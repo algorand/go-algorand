@@ -531,10 +531,10 @@
           "http"
         ],
         "summary": "Add a participation key to the node",
-        "operationId": "AddParticipationID",
+        "operationId": "AddParticipationKey",
         "parameters": [
           {
-            "description": "The participation id to add to the node",
+            "description": "The participation key to add to the node",
             "name": "participationkey",
             "in": "body",
             "required": true,
@@ -550,7 +550,7 @@
             "$ref": "#/responses/PostParticipationResponse"
           },
           "400": {
-            "description": "Bad Request - Malformed Algorand transaction ",
+            "description": "Bad Request",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -581,7 +581,7 @@
       }
 
     },
-    "/v2/participation/{participationid}": {
+    "/v2/participation/{participation-id}": {
       "delete": {
 
         "tags": [
@@ -679,7 +679,65 @@
       "parameters": [
         {
           "type": "string",
-          "name": "participationid",
+          "name": "participation-id",
+          "in": "path",
+          "required": true
+        }
+      ]
+    },
+    "/v2/register-participation-keys/{address}": {
+      "post": {
+        "description": "Generate (or renew) and register participation keys on the node for a given account address.",
+        "tags": [
+          "private"
+        ],
+        "operationId": "RegisterParticipationKeys",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "The `account-id` to update, or `all` to update all accounts.",
+            "name": "address",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "default": 1000,
+            "description": "The fee to use when submitting key registration transactions. Defaults to the suggested fee.",
+            "name": "fee",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "value to use for two-level participation key.",
+            "name": "key-dilution",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "The last round for which the generated participation keys will be valid.",
+            "name": "round-last-valid",
+            "in": "query"
+          },
+          {
+            "type": "boolean",
+            "description": "Don't wait for transaction to commit before returning response.",
+            "name": "no-wait",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "$ref": "#/responses/PostTransactionsResponse"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "string",
+          "description": "Account address where keys will be registered.",
+          "name": "address",
           "in": "path",
           "required": true
         }

@@ -2547,7 +2547,7 @@
         ]
       },
       "post": {
-        "operationId": "AddParticipationID",
+        "operationId": "AddParticipationKey",
         "requestBody": {
           "content": {
             "application/msgpack": {
@@ -2557,7 +2557,7 @@
               }
             }
           },
-          "description": "The participation id to add to the node",
+          "description": "The participation key to add to the node",
           "required": true
         },
         "responses": {
@@ -2588,7 +2588,7 @@
                 }
               }
             },
-            "description": "Bad Request - Malformed Algorand transaction "
+            "description": "Bad Request"
           },
           "401": {
             "content": {
@@ -2632,14 +2632,14 @@
         "x-codegen-request-body-name": "participationkey"
       }
     },
-    "/v2/participation/{participationid}": {
+    "/v2/participation/{participation-id}": {
       "delete": {
         "description": "Delete a given participation key by id",
         "operationId": "DeleteParticipationKeyByID",
         "parameters": [
           {
             "in": "path",
-            "name": "participationid",
+            "name": "participation-id",
             "required": true,
             "schema": {
               "type": "string"
@@ -2697,7 +2697,7 @@
         "parameters": [
           {
             "in": "path",
-            "name": "participationid",
+            "name": "participation-id",
             "required": true,
             "schema": {
               "type": "string"
@@ -2770,6 +2770,80 @@
           }
         },
         "summary": "Get participation key info by id",
+        "tags": [
+          "private"
+        ]
+      }
+    },
+    "/v2/register-participation-keys/{address}": {
+      "post": {
+        "description": "Generate (or renew) and register participation keys on the node for a given account address.",
+        "operationId": "RegisterParticipationKeys",
+        "parameters": [
+          {
+            "description": "The `account-id` to update, or `all` to update all accounts.",
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The fee to use when submitting key registration transactions. Defaults to the suggested fee.",
+            "in": "query",
+            "name": "fee",
+            "schema": {
+              "default": 1000,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "value to use for two-level participation key.",
+            "in": "query",
+            "name": "key-dilution",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The last round for which the generated participation keys will be valid.",
+            "in": "query",
+            "name": "round-last-valid",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Don't wait for transaction to commit before returning response.",
+            "in": "query",
+            "name": "no-wait",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "txId": {
+                      "description": "encoding of the transaction hash.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "txId"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Transaction ID of the submission."
+          }
+        },
         "tags": [
           "private"
         ]
