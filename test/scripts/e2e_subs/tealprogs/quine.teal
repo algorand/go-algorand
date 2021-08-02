@@ -15,7 +15,7 @@ dup
 extract 3 0 // the range here must be updated if the varuint length is longer than 1 byte
 concat
 concat // after this line the whole program is on the stack
-int 0
+pushint 0
 app_params_get AppApprovalProgram
 assert
 ==
