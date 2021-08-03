@@ -40,9 +40,10 @@ jobs:
       - name: Install golangci-lint
         run: |
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/v1.41.1/install.sh | sh -s
-          echo "::add-path::$GITHUB_WORKSPACE/bin"
-          echo "::add-path::$RUNNER_WORKSPACE/$(basename $GITHUB_REPOSITORY)/bin"
-          golangci-lint --version
+          echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
+          echo "$RUNNER_WORKSPACE/$(basename $GITHUB_REPOSITORY)/bin" >> $GITHUB_PATH
+      - name: Test if golangci-lint installed
+        run: golangci-lint --version
       - name: Install reviewdog
         run: |
           curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.13.0/install.sh | sh -s
