@@ -235,7 +235,7 @@ func (ac *ApplicationCallTxnFields) IndexByAddress(target basics.Address, sender
 }
 
 // IDByIndex converts an integer index into an application id associated with the
-// transaction. Index 0 corresponds to the transaction sender, and an index > 0
+// transaction. Index 0 corresponds to the current app, and an index > 0
 // corresponds to an offset into txn.ForeignApps. Returns an error if the index is
 // not valid.
 func (ac *ApplicationCallTxnFields) IDByIndex(i uint64) (basics.AppIndex, error) {
@@ -256,7 +256,7 @@ func (ac *ApplicationCallTxnFields) IDByIndex(i uint64) (basics.AppIndex, error)
 	return ac.ForeignApps[i-1], nil
 }
 
-// IndexByID converts an application id into an integer offset into [txn.Sender,
+// IndexByID converts an application id into an integer offset into [current app,
 // txn.ForeignApps[0], ...], returning the index at the first match. It returns
 // an error if there is no such match.
 func (ac *ApplicationCallTxnFields) IndexByID(appID basics.AppIndex) (uint64, error) {

@@ -132,7 +132,7 @@ func (c *mockCowForLogicLedger) AppendLog(aidx uint64, value string) error {
 	return nil
 }
 
-func (c *mockCowForLogicLedger) GetLogs() []basics.LogItem {
+func (c *mockCowForLogicLedger) getLogs() []basics.LogItem {
 	return c.logs
 }
 

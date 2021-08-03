@@ -18,6 +18,7 @@ package restapi
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"flag"
 	"math"
@@ -1000,11 +1001,54 @@ bnz loop
 
 	txid, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
 	a.NoError(err)
-	_, err = waitForTransactionV2(t, testClient, someAddress, txid, 60*time.Second)
+	_, err = waitForTransaction(t, testClient, someAddress, txid, 60*time.Second)
 	a.NoError(err)
 	txn, err := testClient.PendingTransactionInformationV2(txid)
 	a.NoError(err)
 	a.NotNil(txn.Logs)
 	a.Equal(29, len(*txn.Logs))
+	for _, l := range *txn.Logs {
+		a.Equal(*txn.ApplicationIndex, l.Id)
+		a.Equal(base64.StdEncoding.EncodeToString([]byte("a")), l.Value)
+	}
+
+	//check non-create app call
+	expectedAppID := *txn.ApplicationIndex
+	wh, err = testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err = testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, someAddress = getMaxBalAddr(t, testClient, addresses)
+	if someAddress == "" {
+		t.Error("no addr with funds")
+	}
+	a.NoError(err)
+	addr, err = basics.UnmarshalChecksumAddress(someAddress)
+
+	params, err = testClient.SuggestedParams()
+	a.NoError(err)
+
+	firstRound = basics.Round(params.LastRound + 1)
+	lastRound = basics.Round(params.LastRound + 1000)
+
+	tx, err = testClient.MakeUnsignedAppNoOpTx(*txn.ApplicationIndex, nil, addresses, nil, nil)
+	tx.Sender = addr
+	tx.Fee = basics.MicroAlgos{Raw: minTxnFee}
+	tx.FirstValid = firstRound
+	tx.LastValid = lastRound
+	tx.GenesisHash = gh
+
+	txid, err = testClient.SignAndBroadcastTransaction(wh, nil, tx)
+	a.NoError(err)
+	_, err = waitForTransaction(t, testClient, someAddress, txid, 60*time.Second)
+	a.NoError(err)
+	txn, err = testClient.PendingTransactionInformationV2(txid)
+	a.NoError(err)
+	a.NotNil(txn.Logs)
+	a.Equal(29, len(*txn.Logs))
+	for _, l := range *txn.Logs {
+		a.Equal(expectedAppID, l.Id)
+		a.Equal(base64.StdEncoding.EncodeToString([]byte("a")), l.Value)
+	}
 
 }

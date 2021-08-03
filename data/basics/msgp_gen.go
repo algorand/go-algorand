@@ -4232,13 +4232,13 @@ func (z *EvalDelta) MarshalMsg(b []byte) (o []byte) {
 				// variable map header, size zb0009Len
 				o = append(o, 0x80|uint8(zb0009Len))
 				if (zb0009Mask & 0x2) == 0 { // if not empty
-					// string "id"
-					o = append(o, 0xa2, 0x69, 0x64)
+					// string "i"
+					o = append(o, 0xa1, 0x69)
 					o = msgp.AppendUint64(o, (*z).Logs[zb0007].ID)
 				}
 				if (zb0009Mask & 0x4) == 0 { // if not empty
-					// string "mg"
-					o = append(o, 0xa2, 0x6d, 0x67)
+					// string "m"
+					o = append(o, 0xa1, 0x6d)
 					o = msgp.AppendString(o, (*z).Logs[zb0007].Message)
 				}
 			}
@@ -4435,13 +4435,13 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							return
 						}
 						switch string(field) {
-						case "id":
+						case "i":
 							(*z).Logs[zb0007].ID, bts, err = msgp.ReadUint64Bytes(bts)
 							if err != nil {
 								err = msgp.WrapError(err, "struct-from-array", "Logs", zb0007, "ID")
 								return
 							}
-						case "mg":
+						case "m":
 							(*z).Logs[zb0007].Message, bts, err = msgp.ReadStringBytes(bts)
 							if err != nil {
 								err = msgp.WrapError(err, "struct-from-array", "Logs", zb0007, "Message")
@@ -4646,13 +4646,13 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 								return
 							}
 							switch string(field) {
-							case "id":
+							case "i":
 								(*z).Logs[zb0007].ID, bts, err = msgp.ReadUint64Bytes(bts)
 								if err != nil {
 									err = msgp.WrapError(err, "Logs", zb0007, "ID")
 									return
 								}
-							case "mg":
+							case "m":
 								(*z).Logs[zb0007].Message, bts, err = msgp.ReadStringBytes(bts)
 								if err != nil {
 									err = msgp.WrapError(err, "Logs", zb0007, "Message")
@@ -4713,7 +4713,7 @@ func (z *EvalDelta) Msgsize() (s int) {
 	}
 	s += 3 + msgp.ArrayHeaderSize
 	for zb0007 := range (*z).Logs {
-		s += 1 + 3 + msgp.Uint64Size + 3 + msgp.StringPrefixSize + len((*z).Logs[zb0007].Message)
+		s += 1 + 2 + msgp.Uint64Size + 2 + msgp.StringPrefixSize + len((*z).Logs[zb0007].Message)
 	}
 	return
 }
@@ -4741,13 +4741,13 @@ func (z *LogItem) MarshalMsg(b []byte) (o []byte) {
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
-			// string "id"
-			o = append(o, 0xa2, 0x69, 0x64)
+			// string "i"
+			o = append(o, 0xa1, 0x69)
 			o = msgp.AppendUint64(o, (*z).ID)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
-			// string "mg"
-			o = append(o, 0xa2, 0x6d, 0x67)
+			// string "m"
+			o = append(o, 0xa1, 0x6d)
 			o = msgp.AppendString(o, (*z).Message)
 		}
 	}
@@ -4811,13 +4811,13 @@ func (z *LogItem) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "id":
+			case "i":
 				(*z).ID, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ID")
 					return
 				}
-			case "mg":
+			case "m":
 				(*z).Message, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Message")
@@ -4843,7 +4843,7 @@ func (_ *LogItem) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *LogItem) Msgsize() (s int) {
-	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.StringPrefixSize + len((*z).Message)
+	s = 1 + 2 + msgp.Uint64Size + 2 + msgp.StringPrefixSize + len((*z).Message)
 	return
 }
 

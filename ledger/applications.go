@@ -41,7 +41,7 @@ type cowForLogicLedger interface {
 	DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) error
 
 	AppendLog(idx uint64, value string) error
-	GetLogs() []basics.LogItem
+	getLogs() []basics.LogItem
 
 	round() basics.Round
 	prevTimestamp() int64
@@ -248,5 +248,5 @@ func (al *logicLedger) AppendLog(txn *transactions.Transaction, value string) er
 }
 
 func (al *logicLedger) GetLogs() []basics.LogItem {
-	return al.cow.GetLogs()
+	return al.cow.getLogs()
 }

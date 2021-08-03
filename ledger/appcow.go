@@ -450,8 +450,8 @@ func (cb *roundCowState) AppendLog(idx uint64, value string) error {
 	return nil
 }
 
-// GetLogs returns logs
-func (cb *roundCowState) GetLogs() []basics.LogItem {
+// getLogs returns logs
+func (cb *roundCowState) getLogs() []basics.LogItem {
 	return cb.logs
 }
 

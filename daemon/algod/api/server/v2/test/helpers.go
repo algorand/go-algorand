@@ -278,12 +278,12 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 	}
 
 	tx := make([]transactions.SignedTxn, TXs)
-
 	latest := ledger.Latest()
 	if latest != 0 {
 		panic(fmt.Errorf("newly created ledger doesn't start on round 0"))
 	}
 	bal := genesis // the current balance record is the same as the genesis balance record
+
 	for i := 0; i < TXs; i++ {
 		send := gen.Int() % P
 		recv := gen.Int() % P
@@ -338,7 +338,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 		rbal := bal[raddr]
 		rbal.MicroAlgos.Raw += amt.Raw
 		bal[raddr] = rbal
-
 	}
+
 	return ledger, roots, parts, tx, release
 }

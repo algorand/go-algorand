@@ -1180,6 +1180,9 @@ bnz loop
 	}
 	logs := *response.Txns[0].Logs
 	assert.Equal(t, len(logs), 29)
+	for _, m := range logs {
+		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte("a")), m.Value)
+	}
 	encoded := string(protocol.EncodeJSON(response.Txns[0]))
 	assert.Contains(t, encoded, "logs")
 

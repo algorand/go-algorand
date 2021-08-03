@@ -4755,7 +4755,7 @@ func TestLog(t *testing.T) {
 			loglen: 1,
 		},
 		{
-			source: `byte  "a logging message"; log; byte  "second logging message"; log; int 1`,
+			source: `byte  "a logging message"; log; byte  "a logging message"; log; int 1`,
 			loglen: 2,
 		},
 		{
@@ -4774,7 +4774,7 @@ func TestLog(t *testing.T) {
 
 	//track expected number of logs in ep.Ledger
 	count := 0
-	for _, s := range testCases {
+	for i, s := range testCases {
 		ops := testProg(t, s.source, AssemblerMaxVersion)
 
 		err := CheckStateful(ops.Program, ep)
@@ -4783,9 +4783,15 @@ func TestLog(t *testing.T) {
 		pass, err := EvalStateful(ops.Program, ep)
 		require.NoError(t, err)
 		require.True(t, pass)
-
 		count += s.loglen
 		require.Equal(t, len(ep.Ledger.GetLogs()), count)
+		if i == len(testCases)-1 {
+			require.Equal(t, strings.Repeat("a", MaxLogSize), ep.Ledger.GetLogs()[count-1].Message)
+		} else {
+			for _, l := range ep.Ledger.GetLogs()[count-s.loglen:] {
+				require.Equal(t, "a logging message", l.Message)
+			}
+		}
 	}
 
 	msg := strings.Repeat("a", 400)

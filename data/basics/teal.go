@@ -124,11 +124,12 @@ func (sd StateDelta) Valid(proto *config.ConsensusParams) error {
 }
 
 // LogItem is contains logs for an application
+// ID is the offset into Txn.ForeignApps
 type LogItem struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ID      uint64 `codec:"id"`
-	Message string `codec:"mg"`
+	ID      uint64 `codec:"i"`
+	Message string `codec:"m"`
 }
 
 // EvalDelta stores StateDeltas for an application's global key/value store, as
