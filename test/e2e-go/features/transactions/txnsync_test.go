@@ -61,7 +61,7 @@ import (
 func TestTxnSync(t *testing.T) {
 	t.Parallel()
 
-	numberOfSends := 2
+	numberOfSends := 1000
 	targetRate := 300 // txn/sec
 	if testing.Short() {
 		numberOfSends = 100
@@ -70,12 +70,12 @@ func TestTxnSync(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 
-	roundTime := time.Duration(10)
+	roundTime := time.Duration(17 * 1000 * time.Millisecond)
 
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
-	proto.AgreementFilterTimeoutPeriod0 = roundTime * time.Second
-	proto.AgreementFilterTimeout = roundTime * time.Second
+	proto.AgreementFilterTimeoutPeriod0 = roundTime
+	proto.AgreementFilterTimeout = roundTime
 	fixture.SetConsensus(config.ConsensusProtocols{protocol.ConsensusCurrentVersion: proto})
 
 	fixture.Setup(t, templatePath)
@@ -111,6 +111,7 @@ func TestTxnSync(t *testing.T) {
 		account1:            account1,
 		account2:            account2,
 		name:                "node1",
+		cancelFunc:          cancel,
 	}
 
 	ttn2 := transactionTracker{
@@ -123,6 +124,7 @@ func TestTxnSync(t *testing.T) {
 		account1:            account1,
 		account2:            account2,
 		name:                "node2",
+		cancelFunc:          cancel,
 	}
 
 	ttr1 := transactionTracker{
@@ -135,6 +137,7 @@ func TestTxnSync(t *testing.T) {
 		account1:            account1,
 		account2:            account2,
 		name:                "relay1",
+		cancelFunc:          cancel,
 	}
 
 	ttr2 := transactionTracker{
@@ -147,6 +150,7 @@ func TestTxnSync(t *testing.T) {
 		account1:            account1,
 		account2:            account2,
 		name:                "relay2",
+		cancelFunc:          cancel,
 	}
 
 	minTxnFee, minAcctBalance, err := fixture.CurrentMinFeeAndBalance()
@@ -263,6 +267,7 @@ type transactionTracker struct {
 	account1            string
 	account2            string
 	name                string
+	cancelFunc          context.CancelFunc
 }
 
 // Adds the transaction to the channels of the nodes intended to receive the transaction
@@ -292,41 +297,44 @@ func (tt *transactionTracker) passTxnsToVeirfy() {
 }
 
 func (tt *transactionTracker) checkAll() {
-
 	for {
-		if _, more := <-tt.selfToVerify; !(more && len(tt.pendingVerification) != 0) {
-			break
-		}
-
 		select {
 		case <-tt.ctx.Done():
 			return
+		case _, more := <-tt.selfToVerify:
+			if !more && len(tt.pendingVerification) == 0 {
+				return
+			}
 		default:
 		}
 		transactions, err := tt.client.GetPendingTransactionsByAddress(tt.account1, 1000000)
-		require.NoError(tt.t, err)
+		if err != nil {
+			tt.cancelFunc()
+			require.NoError(tt.t, err)
+		}
 
 		for _, transactionInfo := range transactions.TruncatedTxns.Transactions {
+			tt.mu.Lock()
 			if _, ok := tt.pendingVerification[transactionInfo.TxID]; ok {
-				//				fmt.Printf("Transaction account1 found! deleting from pending.\n")
-				tt.mu.Lock()
 				delete(tt.pendingVerification, transactionInfo.TxID)
-				tt.mu.Unlock()
 			}
+			tt.mu.Unlock()
 		}
 
 		transactions, err = tt.client.GetPendingTransactionsByAddress(tt.account2, 1000000)
-		require.NoError(tt.t, err)
+		if err != nil {
+			tt.cancelFunc()
+			require.NoError(tt.t, err)
+		}
 
 		for _, transactionInfo := range transactions.TruncatedTxns.Transactions {
+			tt.mu.Lock()
 			if _, ok := tt.pendingVerification[transactionInfo.TxID]; ok {
-				//				fmt.Printf("Transaction account2 found! deleting from pending.\n")
-				tt.mu.Lock()
 				delete(tt.pendingVerification, transactionInfo.TxID)
-				tt.mu.Unlock()
 			}
+			tt.mu.Unlock()
 		}
-		time.Sleep(600 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
