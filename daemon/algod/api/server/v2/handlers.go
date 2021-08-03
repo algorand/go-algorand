@@ -69,6 +69,33 @@ type NodeInterface interface {
 	Config() config.Local
 }
 
+// GetParticipationKeys Return a list of participation keys
+// (GET /v2/participation)
+func (v2 *Handlers) GetParticipationKeys(ctx echo.Context) error {
+	return ctx.String(http.StatusNotImplemented, "Endpoint not implemented.")
+}
+
+// AddParticipationKey Add a participation key to the node
+// (POST /v2/participation)
+func (v2 *Handlers) AddParticipationKey(ctx echo.Context) error {
+
+	return ctx.String(http.StatusNotImplemented, "Endpoint not implemented.")
+}
+
+// DeleteParticipationKeyByID Delete a given participation key by id
+// (DELETE /v2/participation/{participation-id})
+func (v2 *Handlers) DeleteParticipationKeyByID(ctx echo.Context, participationID string) error {
+
+	return ctx.String(http.StatusNotImplemented, "Endpoint not implemented.")
+}
+
+// GetParticipationKeyByID Get participation key info by id
+// (GET /v2/participation/{participation-id})
+func (v2 *Handlers) GetParticipationKeyByID(ctx echo.Context, participationID string) error {
+
+	return ctx.String(http.StatusNotImplemented, "Endpoint not implemented.")
+}
+
 // RegisterParticipationKeys registers participation keys.
 // (POST /v2/register-participation-keys/{address})
 func (v2 *Handlers) RegisterParticipationKeys(ctx echo.Context, address string, params private.RegisterParticipationKeysParams) error {
