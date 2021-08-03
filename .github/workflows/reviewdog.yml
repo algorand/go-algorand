@@ -37,6 +37,14 @@ jobs:
         # move go out of the way temporarily to avoid "go list ./..." from installing modules
       # - name: Make libsodium.a
         # run: sudo mv /usr/bin/go /usr/bin/go.bak && make crypto/libs/linux/amd64/lib/libsodium.a && sudo mv /usr/bin/go.bak /usr/bin/go
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/v1.41.1/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.41.1
+          golangci-lint --version
+      - name: Install reviewdog
+        run: |
+          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.13.0/install.sh | sh -s -- -b $(go env GOPATH)/bin v0.13.0
+          reviewdog --version
       - name: Build custom linters
         run: |
           go version
@@ -49,12 +57,15 @@ jobs:
         run: |
           ls -la cmd/partitiontest_linter/
           pwd
-      - name: reviewdog-golangci-lint
-        uses: reviewdog/action-golangci-lint@v2
-        with:
-          golangci_lint_version: "v1.41.1"
-          golangci_lint_flags: "-c .golangci-warnings.yml --allow-parallel-runners"
-          reporter: "github-check"
-          tool_name: "Lint Warnings"
-          level: "warning"
-          fail_on_error: false
+      - name: Run golangci-lint with reviewdog
+        run: |
+          golangci-lint run --out-format line-number -c .golangci-warnings.yml --allow-parallel-runners | reviewdog -f=golangci-lint -name=Lint Warnings -reporter=github-check -filter-mode=added -fail-on-error=false -level=warning
+      # - name: reviewdog-golangci-lint
+      #   uses: reviewdog/action-golangci-lint@v2
+      #   with:
+      #     golangci_lint_version: "v1.41.1"
+      #     golangci_lint_flags: "-c .golangci-warnings.yml --allow-parallel-runners"
+      #     reporter: "github-check"
+      #     tool_name: "Lint Warnings"
+      #     level: "warning"
+      #     fail_on_error: false
