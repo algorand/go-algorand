@@ -28,11 +28,6 @@ import (
 // in order to determine which need to be called.
 type Migration func(ctx context.Context, tx *sql.Tx, newDatabase bool) error
 
-func init() {
-	UnableToReadErr = errors.New("unable to read database")
-	NoOpMigrationErr = errors.New("migration no-op")
-}
-
 // Initialize creates or upgrades a DB accessor in a new atomic context.
 // The Migration slice is ordered and must contain all prior migrations
 // in order to determine which need to be called.
@@ -47,7 +42,7 @@ func InitializeWithContext(ctx context.Context, tx *sql.Tx, migrations []Migrati
 	// check current database version
 	dbVersion, err := GetUserVersion(ctx, tx)
 	if err != nil {
-		return UnableToReadErr
+		return ErrUnableToRead
 	}
 
 	version := int32(len(migrations))
@@ -55,7 +50,7 @@ func InitializeWithContext(ctx context.Context, tx *sql.Tx, migrations []Migrati
 	// if database version is greater than supported by current binary, write a warning. This would keep the existing
 	// fallback behavior where we could use an older binary iff the schema happen to be backward compatible.
 	if dbVersion > version {
-		return MakeUnknownVersionErr(dbVersion, version)
+		return MakeErrUnknownVersion(dbVersion, version)
 	}
 
 	// if database is not up to date run migration functions.
@@ -63,18 +58,19 @@ func InitializeWithContext(ctx context.Context, tx *sql.Tx, migrations []Migrati
 		var newDatabase bool
 		for i := dbVersion; i < version; i++ {
 			err = migrations[i](ctx, tx, newDatabase)
-			if err != nil && err != NoOpMigrationErr {
-				return MakeUpgradeFailureErr(dbVersion, i)
+			if err != nil && err != ErrNoOpMigration {
+				return MakeErrUpgradeFailure(dbVersion, i)
 			}
 
-			if i == 0 && err != NoOpMigrationErr {
+			// Something like this is used by the account DB to conditionally skip things.
+			if i == 0 && err != ErrNoOpMigration {
 				newDatabase = true
 			}
 
 			// update version
 			_, err = SetUserVersion(ctx, tx, i+1)
 			if err != nil {
-				return MakeUpgradeFailureErr(dbVersion, i)
+				return MakeErrUpgradeFailure(dbVersion, i)
 			}
 		}
 	}
@@ -82,45 +78,45 @@ func InitializeWithContext(ctx context.Context, tx *sql.Tx, migrations []Migrati
 	return nil
 }
 
-// UnableToReadErr is returned when the accessor cannot be read.
-var UnableToReadErr error
+// ErrUnableToRead is returned when the accessor cannot be read.
+var ErrUnableToRead = errors.New("unable to read database")
 
-// NoOpMigrationErr is returned when there was no work for the migration to perform.
-var NoOpMigrationErr error
+// ErrNoOpMigration is returned when there was no work for the migration to perform.
+var ErrNoOpMigration = errors.New("migration no-op")
 
-// UnknownVersionErr is returned when a migration to the current version is not available.
-type UnknownVersionErr struct {
+// ErrUnknownVersion is returned when a migration to the current version is not available.
+type ErrUnknownVersion struct {
 	CurrentVersion   int32
 	SupportedVersion int32
 }
 
 // Error implements the error interface.
-func (err *UnknownVersionErr) Error() string {
+func (err *ErrUnknownVersion) Error() string {
 	return fmt.Sprintf("database schema version is %d, but algod only supports up to %d", err.CurrentVersion, err.SupportedVersion)
 }
 
-// MakeUnknownVersionErr makes an UnknownVersionErr.
-func MakeUnknownVersionErr(currentVersion, supportedVersion int32) *UnknownVersionErr {
-	return &UnknownVersionErr{
+// MakeErrUnknownVersion makes an ErrUnknownVersion.
+func MakeErrUnknownVersion(currentVersion, supportedVersion int32) *ErrUnknownVersion {
+	return &ErrUnknownVersion{
 		CurrentVersion:   currentVersion,
 		SupportedVersion: supportedVersion,
 	}
 }
 
-// UpgradeFailureErr is returned when a migration returns an error.
-type UpgradeFailureErr struct {
+// ErrUpgradeFailure is returned when a migration returns an error.
+type ErrUpgradeFailure struct {
 	SchemaVersionFrom int32
 	SchemaVersionTo   int32
 }
 
 // Error implements the error interface.
-func (err *UpgradeFailureErr) Error() string {
+func (err *ErrUpgradeFailure) Error() string {
 	return fmt.Sprintf("failed to upgrade database from schema %d to %d", err.SchemaVersionFrom, err.SchemaVersionTo)
 }
 
-// MakeUpgradeFailureErr makes an UpgradeFailureErr.
-func MakeUpgradeFailureErr(from, to int32) *UpgradeFailureErr {
-	return &UpgradeFailureErr{
+// MakeErrUpgradeFailure makes an ErrUpgradeFailure.
+func MakeErrUpgradeFailure(from, to int32) *ErrUpgradeFailure {
+	return &ErrUpgradeFailure{
 		SchemaVersionFrom: from,
 		SchemaVersionTo:   to,
 	}

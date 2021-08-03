@@ -98,7 +98,7 @@ func TestInitialize(t *testing.T) {
 			},
 			expectedVersion: 0,
 			verify:          nil,
-			expectedError:   MakeUpgradeFailureErr(0, 2),
+			expectedError:   MakeErrUpgradeFailure(0, 2),
 		},
 	}
 
@@ -142,7 +142,7 @@ func TestReadOnlyError(t *testing.T) {
 	expiredContextCancelFunc()
 	err := InitializeWithContext(expiredContext, nil, []Migration{createFoo})
 
-	require.EqualError(t, err, UnableToReadErr.Error())
+	require.EqualError(t, err, ErrUnableToRead.Error())
 }
 
 func TestUnknownVersionError(t *testing.T) {
@@ -160,7 +160,7 @@ func TestUnknownVersionError(t *testing.T) {
 
 	// Initialize with only version 1
 	err = Initialize(accessor, []Migration{createFoo})
-	require.EqualError(t, err, MakeUnknownVersionErr(1, 0).Error())
+	require.EqualError(t, err, MakeErrUnknownVersion(1, 0).Error())
 }
 
 func TestNewDBFlag(t *testing.T) {
@@ -178,7 +178,7 @@ func TestNewDBFlag(t *testing.T) {
 		{
 			name: "no-op-migration-0",
 			migrations: []Migration{
-				returnError(NoOpMigrationErr),
+				returnError(ErrNoOpMigration),
 				newDBCheck,
 			},
 			expectedNewDB: false,

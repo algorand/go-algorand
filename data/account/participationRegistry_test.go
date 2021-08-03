@@ -17,10 +17,12 @@
 package account
 
 import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
-	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestParticipation_NewParticipationRegistry(t *testing.T) {
