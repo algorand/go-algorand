@@ -29,7 +29,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/libgoal"
-	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
