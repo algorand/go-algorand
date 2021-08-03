@@ -100,7 +100,7 @@ func MakeParticipationRegistry(accessor db.Accessor) (ParticipationRegistry, err
 // dbSchemaUpgrade0 initializes the tables
 func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 	// Keysets is for the immutable data, Rolling may change over time.
-	tableSchema := []string {
+	tableSchema := []string{
 		`CREATE TABLE Keysets (
 			pk INTEGER,
 

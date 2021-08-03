@@ -1,3 +1,19 @@
+// Copyright (C) 2019-2021 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package db
 
 import (
@@ -46,19 +62,19 @@ func TestInitialize(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	testcases := []struct {
-		name string
-		migrations []Migration
+		name            string
+		migrations      []Migration
 		expectedVersion int32
-		verify func(t *testing.T, ctx context.Context, tx *sql.Tx)
-		expectedError error
-	} {
+		verify          func(t *testing.T, ctx context.Context, tx *sql.Tx)
+		expectedError   error
+	}{
 		{
 			name: "Simple",
 			migrations: []Migration{
 				createFoo,
 			},
 			expectedVersion: 1,
-			verify: verifyFoo(0),
+			verify:          verifyFoo(0),
 		},
 		{
 			name: "Multiple",
@@ -70,7 +86,7 @@ func TestInitialize(t *testing.T) {
 				addToFoo(1000),
 			},
 			expectedVersion: 5,
-			verify: verifyFoo(1111),
+			verify:          verifyFoo(1111),
 		},
 		{
 			name: "Error + rollback",
@@ -81,8 +97,8 @@ func TestInitialize(t *testing.T) {
 				addToFoo(10),
 			},
 			expectedVersion: 0,
-			verify: nil,
-			expectedError: MakeUpgradeFailureErr(0, 2),
+			verify:          nil,
+			expectedError:   MakeUpgradeFailureErr(0, 2),
 		},
 	}
 
@@ -92,7 +108,7 @@ func TestInitialize(t *testing.T) {
 			t.Parallel()
 
 			// Setup
-			accessor, err := MakeAccessor("test_" + testcase.name, false, true)
+			accessor, err := MakeAccessor("test_"+testcase.name, false, true)
 			require.NoError(t, err)
 
 			err = Initialize(accessor, testcase.migrations)
@@ -155,10 +171,10 @@ func TestNewDBFlag(t *testing.T) {
 	}
 
 	testcases := []struct {
-		name string
-		migrations []Migration
+		name          string
+		migrations    []Migration
 		expectedNewDB bool
-	} {
+	}{
 		{
 			name: "no-op-migration-0",
 			migrations: []Migration{
@@ -179,7 +195,7 @@ func TestNewDBFlag(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			accessor, err := MakeAccessor("test_" + testcase.name, false, true)
+			accessor, err := MakeAccessor("test_"+testcase.name, false, true)
 			require.NoError(t, err)
 
 			err = Initialize(accessor, testcase.migrations)
