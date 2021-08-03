@@ -232,7 +232,7 @@ func TestAssemblePeerMessage_messageConstBloomFilter(t *testing.T) {
 	a := require.New(t)
 
 	s := syncState{
-		node: mockAsyncNodeConnector{},
+		node:  mockAsyncNodeConnector{},
 		clock: timers.MakeMonotonicClock(time.Now()),
 	}
 
