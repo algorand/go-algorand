@@ -4374,8 +4374,8 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Logs")
 				return
 			}
-			if zb0016 > config.MaxEvalDeltaAccounts {
-				err = msgp.ErrOverflow(uint64(zb0016), uint64(config.MaxEvalDeltaAccounts))
+			if zb0016 > config.MaxLogCalls {
+				err = msgp.ErrOverflow(uint64(zb0016), uint64(config.MaxLogCalls))
 				err = msgp.WrapError(err, "struct-from-array", "Logs")
 				return
 			}
@@ -4585,8 +4585,8 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Logs")
 					return
 				}
-				if zb0026 > config.MaxEvalDeltaAccounts {
-					err = msgp.ErrOverflow(uint64(zb0026), uint64(config.MaxEvalDeltaAccounts))
+				if zb0026 > config.MaxLogCalls {
+					err = msgp.ErrOverflow(uint64(zb0026), uint64(config.MaxLogCalls))
 					err = msgp.WrapError(err, "Logs")
 					return
 				}

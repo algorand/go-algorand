@@ -144,8 +144,7 @@ type EvalDelta struct {
 	// [txn.Sender, txn.Accounts[0], txn.Accounts[1], ...]
 	LocalDeltas map[uint64]StateDelta `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`
 
-	// We don't have a limit on number of app to app calls yet. use config.MaxEvalDeltaAccounts for now
-	Logs []LogItem `codec:"lg,allocbound=config.MaxEvalDeltaAccounts"`
+	Logs []LogItem `codec:"lg,allocbound=config.MaxLogCalls"`
 }
 
 // Equal compares two EvalDeltas and returns whether or not they are
