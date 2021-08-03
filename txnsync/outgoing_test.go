@@ -88,6 +88,11 @@ type mockAsyncNodeConnector struct {
 	called *bool
 }
 
+func (m mockAsyncNodeConnector) Random(rng uint64) uint64 {
+	// We need to be deterministic in our "randomness" for the tests
+	return 42
+}
+
 func (m mockAsyncNodeConnector) SendPeerMessage(netPeer interface{}, msg []byte, callback SendMessageCallback) {
 	*m.called = true
 }
@@ -226,7 +231,10 @@ func TestAsyncEncodeAndSend(t *testing.T) {
 func TestAssemblePeerMessage_messageConstBloomFilter(t *testing.T) {
 	a := require.New(t)
 
-	s := syncState{clock: timers.MakeMonotonicClock(time.Now())}
+	s := syncState{
+		node: mockAsyncNodeConnector{},
+		clock: timers.MakeMonotonicClock(time.Now()),
+	}
 
 	s.profiler = makeProfiler(1*time.Millisecond, s.clock, s.log, 1*time.Millisecond)
 
