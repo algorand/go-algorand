@@ -78,12 +78,14 @@ type ParticipationRegistry interface {
 }
 
 // MakeParticipationRegistry creates a db.Accessor backed ParticipationRegistry.
-func MakeParticipationRegistry(db db.Accessor) ParticipationRegistry {
+func MakeParticipationRegistry(db db.Accessor) (ParticipationRegistry, error) {
+	// TODO: Versioning and upgrading should mimic accountsInitialize:accountsInitialize
 	return &participationDB{
 		store: db,
-	}
+	}, nil
 }
 
+// participationDB is a private implementation of ParticipationRegistry.
 type participationDB struct {
 	store db.Accessor
 }
