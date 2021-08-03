@@ -17,7 +17,10 @@
 package account
 
 import (
+	"context"
+	"database/sql"
 	"errors"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/util/db"
@@ -79,11 +82,58 @@ type ParticipationRegistry interface {
 }
 
 // MakeParticipationRegistry creates a db.Accessor backed ParticipationRegistry.
-func MakeParticipationRegistry(db db.Accessor) (ParticipationRegistry, error) {
-	// TODO: Versioning and upgrading should mimic accountsInitialize:accountsInitialize
+func MakeParticipationRegistry(accessor db.Accessor) (ParticipationRegistry, error) {
+	migrations := []db.Migration{
+		dbSchemaUpgrade0,
+	}
+
+	err := db.Initialize(accessor, migrations)
+	if err != nil {
+		return nil, err
+	}
+
 	return &participationDB{
-		store: db,
+		store: accessor,
 	}, nil
+}
+
+// dbSchemaUpgrade0 initializes the tables
+func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
+	// Keysets is for the immutable data, Rolling may change over time.
+	tableSchema := []string {
+		`CREATE TABLE Keysets (
+			pk INTEGER,
+
+			participationID BLOB
+			account BLOB,
+
+			firstValidRound INTEGER,
+			lastValidRound INTEGER,
+			keyDilution INTEGER NOT NULL DEFAULT 0
+
+			--vrf BLOB,    --*  msgpack encoding of ParticipationAccount.vrf
+		);`,
+		`CREATE TABLE Rolling (
+			pk INTEGER,
+
+			lastVoteRound INTEGER,
+			lastBlockProposalRound INTEGER,
+			lastCompactCertificateRound INTEGER,
+			effectiveFirstValidRound INTEGER,
+			effectiveLastValidRound INTEGER,
+
+			--voting BLOB, --*  msgpack encoding of ParticipationAccount.voting
+		);`,
+	}
+
+	for _, tableCreate := range tableSchema {
+		_, err := tx.Exec(tableCreate)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // participationDB is a private implementation of ParticipationRegistry.
