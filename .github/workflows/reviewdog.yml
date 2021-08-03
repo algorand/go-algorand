@@ -37,29 +37,29 @@ jobs:
         # move go out of the way temporarily to avoid "go list ./..." from installing modules
       # - name: Make libsodium.a
         # run: sudo mv /usr/bin/go /usr/bin/go.bak && make crypto/libs/linux/amd64/lib/libsodium.a && sudo mv /usr/bin/go.bak /usr/bin/go
+      - name: Add bin to PATH
+        run: |
+          echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
+          echo "$RUNNER_WORKSPACE/$(basename $GITHUB_REPOSITORY)/bin" >> $GITHUB_PATH
       - name: Install golangci-lint
         run: |
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/v1.41.1/install.sh | sh -s
-          echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
-          echo "$RUNNER_WORKSPACE/$(basename $GITHUB_REPOSITORY)/bin" >> $GITHUB_PATH
-      - name: Test if golangci-lint installed
-        run: golangci-lint --version
+          golangci-lint --version
       - name: Install reviewdog
         run: |
           curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.13.0/install.sh | sh -s
           reviewdog --version
+      - name: Check dependency versions
+        run: |
+          go version -m golangci-lint
+          echo "----=====----"
+          cat cmd/partitiontest_linter/go.mod
       - name: Build custom linters
         run: |
-          go version
           cd cmd/partitiontest_linter/
           go build -buildmode=plugin -trimpath plugin/plugin.go
-          ls plugin.so
-          pwd
           cd ../../
-      - name: test step
-        run: |
           ls -la cmd/partitiontest_linter/
-          pwd
       - name: Run golangci-lint with reviewdog
         run: |
           golangci-lint run --out-format line-number -c .golangci-warnings.yml --allow-parallel-runners | reviewdog -f=golangci-lint -name=Lint Warnings -reporter=github-check -filter-mode=added -fail-on-error=false -level=warning
