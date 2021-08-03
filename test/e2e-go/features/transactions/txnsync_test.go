@@ -61,12 +61,7 @@ import (
 func TestTxnSync(t *testing.T) {
 	t.Parallel()
 
-	// maxParallelChecks is the number of goroutines will simultaniously check if the
-	// transaction is received by the node.
-	// If this is too large, the system will report too many open files.
-	// If too small, the txns will be moved to the block.
-	maxParallelChecks := 1
-	numberOfSends := 1
+	numberOfSends := 2
 	targetRate := 300 // txn/sec
 	if testing.Short() {
 		numberOfSends = 100
@@ -75,7 +70,7 @@ func TestTxnSync(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 
-	roundTime := time.Duration(20)
+	roundTime := time.Duration(10)
 
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
@@ -96,8 +91,6 @@ func TestTxnSync(t *testing.T) {
 	r1chan := make(chan string, numberOfSends*2)
 	r2chan := make(chan string, numberOfSends*2)
 
-	parallelCheckChannel := make(chan bool, maxParallelChecks)
-
 	ctx, cancel := context.WithCancel(context.Background())
 
 	account1List, err := fixture.GetNodeWalletsSortedByBalance(node1.DataDir())
@@ -109,55 +102,51 @@ func TestTxnSync(t *testing.T) {
 	account2 := account2List[0].Address
 
 	ttn1 := transactionTracker{
-		t:                    t,
-		ctx:                  ctx,
-		client:               &node1,
-		othersToVerify:       []chan string{n2chan, r1chan, r2chan, n1chan},
-		selfToVerify:         n1chan,
-		pendingVerification:  make(map[string]bool),
-		parallelCheckChannel: parallelCheckChannel,
-		cancelFunc:           cancel,
-		account1:             account1,
-		account2:             account2,
+		t:                   t,
+		ctx:                 ctx,
+		client:              &node1,
+		othersToVerify:      []chan string{n2chan, r1chan, r2chan, n1chan},
+		selfToVerify:        n1chan,
+		pendingVerification: make(map[string]bool),
+		account1:            account1,
+		account2:            account2,
+		name:                "node1",
 	}
 
 	ttn2 := transactionTracker{
-		t:                    t,
-		ctx:                  ctx,
-		client:               &node2,
-		othersToVerify:       []chan string{n1chan, r1chan, r2chan, n2chan},
-		selfToVerify:         n2chan,
-		pendingVerification:  make(map[string]bool),
-		parallelCheckChannel: parallelCheckChannel,
-		cancelFunc:           cancel,
-		account1:             account1,
-		account2:             account2,
+		t:                   t,
+		ctx:                 ctx,
+		client:              &node2,
+		othersToVerify:      []chan string{n1chan, r1chan, r2chan, n2chan},
+		selfToVerify:        n2chan,
+		pendingVerification: make(map[string]bool),
+		account1:            account1,
+		account2:            account2,
+		name:                "node2",
 	}
 
 	ttr1 := transactionTracker{
-		t:                    t,
-		ctx:                  ctx,
-		client:               &relay1,
-		othersToVerify:       []chan string{n1chan, n2chan, r2chan, r1chan},
-		selfToVerify:         r1chan,
-		pendingVerification:  make(map[string]bool),
-		parallelCheckChannel: parallelCheckChannel,
-		cancelFunc:           cancel,
-		account1:             account1,
-		account2:             account2,
+		t:                   t,
+		ctx:                 ctx,
+		client:              &relay1,
+		othersToVerify:      []chan string{n1chan, n2chan, r2chan, r1chan},
+		selfToVerify:        r1chan,
+		pendingVerification: make(map[string]bool),
+		account1:            account1,
+		account2:            account2,
+		name:                "relay1",
 	}
 
 	ttr2 := transactionTracker{
-		t:                    t,
-		ctx:                  ctx,
-		client:               &relay2,
-		othersToVerify:       []chan string{n1chan, n2chan, r1chan, r2chan},
-		selfToVerify:         r2chan,
-		pendingVerification:  make(map[string]bool),
-		parallelCheckChannel: parallelCheckChannel,
-		cancelFunc:           cancel,
-		account1:             account1,
-		account2:             account2,
+		t:                   t,
+		ctx:                 ctx,
+		client:              &relay2,
+		othersToVerify:      []chan string{n1chan, n2chan, r1chan, r2chan},
+		selfToVerify:        r2chan,
+		pendingVerification: make(map[string]bool),
+		account1:            account1,
+		account2:            account2,
+		name:                "relay2",
 	}
 
 	minTxnFee, minAcctBalance, err := fixture.CurrentMinFeeAndBalance()
@@ -171,7 +160,18 @@ func TestTxnSync(t *testing.T) {
 	defer ttn2.terminate()
 	defer ttr1.terminate()
 	defer ttr2.terminate()
+
 	defer cancel()
+
+	go ttn1.passTxnsToVeirfy()
+	go ttn2.passTxnsToVeirfy()
+	go ttr1.passTxnsToVeirfy()
+	go ttr2.passTxnsToVeirfy()
+
+	go ttn1.checkAll()
+	go ttn2.checkAll()
+	go ttr1.checkAll()
+	go ttr2.checkAll()
 
 	st := time.Now()
 	for i := 0; i < numberOfSends; i++ {
@@ -193,11 +193,10 @@ func TestTxnSync(t *testing.T) {
 			fmt.Printf("txn sent  %d / %d\n", i, numberOfSends)
 		}
 	}
-
-	go ttn1.checkAll()
-	go ttn2.checkAll()
-	go ttr1.checkAll()
-	go ttr2.checkAll()
+	close(ttn1.selfToVerify)
+	close(ttn2.selfToVerify)
+	close(ttr1.selfToVerify)
+	close(ttr2.selfToVerify)
 
 	// wait until all channels are empty for max 50 seconds
 	for x := 0; x < 250; x++ {
@@ -218,7 +217,7 @@ func TestTxnSync(t *testing.T) {
 	require.True(t, ttn1.channelsAreEmpty())
 
 	unprocessed := 0
-	maxWait := 1000
+	maxWait := 100
 	for x := 0; x < maxWait; x++ {
 		select {
 		case <-ctx.Done():
@@ -244,27 +243,26 @@ func TestTxnSync(t *testing.T) {
 		if unprocessed == 0 {
 			break
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
 		if x%10 == 0 {
 			fmt.Printf("waiting for pending verificaitons [%d] %d / %d\n", unprocessed, x, maxWait)
 		}
 	}
-	require.Equal(t, 0, unprocessed)
+	require.Equal(t, 0, unprocessed, "overall missing %d/%d transactions",
+		unprocessed, 2*numberOfSends*4)
 }
 
 type transactionTracker struct {
-	t                    *testing.T
-	ctx                  context.Context
-	mu                   sync.Mutex
-	wg                   sync.WaitGroup
-	client               *libgoal.Client
-	othersToVerify       []chan string
-	selfToVerify         chan string
-	pendingVerification  map[string]bool
-	parallelCheckChannel chan bool
-	cancelFunc           context.CancelFunc
-	account1             string
-	account2             string
+	t                   *testing.T
+	ctx                 context.Context
+	mu                  sync.Mutex
+	client              *libgoal.Client
+	othersToVerify      []chan string
+	selfToVerify        chan string
+	pendingVerification map[string]bool
+	account1            string
+	account2            string
+	name                string
 }
 
 // Adds the transaction to the channels of the nodes intended to receive the transaction
@@ -279,19 +277,27 @@ func (tt *transactionTracker) addTransactionToVerify(transactionID string) {
 	}
 }
 
-func (tt *transactionTracker) checkAll() {
-	for len(tt.selfToVerify) > 0 {
+func (tt *transactionTracker) passTxnsToVeirfy() {
+	for tid := range tt.selfToVerify {
 		select {
 		case <-tt.ctx.Done():
 			return
-		case tid := <-tt.selfToVerify:
-			tt.mu.Lock()
-			tt.pendingVerification[tid] = true
-			tt.mu.Unlock()
+		default:
 		}
-	}
 
-	for len(tt.pendingVerification) != 0 {
+		tt.mu.Lock()
+		tt.pendingVerification[tid] = true
+		tt.mu.Unlock()
+	}
+}
+
+func (tt *transactionTracker) checkAll() {
+
+	for {
+		if _, more := <-tt.selfToVerify; !(more && len(tt.pendingVerification) != 0) {
+			break
+		}
+
 		select {
 		case <-tt.ctx.Done():
 			return
@@ -301,28 +307,33 @@ func (tt *transactionTracker) checkAll() {
 		require.NoError(tt.t, err)
 
 		for _, transactionInfo := range transactions.TruncatedTxns.Transactions {
-			tt.mu.Lock()
-			delete(tt.pendingVerification, transactionInfo.TxID)
-			tt.mu.Unlock()
+			if _, ok := tt.pendingVerification[transactionInfo.TxID]; ok {
+				//				fmt.Printf("Transaction account1 found! deleting from pending.\n")
+				tt.mu.Lock()
+				delete(tt.pendingVerification, transactionInfo.TxID)
+				tt.mu.Unlock()
+			}
 		}
 
 		transactions, err = tt.client.GetPendingTransactionsByAddress(tt.account2, 1000000)
 		require.NoError(tt.t, err)
 
 		for _, transactionInfo := range transactions.TruncatedTxns.Transactions {
-			tt.mu.Lock()
-			delete(tt.pendingVerification, transactionInfo.TxID)
-			tt.mu.Unlock()
+			if _, ok := tt.pendingVerification[transactionInfo.TxID]; ok {
+				//				fmt.Printf("Transaction account2 found! deleting from pending.\n")
+				tt.mu.Lock()
+				delete(tt.pendingVerification, transactionInfo.TxID)
+				tt.mu.Unlock()
+			}
 		}
-		time.Sleep(50*time.Millisecond)
+		time.Sleep(600 * time.Millisecond)
 	}
 }
 
 func (tt *transactionTracker) terminate() {
-	tt.wg.Wait()
 	tt.mu.Lock()
 	defer tt.mu.Unlock()
-	require.Equal(tt.t, 0, len(tt.pendingVerification))
+	require.Equal(tt.t, 0, len(tt.pendingVerification), "%s is missing %d transactions", tt.name, len(tt.pendingVerification))
 }
 
 // Retruns true if all the associated channels are empty
