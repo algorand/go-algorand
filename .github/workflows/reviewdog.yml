@@ -41,6 +41,10 @@ jobs:
         run: |
           echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
           echo "$RUNNER_WORKSPACE/$(basename $GITHUB_REPOSITORY)/bin" >> $GITHUB_PATH
+      - name: Install specific golang
+        uses: actions/setup-go@v2
+        with:
+          go-version: '^1.13.1'
       - name: Install golangci-lint
         run: |
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/v1.41.1/install.sh | sh -s
@@ -49,11 +53,8 @@ jobs:
         run: |
           curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.13.0/install.sh | sh -s
           reviewdog --version
-      - name: Check dependency versions
-        run: |
-          go version -m `which golangci-lint`
-          echo "----=====----"
-          cat cmd/partitiontest_linter/go.mod
+      - name: Check go version
+        run: go version
       - name: Build custom linters
         run: |
           cd cmd/partitiontest_linter/
