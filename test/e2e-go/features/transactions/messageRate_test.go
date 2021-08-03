@@ -38,8 +38,6 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-// TODO: remove print statements
-
 // this test checks that the txsync outgoing message rate
 // varies according to the transaction rate
 func TestMessageRateChangesWithTxnRate(t *testing.T) {
@@ -141,7 +139,8 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 		endTimeDelta := time.Since(startTime)
 		avgTps := float64(txnSentCount) / endTimeDelta.Seconds()
 		avgTpsErrorMessage := fmt.Sprintf("Avg txn rate %f < expected txn rate %f", avgTps, float64(txnRate))
-		a.Greaterf(avgTps, 0.9*float64(txnRate), avgTpsErrorMessage)
+		// fail the test if avg tps deviates more than 10% of the expected txn rate
+		a.Greater(avgTps, 0.9*float64(txnRate), avgTpsErrorMessage)
 
 		// wait for some time for the logs to get flushed
 		time.Sleep(2 * time.Second)
@@ -207,21 +206,6 @@ func parseLog(ctx context.Context, logPath string, filterAddress string, errChan
 		line := scanner.Text()
 		// look for txnsync messages sent to `filterAddress`
 		if strings.Contains(line, "Outgoing Txsync") && strings.Contains(line, filterAddress) {
-			// var logEvent map[string]interface{}
-			// json.Unmarshal([]byte(line), &logEvent)
-			// eventTime := fmt.Sprintf("%v", logEvent["time"])
-			// message := fmt.Sprintf("%v", logEvent["msg"])
-			// skip lines containing empty bloom filter
-			// if strings.Contains(message, "bloom 0") || strings.Contains(message, "transacations 0") {
-			// 	continue
-			// }
-			// record the timestamps of txnsync messages
-			// lastTimestamp, err = time.Parse(time.RFC3339, eventTime)
-			// lastMessage = message
-			// if err != nil {
-			// 	errChan <- err
-			// 	return
-			// }
 			messageCount++
 		}
 	}
