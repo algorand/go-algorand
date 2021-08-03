@@ -27,7 +27,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/nodecontrol"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
@@ -63,8 +66,8 @@ func TestTxnSync(t *testing.T) {
 	// transaction is received by the node.
 	// If this is too large, the system will report too many open files.
 	// If too small, the txns will be moved to the block.
-	maxParallelChecks := 10
-	numberOfSends := 500
+	maxParallelChecks := 1
+	numberOfSends := 1
 	targetRate := 300 // txn/sec
 	if testing.Short() {
 		numberOfSends = 100
@@ -72,21 +75,39 @@ func TestTxnSync(t *testing.T) {
 	templatePath := filepath.Join("nettemplates", "TwoNodes50EachWithTwoRelays.json")
 
 	var fixture fixtures.RestClientFixture
+
+	roundTime := time.Duration(20)
+
+	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
+	require.True(t, ok)
+	proto.AgreementFilterTimeoutPeriod0 = roundTime * time.Second
+	proto.AgreementFilterTimeout = roundTime * time.Second
+	fixture.SetConsensus(config.ConsensusProtocols{protocol.ConsensusCurrentVersion: proto})
+
 	fixture.Setup(t, templatePath)
+	defer fixture.Shutdown()
 
 	node1 := fixture.GetLibGoalClientForNamedNode("Node1")
 	node2 := fixture.GetLibGoalClientForNamedNode("Node2")
 	relay1 := fixture.GetLibGoalClientForNamedNode("Relay1")
 	relay2 := fixture.GetLibGoalClientForNamedNode("Relay2")
 
-	n1chan := make(chan string, numberOfSends)
-	n2chan := make(chan string, numberOfSends)
+	n1chan := make(chan string, numberOfSends*2)
+	n2chan := make(chan string, numberOfSends*2)
 	r1chan := make(chan string, numberOfSends*2)
 	r2chan := make(chan string, numberOfSends*2)
 
 	parallelCheckChannel := make(chan bool, maxParallelChecks)
 
 	ctx, cancel := context.WithCancel(context.Background())
+
+	account1List, err := fixture.GetNodeWalletsSortedByBalance(node1.DataDir())
+	require.NoError(t, err)
+	account1 := account1List[0].Address
+
+	account2List, err := fixture.GetNodeWalletsSortedByBalance(node2.DataDir())
+	require.NoError(t, err)
+	account2 := account2List[0].Address
 
 	ttn1 := transactionTracker{
 		t:                    t,
@@ -97,6 +118,8 @@ func TestTxnSync(t *testing.T) {
 		pendingVerification:  make(map[string]bool),
 		parallelCheckChannel: parallelCheckChannel,
 		cancelFunc:           cancel,
+		account1:             account1,
+		account2:             account2,
 	}
 
 	ttn2 := transactionTracker{
@@ -108,6 +131,8 @@ func TestTxnSync(t *testing.T) {
 		pendingVerification:  make(map[string]bool),
 		parallelCheckChannel: parallelCheckChannel,
 		cancelFunc:           cancel,
+		account1:             account1,
+		account2:             account2,
 	}
 
 	ttr1 := transactionTracker{
@@ -119,6 +144,8 @@ func TestTxnSync(t *testing.T) {
 		pendingVerification:  make(map[string]bool),
 		parallelCheckChannel: parallelCheckChannel,
 		cancelFunc:           cancel,
+		account1:             account1,
+		account2:             account2,
 	}
 
 	ttr2 := transactionTracker{
@@ -130,29 +157,16 @@ func TestTxnSync(t *testing.T) {
 		pendingVerification:  make(map[string]bool),
 		parallelCheckChannel: parallelCheckChannel,
 		cancelFunc:           cancel,
+		account1:             account1,
+		account2:             account2,
 	}
-
-	defer fixture.Shutdown()
-
-	account1List, err := fixture.GetNodeWalletsSortedByBalance(node1.DataDir())
-	require.NoError(t, err)
-	account1 := account1List[0].Address
-
-	account2List, err := fixture.GetNodeWalletsSortedByBalance(node2.DataDir())
-	require.NoError(t, err)
-	account2 := account2List[0].Address
 
 	minTxnFee, minAcctBalance, err := fixture.CurrentMinFeeAndBalance()
 	require.NoError(t, err)
 
-	transactionFee := minTxnFee * 5
+	transactionFee := minTxnFee * 1000
 	amount1 := minAcctBalance / uint64(numberOfSends)
 	amount2 := minAcctBalance / uint64(numberOfSends)
-
-	go ttn1.verifyTransactions()
-	go ttn2.verifyTransactions()
-	go ttr1.verifyTransactions()
-	go ttr2.verifyTransactions()
 
 	defer ttn1.terminate()
 	defer ttn2.terminate()
@@ -181,12 +195,16 @@ func TestTxnSync(t *testing.T) {
 		}
 	}
 
+	go ttn1.checkAll()
+	go ttn2.checkAll()
+	go ttr1.checkAll()
+	go ttr2.checkAll()
+
 	// wait until all channels are empty for max 50 seconds
 	for x := 0; x < 250; x++ {
 		select {
 		case <-ctx.Done():
 			require.True(t, false, "Context canceled due to an error")
-			return
 		default:
 		}
 
@@ -194,15 +212,18 @@ func TestTxnSync(t *testing.T) {
 			break
 		}
 		time.Sleep(200 * time.Millisecond)
+		if x%10 == 0 {
+			fmt.Printf("waiting for channel flushing [%d %d %d %d]  %d / %d\n", len(n1chan), len(n2chan), len(r1chan), len(r2chan), x, 250)
+		}
 	}
 	require.True(t, ttn1.channelsAreEmpty())
 
 	unprocessed := 0
-	for x := 0; x < numberOfSends/10; x++ {
+	maxWait := 1000
+	for x := 0; x < maxWait; x++ {
 		select {
 		case <-ctx.Done():
 			require.True(t, false, "Context canceled due to an error")
-			return
 		default:
 		}
 		ttn1.mu.Lock()
@@ -225,6 +246,9 @@ func TestTxnSync(t *testing.T) {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
+		if x%10 == 0 {
+			fmt.Printf("waiting for pending verificaitons [%d] %d / %d\n", unprocessed, x, maxWait)
+		}
 	}
 	require.Equal(t, 0, unprocessed)
 }
@@ -240,13 +264,8 @@ type transactionTracker struct {
 	pendingVerification  map[string]bool
 	parallelCheckChannel chan bool
 	cancelFunc           context.CancelFunc
-}
-
-func (tt *transactionTracker) terminate() {
-	tt.wg.Wait()
-	tt.mu.Lock()
-	defer tt.mu.Unlock()
-	require.Equal(tt.t, 0, len(tt.pendingVerification))
+	account1             string
+	account2             string
 }
 
 // Adds the transaction to the channels of the nodes intended to receive the transaction
@@ -261,10 +280,8 @@ func (tt *transactionTracker) addTransactionToVerify(transactionID string) {
 	}
 }
 
-// Pulls transactions from the channel and pushes them to another limited bandwith channel
-// Then, the check if the node received is performed async
-func (tt *transactionTracker) verifyTransactions() {
-	for {
+func (tt *transactionTracker) checkAll() {
+	for len(tt.selfToVerify) > 0 {
 		select {
 		case <-tt.ctx.Done():
 			return
@@ -272,58 +289,45 @@ func (tt *transactionTracker) verifyTransactions() {
 			tt.mu.Lock()
 			tt.pendingVerification[tid] = true
 			tt.mu.Unlock()
-			// This may be blocked untill there is room in parallelCheckChannel
-			select {
-			case <-tt.ctx.Done():
-				return
-			case tt.parallelCheckChannel <- true:
-				tt.wg.Add(1)
-				go tt.checkIfReceivedTransaction(tid)
-			}
 		}
 	}
-}
 
-// Waits until gets a confirmation that the transaction is recieved by the node
-func (tt *transactionTracker) checkIfReceivedTransaction(transactionID string) {
-	defer tt.wg.Done()
-	startTime := time.Now()
-	tries := 0
-	for {
+	for len(tt.pendingVerification) != 0 {
 		select {
 		case <-tt.ctx.Done():
 			return
 		default:
-			transactionInfo, err := tt.client.PendingTransactionInformation(transactionID)
-			tries++
-			if err != nil {
-				if err.Error() != "HTTP 404 Not Found: couldn't find the required transaction in the required range" {
-					require.NoError(tt.t, err)
-					tt.cancelFunc()
-				}
-				throttleRate(startTime, 3, tries)
-				continue
-			}
-			// If we got txn information
-			if transactionInfo.ConfirmedRound > 0 {
-				tt.cancelFunc()
-				require.Equal(tt.t, 0, int(transactionInfo.ConfirmedRound))
-			}
 		}
-		break
+		transactions, err := tt.client.GetPendingTransactionsByAddress(tt.account1, 1000000)
+		require.NoError(tt.t, err)
+
+		for _, transactionInfo := range transactions.TruncatedTxns.Transactions {
+			tt.mu.Lock()
+			delete(tt.pendingVerification, transactionInfo.TxID)
+			tt.mu.Unlock()
+		}
+
+		transactions, err = tt.client.GetPendingTransactionsByAddress(tt.account2, 1000000)
+		require.NoError(tt.t, err)
+
+		for _, transactionInfo := range transactions.TruncatedTxns.Transactions {
+			tt.mu.Lock()
+			delete(tt.pendingVerification, transactionInfo.TxID)
+			tt.mu.Unlock()
+		}
+		time.Sleep(50*time.Millisecond)
 	}
-	<-tt.parallelCheckChannel
-	// if received
+}
+
+func (tt *transactionTracker) terminate() {
+	tt.wg.Wait()
 	tt.mu.Lock()
 	defer tt.mu.Unlock()
-	delete(tt.pendingVerification, transactionID)
+	require.Equal(tt.t, 0, len(tt.pendingVerification))
 }
 
 // Retruns true if all the associated channels are empty
 func (tt *transactionTracker) channelsAreEmpty() bool {
-	if len(tt.selfToVerify) > 0 {
-		return false
-	}
 	for _, c := range tt.othersToVerify {
 		if len(c) > 0 {
 			return false
