@@ -51,7 +51,7 @@ jobs:
           reviewdog --version
       - name: Check dependency versions
         run: |
-          go version -m golangci-lint
+          go version -m `which golangci-lint`
           echo "----=====----"
           cat cmd/partitiontest_linter/go.mod
       - name: Build custom linters
