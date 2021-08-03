@@ -753,7 +753,7 @@ func (node *AlgorandFullNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn
 
 // ensureParticipationDB opens or creates a participation DB.
 func ensureParticipationDB() (account.ParticipationRegistry, error) {
-	return account.MakeParticipationRegistry(db.Accessor{}), nil
+	return account.MakeParticipationRegistry(db.Accessor{})
 }
 
 // Reload participation keys from disk periodically

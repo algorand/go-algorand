@@ -30,10 +30,10 @@ type ParticipationID crypto.Digest
 type ParticipationRecord struct {
 	ParticipationID ParticipationID
 
-	Account         basics.Address
-	FirstValid      basics.Round
-	LastValid       basics.Round
-	KeyDilution     uint64
+	Account     basics.Address
+	FirstValid  basics.Round
+	LastValid   basics.Round
+	KeyDilution uint64
 
 	LastVote               basics.Round
 	LastBlockProposal      basics.Round
@@ -48,6 +48,7 @@ type ParticipationRecord struct {
 // ParticipationAction is used when recording participation actions.
 type ParticipationAction int
 
+// ParticipationAction types
 const (
 	Vote ParticipationAction = iota
 	BlockProposal
