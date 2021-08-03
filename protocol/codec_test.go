@@ -18,10 +18,10 @@ package protocol
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-codec/codec"
 	"github.com/stretchr/testify/require"
 )
 
@@ -167,20 +167,34 @@ func TestEncodeJSON(t *testing.T) {
 	v.Map[1] = []string{"test1"}
 
 	nonStrict := EncodeJSON(&v)
-	strings.Contains(string(nonStrict), `0:`)
-	strings.Contains(string(nonStrict), `1:`)
+	require.Contains(t, string(nonStrict), `0:`)
+	require.Contains(t, string(nonStrict), `1:`)
 
 	strict := EncodeJSONStrict(&v)
-	strings.Contains(string(strict), `"0":`)
-	strings.Contains(string(strict), `"1":`)
+	require.Contains(t, string(strict), `"0":`)
+	require.Contains(t, string(strict), `"1":`)
 
 	var nsv mp
 	err := DecodeJSON(nonStrict, &nsv)
 	require.NoError(t, err)
 
 	var sv mp
-	err = DecodeJSON(nonStrict, &sv)
+	err = DecodeJSON(strict, &sv)
 	require.NoError(t, err)
+
+	require.True(t, reflect.DeepEqual(v, nsv))
+	require.True(t, reflect.DeepEqual(v, sv))
+
+	decodeJSONStrict := func(b []byte, objptr interface{}) error {
+		dec := codec.NewDecoderBytes(b, JSONStrictHandle)
+		return dec.Decode(objptr)
+	}
+
+	nsv = mp{}
+	decodeJSONStrict(nonStrict, &nsv)
+
+	sv = mp{}
+	decodeJSONStrict(strict, &sv)
 
 	require.True(t, reflect.DeepEqual(v, nsv))
 	require.True(t, reflect.DeepEqual(v, sv))

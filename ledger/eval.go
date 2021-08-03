@@ -247,16 +247,7 @@ func (cs *roundCowState) GetCreator(cidx basics.CreatableIndex, ctype basics.Cre
 }
 
 func (cs *roundCowState) Put(addr basics.Address, acct basics.AccountData) error {
-	return cs.PutWithCreatable(addr, acct, nil, nil)
-}
-
-func (cs *roundCowState) PutWithCreatable(addr basics.Address, acct basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
-	cs.put(addr, acct, newCreatable, deletedCreatable)
-
-	// store the creatable locator
-	if newCreatable != nil {
-		cs.trackCreatable(newCreatable.Index)
-	}
+	cs.mods.Accts.Upsert(addr, acct)
 	return nil
 }
 
@@ -283,7 +274,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	if overflowed {
 		return fmt.Errorf("overspend (account %v, data %+v, tried to spend %v)", from, fromBal, amt)
 	}
-	cs.put(from, fromBalNew, nil, nil)
+	cs.Put(from, fromBalNew)
 
 	toBal, err := cs.lookup(to)
 	if err != nil {
@@ -304,7 +295,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	if overflowed {
 		return fmt.Errorf("balance overflow (account %v, data %+v, was going to receive %v)", to, toBal, amt)
 	}
-	cs.put(to, toBalNew, nil, nil)
+	cs.Put(to, toBalNew)
 
 	return nil
 }
@@ -383,15 +374,15 @@ type ledgerForCowBase interface {
 // payset being evaluated is known in advance, a paysetHint >= 0 can be
 // passed, avoiding unnecessary payset slice growth.
 func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint int) (*BlockEvaluator, error) {
-	return startEvaluator(l, hdr, paysetHint, true, true)
-}
-
-func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHint int, validate bool, generate bool) (*BlockEvaluator, error) {
 	proto, ok := config.Consensus[hdr.CurrentProtocol]
 	if !ok {
 		return nil, protocol.Error(hdr.CurrentProtocol)
 	}
 
+	return startEvaluator(l, hdr, proto, paysetHint, true, true)
+}
+
+func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto config.ConsensusParams, paysetHint int, validate bool, generate bool) (*BlockEvaluator, error) {
 	base := &roundCowBase{
 		l: l,
 		// round that lookups come from is previous block.  We validate
@@ -432,6 +423,8 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 
 		base.txnCount = eval.prevHeader.TxnCounter
 		base.compactCertNextRnd = eval.prevHeader.CompactCert[protocol.CompactCertBasic].CompactCertNextRound
+
+		var ok bool
 		prevProto, ok = config.Consensus[eval.prevHeader.CurrentProtocol]
 		if !ok {
 			return nil, protocol.Error(eval.prevHeader.CurrentProtocol)
@@ -1166,7 +1159,13 @@ func (validator *evalTxValidator) run() {
 // AddBlock: eval(context.Background(), l, blk, false, txcache, nil, true)
 // tracker:  eval(context.Background(), l, blk, false, txcache, nil, false)
 func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
-	eval, err := startEvaluator(l, blk.BlockHeader, len(blk.Payset), validate, false)
+	proto, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]
+	if !ok {
+		return ledgercore.StateDelta{}, protocol.Error(blk.BlockHeader.CurrentProtocol)
+	}
+
+	eval, err := startEvaluator(
+		l, blk.BlockHeader, proto, len(blk.Payset), validate, false)
 	if err != nil {
 		return ledgercore.StateDelta{}, err
 	}
@@ -1240,7 +1239,7 @@ transactionGroupLoop:
 		}
 	}
 
-	// Finally, proceeds any pending end-of-block state changes
+	// Finally, process any pending end-of-block state changes.
 	err = eval.endOfBlock()
 	if err != nil {
 		return ledgercore.StateDelta{}, err
@@ -1487,4 +1486,37 @@ func (vb ValidatedBlock) WithSeed(s committee.Seed) ValidatedBlock {
 		blk:   newblock,
 		delta: vb.delta,
 	}
+}
+
+// Eval evaluates a block without validation using the given `proto`. Return the state
+// delta and transactions with modified apply data according to `proto`.
+// This function is used by Indexer which modifies `proto` to retrieve the asset
+// close amount for each transaction even when the real consensus parameters do not
+// support it.
+func Eval(l ledgerForEvaluator, blk *bookkeeping.Block, proto config.ConsensusParams) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
+	eval, err := startEvaluator(
+		l, blk.BlockHeader, proto, len(blk.Payset), false, false)
+	if err != nil {
+		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{}, err
+	}
+
+	paysetgroups, err := blk.DecodePaysetGroups()
+	if err != nil {
+		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{}, err
+	}
+
+	for _, group := range paysetgroups {
+		err = eval.TransactionGroup(group)
+		if err != nil {
+			return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{}, err
+		}
+	}
+
+	// Finally, process any pending end-of-block state changes.
+	err = eval.endOfBlock()
+	if err != nil {
+		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{}, err
+	}
+
+	return eval.state.deltas(), eval.block.Payset, nil
 }

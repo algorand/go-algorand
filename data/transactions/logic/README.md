@@ -360,6 +360,8 @@ App fields used in the `app_params_get` opcode.
 | `dup` | duplicate last value on stack |
 | `dup2` | duplicate two last values on stack: A, B -> A, B, A, B |
 | `dig n` | push the Nth value from the top of the stack. dig 0 is equivalent to dup |
+| `cover n` | remove top of stack, and place it down the stack such that N elements are above it |
+| `uncover n` | remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack |
 | `swap` | swaps two last values on stack: A, B -> B, A |
 | `select` | selects one of two values based on top-of-stack: A, B, C -> (if C != 0 then B else A) |
 | `assert` | immediately fail unless value X is a non-zero number |

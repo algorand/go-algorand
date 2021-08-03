@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
@@ -188,6 +189,7 @@ var sinkAddr = basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb
 var poolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 var genesisHash = crypto.Digest{0xff, 0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe}
 var genesisID = "testingid"
+var retOneProgram = []byte{2, 0x20, 1, 1, 0x22}
 
 var proto = config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -256,7 +258,15 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 
 	genesis[poolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})
 
-	bootstrap := data.MakeGenesisBalances(genesis, poolAddr, sinkAddr)
+	program := logic.Program(retOneProgram)
+	lhash := crypto.HashObj(&program)
+	var addr basics.Address
+	copy(addr[:], lhash[:])
+	ad := basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})
+	ad.AppLocalStates = map[basics.AppIndex]basics.AppLocalState{1: {}}
+	genesis[addr] = ad
+
+	bootstrap := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 
 	// generate test transactions
 	const inMem = true

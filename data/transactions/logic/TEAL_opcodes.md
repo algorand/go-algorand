@@ -660,6 +660,22 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - selects one of two values based on top-of-stack: A, B, C -> (if C != 0 then B else A)
 - LogicSigVersion >= 3
 
+## cover n
+
+- Opcode: 0x4e {uint8 depth}
+- Pops: *... stack*, any
+- Pushes: any
+- remove top of stack, and place it down the stack such that N elements are above it
+- LogicSigVersion >= 5
+
+## uncover n
+
+- Opcode: 0x4f {uint8 depth}
+- Pops: *... stack*, any
+- Pushes: any
+- remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack
+- LogicSigVersion >= 5
+
 ## concat
 
 - Opcode: 0x50

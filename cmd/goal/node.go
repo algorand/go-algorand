@@ -165,7 +165,7 @@ var startCmd = &cobra.Command{
 		}
 		onDataDirs(func(dataDir string) {
 			if libgoal.AlgorandDaemonSystemdManaged(dataDir) {
-				reportErrorf(errorNodeManagedBySystemd, "start")
+				reportErrorf(errorNodeManagedBySystemd)
 			}
 
 			nc := nodecontrol.MakeNodeController(binDir, dataDir)
@@ -237,7 +237,7 @@ var stopCmd = &cobra.Command{
 		}
 		onDataDirs(func(dataDir string) {
 			if libgoal.AlgorandDaemonSystemdManaged(dataDir) {
-				reportErrorf(errorNodeManagedBySystemd, "stop")
+				reportErrorf(errorNodeManagedBySystemd)
 			}
 
 			nc := nodecontrol.MakeNodeController(binDir, dataDir)
@@ -268,7 +268,7 @@ var restartCmd = &cobra.Command{
 		}
 		onDataDirs(func(dataDir string) {
 			if libgoal.AlgorandDaemonSystemdManaged(dataDir) {
-				reportErrorf(errorNodeManagedBySystemd, "restart")
+				reportErrorf(errorNodeManagedBySystemd)
 			}
 
 			nc := nodecontrol.MakeNodeController(binDir, dataDir)
