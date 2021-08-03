@@ -1028,7 +1028,6 @@ const globalV4TestProgram = globalV3TestProgram + `
 `
 
 const globalV5TestProgram = globalV4TestProgram + `
-// No new globals in v5
 global CurrentApplicationAddress
 len
 int 32

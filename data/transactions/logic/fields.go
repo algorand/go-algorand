@@ -485,6 +485,9 @@ const (
 	// AppCreator is not *in* the Params, but it is uniquely determined.
 	AppCreator
 
+	// AppAddress is also not *in* the Params, but can be derived
+	AppAddress
+
 	invalidAppParamsField
 )
 
@@ -505,6 +508,7 @@ var appParamsFieldTypeList = []appParamsFieldType{
 	{AppLocalNumByteSlice, StackUint64},
 	{AppExtraProgramPages, StackUint64},
 	{AppCreator, StackBytes},
+	{AppAddress, StackBytes},
 }
 
 // AppParamsFieldTypes is StackUint64 StackBytes in parallel with AppParamsFieldNames

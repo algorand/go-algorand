@@ -465,4 +465,5 @@ var AppParamsFieldDocs = map[string]string{
 	"AppLocalNumByteSlice":  "Number of byte array values allowed in Local State",
 	"AppExtraProgramPages":  "Number of Extra Program Pages of code space",
 	"AppCreator":            "Creator address",
+	"AppAddress":            "Address for which this application has authority",
 }

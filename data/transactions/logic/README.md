@@ -346,6 +346,7 @@ App fields used in the `app_params_get` opcode.
 | 5 | AppLocalNumByteSlice | uint64 | Number of byte array values allowed in Local State |
 | 6 | AppExtraProgramPages | uint64 | Number of Extra Program Pages of code space |
 | 7 | AppCreator | []byte | Creator address |
+| 8 | AppAddress | []byte | Address for which this application has authority |
 
 
 ### Flow Control

@@ -2520,6 +2520,15 @@ func TestAppAddress(t *testing.T) {
 	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
 	source := fmt.Sprintf("global CurrentApplicationAddress; addr %s; ==;", basics.AppIndex(888).Address())
 	testApp(t, source, ep)
+
+	source = fmt.Sprintf("int 0; app_params_get AppAddress; assert; addr %s; ==;", basics.AppIndex(888).Address())
+	testApp(t, source, ep)
+
+	// To document easy construction:
+	// python -c 'import algosdk.encoding as e; print(e.encode_address(e.checksum(b"app"+(888).to_bytes(8, "big"))))'
+	a := "F3W7PAA7ZTPJHJACQL55RBTN4QXG2ZWAEOXC6XLMPIQQPGDDIA4P6JYSKM"
+	source = fmt.Sprintf("int 0; app_params_get AppAddress; assert; addr %s; ==;", a)
+	testApp(t, source, ep)
 }
 
 func TestAppPay(t *testing.T) {

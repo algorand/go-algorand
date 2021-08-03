@@ -348,6 +348,7 @@ type BlockEvaluator struct {
 
 	block        bookkeeping.Block
 	blockTxBytes int
+	specials     transactions.SpecialAddresses
 
 	blockGenerated bool // prevent repeated GenerateBlock calls
 
@@ -398,6 +399,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 		validate:    validate,
 		generate:    generate,
 		block:       bookkeeping.Block{BlockHeader: hdr},
+		specials:    transactions.SpecialAddresses{hdr.FeeSink, hdr.RewardsPool},
 		proto:       proto,
 		genesisHash: l.GenesisHash(),
 		l:           l,
@@ -627,12 +629,7 @@ func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn, cow *rou
 		return err
 	}
 
-	// Well-formed on its own?
-	spec := transactions.SpecialAddresses{
-		FeeSink:     eval.block.BlockHeader.FeeSink,
-		RewardsPool: eval.block.BlockHeader.RewardsPool,
-	}
-	err = txn.Txn.WellFormed(spec, eval.proto)
+	err = txn.Txn.WellFormed(eval.specials, eval.proto)
 	if err != nil {
 		return fmt.Errorf("transaction %v: malformed: %v", txn.ID(), err)
 	}
@@ -668,12 +665,13 @@ func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithA
 
 // prepareEvalParams creates a logic.EvalParams for each ApplicationCall
 // transaction in the group
-func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWithAD, spec *transactions.SpecialAddresses) (res []*logic.EvalParams) {
+func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWithAD) []*logic.EvalParams {
 	var groupNoAD []transactions.SignedTxn
 	var pastSideEffects []logic.EvalSideEffects
 	var minTealVersion uint64
 	pooledApplicationBudget := uint64(0)
-	res = make([]*logic.EvalParams, len(txgroup))
+	var overpaidFee uint64
+	res := make([]*logic.EvalParams, len(txgroup))
 	for i, txn := range txgroup {
 		// Ignore any non-ApplicationCall transactions
 		if txn.SignedTxn.Txn.Type != protocol.ApplicationCallTx {
@@ -693,6 +691,8 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 			}
 			pastSideEffects = logic.MakePastSideEffects(len(txgroup))
 			minTealVersion = logic.ComputeMinTealVersion(groupNoAD)
+			overpaidFee, _ = transactions.OverpaidFees(groupNoAD, eval.proto.MinTxnFee)
+			// intentionally ignoring error here, fees had to have been enough to get here
 		}
 
 		res[i] = &logic.EvalParams{
@@ -703,9 +703,11 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 			PastSideEffects:         pastSideEffects,
 			MinTealVersion:          &minTealVersion,
 			PooledApplicationBudget: &pooledApplicationBudget,
+			OverpaidFee:             &overpaidFee,
+			Specials:                &eval.specials,
 		}
 	}
-	return
+	return res
 }
 
 // transactionGroup tentatively executes a group of transactions as part of this block evaluation.
@@ -726,13 +728,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	var groupTxBytes int
 
 	cow := eval.state.child(len(txgroup))
-
-	// Prepare eval params for any ApplicationCall transactions in the group
-	spec := transactions.SpecialAddresses{
-		FeeSink:     eval.block.BlockHeader.FeeSink,
-		RewardsPool: eval.block.BlockHeader.RewardsPool,
-	}
-	evalParams := eval.prepareEvalParams(txgroup, &spec)
+	evalParams := eval.prepareEvalParams(txgroup)
 
 	// Evaluate each transaction in the group
 	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
@@ -740,7 +736,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		var txib transactions.SignedTxnInBlock
 
 		cow.setGroupIdx(gi)
-		err := eval.transaction(txad.SignedTxn, evalParams[gi], spec, txad.ApplyData, cow, &txib)
+		err := eval.transaction(txad.SignedTxn, evalParams[gi], txad.ApplyData, cow, &txib)
 		if err != nil {
 			return err
 		}
@@ -831,7 +827,7 @@ func (eval *BlockEvaluator) checkMinBalance(cow *roundCowState) error {
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *logic.EvalParams, spec transactions.SpecialAddresses, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *logic.EvalParams, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
 
 	// Only compute the TxID once
@@ -865,7 +861,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	}
 
 	// Apply the transaction, updating the cow balances
-	applyData, err := eval.applyTransaction(txn.Txn, cow, evalParams, spec, cow.txnCounter())
+	applyData, err := eval.applyTransaction(txn.Txn, cow, evalParams, cow.txnCounter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txid, err)
 	}
@@ -909,11 +905,11 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 }
 
 // applyTransaction changes the balances according to this transaction.
-func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balances *roundCowState, evalParams *logic.EvalParams, spec transactions.SpecialAddresses, ctr uint64) (ad transactions.ApplyData, err error) {
+func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balances *roundCowState, evalParams *logic.EvalParams, ctr uint64) (ad transactions.ApplyData, err error) {
 	params := balances.ConsensusParams()
 
 	// move fee to pool
-	err = balances.Move(tx.Sender, spec.FeeSink, tx.Fee, &ad.SenderRewards, nil)
+	err = balances.Move(tx.Sender, eval.specials.FeeSink, tx.Fee, &ad.SenderRewards, nil)
 	if err != nil {
 		return
 	}
@@ -941,19 +937,19 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 
 	switch tx.Type {
 	case protocol.PaymentTx:
-		err = apply.Payment(tx.PaymentTxnFields, tx.Header, balances, spec, &ad)
+		err = apply.Payment(tx.PaymentTxnFields, tx.Header, balances, eval.specials, &ad)
 
 	case protocol.KeyRegistrationTx:
-		err = apply.Keyreg(tx.KeyregTxnFields, tx.Header, balances, spec, &ad, balances.round())
+		err = apply.Keyreg(tx.KeyregTxnFields, tx.Header, balances, eval.specials, &ad, balances.round())
 
 	case protocol.AssetConfigTx:
-		err = apply.AssetConfig(tx.AssetConfigTxnFields, tx.Header, balances, spec, &ad, ctr)
+		err = apply.AssetConfig(tx.AssetConfigTxnFields, tx.Header, balances, eval.specials, &ad, ctr)
 
 	case protocol.AssetTransferTx:
-		err = apply.AssetTransfer(tx.AssetTransferTxnFields, tx.Header, balances, spec, &ad)
+		err = apply.AssetTransfer(tx.AssetTransferTxnFields, tx.Header, balances, eval.specials, &ad)
 
 	case protocol.AssetFreezeTx:
-		err = apply.AssetFreeze(tx.AssetFreezeTxnFields, tx.Header, balances, spec, &ad)
+		err = apply.AssetFreeze(tx.AssetFreezeTxnFields, tx.Header, balances, eval.specials, &ad)
 
 	case protocol.ApplicationCallTx:
 		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, balances, &ad, evalParams, ctr)

@@ -1835,8 +1835,8 @@ func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, creato
 	return
 }
 
-func (cx *evalContext) appParamsEnumToValue(params *basics.AppParams, creator basics.Address, field uint64) (sv stackValue, err error) {
-	switch AppParamsField(field) {
+func (cx *evalContext) appParamsEnumToValue(params *basics.AppParams, field AppParamsField) (sv stackValue, err error) {
+	switch field {
 	case AppApprovalProgram:
 		sv.Bytes = params.ApprovalProgram[:]
 	case AppClearStateProgram:
@@ -1851,17 +1851,15 @@ func (cx *evalContext) appParamsEnumToValue(params *basics.AppParams, creator ba
 		sv.Uint = params.LocalStateSchema.NumByteSlice
 	case AppExtraProgramPages:
 		sv.Uint = uint64(params.ExtraProgramPages)
-	case AppCreator:
-		sv.Bytes = creator[:]
 	default:
+		// The pseudo fields AppCreator and AppAddress are handled outside this method
 		err = fmt.Errorf("invalid app params field %d", field)
 		return
 	}
 
-	appParamsField := AppParamsField(field)
-	appParamsFieldType := AppParamsFieldTypes[appParamsField]
+	appParamsFieldType := AppParamsFieldTypes[field]
 	if !typecheck(appParamsFieldType, sv.argType()) {
-		err = fmt.Errorf("%s expected field type is %s but got %s", appParamsField.String(), appParamsFieldType.String(), sv.argType().String())
+		err = fmt.Errorf("%s expected field type is %s but got %s", field.String(), appParamsFieldType.String(), sv.argType().String())
 	}
 	return
 }
@@ -3216,7 +3214,17 @@ func opAppParamsGet(cx *evalContext) {
 	if params, creator, err := cx.Ledger.AppParams(app); err == nil {
 		// params exist, read the value
 		exist = 1
-		value, err = cx.appParamsEnumToValue(&params, creator, paramIdx)
+
+		field := AppParamsField(paramIdx)
+		switch field {
+		case AppCreator:
+			value.Bytes = creator[:]
+		case AppAddress:
+			address := app.Address()
+			value.Bytes = address[:]
+		default:
+			value, err = cx.appParamsEnumToValue(&params, field)
+		}
 		if err != nil {
 			cx.err = err
 			return
@@ -3281,7 +3289,7 @@ func opTxBegin(cx *evalContext) {
 			// Use up the overpay to shrink the fee
 			fee -= *cx.OverpaidFee
 		}
-		// We don't change OverpiadFee here, because they
+		// We don't change OverpaidFee here, because they
 		// might never tx_submit, or they might change the fee
 		// (if we decide to allow that).  Do it in tx_submit.
 	}
@@ -3400,7 +3408,7 @@ func opTxSubmit(cx *evalContext) {
 	} else {
 		underpaid := cx.Proto.MinTxnFee - paid
 		// Try to pay with OverpaidFee, else fail.
-		if cx.OverpaidFee != nil && *cx.OverpaidFee > underpaid {
+		if cx.OverpaidFee != nil && *cx.OverpaidFee >= underpaid {
 			*cx.OverpaidFee -= underpaid
 		} else {
 			// This should be impossible until we allow changing the Fee

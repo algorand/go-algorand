@@ -177,7 +177,7 @@ func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 		return
 	}
 	// feesPaid may have saturated. That's ok. Since we know
-	// feeNeeded did not overlfow, simple comparison tells us
+	// feeNeeded did not overflow, simple comparison tells us
 	// feesPaid was enough.
 	if feesPaid < feeNeeded {
 		err = fmt.Errorf("txgroup had %d in fees, which is less than the minimum %d * %d",

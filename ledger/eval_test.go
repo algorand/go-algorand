@@ -71,7 +71,9 @@ func TestBlockEvaluator(t *testing.T) {
 	defer l.Close()
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+	newBlock.RewardsState = genesisInitState.Block.RewardsState
 	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	require.Equal(t, eval.specials.FeeSink, testSinkAddr)
 	require.NoError(t, err)
 
 	genHash := genesisInitState.Block.BlockHeader.GenesisHash
@@ -283,6 +285,7 @@ func TestRekeying(t *testing.T) {
 		// So the ValidatedBlock that comes out isn't necessarily actually a valid block. We'll call Validate ourselves.
 
 		newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+		newBlock.RewardsState = genesisInitState.Block.RewardsState
 		eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
 		require.NoError(t, err)
 
@@ -415,11 +418,7 @@ func TestPrepareEvalParams(t *testing.T) {
 		for j, testCase := range cases {
 			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
 				eval.proto = param
-				spec := transactions.SpecialAddresses{
-					FeeSink:     eval.block.BlockHeader.FeeSink,
-					RewardsPool: eval.block.BlockHeader.RewardsPool,
-				}
-				res := eval.prepareEvalParams(testCase.group, &spec)
+				res := eval.prepareEvalParams(testCase.group)
 				require.Equal(t, len(res), len(testCase.group))
 
 				// Compute the expected transaction group without ApplyData for
@@ -479,6 +478,7 @@ func testEvalAppGroup(t *testing.T, schema basics.StateSchema) (*BlockEvaluator,
 	defer l.Close()
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+	newBlock.RewardsState = genesisInitState.Block.RewardsState
 	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
 	require.NoError(t, err)
 	eval.validate = true
@@ -779,6 +779,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
 
 	// test speed of block building
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+	newBlock.RewardsState = genesisInitState.Block.RewardsState
 	bev, err := l.StartEvaluator(newBlock.BlockHeader, 0)
 	require.NoError(b, err)
 
@@ -996,6 +997,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	defer l.Close()
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+	newBlock.RewardsState = genesisInitState.Block.RewardsState
 	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
 	require.NoError(t, err)
 
