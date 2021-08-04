@@ -25,16 +25,63 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-func TestParticipation_NewParticipationRegistry(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
-
+func getRegistry(t *testing.T) (db.Accessor, ParticipationRegistry) {
 	rootDB, err := db.MakeAccessor(t.Name(), false, true)
-	a.NoError(err)
+	require.NoError(t, err)
 
 	registry, err := MakeParticipationRegistry(rootDB)
-	a.NoError(err)
-	a.NotNil(registry)
+	require.NoError(t, err)
+	require.NotNil(t, registry)
 
+	return rootDB, registry
+}
+
+func assertParticipation(t *testing.T, p Participation, pr ParticipationRecord) {
+	require.Equal(t, p.FirstValid, pr.FirstValid)
+	require.Equal(t, p.LastValid, pr.LastValid)
+	require.Equal(t, p.KeyDilution, pr.KeyDilution)
+	require.Equal(t, p.Parent, pr.Account)
+}
+
+func TestParticipation_InsertGet(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	_, registry := getRegistry(t)
+
+	// Create first record.
+	p := Participation{
+		FirstValid:  1,
+		LastValid:   2,
+		KeyDilution: 3,
+	}
+	p.Parent[0] = 1
+
+	p2 := Participation{
+		FirstValid:  4,
+		LastValid:   5,
+		KeyDilution: 6,
+	}
+	p2.Parent[0] = 2
+
+	insertAndVerify := func(part Participation) {
+		id, err := registry.Insert(part)
+		a.NoError(err)
+		a.Equal(part.ParticipationID(), id)
+
+		record, err := registry.Get(part.ParticipationID())
+		a.NoError(err)
+		assertParticipation(t, part, record)
+	}
+
+	// Verify inserting some records.
+	insertAndVerify(p)
+	insertAndVerify(p2)
+
+	// Verify GetAll.
+	results, err := registry.GetAll()
+	a.NoError(err)
+	a.Len(results, 2)
+	assertParticipation(t, p, results[0])
+	assertParticipation(t, p2, results[1])
 }

@@ -146,6 +146,8 @@ func TestReadOnlyError(t *testing.T) {
 }
 
 func TestUnknownVersionError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	accessor, err := MakeAccessor("test-unknown-version", false, true)
 	require.NoError(t, err)
 
@@ -164,6 +166,8 @@ func TestUnknownVersionError(t *testing.T) {
 }
 
 func TestNewDBFlag(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	var captureNewDB bool
 	newDBCheck := func(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 		captureNewDB = newDatabase
@@ -207,6 +211,8 @@ func TestNewDBFlag(t *testing.T) {
 }
 
 func TestResumeUpgrading(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	accessor, err := MakeAccessor("test-resume", false, true)
 	require.NoError(t, err)
 

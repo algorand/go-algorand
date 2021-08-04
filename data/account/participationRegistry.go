@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -58,20 +59,22 @@ const (
 	CompactCertificate
 )
 
-// ParticipationIDNotFoundErr is used when attempting to update a set of keys which do not exist.
-var ParticipationIDNotFoundErr error
-
-func init() {
-	ParticipationIDNotFoundErr = errors.New("the participation ID was not found")
-}
+// ErrParticipationIDNotFound is used when attempting to update a set of keys which do not exist.
+var ErrParticipationIDNotFound = errors.New("the participation ID was not found")
 
 // ParticipationRegistry contain all functions for interacting with the Participation Registry.
 type ParticipationRegistry interface {
 	// Insert adds a record to storage and computes the ParticipationID
-	Insert(record ParticipationRecord) (ParticipationID, error)
+	Insert(record Participation) (ParticipationID, error)
 
 	// Delete removes a record from storage.
 	Delete(id ParticipationID) error
+
+	// Get a participation record.
+	Get(id ParticipationID) (ParticipationRecord, error)
+
+	// GetAll of the participation records.
+	GetAll() ([]ParticipationRecord, error)
 
 	// Register updates the EffectiveFirst and EffectiveLast fields. If there are multiple records for the account
 	// then it is possible for multiple records to be updated.
@@ -97,35 +100,50 @@ func MakeParticipationRegistry(accessor db.Accessor) (ParticipationRegistry, err
 	}, nil
 }
 
-// dbSchemaUpgrade0 initializes the tables
-func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
-	// Keysets is for the immutable data, Rolling may change over time.
-	tableSchema := []string{
-		`CREATE TABLE Keysets (
-			pk INTEGER,
+// Queries
+var (
+	createKeysets = `CREATE TABLE Keysets (
+			pk INTEGER PRIMARY KEY,
 
-			participationID BLOB
+			participationID BLOB,
 			account BLOB,
 
-			firstValidRound INTEGER,
-			lastValidRound INTEGER,
-			keyDilution INTEGER NOT NULL DEFAULT 0
+			firstValidRound INTEGER NOT NULL DEFAULT 0,
+			lastValidRound INTEGER  NOT NULL DEFAULT 0,
+			keyDilution INTEGER     NOT NULL DEFAULT 0
 
-			--vrf BLOB,    --*  msgpack encoding of ParticipationAccount.vrf
-		);`,
-		`CREATE TABLE Rolling (
-			pk INTEGER,
+			-- vrf BLOB,    --*  msgpack encoding of ParticipationAccount.vrf
+		)`
+	createRolling = `CREATE TABLE Rolling (
+			pk INTEGER PRIMARY KEY,
 
-			lastVoteRound INTEGER,
-			lastBlockProposalRound INTEGER,
-			lastCompactCertificateRound INTEGER,
-			effectiveFirstValidRound INTEGER,
-			effectiveLastValidRound INTEGER,
+			lastVoteRound INTEGER               NOT NULL DEFAULT 0,
+			lastBlockProposalRound INTEGER      NOT NULL DEFAULT 0,
+			lastCompactCertificateRound INTEGER NOT NULL DEFAULT 0,
+			effectiveFirstValidRound INTEGER    NOT NULL DEFAULT 0,
+			effectiveLastValidRound INTEGER     NOT NULL DEFAULT 0
 
-			--voting BLOB, --*  msgpack encoding of ParticipationAccount.voting
-		);`,
-	}
+			-- voting BLOB, --*  msgpack encoding of ParticipationAccount.voting
+		)`
+	insertKeysetQuery  = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution) VALUES (?, ?, ?, ?, ?)`
+	insertRollingQuery = `INSERT INTO Rolling (pk) VALUES (?)`
+	// SELECT pk FROM Keysets WHERE participationID = ?
+	selectLastPK = `SELECT pk FROM Keysets ORDER BY pk DESC limit 1`
+	selectRecords = `SELECT 
+			participationID, account, firstValidRound, lastValidRound, keyDilution,
+			lastVoteRound, lastBlockProposalRound, lastCompactCertificateRound,
+			effectiveFirstValidRound, effectiveLastValidRound
+		FROM Keysets, Rolling
+		WHERE Keysets.pk = Rolling.pk`
+	selectRecord = selectRecords + ` AND participationID = ?`
+)
 
+
+// dbSchemaUpgrade0 initialize the tables.
+func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
+	// Keysets is for the immutable data.
+	// Rolling may change over time.
+	tableSchema := []string{createKeysets, createRolling}
 	for _, tableCreate := range tableSchema {
 		_, err := tx.Exec(tableCreate)
 		if err != nil {
@@ -141,12 +159,121 @@ type participationDB struct {
 	store db.Accessor
 }
 
-func (db *participationDB) Insert(record ParticipationRecord) (ParticipationID, error) {
-	return ParticipationID{}, nil
+func (db *participationDB) Insert(record Participation) (id ParticipationID, err error) {
+	id = record.ParticipationID()
+	err = db.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec(
+			insertKeysetQuery,
+			id[:],
+			record.Parent[:],
+			record.FirstValid,
+			record.LastValid,
+			record.KeyDilution)
+		if err != nil {
+			return fmt.Errorf("unable to insert keyset: %w", err)
+		}
+
+		// Fetch primary key
+		var pk int
+		row := tx.QueryRow(selectLastPK, id[:])
+		if row.Err() != nil {
+			return fmt.Errorf("unable to fetch pk: %w", row.Err())
+		}
+		err = row.Scan(&pk)
+		if err != nil {
+			return fmt.Errorf("unable to scan pk: %w", err)
+		}
+
+		// Create Rolling entry
+		_, err = tx.Exec(insertRollingQuery, pk)
+		if err != nil {
+			return fmt.Errorf("unable insert rolling: %w", err)
+		}
+
+		return nil
+	})
+	return
 }
 
 func (db *participationDB) Delete(id ParticipationID) error {
 	return nil
+}
+
+func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
+	results := make([]ParticipationRecord, 0)
+	for rows.Next() {
+		var record ParticipationRecord
+		// participationID, account, firstValidRound, lastValidRound, keyDilution,
+		// lastVoteRound, lastBlockProposalRound, lastCompactCertificateRound,
+		// effectiveFirstValidRound, effectiveLastValidRound
+		var participationBlob []byte
+		var accountBlob []byte
+		err := rows.Scan(
+			&participationBlob,
+			&accountBlob,
+			&record.FirstValid,
+			&record.LastValid,
+			&record.KeyDilution,
+			&record.LastVote,
+			&record.LastBlockProposal,
+			&record.LastCompactCertificate,
+			&record.EffectiveFirst,
+			&record.EffectiveLast,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		copy(record.ParticipationID[:], participationBlob)
+		copy(record.Account[:], accountBlob)
+
+		results = append(results, record)
+	}
+
+	return results, nil
+}
+
+func (db *participationDB) Get(id ParticipationID) (record ParticipationRecord, err error) {
+	err = db.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		rows, err := tx.Query(selectRecord, id[:])
+		if err != nil {
+			return fmt.Errorf("unable to scan record: %w", err)
+		}
+
+		records, err := scanRecords(rows)
+		if err != nil {
+			return fmt.Errorf("unable to scan record: %w", err)
+		}
+
+		if len(records) != 1 {
+			return fmt.Errorf("expected 1 result found %d", len(records))
+		}
+
+		record = records[0]
+
+		return nil
+	})
+
+	return
+}
+
+func (db *participationDB) GetAll() (records []ParticipationRecord, err error) {
+	err = db.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		rows, err := tx.Query(selectRecords)
+		if err != nil {
+			return fmt.Errorf("unable to query records: %w", err)
+		}
+
+		records, err = scanRecords(rows)
+		if err != nil {
+			records = nil
+			return fmt.Errorf("problem scanning records: %w", err)
+		}
+
+		return nil
+	})
+
+	return
 }
 
 func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
