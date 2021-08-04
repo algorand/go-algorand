@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -50,12 +51,12 @@ func (i entryValidatorImpl) Validate(ctx context.Context, e bookkeeping.Block) (
 }
 
 type entryFactoryImpl struct {
-	l *data.Ledger
+	sl *ledger.SpeculativeLedger
 }
 
 // AssembleBlock implements Ledger.AssembleBlock.
-func (i entryFactoryImpl) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
-	prev, err := i.l.BlockHdr(round - 1)
+func (i entryFactoryImpl) AssembleSpeculativeBlock(round basics.Round, leaf bookkeeping.BlockHash, deadline time.Time) (agreement.ValidatedBlock, error) {
+	prev, err := i.sl.BlockHdr(round-1, leaf)
 	if err != nil {
 		return nil, fmt.Errorf("could not make proposals: could not read block from ledger at round %v: %v", round, err)
 	}
@@ -77,24 +78,24 @@ func (ve validatedBlock) Block() bookkeeping.Block {
 }
 
 type ledgerImpl struct {
-	l *data.Ledger
+	sl *ledger.SpeculativeLedger
 }
 
 // NextRound implements Ledger.NextRound.
 func (i ledgerImpl) NextRound() basics.Round {
-	return i.l.NextRound()
+	return i.sl.NextRound()
 }
 
-func (i ledgerImpl) Seed(r basics.Round) (committee.Seed, error) {
-	block, err := i.l.BlockHdr(r)
+func (i ledgerImpl) Seed(r basics.Round, leaf bookkeeping.BlockHash) (committee.Seed, error) {
+	block, err := i.sl.BlockHdr(r, leaf)
 	if err != nil {
 		return committee.Seed{}, err
 	}
 	return block.Seed, nil
 }
 
-func (i ledgerImpl) LookupDigest(r basics.Round) (crypto.Digest, error) {
-	blockhdr, err := i.l.BlockHdr(r)
+func (i ledgerImpl) LookupDigest(r basics.Round, leaf bookkeeping.BlockHash) (crypto.Digest, error) {
+	blockhdr, err := i.sl.BlockHdr(r, leaf)
 	if err != nil {
 		return crypto.Digest{}, err
 	}
@@ -102,38 +103,38 @@ func (i ledgerImpl) LookupDigest(r basics.Round) (crypto.Digest, error) {
 }
 
 // Lookup implements Ledger.Lookup.
-func (i ledgerImpl) Lookup(r basics.Round, addr basics.Address) (basics.AccountData, error) {
-	return i.l.Lookup(r, addr)
+func (i ledgerImpl) Lookup(r basics.Round, leaf bookkeeping.BlockHash, addr basics.Address) (basics.AccountData, error) {
+	return i.sl.Lookup(r, leaf, addr)
 }
 
 // Circulation implements Ledger.Circulation.
-func (i ledgerImpl) Circulation(r basics.Round) (basics.MicroAlgos, error) {
-	return i.l.Circulation(r)
+func (i ledgerImpl) Circulation(r basics.Round, leaf bookkeeping.BlockHash) (basics.MicroAlgos, error) {
+	return i.sl.Circulation(r, leaf)
 }
 
 // Wait implements Ledger.Wait.
-func (i ledgerImpl) Wait(r basics.Round) chan struct{} {
-	return i.l.Wait(r)
+func (i ledgerImpl) Wait(r basics.Round, leaf bookkeeping.BlockHash) chan struct{} {
+	return i.sl.Wait(r, leaf)
 }
 
 // EnsureValidatedBlock implements Ledger.EnsureValidatedBlock.
 func (i ledgerImpl) EnsureValidatedBlock(e agreement.ValidatedBlock, c agreement.Certificate) {
-	i.l.EnsureBlock(e.(validatedBlock).blk, c)
+	i.sl.EnsureBlock(e.(validatedBlock).blk, c)
 }
 
 // EnsureBlock implements Ledger.EnsureBlock.
 func (i ledgerImpl) EnsureBlock(e bookkeeping.Block, c agreement.Certificate) {
-	i.l.EnsureBlock(&e, c)
+	i.sl.EnsureBlock(&e, c)
 }
 
 // ConsensusParams implements Ledger.ConsensusParams.
-func (i ledgerImpl) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {
-	return i.l.ConsensusParams(r)
+func (i ledgerImpl) ConsensusParams(r basics.Round, leaf bookkeeping.BlockHash) (config.ConsensusParams, error) {
+	return i.sl.ConsensusParams(r, leaf)
 }
 
 // ConsensusParams implements Ledger.ConsensusVersion.
-func (i ledgerImpl) ConsensusVersion(r basics.Round) (protocol.ConsensusVersion, error) {
-	return i.l.ConsensusVersion(r)
+func (i ledgerImpl) ConsensusVersion(r basics.Round, leaf bookkeeping.BlockHash) (protocol.ConsensusVersion, error) {
+	return i.sl.ConsensusVersion(r, leaf)
 }
 
 // EnsureDigest implements Ledger.EnsureDigest.
@@ -141,7 +142,7 @@ func (i ledgerImpl) EnsureDigest(cert agreement.Certificate, verifier *agreement
 	r := cert.Round
 	consistencyCheck := func() bool {
 		if r < i.NextRound() {
-			b, err := i.l.Block(r)
+			b, err := i.sl.Block(r)
 			if err != nil {
 				panic(err)
 			}

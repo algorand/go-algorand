@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -33,16 +34,18 @@ import (
 var roundDeadline = 0 * time.Second
 
 // FabricateLedger is a test-only helper to create a new in-memory Ledger and run the protocol through the specified Round with the given accounts
-func FabricateLedger(log logging.Logger, ledgerName string, accounts []account.Participation, genesis data.GenesisBalances, lastRound basics.Round) (*data.Ledger, error) {
+func FabricateLedger(log logging.Logger, ledgerName string, accounts []account.Participation, genesis data.GenesisBalances, lastRound basics.Round) (*ledger.SpeculativeLedger, error) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	ledger, err := data.LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genesis, "", crypto.Digest{}, nil, cfg)
+	dledger, err := data.LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genesis, "", crypto.Digest{}, nil, cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	numRounds := lastRound - ledger.LastRound()
-	err = agreementtest.Simulate(ledgerName, numRounds, roundDeadline, ledgerImpl{l: ledger}, agreementtest.SimpleKeyManager(accounts), entryFactoryImpl{l: ledger}, entryValidatorImpl{l: ledger}, logging.Base())
-	return ledger, err
+	sl := ledger.MakeSpeculativeLedger(dledger.Ledger)
+
+	numRounds := lastRound - sl.Latest()
+	err = agreementtest.Simulate(ledgerName, numRounds, roundDeadline, ledgerImpl{sl: sl}, agreementtest.SimpleKeyManager(accounts), entryFactoryImpl{sl: sl}, entryValidatorImpl{l: dledger}, logging.Base())
+	return sl, err
 }
