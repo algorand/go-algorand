@@ -14,22 +14,26 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package components
+package main
 
-import "github.com/algorand/go-algorand/data/basics"
+import (
+	linter "github.com/algorand/go-algorand/cmd/partitiontest_linter"
+	"golang.org/x/tools/go/analysis"
+	"golang.org/x/tools/go/analysis/singlechecker"
+)
 
-// NodeContext is an interface representing various context information regarding
-// a specific node instance (per AlgorandFullNode)
-type NodeContext interface {
-	// IsCatchingUp returns true if our sync routine is currently running
-	IsCatchingUp() bool
+type analyzerPlugin struct{}
 
-	// IsInitialCatchupComplete returns true if the initial sync has completed (doesn't mean it succeeded)
-	IsInitialCatchupComplete() bool
+// This must be implemented
+func (*analyzerPlugin) GetAnalyzers() []*analysis.Analyzer {
+	return []*analysis.Analyzer{
+		linter.Analyzer,
+	}
+}
 
-	// HasCaughtUp returns true if we have completely caught up at least once
-	HasCaughtUp() bool
+// This must be defined and named 'AnalyzerPlugin'
+var AnalyzerPlugin analyzerPlugin
 
-	// SetLastLiveRound is called to record observation of a round completion
-	SetLastLiveRound(round basics.Round)
+func main() {
+	singlechecker.Main(linter.Analyzer)
 }

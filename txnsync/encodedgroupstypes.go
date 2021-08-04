@@ -245,7 +245,7 @@ type appIndices []basics.AppIndex
 //msgp:allocbound assetIndices transactions.EncodedMaxForeignAssets
 type assetIndices []basics.AssetIndex
 
-//msgp:allocbound program config.MaxAppProgramLen
+//msgp:allocbound program config.MaxAvailableAppProgramLen
 type program []byte
 
 type encodedApplicationCallTxnFields struct {
