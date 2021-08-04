@@ -27,7 +27,7 @@ severity:
 
 issues:
   # use these new lint checks on code since #2574
-  new-from-rev: 07d3c1a94a54a176a74c84ae762a41c746a93d3b
+  new-from-rev: eb019291beed556ec6ac1ceb4a15114ce4df0c57
 
   # Disable default exclude rules listed in `golangci-lint run --help` (selectively re-enable some below)
   exclude-use-default: false
@@ -63,3 +63,14 @@ issues:
         - deadcode
         - gosimple
         - unused
+    # Add all linters here -- Comment this block out for testing linters
+    - path: test/linttest/lintissues\.go
+      linters:
+        - staticcheck
+        - structcheck
+        - typecheck
+        - varcheck
+        - deadcode
+        - gosimple
+        - unused
+        - partitiontest
