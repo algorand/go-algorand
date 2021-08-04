@@ -263,6 +263,12 @@ func (cb *roundCowState) commitToParent() {
 		}
 	}
 	cb.commitParent.mods.CompactCertNext = cb.mods.CompactCertNext
+	for index, created := range cb.mods.ModifiedAssetHoldings {
+		cb.commitParent.mods.ModifiedAssetHoldings[index] = created
+	}
+	for index, created := range cb.mods.ModifiedAppLocalStates {
+		cb.commitParent.mods.ModifiedAppLocalStates[index] = created
+	}
 }
 
 func (cb *roundCowState) modifiedAccounts() []basics.Address {

@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-deadlock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -37,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -868,4 +870,293 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	poolOld, err := eval.workaroundOverspentRewards(rewardPoolBalance, headerRound)
 	require.Equal(t, nextPoolBalance, poolOld.MicroAlgos.Raw)
 	require.NoError(t, err)
+}
+
+// Test that ModifiedAssetHoldings in StateDelta is set correctly.
+func TestModifiedAssetHoldings(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genesisInitState, addrs, _ := genesis(10)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	genHash := genesisInitState.Block.BlockHeader.GenesisHash
+	const assetid basics.AssetIndex = 1
+
+	var validatedBlock *ValidatedBlock
+	{
+		// Create an asset.
+		createTxn := transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: "acfg",
+				Header: transactions.Header{
+					Sender:      addrs[0],
+					Fee:         basics.MicroAlgos{Raw: 2000},
+					GenesisHash: genHash,
+				},
+				AssetConfigTxnFields: transactions.AssetConfigTxnFields{
+					AssetParams: basics.AssetParams{
+						Total:    3,
+						Decimals: 0,
+						Manager:  addrs[0],
+						Reserve:  addrs[0],
+						Freeze:   addrs[0],
+						Clawback: addrs[0],
+					},
+				},
+			},
+		}
+
+		// Opt in.
+		optInTxn := transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: "axfer",
+				Header: transactions.Header{
+					Sender:      addrs[1],
+					Fee:         basics.MicroAlgos{Raw: 2000},
+					GenesisHash: genHash,
+				},
+				AssetTransferTxnFields: transactions.AssetTransferTxnFields{
+					XferAsset:     assetid,
+					AssetAmount:   0,
+					AssetReceiver: addrs[1],
+				},
+			},
+		}
+
+		eval, err := startEvaluator(
+			l, bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader).BlockHeader,
+			config.Consensus[protocol.ConsensusFuture], 0, false, true)
+		require.NoError(t, err)
+		eval.Transaction(createTxn, transactions.ApplyData{})
+		require.NoError(t, err)
+		eval.Transaction(optInTxn, transactions.ApplyData{})
+		require.NoError(t, err)
+		validatedBlock, err = eval.GenerateBlock()
+		require.NoError(t, err)
+
+		{
+			aa := ledgercore.AccountAsset{
+				Address: addrs[0],
+				Asset:   assetid,
+			}
+			created, ok := validatedBlock.delta.ModifiedAssetHoldings[aa]
+			require.True(t, ok)
+			assert.True(t, created)
+		}
+		{
+			aa := ledgercore.AccountAsset{
+				Address: addrs[1],
+				Asset:   assetid,
+			}
+			created, ok := validatedBlock.delta.ModifiedAssetHoldings[aa]
+			require.True(t, ok)
+			assert.True(t, created)
+		}
+
+		// Write deltas to the ledger.
+		err = l.AddBlock(validatedBlock.blk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+
+	{
+		// Opt out.
+		optOutTxn := transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: "axfer",
+				Header: transactions.Header{
+					Sender:      addrs[1],
+					Fee:         basics.MicroAlgos{Raw: 1000},
+					GenesisHash: genHash,
+				},
+				AssetTransferTxnFields: transactions.AssetTransferTxnFields{
+					XferAsset:     assetid,
+					AssetReceiver: addrs[0],
+					AssetCloseTo:  addrs[0],
+				},
+			},
+		}
+
+		// Close the asset.
+		closeTxn := transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: "acfg",
+				Header: transactions.Header{
+					Sender:      addrs[0],
+					Fee:         basics.MicroAlgos{Raw: 1000},
+					GenesisHash: genHash,
+				},
+				AssetConfigTxnFields: transactions.AssetConfigTxnFields{
+					ConfigAsset: assetid,
+				},
+			},
+		}
+
+		eval, err := startEvaluator(
+			l, bookkeeping.MakeBlock(validatedBlock.blk.BlockHeader).BlockHeader,
+			config.Consensus[protocol.ConsensusFuture], 0, false, true)
+		require.NoError(t, err)
+		eval.Transaction(optOutTxn, transactions.ApplyData{})
+		require.NoError(t, err)
+		eval.Transaction(closeTxn, transactions.ApplyData{})
+		require.NoError(t, err)
+		validatedBlock, err = eval.GenerateBlock()
+		require.NoError(t, err)
+
+		{
+			aa := ledgercore.AccountAsset{
+				Address: addrs[0],
+				Asset:   assetid,
+			}
+			created, ok := validatedBlock.delta.ModifiedAssetHoldings[aa]
+			require.True(t, ok)
+			assert.False(t, created)
+		}
+		{
+			aa := ledgercore.AccountAsset{
+				Address: addrs[1],
+				Asset:   assetid,
+			}
+			created, ok := validatedBlock.delta.ModifiedAssetHoldings[aa]
+			require.True(t, ok)
+			assert.False(t, created)
+		}
+	}
+}
+
+// Test that ModifiedAppLocalStates in StateDelta is set correctly.
+func TestModifiedAppLocalStates(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genesisInitState, addrs, _ := genesis(10)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	genHash := genesisInitState.Block.BlockHeader.GenesisHash
+	const appid basics.AppIndex = 1
+
+	var validatedBlock *ValidatedBlock
+	{
+		// Create an app.
+		createTxn := transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: "appl",
+				Header: transactions.Header{
+					Sender:      addrs[0],
+					GenesisHash: genHash,
+				},
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApprovalProgram:   []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+					ClearStateProgram: []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+				},
+			},
+		}
+
+		// Opt in.
+		optInTxn := transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: "appl",
+				Header: transactions.Header{
+					Sender:      addrs[1],
+					GenesisHash: genHash,
+				},
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID: appid,
+					OnCompletion:  transactions.OptInOC,
+				},
+			},
+		}
+
+		eval, err := startEvaluator(
+			l, bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader).BlockHeader,
+			config.Consensus[protocol.ConsensusFuture], 0, false, true)
+		require.NoError(t, err)
+		eval.Transaction(createTxn, transactions.ApplyData{})
+		require.NoError(t, err)
+		eval.Transaction(optInTxn, transactions.ApplyData{})
+		require.NoError(t, err)
+		validatedBlock, err = eval.GenerateBlock()
+		require.NoError(t, err)
+
+		assert.Equal(t, 1, len(validatedBlock.delta.ModifiedAppLocalStates))
+		{
+			aa := ledgercore.AccountApp{
+				Address: addrs[1],
+				App:     appid,
+			}
+			created, ok := validatedBlock.delta.ModifiedAppLocalStates[aa]
+			require.True(t, ok)
+			assert.True(t, created)
+		}
+
+		// Write deltas to the ledger.
+		err = l.AddBlock(validatedBlock.blk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+
+	{
+		// Opt out.
+		optOutTxn := transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: "appl",
+				Header: transactions.Header{
+					Sender:      addrs[1],
+					GenesisHash: genHash,
+				},
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID: appid,
+					OnCompletion:  transactions.CloseOutOC,
+				},
+			},
+		}
+
+		// Delete the app.
+		closeTxn := transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: "appl",
+				Header: transactions.Header{
+					Sender:      addrs[0],
+					GenesisHash: genHash,
+				},
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID: appid,
+					OnCompletion:  transactions.DeleteApplicationOC,
+				},
+			},
+		}
+
+		eval, err := startEvaluator(
+			l, bookkeeping.MakeBlock(validatedBlock.blk.BlockHeader).BlockHeader,
+			config.Consensus[protocol.ConsensusFuture], 0, false, true)
+		require.NoError(t, err)
+		eval.Transaction(optOutTxn, transactions.ApplyData{})
+		require.NoError(t, err)
+		eval.Transaction(closeTxn, transactions.ApplyData{})
+		require.NoError(t, err)
+		validatedBlock, err = eval.GenerateBlock()
+		require.NoError(t, err)
+
+		assert.Equal(t, 1, len(validatedBlock.delta.ModifiedAppLocalStates))
+		{
+			aa := ledgercore.AccountApp{
+				Address: addrs[1],
+				App:     appid,
+			}
+			created, ok := validatedBlock.delta.ModifiedAppLocalStates[aa]
+			require.True(t, ok)
+			assert.False(t, created)
+		}
+	}
 }
