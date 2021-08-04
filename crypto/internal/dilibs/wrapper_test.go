@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package dillibs
+package dilibs
 
 import (
 	"crypto/sha256"
@@ -27,15 +27,22 @@ import (
 func TestDil2Check(t *testing.T) {
 	a := require.New(t)
 	for i := 0; i < 100; i++ {
-		pk, sk := dil2GenerateKeys()
+		dsigner := NewKeys()
 		b := make([]byte, 8)
 		binary.BigEndian.PutUint64(b, uint64(i))
 		bs := sha256.Sum256(b)
-		sig := dil2Sign(sk, bs[:])
-		a.True(dil2Verify(pk, bs[:], sig))
-		bs[0]++
-		a.False(dil2Verify(pk, bs[:], sig))
-		sig[0]++
-		a.False(dil2Verify(pk, bs[:], sig))
+		sig := dsigner.SignBytes(bs[:])
+		a.NoError(dsigner.PublicKey.VerifyBytes(bs[:], sig))
+		var sig2 Dil2Signature
+		copy(sig2[:], sig)
+
+		sig2[0]++
+		a.Error(dsigner.PublicKey.VerifyBytes(bs[:], sig2[:]))
+
+		var bs2 [32]byte
+		copy(bs2[:], bs[:])
+
+		bs2[0]++
+		a.Error(dsigner.PublicKey.VerifyBytes(bs2[:], sig[:]))
 	}
 }
