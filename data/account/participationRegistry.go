@@ -27,6 +27,8 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
+const maxBalLookback = 320
+
 // ParticipationID identifies a particular set of participation keys.
 type ParticipationID crypto.Digest
 
@@ -61,6 +63,9 @@ const (
 
 // ErrParticipationIDNotFound is used when attempting to update a set of keys which do not exist.
 var ErrParticipationIDNotFound = errors.New("the participation ID was not found")
+
+// ErrInvalidRegisterRange is used when attempting to register a participation key on a round that is out of range.
+var ErrInvalidRegisterRange = errors.New("key would not be active within range")
 
 // ParticipationRegistry contain all functions for interacting with the Participation Registry.
 type ParticipationRegistry interface {
@@ -127,6 +132,8 @@ var (
 		)`
 	insertKeysetQuery  = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution) VALUES (?, ?, ?, ?, ?)`
 	insertRollingQuery = `INSERT INTO Rolling (pk) VALUES (?)`
+
+
 	// SELECT pk FROM Keysets WHERE participationID = ?
 	selectPK = `SELECT pk FROM Keysets WHERE participationID = ? LIMIT 1`
 	selectLastPK = `SELECT pk FROM Keysets ORDER BY pk DESC LIMIT 1`
@@ -137,6 +144,28 @@ var (
 		FROM Keysets, Rolling
 		WHERE Keysets.pk = Rolling.pk`
 	selectRecord = selectRecords + ` AND participationID = ?`
+	deleteKeysets = `DELETE FROM Keysets WHERE pk=?`
+	deleteRolling = `DELETE FROM Rolling WHERE pk=?`
+	// there should only be a single record within the effective range.
+	updateRollingFieldX =
+		`UPDATE Keysets, Rolling
+		 SET %s=?1
+		 WHERE Keysets.account=?2
+		 AND Rolling.effectiveFirstValidRound < ?1
+		 AND Rolling.effectiveLastValidRound < ?1`
+	// there should be, at most, a single record within the effective range.
+	// only the effectiveLastValid can change here.
+	clearRegistered =
+		`UPDATE Rolling
+		 SET effectiveLastValidRound = ?1
+		 WHERE pk IN (SELECT pk FROM Keysets WHERE account = ?2)
+		 AND Rolling.effectiveFirstValidRound < ?1
+		 AND Rolling.effectiveLastValidRound > ?1`
+	setRegistered =
+		`UPDATE Rolling
+		 SET effectiveFirstValidRound=?,
+		     effectiveLastValidRound=?
+		 WHERE pk = (SELECT pk FROM Keysets WHERE participationID = ?)`
 )
 
 
@@ -213,12 +242,12 @@ func (db *participationDB) Delete(id ParticipationID) error {
 
 		// Delete rows
 
-		_, err = tx.Exec(`DELETE FROM Keysets WHERE pk=?`, pk)
+		_, err = tx.Exec(deleteKeysets, pk)
 		if err != nil {
 			return err
 		}
 
-		_, err = tx.Exec(`DELETE FROM Rolling WHERE pk=?`, pk)
+		_, err = tx.Exec(deleteRolling, pk)
 		if err != nil {
 			return err
 		}
@@ -302,9 +331,59 @@ func (db *participationDB) GetAll() (records []ParticipationRecord, err error) {
 }
 
 func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
+	// Lookup record for first/last valid and account.
+	record, err := db.Get(id)
+	if err != nil {
+		return fmt.Errorf("unable to lookup id: %w", err)
+	}
+
+	// round out of valid range.
+	if on + maxBalLookback > record.LastValid || on + maxBalLookback < record.FirstValid {
+		return ErrInvalidRegisterRange
+	}
+
+	return db.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		// if the is an active key, shut it down.
+		_, err = tx.Exec(clearRegistered, on + maxBalLookback, record.Account[:])
+		if err != nil {
+			return fmt.Errorf("unable to clear registered key: %w", err)
+		}
+
+		// update id
+		_, err = tx.Exec(setRegistered, on + maxBalLookback, record.LastValid, id[:])
+		if err != nil {
+			return fmt.Errorf("unable to update registered key: %w", err)
+		}
+
+		return nil
+	})
+
 	return nil
 }
 
-func (db *participationDB) Record(account basics.Address, round basics.Round, participationType ParticipationAction) error {
+func (db *participationDB) Record(account basics.Address, round basics.Round, participationAction ParticipationAction) error {
+	var field string
+	switch participationAction {
+	case Vote:
+		field = "lastVoteRound"
+	case BlockProposal:
+		field = "lastBlockProposalRound"
+	case CompactCertificate:
+		field = "lastCompactCertificateRound"
+	default:
+		return fmt.Errorf("unknown participation action: %d", participationAction)
+	}
+
+	query := fmt.Sprintf(updateRollingFieldX, field)
+
+	return db.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec(query, round, account[:])
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
 	return nil
 }

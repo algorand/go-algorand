@@ -49,7 +49,6 @@ func TestParticipation_InsertGet(t *testing.T) {
 
 	_, registry := getRegistry(t)
 
-	// Create first record.
 	p := Participation{
 		FirstValid:  1,
 		LastValid:   2,
@@ -90,7 +89,6 @@ func TestParticipation_Delete(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	// Create first record.
 	p := Participation{
 		FirstValid:  1,
 		LastValid:   2,
@@ -123,4 +121,73 @@ func TestParticipation_Delete(t *testing.T) {
 	a.NoError(err)
 	a.Len(results, 1)
 	assertParticipation(t, p2, results[0])
+}
+
+func TestParticipation_Register(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	// Overlapping keys.
+	p := Participation{
+		FirstValid:  250000,
+		LastValid:   3000000,
+		KeyDilution: 1,
+	}
+	p.Parent[0] = 1
+
+	p2 := Participation{
+		FirstValid:  2000000,
+		LastValid:   4000000,
+		KeyDilution: 2,
+		Parent: p.Parent,
+	}
+
+	_, registry := getRegistry(t)
+
+	id, err := registry.Insert(p)
+	a.NoError(err)
+	a.Equal(p.ParticipationID(), id)
+
+	id, err = registry.Insert(p2)
+	a.NoError(err)
+	a.Equal(p2.ParticipationID(), id)
+
+	verifyEffectiveRound := func(id ParticipationID, first, last int) {
+		record, err := registry.Get(id)
+		a.NoError(err)
+		require.Equal(t, first, int(record.EffectiveFirst))
+		require.Equal(t, last, int(record.EffectiveLast))
+	}
+
+	// Register the first key.
+	err = registry.Register(p.ParticipationID(), 500000)
+	a.NoError(err)
+	verifyEffectiveRound(p.ParticipationID(), 500320, int(p.LastValid))
+
+	// Register second key.
+	err = registry.Register(p2.ParticipationID(), 2500000)
+	a.NoError(err)
+	verifyEffectiveRound(p.ParticipationID(), 500320, 2500320)
+	verifyEffectiveRound(p2.ParticipationID(), 2500320, int(p2.LastValid))
+}
+
+func TestParticipation_RegisterInvalidRange(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	_, registry := getRegistry(t)
+
+	// Overlapping keys.
+	p := Participation{
+		FirstValid:  250000,
+		LastValid:   3000000,
+		KeyDilution: 1,
+	}
+
+	id, err := registry.Insert(p)
+	a.NoError(err)
+	a.Equal(p.ParticipationID(), id)
+
+	// Register the first key.
+	err = registry.Register(p.ParticipationID(), 1000000000)
+	a.EqualError(err, ErrInvalidRegisterRange.Error())
 }
