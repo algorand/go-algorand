@@ -23,9 +23,9 @@ import "errors"
 
 type (
 	// Dil2Signature is the signature used by the dilithium scheme
-	Dil2Signature  [2420]byte
+	Dil2Signature [2420]byte
 	// Dil2PublicKey is the public key used by the dilithium scheme
-	Dil2PublicKey  [1312]byte
+	Dil2PublicKey [1312]byte
 	// Dil2PrivateKey is the private key used by the dilithium scheme
 	Dil2PrivateKey [2528]byte
 )
