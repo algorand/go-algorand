@@ -76,5 +76,15 @@ jobs:
       - name: Run golangci-lint with reviewdog
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          ./cicdtmp/golangci-lint/golangci-lint-cgo run --out-format line-number -c .golangci-warnings.yml --allow-parallel-runners | reviewdog -f=golangci-lint -name="Lint Warnings" -reporter=github-pr-check -filter-mode=added -fail-on-error=false -level=warning
+        run: >
+          ./cicdtmp/golangci-lint/golangci-lint-cgo run
+          --out-format line-number
+          -c .golangci-warnings.yml
+          --allow-parallel-runners
+          | reviewdog
+          -f=golangci-lint
+          -name="Lint Warnings"
+          -reporter=github-check
+          -filter-mode=added
+          -fail-on-error=false
+          -level=warning
