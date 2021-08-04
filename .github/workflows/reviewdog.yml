@@ -45,13 +45,20 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: '1.16.6'
-      - name: Build golangci-lint
+      - name: Create folders for golangci-lint
+        run: mkdir -p cicdtmp/golangci-lint
+      - name: Check if custom golangci-lint is already built
+        id: cache-golnagci-lint
+        uses: actions/cache@v2
+        with:
+          path: cicdtmp/golangci-lint/golangci-lint-cgo
+          key: cicd-golangci-lint-cgo-v0.0.1
+
+      - name: Build custom golangci-lint with CGO_ENABLED
+        if: steps.cache-golnagci-lint.outputs.cache-hit != 'true'
         run: |
-          # curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/v1.41.1/install.sh | sh -s
-          mkdir cicdtmp
-          cd cicdtmp
-          git clone https://github.com/golangci/golangci-lint.git
-          cd golangci-lint
+          cd cicdtmp/golangci-lint
+          git clone https://github.com/golangci/golangci-lint.git .
           git checkout tags/v1.41.1
           CGO_ENABLED=true go build -trimpath -o golangci-lint-cgo ./cmd/golangci-lint
           ./golangci-lint-cgo --version
@@ -66,18 +73,6 @@ jobs:
           CGO_ENABLED=true go build -buildmode=plugin -trimpath plugin/plugin.go
           cd ../../
           ls -la cmd/partitiontest_linter/
-      - name: Check dependency versions
-        run: go version -m ./cicdtmp/golangci-lint/golangci-lint-cgo
       - name: Run golangci-lint with reviewdog
         run: |
-          ./cicdtmp/golangci-lint/golangci-lint-cgo run --out-format line-number -c .golangci-warnings.yml --allow-parallel-runners
-          # | reviewdog -f=golangci-lint -name=Lint Warnings -reporter=github-check -filter-mode=added -fail-on-error=false -level=warning
-      # - name: reviewdog-golangci-lint
-      #   uses: reviewdog/action-golangci-lint@v2
-      #   with:
-      #     golangci_lint_version: "v1.41.1"
-      #     golangci_lint_flags: "-c .golangci-warnings.yml --allow-parallel-runners"
-      #     reporter: "github-check"
-      #     tool_name: "Lint Warnings"
-      #     level: "warning"
-      #     fail_on_error: false
+          ./cicdtmp/golangci-lint/golangci-lint-cgo run --out-format line-number -c .golangci-warnings.yml --allow-parallel-runners | reviewdog -f=golangci-lint -name=Lint Warnings -reporter=github-check -filter-mode=added -fail-on-error=false -level=warning
