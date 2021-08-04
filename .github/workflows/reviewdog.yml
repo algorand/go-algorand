@@ -75,4 +75,4 @@ jobs:
           ls -la cmd/partitiontest_linter/
       - name: Run golangci-lint with reviewdog
         run: |
-          ./cicdtmp/golangci-lint/golangci-lint-cgo run --out-format line-number -c .golangci-warnings.yml --allow-parallel-runners | reviewdog -f=golangci-lint -name=Lint Warnings -reporter=github-check -filter-mode=added -fail-on-error=false -level=warning
+          ./cicdtmp/golangci-lint/golangci-lint-cgo run --out-format line-number -c .golangci-warnings.yml --allow-parallel-runners | reviewdog -f=golangci-lint -name="Lint Warnings" -reporter=github-check -filter-mode=added -fail-on-error=false -level=warning
