@@ -66,9 +66,12 @@ jobs:
           CGO_ENABLED=true go build -buildmode=plugin -trimpath plugin/plugin.go
           cd ../../
           ls -la cmd/partitiontest_linter/
+      - name: Check dependency versions
+        run: go version -m ./cicdtmp/golangci-lint/golangci-lint-cgo
       - name: Run golangci-lint with reviewdog
         run: |
-          ./cicdtmp/golangci-lint/golangci-lint-cgo run --out-format line-number -c .golangci-warnings.yml --allow-parallel-runners | reviewdog -f=golangci-lint -name=Lint Warnings -reporter=github-check -filter-mode=added -fail-on-error=false -level=warning
+          ./cicdtmp/golangci-lint/golangci-lint-cgo run --out-format line-number -c .golangci-warnings.yml --allow-parallel-runners
+          # | reviewdog -f=golangci-lint -name=Lint Warnings -reporter=github-check -filter-mode=added -fail-on-error=false -level=warning
       # - name: reviewdog-golangci-lint
       #   uses: reviewdog/action-golangci-lint@v2
       #   with:
