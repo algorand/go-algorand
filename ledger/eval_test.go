@@ -932,7 +932,7 @@ func TestModifiedAssetHoldings(t *testing.T) {
 
 		eval, err := startEvaluator(
 			l, bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader).BlockHeader,
-			config.Consensus[protocol.ConsensusFuture], 0, false, true)
+			config.Consensus[protocol.ConsensusFuture], 0, false, true, 0)
 		require.NoError(t, err)
 		eval.Transaction(createTxn, transactions.ApplyData{})
 		require.NoError(t, err)
@@ -1000,7 +1000,7 @@ func TestModifiedAssetHoldings(t *testing.T) {
 
 		eval, err := startEvaluator(
 			l, bookkeeping.MakeBlock(validatedBlock.blk.BlockHeader).BlockHeader,
-			config.Consensus[protocol.ConsensusFuture], 0, false, true)
+			config.Consensus[protocol.ConsensusFuture], 0, false, true, 0)
 		require.NoError(t, err)
 		eval.Transaction(optOutTxn, transactions.ApplyData{})
 		require.NoError(t, err)
@@ -1081,7 +1081,7 @@ func TestModifiedAppLocalStates(t *testing.T) {
 
 		eval, err := startEvaluator(
 			l, bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader).BlockHeader,
-			config.Consensus[protocol.ConsensusFuture], 0, false, true)
+			config.Consensus[protocol.ConsensusFuture], 0, false, true, 0)
 		require.NoError(t, err)
 		eval.Transaction(createTxn, transactions.ApplyData{})
 		require.NoError(t, err)
@@ -1139,7 +1139,7 @@ func TestModifiedAppLocalStates(t *testing.T) {
 
 		eval, err := startEvaluator(
 			l, bookkeeping.MakeBlock(validatedBlock.blk.BlockHeader).BlockHeader,
-			config.Consensus[protocol.ConsensusFuture], 0, false, true)
+			config.Consensus[protocol.ConsensusFuture], 0, false, true, 0)
 		require.NoError(t, err)
 		eval.Transaction(optOutTxn, transactions.ApplyData{})
 		require.NoError(t, err)
