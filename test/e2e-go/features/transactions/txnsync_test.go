@@ -33,31 +33,20 @@ import (
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
-// TestTxnSync sends payments by two nodes, and verifies that
-// each transaction is received by the other node and the relay
-//
-// The test sets up a network with 2 nodes and 2 relays.
+// This test sets up a network with 2 nodes and 2 relays.
 // The two nodes send payment transactions.
-//
+
 // For each transaction, the test checks if the relays and the nodes
 // (including the node that originated the transaction) have the
 // transaction in the pool (i.e. the transactionInfo.ConfirmedRound ==
 // 0).
-//
-// The tests needs a delicate balance to pass.
-//
-// The transactions need to be checked in the pool fast enough before
-// they are moved out to the block.
-//
-// In order to quickly test them while maintaining a high transaction
-// throughput, the checks need to be performed in parallel.
-//
-// The parallel checks require open files for the rest
-// connections. Too many of them and the system will complain about
-// too many open files.
-//
-// The test keeps the number of simultaneous open connections via
-// maxParallelChecks.
+
+// The tests needs to check for the transactions in the pool fast
+// enough before they get evicted from the pool to the block.
+
+// To achieve this, it sends transactions during the first half of the
+// round period, to give the test enough time to check for the
+// transactions.
 func TestTxnSync(t *testing.T) {
 	t.Parallel()
 
