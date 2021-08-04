@@ -179,7 +179,7 @@ func TestTxnSync(t *testing.T) {
 
 	// wait for the 1st round
 	nextRound := uint64(1)
-	err = fixture.ClientWaitForRound(fixture.AlgodClient, nextRound, 10*roundTime)
+	err = fixture.ClientWaitForRound(fixture.AlgodClient, nextRound, 20*roundTime)
 	require.NoError(t, err)
 	nextRound++
 

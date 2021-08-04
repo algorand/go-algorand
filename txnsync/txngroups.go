@@ -127,10 +127,10 @@ func (s *syncState) compressTransactionGroupsBytes(uncompressedData []byte) ([]b
 	return compressedData, compressionFormatDeflate
 }
 
-func decodeTransactionGroups(ptg packedTransactionGroups, genesisID string, genesisHash crypto.Digest) (txnGroups []transactions.SignedTxGroup, err error) {
+func decodeTransactionGroups(ptg packedTransactionGroups, genesisID string, genesisHash crypto.Digest) (txnGroups []transactions.SignedTxGroup, totalTxnsInGroups int, err error) {
 	data := ptg.Bytes
 	if len(data) == 0 {
-		return nil, nil
+		return nil, 0, nil
 	}
 
 	switch ptg.CompressionFormat {
@@ -142,23 +142,23 @@ func decodeTransactionGroups(ptg packedTransactionGroups, genesisID string, gene
 		}
 		defer releaseMessageBuffer(data)
 	default:
-		return nil, fmt.Errorf("invalid compressionFormat, %d", ptg.CompressionFormat)
+		return nil, 0, fmt.Errorf("invalid compressionFormat, %d", ptg.CompressionFormat)
 	}
 	var stub txGroupsEncodingStub
 	_, err = stub.UnmarshalMsg(data)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	if stub.TransactionGroupCount > maxEncodedTransactionGroup {
-		return nil, errors.New("invalid TransactionGroupCount")
+		return nil, 0, errors.New("invalid TransactionGroupCount")
 	}
 
 	stx := make([]transactions.SignedTxn, stub.TotalTransactionsCount)
 
 	err = stub.reconstructSignedTransactions(stx, genesisID, genesisHash)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	txnGroups = make([]transactions.SignedTxGroup, stub.TransactionGroupCount)
@@ -167,7 +167,7 @@ func decodeTransactionGroups(ptg packedTransactionGroups, genesisID string, gene
 		if txnGroupIndex < len(stub.TransactionGroupSizes)*2 {
 			nibble, err := getNibble(stub.TransactionGroupSizes, txnGroupIndex)
 			if err != nil {
-				return nil, err
+				return nil, 0, err
 			}
 			size = int(nibble) + 1
 		}
@@ -177,10 +177,10 @@ func decodeTransactionGroups(ptg packedTransactionGroups, genesisID string, gene
 
 	err = addGroupHashes(txnGroups, int(stub.TotalTransactionsCount), stub.BitmaskGroup)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return txnGroups, nil
+	return txnGroups, int(stub.TotalTransactionsCount), nil
 }
 
 func decompressTransactionGroupsBytes(data []byte, lenDecompressedBytes uint64) (decoded []byte, err error) {
