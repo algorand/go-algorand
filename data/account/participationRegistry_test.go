@@ -85,3 +85,42 @@ func TestParticipation_InsertGet(t *testing.T) {
 	assertParticipation(t, p, results[0])
 	assertParticipation(t, p2, results[1])
 }
+
+func TestParticipation_Delete(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	// Create first record.
+	p := Participation{
+		FirstValid:  1,
+		LastValid:   2,
+		KeyDilution: 3,
+	}
+	p.Parent[0] = 1
+
+	p2 := Participation{
+		FirstValid:  4,
+		LastValid:   5,
+		KeyDilution: 6,
+	}
+	p2.Parent[0] = 2
+
+	_, registry := getRegistry(t)
+
+	id, err := registry.Insert(p)
+	a.NoError(err)
+	a.Equal(p.ParticipationID(), id)
+
+	id, err = registry.Insert(p2)
+	a.NoError(err)
+	a.Equal(p2.ParticipationID(), id)
+
+	err = registry.Delete(p.ParticipationID())
+	a.NoError(err)
+
+	// Verify p removed in GetAll.
+	results, err := registry.GetAll()
+	a.NoError(err)
+	a.Len(results, 1)
+	assertParticipation(t, p2, results[0])
+}

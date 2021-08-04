@@ -128,7 +128,8 @@ var (
 	insertKeysetQuery  = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution) VALUES (?, ?, ?, ?, ?)`
 	insertRollingQuery = `INSERT INTO Rolling (pk) VALUES (?)`
 	// SELECT pk FROM Keysets WHERE participationID = ?
-	selectLastPK = `SELECT pk FROM Keysets ORDER BY pk DESC limit 1`
+	selectPK = `SELECT pk FROM Keysets WHERE participationID = ? LIMIT 1`
+	selectLastPK = `SELECT pk FROM Keysets ORDER BY pk DESC LIMIT 1`
 	selectRecords = `SELECT 
 			participationID, account, firstValidRound, lastValidRound, keyDilution,
 			lastVoteRound, lastBlockProposalRound, lastCompactCertificateRound,
@@ -142,13 +143,15 @@ var (
 // dbSchemaUpgrade0 initialize the tables.
 func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 	// Keysets is for the immutable data.
+	_, err := tx.Exec(createKeysets)
+	if err != nil {
+		return err
+	}
+
 	// Rolling may change over time.
-	tableSchema := []string{createKeysets, createRolling}
-	for _, tableCreate := range tableSchema {
-		_, err := tx.Exec(tableCreate)
-		if err != nil {
-			return err
-		}
+	_, err = tx.Exec(createRolling)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -196,16 +199,38 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 }
 
 func (db *participationDB) Delete(id ParticipationID) error {
-	return nil
+	return db.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		// Fetch primary key
+		var pk int
+		row := tx.QueryRow(selectPK, id[:])
+		if row.Err() != nil {
+			return fmt.Errorf("unable to fetch pk: %w", row.Err())
+		}
+		err := row.Scan(&pk)
+		if err != nil {
+			return fmt.Errorf("unable to scan pk: %w", err)
+		}
+
+		// Delete rows
+
+		_, err = tx.Exec(`DELETE FROM Keysets WHERE pk=?`, pk)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.Exec(`DELETE FROM Rolling WHERE pk=?`, pk)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
 }
 
 func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 	results := make([]ParticipationRecord, 0)
 	for rows.Next() {
 		var record ParticipationRecord
-		// participationID, account, firstValidRound, lastValidRound, keyDilution,
-		// lastVoteRound, lastBlockProposalRound, lastCompactCertificateRound,
-		// effectiveFirstValidRound, effectiveLastValidRound
 		var participationBlob []byte
 		var accountBlob []byte
 		err := rows.Scan(
