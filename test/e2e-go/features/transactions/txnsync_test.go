@@ -70,7 +70,7 @@ func TestTxnSync(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 
-	roundTime := time.Duration(10 * 1000 * time.Millisecond)
+	roundTime := time.Duration(8 * 1000 * time.Millisecond)
 
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
@@ -179,7 +179,7 @@ func TestTxnSync(t *testing.T) {
 
 	// wait for the 1st round
 	nextRound := uint64(1)
-	err = fixture.ClientWaitForRound(fixture.AlgodClient, nextRound, 4*roundTime)
+	err = fixture.ClientWaitForRound(fixture.AlgodClient, nextRound, 10*roundTime)
 	require.NoError(t, err)
 	nextRound++
 
@@ -193,6 +193,8 @@ func TestTxnSync(t *testing.T) {
 			require.True(t, false, "Context canceled due to an error at iteration %d", i)
 			return
 		case <-timeout.C:
+			// Send the transactions only during the first half of the round
+			// Wait for the next round, and stop sending transactions after the first half
 			err = fixture.ClientWaitForRound(fixture.AlgodClient, nextRound, 2*roundTime)
 			require.NoError(t, err)
 			fmt.Printf("Round %d\n", int(nextRound))
