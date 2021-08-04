@@ -33,10 +33,10 @@ jobs:
         with:
           fetch-depth: 0 # required for new-from-rev option in .golangci.yml
       # - name: Install libraries
-        # run: sudo apt-get -y -q install libboost-math-dev
-        # move go out of the way temporarily to avoid "go list ./..." from installing modules
+      #   run: sudo apt-get -y -q install libboost-math-dev
+      #   move go out of the way temporarily to avoid "go list ./..." from installing modules
       # - name: Make libsodium.a
-        # run: sudo mv /usr/bin/go /usr/bin/go.bak && make crypto/libs/linux/amd64/lib/libsodium.a && sudo mv /usr/bin/go.bak /usr/bin/go
+      #   run: sudo mv /usr/bin/go /usr/bin/go.bak && make crypto/libs/linux/amd64/lib/libsodium.a && sudo mv /usr/bin/go.bak /usr/bin/go
       - name: Add bin to PATH
         run: |
           echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
@@ -49,6 +49,7 @@ jobs:
         run: |
           ./scripts/configure_dev.sh
           ./scripts/buildtools/install_buildtools.sh
+          make install
       - name: Install golangci-lint
         run: |
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/v1.41.1/install.sh | sh -s
