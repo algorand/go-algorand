@@ -61,16 +61,16 @@ import (
 func TestTxnSync(t *testing.T) {
 	t.Parallel()
 
-	numberOfSends := 1000
-	targetRate := 300 // txn/sec
+	maxNumberOfSends := 1200
+	maxRate := 1000 // txn/sec
 	if testing.Short() {
-		numberOfSends = 100
+		maxNumberOfSends = 300
 	}
 	templatePath := filepath.Join("nettemplates", "TwoNodes50EachWithTwoRelays.json")
 
 	var fixture fixtures.RestClientFixture
 
-	roundTime := time.Duration(17 * 1000 * time.Millisecond)
+	roundTime := time.Duration(10 * 1000 * time.Millisecond)
 
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
@@ -86,10 +86,10 @@ func TestTxnSync(t *testing.T) {
 	relay1 := fixture.GetLibGoalClientForNamedNode("Relay1")
 	relay2 := fixture.GetLibGoalClientForNamedNode("Relay2")
 
-	n1chan := make(chan string, numberOfSends*2)
-	n2chan := make(chan string, numberOfSends*2)
-	r1chan := make(chan string, numberOfSends*2)
-	r2chan := make(chan string, numberOfSends*2)
+	n1chan := make(chan string, maxNumberOfSends*2)
+	n2chan := make(chan string, maxNumberOfSends*2)
+	r1chan := make(chan string, maxNumberOfSends*2)
+	r2chan := make(chan string, maxNumberOfSends*2)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -157,8 +157,8 @@ func TestTxnSync(t *testing.T) {
 	require.NoError(t, err)
 
 	transactionFee := minTxnFee * 1000
-	amount1 := minAcctBalance / uint64(numberOfSends)
-	amount2 := minAcctBalance / uint64(numberOfSends)
+	amount1 := minAcctBalance / uint64(maxNumberOfSends)
+	amount2 := minAcctBalance / uint64(maxNumberOfSends)
 
 	defer ttn1.terminate()
 	defer ttn2.terminate()
@@ -177,15 +177,30 @@ func TestTxnSync(t *testing.T) {
 	go ttr1.checkAll()
 	go ttr2.checkAll()
 
+	// wait for the 1st round
+	nextRound := uint64(1)
+	err = fixture.ClientWaitForRound(fixture.AlgodClient, nextRound, 4*roundTime)
+	require.NoError(t, err)
+	nextRound++
+
 	st := time.Now()
-	for i := 0; i < numberOfSends; i++ {
+	timeout := time.NewTimer(roundTime / 2)
+
+	for i := 0; i < maxNumberOfSends; i++ {
+
 		select {
 		case <-ctx.Done():
 			require.True(t, false, "Context canceled due to an error at iteration %d", i)
 			return
+		case <-timeout.C:
+			err = fixture.ClientWaitForRound(fixture.AlgodClient, nextRound, 2*roundTime)
+			require.NoError(t, err)
+			fmt.Printf("Round %d\n", int(nextRound))
+			nextRound++
+			timeout = time.NewTimer(roundTime / 2)
 		default:
 		}
-		throttleRate(st, targetRate, i*2)
+		throttleRate(st, maxRate, i*2)
 		tx1, err := node1.SendPaymentFromUnencryptedWallet(account1, account2, transactionFee, amount1, GenerateRandomBytes(8))
 		require.NoError(t, err, "Failed to send transaction on iteration %d", i)
 		ttn1.addTransactionToVerify(tx1.ID().String())
@@ -194,7 +209,7 @@ func TestTxnSync(t *testing.T) {
 		require.NoError(t, err, "Failed to send transaction on iteration %d", i)
 		ttn2.addTransactionToVerify(tx2.ID().String())
 		if i%100 == 0 {
-			fmt.Printf("txn sent  %d / %d\n", i, numberOfSends)
+			fmt.Printf("txn sent  %d / %d\n", i, maxNumberOfSends)
 		}
 	}
 	close(ttn1.selfToVerify)
@@ -252,8 +267,7 @@ func TestTxnSync(t *testing.T) {
 			fmt.Printf("waiting for pending verificaitons [%d] %d / %d\n", unprocessed, x, maxWait)
 		}
 	}
-	require.Equal(t, 0, unprocessed, "overall missing %d/%d transactions",
-		unprocessed, 2*numberOfSends*4)
+	require.Equal(t, 0, unprocessed, "missing %d transactions", unprocessed)
 }
 
 type transactionTracker struct {
@@ -302,9 +316,12 @@ func (tt *transactionTracker) checkAll() {
 		case <-tt.ctx.Done():
 			return
 		case _, more := <-tt.selfToVerify:
+			tt.mu.Lock()
 			if !more && len(tt.pendingVerification) == 0 {
+				tt.mu.Unlock()
 				return
 			}
+			tt.mu.Unlock()
 		default:
 		}
 		transactions, err := tt.client.GetPendingTransactionsByAddress(tt.account1, 1000000)
@@ -334,7 +351,7 @@ func (tt *transactionTracker) checkAll() {
 			}
 			tt.mu.Unlock()
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(time.Second)
 	}
 }
 
