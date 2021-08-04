@@ -207,7 +207,7 @@ func (router *roundRouter) update(state player, p period, gc bool) {
 	if gc {
 		children := make(map[period]*periodRouter)
 		for p, c := range router.Children {
-			if p+1 >= state.Period {
+			if p+1 >= state.Period { // XXXX OK to GC based on state.Period?
 				children[p] = c
 			} else if p <= 1 {
 				// avoid garbage-collecting (next round, period 0/1) state

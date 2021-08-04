@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -129,11 +130,26 @@ func (t *tracer) setMetadata(metadata tracerMetadata) {
 	t.playerInfo = metadata
 }
 
+func getCallerInfo() string {
+	for skip := 1; ; skip += 1 {
+		_, file, line, ok := runtime.Caller(skip)
+		if !ok {
+			return ""
+		}
+		s := strings.Split(file, "/")
+		fname := s[len(s)-1]
+		if fname == "trace.go" || fname == "router.go" {
+			continue
+		}
+		return fmt.Sprintf("%s:%d", fname, line)
+	}
+}
+
 func (t *tracer) ein(src, dest stateMachineTag, e event, r round, p period, s step) {
 	t.seq++
 	if t.level >= all {
 		// fmt.Fprintf(t.w, "%v %3v %23v  -> %23v: %30v\n", t.tag, t.seq, src, dest, e)
-		fmt.Fprintf(t.w, "%v] %23v  -> %23v: %30v\n", t.tag, src, dest, e)
+		fmt.Fprintf(t.w, "%v] %23v  -> %23v: %30v %s\n", t.tag, src, dest, e, getCallerInfo())
 	}
 }
 
@@ -141,12 +157,12 @@ func (t *tracer) eout(src, dest stateMachineTag, e event, r round, p period, s s
 	t.seq++
 	if t.level >= all {
 		// fmt.Fprintf(t.w, "%v %3v %23v <-  %23v: %30v\n", t.tag, t.seq, src, dest, e)
-		fmt.Fprintf(t.w, "%v] %23v <-  %23v: %30v\n", t.tag, src, dest, e)
+		fmt.Fprintf(t.w, "%v] %23v <-  %23v: %30v %s\n", t.tag, src, dest, e, getCallerInfo())
 	} else if t.level >= key {
 		switch e.t() {
 		case proposalAccepted, proposalCommittable, softThreshold, certThreshold, nextThreshold:
 			// fmt.Fprintf(t.w, "%v %3v %23v <-  %23v: %30v\n", t.tag, t.seq, src, dest, e)
-			fmt.Fprintf(t.w, "%v] %23v <-  %23v: %30v\n", t.tag, src, dest, e)
+			fmt.Fprintf(t.w, "%v] %23v <-  %23v: %30v %s\n", t.tag, src, dest, e, getCallerInfo())
 		}
 	}
 }
@@ -155,7 +171,7 @@ func (t *tracer) ainTop(src, dest stateMachineTag, state player, e event, r roun
 	t.seq++
 	if t.level >= top {
 		// fmt.Fprintf(t.w, "%v %3v %23v  => %23v: %30v\n", t.tag, t.seq, src, dest, e)
-		fmt.Fprintf(t.w, "%v] %23v =>  %23v: %30v\n", t.tag, src, dest, e)
+		fmt.Fprintf(t.w, "%v] %23v =>  %23v: %30v %s\n", t.tag, src, dest, e, getCallerInfo())
 	}
 }
 
@@ -172,7 +188,7 @@ func (t *tracer) aoutTop(src, dest stateMachineTag, as []action, r round, p peri
 	t.seq++
 	if t.level >= top {
 		// fmt.Fprintf(t.w, "%v %3v %23v <=  %23v: %.30v\n", t.tag, t.seq, src, dest, as)
-		fmt.Fprintf(t.w, "%v] %23v <=  %23v: %.30v\n", t.tag, src, dest, as)
+		fmt.Fprintf(t.w, "%v] %23v <=  %23v: %.30v %s\n", t.tag, src, dest, as, getCallerInfo())
 	}
 }
 

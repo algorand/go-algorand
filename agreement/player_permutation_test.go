@@ -41,6 +41,14 @@ func makeRandomProposalPayload(r round) *proposal {
 	return &proposal{unauthenticatedProposal: payload, ve: ve}
 }
 
+func makeProposalPayload(r round, ve ValidatedBlock) *proposal {
+	var payload unauthenticatedProposal
+	payload.Block = ve.Block()
+	payload.SeedProof = crypto.VRFProof{}
+
+	return &proposal{unauthenticatedProposal: payload, ve: ve}
+}
+
 var errTestVerifyFailed = makeSerErrStr("test error")
 
 type playerPermutation int
@@ -64,7 +72,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 	const p = period(0)
 
 	// proposal and proposalValue for round r
-	rPayload, _ := helper.MakeProposalPayload(t, r, rBlock)
+	rPayload := makeProposalPayload(r, rBlock)
 	rpV := rPayload.value()
 
 	switch n {
@@ -367,7 +375,7 @@ func expectDisconnect(t *testing.T, trace ioTrace, errMsg string, playerN int, e
 }
 
 func requireActionCount(t *testing.T, trace ioTrace, expectedCount, playerN, eventN int) {
-	require.Equalf(t, trace.countAction(), expectedCount, "Player should not emit extra actions, player: %v, event: %v", playerN, eventN)
+	require.Equalf(t, expectedCount, trace.countAction(), "Player should not emit extra actions, player: %v, event: %v", playerN, eventN)
 }
 
 func requireTraceContains(t *testing.T, trace ioTrace, expected event, playerN, eventN int) {

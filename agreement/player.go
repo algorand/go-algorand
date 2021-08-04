@@ -53,6 +53,9 @@ type player struct {
 	// Pending holds the player's proposalTable, which stores proposals that
 	// must be verified after some vote has been verified.
 	Pending proposalTable
+
+	// pipelined is set to true if this player is part of a pipelinePlayer.
+	pipelined bool
 }
 
 func (p *player) T() stateMachineTag {
@@ -629,7 +632,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				cert := Certificate(freshestRes.Event.Bundle)
 				a0 := ensureAction{Payload: e.Input.Proposal, Certificate: cert}
 				actions = append(actions, a0)
-				as := p.enterRound(r, delegatedE, round{Number: cert.Round + 1, Branch: bookkeeping.BlockHash(cert.Proposal.BlockDigest)})
+				as := p.enterRound(r, delegatedE, round{Number: cert.Round + 1, Branch: bookkeeping.BlockHash(e.Input.Proposal.Block.Digest())})
 				return append(actions, as...)
 			}
 		}
