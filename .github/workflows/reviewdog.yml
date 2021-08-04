@@ -47,8 +47,15 @@ jobs:
           go-version: '1.16.5'
       - name: Install golangci-lint
         run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/v1.41.1/install.sh | sh -s
-          golangci-lint --version
+          # curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/v1.41.1/install.sh | sh -s
+          mkdir cicdtmp
+          cd cicdtmp
+          git clone https://github.com/golangci/golangci-lint.git
+          cd golangci-lint
+          git checkout tags/v1.41.1
+          CGO_ENABLED=true go build -o golangci-lint-cgo ./cmd/golangci-lint
+          ./golangci-lint-cgo --version
+          cd ../../
       - name: Install reviewdog
         run: |
           curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.13.0/install.sh | sh -s
@@ -61,7 +68,7 @@ jobs:
           ls -la cmd/partitiontest_linter/
       - name: Run golangci-lint with reviewdog
         run: |
-          golangci-lint run --out-format line-number -c .golangci-warnings.yml --allow-parallel-runners | reviewdog -f=golangci-lint -name=Lint Warnings -reporter=github-check -filter-mode=added -fail-on-error=false -level=warning
+          ./cicdtmp/golangci-lint/golangci-lint-cgo run --out-format line-number -c .golangci-warnings.yml --allow-parallel-runners | reviewdog -f=golangci-lint -name=Lint Warnings -reporter=github-check -filter-mode=added -fail-on-error=false -level=warning
       # - name: reviewdog-golangci-lint
       #   uses: reviewdog/action-golangci-lint@v2
       #   with:
