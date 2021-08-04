@@ -1085,7 +1085,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 	// depends on what the concensus is need to generate correct KeyregTxnFields.
 	if proto.EnableBlockProofKeyregCheck {
 		frst, lst := uint64(correctKeyregFields.VoteFirst), uint64(correctKeyregFields.VoteLast)
-		signer, err := merklekeystore.New(frst, lst, 1, crypto.PlaceHolderType)
+		signer, err := merklekeystore.New(frst, lst, 1, crypto.DilithiumType)
 		require.NoError(t, err)
 
 		correctKeyregFields.BlockProofPK = *(signer.GetVerifier())

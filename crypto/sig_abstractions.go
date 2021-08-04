@@ -36,7 +36,6 @@ type (
 const (
 	minAlgorithmType AlgorithmType = iota
 
-	PlaceHolderType
 	DilithiumType
 
 	maxAlgorithmType
@@ -100,16 +99,13 @@ func (z *VerifyingKey) GetVerifier() (Verifier, error) {
 type PackedVerifyingKey struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	PlaceHolderPublicKey PlaceHolderPublicKey `codec:"placeholder"`
-	DilithiumPublicKey   DilithiumVerifier    `codec:"dk2"`
+	DilithiumPublicKey DilithiumVerifier `codec:"dk2"`
 }
 
 var errUnknownVerifier = errors.New("could not find stored Verifier")
 
 func (p *PackedVerifyingKey) getVerifier(t AlgorithmType) (Verifier, error) {
 	switch t {
-	case PlaceHolderType:
-		return &p.PlaceHolderPublicKey, nil
 	case DilithiumType:
 		return &p.DilithiumPublicKey, nil
 	default:
@@ -121,7 +117,6 @@ func (p *PackedVerifyingKey) getVerifier(t AlgorithmType) (Verifier, error) {
 type PackedSignatureAlgorithm struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	PlaceHolderKey  PlaceHolderKey  `codec:"placeholderkey"`
 	DilithiumSigner DilithiumSigner `codec:"ds"`
 }
 
@@ -129,8 +124,6 @@ var errUnknownSigner = errors.New("could not find stored signer")
 
 func (p *PackedSignatureAlgorithm) getSigner(t AlgorithmType) (Signer, error) {
 	switch t {
-	case PlaceHolderType:
-		return &p.PlaceHolderKey, nil
 	case DilithiumType:
 		return &p.DilithiumSigner, nil
 	default:
@@ -144,13 +137,6 @@ var errNonExistingSignatureAlgorithmType = errors.New("signing algorithm type do
 func NewSigner(t AlgorithmType) (*SignatureAlgorithm, error) {
 	var p PackedSignatureAlgorithm
 	switch t {
-	case PlaceHolderType:
-		var seed Seed
-		SystemRNG.RandBytes(seed[:])
-		key := GeneratePlaceHolderKey(seed)
-		p = PackedSignatureAlgorithm{
-			PlaceHolderKey: *key,
-		}
 	case DilithiumType:
 		signer := NewDilithiumSigner().(*DilithiumSigner)
 		p = PackedSignatureAlgorithm{
