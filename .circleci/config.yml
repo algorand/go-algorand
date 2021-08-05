@@ -6,11 +6,13 @@ jobs:
     docker:
       - image: 'cimg/base:stable'
     steps:
-      - slack/notify:
-          template: basic_success_1
-          event: always
 workflows:
   send-notification:
     jobs:
       - notify:
-          context: 'slack-secrets'
+          filters:
+            branches:
+              only:
+                - "/pull\/[0-9]+/"
+
+
