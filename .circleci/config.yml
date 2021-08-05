@@ -16,7 +16,7 @@ workflows:
           filters:
             branches:
               ignore:
-                - "hotfix/*"
+                - "/hotfix\/.*/"
                 - "rel/nightly"
       - amd64_test_nightly:
           requires:
