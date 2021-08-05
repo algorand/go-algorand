@@ -61,9 +61,9 @@ const (
 	CompactCertificate
 )
 
-var participationActionFields = map[ParticipationAction]string {
-	Vote: "lastVoteRound",
-	BlockProposal: "lastBlockProposalRound",
+var participationActionFields = map[ParticipationAction]string{
+	Vote:               "lastVoteRound",
+	BlockProposal:      "lastBlockProposalRound",
 	CompactCertificate: "lastCompactCertificateRound",
 }
 
