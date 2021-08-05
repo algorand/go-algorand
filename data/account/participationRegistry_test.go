@@ -138,7 +138,7 @@ func TestParticipation_Register(t *testing.T) {
 		FirstValid:  2000000,
 		LastValid:   4000000,
 		KeyDilution: 2,
-		Parent: p.Parent,
+		Parent:      p.Parent,
 	}
 
 	id, err := registry.Insert(p)

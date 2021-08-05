@@ -133,41 +133,36 @@ var (
 	insertKeysetQuery  = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution) VALUES (?, ?, ?, ?, ?)`
 	insertRollingQuery = `INSERT INTO Rolling (pk) VALUES (?)`
 
-
 	// SELECT pk FROM Keysets WHERE participationID = ?
-	selectPK = `SELECT pk FROM Keysets WHERE participationID = ? LIMIT 1`
-	selectLastPK = `SELECT pk FROM Keysets ORDER BY pk DESC LIMIT 1`
+	selectPK      = `SELECT pk FROM Keysets WHERE participationID = ? LIMIT 1`
+	selectLastPK  = `SELECT pk FROM Keysets ORDER BY pk DESC LIMIT 1`
 	selectRecords = `SELECT 
 			participationID, account, firstValidRound, lastValidRound, keyDilution,
 			lastVoteRound, lastBlockProposalRound, lastCompactCertificateRound,
 			effectiveFirstValidRound, effectiveLastValidRound
 		FROM Keysets, Rolling
 		WHERE Keysets.pk = Rolling.pk`
-	selectRecord = selectRecords + ` AND participationID = ?`
+	selectRecord  = selectRecords + ` AND participationID = ?`
 	deleteKeysets = `DELETE FROM Keysets WHERE pk=?`
 	deleteRolling = `DELETE FROM Rolling WHERE pk=?`
 	// there should be, at most, a single record within the effective range.
 	// only the effectiveLastValid can change here.
-	clearRegistered =
-		`UPDATE Rolling
+	clearRegistered = `UPDATE Rolling
 		 SET effectiveLastValidRound = ?1
 		 WHERE pk IN (SELECT pk FROM Keysets WHERE account = ?2)
 		 AND effectiveFirstValidRound < ?1
 		 AND effectiveLastValidRound > ?1`
-	setRegistered =
-		`UPDATE Rolling
+	setRegistered = `UPDATE Rolling
 		 SET effectiveFirstValidRound=?,
 		     effectiveLastValidRound=?
 		 WHERE pk = (SELECT pk FROM Keysets WHERE participationID = ?)`
 	// there should only be a single record within the effective range.
-	updateRollingFieldX =
-		`UPDATE Rolling
+	updateRollingFieldX = `UPDATE Rolling
 		 SET %s=?1
 		 WHERE effectiveFirstValidRound < ?1
 		 AND effectiveLastValidRound > ?1
 		 AND pk IN (SELECT pk FROM Keysets WHERE account=?2)`
 )
-
 
 // dbSchemaUpgrade0 initialize the tables.
 func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
@@ -338,19 +333,19 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 	}
 
 	// round out of valid range.
-	if on + maxBalLookback > record.LastValid || on + maxBalLookback < record.FirstValid {
+	if on+maxBalLookback > record.LastValid || on+maxBalLookback < record.FirstValid {
 		return ErrInvalidRegisterRange
 	}
 
 	return db.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// if the is an active key, shut it down.
-		_, err = tx.Exec(clearRegistered, on + maxBalLookback, record.Account[:])
+		_, err = tx.Exec(clearRegistered, on+maxBalLookback, record.Account[:])
 		if err != nil {
 			return fmt.Errorf("unable to clear registered key: %w", err)
 		}
 
 		// update id
-		_, err = tx.Exec(setRegistered, on + maxBalLookback, record.LastValid, id[:])
+		_, err = tx.Exec(setRegistered, on+maxBalLookback, record.LastValid, id[:])
 		if err != nil {
 			return fmt.Errorf("unable to update registered key: %w", err)
 		}
