@@ -41,7 +41,6 @@ import (
 // this test checks that the txsync outgoing message rate
 // varies according to the transaction rate
 func TestMessageRateChangesWithTxnRate(t *testing.T) {
-	// t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 	txnRates := []uint{50, 300, 800, 1200}
 	if testing.Short() {
@@ -58,14 +57,16 @@ func TestMessageRateChangesWithTxnRate(t *testing.T) {
 
 }
 
-func throttleTransactionRate(startTime time.Time, txnRate uint, sentSoFar uint) {
+func throttleTransactionRate(startTime time.Time, txnRate uint, sentSoFar uint) float64 {
 	timeDelta := time.Since(startTime)
 	currentTps := float64(sentSoFar) / timeDelta.Seconds()
 	if currentTps > float64(txnRate) {
 		sleepDuration := float64(sentSoFar)/float64(txnRate) - timeDelta.Seconds()
 		sleepTime := time.Duration(int64(math.Round(sleepDuration*1000))) * time.Millisecond
 		time.Sleep(sleepTime)
+		currentTps = float64(sentSoFar) / (sleepDuration + timeDelta.Seconds())
 	}
+	return currentTps
 }
 
 func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRate uint, a *require.Assertions) (avgTps, msgRate float64) {
@@ -103,9 +104,6 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 	a.NoError(err)
 	listeningURL := strings.Split(listeningURLRaw, "//")[1]
 
-	// store message rate for each of the txn rates
-	// prevMsgRate := 0.0
-
 	errChan := make(chan error)
 	resetChan := make(chan bool)
 	msgRateChan := make(chan float64)
@@ -138,18 +136,8 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 
 		txnSentCount++
 
-		throttleTransactionRate(startTime, txnRate, txnSentCount)
+		avgTps = throttleTransactionRate(startTime, txnRate, txnSentCount)
 	}
-
-	// calculate avg tps
-	endTimeDelta := time.Since(startTime)
-	avgTps = float64(txnSentCount) / endTimeDelta.Seconds()
-	// avgTpsErrorMessage := fmt.Sprintf("Avg txn rate %f < expected txn rate %f", avgTps, float64(txnRate))
-	// fail the test if avg tps deviates more than 10% of the expected txn rate
-	// a.Greater(avgTps, 0.9*float64(txnRate), avgTpsErrorMessage)
-
-	// wait for some time for the logs to get flushed
-	// time.Sleep(2 * time.Second)
 
 	// send reset on resetChan to signal the parseLog goroutine to send the msgRate and reset its counters
 	resetChan <- true
