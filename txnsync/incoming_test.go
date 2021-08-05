@@ -241,7 +241,7 @@ func TestEvaluateIncomingMessagePart2(t *testing.T) {
 				Transactions: []transactions.SignedTxn{
 					transactions.SignedTxn{}}}},
 	})
-	require.Equal(t, "Incoming Txsync #5 round 5 transacations 1 request [0/0] bloom 0 nextTS 0 from ''", incLogger.lastLogged)
+	require.Equal(t, "Incoming Txsync #5 round 5 transactions 1 request [0/0] bloom 0 nextTS 0 from ''", incLogger.lastLogged)
 
 }
 
