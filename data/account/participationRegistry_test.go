@@ -46,7 +46,6 @@ func assertParticipation(t *testing.T, p Participation, pr ParticipationRecord) 
 func TestParticipation_InsertGet(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-
 	_, registry := getRegistry(t)
 
 	p := Participation{
@@ -88,6 +87,7 @@ func TestParticipation_InsertGet(t *testing.T) {
 func TestParticipation_Delete(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
+	_, registry := getRegistry(t)
 
 	p := Participation{
 		FirstValid:  1,
@@ -102,8 +102,6 @@ func TestParticipation_Delete(t *testing.T) {
 		KeyDilution: 6,
 	}
 	p2.Parent[0] = 2
-
-	_, registry := getRegistry(t)
 
 	id, err := registry.Insert(p)
 	a.NoError(err)
@@ -126,6 +124,7 @@ func TestParticipation_Delete(t *testing.T) {
 func TestParticipation_Register(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
+	_, registry := getRegistry(t)
 
 	// Overlapping keys.
 	p := Participation{
@@ -141,8 +140,6 @@ func TestParticipation_Register(t *testing.T) {
 		KeyDilution: 2,
 		Parent: p.Parent,
 	}
-
-	_, registry := getRegistry(t)
 
 	id, err := registry.Insert(p)
 	a.NoError(err)
@@ -176,7 +173,6 @@ func TestParticipation_RegisterInvalidRange(t *testing.T) {
 	a := require.New(t)
 	_, registry := getRegistry(t)
 
-	// Overlapping keys.
 	p := Participation{
 		FirstValid:  250000,
 		LastValid:   3000000,
@@ -190,4 +186,60 @@ func TestParticipation_RegisterInvalidRange(t *testing.T) {
 	// Register the first key.
 	err = registry.Register(p.ParticipationID(), 1000000000)
 	a.EqualError(err, ErrInvalidRegisterRange.Error())
+}
+
+func TestParticipation_Record(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	_, registry := getRegistry(t)
+
+	// Setup p
+	p := Participation{
+		FirstValid:  0,
+		LastValid:   3000000,
+		KeyDilution: 1,
+	}
+	p.Parent[0] = 1
+
+	// Setup some other keys to make sure they are not updated.
+	p2 := p
+	p2.Parent[0] = 2
+	p3 := p
+	p3.Parent[0] = 3
+
+	// Install and register all of the keys
+	for _, part := range []Participation{p, p2, p3} {
+		id, err := registry.Insert(part)
+		a.NoError(err)
+		a.Equal(part.ParticipationID(), id)
+		err = registry.Register(part.ParticipationID(), 0)
+		a.NoError(err)
+	}
+
+	all, err := registry.GetAll()
+	a.NotNil(all)
+	a.NoError(err)
+
+	err = registry.Record(p.Parent, 1000, Vote)
+	a.NoError(err)
+	err = registry.Record(p.Parent, 2000, BlockProposal)
+	a.NoError(err)
+	err = registry.Record(p.Parent, 3000, CompactCertificate)
+	a.NoError(err)
+
+	// Verify that one and only one key was updated.
+	records, err := registry.GetAll()
+	a.NoError(err)
+	a.Len(records, 3)
+	for _, record := range records {
+		if record.ParticipationID == p.ParticipationID() {
+			require.Equal(t, 1000, int(record.LastVote))
+			require.Equal(t, 2000, int(record.LastBlockProposal))
+			require.Equal(t, 3000, int(record.LastCompactCertificate))
+		} else {
+			require.Equal(t, 0, int(record.LastVote))
+			require.Equal(t, 0, int(record.LastBlockProposal))
+			require.Equal(t, 0, int(record.LastCompactCertificate))
+		}
+	}
 }

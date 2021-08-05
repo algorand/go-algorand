@@ -146,26 +146,26 @@ var (
 	selectRecord = selectRecords + ` AND participationID = ?`
 	deleteKeysets = `DELETE FROM Keysets WHERE pk=?`
 	deleteRolling = `DELETE FROM Rolling WHERE pk=?`
-	// there should only be a single record within the effective range.
-	updateRollingFieldX =
-		`UPDATE Keysets, Rolling
-		 SET %s=?1
-		 WHERE Keysets.account=?2
-		 AND Rolling.effectiveFirstValidRound < ?1
-		 AND Rolling.effectiveLastValidRound < ?1`
 	// there should be, at most, a single record within the effective range.
 	// only the effectiveLastValid can change here.
 	clearRegistered =
 		`UPDATE Rolling
 		 SET effectiveLastValidRound = ?1
 		 WHERE pk IN (SELECT pk FROM Keysets WHERE account = ?2)
-		 AND Rolling.effectiveFirstValidRound < ?1
-		 AND Rolling.effectiveLastValidRound > ?1`
+		 AND effectiveFirstValidRound < ?1
+		 AND effectiveLastValidRound > ?1`
 	setRegistered =
 		`UPDATE Rolling
 		 SET effectiveFirstValidRound=?,
 		     effectiveLastValidRound=?
 		 WHERE pk = (SELECT pk FROM Keysets WHERE participationID = ?)`
+	// there should only be a single record within the effective range.
+	updateRollingFieldX =
+		`UPDATE Rolling
+		 SET %s=?1
+		 WHERE effectiveFirstValidRound < ?1
+		 AND effectiveLastValidRound > ?1
+		 AND pk IN (SELECT pk FROM Keysets WHERE account=?2)`
 )
 
 
@@ -377,9 +377,17 @@ func (db *participationDB) Record(account basics.Address, round basics.Round, pa
 	query := fmt.Sprintf(updateRollingFieldX, field)
 
 	return db.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		_, err := tx.Exec(query, round, account[:])
+		r, err := tx.Exec(query, round, account[:])
 		if err != nil {
 			return err
+		}
+
+		// If multiple rows were changed there is probably a problem with Register.
+		rowsEffected, err := r.RowsAffected()
+		if err != nil {
+			return err
+		} else if rowsEffected > 1 {
+			return fmt.Errorf("too many rows effected: %d", rowsEffected)
 		}
 
 		return nil
