@@ -271,7 +271,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	node.participationRegistry, err = ensureParticipationDB(genesisDir)
 	if err != nil {
-		log.Errorf("Cannot get participation metrics: %v", err)
+		log.Errorf("unable to initialize the participation registry database: %v", err)
 		return nil, err
 	}
 
