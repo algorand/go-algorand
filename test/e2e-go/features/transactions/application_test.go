@@ -75,8 +75,12 @@ int 1
 +
 dup
 int 30
-<
+<=
 bnz loop
+byte "b"
+log
+byte "c"
+log
 `
 
 	approvalOps, err := logic.AssembleString(counter)
@@ -106,10 +110,12 @@ bnz loop
 	round, err = client.CurrentRound()
 	a.NoError(err)
 
-	logs := make([]basics.LogItem, 29)
+	logs := make([]basics.LogItem, 32)
 	for i := range logs {
 		logs[i] = basics.LogItem{ID: 0, Message: "a"}
 	}
+	logs[30] = basics.LogItem{ID: 0, Message: "b"}
+	logs[31] = basics.LogItem{ID: 0, Message: "c"}
 
 	b, err := client.BookkeepingBlock(round)
 	for _, ps := range b.Payset {

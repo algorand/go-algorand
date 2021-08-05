@@ -471,7 +471,7 @@ func (l *testLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics.E
 
 func (l *testLedger) AppendLog(txn *transactions.Transaction, value string) error {
 
-	appIdx, err := txn.IndexByID(l.appID)
+	appIdx, err := txn.IndexByAppID(l.appID)
 	if err != nil {
 		return err
 	}

@@ -444,7 +444,7 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 	return nil // note: deletion cannot cause us to violate maxCount
 }
 
-// AppendLog adds message in logs
+// AppendLog adds message in logs. idx is expected to be an index in txn.ForeignApps
 func (cb *roundCowState) AppendLog(idx uint64, value string) error {
 	cb.logs = append(cb.logs, basics.LogItem{ID: idx, Message: value})
 	return nil

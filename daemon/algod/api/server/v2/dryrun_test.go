@@ -1098,14 +1098,12 @@ func TestDryrunLogs(t *testing.T) {
 	ops, err := logic.AssembleString(`
 #pragma version 5
 int 1
-loop: byte "a"
+byte "a"
 log
-int 1
-+
-dup
-int 30
-<
-bnz loop
+byte "b"
+log
+byte "c"
+log
 `)
 
 	require.NoError(t, err)
@@ -1115,6 +1113,7 @@ bnz loop
 	ops, err = logic.AssembleString("#pragma version 5 \nint 1")
 	approv := ops.Program
 	require.NoError(t, err)
+
 	var appIdx basics.AppIndex = 1
 	creator := randomAddress()
 	sender := randomAddress()
@@ -1179,9 +1178,16 @@ bnz loop
 		logResponse(t, &response)
 	}
 	logs := *response.Txns[0].Logs
-	assert.Equal(t, len(logs), 29)
-	for _, m := range logs {
-		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte("a")), m.Value)
+	assert.Equal(t, 3, len(logs))
+	for i, m := range logs {
+		if i == 0 {
+			assert.Equal(t, base64.StdEncoding.EncodeToString([]byte("a")), m.Value)
+		} else if i == 1 {
+			assert.Equal(t, base64.StdEncoding.EncodeToString([]byte("b")), m.Value)
+		} else if i == 2 {
+			assert.Equal(t, base64.StdEncoding.EncodeToString([]byte("c")), m.Value)
+		}
+
 	}
 	encoded := string(protocol.EncodeJSON(response.Txns[0]))
 	assert.Contains(t, encoded, "logs")
@@ -1189,4 +1195,5 @@ bnz loop
 	assert.Empty(t, response.Txns[1].Logs)
 	encoded = string(protocol.EncodeJSON(response.Txns[1]))
 	assert.NotContains(t, encoded, "logs")
+
 }

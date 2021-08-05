@@ -188,36 +188,6 @@ func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, tx
 	}
 }
 
-func waitForTransactionV2(t *testing.T, testClient libgoal.Client, fromAddress, txID string, timeout time.Duration) (tx v1.Transaction, err error) {
-	a := require.New(fixtures.SynchronizedTest(t))
-	rnd, err := testClient.Status()
-	a.NoError(err)
-	if rnd.LastRound == 0 {
-		t.Fatal("it is currently round 0 but we need to wait for a transaction that might happen this round but we'll never know if that happens because ConfirmedRound==0 is indestinguishable from not having happened")
-	}
-	timeoutTime := time.Now().Add(timeout)
-	var e error
-	for {
-		tx, err = testClient.TransactionInformation(fromAddress, txID)
-		if err != nil && strings.HasPrefix(err.Error(), "HTTP 404") {
-			_, e = testClient.PendingTransactionInformationV2(txID)
-			a.NoError(e)
-		}
-		if err == nil {
-			a.NotEmpty(tx)
-			a.Empty(tx.PoolError)
-			if tx.ConfirmedRound > 0 {
-				return
-			}
-		}
-		if time.Now().After(timeoutTime) {
-			err = errWaitForTransactionTimeout
-			return
-		}
-		time.Sleep(time.Second)
-	}
-}
-
 func TestClientCanGetStatus(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -976,9 +946,13 @@ int 1
 +
 dup
 int 30
-<
+<=
 bnz loop
-	`
+byte "b"
+log
+byte "c"
+log
+`
 	ops, err := logic.AssembleString(prog)
 	approv := ops.Program
 	ops, err = logic.AssembleString("#pragma version 5 \nint 1")
@@ -1006,10 +980,16 @@ bnz loop
 	txn, err := testClient.PendingTransactionInformationV2(txid)
 	a.NoError(err)
 	a.NotNil(txn.Logs)
-	a.Equal(29, len(*txn.Logs))
-	for _, l := range *txn.Logs {
+	a.Equal(32, len(*txn.Logs))
+	for i, l := range *txn.Logs {
 		a.Equal(*txn.ApplicationIndex, l.Id)
-		a.Equal(base64.StdEncoding.EncodeToString([]byte("a")), l.Value)
+		if i < 30 {
+			a.Equal(base64.StdEncoding.EncodeToString([]byte("a")), l.Value)
+		} else if i == 30 {
+			a.Equal(base64.StdEncoding.EncodeToString([]byte("b")), l.Value)
+		} else {
+			a.Equal(base64.StdEncoding.EncodeToString([]byte("c")), l.Value)
+		}
 	}
 
 	//check non-create app call
@@ -1045,10 +1025,16 @@ bnz loop
 	txn, err = testClient.PendingTransactionInformationV2(txid)
 	a.NoError(err)
 	a.NotNil(txn.Logs)
-	a.Equal(29, len(*txn.Logs))
-	for _, l := range *txn.Logs {
+	a.Equal(32, len(*txn.Logs))
+	for i, l := range *txn.Logs {
 		a.Equal(expectedAppID, l.Id)
-		a.Equal(base64.StdEncoding.EncodeToString([]byte("a")), l.Value)
+		if i < 30 {
+			a.Equal(base64.StdEncoding.EncodeToString([]byte("a")), l.Value)
+		} else if i == 30 {
+			a.Equal(base64.StdEncoding.EncodeToString([]byte("b")), l.Value)
+		} else {
+			a.Equal(base64.StdEncoding.EncodeToString([]byte("c")), l.Value)
+		}
 	}
 
 }

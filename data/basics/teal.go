@@ -132,6 +132,13 @@ type LogItem struct {
 	Message string `codec:"m"`
 }
 
+// Equal checks whether two LogItems are equal.
+func (l LogItem) Equal(o LogItem) bool {
+
+	return l.ID == o.ID && l.Message == o.Message
+
+}
+
 // EvalDelta stores StateDeltas for an application's global key/value store, as
 // well as StateDeltas for some number of accounts holding local state for that
 // application
@@ -174,6 +181,14 @@ func (ed EvalDelta) Equal(o EvalDelta) bool {
 	// GlobalDeltas must be equal
 	if !ed.GlobalDelta.Equal(o.GlobalDelta) {
 		return false
+	}
+
+	// Logs must be equal
+	for i, l := range ed.Logs {
+		ok := l.Equal(o.Logs[i])
+		if !ok {
+			return false
+		}
 	}
 
 	return true

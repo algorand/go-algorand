@@ -269,7 +269,7 @@ func convertToDeltas(txn node.TxnWithStatus) (*[]generated.AccountStateDelta, *g
 func convertToLogItems(txn node.TxnWithStatus, aidx *uint64) (*[]generated.LogItem, error) {
 	var logItems *[]generated.LogItem
 	if len(txn.ApplyData.EvalDelta.Logs) > 0 {
-		l := make([]generated.LogItem, 0)
+		l := make([]generated.LogItem, 0, len(txn.ApplyData.EvalDelta.Logs))
 
 		for _, v := range txn.ApplyData.EvalDelta.Logs {
 			// Resolve appid from index

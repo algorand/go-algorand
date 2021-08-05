@@ -1359,4 +1359,6 @@ func TestLogicLedgerAppendLog(t *testing.T) {
 
 	err = l.AppendLog(&appCall, "a")
 	a.NoError(err)
+	a.Equal(len(l.cow.getLogs()), 1)
+	a.Equal(l.cow.getLogs()[0].Message, "a")
 }

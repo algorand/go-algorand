@@ -537,8 +537,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)
 		response.Logs, err = convertToLogItems(txn, response.ApplicationIndex)
 		if err != nil {
-			msg := fmt.Sprintf("%v", err)
-			return internalError(ctx, err, msg, v2.Log)
+			return internalError(ctx, err, err.Error(), v2.Log)
 		}
 
 	}

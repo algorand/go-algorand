@@ -56,6 +56,9 @@ const MaxByteMathSize = 64
 // MaxLogSize is the limit of total log size from n log calls in a program
 const MaxLogSize = 1024
 
+// MaxLogCalls is the limit of total log calls during a program execution
+const MaxLogCalls = 32
+
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
 // If (.Bytes != nil) the stackValue is a []byte value, otherwise uint64 value.
@@ -164,7 +167,6 @@ type LedgerForLogic interface {
 	GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error)
 
 	AppendLog(txn *transactions.Transaction, value string) error
-	GetLogs() []basics.LogItem
 }
 
 // EvalSideEffects contains data returned from evaluation
@@ -3166,12 +3168,7 @@ func opAppParamsGet(cx *evalContext) {
 func opLog(cx *evalContext) {
 	last := len(cx.stack) - 1
 
-	if cx.stack[last].argType() != StackBytes {
-		cx.err = fmt.Errorf("log arg 0 wanted type []byte got uint64")
-		return
-	}
-
-	if cx.logCalls == config.MaxLogCalls {
+	if cx.logCalls == MaxLogCalls {
 		cx.err = fmt.Errorf("too many log calls in program. up to %d is allowed", config.MaxLogCalls)
 		return
 	}

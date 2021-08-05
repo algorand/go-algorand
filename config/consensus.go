@@ -422,8 +422,8 @@ var MaxEvalDeltaAccounts int
 // in a StateDelta, used for decoding purposes.
 var MaxStateDeltaKeys int
 
-// MaxLogCalls is the largest number of log calls that may appear in
-// an eval delta, used for decoding purposes.
+// MaxLogCalls is the highest allowable log messages that may appear in
+// any version, used for decoding purposes. Never decrease this value.
 var MaxLogCalls int
 
 // MaxLogicSigMaxSize is the largest logical signature appear in any of the supported

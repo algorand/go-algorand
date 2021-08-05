@@ -522,7 +522,12 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 					result.LocalDeltas = &localDeltas
 				}
 
-				result.Logs = DeltaLogToLog(delta.Logs)
+				var err3 error
+				result.Logs, err3 = DeltaLogToLog(delta.Logs, appIdx)
+				if err3 != nil {
+					messages = append(messages, err3.Error())
+				}
+
 				if pass {
 					messages = append(messages, "PASS")
 				} else {
@@ -566,17 +571,19 @@ func StateDeltaToStateDelta(sd basics.StateDelta) *generated.StateDelta {
 }
 
 // DeltaLogToLog EvalDelta.Logs to generated.LogItem
-func DeltaLogToLog(logs []basics.LogItem) *[]generated.LogItem {
+func DeltaLogToLog(logs []basics.LogItem, appIdx basics.AppIndex) (*[]generated.LogItem, error) {
 	if len(logs) == 0 {
-		return nil
+		return nil, nil
 	}
-
 	encodedLogs := make([]generated.LogItem, 0, len(logs))
 	for _, log := range logs {
+		if log.ID != 0 {
+			return nil, fmt.Errorf("logging for a foreign app is not supported")
+		}
 		msg := base64.StdEncoding.EncodeToString([]byte(log.Message))
-		encodedLogs = append(encodedLogs, generated.LogItem{Id: uint64(log.ID), Value: msg})
+		encodedLogs = append(encodedLogs, generated.LogItem{Id: uint64(appIdx), Value: msg})
 	}
-	return &encodedLogs
+	return &encodedLogs, nil
 }
 
 // MergeAppParams merges values, existing in "base" take priority over new in "update"

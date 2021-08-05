@@ -234,11 +234,11 @@ func (ac *ApplicationCallTxnFields) IndexByAddress(target basics.Address, sender
 	return 0, fmt.Errorf("invalid Account reference %s", target)
 }
 
-// IDByIndex converts an integer index into an application id associated with the
+// AppIDByIndex converts an integer index into an application id associated with the
 // transaction. Index 0 corresponds to the current app, and an index > 0
 // corresponds to an offset into txn.ForeignApps. Returns an error if the index is
 // not valid.
-func (ac *ApplicationCallTxnFields) IDByIndex(i uint64) (basics.AppIndex, error) {
+func (ac *ApplicationCallTxnFields) AppIDByIndex(i uint64) (basics.AppIndex, error) {
 
 	// Index 0 always corresponds to the sender
 	if i == 0 {
@@ -256,10 +256,10 @@ func (ac *ApplicationCallTxnFields) IDByIndex(i uint64) (basics.AppIndex, error)
 	return ac.ForeignApps[i-1], nil
 }
 
-// IndexByID converts an application id into an integer offset into [current app,
+// IndexByAppID converts an application id into an integer offset into [current app,
 // txn.ForeignApps[0], ...], returning the index at the first match. It returns
 // an error if there is no such match.
-func (ac *ApplicationCallTxnFields) IndexByID(appID basics.AppIndex) (uint64, error) {
+func (ac *ApplicationCallTxnFields) IndexByAppID(appID basics.AppIndex) (uint64, error) {
 
 	// Index 0 always corresponds to the sender
 	if appID == ac.ApplicationID {

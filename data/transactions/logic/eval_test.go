@@ -4763,8 +4763,8 @@ func TestLog(t *testing.T) {
 			loglen: config.MaxLogCalls,
 		},
 		{
-			source: `int 1; loop: byte "a logging message"; log; int 1; +; dup; int 30; <; bnz loop;`,
-			loglen: 29,
+			source: `int 1; loop: byte "a logging message"; log; int 1; +; dup; int 30; <=; bnz loop;`,
+			loglen: 30,
 		},
 		{
 			source: fmt.Sprintf(`byte "%s"; log; int 1`, strings.Repeat("a", MaxLogSize)),
@@ -4784,11 +4784,11 @@ func TestLog(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, pass)
 		count += s.loglen
-		require.Equal(t, len(ep.Ledger.GetLogs()), count)
+		require.Equal(t, len(ledger.logs), count)
 		if i == len(testCases)-1 {
-			require.Equal(t, strings.Repeat("a", MaxLogSize), ep.Ledger.GetLogs()[count-1].Message)
+			require.Equal(t, strings.Repeat("a", MaxLogSize), ledger.logs[count-1].Message)
 		} else {
-			for _, l := range ep.Ledger.GetLogs()[count-s.loglen:] {
+			for _, l := range ledger.logs[count-s.loglen:] {
 				require.Equal(t, "a logging message", l.Message)
 			}
 		}

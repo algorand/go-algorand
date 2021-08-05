@@ -240,13 +240,9 @@ func (al *logicLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics
 }
 
 func (al *logicLedger) AppendLog(txn *transactions.Transaction, value string) error {
-	idx, err := txn.IndexByID(txn.ApplicationID)
+	idx, err := txn.IndexByAppID(txn.ApplicationID)
 	if err != nil {
 		return err
 	}
 	return al.cow.AppendLog(idx, value)
-}
-
-func (al *logicLedger) GetLogs() []basics.LogItem {
-	return al.cow.getLogs()
 }
