@@ -386,7 +386,6 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 
 	var totalWeight uint64
 	for _, result := range verifiedResults {
-		t.node.keys.Record(result.v.R.Sender, result.v.R.Round, account.Vote)
 		totalWeight += result.v.Cred.Weight
 	}
 	if t.node.log.IsLevelEnabled(logging.Info) {
@@ -445,6 +444,7 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 	for _, r := range verifiedResults {
 		select {
 		case t.out <- messageEvent{T: voteVerified, Input: r.message, Err: makeSerErr(r.err)}:
+			t.node.keys.Record(r.v.R.Sender, r.v.R.Round, account.Vote)
 		case <-quit:
 			return
 		case <-t.context.Done():
