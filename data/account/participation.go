@@ -194,8 +194,9 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	vrf := crypto.GenerateVRFSecrets()
 	compactCertRound := config.Consensus[protocol.ConsensusCurrentVersion].CompactCertRounds
 	if compactCertRound == 0 {
-		compactCertRound = 1000
+		compactCertRound = keyDilution
 	}
+
 	// Generate a new key which signs the compact certificates
 	blockProof, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), compactCertRound, crypto.DilithiumType)
 	if err != nil {
