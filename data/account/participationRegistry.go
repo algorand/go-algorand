@@ -90,12 +90,12 @@ type ParticipationRegistry interface {
 }
 
 // MakeParticipationRegistry creates a db.Accessor backed ParticipationRegistry.
-func MakeParticipationRegistry(accessor db.Accessor) (ParticipationRegistry, error) {
+func MakeParticipationRegistry(accessor db.Pair) (ParticipationRegistry, error) {
 	migrations := []db.Migration{
 		dbSchemaUpgrade0,
 	}
 
-	err := db.Initialize(accessor, migrations)
+	err := db.Initialize(accessor.Wdb, migrations)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func MakeParticipationRegistry(accessor db.Accessor) (ParticipationRegistry, err
 // Queries
 var (
 	createKeysets = `CREATE TABLE Keysets (
-			pk INTEGER PRIMARY KEY,
+			pk INTEGER PRIMARY KEY NOT NULL,
 
 			participationID BLOB,
 			account BLOB,
@@ -120,7 +120,7 @@ var (
 			-- vrf BLOB,    --*  msgpack encoding of ParticipationAccount.vrf
 		)`
 	createRolling = `CREATE TABLE Rolling (
-			pk INTEGER PRIMARY KEY,
+			pk INTEGER PRIMARY KEY NOT NULL,
 
 			lastVoteRound INTEGER               NOT NULL DEFAULT 0,
 			lastBlockProposalRound INTEGER      NOT NULL DEFAULT 0,
@@ -140,8 +140,9 @@ var (
 			participationID, account, firstValidRound, lastValidRound, keyDilution,
 			lastVoteRound, lastBlockProposalRound, lastCompactCertificateRound,
 			effectiveFirstValidRound, effectiveLastValidRound
-		FROM Keysets, Rolling
-		WHERE Keysets.pk = Rolling.pk`
+		FROM Keysets
+		INNER JOIN Rolling
+		ON Keysets.pk = Rolling.pk`
 	selectRecord  = selectRecords + ` AND participationID = ?`
 	deleteKeysets = `DELETE FROM Keysets WHERE pk=?`
 	deleteRolling = `DELETE FROM Rolling WHERE pk=?`
@@ -183,12 +184,12 @@ func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 
 // participationDB is a private implementation of ParticipationRegistry.
 type participationDB struct {
-	store db.Accessor
+	store db.Pair
 }
 
 func (db *participationDB) Insert(record Participation) (id ParticipationID, err error) {
 	id = record.ParticipationID()
-	err = db.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		_, err := tx.Exec(
 			insertKeysetQuery,
 			id[:],
@@ -220,7 +221,7 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 }
 
 func (db *participationDB) Delete(id ParticipationID) error {
-	return db.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	return db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// Fetch primary key
 		var pk int
 		row := tx.QueryRow(selectPK, id[:])
@@ -277,7 +278,7 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 }
 
 func (db *participationDB) Get(id ParticipationID) (record ParticipationRecord, err error) {
-	err = db.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		rows, err := tx.Query(selectRecord, id[:])
 		if err != nil {
 			return fmt.Errorf("unable to scan record: %w", err)
@@ -301,7 +302,7 @@ func (db *participationDB) Get(id ParticipationID) (record ParticipationRecord, 
 }
 
 func (db *participationDB) GetAll() (records []ParticipationRecord, err error) {
-	err = db.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		rows, err := tx.Query(selectRecords)
 		if err != nil {
 			return fmt.Errorf("unable to query records: %w", err)
@@ -331,7 +332,7 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 		return ErrInvalidRegisterRange
 	}
 
-	return db.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	return db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// if the is an active key, shut it down.
 		_, err = tx.Exec(clearRegistered, on+maxBalLookback, record.Account[:])
 		if err != nil {
@@ -363,7 +364,7 @@ func (db *participationDB) Record(account basics.Address, round basics.Round, pa
 
 	query := fmt.Sprintf(updateRollingFieldX, field)
 
-	return db.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	return db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		r, err := tx.Exec(query, round, account[:])
 		if err != nil {
 			return err

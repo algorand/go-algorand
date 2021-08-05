@@ -25,15 +25,15 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-func getRegistry(t *testing.T) (db.Accessor, ParticipationRegistry) {
-	rootDB, err := db.MakeAccessor(t.Name(), false, true)
+func getRegistry(t *testing.T) ParticipationRegistry {
+	rootDB, err := db.OpenPair(t.Name(), true)
 	require.NoError(t, err)
 
 	registry, err := MakeParticipationRegistry(rootDB)
 	require.NoError(t, err)
 	require.NotNil(t, registry)
 
-	return rootDB, registry
+	return registry
 }
 
 func assertParticipation(t *testing.T, p Participation, pr ParticipationRecord) {
@@ -46,7 +46,7 @@ func assertParticipation(t *testing.T, p Participation, pr ParticipationRecord) 
 func TestParticipation_InsertGet(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	_, registry := getRegistry(t)
+	registry := getRegistry(t)
 
 	p := Participation{
 		FirstValid:  1,
@@ -87,7 +87,7 @@ func TestParticipation_InsertGet(t *testing.T) {
 func TestParticipation_Delete(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	_, registry := getRegistry(t)
+	registry := getRegistry(t)
 
 	p := Participation{
 		FirstValid:  1,
@@ -124,7 +124,7 @@ func TestParticipation_Delete(t *testing.T) {
 func TestParticipation_Register(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	_, registry := getRegistry(t)
+	registry := getRegistry(t)
 
 	// Overlapping keys.
 	p := Participation{
@@ -171,7 +171,7 @@ func TestParticipation_Register(t *testing.T) {
 func TestParticipation_RegisterInvalidRange(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	_, registry := getRegistry(t)
+	registry := getRegistry(t)
 
 	p := Participation{
 		FirstValid:  250000,
@@ -191,7 +191,7 @@ func TestParticipation_RegisterInvalidRange(t *testing.T) {
 func TestParticipation_Record(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	_, registry := getRegistry(t)
+	registry := getRegistry(t)
 
 	// Setup p
 	p := Participation{

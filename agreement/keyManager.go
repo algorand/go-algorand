@@ -37,9 +37,6 @@ func (m SimpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Part
 
 // DeleteOldKeys implements KeyManager.DeleteOldKeys.
 func (m SimpleKeyManager) DeleteOldKeys(r basics.Round) {
-	// for _, acc := range m {
-	// acc.DeleteOldKeys(r)
-	// }
 }
 
 // TODO: Test that these are called?
