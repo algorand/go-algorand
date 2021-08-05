@@ -18,6 +18,7 @@ package pingpong
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"math/rand"
@@ -54,9 +55,10 @@ type WorkerState struct {
 	accounts map[string]*pingPongAccount
 	cinfo    CreatablesInfo
 
-	nftStartTime  int64
-	localNftIndex uint64
-	nftHolders    map[string]int
+	nftStartTime       int64
+	localNftIndex      uint64
+	nftHolders         map[string]int
+	incTransactionSalt uint64
 }
 
 // PrepareAccounts to set up accounts and asset accounts required for Ping Pong run
@@ -233,7 +235,7 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 			if !cfg.Quiet {
 				fmt.Printf("adjusting balance of account %v by %d\n ", addr, toSend)
 			}
-			_, err := pps.sendPaymentFromSourceAccount(client, addr, fee, toSend, nil)
+			_, err := pps.sendPaymentFromSourceAccount(client, addr, fee, toSend)
 			if err != nil {
 				return err
 			}
@@ -249,17 +251,14 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 	return nil
 }
 
-func (pps *WorkerState) sendPaymentFromSourceAccount(client libgoal.Client, to string, fee, amount uint64, note []byte) (transactions.Transaction, error) {
-	// generate a random note/lease to avoid duplicate transaction failures
-	var lease [32]byte
-	if note == nil {
-		note = make([]byte, 32)
-		crypto.RandBytes(note[:])
-	} else {
-		crypto.RandBytes(lease[:])
-	}
+func (pps *WorkerState) sendPaymentFromSourceAccount(client libgoal.Client, to string, fee, amount uint64) (transactions.Transaction, error) {
+	// generate a unique note to avoid duplicate transaction failures
+	var note [binary.MaxVarintLen64]byte
+	binary.PutUvarint(note[:], pps.incTransactionSalt)
+	pps.incTransactionSalt++
+
 	from := pps.cfg.SrcAccount
-	tx, err := client.ConstructPayment(from, to, fee, amount, note, "", lease, 0, 0)
+	tx, err := client.ConstructPayment(from, to, fee, amount, note[:], "", [32]byte{}, 0, 0)
 
 	if err != nil {
 		return transactions.Transaction{}, err
@@ -489,7 +488,7 @@ func (pps *WorkerState) makeNftTraffic(client libgoal.Client) (sentCount uint64,
 		// enough for the per-asa minbalance and more than enough for the txns to create them
 		toSend := proto.MinBalance * uint64(pps.cfg.NftAsaPerAccount+1) * 2
 		pps.nftHolders[addr] = 0
-		_, err = pps.sendPaymentFromSourceAccount(client, addr, fee, toSend, nil)
+		_, err = pps.sendPaymentFromSourceAccount(client, addr, fee, toSend)
 		if err != nil {
 			return
 		}
