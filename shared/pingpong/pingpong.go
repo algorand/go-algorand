@@ -722,10 +722,10 @@ func (pps *WorkerState) nftSpamAssetName() string {
 	return fmt.Sprintf("nft%d_%d", pps.nftStartTime, pps.localNftIndex)
 }
 func (pps *WorkerState) makeNextUniqueNoteField() []byte {
-	noteField := make([]byte, 0, binary.MaxVarintLen64)
-	binary.PutUvarint(noteField[:], pps.incTransactionSalt)
+	noteField := make([]byte, binary.MaxVarintLen64)
+	usedBytes := binary.PutUvarint(noteField[:], pps.incTransactionSalt)
 	pps.incTransactionSalt++
-	return noteField
+	return noteField[:usedBytes]
 }
 
 func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, client libgoal.Client) (txn transactions.Transaction, sender string, err error) {
