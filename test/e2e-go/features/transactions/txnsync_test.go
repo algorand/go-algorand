@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -264,7 +264,7 @@ func TestTxnSync(t *testing.T) {
 type transactionTracker struct {
 	t                   *testing.T
 	ctx                 context.Context
-	mu                  sync.Mutex
+	mu                  deadlock.Mutex
 	client              *libgoal.Client
 	othersToVerify      []chan string
 	selfToVerify        chan string
