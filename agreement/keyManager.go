@@ -45,6 +45,5 @@ func (m SimpleKeyManager) DeleteOldKeys(r basics.Round) {
 // TODO: Test that these are called?
 
 // Record implements KeyManager.Record.
-func (m SimpleKeyManager) Record(account basics.Address, round basics.Round, action account.ParticipationAction) error {
-	return nil
+func (m SimpleKeyManager) Record(account basics.Address, round basics.Round, action account.ParticipationAction) {
 }

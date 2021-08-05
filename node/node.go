@@ -1177,6 +1177,9 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 }
 
 // Record forwards participation record calls to the participation registry.
-func (node *AlgorandFullNode) Record(account basics.Address, round basics.Round, participationType account.ParticipationAction) error {
-	return node.participationRegistry.Record(account, round, participationType)
+func (node *AlgorandFullNode) Record(account basics.Address, round basics.Round, participationType account.ParticipationAction) {
+	err := node.participationRegistry.Record(account, round, participationType)
+	if err != nil {
+		node.log.Warnf("node.Record: Account %v not able to record participation (%d) on round %d: %w", account, participationType, round, err)
+	}
 }

@@ -232,7 +232,7 @@ type KeyManager interface {
 
 	// Record indicates that the given participation action has been taken.
 	// This function is also part of account.ParticipationRegistry.
-	Record(account basics.Address, round basics.Round, participationType account.ParticipationAction) error
+	Record(account basics.Address, round basics.Round, participationType account.ParticipationAction)
 }
 
 // MessageHandle is an ID referring to a specific message.
