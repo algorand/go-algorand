@@ -1025,6 +1025,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 
 	b.pass = true
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
+	a.Error(err)
 	a.Contains(err.Error(), "updateApplication app programs too long")
 
 	// check extraProgramPages is used
@@ -1065,6 +1066,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 		StateSchemas: basics.StateSchemas{
 			GlobalStateSchema: basics.StateSchema{NumUint: 1},
 		},
+		ExtraProgramPages: 1,
 	}
 	h := transactions.Header{
 		Sender: sender,
@@ -1074,15 +1076,19 @@ func TestAppCallApplyDelete(t *testing.T) {
 	var b testBalances
 
 	b.balances = make(map[basics.Address]basics.AccountData)
+	// cbr is to ensure the original balance record is not modified but copied when updated in apply
 	cbr := basics.AccountData{
-		AppParams: map[basics.AppIndex]basics.AppParams{appIdx: params},
+		AppParams:          map[basics.AppIndex]basics.AppParams{appIdx: params},
+		TotalExtraAppPages: 1,
 	}
 	cp := basics.AccountData{
-		AppParams: map[basics.AppIndex]basics.AppParams{appIdx: params},
+		AppParams:          map[basics.AppIndex]basics.AppParams{appIdx: params},
+		TotalExtraAppPages: 1,
 	}
 	b.balances[creator] = cp
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
+	// check if it fails nothing changes
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
 	ep.Proto = &proto
@@ -1096,7 +1102,11 @@ func TestAppCallApplyDelete(t *testing.T) {
 	a.Equal(cbr, br)
 	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
 
-	// check deletion on empty balance record - happy case
+	// check calculation on ConsensusV28. TotalExtraAppPages does not change
+	b.SetProto(protocol.ConsensusV28)
+	proto = b.ConsensusParams()
+	ep.Proto = &proto
+
 	b.pass = true
 	b.balances[sender] = basics.AccountData{}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
@@ -1109,7 +1119,43 @@ func TestAppCallApplyDelete(t *testing.T) {
 	a.Equal(basics.AppParams{}, br.AppParams[appIdx])
 	a.Equal(basics.StateSchema{}, br.TotalAppSchema)
 	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
-	a.Equal(uint32(0), br.TotalExtraAppPages)
+	a.Equal(uint32(1), br.TotalExtraAppPages)
+	b.ResetWrites()
+
+	b.SetProto(protocol.ConsensusFuture)
+	proto = b.ConsensusParams()
+	ep.Proto = &proto
+
+	// check deletion
+	for initTotalExtraPages := uint32(0); initTotalExtraPages < 3; initTotalExtraPages++ {
+		cbr = basics.AccountData{
+			AppParams:          map[basics.AppIndex]basics.AppParams{appIdx: params},
+			TotalExtraAppPages: initTotalExtraPages,
+		}
+		cp := basics.AccountData{
+			AppParams:          map[basics.AppIndex]basics.AppParams{appIdx: params},
+			TotalExtraAppPages: initTotalExtraPages,
+		}
+		b.balances[creator] = cp
+		b.pass = true
+		b.balances[sender] = basics.AccountData{}
+		err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
+		a.NoError(err)
+		a.Equal(appIdx, b.deAllocatedAppIdx)
+		a.Equal(1, b.put)
+		br = b.balances[creator]
+		a.Equal(cbr, br)
+		br = b.putBalances[creator]
+		a.Equal(basics.AppParams{}, br.AppParams[appIdx])
+		a.Equal(basics.StateSchema{}, br.TotalAppSchema)
+		a.Equal(basics.EvalDelta{}, ad.EvalDelta)
+		if initTotalExtraPages <= params.ExtraProgramPages {
+			a.Equal(uint32(0), br.TotalExtraAppPages)
+		} else {
+			a.Equal(initTotalExtraPages-1, br.TotalExtraAppPages)
+		}
+		b.ResetWrites()
+	}
 }
 
 func TestAppCallApplyCreateClearState(t *testing.T) {
