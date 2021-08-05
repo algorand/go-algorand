@@ -128,7 +128,7 @@ func (pps *WorkerState) prepareNewAccounts(client libgoal.Client, cfg PpConfig, 
 	}
 	// create new accounts for testing
 	newAccounts = make(map[string]*pingPongAccount)
-	newAccounts, err = generateAccounts(client, newAccounts, cfg.NumPartAccounts-1)
+	newAccounts, err = generateAccounts(newAccounts, cfg.NumPartAccounts-1)
 
 	for k := range newAccounts {
 		accounts[k] = newAccounts[k]
@@ -233,7 +233,7 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 			if !cfg.Quiet {
 				fmt.Printf("adjusting balance of account %v by %d\n ", addr, toSend)
 			}
-			_, err := pps.sendPaymentFromUnencryptedWallet(client, cfg.SrcAccount, addr, fee, toSend, nil)
+			_, err := pps.sendPaymentFromSourceAccount(client, addr, fee, toSend, nil)
 			if err != nil {
 				return err
 			}
@@ -249,12 +249,16 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 	return nil
 }
 
-func (pps *WorkerState) sendPaymentFromUnencryptedWallet(client libgoal.Client, from, to string, fee, amount uint64, note []byte) (transactions.Transaction, error) {
-
-	// generate a random lease to avoid duplicate transaction failures
+func (pps *WorkerState) sendPaymentFromSourceAccount(client libgoal.Client, to string, fee, amount uint64, note []byte) (transactions.Transaction, error) {
+	// generate a random note/lease to avoid duplicate transaction failures
 	var lease [32]byte
-	crypto.RandBytes(lease[:])
-
+	if note == nil {
+		note = make([]byte, 32)
+		crypto.RandBytes(note[:])
+	} else {
+		crypto.RandBytes(lease[:])
+	}
+	from := pps.cfg.SrcAccount
 	tx, err := client.ConstructPayment(from, to, fee, amount, note, "", lease, 0, 0)
 
 	if err != nil {
@@ -464,15 +468,18 @@ func (pps *WorkerState) makeNftTraffic(client libgoal.Client) (sentCount uint64,
 	fee := pps.fee()
 	if (len(pps.nftHolders) == 0) || ((float64(int(pps.cfg.NftAsaAccountInFlight)-len(pps.nftHolders)) / float64(pps.cfg.NftAsaAccountInFlight)) >= rand.Float64()) {
 		var addr string
-		var wallet []byte
-		wallet, err = client.GetUnencryptedWalletHandle()
-		if err != nil {
-			return
+
+		var seed [32]byte
+		crypto.RandBytes(seed[:])
+		privateKey := crypto.GenerateSignatureSecrets(seed)
+		publicKey := basics.Address(privateKey.SignatureVerifier)
+
+		pps.accounts[publicKey.String()] = &pingPongAccount{
+			sk: privateKey,
+			pk: publicKey,
 		}
-		addr, err = client.GenerateAddress(wallet)
-		if err != nil {
-			return
-		}
+		addr = publicKey.String()
+
 		fmt.Printf("new NFT holder %s\n", addr)
 		var proto config.ConsensusParams
 		proto, err = getProto(client)
@@ -482,7 +489,7 @@ func (pps *WorkerState) makeNftTraffic(client libgoal.Client) (sentCount uint64,
 		// enough for the per-asa minbalance and more than enough for the txns to create them
 		toSend := proto.MinBalance * uint64(pps.cfg.NftAsaPerAccount+1) * 2
 		pps.nftHolders[addr] = 0
-		_, err = pps.sendPaymentFromUnencryptedWallet(client, pps.cfg.SrcAccount, addr, fee, toSend, nil)
+		_, err = pps.sendPaymentFromSourceAccount(client, addr, fee, toSend, nil)
 		if err != nil {
 			return
 		}

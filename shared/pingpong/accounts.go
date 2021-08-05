@@ -141,7 +141,7 @@ func (pps *WorkerState) ensureAccounts(ac libgoal.Client, initCfg PpConfig) (acc
 			if len(accounts) != int(cfg.NumPartAccounts+1) {
 				fmt.Printf("Not enough accounts - creating %d more\n", int(cfg.NumPartAccounts+1)-len(accounts))
 			}
-			accounts, err = generateAccounts(ac, accounts, cfg.NumPartAccounts)
+			accounts, err = generateAccounts(accounts, cfg.NumPartAccounts)
 			if err != nil {
 				return
 			}
@@ -635,7 +635,6 @@ func (pps *WorkerState) sendAsGroup(txgroup []transactions.Transaction, client l
 	var stxgroup []transactions.SignedTxn
 	for i, txn := range txgroup {
 		txn.Group = gid
-		//signedTxn, signErr := client.SignTransactionWithWallet(h, nil, txn)
 		signedTxn, signErr := signTxn(senders[i], txn, pps.accounts, pps.cfg)
 		if err != nil {
 			fmt.Printf("Cannot sign trx %+v with account %v\nerror %v\n", txn, senders[i], err)
@@ -889,7 +888,7 @@ func takeTopAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32
 	return
 }
 
-func generateAccounts(client libgoal.Client, allAccounts map[string]*pingPongAccount, numAccounts uint32) (map[string]*pingPongAccount, error) {
+func generateAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32) (map[string]*pingPongAccount, error) {
 	// Compute the number of accounts to generate
 	accountsRequired := int(numAccounts+1) - len(allAccounts)
 
