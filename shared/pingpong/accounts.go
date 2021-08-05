@@ -141,10 +141,7 @@ func (pps *WorkerState) ensureAccounts(ac libgoal.Client, initCfg PpConfig) (acc
 			if len(accounts) != int(cfg.NumPartAccounts+1) {
 				fmt.Printf("Not enough accounts - creating %d more\n", int(cfg.NumPartAccounts+1)-len(accounts))
 			}
-			accounts, err = generateAccounts(accounts, cfg.NumPartAccounts)
-			if err != nil {
-				return
-			}
+			accounts = generateAccounts(accounts, cfg.NumPartAccounts)
 		}
 	}
 
@@ -886,7 +883,7 @@ func takeTopAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32
 	return
 }
 
-func generateAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32) (map[string]*pingPongAccount, error) {
+func generateAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32) map[string]*pingPongAccount {
 	// Compute the number of accounts to generate
 	accountsRequired := int(numAccounts+1) - len(allAccounts)
 
@@ -905,5 +902,5 @@ func generateAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint3
 		}
 	}
 
-	return allAccounts, nil
+	return allAccounts
 }

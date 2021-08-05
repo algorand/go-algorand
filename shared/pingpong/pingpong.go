@@ -130,7 +130,7 @@ func (pps *WorkerState) prepareNewAccounts(client libgoal.Client, cfg PpConfig, 
 	}
 	// create new accounts for testing
 	newAccounts = make(map[string]*pingPongAccount)
-	newAccounts, err = generateAccounts(newAccounts, cfg.NumPartAccounts-1)
+	newAccounts = generateAccounts(newAccounts, cfg.NumPartAccounts-1)
 
 	for k := range newAccounts {
 		accounts[k] = newAccounts[k]
@@ -739,7 +739,7 @@ func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, cli
 	if cfg.RandomNote {
 		const maxNoteFieldLen = 1024
 		noteLength := tagLen + int(rand.Uint32())%(maxNoteFieldLen-tagLen)
-		noteField = make([]byte, noteLength, noteLength)
+		noteField = make([]byte, noteLength)
 		copy(noteField, pingpongTag)
 		crypto.RandBytes(noteField[tagLen:])
 	} else {
