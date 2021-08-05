@@ -9,14 +9,14 @@ import (
 )
 
 func TestClockManagerSerialization(t *testing.T) {
-	cm := makeClockManager(timers.MakeMonotonicClockFactory())
+	cm := makeClockManager(MakeMonotonicClockFactory())
 	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 	rnd := makeRoundRandomBranch(350)
 	cm.m[rnd] = clock
 
 	enc := cm.Encode()
 
-	cm2 := makeClockManager(timers.MakeMonotonicClockFactory())
+	cm2 := makeClockManager(MakeMonotonicClockFactory())
 	cm3, err := cm2.Decode(enc)
 	assert.NoError(t, err)
 	assert.Equal(t, cm, cm3)

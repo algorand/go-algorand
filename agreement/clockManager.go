@@ -9,14 +9,41 @@ import (
 	"github.com/algorand/go-algorand/util/timers"
 )
 
+// ClockFactory provides a source of new Clock instances.
+type ClockFactory interface {
+	// Zero returns a new Clock, with zero set to now.
+	Zero() timers.Clock
+	Decode([]byte) (timers.Clock, error)
+}
+
 // clockManager managers multiple clocks used by different pipelined rounds.
 // XXX garbage-collect old rounds
 type clockManager struct {
 	m map[round]timers.Clock
-	f timers.ClockFactory
+	f ClockFactory
 }
 
-func makeClockManager(f timers.ClockFactory) *clockManager {
+type MonotonicFactory struct{}
+
+// MakeMonotonicClockFactory returns a ClockFactory implementation that creates Monotonic clock instances.
+func MakeMonotonicClockFactory() ClockFactory {
+	return &MonotonicFactory{}
+}
+
+// Zero returns a new Monotonic clock, with zero set to now.
+func (m *MonotonicFactory) Zero() timers.Clock {
+	z := time.Now()
+	logging.Base().Debugf("Clock zeroed to %v", z)
+	return timers.MakeMonotonicClock(z)
+}
+
+// Decode implements MontonicFactory
+func (m *MonotonicFactory) Decode(data []byte) (timers.Clock, error) {
+	c := &timers.Monotonic{}
+	return c.Decode(data)
+}
+
+func makeClockManager(f ClockFactory) *clockManager {
 	return &clockManager{m: make(map[round]timers.Clock), f: f}
 }
 
@@ -39,12 +66,11 @@ func (cm *clockManager) nextDeadlineCh(es []externalDemuxSignals) (<-chan time.T
 	r := es[0].CurrentRound
 	c, ok := cm.m[r]
 	if !ok {
-		for r := range cm.m {
-			logging.Base().Errorf("cm.m key r: %+v", r)
-		}
-		logging.Base().Errorf("es +%v", es)
-		logging.Base().Errorf("cm.m +%v", cm.m)
-		logging.Base().Panicf("couldn't find clock for r %+v", r)
+		// no rezeroAction has set up this clock yet
+		// XXX this should probably only happen at service bootstrap or in tests
+		logging.Base().Warnf("clockManager.nextDeadlineCh making new clock for round %+v", r)
+		c = cm.f.Zero()
+		cm.m[r] = c
 	}
 	return c.TimeoutAt(es[0].Deadline), r
 }

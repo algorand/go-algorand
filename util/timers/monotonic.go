@@ -91,23 +91,3 @@ func (m *Monotonic) String() string {
 func (m *Monotonic) GetTimeout(delta time.Duration) time.Time {
 	return m.zero.Add(delta)
 }
-
-type MonotonicFactory struct{}
-
-// MakeMonotonicClockFactory returns a ClockFactory implementation that creates Monotonic clock instances.
-func MakeMonotonicClockFactory() ClockFactory {
-	return &MonotonicFactory{}
-}
-
-// Zero returns a new Monotonic clock, with zero set to now.
-func (m *MonotonicFactory) Zero() Clock {
-	z := time.Now()
-	logging.Base().Debugf("Clock zeroed to %v", z)
-	return MakeMonotonicClock(z)
-}
-
-// Decode implements MontonicFactory
-func (m *MonotonicFactory) Decode(data []byte) (Clock, error) {
-	c := &Monotonic{}
-	return c.Decode(data)
-}

@@ -1,5 +1,3 @@
-// +build demux
-
 // Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
@@ -420,20 +418,24 @@ func TestDemuxNext(t *testing.T) {
 	dt.Test()
 }
 
+type demuxTestClock struct {
+	dt *demuxTester
+}
+
 // implement timers.Clock and timers.ClockFactory
-func (t *demuxTester) Zero() timers.Clock {
+func (t *demuxTestClock) Zero() timers.Clock {
 	// we don't care about this function in this test.
 	return t
 }
 
 // implement timers.Clock
-func (t *demuxTester) TimeoutAt(delta time.Duration) <-chan time.Time {
+func (t *demuxTestClock) TimeoutAt(delta time.Duration) <-chan time.Time {
 	if delta == fastTimeoutChTime {
 		return nil
 	}
 
 	c := make(chan time.Time, 2)
-	if t.currentUsecase.deadlineReached {
+	if t.dt.currentUsecase.deadlineReached {
 		// return a closed channel.
 		c <- time.Now()
 		close(c)
@@ -443,19 +445,19 @@ func (t *demuxTester) TimeoutAt(delta time.Duration) <-chan time.Time {
 }
 
 // implement timers.Clock
-func (t *demuxTester) GetTimeout(delta time.Duration) time.Time {
+func (t *demuxTestClock) GetTimeout(delta time.Duration) time.Time {
 	// we don't care about this function in this test.
 	return time.Time{}
 }
 
 // implement timers.Clock
-func (t *demuxTester) Encode() []byte {
+func (t *demuxTestClock) Encode() []byte {
 	// we don't care about this function in this test.
 	return []byte{}
 }
 
 // implement timers.Clock
-func (t *demuxTester) Decode([]byte) (timers.Clock, error) {
+func (t *demuxTestClock) Decode([]byte) (timers.Clock, error) {
 	// we don't care about this function in this test.
 	return t, nil
 }
@@ -667,7 +669,7 @@ func (t *demuxTester) TestUsecase(testcase demuxTestUsecase) bool {
 
 	s := &Service{}
 	s.quit = make(chan struct{})
-	s.clockManager = makeClockManager(t)
+	s.clockManager = makeClockManager(&demuxTestClock{dt: t})
 	s.Ledger = t
 	s.RandomSource = t
 	s.log = serviceLogger{logging.Base()}

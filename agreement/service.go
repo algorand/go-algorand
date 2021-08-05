@@ -28,7 +28,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
-	"github.com/algorand/go-algorand/util/timers"
 )
 
 const (
@@ -72,7 +71,7 @@ type Parameters struct {
 	BlockFactory
 	RandomSource
 	EventsProcessingMonitor
-	timers.ClockFactory
+	ClockFactory
 	db.Accessor
 	logging.Logger
 	config.Local

@@ -44,10 +44,3 @@ type Clock interface {
 	// the same timeouts as the original Clock.
 	Decode([]byte) (Clock, error)
 }
-
-// ClockFactory provides a source of new Clock instances.
-type ClockFactory interface {
-	// Zero returns a new Clock, with zero set to now.
-	Zero() Clock
-	Decode([]byte) (Clock, error)
-}

@@ -34,7 +34,7 @@ import (
 func TestAgreementSerialization(t *testing.T) {
 	// todo : we need to deserialize some more meaningfull state.
 	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
-	clockManager := makeClockManager(timers.MakeMonotonicClockFactory())
+	clockManager := makeClockManager(MakeMonotonicClockFactory())
 	rnd := makeRoundRandomBranch(350)
 	clockManager.m[rnd] = clock
 	status := &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second}
@@ -43,7 +43,7 @@ func TestAgreementSerialization(t *testing.T) {
 
 	encodedBytes := encode(clockManager, router, status, a)
 
-	t0 := makeClockManager(timers.MakeMonotonicClockFactory())
+	t0 := makeClockManager(MakeMonotonicClockFactory())
 	clock2, router2, status2, a2, err := decode(encodedBytes, t0)
 	require.NoError(t, err)
 	require.Equalf(t, clockManager, clock2, "Clock wasn't serialized/deserialized correctly")
@@ -54,7 +54,7 @@ func TestAgreementSerialization(t *testing.T) {
 
 func TestAgreementSerializationPipeline(t *testing.T) {
 	// todo : we need to deserialize some more meaningfull state.
-	clockManager := makeClockManager(timers.MakeMonotonicClockFactory())
+	clockManager := makeClockManager(MakeMonotonicClockFactory())
 	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 	rnd := makeRoundRandomBranch(350)
 	clockManager.m[rnd] = clock
@@ -68,7 +68,7 @@ func TestAgreementSerializationPipeline(t *testing.T) {
 
 	encodedBytes := encode(clockManager, router, status, a)
 
-	t0 := makeClockManager(timers.MakeMonotonicClockFactory())
+	t0 := makeClockManager(MakeMonotonicClockFactory())
 	clockM2, router2, status2, a2, err := decode(encodedBytes, t0)
 	require.NoError(t, err)
 	require.Equalf(t, clockManager, clockM2, "Clock wasn't serialized/deserialized correctly")
@@ -81,7 +81,7 @@ func BenchmarkAgreementSerialization(b *testing.B) {
 	// todo : we need to deserialize some more meaningfull state.
 	b.SkipNow()
 
-	clockManager := makeClockManager(timers.MakeMonotonicClockFactory())
+	clockManager := makeClockManager(MakeMonotonicClockFactory())
 	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 	rnd := makeRoundRandomBranch(350)
 	clockManager.m[rnd] = clock
@@ -103,7 +103,7 @@ func BenchmarkAgreementDeserialization(b *testing.B) {
 	// todo : we need to deserialize some more meaningfull state.
 	b.SkipNow()
 
-	clockManager := makeClockManager(timers.MakeMonotonicClockFactory())
+	clockManager := makeClockManager(MakeMonotonicClockFactory())
 	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 	rnd := makeRoundRandomBranch(350)
 	clockManager.m[rnd] = clock
@@ -116,7 +116,7 @@ func BenchmarkAgreementDeserialization(b *testing.B) {
 	a := []action{}
 
 	encodedBytes := encode(clockManager, router, &status, a)
-	t0 := makeClockManager(timers.MakeMonotonicClockFactory())
+	t0 := makeClockManager(MakeMonotonicClockFactory())
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
