@@ -61,11 +61,20 @@ const (
 	CompactCertificate
 )
 
+var participationActionFields = map[ParticipationAction]string {
+	Vote: "lastVoteRound",
+	BlockProposal: "lastBlockProposalRound",
+	CompactCertificate: "lastCompactCertificateRound",
+}
+
 // ErrParticipationIDNotFound is used when attempting to update a set of keys which do not exist.
 var ErrParticipationIDNotFound = errors.New("the participation ID was not found")
 
 // ErrInvalidRegisterRange is used when attempting to register a participation key on a round that is out of range.
 var ErrInvalidRegisterRange = errors.New("key would not be active within range")
+
+// ErrUnknownParticipationAction is used when record is given something other than the known actions.
+var ErrUnknownParticipationAction = errors.New("unknown participation action")
 
 // ParticipationRegistry contain all functions for interacting with the Participation Registry.
 type ParticipationRegistry interface {
@@ -350,16 +359,9 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 }
 
 func (db *participationDB) Record(account basics.Address, round basics.Round, participationAction ParticipationAction) error {
-	var field string
-	switch participationAction {
-	case Vote:
-		field = "lastVoteRound"
-	case BlockProposal:
-		field = "lastBlockProposalRound"
-	case CompactCertificate:
-		field = "lastCompactCertificateRound"
-	default:
-		return fmt.Errorf("unknown participation action: %d", participationAction)
+	field, ok := participationActionFields[participationAction]
+	if !ok {
+		return ErrUnknownParticipationAction
 	}
 
 	query := fmt.Sprintf(updateRollingFieldX, field)

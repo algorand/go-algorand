@@ -17,6 +17,11 @@
 package account
 
 import (
+	"context"
+	"database/sql"
+	"fmt"
+	"github.com/algorand/go-algorand/data/basics"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -168,6 +173,22 @@ func TestParticipation_Register(t *testing.T) {
 	verifyEffectiveRound(p2.ParticipationID(), 2500320, int(p2.LastValid))
 }
 
+func TestParticipation_RegisterInvalidID(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	registry := getRegistry(t)
+
+	p := Participation{
+		FirstValid:  250000,
+		LastValid:   3000000,
+		KeyDilution: 1,
+	}
+
+	err := registry.Register(p.ParticipationID(), 10000000)
+	a.Error(err)
+	a.True(strings.Contains(err.Error(), "unable to lookup id"))
+}
+
 func TestParticipation_RegisterInvalidRange(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -242,4 +263,56 @@ func TestParticipation_Record(t *testing.T) {
 			require.Equal(t, 0, int(record.LastCompactCertificate))
 		}
 	}
+}
+
+func TestParticipation_RecordInvalidType(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	registry := getRegistry(t)
+
+	err := registry.Record(basics.Address{}, 0, ParticipationAction(9000))
+	a.EqualError(err, ErrUnknownParticipationAction.Error())
+}
+
+func TestParticipation_RecordMultipleUpdates(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	rootDB, err := db.OpenPair(t.Name(), true)
+	require.NoError(t, err)
+	registry, err := MakeParticipationRegistry(rootDB)
+	require.NoError(t, err)
+	require.NotNil(t, registry)
+
+	p := Participation{
+		FirstValid:  0,
+		LastValid:   3000000,
+		KeyDilution: 1,
+	}
+	p.Parent[0] = 1
+	p2 := Participation{
+		FirstValid:  1,
+		LastValid:   3000000,
+		KeyDilution: 1,
+	}
+	p2.Parent = p.Parent
+
+	_, err = registry.Insert(p)
+	a.NoError(err)
+	_, err = registry.Insert(p2)
+	a.NoError(err)
+	err = registry.Register(p.ParticipationID(), 1000)
+	a.NoError(err)
+
+	// Force the DB into a bad state (2 active keys for one account).
+	rootDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		id := p2.ParticipationID()
+		_, err = tx.Exec(setRegistered, 1000+maxBalLookback, p2.LastValid, id[:])
+		if err != nil {
+			return fmt.Errorf("unable to update registered key: %w", err)
+		}
+		return nil
+	})
+
+	err = registry.Record(p.Parent, 5000, Vote)
+	a.EqualError(err, "too many rows effected: 2")
 }
