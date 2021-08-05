@@ -253,9 +253,7 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 
 func (pps *WorkerState) sendPaymentFromSourceAccount(client libgoal.Client, to string, fee, amount uint64) (transactions.Transaction, error) {
 	// generate a unique note to avoid duplicate transaction failures
-	var note [binary.MaxVarintLen64]byte
-	binary.PutUvarint(note[:], pps.incTransactionSalt)
-	pps.incTransactionSalt++
+	note := pps.makeNextUniqueNoteField()
 
 	from := pps.cfg.SrcAccount
 	tx, err := client.ConstructPayment(from, to, fee, amount, note[:], "", [32]byte{}, 0, 0)
@@ -723,6 +721,12 @@ func (pps *WorkerState) nftSpamAssetName() string {
 	pps.localNftIndex++
 	return fmt.Sprintf("nft%d_%d", pps.nftStartTime, pps.localNftIndex)
 }
+func (pps *WorkerState) makeNextUniqueNoteField() []byte {
+	noteField := make([]byte, 0, binary.MaxVarintLen64)
+	binary.PutUvarint(noteField[:], pps.incTransactionSalt)
+	pps.incTransactionSalt++
+	return noteField
+}
 
 func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, client libgoal.Client) (txn transactions.Transaction, sender string, err error) {
 	cfg := pps.cfg
@@ -730,17 +734,17 @@ func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, cli
 	sender = from
 	var noteField []byte
 	const pingpongTag = "pingpong"
-	const tagLen = uint32(len(pingpongTag))
-	const randomBaseLen = uint32(8)
-	const maxNoteFieldLen = uint32(1024)
-	var noteLength = uint32(tagLen) + randomBaseLen
+	const tagLen = len(pingpongTag)
 	// if random note flag set, then append a random number of additional bytes
 	if cfg.RandomNote {
-		noteLength = noteLength + rand.Uint32()%(maxNoteFieldLen-noteLength)
+		const maxNoteFieldLen = 1024
+		noteLength := tagLen + int(rand.Uint32())%(maxNoteFieldLen-tagLen)
+		noteField = make([]byte, noteLength, noteLength)
+		copy(noteField, pingpongTag)
+		crypto.RandBytes(noteField[tagLen:])
+	} else {
+		noteField = pps.makeNextUniqueNoteField()
 	}
-	noteField = make([]byte, noteLength, noteLength)
-	copy(noteField, pingpongTag)
-	crypto.RandBytes(noteField[tagLen:])
 
 	// if random lease flag set, fill the lease field with random bytes
 	var lease [32]byte

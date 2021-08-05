@@ -222,7 +222,7 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]*pingPongAccount,
 				fmt.Printf("Cannot fill asset creation txn\n")
 				return
 			}
-
+			tx.Note = pps.makeNextUniqueNoteField()
 			_, err = signAndBroadcastTransaction(accounts, addr, tx, client, cfg)
 			if err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset creation failed with error %v\n", err)
@@ -314,6 +314,7 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]*pingPongAccount,
 				fmt.Printf("Cannot fill asset optin %v in account %v\n", k, addr)
 				return
 			}
+			tx.Note = pps.makeNextUniqueNoteField()
 
 			_, err = signAndBroadcastTransaction(accounts, addr, tx, client, cfg)
 			if err != nil {
@@ -398,6 +399,7 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]*pingPongAccount,
 				return
 			}
 
+			tx.Note = pps.makeNextUniqueNoteField()
 			_, err = signAndBroadcastTransaction(accounts, signer, tx, client, cfg)
 			if err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset distribution failed with error %v\n", err)
@@ -761,9 +763,7 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 			}
 
 			// Ensure different txids
-			var note [8]byte
-			crypto.RandBytes(note[:])
-			tx.Note = note[:]
+			tx.Note = pps.makeNextUniqueNoteField()
 
 			txgroup = append(txgroup, tx)
 			accounts[appAccount.Address].balance -= tx.Fee.Raw
@@ -832,9 +832,7 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 				}
 
 				// Ensure different txids
-				var note [8]byte
-				crypto.RandBytes(note[:])
-				tx.Note = note[:]
+				tx.Note = pps.makeNextUniqueNoteField()
 
 				optIns[aidx] = append(optIns[aidx], addr)
 
