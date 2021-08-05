@@ -346,8 +346,6 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 
 		return nil
 	})
-
-	return nil
 }
 
 func (db *participationDB) Record(account basics.Address, round basics.Round, participationAction ParticipationAction) error {
@@ -381,6 +379,4 @@ func (db *participationDB) Record(account basics.Address, round basics.Round, pa
 
 		return nil
 	})
-
-	return nil
 }
