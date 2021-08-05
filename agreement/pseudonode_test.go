@@ -390,8 +390,7 @@ func (k *KeyManagerProxy) VotingKeys(votingRound, balanceRound basics.Round) []a
 	return k.target(votingRound, balanceRound)
 }
 
-func (k *KeyManagerProxy) Record(account basics.Address, round basics.Round, action account.ParticipationAction) error {
-	return nil
+func (k *KeyManagerProxy) Record(account basics.Address, round basics.Round, action account.ParticipationAction) {
 }
 
 func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
