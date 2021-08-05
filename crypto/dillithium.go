@@ -16,7 +16,7 @@
 
 package crypto
 
-import "github.com/algorand/go-algorand/crypto/internal/dilithium_libs"
+import "github.com/algorand/go-algorand/crypto/internal/cdilithium"
 
 // Exporting signature, publicKey, secretKey.
 type (
@@ -35,13 +35,13 @@ type (
 type DilithiumSigner struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Keypair dilithium_libs.DilithiumKeyPair `codec:"kys"`
+	Keypair cdilithium.DilithiumKeyPair `codec:"kys"`
 }
 
 // NewDilithiumSigner Generates a dilithium Signer.
 func NewDilithiumSigner() Signer {
 	return &DilithiumSigner{
-		Keypair: *dilithium_libs.NewKeys(),
+		Keypair: *cdilithium.NewKeys(),
 	}
 }
 
@@ -74,7 +74,7 @@ func (d *DilithiumSigner) GetVerifyingKey() *VerifyingKey {
 type DilithiumVerifier struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	PublicKey dilithium_libs.Dil2PublicKey `codec:"k"`
+	PublicKey cdilithium.Dil2PublicKey `codec:"k"`
 }
 
 // Verify follows dilithium algorithm to verify a signature.
