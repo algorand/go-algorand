@@ -428,6 +428,16 @@ type Local struct {
 	// message exchange information to the log file. This option is disabled by default,
 	// so that the log files would not grow too rapidly.
 	EnableVerbosedTransactionSyncLogging bool `version[17]:"false"`
+
+	// TransactionSyncDataExchangeRate overrides the auto-calculated data exchange rate between each
+	// two peers. The unit of the data exchange rate is in bytes per second. Setting the value to
+	// zero implies allowing the transaction sync to dynamically calculate the value.
+	TransactionSyncDataExchangeRate uint64 `version[17]:"0"`
+
+	// TransactionSyncSignificantMessageThreshold define the threshold used for a transaction sync
+	// message before it can be used for calculating the data exchange rate. Setting this to zero
+	// would use the default values.
+	TransactionSyncSignificantMessageThreshold uint64 `version[17]:"0"`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
