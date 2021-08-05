@@ -36,3 +36,30 @@ func TestBeta(t *testing.T) {
 	}
 
 }
+
+func TestShouldUpdateBeta(t *testing.T) {
+	beta0 := beta(0)
+	beta100 := beta(100)
+	beta5000 := beta(5000)
+	beta5100 := beta(5100)
+	beta5900 := beta(5900)
+	beta6000 := beta(6000)
+	beta10000 := beta(10000)
+	beta15000 := beta(15000)
+
+	// new beta greater than betaGranularChangeThreshold times previous beta
+	require.True(t, shouldUpdateBeta(beta0, beta10000, betaGranularChangeThreshold))
+	require.True(t, shouldUpdateBeta(beta5000, beta6000, betaGranularChangeThreshold))
+
+	//same beta values
+	require.False(t, shouldUpdateBeta(beta0, beta100, betaGranularChangeThreshold))
+	require.False(t, shouldUpdateBeta(beta10000, beta15000, betaGranularChangeThreshold))
+
+	// new beta lesser than betaGranularChangeThreshold times previous beta
+	require.True(t, shouldUpdateBeta(beta15000, beta0, betaGranularChangeThreshold))
+	require.True(t, shouldUpdateBeta(beta6000, beta100, betaGranularChangeThreshold))
+
+	// no change in beta is expected
+	require.False(t, shouldUpdateBeta(beta5000, beta5100, betaGranularChangeThreshold))
+	require.False(t, shouldUpdateBeta(beta6000, beta5900, betaGranularChangeThreshold))
+}

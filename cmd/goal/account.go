@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/passphrase"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	algodAcct "github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -591,22 +591,28 @@ func printAccountInfo(client libgoal.Client, address string, account v1.Account)
 	}
 	for _, id := range heldAssets {
 		assetHolding := account.Assets[id]
-		assetParams, err := client.AssetInformation(id)
+		assetParams, err := client.AssetInformationV2(id)
 		if err != nil {
 			hasError = true
 			fmt.Fprintf(errorReport, "Error: Unable to retrieve asset information for asset %d referred to by account %s: %v\n", id, address, err)
 			fmt.Fprintf(report, "\tID %d, error\n", id)
 		}
 
-		amount := assetDecimalsFmt(assetHolding.Amount, assetParams.Decimals)
+		amount := assetDecimalsFmt(assetHolding.Amount, uint32(assetParams.Params.Decimals))
 
-		assetName := assetParams.AssetName
+		var assetName string
+		if assetParams.Params.Name != nil {
+			assetName = *assetParams.Params.Name
+		}
 		if len(assetName) == 0 {
 			assetName = "<unnamed>"
 		}
 		_, assetName = unicodePrintable(assetName)
 
-		unitName := assetParams.UnitName
+		var unitName string
+		if assetParams.Params.UnitName != nil {
+			unitName = *assetParams.Params.UnitName
+		}
 		if len(unitName) == 0 {
 			unitName = "units"
 		}
@@ -1189,7 +1195,6 @@ var importRootKeysCmd = &cobra.Command{
 			handle, err = db.MakeErasableAccessor(filepath.Join(keyDir, filename))
 			if err != nil {
 				// Couldn't open it, skip it
-				err = nil
 				continue
 			}
 
@@ -1198,7 +1203,6 @@ var importRootKeysCmd = &cobra.Command{
 			handle.Close()
 			if err != nil {
 				// Couldn't read it, skip it
-				err = nil
 				continue
 			}
 

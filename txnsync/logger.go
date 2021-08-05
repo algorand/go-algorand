@@ -67,7 +67,7 @@ func (l *basicMsgLogger) logMessage(mstat msgStats, mode, tofrom string) {
 		return
 	}
 	l.Infof(
-		"%s Txsync #%d round %d transacations %d request [%d/%d] bloom %d nextTS %d %s '%s'",
+		"%s Txsync #%d round %d transactions %d request [%d/%d] bloom %d nextTS %d %s '%s'",
 		mode,
 		mstat.sequenceNumber,
 		mstat.round,

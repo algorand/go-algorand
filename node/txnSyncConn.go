@@ -161,7 +161,7 @@ func (tsnc *transcationSyncNodeConnector) GetPendingTransactionGroups() ([]trans
 
 func (tsnc *transcationSyncNodeConnector) onNewTransactionPoolEntry(transcationPoolSize int) {
 	select {
-	case tsnc.eventsCh <- txnsync.MakeTranscationPoolChangeEvent(transcationPoolSize):
+	case tsnc.eventsCh <- txnsync.MakeTranscationPoolChangeEvent(transcationPoolSize, false):
 	default:
 	}
 }
@@ -226,12 +226,10 @@ func (tsnc *transcationSyncNodeConnector) stop() {
 }
 
 func (tsnc *transcationSyncNodeConnector) IncomingTransactionGroups(peer *txnsync.Peer, messageSeq uint64, txGroups []transactions.SignedTxGroup) (transactionPoolSize int) {
-	// count the transactions that we are adding.
-	txCount := 0
-	for _, txGroup := range txGroups {
-		txCount += len(txGroup.Transactions)
+	if tsnc.txHandler.HandleTransactionGroups(peer.GetNetworkPeer(), peer.GetTransactionPoolAckChannel(), messageSeq, txGroups) {
+		transactionPoolSize = tsnc.node.transactionPool.PendingCount()
+	} else {
+		transactionPoolSize = -1
 	}
-
-	tsnc.txHandler.HandleTransactionGroups(peer.GetNetworkPeer(), peer.GetTransactionPoolAckChannel(), messageSeq, txGroups)
-	return tsnc.node.transactionPool.PendingCount() + txCount
+	return
 }

@@ -393,7 +393,7 @@ func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
 
 	var dr DryrunRequest
 	var gdr generated.DryrunRequest
-	err := decode(protocol.JSONHandle, data, &gdr)
+	err := decode(protocol.JSONStrictHandle, data, &gdr)
 	if err == nil {
 		dr, err = DryrunRequestFromGenerated(&gdr)
 		if err != nil {

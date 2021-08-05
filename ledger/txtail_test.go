@@ -29,9 +29,12 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestTxTailCheckdup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ledger := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	tail := txTail{}

@@ -213,7 +213,11 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 }
 
 func (s *syncState) onTransactionPoolChangedEvent(ent Event) {
-	if s.transactionPoolFull {
+	if ent.transactionHandlerBacklogFull {
+		// if the transaction handler backlog is full, we don't want to receive any more transactions.
+		// setting the transactionPoolFull here would notify other nodes that we don't want any more messages.
+		s.transactionPoolFull = true
+	} else if s.transactionPoolFull {
 		// the transaction pool is currently full.
 		if float32(ent.transactionPoolSize) < float32(s.config.TxPoolSize)*transacationPoolLowWatermark {
 			s.transactionPoolFull = false
@@ -226,12 +230,12 @@ func (s *syncState) onTransactionPoolChangedEvent(ent Event) {
 
 	newBeta := beta(ent.transactionPoolSize)
 
-	// see if the newBeta is at least 10% smaller or bigger than the current one
-	if (float32(s.lastBeta)*(1.0-betaGranularChangeThreshold)) <= float32(newBeta) || (float32(s.lastBeta)*(1.0+betaGranularChangeThreshold)) >= float32(newBeta) {
-		// no, it's not.
+	// check if beta should be updated
+	if !shouldUpdateBeta(s.lastBeta, newBeta, betaGranularChangeThreshold) {
+		// no changes
 		return
 	}
-	// yes, the number of transactions in the pool have changed dramatically since the last time.
+	// yes, change beta as the number of transactions in the pool have changed dramatically since the last time.
 	s.lastBeta = newBeta
 
 	peers := make([]*Peer, 0, len(s.interruptablePeers))
@@ -274,6 +278,18 @@ func beta(txPoolSize int) time.Duration {
 	beta := 1.0 / (2 * 3.6923 * math.Exp(float64(txPoolSize)*0.00026))
 	return time.Duration(float64(time.Second) * beta)
 
+}
+
+func shouldUpdateBeta(currentBeta, newBeta time.Duration, betaGranularChangeThreshold float32) bool {
+	// see if the newBeta is at least threshold percent smaller or bigger than the current one
+	if float32(newBeta) >= (float32(currentBeta) * (1.0 + betaGranularChangeThreshold)) {
+		return true
+	}
+	if float32(newBeta) <= (float32(currentBeta) * (1.0 - betaGranularChangeThreshold)) {
+		return true
+	}
+	// no, it's not.
+	return false
 }
 
 func (s *syncState) onNewRoundEvent(ent Event) {

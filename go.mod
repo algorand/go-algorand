@@ -6,7 +6,7 @@ require (
 	github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d
 	github.com/algorand/go-deadlock v0.2.1
 	github.com/algorand/graphtrace v0.0.0-20201117160756-e524ed1a6f64
-	github.com/algorand/msgp v1.1.47
+	github.com/algorand/msgp v1.1.48
 	github.com/algorand/oapi-codegen v1.3.5-algorand5
 	github.com/algorand/websocket v1.4.2
 	github.com/algorand/xorfilter v0.1.0
@@ -25,6 +25,7 @@ require (
 	github.com/gopherjs/gopherwasm v1.0.1 // indirect
 	github.com/gorilla/context v1.1.1 // indirect
 	github.com/gorilla/mux v1.6.2
+	github.com/gorilla/schema v1.0.2
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jmoiron/sqlx v1.2.0

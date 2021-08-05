@@ -100,6 +100,8 @@ var opDocByName = map[string]string{
 	"dup":           "duplicate last value on stack",
 	"dup2":          "duplicate two last values on stack: A, B -> A, B, A, B",
 	"dig":           "push the Nth value from the top of the stack. dig 0 is equivalent to dup",
+	"cover":         "remove top of stack, and place it down the stack such that N elements are above it",
+	"uncover":       "remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack",
 	"swap":          "swaps two last values on stack: A, B -> B, A",
 	"select":        "selects one of two values based on top-of-stack: A, B, C -> (if C != 0 then B else A)",
 	"concat":        "pop two byte-arrays A and B and join them, push the result",
@@ -182,6 +184,8 @@ var opcodeImmediateNotes = map[string]string{
 	"substring":         "{uint8 start position} {uint8 end position}",
 	"extract":           "{uint8 start position} {uint8 length}",
 	"dig":               "{uint8 depth}",
+	"cover":             "{uint8 depth}",
+	"uncover":           "{uint8 depth}",
 	"asset_holding_get": "{uint8 asset holding field index}",
 	"asset_params_get":  "{uint8 asset params field index}",
 	"app_params_get":    "{uint8 app params field index}",
@@ -246,7 +250,7 @@ var OpGroups = map[string][]string{
 	"Byteslice Arithmetic": {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%"},
 	"Byteslice Logic":      {"b|", "b&", "b^", "b~"},
 	"Loading Values":       {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "gtxns", "gtxnsa", "global", "load", "store", "gload", "gloads", "gaid", "gaids"},
-	"Flow Control":         {"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "swap", "select", "assert", "callsub", "retsub"},
+	"Flow Control":         {"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "cover", "uncover", "swap", "select", "assert", "callsub", "retsub"},
 	"State Access":         {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get"},
 }
 

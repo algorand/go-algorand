@@ -230,6 +230,19 @@ func TestEvaluateIncomingMessagePart2(t *testing.T) {
 	require.Equal(t, "received message out of order; seq = 11, expecting seq = 5\n", incLogger.lastLogged)
 	require.Equal(t, xorBloomFilter32, peer.recentIncomingBloomFilters[0].filter.filterType)
 
+	// currentTransacationPoolSize is -1
+	peer.incomingMessages = messageOrderingHeap{}
+	mNodeConnector.transactionPoolSize = -1
+	s.evaluateIncomingMessage(incomingMessage{
+		sequenceNumber: 5,
+		message:        transactionBlockMessage{Round: 5},
+		transactionGroups: []transactions.SignedTxGroup{
+			transactions.SignedTxGroup{
+				Transactions: []transactions.SignedTxn{
+					transactions.SignedTxn{}}}},
+	})
+	require.Equal(t, "Incoming Txsync #5 round 5 transactions 1 request [0/0] bloom 0 nextTS 0 from ''", incLogger.lastLogged)
+
 }
 
 func TestEvaluateIncomingMessagePart3(t *testing.T) {

@@ -75,7 +75,7 @@ const (
 	errorNodeRunning                  = "Node must be stopped before writing APIToken"
 	errorNodeFailGenToken             = "Cannot generate API token: %s"
 	errorNodeCreation                 = "Error during node creation: %v"
-	errorNodeManagedBySystemd         = "This node is managed by systemd, you must run the following command to make your desired state change to your node:\n\nsystemctl %s algorand.service"
+	errorNodeManagedBySystemd         = "This node is using systemd and should be managed with systemctl. For additional information refer to https://developer.algorand.org/docs/run-a-node/setup/install/#installing-algod-as-a-systemd-service"
 	errorKill                         = "Cannot kill node: %s"
 	errorCloningNode                  = "Error cloning the node: %s"
 	infoNodeCloned                    = "Node cloned successfully to: %s"

@@ -381,6 +381,17 @@ func (handler *TxHandler) processDecodedArray(unverifiedTxGroups []transactions.
 	// so we can safely treat the transaction as a verified transaction.
 	verifiedTxGroup := unverifiedTxGroups
 
+	// before calling RememberArray we should reallocate the individual remaining
+	// signed transactions - these transactions were allocated in bulk by the
+	// transaction sync. By re-allocating the backing storage, we would allow the
+	// original backing storage ( which includes transactions that won't go into the
+	// transaction pool ) to be garbge collected.
+	for i, group := range verifiedTxGroup {
+		copiedTransactions := make(transactions.SignedTxnSlice, len(group.Transactions))
+		copy(copiedTransactions, group.Transactions)
+		verifiedTxGroup[i].Transactions = copiedTransactions
+	}
+
 	// save the transaction, if it has high enough fee and not already in the cache
 	err = handler.txPool.RememberArray(verifiedTxGroup)
 	if err != nil {
@@ -423,16 +434,22 @@ func (handler *solicitedTxHandler) Handle(txgroup []transactions.SignedTxn) erro
 // SolicitedAsyncTxHandler handles messages received through channels other than the gossip network.
 // It therefore circumvents the notion of incoming/outgoing messages
 type SolicitedAsyncTxHandler interface {
-	HandleTransactionGroups(networkPeer interface{}, ackCh chan uint64, messageSeq uint64, groups []transactions.SignedTxGroup)
+	// HandleTransactionGroups enqueues the given slice of transaction groups that came from the given network peer with
+	// the given message sequence number. The provided acknowledgement channel provides a feedback for the transaction sync
+	// that the entire transaction group slice was added ( or already included ) within the transaction pool. The method
+	// return true if it's able to enqueue the processing task, or false if it's unable to enqueue the processing task.
+	HandleTransactionGroups(networkPeer interface{}, ackCh chan uint64, messageSeq uint64, groups []transactions.SignedTxGroup) bool
 	Start()
 	Stop()
 }
 
 type solicitedAyncTxHandler struct {
 	txHandler     *TxHandler
-	backlogGroups chan txGroups
+	backlogGroups chan *txGroups
 	stopped       sync.WaitGroup
 	stopCtxFunc   context.CancelFunc
+	// skipNextBacklogWarning is used to avoid repeated backlog full warning messages.
+	skipNextBacklogWarning bool
 }
 
 type txGroups struct {
@@ -449,17 +466,36 @@ type txGroups struct {
 // SolicitedAsyncTxHandler converts a transaction handler to a SolicitedTxHandler
 func (handler *TxHandler) SolicitedAsyncTxHandler() SolicitedAsyncTxHandler {
 	return &solicitedAyncTxHandler{
-		txHandler:     handler,
-		backlogGroups: make(chan txGroups, txBacklogSize),
+		txHandler:              handler,
+		backlogGroups:          make(chan *txGroups, txBacklogSize),
+		skipNextBacklogWarning: false,
 	}
 }
 
-func (handler *solicitedAyncTxHandler) HandleTransactionGroups(networkPeer interface{}, ackCh chan uint64, messageSeq uint64, groups []transactions.SignedTxGroup) {
+// HandleTransactionGroups implements the SolicitedAsyncTxHandler.HandleTransactionGroups interface
+// HandleTransactionGroups enqueues the given slice of transaction groups that came from the given network peer with
+// the given message sequence number. The provided acknowledgement channel provides a feedback for the transaction sync
+// that the entire transaction group slice was added ( or already included ) within the transaction pool. The method
+// return true if it's able to enqueue the processing task, or false if it's unable to enqueue the processing task.
+func (handler *solicitedAyncTxHandler) HandleTransactionGroups(networkPeer interface{}, ackCh chan uint64, messageSeq uint64, groups []transactions.SignedTxGroup) (enqueued bool) {
 	select {
-	case handler.backlogGroups <- txGroups{networkPeer: networkPeer, txGroups: groups, ackCh: ackCh, messageSeq: messageSeq}:
+	case handler.backlogGroups <- &txGroups{networkPeer: networkPeer, txGroups: groups, ackCh: ackCh, messageSeq: messageSeq}:
+		// reset the skipNextBacklogWarning once the number of pending items on the backlogGroups channels goes to
+		// less than half of it's capacity.
+		if handler.skipNextBacklogWarning && (len(handler.backlogGroups)*2 < cap(handler.backlogGroups)) {
+			handler.skipNextBacklogWarning = false
+		}
+		enqueued = true
 	default:
-		logging.Base().Warnf("solicitedAyncTxHandler exhusted groups backlog")
+		if !handler.skipNextBacklogWarning {
+			logging.Base().Warnf("solicitedAyncTxHandler exhusted groups backlog")
+			handler.skipNextBacklogWarning = true
+		}
+		// if we failed here we want to increase the corresponding metric. It might suggest that we
+		// want to increase the queue size.
+		transactionMessagesDroppedFromBacklog.Inc(nil)
 	}
+	return
 }
 
 func (handler *solicitedAyncTxHandler) Start() {
@@ -480,7 +516,7 @@ func (handler *solicitedAyncTxHandler) Stop() {
 }
 func (handler *solicitedAyncTxHandler) loop(ctx context.Context) {
 	defer handler.stopped.Done()
-	var groups txGroups
+	var groups *txGroups
 	for {
 		select {
 		case <-ctx.Done():
@@ -491,6 +527,7 @@ func (handler *solicitedAyncTxHandler) loop(ctx context.Context) {
 		if disconnect {
 			handler.txHandler.net.Disconnect(groups.networkPeer)
 			handler.txHandler.net.RequestConnectOutgoing(false, make(chan struct{}))
+			transactionMessagesDroppedFromPool.Inc(nil)
 		} else if allTransactionsIncluded {
 			select {
 			case groups.ackCh <- groups.messageSeq:
@@ -499,6 +536,12 @@ func (handler *solicitedAyncTxHandler) loop(ctx context.Context) {
 				// unable to write since channel was full - log this:
 				logging.Base().Warnf("solicitedAyncTxHandler was unable to ack transaction groups inclusion since the acknowledgement channel was full")
 			}
+			// we've processed this message, so increase the counter.
+			transactionMessagesHandled.Inc(nil)
+		} else {
+			transactionMessagesDroppedFromPool.Inc(nil)
 		}
+		// clear out the groups; that would allow the GC to collect the group's memory allocations while we wait for the next task.
+		*groups = txGroups{}
 	}
 }

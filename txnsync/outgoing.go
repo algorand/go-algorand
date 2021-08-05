@@ -75,6 +75,8 @@ func (encoder *messageAsyncEncoder) asyncMessageSent(enqueued bool, sequenceNumb
 		return errTransactionSyncOutgoingMessageQueueFull
 	}
 }
+
+// asyncEncodeAndSend encodes transaction groups and sends peer message asynchronously
 func (encoder *messageAsyncEncoder) asyncEncodeAndSend(interface{}) interface{} {
 	defer encoder.state.messageSendWaitGroup.Done()
 

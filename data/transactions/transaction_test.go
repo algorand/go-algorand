@@ -26,10 +26,13 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestTransaction_EstimateEncodedSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
 
@@ -80,6 +83,8 @@ func generateDummyGoNonparticpatingTransaction(addr basics.Address) (tx Transact
 }
 
 func TestGoOnlineGoNonparticipatingContradiction(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	// addr has no significance here other than being a normal valid address
 	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
@@ -102,6 +107,8 @@ func TestGoOnlineGoNonparticipatingContradiction(t *testing.T) {
 }
 
 func TestGoNonparticipatingWellFormed(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	// addr has no significance here other than being a normal valid address
 	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
@@ -124,6 +131,8 @@ func TestGoNonparticipatingWellFormed(t *testing.T) {
 }
 
 func TestAppCallCreateWellFormed(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	feeSink := basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
 	specialAddr := SpecialAddresses{FeeSink: feeSink}
 	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -223,11 +232,14 @@ func TestAppCallCreateWellFormed(t *testing.T) {
 }
 
 func TestWellFormedErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	feeSink := basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
 	specialAddr := SpecialAddresses{FeeSink: feeSink}
 	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
 	futureProto := config.Consensus[protocol.ConsensusFuture]
 	protoV27 := config.Consensus[protocol.ConsensusV27]
+	protoV28 := config.Consensus[protocol.ConsensusV28]
 	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
 	okHeader := Header{
@@ -447,6 +459,54 @@ func TestWellFormedErrors(t *testing.T) {
 			proto:         futureProto,
 			expectedError: fmt.Errorf("tx has too many references, max is 8"),
 		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     1,
+					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
+					ExtraProgramPages: 0,
+					OnCompletion:      UpdateApplicationOC,
+				},
+			},
+			spec:          specialAddr,
+			proto:         protoV28,
+			expectedError: fmt.Errorf("app programs too long. max total len %d bytes", curProto.MaxAppProgramLen),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     1,
+					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
+					ExtraProgramPages: 0,
+					OnCompletion:      UpdateApplicationOC,
+				},
+			},
+			spec:  specialAddr,
+			proto: futureProto,
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ApplicationArgs: [][]byte{
+						[]byte("write"),
+					},
+					ExtraProgramPages: 1,
+					OnCompletion:      UpdateApplicationOC,
+				},
+			},
+			spec:          specialAddr,
+			proto:         protoV28,
+			expectedError: fmt.Errorf("tx.ExtraProgramPages is immutable"),
+		},
 	}
 	for _, usecase := range usecases {
 		err := usecase.tx.WellFormed(usecase.spec, usecase.proto)
@@ -458,6 +518,8 @@ var generateFlag = flag.Bool("generate", false, "")
 
 // running test with -generate would generate the matrix used in the test ( without the "correct" errors )
 func TestWellFormedKeyRegistrationTx(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	flag.Parse()
 
 	// addr has no significance here other than being a normal valid address
