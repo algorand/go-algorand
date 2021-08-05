@@ -88,7 +88,7 @@ func MultisigAddrGen(version, threshold uint8, pk []PublicKey) (addr Digest, err
 	}
 
 	if threshold == 0 || len(pk) == 0 || int(threshold) > len(pk) {
-		err = errorinvalidthreshold
+		err = errInvalidThreshold
 		return
 	}
 
@@ -110,7 +110,7 @@ func MultisigAddrGenWithSubsigs(version uint8, threshold uint8,
 	}
 
 	if threshold == 0 || len(subsigs) == 0 || int(threshold) > len(subsigs) {
-		err = errorinvalidthreshold
+		err = errInvalidThreshold
 		return
 	}
 
@@ -135,7 +135,7 @@ func MultisigSign(msg Hashable, addr Digest, version, threshold uint8, pk []Publ
 	}
 
 	if addr != addrnew {
-		err = errorinvalidaddress
+		err = errInvalidAddress
 		return
 	}
 
@@ -152,7 +152,7 @@ func MultisigSign(msg Hashable, addr Digest, version, threshold uint8, pk []Publ
 		}
 	}
 	if keyexist == len(pk) {
-		err = errorkeynotexist
+		err = errKeyNotExist
 		return
 	}
 
@@ -177,20 +177,20 @@ func MultisigAssemble(unisig []MultisigSig) (msig MultisigSig, err error) {
 	// check if all unisig match
 	for i := 1; i < len(unisig); i++ {
 		if unisig[0].Threshold != unisig[i].Threshold {
-			err = errorinvalidthreshold
+			err = errInvalidThreshold
 			return
 		}
 		if unisig[0].Version != unisig[i].Version {
-			err = errorinvalidversion
+			err = errInvalidVersion
 			return
 		}
 		if len(unisig[0].Subsigs) != len(unisig[i].Subsigs) {
-			err = errorinvalidnumberofsignature
+			err = errInvalidNumberOfSignature
 			return
 		}
 		for j := 0; j < len(unisig[0].Subsigs); j++ {
 			if unisig[0].Subsigs[j].Key != unisig[i].Subsigs[j].Key {
-				err = errorkeysnotmatch
+				err = errKeysNotMatch
 				return
 			}
 		}
@@ -235,13 +235,13 @@ func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (verified bool, 
 }
 
 // MultisigBatchVerify verifies an assembled MultisigSig.
-// it is the caller responsibility to call batchVerifier.verifiy()
+// it is the caller responsibility to call batchVerifier.verify()
 func MultisigBatchVerify(msg Hashable, addr Digest, sig MultisigSig, batchVerifier *BatchVerifier) (verified bool, err error) {
 	verified = false
 	// short circuit: if msig doesn't have subsigs or if Subsigs are empty
 	// then terminate (the upper layer should now verify the unisig)
 	if (len(sig.Subsigs) == 0 || sig.Subsigs[0] == MultisigSubsig{}) {
-		err = errorinvalidnumberofsignature
+		err = errInvalidNumberOfSignature
 		return
 	}
 
@@ -251,19 +251,19 @@ func MultisigBatchVerify(msg Hashable, addr Digest, sig MultisigSig, batchVerifi
 		return
 	}
 	if addr != addrnew {
-		err = errorinvalidaddress
+		err = errInvalidAddress
 		return
 	}
 
 	// check that we don't have too many multisig subsigs
 	if len(sig.Subsigs) > maxMultisig {
-		err = errorinvalidnumberofsignature
+		err = errInvalidNumberOfSignature
 		return
 	}
 
 	// check that we don't have too few multisig subsigs
 	if len(sig.Subsigs) < int(sig.Threshold) {
-		err = errorinvalidnumberofsignature
+		err = errInvalidNumberOfSignature
 		return
 	}
 
@@ -275,7 +275,7 @@ func MultisigBatchVerify(msg Hashable, addr Digest, sig MultisigSig, batchVerifi
 		}
 	}
 	if counter < sig.Threshold {
-		err = errorinvalidnumberofsignature
+		err = errInvalidNumberOfSignature
 		return
 	}
 
@@ -291,7 +291,7 @@ func MultisigBatchVerify(msg Hashable, addr Digest, sig MultisigSig, batchVerifi
 	// sanity check. if we get here then every non-blank subsig should have
 	// been verified successfully, and we should have had enough of them
 	if verifiedCount < int(sig.Threshold) {
-		err = errorinvalidnumberofsignature
+		err = errInvalidNumberOfSignature
 		return
 	}
 
@@ -302,29 +302,29 @@ func MultisigBatchVerify(msg Hashable, addr Digest, sig MultisigSig, batchVerifi
 // MultisigAdd adds unisig to an existing msig
 func MultisigAdd(unisig []MultisigSig, msig *MultisigSig) (err error) {
 	if len(unisig) < 1 || msig == nil {
-		err = errorinvalidnumberofsig
+		err = errInvalidNumberOfSig
 		return
 	}
 
 	// check if all unisig match
 	for i := 0; i < len(unisig); i++ {
 		if msig.Threshold != unisig[i].Threshold {
-			err = errorinvalidthreshold
+			err = errInvalidThreshold
 			return
 		}
 
 		if msig.Version != unisig[i].Version {
-			err = errorinvalidversion
+			err = errInvalidVersion
 			return
 		}
 
 		if len(msig.Subsigs) != len(unisig[i].Subsigs) {
-			err = errorkeysnotmatch
+			err = errKeysNotMatch
 			return
 		}
 		for j := 0; j < len(unisig[0].Subsigs); j++ {
 			if msig.Subsigs[j].Key != unisig[i].Subsigs[j].Key {
-				err = errorkeysnotmatch
+				err = errKeysNotMatch
 				return
 			}
 		}
@@ -338,7 +338,7 @@ func MultisigAdd(unisig []MultisigSig, msig *MultisigSig) (err error) {
 					msig.Subsigs[j].Sig = unisig[i].Subsigs[j].Sig
 				} else if msig.Subsigs[j].Sig != unisig[i].Subsigs[j].Sig {
 					// invalid duplicates
-					err = errorinvalidduplicates
+					err = errInvalidDuplicates
 					return
 				} else {
 					// valid duplicates
@@ -356,12 +356,12 @@ func MultisigMerge(msig1 MultisigSig, msig2 MultisigSig) (msigt MultisigSig, err
 	if msig1.Threshold != msig2.Threshold ||
 		msig1.Version != msig2.Version ||
 		len(msig1.Subsigs) != len(msig2.Subsigs) {
-		err = errorinvalidthreshold
+		err = errInvalidThreshold
 		return
 	}
 	for i := 0; i < len(msig1.Subsigs); i++ {
 		if msig1.Subsigs[i].Key != msig2.Subsigs[i].Key {
-			err = errorkeysnotmatch
+			err = errKeysNotMatch
 			return
 		}
 	}
@@ -382,7 +382,7 @@ func MultisigMerge(msig1 MultisigSig, msig2 MultisigSig) (msigt MultisigSig, err
 			msigt.Subsigs[i].Sig = msig1.Subsigs[i].Sig
 		} else {
 			// invalid duplicates
-			err = errorinvalidduplicates
+			err = errInvalidDuplicates
 			msigt = MultisigSig{}
 			return
 		}

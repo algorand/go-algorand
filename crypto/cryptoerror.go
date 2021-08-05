@@ -19,15 +19,15 @@ package crypto
 import "errors"
 
 var (
-	errorinvalidversion           = errors.New("Invalid version")
-	errorinvalidaddress           = errors.New("Invalid address")
-	errorinvalidthreshold         = errors.New("Invalid threshold")
-	errorinvalidnumberofsignature = errors.New("Invalid number of signatures")
-	errorkeynotexist              = errors.New("Key does not exist")
-	errorsubsigverification       = errors.New("Verification failure: subsignature")
-	errorkeysnotmatch             = errors.New("Public key lists do not match")
-	errorinvalidduplicates        = errors.New("Invalid duplicates")
-	errorinvalidnumberofsig       = errors.New("invalid number of signatures to add")
+	errInvalidVersion           = errors.New("Invalid version")
+	errInvalidAddress           = errors.New("Invalid address")
+	errInvalidThreshold         = errors.New("Invalid threshold")
+	errInvalidNumberOfSignature = errors.New("Invalid number of signatures")
+	errKeyNotExist              = errors.New("Key does not exist")
+	errSubsigVerification       = errors.New("Verification failure: subsignature")
+	errKeysNotMatch             = errors.New("Public key lists do not match")
+	errInvalidDuplicates        = errors.New("Invalid duplicates")
+	errInvalidNumberOfSig       = errors.New("invalid number of signatures to add")
 )
 
 var errUnknownVersion = errors.New("unknown version")
