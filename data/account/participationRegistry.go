@@ -203,9 +203,6 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		// Fetch primary key
 		var pk int
 		row := tx.QueryRow(selectLastPK, id[:])
-		if row.Err() != nil {
-			return fmt.Errorf("unable to fetch pk: %w", row.Err())
-		}
 		err = row.Scan(&pk)
 		if err != nil {
 			return fmt.Errorf("unable to scan pk: %w", err)
@@ -227,9 +224,6 @@ func (db *participationDB) Delete(id ParticipationID) error {
 		// Fetch primary key
 		var pk int
 		row := tx.QueryRow(selectPK, id[:])
-		if row.Err() != nil {
-			return fmt.Errorf("unable to fetch pk: %w", row.Err())
-		}
 		err := row.Scan(&pk)
 		if err != nil {
 			return fmt.Errorf("unable to scan pk: %w", err)
