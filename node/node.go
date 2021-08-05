@@ -754,7 +754,7 @@ func (node *AlgorandFullNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn
 // ensureParticipationDB opens or creates a participation DB.
 func ensureParticipationDB(genesisDir string) (account.ParticipationRegistry, error) {
 	accessorFile := filepath.Join(genesisDir, config.ParticipationRegistryFilename)
-	accessor, err := db.MakeAccessor(accessorFile, false, false)
+	accessor, err := db.OpenPair(accessorFile, false)
 	if err != nil {
 		return nil, err
 	}
