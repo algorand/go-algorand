@@ -548,8 +548,7 @@ func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound ba
 		// if so, we might be able to calculate the bandwidth.
 		timeSinceLastMessageWasSent := currentTime - p.lastSentMessageTimestamp
 		networkMessageSize := uint64(p.lastSentMessageSize + incomingMessageSize)
-		//if timings.ResponseElapsedTime != 0 && timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime) && networkMessageSize > p.significantMessageThreshold {
-		if timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime) {
+		if timings.ResponseElapsedTime != 0 && timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime) && networkMessageSize >= p.significantMessageThreshold {
 			networkTrasmitTime := timeSinceLastMessageWasSent - time.Duration(timings.ResponseElapsedTime)
 			dataExchangeRate := uint64(time.Second) * networkMessageSize / uint64(networkTrasmitTime)
 

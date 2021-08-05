@@ -238,7 +238,9 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 
 	metaMessage.message.MsgSync.RefTxnBlockMsgSeq = peer.nextReceivedMessageSeq - 1
 	if peer.lastReceivedMessageTimestamp != 0 && peer.lastReceivedMessageLocalRound == s.round {
-		metaMessage.message.MsgSync.ResponseElapsedTime = uint64((s.clock.Since() - peer.lastReceivedMessageTimestamp).Nanoseconds())
+		// adding a nanosecond to the elapsed time is meaningless for the data rate calculation, but would ensure that
+		// the ResponseElapsedTime field has a clear distinction between "being set" vs. "not being set"
+		metaMessage.message.MsgSync.ResponseElapsedTime = uint64((s.clock.Since() - peer.lastReceivedMessageTimestamp).Nanoseconds()) + 1
 		// reset the lastReceivedMessageTimestamp so that we won't be using that again on a subsequent outgoing message.
 		peer.lastReceivedMessageTimestamp = 0
 	}
