@@ -269,7 +269,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
-	node.participationRegistry, err = ensureParticipationDB()
+	node.participationRegistry, err = ensureParticipationDB(genesisDir)
 	if err != nil {
 		log.Errorf("Cannot get participation metrics: %v", err)
 		return nil, err
@@ -752,8 +752,13 @@ func (node *AlgorandFullNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn
 }
 
 // ensureParticipationDB opens or creates a participation DB.
-func ensureParticipationDB() (account.ParticipationRegistry, error) {
-	return account.MakeParticipationRegistry(db.Accessor{})
+func ensureParticipationDB(genesisDir string) (account.ParticipationRegistry, error) {
+	accessorFile := filepath.Join(genesisDir, config.ParticipationRegistryFilename)
+	accessor, err := db.MakeAccessor(accessorFile, false, false)
+	if err != nil {
+		return nil, err
+	}
+	return account.MakeParticipationRegistry(accessor)
 }
 
 // Reload participation keys from disk periodically
