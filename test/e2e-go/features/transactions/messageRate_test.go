@@ -59,7 +59,7 @@ func throttleTransactionRate(startTime time.Time, txnRate uint, sentSoFar uint) 
 }
 
 func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRates []uint) {
-	t.Parallel()
+	// t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
