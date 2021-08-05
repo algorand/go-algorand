@@ -76,6 +76,10 @@ const (
 	messageConstTransactions        messageConstructionOps = 2
 	messageConstNextMinDelay        messageConstructionOps = 4
 	messageConstUpdateRequestParams messageConstructionOps = 8
+
+	// defaultSignificantMessageThreshold is the minimal transmitted message size which would be used for recalculating the
+	// data exchange rate.
+	defaultSignificantMessageThreshold = 50000
 )
 
 // incomingBloomFilter stores an incoming bloom filter, along with the associated round number.
@@ -255,12 +259,13 @@ func (t *transactionGroupCounterTracker) index(offset, modulator byte) int {
 
 func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool, cfg *config.Local) *Peer {
 	p := &Peer{
-		networkPeer:                networkPeer,
-		isOutgoing:                 isOutgoing,
-		recentSentTransactions:     makeTransactionCache(shortTermRecentTransactionsSentBufferLength, longTermRecentTransactionsSentBufferLength, pendingUnconfirmedRemoteMessages),
-		dataExchangeRate:           defaultDataExchangeRate,
-		transactionPoolAckCh:       make(chan uint64, maxAcceptedMsgSeq),
-		transactionPoolAckMessages: make([]uint64, 0, maxAcceptedMsgSeq),
+		networkPeer:                 networkPeer,
+		isOutgoing:                  isOutgoing,
+		recentSentTransactions:      makeTransactionCache(shortTermRecentTransactionsSentBufferLength, longTermRecentTransactionsSentBufferLength, pendingUnconfirmedRemoteMessages),
+		dataExchangeRate:            defaultDataExchangeRate,
+		transactionPoolAckCh:        make(chan uint64, maxAcceptedMsgSeq),
+		transactionPoolAckMessages:  make([]uint64, 0, maxAcceptedMsgSeq),
+		significantMessageThreshold: defaultSignificantMessageThreshold,
 	}
 	if isLocalNodeRelay {
 		p.requestedTransactionsModulator = 1
@@ -539,11 +544,12 @@ func (p *Peer) updateIncomingTransactionGroups(txnGroups []transactions.SignedTx
 func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound basics.Round, currentTime time.Duration, incomingMessageSize int) {
 	p.lastConfirmedMessageSeqReceived = timings.RefTxnBlockMsgSeq
 	// if we received a message that references our previous message, see if they occurred on the same round
-	if p.lastConfirmedMessageSeqReceived == p.lastSentMessageSequenceNumber && p.lastSentMessageRound == currentRound {
+	if p.lastConfirmedMessageSeqReceived == p.lastSentMessageSequenceNumber && p.lastSentMessageRound == currentRound && p.lastSentMessageTimestamp > 0 {
 		// if so, we might be able to calculate the bandwidth.
 		timeSinceLastMessageWasSent := currentTime - p.lastSentMessageTimestamp
 		networkMessageSize := uint64(p.lastSentMessageSize + incomingMessageSize)
-		if timings.ResponseElapsedTime != 0 && timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime) && networkMessageSize > p.significantMessageThreshold {
+		//if timings.ResponseElapsedTime != 0 && timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime) && networkMessageSize > p.significantMessageThreshold {
+		if timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime) {
 			networkTrasmitTime := timeSinceLastMessageWasSent - time.Duration(timings.ResponseElapsedTime)
 			dataExchangeRate := uint64(time.Second) * networkMessageSize / uint64(networkTrasmitTime)
 
