@@ -162,7 +162,7 @@ func TestUnknownVersionError(t *testing.T) {
 
 	// Initialize with only version 1
 	err = Initialize(accessor, []Migration{createFoo})
-	require.EqualError(t, err, MakeErrUnknownVersion(1, 0).Error())
+	require.EqualError(t, err, MakeErrUnknownVersion(2, 1).Error())
 }
 
 func TestNewDBFlag(t *testing.T) {
