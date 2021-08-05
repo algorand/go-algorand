@@ -14,9 +14,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package dilibs
+package dilithium_libs
 
-//#cgo CFLAGS: -O3
+// NOTE: -Wno-unused-parameter is used because cgo injects code that doesn't comply with -Wunused-parameter
+
+//#cgo CFLAGS:  -O3 -Wextra -Wno-unused-parameter  -Wpedantic -fomit-frame-pointer -Wshadow -Wvla -Wpointer-arith -Wredundant-decls
 //#include "api.h"
 import "C"
 import "errors"
