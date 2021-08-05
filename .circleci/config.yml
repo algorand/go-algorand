@@ -13,6 +13,6 @@ workflows:
           filters:
             branches:
               only:
-                - "/pull\/[0-9]+/"
+                - /pull\/[0-9]+/
 
 
