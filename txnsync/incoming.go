@@ -18,6 +18,7 @@ package txnsync
 
 import (
 	"errors"
+	"github.com/algorand/go-algorand/crypto"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -231,9 +232,16 @@ incomingMessageLoop:
 		// skip txnsync messages with proposalData for now
 		if !incomingMsg.message.RelayedProposal.MsgIsZero() {
 			if !incomingMsg.message.RelayedProposal.ExcludeProposal.MsgIsZero() {
-				peer.proposalFilterCache.insert(incomingMsg.message.RelayedProposal.ExcludeProposal)
+				// add filtered proposal to proposalFilterCache
+				peer.ProposalFilterCache.insert(incomingMsg.message.RelayedProposal.ExcludeProposal)
 			} else {
-				s.node.HandleProposalMessage(incomingMsg.message.RelayedProposal.RawBytes, incomingMsg.transactionGroups)
+				if incomingMsg.message.RelayedProposal.RawBytes != nil {
+					// add received proposal to proposalFilterCache
+					hash := crypto.Hash(incomingMsg.message.RelayedProposal.RawBytes)
+					peer.ProposalFilterCache.insert(hash)
+				}
+				// send proposal or proposal txns to handler
+				s.node.HandleProposalMessage(incomingMsg.message.RelayedProposal.RawBytes, incomingMsg.transactionGroups, peer)
 			}
 
 

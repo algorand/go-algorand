@@ -65,6 +65,8 @@ const (
 	peerStateInterrupt
 	// peerStateLateBloom is set for outgoing peers on relays, indicating that the next message should be a bloom filter only message.
 	peerStateLateBloom
+	// peerStateProposal is set when a peer still has proposal transactions it needs to send
+	peerStateProposal
 
 	peerOpsSendMessage        peersOps = 1
 	peerOpsSetInterruptible   peersOps = 2
@@ -172,7 +174,10 @@ type Peer struct {
 	lastSelectedTransactionsCount int
 
 	// proposalFilterCache keeps track of the most recent proposal bytes that the peer does not want to receive
-	proposalFilterCache proposalFilterCache
+	ProposalFilterCache proposalFilterCache
+
+	// proposalCache keeps track of most recent proposal sent and its txns
+	ProposalCache ProposalCache
 }
 
 // requestParamsGroupCounterState stores the latest group counters for a given set of request params.
@@ -189,6 +194,15 @@ type requestParamsGroupCounterState struct {
 // transactionGroupCounterTracker manages the group counter state for each request param.
 //msgp:ignore transactionGroupCounterTracker
 type transactionGroupCounterTracker []requestParamsGroupCounterState
+
+// cache used by the peer to keep track of which proposals not to send
+type ProposalCache struct {
+	RawBytes []byte
+	TxGroupIds []transactions.Txid
+	TxGroupIdIndex map[transactions.Txid]int
+	TxGroups []transactions.SignedTxGroup
+	NumTxGroupsReceived int
+}
 
 // get returns the group counter for a given set of request param.
 func (t *transactionGroupCounterTracker) get(offset, modulator byte) uint64 {
@@ -259,7 +273,7 @@ func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool) *
 		dataExchangeRate:           defaultDataExchangeRate,
 		transactionPoolAckCh:       make(chan uint64, maxAcceptedMsgSeq),
 		transactionPoolAckMessages: make([]uint64, 0, maxAcceptedMsgSeq),
-		proposalFilterCache:        makeProposalFilterCache(maxProposalFilterCacheSize),
+		ProposalFilterCache:        makeProposalFilterCache(maxProposalFilterCacheSize),
 	}
 	if isLocalNodeRelay {
 		p.requestedTransactionsModulator = 1
@@ -306,107 +320,6 @@ func (p *Peer) getAcceptedMessages() []uint64 {
 	return acceptedMessages
 }
 
-func (p *Peer) selectProposalTransactions(pendingTransactions []transactions.SignedTxGroup, sendWindow time.Duration, startIndex int) (selectedTxns []transactions.SignedTxGroup, nextIndex int) {
-	windowLengthBytes := int(uint64(sendWindow) * p.dataExchangeRate / uint64(time.Second))
-	accumulatedSize := 0
-
-	selectedIDsSliceLength := len(pendingTransactions) - startIndex
-	if selectedIDsSliceLength > p.lastSelectedTransactionsCount*2 {
-		selectedIDsSliceLength = p.lastSelectedTransactionsCount * 2
-	}
-	//selectedTxnIDs = make([]transactions.Txid, 0, selectedIDsSliceLength)
-	selectedTxns = make([]transactions.SignedTxGroup, 0, selectedIDsSliceLength)
-
-	windowSizedReached := false
-	//hasMorePendingTransactions := false
-
-	// create a list of all the bloom filters that might need to be tested. This list excludes bloom filters
-	// which has the same modulator and a different offset.
-	var effectiveBloomFilters []int
-	effectiveBloomFilters = make([]int, 0, len(p.recentIncomingBloomFilters))
-	for filterIdx := len(p.recentIncomingBloomFilters) - 1; filterIdx >= 0; filterIdx-- {
-		if p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Modulator == p.requestedTransactionsModulator && p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Offset != p.requestedTransactionsOffset {
-			continue
-		}
-		effectiveBloomFilters = append(effectiveBloomFilters, filterIdx)
-	}
-
-	//removedTxn := 0
-	grpIdx := startIndex
-scanLoop:
-	for ; grpIdx < len(pendingTransactions); grpIdx++ {
-		txID := pendingTransactions[grpIdx].GroupTransactionID
-
-		// check if the peer would be interested in these messages -
-		//if p.requestedTransactionsModulator > 1 {
-		//	if txidToUint64(txID)%uint64(p.requestedTransactionsModulator) != uint64(p.requestedTransactionsOffset) {
-		//		continue
-		//	}
-		//}
-
-		// filter out transactions that we already previously sent.
-		//if p.recentSentTransactions.contained(txID) {
-		//	// we already sent that transaction. no need to send again.
-		//	continue
-		//}
-
-		// check if the peer already received these messages from a different source other than us.
-		for _, filterIdx := range effectiveBloomFilters {
-			if p.recentIncomingBloomFilters[filterIdx].filter.test(txID) {
-				//removedTxn++
-				continue scanLoop
-			}
-		}
-
-		if windowSizedReached {
-			//hasMorePendingTransactions = true
-			break
-		}
-		selectedTxns = append(selectedTxns, pendingTransactions[grpIdx])
-		//selectedTxnIDs = append(selectedTxnIDs, txID)
-
-		// add the size of the transaction group
-		accumulatedSize += pendingTransactions[grpIdx].EncodedLength
-
-		if accumulatedSize > windowLengthBytes {
-			windowSizedReached = true
-		}
-	}
-
-	//p.lastSelectedTransactionsCount = len(selectedTxnIDs)
-
-	// if we've over-allocated, resize the buffer; This becomes important on relays,
-	// as storing these arrays can consume considerable amount of memory.
-	//if len(selectedTxnIDs)*2 < cap(selectedTxnIDs) {
-	//	exactBuffer := make([]transactions.Txid, len(selectedTxnIDs))
-	//	copy(exactBuffer, selectedTxnIDs)
-	//	selectedTxnIDs = exactBuffer
-	//}
-
-	// update the lastTransactionSelectionGroupCounter if needed -
-	// if we selected any transaction to be sent, update the lastTransactionSelectionGroupCounter with the latest
-	// group counter. If the startIndex was *after* the last pending transaction, it means that we don't
-	// need to update the lastTransactionSelectionGroupCounter since it's already ahead of everything in the pending transactions.
-	//if grpIdx >= 0 && startIndex < len(pendingTransactions) {
-	//	if grpIdx == len(pendingTransactions) {
-	//		if grpIdx > 0 {
-	//			p.lastTransactionSelectionTracker.set(p.requestedTransactionsOffset, p.requestedTransactionsModulator, pendingTransactions[grpIdx-1].GroupCounter+1)
-	//		}
-	//	} else {
-	//		p.lastTransactionSelectionTracker.set(p.requestedTransactionsOffset, p.requestedTransactionsModulator, pendingTransactions[grpIdx].GroupCounter)
-	//	}
-	//}
-	//
-	//if !hasMorePendingTransactions {
-	//	// we're done with the current sequence.
-	//	p.messageSeriesPendingTransactions = nil
-	//}
-
-	//fmt.Printf("selectPendingTransactions : selected %d transactions, %d not needed and aborted after exceeding data length %d/%d more = %v\n", len(selectedTxnIDs), removedTxn, accumulatedSize, windowLengthBytes, hasMorePendingTransactions)
-
-	return selectedTxns, grpIdx
-}
-
 func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.SignedTxGroup, sendWindow time.Duration, round basics.Round, bloomFilterSize int) (selectedTxns []transactions.SignedTxGroup, selectedTxnIDs []transactions.Txid, partialTranscationsSet bool) {
 	// if peer is too far back, don't send it any transactions ( or if the peer is not interested in transactions )
 	if p.lastRound < round.SubSaturate(1) || p.requestedTransactionsModulator == 0 {
@@ -433,7 +346,15 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 
 	accumulatedSize := 0
 
-	lastTransactionSelectionGroupCounter := p.lastTransactionSelectionTracker.get(p.requestedTransactionsOffset, p.requestedTransactionsModulator)
+	offset := byte(0)
+	modulator := byte(0)
+
+	if p.state != peerStateProposal {
+		offset = p.requestedTransactionsOffset
+		modulator = p.requestedTransactionsModulator
+	}
+
+	lastTransactionSelectionGroupCounter := p.lastTransactionSelectionTracker.get(offset, modulator)
 
 	startIndex := sort.Search(len(pendingTransactions), func(i int) bool {
 		return pendingTransactions[i].GroupCounter >= lastTransactionSelectionGroupCounter
@@ -454,7 +375,7 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 	var effectiveBloomFilters []int
 	effectiveBloomFilters = make([]int, 0, len(p.recentIncomingBloomFilters))
 	for filterIdx := len(p.recentIncomingBloomFilters) - 1; filterIdx >= 0; filterIdx-- {
-		if p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Modulator == p.requestedTransactionsModulator && p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Offset != p.requestedTransactionsOffset {
+		if p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Modulator == modulator && p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Offset != offset {
 			continue
 		}
 		effectiveBloomFilters = append(effectiveBloomFilters, filterIdx)
@@ -467,8 +388,8 @@ scanLoop:
 		txID := pendingTransactions[grpIdx].GroupTransactionID
 
 		// check if the peer would be interested in these messages -
-		if p.requestedTransactionsModulator > 1 {
-			if txidToUint64(txID)%uint64(p.requestedTransactionsModulator) != uint64(p.requestedTransactionsOffset) {
+		if modulator > 1 {
+			if txidToUint64(txID)%uint64(modulator) != uint64(offset) {
 				continue
 			}
 		}
@@ -529,6 +450,8 @@ scanLoop:
 	if !hasMorePendingTransactions {
 		// we're done with the current sequence.
 		p.messageSeriesPendingTransactions = nil
+	} else {
+		p.messageSeriesPendingTransactions = pendingTransactions[grpIdx:]
 	}
 
 	//fmt.Printf("selectPendingTransactions : selected %d transactions, %d not needed and aborted after exceeding data length %d/%d more = %v\n", len(selectedTxnIDs), removedTxn, accumulatedSize, windowLengthBytes, hasMorePendingTransactions)
@@ -696,6 +619,10 @@ func (p *Peer) advancePeerState(currenTime time.Duration, isRelay bool) (ops pee
 				// send a message
 				ops |= peerOpsSendMessage
 
+			case peerStateProposal:
+				// send a message
+				ops |= peerOpsSendMessage
+
 			default:
 				// this isn't expected, so we can just ignore this.
 				// todo : log
@@ -708,6 +635,9 @@ func (p *Peer) advancePeerState(currenTime time.Duration, isRelay bool) (ops pee
 				fallthrough
 			case peerStateHoldsoff:
 				// prepare the send message array.
+				ops |= peerOpsSendMessage
+			case peerStateProposal:
+				// send a message
 				ops |= peerOpsSendMessage
 			default: // peerStateInterrupt & peerStateLateBloom
 				// this isn't expected, so we can just ignore this.
@@ -731,6 +661,10 @@ func (p *Peer) advancePeerState(currenTime time.Duration, isRelay bool) (ops pee
 		case peerStateInterrupt:
 			p.state = peerStateHoldsoff
 			ops |= peerOpsSendMessage | peerOpsClearInterruptible
+
+		case peerStateProposal:
+			// send a message
+			ops |= peerOpsSendMessage
 
 		default: // peerStateLateBloom
 			// this isn't expected, so we can just ignore this.
@@ -757,6 +691,8 @@ func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (
 				}
 			case peerStateHoldsoff:
 				ops |= messageConstTransactions
+			case peerStateProposal:
+				ops |= messageConstTransactions
 			}
 		} else {
 			if p.requestedTransactionsModulator != 0 {
@@ -768,11 +704,14 @@ func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (
 			if p.nextStateTimestamp == 0 {
 				ops |= messageConstNextMinDelay
 			}
+			if p.state == peerStateProposal {
+				ops |= messageConstTransactions
+			}
 		}
 		ops |= messageConstUpdateRequestParams
 	} else {
 		ops |= messageConstTransactions // send transactions to the other peer
-		if fetchTransactions {
+		if fetchTransactions && p.state != peerStateProposal {
 			switch p.localTransactionsModulator {
 			case 0:
 				// don't send bloom filter.
@@ -831,7 +770,9 @@ func (p *Peer) getNextScheduleOffset(isRelay bool, beta time.Duration, partialMe
 				p.nextStateTimestamp = 0
 				p.messageSeriesPendingTransactions = nil
 				// move to the next state.
-				p.state = peerStateHoldsoff
+				if p.state != peerStateProposal{
+					p.state = peerStateHoldsoff
+				}
 				return next - currentTime, peerOpsReschedule | peerOpsClearInterruptible
 
 			}
@@ -841,6 +782,10 @@ func (p *Peer) getNextScheduleOffset(isRelay bool, beta time.Duration, partialMe
 			return messageTimeWindow, peerOpsReschedule
 		}
 	} else {
+		// since we are done sending the proposal transactions, update the state
+		if p.state == peerStateProposal {
+			p.state = peerStateHoldsoff
+		}
 		if isRelay {
 			if p.isOutgoing {
 				if p.state == peerStateHoldsoff {

@@ -55,7 +55,6 @@ type messageAsyncEncoder struct {
 	messageData          sentMessageMetadata
 	roundClock           timers.WallClock
 	peerDataExchangeRate uint64
-	sendCtx              context.Context
 }
 
 // asyncMessageSent called via the network package to inform the txsync that a message was enqueued, and the associated sequence number.
@@ -80,32 +79,27 @@ func (encoder *messageAsyncEncoder) asyncMessageSent(enqueued bool, sequenceNumb
 func (encoder *messageAsyncEncoder) asyncEncodeAndSend(interface{}) interface{} {
 	defer encoder.state.messageSendWaitGroup.Done()
 
-	select {
-	case <-encoder.sendCtx.Done():
-		return nil
-	default:
-		var err error
-		if len(encoder.messageData.transactionGroups) > 0 {
-			encoder.messageData.message.TransactionGroups, err = encoder.state.encodeTransactionGroups(encoder.messageData.transactionGroups, encoder.peerDataExchangeRate)
-			if err != nil {
-				encoder.state.log.Warnf("unable to encode transaction groups : %v", err)
-			}
-			encoder.messageData.transactionGroups = nil // clear out to allow GC to reclaim
+	var err error
+	if len(encoder.messageData.transactionGroups) > 0 {
+		encoder.messageData.message.TransactionGroups, err = encoder.state.encodeTransactionGroups(encoder.messageData.transactionGroups, encoder.peerDataExchangeRate)
+		if err != nil {
+			encoder.state.log.Warnf("unable to encode transaction groups : %v", err)
 		}
-
-		encodedMessage := encoder.messageData.message.MarshalMsg(getMessageBuffer())
-		encoder.messageData.encodedMessageSize = len(encodedMessage)
-		// now that the message is ready, we can discard the encoded transcation group slice to allow the GC to collect it.
-		releaseEncodedTransactionGroups(encoder.messageData.message.TransactionGroups.Bytes)
-
-		encoder.state.node.SendPeerMessage(encoder.messageData.peer.networkPeer, encodedMessage, encoder.asyncMessageSent)
-		releaseMessageBuffer(encodedMessage)
-
-		encoder.messageData.message.TransactionGroups.Bytes = nil
-		// increase the metric for total messages sent.
-		txsyncOutgoingMessagesTotal.Inc(nil)
-		return nil
+		encoder.messageData.transactionGroups = nil // clear out to allow GC to reclaim
 	}
+
+	encodedMessage := encoder.messageData.message.MarshalMsg(getMessageBuffer())
+	encoder.messageData.encodedMessageSize = len(encodedMessage)
+	// now that the message is ready, we can discard the encoded transcation group slice to allow the GC to collect it.
+	releaseEncodedTransactionGroups(encoder.messageData.message.TransactionGroups.Bytes)
+
+	encoder.state.node.SendPeerMessage(encoder.messageData.peer.networkPeer, encodedMessage, encoder.asyncMessageSent)
+	releaseMessageBuffer(encodedMessage)
+
+	encoder.messageData.message.TransactionGroups.Bytes = nil
+	// increase the metric for total messages sent.
+	txsyncOutgoingMessagesTotal.Inc(nil)
+	return nil
 }
 
 // enqueue add the given message encoding task to the execution pool, and increase the waitgroup as needed.
@@ -120,6 +114,7 @@ func (encoder *messageAsyncEncoder) enqueue() {
 // The goal is to ensure we're "capturing"  this only once per `sendMessageLoop` call. In order to do so, we allocate that structure on the stack, and passing
 // a pointer to that structure downstream.
 type pendingTransactionGroupsSnapshot struct {
+	proposalRawBytes                    []byte
 	pendingTransactionsGroups           []transactions.SignedTxGroup
 	latestLocallyOriginatedGroupCounter uint64
 }
@@ -140,7 +135,6 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 			state:                s,
 			roundClock:           s.clock,
 			peerDataExchangeRate: peer.dataExchangeRate,
-			sendCtx:              context.Background(),
 		}
 		profAssembleMessage.start()
 		msgEncoder.messageData = s.assemblePeerMessage(peer, &pendingTransactions)
@@ -172,34 +166,15 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 	}
 }
 
-func (s *syncState) assembleProposalMessage(peer *Peer, pendingTransactionsGroups []transactions.SignedTxGroup) (metaMessage sentMessageMetadata) {
-	metaMessage = sentMessageMetadata{
-		peer: peer,
-		message: &transactionBlockMessage{
-			Version: txnBlockMessageVersion,
-			Round:   s.round,
-		},
-	}
-
-	metaMessage.transactionGroups = pendingTransactionsGroups
-
-	metaMessage.message.MsgSync.RefTxnBlockMsgSeq = peer.nextReceivedMessageSeq - 1
-	if peer.lastReceivedMessageTimestamp != 0 && peer.lastReceivedMessageLocalRound == s.round {
-		metaMessage.message.MsgSync.ResponseElapsedTime = uint64((s.clock.Since() - peer.lastReceivedMessageTimestamp).Nanoseconds())
-	}
-	// use the messages seq number that we've accepted so far, and let the other peer
-	// know about them. The getAcceptedMessages would delete the returned list from the peer's storage before
-	// returning.
-	metaMessage.message.MsgSync.AcceptedMsgSeq = peer.getAcceptedMessages()
-	return
-}
-
 func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pendingTransactionGroupsSnapshot) (metaMessage sentMessageMetadata) {
 	metaMessage = sentMessageMetadata{
 		peer: peer,
 		message: &transactionBlockMessage{
 			Version: txnBlockMessageVersion,
 			Round:   s.round,
+			RelayedProposal: relayedProposal{
+				RawBytes: pendingTransactions.proposalRawBytes,
+			},
 		},
 	}
 
@@ -259,6 +234,10 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 		if !metaMessage.partialMessage {
 			peer.lastSentBloomFilter = bloomFilter{}
 		}
+
+		if peer.state == peerStateProposal {
+			metaMessage.message.RelayedProposal.Content = transactionsForProposal
+		}
 	}
 
 	metaMessage.message.MsgSync.RefTxnBlockMsgSeq = peer.nextReceivedMessageSeq - 1
@@ -307,45 +286,48 @@ func (s *syncState) locallyGeneratedTransactions(pendingTransactions *pendingTra
 }
 
 func (s *syncState) broadcastProposal(p ProposalBroadcastRequest, peers []*Peer) {
-	var cancelSendCtx context.CancelFunc
-	s.sendCtx, cancelSendCtx = context.WithCancel(context.Background())
-	s.node.SetProposalCancelFunc(cancelSendCtx)
+	currentTime := s.clock.Since()
 
 	for _, peer := range peers {
-		select {
-		case <-s.sendCtx.Done():
-			return
-		default:
-			// check if p.proposalBytes was filtered
-			if peer.proposalFilterCache.exists(crypto.Hash(p.proposalBytes)) {
-				continue
-			}
+		// check if p.proposalBytes was filtered
+		if peer.ProposalFilterCache.exists(crypto.Hash(p.proposalBytes)) {
+			continue
+		}
 
-			// send p.proposalBytes
-			proposalMessage := transactionBlockMessage{
-				Version: txnBlockMessageVersion,
-				RelayedProposal: relayedProposal{
-					RawBytes: p.proposalBytes,
-				},
-			}
-			encodedMessage := proposalMessage.MarshalMsg(getMessageBuffer())
-			s.node.SendPeerMessage(peer.networkPeer, encodedMessage, func(enqueued bool, sequenceNumber uint64) error { return nil })
-			releaseMessageBuffer(encodedMessage)
-			// send txns using s.assemblePeerMessage(peer, &pendingTransactions)
+		// send p.proposalBytes
+		peer.state = peerStateProposal
+		// reset last txn tracker, use 0 mod 0 for proposals
+		peer.lastTransactionSelectionTracker.set(0, 0, 0)
 
-			startIndex := 0
-			for startIndex < len(p.txGroups) {
-				var txGroupsToSend []transactions.SignedTxGroup
-				msgEncoder := &messageAsyncEncoder{
-					state:                s,
-					roundClock:           s.clock,
-					peerDataExchangeRate: peer.dataExchangeRate,
-					sendCtx:              s.sendCtx,
-				}
-				txGroupsToSend, startIndex = peer.selectProposalTransactions(p.txGroups, messageTimeWindow, startIndex)
-				msgEncoder.messageData = s.assembleProposalMessage(peer, txGroupsToSend)
-				msgEncoder.enqueue()
+		pendingTransactions := pendingTransactionGroupsSnapshot {
+			proposalRawBytes: p.proposalBytes,
+			pendingTransactionsGroups: p.txGroups,
+		}
+
+		msgEncoder := &messageAsyncEncoder{
+			state:                s,
+			roundClock:           s.clock,
+			peerDataExchangeRate: peer.dataExchangeRate,
+		}
+		msgEncoder.messageData = s.assemblePeerMessage(peer, &pendingTransactions)
+		isPartialMessage := msgEncoder.messageData.partialMessage
+		msgEncoder.enqueue()
+
+		scheduleOffset, ops := peer.getNextScheduleOffset(s.isRelay, s.lastBeta, isPartialMessage, currentTime)
+		if (ops & peerOpsSetInterruptible) == peerOpsSetInterruptible {
+			if _, has := s.interruptablePeersMap[peer]; !has {
+				s.interruptablePeers = append(s.interruptablePeers, peer)
+				s.interruptablePeersMap[peer] = len(s.interruptablePeers) - 1
 			}
+		}
+		if (ops & peerOpsClearInterruptible) == peerOpsClearInterruptible {
+			if idx, has := s.interruptablePeersMap[peer]; has {
+				delete(s.interruptablePeersMap, peer)
+				s.interruptablePeers[idx] = nil
+			}
+		}
+		if (ops & peerOpsReschedule) == peerOpsReschedule {
+			s.scheduler.schedulerPeer(peer, currentTime+scheduleOffset)
 		}
 	}
 }

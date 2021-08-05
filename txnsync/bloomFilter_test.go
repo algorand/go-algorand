@@ -17,7 +17,6 @@
 package txnsync
 
 import (
-	"context"
 	"encoding/binary"
 	"math/rand"
 	"testing"
@@ -341,8 +340,6 @@ func (fn *justRandomFakeNode) IncomingTransactionGroups(peer *Peer, messageSeq u
 }
 func (fn *justRandomFakeNode) NotifyMonitor() chan struct{} { return nil }
 
-func (fn *justRandomFakeNode) SetProposalCancelFunc(cancelFunc context.CancelFunc) {}
-
 func (fn *justRandomFakeNode) RelayProposal(proposalBytes []byte, txnSlices []transactions.SignedTxnSlice) {}
 
-func (fn *justRandomFakeNode) HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup) {}
+func (fn *justRandomFakeNode) HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup, peer *Peer) {}

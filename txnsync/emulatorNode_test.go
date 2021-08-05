@@ -17,7 +17,6 @@
 package txnsync
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -398,8 +397,6 @@ func (p *networkPeer) GetAddress() string {
 	return fmt.Sprintf("%d", p.target)
 }
 
-func (n *emulatedNode) SetProposalCancelFunc(context.CancelFunc) {}
-
 func (n *emulatedNode) RelayProposal(proposalBytes []byte, txnSlices []transactions.SignedTxnSlice) {
 	data := proposalData{
 		proposalBytes: proposalBytes,
@@ -424,4 +421,4 @@ func (n *emulatedNode) RelayProposal(proposalBytes []byte, txnSlices []transacti
 	n.externalEvents <- MakeBroadcastProposalRequestEvent(proposalBytes, txGroups)
 }
 
-func (n *emulatedNode) HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup) {}
+func (n *emulatedNode) HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup, peer *Peer) {}

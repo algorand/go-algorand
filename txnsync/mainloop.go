@@ -93,8 +93,6 @@ type syncState struct {
 	messageSendWaitGroup sync.WaitGroup
 
 	xorBuilder bloom.XorBuilder
-
-	sendCtx       context.Context
 }
 
 func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {

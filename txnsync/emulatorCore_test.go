@@ -131,9 +131,24 @@ func (e *emulator) run() {
 }
 func (e *emulator) nextRound() {
 	e.currentRound++
+
+	txnSlices := make([]transactions.SignedTxnSlice, 10)
+	for i := 0; i < len(txnSlices); i++ {
+		txnSlices[i] = []transactions.SignedTxn{
+			transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type: protocol.PaymentTx,
+					Header: transactions.Header{
+						Note: []byte{byte(i)},
+					},
+				},
+			},
+		}
+	}
+
 	for _, node := range e.nodes {
 		node.onNewRound(e.currentRound, true)
-		node.RelayProposal([]byte("proposal"), nil)
+		node.RelayProposal([]byte("proposal"), txnSlices)
 	}
 }
 func (e *emulator) unblockStep() {

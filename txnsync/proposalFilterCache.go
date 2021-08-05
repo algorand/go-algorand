@@ -22,6 +22,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 )
 
+// cache used by the peer to keep track of which proposals not to send
 type proposalFilterCache struct {
 	store       map[crypto.Digest]*list.Element
 	orderedMsgs *list.List
@@ -41,13 +42,14 @@ func (c *proposalFilterCache) insert(proposalHash crypto.Digest) {
 	if found {
 		c.orderedMsgs.MoveToBack(element)
 	} else {
-		element := c.orderedMsgs.PushBack(proposalHash)
-		c.store[proposalHash] = element
-		for c.orderedMsgs.Len() > c.limit {
+		// remove oldest item in the cache if reached capacity
+		if c.orderedMsgs.Len() >= c.limit {
 			key := c.orderedMsgs.Front()
 			delete(c.store, key.Value.(crypto.Digest))
 			c.orderedMsgs.Remove(key)
 		}
+		element := c.orderedMsgs.PushBack(proposalHash)
+		c.store[proposalHash] = element
 	}
 }
 

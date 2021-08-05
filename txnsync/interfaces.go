@@ -17,8 +17,6 @@
 package txnsync
 
 import (
-	"context"
-
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/util/timers"
@@ -100,9 +98,7 @@ type NodeConnector interface {
 	// to the transaction pool.
 	IncomingTransactionGroups(peer *Peer, messageSeq uint64, txGroups []transactions.SignedTxGroup) (transactionPoolSize int)
 	NotifyMonitor() chan struct{}
-	SetProposalCancelFunc(context.CancelFunc)
-    RelayProposal(proposalBytes []byte, txnSlices []transactions.SignedTxnSlice)
-	HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup)
+	HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup, peer *Peer)
 }
 
 // MakeTranscationPoolChangeEvent creates an event for when a txn pool size has changed.
