@@ -2033,13 +2033,13 @@ func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err erro
 	return off, nil
 }
 
-// commitSyncer is the syncer go-routine function which perform the database updates. Internally, it dequeues deferedCommits and
+// commitSyncer is the syncer go-routine function which perform the database updates. Internally, it dequeues deferredCommits and
 // send the tasks to commitRound for completing the operation.
-func (au *accountUpdates) commitSyncer(deferedCommits chan deferredCommit) {
+func (au *accountUpdates) commitSyncer(deferredCommits chan deferredCommit) {
 	defer close(au.commitSyncerClosed)
 	for {
 		select {
-		case committedOffset, ok := <-deferedCommits:
+		case committedOffset, ok := <-deferredCommits:
 			if !ok {
 				return
 			}
@@ -2049,7 +2049,7 @@ func (au *accountUpdates) commitSyncer(deferedCommits chan deferredCommit) {
 			drained := false
 			for !drained {
 				select {
-				case <-deferedCommits:
+				case <-deferredCommits:
 					au.accountsWriting.Done()
 				default:
 					drained = true
