@@ -324,6 +324,5 @@ archive:
 	aws s3 cp tmp/node_pkgs s3://algorand-internal/channel/$(CHANNEL)/$(FULLBUILDNUMBER) --recursive --exclude "*" --include "*$(FULLBUILDNUMBER)*"
 
 build_custom_linters:
-	cd cmd/partitiontest_linter/
-	go build -buildmode=plugin -trimpath plugin/plugin.go
-	cd -
+	cd $(SRCPATH)/cmd/partitiontest_linter/ && go build -buildmode=plugin -trimpath plugin/plugin.go && ls plugin.so
+	cd $(SRCPATH)

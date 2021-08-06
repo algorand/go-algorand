@@ -14,16 +14,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package linter
-
-import (
-	"testing"
-
-	"golang.org/x/tools/go/analysis/analysistest"
-)
-
-func TestAll(t *testing.T) {
-	analysistest.Run(t, analysistest.TestData(), Analyzer)
 package linttest
 
 import (
@@ -43,6 +33,4 @@ func (m *myStruct) couldError() error {
 func doSomething() {
 	m := myStruct{a: 2, b: 2.0}
 	m.couldError()
-=======
->>>>>>> master
 }

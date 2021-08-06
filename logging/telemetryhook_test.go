@@ -217,10 +217,5 @@ func TestAsyncTelemetryHook_QueueDepth(t *testing.T) {
 	close(filling)
 	hook.Close()
 
-	hookEntries := len(testHook.entries())
-	require.GreaterOrEqual(t, hookEntries, maxDepth)
-	// the anonymous goroutine in createAsyncHookLevels might pull an entry off the pending list before
-	// writing it off to the underlying hook. when that happens, the total number of sent entries could
-	// be one higher then the maxDepth.
-	require.LessOrEqual(t, hookEntries, maxDepth+1)
+	require.Equal(t, maxDepth, len(testHook.entries()))
 }
