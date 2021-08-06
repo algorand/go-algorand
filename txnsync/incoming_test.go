@@ -26,6 +26,7 @@ import (
 
 	"github.com/algorand/msgp/msgp"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
@@ -281,4 +282,47 @@ func TestEvaluateIncomingMessagePart3(t *testing.T) {
 				NextMsgMinDelay: 3}}})
 
 	require.Equal(t, "Incoming Txsync #1 late round 0", incLogger.lastLogged)
+}
+
+func TestEvaluateIncomingMessageAccumulatedTransactionsCount(t *testing.T) {
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableVerbosedTransactionSyncLogging = true
+	peer := &Peer{}
+	peer.recentSentTransactions = makeTransactionCache(5, 10, 20)
+	incLogger := incomingLogger{}
+
+	mNodeConnector := &mockNodeConnector{transactionPoolSize: 3}
+	mNodeConnector.peerInfo = PeerInfo{NetworkPeer: peer}
+
+	s := syncState{
+		node:  mNodeConnector,
+		log:   wrapLogger(&incLogger, &cfg),
+		clock: mNodeConnector.Clock()}
+
+	mNodeConnector.peerInfo.TxnSyncPeer = peer
+	peer.incomingMessages = messageOrderingHeap{}
+
+	genesisID := "gID"
+	genesisHash := crypto.Hash([]byte("gh"))
+	txnGroups := getTxnGroups(genesisHash, genesisID)
+
+	// test with more than 200 transactions in the txnGroups
+	for x := 0; x < 100; x++ {
+		t := getTxnGroups(genesisHash, genesisID)
+		txnGroups = append(txnGroups, t...)
+	}
+	
+	ptg, err := s.encodeTransactionGroups(txnGroups, 1000000000)
+	require.NoError(t, err)
+	txGroups, err := decodeTransactionGroups(ptg, genesisID, genesisHash)
+	require.NoError(t, err)
+
+	
+	s.evaluateIncomingMessage(incomingMessage{
+		sequenceNumber:    0,
+		message:           transactionBlockMessage{Round: 5},
+		transactionGroups: txGroups,
+	})
+	require.Equal(t, time.Duration(115586426), s.lastBeta)
 }
