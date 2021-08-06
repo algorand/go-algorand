@@ -87,8 +87,6 @@ func (status StatusReport) TimeSinceLastRound() time.Duration {
 
 // AlgorandFullNode specifies and implements a full Algorand node.
 type AlgorandFullNode struct {
-	nodeContextData
-
 	mu        deadlock.Mutex
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -161,7 +159,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	node := new(AlgorandFullNode)
 	node.rootDir = rootDir
-	node.config = cfg
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
 	node.genesisHash = crypto.HashObj(genesis)
@@ -170,6 +167,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	if node.devMode {
 		cfg.DisableNetworking = true
 	}
+	node.config = cfg
 
 	// tie network, block fetcher, and agreement services together
 	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network)

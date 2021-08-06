@@ -22,10 +22,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -250,6 +249,8 @@ dup
 var programTEALv1 = "01200500010220ffffffffffffffffff012608014120559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd0142201f675bff07515f5df96737194ea945c36c41e7b4fcef307b7cd4d0e602a6911101432034b99f8dde1ba273c0a28cf5b2e4dbe497f8cb2453de0c8ba6d578c9431a62cb0100200000000000000000000000000000000000000000000000000000000000000000280129122a022b1210270403270512102d2e2f041022082209230a230b240c220d230e230f231022112312231314301525121617182319231a221b21041c1d12222312242512102104231210482829122a2b121027042706121048310031071331013102121022310413103105310613103108311613103109310a1210310b310f1310310c310d1210310e31101310311131121310311331141210311531171210483300003300071333000133000212102233000413103300053300061310330008330016131033000933000a121033000b33000f131033000c33000d121033000e3300101310330011330012131033001333001412103300153300171210483200320112320232041310320327071210350034001040000100234912"
 
 func TestBackwardCompatTEALv1(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 	var s crypto.Seed
 	crypto.RandBytes(s[:])
@@ -370,148 +371,9 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 
 }
 
-// ensure v2 fields error on pre TEAL v2 logicsig version
-// ensure v2 fields error in v1 program
-func TestBackwardCompatGlobalFields(t *testing.T) {
-	t.Parallel()
-	var fields []globalFieldSpec
-	for _, fs := range globalFieldSpecs {
-		if fs.version > 1 {
-			fields = append(fields, fs)
-		}
-	}
-	require.Greater(t, len(fields), 1)
-
-	ledger := makeTestLedger(nil)
-	for _, field := range fields {
-		text := fmt.Sprintf("global %s", field.gfield.String())
-		// check assembler fails if version before introduction
-		testLine(t, text, assemblerNoVersion, "...available in version...")
-		for v := uint64(0); v < field.version; v++ {
-			testLine(t, text, v, "...available in version...")
-		}
-
-		ops := testProg(t, text, AssemblerMaxVersion)
-
-		proto := config.Consensus[protocol.ConsensusV23]
-		require.False(t, proto.Application)
-		ep := defaultEvalParams(nil, nil)
-		ep.Proto = &proto
-		ep.Ledger = ledger
-
-		// check failure with version check
-		_, err := Eval(ops.Program, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "greater than protocol supported version")
-		_, err = Eval(ops.Program, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "greater than protocol supported version")
-
-		// check opcodes failures
-		ops.Program[0] = 1 // set version to 1
-		_, err = Eval(ops.Program, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid global[")
-		_, err = Eval(ops.Program, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid global[")
-
-		// check opcodes failures
-		ops.Program[0] = 0 // set version to 0
-		_, err = Eval(ops.Program, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid global[")
-		_, err = Eval(ops.Program, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid global[")
-	}
-}
-
-// ensure v2 fields error in v1 program
-func TestBackwardCompatTxnFields(t *testing.T) {
-	t.Parallel()
-	var fields []txnFieldSpec
-	for _, fs := range txnFieldSpecs {
-		if fs.version > 1 {
-			fields = append(fields, fs)
-		}
-	}
-	require.Greater(t, len(fields), 1)
-
-	tests := []string{
-		"txn %s",
-		"gtxn 0 %s",
-	}
-
-	ledger := makeTestLedger(nil)
-	txn := makeSampleTxn()
-	// We'll reject too early if we have a nonzero RekeyTo, because that
-	// field must be zero for every txn in the group if this is an old
-	// TEAL version
-	txn.Txn.RekeyTo = basics.Address{}
-	txgroup := makeSampleTxnGroup(txn)
-	for _, fs := range fields {
-		field := fs.field.String()
-		for _, command := range tests {
-			text := fmt.Sprintf(command, field)
-			asmError := "...available in version ..."
-			if _, ok := txnaFieldSpecByField[fs.field]; ok {
-				parts := strings.Split(text, " ")
-				op := parts[0]
-				asmError = fmt.Sprintf("found array field %#v in %s op", field, op)
-			}
-			// check assembler fails if version before introduction
-			testLine(t, text, assemblerNoVersion, asmError)
-			for v := uint64(0); v < fs.version; v++ {
-				testLine(t, text, v, asmError)
-			}
-
-			ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
-			if _, ok := txnaFieldSpecByField[fs.field]; ok {
-				// "txn Accounts" is invalid, so skip evaluation
-				require.Error(t, err, asmError)
-				continue
-			} else {
-				require.NoError(t, err)
-			}
-
-			proto := config.Consensus[protocol.ConsensusV23]
-			require.False(t, proto.Application)
-			ep := defaultEvalParams(nil, nil)
-			ep.Proto = &proto
-			ep.Ledger = ledger
-			ep.TxnGroup = txgroup
-
-			// check failure with version check
-			_, err = Eval(ops.Program, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "greater than protocol supported version")
-			_, err = Eval(ops.Program, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "greater than protocol supported version")
-
-			// check opcodes failures
-			ops.Program[0] = 1 // set version to 1
-			_, err = Eval(ops.Program, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid txn field")
-			_, err = Eval(ops.Program, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid txn field")
-
-			// check opcodes failures
-			ops.Program[0] = 0 // set version to 0
-			_, err = Eval(ops.Program, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid txn field")
-			_, err = Eval(ops.Program, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid txn field")
-		}
-	}
-}
-
 func TestBackwardCompatAssemble(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	// TEAL v1 does not allow branching to the last line
 	// TEAL v2 makes such programs legal
 	t.Parallel()

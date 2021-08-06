@@ -23,6 +23,7 @@ BUILDBRANCH      := $(shell ./scripts/compute_branch.sh)
 CHANNEL          ?= $(shell ./scripts/compute_branch_channel.sh $(BUILDBRANCH))
 DEFAULTNETWORK   ?= $(shell ./scripts/compute_branch_network.sh $(BUILDBRANCH))
 DEFAULT_DEADLOCK ?= $(shell ./scripts/compute_branch_deadlock_default.sh $(BUILDBRANCH))
+export GOCACHE=$(SRCPATH)/tmp/go-cache
 
 GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 
@@ -75,7 +76,7 @@ GOLDFLAGS := $(GOLDFLAGS_BASE) \
 UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
 ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
 
-MSGP_GENERATE	:= ./protocol ./crypto ./crypto/compactcert ./data/basics ./data/transactions ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./node ./ledger ./ledger/ledgercore ./compactcert
+MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/compactcert ./data/basics ./data/transactions ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./node ./ledger ./ledger/ledgercore ./compactcert
 
 default: build
 
@@ -203,9 +204,9 @@ build: buildsrc
 # to cache binaries from time to time on empty NFS
 # dirs
 buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN
-	mkdir -p tmp/go-cache && \
-	touch tmp/go-cache/file.txt && \
-	GOCACHE=$(SRCPATH)/tmp/go-cache go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+	mkdir -p "${GOCACHE}" && \
+	touch "${GOCACHE}"/file.txt && \
+	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 check-go-version:
 	./scripts/check_golang_version.sh build
@@ -321,3 +322,7 @@ include ./scripts/release/mule/Makefile.mule
 
 archive:
 	aws s3 cp tmp/node_pkgs s3://algorand-internal/channel/$(CHANNEL)/$(FULLBUILDNUMBER) --recursive --exclude "*" --include "*$(FULLBUILDNUMBER)*"
+
+build_custom_linters:
+	cd $(SRCPATH)/cmd/partitiontest_linter/ && go build -buildmode=plugin -trimpath plugin/plugin.go && ls plugin.so
+	cd $(SRCPATH)
