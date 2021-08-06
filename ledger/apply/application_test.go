@@ -268,6 +268,10 @@ func (b *testBalances) SetProto(name protocol.ConsensusVersion) {
 	b.proto = config.Consensus[name]
 }
 
+func (b *testBalances) SetParams(params config.ConsensusParams) {
+	b.proto = params
+}
+
 type testEvaluator struct {
 	pass   bool
 	delta  basics.EvalDelta
@@ -984,19 +988,12 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	a.Equal([]byte{2}, br.AppParams[appIdx].ClearStateProgram)
 	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
 
-	// check app program len
-	appr := make([]byte, 6050)
+	//check program len check happens in future consensus proto version
+	b.SetProto(protocol.ConsensusFuture)
+	proto = b.ConsensusParams()
+	ep.Proto = &proto
 
-	for i := range appr {
-		appr[i] = 2
-	}
-	appr[0] = 4
-	ac = transactions.ApplicationCallTxnFields{
-		ApplicationID:     appIdx,
-		OnCompletion:      transactions.UpdateApplicationOC,
-		ApprovalProgram:   appr,
-		ClearStateProgram: []byte{2},
-	}
+	// check app program len
 	params = basics.AppParams{
 		ApprovalProgram: []byte{1},
 		StateSchemas: basics.StateSchemas{
@@ -1018,22 +1015,34 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	b.balances[creator] = cp
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
-	//check program len check happens in future consensus proto version
-	b.SetProto(protocol.ConsensusFuture)
-	proto = b.ConsensusParams()
-	ep.Proto = &proto
-
-	b.pass = true
-	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
-	a.Error(err)
-	a.Contains(err.Error(), "updateApplication app programs too long")
-
 	// check extraProgramPages is used
-	appr = make([]byte, 3072)
+	appr := make([]byte, 2*proto.MaxAppProgramLen+1)
+	appr[0] = 4 // version 4
 
-	for i := range appr {
-		appr[i] = 2
+	var tests = []struct {
+		name     string
+		approval []byte
+		clear    []byte
+	}{
+		{"approval", appr, []byte{2}},
+		{"clear state", []byte{2}, appr},
 	}
+	for _, test := range tests {
+		ac = transactions.ApplicationCallTxnFields{
+			ApplicationID:     appIdx,
+			OnCompletion:      transactions.UpdateApplicationOC,
+			ApprovalProgram:   test.approval,
+			ClearStateProgram: test.clear,
+		}
+
+		b.pass = true
+		err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
+		a.Error(err)
+		a.Contains(err.Error(), fmt.Sprintf("updateApplication %s program too long", test.name))
+	}
+
+	// check extraProgramPages allows length of proto.MaxAppProgramLen + 1
+	appr = make([]byte, proto.MaxAppProgramLen+1)
 	appr[0] = 4
 	ac = transactions.ApplicationCallTxnFields{
 		ApplicationID:     appIdx,
@@ -1045,6 +1054,17 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
 
+	// check extraProgramPages is used and long sum rejected
+	ac = transactions.ApplicationCallTxnFields{
+		ApplicationID:     appIdx,
+		OnCompletion:      transactions.UpdateApplicationOC,
+		ApprovalProgram:   appr,
+		ClearStateProgram: appr,
+	}
+	b.pass = true
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
+	a.Error(err)
+	a.Contains(err.Error(), "updateApplication app programs too long")
 }
 
 func TestAppCallApplyDelete(t *testing.T) {

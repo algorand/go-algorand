@@ -193,10 +193,17 @@ func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	proto := balances.ConsensusParams()
 	// when proto.EnableExtraPageOnAppUpdate is false, WellFormed rejects all updates with a multiple-page program
 	if proto.EnableExtraPagesOnAppUpdate {
-		allowed := int(1+params.ExtraProgramPages) * proto.MaxAppTotalProgramLen
-		actual := len(ac.ApprovalProgram) + len(ac.ClearStateProgram)
-		if actual > allowed {
-			return fmt.Errorf("updateApplication app programs too long, %d. max total len %d bytes", actual, allowed)
+		lap := len(ac.ApprovalProgram)
+		lcs := len(ac.ClearStateProgram)
+		pages := int(1 + params.ExtraProgramPages)
+		if lap > pages*proto.MaxAppProgramLen {
+			return fmt.Errorf("updateApplication approval program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
+		}
+		if lcs > pages*proto.MaxAppProgramLen {
+			return fmt.Errorf("updateApplication clear state program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
+		}
+		if lap+lcs > pages*proto.MaxAppTotalProgramLen {
+			return fmt.Errorf("updateApplication app programs too long, %d. max total len %d bytes", lap+lcs, pages*proto.MaxAppTotalProgramLen)
 		}
 	}
 
