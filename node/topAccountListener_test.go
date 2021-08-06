@@ -294,8 +294,8 @@ func makeBlockWithTxnFor(senders []byte, receivers []byte) bookkeeping.Block {
 			Txn: transactions.Transaction{
 				Type: protocol.PaymentTx,
 				Header: transactions.Header{
-					Sender: basics.Address{senders[i]},
-					GenesisID: blk.BlockHeader.GenesisID,
+					Sender:      basics.Address{senders[i]},
+					GenesisID:   blk.BlockHeader.GenesisID,
 					GenesisHash: blk.BlockHeader.GenesisHash,
 				},
 				PaymentTxnFields: transactions.PaymentTxnFields{

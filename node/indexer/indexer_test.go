@@ -35,6 +35,7 @@ import (
 )
 
 const genesisID string = "foo"
+
 var genesisHash crypto.Digest
 
 type IndexSuite struct {
@@ -65,9 +66,9 @@ func (s *IndexSuite) SetupSuite() {
 		var txnEnc []transactions.SignedTxnInBlock
 		b := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round:     basics.Round(uint64(i + 2)),
-				TimeStamp: time.Now().Unix(),
-				GenesisID: genesisID,
+				Round:       basics.Round(uint64(i + 2)),
+				TimeStamp:   time.Now().Unix(),
+				GenesisID:   genesisID,
 				GenesisHash: genesisHash,
 				UpgradeState: bookkeeping.UpgradeState{
 					CurrentProtocol: protocol.ConsensusFuture,
@@ -237,11 +238,11 @@ func generateTestObjects(numTxs, numAccs int) ([]transactions.Transaction, []tra
 
 		txs[i] = transactions.Transaction{
 			Header: transactions.Header{
-				Sender:     addresses[s],
-				Fee:        basics.MicroAlgos{Raw: f},
-				FirstValid: basics.Round(iss),
-				LastValid:  basics.Round(exp),
-				GenesisID: genesisID,
+				Sender:      addresses[s],
+				Fee:         basics.MicroAlgos{Raw: f},
+				FirstValid:  basics.Round(iss),
+				LastValid:   basics.Round(exp),
+				GenesisID:   genesisID,
 				GenesisHash: genesisHash,
 			},
 		}
