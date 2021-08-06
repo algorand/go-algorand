@@ -21,6 +21,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-deadlock"
 )
 
 func makeRecordingKeyManager(accounts []account.Participation) *recordingKeyManager {
@@ -34,7 +35,7 @@ func makeRecordingKeyManager(accounts []account.Participation) *recordingKeyMana
 type recordingKeyManager struct {
 	keys      []account.Participation
 	recording map[basics.Address]map[account.ParticipationAction]basics.Round
-	mutex     sync.Mutex
+	mutex     deadlock.Mutex
 }
 
 // VotingKeys implements KeyManager.VotingKeys.
