@@ -109,7 +109,6 @@ type AlgorandFullNode struct {
 	indexer *indexer.Indexer
 
 	participationRegistry account.ParticipationRegistry
-	participationRecorder chan recordParams
 
 	rootDir     string
 	genesisID   string
@@ -281,7 +280,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		log.Errorf("Cannot load participation keys: %v", err)
 		return nil, err
 	}
-	node.participationRecorder = make(chan recordParams, 5)
 
 	node.oldKeyDeletionNotify = make(chan struct{}, 1)
 
@@ -402,7 +400,7 @@ func (node *AlgorandFullNode) Start() {
 
 // startMonitoringRoutines starts the internal monitoring routines used by the node.
 func (node *AlgorandFullNode) startMonitoringRoutines() {
-	node.monitoringRoutinesWaitGroup.Add(4)
+	node.monitoringRoutinesWaitGroup.Add(3)
 
 	// TODO: Remove this with #2596
 	// Periodically check for new participation keys
@@ -411,8 +409,6 @@ func (node *AlgorandFullNode) startMonitoringRoutines() {
 	go node.txPoolGaugeThread()
 	// Delete old participation keys
 	go node.oldKeyDeletionThread()
-
-	go node.participationRecorderThread()
 
 	// TODO re-enable with configuration flag post V1
 	//go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, nil)
@@ -1188,24 +1184,8 @@ type recordParams struct {
 
 // RecordAsync forwards participation record calls to the participation registry.
 func (node *AlgorandFullNode) RecordAsync(account basics.Address, round basics.Round, participationType account.ParticipationAction) {
-	node.participationRecorder <- recordParams{
-		account:           account,
-		round:             round,
-		participationType: participationType,
-	}
-}
-
-func (node *AlgorandFullNode) participationRecorderThread() {
-	defer node.monitoringRoutinesWaitGroup.Done()
-	for {
-		select {
-		case <-node.ctx.Done():
-			return
-		case params := <-node.participationRecorder:
-			err := node.participationRegistry.Record(params.account, params.round, params.participationType)
-			if err != nil {
-				node.log.Warnf("node.RecordAsync: Account %v not able to record participation (%d) on round %d: %w", params.account, params.participationType, params.round, err)
-			}
-		}
+	err := node.participationRegistry.Record(account, round, participationType)
+	if err != nil {
+		node.log.Warnf("node.RecordAsync: Account %v not able to record participation (%d) on round %d: %w", account, participationType, round, err)
 	}
 }
