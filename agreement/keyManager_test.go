@@ -17,6 +17,8 @@
 package agreement
 
 import (
+	"sync"
+
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 )
@@ -32,6 +34,7 @@ func makeRecordingKeyManager(accounts []account.Participation) recordingKeyManag
 type recordingKeyManager struct {
 	keys      []account.Participation
 	recording map[basics.Address]map[account.ParticipationAction]basics.Round
+	mutex     sync.Mutex
 }
 
 // VotingKeys implements KeyManager.VotingKeys.
@@ -51,6 +54,8 @@ func (m recordingKeyManager) DeleteOldKeys(r basics.Round) {
 
 // Record implements KeyManager.Record.
 func (m recordingKeyManager) RecordAsync(acct basics.Address, round basics.Round, action account.ParticipationAction) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	if _, ok := m.recording[acct]; !ok {
 		m.recording[acct] = make(map[account.ParticipationAction]basics.Round)
 	}
