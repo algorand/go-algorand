@@ -394,7 +394,7 @@ func (s *syncState) getPeers() (result []*Peer) {
 	// some of the network peers might not have a sync peer, so we need to create one for these.
 	for _, peerInfo := range peersInfo {
 		if peerInfo.TxnSyncPeer == nil {
-			syncPeer := makePeer(peerInfo.NetworkPeer, peerInfo.IsOutgoing, s.isRelay)
+			syncPeer := makePeer(peerInfo.NetworkPeer, peerInfo.IsOutgoing, s.isRelay, &s.config)
 			peerInfo.TxnSyncPeer = syncPeer
 			updatedNetworkPeers = append(updatedNetworkPeers, peerInfo.NetworkPeer)
 			updatedNetworkPeersSync = append(updatedNetworkPeersSync, syncPeer)

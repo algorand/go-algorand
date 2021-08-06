@@ -95,7 +95,7 @@ func emulateScenario(t *testing.T, scenario scenario) {
 	t.Logf("Total duplicate transaction count: %d", e.totalDuplicateTransactions)
 	t.Logf("Total duplicate transactions size: %d", e.totalDuplicateTransactionSize)
 	for n := 0; n < e.nodeCount; n++ {
-		t.Logf("%s message count : %d", e.nodes[n].name, len(results.nodes[n]))
+		t.Logf("%s transaction groups count : %d", e.nodes[n].name, len(results.nodes[n]))
 	}
 	for n := 0; n < e.nodeCount; n++ {
 		require.Equalf(t, len(scenario.expectedResults.nodes[n]), len(results.nodes[n]), "node %d", n)
