@@ -1,5 +1,3 @@
-// +build service_test
-
 // Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //

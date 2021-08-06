@@ -2354,5 +2354,6 @@ func TestAgreementServiceStartDeadline(t *testing.T) {
 	}
 	require.Len(t, demuxSignal.signals, 1)
 	require.Equal(t, testConsensusParams.AgreementFilterTimeoutPeriod0, demuxSignal.signals[0].Deadline)
-	require.Equal(t, baseLedger.NextRound(), demuxSignal.signals[0].CurrentRound)
+	require.Equal(t, baseLedger.NextRound(), demuxSignal.signals[0].CurrentRound.Number)
+	require.Equal(t, baseLedger.NextRound(), demuxSignal.currentRound)
 }
