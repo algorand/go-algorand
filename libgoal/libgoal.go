@@ -746,7 +746,7 @@ func (c *Client) PendingTransactionInformation(txid string) (resp v1.Transaction
 	return
 }
 
-// PendingTransactionInformation returns information about a recently issued
+// PendingTransactionInformationV2 returns information about a recently issued
 // transaction based on its txid.
 func (c *Client) PendingTransactionInformationV2(txid string) (resp generatedV2.PendingTransactionResponse, err error) {
 	algod, err := c.ensureAlgodClient()
