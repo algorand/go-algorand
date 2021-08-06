@@ -1675,8 +1675,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 						err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram", zb0014)
 						return
 					}
-					if zb0069 > config.MaxAppProgramLen {
-						err = msgp.ErrOverflow(uint64(zb0069), uint64(config.MaxAppProgramLen))
+					if zb0069 > config.MaxAvailableAppProgramLen {
+						err = msgp.ErrOverflow(uint64(zb0069), uint64(config.MaxAvailableAppProgramLen))
 						return
 					}
 					zb0068, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).ApprovalProgram[zb0014]))
@@ -1740,8 +1740,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 						err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram", zb0015)
 						return
 					}
-					if zb0075 > config.MaxAppProgramLen {
-						err = msgp.ErrOverflow(uint64(zb0075), uint64(config.MaxAppProgramLen))
+					if zb0075 > config.MaxAvailableAppProgramLen {
+						err = msgp.ErrOverflow(uint64(zb0075), uint64(config.MaxAvailableAppProgramLen))
 						return
 					}
 					zb0074, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).ClearStateProgram[zb0015]))
@@ -2421,8 +2421,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 							err = msgp.WrapError(err, "ApprovalProgram", zb0014)
 							return
 						}
-						if zb0132 > config.MaxAppProgramLen {
-							err = msgp.ErrOverflow(uint64(zb0132), uint64(config.MaxAppProgramLen))
+						if zb0132 > config.MaxAvailableAppProgramLen {
+							err = msgp.ErrOverflow(uint64(zb0132), uint64(config.MaxAvailableAppProgramLen))
 							return
 						}
 						zb0131, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).ApprovalProgram[zb0014]))
@@ -2482,8 +2482,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 							err = msgp.WrapError(err, "ClearStateProgram", zb0015)
 							return
 						}
-						if zb0138 > config.MaxAppProgramLen {
-							err = msgp.ErrOverflow(uint64(zb0138), uint64(config.MaxAppProgramLen))
+						if zb0138 > config.MaxAvailableAppProgramLen {
+							err = msgp.ErrOverflow(uint64(zb0138), uint64(config.MaxAvailableAppProgramLen))
 							return
 						}
 						zb0137, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).ClearStateProgram[zb0015]))
@@ -14509,8 +14509,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram", zb0036)
 						return
 					}
-					if zb0257 > config.MaxAppProgramLen {
-						err = msgp.ErrOverflow(uint64(zb0257), uint64(config.MaxAppProgramLen))
+					if zb0257 > config.MaxAvailableAppProgramLen {
+						err = msgp.ErrOverflow(uint64(zb0257), uint64(config.MaxAvailableAppProgramLen))
 						return
 					}
 					zb0256, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram[zb0036]))
@@ -14574,8 +14574,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram", zb0037)
 						return
 					}
-					if zb0263 > config.MaxAppProgramLen {
-						err = msgp.ErrOverflow(uint64(zb0263), uint64(config.MaxAppProgramLen))
+					if zb0263 > config.MaxAvailableAppProgramLen {
+						err = msgp.ErrOverflow(uint64(zb0263), uint64(config.MaxAvailableAppProgramLen))
 						return
 					}
 					zb0262, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram[zb0037]))
@@ -17505,8 +17505,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "ApprovalProgram", zb0036)
 							return
 						}
-						if zb0509 > config.MaxAppProgramLen {
-							err = msgp.ErrOverflow(uint64(zb0509), uint64(config.MaxAppProgramLen))
+						if zb0509 > config.MaxAvailableAppProgramLen {
+							err = msgp.ErrOverflow(uint64(zb0509), uint64(config.MaxAvailableAppProgramLen))
 							return
 						}
 						zb0508, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram[zb0036]))
@@ -17566,8 +17566,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "ClearStateProgram", zb0037)
 							return
 						}
-						if zb0515 > config.MaxAppProgramLen {
-							err = msgp.ErrOverflow(uint64(zb0515), uint64(config.MaxAppProgramLen))
+						if zb0515 > config.MaxAvailableAppProgramLen {
+							err = msgp.ErrOverflow(uint64(zb0515), uint64(config.MaxAvailableAppProgramLen))
 							return
 						}
 						zb0514, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram[zb0037]))
@@ -22785,8 +22785,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram", zb0031)
 						return
 					}
-					if zb0222 > config.MaxAppProgramLen {
-						err = msgp.ErrOverflow(uint64(zb0222), uint64(config.MaxAppProgramLen))
+					if zb0222 > config.MaxAvailableAppProgramLen {
+						err = msgp.ErrOverflow(uint64(zb0222), uint64(config.MaxAvailableAppProgramLen))
 						return
 					}
 					zb0221, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedApplicationCallTxnFields.ApprovalProgram[zb0031]))
@@ -22850,8 +22850,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram", zb0032)
 						return
 					}
-					if zb0228 > config.MaxAppProgramLen {
-						err = msgp.ErrOverflow(uint64(zb0228), uint64(config.MaxAppProgramLen))
+					if zb0228 > config.MaxAvailableAppProgramLen {
+						err = msgp.ErrOverflow(uint64(zb0228), uint64(config.MaxAvailableAppProgramLen))
 						return
 					}
 					zb0227, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedApplicationCallTxnFields.ClearStateProgram[zb0032]))
@@ -25434,8 +25434,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "ApprovalProgram", zb0031)
 							return
 						}
-						if zb0444 > config.MaxAppProgramLen {
-							err = msgp.ErrOverflow(uint64(zb0444), uint64(config.MaxAppProgramLen))
+						if zb0444 > config.MaxAvailableAppProgramLen {
+							err = msgp.ErrOverflow(uint64(zb0444), uint64(config.MaxAvailableAppProgramLen))
 							return
 						}
 						zb0443, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedApplicationCallTxnFields.ApprovalProgram[zb0031]))
@@ -25495,8 +25495,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "ClearStateProgram", zb0032)
 							return
 						}
-						if zb0450 > config.MaxAppProgramLen {
-							err = msgp.ErrOverflow(uint64(zb0450), uint64(config.MaxAppProgramLen))
+						if zb0450 > config.MaxAvailableAppProgramLen {
+							err = msgp.ErrOverflow(uint64(zb0450), uint64(config.MaxAvailableAppProgramLen))
 							return
 						}
 						zb0449, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedApplicationCallTxnFields.ClearStateProgram[zb0032]))
@@ -26313,8 +26313,8 @@ func (z *program) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > config.MaxAppProgramLen {
-			err = msgp.ErrOverflow(uint64(zb0002), uint64(config.MaxAppProgramLen))
+		if zb0002 > config.MaxAvailableAppProgramLen {
+			err = msgp.ErrOverflow(uint64(zb0002), uint64(config.MaxAvailableAppProgramLen))
 			return
 		}
 		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
@@ -31537,8 +31537,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram", zb0036)
 						return
 					}
-					if zb0258 > config.MaxAppProgramLen {
-						err = msgp.ErrOverflow(uint64(zb0258), uint64(config.MaxAppProgramLen))
+					if zb0258 > config.MaxAvailableAppProgramLen {
+						err = msgp.ErrOverflow(uint64(zb0258), uint64(config.MaxAvailableAppProgramLen))
 						return
 					}
 					zb0257, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram[zb0036]))
@@ -31602,8 +31602,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram", zb0037)
 						return
 					}
-					if zb0264 > config.MaxAppProgramLen {
-						err = msgp.ErrOverflow(uint64(zb0264), uint64(config.MaxAppProgramLen))
+					if zb0264 > config.MaxAvailableAppProgramLen {
+						err = msgp.ErrOverflow(uint64(zb0264), uint64(config.MaxAvailableAppProgramLen))
 						return
 					}
 					zb0263, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram[zb0037]))
@@ -34561,8 +34561,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "ApprovalProgram", zb0036)
 							return
 						}
-						if zb0511 > config.MaxAppProgramLen {
-							err = msgp.ErrOverflow(uint64(zb0511), uint64(config.MaxAppProgramLen))
+						if zb0511 > config.MaxAvailableAppProgramLen {
+							err = msgp.ErrOverflow(uint64(zb0511), uint64(config.MaxAvailableAppProgramLen))
 							return
 						}
 						zb0510, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram[zb0036]))
@@ -34622,8 +34622,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "ClearStateProgram", zb0037)
 							return
 						}
-						if zb0517 > config.MaxAppProgramLen {
-							err = msgp.ErrOverflow(uint64(zb0517), uint64(config.MaxAppProgramLen))
+						if zb0517 > config.MaxAvailableAppProgramLen {
+							err = msgp.ErrOverflow(uint64(zb0517), uint64(config.MaxAvailableAppProgramLen))
 							return
 						}
 						zb0516, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram[zb0037]))

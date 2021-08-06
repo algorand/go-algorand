@@ -793,6 +793,7 @@ func BenchmarkUnmarshalSignedTxnInBlock(b *testing.B) {
 }
 
 func TestMarshalUnmarshalSignedTxnSlice(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := SignedTxnSlice{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)

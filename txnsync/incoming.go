@@ -266,6 +266,12 @@ incomingMessageLoop:
 
 		// if we received at least a single transaction group, then forward it to the transaction handler.
 		if len(incomingMsg.transactionGroups) > 0 {
+			// get the number of transactions ( not transaction groups !! ) from the transaction groups slice.
+			// this code is using the fact the we allocate all the transactions as a single array, and then slice
+			// them for the different transaction groups. The transaction handler would re-allocate the transactions that
+			// would be stored in the transaction pool.
+			totalTransactionCount := cap(incomingMsg.transactionGroups[0].Transactions)
+
 			// send the incoming transaction group to the node last, so that the txhandler could modify the underlaying array if needed.
 			currentTransacationPoolSize := s.node.IncomingTransactionGroups(peer, peer.nextReceivedMessageSeq-1, incomingMsg.transactionGroups)
 			// was the call reached the transaction handler queue ?
@@ -274,10 +280,8 @@ incomingMessageLoop:
 				if transacationPoolSize == 0 {
 					transacationPoolSize = currentTransacationPoolSize
 				}
-				// count the transactions that we are adding.
-				for _, txGroup := range incomingMsg.transactionGroups {
-					totalAccumulatedTransactionsCount += len(txGroup.Transactions)
-				}
+				// add the transactions count to the accumulated count.
+				totalAccumulatedTransactionsCount += totalTransactionCount
 			} else {
 				// no - we couldn't add this group since the transaction handler buffer backlog exceeded it's capacity.
 				transactionHandlerBacklogFull = true

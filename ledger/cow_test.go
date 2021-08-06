@@ -102,7 +102,7 @@ func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.
 func applyUpdates(cow *roundCowState, updates ledgercore.AccountDeltas) {
 	for i := 0; i < updates.Len(); i++ {
 		addr, delta := updates.GetByIdx(i)
-		cow.put(addr, delta, nil, nil)
+		cow.Put(addr, delta)
 	}
 }
 

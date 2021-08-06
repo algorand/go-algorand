@@ -52,6 +52,7 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 	return config.ConsensusParams{
 		LogicSigVersion:     version,
 		LogicSigMaxCost:     20000,
+		Application:         version >= appsEnabledVersion,
 		MaxAppProgramCost:   700,
 		MaxAppKeyLen:        64,
 		MaxAppBytesValueLen: 64,
@@ -1026,6 +1027,8 @@ func TestGlobal(t *testing.T) {
 			EvalStateful, CheckStateful,
 		},
 	}
+	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
+	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
 	ledger := makeTestLedger(nil)
 	ledger.appID = 42
 	addr, err := basics.UnmarshalChecksumAddress(testAddr)
@@ -4398,6 +4401,28 @@ func TestDig(t *testing.T) {
 	t.Parallel()
 	testAccepts(t, "int 3; int 2; int 1; dig 1; int 2; ==; return", 3)
 	testPanics(t, obfuscate("int 3; int 2; int 1; dig 11; int 2; ==; return"), 3)
+}
+
+func TestCover(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, "int 4; int 3; int 2; int 1; cover 0; int 1; ==; return", 5)
+	testAccepts(t, "int 4; int 3; int 2; int 1; cover 1; int 2; ==; return", 5)
+	testAccepts(t, "int 4; int 3; int 2; int 1; cover 2; int 2; ==; return", 5)
+	testAccepts(t, "int 4; int 3; int 2; int 1; cover 2; pop; pop; int 1; ==; return", 5)
+	testPanics(t, obfuscate("int 4; int 3; int 2; int 1; cover 11; int 2; ==; return"), 5)
+	testPanics(t, obfuscate("int 4; int 3; int 2; int 1; cover 4; int 2; ==; return"), 5)
+}
+
+func TestUncover(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, "int 4; int 3; int 2; int 1; uncover 0; int 1; ==; return", 5)
+	testAccepts(t, "int 4; int 3; int 2; int 1; uncover 2; int 3; ==; return", 5)
+	testAccepts(t, "int 4; int 3; int 2; int 1; uncover 3; int 4; ==; return", 5)
+	testAccepts(t, "int 4; int 3; int 2; int 1; uncover 3; pop; int 1; ==; return", 5)
+	testAccepts(t, "int 4; int 3; int 2; int 1; uncover 3; pop; pop; int 2; ==; return", 5)
+	testAccepts(t, "int 1; int 3; int 2; int 1; uncover 3; pop; pop; int 2; ==; return", 5)
+	testPanics(t, obfuscate("int 4; int 3; int 2; int 1; uncover 11; int 3; ==; return"), 5)
+	testPanics(t, obfuscate("int 4; int 3; int 2; int 1; uncover 4; int 2; ==; return"), 5)
 }
 
 func TestPush(t *testing.T) {
