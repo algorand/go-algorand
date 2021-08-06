@@ -23,8 +23,8 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-func makeRecordingKeyManager(accounts []account.Participation) recordingKeyManager {
-	return recordingKeyManager{
+func makeRecordingKeyManager(accounts []account.Participation) *recordingKeyManager {
+	return &recordingKeyManager{
 		keys:      accounts,
 		recording: make(map[basics.Address]map[account.ParticipationAction]basics.Round),
 	}
@@ -38,7 +38,7 @@ type recordingKeyManager struct {
 }
 
 // VotingKeys implements KeyManager.VotingKeys.
-func (m recordingKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Participation {
+func (m *recordingKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Participation {
 	var km []account.Participation
 	for _, acc := range m.keys {
 		if acc.OverlapsInterval(votingRound, votingRound) {
@@ -49,11 +49,11 @@ func (m recordingKeyManager) VotingKeys(votingRound, _ basics.Round) []account.P
 }
 
 // DeleteOldKeys implements KeyManager.DeleteOldKeys.
-func (m recordingKeyManager) DeleteOldKeys(r basics.Round) {
+func (m *recordingKeyManager) DeleteOldKeys(r basics.Round) {
 }
 
 // Record implements KeyManager.Record.
-func (m recordingKeyManager) RecordAsync(acct basics.Address, round basics.Round, action account.ParticipationAction) {
+func (m *recordingKeyManager) RecordAsync(acct basics.Address, round basics.Round, action account.ParticipationAction) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	if _, ok := m.recording[acct]; !ok {
