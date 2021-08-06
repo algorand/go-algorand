@@ -281,6 +281,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		log.Errorf("Cannot load participation keys: %v", err)
 		return nil, err
 	}
+	node.participationRecorder = make(chan recordParams, 5)
 
 	node.oldKeyDeletionNotify = make(chan struct{}, 1)
 
@@ -1180,16 +1181,16 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 }
 
 type recordParams struct {
-	account basics.Address
-	round basics.Round
+	account           basics.Address
+	round             basics.Round
 	participationType account.ParticipationAction
 }
 
-// Record forwards participation record calls to the participation registry.
+// RecordAsync forwards participation record calls to the participation registry.
 func (node *AlgorandFullNode) RecordAsync(account basics.Address, round basics.Round, participationType account.ParticipationAction) {
 	node.participationRecorder <- recordParams{
-		account: account,
-		round: round,
+		account:           account,
+		round:             round,
 		participationType: participationType,
 	}
 }

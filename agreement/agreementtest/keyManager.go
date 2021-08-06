@@ -39,6 +39,6 @@ func (m SimpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Part
 func (m SimpleKeyManager) DeleteOldKeys(r basics.Round) {
 }
 
-// Record implements KeyManager.RecordAsync.
+// RecordAsync implements KeyManager.RecordAsync.
 func (m SimpleKeyManager) RecordAsync(account basics.Address, round basics.Round, action account.ParticipationAction) {
 }
