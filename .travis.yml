@@ -223,7 +223,7 @@ before_cache:
 addons:
   apt:
     packages:
-      - libboost-all-dev
+      - libboost-math-dev
       - fakeroot
       - rpm
       - python3-venv
