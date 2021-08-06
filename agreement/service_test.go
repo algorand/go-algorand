@@ -1,5 +1,3 @@
-// +build service_test
-
 // Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
@@ -46,7 +44,9 @@ import (
 )
 
 type testingClock struct {
-	f *testingClockFactory
+	mu deadlock.Mutex
+
+	zeroes uint
 
 	TA map[time.Duration]chan time.Time // TimeoutAt
 
@@ -61,10 +61,10 @@ func makeTestingClock(m *coserviceMonitor) *testingClock {
 }
 
 func (c *testingClock) Zero() timers.Clock {
-	c.f.mu.Lock()
-	defer c.f.mu.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	c.f.zeroes++
+	c.zeroes++
 	c.TA = make(map[time.Duration]chan time.Time)
 	c.monitor.clearClock()
 	return c
@@ -76,8 +76,8 @@ func (c *testingClock) GetTimeout(d time.Duration) time.Time {
 }
 
 func (c *testingClock) TimeoutAt(d time.Duration) <-chan time.Time {
-	c.f.mu.Lock()
-	defer c.f.mu.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	ta := c.TA[d]
 	if ta == nil {
@@ -100,8 +100,8 @@ func (c *testingClock) prepareToFire() {
 }
 
 func (c *testingClock) fire(d time.Duration) {
-	c.f.mu.Lock()
-	defer c.f.mu.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	if c.TA[d] == nil {
 		c.TA[d] = make(chan time.Time)
@@ -113,15 +113,6 @@ type testingClockFactory struct {
 	mu      deadlock.Mutex // this mutex protects all testingClocks
 	monitor *coserviceMonitor
 	zeroes  uint
-}
-
-func makeTestingClockFactory(m *coserviceMonitor) *testingClockFactory {
-	return &testingClockFactory{monitor: m}
-}
-
-func (f *testingClockFactory) Zero() timers.Clock {
-	c := makeTestingClock(f.monitor)
-	return c.Zero()
 }
 
 type testingNetwork struct {
@@ -708,12 +699,12 @@ func (testingRand) Uint64() uint64 {
 	return maxuint64 / 2
 }
 
-func setupAgreement(t *testing.T, numNodes int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.ClockFactory, []Ledger, *activityMonitor) {
+func setupAgreement(t *testing.T, numNodes int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.Clock, []Ledger, *activityMonitor) {
 	var validator testBlockValidator
 	return setupAgreementWithValidator(t, numNodes, traceLevel, validator, ledgerFactory)
 }
 
-func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLevel, validator BlockValidator, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.ClockFactory, []Ledger, *activityMonitor) {
+func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLevel, validator BlockValidator, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.Clock, []Ledger, *activityMonitor) {
 	bufCap := 1000 // max number of buffered messages
 
 	// system state setup: keygen, stake initialization
@@ -728,7 +719,7 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 	log.SetLevel(logging.Debug)
 
 	// node setup
-	clocks := make([]timers.ClockFactory, numNodes)
+	clocks := make([]timers.Clock, numNodes)
 	ledgers := make([]Ledger, numNodes)
 	dbAccessors := make([]db.Accessor, numNodes)
 	services := make([]*Service, numNodes)
@@ -744,7 +735,7 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 
 		m := baseNetwork.monitors[nodeID(i)]
 		m.coserviceListener = am.coserviceListener(nodeID(i))
-		clocks[i] = makeTestingClockFactory(m)
+		clocks[i] = makeTestingClock(m)
 		ledgers[i] = ledgerFactory(balances)
 		keys := simpleKeyManager(accounts[i : i+1])
 		endpoint := baseNetwork.testingNetworkEndpoint(nodeID(i))
@@ -757,7 +748,7 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 			KeyManager:     keys,
 			BlockValidator: validator,
 			BlockFactory:   testBlockFactory{Owner: i},
-			ClockFactory:   clocks[i],
+			Clock:          clocks[i],
 			Accessor:       accessor,
 			Local:          config.Local{CadaverSizeTarget: 10000000},
 			RandomSource:   &testingRand{},
@@ -784,7 +775,7 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 		if r := recover(); r != nil {
 			for n, c := range clocks {
 				fmt.Printf("node-%v:\n", n)
-				c.(*testingClockFactory).monitor.dump()
+				c.(*testingClock).monitor.dump()
 			}
 			panic(r)
 		}
@@ -820,21 +811,21 @@ func (m *coserviceMonitor) clearClock() {
 	}
 }
 
-func expectNewPeriod(clocks []timers.ClockFactory, zeroes uint) (newzeroes uint) {
+func expectNewPeriod(clocks []timers.Clock, zeroes uint) (newzeroes uint) {
 	zeroes++
 	for i := range clocks {
-		if clocks[i].(*testingClockFactory).zeroes != zeroes {
-			errstr := fmt.Sprintf("unexpected number of zeroes: %v != %v", clocks[i].(*testingClockFactory).zeroes, zeroes)
+		if clocks[i].(*testingClock).zeroes != zeroes {
+			errstr := fmt.Sprintf("unexpected number of zeroes: %v != %v", clocks[i].(*testingClock).zeroes, zeroes)
 			panic(errstr)
 		}
 	}
 	return zeroes
 }
 
-func expectNoNewPeriod(clocks []timers.ClockFactory, zeroes uint) (newzeroes uint) {
+func expectNoNewPeriod(clocks []timers.Clock, zeroes uint) (newzeroes uint) {
 	for i := range clocks {
-		if clocks[i].(*testingClockFactory).zeroes != zeroes {
-			errstr := fmt.Sprintf("unexpected number of zeroes: %v != %v", clocks[i].(*testingClockFactory).zeroes, zeroes)
+		if clocks[i].(*testingClock).zeroes != zeroes {
+			errstr := fmt.Sprintf("unexpected number of zeroes: %v != %v", clocks[i].(*testingClock).zeroes, zeroes)
 			panic(errstr)
 		}
 	}
@@ -878,7 +869,7 @@ func simulateAgreement(t *testing.T, numNodes int, numRounds int, traceLevel tra
 	simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, makeTestLedger)
 }
 
-func simulateAgreementWithConsensusVersion(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, consensusVersion func(basics.Round) (protocol.ConsensusVersion, error)) {
+func simulateAgreementWithConsensusVersion(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, consensusVersion func(basics.Round, bookkeeping.BlockHash) (protocol.ConsensusVersion, error)) {
 	ledgerFactory := func(data map[basics.Address]basics.AccountData) Ledger {
 		return makeTestLedgerWithConsensusVersion(data, consensusVersion)
 	}
@@ -900,7 +891,7 @@ func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds in
 	// run round with current consensus version first
 	zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, protocol.ConsensusCurrentVersion))
 	for j := 1; j < numRounds; j++ {
-		version, _ := baseLedger.ConsensusVersion(ParamsRound(baseLedger.NextRound() + basics.Round(j-1)))
+		version, _ := baseLedger.ConsensusVersion(ParamsRound(baseLedger.NextRound()+basics.Round(j-1)), bookkeeping.BlockHash{})
 		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
@@ -908,7 +899,7 @@ func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds in
 		services[i].Shutdown()
 	}
 
-	sanityCheck(startRound, round(numRounds), ledgers)
+	sanityCheck(startRound, basics.Round(numRounds), ledgers)
 }
 
 func TestAgreementSynchronous1(t *testing.T) {
@@ -972,7 +963,7 @@ func TestAgreementSynchronousFuture1(t *testing.T) {
 	//	t.Skip("Skipping agreement integration test")
 	//}
 
-	consensusVersion := func(r basics.Round) (protocol.ConsensusVersion, error) {
+	consensusVersion := func(r basics.Round, h bookkeeping.BlockHash) (protocol.ConsensusVersion, error) {
 		return protocol.ConsensusFuture, nil
 	}
 	simulateAgreementWithConsensusVersion(t, 1, 5, disabled, consensusVersion)
@@ -983,7 +974,7 @@ func TestAgreementSynchronousFuture5(t *testing.T) {
 		t.Skip("Skipping agreement integration test")
 	}
 
-	consensusVersion := func(r basics.Round) (protocol.ConsensusVersion, error) {
+	consensusVersion := func(r basics.Round, h bookkeeping.BlockHash) (protocol.ConsensusVersion, error) {
 		return protocol.ConsensusFuture, nil
 	}
 	simulateAgreementWithConsensusVersion(t, 5, 5, disabled, consensusVersion)
@@ -994,7 +985,7 @@ func TestAgreementSynchronousFutureUpgrade(t *testing.T) {
 		t.Skip("Skipping agreement integration test")
 	}
 
-	consensusVersion := func(r basics.Round) (protocol.ConsensusVersion, error) {
+	consensusVersion := func(r basics.Round, h bookkeeping.BlockHash) (protocol.ConsensusVersion, error) {
 		if r >= 5 {
 			return protocol.ConsensusFuture, nil
 		}
@@ -1007,7 +998,7 @@ func TestAgreementFastRecoveryDownEarly(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
-	version, _ := baseLedger.ConsensusVersion(startRound)
+	version, _ := baseLedger.ConsensusVersion(startRound, bookkeeping.BlockHash{})
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -1063,7 +1054,7 @@ func TestAgreementFastRecoveryDownMiss(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
-	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound(), bookkeeping.BlockHash{})
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -1142,7 +1133,7 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
-	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound(), bookkeeping.BlockHash{})
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -1227,7 +1218,7 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 	}
 
 	for _, l := range ledgers {
-		lastHash, err := l.LookupDigest(l.NextRound() - 1)
+		lastHash, err := l.LookupDigest(l.NextRound()-1, bookkeeping.BlockHash{})
 		if err != nil {
 			panic(err)
 		}
@@ -1253,7 +1244,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
-	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound(), bookkeeping.BlockHash{})
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -1379,7 +1370,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 	}
 
 	for _, l := range ledgers {
-		lastHash, err := l.LookupDigest(l.NextRound() - 1)
+		lastHash, err := l.LookupDigest(l.NextRound()-1, bookkeeping.BlockHash{})
 		if err != nil {
 			panic(err)
 		}
@@ -1405,7 +1396,7 @@ func TestAgreementBlockReplayBug_b29ea57(t *testing.T) {
 	numNodes := 2
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
-	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound(), bookkeeping.BlockHash{})
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -1462,7 +1453,7 @@ func TestAgreementLateCertBug(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
-	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound(), bookkeeping.BlockHash{})
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -1518,7 +1509,7 @@ func TestAgreementRecoverGlobalStartingValue(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
-	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound(), bookkeeping.BlockHash{})
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -1616,7 +1607,7 @@ func TestAgreementRecoverGlobalStartingValueBadProposal(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
-	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound(), bookkeeping.BlockHash{})
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -1717,7 +1708,7 @@ func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
-	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound(), bookkeeping.BlockHash{})
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -1840,7 +1831,7 @@ func TestAgreementSlowPayloadsPreDeadline(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
-	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound(), bookkeeping.BlockHash{})
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -1896,7 +1887,7 @@ func TestAgreementSlowPayloadsPostDeadline(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
-	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound(), bookkeeping.BlockHash{})
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -1959,7 +1950,7 @@ func TestAgreementLargePeriods(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
-	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound(), bookkeeping.BlockHash{})
 	defer cleanupFn()
 	for i := 0; i < numNodes; i++ {
 		services[i].Start()
@@ -2004,17 +1995,17 @@ func TestAgreementLargePeriods(t *testing.T) {
 
 	const expectNumRounds = 5
 	for i := 0; i < numNodes; i++ {
-		if ledgers[i].NextRound() != startRound+round(expectNumRounds) {
+		if ledgers[i].NextRound() != startRound+basics.Round(expectNumRounds) {
 			panic("did not progress 5 rounds")
 		}
 	}
 
 	for j := 0; j < expectNumRounds; j++ {
 		ledger := ledgers[0].(*testLedger)
-		reference := ledger.entries[startRound+round(j)].Digest()
+		reference := ledger.entries[startRound+basics.Round(j)].Digest()
 		for i := 0; i < numNodes; i++ {
 			ledger := ledgers[i].(*testLedger)
-			if ledger.entries[startRound+round(j)].Digest() != reference {
+			if ledger.entries[startRound+basics.Round(j)].Digest() != reference {
 				panic("wrong block confirmed")
 			}
 		}
@@ -2055,7 +2046,7 @@ func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942
 	validator := makeTestSuspendableBlockValidator()
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreementWithValidator(t, numNodes, disabled, validator, makeTestLedger)
 	startRound := baseLedger.NextRound()
-	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound(), bookkeeping.BlockHash{})
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -2185,17 +2176,17 @@ func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942
 
 	const expectNumRounds = 5
 	for i := 0; i < numNodes; i++ {
-		if ledgers[i].NextRound() != startRound+round(expectNumRounds) {
+		if ledgers[i].NextRound() != startRound+basics.Round(expectNumRounds) {
 			panic("did not progress 5 rounds")
 		}
 	}
 
 	for j := 0; j < expectNumRounds; j++ {
 		ledger := ledgers[0].(*testLedger)
-		reference := ledger.entries[startRound+round(j)].Digest()
+		reference := ledger.entries[startRound+basics.Round(j)].Digest()
 		for i := 0; i < numNodes; i++ {
 			ledger := ledgers[i].(*testLedger)
-			if ledger.entries[startRound+round(j)].Digest() != reference {
+			if ledger.entries[startRound+basics.Round(j)].Digest() != reference {
 				panic("wrong block confirmed")
 			}
 		}
@@ -2211,7 +2202,7 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 
 	startRound := baseLedger.NextRound()
-	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound(), bookkeeping.BlockHash{})
 	defer cleanupFn()
 	for i := 0; i < numNodes; i++ {
 		services[i].Start()
@@ -2302,16 +2293,16 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 	}
 	const expectNumRounds = 4
 	for i := 1; i < numNodes; i++ {
-		if ledgers[i].NextRound() != startRound+round(expectNumRounds) {
+		if ledgers[i].NextRound() != startRound+basics.Round(expectNumRounds) {
 			panic("did not progress 4 rounds")
 		}
 	}
 	for j := 0; j < expectNumRounds; j++ {
 		ledger := ledgers[1].(*testLedger)
-		reference := ledger.entries[startRound+round(j)].Digest()
+		reference := ledger.entries[startRound+basics.Round(j)].Digest()
 		for i := 1; i < numNodes; i++ {
 			ledger := ledgers[i].(*testLedger)
-			if ledger.entries[startRound+round(j)].Digest() != reference {
+			if ledger.entries[startRound+basics.Round(j)].Digest() != reference {
 				panic("wrong block confirmed")
 			}
 		}
@@ -2333,7 +2324,7 @@ func TestAgreementServiceStartDeadline(t *testing.T) {
 		delete(config.Consensus, testConsensusProtocolVersion)
 	}()
 
-	baseLedger.consensusVersion = func(basics.Round) (protocol.ConsensusVersion, error) {
+	baseLedger.consensusVersion = func(basics.Round, bookkeeping.BlockHash) (protocol.ConsensusVersion, error) {
 		return testConsensusProtocolVersion, nil
 	}
 
@@ -2349,11 +2340,11 @@ func TestAgreementServiceStartDeadline(t *testing.T) {
 	inputCh := make(chan externalEvent, 1)
 	close(inputCh)
 	output := make(chan []action, 10)
-	ready := make(chan externalDemuxSignals, 1)
+	ready := make(chan pipelineExternalDemuxSignals, 1)
 	s.mainLoop(inputCh, output, ready)
 
 	// check the ready channel:
-	var demuxSignal externalDemuxSignals
+	var demuxSignal pipelineExternalDemuxSignals
 	var ok bool
 	select {
 	case demuxSignal, ok = <-ready:
@@ -2361,6 +2352,7 @@ func TestAgreementServiceStartDeadline(t *testing.T) {
 	default:
 		require.Fail(t, "ready channel was empty while it should have contained a single entry")
 	}
-	require.Equal(t, testConsensusParams.AgreementFilterTimeoutPeriod0, demuxSignal.Deadline)
-	require.Equal(t, baseLedger.NextRound(), demuxSignal.CurrentRound)
+	require.Len(t, demuxSignal.signals, 1)
+	require.Equal(t, testConsensusParams.AgreementFilterTimeoutPeriod0, demuxSignal.signals[0].Deadline)
+	require.Equal(t, baseLedger.NextRound(), demuxSignal.signals[0].CurrentRound)
 }

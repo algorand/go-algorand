@@ -208,7 +208,7 @@ type testLedger struct {
 
 	notifications map[basics.Round]signal
 
-	consensusVersion func(basics.Round) (protocol.ConsensusVersion, error)
+	consensusVersion func(basics.Round, bookkeeping.BlockHash) (protocol.ConsensusVersion, error)
 }
 
 func makeTestLedger(state map[basics.Address]basics.AccountData) Ledger {
@@ -224,13 +224,13 @@ func makeTestLedger(state map[basics.Address]basics.AccountData) Ledger {
 
 	l.notifications = make(map[basics.Round]signal)
 
-	l.consensusVersion = func(r basics.Round) (protocol.ConsensusVersion, error) {
+	l.consensusVersion = func(r basics.Round, h bookkeeping.BlockHash) (protocol.ConsensusVersion, error) {
 		return protocol.ConsensusCurrentVersion, nil
 	}
 	return l
 }
 
-func makeTestLedgerWithConsensusVersion(state map[basics.Address]basics.AccountData, consensusVersion func(basics.Round) (protocol.ConsensusVersion, error)) Ledger {
+func makeTestLedgerWithConsensusVersion(state map[basics.Address]basics.AccountData, consensusVersion func(basics.Round, bookkeeping.BlockHash) (protocol.ConsensusVersion, error)) Ledger {
 	l := new(testLedger)
 	l.entries = make(map[basics.Round]bookkeeping.Block)
 	l.certs = make(map[basics.Round]Certificate)
@@ -262,7 +262,7 @@ func makeTestLedgerMaxBlocks(state map[basics.Address]basics.AccountData, maxNum
 
 	l.notifications = make(map[basics.Round]signal)
 
-	l.consensusVersion = func(r basics.Round) (protocol.ConsensusVersion, error) {
+	l.consensusVersion = func(r basics.Round, h bookkeeping.BlockHash) (protocol.ConsensusVersion, error) {
 		return protocol.ConsensusCurrentVersion, nil
 	}
 	return l
@@ -419,7 +419,7 @@ func (l *testLedger) ConsensusParams(r basics.Round, leafBranch bookkeeping.Bloc
 }
 
 func (l *testLedger) ConsensusVersion(r basics.Round, leafBranch bookkeeping.BlockHash) (protocol.ConsensusVersion, error) {
-	return l.consensusVersion(r)
+	return l.consensusVersion(r, leafBranch)
 }
 
 // simulation helpers

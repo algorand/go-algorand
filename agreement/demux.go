@@ -214,7 +214,7 @@ func (d *demux) next(s *Service, extSignals pipelineExternalDemuxSignals) (e ext
 
 	}
 
-	nextRound := extSignals.lastCommittedRound
+	nextRound := extSignals.currentRound
 	ok = true
 
 	rawVotes := d.rawVotes

@@ -678,7 +678,7 @@ func (t *demuxTester) TestUsecase(testcase demuxTestUsecase) bool {
 	}
 
 	extSignals := pipelineExternalDemuxSignals{
-		lastCommittedRound: 299,
+		currentRound: 299,
 		signals: []externalDemuxSignals{{
 			Deadline:             time.Second,
 			FastRecoveryDeadline: fastTimeoutChTime,

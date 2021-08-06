@@ -87,7 +87,7 @@ func (p *player) encode() []byte {
 
 func (p *player) externalDemuxSignals() pipelineExternalDemuxSignals {
 	return pipelineExternalDemuxSignals{
-		lastCommittedRound: p.Round.Number - 1,
+		currentRound: p.Round.Number,
 		signals: []externalDemuxSignals{{
 			Deadline:             p.Deadline,
 			FastRecoveryDeadline: p.FastRecoveryDeadline,

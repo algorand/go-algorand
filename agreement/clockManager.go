@@ -9,46 +9,19 @@ import (
 	"github.com/algorand/go-algorand/util/timers"
 )
 
-// ClockFactory provides a source of new Clock instances.
-type ClockFactory interface {
-	// Zero returns a new Clock, with zero set to now.
-	Zero() timers.Clock
-	Decode([]byte) (timers.Clock, error)
-}
-
 // clockManager managers multiple clocks used by different pipelined rounds.
 // XXX garbage-collect old rounds
 type clockManager struct {
-	m map[round]timers.Clock
-	f ClockFactory
+	m  map[round]timers.Clock
+	t0 timers.Clock
 }
 
-type MonotonicFactory struct{}
-
-// MakeMonotonicClockFactory returns a ClockFactory implementation that creates Monotonic clock instances.
-func MakeMonotonicClockFactory() ClockFactory {
-	return &MonotonicFactory{}
-}
-
-// Zero returns a new Monotonic clock, with zero set to now.
-func (m *MonotonicFactory) Zero() timers.Clock {
-	z := time.Now()
-	logging.Base().Debugf("Clock zeroed to %v", z)
-	return timers.MakeMonotonicClock(z)
-}
-
-// Decode implements MontonicFactory
-func (m *MonotonicFactory) Decode(data []byte) (timers.Clock, error) {
-	c := &timers.Monotonic{}
-	return c.Decode(data)
-}
-
-func makeClockManager(f ClockFactory) *clockManager {
-	return &clockManager{m: make(map[round]timers.Clock), f: f}
+func makeClockManager(t0 timers.Clock) *clockManager {
+	return &clockManager{m: make(map[round]timers.Clock), t0: t0}
 }
 
 func (cm *clockManager) setZero(r round) {
-	cm.m[r] = cm.f.Zero()
+	cm.m[r] = cm.t0.Zero()
 }
 
 // nextDeadlineCh returns a timeout channel that will fire when the earliest Deadline among all of
@@ -69,7 +42,7 @@ func (cm *clockManager) nextDeadlineCh(es []externalDemuxSignals) (<-chan time.T
 		// no rezeroAction has set up this clock yet
 		// XXX this should probably only happen at service bootstrap or in tests
 		logging.Base().Warnf("clockManager.nextDeadlineCh making new clock for round %+v", r)
-		c = cm.f.Zero()
+		c = cm.t0.Zero()
 		cm.m[r] = c
 	}
 	return c.TimeoutAt(es[0].Deadline), r
@@ -108,13 +81,13 @@ func (cm *clockManager) Decode(data []byte) (*clockManager, error) {
 		if err != nil {
 			return nil, err
 		}
-		clk, err := cm.f.Decode(rc.C)
+		clk, err := cm.t0.Decode(rc.C)
 		if err != nil {
 			return nil, err
 		}
 		m[r] = clk
 	}
-	return &clockManager{m: m, f: cm.f}, err
+	return &clockManager{m: m, t0: cm.t0}, err
 }
 
 func (cm *clockManager) Encode() []byte {

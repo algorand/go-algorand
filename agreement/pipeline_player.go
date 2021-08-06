@@ -159,7 +159,7 @@ func (p *pipelinePlayer) externalDemuxSignals() pipelineExternalDemuxSignals {
 		}
 		i++
 	}
-	return pipelineExternalDemuxSignals{signals: s, lastCommittedRound: p.LastCommittedRound}
+	return pipelineExternalDemuxSignals{signals: s, currentRound: p.LastCommittedRound}
 }
 
 // allPlayersRPS returns a list of per-player (round, period, step) tuples reflecting the current

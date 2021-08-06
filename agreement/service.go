@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
+	"github.com/algorand/go-algorand/util/timers"
 )
 
 const (
@@ -71,7 +72,7 @@ type Parameters struct {
 	BlockFactory
 	RandomSource
 	EventsProcessingMonitor
-	ClockFactory
+	timers.Clock
 	db.Accessor
 	logging.Logger
 	config.Local
@@ -89,8 +90,8 @@ type externalDemuxSignals struct {
 }
 
 type pipelineExternalDemuxSignals struct {
-	lastCommittedRound basics.Round
-	signals            []externalDemuxSignals
+	currentRound basics.Round
+	signals      []externalDemuxSignals
 }
 
 // MakeService creates a new Agreement Service instance given a set of Parameters.
@@ -100,7 +101,7 @@ func MakeService(p Parameters) *Service {
 	s := new(Service)
 
 	s.parameters = parameters(p)
-	s.clockManager = makeClockManager(s.ClockFactory)
+	s.clockManager = makeClockManager(s.Clock)
 
 	s.log = serviceLogger{Logger: p.Logger}
 
@@ -218,8 +219,8 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 			s.log.Errorf("unable to retrieve consensus version for round %d, defaulting to binary consensus version", nextRound)
 			nextVersion = protocol.ConsensusCurrentVersion
 		}
-		pl := makePipelinePlayer(nextRound, nextVersion)
-		//pl := player{Round: makeRoundBranch(nextRound, bookkeeping.BlockHash{}), Step: soft, Deadline: FilterTimeout(0, nextVersion)}
+		//pl := makePipelinePlayer(nextRound, nextVersion)
+		pl := player{Round: makeRoundBranch(nextRound, bookkeeping.BlockHash{}), Step: soft, Deadline: FilterTimeout(0, nextVersion)}
 		status = &pl
 		router = makeRootRouter(status)
 
