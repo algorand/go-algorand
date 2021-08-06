@@ -100,7 +100,7 @@ export GOPATH=$(go env GOPATH)
 # Change current directory to test/scripts so we can just use ./test.sh to exec.
 cd "${SCRIPT_PATH}"
 
-if [ "${SKIP_E2E_SUBS}" = "" ]; then
+if [ "${E2E_SUBS}" != "SKIP" ]; then
 
 ./timeout 200 ./e2e_basic_start_stop.sh
 duration "e2e_basic_start_stop.sh"
@@ -126,9 +126,9 @@ duration "serial client runners"
 
 deactivate
 
-fi # if $SKIP_E2E_SUBS = ""
+fi # if $E2E_SUBS != "SKIP"
 
-if [ "${E2E_SUBS_ONLY}" != "" ]; then
+if [ "${E2E_SUBS}" = "ONLY" ]; then
     exit 0
 fi
 
