@@ -184,7 +184,7 @@ func TestTxnSync(t *testing.T) {
 		case <-timeout.C:
 			// Send the transactions only during the first half of the round
 			// Wait for the next round, and stop sending transactions after the first half
-			err = fixture.ClientWaitForRound(fixture.AlgodClient, nextRound, 2*roundTime)
+			err = fixture.ClientWaitForRound(fixture.AlgodClient, nextRound, 10*roundTime)
 			require.NoError(t, err)
 			fmt.Printf("Round %d\n", int(nextRound))
 			nextRound++
