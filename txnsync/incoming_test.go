@@ -26,8 +26,8 @@ import (
 
 	"github.com/algorand/msgp/msgp"
 
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 )
@@ -312,13 +312,12 @@ func TestEvaluateIncomingMessageAccumulatedTransactionsCount(t *testing.T) {
 		t := getTxnGroups(genesisHash, genesisID)
 		txnGroups = append(txnGroups, t...)
 	}
-	
+
 	ptg, err := s.encodeTransactionGroups(txnGroups, 1000000000)
 	require.NoError(t, err)
 	txGroups, err := decodeTransactionGroups(ptg, genesisID, genesisHash)
 	require.NoError(t, err)
 
-	
 	s.evaluateIncomingMessage(incomingMessage{
 		sequenceNumber:    0,
 		message:           transactionBlockMessage{Round: 5},
