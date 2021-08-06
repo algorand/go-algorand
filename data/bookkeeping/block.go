@@ -672,7 +672,11 @@ func (bh BlockHeader) DecodeSignedTxn(stb transactions.SignedTxnInBlock) (transa
 	st := stb.SignedTxn
 	ad := stb.ApplyData
 
-	proto := config.Consensus[bh.CurrentProtocol]
+	proto, ok := config.Consensus[bh.CurrentProtocol]
+	if !ok {
+		return transactions.SignedTxn{}, transactions.ApplyData{},
+			fmt.Errorf("consensus protocol %s not found", bh.CurrentProtocol)
+	}
 	if !proto.SupportSignedTxnInBlock {
 		return st, transactions.ApplyData{}, nil
 	}
