@@ -91,8 +91,12 @@ type testBlockFactory struct {
 	Owner int
 }
 
-func (f testBlockFactory) AssembleBlock(r basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
-	return testValidatedBlock{Inside: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: r}}}, nil
+func (f testBlockFactory) AssembleSpeculativeBlock(r basics.Round, prev bookkeeping.BlockHash, deadline time.Time) (agreement.ValidatedBlock, error) {
+	return testValidatedBlock{Inside: bookkeeping.Block{
+		BlockHeader: bookkeeping.BlockHeader{
+			Round:  r,
+			Branch: prev,
+		}}}, nil
 }
 
 // If we try to read from high rounds, we panic and do not emit an error to find bugs during testing.
@@ -152,7 +156,7 @@ func (l *testLedger) NextRound() basics.Round {
 	return l.nextRound
 }
 
-func (l *testLedger) Wait(r basics.Round) chan struct{} {
+func (l *testLedger) Wait(r basics.Round, h bookkeeping.BlockHash) chan struct{} {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -177,7 +181,7 @@ func (l *testLedger) notify(r basics.Round) {
 	l.notifications[r] = l.notifications[r].fire()
 }
 
-func (l *testLedger) Seed(r basics.Round) (committee.Seed, error) {
+func (l *testLedger) Seed(r basics.Round, h bookkeeping.BlockHash) (committee.Seed, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -190,7 +194,7 @@ func (l *testLedger) Seed(r basics.Round) (committee.Seed, error) {
 	return b.Seed(), nil
 }
 
-func (l *testLedger) LookupDigest(r basics.Round) (crypto.Digest, error) {
+func (l *testLedger) LookupDigest(r basics.Round, h bookkeeping.BlockHash) (crypto.Digest, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -202,7 +206,7 @@ func (l *testLedger) LookupDigest(r basics.Round) (crypto.Digest, error) {
 	return l.entries[r].Digest(), nil
 }
 
-func (l *testLedger) Lookup(r basics.Round, a basics.Address) (basics.AccountData, error) {
+func (l *testLedger) Lookup(r basics.Round, h bookkeeping.BlockHash, a basics.Address) (basics.AccountData, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -213,7 +217,7 @@ func (l *testLedger) Lookup(r basics.Round, a basics.Address) (basics.AccountDat
 	return l.state[a], nil
 }
 
-func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
+func (l *testLedger) Circulation(r basics.Round, h bookkeeping.BlockHash) (basics.MicroAlgos, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -233,11 +237,11 @@ func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 	return sum, nil
 }
 
-func (l *testLedger) ConsensusParams(basics.Round) (config.ConsensusParams, error) {
+func (l *testLedger) ConsensusParams(basics.Round, bookkeeping.BlockHash) (config.ConsensusParams, error) {
 	return config.Consensus[protocol.ConsensusCurrentVersion], nil
 }
 
-func (l *testLedger) ConsensusVersion(basics.Round) (protocol.ConsensusVersion, error) {
+func (l *testLedger) ConsensusVersion(basics.Round, bookkeeping.BlockHash) (protocol.ConsensusVersion, error) {
 	return protocol.ConsensusCurrentVersion, nil
 }
 
@@ -286,7 +290,7 @@ func (l *testLedger) EnsureDigest(c agreement.Certificate, verifier *agreement.A
 		return
 	}
 
-	<-l.Wait(r)
+	<-l.Wait(r, bookkeeping.BlockHash{})
 	if !consistencyCheck() {
 		err := fmt.Errorf("Wait channel fired without matching block in round %d", r)
 		panic(err)
