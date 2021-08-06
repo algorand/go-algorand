@@ -268,8 +268,8 @@ func (al *logicLedger) balances() (apply.Balances, error) {
 	return balances, nil
 }
 
-func (l *logicLedger) Perform(tx *transactions.Transaction, spec transactions.SpecialAddresses) error {
-	balances, err := l.balances()
+func (al *logicLedger) Perform(tx *transactions.Transaction, spec transactions.SpecialAddresses) error {
+	balances, err := al.balances()
 	if err != nil {
 		return err
 	}

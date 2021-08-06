@@ -131,7 +131,7 @@ func WrapSignedTxnsWithAD(txgroup []SignedTxn) []SignedTxnWithAD {
 	return txgroupad
 }
 
-func OverpaidFees(txgroup []SignedTxn, minFee uint64) (uint64, error) {
+func FeeCredit(txgroup []SignedTxn, minFee uint64) (uint64, error) {
 	minFeeCount := uint64(0)
 	feesPaid := uint64(0)
 	for _, stxn := range txgroup {

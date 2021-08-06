@@ -242,7 +242,7 @@ type EvalParams struct {
 	// group.  Often 0.  When positive, it is spent by application
 	// actions.  Shared value across a group's txns, so that it
 	// can be updated. nil is interpretted as 0.
-	OverpaidFee *uint64
+	FeeCredit *uint64
 
 	Specials *transactions.SpecialAddresses
 
@@ -2300,12 +2300,12 @@ func (cx *evalContext) getApplicationAddress() ([]byte, error) {
 		cx.appAddrCache = make(map[basics.AppIndex]basics.Address)
 	}
 
-	appId := cx.Ledger.ApplicationID()
+	appID := cx.Ledger.ApplicationID()
 	// Hashes are expensive, so we cache computed app addrs
-	appAddr, ok := cx.appAddrCache[appId]
+	appAddr, ok := cx.appAddrCache[appID]
 	if !ok {
-		appAddr = appId.Address()
-		cx.appAddrCache[appId] = appAddr
+		appAddr = appID.Address()
+		cx.appAddrCache[appID] = appAddr
 	}
 
 	return appAddr[:], nil
@@ -3282,14 +3282,14 @@ func opTxBegin(cx *evalContext) {
 	copy(addr[:], bytes)
 
 	fee := cx.Proto.MinTxnFee
-	if cx.OverpaidFee != nil {
-		if fee < *cx.OverpaidFee {
+	if cx.FeeCredit != nil {
+		if fee < *cx.FeeCredit {
 			fee = 0
 		} else {
 			// Use up the overpay to shrink the fee
-			fee -= *cx.OverpaidFee
+			fee -= *cx.FeeCredit
 		}
-		// We don't change OverpaidFee here, because they
+		// We don't change FeeCredit here, because they
 		// might never tx_submit, or they might change the fee
 		// (if we decide to allow that).  Do it in tx_submit.
 	}
@@ -3301,7 +3301,7 @@ func opTxBegin(cx *evalContext) {
 	}
 }
 
-func (cx *evalContext) available_address(sv stackValue) (basics.Address, error) {
+func (cx *evalContext) availableAddress(sv stackValue) (basics.Address, error) {
 	addr, err := sv.address()
 	if err != nil {
 		return basics.Address{}, err
@@ -3314,7 +3314,7 @@ func (cx *evalContext) available_address(sv stackValue) (basics.Address, error) 
 	return addr, nil
 }
 
-func (cx *evalContext) available_asset(sv stackValue) (basics.AssetIndex, error) {
+func (cx *evalContext) availableAsset(sv stackValue) (basics.AssetIndex, error) {
 	aid, err := sv.uint()
 	if err != nil {
 		return basics.AssetIndex(0), err
@@ -3335,13 +3335,13 @@ func opTxField(cx *evalContext) {
 	var i uint64
 	switch field {
 	case Sender:
-		cx.subtxn.Sender, cx.err = cx.available_address(sv)
+		cx.subtxn.Sender, cx.err = cx.availableAddress(sv)
 	case Receiver:
-		cx.subtxn.Receiver, cx.err = cx.available_address(sv)
+		cx.subtxn.Receiver, cx.err = cx.availableAddress(sv)
 	case Amount:
 		cx.subtxn.Amount.Raw, cx.err = sv.uint()
 	case CloseRemainderTo:
-		cx.subtxn.CloseRemainderTo, cx.err = cx.available_address(sv)
+		cx.subtxn.CloseRemainderTo, cx.err = cx.availableAddress(sv)
 	case Type:
 		cx.subtxn.Type = protocol.TxType(sv.Bytes)
 	case TypeEnum:
@@ -3350,13 +3350,13 @@ func opTxField(cx *evalContext) {
 			cx.subtxn.Type = protocol.TxType(TxnTypeNames[i])
 		}
 	case XferAsset:
-		cx.subtxn.XferAsset, cx.err = cx.available_asset(sv)
+		cx.subtxn.XferAsset, cx.err = cx.availableAsset(sv)
 	case AssetReceiver:
-		cx.subtxn.AssetReceiver, cx.err = cx.available_address(sv)
+		cx.subtxn.AssetReceiver, cx.err = cx.availableAddress(sv)
 	case AssetAmount:
 		cx.subtxn.AssetAmount, cx.err = sv.uint()
 	case AssetCloseTo:
-		cx.subtxn.AssetCloseTo, cx.err = cx.available_address(sv)
+		cx.subtxn.AssetCloseTo, cx.err = cx.availableAddress(sv)
 	// Keeping things buttoned up for now
 	// Disallow rekey, explicit fee, fv, lv, lease (and everything outside pay, axfr)
 	default:
@@ -3399,17 +3399,17 @@ func opTxSubmit(cx *evalContext) {
 
 	paid := cx.subtxn.Fee.Raw
 	if paid >= cx.Proto.MinTxnFee {
-		// Over paying - accumulate into OverpaidFee
+		// Over paying - accumulate into FeeCredit
 		overpaid := paid - cx.Proto.MinTxnFee
-		if cx.OverpaidFee == nil {
-			cx.OverpaidFee = new(uint64)
+		if cx.FeeCredit == nil {
+			cx.FeeCredit = new(uint64)
 		}
-		*cx.OverpaidFee = basics.AddSaturate(*cx.OverpaidFee, overpaid)
+		*cx.FeeCredit = basics.AddSaturate(*cx.FeeCredit, overpaid)
 	} else {
 		underpaid := cx.Proto.MinTxnFee - paid
-		// Try to pay with OverpaidFee, else fail.
-		if cx.OverpaidFee != nil && *cx.OverpaidFee >= underpaid {
-			*cx.OverpaidFee -= underpaid
+		// Try to pay with FeeCredit, else fail.
+		if cx.FeeCredit != nil && *cx.FeeCredit >= underpaid {
+			*cx.FeeCredit -= underpaid
 		} else {
 			// This should be impossible until we allow changing the Fee
 			cx.err = fmt.Errorf("fee too small")

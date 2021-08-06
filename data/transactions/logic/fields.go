@@ -312,6 +312,7 @@ const (
 	GroupSize
 
 	// v2
+
 	// LogicSigVersion ConsensusParams.LogicSigVersion
 	LogicSigVersion
 	// Round basics.Round
@@ -322,10 +323,12 @@ const (
 	CurrentApplicationID
 
 	// v3
+
 	// CreatorAddress [32]byte
 	CreatorAddress
 
 	// v5
+
 	// CurrentApplicationAddress [32]byte
 	CurrentApplicationAddress
 

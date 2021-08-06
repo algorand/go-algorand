@@ -396,10 +396,13 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 	}
 
 	eval := &BlockEvaluator{
-		validate:    validate,
-		generate:    generate,
-		block:       bookkeeping.Block{BlockHeader: hdr},
-		specials:    transactions.SpecialAddresses{hdr.FeeSink, hdr.RewardsPool},
+		validate: validate,
+		generate: generate,
+		block:    bookkeeping.Block{BlockHeader: hdr},
+		specials: transactions.SpecialAddresses{
+			FeeSink:     hdr.FeeSink,
+			RewardsPool: hdr.RewardsPool,
+		},
 		proto:       proto,
 		genesisHash: l.GenesisHash(),
 		l:           l,
@@ -670,7 +673,7 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 	var pastSideEffects []logic.EvalSideEffects
 	var minTealVersion uint64
 	pooledApplicationBudget := uint64(0)
-	var overpaidFee uint64
+	var credit uint64
 	res := make([]*logic.EvalParams, len(txgroup))
 	for i, txn := range txgroup {
 		// Ignore any non-ApplicationCall transactions
@@ -691,7 +694,7 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 			}
 			pastSideEffects = logic.MakePastSideEffects(len(txgroup))
 			minTealVersion = logic.ComputeMinTealVersion(groupNoAD)
-			overpaidFee, _ = transactions.OverpaidFees(groupNoAD, eval.proto.MinTxnFee)
+			credit, _ = transactions.FeeCredit(groupNoAD, eval.proto.MinTxnFee)
 			// intentionally ignoring error here, fees had to have been enough to get here
 		}
 
@@ -703,7 +706,7 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 			PastSideEffects:         pastSideEffects,
 			MinTealVersion:          &minTealVersion,
 			PooledApplicationBudget: &pooledApplicationBudget,
-			OverpaidFee:             &overpaidFee,
+			FeeCredit:               &credit,
 			Specials:                &eval.specials,
 		}
 	}
