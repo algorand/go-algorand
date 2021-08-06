@@ -24,25 +24,4 @@ import (
 
 func TestAll(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(), Analyzer)
-package linttest
-
-import (
-	"fmt"
-)
-
-type myStruct struct {
-	a int32
-	b float64
-	c bool
-}
-
-func (m *myStruct) couldError() error {
-	return fmt.Errorf("an error occurred")
-}
-
-func doSomething() {
-	m := myStruct{a: 2, b: 2.0}
-	m.couldError()
-=======
->>>>>>> master
 }
