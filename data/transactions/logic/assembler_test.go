@@ -2079,7 +2079,7 @@ func TestDigAsm(t *testing.T) {
 
 }
 
-func TestEqualsTypeCheck(t *testing.T){
+func TestEqualsTypeCheck(t *testing.T) {
 	t.Parallel()
 	testProg(t, "int 1; byte 0x1234; ==", AssemblerMaxVersion, expect{3, "== arg 0..."})
 	testProg(t, "int 1; byte 0x1234; !=", AssemblerMaxVersion, expect{3, "!= arg 0..."})
@@ -2087,7 +2087,7 @@ func TestEqualsTypeCheck(t *testing.T){
 	testProg(t, "byte 0x1234; int 1; !=", AssemblerMaxVersion, expect{3, "!= arg 0..."})
 }
 
-func TestDupTypeCheck(t *testing.T){
+func TestDupTypeCheck(t *testing.T) {
 	t.Parallel()
 	testProg(t, "int 1; byte 0x1234; dup; +", AssemblerMaxVersion, expect{4, "+ arg 1..."})
 	testProg(t, "byte 0x1234; int 1; dup; +", AssemblerMaxVersion)
@@ -2101,16 +2101,14 @@ func TestDupTypeCheck(t *testing.T){
 	testProg(t, "int 1; byte 0x1234; dup2; dig 2; !", AssemblerMaxVersion, expect{5, "! arg 0..."})
 }
 
-func TestSelectTypeCheck(t *testing.T){
+func TestSelectTypeCheck(t *testing.T) {
 	t.Parallel()
 	testProg(t, "int 1; int 2; int 3; select; len", AssemblerMaxVersion, expect{5, "len arg 0..."})
 	testProg(t, "byte 0x1234; byte 0x5678; int 3; select; !", AssemblerMaxVersion, expect{5, "! arg 0..."})
 }
 
-func TestSetBitTypeCheck(t *testing.T){
+func TestSetBitTypeCheck(t *testing.T) {
 	t.Parallel()
 	testProg(t, "int 1; int 2; int 3; setbit; len", AssemblerMaxVersion, expect{5, "len arg 0..."})
 	testProg(t, "byte 0x1234; int 2; int 3; setbit; !", AssemblerMaxVersion, expect{5, "! arg 0..."})
 }
-
-

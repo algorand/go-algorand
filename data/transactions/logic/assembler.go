@@ -1101,27 +1101,27 @@ func typeDig(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	return anys, returns
 }
 
-func typeEquals(ops *OpStream, args []string) (StackTypes, StackTypes){
+func typeEquals(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	topTwo := oneAny.plus(oneAny)
 	top := len(ops.typeStack) - 1
-	if top>=0{
-		topTwo[1]=ops.typeStack[top]
-		topTwo[0]=ops.typeStack[top]
+	if top >= 0 {
+		topTwo[1] = ops.typeStack[top]
+		topTwo[0] = ops.typeStack[top]
 	}
 	return topTwo, oneInt
 }
 
-func typeDup(ops *OpStream, args []string) (StackTypes, StackTypes){
+func typeDup(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	topType := StackTypes{StackAny}
 	top := len(ops.typeStack) - 1
 	if top >= 0 {
 		topType[0] = ops.typeStack[top]
 	}
-	result:=topType.plus(topType)
+	result := topType.plus(topType)
 	return topType, result
 }
 
-func typeDupTwo(ops *OpStream, args []string) (StackTypes, StackTypes){
+func typeDupTwo(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	topTwo := oneAny.plus(oneAny)
 	top := len(ops.typeStack) - 1
 	if top >= 0 {
@@ -1130,28 +1130,28 @@ func typeDupTwo(ops *OpStream, args []string) (StackTypes, StackTypes){
 			topTwo[0] = ops.typeStack[top-1]
 		}
 	}
-	result:=topTwo.plus(topTwo)
+	result := topTwo.plus(topTwo)
 	return topTwo, result
 }
 
-func typeSelect(ops *OpStream, args []string) (StackTypes, StackTypes){
+func typeSelect(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	selectArgs := twoAny.plus(oneInt)
-	result:=StackTypes{StackAny}
+	result := StackTypes{StackAny}
 	top := len(ops.typeStack) - 1
-	if top>=2{
-		if ops.typeStack[top-1]==ops.typeStack[top-2]{
-			result[0]=ops.typeStack[top-1]
+	if top >= 2 {
+		if ops.typeStack[top-1] == ops.typeStack[top-2] {
+			result[0] = ops.typeStack[top-1]
 		}
 	}
 	return selectArgs, result
 }
 
-func typeSetBit(ops *OpStream, args []string) (StackTypes, StackTypes){
+func typeSetBit(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	setBitArgs := oneAny.plus(twoInts)
 	result := StackTypes{StackAny}
 	top := len(ops.typeStack) - 1
-	if top>=2{
-		result[0]=ops.typeStack[top-2]
+	if top >= 2 {
+		result[0] = ops.typeStack[top-2]
 	}
 	return setBitArgs, result
 }
