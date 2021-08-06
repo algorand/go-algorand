@@ -34,7 +34,7 @@ func (m recordingKeyManager) DeleteOldKeys(r basics.Round) {
 }
 
 // Record implements KeyManager.Record.
-func (m recordingKeyManager) Record(acct basics.Address, round basics.Round, action account.ParticipationAction) {
+func (m recordingKeyManager) RecordAsync(acct basics.Address, round basics.Round, action account.ParticipationAction) {
 	if _, ok := m.recording[acct]; !ok {
 		m.recording[acct] = make(map[account.ParticipationAction]basics.Round)
 	}

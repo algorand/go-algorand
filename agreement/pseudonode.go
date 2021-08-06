@@ -444,7 +444,7 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 	for _, r := range verifiedResults {
 		select {
 		case t.out <- messageEvent{T: voteVerified, Input: r.message, Err: makeSerErr(r.err)}:
-			t.node.keys.Record(r.v.R.Sender, r.v.R.Round, account.Vote)
+			t.node.keys.RecordAsync(r.v.R.Sender, r.v.R.Round, account.Vote)
 		case <-quit:
 			return
 		case <-t.context.Done():
@@ -509,7 +509,7 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 			ObjectPeriod: uint64(vote.R.Period),
 		}
 		t.node.log.with(logEvent).Infof("pseudonode.makeProposals: proposal created for (%d, %d)", vote.R.Round, vote.R.Period)
-		t.node.keys.Record(vote.R.Sender, vote.R.Round, account.BlockProposal)
+		t.node.keys.RecordAsync(vote.R.Sender, vote.R.Round, account.BlockProposal)
 		if t.node.log.GetTelemetryEnabled() {
 			t.node.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockProposedEvent, telemetryspec.BlockProposedEventDetails{
 				Hash:    vote.R.Proposal.BlockDigest.String(),

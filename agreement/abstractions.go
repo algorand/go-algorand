@@ -230,9 +230,9 @@ type KeyManager interface {
 	// keysRound.
 	VotingKeys(votingRound, keysRound basics.Round) []account.Participation
 
-	// Record indicates that the given participation action has been taken.
-	// This function is also part of account.ParticipationRegistry.
-	Record(account basics.Address, round basics.Round, participationType account.ParticipationAction)
+	// RecordAsync indicates that the given participation action has been taken.
+	// The operation needs to be asynchronous to avoid impacting agreement.
+	RecordAsync(account basics.Address, round basics.Round, participationType account.ParticipationAction)
 }
 
 // MessageHandle is an ID referring to a specific message.
