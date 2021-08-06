@@ -284,6 +284,9 @@ func TestInit(t *testing.T) {
 
 func makeBlockWithTxnFor(senders []byte, receivers []byte) bookkeeping.Block {
 	var blk bookkeeping.Block
+	blk.BlockHeader.GenesisID = "foo"
+	blk.BlockHeader.GenesisHash[0] = 3
+	blk.CurrentProtocol = protocol.ConsensusFuture
 
 	paysets := make([]transactions.SignedTxnInBlock, 0, len(receivers))
 	for i, b := range receivers {
@@ -292,6 +295,8 @@ func makeBlockWithTxnFor(senders []byte, receivers []byte) bookkeeping.Block {
 				Type: protocol.PaymentTx,
 				Header: transactions.Header{
 					Sender: basics.Address{senders[i]},
+					GenesisID: blk.BlockHeader.GenesisID,
+					GenesisHash: blk.BlockHeader.GenesisHash,
 				},
 				PaymentTxnFields: transactions.PaymentTxnFields{
 					Receiver: basics.Address{b},
