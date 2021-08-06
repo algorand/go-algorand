@@ -163,20 +163,20 @@ func TestParticipation_Register(t *testing.T) {
 	verifyEffectiveRound := func(id ParticipationID, first, last int) {
 		record, err := registry.Get(id)
 		a.NoError(err)
-		require.Equal(t, first, int(record.EffectiveFirst))
-		require.Equal(t, last, int(record.EffectiveLast))
+		require.Equal(t, first, int(record.RegisteredFirst))
+		require.Equal(t, last, int(record.RegisteredLast))
 	}
 
 	// Register the first key.
 	err = registry.Register(p.ParticipationID(), 500000)
 	a.NoError(err)
-	verifyEffectiveRound(p.ParticipationID(), 500320, int(p.LastValid))
+	verifyEffectiveRound(p.ParticipationID(), 500000, int(p.LastValid))
 
 	// Register second key.
 	err = registry.Register(p2.ParticipationID(), 2500000)
 	a.NoError(err)
-	verifyEffectiveRound(p.ParticipationID(), 500320, 2500320)
-	verifyEffectiveRound(p2.ParticipationID(), 2500320, int(p2.LastValid))
+	verifyEffectiveRound(p.ParticipationID(), 500000, 2500000)
+	verifyEffectiveRound(p2.ParticipationID(), 2500000, int(p2.LastValid))
 }
 
 // Test error when registering a non-existing participation ID.
@@ -322,7 +322,7 @@ func TestParticipation_RecordMultipleUpdates(t *testing.T) {
 	// Force the DB into a bad state (2 active keys for one account).
 	rootDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		id := p2.ParticipationID()
-		_, err = tx.Exec(setRegistered, 1000+maxBalLookback, p2.LastValid, id[:])
+		_, err = tx.Exec(setRegistered, 1500, p2.LastValid, id[:])
 		if err != nil {
 			return fmt.Errorf("unable to update registered key: %w", err)
 		}

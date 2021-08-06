@@ -27,8 +27,6 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-const maxBalLookback = 320
-
 // ParticipationID identifies a particular set of participation keys.
 type ParticipationID crypto.Digest
 
@@ -44,8 +42,8 @@ type ParticipationRecord struct {
 	LastVote               basics.Round
 	LastBlockProposal      basics.Round
 	LastCompactCertificate basics.Round
-	EffectiveFirst         basics.Round
-	EffectiveLast          basics.Round
+	RegisteredFirst        basics.Round
+	RegisteredLast         basics.Round
 
 	// VRFSecrets
 	// OneTimeSignatureSecrets
@@ -127,19 +125,19 @@ var (
 			account BLOB,
 
 			firstValidRound INTEGER NOT NULL DEFAULT 0,
-			lastValidRound INTEGER  NOT NULL DEFAULT 0,
-			keyDilution INTEGER     NOT NULL DEFAULT 0
+			lastValidRound  INTEGER NOT NULL DEFAULT 0,
+			keyDilution     INTEGER NOT NULL DEFAULT 0
 
 			-- vrf BLOB,    --*  msgpack encoding of ParticipationAccount.vrf
 		)`
 	createRolling = `CREATE TABLE Rolling (
 			pk INTEGER PRIMARY KEY NOT NULL,
 
-			lastVoteRound INTEGER               NOT NULL DEFAULT 0,
-			lastBlockProposalRound INTEGER      NOT NULL DEFAULT 0,
+			lastVoteRound               INTEGER NOT NULL DEFAULT 0,
+			lastBlockProposalRound      INTEGER NOT NULL DEFAULT 0,
 			lastCompactCertificateRound INTEGER NOT NULL DEFAULT 0,
-			effectiveFirstValidRound INTEGER    NOT NULL DEFAULT 0,
-			effectiveLastValidRound INTEGER     NOT NULL DEFAULT 0
+			registeredFirstRound        INTEGER NOT NULL DEFAULT 0,
+			registeredLastRound         INTEGER NOT NULL DEFAULT 0
 
 			-- voting BLOB, --*  msgpack encoding of ParticipationAccount.voting
 		)`
@@ -152,7 +150,7 @@ var (
 	selectRecords = `SELECT 
 			participationID, account, firstValidRound, lastValidRound, keyDilution,
 			lastVoteRound, lastBlockProposalRound, lastCompactCertificateRound,
-			effectiveFirstValidRound, effectiveLastValidRound
+			registeredFirstRound, registeredLastRound
 		FROM Keysets
 		INNER JOIN Rolling
 		ON Keysets.pk = Rolling.pk`
@@ -162,19 +160,19 @@ var (
 	// there should be, at most, a single record within the effective range.
 	// only the effectiveLastValid can change here.
 	clearRegistered = `UPDATE Rolling
-		 SET effectiveLastValidRound = ?1
+		 SET registeredLastRound = ?1
 		 WHERE pk IN (SELECT pk FROM Keysets WHERE account = ?2)
-		 AND effectiveFirstValidRound < ?1
-		 AND effectiveLastValidRound > ?1`
+		 AND registeredFirstRound < ?1
+		 AND registeredLastRound > ?1`
 	setRegistered = `UPDATE Rolling
-		 SET effectiveFirstValidRound=?,
-		     effectiveLastValidRound=?
+		 SET registeredFirstRound=?,
+		     registeredLastRound=?
 		 WHERE pk = (SELECT pk FROM Keysets WHERE participationID = ?)`
 	// there should only be a single record within the effective range.
 	updateRollingFieldX = `UPDATE Rolling
 		 SET %s=?1
-		 WHERE effectiveFirstValidRound < ?1
-		 AND effectiveLastValidRound > ?1
+		 WHERE registeredFirstRound < ?1
+		 AND registeredLastRound > ?1
 		 AND pk IN (SELECT pk FROM Keysets WHERE account=?2)`
 )
 
@@ -275,8 +273,8 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 			&record.LastVote,
 			&record.LastBlockProposal,
 			&record.LastCompactCertificate,
-			&record.EffectiveFirst,
-			&record.EffectiveLast,
+			&record.RegisteredFirst,
+			&record.RegisteredLast,
 		)
 		if err != nil {
 			return nil, err
@@ -342,19 +340,19 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 	}
 
 	// round out of valid range.
-	if on+maxBalLookback > record.LastValid || on+maxBalLookback < record.FirstValid {
+	if on > record.LastValid || on < record.FirstValid {
 		return ErrInvalidRegisterRange
 	}
 
 	return db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// if the is an active key, shut it down.
-		_, err = tx.Exec(clearRegistered, on+maxBalLookback, record.Account[:])
+		_, err = tx.Exec(clearRegistered, on, record.Account[:])
 		if err != nil {
 			return fmt.Errorf("unable to clear registered key: %w", err)
 		}
 
 		// update id
-		_, err = tx.Exec(setRegistered, on+maxBalLookback, record.LastValid, id[:])
+		_, err = tx.Exec(setRegistered, on, record.LastValid, id[:])
 		if err != nil {
 			return fmt.Errorf("unable to update registered key: %w", err)
 		}
