@@ -17,7 +17,6 @@
 package node
 
 import (
-	"context"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -527,9 +526,8 @@ func TestAsyncRecord(t *testing.T) {
 	cfg.DisableNetworking = true
 	node, err := MakeFull(logging.TestingLog(t), testDirectroy, config.GetDefaultLocal(), []string{}, genesis)
 	require.NoError(t, err)
-	node.ctx, node.cancelCtx = context.WithCancel(context.Background())
-	node.startMonitoringRoutines()
-	defer node.cancelCtx()
+	node.Start()
+	defer node.Stop()
 
 	var addr basics.Address
 	addr[0] = 1
