@@ -161,7 +161,7 @@ func Simulate(dbname string, n basics.Round, roundDeadline time.Duration, ledger
 	parameters := agreement.Parameters{
 		Logger:         log,
 		Accessor:       accessor,
-		ClockFactory:   stopwatch,
+		Clock:          stopwatch,
 		Network:        gossip.WrapNetwork(new(blackhole), log),
 		Ledger:         ledger,
 		BlockFactory:   proposalFactory,
