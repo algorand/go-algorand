@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package agreement
+package agreementtest
 
 import (
 	"github.com/algorand/go-algorand/data/account"
@@ -38,8 +38,6 @@ func (m SimpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Part
 // DeleteOldKeys implements KeyManager.DeleteOldKeys.
 func (m SimpleKeyManager) DeleteOldKeys(r basics.Round) {
 }
-
-// TODO: Test that these are called?
 
 // Record implements KeyManager.Record.
 func (m SimpleKeyManager) Record(account basics.Address, round basics.Round, action account.ParticipationAction) {

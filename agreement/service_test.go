@@ -727,7 +727,7 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 		m.coserviceListener = am.coserviceListener(nodeID(i))
 		clocks[i] = makeTestingClock(m)
 		ledgers[i] = ledgerFactory(balances)
-		keys := SimpleKeyManager(accounts[i : i+1])
+		keys := makeRecordingKeyManager(accounts[i : i+1])
 		endpoint := baseNetwork.testingNetworkEndpoint(nodeID(i))
 		ilog := log.WithFields(logging.Fields{"Source": "service-" + strconv.Itoa(i)})
 

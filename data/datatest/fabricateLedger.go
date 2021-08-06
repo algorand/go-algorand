@@ -19,7 +19,6 @@ package datatest
 import (
 	"time"
 
-	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/agreement/agreementtest"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -44,6 +43,6 @@ func FabricateLedger(log logging.Logger, ledgerName string, accounts []account.P
 	}
 
 	numRounds := lastRound - ledger.LastRound()
-	err = agreementtest.Simulate(ledgerName, numRounds, roundDeadline, ledgerImpl{l: ledger}, agreement.SimpleKeyManager(accounts), entryFactoryImpl{l: ledger}, entryValidatorImpl{l: ledger}, logging.Base())
+	err = agreementtest.Simulate(ledgerName, numRounds, roundDeadline, ledgerImpl{l: ledger}, agreementtest.SimpleKeyManager(accounts), entryFactoryImpl{l: ledger}, entryValidatorImpl{l: ledger}, logging.Base())
 	return ledger, err
 }

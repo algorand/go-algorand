@@ -145,7 +145,7 @@ func TestPseudonode(t *testing.T) {
 	sLogger := serviceLogger{logging.NewLogger()}
 	sLogger.SetLevel(logging.Warn)
 
-	keyManager := SimpleKeyManager(accounts)
+	keyManager := makeRecordingKeyManager(accounts)
 	pb := makePseudonode(pseudonodeParams{
 		factory:      testBlockFactory{Owner: 0},
 		validator:    testBlockValidator{},
@@ -222,6 +222,9 @@ func TestPseudonode(t *testing.T) {
 		}
 		messageEvent, typeOk := ev.(messageEvent)
 		assert.True(t, true, typeOk)
+		// Everyone is voting and proposing blocks.
+		assert.Equal(t, startRound, keyManager.recording[messageEvent.Input.Vote.R.Sender][account.Vote])
+		assert.Equal(t, startRound, keyManager.recording[messageEvent.Input.Vote.R.Sender][account.BlockProposal])
 		events[messageEvent.t()] = append(events[messageEvent.t()], messageEvent)
 	}
 	assert.Subset(t, []int{5, 6, 7, 8, 9, 10}, []int{len(events[voteVerified])})
@@ -406,7 +409,7 @@ func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
 	sLogger := serviceLogger{logging.NewLogger()}
 	sLogger.SetLevel(logging.Warn)
 
-	keyManager := SimpleKeyManager(accounts)
+	keyManager := makeRecordingKeyManager(accounts)
 	pb := makePseudonode(pseudonodeParams{
 		factory:      testBlockFactory{Owner: 0},
 		validator:    testBlockValidator{},
