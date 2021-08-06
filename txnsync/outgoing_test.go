@@ -72,7 +72,7 @@ func TestAsyncMessageSent(t *testing.T) {
 	a.Equal(asyncEncoder.asyncMessageSent(false, 0), errTransactionSyncOutgoingMessageSendFailed)
 	err := asyncEncoder.asyncMessageSent(true, 1337)
 	a.Equal(err, errTransactionSyncOutgoingMessageQueueFull)
-	a.NotEqual(asyncEncoder.messageData.sentTimestamp, oldTimestamp)
+	a.Equal(asyncEncoder.messageData.sentTimestamp, oldTimestamp)
 	a.Equal(asyncEncoder.messageData.sequenceNumber, uint64(1337))
 
 	// Make this buffered for now so we catch the select statement
@@ -221,9 +221,9 @@ func TestAsyncEncodeAndSend(t *testing.T) {
 	asyncEncoder.state.messageSendWaitGroup.Add(1)
 
 	err := asyncEncoder.asyncEncodeAndSend(nil)
-
 	a.Nil(err)
 	a.True(sendPeerMessageCalled)
+	a.NotZero(asyncEncoder.messageData.sentTimestamp)
 
 }
 
