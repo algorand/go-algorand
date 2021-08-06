@@ -2089,7 +2089,7 @@ func TestEqualsTypeCheck(t *testing.T) {
 
 func TestDupTypeCheck(t *testing.T) {
 	t.Parallel()
-	testProg(t, "int 1; byte 0x1234; dup; +", AssemblerMaxVersion, expect{4, "+ arg 1..."})
+	testProg(t, "byte 0x1234; dup; int 1; +", AssemblerMaxVersion, expect{4, "+ arg 0..."})
 	testProg(t, "byte 0x1234; int 1; dup; +", AssemblerMaxVersion)
 	testProg(t, "byte 0x1234; int 1; dup2; +", AssemblerMaxVersion, expect{4, "+ arg 0..."})
 	testProg(t, "int 1; byte 0x1234; dup2; +", AssemblerMaxVersion, expect{4, "+ arg 1..."})

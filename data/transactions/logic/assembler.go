@@ -1102,23 +1102,20 @@ func typeDig(ops *OpStream, args []string) (StackTypes, StackTypes) {
 }
 
 func typeEquals(ops *OpStream, args []string) (StackTypes, StackTypes) {
-	topTwo := oneAny.plus(oneAny)
 	top := len(ops.typeStack) - 1
 	if top >= 0 {
-		topTwo[1] = ops.typeStack[top]
-		topTwo[0] = ops.typeStack[top]
+		//Require arg0 and arg1 to have same type
+		return StackTypes{ops.typeStack[top], ops.typeStack[top]}, oneInt
 	}
-	return topTwo, oneInt
+	return oneAny.plus(oneAny), oneInt
 }
 
 func typeDup(ops *OpStream, args []string) (StackTypes, StackTypes) {
-	topType := StackTypes{StackAny}
 	top := len(ops.typeStack) - 1
 	if top >= 0 {
-		topType[0] = ops.typeStack[top]
+		return StackTypes{ops.typeStack[top]}, StackTypes{ops.typeStack[top], ops.typeStack[top]}
 	}
-	result := topType.plus(topType)
-	return topType, result
+	return StackTypes{StackAny}, oneAny.plus(oneAny)
 }
 
 func typeDupTwo(ops *OpStream, args []string) (StackTypes, StackTypes) {
@@ -1136,24 +1133,22 @@ func typeDupTwo(ops *OpStream, args []string) (StackTypes, StackTypes) {
 
 func typeSelect(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	selectArgs := twoAny.plus(oneInt)
-	result := StackTypes{StackAny}
 	top := len(ops.typeStack) - 1
 	if top >= 2 {
 		if ops.typeStack[top-1] == ops.typeStack[top-2] {
-			result[0] = ops.typeStack[top-1]
+			return selectArgs, StackTypes{ops.typeStack[top-1]}
 		}
 	}
-	return selectArgs, result
+	return selectArgs, StackTypes{StackAny}
 }
 
 func typeSetBit(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	setBitArgs := oneAny.plus(twoInts)
-	result := StackTypes{StackAny}
 	top := len(ops.typeStack) - 1
 	if top >= 2 {
-		result[0] = ops.typeStack[top-2]
+		return setBitArgs, StackTypes{ops.typeStack[top-2]}
 	}
-	return setBitArgs, result
+	return setBitArgs, StackTypes{StackAny}
 }
 
 // keywords handle parsing and assembling special asm language constructs like 'addr'
