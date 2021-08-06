@@ -48,6 +48,7 @@ func assertParticipation(t *testing.T, p Participation, pr ParticipationRecord) 
 	require.Equal(t, p.Parent, pr.Account)
 }
 
+// Insert participation records and make sure they can be fetched.
 func TestParticipation_InsertGet(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -90,6 +91,7 @@ func TestParticipation_InsertGet(t *testing.T) {
 	assertParticipation(t, p2, results[1])
 }
 
+// Make sure a record can be deleted by id.
 func TestParticipation_Delete(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -128,6 +130,7 @@ func TestParticipation_Delete(t *testing.T) {
 	assertParticipation(t, p2, results[0])
 }
 
+// Make sure the register function properly sets effective first/last for all effected records.
 func TestParticipation_Register(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -176,6 +179,7 @@ func TestParticipation_Register(t *testing.T) {
 	verifyEffectiveRound(p2.ParticipationID(), 2500320, int(p2.LastValid))
 }
 
+// Test error when registering a non-existing participation ID.
 func TestParticipation_RegisterInvalidID(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -193,6 +197,7 @@ func TestParticipation_RegisterInvalidID(t *testing.T) {
 	a.True(strings.Contains(err.Error(), "unable to lookup id"))
 }
 
+// Test error attempting to register a key with an invalid range.
 func TestParticipation_RegisterInvalidRange(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -214,6 +219,7 @@ func TestParticipation_RegisterInvalidRange(t *testing.T) {
 	a.EqualError(err, ErrInvalidRegisterRange.Error())
 }
 
+// Test the recording function.
 func TestParticipation_Record(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -271,6 +277,7 @@ func TestParticipation_Record(t *testing.T) {
 	}
 }
 
+// Test that attempting to record an invalid action generates an error.
 func TestParticipation_RecordInvalidType(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -281,6 +288,8 @@ func TestParticipation_RecordInvalidType(t *testing.T) {
 	a.EqualError(err, ErrUnknownParticipationAction.Error())
 }
 
+// Test that an error is generated if the record function updates multiple records.
+// This would only happen if the DB was in an inconsistent state.
 func TestParticipation_RecordMultipleUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)

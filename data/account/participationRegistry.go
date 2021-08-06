@@ -259,6 +259,7 @@ func (db *participationDB) Delete(id ParticipationID) error {
 	})
 }
 
+// scanRecords is a helper to manage scanning participation records.
 func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 	results := make([]ParticipationRecord, 0)
 	for rows.Next() {

@@ -222,7 +222,7 @@ func TestPseudonode(t *testing.T) {
 		}
 		messageEvent, typeOk := ev.(messageEvent)
 		assert.True(t, true, typeOk)
-		// Everyone is voting and proposing blocks.
+		// Verify votes are recorded - everyone is voting and proposing blocks.
 		assert.Equal(t, startRound, keyManager.recording[messageEvent.Input.Vote.R.Sender][account.Vote])
 		assert.Equal(t, startRound, keyManager.recording[messageEvent.Input.Vote.R.Sender][account.BlockProposal])
 		events[messageEvent.t()] = append(events[messageEvent.t()], messageEvent)
