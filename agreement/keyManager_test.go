@@ -1,7 +1,6 @@
 package agreement
 
 import (
-	"fmt"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 )
@@ -38,9 +37,6 @@ func (m recordingKeyManager) DeleteOldKeys(r basics.Round) {
 func (m recordingKeyManager) Record(acct basics.Address, round basics.Round, action account.ParticipationAction) {
 	if _, ok := m.recording[acct]; !ok {
 		m.recording[acct] = make(map[account.ParticipationAction]basics.Round)
-	}
-	if action == account.BlockProposal {
-		fmt.Println("it happens")
 	}
 	m.recording[acct][action] = round
 }

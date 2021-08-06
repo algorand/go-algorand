@@ -52,6 +52,7 @@ func TestParticipation_InsertGet(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	registry := getRegistry(t)
+	defer registry.Close()
 
 	p := Participation{
 		FirstValid:  1,
@@ -93,6 +94,7 @@ func TestParticipation_Delete(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	registry := getRegistry(t)
+	defer registry.Close()
 
 	p := Participation{
 		FirstValid:  1,
@@ -130,6 +132,7 @@ func TestParticipation_Register(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	registry := getRegistry(t)
+	defer registry.Close()
 
 	// Overlapping keys.
 	p := Participation{
@@ -177,6 +180,7 @@ func TestParticipation_RegisterInvalidID(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	registry := getRegistry(t)
+	defer registry.Close()
 
 	p := Participation{
 		FirstValid:  250000,
@@ -193,6 +197,7 @@ func TestParticipation_RegisterInvalidRange(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	registry := getRegistry(t)
+	defer registry.Close()
 
 	p := Participation{
 		FirstValid:  250000,
@@ -213,6 +218,7 @@ func TestParticipation_Record(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	registry := getRegistry(t)
+	defer registry.Close()
 
 	// Setup p
 	p := Participation{
@@ -269,6 +275,7 @@ func TestParticipation_RecordInvalidType(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	registry := getRegistry(t)
+	defer registry.Close()
 
 	err := registry.Record(basics.Address{}, 0, ParticipationAction(9000))
 	a.EqualError(err, ErrUnknownParticipationAction.Error())

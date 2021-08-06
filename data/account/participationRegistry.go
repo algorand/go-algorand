@@ -96,6 +96,9 @@ type ParticipationRegistry interface {
 
 	// Record sets the Last* field for the active ParticipationID for the given account.
 	Record(account basics.Address, round basics.Round, participationType ParticipationAction) error
+
+	// Close any resources used to implement the interface.
+	Close()
 }
 
 // MakeParticipationRegistry creates a db.Accessor backed ParticipationRegistry.
@@ -106,6 +109,7 @@ func MakeParticipationRegistry(accessor db.Pair) (ParticipationRegistry, error) 
 
 	err := db.Initialize(accessor.Wdb, migrations)
 	if err != nil {
+		accessor.Close()
 		return nil, err
 	}
 
@@ -382,4 +386,8 @@ func (db *participationDB) Record(account basics.Address, round basics.Round, pa
 
 		return nil
 	})
+}
+
+func (db *participationDB) Close() {
+	db.store.Close()
 }

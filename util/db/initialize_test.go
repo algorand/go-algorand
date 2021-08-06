@@ -110,6 +110,7 @@ func TestInitialize(t *testing.T) {
 			// Setup
 			accessor, err := MakeAccessor("test_"+testcase.name, false, true)
 			require.NoError(t, err)
+			defer accessor.Close()
 
 			err = Initialize(accessor, testcase.migrations)
 
@@ -150,6 +151,7 @@ func TestUnknownVersionError(t *testing.T) {
 
 	accessor, err := MakeAccessor("test-unknown-version", false, true)
 	require.NoError(t, err)
+	defer accessor.Close()
 
 	migrations := []Migration{
 		createFoo,
@@ -201,6 +203,7 @@ func TestNewDBFlag(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			accessor, err := MakeAccessor("test_"+testcase.name, false, true)
 			require.NoError(t, err)
+			defer accessor.Close()
 
 			err = Initialize(accessor, testcase.migrations)
 			require.NoError(t, err)
@@ -215,6 +218,7 @@ func TestResumeUpgrading(t *testing.T) {
 
 	accessor, err := MakeAccessor("test-resume", false, true)
 	require.NoError(t, err)
+	defer accessor.Close()
 
 	// Initialize to version 2
 	migrations := []Migration{
