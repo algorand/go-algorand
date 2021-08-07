@@ -1101,8 +1101,8 @@ func TestAppCallApplyDelete(t *testing.T) {
 	a.Equal(cbr, br)
 	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
 
-	// check calculation on ConsensusV28. TotalExtraAppPages does not change
-	b.SetProto(protocol.ConsensusV28)
+	// check calculation on ConsensusV29. TotalExtraAppPages does not change
+	b.SetProto(protocol.ConsensusV29)
 	proto = b.ConsensusParams()
 	ep.Proto = &proto
 
