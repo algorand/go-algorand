@@ -14,20 +14,33 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package agreementtest
+package agreement
 
 import (
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-// SimpleKeyManager provides a simple implementation of a KeyManager for unit tests.
-type SimpleKeyManager []account.Participation
+func makeRecordingKeyManager(accounts []account.Participation) *recordingKeyManager {
+	return &recordingKeyManager{
+		keys:      accounts,
+		recording: make(map[basics.Address]map[account.ParticipationAction]basics.Round),
+	}
+}
+
+// recordingKeyManager provides a simple implementation of a KeyManager for unit tests.
+type recordingKeyManager struct {
+	keys      []account.Participation
+	recording map[basics.Address]map[account.ParticipationAction]basics.Round
+	mutex     deadlock.Mutex
+}
 
 // VotingKeys implements KeyManager.VotingKeys.
-func (m SimpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Participation {
+func (m *recordingKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Participation {
 	var km []account.Participation
-	for _, acc := range m {
+	for _, acc := range m.keys {
 		if acc.OverlapsInterval(votingRound, votingRound) {
 			km = append(km, acc)
 		}
@@ -36,9 +49,15 @@ func (m SimpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Part
 }
 
 // DeleteOldKeys implements KeyManager.DeleteOldKeys.
-func (m SimpleKeyManager) DeleteOldKeys(r basics.Round) {
+func (m *recordingKeyManager) DeleteOldKeys(r basics.Round) {
 }
 
-// RecordAsync implements KeyManager.RecordAsync.
-func (m SimpleKeyManager) RecordAsync(account basics.Address, round basics.Round, action account.ParticipationAction) {
+// Record implements KeyManager.Record.
+func (m *recordingKeyManager) RecordAsync(acct basics.Address, round basics.Round, action account.ParticipationAction) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	if _, ok := m.recording[acct]; !ok {
+		m.recording[acct] = make(map[account.ParticipationAction]basics.Round)
+	}
+	m.recording[acct][action] = round
 }

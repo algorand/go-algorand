@@ -108,6 +108,8 @@ type AlgorandFullNode struct {
 
 	indexer *indexer.Indexer
 
+	participationRegistry account.ParticipationRegistry
+
 	rootDir     string
 	genesisID   string
 	genesisHash crypto.Digest
@@ -267,6 +269,12 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
+	node.participationRegistry, err = ensureParticipationDB(genesisDir)
+	if err != nil {
+		log.Errorf("unable to initialize the participation registry database: %v", err)
+		return nil, err
+	}
+
 	err = node.loadParticipationKeys()
 	if err != nil {
 		log.Errorf("Cannot load participation keys: %v", err)
@@ -394,6 +402,7 @@ func (node *AlgorandFullNode) Start() {
 func (node *AlgorandFullNode) startMonitoringRoutines() {
 	node.monitoringRoutinesWaitGroup.Add(3)
 
+	// TODO: Remove this with #2596
 	// Periodically check for new participation keys
 	go node.checkForParticipationKeys()
 
@@ -740,6 +749,16 @@ func (node *AlgorandFullNode) SuggestedFee() basics.MicroAlgos {
 // Transactions are sorted in decreasing order. If no transactions, returns an empty slice.
 func (node *AlgorandFullNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn, error) {
 	return bookkeeping.SignedTxnGroupsFlatten(node.transactionPool.PendingTxGroups()), nil
+}
+
+// ensureParticipationDB opens or creates a participation DB.
+func ensureParticipationDB(genesisDir string) (account.ParticipationRegistry, error) {
+	accessorFile := filepath.Join(genesisDir, config.ParticipationRegistryFilename)
+	accessor, err := db.OpenPair(accessorFile, false)
+	if err != nil {
+		return nil, err
+	}
+	return account.MakeParticipationRegistry(accessor)
 }
 
 // Reload participation keys from disk periodically
@@ -1155,4 +1174,18 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 		}
 	}
 	return participations
+}
+
+type recordParams struct {
+	account           basics.Address
+	round             basics.Round
+	participationType account.ParticipationAction
+}
+
+// RecordAsync forwards participation record calls to the participation registry.
+func (node *AlgorandFullNode) RecordAsync(account basics.Address, round basics.Round, participationType account.ParticipationAction) {
+	err := node.participationRegistry.Record(account, round, participationType)
+	if err != nil {
+		node.log.Warnf("node.RecordAsync: Account %v not able to record participation (%d) on round %d: %w", account, participationType, round, err)
+	}
 }

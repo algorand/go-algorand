@@ -444,6 +444,7 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 	for _, r := range verifiedResults {
 		select {
 		case t.out <- messageEvent{T: voteVerified, Input: r.message, Err: makeSerErr(r.err)}:
+			t.node.keys.RecordAsync(r.v.R.Sender, r.v.R.Round, account.Vote)
 		case <-quit:
 			return
 		case <-t.context.Done():
@@ -531,6 +532,7 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 	for _, r := range verifiedVotes {
 		select {
 		case t.out <- messageEvent{T: voteVerified, Input: r.message, Err: makeSerErr(r.err)}:
+			t.node.keys.RecordAsync(r.v.R.Sender, r.v.R.Round, account.BlockProposal)
 		case <-quit:
 			return
 		case <-t.context.Done():

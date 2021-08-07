@@ -17,8 +17,10 @@
 package account
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
@@ -54,6 +56,24 @@ type Participation struct {
 	LastValid  basics.Round
 
 	KeyDilution uint64
+}
+
+// ParticipationID computes a ParticipationID.
+func (part Participation) ParticipationID() ParticipationID {
+	data := new(bytes.Buffer)
+
+	data.Write(part.Parent[:])
+	binary.Write(data, binary.LittleEndian, part.FirstValid)
+	binary.Write(data, binary.LittleEndian, part.LastValid)
+	binary.Write(data, binary.LittleEndian, part.KeyDilution)
+	if part.VRF != nil {
+		data.Write(part.VRF.PK[:])
+	}
+
+	// this too?
+	//part.Write(part.Voting.SubKeyPK[:])
+
+	return ParticipationID(crypto.Hash(data.Bytes()))
 }
 
 // PersistedParticipation encapsulates the static state of the participation
