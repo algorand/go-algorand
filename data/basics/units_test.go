@@ -32,8 +32,6 @@ func TestSubSaturate(t *testing.T) {
 }
 
 func TestSubSaturate32(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	require.Equal(t, uint32(0), SubSaturate32(0, 1))
 	require.Equal(t, uint32(0), SubSaturate32(1, 2))
 	require.Equal(t, uint32(0), SubSaturate32(1, 1))
@@ -43,8 +41,6 @@ func TestSubSaturate32(t *testing.T) {
 }
 
 func TestAddSaturate32(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	require.Equal(t, uint32(1), AddSaturate32(0, 1))
 	require.Equal(t, uint32(math.MaxUint32-1), AddSaturate32(math.MaxUint32-2, 1))
 	require.Equal(t, uint32(math.MaxUint32), AddSaturate32(math.MaxUint32, 0))
