@@ -1006,9 +1006,6 @@ func initConsensusProtocols() {
 	// Enable TEAL 5 / AVM 1.0
 	vFuture.LogicSigVersion = 5
 
-	// Enable ExtraProgramPages for application update
-	vFuture.EnableExtraPagesOnAppUpdate = true
-
 	// Enable App calls to pool budget in grouped transactions
 	vFuture.EnableAppFeePooling = true
 
