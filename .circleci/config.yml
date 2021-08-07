@@ -627,7 +627,7 @@ jobs:
             #export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
             export GOPATH="/home/circleci/go"
             export ALGORAND_DEADLOCK=enable
-            export NO_GIMME=True
+            export SKIP_GO_INSTALLATION=True
             export PATH=/mingw64/bin:/C/tools/msys64/mingw64/bin:/usr/bin:$PATH
             export MAKE=mingw32-make
             $msys2 scripts/travis/build_test.sh

@@ -971,9 +971,21 @@ func initConsensusProtocols() {
 	// v27 can be upgraded to v28, with an update delay of 7 days ( see calculation above )
 	v27.ApprovedUpgrades[protocol.ConsensusV28] = 140000
 
+	// v29 fixes application update by using ExtraProgramPages in size calculations
+	v29 := v28
+	v29.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// Enable ExtraProgramPages for application update
+	v29.EnableExtraPagesOnAppUpdate = true
+
+	Consensus[protocol.ConsensusV29] = v29
+
+	// v28 can be upgraded to v29, with an update delay of 3 days ( see calculation above )
+	v28.ApprovedUpgrades[protocol.ConsensusV29] = 60000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v28
+	vFuture := v29
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
@@ -988,9 +1000,6 @@ func initConsensusProtocols() {
 
 	// Enable TEAL 5 / AVM 1.0
 	vFuture.LogicSigVersion = 5
-
-	// Enable ExtraProgramPages for application update
-	vFuture.EnableExtraPagesOnAppUpdate = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

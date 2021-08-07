@@ -1,0 +1,90 @@
+name: "ReviewDog workflow"
+on:
+  pull_request:
+jobs:
+  # Blocking Errors Section
+  reviewdog-errors:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0 # required for new-from-rev option in .golangci.yml
+      - name: Install libraries
+        run: sudo apt-get -y -q install libboost-math-dev
+        # move go out of the way temporarily to avoid "go list ./..." from installing modules
+      - name: Make libsodium.a
+        run: sudo mv /usr/bin/go /usr/bin/go.bak && make crypto/libs/linux/amd64/lib/libsodium.a && sudo mv /usr/bin/go.bak /usr/bin/go
+      - name: reviewdog-golangci-lint
+        uses: reviewdog/action-golangci-lint@v2
+        with:
+          golangci_lint_version: "v1.41.1"
+          golangci_lint_flags: "-c .golangci.yml --allow-parallel-runners"
+          reporter: "github-pr-review"
+          tool_name: "Lint Errors"
+          level: "error"
+          fail_on_error: true
+  # Non-Blocking Warnings Section
+  reviewdog-warnings:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0 # required for new-from-rev option in .golangci.yml
+      - name: Install libraries
+        run: sudo apt-get -y -q install libboost-math-dev
+      # move go out of the way temporarily to avoid "go list ./..." from installing modules
+      - name: Make libsodium.a
+        run: sudo mv /usr/bin/go /usr/bin/go.bak && make crypto/libs/linux/amd64/lib/libsodium.a && sudo mv /usr/bin/go.bak /usr/bin/go
+      - name: Add bin to PATH
+        run: |
+          echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
+          echo "$RUNNER_WORKSPACE/$(basename $GITHUB_REPOSITORY)/bin" >> $GITHUB_PATH
+      - name: Install specific golang
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.16.6'
+      - name: Create folders for golangci-lint
+        run: mkdir -p cicdtmp/golangci-lint
+      - name: Check if custom golangci-lint is already built
+        id: cache-golangci-lint
+        uses: actions/cache@v2
+        with:
+          path: cicdtmp/golangci-lint/golangci-lint-cgo
+          key: cicd-golangci-lint-cgo-v0.0.1
+
+      - name: Build custom golangci-lint with CGO_ENABLED
+        if: steps.cache-golangci-lint.outputs.cache-hit != 'true'
+        run: |
+          cd cicdtmp/golangci-lint
+          git clone https://github.com/golangci/golangci-lint.git .
+          git checkout tags/v1.41.1
+          CGO_ENABLED=true go build -trimpath -o golangci-lint-cgo ./cmd/golangci-lint
+          ./golangci-lint-cgo --version
+          cd ../../
+      - name: Install reviewdog
+        run: |
+          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.13.0/install.sh | sh -s
+          reviewdog --version
+      - name: Build custom linters
+        run: |
+          cd cmd/partitiontest_linter/
+          CGO_ENABLED=true go build -buildmode=plugin -trimpath plugin/plugin.go
+          cd ../../
+          ls -la cmd/partitiontest_linter/
+      - name: Run golangci-lint with reviewdog
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          ./cicdtmp/golangci-lint/golangci-lint-cgo run
+          --out-format line-number
+          -c .golangci-warnings.yml
+          --allow-parallel-runners
+          | reviewdog
+          -f=golangci-lint
+          -name="Lint Warnings"
+          -reporter=github-check
+          -filter-mode=added
+          -fail-on-error=false
+          -level=warning
