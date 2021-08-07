@@ -450,6 +450,14 @@ return`
 	l, err := OpenLedger(logging.Base(), "TestAppAccountData", true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
+	l.accts.ctxCancel() // force commitSyncer to exit
+
+	// wait commitSyncer to exit
+	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
+	select {
+	case <-l.accts.commitSyncerClosed:
+		break
+	}
 
 	txHeader := transactions.Header{
 		Sender:      creator,
@@ -506,7 +514,7 @@ return`
 	// save data into DB and write into local state
 	l.accts.accountsWriting.Add(1)
 	l.accts.commitRound(3, 0, 0)
-	l.reloadLedger()
+	l.accts.accountsWriting.Wait()
 
 	appCallFields = transactions.ApplicationCallTxnFields{
 		OnCompletion:    0,
@@ -527,7 +535,7 @@ return`
 	// save data into DB
 	l.accts.accountsWriting.Add(1)
 	l.accts.commitRound(1, 3, 0)
-	l.reloadLedger()
+	l.accts.accountsWriting.Wait()
 
 	// dump accounts
 	var rowid int64
@@ -660,6 +668,14 @@ return`
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
+	l.accts.ctxCancel() // force commitSyncer to exit
+
+	// wait commitSyncer to exit
+	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
+	select {
+	case <-l.accts.commitSyncerClosed:
+		break
+	}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -727,7 +743,7 @@ return`
 	// save data into DB and write into local state
 	l.accts.accountsWriting.Add(1)
 	l.accts.commitRound(3, 0, 0)
-	l.reloadLedger()
+	l.accts.accountsWriting.Wait()
 
 	// check first write
 	blk, err := l.Block(2)
@@ -783,7 +799,7 @@ return`
 	// save data into DB
 	l.accts.accountsWriting.Add(1)
 	l.accts.commitRound(2, 3, 0)
-	l.reloadLedger()
+	l.accts.accountsWriting.Wait()
 
 	// check first write
 	blk, err = l.Block(4)
@@ -907,6 +923,14 @@ return`
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
+	l.accts.ctxCancel() // force commitSyncer to exit
+
+	// wait commitSyncer to exit
+	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
+	select {
+	case <-l.accts.commitSyncerClosed:
+		break
+	}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -1002,7 +1026,7 @@ return`
 	// save data into DB and write into local state
 	l.accts.accountsWriting.Add(1)
 	l.accts.commitRound(3, 0, 0)
-	l.reloadLedger()
+	l.accts.accountsWriting.Wait()
 
 	// check first write
 	blk, err = l.Block(2)
@@ -1058,6 +1082,14 @@ return`
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
+	l.accts.ctxCancel() // force commitSyncer to exit
+
+	// wait commitSyncer to exit
+	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
+	select {
+	case <-l.accts.commitSyncerClosed:
+		break
+	}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -1134,7 +1166,7 @@ return`
 	// save data into DB and write into local state
 	l.accts.accountsWriting.Add(1)
 	l.accts.commitRound(2, 0, 0)
-	l.reloadLedger()
+	l.accts.accountsWriting.Wait()
 
 	// check first write
 	blk, err = l.Block(1)
@@ -1251,6 +1283,14 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
+	l.accts.ctxCancel() // force commitSyncer to exit
+
+	// wait commitSyncer to exit
+	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
+	select {
+	case <-l.accts.commitSyncerClosed:
+		break
+	}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -1313,7 +1353,7 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	// save data into DB and write into local state
 	l.accts.accountsWriting.Add(1)
 	l.accts.commitRound(2, 0, 0)
-	l.reloadLedger()
+	l.accts.accountsWriting.Wait()
 
 	// check first write
 	blk, err := l.Block(2)

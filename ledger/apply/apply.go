@@ -33,21 +33,22 @@ type Balances interface {
 
 	Put(basics.Address, basics.AccountData) error
 
-	// PutWithCreatable is like Put, but should be used when creating or deleting an asset or application.
-	PutWithCreatable(addr basics.Address, acct basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error
-
 	// GetCreator gets the address of the account that created a given creatable
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 
-	// Allocate or Deallocate either global or address-local app storage.
+	// Allocate or deallocate either global or address-local app storage.
 	//
-	// PutWithCreatable(...) and then {Allocate/Deallocate}(..., ..., global=true)
+	// Put(...) and then {AllocateApp/DeallocateApp}(..., ..., global=true)
 	// creates/destroys an application.
 	//
-	// Put(...) and then {Allocate/Deallocate}(..., ..., global=false)
+	// Put(...) and then {AllocateApp/DeallocateApp}(..., ..., global=false)
 	// opts into/closes out of an application.
-	Allocate(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error
-	Deallocate(addr basics.Address, aidx basics.AppIndex, global bool) error
+	AllocateApp(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error
+	DeallocateApp(addr basics.Address, aidx basics.AppIndex, global bool) error
+
+	// Similar to above, notify COW that global/local asset state was created.
+	AllocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error
+	DeallocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error
 
 	// StatefulEval executes a TEAL program in stateful mode on the balances.
 	// It returns whether the program passed and its error.  It alo returns

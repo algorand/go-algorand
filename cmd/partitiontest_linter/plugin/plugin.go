@@ -31,7 +31,7 @@ func (*analyzerPlugin) GetAnalyzers() []*analysis.Analyzer {
 	}
 }
 
-// This must be defined and named 'AnalyzerPlugin'
+// AnalyzerPlugin must be defined and named 'AnalyzerPlugin'
 var AnalyzerPlugin analyzerPlugin
 
 func main() {
