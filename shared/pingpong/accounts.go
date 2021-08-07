@@ -459,7 +459,7 @@ func signAndBroadcastTransaction(accounts map[string]*pingPongAccount, sender st
 	if !cfg.Quiet {
 		fmt.Printf("Broadcast transaction %v\n", txID)
 	}
-	accounts[sender].setBalance(accounts[sender].getBalance() - tx.Fee.Raw)
+	accounts[sender].addBalance(-int64(tx.Fee.Raw))
 	return
 }
 
@@ -762,7 +762,7 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 			tx.Note = pps.makeNextUniqueNoteField()
 
 			txgroup = append(txgroup, tx)
-			accounts[appAccount.Address].setBalance(accounts[appAccount.Address].getBalance() - tx.Fee.Raw)
+			accounts[appAccount.Address].addBalance(-int64(tx.Fee.Raw))
 			senders = append(senders, appAccount.Address)
 		}
 

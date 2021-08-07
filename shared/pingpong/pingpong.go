@@ -631,8 +631,6 @@ func (pps *WorkerState) sendFromTo(
 		c := p.Creator
 		assetsByCreator[c] = append(assetsByCreator[c], &p)
 	}
-	txnBlock := time.Now()
-	txnBlockCount := 0
 	lastTransactionTime := time.Now()
 	timeCredit := time.Duration(0)
 	for i := 0; i < len(fromList); i = (i + 1) % len(fromList) {
@@ -659,9 +657,9 @@ func (pps *WorkerState) sendFromTo(
 			crypto.RandBytes(addr[:])
 			to = addr.String()
 		} else {
-			// make 5% of the calls attempt to refund low-balanced accounts.
+			// make 50% of the calls attempt to refund low-balanced accounts.
 			// ( if there is any )
-			if len(belowMinBalanceAccounts) > 0 /*&& (crypto.RandUint64()%100 < 5)*/ {
+			if len(belowMinBalanceAccounts) > 0 && (crypto.RandUint64()%100 < 50) {
 				// pick the first low balance account
 				for acct := range belowMinBalanceAccounts {
 					to = acct
@@ -801,7 +799,6 @@ func (pps *WorkerState) sendFromTo(
 
 			sentCount++
 			sendErr = client.BroadcastTransactionGroup(stxGroup)
-
 		}
 
 		if sendErr != nil {
@@ -838,14 +835,6 @@ func (pps *WorkerState) sendFromTo(
 			sentCount--
 			successCount--
 			//fmt.Printf("itration took %v\n", took)
-		}
-		txnBlockCount++
-		if txnBlockCount == 100 {
-			now := time.Now()
-			dt := now.Sub(txnBlock)
-			txnBlock = now
-			fmt.Printf("time per 100 transaction was %v\n", dt)
-			txnBlockCount = 0
 		}
 	}
 	return
@@ -1044,7 +1033,7 @@ func (pps *WorkerState) constructPayment(from, to string, fee, amount uint64, no
 		return transactions.Transaction{}, fmt.Errorf("ConstructPayment: unknown consensus protocol %s", params.ConsensusVersion)
 	}
 	fv := params.LastRound + 1
-	lv := fv + 1000
+	lv := fv + cp.MaxTxnLife - 1
 
 	tx := transactions.Transaction{
 		Type: protocol.PaymentTx,
