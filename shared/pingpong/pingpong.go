@@ -333,7 +333,11 @@ func waitPendingTransactions(accounts map[string]*pingPongAccount, client libgoa
 				continue
 			}
 			// this would wait for the next round, when we will perform the check again.
-			client.WaitForRound(nodeStatus.LastRound)
+			_, err = client.WaitForRound(nodeStatus.LastRound)
+			if err != nil {
+				fmt.Printf("failed to wait for next round : %v\n", err)
+				return err
+			}
 			goto repeat
 		}
 	}
@@ -341,7 +345,7 @@ func waitPendingTransactions(accounts map[string]*pingPongAccount, client libgoa
 }
 
 func (pps *WorkerState) refreshAccounts(accounts map[string]*pingPongAccount, client libgoal.Client, cfg PpConfig) error {
-	// wait until all the pending transcations have been sent; otherwise, getting the balance
+	// wait until all the pending transactions have been sent; otherwise, getting the balance
 	// is pretty much meaningless.
 	fmt.Printf("waiting for all transactions to be accepted before refreshing accounts.\n")
 	err := waitPendingTransactions(accounts, client)
@@ -895,7 +899,11 @@ func (pps *WorkerState) roundMonitor(client libgoal.Client) {
 		}
 
 		// wait for the next round.
-		client.WaitForRound(paramsResp.LastRound)
+		_, err = client.WaitForRound(paramsResp.LastRound)
+		if err != nil {
+			fmt.Printf("failed to wait for next round : %v\n", err)
+			time.Sleep(30 * time.Millisecond)
+		}
 	}
 }
 
