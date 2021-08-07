@@ -18,6 +18,7 @@ package pingpong
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"math/rand"
@@ -54,9 +55,10 @@ type WorkerState struct {
 	accounts map[string]*pingPongAccount
 	cinfo    CreatablesInfo
 
-	nftStartTime  int64
-	localNftIndex uint64
-	nftHolders    map[string]int
+	nftStartTime       int64
+	localNftIndex      uint64
+	nftHolders         map[string]int
+	incTransactionSalt uint64
 }
 
 // PrepareAccounts to set up accounts and asset accounts required for Ping Pong run
@@ -128,7 +130,7 @@ func (pps *WorkerState) prepareNewAccounts(client libgoal.Client, cfg PpConfig, 
 	}
 	// create new accounts for testing
 	newAccounts = make(map[string]*pingPongAccount)
-	newAccounts, err = generateAccounts(client, newAccounts, cfg.NumPartAccounts-1)
+	newAccounts = generateAccounts(newAccounts, cfg.NumPartAccounts-1)
 
 	for k := range newAccounts {
 		accounts[k] = newAccounts[k]
@@ -233,7 +235,7 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 			if !cfg.Quiet {
 				fmt.Printf("adjusting balance of account %v by %d\n ", addr, toSend)
 			}
-			_, err := pps.sendPaymentFromUnencryptedWallet(client, cfg.SrcAccount, addr, fee, toSend, nil)
+			_, err := pps.sendPaymentFromSourceAccount(client, addr, fee, toSend)
 			if err != nil {
 				return err
 			}
@@ -249,13 +251,12 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 	return nil
 }
 
-func (pps *WorkerState) sendPaymentFromUnencryptedWallet(client libgoal.Client, from, to string, fee, amount uint64, note []byte) (transactions.Transaction, error) {
+func (pps *WorkerState) sendPaymentFromSourceAccount(client libgoal.Client, to string, fee, amount uint64) (transactions.Transaction, error) {
+	// generate a unique note to avoid duplicate transaction failures
+	note := pps.makeNextUniqueNoteField()
 
-	// generate a random lease to avoid duplicate transaction failures
-	var lease [32]byte
-	crypto.RandBytes(lease[:])
-
-	tx, err := client.ConstructPayment(from, to, fee, amount, note, "", lease, 0, 0)
+	from := pps.cfg.SrcAccount
+	tx, err := client.ConstructPayment(from, to, fee, amount, note[:], "", [32]byte{}, 0, 0)
 
 	if err != nil {
 		return transactions.Transaction{}, err
@@ -464,15 +465,18 @@ func (pps *WorkerState) makeNftTraffic(client libgoal.Client) (sentCount uint64,
 	fee := pps.fee()
 	if (len(pps.nftHolders) == 0) || ((float64(int(pps.cfg.NftAsaAccountInFlight)-len(pps.nftHolders)) / float64(pps.cfg.NftAsaAccountInFlight)) >= rand.Float64()) {
 		var addr string
-		var wallet []byte
-		wallet, err = client.GetUnencryptedWalletHandle()
-		if err != nil {
-			return
+
+		var seed [32]byte
+		crypto.RandBytes(seed[:])
+		privateKey := crypto.GenerateSignatureSecrets(seed)
+		publicKey := basics.Address(privateKey.SignatureVerifier)
+
+		pps.accounts[publicKey.String()] = &pingPongAccount{
+			sk: privateKey,
+			pk: publicKey,
 		}
-		addr, err = client.GenerateAddress(wallet)
-		if err != nil {
-			return
-		}
+		addr = publicKey.String()
+
 		fmt.Printf("new NFT holder %s\n", addr)
 		var proto config.ConsensusParams
 		proto, err = getProto(client)
@@ -482,7 +486,7 @@ func (pps *WorkerState) makeNftTraffic(client libgoal.Client) (sentCount uint64,
 		// enough for the per-asa minbalance and more than enough for the txns to create them
 		toSend := proto.MinBalance * uint64(pps.cfg.NftAsaPerAccount+1) * 2
 		pps.nftHolders[addr] = 0
-		_, err = pps.sendPaymentFromUnencryptedWallet(client, pps.cfg.SrcAccount, addr, fee, toSend, nil)
+		_, err = pps.sendPaymentFromSourceAccount(client, addr, fee, toSend)
 		if err != nil {
 			return
 		}
@@ -717,6 +721,12 @@ func (pps *WorkerState) nftSpamAssetName() string {
 	pps.localNftIndex++
 	return fmt.Sprintf("nft%d_%d", pps.nftStartTime, pps.localNftIndex)
 }
+func (pps *WorkerState) makeNextUniqueNoteField() []byte {
+	noteField := make([]byte, binary.MaxVarintLen64)
+	usedBytes := binary.PutUvarint(noteField[:], pps.incTransactionSalt)
+	pps.incTransactionSalt++
+	return noteField[:usedBytes]
+}
 
 func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, client libgoal.Client) (txn transactions.Transaction, sender string, err error) {
 	cfg := pps.cfg
@@ -724,17 +734,17 @@ func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, cli
 	sender = from
 	var noteField []byte
 	const pingpongTag = "pingpong"
-	const tagLen = uint32(len(pingpongTag))
-	const randomBaseLen = uint32(8)
-	const maxNoteFieldLen = uint32(1024)
-	var noteLength = uint32(tagLen) + randomBaseLen
+	const tagLen = len(pingpongTag)
 	// if random note flag set, then append a random number of additional bytes
 	if cfg.RandomNote {
-		noteLength = noteLength + rand.Uint32()%(maxNoteFieldLen-noteLength)
+		const maxNoteFieldLen = 1024
+		noteLength := tagLen + int(rand.Uint32())%(maxNoteFieldLen-tagLen)
+		noteField = make([]byte, noteLength)
+		copy(noteField, pingpongTag)
+		crypto.RandBytes(noteField[tagLen:])
+	} else {
+		noteField = pps.makeNextUniqueNoteField()
 	}
-	noteField = make([]byte, noteLength, noteLength)
-	copy(noteField, pingpongTag)
-	crypto.RandBytes(noteField[tagLen:])
 
 	// if random lease flag set, fill the lease field with random bytes
 	var lease [32]byte

@@ -141,10 +141,7 @@ func (pps *WorkerState) ensureAccounts(ac libgoal.Client, initCfg PpConfig) (acc
 			if len(accounts) != int(cfg.NumPartAccounts+1) {
 				fmt.Printf("Not enough accounts - creating %d more\n", int(cfg.NumPartAccounts+1)-len(accounts))
 			}
-			accounts, err = generateAccounts(ac, accounts, cfg.NumPartAccounts)
-			if err != nil {
-				return
-			}
+			accounts = generateAccounts(accounts, cfg.NumPartAccounts)
 		}
 	}
 
@@ -222,7 +219,7 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]*pingPongAccount,
 				fmt.Printf("Cannot fill asset creation txn\n")
 				return
 			}
-
+			tx.Note = pps.makeNextUniqueNoteField()
 			_, err = signAndBroadcastTransaction(accounts, addr, tx, client, cfg)
 			if err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset creation failed with error %v\n", err)
@@ -314,6 +311,7 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]*pingPongAccount,
 				fmt.Printf("Cannot fill asset optin %v in account %v\n", k, addr)
 				return
 			}
+			tx.Note = pps.makeNextUniqueNoteField()
 
 			_, err = signAndBroadcastTransaction(accounts, addr, tx, client, cfg)
 			if err != nil {
@@ -398,6 +396,7 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]*pingPongAccount,
 				return
 			}
 
+			tx.Note = pps.makeNextUniqueNoteField()
 			_, err = signAndBroadcastTransaction(accounts, signer, tx, client, cfg)
 			if err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset distribution failed with error %v\n", err)
@@ -635,7 +634,6 @@ func (pps *WorkerState) sendAsGroup(txgroup []transactions.Transaction, client l
 	var stxgroup []transactions.SignedTxn
 	for i, txn := range txgroup {
 		txn.Group = gid
-		//signedTxn, signErr := client.SignTransactionWithWallet(h, nil, txn)
 		signedTxn, signErr := signTxn(senders[i], txn, pps.accounts, pps.cfg)
 		if err != nil {
 			fmt.Printf("Cannot sign trx %+v with account %v\nerror %v\n", txn, senders[i], err)
@@ -762,9 +760,7 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 			}
 
 			// Ensure different txids
-			var note [8]byte
-			crypto.RandBytes(note[:])
-			tx.Note = note[:]
+			tx.Note = pps.makeNextUniqueNoteField()
 
 			txgroup = append(txgroup, tx)
 			accounts[appAccount.Address].balance -= tx.Fee.Raw
@@ -833,9 +829,7 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 				}
 
 				// Ensure different txids
-				var note [8]byte
-				crypto.RandBytes(note[:])
-				tx.Note = note[:]
+				tx.Note = pps.makeNextUniqueNoteField()
 
 				optIns[aidx] = append(optIns[aidx], addr)
 
@@ -889,7 +883,7 @@ func takeTopAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32
 	return
 }
 
-func generateAccounts(client libgoal.Client, allAccounts map[string]*pingPongAccount, numAccounts uint32) (map[string]*pingPongAccount, error) {
+func generateAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32) map[string]*pingPongAccount {
 	// Compute the number of accounts to generate
 	accountsRequired := int(numAccounts+1) - len(allAccounts)
 
@@ -908,5 +902,5 @@ func generateAccounts(client libgoal.Client, allAccounts map[string]*pingPongAcc
 		}
 	}
 
-	return allAccounts, nil
+	return allAccounts
 }

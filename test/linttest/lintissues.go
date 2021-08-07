@@ -14,26 +14,23 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package main
+package linttest
 
 import (
-	linter "github.com/algorand/go-algorand/cmd/partitiontest_linter"
-	"golang.org/x/tools/go/analysis"
-	"golang.org/x/tools/go/analysis/singlechecker"
+	"fmt"
 )
 
-type analyzerPlugin struct{}
-
-// This must be implemented
-func (*analyzerPlugin) GetAnalyzers() []*analysis.Analyzer {
-	return []*analysis.Analyzer{
-		linter.Analyzer,
-	}
+type myStruct struct {
+	a int32
+	b float64
+	c bool
 }
 
-// AnalyzerPlugin must be defined and named 'AnalyzerPlugin'
-var AnalyzerPlugin analyzerPlugin
+func (m *myStruct) couldError() error {
+	return fmt.Errorf("an error occurred")
+}
 
-func main() {
-	singlechecker.Main(linter.Analyzer)
+func doSomething() {
+	m := myStruct{a: 2, b: 2.0}
+	m.couldError()
 }
