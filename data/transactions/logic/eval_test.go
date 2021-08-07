@@ -1001,28 +1001,29 @@ func TestGlobal(t *testing.T) {
 
 	t.Parallel()
 	type desc struct {
-		lastField GlobalField
-		program   string
-		eval      func([]byte, EvalParams) (bool, error)
-		check     func([]byte, EvalParams) error
+		lastField    GlobalField
+		program      string
+		eval         func([]byte, EvalParams) (bool, error)
+		evalStateful func([]byte, EvalParams) (int, bool, error)
+		check        func([]byte, EvalParams) error
 	}
 	tests := map[uint64]desc{
-		0: {GroupSize, globalV1TestProgram, Eval, Check},
-		1: {GroupSize, globalV1TestProgram, Eval, Check},
+		0: {GroupSize, globalV1TestProgram, Eval, EvalStateful, Check},
+		1: {GroupSize, globalV1TestProgram, Eval, EvalStateful, Check},
 		2: {
-			CurrentApplicationID, globalV2TestProgram,
+			CurrentApplicationID, globalV2TestProgram, Eval,
 			EvalStateful, CheckStateful,
 		},
 		3: {
-			CreatorAddress, globalV3TestProgram,
+			CreatorAddress, globalV3TestProgram, Eval,
 			EvalStateful, CheckStateful,
 		},
 		4: {
-			CreatorAddress, globalV4TestProgram,
+			CreatorAddress, globalV4TestProgram, Eval,
 			EvalStateful, CheckStateful,
 		},
 		5: {
-			CreatorAddress, globalV5TestProgram,
+			CreatorAddress, globalV5TestProgram, Eval,
 			EvalStateful, CheckStateful,
 		},
 	}
@@ -1039,6 +1040,8 @@ func TestGlobal(t *testing.T) {
 			testProgram := tests[v].program
 			check := tests[v].check
 			eval := tests[v].eval
+			evalStateful := tests[v].evalStateful
+			var pass bool
 			for _, globalField := range GlobalFieldNames[:last] {
 				if !strings.Contains(testProgram, globalField) {
 					t.Errorf("TestGlobal missing field %v", globalField)
@@ -1067,7 +1070,11 @@ func TestGlobal(t *testing.T) {
 			ep.TxnGroup = txgroup
 			ep.Proto = &proto
 			ep.Ledger = ledger
-			pass, err := eval(ops.Program, ep)
+			if v < 2 {
+				pass, err = eval(ops.Program, ep)
+			} else {
+				_, pass, err = evalStateful(ops.Program, ep)
+			}
 			if !pass {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(sb.String())
@@ -1662,7 +1669,7 @@ int 100
 	ep.Ledger = ledger
 	ep.TxnGroup = txgroup
 	ep.GroupIndex = 1
-	pass, err := EvalStateful(ops.Program, ep)
+	_, pass, err := EvalStateful(ops.Program, ep)
 	if !pass || err != nil {
 		t.Log(hex.EncodeToString(ops.Program))
 		t.Log(sb.String())
@@ -1678,21 +1685,21 @@ int 0
 `
 
 	ops = testProg(t, futureCreatableIDProg, 4)
-	_, err = EvalStateful(ops.Program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gaid can't get creatable ID of txn ahead of the current one")
 
 	// should fail when accessing self
 	ep.GroupIndex = 0
 	ops = testProg(t, checkCreatableIDProg, 4)
-	_, err = EvalStateful(ops.Program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gaid is only for accessing creatable IDs of previous txns")
 	ep.GroupIndex = 1
 
 	// should fail on non-creatable
 	ep.TxnGroup[0].Txn.Type = protocol.PaymentTx
-	_, err = EvalStateful(ops.Program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "can't use gaid on txn that is not an app call nor an asset config txn")
 	ep.TxnGroup[0].Txn.Type = protocol.AssetConfigTx
@@ -1700,7 +1707,7 @@ int 0
 	// should fail when no creatable was created
 	var nilIndex basics.CreatableIndex
 	ledger.trackedCreatables[0] = nilIndex
-	_, err = EvalStateful(ops.Program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "the txn did not create anything")
 }
@@ -2361,7 +2368,7 @@ int 1`,
 			shouldErr := testCase.errContains != ""
 			didPass := true
 			for j, ops := range opsList {
-				pass, err := EvalStateful(ops.Program, epList[j])
+				_, pass, err := EvalStateful(ops.Program, epList[j])
 
 				// Confirm it errors or that the error message is the expected one
 				if !shouldErr {
@@ -2435,7 +2442,7 @@ int 1`,
 			var err error
 			switch failCase.runMode {
 			case runModeApplication:
-				_, err = EvalStateful(ops.Program, epList[1])
+				_, _, err = EvalStateful(ops.Program, epList[1])
 			default:
 				_, err = Eval(ops.Program, epList[1])
 			}
@@ -2506,7 +2513,7 @@ byte "txn 2"
 
 	// Evaluate app calls
 	for j, ops := range opsList {
-		pass, err := EvalStateful(ops.Program, epList[j])
+		_, pass, err := EvalStateful(ops.Program, epList[j])
 		require.NoError(t, err)
 		require.True(t, pass)
 	}
@@ -3937,7 +3944,7 @@ func TestApplicationsDisallowOldTeal(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", appsEnabledVersion))
 
-		_, err = EvalStateful(ops.Program, ep)
+		_, _, err = EvalStateful(ops.Program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", appsEnabledVersion))
 	}
@@ -3948,7 +3955,7 @@ func TestApplicationsDisallowOldTeal(t *testing.T) {
 	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 
-	_, err = EvalStateful(ops.Program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 }
 
@@ -4011,7 +4018,7 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), expected)
 
-				_, err = EvalStateful(ops.Program, ep)
+				_, _, err = EvalStateful(ops.Program, ep)
 				require.Error(t, err)
 				require.Contains(t, err.Error(), expected)
 
@@ -4032,7 +4039,7 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 				err = CheckStateful(ops.Program, ep)
 				require.NoError(t, err)
 
-				_, err = EvalStateful(ops.Program, ep)
+				_, _, err = EvalStateful(ops.Program, ep)
 				require.NoError(t, err)
 
 				err = Check(ops.Program, ep)
@@ -4096,7 +4103,7 @@ func TestAllowedOpcodesV2(t *testing.T) {
 			// all opcodes allowed in stateful mode so use CheckStateful/EvalStateful
 			err := CheckStateful(ops.Program, ep)
 			require.NoError(t, err, source)
-			_, err = EvalStateful(ops.Program, ep)
+			_, _, err = EvalStateful(ops.Program, ep)
 			if spec.Name != "return" {
 				// "return" opcode always succeeds so ignore it
 				require.Error(t, err, source)
@@ -4114,7 +4121,7 @@ func TestAllowedOpcodesV2(t *testing.T) {
 				_, err = Eval(ops.Program, ep)
 				require.Error(t, err, source)
 				require.Contains(t, err.Error(), "illegal opcode")
-				_, err = EvalStateful(ops.Program, ep)
+				_, _, err = EvalStateful(ops.Program, ep)
 				require.Error(t, err, source)
 				require.Contains(t, err.Error(), "illegal opcode")
 			}
@@ -4161,7 +4168,7 @@ func TestAllowedOpcodesV3(t *testing.T) {
 			// all opcodes allowed in stateful mode so use CheckStateful/EvalStateful
 			err := CheckStateful(ops.Program, ep)
 			require.NoError(t, err, source)
-			_, err = EvalStateful(ops.Program, ep)
+			_, _, err = EvalStateful(ops.Program, ep)
 			require.Error(t, err, source)
 			require.NotContains(t, err.Error(), "illegal opcode")
 
@@ -4176,7 +4183,7 @@ func TestAllowedOpcodesV3(t *testing.T) {
 				_, err = Eval(ops.Program, ep)
 				require.Error(t, err, source)
 				require.Contains(t, err.Error(), "illegal opcode")
-				_, err = EvalStateful(ops.Program, ep)
+				_, _, err = EvalStateful(ops.Program, ep)
 				require.Error(t, err, source)
 				require.Contains(t, err.Error(), "illegal opcode")
 			}

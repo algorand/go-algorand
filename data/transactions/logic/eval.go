@@ -216,6 +216,9 @@ type EvalParams struct {
 
 	// determines eval mode: runModeSignature or runModeApplication
 	runModeFlags runMode
+
+	// Add a field here to keep track of total pool of app call budget
+	PooledApplicationBudget int
 }
 
 type opEvalFunc func(cx *evalContext)
@@ -254,6 +257,9 @@ func (r runMode) String() string {
 func (ep EvalParams) budget() int {
 	if ep.runModeFlags == runModeSignature {
 		return int(ep.Proto.LogicSigMaxCost)
+	}
+	if ep.PooledApplicationBudget > ep.Proto.MaxAppProgramCost {
+		return ep.PooledApplicationBudget
 	}
 	return ep.Proto.MaxAppProgramCost
 }
@@ -350,11 +356,12 @@ var errLogicSigNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
 // EvalStateful executes stateful TEAL program
-func EvalStateful(program []byte, params EvalParams) (pass bool, err error) {
+func EvalStateful(program []byte, params EvalParams) (cost int, pass bool, err error) {
 	var cx evalContext
 	cx.EvalParams = params
 	cx.runModeFlags = runModeApplication
 	pass, err = eval(program, &cx)
+	cost = cx.cost
 
 	// set side effects
 	cx.PastSideEffects[cx.GroupIndex].setScratchSpace(cx.scratch)

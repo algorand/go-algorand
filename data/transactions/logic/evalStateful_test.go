@@ -592,20 +592,23 @@ pop
 !=
 `
 	type desc struct {
-		source string
-		eval   func([]byte, EvalParams) (bool, error)
-		check  func([]byte, EvalParams) error
+		source       string
+		eval         func([]byte, EvalParams) (bool, error)
+		evalStateful func([]byte, EvalParams) (int, bool, error)
+		check        func([]byte, EvalParams) error
 	}
 	tests := map[runMode]desc{
 		runModeSignature: {
-			source: opcodesRunModeAny + opcodesRunModeSignature,
-			eval:   func(program []byte, ep EvalParams) (bool, error) { return Eval(program, ep) },
-			check:  func(program []byte, ep EvalParams) error { return Check(program, ep) },
+			source:       opcodesRunModeAny + opcodesRunModeSignature,
+			eval:         func(program []byte, ep EvalParams) (bool, error) { return Eval(program, ep) },
+			evalStateful: func(program []byte, ep EvalParams) (int, bool, error) { return EvalStateful(program, ep) },
+			check:        func(program []byte, ep EvalParams) error { return Check(program, ep) },
 		},
 		runModeApplication: {
-			source: opcodesRunModeAny + opcodesRunModeApplication,
-			eval:   func(program []byte, ep EvalParams) (bool, error) { return EvalStateful(program, ep) },
-			check:  func(program []byte, ep EvalParams) error { return CheckStateful(program, ep) },
+			source:       opcodesRunModeAny + opcodesRunModeApplication,
+			eval:         func(program []byte, ep EvalParams) (bool, error) { return Eval(program, ep) },
+			evalStateful: func(program []byte, ep EvalParams) (int, bool, error) { return EvalStateful(program, ep) },
+			check:        func(program []byte, ep EvalParams) error { return CheckStateful(program, ep) },
 		},
 	}
 
@@ -653,7 +656,11 @@ pop
 
 			err := test.check(ops.Program, ep)
 			require.NoError(t, err)
-			_, err = test.eval(ops.Program, ep)
+			if mode == runModeSignature {
+				_, err = test.eval(ops.Program, ep)
+			} else {
+				_, _, err = test.evalStateful(ops.Program, ep)
+			}
 			if err != nil {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(sb.String())
@@ -671,16 +678,19 @@ pop
 			ep := defaultEvalParams(nil, nil)
 			err = test.check(ops.Program, ep)
 			require.NoError(t, err)
-			_, err = test.eval(ops.Program, ep)
+			if mode == runModeSignature {
+				_, err = test.eval(ops.Program, ep)
+			} else {
+				_, _, err = test.evalStateful(ops.Program, ep)
+			}
 			require.Error(t, err)
 			require.NotContains(t, err.Error(), "not allowed in current mode")
 			require.Contains(t, err.Error(), "err opcode")
 		})
 	}
 
-	// check ed25519verify and arg are not allowed in statefull mode
+	// check that arg is not allowed in stateful mode
 	disallowed := []string{
-		"byte 0x01\nbyte 0x01\nbyte 0x01\ned25519verify",
 		"arg 0",
 		"arg_0",
 		"arg_1",
@@ -692,7 +702,7 @@ pop
 		ep := defaultEvalParams(nil, nil)
 		err := CheckStateful(ops.Program, ep)
 		require.Error(t, err)
-		_, err = EvalStateful(ops.Program, ep)
+		_, _, err = EvalStateful(ops.Program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "not allowed in current mode")
 	}
@@ -774,7 +784,7 @@ func testApp(t *testing.T, program string, ep EvalParams, problems ...string) ba
 
 	sb := &strings.Builder{}
 	ep.Trace = sb
-	pass, err = EvalStateful(ops.Program, ep)
+	_, pass, err = EvalStateful(ops.Program, ep)
 	if len(problems) == 0 {
 		require.NoError(t, err, sb.String())
 		require.True(t, pass, sb.String())
@@ -1344,7 +1354,7 @@ intc_2 // 1
 	ops := testProg(t, source, AssemblerMaxVersion)
 	require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_holding_get"].Opcode, ops.Program[8])
 	ops.Program[9] = 0x02
-	_, err := EvalStateful(ops.Program, now)
+	_, _, err := EvalStateful(ops.Program, now)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid asset holding field 2")
 
@@ -1369,7 +1379,7 @@ intc_1
 	ops = testProg(t, source, AssemblerMaxVersion)
 	require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_params_get"].Opcode, ops.Program[6])
 	ops.Program[7] = 0x20
-	_, err = EvalStateful(ops.Program, now)
+	_, _, err = EvalStateful(ops.Program, now)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid asset params field 32")
 
@@ -1511,7 +1521,7 @@ intc_1
 			ep.Txn.Txn.ApplicationID = 100
 			err = CheckStateful(ops.Program, ep)
 			require.NoError(t, err)
-			_, err = EvalStateful(ops.Program, ep)
+			_, _, err = EvalStateful(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "ledger not available")
 
@@ -1525,19 +1535,19 @@ intc_1
 			saved := ops.Program[firstCmdOffset]
 			require.Equal(t, OpsByName[0]["intc_0"].Opcode, saved)
 			ops.Program[firstCmdOffset] = OpsByName[0]["intc_1"].Opcode
-			_, err = EvalStateful(ops.Program, ep)
+			_, _, err = EvalStateful(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid Account reference 100")
 
 			ops.Program[firstCmdOffset] = saved
-			_, err = EvalStateful(ops.Program, ep)
+			_, _, err = EvalStateful(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "no app for account")
 
 			ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
 
 			if name == "read" {
-				_, err = EvalStateful(ops.Program, ep)
+				_, _, err = EvalStateful(ops.Program, ep)
 				require.Error(t, err)
 				require.Contains(t, err.Error(), "err opcode") // no such key
 			}
@@ -1546,7 +1556,7 @@ intc_1
 			ledger.balances[txn.Txn.Sender].locals[100]["ALGOA"] = basics.TealValue{Type: basics.TealUintType, Uint: 1}
 
 			ledger.reset()
-			pass, err := EvalStateful(ops.Program, ep)
+			_, pass, err := EvalStateful(ops.Program, ep)
 			require.NoError(t, err)
 			require.True(t, pass)
 			delta, err := ledger.GetDelta(&ep.Txn.Txn)
@@ -1611,7 +1621,7 @@ int 0x77
 	require.NoError(t, err)
 	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	pass, err := EvalStateful(ops.Program, ep)
+	_, pass, err := EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err := ledger.GetDelta(&ep.Txn.Txn)
@@ -1654,7 +1664,7 @@ int 0x77
 	require.NoError(t, err)
 	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
+	_, pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -1689,7 +1699,7 @@ exist2:
 
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
+	_, pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -1710,7 +1720,7 @@ int 1
 
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
+	_, pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -1743,7 +1753,7 @@ int 0x78
 
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
+	_, pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -1774,7 +1784,7 @@ app_local_put
 
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
+	_, pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -1816,7 +1826,7 @@ int 1
 	require.NoError(t, err)
 	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
+	_, pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -1881,7 +1891,7 @@ int 1
 			txn := makeSampleTxn()
 			ep := defaultEvalParams(nil, nil)
 			ep.Txn = &txn
-			_, err = EvalStateful(ops.Program, ep)
+			_, _, err = EvalStateful(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "ledger not available")
 
@@ -1893,7 +1903,7 @@ int 1
 			ep.Ledger = ledger
 
 			txn.Txn.ApplicationID = 100
-			_, err = EvalStateful(ops.Program, ep)
+			_, _, err = EvalStateful(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "no such app")
 
@@ -1901,14 +1911,14 @@ int 1
 
 			// a special test for read
 			if name == "read" {
-				_, err = EvalStateful(ops.Program, ep)
+				_, _, err = EvalStateful(ops.Program, ep)
 				require.Error(t, err)
 				require.Contains(t, err.Error(), "err opcode") // no such key
 			}
 			ledger.applications[100].GlobalState["ALGO"] = basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
 
 			ledger.reset()
-			pass, err := EvalStateful(ops.Program, ep)
+			_, pass, err := EvalStateful(ops.Program, ep)
 			require.NoError(t, err)
 			require.True(t, pass)
 			delta, err := ledger.GetDelta(&ep.Txn.Txn)
@@ -2000,7 +2010,7 @@ int 0x77
 	require.NoError(t, err)
 	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	pass, err := EvalStateful(ops.Program, ep)
+	_, pass, err := EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err := ledger.GetDelta(&ep.Txn.Txn)
@@ -2035,7 +2045,7 @@ int 0x77
 
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
+	_, pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -2066,7 +2076,7 @@ int 0x77
 
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
+	_, pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -2116,7 +2126,7 @@ byte 0x414c474f
 	ep.Trace = &sb
 	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
+	_, pass, err = EvalStateful(ops.Program, ep)
 	if !pass {
 		t.Log(hex.EncodeToString(ops.Program))
 		t.Log(sb.String())
@@ -2611,7 +2621,7 @@ func TestEnumFieldErrors(t *testing.T) {
 	_, err = Eval(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Amount expected field type is []byte but got uint64")
-	_, err = EvalStateful(ops.Program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Amount expected field type is []byte but got uint64")
 
@@ -2627,7 +2637,7 @@ func TestEnumFieldErrors(t *testing.T) {
 	_, err = Eval(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "MinTxnFee expected field type is []byte but got uint64")
-	_, err = EvalStateful(ops.Program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "MinTxnFee expected field type is []byte but got uint64")
 
@@ -2667,7 +2677,7 @@ pop
 
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	_, err = EvalStateful(ops.Program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "AssetBalance expected field type is []byte but got uint64")
 
@@ -2683,7 +2693,7 @@ pop
 
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	_, err = EvalStateful(ops.Program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "AssetTotal expected field type is []byte but got uint64")
 }

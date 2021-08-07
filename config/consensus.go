@@ -108,6 +108,11 @@ type ConsensusParams struct {
 	// each Txn has a MinFee.
 	EnableFeePooling bool
 
+	// EnableAppFeePooling specifies that the sum of fees for application calls
+	// in a group is checked against the sum of the budget for application calls,
+	// rather than check each individual app call is within the budget.
+	EnableAppFeePooling bool
+
 	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
 	// unit.
 	//
@@ -991,6 +996,9 @@ func initConsensusProtocols() {
 
 	// Enable ExtraProgramPages for application update
 	vFuture.EnableExtraPagesOnAppUpdate = true
+
+	// Enable
+	vFuture.EnableAppFeePooling = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

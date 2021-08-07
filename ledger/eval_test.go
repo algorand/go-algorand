@@ -560,6 +560,266 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
 }
 
+func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalProgram string, consensusVersion protocol.ConsensusVersion) (*BlockEvaluator, error) {
+	genesisInitState, addrs, keys := genesis(10)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	require.NoError(t, err)
+	eval.validate = true
+	eval.generate = false
+	eval.proto = config.Consensus[consensusVersion]
+	// eval.proto.EnableAppFeePooling = true
+
+	ops, err := logic.AssembleString(approvalProgram)
+	require.NoError(t, err, ops.Errors)
+	approval := ops.Program
+	ops, err = logic.AssembleString("#pragma version 4\nint 1")
+	require.NoError(t, err)
+	clear := ops.Program
+
+	genHash := genesisInitState.Block.BlockHeader.GenesisHash
+	header := transactions.Header{
+		Sender:      addrs[0],
+		Fee:         minFee,
+		FirstValid:  newBlock.Round(),
+		LastValid:   newBlock.Round(),
+		GenesisHash: genHash,
+	}
+	appcall1 := transactions.Transaction{
+		Type:   protocol.ApplicationCallTx,
+		Header: header,
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			GlobalStateSchema: schema,
+			ApprovalProgram:   approval,
+			ClearStateProgram: clear,
+		},
+	}
+
+	appcall2 := transactions.Transaction{
+		Type:   protocol.ApplicationCallTx,
+		Header: header,
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: basics.AppIndex(1),
+		},
+	}
+
+	appcall3 := appcall2
+	appcall3.Header.Sender = addrs[1]
+
+	var group transactions.TxGroup
+	group.TxGroupHashes = []crypto.Digest{crypto.HashObj(appcall1), crypto.HashObj(appcall2), crypto.HashObj(appcall3)}
+	appcall1.Group = crypto.HashObj(group)
+	appcall2.Group = crypto.HashObj(group)
+	appcall3.Group = crypto.HashObj(group)
+	stxn1 := appcall1.Sign(keys[0])
+	stxn2 := appcall2.Sign(keys[0])
+	stxn3 := appcall3.Sign(keys[1])
+
+	g := []transactions.SignedTxnWithAD{
+		{
+			SignedTxn: stxn1,
+		},
+		{
+			SignedTxn: stxn2,
+		},
+		{
+			SignedTxn: stxn3,
+		},
+	}
+	txgroup := []transactions.SignedTxn{stxn1, stxn2, stxn3}
+	err = eval.TestTransactionGroup(txgroup)
+	if err != nil {
+		return eval, err
+	}
+	err = eval.transactionGroup(g)
+	return eval, err
+}
+
+func TestProtocolAllowsAppPooling(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	approvalProgram := `#pragma version 4
+	txn ApplicationID
+	bz create
+	byte "caller"
+	pop
+	b ok
+create:
+	byte 0x01
+	byte "ZC9KNzlnWTlKZ1pwSkNzQXVzYjNBcG1xTU9YbkRNWUtIQXNKYVk2RzRBdExPakQx"
+	addr DROUIZXGT3WFJR3QYVZWTR5OJJXJCMOLS7G4FUGZDSJM5PNOVOREH6HIZE
+	ed25519verify
+	pop
+ok:
+	int 1`
+
+	_, err := testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, approvalProgram, protocol.ConsensusV28)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "dynamic cost budget of 700 exceeded, executing ed25519verify")
+
+	_, err = testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, approvalProgram, protocol.ConsensusFuture)
+	require.NoError(t, err)
+}
+
+// TestEvalAppExceedsPooledBudgetWithTxnGroup ensures app call txns cannot exceed
+// the total pooled budget for group txns
+func TestEvalAppExceedsPooledBudgetWithTxnGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	approvalProgram1 := `#pragma version 4
+	txn ApplicationID
+	bz create
+	byte "caller"
+	sha256
+	sha256
+	pop
+	b ok
+create:
+	byte "creator"
+	pop
+ok:
+	byte "ok"
+	keccak256
+	keccak256
+	keccak256
+	keccak256
+	keccak256
+	pop
+	int 1`
+
+	approvalProgram2 := `#pragma version 4
+	txn ApplicationID
+	bz create
+	byte "caller"
+	keccak256
+	keccak256
+	keccak256
+	keccak256
+	keccak256
+	keccak256
+	keccak256
+	keccak256
+	pop
+	b ok
+create:
+ok:
+	byte "ok"
+	pop
+	int 1`
+
+	approvalProgram3 := `#pragma version 4
+	txn ApplicationID
+	bz create
+	byte "caller"
+	sha256
+	pop
+	b ok
+create:
+	byte "creator"
+	pop
+	byte 0x01
+	byte "ZC9KNzlnWTlKZ1pwSkNzQXVzYjNBcG1xTU9YbkRNWUtIQXNKYVk2RzRBdExPakQx"
+	addr DROUIZXGT3WFJR3QYVZWTR5OJJXJCMOLS7G4FUGZDSJM5PNOVOREH6HIZE
+	ed25519verify
+	pop
+ok:
+	byte "ok"
+	sha256
+	pop
+	int 1`
+
+	cases := []struct {
+		prog          string
+		expectedError string
+	}{
+		{approvalProgram1, "Costs exceed total pooled budget: 2113 > 2100"},
+		{approvalProgram2, "Costs exceed total pooled budget: 2101 > 2100"},
+		{approvalProgram3, "Costs exceed total pooled budget: 2102 > 2100"},
+	}
+
+	for _, testCase := range cases {
+		_, err := testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, testCase.prog, protocol.ConsensusFuture)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), testCase.expectedError)
+	}
+}
+
+// TestEvalAppAcceptsPooledBudgetWithTxnGroup ensures app call txns can correctly
+// pool the budget for group txns
+func TestEvalAppAcceptsPooledBudgetWithTxnGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	approvalProgram1 := `#pragma version 4
+	txn ApplicationID
+	bz create
+	byte "caller"
+	keccak256
+	keccak256
+	keccak256
+	keccak256
+	keccak256
+	keccak256
+	pop
+	b ok
+create:
+	byte "creator"
+	pop
+ok:
+	int 1`
+
+	approvalProgram2 := `#pragma version 4
+	txn ApplicationID
+	bz create
+	byte "caller"
+	pop
+	b ok
+create:
+	byte "creator"
+	keccak256
+	keccak256
+	keccak256
+	keccak256
+	keccak256
+	keccak256
+	pop
+ok:
+	int 1`
+
+	approvalProgram3 := `#pragma version 4
+	txn ApplicationID
+	bz create
+	byte "caller"
+	pop
+	b ok
+create:
+	byte 0x01
+	byte "ZC9KNzlnWTlKZ1pwSkNzQXVzYjNBcG1xTU9YbkRNWUtIQXNKYVk2RzRBdExPakQx"
+	addr DROUIZXGT3WFJR3QYVZWTR5OJJXJCMOLS7G4FUGZDSJM5PNOVOREH6HIZE
+	ed25519verify
+	pop
+ok:
+	int 1`
+
+	cases := []string{
+		approvalProgram1,
+		approvalProgram2,
+		approvalProgram3,
+	}
+
+	for _, testCase := range cases {
+		_, err := testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, testCase, protocol.ConsensusFuture)
+		require.NoError(t, err)
+	}
+}
+
 func BenchmarkBlockEvaluatorRAMCrypto(b *testing.B) {
 	benchmarkBlockEvaluator(b, true, true)
 }

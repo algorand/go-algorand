@@ -73,6 +73,9 @@ type roundCowState struct {
 	groupIdx int
 	// track creatables created during each transaction in the round
 	trackedCreatables map[int]basics.CreatableIndex
+
+	// Pooled costs for App calls in group transactions
+	pooledApplicationCosts int
 }
 
 func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64, hint int) *roundCowState {
