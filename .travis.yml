@@ -7,7 +7,7 @@ if: tag IS blank
 
 stages:
   - name: build_commit
-    if: NOT (branch =~ /^rel\//) AND type != pull_request
+    if: NOT (branch =~ /^hotfix\//) AND NOT (branch =~ /^rel\//) AND type != pull_request
   - name: build_pr
     if: type = pull_request
   - name: build_release
