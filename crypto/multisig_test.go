@@ -40,36 +40,36 @@ func MultisigSigPrint(sig MultisigSig) {
 //
 func TestMultisigAddr(t *testing.T) {
 	var s Seed
-	var userkeypair []*SecretKey
-	var pk []PublicKey
+	var secrets []*SecretKey
+	var pks []PublicKey
 	var err error
 
 	version := uint8(1)
 	threshold := uint8(3)
 
-	userkeypair = make([]*SecretKey, 4)
+	secrets = make([]*SecretKey, 4)
 
 	for i := 0; i < 4; i++ {
 		RandBytes(s[:])
-		userkeypair[i] = GenerateSignatureSecrets(s)
+		secrets[i] = GenerateSignatureSecrets(s)
 	}
 
-	pk = make([]PublicKey, 2)
-	pk[0] = userkeypair[0].SignatureVerifier
-	pk[1] = userkeypair[1].SignatureVerifier
+	pks = make([]PublicKey, 2)
+	pks[0] = secrets[0].SignatureVerifier
+	pks[1] = secrets[1].SignatureVerifier
 
 	// test if invalid threshold can be detected
 	// #keys= 2 < threshold = 3
-	_, err = MultisigAddrGen(version, threshold, pk)
-	require.Error(t, err, "MultisigAddr: unable to detect invalid threshold (keys == %d, threshold == %d)", len(pk), threshold)
+	_, err = MultisigAddrGen(version, threshold, pks)
+	require.Error(t, err, "MultisigAddr: unable to detect invalid threshold (keys == %d, threshold == %d)", len(pks), threshold)
 	// #keys = 3 == threshold = 3
-	pk = append(pk, userkeypair[2].SignatureVerifier)
-	_, err = MultisigAddrGen(version, threshold, pk)
-	require.NoError(t, err, "MultisigAddr: unexpected failure generating message digest with %d keys and a threshold of %d", len(pk), threshold)
+	pks = append(pks, secrets[2].SignatureVerifier)
+	_, err = MultisigAddrGen(version, threshold, pks)
+	require.NoError(t, err, "MultisigAddr: unexpected failure generating message digest with %d keys and a threshold of %d", len(pks), threshold)
 	// #keys = 4 > threshold = 3
-	pk = append(pk, userkeypair[3].SignatureVerifier)
-	_, err = MultisigAddrGen(version, threshold, pk)
-	require.NoError(t, err, "MultisigAddr: unexpected failure generating message digest with %d keys and a threshold of %d", len(pk), threshold)
+	pks = append(pks, secrets[3].SignatureVerifier)
+	_, err = MultisigAddrGen(version, threshold, pks)
+	require.NoError(t, err, "MultisigAddr: unexpected failure generating message digest with %d keys and a threshold of %d", len(pks), threshold)
 }
 
 // this test generates a set of 4 public keys for a threshold of 3
@@ -80,8 +80,8 @@ func TestMultisig(t *testing.T) {
 	var sigs []MultisigSig
 
 	var s Seed
-	var userkeypair []*SecretKey
-	var pk []PublicKey
+	var secrets []*SecretKey
+	var pks []PublicKey
 
 	var err error
 	var addr Digest
@@ -90,33 +90,33 @@ func TestMultisig(t *testing.T) {
 	threshold := uint8(3)
 	txid := TestingHashable{[]byte("test: txid 1000")}
 
-	userkeypair = make([]*SecretKey, 5)
+	secrets = make([]*SecretKey, 5)
 	for i := 0; i < 5; i++ {
 		RandBytes(s[:])
-		userkeypair[i] = GenerateSignatureSecrets(s)
+		secrets[i] = GenerateSignatureSecrets(s)
 	}
 
 	// addr  = hash (... |pk0|pk1|pk2|pk3), pk4 is not included
-	pk = make([]PublicKey, 4)
-	pk[0] = userkeypair[0].SignatureVerifier
-	pk[1] = userkeypair[1].SignatureVerifier
-	pk[2] = userkeypair[2].SignatureVerifier
-	pk[3] = userkeypair[3].SignatureVerifier
-	addr, err = MultisigAddrGen(version, threshold, pk)
+	pks = make([]PublicKey, 4)
+	pks[0] = secrets[0].SignatureVerifier
+	pks[1] = secrets[1].SignatureVerifier
+	pks[2] = secrets[2].SignatureVerifier
+	pks[3] = secrets[3].SignatureVerifier
+	addr, err = MultisigAddrGen(version, threshold, pks)
 	require.NoError(t, err, "Multisig: unexpected failure generating message digest")
 
 	// now testing signing functions
 	// check if invalid version can be detected
-	_, err = MultisigSign(txid, addr, version+1, threshold, pk, *userkeypair[0])
+	_, err = MultisigSign(txid, addr, version+1, threshold, pks, *secrets[0])
 	require.Error(t, err, "should be able to detect invalid version number")
 	//	check if invalid secret key can be detected
-	_, err = MultisigSign(txid, addr, version, threshold, pk, *userkeypair[4])
+	_, err = MultisigSign(txid, addr, version, threshold, pks, *secrets[4])
 	require.Error(t, err, "should be able to detect invalid secret key used")
 
 	// test assembling
 	// test1: assemble a single signature -- should return failure
 	sigs = make([]MultisigSig, 1)
-	sigs[0], err = MultisigSign(txid, addr, version, threshold, pk, *userkeypair[3])
+	sigs[0], err = MultisigSign(txid, addr, version, threshold, pks, *secrets[3])
 	require.NoError(t, err, "Multisig: unexpected failure in multisig signing")
 	_, err = MultisigAssemble(sigs)
 	require.Error(t, err, "should be able to detect insufficient signatures for assembling")
@@ -124,17 +124,25 @@ func TestMultisig(t *testing.T) {
 	// test2: assemble 3 signatures
 	// signing three signatures with pk0, pk1 and pk2
 	sigs = make([]MultisigSig, 3)
-	sigs[0], err = MultisigSign(txid, addr, version, threshold, pk, *userkeypair[0])
+	sigs[0], err = MultisigSign(txid, addr, version, threshold, pks, *secrets[0])
 	require.NoError(t, err, "Multisig: unexpected failure in generating sig from pk 0")
-	sigs[1], err = MultisigSign(txid, addr, version, threshold, pk, *userkeypair[1])
+	sigs[1], err = MultisigSign(txid, addr, version, threshold, pks, *secrets[1])
 	require.NoError(t, err, "Multisig: unexpected failure in generating sig from pk 1")
-	sigs[2], err = MultisigSign(txid, addr, version, threshold, pk, *userkeypair[2])
+	sigs[2], err = MultisigSign(txid, addr, version, threshold, pks, *secrets[2])
 	require.NoError(t, err, "Multisig: unexpected failure in generating sig from pk 2")
 	msig, err = MultisigAssemble(sigs)
 	require.NoError(t, err, "Multisig: unexpected failure when assembling multisig")
 	verify, err := MultisigVerify(txid, addr, msig)
-	require.True(t, verify, "Multisig: verification failed, verify flag was false")
 	require.NoError(t, err, "Multisig: unexpected verification failure with err")
+	require.True(t, verify, "Multisig: verification failed, verify flag was false")
+
+	//test3: use the batch verification
+	br := MakeBatchVerifier(1)
+	verify, err = MultisigBatchVerify(txid, addr, msig, br)
+	require.NoError(t, err, "Multisig: unexpected verification failure with err")
+	require.True(t, verify, "Multisig: verification failed, verify flag was false")
+	res := br.Verify()
+	require.NoError(t, res, "Multisig: batch verification failed")
 }
 
 // test multisig merge functions
@@ -149,8 +157,8 @@ func TestMultisigAddAndMerge(t *testing.T) {
 	var sigs []MultisigSig
 
 	var s Seed
-	var userkeypair []*SecretKey
-	var pk []PublicKey
+	var secrets []*SecretKey
+	var pks []PublicKey
 
 	var err error
 	var addr Digest
@@ -159,31 +167,31 @@ func TestMultisigAddAndMerge(t *testing.T) {
 	threshold := uint8(3)
 	txid := TestingHashable{[]byte("test: txid 1000")}
 
-	userkeypair = make([]*SecretKey, 5)
+	secrets = make([]*SecretKey, 5)
 
 	RandBytes(s[:])
 
-	pk = make([]PublicKey, 5)
+	pks = make([]PublicKey, 5)
 	for i := 0; i < 5; i++ {
-		userkeypair[i] = GenerateSignatureSecrets(s)
-		pk[i] = userkeypair[i].SignatureVerifier
+		secrets[i] = GenerateSignatureSecrets(s)
+		pks[i] = secrets[i].SignatureVerifier
 	}
 
 	// addr = hash (... |pk0|pk1|pk2|pk3|pk4)
-	addr, err = MultisigAddrGen(version, threshold, pk)
+	addr, err = MultisigAddrGen(version, threshold, pks)
 	require.NoError(t, err, "Multisig: unexpected failure generating message digest")
 
 	// msig1 = {sig0,sig1}
 	sigs = make([]MultisigSig, 2)
-	sigs[0], err = MultisigSign(txid, addr, version, threshold, pk, *userkeypair[0])
+	sigs[0], err = MultisigSign(txid, addr, version, threshold, pks, *secrets[0])
 	require.NoError(t, err, "Multisig: unexpected failure signing with pk 0")
-	sigs[1], err = MultisigSign(txid, addr, version, threshold, pk, *userkeypair[1])
+	sigs[1], err = MultisigSign(txid, addr, version, threshold, pks, *secrets[1])
 	require.NoError(t, err, "Multisig: unexpected failure signing with pk 1")
 	msig1, err = MultisigAssemble(sigs)
 	require.NoError(t, err, "Multisig: unexpected failure assembling message from signatures 0 and 1")
 	// add sig3 to msig and then verify
 	sigs = make([]MultisigSig, 1)
-	sigs[0], err = MultisigSign(txid, addr, version, threshold, pk, *userkeypair[2])
+	sigs[0], err = MultisigSign(txid, addr, version, threshold, pks, *secrets[2])
 	require.NoError(t, err, "Multisig: unexpected failure signing with pk 2")
 	err = MultisigAdd(sigs, &msig1)
 	require.NoError(t, err, "Multisig: unexpected err adding pk 2 signature to that of pk 0 and 1")
@@ -193,9 +201,9 @@ func TestMultisigAddAndMerge(t *testing.T) {
 
 	// msig2 = {sig3, sig4}
 	sigs = make([]MultisigSig, 2)
-	sigs[0], err = MultisigSign(txid, addr, version, threshold, pk, *userkeypair[3])
+	sigs[0], err = MultisigSign(txid, addr, version, threshold, pks, *secrets[3])
 	require.NoError(t, err, "Multisig: unexpected failure signing with pk 3")
-	sigs[1], err = MultisigSign(txid, addr, version, threshold, pk, *userkeypair[4])
+	sigs[1], err = MultisigSign(txid, addr, version, threshold, pks, *secrets[4])
 	require.NoError(t, err, "Multisig: unexpected failure signing with pk 4")
 	msig2, err = MultisigAssemble(sigs)
 	require.NoError(t, err, "Multisig: unexpected failure assembling message from signatures 3 and 4")
@@ -203,23 +211,248 @@ func TestMultisigAddAndMerge(t *testing.T) {
 	msigt, err := MultisigMerge(msig1, msig2)
 	require.NoError(t, err, "Multisig: unexpected failure merging multisig messages {0, 1, 2} and {3, 4}")
 	verify, err = MultisigVerify(txid, addr, msigt)
-	require.True(t, verify, "Multisig: verification failed, verify flag was false")
 	require.NoError(t, err, "Multisig: unexpected verification failure with err")
+	require.True(t, verify, "Multisig: verification failed, verify flag was false")
 
 	// create a valid duplicate on purpose
 	// msig1 = {sig0, sig1, sig2}
 	// msig2 = {sig2, sig3, sig4}
 	// then verify the merged signature
 	sigs = make([]MultisigSig, 1)
-	sigs[0], err = MultisigSign(txid, addr, version, threshold, pk, *userkeypair[2])
+	sigs[0], err = MultisigSign(txid, addr, version, threshold, pks, *secrets[2])
 	require.NoError(t, err, "Multisig: unexpected failure signing with pk 2")
 	err = MultisigAdd(sigs, &msig2)
 	require.NoError(t, err, "Multisig: unexpected failure adding pk 2 signature to that of pk 3 and 4")
 	msigt, err = MultisigMerge(msig1, msig2)
 	require.NoError(t, err, "Multisig: unexpected failure merging multisig messages {0, 1, 2} and {2, 3, 4}")
 	verify, err = MultisigVerify(txid, addr, msigt)
-	require.True(t, verify, "Multisig: verification failed, verify flag was false")
 	require.NoError(t, err, "Multisig: unexpected verification failure with err")
+	require.True(t, verify, "Multisig: verification failed, verify flag was false")
 
 	return
+}
+
+func TestEmptyMultisig(t *testing.T) {
+	var s Seed
+	var secrets *SecretKey
+	var pks []PublicKey
+
+	txid := TestingHashable{[]byte("test: txid 1000")}
+	version := uint8(1)
+	threshold := uint8(1)
+	RandBytes(s[:])
+	secrets = GenerateSignatureSecrets(s)
+	pks = make([]PublicKey, 1)
+	pks[0] = secrets.SignatureVerifier
+
+	addr, err := MultisigAddrGen(version, threshold, pks)
+	require.NoError(t, err, "Multisig: unexpected failure generating message digest")
+	emptyMutliSig := MultisigSig{Version: version, Threshold: threshold, Subsigs: make([]MultisigSubsig, 0)}
+	verify, err := MultisigVerify(txid, addr, emptyMutliSig)
+	require.False(t, verify, "Multisig: verification succeeded, it should failed")
+	require.Error(t, err, "Multisig: did not return error as expected")
+	br := MakeBatchVerifier(1)
+	verify, err = MultisigBatchVerify(txid, addr, emptyMutliSig, br)
+	require.False(t, verify, "Multisig: verification succeeded, it should failed")
+	require.Error(t, err, "Multisig: did not return error as expected")
+}
+
+func TestIncorrectAddrresInMultisig(t *testing.T) {
+	var s Seed
+	var secrets *SecretKey
+	var pks []PublicKey
+
+	txid := TestingHashable{[]byte("test: txid 1000")}
+	version := uint8(1)
+	threshold := uint8(1)
+	RandBytes(s[:])
+	secrets = GenerateSignatureSecrets(s)
+	pks = make([]PublicKey, 1)
+	pks[0] = secrets.SignatureVerifier
+
+	addr, err := MultisigAddrGen(version, threshold, pks)
+	require.NoError(t, err, "Multisig: unexpected failure generating message digest")
+	MutliSig, err := MultisigSign(txid, addr, version, threshold, pks, *secrets)
+	require.NoError(t, err, "Multisig: could not create mutlisig")
+	addr[0] = addr[0] + 1
+	verify, err := MultisigVerify(txid, addr, MutliSig)
+	require.False(t, verify, "Multisig: verification succeeded, it should failed")
+	require.Error(t, err, "Multisig: did not return error as expected")
+	br := MakeBatchVerifier(1)
+	verify, err = MultisigBatchVerify(txid, addr, MutliSig, br)
+	require.False(t, verify, "Multisig: verification succeeded, it should failed")
+	require.Error(t, err, "Multisig: did not return error as expected")
+
+}
+
+func TestMoreThanMaxSigsInMultisig(t *testing.T) {
+	var s Seed
+	var secrets []*SecretKey
+	var pks []PublicKey
+	multiSigLen := maxMultisig + 1
+	txid := TestingHashable{[]byte("test: txid 1000")}
+	version := uint8(1)
+	threshold := uint8(1)
+	pks = make([]PublicKey, multiSigLen)
+	secrets = make([]*SecretKey, multiSigLen)
+	for i := 0; i < multiSigLen; i++ {
+		RandBytes(s[:])
+		secrets[i] = GenerateSignatureSecrets(s)
+		pks[i] = secrets[i].SignatureVerifier
+	}
+
+	addr, err := MultisigAddrGen(version, threshold, pks)
+	require.NoError(t, err, "Multisig: unexpected failure generating message digest")
+
+	sigs := make([]MultisigSig, multiSigLen)
+
+	for i := 0; i < len(sigs); i++ {
+		sigs[i], err = MultisigSign(txid, addr, version, threshold, pks, *secrets[i])
+		require.NoError(t, err, "Multisig: unexpected failure in generating sig from pk %v", i)
+	}
+
+	msig, err := MultisigAssemble(sigs)
+	require.NoError(t, err, "Multisig: error assmeble multisig")
+	verify, err := MultisigVerify(txid, addr, msig)
+	require.False(t, verify, "Multisig: verification succeeded, it should failed")
+	require.Error(t, err, "Multisig: did not return error as expected")
+	br := MakeBatchVerifier(1)
+	verify, err = MultisigBatchVerify(txid, addr, msig, br)
+	require.False(t, verify, "Multisig: verification succeeded, it should failed")
+	require.Error(t, err, "Multisig: did not return error as expected")
+}
+
+func TestOneSignatureIsEmpty(t *testing.T) {
+	var s Seed
+	var secrets []*SecretKey
+	var pks []PublicKey
+	multiSigLen := 6
+	txid := TestingHashable{[]byte("test: txid 1000")}
+	version := uint8(1)
+	threshold := uint8(multiSigLen)
+	pks = make([]PublicKey, multiSigLen)
+	secrets = make([]*SecretKey, multiSigLen)
+	for i := 0; i < multiSigLen; i++ {
+		RandBytes(s[:])
+		secrets[i] = GenerateSignatureSecrets(s)
+		pks[i] = secrets[i].SignatureVerifier
+	}
+
+	addr, err := MultisigAddrGen(version, threshold, pks)
+	require.NoError(t, err, "Multisig: unexpected failure generating message digest")
+
+	sigs := make([]MultisigSig, multiSigLen)
+
+	for i := 0; i < multiSigLen; i++ {
+		sigs[i], err = MultisigSign(txid, addr, version, threshold, pks, *secrets[i])
+		require.NoError(t, err, "Multisig: unexpected failure in generating sig from pk %v", i)
+	}
+
+	msig, err := MultisigAssemble(sigs)
+	require.NoError(t, err, "Multisig: error assmeble multisig")
+	msig.Subsigs[0].Sig = Signature{}
+	verify, err := MultisigVerify(txid, addr, msig)
+	require.False(t, verify, "Multisig: verification succeeded, it should failed")
+	require.Error(t, err, "Multisig: did not return error as expected")
+	br := MakeBatchVerifier(1)
+	verify, err = MultisigBatchVerify(txid, addr, msig, br)
+	require.False(t, verify, "Multisig: verification succeeded, it should failed")
+	require.Error(t, err, "Multisig: did not return error as expected")
+}
+
+// in this test we want to test what happen if one of the signatures are not valid.
+// we create case where are enoguht valid signatures (that pass the thrashold). but since one is false. everything fails.
+func TestOneSignatureIsInvalid(t *testing.T) {
+	var s Seed
+	var userkeypair []*SecretKey
+	var pks []PublicKey
+	multiSigLen := 6
+	txid := TestingHashable{[]byte("test: txid 1000")}
+	version := uint8(1)
+	threshold := uint8(3)
+	pks = make([]PublicKey, multiSigLen)
+	userkeypair = make([]*SecretKey, multiSigLen)
+	for i := 0; i < multiSigLen; i++ {
+		RandBytes(s[:])
+		userkeypair[i] = GenerateSignatureSecrets(s)
+		pks[i] = userkeypair[i].SignatureVerifier
+	}
+
+	addr, err := MultisigAddrGen(version, threshold, pks)
+	require.NoError(t, err, "Multisig: unexpected failure generating message digest")
+
+	sigs := make([]MultisigSig, multiSigLen)
+
+	for i := 0; i < multiSigLen; i++ {
+		sigs[i], err = MultisigSign(txid, addr, version, threshold, pks, *userkeypair[i])
+		require.NoError(t, err, "Multisig: unexpected failure in generating sig from pk %v", i)
+	}
+
+	sigs[1].Subsigs[1].Sig[5] = sigs[1].Subsigs[1].Sig[5] + 1
+	msig, err := MultisigAssemble(sigs)
+	require.NoError(t, err, "Multisig: error assmeble multisig")
+	verify, err := MultisigVerify(txid, addr, msig)
+	require.False(t, verify, "Multisig: verification succeeded, it should failed")
+	require.Error(t, err, "Multisig: did not return error as expected")
+	br := MakeBatchVerifier(1)
+	verify, err = MultisigBatchVerify(txid, addr, msig, br)
+	require.NoError(t, err, "Multisig: did not return error as expected")
+	require.True(t, verify, "Multisig: verification succeeded, it should failed")
+	res := br.Verify()
+	require.Error(t, res, "Multisig: batch verification passed on broken signature")
+
+}
+
+func TestMultisigLessThanTrashold(t *testing.T) {
+	var msig MultisigSig
+	var sigs []MultisigSig
+
+	var s Seed
+	var secrets []*SecretKey
+	var pks []PublicKey
+
+	var err error
+	var addr Digest
+
+	version := uint8(1)
+	threshold := uint8(3)
+	txid := TestingHashable{[]byte("test: txid 1000")}
+
+	secrets = make([]*SecretKey, 4)
+	for i := 0; i < 4; i++ {
+		RandBytes(s[:])
+		secrets[i] = GenerateSignatureSecrets(s)
+	}
+
+	// addr  = hash (... |pk0|pk1|pk2|pk3)
+	pks = make([]PublicKey, 4)
+	pks[0] = secrets[0].SignatureVerifier
+	pks[1] = secrets[1].SignatureVerifier
+	pks[2] = secrets[2].SignatureVerifier
+	pks[3] = secrets[3].SignatureVerifier
+	addr, err = MultisigAddrGen(version, threshold, pks)
+	require.NoError(t, err, "Multisig: unexpected failure generating message digest")
+
+	sigs = make([]MultisigSig, 3)
+	sigs[0], err = MultisigSign(txid, addr, version, threshold, pks, *secrets[0])
+	require.NoError(t, err, "Multisig: unexpected failure in multisig signing")
+	sigs[1], err = MultisigSign(txid, addr, version, threshold, pks, *secrets[1])
+	require.NoError(t, err, "Multisig: unexpected failure in multisig signing")
+	sigs[2], err = MultisigSign(txid, addr, version, threshold, pks, *secrets[2])
+	require.NoError(t, err, "Multisig: unexpected failure in multisig signing")
+
+	msig, err = MultisigAssemble(sigs)
+	require.NoError(t, err, "should be able to detect insufficient signatures for assembling")
+	msig.Subsigs[1].Sig = BlankSignature
+	verify, err := MultisigVerify(txid, addr, msig)
+	require.False(t, verify, "Multisig: verification passed, should have failed")
+	require.Error(t, err, "Multisig: expected verification failure with err")
+
+	msig, err = MultisigAssemble(sigs)
+	require.NoError(t, err, "should be able to detect insufficient signatures for assembling")
+	msig.Subsigs = msig.Subsigs[:len(msig.Subsigs)-1]
+	verify, err = MultisigVerify(txid, addr, msig)
+	require.False(t, verify, "Multisig: verification passed, should have failed")
+	require.Error(t, err, "Multisig: expected verification failure with err")
+
 }
