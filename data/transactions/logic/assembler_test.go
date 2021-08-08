@@ -2081,25 +2081,15 @@ func TestDigAsm(t *testing.T) {
 
 func TestBlockTypeCheck(t *testing.T) {
 	t.Parallel()
-	//If we evaluate and error on dead code or explore paths we'll have to change these, but for now it's fine
-	//All just confirm we can now error on blocks containing internal type errors
-	errmsg := "len arg 0..."
-	checkFlow := "int 1; bnz hello; int 3; len; hello:; int 2; +"
-	checkJump := "int 1; bnz hello; int 4; int 2; +; hello:; int 3; len"
-	checkFirst := "int 1; len; int 3; bnz hello; int 4; hello:; int 1"
-	checkStackNoneFirst := "len"
-	//Check to make sure we don't error since can't know (currently) what comes into block unless first block
-	checkStackNone := "b hello; hello:; len"
-
 	for i := uint64(1); i <= AssemblerMaxVersion; i++ {
 		//b introduced in v2
 		if i > 1 {
-			testProg(t, checkStackNone, i)
+			//Check to make sure we don't error since can't know (currently) what comes into block unless first block
+			testProg(t, "b hello; hello:; len", i)
 		}
-		testProg(t, checkFlow, i, expect{4, errmsg})
-		testProg(t, checkJump, i, expect{8, errmsg})
-		testProg(t, checkFirst, i, expect{2, errmsg})
-		testProg(t, checkStackNoneFirst, i, expect{1, "len expects..."})
-
+		testProg(t, "int 1; bnz hello; int 3; len; hello:; int 2; +", i, expect{4, "len arg 0..."})
+		testProg(t, "int 1; bnz hello; int 4; int 2; +; hello:; int 3; len", i, expect{8, "len arg 0..."})
+		testProg(t, "int 1; len; int 3; bnz hello; int 4; hello:; int 1", i, expect{2, "len arg 0..."})
+		testProg(t, "len", i, expect{1, "len expects..."})
 	}
 }
