@@ -485,17 +485,9 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 	}
 
 	// Eval the program
-	txnCost := 0
-	txnCost, pass, err = logic.EvalStateful(program, params)
+	pass, err = logic.EvalStateful(program, params)
 	if err != nil {
 		return false, basics.EvalDelta{}, ledgercore.LogicEvalError{Err: err}
-	}
-	if params.Proto.EnableAppFeePooling {
-		cb.pooledApplicationCosts += txnCost
-		if cb.pooledApplicationCosts > params.PooledApplicationBudget {
-			return false, basics.EvalDelta{}, fmt.Errorf("transactionGroup: Costs exceed total pooled budget: %v > %v",
-				cb.pooledApplicationCosts, params.PooledApplicationBudget)
-		}
 	}
 
 	// If program passed, build our eval delta, and commit to state changes

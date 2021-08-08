@@ -678,16 +678,17 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 		// Ignore any non-ApplicationCall transactions
 		if txn.SignedTxn.Txn.Type != protocol.ApplicationCallTx {
 			continue
+		} else if eval.proto.EnableAppCostPooling {
+			pooledApplicationBudget += eval.proto.MaxAppProgramCost
+		} else {
+			pooledApplicationBudget = eval.proto.MaxAppProgramCost
 		}
 
 		// Initialize side effects and group without ApplyData lazily
 		if groupNoAD == nil {
 			groupNoAD = make([]transactions.SignedTxn, len(txgroup))
-			for j, tx := range txgroup {
+			for j := range txgroup {
 				groupNoAD[j] = txgroup[j].SignedTxn
-				if tx.SignedTxn.Txn.Type == protocol.ApplicationCallTx && eval.proto.EnableAppFeePooling {
-					pooledApplicationBudget += eval.proto.MaxAppProgramCost
-				}
 			}
 			pastSideEffects = logic.MakePastSideEffects(len(txgroup))
 			minTealVersion = logic.ComputeMinTealVersion(groupNoAD)
@@ -700,7 +701,7 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 			GroupIndex:              i,
 			PastSideEffects:         pastSideEffects,
 			MinTealVersion:          &minTealVersion,
-			PooledApplicationBudget: pooledApplicationBudget,
+			PooledApplicationBudget: &pooledApplicationBudget,
 		}
 	}
 	return

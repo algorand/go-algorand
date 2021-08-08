@@ -578,7 +578,6 @@ func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalPr
 	eval.validate = true
 	eval.generate = false
 	eval.proto = config.Consensus[consensusVersion]
-	// eval.proto.EnableAppFeePooling = true
 
 	ops, err := logic.AssembleString(approvalProgram)
 	require.NoError(t, err, ops.Errors)
@@ -648,7 +647,7 @@ func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalPr
 func TestProtocolAllowsAppPooling(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	approvalProgram := `#pragma version 4
+	approvalProgram1 := `#pragma version 4
 	txn ApplicationID
 	bz create
 	byte "caller"
@@ -663,12 +662,40 @@ create:
 ok:
 	int 1`
 
-	_, err := testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, approvalProgram, protocol.ConsensusV28)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "dynamic cost budget of 700 exceeded, executing ed25519verify")
+	approvalProgram2 := `#pragma version 4
+	txn ApplicationID
+	bz create
+	byte "caller"
+	pop
+	b ok
+create:
+	byte "creator"
+	keccak256
+	keccak256
+	keccak256
+	keccak256
+	keccak256
+	keccak256
+	pop
+ok:
+	int 1`
 
-	_, err = testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, approvalProgram, protocol.ConsensusFuture)
-	require.NoError(t, err)
+	cases := []struct {
+		prog          string
+		expectedError string
+	}{
+		{approvalProgram1, "dynamic cost budget exceeded, executing ed25519verify: remaining budget is 700 but program cost was 1905"},
+		{approvalProgram2, "dynamic cost budget exceeded, executing keccak256: remaining budget is 700 but program cost was 783"},
+	}
+
+	for _, testCase := range cases {
+		_, err := testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, testCase.prog, protocol.ConsensusV28)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), testCase.expectedError)
+
+		_, err = testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, testCase.prog, protocol.ConsensusFuture)
+		require.NoError(t, err)
+	}
 }
 
 // TestEvalAppExceedsPooledBudgetWithTxnGroup ensures app call txns cannot exceed
@@ -695,7 +722,7 @@ ok:
 	keccak256
 	keccak256
 	pop
-	int 1`
+	int 1` // total cost: 2113
 
 	approvalProgram2 := `#pragma version 4
 	txn ApplicationID
@@ -715,7 +742,7 @@ create:
 ok:
 	byte "ok"
 	pop
-	int 1`
+	int 1` // total cost: 2101
 
 	approvalProgram3 := `#pragma version 4
 	txn ApplicationID
@@ -736,15 +763,15 @@ ok:
 	byte "ok"
 	sha256
 	pop
-	int 1`
+	int 1` // total cost: 2102
 
 	cases := []struct {
 		prog          string
 		expectedError string
 	}{
-		{approvalProgram1, "Costs exceed total pooled budget: 2113 > 2100"},
-		{approvalProgram2, "Costs exceed total pooled budget: 2101 > 2100"},
-		{approvalProgram3, "Costs exceed total pooled budget: 2102 > 2100"},
+		{approvalProgram1, "dynamic cost budget exceeded, executing keccak256: remaining budget is 715 but program cost was 726"},
+		{approvalProgram2, "dynamic cost budget exceeded, executing pushint: remaining budget is 1047 but program cost was 1048"},
+		{approvalProgram3, "dynamic cost budget exceeded, executing pop: remaining budget is 76 but program cost was 77"},
 	}
 
 	for _, testCase := range cases {
@@ -769,13 +796,15 @@ func TestEvalAppAcceptsPooledBudgetWithTxnGroup(t *testing.T) {
 	keccak256
 	keccak256
 	keccak256
+	keccak256
+	keccak256
 	pop
-	b ok
+	byte "call"
+	pop
 create:
-	byte "creator"
-	pop
+	b ok
 ok:
-	int 1`
+	int 1` // total cost: 2000
 
 	approvalProgram2 := `#pragma version 4
 	txn ApplicationID
@@ -793,7 +822,7 @@ create:
 	keccak256
 	pop
 ok:
-	int 1`
+	int 1` // total cost: 797
 
 	approvalProgram3 := `#pragma version 4
 	txn ApplicationID
@@ -808,7 +837,7 @@ create:
 	ed25519verify
 	pop
 ok:
-	int 1`
+	int 1` // total cost: 1919
 
 	cases := []string{
 		approvalProgram1,
