@@ -103,7 +103,7 @@ func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
 		cfg.MaxAmt = 0
 
 		var assetAccounts map[string]*pingPongAccount
-		assetAccounts, err = pps.prepareNewAccounts(ac, cfg, pps.accounts)
+		assetAccounts, err = pps.prepareNewAccounts(ac)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "prepare new accounts failed: %v\n", err)
 			return
@@ -123,7 +123,7 @@ func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
 	} else if cfg.NumApp > 0 {
 
 		var appAccounts map[string]*pingPongAccount
-		appAccounts, err = pps.prepareNewAccounts(ac, cfg, pps.accounts)
+		appAccounts, err = pps.prepareNewAccounts(ac)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "prepare new accounts failed: %v\n", err)
 			return
@@ -149,31 +149,27 @@ func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
 	return
 }
 
-func (pps *WorkerState) prepareNewAccounts(client libgoal.Client, cfg PpConfig, accounts map[string]*pingPongAccount) (newAccounts map[string]*pingPongAccount, err error) {
-	// remove existing accounts except for src account
-	for k := range accounts {
-		if k != cfg.SrcAccount {
-			delete(accounts, k)
-		}
-	}
+func (pps *WorkerState) prepareNewAccounts(client libgoal.Client) (newAccounts map[string]*pingPongAccount, err error) {
 	// create new accounts for testing
 	newAccounts = make(map[string]*pingPongAccount)
-	newAccounts = generateAccounts(newAccounts, cfg.NumPartAccounts-1)
-
-	for k := range newAccounts {
-		accounts[k] = newAccounts[k]
+	generateAccounts(newAccounts, pps.cfg.NumPartAccounts-1)
+	// copy the source account, as needed.
+	if srcAcct, has := pps.accounts[pps.cfg.SrcAccount]; has {
+		newAccounts[pps.cfg.SrcAccount] = srcAcct
 	}
-	err = pps.fundAccounts(accounts, client, cfg)
+
+	err = pps.fundAccounts(newAccounts, client, pps.cfg)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "fund accounts failed %v\n", err)
 		return
 	}
 
+	pps.accounts = newAccounts
 	return
 }
 
 // determine the min balance per participant account
-func computeAccountMinBalance(client libgoal.Client, cfg PpConfig) (requiredBalance uint64, err error) {
+func computeAccountMinBalance(client libgoal.Client, cfg PpConfig) (fundingRequiredBalance uint64, runningRequiredBalance uint64, err error) {
 	proto, err := getProto(client)
 	if err != nil {
 		return
@@ -182,8 +178,9 @@ func computeAccountMinBalance(client libgoal.Client, cfg PpConfig) (requiredBala
 	minActiveAccountBalance := proto.MinBalance
 
 	if cfg.NumApp > 0 {
-		requiredBalance = (cfg.MinAccountFunds + (cfg.MaxAmt+cfg.MaxFee)*10) * 2
-		fmt.Printf("required min balance for app accounts: %d\n", requiredBalance)
+		runningRequiredBalance = (cfg.MaxAmt + cfg.MaxFee) * 10 * 2
+		fundingRequiredBalance = (cfg.MinAccountFunds + (cfg.MaxAmt+cfg.MaxFee)*10) * 2
+		fmt.Printf("required min balance for app accounts: %d\n", fundingRequiredBalance)
 		return
 	}
 	var fee uint64
@@ -196,7 +193,8 @@ func computeAccountMinBalance(client libgoal.Client, cfg PpConfig) (requiredBala
 			return
 		}
 	}
-	requiredBalance = minActiveAccountBalance
+	fundingRequiredBalance = minActiveAccountBalance
+	runningRequiredBalance = minActiveAccountBalance
 
 	// add cost of assets
 	if cfg.NumAsset > 0 {
@@ -204,7 +202,8 @@ func computeAccountMinBalance(client libgoal.Client, cfg PpConfig) (requiredBala
 			(fee)*uint64(cfg.NumAsset) + // asset creations
 			(fee)*uint64(cfg.NumAsset)*uint64(cfg.NumPartAccounts) + // asset opt-ins
 			(fee)*uint64(cfg.NumAsset)*uint64(cfg.NumPartAccounts) // asset distributions
-		requiredBalance += assetCost
+		fundingRequiredBalance += assetCost
+		runningRequiredBalance += assetCost
 	}
 	if cfg.NumApp > 0 {
 		creationCost := uint64(cfg.NumApp) * proto.AppFlatParamsMinBalance * uint64(proto.MaxAppsCreated)
@@ -213,14 +212,15 @@ func computeAccountMinBalance(client libgoal.Client, cfg PpConfig) (requiredBala
 		maxLocalSchema := basics.StateSchema{NumUint: proto.MaxLocalSchemaEntries, NumByteSlice: proto.MaxLocalSchemaEntries}
 		schemaCost := uint64(cfg.NumApp) * (maxGlobalSchema.MinBalance(&proto).Raw*uint64(proto.MaxAppsCreated) +
 			maxLocalSchema.MinBalance(&proto).Raw*uint64(proto.MaxAppsOptedIn))
-		requiredBalance += creationCost + optInCost + schemaCost
+		fundingRequiredBalance += creationCost + optInCost + schemaCost
+		runningRequiredBalance += creationCost + optInCost + schemaCost
 	}
 	// add cost of transactions
-	requiredBalance += (cfg.MaxAmt + fee) * 2 * cfg.TxnPerSec * uint64(math.Ceil(cfg.RefreshTime.Seconds()))
+	fundingRequiredBalance += (cfg.MaxAmt + fee) * 2 * cfg.TxnPerSec * uint64(math.Ceil(cfg.RefreshTime.Seconds()))
 
 	// override computed value if less than configured value
-	if cfg.MinAccountFunds > requiredBalance {
-		requiredBalance = cfg.MinAccountFunds
+	if cfg.MinAccountFunds > fundingRequiredBalance {
+		fundingRequiredBalance = cfg.MinAccountFunds
 	}
 
 	return
@@ -239,10 +239,13 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 	// Fee of 0 will make cause the function to use the suggested one by network
 	fee := uint64(0)
 
-	minFund, err := computeAccountMinBalance(client, cfg)
+	minFund, _, err := computeAccountMinBalance(client, cfg)
 	if err != nil {
 		return err
 	}
+
+	// fund to double the minimum amount.
+	//minFund *= 2
 
 	fmt.Printf("adjusting account balance to %d\n", minFund)
 	for addr, acct := range accounts {
@@ -263,11 +266,12 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 			if !cfg.Quiet {
 				fmt.Printf("adjusting balance of account %v by %d\n ", addr, toSend)
 			}
-			_, err := pps.sendPaymentFromSourceAccount(client, addr, fee, toSend)
+			tx, err := pps.sendPaymentFromSourceAccount(client, addr, fee, toSend)
 			if err != nil {
 				return err
 			}
-			accounts[addr].setBalance(minFund)
+			srcFunds -= tx.Fee.Raw
+			accounts[addr].addBalance(int64(toSend))
 			if !cfg.Quiet {
 				fmt.Printf("account balance for key %s is %d\n", addr, accounts[addr].getBalance())
 			}
@@ -541,6 +545,7 @@ func (pps *WorkerState) fee() uint64 {
 
 func (pps *WorkerState) makeNftTraffic(client libgoal.Client) (sentCount uint64, err error) {
 	fee := pps.fee()
+	var srcCost uint64
 	if (len(pps.nftHolders) == 0) || ((float64(int(pps.cfg.NftAsaAccountInFlight)-len(pps.nftHolders)) / float64(pps.cfg.NftAsaAccountInFlight)) >= rand.Float64()) {
 		var addr string
 
@@ -564,14 +569,17 @@ func (pps *WorkerState) makeNftTraffic(client libgoal.Client) (sentCount uint64,
 		// enough for the per-asa minbalance and more than enough for the txns to create them
 		toSend := proto.MinBalance * uint64(pps.cfg.NftAsaPerAccount+1) * 2
 		pps.nftHolders[addr] = 0
-		_, err = pps.sendPaymentFromSourceAccount(client, addr, fee, toSend)
+		var tx transactions.Transaction
+		tx, err = pps.sendPaymentFromSourceAccount(client, addr, fee, toSend)
 		if err != nil {
 			return
 		}
+		srcCost += tx.Fee.Raw + toSend
 		sentCount++
 		// we ran one txn above already to fund the new addr,
 		// we'll run a second txn below
 	}
+	pps.accounts[pps.cfg.SrcAccount].addBalance(-int64(srcCost))
 	// pick a random sender from nft holder sub accounts
 	pick := rand.Intn(len(pps.nftHolders))
 	pos := 0
@@ -627,7 +635,11 @@ func (pps *WorkerState) sendFromTo(
 	cfg := pps.cfg
 
 	amt := cfg.MaxAmt
-
+	var minAccountRunningBalance uint64
+	_, minAccountRunningBalance, err = computeAccountMinBalance(client, cfg)
+	if err != nil {
+		return 0, 0, err
+	}
 	belowMinBalanceAccounts := make(map[string] /*basics.Address*/ bool)
 
 	assetsByCreator := make(map[string][]*v1.AssetParams)
@@ -642,6 +654,7 @@ func (pps *WorkerState) sendFromTo(
 
 		// keep going until the balances of at least 20% of the accounts is too low.
 		if len(belowMinBalanceAccounts)*5 > len(fromList) {
+			fmt.Printf("quitting sendFromTo: too many accounts below threshold")
 			return
 		}
 
@@ -694,8 +707,8 @@ func (pps *WorkerState) sendFromTo(
 			}
 
 			// would we have enough money after taking into account the current updated fees ?
-			if accounts[from].getBalance() <= (txn.Fee.Raw + amt + cfg.MinAccountFunds) {
-				_, _ = fmt.Fprintf(os.Stdout, "Skipping sending %d: %s -> %s; Current cost too high(%d <= %d + %d  + %d).\n", amt, from, to, accounts[from].getBalance(), txn.Fee.Raw, amt, cfg.MinAccountFunds)
+			if accounts[from].getBalance() <= (txn.Fee.Raw + amt + minAccountRunningBalance) {
+				_, _ = fmt.Fprintf(os.Stdout, "Skipping sending %d: %s -> %s; Current cost too high(%d <= %d + %d  + %d).\n", amt, from, to, accounts[from].getBalance(), txn.Fee.Raw, amt, minAccountRunningBalance)
 				belowMinBalanceAccounts[from] = true
 				continue
 			}
@@ -862,7 +875,7 @@ func (pps *WorkerState) roundMonitor(client libgoal.Client) {
 	var minFund uint64
 	var err error
 	for {
-		minFund, err = computeAccountMinBalance(client, pps.cfg)
+		minFund, _, err = computeAccountMinBalance(client, pps.cfg)
 		if err == nil {
 			break
 		}

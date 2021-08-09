@@ -141,7 +141,7 @@ func (pps *WorkerState) ensureAccounts(ac libgoal.Client, initCfg PpConfig) (acc
 			if len(accounts) != int(cfg.NumPartAccounts+1) {
 				fmt.Printf("Not enough accounts - creating %d more\n", int(cfg.NumPartAccounts+1)-len(accounts))
 			}
-			accounts = generateAccounts(accounts, cfg.NumPartAccounts)
+			generateAccounts(accounts, cfg.NumPartAccounts)
 		}
 	}
 
@@ -180,6 +180,9 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]*pingPongAccount,
 	numCreatedAssetsByAddr := make(map[string]int, len(accounts))
 	// 1) Create X assets for each of the participant accounts
 	for addr := range accounts {
+		if addr == pps.cfg.SrcAccount {
+			continue
+		}
 		addrAccount, addrErr := client.AccountInformation(addr)
 		if addrErr != nil {
 			fmt.Printf("Cannot lookup source account %v\n", addr)
@@ -237,9 +240,11 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]*pingPongAccount,
 		fmt.Printf("Error: failed to obtain last round after assets creation")
 		return
 	}
-	nextRound := r.LastRound + 1
 	allAssets := make(map[uint64]string, int(cfg.NumAsset)*len(accounts))
 	for addr := range accounts {
+		if addr == pps.cfg.SrcAccount {
+			continue
+		}
 		var account v1.Account
 		deadline := time.Now().Add(3 * time.Minute)
 		for {
@@ -257,13 +262,12 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]*pingPongAccount,
 				fmt.Printf("Error: %s\n", err.Error())
 				return
 			}
-			r, err = client.WaitForRound(nextRound)
+			r, err = client.WaitForRound(r.LastRound)
 			if err != nil {
-				fmt.Printf("Warning: failed to wait for round %d after assets creation", nextRound)
+				fmt.Printf("Warning: failed to wait for round %d after assets creation", r.LastRound)
 				time.Sleep(1 * time.Second)
 				continue
 			}
-			nextRound = r.LastRound + 1
 		}
 		assetParams := account.AssetParams
 		if !cfg.Quiet {
@@ -279,8 +283,15 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]*pingPongAccount,
 	// optInsByAddr tracks only explicitly opted-in assetsA
 	optInsByAddr := make(map[string]map[uint64]bool)
 
+	// reset rate-control
+	startTime = time.Now()
+	totalSent = 0
+
 	// 2) For each participant account, opt-in up to proto.MaxAssetsPerAccount assets of all other participant accounts
 	for addr := range accounts {
+		if addr == pps.cfg.SrcAccount {
+			continue
+		}
 		if !cfg.Quiet {
 			fmt.Printf("Opting to account %v\n", addr)
 		}
@@ -318,6 +329,8 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]*pingPongAccount,
 				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset optin failed with error %v\n", err)
 				return
 			}
+			totalSent++
+
 			optIns[k] = append(optIns[k], addr)
 			if _, ok := optInsByAddr[addr]; !ok {
 				optInsByAddr[addr] = make(map[uint64]bool)
@@ -329,7 +342,6 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]*pingPongAccount,
 			}
 			i++
 
-			totalSent++
 			throttleTransactionRate(startTime, cfg, totalSent)
 		}
 	}
@@ -340,8 +352,10 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]*pingPongAccount,
 		fmt.Printf("Error: failed to obtain last round after assets opt in")
 		return
 	}
-	nextRound = r.LastRound + 1
 	for addr := range accounts {
+		if addr == pps.cfg.SrcAccount {
+			continue
+		}
 		expectedAssets := numCreatedAssetsByAddr[addr] + len(optInsByAddr[addr])
 		var account v1.Account
 		deadline := time.Now().Add(3 * time.Minute)
@@ -360,15 +374,18 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]*pingPongAccount,
 				fmt.Printf("Error: %s\n", err.Error())
 				return
 			}
-			r, err = client.WaitForRound(nextRound)
+			r, err = client.WaitForRound(r.LastRound)
 			if err != nil {
-				fmt.Printf("Warning: failed to wait for round %d after assets opt in", nextRound)
+				fmt.Printf("Warning: failed to wait for round %d after assets opt in", r.LastRound)
 				time.Sleep(1 * time.Second)
 				continue
 			}
-			nextRound = r.LastRound + 1
 		}
 	}
+
+	// reset rate-control
+	startTime = time.Now()
+	totalSent = 0
 
 	// Step 3) Evenly distribute the assets across all opted-in accounts
 	for k, creator := range allAssets {
@@ -416,7 +433,6 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]*pingPongAccount,
 		fmt.Printf("Error: failed to obtain last round after assets distribution")
 		return
 	}
-	nextRound = r.LastRound + 1
 	deadline := time.Now().Add(3 * time.Minute)
 	var pending v1.PendingTransactions
 	for {
@@ -433,13 +449,12 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]*pingPongAccount,
 			fmt.Printf("Warning: assets distribution took too long")
 			break
 		}
-		r, err = client.WaitForRound(nextRound)
+		r, err = client.WaitForRound(r.LastRound)
 		if err != nil {
-			fmt.Printf("Warning: failed to wait for round %d after assets distribution", nextRound)
+			fmt.Printf("Warning: failed to wait for round %d after assets distribution", r.LastRound)
 			time.Sleep(1 * time.Second)
 			continue
 		}
-		nextRound = r.LastRound + 1
 	}
 	return
 }
@@ -882,15 +897,10 @@ func takeTopAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32
 	return
 }
 
-func generateAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32) map[string]*pingPongAccount {
-	// Compute the number of accounts to generate
-	accountsRequired := int(numAccounts+1) - len(allAccounts)
-
+func generateAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32) {
 	var seed crypto.Seed
 
-	for accountsRequired > 0 {
-		accountsRequired--
-
+	for accountsRequired := int(numAccounts+1) - len(allAccounts); accountsRequired > 0; accountsRequired-- {
 		crypto.RandBytes(seed[:])
 		privateKey := crypto.GenerateSignatureSecrets(seed)
 		publicKey := basics.Address(privateKey.SignatureVerifier)
@@ -900,6 +910,4 @@ func generateAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint3
 			pk: publicKey,
 		}
 	}
-
-	return allAccounts
 }
