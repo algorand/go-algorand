@@ -78,8 +78,8 @@ type timingParams struct {
 }
 
 const (
-	noProposal byte = iota
-	transactionsForProposal
+	noProposal              byte = iota //nolint:deadcode
+	transactionsForProposal             //nolint:deadcode
 )
 
 type relayedProposal struct {

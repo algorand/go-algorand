@@ -268,6 +268,8 @@ func TestEncodingDecoding(t *testing.T) {
 }
 
 func TestDecodingErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	bf, err := decodeBloomFilter(encodedBloomFilter{})
 	require.Equal(t, errInvalidBloomFilterEncoding, err)
 	require.Equal(t, bloomFilter{}, bf)
