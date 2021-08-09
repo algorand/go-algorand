@@ -22,7 +22,9 @@ package cdilithium
 //#cgo CFLAGS: -DDILITHIUM_MODE=3 -DDILITHIUM_RANDOMIZED_SIGNING
 //#include "api.h"
 import "C"
-import "errors"
+import (
+	"errors"
+)
 
 type (
 	// DilSignature is the signature used by the dilithium scheme
@@ -32,6 +34,8 @@ type (
 	// DilPrivateKey is the private key used by the dilithium scheme
 	DilPrivateKey [4000]byte
 )
+
+const sigSize = C.pqcrystals_dilithium3_BYTES
 
 func init() {
 	// Check sizes of structs
@@ -68,7 +72,10 @@ func (s *DilithiumKeyPair) SignBytes(data []byte) []byte {
 	}
 	var sig DilSignature
 	var smlen uint64
-	C.pqcrystals_dilithium3_ref((*C.uchar)(&sig[0]), (*C.size_t)(&smlen), (*C.uchar)(cdata), (C.size_t)(len(data)), (*C.uchar)(&(s.SecretKey[0])))
+	C.pqcrystals_dilithium3_ref_signature((*C.uchar)(&sig[0]), (*C.size_t)(&smlen), (*C.uchar)(cdata), (C.size_t)(len(data)), (*C.uchar)(&(s.SecretKey[0])))
+	if smlen != uint64(sigSize) {
+		panic("const value of dilithium signature had changed.")
+	}
 	return sig[:]
 }
 
