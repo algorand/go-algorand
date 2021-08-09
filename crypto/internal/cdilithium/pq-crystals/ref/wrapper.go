@@ -36,12 +36,14 @@ type (
 )
 
 const sigSize = C.pqcrystals_dilithium3_BYTES
+const publickeySize = C.pqcrystals_dilithium3_PUBLICKEYBYTES
+const privateKeySize = C.pqcrystals_dilithium3_SECRETKEYBYTES
 
 func init() {
 	// Check sizes of structs
-	_ = [C.pqcrystals_dilithium3_BYTES]byte(DilSignature{})
-	_ = [C.pqcrystals_dilithium3_PUBLICKEYBYTES]byte(DilPublicKey{})
-	_ = [C.pqcrystals_dilithium3_SECRETKEYBYTES]byte(DilPrivateKey{})
+	_ = [sigSize]byte(DilSignature{})
+	_ = [publickeySize]byte(DilPublicKey{})
+	_ = [privateKeySize]byte(DilPrivateKey{})
 }
 
 // DilithiumKeyPair is the implementation of DilithiumKeyPair for the Dilithium signature scheme.
