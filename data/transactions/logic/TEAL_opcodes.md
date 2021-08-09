@@ -1212,4 +1212,4 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - LogicSigVersion >= 5
 - Mode: Application
 
-`log` can be called up to 32 times in a program, and log up to a total of 1k bytes.
+`log` can be called up to MaxLogCalls times in a program, and log up to a total of 1k bytes.

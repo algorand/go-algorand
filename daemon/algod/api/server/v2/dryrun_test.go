@@ -1097,13 +1097,24 @@ func TestDryrunLogs(t *testing.T) {
 
 	ops, err := logic.AssembleString(`
 #pragma version 5
+byte "A"
+loop:
+int 0
+dup2
+getbyte
 int 1
-byte "a"
++
+dup
+int 98 //ascii code of last char
+<=
+bz end
+setbyte
+dup
 log
-byte "b"
-log
-byte "c"
-log
+b loop
+end:
+int 1
+return
 `)
 
 	require.NoError(t, err)
@@ -1178,16 +1189,9 @@ log
 		logResponse(t, &response)
 	}
 	logs := *response.Txns[0].Logs
-	assert.Equal(t, 3, len(logs))
+	assert.Equal(t, 33, len(logs))
 	for i, m := range logs {
-		if i == 0 {
-			assert.Equal(t, base64.StdEncoding.EncodeToString([]byte("a")), m.Value)
-		} else if i == 1 {
-			assert.Equal(t, base64.StdEncoding.EncodeToString([]byte("b")), m.Value)
-		} else if i == 2 {
-			assert.Equal(t, base64.StdEncoding.EncodeToString([]byte("c")), m.Value)
-		}
-
+		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), m.Value)
 	}
 	encoded := string(protocol.EncodeJSON(response.Txns[0]))
 	assert.Contains(t, encoded, "logs")

@@ -30,6 +30,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
@@ -939,19 +940,24 @@ func TestClientCanGetPendingTransactionInfo(t *testing.T) {
 	copy(gh[:], params.GenesisHash)
 
 	prog := `#pragma version 5
-int 1
-loop: byte "a"
-log
+byte "A"
+loop:
+int 0
+dup2
+getbyte
 int 1
 +
 dup
-int 30
+int 98 //ascii code of last char
 <=
-bnz loop
-byte "b"
+bz end
+setbyte
+dup
 log
-byte "c"
-log
+b loop
+end:
+int 1
+return
 `
 	ops, err := logic.AssembleString(prog)
 	approv := ops.Program
@@ -980,16 +986,10 @@ log
 	txn, err := testClient.PendingTransactionInformationV2(txid)
 	a.NoError(err)
 	a.NotNil(txn.Logs)
-	a.Equal(32, len(*txn.Logs))
+	a.Equal(33, len(*txn.Logs))
 	for i, l := range *txn.Logs {
 		a.Equal(*txn.ApplicationIndex, l.Id)
-		if i < 30 {
-			a.Equal(base64.StdEncoding.EncodeToString([]byte("a")), l.Value)
-		} else if i == 30 {
-			a.Equal(base64.StdEncoding.EncodeToString([]byte("b")), l.Value)
-		} else {
-			a.Equal(base64.StdEncoding.EncodeToString([]byte("c")), l.Value)
-		}
+		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), l.Value)
 	}
 
 	//check non-create app call
@@ -1025,16 +1025,10 @@ log
 	txn, err = testClient.PendingTransactionInformationV2(txid)
 	a.NoError(err)
 	a.NotNil(txn.Logs)
-	a.Equal(32, len(*txn.Logs))
+	a.Equal(33, len(*txn.Logs))
 	for i, l := range *txn.Logs {
 		a.Equal(expectedAppID, l.Id)
-		if i < 30 {
-			a.Equal(base64.StdEncoding.EncodeToString([]byte("a")), l.Value)
-		} else if i == 30 {
-			a.Equal(base64.StdEncoding.EncodeToString([]byte("b")), l.Value)
-		} else {
-			a.Equal(base64.StdEncoding.EncodeToString([]byte("c")), l.Value)
-		}
+		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), l.Value)
 	}
 
 }

@@ -4760,7 +4760,7 @@ func TestLog(t *testing.T) {
 		},
 		{
 			source: fmt.Sprintf(`%s int 1`, strings.Repeat(`byte "a logging message"; log;`, config.MaxLogCalls)),
-			loglen: config.MaxLogCalls,
+			loglen: MaxLogCalls,
 		},
 		{
 			source: `int 1; loop: byte "a logging message"; log; int 1; +; dup; int 30; <=; bnz loop;`,

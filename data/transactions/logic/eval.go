@@ -57,7 +57,7 @@ const MaxByteMathSize = 64
 const MaxLogSize = 1024
 
 // MaxLogCalls is the limit of total log calls during a program execution
-const MaxLogCalls = 32
+const MaxLogCalls = config.MaxLogCalls
 
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
@@ -3169,7 +3169,7 @@ func opLog(cx *evalContext) {
 	last := len(cx.stack) - 1
 
 	if cx.logCalls == MaxLogCalls {
-		cx.err = fmt.Errorf("too many log calls in program. up to %d is allowed", config.MaxLogCalls)
+		cx.err = fmt.Errorf("too many log calls in program. up to %d is allowed", MaxLogCalls)
 		return
 	}
 	cx.logCalls++
