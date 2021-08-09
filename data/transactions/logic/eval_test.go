@@ -1042,7 +1042,6 @@ func TestGlobal(t *testing.T) {
 			testProgram := tests[v].program
 			check := tests[v].check
 			eval := tests[v].eval
-			var pass bool
 			for _, globalField := range GlobalFieldNames[:last] {
 				if !strings.Contains(testProgram, globalField) {
 					t.Errorf("TestGlobal missing field %v", globalField)
@@ -1071,7 +1070,7 @@ func TestGlobal(t *testing.T) {
 			ep.TxnGroup = txgroup
 			ep.Proto = &proto
 			ep.Ledger = ledger
-			pass, err = eval(ops.Program, ep)
+			pass, err := eval(ops.Program, ep)
 			if !pass {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(sb.String())

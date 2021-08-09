@@ -258,7 +258,7 @@ func (ep EvalParams) budget() int {
 	if ep.runModeFlags == runModeSignature {
 		return int(ep.Proto.LogicSigMaxCost)
 	}
-	if ep.Proto.EnableAppCostPooling {
+	if ep.Proto.EnableAppCostPooling && ep.PooledApplicationBudget != nil {
 		return *ep.PooledApplicationBudget
 	}
 	return ep.Proto.MaxAppProgramCost
