@@ -1,0 +1,43 @@
+name: Dilithium2
+type: signature
+claimed-nist-level: 2
+length-public-key: 1312
+length-secret-key: 2528
+length-signature: 2420
+nistkat-sha256: 26ae9c1224171e957dbe38672942d31edb7dffbe700825e0cb52128cdb45280a
+testvectors-sha256: b56155479f5643a3cb3d73260ba2b1fd7e772a49b6f4cebcf742cd860fbf6879
+principal-submitters:
+  - Vadim Lyubashevsky
+auxiliary-submitters:
+  - Léo Ducas
+  - Eike Kiltz
+  - Tancrède Lepoint
+  - Peter Schwabe
+  - Gregor Seiler
+  - Damien Stehlé
+implementations:
+  - name: ref
+    version: https://github.com/pq-crystals/dilithium/commit/d9c885d3f2e11c05529eeeb7d70d808c972b8409
+    folder_name: ref
+    compile_opts: -DDILITHIUM_MODE=2 -DDILITHIUM_RANDOMIZED_SIGNING
+    signature_keypair: pqcrystals_dilithium2_ref_keypair
+    signature_signature: pqcrystals_dilithium2_ref_signature
+    signature_verify: pqcrystals_dilithium2_ref_verify
+    sources: ../LICENSE api.h config.h params.h sign.c sign.h packing.c packing.h polyvec.c polyvec.h poly.c poly.h ntt.c ntt.h reduce.c reduce.h rounding.c rounding.h symmetric.h fips202.h symmetric-shake.c
+    common_dep: common_ref
+  - name: avx2
+    version: https://github.com/pq-crystals/dilithium/commit/d9c885d3f2e11c05529eeeb7d70d808c972b8409
+    compile_opts: -DDILITHIUM_MODE=2 -DDILITHIUM_RANDOMIZED_SIGNING
+    signature_keypair: pqcrystals_dilithium2_avx2_keypair
+    signature_signature: pqcrystals_dilithium2_avx2_signature
+    signature_verify: pqcrystals_dilithium2_avx2_verify
+    sources: ../LICENSE api.h config.h params.h align.h sign.c sign.h packing.c packing.h polyvec.c polyvec.h poly.c poly.h ntt.S invntt.S pointwise.S ntt.h shuffle.S shuffle.inc consts.c consts.h rejsample.c rejsample.h rounding.c rounding.h symmetric.h fips202.h fips202x4.h symmetric-shake.c
+    common_dep: common_avx2
+    supported_platforms:
+      - architecture: x86_64
+        operating_systems:
+          - Darwin
+          - Linux
+        required_flags:
+          - avx2
+          - popcnt

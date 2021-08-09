@@ -1,0 +1,44 @@
+name: Dilithium2-AES
+type: signature
+claimed-nist-level: 2
+length-public-key: 1312
+length-secret-key: 2528
+length-signature: 2420
+nistkat-sha256: b68911c8055f070b4e7c96bcfc0fbd504331064008bfced8ab253fb20e285087
+testvectors-sha256: df2ac36db00fdc5cbdc227c76f4a35ba779ae775f8efbab6a3e04053c3cdbc61
+principal-submitters:
+  - Vadim Lyubashevsky
+auxiliary-submitters:
+  - Léo Ducas
+  - Eike Kiltz
+  - Tancrède Lepoint
+  - Peter Schwabe
+  - Gregor Seiler
+  - Damien Stehlé
+implementations:
+  - name: ref
+    version: https://github.com/pq-crystals/dilithium/commit/d9c885d3f2e11c05529eeeb7d70d808c972b8409
+    folder_name: ref
+    compile_opts: -DDILITHIUM_MODE=2 -DDILITHIUM_USE_AES -DDILITHIUM_RANDOMIZED_SIGNING
+    signature_keypair: pqcrystals_dilithium2aes_ref_keypair
+    signature_signature: pqcrystals_dilithium2aes_ref_signature
+    signature_verify: pqcrystals_dilithium2aes_ref_verify
+    sources: ../LICENSE api.h config.h params.h sign.c sign.h packing.c packing.h polyvec.c polyvec.h poly.c poly.h ntt.c ntt.h reduce.c reduce.h rounding.c rounding.h symmetric.h fips202.h symmetric-aes.c aes256ctr.h
+    common_dep: common_ref
+  - name: avx2
+    version: https://github.com/pq-crystals/dilithium/commit/d9c885d3f2e11c05529eeeb7d70d808c972b8409
+    compile_opts: -DDILITHIUM_MODE=2 -DDILITHIUM_USE_AES -DDILITHIUM_RANDOMIZED_SIGNING
+    signature_keypair: pqcrystals_dilithium2aes_avx2_keypair
+    signature_signature: pqcrystals_dilithium2aes_avx2_signature
+    signature_verify: pqcrystals_dilithium2aes_avx2_verify
+    sources: ../LICENSE api.h config.h params.h align.h sign.c sign.h packing.c packing.h polyvec.c polyvec.h poly.c poly.h ntt.S invntt.S pointwise.S ntt.h shuffle.S shuffle.inc consts.c consts.h rejsample.c rejsample.h rounding.c rounding.h symmetric.h fips202.h aes256ctr.h
+    common_dep: common_avx2 common_aes
+    supported_platforms:
+      - architecture: x86_64
+        operating_systems:
+          - Darwin
+          - Linux
+        required_flags:
+          - avx2
+          - aes
+          - popcnt

@@ -19,39 +19,40 @@ package cdilithium
 // NOTE: -Wno-unused-parameter is used because cgo injects code that doesn't comply with -Wunused-parameter
 
 //#cgo CFLAGS:  -O3 -Wextra -Wno-unused-parameter  -Wpedantic -fomit-frame-pointer -Wshadow -Wvla -Wpointer-arith -Wredundant-decls
+//#cgo CFLAGS: -DDILITHIUM_MODE=3 -DDILITHIUM_RANDOMIZED_SIGNING
 //#include "api.h"
 import "C"
 import "errors"
 
 type (
-	// Dil2Signature is the signature used by the dilithium scheme
-	Dil2Signature [2420]byte
-	// Dil2PublicKey is the public key used by the dilithium scheme
-	Dil2PublicKey [1312]byte
-	// Dil2PrivateKey is the private key used by the dilithium scheme
-	Dil2PrivateKey [2528]byte
+	// DilSignature is the signature used by the dilithium scheme
+	DilSignature [3293]byte
+	// DilPublicKey is the public key used by the dilithium scheme
+	DilPublicKey [1952]byte
+	// DilPrivateKey is the private key used by the dilithium scheme
+	DilPrivateKey [4000]byte
 )
 
 func init() {
 	// Check sizes of structs
-	_ = [C.pqcrystals_dilithium2_BYTES]byte(Dil2Signature{})
-	_ = [C.pqcrystals_dilithium2_PUBLICKEYBYTES]byte(Dil2PublicKey{})
-	_ = [C.pqcrystals_dilithium2_SECRETKEYBYTES]byte(Dil2PrivateKey{})
+	_ = [C.pqcrystals_dilithium3_BYTES]byte(DilSignature{})
+	_ = [C.pqcrystals_dilithium3_PUBLICKEYBYTES]byte(DilPublicKey{})
+	_ = [C.pqcrystals_dilithium3_SECRETKEYBYTES]byte(DilPrivateKey{})
 }
 
 // DilithiumKeyPair is the implementation of DilithiumKeyPair for the Dilithium signature scheme.
 type DilithiumKeyPair struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	SecretKey Dil2PrivateKey `codec:"sk"`
-	PublicKey Dil2PublicKey  `codec:"pk"`
+	SecretKey DilPrivateKey `codec:"sk"`
+	PublicKey DilPublicKey  `codec:"pk"`
 }
 
 // NewKeys Generates a dilithium DilithiumKeyPair.
 func NewKeys() *DilithiumKeyPair {
-	pk := Dil2PublicKey{}
-	sk := Dil2PrivateKey{}
-	C.pqcrystals_dilithium2_ref_keypair((*C.uchar)(&(pk[0])), (*C.uchar)(&(sk[0])))
+	pk := DilPublicKey{}
+	sk := DilPrivateKey{}
+	C.pqcrystals_dilithium3_ref_keypair((*C.uchar)(&(pk[0])), (*C.uchar)(&(sk[0])))
 	return &DilithiumKeyPair{
 		SecretKey: sk,
 		PublicKey: pk,
@@ -65,9 +66,9 @@ func (s *DilithiumKeyPair) SignBytes(data []byte) []byte {
 	if len(data) != 0 {
 		cdata = (*C.uchar)(&data[0])
 	}
-	var sig Dil2Signature
+	var sig DilSignature
 	var smlen uint64
-	C.pqcrystals_dilithium2_ref((*C.uchar)(&sig[0]), (*C.size_t)(&smlen), (*C.uchar)(cdata), (C.size_t)(len(data)), (*C.uchar)(&(s.SecretKey[0])))
+	C.pqcrystals_dilithium3_ref((*C.uchar)(&sig[0]), (*C.size_t)(&smlen), (*C.uchar)(cdata), (C.size_t)(len(data)), (*C.uchar)(&(s.SecretKey[0])))
 	return sig[:]
 }
 
@@ -75,13 +76,13 @@ func (s *DilithiumKeyPair) SignBytes(data []byte) []byte {
 var ErrBadDilithiumSignature = errors.New("bad signature")
 
 // VerifyBytes follows dilithium algorithm to verify a signature.
-func (v *Dil2PublicKey) VerifyBytes(data []byte, sig []byte) error {
+func (v *DilPublicKey) VerifyBytes(data []byte, sig []byte) error {
 	cdata := (*C.uchar)(C.NULL)
 	if len(data) != 0 {
 		cdata = (*C.uchar)(&data[0])
 	}
 
-	out := C.pqcrystals_dilithium2_ref_verify((*C.uchar)(&sig[0]), (C.size_t)(len(sig)), (*C.uchar)(cdata), C.size_t(len(data)), (*C.uchar)(&(v[0])))
+	out := C.pqcrystals_dilithium3_ref_verify((*C.uchar)(&sig[0]), (C.size_t)(len(sig)), (*C.uchar)(cdata), C.size_t(len(data)), (*C.uchar)(&(v[0])))
 	if out != 0 {
 		return ErrBadDilithiumSignature
 	}
