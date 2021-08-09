@@ -192,7 +192,7 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 		}
 		if peerInfo.TxnSyncPeer == nil {
 			// we couldn't really do much about this message previously, since we didn't have the peer.
-			peer = makePeer(message.networkPeer, peerInfo.IsOutgoing, s.isRelay)
+			peer = makePeer(message.networkPeer, peerInfo.IsOutgoing, s.isRelay, &s.config)
 			// let the network peer object know about our peer
 			s.node.UpdatePeers([]*Peer{peer}, []interface{}{message.networkPeer}, 0)
 		} else {
@@ -209,7 +209,7 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 	// messages from the peer to be placed on the message queue.
 	s.incomingMessagesQ.clear(message)
 	messageProcessed := false
-	transacationPoolSize := 0
+	transactionPoolSize := 0
 	totalAccumulatedTransactionsCount := 0 // the number of transactions that were added during the execution of this method
 	transactionHandlerBacklogFull := false
 incomingMessageLoop:
@@ -273,12 +273,12 @@ incomingMessageLoop:
 			totalTransactionCount := cap(incomingMsg.transactionGroups[0].Transactions)
 
 			// send the incoming transaction group to the node last, so that the txhandler could modify the underlaying array if needed.
-			currentTransacationPoolSize := s.node.IncomingTransactionGroups(peer, peer.nextReceivedMessageSeq-1, incomingMsg.transactionGroups)
+			currentTransactionPoolSize := s.node.IncomingTransactionGroups(peer, peer.nextReceivedMessageSeq-1, incomingMsg.transactionGroups)
 			// was the call reached the transaction handler queue ?
-			if currentTransacationPoolSize >= 0 {
-				// we want to store in transacationPoolSize only the first call to IncomingTransactionGroups
-				if transacationPoolSize == 0 {
-					transacationPoolSize = currentTransacationPoolSize
+			if currentTransactionPoolSize >= 0 {
+				// we want to store in transactionPoolSize only the first call to IncomingTransactionGroups
+				if transactionPoolSize == 0 {
+					transactionPoolSize = currentTransactionPoolSize
 				}
 				// add the transactions count to the accumulated count.
 				totalAccumulatedTransactionsCount += totalTransactionCount
@@ -301,7 +301,7 @@ incomingMessageLoop:
 
 		s.scheduler.schedulerPeer(peer, s.clock.Since())
 	}
-	if transacationPoolSize > 0 || transactionHandlerBacklogFull {
-		s.onTransactionPoolChangedEvent(MakeTranscationPoolChangeEvent(transacationPoolSize+totalAccumulatedTransactionsCount, transactionHandlerBacklogFull))
+	if transactionPoolSize > 0 || transactionHandlerBacklogFull {
+		s.onTransactionPoolChangedEvent(MakeTranscationPoolChangeEvent(transactionPoolSize+totalAccumulatedTransactionsCount, transactionHandlerBacklogFull))
 	}
 }

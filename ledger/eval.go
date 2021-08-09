@@ -1174,8 +1174,7 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 		return ledgercore.StateDelta{}, protocol.Error(blk.BlockHeader.CurrentProtocol)
 	}
 
-	eval, err := startEvaluator(
-		l, blk.BlockHeader, proto, len(blk.Payset), validate, false, 0)
+	eval, err := startEvaluator(l, blk.BlockHeader, proto, len(blk.Payset), validate, false, 0)
 	if err != nil {
 		return ledgercore.StateDelta{}, err
 	}

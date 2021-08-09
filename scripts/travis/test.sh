@@ -8,7 +8,7 @@ OS=$("${SCRIPTPATH}/../ostype.sh")
 ARCH=$("${SCRIPTPATH}/../archtype.sh")
 
 # Get the go build version.
-if [ -z "${NO_GIMME}" ]; then
+if [ -z "${SKIP_GO_INSTALLATION}" ]; then
   GOLANG_VERSION=$(./scripts/get_golang_version.sh)
   curl -sL -o ~/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gimme
   chmod +x ~/gimme

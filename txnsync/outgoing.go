@@ -35,15 +35,16 @@ var errTransactionSyncOutgoingMessageSendFailed = errors.New("transaction sync f
 // pieces of information about the message itself, used for tracking the "content" of the message beyond
 // the point where it's being encoded.
 type sentMessageMetadata struct {
-	encodedMessageSize  int
-	sentTranscationsIDs []transactions.Txid
-	message             *transactionBlockMessage
-	peer                *Peer
-	sentTimestamp       time.Duration
-	sequenceNumber      uint64
-	partialMessage      bool
-	filter              bloomFilter
-	transactionGroups   []transactions.SignedTxGroup
+	encodedMessageSize      int
+	sentTranscationsIDs     []transactions.Txid
+	message                 *transactionBlockMessage
+	peer                    *Peer
+	sentTimestamp           time.Duration
+	sequenceNumber          uint64
+	partialMessage          bool
+	filter                  bloomFilter
+	transactionGroups       []transactions.SignedTxGroup
+	projectedSequenceNumber uint64
 }
 
 // messageAsyncEncoder structure encapsulates the encoding and sending of a given message to the network. The encoding
@@ -62,8 +63,7 @@ func (encoder *messageAsyncEncoder) asyncMessageSent(enqueued bool, sequenceNumb
 		encoder.state.log.Infof("unable to send message to peer. disconnecting from peer.")
 		return errTransactionSyncOutgoingMessageSendFailed
 	}
-	// record the timestamp here, before placing the entry on the queue
-	encoder.messageData.sentTimestamp = encoder.roundClock.Since()
+	// record the sequence number here, so that we can store that later on.
 	encoder.messageData.sequenceNumber = sequenceNumber
 
 	select {
@@ -93,6 +93,10 @@ func (encoder *messageAsyncEncoder) asyncEncodeAndSend(interface{}) interface{} 
 	encoder.messageData.encodedMessageSize = len(encodedMessage)
 	// now that the message is ready, we can discard the encoded transcation group slice to allow the GC to collect it.
 	releaseEncodedTransactionGroups(encoder.messageData.message.TransactionGroups.Bytes)
+	// record the timestamp here, before sending the raw bytes to the network :
+	// the time we spend on the network package might include the network processing time, which
+	// we want to make sure we avoid.
+	encoder.messageData.sentTimestamp = encoder.roundClock.Since()
 
 	encoder.state.node.SendPeerMessage(encoder.messageData.peer.networkPeer, encodedMessage, encoder.asyncMessageSent)
 	releaseMessageBuffer(encodedMessage)
@@ -136,6 +140,11 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 		msgEncoder.messageData = s.assemblePeerMessage(peer, &pendingTransactions)
 		profAssembleMessage.end()
 		isPartialMessage := msgEncoder.messageData.partialMessage
+		// The message that we've just encoded is expected to be sent out with the next sequence number.
+		// However, since the enqueue method is using the execution pool, there is a remote chance that we
+		// would "garble" the message ordering. That's not a huge issue, but we need to be able to tell that
+		// so we can have accurate elapsed time measurements for the data exchange rate calculations.
+		msgEncoder.messageData.projectedSequenceNumber = peer.lastSentMessageSequenceNumber + 1
 		msgEncoder.enqueue()
 
 		scheduleOffset, ops := peer.getNextScheduleOffset(s.isRelay, s.lastBeta, isPartialMessage, currentTime)
@@ -231,8 +240,13 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 
 	metaMessage.message.MsgSync.RefTxnBlockMsgSeq = peer.nextReceivedMessageSeq - 1
 	if peer.lastReceivedMessageTimestamp != 0 && peer.lastReceivedMessageLocalRound == s.round {
-		metaMessage.message.MsgSync.ResponseElapsedTime = uint64((s.clock.Since() - peer.lastReceivedMessageTimestamp).Nanoseconds())
+		// adding a nanosecond to the elapsed time is meaningless for the data rate calculation, but would ensure that
+		// the ResponseElapsedTime field has a clear distinction between "being set" vs. "not being set"
+		metaMessage.message.MsgSync.ResponseElapsedTime = uint64((s.clock.Since() - peer.lastReceivedMessageTimestamp).Nanoseconds()) + 1
+		// reset the lastReceivedMessageTimestamp so that we won't be using that again on a subsequent outgoing message.
+		peer.lastReceivedMessageTimestamp = 0
 	}
+
 	// use the messages seq number that we've accepted so far, and let the other peer
 	// know about them. The getAcceptedMessages would delete the returned list from the peer's storage before
 	// returning.
@@ -245,7 +259,15 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 }
 
 func (s *syncState) evaluateOutgoingMessage(msgData sentMessageMetadata) {
-	msgData.peer.updateMessageSent(msgData.message, msgData.sentTranscationsIDs, msgData.sentTimestamp, msgData.sequenceNumber, msgData.encodedMessageSize, msgData.filter)
+	timestamp := msgData.sentTimestamp
+	// test to see if our message got re-ordered between the time we placed it on the execution pool queue and the time
+	// we received it back from the network:
+	if msgData.sequenceNumber != msgData.projectedSequenceNumber {
+		// yes, the order was changed. In this case, we will set the timestamp to zero. This would allow the
+		// incoming message handler to identify that we shouldn't use this timestamp for calculating the data exchange rate.
+		timestamp = 0
+	}
+	msgData.peer.updateMessageSent(msgData.message, msgData.sentTranscationsIDs, timestamp, msgData.sequenceNumber, msgData.encodedMessageSize, msgData.filter)
 	s.log.outgoingMessage(msgStats{msgData.sequenceNumber, msgData.message.Round, len(msgData.sentTranscationsIDs), msgData.message.UpdatedRequestParams, len(msgData.message.TxnBloomFilter.BloomFilter), msgData.message.MsgSync.NextMsgMinDelay, msgData.peer.networkAddress()})
 }
 

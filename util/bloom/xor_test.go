@@ -25,13 +25,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/xorfilter"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/xorfilter"
+
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestXorBloom(t *testing.T) {
-	t.Parallel()
+	partitiontest.PartitionTest(t)
+
 	numElementsCases := []int{2000, 20000, 200000}
 	fpRateCases := []float64{0.0042} //, 0.00001, 0.0000001}
 	numFP := []int{100, 25, 5}
@@ -94,6 +98,8 @@ func estimateFalsePositiveRateXor(t *testing.T, numAdded int, numFP int) float64
 }
 
 func TestByte32FalsePositive(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 	var filterSizes = []int{1000, 5000, 10000, 50000, 100000}
 	for _, filterSetSize := range filterSizes {
@@ -213,6 +219,8 @@ func memDelta(a, b *runtime.MemStats) string {
 }
 
 func TestMemXor(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 	var xb xorfilter.Builder
 	xff := func() GenericFilter {
@@ -224,6 +232,8 @@ func TestMemXor(t *testing.T) {
 }
 
 func TestMemBloom(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 	fpRate := 0.004
 	filterSetSize := 5000

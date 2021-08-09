@@ -377,7 +377,6 @@ func (node *AlgorandFullNode) Start() {
 		node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)
 		node.blockService.Start()
 		node.ledgerService.Start()
-		node.txHandler.Start()
 		node.compactCert.Start()
 		node.txnSyncService.Start()
 		node.txnSyncConnector.start()
@@ -451,7 +450,7 @@ func (node *AlgorandFullNode) Stop() {
 		node.catchpointCatchupService.Stop()
 	} else {
 		node.txnSyncService.Stop()
-		node.txHandler.Stop()
+		node.txnSyncConnector.stop()
 		node.agreementService.Shutdown()
 		node.catchupService.Stop()
 		node.txPoolSyncerService.Stop()
@@ -1039,7 +1038,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 				node.waitMonitoringRoutines()
 			}()
 			node.net.ClearHandlers()
-			node.txHandler.Stop()
+			node.txnSyncConnector.stop()
 			node.txnSyncService.Stop()
 			node.agreementService.Shutdown()
 			node.catchupService.Stop()
@@ -1064,7 +1063,6 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 		node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)
 		node.blockService.Start()
 		node.ledgerService.Start()
-		node.txHandler.Start()
 		node.txnSyncService.Start()
 		node.txnSyncConnector.start()
 

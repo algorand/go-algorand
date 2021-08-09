@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/util/timers"
 )
 
-// transcationSyncNodeConnector implementes the txnsync.NodeConnector interface, allowing the
+// transcationSyncNodeConnector implements the txnsync.NodeConnector interface, allowing the
 // transaction sync communicate with the node and it's child objects.
 type transcationSyncNodeConnector struct {
 	node           *AlgorandFullNode
@@ -186,6 +186,7 @@ func (tsnc *transcationSyncNodeConnector) OnNewBlock(block bookkeeping.Block, de
 }
 
 func (tsnc *transcationSyncNodeConnector) start() {
+	tsnc.txHandler.Start()
 	tsnc.messageHandler = tsnc.node.txnSyncService.GetIncomingMessageHandler()
 	handlers := []network.TaggedMessageHandler{
 		{Tag: protocol.Txn2Tag, MessageHandler: tsnc},

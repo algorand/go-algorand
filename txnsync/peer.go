@@ -17,9 +17,11 @@
 package txnsync
 
 import (
+	"math"
 	"sort"
 	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 )
@@ -47,7 +49,7 @@ const pendingUnconfirmedRemoteMessages = 20
 
 // longTermRecentTransactionsSentBufferLength is the size of the long term transaction id cache.
 const longTermRecentTransactionsSentBufferLength = 15000
-const minDataExchangeRateThreshold = 100 * 1024            // 100KB/s, which is ~0.8Mbps
+const minDataExchangeRateThreshold = 500 * 1024            // 500KB/s, which is ~3.9Mbps
 const maxDataExchangeRateThreshold = 100 * 1024 * 1024 / 8 // 100Mbps
 const defaultDataExchangeRate = minDataExchangeRateThreshold
 const defaultRelayToRelayDataExchangeRate = 10 * 1024 * 1024 / 8 // 10Mbps
@@ -74,6 +76,10 @@ const (
 	messageConstTransactions        messageConstructionOps = 2
 	messageConstNextMinDelay        messageConstructionOps = 4
 	messageConstUpdateRequestParams messageConstructionOps = 8
+
+	// defaultSignificantMessageThreshold is the minimal transmitted message size which would be used for recalculating the
+	// data exchange rate.
+	defaultSignificantMessageThreshold = 50000
 )
 
 // incomingBloomFilter stores an incoming bloom filter, along with the associated round number.
@@ -90,6 +96,10 @@ type Peer struct {
 	// isOutgoing defines whether the peer is an outgoing peer or not. For relays, this is meaningful as these have
 	// slightly different message timing logic.
 	isOutgoing bool
+	// significantMessageThreshold is the minimal transmitted message size which would be used for recalculating the
+	// data exchange rate. When significantMessageThreshold is equal to math.MaxUint64, no data exchange rate updates would be
+	// performed.
+	significantMessageThreshold uint64
 	// state defines the peer state ( in terms of state machine state ). It's touched only by the sync main state machine
 	state peerState
 
@@ -247,18 +257,26 @@ func (t *transactionGroupCounterTracker) index(offset, modulator byte) int {
 	return -1
 }
 
-func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool) *Peer {
+func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool, cfg *config.Local) *Peer {
 	p := &Peer{
-		networkPeer:                networkPeer,
-		isOutgoing:                 isOutgoing,
-		recentSentTransactions:     makeTransactionCache(shortTermRecentTransactionsSentBufferLength, longTermRecentTransactionsSentBufferLength, pendingUnconfirmedRemoteMessages),
-		dataExchangeRate:           defaultDataExchangeRate,
-		transactionPoolAckCh:       make(chan uint64, maxAcceptedMsgSeq),
-		transactionPoolAckMessages: make([]uint64, 0, maxAcceptedMsgSeq),
+		networkPeer:                 networkPeer,
+		isOutgoing:                  isOutgoing,
+		recentSentTransactions:      makeTransactionCache(shortTermRecentTransactionsSentBufferLength, longTermRecentTransactionsSentBufferLength, pendingUnconfirmedRemoteMessages),
+		dataExchangeRate:            defaultDataExchangeRate,
+		transactionPoolAckCh:        make(chan uint64, maxAcceptedMsgSeq),
+		transactionPoolAckMessages:  make([]uint64, 0, maxAcceptedMsgSeq),
+		significantMessageThreshold: defaultSignificantMessageThreshold,
 	}
 	if isLocalNodeRelay {
 		p.requestedTransactionsModulator = 1
 		p.dataExchangeRate = defaultRelayToRelayDataExchangeRate
+	}
+	if cfg.TransactionSyncDataExchangeRate > 0 {
+		p.dataExchangeRate = cfg.TransactionSyncDataExchangeRate
+		p.significantMessageThreshold = math.MaxUint64
+	}
+	if cfg.TransactionSyncSignificantMessageThreshold > 0 && cfg.TransactionSyncDataExchangeRate == 0 {
+		p.significantMessageThreshold = cfg.TransactionSyncSignificantMessageThreshold
 	}
 	// increase the number of total created peers.
 	txsyncCreatedPeersTotal.Inc(nil)
@@ -525,13 +543,13 @@ func (p *Peer) updateIncomingTransactionGroups(txnGroups []transactions.SignedTx
 
 func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound basics.Round, currentTime time.Duration, incomingMessageSize int) {
 	p.lastConfirmedMessageSeqReceived = timings.RefTxnBlockMsgSeq
-	// if we received a message that references our privious message, see if they occurred on the same round
-	if p.lastConfirmedMessageSeqReceived == p.lastSentMessageSequenceNumber && p.lastSentMessageRound == currentRound {
+	// if we received a message that references our previous message, see if they occurred on the same round
+	if p.lastConfirmedMessageSeqReceived == p.lastSentMessageSequenceNumber && p.lastSentMessageRound == currentRound && p.lastSentMessageTimestamp > 0 {
 		// if so, we might be able to calculate the bandwidth.
 		timeSinceLastMessageWasSent := currentTime - p.lastSentMessageTimestamp
-		if timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime) {
+		networkMessageSize := uint64(p.lastSentMessageSize + incomingMessageSize)
+		if timings.ResponseElapsedTime != 0 && timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime) && networkMessageSize >= p.significantMessageThreshold {
 			networkTrasmitTime := timeSinceLastMessageWasSent - time.Duration(timings.ResponseElapsedTime)
-			networkMessageSize := uint64(p.lastSentMessageSize + incomingMessageSize)
 			dataExchangeRate := uint64(time.Second) * networkMessageSize / uint64(networkTrasmitTime)
 
 			if dataExchangeRate < minDataExchangeRateThreshold {
@@ -543,6 +561,13 @@ func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound ba
 			p.dataExchangeRate = dataExchangeRate
 			//fmt.Printf("incoming message : updating data exchange to %d; network msg size = %d+%d, transmit time = %v\n", dataExchangeRate, p.lastSentMessageSize, incomingMessageSize, networkTrasmitTime)
 		}
+
+		// given that we've (maybe) updated the data exchange rate, we need to clear out the lastSendMessage information
+		// so we won't use that again on a subsequent incoming message.
+		p.lastSentMessageSequenceNumber = 0
+		p.lastSentMessageRound = 0
+		p.lastSentMessageTimestamp = 0
+		p.lastSentMessageSize = 0
 	}
 	p.lastReceivedMessageLocalRound = currentRound
 	p.lastReceivedMessageTimestamp = currentTime

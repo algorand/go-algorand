@@ -22,13 +22,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/stretchr/testify/require"
+
+  "github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // TestTransactionCache General smoke test for the transaction cache
 func TestTransactionCache(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	var txid transactions.Txid
 	a := makeTransactionCache(5, 10, 20)
 	// add 5
@@ -76,6 +80,8 @@ func TestTransactionCache(t *testing.T) {
 
 // TestTransactionCacheAddSlice tests addSlice functionality of the transaction cache
 func TestTransactionCacheAddSlice(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	tc := makeTransactionCache(5, 10, 20)
 	curTimestamp := time.Duration(0)
 	msgSeq := uint64(0)
@@ -93,6 +99,8 @@ func TestTransactionCacheAddSlice(t *testing.T) {
 
 // TestAddSliceSeqReturn Tests that if the ackPendingTxIds is bigger that the msgSeq then we return
 func TestAddSliceSeqReturn(t *testing.T) {
+  partitiontest.PartitionTest(t)
+
 	tc := makeTransactionCache(5, 10, 20)
 	curTimestamp := time.Duration(cacheHistoryDuration)
 	msgSeq := uint64(1)
@@ -111,7 +119,7 @@ func TestAddSliceSeqReturn(t *testing.T) {
 
 // TestAddSliceCapacity tests that we correctly copy the ackPendingTxids when at capacity
 func TestAddSliceCapacity(t *testing.T) {
-
+  partitiontest.PartitionTest(t)
 	tc := makeTransactionCache(5, 10, 5)
 
 	curTimestamp := time.Duration(0)
@@ -128,7 +136,7 @@ func TestAddSliceCapacity(t *testing.T) {
 
 // TestShortTermCacheReset tests that the short term cache is reset
 func TestShortTermCacheReset(t *testing.T) {
-
+  partitiontest.PartitionTest(t)
 	tc := makeTransactionCache(5, 10, 5)
 	require.Equal(t, 0, tc.shortTermCache.oldest)
 	require.Equal(t, 0, len(tc.shortTermCache.transactionsMap))
@@ -150,7 +158,7 @@ func TestShortTermCacheReset(t *testing.T) {
 
 // TestCacheAcknowledge tests that the acknowledge function correctly adds entries
 func TestCacheAcknowledge(t *testing.T) {
-
+  partitiontest.PartitionTest(t)
 	tc := makeTransactionCache(5, 10, 5)
 
 	curTimestamp := time.Duration(0)
@@ -177,7 +185,7 @@ func TestCacheAcknowledge(t *testing.T) {
 
 // TestCacheAddAndContains tests adding to the long term cache and if we can test if it contains it
 func TestCacheAddAndContains(t *testing.T) {
-
+  partitiontest.PartitionTest(t)
 	tc := makeTransactionCache(5, 2*cachedEntriesPerMap, 5)
 
 	// We want two scenarios: Smaller than cachedEntriesPerMap and bigger

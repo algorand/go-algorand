@@ -25,12 +25,14 @@ import (
 	"time"
 
 	"github.com/algorand/go-deadlock"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // This test sets up a network with 2 nodes and 2 relays.
@@ -48,7 +50,7 @@ import (
 // round period, to give the test enough time to check for the
 // transactions.
 func TestTxnSync(t *testing.T) {
-	t.Parallel()
+	partitiontest.PartitionTest(t)
 
 	maxNumberOfSends := 1200
 	maxRate := 1000 // txn/sec
@@ -184,7 +186,7 @@ func TestTxnSync(t *testing.T) {
 		case <-timeout.C:
 			// Send the transactions only during the first half of the round
 			// Wait for the next round, and stop sending transactions after the first half
-			err = fixture.ClientWaitForRound(fixture.AlgodClient, nextRound, 2*roundTime)
+			err = fixture.ClientWaitForRound(fixture.AlgodClient, nextRound, 10*roundTime)
 			require.NoError(t, err)
 			fmt.Printf("Round %d\n", int(nextRound))
 			nextRound++

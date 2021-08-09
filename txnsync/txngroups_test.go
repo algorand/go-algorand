@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -42,6 +43,8 @@ var startRound = flag.Int("start", 0, "Starting round")
 var endRound = flag.Int("end", 10, "Ending round")
 
 func TestNibble(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	var b []byte
 	for i := 0; i < 10; i++ {
 		b = append(b, byte(i))
@@ -84,6 +87,8 @@ func decodeTransactionGroupsOld(bytes []byte) (txnGroups []transactions.SignedTx
 }
 
 func TestTxnGroupEncodingSmall(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	genesisHash := crypto.Hash([]byte("gh"))
 	genesisID := "gID"
 
@@ -224,6 +229,8 @@ func txnGroupsData(numBlocks int) (txnGroups []transactions.SignedTxGroup, genes
 }
 
 func TestTxnGroupEncodingLarge(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	txnGroups, genesisID, genesisHash, err := txnGroupsData(969)
 	require.NoError(t, err)
 
@@ -375,6 +382,8 @@ func BenchmarkTxnGroupDecodingOld(b *testing.B) {
 // TestTxnGroupEncodingReflection generates random
 // txns of each type using reflection
 func TestTxnGroupEncodingReflection(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	for i := 0; i < 10; i++ {
 		v0, err := protocol.RandomizeObject(&transactions.SignedTxn{})
 		require.NoError(t, err)
@@ -474,6 +483,8 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 
 // pass in flag -db to specify db, start round, end round
 func TestTxnGroupEncodingArchival(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	if *blockDBFilename == "" {
 		t.Skip("no archival node db was provided")
 	}
