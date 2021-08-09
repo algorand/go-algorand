@@ -374,7 +374,7 @@ jobs:
     resource_class: medium
     parallelism: 4
     environment:
-      E2E_SUBS: "SKIP"
+      E2E_SUBS_SCRIPTS: "SKIP"
     steps:
       - prepare_go
       - generic_integration:
@@ -387,7 +387,7 @@ jobs:
     resource_class: medium
     parallelism: 4
     environment:
-      E2E_SUBS: "SKIP"
+      E2E_SUBS_SCRIPTS: "SKIP"
     steps:
       - prepare_go
       - generic_integration:
@@ -399,7 +399,7 @@ jobs:
       image: ubuntu-2004:202104-01
     resource_class: large
     environment:
-      E2E_SUBS: "ONLY"
+      E2E_SUBS_SCRIPTS: "ONLY"
     steps:
       - prepare_go
       - generic_integration:
@@ -411,7 +411,7 @@ jobs:
       image: ubuntu-2004:202104-01
     resource_class: large
     environment:
-      E2E_SUBS: "ONLY"
+      E2E_SUBS_SCRIPTS: "ONLY"
     steps:
       - prepare_go
       - generic_integration:
@@ -459,7 +459,7 @@ jobs:
     resource_class: arm.medium
     parallelism: 4
     environment:
-      E2E_SUBS: "SKIP"
+      E2E_SUBS_SCRIPTS: "SKIP"
     steps:
       - checkout
       - prepare_go
@@ -473,7 +473,7 @@ jobs:
     resource_class: arm.medium
     parallelism: 4
     environment:
-      E2E_SUBS: "SKIP"
+      E2E_SUBS_SCRIPTS: "SKIP"
     steps:
       - checkout
       - prepare_go
@@ -486,7 +486,7 @@ jobs:
       image: ubuntu-2004:202101-01
     resource_class: arm.large
     environment:
-      E2E_SUBS: "ONLY"
+      E2E_SUBS_SCRIPTS: "ONLY"
     steps:
       - checkout
       - prepare_go
@@ -499,7 +499,7 @@ jobs:
       image: ubuntu-2004:202101-01
     resource_class: arm.large
     environment:
-      E2E_SUBS: "ONLY"
+      E2E_SUBS_SCRIPTS: "ONLY"
     steps:
       - checkout
       - prepare_go
@@ -558,7 +558,7 @@ jobs:
     resource_class: medium
     parallelism: 4
     environment:
-      E2E_SUBS: "SKIP"
+      E2E_SUBS_SCRIPTS: "SKIP"
       HOMEBREW_NO_AUTO_UPDATE: "true"
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
@@ -574,7 +574,7 @@ jobs:
     resource_class: medium
     parallelism: 4
     environment:
-      E2E_SUBS: "SKIP"
+      E2E_SUBS_SCRIPTS: "SKIP"
       HOMEBREW_NO_AUTO_UPDATE: "true"
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
@@ -589,7 +589,7 @@ jobs:
       xcode: 12.0.1
     resource_class: large
     environment:
-      E2E_SUBS: "ONLY"
+      E2E_SUBS_SCRIPTS: "ONLY"
       HOMEBREW_NO_AUTO_UPDATE: "true"
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
@@ -604,7 +604,7 @@ jobs:
       xcode: 12.0.1
     resource_class: large
     environment:
-      E2E_SUBS: "ONLY"
+      E2E_SUBS_SCRIPTS: "ONLY"
       HOMEBREW_NO_AUTO_UPDATE: "true"
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow

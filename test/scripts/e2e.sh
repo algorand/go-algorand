@@ -100,37 +100,43 @@ export GOPATH=$(go env GOPATH)
 # Change current directory to test/scripts so we can just use ./test.sh to exec.
 cd "${SCRIPT_PATH}"
 
-if [ "${E2E_SUBS}" != "SKIP" ]; then
+e2e_subs_scripts()
+{
+    ./timeout 200 ./e2e_basic_start_stop.sh
+    duration "e2e_basic_start_stop.sh"
 
-./timeout 200 ./e2e_basic_start_stop.sh
-duration "e2e_basic_start_stop.sh"
+    python3 -m venv "${TEMPDIR}/ve"
+    . "${TEMPDIR}/ve/bin/activate"
+    "${TEMPDIR}/ve/bin/pip3" install --upgrade pip
+    "${TEMPDIR}/ve/bin/pip3" install --upgrade py-algorand-sdk cryptography
+    duration "e2e client setup"
 
-python3 -m venv "${TEMPDIR}/ve"
-. "${TEMPDIR}/ve/bin/activate"
-"${TEMPDIR}/ve/bin/pip3" install --upgrade pip
-"${TEMPDIR}/ve/bin/pip3" install --upgrade py-algorand-sdk cryptography
-duration "e2e client setup"
+    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.sh
+    duration "parallel client runner"
 
-"${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.sh
-duration "parallel client runner"
+    for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
+        "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} --version "$(basename "$vdir")" "$vdir"/*.sh
+    done
+    duration "vdir client runners"
 
-for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
-    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} --version "$(basename "$vdir")" "$vdir"/*.sh
-done
-duration "vdir client runners"
+    for script in "$SRCROOT"/test/scripts/e2e_subs/serial/*; do
+        "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} $script
+    done
+    duration "serial client runners"
 
-for script in "$SRCROOT"/test/scripts/e2e_subs/serial/*; do
-    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} $script
-done
-duration "serial client runners"
+    deactivate
+}
 
-deactivate
-
-fi # if $E2E_SUBS != "SKIP"
-
-if [ "${E2E_SUBS}" = "ONLY" ]; then
-    exit 0
-fi
+case $E2E_SUBS_SCRIPTS in
+    SKIP)
+        ;;
+    ONLY)
+        exit 0
+        ;;
+    *)
+        e2e_subs_scripts
+        ;;
+esac
 
 # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
 # This allows us to clean up everything with our rm -rf trap.
