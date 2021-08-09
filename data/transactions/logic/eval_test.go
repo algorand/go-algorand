@@ -52,6 +52,7 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 	return config.ConsensusParams{
 		LogicSigVersion:     version,
 		LogicSigMaxCost:     20000,
+		Application:         version >= appsEnabledVersion,
 		MaxAppProgramCost:   700,
 		MaxAppKeyLen:        64,
 		MaxAppBytesValueLen: 64,
@@ -1026,6 +1027,8 @@ func TestGlobal(t *testing.T) {
 			EvalStateful, CheckStateful,
 		},
 	}
+	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
+	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
 	ledger := makeTestLedger(nil)
 	ledger.appID = 42
 	addr, err := basics.UnmarshalChecksumAddress(testAddr)

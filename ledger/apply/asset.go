@@ -101,7 +101,11 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 		}
 
 		// Tell the cow what asset we created
-		return balances.AllocateAsset(header.Sender, newidx, true)
+		err = balances.AllocateAsset(header.Sender, newidx, true)
+		if err != nil {
+			return err
+		}
+		return balances.AllocateAsset(header.Sender, newidx, false)
 	}
 
 	// Re-configuration and destroying must be done by the manager key.
@@ -131,6 +135,10 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 
 		// Tell the cow what asset we deleted
 		err = balances.DeallocateAsset(creator, cc.ConfigAsset, true)
+		if err != nil {
+			return err
+		}
+		err = balances.DeallocateAsset(creator, cc.ConfigAsset, false)
 		if err != nil {
 			return err
 		}
@@ -269,6 +277,11 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 			if err != nil {
 				return err
 			}
+
+			err = balances.AllocateAsset(source, ct.XferAsset, false)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -360,6 +373,11 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 
 		delete(snd.Assets, ct.XferAsset)
 		err = balances.Put(source, snd)
+		if err != nil {
+			return err
+		}
+
+		err = balances.DeallocateAsset(source, ct.XferAsset, false)
 		if err != nil {
 			return err
 		}
