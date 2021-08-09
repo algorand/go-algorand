@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
@@ -125,6 +126,8 @@ func BenchmarkTimeAfter(b *testing.B) {
 	}
 }
 func TestFilterAlreadyCommitted(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	const numUsers = 100
 	tp, l, secrets, addresses := makeTestingTransactionPoolAndLedger(t, 1)
 	defer l.Close()

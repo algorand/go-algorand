@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/timers"
 )
 
@@ -50,6 +51,8 @@ func (m mockAsyncLogger) Warnf(string, ...interface{}) {
 }
 
 func TestAsyncMessageSent(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	var s syncState
@@ -103,6 +106,8 @@ func (m mockAsyncNodeConnector) GetPendingTransactionGroups() (txGroups []transa
 
 // TestAsyncEncodeAndSendErr Tests response when encodeTransactionGroups doesn't return an error
 func TestAsyncEncodeAndSendNonErr(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	var s syncState
@@ -150,6 +155,8 @@ func TestAsyncEncodeAndSendNonErr(t *testing.T) {
 
 // TestAsyncEncodeAndSendErr Tests response when encodeTransactionGroups returns an error
 func TestAsyncEncodeAndSendErr(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	var s syncState
@@ -197,6 +204,8 @@ func TestAsyncEncodeAndSendErr(t *testing.T) {
 
 // TestAsyncEncodeAndSend Tests that SendPeerMessage is called in the node connector
 func TestAsyncEncodeAndSend(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	var s syncState
@@ -229,6 +238,8 @@ func TestAsyncEncodeAndSend(t *testing.T) {
 
 // TestAssemblePeerMessage_messageConstBloomFilter Tests assemblePeerMessage with messageConstBloomFilter msgOps
 func TestAssemblePeerMessage_messageConstBloomFilter(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	s := syncState{
@@ -269,6 +280,7 @@ func TestAssemblePeerMessage_messageConstBloomFilter(t *testing.T) {
 
 // TestAssemblePeerMessage_messageConstNextMinDelay_messageConstUpdateRequestParams Tests assemblePeerMessage with messageConstNextMinDelay | messageConstUpdateRequestParams msgOps
 func TestAssemblePeerMessage_messageConstNextMinDelay_messageConstUpdateRequestParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -301,6 +313,8 @@ func TestAssemblePeerMessage_messageConstNextMinDelay_messageConstUpdateRequestP
 
 // TestAssemblePeerMessage_messageConstTransactions Tests assemblePeerMessage messageConstTransactions msgOps
 func TestAssemblePeerMessage_messageConstTransactions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	s := syncState{clock: timers.MakeMonotonicClock(time.Now())}
@@ -339,6 +353,7 @@ func TestAssemblePeerMessage_messageConstTransactions(t *testing.T) {
 // TestLocallyGeneratedTransactions Separately tests that generating transactions are being
 // correctly made given a signed transaction group array.
 func TestLocallyGeneratedTransactions(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
 

@@ -22,9 +22,13 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestBeta(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	beta0 := beta(0)
 	beta10000 := beta(10000)
 	require.GreaterOrEqual(t, int64(beta0), int64(100*time.Millisecond))
@@ -38,6 +42,8 @@ func TestBeta(t *testing.T) {
 }
 
 func TestShouldUpdateBeta(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	beta0 := beta(0)
 	beta100 := beta(100)
 	beta5000 := beta(5000)

@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type incomingLogger struct {
@@ -46,6 +47,7 @@ func (ml *incomingLogger) Infof(format string, args ...interface{}) {
 }
 
 func TestAsyncIncomingMessageHandlerAndErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	message := transactionBlockMessage{Version: 1}
 	messageBytes := message.MarshalMsg(nil)
@@ -111,6 +113,7 @@ func TestAsyncIncomingMessageHandlerAndErrors(t *testing.T) {
 }
 
 func TestEvaluateIncomingMessagePart1(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	message := incomingMessage{}
 	cfg := config.GetDefaultLocal()
@@ -164,6 +167,7 @@ func TestEvaluateIncomingMessagePart1(t *testing.T) {
 }
 
 func TestEvaluateIncomingMessagePart2(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	cfg := config.GetDefaultLocal()
 	cfg.EnableVerbosedTransactionSyncLogging = true
@@ -247,6 +251,7 @@ func TestEvaluateIncomingMessagePart2(t *testing.T) {
 }
 
 func TestEvaluateIncomingMessagePart3(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	cfg := config.GetDefaultLocal()
 	cfg.EnableVerbosedTransactionSyncLogging = true
@@ -285,6 +290,7 @@ func TestEvaluateIncomingMessagePart3(t *testing.T) {
 }
 
 func TestEvaluateIncomingMessageAccumulatedTransactionsCount(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	cfg := config.GetDefaultLocal()
 	cfg.EnableVerbosedTransactionSyncLogging = true

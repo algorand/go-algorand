@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type connectionSettings struct {
@@ -61,6 +62,8 @@ type scenario struct {
 }
 
 func TestEmulatedTrivialTransactionsExchange(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	testScenario := scenario{
 		netConfig: networkConfiguration{
 			nodes: []nodeConfiguration{
@@ -140,6 +143,7 @@ func TestEmulatedTrivialTransactionsExchange(t *testing.T) {
 }
 
 func TestEmulatedTwoNodesToRelaysTransactionsExchange(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// this test creates the following network mode:
 	//
 	//       relay1 ---------->  relay2
@@ -231,6 +235,8 @@ func TestEmulatedTwoNodesToRelaysTransactionsExchange(t *testing.T) {
 }
 
 func TestEmulatedLargeSetTransactionsExchange(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	testScenario := scenario{
 		netConfig: networkConfiguration{
 			nodes: []nodeConfiguration{
@@ -310,6 +316,8 @@ func TestEmulatedLargeSetTransactionsExchange(t *testing.T) {
 }
 
 func TestEmulatedLargeSetTransactionsExchangeIntermixed(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	testScenario := scenario{
 		netConfig: networkConfiguration{
 			nodes: []nodeConfiguration{
@@ -397,6 +405,8 @@ func TestEmulatedLargeSetTransactionsExchangeIntermixed(t *testing.T) {
 }
 
 func TestEmulatedNonRelayToMultipleRelays(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	testScenario := scenario{
 		netConfig: networkConfiguration{
 			nodes: []nodeConfiguration{
@@ -496,6 +506,8 @@ func TestEmulatedNonRelayToMultipleRelays(t *testing.T) {
 }
 
 func TestEmulatedTwoNodesFourRelays(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	testScenario := scenario{
 		netConfig: networkConfiguration{
 			nodes: []nodeConfiguration{
@@ -643,6 +655,8 @@ func TestEmulatedTwoNodesFourRelays(t *testing.T) {
 }
 
 func TestEmulatedTwentyNodesFourRelays(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	if testing.Short() {
 		t.Skip("TestEmulatedTwentyNodesFourRelays is a long test and therefore was skipped")
 	}

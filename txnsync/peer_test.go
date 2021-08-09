@@ -28,10 +28,13 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // TestGetSetTransactionGroupCounterTracker tests the get/set capabilities for the counter
 func TestGetSetTransactionGroupCounterTracker(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	grp := transactionGroupCounterTracker{}
@@ -61,6 +64,8 @@ func TestGetSetTransactionGroupCounterTracker(t *testing.T) {
 
 // TestIndexTransactionGroupCounterTracker tests the index function specifically
 func TestIndexTransactionGroupCounterTracker(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	grp := transactionGroupCounterTracker{
 		{
 			offset:        0,
@@ -82,6 +87,8 @@ func TestIndexTransactionGroupCounterTracker(t *testing.T) {
 
 // TestRollTransactionGroupCounterTracker tests that rolling works and doesn't panic
 func TestRollTransactionGroupCounterTracker(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	defer func() {
@@ -130,6 +137,7 @@ func TestRollTransactionGroupCounterTracker(t *testing.T) {
 
 // TestGetNextScheduleOffset tests the state machine of getNextScheduleOffset
 func TestGetNextScheduleOffset(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	type args struct {
 		isRelay        bool
@@ -279,6 +287,7 @@ func TestGetNextScheduleOffset(t *testing.T) {
 
 // TestGetMessageConstructionOps tests the state machine of getMessageConstructionOps
 func TestGetMessageConstructionOps(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	type args struct {
 		isRelay           bool
@@ -405,6 +414,7 @@ func TestGetMessageConstructionOps(t *testing.T) {
 
 // TestAdvancePeerState tests the state machine of advancePeerState
 func TestAdvancePeerState(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	type args struct {
 		currentTime time.Duration
@@ -530,6 +540,8 @@ func TestAdvancePeerState(t *testing.T) {
 
 // TestUpdateIncomingMessageTiming tests updating the incoming message timing
 func TestUpdateIncomingMessageTiming(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	config := config.GetDefaultLocal()
 	p := makePeer(nil, true, true, &config)
@@ -575,6 +587,8 @@ func TestUpdateIncomingMessageTiming(t *testing.T) {
 
 // TestUpdateIncomingTransactionGroups tests updating the incoming transaction groups
 func TestUpdateIncomingTransactionGroups(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	var txnGroups []transactions.SignedTxGroup
@@ -611,6 +625,8 @@ func TestUpdateIncomingTransactionGroups(t *testing.T) {
 
 // TestUpdateRequestParams tests updating the request parameters
 func TestUpdateRequestParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	config := config.GetDefaultLocal()
 	p := makePeer(nil, true, true, &config)
@@ -629,6 +645,8 @@ func TestUpdateRequestParams(t *testing.T) {
 
 // TestAddIncomingBloomFilter tests adding an incoming bloom filter
 func TestAddIncomingBloomFilter(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	config := config.GetDefaultLocal()
 	p := makePeer(nil, true, true, &config)
@@ -671,6 +689,7 @@ func TestAddIncomingBloomFilter(t *testing.T) {
 
 // TestSelectPendingTransactions tests selectPendingTransactions
 func TestSelectPendingTransactions(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	type args struct {
 		pendingTransactions []transactions.SignedTxGroup
@@ -713,6 +732,7 @@ func TestSelectPendingTransactions(t *testing.T) {
 
 // TestSelectedMessagesModulator tests the use of the modulator on the returned list
 func TestSelectedMessagesModulator(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -758,6 +778,8 @@ func TestSelectedMessagesModulator(t *testing.T) {
 
 // TestGetAcceptedMessages tests get accepted messages
 func TestGetAcceptedMessages(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	config := config.GetDefaultLocal()
 	p := makePeer(nil, true, true, &config)
@@ -779,6 +801,8 @@ func TestGetAcceptedMessages(t *testing.T) {
 
 // TestDequeuePendingTransactionPoolAckMessages tests dequeuePendingTransactionPoolAckMessages
 func TestDequeuePendingTransactionPoolAckMessages(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	config := config.GetDefaultLocal()
 	p := makePeer(nil, true, true, &config)
@@ -820,6 +844,8 @@ func TestDequeuePendingTransactionPoolAckMessages(t *testing.T) {
 
 // TestUpdateMessageSent Tests whether we can update the messages sent fields
 func TestUpdateMessageSent(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	config := config.GetDefaultLocal()
 	p := makePeer(nil, true, true, &config)
@@ -850,6 +876,8 @@ func TestUpdateMessageSent(t *testing.T) {
 
 // TestIncomingPeersOnly Tests whether we can extract outgoing peers only
 func TestIncomingPeersOnly(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	config := config.GetDefaultLocal()
 	p1 := makePeer(nil, true, true, &config)
@@ -868,6 +896,8 @@ func TestIncomingPeersOnly(t *testing.T) {
 
 // TestLocalRequestParams Tests setting and getting local request params
 func TestLocalRequestParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	config := config.GetDefaultLocal()
 	p := makePeer(nil, true, true, &config)
@@ -886,6 +916,8 @@ func TestLocalRequestParams(t *testing.T) {
 
 // TestSimpleGetters Tests the "simple" getters for the Peer Object
 func TestSimpleGetters(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	var sentinelInterface interface{}
 	config := config.GetDefaultLocal()
@@ -897,6 +929,7 @@ func TestSimpleGetters(t *testing.T) {
 
 // TestMakePeer Tests the Peer factory function
 func TestMakePeer(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
 

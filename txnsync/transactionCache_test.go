@@ -20,11 +20,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestTransactionCache(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	var txid transactions.Txid
 	a := makeTransactionCache(5, 10, 20)
 	// add 5
@@ -71,6 +75,8 @@ func TestTransactionCache(t *testing.T) {
 }
 
 func TestTransactionCacheAddSlice(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	tc := makeTransactionCache(5, 10, 20)
 	curTimestamp := time.Duration(0)
 	msgSeq := uint64(0)

@@ -22,9 +22,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestTrivialCompression(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	bufLen := 10240
 	buffer := make([]byte, bufLen)
 	for i := range buffer {

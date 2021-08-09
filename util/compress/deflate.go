@@ -160,7 +160,6 @@ func startMemAddr(b []byte) *byte {
 
 	b = append(b, 0)
 	ptr := &b[0]
-	b = b[0:0]
 
 	return ptr
 }

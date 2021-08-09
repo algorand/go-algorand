@@ -26,11 +26,15 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestMessageOrderingHeap_PushPopSwapLess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	heap := messageOrderingHeap{}
@@ -62,6 +66,8 @@ func TestMessageOrderingHeap_PushPopSwapLess(t *testing.T) {
 }
 
 func TestEnqueueHeapPop(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	heap := messageOrderingHeap{}
@@ -88,6 +94,7 @@ func TestEnqueueHeapPop(t *testing.T) {
 }
 
 func TestPopSequence(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -115,6 +122,7 @@ func TestPopSequence(t *testing.T) {
 }
 
 func TestMultiThreaded(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
 
