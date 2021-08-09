@@ -34,9 +34,8 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-const genesisID string = "foo"
-
-var genesisHash crypto.Digest
+const testGenesisID string = "foo"
+var genesisHash = crypto.Digest{0x1, 0x2, 0x3}
 
 type IndexSuite struct {
 	suite.Suite
@@ -68,7 +67,7 @@ func (s *IndexSuite) SetupSuite() {
 			BlockHeader: bookkeeping.BlockHeader{
 				Round:       basics.Round(uint64(i + 2)),
 				TimeStamp:   time.Now().Unix(),
-				GenesisID:   genesisID,
+				GenesisID:   testGenesisID,
 				GenesisHash: genesisHash,
 				UpgradeState: bookkeeping.UpgradeState{
 					CurrentProtocol: protocol.ConsensusFuture,
@@ -242,7 +241,7 @@ func generateTestObjects(numTxs, numAccs int) ([]transactions.Transaction, []tra
 				Fee:         basics.MicroAlgos{Raw: f},
 				FirstValid:  basics.Round(iss),
 				LastValid:   basics.Round(exp),
-				GenesisID:   genesisID,
+				GenesisID:   testGenesisID,
 				GenesisHash: genesisHash,
 			},
 		}
@@ -284,8 +283,4 @@ func (l *TestLedger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) 
 
 func (l *TestLedger) Wait(r basics.Round) chan struct{} {
 	return nil
-}
-
-func init() {
-	genesisHash[0] = 3
 }
