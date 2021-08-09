@@ -60,6 +60,9 @@ type unauthenticatedProposal struct {
 	OriginalProposer basics.Address `codec:"oprop"`
 }
 
+// Exported for dumping textual versions of messages
+type TransmittedPayload = transmittedPayload
+
 // ToBeHashed implements the Hashable interface.
 func (p unauthenticatedProposal) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Payload, protocol.Encode(&p)
