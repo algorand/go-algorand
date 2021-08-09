@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/util/timers"
 )
 
-// transcationSyncNodeConnector implementes the txnsync.NodeConnector interface, allowing the
+// transcationSyncNodeConnector implements the txnsync.NodeConnector interface, allowing the
 // transaction sync communicate with the node and it's child objects.
 type transcationSyncNodeConnector struct {
 	node           *AlgorandFullNode
