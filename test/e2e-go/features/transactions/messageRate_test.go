@@ -35,12 +35,14 @@ import (
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 )
 
 // this test checks that the txsync outgoing message rate
 // varies according to the transaction rate
 func TestMessageRateChangesWithTxnRate(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	if _, present := os.LookupEnv("GORACE"); present {
 		t.Skip("Skipping MessageRateChangesWithTxnRate test when race mode is enabled")
 	}
