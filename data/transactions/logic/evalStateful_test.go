@@ -484,10 +484,6 @@ func (l *testLedger) AppendLog(txn *transactions.Transaction, value string) erro
 	return nil
 }
 
-func (l *testLedger) GetLogs() []basics.LogItem {
-	return l.logs
-}
-
 func TestEvalModes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

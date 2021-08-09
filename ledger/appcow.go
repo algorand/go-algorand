@@ -462,11 +462,6 @@ func (cb *roundCowState) AppendLog(idx uint64, value string) error {
 	return nil
 }
 
-// getLogs returns logs
-func (cb *roundCowState) getLogs() []basics.LogItem {
-	return cb.logs
-}
-
 // MakeDebugBalances creates a ledger suitable for dryrun and debugger
 func MakeDebugBalances(l ledgerForCowBase, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
 	base := &roundCowBase{
