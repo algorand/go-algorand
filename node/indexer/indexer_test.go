@@ -35,6 +35,7 @@ import (
 )
 
 const testGenesisID string = "foo"
+
 var genesisHash = crypto.Digest{0x1, 0x2, 0x3}
 
 type IndexSuite struct {
