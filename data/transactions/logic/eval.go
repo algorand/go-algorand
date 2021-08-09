@@ -218,7 +218,7 @@ type EvalParams struct {
 	runModeFlags runMode
 
 	// Total pool of app call budget in a group transaction
-	PooledApplicationBudget *int
+	PooledApplicationBudget *uint64
 }
 
 type opEvalFunc func(cx *evalContext)
@@ -259,7 +259,7 @@ func (ep EvalParams) budget() int {
 		return int(ep.Proto.LogicSigMaxCost)
 	}
 	if ep.Proto.EnableAppCostPooling && ep.PooledApplicationBudget != nil {
-		return *ep.PooledApplicationBudget
+		return int(*ep.PooledApplicationBudget)
 	}
 	return ep.Proto.MaxAppProgramCost
 }
@@ -361,9 +361,9 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, err error) {
 	cx.EvalParams = params
 	cx.runModeFlags = runModeApplication
 	pass, err = eval(program, &cx)
-	if pass && cx.EvalParams.Proto.EnableAppCostPooling {
+	if cx.EvalParams.Proto.EnableAppCostPooling && cx.EvalParams.PooledApplicationBudget != nil {
 		// if eval passes, then budget is always greater than cost, so should not have underflow
-		*cx.EvalParams.PooledApplicationBudget -= cx.cost
+		*cx.EvalParams.PooledApplicationBudget = basics.SubSaturate(*cx.EvalParams.PooledApplicationBudget, uint64(cx.cost))
 	}
 
 	// set side effects
