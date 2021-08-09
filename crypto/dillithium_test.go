@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDil2Check(t *testing.T) {
+func TestDilithiumSignAndVerify(t *testing.T) {
 	a := require.New(t)
 	for i := 0; i < 100; i++ {
 		dsigner := NewDilithiumSigner()
@@ -38,4 +38,31 @@ func TestDil2Check(t *testing.T) {
 		a.NoError(err)
 		a.NoError(dverifier.VerifyBytes(bs[:], sig))
 	}
+}
+
+func TestDilithiumSignerImplemantation(t *testing.T) {
+	a := require.New(t)
+	dsigner := NewDilithiumSigner()
+
+	sig := dsigner.Sign(TestingHashable{})
+
+	dvf := dsigner.GetVerifyingKey()
+	dverifier, err := dvf.GetVerifier()
+	a.NoError(err)
+	a.NoError(dverifier.Verify(TestingHashable{}, sig))
+	a.Error(dverifier.Verify(TestingHashable{
+		data: []byte{1, 2, 3},
+	}, sig))
+	sig[0]++
+	a.Error(dverifier.Verify(TestingHashable{}, sig))
+
+	bs := sha256.Sum256(make([]byte, 8))
+	sig2 := dsigner.SignBytes(bs[:])
+	a.NoError(dverifier.VerifyBytes(bs[:], sig2))
+
+	bs2 := bs
+	bs2[0]++
+	a.Error(dverifier.VerifyBytes(bs2[:], sig2))
+	sig2[0]++
+	a.Error(dverifier.VerifyBytes(bs[:], sig2))
 }
