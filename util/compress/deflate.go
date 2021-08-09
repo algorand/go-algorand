@@ -170,5 +170,5 @@ func init() {
 	compressedBuffer := make([]byte, 128)
 	_, compressedOutput, _ := Compress(decompressedBuffer, compressedBuffer, 9)
 	decompressedBuffer = make([]byte, 128)
-	Decompress(compressedOutput, decompressedBuffer)
+	Decompress(compressedOutput, decompressedBuffer) //nolint:errcheck // static call that won't fail
 }
