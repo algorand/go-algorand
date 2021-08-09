@@ -1029,6 +1029,12 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	b.balances[creator] = cp
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
+	logs := []basics.LogItem{{ID: 0, Message: "a"}}
+	b.delta = basics.EvalDelta{Logs: []basics.LogItem{{ID: 0, Message: "a"}}}
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
+	a.NoError(err)
+	a.Equal(basics.EvalDelta{Logs: logs}, ad.EvalDelta)
+
 	// check extraProgramPages is used
 	appr := make([]byte, 2*proto.MaxAppProgramLen+1)
 	appr[0] = 4 // version 4
@@ -1079,11 +1085,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.Error(err)
 	a.Contains(err.Error(), "updateApplication app programs too long")
-	logs := []basics.LogItem{{ID: 0, Message: "a"}}
-	b.delta = basics.EvalDelta{Logs: []basics.LogItem{{ID: 0, Message: "a"}}}
-	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
-	a.NoError(err)
-	a.Equal(basics.EvalDelta{Logs: logs}, ad.EvalDelta)
+
 }
 
 func TestAppCallApplyDelete(t *testing.T) {
@@ -1195,8 +1197,6 @@ func TestAppCallApplyDelete(t *testing.T) {
 		}
 		b.ResetWrites()
 	}
-	a.Equal(uint32(0), br.TotalExtraAppPages)
-
 	logs := []basics.LogItem{{ID: 0, Message: "a"}}
 	b.delta = basics.EvalDelta{Logs: []basics.LogItem{{ID: 0, Message: "a"}}}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
