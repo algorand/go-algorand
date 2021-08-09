@@ -258,7 +258,7 @@ func MultisigBatchVerify(msg Hashable, addr Digest, sig MultisigSig, batchVerifi
 	}
 
 	// check that we don't have too many multisig subsigs
-	if len(sig.Subsigs) > maxMultisig {
+	if len(sig.Subsigs) > MaxMultisig {
 		err = errInvalidNumberOfSignature
 
 		return
