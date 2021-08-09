@@ -240,6 +240,9 @@ func (al *logicLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics
 
 func (al *logicLedger) AppendLog(txn *transactions.Transaction, value string) error {
 	idx, err := txn.IndexByAppID(txn.ApplicationID)
+	if idx != 0 {
+		return fmt.Errorf("index offset is not 0. logging is allowed for current app only")
+	}
 	if err != nil {
 		return err
 	}

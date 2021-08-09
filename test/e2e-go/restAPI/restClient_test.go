@@ -30,7 +30,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
@@ -989,7 +988,7 @@ return
 	a.Equal(32, len(*txn.Logs))
 	for i, l := range *txn.Logs {
 		a.Equal(*txn.ApplicationIndex, l.Id)
-		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), l.Value)
+		a.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), l.Value)
 	}
 
 	//check non-create app call
@@ -1028,7 +1027,7 @@ return
 	a.Equal(32, len(*txn.Logs))
 	for i, l := range *txn.Logs {
 		a.Equal(expectedAppID, l.Id)
-		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), l.Value)
+		a.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), l.Value)
 	}
 
 }

@@ -36,7 +36,7 @@ func checkEqual(expected []basics.LogItem, actual []basics.LogItem) bool {
 		return false
 	}
 	for i, e := range expected {
-		if e.ID != actual[i].ID || e.Message != actual[i].Message {
+		if !e.Equal(actual[i]) {
 			return false
 		}
 	}

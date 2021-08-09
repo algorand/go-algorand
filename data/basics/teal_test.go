@@ -245,6 +245,11 @@ func TestEvalDeltaEqual(t *testing.T) {
 	a.False(d1.Equal(d2))
 
 	d1 = EvalDelta{
+		Logs: []LogItem{{ID: 0, Message: "val"}, {ID: 0, Message: "val2"}},
+	}
+	a.False(d1.Equal(d2))
+
+	d1 = EvalDelta{
 		Logs: []LogItem{{ID: 0, Message: "val"}},
 	}
 	a.True(d1.Equal(d2))

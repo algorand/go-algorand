@@ -240,7 +240,7 @@ func (ac *ApplicationCallTxnFields) IndexByAddress(target basics.Address, sender
 // not valid.
 func (ac *ApplicationCallTxnFields) AppIDByIndex(i uint64) (basics.AppIndex, error) {
 
-	// Index 0 always corresponds to the sender
+	// Index 0 always corresponds to the current app
 	if i == 0 {
 		return ac.ApplicationID, nil
 	}
@@ -261,7 +261,7 @@ func (ac *ApplicationCallTxnFields) AppIDByIndex(i uint64) (basics.AppIndex, err
 // an error if there is no such match.
 func (ac *ApplicationCallTxnFields) IndexByAppID(appID basics.AppIndex) (uint64, error) {
 
-	// Index 0 always corresponds to the sender
+	// Index 0 always corresponds to the current app
 	if appID == ac.ApplicationID {
 		return 0, nil
 	}

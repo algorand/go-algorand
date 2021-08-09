@@ -184,6 +184,9 @@ func (ed EvalDelta) Equal(o EvalDelta) bool {
 	}
 
 	// Logs must be equal
+	if len(ed.Logs) != len(o.Logs) {
+		return false
+	}
 	for i, l := range ed.Logs {
 		ok := l.Equal(o.Logs[i])
 		if !ok {
