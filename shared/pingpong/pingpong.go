@@ -116,12 +116,13 @@ func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
 		}
 
 		if !cfg.Quiet {
-			for addr := range pps.accounts {
-				fmt.Printf("final prepareAccounts, account addr: %s, balance: %d\n", addr, pps.accounts[addr].getBalance())
+			for addr := range assetAccounts {
+				if addr != pps.cfg.SrcAccount {
+					fmt.Printf("final prepareAccounts, account addr: %s, balance: %d\n", addr, pps.accounts[addr].getBalance())
+				}
 			}
 		}
 	} else if cfg.NumApp > 0 {
-
 		var appAccounts map[string]*pingPongAccount
 		appAccounts, err = pps.prepareNewAccounts(ac)
 		if err != nil {
@@ -133,11 +134,23 @@ func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
 			return
 		}
 		if !cfg.Quiet {
-			for addr := range pps.accounts {
-				fmt.Printf("final prepareAccounts, account addr: %s, balance: %d\n", addr, pps.accounts[addr].getBalance())
+			for addr := range appAccounts {
+				if addr != pps.cfg.SrcAccount {
+					fmt.Printf("final prepareAccounts, account addr: %s, balance: %d\n", addr, pps.accounts[addr].getBalance())
+				}
 			}
 		}
 	} else {
+		// If we have more accounts than requested, pick the top N (not including src)
+		if len(pps.accounts) > int(cfg.NumPartAccounts+1) {
+			fmt.Printf("Finding the richest %d accounts to use for transacting\n", cfg.NumPartAccounts)
+			pps.accounts = takeTopAccounts(pps.accounts, cfg.NumPartAccounts, cfg.SrcAccount)
+		} else {
+			// Not enough accounts yet (or just enough).  Create more if needed
+			fmt.Printf("Not enough accounts - creating %d more\n", int(cfg.NumPartAccounts+1)-len(pps.accounts))
+			generateAccounts(pps.accounts, cfg.NumPartAccounts)
+		}
+
 		err = pps.fundAccounts(pps.accounts, ac, cfg)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "fund accounts failed %v\n", err)
@@ -152,7 +165,7 @@ func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
 func (pps *WorkerState) prepareNewAccounts(client libgoal.Client) (newAccounts map[string]*pingPongAccount, err error) {
 	// create new accounts for testing
 	newAccounts = make(map[string]*pingPongAccount)
-	generateAccounts(newAccounts, pps.cfg.NumPartAccounts-1)
+	generateAccounts(newAccounts, pps.cfg.NumPartAccounts)
 	// copy the source account, as needed.
 	if srcAcct, has := pps.accounts[pps.cfg.SrcAccount]; has {
 		newAccounts[pps.cfg.SrcAccount] = srcAcct
