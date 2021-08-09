@@ -142,7 +142,7 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 		isPartialMessage := msgEncoder.messageData.partialMessage
 		msgEncoder.enqueue()
 
-		scheduleOffset, ops := peer.getNextScheduleOffset(s.isRelay, s.lastBeta, isPartialMessage, currentTime)
+		scheduleOffset, ops := peer.getNextScheduleOffset(s.isRelay, s.lastBeta, isPartialMessage, currentTime, s.node)
 		if (ops & peerOpsSetInterruptible) == peerOpsSetInterruptible {
 			if _, has := s.interruptablePeersMap[peer]; !has {
 				s.interruptablePeers = append(s.interruptablePeers, peer)
@@ -287,17 +287,21 @@ func (s *syncState) locallyGeneratedTransactions(pendingTransactions *pendingTra
 
 func (s *syncState) broadcastProposal(p ProposalBroadcastRequest, peers []*Peer) {
 	currentTime := s.clock.Since()
+	proposalHash := crypto.Hash(p.proposalBytes)
 
 	for _, peer := range peers {
 		// check if p.proposalBytes was filtered
-		if peer.ProposalFilterCache.exists(crypto.Hash(p.proposalBytes)) {
+		if peer.proposalFilterCache.exists(proposalHash) {
 			continue
 		}
 
-		// send p.proposalBytes
+		s.scheduler.peerDuration(peer)
+
 		peer.state = peerStateProposal
-		// reset last txn tracker, use 0 mod 0 for proposals
-		peer.lastTransactionSelectionTracker.set(0, 0, 0)
+
+		peer.lastTransactionSelectionTracker.resetProposalTracker()
+
+		peer.messageSeriesPendingTransactions = nil
 
 		pendingTransactions := pendingTransactionGroupsSnapshot {
 			proposalRawBytes: p.proposalBytes,
@@ -313,19 +317,8 @@ func (s *syncState) broadcastProposal(p ProposalBroadcastRequest, peers []*Peer)
 		isPartialMessage := msgEncoder.messageData.partialMessage
 		msgEncoder.enqueue()
 
-		scheduleOffset, ops := peer.getNextScheduleOffset(s.isRelay, s.lastBeta, isPartialMessage, currentTime)
-		if (ops & peerOpsSetInterruptible) == peerOpsSetInterruptible {
-			if _, has := s.interruptablePeersMap[peer]; !has {
-				s.interruptablePeers = append(s.interruptablePeers, peer)
-				s.interruptablePeersMap[peer] = len(s.interruptablePeers) - 1
-			}
-		}
-		if (ops & peerOpsClearInterruptible) == peerOpsClearInterruptible {
-			if idx, has := s.interruptablePeersMap[peer]; has {
-				delete(s.interruptablePeersMap, peer)
-				s.interruptablePeers[idx] = nil
-			}
-		}
+		scheduleOffset, ops := peer.getNextScheduleOffset(s.isRelay, s.lastBeta, isPartialMessage, currentTime, s.node)
+
 		if (ops & peerOpsReschedule) == peerOpsReschedule {
 			s.scheduler.schedulerPeer(peer, currentTime+scheduleOffset)
 		}

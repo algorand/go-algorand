@@ -130,3 +130,8 @@ func (p *peerScheduler) peerDuration(peer *Peer) time.Duration {
 	}
 	return time.Duration(0)
 }
+
+func (p *peerScheduler) removePeerEntries(peer *Peer, next time.Duration) {
+	bucket := peerBucket{peer: peer, next: next}
+	heap.Push(p, bucket)
+}

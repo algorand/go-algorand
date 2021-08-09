@@ -132,7 +132,7 @@ func (e *emulator) run() {
 func (e *emulator) nextRound() {
 	e.currentRound++
 
-	txnSlices := make([]transactions.SignedTxnSlice, 10)
+	txnSlices := make([]transactions.SignedTxnSlice, 1000)
 	for i := 0; i < len(txnSlices); i++ {
 		txnSlices[i] = []transactions.SignedTxn{
 			transactions.SignedTxn{

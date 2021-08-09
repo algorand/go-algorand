@@ -52,10 +52,13 @@ type proposalData struct {
 	txGroupIds    []transactions.Txid `codec:"h,allocbound=maxNumTxGroupHashesBytes"` // TODO: make this []byte
 }
 
+// cache used by the peer to keep track of which proposals not to send
 type proposalCache struct {
 	proposalData
 
-	receivedTxGroups []transactions.SignedTxGroup
+	txGroupIdIndex map[transactions.Txid]int
+	txGroups []transactions.SignedTxGroup
+	numTxGroupsReceived int
 }
 
 func makeTranscationSyncNodeConnector(node *AlgorandFullNode) transcationSyncNodeConnector {
@@ -276,31 +279,35 @@ func (tsnc *transcationSyncNodeConnector) RelayProposal(proposalBytes []byte, tx
 
 func (tsnc *transcationSyncNodeConnector) HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup, peer *txnsync.Peer) {
 	var data proposalData
+	var pc proposalCache
 	protocol.Decode(proposalDataBytes, &data)
 
 	if proposalDataBytes != nil {
-		peer.ProposalCache = txnsync.ProposalCache{
-			RawBytes: data.proposalBytes,
-			TxGroupIds: data.txGroupIds,
-			TxGroupIdIndex: make(map[transactions.Txid]int, len(data.txGroupIds)),
-			TxGroups: make([]transactions.SignedTxGroup, len(data.txGroupIds)),
+		pc = proposalCache{
+			proposalData: data,
+			txGroupIdIndex: make(map[transactions.Txid]int, len(data.txGroupIds)),
+			txGroups: make([]transactions.SignedTxGroup, len(data.txGroupIds)),
 		}
-		for i, txid := range peer.ProposalCache.TxGroupIds {
-			peer.ProposalCache.TxGroupIdIndex[txid] = i
+		for i, txid := range pc.txGroupIds {
+			pc.txGroupIdIndex[txid] = i
 		}
+	} else { // fetch proposalCache from peerData
+		pc, _ = tsnc.node.net.GetPeerData(peer.GetNetworkPeer(), "proposalCache").(proposalCache)
 	}
 	// TODO attempt to fill receivedTxns with txpool
 
 	for _, txGroup := range txGroups {
-		if index, found := peer.ProposalCache.TxGroupIdIndex[txGroup.GroupTransactionID]; found {
-			peer.ProposalCache.TxGroups[index] = txGroup
+		if index, found := pc.txGroupIdIndex[txGroup.GroupTransactionID]; found {
+			pc.txGroups[index] = txGroup
 		}
 	}
 
-	if peer.ProposalCache.NumTxGroupsReceived == len(peer.ProposalCache.TxGroups) {
+	if pc.numTxGroupsReceived == len(pc.txGroups) {
 		// TODO send proposal to agreement
 		// TODO send filter message
 
-		peer.ProposalCache = txnsync.ProposalCache{}
+		pc = proposalCache{}
 	}
+
+	tsnc.node.net.SetPeerData(peer.GetNetworkPeer(), "proposalCache", pc)
 }

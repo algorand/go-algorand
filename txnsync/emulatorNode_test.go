@@ -421,4 +421,6 @@ func (n *emulatedNode) RelayProposal(proposalBytes []byte, txnSlices []transacti
 	n.externalEvents <- MakeBroadcastProposalRequestEvent(proposalBytes, txGroups)
 }
 
-func (n *emulatedNode) HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup, peer *Peer) {}
+func (n *emulatedNode) HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup, peer *Peer) {
+	fmt.Println(proposalDataBytes, "hello", len(txGroups))
+}

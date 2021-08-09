@@ -174,10 +174,7 @@ type Peer struct {
 	lastSelectedTransactionsCount int
 
 	// proposalFilterCache keeps track of the most recent proposal bytes that the peer does not want to receive
-	ProposalFilterCache proposalFilterCache
-
-	// proposalCache keeps track of most recent proposal sent and its txns
-	ProposalCache ProposalCache
+	proposalFilterCache proposalFilterCache
 }
 
 // requestParamsGroupCounterState stores the latest group counters for a given set of request params.
@@ -195,17 +192,12 @@ type requestParamsGroupCounterState struct {
 //msgp:ignore transactionGroupCounterTracker
 type transactionGroupCounterTracker []requestParamsGroupCounterState
 
-// cache used by the peer to keep track of which proposals not to send
-type ProposalCache struct {
-	RawBytes []byte
-	TxGroupIds []transactions.Txid
-	TxGroupIdIndex map[transactions.Txid]int
-	TxGroups []transactions.SignedTxGroup
-	NumTxGroupsReceived int
-}
-
 // get returns the group counter for a given set of request param.
-func (t *transactionGroupCounterTracker) get(offset, modulator byte) uint64 {
+func (t *transactionGroupCounterTracker) get(offset, modulator byte, peerState peerState) uint64 {
+	if peerState == peerStateProposal {
+		offset = 0
+		modulator = 0
+	}
 	i := t.index(offset, modulator)
 	if i >= 0 {
 		return (*t)[i].groupCounters[0]
@@ -235,6 +227,10 @@ func (t *transactionGroupCounterTracker) set(offset, modulator byte, counter uin
 	} else {
 		*t = append(*t, state)
 	}
+}
+
+func (t *transactionGroupCounterTracker) resetProposalTracker() {
+	t.set(0, 0, 0)
 }
 
 // roll the counters for a given requests params, so that we would go back and
@@ -273,7 +269,7 @@ func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool) *
 		dataExchangeRate:           defaultDataExchangeRate,
 		transactionPoolAckCh:       make(chan uint64, maxAcceptedMsgSeq),
 		transactionPoolAckMessages: make([]uint64, 0, maxAcceptedMsgSeq),
-		ProposalFilterCache:        makeProposalFilterCache(maxProposalFilterCacheSize),
+		proposalFilterCache:        makeProposalFilterCache(maxProposalFilterCacheSize),
 	}
 	if isLocalNodeRelay {
 		p.requestedTransactionsModulator = 1
@@ -346,15 +342,7 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 
 	accumulatedSize := 0
 
-	offset := byte(0)
-	modulator := byte(0)
-
-	if p.state != peerStateProposal {
-		offset = p.requestedTransactionsOffset
-		modulator = p.requestedTransactionsModulator
-	}
-
-	lastTransactionSelectionGroupCounter := p.lastTransactionSelectionTracker.get(offset, modulator)
+	lastTransactionSelectionGroupCounter := p.lastTransactionSelectionTracker.get(p.requestedTransactionsOffset, p.requestedTransactionsModulator, p.state)
 
 	startIndex := sort.Search(len(pendingTransactions), func(i int) bool {
 		return pendingTransactions[i].GroupCounter >= lastTransactionSelectionGroupCounter
@@ -373,12 +361,14 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 	// create a list of all the bloom filters that might need to be tested. This list excludes bloom filters
 	// which has the same modulator and a different offset.
 	var effectiveBloomFilters []int
-	effectiveBloomFilters = make([]int, 0, len(p.recentIncomingBloomFilters))
-	for filterIdx := len(p.recentIncomingBloomFilters) - 1; filterIdx >= 0; filterIdx-- {
-		if p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Modulator == modulator && p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Offset != offset {
-			continue
+	if p.state != peerStateProposal {
+		effectiveBloomFilters = make([]int, 0, len(p.recentIncomingBloomFilters))
+		for filterIdx := len(p.recentIncomingBloomFilters) - 1; filterIdx >= 0; filterIdx-- {
+			if p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Modulator == p.requestedTransactionsModulator && p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Offset != p.requestedTransactionsOffset {
+				continue
+			}
+			effectiveBloomFilters = append(effectiveBloomFilters, filterIdx)
 		}
-		effectiveBloomFilters = append(effectiveBloomFilters, filterIdx)
 	}
 
 	//removedTxn := 0
@@ -388,14 +378,14 @@ scanLoop:
 		txID := pendingTransactions[grpIdx].GroupTransactionID
 
 		// check if the peer would be interested in these messages -
-		if modulator > 1 {
-			if txidToUint64(txID)%uint64(modulator) != uint64(offset) {
+		if p.state != peerStateProposal && p.requestedTransactionsModulator > 1 {
+			if txidToUint64(txID)%uint64(p.requestedTransactionsModulator) != uint64(p.requestedTransactionsOffset) {
 				continue
 			}
 		}
 
 		// filter out transactions that we already previously sent.
-		if p.recentSentTransactions.contained(txID) {
+		if p.state != peerStateProposal && p.recentSentTransactions.contained(txID) {
 			// we already sent that transaction. no need to send again.
 			continue
 		}
@@ -711,21 +701,23 @@ func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (
 		ops |= messageConstUpdateRequestParams
 	} else {
 		ops |= messageConstTransactions // send transactions to the other peer
-		if fetchTransactions && p.state != peerStateProposal {
-			switch p.localTransactionsModulator {
-			case 0:
-				// don't send bloom filter.
-			case 1:
-				// special optimization if we have just one relay that we're connected to:
-				// generate the bloom filter only once per 2*beta message.
-				// this would reduce the number of unneeded bloom filters generation dramatically.
-				// that single relay would know which messages it previously sent us, and would refrain from
-				// sending these again.
-				if p.nextStateTimestamp == 0 {
+		if fetchTransactions {
+			if p.state != peerStateProposal {
+				switch p.localTransactionsModulator {
+				case 0:
+					// don't send bloom filter.
+				case 1:
+					// special optimization if we have just one relay that we're connected to:
+					// generate the bloom filter only once per 2*beta message.
+					// this would reduce the number of unneeded bloom filters generation dramatically.
+					// that single relay would know which messages it previously sent us, and would refrain from
+					// sending these again.
+					if p.nextStateTimestamp == 0 {
+						ops |= messageConstBloomFilter
+					}
+				default:
 					ops |= messageConstBloomFilter
 				}
-			default:
-				ops |= messageConstBloomFilter
 			}
 			ops |= messageConstUpdateRequestParams
 		}
@@ -735,11 +727,15 @@ func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (
 
 // getNextScheduleOffset is called after a message was sent to the peer, and we need to evaluate the next
 // scheduling time.
-func (p *Peer) getNextScheduleOffset(isRelay bool, beta time.Duration, partialMessage bool, currentTime time.Duration) (offset time.Duration, ops peersOps) {
+func (p *Peer) getNextScheduleOffset(isRelay bool, beta time.Duration, partialMessage bool, currentTime time.Duration, node NodeConnector) (offset time.Duration, ops peersOps) {
 	if partialMessage {
+		// schedule the next proposal message
+		if p.state == peerStateProposal {
+			return messageTimeWindow, peerOpsReschedule
+		}
 		if isRelay {
 			if p.isOutgoing {
-				if p.state == peerStateHoldsoff {
+				if p.state == peerStateHoldsoff || p.state == peerStateProposal {
 					// we have enough time to send another message.
 					return messageTimeWindow, peerOpsReschedule
 				}
@@ -770,9 +766,7 @@ func (p *Peer) getNextScheduleOffset(isRelay bool, beta time.Duration, partialMe
 				p.nextStateTimestamp = 0
 				p.messageSeriesPendingTransactions = nil
 				// move to the next state.
-				if p.state != peerStateProposal{
-					p.state = peerStateHoldsoff
-				}
+				p.state = peerStateHoldsoff
 				return next - currentTime, peerOpsReschedule | peerOpsClearInterruptible
 
 			}
@@ -785,6 +779,7 @@ func (p *Peer) getNextScheduleOffset(isRelay bool, beta time.Duration, partialMe
 		// since we are done sending the proposal transactions, update the state
 		if p.state == peerStateProposal {
 			p.state = peerStateHoldsoff
+			return time.Duration(node.Random(uint64(randomRange))), peerOpsReschedule
 		}
 		if isRelay {
 			if p.isOutgoing {

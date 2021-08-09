@@ -233,12 +233,12 @@ incomingMessageLoop:
 		if !incomingMsg.message.RelayedProposal.MsgIsZero() {
 			if !incomingMsg.message.RelayedProposal.ExcludeProposal.MsgIsZero() {
 				// add filtered proposal to proposalFilterCache
-				peer.ProposalFilterCache.insert(incomingMsg.message.RelayedProposal.ExcludeProposal)
+				peer.proposalFilterCache.insert(incomingMsg.message.RelayedProposal.ExcludeProposal)
 			} else {
 				if incomingMsg.message.RelayedProposal.RawBytes != nil {
 					// add received proposal to proposalFilterCache
 					hash := crypto.Hash(incomingMsg.message.RelayedProposal.RawBytes)
-					peer.ProposalFilterCache.insert(hash)
+					peer.proposalFilterCache.insert(hash)
 				}
 				// send proposal or proposal txns to handler
 				s.node.HandleProposalMessage(incomingMsg.message.RelayedProposal.RawBytes, incomingMsg.transactionGroups, peer)
