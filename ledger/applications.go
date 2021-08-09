@@ -41,7 +41,6 @@ type cowForLogicLedger interface {
 	DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) error
 
 	AppendLog(idx uint64, value string) error
-	getLogs() []basics.LogItem
 
 	round() basics.Round
 	prevTimestamp() int64
