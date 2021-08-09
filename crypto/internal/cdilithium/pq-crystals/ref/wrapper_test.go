@@ -62,3 +62,19 @@ func TestWrongSizedBytes(t *testing.T) {
 	sig = sig[:len(sig)-1]
 	a.Error(dsigner.PublicKey.VerifyBytes(bs[:], sig))
 }
+
+func TestEmpty(t *testing.T) {
+	a := require.New(t)
+	dsigner := NewKeys()
+	bs := make([]byte, 0)
+	sig := dsigner.SignBytes(bs)
+
+	sig = append(sig, 0)
+	a.Error(dsigner.PublicKey.VerifyBytes(bs[:], sig))
+
+	sig = sig[:len(sig)-1]
+	a.NoError(dsigner.PublicKey.VerifyBytes(bs[:], sig))
+
+	sig = sig[:len(sig)-1]
+	a.Error(dsigner.PublicKey.VerifyBytes(bs[:], sig))
+}
