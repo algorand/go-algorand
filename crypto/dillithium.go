@@ -16,7 +16,7 @@
 
 package crypto
 
-import "github.com/algorand/go-algorand/crypto/internal/cdilithium"
+import cdilithium "github.com/algorand/go-algorand/crypto/internal/cdilithium/pq-crystals/ref"
 
 // Exporting signature, publicKey, secretKey.
 type (
@@ -74,7 +74,7 @@ func (d *DilithiumSigner) GetVerifyingKey() *VerifyingKey {
 type DilithiumVerifier struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	PublicKey cdilithium.Dil2PublicKey `codec:"k"`
+	PublicKey cdilithium.DilPublicKey `codec:"k"`
 }
 
 // Verify follows dilithium algorithm to verify a signature.
