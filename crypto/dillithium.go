@@ -58,7 +58,7 @@ func (d *DilithiumSigner) SignBytes(data []byte) ByteSignature {
 	return d.Keypair.SignBytes(data)
 }
 
-// GetVerifyingKey Outputs a veryfying key ovject which is serializeable.
+// GetVerifyingKey Outputs a verifying key object which is serializable.
 func (d *DilithiumSigner) GetVerifyingKey() *VerifyingKey {
 	return &VerifyingKey{
 		Type: DilithiumType,
