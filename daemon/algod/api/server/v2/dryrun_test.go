@@ -1105,7 +1105,7 @@ getbyte
 int 1
 +
 dup
-int 98 //ascii code of last char
+int 97 //ascii code of last char
 <=
 bz end
 setbyte
@@ -1189,7 +1189,7 @@ return
 		logResponse(t, &response)
 	}
 	logs := *response.Txns[0].Logs
-	assert.Equal(t, 33, len(logs))
+	assert.Equal(t, 32, len(logs))
 	for i, m := range logs {
 		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), m.Value)
 	}

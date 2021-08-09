@@ -948,7 +948,7 @@ getbyte
 int 1
 +
 dup
-int 98 //ascii code of last char
+int 97 //ascii code of last char
 <=
 bz end
 setbyte
@@ -986,7 +986,7 @@ return
 	txn, err := testClient.PendingTransactionInformationV2(txid)
 	a.NoError(err)
 	a.NotNil(txn.Logs)
-	a.Equal(33, len(*txn.Logs))
+	a.Equal(32, len(*txn.Logs))
 	for i, l := range *txn.Logs {
 		a.Equal(*txn.ApplicationIndex, l.Id)
 		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), l.Value)
@@ -1025,7 +1025,7 @@ return
 	txn, err = testClient.PendingTransactionInformationV2(txid)
 	a.NoError(err)
 	a.NotNil(txn.Logs)
-	a.Equal(33, len(*txn.Logs))
+	a.Equal(32, len(*txn.Logs))
 	for i, l := range *txn.Logs {
 		a.Equal(expectedAppID, l.Id)
 		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), l.Value)
