@@ -10,7 +10,7 @@ import (
 )
 
 // The following msgp objects are implemented in this file:
-// Dil2PrivateKey
+// DilPrivateKey
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
@@ -18,7 +18,7 @@ import (
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
 //
-// Dil2PublicKey
+// DilPublicKey
 //       |-----> (*) MarshalMsg
 //       |-----> (*) CanMarshalMsg
 //       |-----> (*) UnmarshalMsg
@@ -26,7 +26,7 @@ import (
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
 //
-// Dil2Signature
+// DilSignature
 //       |-----> (*) MarshalMsg
 //       |-----> (*) CanMarshalMsg
 //       |-----> (*) UnmarshalMsg
@@ -44,19 +44,19 @@ import (
 //
 
 // MarshalMsg implements msgp.Marshaler
-func (z *Dil2PrivateKey) MarshalMsg(b []byte) (o []byte) {
+func (z *DilPrivateKey) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
-func (_ *Dil2PrivateKey) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*Dil2PrivateKey)
+func (_ *DilPrivateKey) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*DilPrivateKey)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Dil2PrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *DilPrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -66,36 +66,36 @@ func (z *Dil2PrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
-func (_ *Dil2PrivateKey) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*Dil2PrivateKey)
+func (_ *DilPrivateKey) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*DilPrivateKey)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *Dil2PrivateKey) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (2528 * (msgp.ByteSize))
+func (z *DilPrivateKey) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (4000 * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *Dil2PrivateKey) MsgIsZero() bool {
-	return (*z) == (Dil2PrivateKey{})
+func (z *DilPrivateKey) MsgIsZero() bool {
+	return (*z) == (DilPrivateKey{})
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *Dil2PublicKey) MarshalMsg(b []byte) (o []byte) {
+func (z *DilPublicKey) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
-func (_ *Dil2PublicKey) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*Dil2PublicKey)
+func (_ *DilPublicKey) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*DilPublicKey)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Dil2PublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *DilPublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -105,36 +105,36 @@ func (z *Dil2PublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
-func (_ *Dil2PublicKey) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*Dil2PublicKey)
+func (_ *DilPublicKey) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*DilPublicKey)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *Dil2PublicKey) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (1312 * (msgp.ByteSize))
+func (z *DilPublicKey) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (1952 * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *Dil2PublicKey) MsgIsZero() bool {
-	return (*z) == (Dil2PublicKey{})
+func (z *DilPublicKey) MsgIsZero() bool {
+	return (*z) == (DilPublicKey{})
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *Dil2Signature) MarshalMsg(b []byte) (o []byte) {
+func (z *DilSignature) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
-func (_ *Dil2Signature) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*Dil2Signature)
+func (_ *DilSignature) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*DilSignature)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Dil2Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *DilSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -144,20 +144,20 @@ func (z *Dil2Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
-func (_ *Dil2Signature) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*Dil2Signature)
+func (_ *DilSignature) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*DilSignature)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *Dil2Signature) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (2420 * (msgp.ByteSize))
+func (z *DilSignature) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (3293 * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *Dil2Signature) MsgIsZero() bool {
-	return (*z) == (Dil2Signature{})
+func (z *DilSignature) MsgIsZero() bool {
+	return (*z) == (DilSignature{})
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -166,11 +166,11 @@ func (z *DilithiumKeyPair) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0003Len := uint32(2)
 	var zb0003Mask uint8 /* 3 bits */
-	if (*z).PublicKey == (Dil2PublicKey{}) {
+	if (*z).PublicKey == (DilPublicKey{}) {
 		zb0003Len--
 		zb0003Mask |= 0x2
 	}
-	if (*z).SecretKey == (Dil2PrivateKey{}) {
+	if (*z).SecretKey == (DilPrivateKey{}) {
 		zb0003Len--
 		zb0003Mask |= 0x4
 	}
@@ -280,11 +280,11 @@ func (_ *DilithiumKeyPair) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *DilithiumKeyPair) Msgsize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + (2528 * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (1312 * (msgp.ByteSize))
+	s = 1 + 3 + msgp.ArrayHeaderSize + (4000 * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (1952 * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *DilithiumKeyPair) MsgIsZero() bool {
-	return ((*z).SecretKey == (Dil2PrivateKey{})) && ((*z).PublicKey == (Dil2PublicKey{}))
+	return ((*z).SecretKey == (DilPrivateKey{})) && ((*z).PublicKey == (DilPublicKey{}))
 }

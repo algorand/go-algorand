@@ -12,7 +12,7 @@ import (
 )
 
 func TestMarshalUnmarshalDil2PrivateKey(t *testing.T) {
-	v := Dil2PrivateKey{}
+	v := DilPrivateKey{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -32,11 +32,11 @@ func TestMarshalUnmarshalDil2PrivateKey(t *testing.T) {
 }
 
 func TestRandomizedEncodingDil2PrivateKey(t *testing.T) {
-	protocol.RunEncodingTest(t, &Dil2PrivateKey{})
+	protocol.RunEncodingTest(t, &DilPrivateKey{})
 }
 
 func BenchmarkMarshalMsgDil2PrivateKey(b *testing.B) {
-	v := Dil2PrivateKey{}
+	v := DilPrivateKey{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -45,7 +45,7 @@ func BenchmarkMarshalMsgDil2PrivateKey(b *testing.B) {
 }
 
 func BenchmarkAppendMsgDil2PrivateKey(b *testing.B) {
-	v := Dil2PrivateKey{}
+	v := DilPrivateKey{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -57,7 +57,7 @@ func BenchmarkAppendMsgDil2PrivateKey(b *testing.B) {
 }
 
 func BenchmarkUnmarshalDil2PrivateKey(b *testing.B) {
-	v := Dil2PrivateKey{}
+	v := DilPrivateKey{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -71,7 +71,7 @@ func BenchmarkUnmarshalDil2PrivateKey(b *testing.B) {
 }
 
 func TestMarshalUnmarshalDil2PublicKey(t *testing.T) {
-	v := Dil2PublicKey{}
+	v := DilPublicKey{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -91,11 +91,11 @@ func TestMarshalUnmarshalDil2PublicKey(t *testing.T) {
 }
 
 func TestRandomizedEncodingDil2PublicKey(t *testing.T) {
-	protocol.RunEncodingTest(t, &Dil2PublicKey{})
+	protocol.RunEncodingTest(t, &DilPublicKey{})
 }
 
 func BenchmarkMarshalMsgDil2PublicKey(b *testing.B) {
-	v := Dil2PublicKey{}
+	v := DilPublicKey{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -104,7 +104,7 @@ func BenchmarkMarshalMsgDil2PublicKey(b *testing.B) {
 }
 
 func BenchmarkAppendMsgDil2PublicKey(b *testing.B) {
-	v := Dil2PublicKey{}
+	v := DilPublicKey{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -116,7 +116,7 @@ func BenchmarkAppendMsgDil2PublicKey(b *testing.B) {
 }
 
 func BenchmarkUnmarshalDil2PublicKey(b *testing.B) {
-	v := Dil2PublicKey{}
+	v := DilPublicKey{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -130,7 +130,7 @@ func BenchmarkUnmarshalDil2PublicKey(b *testing.B) {
 }
 
 func TestMarshalUnmarshalDil2Signature(t *testing.T) {
-	v := Dil2Signature{}
+	v := DilSignature{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -150,11 +150,11 @@ func TestMarshalUnmarshalDil2Signature(t *testing.T) {
 }
 
 func TestRandomizedEncodingDil2Signature(t *testing.T) {
-	protocol.RunEncodingTest(t, &Dil2Signature{})
+	protocol.RunEncodingTest(t, &DilSignature{})
 }
 
 func BenchmarkMarshalMsgDil2Signature(b *testing.B) {
-	v := Dil2Signature{}
+	v := DilSignature{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -163,7 +163,7 @@ func BenchmarkMarshalMsgDil2Signature(b *testing.B) {
 }
 
 func BenchmarkAppendMsgDil2Signature(b *testing.B) {
-	v := Dil2Signature{}
+	v := DilSignature{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -175,7 +175,7 @@ func BenchmarkAppendMsgDil2Signature(b *testing.B) {
 }
 
 func BenchmarkUnmarshalDil2Signature(b *testing.B) {
-	v := Dil2Signature{}
+	v := DilSignature{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDil2Check(t *testing.T) {
+func TestDilSigning(t *testing.T) {
 	a := require.New(t)
 	for i := 0; i < 100; i++ {
 		dsigner := NewKeys()
@@ -33,7 +33,7 @@ func TestDil2Check(t *testing.T) {
 		bs := sha256.Sum256(b)
 		sig := dsigner.SignBytes(bs[:])
 		a.NoError(dsigner.PublicKey.VerifyBytes(bs[:], sig))
-		var sig2 Dil2Signature
+		var sig2 DilSignature
 		copy(sig2[:], sig)
 
 		sig2[0]++
@@ -45,4 +45,20 @@ func TestDil2Check(t *testing.T) {
 		bs2[0]++
 		a.Error(dsigner.PublicKey.VerifyBytes(bs2[:], sig[:]))
 	}
+}
+
+func TestWrongSizedBytes(t *testing.T) {
+	a := require.New(t)
+	dsigner := NewKeys()
+	bs := sha256.Sum256(make([]byte, 8))
+	sig := dsigner.SignBytes(bs[:])
+
+	sig = append(sig, 0)
+	a.Error(dsigner.PublicKey.VerifyBytes(bs[:], sig))
+
+	sig = sig[:len(sig)-1]
+	a.NoError(dsigner.PublicKey.VerifyBytes(bs[:], sig))
+
+	sig = sig[:len(sig)-1]
+	a.Error(dsigner.PublicKey.VerifyBytes(bs[:], sig))
 }
