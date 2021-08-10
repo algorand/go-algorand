@@ -522,7 +522,7 @@ func NewPingpong(cfg PpConfig) *WorkerState {
 	return &WorkerState{cfg: cfg, nftHolders: make(map[string]int)}
 }
 
-func getCreatableID(cfg PpConfig, cinfo CreatablesInfo) (aidx uint64) {
+func randomizeCreatableID(cfg PpConfig, cinfo CreatablesInfo) (aidx uint64) {
 	if cfg.NumAsset > 0 {
 		rindex := rand.Intn(len(cinfo.AssetParams))
 		i := 0
@@ -708,7 +708,7 @@ func (pps *WorkerState) sendFromTo(
 
 		if cfg.GroupSize == 1 {
 			// generate random assetID or appId if we send asset/app txns
-			aidx := getCreatableID(cfg, cinfo)
+			aidx := randomizeCreatableID(cfg, cinfo)
 			var txn transactions.Transaction
 			var consErr error
 			// Construct single txn
@@ -968,7 +968,7 @@ func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, cli
 		var accounts []string
 		if len(cinfo.OptIns[aidx]) > 0 {
 			indices := rand.Perm(len(cinfo.OptIns[aidx]))
-			limit := 4
+			limit := 5
 			if len(indices) < limit {
 				limit = len(indices)
 			}
@@ -976,6 +976,13 @@ func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, cli
 				idx := indices[i]
 				accounts = append(accounts, cinfo.OptIns[aidx][idx])
 			}
+			sender = accounts[0]
+			accounts = accounts[1:]
+			from = sender
+		} else {
+			err = fmt.Errorf("application %d has not been opted in by any account", aidx)
+			_, _ = fmt.Fprintf(os.Stdout, "error constructing transaction - %v\n", err)
+			return
 		}
 		txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, accounts, nil, nil)
 		if err != nil {
@@ -995,6 +1002,10 @@ func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, cli
 			from = cinfo.OptIns[aidx][indices[0]]
 			to = cinfo.OptIns[aidx][indices[1]]
 			sender = from
+		} else {
+			err = fmt.Errorf("asset %d has not been opted in by any account", aidx)
+			_, _ = fmt.Fprintf(os.Stdout, "error constructing transaction - %v\n", err)
+			return
 		}
 		txn, err = client.MakeUnsignedAssetSendTx(aidx, amt, to, "", "")
 		if err != nil {
@@ -1003,9 +1014,9 @@ func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, cli
 		}
 		txn.Note = noteField[:]
 		txn.Lease = lease
-		txn, err = client.FillUnsignedTxTemplate(from, 0, 0, cfg.MaxFee, txn)
+		txn, err = client.FillUnsignedTxTemplate(sender, 0, 0, cfg.MaxFee, txn)
 		if !cfg.Quiet {
-			_, _ = fmt.Fprintf(os.Stdout, "Sending %d asset %d: %s -> %s\n", amt, aidx, from, to)
+			_, _ = fmt.Fprintf(os.Stdout, "Sending %d asset %d: %s -> %s\n", amt, aidx, sender, to)
 		}
 	} else {
 		txn, err = pps.constructPayment(from, to, fee, amt, noteField[:], "", lease)
