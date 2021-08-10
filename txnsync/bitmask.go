@@ -164,13 +164,14 @@ func (b *bitmask) iterate(entries int, maxIndex int, callback func(int, int) err
 		}
 	case 2:
 		sum := 0
-		for index := 0; index*2+2 < len(*b); index++ {
+		elementsCount := (len(*b) - 1) / 2
+		if elementsCount > maxIndex {
+			return errDataMissing
+		}
+		for index := 0; index < elementsCount; index++ {
 			sum += int((*b)[index*2+1])*256 + int((*b)[index*2+2])
 			if sum >= entries {
 				return errIndexNotFound
-			}
-			if index >= maxIndex {
-				return errDataMissing
 			}
 			if err := callback(sum, index); err != nil {
 				return err
