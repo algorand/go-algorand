@@ -133,6 +133,7 @@ func trimIterateHelper(t *testing.T, setBits []int) {
 			require.False(t, iterated[i], i)
 		}
 	}
+
 	b.trimBitmask(entries)
 	if int(b[0]) < 2 {
 		// make sure TrimRight is behaving as expected
@@ -145,7 +146,9 @@ func trimIterateHelper(t *testing.T, setBits []int) {
 
 	// For types 2, let the sum exceed entries
 	if int((b)[0]) == 2 {
-		require.Equal(t, errIndexNotFound, b.iterate(setBits[len(setBits)-1], len(setBits)-1, iterfunc))
+		require.Equal(t, errIndexNotFound, b.iterate(setBits[len(setBits)-1]-1, len(setBits), iterfunc))
+		require.Nil(t, b.iterate(setBits[len(setBits)-1], len(setBits), iterfunc))
+		require.Equal(t, errDataMissing, b.iterate(setBits[len(setBits)-1], len(setBits)-1, iterfunc))
 	}
 
 	// For types 1 and 3, test the error handling in the first stage.
