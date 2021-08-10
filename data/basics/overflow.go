@@ -33,6 +33,13 @@ func OAdd16(a uint16, b uint16) (res uint16, overflowed bool) {
 	return
 }
 
+// OAdd32 adds 2 uint32 values with overflow detection
+func OAdd32(a uint32, b uint32) (res uint32, overflowed bool) {
+	res = a + b
+	overflowed = res < a
+	return
+}
+
 // OAdd adds 2 values with overflow detection
 func OAdd(a uint64, b uint64) (res uint64, overflowed bool) {
 	res = a + b
@@ -42,6 +49,13 @@ func OAdd(a uint64, b uint64) (res uint64, overflowed bool) {
 
 // OSub subtracts b from a with overflow detection
 func OSub(a uint64, b uint64) (res uint64, overflowed bool) {
+	res = a - b
+	overflowed = res > a
+	return
+}
+
+// OSub32 subtracts b from a with overflow detection
+func OSub32(a uint32, b uint32) (res uint32, overflowed bool) {
 	res = a - b
 	overflowed = res > a
 	return
@@ -78,9 +92,27 @@ func AddSaturate(a uint64, b uint64) uint64 {
 	return res
 }
 
+// AddSaturate32 adds 2 uint32 values with saturation on overflow
+func AddSaturate32(a uint32, b uint32) uint32 {
+	res, overflowed := OAdd32(a, b)
+	if overflowed {
+		return math.MaxUint32
+	}
+	return res
+}
+
 // SubSaturate subtracts 2 values with saturation on underflow
 func SubSaturate(a uint64, b uint64) uint64 {
 	res, overflowed := OSub(a, b)
+	if overflowed {
+		return 0
+	}
+	return res
+}
+
+// SubSaturate32 subtracts 2 uint32 values with saturation on underflow
+func SubSaturate32(a uint32, b uint32) uint32 {
+	res, overflowed := OSub32(a, b)
 	if overflowed {
 		return 0
 	}

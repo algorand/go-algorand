@@ -434,6 +434,14 @@ func (client RestClient) PendingTransactionInformation(transactionID string) (re
 	return
 }
 
+// PendingTransactionInformationV2 gets information about a recently issued
+// transaction. See PendingTransactionInformation for more details.
+func (client RestClient) PendingTransactionInformationV2(transactionID string) (response generatedV2.PendingTransactionResponse, err error) {
+	transactionID = stripTransaction(transactionID)
+	err = client.get(&response, fmt.Sprintf("/v2/transactions/pending/%s", transactionID), nil)
+	return
+}
+
 // SuggestedFee gets the recommended transaction fee from the node
 func (client RestClient) SuggestedFee() (response v1.TransactionFee, err error) {
 	err = client.get(&response, "/v1/transactions/fee", nil)
