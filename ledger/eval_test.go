@@ -804,7 +804,7 @@ func TestEvalAppAcceptsPooledBudgetWithTxnGroup(t *testing.T) {
 create:
 	b ok
 ok:
-	int 1` // total cost: 2000
+	int 1` // total cost: 2100
 
 	approvalProgram2 := `#pragma version 4
 	txn ApplicationID
