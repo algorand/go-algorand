@@ -133,7 +133,6 @@ func trimIterateHelper(t *testing.T, setBits []int) {
 			require.False(t, iterated[i], i)
 		}
 	}
-
 	b.trimBitmask(entries)
 	if int(b[0]) < 2 {
 		// make sure TrimRight is behaving as expected
