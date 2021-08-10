@@ -1030,7 +1030,7 @@ return
 	a.Equal(32, len(*txn.Logs))
 	for i, l := range *txn.Logs {
 		a.Equal(expectedAppID, l.Id)
-		a.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), l.Value)
+		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), l.Value)
 	}
 
 }
