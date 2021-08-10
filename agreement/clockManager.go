@@ -7,11 +7,13 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/timers"
+	"github.com/algorand/go-deadlock"
 )
 
 // clockManager managers multiple clocks used by different pipelined rounds.
 // XXX garbage-collect old rounds
 type clockManager struct {
+	mu deadlock.Mutex
 	m  map[round]timers.Clock
 	t0 timers.Clock
 }
@@ -21,6 +23,9 @@ func makeClockManager(t0 timers.Clock) *clockManager {
 }
 
 func (cm *clockManager) setZero(r round) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
 	cm.m[r] = cm.t0.Zero()
 }
 
@@ -31,6 +36,9 @@ func (cm *clockManager) nextDeadlineCh(es []externalDemuxSignals) (<-chan time.T
 	if len(es) == 0 {
 		return nil, roundZero
 	}
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
 	sort.Slice(es, func(i, j int) bool {
 		ti := cm.m[es[i].CurrentRound].GetTimeout(es[i].Deadline)
 		tj := cm.m[es[j].CurrentRound].GetTimeout(es[j].Deadline)
@@ -51,10 +59,13 @@ func (cm *clockManager) nextDeadlineCh(es []externalDemuxSignals) (<-chan time.T
 // nextFastDeadlineCh returns a timeout channel that will fire when the earliest FastRecoveryDeadline among all of
 // the rounds described in externalDemuxSignals has occurred. It also returns the corresponding
 // round (including speculative branch) this timeout channel corresponds to.
-func (cm clockManager) nextFastDeadlineCh(es []externalDemuxSignals) (<-chan time.Time, round) {
+func (cm *clockManager) nextFastDeadlineCh(es []externalDemuxSignals) (<-chan time.Time, round) {
 	if len(es) == 0 {
 		return nil, roundZero
 	}
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
 	sort.Slice(es, func(i, j int) bool {
 		ti := cm.m[es[i].CurrentRound].GetTimeout(es[i].FastRecoveryDeadline)
 		tj := cm.m[es[j].CurrentRound].GetTimeout(es[j].FastRecoveryDeadline)
@@ -91,6 +102,9 @@ func (cm *clockManager) Decode(data []byte) (*clockManager, error) {
 }
 
 func (cm *clockManager) Encode() []byte {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
 	var s clockManagerSerialized
 	for r, c := range cm.m {
 		s.Clocks = append(s.Clocks, struct{ R, C []byte }{

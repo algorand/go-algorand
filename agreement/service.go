@@ -19,6 +19,7 @@ package agreement
 //go:generate dbgen -i agree.sql -p agreement -n agree -o agreeInstall.go -h ../scripts/LICENSE_HEADER
 import (
 	"context"
+	"os"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -34,6 +35,8 @@ import (
 const (
 	defaultCadaverName = "agreement"
 )
+
+var enablePipelining = (os.Getenv("PIPELINE") != "")
 
 // Service represents an instance of an execution of Algorand's agreement protocol.
 type Service struct {
@@ -219,9 +222,14 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 			s.log.Errorf("unable to retrieve consensus version for round %d, defaulting to binary consensus version", nextRound)
 			nextVersion = protocol.ConsensusCurrentVersion
 		}
-		//pl := makePipelinePlayer(nextRound, nextVersion)
-		pl := player{Round: makeRoundBranch(nextRound, bookkeeping.BlockHash{}), Step: soft, Deadline: FilterTimeout(0, nextVersion)}
-		status = &pl
+
+		if enablePipelining {
+			pl := makePipelinePlayer(nextRound, nextVersion)
+			status = &pl
+		} else {
+			status = &player{Round: makeRoundBranch(nextRound, bookkeeping.BlockHash{}), Step: soft, Deadline: FilterTimeout(0, nextVersion)}
+		}
+
 		router = makeRootRouter(status)
 
 		a1 := pseudonodeAction{T: assemble, Round: makeRoundBranch(s.Ledger.NextRound(), bookkeeping.BlockHash{})}

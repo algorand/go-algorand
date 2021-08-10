@@ -107,7 +107,13 @@ type stepRouter struct {
 }
 
 func makeRootRouter(p actor) (res rootRouter) {
-	res.root = checkedActor{actor: p, actorContract: playerContract{}}
+	// XXX maybe move this external to this method?
+	switch p.(type) {
+	case *player:
+		res.root = checkedActor{actor: p, actorContract: playerContract{}}
+	case *pipelinePlayer:
+		res.root = p
+	}
 	return
 }
 

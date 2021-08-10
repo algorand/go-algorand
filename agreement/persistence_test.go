@@ -59,7 +59,7 @@ func TestAgreementSerializationPipeline(t *testing.T) {
 	rnd := makeRoundRandomBranch(350)
 	clockManager.m[rnd] = clock
 	status := &pipelinePlayer{
-		LastCommittedRound: 349,
+		FirstUncommittedRound: 349,
 		Players: map[round]*player{
 			rnd: &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second}},
 	}
@@ -86,7 +86,7 @@ func BenchmarkAgreementSerialization(b *testing.B) {
 	rnd := makeRoundRandomBranch(350)
 	clockManager.m[rnd] = clock
 	status := pipelinePlayer{
-		LastCommittedRound: 349,
+		FirstUncommittedRound: 349,
 		Players: map[round]*player{
 			rnd: &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second}},
 	}
@@ -108,7 +108,7 @@ func BenchmarkAgreementDeserialization(b *testing.B) {
 	rnd := makeRoundRandomBranch(350)
 	clockManager.m[rnd] = clock
 	status := pipelinePlayer{
-		LastCommittedRound: 349,
+		FirstUncommittedRound: 349,
 		Players: map[round]*player{
 			rnd: &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second}},
 	}
@@ -211,7 +211,7 @@ func TestPlayerSerialization(t *testing.T) {
 	assert.Equal(t, p, p2)
 
 	status := &pipelinePlayer{
-		LastCommittedRound: 349,
+		FirstUncommittedRound: 349,
 		Players: map[round]*player{
 			rnd: &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second}},
 	}

@@ -109,12 +109,6 @@ func (c *testingClock) fire(d time.Duration) {
 	close(c.TA[d])
 }
 
-type testingClockFactory struct {
-	mu      deadlock.Mutex // this mutex protects all testingClocks
-	monitor *coserviceMonitor
-	zeroes  uint
-}
-
 type testingNetwork struct {
 	validator BlockValidator
 

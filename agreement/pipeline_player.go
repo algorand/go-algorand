@@ -20,29 +20,37 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
 // pipelinePlayer manages an ensemble of players and implements the actor interface.
-// It tracks the last committed agreement round, and manages speculative agreement rounds.
+// It tracks the current (first uncommitted) agreement round, and manages additional speculative agreement rounds.
 type pipelinePlayer struct {
-	LastCommittedRound basics.Round
-	Players            map[round]*player
+	FirstUncommittedRound basics.Round
+	Players               map[round]*player
+	bootstrapRound        basics.Round // handle initial nextRound
 }
 
 func makePipelinePlayer(nextRound basics.Round, nextVersion protocol.ConsensusVersion) pipelinePlayer {
-	return pipelinePlayer{
-		LastCommittedRound: nextRound,
-		Players:            make(map[round]*player),
+	// create player for next round
+	ret := pipelinePlayer{
+		FirstUncommittedRound: nextRound,
+		Players:               make(map[round]*player),
+		bootstrapRound:        nextRound,
 	}
+	r := makeRoundBranch(nextRound, bookkeeping.BlockHash{}) // XXXX need prev hash for next round?
+	p := &player{Round: r, Step: soft, Deadline: FilterTimeout(0, nextVersion), pipelined: true}
+	ret.Players[r] = p
+	return ret
 }
 
 func (p *pipelinePlayer) T() stateMachineTag { return playerMachine } // XXX different tag?
 func (p *pipelinePlayer) underlying() actor  { return p }
 
 func (p *pipelinePlayer) forgetBeforeRound() basics.Round {
-	return p.LastCommittedRound // XXX actually lastCommittedRound+1?
+	return p.FirstUncommittedRound
 }
 
 // decode implements serializableActor
@@ -70,11 +78,13 @@ func (p *pipelinePlayer) handle(r routerHandle, e event) []action {
 	if !ok {
 		panic("pipelinePlayer.handle didn't receive externalEvent")
 	}
-	rnd := ee.ConsensusRound()
 
 	switch e := e.(type) {
-	case messageEvent, timeoutEvent, checkpointEvent:
-		return p.handleRoundEvent(r, ee, rnd)
+	case messageEvent, timeoutEvent:
+		return p.handleRoundEvent(r, ee, ee.ConsensusRound())
+	case checkpointEvent:
+		// checkpointEvent.ConsensusRound() returns zero
+		return p.handleRoundEvent(r, ee, e.Round) // XXX make checkpointAction in pipelinePlayer?
 	case roundInterruptionEvent:
 		// XXX handle enterRound ourselves and reshuffle players
 		// could have come from ledgerNextRoundCh
@@ -109,7 +119,12 @@ func newPlayerForEvent(e externalEvent, rnd round) (*player, error) {
 			return nil, err
 		}
 		// XXX check when ConsensusVersionView.Err is set by LedgerReader
-		return &player{Round: rnd, Step: soft, Deadline: FilterTimeout(0, cv)}, nil
+		return &player{
+			Round:     rnd,
+			Step:      soft,
+			Deadline:  FilterTimeout(0, cv),
+			pipelined: true,
+		}, nil
 	default:
 		return nil, fmt.Errorf("can't make player for event %+v", e)
 	}
@@ -119,13 +134,28 @@ func newPlayerForEvent(e externalEvent, rnd round) (*player, error) {
 func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd round) []action {
 	state, ok := p.Players[rnd]
 	if !ok {
-		// XXXX haven't seen this round before; create player or drop event
-		state, err := newPlayerForEvent(e, rnd)
-		if err != nil {
-			logging.Base().Debugf("couldn't make player for rnd %+v, dropping event", rnd)
-			return nil
+		switch {
+		case p.bootstrapRound == rnd.Number:
+			// XXX is this the first bootstrap round (no prev hash)?
+			if bootstrapPlayer, ok := p.Players[makeRoundBranch(rnd.Number, bookkeeping.BlockHash{})]; ok {
+				state = bootstrapPlayer
+			} else {
+				panic("event with bootstrap round but bootstrap player missing") // XXX drop this event
+			}
+
+		case rnd.Branch == (bookkeeping.BlockHash{}):
+			panic("handleRoundEvent got empty prev")
+
+		default:
+			// XXXX haven't seen this round before; create player or drop event
+			newPlayer, err := newPlayerForEvent(e, rnd)
+			if err != nil {
+				logging.Base().Debugf("couldn't make player for rnd %+v, dropping event", rnd)
+				return nil
+			}
+			p.Players[rnd] = newPlayer
+			state = newPlayer
 		}
-		p.Players[rnd] = state
 	}
 
 	// TODO move cadaver calls to somewhere cleanerxtern
@@ -159,7 +189,7 @@ func (p *pipelinePlayer) externalDemuxSignals() pipelineExternalDemuxSignals {
 		}
 		i++
 	}
-	return pipelineExternalDemuxSignals{signals: s, currentRound: p.LastCommittedRound}
+	return pipelineExternalDemuxSignals{signals: s, currentRound: p.FirstUncommittedRound}
 }
 
 // allPlayersRPS returns a list of per-player (round, period, step) tuples reflecting the current
