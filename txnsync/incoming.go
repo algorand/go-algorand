@@ -128,7 +128,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 
 	if incomingMessage.message.Version != txnBlockMessageVersion {
 		// we receive a message from a version that we don't support, disconnect.
-		s.log.Infof("received unsupported transaction sync message version from peer. disconnecting from peer.")
+		s.log.Infof("received unsupported transaction sync message version from peer (%d). disconnecting from peer.", incomingMessage.message.Version)
 		return errUnsupportedTransactionSyncMessageVersion
 	}
 
