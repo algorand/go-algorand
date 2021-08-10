@@ -242,7 +242,7 @@ func (t *transactionGroupCounterTracker) roll(offset, modulator byte) {
 	}
 	firstGroupCounter := (*t)[i].groupCounters[0]
 	copy((*t)[i].groupCounters[0:], (*t)[i].groupCounters[1:])
-	(*t)[i].groupCounters[len((*t)[i].groupCounters)-1] = firstGroupCounter
+	(*t)[i].groupCounters[bloomFilterRetryCount-1] = firstGroupCounter
 }
 
 // index is a helper method for the transactionGroupCounterTracker, helping to locate the index of
@@ -500,15 +500,28 @@ func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter bloomFi
 	firstValidEntry := sort.Search(len(p.recentIncomingBloomFilters), func(i int) bool {
 		return p.recentIncomingBloomFilters[i].round >= currentRound.SubSaturate(1)
 	})
-	if firstValidEntry < len(p.recentIncomingBloomFilters) {
-		// delete some of the old entries.
-		p.recentIncomingBloomFilters = p.recentIncomingBloomFilters[firstValidEntry:]
+	// clear out the existing bloom filters.
+	for i := 0; i < firstValidEntry; i++ {
+		p.recentIncomingBloomFilters[i] = incomingBloomFilter{}
 	}
+	if firstValidEntry == len(p.recentIncomingBloomFilters) {
+		// all bloom filters are too old  -
+		// reset the slice length
+		p.recentIncomingBloomFilters = p.recentIncomingBloomFilters[:0]
+	} else {
+		// delete some of the old entries.
+		copy(p.recentIncomingBloomFilters[0:], p.recentIncomingBloomFilters[firstValidEntry:])
+		// adjust slice length
+		p.recentIncomingBloomFilters = p.recentIncomingBloomFilters[0 : len(p.recentIncomingBloomFilters)-firstValidEntry]
+	}
+
 	// reset the counter, since we might need to re-evaluate some of the transaction group with the new bloom filter.
 	p.lastTransactionSelectionTracker.roll(incomingFilter.encodingParams.Offset, incomingFilter.encodingParams.Modulator)
 
 	// scan the existing bloom filter, and ensure we have only one bloom filter for every
-	// set of encoding parameters. this would allow us to accumulate false positive
+	// set of encoding parameters. This would allow us to avoid accumulating false positive.
+	// i.e. testing if a transaction is included in two bloom filters have a higher chance
+	// of being "wrong" compared to test it against only a single bloom filter.
 	for idx, bloomFltr := range p.recentIncomingBloomFilters {
 		if bloomFltr.filter.encodingParams == incomingFilter.encodingParams {
 			// replace.
@@ -517,9 +530,11 @@ func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter bloomFi
 		}
 	}
 
-	p.recentIncomingBloomFilters = append(p.recentIncomingBloomFilters, bf)
-	if len(p.recentIncomingBloomFilters) > maxIncomingBloomFilterHistory {
-		p.recentIncomingBloomFilters = p.recentIncomingBloomFilters[1:]
+	if len(p.recentIncomingBloomFilters) == maxIncomingBloomFilterHistory {
+		copy(p.recentIncomingBloomFilters[0:], p.recentIncomingBloomFilters[1:])
+		p.recentIncomingBloomFilters[maxIncomingBloomFilterHistory-1] = bf
+	} else {
+		p.recentIncomingBloomFilters = append(p.recentIncomingBloomFilters, bf)
 	}
 }
 
