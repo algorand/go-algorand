@@ -82,18 +82,37 @@ func TestBitmaskType2(t *testing.T) {
 func TestBitmaskType3(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	setBits := make([]int, 0, 5)
 	entries := 80
+	setBits := make([]int, 0, entries)
 	for i := 0; i < entries; i++ {
-		if i != 0 && i != 2 && i != 71 {
+		if i != 0 && i != 2 && i != 71  && i != 72 {
 			setBits = append(setBits, i)
 		}
 	}
-
 	trimIterateHelper(t, setBits)
 }
+/*
+func TestBitmaskMoreEntries	
+	b := make(bitmask, 3)
+	b[0] = 3
+	b[1] = 99
+	b[2] = 99
 
-func TestBitmaskTypeX(t *testing.T) {
+
+	iterated := make([]bool, entries)
+	iterfunc := func(i int, index int) error {
+		iterated[i] = true
+		return nil
+	}
+
+	
+	b.iterate(3, 3, iterfunc)
+
+	
+}
+*/
+
+func TestBitmaksTypeX(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	b := make(bitmask, bytesNeededBitmask(80))
