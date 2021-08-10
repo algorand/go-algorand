@@ -98,11 +98,20 @@ func (p *pipelinePlayer) handle(r routerHandle, e event) []action {
 func protoForEvent(e event) (protocol.ConsensusVersion, error) {
 	switch e := e.(type) {
 	case messageEvent:
-		return e.Proto.Version, e.Proto.Err
+		if e.Proto.Err != nil {
+			return "", e.Proto.Err
+		}
+		return e.Proto.Version, nil
 	case timeoutEvent:
-		return e.Proto.Version, e.Proto.Err
+		if e.Proto.Err != nil {
+			return "", e.Proto.Err
+		}
+		return e.Proto.Version, nil
 	case roundInterruptionEvent:
-		return e.Proto.Version, e.Proto.Err
+		if e.Proto.Err != nil {
+			return "", e.Proto.Err
+		}
+		return e.Proto.Version, nil
 	case thresholdEvent:
 		return e.Proto, nil
 	default:
