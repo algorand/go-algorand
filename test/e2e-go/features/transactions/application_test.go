@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func checkEqual(expected []basics.LogItem, actual []basics.LogItem) bool {
@@ -44,6 +45,8 @@ func checkEqual(expected []basics.LogItem, actual []basics.LogItem) bool {
 }
 
 func TestApplication(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 

@@ -30,6 +30,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
@@ -908,6 +909,8 @@ func TestClientPrioritizesPendingTransactions(t *testing.T) {
 }
 
 func TestClientCanGetPendingTransactionInfo(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture
 	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
@@ -988,7 +991,7 @@ return
 	a.Equal(32, len(*txn.Logs))
 	for i, l := range *txn.Logs {
 		a.Equal(*txn.ApplicationIndex, l.Id)
-		a.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), l.Value)
+		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), l.Value)
 	}
 
 	//check non-create app call

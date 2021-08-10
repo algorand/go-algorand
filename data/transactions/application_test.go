@@ -119,6 +119,8 @@ func TestEncodedAppTxnAllocationBounds(t *testing.T) {
 }
 
 func TestIDByIndex(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	ac := ApplicationCallTxnFields{}
 	ac.ApplicationID = 1
@@ -131,6 +133,8 @@ func TestIDByIndex(t *testing.T) {
 }
 
 func TestIndexByID(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	ac := ApplicationCallTxnFields{}
 	ac.ApplicationID = 1

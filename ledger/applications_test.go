@@ -1372,6 +1372,8 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 }
 
 func TestLogicLedgerAppendLog(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	addr := getRandomAddress(a)

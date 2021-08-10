@@ -1359,6 +1359,8 @@ func TestCowDelKey(t *testing.T) {
 	a.Panics(func() { c.DelKey(addr, aidx+1, false, key, 0) })
 }
 func TestCowAppendLog(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	addr := getRandomAddress(a)

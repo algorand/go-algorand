@@ -4736,6 +4736,8 @@ func TestBytesConversions(t *testing.T) {
 }
 
 func TestLog(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 	proto := defaultEvalProtoWithVersion(LogicVersion)
 	txn := transactions.SignedTxn{
