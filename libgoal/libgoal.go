@@ -1045,7 +1045,7 @@ func MakeDryrunStateGenerated(client Client, txnOrStxn interface{}, other []tran
 				} else {
 					// otherwise need to fetch app state
 					var app generatedV2.Application
-					if app, err = client.ApplicationInformation(uint64(tx.ApplicationID)); err != nil {
+					if app, err = client.ApplicationInformation(uint64(appIdx)); err != nil {
 						return
 					}
 					appParams = app.Params
