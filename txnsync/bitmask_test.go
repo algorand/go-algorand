@@ -17,11 +17,13 @@
 package txnsync
 
 import (
+	"encoding/binary"
 	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -91,7 +93,7 @@ func TestBitmaskType3(t *testing.T) {
 	trimIterateHelper(t, setBits)
 }
 
-func TestBitmaksTypeX(t *testing.T) {
+func TestBitmaskTypeX(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	b := make(bitmask, bytesNeededBitmask(80))
@@ -168,5 +170,49 @@ func trimIterateHelper(t *testing.T, setBits []int) {
 		} else {
 			require.False(t, iterated[i], i)
 		}
+	}
+}
+
+func TestFuzzBitmask(t *testing.T) {
+	randSeed := uint64(0)
+	rand := func() byte {
+		bytes := [16]byte{}
+		l := binary.PutUvarint(bytes[:], randSeed)
+		h := crypto.Hash(bytes[:l])
+		randSeed = 0
+		for i := 0; i < 8; i++ {
+			randSeed += uint64(h[i]) << (i * 8)
+		}
+		return byte(h[0])
+	}
+	for iterationsCount := 0; iterationsCount < 1000; iterationsCount++ {
+		bitmaskType := rand() % 4
+		blen := int(rand()%33) + 1
+		var b bitmask
+		b = make([]byte, blen)
+		b[0] = byte(bitmaskType)
+		for i := 1; i < blen; i++ {
+			b[i] = rand()
+		}
+		entries := int(rand())
+		maxIndex := int(rand())
+		lastEntryIndex := -1
+		b.iterate(entries, maxIndex, func(i, j int) error {
+			require.Greater(t, i, lastEntryIndex)
+			lastEntryIndex = i
+			require.Less(t, j, maxIndex)
+			return nil
+		})
+		// reset to mode 0
+		b[0] = 0
+		entries = (blen - 1) * 8
+		err1 := b.iterate(entries, maxIndex, func(i, j int) error {
+			return nil
+		})
+		b.trimBitmask(entries)
+		err2 := b.iterate(entries, maxIndex, func(i, j int) error {
+			return nil
+		})
+		require.Equal(t, err1, err2)
 	}
 }
