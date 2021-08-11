@@ -38,7 +38,7 @@ func MakeMonotonicClock(zero time.Time) Clock {
 
 // Zero returns a new Clock reset to the current time.
 func (m *Monotonic) Zero() Clock {
-	z := time.Now()
+	z := time.Now().UTC()
 	logging.Base().Debugf("Clock zeroed to %v", z)
 	return MakeMonotonicClock(z)
 }
@@ -54,7 +54,7 @@ func (m *Monotonic) TimeoutAt(delta time.Duration) <-chan time.Time {
 	}
 
 	target := m.zero.Add(delta)
-	left := target.Sub(time.Now())
+	left := time.Until(target)
 	if left < 0 {
 		timeout := make(chan time.Time)
 		close(timeout)

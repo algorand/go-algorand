@@ -153,7 +153,7 @@ func (p *player) handle(r routerHandle, e event) []action {
 			return actions
 		}
 	case roundInterruptionEvent:
-		return p.enterRound(r, e, e.Round)
+		return enterRound(p, r, e, e.Round)
 	case checkpointEvent:
 		return p.handleCheckpointEvent(r, e)
 	default:
@@ -313,7 +313,7 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 			cert := Certificate(e.Bundle)
 			a0 := ensureAction{Payload: res.Payload, Certificate: cert}
 			actions = append(actions, a0)
-			as := p.enterRound(r, e, round{Number: p.Round.Number + 1, Branch: bookkeeping.BlockHash(cert.Proposal.BlockDigest)})
+			as := enterRound(p, r, e, round{Number: p.Round.Number + 1, Branch: bookkeeping.BlockHash(cert.Proposal.BlockDigest)})
 			return append(actions, as...)
 		}
 		// we don't have the block! We need to ensure we will be able to receive the block.
@@ -389,7 +389,14 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 	return actions
 }
 
-func (p *player) enterRound(r routerHandle, source event, target round) []action {
+type roundEnterer interface {
+	enterRound(p *player, r routerHandle, source event, target round) []action
+}
+
+type playerRoundEnterer struct{}
+
+//func (*playerRoundEnterer) enterRound(p *player, r routerHandle, source event, target round) []action {
+func enterRound(p *player, r routerHandle, source event, target round) []action {
 	var actions []action
 
 	newRoundEvent := source
@@ -632,7 +639,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				cert := Certificate(freshestRes.Event.Bundle)
 				a0 := ensureAction{Payload: e.Input.Proposal, Certificate: cert}
 				actions = append(actions, a0)
-				as := p.enterRound(r, delegatedE, round{Number: cert.Round + 1, Branch: bookkeeping.BlockHash(e.Input.Proposal.Block.Digest())})
+				as := enterRound(p, r, delegatedE, round{Number: cert.Round + 1, Branch: bookkeeping.BlockHash(e.Input.Proposal.Block.Digest())})
 				return append(actions, as...)
 			}
 		}

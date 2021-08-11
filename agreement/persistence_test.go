@@ -29,14 +29,16 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/timers"
+	"github.com/algorand/go-deadlock"
 )
 
 func TestAgreementSerialization(t *testing.T) {
 	// todo : we need to deserialize some more meaningfull state.
-	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
+	//clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 	clockManager := makeClockManager(&timers.Monotonic{})
 	rnd := makeRoundRandomBranch(350)
-	clockManager.m[rnd] = clock
+	//clockManager.m[rnd] = clock
+	clockManager.setZero(rnd)
 	status := &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second}
 	router := makeRootRouter(status)
 	a := []action{}
@@ -44,9 +46,11 @@ func TestAgreementSerialization(t *testing.T) {
 	encodedBytes := encode(clockManager, router, status, a)
 
 	t0 := makeClockManager(&timers.Monotonic{})
-	clock2, router2, status2, a2, err := decode(encodedBytes, t0)
+	clockM2, router2, status2, a2, err := decode(encodedBytes, t0)
 	require.NoError(t, err)
-	require.Equalf(t, clockManager, clock2, "Clock wasn't serialized/deserialized correctly")
+	// clear clockManager mutex so equal check will work
+	clockManager.mu, clockM2.mu = deadlock.Mutex{}, deadlock.Mutex{}
+	require.Equalf(t, clockManager, clockM2, "Clock wasn't serialized/deserialized correctly")
 	require.Equalf(t, router, router2, "Router wasn't serialized/deserialized correctly")
 	require.Equalf(t, status, status2, "Status wasn't serialized/deserialized correctly")
 	require.Equalf(t, a, a2, "Action wasn't serialized/deserialized correctly")
@@ -55,9 +59,10 @@ func TestAgreementSerialization(t *testing.T) {
 func TestAgreementSerializationPipeline(t *testing.T) {
 	// todo : we need to deserialize some more meaningfull state.
 	clockManager := makeClockManager(&timers.Monotonic{})
-	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
+	//clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 	rnd := makeRoundRandomBranch(350)
-	clockManager.m[rnd] = clock
+	//clockManager.m[rnd] = clock
+	clockManager.setZero(rnd)
 	status := &pipelinePlayer{
 		FirstUncommittedRound: 349,
 		Players: map[round]*player{
@@ -71,6 +76,8 @@ func TestAgreementSerializationPipeline(t *testing.T) {
 	t0 := makeClockManager(&timers.Monotonic{})
 	clockM2, router2, status2, a2, err := decode(encodedBytes, t0)
 	require.NoError(t, err)
+	// clear clockManager mutex so equal check will work
+	clockManager.mu, clockM2.mu = deadlock.Mutex{}, deadlock.Mutex{}
 	require.Equalf(t, clockManager, clockM2, "Clock wasn't serialized/deserialized correctly")
 	require.Equalf(t, status, status2, "Status wasn't serialized/deserialized correctly")
 	require.Equalf(t, router, router2, "Router wasn't serialized/deserialized correctly")
