@@ -86,6 +86,10 @@ var ErrBadDilithiumSignature = errors.New("bad signature")
 
 // VerifyBytes follows dilithium algorithm to verify a signature.
 func (v *DilPublicKey) VerifyBytes(data []byte, sig []byte) error {
+	if len(sig) == 0 {
+		return ErrBadDilithiumSignature
+	}
+
 	cdata := (*C.uchar)(C.NULL)
 	if len(data) != 0 {
 		cdata = (*C.uchar)(&data[0])
