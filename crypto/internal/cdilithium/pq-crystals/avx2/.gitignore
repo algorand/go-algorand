@@ -1,8 +1,0 @@
-*.so
-*.o
-PQCgenKAT_sign2
-PQCgenKAT_sign2aes
-PQCgenKAT_sign3
-PQCgenKAT_sign3aes
-PQCgenKAT_sign5
-PQCgenKAT_sign5aes
