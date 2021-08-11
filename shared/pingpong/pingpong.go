@@ -979,36 +979,38 @@ func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, cli
 		// select opted-in accounts for Txn.Accounts field
 		var accounts []string
 		assetOptIns := cinfo.OptIns[aidx]
-		if len(assetOptIns) > 0 {
-			indices := rand.Perm(len(assetOptIns))
-			limit := 5
-			if len(indices) < limit {
-				limit = len(indices)
-			}
-			for i := 0; i < limit; i++ {
-				idx := indices[i]
-				accounts = append(accounts, assetOptIns[idx])
-			}
-			if cinfo.AssetParams[aidx].Creator == from {
-				// if the application was created by the "from" account, then we don't need to worry about it being opted-in.
-			} else {
-				fromIsOptedIn := false
-				for i := 0; i < len(assetOptIns); i++ {
-					if assetOptIns[i] == from {
-						fromIsOptedIn = true
-						break
+		if from != to {
+			if len(assetOptIns) > 0 {
+				indices := rand.Perm(len(assetOptIns))
+				limit := 5
+				if len(indices) < limit {
+					limit = len(indices)
+				}
+				for i := 0; i < limit; i++ {
+					idx := indices[i]
+					accounts = append(accounts, assetOptIns[idx])
+				}
+				if cinfo.AssetParams[aidx].Creator == from {
+					// if the application was created by the "from" account, then we don't need to worry about it being opted-in.
+				} else {
+					fromIsOptedIn := false
+					for i := 0; i < len(assetOptIns); i++ {
+						if assetOptIns[i] == from {
+							fromIsOptedIn = true
+							break
+						}
+					}
+					if !fromIsOptedIn {
+						sender = accounts[0]
+						from = sender
 					}
 				}
-				if !fromIsOptedIn {
-					sender = accounts[0]
-					from = sender
-				}
+				accounts = accounts[1:]
+			} else {
+				err = fmt.Errorf("application %d has not been opted in by any account", aidx)
+				_, _ = fmt.Fprintf(os.Stdout, "error constructing transaction - %v\n", err)
+				return
 			}
-			accounts = accounts[1:]
-		} else {
-			err = fmt.Errorf("application %d has not been opted in by any account", aidx)
-			_, _ = fmt.Fprintf(os.Stdout, "error constructing transaction - %v\n", err)
-			return
 		}
 		txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, accounts, nil, nil)
 		if err != nil {
@@ -1023,15 +1025,17 @@ func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, cli
 	} else if cfg.NumAsset > 0 { // Construct asset transaction
 		// select a pair of random opted-in accounts by aidx
 		// use them as from/to addresses
-		if len(cinfo.OptIns[aidx]) > 0 {
-			indices := rand.Perm(len(cinfo.OptIns[aidx]))
-			from = cinfo.OptIns[aidx][indices[0]]
-			to = cinfo.OptIns[aidx][indices[1]]
-			sender = from
-		} else {
-			err = fmt.Errorf("asset %d has not been opted in by any account", aidx)
-			_, _ = fmt.Fprintf(os.Stdout, "error constructing transaction - %v\n", err)
-			return
+		if from != to {
+			if len(cinfo.OptIns[aidx]) > 0 {
+				indices := rand.Perm(len(cinfo.OptIns[aidx]))
+				from = cinfo.OptIns[aidx][indices[0]]
+				to = cinfo.OptIns[aidx][indices[1]]
+				sender = from
+			} else {
+				err = fmt.Errorf("asset %d has not been opted in by any account", aidx)
+				_, _ = fmt.Fprintf(os.Stdout, "error constructing transaction - %v\n", err)
+				return
+			}
 		}
 		txn, err = client.MakeUnsignedAssetSendTx(aidx, amt, to, "", "")
 		if err != nil {

@@ -177,12 +177,12 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 		fmt.Printf("Creating %v create asset transaction for account %v \n", toCreate, addr)
 		fmt.Printf("cfg.NumAsset %v, addrAccount.AssetParams %v\n", pps.cfg.NumAsset, addrAccount.AssetParams)
 
+		totalSupply := pps.cfg.MinAccountAsset * uint64(pps.cfg.NumPartAccounts) * 9 * uint64(pps.cfg.GroupSize) * uint64(pps.cfg.RefreshTime.Seconds()) / pps.cfg.TxnPerSec
 		// create assets in participant account
 		for i := 0; i < toCreate; i++ {
 			var metaLen = 32
-			meta := make([]byte, metaLen, metaLen)
+			meta := make([]byte, metaLen)
 			crypto.RandBytes(meta[:])
-			totalSupply := pps.cfg.MinAccountAsset * uint64(pps.cfg.NumPartAccounts) * 9
 
 			if totalSupply < pps.cfg.MinAccountAsset { //overflow
 				fmt.Printf("Too many NumPartAccounts\n")
@@ -358,12 +358,13 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 				fmt.Printf("Error: %s\n", err.Error())
 				return
 			}
-			r, err = client.WaitForRound(r.LastRound)
-			if err != nil {
-				fmt.Printf("Warning: failed to wait for round %d after assets opt in", r.LastRound)
+			updatedStatus, waitErr := client.WaitForRound(r.LastRound)
+			if waitErr != nil {
+				fmt.Printf("Warning: failed to wait for round %d after assets opt in", r.LastRound+1)
 				time.Sleep(1 * time.Second)
 				continue
 			}
+			r = updatedStatus
 		}
 	}
 
@@ -390,15 +391,28 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 				fmt.Printf("Distributing assets from %v to %v \n", creator, addr)
 			}
 
-			tx, signer, sendErr := pps.constructTxn(creator, addr, pps.cfg.MaxFee, assetAmt, k, client)
+			tx, sendErr := client.MakeUnsignedAssetSendTx(k, assetAmt, addr, "", "")
 			if sendErr != nil {
-				fmt.Printf("Cannot transfer asset %v from account %v\n", k, creator)
-				err = sendErr
+				_, _ = fmt.Fprintf(os.Stdout, "error making unsigned asset send tx %v\n", sendErr)
+				err = fmt.Errorf("error making unsigned asset send tx : %w", sendErr)
 				return
 			}
-
 			tx.Note = pps.makeNextUniqueNoteField()
-			_, err = signAndBroadcastTransaction(accounts, signer, tx, client, pps.cfg)
+			tx, err = client.FillUnsignedTxTemplate(creator, 0, 0, pps.cfg.MaxFee, tx)
+			tx.LastValid = tx.FirstValid + 5
+			if pps.cfg.MaxFee == 0 {
+				var suggestedFee uint64
+				suggestedFee, err = client.SuggestedFee()
+				if err != nil {
+					_, _ = fmt.Fprintf(os.Stdout, "error retrieving suggestedFee: %v\n", err)
+					return
+				}
+				if suggestedFee > tx.Fee.Raw {
+					tx.Fee.Raw = suggestedFee
+				}
+			}
+
+			_, err = signAndBroadcastTransaction(accounts, creator, tx, client, pps.cfg)
 			if err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset distribution failed with error %v\n", err)
 				return
