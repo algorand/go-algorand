@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -49,7 +50,7 @@ func TestParticipation_NewDB(t *testing.T) {
 }
 
 func setupParticipationKey(t *testing.T, a *require.Assertions) (PersistedParticipation, db.Accessor, db.Accessor, error) {
-	root, rootDB, partDB := createTestDBs(t, a)
+	root, rootDB, partDB := createTestDBs(a, t.Name())
 
 	part, err := FillDBWithParticipationKeys(partDB, root.Address(), 0, 0, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
 	a.NoError(err)
@@ -69,15 +70,15 @@ func setupkeyWithNoDBS(t *testing.T, a *require.Assertions) PersistedParticipati
 	return part
 }
 
-func createTestDBs(t *testing.T, a *require.Assertions) (Root, db.Accessor, db.Accessor) {
-	rootDB, err := db.MakeAccessor(t.Name(), false, true)
+func createTestDBs(a *require.Assertions, name string) (Root, db.Accessor, db.Accessor) {
+	rootDB, err := db.MakeAccessor(name, false, true)
 	a.NoError(err)
 	a.NotNil(rootDB)
 	root, err := GenerateRoot(rootDB)
 	a.NoError(err)
 	a.NotNil(root)
 
-	partDB, err := db.MakeAccessor(t.Name()+"_part", false, true)
+	partDB, err := db.MakeAccessor(name+"_part", false, true)
 	a.NoError(err)
 	a.NotNil(partDB)
 
@@ -192,7 +193,7 @@ func TestRetrieveFromDB(t *testing.T) {
 func TestRetrieveFromDBAtVersion1(t *testing.T) {
 	a := require.New(t)
 	ppart := setupkeyWithNoDBS(t, a)
-	_, rootDB, partDB := createTestDBs(t, a)
+	_, rootDB, partDB := createTestDBs(a, t.Name())
 	defer closeDBS(rootDB, partDB)
 
 	part := ppart.Participation
@@ -207,7 +208,7 @@ func TestRetriveFromDBAtVersion2(t *testing.T) {
 	a := require.New(t)
 
 	ppart := setupkeyWithNoDBS(t, a)
-	_, rootDB, partDB := createTestDBs(t, a)
+	_, rootDB, partDB := createTestDBs(a, t.Name())
 	defer closeDBS(rootDB, partDB)
 
 	part := ppart.Participation
@@ -247,7 +248,7 @@ func TestMigrateFromVersion1(t *testing.T) {
 	a := require.New(t)
 	part := setupkeyWithNoDBS(t, a).Participation
 
-	_, rootDB, partDB := createTestDBs(t, a)
+	_, rootDB, partDB := createTestDBs(a, t.Name())
 	defer closeDBS(rootDB, partDB)
 
 	a.NoError(setupTestDBAtVer1(partDB, part))
@@ -260,7 +261,7 @@ func TestMigrationFromVersion2(t *testing.T) {
 	a := require.New(t)
 	part := setupkeyWithNoDBS(t, a).Participation
 
-	_, rootDB, partDB := createTestDBs(t, a)
+	_, rootDB, partDB := createTestDBs(a, t.Name())
 	defer closeDBS(rootDB, partDB)
 
 	a.NoError(setupTestDBAtVer2(partDB, part))
@@ -379,4 +380,45 @@ func intoComparable(part PersistedParticipation) comparablePartition {
 		LastValid:   part.LastValid,
 		KeyDilution: part.KeyDilution,
 	}
+}
+
+func BenchmarkFillDB(b *testing.B) {
+	a := require.New(b)
+	root, _, partDB := createTestDBs(a, b.Name()+strconv.Itoa(b.N))
+
+	tmp := config.Consensus[protocol.ConsensusCurrentVersion]
+	cpy := config.Consensus[protocol.ConsensusCurrentVersion]
+	cpy.CompactCertRounds = 1000
+	config.Consensus[protocol.ConsensusCurrentVersion] = cpy
+	defer func() { config.Consensus[protocol.ConsensusCurrentVersion] = tmp }()
+	secondsPerRound := 4
+	numSecondsInDay := 60 * 60 * 24
+	numSecondsInMonth := numSecondsInDay * 30
+	numSecondsInHalfYear := 6 * numSecondsInMonth
+	numRoundsInHalfAYear := numSecondsInHalfYear / secondsPerRound
+	var partt *PersistedParticipation
+	for i := 0; i < b.N; i++ {
+		part, err := FillDBWithParticipationKeys(partDB, root.Address(), 1, basics.Round(numRoundsInHalfAYear+1), config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+		a.NoError(err)
+		a.NotNil(part)
+
+		b.StopTimer()
+		err = partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			_, err := tx.Exec("DROP TABLE ParticipationAccount;")
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec("DROP TABLE schema;")
+			return err
+		})
+		a.NoError(err)
+		partt = &part
+		b.StartTimer()
+	}
+	if partt == nil {
+		return
+	}
+	out := protocol.Encode(partt.BlockProof)
+	outvoting := protocol.Encode(partt.Voting)
+	fmt.Println("merkle key store size:", len(out), "bytes.", "voting key size:", len(outvoting), "bytes.")
 }

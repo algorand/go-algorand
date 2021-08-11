@@ -17,7 +17,9 @@
 package crypto
 
 import (
+	"errors"
 	"fmt"
+
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -34,20 +36,16 @@ type (
 const (
 	minAlgorithmType AlgorithmType = iota
 
-	PlaceHolderType
+	DilithiumType
 
 	maxAlgorithmType
 )
-
-func (t AlgorithmType) isValidType() bool {
-	return minAlgorithmType < t && t < maxAlgorithmType
-}
 
 // Signer interface represents the possible operations that can be done with a signing key.
 type Signer interface {
 	Sign(message Hashable) ByteSignature
 	SignBytes(message []byte) ByteSignature
-	GetVerifyingKey() VerifyingKey
+	GetVerifyingKey() *VerifyingKey
 }
 
 // ErrBadSignature represents a bad signature
@@ -87,23 +85,13 @@ func (z *VerifyingKey) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.VerifyingKey, protocol.Encode(z)
 }
 
-// IsValid Makes certain struct is valid.
-func (z *SignatureAlgorithm) IsValid() bool {
-	return !(z == nil) && z.Type.isValidType()
-}
-
 // GetSigner fetches the Signer type that is stored inside this SignatureAlgorithm.
-func (z *SignatureAlgorithm) GetSigner() Signer {
+func (z *SignatureAlgorithm) GetSigner() (Signer, error) {
 	return z.Pack.getSigner(z.Type)
 }
 
-// IsValid Makes certain struct is valid.
-func (z *VerifyingKey) IsValid() bool {
-	return !(z == nil) && z.Type.isValidType()
-}
-
 // GetVerifier fetches the Verifier type that is stored inside this VerifyingKey.
-func (z *VerifyingKey) GetVerifier() Verifier {
+func (z *VerifyingKey) GetVerifier() (Verifier, error) {
 	return z.Pack.getVerifier(z.Type)
 }
 
@@ -111,15 +99,17 @@ func (z *VerifyingKey) GetVerifier() Verifier {
 type PackedVerifyingKey struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	PlaceHolderPublicKey PlaceHolderPublicKey `codec:"placeholder"`
+	DilithiumPublicKey DilithiumVerifier `codec:"dpk"`
 }
 
-func (p *PackedVerifyingKey) getVerifier(t AlgorithmType) Verifier {
+var errUnknownVerifier = errors.New("could not find stored Verifier")
+
+func (p *PackedVerifyingKey) getVerifier(t AlgorithmType) (Verifier, error) {
 	switch t {
-	case PlaceHolderType:
-		return &p.PlaceHolderPublicKey
+	case DilithiumType:
+		return &p.DilithiumPublicKey, nil
 	default:
-		panic("unknown type")
+		return nil, errUnknownVerifier
 	}
 }
 
@@ -127,34 +117,36 @@ func (p *PackedVerifyingKey) getVerifier(t AlgorithmType) Verifier {
 type PackedSignatureAlgorithm struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	PlaceHolderKey PlaceHolderKey `codec:"placeholderkey"`
+	DilithiumSigner DilithiumSigner `codec:"ds"`
 }
 
-func (p *PackedSignatureAlgorithm) getSigner(t AlgorithmType) Signer {
+var errUnknownSigner = errors.New("could not find stored signer")
+
+func (p *PackedSignatureAlgorithm) getSigner(t AlgorithmType) (Signer, error) {
 	switch t {
-	case PlaceHolderType:
-		return &p.PlaceHolderKey
+	case DilithiumType:
+		return &p.DilithiumSigner, nil
 	default:
-		panic("unknown type")
+		return nil, errUnknownSigner
 	}
 }
 
+var errNonExistingSignatureAlgorithmType = errors.New("signing algorithm type does not exist")
+
 // NewSigner receives a type of signing algorithm and generates keys.
-func NewSigner(t AlgorithmType) *SignatureAlgorithm {
+func NewSigner(t AlgorithmType) (*SignatureAlgorithm, error) {
 	var p PackedSignatureAlgorithm
 	switch t {
-	case PlaceHolderType:
-		var seed Seed
-		SystemRNG.RandBytes(seed[:])
-		key := GeneratePlaceHolderKey(seed)
+	case DilithiumType:
+		signer := NewDilithiumSigner().(*DilithiumSigner)
 		p = PackedSignatureAlgorithm{
-			PlaceHolderKey: *key,
+			DilithiumSigner: *signer,
 		}
 	default:
-		panic("non existing signer type.")
+		return nil, errNonExistingSignatureAlgorithmType
 	}
 	return &SignatureAlgorithm{
 		Type: t,
 		Pack: p,
-	}
+	}, nil
 }
