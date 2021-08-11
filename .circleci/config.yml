@@ -16,39 +16,51 @@ workflows:
             - amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - amd64_test_nightly:
           requires:
             - amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
           context: slack-secrets
       - amd64_integration:
           requires:
             - amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - amd64_integration_nightly:
           requires:
             - amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
           context: slack-secrets
       - amd64_e2e_subs:
           requires:
             - amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - amd64_e2e_subs_nightly:
           requires:
             - amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
           context: slack-secrets
       - arm64_build
       - arm64_test:
@@ -56,39 +68,51 @@ workflows:
             - arm64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - arm64_test_nightly:
           requires:
             - arm64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
           context: slack-secrets
       - arm64_integration:
           requires:
             - arm64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - arm64_integration_nightly:
           requires:
             - arm64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
           context: slack-secrets
       - arm64_e2e_subs:
           requires:
             - arm64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - arm64_e2e_subs_nightly:
           requires:
             - arm64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
           context: slack-secrets
       - mac_amd64_build
       - mac_amd64_test:
@@ -96,39 +120,51 @@ workflows:
             - mac_amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - mac_amd64_test_nightly:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
           context: slack-secrets
       - mac_amd64_integration:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - mac_amd64_integration_nightly:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
           context: slack-secrets
       - mac_amd64_e2e_subs:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - mac_amd64_e2e_subs_nightly:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
           context: slack-secrets
       #- windows_x64_build
 
@@ -374,8 +410,8 @@ jobs:
     steps:
       - prepare_go
       - generic_buildtest:
-          result_subdir: amd64-nightly
-          no_output_timeout: 45m
+          result_subdi                - /rel\/.*/
+                - /hotfix\/.*/          no_output_timeout: 45m
       - upload_coverage
       - slack/notify:
           event: fail
@@ -468,8 +504,8 @@ jobs:
       - checkout
       - prepare_go
       - generic_buildtest:
-          result_subdir: arm64-nightly
-          no_output_timeout: 45m
+          result_subdi                - /rel\/.*/
+                - /hotfix\/.*/          no_output_timeout: 45m
       - upload_coverage
       - slack/notify:
           event: fail
@@ -500,8 +536,8 @@ jobs:
       - checkout
       - prepare_go
       - generic_integration:
-          result_subdir: arm64-integration-nightly
-          no_output_timeout: 45m
+          result_subdir: arm64-int                - /rel\/.*/
+                - /hotfix\/.*/          no_output_timeout: 45m
       - slack/notify:
           event: fail
           template: basic_fail_1
@@ -529,8 +565,8 @@ jobs:
       - checkout
       - prepare_go
       - generic_integration:
-          result_subdir: arm64-e2e_subs-nightly
-          no_output_timeout: 45m
+          result_subdir: arm64-                - /rel\/.*/
+                - /hotfix\/.*/          no_output_timeout: 45m
       - slack/notify:
           event: fail
           template: basic_fail_1
@@ -611,8 +647,8 @@ jobs:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
       - generic_integration:
-          result_subdir: mac-amd64-integration-nightly
-          circleci_home: /Users/distiller
+          result_subdir: mac-amd64-int                - /rel\/.*/
+                - /hotfix\/.*/          circleci_home: /Users/distiller
           no_output_timeout: 45m
       - slack/notify:
           event: fail
@@ -644,8 +680,8 @@ jobs:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
       - generic_integration:
-          result_subdir: mac-amd64-e2e_subs-nightly
-          circleci_home: /Users/distiller
+          result_subdir: mac-amd64-                - /rel\/.*/
+                - /hotfix\/.*/          circleci_home: /Users/distiller
           no_output_timeout: 45m
       - slack/notify:
           event: fail
