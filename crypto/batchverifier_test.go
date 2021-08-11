@@ -20,9 +20,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestBatchVerifierSingle(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// test expected success
 	bv := MakeBatchVerifier(1)
 	msg := randString()
@@ -46,6 +49,7 @@ func TestBatchVerifierSingle(t *testing.T) {
 }
 
 func TestBatchVerifierBulk(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	for i := 1; i < 64*2+3; i++ {
 		n := i
 		bv := MakeBatchVerifier(n)
@@ -65,6 +69,7 @@ func TestBatchVerifierBulk(t *testing.T) {
 }
 
 func TestBatchVerifierBulkWithExpand(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	n := 64
 	bv := MakeBatchVerifier(1)
 	var s Seed
@@ -80,6 +85,7 @@ func TestBatchVerifierBulkWithExpand(t *testing.T) {
 }
 
 func TestBatchVerifierWithInvalidSiganture(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	n := 64
 	bv := MakeBatchVerifier(1)
 	var s Seed
@@ -114,6 +120,7 @@ func BenchmarkBatchVerifier(b *testing.B) {
 }
 
 func TestEmpty(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	bv := MakeBatchVerifierDefaultSize()
 	require.Error(t, bv.Verify())
 }
