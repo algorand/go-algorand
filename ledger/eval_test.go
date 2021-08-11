@@ -391,24 +391,20 @@ func TestPrepareEvalParams(t *testing.T) {
 		// appTealEvaluator for the txn at index i
 		expected []bool
 
-		// Checks the pooled app call cost in old and new protos
-		pooledCostsOld uint64
-		pooledCostsNew uint64
-
 		numAppCalls int
 	}
 
 	// Create some groups with these transactions
 	cases := []evalTestCase{
-		{[]transactions.SignedTxnWithAD{payment}, []bool{false}, 0, 0, 0},
-		{[]transactions.SignedTxnWithAD{appcall1}, []bool{true}, 700, 700, 1},
-		{[]transactions.SignedTxnWithAD{payment, payment}, []bool{false, false}, 0, 0, 0},
-		{[]transactions.SignedTxnWithAD{appcall1, payment}, []bool{true, false}, 700, 700, 1},
-		{[]transactions.SignedTxnWithAD{payment, appcall1}, []bool{false, true}, 700, 700, 1},
-		{[]transactions.SignedTxnWithAD{appcall1, appcall2}, []bool{true, true}, 700, 1400, 2},
-		{[]transactions.SignedTxnWithAD{appcall1, appcall2, appcall1}, []bool{true, true, true}, 700, 2100, 3},
-		{[]transactions.SignedTxnWithAD{payment, appcall1, payment}, []bool{false, true, false}, 700, 700, 1},
-		{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, []bool{true, false, true}, 700, 1400, 2},
+		{[]transactions.SignedTxnWithAD{payment}, []bool{false}, 0},
+		{[]transactions.SignedTxnWithAD{appcall1}, []bool{true}, 1},
+		{[]transactions.SignedTxnWithAD{payment, payment}, []bool{false, false}, 0},
+		{[]transactions.SignedTxnWithAD{appcall1, payment}, []bool{true, false}, 1},
+		{[]transactions.SignedTxnWithAD{payment, appcall1}, []bool{false, true}, 1},
+		{[]transactions.SignedTxnWithAD{appcall1, appcall2}, []bool{true, true}, 2},
+		{[]transactions.SignedTxnWithAD{appcall1, appcall2, appcall1}, []bool{true, true, true}, 3},
+		{[]transactions.SignedTxnWithAD{payment, appcall1, payment}, []bool{false, true, false}, 1},
+		{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, []bool{true, false, true}, 2},
 	}
 
 	for i, param := range params {
