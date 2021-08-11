@@ -65,4 +65,19 @@ func TestDilithiumSignerImplemantation(t *testing.T) {
 	a.Error(dverifier.VerifyBytes(bs2[:], sig2))
 	sig2[0]++
 	a.Error(dverifier.VerifyBytes(bs[:], sig2))
+
+	// Non-empty hashable:
+	hashableWithData := TestingHashable{
+		data: []byte{1, 2, 3},
+	}
+	sig = dsigner.Sign(hashableWithData)
+	a.NoError(dverifier.Verify(hashableWithData, sig))
+
+	sig = dsigner.Sign(hashableWithData)
+	hashableWithData.data[0]++
+	a.Error(dverifier.Verify(hashableWithData, sig))
+	hashableWithData.data[0]--
+
+	sig[0]++
+	a.Error(dverifier.Verify(hashableWithData, sig))
 }
