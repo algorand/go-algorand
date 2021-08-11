@@ -60,6 +60,7 @@ type testLedger struct {
 	appID             basics.AppIndex
 	creatorAddr       basics.Address
 	mods              map[basics.AppIndex]map[string]basics.ValueDelta
+	logs              []basics.LogItem
 }
 
 func makeApp(li uint64, lb uint64, gi uint64, gb uint64) basics.AppParams {
@@ -464,7 +465,23 @@ func (l *testLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics.E
 			}
 		}
 	}
+	evalDelta.Logs = l.logs
 	return
+}
+
+func (l *testLedger) AppendLog(txn *transactions.Transaction, value string) error {
+
+	appIdx, err := txn.IndexByAppID(l.appID)
+	if err != nil {
+		return err
+	}
+	_, ok := l.applications[l.appID]
+	if !ok {
+		return fmt.Errorf("no such app")
+	}
+
+	l.logs = append(l.logs, basics.LogItem{ID: appIdx, Message: value})
+	return nil
 }
 
 func TestEvalModes(t *testing.T) {
@@ -590,6 +607,8 @@ asset_params_get AssetTotal
 pop
 &&
 !=
+bytec_0
+log
 `
 	type desc struct {
 		source string
@@ -730,6 +749,7 @@ pop
 		"int 0\nint 0\nasset_holding_get AssetFrozen",
 		"int 0\nint 0\nasset_params_get AssetManager",
 		"int 0\nint 0\napp_params_get AppApprovalProgram",
+		"byte 0x01\nlog",
 	}
 
 	for _, source := range statefulOpcodeCalls {
@@ -810,6 +830,7 @@ func testApp(t *testing.T, program string, ep EvalParams, problems ...string) ba
 		require.NoError(t, err)
 		require.Empty(t, delta.GlobalDelta)
 		require.Empty(t, delta.LocalDeltas)
+		require.Empty(t, delta.Logs)
 		return delta
 	}
 	return basics.EvalDelta{}
@@ -2883,6 +2904,48 @@ func TestAppLoop(t *testing.T) {
 
 	// Infinite loop because multiply by one instead of two
 	testApp(t, stateful+"int 1; loop:; int 1; *; dup; int 10; <; bnz loop; int 16; ==", ep, "dynamic cost")
+}
+
+func TestWriteLogs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+
+	ep := defaultEvalParams(nil, nil)
+	txn := makeSampleTxn()
+	txn.Txn.ApplicationID = 100
+	ep.Txn = &txn
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Sender: 1,
+		},
+	)
+	ep.Ledger = ledger
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
+
+	// write int and bytes values
+	source := `int 1
+loop: byte "a"
+log
+int 1
++
+dup
+int 30
+<
+bnz loop
+`
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	require.NoError(t, err)
+	err = CheckStateful(ops.Program, ep)
+	require.NoError(t, err)
+	pass, err := EvalStateful(ops.Program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+	delta, err := ledger.GetDelta(&ep.Txn.Txn)
+	require.NoError(t, err)
+	require.Empty(t, 0, delta.GlobalDelta)
+	require.Empty(t, delta.LocalDeltas)
+	require.Len(t, delta.Logs, 29)
 }
 
 func TestPooledAppCallsVerifyOp(t *testing.T) {
