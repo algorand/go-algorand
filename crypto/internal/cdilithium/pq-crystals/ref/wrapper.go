@@ -19,7 +19,7 @@ package cdilithium
 // NOTE: -Wno-unused-parameter is used because cgo injects code that doesn't comply with -Wunused-parameter
 
 //#cgo CFLAGS:  -O3 -Wextra -Wno-unused-parameter  -Wpedantic -fomit-frame-pointer -Wshadow -Wvla -Wpointer-arith -Wredundant-decls
-//#cgo CFLAGS: -DDILITHIUM_MODE=3 -DDILITHIUM_RANDOMIZED_SIGNING
+//#cgo CFLAGS: -DDILITHIUM_MODE=3
 //#include "api.h"
 import "C"
 import (
