@@ -2502,8 +2502,8 @@ func (z *PackedVerifyingKey) MarshalMsg(b []byte) (o []byte) {
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
-			// string "dk2"
-			o = append(o, 0xa3, 0x64, 0x6b, 0x32)
+			// string "dpk"
+			o = append(o, 0xa3, 0x64, 0x70, 0x6b)
 			// omitempty: check for empty values
 			zb0002Len := uint32(1)
 			var zb0002Mask uint8 /* 2 bits */
@@ -2622,7 +2622,7 @@ func (z *PackedVerifyingKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "dk2":
+			case "dpk":
 				var zb0005 int
 				var zb0006 bool
 				zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
