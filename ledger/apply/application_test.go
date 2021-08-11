@@ -242,6 +242,7 @@ func (b *testBalancesPass) Put(addr basics.Address, ad basics.AccountData) error
 func (b *testBalancesPass) ConsensusParams() config.ConsensusParams {
 	return b.proto
 }
+
 func (b *testBalancesPass) Allocate(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error {
 	b.allocatedAppIdx = aidx
 	return nil
@@ -390,6 +391,8 @@ func TestAppCallCheckPrograms(t *testing.T) {
 	// This check is for static costs. v26 is last with static cost checking
 	proto := config.Consensus[protocol.ConsensusV26]
 	ep.Proto = &proto
+	ep.MinTealVersion = new(uint64)
+	ep.PooledApplicationBudget = new(uint64)
 
 	proto.MaxAppProgramCost = 1
 	err := checkPrograms(&ac, &ep)
@@ -497,6 +500,8 @@ func TestAppCallApplyCreate(t *testing.T) {
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
 	ep.Proto = &proto
+	ep.MinTealVersion = new(uint64)
+	ep.PooledApplicationBudget = new(uint64)
 
 	// this test will succeed in creating the app, but then fail
 	// because the mock balances doesn't update the creators table
@@ -603,6 +608,8 @@ func TestAppCallApplyCreateOptIn(t *testing.T) {
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
 	ep.Proto = &proto
+	ep.MinTealVersion = new(uint64)
+	ep.PooledApplicationBudget = new(uint64)
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
 	gd := map[string]basics.ValueDelta{"uint": {Action: basics.SetUintAction, Uint: 1}}
@@ -709,6 +716,8 @@ func TestAppCallClearState(t *testing.T) {
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
 	ep.Proto = &proto
+	ep.MinTealVersion = new(uint64)
+	ep.PooledApplicationBudget = new(uint64)
 
 	ac := transactions.ApplicationCallTxnFields{
 		ApplicationID: appIdx,
@@ -881,6 +890,8 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
 	ep.Proto = &proto
+	ep.MinTealVersion = new(uint64)
+	ep.PooledApplicationBudget = new(uint64)
 
 	b.pass = false
 	err := ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
@@ -965,6 +976,8 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	b.SetProto(protocol.ConsensusV28)
 	proto := b.ConsensusParams()
 	ep.Proto = &proto
+	ep.MinTealVersion = new(uint64)
+	ep.PooledApplicationBudget = new(uint64)
 
 	b.pass = false
 	err := ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
@@ -1112,6 +1125,8 @@ func TestAppCallApplyDelete(t *testing.T) {
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
 	ep.Proto = &proto
+	ep.MinTealVersion = new(uint64)
+	ep.PooledApplicationBudget = new(uint64)
 
 	b.pass = false
 	err := ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
@@ -1206,6 +1221,8 @@ func TestAppCallApplyCreateClearState(t *testing.T) {
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
 	ep.Proto = &proto
+	ep.MinTealVersion = new(uint64)
+	ep.PooledApplicationBudget = new(uint64)
 
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
@@ -1256,6 +1273,8 @@ func TestAppCallApplyCreateDelete(t *testing.T) {
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
 	ep.Proto = &proto
+	ep.MinTealVersion = new(uint64)
+	ep.PooledApplicationBudget = new(uint64)
 
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 

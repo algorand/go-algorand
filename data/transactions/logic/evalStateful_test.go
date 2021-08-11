@@ -678,7 +678,26 @@ pop
 		})
 	}
 
-	// check that arg is not allowed in stateful mode
+	// check that ed25519verify and arg is not allowed in stateful mode between v2-v4
+	disallowed_v4 := []string{
+		"byte 0x01\nbyte 0x01\nbyte 0x01\ned25519verify",
+		"arg 0",
+		"arg_0",
+		"arg_1",
+		"arg_2",
+		"arg_3",
+	}
+	for _, source := range disallowed_v4 {
+		ops := testProg(t, source, 4)
+		ep := defaultEvalParams(nil, nil)
+		err := CheckStateful(ops.Program, ep)
+		require.Error(t, err)
+		_, err = EvalStateful(ops.Program, ep)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "not allowed in current mode")
+	}
+
+	// check that arg is not allowed in stateful mode beyond v5
 	disallowed := []string{
 		"arg 0",
 		"arg_0",

@@ -385,19 +385,23 @@ func TestPrepareEvalParams(t *testing.T) {
 		// indicates if prepareAppEvaluators should return a non-nil
 		// appTealEvaluator for the txn at index i
 		expected []bool
+
+		// Checks the pooled app call cost in old and new protos
+		pooledCosts_old uint64
+		pooledCosts_new uint64
 	}
 
 	// Create some groups with these transactions
 	cases := []evalTestCase{
-		{[]transactions.SignedTxnWithAD{payment}, []bool{false}},
-		{[]transactions.SignedTxnWithAD{appcall1}, []bool{true}},
-		{[]transactions.SignedTxnWithAD{payment, payment}, []bool{false, false}},
-		{[]transactions.SignedTxnWithAD{appcall1, payment}, []bool{true, false}},
-		{[]transactions.SignedTxnWithAD{payment, appcall1}, []bool{false, true}},
-		{[]transactions.SignedTxnWithAD{appcall1, appcall2}, []bool{true, true}},
-		{[]transactions.SignedTxnWithAD{appcall1, appcall2, appcall1}, []bool{true, true, true}},
-		{[]transactions.SignedTxnWithAD{payment, appcall1, payment}, []bool{false, true, false}},
-		{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, []bool{true, false, true}},
+		{[]transactions.SignedTxnWithAD{payment}, []bool{false}, 0, 0},
+		{[]transactions.SignedTxnWithAD{appcall1}, []bool{true}, 700, 700},
+		{[]transactions.SignedTxnWithAD{payment, payment}, []bool{false, false}, 0, 0},
+		{[]transactions.SignedTxnWithAD{appcall1, payment}, []bool{true, false}, 700, 700},
+		{[]transactions.SignedTxnWithAD{payment, appcall1}, []bool{false, true}, 700, 700},
+		{[]transactions.SignedTxnWithAD{appcall1, appcall2}, []bool{true, true}, 700, 1400},
+		{[]transactions.SignedTxnWithAD{appcall1, appcall2, appcall1}, []bool{true, true, true}, 700, 2100},
+		{[]transactions.SignedTxnWithAD{payment, appcall1, payment}, []bool{false, true, false}, 700, 700},
+		{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, []bool{true, false, true}, 700, 1400},
 	}
 
 	for i, testCase := range cases {
@@ -422,6 +426,36 @@ func TestPrepareEvalParams(t *testing.T) {
 					require.Equal(t, res[j].TxnGroup, expGroupNoAD)
 					require.Equal(t, *res[j].Proto, eval.proto)
 					require.Equal(t, *res[j].Txn, testCase.group[j].SignedTxn)
+				} else {
+					require.Nil(t, res[j])
+				}
+			}
+		})
+	}
+
+	// Test cost pooling on old and new consensus protos
+	for i, testCase := range cases {
+		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			eval.proto = config.Consensus[protocol.ConsensusFuture]
+			res := eval.prepareEvalParams(testCase.group)
+			require.Equal(t, len(res), len(testCase.group))
+
+			for j, present := range testCase.expected {
+				if present {
+					require.Equal(t, *res[j].PooledApplicationBudget, testCase.pooledCosts_new)
+				} else {
+					require.Nil(t, res[j])
+				}
+			}
+
+			// Pooling should not work in v29 and prior versions
+			eval.proto = config.Consensus[protocol.ConsensusV29]
+			res = eval.prepareEvalParams(testCase.group)
+			require.Equal(t, len(res), len(testCase.group))
+
+			for j, present := range testCase.expected {
+				if present {
+					require.Equal(t, *res[j].PooledApplicationBudget, testCase.pooledCosts_old)
 				} else {
 					require.Nil(t, res[j])
 				}
@@ -582,7 +616,7 @@ func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalPr
 	ops, err := logic.AssembleString(approvalProgram)
 	require.NoError(t, err, ops.Errors)
 	approval := ops.Program
-	ops, err = logic.AssembleString("#pragma version 4\nint 1")
+	ops, err = logic.AssembleString("#pragma version 5\nint 1")
 	require.NoError(t, err)
 	clear := ops.Program
 
@@ -644,66 +678,12 @@ func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalPr
 	return eval, err
 }
 
-func TestProtocolAllowsAppPooling(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	approvalProgram1 := `#pragma version 4
-	txn ApplicationID
-	bz create
-	byte "caller"
-	pop
-	b ok
-create:
-	byte 0x01
-	byte "ZC9KNzlnWTlKZ1pwSkNzQXVzYjNBcG1xTU9YbkRNWUtIQXNKYVk2RzRBdExPakQx"
-	addr DROUIZXGT3WFJR3QYVZWTR5OJJXJCMOLS7G4FUGZDSJM5PNOVOREH6HIZE
-	ed25519verify
-	pop
-ok:
-	int 1`
-
-	approvalProgram2 := `#pragma version 4
-	txn ApplicationID
-	bz create
-	byte "caller"
-	pop
-	b ok
-create:
-	byte "creator"
-	keccak256
-	keccak256
-	keccak256
-	keccak256
-	keccak256
-	keccak256
-	pop
-ok:
-	int 1`
-
-	cases := []struct {
-		prog          string
-		expectedError string
-	}{
-		{approvalProgram1, "dynamic cost budget exceeded, executing ed25519verify: remaining budget is 700 but program cost was 1905"},
-		{approvalProgram2, "dynamic cost budget exceeded, executing keccak256: remaining budget is 700 but program cost was 783"},
-	}
-
-	for _, testCase := range cases {
-		_, err := testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, testCase.prog, protocol.ConsensusV28)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), testCase.expectedError)
-
-		_, err = testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, testCase.prog, protocol.ConsensusFuture)
-		require.NoError(t, err)
-	}
-}
-
 // TestEvalAppExceedsPooledBudgetWithTxnGroup ensures app call txns cannot exceed
 // the total pooled budget for group txns
 func TestEvalAppExceedsPooledBudgetWithTxnGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	approvalProgram1 := `#pragma version 4
+	approvalProgram1 := `#pragma version 5
 	txn ApplicationID
 	bz create
 	byte "caller"
@@ -724,7 +704,7 @@ ok:
 	pop
 	int 1` // total cost: 2113
 
-	approvalProgram2 := `#pragma version 4
+	approvalProgram2 := `#pragma version 5
 	txn ApplicationID
 	bz create
 	byte "caller"
@@ -744,7 +724,7 @@ ok:
 	pop
 	int 1` // total cost: 2101
 
-	approvalProgram3 := `#pragma version 4
+	approvalProgram3 := `#pragma version 5
 	txn ApplicationID
 	bz create
 	byte "caller"
@@ -786,7 +766,7 @@ ok:
 func TestEvalAppAcceptsPooledBudgetWithTxnGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	approvalProgram1 := `#pragma version 4
+	approvalProgram1 := `#pragma version 5
 	txn ApplicationID
 	bz create
 	byte "caller"
@@ -806,7 +786,7 @@ create:
 ok:
 	int 1` // total cost: 2100
 
-	approvalProgram2 := `#pragma version 4
+	approvalProgram2 := `#pragma version 5
 	txn ApplicationID
 	bz create
 	byte "caller"
@@ -824,7 +804,7 @@ create:
 ok:
 	int 1` // total cost: 797
 
-	approvalProgram3 := `#pragma version 4
+	approvalProgram3 := `#pragma version 5
 	txn ApplicationID
 	bz create
 	byte "caller"
