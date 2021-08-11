@@ -187,6 +187,9 @@ func (b *bitmask) iterate(entries int, maxIndex int, callback func(int, int) err
 		}
 	case 3:
 		sum := 0
+		// This is the least amount of elements can be set.
+		// There could be more, if the numbers are corrupted
+		// i.e. when sum >= entries
 		elementsCount := entries - (len(*b)-1)/2
 		if elementsCount > maxIndex || elementsCount < 0 {
 			return errDataMissing
@@ -194,10 +197,10 @@ func (b *bitmask) iterate(entries int, maxIndex int, callback func(int, int) err
 		j := 0
 		for i := 0; i*2+2 < len(*b); i++ {
 			sum += int((*b)[i*2+1])*256 + int((*b)[i*2+2])
+			if sum >= entries {
+				return errIndexNotFound
+			}
 			for j < sum {
-				if j >= entries {
-					return errIndexNotFound
-				}
 				if err := callback(j, index); err != nil {
 					return err
 				}

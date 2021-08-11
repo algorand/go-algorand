@@ -92,6 +92,31 @@ func TestBitmaskType3(t *testing.T) {
 	trimIterateHelper(t, setBits)
 }
 
+// Test for corrupted bitmask
+func TestBitmaskType3Corrupted(t *testing.T) {
+
+	// 10 entries, bitmask has 3 compliment bits (case 3): 10-3=7 set bits,
+	// last valid index should be 6
+	maxIndex := 7
+	entries := 10
+
+	var b bitmask
+	b = make([]byte, 7)
+	b[0] = 3
+	b[1] = 0
+	b[3] = 0
+	b[5] = 0
+
+	b[2] = 1 // index 1 is not set
+	b[4] = 1 // index 2 is not set
+	b[6] = 8 // index 2+8=10 is not set. 10 is outside the entries, and does not count
+	// set bits: 0, 3, 4, 5, 6, 7, 8, 9
+
+	require.Equal(t, errIndexNotFound, b.iterate(entries, maxIndex, func(entry, index int) error {
+		return nil
+	}))
+}
+
 func TestBitmaskTypeX(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -156,7 +181,7 @@ func trimIterateHelper(t *testing.T, setBits []int) {
 	if int((b)[0]) == 1 || int((b)[0]) == 3 {
 		require.Equal(t, errIndexNotFound, b.iterate(70, len(setBits), iterfunc))
 	}
-	
+
 	// For types 1 and 3, test the error handling in the second stage.
 	errorAfter = len(setBits) - 1 - 8
 	require.Equal(t, errTestError, b.iterate(entries, len(setBits), errfunc))
@@ -205,6 +230,7 @@ func TestFuzzBitmask(t *testing.T) {
 		b.iterate(entries, maxIndex, func(i, j int) error {
 			require.Greater(t, i, lastEntryIndex)
 			lastEntryIndex = i
+			require.Less(t, i, entries)
 			require.Less(t, j, maxIndex)
 			return nil
 		})
