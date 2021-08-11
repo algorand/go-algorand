@@ -2903,10 +2903,10 @@ func TestPooledAppCallsVerifyOp(t *testing.T) {
 	ep.Proto.EnableAppCostPooling = true
 	ep.PooledApplicationBudget = new(uint64)
 	// Simulate test with 2 grouped txn
-	*ep.PooledApplicationBudget = uint64(1400)
+	*ep.PooledApplicationBudget = uint64(ep.Proto.MaxAppProgramCost * 2)
 	testApp(t, source, ep, "pc=107 dynamic cost budget exceeded, executing ed25519verify: remaining budget is 1400 but program cost was 1905")
 
 	// Simulate test with 3 grouped txn
-	*ep.PooledApplicationBudget = uint64(2100)
+	*ep.PooledApplicationBudget = uint64(ep.Proto.MaxAppProgramCost * 3)
 	testApp(t, source, ep)
 }
