@@ -229,6 +229,7 @@ addons:
       - python3-venv
       - libssl-dev
       - libffi-dev
+      - make
   artifacts:
     s3_region: "us-east-1"
     paths:
