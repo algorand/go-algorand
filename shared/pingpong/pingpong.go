@@ -205,6 +205,7 @@ func computeAccountMinBalance(client libgoal.Client, cfg PpConfig) (fundingRequi
 		if err != nil {
 			return
 		}
+		fee *= uint64(cfg.GroupSize)
 	}
 	fundingRequiredBalance = minActiveAccountBalance
 	runningRequiredBalance = minActiveAccountBalance
@@ -256,9 +257,6 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 	if err != nil {
 		return err
 	}
-
-	// fund to double the minimum amount.
-	//minFund *= 2
 
 	fmt.Printf("adjusting account balance to %d\n", minFund)
 	for addr, acct := range accounts {
@@ -764,17 +762,17 @@ func (pps *WorkerState) sendFromTo(
 					fromBalanceChange -= int64(txn.Fee.Raw + amt)
 					toBalanceChange += int64(amt)
 					signer = to
+					// Tsachi : I think this is incorrect.
 				} else {
-					txn, _, err = pps.constructTxn(to, from, fee, amt, 0, client)
+					txn, signer, err = pps.constructTxn(to, from, fee, amt, 0, client)
 					toBalanceChange -= int64(txn.Fee.Raw + amt)
 					fromBalanceChange += int64(amt)
-					signer = to
 				}
 				if err != nil {
 					_, _ = fmt.Fprintf(os.Stderr, "group tx failed: %v\n", err)
 					return
 				}
-				if cfg.RandomizeAmt {
+				if cfg.RandomizeAmt && j%2 == 1 {
 					amt = rand.Uint64()%cfg.MaxAmt + 1
 				}
 				if cfg.Rekey {
@@ -966,19 +964,33 @@ func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, cli
 	if cfg.NumApp > 0 { // Construct app transaction
 		// select opted-in accounts for Txn.Accounts field
 		var accounts []string
-		if len(cinfo.OptIns[aidx]) > 0 {
-			indices := rand.Perm(len(cinfo.OptIns[aidx]))
+		assetOptIns := cinfo.OptIns[aidx]
+		if len(assetOptIns) > 0 {
+			indices := rand.Perm(len(assetOptIns))
 			limit := 5
 			if len(indices) < limit {
 				limit = len(indices)
 			}
 			for i := 0; i < limit; i++ {
 				idx := indices[i]
-				accounts = append(accounts, cinfo.OptIns[aidx][idx])
+				accounts = append(accounts, assetOptIns[idx])
 			}
-			sender = accounts[0]
+			if cinfo.AssetParams[aidx].Creator == from {
+				// if the application was created by the "from" account, then we don't need to worry about it being opted-in.
+			} else {
+				fromIsOptedIn := false
+				for i := 0; i < len(assetOptIns); i++ {
+					if assetOptIns[i] == from {
+						fromIsOptedIn = true
+						break
+					}
+				}
+				if !fromIsOptedIn {
+					sender = accounts[0]
+					from = sender
+				}
+			}
 			accounts = accounts[1:]
-			from = sender
 		} else {
 			err = fmt.Errorf("application %d has not been opted in by any account", aidx)
 			_, _ = fmt.Fprintf(os.Stdout, "error constructing transaction - %v\n", err)
