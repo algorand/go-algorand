@@ -410,8 +410,8 @@ jobs:
     steps:
       - prepare_go
       - generic_buildtest:
-          result_subdi                - /rel\/.*/
-                - /hotfix\/.*/          no_output_timeout: 45m
+          result_subdir: amd64-nightly
+          no_output_timeout: 45m
       - upload_coverage
       - slack/notify:
           event: fail
@@ -504,8 +504,8 @@ jobs:
       - checkout
       - prepare_go
       - generic_buildtest:
-          result_subdi                - /rel\/.*/
-                - /hotfix\/.*/          no_output_timeout: 45m
+          result_subdir: arm64-nightly
+          no_output_timeout: 45m
       - upload_coverage
       - slack/notify:
           event: fail
@@ -536,8 +536,8 @@ jobs:
       - checkout
       - prepare_go
       - generic_integration:
-          result_subdir: arm64-int                - /rel\/.*/
-                - /hotfix\/.*/          no_output_timeout: 45m
+          result_subdir: arm64-integration-nightly
+          no_output_timeout: 45m
       - slack/notify:
           event: fail
           template: basic_fail_1
@@ -565,8 +565,8 @@ jobs:
       - checkout
       - prepare_go
       - generic_integration:
-          result_subdir: arm64-                - /rel\/.*/
-                - /hotfix\/.*/          no_output_timeout: 45m
+          result_subdir: arm64-e2e_subs-nightly
+          no_output_timeout: 45m
       - slack/notify:
           event: fail
           template: basic_fail_1
@@ -647,8 +647,8 @@ jobs:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
       - generic_integration:
-          result_subdir: mac-amd64-int                - /rel\/.*/
-                - /hotfix\/.*/          circleci_home: /Users/distiller
+          result_subdir: mac-amd64-integration-nightly
+          circleci_home: /Users/distiller
           no_output_timeout: 45m
       - slack/notify:
           event: fail
@@ -680,8 +680,8 @@ jobs:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
       - generic_integration:
-          result_subdir: mac-amd64-                - /rel\/.*/
-                - /hotfix\/.*/          circleci_home: /Users/distiller
+          result_subdir: mac-amd64-e2e_subs-nightly
+          circleci_home: /Users/distiller
           no_output_timeout: 45m
       - slack/notify:
           event: fail
