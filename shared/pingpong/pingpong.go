@@ -23,6 +23,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -264,7 +265,7 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 		if addr == pps.cfg.SrcAccount {
 			continue
 		}
-
+	repeat:
 		if !cfg.Quiet {
 			fmt.Printf("adjusting balance of account %v\n", addr)
 		}
@@ -279,6 +280,19 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 			}
 			tx, err := pps.sendPaymentFromSourceAccount(client, addr, fee, toSend)
 			if err != nil {
+				if strings.Contains(err.Error(), "broadcast queue full") {
+					fmt.Printf("failed to send payment, broadcast queue full : sleeping 500ms\n")
+					stat, err2 := client.Status()
+					if err2 == nil {
+						_, err2 = client.WaitForRound(stat.LastRound)
+						if err2 != nil {
+							time.Sleep(500 * time.Millisecond)
+						}
+					} else {
+						time.Sleep(500 * time.Millisecond)
+					}
+					goto repeat
+				}
 				return err
 			}
 			srcFunds -= tx.Fee.Raw
