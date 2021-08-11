@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func MultisigSigPrint(sig MultisigSig) {
@@ -39,6 +41,7 @@ func MultisigSigPrint(sig MultisigSig) {
 // detect invalid threshold and versions
 //
 func TestMultisigAddr(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var s Seed
 	var secrets []*SecretKey
 	var pks []PublicKey
@@ -76,6 +79,7 @@ func TestMultisigAddr(t *testing.T) {
 // signs with 3 keys to get 3 signatures
 // assembles 3 signatures, verify the msig
 func TestMultisig(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var msig MultisigSig
 	var sigs []MultisigSig
 
@@ -152,6 +156,7 @@ func TestMultisig(t *testing.T) {
 // 4. merge msig1 and msig2
 // 5. verify the merged one
 func TestMultisigAddAndMerge(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var msig1 MultisigSig
 	var msig2 MultisigSig
 	var sigs []MultisigSig
@@ -233,6 +238,7 @@ func TestMultisigAddAndMerge(t *testing.T) {
 }
 
 func TestEmptyMultisig(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var s Seed
 	var secrets *SecretKey
 	var pks []PublicKey
@@ -258,6 +264,7 @@ func TestEmptyMultisig(t *testing.T) {
 }
 
 func TestIncorrectAddrresInMultisig(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var s Seed
 	var secrets *SecretKey
 	var pks []PublicKey
@@ -286,6 +293,7 @@ func TestIncorrectAddrresInMultisig(t *testing.T) {
 }
 
 func TestMoreThanMaxSigsInMultisig(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var s Seed
 	var secrets []*SecretKey
 	var pks []PublicKey
@@ -323,6 +331,7 @@ func TestMoreThanMaxSigsInMultisig(t *testing.T) {
 }
 
 func TestOneSignatureIsEmpty(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var s Seed
 	var secrets []*SecretKey
 	var pks []PublicKey
@@ -363,6 +372,7 @@ func TestOneSignatureIsEmpty(t *testing.T) {
 // in this test we want to test what happen if one of the signatures are not valid.
 // we create case where are enoguht valid signatures (that pass the thrashold). but since one is false. everything fails.
 func TestOneSignatureIsInvalid(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var s Seed
 	var userkeypair []*SecretKey
 	var pks []PublicKey
@@ -404,6 +414,7 @@ func TestOneSignatureIsInvalid(t *testing.T) {
 }
 
 func TestMultisigLessThanTrashold(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var msig MultisigSig
 	var sigs []MultisigSig
 

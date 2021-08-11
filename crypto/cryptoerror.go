@@ -24,7 +24,6 @@ var (
 	errInvalidThreshold         = errors.New("Invalid threshold")
 	errInvalidNumberOfSignature = errors.New("Invalid number of signatures")
 	errKeyNotExist              = errors.New("Key does not exist")
-	errSubsigVerification       = errors.New("Verification failure: subsignature")
 	errKeysNotMatch             = errors.New("Public key lists do not match")
 	errInvalidDuplicates        = errors.New("Invalid duplicates")
 	errInvalidNumberOfSig       = errors.New("invalid number of signatures to add")
