@@ -266,7 +266,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 	ad.AppLocalStates = map[basics.AppIndex]basics.AppLocalState{1: {}}
 	genesis[addr] = ad
 
-	bootstrap := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	bootstrap := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 
 	// generate test transactions
 	const inMem = true

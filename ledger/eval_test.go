@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -1088,9 +1089,9 @@ func TestModifiedAssetHoldings(t *testing.T) {
 			l, bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader).BlockHeader,
 			config.Consensus[protocol.ConsensusFuture], 0, false, true)
 		require.NoError(t, err)
-		eval.Transaction(createTxn, transactions.ApplyData{})
+		err = eval.Transaction(createTxn, transactions.ApplyData{})
 		require.NoError(t, err)
-		eval.Transaction(optInTxn, transactions.ApplyData{})
+		err = eval.Transaction(optInTxn, transactions.ApplyData{})
 		require.NoError(t, err)
 		validatedBlock, err = eval.GenerateBlock()
 		require.NoError(t, err)
@@ -1156,9 +1157,9 @@ func TestModifiedAssetHoldings(t *testing.T) {
 			l, bookkeeping.MakeBlock(validatedBlock.blk.BlockHeader).BlockHeader,
 			config.Consensus[protocol.ConsensusFuture], 0, false, true)
 		require.NoError(t, err)
-		eval.Transaction(optOutTxn, transactions.ApplyData{})
+		err = eval.Transaction(optOutTxn, transactions.ApplyData{})
 		require.NoError(t, err)
-		eval.Transaction(closeTxn, transactions.ApplyData{})
+		err = eval.Transaction(closeTxn, transactions.ApplyData{})
 		require.NoError(t, err)
 		validatedBlock, err = eval.GenerateBlock()
 		require.NoError(t, err)
@@ -1182,6 +1183,210 @@ func TestModifiedAssetHoldings(t *testing.T) {
 			assert.False(t, created)
 		}
 	}
+}
+
+func newTestGenesis() (bookkeeping.GenesisBalances, []basics.Address, []*crypto.SignatureSecrets) {
+	// irrelevant, but deterministic
+	sink, err := basics.UnmarshalChecksumAddress("YTPRLJ2KK2JRFSZZNAF57F3K5Y2KCG36FZ5OSYLW776JJGAUW5JXJBBD7Q")
+	if err != nil {
+		panic(err)
+	}
+	rewards, err := basics.UnmarshalChecksumAddress("242H5OXHUEBYCGGWB3CQ6AZAMQB5TMCWJGHCGQOZPEIVQJKOO7NZXUXDQA")
+	if err != nil {
+		panic(err)
+	}
+
+	const count = 10
+	addrs := make([]basics.Address, count)
+	secrets := make([]*crypto.SignatureSecrets, count)
+	accts := make(map[basics.Address]basics.AccountData)
+
+	// 10 billion microalgos, across N accounts and pool and sink
+	amount := 10 * 1000000000 * 1000000 / uint64(count+2)
+
+	for i := 0; i < count; i++ {
+		// Create deterministic addresses, so that output stays the same, run to run.
+		var seed crypto.Seed
+		seed[0] = byte(i)
+		secrets[i] = crypto.GenerateSignatureSecrets(seed)
+		addrs[i] = basics.Address(secrets[i].SignatureVerifier)
+
+		adata := basics.AccountData{
+			MicroAlgos: basics.MicroAlgos{Raw: amount},
+		}
+		accts[addrs[i]] = adata
+	}
+
+	accts[sink] = basics.AccountData{
+		MicroAlgos: basics.MicroAlgos{Raw: amount},
+		Status:     basics.NotParticipating,
+	}
+
+	accts[rewards] = basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: amount}}
+
+	genBalances := bookkeeping.MakeGenesisBalances(accts, sink, rewards)
+
+	return genBalances, addrs, secrets
+}
+
+func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *Ledger {
+	// Consider changing this to use LoadLedger for even more fidelity.
+	// There's already GenesisBalances that could replace Genesis.
+
+	var genHash crypto.Digest
+	crypto.RandBytes(genHash[:])
+	genBlock, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture,
+		balances, "test", genHash)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	const inMem = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, InitState{
+		Block:       genBlock,
+		Accounts:    balances.Balances,
+		GenesisHash: genHash,
+	}, cfg)
+	require.NoError(t, err)
+	return l
+}
+
+func (ledger *Ledger) nextEval(t testing.TB) *BlockEvaluator {
+	rnd := ledger.Latest()
+	hdr, err := ledger.BlockHdr(rnd)
+	require.NoError(t, err)
+	eval, err := startEvaluator(ledger, bookkeeping.MakeBlock(hdr).BlockHeader,
+		config.Consensus[hdr.CurrentProtocol], 0, false, true)
+	require.NoError(t, err)
+	return eval
+}
+
+func (ledger *Ledger) endBlock(t testing.TB, eval *BlockEvaluator) {
+	validatedBlock, err := eval.GenerateBlock()
+	require.NoError(t, err)
+	err = ledger.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
+	require.NoError(t, err)
+}
+
+func (ledger *Ledger) lookup(t testing.TB, addr basics.Address) basics.AccountData {
+	rnd := ledger.Latest()
+	ad, err := ledger.Lookup(rnd, addr)
+	require.NoError(t, err)
+	return ad
+}
+
+func (eval *BlockEvaluator) txn(t testing.TB, txn *txntest.Txn) {
+	if txn.GenesisHash.IsZero() {
+		txn.GenesisHash = eval.genesisHash
+	}
+	if txn.FirstValid == 0 {
+		txn.FirstValid = eval.Round()
+	}
+	txn.FillDefaults(eval.proto)
+	stxn := txn.SignedTxn()
+	err := eval.testTransaction(stxn, eval.state.child(1))
+	require.NoError(t, err)
+	eval.Transaction(stxn, transactions.ApplyData{})
+	require.NoError(t, err)
+}
+
+func (eval *BlockEvaluator) txns(t testing.TB, txns ...*txntest.Txn) {
+	for _, txn := range txns {
+		eval.txn(t, txn)
+	}
+}
+
+func TestRewardsInAD(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	payTxn := txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[1]}
+
+	// Build up Residue in RewardsState so it's ready to pay
+	for i := 1; i < 10; i++ {
+		eval := l.nextEval(t)
+		l.endBlock(t, eval)
+	}
+
+	eval := l.nextEval(t)
+	eval.txn(t, &payTxn)
+	payInBlock := eval.block.Payset[0]
+	require.Greater(t, payInBlock.ApplyData.SenderRewards.Raw, uint64(1000))
+	require.Greater(t, payInBlock.ApplyData.ReceiverRewards.Raw, uint64(1000))
+	require.Equal(t, payInBlock.ApplyData.SenderRewards, payInBlock.ApplyData.ReceiverRewards)
+	l.endBlock(t, eval)
+}
+
+func TestMinBalanceChanges(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	createTxn := txntest.Txn{
+		Type:   "acfg",
+		Sender: addrs[0],
+		AssetParams: basics.AssetParams{
+			Total:    3,
+			Manager:  addrs[1],
+			Reserve:  addrs[2],
+			Freeze:   addrs[3],
+			Clawback: addrs[4],
+		},
+	}
+
+	const expectedID basics.AssetIndex = 1
+	optInTxn := txntest.Txn{
+		Type:          "axfer",
+		Sender:        addrs[5],
+		XferAsset:     expectedID,
+		AssetReceiver: addrs[5],
+	}
+
+	ad0init := l.lookup(t, addrs[0])
+	ad5init := l.lookup(t, addrs[5])
+
+	eval := l.nextEval(t)
+	eval.txns(t, &createTxn, &optInTxn)
+	l.endBlock(t, eval)
+
+	ad0new := l.lookup(t, addrs[0])
+	ad5new := l.lookup(t, addrs[5])
+
+	proto := config.Consensus[eval.block.BlockHeader.CurrentProtocol]
+	// Check balance and min balance requirement changes
+	require.Equal(t, ad0init.MicroAlgos.Raw, ad0new.MicroAlgos.Raw+1000)                   // fee
+	require.Equal(t, ad0init.MinBalance(&proto).Raw, ad0new.MinBalance(&proto).Raw-100000) // create
+	require.Equal(t, ad5init.MicroAlgos.Raw, ad5new.MicroAlgos.Raw+1000)                   // fee
+	require.Equal(t, ad5init.MinBalance(&proto).Raw, ad5new.MinBalance(&proto).Raw-100000) // optin
+
+	optOutTxn := txntest.Txn{
+		Type:          "axfer",
+		Sender:        addrs[5],
+		XferAsset:     expectedID,
+		AssetReceiver: addrs[0],
+		AssetCloseTo:  addrs[0],
+	}
+
+	closeTxn := txntest.Txn{
+		Type:        "acfg",
+		Sender:      addrs[1], // The manager, not the creator
+		ConfigAsset: expectedID,
+	}
+
+	eval = l.nextEval(t)
+	eval.txns(t, &optOutTxn, &closeTxn)
+	l.endBlock(t, eval)
+
+	ad0final := l.lookup(t, addrs[0])
+	ad5final := l.lookup(t, addrs[5])
+	// Check we got our balance "back"
+	require.Equal(t, ad0final.MinBalance(&proto), ad0init.MinBalance(&proto))
+	require.Equal(t, ad5final.MinBalance(&proto), ad5init.MinBalance(&proto))
 }
 
 // Test that ModifiedAppLocalStates in StateDelta is set correctly.
@@ -1237,9 +1442,9 @@ func TestModifiedAppLocalStates(t *testing.T) {
 			l, bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader).BlockHeader,
 			config.Consensus[protocol.ConsensusFuture], 0, false, true)
 		require.NoError(t, err)
-		eval.Transaction(createTxn, transactions.ApplyData{})
+		err = eval.Transaction(createTxn, transactions.ApplyData{})
 		require.NoError(t, err)
-		eval.Transaction(optInTxn, transactions.ApplyData{})
+		err = eval.Transaction(optInTxn, transactions.ApplyData{})
 		require.NoError(t, err)
 		validatedBlock, err = eval.GenerateBlock()
 		require.NoError(t, err)
@@ -1295,9 +1500,9 @@ func TestModifiedAppLocalStates(t *testing.T) {
 			l, bookkeeping.MakeBlock(validatedBlock.blk.BlockHeader).BlockHeader,
 			config.Consensus[protocol.ConsensusFuture], 0, false, true)
 		require.NoError(t, err)
-		eval.Transaction(optOutTxn, transactions.ApplyData{})
+		err = eval.Transaction(optOutTxn, transactions.ApplyData{})
 		require.NoError(t, err)
-		eval.Transaction(closeTxn, transactions.ApplyData{})
+		err = eval.Transaction(closeTxn, transactions.ApplyData{})
 		require.NoError(t, err)
 		validatedBlock, err = eval.GenerateBlock()
 		require.NoError(t, err)
