@@ -98,6 +98,8 @@ type Txn struct {
 	Cert      compactcert.Cert
 }
 
+// FillDefaults populates some obvious defaults from config params,
+// unless they have already been set.
 func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 	if tx.Fee.IsZero() {
 		tx.Fee = basics.MicroAlgos{Raw: params.MinTxnFee}
@@ -107,6 +109,7 @@ func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 	}
 }
 
+// Txn produces a transactions.Transaction from the fields in this Txn
 func (tx Txn) Txn() transactions.Transaction {
 	return transactions.Transaction{
 		Type: tx.Type,
@@ -172,6 +175,9 @@ func (tx Txn) Txn() transactions.Transaction {
 	}
 }
 
+// SignedTxn produces a unsigned, transactions.SignedTransaction from
+// the fields in this Txn.  This seemingly pointless operation exists,
+// again, for convenience when driving tests.
 func (tx Txn) SignedTxn() transactions.SignedTxn {
 	return transactions.SignedTxn{Txn: tx.Txn()}
 }

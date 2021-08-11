@@ -140,6 +140,7 @@ func MakeTimestampedGenesisBalances(balances map[basics.Address]basics.AccountDa
 	return GenesisBalances{Balances: balances, FeeSink: feeSink, RewardsPool: rewardsPool, Timestamp: timestamp}
 }
 
+// MakeGenesisBlock creates a genesis block, including setup of RewardsState.
 func MakeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest) (Block, error) {
 	params, ok := config.Consensus[proto]
 	if !ok {
