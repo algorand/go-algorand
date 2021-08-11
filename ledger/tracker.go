@@ -157,4 +157,5 @@ func (tr *trackerRegistry) close() {
 		lt.close()
 	}
 	tr.trackers = nil
+	tr.loaders = nil
 }
