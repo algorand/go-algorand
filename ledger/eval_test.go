@@ -392,19 +392,22 @@ func TestPrepareEvalParams(t *testing.T) {
 		expected []bool
 
 		numAppCalls int
+		// Used for checking transitive pointer equality in app calls
+		// If there are no app calls in the group, it is set to -1
+		firstAppCallIndex int
 	}
 
 	// Create some groups with these transactions
 	cases := []evalTestCase{
-		{[]transactions.SignedTxnWithAD{payment}, []bool{false}, 0},
-		{[]transactions.SignedTxnWithAD{appcall1}, []bool{true}, 1},
-		{[]transactions.SignedTxnWithAD{payment, payment}, []bool{false, false}, 0},
-		{[]transactions.SignedTxnWithAD{appcall1, payment}, []bool{true, false}, 1},
-		{[]transactions.SignedTxnWithAD{payment, appcall1}, []bool{false, true}, 1},
-		{[]transactions.SignedTxnWithAD{appcall1, appcall2}, []bool{true, true}, 2},
-		{[]transactions.SignedTxnWithAD{appcall1, appcall2, appcall1}, []bool{true, true, true}, 3},
-		{[]transactions.SignedTxnWithAD{payment, appcall1, payment}, []bool{false, true, false}, 1},
-		{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, []bool{true, false, true}, 2},
+		{[]transactions.SignedTxnWithAD{payment}, []bool{false}, 0, -1},
+		{[]transactions.SignedTxnWithAD{appcall1}, []bool{true}, 1, 0},
+		{[]transactions.SignedTxnWithAD{payment, payment}, []bool{false, false}, 0, -1},
+		{[]transactions.SignedTxnWithAD{appcall1, payment}, []bool{true, false}, 1, 0},
+		{[]transactions.SignedTxnWithAD{payment, appcall1}, []bool{false, true}, 1, 1},
+		{[]transactions.SignedTxnWithAD{appcall1, appcall2}, []bool{true, true}, 2, 0},
+		{[]transactions.SignedTxnWithAD{appcall1, appcall2, appcall1}, []bool{true, true, true}, 3, 0},
+		{[]transactions.SignedTxnWithAD{payment, appcall1, payment}, []bool{false, true, false}, 1, 1},
+		{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, []bool{true, false, true}, 2, 0},
 	}
 
 	for i, param := range params {
@@ -431,6 +434,8 @@ func TestPrepareEvalParams(t *testing.T) {
 						require.Equal(t, res[k].TxnGroup, expGroupNoAD)
 						require.Equal(t, *res[k].Proto, eval.proto)
 						require.Equal(t, *res[k].Txn, testCase.group[k].SignedTxn)
+						require.Equal(t, res[k].MinTealVersion, res[testCase.firstAppCallIndex].MinTealVersion)
+						require.Equal(t, res[k].PooledApplicationBudget, res[testCase.firstAppCallIndex].PooledApplicationBudget)
 						if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusV29]) {
 							require.Equal(t, *res[k].PooledApplicationBudget, uint64(eval.proto.MaxAppProgramCost))
 						} else if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusFuture]) {
@@ -692,7 +697,7 @@ func TestEvalAppPooledBudgetWithTxnGroup(t *testing.T) {
 			""},
 		{source(16, 18), false, false,
 			"pc= 12 dynamic cost budget exceeded, executing keccak256: remaining budget is 700 but program cost was 781",
-			"dynamic cost budget exceeded, executing pushint: remaining budget is 2100 but program cost was 2101"},
+			"pc= 78 dynamic cost budget exceeded, executing pushint: remaining budget is 2100 but program cost was 2101"},
 	}
 
 	for i, param := range params {
