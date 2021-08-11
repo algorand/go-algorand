@@ -77,4 +77,6 @@ func TestEmpty(t *testing.T) {
 
 	sig = sig[:len(sig)-1]
 	a.Error(dsigner.PublicKey.VerifyBytes(bs[:], sig))
+
+	a.Error(dsigner.PublicKey.VerifyBytes(bs[:], nil))
 }
