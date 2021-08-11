@@ -22,7 +22,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime/pprof"
+	"strings"
 	"testing"
 	"time"
 
@@ -341,9 +343,12 @@ func TestPrepareEvalParams(t *testing.T) {
 			TimeStamp: 1234,
 			Round:     2345,
 		},
-		proto: config.ConsensusParams{
-			Application: true,
-		},
+	}
+
+	params := []config.ConsensusParams{
+		config.ConsensusParams{Application: true, MaxAppProgramCost: 700},
+		config.Consensus[protocol.ConsensusV29],
+		config.Consensus[protocol.ConsensusFuture],
 	}
 
 	// Create some sample transactions
@@ -387,80 +392,60 @@ func TestPrepareEvalParams(t *testing.T) {
 		expected []bool
 
 		// Checks the pooled app call cost in old and new protos
-		pooledCosts_old uint64
-		pooledCosts_new uint64
+		pooledCostsOld uint64
+		pooledCostsNew uint64
+
+		numAppCalls int
 	}
 
 	// Create some groups with these transactions
 	cases := []evalTestCase{
-		{[]transactions.SignedTxnWithAD{payment}, []bool{false}, 0, 0},
-		{[]transactions.SignedTxnWithAD{appcall1}, []bool{true}, 700, 700},
-		{[]transactions.SignedTxnWithAD{payment, payment}, []bool{false, false}, 0, 0},
-		{[]transactions.SignedTxnWithAD{appcall1, payment}, []bool{true, false}, 700, 700},
-		{[]transactions.SignedTxnWithAD{payment, appcall1}, []bool{false, true}, 700, 700},
-		{[]transactions.SignedTxnWithAD{appcall1, appcall2}, []bool{true, true}, 700, 1400},
-		{[]transactions.SignedTxnWithAD{appcall1, appcall2, appcall1}, []bool{true, true, true}, 700, 2100},
-		{[]transactions.SignedTxnWithAD{payment, appcall1, payment}, []bool{false, true, false}, 700, 700},
-		{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, []bool{true, false, true}, 700, 1400},
+		{[]transactions.SignedTxnWithAD{payment}, []bool{false}, 0, 0, 0},
+		{[]transactions.SignedTxnWithAD{appcall1}, []bool{true}, 700, 700, 1},
+		{[]transactions.SignedTxnWithAD{payment, payment}, []bool{false, false}, 0, 0, 0},
+		{[]transactions.SignedTxnWithAD{appcall1, payment}, []bool{true, false}, 700, 700, 1},
+		{[]transactions.SignedTxnWithAD{payment, appcall1}, []bool{false, true}, 700, 700, 1},
+		{[]transactions.SignedTxnWithAD{appcall1, appcall2}, []bool{true, true}, 700, 1400, 2},
+		{[]transactions.SignedTxnWithAD{appcall1, appcall2, appcall1}, []bool{true, true, true}, 700, 2100, 3},
+		{[]transactions.SignedTxnWithAD{payment, appcall1, payment}, []bool{false, true, false}, 700, 700, 1},
+		{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, []bool{true, false, true}, 700, 1400, 2},
 	}
 
-	for i, testCase := range cases {
-		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
-			res := eval.prepareEvalParams(testCase.group)
-			require.Equal(t, len(res), len(testCase.group))
+	for i, param := range params {
+		for j, testCase := range cases {
+			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
+				eval.proto = param
+				res := eval.prepareEvalParams(testCase.group)
+				require.Equal(t, len(res), len(testCase.group))
 
-			// Compute the expected transaction group without ApplyData for
-			// the test case
-			expGroupNoAD := make([]transactions.SignedTxn, len(testCase.group))
-			for j := range testCase.group {
-				expGroupNoAD[j] = testCase.group[j].SignedTxn
-			}
-
-			// Ensure non app calls have a nil evaluator, and that non-nil
-			// evaluators point to the right transactions and values
-			for j, present := range testCase.expected {
-				if present {
-					require.NotNil(t, res[j])
-					require.NotNil(t, res[j].PastSideEffects)
-					require.Equal(t, res[j].GroupIndex, j)
-					require.Equal(t, res[j].TxnGroup, expGroupNoAD)
-					require.Equal(t, *res[j].Proto, eval.proto)
-					require.Equal(t, *res[j].Txn, testCase.group[j].SignedTxn)
-				} else {
-					require.Nil(t, res[j])
+				// Compute the expected transaction group without ApplyData for
+				// the test case
+				expGroupNoAD := make([]transactions.SignedTxn, len(testCase.group))
+				for k := range testCase.group {
+					expGroupNoAD[k] = testCase.group[k].SignedTxn
 				}
-			}
-		})
-	}
 
-	// Test cost pooling on old and new consensus protos
-	for i, testCase := range cases {
-		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
-			eval.proto = config.Consensus[protocol.ConsensusFuture]
-			res := eval.prepareEvalParams(testCase.group)
-			require.Equal(t, len(res), len(testCase.group))
-
-			for j, present := range testCase.expected {
-				if present {
-					require.Equal(t, *res[j].PooledApplicationBudget, testCase.pooledCosts_new)
-				} else {
-					require.Nil(t, res[j])
+				// Ensure non app calls have a nil evaluator, and that non-nil
+				// evaluators point to the right transactions and values
+				for k, present := range testCase.expected {
+					if present {
+						require.NotNil(t, res[k])
+						require.NotNil(t, res[k].PastSideEffects)
+						require.Equal(t, res[k].GroupIndex, k)
+						require.Equal(t, res[k].TxnGroup, expGroupNoAD)
+						require.Equal(t, *res[k].Proto, eval.proto)
+						require.Equal(t, *res[k].Txn, testCase.group[k].SignedTxn)
+						if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusV29]) {
+							require.Equal(t, *res[k].PooledApplicationBudget, uint64(eval.proto.MaxAppProgramCost))
+						} else if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusFuture]) {
+							require.Equal(t, *res[k].PooledApplicationBudget, uint64(eval.proto.MaxAppProgramCost*testCase.numAppCalls))
+						}
+					} else {
+						require.Nil(t, res[k])
+					}
 				}
-			}
-
-			// Pooling should not work in v29 and prior versions
-			eval.proto = config.Consensus[protocol.ConsensusV29]
-			res = eval.prepareEvalParams(testCase.group)
-			require.Equal(t, len(res), len(testCase.group))
-
-			for j, present := range testCase.expected {
-				if present {
-					require.Equal(t, *res[j].PooledApplicationBudget, testCase.pooledCosts_old)
-				} else {
-					require.Nil(t, res[j])
-				}
-			}
-		})
+			})
+		}
 	}
 }
 
@@ -616,7 +601,7 @@ func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalPr
 	ops, err := logic.AssembleString(approvalProgram)
 	require.NoError(t, err, ops.Errors)
 	approval := ops.Program
-	ops, err = logic.AssembleString("#pragma version 5\nint 1")
+	ops, err = logic.AssembleString("#pragma version 4\nint 1")
 	require.NoError(t, err)
 	clear := ops.Program
 
@@ -678,156 +663,55 @@ func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalPr
 	return eval, err
 }
 
-// TestEvalAppExceedsPooledBudgetWithTxnGroup ensures app call txns cannot exceed
-// the total pooled budget for group txns
-func TestEvalAppExceedsPooledBudgetWithTxnGroup(t *testing.T) {
+// TestEvalAppPooledBudgetWithTxnGroup ensures 3 app call txns can successfully pool
+// budgets in a group txn and return an error if the budget is exceeded
+func TestEvalAppPooledBudgetWithTxnGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	approvalProgram1 := `#pragma version 5
-	txn ApplicationID
-	bz create
-	byte "caller"
-	sha256
-	sha256
-	pop
-	b ok
-create:
-	byte "creator"
-	pop
-ok:
-	byte "ok"
-	keccak256
-	keccak256
-	keccak256
-	keccak256
-	keccak256
-	pop
-	int 1` // total cost: 2113
+	source := func(n int, m int) string {
+		return "#pragma version 4\nbyte 0x1337BEEF\n" + strings.Repeat("keccak256\n", n) +
+			strings.Repeat("substring 0 4\n", m) + "pop\nint 1\n"
+	}
 
-	approvalProgram2 := `#pragma version 5
-	txn ApplicationID
-	bz create
-	byte "caller"
-	keccak256
-	keccak256
-	keccak256
-	keccak256
-	keccak256
-	keccak256
-	keccak256
-	keccak256
-	pop
-	b ok
-create:
-ok:
-	byte "ok"
-	pop
-	int 1` // total cost: 2101
-
-	approvalProgram3 := `#pragma version 5
-	txn ApplicationID
-	bz create
-	byte "caller"
-	sha256
-	pop
-	b ok
-create:
-	byte "creator"
-	pop
-	byte 0x01
-	byte "ZC9KNzlnWTlKZ1pwSkNzQXVzYjNBcG1xTU9YbkRNWUtIQXNKYVk2RzRBdExPakQx"
-	addr DROUIZXGT3WFJR3QYVZWTR5OJJXJCMOLS7G4FUGZDSJM5PNOVOREH6HIZE
-	ed25519verify
-	pop
-ok:
-	byte "ok"
-	sha256
-	pop
-	int 1` // total cost: 2102
+	params := []protocol.ConsensusVersion{
+		protocol.ConsensusV29,
+		protocol.ConsensusFuture,
+	}
 
 	cases := []struct {
-		prog          string
-		expectedError string
+		prog                 string
+		isSuccessV29         bool
+		isSuccessVFuture     bool
+		expectedErrorV29     string
+		expectedErrorVFuture string
 	}{
-		{approvalProgram1, "dynamic cost budget exceeded, executing keccak256: remaining budget is 715 but program cost was 726"},
-		{approvalProgram2, "dynamic cost budget exceeded, executing pushint: remaining budget is 1047 but program cost was 1048"},
-		{approvalProgram3, "dynamic cost budget exceeded, executing pop: remaining budget is 76 but program cost was 77"},
+		{source(5, 47), true, true,
+			"",
+			""},
+		{source(5, 48), false, true,
+			"pc=157 dynamic cost budget exceeded, executing pushint: remaining budget is 700 but program cost was 701",
+			""},
+		{source(16, 17), false, true,
+			"pc= 12 dynamic cost budget exceeded, executing keccak256: remaining budget is 700 but program cost was 781",
+			""},
+		{source(16, 18), false, false,
+			"pc= 12 dynamic cost budget exceeded, executing keccak256: remaining budget is 700 but program cost was 781",
+			"dynamic cost budget exceeded, executing pushint: remaining budget is 2100 but program cost was 2101"},
 	}
 
-	for _, testCase := range cases {
-		_, err := testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, testCase.prog, protocol.ConsensusFuture)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), testCase.expectedError)
-	}
-}
-
-// TestEvalAppAcceptsPooledBudgetWithTxnGroup ensures app call txns can correctly
-// pool the budget for group txns
-func TestEvalAppAcceptsPooledBudgetWithTxnGroup(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	approvalProgram1 := `#pragma version 5
-	txn ApplicationID
-	bz create
-	byte "caller"
-	keccak256
-	keccak256
-	keccak256
-	keccak256
-	keccak256
-	keccak256
-	keccak256
-	keccak256
-	pop
-	byte "call"
-	pop
-create:
-	b ok
-ok:
-	int 1` // total cost: 2100
-
-	approvalProgram2 := `#pragma version 5
-	txn ApplicationID
-	bz create
-	byte "caller"
-	pop
-	b ok
-create:
-	byte "creator"
-	keccak256
-	keccak256
-	keccak256
-	keccak256
-	keccak256
-	keccak256
-	pop
-ok:
-	int 1` // total cost: 797
-
-	approvalProgram3 := `#pragma version 5
-	txn ApplicationID
-	bz create
-	byte "caller"
-	pop
-	b ok
-create:
-	byte 0x01
-	byte "ZC9KNzlnWTlKZ1pwSkNzQXVzYjNBcG1xTU9YbkRNWUtIQXNKYVk2RzRBdExPakQx"
-	addr DROUIZXGT3WFJR3QYVZWTR5OJJXJCMOLS7G4FUGZDSJM5PNOVOREH6HIZE
-	ed25519verify
-	pop
-ok:
-	int 1` // total cost: 1919
-
-	cases := []string{
-		approvalProgram1,
-		approvalProgram2,
-		approvalProgram3,
-	}
-
-	for _, testCase := range cases {
-		_, err := testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, testCase, protocol.ConsensusFuture)
-		require.NoError(t, err)
+	for i, param := range params {
+		for j, testCase := range cases {
+			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
+				_, err := testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, testCase.prog, param)
+				if !testCase.isSuccessV29 && reflect.DeepEqual(param, protocol.ConsensusV29) {
+					require.Error(t, err)
+					require.Contains(t, err.Error(), testCase.expectedErrorV29)
+				} else if !testCase.isSuccessVFuture && reflect.DeepEqual(param, protocol.ConsensusFuture) {
+					require.Error(t, err)
+					require.Contains(t, err.Error(), testCase.expectedErrorVFuture)
+				}
+			})
+		}
 	}
 }
 

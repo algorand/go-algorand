@@ -679,7 +679,7 @@ pop
 	}
 
 	// check that ed25519verify and arg is not allowed in stateful mode between v2-v4
-	disallowed_v4 := []string{
+	disallowedV4 := []string{
 		"byte 0x01\nbyte 0x01\nbyte 0x01\ned25519verify",
 		"arg 0",
 		"arg_0",
@@ -687,7 +687,7 @@ pop
 		"arg_2",
 		"arg_3",
 	}
-	for _, source := range disallowed_v4 {
+	for _, source := range disallowedV4 {
 		ops := testProg(t, source, 4)
 		ep := defaultEvalParams(nil, nil)
 		err := CheckStateful(ops.Program, ep)
@@ -2883,4 +2883,30 @@ func TestAppLoop(t *testing.T) {
 
 	// Infinite loop because multiply by one instead of two
 	testApp(t, stateful+"int 1; loop:; int 1; *; dup; int 10; <; bnz loop; int 16; ==", ep, "dynamic cost")
+}
+
+func TestPooledAppCallsVerifyOp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	source := `#pragma version 5
+	global CurrentApplicationID
+	pop
+	byte 0x01
+	byte "ZC9KNzlnWTlKZ1pwSkNzQXVzYjNBcG1xTU9YbkRNWUtIQXNKYVk2RzRBdExPakQx"
+	addr DROUIZXGT3WFJR3QYVZWTR5OJJXJCMOLS7G4FUGZDSJM5PNOVOREH6HIZE
+	ed25519verify
+	pop
+	int 1`
+
+	ep, _ := makeSampleEnv()
+	ep.Proto.EnableAppCostPooling = true
+	ep.PooledApplicationBudget = new(uint64)
+	// Simulate test with 2 grouped txn
+	*ep.PooledApplicationBudget = uint64(1400)
+	testApp(t, source, ep, "pc=107 dynamic cost budget exceeded, executing ed25519verify: remaining budget is 1400 but program cost was 1905")
+
+	// Simulate test with 3 grouped txn
+	*ep.PooledApplicationBudget = uint64(2100)
+	testApp(t, source, ep)
 }
