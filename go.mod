@@ -3,7 +3,7 @@ module github.com/algorand/go-algorand
 go 1.14
 
 require (
-	github.com/algorand/dilithium v0.0.0-20210811082133-e9fd443d1433
+	github.com/algorand/dilithium v0.0.0-20210811122002-1ca237b9c9ac
 	github.com/algorand/go-algorand/cmd/partitiontest_linter v0.0.0-20210731012338-8835bfdd24ed // indirect
 	github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d
 	github.com/algorand/go-deadlock v0.2.1
