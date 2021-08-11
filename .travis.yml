@@ -55,6 +55,7 @@ jobs:
         apt:
           packages:
             - awscli
+            - make
       script:
         - scripts/travis/external_build.sh ./scripts/travis/build_test.sh
     - # same stage, parallel job
@@ -67,6 +68,7 @@ jobs:
         apt:
           packages:
             - awscli
+            - make
       script:
         - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
     - # same stage, parallel job
@@ -116,6 +118,7 @@ jobs:
         apt:
           packages:
             - awscli
+            - make
       script:
         - scripts/travis/external_build.sh ./scripts/travis/build_test.sh
     - # same stage, parallel job
@@ -128,6 +131,7 @@ jobs:
         apt:
           packages:
             - awscli
+            - make
       script:
         - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
     - # same stage, parallel job
@@ -229,7 +233,6 @@ addons:
       - python3-venv
       - libssl-dev
       - libffi-dev
-      - make
   artifacts:
     s3_region: "us-east-1"
     paths:
