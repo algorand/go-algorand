@@ -4764,7 +4764,7 @@ func TestLog(t *testing.T) {
 			loglen: 2,
 		},
 		{
-			source: fmt.Sprintf(`%s int 1`, strings.Repeat(`byte "a logging message"; log;`, config.MaxLogCalls)),
+			source: fmt.Sprintf(`%s int 1`, strings.Repeat(`byte "a logging message"; log;`, MaxLogCalls)),
 			loglen: MaxLogCalls,
 		},
 		{
@@ -4816,7 +4816,7 @@ func TestLog(t *testing.T) {
 			runMode:     runModeApplication,
 		},
 		{
-			source:      fmt.Sprintf(`%s; int 1`, strings.Repeat(`byte "a"; log;`, config.MaxLogCalls+1)),
+			source:      fmt.Sprintf(`%s; int 1`, strings.Repeat(`byte "a"; log;`, MaxLogCalls+1)),
 			errContains: "too many log calls",
 			runMode:     runModeApplication,
 		},

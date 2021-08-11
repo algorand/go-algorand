@@ -423,8 +423,8 @@ var MaxEvalDeltaAccounts int
 var MaxStateDeltaKeys int
 
 // MaxLogCalls is the highest allowable log messages that may appear in
-// any version, used for decoding purposes. Never decrease this value.
-const MaxLogCalls = 32
+// any version, used only for decoding purposes. Never decrease this value.
+var MaxLogCalls int
 
 // MaxLogicSigMaxSize is the largest logical signature appear in any of the supported
 // protocols, used for decoding purposes.
@@ -486,6 +486,9 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxExtraAppProgramPages, &MaxExtraAppProgramLen)
 	// MaxAvailableAppProgramLen is the max of supported app program size
 	MaxAvailableAppProgramLen = MaxAppProgramLen * (1 + MaxExtraAppProgramLen)
+	// There is no consensus parameter for MaxLogCalls and MaxAppProgramLen as an approximation
+	// Its value is much larger than any possible reasonable MaxLogCalls value in future
+	checkSetMax(p.MaxAppProgramLen, &MaxLogCalls)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
