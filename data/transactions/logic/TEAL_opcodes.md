@@ -1202,3 +1202,14 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Pushes: []byte
 - push a byte-array of length X, containing all zero bytes
 - LogicSigVersion >= 4
+
+## log
+
+- Opcode: 0xb0
+- Pops: *... stack*, []byte
+- Pushes: _None_
+- write bytes to log state of the current application
+- LogicSigVersion >= 5
+- Mode: Application
+
+`log` can be called up to MaxLogCalls times in a program, and log up to a total of 1k bytes.
