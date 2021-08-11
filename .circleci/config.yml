@@ -16,39 +16,51 @@ workflows:
             - amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - amd64_test_nightly:
           requires:
             - amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
           context: slack-secrets
       - amd64_integration:
           requires:
             - amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - amd64_integration_nightly:
           requires:
             - amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
           context: slack-secrets
       - amd64_e2e_subs:
           requires:
             - amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - amd64_e2e_subs_nightly:
           requires:
             - amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
           context: slack-secrets
       - arm64_build
       - arm64_test:
@@ -56,39 +68,51 @@ workflows:
             - arm64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - arm64_test_nightly:
           requires:
             - arm64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
           context: slack-secrets
       - arm64_integration:
           requires:
             - arm64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - arm64_integration_nightly:
           requires:
             - arm64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
           context: slack-secrets
       - arm64_e2e_subs:
           requires:
             - arm64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - arm64_e2e_subs_nightly:
           requires:
             - arm64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
           context: slack-secrets
       - mac_amd64_build
       - mac_amd64_test:
@@ -96,39 +120,51 @@ workflows:
             - mac_amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - mac_amd64_test_nightly:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
           context: slack-secrets
       - mac_amd64_integration:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - mac_amd64_integration_nightly:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
           context: slack-secrets
       - mac_amd64_e2e_subs:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - mac_amd64_e2e_subs_nightly:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
           context: slack-secrets
       #- windows_x64_build
 
