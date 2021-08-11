@@ -18,6 +18,7 @@ package agreement
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -33,15 +34,21 @@ type pipelinePlayer struct {
 	bootstrapRound        basics.Round // handle initial nextRound
 }
 
-func makePipelinePlayer(nextRound basics.Round, nextVersion protocol.ConsensusVersion) pipelinePlayer {
+func makePipelinePlayer(nextRound basics.Round, nextVersion protocol.ConsensusVersion) *pipelinePlayer {
 	// create player for next round
-	ret := pipelinePlayer{
+	ret := &pipelinePlayer{
 		FirstUncommittedRound: nextRound,
 		Players:               make(map[round]*player),
 		bootstrapRound:        nextRound,
 	}
 	r := makeRoundBranch(nextRound, bookkeeping.BlockHash{}) // XXXX need prev hash for next round?
-	p := &player{Round: r, Step: soft, Deadline: FilterTimeout(0, nextVersion), pipelined: true}
+	p := &player{
+		Round:        r,
+		Step:         soft,
+		Deadline:     FilterTimeout(0, nextVersion),
+		pipelined:    true,
+		roundEnterer: &pipelineRoundEnterer{pp: ret},
+	}
 	ret.Players[r] = p
 	return ret
 }
@@ -119,7 +126,7 @@ func protoForEvent(e event) (protocol.ConsensusVersion, error) {
 	}
 }
 
-func newPlayerForEvent(e externalEvent, rnd round) (*player, error) {
+func (p *pipelinePlayer) newPlayerForEvent(e externalEvent, rnd round) (*player, error) {
 	switch e := e.(type) {
 	// for now, only create new players for messageEvents
 	case messageEvent:
@@ -129,10 +136,11 @@ func newPlayerForEvent(e externalEvent, rnd round) (*player, error) {
 		}
 		// XXX check when ConsensusVersionView.Err is set by LedgerReader
 		return &player{
-			Round:     rnd,
-			Step:      soft,
-			Deadline:  FilterTimeout(0, cv),
-			pipelined: true,
+			Round:        rnd,
+			Step:         soft,
+			Deadline:     FilterTimeout(0, cv),
+			pipelined:    true,
+			roundEnterer: &pipelineRoundEnterer{pp: p},
 		}, nil
 	default:
 		return nil, fmt.Errorf("can't make player for event %+v", e)
@@ -157,7 +165,7 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 
 		default:
 			// XXXX haven't seen this round before; create player or drop event
-			newPlayer, err := newPlayerForEvent(e, rnd)
+			newPlayer, err := p.newPlayerForEvent(e, rnd)
 			if err != nil {
 				logging.Base().Debugf("couldn't make player for rnd %+v, dropping event", rnd)
 				return nil
@@ -182,6 +190,7 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 
 func (p *pipelinePlayer) enterRound(r routerHandle, source event, target round) []action {
 	// XXXX create new players and GC old ones
+	panic("pipelinePlayer.enterRound not implemented")
 	return nil
 }
 
@@ -211,4 +220,35 @@ func (p *pipelinePlayer) allPlayersRPS() []RPS {
 		i++
 	}
 	return ret
+}
+
+type pipelineRoundEnterer struct {
+	pp *pipelinePlayer
+}
+
+func (re *pipelineRoundEnterer) enter(p *player, r routerHandle, source event, target round) []action {
+	prevRound := p.Round
+	a := enterRound(p, r, source, target)
+	if p.Round != target {
+		panic("enterRound did not transition player to target")
+	}
+
+	// confirmed prevRound, player wants to move to target
+	delete(re.pp.Players, prevRound)
+
+	// update player's entry in map to new round
+	re.pp.Players[target] = p
+
+	// XXX check if we are speculating on the same round, different leaf
+
+	// update FirstUncommittedRound
+	minRound := basics.Round(math.MaxUint64)
+	for rnd := range re.pp.Players {
+		if rnd.Number < minRound {
+			minRound = rnd.Number
+		}
+	}
+	re.pp.FirstUncommittedRound = minRound
+
+	return a
 }

@@ -224,8 +224,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 		}
 
 		if enablePipelining {
-			pl := makePipelinePlayer(nextRound, nextVersion)
-			status = &pl
+			status = makePipelinePlayer(nextRound, nextVersion)
 		} else {
 			status = &player{Round: makeRoundBranch(nextRound, bookkeeping.BlockHash{}), Step: soft, Deadline: FilterTimeout(0, nextVersion)}
 		}

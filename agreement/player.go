@@ -56,6 +56,8 @@ type player struct {
 
 	// pipelined is set to true if this player is part of a pipelinePlayer.
 	pipelined bool
+
+	roundEnterer roundEnterer
 }
 
 func (p *player) T() stateMachineTag {
@@ -72,7 +74,7 @@ func (p *player) forgetBeforeRound() basics.Round {
 
 // decode implements serializableActor
 func (*player) decode(buf []byte) (serializableActor, error) {
-	ret := player{}
+	ret := player{} // XXX handle pipelining
 	err := protocol.DecodeReflect(buf, &ret)
 	if err != nil {
 		return nil, err
@@ -104,6 +106,10 @@ func (p *player) allPlayersRPS() []RPS {
 // Postcondition: each messageEvent is processed exactly once
 func (p *player) handle(r routerHandle, e event) []action {
 	var actions []action
+
+	if p.roundEnterer == nil { // XXX
+		p.roundEnterer = playerRoundEnterer{}
+	}
 
 	if e.t() == none {
 		return nil
@@ -153,7 +159,7 @@ func (p *player) handle(r routerHandle, e event) []action {
 			return actions
 		}
 	case roundInterruptionEvent:
-		return enterRound(p, r, e, e.Round)
+		return p.roundEnterer.enter(p, r, e, e.Round)
 	case checkpointEvent:
 		return p.handleCheckpointEvent(r, e)
 	default:
@@ -313,7 +319,7 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 			cert := Certificate(e.Bundle)
 			a0 := ensureAction{Payload: res.Payload, Certificate: cert}
 			actions = append(actions, a0)
-			as := enterRound(p, r, e, round{Number: p.Round.Number + 1, Branch: bookkeeping.BlockHash(cert.Proposal.BlockDigest)})
+			as := p.roundEnterer.enter(p, r, e, round{Number: p.Round.Number + 1, Branch: bookkeeping.BlockHash(cert.Proposal.BlockDigest)})
 			return append(actions, as...)
 		}
 		// we don't have the block! We need to ensure we will be able to receive the block.
@@ -390,12 +396,15 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 }
 
 type roundEnterer interface {
-	enterRound(p *player, r routerHandle, source event, target round) []action
+	enter(p *player, r routerHandle, source event, target round) []action
 }
 
 type playerRoundEnterer struct{}
 
-//func (*playerRoundEnterer) enterRound(p *player, r routerHandle, source event, target round) []action {
+func (playerRoundEnterer) enter(p *player, r routerHandle, source event, target round) []action {
+	return enterRound(p, r, source, target)
+}
+
 func enterRound(p *player, r routerHandle, source event, target round) []action {
 	var actions []action
 
