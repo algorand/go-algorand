@@ -85,34 +85,14 @@ func TestBitmaskType3(t *testing.T) {
 	entries := 80
 	setBits := make([]int, 0, entries)
 	for i := 0; i < entries; i++ {
-		if i != 0 && i != 2 && i != 71  && i != 72 {
+		if i != 0 && i != 2 && i != 3 && i != 71 {
 			setBits = append(setBits, i)
 		}
 	}
 	trimIterateHelper(t, setBits)
 }
-/*
-func TestBitmaskMoreEntries	
-	b := make(bitmask, 3)
-	b[0] = 3
-	b[1] = 99
-	b[2] = 99
 
-
-	iterated := make([]bool, entries)
-	iterfunc := func(i int, index int) error {
-		iterated[i] = true
-		return nil
-	}
-
-	
-	b.iterate(3, 3, iterfunc)
-
-	
-}
-*/
-
-func TestBitmaksTypeX(t *testing.T) {
+func TestBitmaskTypeX(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	b := make(bitmask, bytesNeededBitmask(80))
@@ -164,14 +144,20 @@ func trimIterateHelper(t *testing.T, setBits []int) {
 	require.Equal(t, errTestError, b.iterate(entries, len(setBits), errfunc))
 	require.Equal(t, errDataMissing, b.iterate(entries, len(setBits)-1, iterfunc))
 
-	// For types 2, let the sum exceed entries
-	if int((b)[0]) == 2 {
-		require.Equal(t, errIndexNotFound, b.iterate(setBits[len(setBits)-1]-1, len(setBits), iterfunc))
-		require.Nil(t, b.iterate(setBits[len(setBits)-1], len(setBits), iterfunc))
-		require.Equal(t, errDataMissing, b.iterate(setBits[len(setBits)-1], len(setBits)-1, iterfunc))
+	// For types 0 and 2, let the entries be smaller than what the bitmap will provide
+	// This is the edge case, and will not be a problem for the compliment set bitmasks
+	if int((b)[0]) == 0 || int((b)[0]) == 2 {
+		require.Equal(t, errIndexNotFound, b.iterate(setBits[len(setBits)-1], len(setBits), iterfunc))
+		require.Nil(t, b.iterate(setBits[len(setBits)-1]+1, len(setBits), iterfunc))
 	}
 
-	// For types 1 and 3, test the error handling in the first stage.
+	// For types 1 and 3, let the entries be smaller than what the bitmap will provide
+	// This requires a much smaller entries limit, since it is only checked in the first stage
+	if int((b)[0]) == 1 || int((b)[0]) == 3 {
+		require.Equal(t, errIndexNotFound, b.iterate(70, len(setBits), iterfunc))
+	}
+	
+	// For types 1 and 3, test the error handling in the second stage.
 	errorAfter = len(setBits) - 1 - 8
 	require.Equal(t, errTestError, b.iterate(entries, len(setBits), errfunc))
 	require.Equal(t, errDataMissing, b.iterate(entries, len(setBits)-1-8, iterfunc))

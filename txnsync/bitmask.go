@@ -130,7 +130,7 @@ func (b *bitmask) iterate(entries int, maxIndex int, callback func(int, int) err
 					if index >= maxIndex {
 						return errDataMissing
 					}
-					ij8 := 8*i+j
+					ij8 := 8*i + j
 					if ij8 >= entries {
 						return errIndexNotFound
 					}
@@ -149,10 +149,10 @@ func (b *bitmask) iterate(entries int, maxIndex int, callback func(int, int) err
 					if index >= maxIndex {
 						return errDataMissing
 					}
-					ij8 := 8*i+j
+					ij8 := 8*i + j
 					if ij8 >= entries {
 						return errIndexNotFound
-					}					
+					}
 					if err := callback(ij8, index); err != nil {
 						return err
 					}
@@ -178,7 +178,7 @@ func (b *bitmask) iterate(entries int, maxIndex int, callback func(int, int) err
 		}
 		for index := 0; index < elementsCount; index++ {
 			sum += int((*b)[index*2+1])*256 + int((*b)[index*2+2])
-			if sum > entries {
+			if sum >= entries {
 				return errIndexNotFound
 			}
 			if err := callback(sum, index); err != nil {
@@ -190,16 +190,13 @@ func (b *bitmask) iterate(entries int, maxIndex int, callback func(int, int) err
 		elementsCount := entries - (len(*b)-1)/2
 		if elementsCount > maxIndex || elementsCount < 0 {
 			return errDataMissing
-		}			
+		}
 		j := 0
 		for i := 0; i*2+2 < len(*b); i++ {
 			sum += int((*b)[i*2+1])*256 + int((*b)[i*2+2])
 			for j < sum {
 				if j >= entries {
 					return errIndexNotFound
-				}
-				if index >= maxIndex {
-					return errDataMissing
 				}
 				if err := callback(j, index); err != nil {
 					return err
@@ -210,9 +207,6 @@ func (b *bitmask) iterate(entries int, maxIndex int, callback func(int, int) err
 			j++
 		}
 		for j < entries {
-			if index >= maxIndex {
-				return errDataMissing
-			}
 			if err := callback(j, index); err != nil {
 				return err
 			}
