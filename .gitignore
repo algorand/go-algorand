@@ -65,3 +65,5 @@ assets
 
 index.html
 
+# ignore asdf-vm
+.tool-versions
