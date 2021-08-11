@@ -99,7 +99,7 @@ func (z *VerifyingKey) GetVerifier() (Verifier, error) {
 type PackedVerifyingKey struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	DilithiumPublicKey DilithiumVerifier `codec:"dk2"`
+	DilithiumPublicKey DilithiumVerifier `codec:"dpk"`
 }
 
 var errUnknownVerifier = errors.New("could not find stored Verifier")
