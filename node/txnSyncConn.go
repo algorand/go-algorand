@@ -279,20 +279,21 @@ func (tsnc *transcationSyncNodeConnector) RelayProposal(proposalBytes []byte, tx
 
 func (tsnc *transcationSyncNodeConnector) HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup, peer *txnsync.Peer) {
 	var data proposalData
-	var pc proposalCache
+	var pc *proposalCache
 	protocol.Decode(proposalDataBytes, &data)
 
 	if proposalDataBytes != nil {
-		pc = proposalCache{
+		pc = &proposalCache{
 			proposalData: data,
 			txGroupIdIndex: make(map[transactions.Txid]int, len(data.txGroupIds)),
 			txGroups: make([]transactions.SignedTxGroup, len(data.txGroupIds)),
 		}
+		tsnc.node.net.SetPeerData(peer.GetNetworkPeer(), "proposalCache", pc)
 		for i, txid := range pc.txGroupIds {
 			pc.txGroupIdIndex[txid] = i
 		}
 	} else { // fetch proposalCache from peerData
-		pc, _ = tsnc.node.net.GetPeerData(peer.GetNetworkPeer(), "proposalCache").(proposalCache)
+		pc, _ = tsnc.node.net.GetPeerData(peer.GetNetworkPeer(), "proposalCache").(*proposalCache)
 	}
 	// TODO attempt to fill receivedTxns with txpool
 
@@ -306,8 +307,10 @@ func (tsnc *transcationSyncNodeConnector) HandleProposalMessage(proposalDataByte
 		// TODO send proposal to agreement
 		// TODO send filter message
 
-		pc = proposalCache{}
+		pc.proposalBytes = nil
+		pc.txGroups = nil
+		pc.txGroupIds = nil
+		pc.txGroupIdIndex = nil
+		pc.numTxGroupsReceived = 0
 	}
-
-	tsnc.node.net.SetPeerData(peer.GetNetworkPeer(), "proposalCache", pc)
 }

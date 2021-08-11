@@ -778,7 +778,7 @@ func (p *Peer) getNextScheduleOffset(isRelay bool, beta time.Duration, partialMe
 	} else {
 		// since we are done sending the proposal transactions, update the state
 		if p.state == peerStateProposal {
-			p.state = peerStateHoldsoff
+			p.state = peerStateHoldsoff  // TODO think about what state to transition to
 			return time.Duration(node.Random(uint64(randomRange))), peerOpsReschedule
 		}
 		if isRelay {

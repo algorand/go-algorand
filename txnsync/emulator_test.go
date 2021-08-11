@@ -92,15 +92,19 @@ func TestEmulatedTrivialTransactionsExchange(t *testing.T) {
 		expectedResults: emulatorResult{
 			nodes: []nodeTransactions{
 				{
-					nodeTransaction{
-						expirationRound: 5,
-						transactionSize: 250,
+					txns: []nodeTransaction{
+						nodeTransaction{
+							expirationRound: 5,
+							transactionSize: 250,
+						},
 					},
 				},
 				{
-					nodeTransaction{
-						expirationRound: 5,
-						transactionSize: 250,
+					txns: []nodeTransaction{
+						nodeTransaction{
+							expirationRound: 5,
+							transactionSize: 250,
+						},
 					},
 				},
 			},
@@ -200,27 +204,35 @@ func TestEmulatedTwoNodesToRelaysTransactionsExchange(t *testing.T) {
 		expectedResults: emulatorResult{
 			nodes: []nodeTransactions{
 				{
-					nodeTransaction{
-						expirationRound: 5,
-						transactionSize: 250,
+					txns: []nodeTransaction{
+						nodeTransaction{
+							expirationRound: 5,
+							transactionSize: 250,
+						},
 					},
 				},
 				{
-					nodeTransaction{
-						expirationRound: 5,
-						transactionSize: 250,
+					txns: []nodeTransaction{
+						nodeTransaction{
+							expirationRound: 5,
+							transactionSize: 250,
+						},
 					},
 				},
 				{
-					nodeTransaction{
-						expirationRound: 5,
-						transactionSize: 250,
+					txns: []nodeTransaction{
+						nodeTransaction{
+							expirationRound: 5,
+							transactionSize: 250,
+						},
 					},
 				},
 				{
-					nodeTransaction{
-						expirationRound: 5,
-						transactionSize: 250,
+					txns: []nodeTransaction{
+						nodeTransaction{
+							expirationRound: 5,
+							transactionSize: 250,
+						},
 					},
 				},
 			},
@@ -270,7 +282,7 @@ func TestEmulatedLargeSetTransactionsExchange(t *testing.T) {
 	// update the expected results to have the correct number of entries.
 	for i := 0; i < testScenario.initialAlloc[0].transactionsCount; i++ {
 		for n := range testScenario.expectedResults.nodes {
-			testScenario.expectedResults.nodes[n] = append(testScenario.expectedResults.nodes[n], nodeTransaction{expirationRound: testScenario.initialAlloc[0].expirationRound, transactionSize: testScenario.initialAlloc[0].transactionSize})
+			testScenario.expectedResults.nodes[n].txns = append(testScenario.expectedResults.nodes[n].txns, nodeTransaction{expirationRound: testScenario.initialAlloc[0].expirationRound, transactionSize: testScenario.initialAlloc[0].transactionSize})
 		}
 	}
 
@@ -356,7 +368,7 @@ func TestEmulatedLargeSetTransactionsExchangeIntermixed(t *testing.T) {
 	for j := range testScenario.initialAlloc {
 		for i := 0; i < testScenario.initialAlloc[j].transactionsCount; i++ {
 			for n := range testScenario.expectedResults.nodes {
-				testScenario.expectedResults.nodes[n] = append(testScenario.expectedResults.nodes[n], nodeTransaction{expirationRound: testScenario.initialAlloc[j].expirationRound, transactionSize: testScenario.initialAlloc[j].transactionSize})
+				testScenario.expectedResults.nodes[n].txns = append(testScenario.expectedResults.nodes[n].txns, nodeTransaction{expirationRound: testScenario.initialAlloc[j].expirationRound, transactionSize: testScenario.initialAlloc[j].transactionSize})
 			}
 		}
 	}
@@ -487,7 +499,7 @@ func TestEmulatedNonRelayToMultipleRelays(t *testing.T) {
 	for j := range testScenario.initialAlloc {
 		for i := 0; i < testScenario.initialAlloc[j].transactionsCount; i++ {
 			for n := range testScenario.expectedResults.nodes {
-				testScenario.expectedResults.nodes[n] = append(testScenario.expectedResults.nodes[n], nodeTransaction{expirationRound: testScenario.initialAlloc[j].expirationRound, transactionSize: testScenario.initialAlloc[j].transactionSize})
+				testScenario.expectedResults.nodes[n].txns = append(testScenario.expectedResults.nodes[n].txns, nodeTransaction{expirationRound: testScenario.initialAlloc[j].expirationRound, transactionSize: testScenario.initialAlloc[j].transactionSize})
 			}
 		}
 	}
@@ -634,7 +646,7 @@ func TestEmulatedTwoNodesFourRelays(t *testing.T) {
 	for j := range testScenario.initialAlloc {
 		for i := 0; i < testScenario.initialAlloc[j].transactionsCount; i++ {
 			for n := range testScenario.expectedResults.nodes {
-				testScenario.expectedResults.nodes[n] = append(testScenario.expectedResults.nodes[n], nodeTransaction{expirationRound: testScenario.initialAlloc[j].expirationRound, transactionSize: testScenario.initialAlloc[j].transactionSize})
+				testScenario.expectedResults.nodes[n].txns = append(testScenario.expectedResults.nodes[n].txns, nodeTransaction{expirationRound: testScenario.initialAlloc[j].expirationRound, transactionSize: testScenario.initialAlloc[j].transactionSize})
 			}
 		}
 	}
@@ -758,7 +770,7 @@ func TestEmulatedTwentyNodesFourRelays(t *testing.T) {
 	for j := range testScenario.initialAlloc {
 		for i := 0; i < testScenario.initialAlloc[j].transactionsCount; i++ {
 			for n := range testScenario.expectedResults.nodes {
-				testScenario.expectedResults.nodes[n] = append(testScenario.expectedResults.nodes[n], nodeTransaction{expirationRound: testScenario.initialAlloc[j].expirationRound, transactionSize: testScenario.initialAlloc[j].transactionSize})
+				testScenario.expectedResults.nodes[n].txns = append(testScenario.expectedResults.nodes[n].txns, nodeTransaction{expirationRound: testScenario.initialAlloc[j].expirationRound, transactionSize: testScenario.initialAlloc[j].transactionSize})
 			}
 		}
 	}

@@ -19,6 +19,7 @@ package txnsync
 import (
 	"errors"
 	"fmt"
+	"github.com/algorand/msgp/msgp"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -64,6 +65,7 @@ type emulatedNode struct {
 	expiredTx                           []transactions.SignedTxGroup
 	txpoolEntries                       []transactions.SignedTxGroup
 	txpoolIds                           map[transactions.Txid]bool
+	proposals                           []*proposalCache
 	latestLocallyOriginatedGroupCounter uint64
 	name                                string
 	blocked                             chan struct{}
@@ -78,7 +80,70 @@ type proposalData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	proposalBytes []byte              `codec:"b,allocbound=maxNumProposalBytes"`
-	txGroupHashes []transactions.Txid `codec:"h,allocbound=maxNumTxGroupHashesBytes"` // TODO: make this []byte
+	txGroupIds []transactions.Txid    `codec:"h,allocbound=maxNumTxGroupHashesBytes"` // TODO: make this []byte
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *proposalData) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0002)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0003 {
+			(*z) = proposalData{}
+		}
+		for zb0002 > 0 {
+			zb0002--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *proposalData) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*proposalData)
+	return ok
+}
+
+// cache used by the peer to keep track of which proposals not to send
+type proposalCache struct {
+	proposalData
+
+	txGroupIdIndex map[transactions.Txid]int
+	txGroups []transactions.SignedTxGroup
+	numTxGroupsReceived int
 }
 
 func makeEmulatedNode(emulator *emulator, nodeIdx int) *emulatedNode {
@@ -400,16 +465,16 @@ func (p *networkPeer) GetAddress() string {
 func (n *emulatedNode) RelayProposal(proposalBytes []byte, txnSlices []transactions.SignedTxnSlice) {
 	data := proposalData{
 		proposalBytes: proposalBytes,
-		txGroupHashes: make([]transactions.Txid, len(txnSlices)),
+		txGroupIds: make([]transactions.Txid, len(txnSlices)),
 	}
 
 	txGroups := make([]transactions.SignedTxGroup, len(txnSlices))
 	encodingBuf := protocol.GetEncodingBuf()
 	for i, txnSlice := range txnSlices {
-		data.txGroupHashes[i] = txnSlice.ID()
+		data.txGroupIds[i] = txnSlice.ID()
 		txGroups[i] = transactions.SignedTxGroup{
 			Transactions:       txnSlice,
-			GroupTransactionID: data.txGroupHashes[i],
+			GroupTransactionID: data.txGroupIds[i],
 		}
 		txGroups[i].EncodedLength = 0
 		for _, txn := range txGroups[i].Transactions {
@@ -422,5 +487,35 @@ func (n *emulatedNode) RelayProposal(proposalBytes []byte, txnSlices []transacti
 }
 
 func (n *emulatedNode) HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup, peer *Peer) {
-	fmt.Println(proposalDataBytes, "hello", len(txGroups))
+	var data proposalData
+	var pc *proposalCache
+	protocol.Decode(proposalDataBytes, &data)
+
+	if proposalDataBytes != nil {
+		pc = &proposalCache{
+			proposalData: data,
+			txGroupIdIndex: make(map[transactions.Txid]int, len(data.txGroupIds)),
+			txGroups: make([]transactions.SignedTxGroup, len(data.txGroupIds)),
+		}
+		n.proposals = append(n.proposals, pc)
+		for i, txid := range pc.txGroupIds {
+			pc.txGroupIdIndex[txid] = i
+		}
+	} else {
+		pc = n.proposals[len(n.proposals)-1]
+	}
+	// TODO attempt to fill receivedTxns with txpool
+
+	for _, txGroup := range txGroups {
+		if index, found := pc.txGroupIdIndex[txGroup.GroupTransactionID]; found {
+			pc.txGroups[index] = txGroup
+		}
+	}
+
+	if pc.numTxGroupsReceived == len(pc.txGroups) {
+		// TODO send proposal to agreement
+		// TODO send filter message
+
+		// TODO clear out individual fields of proposal cache instead of redeclaring
+	}
 }

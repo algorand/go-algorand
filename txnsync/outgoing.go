@@ -295,12 +295,13 @@ func (s *syncState) broadcastProposal(p ProposalBroadcastRequest, peers []*Peer)
 			continue
 		}
 
-		s.scheduler.peerDuration(peer)
+		// clear out all scheduled messages for this peer
+		for s.scheduler.peerDuration(peer) != 0 {
+		}
 
+		// TODO make a function for the next 3 calls
 		peer.state = peerStateProposal
-
 		peer.lastTransactionSelectionTracker.resetProposalTracker()
-
 		peer.messageSeriesPendingTransactions = nil
 
 		pendingTransactions := pendingTransactionGroupsSnapshot {

@@ -55,22 +55,25 @@ type nodeTransaction struct {
 	transactionSize int
 }
 
-type nodeTransactions []nodeTransaction
+type nodeTransactions struct {
+	txns []nodeTransaction
+	proposals []proposalCache
+}
 
 type emulatorResult struct {
 	nodes []nodeTransactions
 }
 
-func (a nodeTransactions) Len() int      { return len(a) }
-func (a nodeTransactions) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a nodeTransactions) Len() int      { return len(a.txns) }
+func (a nodeTransactions) Swap(i, j int) { a.txns[i], a.txns[j] = a.txns[j], a.txns[i] }
 func (a nodeTransactions) Less(i, j int) bool {
-	if a[i].expirationRound < a[j].expirationRound {
+	if a.txns[i].expirationRound < a.txns[j].expirationRound {
 		return true
 	}
-	if a[i].expirationRound > a[j].expirationRound {
+	if a.txns[i].expirationRound > a.txns[j].expirationRound {
 		return false
 	}
-	return a[i].transactionSize < a[j].transactionSize
+	return a.txns[i].transactionSize < a.txns[j].transactionSize
 }
 
 func emulateScenario(t *testing.T, scenario scenario) {
@@ -95,10 +98,10 @@ func emulateScenario(t *testing.T, scenario scenario) {
 	t.Logf("Total duplicate transaction count: %d", e.totalDuplicateTransactions)
 	t.Logf("Total duplicate transactions size: %d", e.totalDuplicateTransactionSize)
 	for n := 0; n < e.nodeCount; n++ {
-		t.Logf("%s message count : %d", e.nodes[n].name, len(results.nodes[n]))
+		t.Logf("%s message count : %d", e.nodes[n].name, len(results.nodes[n].txns))
 	}
 	for n := 0; n < e.nodeCount; n++ {
-		require.Equalf(t, len(scenario.expectedResults.nodes[n]), len(results.nodes[n]), "node %d", n)
+		require.Equalf(t, len(scenario.expectedResults.nodes[n].txns), len(results.nodes[n].txns), "node %d", n)
 	}
 
 	// calculating efficiency / overhead :
@@ -241,12 +244,12 @@ func (e *emulator) collectResult() (result emulatorResult) {
 		for _, txnGroup := range node.txpoolEntries {
 			size := len(txnGroup.Transactions[0].Txn.Note)
 			exp := txnGroup.Transactions[0].Txn.LastValid
-			txns = append(txns, nodeTransaction{expirationRound: exp, transactionSize: size + senderEncodingSize})
+			txns.txns = append(txns.txns, nodeTransaction{expirationRound: exp, transactionSize: size + senderEncodingSize})
 		}
 		for _, txnGroup := range node.expiredTx {
 			size := len(txnGroup.Transactions[0].Txn.Note)
 			exp := txnGroup.Transactions[0].Txn.LastValid
-			txns = append(txns, nodeTransaction{expirationRound: exp, transactionSize: size + senderEncodingSize})
+			txns.txns = append(txns.txns, nodeTransaction{expirationRound: exp, transactionSize: size + senderEncodingSize})
 		}
 		result.nodes[i] = txns
 	}
