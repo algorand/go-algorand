@@ -16,7 +16,7 @@
 
 package crypto
 
-import cdilithium "github.com/algorand/go-algorand/crypto/internal/cdilithium/pq-crystals/ref"
+import cdilithium "github.com/algorand/dilithium/ref"
 
 // Exporting signature, publicKey, secretKey.
 type (
@@ -29,33 +29,41 @@ type (
 	//DilithiumSignature is the exported signature
 	//msgp:allocbound DilithiumSignature
 	DilithiumSignature ByteSignature
+
+	// DPublicKey is a wrapper for cdilithium.DilPublicKey (used for packing)
+	DPublicKey [cdilithium.PublicKeySize]byte //cdilithium.DilPublicKey
+	// DSecretKey is a wrapper for cdilithium.DilPrivateKe (used for packing)
+	DSecretKey [cdilithium.PrivateKeySize]byte //cdilithium.DilPrivateKe
 )
 
 // DilithiumSigner is the implementation of Signer for the Dilithium signature scheme.
 type DilithiumSigner struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Keypair cdilithium.DilithiumKeyPair `codec:"kys"`
+	PublicKey DPublicKey `codec:"pk"`
+	SecretKey DSecretKey `codec:"sk"`
 }
 
 // NewDilithiumSigner Generates a dilithium Signer.
 func NewDilithiumSigner() Signer {
+	sk, pk := cdilithium.NewKeys()
 	return &DilithiumSigner{
-		Keypair: *cdilithium.NewKeys(),
+		PublicKey: DPublicKey(pk),
+		SecretKey: DSecretKey(sk),
 	}
 }
 
 // Sign receives a message and generates a signature over that message.
-// the size of the signature should conform with dil2Signature.
+// the size of the signature should conform with cdilithium.SigSize.
 func (d *DilithiumSigner) Sign(message Hashable) ByteSignature {
 	hs := Hash(hashRep(message))
 	return d.SignBytes(hs[:])
 }
 
 // SignBytes receives bytes and signs over them.
-// the size of the signature should conform with dil2Signature.
+// the size of the signature should conform with cdilithium.SigSize.
 func (d *DilithiumSigner) SignBytes(data []byte) ByteSignature {
-	return d.Keypair.SignBytes(data)
+	return (*cdilithium.DilPrivateKey)(&d.SecretKey).SignBytes(data)
 }
 
 // GetVerifyingKey Outputs a verifying key object which is serializable.
@@ -64,7 +72,7 @@ func (d *DilithiumSigner) GetVerifyingKey() *VerifyingKey {
 		Type: DilithiumType,
 		Pack: PackedVerifyingKey{
 			DilithiumPublicKey: DilithiumVerifier{
-				PublicKey: d.Keypair.PublicKey,
+				PublicKey: d.PublicKey,
 			},
 		},
 	}
@@ -74,7 +82,7 @@ func (d *DilithiumSigner) GetVerifyingKey() *VerifyingKey {
 type DilithiumVerifier struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	PublicKey cdilithium.DilPublicKey `codec:"k"`
+	PublicKey DPublicKey `codec:"k"`
 }
 
 // Verify follows dilithium algorithm to verify a signature.
@@ -85,5 +93,5 @@ func (d *DilithiumVerifier) Verify(message Hashable, sig ByteSignature) error {
 
 // VerifyBytes follows dilithium algorithm to verify a signature.
 func (d *DilithiumVerifier) VerifyBytes(data []byte, sig ByteSignature) error {
-	return d.PublicKey.VerifyBytes(data, sig)
+	return (*cdilithium.DilPublicKey)(&d.PublicKey).VerifyBytes(data, sig)
 }
