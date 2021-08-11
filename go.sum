@@ -1,3 +1,10 @@
+github.com/algorand/dilithium v0.0.0-20210811074936-51d382512ab5 h1:e4vTCBl4ihVJY32iXJz2A8ZvJdekKff08tE3BaHllXM=
+github.com/algorand/dilithium v0.0.0-20210811074936-51d382512ab5/go.mod h1:wlSkWnN0f1CR91Y+3bLklrUabOo4WmkhaPZLHqxRsTs=
+github.com/algorand/dilithium v0.0.0-20210811081611-26ae904a3089 h1:SLJLyk5lNaXdJjX8WrVF/+QukGinGhgXuMbi2suQpW0=
+github.com/algorand/dilithium v0.0.0-20210811081611-26ae904a3089/go.mod h1:wlSkWnN0f1CR91Y+3bLklrUabOo4WmkhaPZLHqxRsTs=
+github.com/algorand/dilithium v0.0.0-20210811082133-e9fd443d1433 h1:Z63DXvmAAbiWic+IorQLUyIsLnhesdyf0bmQanj82Sk=
+github.com/algorand/dilithium v0.0.0-20210811082133-e9fd443d1433/go.mod h1:wlSkWnN0f1CR91Y+3bLklrUabOo4WmkhaPZLHqxRsTs=
+github.com/algorand/go-algorand v0.0.0-20210810215942-dd7f7b6410af/go.mod h1:OHgE11gypiNBPQzngOs/JU314IjDNMx6R8t9iAWt47g=
 github.com/algorand/go-algorand/cmd/partitiontest_linter v0.0.0-20210731012338-8835bfdd24ed h1:LljeFygRkot7Pw1iFcM3zQhEcuwQ0Gg35AWiOY5sk7Y=
 github.com/algorand/go-algorand/cmd/partitiontest_linter v0.0.0-20210731012338-8835bfdd24ed/go.mod h1:L/etDo2SeYWLLJ/EkVblqhNd1uPOwqPvgKgzK1hW7As=
 github.com/algorand/go-codec v1.1.2 h1:QWS9YC3EEWBpJq5AqFPELcCJ2QPpTIg9aqR2K/sRDq4=
