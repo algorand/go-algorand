@@ -3,6 +3,7 @@ version: 2.1
 orbs:
   win: circleci/windows@2.3.0
   go: circleci/go@1.7.0
+  slack: circleci/slack@4.4.2
 
 workflows:
   version: 2
@@ -22,6 +23,7 @@ workflows:
           filters:
             branches:
               only: "rel/nightly"
+          context: slack-secrets
       - amd64_integration:
           requires:
             - amd64_build
@@ -34,6 +36,7 @@ workflows:
           filters:
             branches:
               only: "rel/nightly"
+          context: slack-secrets
       - amd64_e2e_subs:
           requires:
             - amd64_build
@@ -46,6 +49,7 @@ workflows:
           filters:
             branches:
               only: "rel/nightly"
+          context: slack-secrets
       - arm64_build
       - arm64_test:
           requires:
@@ -59,6 +63,7 @@ workflows:
           filters:
             branches:
               only: "rel/nightly"
+          context: slack-secrets
       - arm64_integration:
           requires:
             - arm64_build
@@ -71,6 +76,7 @@ workflows:
           filters:
             branches:
               only: "rel/nightly"
+          context: slack-secrets
       - arm64_e2e_subs:
           requires:
             - arm64_build
@@ -83,6 +89,7 @@ workflows:
           filters:
             branches:
               only: "rel/nightly"
+          context: slack-secrets
       - mac_amd64_build
       - mac_amd64_test:
           requires:
@@ -96,6 +103,7 @@ workflows:
           filters:
             branches:
               only: "rel/nightly"
+          context: slack-secrets
       - mac_amd64_integration:
           requires:
             - mac_amd64_build
@@ -108,6 +116,7 @@ workflows:
           filters:
             branches:
               only: "rel/nightly"
+          context: slack-secrets
       - mac_amd64_e2e_subs:
           requires:
             - mac_amd64_build
@@ -120,6 +129,7 @@ workflows:
           filters:
             branches:
               only: "rel/nightly"
+          context: slack-secrets
       #- windows_x64_build
 
 commands:
@@ -367,6 +377,9 @@ jobs:
           result_subdir: amd64-nightly
           no_output_timeout: 45m
       - upload_coverage
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
 
   amd64_integration:
     machine:
@@ -393,6 +406,9 @@ jobs:
       - generic_integration:
           result_subdir: amd64-integrationnightly
           no_output_timeout: 45m
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
 
   amd64_e2e_subs:
     machine:
@@ -417,6 +433,9 @@ jobs:
       - generic_integration:
           result_subdir: amd64-e2e_subs_nightly
           no_output_timeout: 45m
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
 
   arm64_build:
     machine:
@@ -452,6 +471,9 @@ jobs:
           result_subdir: arm64-nightly
           no_output_timeout: 45m
       - upload_coverage
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
 
   arm64_integration:
     machine:
@@ -480,6 +502,9 @@ jobs:
       - generic_integration:
           result_subdir: arm64-integration-nightly
           no_output_timeout: 45m
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
 
   arm64_e2e_subs:
     machine:
@@ -506,6 +531,9 @@ jobs:
       - generic_integration:
           result_subdir: arm64-e2e_subs-nightly
           no_output_timeout: 45m
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
 
   mac_amd64_build:
     macos:
@@ -551,6 +579,9 @@ jobs:
           circleci_home: /Users/distiller
           no_output_timeout: 45m
       - upload_coverage
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
 
   mac_amd64_integration:
     macos:
@@ -583,6 +614,9 @@ jobs:
           result_subdir: mac-amd64-integration-nightly
           circleci_home: /Users/distiller
           no_output_timeout: 45m
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
 
   mac_amd64_e2e_subs:
     macos:
@@ -613,6 +647,9 @@ jobs:
           result_subdir: mac-amd64-e2e_subs-nightly
           circleci_home: /Users/distiller
           no_output_timeout: 45m
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
 
   windows_x64_build:
     executor:
