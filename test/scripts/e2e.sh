@@ -100,8 +100,8 @@ export GOPATH=$(go env GOPATH)
 # Change current directory to test/scripts so we can just use ./test.sh to exec.
 cd "${SCRIPT_PATH}"
 
-e2e_subs_scripts()
-{
+if [ -z $E2E_TEST_FILTER || $E2E_TEST_FILTER="SCRIPTS" ]; then
+
     ./timeout 200 ./e2e_basic_start_stop.sh
     duration "e2e_basic_start_stop.sh"
 
@@ -125,34 +125,25 @@ e2e_subs_scripts()
     duration "serial client runners"
 
     deactivate
-}
+fi # if E2E_TEST_FILTER = "" or = "SCRIPTS"
 
-case $E2E_SUBS_SCRIPTS in
-    SKIP)
-        ;;
-    ONLY)
-        exit 0
-        ;;
-    *)
-        e2e_subs_scripts
-        ;;
-esac
+if [ -z $E2E_TEST_FILTER || $E2E_TEST_FILTER="GO" ]; then
+    # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
+    # This allows us to clean up everything with our rm -rf trap.
+    export TESTDIR=${TEMPDIR}
+    export TESTDATADIR=${SRCROOT}/test/testdata
+    export SRCROOT=${SRCROOT}
 
-# Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
-# This allows us to clean up everything with our rm -rf trap.
-export TESTDIR=${TEMPDIR}
-export TESTDATADIR=${SRCROOT}/test/testdata
-export SRCROOT=${SRCROOT}
+    ./e2e_go_tests.sh ${GO_TEST_ARGS}
+    duration "e2e_go_tests.sh"
 
-./e2e_go_tests.sh ${GO_TEST_ARGS}
-duration "e2e_go_tests.sh"
+    rm -rf "${TEMPDIR}"
 
-rm -rf "${TEMPDIR}"
+    if ! ${NO_BUILD} ; then
+        rm -rf ${PKG_ROOT}
+    fi
 
-if ! ${NO_BUILD} ; then
-    rm -rf ${PKG_ROOT}
-fi
-
-echo "----------------------------------------------------------------------"
-echo "  DONE: E2E"
-echo "----------------------------------------------------------------------"
+    echo "----------------------------------------------------------------------"
+    echo "  DONE: E2E"
+    echo "----------------------------------------------------------------------"
+fi # if E2E_TEST_FILTER = "" or = "GO"
