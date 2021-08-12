@@ -152,7 +152,19 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 	state, ok := p.Players[rnd]
 	if !ok {
 		switch {
-		case p.bootstrapRound == rnd.Number:
+		case rnd.Number < p.FirstUncommittedRound:
+			// stale event: give it to the oldest player so it will throw it away
+			var oldestPlayer *player
+			minRound := basics.Round(math.MaxUint64)
+			for rnd, plyr := range p.Players {
+				if rnd.Number < minRound {
+					minRound = rnd.Number
+					oldestPlayer = plyr
+				}
+			}
+			state = oldestPlayer
+
+		case rnd.Number == p.bootstrapRound:
 			// XXX is this the first bootstrap round (no prev hash)?
 			if bootstrapPlayer, ok := p.Players[makeRoundBranch(rnd.Number, bookkeeping.BlockHash{})]; ok {
 				state = bootstrapPlayer
@@ -170,6 +182,8 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 				logging.Base().Debugf("couldn't make player for rnd %+v, dropping event", rnd)
 				return nil
 			}
+			// XXX call enterRound for this player:
+			//  - rezeroAction{Round}, pseudonodeAction{assemble}
 			p.Players[rnd] = newPlayer
 			state = newPlayer
 		}
@@ -228,6 +242,7 @@ type pipelineRoundEnterer struct {
 
 func (re *pipelineRoundEnterer) enter(p *player, r routerHandle, source event, target round) []action {
 	prevRound := p.Round
+
 	a := enterRound(p, r, source, target)
 	if p.Round != target {
 		panic("enterRound did not transition player to target")
@@ -244,6 +259,7 @@ func (re *pipelineRoundEnterer) enter(p *player, r routerHandle, source event, t
 	// update FirstUncommittedRound
 	minRound := basics.Round(math.MaxUint64)
 	for rnd := range re.pp.Players {
+		// XXX ensure rnd.Branch matches the hash of the block that just committed
 		if rnd.Number < minRound {
 			minRound = rnd.Number
 		}
