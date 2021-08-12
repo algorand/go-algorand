@@ -242,7 +242,10 @@ func computeAccountMinBalance(client libgoal.Client, cfg PpConfig) (fundingRequi
 }
 
 func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, client libgoal.Client, cfg PpConfig) error {
-	srcFunds, err := client.GetBalance(cfg.SrcAccount)
+	var srcFunds, minFund uint64
+	var err error
+	var tx transactions.Transaction
+	srcFunds, err = client.GetBalance(cfg.SrcAccount)
 
 	if err != nil {
 		return err
@@ -254,7 +257,7 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 	// Fee of 0 will make cause the function to use the suggested one by network
 	fee := uint64(0)
 
-	minFund, _, err := computeAccountMinBalance(client, cfg)
+	minFund, _, err = computeAccountMinBalance(client, cfg)
 	if err != nil {
 		return err
 	}
@@ -278,7 +281,8 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 			if !cfg.Quiet {
 				fmt.Printf("adjusting balance of account %v by %d\n ", addr, toSend)
 			}
-			tx, err := pps.sendPaymentFromSourceAccount(client, addr, fee, toSend)
+
+			tx, err = pps.sendPaymentFromSourceAccount(client, addr, fee, toSend)
 			if err != nil {
 				if strings.Contains(err.Error(), "broadcast queue full") {
 					fmt.Printf("failed to send payment, broadcast queue full : sleeping 500ms\n")
