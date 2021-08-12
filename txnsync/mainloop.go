@@ -35,15 +35,15 @@ const (
 	randomRange      = 100 * time.Millisecond
 	sendMessagesTime = 10 * time.Millisecond
 
-	// transacationPoolLowWatermark is the low watermark for the transaction pool, relative
+	// transactionPoolLowWatermark is the low watermark for the transaction pool, relative
 	// to the transaction pool size. When the number of transactions in the transaction pool
 	// drops below this value, the transactionPoolFull flag would get cleared.
-	transacationPoolLowWatermark = float32(0.8)
+	transactionPoolLowWatermark = float32(0.8)
 
-	// transacationPoolHighWatermark is the low watermark for the transaction pool, relative
+	// transactionPoolHighWatermark is the low watermark for the transaction pool, relative
 	// to the transaction pool size. When the number of transactions in the transaction pool
 	// grows beyond this value, the transactionPoolFull flag would get set.
-	transacationPoolHighWatermark = float32(0.9)
+	transactionPoolHighWatermark = float32(0.9)
 
 	// betaGranularChangeThreshold defined the difference threshold for changing the beta value.
 	// Changes to the beta value only takes effect once the difference is sufficiently big enough
@@ -219,11 +219,11 @@ func (s *syncState) onTransactionPoolChangedEvent(ent Event) {
 		s.transactionPoolFull = true
 	} else if s.transactionPoolFull {
 		// the transaction pool is currently full.
-		if float32(ent.transactionPoolSize) < float32(s.config.TxPoolSize)*transacationPoolLowWatermark {
+		if float32(ent.transactionPoolSize) < float32(s.config.TxPoolSize)*transactionPoolLowWatermark {
 			s.transactionPoolFull = false
 		}
 	} else {
-		if float32(ent.transactionPoolSize) > float32(s.config.TxPoolSize)*transacationPoolHighWatermark {
+		if float32(ent.transactionPoolSize) > float32(s.config.TxPoolSize)*transactionPoolHighWatermark {
 			s.transactionPoolFull = true
 		}
 	}
@@ -268,7 +268,7 @@ func (s *syncState) onTransactionPoolChangedEvent(ent Event) {
 	}
 }
 
-// calculate the beta parameter, based on the transcation pool size.
+// calculate the beta parameter, based on the transaction pool size.
 func beta(txPoolSize int) time.Duration {
 	if txPoolSize < 200 {
 		txPoolSize = 200
@@ -298,7 +298,7 @@ func (s *syncState) onNewRoundEvent(ent Event) {
 	newRoundPeers := peers
 	if s.isRelay {
 		// on relays, outgoing peers have a difference scheduling, which is based on the incoming message timing
-		// rather then a priodic message transmission.
+		// rather then a periodic message transmission.
 		newRoundPeers = incomingPeersOnly(newRoundPeers)
 	}
 	s.scheduler.scheduleNewRound(newRoundPeers, s.isRelay)
@@ -372,7 +372,7 @@ func (s *syncState) rollOffsets() {
 			continue
 		}
 		if currentTimeOffset+sendMessagesTime > nextSchedule {
-			// there was a message scheudled already in less than 20ms, so keep that one.
+			// there was a message scheduled already in less than 20ms, so keep that one.
 			s.scheduler.schedulerPeer(peer, nextSchedule)
 			continue
 		}

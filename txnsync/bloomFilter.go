@@ -25,7 +25,7 @@ import (
 )
 
 // bloomFilterFalsePositiveRate is used as the target false positive rate for the multiHashBloomFilter implementation.
-// the xor based bloom filters have their own hard-coded false positive rate, and thefore require no configuration.
+// the xor based bloom filters have their own hard-coded false positive rate, and therefore require no configuration.
 const bloomFilterFalsePositiveRate = 0.01
 
 var errInvalidBloomFilterEncoding = errors.New("invalid bloom filter encoding")
@@ -43,7 +43,7 @@ const (
 // transactionsRange helps us to identify a subset of the transaction pool pending transaction groups.
 // it's being used as part of an optimization when we're attempting to recreate a bloom filter :
 // if the new bloom filter shares the same set of parameters, then the result is expected to be the
-// same and thefore the old bloom filter can be used.
+// same and therefore the old bloom filter can be used.
 type transactionsRange struct {
 	firstCounter      uint64
 	lastCounter       uint64

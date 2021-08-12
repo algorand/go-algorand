@@ -36,7 +36,7 @@ var errTransactionSyncOutgoingMessageSendFailed = errors.New("transaction sync f
 // the point where it's being encoded.
 type sentMessageMetadata struct {
 	encodedMessageSize      int
-	sentTranscationsIDs     []transactions.Txid
+	sentTransactionsIDs     []transactions.Txid
 	message                 *transactionBlockMessage
 	peer                    *Peer
 	sentTimestamp           time.Duration
@@ -91,7 +91,7 @@ func (encoder *messageAsyncEncoder) asyncEncodeAndSend(interface{}) interface{} 
 
 	encodedMessage := encoder.messageData.message.MarshalMsg(getMessageBuffer())
 	encoder.messageData.encodedMessageSize = len(encodedMessage)
-	// now that the message is ready, we can discard the encoded transcation group slice to allow the GC to collect it.
+	// now that the message is ready, we can discard the encoded transaction group slice to allow the GC to collect it.
 	releaseEncodedTransactionGroups(encoder.messageData.message.TransactionGroups.Bytes)
 	// record the timestamp here, before sending the raw bytes to the network :
 	// the time we spend on the network package might include the network processing time, which
@@ -115,7 +115,7 @@ func (encoder *messageAsyncEncoder) enqueue() {
 	}
 }
 
-// pendingTransactionGroupsSnapshot is used to represent a snapshot of a pending transcation groups along with the latestLocallyOriginatedGroupCounter value.
+// pendingTransactionGroupsSnapshot is used to represent a snapshot of a pending transaction groups along with the latestLocallyOriginatedGroupCounter value.
 // The goal is to ensure we're "capturing"  this only once per `sendMessageLoop` call. In order to do so, we allocate that structure on the stack, and passing
 // a pointer to that structure downstream.
 type pendingTransactionGroupsSnapshot struct {
@@ -221,13 +221,13 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 		transactionGroups := pendingTransactions.pendingTransactionsGroups
 		if !s.isRelay {
 			// on non-relay, we need to filter out the non-locally originated messages since we don't want
-			// non-relays to send transcation that they received via the transaction sync back.
+			// non-relays to send transaction that they received via the transaction sync back.
 			transactionGroups = s.locallyGeneratedTransactions(pendingTransactions)
 		}
 
 		profTxnsSelection := s.profiler.getElement(profElementTxnsSelection)
 		profTxnsSelection.start()
-		metaMessage.transactionGroups, metaMessage.sentTranscationsIDs, metaMessage.partialMessage = peer.selectPendingTransactions(transactionGroups, messageTimeWindow, s.round, bloomFilterSize)
+		metaMessage.transactionGroups, metaMessage.sentTransactionsIDs, metaMessage.partialMessage = peer.selectPendingTransactions(transactionGroups, messageTimeWindow, s.round, bloomFilterSize)
 		profTxnsSelection.end()
 
 		// clear the last sent bloom filter on the end of a series of partial messages.
@@ -267,8 +267,8 @@ func (s *syncState) evaluateOutgoingMessage(msgData sentMessageMetadata) {
 		// incoming message handler to identify that we shouldn't use this timestamp for calculating the data exchange rate.
 		timestamp = 0
 	}
-	msgData.peer.updateMessageSent(msgData.message, msgData.sentTranscationsIDs, timestamp, msgData.sequenceNumber, msgData.encodedMessageSize, msgData.filter)
-	s.log.outgoingMessage(msgStats{msgData.sequenceNumber, msgData.message.Round, len(msgData.sentTranscationsIDs), msgData.message.UpdatedRequestParams, len(msgData.message.TxnBloomFilter.BloomFilter), msgData.message.MsgSync.NextMsgMinDelay, msgData.peer.networkAddress()})
+	msgData.peer.updateMessageSent(msgData.message, msgData.sentTransactionsIDs, timestamp, msgData.sequenceNumber, msgData.encodedMessageSize, msgData.filter)
+	s.log.outgoingMessage(msgStats{msgData.sequenceNumber, msgData.message.Round, len(msgData.sentTransactionsIDs), msgData.message.UpdatedRequestParams, len(msgData.message.TxnBloomFilter.BloomFilter), msgData.message.MsgSync.NextMsgMinDelay, msgData.peer.networkAddress()})
 }
 
 // locallyGeneratedTransactions return a subset of the given transactionGroups array by filtering out transactions that are not locally generated.

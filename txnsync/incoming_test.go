@@ -235,7 +235,7 @@ func TestEvaluateIncomingMessagePart2(t *testing.T) {
 	require.Equal(t, "received message out of order; seq = 11, expecting seq = 5\n", incLogger.lastLogged)
 	require.Equal(t, xorBloomFilter32, peer.recentIncomingBloomFilters[0].filter.filterType)
 
-	// currentTransacationPoolSize is -1
+	// currentTransactionPoolSize is -1
 	peer.incomingMessages = messageOrderingHeap{}
 	mNodeConnector.transactionPoolSize = -1
 	s.evaluateIncomingMessage(incomingMessage{
