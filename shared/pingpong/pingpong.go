@@ -151,6 +151,7 @@ func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
 			fmt.Printf("Not enough accounts - creating %d more\n", int(cfg.NumPartAccounts+1)-len(pps.accounts))
 			generateAccounts(pps.accounts, cfg.NumPartAccounts)
 		}
+		go pps.roundMonitor(ac)
 
 		err = pps.fundAccounts(pps.accounts, ac, cfg)
 		if err != nil {
@@ -171,6 +172,8 @@ func (pps *WorkerState) prepareNewAccounts(client libgoal.Client) (newAccounts m
 	if srcAcct, has := pps.accounts[pps.cfg.SrcAccount]; has {
 		newAccounts[pps.cfg.SrcAccount] = srcAcct
 	}
+	pps.accounts = newAccounts
+	go pps.roundMonitor(client)
 
 	err = pps.fundAccounts(newAccounts, client, pps.cfg)
 	if err != nil {
@@ -178,7 +181,6 @@ func (pps *WorkerState) prepareNewAccounts(client libgoal.Client) (newAccounts m
 		return
 	}
 
-	pps.accounts = newAccounts
 	return
 }
 
@@ -469,8 +471,6 @@ func (pps *WorkerState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 
 	lastLog := time.Now()
 	nextLog := lastLog.Add(logPeriod)
-
-	go pps.roundMonitor(ac)
 
 	for {
 		if ctx.Err() != nil {
