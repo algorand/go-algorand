@@ -3334,14 +3334,6 @@ func opTxField(cx *evalContext) {
 	sv := cx.stack[last]
 	var i uint64
 	switch field {
-	case Sender:
-		cx.subtxn.Sender, cx.err = cx.availableAddress(sv)
-	case Receiver:
-		cx.subtxn.Receiver, cx.err = cx.availableAddress(sv)
-	case Amount:
-		cx.subtxn.Amount.Raw, cx.err = sv.uint()
-	case CloseRemainderTo:
-		cx.subtxn.CloseRemainderTo, cx.err = cx.availableAddress(sv)
 	case Type:
 		cx.subtxn.Type = protocol.TxType(sv.Bytes)
 	case TypeEnum:
@@ -3349,16 +3341,44 @@ func opTxField(cx *evalContext) {
 		if i < uint64(len(TxnTypeNames)) {
 			cx.subtxn.Type = protocol.TxType(TxnTypeNames[i])
 		}
+
+	case Sender:
+		cx.subtxn.Sender, cx.err = cx.availableAddress(sv)
+	case Fee:
+		cx.subtxn.Fee.Raw, cx.err = sv.uint()
+	// FirstValid, LastValid unsettable: no motivation
+	// Note unsettable: would be strange, as this "Note" would not end up "chain-visible"
+	// GenesisID, GenesisHash unsettable: surely makes no sense
+	// Group unsettable: Can't make groups from AVM (yet?)
+	// Lease unsettable: This seems potentially useful.
+	// RekeyTo unsettable: Feels dangerous for first release.
+
+	// KeyReg not allowed yet, so no fields settable
+
+	case Receiver:
+		cx.subtxn.Receiver, cx.err = cx.availableAddress(sv)
+	case Amount:
+		cx.subtxn.Amount.Raw, cx.err = sv.uint()
+	case CloseRemainderTo:
+		cx.subtxn.CloseRemainderTo, cx.err = cx.availableAddress(sv)
+
 	case XferAsset:
 		cx.subtxn.XferAsset, cx.err = cx.availableAsset(sv)
-	case AssetReceiver:
-		cx.subtxn.AssetReceiver, cx.err = cx.availableAddress(sv)
 	case AssetAmount:
 		cx.subtxn.AssetAmount, cx.err = sv.uint()
+	case AssetSender:
+		cx.subtxn.AssetSender, cx.err = cx.availableAddress(sv)
+	case AssetReceiver:
+		cx.subtxn.AssetReceiver, cx.err = cx.availableAddress(sv)
 	case AssetCloseTo:
 		cx.subtxn.AssetCloseTo, cx.err = cx.availableAddress(sv)
-	// Keeping things buttoned up for now
-	// Disallow rekey, explicit fee, fv, lv, lease (and everything outside pay, axfr)
+
+	// acfg likely next
+
+	// afrz seems easy but not high demand
+
+	// appl needs to wait. Can't call AVM from AVM.
+
 	default:
 		cx.err = fmt.Errorf("invalid txfield %s", field)
 	}
