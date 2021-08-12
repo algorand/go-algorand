@@ -113,31 +113,33 @@ func (b *bitmask) trimBitmask(entries int) {
 }
 
 // iterate through the elements of bitmask without expanding it.
-// If more than maxIndex set bits are found, return error. For each set value, call callback.
-func (b *bitmask) iterate(entries int, maxIndex int, callback func(int, int) error) error {
+// call the func(entriesCount, setBitIndex) for every set bit
+// countOfEntries: is the size of the array that entryIndex is accessing: entryIndex < countOfEntries
+// countOfSetBits: is the size of the array that setBitCounter is accessing: setBitCounter < countOfSetBits
+func (b *bitmask) iterate(countOfEntries int, countOfSetBits int, callback func(int, int) error) error {
 	option := 0
 	if len(*b) > 0 {
 		option = int((*b)[0])
 	} else { // nothing to iterate
 		return nil
 	}
-	index := 0
+	setBitCounter := 0
 	switch option {
 	case 0:
 		for i, v := range (*b)[1:] {
 			for j := 0; j < 8 && v > 0; j++ {
 				if v&1 != 0 {
-					if index >= maxIndex {
+					if setBitCounter >= countOfSetBits {
 						return errDataMissing
 					}
-					ij8 := 8*i + j
-					if ij8 >= entries {
+					entryIndex := 8*i + j
+					if entryIndex >= countOfEntries {
 						return errIndexNotFound
 					}
-					if err := callback(ij8, index); err != nil {
+					if err := callback(entryIndex, setBitCounter); err != nil {
 						return err
 					}
-					index++
+					setBitCounter++
 				}
 				v >>= 1
 			}
@@ -146,42 +148,42 @@ func (b *bitmask) iterate(entries int, maxIndex int, callback func(int, int) err
 		for i, v := range (*b)[1:] {
 			for j := 0; j < 8 && v < 255; j++ {
 				if v&1 == 0 {
-					if index >= maxIndex {
+					if setBitCounter >= countOfSetBits {
 						return errDataMissing
 					}
-					ij8 := 8*i + j
-					if ij8 >= entries {
+					entryIndex := 8*i + j
+					if entryIndex >= countOfEntries {
 						return errIndexNotFound
 					}
-					if err := callback(ij8, index); err != nil {
+					if err := callback(entryIndex, setBitCounter); err != nil {
 						return err
 					}
-					index++
+					setBitCounter++
 				}
 				v >>= 1
 			}
 		}
-		for i := (len(*b) - 1) * 8; i < entries; i++ {
-			if index >= maxIndex {
+		for i := (len(*b) - 1) * 8; i < countOfEntries; i++ {
+			if setBitCounter >= countOfSetBits {
 				return errDataMissing
 			}
-			if err := callback(i, index); err != nil {
+			if err := callback(i, setBitCounter); err != nil {
 				return err
 			}
-			index++
+			setBitCounter++
 		}
 	case 2:
-		sum := 0
+		sum := 0 // entryIndex
 		elementsCount := (len(*b) - 1) / 2
-		if elementsCount > maxIndex {
+		if elementsCount > countOfSetBits {
 			return errDataMissing
 		}
-		for index := 0; index < elementsCount; index++ {
-			sum += int((*b)[index*2+1])*256 + int((*b)[index*2+2])
-			if sum >= entries {
+		for setBitCounter := 0; setBitCounter < elementsCount; setBitCounter++ {
+			sum += int((*b)[setBitCounter*2+1])*256 + int((*b)[setBitCounter*2+2])
+			if sum >= countOfEntries {
 				return errIndexNotFound
 			}
-			if err := callback(sum, index); err != nil {
+			if err := callback(sum, setBitCounter); err != nil {
 				return err
 			}
 		}
@@ -189,32 +191,32 @@ func (b *bitmask) iterate(entries int, maxIndex int, callback func(int, int) err
 		sum := 0
 		// This is the least amount of elements can be set.
 		// There could be more, if the numbers are corrupted
-		// i.e. when sum >= entries
-		elementsCount := entries - (len(*b)-1)/2
-		if elementsCount > maxIndex || elementsCount < 0 {
+		// i.e. when sum >= countOfEntries
+		elementsCount := countOfEntries - (len(*b)-1)/2
+		if elementsCount > countOfSetBits || elementsCount < 0 {
 			return errDataMissing
 		}
-		j := 0
+		entryIndex := 0
 		for i := 0; i*2+2 < len(*b); i++ {
 			sum += int((*b)[i*2+1])*256 + int((*b)[i*2+2])
-			if sum >= entries {
+			if sum >= countOfEntries {
 				return errIndexNotFound
 			}
-			for j < sum {
-				if err := callback(j, index); err != nil {
+			for entryIndex < sum {
+				if err := callback(entryIndex, setBitCounter); err != nil {
 					return err
 				}
-				j++
-				index++
+				entryIndex++
+				setBitCounter++
 			}
-			j++
+			entryIndex++
 		}
-		for j < entries {
-			if err := callback(j, index); err != nil {
+		for entryIndex < countOfEntries {
+			if err := callback(entryIndex, setBitCounter); err != nil {
 				return err
 			}
-			j++
-			index++
+			entryIndex++
+			setBitCounter++
 		}
 	default:
 		return errInvalidBitmaskType
