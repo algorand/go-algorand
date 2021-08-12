@@ -634,6 +634,17 @@ func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKe
 	return ops.Program, progAsm
 }
 
+func (pps *WorkerState) waitForNextRoundOrSleep(client libgoal.Client, waitTime time.Duration) {
+	status, err := client.Status()
+	if err == nil {
+		status, err = client.WaitForRound(status.LastRound)
+		if err == nil {
+			return
+		}
+	}
+	time.Sleep(waitTime)
+}
+
 func (pps *WorkerState) sendAsGroup(txgroup []transactions.Transaction, client libgoal.Client, senders []string) (err error) {
 	if len(txgroup) == 0 {
 		err = fmt.Errorf("sendAsGroup: empty group")
@@ -660,9 +671,22 @@ func (pps *WorkerState) sendAsGroup(txgroup []transactions.Transaction, client l
 		}
 		stxgroup = append(stxgroup, signedTxn)
 	}
-
+repeat:
 	broadcastErr := client.BroadcastTransactionGroup(stxgroup)
 	if broadcastErr != nil {
+		if strings.Contains(broadcastErr.Error(), "broadcast queue full") {
+			fmt.Printf("failed to send broadcast app creation txn group, broadcast queue full. sleeping & retrying.\n")
+			stat, err2 := client.Status()
+			if err2 == nil {
+				_, err2 = client.WaitForRound(stat.LastRound)
+				if err2 != nil {
+					time.Sleep(500 * time.Millisecond)
+				}
+			} else {
+				time.Sleep(500 * time.Millisecond)
+			}
+			goto repeat
+		}
 		fmt.Printf("Cannot broadcast app creation txn group\n")
 		err = broadcastErr
 		return
@@ -804,7 +828,8 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 			if len(account.AppParams) >= appsPerAcct || len(aidxs) >= int(cfg.NumApp) {
 				break
 			}
-			time.Sleep(time.Second)
+			pps.waitForNextRoundOrSleep(client, 500*time.Millisecond)
+			// TODO : if we fail here for too long, we should re-create new accounts, etc.
 		}
 		for idx := range account.AppParams {
 			aidxs = append(aidxs, idx)
@@ -822,6 +847,9 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 	if cfg.NumAppOptIn > 0 {
 		optIns = make(map[uint64][]string)
 		for addr := range accounts {
+			if addr == cfg.SrcAccount {
+				continue
+			}
 			var txgroup []transactions.Transaction
 			var senders []string
 			permAppIndices := rand.Perm(len(aidxs))
@@ -854,6 +882,7 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 						return
 					}
 					txgroup = txgroup[:0]
+					senders = senders[:0]
 				}
 			}
 			// broadcast leftovers

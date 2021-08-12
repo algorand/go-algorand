@@ -193,7 +193,7 @@ func computeAccountMinBalance(client libgoal.Client, cfg PpConfig) (fundingRequi
 
 	if cfg.NumApp > 0 {
 		runningRequiredBalance = (cfg.MaxAmt + cfg.MaxFee) * 10 * 2
-		fundingRequiredBalance = (cfg.MinAccountFunds + (cfg.MaxAmt+cfg.MaxFee)*10) * 2
+		fundingRequiredBalance = (cfg.MinAccountFunds + (cfg.MaxAmt+cfg.MaxFee)*10) * 2 * cfg.TxnPerSec * uint64(math.Ceil(cfg.RefreshTime.Seconds()))
 		fmt.Printf("required min balance for app accounts: %d\n", fundingRequiredBalance)
 		return
 	}
@@ -285,7 +285,7 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 			tx, err = pps.sendPaymentFromSourceAccount(client, addr, fee, toSend)
 			if err != nil {
 				if strings.Contains(err.Error(), "broadcast queue full") {
-					fmt.Printf("failed to send payment, broadcast queue full : sleeping 500ms\n")
+					fmt.Printf("failed to send payment, broadcast queue full. sleeping & retrying.\n")
 					stat, err2 := client.Status()
 					if err2 == nil {
 						_, err2 = client.WaitForRound(stat.LastRound)
@@ -983,38 +983,32 @@ func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, cli
 		// select opted-in accounts for Txn.Accounts field
 		var accounts []string
 		assetOptIns := cinfo.OptIns[aidx]
-		if from != to {
-			if len(assetOptIns) > 0 {
-				indices := rand.Perm(len(assetOptIns))
-				limit := 5
-				if len(indices) < limit {
-					limit = len(indices)
-				}
-				for i := 0; i < limit; i++ {
-					idx := indices[i]
-					accounts = append(accounts, assetOptIns[idx])
-				}
-				if cinfo.AssetParams[aidx].Creator == from {
-					// if the application was created by the "from" account, then we don't need to worry about it being opted-in.
-				} else {
-					fromIsOptedIn := false
-					for i := 0; i < len(assetOptIns); i++ {
-						if assetOptIns[i] == from {
-							fromIsOptedIn = true
-							break
-						}
-					}
-					if !fromIsOptedIn {
-						sender = accounts[0]
-						from = sender
-					}
-				}
-				accounts = accounts[1:]
-			} else {
-				err = fmt.Errorf("application %d has not been opted in by any account", aidx)
-				_, _ = fmt.Fprintf(os.Stdout, "error constructing transaction - %v\n", err)
-				return
+		if len(assetOptIns) > 0 {
+			indices := rand.Perm(len(assetOptIns))
+			limit := 5
+			if len(indices) < limit {
+				limit = len(indices)
 			}
+			for i := 0; i < limit; i++ {
+				idx := indices[i]
+				accounts = append(accounts, assetOptIns[idx])
+			}
+			if cinfo.AssetParams[aidx].Creator == from {
+				// if the application was created by the "from" account, then we don't need to worry about it being opted-in.
+			} else {
+				fromIsOptedIn := false
+				for i := 0; i < len(assetOptIns); i++ {
+					if assetOptIns[i] == from {
+						fromIsOptedIn = true
+						break
+					}
+				}
+				if !fromIsOptedIn {
+					sender = accounts[0]
+					from = sender
+				}
+			}
+			accounts = accounts[1:]
 		}
 		txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, accounts, nil, nil)
 		if err != nil {
