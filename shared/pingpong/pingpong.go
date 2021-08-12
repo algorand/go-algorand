@@ -191,13 +191,6 @@ func computeAccountMinBalance(client libgoal.Client, cfg PpConfig) (fundingRequi
 
 	minActiveAccountBalance := proto.MinBalance
 
-	if cfg.NumApp > 0 {
-		amount := uint64(1)
-		runningRequiredBalance = (amount + cfg.MaxFee) * 10 * 2
-		fundingRequiredBalance = cfg.MinAccountFunds + (amount+cfg.MaxFee)*10*2*cfg.TxnPerSec*uint64(math.Ceil(cfg.RefreshTime.Seconds()))
-		fmt.Printf("required min balance for app accounts: %d\n", fundingRequiredBalance)
-		return
-	}
 	var fee uint64
 	if cfg.MaxFee != 0 {
 		fee = cfg.MaxFee
@@ -209,6 +202,17 @@ func computeAccountMinBalance(client libgoal.Client, cfg PpConfig) (fundingRequi
 		}
 		fee *= uint64(cfg.GroupSize)
 	}
+
+	if cfg.NumApp > 0 {
+		amount := uint64(0)
+		runningRequiredBalance = (amount + fee) * 10 * 2
+		setupCost := uint64(proto.MaxTxGroupSize) * (uint64(proto.MaxAppProgramCost*2) + fee)
+		// todo: add the cfg.NumAppOptIn to the setup cost.
+		fundingRequiredBalance = cfg.MinAccountFunds + (amount+fee)*10*2*cfg.TxnPerSec*uint64(math.Ceil(cfg.RefreshTime.Seconds())) + setupCost
+		fmt.Printf("required min balance for app accounts: %d\n", fundingRequiredBalance)
+		return
+	}
+
 	fundingRequiredBalance = minActiveAccountBalance
 	runningRequiredBalance = minActiveAccountBalance
 
@@ -264,56 +268,65 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 	}
 
 	fmt.Printf("adjusting account balance to %d\n", minFund)
-	for addr, acct := range accounts {
+	for {
+		accountsAdjusted := 0
+		for addr, acct := range accounts {
 
-		if addr == pps.cfg.SrcAccount {
-			continue
-		}
-	repeat:
-		if !cfg.Quiet {
-			fmt.Printf("adjusting balance of account %v\n", addr)
-		}
-		if acct.getBalance() < minFund {
-			toSend := minFund - acct.getBalance()
-			if srcFunds <= toSend {
-				return fmt.Errorf("source account %s has insufficient funds %d - needs %d", cfg.SrcAccount, srcFunds, toSend)
+			if addr == pps.cfg.SrcAccount {
+				continue
 			}
-			srcFunds -= toSend
+		repeat:
 			if !cfg.Quiet {
-				fmt.Printf("adjusting balance of account %v by %d\n ", addr, toSend)
+				fmt.Printf("adjusting balance of account %v\n", addr)
 			}
+			if acct.getBalance() < minFund {
+				toSend := minFund - acct.getBalance()
+				if srcFunds <= toSend {
+					return fmt.Errorf("source account %s has insufficient funds %d - needs %d", cfg.SrcAccount, srcFunds, toSend)
+				}
+				srcFunds -= toSend
+				if !cfg.Quiet {
+					fmt.Printf("adjusting balance of account %v by %d\n ", addr, toSend)
+				}
 
-			tx, err = pps.sendPaymentFromSourceAccount(client, addr, fee, toSend)
-			if err != nil {
-				if strings.Contains(err.Error(), "broadcast queue full") {
-					fmt.Printf("failed to send payment, broadcast queue full. sleeping & retrying.\n")
-					stat, err2 := client.Status()
-					if err2 == nil {
-						_, err2 = client.WaitForRound(stat.LastRound)
-						if err2 != nil {
+				tx, err = pps.sendPaymentFromSourceAccount(client, addr, fee, toSend)
+				if err != nil {
+					if strings.Contains(err.Error(), "broadcast queue full") {
+						fmt.Printf("failed to send payment, broadcast queue full. sleeping & retrying.\n")
+						stat, err2 := client.Status()
+						if err2 == nil {
+							_, err2 = client.WaitForRound(stat.LastRound)
+							if err2 != nil {
+								time.Sleep(500 * time.Millisecond)
+							}
+						} else {
 							time.Sleep(500 * time.Millisecond)
 						}
-					} else {
-						time.Sleep(500 * time.Millisecond)
+						goto repeat
 					}
-					goto repeat
+					return err
 				}
-				return err
-			}
-			srcFunds -= tx.Fee.Raw
-			accounts[addr].addBalance(int64(toSend))
-			if !cfg.Quiet {
-				fmt.Printf("account balance for key %s is %d\n", addr, accounts[addr].getBalance())
-			}
+				srcFunds -= tx.Fee.Raw
+				accountsAdjusted++
+				if !cfg.Quiet {
+					fmt.Printf("account balance for key %s is %d\n", addr, accounts[addr].getBalance())
+				}
 
-			totalSent++
-			throttleTransactionRate(startTime, cfg, totalSent)
+				totalSent++
+				throttleTransactionRate(startTime, cfg, totalSent)
+			}
+		}
+		accounts[cfg.SrcAccount].setBalance(srcFunds)
+		// wait until all the above transactions are sent, or that we have no more transactions
+		// in our pending transaction pool coming from the source account.
+		err = waitPendingTransactions(map[string]*pingPongAccount{cfg.SrcAccount: nil}, client)
+		if err != nil {
+			return err
+		}
+		if accountsAdjusted == 0 {
+			break
 		}
 	}
-	accounts[cfg.SrcAccount].setBalance(srcFunds)
-	// wait until all the above transactions are sent, or that we have no more transactions
-	// in our pending transaction pool coming from the source account.
-	err = waitPendingTransactions(map[string]*pingPongAccount{cfg.SrcAccount: nil}, client)
 	return err
 }
 
@@ -719,8 +732,10 @@ func (pps *WorkerState) sendFromTo(
 		var sendErr error
 		fromBalanceChange := int64(0)
 		toBalanceChange := int64(0)
-		if cfg.NumAsset > 0 || cfg.NumApp > 0 {
+		if cfg.NumAsset > 0 {
 			amt = 1
+		} else if cfg.NumApp > 0 {
+			amt = 0
 		}
 
 		if cfg.GroupSize == 1 {
@@ -756,9 +771,6 @@ func (pps *WorkerState) sendFromTo(
 
 			sentCount++
 			_, sendErr = client.BroadcastTransaction(stxn)
-			if sendErr != nil {
-				fmt.Printf("Warning, cannot broadcast txn, %s\n", sendErr)
-			}
 		} else {
 			// Generate txn group
 

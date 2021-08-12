@@ -743,17 +743,18 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 
 	var appAccounts []v1.Account
 	for tempAccount := range accounts {
-		if tempAccount != cfg.SrcAccount {
-			var appAccount v1.Account
-			appAccount, err = client.AccountInformation(tempAccount)
-			if err != nil {
-				fmt.Printf("Warning, cannot lookup tempAccount account %s", tempAccount)
-				return
-			}
-			appAccounts = append(appAccounts, appAccount)
-			if len(appAccounts) == acctNeeded {
-				break
-			}
+		if tempAccount == cfg.SrcAccount {
+			continue
+		}
+		var appAccount v1.Account
+		appAccount, err = client.AccountInformation(tempAccount)
+		if err != nil {
+			fmt.Printf("Warning, cannot lookup tempAccount account %s", tempAccount)
+			return
+		}
+		appAccounts = append(appAccounts, appAccount)
+		if len(appAccounts) == acctNeeded {
+			break
 		}
 	}
 
@@ -764,6 +765,17 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 		}
 	}
 
+	// generate app program with roughly some number of operations
+	prog, asm := genAppProgram(cfg.AppProgOps, cfg.AppProgHashes, cfg.AppProgHashSize, cfg.AppGlobKeys, cfg.AppLocalKeys)
+	if !cfg.Quiet {
+		fmt.Printf("generated program: \n%s\n", asm)
+	}
+	globSchema := basics.StateSchema{NumByteSlice: proto.MaxGlobalSchemaEntries}
+	locSchema := basics.StateSchema{NumByteSlice: proto.MaxLocalSchemaEntries}
+
+	// for each account, store the number of expected applications.
+	accountsApplicationCount := make(map[string]int)
+
 	// create apps
 	for idx, appAccount := range appAccounts {
 		begin := idx * appsPerAcct
@@ -771,29 +783,24 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 		if end > toCreate {
 			end = toCreate
 		}
+
 		var txgroup []transactions.Transaction
 		var senders []string
 		for i := begin; i < end; i++ {
 			var tx transactions.Transaction
 
-			// generate app program with roughly some number of operations
-			prog, asm := genAppProgram(cfg.AppProgOps, cfg.AppProgHashes, cfg.AppProgHashSize, cfg.AppGlobKeys, cfg.AppLocalKeys)
-			if !cfg.Quiet {
-				fmt.Printf("generated program: \n%s\n", asm)
-			}
-
-			globSchema := basics.StateSchema{NumByteSlice: proto.MaxGlobalSchemaEntries}
-			locSchema := basics.StateSchema{NumByteSlice: proto.MaxLocalSchemaEntries}
 			tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, nil, nil, nil, 0)
 			if err != nil {
 				fmt.Printf("Cannot create app txn\n")
 				panic(err)
+				// TODO : if we fail here for too long, we should re-create new accounts, etc.
 			}
 
 			tx, err = client.FillUnsignedTxTemplate(appAccount.Address, 0, 0, cfg.MaxFee, tx)
 			if err != nil {
 				fmt.Printf("Cannot fill app creation txn\n")
 				panic(err)
+				// TODO : if we fail here for too long, we should re-create new accounts, etc.
 			}
 
 			// Ensure different txids
@@ -802,6 +809,7 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 			txgroup = append(txgroup, tx)
 			accounts[appAccount.Address].addBalance(-int64(tx.Fee.Raw))
 			senders = append(senders, appAccount.Address)
+			accountsApplicationCount[appAccount.Address] = accountsApplicationCount[appAccount.Address] + 1
 		}
 
 		err = pps.sendAsGroup(txgroup, client, senders)
@@ -825,17 +833,15 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 				fmt.Printf("Warning, cannot lookup source account")
 				return
 			}
-			if len(account.AppParams) >= appsPerAcct || len(aidxs) >= int(cfg.NumApp) {
+			if len(account.AppParams) >= accountsApplicationCount[appAccount.Address] {
 				break
 			}
 			pps.waitForNextRoundOrSleep(client, 500*time.Millisecond)
 			// TODO : if we fail here for too long, we should re-create new accounts, etc.
 		}
-		for idx := range account.AppParams {
+		for idx, v := range account.AppParams {
+			appParams[idx] = v
 			aidxs = append(aidxs, idx)
-		}
-		for k, v := range account.AppParams {
-			appParams[k] = v
 		}
 	}
 	if len(aidxs) != len(appParams) {
