@@ -224,6 +224,9 @@ type EvalParams struct {
 
 	// determines eval mode: runModeSignature or runModeApplication
 	runModeFlags runMode
+
+	// Total pool of app call budget in a group transaction
+	PooledApplicationBudget *uint64
 }
 
 type opEvalFunc func(cx *evalContext)
@@ -262,6 +265,9 @@ func (r runMode) String() string {
 func (ep EvalParams) budget() int {
 	if ep.runModeFlags == runModeSignature {
 		return int(ep.Proto.LogicSigMaxCost)
+	}
+	if ep.Proto.EnableAppCostPooling && ep.PooledApplicationBudget != nil {
+		return int(*ep.PooledApplicationBudget)
 	}
 	return ep.Proto.MaxAppProgramCost
 }
@@ -365,6 +371,10 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, err error) {
 	cx.EvalParams = params
 	cx.runModeFlags = runModeApplication
 	pass, err = eval(program, &cx)
+	if cx.EvalParams.Proto.EnableAppCostPooling && cx.EvalParams.PooledApplicationBudget != nil {
+		// if eval passes, then budget is always greater than cost, so should not have underflow
+		*cx.EvalParams.PooledApplicationBudget = basics.SubSaturate(*cx.EvalParams.PooledApplicationBudget, uint64(cx.cost))
+	}
 
 	// set side effects
 	cx.PastSideEffects[cx.GroupIndex].setScratchSpace(cx.scratch)
@@ -640,7 +650,8 @@ func (cx *evalContext) step() {
 	}
 	cx.cost += deets.Cost
 	if cx.cost > cx.budget() {
-		cx.err = fmt.Errorf("pc=%3d dynamic cost budget of %d exceeded, executing %s", cx.pc, cx.budget(), spec.Name)
+		cx.err = fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: remaining budget is %d but program cost was %d",
+			cx.pc, spec.Name, cx.budget(), cx.cost)
 		return
 	}
 
