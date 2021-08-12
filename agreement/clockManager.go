@@ -1,6 +1,7 @@
 package agreement
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -53,11 +54,7 @@ func (cm *clockManager) nextDeadlineCh(es []externalDemuxSignals) (<-chan time.T
 	c, ok := cm.m[r]
 	if !ok {
 		// no rezeroAction has set up this clock yet
-		// XXX this should probably only happen at service bootstrap or in tests
-		logging.Base().Warnf("clockManager.nextDeadlineCh making new clock for round %+v", r)
-		cm.zm[r] = time.Now().UTC()
-		c = cm.t0.Zero()
-		cm.m[r] = c
+		panic(fmt.Sprintf("clockManager.nextDeadlineCh: no clock for round %+v\n", r))
 	}
 	return c.TimeoutAt(es[0].Deadline), r
 }

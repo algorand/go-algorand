@@ -149,6 +149,8 @@ func (p *pipelinePlayer) newPlayerForEvent(e externalEvent, rnd round) (*player,
 
 // handleRoundEvent looks up a player for a given round to handle an event.
 func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd round) []action {
+	var actions []action
+
 	state, ok := p.Players[rnd]
 	if !ok {
 		switch {
@@ -186,6 +188,7 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 			//  - rezeroAction{Round}, pseudonodeAction{assemble}
 			p.Players[rnd] = newPlayer
 			state = newPlayer
+			actions = append(actions, pseudonodeAction{T: assemble, Round: rnd}, rezeroAction{Round: rnd})
 		}
 	}
 
@@ -195,11 +198,12 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 
 	// pass event to corresponding child player for this round
 	a := state.handle(r, e)
+	actions = append(actions, a...)
 
 	r.t.aoutTop(demultiplexer, playerMachine, a, roundZero, 0, 0)
 	r.t.traceOutput(state.Round, state.Period, *state, a) // cadaver
 
-	return a
+	return actions
 }
 
 func (p *pipelinePlayer) enterRound(r routerHandle, source event, target round) []action {

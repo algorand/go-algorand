@@ -677,12 +677,15 @@ func (t *demuxTester) TestUsecase(testcase demuxTestUsecase) bool {
 		close(s.quit)
 	}
 
+	rnd := makeRoundRandomBranch(300)
+	s.clockManager.setZero(rnd) // initialize clock for this round
+
 	extSignals := pipelineExternalDemuxSignals{
-		currentRound: 299,
+		currentRound: rnd.Number,
 		signals: []externalDemuxSignals{{
 			Deadline:             time.Second,
 			FastRecoveryDeadline: fastTimeoutChTime,
-			CurrentRound:         makeRoundRandomBranch(300),
+			CurrentRound:         rnd,
 		}}}
 	e, ok := dmx.next(s, extSignals)
 

@@ -17,7 +17,6 @@
 package agreement
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -769,8 +768,7 @@ func TestPlayerPermutation(t *testing.T) {
 			_, pMachine, helper, r := getPlayerPermutation(t, i)
 			inMsg := getMessageEventPermutation(t, j, helper, r)
 			err, panicErr := pMachine.transition(inMsg)
-			fmt.Println(i, j, pMachine.getTrace().events)
-			fmt.Println("")
+			t.Log(i, j, pMachine.getTrace().events)
 			require.NoErrorf(t, err, "player: %v, event: %v", i, j)
 			require.NoErrorf(t, panicErr, "player: %v, event: %v", i, j)
 
