@@ -456,6 +456,12 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 	return nil // note: deletion cannot cause us to violate maxCount
 }
 
+// AppendLog adds message in logs. idx is expected to be an index in txn.ForeignApps
+func (cb *roundCowState) AppendLog(idx uint64, value string) error {
+	cb.logs = append(cb.logs, basics.LogItem{ID: idx, Message: value})
+	return nil
+}
+
 // MakeDebugBalances creates a ledger suitable for dryrun and debugger
 func MakeDebugBalances(l ledgerForCowBase, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
 	base := &roundCowBase{
@@ -502,8 +508,9 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 	return pass, evalDelta, nil
 }
 
-// BuildEvalDelta converts internal sdeltas into basics.EvalDelta
+// BuildEvalDelta converts internal sdeltas and logs into basics.EvalDelta
 func (cb *roundCowState) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error) {
+	// sdeltas
 	foundGlobal := false
 	for addr, smod := range cb.sdeltas {
 		for aapp, sdelta := range smod {
@@ -550,6 +557,10 @@ func (cb *roundCowState) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.
 			}
 		}
 	}
+
+	// logs
+	evalDelta.Logs = cb.logs
+
 	return
 }
 

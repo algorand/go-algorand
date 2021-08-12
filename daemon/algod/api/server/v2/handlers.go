@@ -513,6 +513,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		ReceiverRewards    *uint64                        `codec:"receiver-rewards,omitempty"`
 		SenderRewards      *uint64                        `codec:"sender-rewards,omitempty"`
 		Txn                transactions.SignedTxn         `codec:"txn"`
+		Logs               *[]generated.LogItem           `codec:"logs,omitempty"`
 	}{
 		Txn: txn.Txn,
 	}
@@ -531,13 +532,15 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		response.SenderRewards = &txn.ApplyData.SenderRewards.Raw
 		response.ReceiverRewards = &txn.ApplyData.ReceiverRewards.Raw
 		response.CloseRewards = &txn.ApplyData.CloseRewards.Raw
-
 		response.AssetIndex = computeAssetIndexFromTxn(txn, v2.Node.Ledger())
 		response.ApplicationIndex = computeAppIndexFromTxn(txn, v2.Node.Ledger())
-
 		response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)
-	}
+		response.Logs, err = convertToLogItems(txn, response.ApplicationIndex)
+		if err != nil {
+			return internalError(ctx, err, err.Error(), v2.Log)
+		}
 
+	}
 	data, err := encode(handle, response)
 	if err != nil {
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
