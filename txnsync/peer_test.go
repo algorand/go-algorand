@@ -701,7 +701,7 @@ func TestSelectPendingTransactions(t *testing.T) {
 	type results struct {
 		selectedTxns           []transactions.SignedTxGroup
 		selectedTxnIDs         []transactions.Txid
-		partialTranscationsSet bool
+		partialTransactionsSet bool
 	}
 
 	tests := []struct {
@@ -722,7 +722,7 @@ func TestSelectPendingTransactions(t *testing.T) {
 				test.fxn(p)
 			}
 			var r results
-			r.selectedTxns, r.selectedTxnIDs, r.partialTranscationsSet = p.selectPendingTransactions(test.arg.pendingTransactions, test.arg.sendWindow, test.arg.round, test.arg.bloomFilterSize)
+			r.selectedTxns, r.selectedTxnIDs, r.partialTransactionsSet = p.selectPendingTransactions(test.arg.pendingTransactions, test.arg.sendWindow, test.arg.round, test.arg.bloomFilterSize)
 			if !reflect.DeepEqual(r, test.result) {
 				t.Errorf("selectPendingTransactions() gotSelectedTxns = %v, want %v", r, test.result)
 			}

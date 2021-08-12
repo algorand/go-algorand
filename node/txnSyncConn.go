@@ -31,9 +31,9 @@ import (
 	"github.com/algorand/go-algorand/util/timers"
 )
 
-// transcationSyncNodeConnector implements the txnsync.NodeConnector interface, allowing the
+// transactionSyncNodeConnector implements the txnsync.NodeConnector interface, allowing the
 // transaction sync communicate with the node and it's child objects.
-type transcationSyncNodeConnector struct {
+type transactionSyncNodeConnector struct {
 	node           *AlgorandFullNode
 	eventsCh       chan txnsync.Event
 	clock          timers.WallClock
@@ -42,8 +42,8 @@ type transcationSyncNodeConnector struct {
 	openStateCh    chan struct{}
 }
 
-func makeTranscationSyncNodeConnector(node *AlgorandFullNode) transcationSyncNodeConnector {
-	return transcationSyncNodeConnector{
+func makeTransactionSyncNodeConnector(node *AlgorandFullNode) transactionSyncNodeConnector {
+	return transactionSyncNodeConnector{
 		node:        node,
 		eventsCh:    make(chan txnsync.Event, 1),
 		clock:       timers.MakeMonotonicClock(time.Now()),
@@ -52,13 +52,13 @@ func makeTranscationSyncNodeConnector(node *AlgorandFullNode) transcationSyncNod
 	}
 }
 
-func (tsnc *transcationSyncNodeConnector) Events() <-chan txnsync.Event {
+func (tsnc *transactionSyncNodeConnector) Events() <-chan txnsync.Event {
 	return tsnc.eventsCh
 }
 
 // GetCurrentRoundSettings is called when the txsync is starting up, proving
 // round information.
-func (tsnc *transcationSyncNodeConnector) GetCurrentRoundSettings() txnsync.RoundSettings {
+func (tsnc *transactionSyncNodeConnector) GetCurrentRoundSettings() txnsync.RoundSettings {
 	round := tsnc.node.ledger.Latest()
 	return txnsync.RoundSettings{
 		Round:             round,
@@ -67,19 +67,19 @@ func (tsnc *transcationSyncNodeConnector) GetCurrentRoundSettings() txnsync.Roun
 }
 
 // NotifyMonitor is used for testing purposes only, and can remain(almost) empty on production code.
-func (tsnc *transcationSyncNodeConnector) NotifyMonitor() chan struct{} {
+func (tsnc *transactionSyncNodeConnector) NotifyMonitor() chan struct{} {
 	return tsnc.openStateCh
 }
 
-func (tsnc *transcationSyncNodeConnector) Random(rng uint64) uint64 {
+func (tsnc *transactionSyncNodeConnector) Random(rng uint64) uint64 {
 	return tsnc.node.Uint64() % rng
 }
 
-func (tsnc *transcationSyncNodeConnector) Clock() timers.WallClock {
+func (tsnc *transactionSyncNodeConnector) Clock() timers.WallClock {
 	return tsnc.clock
 }
 
-func (tsnc *transcationSyncNodeConnector) GetPeer(networkPeer interface{}) txnsync.PeerInfo {
+func (tsnc *transactionSyncNodeConnector) GetPeer(networkPeer interface{}) txnsync.PeerInfo {
 	unicastPeer := networkPeer.(network.UnicastPeer)
 	if unicastPeer == nil {
 		return txnsync.PeerInfo{}
@@ -99,7 +99,7 @@ func (tsnc *transcationSyncNodeConnector) GetPeer(networkPeer interface{}) txnsy
 	}
 }
 
-func (tsnc *transcationSyncNodeConnector) GetPeers() (peersInfo []txnsync.PeerInfo) {
+func (tsnc *transactionSyncNodeConnector) GetPeers() (peersInfo []txnsync.PeerInfo) {
 	networkPeers := tsnc.node.net.GetPeers(network.PeersConnectedOut, network.PeersConnectedIn)
 	peersInfo = make([]txnsync.PeerInfo, len(networkPeers))
 	k := 0
@@ -124,7 +124,7 @@ func (tsnc *transcationSyncNodeConnector) GetPeers() (peersInfo []txnsync.PeerIn
 	return peersInfo[:k]
 }
 
-func (tsnc *transcationSyncNodeConnector) UpdatePeers(txsyncPeers []*txnsync.Peer, netPeers []interface{}, averageDataExchangeRate uint64) {
+func (tsnc *transactionSyncNodeConnector) UpdatePeers(txsyncPeers []*txnsync.Peer, netPeers []interface{}, averageDataExchangeRate uint64) {
 	for i, netPeer := range netPeers {
 		tsnc.node.net.SetPeerData(netPeer, "txsync", txsyncPeers[i])
 	}
@@ -135,14 +135,14 @@ func (tsnc *transcationSyncNodeConnector) UpdatePeers(txsyncPeers []*txnsync.Pee
 	}
 }
 
-func (tsnc *transcationSyncNodeConnector) SendPeerMessage(netPeer interface{}, msg []byte, callback txnsync.SendMessageCallback) {
+func (tsnc *transactionSyncNodeConnector) SendPeerMessage(netPeer interface{}, msg []byte, callback txnsync.SendMessageCallback) {
 	unicastPeer := netPeer.(network.UnicastPeer)
 	if unicastPeer == nil {
 		return
 	}
 
 	if err := unicastPeer.Unicast(context.Background(), msg, protocol.Txn2Tag, func(enqueued bool, sequenceNumber uint64) error {
-		// this migth return an error to the network package callback routine. Returning an error signal the network package
+		// this might return an error to the network package callback routine. Returning an error signal the network package
 		// that we want to disconnect from this peer. This aligns with the transaction sync txnsync.SendMessageCallback function
 		// behaviour.
 		return callback(enqueued, sequenceNumber)
@@ -155,13 +155,13 @@ func (tsnc *transcationSyncNodeConnector) SendPeerMessage(netPeer interface{}, m
 }
 
 // TODO : add description.
-func (tsnc *transcationSyncNodeConnector) GetPendingTransactionGroups() ([]transactions.SignedTxGroup, uint64) {
+func (tsnc *transactionSyncNodeConnector) GetPendingTransactionGroups() ([]transactions.SignedTxGroup, uint64) {
 	return tsnc.node.transactionPool.PendingTxGroups()
 }
 
-func (tsnc *transcationSyncNodeConnector) onNewTransactionPoolEntry(transcationPoolSize int) {
+func (tsnc *transactionSyncNodeConnector) onNewTransactionPoolEntry(transactionPoolSize int) {
 	select {
-	case tsnc.eventsCh <- txnsync.MakeTranscationPoolChangeEvent(transcationPoolSize, false):
+	case tsnc.eventsCh <- txnsync.MakeTransactionPoolChangeEvent(transactionPoolSize, false):
 	default:
 	}
 }
@@ -169,7 +169,7 @@ func (tsnc *transcationSyncNodeConnector) onNewTransactionPoolEntry(transcationP
 // OnNewBlock receives a notification that we've moved to a new round from the ledger.
 // This notification would be received before the transaction pool get a similar notification, due
 // the ordering of the block notifier registration.
-func (tsnc *transcationSyncNodeConnector) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
+func (tsnc *transactionSyncNodeConnector) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
 	blkRound := block.Round()
 
 	fetchTransactions := tsnc.node.config.ForceFetchTransactions || tsnc.node.accountManager.HasLiveKeys(blkRound, blkRound)
@@ -185,7 +185,7 @@ func (tsnc *transcationSyncNodeConnector) OnNewBlock(block bookkeeping.Block, de
 
 }
 
-func (tsnc *transcationSyncNodeConnector) start() {
+func (tsnc *transactionSyncNodeConnector) start() {
 	tsnc.txHandler.Start()
 	tsnc.messageHandler = tsnc.node.txnSyncService.GetIncomingMessageHandler()
 	handlers := []network.TaggedMessageHandler{
@@ -195,7 +195,7 @@ func (tsnc *transcationSyncNodeConnector) start() {
 	tsnc.txHandler.Start()
 }
 
-func (tsnc *transcationSyncNodeConnector) Handle(raw network.IncomingMessage) network.OutgoingMessage {
+func (tsnc *transactionSyncNodeConnector) Handle(raw network.IncomingMessage) network.OutgoingMessage {
 	unicastPeer := raw.Sender.(network.UnicastPeer)
 	if unicastPeer != nil {
 		// check version.
@@ -222,11 +222,11 @@ func (tsnc *transcationSyncNodeConnector) Handle(raw network.IncomingMessage) ne
 	}
 }
 
-func (tsnc *transcationSyncNodeConnector) stop() {
+func (tsnc *transactionSyncNodeConnector) stop() {
 	tsnc.txHandler.Stop()
 }
 
-func (tsnc *transcationSyncNodeConnector) IncomingTransactionGroups(peer *txnsync.Peer, messageSeq uint64, txGroups []transactions.SignedTxGroup) (transactionPoolSize int) {
+func (tsnc *transactionSyncNodeConnector) IncomingTransactionGroups(peer *txnsync.Peer, messageSeq uint64, txGroups []transactions.SignedTxGroup) (transactionPoolSize int) {
 	if tsnc.txHandler.HandleTransactionGroups(peer.GetNetworkPeer(), peer.GetTransactionPoolAckChannel(), messageSeq, txGroups) {
 		transactionPoolSize = tsnc.node.transactionPool.PendingCount()
 	} else {

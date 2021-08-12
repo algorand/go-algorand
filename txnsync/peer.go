@@ -319,7 +319,7 @@ func (p *Peer) getAcceptedMessages() []uint64 {
 	return acceptedMessages
 }
 
-func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.SignedTxGroup, sendWindow time.Duration, round basics.Round, bloomFilterSize int) (selectedTxns []transactions.SignedTxGroup, selectedTxnIDs []transactions.Txid, partialTranscationsSet bool) {
+func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.SignedTxGroup, sendWindow time.Duration, round basics.Round, bloomFilterSize int) (selectedTxns []transactions.SignedTxGroup, selectedTxnIDs []transactions.Txid, partialTransactionsSet bool) {
 	// if peer is too far back, don't send it any transactions ( or if the peer is not interested in transactions )
 	if p.lastRound < round.SubSaturate(1) || p.requestedTransactionsModulator == 0 {
 		return nil, nil, false

@@ -105,7 +105,7 @@ func (imq *incomingMessageQueue) clear(m incomingMessage) {
 }
 
 // incomingMessageHandler
-// note - this message is called by the network go-routine dispatch pool, and is not syncronized with the rest of the transaction syncronizer
+// note - this message is called by the network go-routine dispatch pool, and is not synchronized with the rest of the transaction synchronizer
 func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *Peer, message []byte, sequenceNumber uint64) (err error) {
 	// increase number of incoming messages metric.
 	txsyncIncomingMessagesTotal.Inc(nil)
@@ -157,7 +157,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 		enqueued := s.incomingMessagesQ.enqueue(incomingMessage)
 		if !enqueued {
 			// if we can't enqueue that, return an error, which would disconnect the peer.
-			// ( we have to disconnect, since otherwise, we would have no way to syncronize the sequence number)
+			// ( we have to disconnect, since otherwise, we would have no way to synchronize the sequence number)
 			s.log.Infof("unable to enqueue incoming message from a peer without txsync allocated data; incoming messages queue is full. disconnecting from peer.")
 			return errTransactionSyncIncomingMessageQueueFull
 		}
@@ -261,7 +261,7 @@ incomingMessageLoop:
 		// add the received transaction groups to the peer's recentSentTransactions so that we won't be sending these back to the peer.
 		peer.updateIncomingTransactionGroups(incomingMsg.transactionGroups)
 
-		// before enqueing more data to the transaction pool, make sure we flush the ack channel
+		// before enqueuing more data to the transaction pool, make sure we flush the ack channel
 		peer.dequeuePendingTransactionPoolAckMessages()
 
 		// if we received at least a single transaction group, then forward it to the transaction handler.
@@ -302,6 +302,6 @@ incomingMessageLoop:
 		s.scheduler.schedulerPeer(peer, s.clock.Since())
 	}
 	if transactionPoolSize > 0 || transactionHandlerBacklogFull {
-		s.onTransactionPoolChangedEvent(MakeTranscationPoolChangeEvent(transactionPoolSize+totalAccumulatedTransactionsCount, transactionHandlerBacklogFull))
+		s.onTransactionPoolChangedEvent(MakeTransactionPoolChangeEvent(transactionPoolSize+totalAccumulatedTransactionsCount, transactionHandlerBacklogFull))
 	}
 }

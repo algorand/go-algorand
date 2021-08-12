@@ -135,7 +135,7 @@ type AlgorandFullNode struct {
 
 	compactCert *compactcert.Worker
 
-	txnSyncConnector transcationSyncNodeConnector
+	txnSyncConnector transactionSyncNodeConnector
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -261,7 +261,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
-	node.txnSyncConnector = makeTranscationSyncNodeConnector(node)
+	node.txnSyncConnector = makeTransactionSyncNodeConnector(node)
 	node.txnSyncService = txnsync.MakeTransactionSyncService(node.log, &node.txnSyncConnector, cfg.NetAddress != "", node.genesisID, node.genesisHash, node.config, node.lowPriorityCryptoVerificationPool)
 
 	err = node.loadParticipationKeys()
