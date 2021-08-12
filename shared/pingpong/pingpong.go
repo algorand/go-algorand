@@ -192,8 +192,9 @@ func computeAccountMinBalance(client libgoal.Client, cfg PpConfig) (fundingRequi
 	minActiveAccountBalance := proto.MinBalance
 
 	if cfg.NumApp > 0 {
-		runningRequiredBalance = (cfg.MaxAmt + cfg.MaxFee) * 10 * 2
-		fundingRequiredBalance = (cfg.MinAccountFunds + (cfg.MaxAmt+cfg.MaxFee)*10) * 2 * cfg.TxnPerSec * uint64(math.Ceil(cfg.RefreshTime.Seconds()))
+		amount := uint64(1)
+		runningRequiredBalance = (amount + cfg.MaxFee) * 10 * 2
+		fundingRequiredBalance = cfg.MinAccountFunds + (amount+cfg.MaxFee)*10*2*cfg.TxnPerSec*uint64(math.Ceil(cfg.RefreshTime.Seconds()))
 		fmt.Printf("required min balance for app accounts: %d\n", fundingRequiredBalance)
 		return
 	}
@@ -718,7 +719,7 @@ func (pps *WorkerState) sendFromTo(
 		var sendErr error
 		fromBalanceChange := int64(0)
 		toBalanceChange := int64(0)
-		if cfg.NumAsset > 0 {
+		if cfg.NumAsset > 0 || cfg.NumApp > 0 {
 			amt = 1
 		}
 
