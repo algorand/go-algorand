@@ -815,9 +815,12 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 
 		err = pps.sendAsGroup(txgroup, client, senders)
 		if err != nil {
+			balance, err2 := client.GetBalance(appAccount.Address)
+			if err2 == nil {
+				fmt.Printf("account %v balance is %d, logged balance is %d\n", appAccount.Address, balance, accounts[appAccount.Address].getBalance())
+			}
 			return
 		}
-
 		if !cfg.Quiet {
 			fmt.Printf("Created new %d apps\n", len(txgroup))
 		}
