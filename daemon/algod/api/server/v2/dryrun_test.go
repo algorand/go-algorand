@@ -346,7 +346,7 @@ func init() {
 
 	// legder requires proto string and proto params set
 	var proto config.ConsensusParams
-	proto.LogicSigVersion = 4
+	proto.LogicSigVersion = 5
 	proto.LogicSigMaxCost = 20000
 	proto.MaxAppProgramCost = 700
 	proto.MaxAppKeyLen = 64
@@ -1090,4 +1090,114 @@ int 1`)
 	if t.Failed() {
 		logResponse(t, &response)
 	}
+}
+
+func TestDryrunLogs(t *testing.T) {
+	t.Parallel()
+
+	ops, err := logic.AssembleString(`
+#pragma version 5
+byte "A"
+loop:
+int 0
+dup2
+getbyte
+int 1
++
+dup
+int 97 //ascii code of last char
+<=
+bz end
+setbyte
+dup
+log
+b loop
+end:
+int 1
+return
+`)
+
+	require.NoError(t, err)
+	approval := ops.Program
+	ops, err = logic.AssembleString("int 1")
+	clst := ops.Program
+	ops, err = logic.AssembleString("#pragma version 5 \nint 1")
+	approv := ops.Program
+	require.NoError(t, err)
+
+	var appIdx basics.AppIndex = 1
+	creator := randomAddress()
+	sender := randomAddress()
+	dr := DryrunRequest{
+		Txns: []transactions.SignedTxn{
+			{
+				Txn: transactions.Transaction{
+					Header: transactions.Header{Sender: sender},
+					Type:   protocol.ApplicationCallTx,
+					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+						ApplicationID: appIdx,
+						OnCompletion:  transactions.OptInOC,
+					},
+				},
+			},
+			{
+				Txn: transactions.Transaction{
+					Header: transactions.Header{Sender: sender},
+					Type:   protocol.ApplicationCallTx,
+					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+						ApplicationID: appIdx + 1,
+						OnCompletion:  transactions.OptInOC,
+					},
+				},
+			},
+		},
+		Apps: []generated.Application{
+			{
+				Id: uint64(appIdx),
+				Params: generated.ApplicationParams{
+					Creator:           creator.String(),
+					ApprovalProgram:   approval,
+					ClearStateProgram: clst,
+					LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
+				},
+			},
+			{
+				Id: uint64(appIdx + 1),
+				Params: generated.ApplicationParams{
+					Creator:           creator.String(),
+					ApprovalProgram:   approv,
+					ClearStateProgram: clst,
+					LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
+				},
+			},
+		},
+		Accounts: []generated.Account{
+			{
+				Address: sender.String(),
+				Status:  "Online",
+				Amount:  10000000,
+			},
+		},
+	}
+	dr.ProtocolVersion = string(dryrunProtoVersion)
+
+	var response generated.DryrunResponse
+	doDryrunRequest(&dr, &response)
+	require.NoError(t, err)
+	checkAppCallPass(t, &response)
+	if t.Failed() {
+		logResponse(t, &response)
+	}
+	logs := *response.Txns[0].Logs
+	assert.Equal(t, 32, len(logs))
+	for i, m := range logs {
+		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), m.Value)
+	}
+	encoded := string(protocol.EncodeJSON(response.Txns[0]))
+	assert.Contains(t, encoded, "logs")
+
+	assert.Empty(t, response.Txns[1].Logs)
+	encoded = string(protocol.EncodeJSON(response.Txns[1]))
+	assert.NotContains(t, encoded, "logs")
+
 }

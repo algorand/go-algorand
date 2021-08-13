@@ -4064,14 +4064,14 @@ func TestAllowedOpcodesV2(t *testing.T) {
 		"dup2":              "int 1; int 2; dup2",
 		"concat":            "byte 0x41; dup; concat",
 		"substring":         "byte 0x41; substring 0 1",
-		"substring3":        "byte 0x41; dup; dup; substring3",
+		"substring3":        "byte 0x41; int 0; int 1; substring3",
 		"balance":           "int 1; balance",
 		"app_opted_in":      "int 0; dup; app_opted_in",
 		"app_local_get":     "int 0; byte 0x41; app_local_get",
 		"app_local_get_ex":  "int 0; dup; byte 0x41; app_local_get_ex",
 		"app_global_get":    "int 0; byte 0x41; app_global_get",
 		"app_global_get_ex": "int 0; byte 0x41; app_global_get_ex",
-		"app_local_put":     "int 0; dup; byte 0x41; app_local_put",
+		"app_local_put":     "int 0; byte 0x41; dup; app_local_put",
 		"app_global_put":    "byte 0x41; dup; app_global_put",
 		"app_local_del":     "int 0; byte 0x41; app_local_del",
 		"app_global_del":    "byte 0x41; app_global_del",
@@ -4733,4 +4733,130 @@ func TestBytesConversions(t *testing.T) {
 
 	testAccepts(t, "byte 0x11; byte 0x10; b+; btoi; int 0x21; ==", 4)
 	testAccepts(t, "byte 0x0011; byte 0x10; b+; btoi; int 0x21; ==", 4)
+}
+
+func TestLog(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	proto := defaultEvalProtoWithVersion(LogicVersion)
+	txn := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Type: protocol.ApplicationCallTx,
+		},
+	}
+	ledger := makeTestLedger(nil)
+	ledger.newApp(txn.Txn.Receiver, 0, basics.AppParams{})
+	sb := strings.Builder{}
+	ep := defaultEvalParams(&sb, &txn)
+	ep.Proto = &proto
+	ep.Ledger = ledger
+	testCases := []struct {
+		source string
+		loglen int
+	}{
+		{
+			source: `byte  "a logging message"; log; int 1`,
+			loglen: 1,
+		},
+		{
+			source: `byte  "a logging message"; log; byte  "a logging message"; log; int 1`,
+			loglen: 2,
+		},
+		{
+			source: fmt.Sprintf(`%s int 1`, strings.Repeat(`byte "a logging message"; log;`, config.MaxLogCalls)),
+			loglen: MaxLogCalls,
+		},
+		{
+			source: `int 1; loop: byte "a logging message"; log; int 1; +; dup; int 30; <=; bnz loop;`,
+			loglen: 30,
+		},
+		{
+			source: fmt.Sprintf(`byte "%s"; log; int 1`, strings.Repeat("a", MaxLogSize)),
+			loglen: 1,
+		},
+	}
+
+	//track expected number of logs in ep.Ledger
+	count := 0
+	for i, s := range testCases {
+		ops := testProg(t, s.source, AssemblerMaxVersion)
+
+		err := CheckStateful(ops.Program, ep)
+		require.NoError(t, err, s)
+
+		pass, err := EvalStateful(ops.Program, ep)
+		require.NoError(t, err)
+		require.True(t, pass)
+		count += s.loglen
+		require.Equal(t, len(ledger.logs), count)
+		if i == len(testCases)-1 {
+			require.Equal(t, strings.Repeat("a", MaxLogSize), ledger.logs[count-1].Message)
+		} else {
+			for _, l := range ledger.logs[count-s.loglen:] {
+				require.Equal(t, "a logging message", l.Message)
+			}
+		}
+	}
+
+	msg := strings.Repeat("a", 400)
+	failCases := []struct {
+		source      string
+		runMode     runMode
+		errContains string
+	}{
+		{
+			source:      fmt.Sprintf(`byte  "%s"; log; int 1`, strings.Repeat("a", MaxLogSize+1)),
+			errContains: fmt.Sprintf(">  %d bytes limit", MaxLogSize),
+			runMode:     runModeApplication,
+		},
+		{
+			source:      fmt.Sprintf(`byte  "%s"; log; byte  "%s"; log; byte  "%s"; log; int 1`, msg, msg, msg),
+			errContains: fmt.Sprintf(">  %d bytes limit", MaxLogSize),
+			runMode:     runModeApplication,
+		},
+		{
+			source:      fmt.Sprintf(`%s; int 1`, strings.Repeat(`byte "a"; log;`, config.MaxLogCalls+1)),
+			errContains: "too many log calls",
+			runMode:     runModeApplication,
+		},
+		{
+			source:      `int 1; loop: byte "a"; log; int 1; +; dup; int 35; <; bnz loop;`,
+			errContains: "too many log calls",
+			runMode:     runModeApplication,
+		},
+		{
+			source:      fmt.Sprintf(`int 1; loop: byte "%s"; log; int 1; +; dup; int 6; <; bnz loop;`, strings.Repeat(`a`, 400)),
+			errContains: fmt.Sprintf(">  %d bytes limit", MaxLogSize),
+			runMode:     runModeApplication,
+		},
+		{
+			source:      `load 0; log`,
+			errContains: "log arg 0 wanted []byte but got uint64",
+			runMode:     runModeApplication,
+		},
+		{
+			source:      `byte  "a logging message"; log; int 1`,
+			errContains: "log not allowed in current mode",
+			runMode:     runModeSignature,
+		},
+	}
+
+	for _, c := range failCases {
+		ops := testProg(t, c.source, AssemblerMaxVersion)
+
+		err := CheckStateful(ops.Program, ep)
+		require.NoError(t, err, c)
+
+		var pass bool
+		switch c.runMode {
+		case runModeApplication:
+			pass, err = EvalStateful(ops.Program, ep)
+		default:
+			pass, err = Eval(ops.Program, ep)
+
+		}
+		require.Contains(t, err.Error(), c.errContains)
+		require.False(t, pass)
+	}
 }

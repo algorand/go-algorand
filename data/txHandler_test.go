@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
@@ -60,7 +61,7 @@ func makeTestingTransactionPoolAndLedger(tb testing.TB, N int) (*pools.Transacti
 	}
 
 	require.Equal(tb, len(genesis), numUsers+1)
-	genBal := MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	ledgerName := fmt.Sprintf("%s-mem-%d", tb.Name(), N)
 	const inMem = true
 	cfg := config.GetDefaultLocal()

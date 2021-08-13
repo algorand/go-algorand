@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/datatest"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -81,7 +82,7 @@ func BenchmarkServiceFetchBlocks(b *testing.B) {
 }
 
 // one service
-func benchenv(t testing.TB, numAccounts, numBlocks int) (ledger, emptyLedger *data.Ledger, release func(), genesisBalances data.GenesisBalances) {
+func benchenv(t testing.TB, numAccounts, numBlocks int) (ledger, emptyLedger *data.Ledger, release func(), genesisBalances bookkeeping.GenesisBalances) {
 	P := numAccounts                                  // n accounts
 	maxMoneyAtStart := uint64(10 * defaultRewardUnit) // max money start
 	minMoneyAtStart := uint64(defaultRewardUnit)      // min money start
@@ -143,7 +144,7 @@ func benchenv(t testing.TB, numAccounts, numBlocks int) (ledger, emptyLedger *da
 	}
 
 	var err error
-	genesisBalances = data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	genesisBalances = bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
