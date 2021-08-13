@@ -1101,6 +1101,56 @@ func typeDig(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	return anys, returns
 }
 
+func typeEquals(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	top := len(ops.typeStack) - 1
+	if top >= 0 {
+		//Require arg0 and arg1 to have same type
+		return StackTypes{ops.typeStack[top], ops.typeStack[top]}, oneInt
+	}
+	return oneAny.plus(oneAny), oneInt
+}
+
+func typeDup(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	top := len(ops.typeStack) - 1
+	if top >= 0 {
+		return StackTypes{ops.typeStack[top]}, StackTypes{ops.typeStack[top], ops.typeStack[top]}
+	}
+	return StackTypes{StackAny}, oneAny.plus(oneAny)
+}
+
+func typeDupTwo(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	topTwo := oneAny.plus(oneAny)
+	top := len(ops.typeStack) - 1
+	if top >= 0 {
+		topTwo[1] = ops.typeStack[top]
+		if top >= 1 {
+			topTwo[0] = ops.typeStack[top-1]
+		}
+	}
+	result := topTwo.plus(topTwo)
+	return topTwo, result
+}
+
+func typeSelect(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	selectArgs := twoAny.plus(oneInt)
+	top := len(ops.typeStack) - 1
+	if top >= 2 {
+		if ops.typeStack[top-1] == ops.typeStack[top-2] {
+			return selectArgs, StackTypes{ops.typeStack[top-1]}
+		}
+	}
+	return selectArgs, StackTypes{StackAny}
+}
+
+func typeSetBit(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	setBitArgs := oneAny.plus(twoInts)
+	top := len(ops.typeStack) - 1
+	if top >= 2 {
+		return setBitArgs, StackTypes{ops.typeStack[top-2]}
+	}
+	return setBitArgs, StackTypes{StackAny}
+}
+
 func typeCover(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	if len(args) == 0 {
 		return oneAny, oneAny

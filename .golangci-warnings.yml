@@ -1,19 +1,29 @@
 run:
   timeout: 5m
-  tests: false
+  tests: true
   
 linters:
   disable-all: true
   enable:
-    - errcheck
-    - gofmt
-    - golint
-    - govet
-    - ineffassign
-    - misspell
+    - staticcheck
+    - structcheck
+    - typecheck
+    - varcheck
+    - deadcode
+    - gosimple
+    - unused
+    - partitiontest
+
+
+linters-settings:
+  custom:
+    partitiontest:
+      path: cmd/partitiontest_linter/plugin.so
+      description: This custom linter checks files that end in '_test.go', specifically functions that start with 'Test' and have testing argument, for a line 'partitiontest.ParitionTest(<testing arg>)'
+      original-url: github.com/algorand/go-algorand/cmd/partitiontest_linter
 
 severity:
-  default-severity: error
+  default-severity: warning
 
 issues:
   # use these new lint checks on code since #2574
@@ -43,12 +53,24 @@ issues:
     - ineffective break statement. Did you mean to break out of the outer loop
 
   exclude-rules:
+    # be more lenient with test code
+    - path: _test\.go
+      linters:
+        - staticcheck
+        - structcheck
+        - typecheck
+        - varcheck
+        - deadcode
+        - gosimple
+        - unused
     # Add all linters here -- Comment this block out for testing linters
     - path: test/linttest/lintissues\.go
       linters:
-        - errcheck
-        - gofmt
-        - golint
-        - govet
-        - ineffassign
-        - misspell
+        - staticcheck
+        - structcheck
+        - typecheck
+        - varcheck
+        - deadcode
+        - gosimple
+        - unused
+        - partitiontest

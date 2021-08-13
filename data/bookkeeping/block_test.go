@@ -348,6 +348,7 @@ func TestEncodeDecodeSignedTxn(t *testing.T) {
 	var b Block
 	b.BlockHeader.GenesisID = "foo"
 	crypto.RandBytes(b.BlockHeader.GenesisHash[:])
+	b.CurrentProtocol = protocol.ConsensusFuture
 
 	var tx transactions.SignedTxn
 	tx.Txn.GenesisID = b.BlockHeader.GenesisID
