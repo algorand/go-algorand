@@ -133,7 +133,7 @@ func (pps *WorkerState) ensureAccounts(ac libgoal.Client, initCfg PpConfig) (acc
 
 // throttle transaction rate
 func throttleTransactionRate(startTime time.Time, cfg PpConfig, totalSent uint64) {
-	localTimeDelta := time.Now().Sub(startTime)
+	localTimeDelta := time.Since(startTime)
 	currentTps := float64(totalSent) / localTimeDelta.Seconds()
 	if currentTps > float64(cfg.TxnPerSec) {
 		sleepSec := float64(totalSent)/float64(cfg.TxnPerSec) - localTimeDelta.Seconds()
@@ -660,10 +660,11 @@ func (pps *WorkerState) sendAsGroup(txgroup []transactions.Transaction, client l
 		err = gidErr
 		return
 	}
-	var stxgroup []transactions.SignedTxn
+	stxgroup := make([]transactions.SignedTxn, len(txgroup))
+	var signErr error
 	for i, txn := range txgroup {
 		txn.Group = gid
-		signedTxn, signErr := signTxn(senders[i], txn, pps.accounts, pps.cfg)
+		stxgroup[i], signErr = signTxn(senders[i], txn, pps.accounts, pps.cfg)
 		if err != nil {
 			fmt.Printf("Cannot sign trx %+v with account %v\nerror %v\n", txn, senders[i], err)
 			return
@@ -674,7 +675,6 @@ func (pps *WorkerState) sendAsGroup(txgroup []transactions.Transaction, client l
 			err = signErr
 			return
 		}
-		stxgroup = append(stxgroup, signedTxn)
 	}
 repeat:
 	broadcastErr := client.BroadcastTransactionGroup(stxgroup)
@@ -737,12 +737,12 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 		acctNeeded++
 	}
 	if acctNeeded >= len(accounts) { // >= because cfg.SrcAccount is skipped
-		err = fmt.Errorf("Need %d accts to create %d apps but got only %d accts", acctNeeded, toCreate, len(accounts))
+		err = fmt.Errorf("need %d accts to create %d apps but got only %d accts", acctNeeded, toCreate, len(accounts))
 		return
 	}
 	maxOptIn := uint32(config.Consensus[protocol.ConsensusCurrentVersion].MaxAppsOptedIn)
 	if cfg.NumAppOptIn > maxOptIn {
-		err = fmt.Errorf("Each acct can only opt in to %d but %d requested", maxOptIn, cfg.NumAppOptIn)
+		err = fmt.Errorf("each acct can only opt in to %d but %d requested", maxOptIn, cfg.NumAppOptIn)
 		return
 	}
 

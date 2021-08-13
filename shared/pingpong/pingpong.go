@@ -430,7 +430,7 @@ func listSufficientAccounts(accounts map[string]*pingPongAccount, minimumAmount 
 			out = append(out, key)
 		}
 	}
-	rand.Shuffle(len(out), func(i, j int) { t := out[i]; out[i] = out[j]; out[j] = t })
+	rand.Shuffle(len(out), func(i, j int) { out[i], out[j] = out[j], out[i] })
 	return out
 }
 
@@ -542,7 +542,7 @@ func (pps *WorkerState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 			throttleTransactionRate(startTime, cfg, totalSent)
 		}
 
-		timeDelta := time.Now().Sub(startTime)
+		timeDelta := time.Since(startTime)
 		_, _ = fmt.Fprintf(os.Stdout, "Sent %d transactions (%d attempted) in %d seconds\n", totalSucceeded, totalSent, int(math.Round(timeDelta.Seconds())))
 		if cfg.RestTime > 0 {
 			_, _ = fmt.Fprintf(os.Stdout, "Pausing %d seconds before sending more transactions\n", int(math.Round(cfg.RestTime.Seconds())))
@@ -692,7 +692,9 @@ func (pps *WorkerState) sendFromTo(
 	assetsByCreator := make(map[string][]*v1.AssetParams)
 	for _, p := range cinfo.AssetParams {
 		c := p.Creator
-		assetsByCreator[c] = append(assetsByCreator[c], &p)
+		ap := &v1.AssetParams{}
+		*ap = p
+		assetsByCreator[c] = append(assetsByCreator[c], ap)
 	}
 	lastTransactionTime := time.Now()
 	timeCredit := time.Duration(0)
@@ -847,15 +849,15 @@ func (pps *WorkerState) sendFromTo(
 			}
 
 			// Sign each transaction
-			var stxGroup []transactions.SignedTxn
+			stxGroup := make([]transactions.SignedTxn, len(txGroup))
+			var signErr error
 			for j, txn := range txGroup {
 				txn.Group = gid
-				stxn, signErr := signTxn(txSigners[j], txn, pps.accounts, cfg)
+				stxGroup[j], signErr = signTxn(txSigners[j], txn, pps.accounts, cfg)
 				if signErr != nil {
 					err = signErr
 					return
 				}
-				stxGroup = append(stxGroup, stxn)
 			}
 
 			sentCount++
