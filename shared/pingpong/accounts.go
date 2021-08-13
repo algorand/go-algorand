@@ -741,22 +741,23 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 		return
 	}
 
-	var appAccounts []v1.Account
-	for tempAccount := range accounts {
-		if tempAccount == cfg.SrcAccount {
+	appAccounts := make([]v1.Account, len(accounts))
+	accountsCount := 0
+	for acctAddr := range accounts {
+		if acctAddr == cfg.SrcAccount {
 			continue
 		}
-		var appAccount v1.Account
-		appAccount, err = client.AccountInformation(tempAccount)
+		appAccounts[accountsCount], err = client.AccountInformation(acctAddr)
 		if err != nil {
-			fmt.Printf("Warning, cannot lookup tempAccount account %s", tempAccount)
+			fmt.Printf("Warning, cannot lookup acctAddr account %s", acctAddr)
 			return
 		}
-		appAccounts = append(appAccounts, appAccount)
-		if len(appAccounts) == acctNeeded {
+		accountsCount++
+		if accountsCount == acctNeeded {
 			break
 		}
 	}
+	appAccounts = appAccounts[:accountsCount]
 
 	if !cfg.Quiet {
 		fmt.Printf("Selected temp account:\n")
