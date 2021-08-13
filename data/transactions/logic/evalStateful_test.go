@@ -697,9 +697,27 @@ log
 		})
 	}
 
-	// check ed25519verify and arg are not allowed in statefull mode
-	disallowed := []string{
+	// check that ed25519verify and arg is not allowed in stateful mode between v2-v4
+	disallowedV4 := []string{
 		"byte 0x01\nbyte 0x01\nbyte 0x01\ned25519verify",
+		"arg 0",
+		"arg_0",
+		"arg_1",
+		"arg_2",
+		"arg_3",
+	}
+	for _, source := range disallowedV4 {
+		ops := testProg(t, source, 4)
+		ep := defaultEvalParams(nil, nil)
+		err := CheckStateful(ops.Program, ep)
+		require.Error(t, err)
+		_, err = EvalStateful(ops.Program, ep)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "not allowed in current mode")
+	}
+
+	// check that arg is not allowed in stateful mode beyond v5
+	disallowed := []string{
 		"arg 0",
 		"arg_0",
 		"arg_1",
@@ -2928,4 +2946,30 @@ bnz loop
 	require.Empty(t, 0, delta.GlobalDelta)
 	require.Empty(t, delta.LocalDeltas)
 	require.Len(t, delta.Logs, 29)
+}
+
+func TestPooledAppCallsVerifyOp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	source := `#pragma version 5
+	global CurrentApplicationID
+	pop
+	byte 0x01
+	byte "ZC9KNzlnWTlKZ1pwSkNzQXVzYjNBcG1xTU9YbkRNWUtIQXNKYVk2RzRBdExPakQx"
+	addr DROUIZXGT3WFJR3QYVZWTR5OJJXJCMOLS7G4FUGZDSJM5PNOVOREH6HIZE
+	ed25519verify
+	pop
+	int 1`
+
+	ep, _ := makeSampleEnv()
+	ep.Proto.EnableAppCostPooling = true
+	ep.PooledApplicationBudget = new(uint64)
+	// Simulate test with 2 grouped txn
+	*ep.PooledApplicationBudget = uint64(ep.Proto.MaxAppProgramCost * 2)
+	testApp(t, source, ep, "pc=107 dynamic cost budget exceeded, executing ed25519verify: remaining budget is 1400 but program cost was 1905")
+
+	// Simulate test with 3 grouped txn
+	*ep.PooledApplicationBudget = uint64(ep.Proto.MaxAppProgramCost * 3)
+	testApp(t, source, ep)
 }

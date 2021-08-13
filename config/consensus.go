@@ -108,6 +108,11 @@ type ConsensusParams struct {
 	// each Txn has a MinFee.
 	EnableFeePooling bool
 
+	// EnableAppCostPooling specifies that the sum of fees for application calls
+	// in a group is checked against the sum of the budget for application calls,
+	// rather than check each individual app call is within the budget.
+	EnableAppCostPooling bool
+
 	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
 	// unit.
 	//
@@ -1004,6 +1009,9 @@ func initConsensusProtocols() {
 
 	// Enable TEAL 5 / AVM 1.0
 	vFuture.LogicSigVersion = 5
+
+	// Enable App calls to pool budget in grouped transactions
+	vFuture.EnableAppCostPooling = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
