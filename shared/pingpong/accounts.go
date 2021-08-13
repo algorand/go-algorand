@@ -184,7 +184,7 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 			meta := make([]byte, metaLen)
 			crypto.RandBytes(meta[:])
 
-			if totalSupply < pps.cfg.MinAccountAsset { //overflow
+			if totalSupply < pps.cfg.MinAccountAsset { // overflow
 				fmt.Printf("Too many NumPartAccounts\n")
 				return
 			}
@@ -398,7 +398,12 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 				return
 			}
 			tx.Note = pps.makeNextUniqueNoteField()
-			tx, err = client.FillUnsignedTxTemplate(creator, 0, 0, pps.cfg.MaxFee, tx)
+			tx, sendErr = client.FillUnsignedTxTemplate(creator, 0, 0, pps.cfg.MaxFee, tx)
+			if sendErr != nil {
+				_, _ = fmt.Fprintf(os.Stdout, "error making unsigned asset send tx %v\n", sendErr)
+				err = fmt.Errorf("error making unsigned asset send tx : %w", sendErr)
+				return
+			}
 			tx.LastValid = tx.FirstValid + 5
 			if pps.cfg.MaxFee == 0 {
 				var suggestedFee uint64
@@ -810,7 +815,7 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 			txgroup = append(txgroup, tx)
 			accounts[appAccount.Address].addBalance(-int64(tx.Fee.Raw))
 			senders = append(senders, appAccount.Address)
-			accountsApplicationCount[appAccount.Address] = accountsApplicationCount[appAccount.Address] + 1
+			accountsApplicationCount[appAccount.Address]++
 		}
 
 		err = pps.sendAsGroup(txgroup, client, senders)

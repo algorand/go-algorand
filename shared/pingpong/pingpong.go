@@ -338,13 +338,16 @@ func (pps *WorkerState) sendPaymentFromSourceAccount(client libgoal.Client, to s
 	note := pps.makeNextUniqueNoteField()
 
 	from := pps.cfg.SrcAccount
-	tx, err := client.ConstructPayment(from, to, fee, amount, note[:], "", [32]byte{}, 0, 0)
+	var txn transactions.Transaction
+	var stxn transactions.SignedTxn
+	var err error
+	txn, err = client.ConstructPayment(from, to, fee, amount, note, "", [32]byte{}, 0, 0)
 
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
 
-	stxn, err := signTxn(from, tx, pps.accounts, pps.cfg)
+	stxn, err = signTxn(from, txn, pps.accounts, pps.cfg)
 
 	if err != nil {
 		return transactions.Transaction{}, err
@@ -355,7 +358,7 @@ func (pps *WorkerState) sendPaymentFromSourceAccount(client libgoal.Client, to s
 		return transactions.Transaction{}, err
 	}
 
-	return tx, nil
+	return txn, nil
 }
 
 // waitPendingTransactions waits until all the pending transactions coming from the given
@@ -717,15 +720,13 @@ func (pps *WorkerState) sendFromTo(
 			var addr basics.Address
 			crypto.RandBytes(addr[:])
 			to = addr.String()
-		} else {
+		} else if len(belowMinBalanceAccounts) > 0 && (crypto.RandUint64()%100 < 50) {
 			// make 50% of the calls attempt to refund low-balanced accounts.
 			// ( if there is any )
-			if len(belowMinBalanceAccounts) > 0 && (crypto.RandUint64()%100 < 50) {
-				// pick the first low balance account
-				for acct := range belowMinBalanceAccounts {
-					to = acct
-					break
-				}
+			// pick the first low balance account
+			for acct := range belowMinBalanceAccounts {
+				to = acct
+				break
 			}
 		}
 
@@ -894,7 +895,7 @@ func (pps *WorkerState) sendFromTo(
 			// since we just slept enough here, we can take it off the counters
 			sentCount--
 			successCount--
-			//fmt.Printf("itration took %v\n", took)
+			// fmt.Printf("itration took %v\n", took)
 		}
 	}
 	return
@@ -909,7 +910,7 @@ func (pps *WorkerState) nftSpamAssetName() string {
 }
 func (pps *WorkerState) makeNextUniqueNoteField() []byte {
 	noteField := make([]byte, binary.MaxVarintLen64)
-	usedBytes := binary.PutUvarint(noteField[:], pps.incTransactionSalt)
+	usedBytes := binary.PutUvarint(noteField, pps.incTransactionSalt)
 	pps.incTransactionSalt++
 	return noteField[:usedBytes]
 }
@@ -1061,7 +1062,7 @@ func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, cli
 			_, _ = fmt.Fprintf(os.Stdout, "Sending %d asset %d: %s -> %s\n", amt, aidx, sender, to)
 		}
 	} else {
-		txn, err = pps.constructPayment(from, to, fee, amt, noteField[:], "", lease)
+		txn, err = pps.constructPayment(from, to, fee, amt, noteField, "", lease)
 		if !cfg.Quiet {
 			_, _ = fmt.Fprintf(os.Stdout, "Sending %d : %s -> %s\n", amt, from, to)
 		}
