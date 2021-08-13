@@ -22,7 +22,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime/pprof"
+	"strings"
 	"testing"
 	"time"
 
@@ -341,9 +343,12 @@ func TestPrepareEvalParams(t *testing.T) {
 			TimeStamp: 1234,
 			Round:     2345,
 		},
-		proto: config.ConsensusParams{
-			Application: true,
-		},
+	}
+
+	params := []config.ConsensusParams{
+		config.ConsensusParams{Application: true, MaxAppProgramCost: 700},
+		config.Consensus[protocol.ConsensusV29],
+		config.Consensus[protocol.ConsensusFuture],
 	}
 
 	// Create some sample transactions
@@ -385,48 +390,63 @@ func TestPrepareEvalParams(t *testing.T) {
 		// indicates if prepareAppEvaluators should return a non-nil
 		// appTealEvaluator for the txn at index i
 		expected []bool
+
+		numAppCalls int
+		// Used for checking transitive pointer equality in app calls
+		// If there are no app calls in the group, it is set to -1
+		firstAppCallIndex int
 	}
 
 	// Create some groups with these transactions
 	cases := []evalTestCase{
-		{[]transactions.SignedTxnWithAD{payment}, []bool{false}},
-		{[]transactions.SignedTxnWithAD{appcall1}, []bool{true}},
-		{[]transactions.SignedTxnWithAD{payment, payment}, []bool{false, false}},
-		{[]transactions.SignedTxnWithAD{appcall1, payment}, []bool{true, false}},
-		{[]transactions.SignedTxnWithAD{payment, appcall1}, []bool{false, true}},
-		{[]transactions.SignedTxnWithAD{appcall1, appcall2}, []bool{true, true}},
-		{[]transactions.SignedTxnWithAD{appcall1, appcall2, appcall1}, []bool{true, true, true}},
-		{[]transactions.SignedTxnWithAD{payment, appcall1, payment}, []bool{false, true, false}},
-		{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, []bool{true, false, true}},
+		{[]transactions.SignedTxnWithAD{payment}, []bool{false}, 0, -1},
+		{[]transactions.SignedTxnWithAD{appcall1}, []bool{true}, 1, 0},
+		{[]transactions.SignedTxnWithAD{payment, payment}, []bool{false, false}, 0, -1},
+		{[]transactions.SignedTxnWithAD{appcall1, payment}, []bool{true, false}, 1, 0},
+		{[]transactions.SignedTxnWithAD{payment, appcall1}, []bool{false, true}, 1, 1},
+		{[]transactions.SignedTxnWithAD{appcall1, appcall2}, []bool{true, true}, 2, 0},
+		{[]transactions.SignedTxnWithAD{appcall1, appcall2, appcall1}, []bool{true, true, true}, 3, 0},
+		{[]transactions.SignedTxnWithAD{payment, appcall1, payment}, []bool{false, true, false}, 1, 1},
+		{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, []bool{true, false, true}, 2, 0},
 	}
 
-	for i, testCase := range cases {
-		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
-			res := eval.prepareEvalParams(testCase.group)
-			require.Equal(t, len(res), len(testCase.group))
+	for i, param := range params {
+		for j, testCase := range cases {
+			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
+				eval.proto = param
+				res := eval.prepareEvalParams(testCase.group)
+				require.Equal(t, len(res), len(testCase.group))
 
-			// Compute the expected transaction group without ApplyData for
-			// the test case
-			expGroupNoAD := make([]transactions.SignedTxn, len(testCase.group))
-			for j := range testCase.group {
-				expGroupNoAD[j] = testCase.group[j].SignedTxn
-			}
-
-			// Ensure non app calls have a nil evaluator, and that non-nil
-			// evaluators point to the right transactions and values
-			for j, present := range testCase.expected {
-				if present {
-					require.NotNil(t, res[j])
-					require.NotNil(t, res[j].PastSideEffects)
-					require.Equal(t, res[j].GroupIndex, j)
-					require.Equal(t, res[j].TxnGroup, expGroupNoAD)
-					require.Equal(t, *res[j].Proto, eval.proto)
-					require.Equal(t, *res[j].Txn, testCase.group[j].SignedTxn)
-				} else {
-					require.Nil(t, res[j])
+				// Compute the expected transaction group without ApplyData for
+				// the test case
+				expGroupNoAD := make([]transactions.SignedTxn, len(testCase.group))
+				for k := range testCase.group {
+					expGroupNoAD[k] = testCase.group[k].SignedTxn
 				}
-			}
-		})
+
+				// Ensure non app calls have a nil evaluator, and that non-nil
+				// evaluators point to the right transactions and values
+				for k, present := range testCase.expected {
+					if present {
+						require.NotNil(t, res[k])
+						require.NotNil(t, res[k].PastSideEffects)
+						require.Equal(t, res[k].GroupIndex, k)
+						require.Equal(t, res[k].TxnGroup, expGroupNoAD)
+						require.Equal(t, *res[k].Proto, eval.proto)
+						require.Equal(t, *res[k].Txn, testCase.group[k].SignedTxn)
+						require.Equal(t, res[k].MinTealVersion, res[testCase.firstAppCallIndex].MinTealVersion)
+						require.Equal(t, res[k].PooledApplicationBudget, res[testCase.firstAppCallIndex].PooledApplicationBudget)
+						if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusV29]) {
+							require.Equal(t, *res[k].PooledApplicationBudget, uint64(eval.proto.MaxAppProgramCost))
+						} else if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusFuture]) {
+							require.Equal(t, *res[k].PooledApplicationBudget, uint64(eval.proto.MaxAppProgramCost*testCase.numAppCalls))
+						}
+					} else {
+						require.Nil(t, res[k])
+					}
+				}
+			})
+		}
 	}
 }
 
@@ -560,6 +580,140 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 	state := ad.AppParams[1].GlobalState
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["caller"])
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
+}
+
+func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalProgram string, consensusVersion protocol.ConsensusVersion) (*BlockEvaluator, error) {
+	genesisInitState, addrs, keys := genesis(10)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	require.NoError(t, err)
+	eval.validate = true
+	eval.generate = false
+	eval.proto = config.Consensus[consensusVersion]
+
+	ops, err := logic.AssembleString(approvalProgram)
+	require.NoError(t, err, ops.Errors)
+	approval := ops.Program
+	ops, err = logic.AssembleString("#pragma version 4\nint 1")
+	require.NoError(t, err)
+	clear := ops.Program
+
+	genHash := genesisInitState.Block.BlockHeader.GenesisHash
+	header := transactions.Header{
+		Sender:      addrs[0],
+		Fee:         minFee,
+		FirstValid:  newBlock.Round(),
+		LastValid:   newBlock.Round(),
+		GenesisHash: genHash,
+	}
+	appcall1 := transactions.Transaction{
+		Type:   protocol.ApplicationCallTx,
+		Header: header,
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			GlobalStateSchema: schema,
+			ApprovalProgram:   approval,
+			ClearStateProgram: clear,
+		},
+	}
+
+	appcall2 := transactions.Transaction{
+		Type:   protocol.ApplicationCallTx,
+		Header: header,
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: basics.AppIndex(1),
+		},
+	}
+
+	appcall3 := appcall2
+	appcall3.Header.Sender = addrs[1]
+
+	var group transactions.TxGroup
+	group.TxGroupHashes = []crypto.Digest{crypto.HashObj(appcall1), crypto.HashObj(appcall2), crypto.HashObj(appcall3)}
+	appcall1.Group = crypto.HashObj(group)
+	appcall2.Group = crypto.HashObj(group)
+	appcall3.Group = crypto.HashObj(group)
+	stxn1 := appcall1.Sign(keys[0])
+	stxn2 := appcall2.Sign(keys[0])
+	stxn3 := appcall3.Sign(keys[1])
+
+	g := []transactions.SignedTxnWithAD{
+		{
+			SignedTxn: stxn1,
+		},
+		{
+			SignedTxn: stxn2,
+		},
+		{
+			SignedTxn: stxn3,
+		},
+	}
+	txgroup := []transactions.SignedTxn{stxn1, stxn2, stxn3}
+	err = eval.TestTransactionGroup(txgroup)
+	if err != nil {
+		return eval, err
+	}
+	err = eval.transactionGroup(g)
+	return eval, err
+}
+
+// TestEvalAppPooledBudgetWithTxnGroup ensures 3 app call txns can successfully pool
+// budgets in a group txn and return an error if the budget is exceeded
+func TestEvalAppPooledBudgetWithTxnGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	source := func(n int, m int) string {
+		return "#pragma version 4\nbyte 0x1337BEEF\n" + strings.Repeat("keccak256\n", n) +
+			strings.Repeat("substring 0 4\n", m) + "pop\nint 1\n"
+	}
+
+	params := []protocol.ConsensusVersion{
+		protocol.ConsensusV29,
+		protocol.ConsensusFuture,
+	}
+
+	cases := []struct {
+		prog                 string
+		isSuccessV29         bool
+		isSuccessVFuture     bool
+		expectedErrorV29     string
+		expectedErrorVFuture string
+	}{
+		{source(5, 47), true, true,
+			"",
+			""},
+		{source(5, 48), false, true,
+			"pc=157 dynamic cost budget exceeded, executing pushint: remaining budget is 700 but program cost was 701",
+			""},
+		{source(16, 17), false, true,
+			"pc= 12 dynamic cost budget exceeded, executing keccak256: remaining budget is 700 but program cost was 781",
+			""},
+		{source(16, 18), false, false,
+			"pc= 12 dynamic cost budget exceeded, executing keccak256: remaining budget is 700 but program cost was 781",
+			"pc= 78 dynamic cost budget exceeded, executing pushint: remaining budget is 2100 but program cost was 2101"},
+	}
+
+	for i, param := range params {
+		for j, testCase := range cases {
+			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
+				_, err := testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, testCase.prog, param)
+				if !testCase.isSuccessV29 && reflect.DeepEqual(param, protocol.ConsensusV29) {
+					require.Error(t, err)
+					require.Contains(t, err.Error(), testCase.expectedErrorV29)
+				} else if !testCase.isSuccessVFuture && reflect.DeepEqual(param, protocol.ConsensusFuture) {
+					require.Error(t, err)
+					require.Contains(t, err.Error(), testCase.expectedErrorVFuture)
+				}
+			})
+		}
+	}
 }
 
 func BenchmarkBlockEvaluatorRAMCrypto(b *testing.B) {

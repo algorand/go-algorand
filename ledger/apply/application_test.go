@@ -242,6 +242,7 @@ func (b *testBalancesPass) Put(addr basics.Address, ad basics.AccountData) error
 func (b *testBalancesPass) ConsensusParams() config.ConsensusParams {
 	return b.proto
 }
+
 func (b *testBalancesPass) Allocate(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error {
 	b.allocatedAppIdx = aidx
 	return nil
