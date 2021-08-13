@@ -126,7 +126,7 @@ func compareEventChannels(t *testing.T, ch1, ch2 <-chan externalEvent) bool {
 				}
 			}
 		default:
-			assert.NoError(t, fmt.Errorf("Unexpected tag %v encountered", ev1.Input.Tag))
+			assert.NoError(t, fmt.Errorf("Unexpected tag '%v' encountered", ev1.Input.Tag))
 		}
 	}
 	return true
