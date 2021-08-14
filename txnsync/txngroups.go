@@ -99,28 +99,32 @@ func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxG
 	}, nil
 }
 
-func (s *syncState) compressTransactionGroupsBytes(data []byte) ([]byte, byte) {
+func (s *syncState) compressTransactionGroupsBytes(uncompressedData []byte) ([]byte, byte) {
 	b := getMessageBuffer()
-	if cap(b) < len(data) {
+	if cap(b) < len(uncompressedData) {
 		releaseMessageBuffer(b)
-		b = make([]byte, 0, len(data))
+		b = make([]byte, 0, len(uncompressedData))
 	}
-	_, out, err := compress.Compress(data, b, 1)
+	_, compressedData, err := compress.Compress(uncompressedData, b, 1)
 	if err != nil {
 		if errors.Is(err, compress.ErrShortBuffer) {
-			s.log.Debugf("compression had negative effect, made message bigger: original msg length: %d", len(data))
+			s.log.Debugf("compression had negative effect, made message bigger: original msg length: %d", len(uncompressedData))
 		} else {
-			s.log.Warnf("failed to compress %d bytes txnsync msg: %v", len(data), err)
+			s.log.Warnf("failed to compress %d bytes txnsync msg: %v", len(uncompressedData), err)
 		}
 		releaseMessageBuffer(b)
-		return data, compressionFormatNone
+		return uncompressedData, compressionFormatNone
 	}
-	if len(data) > len(out)*maxCompressionRatio {
-		s.log.Infof("compression exceeded compression ratio: compressed data len: %d", len(out))
+	if len(uncompressedData) > len(compressedData)*maxCompressionRatio {
+		s.log.Infof("compression exceeded compression ratio: compressed data len: %d", len(compressedData))
 		releaseMessageBuffer(b)
-		return data, compressionFormatNone
+		return uncompressedData, compressionFormatNone
+	} else if len(uncompressedData) <= len(compressedData) {
+		// compression wasn't effective and ended up spending more data.
+		releaseMessageBuffer(b)
+		return uncompressedData, compressionFormatNone
 	}
-	return out, compressionFormatDeflate
+	return compressedData, compressionFormatDeflate
 }
 
 func decodeTransactionGroups(ptg packedTransactionGroups, genesisID string, genesisHash crypto.Digest) (txnGroups []transactions.SignedTxGroup, err error) {
@@ -182,7 +186,7 @@ func decodeTransactionGroups(ptg packedTransactionGroups, genesisID string, gene
 func decompressTransactionGroupsBytes(data []byte, lenDecompressedBytes uint64) (decoded []byte, err error) {
 	compressionRatio := lenDecompressedBytes / uint64(len(data)) // data should have been compressed between 0 and 95%
 	if lenDecompressedBytes > maxEncodedTransactionGroupBytes || compressionRatio <= 0 || compressionRatio >= maxCompressionRatio {
-		return nil, fmt.Errorf("invalid lenDecompressedBytes: %d, lenCompressedBytes: %d", lenDecompressedBytes, len(data))
+		return nil, fmt.Errorf("invalid lenDecompressedBytes: %d, len(data): %d", lenDecompressedBytes, len(data))
 	}
 
 	out := getMessageBuffer()

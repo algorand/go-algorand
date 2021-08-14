@@ -105,7 +105,7 @@ func (imq *incomingMessageQueue) clear(m incomingMessage) {
 }
 
 // incomingMessageHandler
-// note - this message is called by the network go-routine dispatch pool, and is not syncronized with the rest of the transaction syncronizer
+// note - this message is called by the network go-routine dispatch pool, and is not synchronized with the rest of the transaction synchronizer
 func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *Peer, message []byte, sequenceNumber uint64) (err error) {
 	// increase number of incoming messages metric.
 	txsyncIncomingMessagesTotal.Inc(nil)
@@ -128,7 +128,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 
 	if incomingMessage.message.Version != txnBlockMessageVersion {
 		// we receive a message from a version that we don't support, disconnect.
-		s.log.Infof("received unsupported transaction sync message version from peer. disconnecting from peer.")
+		s.log.Infof("received unsupported transaction sync message version from peer (%d). disconnecting from peer.", incomingMessage.message.Version)
 		return errUnsupportedTransactionSyncMessageVersion
 	}
 
@@ -157,7 +157,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 		enqueued := s.incomingMessagesQ.enqueue(incomingMessage)
 		if !enqueued {
 			// if we can't enqueue that, return an error, which would disconnect the peer.
-			// ( we have to disconnect, since otherwise, we would have no way to syncronize the sequence number)
+			// ( we have to disconnect, since otherwise, we would have no way to synchronize the sequence number)
 			s.log.Infof("unable to enqueue incoming message from a peer without txsync allocated data; incoming messages queue is full. disconnecting from peer.")
 			return errTransactionSyncIncomingMessageQueueFull
 		}
@@ -192,7 +192,7 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 		}
 		if peerInfo.TxnSyncPeer == nil {
 			// we couldn't really do much about this message previously, since we didn't have the peer.
-			peer = makePeer(message.networkPeer, peerInfo.IsOutgoing, s.isRelay)
+			peer = makePeer(message.networkPeer, peerInfo.IsOutgoing, s.isRelay, &s.config)
 			// let the network peer object know about our peer
 			s.node.UpdatePeers([]*Peer{peer}, []interface{}{message.networkPeer}, 0)
 		} else {
@@ -209,18 +209,20 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 	// messages from the peer to be placed on the message queue.
 	s.incomingMessagesQ.clear(message)
 	messageProcessed := false
-	transacationPoolSize := 0
-MainForLoop:
+	transactionPoolSize := 0
+	totalAccumulatedTransactionsCount := 0 // the number of transactions that were added during the execution of this method
+	transactionHandlerBacklogFull := false
+incomingMessageLoop:
 	for {
 		incomingMsg, seq, err := peer.incomingMessages.popSequence(peer.nextReceivedMessageSeq)
 		switch err {
 		case errHeapEmpty:
 			// this is very likely, once we run out of consecutive messages.
-			break MainForLoop
+			break incomingMessageLoop
 		case errSequenceNumberMismatch:
 			// if we receive a message which wasn't in-order, just let it go.
 			s.log.Debugf("received message out of order; seq = %d, expecting seq = %d\n", seq, peer.nextReceivedMessageSeq)
-			break MainForLoop
+			break incomingMessageLoop
 		}
 
 		// increase the message sequence number, since we're processing this message.
@@ -259,18 +261,37 @@ MainForLoop:
 		// add the received transaction groups to the peer's recentSentTransactions so that we won't be sending these back to the peer.
 		peer.updateIncomingTransactionGroups(incomingMsg.transactionGroups)
 
-		// before enqueing more data to the transaction pool, make sure we flush the ack channel
+		// before enqueuing more data to the transaction pool, make sure we flush the ack channel
 		peer.dequeuePendingTransactionPoolAckMessages()
 
 		// if we received at least a single transaction group, then forward it to the transaction handler.
 		if len(incomingMsg.transactionGroups) > 0 {
+			// get the number of transactions ( not transaction groups !! ) from the transaction groups slice.
+			// this code is using the fact the we allocate all the transactions as a single array, and then slice
+			// them for the different transaction groups. The transaction handler would re-allocate the transactions that
+			// would be stored in the transaction pool.
+			totalTransactionCount := cap(incomingMsg.transactionGroups[0].Transactions)
+
 			// send the incoming transaction group to the node last, so that the txhandler could modify the underlaying array if needed.
-			transacationPoolSize = s.node.IncomingTransactionGroups(peer, peer.nextReceivedMessageSeq-1, incomingMsg.transactionGroups)
+			currentTransactionPoolSize := s.node.IncomingTransactionGroups(peer, peer.nextReceivedMessageSeq-1, incomingMsg.transactionGroups)
+			// was the call reached the transaction handler queue ?
+			if currentTransactionPoolSize >= 0 {
+				// we want to store in transactionPoolSize only the first call to IncomingTransactionGroups
+				if transactionPoolSize == 0 {
+					transactionPoolSize = currentTransactionPoolSize
+				}
+				// add the transactions count to the accumulated count.
+				totalAccumulatedTransactionsCount += totalTransactionCount
+			} else {
+				// no - we couldn't add this group since the transaction handler buffer backlog exceeded it's capacity.
+				transactionHandlerBacklogFull = true
+			}
 		}
 
 		s.log.incomingMessage(msgStats{seq, incomingMsg.message.Round, len(incomingMsg.transactionGroups), incomingMsg.message.UpdatedRequestParams, len(incomingMsg.message.TxnBloomFilter.BloomFilter), incomingMsg.message.MsgSync.NextMsgMinDelay, peer.networkAddress()})
 		messageProcessed = true
 	}
+
 	// if we're a relay, this is an outgoing peer and we've processed a valid message,
 	// then we want to respond right away as well as schedule bloom message.
 	if messageProcessed && peer.isOutgoing && s.isRelay && peer.lastReceivedMessageNextMsgMinDelay != time.Duration(0) {
@@ -280,7 +301,7 @@ MainForLoop:
 
 		s.scheduler.schedulerPeer(peer, s.clock.Since())
 	}
-	if transacationPoolSize > 0 {
-		s.onTransactionPoolChangedEvent(MakeTranscationPoolChangeEvent(transacationPoolSize))
+	if transactionPoolSize > 0 || transactionHandlerBacklogFull {
+		s.onTransactionPoolChangedEvent(MakeTransactionPoolChangeEvent(transactionPoolSize+totalAccumulatedTransactionsCount, transactionHandlerBacklogFull))
 	}
 }

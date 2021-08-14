@@ -222,7 +222,7 @@ func errAlreadyStorage(addr basics.Address, aidx basics.AppIndex, global bool) e
 }
 
 // Allocate creates kv storage for a given {addr, aidx, global}. It is called on app creation (global) or opting in (local)
-func (cb *roundCowState) Allocate(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error {
+func (cb *roundCowState) AllocateApp(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error {
 	// Check that account is not already opted in
 	allocated, err := cb.allocated(addr, aidx, global)
 	if err != nil {
@@ -241,11 +241,27 @@ func (cb *roundCowState) Allocate(addr basics.Address, aidx basics.AppIndex, glo
 	lsd.action = allocAction
 	lsd.maxCounts = &space
 
+	if global {
+		cb.mods.Creatables[basics.CreatableIndex(aidx)] = ledgercore.ModifiedCreatable{
+			Ctype:   basics.AppCreatable,
+			Creator: addr,
+			Created: true,
+		}
+	} else {
+		aa := ledgercore.AccountApp{
+			Address: addr,
+			App:     aidx,
+		}
+		cb.mods.ModifiedAppLocalStates[aa] = true
+	}
+
+	cb.trackCreatable(basics.CreatableIndex(aidx))
+
 	return nil
 }
 
 // Deallocate clears storage for {addr, aidx, global}. It happens on app deletion (global) or closing out (local)
-func (cb *roundCowState) Deallocate(addr basics.Address, aidx basics.AppIndex, global bool) error {
+func (cb *roundCowState) DeallocateApp(addr basics.Address, aidx basics.AppIndex, global bool) error {
 	// Check that account has allocated storage
 	allocated, err := cb.allocated(addr, aidx, global)
 	if err != nil {
@@ -265,6 +281,21 @@ func (cb *roundCowState) Deallocate(addr basics.Address, aidx basics.AppIndex, g
 	lsd.counts = &basics.StateSchema{}
 	lsd.maxCounts = &basics.StateSchema{}
 	lsd.kvCow = make(stateDelta)
+
+	if global {
+		cb.mods.Creatables[basics.CreatableIndex(aidx)] = ledgercore.ModifiedCreatable{
+			Ctype:   basics.AppCreatable,
+			Creator: addr,
+			Created: false,
+		}
+	} else {
+		aa := ledgercore.AccountApp{
+			Address: addr,
+			App:     aidx,
+		}
+		cb.mods.ModifiedAppLocalStates[aa] = false
+	}
+
 	return nil
 }
 
@@ -425,6 +456,12 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 	return nil // note: deletion cannot cause us to violate maxCount
 }
 
+// AppendLog adds message in logs. idx is expected to be an index in txn.ForeignApps
+func (cb *roundCowState) AppendLog(idx uint64, value string) error {
+	cb.logs = append(cb.logs, basics.LogItem{ID: idx, Message: value})
+	return nil
+}
+
 // MakeDebugBalances creates a ledger suitable for dryrun and debugger
 func MakeDebugBalances(l ledgerForCowBase, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
 	base := &roundCowBase{
@@ -471,8 +508,9 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 	return pass, evalDelta, nil
 }
 
-// BuildEvalDelta converts internal sdeltas into basics.EvalDelta
+// BuildEvalDelta converts internal sdeltas and logs into basics.EvalDelta
 func (cb *roundCowState) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error) {
+	// sdeltas
 	foundGlobal := false
 	for addr, smod := range cb.sdeltas {
 		for aapp, sdelta := range smod {
@@ -519,6 +557,10 @@ func (cb *roundCowState) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.
 			}
 		}
 	}
+
+	// logs
+	evalDelta.Logs = cb.logs
+
 	return
 }
 
@@ -619,7 +661,7 @@ func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageD
 			delete(owned, aapp.aidx)
 		case allocAction, remainAllocAction:
 			// note: these should always exist because they were
-			// at least preceded by a call to PutWithCreatable
+			// at least preceded by a call to Put()
 			params, ok := owned[aapp.aidx]
 			if !ok {
 				return basics.AccountData{}, fmt.Errorf("could not find existing params for %v", aapp.aidx)

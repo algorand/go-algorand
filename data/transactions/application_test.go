@@ -117,3 +117,30 @@ func TestEncodedAppTxnAllocationBounds(t *testing.T) {
 		}
 	}
 }
+
+func TestIDByIndex(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	ac := ApplicationCallTxnFields{}
+	ac.ApplicationID = 1
+	appID, err := ac.AppIDByIndex(0)
+	a.NoError(err)
+	a.Equal(basics.AppIndex(1), appID)
+	appID, err = ac.AppIDByIndex(1)
+	a.Contains(err.Error(), "invalid Foreign App reference")
+
+}
+
+func TestIndexByID(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	ac := ApplicationCallTxnFields{}
+	ac.ApplicationID = 1
+	aidx, err := ac.IndexByAppID(1)
+	a.NoError(err)
+	a.Equal(uint64(0), aidx)
+	aidx, err = ac.IndexByAppID(2)
+	a.Contains(err.Error(), "invalid Foreign App reference")
+}

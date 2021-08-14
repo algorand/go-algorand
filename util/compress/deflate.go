@@ -160,7 +160,6 @@ func startMemAddr(b []byte) *byte {
 
 	b = append(b, 0)
 	ptr := &b[0]
-	b = b[0:0]
 
 	return ptr
 }
@@ -171,5 +170,5 @@ func init() {
 	compressedBuffer := make([]byte, 128)
 	_, compressedOutput, _ := Compress(decompressedBuffer, compressedBuffer, 9)
 	decompressedBuffer = make([]byte, 128)
-	Decompress(compressedOutput, decompressedBuffer)
+	Decompress(compressedOutput, decompressedBuffer) //nolint:errcheck // static call that won't fail
 }

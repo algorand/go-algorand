@@ -88,8 +88,6 @@ func (status StatusReport) TimeSinceLastRound() time.Duration {
 
 // AlgorandFullNode specifies and implements a full Algorand node.
 type AlgorandFullNode struct {
-	nodeContextData
-
 	mu        deadlock.Mutex
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -137,7 +135,7 @@ type AlgorandFullNode struct {
 
 	compactCert *compactcert.Worker
 
-	txnSyncConnector transcationSyncNodeConnector
+	txnSyncConnector transactionSyncNodeConnector
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -197,7 +195,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		log.Errorf("Unable to create genesis directory: %v", err)
 		return nil, err
 	}
-	var genalloc data.GenesisBalances
+	var genalloc bookkeeping.GenesisBalances
 	genalloc, err = bootstrapData(genesis, log)
 	if err != nil {
 		log.Errorf("Cannot load genesis allocation: %v", err)
@@ -263,7 +261,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
-	node.txnSyncConnector = makeTranscationSyncNodeConnector(node)
+	node.txnSyncConnector = makeTransactionSyncNodeConnector(node)
 	node.txnSyncService = txnsync.MakeTransactionSyncService(node.log, &node.txnSyncConnector, cfg.NetAddress != "", node.genesisID, node.genesisHash, node.config, node.lowPriorityCryptoVerificationPool)
 
 	err = node.loadParticipationKeys()
@@ -312,20 +310,20 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	return node, err
 }
 
-func bootstrapData(genesis bookkeeping.Genesis, log logging.Logger) (data.GenesisBalances, error) {
+func bootstrapData(genesis bookkeeping.Genesis, log logging.Logger) (bookkeeping.GenesisBalances, error) {
 	genalloc := make(map[basics.Address]basics.AccountData)
 	for _, entry := range genesis.Allocation {
 		addr, err := basics.UnmarshalChecksumAddress(entry.Address)
 		if err != nil {
 			log.Errorf("Cannot parse genesis addr %s: %v", entry.Address, err)
-			return data.GenesisBalances{}, err
+			return bookkeeping.GenesisBalances{}, err
 		}
 
 		_, present := genalloc[addr]
 		if present {
 			err = fmt.Errorf("repeated allocation to %s", entry.Address)
 			log.Error(err)
-			return data.GenesisBalances{}, err
+			return bookkeeping.GenesisBalances{}, err
 		}
 
 		genalloc[addr] = entry.State
@@ -334,16 +332,16 @@ func bootstrapData(genesis bookkeeping.Genesis, log logging.Logger) (data.Genesi
 	feeSink, err := basics.UnmarshalChecksumAddress(genesis.FeeSink)
 	if err != nil {
 		log.Errorf("Cannot parse fee sink addr %s: %v", genesis.FeeSink, err)
-		return data.GenesisBalances{}, err
+		return bookkeeping.GenesisBalances{}, err
 	}
 
 	rewardsPool, err := basics.UnmarshalChecksumAddress(genesis.RewardsPool)
 	if err != nil {
 		log.Errorf("Cannot parse rewards pool addr %s: %v", genesis.RewardsPool, err)
-		return data.GenesisBalances{}, err
+		return bookkeeping.GenesisBalances{}, err
 	}
 
-	return data.MakeTimestampedGenesisBalances(genalloc, feeSink, rewardsPool, genesis.Timestamp), nil
+	return bookkeeping.MakeTimestampedGenesisBalances(genalloc, feeSink, rewardsPool, genesis.Timestamp), nil
 }
 
 // Config returns a copy of the node's Local configuration
@@ -379,7 +377,6 @@ func (node *AlgorandFullNode) Start() {
 		node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)
 		node.blockService.Start()
 		node.ledgerService.Start()
-		node.txHandler.Start()
 		node.compactCert.Start()
 		node.txnSyncService.Start()
 		node.txnSyncConnector.start()
@@ -453,7 +450,7 @@ func (node *AlgorandFullNode) Stop() {
 		node.catchpointCatchupService.Stop()
 	} else {
 		node.txnSyncService.Stop()
-		node.txHandler.Stop()
+		node.txnSyncConnector.stop()
 		node.agreementService.Shutdown()
 		node.catchupService.Stop()
 		node.txPoolSyncerService.Stop()
@@ -1039,7 +1036,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 				node.waitMonitoringRoutines()
 			}()
 			node.net.ClearHandlers()
-			node.txHandler.Stop()
+			node.txnSyncConnector.stop()
 			node.txnSyncService.Stop()
 			node.agreementService.Shutdown()
 			node.catchupService.Stop()
@@ -1064,7 +1061,6 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 		node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)
 		node.blockService.Start()
 		node.ledgerService.Start()
-		node.txHandler.Start()
 		node.txnSyncService.Start()
 		node.txnSyncConnector.start()
 

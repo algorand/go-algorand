@@ -108,6 +108,11 @@ type ConsensusParams struct {
 	// each Txn has a MinFee.
 	EnableFeePooling bool
 
+	// EnableAppCostPooling specifies that the sum of fees for application calls
+	// in a group is checked against the sum of the budget for application calls,
+	// rather than check each individual app call is within the budget.
+	EnableAppCostPooling bool
+
 	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
 	// unit.
 	//
@@ -381,6 +386,8 @@ type ConsensusParams struct {
 	// 5. checking that in the case of going online the VoteFirst is less or equal to the LastValid+1.
 	// 6. checking that in the case of going online the VoteFirst is less or equal to the next network round.
 	EnableKeyregCoherencyCheck bool
+
+	EnableExtraPagesOnAppUpdate bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -419,6 +426,10 @@ var MaxEvalDeltaAccounts int
 // MaxStateDeltaKeys is the largest number of key/value pairs that may appear
 // in a StateDelta, used for decoding purposes.
 var MaxStateDeltaKeys int
+
+// MaxLogCalls is the highest allowable log messages that may appear in
+// any version, used for decoding purposes. Never decrease this value.
+const MaxLogCalls = 32
 
 // MaxLogicSigMaxSize is the largest logical signature appear in any of the supported
 // protocols, used for decoding purposes.
@@ -971,9 +982,21 @@ func initConsensusProtocols() {
 	// v27 can be upgraded to v28, with an update delay of 7 days ( see calculation above )
 	v27.ApprovedUpgrades[protocol.ConsensusV28] = 140000
 
+	// v29 fixes application update by using ExtraProgramPages in size calculations
+	v29 := v28
+	v29.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// Enable ExtraProgramPages for application update
+	v29.EnableExtraPagesOnAppUpdate = true
+
+	Consensus[protocol.ConsensusV29] = v29
+
+	// v28 can be upgraded to v29, with an update delay of 3 days ( see calculation above )
+	v28.ApprovedUpgrades[protocol.ConsensusV29] = 60000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v28
+	vFuture := v29
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
@@ -988,6 +1011,9 @@ func initConsensusProtocols() {
 
 	// Enable TEAL 5 / AVM 1.0
 	vFuture.LogicSigVersion = 5
+
+	// Enable App calls to pool budget in grouped transactions
+	vFuture.EnableAppCostPooling = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

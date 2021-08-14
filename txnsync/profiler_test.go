@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/timers"
 )
 
@@ -46,6 +47,7 @@ func (n metricsLogger) Metrics(category telemetryspec.Category, metrics telemetr
 // TestPrune Test the prune capabilities of the profiler.  We want to simulate
 // the conditions to show that the profiler will "remove" elements when needed.
 func TestPrune(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	prof := makeProfiler(2*time.Millisecond, nil, nil, 3*time.Millisecond)
 	a := require.New(t)
@@ -78,6 +80,7 @@ func TestPrune(t *testing.T) {
 
 // TestProfilerStartEndZero Test functionality if the log interval is 0
 func TestProfilerStartEndZero(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	var s syncState
 	s.clock = timers.MakeMonotonicClock(time.Now())
@@ -107,6 +110,7 @@ func TestProfilerStartEndZero(t *testing.T) {
 //
 // This test forces "detached element" logic to be run.
 func TestProfilerStartEndEnabled(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	var s syncState
 	s.clock = timers.MakeMonotonicClock(time.Now())
@@ -141,6 +145,7 @@ func TestProfilerStartEndEnabled(t *testing.T) {
 
 // TestProfilerStartEndDisabled Test start-end functionality with detached elements.
 func TestProfilerStartEndDisabled(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	var s syncState
 	s.clock = timers.MakeMonotonicClock(time.Now())
@@ -170,6 +175,7 @@ func TestProfilerStartEndDisabled(t *testing.T) {
 // TestMaybeLogProfile Test that Metrics are only sent when all conditions are met and not
 // sent if they are not.
 func TestMaybeLogProfile(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	sentMetrics := false
 
@@ -217,6 +223,8 @@ func TestMaybeLogProfile(t *testing.T) {
 
 // TestGetElement Tests that getting an element returns it properly
 func TestGetElement(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	var s syncState
 	prof := makeProfiler(2*time.Millisecond, s.clock, s.log, 3*time.Millisecond)
 	a := require.New(t)
@@ -234,6 +242,8 @@ func TestGetElement(t *testing.T) {
 
 // TestMakeProfiler Ensures that makeProfiler() returns a valid profiler.
 func TestMakeProfiler(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	var s syncState
 	prof := makeProfiler(2*time.Millisecond, s.clock, s.log, 3*time.Millisecond)
 	a := require.New(t)
