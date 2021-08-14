@@ -44,8 +44,8 @@ import (
 // EvalMaxVersion is the max version we can interpret and run
 const EvalMaxVersion = LogicVersion
 
-// EvalMaxScratchSize is the maximum number of scratch slots.
-const EvalMaxScratchSize = 255
+// The constants below control TEAL opcodes evaluation and MAY NOT be changed
+// without moving them into consensus parameters.
 
 // MaxStringSize is the limit of byte strings created by `concat`
 const MaxStringSize = 4096
@@ -57,7 +57,7 @@ const MaxByteMathSize = 64
 const MaxLogSize = 1024
 
 // MaxLogCalls is the limit of total log calls during a program execution
-const MaxLogCalls = config.MaxLogCalls
+const MaxLogCalls = 32
 
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.

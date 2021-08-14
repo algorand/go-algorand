@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -113,7 +114,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*L
 
 	genesis[poolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})
 
-	bootstrap := MakeGenesisBalances(genesis, poolAddr, sinkAddr)
+	bootstrap := bookkeeping.MakeGenesisBalances(genesis, poolAddr, sinkAddr)
 
 	// generate test transactions
 	const inMem = true
@@ -129,7 +130,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*L
 	if latest != 0 {
 		panic(fmt.Errorf("newly created ledger doesn't start on round 0"))
 	}
-	bal := bootstrap.balances
+	bal := bootstrap.Balances
 
 	for i := 0; i < TXs; i++ {
 		send := gen.Int() % P

@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -284,7 +285,7 @@ func makeLedger(t *testing.T, namePostfix string) *data.Ledger {
 	}
 
 	log := logging.TestingLog(t)
-	genBal := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	genHash := crypto.Digest{0x42}
 	cfg := config.GetDefaultLocal()
 	const inMem = true
