@@ -71,7 +71,6 @@ func TestBlockEvaluator(t *testing.T) {
 	defer l.Close()
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	newBlock.RewardsState = genesisInitState.Block.RewardsState
 	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
 	require.Equal(t, eval.specials.FeeSink, testSinkAddr)
 	require.NoError(t, err)
@@ -285,7 +284,6 @@ func TestRekeying(t *testing.T) {
 		// So the ValidatedBlock that comes out isn't necessarily actually a valid block. We'll call Validate ourselves.
 
 		newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-		newBlock.RewardsState = genesisInitState.Block.RewardsState
 		eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
 		require.NoError(t, err)
 
@@ -478,7 +476,6 @@ func testEvalAppGroup(t *testing.T, schema basics.StateSchema) (*BlockEvaluator,
 	defer l.Close()
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	newBlock.RewardsState = genesisInitState.Block.RewardsState
 	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
 	require.NoError(t, err)
 	eval.validate = true
@@ -779,7 +776,6 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
 
 	// test speed of block building
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	newBlock.RewardsState = genesisInitState.Block.RewardsState
 	bev, err := l.StartEvaluator(newBlock.BlockHeader, 0)
 	require.NoError(b, err)
 
@@ -997,7 +993,6 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	defer l.Close()
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	newBlock.RewardsState = genesisInitState.Block.RewardsState
 	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
 	require.NoError(t, err)
 
@@ -1184,7 +1179,8 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *Ledger {
 	crypto.RandBytes(genHash[:])
 	genBlock, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture,
 		balances, "test", genHash)
-
+	require.False(t, genBlock.FeeSink.IsZero())
+	require.False(t, genBlock.RewardsPool.IsZero())
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
@@ -1203,8 +1199,9 @@ func (ledger *Ledger) nextBlock(t testing.TB) *BlockEvaluator {
 	rnd := ledger.Latest()
 	hdr, err := ledger.BlockHdr(rnd)
 	require.NoError(t, err)
-	eval, err := startEvaluator(ledger, bookkeeping.MakeBlock(hdr).BlockHeader,
-		config.Consensus[hdr.CurrentProtocol], 0, false, true)
+
+	nextHdr := bookkeeping.MakeBlock(hdr).BlockHeader
+	eval, err := ledger.StartEvaluator(nextHdr, 0)
 	require.NoError(t, err)
 	return eval
 }
@@ -1237,7 +1234,7 @@ func (eval *BlockEvaluator) txn(t testing.TB, txn *txntest.Txn) {
 	stxn := txn.SignedTxn()
 	err := eval.testTransaction(stxn, eval.state.child(1))
 	require.NoError(t, err)
-	eval.Transaction(stxn, transactions.ApplyData{})
+	err = eval.Transaction(stxn, transactions.ApplyData{})
 	require.NoError(t, err)
 }
 
@@ -1354,7 +1351,7 @@ func TestModifiedAppLocalStates(t *testing.T) {
 		Type:              "appl",
 		Sender:            addrs[0],
 		ApprovalProgram:   []byte{0x02, 0x20, 0x01, 0x01, 0x22},
-		ClearStateProgram: []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+		ClearStateProgram: []byte{0x02},
 	}
 
 	optInTxn := txntest.Txn{

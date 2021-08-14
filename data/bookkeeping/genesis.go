@@ -147,9 +147,6 @@ func MakeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalance
 		return Block{}, fmt.Errorf("unsupported protocol %s", proto)
 	}
 
-	poolAddr := basics.Address(genesisBal.RewardsPool)
-	incentivePoolBalanceAtGenesis := genesisBal.Balances[poolAddr].MicroAlgos
-
 	genesisRewardsState := RewardsState{
 		FeeSink:                   genesisBal.FeeSink,
 		RewardsPool:               genesisBal.RewardsPool,
@@ -158,14 +155,11 @@ func MakeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalance
 		RewardsRecalculationRound: basics.Round(params.RewardsRateRefreshInterval),
 	}
 
+	initialRewards := genesisBal.Balances[genesisBal.RewardsPool].MicroAlgos.Raw
 	if params.InitialRewardsRateCalculation {
-		genesisRewardsState.RewardsRate = basics.SubSaturate(incentivePoolBalanceAtGenesis.Raw, params.MinBalance) / uint64(params.RewardsRateRefreshInterval)
+		genesisRewardsState.RewardsRate = basics.SubSaturate(initialRewards, params.MinBalance) / uint64(params.RewardsRateRefreshInterval)
 	} else {
-		genesisRewardsState.RewardsRate = incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
-	}
-
-	genesisProtoState := UpgradeState{
-		CurrentProtocol: proto,
+		genesisRewardsState.RewardsRate = initialRewards / uint64(params.RewardsRateRefreshInterval)
 	}
 
 	blk := Block{
@@ -177,8 +171,10 @@ func MakeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalance
 			TimeStamp:    genesisBal.Timestamp,
 			GenesisID:    genesisID,
 			RewardsState: genesisRewardsState,
-			UpgradeState: genesisProtoState,
-			UpgradeVote:  UpgradeVote{},
+			UpgradeState: UpgradeState{
+				CurrentProtocol: proto,
+			},
+			UpgradeVote: UpgradeVote{},
 		},
 	}
 
