@@ -837,7 +837,6 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 				if len(txgroup) == groupSize {
 					err = pps.sendAsGroup(txgroup, client, senders)
 					if err != nil {
-						err = fmt.Errorf("optins1 : %w", err)
 						return
 					}
 					txgroup = txgroup[:0]
@@ -848,7 +847,6 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 			if len(txgroup) > 0 {
 				err = pps.sendAsGroup(txgroup, client, senders)
 				if err != nil {
-					err = fmt.Errorf("optins2 : %w", err)
 					return
 				}
 			}
