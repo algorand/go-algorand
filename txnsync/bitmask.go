@@ -127,11 +127,7 @@ func (b *bitmask) iterate(numTransactions int, numItems int, callback func(int, 
 	switch option {
 	case 0:
 		transactionIndex := 0
-		maxV := numTransactions / 8
-		if numTransactions%8 != 0 {
-			maxV++
-		}
-		maxV++ //b[0] is the option
+		maxV := 1 + (numTransactions+7)/8
 		if len(*b) > maxV {
 			return errIndexNotFound
 		}
@@ -157,11 +153,7 @@ func (b *bitmask) iterate(numTransactions int, numItems int, callback func(int, 
 		}
 	case 1:
 		transactionIndex := 0
-		maxV := numTransactions / 8
-		if numTransactions%8 != 0 {
-			maxV++
-		}
-		maxV++ //b[0] is the option
+		maxV := 1 + (numTransactions+7)/8
 		if len(*b) > maxV {
 			return errIndexNotFound
 		}
