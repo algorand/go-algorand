@@ -204,7 +204,7 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 				return
 			}
 			tx.Note = pps.makeNextUniqueNoteField()
-			_, err = signAndBroadcastTransaction(accounts, addr, tx, client, pps.cfg)
+			_, err = signAndBroadcastTransaction(accounts[addr], tx, client)
 			if err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset creation failed with error %v\n", err)
 				return
@@ -301,7 +301,7 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 			}
 			tx.Note = pps.makeNextUniqueNoteField()
 
-			_, err = signAndBroadcastTransaction(accounts, addr, tx, client, pps.cfg)
+			_, err = signAndBroadcastTransaction(accounts[addr], tx, client)
 			if err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset optin failed with error %v\n", err)
 				return
@@ -397,7 +397,7 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 				}
 			}
 
-			_, err = signAndBroadcastTransaction(accounts, creator, tx, client, pps.cfg)
+			_, err = signAndBroadcastTransaction(accounts[creator], tx, client)
 			if err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset distribution failed with error %v\n", err)
 				return
@@ -434,22 +434,14 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 	return
 }
 
-func signAndBroadcastTransaction(accounts map[string]*pingPongAccount, sender string, tx transactions.Transaction, client libgoal.Client, cfg PpConfig) (txID string, err error) {
-	var signedTx transactions.SignedTxn
-	signedTx, err = signTxn(sender, tx, accounts, cfg)
-	if err != nil {
-		fmt.Printf("Cannot sign trx %+v with account %v\nerror %v\n", tx, sender, err)
-		return
-	}
+func signAndBroadcastTransaction(senderAccount *pingPongAccount, tx transactions.Transaction, client libgoal.Client) (txID string, err error) {
+	signedTx := tx.Sign(senderAccount.sk)
 	txID, err = client.BroadcastTransaction(signedTx)
 	if err != nil {
 		fmt.Printf("Cannot broadcast transaction %+v\nerror %v \n", signedTx, err)
 		return
 	}
-	if !cfg.Quiet {
-		fmt.Printf("Broadcast transaction %v\n", txID)
-	}
-	accounts[sender].addBalance(-int64(tx.Fee.Raw))
+	senderAccount.addBalance(-int64(tx.Fee.Raw))
 	return
 }
 
