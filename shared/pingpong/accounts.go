@@ -217,11 +217,6 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 	}
 
 	// wait until all the assets created
-	r, err := client.Status()
-	if err != nil {
-		fmt.Printf("Error: failed to obtain last round after assets creation")
-		return
-	}
 	allAssets := make(map[uint64]string, int(pps.cfg.NumAsset)*len(accounts))
 	for addr := range accounts {
 		if addr == pps.cfg.SrcAccount {
@@ -244,12 +239,7 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 				fmt.Printf("Error: %s\n", err.Error())
 				return
 			}
-			r, err = client.WaitForRound(r.LastRound)
-			if err != nil {
-				fmt.Printf("Warning: failed to wait for round %d after assets creation", r.LastRound)
-				time.Sleep(1 * time.Second)
-				continue
-			}
+			waitForNextRoundOrSleep(client, 500*time.Millisecond)
 		}
 		assetParams := account.AssetParams
 		if !pps.cfg.Quiet {
@@ -327,11 +317,7 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 	}
 
 	// wait until all opt-ins completed
-	r, err = client.Status()
-	if err != nil {
-		fmt.Printf("Error: failed to obtain last round after assets opt in")
-		return
-	}
+	waitForNextRoundOrSleep(client, 500*time.Millisecond)
 	for addr := range accounts {
 		if addr == pps.cfg.SrcAccount {
 			continue
@@ -358,13 +344,7 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 				fmt.Printf("Error: %s\n", err.Error())
 				return
 			}
-			updatedStatus, waitErr := client.WaitForRound(r.LastRound)
-			if waitErr != nil {
-				fmt.Printf("Warning: failed to wait for round %d after assets opt in", r.LastRound+1)
-				time.Sleep(1 * time.Second)
-				continue
-			}
-			r = updatedStatus
+			waitForNextRoundOrSleep(client, 500*time.Millisecond)
 		}
 	}
 
@@ -432,11 +412,7 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 	}
 
 	// wait for all transfers acceptance
-	r, err = client.Status()
-	if err != nil {
-		fmt.Printf("Error: failed to obtain last round after assets distribution")
-		return
-	}
+	waitForNextRoundOrSleep(client, 500*time.Millisecond)
 	deadline := time.Now().Add(3 * time.Minute)
 	var pending v1.PendingTransactions
 	for {
@@ -453,12 +429,7 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 			fmt.Printf("Warning: assets distribution took too long")
 			break
 		}
-		r, err = client.WaitForRound(r.LastRound)
-		if err != nil {
-			fmt.Printf("Warning: failed to wait for round %d after assets distribution", r.LastRound)
-			time.Sleep(1 * time.Second)
-			continue
-		}
+		waitForNextRoundOrSleep(client, 500*time.Millisecond)
 	}
 	return
 }
@@ -639,7 +610,7 @@ func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKe
 	return ops.Program, progAsm
 }
 
-func (pps *WorkerState) waitForNextRoundOrSleep(client libgoal.Client, waitTime time.Duration) {
+func waitForNextRoundOrSleep(client libgoal.Client, waitTime time.Duration) {
 	status, err := client.Status()
 	if err == nil {
 		status, err = client.WaitForRound(status.LastRound)
@@ -670,15 +641,7 @@ repeat:
 	if broadcastErr != nil {
 		if strings.Contains(broadcastErr.Error(), "broadcast queue full") {
 			fmt.Printf("failed to send broadcast app creation txn group, broadcast queue full. sleeping & retrying.\n")
-			stat, err2 := client.Status()
-			if err2 == nil {
-				_, err2 = client.WaitForRound(stat.LastRound)
-				if err2 != nil {
-					time.Sleep(500 * time.Millisecond)
-				}
-			} else {
-				time.Sleep(500 * time.Millisecond)
-			}
+			waitForNextRoundOrSleep(client, 500*time.Millisecond)
 			goto repeat
 		}
 		fmt.Printf("Cannot broadcast app creation txn group - %#v\n", stxgroup)
@@ -836,7 +799,7 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 			if len(account.AppParams) >= accountsApplicationCount[appAccount.Address] {
 				break
 			}
-			pps.waitForNextRoundOrSleep(client, 500*time.Millisecond)
+			waitForNextRoundOrSleep(client, 500*time.Millisecond)
 			// TODO : if we fail here for too long, we should re-create new accounts, etc.
 		}
 		for idx, v := range account.AppParams {

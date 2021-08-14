@@ -298,15 +298,7 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 			if err != nil {
 				if strings.Contains(err.Error(), "broadcast queue full") {
 					fmt.Printf("failed to send payment, broadcast queue full. sleeping & retrying.\n")
-					stat, err2 := client.Status()
-					if err2 == nil {
-						_, err2 = client.WaitForRound(stat.LastRound)
-						if err2 != nil {
-							time.Sleep(500 * time.Millisecond)
-						}
-					} else {
-						time.Sleep(500 * time.Millisecond)
-					}
+					waitForNextRoundOrSleep(client, 500*time.Millisecond)
 					goto repeat
 				}
 				return err
@@ -381,17 +373,8 @@ func waitPendingTransactions(accounts map[string]*pingPongAccount, client libgoa
 				continue
 			}
 			// the transaction is still in the transaction pool.
-			nodeStatus, err := client.Status()
-			if err != nil {
-				fmt.Printf("failed to retrieve node status : %v\n", err)
-				continue
-			}
 			// this would wait for the next round, when we will perform the check again.
-			_, err = client.WaitForRound(nodeStatus.LastRound)
-			if err != nil {
-				fmt.Printf("failed to wait for next round : %v\n", err)
-				return err
-			}
+			waitForNextRoundOrSleep(client, 500*time.Millisecond)
 			goto repeat
 		}
 	}
@@ -959,11 +942,7 @@ func (pps *WorkerState) roundMonitor(client libgoal.Client) {
 		}
 
 		// wait for the next round.
-		_, err = client.WaitForRound(paramsResp.LastRound)
-		if err != nil {
-			fmt.Printf("failed to wait for next round : %v\n", err)
-			time.Sleep(30 * time.Millisecond)
-		}
+		waitForNextRoundOrSleep(client, 200*time.Millisecond)
 	}
 }
 
