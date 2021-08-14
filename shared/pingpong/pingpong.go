@@ -207,10 +207,11 @@ func computeAccountMinBalance(client libgoal.Client, cfg PpConfig) (fundingRequi
 
 	if cfg.NumApp > 0 {
 		amount := uint64(0)
+
 		runningRequiredBalance = (amount + fee) * 10 * 2
-		setupCost := uint64(proto.MaxTxGroupSize) * (uint64(proto.MaxAppProgramCost*2) + fee)
+		setupCost := uint64(proto.MaxTxGroupSize) * (uint64(proto.AppFlatParamsMinBalance*2) + fee)
 		// todo: add the cfg.NumAppOptIn to the setup cost.
-		fundingRequiredBalance = cfg.MinAccountFunds + (amount+fee)*10*2*cfg.TxnPerSec*uint64(math.Ceil(cfg.RefreshTime.Seconds())) + setupCost
+		fundingRequiredBalance = proto.MinBalance + cfg.MinAccountFunds + (amount+fee)*10*2*cfg.TxnPerSec*uint64(math.Ceil(cfg.RefreshTime.Seconds())) + setupCost
 		fmt.Printf("required min balance for app accounts: %d\n", fundingRequiredBalance)
 		return
 	}

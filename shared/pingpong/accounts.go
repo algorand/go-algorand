@@ -661,20 +661,9 @@ func (pps *WorkerState) sendAsGroup(txgroup []transactions.Transaction, client l
 		return
 	}
 	stxgroup := make([]transactions.SignedTxn, len(txgroup))
-	var signErr error
 	for i, txn := range txgroup {
 		txn.Group = gid
-		stxgroup[i], signErr = signTxn(senders[i], txn, pps.accounts, pps.cfg)
-		if err != nil {
-			fmt.Printf("Cannot sign trx %+v with account %v\nerror %v\n", txn, senders[i], err)
-			return
-		}
-
-		if signErr != nil {
-			fmt.Printf("Cannot sign app creation txn\n")
-			err = signErr
-			return
-		}
+		stxgroup[i] = txn.Sign(pps.accounts[senders[i]].sk)
 	}
 repeat:
 	broadcastErr := client.BroadcastTransactionGroup(stxgroup)
@@ -692,7 +681,7 @@ repeat:
 			}
 			goto repeat
 		}
-		fmt.Printf("Cannot broadcast app creation txn group\n")
+		fmt.Printf("Cannot broadcast app creation txn group - %#v\n", stxgroup)
 		err = broadcastErr
 		return
 	}
@@ -823,6 +812,8 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 			balance, err2 := client.GetBalance(appAccount.Address)
 			if err2 == nil {
 				fmt.Printf("account %v balance is %d, logged balance is %d\n", appAccount.Address, balance, accounts[appAccount.Address].getBalance())
+			} else {
+				fmt.Printf("account %v balance cannot be determined : %v\n", appAccount.Address, err2)
 			}
 			return
 		}
@@ -894,6 +885,7 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 				if len(txgroup) == groupSize {
 					err = pps.sendAsGroup(txgroup, client, senders)
 					if err != nil {
+						err = fmt.Errorf("optins1 : %w", err)
 						return
 					}
 					txgroup = txgroup[:0]
@@ -904,6 +896,7 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 			if len(txgroup) > 0 {
 				err = pps.sendAsGroup(txgroup, client, senders)
 				if err != nil {
+					err = fmt.Errorf("optins2 : %w", err)
 					return
 				}
 			}
