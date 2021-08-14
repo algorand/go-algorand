@@ -209,7 +209,6 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset creation failed with error %v\n", err)
 				return
 			}
-			accounts[addr].addBalance(-int64(tx.Fee.Raw))
 
 			totalSent++
 			throttleTransactionRate(startTime, pps.cfg, totalSent)
@@ -307,7 +306,6 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 				return
 			}
 			totalSent++
-			accounts[addr].addBalance(-int64(tx.Fee.Raw))
 
 			optIns[k] = append(optIns[k], addr)
 			optInsByAddr[addr][k] = true
@@ -402,7 +400,6 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset distribution failed with error %v\n", err)
 				return
 			}
-			accounts[creator].addBalance(-int64(tx.Fee.Raw))
 
 			totalSent++
 			throttleTransactionRate(startTime, pps.cfg, totalSent)
