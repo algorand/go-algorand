@@ -126,16 +126,21 @@ func (b *bitmask) iterate(countOfEntries int, countOfSetBits int, callback func(
 	setBitCounter := 0
 	switch option {
 	case 0:
+		entryIndex := 0
+		maxV := countOfEntries / 8
+		if countOfEntries%8 != 0 {
+			maxV++
+		}
+		maxV++ //b[0] is the option
+		if len(*b) > maxV {
+			return errIndexNotFound
+		}
 		for i, v := range (*b)[1:] {
-			for j := 0; j < 8 && v > 0; j++ {
+			for ; entryIndex < countOfEntries && v > 0; entryIndex++ {
 				if v&1 != 0 {
 					if setBitCounter >= countOfSetBits {
 						return errDataMissing
 					}
-					entryIndex := 8*i + j
-					if entryIndex >= countOfEntries {
-						return errIndexNotFound
-					}
 					if err := callback(entryIndex, setBitCounter); err != nil {
 						return err
 					}
@@ -143,31 +148,56 @@ func (b *bitmask) iterate(countOfEntries int, countOfSetBits int, callback func(
 				}
 				v >>= 1
 			}
+			if v > 0 {
+				// remaining set bits, but entryIndex exceeded countOfEntries
+				return errIndexNotFound
+			}
+			// in case the loop is cut short because there are no more set bits in the byte
+			entryIndex = (i + 1) * 8
 		}
 	case 1:
-		for i, v := range (*b)[1:] {
-			for j := 0; j < 8 && v < 255; j++ {
+		entryIndex := 0
+		maxV := countOfEntries / 8
+		if countOfEntries%8 != 0 {
+			maxV++
+		}
+		maxV++ //b[0] is the option
+		if len(*b) > maxV {
+			return errIndexNotFound
+		}
+		for _, v := range (*b)[1:] {
+			// after the first iteration of the loop below, v will be less than 255
+			if v >= 255 {
+				entryIndex += 8
+				continue
+			}
+			maxJ := 8
+			if maxJ > countOfEntries-entryIndex {
+				maxJ = countOfEntries - entryIndex
+			}
+			for j := 0; j < maxJ; j++ {
 				if v&1 == 0 {
 					if setBitCounter >= countOfSetBits {
 						return errDataMissing
 					}
-					entryIndex := 8*i + j
-					if entryIndex >= countOfEntries {
-						return errIndexNotFound
-					}
 					if err := callback(entryIndex, setBitCounter); err != nil {
 						return err
 					}
 					setBitCounter++
 				}
 				v >>= 1
+				entryIndex++
+			}
+			if 255>>maxJ != v {
+				// The remaining of the bits must be 1
+				return errIndexNotFound
 			}
 		}
-		for i := (len(*b) - 1) * 8; i < countOfEntries; i++ {
-			if setBitCounter >= countOfSetBits {
-				return errDataMissing
-			}
-			if err := callback(i, setBitCounter); err != nil {
+		if countOfEntries-entryIndex > countOfSetBits-setBitCounter {
+			return errDataMissing
+		}
+		for ; entryIndex < countOfEntries; entryIndex++ {
+			if err := callback(entryIndex, setBitCounter); err != nil {
 				return err
 			}
 			setBitCounter++
