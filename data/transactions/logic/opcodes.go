@@ -142,6 +142,7 @@ var OpSpecs = []OpSpec{
 	{0x03, "sha512_256", opSHA512_256, asmDefault, disDefault, oneBytes, oneBytes, 2, modeAny, costly(45)},
 
 	{0x04, "ed25519verify", opEd25519verify, asmDefault, disDefault, threeBytes, oneInt, 1, runModeSignature, costly(1900)},
+	{0x04, "ed25519verify", opEd25519verify, asmDefault, disDefault, threeBytes, oneInt, 5, modeAny, costly(1900)},
 	{0x08, "+", opPlus, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
 	{0x09, "-", opMinus, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
 	{0x0a, "/", opDiv, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
@@ -152,8 +153,8 @@ var OpSpecs = []OpSpec{
 	{0x0f, ">=", opGe, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
 	{0x10, "&&", opAnd, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
 	{0x11, "||", opOr, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
-	{0x12, "==", opEq, asmDefault, disDefault, twoAny, oneInt, 1, modeAny, opDefault},
-	{0x13, "!=", opNeq, asmDefault, disDefault, twoAny, oneInt, 1, modeAny, opDefault},
+	{0x12, "==", opEq, asmDefault, disDefault, twoAny, oneInt, 1, modeAny, stacky(typeEquals)},
+	{0x13, "!=", opNeq, asmDefault, disDefault, twoAny, oneInt, 1, modeAny, stacky(typeEquals)},
 	{0x14, "!", opNot, asmDefault, disDefault, oneInt, oneInt, 1, modeAny, opDefault},
 	{0x15, "len", opLen, asmDefault, disDefault, oneBytes, oneInt, 1, modeAny, opDefault},
 	{0x16, "itob", opItob, asmDefault, disDefault, oneInt, oneBytes, 1, modeAny, opDefault},
@@ -212,13 +213,13 @@ var OpSpecs = []OpSpec{
 	{0x43, "return", opReturn, asmDefault, disDefault, oneInt, nil, 2, modeAny, opDefault},
 	{0x44, "assert", opAssert, asmDefault, disDefault, oneInt, nil, 3, modeAny, opDefault},
 	{0x48, "pop", opPop, asmDefault, disDefault, oneAny, nil, 1, modeAny, opDefault},
-	{0x49, "dup", opDup, asmDefault, disDefault, oneAny, twoAny, 1, modeAny, opDefault},
-	{0x4a, "dup2", opDup2, asmDefault, disDefault, twoAny, twoAny.plus(twoAny), 2, modeAny, opDefault},
+	{0x49, "dup", opDup, asmDefault, disDefault, oneAny, twoAny, 1, modeAny, stacky(typeDup)},
+	{0x4a, "dup2", opDup2, asmDefault, disDefault, twoAny, twoAny.plus(twoAny), 2, modeAny, stacky(typeDupTwo)},
 	// There must be at least one thing on the stack for dig, but
 	// it would be nice if we did better checking than that.
 	{0x4b, "dig", opDig, asmDefault, disDefault, oneAny, twoAny, 3, modeAny, stacky(typeDig, "n")},
 	{0x4c, "swap", opSwap, asmDefault, disDefault, twoAny, twoAny, 3, modeAny, stacky(typeSwap)},
-	{0x4d, "select", opSelect, asmDefault, disDefault, twoAny.plus(oneInt), oneAny, 3, modeAny, opDefault},
+	{0x4d, "select", opSelect, asmDefault, disDefault, twoAny.plus(oneInt), oneAny, 3, modeAny, stacky(typeSelect)},
 	{0x4e, "cover", opCover, asmDefault, disDefault, oneAny, oneAny, 5, modeAny, stacky(typeCover, "n")},
 	{0x4f, "uncover", opUncover, asmDefault, disDefault, oneAny, oneAny, 5, modeAny, stacky(typeUncover, "n")},
 
@@ -226,7 +227,7 @@ var OpSpecs = []OpSpec{
 	{0x51, "substring", opSubstring, assembleSubstring, disDefault, oneBytes, oneBytes, 2, modeAny, immediates("s", "e")},
 	{0x52, "substring3", opSubstring3, asmDefault, disDefault, byteIntInt, oneBytes, 2, modeAny, opDefault},
 	{0x53, "getbit", opGetBit, asmDefault, disDefault, anyInt, oneInt, 3, modeAny, opDefault},
-	{0x54, "setbit", opSetBit, asmDefault, disDefault, anyIntInt, oneAny, 3, modeAny, opDefault},
+	{0x54, "setbit", opSetBit, asmDefault, disDefault, anyIntInt, oneAny, 3, modeAny, stacky(typeSetBit)},
 	{0x55, "getbyte", opGetByte, asmDefault, disDefault, byteInt, oneInt, 3, modeAny, opDefault},
 	{0x56, "setbyte", opSetByte, asmDefault, disDefault, byteIntInt, oneBytes, 3, modeAny, opDefault},
 	{0x57, "extract", opExtract, asmDefault, disDefault, oneBytes, oneBytes, 5, modeAny, immediates("s", "l")},
@@ -294,6 +295,9 @@ var OpSpecs = []OpSpec{
 	{0xad, "b^", opBytesBitXor, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(6)},
 	{0xae, "b~", opBytesBitNot, asmDefault, disDefault, oneBytes, oneBytes, 4, modeAny, costly(4)},
 	{0xaf, "bzero", opBytesZero, asmDefault, disDefault, oneInt, oneBytes, 4, modeAny, opDefault},
+
+	// ABI support opcodes.
+	{0xb0, "log", opLog, asmDefault, disDefault, oneBytes, nil, 5, runModeApplication, opDefault},
 }
 
 type sortByOpcode []OpSpec

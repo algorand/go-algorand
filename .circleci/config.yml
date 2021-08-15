@@ -3,6 +3,7 @@ version: 2.1
 orbs:
   win: circleci/windows@2.3.0
   go: circleci/go@1.7.0
+  slack: circleci/slack@4.4.2
 
 workflows:
   version: 2
@@ -15,111 +16,156 @@ workflows:
             - amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - amd64_test_nightly:
           requires:
             - amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
       - amd64_integration:
           requires:
             - amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - amd64_integration_nightly:
           requires:
             - amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
       - amd64_e2e_subs:
           requires:
             - amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - amd64_e2e_subs_nightly:
           requires:
             - amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
       - arm64_build
       - arm64_test:
           requires:
             - arm64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - arm64_test_nightly:
           requires:
             - arm64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
       - arm64_integration:
           requires:
             - arm64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - arm64_integration_nightly:
           requires:
             - arm64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
       - arm64_e2e_subs:
           requires:
             - arm64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - arm64_e2e_subs_nightly:
           requires:
             - arm64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
       - mac_amd64_build
       - mac_amd64_test:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - mac_amd64_test_nightly:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
       - mac_amd64_integration:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - mac_amd64_integration_nightly:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
       - mac_amd64_e2e_subs:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
       - mac_amd64_e2e_subs_nightly:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
       #- windows_x64_build
 
 commands:
@@ -367,6 +413,9 @@ jobs:
           result_subdir: amd64-nightly
           no_output_timeout: 45m
       - upload_coverage
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
 
   amd64_integration:
     machine:
@@ -374,7 +423,7 @@ jobs:
     resource_class: medium
     parallelism: 4
     environment:
-      SKIP_E2E_SUBS: "true"
+      E2E_TEST_FILTER: "GO"
     steps:
       - prepare_go
       - generic_integration:
@@ -387,19 +436,22 @@ jobs:
     resource_class: medium
     parallelism: 4
     environment:
-      SKIP_E2E_SUBS: "true"
+      E2E_TEST_FILTER: "GO"
     steps:
       - prepare_go
       - generic_integration:
           result_subdir: amd64-integrationnightly
           no_output_timeout: 45m
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
 
   amd64_e2e_subs:
     machine:
       image: ubuntu-2004:202104-01
     resource_class: large
     environment:
-      E2E_SUBS_ONLY: "true"
+      E2E_TEST_FILTER: "SCRIPTS"
     steps:
       - prepare_go
       - generic_integration:
@@ -411,12 +463,15 @@ jobs:
       image: ubuntu-2004:202104-01
     resource_class: large
     environment:
-      E2E_SUBS_ONLY: "true"
+      E2E_TEST_FILTER: "SCRIPTS"
     steps:
       - prepare_go
       - generic_integration:
           result_subdir: amd64-e2e_subs_nightly
           no_output_timeout: 45m
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
 
   arm64_build:
     machine:
@@ -452,6 +507,9 @@ jobs:
           result_subdir: arm64-nightly
           no_output_timeout: 45m
       - upload_coverage
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
 
   arm64_integration:
     machine:
@@ -459,7 +517,7 @@ jobs:
     resource_class: arm.medium
     parallelism: 4
     environment:
-      SKIP_E2E_SUBS: "true"
+      E2E_TEST_FILTER: "GO"
     steps:
       - checkout
       - prepare_go
@@ -473,20 +531,23 @@ jobs:
     resource_class: arm.medium
     parallelism: 4
     environment:
-      SKIP_E2E_SUBS: "true"
+      E2E_TEST_FILTER: "GO"
     steps:
       - checkout
       - prepare_go
       - generic_integration:
           result_subdir: arm64-integration-nightly
           no_output_timeout: 45m
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
 
   arm64_e2e_subs:
     machine:
       image: ubuntu-2004:202101-01
     resource_class: arm.large
     environment:
-      E2E_SUBS_ONLY: "true"
+      E2E_TEST_FILTER: "SCRIPTS"
     steps:
       - checkout
       - prepare_go
@@ -499,13 +560,16 @@ jobs:
       image: ubuntu-2004:202101-01
     resource_class: arm.large
     environment:
-      E2E_SUBS_ONLY: "true"
+      E2E_TEST_FILTER: "SCRIPTS"
     steps:
       - checkout
       - prepare_go
       - generic_integration:
           result_subdir: arm64-e2e_subs-nightly
           no_output_timeout: 45m
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
 
   mac_amd64_build:
     macos:
@@ -551,6 +615,9 @@ jobs:
           circleci_home: /Users/distiller
           no_output_timeout: 45m
       - upload_coverage
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
 
   mac_amd64_integration:
     macos:
@@ -558,7 +625,7 @@ jobs:
     resource_class: medium
     parallelism: 4
     environment:
-      SKIP_E2E_SUBS: "true"
+      E2E_TEST_FILTER: "GO"
       HOMEBREW_NO_AUTO_UPDATE: "true"
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
@@ -574,7 +641,7 @@ jobs:
     resource_class: medium
     parallelism: 4
     environment:
-      SKIP_E2E_SUBS: "true"
+      E2E_TEST_FILTER: "GO"
       HOMEBREW_NO_AUTO_UPDATE: "true"
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
@@ -583,13 +650,16 @@ jobs:
           result_subdir: mac-amd64-integration-nightly
           circleci_home: /Users/distiller
           no_output_timeout: 45m
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
 
   mac_amd64_e2e_subs:
     macos:
       xcode: 12.0.1
     resource_class: large
     environment:
-      E2E_SUBS_ONLY: "true"
+      E2E_TEST_FILTER: "SCRIPTS"
       HOMEBREW_NO_AUTO_UPDATE: "true"
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
@@ -604,7 +674,7 @@ jobs:
       xcode: 12.0.1
     resource_class: large
     environment:
-      E2E_SUBS_ONLY: "true"
+      E2E_TEST_FILTER: "SCRIPTS"
       HOMEBREW_NO_AUTO_UPDATE: "true"
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
@@ -613,6 +683,9 @@ jobs:
           result_subdir: mac-amd64-e2e_subs-nightly
           circleci_home: /Users/distiller
           no_output_timeout: 45m
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
 
   windows_x64_build:
     executor:
@@ -627,7 +700,7 @@ jobs:
             #export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
             export GOPATH="/home/circleci/go"
             export ALGORAND_DEADLOCK=enable
-            export NO_GIMME=True
+            export SKIP_GO_INSTALLATION=True
             export PATH=/mingw64/bin:/C/tools/msys64/mingw64/bin:/usr/bin:$PATH
             export MAKE=mingw32-make
             $msys2 scripts/travis/build_test.sh

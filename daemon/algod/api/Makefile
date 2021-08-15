@@ -25,7 +25,7 @@ algod.oas3.yml:	algod.oas2.json
 	rm -f .3tmp.json
 
 oapi-codegen:	.PHONY
-	GO111MODULE=on go get -u "github.com/algorand/oapi-codegen/...@v1.3.5-algorand5"
+	../../../scripts/buildtools/install_buildtools.sh -o github.com/algorand/oapi-codegen -c github.com/algorand/oapi-codegen/cmd/oapi-codegen
 
 clean:
 	rm -rf server/v2/generated/types.go server/v2/generated/routes.go server/v2/generated/private/types.go server/v2/generated/private/routes.go algod.oas3.yml

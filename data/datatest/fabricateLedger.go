@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -33,7 +34,7 @@ import (
 var roundDeadline = 0 * time.Second
 
 // FabricateLedger is a test-only helper to create a new in-memory Ledger and run the protocol through the specified Round with the given accounts
-func FabricateLedger(log logging.Logger, ledgerName string, accounts []account.Participation, genesis data.GenesisBalances, lastRound basics.Round) (*data.Ledger, error) {
+func FabricateLedger(log logging.Logger, ledgerName string, accounts []account.Participation, genesis bookkeeping.GenesisBalances, lastRound basics.Round) (*data.Ledger, error) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true

@@ -47,7 +47,6 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Pushes: uint64
 - for (data A, signature B, pubkey C) verify the signature of ("ProgData" || program_hash || data) against the pubkey => {0 or 1}
 - **Cost**: 1900
-- Mode: Signature
 
 The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.
 
@@ -1202,3 +1201,14 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Pushes: []byte
 - push a byte-array of length X, containing all zero bytes
 - LogicSigVersion >= 4
+
+## log
+
+- Opcode: 0xb0
+- Pops: *... stack*, []byte
+- Pushes: _None_
+- write bytes to log state of the current application
+- LogicSigVersion >= 5
+- Mode: Application
+
+`log` can be called up to MaxLogCalls times in a program, and log up to a total of 1k bytes.

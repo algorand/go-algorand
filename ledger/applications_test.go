@@ -61,6 +61,7 @@ type mockCowForLogicLedger struct {
 	brs    map[basics.Address]basics.AccountData
 	stores map[storeLocator]basics.TealKeyValue
 	tcs    map[int]basics.CreatableIndex
+	logs   []basics.LogItem
 }
 
 func (c *mockCowForLogicLedger) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
@@ -124,6 +125,11 @@ func (c *mockCowForLogicLedger) prevTimestamp() int64 {
 func (c *mockCowForLogicLedger) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
 	_, found := c.stores[storeLocator{addr, aidx, global}]
 	return found, nil
+}
+
+func (c *mockCowForLogicLedger) AppendLog(aidx uint64, value string) error {
+	c.logs = append(c.logs, basics.LogItem{ID: aidx, Message: value})
+	return nil
 }
 
 func newCowMock(creatables []modsData) *mockCowForLogicLedger {
@@ -450,6 +456,14 @@ return`
 	l, err := OpenLedger(logging.Base(), "TestAppAccountData", true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
+	l.accts.ctxCancel() // force commitSyncer to exit
+
+	// wait commitSyncer to exit
+	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
+	select {
+	case <-l.accts.commitSyncerClosed:
+		break
+	}
 
 	txHeader := transactions.Header{
 		Sender:      creator,
@@ -506,7 +520,7 @@ return`
 	// save data into DB and write into local state
 	l.accts.accountsWriting.Add(1)
 	l.accts.commitRound(3, 0, 0)
-	l.reloadLedger()
+	l.accts.accountsWriting.Wait()
 
 	appCallFields = transactions.ApplicationCallTxnFields{
 		OnCompletion:    0,
@@ -527,7 +541,7 @@ return`
 	// save data into DB
 	l.accts.accountsWriting.Add(1)
 	l.accts.commitRound(1, 3, 0)
-	l.reloadLedger()
+	l.accts.accountsWriting.Wait()
 
 	// dump accounts
 	var rowid int64
@@ -660,6 +674,14 @@ return`
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
+	l.accts.ctxCancel() // force commitSyncer to exit
+
+	// wait commitSyncer to exit
+	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
+	select {
+	case <-l.accts.commitSyncerClosed:
+		break
+	}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -727,7 +749,7 @@ return`
 	// save data into DB and write into local state
 	l.accts.accountsWriting.Add(1)
 	l.accts.commitRound(3, 0, 0)
-	l.reloadLedger()
+	l.accts.accountsWriting.Wait()
 
 	// check first write
 	blk, err := l.Block(2)
@@ -783,7 +805,7 @@ return`
 	// save data into DB
 	l.accts.accountsWriting.Add(1)
 	l.accts.commitRound(2, 3, 0)
-	l.reloadLedger()
+	l.accts.accountsWriting.Wait()
 
 	// check first write
 	blk, err = l.Block(4)
@@ -907,6 +929,14 @@ return`
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
+	l.accts.ctxCancel() // force commitSyncer to exit
+
+	// wait commitSyncer to exit
+	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
+	select {
+	case <-l.accts.commitSyncerClosed:
+		break
+	}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -1002,7 +1032,7 @@ return`
 	// save data into DB and write into local state
 	l.accts.accountsWriting.Add(1)
 	l.accts.commitRound(3, 0, 0)
-	l.reloadLedger()
+	l.accts.accountsWriting.Wait()
 
 	// check first write
 	blk, err = l.Block(2)
@@ -1058,6 +1088,14 @@ return`
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
+	l.accts.ctxCancel() // force commitSyncer to exit
+
+	// wait commitSyncer to exit
+	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
+	select {
+	case <-l.accts.commitSyncerClosed:
+		break
+	}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -1134,7 +1172,7 @@ return`
 	// save data into DB and write into local state
 	l.accts.accountsWriting.Add(1)
 	l.accts.commitRound(2, 0, 0)
-	l.reloadLedger()
+	l.accts.accountsWriting.Wait()
 
 	// check first write
 	blk, err = l.Block(1)
@@ -1251,6 +1289,14 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
+	l.accts.ctxCancel() // force commitSyncer to exit
+
+	// wait commitSyncer to exit
+	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
+	select {
+	case <-l.accts.commitSyncerClosed:
+		break
+	}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -1313,7 +1359,7 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	// save data into DB and write into local state
 	l.accts.accountsWriting.Add(1)
 	l.accts.commitRound(2, 0, 0)
-	l.reloadLedger()
+	l.accts.accountsWriting.Wait()
 
 	// check first write
 	blk, err := l.Block(2)
@@ -1323,4 +1369,34 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx]["lk0"].Bytes, "local0")
 	a.Contains(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx], "lk1")
 	a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx]["lk1"].Bytes, "local1")
+}
+
+func TestLogicLedgerAppendLog(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	addr := getRandomAddress(a)
+	aidx := basics.AppIndex(1)
+	c := newCowMock([]modsData{
+		{addr, basics.CreatableIndex(1), basics.AppCreatable},
+	})
+	l, err := newLogicLedger(c, aidx)
+	a.NoError(err)
+	a.NotNil(l)
+
+	appCallFields := transactions.ApplicationCallTxnFields{
+		OnCompletion:  transactions.NoOpOC,
+		ApplicationID: 0,
+		Accounts:      []basics.Address{},
+	}
+	appCall := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		ApplicationCallTxnFields: appCallFields,
+	}
+
+	err = l.AppendLog(&appCall, "a")
+	a.NoError(err)
+	a.Equal(len(c.logs), 1)
+	a.Equal(c.logs[0].Message, "a")
 }
