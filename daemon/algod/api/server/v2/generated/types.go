@@ -316,7 +316,7 @@ type ErrorResponse struct {
 	Message string  `json:"message"`
 }
 
-// EvalDelta defines model for EvalDelta.
+// EvalDelta defines model for f.
 type EvalDelta struct {
 
 	// \[at\] delta action.
@@ -498,6 +498,7 @@ type DryrunResponse struct {
 	// Protocol version is the protocol version Dryrun was operated under.
 	ProtocolVersion string            `json:"protocol-version"`
 	Txns            []DryrunTxnResult `json:"txns"`
+	Cost            uint64            `json:"cost"`
 }
 
 // NodeStatusResponse defines model for NodeStatusResponse.

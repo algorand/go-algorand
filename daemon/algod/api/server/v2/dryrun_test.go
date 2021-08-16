@@ -124,6 +124,8 @@ func logResponse(t *testing.T, response *generated.DryrunResponse) {
 			}
 		}
 	}
+	t.Log("App Cost:")
+	t.Log(response.Cost)
 }
 
 var dryrunProtoVersion protocol.ConsensusVersion = "dryrunTestProto"
@@ -1199,5 +1201,69 @@ return
 	assert.Empty(t, response.Txns[1].Logs)
 	encoded = string(protocol.EncodeJSON(response.Txns[1]))
 	assert.NotContains(t, encoded, "logs")
+
+}
+
+func TestDryrunCost(t *testing.T) {
+	t.Parallel()
+
+	ops, err := logic.AssembleString(`
+#pragma version 5
+int 16
+sqrt
+sqrt
+dup
+pop
+`)
+
+	require.NoError(t, err)
+	approval := ops.Program
+	ops, err = logic.AssembleString("int 1")
+	clst := ops.Program
+	var appIdx basics.AppIndex = 1
+	creator := randomAddress()
+	sender := randomAddress()
+	dr := DryrunRequest{
+		Txns: []transactions.SignedTxn{
+			{
+				Txn: transactions.Transaction{
+					Header: transactions.Header{Sender: sender},
+					Type:   protocol.ApplicationCallTx,
+					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+						ApplicationID: appIdx,
+						OnCompletion:  transactions.OptInOC,
+					},
+				},
+			},
+		},
+		Apps: []generated.Application{
+			{
+				Id: uint64(appIdx),
+				Params: generated.ApplicationParams{
+					Creator:           creator.String(),
+					ApprovalProgram:   approval,
+					ClearStateProgram: clst,
+					LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
+				},
+			},
+		},
+		Accounts: []generated.Account{
+			{
+				Address: sender.String(),
+				Status:  "Online",
+				Amount:  10000000,
+			},
+		},
+	}
+	dr.ProtocolVersion = string(dryrunProtoVersion)
+
+	var response generated.DryrunResponse
+	doDryrunRequest(&dr, &response)
+	require.Equal(t,uint64(11),response.Cost)
+	require.NoError(t, err)
+	checkAppCallPass(t, &response)
+	if t.Failed() {
+		logResponse(t, &response)
+	}
 
 }
