@@ -15,7 +15,6 @@ GOTESTCOMMAND=${GOTESTCOMMAND:="gotestsum --format pkgname --jsonfile testresult
 fi
 
 echo "GOTESTCOMMAND IS: ${GOTESTCOMMAND}"
-exit
 
 # If one or more -t <pattern> are specified, use GOTESTCOMMAND -run <pattern> for each
 
