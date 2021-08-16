@@ -144,7 +144,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		genesis[short] = data
 	}
 
-	bootstrap := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	bootstrap := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 
 	for i, rootDirectory := range rootDirs {
 		genesisDir := filepath.Join(rootDirectory, g.ID())

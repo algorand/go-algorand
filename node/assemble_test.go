@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
@@ -78,7 +79,7 @@ func BenchmarkAssembleBlock(b *testing.B) {
 	}
 
 	require.Equal(b, len(genesis), numUsers+1)
-	genBal := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	ledgerName := fmt.Sprintf("%s-mem-%d", b.Name(), b.N)
 	const inMem = true
 	cfg := config.GetDefaultLocal()
@@ -208,7 +209,7 @@ func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 	}
 
 	require.Equal(t, len(genesis), numUsers+1)
-	genBal := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true

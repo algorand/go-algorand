@@ -529,6 +529,13 @@
                   },
                   "type": "array"
                 },
+                "logs": {
+                  "description": "\\[lg\\] Logs for the application being executed by this transaction.",
+                  "items": {
+                    "$ref": "#/components/schemas/LogItem"
+                  },
+                  "type": "array"
+                },
                 "pool-error": {
                   "description": "Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.\n",
                   "type": "string"
@@ -1322,6 +1329,12 @@
               "$ref": "#/components/schemas/DryrunState"
             },
             "type": "array"
+          },
+          "logs": {
+            "items": {
+              "$ref": "#/components/schemas/LogItem"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -1378,6 +1391,24 @@
         },
         "required": [
           "key",
+          "value"
+        ],
+        "type": "object"
+      },
+      "LogItem": {
+        "description": "Application Log",
+        "properties": {
+          "id": {
+            "description": "unique application identifier",
+            "type": "integer"
+          },
+          "value": {
+            "description": " base64 encoded log message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
           "value"
         ],
         "type": "object"
@@ -3696,6 +3727,13 @@
                       },
                       "type": "array"
                     },
+                    "logs": {
+                      "description": "\\[lg\\] Logs for the application being executed by this transaction.",
+                      "items": {
+                        "$ref": "#/components/schemas/LogItem"
+                      },
+                      "type": "array"
+                    },
                     "pool-error": {
                       "description": "Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.\n",
                       "type": "string"
@@ -3757,6 +3795,13 @@
                       "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
                       "items": {
                         "$ref": "#/components/schemas/AccountStateDelta"
+                      },
+                      "type": "array"
+                    },
+                    "logs": {
+                      "description": "\\[lg\\] Logs for the application being executed by this transaction.",
+                      "items": {
+                        "$ref": "#/components/schemas/LogItem"
                       },
                       "type": "array"
                     },

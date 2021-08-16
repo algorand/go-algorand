@@ -44,14 +44,20 @@ import (
 // EvalMaxVersion is the max version we can interpret and run
 const EvalMaxVersion = LogicVersion
 
-// EvalMaxScratchSize is the maximum number of scratch slots.
-const EvalMaxScratchSize = 255
+// The constants below control TEAL opcodes evaluation and MAY NOT be changed
+// without moving them into consensus parameters.
 
 // MaxStringSize is the limit of byte strings created by `concat`
 const MaxStringSize = 4096
 
 // MaxByteMathSize is the limit of byte strings supplied as input to byte math opcodes
 const MaxByteMathSize = 64
+
+// MaxLogSize is the limit of total log size from n log calls in a program
+const MaxLogSize = 1024
+
+// MaxLogCalls is the limit of total log calls during a program execution
+const MaxLogCalls = 32
 
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
@@ -159,6 +165,8 @@ type LedgerForLogic interface {
 	DelGlobal(key string) error
 
 	GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error)
+
+	AppendLog(txn *transactions.Transaction, value string) error
 }
 
 // EvalSideEffects contains data returned from evaluation
@@ -216,6 +224,9 @@ type EvalParams struct {
 
 	// determines eval mode: runModeSignature or runModeApplication
 	runModeFlags runMode
+
+	// Total pool of app call budget in a group transaction
+	PooledApplicationBudget *uint64
 }
 
 type opEvalFunc func(cx *evalContext)
@@ -255,6 +266,9 @@ func (ep EvalParams) budget() int {
 	if ep.runModeFlags == runModeSignature {
 		return int(ep.Proto.LogicSigMaxCost)
 	}
+	if ep.Proto.EnableAppCostPooling && ep.PooledApplicationBudget != nil {
+		return int(*ep.PooledApplicationBudget)
+	}
 	return ep.Proto.MaxAppProgramCost
 }
 
@@ -281,7 +295,9 @@ type evalContext struct {
 	version   uint64
 	scratch   scratchSpace
 
-	cost int // cost incurred so far
+	cost     int // cost incurred so far
+	logCalls int // number of log calls so far
+	logSize  int // log size of the program so far
 
 	// Set of PC values that branches we've seen so far might
 	// go. So, if checkStep() skips one, that branch is trying to
@@ -355,6 +371,10 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, err error) {
 	cx.EvalParams = params
 	cx.runModeFlags = runModeApplication
 	pass, err = eval(program, &cx)
+	if cx.EvalParams.Proto.EnableAppCostPooling && cx.EvalParams.PooledApplicationBudget != nil {
+		// if eval passes, then budget is always greater than cost, so should not have underflow
+		*cx.EvalParams.PooledApplicationBudget = basics.SubSaturate(*cx.EvalParams.PooledApplicationBudget, uint64(cx.cost))
+	}
 
 	// set side effects
 	cx.PastSideEffects[cx.GroupIndex].setScratchSpace(cx.scratch)
@@ -630,7 +650,8 @@ func (cx *evalContext) step() {
 	}
 	cx.cost += deets.Cost
 	if cx.cost > cx.budget() {
-		cx.err = fmt.Errorf("pc=%3d dynamic cost budget of %d exceeded, executing %s", cx.pc, cx.budget(), spec.Name)
+		cx.err = fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: remaining budget is %d but program cost was %d",
+			cx.pc, spec.Name, cx.budget(), cx.cost)
 		return
 	}
 
@@ -3153,4 +3174,27 @@ func opAppParamsGet(cx *evalContext) {
 
 	cx.stack[last] = value
 	cx.stack = append(cx.stack, stackValue{Uint: exist})
+}
+
+func opLog(cx *evalContext) {
+	last := len(cx.stack) - 1
+
+	if cx.logCalls == MaxLogCalls {
+		cx.err = fmt.Errorf("too many log calls in program. up to %d is allowed", MaxLogCalls)
+		return
+	}
+	cx.logCalls++
+	log := cx.stack[last]
+	cx.logSize += len(log.Bytes)
+	if cx.logSize > MaxLogSize {
+		cx.err = fmt.Errorf("program logs too large. %d bytes >  %d bytes limit", cx.logSize, MaxLogSize)
+		return
+	}
+	// write log to applyData
+	err := cx.Ledger.AppendLog(&cx.Txn.Txn, string(log.Bytes))
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack = cx.stack[:last]
 }

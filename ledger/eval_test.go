@@ -22,7 +22,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime/pprof"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -341,9 +344,12 @@ func TestPrepareEvalParams(t *testing.T) {
 			TimeStamp: 1234,
 			Round:     2345,
 		},
-		proto: config.ConsensusParams{
-			Application: true,
-		},
+	}
+
+	params := []config.ConsensusParams{
+		config.ConsensusParams{Application: true, MaxAppProgramCost: 700},
+		config.Consensus[protocol.ConsensusV29],
+		config.Consensus[protocol.ConsensusFuture],
 	}
 
 	// Create some sample transactions
@@ -385,48 +391,63 @@ func TestPrepareEvalParams(t *testing.T) {
 		// indicates if prepareAppEvaluators should return a non-nil
 		// appTealEvaluator for the txn at index i
 		expected []bool
+
+		numAppCalls int
+		// Used for checking transitive pointer equality in app calls
+		// If there are no app calls in the group, it is set to -1
+		firstAppCallIndex int
 	}
 
 	// Create some groups with these transactions
 	cases := []evalTestCase{
-		{[]transactions.SignedTxnWithAD{payment}, []bool{false}},
-		{[]transactions.SignedTxnWithAD{appcall1}, []bool{true}},
-		{[]transactions.SignedTxnWithAD{payment, payment}, []bool{false, false}},
-		{[]transactions.SignedTxnWithAD{appcall1, payment}, []bool{true, false}},
-		{[]transactions.SignedTxnWithAD{payment, appcall1}, []bool{false, true}},
-		{[]transactions.SignedTxnWithAD{appcall1, appcall2}, []bool{true, true}},
-		{[]transactions.SignedTxnWithAD{appcall1, appcall2, appcall1}, []bool{true, true, true}},
-		{[]transactions.SignedTxnWithAD{payment, appcall1, payment}, []bool{false, true, false}},
-		{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, []bool{true, false, true}},
+		{[]transactions.SignedTxnWithAD{payment}, []bool{false}, 0, -1},
+		{[]transactions.SignedTxnWithAD{appcall1}, []bool{true}, 1, 0},
+		{[]transactions.SignedTxnWithAD{payment, payment}, []bool{false, false}, 0, -1},
+		{[]transactions.SignedTxnWithAD{appcall1, payment}, []bool{true, false}, 1, 0},
+		{[]transactions.SignedTxnWithAD{payment, appcall1}, []bool{false, true}, 1, 1},
+		{[]transactions.SignedTxnWithAD{appcall1, appcall2}, []bool{true, true}, 2, 0},
+		{[]transactions.SignedTxnWithAD{appcall1, appcall2, appcall1}, []bool{true, true, true}, 3, 0},
+		{[]transactions.SignedTxnWithAD{payment, appcall1, payment}, []bool{false, true, false}, 1, 1},
+		{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, []bool{true, false, true}, 2, 0},
 	}
 
-	for i, testCase := range cases {
-		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
-			res := eval.prepareEvalParams(testCase.group)
-			require.Equal(t, len(res), len(testCase.group))
+	for i, param := range params {
+		for j, testCase := range cases {
+			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
+				eval.proto = param
+				res := eval.prepareEvalParams(testCase.group)
+				require.Equal(t, len(res), len(testCase.group))
 
-			// Compute the expected transaction group without ApplyData for
-			// the test case
-			expGroupNoAD := make([]transactions.SignedTxn, len(testCase.group))
-			for j := range testCase.group {
-				expGroupNoAD[j] = testCase.group[j].SignedTxn
-			}
-
-			// Ensure non app calls have a nil evaluator, and that non-nil
-			// evaluators point to the right transactions and values
-			for j, present := range testCase.expected {
-				if present {
-					require.NotNil(t, res[j])
-					require.NotNil(t, res[j].PastSideEffects)
-					require.Equal(t, res[j].GroupIndex, j)
-					require.Equal(t, res[j].TxnGroup, expGroupNoAD)
-					require.Equal(t, *res[j].Proto, eval.proto)
-					require.Equal(t, *res[j].Txn, testCase.group[j].SignedTxn)
-				} else {
-					require.Nil(t, res[j])
+				// Compute the expected transaction group without ApplyData for
+				// the test case
+				expGroupNoAD := make([]transactions.SignedTxn, len(testCase.group))
+				for k := range testCase.group {
+					expGroupNoAD[k] = testCase.group[k].SignedTxn
 				}
-			}
-		})
+
+				// Ensure non app calls have a nil evaluator, and that non-nil
+				// evaluators point to the right transactions and values
+				for k, present := range testCase.expected {
+					if present {
+						require.NotNil(t, res[k])
+						require.NotNil(t, res[k].PastSideEffects)
+						require.Equal(t, res[k].GroupIndex, k)
+						require.Equal(t, res[k].TxnGroup, expGroupNoAD)
+						require.Equal(t, *res[k].Proto, eval.proto)
+						require.Equal(t, *res[k].Txn, testCase.group[k].SignedTxn)
+						require.Equal(t, res[k].MinTealVersion, res[testCase.firstAppCallIndex].MinTealVersion)
+						require.Equal(t, res[k].PooledApplicationBudget, res[testCase.firstAppCallIndex].PooledApplicationBudget)
+						if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusV29]) {
+							require.Equal(t, *res[k].PooledApplicationBudget, uint64(eval.proto.MaxAppProgramCost))
+						} else if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusFuture]) {
+							require.Equal(t, *res[k].PooledApplicationBudget, uint64(eval.proto.MaxAppProgramCost*testCase.numAppCalls))
+						}
+					} else {
+						require.Nil(t, res[k])
+					}
+				}
+			})
+		}
 	}
 }
 
@@ -560,6 +581,140 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 	state := ad.AppParams[1].GlobalState
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["caller"])
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
+}
+
+func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalProgram string, consensusVersion protocol.ConsensusVersion) (*BlockEvaluator, error) {
+	genesisInitState, addrs, keys := genesis(10)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	require.NoError(t, err)
+	eval.validate = true
+	eval.generate = false
+	eval.proto = config.Consensus[consensusVersion]
+
+	ops, err := logic.AssembleString(approvalProgram)
+	require.NoError(t, err, ops.Errors)
+	approval := ops.Program
+	ops, err = logic.AssembleString("#pragma version 4\nint 1")
+	require.NoError(t, err)
+	clear := ops.Program
+
+	genHash := genesisInitState.Block.BlockHeader.GenesisHash
+	header := transactions.Header{
+		Sender:      addrs[0],
+		Fee:         minFee,
+		FirstValid:  newBlock.Round(),
+		LastValid:   newBlock.Round(),
+		GenesisHash: genHash,
+	}
+	appcall1 := transactions.Transaction{
+		Type:   protocol.ApplicationCallTx,
+		Header: header,
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			GlobalStateSchema: schema,
+			ApprovalProgram:   approval,
+			ClearStateProgram: clear,
+		},
+	}
+
+	appcall2 := transactions.Transaction{
+		Type:   protocol.ApplicationCallTx,
+		Header: header,
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: basics.AppIndex(1),
+		},
+	}
+
+	appcall3 := appcall2
+	appcall3.Header.Sender = addrs[1]
+
+	var group transactions.TxGroup
+	group.TxGroupHashes = []crypto.Digest{crypto.HashObj(appcall1), crypto.HashObj(appcall2), crypto.HashObj(appcall3)}
+	appcall1.Group = crypto.HashObj(group)
+	appcall2.Group = crypto.HashObj(group)
+	appcall3.Group = crypto.HashObj(group)
+	stxn1 := appcall1.Sign(keys[0])
+	stxn2 := appcall2.Sign(keys[0])
+	stxn3 := appcall3.Sign(keys[1])
+
+	g := []transactions.SignedTxnWithAD{
+		{
+			SignedTxn: stxn1,
+		},
+		{
+			SignedTxn: stxn2,
+		},
+		{
+			SignedTxn: stxn3,
+		},
+	}
+	txgroup := []transactions.SignedTxn{stxn1, stxn2, stxn3}
+	err = eval.TestTransactionGroup(txgroup)
+	if err != nil {
+		return eval, err
+	}
+	err = eval.transactionGroup(g)
+	return eval, err
+}
+
+// TestEvalAppPooledBudgetWithTxnGroup ensures 3 app call txns can successfully pool
+// budgets in a group txn and return an error if the budget is exceeded
+func TestEvalAppPooledBudgetWithTxnGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	source := func(n int, m int) string {
+		return "#pragma version 4\nbyte 0x1337BEEF\n" + strings.Repeat("keccak256\n", n) +
+			strings.Repeat("substring 0 4\n", m) + "pop\nint 1\n"
+	}
+
+	params := []protocol.ConsensusVersion{
+		protocol.ConsensusV29,
+		protocol.ConsensusFuture,
+	}
+
+	cases := []struct {
+		prog                 string
+		isSuccessV29         bool
+		isSuccessVFuture     bool
+		expectedErrorV29     string
+		expectedErrorVFuture string
+	}{
+		{source(5, 47), true, true,
+			"",
+			""},
+		{source(5, 48), false, true,
+			"pc=157 dynamic cost budget exceeded, executing pushint: remaining budget is 700 but program cost was 701",
+			""},
+		{source(16, 17), false, true,
+			"pc= 12 dynamic cost budget exceeded, executing keccak256: remaining budget is 700 but program cost was 781",
+			""},
+		{source(16, 18), false, false,
+			"pc= 12 dynamic cost budget exceeded, executing keccak256: remaining budget is 700 but program cost was 781",
+			"pc= 78 dynamic cost budget exceeded, executing pushint: remaining budget is 2100 but program cost was 2101"},
+	}
+
+	for i, param := range params {
+		for j, testCase := range cases {
+			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
+				_, err := testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, testCase.prog, param)
+				if !testCase.isSuccessV29 && reflect.DeepEqual(param, protocol.ConsensusV29) {
+					require.Error(t, err)
+					require.Contains(t, err.Error(), testCase.expectedErrorV29)
+				} else if !testCase.isSuccessVFuture && reflect.DeepEqual(param, protocol.ConsensusFuture) {
+					require.Error(t, err)
+					require.Contains(t, err.Error(), testCase.expectedErrorVFuture)
+				}
+			})
+		}
+	}
 }
 
 func BenchmarkBlockEvaluatorRAMCrypto(b *testing.B) {
@@ -876,287 +1031,374 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 func TestModifiedAssetHoldings(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genesisInitState, addrs, _ := genesis(10)
-
-	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
-	require.NoError(t, err)
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
 	defer l.Close()
 
-	genHash := genesisInitState.Block.BlockHeader.GenesisHash
 	const assetid basics.AssetIndex = 1
 
-	var validatedBlock *ValidatedBlock
-	{
-		// Create an asset.
-		createTxn := transactions.SignedTxn{
-			Txn: transactions.Transaction{
-				Type: "acfg",
-				Header: transactions.Header{
-					Sender:      addrs[0],
-					Fee:         basics.MicroAlgos{Raw: 2000},
-					GenesisHash: genHash,
-				},
-				AssetConfigTxnFields: transactions.AssetConfigTxnFields{
-					AssetParams: basics.AssetParams{
-						Total:    3,
-						Decimals: 0,
-						Manager:  addrs[0],
-						Reserve:  addrs[0],
-						Freeze:   addrs[0],
-						Clawback: addrs[0],
-					},
-				},
-			},
-		}
-
-		// Opt in.
-		optInTxn := transactions.SignedTxn{
-			Txn: transactions.Transaction{
-				Type: "axfer",
-				Header: transactions.Header{
-					Sender:      addrs[1],
-					Fee:         basics.MicroAlgos{Raw: 2000},
-					GenesisHash: genHash,
-				},
-				AssetTransferTxnFields: transactions.AssetTransferTxnFields{
-					XferAsset:     assetid,
-					AssetAmount:   0,
-					AssetReceiver: addrs[1],
-				},
-			},
-		}
-
-		eval, err := startEvaluator(
-			l, bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader).BlockHeader,
-			config.Consensus[protocol.ConsensusFuture], 0, false, true)
-		require.NoError(t, err)
-		eval.Transaction(createTxn, transactions.ApplyData{})
-		require.NoError(t, err)
-		eval.Transaction(optInTxn, transactions.ApplyData{})
-		require.NoError(t, err)
-		validatedBlock, err = eval.GenerateBlock()
-		require.NoError(t, err)
-
-		{
-			aa := ledgercore.AccountAsset{
-				Address: addrs[0],
-				Asset:   assetid,
-			}
-			created, ok := validatedBlock.delta.ModifiedAssetHoldings[aa]
-			require.True(t, ok)
-			assert.True(t, created)
-		}
-		{
-			aa := ledgercore.AccountAsset{
-				Address: addrs[1],
-				Asset:   assetid,
-			}
-			created, ok := validatedBlock.delta.ModifiedAssetHoldings[aa]
-			require.True(t, ok)
-			assert.True(t, created)
-		}
-
-		// Write deltas to the ledger.
-		err = l.AddBlock(validatedBlock.blk, agreement.Certificate{})
-		require.NoError(t, err)
+	createTxn := txntest.Txn{
+		Type:   "acfg",
+		Sender: addrs[0],
+		Fee:    basics.MicroAlgos{Raw: 2000},
+		AssetParams: basics.AssetParams{
+			Total:    3,
+			Decimals: 0,
+			Manager:  addrs[0],
+			Reserve:  addrs[0],
+			Freeze:   addrs[0],
+			Clawback: addrs[0],
+		},
 	}
 
-	{
-		// Opt out.
-		optOutTxn := transactions.SignedTxn{
-			Txn: transactions.Transaction{
-				Type: "axfer",
-				Header: transactions.Header{
-					Sender:      addrs[1],
-					Fee:         basics.MicroAlgos{Raw: 1000},
-					GenesisHash: genHash,
-				},
-				AssetTransferTxnFields: transactions.AssetTransferTxnFields{
-					XferAsset:     assetid,
-					AssetReceiver: addrs[0],
-					AssetCloseTo:  addrs[0],
-				},
-			},
-		}
-
-		// Close the asset.
-		closeTxn := transactions.SignedTxn{
-			Txn: transactions.Transaction{
-				Type: "acfg",
-				Header: transactions.Header{
-					Sender:      addrs[0],
-					Fee:         basics.MicroAlgos{Raw: 1000},
-					GenesisHash: genHash,
-				},
-				AssetConfigTxnFields: transactions.AssetConfigTxnFields{
-					ConfigAsset: assetid,
-				},
-			},
-		}
-
-		eval, err := startEvaluator(
-			l, bookkeeping.MakeBlock(validatedBlock.blk.BlockHeader).BlockHeader,
-			config.Consensus[protocol.ConsensusFuture], 0, false, true)
-		require.NoError(t, err)
-		eval.Transaction(optOutTxn, transactions.ApplyData{})
-		require.NoError(t, err)
-		eval.Transaction(closeTxn, transactions.ApplyData{})
-		require.NoError(t, err)
-		validatedBlock, err = eval.GenerateBlock()
-		require.NoError(t, err)
-
-		{
-			aa := ledgercore.AccountAsset{
-				Address: addrs[0],
-				Asset:   assetid,
-			}
-			created, ok := validatedBlock.delta.ModifiedAssetHoldings[aa]
-			require.True(t, ok)
-			assert.False(t, created)
-		}
-		{
-			aa := ledgercore.AccountAsset{
-				Address: addrs[1],
-				Asset:   assetid,
-			}
-			created, ok := validatedBlock.delta.ModifiedAssetHoldings[aa]
-			require.True(t, ok)
-			assert.False(t, created)
-		}
+	optInTxn := txntest.Txn{
+		Type:          "axfer",
+		Sender:        addrs[1],
+		Fee:           basics.MicroAlgos{Raw: 2000},
+		XferAsset:     assetid,
+		AssetAmount:   0,
+		AssetReceiver: addrs[1],
 	}
+
+	eval := l.nextBlock(t)
+	eval.txns(t, &createTxn, &optInTxn)
+	vb := l.endBlock(t, eval)
+
+	{
+		aa := ledgercore.AccountAsset{
+			Address: addrs[0],
+			Asset:   assetid,
+		}
+		created, ok := vb.delta.ModifiedAssetHoldings[aa]
+		require.True(t, ok)
+		assert.True(t, created)
+	}
+	{
+		aa := ledgercore.AccountAsset{
+			Address: addrs[1],
+			Asset:   assetid,
+		}
+		created, ok := vb.delta.ModifiedAssetHoldings[aa]
+		require.True(t, ok)
+		assert.True(t, created)
+	}
+
+	optOutTxn := txntest.Txn{
+		Type:          "axfer",
+		Sender:        addrs[1],
+		Fee:           basics.MicroAlgos{Raw: 1000},
+		XferAsset:     assetid,
+		AssetReceiver: addrs[0],
+		AssetCloseTo:  addrs[0],
+	}
+
+	closeTxn := txntest.Txn{
+		Type:        "acfg",
+		Sender:      addrs[0],
+		Fee:         basics.MicroAlgos{Raw: 1000},
+		ConfigAsset: assetid,
+	}
+
+	eval = l.nextBlock(t)
+	eval.txns(t, &optOutTxn, &closeTxn)
+	vb = l.endBlock(t, eval)
+
+	{
+		aa := ledgercore.AccountAsset{
+			Address: addrs[0],
+			Asset:   assetid,
+		}
+		created, ok := vb.delta.ModifiedAssetHoldings[aa]
+		require.True(t, ok)
+		assert.False(t, created)
+	}
+	{
+		aa := ledgercore.AccountAsset{
+			Address: addrs[1],
+			Asset:   assetid,
+		}
+		created, ok := vb.delta.ModifiedAssetHoldings[aa]
+		require.True(t, ok)
+		assert.False(t, created)
+	}
+}
+
+// newTestGenesis creates a bunch of accounts, splits up 10B algos
+// between them and the rewardspool and feesink, and gives out the
+// addresses and secrets it creates to enable tests.  For special
+// scenarios, manipulate these return values before using newTestLedger.
+func newTestGenesis() (bookkeeping.GenesisBalances, []basics.Address, []*crypto.SignatureSecrets) {
+	// irrelevant, but deterministic
+	sink, err := basics.UnmarshalChecksumAddress("YTPRLJ2KK2JRFSZZNAF57F3K5Y2KCG36FZ5OSYLW776JJGAUW5JXJBBD7Q")
+	if err != nil {
+		panic(err)
+	}
+	rewards, err := basics.UnmarshalChecksumAddress("242H5OXHUEBYCGGWB3CQ6AZAMQB5TMCWJGHCGQOZPEIVQJKOO7NZXUXDQA")
+	if err != nil {
+		panic(err)
+	}
+
+	const count = 10
+	addrs := make([]basics.Address, count)
+	secrets := make([]*crypto.SignatureSecrets, count)
+	accts := make(map[basics.Address]basics.AccountData)
+
+	// 10 billion microalgos, across N accounts and pool and sink
+	amount := 10 * 1000000000 * 1000000 / uint64(count+2)
+
+	for i := 0; i < count; i++ {
+		// Create deterministic addresses, so that output stays the same, run to run.
+		var seed crypto.Seed
+		seed[0] = byte(i)
+		secrets[i] = crypto.GenerateSignatureSecrets(seed)
+		addrs[i] = basics.Address(secrets[i].SignatureVerifier)
+
+		adata := basics.AccountData{
+			MicroAlgos: basics.MicroAlgos{Raw: amount},
+		}
+		accts[addrs[i]] = adata
+	}
+
+	accts[sink] = basics.AccountData{
+		MicroAlgos: basics.MicroAlgos{Raw: amount},
+		Status:     basics.NotParticipating,
+	}
+
+	accts[rewards] = basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: amount}}
+
+	genBalances := bookkeeping.MakeGenesisBalances(accts, sink, rewards)
+
+	return genBalances, addrs, secrets
+}
+
+// newTestLedger creates a in memory Ledger that is as realistic as
+// possible.  It has Rewards and FeeSink properly configured.
+func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *Ledger {
+	var genHash crypto.Digest
+	crypto.RandBytes(genHash[:])
+	genBlock, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture,
+		balances, "test", genHash)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	const inMem = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, InitState{
+		Block:       genBlock,
+		Accounts:    balances.Balances,
+		GenesisHash: genHash,
+	}, cfg)
+	require.NoError(t, err)
+	return l
+}
+
+// nextBlock begins evaluation of a new block, after ledger creation or endBlock()
+func (ledger *Ledger) nextBlock(t testing.TB) *BlockEvaluator {
+	rnd := ledger.Latest()
+	hdr, err := ledger.BlockHdr(rnd)
+	require.NoError(t, err)
+	eval, err := startEvaluator(ledger, bookkeeping.MakeBlock(hdr).BlockHeader,
+		config.Consensus[hdr.CurrentProtocol], 0, false, true)
+	require.NoError(t, err)
+	return eval
+}
+
+// endBlock completes the block being created, returns the ValidatedBlock for inspection
+func (ledger *Ledger) endBlock(t testing.TB, eval *BlockEvaluator) *ValidatedBlock {
+	validatedBlock, err := eval.GenerateBlock()
+	require.NoError(t, err)
+	err = ledger.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
+	require.NoError(t, err)
+	return validatedBlock
+}
+
+// lookup gets the current accountdaa for an address
+func (ledger *Ledger) lookup(t testing.TB, addr basics.Address) basics.AccountData {
+	rnd := ledger.Latest()
+	ad, err := ledger.Lookup(rnd, addr)
+	require.NoError(t, err)
+	return ad
+}
+
+func (eval *BlockEvaluator) txn(t testing.TB, txn *txntest.Txn) {
+	if txn.GenesisHash.IsZero() {
+		txn.GenesisHash = eval.genesisHash
+	}
+	if txn.FirstValid == 0 {
+		txn.FirstValid = eval.Round()
+	}
+	txn.FillDefaults(eval.proto)
+	stxn := txn.SignedTxn()
+	err := eval.testTransaction(stxn, eval.state.child(1))
+	require.NoError(t, err)
+	eval.Transaction(stxn, transactions.ApplyData{})
+	require.NoError(t, err)
+}
+
+func (eval *BlockEvaluator) txns(t testing.TB, txns ...*txntest.Txn) {
+	for _, txn := range txns {
+		eval.txn(t, txn)
+	}
+}
+
+func TestRewardsInAD(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	payTxn := txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[1]}
+
+	// Build up Residue in RewardsState so it's ready to pay
+	for i := 1; i < 10; i++ {
+		eval := l.nextBlock(t)
+		l.endBlock(t, eval)
+	}
+
+	eval := l.nextBlock(t)
+	eval.txn(t, &payTxn)
+	payInBlock := eval.block.Payset[0]
+	require.Greater(t, payInBlock.ApplyData.SenderRewards.Raw, uint64(1000))
+	require.Greater(t, payInBlock.ApplyData.ReceiverRewards.Raw, uint64(1000))
+	require.Equal(t, payInBlock.ApplyData.SenderRewards, payInBlock.ApplyData.ReceiverRewards)
+	l.endBlock(t, eval)
+}
+
+func TestMinBalanceChanges(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	createTxn := txntest.Txn{
+		Type:   "acfg",
+		Sender: addrs[0],
+		AssetParams: basics.AssetParams{
+			Total:    3,
+			Manager:  addrs[1],
+			Reserve:  addrs[2],
+			Freeze:   addrs[3],
+			Clawback: addrs[4],
+		},
+	}
+
+	const expectedID basics.AssetIndex = 1
+	optInTxn := txntest.Txn{
+		Type:          "axfer",
+		Sender:        addrs[5],
+		XferAsset:     expectedID,
+		AssetReceiver: addrs[5],
+	}
+
+	ad0init := l.lookup(t, addrs[0])
+	ad5init := l.lookup(t, addrs[5])
+
+	eval := l.nextBlock(t)
+	eval.txns(t, &createTxn, &optInTxn)
+	l.endBlock(t, eval)
+
+	ad0new := l.lookup(t, addrs[0])
+	ad5new := l.lookup(t, addrs[5])
+
+	proto := config.Consensus[eval.block.BlockHeader.CurrentProtocol]
+	// Check balance and min balance requirement changes
+	require.Equal(t, ad0init.MicroAlgos.Raw, ad0new.MicroAlgos.Raw+1000)                   // fee
+	require.Equal(t, ad0init.MinBalance(&proto).Raw, ad0new.MinBalance(&proto).Raw-100000) // create
+	require.Equal(t, ad5init.MicroAlgos.Raw, ad5new.MicroAlgos.Raw+1000)                   // fee
+	require.Equal(t, ad5init.MinBalance(&proto).Raw, ad5new.MinBalance(&proto).Raw-100000) // optin
+
+	optOutTxn := txntest.Txn{
+		Type:          "axfer",
+		Sender:        addrs[5],
+		XferAsset:     expectedID,
+		AssetReceiver: addrs[0],
+		AssetCloseTo:  addrs[0],
+	}
+
+	closeTxn := txntest.Txn{
+		Type:        "acfg",
+		Sender:      addrs[1], // The manager, not the creator
+		ConfigAsset: expectedID,
+	}
+
+	eval = l.nextBlock(t)
+	eval.txns(t, &optOutTxn, &closeTxn)
+	l.endBlock(t, eval)
+
+	ad0final := l.lookup(t, addrs[0])
+	ad5final := l.lookup(t, addrs[5])
+	// Check we got our balance "back"
+	require.Equal(t, ad0final.MinBalance(&proto), ad0init.MinBalance(&proto))
+	require.Equal(t, ad5final.MinBalance(&proto), ad5init.MinBalance(&proto))
 }
 
 // Test that ModifiedAppLocalStates in StateDelta is set correctly.
 func TestModifiedAppLocalStates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genesisInitState, addrs, _ := genesis(10)
-
-	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
-	require.NoError(t, err)
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
 	defer l.Close()
 
-	genHash := genesisInitState.Block.BlockHeader.GenesisHash
 	const appid basics.AppIndex = 1
 
-	var validatedBlock *ValidatedBlock
-	{
-		// Create an app.
-		createTxn := transactions.SignedTxn{
-			Txn: transactions.Transaction{
-				Type: "appl",
-				Header: transactions.Header{
-					Sender:      addrs[0],
-					GenesisHash: genHash,
-				},
-				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-					ApprovalProgram:   []byte{0x02, 0x20, 0x01, 0x01, 0x22},
-					ClearStateProgram: []byte{0x02, 0x20, 0x01, 0x01, 0x22},
-				},
-			},
-		}
-
-		// Opt in.
-		optInTxn := transactions.SignedTxn{
-			Txn: transactions.Transaction{
-				Type: "appl",
-				Header: transactions.Header{
-					Sender:      addrs[1],
-					GenesisHash: genHash,
-				},
-				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-					ApplicationID: appid,
-					OnCompletion:  transactions.OptInOC,
-				},
-			},
-		}
-
-		eval, err := startEvaluator(
-			l, bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader).BlockHeader,
-			config.Consensus[protocol.ConsensusFuture], 0, false, true)
-		require.NoError(t, err)
-		eval.Transaction(createTxn, transactions.ApplyData{})
-		require.NoError(t, err)
-		eval.Transaction(optInTxn, transactions.ApplyData{})
-		require.NoError(t, err)
-		validatedBlock, err = eval.GenerateBlock()
-		require.NoError(t, err)
-
-		assert.Equal(t, 1, len(validatedBlock.delta.ModifiedAppLocalStates))
-		{
-			aa := ledgercore.AccountApp{
-				Address: addrs[1],
-				App:     appid,
-			}
-			created, ok := validatedBlock.delta.ModifiedAppLocalStates[aa]
-			require.True(t, ok)
-			assert.True(t, created)
-		}
-
-		// Write deltas to the ledger.
-		err = l.AddBlock(validatedBlock.blk, agreement.Certificate{})
-		require.NoError(t, err)
+	createTxn := txntest.Txn{
+		Type:              "appl",
+		Sender:            addrs[0],
+		ApprovalProgram:   []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+		ClearStateProgram: []byte{0x02, 0x20, 0x01, 0x01, 0x22},
 	}
 
+	optInTxn := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[1],
+		ApplicationID: appid,
+		OnCompletion:  transactions.OptInOC,
+	}
+
+	eval := l.nextBlock(t)
+	eval.txns(t, &createTxn, &optInTxn)
+	vb := l.endBlock(t, eval)
+
+	assert.Len(t, vb.delta.ModifiedAppLocalStates, 1)
 	{
-		// Opt out.
-		optOutTxn := transactions.SignedTxn{
-			Txn: transactions.Transaction{
-				Type: "appl",
-				Header: transactions.Header{
-					Sender:      addrs[1],
-					GenesisHash: genHash,
-				},
-				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-					ApplicationID: appid,
-					OnCompletion:  transactions.CloseOutOC,
-				},
-			},
+		aa := ledgercore.AccountApp{
+			Address: addrs[1],
+			App:     appid,
 		}
+		created, ok := vb.delta.ModifiedAppLocalStates[aa]
+		require.True(t, ok)
+		assert.True(t, created)
+	}
 
-		// Delete the app.
-		closeTxn := transactions.SignedTxn{
-			Txn: transactions.Transaction{
-				Type: "appl",
-				Header: transactions.Header{
-					Sender:      addrs[0],
-					GenesisHash: genHash,
-				},
-				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-					ApplicationID: appid,
-					OnCompletion:  transactions.DeleteApplicationOC,
-				},
-			},
+	optOutTxn := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[1],
+		ApplicationID: appid,
+		OnCompletion:  transactions.CloseOutOC,
+	}
+
+	closeTxn := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[0],
+		ApplicationID: appid,
+		OnCompletion:  transactions.DeleteApplicationOC,
+	}
+
+	eval = l.nextBlock(t)
+	eval.txns(t, &optOutTxn, &closeTxn)
+	vb = l.endBlock(t, eval)
+
+	assert.Len(t, vb.delta.ModifiedAppLocalStates, 1)
+	{
+		aa := ledgercore.AccountApp{
+			Address: addrs[1],
+			App:     appid,
 		}
-
-		eval, err := startEvaluator(
-			l, bookkeeping.MakeBlock(validatedBlock.blk.BlockHeader).BlockHeader,
-			config.Consensus[protocol.ConsensusFuture], 0, false, true)
-		require.NoError(t, err)
-		eval.Transaction(optOutTxn, transactions.ApplyData{})
-		require.NoError(t, err)
-		eval.Transaction(closeTxn, transactions.ApplyData{})
-		require.NoError(t, err)
-		validatedBlock, err = eval.GenerateBlock()
-		require.NoError(t, err)
-
-		assert.Equal(t, 1, len(validatedBlock.delta.ModifiedAppLocalStates))
-		{
-			aa := ledgercore.AccountApp{
-				Address: addrs[1],
-				App:     appid,
-			}
-			created, ok := validatedBlock.delta.ModifiedAppLocalStates[aa]
-			require.True(t, ok)
-			assert.False(t, created)
-		}
+		created, ok := vb.delta.ModifiedAppLocalStates[aa]
+		require.True(t, ok)
+		assert.False(t, created)
 	}
 }
