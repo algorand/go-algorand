@@ -1176,6 +1176,15 @@ func newTestGenesis() (bookkeeping.GenesisBalances, []basics.Address, []*crypto.
 // newTestLedger creates a in memory Ledger that is as realistic as
 // possible.  It has Rewards and FeeSink properly configured.
 func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *Ledger {
+	l, _, _ := newTestLedgerImpl(t, balances, true)
+	return l
+}
+
+func newTestLedgerOnDisk(t testing.TB, balances bookkeeping.GenesisBalances) (*Ledger, string, bookkeeping.Block) {
+	return newTestLedgerImpl(t, balances, false)
+}
+
+func newTestLedgerImpl(t testing.TB, balances bookkeeping.GenesisBalances, inMem bool) (*Ledger, string, bookkeeping.Block) {
 	var genHash crypto.Digest
 	crypto.RandBytes(genHash[:])
 	genBlock, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture,
@@ -1184,14 +1193,13 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *Ledger {
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	const inMem = true
 	l, err := OpenLedger(logging.Base(), dbName, inMem, InitState{
 		Block:       genBlock,
 		Accounts:    balances.Balances,
 		GenesisHash: genHash,
 	}, cfg)
 	require.NoError(t, err)
-	return l
+	return l, dbName, genBlock
 }
 
 // nextBlock begins evaluation of a new block, after ledger creation or endBlock()
@@ -1214,7 +1222,7 @@ func (ledger *Ledger) endBlock(t testing.TB, eval *BlockEvaluator) *ValidatedBlo
 	return validatedBlock
 }
 
-// lookup gets the current accountdaa for an address
+// lookup gets the current accountdata for an address
 func (ledger *Ledger) lookup(t testing.TB, addr basics.Address) basics.AccountData {
 	rnd := ledger.Latest()
 	ad, err := ledger.Lookup(rnd, addr)
@@ -1233,7 +1241,7 @@ func (eval *BlockEvaluator) txn(t testing.TB, txn *txntest.Txn) {
 	stxn := txn.SignedTxn()
 	err := eval.testTransaction(stxn, eval.state.child(1))
 	require.NoError(t, err)
-	eval.Transaction(stxn, transactions.ApplyData{})
+	err = eval.Transaction(stxn, transactions.ApplyData{})
 	require.NoError(t, err)
 }
 
@@ -1500,4 +1508,61 @@ func TestCustomProtocolParams(t *testing.T) {
 
 	require.Equal(t, 4, len(modifiedTxns))
 	assert.Equal(t, uint64(70), modifiedTxns[3].AssetClosingAmount)
+}
+
+// TestAppInsMinBalance checks that accounts with MaxAppsOptedIn are accepted by block evaluator
+// and do not cause any MaximumMinimumBalance problems
+func TestAppInsMinBalance(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	const appid basics.AppIndex = 1
+
+	maxAppsOptedIn := config.Consensus[protocol.ConsensusFuture].MaxAppsOptedIn
+	require.Greater(t, maxAppsOptedIn, 0)
+	maxAppsCreated := config.Consensus[protocol.ConsensusFuture].MaxAppsCreated
+	require.Greater(t, maxAppsCreated, 0)
+	maxLocalSchemaEntries := config.Consensus[protocol.ConsensusFuture].MaxLocalSchemaEntries
+	require.Greater(t, maxLocalSchemaEntries, uint64(0))
+
+	txnsCreate := make([]*txntest.Txn, 0, maxAppsOptedIn)
+	txnsOptIn := make([]*txntest.Txn, 0, maxAppsOptedIn)
+	appsCreated := make(map[basics.Address]int, len(addrs)-1)
+
+	acctIdx := 0
+	for i := 0; i < maxAppsOptedIn; i++ {
+		creator := addrs[acctIdx]
+		createTxn := txntest.Txn{
+			Type:              "appl",
+			Sender:            creator,
+			ApprovalProgram:   []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+			ClearStateProgram: []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+			LocalStateSchema:  basics.StateSchema{NumByteSlice: maxLocalSchemaEntries},
+			Note:              randomNote(),
+		}
+		txnsCreate = append(txnsCreate, &createTxn)
+		count := appsCreated[creator]
+		count++
+		appsCreated[creator] = count
+		if count == maxAppsCreated {
+			acctIdx++
+		}
+
+		optInTxn := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[9],
+			ApplicationID: appid + basics.AppIndex(i),
+			OnCompletion:  transactions.OptInOC,
+		}
+		txnsOptIn = append(txnsOptIn, &optInTxn)
+	}
+
+	eval := l.nextBlock(t)
+	txns := append(txnsCreate, txnsOptIn...)
+	eval.txns(t, txns...)
+	vb := l.endBlock(t, eval)
+	assert.Len(t, vb.delta.ModifiedAppLocalStates, 50)
 }

@@ -47,6 +47,12 @@ func randomAddress() basics.Address {
 	return addr
 }
 
+func randomNote() []byte {
+	var note [16]byte
+	crypto.RandBytes(note[:])
+	return note[:]
+}
+
 func randomAccountData(rewardsLevel uint64) basics.AccountData {
 	var data basics.AccountData
 
