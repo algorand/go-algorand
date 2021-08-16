@@ -436,7 +436,7 @@ type Local struct {
 
 	// TransactionSyncSignificantMessageThreshold define the threshold used for a transaction sync
 	// message before it can be used for calculating the data exchange rate. Setting this to zero
-	// would use the default values.
+	// would use the default values. The threshold is defined in units of bytes.
 	TransactionSyncSignificantMessageThreshold uint64 `version[17]:"0"`
 }
 
