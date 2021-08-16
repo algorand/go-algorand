@@ -453,7 +453,7 @@ func (pool *TransactionPool) ingest(txgroup transactions.SignedTxGroup, params p
 		}
 
 		// since this is the first time the transaction was added to the transaction pool, it would
-		// be a good time now to figure the group's ID and group counter.
+		// be a good time now to figure the group's ID.
 		txgroup.GroupTransactionID = txgroup.Transactions.ID()
 	}
 
@@ -511,7 +511,7 @@ func (pool *TransactionPool) RememberArray(txgroups []transactions.SignedTxGroup
 		if err != nil {
 			// we need to explicitly clear the remembered transaction groups here, since we might have added the first one successfully and then failing on the second one.
 			pool.resetRememberedTransactionGroups()
-			return fmt.Errorf("TransactionPool.RememberArray: %v", err)
+			return fmt.Errorf("TransactionPool.RememberArray: %w", err)
 		}
 	}
 
