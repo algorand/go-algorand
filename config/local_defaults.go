@@ -108,7 +108,7 @@ var defaultLocal = Local{
 	TransactionSyncDataExchangeRate:            0,
 	TransactionSyncSignificantMessageThreshold: 0,
 	TxPoolExponentialIncreaseFactor:            2,
-	TxPoolSize:                                 15000,
+	TxPoolSize:                                 50000,
 	TxSyncIntervalSeconds:                      60,
 	TxSyncServeResponseSize:                    1000000,
 	TxSyncTimeoutSeconds:                       30,
