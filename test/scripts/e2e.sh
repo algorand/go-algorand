@@ -100,7 +100,7 @@ export GOPATH=$(go env GOPATH)
 # Change current directory to test/scripts so we can just use ./test.sh to exec.
 cd "${SCRIPT_PATH}"
 
-if [ -z $E2E_TEST_FILTER || $E2E_TEST_FILTER="SCRIPTS" ]; then
+if [ -z $E2E_TEST_FILTER || $E2E_TEST_FILTER=="SCRIPTS" ]; then
 
     ./timeout 200 ./e2e_basic_start_stop.sh
     duration "e2e_basic_start_stop.sh"
@@ -127,7 +127,7 @@ if [ -z $E2E_TEST_FILTER || $E2E_TEST_FILTER="SCRIPTS" ]; then
     deactivate
 fi # if E2E_TEST_FILTER = "" or = "SCRIPTS"
 
-if [ -z $E2E_TEST_FILTER || $E2E_TEST_FILTER="GO" ]; then
+if [ -z $E2E_TEST_FILTER || $E2E_TEST_FILTER=="GO" ]; then
     # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
     # This allows us to clean up everything with our rm -rf trap.
     export TESTDIR=${TEMPDIR}
