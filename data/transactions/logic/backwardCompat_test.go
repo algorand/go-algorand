@@ -404,3 +404,12 @@ done:`
 		})
 	}
 }
+
+func TestExplicitConstants(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	require.Equal(t, 4096, MaxStringSize, "constant changed, move it to consensus params")
+	require.Equal(t, 64, MaxByteMathSize, "constant changed, move it to consensus params")
+	require.Equal(t, 1024, MaxLogSize, "constant changed, move it to consensus params")
+	require.Equal(t, 32, MaxLogCalls, "constant changed, move it to consensus params")
+}
