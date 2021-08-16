@@ -7,7 +7,15 @@ set -o pipefail
 
 export GOPATH=$(go env GOPATH)
 export GO111MODULE=on
+# GOTESTCOMMAND=${GOTESTCOMMAND:="go test"}
+if [ -z $(which gotestsum) ]; then
 GOTESTCOMMAND=${GOTESTCOMMAND:="go test"}
+else
+GOTESTCOMMAND=${GOTESTCOMMAND:="gotestsum --format pkgname --jsonfile testresults.json --"}
+fi
+
+echo "GOTESTCOMMAND IS: ${GOTESTCOMMAND}"
+exit
 
 # If one or more -t <pattern> are specified, use GOTESTCOMMAND -run <pattern> for each
 
