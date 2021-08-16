@@ -398,11 +398,12 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 	}
 	proto := config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
 	proto.EnableAppCostPooling = true
+	proto.MaxTxGroupSize = 16
 	response.Txns = make([]generated.DryrunTxnResult, len(dr.Txns))
 	for ti, stxn := range dr.Txns {
 		pse := logic.MakePastSideEffects(len(dr.Txns))
-		maxBudget := uint64(16*700)
-		evalBudget := uint64(16*700)
+		maxBudget := uint64(proto.MaxAppProgramCost * proto.MaxTxGroupSize)
+		evalBudget := uint64(proto.MaxAppProgramCost * proto.MaxTxGroupSize)
 		ep := logic.EvalParams{
 			Txn:                     &stxn,
 			Proto:                   &proto,
