@@ -5,8 +5,7 @@ echo "######################################################################"
 set -e
 set -o pipefail
 
-GOPATH=$(go env GOPATH)
-export GOPATH
+export GOPATH=$(go env GOPATH)
 export GO111MODULE=on
 
 if [ -z "$(which gotestsum)" ]; then
@@ -101,10 +100,10 @@ fi
 echo "PARALLEL_FLAG = ${PARALLEL_FLAG}"
 
 if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
-    ${GOTESTCOMMAND} "${RACE_OPTION}" "${PARALLEL_FLAG}" -timeout 1h -v "${SHORTTEST}" ./...
+    ${GOTESTCOMMAND} ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} ./...
 else
-    for TEST in "${TESTPATTERNS[@]}"; do
-        ${GOTESTCOMMAND} "${RACE_OPTION}" "${PARALLEL_FLAG}" -timeout 1h -v "${SHORTTEST}" -run "${TEST}" ./...
+    for TEST in ${TESTPATTERNS[@]}; do
+        ${GOTESTCOMMAND} ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} -run ${TEST} ./...
     done
 fi
 
