@@ -5,16 +5,18 @@ echo "######################################################################"
 set -e
 set -o pipefail
 
-export GOPATH=$(go env GOPATH)
+GOPATH=$(go env GOPATH)
+export GOPATH
 export GO111MODULE=on
-# GOTESTCOMMAND=${GOTESTCOMMAND:="go test"}
-if [ -z $(which gotestsum) ]; then
-GOTESTCOMMAND=${GOTESTCOMMAND:="go test"}
+
+if [ -z "$(which gotestsum)" ]; then
+    GOTESTCOMMAND=${GOTESTCOMMAND:="go test"}
 else
-GOTESTCOMMAND=${GOTESTCOMMAND:="gotestsum --format pkgname --jsonfile testresults.json --"}
+    TEST_RESULTS=${TEST_RESULTS:="$(pwd)"}
+    GOTESTCOMMAND=${GOTESTCOMMAND:="gotestsum --format pkgname --jsonfile ${TEST_RESULTS}/testresults.json --"}
 fi
 
-echo "GOTESTCOMMAND IS: ${GOTESTCOMMAND}"
+echo "GOTESTCOMMAND will be: ${GOTESTCOMMAND}"
 
 # If one or more -t <pattern> are specified, use GOTESTCOMMAND -run <pattern> for each
 
@@ -24,7 +26,7 @@ while [ "$1" != "" ]; do
     case "$1" in
         -t)
             shift
-            TESTPATTERNS+=($1)
+            TESTPATTERNS+=("$1")
             ;;
         -norace)
             NORACEBUILD="TRUE"
@@ -42,7 +44,7 @@ REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/../..
 
 if [ "${NORACEBUILD}" = "" ]; then
     # Need bin-race binaries for e2e tests
-    pushd ${REPO_ROOT}
+    pushd "${REPO_ROOT}"
     make build-race -j4
     popd
     RACE_OPTION="-race"
@@ -66,7 +68,7 @@ fi
 echo "Test output can be found in ${TESTDIR}"
 
 if [ "${SRCROOT}" = "" ]; then
-    export SRCROOT=${REPO_ROOT}
+    export SRCROOT="${REPO_ROOT}"
 fi
 
 if [ "${NODEBINDIR}" = "" ]; then
@@ -85,7 +87,7 @@ echo "PATH:        ${PATH}"
 echo "SRCROOT:     ${SRCROOT}"
 echo "TESTDATADIR: ${TESTDATADIR}"
 
-cd ${SRCROOT}/test/e2e-go
+cd "${SRCROOT}"/test/e2e-go
 
 # ARM64 has some memory related issues with fork. Since we don't really care
 # about testing the forking capabilities, we're just run the tests one at a time.
@@ -99,15 +101,15 @@ fi
 echo "PARALLEL_FLAG = ${PARALLEL_FLAG}"
 
 if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
-    ${GOTESTCOMMAND} ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} ./...
+    ${GOTESTCOMMAND} "${RACE_OPTION}" "${PARALLEL_FLAG}" -timeout 1h -v "${SHORTTEST}" ./...
 else
-    for TEST in ${TESTPATTERNS[@]}; do
-        ${GOTESTCOMMAND} ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} -run ${TEST} ./...
+    for TEST in "${TESTPATTERNS[@]}"; do
+        ${GOTESTCOMMAND} "${RACE_OPTION}" "${PARALLEL_FLAG}" -timeout 1h -v "${SHORTTEST}" -run "${TEST}" ./...
     done
 fi
 
 if [ ${CLEANUP_TEMPDIR} -ne 0 ]; then
-    rm -rf ${TEMPDIR}
+    rm -rf "${TEMPDIR}"
 fi
 
 echo "----------------------------------------------------------------------"
