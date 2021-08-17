@@ -1938,7 +1938,15 @@ type disassembleState struct {
 	numericTargets bool
 	labelCount     int
 	pendingLabels  map[int]string
-	rerun          bool
+
+	// If we find a (back) jump to a label we did not generate
+	// (because we didn't know about it yet), rerun is set to
+	// true, and we make a second attempt to assemble once the
+	// first attempt is done. The second attempt retains all the
+	// labels found in the first pass.  In effect, the first
+	// attempt to assemble becomes a first-pass in a two-pass
+	// assembly process that simply collects jump target labels.
+	rerun bool
 
 	nextpc int
 	err    error
