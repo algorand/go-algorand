@@ -208,10 +208,16 @@ func (tx Txn) SignedTxn() transactions.SignedTxn {
 	return transactions.SignedTxn{Txn: tx.Txn()}
 }
 
+// SignedTxnWithAD produces unsigned, transactions.SignedTxnWithAD
+// from the fields in this Txn.  This seemingly pointless operation
+// exists, again, for convenience when driving tests.
 func (tx Txn) SignedTxnWithAD() transactions.SignedTxnWithAD {
 	return transactions.SignedTxnWithAD{SignedTxn: tx.SignedTxn()}
 }
 
+// SignedTxns turns a list of Txns into a slice of SignedTxns with
+// GroupIDs set properly to make them a transaction group. Maybe
+// another name is more approrpriate
 func SignedTxns(txns ...*Txn) []transactions.SignedTxn {
 	var txgroup transactions.TxGroup
 	txgroup.TxGroupHashes = make([]crypto.Digest, len(txns))
@@ -231,6 +237,7 @@ func SignedTxns(txns ...*Txn) []transactions.SignedTxn {
 
 }
 
+// SignedWithADs converts a slice of SignedTxns to SignedTxnWithADs
 func SignedWithADs(stxns []transactions.SignedTxn) []transactions.SignedTxnWithAD {
 	withADs := make([]transactions.SignedTxnWithAD, len(stxns))
 	for i, stxn := range stxns {
