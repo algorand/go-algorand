@@ -26,7 +26,7 @@ while [ "$1" != "" ]; do
     case "$1" in
         -t)
             shift
-            TESTPATTERNS+=("$1")
+            TESTPATTERNS+=($1)
             ;;
         -norace)
             NORACEBUILD="TRUE"
@@ -44,7 +44,7 @@ REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/../..
 
 if [ "${NORACEBUILD}" = "" ]; then
     # Need bin-race binaries for e2e tests
-    pushd "${REPO_ROOT}"
+    pushd ${REPO_ROOT}
     make build-race -j4
     popd
     RACE_OPTION="-race"
@@ -68,7 +68,7 @@ fi
 echo "Test output can be found in ${TESTDIR}"
 
 if [ "${SRCROOT}" = "" ]; then
-    export SRCROOT="${REPO_ROOT}"
+    export SRCROOT=${REPO_ROOT}
 fi
 
 if [ "${NODEBINDIR}" = "" ]; then
@@ -87,7 +87,7 @@ echo "PATH:        ${PATH}"
 echo "SRCROOT:     ${SRCROOT}"
 echo "TESTDATADIR: ${TESTDATADIR}"
 
-cd "${SRCROOT}"/test/e2e-go
+cd ${SRCROOT}/test/e2e-go
 
 # ARM64 has some memory related issues with fork. Since we don't really care
 # about testing the forking capabilities, we're just run the tests one at a time.
@@ -109,7 +109,7 @@ else
 fi
 
 if [ ${CLEANUP_TEMPDIR} -ne 0 ]; then
-    rm -rf "${TEMPDIR}"
+    rm -rf ${TEMPDIR}
 fi
 
 echo "----------------------------------------------------------------------"
