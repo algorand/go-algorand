@@ -12,7 +12,7 @@ if [ -z "$(which gotestsum)" ]; then
     GOTESTCOMMAND=${GOTESTCOMMAND:="go test"}
 else
     TEST_RESULTS=${TEST_RESULTS:="$(pwd)"}
-    GOTESTCOMMAND=${GOTESTCOMMAND:="gotestsum --format pkgname --jsonfile ${TEST_RESULTS}/testresults.json --"}
+    GOTESTCOMMAND=${GOTESTCOMMAND:="gotestsum --format pkgname --junitfile ${TEST_RESULTS}/results.xml --jsonfile ${TEST_RESULTS}/testresults.json --"}
 fi
 
 echo "GOTESTCOMMAND will be: ${GOTESTCOMMAND}"
