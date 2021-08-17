@@ -1447,8 +1447,16 @@ func (ops *OpStream) fixJumpsAndFlows() {
 			refCount++
 		}
 		if ops.blocks[i].flowTo > -1 {
-			ops.blocks[i].flowTo = i + 1
+			if i+1 >= len(ops.blocks) {
+				ops.blocks[i].flowTo = exiting
+			} else {
+				ops.blocks[i].flowTo = i + 1
+			}
 		}
+		if ops.blocks[i].jumpTo >= len(ops.blocks) {
+			ops.blocks[i].flowTo = exiting
+		}
+
 	}
 }
 
