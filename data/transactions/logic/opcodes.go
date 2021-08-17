@@ -368,7 +368,7 @@ func addJumpFuncs() {
 		case "bnz", "bz":
 			OpSpecs[i].Details.jumpFunc = jumpConditionalBranch
 		case "b":
-			OpSpecs[i].Details.jumpFunc = jumpConditionalBranch
+			OpSpecs[i].Details.jumpFunc = jumpUnconditionalBranch
 		case "return":
 			OpSpecs[i].Details.jumpFunc = jumpReturn
 		case "callsub":

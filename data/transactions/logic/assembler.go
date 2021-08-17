@@ -1401,7 +1401,7 @@ func (ops *OpStream) checkStack(args StackTypes, returns StackTypes, instruction
 			}
 			if !typecheck(argType, stype) {
 				err := fmt.Errorf("%s arg %d wanted type %s got %s", strings.Join(instruction, " "), i, argType.String(), stype.String())
-				ops.error(err)
+				_ = ops.error(err)
 			}
 		}
 		if !firstPop {
