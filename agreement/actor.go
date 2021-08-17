@@ -36,9 +36,9 @@ type actor interface {
 	//   c.underlying() == c.actor
 	underlying() actor
 
-	// forgetBeforeRound is used by router update() when cleaning up old rounds
-	// also used in service at startup XXX change name to lastCommittedRound
-	forgetBeforeRound() basics.Round
+	// firstUncommittedRound is used by router update() when cleaning up old rounds
+	// also used in service at startup.
+	firstUncommittedRound() basics.Round
 
 	externalDemuxSignals() pipelineExternalDemuxSignals
 

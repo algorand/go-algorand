@@ -56,7 +56,7 @@ func makePipelinePlayer(nextRound basics.Round, nextVersion protocol.ConsensusVe
 func (p *pipelinePlayer) T() stateMachineTag { return playerMachine } // XXX different tag?
 func (p *pipelinePlayer) underlying() actor  { return p }
 
-func (p *pipelinePlayer) forgetBeforeRound() basics.Round {
+func (p *pipelinePlayer) firstUncommittedRound() basics.Round {
 	return p.FirstUncommittedRound
 }
 

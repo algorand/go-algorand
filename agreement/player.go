@@ -68,7 +68,7 @@ func (p *player) underlying() actor {
 	return p
 }
 
-func (p *player) forgetBeforeRound() basics.Round {
+func (p *player) firstUncommittedRound() basics.Round {
 	return p.Round.Number
 }
 
