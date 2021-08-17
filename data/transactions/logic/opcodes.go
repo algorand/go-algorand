@@ -50,7 +50,7 @@ type opDetails struct {
 	checkFunc  opCheckFunc
 	Immediates []immediate
 	typeFunc   opTypeFunc
-	jumpFunc opJumpFunc
+	jumpFunc   opJumpFunc
 }
 
 var opDefault = opDetails{1, 1, nil, nil, nil, nil}
@@ -71,11 +71,6 @@ func immediates(names ...string) opDetails {
 func stacky(typer opTypeFunc, imms ...string) opDetails {
 	d := immediates(imms...)
 	d.typeFunc = typer
-	return d
-}
-
-func jumpy(jumper opJumpFunc, d opDetails) opDetails{
-	d.jumpFunc=jumper
 	return d
 }
 
@@ -134,7 +129,7 @@ var anyIntInt = StackTypes{StackAny, StackUint64, StackUint64}
 // Note: assembly can specialize an Any return type if known at
 // assembly-time, with ops.returns()
 var OpSpecs = []OpSpec{
-	{0x00, "err", opErr, asmDefault, disDefault, nil, nil, 1, modeAny, jumpy(jumpErr, opDefault)},
+	{0x00, "err", opErr, asmDefault, disDefault, nil, nil, 1, modeAny, opDefault},
 	{0x01, "sha256", opSHA256, asmDefault, disDefault, oneBytes, oneBytes, 1, modeAny, costly(7)},
 	{0x02, "keccak256", opKeccak256, asmDefault, disDefault, oneBytes, oneBytes, 1, modeAny, costly(26)},
 	{0x03, "sha512_256", opSHA512_256, asmDefault, disDefault, oneBytes, oneBytes, 1, modeAny, costly(9)},
@@ -212,10 +207,10 @@ var OpSpecs = []OpSpec{
 	{0x3c, "gaid", opGaid, asmDefault, disDefault, nil, oneInt, 4, runModeApplication, immediates("t")},
 	{0x3d, "gaids", opGaids, asmDefault, disDefault, oneInt, oneInt, 4, runModeApplication, opDefault},
 
-	{0x40, "bnz", opBnz, assembleBranch, disBranch, oneInt, nil, 1, modeAny, jumpy(jumpConditionalBranch, opBranch)},
-	{0x41, "bz", opBz, assembleBranch, disBranch, oneInt, nil, 2, modeAny, jumpy(jumpConditionalBranch, opBranch)},
-	{0x42, "b", opB, assembleBranch, disBranch, nil, nil, 2, modeAny, jumpy(jumpUnconditionalBranch,opBranch)},
-	{0x43, "return", opReturn, asmDefault, disDefault, oneInt, nil, 2, modeAny, jumpy(jumpReturn, opDefault)},
+	{0x40, "bnz", opBnz, assembleBranch, disBranch, oneInt, nil, 1, modeAny, opBranch},
+	{0x41, "bz", opBz, assembleBranch, disBranch, oneInt, nil, 2, modeAny, opBranch},
+	{0x42, "b", opB, assembleBranch, disBranch, nil, nil, 2, modeAny, opBranch},
+	{0x43, "return", opReturn, asmDefault, disDefault, oneInt, nil, 2, modeAny, opDefault},
 	{0x44, "assert", opAssert, asmDefault, disDefault, oneInt, nil, 3, modeAny, opDefault},
 	{0x48, "pop", opPop, asmDefault, disDefault, oneAny, nil, 1, modeAny, opDefault},
 	{0x49, "dup", opDup, asmDefault, disDefault, oneAny, twoAny, 1, modeAny, opDefault},
@@ -269,8 +264,8 @@ var OpSpecs = []OpSpec{
 	{0x81, "pushint", opPushInt, asmPushInt, disPushInt, nil, oneInt, 3, modeAny, varies(checkPushInt, "uint", immInt)},
 
 	// "Function oriented"
-	{0x88, "callsub", opCallSub, assembleBranch, disBranch, nil, nil, 4, modeAny, jumpy(jumpConditionalBranch, opBranch)},
-	{0x89, "retsub", opRetSub, asmDefault, disDefault, nil, nil, 4, modeAny, jumpy(jumpRetSub, opDefault)},
+	{0x88, "callsub", opCallSub, assembleBranch, disBranch, nil, nil, 4, modeAny, opBranch},
+	{0x89, "retsub", opRetSub, asmDefault, disDefault, nil, nil, 4, modeAny, opDefault},
 	// Leave a little room for indirect function calls, or similar
 
 	// More math
@@ -358,6 +353,26 @@ var opsByOpcode [LogicVersion + 1][256]OpSpec
 // OpsByName map for each each version, mapping opcode name to OpSpec
 var OpsByName [LogicVersion + 1]map[string]OpSpec
 
+// Now that opDetails has this additional component, jumpFunc, we need to go through and add them to the specs in init
+func addJumpFuncs() {
+	for i := range OpSpecs {
+		switch OpSpecs[i].Name {
+		case "err":
+			OpSpecs[i].Details.jumpFunc = jumpErr
+		case "bnz", "bz":
+			OpSpecs[i].Details.jumpFunc = jumpConditionalBranch
+		case "b":
+			OpSpecs[i].Details.jumpFunc = jumpConditionalBranch
+		case "return":
+			OpSpecs[i].Details.jumpFunc = jumpReturn
+		case "callsub":
+			OpSpecs[i].Details.jumpFunc = jumpConditionalBranch
+		case "retsub":
+			OpSpecs[i].Details.jumpFunc = jumpRetSub
+		}
+	}
+}
+
 // Migration from TEAL v1 to TEAL v2.
 // TEAL v1 allowed execution of program with version 0.
 // With TEAL v2 opcode versions are introduced and they are bound to every opcode.
@@ -365,6 +380,7 @@ var OpsByName [LogicVersion + 1]map[string]OpSpec
 // To preserve backward compatibility version 0 array is populated with TEAL v1 opcodes
 // with the version overwritten to 0.
 func init() {
+	addJumpFuncs()
 	// First, initialize baseline v1 opcodes.
 	// Zero (empty) version is an alias for TEAL v1 opcodes and needed for compatibility with v1 code.
 	OpsByName[0] = make(map[string]OpSpec, 256)
