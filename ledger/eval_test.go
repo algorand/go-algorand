@@ -1205,7 +1205,8 @@ func (eval *BlockEvaluator) txgroup(t testing.TB, txns ...*txntest.Txn) error {
 	if err != nil {
 		return err
 	}
-	err = eval.transactionGroup(txntest.SignedWithADs(txgroup))
+
+	err = eval.transactionGroup(transactions.WrapSignedTxnsWithAD(txgroup))
 	return err
 }
 

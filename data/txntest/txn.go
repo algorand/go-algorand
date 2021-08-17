@@ -236,15 +236,3 @@ func SignedTxns(txns ...*Txn) []transactions.SignedTxn {
 	return stxns
 
 }
-
-// SignedWithADs converts a slice of SignedTxns to SignedTxnWithADs
-func SignedWithADs(stxns []transactions.SignedTxn) []transactions.SignedTxnWithAD {
-	withADs := make([]transactions.SignedTxnWithAD, len(stxns))
-	for i, stxn := range stxns {
-		withADs[i] = transactions.SignedTxnWithAD{
-			SignedTxn: stxn,
-			ApplyData: transactions.ApplyData{},
-		}
-	}
-	return withADs
-}
