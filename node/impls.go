@@ -79,14 +79,14 @@ func makeAgreementLedger(ledger *ledger.SpeculativeLedger, net network.GossipNod
 
 // EnsureBlock implements agreement.LedgerWriter.EnsureBlock.
 func (l agreementLedger) EnsureBlock(e bookkeeping.Block, c agreement.Certificate) {
-	l.Ledger.EnsureBlock(&e, c)
+	l.SpeculativeLedger.EnsureBlock(&e, c)
 	// let the network know that we've made some progress.
 	l.n.OnNetworkAdvance()
 }
 
 // EnsureValidatedBlock implements agreement.LedgerWriter.EnsureValidatedBlock.
 func (l agreementLedger) EnsureValidatedBlock(ve agreement.ValidatedBlock, c agreement.Certificate) {
-	l.Ledger.EnsureValidatedBlock(ve.(validatedBlock).vb, c)
+	l.SpeculativeLedger.EnsureValidatedBlock(ve.(validatedBlock).vb, c)
 	// let the network know that we've made some progress.
 	l.n.OnNetworkAdvance()
 }

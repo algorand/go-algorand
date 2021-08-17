@@ -150,7 +150,9 @@ func TestMinBalanceOK(t *testing.T) {
 	limitedAccounts := make(map[basics.Address]uint64)
 	limitedAccounts[addresses[0]] = 2*minBalance + proto.MinTxnFee
 	mockledger := makeMockLedger(t, initAcc(limitedAccounts))
-	ledger := ledger.MakeSpeculativeLedger(mockledger)
+	ledger, err := ledger.MakeSpeculativeLedger(mockledger)
+	require.NoError(t, err)
+
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
@@ -192,7 +194,9 @@ func TestSenderGoesBelowMinBalance(t *testing.T) {
 	limitedAccounts := make(map[basics.Address]uint64)
 	limitedAccounts[addresses[0]] = 2*minBalance + proto.MinTxnFee
 	mockledger := makeMockLedger(t, initAcc(limitedAccounts))
-	ledger := ledger.MakeSpeculativeLedger(mockledger)
+	ledger, err := ledger.MakeSpeculativeLedger(mockledger)
+	require.NoError(t, err)
+
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
@@ -235,7 +239,9 @@ func TestSenderGoesBelowMinBalanceDueToAssets(t *testing.T) {
 	limitedAccounts := make(map[basics.Address]uint64)
 	limitedAccounts[addresses[0]] = 3*minBalance + 2*proto.MinTxnFee
 	mockledger := makeMockLedgerFuture(t, initAcc(limitedAccounts))
-	ledger := ledger.MakeSpeculativeLedger(mockledger)
+	ledger, err := ledger.MakeSpeculativeLedger(mockledger)
+	require.NoError(t, err)
+
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
@@ -279,7 +285,7 @@ func TestSenderGoesBelowMinBalanceDueToAssets(t *testing.T) {
 		},
 	}
 	signedTx := tx.Sign(secrets[0])
-	err := transactionPool.RememberOne(signedTx)
+	err = transactionPool.RememberOne(signedTx)
 	require.Error(t, err)
 	var returnedTxid, returnedAcct string
 	var returnedBal, returnedMin, numAssets uint64
@@ -305,7 +311,9 @@ func TestCloseAccount(t *testing.T) {
 	limitedAccounts := make(map[basics.Address]uint64)
 	limitedAccounts[addresses[0]] = 3*minBalance + 2*proto.MinTxnFee
 	mockledger := makeMockLedger(t, initAcc(limitedAccounts))
-	ledger := ledger.MakeSpeculativeLedger(mockledger)
+	ledger, err := ledger.MakeSpeculativeLedger(mockledger)
+	require.NoError(t, err)
+
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
@@ -367,7 +375,9 @@ func TestCloseAccountWhileTxIsPending(t *testing.T) {
 	limitedAccounts := make(map[basics.Address]uint64)
 	limitedAccounts[addresses[0]] = 2*minBalance + 2*proto.MinTxnFee - 1
 	mockledger := makeMockLedger(t, initAcc(limitedAccounts))
-	ledger := ledger.MakeSpeculativeLedger(mockledger)
+	ledger, err := ledger.MakeSpeculativeLedger(mockledger)
+	require.NoError(t, err)
+
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
@@ -430,7 +440,9 @@ func TestClosingAccountBelowMinBalance(t *testing.T) {
 	limitedAccounts[addresses[0]] = 2*minBalance - 1 + proto.MinTxnFee
 	limitedAccounts[addresses[2]] = 0
 	mockledger := makeMockLedger(t, initAcc(limitedAccounts))
-	ledger := ledger.MakeSpeculativeLedger(mockledger)
+	ledger, err := ledger.MakeSpeculativeLedger(mockledger)
+	require.NoError(t, err)
+
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
@@ -473,7 +485,9 @@ func TestRecipientGoesBelowMinBalance(t *testing.T) {
 	limitedAccounts := make(map[basics.Address]uint64)
 	limitedAccounts[addresses[1]] = 0
 	mockledger := makeMockLedger(t, initAcc(limitedAccounts))
-	ledger := ledger.MakeSpeculativeLedger(mockledger)
+	ledger, err := ledger.MakeSpeculativeLedger(mockledger)
+	require.NoError(t, err)
+
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
@@ -513,7 +527,9 @@ func TestRememberForget(t *testing.T) {
 	}
 
 	mockLedger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
-	ledger := ledger.MakeSpeculativeLedger(mockLedger)
+	ledger, err := ledger.MakeSpeculativeLedger(mockLedger)
+	require.NoError(t, err)
+
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
@@ -579,7 +595,9 @@ func TestCleanUp(t *testing.T) {
 	}
 
 	mockLedger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
-	ledger := ledger.MakeSpeculativeLedger(mockLedger)
+	ledger, err := ledger.MakeSpeculativeLedger(mockLedger)
+	require.NoError(t, err)
+
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
@@ -657,7 +675,9 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 	}
 
 	mockLedger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
-	ledger := ledger.MakeSpeculativeLedger(mockLedger)
+	ledger, err := ledger.MakeSpeculativeLedger(mockLedger)
+	require.NoError(t, err)
+
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
@@ -721,7 +741,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 	signedTx := tx.Sign(secrets[0])
 
 	blockEval := newBlockEvaluator(t, mockLedger)
-	err := blockEval.Transaction(signedTx, transactions.ApplyData{})
+	err = blockEval.Transaction(signedTx, transactions.ApplyData{})
 	require.NoError(t, err)
 
 	// simulate this transaction was applied
@@ -753,7 +773,9 @@ func TestOverspender(t *testing.T) {
 
 	overSpender := addresses[0]
 	mockledger := makeMockLedger(t, initAcc(map[basics.Address]uint64{overSpender: proto.MinTxnFee - 1}))
-	ledger := ledger.MakeSpeculativeLedger(mockledger)
+	ledger, err := ledger.MakeSpeculativeLedger(mockledger)
+	require.NoError(t, err)
+
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
@@ -814,7 +836,9 @@ func TestRemove(t *testing.T) {
 	}
 
 	mockledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
-	ledger := ledger.MakeSpeculativeLedger(mockledger)
+	ledger, err := ledger.MakeSpeculativeLedger(mockledger)
+	require.NoError(t, err)
+
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
@@ -870,7 +894,9 @@ func TestLogicSigOK(t *testing.T) {
 	limitedAccounts := make(map[basics.Address]uint64)
 	limitedAccounts[addresses[0]] = 2*minBalance + proto.MinTxnFee
 	mockledger := makeMockLedger(t, initAcc(limitedAccounts))
-	ledger := ledger.MakeSpeculativeLedger(mockledger)
+	ledger, err := ledger.MakeSpeculativeLedger(mockledger)
+	require.NoError(t, err)
+
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
@@ -915,7 +941,9 @@ func TestTransactionPool_CurrentFeePerByte(t *testing.T) {
 	}
 
 	mockledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
-	l := ledger.MakeSpeculativeLedger(mockledger)
+	l, err := ledger.MakeSpeculativeLedger(mockledger)
+	require.NoError(t, err)
+
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize * 15
 	cfg.EnableProcessBlockStats = false
@@ -967,7 +995,9 @@ func BenchmarkTransactionPoolRememberOne(b *testing.B) {
 	}
 
 	mockledger := makeMockLedger(b, initAccFixed(addresses, 1<<32))
-	specledger := ledger.MakeSpeculativeLedger(mockledger)
+	specledger, err := ledger.MakeSpeculativeLedger(mockledger)
+	require.NoError(b, err)
+
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = b.N
 	cfg.EnableProcessBlockStats = false
@@ -1003,7 +1033,9 @@ func BenchmarkTransactionPoolRememberOne(b *testing.B) {
 	b.StopTimer()
 	b.ResetTimer()
 	mockledger = makeMockLedger(b, initAccFixed(addresses, 1<<32))
-	specledger = ledger.MakeSpeculativeLedger(mockledger)
+	specledger, err = ledger.MakeSpeculativeLedger(mockledger)
+	require.NoError(b, err)
+
 	transactionPool = MakeTransactionPool(specledger, cfg, logging.Base())
 
 	b.StartTimer()
@@ -1030,7 +1062,9 @@ func BenchmarkTransactionPoolPending(b *testing.B) {
 		b.ResetTimer()
 
 		mockledger := makeMockLedger(b, initAccFixed(addresses, 1<<32))
-		ledger := ledger.MakeSpeculativeLedger(mockledger)
+		ledger, err := ledger.MakeSpeculativeLedger(mockledger)
+		require.NoError(b, err)
+
 		cfg := config.GetDefaultLocal()
 		cfg.TxPoolSize = benchPoolSize
 		cfg.EnableProcessBlockStats = false
@@ -1096,7 +1130,9 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 	}
 
 	mockledger := makeMockLedger(b, initAccFixed(addresses, 1<<32))
-	l := ledger.MakeSpeculativeLedger(mockledger)
+	l, err := ledger.MakeSpeculativeLedger(mockledger)
+	require.NoError(b, err)
+
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = poolSize
 	cfg.EnableProcessBlockStats = false
@@ -1194,7 +1230,8 @@ func TestTxPoolSizeLimits(t *testing.T) {
 	cfg.EnableProcessBlockStats = false
 
 	mockledger := makeMockLedger(t, initAcc(map[basics.Address]uint64{firstAddress: proto.MinBalance + 2*proto.MinTxnFee*uint64(cfg.TxPoolSize)}))
-	ledger := ledger.MakeSpeculativeLedger(mockledger)
+	ledger, err := ledger.MakeSpeculativeLedger(mockledger)
+	require.NoError(t, err)
 
 	transactionPool := MakeTransactionPool(ledger, cfg, logging.Base())
 

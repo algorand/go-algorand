@@ -75,7 +75,9 @@ func BenchmarkTxHandlerProcessDecoded(b *testing.B) {
 
 	cfg.TxPoolSize = 20000
 	cfg.EnableProcessBlockStats = false
-	specledger := ledger.MakeSpeculativeLedger(l.Ledger)
+	specledger, err := ledger.MakeSpeculativeLedger(l.Ledger)
+	require.NoError(b, err)
+
 	tp := pools.MakeTransactionPool(specledger, cfg, logging.Base())
 	signedTransactions := make([]transactions.SignedTxn, 0, b.N)
 	for i := 0; i < b.N/numUsers; i++ {

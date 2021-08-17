@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -127,17 +128,8 @@ func (ml *mockLedgerForTracker) addMockBlock(be blockEntry, delta ledgercore.Sta
 	return nil
 }
 
-func (ml *mockLedgerForTracker) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (*roundCowState, error) {
-	// support returning the deltas if the client explicitly provided them by calling addMockBlock, otherwise,
-	// just return an empty state delta ( since the client clearly didn't care about these )
-	if len(ml.deltas) > int(blk.Round()) {
-		return &roundCowState{mods: ml.deltas[uint64(blk.Round())]}, nil
-	}
-	return &roundCowState{
-		mods: ledgercore.StateDelta{
-			Hdr: &bookkeeping.BlockHeader{},
-		},
-	}, nil
+func (ml *mockLedgerForTracker) VerifiedTransactionCache() verify.VerifiedTransactionCache {
+	return verify.MakeVerifiedTransactionCache(100)
 }
 
 func (ml *mockLedgerForTracker) Block(rnd basics.Round) (bookkeeping.Block, error) {
@@ -156,15 +148,11 @@ func (ml *mockLedgerForTracker) BlockHdr(rnd basics.Round) (bookkeeping.BlockHea
 	return ml.blocks[int(rnd)].block.BlockHeader, nil
 }
 
-func (ml *mockLedgerForTracker) trackerDB() db.Pair {
+func (ml *mockLedgerForTracker) TrackerDB() db.Pair {
 	return ml.dbs
 }
 
-func (ml *mockLedgerForTracker) blockDB() db.Pair {
-	return db.Pair{}
-}
-
-func (ml *mockLedgerForTracker) trackerLog() logging.Logger {
+func (ml *mockLedgerForTracker) TrackerLog() logging.Logger {
 	return ml.log
 }
 

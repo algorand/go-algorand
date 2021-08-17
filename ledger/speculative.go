@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -29,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -178,22 +180,39 @@ type speculativeBlock struct {
 	cert *agreement.Certificate
 }
 
-// The speculationTracker tracks speculative blocks that have been proposed
+// ledgerForSpeculation defines the part of the Ledger interface that is
+// needed by the speculative ledger code.
+type ledgerForSpeculation interface {
+	ledgerForEvaluator
+
+	Latest() basics.Round
+	AddBlock(blk bookkeeping.Block, c agreement.Certificate) error
+	AddValidatedBlock(vb ValidatedBlock, c agreement.Certificate) error
+	Wait(basics.Round) chan struct{}
+
+	TrackerDB() db.Pair
+	TrackerLog() logging.Logger
+	VerifiedTransactionCache() verify.VerifiedTransactionCache
+	RegisterBlockListeners([]BlockListener)
+}
+
+// The SpeculativeLedger tracks speculative blocks that have been proposed
 // over the network but that have not yet been agreed upon (no certificate).
-//
-// The speculationTracker uses the tracker interface to monitor the real
-// ledger for committed blocks.  The ledger's tracker rwmutex protects
-// concurrent operations on the speculationTracker.
-type speculationTracker struct {
+type SpeculativeLedger struct {
+	mu sync.Mutex
+
 	// blocks contains the set of blocks that we have received in a
 	// proposal but for whose round we have not yet reached consensus.
 	blocks map[bookkeeping.BlockHash]speculativeBlock
 
 	// l is the committed ledger.
-	l *Ledger
+	l ledgerForSpeculation
 
-	// dbs is l.trackerDB()
+	// dbs is l.TrackerDB()
 	dbs db.Pair
+
+	// log for logging
+	log logging.Logger
 }
 
 // speculativeBlocksSchema describes the on-disk state format for storing
@@ -209,8 +228,8 @@ var speculativeBlockSchema = []string{
 }
 
 // addSpeculativeBlock records a new speculative block.
-func (st *speculationTracker) addSpeculativeBlock(vblk ValidatedBlock, cert *agreement.Certificate) error {
-	err := st.addSpeculativeBlockInMem(vblk, cert)
+func (sl *SpeculativeLedger) addSpeculativeBlock(vblk ValidatedBlock, cert *agreement.Certificate) error {
+	err := sl.addSpeculativeBlockInMem(vblk, cert)
 	if err != nil {
 		return err
 	}
@@ -221,7 +240,7 @@ func (st *speculationTracker) addSpeculativeBlock(vblk ValidatedBlock, cert *agr
 	}
 
 	blkhash := vblk.blk.Hash()
-	err = st.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = sl.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		_, err := tx.Exec("INSERT INTO speculative (rnd, blkhash, blkdata, certdata) VALUES (?, ?, ?, ?)",
 			vblk.blk.Round(), blkhash[:], protocol.Encode(&vblk.blk), certbuf)
 		return err
@@ -232,13 +251,13 @@ func (st *speculationTracker) addSpeculativeBlock(vblk ValidatedBlock, cert *agr
 
 // addSpeculativeBlockInMem updates the in-memory state with a new speculative
 // block, but does not store the block on-disk.
-func (st *speculationTracker) addSpeculativeBlockInMem(vblk ValidatedBlock, cert *agreement.Certificate) error {
+func (sl *SpeculativeLedger) addSpeculativeBlockInMem(vblk ValidatedBlock, cert *agreement.Certificate) error {
 	// The parent of this block must be committed or present in the
 	// speculation tracker.
-	latest := st.l.Latest()
+	latest := sl.l.Latest()
 	if vblk.blk.Round() > latest+1 {
 		prevhash := vblk.blk.Branch
-		_, ok := st.blocks[prevhash]
+		_, ok := sl.blocks[prevhash]
 		if !ok {
 			return fmt.Errorf("addSpeculativeBlockInMem(%d): latest is %d, missing parent %s", vblk.blk.Round(), latest, prevhash)
 		}
@@ -250,7 +269,7 @@ func (st *speculationTracker) addSpeculativeBlockInMem(vblk ValidatedBlock, cert
 	}
 
 	h := vblk.blk.Hash()
-	st.blocks[h] = speculativeBlock{
+	sl.blocks[h] = speculativeBlock{
 		lfe:  lfe,
 		cert: cert,
 	}
@@ -262,18 +281,14 @@ type blkcert struct {
 	cert *agreement.Certificate
 }
 
-func (st *speculationTracker) loadFromDisk(l *Ledger) error {
-	st.l = l
-	st.dbs = st.l.trackerDB()
-	st.blocks = make(map[bookkeeping.BlockHash]speculativeBlock)
-
+func (sl *SpeculativeLedger) loadFromDisk() error {
 	var blocks []blkcert
 
-	err := st.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err := sl.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		for _, tableCreate := range speculativeBlockSchema {
 			_, err := tx.Exec(tableCreate)
 			if err != nil {
-				return fmt.Errorf("speculationTracker could not create: %v", err)
+				return fmt.Errorf("SpeculativeLedger could not create: %v", err)
 			}
 		}
 
@@ -317,21 +332,21 @@ func (st *speculationTracker) loadFromDisk(l *Ledger) error {
 	for _, entry := range blocks {
 		blk := &entry.blk
 		var parentLedger ledgerForEvaluator
-		if blk.Round() == l.Latest()+1 {
-			parentLedger = l
+		if blk.Round() == sl.l.Latest()+1 {
+			parentLedger = sl.l
 		} else {
 			parentHash := blk.Branch
-			parent, ok := st.blocks[parentHash]
+			parent, ok := sl.blocks[parentHash]
 			if !ok {
-				l.trackerLog().Warnf("speculationTracker.loadFromDisk: cannot find parent %v for block %v round %d, latest %d", parentHash, blk.Hash(), blk.Round(), l.Latest())
+				sl.log.Warnf("SpeculativeLedger.loadFromDisk: cannot find parent %v for block %v round %d, latest %d", parentHash, blk.Hash(), blk.Round(), sl.l.Latest())
 				continue
 			}
 			parentLedger = parent.lfe
 		}
 
-		state, err := l.trackerEvalVerified(*blk, parentLedger)
+		state, err := eval(context.Background(), parentLedger, *blk, false, sl.l.VerifiedTransactionCache(), nil)
 		if err != nil {
-			l.trackerLog().Warnf("speculationTracker.loadFromDisk: block %d round %d: %v", blk.Hash(), blk.Round(), err)
+			sl.log.Warnf("SpeculativeLedger.loadFromDisk: block %d round %d: %v", blk.Hash(), blk.Round(), err)
 			continue
 		}
 
@@ -339,26 +354,26 @@ func (st *speculationTracker) loadFromDisk(l *Ledger) error {
 			blk:   *blk,
 			state: state,
 		}
-		err = st.addSpeculativeBlockInMem(vblk, entry.cert)
+		err = sl.addSpeculativeBlockInMem(vblk, entry.cert)
 		if err != nil {
-			l.trackerLog().Warnf("speculationTracker.loadFromDisk: block %d round %d: addSpeculativeBlockInMem: %v", blk.Hash(), blk.Round(), err)
+			sl.log.Warnf("SpeculativeLedger.loadFromDisk: block %d round %d: addSpeculativeBlockInMem: %v", blk.Hash(), blk.Round(), err)
 		}
 	}
 
 	return nil
 }
 
-func (st *speculationTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
-	for h, specblk := range st.blocks {
+func (sl *SpeculativeLedger) OnNewBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
+	for h, specblk := range sl.blocks {
 		if specblk.lfe.vb.blk.Round() < blk.Round() {
 			// Older blocks hanging around for whatever reason.
 			// Shouldn't happen, but clean them up just in case.
-			delete(st.blocks, h)
+			delete(sl.blocks, h)
 		}
 
 		if specblk.lfe.vb.blk.Round() == blk.Round() {
 			// Block for the same round.  Clear it out.
-			delete(st.blocks, h)
+			delete(sl.blocks, h)
 
 			if h == blk.Hash() {
 				// Same block; we speculated correctly.
@@ -366,7 +381,7 @@ func (st *speculationTracker) newBlock(blk bookkeeping.Block, delta ledgercore.S
 				// Different block for the same round.
 				// Now we know this is an incorrect speculation;
 				// clear out its children too.
-				st.invalidateChildren(h)
+				sl.invalidateChildren(h)
 			}
 		}
 
@@ -376,55 +391,52 @@ func (st *speculationTracker) newBlock(blk bookkeeping.Block, delta ledgercore.S
 			// If this is a child of the now-committed block,
 			// update its parent ledger pointer to avoid chains
 			// of validatedBlockAsLFE's.
-			specblk.lfe.resetParent(st.l)
+			specblk.lfe.resetParent(sl.l)
 
 			// If this child has a certificate associated with it,
 			// add the block to the ledger.  This will in turn cause
 			// the ledger to call our newBlock() again, which will
 			// commit any subsequent blocks that already have certs.
 			if specblk.cert != nil {
-				st.l.EnsureValidatedBlock(specblk.lfe.vb, *specblk.cert)
+				sl.EnsureValidatedBlock(specblk.lfe.vb, *specblk.cert)
 			}
 		}
 	}
 
-	err := st.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err := sl.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		_, err := tx.Exec("DELETE FROM speculative WHERE rnd<=?", blk.Round())
 		return err
 	})
 	if err != nil {
-		st.l.trackerLog().Warnf("speculationTracker.newBlock: cannot delete blocks up to %d: %v", blk.Round(), err)
+		sl.log.Warnf("SpeculativeLedger.OnNewBlock: cannot delete blocks up to %d: %v", blk.Round(), err)
 	}
 }
 
-func (st *speculationTracker) invalidateChildren(branch bookkeeping.BlockHash) {
-	for h, specblk := range st.blocks {
+func (sl *SpeculativeLedger) invalidateChildren(branch bookkeeping.BlockHash) {
+	for h, specblk := range sl.blocks {
 		if specblk.lfe.vb.blk.Branch == branch {
-			delete(st.blocks, h)
-			st.invalidateChildren(h)
+			delete(sl.blocks, h)
+			sl.invalidateChildren(h)
 		}
 	}
 }
 
-func (st *speculationTracker) committedUpTo(r basics.Round) basics.Round {
-	return r
-}
-
-func (st *speculationTracker) close() {
-}
-
-// SpeculativeLedger is an alternative view of the Ledger that exports methods
-// to access speculative blocks.  This allows having methods with the same
-// name but different arguments, between Ledger and SpeculativeLedger.
-type SpeculativeLedger struct {
-	*Ledger
-}
-
 // MakeSpeculativeLedger constructs a SpeculativeLedger around a Ledger.
-func MakeSpeculativeLedger(l *Ledger) *SpeculativeLedger {
-	return &SpeculativeLedger{
-		Ledger: l,
+func MakeSpeculativeLedger(l ledgerForSpeculation) (*SpeculativeLedger, error) {
+	sl := &SpeculativeLedger{
+		l:   l,
+		dbs:   l.TrackerDB(),
+		log:   l.TrackerLog(),
+		blocks: make(map[bookkeeping.BlockHash]speculativeBlock),
 	}
+
+	err := sl.loadFromDisk()
+	if err != nil {
+		return nil, err
+	}
+
+	l.RegisterBlockListeners([]BlockListener{sl})
+	return sl, nil
 }
 
 // leafNotFound is an error indicating that the leaf hash was not present
@@ -440,22 +452,22 @@ func (lnf leafNotFound) Error() string {
 
 // LFE returns a ledgerForEvaluator for round r from the speculative ledger.
 func (sl *SpeculativeLedger) LFE(r basics.Round, leaf bookkeeping.BlockHash) (ledgerForEvaluator, error) {
-	sl.trackerMu.Lock()
-	defer sl.trackerMu.Unlock()
+	sl.mu.Lock()
+	defer sl.mu.Unlock()
 
-	entry, ok := sl.speculate.blocks[leaf]
+	entry, ok := sl.blocks[leaf]
 	if ok {
 		return entry.lfe, nil
 	}
 
-	if r <= sl.Latest() {
-		return sl.Ledger, nil
+	if r <= sl.l.Latest() {
+		return sl.l, nil
 	}
 
 	return nil, leafNotFound{h: leaf}
 }
 
-// blockHdr returns the block header for round r from the speculative ledger.
+// BlockHdr returns the block header for round r from the speculative ledger.
 func (sl *SpeculativeLedger) BlockHdr(r basics.Round, leaf bookkeeping.BlockHash) (bookkeeping.BlockHeader, error) {
 	lfe, err := sl.LFE(r, leaf)
 	if err != nil {
@@ -467,7 +479,7 @@ func (sl *SpeculativeLedger) BlockHdr(r basics.Round, leaf bookkeeping.BlockHash
 
 // NextRound returns the next round for which no block has been committed.
 func (sl *SpeculativeLedger) NextRound() basics.Round {
-	return sl.Latest() + 1
+	return sl.l.Latest() + 1
 }
 
 // Wait returns a channel that closes once a given round is stored
@@ -486,16 +498,16 @@ func (sl *SpeculativeLedger) NextRound() basics.Round {
 func (sl *SpeculativeLedger) Wait(r basics.Round, leaf bookkeeping.BlockHash) chan struct{} {
 	// Check for a pending non-speculative block.  This might exist
 	// even if we already have a speculative block too.
-	if r <= sl.Latest() {
-		return sl.Ledger.Wait(r)
+	if r <= sl.l.Latest() {
+		return sl.l.Wait(r)
 	}
 
 	// Check if we have a speculative block for this round.  Speculative
 	// blocks are currently written to durable storage synchronously, so
 	// no waiting is needed.
-	sl.trackerMu.Lock()
-	entry, ok := sl.speculate.blocks[leaf]
-	sl.trackerMu.Unlock()
+	sl.mu.Lock()
+	entry, ok := sl.blocks[leaf]
+	sl.mu.Unlock()
 	if ok && r <= entry.lfe.vb.blk.Round() {
 		closed := make(chan struct{})
 		close(closed)
@@ -504,7 +516,7 @@ func (sl *SpeculativeLedger) Wait(r basics.Round, leaf bookkeeping.BlockHash) ch
 
 	// No speculative block present, and not pending in the blockQ.
 	// Wait for the block to be inserted by someone else (e.g., catchup).
-	return sl.Ledger.Wait(r)
+	return sl.l.Wait(r)
 }
 
 // Seed returns the VRF seed that in a given round's block header.
@@ -584,9 +596,9 @@ func (sl *SpeculativeLedger) ConsensusVersion(r basics.Round, leaf bookkeeping.B
 
 // AddSpeculativeBlock records a new speculative block.
 func (sl *SpeculativeLedger) AddSpeculativeBlock(vblk ValidatedBlock) error {
-	sl.trackerMu.Lock()
-	defer sl.trackerMu.Unlock()
-	return sl.speculate.addSpeculativeBlock(vblk, nil)
+	sl.mu.Lock()
+	defer sl.mu.Unlock()
+	return sl.addSpeculativeBlock(vblk, nil)
 }
 
 // AddBlock adds a certificate together with a block to the ledger.
@@ -601,7 +613,7 @@ func (sl *SpeculativeLedger) AddBlock(blk bookkeeping.Block, cert agreement.Cert
 
 // AddValidatedBlock adds a certificate together with a block to the ledger.
 func (sl *SpeculativeLedger) AddValidatedBlock(vb ValidatedBlock, cert agreement.Certificate) error {
-	sl.trackerMu.Lock()
+	sl.mu.Lock()
 
 	// If this block is for the next round expected by the ledger,
 	// add it directly to the underlying ledger.  That avoids writing
@@ -609,28 +621,28 @@ func (sl *SpeculativeLedger) AddValidatedBlock(vb ValidatedBlock, cert agreement
 	// concurrent insertion of blocks, but the latest round returned
 	// by the ledger is monotonically increasing, so if it increments
 	// concurrently with us, the block insertion should error out anyway.
-	if vb.blk.Round() == sl.Latest()+1 {
-		sl.trackerMu.Unlock()
-		return sl.Ledger.AddValidatedBlock(vb, cert)
+	if vb.blk.Round() == sl.l.Latest()+1 {
+		sl.mu.Unlock()
+		return sl.l.AddValidatedBlock(vb, cert)
 	}
 
-	// This is a speculative block.  We are holding the trackerMu, which
-	// will serialize us with respect to calls to newBlock().  We rely
-	// on that so that newBlock() will insert this certificate into the
+	// This is a speculative block.  We are holding the sl.mu lock, which
+	// will serialize us with respect to calls to OnNewBlock().  We rely
+	// on that so that OnNewBlock() will insert this certificate into the
 	// ledger, if/when this block stops being speculative.
-	defer sl.trackerMu.Unlock()
+	defer sl.mu.Unlock()
 
 	// This block might be not even in our set of known speculative blocks
 	// yet, so add it there if need be.  addSpeculativeBlock() takes a cert,
 	// so nothing left for us to do if we invoke it.
-	entry, ok := sl.speculate.blocks[vb.blk.Hash()]
+	entry, ok := sl.blocks[vb.blk.Hash()]
 	if !ok {
-		return sl.speculate.addSpeculativeBlock(vb, &cert)
+		return sl.addSpeculativeBlock(vb, &cert)
 	}
 
 	entry.cert = &cert
 	blkhash := entry.lfe.vb.blk.Hash()
-	return sl.speculate.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	return sl.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		_, err := tx.Exec("UPDATE speculative SET certdata=? WHERE rnd=? AND blkhash=?",
 			protocol.Encode(&cert), entry.lfe.vb.blk.Round(), blkhash[:])
 		return err
@@ -657,7 +669,7 @@ func (sl *SpeculativeLedger) eval(ctx context.Context, leaf bookkeeping.BlockHas
 		return nil, err
 	}
 
-	return eval(ctx, lfe, blk, validate, sl.verifiedTxnCache, executionPool)
+	return eval(ctx, lfe, blk, validate, sl.l.VerifiedTransactionCache(), executionPool)
 }
 
 // StartEvaluator starts a block evaluator with a particular block header.
@@ -682,8 +694,8 @@ func (sl *SpeculativeLedger) EnsureBlock(block *bookkeeping.Block, c agreement.C
 
 	// As a fallback, bail out if the base (non-speculative) ledger has a
 	// block for the same round number.
-	for sl.Latest() < round {
-		err := sl.AddBlock(*block, c)
+	for sl.l.Latest() < round {
+		err := sl.l.AddBlock(*block, c)
 		if err == nil {
 			break
 		}
@@ -714,8 +726,8 @@ func (sl *SpeculativeLedger) EnsureValidatedBlock(vb *ValidatedBlock, c agreemen
 
 	// As a fallback, bail out if the base (non-speculative) ledger has a
 	// block for the same round number.
-	for sl.Latest() < round {
-		err := sl.AddValidatedBlock(*vb, c)
+	for sl.l.Latest() < round {
+		err := sl.l.AddValidatedBlock(*vb, c)
 		if err == nil {
 			break
 		}
@@ -729,4 +741,19 @@ func (sl *SpeculativeLedger) EnsureValidatedBlock(vb *ValidatedBlock, c agreemen
 
 		logfn("could not write block %d to the speculative ledger: %v", round, err)
 	}
+}
+
+// Latest proxies Ledger.Latest()
+func (sl *SpeculativeLedger) Latest() basics.Round {
+	return sl.l.Latest()
+}
+
+// VerifiedTransactionCache proxies Ledger.VerifiedTransactionCache()
+func (sl *SpeculativeLedger) VerifiedTransactionCache() verify.VerifiedTransactionCache {
+	return sl.l.VerifiedTransactionCache()
+}
+
+// GenesisHash proxies Ledger.GenesisHash()
+func (sl *SpeculativeLedger) GenesisHash() crypto.Digest {
+	return sl.l.GenesisHash()
 }

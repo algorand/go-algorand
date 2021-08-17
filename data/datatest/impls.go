@@ -142,12 +142,12 @@ func (i ledgerImpl) EnsureDigest(cert agreement.Certificate, verifier *agreement
 	r := cert.Round
 	consistencyCheck := func() bool {
 		if r < i.NextRound() {
-			b, err := i.sl.Block(r)
+			bh, err := i.sl.BlockHdr(r, cert.Branch)
 			if err != nil {
 				panic(err)
 			}
 
-			if b.Digest() != cert.Proposal.BlockDigest {
+			if crypto.Digest(bh.Hash()) != cert.Proposal.BlockDigest {
 				err := fmt.Errorf("testLedger.EnsureDigest called with conflicting entries in round %v", r)
 				panic(err)
 			}

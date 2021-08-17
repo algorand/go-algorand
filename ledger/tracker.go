@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
@@ -50,6 +51,14 @@ import (
 // modifies state in response to read-only calls, it is the tracker's
 // responsibility to ensure thread-safety.
 type ledgerTracker interface {
+	// loadFromDisk loads the state of a tracker from persistent
+	// storage.  The ledger argument allows loadFromDisk to load
+	// blocks from the database, or access its own state.  The
+	// ledgerForTracker interface abstracts away the details of
+	// ledger internals so that individual trackers can be tested
+	// in isolation.
+	loadFromDisk(ledgerForTracker) error
+
 	// newBlock informs the tracker of a new block from round
 	// rnd and a given ledgercore.StateDelta as produced by BlockEvaluator.
 	newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta)
@@ -75,26 +84,12 @@ type ledgerTracker interface {
 	close()
 }
 
-// ledgerTrackerLoader is a ledgerTracker with loadFromDisk().
-type ledgerTrackerLoader interface {
-	// loadFromDisk loads the state of a tracker from persistent
-	// storage.  The ledger argument allows loadFromDisk to load
-	// blocks from the database, or access its own state.  The
-	// ledgerForTracker interface abstracts away the details of
-	// ledger internals so that individual trackers can be tested
-	// in isolation.
-	loadFromDisk(ledgerForTracker) error
-
-	ledgerTracker
-}
-
 // ledgerForTracker defines the part of the ledger that a tracker can
 // access.  This is particularly useful for testing trackers in isolation.
 type ledgerForTracker interface {
-	trackerDB() db.Pair
-	blockDB() db.Pair
-	trackerLog() logging.Logger
-	trackerEvalVerified(bookkeeping.Block, ledgerForEvaluator) (*roundCowState, error)
+	TrackerDB() db.Pair
+	TrackerLog() logging.Logger
+	VerifiedTransactionCache() verify.VerifiedTransactionCache
 
 	Latest() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)
@@ -105,20 +100,14 @@ type ledgerForTracker interface {
 
 type trackerRegistry struct {
 	trackers []ledgerTracker
-	loaders  []ledgerTrackerLoader
 }
 
 func (tr *trackerRegistry) register(lt ledgerTracker) {
 	tr.trackers = append(tr.trackers, lt)
 }
 
-func (tr *trackerRegistry) registerLoader(lt ledgerTrackerLoader) {
-	tr.trackers = append(tr.trackers, lt)
-	tr.loaders = append(tr.loaders, lt)
-}
-
 func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
-	for _, lt := range tr.loaders {
+	for _, lt := range tr.trackers {
 		err := lt.loadFromDisk(l)
 		if err != nil {
 			// find the tracker name.
@@ -157,5 +146,4 @@ func (tr *trackerRegistry) close() {
 		lt.close()
 	}
 	tr.trackers = nil
-	tr.loaders = nil
 }

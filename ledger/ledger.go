@@ -71,13 +71,12 @@ type Ledger struct {
 	genesisProto config.ConsensusParams
 
 	// State-machine trackers
-	accts     accountUpdates
-	txTail    txTail
-	bulletin  bulletin
-	notifier  blockNotifier
-	time      timeTracker
-	metrics   metricsTracker
-	speculate speculationTracker
+	accts    accountUpdates
+	txTail   txTail
+	bulletin bulletin
+	notifier blockNotifier
+	time     timeTracker
+	metrics  metricsTracker
 
 	trackers  trackerRegistry
 	trackerMu deadlock.RWMutex
@@ -189,26 +188,16 @@ func (l *Ledger) reloadLedger() error {
 		return err
 	}
 
-	l.trackers.registerLoader(&l.accts)    // update the balances
-	l.trackers.registerLoader(&l.time)     // tracks the block timestamps
-	l.trackers.registerLoader(&l.txTail)   // update the transaction tail, tracking the recent 1000 txn
-	l.trackers.registerLoader(&l.bulletin) // provide closed channel signaling support for completed rounds
-	l.trackers.registerLoader(&l.notifier) // send OnNewBlocks to subscribers
-	l.trackers.registerLoader(&l.metrics)  // provides metrics reporting support
-	l.trackers.register(&l.speculate)
+	l.trackers.register(&l.accts)    // update the balances
+	l.trackers.register(&l.time)     // tracks the block timestamps
+	l.trackers.register(&l.txTail)   // update the transaction tail, tracking the recent 1000 txn
+	l.trackers.register(&l.bulletin) // provide closed channel signaling support for completed rounds
+	l.trackers.register(&l.notifier) // send OnNewBlocks to subscribers
+	l.trackers.register(&l.metrics)  // provides metrics reporting support
 
 	err = l.trackers.loadFromDisk(l)
 	if err != nil {
 		err = fmt.Errorf("reloadLedger.loadFromDisk %v", err)
-		return err
-	}
-
-	// The speculation tracker needs access to the account state, so
-	// it's not purely a ledger tracker; it uses both the ledger and
-	// the acctupdates tracker.
-	err = l.speculate.loadFromDisk(l)
-	if err != nil {
-		err = fmt.Errorf("reloadLedger.loadFromDisk: speculationTracker: %v", err)
 		return err
 	}
 
@@ -631,30 +620,14 @@ func (l *Ledger) GetCatchpointStream(round basics.Round) (ReadCloseSizer, error)
 	return l.accts.GetCatchpointStream(round)
 }
 
-// ledgerForTracker methods
-func (l *Ledger) trackerDB() db.Pair {
+// TrackerDB implements the ledgerForTracker interface.
+func (l *Ledger) TrackerDB() db.Pair {
 	return l.trackerDBs
 }
 
-// ledgerForTracker methods
-func (l *Ledger) blockDB() db.Pair {
-	return l.blockDBs
-}
-
-func (l *Ledger) trackerLog() logging.Logger {
+// TrackerLog implements the ledgerForTracker interface.
+func (l *Ledger) TrackerLog() logging.Logger {
 	return l.log
-}
-
-// trackerEvalVerified is used by the accountUpdates to reconstruct the ledgercore.StateDelta from a given block during it's loadFromDisk execution.
-// when this function is called, the trackers mutex is expected already to be taken. The provided accUpdatesLedger would allow the
-// evaluator to shortcut the "main" ledger ( i.e. this struct ) and avoid taking the trackers lock a second time.
-func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (*roundCowState, error) {
-	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
-	state, err := eval(context.Background(), accUpdatesLedger, blk, false, l.verifiedTxnCache, nil)
-	if err != nil {
-		return nil, err
-	}
-	return state, err
 }
 
 // IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service

@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -66,24 +67,20 @@ func (wl *wrappedLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, er
 	return wl.l.BlockHdr(rnd)
 }
 
-func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (*roundCowState, error) {
-	return wl.l.trackerEvalVerified(blk, accUpdatesLedger)
+func (wl *wrappedLedger) VerifiedTransactionCache() verify.VerifiedTransactionCache {
+	return wl.l.VerifiedTransactionCache()
 }
 
 func (wl *wrappedLedger) Latest() basics.Round {
 	return wl.l.Latest()
 }
 
-func (wl *wrappedLedger) trackerDB() db.Pair {
-	return wl.l.trackerDB()
+func (wl *wrappedLedger) TrackerDB() db.Pair {
+	return wl.l.TrackerDB()
 }
 
-func (wl *wrappedLedger) blockDB() db.Pair {
-	return wl.l.blockDB()
-}
-
-func (wl *wrappedLedger) trackerLog() logging.Logger {
-	return wl.l.trackerLog()
+func (wl *wrappedLedger) TrackerLog() logging.Logger {
+	return wl.l.TrackerLog()
 }
 
 func (wl *wrappedLedger) GenesisHash() crypto.Digest {
@@ -774,7 +771,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Round, error) {
 	minMinSave := rnd
 	var minSave basics.Round
-	var cleanTracker ledgerTrackerLoader
+	var cleanTracker ledgerTracker
 	var trackerType reflect.Type
 	wl.l.trackerMu.RLock()
 	defer wl.l.trackerMu.RUnlock()
@@ -789,7 +786,7 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 			wl.minQueriedBlock = rnd
 
 			trackerType = reflect.TypeOf(trk).Elem()
-			cleanTracker = reflect.New(trackerType).Interface().(ledgerTrackerLoader)
+			cleanTracker = reflect.New(trackerType).Interface().(ledgerTracker)
 
 			au = cleanTracker.(*accountUpdates)
 			cfg := config.GetDefaultLocal()
@@ -803,7 +800,7 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 			wl.minQueriedBlock = rnd
 
 			trackerType = reflect.TypeOf(trk).Elem()
-			cleanTracker = reflect.New(trackerType).Interface().(ledgerTrackerLoader)
+			cleanTracker = reflect.New(trackerType).Interface().(ledgerTracker)
 		}
 
 		cleanTracker.close()

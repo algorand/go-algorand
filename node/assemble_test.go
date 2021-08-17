@@ -99,7 +99,9 @@ func BenchmarkAssembleBlock(b *testing.B) {
 		cfg := config.GetDefaultLocal()
 		cfg.TxPoolSize = txPoolSize
 		cfg.EnableAssembleStats = false
-		specledger := ledger.MakeSpeculativeLedger(l.Ledger)
+		specledger, err := ledger.MakeSpeculativeLedger(l.Ledger)
+		require.NoError(b, err)
+
 		tp := pools.MakeTransactionPool(specledger, cfg, logging.Base())
 		errcount := 0
 		okcount := 0
@@ -146,7 +148,7 @@ func BenchmarkAssembleBlock(b *testing.B) {
 		}
 		b.StartTimer()
 		deadline := time.Now().Add(time.Second)
-		_, err := tp.AssembleBlock(next, deadline)
+		_, err = tp.AssembleBlock(next, deadline)
 		b.StopTimer()
 
 		if err != nil {
@@ -219,7 +221,9 @@ func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 	cfg = config.GetDefaultLocal()
 	cfg.TxPoolSize = txPoolSize
 	cfg.EnableAssembleStats = false
-	specledger := ledger.MakeSpeculativeLedger(l.Ledger)
+	specledger, err := ledger.MakeSpeculativeLedger(l.Ledger)
+	require.NoError(t, err)
+
 	tp := pools.MakeTransactionPool(specledger, cfg, log)
 
 	next := l.NextRound()

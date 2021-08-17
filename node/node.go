@@ -204,7 +204,11 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
-	node.specledger = ledger.MakeSpeculativeLedger(node.ledger.Ledger)
+	node.specledger, err = ledger.MakeSpeculativeLedger(node.ledger.Ledger)
+	if err != nil {
+		log.Errorf("Cannot initialize speculative ledger: %v", err)
+		return nil, err
+	}
 
 	node.transactionPool = pools.MakeTransactionPool(node.specledger, cfg, node.log)
 

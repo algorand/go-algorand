@@ -43,7 +43,10 @@ func FabricateLedger(log logging.Logger, ledgerName string, accounts []account.P
 		return nil, err
 	}
 
-	sl := ledger.MakeSpeculativeLedger(dledger.Ledger)
+	sl, err := ledger.MakeSpeculativeLedger(dledger.Ledger)
+	if err != nil {
+		return nil, err
+	}
 
 	numRounds := lastRound - sl.Latest()
 	err = agreementtest.Simulate(ledgerName, numRounds, roundDeadline, ledgerImpl{sl: sl}, agreementtest.SimpleKeyManager(accounts), entryFactoryImpl{sl: sl}, entryValidatorImpl{l: dledger}, logging.Base())

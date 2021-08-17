@@ -39,6 +39,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -195,6 +196,9 @@ type accountUpdates struct {
 	// the rounds at which we need to flush the balances to disk
 	// in favor of the catchpoint to be generated.
 	ledger ledgerForTracker
+
+	// verifiedTxnCache is the verified transaction cache from the ledger
+	verifiedTxnCache verify.VerifiedTransactionCache
 
 	// The Trie tracking the current account balances. Always matches the balances that were
 	// written to the database.
@@ -1017,7 +1021,7 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 
 	for blk := range blocksStream {
 		var state *roundCowState
-		state, err = au.ledger.trackerEvalVerified(blk, &accLedgerEval)
+		state, err = eval(context.Background(), &accLedgerEval, blk, false, au.verifiedTxnCache, nil)
 		if err != nil {
 			close(blockEvalFailed)
 			return
@@ -1107,8 +1111,9 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 // initializeFromDisk performs the atomic operation of loading the accounts data information from disk
 // and preparing the accountUpdates for operation, including initializing the commitSyncer goroutine.
 func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRound, lastestBlockRound basics.Round, err error) {
-	au.dbs = l.trackerDB()
-	au.log = l.trackerLog()
+	au.verifiedTxnCache = l.VerifiedTransactionCache()
+	au.dbs = l.TrackerDB()
+	au.log = l.TrackerLog()
 	au.ledger = l
 
 	if au.initAccounts == nil {

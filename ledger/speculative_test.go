@@ -43,7 +43,8 @@ func TestSpeculative(t *testing.T) {
 	blk0, err := l.BlockHdr(l.Latest())
 	require.NoError(t, err)
 
-	sl := SpeculativeLedger{l}
+	sl, err := MakeSpeculativeLedger(l)
+	require.NoError(t, err)
 
 	var blk1 bookkeeping.Block
 	blk1.CurrentProtocol = protocol.ConsensusCurrentVersion
