@@ -209,7 +209,6 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 func (p *pipelinePlayer) enterRound(r routerHandle, source event, target round) []action {
 	// XXXX create new players and GC old ones
 	panic("pipelinePlayer.enterRound not implemented")
-	return nil
 }
 
 // externalDemuxSignals returns a list of per-player signals allowing demux.next to wait for

@@ -72,7 +72,6 @@ func (c *testingClock) Zero() timers.Clock {
 
 func (c *testingClock) GetTimeout(d time.Duration) time.Time {
 	panic("testingClock.GetTimeout not implemented")
-	return time.Time{}
 }
 
 func (c *testingClock) TimeoutAt(d time.Duration) <-chan time.Time {
