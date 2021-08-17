@@ -1,0 +1,22 @@
+#pragma version 5
+// To modify the program:
+// 1. Replace the first line with `pushbytes ""`.
+// 2. Compile the program.
+// 3. Replace the first line with `pushbytes <compiled bytecode>`
+// 4. Update the varuint length of the new bytecode (line 11)
+// 5. The quine is complete. Compile again.
+pushbytes 0x0580004957000280011a504f0149570300505081007200441243
+dup
+extract 0 2
+pushbytes 0x1a // the varuint length of 0x0580...
+concat
+uncover 1
+dup
+extract 3 0 // the range here must be updated if the varuint length is longer than 1 byte
+concat
+concat // after this line the whole program is on the stack
+pushint 0
+app_params_get AppApprovalProgram
+assert
+==
+return

@@ -14,26 +14,13 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package metrics
+package test
 
-import (
-	"time"
+// used to generate code that might produce this error:
+//
+//         	Error:      	Received unexpected error:
+//        	            	msgp: length overflow: 29 > 16
+//        	Test:       	TestRandomizedEncodingtestSlice
 
-	"github.com/algorand/go-deadlock"
-)
-
-// Gauge represent a single gauge variable.
-type Gauge struct {
-	deadlock.Mutex
-	name          string
-	description   string
-	labels        map[string]int       // map each label ( i.e. httpErrorCode ) to an index.
-	valuesIndices map[int]*gaugeValues // maps each set of labels into a concrete gauge
-}
-
-type gaugeValues struct {
-	gauge           float64
-	timestamp       time.Time
-	labels          map[string]string
-	formattedLabels string
-}
+//msgp:allocbound testSlice 16
+type testSlice []uint64

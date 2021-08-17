@@ -17,12 +17,16 @@
 package basics
 
 import (
+	"math"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestSubSaturate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := Round(1)
 	b := Round(2)
 	require.Equal(t, a.SubSaturate(b), Round(0))
@@ -30,7 +34,30 @@ func TestSubSaturate(t *testing.T) {
 	require.Equal(t, b.SubSaturate(a), Round(1))
 }
 
+func TestSubSaturate32(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	require.Equal(t, uint32(0), SubSaturate32(0, 1))
+	require.Equal(t, uint32(0), SubSaturate32(1, 2))
+	require.Equal(t, uint32(0), SubSaturate32(1, 1))
+	require.Equal(t, uint32(0), SubSaturate32(1, math.MaxUint32))
+	require.Equal(t, uint32(1), SubSaturate32(2, 1))
+	require.Equal(t, uint32(math.MaxUint32-1), SubSaturate32(math.MaxUint32, 1))
+}
+
+func TestAddSaturate32(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	require.Equal(t, uint32(1), AddSaturate32(0, 1))
+	require.Equal(t, uint32(math.MaxUint32-1), AddSaturate32(math.MaxUint32-2, 1))
+	require.Equal(t, uint32(math.MaxUint32), AddSaturate32(math.MaxUint32, 0))
+	require.Equal(t, uint32(math.MaxUint32), AddSaturate32(math.MaxUint32-1, 1))
+	require.Equal(t, uint32(math.MaxUint32), AddSaturate32(math.MaxUint32, 2))
+}
+
 func TestRoundUpToMultipleOf(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	r := Round(24)
 	for n := Round(1); n < Round(100); n++ {
 		nextMul := r.RoundUpToMultipleOf(n)

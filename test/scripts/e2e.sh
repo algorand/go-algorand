@@ -100,45 +100,50 @@ export GOPATH=$(go env GOPATH)
 # Change current directory to test/scripts so we can just use ./test.sh to exec.
 cd "${SCRIPT_PATH}"
 
-./timeout 200 ./e2e_basic_start_stop.sh
-duration "e2e_basic_start_stop.sh"
+if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
 
-python3 -m venv "${TEMPDIR}/ve"
-. "${TEMPDIR}/ve/bin/activate"
-"${TEMPDIR}/ve/bin/pip3" install --upgrade pip
-"${TEMPDIR}/ve/bin/pip3" install --upgrade py-algorand-sdk cryptography
-duration "e2e client setup"
+    ./timeout 200 ./e2e_basic_start_stop.sh
+    duration "e2e_basic_start_stop.sh"
 
-"${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.sh
-duration "parallel client runner"
+    python3 -m venv "${TEMPDIR}/ve"
+    . "${TEMPDIR}/ve/bin/activate"
+    "${TEMPDIR}/ve/bin/pip3" install --upgrade pip
+    "${TEMPDIR}/ve/bin/pip3" install --upgrade py-algorand-sdk cryptography
+    duration "e2e client setup"
 
-for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
-    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} --version "$(basename "$vdir")" "$vdir"/*.sh
-done
-duration "vdir client runners"
+    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.sh
+    duration "parallel client runner"
 
-for script in "$SRCROOT"/test/scripts/e2e_subs/serial/*; do
-    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} $script
-done
-duration "serial client runners"
+    for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
+        "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} --version "$(basename "$vdir")" "$vdir"/*.sh
+    done
+    duration "vdir client runners"
 
-deactivate
+    for script in "$SRCROOT"/test/scripts/e2e_subs/serial/*; do
+        "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} $script
+    done
+    duration "serial client runners"
 
-# Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
-# This allows us to clean up everything with our rm -rf trap.
-export TESTDIR=${TEMPDIR}
-export TESTDATADIR=${SRCROOT}/test/testdata
-export SRCROOT=${SRCROOT}
+    deactivate
+fi # if E2E_TEST_FILTER == "" or == "SCRIPTS"
 
-./e2e_go_tests.sh ${GO_TEST_ARGS}
-duration "e2e_go_tests.sh"
+if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "GO" ]; then
+    # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
+    # This allows us to clean up everything with our rm -rf trap.
+    export TESTDIR=${TEMPDIR}
+    export TESTDATADIR=${SRCROOT}/test/testdata
+    export SRCROOT=${SRCROOT}
 
-rm -rf "${TEMPDIR}"
+    ./e2e_go_tests.sh ${GO_TEST_ARGS}
+    duration "e2e_go_tests.sh"
 
-if ! ${NO_BUILD} ; then
-    rm -rf ${PKG_ROOT}
-fi
+    rm -rf "${TEMPDIR}"
 
-echo "----------------------------------------------------------------------"
-echo "  DONE: E2E"
-echo "----------------------------------------------------------------------"
+    if ! ${NO_BUILD} ; then
+        rm -rf ${PKG_ROOT}
+    fi
+
+    echo "----------------------------------------------------------------------"
+    echo "  DONE: E2E"
+    echo "----------------------------------------------------------------------"
+fi # if E2E_TEST_FILTER == "" or == "GO"

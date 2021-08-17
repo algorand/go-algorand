@@ -18,7 +18,9 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 OS=$("${SCRIPTPATH}"/../ostype.sh)
 ARCH=$("${SCRIPTPATH}"/../archtype.sh)
 
-echo "Building libsodium-fork..."
-make crypto/libs/${OS}/${ARCH}/lib/libsodium.a
+if [ ! -f crypto/libs/${OS}/${ARCH}/lib/libsodium.a ]; then
+  echo "Building libsodium-fork..."
+  make crypto/libs/${OS}/${ARCH}/lib/libsodium.a
+fi
 
 

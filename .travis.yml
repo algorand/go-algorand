@@ -7,11 +7,11 @@ if: tag IS blank
 
 stages:
   - name: build_commit
-    if: NOT (branch =~ /^rel\//) AND type != pull_request
+    if: NOT (branch =~ /^hotfix\//) AND NOT (branch =~ /^rel\//) AND type != pull_request
   - name: build_pr
     if: type = pull_request
   - name: build_release
-    if: branch =~ /^rel\// AND type != pull_request
+    if: (branch =~ /^hotfix\// OR branch =~ /^rel\//) AND type != pull_request
   - name: deploy
     if: branch =~ /^rel\// AND type != pull_request
   - name: post_deploy
@@ -217,8 +217,8 @@ before_cache:
    esac
    docker save -o $HOME/docker_cache/images.tar $(docker images -a -q)
 
-after_success:
-  - scripts/travis/upload_coverage.sh || true
+#after_success:
+#  - scripts/travis/upload_coverage.sh || true
 
 addons:
   apt:

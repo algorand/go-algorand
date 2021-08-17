@@ -47,7 +47,6 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Pushes: uint64
 - for (data A, signature B, pubkey C) verify the signature of ("ProgData" || program_hash || data) against the pubkey => {0 or 1}
 - **Cost**: 1900
-- Mode: Signature
 
 The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.
 
@@ -660,6 +659,22 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - selects one of two values based on top-of-stack: A, B, C -> (if C != 0 then B else A)
 - LogicSigVersion >= 3
 
+## cover n
+
+- Opcode: 0x4e {uint8 depth}
+- Pops: *... stack*, any
+- Pushes: any
+- remove top of stack, and place it down the stack such that N elements are above it
+- LogicSigVersion >= 5
+
+## uncover n
+
+- Opcode: 0x4f {uint8 depth}
+- Pops: *... stack*, any
+- Pushes: any
+- remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack
+- LogicSigVersion >= 5
+
 ## concat
 
 - Opcode: 0x50
@@ -1186,3 +1201,14 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Pushes: []byte
 - push a byte-array of length X, containing all zero bytes
 - LogicSigVersion >= 4
+
+## log
+
+- Opcode: 0xb0
+- Pops: *... stack*, []byte
+- Pushes: _None_
+- write bytes to log state of the current application
+- LogicSigVersion >= 5
+- Mode: Application
+
+`log` can be called up to MaxLogCalls times in a program, and log up to a total of 1k bytes.

@@ -17,9 +17,15 @@
 package bookkeeping
 
 import (
+	"fmt"
 	"io/ioutil"
+	"time"
 
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -114,4 +120,71 @@ type GenesisAllocation struct {
 // ToBeHashed impements the crypto.Hashable interface.
 func (genesis Genesis) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Genesis, protocol.Encode(&genesis)
+}
+
+// GenesisBalances contains the information needed to generate a new ledger
+type GenesisBalances struct {
+	Balances    map[basics.Address]basics.AccountData
+	FeeSink     basics.Address
+	RewardsPool basics.Address
+	Timestamp   int64
+}
+
+// MakeGenesisBalances returns the information needed to bootstrap the ledger based on the current time
+func MakeGenesisBalances(balances map[basics.Address]basics.AccountData, feeSink, rewardsPool basics.Address) GenesisBalances {
+	return MakeTimestampedGenesisBalances(balances, feeSink, rewardsPool, time.Now().Unix())
+}
+
+// MakeTimestampedGenesisBalances returns the information needed to bootstrap the ledger based on a given time
+func MakeTimestampedGenesisBalances(balances map[basics.Address]basics.AccountData, feeSink, rewardsPool basics.Address, timestamp int64) GenesisBalances {
+	return GenesisBalances{Balances: balances, FeeSink: feeSink, RewardsPool: rewardsPool, Timestamp: timestamp}
+}
+
+// MakeGenesisBlock creates a genesis block, including setup of RewardsState.
+func MakeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest) (Block, error) {
+	params, ok := config.Consensus[proto]
+	if !ok {
+		return Block{}, fmt.Errorf("unsupported protocol %s", proto)
+	}
+
+	poolAddr := basics.Address(genesisBal.RewardsPool)
+	incentivePoolBalanceAtGenesis := genesisBal.Balances[poolAddr].MicroAlgos
+
+	genesisRewardsState := RewardsState{
+		FeeSink:                   genesisBal.FeeSink,
+		RewardsPool:               genesisBal.RewardsPool,
+		RewardsLevel:              0,
+		RewardsResidue:            0,
+		RewardsRecalculationRound: basics.Round(params.RewardsRateRefreshInterval),
+	}
+
+	if params.InitialRewardsRateCalculation {
+		genesisRewardsState.RewardsRate = basics.SubSaturate(incentivePoolBalanceAtGenesis.Raw, params.MinBalance) / uint64(params.RewardsRateRefreshInterval)
+	} else {
+		genesisRewardsState.RewardsRate = incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
+	}
+
+	genesisProtoState := UpgradeState{
+		CurrentProtocol: proto,
+	}
+
+	blk := Block{
+		BlockHeader: BlockHeader{
+			Round:        0,
+			Branch:       BlockHash{},
+			Seed:         committee.Seed(genesisHash),
+			TxnRoot:      transactions.Payset{}.CommitGenesis(),
+			TimeStamp:    genesisBal.Timestamp,
+			GenesisID:    genesisID,
+			RewardsState: genesisRewardsState,
+			UpgradeState: genesisProtoState,
+			UpgradeVote:  UpgradeVote{},
+		},
+	}
+
+	if params.SupportGenesisHash {
+		blk.BlockHeader.GenesisHash = genesisHash
+	}
+
+	return blk, nil
 }

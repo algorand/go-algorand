@@ -8,10 +8,12 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalAccountData(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := AccountData{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -71,6 +73,7 @@ func BenchmarkUnmarshalAccountData(b *testing.B) {
 }
 
 func TestMarshalUnmarshalAppLocalState(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := AppLocalState{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -130,6 +133,7 @@ func BenchmarkUnmarshalAppLocalState(b *testing.B) {
 }
 
 func TestMarshalUnmarshalAppParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := AppParams{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -189,6 +193,7 @@ func BenchmarkUnmarshalAppParams(b *testing.B) {
 }
 
 func TestMarshalUnmarshalAssetHolding(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := AssetHolding{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -248,6 +253,7 @@ func BenchmarkUnmarshalAssetHolding(b *testing.B) {
 }
 
 func TestMarshalUnmarshalAssetParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := AssetParams{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -307,6 +313,7 @@ func BenchmarkUnmarshalAssetParams(b *testing.B) {
 }
 
 func TestMarshalUnmarshalBalanceRecord(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := BalanceRecord{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -366,6 +373,7 @@ func BenchmarkUnmarshalBalanceRecord(b *testing.B) {
 }
 
 func TestMarshalUnmarshalEvalDelta(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := EvalDelta{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -424,7 +432,68 @@ func BenchmarkUnmarshalEvalDelta(b *testing.B) {
 	}
 }
 
+func TestMarshalUnmarshalLogItem(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := LogItem{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingLogItem(t *testing.T) {
+	protocol.RunEncodingTest(t, &LogItem{})
+}
+
+func BenchmarkMarshalMsgLogItem(b *testing.B) {
+	v := LogItem{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgLogItem(b *testing.B) {
+	v := LogItem{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalLogItem(b *testing.B) {
+	v := LogItem{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestMarshalUnmarshalStateDelta(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := StateDelta{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -484,6 +553,7 @@ func BenchmarkUnmarshalStateDelta(b *testing.B) {
 }
 
 func TestMarshalUnmarshalStateSchema(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := StateSchema{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -543,6 +613,7 @@ func BenchmarkUnmarshalStateSchema(b *testing.B) {
 }
 
 func TestMarshalUnmarshalStateSchemas(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := StateSchemas{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -602,6 +673,7 @@ func BenchmarkUnmarshalStateSchemas(b *testing.B) {
 }
 
 func TestMarshalUnmarshalTealKeyValue(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := TealKeyValue{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -661,6 +733,7 @@ func BenchmarkUnmarshalTealKeyValue(b *testing.B) {
 }
 
 func TestMarshalUnmarshalTealValue(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := TealValue{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -720,6 +793,7 @@ func BenchmarkUnmarshalTealValue(b *testing.B) {
 }
 
 func TestMarshalUnmarshalValueDelta(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := ValueDelta{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)

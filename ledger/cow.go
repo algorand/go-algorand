@@ -63,6 +63,9 @@ type roundCowState struct {
 	// must be incorporated into mods.accts before passing deltas forward
 	sdeltas map[basics.Address]map[storagePtr]*storageDelta
 
+	// logs populated in AppCall transaction
+	logs []basics.LogItem
+
 	// either or not maintain compatibility with original app refactoring behavior
 	// this is needed for generating old eval delta in new code
 	compatibilityMode bool
@@ -83,6 +86,7 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimest
 		mods:              ledgercore.MakeStateDelta(&hdr, prevTimestamp, hint, 0),
 		sdeltas:           make(map[basics.Address]map[storagePtr]*storageDelta),
 		trackedCreatables: make(map[int]basics.CreatableIndex),
+		logs:              make([]basics.LogItem, 0),
 	}
 
 	// compatibilityMode retains producing application' eval deltas under the following rule:
@@ -194,26 +198,6 @@ func (cb *roundCowState) blockHdr(r basics.Round) (bookkeeping.BlockHeader, erro
 	return cb.lookupParent.blockHdr(r)
 }
 
-func (cb *roundCowState) put(addr basics.Address, new basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) {
-	cb.mods.Accts.Upsert(addr, new)
-
-	if newCreatable != nil {
-		cb.mods.Creatables[newCreatable.Index] = ledgercore.ModifiedCreatable{
-			Ctype:   newCreatable.Type,
-			Creator: newCreatable.Creator,
-			Created: true,
-		}
-	}
-
-	if deletedCreatable != nil {
-		cb.mods.Creatables[deletedCreatable.Index] = ledgercore.ModifiedCreatable{
-			Ctype:   deletedCreatable.Type,
-			Creator: deletedCreatable.Creator,
-			Created: false,
-		}
-	}
-}
-
 func (cb *roundCowState) trackCreatable(creatableIndex basics.CreatableIndex) {
 	cb.trackedCreatables[cb.groupIdx] = creatableIndex
 }
@@ -283,6 +267,12 @@ func (cb *roundCowState) commitToParent() {
 		}
 	}
 	cb.commitParent.mods.CompactCertNext = cb.mods.CompactCertNext
+	for index, created := range cb.mods.ModifiedAssetHoldings {
+		cb.commitParent.mods.ModifiedAssetHoldings[index] = created
+	}
+	for index, created := range cb.mods.ModifiedAppLocalStates {
+		cb.commitParent.mods.ModifiedAppLocalStates[index] = created
+	}
 }
 
 func (cb *roundCowState) modifiedAccounts() []basics.Address {

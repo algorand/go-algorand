@@ -1602,7 +1602,6 @@ func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries
 			err = os.Remove(absCatchpointFileName)
 			if err == nil || os.IsNotExist(err) {
 				// it's ok if the file doesn't exist. just remove it from the database and we'll be good to go.
-				err = nil
 			} else {
 				// we can't delete the file, abort -
 				return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
@@ -2034,13 +2033,13 @@ func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err erro
 	return off, nil
 }
 
-// commitSyncer is the syncer go-routine function which perform the database updates. Internally, it dequeues deferedCommits and
+// commitSyncer is the syncer go-routine function which perform the database updates. Internally, it dequeues deferredCommits and
 // send the tasks to commitRound for completing the operation.
-func (au *accountUpdates) commitSyncer(deferedCommits chan deferredCommit) {
+func (au *accountUpdates) commitSyncer(deferredCommits chan deferredCommit) {
 	defer close(au.commitSyncerClosed)
 	for {
 		select {
-		case committedOffset, ok := <-deferedCommits:
+		case committedOffset, ok := <-deferredCommits:
 			if !ok {
 				return
 			}
@@ -2050,7 +2049,7 @@ func (au *accountUpdates) commitSyncer(deferedCommits chan deferredCommit) {
 			drained := false
 			for !drained {
 				select {
-				case <-deferedCommits:
+				case <-deferredCommits:
 					au.accountsWriting.Done()
 				default:
 					drained = true

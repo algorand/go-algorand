@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type balanceRecord struct {
@@ -59,6 +60,7 @@ type testLedger struct {
 	appID             basics.AppIndex
 	creatorAddr       basics.Address
 	mods              map[basics.AppIndex]map[string]basics.ValueDelta
+	logs              []basics.LogItem
 }
 
 func makeApp(li uint64, lb uint64, gi uint64, gb uint64) basics.AppParams {
@@ -463,10 +465,28 @@ func (l *testLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics.E
 			}
 		}
 	}
+	evalDelta.Logs = l.logs
 	return
 }
 
+func (l *testLedger) AppendLog(txn *transactions.Transaction, value string) error {
+
+	appIdx, err := txn.IndexByAppID(l.appID)
+	if err != nil {
+		return err
+	}
+	_, ok := l.applications[l.appID]
+	if !ok {
+		return fmt.Errorf("no such app")
+	}
+
+	l.logs = append(l.logs, basics.LogItem{ID: appIdx, Message: value})
+	return nil
+}
+
 func TestEvalModes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 	// ed25519verify and err are tested separately below
 
@@ -587,6 +607,8 @@ asset_params_get AssetTotal
 pop
 &&
 !=
+bytec_0
+log
 `
 	type desc struct {
 		source string
@@ -675,9 +697,27 @@ pop
 		})
 	}
 
-	// check ed25519verify and arg are not allowed in statefull mode
-	disallowed := []string{
+	// check that ed25519verify and arg is not allowed in stateful mode between v2-v4
+	disallowedV4 := []string{
 		"byte 0x01\nbyte 0x01\nbyte 0x01\ned25519verify",
+		"arg 0",
+		"arg_0",
+		"arg_1",
+		"arg_2",
+		"arg_3",
+	}
+	for _, source := range disallowedV4 {
+		ops := testProg(t, source, 4)
+		ep := defaultEvalParams(nil, nil)
+		err := CheckStateful(ops.Program, ep)
+		require.Error(t, err)
+		_, err = EvalStateful(ops.Program, ep)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "not allowed in current mode")
+	}
+
+	// check that arg is not allowed in stateful mode beyond v5
+	disallowed := []string{
 		"arg 0",
 		"arg_0",
 		"arg_1",
@@ -709,6 +749,7 @@ pop
 		"int 0\nint 0\nasset_holding_get AssetFrozen",
 		"int 0\nint 0\nasset_params_get AssetManager",
 		"int 0\nint 0\napp_params_get AppApprovalProgram",
+		"byte 0x01\nlog",
 	}
 
 	for _, source := range statefulOpcodeCalls {
@@ -728,6 +769,8 @@ pop
 }
 
 func TestBalance(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	ep, ledger := makeSampleEnv()
@@ -787,12 +830,15 @@ func testApp(t *testing.T, program string, ep EvalParams, problems ...string) ba
 		require.NoError(t, err)
 		require.Empty(t, delta.GlobalDelta)
 		require.Empty(t, delta.LocalDeltas)
+		require.Empty(t, delta.Logs)
 		return delta
 	}
 	return basics.EvalDelta{}
 }
 
 func TestMinBalance(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	ep, ledger := makeSampleEnv()
@@ -831,6 +877,8 @@ func TestMinBalance(t *testing.T) {
 }
 
 func TestAppCheckOptedIn(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	txn := makeSampleTxn()
@@ -876,6 +924,8 @@ func TestAppCheckOptedIn(t *testing.T) {
 }
 
 func TestAppReadLocalState(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	text := `int 2  // account idx
@@ -1023,6 +1073,8 @@ int 0
 }
 
 func TestAppReadGlobalState(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	text := `int 0
@@ -1228,6 +1280,8 @@ int 1
 `
 
 func TestAssets(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 	for _, field := range AssetHoldingFieldNames {
 		if !strings.Contains(assetsTestProgram, field) {
@@ -1428,6 +1482,8 @@ func TestAppParams(t *testing.T) {
 }
 
 func TestAppLocalReadWriteDeleteErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	sourceRead := `intcblock 0 100 0x77 1
@@ -1545,6 +1601,8 @@ intc_1
 }
 
 func TestAppLocalStateReadWrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	ep := defaultEvalParams(nil, nil)
@@ -1820,6 +1878,8 @@ int 1
 }
 
 func TestAppGlobalReadWriteDeleteErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	sourceRead := `int 0
@@ -1899,6 +1959,8 @@ int 1
 }
 
 func TestAppGlobalReadWrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	// check writing ints and bytes
@@ -2116,6 +2178,8 @@ byte 0x414c474f
 }
 
 func TestAppGlobalReadOtherApp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 	source := `int 2 // ForeignApps index
 byte "mykey1"
@@ -2161,6 +2225,8 @@ byte "myval"
 }
 
 func TestBlankKey(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 	source := `
 byte ""
@@ -2195,6 +2261,8 @@ int 7
 }
 
 func TestAppGlobalDelete(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	// check write/delete/read
@@ -2352,6 +2420,8 @@ int 1
 }
 
 func TestAppLocalDelete(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	// check write/delete/read
@@ -2564,6 +2634,8 @@ int 1
 }
 
 func TestEnumFieldErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep := defaultEvalParams(nil, nil)
 
 	source := `txn Amount`
@@ -2656,6 +2728,8 @@ pop
 }
 
 func TestReturnTypes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	// Ensure all opcodes return values they supposed to according to the OpSpecs table
 	t.Parallel()
 	typeToArg := map[StackType]string{
@@ -2722,6 +2796,8 @@ func TestReturnTypes(t *testing.T) {
 		"gloads":            "gloads 0",
 		"gaid":              "gaid 0",
 		"dig":               "dig 0",
+		"cover":             "cover 0",
+		"uncover":           "uncover 0",
 		"intc":              "intcblock 0; intc 0",
 		"intc_0":            "intcblock 0; intc_0",
 		"intc_1":            "intcblock 0 0; intc_1",
@@ -2790,6 +2866,7 @@ func TestReturnTypes(t *testing.T) {
 }
 
 func TestRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	ep, _ := makeSampleEnv()
 	source := "global Round; int 1; >="
@@ -2797,6 +2874,7 @@ func TestRound(t *testing.T) {
 }
 
 func TestLatestTimestamp(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	ep, _ := makeSampleEnv()
 	source := "global LatestTimestamp; int 1; >="
@@ -2804,6 +2882,7 @@ func TestLatestTimestamp(t *testing.T) {
 }
 
 func TestCurrentApplicationID(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	ep, ledger := makeSampleEnv()
 	ledger.appID = basics.AppIndex(42)
@@ -2812,6 +2891,7 @@ func TestCurrentApplicationID(t *testing.T) {
 }
 
 func TestAppLoop(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	ep, _ := makeSampleEnv()
 
@@ -2824,4 +2904,72 @@ func TestAppLoop(t *testing.T) {
 
 	// Infinite loop because multiply by one instead of two
 	testApp(t, stateful+"int 1; loop:; int 1; *; dup; int 10; <; bnz loop; int 16; ==", ep, "dynamic cost")
+}
+
+func TestWriteLogs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+
+	ep := defaultEvalParams(nil, nil)
+	txn := makeSampleTxn()
+	txn.Txn.ApplicationID = 100
+	ep.Txn = &txn
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Sender: 1,
+		},
+	)
+	ep.Ledger = ledger
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
+
+	// write int and bytes values
+	source := `int 1
+loop: byte "a"
+log
+int 1
++
+dup
+int 30
+<
+bnz loop
+`
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	require.NoError(t, err)
+	err = CheckStateful(ops.Program, ep)
+	require.NoError(t, err)
+	pass, err := EvalStateful(ops.Program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+	delta, err := ledger.GetDelta(&ep.Txn.Txn)
+	require.NoError(t, err)
+	require.Empty(t, 0, delta.GlobalDelta)
+	require.Empty(t, delta.LocalDeltas)
+	require.Len(t, delta.Logs, 29)
+}
+
+func TestPooledAppCallsVerifyOp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	source := `#pragma version 5
+	global CurrentApplicationID
+	pop
+	byte 0x01
+	byte "ZC9KNzlnWTlKZ1pwSkNzQXVzYjNBcG1xTU9YbkRNWUtIQXNKYVk2RzRBdExPakQx"
+	addr DROUIZXGT3WFJR3QYVZWTR5OJJXJCMOLS7G4FUGZDSJM5PNOVOREH6HIZE
+	ed25519verify
+	pop
+	int 1`
+
+	ep, _ := makeSampleEnv()
+	ep.Proto.EnableAppCostPooling = true
+	ep.PooledApplicationBudget = new(uint64)
+	// Simulate test with 2 grouped txn
+	*ep.PooledApplicationBudget = uint64(ep.Proto.MaxAppProgramCost * 2)
+	testApp(t, source, ep, "pc=107 dynamic cost budget exceeded, executing ed25519verify: remaining budget is 1400 but program cost was 1905")
+
+	// Simulate test with 3 grouped txn
+	*ep.PooledApplicationBudget = uint64(ep.Proto.MaxAppProgramCost * 3)
+	testApp(t, source, ep)
 }

@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -48,6 +49,8 @@ func dbOpenTest(t testing.TB, inMemory bool) (db.Pair, string) {
 }
 
 func TestPendingSigDB(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	dbs, _ := dbOpenTest(t, true)
 	defer dbs.Close()
 

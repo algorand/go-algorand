@@ -1150,6 +1150,112 @@ func typeDig(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	return anys, returns
 }
 
+func typeEquals(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	top := len(ops.typeStack) - 1
+	if top >= 0 {
+		//Require arg0 and arg1 to have same type
+		return StackTypes{ops.typeStack[top], ops.typeStack[top]}, oneInt
+	}
+	return oneAny.plus(oneAny), oneInt
+}
+
+func typeDup(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	top := len(ops.typeStack) - 1
+	if top >= 0 {
+		return StackTypes{ops.typeStack[top]}, StackTypes{ops.typeStack[top], ops.typeStack[top]}
+	}
+	return StackTypes{StackAny}, oneAny.plus(oneAny)
+}
+
+func typeDupTwo(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	topTwo := oneAny.plus(oneAny)
+	top := len(ops.typeStack) - 1
+	if top >= 0 {
+		topTwo[1] = ops.typeStack[top]
+		if top >= 1 {
+			topTwo[0] = ops.typeStack[top-1]
+		}
+	}
+	result := topTwo.plus(topTwo)
+	return topTwo, result
+}
+
+func typeSelect(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	selectArgs := twoAny.plus(oneInt)
+	top := len(ops.typeStack) - 1
+	if top >= 2 {
+		if ops.typeStack[top-1] == ops.typeStack[top-2] {
+			return selectArgs, StackTypes{ops.typeStack[top-1]}
+		}
+	}
+	return selectArgs, StackTypes{StackAny}
+}
+
+func typeSetBit(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	setBitArgs := oneAny.plus(twoInts)
+	top := len(ops.typeStack) - 1
+	if top >= 2 {
+		return setBitArgs, StackTypes{ops.typeStack[top-2]}
+	}
+	return setBitArgs, StackTypes{StackAny}
+}
+
+func typeCover(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	if len(args) == 0 {
+		return oneAny, oneAny
+	}
+	n, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		return oneAny, oneAny
+	}
+	depth := int(n) + 1
+	anys := make(StackTypes, depth)
+	for i := range anys {
+		anys[i] = StackAny
+	}
+	returns := make(StackTypes, depth)
+	for i := range returns {
+		returns[i] = StackAny
+	}
+	idx := len(ops.typeStack) - depth
+	if idx >= 0 {
+		sv := ops.typeStack[len(ops.typeStack)-1]
+		for i := idx; i < len(ops.typeStack)-1; i++ {
+			returns[i-idx+1] = ops.typeStack[i]
+		}
+		returns[len(returns)-depth] = sv
+	}
+	return anys, returns
+}
+
+func typeUncover(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	if len(args) == 0 {
+		return oneAny, oneAny
+	}
+	n, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		return oneAny, oneAny
+	}
+	depth := int(n) + 1
+	anys := make(StackTypes, depth)
+	for i := range anys {
+		anys[i] = StackAny
+	}
+	returns := make(StackTypes, depth)
+	for i := range returns {
+		returns[i] = StackAny
+	}
+	idx := len(ops.typeStack) - depth
+	if idx >= 0 {
+		sv := ops.typeStack[idx]
+		for i := idx + 1; i < len(ops.typeStack); i++ {
+			returns[i-idx-1] = ops.typeStack[i]
+		}
+		returns[len(returns)-1] = sv
+	}
+	return anys, returns
+}
+
 // keywords handle parsing and assembling special asm language constructs like 'addr'
 // We use OpSpec here, but somewhat degenerate, since they don't have opcodes or eval functions
 var keywords = map[string]OpSpec{

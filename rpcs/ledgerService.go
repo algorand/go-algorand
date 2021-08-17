@@ -163,8 +163,6 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 				response.Write([]byte(fmt.Sprintf("invalid number of version specified %d", len(versionStrs))))
 				return
 			}
-		} else {
-			versionStr = "1"
 		}
 	}
 	round, err := strconv.ParseUint(roundStr, 36, 64)
