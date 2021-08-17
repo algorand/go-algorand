@@ -717,21 +717,55 @@ func TestEvalAppPooledBudgetWithTxnGroup(t *testing.T) {
 	}
 }
 
+// BenchTxnGenerator generates transactions as long as asked for
+type BenchTxnGenerator interface {
+	// PreparationTxn should be used for making pre-benchmark ledger initialization
+	// like accounts funding, assets or apps creation
+	Prepare(addrs []basics.Address, keys []*crypto.SignatureSecrets, gh crypto.Digest) []transactions.SignedTxn
+	// Txn generates a single transaction
+	Txn(sender, receiver basics.Address) transactions.Transaction
+}
+
+type BenchPaymentTxnGenerator struct{}
+
+func (g *BenchPaymentTxnGenerator) Prepare(addrs []basics.Address, keys []*crypto.SignatureSecrets, gh crypto.Digest) []transactions.SignedTxn {
+	return nil
+}
+
+func (g *BenchPaymentTxnGenerator) Txn(sender, receiver basics.Address) transactions.Transaction {
+	txn := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender: sender,
+			Fee:    minFee,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: receiver,
+			Amount:   basics.MicroAlgos{Raw: 100},
+		},
+	}
+	return txn
+}
+
 func BenchmarkBlockEvaluatorRAMCrypto(b *testing.B) {
-	benchmarkBlockEvaluator(b, true, true)
+	g := BenchPaymentTxnGenerator{}
+	benchmarkBlockEvaluator(b, true, true, &g)
 }
 func BenchmarkBlockEvaluatorRAMNoCrypto(b *testing.B) {
-	benchmarkBlockEvaluator(b, true, false)
+	g := BenchPaymentTxnGenerator{}
+	benchmarkBlockEvaluator(b, true, false, &g)
 }
 func BenchmarkBlockEvaluatorDiskCrypto(b *testing.B) {
-	benchmarkBlockEvaluator(b, false, true)
+	g := BenchPaymentTxnGenerator{}
+	benchmarkBlockEvaluator(b, false, true, &g)
 }
 func BenchmarkBlockEvaluatorDiskNoCrypto(b *testing.B) {
-	benchmarkBlockEvaluator(b, false, false)
+	g := BenchPaymentTxnGenerator{}
+	benchmarkBlockEvaluator(b, false, false, &g)
 }
 
 // this variant focuses on benchmarking ledger.go `eval()`, the rest is setup, it runs eval() b.N times.
-func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
+func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, txnSource BenchTxnGenerator) {
 	deadlockDisable := deadlock.Opts.Disable
 	deadlock.Opts.Disable = true
 	defer func() { deadlock.Opts.Disable = deadlockDisable }()
@@ -752,10 +786,6 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
 	l2, err := OpenLedger(logging.Base(), dbName2, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 	defer testLedgerCleanup(l2, dbName2, inMem)
-
-	setupDone := time.Now()
-	setupTime := setupDone.Sub(start)
-	b.Logf("BenchmarkBlockEvaluator setup time %s", setupTime.String())
 
 	bepprof := os.Getenv("BLOCK_EVAL_PPROF")
 	if len(bepprof) > 0 {
@@ -780,6 +810,35 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
 
 	genHash := genesisInitState.Block.BlockHeader.GenesisHash
 
+	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+	defer backlogPool.Shutdown()
+
+	// emit init transations if needed
+	initSignedTxns := txnSource.Prepare(addrs, keys, genHash)
+	if len(initSignedTxns) > 0 {
+		for _, stxn := range initSignedTxns {
+			err = bev.Transaction(stxn, transactions.ApplyData{})
+		}
+		validatedBlock, err := bev.GenerateBlock()
+		require.NoError(b, err)
+
+		err = l.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
+		require.NoError(b, err)
+
+		// put the same block into l2 ledger
+		err = l2.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
+		require.NoError(b, err)
+
+		// test speed of block building
+		newBlock = bookkeeping.MakeBlock(validatedBlock.blk.BlockHeader)
+		bev, err = l.StartEvaluator(newBlock.BlockHeader, 0)
+		require.NoError(b, err)
+	}
+
+	setupDone := time.Now()
+	setupTime := setupDone.Sub(start)
+	b.Logf("BenchmarkBlockEvaluator setup time %s", setupTime.String())
+
 	numTxns := 50000
 
 	for i := 0; i < numTxns; i++ {
@@ -789,20 +848,10 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
 		//		iDigest := crypto.Hash([]byte{byte(i), byte(i >> 8), byte(i >> 16), byte(i >> 24)})
 		//		sender := (uint64(iDigest[0]) + uint64(iDigest[1])*256 + uint64(iDigest[2])*256*256) % uint64(len(addrs))
 		//		receiver := (uint64(iDigest[4]) + uint64(iDigest[5])*256 + uint64(iDigest[6])*256*256) % uint64(len(addrs))
-		txn := transactions.Transaction{
-			Type: protocol.PaymentTx,
-			Header: transactions.Header{
-				Sender:      addrs[sender],
-				Fee:         minFee,
-				FirstValid:  newBlock.Round(),
-				LastValid:   newBlock.Round(),
-				GenesisHash: genHash,
-			},
-			PaymentTxnFields: transactions.PaymentTxnFields{
-				Receiver: addrs[receiver],
-				Amount:   basics.MicroAlgos{Raw: 100},
-			},
-		}
+		txn := txnSource.Txn(addrs[sender], addrs[receiver])
+		txn.FirstValid = newBlock.Round()
+		txn.LastValid = newBlock.Round()
+		txn.GenesisHash = genHash
 		st := txn.Sign(keys[sender])
 		err = bev.Transaction(st, transactions.ApplyData{})
 		require.NoError(b, err)
@@ -815,14 +864,12 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
 	blockBuildTime := blockBuildDone.Sub(setupDone)
 	b.ReportMetric(float64(blockBuildTime)/float64(numTxns), "ns/block_build_tx")
 
-	l.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
+	err = l.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
+	require.NoError(b, err)
 
 	avbDone := time.Now()
 	avbTime := avbDone.Sub(blockBuildDone)
 	b.ReportMetric(float64(avbTime)/float64(numTxns), "ns/AddValidatedBlock_tx")
-
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	defer backlogPool.Shutdown()
 
 	// test speed of block validation
 	// This should be the same as the eval line in ledger.go AddBlock()
