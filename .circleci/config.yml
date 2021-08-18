@@ -10,76 +10,76 @@ workflows:
   build_pr:
     jobs:
       - codegen_verification
-      - amd64_build
-      - amd64_test:
-          requires:
-            - amd64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - amd64_test_nightly:
-          requires:
-            - amd64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
-      - amd64_integration:
-          requires:
-            - amd64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - amd64_integration_nightly:
-          requires:
-            - amd64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
-      - amd64_e2e_subs:
-          requires:
-            - amd64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - amd64_e2e_subs_nightly:
-          requires:
-            - amd64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
+      # - amd64_build
+      # - amd64_test:
+      #     requires:
+      #       - amd64_build
+      #     filters:
+      #       branches:
+      #         ignore:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      # - amd64_test_nightly:
+      #     requires:
+      #       - amd64_build
+      #     filters:
+      #       branches:
+      #         only:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      #     context: slack-secrets
+      # - amd64_integration:
+      #     requires:
+      #       - amd64_build
+      #     filters:
+      #       branches:
+      #         ignore:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      # - amd64_integration_nightly:
+      #     requires:
+      #       - amd64_build
+      #     filters:
+      #       branches:
+      #         only:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      #     context: slack-secrets
+      # - amd64_e2e_subs:
+      #     requires:
+      #       - amd64_build
+      #     filters:
+      #       branches:
+      #         ignore:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      # - amd64_e2e_subs_nightly:
+      #     requires:
+      #       - amd64_build
+      #     filters:
+      #       branches:
+      #         only:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      #     context: slack-secrets
       - arm64_build
-      - arm64_test:
-          requires:
-            - arm64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - arm64_test_nightly:
-          requires:
-            - arm64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
+      # - arm64_test:
+      #     requires:
+      #       - arm64_build
+      #     filters:
+      #       branches:
+      #         ignore:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      # - arm64_test_nightly:
+      #     requires:
+      #       - arm64_build
+      #     filters:
+      #       branches:
+      #         only:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      #     context: slack-secrets
       - arm64_integration:
           requires:
             - arm64_build
@@ -88,85 +88,88 @@ workflows:
               ignore:
                 - /rel\/.*/
                 - /hotfix\/.*/
-      - arm64_integration_nightly:
+      - arm64_integration_check:
           requires:
-            - arm64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
-      - arm64_e2e_subs:
-          requires:
-            - arm64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - arm64_e2e_subs_nightly:
-          requires:
-            - arm64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
-      - mac_amd64_build
-      - mac_amd64_test:
-          requires:
-            - mac_amd64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - mac_amd64_test_nightly:
-          requires:
-            - mac_amd64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
-      - mac_amd64_integration:
-          requires:
-            - mac_amd64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - mac_amd64_integration_nightly:
-          requires:
-            - mac_amd64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
-      - mac_amd64_e2e_subs:
-          requires:
-            - mac_amd64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - mac_amd64_e2e_subs_nightly:
-          requires:
-            - mac_amd64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
-      #- windows_x64_build
+            - arm64_integration
+      # - arm64_integration_nightly:
+      #     requires:
+      #       - arm64_build
+      #     filters:
+      #       branches:
+      #         only:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      #     context: slack-secrets
+      # - arm64_e2e_subs:
+      #     requires:
+      #       - arm64_build
+      #     filters:
+      #       branches:
+      #         ignore:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      # - arm64_e2e_subs_nightly:
+      #     requires:
+      #       - arm64_build
+      #     filters:
+      #       branches:
+      #         only:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      #     context: slack-secrets
+      # - mac_amd64_build
+      # - mac_amd64_test:
+      #     requires:
+      #       - mac_amd64_build
+      #     filters:
+      #       branches:
+      #         ignore:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      # - mac_amd64_test_nightly:
+      #     requires:
+      #       - mac_amd64_build
+      #     filters:
+      #       branches:
+      #         only:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      #     context: slack-secrets
+      # - mac_amd64_integration:
+      #     requires:
+      #       - mac_amd64_build
+      #     filters:
+      #       branches:
+      #         ignore:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      # - mac_amd64_integration_nightly:
+      #     requires:
+      #       - mac_amd64_build
+      #     filters:
+      #       branches:
+      #         only:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      #     context: slack-secrets
+      # - mac_amd64_e2e_subs:
+      #     requires:
+      #       - mac_amd64_build
+      #     filters:
+      #       branches:
+      #         ignore:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      # - mac_amd64_e2e_subs_nightly:
+      #     requires:
+      #       - mac_amd64_build
+      #     filters:
+      #       branches:
+      #         only:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      #     context: slack-secrets
+      ##- windows_x64_build
 
 commands:
   prepare_go:
@@ -276,10 +279,13 @@ commands:
       short_test_flag:
         type: string
         default: ""
+      result_path:
+        type: string
+        default: "/tmp/results"
     steps:
       - attach_workspace:
           at: << parameters.circleci_home >>
-      - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
+      - run: mkdir -p << result_path >>/<< parameters.result_subdir >>
       - restore_cache:
           keys:
             - 'go-cache-{{ .Environment.CIRCLE_STAGE }}-'
@@ -303,12 +309,16 @@ commands:
             export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
             export PARTITION_ID=$CIRCLE_NODE_INDEX
             export PARALLEL_FLAG="-p 1"
-            gotestsum --format pkgname --junitfile /tmp/results/<< parameters.result_subdir >>/results.xml --jsonfile /tmp/results/<< parameters.result_subdir >>/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" << parameters.short_test_flag >> -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
+            gotestsum --format pkgname --junitfile << result_path >>/<< parameters.result_subdir >>/results.xml --jsonfile << result_path >>/<< parameters.result_subdir >>/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" << parameters.short_test_flag >> -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
       - store_artifacts:
-          path: /tmp/results
+          path: << result_path >>
           destination: test-results
       - store_test_results:
-          path: /tmp/results
+          path: << result_path >>
+      - persist_to_workspace:
+          root: << result_path >>
+          paths:
+            - << parameters.result_subdir >>
       - save_cache:
           key: 'go-cache-{{ .Environment.CIRCLE_STAGE }}-{{ .Environment.CIRCLE_BUILD_NUM }}'
           paths:
@@ -337,10 +347,13 @@ commands:
       short_test_flag:
         type: string
         default: ""
+      result_path:
+        type: string
+        default: "/tmp/results"
     steps:
       - attach_workspace:
           at: << parameters.circleci_home >>
-      - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
+      - run: mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>
       - run:
           name: Run integration tests
           no_output_timeout: << parameters.no_output_timeout >>
@@ -358,15 +371,41 @@ commands:
             scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
             export ALGOTEST=1
             export SHORTTEST=<< parameters.short_test_flag >>
-            export TEST_RESULTS=/tmp/results/<< parameters.result_subdir >>
+            export TEST_RESULTS=<< parameters.result_path >>/<< parameters.result_subdir >>
             export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
             export PARTITION_ID=$CIRCLE_NODE_INDEX
             test/scripts/run_integration_tests.sh
       - store_artifacts:
-          path: /tmp/results
+          path: << parameters.result_path >>
           destination: test-results
       - store_test_results:
-          path: /tmp/results
+          path: << parameters.result_path >>
+      - persist_to_workspace:
+          root: << result_path >>
+          paths:
+            - << parameters.result_subdir >>
+
+  generic_tests_check:
+    description: Check if all tests were run at least once and only once across all parallel runs
+    parameters:
+      circleci_home:
+        type: string
+        default: "/home/circleci"
+      result_path:
+        type: string
+        default: "/tmp/results"
+      result_subdir:
+        type: string
+    steps:
+      - attach_workspace:
+          at: << parameters.result_path >>
+      - run:
+          name: Check if all tests were run
+          command: |
+            echo "Result Path/Subdir: << parameters.result_path >>/<< parameters.result_subdir >>"
+            ls << parameters.result_path >>/<< parameters.result_subdir >>
+            echo "Could be inside other workspace: << parameters.circleci_home >>/<< parameters.result_path >>/<< parameters.result_subdir >>"
+            ls << parameters.circleci_home >>/<< parameters.result_path >>/<< parameters.result_subdir >>
 
 jobs:
   codegen_verification:
@@ -524,6 +563,14 @@ jobs:
       - generic_integration:
           result_subdir: arm64-integration
           short_test_flag: "-short"
+
+  arm64_integration_check:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.small
+    steps:
+      - generic_tests_check
+          result_subdir: arm64-integration
 
   arm64_integration_nightly:
     machine:
