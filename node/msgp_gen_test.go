@@ -129,6 +129,65 @@ func BenchmarkUnmarshalnetPrioResponseSigned(b *testing.B) {
 	}
 }
 
+func TestMarshalUnmarshalproposalCache(t *testing.T) {
+	v := proposalCache{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingproposalCache(t *testing.T) {
+	protocol.RunEncodingTest(t, &proposalCache{})
+}
+
+func BenchmarkMarshalMsgproposalCache(b *testing.B) {
+	v := proposalCache{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgproposalCache(b *testing.B) {
+	v := proposalCache{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalproposalCache(b *testing.B) {
+	v := proposalCache{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestMarshalUnmarshalproposalData(t *testing.T) {
 	v := proposalData{}
 	bts := v.MarshalMsg(nil)

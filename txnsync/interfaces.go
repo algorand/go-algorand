@@ -41,6 +41,7 @@ type RoundSettings struct {
 type ProposalBroadcastRequest struct {
 	proposalBytes []byte
 	txGroups      []transactions.SignedTxGroup
+	isFilterMsg   bool
 }
 
 // Event is an external triggering event
@@ -120,6 +121,18 @@ func MakeNewRoundEvent(roundNumber basics.Round, fetchTransactions bool) Event {
 		},
 	}
 }
+
+// MakeBroadcastProposalFilterEvent creates an event for sending a proposal filter message
+func MakeBroadcastProposalFilterEvent(proposalBytes []byte) Event {
+	return Event{
+		eventType: proposalBroadcastRequestEvent,
+		proposalBroadcastRequest: ProposalBroadcastRequest{
+			proposalBytes: proposalBytes,
+			isFilterMsg: true,
+		},
+	}
+}
+
 
 // MakeBroadcastProposalRequestEvent creates an event for sending a proposal
 func MakeBroadcastProposalRequestEvent(proposalBytes []byte, txGroups []transactions.SignedTxGroup) Event {

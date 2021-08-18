@@ -50,6 +50,12 @@ type initialTransactionsAllocation struct {
 	expirationRound   basics.Round
 }
 
+type initialProposalAllocation struct {
+	node int
+	transactionsCount int
+	transactionSize   int
+}
+
 // scenario defines the emulator test scenario, which includes the network configuration,
 // initial transaction distribution, test duration, dynamic transactions creation as well
 // as expected test outcomes.
@@ -58,6 +64,7 @@ type scenario struct {
 	testDuration    time.Duration
 	step            time.Duration
 	initialAlloc    []initialTransactionsAllocation
+	initialProposals []initialProposalAllocation
 	expectedResults emulatorResult
 }
 
@@ -93,23 +100,23 @@ func TestEmulatedTrivialTransactionsExchange(t *testing.T) {
 			},
 		},
 		expectedResults: emulatorResult{
-			nodes: []nodeTransactions{
+			nodeTxns: []nodeTransactions{
 				{
-					txns: []nodeTransaction{
-						nodeTransaction{
-							expirationRound: 5,
-							transactionSize: 250,
-						},
+					nodeTransaction{
+						expirationRound: 5,
+						transactionSize: 250,
 					},
 				},
 				{
-					txns: []nodeTransaction{
-						nodeTransaction{
-							expirationRound: 5,
-							transactionSize: 250,
-						},
+					nodeTransaction{
+						expirationRound: 5,
+						transactionSize: 250,
 					},
 				},
+			},
+			nodeProposals: []nodeProposals{
+				{},
+				{},
 			},
 		},
 		step: 1 * time.Millisecond,
@@ -206,39 +213,37 @@ func TestEmulatedTwoNodesToRelaysTransactionsExchange(t *testing.T) {
 			},
 		},
 		expectedResults: emulatorResult{
-			nodes: []nodeTransactions{
+			nodeTxns: []nodeTransactions{
 				{
-					txns: []nodeTransaction{
-						nodeTransaction{
-							expirationRound: 5,
-							transactionSize: 250,
-						},
+					nodeTransaction{
+						expirationRound: 5,
+						transactionSize: 250,
 					},
 				},
 				{
-					txns: []nodeTransaction{
-						nodeTransaction{
-							expirationRound: 5,
-							transactionSize: 250,
-						},
+					nodeTransaction{
+						expirationRound: 5,
+						transactionSize: 250,
 					},
 				},
 				{
-					txns: []nodeTransaction{
-						nodeTransaction{
-							expirationRound: 5,
-							transactionSize: 250,
-						},
+					nodeTransaction{
+						expirationRound: 5,
+						transactionSize: 250,
 					},
 				},
 				{
-					txns: []nodeTransaction{
-						nodeTransaction{
-							expirationRound: 5,
-							transactionSize: 250,
-						},
+					nodeTransaction{
+						expirationRound: 5,
+						transactionSize: 250,
 					},
 				},
+			},
+			nodeProposals: []nodeProposals{
+				{},
+				{},
+				{},
+				{},
 			},
 		},
 		step: 1 * time.Millisecond,
@@ -278,7 +283,11 @@ func TestEmulatedLargeSetTransactionsExchange(t *testing.T) {
 			},
 		},
 		expectedResults: emulatorResult{
-			nodes: []nodeTransactions{
+			nodeTxns: []nodeTransactions{
+				{},
+				{},
+			},
+			nodeProposals: []nodeProposals{
 				{},
 				{},
 			},
@@ -287,8 +296,8 @@ func TestEmulatedLargeSetTransactionsExchange(t *testing.T) {
 	}
 	// update the expected results to have the correct number of entries.
 	for i := 0; i < testScenario.initialAlloc[0].transactionsCount; i++ {
-		for n := range testScenario.expectedResults.nodes {
-			testScenario.expectedResults.nodes[n].txns = append(testScenario.expectedResults.nodes[n].txns, nodeTransaction{expirationRound: testScenario.initialAlloc[0].expirationRound, transactionSize: testScenario.initialAlloc[0].transactionSize})
+		for n := range testScenario.expectedResults.nodeTxns {
+			testScenario.expectedResults.nodeTxns[n] = append(testScenario.expectedResults.nodeTxns[n], nodeTransaction{expirationRound: testScenario.initialAlloc[0].expirationRound, transactionSize: testScenario.initialAlloc[0].transactionSize})
 		}
 	}
 
@@ -364,7 +373,11 @@ func TestEmulatedLargeSetTransactionsExchangeIntermixed(t *testing.T) {
 			},
 		},
 		expectedResults: emulatorResult{
-			nodes: []nodeTransactions{
+			nodeTxns: []nodeTransactions{
+				{},
+				{},
+			},
+			nodeProposals: []nodeProposals{
 				{},
 				{},
 			},
@@ -375,8 +388,8 @@ func TestEmulatedLargeSetTransactionsExchangeIntermixed(t *testing.T) {
 	// update the expected results to have the correct number of entries.
 	for j := range testScenario.initialAlloc {
 		for i := 0; i < testScenario.initialAlloc[j].transactionsCount; i++ {
-			for n := range testScenario.expectedResults.nodes {
-				testScenario.expectedResults.nodes[n].txns = append(testScenario.expectedResults.nodes[n].txns, nodeTransaction{expirationRound: testScenario.initialAlloc[j].expirationRound, transactionSize: testScenario.initialAlloc[j].transactionSize})
+			for n := range testScenario.expectedResults.nodeTxns {
+				testScenario.expectedResults.nodeTxns[n] = append(testScenario.expectedResults.nodeTxns[n], nodeTransaction{expirationRound: testScenario.initialAlloc[j].expirationRound, transactionSize: testScenario.initialAlloc[j].transactionSize})
 			}
 		}
 	}
@@ -494,7 +507,14 @@ func TestEmulatedNonRelayToMultipleRelays(t *testing.T) {
 			},
 		},
 		expectedResults: emulatorResult{
-			nodes: []nodeTransactions{
+			nodeTxns: []nodeTransactions{
+				{},
+				{},
+				{},
+				{},
+				{},
+			},
+			nodeProposals: []nodeProposals{
 				{},
 				{},
 				{},
@@ -508,8 +528,8 @@ func TestEmulatedNonRelayToMultipleRelays(t *testing.T) {
 	// update the expected results to have the correct number of entries.
 	for j := range testScenario.initialAlloc {
 		for i := 0; i < testScenario.initialAlloc[j].transactionsCount; i++ {
-			for n := range testScenario.expectedResults.nodes {
-				testScenario.expectedResults.nodes[n].txns = append(testScenario.expectedResults.nodes[n].txns, nodeTransaction{expirationRound: testScenario.initialAlloc[j].expirationRound, transactionSize: testScenario.initialAlloc[j].transactionSize})
+			for n := range testScenario.expectedResults.nodeTxns {
+				testScenario.expectedResults.nodeTxns[n] = append(testScenario.expectedResults.nodeTxns[n], nodeTransaction{expirationRound: testScenario.initialAlloc[j].expirationRound, transactionSize: testScenario.initialAlloc[j].transactionSize})
 			}
 		}
 	}
@@ -642,7 +662,15 @@ func TestEmulatedTwoNodesFourRelays(t *testing.T) {
 			},
 		},
 		expectedResults: emulatorResult{
-			nodes: []nodeTransactions{
+			nodeTxns: []nodeTransactions{
+				{},
+				{},
+				{},
+				{},
+				{},
+				{},
+			},
+			nodeProposals: []nodeProposals{
 				{},
 				{},
 				{},
@@ -657,8 +685,8 @@ func TestEmulatedTwoNodesFourRelays(t *testing.T) {
 	// update the expected results to have the correct number of entries.
 	for j := range testScenario.initialAlloc {
 		for i := 0; i < testScenario.initialAlloc[j].transactionsCount; i++ {
-			for n := range testScenario.expectedResults.nodes {
-				testScenario.expectedResults.nodes[n].txns = append(testScenario.expectedResults.nodes[n].txns, nodeTransaction{expirationRound: testScenario.initialAlloc[j].expirationRound, transactionSize: testScenario.initialAlloc[j].transactionSize})
+			for n := range testScenario.expectedResults.nodeTxns {
+				testScenario.expectedResults.nodeTxns[n] = append(testScenario.expectedResults.nodeTxns[n], nodeTransaction{expirationRound: testScenario.initialAlloc[j].expirationRound, transactionSize: testScenario.initialAlloc[j].transactionSize})
 			}
 		}
 	}
@@ -731,7 +759,13 @@ func TestEmulatedTwentyNodesFourRelays(t *testing.T) {
 		},
 		initialAlloc: []initialTransactionsAllocation{},
 		expectedResults: emulatorResult{
-			nodes: []nodeTransactions{
+			nodeTxns: []nodeTransactions{
+				{},
+				{},
+				{},
+				{},
+			},
+			nodeProposals: []nodeProposals{
 				{},
 				{},
 				{},
@@ -777,17 +811,191 @@ func TestEmulatedTwentyNodesFourRelays(t *testing.T) {
 			expirationRound:   basics.Round(5),
 		})
 
-		testScenario.expectedResults.nodes = append(testScenario.expectedResults.nodes, nodeTransactions{})
+		testScenario.expectedResults.nodeTxns = append(testScenario.expectedResults.nodeTxns, nodeTransactions{})
+		testScenario.expectedResults.nodeProposals = append(testScenario.expectedResults.nodeProposals, nodeProposals{})
 	}
 
 	// update the expected results to have the correct number of entries.
 	for j := range testScenario.initialAlloc {
 		for i := 0; i < testScenario.initialAlloc[j].transactionsCount; i++ {
-			for n := range testScenario.expectedResults.nodes {
-				testScenario.expectedResults.nodes[n].txns = append(testScenario.expectedResults.nodes[n].txns, nodeTransaction{expirationRound: testScenario.initialAlloc[j].expirationRound, transactionSize: testScenario.initialAlloc[j].transactionSize})
+			for n := range testScenario.expectedResults.nodeTxns {
+				testScenario.expectedResults.nodeTxns[n] = append(testScenario.expectedResults.nodeTxns[n], nodeTransaction{expirationRound: testScenario.initialAlloc[j].expirationRound, transactionSize: testScenario.initialAlloc[j].transactionSize})
 			}
 		}
 	}
 
 	emulateScenario(t, testScenario)
+}
+
+
+func TestEmulatedTrivialProposalsExchange(t *testing.T) {
+	testScenario := scenario{
+		netConfig: networkConfiguration{
+			nodes: []nodeConfiguration{
+				{
+					name:    "relay",
+					isRelay: true,
+				},
+				{
+					name: "node",
+					outgoingConnections: []connectionSettings{
+						{
+							uploadSpeed:   1000000,
+							downloadSpeed: 1000000,
+							target:        0,
+						},
+					},
+				},
+			},
+		},
+		testDuration: 20000 * time.Millisecond,
+		initialAlloc: []initialTransactionsAllocation{
+			initialTransactionsAllocation{
+				node:              1,
+				transactionsCount: 1,
+				transactionSize:   250,
+				expirationRound:   basics.Round(5),
+			},
+		},
+		initialProposals: []initialProposalAllocation{
+			initialProposalAllocation{
+				node: 1,
+				transactionsCount: 250,
+				transactionSize: 270,
+			},
+		},
+		expectedResults: emulatorResult{
+			nodeTxns: []nodeTransactions{
+				{
+					nodeTransaction{
+						expirationRound: 5,
+						transactionSize: 250,
+					},
+				},
+				{
+					nodeTransaction{
+						expirationRound: 5,
+						transactionSize: 250,
+					},
+				},
+			},
+			nodeProposals: []nodeProposals{
+				{
+					nodeProposal{
+						proposalBytes: []byte{byte(1)},
+						complete: true,
+					},
+				},
+				{
+					nodeProposal{
+						proposalBytes: []byte{byte(1)},
+						complete: true,
+					},
+				},
+			},
+		},
+		step: 1 * time.Millisecond,
+	}
+	t.Run("NonRelay_To_Relay", func(t *testing.T) {
+		testScenario.netConfig.nodes[0].name = "relay"
+		testScenario.netConfig.nodes[0].isRelay = true
+		testScenario.netConfig.nodes[1].name = "node"
+		testScenario.initialProposals[0].node = 1
+		emulateScenario(t, testScenario)
+	})
+	t.Run("Relay_To_NonRelay", func(t *testing.T) {
+		testScenario.netConfig.nodes[0].name = "relay"
+		testScenario.netConfig.nodes[0].isRelay = true
+		testScenario.netConfig.nodes[1].name = "node"
+		testScenario.initialProposals[0].node = 0
+		emulateScenario(t, testScenario)
+	})
+	t.Run("OutgoingRelay_To_IncomingRelay", func(t *testing.T) {
+		testScenario.netConfig.nodes[0].name = "incoming-relay"
+		testScenario.netConfig.nodes[0].isRelay = true
+		testScenario.netConfig.nodes[1].name = "outgoing-relay"
+		testScenario.netConfig.nodes[1].isRelay = true
+		testScenario.initialProposals[0].node = 1
+		emulateScenario(t, testScenario)
+	})
+	t.Run("IncomingRelay_To_OutgoingRelay", func(t *testing.T) {
+		testScenario.netConfig.nodes[0].name = "incoming-relay"
+		testScenario.netConfig.nodes[0].isRelay = true
+		testScenario.netConfig.nodes[1].name = "outgoing-relay"
+		testScenario.netConfig.nodes[1].isRelay = true
+		testScenario.initialProposals[0].node = 0
+		emulateScenario(t, testScenario)
+	})
+}
+
+func TestEmulatedProposalsExchangeCancel(t *testing.T) {
+	testScenario := scenario{
+		netConfig: networkConfiguration{
+			nodes: []nodeConfiguration{
+				{
+					name:    "relay",
+					isRelay: true,
+				},
+				{
+					name: "node",
+					outgoingConnections: []connectionSettings{
+						{
+							uploadSpeed:   1000000,
+							downloadSpeed: 1000000,
+							target:        0,
+						},
+					},
+				},
+			},
+		},
+		testDuration: 20000 * time.Millisecond,
+		initialProposals: []initialProposalAllocation{
+			initialProposalAllocation{
+				node: 1,
+				transactionsCount: 250,
+				transactionSize: 270,
+			},
+			initialProposalAllocation{
+				node: 1,
+				transactionsCount: 250,
+				transactionSize: 270,
+			},
+		},
+		expectedResults: emulatorResult{
+			nodeTxns: []nodeTransactions{
+				{},
+				{},
+			},
+			nodeProposals: []nodeProposals{
+				{
+					nodeProposal{
+						proposalBytes: []byte{byte(1)},
+						complete: false,
+					},
+					nodeProposal{
+						proposalBytes: []byte{byte(2)},
+						complete: true,
+					},
+				},
+				{
+					nodeProposal{
+						proposalBytes: []byte{byte(1)},
+						complete: true,
+					},
+					nodeProposal{
+						proposalBytes: []byte{byte(2)},
+						complete: true,
+					},
+				},
+			},
+		},
+		step: 1 * time.Millisecond,
+	}
+	t.Run("NonRelay_To_Relay", func(t *testing.T) {
+		testScenario.netConfig.nodes[0].name = "relay"
+		testScenario.netConfig.nodes[0].isRelay = true
+		testScenario.netConfig.nodes[1].name = "node"
+		testScenario.initialProposals[0].node = 1
+		emulateScenario(t, testScenario)
+	})
 }

@@ -441,5 +441,9 @@ func (s *syncState) updatePeersRequestParams(peers []*Peer) {
 
 func (s *syncState) onBroadcastProposalRequestEvent(ent Event) {
 	peers := s.getPeers()
-	s.broadcastProposal(ent.proposalBroadcastRequest, peers)
+	if ent.proposalBroadcastRequest.isFilterMsg {
+		s.broadcastProposalFilter(crypto.Hash(ent.proposalBroadcastRequest.proposalBytes), peers)
+	} else {
+		s.broadcastProposal(ent.proposalBroadcastRequest, peers)
+	}
 }

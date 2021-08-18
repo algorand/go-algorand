@@ -228,7 +228,7 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 
 	if msgOps&messageConstTransactions == messageConstTransactions {
 		transactionGroups := pendingTransactions.pendingTransactionsGroups
-		if !s.isRelay {
+		if !s.isRelay && peer.state != peerStateProposal {
 			// on non-relay, we need to filter out the non-locally originated messages since we don't want
 			// non-relays to send transaction that they received via the transaction sync back.
 			transactionGroups = s.locallyGeneratedTransactions(pendingTransactions)
@@ -307,6 +307,28 @@ func (s *syncState) locallyGeneratedTransactions(pendingTransactions *pendingTra
 		count++
 	}
 	return result[:count]
+}
+
+func (s *syncState) broadcastProposalFilter(proposalHash crypto.Digest, peers []*Peer) {
+	for _, peer := range peers {
+		msgEncoder := &messageAsyncEncoder{
+			state:                s,
+			roundClock:           s.clock,
+			peerDataExchangeRate: peer.dataExchangeRate,
+		}
+
+		msgEncoder.messageData = sentMessageMetadata{
+			peer: peer,
+			message: &transactionBlockMessage{
+				Version: txnBlockMessageVersion,
+				Round:   s.round,
+				RelayedProposal: relayedProposal{
+					ExcludeProposal: proposalHash,
+				},
+			},
+		}
+		msgEncoder.enqueue()
+	}
 }
 
 func (s *syncState) broadcastProposal(p ProposalBroadcastRequest, peers []*Peer) {

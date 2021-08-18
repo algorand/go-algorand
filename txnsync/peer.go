@@ -217,7 +217,11 @@ func (t *transactionGroupCounterTracker) get(offset, modulator byte, peerState p
 
 // set updates the group counter for a given set of request param. If no such request
 // param currently exists, it create it.
-func (t *transactionGroupCounterTracker) set(offset, modulator byte, counter uint64) {
+func (t *transactionGroupCounterTracker) set(offset, modulator byte, peerState peerState, counter uint64) {
+	if peerState == peerStateProposal {
+		offset = 0
+		modulator = 0
+	}
 	i := t.index(offset, modulator)
 	if i >= 0 {
 		(*t)[i].groupCounters[0] = counter
@@ -240,7 +244,7 @@ func (t *transactionGroupCounterTracker) set(offset, modulator byte, counter uin
 }
 
 func (t *transactionGroupCounterTracker) resetProposalTracker() {
-	t.set(0, 0, 0)
+	t.set(0, 0, peerStateProposal, 0)
 }
 
 // roll the counters for a given requests params, so that we would go back and
@@ -336,7 +340,7 @@ func (p *Peer) getAcceptedMessages() []uint64 {
 
 func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.SignedTxGroup, sendWindow time.Duration, round basics.Round, bloomFilterSize int) (selectedTxns []transactions.SignedTxGroup, selectedTxnIDs []transactions.Txid, partialTransactionsSet bool) {
 	// if peer is too far back, don't send it any transactions ( or if the peer is not interested in transactions )
-	if p.lastRound < round.SubSaturate(1) || p.requestedTransactionsModulator == 0 {
+	if p.lastRound < round.SubSaturate(1) || (p.requestedTransactionsModulator == 0 && p.state != peerStateProposal) {
 		return nil, nil, false
 	}
 
@@ -448,10 +452,10 @@ scanLoop:
 	if grpIdx >= 0 && startIndex < len(pendingTransactions) {
 		if grpIdx == len(pendingTransactions) {
 			if grpIdx > 0 {
-				p.lastTransactionSelectionTracker.set(p.requestedTransactionsOffset, p.requestedTransactionsModulator, pendingTransactions[grpIdx-1].GroupCounter+1)
+				p.lastTransactionSelectionTracker.set(p.requestedTransactionsOffset, p.requestedTransactionsModulator, p.state, pendingTransactions[grpIdx-1].GroupCounter+1)
 			}
 		} else {
-			p.lastTransactionSelectionTracker.set(p.requestedTransactionsOffset, p.requestedTransactionsModulator, pendingTransactions[grpIdx].GroupCounter)
+			p.lastTransactionSelectionTracker.set(p.requestedTransactionsOffset, p.requestedTransactionsModulator, p.state, pendingTransactions[grpIdx].GroupCounter)
 		}
 	}
 

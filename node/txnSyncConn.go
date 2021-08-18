@@ -48,8 +48,9 @@ type transactionSyncNodeConnector struct {
 type proposalData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	proposalBytes []byte              `codec:"b,allocbound=maxNumProposalBytes"`
-	txGroupIds    []transactions.Txid `codec:"h,allocbound=maxNumTxGroupHashesBytes"` // TODO: make this []byte
+	ProposalBytes []byte              `codec:"b,allocbound=maxNumProposalBytes"`
+	TxGroupIds    []transactions.Txid `codec:"h,allocbound=maxNumTxGroupHashesBytes"`
+	// TODO: make txGroupIds []byte
 }
 
 // cache used by the peer to keep track of which proposals not to send
@@ -256,17 +257,17 @@ func (tsnc *transactionSyncNodeConnector) IncomingTransactionGroups(peer *txnsyn
 
 func (tsnc *transactionSyncNodeConnector) RelayProposal(proposalBytes []byte, txnSlices []transactions.SignedTxnSlice) {
 	data := proposalData{
-		proposalBytes: proposalBytes,
-		txGroupIds: make([]transactions.Txid, len(txnSlices)),
+		ProposalBytes: proposalBytes,
+		TxGroupIds: make([]transactions.Txid, len(txnSlices)),
 	}
 
 	txGroups := make([]transactions.SignedTxGroup, len(txnSlices))
 	encodingBuf := protocol.GetEncodingBuf()
 	for i, txnSlice := range txnSlices {
-		data.txGroupIds[i] = txnSlice.ID()
+		data.TxGroupIds[i] = txnSlice.ID()
 		txGroups[i] = transactions.SignedTxGroup{
 			Transactions:       txnSlice,
-			GroupTransactionID: data.txGroupIds[i],
+			GroupTransactionID: data.TxGroupIds[i],
 		}
 		txGroups[i].EncodedLength = 0
 		for _, txn := range txGroups[i].Transactions {
@@ -286,11 +287,11 @@ func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataByte
 	if proposalDataBytes != nil {
 		pc = &proposalCache{
 			proposalData: data,
-			txGroupIdIndex: make(map[transactions.Txid]int, len(data.txGroupIds)),
-			txGroups: make([]transactions.SignedTxGroup, len(data.txGroupIds)),
+			txGroupIdIndex: make(map[transactions.Txid]int, len(data.TxGroupIds)),
+			txGroups: make([]transactions.SignedTxGroup, len(data.TxGroupIds)),
 		}
 		tsnc.node.net.SetPeerData(peer.GetNetworkPeer(), "proposalCache", pc)
-		for i, txid := range pc.txGroupIds {
+		for i, txid := range pc.TxGroupIds {
 			pc.txGroupIdIndex[txid] = i
 		}
 	} else { // fetch proposalCache from peerData
@@ -299,18 +300,19 @@ func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataByte
 	// TODO attempt to fill receivedTxns with txpool
 
 	for _, txGroup := range txGroups {
-		if index, found := pc.txGroupIdIndex[txGroup.GroupTransactionID]; found {
+		if index, found := pc.txGroupIdIndex[txGroup.Transactions.ID()]; found && pc.txGroups[index].Transactions == nil {
 			pc.txGroups[index] = txGroup
+			pc.numTxGroupsReceived++
 		}
 	}
 
 	if pc.numTxGroupsReceived == len(pc.txGroups) {
 		// TODO send proposal to agreement
-		// TODO send filter message
+		tsnc.eventsCh <- txnsync.MakeBroadcastProposalFilterEvent(protocol.Encode(&pc.proposalData))
 
-		pc.proposalBytes = nil
+		pc.ProposalBytes = nil
 		pc.txGroups = nil
-		pc.txGroupIds = nil
+		pc.TxGroupIds = nil
 		pc.txGroupIdIndex = nil
 		pc.numTxGroupsReceived = 0
 	}

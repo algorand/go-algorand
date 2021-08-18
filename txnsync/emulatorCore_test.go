@@ -55,25 +55,30 @@ type nodeTransaction struct {
 	transactionSize int
 }
 
-type nodeTransactions struct {
-	txns []nodeTransaction
-	proposals []proposalCache
+type nodeTransactions []nodeTransaction
+
+type nodeProposal struct {
+	proposalBytes []byte
+	complete bool
 }
+
+type nodeProposals []nodeProposal
 
 type emulatorResult struct {
-	nodes []nodeTransactions
+	nodeTxns []nodeTransactions
+	nodeProposals []nodeProposals
 }
 
-func (a nodeTransactions) Len() int      { return len(a.txns) }
-func (a nodeTransactions) Swap(i, j int) { a.txns[i], a.txns[j] = a.txns[j], a.txns[i] }
+func (a nodeTransactions) Len() int      { return len(a) }
+func (a nodeTransactions) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a nodeTransactions) Less(i, j int) bool {
-	if a.txns[i].expirationRound < a.txns[j].expirationRound {
+	if a[i].expirationRound < a[j].expirationRound {
 		return true
 	}
-	if a.txns[i].expirationRound > a.txns[j].expirationRound {
+	if a[i].expirationRound > a[j].expirationRound {
 		return false
 	}
-	return a.txns[i].transactionSize < a.txns[j].transactionSize
+	return a[i].transactionSize < a[j].transactionSize
 }
 
 func emulateScenario(t *testing.T, scenario scenario) {
@@ -87,21 +92,21 @@ func emulateScenario(t *testing.T, scenario scenario) {
 	e.run()
 
 	results := e.collectResult()
-	for n := range scenario.expectedResults.nodes {
-		sort.Stable(scenario.expectedResults.nodes[n])
+	for n := range scenario.expectedResults.nodeTxns {
+		sort.Stable(scenario.expectedResults.nodeTxns[n])
 	}
-	for n := range results.nodes {
-		sort.Stable(results.nodes[n])
+	for n := range results.nodeTxns {
+		sort.Stable(results.nodeTxns[n])
 	}
 
 	t.Logf("Emulation Statistics:")
 	t.Logf("Total duplicate transaction count: %d", e.totalDuplicateTransactions)
 	t.Logf("Total duplicate transactions size: %d", e.totalDuplicateTransactionSize)
 	for n := 0; n < e.nodeCount; n++ {
-		t.Logf("%s transaction groups count : %d", e.nodes[n].name, len(results.nodes[n].txns))
+		t.Logf("%s transaction groups count : %d", e.nodes[n].name, len(results.nodeTxns[n]))
 	}
 	for n := 0; n < e.nodeCount; n++ {
-		require.Equalf(t, len(scenario.expectedResults.nodes[n].txns), len(results.nodes[n].txns), "node %d", n)
+		require.Equalf(t, len(scenario.expectedResults.nodeTxns[n]), len(results.nodeTxns[n]), "node %d", n)
 	}
 
 	// calculating efficiency / overhead :
@@ -109,7 +114,9 @@ func emulateScenario(t *testing.T, scenario scenario) {
 	// each node received all the transactions, minus the ones that it start up with.
 	totalNeededSentTransactions := e.totalInitialTransactions*uint64(len(e.nodes)) - e.totalInitialTransactions
 	actualReceivedTransactions := totalNeededSentTransactions + e.totalDuplicateTransactions
-	t.Logf("Total transaction overhead: %d%%", (actualReceivedTransactions-totalNeededSentTransactions)*100/totalNeededSentTransactions)
+	if totalNeededSentTransactions > 0 {
+		t.Logf("Total transaction overhead: %d%%", (actualReceivedTransactions-totalNeededSentTransactions)*100/totalNeededSentTransactions)
+	}
 
 	require.Equal(t, scenario.expectedResults, results)
 	require.Equal(t, 1, 1)
@@ -151,7 +158,6 @@ func (e *emulator) nextRound() {
 
 	for _, node := range e.nodes {
 		node.onNewRound(e.currentRound, true)
-		node.RelayProposal([]byte("proposal"), txnSlices)
 	}
 }
 func (e *emulator) unblockStep() {
@@ -233,25 +239,67 @@ func (e *emulator) initNodes() {
 		node.txpoolGroupCounter += uint64(initAlloc.transactionsCount)
 		node.onNewTransactionPoolEntry()
 	}
+
+	for i, initProposal := range e.scenario.initialProposals {
+		node := e.nodes[initProposal.node]
+		proposalBytes := []byte{byte(i+1)}
+		var txGroups []transactions.SignedTxGroup
+		for i := 0; i < initProposal.transactionsCount; i++ {
+			var group = transactions.SignedTxGroup{}
+			group.LocallyOriginated = true
+			group.GroupCounter = uint64(len(node.txpoolEntries))
+			group.Transactions = []transactions.SignedTxn{
+				transactions.SignedTxn{
+					Txn: transactions.Transaction{
+						Type: protocol.PaymentTx,
+						Header: transactions.Header{
+							Note:      make([]byte, initProposal.transactionSize-senderEncodingSize, initProposal.transactionSize-senderEncodingSize),
+							Sender:    defaultSender,
+						},
+					},
+				},
+			}
+			for i := 0; i < 1+(initProposal.transactionSize-senderEncodingSize)/32; i++ {
+				digest := crypto.Hash([]byte{byte(randCounter), byte(randCounter >> 8), byte(randCounter >> 16), byte(randCounter >> 24)})
+				copy(group.Transactions[0].Txn.Note[i*32:], digest[:])
+				randCounter++
+			}
+			group.GroupTransactionID = group.Transactions.ID()
+			encodingBuf = encodingBuf[:0]
+			group.EncodedLength = len(group.Transactions[0].MarshalMsg(encodingBuf))
+			txGroups = append(txGroups, group)
+		}
+		node.RelayProposal(proposalBytes, txGroups)
+	}
+
 	protocol.PutEncodingBuf(encodingBuf)
 }
 
 func (e *emulator) collectResult() (result emulatorResult) {
-	result.nodes = make([]nodeTransactions, len(e.nodes))
+	result.nodeTxns = make([]nodeTransactions, len(e.nodes))
+	result.nodeProposals = make([]nodeProposals, len(e.nodes))
 	const senderEncodingSize = 35
 	for i, node := range e.nodes {
-		var txns nodeTransactions
+		txns := make(nodeTransactions, 0)
+		proposals := make(nodeProposals, 0)
 		for _, txnGroup := range node.txpoolEntries {
 			size := len(txnGroup.Transactions[0].Txn.Note)
 			exp := txnGroup.Transactions[0].Txn.LastValid
-			txns.txns = append(txns.txns, nodeTransaction{expirationRound: exp, transactionSize: size + senderEncodingSize})
+			txns = append(txns, nodeTransaction{expirationRound: exp, transactionSize: size + senderEncodingSize})
 		}
 		for _, txnGroup := range node.expiredTx {
 			size := len(txnGroup.Transactions[0].Txn.Note)
 			exp := txnGroup.Transactions[0].Txn.LastValid
-			txns.txns = append(txns.txns, nodeTransaction{expirationRound: exp, transactionSize: size + senderEncodingSize})
+			txns = append(txns, nodeTransaction{expirationRound: exp, transactionSize: size + senderEncodingSize})
 		}
-		result.nodes[i] = txns
+		for _, pc := range node.proposals {
+			proposals = append(proposals, nodeProposal{
+				proposalBytes: pc.ProposalBytes,
+				complete: pc.numTxGroupsReceived == len(pc.TxGroupIds),
+			})
+		}
+		result.nodeTxns[i] = txns
+		result.nodeProposals[i] = proposals
 	}
 	return result
 }
