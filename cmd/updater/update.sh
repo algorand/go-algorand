@@ -246,7 +246,7 @@ function check_for_update() {
     fi
 
     if [ -z ${LATEST} ]; then
-        echo "Failed to lookup latest release. This could happen if the 'updater' binary is corrupted."
+        echo "Failed to lookup latest release"
         return 1
     fi
 
