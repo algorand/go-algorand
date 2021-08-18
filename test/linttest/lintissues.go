@@ -32,9 +32,16 @@ func (m *myStruct) willError() error {
 
 func doSomething() {
 	m := myStruct{d: 2, e: 2.0}
-	m.willError()
+	err := m.willError()
+	if err != nil {
+		fmt.Printf("error")
+	}
 
 	var x myStruct
 	x = myStruct{f: true}
 	x.f = false
+}
+
+func init() {
+	doSomething()
 }
