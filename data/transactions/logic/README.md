@@ -386,6 +386,7 @@ App fields used in the `app_params_get` opcode.
 | `asset_holding_get i` | read from account A and asset B holding field X (imm arg) => {0 or 1 (top), value} |
 | `asset_params_get i` | read from asset A params field X (imm arg) => {0 or 1 (top), value} |
 | `app_params_get i` | read from app A params field X (imm arg) => {0 or 1 (top), value} |
+| `log` | write bytes to log state of the current application |
 
 # Assembler Syntax
 

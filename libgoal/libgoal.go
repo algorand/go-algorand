@@ -746,6 +746,16 @@ func (c *Client) PendingTransactionInformation(txid string) (resp v1.Transaction
 	return
 }
 
+// PendingTransactionInformationV2 returns information about a recently issued
+// transaction based on its txid.
+func (c *Client) PendingTransactionInformationV2(txid string) (resp generatedV2.PendingTransactionResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.PendingTransactionInformationV2(txid)
+	}
+	return
+}
+
 // Block takes a round and returns its block
 func (c *Client) Block(round uint64) (resp v1.Block, err error) {
 	algod, err := c.ensureAlgodClient()
@@ -867,6 +877,16 @@ func (c *Client) GetPendingTransactions(maxTxns uint64) (resp v1.PendingTransact
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.GetPendingTransactions(maxTxns)
+	}
+	return
+}
+
+// GetPendingTransactionsByAddress gets a snapshot of current pending transactions on the node for the given address.
+// If maxTxns = 0, fetches as many transactions as possible.
+func (c *Client) GetPendingTransactionsByAddress(addr string, maxTxns uint64) (resp v1.PendingTransactions, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.PendingTransactionsByAddr(addr, maxTxns)
 	}
 	return
 }
@@ -1025,7 +1045,7 @@ func MakeDryrunStateGenerated(client Client, txnOrStxn interface{}, other []tran
 				} else {
 					// otherwise need to fetch app state
 					var app generatedV2.Application
-					if app, err = client.ApplicationInformation(uint64(tx.ApplicationID)); err != nil {
+					if app, err = client.ApplicationInformation(uint64(appIdx)); err != nil {
 						return
 					}
 					appParams = app.Params

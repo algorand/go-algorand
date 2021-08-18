@@ -60,7 +60,7 @@ func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, 
 	}
 
 	log := logging.TestingLog(t)
-	genBal := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	genHash := crypto.Digest{0x42}
 	const inMem = true
 	cfg := config.GetDefaultLocal()

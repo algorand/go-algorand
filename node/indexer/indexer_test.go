@@ -34,6 +34,10 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+const testGenesisID string = "foo"
+
+var genesisHash = crypto.Digest{0x1, 0x2, 0x3}
+
 type IndexSuite struct {
 	suite.Suite
 	idx *Indexer
@@ -62,14 +66,18 @@ func (s *IndexSuite) SetupSuite() {
 		var txnEnc []transactions.SignedTxnInBlock
 		b := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round:     basics.Round(uint64(i + 2)),
-				TimeStamp: time.Now().Unix(),
+				Round:       basics.Round(uint64(i + 2)),
+				TimeStamp:   time.Now().Unix(),
+				GenesisID:   testGenesisID,
+				GenesisHash: genesisHash,
+				UpgradeState: bookkeeping.UpgradeState{
+					CurrentProtocol: protocol.ConsensusFuture,
+				},
 			},
 		}
 
 		chunkSize := numOfTransactions / numOfBlocks
 		for t := i * chunkSize; t < (i+1)*chunkSize; t++ {
-
 			txid, err := b.EncodeSignedTxn(s.txns[t], transactions.ApplyData{})
 			require.NoError(s.T(), err)
 			txnEnc = append(txnEnc, txid)
@@ -230,10 +238,12 @@ func generateTestObjects(numTxs, numAccs int) ([]transactions.Transaction, []tra
 
 		txs[i] = transactions.Transaction{
 			Header: transactions.Header{
-				Sender:     addresses[s],
-				Fee:        basics.MicroAlgos{Raw: f},
-				FirstValid: basics.Round(iss),
-				LastValid:  basics.Round(exp),
+				Sender:      addresses[s],
+				Fee:         basics.MicroAlgos{Raw: f},
+				FirstValid:  basics.Round(iss),
+				LastValid:   basics.Round(exp),
+				GenesisID:   testGenesisID,
+				GenesisHash: genesisHash,
 			},
 		}
 
