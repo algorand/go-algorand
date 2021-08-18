@@ -17,64 +17,97 @@
 package txnsync
 
 import (
-	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+// A unique length that we can use to identify non-default allocated buffers
+var uniqueLength int = messageBufferDefaultInitialSize + 482
+var uniqueIdentifier int = 50
+
+// Stamp a byte buffer with a unique identifier, assumes a capacity of at least unique_length
+func stampBuffer(i int, buf *[]byte) {
+	if cap(*buf) < uniqueLength {
+		return
+	}
+
+	*buf = (*buf)[:cap(*buf)]
+
+	for j := 0; j < i; j++ {
+		(*buf)[uniqueLength-1-j] = byte(j)
+	}
+
+}
+
+func validBuffer(i int, buf *[]byte) bool {
+
+	if cap(*buf) != uniqueLength {
+		return false
+	}
+
+	*buf = (*buf)[:cap(*buf)]
+
+	for j := 0; j < i; j++ {
+		if (*buf)[uniqueLength-1-j] != byte(j) {
+			return false
+		}
+	}
+
+	return true
+}
+
 // TestMessageBuffersPool tests that a buffer pool can be retrieved and has proper length/capacity properties
 func TestMessageBuffersPool(t *testing.T) {
 
-	counter := 0
-
-	oldFunc := msgBuffersPool.New
-
-	msgBuffersPool = sync.Pool{
-		New: func() interface{} {
-			counter++
-			return oldFunc()
-		},
-	}
-
 	partitiontest.PartitionTest(t)
 
-	for i := 0; i < 10; i++ {
-		bytes := getMessageBuffer()
-		require.Equal(t, 0, len(bytes))
-		require.GreaterOrEqual(t, cap(bytes), messageBufferDefaultInitialSize)
+	foundBuffer := false
 
-		releaseMessageBuffer(bytes)
-		require.Equal(t, 1, counter)
+	for retryCount := 0; retryCount < 10; retryCount++ {
+
+		// Let's put a bunch of uniquely identifiable buffers in the global pool
+		for i := 0; i < 10; i++ {
+
+			bytes := make([]byte, 0, uniqueLength)
+			stampBuffer(uniqueIdentifier, &bytes)
+
+			releaseMessageBuffer(bytes)
+		}
+
+		collector := [][]byte{}
+
+		// Let's try to get at least one buffer that is uniquely identifiable over a period of time
+		for i := 0; i < 10000; i++ {
+			byte := getMessageBuffer()
+
+			collector = append(collector, byte)
+
+			if validBuffer(uniqueIdentifier, &byte) {
+				foundBuffer = true
+				break
+			}
+
+			time.Sleep(500 * time.Microsecond)
+		}
+
+		for _, b := range collector {
+			releaseMessageBuffer(b)
+		}
+
+		if foundBuffer {
+			// If we found a buffer, we passed the test
+			break
+		}
+
+		// Otherwise, let's start all over again
 	}
 
-	collector := [][]byte{}
+	require.True(t, foundBuffer)
 
-	counter = 1
-
-	for i := 0; i < 10; i++ {
-		bytes := getMessageBuffer()
-		collector = append(collector, bytes)
-		require.Equal(t, 0, len(bytes))
-		require.GreaterOrEqual(t, cap(bytes), messageBufferDefaultInitialSize)
-
-		require.Equal(t, i+1, counter)
-	}
-
-	for _, b := range collector {
-		releaseMessageBuffer(b)
-	}
-
-	for i := 0; i < 10; i++ {
-		bytes := getMessageBuffer()
-		collector = append(collector, bytes)
-		require.Equal(t, 0, len(bytes))
-		require.GreaterOrEqual(t, cap(bytes), messageBufferDefaultInitialSize)
-
-		require.Equal(t, 10, counter)
-	}
 }
 
 // TestTxIDSlicePool tests that the transaction id pool can be retrieved and has proper length/capacity properties
