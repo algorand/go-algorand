@@ -285,7 +285,7 @@ commands:
     steps:
       - attach_workspace:
           at: << parameters.circleci_home >>
-      - run: mkdir -p << result_path >>/<< parameters.result_subdir >>
+      - run: mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>
       - restore_cache:
           keys:
             - 'go-cache-{{ .Environment.CIRCLE_STAGE }}-'
@@ -309,14 +309,14 @@ commands:
             export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
             export PARTITION_ID=$CIRCLE_NODE_INDEX
             export PARALLEL_FLAG="-p 1"
-            gotestsum --format pkgname --junitfile << result_path >>/<< parameters.result_subdir >>/results.xml --jsonfile << result_path >>/<< parameters.result_subdir >>/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" << parameters.short_test_flag >> -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
+            gotestsum --format pkgname --junitfile << parameters.result_path >>/<< parameters.result_subdir >>/results.xml --jsonfile << parameters.result_path >>/<< parameters.result_subdir >>/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" << parameters.short_test_flag >> -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
       - store_artifacts:
-          path: << result_path >>
+          path: << parameters.result_path >>
           destination: test-results
       - store_test_results:
-          path: << result_path >>
+          path: << parameters.result_path >>
       - persist_to_workspace:
-          root: << result_path >>
+          root: << parameters.result_path >>
           paths:
             - << parameters.result_subdir >>
       - save_cache:
@@ -381,7 +381,7 @@ commands:
       - store_test_results:
           path: << parameters.result_path >>
       - persist_to_workspace:
-          root: << result_path >>
+          root: << parameters.result_path >>
           paths:
             - << parameters.result_subdir >>
 
