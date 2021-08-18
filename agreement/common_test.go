@@ -431,7 +431,6 @@ type testAccountData struct {
 }
 
 func makeProposalsTesting(accs testAccountData, round round, period period, factory BlockFactory, ledger Ledger) (ps []proposal, vs []vote) {
-	// XXX passing empty leaf
 	ve, err := factory.AssembleSpeculativeBlock(round.Number, round.Branch, time.Now().Add(time.Minute))
 	if err != nil {
 		logging.Base().Errorf("Could not generate a proposal for round %d: %v", round, err)

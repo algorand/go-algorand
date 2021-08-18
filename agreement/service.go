@@ -19,6 +19,7 @@ package agreement
 //go:generate dbgen -i agree.sql -p agreement -n agree -o agreeInstall.go -h ../scripts/LICENSE_HEADER
 import (
 	"context"
+	"fmt"
 	"os"
 	"reflect"
 	"time"
@@ -260,8 +261,8 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 			status2 = ac2.(serializableActor)
 
 			if !reflect.DeepEqual(a, a2) {
-				s.log.Errorf("MISMATCHED ACTIONS: pipelinePlayer %+v", a)
-				s.log.Errorf("MISMATCHED ACTIONS: regular player %+v\n", a2)
+				fmt.Printf("MISMATCHED ACTIONS: pipelinePlayer %+v\n", a)
+				fmt.Printf("MISMATCHED ACTIONS: regular player %+v\n", a2)
 			}
 		}
 
