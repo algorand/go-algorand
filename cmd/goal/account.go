@@ -592,8 +592,8 @@ func printAccountInfo(client libgoal.Client, address string, account generatedV2
 
 		url := ""
 		if createdAsset.Params.Url != nil {
-			_, safeUrl := unicodePrintable(*createdAsset.Params.Url)
-			url = fmt.Sprintf(", %s", safeUrl)
+			_, safeURL := unicodePrintable(*createdAsset.Params.Url)
+			url = fmt.Sprintf(", %s", safeURL)
 		}
 
 		fmt.Fprintf(report, "\tID %d, %s, supply %s %s%s\n", createdAsset.Index, name, total, units, url)
