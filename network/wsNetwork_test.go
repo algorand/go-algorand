@@ -786,71 +786,39 @@ func avgSendBufferHighPrioLength(wn *WebsocketNetwork) float64 {
 	return float64(sum) / float64(len(wn.peers))
 }
 
-// TestSlowOutboundPeer tests what happens when one outbound peer is slow and the rest are fine. Current logic is to disconnect the one slow peer when its outbound channel is full.
-//
-// This is a deeply invasive test that reaches into the guts of WebsocketNetwork and wsPeer. If the implementation chainges consider throwing away or totally reimplementing this test.
+// TestSlowOutboundPeer tests what happens when one outbound peer is slow and the rest are fine.
 func TestSlowOutboundPeer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	t.Skip() // todo - update this test to reflect the new implementation.
-	xtag := protocol.ProposalPayloadTag
 	node := makeTestWebsocketNode(t)
 	destPeers := make([]wsPeer, 5)
 	for i := range destPeers {
 		destPeers[i].closing = make(chan struct{})
-		destPeers[i].net = node
-		destPeers[i].sendBufferHighPrio = make(chan sendMessages, sendBufferLength)
-		destPeers[i].sendBufferBulk = make(chan sendMessages, sendBufferLength)
 		destPeers[i].conn = &nopConnSingleton
 		destPeers[i].rootURL = fmt.Sprintf("fake %d", i)
 		node.addPeer(&destPeers[i])
 	}
 	node.Start()
-	tctx, cf := context.WithTimeout(context.Background(), 5*time.Second)
-	for i := 0; i < sendBufferLength; i++ {
-		t.Logf("broadcast %d", i)
-		sent := node.Broadcast(tctx, xtag, []byte{byte(i)}, true, nil)
-		require.NoError(t, sent)
-	}
-	cf()
-	ok := false
-	for i := 0; i < 10; i++ {
-		time.Sleep(time.Millisecond)
-		aoql := avgSendBufferHighPrioLength(node)
-		if aoql == sendBufferLength {
-			ok = true
-			break
-		}
-		t.Logf("node.avgOutboundQueueLength() %f", aoql)
-	}
-	require.True(t, ok)
-	for p := range destPeers {
-		if p == 0 {
-			continue
-		}
-		for j := 0; j < sendBufferLength; j++ {
-			// throw away a message as if sent
-			<-destPeers[p].sendBufferHighPrio
-		}
-	}
-	aoql := avgSendBufferHighPrioLength(node)
-	if aoql > (sendBufferLength / 2) {
-		t.Fatalf("avgOutboundQueueLength=%f wanted <%f", aoql, sendBufferLength/2.0)
-		return
-	}
+
 	// it shouldn't have closed for just sitting on the limit of full
 	require.False(t, peerIsClosed(&destPeers[0]))
 
-	// function context just to contain defer cf()
-	func() {
-		timeout, cf := context.WithTimeout(context.Background(), time.Second)
-		defer cf()
-		sent := node.Broadcast(timeout, xtag, []byte{byte(42)}, true, nil)
-		assert.NoError(t, sent)
-	}()
+	atomic.StoreInt64(&destPeers[0].intermittentOutgoingMessageEnqueueTime, int64(28*time.Second))
+	for x := 0; x < 100; x++ {
+		if peerIsClosed(&destPeers[0]) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 
 	// and now with the rest of the peers well and this one slow, we closed the slow one
-	require.True(t, peerIsClosed(&destPeers[0]))
+	for i := range destPeers {
+		if i == 0 {
+			require.True(t, peerIsClosed(&destPeers[i]))
+		} else {
+			require.False(t, peerIsClosed(&destPeers[i]))
+		}
+	}
 }
 
 func makeTestFilterWebsocketNode(t *testing.T, nodename string) *WebsocketNetwork {
