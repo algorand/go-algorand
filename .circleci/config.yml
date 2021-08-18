@@ -9,7 +9,7 @@ workflows:
   version: 2
   build_pr:
     jobs:
-      - codegen_verification
+      # - codegen_verification
       # - amd64_build
       # - amd64_test:
       #     requires:
@@ -402,10 +402,12 @@ commands:
       - run:
           name: Check if all tests were run
           command: |
-            echo "Result Path/Subdir: << parameters.result_path >>/<< parameters.result_subdir >>"
-            ls << parameters.result_path >>/<< parameters.result_subdir >>
-            echo "Could be inside other workspace: << parameters.circleci_home >>/<< parameters.result_path >>/<< parameters.result_subdir >>"
-            ls << parameters.circleci_home >>/<< parameters.result_path >>/<< parameters.result_subdir >>
+            echo "Checking contents of testresults.json:"
+            cat << parameters.result_path >>/<< parameters.result_subdir >>/testresults.json
+            python3 scripts/buildtools/check_tests.py << parameters.result_path >>/<< parameters.result_subdir >>/testresults.json
+      - store_artifacts:
+          path: << parameters.result_path >>/<< parameters.result_subdir >>
+          destination: << parameters.result_subdir >>/combined-test-results
 
 jobs:
   codegen_verification:
@@ -565,10 +567,11 @@ jobs:
           short_test_flag: "-short"
 
   arm64_integration_check:
-    machine:
-      image: ubuntu-2004:202101-01
-    resource_class: arm.small
+    docker:
+      - image: python:3.9.6-alpine
+    resource_class: medium
     steps:
+      - checkout
       - generic_tests_check:
           result_subdir: arm64-integration
 
