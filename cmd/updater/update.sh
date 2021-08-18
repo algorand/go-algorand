@@ -196,8 +196,8 @@ function get_updater_url() {
 
 # check to see if the binary updater exists. if not, it will automatically the correct updater binary for the current platform
 function check_for_updater() {
-    # check if the updater binary exist.
-    if [ -f "${SCRIPTPATH}/updater" ]; then
+    # check if the updater binary exist and is not empty.
+    if [[ -s "${SCRIPTPATH}/updater" && -f "${SCRIPTPATH}/updater" ]]; then
         return 0
     fi
     get_updater_url
