@@ -263,6 +263,22 @@ func (p *pipelinePlayer) createPlayers(r routerHandle) []action {
 
 		p.Players[nextrnd] = newPlayer
 		actions = append(actions, pseudonodeAction{T: assemble, Round: nextrnd}, rezeroAction{Round: nextrnd})
+
+		e := r.dispatch(*newPlayer, roundInterruptionEvent{Round: nextrnd}, proposalMachine, nextrnd, 0, 0)
+		if e.t() == payloadPipelined {
+			e := e.(payloadProcessedEvent)
+			msg := message{MessageHandle: 0, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: e.UnauthenticatedPayload}
+			a := verifyPayloadAction(messageEvent{T: payloadPresent, Input: msg}, newPlayer.Round, e.Period, e.Pinned)
+			actions = append(actions, a)
+		}
+
+		// we might need to handle a pipelined threshold event
+		res := r.dispatch(*newPlayer, freshestBundleRequestEvent{}, voteMachineRound, newPlayer.Round, 0, 0)
+		freshestRes := res.(freshestBundleEvent) // panic if violate postcondition
+		if freshestRes.Ok {
+			a4 := newPlayer.handle(r, freshestRes.Event)
+			actions = append(actions, a4...)
+		}
 	}
 
 	return actions
