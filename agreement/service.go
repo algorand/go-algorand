@@ -20,6 +20,7 @@ package agreement
 import (
 	"context"
 	"os"
+	"reflect"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -198,9 +199,9 @@ func (s *Service) demuxLoop(ctx context.Context, input chan<- externalEvent, out
 func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, ready chan<- pipelineExternalDemuxSignals) {
 	// setup
 	var clockManager *clockManager
-	var router rootRouter
-	var status serializableActor
-	var a []action
+	var router, router2 rootRouter
+	var status, status2 serializableActor
+	var a, a2 []action
 	var err error
 	raw, err := restore(s.log, s.Accessor)
 	if err == nil {
@@ -225,11 +226,13 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 
 		if enablePipelining {
 			status = makePipelinePlayer(nextRound, nextVersion)
+			status2 = &player{Round: makeRoundBranch(nextRound, bookkeeping.BlockHash{}), Step: soft, Deadline: FilterTimeout(0, nextVersion)}
 		} else {
 			status = &player{Round: makeRoundBranch(nextRound, bookkeeping.BlockHash{}), Step: soft, Deadline: FilterTimeout(0, nextVersion)}
 		}
 
 		router = makeRootRouter(status)
+		router2 = makeRootRouter(status2)
 
 		a1 := pseudonodeAction{T: assemble, Round: makeRoundBranch(s.Ledger.NextRound(), bookkeeping.BlockHash{})}
 		a2 := rezeroAction{Round: a1.Round}
@@ -248,9 +251,19 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 			break
 		}
 
-		var ac actor
+		var ac, ac2 actor
 		ac, a = router.submitTop(s.tracer, status, e)
 		status = ac.(serializableActor)
+
+		if enablePipelining { // double-check by feeding event to status2
+			ac2, a2 = router2.submitTop(s.tracer, status2, e)
+			status2 = ac2.(serializableActor)
+
+			if !reflect.DeepEqual(a, a2) {
+				s.log.Errorf("MISMATCHED ACTIONS: pipelinePlayer %+v", a)
+				s.log.Errorf("MISMATCHED ACTIONS: regular player %+v\n", a2)
+			}
+		}
 
 		// XXXX only persist specific sub-player states when they return persistent actions
 		if persistent(a) {
