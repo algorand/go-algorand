@@ -124,11 +124,10 @@ func logResponse(t *testing.T, response *generated.DryrunResponse) {
 			}
 		}
 	}
-	t.Log("App Cost:")
-	t.Log(response.Cost)
 }
 
-var dryrunProtoVersion protocol.ConsensusVersion = "dryrunTestProto"
+var dryrunProtoVersion protocol.ConsensusVersion = protocol.ConsensusFuture
+var dryrunMakeLedgerProto protocol.ConsensusVersion = "dryrunMakeLedgerProto"
 
 func TestDryrunLogicSig(t *testing.T) {
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
@@ -355,7 +354,7 @@ func init() {
 	proto.MaxAppBytesValueLen = 64
 	proto.MaxAppSumKeyValueLens = 128
 
-	config.Consensus[dryrunProtoVersion] = proto
+	config.Consensus[dryrunMakeLedgerProto] = proto
 }
 
 func checkLogicSigPass(t *testing.T, response *generated.DryrunResponse) {
@@ -1206,7 +1205,6 @@ return
 
 func TestDryrunCost(t *testing.T) {
 	t.Parallel()
-
 	ops, err := logic.AssembleString(`
 #pragma version 5
 int 16
@@ -1256,14 +1254,12 @@ pop
 		},
 	}
 	dr.ProtocolVersion = string(dryrunProtoVersion)
-
 	var response generated.DryrunResponse
 	doDryrunRequest(&dr, &response)
-	require.Equal(t,uint64(11),response.Cost)
+	require.Equal(t, uint64(11), response.Cost)
 	require.NoError(t, err)
 	checkAppCallPass(t, &response)
 	if t.Failed() {
 		logResponse(t, &response)
 	}
-
 }

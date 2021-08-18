@@ -346,6 +346,10 @@
           "application/json": {
             "schema": {
               "properties": {
+                "cost": {
+                  "description": "Cost is the execution call of a stateful evaluation of an app call.",
+                  "type": "integer"
+                },
                 "error": {
                   "type": "string"
                 },
@@ -361,6 +365,7 @@
                 }
               },
               "required": [
+                "cost",
                 "error",
                 "protocol-version",
                 "txns"
@@ -2925,6 +2930,10 @@
               "application/json": {
                 "schema": {
                   "properties": {
+                    "cost": {
+                      "description": "Cost is the execution call of a stateful evaluation of an app call.",
+                      "type": "integer"
+                    },
                     "error": {
                       "type": "string"
                     },
@@ -2940,6 +2949,7 @@
                     }
                   },
                   "required": [
+                    "cost",
                     "error",
                     "protocol-version",
                     "txns"

@@ -316,7 +316,7 @@ type ErrorResponse struct {
 	Message string  `json:"message"`
 }
 
-// EvalDelta defines model for f.
+// EvalDelta defines model for EvalDelta.
 type EvalDelta struct {
 
 	// \[at\] delta action.
@@ -493,12 +493,14 @@ type CompileResponse struct {
 
 // DryrunResponse defines model for DryrunResponse.
 type DryrunResponse struct {
+
+	// Cost is the execution call of a stateful evaluation of an app call.
+	Cost  uint64 `json:"cost"`
 	Error string `json:"error"`
 
 	// Protocol version is the protocol version Dryrun was operated under.
 	ProtocolVersion string            `json:"protocol-version"`
 	Txns            []DryrunTxnResult `json:"txns"`
-	Cost            uint64            `json:"cost"`
 }
 
 // NodeStatusResponse defines model for NodeStatusResponse.

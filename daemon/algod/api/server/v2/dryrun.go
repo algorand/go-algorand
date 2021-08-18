@@ -398,12 +398,11 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 	}
 	proto := config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
 	proto.EnableAppCostPooling = true
-	proto.MaxTxGroupSize = 16
 	response.Txns = make([]generated.DryrunTxnResult, len(dr.Txns))
 	for ti, stxn := range dr.Txns {
 		pse := logic.MakePastSideEffects(len(dr.Txns))
 		maxBudget := uint64(proto.MaxAppProgramCost * proto.MaxTxGroupSize)
-		evalBudget := uint64(proto.MaxAppProgramCost * proto.MaxTxGroupSize)
+		evalBudget := maxBudget
 		ep := logic.EvalParams{
 			Txn:                     &stxn,
 			Proto:                   &proto,
@@ -412,7 +411,6 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 			PastSideEffects:         pse,
 			PooledApplicationBudget: &evalBudget,
 		}
-		response.Cost = 0 //LogicSig dryrun will not return cost
 		var result generated.DryrunTxnResult
 		if len(stxn.Lsig.Logic) > 0 {
 			var debug dryrunDebugReceiver
@@ -526,7 +524,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 					}
 					result.LocalDeltas = &localDeltas
 				}
-				response.Cost = maxBudget - evalBudget
+				response.Cost = uint64(maxBudget - evalBudget)
 				var err3 error
 				result.Logs, err3 = DeltaLogToLog(delta.Logs, appIdx)
 				if err3 != nil {
