@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/bloom"
 	"github.com/algorand/go-algorand/util/timers"
 )
@@ -132,6 +133,8 @@ func BenchmarkTxidToUint64(b *testing.B) {
 }
 
 func TestBloomFallback(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	genesisHash := crypto.Hash([]byte("gh"))
 	genesisID := "gID"
 
@@ -176,6 +179,8 @@ func TestBloomFallback(t *testing.T) {
 
 // TestHint tests that the hint is used only when it should be used
 func TestHint(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	genesisHash := crypto.Hash([]byte("gh"))
 	genesisID := "gID"
 
@@ -229,6 +234,7 @@ func TestHint(t *testing.T) {
 
 // TestEncodingDecoding checks the encoding/decoding of the filters
 func TestEncodingDecoding(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	genesisHash := crypto.Hash([]byte("gh"))
 	genesisID := "gID"
@@ -262,6 +268,8 @@ func TestEncodingDecoding(t *testing.T) {
 }
 
 func TestDecodingErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	bf, err := decodeBloomFilter(encodedBloomFilter{})
 	require.Equal(t, errInvalidBloomFilterEncoding, err)
 	require.Equal(t, bloomFilter{}, bf)
@@ -274,6 +282,7 @@ func TestDecodingErrors(t *testing.T) {
 }
 
 func TestBloomFilterTest(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	filters := []func(int, *syncState) (filter bloom.GenericFilter, filterType bloomFilterTypes){
 		filterFactoryXor8, filterFactoryXor32, filterFactoryBloom}

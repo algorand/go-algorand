@@ -84,6 +84,8 @@
     "TLSCertFile": "",
     "TLSKeyFile": "",
     "TelemetryToLog": true,
+    "TransactionSyncDataExchangeRate": 0,
+    "TransactionSyncSignificantMessageThreshold": 0,
     "TxPoolExponentialIncreaseFactor": 2,
     "TxPoolSize": 15000,
     "TxSyncIntervalSeconds": 60,

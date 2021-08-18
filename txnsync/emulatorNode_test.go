@@ -224,7 +224,7 @@ func (n *emulatedNode) disableBlocking() {
 }
 func (n *emulatedNode) unblock() {
 	n.mu.Lock()
-	// wait until the state chages to StateMachineRunning
+	// wait until the state changes to StateMachineRunning
 	select {
 	case <-n.nodeBlocked:
 		// we're blocked.
@@ -455,7 +455,7 @@ func (n *emulatedNode) onNewRound(round basics.Round, hasParticipationKeys bool)
 }
 
 func (n *emulatedNode) onNewTransactionPoolEntry() {
-	n.externalEvents <- MakeTranscationPoolChangeEvent(len(n.txpoolEntries), false)
+	n.externalEvents <- MakeTransactionPoolChangeEvent(len(n.txpoolEntries), false)
 }
 
 func (p *networkPeer) GetAddress() string {

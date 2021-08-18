@@ -101,16 +101,23 @@ func (p *peerScheduler) nextPeers() (outPeers []*Peer) {
 	// in many cases, we'll have only a single peer; however, in case we have multiple
 	// ( which is more likely when we're "running late" ), we want to make sure to remove
 	// duplicate ones.
-	if len(outPeers) > 0 {
-		peersMap := make(map[*Peer]struct{}, len(outPeers))
-		for _, peer := range outPeers {
-			peersMap[peer] = struct{}{}
+	if len(outPeers) > 1 {
+		// note that the algorithm here ensures that we retain the peer order from above
+		// while dropping off recurring peers.
+		peersMap := make(map[*Peer]bool, len(outPeers))
+		offset := 0
+		peersMap[outPeers[0]] = true
+		for i := 1; i < len(outPeers); i++ {
+			if peersMap[outPeers[i]] {
+				// we already had this peer.
+				offset++
+				continue
+			}
+			// we haven't seen this peer.
+			outPeers[i-offset] = outPeers[i]
+			peersMap[outPeers[i]] = true
 		}
-		// reset the outPeers array.
-		outPeers = outPeers[:0]
-		for peer := range peersMap {
-			outPeers = append(outPeers, peer)
-		}
+		outPeers = outPeers[:len(outPeers)-offset]
 	}
 	return
 }

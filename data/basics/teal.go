@@ -123,6 +123,22 @@ func (sd StateDelta) Valid(proto *config.ConsensusParams) error {
 	return nil
 }
 
+// LogItem is contains logs for an application
+// ID is the offset into Txn.ForeignApps
+type LogItem struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	ID      uint64 `codec:"i"`
+	Message string `codec:"m"`
+}
+
+// Equal checks whether two LogItems are equal.
+func (l LogItem) Equal(o LogItem) bool {
+
+	return l.ID == o.ID && l.Message == o.Message
+
+}
+
 // EvalDelta stores StateDeltas for an application's global key/value store, as
 // well as StateDeltas for some number of accounts holding local state for that
 // application
@@ -134,6 +150,8 @@ type EvalDelta struct {
 	// When decoding EvalDeltas, the integer key represents an offset into
 	// [txn.Sender, txn.Accounts[0], txn.Accounts[1], ...]
 	LocalDeltas map[uint64]StateDelta `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`
+
+	Logs []LogItem `codec:"lg,allocbound=config.MaxLogCalls"`
 }
 
 // Equal compares two EvalDeltas and returns whether or not they are
@@ -163,6 +181,17 @@ func (ed EvalDelta) Equal(o EvalDelta) bool {
 	// GlobalDeltas must be equal
 	if !ed.GlobalDelta.Equal(o.GlobalDelta) {
 		return false
+	}
+
+	// Logs must be equal
+	if len(ed.Logs) != len(o.Logs) {
+		return false
+	}
+	for i, l := range ed.Logs {
+		ok := l.Equal(o.Logs[i])
+		if !ok {
+			return false
+		}
 	}
 
 	return true

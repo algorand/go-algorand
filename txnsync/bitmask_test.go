@@ -21,21 +21,29 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestTrimBitmaskNi(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	var b bitmask
 	b.trimBitmask(0)
 	require.Nil(t, b)
 }
 
 func TestIterateExceptions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	var b bitmask
 	require.Nil(t, b.iterate(0, 0, nil))
 
 }
 
 func TestBitmaskType0(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	setBits := make([]int, 0, 5)
 	setBits = append(setBits, 0)
 	setBits = append(setBits, 2)
@@ -46,6 +54,8 @@ func TestBitmaskType0(t *testing.T) {
 }
 
 func TestBitmaskType1(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	setBits := make([]int, 0, 80)
 	entries := 80
 	for i := 0; i < entries; i++ {
@@ -57,6 +67,8 @@ func TestBitmaskType1(t *testing.T) {
 }
 
 func TestBitmaskType2(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	setBits := make([]int, 0, 5)
 	setBits = append(setBits, 0)
 	setBits = append(setBits, 2)
@@ -66,6 +78,8 @@ func TestBitmaskType2(t *testing.T) {
 }
 
 func TestBitmaskType3(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	setBits := make([]int, 0, 5)
 	entries := 80
 	for i := 0; i < entries; i++ {
@@ -78,6 +92,8 @@ func TestBitmaskType3(t *testing.T) {
 }
 
 func TestBitmaksTypeX(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	b := make(bitmask, bytesNeededBitmask(80))
 	b[0] = 4
 	require.Equal(t, b.iterate(0, 0, nil), errInvalidBitmaskType)

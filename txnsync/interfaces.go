@@ -101,8 +101,8 @@ type NodeConnector interface {
 	HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup, peer *Peer)
 }
 
-// MakeTranscationPoolChangeEvent creates an event for when a txn pool size has changed.
-func MakeTranscationPoolChangeEvent(transactionPoolSize int, transactionHandlerBacklogFull bool) Event {
+// MakeTransactionPoolChangeEvent creates an event for when a txn pool size has changed.
+func MakeTransactionPoolChangeEvent(transactionPoolSize int, transactionHandlerBacklogFull bool) Event {
 	return Event{
 		eventType:                     transactionPoolChangedEvent,
 		transactionPoolSize:           transactionPoolSize,

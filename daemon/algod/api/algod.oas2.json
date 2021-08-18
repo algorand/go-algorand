@@ -1744,6 +1744,12 @@
           "items": {
             "$ref": "#/definitions/AccountStateDelta"
           }
+        },
+        "logs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LogItem"
+          }
         }
       }
     },
@@ -1908,6 +1914,24 @@
         "minor": {
           "type": "integer",
           "format": "int64"
+        }
+      }
+    },
+    "LogItem": {
+      "description": "Application Log",
+      "type": "object",
+      "required": [
+        "id",
+        "value"
+      ],
+      "properties": {
+        "id": {
+          "description": "unique application identifier",
+          "type": "integer"
+        },
+        "value": {
+          "description": " base64 encoded log message",
+          "type": "string"
         }
       }
     }
@@ -2306,6 +2330,13 @@
           "global-state-delta": {
             "description": "\\[gd\\] Global state key/value changes for the application being executed by this transaction.",
             "$ref": "#/definitions/StateDelta"
+          },
+          "logs": {
+            "description": "\\[lg\\] Logs for the application being executed by this transaction.",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/LogItem"
+            }
           },
           "txn": {
             "description": "The raw signed transaction.",

@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/timers"
 )
@@ -95,6 +96,7 @@ type mockThreadPool struct {
 
 // TestStartStopTransactionSyncService test that we can start and stop the transaction sync service
 func TestStartStopTransactionSyncService(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	calledEventsInNodeConnector := false
 
@@ -123,6 +125,7 @@ func TestStartStopTransactionSyncService(t *testing.T) {
 
 // TestMakeTransactionSyncService tests that an appropriate transaction sync service was made
 func TestMakeTransactionSyncService(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
 

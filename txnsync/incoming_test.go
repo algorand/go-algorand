@@ -27,8 +27,10 @@ import (
 	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type incomingLogger struct {
@@ -45,6 +47,7 @@ func (ml *incomingLogger) Infof(format string, args ...interface{}) {
 }
 
 func TestAsyncIncomingMessageHandlerAndErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	message := transactionBlockMessage{Version: 1}
 	messageBytes := message.MarshalMsg(nil)
@@ -110,6 +113,7 @@ func TestAsyncIncomingMessageHandlerAndErrors(t *testing.T) {
 }
 
 func TestEvaluateIncomingMessagePart1(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	message := incomingMessage{}
 	cfg := config.GetDefaultLocal()
@@ -163,6 +167,7 @@ func TestEvaluateIncomingMessagePart1(t *testing.T) {
 }
 
 func TestEvaluateIncomingMessagePart2(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	cfg := config.GetDefaultLocal()
 	cfg.EnableVerbosedTransactionSyncLogging = true
@@ -230,7 +235,7 @@ func TestEvaluateIncomingMessagePart2(t *testing.T) {
 	require.Equal(t, "received message out of order; seq = 11, expecting seq = 5\n", incLogger.lastLogged)
 	require.Equal(t, xorBloomFilter32, peer.recentIncomingBloomFilters[0].filter.filterType)
 
-	// currentTransacationPoolSize is -1
+	// currentTransactionPoolSize is -1
 	peer.incomingMessages = messageOrderingHeap{}
 	mNodeConnector.transactionPoolSize = -1
 	s.evaluateIncomingMessage(incomingMessage{
@@ -241,11 +246,12 @@ func TestEvaluateIncomingMessagePart2(t *testing.T) {
 				Transactions: []transactions.SignedTxn{
 					transactions.SignedTxn{}}}},
 	})
-	require.Equal(t, "Incoming Txsync #5 round 5 transacations 1 request [0/0] bloom 0 nextTS 0 from ''", incLogger.lastLogged)
+	require.Equal(t, "Incoming Txsync #5 round 5 transactions 1 request [0/0] bloom 0 nextTS 0 from ''", incLogger.lastLogged)
 
 }
 
 func TestEvaluateIncomingMessagePart3(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	cfg := config.GetDefaultLocal()
 	cfg.EnableVerbosedTransactionSyncLogging = true
@@ -281,4 +287,47 @@ func TestEvaluateIncomingMessagePart3(t *testing.T) {
 				NextMsgMinDelay: 3}}})
 
 	require.Equal(t, "Incoming Txsync #1 late round 0", incLogger.lastLogged)
+}
+
+func TestEvaluateIncomingMessageAccumulatedTransactionsCount(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableVerbosedTransactionSyncLogging = true
+	peer := &Peer{}
+	peer.recentSentTransactions = makeTransactionCache(5, 10, 20)
+	incLogger := incomingLogger{}
+
+	mNodeConnector := &mockNodeConnector{transactionPoolSize: 3}
+	mNodeConnector.peerInfo = PeerInfo{NetworkPeer: peer}
+
+	s := syncState{
+		node:  mNodeConnector,
+		log:   wrapLogger(&incLogger, &cfg),
+		clock: mNodeConnector.Clock()}
+
+	mNodeConnector.peerInfo.TxnSyncPeer = peer
+	peer.incomingMessages = messageOrderingHeap{}
+
+	genesisID := "gID"
+	genesisHash := crypto.Hash([]byte("gh"))
+	txnGroups := getTxnGroups(genesisHash, genesisID)
+
+	// test with more than 200 transactions in the txnGroups
+	for x := 0; x < 100; x++ {
+		t := getTxnGroups(genesisHash, genesisID)
+		txnGroups = append(txnGroups, t...)
+	}
+
+	ptg, err := s.encodeTransactionGroups(txnGroups, 1000000000)
+	require.NoError(t, err)
+	txGroups, err := decodeTransactionGroups(ptg, genesisID, genesisHash)
+	require.NoError(t, err)
+
+	s.evaluateIncomingMessage(incomingMessage{
+		sequenceNumber:    0,
+		message:           transactionBlockMessage{Round: 5},
+		transactionGroups: txGroups,
+	})
+	require.Equal(t, time.Duration(115586426), s.lastBeta)
 }

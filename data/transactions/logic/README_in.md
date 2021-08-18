@@ -75,7 +75,7 @@ For two-argument ops, `A` is the penultimate element on the stack and `B` is the
 
 For three-argument ops, `A` is the element two below the top, `B` is the penultimate stack element and `C` is the top of the stack. These operations typically pop A, B, and C from the stack and push the result.
 
-For three-argument ops, `A` is the element two below the top, `B` is the penultimate stack element and `C` is the top of the stack. These operations typically pop A, B, and C from the stack and push the result.
+@@ Arithmetic.md @@
 
 These opcodes take byte-array values that are interpreted as
 big-endian unsigned integers.  For mathematical operators, the

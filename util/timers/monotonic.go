@@ -89,7 +89,7 @@ func (m *Monotonic) String() string {
 
 // Since returns the time that has passed between the time the clock was last zeroed out and now
 func (m *Monotonic) Since() time.Duration {
-	return time.Now().Sub(m.zero)
+	return time.Since(m.zero)
 }
 
 // DeadlineMonitorAt returns a DeadlineMonitor that expires after the provided delta time from zero has passed.

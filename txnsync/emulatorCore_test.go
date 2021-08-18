@@ -98,7 +98,7 @@ func emulateScenario(t *testing.T, scenario scenario) {
 	t.Logf("Total duplicate transaction count: %d", e.totalDuplicateTransactions)
 	t.Logf("Total duplicate transactions size: %d", e.totalDuplicateTransactionSize)
 	for n := 0; n < e.nodeCount; n++ {
-		t.Logf("%s message count : %d", e.nodes[n].name, len(results.nodes[n].txns))
+		t.Logf("%s transaction groups count : %d", e.nodes[n].name, len(results.nodes[n].txns))
 	}
 	for n := 0; n < e.nodeCount; n++ {
 		require.Equalf(t, len(scenario.expectedResults.nodes[n].txns), len(results.nodes[n].txns), "node %d", n)
@@ -108,8 +108,8 @@ func emulateScenario(t *testing.T, scenario scenario) {
 	// how many transaction need to be received ?
 	// each node received all the transactions, minus the ones that it start up with.
 	totalNeededSentTransactions := e.totalInitialTransactions*uint64(len(e.nodes)) - e.totalInitialTransactions
-	actualRecievedTransactions := totalNeededSentTransactions + e.totalDuplicateTransactions
-	t.Logf("Total transaction overhead: %d%%", (actualRecievedTransactions-totalNeededSentTransactions)*100/totalNeededSentTransactions)
+	actualReceivedTransactions := totalNeededSentTransactions + e.totalDuplicateTransactions
+	t.Logf("Total transaction overhead: %d%%", (actualReceivedTransactions-totalNeededSentTransactions)*100/totalNeededSentTransactions)
 
 	require.Equal(t, scenario.expectedResults, results)
 	require.Equal(t, 1, 1)

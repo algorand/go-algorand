@@ -28,10 +28,12 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
@@ -59,7 +61,7 @@ func makeTestingTransactionPoolAndLedger(tb testing.TB, N int) (*pools.Transacti
 	}
 
 	require.Equal(tb, len(genesis), numUsers+1)
-	genBal := MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	ledgerName := fmt.Sprintf("%s-mem-%d", tb.Name(), N)
 	const inMem = true
 	cfg := config.GetDefaultLocal()
@@ -125,6 +127,8 @@ func BenchmarkTimeAfter(b *testing.B) {
 	}
 }
 func TestFilterAlreadyCommitted(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	const numUsers = 100
 	tp, l, secrets, addresses := makeTestingTransactionPoolAndLedger(t, 1)
 	defer l.Close()
