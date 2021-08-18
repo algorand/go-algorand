@@ -21,7 +21,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io/ioutil"
-	rnd "math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,7 +37,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
-	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -1296,136 +1294,3 @@ int 32
 &&
 if_end1:
 `
-
-func BenchmarkAppOptIns(b *testing.B) {
-	a := require.New(b)
-
-	genBalances, addrs, _ := newTestGenesis()
-	l, dbName, genBlock := newTestLedgerOnDisk(b, genBalances)
-	genAccounts := l.genesisAccounts
-	genHash := l.genesisHash
-	defer testLedgerCleanup(l, dbName, false)
-
-	l.accts.ctxCancel() // force commitSyncer to exit
-
-	// wait commitSyncer to exit
-	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
-	select {
-	case <-l.accts.commitSyncerClosed:
-		break
-	}
-
-	maxAppsCreated := config.Consensus[protocol.ConsensusFuture].MaxAppsCreated
-	maxLocalSchemaEntries := config.Consensus[protocol.ConsensusFuture].MaxLocalSchemaEntries
-
-	// create apps
-	txns := make([]*txntest.Txn, 0, maxAppsCreated*len(addrs))
-	for i := 0; i < len(addrs); i++ {
-		creator := addrs[i]
-		for j := 0; j < maxAppsCreated; j++ {
-			createTxn := txntest.Txn{
-				Type:              "appl",
-				Sender:            creator,
-				ApprovalProgram:   []byte{0x02, 0x20, 0x01, 0x01, 0x22},
-				ClearStateProgram: []byte{0x02, 0x20, 0x01, 0x01, 0x22},
-				LocalStateSchema:  basics.StateSchema{NumByteSlice: maxLocalSchemaEntries},
-				Note:              randomNote(),
-			}
-			txns = append(txns, &createTxn)
-		}
-	}
-	// app ids are expected to be in range 1..len(txns)-1 => 1..100
-	maxAppIndex := len(txns)
-	maxAppsOptedIn := config.Consensus[protocol.ConsensusFuture].MaxAppsOptedIn
-
-	eval := l.nextBlock(b)
-	eval.txns(b, txns...)
-	l.endBlock(b, eval)
-
-	l.accts.accountsWriting.Add(1)
-	l.accts.commitRound(0, 0, 0)
-	l.accts.accountsWriting.Wait()
-
-	// fund some accounts for apps
-	const numAcct = 10000
-	txns = make([]*txntest.Txn, 0, numAcct)
-	accounts := make(map[basics.Address]map[basics.AppIndex]struct{}, numAcct)
-	for i := 0; i < numAcct; i++ {
-		receiver := randomAddress()
-		payTxn := txntest.Txn{
-			Type:     "pay",
-			Sender:   addrs[i%len(addrs)],
-			Receiver: receiver,
-			Amount:   basics.MicroAlgos{Raw: 100 * 1000000}, // 100 algo
-			Note:     randomNote(),
-		}
-		txns = append(txns, &payTxn)
-		accounts[receiver] = make(map[basics.AppIndex]struct{}, maxAppsOptedIn)
-	}
-
-	eval = l.nextBlock(b)
-	eval.txns(b, txns...)
-	l.endBlock(b, eval)
-
-	l.accts.accountsWriting.Add(1)
-	l.accts.commitRound(1, 1, 0)
-	l.accts.accountsWriting.Wait()
-
-	l.Close()
-
-	const txnPerBlock = 50
-	for _, full := range []bool{false, true} {
-		b.Run(fmt.Sprintf("max-opt-ins=%d/full-opt-in=%v", maxAppsOptedIn, full), func(b *testing.B) {
-			cfg := config.GetDefaultLocal()
-			cfg.Archival = true
-			l, err := OpenLedger(logging.Base(), dbName, false, InitState{
-				Block:       genBlock,
-				Accounts:    genAccounts,
-				GenesisHash: genHash,
-			}, cfg)
-			a.NoError(err)
-
-			b.ResetTimer()
-
-			txns = make([]*txntest.Txn, 0, txnPerBlock)
-			totalTxn := 0
-			for i := 0; i < b.N; i++ {
-				var addr basics.Address
-				for addr = range accounts {
-					if len(accounts[addr]) < maxAppsOptedIn {
-						break
-					}
-				}
-			repeat:
-				var appIdx basics.AppIndex
-				for {
-					appIdx = basics.AppIndex(rnd.Intn(maxAppIndex) + 1)
-					if _, ok := accounts[addr][appIdx]; !ok {
-						accounts[addr][appIdx] = struct{}{}
-						break
-					}
-				}
-				optInTxn := txntest.Txn{
-					Type:          "appl",
-					Sender:        addr,
-					ApplicationID: appIdx,
-					OnCompletion:  transactions.OptInOC,
-				}
-				txns = append(txns, &optInTxn)
-				if full && len(accounts[addr]) < maxAppsOptedIn {
-					goto repeat
-				}
-
-				if i%txnPerBlock == 0 {
-					eval := l.nextBlock(b)
-					eval.txns(b, txns...)
-					l.endBlock(b, eval)
-					totalTxn += len(txns)
-					txns = txns[:0]
-				}
-			}
-			b.ReportMetric(float64(totalTxn), "txn_sent")
-			l.Close()
-		})
-	}
-}
