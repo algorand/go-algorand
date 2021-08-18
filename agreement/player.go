@@ -648,7 +648,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				cert := Certificate(freshestRes.Event.Bundle)
 				a0 := ensureAction{Payload: e.Input.Proposal, Certificate: cert}
 				actions = append(actions, a0)
-				as := enterRound(p, r, delegatedE, round{Number: cert.Round + 1, Branch: bookkeeping.BlockHash(e.Input.Proposal.Block.Digest())})
+				as := p.roundEnterer.enter(p, r, delegatedE, round{Number: cert.Round + 1, Branch: bookkeeping.BlockHash(e.Input.Proposal.Block.Digest())})
 				return append(actions, as...)
 			}
 		}

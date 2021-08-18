@@ -171,7 +171,6 @@ func deriveNewSeed(address basics.Address, vrf *crypto.VRFSecrets, rnd round, pe
 	rerand := rnd.Number % basics.Round(cparams.SeedLookback*cparams.SeedRefreshInterval)
 	if rerand < basics.Round(cparams.SeedLookback) {
 		digrnd := rnd.Number.SubSaturate(basics.Round(cparams.SeedLookback * cparams.SeedRefreshInterval))
-		// XXXX need to remember branch from 160 rounds ago or assert that it is long enough ago to be confirmed
 		oldDigest, err := ledger.LookupDigest(digrnd, bookkeeping.BlockHash{})
 		if err != nil {
 			reterr = fmt.Errorf("could not lookup old entry digest (for seed) from round %d: %v", digrnd, err)

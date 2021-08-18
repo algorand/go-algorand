@@ -24,7 +24,7 @@ import (
 // ParamsRound returns the round from which consensus parameters
 // should be used for agreement on round rnd.
 func ParamsRound(rnd basics.Round) basics.Round {
-	return rnd.SubSaturate(2) // XXXX update to pipeline_depth + 2
+	return rnd.SubSaturate(2)
 }
 
 // paramsRoundBranch returns the target round and leaf branch from which consensus parameters
