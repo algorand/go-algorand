@@ -156,12 +156,14 @@ func TestEvalDeltaEqual(t *testing.T) {
 	d2 = EvalDelta{
 		GlobalDelta: nil,
 		LocalDeltas: nil,
+		Logs:        nil,
 	}
 	a.True(d1.Equal(d2))
 
 	d2 = EvalDelta{
 		GlobalDelta: StateDelta{},
 		LocalDeltas: map[uint64]StateDelta{},
+		Logs:        []LogItem{},
 	}
 	a.True(d1.Equal(d2))
 
@@ -221,4 +223,34 @@ func TestEvalDeltaEqual(t *testing.T) {
 		},
 	}
 	a.False(d1.Equal(d2))
+
+	d2 = EvalDelta{
+		Logs: []LogItem{{ID: 0, Message: "val"}},
+	}
+	a.False(d1.Equal(d2))
+
+	d1 = EvalDelta{
+		Logs: []LogItem{{ID: 0, Message: "val2"}},
+	}
+	a.False(d1.Equal(d2))
+
+	d1 = EvalDelta{
+		Logs: []LogItem{{ID: 1, Message: "val"}},
+	}
+	a.False(d1.Equal(d2))
+
+	d1 = EvalDelta{
+		Logs: []LogItem{{ID: 1, Message: "val2"}},
+	}
+	a.False(d1.Equal(d2))
+
+	d1 = EvalDelta{
+		Logs: []LogItem{{ID: 0, Message: "val"}, {ID: 0, Message: "val2"}},
+	}
+	a.False(d1.Equal(d2))
+
+	d1 = EvalDelta{
+		Logs: []LogItem{{ID: 0, Message: "val"}},
+	}
+	a.True(d1.Equal(d2))
 }

@@ -17,7 +17,6 @@
 package data
 
 import (
-	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -76,75 +75,27 @@ type roundSeed struct {
 	elements [2]roundSeedPair
 }
 
-func makeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest) (bookkeeping.Block, error) {
-	params, ok := config.Consensus[proto]
-	if !ok {
-		return bookkeeping.Block{}, fmt.Errorf("unsupported protocol %s", proto)
-	}
-
-	poolAddr := basics.Address(genesisBal.rewardsPool)
-	incentivePoolBalanceAtGenesis := genesisBal.balances[poolAddr].MicroAlgos
-
-	genesisRewardsState := bookkeeping.RewardsState{
-		FeeSink:                   genesisBal.feeSink,
-		RewardsPool:               genesisBal.rewardsPool,
-		RewardsLevel:              0,
-		RewardsResidue:            0,
-		RewardsRecalculationRound: basics.Round(params.RewardsRateRefreshInterval),
-	}
-
-	if params.InitialRewardsRateCalculation {
-		genesisRewardsState.RewardsRate = basics.SubSaturate(incentivePoolBalanceAtGenesis.Raw, params.MinBalance) / uint64(params.RewardsRateRefreshInterval)
-	} else {
-		genesisRewardsState.RewardsRate = incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
-	}
-
-	genesisProtoState := bookkeeping.UpgradeState{
-		CurrentProtocol: proto,
-	}
-
-	blk := bookkeeping.Block{
-		BlockHeader: bookkeeping.BlockHeader{
-			Round:        0,
-			Branch:       bookkeeping.BlockHash{},
-			Seed:         committee.Seed(genesisHash),
-			TxnRoot:      transactions.Payset{}.CommitGenesis(),
-			TimeStamp:    genesisBal.timestamp,
-			GenesisID:    genesisID,
-			RewardsState: genesisRewardsState,
-			UpgradeState: genesisProtoState,
-			UpgradeVote:  bookkeeping.UpgradeVote{},
-		},
-	}
-
-	if params.SupportGenesisHash {
-		blk.BlockHeader.GenesisHash = genesisHash
-	}
-
-	return blk, nil
-}
-
 // LoadLedger creates a Ledger object to represent the ledger with the
 // specified database file prefix, initializing it if necessary.
 func LoadLedger(
 	log logging.Logger, dbFilenamePrefix string, memory bool,
-	genesisProto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest,
+	genesisProto protocol.ConsensusVersion, genesisBal bookkeeping.GenesisBalances, genesisID string, genesisHash crypto.Digest,
 	blockListeners []ledger.BlockListener, cfg config.Local,
 ) (*Ledger, error) {
-	if genesisBal.balances == nil {
-		genesisBal.balances = make(map[basics.Address]basics.AccountData)
+	if genesisBal.Balances == nil {
+		genesisBal.Balances = make(map[basics.Address]basics.AccountData)
 	}
-	genBlock, err := makeGenesisBlock(genesisProto, genesisBal, genesisID, genesisHash)
+	genBlock, err := bookkeeping.MakeGenesisBlock(genesisProto, genesisBal, genesisID, genesisHash)
 	if err != nil {
 		return nil, err
 	}
 
 	params := config.Consensus[genesisProto]
 	if params.ForceNonParticipatingFeeSink {
-		sinkAddr := genesisBal.feeSink
-		sinkData := genesisBal.balances[sinkAddr]
+		sinkAddr := genesisBal.FeeSink
+		sinkData := genesisBal.Balances[sinkAddr]
 		sinkData.Status = basics.NotParticipating
-		genesisBal.balances[sinkAddr] = sinkData
+		genesisBal.Balances[sinkAddr] = sinkData
 	}
 
 	l := &Ledger{
@@ -152,7 +103,7 @@ func LoadLedger(
 	}
 	genesisInitState := ledger.InitState{
 		Block:       genBlock,
-		Accounts:    genesisBal.balances,
+		Accounts:    genesisBal.Balances,
 		GenesisHash: genesisHash,
 	}
 	l.log.Debugf("Initializing Ledger(%s)", dbFilenamePrefix)

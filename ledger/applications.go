@@ -40,6 +40,8 @@ type cowForLogicLedger interface {
 	SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue, accountIdx uint64) error
 	DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) error
 
+	AppendLog(idx uint64, value string) error
+
 	round() basics.Round
 	prevTimestamp() int64
 	allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
@@ -234,4 +236,15 @@ func (al *logicLedger) DelGlobal(key string) error {
 
 func (al *logicLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error) {
 	return al.cow.BuildEvalDelta(al.aidx, txn)
+}
+
+func (al *logicLedger) AppendLog(txn *transactions.Transaction, value string) error {
+	idx, err := txn.IndexByAppID(txn.ApplicationID)
+	if idx != 0 {
+		return fmt.Errorf("index offset is not 0. logging is allowed for current app only")
+	}
+	if err != nil {
+		return err
+	}
+	return al.cow.AppendLog(idx, value)
 }

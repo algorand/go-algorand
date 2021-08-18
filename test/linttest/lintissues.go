@@ -14,19 +14,23 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package crypto
+package linttest
 
-import "errors"
-
-var (
-	errInvalidVersion           = errors.New("Invalid version")
-	errInvalidAddress           = errors.New("Invalid address")
-	errInvalidThreshold         = errors.New("Invalid threshold")
-	errInvalidNumberOfSignature = errors.New("Invalid number of signatures")
-	errKeyNotExist              = errors.New("Key does not exist")
-	errKeysNotMatch             = errors.New("Public key lists do not match")
-	errInvalidDuplicates        = errors.New("Invalid duplicates")
-	errInvalidNumberOfSig       = errors.New("invalid number of signatures to add")
+import (
+	"fmt"
 )
 
-var errUnknownVersion = errors.New("unknown version")
+type myStruct struct {
+	a int32
+	b float64
+	c bool
+}
+
+func (m *myStruct) couldError() error {
+	return fmt.Errorf("an error occurred")
+}
+
+func doSomething() {
+	m := myStruct{a: 2, b: 2.0}
+	m.couldError()
+}
