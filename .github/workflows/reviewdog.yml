@@ -77,11 +77,11 @@ jobs:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >
           ./cicdtmp/golangci-lint/golangci-lint-cgo run
-          --out-format line-number
+          --out-format checkstyle
           -c .golangci-warnings.yml
           --allow-parallel-runners
           | reviewdog
-          -f=golangci-lint
+          -f=checkstyle
           -name="Lint Warnings"
           -reporter=github-pr-check
           -level=warning

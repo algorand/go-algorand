@@ -43,5 +43,5 @@ func doSomething() {
 }
 
 func init() {
-	doSomething()
+	//doSomething()
 }
