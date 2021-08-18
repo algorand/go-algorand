@@ -339,6 +339,7 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 		se.Committable = ea.Assembled
 		se.Payload = ea.Payload
 		return se
+
 	case readPinned:
 		se := e.(pinnedValueEvent)
 		ea := store.Assemblers[store.Pinned] // If pinned is bottom, assembled/payloadOK = false, payload = bottom
@@ -346,6 +347,16 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 		se.PayloadOK = ea.Assembled
 		se.Payload = ea.Payload
 		return se
+
+	case readLowestPayload:
+		re := e.(readLowestEvent)
+		re.T = readLowestValue
+		re = r.dispatch(p, e, proposalMachinePeriod, re.Round, re.Period, 0).(readLowestEvent)
+		re.T = readLowestPayload
+		ea := store.Assemblers[re.Proposal]
+		re.PayloadOK = ea.Assembled
+		re.Payload = ea.Payload
+		return re
 	}
 	logging.Base().Panicf("proposalStore: bad event type: observed an event of type %v", e.t())
 	panic("not reached")

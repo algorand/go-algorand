@@ -178,18 +178,29 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 			panic("handleRoundEvent got empty prev")
 
 		default:
-			// XXXX haven't seen this round before; create player or drop event
-			newPlayer, err := p.newPlayerForEvent(e, rnd)
-			if err != nil {
-				logging.Base().Debugf("couldn't make player for rnd %+v, dropping event", rnd)
+			// See if we can find the parent player; otherwise, drop.
+			for prnd, rp := range p.Players {
+				if rnd.Number == prnd.Number+1 {
+					re := readLowestEvent{T: readLowestValue, Round: prnd}
+					re = r.dispatch(*rp, re, proposalMachineRound, prnd, 0, 0).(readLowestEvent)
+					if bookkeeping.BlockHash(re.Proposal.BlockDigest) == rnd.Branch {
+						state = rp
+						break
+					}
+				}
+			}
+			if state == nil {
+				logging.Base().Debugf("couldn't find player for rnd %+v, dropping event", rnd)
 				return nil
 			}
-			// XXX call enterRound for this player:
-			//  - rezeroAction{Round}, pseudonodeAction{assemble}
-			p.Players[rnd] = newPlayer
-			state = newPlayer
-			actions = append(actions, pseudonodeAction{T: assemble, Round: rnd}, rezeroAction{Round: rnd})
 		}
+	}
+
+	// Fix up the deadline, since we might not have set it correctly
+	// in createPlayers.
+	cv, err := protoForEvent(e)
+	if err == nil {
+		state.Deadline = FilterTimeout(0, cv)
 	}
 
 	// TODO move cadaver calls to somewhere cleanerxtern
@@ -202,6 +213,57 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 
 	r.t.aoutTop(demultiplexer, playerMachine, a, roundZero, 0, 0)
 	r.t.traceOutput(state.Round, state.Period, *state, a) // cadaver
+
+	return actions
+}
+
+// create any additional players needed
+func (p *pipelinePlayer) createPlayers(r routerHandle) []action {
+	var actions []action
+
+	// XXX set somewhere; 0 means no pipelining
+	maxPipelineDepth := basics.Round(5)
+
+	for rnd, rp := range p.Players {
+		if rnd.Number >= p.FirstUncommittedRound + maxPipelineDepth {
+			continue
+		}
+
+		// If some player has moved on beyond period 0, something
+		// is not on the fast path, and we should not speculate.
+		if rp.Period > 0 {
+			// XXX optimization: consider pausing speculation
+			// for any "child" rounds of rnd, if already present
+			// in p.Players.
+			continue
+		}
+
+		re := readLowestEvent{T: readLowestPayload, Round: rp.Round, Period: rp.Period}
+		re = r.dispatch(*rp, re, proposalMachineRound, rp.Round, rp.Period, 0).(readLowestEvent)
+		if !re.PayloadOK {
+			continue
+		}
+
+		nextrnd := round{Number: rnd.Number+1, Branch: bookkeeping.BlockHash(re.Proposal.BlockDigest)}
+		_, ok := p.Players[nextrnd]
+		if ok {
+			continue
+		}
+
+		// XXX annoying that we don't know the consensus version for nextrnd
+		// here.  set it to the same thing as the previous player, and we will
+		// fix it up in handleRoundEvent.
+		newPlayer := &player{
+			Round:        nextrnd,
+			Step:         soft,
+			Deadline:     rp.Deadline,
+			pipelined:    true,
+			roundEnterer: &pipelineRoundEnterer{pp: p},
+		}
+
+		p.Players[nextrnd] = newPlayer
+		actions = append(actions, pseudonodeAction{T: assemble, Round: nextrnd}, rezeroAction{Round: nextrnd})
+	}
 
 	return actions
 }
