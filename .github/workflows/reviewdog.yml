@@ -20,10 +20,10 @@ jobs:
         with:
           golangci_lint_version: "v1.41.1"
           golangci_lint_flags: "-c .golangci.yml --allow-parallel-runners"
-          reporter: "github-pr-review"
+          reporter: "github-pr-check"
           tool_name: "Lint Errors"
           level: "error"
-          fail_on_error: true
+          fail_on_error: false
   # Non-Blocking Warnings Section
   reviewdog-warnings:
     runs-on: ubuntu-latest
@@ -72,7 +72,6 @@ jobs:
           cd cmd/partitiontest_linter/
           CGO_ENABLED=true go build -buildmode=plugin -trimpath plugin/plugin.go
           cd ../../
-          ls -la cmd/partitiontest_linter/
       - name: Run golangci-lint with reviewdog
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -84,7 +83,7 @@ jobs:
           | reviewdog
           -f=golangci-lint
           -name="Lint Warnings"
-          -reporter=github-check
+          -reporter=github-pr-check
+          -level=warning
           -filter-mode=added
           -fail-on-error=false
-          -level=warning

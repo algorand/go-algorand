@@ -41,14 +41,3 @@ issues:
     - Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*print(f|ln)?|os\.(Un)?Setenv). is not checked
     # "EXC0005 staticcheck: Developers tend to write in C-style with an explicit 'break' in a 'switch', so it's ok to ignore"
     - ineffective break statement. Did you mean to break out of the outer loop
-
-  exclude-rules:
-    # Add all linters here -- Comment this block out for testing linters
-    - path: test/linttest/lintissues\.go
-      linters:
-        - errcheck
-        - gofmt
-        - golint
-        - govet
-        - ineffassign
-        - misspell

@@ -21,16 +21,20 @@ import (
 )
 
 type myStruct struct {
-	a int32
-	b float64
-	c bool
+	d int32
+	e float64
+	f bool
 }
 
-func (m *myStruct) couldError() error {
+func (m *myStruct) willError() error {
 	return fmt.Errorf("an error occurred")
 }
 
 func doSomething() {
-	m := myStruct{a: 2, b: 2.0}
-	m.couldError()
+	m := myStruct{d: 2, e: 2.0}
+	m.willError()
+
+	var x myStruct
+	x = myStruct{f: true}
+	x.f = false
 }
