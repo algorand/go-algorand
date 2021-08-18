@@ -245,7 +245,12 @@ function check_for_update() {
         return 1
     fi
 
-    echo Latest Version = ${LATEST}
+    if [ -z ${LATEST} ]; then
+        echo "Failed to lookup latest release. This could happen if the 'updater' binary is corrupted."
+        return 1
+    fi
+
+    echo "Latest Version = ${LATEST}"
 
     if [ ${CURRENTVER} -ge ${LATEST} ]; then
         if [ "${UPDATETYPE}" = "install" ]; then
