@@ -569,7 +569,7 @@ jobs:
       image: ubuntu-2004:202101-01
     resource_class: arm.small
     steps:
-      - generic_tests_check
+      - generic_tests_check:
           result_subdir: arm64-integration
 
   arm64_integration_nightly:
