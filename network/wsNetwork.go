@@ -1937,6 +1937,11 @@ func ParseHostOrURL(addr string) (*url.URL, error) {
 	// This turns "[::]:4601" into "http://[::]:4601" which url.Parse can do
 	parsed, e2 := url.Parse("http://" + addr)
 	if e2 == nil {
+		// https://datatracker.ietf.org/doc/html/rfc1123#section-2
+		// first character is relaxed to allow either a letter or a digit
+		if parsed.Host[0] == ':' && parsed.Host[1] != ':' {
+			return nil, errors.New("host name starts with colon")
+		}
 		return parsed, nil
 	}
 	return parsed, err /* return original err, not our prefix altered try */
