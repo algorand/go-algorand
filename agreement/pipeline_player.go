@@ -40,7 +40,6 @@ func makePipelinePlayer(nextRound round, nextVersion protocol.ConsensusVersion) 
 		FirstUncommittedVersion: nextVersion,
 		Players:                 make(map[round]*player),
 	}
-	// XXX call adjustPlayers
 	return ret
 }
 
@@ -49,6 +48,10 @@ func (p *pipelinePlayer) underlying() actor  { return p }
 
 func (p *pipelinePlayer) firstUncommittedRound() round {
 	return p.FirstUncommittedRound
+}
+
+func (p *pipelinePlayer) init(r routerHandle) []action {
+	return p.adjustPlayers(r)
 }
 
 // decode implements serializableActor

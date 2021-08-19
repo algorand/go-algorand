@@ -46,6 +46,9 @@ type actor interface {
 	//
 	// handle should return a sequence of actions to be performed given the event.
 	handle(routerHandle, event) []action
+
+	// init initializes the actor.
+	init(routerHandle) []action
 }
 
 type serializableActor interface {

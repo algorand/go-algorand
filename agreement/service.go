@@ -247,11 +247,10 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 		router = makeRootRouter(status)
 		router2 = makeRootRouter(status2)
 
-		a1 := pseudonodeAction{T: assemble, Round: nextRound}
-		a2 := rezeroAction{Round: a1.Round}
-
-		a = make([]action, 0)
-		a = append(a, a1, a2)
+		a = status.init(routerHandle{t: s.tracer, r: &router, src: status.T()})
+		if enablePipelining {
+			status2.init(routerHandle{t: s.tracer, r: &router2, src: status2.T()})
+		}
 	} else {
 		s.clockManager = clockManager
 	}

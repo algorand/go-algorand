@@ -71,6 +71,13 @@ func (p *player) firstUncommittedRound() round {
 	return p.Round
 }
 
+func (p *player) init(r routerHandle) []action {
+	return []action{
+		pseudonodeAction{T: assemble, Round: p.Round},
+		rezeroAction{Round: p.Round},
+	}
+}
+
 // decode implements serializableActor
 func (*player) decode(buf []byte) (serializableActor, error) {
 	ret := player{} // XXX handle pipelining
