@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
@@ -29,24 +30,18 @@ import (
 // pipelinePlayer manages an ensemble of players and implements the actor interface.
 // It tracks the current (first uncommitted) agreement round, and manages additional speculative agreement rounds.
 type pipelinePlayer struct {
-	FirstUncommittedRound round
-	Players               map[round]*player
+	FirstUncommittedRound   round
+	FirstUncommittedVersion protocol.ConsensusVersion
+	Players                 map[round]*player
 }
 
 func makePipelinePlayer(nextRound round, nextVersion protocol.ConsensusVersion) *pipelinePlayer {
-	// create player for next round
 	ret := &pipelinePlayer{
-		FirstUncommittedRound: nextRound,
-		Players:               make(map[round]*player),
+		FirstUncommittedRound:   nextRound,
+		FirstUncommittedVersion: nextVersion,
+		Players:                 make(map[round]*player),
 	}
-	p := &player{
-		Round:        nextRound,
-		Step:         soft,
-		Deadline:     FilterTimeout(0, nextVersion),
-		pipelined:    true,
-		roundEnterer: &pipelineRoundEnterer{pp: ret},
-	}
-	ret.Players[nextRound] = p
+	// XXX call adjustPlayers
 	return ret
 }
 
@@ -91,7 +86,7 @@ func (p *pipelinePlayer) handle(r routerHandle, e event) []action {
 		return p.handleRoundEvent(r, ee, e.Round) // XXX make checkpointAction in pipelinePlayer?
 	case roundInterruptionEvent:
 		p.FirstUncommittedRound = e.Round
-		return p.createPlayers(r)
+		return p.adjustPlayers(r)
 	default:
 		panic("bad event")
 	}
@@ -171,17 +166,6 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 		}
 	}
 
-	// Fix up the deadline, since we might not have set it correctly
-	// in createPlayers.
-	if false {
-		// XXX this doesn't work out.  Perhaps we should round-trip player
-		// creation through demux to fetch the protocol version.
-		cv, err := protoForEvent(e)
-		if err == nil {
-			state.Deadline = FilterTimeout(0, cv)
-		}
-	}
-
 	// TODO move cadaver calls to somewhere cleanerxtern
 	r.t.traceInput(state.Round, state.Period, *state, e) // cadaver
 	r.t.ainTop(demultiplexer, playerMachine, *state, e, roundZero, 0, 0)
@@ -196,15 +180,32 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 	return actions
 }
 
-// create any additional players needed
-func (p *pipelinePlayer) createPlayers(r routerHandle) []action {
+// adjustPlayers creates and garbage-collects players as needed
+func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 	var actions []action
+	maxDepth := config.Consensus[p.FirstUncommittedVersion].AgreementPipelineDepth
 
-	// XXX set somewhere; 0 means no pipelining
-	maxPipelineDepth := basics.Round(5)
+	// First, GC any players that are no longer relevant.  We also might
+	// have players that appear to be mis-speculations (we have a better
+	// payload proposal for their parent player), but we don't know yet
+	// if that better proposal will be agreed on..
+	for rnd := range p.Players {
+		if rnd.Number < p.FirstUncommittedRound.Number {
+			delete(p.Players, rnd)
+		}
+
+		if rnd.Number == p.FirstUncommittedRound.Number && rnd.Branch != p.FirstUncommittedRound.Branch {
+			delete(p.Players, rnd)
+		}
+	}
+
+	// If we don't have a player for the first uncommitted round, create it.
+	// This could happen right at startup, or right after the player was GCed
+	// because it reached consensus.
+	actions = append(actions, p.ensurePlayer(r, p.FirstUncommittedRound, p.FirstUncommittedVersion)...)
 
 	for rnd, rp := range p.Players {
-		if rnd.Number >= p.FirstUncommittedRound.Number + maxPipelineDepth {
+		if rnd.Number >= p.FirstUncommittedRound.Number + basics.Round(maxDepth) {
 			continue
 		}
 
@@ -224,40 +225,46 @@ func (p *pipelinePlayer) createPlayers(r routerHandle) []action {
 		}
 
 		nextrnd := round{Number: rnd.Number+1, Branch: bookkeeping.BlockHash(re.Proposal.BlockDigest)}
-		_, ok := p.Players[nextrnd]
-		if ok {
-			continue
-		}
+		actions = append(actions, p.ensurePlayer(r, nextrnd, re.Payload.prevVersion)...)
+	}
 
-		// XXX annoying that we don't know the consensus version for nextrnd
-		// here.  set it to the same thing as the previous player, and we will
-		// fix it up in handleRoundEvent.
-		newPlayer := &player{
-			Round:        nextrnd,
-			Step:         soft,
-			Deadline:     rp.Deadline,
-			pipelined:    true,
-			roundEnterer: &pipelineRoundEnterer{pp: p},
-		}
+	return actions
+}
 
-		p.Players[nextrnd] = newPlayer
-		actions = append(actions, pseudonodeAction{T: assemble, Round: nextrnd}, rezeroAction{Round: nextrnd})
+// ensurePlayer creates a player for a particular round, if not already present.
+func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protocol.ConsensusVersion) []action {
+	var actions []action
 
-		e := r.dispatch(*newPlayer, roundInterruptionEvent{Round: nextrnd}, proposalMachine, nextrnd, 0, 0)
-		if e.t() == payloadPipelined {
-			e := e.(payloadProcessedEvent)
-			msg := message{MessageHandle: 0, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: e.UnauthenticatedPayload}
-			a := verifyPayloadAction(messageEvent{T: payloadPresent, Input: msg}, newPlayer.Round, e.Period, e.Pinned)
-			actions = append(actions, a)
-		}
+	_, ok := p.Players[nextrnd]
+	if ok {
+		return nil
+	}
 
-		// we might need to handle a pipelined threshold event
-		res := r.dispatch(*newPlayer, freshestBundleRequestEvent{}, voteMachineRound, newPlayer.Round, 0, 0)
-		freshestRes := res.(freshestBundleEvent) // panic if violate postcondition
-		if freshestRes.Ok {
-			a4 := newPlayer.handle(r, freshestRes.Event)
-			actions = append(actions, a4...)
-		}
+	newPlayer := &player{
+		Round:        nextrnd,
+		Step:         soft,
+		Deadline:     FilterTimeout(0, ver),
+		pipelined:    true,
+		roundEnterer: &pipelineRoundEnterer{pp: p},
+	}
+
+	p.Players[nextrnd] = newPlayer
+	actions = append(actions, pseudonodeAction{T: assemble, Round: nextrnd}, rezeroAction{Round: nextrnd})
+
+	e := r.dispatch(*newPlayer, roundInterruptionEvent{Round: nextrnd}, proposalMachine, nextrnd, 0, 0)
+	if e.t() == payloadPipelined {
+		e := e.(payloadProcessedEvent)
+		msg := message{MessageHandle: 0, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: e.UnauthenticatedPayload}
+		a := verifyPayloadAction(messageEvent{T: payloadPresent, Input: msg}, newPlayer.Round, e.Period, e.Pinned)
+		actions = append(actions, a)
+	}
+
+	// we might need to handle a pipelined threshold event
+	res := r.dispatch(*newPlayer, freshestBundleRequestEvent{}, voteMachineRound, newPlayer.Round, 0, 0)
+	freshestRes := res.(freshestBundleEvent) // panic if violate postcondition
+	if freshestRes.Ok {
+		a4 := newPlayer.handle(r, freshestRes.Event)
+		actions = append(actions, a4...)
 	}
 
 	return actions
@@ -296,6 +303,10 @@ type pipelineRoundEnterer struct {
 }
 
 func (re *pipelineRoundEnterer) enter(p *player, r routerHandle, source event, target round) []action {
+	// XXX mark player as done:
+	// - do not report in demux signals
+	// - advance FirstUncommitted if the first guy is done
+
 	// XXX 
 	prevRound := p.Round
 
@@ -305,6 +316,7 @@ func (re *pipelineRoundEnterer) enter(p *player, r routerHandle, source event, t
 	}
 
 	// confirmed prevRound, player wants to move to target
+	// XXX bad
 	delete(re.pp.Players, prevRound)
 
 	// update player's entry in map to new round

@@ -230,9 +230,9 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 				time.Sleep(time.Second)
 			}
 
-			nextVersion, err = s.Ledger.ConsensusVersion(nextRound.Number, nextRound.Branch)
+			nextVersion, err = s.Ledger.ConsensusVersion(nextRound.Number-2, nextRound.Branch)
 			if err != nil {
-				s.log.Errorf("unable to retrieve consensus version for round %d: %v", nextRound.Number, err)
+				s.log.Errorf("unable to retrieve consensus version for round %d: %v", nextRound.Number-2, err)
 				time.Sleep(time.Second)
 			}
 		}

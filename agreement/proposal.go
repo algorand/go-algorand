@@ -92,16 +92,23 @@ type proposal struct {
 	// to disk, so after a crash, we will fall back to applying the
 	// raw Block to the ledger (and re-computing the state delta).
 	ve ValidatedBlock
+
+	// prevVersion is the consensus version from block ve.Round-1.
+	// This is the version that will apply to block ve.Round+1, as
+	// the agreement code uses consensus params from r-2.  This will
+	// help us start speculating on the next block once we have a
+	// validated block.
+	prevVersion protocol.ConsensusVersion
 }
 
-func makeProposal(ve ValidatedBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
+func makeProposal(ve ValidatedBlock, pf crypto.VrfProof, origPer period, origProp basics.Address, prevVersion protocol.ConsensusVersion) proposal {
 	e := ve.Block()
 	var payload unauthenticatedProposal
 	payload.Block = e
 	payload.SeedProof = pf
 	payload.OriginalPeriod = origPer
 	payload.OriginalProposer = origProp
-	return proposal{unauthenticatedProposal: payload, ve: ve}
+	return proposal{unauthenticatedProposal: payload, ve: ve, prevVersion: prevVersion}
 }
 
 func (p proposal) u() unauthenticatedProposal {
@@ -248,7 +255,13 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve Validat
 	}
 
 	ve = ve.WithSeed(newSeed)
-	proposal := makeProposal(ve, seedProof, period, address)
+
+	prevVersion, err := ledger.ConsensusVersion(rnd.Number-1, rnd.Branch)
+	if err != nil {
+		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could not get previous version for %d: %v", rnd.Number-1, err)
+	}
+
+	proposal := makeProposal(ve, seedProof, period, address, prevVersion)
 	value := proposalValue{
 		OriginalPeriod:   period,
 		OriginalProposer: address,
@@ -281,5 +294,10 @@ func (p unauthenticatedProposal) validate(ctx context.Context, current round, le
 		return invalid, fmt.Errorf("EntryValidator rejected entry: %v", err)
 	}
 
-	return makeProposal(ve, p.SeedProof, p.OriginalPeriod, p.OriginalProposer), nil
+	prevVersion, err := ledger.ConsensusVersion(entry.Round()-1, entry.Branch)
+	if err != nil {
+		return invalid, fmt.Errorf("ConsensusVersion not available for %d: %v", entry.Round()-1, err)
+	}
+
+	return makeProposal(ve, p.SeedProof, p.OriginalPeriod, p.OriginalProposer, prevVersion), nil
 }

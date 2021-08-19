@@ -381,6 +381,12 @@ type ConsensusParams struct {
 	// 5. checking that in the case of going online the VoteFirst is less or equal to the LastValid+1.
 	// 6. checking that in the case of going online the VoteFirst is less or equal to the next network round.
 	EnableKeyregCoherencyCheck bool
+
+	// AgreementPipelineDepth specifies the maximum number of pipelined
+	// rounds that the agreement protocol can run ahead with.  This is
+	// the maximum difference between the first uncommitted round and
+	// the round number that we run the agreement protocol for.
+	AgreementPipelineDepth int
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -983,6 +989,9 @@ func initConsensusProtocols() {
 	vFuture.CompactCertVotersLookback = 16
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
+
+	// Enable pipelining.
+	vFuture.AgreementPipelineDepth = 5
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
