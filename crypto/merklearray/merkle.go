@@ -159,10 +159,13 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 	s := &siblings{
 		tree: tree,
 	}
-
+	hs, err := tree.Hash.NewHash()
+	if err != nil {
+		return nil, err
+	}
 	for l := uint64(0); l < uint64(len(tree.Levels)-1); l++ {
 		var err error
-		pl, err = pl.up(s, l, validateProof)
+		pl, err = pl.up(s, l, validateProof, hs)
 		if err != nil {
 			return nil, err
 		}
@@ -208,18 +211,26 @@ func Verify(root TreeDigest, elems map[uint64]crypto.Digest, proof *Proof) error
 
 	sort.Slice(pl, func(i, j int) bool { return pl[i].pos < pl[j].pos })
 
-	var hints []Digest
-	if proof != nil {
-		hints = proof.Path
+	return verify(root, proof, pl)
+}
+
+func verify(root TreeDigest, proof *Proof, pl partialLayer) error {
+	if proof == nil {
+		return inspectRoot(root, pl)
 	}
+
+	hints := proof.Path
+	hsh, err := proof.HashFactory.NewHash()
+	if err != nil {
+		return err
+	}
+
 	s := &siblings{
 		hints: hints,
 	}
 
 	for l := uint64(0); len(s.hints) > 0 || len(pl) > 1; l++ {
-		var err error
-		pl, err = pl.up(s, l, true)
-		if err != nil {
+		if pl, err = pl.up(s, l, true, hsh); err != nil {
 			return err
 		}
 
@@ -228,10 +239,13 @@ func Verify(root TreeDigest, elems map[uint64]crypto.Digest, proof *Proof) error
 		}
 	}
 
+	return inspectRoot(root, pl)
+}
+
+func inspectRoot(root TreeDigest, pl partialLayer) error {
 	computedroot := pl[0]
 	if computedroot.pos != 0 || !bytes.Equal(computedroot.hash[:], root.ToSlice()) {
 		return fmt.Errorf("root mismatch")
 	}
-
 	return nil
 }

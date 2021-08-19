@@ -18,6 +18,7 @@ package merklearray
 
 import (
 	"fmt"
+	"hash"
 )
 
 // siblings represents the siblings needed to compute the root hash
@@ -76,7 +77,7 @@ type layerItem struct {
 //
 // If doHash is false, fill in zero hashes, which suffices for constructing
 // a proof.
-func (pl partialLayer) up(s *siblings, l uint64, doHash bool) (partialLayer, error) {
+func (pl partialLayer) up(s *siblings, l uint64, doHash bool, hsh hash.Hash) (partialLayer, error) {
 	var res partialLayer
 	for i := 0; i < len(pl); i++ {
 		item := pl[i]
@@ -113,7 +114,9 @@ func (pl partialLayer) up(s *siblings, l uint64, doHash bool) (partialLayer, err
 				p.l = siblingHash
 				p.r = posHash
 			}
-			nextLayerHash = p.Hash().ToSlice()
+			hsh.Write(p.Marshal())
+			nextLayerHash = hsh.Sum(nil)
+			hsh.Reset()
 		}
 
 		res = append(res, layerItem{
