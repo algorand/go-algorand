@@ -888,6 +888,9 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 		case <-node.oldKeyDeletionNotify:
 		}
 
+		// Persist metrics to database.
+		node.participationRegistry.Flush()
+
 		r := node.ledger.Latest()
 
 		// We need the latest header to determine the next compact cert
@@ -1176,14 +1179,9 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 	return participations
 }
 
-type recordParams struct {
-	account           basics.Address
-	round             basics.Round
-	participationType account.ParticipationAction
-}
-
 // RecordAsync forwards participation record calls to the participation registry.
 func (node *AlgorandFullNode) RecordAsync(account basics.Address, round basics.Round, participationType account.ParticipationAction) {
+	// This function updates a cache in the ParticipationRegistry, we must call Flush to persist the changes.
 	err := node.participationRegistry.Record(account, round, participationType)
 	if err != nil {
 		node.log.Warnf("node.RecordAsync: Account %v not able to record participation (%d) on round %d: %w", account, participationType, round, err)
