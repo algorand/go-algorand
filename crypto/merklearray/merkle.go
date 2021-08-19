@@ -125,9 +125,9 @@ const validateProof = false
 
 // Prove constructs a proof for some set of positions in the array that was
 // used to construct the tree.
-func (tree *Tree) Prove(idxs []uint64) ([]TreeDigest, error) {
+func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 	if len(idxs) == 0 {
-		return nil, nil
+		return &Proof{nil, tree.Hash}, nil
 	}
 
 	// Special case: commitment to zero-length array
@@ -178,15 +178,15 @@ func (tree *Tree) Prove(idxs []uint64) ([]TreeDigest, error) {
 		}
 	}
 
-	return s.hints, nil
+	return &Proof{s.hints, tree.Hash}, nil
 }
 
 // Verify ensures that the positions in elems correspond to the respective hashes
 // in a tree with the given root hash.  The proof is expected to be the proof
 // returned by Prove().
-func Verify(root TreeDigest, elems map[uint64]crypto.Digest, proof []TreeDigest) error {
+func Verify(root TreeDigest, elems map[uint64]crypto.Digest, proof *Proof) error {
 	if len(elems) == 0 {
-		if len(proof) != 0 {
+		if proof == nil || len(proof.path) != 0 {
 			return fmt.Errorf("non-empty proof for empty set of elements")
 		}
 
@@ -203,8 +203,12 @@ func Verify(root TreeDigest, elems map[uint64]crypto.Digest, proof []TreeDigest)
 
 	sort.Slice(pl, func(i, j int) bool { return pl[i].pos < pl[j].pos })
 
+	var hints []Digest
+	if proof != nil {
+		hints = proof.path
+	}
 	s := &siblings{
-		hints: proof,
+		hints: hints,
 	}
 
 	for l := uint64(0); len(s.hints) > 0 || len(pl) > 1; l++ {

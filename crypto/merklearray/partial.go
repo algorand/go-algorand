@@ -26,7 +26,7 @@ import (
 // or use the set of sibling hints, if tree is nil.
 type siblings struct {
 	tree  *Tree
-	hints []TreeDigest
+	hints []Digest
 }
 
 // get returns the sibling from tree level l (0 being the leaves)
