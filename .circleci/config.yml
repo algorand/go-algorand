@@ -285,7 +285,7 @@ commands:
     steps:
       - attach_workspace:
           at: << parameters.circleci_home >>
-      - run: mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>
+      - run: mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/$CIRCLE_NODE_INDEX
       - restore_cache:
           keys:
             - 'go-cache-{{ .Environment.CIRCLE_STAGE }}-'
@@ -353,7 +353,7 @@ commands:
     steps:
       - attach_workspace:
           at: << parameters.circleci_home >>
-      - run: mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>
+      - run: mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/$CIRCLE_NODE_INDEX
       - run:
           name: Run integration tests
           no_output_timeout: << parameters.no_output_timeout >>
