@@ -424,7 +424,8 @@ func (db *participationDB) GetAll() ([]ParticipationRecord, error) {
 
 	results := make([]ParticipationRecord, 0, len(db.cache))
 	for _, record := range db.cache {
-		results = append(results, record)
+		copy := record
+		results = append(results, copy)
 	}
 	return results, nil
 }
