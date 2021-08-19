@@ -322,6 +322,8 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 // RunEncodingTest runs several iterations of encoding/decoding
 // consistency testing of object type specified by template.
 func RunEncodingTest(t *testing.T, template msgpMarshalUnmarshal) {
+	t.Parallel()
+
 	for i := 0; i < 1000; i++ {
 		err := EncodingTest(template)
 		if err == errSkipRawMsgpTesting {

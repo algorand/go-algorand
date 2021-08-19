@@ -42,6 +42,7 @@ func verifyBundleAgainstLedger(b unauthenticatedBundle, l Ledger, avv *AsyncVote
 }
 
 func TestCertificateGoodCertificateBasic(t *testing.T) {
+	t.Parallel()
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	period := period(0)
 	block := makeRandomBlock(1)
@@ -68,6 +69,7 @@ func TestCertificateGoodCertificateBasic(t *testing.T) {
 }
 
 func TestCertificateGoodCertificateEarlyBreak(t *testing.T) {
+	t.Parallel()
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	period := period(0)
 	block := makeRandomBlock(1)
@@ -94,6 +96,7 @@ func TestCertificateGoodCertificateEarlyBreak(t *testing.T) {
 }
 
 func TestCertificateFinalCert(t *testing.T) {
+	t.Parallel()
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	period := period(0)
 	block := makeRandomBlock(1)
@@ -120,6 +123,7 @@ func TestCertificateFinalCert(t *testing.T) {
 }
 
 func TestCertificateBadCertificateWithFakeDoubleVote(t *testing.T) {
+	t.Parallel()
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	period := period(0)
 	block, lastHash := makeRandomBlock(1), randomBlockHash()
@@ -173,6 +177,7 @@ func TestCertificateBadCertificateWithFakeDoubleVote(t *testing.T) {
 }
 
 func TestCertificateDifferentBlock(t *testing.T) {
+	t.Parallel()
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	period := period(0)
 	block, lastHash := makeRandomBlock(1), randomBlockHash()
@@ -202,6 +207,7 @@ func TestCertificateDifferentBlock(t *testing.T) {
 }
 
 func TestCertificateNoCertStep(t *testing.T) {
+	t.Parallel()
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	period := period(0)
 	block, _ := makeRandomBlock(1), randomBlockHash()
@@ -224,6 +230,7 @@ func TestCertificateNoCertStep(t *testing.T) {
 }
 
 func TestCertificateNotEnoughVotesToCert(t *testing.T) {
+	t.Parallel()
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := makeRoundRandomBranch(ledger.NextRound())
 	period := period(0)
@@ -256,6 +263,7 @@ func TestCertificateNotEnoughVotesToCert(t *testing.T) {
 }
 
 func TestCertificateCertWrongRound(t *testing.T) {
+	t.Parallel()
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	period := period(0)
 	block := makeRandomBlock(1 - 1)
@@ -285,6 +293,7 @@ func TestCertificateCertWrongRound(t *testing.T) {
 }
 
 func TestCertificateCertWithTooFewVotes(t *testing.T) {
+	t.Parallel()
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	period := period(0)
 	block, _ := makeRandomBlock(1), randomBlockHash()
@@ -313,6 +322,7 @@ func TestCertificateCertWithTooFewVotes(t *testing.T) {
 }
 
 func TestCertificateDupVote(t *testing.T) {
+	t.Parallel()
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	period := period(0)
 	block, _ := makeRandomBlock(1), randomBlockHash()
