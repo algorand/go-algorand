@@ -29,6 +29,7 @@ import (
 )
 
 // ParticipationID identifies a particular set of participation keys.
+//msgp:ignore ParticipationID
 type ParticipationID crypto.Digest
 
 // ParticipationRecord contains all metadata relating to a set of participation keys.
@@ -51,6 +52,7 @@ type ParticipationRecord struct {
 }
 
 // ParticipationAction is used when recording participation actions.
+//msgp:ignore ParticipationAction
 type ParticipationAction int
 
 // ParticipationAction types

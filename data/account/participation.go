@@ -59,11 +59,11 @@ type Participation struct {
 
 // participationIDData is for msgpack encoding the participation data.
 type participationIDData struct {
-	_struct struct{} `codec:""`
-	Parent basics.Address
-	VRF    crypto.VRFSecrets
-	FirstValid basics.Round
-	LastValid  basics.Round
+	_struct     struct{} `codec:""`
+	Parent      basics.Address
+	VRF         crypto.VRFSecrets
+	FirstValid  basics.Round
+	LastValid   basics.Round
 	KeyDilution uint64
 }
 
@@ -71,9 +71,9 @@ type participationIDData struct {
 func (part Participation) ParticipationID() ParticipationID {
 
 	copy := participationIDData{
-		Parent: part.Parent,
-		FirstValid: part.FirstValid,
-		LastValid: part.LastValid,
+		Parent:      part.Parent,
+		FirstValid:  part.FirstValid,
+		LastValid:   part.LastValid,
 		KeyDilution: part.KeyDilution,
 	}
 	if part.VRF != nil {
