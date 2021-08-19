@@ -383,7 +383,7 @@ commands:
       - persist_to_workspace:
           root: << parameters.result_path >>
           paths:
-            - << parameters.result_subdir >>/$CIRCLE_NODE_INDEX
+            - << parameters.result_subdir >>
 
   generic_tests_check:
     description: Check if all tests were run at least once and only once across all parallel runs
