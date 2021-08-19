@@ -17,6 +17,8 @@
 package merklearray
 
 import (
+	"hash"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -50,7 +52,7 @@ func (p *pair) Hash() crypto.Digest {
 	return crypto.Hash(s)
 }
 
-func upWorker(ws *workerState, in Layer, out Layer) {
+func upWorker(ws *workerState, in Layer, out Layer, h hash.Hash) {
 	ws.started()
 	batchSize := uint64(2)
 
@@ -78,13 +80,17 @@ func upWorker(ws *workerState, in Layer, out Layer) {
 // up takes a Layer representing some level in the tree,
 // and returns the next-higher level in the tree,
 // represented as a Layer.
-func (l Layer) up() Layer {
+func (t *Tree) up() Layer {
+	l := t.topLayer()
 	n := len(l)
 	res := make(Layer, (uint64(n)+1)/2)
 
 	ws := newWorkerState(uint64(n))
 	for ws.nextWorker() {
-		go upWorker(ws, l, res)
+		// no need to inspect error here -
+		// the factory should've been used to generate hash func in the first layer build
+		h, _ := t.Hash.NewHash()
+		go upWorker(ws, l, res, h)
 	}
 	ws.wait()
 

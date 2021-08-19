@@ -29,7 +29,8 @@ type Tree struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// Level 0 is the leaves.
-	Levels []Layer `codec:"lvls,allocbound=-"`
+	Levels []Layer            `codec:"lvls,allocbound=-"`
+	Hash   crypto.HashFactory `codec:"hsh"`
 }
 
 func (tree *Tree) topLayer() Layer {
@@ -95,13 +96,16 @@ func Build(array Array, factory crypto.HashFactory) (*Tree, error) {
 	default:
 	}
 
-	tree := &Tree{}
+	tree := &Tree{
+		Levels: nil,
+		Hash:   factory,
+	}
 
 	if arraylen > 0 {
 		tree.Levels = []Layer{leaves}
 
 		for len(tree.topLayer()) > 1 {
-			tree.Levels = append(tree.Levels, tree.topLayer().up())
+			tree.Levels = append(tree.Levels, tree.up())
 		}
 	}
 
