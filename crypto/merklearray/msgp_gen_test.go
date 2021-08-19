@@ -8,10 +8,12 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalLayer(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := Layer{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -71,6 +73,7 @@ func BenchmarkUnmarshalLayer(b *testing.B) {
 }
 
 func TestMarshalUnmarshalTree(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := Tree{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
