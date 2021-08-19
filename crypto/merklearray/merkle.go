@@ -37,13 +37,13 @@ func (tree *Tree) topLayer() Layer {
 }
 
 func buildWorker(ws *workerState, array Array, leaves Layer, errs chan error) {
+	defer ws.done()
 	ws.started()
 	batchSize := uint64(1)
-
 	for {
 		off := ws.next(batchSize)
 		if off >= ws.maxidx {
-			goto done
+			return
 		}
 
 		for i := off; i < off+batchSize && i < ws.maxidx; i++ {
@@ -54,7 +54,7 @@ func buildWorker(ws *workerState, array Array, leaves Layer, errs chan error) {
 				default:
 				}
 
-				goto done
+				return
 			}
 
 			leaves[i] = hash
@@ -62,9 +62,6 @@ func buildWorker(ws *workerState, array Array, leaves Layer, errs chan error) {
 
 		batchSize++
 	}
-
-done:
-	ws.done()
 }
 
 // Build constructs a Merkle tree given an array.
