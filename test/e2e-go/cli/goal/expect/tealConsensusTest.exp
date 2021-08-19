@@ -68,7 +68,8 @@ if { [catch {
         "\n" { ::AlgorandGoal::Abort $expect_out(buffer) }
     }
 
-    teal "$TEST_ROOT_DIR/big-app.teal" 2 4097 1 "int 0\nbalance\npop\n"
+    # MaxAppProgramLen = 2K * (1 + 3 pages max)
+    teal "$TEST_ROOT_DIR/big-app.teal" 2 8192 1 "int 0\nbalance\npop\n"
     spawn goal clerk compile "$TEST_ROOT_DIR/big-app.teal"
     expect {
         -re {[A-Z2-9]{58}} { ::AlgorandGoal::Abort "hash" }
