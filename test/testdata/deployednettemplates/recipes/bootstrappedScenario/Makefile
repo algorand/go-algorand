@@ -1,5 +1,5 @@
 PARAMS=-w 100 -R 8 -N 20 -n 100 -H 10 --node-template node.json --relay-template relay.json --non-participating-node-template nonPartNode.json
-FILEPARAMS=--rounds 5000 --ntrx 1000 --naccounts 3000000 --nassets 20000 --napps 20000 --wallet-name "wallet1"
+FILEPARAMS=--rounds 5000 --ntxns 1000 --naccounts 3000000 --nassets 20000 --napps 20000 --wallet-name "wallet1" --bal 100000 --bal 1000000
 
 all:	net.json genesis.json boostrappedFile.json
 

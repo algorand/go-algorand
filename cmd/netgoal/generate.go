@@ -50,6 +50,7 @@ var roundTxnCount uint64
 var accountsCount uint64
 var assetsCount uint64
 var applicationCount uint64
+var balRange []string
 
 func init() {
 	rootCmd.AddCommand(generateCmd)
@@ -73,6 +74,7 @@ func init() {
 	generateCmd.Flags().Uint64VarP(&accountsCount, "naccounts", "", 31, "Account count")
 	generateCmd.Flags().Uint64VarP(&assetsCount, "nassets", "", 5, "Asset count")
 	generateCmd.Flags().Uint64VarP(&applicationCount, "napps", "", 7, "Application Count")
+	generateCmd.Flags().StringArrayVar(&balRange, "bal", []string{}, "Application Count")
 
 	longParts := make([]string, len(generateTemplateLines)+1)
 	longParts[0] = generateCmd.Long
@@ -174,8 +176,10 @@ template modes for -t:`,
 			if sourceWallet == "" {
 				reportErrorf("must specify source wallet name with -wname.")
 			}
-
-			err = generateAccountsLoadingFileTemplate(outputFilename, sourceWallet, rounds, roundTxnCount, accountsCount, assetsCount, applicationCount)
+			if len(balRange) < 2 {
+				reportErrorf("must specify account balance range with --bal.")
+			}
+			err = generateAccountsLoadingFileTemplate(outputFilename, sourceWallet, rounds, roundTxnCount, accountsCount, assetsCount, applicationCount, balRange)
 		default:
 			reportInfoln("Please specify a valid template name.\nSupported templates are:")
 			for _, line := range generateTemplateLines {
@@ -507,7 +511,16 @@ func saveGenesisDataToDisk(genesisData gen.GenesisData, filename string) error {
 	return err
 }
 
-func generateAccountsLoadingFileTemplate(templateFilename, sourceWallet string, rounds, roundTxnCount, accountsCount, assetsCount, applicationCount uint64) error {
+func generateAccountsLoadingFileTemplate(templateFilename, sourceWallet string, rounds, roundTxnCount, accountsCount, assetsCount, applicationCount uint64, balRange []string) error {
+
+	min, err := strconv.ParseInt(balRange[0], 0, 64)
+	if err != nil {
+		return err
+	}
+	max, err := strconv.ParseInt(balRange[1], 0, 64)
+	if err != nil {
+		return err
+	}
 
 	var data = remote.BootstrappedNetwork{
 		NumRounds:                 rounds,
@@ -516,6 +529,7 @@ func generateAccountsLoadingFileTemplate(templateFilename, sourceWallet string, 
 		GeneratedAssetsCount:      assetsCount,
 		GeneratedApplicationCount: applicationCount,
 		SourceWalletName:          sourceWallet,
+		BalanceRange:              []int64{min, max},
 	}
 	return saveLoadingFileDataToDisk(data, templateFilename)
 }
