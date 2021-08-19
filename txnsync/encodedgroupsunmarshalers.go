@@ -107,7 +107,7 @@ func (stub *txGroupsEncodingStub) reconstructSignedTransactions(signedTxns []tra
 	if err := stub.reconstructLsigs(signedTxns); err != nil {
 		return fmt.Errorf("failed to lsigs: %w", err)
 	}
-	err = stub.BitmaskAuthAddr.iterate(int(stub.TotalTransactionsCount), len(stub.AuthAddr), func(i int, index int) error {
+	err = stub.BitmaskAuthAddr.iterate(int(stub.TotalTransactionsCount), len(stub.AuthAddr)/crypto.DigestSize, func(i int, index int) error {
 		return nextSlice(&stub.AuthAddr, signedTxns[i].AuthAddr[:], crypto.DigestSize)
 	})
 	if err != nil {
