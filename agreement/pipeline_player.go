@@ -106,7 +106,7 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 		// See if we can find the parent player; otherwise, drop.
 		for prnd, rp := range p.Players {
 			if rnd.Number == prnd.Number+1 {
-				re := readLowestEvent{T: readLowestValue, Round: prnd}
+				re := readLowestEvent{T: readLowestPayload, Round: prnd}
 				re = r.dispatch(*rp, re, proposalMachineRound, prnd, 0, 0).(readLowestEvent)
 				if bookkeeping.BlockHash(re.Proposal.BlockDigest) == rnd.Branch {
 					state = rp
