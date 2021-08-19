@@ -351,7 +351,7 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 	case readLowestPayload:
 		re := e.(readLowestEvent)
 		re.T = readLowestValue
-		re = r.dispatch(p, e, proposalMachinePeriod, re.Round, re.Period, 0).(readLowestEvent)
+		re = r.dispatch(p, re, proposalMachinePeriod, re.Round, re.Period, 0).(readLowestEvent)
 		re.T = readLowestPayload
 		ea := store.Assemblers[re.Proposal]
 		re.PayloadOK = ea.Assembled
