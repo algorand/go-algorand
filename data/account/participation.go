@@ -81,8 +81,6 @@ func (part Participation) ParticipationID() ParticipationID {
 	}
 
 	return ParticipationID(crypto.Hash(copy.MarshalMsg(nil)))
-
-	return ParticipationID{}
 }
 
 // PersistedParticipation encapsulates the static state of the participation
