@@ -223,18 +223,20 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 		for {
 			nextRound.Number = s.Ledger.NextRound()
 			nextRound.Branch, err = s.Ledger.BlockHash(nextRound.Number-1, bookkeeping.BlockHash{})
-			if err == nil {
-				break
-			} else {
+			if err != nil {
 				s.log.Errorf("unable to retrieve last block hash for round %d: %v", nextRound.Number-1, err)
 				time.Sleep(time.Second)
+				continue
 			}
 
 			nextVersion, err = s.Ledger.ConsensusVersion(nextRound.Number-2, nextRound.Branch)
 			if err != nil {
 				s.log.Errorf("unable to retrieve consensus version for round %d: %v", nextRound.Number-2, err)
 				time.Sleep(time.Second)
+				continue
 			}
+
+			break
 		}
 
 		if enablePipelining {
