@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/crypto"
