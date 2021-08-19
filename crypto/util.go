@@ -45,9 +45,19 @@ const DigestSize = sha512.Size256
 // Digest represents a 32-byte value holding the 256-bit Hash digest.
 type Digest [DigestSize]byte
 
+// To32Byte implements merklearray.TreeDigest
+func (d Digest) To32Byte() [32]byte {
+	return d
+}
+
+// ToSlice implements merklearray.TreeDigest
+func (d Digest) ToSlice() []byte {
+	return d[:]
+}
+
 // String returns the digest in a human-readable Base32 string
 func (d Digest) String() string {
-	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(d[:])
+	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(z[:])
 }
 
 // TrimUint64 returns the top 64 bits of the digest and converts to uint64

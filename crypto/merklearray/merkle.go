@@ -17,6 +17,7 @@
 package merklearray
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 
@@ -113,11 +114,10 @@ func Build(array Array, factory crypto.HashFactory) (*Tree, error) {
 }
 
 // Root returns the root hash of the tree.
-func (tree *Tree) Root() crypto.Digest {
+func (tree *Tree) Root() TreeDigest {
 	// Special case: commitment to zero-length array
 	if len(tree.Levels) == 0 {
-		var zero crypto.Digest
-		return zero
+		return Digest{}
 	}
 
 	return tree.topLayer()[0]
@@ -186,7 +186,7 @@ func (tree *Tree) Prove(idxs []uint64) ([]crypto.Digest, error) {
 // Verify ensures that the positions in elems correspond to the respective hashes
 // in a tree with the given root hash.  The proof is expected to be the proof
 // returned by Prove().
-func Verify(root crypto.Digest, elems map[uint64]crypto.Digest, proof []crypto.Digest) error {
+func Verify(root TreeDigest, elems map[uint64]crypto.Digest, proof []crypto.Digest) error {
 	if len(elems) == 0 {
 		if len(proof) != 0 {
 			return fmt.Errorf("non-empty proof for empty set of elements")
@@ -222,7 +222,7 @@ func Verify(root crypto.Digest, elems map[uint64]crypto.Digest, proof []crypto.D
 	}
 
 	computedroot := pl[0]
-	if computedroot.pos != 0 || computedroot.hash != root {
+	if computedroot.pos != 0 || !bytes.Equal(computedroot.hash[:], root.ToSlice()) {
 		return fmt.Errorf("root mismatch")
 	}
 
