@@ -20,7 +20,8 @@ package protocol
 // This ensures, for example, the hash of a transaction will never collide with the hash of a vote
 type HashID string
 
-// Hash IDs for specific object types, in lexicographic order to avoid dups.
+// Hash IDs for specific object types, in lexicographic order.
+// Hash IDs must be PREFIX-FREE (no hash ID is a prefix of another).
 const (
 	AuctionBid        HashID = "aB"
 	AuctionDeposit    HashID = "aD"
