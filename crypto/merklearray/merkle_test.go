@@ -48,13 +48,17 @@ type TestArray []TestData
 func (a TestArray) Length() uint64 {
 	return uint64(len(a))
 }
+func hashRep(h crypto.Hashable) []byte {
+	hashid, data := h.ToBeHashed()
+	return append([]byte(hashid), data...)
+}
 
-func (a TestArray) GetHash(pos uint64) (crypto.Digest, error) {
+func (a TestArray) Marshal(pos uint64) ([]byte, error) {
 	if pos >= uint64(len(a)) {
-		return crypto.Digest{}, fmt.Errorf("pos %d larger than length %d", pos, len(a))
+		return nil, fmt.Errorf("pos %d larger than length %d", pos, len(a))
 	}
 
-	return crypto.HashObj(a[pos]), nil
+	return hashRep(a[pos]), nil
 }
 
 type TestRepeatingArray struct {
@@ -66,12 +70,12 @@ func (a TestRepeatingArray) Length() uint64 {
 	return a.count
 }
 
-func (a TestRepeatingArray) GetHash(pos uint64) (crypto.Digest, error) {
+func (a TestRepeatingArray) Marshal(pos uint64) ([]byte, error) {
 	if pos >= a.count {
-		return crypto.Digest{}, fmt.Errorf("pos %d larger than length %d", pos, a.count)
+		return nil, fmt.Errorf("pos %d larger than length %d", pos, a.count)
 	}
 
-	return crypto.HashObj(a.item), nil
+	return hashRep(a.item), nil
 }
 
 func TestMerkle(t *testing.T) {
@@ -86,7 +90,7 @@ func TestMerkle(t *testing.T) {
 			crypto.RandBytes(a[i][:])
 		}
 
-		tree, err := Build(a)
+		tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha512_256})
 		if err != nil {
 			t.Error(err)
 		}
@@ -180,7 +184,7 @@ func BenchmarkMerkleCommit(b *testing.B) {
 
 			b.Run(fmt.Sprintf("Item%d/Count%d", sz, cnt), func(b *testing.B) {
 				for i := 0; i < b.N; i++ {
-					tree, err := Build(a)
+					tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha512_256})
 					if err != nil {
 						b.Error(err)
 					}
@@ -198,7 +202,7 @@ func BenchmarkMerkleProve1M(b *testing.B) {
 	a.item = msg
 	a.count = 1024 * 1024
 
-	tree, err := Build(a)
+	tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha512_256})
 	if err != nil {
 		b.Error(err)
 	}
@@ -220,7 +224,7 @@ func BenchmarkMerkleVerify1M(b *testing.B) {
 	a.item = msg
 	a.count = 1024 * 1024
 
-	tree, err := Build(a)
+	tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha512_256})
 	if err != nil {
 		b.Error(err)
 	}

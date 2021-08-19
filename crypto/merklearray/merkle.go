@@ -36,10 +36,24 @@ func (tree *Tree) topLayer() Layer {
 	return tree.Levels[len(tree.Levels)-1]
 }
 
-func buildWorker(ws *workerState, array Array, leaves Layer, errs chan error) {
+type errorChannel chan error
+
+func (ch errorChannel) nonBlockSend(e error) {
+	select {
+	case ch <- e:
+	default:
+	}
+}
+
+func buildWorker(ws *workerState, array Array, leaves Layer, h crypto.HashFactory, errs errorChannel) {
 	defer ws.done()
 	ws.started()
 	batchSize := uint64(1)
+	hash, err := h.NewHash()
+	if err != nil {
+		errs.nonBlockSend(err)
+		return
+	}
 	for {
 		off := ws.next(batchSize)
 		if off >= ws.maxidx {
@@ -47,17 +61,16 @@ func buildWorker(ws *workerState, array Array, leaves Layer, errs chan error) {
 		}
 
 		for i := off; i < off+batchSize && i < ws.maxidx; i++ {
-			hash, err := array.GetHash(i)
+			m, err := array.Marshal(i)
 			if err != nil {
-				select {
-				case errs <- err:
-				default:
-				}
-
+				errs.nonBlockSend(err)
 				return
 			}
-
-			leaves[i] = hash
+			d := crypto.Digest{}
+			hash.Write(m)
+			copy(d[:], hash.Sum(nil))
+			hash.Reset()
+			leaves[i] = d
 		}
 
 		batchSize++
@@ -65,14 +78,14 @@ func buildWorker(ws *workerState, array Array, leaves Layer, errs chan error) {
 }
 
 // Build constructs a Merkle tree given an array.
-func Build(array Array) (*Tree, error) {
+func Build(array Array, factory crypto.HashFactory) (*Tree, error) {
 	arraylen := array.Length()
 	leaves := make(Layer, arraylen)
 	errs := make(chan error, 1)
 
 	ws := newWorkerState(arraylen)
 	for ws.nextWorker() {
-		go buildWorker(ws, array, leaves, errs)
+		go buildWorker(ws, array, leaves, factory, errs)
 	}
 	ws.wait()
 
