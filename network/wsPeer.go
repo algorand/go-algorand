@@ -590,8 +590,9 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 	wp.outgoingMsgFilter.CheckDigest(digest, true, true)
 }
 
-func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
-	for _, msg := range msgs.msgs {
+func (wp *wsPeer) writeLoopSend(msgs *sendMessages) disconnectReason {
+	for msgIdx := range msgs.msgs {
+		msg := msgs.msgs[msgIdx]
 		select {
 		case <-msg.ctx.Done():
 			//logging.Base().Infof("cancelled large send, msg %v out of %v", i, len(msgs.msgs))
@@ -602,6 +603,8 @@ func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 		if err := wp.writeLoopSendMsg(msg); err != disconnectReasonNone {
 			return err
 		}
+		// release the message as soon as it was sent, so it could be reclaimed by the GC.
+		msgs.msgs[msgIdx].data = nil
 	}
 
 	return disconnectReasonNone
@@ -696,7 +699,7 @@ func (wp *wsPeer) writeLoop() {
 		// send from high prio channel as long as we can
 		select {
 		case data := <-wp.sendBufferHighPrio:
-			if writeErr := wp.writeLoopSend(data); writeErr != disconnectReasonNone {
+			if writeErr := wp.writeLoopSend(&data); writeErr != disconnectReasonNone {
 				cleanupCloseError = writeErr
 				return
 			}
@@ -708,12 +711,12 @@ func (wp *wsPeer) writeLoop() {
 		case <-wp.closing:
 			return
 		case data := <-wp.sendBufferHighPrio:
-			if writeErr := wp.writeLoopSend(data); writeErr != disconnectReasonNone {
+			if writeErr := wp.writeLoopSend(&data); writeErr != disconnectReasonNone {
 				cleanupCloseError = writeErr
 				return
 			}
 		case data := <-wp.sendBufferBulk:
-			if writeErr := wp.writeLoopSend(data); writeErr != disconnectReasonNone {
+			if writeErr := wp.writeLoopSend(&data); writeErr != disconnectReasonNone {
 				cleanupCloseError = writeErr
 				return
 			}
@@ -742,6 +745,8 @@ func (wp *wsPeer) writeNonBlockMsgs(ctx context.Context, data [][]byte, highPrio
 			// peer has notified us it doesn't need this message
 			outgoingNetworkMessageFilteredOutTotal.Inc(nil)
 			outgoingNetworkMessageFilteredOutBytesTotal.AddUint64(uint64(len(data)), nil)
+			// clear the data slice from the array to let the GC collect it as needed.
+			data[i] = nil
 		} else {
 			includeIndices = append(includeIndices, i)
 		}
@@ -756,6 +761,9 @@ func (wp *wsPeer) writeNonBlockMsgs(ctx context.Context, data [][]byte, highPrio
 	msgs := make([]sendMessage, 0, len(includeIndices))
 	enqueueTime := time.Now()
 	for _, index := range includeIndices {
+		if data[index] == nil {
+			panic(nil)
+		}
 		msgs = append(msgs, sendMessage{data: data[index], enqueued: msgEnqueueTime, peerEnqueued: enqueueTime, ctx: ctx, callback: callback})
 	}
 
