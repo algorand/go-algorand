@@ -402,10 +402,8 @@ commands:
       - run:
           name: Check if all tests were run
           command: |
-            ls -LR
-            # echo "Checking contents of testresults.json:"
-            # cat << parameters.result_path >>/<< parameters.result_subdir >>/testresults.json
-            # python3 scripts/buildtools/check_tests.py << parameters.result_path >>/<< parameters.result_subdir >>/testresults.json
+            cat << parameters.result_path >>/<< parameters.result_subdir >>/**/testresults.json > << parameters.result_path >>/<< parameters.result_subdir >>/combined_testresults.json
+            python3 scripts/buildtools/check_tests.py << parameters.result_path >>/<< parameters.result_subdir >>/combined_testresults.json
       - store_artifacts:
           path: << parameters.result_path >>/<< parameters.result_subdir >>
           destination: << parameters.result_subdir >>/combined-test-results
