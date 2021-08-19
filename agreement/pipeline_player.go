@@ -17,7 +17,6 @@
 package agreement
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/algorand/go-algorand/config"
@@ -89,52 +88,6 @@ func (p *pipelinePlayer) handle(r routerHandle, e event) []action {
 		return p.adjustPlayers(r)
 	default:
 		panic("bad event")
-	}
-}
-
-// protoForEvent returns the consensus version of an event, or error
-func protoForEvent(e event) (protocol.ConsensusVersion, error) {
-	switch e := e.(type) {
-	case messageEvent:
-		if e.Proto.Err != nil {
-			return "", e.Proto.Err
-		}
-		return e.Proto.Version, nil
-	case timeoutEvent:
-		if e.Proto.Err != nil {
-			return "", e.Proto.Err
-		}
-		return e.Proto.Version, nil
-	case roundInterruptionEvent:
-		if e.Proto.Err != nil {
-			return "", e.Proto.Err
-		}
-		return e.Proto.Version, nil
-	case thresholdEvent:
-		return e.Proto, nil
-	default:
-		return "", fmt.Errorf("protoForEvent unsupported event")
-	}
-}
-
-func (p *pipelinePlayer) newPlayerForEvent(e externalEvent, rnd round) (*player, error) {
-	switch e := e.(type) {
-	// for now, only create new players for messageEvents
-	case messageEvent:
-		cv, err := protoForEvent(e)
-		if err != nil {
-			return nil, err
-		}
-		// XXX check when ConsensusVersionView.Err is set by LedgerReader
-		return &player{
-			Round:        rnd,
-			Step:         soft,
-			Deadline:     FilterTimeout(0, cv),
-			pipelined:    true,
-			roundEnterer: &pipelineRoundEnterer{pp: p},
-		}, nil
-	default:
-		return nil, fmt.Errorf("can't make player for event %+v", e)
 	}
 }
 
