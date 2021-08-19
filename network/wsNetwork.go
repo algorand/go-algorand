@@ -1913,6 +1913,8 @@ var errBcastQFull = errors.New("broadcast queue full")
 
 var errURLNoHost = errors.New("could not parse a host from url")
 
+var errURLColonHost = errors.New("host name starts with a colon")
+
 // HostColonPortPattern matches "^[-a-zA-Z0-9.]+:\\d+$" e.g. "foo.com.:1234"
 var HostColonPortPattern = regexp.MustCompile("^[-a-zA-Z0-9.]+:\\d+$")
 
@@ -1940,7 +1942,7 @@ func ParseHostOrURL(addr string) (*url.URL, error) {
 		// https://datatracker.ietf.org/doc/html/rfc1123#section-2
 		// first character is relaxed to allow either a letter or a digit
 		if parsed.Host[0] == ':' && (len(parsed.Host) < 2 || parsed.Host[1] != ':') {
-			return nil, errors.New("host name starts with colon")
+			return nil, errURLColonHost
 		}
 		return parsed, nil
 	}
