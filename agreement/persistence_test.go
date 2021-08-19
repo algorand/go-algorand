@@ -229,10 +229,11 @@ func TestPlayerSerialization(t *testing.T) {
 	status := &pipelinePlayer{
 		FirstUncommittedRound: makeRoundBranch(349, bookkeeping.BlockHash{}),
 		Players: map[round]*player{
-			rnd: &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second}},
+			rnd: &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second, pipelined: true}},
 	}
 	buf = encodePlayer(status)
 	status2, err := decodePlayer(buf)
 	require.NoError(t, err)
+	status2.(*pipelinePlayer).Players[rnd].notify = nil
 	assert.Equal(t, status, status2)
 }
