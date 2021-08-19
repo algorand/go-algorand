@@ -94,6 +94,7 @@ func TestBitmaskType3(t *testing.T) {
 
 // Test for corrupted bitmask
 func TestBitmaskType3Corrupted(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	// 10 entries, bitmask has 3 compliment bits (case 3): 10-3=7 set bits,
 	// last valid index should be 6
@@ -204,6 +205,8 @@ func trimIterateHelper(t *testing.T, setBits []int) {
 }
 
 func TestFuzzBitmask(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	randSeed := uint64(0)
 	rand := func() byte {
 		bytes := [16]byte{}
