@@ -67,8 +67,10 @@ func TestAgreementSerializationPipeline(t *testing.T) {
 	status := &pipelinePlayer{
 		FirstUncommittedRound: makeRoundBranch(349, bookkeeping.BlockHash{}),
 		Players: map[round]*player{
-			rnd: &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second}},
+			rnd: &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second, pipelined: true}},
 	}
+	status.Players[rnd].notify = status
+
 	router := makeRootRouter(status)
 	a := []action{}
 
@@ -79,6 +81,12 @@ func TestAgreementSerializationPipeline(t *testing.T) {
 	require.NoError(t, err)
 	// clear clockManager mutex so equal check will work
 	clockManager.mu, clockM2.mu = deadlock.Mutex{}, deadlock.Mutex{}
+	// clear notify so equal check will work
+	require.Equal(t, status.Players[rnd].notify, status)
+	require.Equal(t, status2.(*pipelinePlayer).Players[rnd].notify, status2)
+	status.Players[rnd].notify = nil
+	status2.(*pipelinePlayer).Players[rnd].notify = nil
+
 	require.Equalf(t, clockManager, clockM2, "Clock wasn't serialized/deserialized correctly")
 	require.Equalf(t, status, status2, "Status wasn't serialized/deserialized correctly")
 	require.Equalf(t, router, router2, "Router wasn't serialized/deserialized correctly")
