@@ -18,8 +18,6 @@ package agreement
 
 import (
 	"fmt"
-
-	"github.com/algorand/go-algorand/data/basics"
 )
 
 // An actor is a state machine which accepts events and returns sequences of actions.
@@ -38,7 +36,7 @@ type actor interface {
 
 	// firstUncommittedRound is used by router update() when cleaning up old rounds
 	// also used in service at startup.
-	firstUncommittedRound() basics.Round
+	firstUncommittedRound() round
 
 	externalDemuxSignals() pipelineExternalDemuxSignals
 

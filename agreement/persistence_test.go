@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/timers"
@@ -64,7 +65,7 @@ func TestAgreementSerializationPipeline(t *testing.T) {
 	//clockManager.m[rnd] = clock
 	clockManager.setZero(rnd)
 	status := &pipelinePlayer{
-		FirstUncommittedRound: 349,
+		FirstUncommittedRound: makeRoundBranch(349, bookkeeping.BlockHash{}),
 		Players: map[round]*player{
 			rnd: &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second}},
 	}
@@ -93,7 +94,7 @@ func BenchmarkAgreementSerialization(b *testing.B) {
 	rnd := makeRoundRandomBranch(350)
 	clockManager.m[rnd] = clock
 	status := pipelinePlayer{
-		FirstUncommittedRound: 349,
+		FirstUncommittedRound: makeRoundBranch(349, bookkeeping.BlockHash{}),
 		Players: map[round]*player{
 			rnd: &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second}},
 	}
@@ -115,7 +116,7 @@ func BenchmarkAgreementDeserialization(b *testing.B) {
 	rnd := makeRoundRandomBranch(350)
 	clockManager.m[rnd] = clock
 	status := pipelinePlayer{
-		FirstUncommittedRound: 349,
+		FirstUncommittedRound: makeRoundBranch(349, bookkeeping.BlockHash{}),
 		Players: map[round]*player{
 			rnd: &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second}},
 	}
@@ -218,7 +219,7 @@ func TestPlayerSerialization(t *testing.T) {
 	assert.Equal(t, p, p2)
 
 	status := &pipelinePlayer{
-		FirstUncommittedRound: 349,
+		FirstUncommittedRound: makeRoundBranch(349, bookkeeping.BlockHash{}),
 		Players: map[round]*player{
 			rnd: &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second}},
 	}

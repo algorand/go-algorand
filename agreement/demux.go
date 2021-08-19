@@ -293,7 +293,19 @@ func (d *demux) next(s *Service, extSignals pipelineExternalDemuxSignals) (e ext
 		// since we don't know how long we've been waiting in this select statement and we don't really know
 		// if the current next round has been increased by 1 or more, we need to sample it again.
 		previousRound := nextRound
-		nextRoundBranch := makeRoundBranch(s.Ledger.NextRound(), bookkeeping.BlockHash{}) // XXX uses empty digest: not speculative
+
+		var nextRoundBranch round
+		var err error
+		for {
+			nextRoundBranch.Number = s.Ledger.NextRound()
+			nextRoundBranch.Branch, err = s.Ledger.BlockHash(nextRoundBranch.Number-1, bookkeeping.BlockHash{})
+			if err != nil {
+				logging.Base().Warnf("demux: cannot get block hash for %d: %v", nextRoundBranch.Number-1, err)
+				time.Sleep(time.Second)
+			} else {
+				break
+			}
+		}
 
 		logEvent := logspec.AgreementEvent{
 			Type:  logspec.RoundInterrupted,

@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -68,8 +67,8 @@ func (p *player) underlying() actor {
 	return p
 }
 
-func (p *player) firstUncommittedRound() basics.Round {
-	return p.Round.Number
+func (p *player) firstUncommittedRound() round {
+	return p.Round
 }
 
 // decode implements serializableActor

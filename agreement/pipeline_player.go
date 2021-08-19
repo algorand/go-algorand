@@ -29,14 +29,14 @@ import (
 // pipelinePlayer manages an ensemble of players and implements the actor interface.
 // It tracks the current (first uncommitted) agreement round, and manages additional speculative agreement rounds.
 type pipelinePlayer struct {
-	FirstUncommittedRound basics.Round
+	FirstUncommittedRound round
 	Players               map[round]*player
 }
 
 func makePipelinePlayer(nextRound round, nextVersion protocol.ConsensusVersion) *pipelinePlayer {
 	// create player for next round
 	ret := &pipelinePlayer{
-		FirstUncommittedRound: nextRound.Number,
+		FirstUncommittedRound: nextRound,
 		Players:               make(map[round]*player),
 	}
 	p := &player{
@@ -53,7 +53,7 @@ func makePipelinePlayer(nextRound round, nextVersion protocol.ConsensusVersion) 
 func (p *pipelinePlayer) T() stateMachineTag { return playerMachine } // XXX different tag?
 func (p *pipelinePlayer) underlying() actor  { return p }
 
-func (p *pipelinePlayer) firstUncommittedRound() basics.Round {
+func (p *pipelinePlayer) firstUncommittedRound() round {
 	return p.FirstUncommittedRound
 }
 
@@ -90,9 +90,8 @@ func (p *pipelinePlayer) handle(r routerHandle, e event) []action {
 		// checkpointEvent.ConsensusRound() returns zero
 		return p.handleRoundEvent(r, ee, e.Round) // XXX make checkpointAction in pipelinePlayer?
 	case roundInterruptionEvent:
-		// XXX handle enterRound ourselves and reshuffle players
-		// could have come from ledgerNextRoundCh
-		return p.enterRound(r, e, e.Round)
+		p.FirstUncommittedRound = e.Round
+		return p.createPlayers(r)
 	default:
 		panic("bad event")
 	}
@@ -148,40 +147,27 @@ func (p *pipelinePlayer) newPlayerForEvent(e externalEvent, rnd round) (*player,
 func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd round) []action {
 	var actions []action
 
+	if rnd.Number < p.FirstUncommittedRound.Number {
+		// stale event: give it to the oldest player
+		rnd = p.FirstUncommittedRound
+	}
+
 	state, ok := p.Players[rnd]
 	if !ok {
-		switch {
-		case rnd.Number < p.FirstUncommittedRound:
-			// stale event: give it to the oldest player so it will throw it away
-			var oldestPlayer *player
-			minRound := basics.Round(math.MaxUint64)
-			for rnd, plyr := range p.Players {
-				if rnd.Number < minRound {
-					minRound = rnd.Number
-					oldestPlayer = plyr
+		// See if we can find the parent player; otherwise, drop.
+		for prnd, rp := range p.Players {
+			if rnd.Number == prnd.Number+1 {
+				re := readLowestEvent{T: readLowestValue, Round: prnd}
+				re = r.dispatch(*rp, re, proposalMachineRound, prnd, 0, 0).(readLowestEvent)
+				if bookkeeping.BlockHash(re.Proposal.BlockDigest) == rnd.Branch {
+					state = rp
+					break
 				}
 			}
-			state = oldestPlayer
-
-		case rnd.Branch == (bookkeeping.BlockHash{}):
-			panic("handleRoundEvent got empty prev")
-
-		default:
-			// See if we can find the parent player; otherwise, drop.
-			for prnd, rp := range p.Players {
-				if rnd.Number == prnd.Number+1 {
-					re := readLowestEvent{T: readLowestValue, Round: prnd}
-					re = r.dispatch(*rp, re, proposalMachineRound, prnd, 0, 0).(readLowestEvent)
-					if bookkeeping.BlockHash(re.Proposal.BlockDigest) == rnd.Branch {
-						state = rp
-						break
-					}
-				}
-			}
-			if state == nil {
-				logging.Base().Debugf("couldn't find player for rnd %+v, dropping event", rnd)
-				return nil
-			}
+		}
+		if state == nil {
+			logging.Base().Debugf("couldn't find player for rnd %+v, dropping event", rnd)
+			return nil
 		}
 	}
 
@@ -218,7 +204,7 @@ func (p *pipelinePlayer) createPlayers(r routerHandle) []action {
 	maxPipelineDepth := basics.Round(5)
 
 	for rnd, rp := range p.Players {
-		if rnd.Number >= p.FirstUncommittedRound + maxPipelineDepth {
+		if rnd.Number >= p.FirstUncommittedRound.Number + maxPipelineDepth {
 			continue
 		}
 
@@ -277,11 +263,6 @@ func (p *pipelinePlayer) createPlayers(r routerHandle) []action {
 	return actions
 }
 
-func (p *pipelinePlayer) enterRound(r routerHandle, source event, target round) []action {
-	// XXXX create new players and GC old ones
-	panic("pipelinePlayer.enterRound not implemented")
-}
-
 // externalDemuxSignals returns a list of per-player signals allowing demux.next to wait for
 // multiple pipelined per-round deadlines, as well as the last committed round.
 func (p *pipelinePlayer) externalDemuxSignals() pipelineExternalDemuxSignals {
@@ -295,7 +276,7 @@ func (p *pipelinePlayer) externalDemuxSignals() pipelineExternalDemuxSignals {
 		}
 		i++
 	}
-	return pipelineExternalDemuxSignals{signals: s, currentRound: p.FirstUncommittedRound}
+	return pipelineExternalDemuxSignals{signals: s, currentRound: p.FirstUncommittedRound.Number}
 }
 
 // allPlayersRPS returns a list of per-player (round, period, step) tuples reflecting the current
@@ -315,6 +296,7 @@ type pipelineRoundEnterer struct {
 }
 
 func (re *pipelineRoundEnterer) enter(p *player, r routerHandle, source event, target round) []action {
+	// XXX 
 	prevRound := p.Round
 
 	a := enterRound(p, r, source, target)
@@ -331,11 +313,12 @@ func (re *pipelineRoundEnterer) enter(p *player, r routerHandle, source event, t
 	// XXX check if we are speculating on the same round, different leaf
 
 	// update FirstUncommittedRound
-	minRound := basics.Round(math.MaxUint64)
+	var minRound round
+	minRound.Number = basics.Round(math.MaxUint64)
 	for rnd := range re.pp.Players {
 		// XXX ensure rnd.Branch matches the hash of the block that just committed
-		if rnd.Number < minRound {
-			minRound = rnd.Number
+		if rnd.Number < minRound.Number {
+			minRound = rnd
 		}
 	}
 	re.pp.FirstUncommittedRound = minRound

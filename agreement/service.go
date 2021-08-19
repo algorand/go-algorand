@@ -215,7 +215,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 	}
 	// err will tell us if the restore/decode operations above completed successfully or not.
 	// XXXX handle restoring multiple player states and using NextRound to check last confirmed
-	if nr := s.Ledger.NextRound(); err != nil || status.firstUncommittedRound() < nr { // XXX double-check with branch
+	if nr := s.Ledger.NextRound(); err != nil || status.firstUncommittedRound().Number < nr { // XXX double-check with branch
 		// in this case, we don't have fresh and valid state
 		// pretend a new round has just started, and propose a block
 		var nextRound round

@@ -135,7 +135,7 @@ func (router *rootRouter) update(state actor, r round, gc bool) {
 		children := make(map[round]*roundRouter)
 		// XXX just considers last committed round number, ignores branch, OK?
 		for r, c := range router.Children {
-			if r.Number >= state.firstUncommittedRound() {
+			if r.Number >= state.firstUncommittedRound().Number {
 				children[r] = c
 			}
 		}
