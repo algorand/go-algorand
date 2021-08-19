@@ -98,7 +98,7 @@ func TestMerkle(t *testing.T) {
 		root := tree.Root()
 
 		var allpos []uint64
-		allmap := make(map[uint64]crypto.Digest)
+		allmap := make(map[uint64]Digest)
 
 		for i := uint64(0); i < sz; i++ {
 			proof, err := tree.Prove([]uint64{i})
@@ -106,18 +106,18 @@ func TestMerkle(t *testing.T) {
 				t.Error(err)
 			}
 
-			err = Verify(root, map[uint64]crypto.Digest{i: crypto.HashObj(a[i])}, proof)
+			err = Verify(root, map[uint64]Digest{i: crypto.HashObj(a[i]).ToSlice()}, proof)
 			if err != nil {
 				t.Error(err)
 			}
 
-			err = Verify(root, map[uint64]crypto.Digest{i: crypto.HashObj(junk)}, proof)
+			err = Verify(root, map[uint64]Digest{i: crypto.HashObj(junk).ToSlice()}, proof)
 			if err == nil {
 				t.Errorf("no error when verifying junk")
 			}
 
 			allpos = append(allpos, i)
-			allmap[i] = crypto.HashObj(a[i])
+			allmap[i] = crypto.HashObj(a[i]).ToSlice()
 		}
 
 		proof, err := tree.Prove(allpos)
@@ -130,12 +130,12 @@ func TestMerkle(t *testing.T) {
 			t.Error(err)
 		}
 
-		err = Verify(root, map[uint64]crypto.Digest{0: crypto.HashObj(junk)}, proof)
+		err = Verify(root, map[uint64]Digest{0: crypto.HashObj(junk).ToSlice()}, proof)
 		if err == nil {
 			t.Errorf("no error when verifying junk batch")
 		}
 
-		err = Verify(root, map[uint64]crypto.Digest{0: crypto.HashObj(junk)}, nil)
+		err = Verify(root, map[uint64]Digest{0: crypto.HashObj(junk).ToSlice()}, nil)
 		if err == nil {
 			t.Errorf("no error when verifying junk batch")
 		}
@@ -145,18 +145,18 @@ func TestMerkle(t *testing.T) {
 			t.Errorf("no error when proving past the end")
 		}
 
-		err = Verify(root, map[uint64]crypto.Digest{sz: crypto.HashObj(junk)}, nil)
+		err = Verify(root, map[uint64]Digest{sz: crypto.HashObj(junk).ToSlice()}, nil)
 		if err == nil {
 			t.Errorf("no error when verifying past the end")
 		}
 
 		if sz > 0 {
 			var somepos []uint64
-			somemap := make(map[uint64]crypto.Digest)
+			somemap := make(map[uint64]Digest)
 			for i := 0; i < 10; i++ {
 				pos := crypto.RandUint64() % sz
 				somepos = append(somepos, pos)
-				somemap[pos] = crypto.HashObj(a[pos])
+				somemap[pos] = crypto.HashObj(a[pos]).ToSlice()
 			}
 
 			proof, err = tree.Prove(somepos)
@@ -241,7 +241,7 @@ func BenchmarkMerkleVerify1M(b *testing.B) {
 	b.ResetTimer()
 
 	for i := uint64(0); i < uint64(b.N); i++ {
-		err := Verify(root, map[uint64]crypto.Digest{i % a.count: crypto.HashObj(msg)}, proofs[i])
+		err := Verify(root, map[uint64]Digest{i % a.count: crypto.HashObj(msg).ToSlice()}, proofs[i])
 		if err != nil {
 			b.Error(err)
 		}

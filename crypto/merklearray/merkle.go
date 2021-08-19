@@ -192,7 +192,7 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 // Verify ensures that the positions in elems correspond to the respective hashes
 // in a tree with the given root hash.  The proof is expected to be the proof
 // returned by Prove().
-func Verify(root TreeDigest, elems map[uint64]crypto.Digest, proof *Proof) error {
+func Verify(root TreeDigest, elems map[uint64]Digest, proof *Proof) error {
 	if len(elems) == 0 {
 		if proof == nil || len(proof.Path) != 0 {
 			return fmt.Errorf("non-empty proof for empty set of elements")
