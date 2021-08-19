@@ -426,8 +426,8 @@ func (db *participationDB) GetAll() ([]ParticipationRecord, error) {
 	return results, nil
 }
 
-// updateRollingFields
-func (db *participationDB) updateRollingFields(record ParticipationRecord, ctx context.Context, tx *sql.Tx) error {
+// updateRollingFields sets all of the rolling fields according to the record object.
+func (db *participationDB) updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRecord) error {
 	_, err := tx.ExecContext(ctx, updateRollingFields,
 		record.LastVote,
 		record.LastBlockProposal,
@@ -457,7 +457,7 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 			if record.RegisteredFirst <= on && on <= record.RegisteredLast {
 				// TODO: this should probably be "on - 1"
 				record.RegisteredLast = on
-				err := db.updateRollingFields(record, ctx, tx)
+				err := db.updateRollingFields(ctx, tx, record)
 				if err != nil {
 					return fmt.Errorf("unable to disable old key when registering %s", id)
 				}
@@ -471,7 +471,7 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 		recordToRegister.RegisteredFirst = on
 		recordToRegister.RegisteredLast = recordToRegister.LastValid
 
-		err := db.updateRollingFields(recordToRegister, ctx, tx)
+		err := db.updateRollingFields(ctx, tx, recordToRegister)
 		if err != nil {
 			return fmt.Errorf("unable to registering key with id: %s", id)
 		}
@@ -545,12 +545,12 @@ func (db *participationDB) Flush() error {
 	}
 
 	return db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		for id, _ := range db.dirty {
+		for id := range db.dirty {
 			record, ok := db.cache[id]
 			if !ok {
 				return ErrParticipationIDNotFound
 			}
-			err := db.updateRollingFields(record, ctx, tx)
+			err := db.updateRollingFields(ctx, tx, record)
 			if err != nil {
 				return err
 			}
