@@ -44,18 +44,22 @@ func (p *pair) ToBeHashed() (protocol.HashID, []byte) {
 
 // Hash implements an optimized version of crypto.HashObj(p).
 func (p *pair) Hash() crypto.Digest {
+	return crypto.Hash(p.Marshal())
+}
+
+func (p *pair) Marshal() []byte {
 	var buf [len(protocol.MerkleArrayNode) + 2*crypto.DigestSize]byte
 	s := buf[:0]
 	s = append(s, protocol.MerkleArrayNode...)
 	s = append(s, p.l[:]...)
-	s = append(s, p.r[:]...)
-	return crypto.Hash(s)
+	return append(s, p.r[:]...)
 }
 
 func upWorker(ws *workerState, in Layer, out Layer, h hash.Hash) {
 	ws.started()
 	batchSize := uint64(2)
 
+	h.Reset()
 	for {
 		off := ws.next(batchSize)
 		if off >= ws.maxidx {
@@ -68,7 +72,12 @@ func upWorker(ws *workerState, in Layer, out Layer, h hash.Hash) {
 			if i+1 < ws.maxidx {
 				p.r = in[i+1]
 			}
-			out[i/2] = p.Hash()
+
+			h.Write(p.Marshal())
+			var d crypto.Digest
+			copy(d[:], h.Sum(nil))
+			h.Reset()
+			out[i/2] = d
 		}
 
 		batchSize += 2
