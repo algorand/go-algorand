@@ -218,24 +218,36 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 	if nr := s.Ledger.NextRound(); err != nil || status.firstUncommittedRound() < nr { // XXX double-check with branch
 		// in this case, we don't have fresh and valid state
 		// pretend a new round has just started, and propose a block
-		nextRound := s.Ledger.NextRound()
-		nextVersion, err := s.Ledger.ConsensusVersion(nextRound, bookkeeping.BlockHash{}) // XXX correct?
-		if err != nil {
-			s.log.Errorf("unable to retrieve consensus version for round %d, defaulting to binary consensus version", nextRound)
-			nextVersion = protocol.ConsensusCurrentVersion
+		var nextRound round
+		var nextVersion protocol.ConsensusVersion
+		for {
+			nextRound.Number = s.Ledger.NextRound()
+			nextRound.Branch, err = s.Ledger.BlockHash(nextRound.Number-1, bookkeeping.BlockHash{})
+			if err == nil {
+				break
+			} else {
+				s.log.Errorf("unable to retrieve last block hash for round %d: %v", nextRound.Number-1, err)
+				time.Sleep(time.Second)
+			}
+
+			nextVersion, err = s.Ledger.ConsensusVersion(nextRound.Number, nextRound.Branch)
+			if err != nil {
+				s.log.Errorf("unable to retrieve consensus version for round %d: %v", nextRound.Number, err)
+				time.Sleep(time.Second)
+			}
 		}
 
 		if enablePipelining {
 			status = makePipelinePlayer(nextRound, nextVersion)
-			status2 = &player{Round: makeRoundBranch(nextRound, bookkeeping.BlockHash{}), Step: soft, Deadline: FilterTimeout(0, nextVersion)}
+			status2 = &player{Round: nextRound, Step: soft, Deadline: FilterTimeout(0, nextVersion)}
 		} else {
-			status = &player{Round: makeRoundBranch(nextRound, bookkeeping.BlockHash{}), Step: soft, Deadline: FilterTimeout(0, nextVersion)}
+			status = &player{Round: nextRound, Step: soft, Deadline: FilterTimeout(0, nextVersion)}
 		}
 
 		router = makeRootRouter(status)
 		router2 = makeRootRouter(status2)
 
-		a1 := pseudonodeAction{T: assemble, Round: makeRoundBranch(s.Ledger.NextRound(), bookkeeping.BlockHash{})}
+		a1 := pseudonodeAction{T: assemble, Round: nextRound}
 		a2 := rezeroAction{Round: a1.Round}
 
 		a = make([]action, 0)

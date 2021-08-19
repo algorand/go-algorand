@@ -31,25 +31,22 @@ import (
 type pipelinePlayer struct {
 	FirstUncommittedRound basics.Round
 	Players               map[round]*player
-	bootstrapRound        basics.Round // handle initial nextRound
 }
 
-func makePipelinePlayer(nextRound basics.Round, nextVersion protocol.ConsensusVersion) *pipelinePlayer {
+func makePipelinePlayer(nextRound round, nextVersion protocol.ConsensusVersion) *pipelinePlayer {
 	// create player for next round
 	ret := &pipelinePlayer{
-		FirstUncommittedRound: nextRound,
+		FirstUncommittedRound: nextRound.Number,
 		Players:               make(map[round]*player),
-		bootstrapRound:        nextRound,
 	}
-	r := makeRoundBranch(nextRound, bookkeeping.BlockHash{}) // XXXX need prev hash for next round?
 	p := &player{
-		Round:        r,
+		Round:        nextRound,
 		Step:         soft,
 		Deadline:     FilterTimeout(0, nextVersion),
 		pipelined:    true,
 		roundEnterer: &pipelineRoundEnterer{pp: ret},
 	}
-	ret.Players[r] = p
+	ret.Players[nextRound] = p
 	return ret
 }
 
@@ -122,7 +119,7 @@ func protoForEvent(e event) (protocol.ConsensusVersion, error) {
 	case thresholdEvent:
 		return e.Proto, nil
 	default:
-		panic("protoForEvent unsupported event")
+		return "", fmt.Errorf("protoForEvent unsupported event")
 	}
 }
 
@@ -166,14 +163,6 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 			}
 			state = oldestPlayer
 
-		case rnd.Number == p.bootstrapRound:
-			// XXX is this the first bootstrap round (no prev hash)?
-			if bootstrapPlayer, ok := p.Players[makeRoundBranch(rnd.Number, bookkeeping.BlockHash{})]; ok {
-				state = bootstrapPlayer
-			} else {
-				panic("event with bootstrap round but bootstrap player missing") // XXX drop this event
-			}
-
 		case rnd.Branch == (bookkeeping.BlockHash{}):
 			panic("handleRoundEvent got empty prev")
 
@@ -198,9 +187,13 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 
 	// Fix up the deadline, since we might not have set it correctly
 	// in createPlayers.
-	cv, err := protoForEvent(e)
-	if err == nil {
-		state.Deadline = FilterTimeout(0, cv)
+	if false {
+		// XXX this doesn't work out.  Perhaps we should round-trip player
+		// creation through demux to fetch the protocol version.
+		cv, err := protoForEvent(e)
+		if err == nil {
+			state.Deadline = FilterTimeout(0, cv)
+		}
 	}
 
 	// TODO move cadaver calls to somewhere cleanerxtern
