@@ -18,8 +18,6 @@ package merklearray
 
 import (
 	"fmt"
-
-	"github.com/algorand/go-algorand/crypto"
 )
 
 // siblings represents the siblings needed to compute the root hash
@@ -28,15 +26,15 @@ import (
 // or use the set of sibling hints, if tree is nil.
 type siblings struct {
 	tree  *Tree
-	hints []crypto.Digest
+	hints []TreeDigest
 }
 
 // get returns the sibling from tree level l (0 being the leaves)
 // position i.
-func (s *siblings) get(l uint64, i uint64) (res crypto.Digest, err error) {
+func (s *siblings) get(l uint64, i uint64) (res Digest, err error) {
 	if s.tree == nil {
 		if len(s.hints) > 0 {
-			res = s.hints[0]
+			res = s.hints[0].ToSlice()
 			s.hints = s.hints[1:]
 			return
 		}
@@ -66,7 +64,7 @@ type partialLayer []layerItem
 
 type layerItem struct {
 	pos  uint64
-	hash crypto.Digest
+	hash Digest
 }
 
 // up takes a partial Layer at level l, and returns the next-higher (partial)
@@ -86,7 +84,7 @@ func (pl partialLayer) up(s *siblings, l uint64, doHash bool) (partialLayer, err
 		posHash := item.hash
 
 		siblingPos := pos ^ 1
-		var siblingHash crypto.Digest
+		var siblingHash Digest
 		if i+1 < len(pl) && pl[i+1].pos == siblingPos {
 			// If our sibling is also in the partial Layer, use its
 			// hash (and skip over its position).
@@ -102,7 +100,7 @@ func (pl partialLayer) up(s *siblings, l uint64, doHash bool) (partialLayer, err
 		}
 
 		nextLayerPos := pos / 2
-		var nextLayerHash crypto.Digest
+		var nextLayerHash Digest
 
 		if doHash {
 			var p pair
@@ -115,7 +113,7 @@ func (pl partialLayer) up(s *siblings, l uint64, doHash bool) (partialLayer, err
 				p.l = siblingHash
 				p.r = posHash
 			}
-			nextLayerHash = p.Hash()
+			nextLayerHash = p.Hash().ToSlice()
 		}
 
 		res = append(res, layerItem{

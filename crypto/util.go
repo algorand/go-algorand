@@ -57,7 +57,7 @@ func (d Digest) ToSlice() []byte {
 
 // String returns the digest in a human-readable Base32 string
 func (d Digest) String() string {
-	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(z[:])
+	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(d[:])
 }
 
 // TrimUint64 returns the top 64 bits of the digest and converts to uint64

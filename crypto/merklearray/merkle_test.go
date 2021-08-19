@@ -230,7 +230,7 @@ func BenchmarkMerkleVerify1M(b *testing.B) {
 	}
 	root := tree.Root()
 
-	proofs := make([][]crypto.Digest, a.count)
+	proofs := make([][]TreeDigest, a.count)
 	for i := uint64(0); i < a.count; i++ {
 		proofs[i], err = tree.Prove([]uint64{i})
 		if err != nil {

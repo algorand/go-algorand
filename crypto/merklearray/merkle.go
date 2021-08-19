@@ -68,11 +68,9 @@ func buildWorker(ws *workerState, array Array, leaves Layer, h crypto.HashFactor
 				errs.nonBlockingSend(err)
 				return
 			}
-			d := crypto.Digest{}
 			hash.Write(m)
-			copy(d[:], hash.Sum(nil))
+			leaves[i] = hash.Sum(nil)
 			hash.Reset()
-			leaves[i] = d
 		}
 
 		batchSize++
@@ -127,7 +125,7 @@ const validateProof = false
 
 // Prove constructs a proof for some set of positions in the array that was
 // used to construct the tree.
-func (tree *Tree) Prove(idxs []uint64) ([]crypto.Digest, error) {
+func (tree *Tree) Prove(idxs []uint64) ([]TreeDigest, error) {
 	if len(idxs) == 0 {
 		return nil, nil
 	}
@@ -175,7 +173,7 @@ func (tree *Tree) Prove(idxs []uint64) ([]crypto.Digest, error) {
 
 	if validateProof {
 		computedroot := pl[0]
-		if computedroot.pos != 0 || computedroot.hash != tree.topLayer()[0] {
+		if computedroot.pos != 0 || !bytes.Equal(computedroot.hash, tree.topLayer()[0]) {
 			return nil, fmt.Errorf("internal error: root mismatch during proof")
 		}
 	}
@@ -186,7 +184,7 @@ func (tree *Tree) Prove(idxs []uint64) ([]crypto.Digest, error) {
 // Verify ensures that the positions in elems correspond to the respective hashes
 // in a tree with the given root hash.  The proof is expected to be the proof
 // returned by Prove().
-func Verify(root TreeDigest, elems map[uint64]crypto.Digest, proof []crypto.Digest) error {
+func Verify(root TreeDigest, elems map[uint64]crypto.Digest, proof []TreeDigest) error {
 	if len(elems) == 0 {
 		if len(proof) != 0 {
 			return fmt.Errorf("non-empty proof for empty set of elements")
@@ -199,7 +197,7 @@ func Verify(root TreeDigest, elems map[uint64]crypto.Digest, proof []crypto.Dige
 	for pos, elem := range elems {
 		pl = append(pl, layerItem{
 			pos:  pos,
-			hash: elem,
+			hash: elem.ToSlice(),
 		})
 	}
 

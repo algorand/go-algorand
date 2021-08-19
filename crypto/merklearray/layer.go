@@ -27,12 +27,12 @@ import (
 // level of the tree.  Hashes beyond the end of the array (e.g., if the
 // number of leaves is not an exact power of 2) are implicitly zero.
 //msgp:allocbound Layer -
-type Layer []crypto.Digest
+type Layer []Digest
 
 // A pair represents an internal node in the Merkle tree.
 type pair struct {
-	l crypto.Digest
-	r crypto.Digest
+	l Digest
+	r Digest
 }
 
 func (p *pair) ToBeHashed() (protocol.HashID, []byte) {
@@ -74,10 +74,8 @@ func upWorker(ws *workerState, in Layer, out Layer, h hash.Hash) {
 			}
 
 			h.Write(p.Marshal())
-			var d crypto.Digest
-			copy(d[:], h.Sum(nil))
+			out[i/2] = h.Sum(nil)
 			h.Reset()
-			out[i/2] = d
 		}
 
 		batchSize += 2

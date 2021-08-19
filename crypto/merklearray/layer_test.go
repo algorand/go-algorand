@@ -26,7 +26,7 @@ import (
 func TestLayerHash(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var p pair
+	var p = pair{make([]byte, 32), make([]byte, 32)}
 	crypto.RandBytes(p.l[:])
 	crypto.RandBytes(p.r[:])
 	if crypto.HashObj(&p) != p.Hash() {

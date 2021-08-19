@@ -7,6 +7,14 @@ import (
 )
 
 // The following msgp objects are implemented in this file:
+// Digest
+//    |-----> MarshalMsg
+//    |-----> CanMarshalMsg
+//    |-----> (*) UnmarshalMsg
+//    |-----> (*) CanUnmarshalMsg
+//    |-----> Msgsize
+//    |-----> MsgIsZero
+//
 // Layer
 //   |-----> MarshalMsg
 //   |-----> CanMarshalMsg
@@ -25,6 +33,52 @@ import (
 //
 
 // MarshalMsg implements msgp.Marshaler
+func (z Digest) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, []byte(z))
+	return
+}
+
+func (_ Digest) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(Digest)
+	if !ok {
+		_, ok = (z).(*Digest)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Digest) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 []byte
+		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = Digest(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (_ *Digest) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Digest)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z Digest) Msgsize() (s int) {
+	s = msgp.BytesPrefixSize + len([]byte(z))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z Digest) MsgIsZero() bool {
+	return len(z) == 0
+}
+
+// MarshalMsg implements msgp.Marshaler
 func (z Layer) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	if z == nil {
@@ -33,7 +87,7 @@ func (z Layer) MarshalMsg(b []byte) (o []byte) {
 		o = msgp.AppendArrayHeader(o, uint32(len(z)))
 	}
 	for za0001 := range z {
-		o = z[za0001].MarshalMsg(o)
+		o = msgp.AppendBytes(o, []byte(z[za0001]))
 	}
 	return
 }
@@ -63,10 +117,14 @@ func (z *Layer) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		(*z) = make(Layer, zb0002)
 	}
 	for zb0001 := range *z {
-		bts, err = (*z)[zb0001].UnmarshalMsg(bts)
-		if err != nil {
-			err = msgp.WrapError(err, zb0001)
-			return
+		{
+			var zb0004 []byte
+			zb0004, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)[zb0001]))
+			if err != nil {
+				err = msgp.WrapError(err, zb0001)
+				return
+			}
+			(*z)[zb0001] = Digest(zb0004)
 		}
 	}
 	o = bts
@@ -82,7 +140,7 @@ func (_ *Layer) CanUnmarshalMsg(z interface{}) bool {
 func (z Layer) Msgsize() (s int) {
 	s = msgp.ArrayHeaderSize
 	for za0001 := range z {
-		s += z[za0001].Msgsize()
+		s += msgp.BytesPrefixSize + len([]byte(z[za0001]))
 	}
 	return
 }
@@ -129,7 +187,7 @@ func (z *Tree) MarshalMsg(b []byte) (o []byte) {
 					o = msgp.AppendArrayHeader(o, uint32(len((*z).Levels[zb0001])))
 				}
 				for zb0002 := range (*z).Levels[zb0001] {
-					o = (*z).Levels[zb0001][zb0002].MarshalMsg(o)
+					o = msgp.AppendBytes(o, []byte((*z).Levels[zb0001][zb0002]))
 				}
 			}
 		}
@@ -187,10 +245,14 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).Levels[zb0001] = make(Layer, zb0007)
 				}
 				for zb0002 := range (*z).Levels[zb0001] {
-					bts, err = (*z).Levels[zb0001][zb0002].UnmarshalMsg(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Levels", zb0001, zb0002)
-						return
+					{
+						var zb0009 []byte
+						zb0009, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).Levels[zb0001][zb0002]))
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Levels", zb0001, zb0002)
+							return
+						}
+						(*z).Levels[zb0001][zb0002] = Digest(zb0009)
 					}
 				}
 			}
@@ -227,40 +289,44 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "lvls":
-				var zb0009 int
-				var zb0010 bool
-				zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0010 int
+				var zb0011 bool
+				zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Levels")
 					return
 				}
-				if zb0010 {
+				if zb0011 {
 					(*z).Levels = nil
-				} else if (*z).Levels != nil && cap((*z).Levels) >= zb0009 {
-					(*z).Levels = ((*z).Levels)[:zb0009]
+				} else if (*z).Levels != nil && cap((*z).Levels) >= zb0010 {
+					(*z).Levels = ((*z).Levels)[:zb0010]
 				} else {
-					(*z).Levels = make([]Layer, zb0009)
+					(*z).Levels = make([]Layer, zb0010)
 				}
 				for zb0001 := range (*z).Levels {
-					var zb0011 int
-					var zb0012 bool
-					zb0011, zb0012, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					var zb0012 int
+					var zb0013 bool
+					zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "Levels", zb0001)
 						return
 					}
-					if zb0012 {
+					if zb0013 {
 						(*z).Levels[zb0001] = nil
-					} else if (*z).Levels[zb0001] != nil && cap((*z).Levels[zb0001]) >= zb0011 {
-						(*z).Levels[zb0001] = ((*z).Levels[zb0001])[:zb0011]
+					} else if (*z).Levels[zb0001] != nil && cap((*z).Levels[zb0001]) >= zb0012 {
+						(*z).Levels[zb0001] = ((*z).Levels[zb0001])[:zb0012]
 					} else {
-						(*z).Levels[zb0001] = make(Layer, zb0011)
+						(*z).Levels[zb0001] = make(Layer, zb0012)
 					}
 					for zb0002 := range (*z).Levels[zb0001] {
-						bts, err = (*z).Levels[zb0001][zb0002].UnmarshalMsg(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "Levels", zb0001, zb0002)
-							return
+						{
+							var zb0014 []byte
+							zb0014, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).Levels[zb0001][zb0002]))
+							if err != nil {
+								err = msgp.WrapError(err, "Levels", zb0001, zb0002)
+								return
+							}
+							(*z).Levels[zb0001][zb0002] = Digest(zb0014)
 						}
 					}
 				}
@@ -294,7 +360,7 @@ func (z *Tree) Msgsize() (s int) {
 	for zb0001 := range (*z).Levels {
 		s += msgp.ArrayHeaderSize
 		for zb0002 := range (*z).Levels[zb0001] {
-			s += (*z).Levels[zb0001][zb0002].Msgsize()
+			s += msgp.BytesPrefixSize + len([]byte((*z).Levels[zb0001][zb0002]))
 		}
 	}
 	s += 4 + (*z).Hash.Msgsize()
