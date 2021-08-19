@@ -17,14 +17,11 @@
 package account
 
 import (
-	"context"
-	"database/sql"
-	"fmt"
-	"github.com/algorand/go-algorand/data/basics"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -336,11 +333,11 @@ func TestParticipation_RecordNoKey(t *testing.T) {
 func TestParticipation_RecordMultipleUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	rootDB, err := db.OpenPair(t.Name(), true)
-	require.NoError(t, err)
-	registry, err := MakeParticipationRegistry(rootDB)
-	require.NoError(t, err)
-	require.NotNil(t, registry)
+	registry := getRegistry(t)
+	defer registry.Close()
+
+	// We'll test that recording at this round fails because both keys are active
+	testRound := basics.Round(5000)
 
 	p := Participation{
 		FirstValid:  0,
@@ -355,23 +352,37 @@ func TestParticipation_RecordMultipleUpdates(t *testing.T) {
 	}
 	p2.Parent = p.Parent
 
-	_, err = registry.Insert(p)
+	_, err := registry.Insert(p)
 	a.NoError(err)
 	_, err = registry.Insert(p2)
 	a.NoError(err)
-	err = registry.Register(p.ParticipationID(), 1000)
+	err = registry.Register(p.ParticipationID(), p.FirstValid)
 	a.NoError(err)
 
-	// Force the DB into a bad state (2 active keys for one account).
-	rootDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		id := p2.ParticipationID()
-		_, err = tx.Exec(setRegistered, 1500, p2.LastValid, id[:])
-		if err != nil {
-			return fmt.Errorf("unable to update registered key: %w", err)
-		}
-		return nil
-	})
+	// Force the DB to have 2 active keys for one account by tampering with the private cache variable
+	recordCopy := registry.cache[p2.ParticipationID()]
+	recordCopy.FirstValid = p2.FirstValid
+	recordCopy.LastValid = p2.LastValid
+	registry.cache[p2.ParticipationID()] = recordCopy
+	registry.dirty[p2.ParticipationID()] = struct{}{}
+	registry.Flush()
+	registry.initializeCache()
 
-	err = registry.Record(p.Parent, 5000, Vote)
-	a.EqualError(err, "too many rows effected: 2")
+	// Verify bad state - both records are valid until round 3 million
+	recordTest := make([]ParticipationRecord, 0)
+	recordP, err := registry.Get(p.ParticipationID())
+	a.NoError(err)
+	recordTest = append(recordTest, recordP)
+	recordP2, err := registry.Get(p2.ParticipationID())
+	a.NoError(err)
+	recordTest = append(recordTest, recordP2)
+
+	// Make sure both accounts are active for the test round
+	for _, record := range recordTest {
+		a.LessOrEqual(uint64(record.FirstValid), uint64(testRound))
+		a.GreaterOrEqual(uint64(record.LastValid), uint64(testRound))
+	}
+
+	err = registry.Record(p.Parent, testRound, Vote)
+	a.EqualError(err, ErrMultipleValidKeys.Error())
 }

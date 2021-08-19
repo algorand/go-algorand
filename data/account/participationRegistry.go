@@ -81,6 +81,9 @@ var ErrAlreadyInserted = errors.New("these participation keys are already insert
 // ErrActiveKeyNotFound is used when attempting to update an account with no active key
 var ErrActiveKeyNotFound = errors.New("no active participation key found for account")
 
+// ErrMultipleValidKeys is used when recording a result but multiple valid keys were found. This should not be possible.
+var ErrMultipleValidKeys = errors.New("multiple valid keys found while recording key usage")
+
 // ParticipationRegistry contain all functions for interacting with the Participation Registry.
 type ParticipationRegistry interface {
 	// Insert adds a record to storage and computes the ParticipationID
@@ -495,27 +498,41 @@ func (db *participationDB) Record(account basics.Address, round basics.Round, pa
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
+	matches := make([]ParticipationID, 0)
 	// At most one id should be updated.
 	for _, record := range db.cache {
 		if record.Account == account && record.FirstValid <= round && round <= record.LastValid {
-			switch participationAction {
-			case Vote:
-				record.LastVote = round
-			case BlockProposal:
-				record.LastBlockProposal = round
-			case CompactCertificate:
-				record.LastCompactCertificate = round
-			default:
-				return ErrUnknownParticipationAction
-			}
-
-			db.dirty[record.ParticipationID] = struct{}{}
-			copy := record
-			db.cache[record.ParticipationID] = copy
-			return nil
+			matches = append(matches, record.ParticipationID)
 		}
 	}
 
+	// Good case, one key found.
+	if len(matches) == 1 {
+		record := db.cache[matches[0]]
+
+		switch participationAction {
+		case Vote:
+			record.LastVote = round
+		case BlockProposal:
+			record.LastBlockProposal = round
+		case CompactCertificate:
+			record.LastCompactCertificate = round
+		default:
+			return ErrUnknownParticipationAction
+		}
+
+		db.dirty[record.ParticipationID] = struct{}{}
+		copy := record
+		db.cache[record.ParticipationID] = copy
+		return nil
+	}
+
+	// This probably means there is a bug in the key participation registry Register implementation.
+	if len(matches) > 1 {
+		return ErrMultipleValidKeys
+	}
+
+	// This indicates the participation registry is not synchronized with agreement.
 	return ErrActiveKeyNotFound
 }
 
