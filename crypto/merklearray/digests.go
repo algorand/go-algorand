@@ -10,11 +10,14 @@ type TreeDigest interface {
 
 // Proof contains the merkle path, along with the hash factory that should be used.
 type Proof struct {
-	path []Digest
-	i    crypto.HashFactory
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Path        []Digest           `codec:"pth,allocbound=-"`
+	HashFactory crypto.HashFactory `codec:"hsh"`
 }
 
 // Digest is used as the digest the tree will use.
+//msgp:allocbound Digest
 type Digest []byte
 
 // To32Byte is used to change the data into crypto.Digest.

@@ -23,6 +23,14 @@ import (
 //   |-----> Msgsize
 //   |-----> MsgIsZero
 //
+// Proof
+//   |-----> (*) MarshalMsg
+//   |-----> (*) CanMarshalMsg
+//   |-----> (*) UnmarshalMsg
+//   |-----> (*) CanUnmarshalMsg
+//   |-----> (*) Msgsize
+//   |-----> (*) MsgIsZero
+//
 // Tree
 //   |-----> (*) MarshalMsg
 //   |-----> (*) CanMarshalMsg
@@ -148,6 +156,186 @@ func (z Layer) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z Layer) MsgIsZero() bool {
 	return len(z) == 0
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *Proof) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0002Len := uint32(2)
+	var zb0002Mask uint8 /* 3 bits */
+	if (*z).HashFactory.MsgIsZero() {
+		zb0002Len--
+		zb0002Mask |= 0x2
+	}
+	if len((*z).Path) == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x4
+	}
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if zb0002Len != 0 {
+		if (zb0002Mask & 0x2) == 0 { // if not empty
+			// string "hsh"
+			o = append(o, 0xa3, 0x68, 0x73, 0x68)
+			o = (*z).HashFactory.MarshalMsg(o)
+		}
+		if (zb0002Mask & 0x4) == 0 { // if not empty
+			// string "pth"
+			o = append(o, 0xa3, 0x70, 0x74, 0x68)
+			if (*z).Path == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).Path)))
+			}
+			for zb0001 := range (*z).Path {
+				o = msgp.AppendBytes(o, []byte((*z).Path[zb0001]))
+			}
+		}
+	}
+	return
+}
+
+func (_ *Proof) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Proof)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Proof) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > 0 {
+			zb0002--
+			var zb0004 int
+			var zb0005 bool
+			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Path")
+				return
+			}
+			if zb0005 {
+				(*z).Path = nil
+			} else if (*z).Path != nil && cap((*z).Path) >= zb0004 {
+				(*z).Path = ((*z).Path)[:zb0004]
+			} else {
+				(*z).Path = make([]Digest, zb0004)
+			}
+			for zb0001 := range (*z).Path {
+				{
+					var zb0006 []byte
+					zb0006, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).Path[zb0001]))
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "Path", zb0001)
+						return
+					}
+					(*z).Path[zb0001] = Digest(zb0006)
+				}
+			}
+		}
+		if zb0002 > 0 {
+			zb0002--
+			bts, err = (*z).HashFactory.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "HashFactory")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0002)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0003 {
+			(*z) = Proof{}
+		}
+		for zb0002 > 0 {
+			zb0002--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "pth":
+				var zb0007 int
+				var zb0008 bool
+				zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Path")
+					return
+				}
+				if zb0008 {
+					(*z).Path = nil
+				} else if (*z).Path != nil && cap((*z).Path) >= zb0007 {
+					(*z).Path = ((*z).Path)[:zb0007]
+				} else {
+					(*z).Path = make([]Digest, zb0007)
+				}
+				for zb0001 := range (*z).Path {
+					{
+						var zb0009 []byte
+						zb0009, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).Path[zb0001]))
+						if err != nil {
+							err = msgp.WrapError(err, "Path", zb0001)
+							return
+						}
+						(*z).Path[zb0001] = Digest(zb0009)
+					}
+				}
+			case "hsh":
+				bts, err = (*z).HashFactory.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "HashFactory")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *Proof) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Proof)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *Proof) Msgsize() (s int) {
+	s = 1 + 4 + msgp.ArrayHeaderSize
+	for zb0001 := range (*z).Path {
+		s += msgp.BytesPrefixSize + len([]byte((*z).Path[zb0001]))
+	}
+	s += 4 + (*z).HashFactory.Msgsize()
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *Proof) MsgIsZero() bool {
+	return (len((*z).Path) == 0) && ((*z).HashFactory.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler

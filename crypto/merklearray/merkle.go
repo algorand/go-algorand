@@ -127,7 +127,9 @@ const validateProof = false
 // used to construct the tree.
 func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 	if len(idxs) == 0 {
-		return &Proof{nil, tree.Hash}, nil
+		return &Proof{
+			HashFactory: crypto.HashFactory{},
+		}, nil
 	}
 
 	// Special case: commitment to zero-length array
@@ -178,7 +180,10 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 		}
 	}
 
-	return &Proof{s.hints, tree.Hash}, nil
+	return &Proof{
+		Path:        s.hints,
+		HashFactory: tree.Hash,
+	}, nil
 }
 
 // Verify ensures that the positions in elems correspond to the respective hashes
@@ -186,7 +191,7 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 // returned by Prove().
 func Verify(root TreeDigest, elems map[uint64]crypto.Digest, proof *Proof) error {
 	if len(elems) == 0 {
-		if proof == nil || len(proof.path) != 0 {
+		if proof == nil || len(proof.Path) != 0 {
 			return fmt.Errorf("non-empty proof for empty set of elements")
 		}
 
@@ -205,7 +210,7 @@ func Verify(root TreeDigest, elems map[uint64]crypto.Digest, proof *Proof) error
 
 	var hints []Digest
 	if proof != nil {
-		hints = proof.path
+		hints = proof.Path
 	}
 	s := &siblings{
 		hints: hints,
