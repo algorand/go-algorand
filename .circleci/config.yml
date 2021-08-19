@@ -309,7 +309,7 @@ commands:
             export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
             export PARTITION_ID=$CIRCLE_NODE_INDEX
             export PARALLEL_FLAG="-p 1"
-            gotestsum --format pkgname --junitfile << parameters.result_path >>/<< parameters.result_subdir >>/results.xml --jsonfile << parameters.result_path >>/<< parameters.result_subdir >>/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" << parameters.short_test_flag >> -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
+            gotestsum --format pkgname --junitfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml --jsonfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" << parameters.short_test_flag >> -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
       - store_artifacts:
           path: << parameters.result_path >>
           destination: test-results
@@ -371,7 +371,7 @@ commands:
             scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
             export ALGOTEST=1
             export SHORTTEST=<< parameters.short_test_flag >>
-            export TEST_RESULTS=<< parameters.result_path >>/<< parameters.result_subdir >>
+            export TEST_RESULTS=<< parameters.result_path >>/<< parameters.result_subdir >>/$CIRCLE_NODE_INDEX
             export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
             export PARTITION_ID=$CIRCLE_NODE_INDEX
             test/scripts/run_integration_tests.sh
@@ -383,7 +383,7 @@ commands:
       - persist_to_workspace:
           root: << parameters.result_path >>
           paths:
-            - << parameters.result_subdir >>
+            - << parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
 
   generic_tests_check:
     description: Check if all tests were run at least once and only once across all parallel runs
@@ -402,9 +402,10 @@ commands:
       - run:
           name: Check if all tests were run
           command: |
-            echo "Checking contents of testresults.json:"
-            cat << parameters.result_path >>/<< parameters.result_subdir >>/testresults.json
-            python3 scripts/buildtools/check_tests.py << parameters.result_path >>/<< parameters.result_subdir >>/testresults.json
+            ls -LR
+            # echo "Checking contents of testresults.json:"
+            # cat << parameters.result_path >>/<< parameters.result_subdir >>/testresults.json
+            # python3 scripts/buildtools/check_tests.py << parameters.result_path >>/<< parameters.result_subdir >>/testresults.json
       - store_artifacts:
           path: << parameters.result_path >>/<< parameters.result_subdir >>
           destination: << parameters.result_subdir >>/combined-test-results
