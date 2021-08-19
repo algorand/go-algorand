@@ -167,7 +167,7 @@ workflows:
                 - /hotfix\/.*/
           context: slack-secrets
       #- windows_x64_build
-      - test_verification_check:
+      - tests_verification_job:
           name: << matrix.job_type >>_<< matrix.job_version >>_verification
           matrix:
             parameters:
@@ -390,12 +390,9 @@ commands:
           paths:
             - << parameters.result_subdir >>
 
-  generic_tests_check:
+  tests_verification_command:
     description: Check if all tests were run at least once and only once across all parallel runs
     parameters:
-      circleci_home:
-        type: string
-        default: "/home/circleci"
       result_path:
         type: string
         default: "/tmp/results"
@@ -443,7 +440,7 @@ jobs:
     steps:
       - prepare_go
       - generic_buildtest:
-          result_subdir: amd64-short
+          result_subdir: amd64_test
           short_test_flag: "-short"
       - upload_coverage
 
@@ -455,7 +452,7 @@ jobs:
     steps:
       - prepare_go
       - generic_buildtest:
-          result_subdir: amd64-nightly
+          result_subdir: amd64_test_nightly
           no_output_timeout: 45m
       - upload_coverage
       - slack/notify:
@@ -472,7 +469,7 @@ jobs:
     steps:
       - prepare_go
       - generic_integration:
-          result_subdir: amd64-integration
+          result_subdir: amd64_integration
           short_test_flag: "-short"
 
   amd64_integration_nightly:
@@ -485,7 +482,7 @@ jobs:
     steps:
       - prepare_go
       - generic_integration:
-          result_subdir: amd64-integrationnightly
+          result_subdir: amd64_integration_nightly
           no_output_timeout: 45m
       - slack/notify:
           event: fail
@@ -500,7 +497,7 @@ jobs:
     steps:
       - prepare_go
       - generic_integration:
-          result_subdir: amd64-e2e_subs
+          result_subdir: amd64_e2e_subs
           short_test_flag: "-short"
 
   amd64_e2e_subs_nightly:
@@ -512,7 +509,7 @@ jobs:
     steps:
       - prepare_go
       - generic_integration:
-          result_subdir: amd64-e2e_subs_nightly
+          result_subdir: amd64_e2e_subs_nightly
           no_output_timeout: 45m
       - slack/notify:
           event: fail
@@ -536,7 +533,7 @@ jobs:
       - checkout
       - prepare_go
       - generic_buildtest:
-          result_subdir: arm64-short
+          result_subdir: arm64_test
           short_test_flag: "-short"
       - upload_coverage
 
@@ -549,7 +546,7 @@ jobs:
       - checkout
       - prepare_go
       - generic_buildtest:
-          result_subdir: arm64-nightly
+          result_subdir: arm64_test_nightly
           no_output_timeout: 45m
       - upload_coverage
       - slack/notify:
@@ -567,7 +564,7 @@ jobs:
       - checkout
       - prepare_go
       - generic_integration:
-          result_subdir: arm64-integration
+          result_subdir: arm64_integration
           short_test_flag: "-short"
 
   arm64_integration_nightly:
@@ -581,7 +578,7 @@ jobs:
       - checkout
       - prepare_go
       - generic_integration:
-          result_subdir: arm64-integration-nightly
+          result_subdir: arm64_integration_nightly
           no_output_timeout: 45m
       - slack/notify:
           event: fail
@@ -597,7 +594,7 @@ jobs:
       - checkout
       - prepare_go
       - generic_integration:
-          result_subdir: arm64-e2e_subs
+          result_subdir: arm64_e2e_subs
           short_test_flag: "-short"
 
   arm64_e2e_subs_nightly:
@@ -610,7 +607,7 @@ jobs:
       - checkout
       - prepare_go
       - generic_integration:
-          result_subdir: arm64-e2e_subs-nightly
+          result_subdir: arm64_e2e_subs_nightly
           no_output_timeout: 45m
       - slack/notify:
           event: fail
@@ -640,7 +637,7 @@ jobs:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
       - generic_buildtest:
-          result_subdir: mac-amd64-short
+          result_subdir: mac_amd64_test
           circleci_home: /Users/distiller
           short_test_flag: "-short"
       - upload_coverage
@@ -656,7 +653,7 @@ jobs:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
       - generic_buildtest:
-          result_subdir: mac-amd64-short
+          result_subdir: mac_amd64_test_nightly
           circleci_home: /Users/distiller
           no_output_timeout: 45m
       - upload_coverage
@@ -676,7 +673,7 @@ jobs:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
       - generic_integration:
-          result_subdir: mac-amd64-integration
+          result_subdir: mac_amd64_integration
           circleci_home: /Users/distiller
           short_test_flag: "-short"
 
@@ -692,7 +689,7 @@ jobs:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
       - generic_integration:
-          result_subdir: mac-amd64-integration-nightly
+          result_subdir: mac_amd64_integration_nightly
           circleci_home: /Users/distiller
           no_output_timeout: 45m
       - slack/notify:
@@ -710,7 +707,7 @@ jobs:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
       - generic_integration:
-          result_subdir: mac-amd64-e2e_subs
+          result_subdir: mac_amd64_e2e_subs
           circleci_home: /Users/distiller
           short_test_flag: "-short"
 
@@ -725,7 +722,7 @@ jobs:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
       - generic_integration:
-          result_subdir: mac-amd64-e2e_subs-nightly
+          result_subdir: mac_amd64_e2e_subs_nightly
           circleci_home: /Users/distiller
           no_output_timeout: 45m
       - slack/notify:
@@ -750,7 +747,7 @@ jobs:
             export MAKE=mingw32-make
             $msys2 scripts/travis/build_test.sh
           shell: bash.exe
-  test_verification_check:
+  tests_verification_job:
     docker:
       - image: python:3.9.6-alpine
     resource_class: medium
@@ -761,5 +758,5 @@ jobs:
         type: string
     steps:
       - checkout
-      - generic_tests_check:
+      - tests_verification_command:
           result_subdir: << parameters.job_type >>_<< parameters.job_version >>

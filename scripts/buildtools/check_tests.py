@@ -50,7 +50,7 @@ if countTotalDeduped != countPassedDeduped:
 else:
     print("All tests passed at least once ... OK")
 
-# Check if in there are any duplicates in the passed tests
+# Check for duplicates in the passed tests
 print("==================================================")
 if countPassed != countPassedDeduped:
     testDuplicates = set([testName + " " + str(testListPassed.count(testName)) for testName in testListPassed if testListPassed.count(testName) > 1])
