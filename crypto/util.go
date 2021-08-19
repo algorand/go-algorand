@@ -39,6 +39,11 @@ func hashRep(h Hashable) []byte {
 	return append([]byte(hashid), data...)
 }
 
+// HashRep  is a tmp function to export hashRep. // TODO remove, and export HashRep
+func HashRep(h Hashable) []byte {
+	return hashRep(h)
+}
+
 // DigestSize is the number of bytes in the preferred hash Digest used here.
 const DigestSize = sha512.Size256
 
