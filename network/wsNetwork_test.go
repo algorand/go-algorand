@@ -2082,6 +2082,12 @@ func TestParseHostOrURL(t *testing.T) {
 		":xxx",
 		":xxx:1234",
 		"::11.22.33.44",
+		":a:1",
+		":a:",
+		":1",
+		":a",
+		":",
+		"",
 	}
 	for _, tc := range urlTestCases {
 		t.Run(tc.text, func(t *testing.T) {

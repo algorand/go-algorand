@@ -1939,7 +1939,7 @@ func ParseHostOrURL(addr string) (*url.URL, error) {
 	if e2 == nil {
 		// https://datatracker.ietf.org/doc/html/rfc1123#section-2
 		// first character is relaxed to allow either a letter or a digit
-		if parsed.Host[0] == ':' && parsed.Host[1] != ':' {
+		if parsed.Host[0] == ':' && (len(parsed.Host) < 2 || parsed.Host[1] != ':') {
 			return nil, errors.New("host name starts with colon")
 		}
 		return parsed, nil
