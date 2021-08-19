@@ -139,8 +139,24 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 	var actions []action
 	maxDepth := config.Consensus[p.FirstUncommittedVersion].AgreementPipelineDepth
 
-	// First, GC any players that are no longer relevant.  We also might
-	// have players that appear to be mis-speculations (we have a better
+	// Advance FirstUncommittedRound to account for any decided players.
+	for {
+		pp, ok := p.Players[p.FirstUncommittedRound]
+		if !ok {
+			break
+		}
+
+		if pp.Decided == (bookkeeping.BlockHash{}) {
+			break
+		}
+
+		p.FirstUncommittedRound.Number += 1
+		p.FirstUncommittedRound.Branch = pp.Decided
+		p.FirstUncommittedVersion = pp.NextVersion
+	}
+
+	// GC any players that are no longer relevant.  We also might have
+	// players that appear to be mis-speculations (we have a better
 	// payload proposal for their parent player), but we don't know yet
 	// if that better proposal will be agreed on..
 	for rnd := range p.Players {
@@ -232,6 +248,6 @@ func (p *pipelinePlayer) allPlayersRPS() []RPS {
 	return ret
 }
 
-func (p *pipelinePlayer) playerFinished(pp *player, r routerHandle, nextver protocol.ConsensusVersion) []action {
+func (p *pipelinePlayer) playerDecided(pp *player, r routerHandle) []action {
 	return p.adjustPlayers(r)
 }

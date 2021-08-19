@@ -57,6 +57,10 @@ type player struct {
 	// value indicates no agreement yet.
 	Decided bookkeeping.BlockHash
 
+	// NextVersion is the protocol version for the next block, set if Decided
+	// is non-zero.
+	NextVersion protocol.ConsensusVersion
+
 	// pipelined is set to true if this player is part of a pipelinePlayer.
 	pipelined bool
 
@@ -92,6 +96,7 @@ func (p *player) init(r routerHandle, target round, proto protocol.ConsensusVers
 	p.FastRecoveryDeadline = 0
 	p.Deadline = FilterTimeout(0, proto)
 	p.Decided = bookkeeping.BlockHash{}
+	p.NextVersion = ""
 
 	// update tracer state to match player
 	r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})
@@ -376,7 +381,8 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 			actions = append(actions, a0)
 
 			p.Decided = bookkeeping.BlockHash(cert.Proposal.BlockDigest)
-			as := p.notify.playerFinished(p, r, e.Proto)
+			p.NextVersion = e.Proto
+			as := p.notify.playerDecided(p, r)
 			return append(actions, as...)
 		}
 		// we don't have the block! We need to ensure we will be able to receive the block.
@@ -453,11 +459,11 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 }
 
 type roundCompletionNotifier interface {
-	playerFinished(p *player, r routerHandle, nextver protocol.ConsensusVersion) []action
+	playerDecided(p *player, r routerHandle) []action
 }
 
-func (p *player) playerFinished(_ *player, r routerHandle, nextver protocol.ConsensusVersion) []action {
-	return p.init(r, makeRoundBranch(p.Round.Number+1, p.Decided), nextver)
+func (p *player) playerDecided(_ *player, r routerHandle) []action {
+	return p.init(r, makeRoundBranch(p.Round.Number+1, p.Decided), p.NextVersion)
 }
 
 // partitionPolicy checks if the player is in a partition, and if it is,
@@ -649,7 +655,8 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				actions = append(actions, a0)
 
 				p.Decided = e.Input.Proposal.Block.Hash()
-				as := p.notify.playerFinished(p, r, delegatedE.Proto.Version)
+				p.NextVersion = delegatedE.Proto.Version
+				as := p.notify.playerDecided(p, r)
 				return append(actions, as...)
 			}
 		}
