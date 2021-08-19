@@ -8,10 +8,12 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalCommittablePublicKey(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := CommittablePublicKey{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -71,6 +73,7 @@ func BenchmarkUnmarshalCommittablePublicKey(b *testing.B) {
 }
 
 func TestMarshalUnmarshalProof(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := Proof{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -130,6 +133,7 @@ func BenchmarkUnmarshalProof(b *testing.B) {
 }
 
 func TestMarshalUnmarshalSignature(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := Signature{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -189,6 +193,7 @@ func BenchmarkUnmarshalSignature(b *testing.B) {
 }
 
 func TestMarshalUnmarshalSigner(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := Signer{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -248,6 +253,7 @@ func BenchmarkUnmarshalSigner(b *testing.B) {
 }
 
 func TestMarshalUnmarshalVerifier(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := Verifier{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
