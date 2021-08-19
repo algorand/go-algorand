@@ -96,16 +96,25 @@ func (z Layer) MsgIsZero() bool {
 func (z *Tree) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0003Len := uint32(1)
-	var zb0003Mask uint8 /* 2 bits */
-	if len((*z).Levels) == 0 {
+	zb0003Len := uint32(2)
+	var zb0003Mask uint8 /* 3 bits */
+	if (*z).Hash.MsgIsZero() {
 		zb0003Len--
 		zb0003Mask |= 0x2
+	}
+	if len((*z).Levels) == 0 {
+		zb0003Len--
+		zb0003Mask |= 0x4
 	}
 	// variable map header, size zb0003Len
 	o = append(o, 0x80|uint8(zb0003Len))
 	if zb0003Len != 0 {
 		if (zb0003Mask & 0x2) == 0 { // if not empty
+			// string "hsh"
+			o = append(o, 0xa3, 0x68, 0x73, 0x68)
+			o = (*z).Hash.MarshalMsg(o)
+		}
+		if (zb0003Mask & 0x4) == 0 { // if not empty
 			// string "lvls"
 			o = append(o, 0xa4, 0x6c, 0x76, 0x6c, 0x73)
 			if (*z).Levels == nil {
@@ -187,6 +196,14 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0003 > 0 {
+			zb0003--
+			bts, err = (*z).Hash.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Hash")
+				return
+			}
+		}
+		if zb0003 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0003)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -247,6 +264,12 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						}
 					}
 				}
+			case "hsh":
+				bts, err = (*z).Hash.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Hash")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -274,10 +297,11 @@ func (z *Tree) Msgsize() (s int) {
 			s += (*z).Levels[zb0001][zb0002].Msgsize()
 		}
 	}
+	s += 4 + (*z).Hash.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Tree) MsgIsZero() bool {
-	return (len((*z).Levels) == 0)
+	return (len((*z).Levels) == 0) && ((*z).Hash.MsgIsZero())
 }
