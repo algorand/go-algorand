@@ -38,7 +38,7 @@ func (tree *Tree) topLayer() Layer {
 
 type errorChannel chan error
 
-func (ch errorChannel) nonBlockSend(e error) {
+func (ch errorChannel) nonBlockingSend(e error) {
 	select {
 	case ch <- e:
 	default:
@@ -51,7 +51,7 @@ func buildWorker(ws *workerState, array Array, leaves Layer, h crypto.HashFactor
 	batchSize := uint64(1)
 	hash, err := h.NewHash()
 	if err != nil {
-		errs.nonBlockSend(err)
+		errs.nonBlockingSend(err)
 		return
 	}
 	for {
@@ -63,7 +63,7 @@ func buildWorker(ws *workerState, array Array, leaves Layer, h crypto.HashFactor
 		for i := off; i < off+batchSize && i < ws.maxidx; i++ {
 			m, err := array.Marshal(i)
 			if err != nil {
-				errs.nonBlockSend(err)
+				errs.nonBlockingSend(err)
 				return
 			}
 			d := crypto.Digest{}
