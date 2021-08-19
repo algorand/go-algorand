@@ -99,6 +99,11 @@ func makeTracer(log serviceLogger, cadaverFilename string, cadaverSizeTarget uin
 
 // call this method to setup timing generators before entering target round, pipelining properly.
 func (t *tracer) resetTimingWithPipeline(target round) {
+	// During testing we might not have initialized the tracer.
+	if t == nil {
+		return
+	}
+
 	if t.tRPlus1 != nil && t.tRPlus1.i.Round == uint64(target.Number) { // XXX
 		t.tR = t.tRPlus1
 	} else {
@@ -127,6 +132,11 @@ func (t *tracer) timeRPlus1() *timingInfoGenerator {
 // setMetadata configures tracer to print round/period/step information.
 // optional.
 func (t *tracer) setMetadata(metadata tracerMetadata) {
+	// During testing we might not have initialized the tracer.
+	if t == nil {
+		return
+	}
+
 	t.playerInfo = metadata
 }
 
@@ -146,6 +156,11 @@ func getCallerInfo() string {
 }
 
 func (t *tracer) ein(src, dest stateMachineTag, e event, r round, p period, s step) {
+	// During testing we might not have initialized the tracer.
+	if t == nil {
+		return
+	}
+
 	t.seq++
 	if t.level >= all {
 		// fmt.Fprintf(t.w, "%v %3v %23v  -> %23v: %30v\n", t.tag, t.seq, src, dest, e)
@@ -154,6 +169,11 @@ func (t *tracer) ein(src, dest stateMachineTag, e event, r round, p period, s st
 }
 
 func (t *tracer) eout(src, dest stateMachineTag, e event, r round, p period, s step) {
+	// During testing we might not have initialized the tracer.
+	if t == nil {
+		return
+	}
+
 	t.seq++
 	if t.level >= all {
 		// fmt.Fprintf(t.w, "%v %3v %23v <-  %23v: %30v\n", t.tag, t.seq, src, dest, e)
@@ -168,6 +188,11 @@ func (t *tracer) eout(src, dest stateMachineTag, e event, r round, p period, s s
 }
 
 func (t *tracer) ainTop(src, dest stateMachineTag, state player, e event, r round, p period, s step) {
+	// During testing we might not have initialized the tracer.
+	if t == nil {
+		return
+	}
+
 	t.seq++
 	if t.level >= top {
 		// fmt.Fprintf(t.w, "%v %3v %23v  => %23v: %30v\n", t.tag, t.seq, src, dest, e)
@@ -176,6 +201,11 @@ func (t *tracer) ainTop(src, dest stateMachineTag, state player, e event, r roun
 }
 
 func (t *tracer) aoutTop(src, dest stateMachineTag, as []action, r round, p period, s step) {
+	// During testing we might not have initialized the tracer.
+	if t == nil {
+		return
+	}
+
 	if t.log.IsLevelEnabled(logging.Debug) {
 		var tags []string
 		for _, a := range as {

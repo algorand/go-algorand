@@ -17,8 +17,6 @@
 package agreement
 
 import (
-	"math"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -34,15 +32,6 @@ type pipelinePlayer struct {
 	Players                 map[round]*player
 }
 
-func makePipelinePlayer(nextRound round, nextVersion protocol.ConsensusVersion) *pipelinePlayer {
-	ret := &pipelinePlayer{
-		FirstUncommittedRound:   nextRound,
-		FirstUncommittedVersion: nextVersion,
-		Players:                 make(map[round]*player),
-	}
-	return ret
-}
-
 func (p *pipelinePlayer) T() stateMachineTag { return playerMachine } // XXX different tag?
 func (p *pipelinePlayer) underlying() actor  { return p }
 
@@ -50,18 +39,27 @@ func (p *pipelinePlayer) firstUncommittedRound() round {
 	return p.FirstUncommittedRound
 }
 
-func (p *pipelinePlayer) init(r routerHandle) []action {
+func (p *pipelinePlayer) init(r routerHandle, target round, proto protocol.ConsensusVersion) []action {
+	p.FirstUncommittedRound = target
+	p.FirstUncommittedVersion = proto
+	p.Players = make(map[round]*player)
 	return p.adjustPlayers(r)
 }
 
 // decode implements serializableActor
 func (*pipelinePlayer) decode(buf []byte) (serializableActor, error) {
-	ret := pipelinePlayer{}
-	err := protocol.DecodeReflect(buf, &ret)
+	p := &pipelinePlayer{}
+	err := protocol.DecodeReflect(buf, p)
 	if err != nil {
 		return nil, err
 	}
-	return &ret, nil
+
+	// fill in fields that are not exported (and thus not serialized)
+	for _, pp := range p.Players {
+		pp.pipelined = true
+		pp.notify = p
+	}
+	return p, nil
 }
 
 // encode implements serializableActor
@@ -161,7 +159,7 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 	actions = append(actions, p.ensurePlayer(r, p.FirstUncommittedRound, p.FirstUncommittedVersion)...)
 
 	for rnd, rp := range p.Players {
-		if rnd.Number >= p.FirstUncommittedRound.Number + basics.Round(maxDepth) {
+		if rnd.Number >= p.FirstUncommittedRound.Number+basics.Round(maxDepth) {
 			continue
 		}
 
@@ -180,7 +178,7 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 			continue
 		}
 
-		nextrnd := round{Number: rnd.Number+1, Branch: bookkeeping.BlockHash(re.Proposal.BlockDigest)}
+		nextrnd := round{Number: rnd.Number + 1, Branch: bookkeeping.BlockHash(re.Proposal.BlockDigest)}
 		actions = append(actions, p.ensurePlayer(r, nextrnd, re.Payload.prevVersion)...)
 	}
 
@@ -189,55 +187,35 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 
 // ensurePlayer creates a player for a particular round, if not already present.
 func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protocol.ConsensusVersion) []action {
-	var actions []action
-
 	_, ok := p.Players[nextrnd]
 	if ok {
 		return nil
 	}
 
 	newPlayer := &player{
-		Round:        nextrnd,
-		Step:         soft,
-		Deadline:     FilterTimeout(0, ver),
-		pipelined:    true,
-		roundEnterer: &pipelineRoundEnterer{pp: p},
+		pipelined: true,
+		notify:    p,
 	}
 
 	p.Players[nextrnd] = newPlayer
-	actions = append(actions, pseudonodeAction{T: assemble, Round: nextrnd}, rezeroAction{Round: nextrnd})
 
-	e := r.dispatch(*newPlayer, roundInterruptionEvent{Round: nextrnd}, proposalMachine, nextrnd, 0, 0)
-	if e.t() == payloadPipelined {
-		e := e.(payloadProcessedEvent)
-		msg := message{MessageHandle: 0, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: e.UnauthenticatedPayload}
-		a := verifyPayloadAction(messageEvent{T: payloadPresent, Input: msg}, newPlayer.Round, e.Period, e.Pinned)
-		actions = append(actions, a)
-	}
-
-	// we might need to handle a pipelined threshold event
-	res := r.dispatch(*newPlayer, freshestBundleRequestEvent{}, voteMachineRound, newPlayer.Round, 0, 0)
-	freshestRes := res.(freshestBundleEvent) // panic if violate postcondition
-	if freshestRes.Ok {
-		a4 := newPlayer.handle(r, freshestRes.Event)
-		actions = append(actions, a4...)
-	}
-
-	return actions
+	return newPlayer.init(r, nextrnd, ver)
 }
 
 // externalDemuxSignals returns a list of per-player signals allowing demux.next to wait for
 // multiple pipelined per-round deadlines, as well as the last committed round.
 func (p *pipelinePlayer) externalDemuxSignals() pipelineExternalDemuxSignals {
-	s := make([]externalDemuxSignals, len(p.Players))
-	i := 0
+	s := make([]externalDemuxSignals, 0, len(p.Players))
 	for _, p := range p.Players {
-		s[i] = externalDemuxSignals{
+		if p.Decided != (bookkeeping.BlockHash{}) {
+			continue
+		}
+
+		s = append(s, externalDemuxSignals{
 			Deadline:             p.Deadline,
 			FastRecoveryDeadline: p.FastRecoveryDeadline,
 			CurrentRound:         p.Round,
-		}
-		i++
+		})
 	}
 	return pipelineExternalDemuxSignals{signals: s, currentRound: p.FirstUncommittedRound.Number}
 }
@@ -254,42 +232,6 @@ func (p *pipelinePlayer) allPlayersRPS() []RPS {
 	return ret
 }
 
-type pipelineRoundEnterer struct {
-	pp *pipelinePlayer
-}
-
-func (re *pipelineRoundEnterer) enter(p *player, r routerHandle, source event, target round) []action {
-	// XXX mark player as done:
-	// - do not report in demux signals
-	// - advance FirstUncommitted if the first guy is done
-
-	// XXX 
-	prevRound := p.Round
-
-	a := enterRound(p, r, source, target)
-	if p.Round != target {
-		panic("enterRound did not transition player to target")
-	}
-
-	// confirmed prevRound, player wants to move to target
-	// XXX bad
-	delete(re.pp.Players, prevRound)
-
-	// update player's entry in map to new round
-	re.pp.Players[target] = p
-
-	// XXX check if we are speculating on the same round, different leaf
-
-	// update FirstUncommittedRound
-	var minRound round
-	minRound.Number = basics.Round(math.MaxUint64)
-	for rnd := range re.pp.Players {
-		// XXX ensure rnd.Branch matches the hash of the block that just committed
-		if rnd.Number < minRound.Number {
-			minRound = rnd
-		}
-	}
-	re.pp.FirstUncommittedRound = minRound
-
-	return a
+func (p *pipelinePlayer) playerFinished(pp *player, r routerHandle, nextver protocol.ConsensusVersion) []action {
+	return p.adjustPlayers(r)
 }

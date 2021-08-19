@@ -238,18 +238,18 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 		}
 
 		if enablePipelining {
-			status = makePipelinePlayer(nextRound, nextVersion)
-			status2 = &player{Round: nextRound, Step: soft, Deadline: FilterTimeout(0, nextVersion)}
+			status = &pipelinePlayer{}
+			status2 = &player{}
 		} else {
-			status = &player{Round: nextRound, Step: soft, Deadline: FilterTimeout(0, nextVersion)}
+			status = &player{}
 		}
 
 		router = makeRootRouter(status)
 		router2 = makeRootRouter(status2)
 
-		a = status.init(routerHandle{t: s.tracer, r: &router, src: status.T()})
+		a = status.init(routerHandle{t: s.tracer, r: &router, src: status.T()}, nextRound, nextVersion)
 		if enablePipelining {
-			status2.init(routerHandle{t: s.tracer, r: &router2, src: status2.T()})
+			status2.init(routerHandle{t: s.tracer, r: &router2, src: status2.T()}, nextRound, nextVersion)
 		}
 	} else {
 		s.clockManager = clockManager

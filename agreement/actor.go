@@ -18,6 +18,8 @@ package agreement
 
 import (
 	"fmt"
+
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // An actor is a state machine which accepts events and returns sequences of actions.
@@ -48,7 +50,7 @@ type actor interface {
 	handle(routerHandle, event) []action
 
 	// init initializes the actor.
-	init(routerHandle) []action
+	init(routerHandle, round, protocol.ConsensusVersion) []action
 }
 
 type serializableActor interface {

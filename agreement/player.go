@@ -53,10 +53,16 @@ type player struct {
 	// must be verified after some vote has been verified.
 	Pending proposalTable
 
+	// Decided is the value that was agreed on by this player.  The zero
+	// value indicates no agreement yet.
+	Decided bookkeeping.BlockHash
+
 	// pipelined is set to true if this player is part of a pipelinePlayer.
 	pipelined bool
 
-	roundEnterer roundEnterer
+	// notify receives a notification when this player reaches consensus
+	// for its round.
+	notify roundCompletionNotifier
 }
 
 func (p *player) T() stateMachineTag {
@@ -71,11 +77,49 @@ func (p *player) firstUncommittedRound() round {
 	return p.Round
 }
 
-func (p *player) init(r routerHandle) []action {
-	return []action{
+func (p *player) init(r routerHandle, target round, proto protocol.ConsensusVersion) []action {
+	if p.notify == nil {
+		p.notify = p
+	}
+
+	// XXX this does not work well in the presence of pipelining
+	p.LastConcluding = p.Step
+
+	p.Round = target
+	p.Period = 0
+	p.Step = soft
+	p.Napping = false
+	p.FastRecoveryDeadline = 0
+	p.Deadline = FilterTimeout(0, proto)
+	p.Decided = bookkeeping.BlockHash{}
+
+	// update tracer state to match player
+	r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})
+	r.t.resetTimingWithPipeline(p.Round)
+
+	e := r.dispatch(*p, roundInterruptionEvent{Round: p.Round}, proposalMachine, p.Round, 0, 0)
+
+	as := []action{
 		pseudonodeAction{T: assemble, Round: p.Round},
 		rezeroAction{Round: p.Round},
 	}
+
+	if e.t() == payloadPipelined {
+		e := e.(payloadProcessedEvent)
+		msg := message{MessageHandle: 0, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: e.UnauthenticatedPayload}
+		a := verifyPayloadAction(messageEvent{T: payloadPresent, Input: msg}, p.Round, e.Period, e.Pinned)
+		as = append(as, a)
+	}
+
+	// we might need to handle a pipelined threshold event
+	res := r.dispatch(*p, freshestBundleRequestEvent{}, voteMachineRound, p.Round, 0, 0)
+	freshestRes := res.(freshestBundleEvent) // panic if violate postcondition
+	if freshestRes.Ok {
+		a4 := p.handle(r, freshestRes.Event)
+		as = append(as, a4...)
+	}
+
+	return as
 }
 
 // decode implements serializableActor
@@ -111,11 +155,12 @@ func (p *player) allPlayersRPS() []RPS {
 // Precondition: passed-in player is equal to player
 // Postcondition: each messageEvent is processed exactly once
 func (p *player) handle(r routerHandle, e event) []action {
-	var actions []action
-
-	if p.roundEnterer == nil { // XXX
-		p.roundEnterer = playerRoundEnterer{}
+	// Test cases initialize the player struct directly, without calling init()..
+	if p.notify == nil {
+		p.notify = p
 	}
+
+	var actions []action
 
 	if e.t() == none {
 		return nil
@@ -165,7 +210,11 @@ func (p *player) handle(r routerHandle, e event) []action {
 			return actions
 		}
 	case roundInterruptionEvent:
-		return p.roundEnterer.enter(p, r, e, e.Round)
+		if p.pipelined {
+			panic("player got roundInterruptionEvent in pipelinedPlayer mode")
+		}
+
+		return p.init(r, e.Round, e.Proto.Version)
 	case checkpointEvent:
 		return p.handleCheckpointEvent(r, e)
 	default:
@@ -325,7 +374,9 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 			cert := Certificate(e.Bundle)
 			a0 := ensureAction{Payload: res.Payload, Certificate: cert}
 			actions = append(actions, a0)
-			as := p.roundEnterer.enter(p, r, e, round{Number: p.Round.Number + 1, Branch: bookkeeping.BlockHash(cert.Proposal.BlockDigest)})
+
+			p.Decided = bookkeeping.BlockHash(cert.Proposal.BlockDigest)
+			as := p.notify.playerFinished(p, r, e.Proto)
 			return append(actions, as...)
 		}
 		// we don't have the block! We need to ensure we will be able to receive the block.
@@ -401,70 +452,12 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 	return actions
 }
 
-type roundEnterer interface {
-	enter(p *player, r routerHandle, source event, target round) []action
+type roundCompletionNotifier interface {
+	playerFinished(p *player, r routerHandle, nextver protocol.ConsensusVersion) []action
 }
 
-type playerRoundEnterer struct{}
-
-func (playerRoundEnterer) enter(p *player, r routerHandle, source event, target round) []action {
-	return enterRound(p, r, source, target)
-}
-
-func enterRound(p *player, r routerHandle, source event, target round) []action {
-	var actions []action
-
-	newRoundEvent := source
-	// passing in a cert threshold to the proposalMachine is now ambiguous,
-	// so replace with an explicit new round event.
-	// In addition, handle a new source: payloadVerified (which can trigger new round if
-	// received after cert threshold)
-	if source.t() == certThreshold || source.t() == payloadVerified { // i.e., source.t() != roundInterruption
-		r.t.logRoundStart(*p, target)
-		newRoundEvent = roundInterruptionEvent{Round: target}
-	}
-	// this happens here so that the proposalMachine contract does not complain
-	e := r.dispatch(*p, newRoundEvent, proposalMachine, target, 0, 0)
-
-	p.LastConcluding = p.Step
-	p.Round = target
-	p.Period = 0
-	p.Step = soft
-	p.Napping = false
-	p.FastRecoveryDeadline = 0 // set immediately
-
-	switch source := source.(type) {
-	case roundInterruptionEvent:
-		p.Deadline = FilterTimeout(0, source.Proto.Version)
-	case thresholdEvent:
-		p.Deadline = FilterTimeout(0, source.Proto)
-	case filterableMessageEvent:
-		p.Deadline = FilterTimeout(0, source.Proto.Version)
-	}
-
-	// update tracer state to match player
-	r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})
-	r.t.resetTimingWithPipeline(target)
-
-	// do proposal-related actions
-	as := pseudonodeAction{T: assemble, Round: p.Round, Period: 0}
-	actions = append(actions, rezeroAction{Round: target}, as)
-
-	if e.t() == payloadPipelined {
-		e := e.(payloadProcessedEvent)
-		msg := message{MessageHandle: 0, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: e.UnauthenticatedPayload} // TODO do we want to keep around the original handle?
-		a := verifyPayloadAction(messageEvent{T: payloadPresent, Input: msg}, p.Round, e.Period, e.Pinned)
-		actions = append(actions, a)
-	}
-
-	// we might need to handle a pipelined threshold event
-	res := r.dispatch(*p, freshestBundleRequestEvent{}, voteMachineRound, p.Round, 0, 0)
-	freshestRes := res.(freshestBundleEvent) // panic if violate postcondition
-	if freshestRes.Ok {
-		a4 := p.handle(r, freshestRes.Event)
-		actions = append(actions, a4...)
-	}
-	return actions
+func (p *player) playerFinished(_ *player, r routerHandle, nextver protocol.ConsensusVersion) []action {
+	return p.init(r, makeRoundBranch(p.Round.Number+1, p.Decided), nextver)
 }
 
 // partitionPolicy checks if the player is in a partition, and if it is,
@@ -654,7 +647,9 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				cert := Certificate(freshestRes.Event.Bundle)
 				a0 := ensureAction{Payload: e.Input.Proposal, Certificate: cert}
 				actions = append(actions, a0)
-				as := p.roundEnterer.enter(p, r, delegatedE, round{Number: cert.Round + 1, Branch: bookkeeping.BlockHash(e.Input.Proposal.Block.Digest())})
+
+				p.Decided = e.Input.Proposal.Block.Hash()
+				as := p.notify.playerFinished(p, r, delegatedE.Proto.Version)
 				return append(actions, as...)
 			}
 		}
