@@ -69,7 +69,6 @@ type participationIDData struct {
 
 // ParticipationID computes a ParticipationID.
 func (part Participation) ParticipationID() ParticipationID {
-
 	copy := participationIDData{
 		Parent:      part.Parent,
 		FirstValid:  part.FirstValid,

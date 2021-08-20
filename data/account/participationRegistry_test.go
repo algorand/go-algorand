@@ -17,6 +17,10 @@
 package account
 
 import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -30,11 +34,11 @@ func getRegistry(t *testing.T) *participationDB {
 	rootDB, err := db.OpenPair(t.Name(), true)
 	require.NoError(t, err)
 
-	registry, err := MakeParticipationRegistry(rootDB)
+	registry, err := makeParticipationRegistry(rootDB)
 	require.NoError(t, err)
 	require.NotNil(t, registry)
 
-	return registry.(*participationDB)
+	return registry
 }
 
 func assertParticipation(t *testing.T, p Participation, pr ParticipationRecord) {
@@ -385,4 +389,111 @@ func TestParticipation_RecordMultipleUpdates(t *testing.T) {
 
 	err = registry.Record(p.Parent, testRound, Vote)
 	a.EqualError(err, ErrMultipleValidKeys.Error())
+}
+
+func TestParticipation_MultipleInsertError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	registry := getRegistry(t)
+	defer registry.Close()
+
+	p := Participation{
+		FirstValid:  1,
+		LastValid:   2,
+		KeyDilution: 3,
+	}
+	p.Parent[0] = 1
+
+	_, err := registry.Insert(p)
+	a.NoError(err)
+	_, err = registry.Insert(p)
+	a.Error(err, ErrAlreadyInserted.Error())
+}
+
+// This is a contrived test on every level. To workaround errors we setup the
+// DB and cache in ways that are impossible with public methods.
+//
+// Basically multiple records with the same ParticipationID are a big no-no and
+// it should be detected as quickly as possible.
+func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	registry := getRegistry(t)
+	defer registry.Close()
+
+	p := Participation{
+		FirstValid:  1,
+		LastValid:   2000000,
+		KeyDilution: 3,
+	}
+	p.Parent[0] = 1
+	id := p.ParticipationID()
+
+	// Insert the same record twice
+	// Pretty much copied from the Insert function without error checking.
+	err := registry.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		for i := 0; i < 2; i++ {
+			record := p
+			_, err := tx.Exec(
+				insertKeysetQuery,
+				id[:],
+				record.Parent[:],
+				record.FirstValid,
+				record.LastValid,
+				record.KeyDilution)
+			if err != nil {
+				return fmt.Errorf("unable to insert keyset: %w", err)
+			}
+
+			// Fetch primary key
+			var pk int
+			row := tx.QueryRow(selectLastPK, id[:])
+			err = row.Scan(&pk)
+			if err != nil {
+				return fmt.Errorf("unable to scan pk: %w", err)
+			}
+
+			// Create Rolling entry
+			_, err = tx.Exec(`INSERT INTO Rolling (pk, registeredFirstRound, registeredLastRound) VALUES (?, ?, ?)`, pk, 1, 2000000)
+			if err != nil {
+				return fmt.Errorf("unable insert rolling: %w", err)
+			}
+
+			var num int
+			row = tx.QueryRow(`SELECT COUNT(*) FROM Keysets WHERE participationID=?`, id[:])
+			err = row.Scan(&num)
+			if err != nil {
+				return fmt.Errorf("unable to scan pk: %w", err)
+			}
+		}
+
+		return nil
+	})
+
+	a.NoError(err)
+	// Detect multiple keys while initializing the cache
+	err = registry.initializeCache()
+	a.EqualError(err, ErrMultipleKeysForID.Error())
+
+	// manually initialize the cache
+	registry.cache[id] = ParticipationRecord{
+		ParticipationID: id,
+		Account:         p.Parent,
+		FirstValid:      p.FirstValid,
+		LastValid:       p.LastValid,
+		KeyDilution:     p.KeyDilution,
+		RegisteredFirst: p.FirstValid,
+		RegisteredLast:  p.LastValid,
+	}
+
+	// Fail to register because there are multiple rows for the ID
+	err = registry.Register(id, 1)
+	a.Error(err)
+	a.Contains(err.Error(), "unable to registering key with id")
+	a.EqualError(errors.Unwrap(err), ErrMultipleKeysForID.Error())
+
+	// Fail to flush dirty record because there are multiple rows for the ID
+	registry.dirty[id] = struct{}{}
+	err = registry.Flush()
+	a.EqualError(err, ErrMultipleKeysForID.Error())
 }

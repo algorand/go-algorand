@@ -87,6 +87,9 @@ var ErrActiveKeyNotFound = errors.New("no active participation key found for acc
 // ErrMultipleValidKeys is used when recording a result but multiple valid keys were found. This should not be possible.
 var ErrMultipleValidKeys = errors.New("multiple valid keys found while recording key usage")
 
+// ErrMultipleKeysForID this should never happen. Multiple keys with the same participationID
+var ErrMultipleKeysForID = errors.New("multiple valid keys found for the same participationID")
+
 // ParticipationRegistry contain all functions for interacting with the Participation Registry.
 type ParticipationRegistry interface {
 	// Insert adds a record to storage and computes the ParticipationID
@@ -117,6 +120,11 @@ type ParticipationRegistry interface {
 
 // MakeParticipationRegistry creates a db.Accessor backed ParticipationRegistry.
 func MakeParticipationRegistry(accessor db.Pair) (ParticipationRegistry, error) {
+	return makeParticipationRegistry(accessor)
+}
+
+// makeParticipationRegistry creates a db.Accessor backed ParticipationRegistry.
+func makeParticipationRegistry(accessor db.Pair) (*participationDB, error) {
 	migrations := []db.Migration{
 		dbSchemaUpgrade0,
 	}
@@ -177,20 +185,16 @@ var (
 		FROM Keysets
 		INNER JOIN Rolling
 		ON Keysets.pk = Rolling.pk`
-	selectRecord  = selectRecords + ` AND participationID = ?`
-	deleteKeysets = `DELETE FROM Keysets WHERE pk=?`
-	deleteRolling = `DELETE FROM Rolling WHERE pk=?`
-	setRegistered = `UPDATE Rolling
-		 SET registeredFirstRound=?,
-		     registeredLastRound=?
-		 WHERE pk = (SELECT pk FROM Keysets WHERE participationID = ?)`
+	selectRecord        = selectRecords + ` AND participationID = ?`
+	deleteKeysets       = `DELETE FROM Keysets WHERE pk=?`
+	deleteRolling       = `DELETE FROM Rolling WHERE pk=?`
 	updateRollingFields = `UPDATE Rolling
 		 SET lastVoteRound=?,
 		     lastBlockProposalRound=?,
 		     lastCompactCertificateRound=?,
 		     registeredFirstRound=?,
 		     registeredLastRound=?
-		 WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?)`
+		 WHERE pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
 )
 
 // dbSchemaUpgrade0 initialize the tables.
@@ -232,6 +236,10 @@ func (db *participationDB) initializeCache() error {
 	}
 
 	for _, record := range records {
+		// Check if it already exists
+		if _, ok := db.cache[record.ParticipationID]; ok {
+			return ErrMultipleKeysForID
+		}
 		db.cache[record.ParticipationID] = record
 	}
 
@@ -432,14 +440,26 @@ func (db *participationDB) GetAll() ([]ParticipationRecord, error) {
 
 // updateRollingFields sets all of the rolling fields according to the record object.
 func (db *participationDB) updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRecord) error {
-	_, err := tx.ExecContext(ctx, updateRollingFields,
+	result, err := tx.ExecContext(ctx, updateRollingFields,
 		record.LastVote,
 		record.LastBlockProposal,
 		record.LastCompactCertificate,
 		record.RegisteredFirst,
 		record.RegisteredLast,
 		record.ParticipationID[:])
-	return err
+	if err != nil {
+		return err
+	}
+
+	numRows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if numRows > 1 {
+		return ErrMultipleKeysForID
+	}
+
+	return nil
 }
 
 func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
@@ -458,7 +478,8 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// Disable active key
 		for _, record := range db.cache {
-			if record.RegisteredFirst <= on && on <= record.RegisteredLast {
+			// Look for active records that are not this record.
+			if record.ParticipationID != id && record.RegisteredFirst <= on && on <= record.RegisteredLast {
 				// TODO: this should probably be "on - 1"
 				record.RegisteredLast = on
 				err := db.updateRollingFields(ctx, tx, record)
@@ -477,7 +498,7 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 
 		err := db.updateRollingFields(ctx, tx, recordToRegister)
 		if err != nil {
-			return fmt.Errorf("unable to registering key with id: %s", id)
+			return fmt.Errorf("unable to registering key with id (%s): %w", id, err)
 		}
 		updated[recordToRegister.ParticipationID] = recordToRegister
 
