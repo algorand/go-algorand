@@ -171,8 +171,8 @@ workflows:
           name: << matrix.job_type >>_<< matrix.job_version >>_verification
           matrix:
             parameters:
-              job_type: ["amd64", "arm64", "mac_amd64"]
-              job_version: ["test", "test_nightly", "integration", "integration_nightly"]
+              job_type: ["amd64"] #["amd64", "arm64", "mac_amd64"]
+              job_version: ["test", "test_nightly"] #["test", "test_nightly", "integration", "integration_nightly"]
           requires:
             - << matrix.job_type >>_<< matrix.job_version >>
 
