@@ -365,7 +365,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	}
 
 	if writingCatchpointRound != 0 && au.catchpointInterval != 0 {
-		au.generateCatchpoint(basics.Round(writingCatchpointRound), au.lastCatchpointLabel, writingCatchpointDigest, time.Duration(0))
+		au.generateCatchpoint(basics.Round(writingCatchpointRound), au.lastCatchpointLabel, writingCatchpointDigest, time.Duration(0), nil)
 	}
 
 	au.voters = &votersTracker{}
@@ -2331,7 +2331,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	if isCatchpointRound && au.archivalLedger && catchpointLabel != "" {
 		// generate the catchpoint file. This need to be done inline so that it will block any new accounts that from being written.
 		// the generateCatchpoint expects that the accounts data would not be modified in the background during it's execution.
-		au.generateCatchpoint(basics.Round(offset)+dbRound+lookback, catchpointLabel, committedRoundDigest, updatingBalancesDuration)
+		au.generateCatchpointAsync(basics.Round(offset)+dbRound+lookback, catchpointLabel, committedRoundDigest, updatingBalancesDuration)
 	}
 
 	// log telemetry event
@@ -2384,8 +2384,16 @@ func (au *accountUpdates) latest() basics.Round {
 	return au.dbRound + basics.Round(len(au.deltas))
 }
 
+func (au *accountUpdates) generateCatchpointAsync(committedRound basics.Round, label string, committedRoundDigest crypto.Digest, updatingBalancesDuration time.Duration) {
+	done := make(chan struct{})
+	go au.generateCatchpoint(committedRound, label, committedRoundDigest, updatingBalancesDuration, done)
+
+	// wait until it starts
+	<-done
+}
+
 // generateCatchpoint generates a single catchpoint file
-func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label string, committedRoundDigest crypto.Digest, updatingBalancesDuration time.Duration) {
+func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label string, committedRoundDigest crypto.Digest, updatingBalancesDuration time.Duration, async chan struct{}) {
 	beforeGeneratingCatchpointTime := time.Now()
 	catchpointGenerationStats := telemetryspec.CatchpointGenerationEventDetails{
 		BalancesWriteTime: uint64(updatingBalancesDuration.Nanoseconds()),
@@ -2428,7 +2436,23 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 	var catchpointWriter *catchpointWriter
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
-	err = au.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+
+	// if running in async mode then create a new connection
+	// its transaction will see only committed portion of SQLite DB if it is WAL mode
+	rdb := au.dbs.Rdb
+	if async != nil {
+		rdb, err := rdb.Clone()
+		if err != nil {
+			au.log.Warnf("accountUpdates: generateCatchpoint unable to open new connection at round %d: %v", committedRound, err)
+			return
+		}
+		defer rdb.Close()
+	}
+	err = rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		// signal a transaction started and the caller can resume
+		if async != nil {
+			async <- struct{}{}
+		}
 		catchpointWriter = makeCatchpointWriter(au.ctx, absCatchpointFileName, tx, committedRound, committedRoundDigest, label)
 		for more {
 			stepCtx, stepCancelFunction := context.WithTimeout(au.ctx, chunkExecutionDuration)

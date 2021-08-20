@@ -53,10 +53,12 @@ var sqliteInitOnce sync.Once
 
 // An Accessor manages a sqlite database handle and any outstanding batching operations.
 type Accessor struct {
-	Handle   *sql.DB
-	readOnly bool
-	inMemory bool
-	log      logging.Logger
+	Handle     *sql.DB
+	dbfilename string
+	readOnly   bool
+	inMemory   bool
+	params     []string
+	log        logging.Logger
 }
 
 // VacuumStats returns the database statistics before and after a vacuum operation
@@ -92,8 +94,10 @@ func MakeErasableAccessor(dbfilename string) (Accessor, error) {
 
 func makeAccessorImpl(dbfilename string, readOnly bool, inMemory bool, params []string) (Accessor, error) {
 	var db Accessor
+	db.dbfilename = dbfilename
 	db.readOnly = readOnly
 	db.inMemory = inMemory
+	db.params = params
 
 	// SQLite3 driver we use (mattn/go-sqlite3) does not implement driver.DriverContext interface
 	// that forces sql.Open calling sql.OpenDB and return a struct without any touches to the underlying driver.
@@ -130,6 +134,13 @@ func makeAccessorImpl(dbfilename string, readOnly bool, inMemory bool, params []
 	}
 
 	return db, err
+}
+
+// Clone creates a new Accessor with the same parameters as the original one
+func (db *Accessor) Clone() (Accessor, error) {
+	conn, err := makeAccessorImpl(db.dbfilename, db.readOnly, db.inMemory, db.params)
+	conn.log = db.log
+	return conn, err
 }
 
 // SetLogger sets the Logger, mainly for unit test quietness

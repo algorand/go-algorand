@@ -1345,7 +1345,7 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 	require.NoError(b, err)
 
 	b.ResetTimer()
-	au.generateCatchpoint(basics.Round(0), "0#ABCD", crypto.Digest{}, time.Second)
+	au.generateCatchpoint(basics.Round(0), "0#ABCD", crypto.Digest{}, time.Second, nil)
 	b.StopTimer()
 	b.ReportMetric(float64(accountsNumber), "accounts")
 }
