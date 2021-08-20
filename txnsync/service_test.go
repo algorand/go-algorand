@@ -50,7 +50,9 @@ func makeMockNodeConnector(calledEvents *bool) mockNodeConnector {
 }
 
 func (fn *mockNodeConnector) Events() <-chan Event {
-	*fn.calledEvents = true
+	if fn.calledEvents != nil {
+		*fn.calledEvents = true
+	}
 	return nil
 }
 
