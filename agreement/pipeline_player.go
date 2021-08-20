@@ -125,8 +125,12 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 	// pass event to corresponding child player for this round
 	a := state.handle(r, e)
 
-	// Check for an opportunity to start pipelining
 	if e.t() == payloadVerified {
+		// Every verified payload gets added to the speculative ledger,
+		// so that we can refer to rounds using that payload's branch hash.
+		a = append(a, ensureSpeculativeAction{Payload: e.(messageEvent).Input.Proposal})
+
+		// Possibly create new players as a result of this payload.
 		a = append(a, p.adjustPlayers(r)...)
 	}
 
@@ -174,7 +178,7 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 	// If we don't have a player for the first uncommitted round, create it.
 	// This could happen right at startup, or right after the player was GCed
 	// because it reached consensus.
-	actions = append(actions, p.ensurePlayer(r, p.FirstUncommittedRound, p.FirstUncommittedVersion, nil)...)
+	actions = append(actions, p.ensurePlayer(r, p.FirstUncommittedRound, p.FirstUncommittedVersion)...)
 
 	for rnd, rp := range p.Players {
 		if rnd.Number >= p.FirstUncommittedRound.Number+basics.Round(maxDepth) {
@@ -197,14 +201,14 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 		}
 
 		nextrnd := round{Number: rnd.Number + 1, Branch: bookkeeping.BlockHash(re.Proposal.BlockDigest)}
-		actions = append(actions, p.ensurePlayer(r, nextrnd, re.Payload.prevVersion, &re.Payload)...)
+		actions = append(actions, p.ensurePlayer(r, nextrnd, re.Payload.prevVersion)...)
 	}
 
 	return actions
 }
 
 // ensurePlayer creates a player for a particular round, if not already present.
-func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protocol.ConsensusVersion, parentProp *proposal) []action {
+func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protocol.ConsensusVersion) []action {
 	_, ok := p.Players[nextrnd]
 	if ok {
 		return nil
@@ -217,12 +221,7 @@ func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protoco
 
 	p.Players[nextrnd] = newPlayer
 
-	var actions []action
-	if parentProp != nil {
-		actions = append(actions, ensureSpeculativeAction{Payload: *parentProp})
-	}
-
-	return append(actions, newPlayer.init(r, nextrnd, ver)...)
+	return newPlayer.init(r, nextrnd, ver)
 }
 
 // externalDemuxSignals returns a list of per-player signals allowing demux.next to wait for
