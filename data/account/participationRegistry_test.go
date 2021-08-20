@@ -482,7 +482,6 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 	err = registry.initializeCache()
 	a.EqualError(err, ErrMultipleKeysForID.Error())
 
-
 	// Registering the ID
 	registry.cache[id] = ParticipationRecord{
 		ParticipationID: id,
