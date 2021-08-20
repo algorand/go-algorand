@@ -8,8 +8,9 @@ if len(sys.argv) != 2:
 filepath = sys.argv[1]
 
 # Go through the given file one json object at a time, and record into lists
-testList = []
-testListPassed = []
+total = set()
+passedWDupes = []
+partitionSkipped = set()
 with open(filepath) as f:
     for jsonObj in f:
         testDict = json.loads(jsonObj)
@@ -17,50 +18,80 @@ with open(filepath) as f:
             continue
         
         fullTestName = testDict['Package'] + ' ' + testDict['Test']
-        testList.append(fullTestName)
+        total.add(fullTestName)
         # actions can be: output, run, skip, pass
         if 'pass' in testDict["Action"]:
-            testListPassed.append(fullTestName)
+            passedWDupes.append(fullTestName)
+        if 'Output' in testDict and 'due to partitioning' in testDict['Output']:
+            partitionSkipped.add(fullTestName)
 
 f.close()
 
-# Dedup some lists:
-testListDeduped = list(set(testList))
-testListPassedDeduped = list(set(testListPassed))
-countTotalDeduped = len(testListDeduped)
-countPassed = len(testListPassed)
-countPassedDeduped = len(testListPassedDeduped)
+# === Calculate results ===
 
-# Summary
+# Total seen (deduped)
+# total
+
+# Passed with duplicates (needed for checking which tests passed multiple times)
+# passedWDupes
+
+# Passed without duplicates (deduped)
+passed = set(passedWDupes)
+
+# Skipped at least once due to partition (deduped)
+# partitionSkipped
+
+# Skipped due to partition and never passed (deduped)
+partitionSkippedNotPass = partitionSkipped - passed
+
+# Skipped due to other reasons (deduped)
+skippedNotPartition = total - passed.union(partitionSkipped)
+
+# Total not passed (deduped)
+notPassed = total - passed
+
+# === Summary ===
 print("==================================================")
-print("Saw " + str(countTotalDeduped) + " tests total")
-print(str(countPassed) + " passed before dedup")
-print(str(countPassedDeduped) + " passed after dedup")
+print("Saw {} tests total".format(len(total)))
+print("{} passed before dedup".format(len(passedWDupes)))
+print("{} passed after dedup".format(len(passed)))
+print("{} skipped total".format(len(notPassed)))
+print("{} skipped due to partition".format(len(partitionSkippedNotPass)))
+print("{} skipped for other reasons (Maybe on purpose)".format(len(skippedNotPartition)))
 print("==================================================")
 
-# Check if all seen tests have passed
-errorCode = ''
-if countTotalDeduped != countPassedDeduped:
-    countNotPassed = countTotalDeduped - countPassedDeduped
-    print(str(countNotPassed) + " tests didn't pass!!")
-    notPassed = set(testListDeduped) - set(testListPassedDeduped)
-    print("Here are the ones that didn't pass even once: ")
-    print(*sorted(notPassed), sep = "\n")
-    errorCode += "FAIL ERROR: " + str(countNotPassed) + " tests didn't pass!!\n"
+errorMessage = ''
+# Check tests not passed due to partition
+print("==================================================")
+if len(partitionSkippedNotPass):
+    print("{} tests didn't pass due to partition!!".format(len(partitionSkippedNotPass)))
+    print("Here are the ones that didn't pass due to partition: ")
+    print(*sorted(list(partitionSkippedNotPass)), sep = "\n")
+    errorMessage += "FAIL ERROR: {} tests didn't pass due to partition!! (Scroll up to see which)\n".format(len(partitionSkippedNotPass))
 else:
-    print("All tests passed at least once ... OK")
+    print("No tests skipped due to partition.")
+print("==================================================")
+
+# Check tests not passed for other reasons
+print("==================================================")
+if len(skippedNotPartition):
+    print("{} tests didn't pass due to other reasons (Maybe on purpose)".format(len(skippedNotPartition)))
+    print("Here are the ones that didn't pass due to other reasons: ")
+    print(*sorted(list(skippedNotPartition)), sep = "\n")
+else:
+    print("No tests skipped for other reasons.")
+print("==================================================")
 
 # Check for duplicates in the passed tests
 print("==================================================")
-if countPassed != countPassedDeduped:
-    testDuplicates = set([testName + " " + str(testListPassed.count(testName)) for testName in testListPassed if testListPassed.count(testName) > 1])
-    print(str(len(testDuplicates)) + " tests passed multiple times!! ... FAIL ERROR")
-    print("Here are the duplicates: ")
+if len(passedWDupes) != len(passed):
+    testDuplicates = set([testName + " - " + str(passedWDupes.count(testName)) for testName in passedWDupes if passedWDupes.count(testName) > 1])
+    print("{} tests passed multiple times!!".format(len(testDuplicates)))
+    print("Here are the duplicates and number of times passed: ")
     print(*sorted(testDuplicates), sep = "\n")
-    errorCode += "FAIL ERROR: " + str(len(testDuplicates)) + " tests passed multiple times!!\n"
 else:
     print("All tests that passed, passed only once ... OK")
 print("==================================================")
 print("===== FINISHED RUNNING check_tests.py =====")
 
-sys.exit(errorCode)
+sys.exit(errorMessage)

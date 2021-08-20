@@ -9,111 +9,111 @@ workflows:
   version: 2
   build_pr:
     jobs:
-      - codegen_verification
-      - amd64_build
-      - amd64_test:
-          requires:
-            - amd64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - amd64_test_nightly:
-          requires:
-            - amd64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
-      - amd64_integration:
-          requires:
-            - amd64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - amd64_integration_nightly:
-          requires:
-            - amd64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
-      - amd64_e2e_subs:
-          requires:
-            - amd64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - amd64_e2e_subs_nightly:
-          requires:
-            - amd64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
-      - arm64_build
-      - arm64_test:
-          requires:
-            - arm64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - arm64_test_nightly:
-          requires:
-            - arm64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
-      - arm64_integration:
-          requires:
-            - arm64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - arm64_integration_nightly:
-          requires:
-            - arm64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
-      - arm64_e2e_subs:
-          requires:
-            - arm64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - arm64_e2e_subs_nightly:
-          requires:
-            - arm64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
+      # - codegen_verification
+      # - amd64_build
+      # - amd64_test:
+      #     requires:
+      #       - amd64_build
+      #     filters:
+      #       branches:
+      #         ignore:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      # - amd64_test_nightly:
+      #     requires:
+      #       - amd64_build
+      #     filters:
+      #       branches:
+      #         only:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      #     context: slack-secrets
+      # - amd64_integration:
+      #     requires:
+      #       - amd64_build
+      #     filters:
+      #       branches:
+      #         ignore:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      # - amd64_integration_nightly:
+      #     requires:
+      #       - amd64_build
+      #     filters:
+      #       branches:
+      #         only:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      #     context: slack-secrets
+      # - amd64_e2e_subs:
+      #     requires:
+      #       - amd64_build
+      #     filters:
+      #       branches:
+      #         ignore:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      # - amd64_e2e_subs_nightly:
+      #     requires:
+      #       - amd64_build
+      #     filters:
+      #       branches:
+      #         only:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      #     context: slack-secrets
+      # - arm64_build
+      # - arm64_test:
+      #     requires:
+      #       - arm64_build
+      #     filters:
+      #       branches:
+      #         ignore:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      # - arm64_test_nightly:
+      #     requires:
+      #       - arm64_build
+      #     filters:
+      #       branches:
+      #         only:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      #     context: slack-secrets
+      # - arm64_integration:
+      #     requires:
+      #       - arm64_build
+      #     filters:
+      #       branches:
+      #         ignore:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      # - arm64_integration_nightly:
+      #     requires:
+      #       - arm64_build
+      #     filters:
+      #       branches:
+      #         only:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      #     context: slack-secrets
+      # - arm64_e2e_subs:
+      #     requires:
+      #       - arm64_build
+      #     filters:
+      #       branches:
+      #         ignore:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      # - arm64_e2e_subs_nightly:
+      #     requires:
+      #       - arm64_build
+      #     filters:
+      #       branches:
+      #         only:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      #     context: slack-secrets
       - mac_amd64_build
       - mac_amd64_test:
           requires:
@@ -132,41 +132,41 @@ workflows:
                 - /rel\/.*/
                 - /hotfix\/.*/
           context: slack-secrets
-      - mac_amd64_integration:
-          requires:
-            - mac_amd64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - mac_amd64_integration_nightly:
-          requires:
-            - mac_amd64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
-      - mac_amd64_e2e_subs:
-          requires:
-            - mac_amd64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - mac_amd64_e2e_subs_nightly:
-          requires:
-            - mac_amd64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
-      #- windows_x64_build
+      # - mac_amd64_integration:
+      #     requires:
+      #       - mac_amd64_build
+      #     filters:
+      #       branches:
+      #         ignore:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      # - mac_amd64_integration_nightly:
+      #     requires:
+      #       - mac_amd64_build
+      #     filters:
+      #       branches:
+      #         only:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      #     context: slack-secrets
+      # - mac_amd64_e2e_subs:
+      #     requires:
+      #       - mac_amd64_build
+      #     filters:
+      #       branches:
+      #         ignore:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      # - mac_amd64_e2e_subs_nightly:
+      #     requires:
+      #       - mac_amd64_build
+      #     filters:
+      #       branches:
+      #         only:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
+      #     context: slack-secrets
+      ## - windows_x64_build
       - tests_verification_job:
           name: << matrix.job_type >>_<< matrix.job_version >>_verification
           matrix:
@@ -314,7 +314,7 @@ commands:
             export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
             export PARTITION_ID=$CIRCLE_NODE_INDEX
             export PARALLEL_FLAG="-p 1"
-            gotestsum --format pkgname --junitfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml --jsonfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" << parameters.short_test_flag >> -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
+            gotestsum --format testname --junitfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml --jsonfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" << parameters.short_test_flag >> -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
       - store_artifacts:
           path: << parameters.result_path >>
           destination: test-results
@@ -750,7 +750,7 @@ jobs:
   tests_verification_job:
     docker:
       - image: python:3.9.6-alpine
-    resource_class: medium
+    resource_class: small
     parameters:
       job_type: # job_type: ["amd64", "arm64", "mac_amd64"]
         type: string
