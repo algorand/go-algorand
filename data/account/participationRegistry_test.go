@@ -90,9 +90,9 @@ func TestParticipation_InsertGet(t *testing.T) {
 	a.Len(results, 2)
 	for _, record := range results {
 		if record.Account == p.Parent {
-			assertParticipation(t, p, results[0])
+			assertParticipation(t, p, record)
 		} else if record.Account == p2.Parent {
-			assertParticipation(t, p2, results[1])
+			assertParticipation(t, p2, record)
 		} else {
 			a.Fail("unexpected account")
 		}
