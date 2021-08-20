@@ -183,18 +183,6 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 			return ep
 		}
 
-		// XXXXX check if round.number = propRound.number but branch != propbranch
-		// XXX frontier of speculation --
-
-		// A message for the wrong round would only be received here if this player was
-		// running as a single player (not pipelined). Otherwise pipelinePlayer would
-		// give it to a different round. Rather than dispatch to proposalStore for
-		// p.Round+1 to reject below, check if it is actually p.Round+1 before dispatching
-		// and reject here otherwise.
-		if p.pipelined {
-			panic("proposalManager: pipelinedPlayer sent proposal payload for wrong round")
-		}
-
 		if propRound.Number != p.Round.Number+1 {
 			return payloadProcessedEvent{
 				T:   payloadRejected,
@@ -203,17 +191,13 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 		}
 
 		// pipeline for next round
-		// XXX or other branch on same round? don't assume p.Round+1
-		//e2 := r.dispatch(p, in, proposalMachineRound, p.Round+1, 0, 0)
 		e2 := r.dispatch(p, in, proposalMachineRound, propRound, 0, 0)
 		if e2.t() == payloadRejected {
 			return e2
 		}
 		ep := e2.(payloadProcessedEvent) // e2.t() == payloadPipelined
-		//ep.Round = p.Round + 1
 		ep.Round = propRound
 
-		//pipelinedRound = p.Round + 1
 		pipelinedRound = propRound
 		pipelinedPeriod = 0
 
