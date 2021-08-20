@@ -205,6 +205,8 @@ type testLedger struct {
 	blocks    map[basics.Round]blockAndCert
 	nextRound basics.Round
 
+	speculative map[bookkeeping.BlockHash]blockAndCert
+
 	maxNumBlocks uint64
 
 	// constant
@@ -218,6 +220,7 @@ type testLedger struct {
 func makeTestLedger(state map[basics.Address]basics.AccountData) Ledger {
 	l := new(testLedger)
 	l.blocks = make(map[basics.Round]blockAndCert)
+	l.speculative = make(map[bookkeeping.BlockHash]blockAndCert)
 	l.nextRound = 1
 
 	l.state = make(map[basics.Address]basics.AccountData)
@@ -236,6 +239,7 @@ func makeTestLedger(state map[basics.Address]basics.AccountData) Ledger {
 func makeTestLedgerWithConsensusVersion(state map[basics.Address]basics.AccountData, consensusVersion func(basics.Round, bookkeeping.BlockHash) (protocol.ConsensusVersion, error)) Ledger {
 	l := new(testLedger)
 	l.blocks = make(map[basics.Round]blockAndCert)
+	l.speculative = make(map[bookkeeping.BlockHash]blockAndCert)
 	l.nextRound = 1
 
 	l.state = make(map[basics.Address]basics.AccountData)
@@ -252,6 +256,7 @@ func makeTestLedgerWithConsensusVersion(state map[basics.Address]basics.AccountD
 func makeTestLedgerMaxBlocks(state map[basics.Address]basics.AccountData, maxNumBlocks uint64) Ledger {
 	l := new(testLedger)
 	l.blocks = make(map[basics.Round]blockAndCert)
+	l.speculative = make(map[bookkeeping.BlockHash]blockAndCert)
 	l.nextRound = 1
 
 	l.maxNumBlocks = maxNumBlocks
@@ -316,6 +321,20 @@ func (l *testLedger) Seed(r basics.Round, leafBranch bookkeeping.BlockHash) (com
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	// Check for speculative blocks
+	for {
+		bc, ok := l.speculative[leafBranch]
+		if !ok {
+			break
+		}
+
+		if bc.block.Round() == r {
+			return bc.block.Seed(), nil
+		}
+
+		leafBranch = bc.block.Branch
+	}
+
 	if r >= l.nextRound {
 		err := fmt.Errorf("Seed called on future round: %v >= %v! (this is probably a bug)", r, l.nextRound)
 		panic(err)
@@ -379,6 +398,14 @@ func (l *testLedger) Circulation(r basics.Round, leafBranch bookkeeping.BlockHas
 
 func (l *testLedger) EnsureValidatedBlock(e ValidatedBlock, c Certificate) {
 	l.EnsureBlock(e.Block(), c)
+}
+
+func (l *testLedger) EnsureSpeculativeBlock(e ValidatedBlock) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	blk := e.Block()
+	l.speculative[blk.Hash()] = blockAndCert{block: blk}
 }
 
 func (l *testLedger) EnsureBlock(e bookkeeping.Block, c Certificate) {

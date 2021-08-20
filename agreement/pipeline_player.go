@@ -174,7 +174,7 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 	// If we don't have a player for the first uncommitted round, create it.
 	// This could happen right at startup, or right after the player was GCed
 	// because it reached consensus.
-	actions = append(actions, p.ensurePlayer(r, p.FirstUncommittedRound, p.FirstUncommittedVersion)...)
+	actions = append(actions, p.ensurePlayer(r, p.FirstUncommittedRound, p.FirstUncommittedVersion, nil)...)
 
 	for rnd, rp := range p.Players {
 		if rnd.Number >= p.FirstUncommittedRound.Number+basics.Round(maxDepth) {
@@ -197,14 +197,14 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 		}
 
 		nextrnd := round{Number: rnd.Number + 1, Branch: bookkeeping.BlockHash(re.Proposal.BlockDigest)}
-		actions = append(actions, p.ensurePlayer(r, nextrnd, re.Payload.prevVersion)...)
+		actions = append(actions, p.ensurePlayer(r, nextrnd, re.Payload.prevVersion, &re.Payload)...)
 	}
 
 	return actions
 }
 
 // ensurePlayer creates a player for a particular round, if not already present.
-func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protocol.ConsensusVersion) []action {
+func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protocol.ConsensusVersion, parentProp *proposal) []action {
 	_, ok := p.Players[nextrnd]
 	if ok {
 		return nil
@@ -217,7 +217,12 @@ func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protoco
 
 	p.Players[nextrnd] = newPlayer
 
-	return newPlayer.init(r, nextrnd, ver)
+	var actions []action
+	if parentProp != nil {
+		actions = append(actions, ensureSpeculativeAction{Payload: *parentProp})
+	}
+
+	return append(actions, newPlayer.init(r, nextrnd, ver)...)
 }
 
 // externalDemuxSignals returns a list of per-player signals allowing demux.next to wait for

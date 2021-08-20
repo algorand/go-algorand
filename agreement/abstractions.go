@@ -208,6 +208,10 @@ type LedgerReader interface {
 
 // A LedgerWriter allows writing entries to the ledger.
 type LedgerWriter interface {
+	// EnsureSpeculativeBlock adds a validated block to the ledger for
+	// pipeline speculation.
+	EnsureSpeculativeBlock(ValidatedBlock)
+
 	// EnsureBlock adds a Block, along with a Certificate authenticating
 	// its contents, to the ledger.
 	//

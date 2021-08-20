@@ -47,6 +47,7 @@ const (
 
 	// ledger
 	ensure
+	ensureSpeculative
 	stageDigest
 
 	// time
@@ -254,6 +255,25 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 	s.log.with(logEventStart).Infof("finished round %d", a.Certificate.Round)
 	s.tracer.timeR().StartRound(round{Number: a.Certificate.Round + 1, Branch: bookkeeping.BlockHash(a.Certificate.Proposal.BlockDigest)})
 	s.tracer.timeR().RecStep(0, propose, bottom)
+}
+
+type ensureSpeculativeAction struct {
+	nonpersistent
+
+	// the payload that we will give to the ledger
+	Payload proposal
+}
+
+func (a ensureSpeculativeAction) t() actionType {
+	return ensureSpeculative
+}
+
+func (a ensureSpeculativeAction) String() string {
+	return fmt.Sprintf("%s: %.5s: %d", a.t().String(), a.Payload.Digest().String(), a.Payload.ve.Block().Round())
+}
+
+func (a ensureSpeculativeAction) do(ctx context.Context, s *Service) {
+	s.Ledger.EnsureSpeculativeBlock(a.Payload.ve)
 }
 
 type stageDigestAction struct {

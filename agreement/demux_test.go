@@ -520,6 +520,11 @@ func (t *demuxTester) ConsensusVersion(basics.Round, bookkeeping.BlockHash) (pro
 }
 
 // implement Ledger
+func (t *demuxTester) EnsureSpeculativeBlock(ValidatedBlock) {
+	// we don't care about this function in this test.
+}
+
+// implement Ledger
 func (t *demuxTester) EnsureBlock(bookkeeping.Block, Certificate) {
 	// we don't care about this function in this test.
 }
