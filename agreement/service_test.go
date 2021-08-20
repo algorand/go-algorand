@@ -849,9 +849,9 @@ func sanityCheck(startRound basics.Round, numRounds basics.Round, ledgers []Ledg
 	}
 
 	for j := basics.Round(0); j < numRounds; j++ {
-		reference := ledgers[0].(*testLedger).entries[startRound+j].Digest()
+		reference := ledgers[0].(*testLedger).blocks[startRound+j].block.Digest()
 		for i := range ledgers {
-			if ledgers[i].(*testLedger).entries[startRound+j].Digest() != reference {
+			if ledgers[i].(*testLedger).blocks[startRound+j].block.Digest() != reference {
 				panic("wrong block confirmed")
 			}
 		}
@@ -2013,10 +2013,10 @@ func TestAgreementLargePeriods(t *testing.T) {
 
 	for j := 0; j < expectNumRounds; j++ {
 		ledger := ledgers[0].(*testLedger)
-		reference := ledger.entries[startRound+basics.Round(j)].Digest()
+		reference := ledger.blocks[startRound+basics.Round(j)].block.Digest()
 		for i := 0; i < numNodes; i++ {
 			ledger := ledgers[i].(*testLedger)
-			if ledger.entries[startRound+basics.Round(j)].Digest() != reference {
+			if ledger.blocks[startRound+basics.Round(j)].block.Digest() != reference {
 				panic("wrong block confirmed")
 			}
 		}
@@ -2194,10 +2194,10 @@ func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942
 
 	for j := 0; j < expectNumRounds; j++ {
 		ledger := ledgers[0].(*testLedger)
-		reference := ledger.entries[startRound+basics.Round(j)].Digest()
+		reference := ledger.blocks[startRound+basics.Round(j)].block.Digest()
 		for i := 0; i < numNodes; i++ {
 			ledger := ledgers[i].(*testLedger)
-			if ledger.entries[startRound+basics.Round(j)].Digest() != reference {
+			if ledger.blocks[startRound+basics.Round(j)].block.Digest() != reference {
 				panic("wrong block confirmed")
 			}
 		}
@@ -2310,10 +2310,10 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 	}
 	for j := 0; j < expectNumRounds; j++ {
 		ledger := ledgers[1].(*testLedger)
-		reference := ledger.entries[startRound+basics.Round(j)].Digest()
+		reference := ledger.blocks[startRound+basics.Round(j)].block.Digest()
 		for i := 1; i < numNodes; i++ {
 			ledger := ledgers[i].(*testLedger)
-			if ledger.entries[startRound+basics.Round(j)].Digest() != reference {
+			if ledger.blocks[startRound+basics.Round(j)].block.Digest() != reference {
 				panic("wrong block confirmed")
 			}
 		}

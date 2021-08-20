@@ -193,12 +193,16 @@ func (f testBlockFactory) AssembleSpeculativeBlock(r basics.Round, prev bookkeep
 		}}}, nil
 }
 
+type blockAndCert struct {
+	block bookkeeping.Block
+	cert  Certificate
+}
+
 // If we try to read from high rounds, we panic and do not emit an error to find bugs during testing.
 type testLedger struct {
 	mu deadlock.Mutex
 
-	entries   map[basics.Round]bookkeeping.Block
-	certs     map[basics.Round]Certificate
+	blocks    map[basics.Round]blockAndCert
 	nextRound basics.Round
 
 	maxNumBlocks uint64
@@ -213,8 +217,7 @@ type testLedger struct {
 
 func makeTestLedger(state map[basics.Address]basics.AccountData) Ledger {
 	l := new(testLedger)
-	l.entries = make(map[basics.Round]bookkeeping.Block)
-	l.certs = make(map[basics.Round]Certificate)
+	l.blocks = make(map[basics.Round]blockAndCert)
 	l.nextRound = 1
 
 	l.state = make(map[basics.Address]basics.AccountData)
@@ -232,8 +235,7 @@ func makeTestLedger(state map[basics.Address]basics.AccountData) Ledger {
 
 func makeTestLedgerWithConsensusVersion(state map[basics.Address]basics.AccountData, consensusVersion func(basics.Round, bookkeeping.BlockHash) (protocol.ConsensusVersion, error)) Ledger {
 	l := new(testLedger)
-	l.entries = make(map[basics.Round]bookkeeping.Block)
-	l.certs = make(map[basics.Round]Certificate)
+	l.blocks = make(map[basics.Round]blockAndCert)
 	l.nextRound = 1
 
 	l.state = make(map[basics.Address]basics.AccountData)
@@ -249,8 +251,7 @@ func makeTestLedgerWithConsensusVersion(state map[basics.Address]basics.AccountD
 
 func makeTestLedgerMaxBlocks(state map[basics.Address]basics.AccountData, maxNumBlocks uint64) Ledger {
 	l := new(testLedger)
-	l.entries = make(map[basics.Round]bookkeeping.Block)
-	l.certs = make(map[basics.Round]Certificate)
+	l.blocks = make(map[basics.Round]blockAndCert)
 	l.nextRound = 1
 
 	l.maxNumBlocks = maxNumBlocks
@@ -298,7 +299,7 @@ func (l *testLedger) BlockHash(r basics.Round, leafBranch bookkeeping.BlockHash)
 		return bookkeeping.BlockHash{}, fmt.Errorf("BlockHash(%d): no such round yet", r)
 	}
 
-	return l.entries[r].Hash(), nil
+	return l.blocks[r].block.Hash(), nil
 }
 
 // note: this must be called when any new block is written
@@ -320,8 +321,8 @@ func (l *testLedger) Seed(r basics.Round, leafBranch bookkeeping.BlockHash) (com
 		panic(err)
 	}
 
-	b := l.entries[r]
-	return b.Seed(), nil
+	b := l.blocks[r]
+	return b.block.Seed(), nil
 }
 
 func (l *testLedger) LookupDigest(r basics.Round, leafBranch bookkeeping.BlockHash) (crypto.Digest, error) {
@@ -337,7 +338,7 @@ func (l *testLedger) LookupDigest(r basics.Round, leafBranch bookkeeping.BlockHa
 		return crypto.Digest{}, &LedgerDroppedRoundError{}
 	}
 
-	return l.entries[r].Digest(), nil
+	return l.blocks[r].block.Digest(), nil
 }
 
 func (l *testLedger) Lookup(r basics.Round, leafBranch bookkeeping.BlockHash, a basics.Address) (basics.AccountData, error) {
@@ -384,15 +385,17 @@ func (l *testLedger) EnsureBlock(e bookkeeping.Block, c Certificate) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	if _, ok := l.entries[e.Round()]; ok {
-		if l.entries[e.Round()].Digest() != e.Digest() {
+	if _, ok := l.blocks[e.Round()]; ok {
+		if l.blocks[e.Round()].block.Digest() != e.Digest() {
 			err := fmt.Errorf("testLedger.EnsureBlock: called with conflicting entries in round %d", e.Round())
 			panic(err)
 		}
 	}
 
-	l.entries[e.Round()] = e
-	l.certs[e.Round()] = c
+	l.blocks[e.Round()] = blockAndCert{
+		block: e,
+		cert:  c,
+	}
 
 	if l.nextRound == e.Round() {
 		l.nextRound = e.Round() + 1
@@ -410,7 +413,7 @@ func (l *testLedger) EnsureDigest(c Certificate, verifier *AsyncVoteVerifier) {
 	defer l.mu.Unlock()
 
 	if r < l.nextRound {
-		if l.entries[r].Digest() != c.Proposal.BlockDigest {
+		if l.blocks[r].block.Digest() != c.Proposal.BlockDigest {
 			err := fmt.Errorf("testLedger.EnsureDigest called with conflicting entries in round %d", r)
 			panic(err)
 		}
