@@ -112,7 +112,7 @@ proc ::AlgorandGoal::StartNode { TEST_ALGO_DIR {SYSTEMD_MANAGED "False"} {PEER_A
         if { $SYSTEMD_MANAGED eq "True" } {
             expect {
                 timeout { close; ::AlgorandGoal::Abort "Did not receive appropriate message during node start" }
-                "^This node is managed by systemd, you must run the following command to make your desired state change to your node:*" { puts "Goal showed correct error message for systemd" ; close}
+                "^This node is using systemd and should be managed with systemctl*" { puts "Goal showed correct error message for systemd" ; close}
                 eof { ::AlgorandGoal::CheckEOF "Unable to start network" }
             }
         } else {
@@ -146,7 +146,7 @@ proc ::AlgorandGoal::StopNode { TEST_ALGO_DIR {SYSTEMD_MANAGED ""} } {
             spawn goal node stop -d $TEST_ALGO_DIR
             expect {
                 timeout { close; ::AlgorandGoal::Abort "Did not receive appropriate message during node stop" }
-                "*This node is managed by systemd, you must run the following command to make your desired state change to your node:*" { puts "Goal showed correct error message for systemd" ; close}
+                "^This node is using systemd and should be managed with systemctl*" { puts "Goal showed correct error message for systemd" ; close}
                 eof { close; ::AlgorandGoal::Abort "Did not receive appropriate message before goal command completion" }
             }
         }
@@ -173,7 +173,7 @@ proc ::AlgorandGoal::RestartNode { TEST_ALGO_DIR {SYSTEMD_MANAGED ""} } {
             spawn goal node restart -d $TEST_ALGO_DIR
             expect {
                 timeout { close; ::AlgorandGoal::Abort "Did not receive appropriate message during node restart" }
-                "^This node is managed by systemd, you must run the following command to make your desired state change to your node:*" { puts "Goal showed correct error message for systemd" ; close}
+                "^This node is using systemd and should be managed with systemctl*" { puts "Goal showed correct error message for systemd" ; close}
             }
         }
     } EXCEPTION] } {
