@@ -120,7 +120,7 @@ workflows:
             - mac_amd64_build
           filters:
             branches:
-              ignore:
+              only: # SWITCHED FOR TESTING
                 - /rel\/.*/
                 - /hotfix\/.*/
       - mac_amd64_test_nightly:
@@ -128,7 +128,7 @@ workflows:
             - mac_amd64_build
           filters:
             branches:
-              only:
+              ignore: # SWITCHED FOR TESTING
                 - /rel\/.*/
                 - /hotfix\/.*/
           context: slack-secrets
