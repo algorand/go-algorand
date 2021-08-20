@@ -78,7 +78,7 @@ var ErrInvalidRegisterRange = errors.New("key would not be active within range")
 // ErrUnknownParticipationAction is used when record is given something other than the known actions.
 var ErrUnknownParticipationAction = errors.New("unknown participation action")
 
-// ErrAlreadyInserted is used when inserting a key which already exists in the registery.
+// ErrAlreadyInserted is used when inserting a key which already exists in the registry.
 var ErrAlreadyInserted = errors.New("these participation keys are already inserted")
 
 // ErrActiveKeyNotFound is used when attempting to update an account with no active key
