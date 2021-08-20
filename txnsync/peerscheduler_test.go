@@ -166,12 +166,15 @@ func TestNextPeers(t *testing.T) {
 		Peer{
 			lastSentMessageSequenceNumber: 2,
 		},
+		Peer{
+			lastSentMessageSequenceNumber: 3,
+		},
 	}
 
 	ps.schedulerPeer(&peers[0], 1*time.Millisecond)
 	ps.schedulerPeer(&peers[1], 2*time.Millisecond)
 	ps.schedulerPeer(&peers[1], 2*time.Millisecond)
-	ps.schedulerPeer(&peers[1], 2*time.Millisecond)
+	ps.schedulerPeer(&peers[2], 2*time.Millisecond)
 
 	require.Equal(t, 4, ps.Len())
 
@@ -184,7 +187,8 @@ func TestNextPeers(t *testing.T) {
 	outPeers = ps.nextPeers()
 
 	require.Equal(t, 0, ps.Len())
-	require.Equal(t, 1, len(outPeers))
-	require.Equal(t, uint64(2), outPeers[0].lastSentMessageSequenceNumber)
+	require.Equal(t, 2, len(outPeers))
+	require.Equal(t, uint64(3), outPeers[0].lastSentMessageSequenceNumber)
+	require.Equal(t, uint64(2), outPeers[1].lastSentMessageSequenceNumber)
 
 }
