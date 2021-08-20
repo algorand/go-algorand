@@ -106,7 +106,7 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 			if rnd.Number == prnd.Number+1 {
 				re := readLowestEvent{T: readLowestPayload, Round: prnd}
 				re = r.dispatch(*rp, re, proposalMachineRound, prnd, 0, 0).(readLowestEvent)
-				if bookkeeping.BlockHash(re.Proposal.BlockDigest) == rnd.Branch {
+				if re.PayloadOK && bookkeeping.BlockHash(re.Proposal.BlockDigest) == rnd.Branch {
 					state = rp
 					break
 				}
