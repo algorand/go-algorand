@@ -495,8 +495,8 @@ type CompileResponse struct {
 type DryrunResponse struct {
 
 	// Cost is the execution call of a stateful evaluation of an app call.
-	Cost  uint64 `json:"cost"`
-	Error string `json:"error"`
+	Cost  *uint64 `json:"cost,omitempty"`
+	Error string  `json:"error"`
 
 	// Protocol version is the protocol version Dryrun was operated under.
 	ProtocolVersion string            `json:"protocol-version"`

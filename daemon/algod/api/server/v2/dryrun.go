@@ -397,12 +397,23 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 		return
 	}
 	proto := config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
-	proto.EnableAppCostPooling = true
+	userCostPoolingValue := proto.EnableAppCostPooling
+	proto.EnableAppCostPooling = true //hardcoded so that dryrun can calculate cost using statefuleval
 	response.Txns = make([]generated.DryrunTxnResult, len(dr.Txns))
+	/*** dryrun specific arbitrarily large budget is set here so that execution passes. 
+	maxCost is calculated from the tx group and dryrun returns failure if the Cost exceeds this ***/
+	maxBudget := uint64(proto.MaxAppProgramCost * proto.MaxTxGroupSize) 
+	evalBudget := maxBudget
+	response.Cost = nil //only stateful evaluation returns cost
+	numAppCalls := 0
+	for _, stxn := range dr.Txns {
+		if stxn.Txn.Type == protocol.ApplicationCallTx {
+			numAppCalls++
+		}
+	}
+	maxCost := uint64(proto.MaxAppProgramCost * proto.MaxTxGroupSize)
 	for ti, stxn := range dr.Txns {
 		pse := logic.MakePastSideEffects(len(dr.Txns))
-		maxBudget := uint64(proto.MaxAppProgramCost * proto.MaxTxGroupSize)
-		evalBudget := maxBudget
 		ep := logic.EvalParams{
 			Txn:                     &stxn,
 			Proto:                   &proto,
@@ -524,7 +535,17 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 					}
 					result.LocalDeltas = &localDeltas
 				}
-				response.Cost = uint64(maxBudget - evalBudget)
+				//calculate cost used by execution, and budget constraints from dryrun request
+				c := maxBudget - evalBudget
+				response.Cost = &c
+				if userCostPoolingValue == false {
+					if c > uint64(proto.MaxAppProgramCost) {
+						pass = false
+					}
+				}
+				if c > maxCost {
+					pass = false
+				}
 				var err3 error
 				result.Logs, err3 = DeltaLogToLog(delta.Logs, appIdx)
 				if err3 != nil {

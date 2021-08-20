@@ -2494,8 +2494,7 @@
         "required": [
           "txns",
           "protocol-version",
-          "error",
-          "cost"
+          "error"
         ],
         "properties": {
           "txns": {

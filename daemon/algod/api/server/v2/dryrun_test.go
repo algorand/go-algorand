@@ -384,6 +384,7 @@ func checkAppCallPass(t *testing.T, response *generated.DryrunResponse) {
 	}
 }
 
+
 func TestDryrunGlobal1(t *testing.T) {
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	t.Parallel()
@@ -1207,17 +1208,27 @@ func TestDryrunCost(t *testing.T) {
 	t.Parallel()
 	ops, err := logic.AssembleString(`
 #pragma version 5
-int 16
-sqrt
-sqrt
-dup
+byte "H"
+keccak256
+keccak256
+keccak256
+keccak256
+keccak256
+keccak256
+keccak256
+keccak256
+keccak256
+keccak256
 pop
+int 1
 `)
 
 	require.NoError(t, err)
 	approval := ops.Program
 	ops, err = logic.AssembleString("int 1")
 	clst := ops.Program
+	ops, err = logic.AssembleString("#pragma version 5 \nint 1 \nint 2 \npop")
+	approv := ops.Program
 	var appIdx basics.AppIndex = 1
 	creator := randomAddress()
 	sender := randomAddress()
@@ -1233,6 +1244,16 @@ pop
 					},
 				},
 			},
+			{
+				Txn: transactions.Transaction{
+					Header: transactions.Header{Sender: sender},
+					Type:   protocol.ApplicationCallTx,
+					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+						ApplicationID: appIdx + 1,
+						OnCompletion:  transactions.OptInOC,
+					},
+				},
+			},
 		},
 		Apps: []generated.Application{
 			{
@@ -1240,6 +1261,15 @@ pop
 				Params: generated.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approval,
+					ClearStateProgram: clst,
+					LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
+				},
+			},
+			{
+				Id: uint64(appIdx + 1),
+				Params: generated.ApplicationParams{
+					Creator:           creator.String(),
+					ApprovalProgram:   approv,
 					ClearStateProgram: clst,
 					LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
 				},
@@ -1256,7 +1286,8 @@ pop
 	dr.ProtocolVersion = string(dryrunProtoVersion)
 	var response generated.DryrunResponse
 	doDryrunRequest(&dr, &response)
-	require.Equal(t, uint64(11), response.Cost)
+	require.NotNil(t, response.Cost)
+	require.Equal(t, uint64(1306), *response.Cost)
 	require.NoError(t, err)
 	checkAppCallPass(t, &response)
 	if t.Failed() {

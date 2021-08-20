@@ -365,7 +365,6 @@
                 }
               },
               "required": [
-                "cost",
                 "error",
                 "protocol-version",
                 "txns"
@@ -2949,7 +2948,6 @@
                     }
                   },
                   "required": [
-                    "cost",
                     "error",
                     "protocol-version",
                     "txns"
