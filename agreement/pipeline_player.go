@@ -94,8 +94,6 @@ func (p *pipelinePlayer) handle(r routerHandle, e event) []action {
 
 // handleRoundEvent looks up a player for a given round to handle an event.
 func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd round) []action {
-	var actions []action
-
 	if rnd.Number < p.FirstUncommittedRound.Number {
 		// stale event: give it to the oldest player
 		rnd = p.FirstUncommittedRound
@@ -126,12 +124,16 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 
 	// pass event to corresponding child player for this round
 	a := state.handle(r, e)
-	actions = append(actions, a...)
+
+	// Check for an opportunity to start pipelining
+	if e.t() == payloadVerified {
+		a = append(a, p.adjustPlayers(r)...)
+	}
 
 	r.t.aoutTop(demultiplexer, playerMachine, a, roundZero, 0, 0)
 	r.t.traceOutput(state.Round, state.Period, *state, a) // cadaver
 
-	return actions
+	return a
 }
 
 // adjustPlayers creates and garbage-collects players as needed
