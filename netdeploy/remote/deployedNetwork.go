@@ -414,7 +414,11 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	}
 
 	//fund src account with enough funding
-	bootstrappedNet.fundPerAccount = basics.MicroAlgos{Raw: uint64(bootstrappedNet.nAssets) * params.MinBalance * 2}
+	rand.Seed(time.Now().UnixNano())
+	min := fileCfgs.BalanceRange[0]
+	max := fileCfgs.BalanceRange[1]
+	bal := rand.Int63n(max-min) + min
+	bootstrappedNet.fundPerAccount = basics.MicroAlgos{Raw: uint64(bal)}
 	totalFunds := accounts[src].MicroAlgos.Raw + bootstrappedNet.fundPerAccount.Raw*bootstrappedNet.nAccounts + bootstrappedNet.roundTxnCnt*fileCfgs.NumRounds
 	accounts[src] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: totalFunds})
 

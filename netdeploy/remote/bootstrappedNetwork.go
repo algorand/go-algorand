@@ -23,12 +23,13 @@ import (
 
 //BootstrappedNetwork contains the specs for generating db files
 type BootstrappedNetwork struct {
-	NumRounds                 uint64 `json:"numRounds"`
-	RoundTransactionsCount    uint64 `json:"roundTransactionsCount"`
-	GeneratedAccountsCount    uint64 `json:"generatedAccountsCount"`
-	GeneratedAssetsCount      uint64 `json:"generatedAssetsCount"`
-	GeneratedApplicationCount uint64 `json:"generatedApplicationCount"`
-	SourceWalletName          string `json:"sourceWalletName"`
+	NumRounds                 uint64  `json:"numRounds"`
+	RoundTransactionsCount    uint64  `json:"roundTransactionsCount"`
+	GeneratedAccountsCount    uint64  `json:"generatedAccountsCount"`
+	GeneratedAssetsCount      uint64  `json:"generatedAssetsCount"`
+	GeneratedApplicationCount uint64  `json:"generatedApplicationCount"`
+	SourceWalletName          string  `json:"sourceWalletName"`
+	BalanceRange              []int64 `json:"acctBalanceRange"`
 }
 
 // LoadBootstrappedData loads a bootstrappedFile structure from a json file
