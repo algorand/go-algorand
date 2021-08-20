@@ -411,7 +411,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 			numAppCalls++
 		}
 	}
-	maxCost := uint64(proto.MaxAppProgramCost * proto.MaxTxGroupSize)
+	maxCost := uint64(proto.MaxAppProgramCost * numAppCalls)
 	for ti, stxn := range dr.Txns {
 		pse := logic.MakePastSideEffects(len(dr.Txns))
 		ep := logic.EvalParams{

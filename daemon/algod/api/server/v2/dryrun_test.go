@@ -1219,6 +1219,8 @@ keccak256
 keccak256
 keccak256
 keccak256
+keccak256
+keccak256
 pop
 int 1
 `)
@@ -1286,10 +1288,13 @@ int 1
 	dr.ProtocolVersion = string(dryrunProtoVersion)
 	var response generated.DryrunResponse
 	doDryrunRequest(&dr, &response)
+	//dryrun call will execute but fail because the first program exceeds max possible cost
+	messages := *response.Txns[0].AppCallMessages
+	assert.GreaterOrEqual(t, len(messages), 1)
+	assert.Equal(t, "REJECT", messages[len(messages)-1])
 	require.NotNil(t, response.Cost)
-	require.Equal(t, uint64(1306), *response.Cost)
+	require.Equal(t, uint64(1566), *response.Cost)
 	require.NoError(t, err)
-	checkAppCallPass(t, &response)
 	if t.Failed() {
 		logResponse(t, &response)
 	}
