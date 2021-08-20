@@ -384,7 +384,6 @@ func checkAppCallPass(t *testing.T, response *generated.DryrunResponse) {
 	}
 }
 
-
 func TestDryrunGlobal1(t *testing.T) {
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	t.Parallel()

@@ -400,9 +400,9 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 	userCostPoolingValue := proto.EnableAppCostPooling
 	proto.EnableAppCostPooling = true //hardcoded so that dryrun can calculate cost using statefuleval
 	response.Txns = make([]generated.DryrunTxnResult, len(dr.Txns))
-	/*** dryrun specific arbitrarily large budget is set here so that execution passes. 
+	/*** dryrun specific arbitrarily large budget is set here so that execution passes.
 	maxCost is calculated from the tx group and dryrun returns failure if the Cost exceeds this ***/
-	maxBudget := uint64(proto.MaxAppProgramCost * proto.MaxTxGroupSize) 
+	maxBudget := uint64(proto.MaxAppProgramCost * proto.MaxTxGroupSize)
 	evalBudget := maxBudget
 	response.Cost = nil //only stateful evaluation returns cost
 	numAppCalls := 0
