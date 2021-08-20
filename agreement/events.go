@@ -120,8 +120,12 @@ const (
 	// period.
 	//
 	// fastTimeout is like timeout but for fast partition recovery.
+	//
+	// pipelineTimeout indicates that enough time has passed to start
+	// pipelining the next block.
 	timeout
 	fastTimeout
+	pipelineTimeout
 
 	// Other events are delivered from one state machine to another to
 	// communicate some message or as a reply to some message.  These events

@@ -387,6 +387,16 @@ type ConsensusParams struct {
 	// the maximum difference between the first uncommitted round and
 	// the round number that we run the agreement protocol for.
 	AgreementPipelineDepth int
+
+	// AgreementPipelineDelayHistory specifies the number of past block arrivals
+	// that are measured to determine when to start pipelining the next block.
+	AgreementPipelineDelayHistory int
+
+	// AgreementPipelineDelay specifies when the agreement code should start
+	// pipelining the next block, by choosing the delay time of the
+	// AgreementPipelineDelay'th slowest block to arrive out of the last
+	// AgreementPipelineDelayHistory lowest-credential block payloads.
+	AgreementPipelineDelay int
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -992,6 +1002,8 @@ func initConsensusProtocols() {
 
 	// Enable pipelining.
 	vFuture.AgreementPipelineDepth = 5
+	vFuture.AgreementPipelineDelayHistory = 32
+	vFuture.AgreementPipelineDelay = 30
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

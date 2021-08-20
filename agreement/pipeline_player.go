@@ -17,6 +17,9 @@
 package agreement
 
 import (
+	"sort"
+	"time"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -30,6 +33,10 @@ type pipelinePlayer struct {
 	FirstUncommittedRound   round
 	FirstUncommittedVersion protocol.ConsensusVersion
 	Players                 map[round]*player
+
+	// Arrival delays of the winning proposal for recently decided rounds.
+	// Most recent rounds are at the end of this slice.
+	PayloadArrivals []time.Duration
 }
 
 func (p *pipelinePlayer) T() stateMachineTag { return playerMachine } // XXX different tag?
@@ -43,7 +50,19 @@ func (p *pipelinePlayer) init(r routerHandle, target round, proto protocol.Conse
 	p.FirstUncommittedRound = target
 	p.FirstUncommittedVersion = proto
 	p.Players = make(map[round]*player)
+	p.PayloadArrivals = nil
+	p.resizeArrivals()
 	return p.adjustPlayers(r)
+}
+
+func (p *pipelinePlayer) resizeArrivals() {
+	proto := config.Consensus[p.FirstUncommittedVersion]
+	if len(p.PayloadArrivals) > proto.AgreementPipelineDelayHistory {
+		p.PayloadArrivals = p.PayloadArrivals[len(p.PayloadArrivals)-proto.AgreementPipelineDelayHistory:]
+	}
+	for len(p.PayloadArrivals) < proto.AgreementPipelineDelayHistory {
+		p.PayloadArrivals = append([]time.Duration{FilterTimeout(0, p.FirstUncommittedVersion)}, p.PayloadArrivals...)
+	}
 }
 
 // decode implements serializableActor
@@ -156,9 +175,15 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 			break
 		}
 
+		// XXX put actual arrival into proposal payload, store it
+		// in the player alongside with Decided, and use it here.
+		payloadArrival := FilterTimeout(0, p.FirstUncommittedVersion)
+
 		p.FirstUncommittedRound.Number += 1
 		p.FirstUncommittedRound.Branch = pp.Decided
 		p.FirstUncommittedVersion = pp.NextVersion
+		p.PayloadArrivals = append(p.PayloadArrivals, payloadArrival)
+		p.resizeArrivals()
 	}
 
 	// GC any players that are no longer relevant.  We also might have
@@ -207,6 +232,24 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 	return actions
 }
 
+// pipelineDelay chooses the appropriate pipelining delay for a new player.
+func (p *pipelinePlayer) pipelineDelay(ver protocol.ConsensusVersion) time.Duration {
+	proto := config.Consensus[ver]
+
+	if proto.AgreementPipelineDelay <= 0 {
+		return 0
+	}
+
+	if proto.AgreementPipelineDelay > len(p.PayloadArrivals) {
+		return FilterTimeout(0, ver)
+	}
+
+	sortedArrivals := make([]time.Duration, len(p.PayloadArrivals))
+	copy(sortedArrivals[:], p.PayloadArrivals[:])
+	sort.Slice(sortedArrivals, func(i, j int) bool { return sortedArrivals[i] < sortedArrivals[j] })
+	return sortedArrivals[proto.AgreementPipelineDelay-1]
+}
+
 // ensurePlayer creates a player for a particular round, if not already present.
 func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protocol.ConsensusVersion) []action {
 	_, ok := p.Players[nextrnd]
@@ -215,8 +258,9 @@ func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protoco
 	}
 
 	newPlayer := &player{
-		pipelined: true,
-		notify:    p,
+		PipelineDelay: p.pipelineDelay(ver),
+		pipelined:     true,
+		notify:        p,
 	}
 
 	p.Players[nextrnd] = newPlayer

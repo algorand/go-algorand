@@ -41,6 +41,7 @@ type player struct {
 	// Deadline contains the time of the next timeout expected by the player
 	// state machine (relevant to the start of the current period).
 	Deadline time.Duration
+
 	// Napping is set when the player is expecting a random timeout (i.e.,
 	// to determine when the player chooses to send a next-vote).
 	Napping bool
@@ -60,6 +61,10 @@ type player struct {
 	// NextVersion is the protocol version for the next block, set if Decided
 	// is non-zero.
 	NextVersion protocol.ConsensusVersion
+
+	// PipelineDelay is the time at which we should start pipelining the
+	// next block.
+	PipelineDelay time.Duration
 
 	// pipelined is set to true if this player is part of a pipelinePlayer.
 	pipelined bool
