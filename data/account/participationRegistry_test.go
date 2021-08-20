@@ -471,11 +471,19 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 	})
 
 	a.NoError(err)
-	// Detect multiple keys while initializing the cache
+
+	// Now that the DB has multiple records for one participation ID, check that all the methods notice.
+
+	// Fetching by ID
+	_, err = registry.get(id)
+	a.EqualError(err, ErrMultipleKeysForID.Error())
+
+	// Initializing the cache
 	err = registry.initializeCache()
 	a.EqualError(err, ErrMultipleKeysForID.Error())
 
-	// manually initialize the cache
+
+	// Registering the ID
 	registry.cache[id] = ParticipationRecord{
 		ParticipationID: id,
 		Account:         p.Parent,
@@ -485,14 +493,12 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 		RegisteredFirst: p.FirstValid,
 		RegisteredLast:  p.LastValid,
 	}
-
-	// Fail to register because there are multiple rows for the ID
 	err = registry.Register(id, 1)
 	a.Error(err)
 	a.Contains(err.Error(), "unable to registering key with id")
 	a.EqualError(errors.Unwrap(err), ErrMultipleKeysForID.Error())
 
-	// Fail to flush dirty record because there are multiple rows for the ID
+	// Flushing changes detects that multiple records are updated
 	registry.dirty[id] = struct{}{}
 	err = registry.Flush()
 	a.EqualError(err, ErrMultipleKeysForID.Error())

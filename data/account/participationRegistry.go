@@ -385,7 +385,7 @@ func (db *participationDB) get(id ParticipationID) (record ParticipationRecord, 
 		}
 
 		if len(records) != 1 {
-			return fmt.Errorf("expected 1 result found %d", len(records))
+			return ErrMultipleKeysForID
 		}
 
 		record = records[0]
@@ -474,7 +474,7 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 		return ErrInvalidRegisterRange
 	}
 
-	updated := make(map[ParticipationID]ParticipationRecord, 0)
+	updated := make(map[ParticipationID]ParticipationRecord)
 	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// Disable active key
 		for _, record := range db.cache {
