@@ -86,12 +86,10 @@ func (p *player) init(r routerHandle, target round, proto protocol.ConsensusVers
 		p.notify = p
 	}
 
-	// XXX this does not work well in the presence of pipelining
-	p.LastConcluding = p.Step
-
 	p.Round = target
 	p.Period = 0
 	p.Step = soft
+	p.LastConcluding = 0
 	p.Napping = false
 	p.FastRecoveryDeadline = 0
 	p.Deadline = FilterTimeout(0, proto)
