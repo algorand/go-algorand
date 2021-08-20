@@ -369,7 +369,7 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 
 	// if we're on an older version, then add the old style transaction message to the send messages tag.
 	// once we deprecate old style transaction sending, this part can go away.
-	if wp.version != "2.5" {
+	if wp.version != "3.0" {
 		txSendMsgTags := make(map[protocol.Tag]bool)
 		for tag := range wp.sendMessageTag {
 			txSendMsgTags[tag] = true

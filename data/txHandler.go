@@ -329,26 +329,23 @@ func (handler *TxHandler) filterAlreadyCommitted(unverifiedTxGroups []transactio
 		switch err.(type) {
 		case nil:
 			// no error was generated.
+			if remainedTxnsGroupOffset != idx {
+				unverifiedTxGroups[remainedTxnsGroupOffset] = utxng
+			}
+			remainedTxnsGroupOffset++
 		case *ledgercore.TransactionInLedgerError:
 			// this is a duplicate transaction group.
-			continue
 		default:
 			// some non-duplicate error was reported on this group.
 			nonDuplicatedFilteredGroups = true
-			continue
 		}
-
-		if remainedTxnsGroupOffset != idx {
-			unverifiedTxGroups[remainedTxnsGroupOffset] = utxng
-		}
-		remainedTxnsGroupOffset++
 	}
 	return unverifiedTxGroups[:remainedTxnsGroupOffset], nonDuplicatedFilteredGroups
 }
 
 // processDecodedArray receives a slice of transaction groups and attempt to add them to the transaction pool.
 // The processDecodedArray returns whether the node should be disconnecting from the source of these transactions ( in case a malicious transaction is found )
-// as well as whether all the provided transactions were included in the transaction pool by the time the method returns.
+// as well as whether all the provided transactions were included in the transaction pool or committed.
 func (handler *TxHandler) processDecodedArray(unverifiedTxGroups []transactions.SignedTxGroup) (disconnect, allTransactionIncluded bool) {
 	var nonDuplicatedFilteredGroups bool
 	unverifiedTxGroups, nonDuplicatedFilteredGroups = handler.filterAlreadyCommitted(unverifiedTxGroups)
@@ -431,8 +428,9 @@ func (handler *solicitedTxHandler) Handle(txgroup []transactions.SignedTxn) erro
 	return nil
 }
 
-// SolicitedAsyncTxHandler handles messages received through channels other than the gossip network.
-// It therefore circumvents the notion of incoming/outgoing messages
+// SolicitedAsyncTxHandler handles slices of transaction groups received from the transaction sync.
+// It provides a non-blocking queueing for the processing of these transaction groups, which allows
+// the single-threaded transaction sync to keep processing other messages.
 type SolicitedAsyncTxHandler interface {
 	// HandleTransactionGroups enqueues the given slice of transaction groups that came from the given network peer with
 	// the given message sequence number. The provided acknowledgement channel provides a feedback for the transaction sync
@@ -514,6 +512,7 @@ func (handler *solicitedAyncTxHandler) Stop() {
 		handler.stopCtxFunc = nil
 	}
 }
+
 func (handler *solicitedAyncTxHandler) loop(ctx context.Context) {
 	defer handler.stopped.Done()
 	var groups *txGroups

@@ -109,7 +109,7 @@ func (tsnc *transactionSyncNodeConnector) GetPeers() (peersInfo []txnsync.PeerIn
 			continue
 		}
 		// check version.
-		if unicastPeer.Version() != "2.5" {
+		if unicastPeer.Version() != "3.0" {
 			continue
 		}
 		peersInfo[k].IsOutgoing = unicastPeer.IsOutgoing()
@@ -192,14 +192,13 @@ func (tsnc *transactionSyncNodeConnector) start() {
 		{Tag: protocol.Txn2Tag, MessageHandler: tsnc},
 	}
 	tsnc.node.net.RegisterHandlers(handlers)
-	tsnc.txHandler.Start()
 }
 
 func (tsnc *transactionSyncNodeConnector) Handle(raw network.IncomingMessage) network.OutgoingMessage {
 	unicastPeer := raw.Sender.(network.UnicastPeer)
 	if unicastPeer != nil {
 		// check version.
-		if unicastPeer.Version() != "2.5" {
+		if unicastPeer.Version() != "3.0" {
 			return network.OutgoingMessage{
 				Action: network.Ignore,
 			}
