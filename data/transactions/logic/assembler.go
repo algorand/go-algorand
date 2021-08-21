@@ -798,7 +798,7 @@ func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(fs.field))
-	ops.returns(TxnFieldTypes[fs.field])
+	ops.returns(fs.ftype)
 	return nil
 }
 
@@ -840,7 +840,7 @@ func assembleTxna(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(fs.field))
 	ops.pending.WriteByte(uint8(arrayFieldIdx))
-	ops.returns(TxnFieldTypes[fs.field])
+	ops.returns(fs.ftype)
 	return nil
 }
 
@@ -871,7 +871,7 @@ func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(slot))
 	ops.pending.WriteByte(uint8(fs.field))
-	ops.returns(TxnFieldTypes[fs.field])
+	ops.returns(fs.ftype)
 	return nil
 }
 
@@ -921,7 +921,7 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.WriteByte(uint8(slot))
 	ops.pending.WriteByte(uint8(fs.field))
 	ops.pending.WriteByte(uint8(arrayFieldIdx))
-	ops.returns(TxnFieldTypes[fs.field])
+	ops.returns(fs.ftype)
 	return nil
 }
 
@@ -947,7 +947,7 @@ func assembleGtxns(ops *OpStream, spec *OpSpec, args []string) error {
 
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(fs.field))
-	ops.returns(TxnFieldTypes[fs.field])
+	ops.returns(fs.ftype)
 	return nil
 }
 
@@ -976,7 +976,7 @@ func assembleGtxnsa(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(fs.field))
 	ops.pending.WriteByte(uint8(arrayFieldIdx))
-	ops.returns(TxnFieldTypes[fs.field])
+	ops.returns(fs.ftype)
 	return nil
 }
 
@@ -993,11 +993,11 @@ func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 		ops.errorf("global %s available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
 
-	val := fs.gfield
+	val := fs.field
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(val))
-	ops.trace("%s (%s)", GlobalFieldNames[val], GlobalFieldTypes[val].String())
-	ops.returns(GlobalFieldTypes[val])
+	ops.trace("%s (%s)", fs.field.String(), fs.ftype.String())
+	ops.returns(fs.ftype)
 	return nil
 }
 
@@ -1005,13 +1005,20 @@ func assembleAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	val, ok := assetHoldingFields[args[0]]
+	fs, ok := assetHoldingFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("%s unknown arg: %#v", spec.Name, args[0])
+		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
+	if fs.version > ops.Version {
+		// no return here. we continue to maintain typestack
+		ops.errorf("asset_holding_get %s available in version %d. Missed #pragma version?", args[0], fs.version)
+	}
+
+	val := fs.field
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(val))
-	ops.returns(AssetHoldingFieldTypes[val], StackUint64)
+	ops.trace("%s (%s)", fs.field.String(), fs.ftype.String())
+	ops.returns(fs.ftype, StackUint64)
 	return nil
 }
 
@@ -1019,13 +1026,20 @@ func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	val, ok := assetParamsFields[args[0]]
+	fs, ok := assetParamsFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("%s unknown arg: %#v", spec.Name, args[0])
+		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
+	if fs.version > ops.Version {
+		// no return here. we continue to maintain typestack
+		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], fs.version)
+	}
+
+	val := fs.field
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(val))
-	ops.returns(AssetParamsFieldTypes[val], StackUint64)
+	ops.trace("%s (%s)", fs.field.String(), fs.ftype.String())
+	ops.returns(fs.ftype, StackUint64)
 	return nil
 }
 
@@ -1033,13 +1047,20 @@ func assembleAppParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	val, ok := appParamsFields[args[0]]
+	fs, ok := appParamsFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("%s unknown arg: %#v", spec.Name, args[0])
+		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
+	if fs.version > ops.Version {
+		// no return here. we continue to maintain typestack
+		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], fs.version)
+	}
+
+	val := fs.field
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(val))
-	ops.returns(AppParamsFieldTypes[val], StackUint64)
+	ops.trace("%s (%s)", fs.field.String(), fs.ftype.String())
+	ops.returns(fs.ftype, StackUint64)
 	return nil
 }
 
