@@ -405,7 +405,7 @@ var assetHoldingFieldSpecByName ahfNameSpecMap
 type ahfNameSpecMap map[string]assetHoldingFieldSpec
 
 func (s ahfNameSpecMap) getExtraFor(name string) (extra string) {
-	// Uses 2 here because asset fields were intrduced in 2
+	// Uses 2 here because asset fields were introduced in 2
 	if s[name].version > 2 {
 		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
 	}
@@ -479,7 +479,7 @@ var assetParamsFieldSpecByName apfNameSpecMap
 type apfNameSpecMap map[string]assetParamsFieldSpec
 
 func (s apfNameSpecMap) getExtraFor(name string) (extra string) {
-	// Uses 2 here because asset fields were intrduced in 2
+	// Uses 2 here because asset fields were introduced in 2
 	if s[name].version > 2 {
 		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
 	}
@@ -541,8 +541,8 @@ var appParamsFieldSpecByName appNameSpecMap
 type appNameSpecMap map[string]appParamsFieldSpec
 
 func (s appNameSpecMap) getExtraFor(name string) (extra string) {
-	// Uses 2 here because app fields were intrduced in 2
-	if s[name].version > 2 {
+	// Uses 2 here because app fields were introduced in 5
+	if s[name].version > 5 {
 		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
 	}
 	return

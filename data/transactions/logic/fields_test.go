@@ -227,6 +227,9 @@ func TestFieldVersions(t *testing.T) {
 	// like TestAssetParamsFieldsVersions that checks the field is
 	// unavailable before its debut.
 
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	for _, fs := range assetHoldingFieldSpecs {
 		require.Equal(t, uint64(2), fs.version)
 	}
