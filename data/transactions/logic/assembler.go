@@ -989,8 +989,8 @@ func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
 	if fs.version > ops.Version {
-		// no return here. we may as well continue to maintain typestack
-		ops.errorf("global %s available in version %d. Missed #pragma version?", args[0], fs.version)
+		//nolint:errcheck // we continue to maintain typestack
+		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], fs.version)
 	}
 
 	val := fs.field
@@ -1010,8 +1010,8 @@ func assembleAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
 	if fs.version > ops.Version {
-		// no return here. we continue to maintain typestack
-		ops.errorf("asset_holding_get %s available in version %d. Missed #pragma version?", args[0], fs.version)
+		//nolint:errcheck // we continue to maintain typestack
+		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], fs.version)
 	}
 
 	val := fs.field
@@ -1031,7 +1031,7 @@ func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
 	if fs.version > ops.Version {
-		// no return here. we continue to maintain typestack
+		//nolint:errcheck // we continue to maintain typestack
 		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], fs.version)
 	}
 
@@ -1052,7 +1052,7 @@ func assembleAppParams(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
 	if fs.version > ops.Version {
-		// no return here. we continue to maintain typestack
+		//nolint:errcheck // we continue to maintain typestack
 		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], fs.version)
 	}
 
