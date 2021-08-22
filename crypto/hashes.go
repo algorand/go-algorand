@@ -32,3 +32,12 @@ func (h HashFactory) NewHash() (hash.Hash, error) {
 		return nil, errUnknownHash
 	}
 }
+
+// HashSum Makes it easier to sum using hash interface and Hashable interface
+func HashSum(hsh hash.Hash, h Hashable) []byte {
+	rep := hashRep(h)
+	hsh.Write(rep)
+	out := hsh.Sum(nil)
+	hsh.Reset()
+	return out
+}

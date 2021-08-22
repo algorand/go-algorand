@@ -18,6 +18,7 @@ package compactcert
 
 import (
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -99,10 +100,10 @@ const maxProofDigests = 20 * maxReveals
 type Cert struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	SigCommit    crypto.Digest   `codec:"c"`
-	SignedWeight uint64          `codec:"w"`
-	SigProofs    []crypto.Digest `codec:"S,allocbound=maxProofDigests"`
-	PartProofs   []crypto.Digest `codec:"P,allocbound=maxProofDigests"`
+	SigCommit    crypto.Digest     `codec:"c"`
+	SignedWeight uint64            `codec:"w"`
+	SigProofs    merklearray.Proof `codec:"S"`
+	PartProofs   merklearray.Proof `codec:"P,allocbound=maxProofDigests"`
 
 	// Reveals is a sparse map from the position being revealed
 	// to the corresponding elements from the sigs and participants
