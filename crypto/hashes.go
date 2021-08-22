@@ -4,6 +4,9 @@ import (
 	"crypto/sha512"
 	"errors"
 	"hash"
+
+	"github.com/algonathan/sumhash"
+	"golang.org/x/crypto/sha3"
 )
 
 // HashType enum type for signing algorithms
@@ -12,7 +15,7 @@ type HashType uint64
 // types of hashes
 const (
 	Sha512_256 HashType = iota
-	Sha512_2512
+	Subsetsum
 )
 
 // HashFactory is responsible for generating new hashes accordingly to the type it stores.
@@ -28,6 +31,16 @@ func (h HashFactory) NewHash() (hash.Hash, error) {
 	switch h.HashType {
 	case Sha512_256:
 		return sha512.New512_256(), nil
+	case Subsetsum:
+		C := 4
+		N := 14
+		shk := sha3.NewShake256()
+		seed := []byte("I have nothing up my sleeve...")
+		_, err := shk.Write(seed)
+		if err != nil {
+			return nil, err
+		}
+		return sumhash.New(sumhash.RandomMatrix(shk, N, C)), nil
 	default:
 		return nil, errUnknownHash
 	}

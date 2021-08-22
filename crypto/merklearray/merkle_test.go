@@ -18,11 +18,13 @@ package merklearray
 
 import (
 	"fmt"
+	"log"
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/require"
 )
 
 type TestMessage string
@@ -81,16 +83,24 @@ func (a TestRepeatingArray) Marshal(pos uint64) ([]byte, error) {
 func TestMerkle(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	//testMerkle(t, crypto.Sha512_256)
+	testMerkle(t, crypto.Subsetsum)
+}
+
+func testMerkle(t *testing.T, hashtype crypto.HashType) {
 	var junk TestData
 	crypto.RandBytes(junk[:])
 
 	for sz := uint64(0); sz < 1024; sz++ {
+		if sz%128 == 0 {
+			log.Println("advancing. ")
+		}
 		a := make(TestArray, sz)
 		for i := uint64(0); i < sz; i++ {
 			crypto.RandBytes(a[i][:])
 		}
 
-		tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha512_256})
+		tree, err := Build(a, crypto.HashFactory{HashType: hashtype})
 		if err != nil {
 			t.Error(err)
 		}
@@ -100,24 +110,27 @@ func TestMerkle(t *testing.T) {
 		var allpos []uint64
 		allmap := make(map[uint64]Digest)
 
+		hsh, err := crypto.HashFactory{HashType: hashtype}.NewHash()
+		require.NoError(t, err)
+
 		for i := uint64(0); i < sz; i++ {
 			proof, err := tree.Prove([]uint64{i})
 			if err != nil {
 				t.Error(err)
 			}
 
-			err = Verify(root, map[uint64]Digest{i: crypto.HashObj(a[i]).ToSlice()}, proof)
+			err = Verify(root, map[uint64]Digest{i: crypto.HashSum(hsh, a[i])}, proof)
 			if err != nil {
 				t.Error(err)
 			}
 
-			err = Verify(root, map[uint64]Digest{i: crypto.HashObj(junk).ToSlice()}, proof)
+			err = Verify(root, map[uint64]Digest{i: crypto.HashSum(hsh, junk)}, proof)
 			if err == nil {
 				t.Errorf("no error when verifying junk")
 			}
 
 			allpos = append(allpos, i)
-			allmap[i] = crypto.HashObj(a[i]).ToSlice()
+			allmap[i] = crypto.HashSum(hsh, a[i])
 		}
 
 		proof, err := tree.Prove(allpos)
@@ -130,12 +143,12 @@ func TestMerkle(t *testing.T) {
 			t.Error(err)
 		}
 
-		err = Verify(root, map[uint64]Digest{0: crypto.HashObj(junk).ToSlice()}, proof)
+		err = Verify(root, map[uint64]Digest{0: crypto.HashSum(hsh, junk)}, proof)
 		if err == nil {
 			t.Errorf("no error when verifying junk batch")
 		}
 
-		err = Verify(root, map[uint64]Digest{0: crypto.HashObj(junk).ToSlice()}, nil)
+		err = Verify(root, map[uint64]Digest{0: crypto.HashSum(hsh, junk)}, nil)
 		if err == nil {
 			t.Errorf("no error when verifying junk batch")
 		}
@@ -145,7 +158,7 @@ func TestMerkle(t *testing.T) {
 			t.Errorf("no error when proving past the end")
 		}
 
-		err = Verify(root, map[uint64]Digest{sz: crypto.HashObj(junk).ToSlice()}, nil)
+		err = Verify(root, map[uint64]Digest{sz: crypto.HashSum(hsh, junk)}, nil)
 		if err == nil {
 			t.Errorf("no error when verifying past the end")
 		}
@@ -156,7 +169,7 @@ func TestMerkle(t *testing.T) {
 			for i := 0; i < 10; i++ {
 				pos := crypto.RandUint64() % sz
 				somepos = append(somepos, pos)
-				somemap[pos] = crypto.HashObj(a[pos]).ToSlice()
+				somemap[pos] = crypto.HashSum(hsh, a[pos])
 			}
 
 			proof, err = tree.Prove(somepos)
@@ -184,7 +197,7 @@ func BenchmarkMerkleCommit(b *testing.B) {
 
 			b.Run(fmt.Sprintf("Item%d/Count%d", sz, cnt), func(b *testing.B) {
 				for i := 0; i < b.N; i++ {
-					tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha512_256})
+					tree, err := Build(a, crypto.HashFactory{HashType: crypto.Subsetsum})
 					if err != nil {
 						b.Error(err)
 					}

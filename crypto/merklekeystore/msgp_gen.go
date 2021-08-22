@@ -604,25 +604,25 @@ func (z *Signer) MsgIsZero() bool {
 func (z *Verifier) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(2)
-	var zb0001Mask uint8 /* 3 bits */
-	if (*z).Root.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x2
+	zb0002Len := uint32(2)
+	var zb0002Mask uint8 /* 3 bits */
+	if (*z).Root == ([112]byte{}) {
+		zb0002Len--
+		zb0002Mask |= 0x2
 	}
 	if (*z).HasValidRoot == false {
-		zb0001Len--
-		zb0001Mask |= 0x4
+		zb0002Len--
+		zb0002Mask |= 0x4
 	}
-	// variable map header, size zb0001Len
-	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len != 0 {
-		if (zb0001Mask & 0x2) == 0 { // if not empty
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if zb0002Len != 0 {
+		if (zb0002Mask & 0x2) == 0 { // if not empty
 			// string "r"
 			o = append(o, 0xa1, 0x72)
-			o = (*z).Root.MarshalMsg(o)
+			o = msgp.AppendBytes(o, ((*z).Root)[:])
 		}
-		if (zb0001Mask & 0x4) == 0 { // if not empty
+		if (zb0002Mask & 0x4) == 0 { // if not empty
 			// string "vr"
 			o = append(o, 0xa2, 0x76, 0x72)
 			o = msgp.AppendBool(o, (*z).HasValidRoot)
@@ -640,33 +640,33 @@ func (_ *Verifier) CanMarshalMsg(z interface{}) bool {
 func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 int
-	var zb0002 bool
-	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
-			bts, err = (*z).Root.UnmarshalMsg(bts)
+		if zb0002 > 0 {
+			zb0002--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).Root)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Root")
 				return
 			}
 		}
-		if zb0001 > 0 {
-			zb0001--
+		if zb0002 > 0 {
+			zb0002--
 			(*z).HasValidRoot, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "HasValidRoot")
 				return
 			}
 		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
+		if zb0002 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0002)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
 				return
@@ -677,11 +677,11 @@ func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 {
+		if zb0003 {
 			(*z) = Verifier{}
 		}
-		for zb0001 > 0 {
-			zb0001--
+		for zb0002 > 0 {
+			zb0002--
 			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
@@ -689,7 +689,7 @@ func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "r":
-				bts, err = (*z).Root.UnmarshalMsg(bts)
+				bts, err = msgp.ReadExactBytes(bts, ((*z).Root)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "Root")
 					return
@@ -720,11 +720,11 @@ func (_ *Verifier) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Verifier) Msgsize() (s int) {
-	s = 1 + 2 + (*z).Root.Msgsize() + 3 + msgp.BoolSize
+	s = 1 + 2 + msgp.ArrayHeaderSize + (112 * (msgp.ByteSize)) + 3 + msgp.BoolSize
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Verifier) MsgIsZero() bool {
-	return ((*z).Root.MsgIsZero()) && ((*z).HasValidRoot == false)
+	return ((*z).Root == ([112]byte{})) && ((*z).HasValidRoot == false)
 }

@@ -70,7 +70,7 @@ type (
 	Verifier struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-		Root crypto.Digest `codec:"r"`
+		Root [112]byte `codec:"r"`
 
 		// indicates that this verifier corresponds to a specific array of ephemeral keys.
 		// this is used to distinguish between an empty structure, and nothing to commit to.
@@ -141,7 +141,7 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 		Interval:            interval,
 		mu:                  deadlock.RWMutex{},
 	}
-	tree, err := merklearray.Build(s, crypto.HashFactory{HashType: crypto.Sha512_256})
+	tree, err := merklearray.Build(s, crypto.HashFactory{HashType: crypto.Subsetsum})
 	if err != nil {
 		return nil, err
 	}
@@ -152,8 +152,10 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 
 // GetVerifier can be used to store the commitment and verifier for this signer.
 func (s *Signer) GetVerifier() *Verifier {
+	root := [112]byte{}
+	copy(root[:], s.Tree.Root().ToSlice())
 	return &Verifier{
-		Root:         s.Tree.Root().To32Byte(),
+		Root:         root,
 		HasValidRoot: true,
 	}
 }
@@ -280,7 +282,7 @@ func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashabl
 	hsh.Write(crypto.HashRep(&ephkey))
 
 	pos := roundToIndex(firstValid, round, interval)
-	isInTree := merklearray.Verify(v.Root, map[uint64]merklearray.Digest{pos: hsh.Sum(nil)}, (*merklearray.Proof)(&sig.Proof))
+	isInTree := merklearray.Verify((merklearray.Digest)(v.Root[:]), map[uint64]merklearray.Digest{pos: hsh.Sum(nil)}, (*merklearray.Proof)(&sig.Proof))
 	if isInTree != nil {
 		return isInTree
 	}
