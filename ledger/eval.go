@@ -1002,7 +1002,7 @@ func (eval *BlockEvaluator) compactCertVotersAndTotal() (root crypto.Digest, tot
 	}
 
 	if voters != nil {
-		root = voters.Tree.Root()
+		root = voters.Tree.Root().To32Byte()
 		total = voters.TotalWeight
 	}
 

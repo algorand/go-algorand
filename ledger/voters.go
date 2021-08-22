@@ -249,7 +249,7 @@ func (tr *VotersForRound) loadTree(l ledgerForTracker, au *accountUpdates, hdr b
 		addrToPos[acct.Address] = uint64(i)
 	}
 
-	tree, err := merklearray.Build(participants)
+	tree, err := merklearray.Build(participants, crypto.HashFactory{HashType: crypto.Sha512_256})
 	if err != nil {
 		return err
 	}
@@ -341,10 +341,10 @@ func (a participantsArray) Length() uint64 {
 	return uint64(len(a))
 }
 
-func (a participantsArray) GetHash(pos uint64) (crypto.Digest, error) {
+func (a participantsArray) Marshal(pos uint64) ([]byte, error) {
 	if pos >= uint64(len(a)) {
-		return crypto.Digest{}, fmt.Errorf("participantsArray.Get(%d) out of bounds %d", pos, len(a))
+		return nil, fmt.Errorf("participantsArray.Get(%d) out of bounds %d", pos, len(a))
 	}
 
-	return crypto.HashObj(a[pos]), nil
+	return crypto.HashRep(a[pos]), nil
 }
