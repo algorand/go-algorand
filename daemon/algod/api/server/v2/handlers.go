@@ -221,16 +221,16 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 			}
 
 			proofconcat := make([]byte, 0)
-			for _, proofelem := range proof {
+			for _, proofelem := range proof.Path {
 				proofconcat = append(proofconcat, proofelem[:]...)
 			}
 
 			stibhash := block.Payset[idx].Hash()
 
 			response := generated.ProofResponse{
+				Idx:      uint64(idx),
 				Proof:    proofconcat,
 				Stibhash: stibhash[:],
-				Idx:      uint64(idx),
 			}
 
 			return ctx.JSON(http.StatusOK, response)
