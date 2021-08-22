@@ -18,7 +18,6 @@ package merklearray
 
 import (
 	"fmt"
-	"log"
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -83,105 +82,84 @@ func (a TestRepeatingArray) Marshal(pos uint64) ([]byte, error) {
 func TestMerkle(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	//testMerkle(t, crypto.Sha512_256)
-	testMerkle(t, crypto.Subsetsum)
+	for i := uint64(0); i < 1024; i++ {
+		testMerkle(t, crypto.Sha512_256, i)
+	}
+
+	if !testing.Short() {
+		for i := uint64(0); i < 1024; i++ {
+			testMerkle(t, crypto.Subsetsum, i)
+		}
+	}
+
 }
 
-func testMerkle(t *testing.T, hashtype crypto.HashType) {
+func testMerkle(t *testing.T, hashtype crypto.HashType, size uint64) {
 	var junk TestData
 	crypto.RandBytes(junk[:])
 
-	for sz := uint64(0); sz < 1024; sz++ {
-		if sz%128 == 0 {
-			log.Println("advancing. ")
-		}
-		a := make(TestArray, sz)
-		for i := uint64(0); i < sz; i++ {
-			crypto.RandBytes(a[i][:])
-		}
+	a := make(TestArray, size)
+	for i := uint64(0); i < size; i++ {
+		crypto.RandBytes(a[i][:])
+	}
 
-		tree, err := Build(a, crypto.HashFactory{HashType: hashtype})
-		if err != nil {
-			t.Error(err)
-		}
+	tree, err := Build(a, crypto.HashFactory{HashType: hashtype})
+	require.NoError(t, err)
 
-		root := tree.Root()
+	root := tree.Root()
 
-		var allpos []uint64
-		allmap := make(map[uint64]Digest)
+	var allpos []uint64
+	allmap := make(map[uint64]Digest)
 
-		hsh, err := crypto.HashFactory{HashType: hashtype}.NewHash()
+	hsh, err := crypto.HashFactory{HashType: hashtype}.NewHash()
+	require.NoError(t, err)
+
+	for i := uint64(0); i < size; i++ {
+		proof, err := tree.Prove([]uint64{i})
 		require.NoError(t, err)
 
-		for i := uint64(0); i < sz; i++ {
-			proof, err := tree.Prove([]uint64{i})
-			if err != nil {
-				t.Error(err)
-			}
+		err = Verify(root, map[uint64]Digest{i: crypto.HashSum(hsh, a[i])}, proof)
+		require.NoError(t, err)
 
-			err = Verify(root, map[uint64]Digest{i: crypto.HashSum(hsh, a[i])}, proof)
-			if err != nil {
-				t.Error(err)
-			}
+		err = Verify(root, map[uint64]Digest{i: crypto.HashSum(hsh, junk)}, proof)
+		require.Error(t, err, "no error when verifying junk")
 
-			err = Verify(root, map[uint64]Digest{i: crypto.HashSum(hsh, junk)}, proof)
-			if err == nil {
-				t.Errorf("no error when verifying junk")
-			}
+		allpos = append(allpos, i)
+		allmap[i] = crypto.HashSum(hsh, a[i])
+	}
 
-			allpos = append(allpos, i)
-			allmap[i] = crypto.HashSum(hsh, a[i])
+	proof, err := tree.Prove(allpos)
+	require.NoError(t, err)
+
+	err = Verify(root, allmap, proof)
+	require.NoError(t, err)
+
+	err = Verify(root, map[uint64]Digest{0: crypto.HashSum(hsh, junk)}, proof)
+	require.Error(t, err, "no error when verifying junk batch")
+
+	err = Verify(root, map[uint64]Digest{0: crypto.HashSum(hsh, junk)}, nil)
+	require.Error(t, err, "no error when verifying junk batch")
+
+	_, err = tree.Prove([]uint64{size})
+	require.Error(t, err, "no error when proving past the end")
+
+	err = Verify(root, map[uint64]Digest{size: crypto.HashSum(hsh, junk)}, nil)
+	require.Error(t, err, "no error when verifying past the end")
+
+	if size > 0 {
+		var somepos []uint64
+		somemap := make(map[uint64]Digest)
+		for i := 0; i < 10; i++ {
+			pos := crypto.RandUint64() % size
+			somepos = append(somepos, pos)
+			somemap[pos] = crypto.HashSum(hsh, a[pos])
 		}
 
-		proof, err := tree.Prove(allpos)
-		if err != nil {
-			t.Error(err)
-		}
+		proof, err = tree.Prove(somepos)
+		require.NoError(t, err)
 
-		err = Verify(root, allmap, proof)
-		if err != nil {
-			t.Error(err)
-		}
-
-		err = Verify(root, map[uint64]Digest{0: crypto.HashSum(hsh, junk)}, proof)
-		if err == nil {
-			t.Errorf("no error when verifying junk batch")
-		}
-
-		err = Verify(root, map[uint64]Digest{0: crypto.HashSum(hsh, junk)}, nil)
-		if err == nil {
-			t.Errorf("no error when verifying junk batch")
-		}
-
-		_, err = tree.Prove([]uint64{sz})
-		if err == nil {
-			t.Errorf("no error when proving past the end")
-		}
-
-		err = Verify(root, map[uint64]Digest{sz: crypto.HashSum(hsh, junk)}, nil)
-		if err == nil {
-			t.Errorf("no error when verifying past the end")
-		}
-
-		if sz > 0 {
-			var somepos []uint64
-			somemap := make(map[uint64]Digest)
-			for i := 0; i < 10; i++ {
-				pos := crypto.RandUint64() % sz
-				somepos = append(somepos, pos)
-				somemap[pos] = crypto.HashSum(hsh, a[pos])
-			}
-
-			proof, err = tree.Prove(somepos)
-			if err != nil {
-				t.Error(err)
-			}
-
-			err = Verify(root, somemap, proof)
-			if err != nil {
-				t.Error(err)
-			}
-		}
+		err = Verify(root, somemap, proof)
+		require.NoError(t, err)
 	}
 }
 
