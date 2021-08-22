@@ -85,12 +85,12 @@ func TestTxnMerkleProof(t *testing.T) {
 	proofresp, err := client.TxnProof(txid.String(), confirmedTx.ConfirmedRound)
 	a.NoError(err)
 
-	var proof []crypto.Digest
+	var proof merklearray.Proof
 	proofconcat := []byte(proofresp.Proof)
 	for len(proofconcat) > 0 {
 		var d crypto.Digest
 		copy(d[:], proofconcat)
-		proof = append(proof, d)
+		proof.Path = append(proof.Path, d[:])
 		proofconcat = proofconcat[len(d):]
 	}
 
@@ -101,8 +101,9 @@ func TestTxnMerkleProof(t *testing.T) {
 	merkleNode = append(merkleNode, txid[:]...)
 	merkleNode = append(merkleNode, proofresp.Stibhash...)
 
-	elems := make(map[uint64]crypto.Digest)
-	elems[proofresp.Idx] = crypto.Hash(merkleNode)
-	err = merklearray.Verify(blk.TxnRoot, elems, proof)
+	elems := make(map[uint64]merklearray.Digest)
+	tmp := crypto.Hash(merkleNode)
+	elems[proofresp.Idx] = tmp[:]
+	err = merklearray.Verify(blk.TxnRoot, elems, &proof)
 	a.NoError(err)
 }
