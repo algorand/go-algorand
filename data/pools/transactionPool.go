@@ -214,7 +214,8 @@ func (pool *TransactionPool) PendingTxIDs() []transactions.Txid {
 }
 
 // PendingTxGroups returns a list of transaction groups that should be proposed
-// in the next block, in order.
+// in the next block, in order. As the second return value, it returns the transaction
+// group counter of the latest local generated transaction group.
 func (pool *TransactionPool) PendingTxGroups() ([]transactions.SignedTxGroup, uint64) {
 	pool.pendingMu.RLock()
 	defer pool.pendingMu.RUnlock()

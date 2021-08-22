@@ -31,6 +31,10 @@ import (
 	"github.com/algorand/go-algorand/util/timers"
 )
 
+// txnsyncPeerDataKey is the key name by which we're going to store the
+// transaction sync internal data object inside the network peer.
+const txnsyncPeerDataKey = "txsync"
+
 // transactionSyncNodeConnector implements the txnsync.NodeConnector interface, allowing the
 // transaction sync communicate with the node and it's child objects.
 type transactionSyncNodeConnector struct {
@@ -71,8 +75,8 @@ func (tsnc *transactionSyncNodeConnector) NotifyMonitor() chan struct{} {
 	return tsnc.openStateCh
 }
 
-func (tsnc *transactionSyncNodeConnector) Random(rng uint64) uint64 {
-	return tsnc.node.Uint64() % rng
+func (tsnc *transactionSyncNodeConnector) Random(upperBound uint64) uint64 {
+	return tsnc.node.Uint64() % upperBound
 }
 
 func (tsnc *transactionSyncNodeConnector) Clock() timers.WallClock {
@@ -85,7 +89,7 @@ func (tsnc *transactionSyncNodeConnector) GetPeer(networkPeer interface{}) txnsy
 		return txnsync.PeerInfo{}
 	}
 
-	peerData := tsnc.node.net.GetPeerData(networkPeer, "txsync")
+	peerData := tsnc.node.net.GetPeerData(networkPeer, txnsyncPeerDataKey)
 	if peerData == nil {
 		return txnsync.PeerInfo{
 			IsOutgoing:  unicastPeer.IsOutgoing(),
@@ -114,7 +118,7 @@ func (tsnc *transactionSyncNodeConnector) GetPeers() (peersInfo []txnsync.PeerIn
 		}
 		peersInfo[k].IsOutgoing = unicastPeer.IsOutgoing()
 		peersInfo[k].NetworkPeer = networkPeers[i]
-		peerData := tsnc.node.net.GetPeerData(networkPeers[i], "txsync")
+		peerData := tsnc.node.net.GetPeerData(networkPeers[i], txnsyncPeerDataKey)
 		if peerData != nil {
 			peersInfo[k].TxnSyncPeer = peerData.(*txnsync.Peer)
 		}
@@ -126,7 +130,7 @@ func (tsnc *transactionSyncNodeConnector) GetPeers() (peersInfo []txnsync.PeerIn
 
 func (tsnc *transactionSyncNodeConnector) UpdatePeers(txsyncPeers []*txnsync.Peer, netPeers []interface{}, averageDataExchangeRate uint64) {
 	for i, netPeer := range netPeers {
-		tsnc.node.net.SetPeerData(netPeer, "txsync", txsyncPeers[i])
+		tsnc.node.net.SetPeerData(netPeer, txnsyncPeerDataKey, txsyncPeers[i])
 	}
 	// The average peers data exchange rate has been updated.
 	if averageDataExchangeRate > 0 {
@@ -205,7 +209,7 @@ func (tsnc *transactionSyncNodeConnector) Handle(raw network.IncomingMessage) ne
 		}
 	}
 	var peer *txnsync.Peer
-	peerData := tsnc.node.net.GetPeerData(raw.Sender, "txsync")
+	peerData := tsnc.node.net.GetPeerData(raw.Sender, txnsyncPeerDataKey)
 	if peerData != nil {
 		peer = peerData.(*txnsync.Peer)
 	}
