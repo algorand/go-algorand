@@ -1420,6 +1420,16 @@ assert
 int 1
 `
 
+const testTxnProgramTextV5 = testTxnProgramTextV4 + `
+assert
+txn FirstValidTime
+int 999999
+==
+assert
+
+int 1
+`
+
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
@@ -1433,6 +1443,7 @@ func makeSampleTxn() transactions.SignedTxn {
 	copy(txn.Txn.Lease[:], []byte("woofwoof"))
 	txn.Txn.Fee.Raw = 1337
 	txn.Txn.FirstValid = 42
+	txn.Txn.FirstValidTime = 999999
 	txn.Txn.LastValid = 1066
 	txn.Txn.Amount.Raw = 1000000
 	txn.Txn.VoteFirst = 1317
@@ -1517,6 +1528,7 @@ func TestTxn(t *testing.T) {
 		2: testTxnProgramTextV2,
 		3: testTxnProgramTextV3,
 		4: testTxnProgramTextV4,
+		5: testTxnProgramTextV5,
 	}
 
 	clearOps := testProg(t, "int 1", 1)
@@ -4859,4 +4871,17 @@ func TestLog(t *testing.T) {
 		require.Contains(t, err.Error(), c.errContains)
 		require.False(t, pass)
 	}
+}
+
+func TestFirstValidTime(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	ep, _ := makeSampleEnv()
+	source := "txn FirstValidTime; int 1; >="
+	ops := testProg(t, source, ep.Proto.LogicSigVersion)
+	err := CheckStateful(ops.Program, ep)
+	require.NoError(t, err)
+
+	pass, _ := Eval(ops.Program, ep)
+	require.True(t, pass)
 }

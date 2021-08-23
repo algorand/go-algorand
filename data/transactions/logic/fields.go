@@ -35,7 +35,7 @@ const (
 	Fee
 	// FirstValid Transaction.FirstValid
 	FirstValid
-	// FirstValidTime panic
+	// FirstValidTime Transaction.FirstValidTime
 	FirstValidTime
 	// LastValid Transaction.LastValid
 	LastValid

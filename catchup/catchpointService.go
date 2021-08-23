@@ -459,7 +459,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	}
 
 	// pick the lookback with the greater of either MaxTxnLife or MaxBalLookback
-	lookback := config.Consensus[topBlock.CurrentProtocol].MaxTxnLife
+	lookback := config.Consensus[topBlock.CurrentProtocol].MaxTxnLife + 1
 	if lookback < config.Consensus[topBlock.CurrentProtocol].MaxBalLookback {
 		lookback = config.Consensus[topBlock.CurrentProtocol].MaxBalLookback
 	}
