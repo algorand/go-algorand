@@ -1184,6 +1184,7 @@ func (eval *BlockEvaluator) fillDefaults(txn *txntest.Txn) {
 }
 
 func (eval *BlockEvaluator) txn(t testing.TB, txn *txntest.Txn) {
+	t.Helper()
 	eval.fillDefaults(txn)
 	stxn := txn.SignedTxn()
 	err := eval.testTransaction(stxn, eval.state.child(1))
@@ -1193,12 +1194,14 @@ func (eval *BlockEvaluator) txn(t testing.TB, txn *txntest.Txn) {
 }
 
 func (eval *BlockEvaluator) txns(t testing.TB, txns ...*txntest.Txn) {
+	t.Helper()
 	for _, txn := range txns {
 		eval.txn(t, txn)
 	}
 }
 
 func (eval *BlockEvaluator) txgroup(t testing.TB, txns ...*txntest.Txn) error {
+	t.Helper()
 	for _, txn := range txns {
 		eval.fillDefaults(txn)
 	}

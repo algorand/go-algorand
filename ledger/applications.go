@@ -293,12 +293,16 @@ func (al *logicLedger) Perform(tx *transactions.Transaction, spec transactions.S
 		return err
 	}
 
-	// Need to check min balances here.  That's not done in the apply.* calls
-	// func (eval *BlockEvaluator) checkMinBalance is the model, but we have to ensure we
-	// check all touched accounts.
+	// We don't check min balances during in app txns.
+
+	// func (eval *BlockEvaluator) checkMinBalance will take care
+	// of it when the top-level txn concludes, as long as we
+	// ensure that cow there returns all changed accounts in
+	// modifiedAccounts().  It seems it must, but this note will
+	// be here until confirmed.
 
 	if !ad.Equal(transactions.ApplyData{}) {
-		return fmt.Errorf("Perform caused ad change %v", ad)
+		return fmt.Errorf("Perform caused unhandled ApplyData change %#v", ad)
 	}
 	return nil
 

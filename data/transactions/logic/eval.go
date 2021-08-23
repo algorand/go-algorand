@@ -310,15 +310,17 @@ type evalContext struct {
 
 	stack     []stackValue
 	callstack []int
-	subtxn    transactions.Transaction // place to build for tx_submit
-	program   []byte
-	pc        int
-	nextpc    int
-	err       error
-	intc      []uint64
-	bytec     [][]byte
-	version   uint64
-	scratch   scratchSpace
+
+	subtxn *transactions.Transaction // place to build for tx_submit
+
+	program []byte
+	pc      int
+	nextpc  int
+	err     error
+	intc    []uint64
+	bytec   [][]byte
+	version uint64
+	scratch scratchSpace
 
 	cost     int // cost incurred so far
 	logCalls int // number of log calls so far
@@ -2290,9 +2292,9 @@ func (cx *evalContext) getApplicationID() (uint64, error) {
 	return uint64(cx.Ledger.ApplicationID()), nil
 }
 
-func (cx *evalContext) getApplicationAddress() ([]byte, error) {
+func (cx *evalContext) getApplicationAddress() (basics.Address, error) {
 	if cx.Ledger == nil {
-		return nil, fmt.Errorf("ledger not available")
+		return basics.Address{}, fmt.Errorf("ledger not available")
 	}
 
 	// Initialize appAddrCache if necessary
@@ -2308,7 +2310,7 @@ func (cx *evalContext) getApplicationAddress() ([]byte, error) {
 		cx.appAddrCache[appID] = appAddr
 	}
 
-	return appAddr[:], nil
+	return appAddr, nil
 }
 
 func (cx *evalContext) getCreatableID(groupIndex int) (cid uint64, err error) {
@@ -2353,7 +2355,9 @@ func (cx *evalContext) globalFieldToStack(field GlobalField) (sv stackValue, err
 	case CurrentApplicationID:
 		sv.Uint, err = cx.getApplicationID()
 	case CurrentApplicationAddress:
-		sv.Bytes, err = cx.getApplicationAddress()
+		var addr basics.Address
+		addr, err = cx.getApplicationAddress()
+		sv.Bytes = addr[:]
 	case CreatorAddress:
 		sv.Bytes, err = cx.getCreatorAddress()
 	default:
@@ -2742,7 +2746,7 @@ func opExtract64Bits(cx *evalContext) {
 	opExtractNBytes(cx, 8) // extract 8 bytes
 }
 
-func accountReference(cx *evalContext, account stackValue) (basics.Address, uint64, error) {
+func (cx *evalContext) accountReference(account stackValue) (basics.Address, uint64, error) {
 	if account.argType() == StackUint64 {
 		addr, err := cx.Txn.Txn.AddressByIndex(account.Uint, cx.Txn.Txn.Sender)
 		return addr, account.Uint, err
@@ -2750,6 +2754,15 @@ func accountReference(cx *evalContext, account stackValue) (basics.Address, uint
 	addr := basics.Address{}
 	copy(addr[:], account.Bytes)
 	idx, err := cx.Txn.Txn.IndexByAddress(addr, cx.Txn.Txn.Sender)
+
+	if err != nil {
+		// Application address is acceptable. index is meaningless though
+		appAddr, _ := cx.getApplicationAddress()
+		if appAddr == addr {
+			return addr, uint64(0xffffffffffffffff), nil
+		}
+	}
+
 	return addr, idx, err
 }
 
@@ -2758,7 +2771,7 @@ type opQuery func(basics.Address, *config.ConsensusParams) (basics.MicroAlgos, e
 func opBalanceQuery(cx *evalContext, query opQuery, item string) error {
 	last := len(cx.stack) - 1 // account (index or actual address)
 
-	addr, _, err := accountReference(cx, cx.stack[last])
+	addr, _, err := cx.accountReference(cx.stack[last])
 	if err != nil {
 		return err
 	}
@@ -2807,7 +2820,7 @@ func opAppOptedIn(cx *evalContext) {
 		return
 	}
 
-	addr, _, err := accountReference(cx, cx.stack[prev])
+	addr, _, err := cx.accountReference(cx.stack[prev])
 	if err != nil {
 		cx.err = err
 		return
@@ -2881,7 +2894,7 @@ func opAppLocalGetImpl(cx *evalContext, appID uint64, key []byte, acct stackValu
 		return
 	}
 
-	addr, accountIdx, err := accountReference(cx, acct)
+	addr, accountIdx, err := cx.accountReference(acct)
 	if err != nil {
 		return
 	}
@@ -2973,7 +2986,7 @@ func opAppLocalPut(cx *evalContext) {
 		return
 	}
 
-	addr, accountIdx, err := accountReference(cx, cx.stack[pprev])
+	addr, accountIdx, err := cx.accountReference(cx.stack[pprev])
 	if err == nil {
 		err = cx.Ledger.SetLocal(addr, key, sv.toTealValue(), accountIdx)
 	}
@@ -3018,7 +3031,7 @@ func opAppLocalDel(cx *evalContext) {
 		return
 	}
 
-	addr, accountIdx, err := accountReference(cx, cx.stack[prev])
+	addr, accountIdx, err := cx.accountReference(cx.stack[prev])
 	if err == nil {
 		err = cx.Ledger.DelLocal(addr, key, accountIdx)
 	}
@@ -3133,7 +3146,7 @@ func opAssetHoldingGet(cx *evalContext) {
 
 	fieldIdx := uint64(cx.program[cx.pc+1])
 
-	addr, _, err := accountReference(cx, cx.stack[prev])
+	addr, _, err := cx.accountReference(cx.stack[prev])
 	if err != nil {
 		cx.err = err
 		return
@@ -3259,27 +3272,26 @@ func opLog(cx *evalContext) {
 }
 
 func authorizedSender(cx *evalContext, addr basics.Address) bool {
-	appAddrBytes, err := cx.getApplicationAddress()
+	appAddr, err := cx.getApplicationAddress()
 	if err != nil {
 		return false
 	}
-	var appAddr basics.Address
-	copy(appAddr[:], appAddrBytes)
-	auth := cx.Ledger.Authorizer(addr)
-	return appAddr == auth
+	return appAddr == cx.Ledger.Authorizer(addr)
 }
 
 func opTxBegin(cx *evalContext) {
+	if cx.subtxn != nil {
+		cx.err = errors.New("tx_begin without tx_submit")
+		return
+	}
 	// Start fresh
-	cx.subtxn = transactions.Transaction{}
+	cx.subtxn = &transactions.Transaction{}
 	// Fill in defaults.
-	bytes, err := cx.getApplicationAddress()
+	addr, err := cx.getApplicationAddress()
 	if err != nil {
 		cx.err = err
 		return
 	}
-	var addr basics.Address
-	copy(addr[:], bytes)
 
 	fee := cx.Proto.MinTxnFee
 	if cx.FeeCredit != nil {
@@ -3301,19 +3313,6 @@ func opTxBegin(cx *evalContext) {
 	}
 }
 
-func (cx *evalContext) availableAddress(sv stackValue) (basics.Address, error) {
-	addr, err := sv.address()
-	if err != nil {
-		return basics.Address{}, err
-	}
-	// Ensure that addr from Accounts.
-	_, err = cx.Txn.Txn.IndexByAddress(addr, cx.Txn.Txn.Sender)
-	if err != nil {
-		return basics.Address{}, err
-	}
-	return addr, nil
-}
-
 func (cx *evalContext) availableAsset(sv stackValue) (basics.AssetIndex, error) {
 	aid, err := sv.uint()
 	if err != nil {
@@ -3329,6 +3328,10 @@ func (cx *evalContext) availableAsset(sv stackValue) (basics.AssetIndex, error) 
 }
 
 func opTxField(cx *evalContext) {
+	if cx.subtxn == nil {
+		cx.err = errors.New("tx_field without tx_begin")
+		return
+	}
 	last := len(cx.stack) - 1
 	field := TxnField(uint64(cx.program[cx.pc+1]))
 	sv := cx.stack[last]
@@ -3343,7 +3346,7 @@ func opTxField(cx *evalContext) {
 		}
 
 	case Sender:
-		cx.subtxn.Sender, cx.err = cx.availableAddress(sv)
+		cx.subtxn.Sender, _, cx.err = cx.accountReference(sv)
 	case Fee:
 		cx.subtxn.Fee.Raw, cx.err = sv.uint()
 	// FirstValid, LastValid unsettable: no motivation
@@ -3356,22 +3359,22 @@ func opTxField(cx *evalContext) {
 	// KeyReg not allowed yet, so no fields settable
 
 	case Receiver:
-		cx.subtxn.Receiver, cx.err = cx.availableAddress(sv)
+		cx.subtxn.Receiver, _, cx.err = cx.accountReference(sv)
 	case Amount:
 		cx.subtxn.Amount.Raw, cx.err = sv.uint()
 	case CloseRemainderTo:
-		cx.subtxn.CloseRemainderTo, cx.err = cx.availableAddress(sv)
+		cx.subtxn.CloseRemainderTo, _, cx.err = cx.accountReference(sv)
 
 	case XferAsset:
 		cx.subtxn.XferAsset, cx.err = cx.availableAsset(sv)
 	case AssetAmount:
 		cx.subtxn.AssetAmount, cx.err = sv.uint()
 	case AssetSender:
-		cx.subtxn.AssetSender, cx.err = cx.availableAddress(sv)
+		cx.subtxn.AssetSender, _, cx.err = cx.accountReference(sv)
 	case AssetReceiver:
-		cx.subtxn.AssetReceiver, cx.err = cx.availableAddress(sv)
+		cx.subtxn.AssetReceiver, _, cx.err = cx.accountReference(sv)
 	case AssetCloseTo:
-		cx.subtxn.AssetCloseTo, cx.err = cx.availableAddress(sv)
+		cx.subtxn.AssetCloseTo, _, cx.err = cx.accountReference(sv)
 
 	// acfg likely next
 
@@ -3389,6 +3392,11 @@ func opTxField(cx *evalContext) {
 func opTxSubmit(cx *evalContext) {
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	if cx.subtxn == nil {
+		cx.err = errors.New("tx_submit without tx_begin")
 		return
 	}
 
@@ -3437,5 +3445,7 @@ func opTxSubmit(cx *evalContext) {
 		}
 	}
 
-	cx.err = cx.Ledger.Perform(&cx.subtxn, *cx.Specials)
+	cx.err = cx.Ledger.Perform(cx.subtxn, *cx.Specials)
+
+	cx.subtxn = nil
 }

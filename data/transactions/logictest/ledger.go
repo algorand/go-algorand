@@ -468,7 +468,7 @@ func (l *Ledger) GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalD
 	return
 }
 
-func (l *Ledger) pay(from basics.Address, to basics.Address, amount uint64, spec transactions.SpecialAddresses) error {
+func (l *Ledger) move(from basics.Address, to basics.Address, amount uint64) error {
 	fbr, ok := l.balances[from]
 	if !ok {
 		fbr = makeBalanceRecord(from, 0)
@@ -482,40 +482,108 @@ func (l *Ledger) pay(from basics.Address, to basics.Address, amount uint64, spec
 	}
 	fbr.balance -= amount
 	tbr.balance += amount
-	// We do *not* check min balances in pay(). They are checked when txn is complete.
+	// We do not check min balances yet. They are checked when txn is complete.
 	l.balances[from] = fbr
 	l.balances[to] = tbr
 	return nil
 }
 
-func (l *Ledger) axfer(from basics.Address, to basics.Address, aid basics.AssetIndex, amount uint64, spec transactions.SpecialAddresses) error {
+func (l *Ledger) pay(from basics.Address, pay transactions.PaymentTxnFields) error {
+	err := l.move(from, pay.Receiver, pay.Amount.Raw)
+	if err != nil {
+		return err
+	}
+	if !pay.CloseRemainderTo.IsZero() {
+		sbr := l.balances[from]
+		if len(sbr.holdings) > 0 {
+			return fmt.Errorf("Sender (%s) has holdings.", from)
+		}
+		if len(sbr.locals) > 0 {
+			return fmt.Errorf("Sender (%s) is opted in to apps.", from)
+		}
+		// Should also check app creations.
+		// Need not check asa creations, as you can't opt out if you created.
+		// (though this test ledger doesn't know that)
+		remainder := sbr.balance
+		if remainder > 0 {
+			return l.move(from, pay.CloseRemainderTo, remainder)
+		}
+	}
+	return nil
+}
+
+func (l *Ledger) axfer(from basics.Address, xfer transactions.AssetTransferTxnFields) error {
+	to := xfer.AssetReceiver
+	aid := xfer.XferAsset
+	amount := xfer.AssetAmount
+	close := xfer.AssetCloseTo
+
 	fbr, ok := l.balances[from]
 	if !ok {
 		fbr = makeBalanceRecord(from, 0)
 	}
 	fholding, ok := fbr.holdings[aid]
 	if !ok {
+		if from == to && amount == 0 {
+			// opt in
+			if params, exists := l.assets[aid]; exists {
+				fbr.holdings[aid] = basics.AssetHolding{
+					Frozen: params.DefaultFrozen,
+				}
+				return nil
+			}
+			return fmt.Errorf("Asset (%d) does not exist", aid)
+		}
 		return fmt.Errorf("Sender (%s) not opted in to %d", from, aid)
+	}
+	if fholding.Frozen {
+		return fmt.Errorf("Sender (%s) is frozen for %d", from, aid)
 	}
 	tbr, ok := l.balances[to]
 	if !ok {
 		tbr = makeBalanceRecord(to, 0)
 	}
 	tholding, ok := tbr.holdings[aid]
-	if !ok {
+	if !ok && amount > 0 {
 		return fmt.Errorf("AssetReceiver (%s) not opted in to %d", to, aid)
 	}
 	if fholding.Amount < amount {
 		return fmt.Errorf("insufficient balance")
 	}
 
-	fholding.Amount -= amount
-	fbr.holdings[aid] = fholding
-	l.balances[from] = fbr
+	// Not just an optimization.
+	//   amount >0 : allows axfer to not opted in account
+	//   from != to : prevents overwriting the same balance record with only
+	//                the second change, and ensures fholding remains correct
+	//                for closeTo handling.
+	if amount > 0 && from != to {
+		fholding.Amount -= amount
+		fbr.holdings[aid] = fholding
+		l.balances[from] = fbr
 
-	tholding.Amount += amount
-	tbr.holdings[aid] = tholding
-	l.balances[to] = tbr
+		tholding.Amount += amount
+		tbr.holdings[aid] = tholding
+		l.balances[to] = tbr
+	}
+
+	if !close.IsZero() && fholding.Amount > 0 {
+		cbr, ok := l.balances[close]
+		if !ok {
+			cbr = makeBalanceRecord(close, 0)
+		}
+		cholding, ok := cbr.holdings[aid]
+		if !ok {
+			return fmt.Errorf("AssetCloseTo (%s) not opted in to %d", to, aid)
+		}
+
+		// Opt out
+		delete(fbr.holdings, aid)
+		l.balances[from] = fbr
+
+		cholding.Amount += fholding.Amount
+		cbr.holdings[aid] = cholding
+		l.balances[close] = cbr
+	}
 
 	return nil
 }
@@ -528,18 +596,19 @@ func (l *Ledger) axfer(from basics.Address, to basics.Address, aid basics.AssetI
    imports. */
 
 func (l *Ledger) Perform(txn *transactions.Transaction, spec transactions.SpecialAddresses) error {
-	err := l.pay(txn.Sender, spec.FeeSink, txn.Fee.Raw, spec)
+	err := l.move(txn.Sender, spec.FeeSink, txn.Fee.Raw)
 	if err != nil {
 		return err
 	}
 	switch txn.Type {
 	case protocol.PaymentTx:
-		return l.pay(txn.Sender, txn.Receiver, txn.Amount.Raw, spec)
+		err = l.pay(txn.Sender, txn.PaymentTxnFields)
 	case protocol.AssetTransferTx:
-		return l.axfer(txn.Sender, txn.AssetReceiver, txn.XferAsset, txn.AssetAmount, spec)
+		err = l.axfer(txn.Sender, txn.AssetTransferTxnFields)
 	default:
-		return fmt.Errorf("%s txn in AVM", txn.Type)
+		err = fmt.Errorf("%s txn in AVM", txn.Type)
 	}
+	return err
 }
 
 // Get() through allocated() implement cowForLogicLedger, we can make

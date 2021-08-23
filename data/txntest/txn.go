@@ -130,7 +130,8 @@ func assemble(source string) []byte {
 	}
 	ops, err := logic.AssembleString(source)
 	if err != nil {
-		panic(source)
+		fmt.Printf("Bad program %v", ops.Errors)
+		panic(ops.Errors)
 	}
 	return ops.Program
 }
