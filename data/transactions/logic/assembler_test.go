@@ -384,19 +384,11 @@ func TestAssembleAlias(t *testing.T) {
 	t.Parallel()
 	source1 := `txn Accounts 0  // alias to txna
 pop
-gtxn 0 ApplicationArgs 0 // alias to gtxn
+gtxn 0 ApplicationArgs 0 // alias to gtxna
 pop
 `
-	ops1, err := AssembleStringWithVersion(source1, AssemblerMaxVersion)
-	require.NoError(t, err)
-
-	source2 := `txna Accounts 0
-pop
-gtxna 0 ApplicationArgs 0
-pop
-`
-	ops2, err := AssembleStringWithVersion(source2, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops1 := testProg(t, source1, AssemblerMaxVersion)
+	ops2 := testProg(t, strings.Replace(source1, "txn", "txna", -1), AssemblerMaxVersion)
 
 	require.Equal(t, ops1.Program, ops2.Program)
 }
@@ -431,6 +423,20 @@ func testProg(t testing.TB, source string, ver uint64, expected ...expect) *OpSt
 		require.NoError(t, err)
 		require.NotNil(t, ops)
 		require.NotNil(t, ops.Program)
+		// It should always be possible to Disassemble
+		dis, err := Disassemble(ops.Program)
+		require.NoError(t, err)
+		// And, while the disassembly may not match input
+		// exactly, the assembly of the disassembly should
+		// give the same bytecode
+		ops2, err := AssembleStringWithVersion(dis, ver)
+		if len(ops2.Errors) > 0 || err != nil || ops2 == nil || ops2.Program == nil {
+			t.Log(program)
+			t.Log(dis)
+		}
+		require.Empty(t, ops2.Errors)
+		require.NoError(t, err)
+		require.Equal(t, ops.Program, ops2.Program)
 	} else {
 		require.Error(t, err)
 		errors := ops.Errors
@@ -592,8 +598,7 @@ func TestAssembleInt(t *testing.T) {
 			}
 
 			text := "int 0xcafebabe"
-			ops, err := AssembleStringWithVersion(text, v)
-			require.NoError(t, err)
+			ops := testProg(t, text, v)
 			s := hex.EncodeToString(ops.Program)
 			require.Equal(t, mutateProgVersion(v, expected), s)
 		})
@@ -643,8 +648,7 @@ func TestAssembleBytes(t *testing.T) {
 			}
 
 			for _, vi := range variations {
-				ops, err := AssembleStringWithVersion(vi, v)
-				require.NoError(t, err)
+				ops := testProg(t, vi, v)
 				s := hex.EncodeToString(ops.Program)
 				require.Equal(t, mutateProgVersion(v, expected), s)
 			}
@@ -1184,8 +1188,7 @@ intc 0
 intc 0
 bnz done
 done:`
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops := testProg(t, source, AssemblerMaxVersion)
 	require.Equal(t, 9, len(ops.Program))
 	expectedProgBytes := []byte("\x01\x20\x01\x01\x22\x22\x40\x00\x00")
 	expectedProgBytes[0] = byte(AssemblerMaxVersion)
@@ -1578,13 +1581,13 @@ func TestAssembleAsset(t *testing.T) {
 		testProg(t, "int 1; int 1; asset_holding_get ABC 1", v,
 			expect{3, "asset_holding_get expects one argument"})
 		testProg(t, "int 1; int 1; asset_holding_get ABC", v,
-			expect{3, "asset_holding_get unknown arg: \"ABC\""})
+			expect{3, "asset_holding_get unknown field: \"ABC\""})
 
 		testProg(t, "byte 0x1234; asset_params_get ABC 1", v,
 			expect{2, "asset_params_get ABC 1 arg 0 wanted type uint64..."})
 
 		testLine(t, "asset_params_get ABC 1", v, "asset_params_get expects one argument")
-		testLine(t, "asset_params_get ABC", v, "asset_params_get unknown arg: \"ABC\"")
+		testLine(t, "asset_params_get ABC", v, "asset_params_get unknown field: \"ABC\"")
 	}
 }
 
