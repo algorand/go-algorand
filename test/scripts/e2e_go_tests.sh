@@ -13,7 +13,7 @@ GOTESTCOMMAND=${GOTESTCOMMAND:="go test"}
 
 TESTPATTERNS=()
 NORACEBUILD=""
-RUN_EXPECT=""
+export RUN_EXPECT="FALSE"
 while [ "$1" != "" ]; do
     case "$1" in
         -e)
