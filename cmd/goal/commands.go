@@ -414,7 +414,7 @@ func getWalletHandleMaybePassword(dataDir string, walletName string, getPassword
 	accountList := makeAccountsList(dataDir)
 	kmd, err := getGoalClient(dataDir, libgoal.KmdClient)
 	if err != nil {
-		return nil, nil, fmt.Errorf("kmd client init error: %v", err)
+		return nil, nil, fmt.Errorf("kmd client init error: %w", err)
 	}
 
 	// If the user didn't manually specify a wallet, use the default wallet ID
