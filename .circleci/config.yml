@@ -9,111 +9,111 @@ workflows:
   version: 2
   build_pr:
     jobs:
-      # - codegen_verification
-      # - amd64_build
-      # - amd64_test:
-      #     requires:
-      #       - amd64_build
-      #     filters:
-      #       branches:
-      #         ignore:
-      #           - /rel\/.*/
-      #           - /hotfix\/.*/
-      # - amd64_test_nightly:
-      #     requires:
-      #       - amd64_build
-      #     filters:
-      #       branches:
-      #         only:
-      #           - /rel\/.*/
-      #           - /hotfix\/.*/
-      #     context: slack-secrets
-      # - amd64_integration:
-      #     requires:
-      #       - amd64_build
-      #     filters:
-      #       branches:
-      #         ignore:
-      #           - /rel\/.*/
-      #           - /hotfix\/.*/
-      # - amd64_integration_nightly:
-      #     requires:
-      #       - amd64_build
-      #     filters:
-      #       branches:
-      #         only:
-      #           - /rel\/.*/
-      #           - /hotfix\/.*/
-      #     context: slack-secrets
-      # - amd64_e2e_subs:
-      #     requires:
-      #       - amd64_build
-      #     filters:
-      #       branches:
-      #         ignore:
-      #           - /rel\/.*/
-      #           - /hotfix\/.*/
-      # - amd64_e2e_subs_nightly:
-      #     requires:
-      #       - amd64_build
-      #     filters:
-      #       branches:
-      #         only:
-      #           - /rel\/.*/
-      #           - /hotfix\/.*/
-      #     context: slack-secrets
-      # - arm64_build
-      # - arm64_test:
-      #     requires:
-      #       - arm64_build
-      #     filters:
-      #       branches:
-      #         ignore:
-      #           - /rel\/.*/
-      #           - /hotfix\/.*/
-      # - arm64_test_nightly:
-      #     requires:
-      #       - arm64_build
-      #     filters:
-      #       branches:
-      #         only:
-      #           - /rel\/.*/
-      #           - /hotfix\/.*/
-      #     context: slack-secrets
-      # - arm64_integration:
-      #     requires:
-      #       - arm64_build
-      #     filters:
-      #       branches:
-      #         ignore:
-      #           - /rel\/.*/
-      #           - /hotfix\/.*/
-      # - arm64_integration_nightly:
-      #     requires:
-      #       - arm64_build
-      #     filters:
-      #       branches:
-      #         only:
-      #           - /rel\/.*/
-      #           - /hotfix\/.*/
-      #     context: slack-secrets
-      # - arm64_e2e_subs:
-      #     requires:
-      #       - arm64_build
-      #     filters:
-      #       branches:
-      #         ignore:
-      #           - /rel\/.*/
-      #           - /hotfix\/.*/
-      # - arm64_e2e_subs_nightly:
-      #     requires:
-      #       - arm64_build
-      #     filters:
-      #       branches:
-      #         only:
-      #           - /rel\/.*/
-      #           - /hotfix\/.*/
-      #     context: slack-secrets
+      - codegen_verification
+      - amd64_build
+      - amd64_test:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              only: # SWITCHED FOR TESTING
+                - /rel\/.*/
+                - /hotfix\/.*/
+      - amd64_test_nightly:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              ignore: # SWITCHED FOR TESTING
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
+      - amd64_integration:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              only: # SWITCHED FOR TESTING
+                - /rel\/.*/
+                - /hotfix\/.*/
+      - amd64_integration_nightly:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              ignore: # SWITCHED FOR TESTING
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
+      - amd64_e2e_subs:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              only: # SWITCHED FOR TESTING
+                - /rel\/.*/
+                - /hotfix\/.*/
+      - amd64_e2e_subs_nightly:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              ignore: # SWITCHED FOR TESTING
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
+      - arm64_build
+      - arm64_test:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              only: # SWITCHED FOR TESTING
+                - /rel\/.*/
+                - /hotfix\/.*/
+      - arm64_test_nightly:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              ignore: # SWITCHED FOR TESTING
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
+      - arm64_integration:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              only: # SWITCHED FOR TESTING
+                - /rel\/.*/
+                - /hotfix\/.*/
+      - arm64_integration_nightly:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              ignore: # SWITCHED FOR TESTING
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
+      - arm64_e2e_subs:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              only: # SWITCHED FOR TESTING
+                - /rel\/.*/
+                - /hotfix\/.*/
+      - arm64_e2e_subs_nightly:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              ignore: # SWITCHED FOR TESTING
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
       - mac_amd64_build
       - mac_amd64_test:
           requires:
@@ -132,47 +132,47 @@ workflows:
                 - /rel\/.*/
                 - /hotfix\/.*/
           context: slack-secrets
-      # - mac_amd64_integration:
-      #     requires:
-      #       - mac_amd64_build
-      #     filters:
-      #       branches:
-      #         ignore:
-      #           - /rel\/.*/
-      #           - /hotfix\/.*/
-      # - mac_amd64_integration_nightly:
-      #     requires:
-      #       - mac_amd64_build
-      #     filters:
-      #       branches:
-      #         only:
-      #           - /rel\/.*/
-      #           - /hotfix\/.*/
-      #     context: slack-secrets
-      # - mac_amd64_e2e_subs:
-      #     requires:
-      #       - mac_amd64_build
-      #     filters:
-      #       branches:
-      #         ignore:
-      #           - /rel\/.*/
-      #           - /hotfix\/.*/
-      # - mac_amd64_e2e_subs_nightly:
-      #     requires:
-      #       - mac_amd64_build
-      #     filters:
-      #       branches:
-      #         only:
-      #           - /rel\/.*/
-      #           - /hotfix\/.*/
-      #     context: slack-secrets
-      ## - windows_x64_build
+      - mac_amd64_integration:
+          requires:
+            - mac_amd64_build
+          filters:
+            branches:
+              only: # SWITCHED FOR TESTING
+                - /rel\/.*/
+                - /hotfix\/.*/
+      - mac_amd64_integration_nightly:
+          requires:
+            - mac_amd64_build
+          filters:
+            branches:
+              ignore: # SWITCHED FOR TESTING
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
+      - mac_amd64_e2e_subs:
+          requires:
+            - mac_amd64_build
+          filters:
+            branches:
+              only: # SWITCHED FOR TESTING
+                - /rel\/.*/
+                - /hotfix\/.*/
+      - mac_amd64_e2e_subs_nightly:
+          requires:
+            - mac_amd64_build
+          filters:
+            branches:
+              ignore: # SWITCHED FOR TESTING
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
+      # - windows_x64_build
       - tests_verification_job:
           name: << matrix.job_type >>_<< matrix.job_version >>_verification
           matrix:
             parameters:
-              job_type: ["mac_amd64"] #["amd64", "arm64", "mac_amd64"]
-              job_version: ["test", "test_nightly"] #["test", "test_nightly", "integration", "integration_nightly"]
+              job_type: ["amd64", "arm64", "mac_amd64"]
+              job_version: ["test", "test_nightly", "integration", "integration_nightly"]
           requires:
             - << matrix.job_type >>_<< matrix.job_version >>
 
