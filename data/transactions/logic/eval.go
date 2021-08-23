@@ -1895,7 +1895,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 		if FirstValidTime == 0 {
 			ts, err := cx.getFirstValidTimestamp(txn.FirstValid)
 			if err == nil {
-				txn.FirstValidTime = int64(ts)
+				txn.FirstValidTime = uint64(ts)
 			}
 		}
 		sv.Uint = uint64(txn.FirstValidTime)
