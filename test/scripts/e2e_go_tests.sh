@@ -13,8 +13,13 @@ GOTESTCOMMAND=${GOTESTCOMMAND:="go test"}
 
 TESTPATTERNS=()
 NORACEBUILD=""
+RUN_EXPECT=""
 while [ "$1" != "" ]; do
     case "$1" in
+        -e)
+            # The test code checks this variable.
+            export RUN_EXPECT="TRUE"
+            ;;
         -t)
             shift
             TESTPATTERNS+=($1)
@@ -29,6 +34,11 @@ while [ "$1" != "" ]; do
     esac
     shift
 done
+
+if [[ ! -z $TESTPATTERNS && ! -z $RUN_EXPECT ]]; then
+    echo "-t and -e are mutually exclusive."
+    exit 1
+fi
 
 # Anchor our repo root reference location
 REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/../..
@@ -89,13 +99,19 @@ if [[ "${ARCHTYPE}" = arm* ]]; then
     PARALLEL_FLAG="-p 1"
 fi
 
+PACKAGES="./..."
+if [ "$RUN_EXPECT" != "" ]; then
+  PACKAGES=$(go list ./...|grep expect)
+fi
+
 echo "PARALLEL_FLAG = ${PARALLEL_FLAG}"
+echo "PACKAGES = ${PACKAGES}"
 
 if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
-    ${GOTESTCOMMAND} ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} ./...
+    ${GOTESTCOMMAND} ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} ${PACKAGES}
 else
     for TEST in ${TESTPATTERNS[@]}; do
-        ${GOTESTCOMMAND} ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} -run ${TEST} ./...
+        ${GOTESTCOMMAND} ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} -run ${TEST} ${PACKAGES}
     done
 fi
 
