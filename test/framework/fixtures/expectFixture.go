@@ -121,6 +121,9 @@ func skipExpectTests() bool {
 	if strings.ToUpper(os.Getenv("RUN_EXPECT")) == "TRUE" {
 		return false
 	}
+	if strings.ToUpper(os.Getenv("RUN_EXPECT")) == "FALSE" {
+		return true
+	}
 
 	// If any of the CI systems didn't set RUN_EXPECT, disable them.
 	if strings.ToUpper(os.Getenv("CI")) == "TRUE" {
