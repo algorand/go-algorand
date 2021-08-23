@@ -571,7 +571,7 @@ func StateDeltaToStateDelta(sd basics.StateDelta) *generated.StateDelta {
 }
 
 // DeltaLogToLog EvalDelta.Logs to generated.LogItem
-func DeltaLogToLog(logs []basics.LogItem, appIdx basics.AppIndex) (*[]generated.LogItem, error) {
+func DeltaLogToLog(logs []transactions.LogItem, appIdx basics.AppIndex) (*[]generated.LogItem, error) {
 	if len(logs) == 0 {
 		return nil, nil
 	}

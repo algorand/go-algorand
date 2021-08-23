@@ -179,7 +179,7 @@ type LedgerForLogic interface {
 	SetGlobal(key string, value basics.TealValue) error
 	DelGlobal(key string) error
 
-	GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error)
+	GetDelta(txn *transactions.Transaction) (evalDelta transactions.EvalDelta, err error)
 
 	AppendLog(txn *transactions.Transaction, value string) error
 	Perform(txn *transactions.Transaction, spec transactions.SpecialAddresses) error

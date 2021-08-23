@@ -37,7 +37,7 @@ type cowForLogicLedger interface {
 	GetCreatableID(groupIdx int) basics.CreatableIndex
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error)
-	BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (basics.EvalDelta, error)
+	BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (transactions.EvalDelta, error)
 
 	SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue, accountIdx uint64) error
 	DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) error
@@ -245,7 +245,7 @@ func (al *logicLedger) DelGlobal(key string) error {
 	return al.cow.DelKey(al.creator, al.aidx, true, key, 0)
 }
 
-func (al *logicLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error) {
+func (al *logicLedger) GetDelta(txn *transactions.Transaction) (evalDelta transactions.EvalDelta, err error) {
 	return al.cow.BuildEvalDelta(al.aidx, txn)
 }
 

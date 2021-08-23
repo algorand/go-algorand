@@ -72,7 +72,7 @@ type Ledger struct {
 	appID             basics.AppIndex
 	mods              map[basics.AppIndex]map[string]basics.ValueDelta
 	rnd               basics.Round
-	Logs              []basics.LogItem // public because write-only in TEAL, tests need direct access
+	Logs              []transactions.LogItem // public because write-only in TEAL, tests need direct access
 }
 
 func MakeLedger(balances map[basics.Address]uint64) *Ledger {
@@ -445,7 +445,7 @@ func (l *Ledger) CreatorAddress() basics.Address {
 	return addr
 }
 
-func (l *Ledger) GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error) {
+func (l *Ledger) GetDelta(txn *transactions.Transaction) (evalDelta transactions.EvalDelta, err error) {
 	if tkv, ok := l.mods[l.appID]; ok {
 		evalDelta.GlobalDelta = tkv
 	}
@@ -671,7 +671,7 @@ func (l *Ledger) AppendLog(txn *transactions.Transaction, value string) error {
 		return fmt.Errorf("no such app")
 	}
 
-	l.Logs = append(l.Logs, basics.LogItem{ID: appIdx, Message: value})
+	l.Logs = append(l.Logs, transactions.LogItem{ID: appIdx, Message: value})
 	return nil
 }
 

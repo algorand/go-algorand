@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logictest"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -376,7 +377,7 @@ func TestBalance(t *testing.T) {
 	testApp(t, text, ep)
 }
 
-func testApp(t *testing.T, program string, ep EvalParams, problems ...string) basics.EvalDelta {
+func testApp(t *testing.T, program string, ep EvalParams, problems ...string) transactions.EvalDelta {
 	t.Helper()
 	ops := testProg(t, program, ep.Proto.LogicSigVersion)
 	err := CheckStateful(ops.Program, ep)
@@ -413,7 +414,7 @@ func testApp(t *testing.T, program string, ep EvalParams, problems ...string) ba
 		require.Empty(t, delta.Logs)
 		return delta
 	}
-	return basics.EvalDelta{}
+	return transactions.EvalDelta{}
 }
 
 func TestMinBalance(t *testing.T) {

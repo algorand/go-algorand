@@ -76,7 +76,7 @@ type DebugState struct {
 	Error   string             `codec:"error"`
 
 	// global/local state changes are updated every step. Stateful TEAL only.
-	basics.EvalDelta
+	transactions.EvalDelta
 }
 
 // GetProgramID returns program or execution ID that is string representation of sha256 checksum.

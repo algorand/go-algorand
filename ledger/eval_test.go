@@ -537,14 +537,14 @@ ok:
 		{
 			SignedTxn: stxn1,
 			ApplyData: transactions.ApplyData{
-				EvalDelta: basics.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
+				EvalDelta: transactions.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
 					"creator": {Action: basics.SetBytesAction, Bytes: string(addrs[0][:])}},
 				}},
 		},
 		{
 			SignedTxn: stxn2,
 			ApplyData: transactions.ApplyData{
-				EvalDelta: basics.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
+				EvalDelta: transactions.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
 					"caller": {Action: basics.SetBytesAction, Bytes: string(addrs[0][:])}},
 				}},
 		},

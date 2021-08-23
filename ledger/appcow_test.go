@@ -387,7 +387,7 @@ func TestCowBuildDelta(t *testing.T) {
 	cow.sdeltas[creator][storagePtr{aidx, true}] = &storageDelta{}
 	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.NoError(err)
-	a.Equal(basics.EvalDelta{GlobalDelta: basics.StateDelta{}}, ed)
+	a.Equal(transactions.EvalDelta{GlobalDelta: basics.StateDelta{}}, ed)
 
 	cow.sdeltas[creator][storagePtr{aidx + 1, true}] = &storageDelta{}
 	ed, err = cow.BuildEvalDelta(aidx, &txn)
@@ -420,7 +420,7 @@ func TestCowBuildDelta(t *testing.T) {
 	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(
-		basics.EvalDelta{
+		transactions.EvalDelta{
 			GlobalDelta: basics.StateDelta{},
 			LocalDeltas: map[uint64]basics.StateDelta{0: {}},
 		},
@@ -433,7 +433,7 @@ func TestCowBuildDelta(t *testing.T) {
 	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(
-		basics.EvalDelta{
+		transactions.EvalDelta{
 			GlobalDelta: basics.StateDelta{},
 			LocalDeltas: map[uint64]basics.StateDelta{},
 		},
@@ -456,7 +456,7 @@ func TestCowBuildDelta(t *testing.T) {
 	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(
-		basics.EvalDelta{
+		transactions.EvalDelta{
 			GlobalDelta: basics.StateDelta(nil),
 			LocalDeltas: map[uint64]basics.StateDelta{
 				0: {
@@ -496,7 +496,7 @@ func TestCowBuildDelta(t *testing.T) {
 	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(
-		basics.EvalDelta{
+		transactions.EvalDelta{
 			GlobalDelta: basics.StateDelta(nil),
 			LocalDeltas: map[uint64]basics.StateDelta{
 				1: {
@@ -530,7 +530,7 @@ func TestCowBuildDelta(t *testing.T) {
 	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(
-		basics.EvalDelta{
+		transactions.EvalDelta{
 			GlobalDelta: basics.StateDelta(nil),
 			LocalDeltas: map[uint64]basics.StateDelta{
 				0: {
@@ -561,7 +561,7 @@ func TestCowBuildDelta(t *testing.T) {
 	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(
-		basics.EvalDelta{
+		transactions.EvalDelta{
 			GlobalDelta: basics.StateDelta(nil),
 			LocalDeltas: map[uint64]basics.StateDelta{
 				1: {
@@ -589,7 +589,7 @@ func TestCowBuildDelta(t *testing.T) {
 	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(
-		basics.EvalDelta{
+		transactions.EvalDelta{
 			GlobalDelta: basics.StateDelta(nil),
 			LocalDeltas: map[uint64]basics.StateDelta{
 				0: {
@@ -601,7 +601,7 @@ func TestCowBuildDelta(t *testing.T) {
 	)
 
 	// check logDelta is added
-	cow.logs = []basics.LogItem{{ID: 0, Message: "hello,world"}}
+	cow.logs = []transactions.LogItem{{ID: 0, Message: "hello,world"}}
 	cow.sdeltas[sender][storagePtr{aidx, false}] = &storageDelta{
 		action: remainAllocAction,
 		kvCow: stateDelta{
@@ -617,14 +617,14 @@ func TestCowBuildDelta(t *testing.T) {
 	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(
-		basics.EvalDelta{
+		transactions.EvalDelta{
 			GlobalDelta: basics.StateDelta(nil),
 			LocalDeltas: map[uint64]basics.StateDelta{
 				0: {
 					"key1": basics.ValueDelta{Action: basics.SetUintAction, Uint: 2},
 				},
 			},
-			Logs: []basics.LogItem{{ID: 0, Message: "hello,world"}},
+			Logs: []transactions.LogItem{{ID: 0, Message: "hello,world"}},
 		},
 		ed,
 	)
@@ -1369,7 +1369,7 @@ func TestCowAppendLog(t *testing.T) {
 		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
 	})
 
-	c.logs = []basics.LogItem{}
+	c.logs = []transactions.LogItem{}
 	err := c.AppendLog(uint64(aidx), "val")
 	a.NoError(err)
 	a.Equal(len(c.logs), 1)
