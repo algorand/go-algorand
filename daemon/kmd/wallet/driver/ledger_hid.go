@@ -202,7 +202,13 @@ func LedgerEnumerate() ([]hid.DeviceInfo, error) {
 	}
 
 	var infos []hid.DeviceInfo
+	// The enumeration process is based on:
+	//  https://github.com/LedgerHQ/blue-loader-python/blob/master/ledgerblue/comm.py#L212
+	//  we search for the Ledger Vendor id and igonre devices that don't have specific usagepage or interface
 	for _, info := range hid.Enumerate(ledgerVendorID, 0) {
+		if info.UsagePage != 0xffa0 && info.Interface != 0 {
+			continue
+		}
 		infos = append(infos, info)
 	}
 
