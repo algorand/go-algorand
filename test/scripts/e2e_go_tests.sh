@@ -8,6 +8,7 @@ set -o pipefail
 export GOPATH=$(go env GOPATH)
 export GO111MODULE=on
 
+# Needed for now because circleci doesn't use makefile yet
 if [ -z "$(which gotestsum)" ]; then
     GOTESTCOMMAND=${GOTESTCOMMAND:="go test"}
 else
