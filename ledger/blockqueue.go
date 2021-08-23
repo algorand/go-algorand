@@ -145,7 +145,7 @@ func (bq *blockQueue) syncer() {
 			minToSave := bq.l.notifyCommit(committed)
 			// Save one extra block in the queue for checking timestamps
 			if minToSave > 0 {
-				minToSave -= 1
+				minToSave--
 			}
 
 			bfstart := time.Now()

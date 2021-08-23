@@ -144,9 +144,6 @@ func (cb *roundCowState) prevTimestamp() int64 {
 }
 
 func (cb *roundCowState) getBlockTimeStamp(r basics.Round) int64 {
-	if r > 0 {
-		r -= 1
-	}
 	blockHdr, _ := cb.blockHdr(r)
 	return blockHdr.TimeStamp
 }

@@ -1871,7 +1871,7 @@ func (cx *evalContext) getFirstValidTimestamp(r basics.Round) (timestamp uint64,
 	}
 	// Get the FirstValid-1 block timestamp
 	if r > 0 {
-		r -= 1
+		r--
 	}
 	ts := cx.Ledger.GetBlockTimeStamp(r)
 	if ts < 0 {
