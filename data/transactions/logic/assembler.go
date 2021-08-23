@@ -1960,6 +1960,15 @@ type disassembleState struct {
 	labelCount     int
 	pendingLabels  map[int]string
 
+	// If we find a (back) jump to a label we did not generate
+	// (because we didn't know about it yet), rerun is set to
+	// true, and we make a second attempt to assemble once the
+	// first attempt is done. The second attempt retains all the
+	// labels found in the first pass.  In effect, the first
+	// attempt to assemble becomes a first-pass in a two-pass
+	// assembly process that simply collects jump target labels.
+	rerun bool
+
 	nextpc int
 	err    error
 
@@ -1972,6 +1981,9 @@ func (dis *disassembleState) putLabel(label string, target int) {
 		dis.pendingLabels = make(map[int]string)
 	}
 	dis.pendingLabels[target] = label
+	if target <= dis.pc {
+		dis.rerun = true
+	}
 }
 
 func (dis *disassembleState) outputLabelIfNeeded() (err error) {
@@ -2433,11 +2445,13 @@ type disInfo struct {
 	hasStatefulOps bool
 }
 
-// disassembleInstrumented is like Disassemble, but additionally returns where
-// each program counter value maps in the disassembly
-func disassembleInstrumented(program []byte) (text string, ds disInfo, err error) {
+// disassembleInstrumented is like Disassemble, but additionally
+// returns where each program counter value maps in the
+// disassembly. If the labels names are known, they may be passed in.
+// When doing so, labels for all jump targets must be provided.
+func disassembleInstrumented(program []byte, labels map[int]string) (text string, ds disInfo, err error) {
 	out := strings.Builder{}
-	dis := disassembleState{program: program, out: &out}
+	dis := disassembleState{program: program, out: &out, pendingLabels: labels}
 	version, vlen := binary.Uvarint(program)
 	if vlen <= 0 {
 		fmt.Fprintf(dis.out, "// invalid version\n")
@@ -2489,18 +2503,26 @@ func disassembleInstrumented(program []byte) (text string, ds disInfo, err error
 	}
 
 	text = out.String()
+
+	if dis.rerun {
+		if labels != nil {
+			err = errors.New("rerun even though we had labels")
+			return
+		}
+		return disassembleInstrumented(program, dis.pendingLabels)
+	}
 	return
 }
 
 // Disassemble produces a text form of program bytes.
 // AssembleString(Disassemble()) should result in the same program bytes.
 func Disassemble(program []byte) (text string, err error) {
-	text, _, err = disassembleInstrumented(program)
+	text, _, err = disassembleInstrumented(program, nil)
 	return
 }
 
 // HasStatefulOps checks if the program has stateful opcodes
 func HasStatefulOps(program []byte) (bool, error) {
-	_, ds, err := disassembleInstrumented(program)
+	_, ds, err := disassembleInstrumented(program, nil)
 	return ds.hasStatefulOps, err
 }
