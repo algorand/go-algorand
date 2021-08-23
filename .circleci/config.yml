@@ -18,7 +18,7 @@ workflows:
             branches:
               ignore:
                 - /rel\/.*/
-                - /hotfix\/.*/
+                - /pull\/[0-9]+/
       - amd64_test_nightly:
           requires:
             - amd64_build
@@ -26,7 +26,7 @@ workflows:
             branches:
               only:
                 - /rel\/.*/
-                - /hotfix\/.*/
+                - /pull\/[0-9]+/
           context: slack-secrets
       - amd64_integration:
           requires:
@@ -35,7 +35,7 @@ workflows:
             branches:
               ignore:
                 - /rel\/.*/
-                - /hotfix\/.*/
+                - /pull\/[0-9]+/
       - amd64_integration_nightly:
           requires:
             - amd64_build
@@ -43,7 +43,7 @@ workflows:
             branches:
               only:
                 - /rel\/.*/
-                - /hotfix\/.*/
+                - /pull\/[0-9]+/
           context: slack-secrets
       - amd64_e2e_subs:
           requires:
@@ -52,7 +52,7 @@ workflows:
             branches:
               ignore:
                 - /rel\/.*/
-                - /hotfix\/.*/
+                - /pull\/[0-9]+/
       - amd64_e2e_subs_nightly:
           requires:
             - amd64_build
@@ -60,7 +60,7 @@ workflows:
             branches:
               only:
                 - /rel\/.*/
-                - /hotfix\/.*/
+                - /pull\/[0-9]+/
           context: slack-secrets
       - arm64_build
       - arm64_test:
@@ -70,7 +70,7 @@ workflows:
             branches:
               ignore:
                 - /rel\/.*/
-                - /hotfix\/.*/
+                - /pull\/[0-9]+/
       - arm64_test_nightly:
           requires:
             - arm64_build
@@ -78,7 +78,7 @@ workflows:
             branches:
               only:
                 - /rel\/.*/
-                - /hotfix\/.*/
+                - /pull\/[0-9]+/
           context: slack-secrets
       - arm64_integration:
           requires:
@@ -87,7 +87,7 @@ workflows:
             branches:
               ignore:
                 - /rel\/.*/
-                - /hotfix\/.*/
+                - /pull\/[0-9]+/
       - arm64_integration_nightly:
           requires:
             - arm64_build
@@ -95,7 +95,7 @@ workflows:
             branches:
               only:
                 - /rel\/.*/
-                - /hotfix\/.*/
+                - /pull\/[0-9]+/
           context: slack-secrets
       - arm64_e2e_subs:
           requires:
@@ -104,7 +104,7 @@ workflows:
             branches:
               ignore:
                 - /rel\/.*/
-                - /hotfix\/.*/
+                - /pull\/[0-9]+/
       - arm64_e2e_subs_nightly:
           requires:
             - arm64_build
@@ -112,7 +112,7 @@ workflows:
             branches:
               only:
                 - /rel\/.*/
-                - /hotfix\/.*/
+                - /pull\/[0-9]+/
           context: slack-secrets
       - mac_amd64_build
       - mac_amd64_test:
@@ -122,7 +122,7 @@ workflows:
             branches:
               ignore:
                 - /rel\/.*/
-                - /hotfix\/.*/
+                - /pull\/[0-9]+/
       - mac_amd64_test_nightly:
           requires:
             - mac_amd64_build
@@ -130,7 +130,7 @@ workflows:
             branches:
               only:
                 - /rel\/.*/
-                - /hotfix\/.*/
+                - /pull\/[0-9]+/
           context: slack-secrets
       - mac_amd64_integration:
           requires:
@@ -139,7 +139,7 @@ workflows:
             branches:
               ignore:
                 - /rel\/.*/
-                - /hotfix\/.*/
+                - /pull\/[0-9]+/
       - mac_amd64_integration_nightly:
           requires:
             - mac_amd64_build
@@ -147,7 +147,7 @@ workflows:
             branches:
               only:
                 - /rel\/.*/
-                - /hotfix\/.*/
+                - /pull\/[0-9]+/
           context: slack-secrets
       - mac_amd64_e2e_subs:
           requires:
@@ -156,7 +156,7 @@ workflows:
             branches:
               ignore:
                 - /rel\/.*/
-                - /hotfix\/.*/
+                - /pull\/[0-9]+/
       - mac_amd64_e2e_subs_nightly:
           requires:
             - mac_amd64_build
@@ -164,7 +164,7 @@ workflows:
             branches:
               only:
                 - /rel\/.*/
-                - /hotfix\/.*/
+                - /pull\/[0-9]+/
           context: slack-secrets
       #- windows_x64_build
 
@@ -528,7 +528,7 @@ jobs:
   arm64_integration_nightly:
     machine:
       image: ubuntu-2004:202101-01
-    resource_class: arm.medium
+    resource_class: arm.large
     parallelism: 4
     environment:
       E2E_TEST_FILTER: "GO"
@@ -638,7 +638,7 @@ jobs:
   mac_amd64_integration_nightly:
     macos:
       xcode: 12.0.1
-    resource_class: medium
+    resource_class: large
     parallelism: 4
     environment:
       E2E_TEST_FILTER: "GO"
