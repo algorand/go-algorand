@@ -92,7 +92,7 @@ fi
 echo "PARALLEL_FLAG = ${PARALLEL_FLAG}"
 
 if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
-    ${GOTESTCOMMAND} ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} ./...
+    ${GOTESTCOMMAND} ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} -run TestGoalWithExpect github.com/algorand/go-algorand/test/e2e/cli/goal/expect
 else
     for TEST in ${TESTPATTERNS[@]}; do
         ${GOTESTCOMMAND} ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} -run ${TEST} ./...
