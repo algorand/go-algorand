@@ -358,8 +358,11 @@ func (handler *TxHandler) processDecodedArray(unverifiedTxGroups []transactions.
 	latest := handler.ledger.Latest()
 	latestHdr, err := handler.ledger.BlockHdr(latest)
 	if err != nil {
-		logging.Base().Warnf("Could not get header for previous block %v: %v", latest, err)
-		return false, false
+		// being unable to retrieve the last's block header is not something a working node is expected to expirience ( ever ).
+		logging.Base().Errorf("Could not get header for previous block %d: %v", latest, err)
+		// returning a disconnect=true, would not fix the problem for the local node, but would force the remote node to pick a different
+		// relay, which ( hopefully ! ) would not have the same issue as this one.
+		return true, false
 	}
 
 	unverifiedTxnGroups := make([][]transactions.SignedTxn, len(unverifiedTxGroups))
