@@ -301,7 +301,7 @@ func (s *syncState) onNewRoundEvent(ent Event) {
 		// rather then a periodic message transmission.
 		newRoundPeers = incomingPeersOnly(newRoundPeers)
 	}
-	s.scheduler.scheduleNewRound(newRoundPeers, s.isRelay)
+	s.scheduler.scheduleNewRound(newRoundPeers)
 	s.updatePeersRequestParams(peers)
 	s.round = ent.roundSettings.Round
 	s.fetchTransactions = ent.roundSettings.FetchTransactions

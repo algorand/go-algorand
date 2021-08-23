@@ -66,13 +66,10 @@ func (p *peerScheduler) Less(i, j int) bool {
 }
 
 // refresh the current schedule by creating new schedule for each of the peers.
-func (p *peerScheduler) scheduleNewRound(peers []*Peer, isRelay bool) {
+func (p *peerScheduler) scheduleNewRound(peers []*Peer) {
 	// clear the existings peers list.
 	p.peers = make(peerBuckets, 0, len(peers))
 	for _, peer := range peers {
-		if isRelay && peer.isOutgoing {
-			continue
-		}
 		peerEntry := peerBucket{peer: peer}
 		peerEntry.next = kickoffTime + time.Duration(p.node.Random(uint64(randomRange)))
 
