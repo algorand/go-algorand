@@ -129,19 +129,28 @@ class algodDir:
 
     def get_metrics(self, snapshot_name=None, outdir=None):
         url = 'http://' + self.net + '/metrics'
-        response = urllib.request.urlopen(urllib.request.Request(url, headers=self.headers))
-        if response.code != 200:
-            logger.error('could not fetch %s from %s via %r', name, self.path. url)
+        try:
+            response = urllib.request.urlopen(urllib.request.Request(url, headers=self.headers))
+            if response.code != 200:
+                logger.error('could not fetch %s from %s via %r', snapshot_name, self.path. url)
+                return
+            blob = response.read()
+        except Exception as e:
+            logger.error('could not fetch %s from %s via %r: %s', snapshot_name, self.path, url, e)
             return
-        blob = response.read()
         outpath = os.path.join(outdir or '.', self.nick + '.' + snapshot_name + '.metrics')
         with open(outpath, 'wb') as fout:
             fout.write(blob)
         logger.debug('%s -> %s', self.nick, outpath)
 
     def get_blockinfo(self, snapshot_name=None, outdir=None):
-        algod = self.algod()
-        status = algod.status()
+        try:
+            algod = self.algod()
+            status = algod.status()
+        except Exception as e:
+            logger.error('could not get blockinfo from %s: %s', self.net, e)
+            self._algod = None
+            return
         bi = msgpack.loads(algod.block_info(status['last-round'], response_format='msgpack'), strict_map_key=False)
         if snapshot_name is None:
             snapshot_name = time.strftime('%Y%m%d_%H%M%S', time.gmtime())
@@ -154,7 +163,7 @@ class algodDir:
         #txncount = bi['block']['tc']
 
     def psHeap(self):
-        # return rss, vsz
+        # return rss, vsz (in kilobytes)
         # ps -o rss,vsz $(cat ${ALGORAND_DATA}/algod.pid)
         subp = subprocess.Popen(['ps', '-o', 'rss,vsz', str(self.pid())], stdout=subprocess.PIPE)
         try:
@@ -243,15 +252,16 @@ class watcher:
         if self.args.blockinfo:
             for ad in self.they:
                 ad.get_blockinfo(snapshot_name, outdir=self.args.out)
-        logger.debug('snapped, processing...')
-        # make absolute and differential plots
-        for path, snappath in newsnapshots.items():
-            subprocess.call(['go', 'tool', 'pprof', '-sample_index=inuse_space', '-svg', '-output', snappath + '.inuse.svg', snappath])
-            subprocess.call(['go', 'tool', 'pprof', '-sample_index=alloc_space', '-svg', '-output', snappath + '.alloc.svg', snappath])
-            prev = self.prevsnapshots.get(path)
-            if prev:
-                subprocess.call(['go', 'tool', 'pprof', '-sample_index=inuse_space', '-svg', '-output', snappath + '.inuse_diff.svg', '-base='+prev, snappath])
-                subprocess.call(['go', 'tool', 'pprof', '-sample_index=alloc_space', '-svg', '-output', snappath + '.alloc_diff.svg', '-diff_base='+prev, snappath])
+        if self.args.svg:
+            logger.debug('snapped, processing...')
+            # make absolute and differential plots
+            for path, snappath in newsnapshots.items():
+                subprocess.call(['go', 'tool', 'pprof', '-sample_index=inuse_space', '-svg', '-output', snappath + '.inuse.svg', snappath])
+                subprocess.call(['go', 'tool', 'pprof', '-sample_index=alloc_space', '-svg', '-output', snappath + '.alloc.svg', snappath])
+                prev = self.prevsnapshots.get(path)
+                if prev:
+                    subprocess.call(['go', 'tool', 'pprof', '-sample_index=inuse_space', '-svg', '-output', snappath + '.inuse_diff.svg', '-base='+prev, snappath])
+                    subprocess.call(['go', 'tool', 'pprof', '-sample_index=alloc_space', '-svg', '-output', snappath + '.alloc_diff.svg', '-diff_base='+prev, snappath])
         self.prevsnapshots = newsnapshots
 
 def main():
@@ -268,6 +278,7 @@ def main():
     ap.add_argument('--admin-token', default='', help='default algod admin-api token to use')
     ap.add_argument('--tf-roles', default='relay', help='comma separated list of terraform roles to follow')
     ap.add_argument('--tf-name-re', action='append', default=[], help='regexp to match terraform node names, may be repeated')
+    ap.add_argument('--no-svg', dest='svg', default=True, action='store_false', help='do not automatically run `go tool pprof` to generate svg from collected data')
     ap.add_argument('-o', '--out', default=None, help='directory to write to')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
