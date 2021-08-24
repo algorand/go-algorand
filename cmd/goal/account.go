@@ -777,7 +777,13 @@ var changeOnlineCmd = &cobra.Command{
 		}
 
 		dataDir := ensureSingleDataDir()
-		client := ensureFullClient(dataDir)
+		var client libgoal.Client
+		if statusChangeTxFile != "" {
+			// writing out a txn, don't need kmd
+			client = ensureAlgodClient(dataDir)
+		} else {
+			client = ensureFullClient(dataDir)
+		}
 
 		var part *algodAcct.Participation
 		if partKeyFile != "" {
