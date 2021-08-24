@@ -178,14 +178,19 @@ int main(void)
     if (sodium_init() != 0) {
         return 99;
     }
+# if defined(__EMSCRIPTEN__) || defined(__SANITIZE_ADDRESS__)
+    guard_page = _guard_page = NULL;
+#else
     if ((_guard_page = (unsigned char *) sodium_malloc(0)) == NULL) {
         perror("sodium_malloc()");
         return 99;
     }
     guard_page = _guard_page + 1;
+#endif
     if (xmain() != 0) {
         return 99;
     }
+    fflush(fp_res);
     rewind(fp_res);
     if ((fp_out = fopen(TEST_NAME_OUT, "r")) == NULL) {
         perror("fopen(" TEST_NAME_OUT ")");

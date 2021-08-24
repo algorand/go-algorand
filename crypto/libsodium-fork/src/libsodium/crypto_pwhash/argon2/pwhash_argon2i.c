@@ -163,6 +163,10 @@ crypto_pwhash_argon2i(unsigned char *const out, unsigned long long outlen,
         errno = EINVAL;
         return -1;
     }
+    if ((const void *) out == (const void *) passwd) {
+        errno = EINVAL;
+        return -1;
+    }
     switch (alg) {
     case crypto_pwhash_argon2i_ALG_ARGON2I13:
         if (argon2i_hash_raw((uint32_t) opslimit, (uint32_t) (memlimit / 1024U),
@@ -261,7 +265,7 @@ _needs_rehash(const char *str, unsigned long long opslimit, size_t memlimit,
     ctx.outlen = ctx.pwdlen    = ctx.saltlen = (uint32_t) fodder_len;
     ctx.ad     = ctx.secret    = NULL;
     ctx.adlen  = ctx.secretlen = 0U;
-    if (decode_string(&ctx, str, type) != 0) {
+    if (argon2_decode_string(&ctx, str, type) != 0) {
         errno = EINVAL;
         ret = -1;
     } else if (ctx.t_cost != (uint32_t) opslimit ||

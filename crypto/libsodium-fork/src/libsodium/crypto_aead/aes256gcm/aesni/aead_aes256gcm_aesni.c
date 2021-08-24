@@ -14,21 +14,21 @@
 #include "crypto_aead_aes256gcm.h"
 #include "export.h"
 #include "private/common.h"
-#include "private/sse2_64_32.h"
 #include "randombytes.h"
 #include "runtime.h"
 #include "utils.h"
 
 #if defined(HAVE_TMMINTRIN_H) && defined(HAVE_WMMINTRIN_H)
 
-# ifdef __GNUC__
-#  pragma GCC target("ssse3")
-#  pragma GCC target("aes")
-#  pragma GCC target("pclmul")
-# endif
+#ifdef __GNUC__
+# pragma GCC target("ssse3")
+# pragma GCC target("aes")
+# pragma GCC target("pclmul")
+#endif
 
 #include <tmmintrin.h>
 #include <wmmintrin.h>
+#include "private/sse2_64_32.h"
 
 #ifndef ENOSYS
 # define ENOSYS ENXIO
@@ -365,7 +365,7 @@ do { \
   */ \
     MAKE4(RED_MUL_MID); \
 \
-/* subtracts x1*h1 and x0*h0 */ \
+    /* subtracts x1*h1 and x0*h0 */ \
     tmp0 = _mm_xor_si128(tmp0, lo); \
     tmp0 = _mm_xor_si128(tmp0, hi); \
     tmp0 = _mm_xor_si128(tmp1, tmp0); \

@@ -214,28 +214,7 @@ static uint32_t index_alpha(const argon2_instance_t *instance,
  * @return ARGON2_OK if everything is all right, otherwise one of error codes
  * (all defined in <argon2.h>
  */
-int validate_inputs(const argon2_context *context);
-
-/*
- * Hashes all the inputs into @a blockhash[PREHASH_DIGEST_LENGTH], clears
- * password and secret if needed
- * @param  context  Pointer to the Argon2 internal structure containing memory
- * pointer, and parameters for time and space requirements.
- * @param  blockhash Buffer for pre-hashing digest
- * @param  type Argon2 type
- * @pre    @a blockhash must have at least @a PREHASH_DIGEST_LENGTH bytes
- * allocated
- */
-void initial_hash(uint8_t *blockhash, argon2_context *context,
-                  argon2_type type);
-
-/*
- * Function creates first 2 blocks per lane
- * @param instance Pointer to the current instance
- * @param blockhash Pointer to the pre-hashing digest
- * @pre blockhash must point to @a PREHASH_SEED_LENGTH allocated values
- */
-void fill_first_blocks(uint8_t *blockhash, const argon2_instance_t *instance);
+int argon2_validate_inputs(const argon2_context *context);
 
 /*
  * Function allocates memory, hashes the inputs with Blake,  and creates first
@@ -247,12 +226,7 @@ void fill_first_blocks(uint8_t *blockhash, const argon2_instance_t *instance);
  * @return Zero if successful, -1 if memory failed to allocate. @context->state
  * will be modified if successful.
  */
-int initialize(argon2_instance_t *instance, argon2_context *context);
-
-/*
- * Deallocates memory. Used on error path.
- */
-void free_instance(argon2_instance_t *instance, int flags);
+int argon2_initialize(argon2_instance_t *instance, argon2_context *context);
 
 /*
  * XORing the last block of each lane, hashing it, making the tag. Deallocates
@@ -265,7 +239,8 @@ void free_instance(argon2_instance_t *instance, int flags);
  * @pre if context->free_cbk is not NULL, it should point to a function that
  * deallocates memory
  */
-void finalize(const argon2_context *context, argon2_instance_t *instance);
+void argon2_finalize(const argon2_context *context,
+                     argon2_instance_t *instance);
 
 /*
  * Function that fills the segment using previous segments also from other
@@ -276,15 +251,14 @@ void finalize(const argon2_context *context, argon2_instance_t *instance);
  */
 typedef void (*fill_segment_fn)(const argon2_instance_t *instance,
                                 argon2_position_t        position);
-int argon2_pick_best_implementation(void);
-void fill_segment_avx512f(const argon2_instance_t *instance,
-                          argon2_position_t        position);
-void fill_segment_avx2(const argon2_instance_t *instance,
-                       argon2_position_t        position);
-void fill_segment_ssse3(const argon2_instance_t *instance,
-                        argon2_position_t        position);
-void fill_segment_ref(const argon2_instance_t *instance,
-                      argon2_position_t        position);
+void argon2_fill_segment_avx512f(const argon2_instance_t *instance,
+                                 argon2_position_t        position);
+void argon2_fill_segment_avx2(const argon2_instance_t *instance,
+                              argon2_position_t        position);
+void argon2_fill_segment_ssse3(const argon2_instance_t *instance,
+                               argon2_position_t        position);
+void argon2_fill_segment_ref(const argon2_instance_t *instance,
+                             argon2_position_t        position);
 
 /*
  * Function that fills the entire memory t_cost times based on the first two
@@ -292,6 +266,6 @@ void fill_segment_ref(const argon2_instance_t *instance,
  * @param instance Pointer to the current instance
  * @return Zero if successful, -1 if memory failed to allocate
  */
-void fill_memory_blocks(argon2_instance_t *instance, uint32_t pass);
+void argon2_fill_memory_blocks(argon2_instance_t *instance, uint32_t pass);
 
 #endif

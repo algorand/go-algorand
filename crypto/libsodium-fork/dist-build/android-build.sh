@@ -10,7 +10,7 @@ export NDK_API_VERSION_COMPAT=$(echo "$NDK_PLATFORM_COMPAT" | sed 's/^android-//
 if [ -z "$ANDROID_NDK_HOME" ]; then
   echo "You should probably set ANDROID_NDK_HOME to the directory containing"
   echo "the Android NDK"
-  exit
+  exit 1
 fi
 
 if [ ! -f ./configure ]; then
@@ -32,6 +32,12 @@ export PATH="${PATH}:${TOOLCHAIN_DIR}/bin"
 export CC=${CC:-"${HOST_COMPILER}-clang"}
 
 rm -rf "${TOOLCHAIN_DIR}" "${PREFIX}"
+
+echo
+echo "Warnings related to headers being present but not usable are due to functions"
+echo "that didn't exist in the specified minimum API version level."
+echo "They can be safely ignored."
+echo
 
 echo
 if [ "$NDK_PLATFORM" != "$NDK_PLATFORM_COMPAT" ]; then

@@ -14,7 +14,9 @@
 extern "C" {
 #endif
 
-#if defined(__IBMC__) || defined(__SUNPRO_C) || defined(__SUNPRO_CC)
+#ifdef __IBMC__
+# pragma pack(1)
+#elif defined(__SUNPRO_C) || defined(__SUNPRO_CC)
 # pragma pack(1)
 #else
 # pragma pack(push, 1)
@@ -24,7 +26,9 @@ typedef struct CRYPTO_ALIGN(64) crypto_generichash_blake2b_state {
     unsigned char opaque[384];
 } crypto_generichash_blake2b_state;
 
-#if defined(__IBMC__) || defined(__SUNPRO_C) || defined(__SUNPRO_CC)
+#ifdef __IBMC__
+# pragma pack(pop)
+#elif defined(__SUNPRO_C) || defined(__SUNPRO_CC)
 # pragma pack()
 #else
 # pragma pack(pop)
@@ -100,7 +104,7 @@ SODIUM_EXPORT
 int crypto_generichash_blake2b_update(crypto_generichash_blake2b_state *state,
                                       const unsigned char *in,
                                       unsigned long long inlen)
-            __attribute__ ((nonnull));
+            __attribute__ ((nonnull(1)));
 
 SODIUM_EXPORT
 int crypto_generichash_blake2b_final(crypto_generichash_blake2b_state *state,

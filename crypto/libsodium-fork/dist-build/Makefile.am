@@ -10,9 +10,8 @@ EXTRA_DIST = \
 	android-x86_64.sh \
 	emscripten.sh \
 	ios.sh \
+	apple-xcframework.sh \
 	msys2-win32.sh \
 	msys2-win64.sh \
-	nativeclient-pnacl.sh \
-	nativeclient-x86.sh \
-	nativeclient-x86_64.sh \
-	watchos.sh
+	watchos.sh \
+	wasm32-wasi.sh

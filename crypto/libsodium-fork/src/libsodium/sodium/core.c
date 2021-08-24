@@ -57,7 +57,7 @@ sodium_init(void)
 static CRITICAL_SECTION _sodium_lock;
 static volatile LONG    _sodium_lock_initialized;
 
-int
+static int
 _sodium_crit_init(void)
 {
     LONG status = 0L;
@@ -136,7 +136,7 @@ sodium_crit_leave(void)
     return pthread_mutex_unlock(&_sodium_lock);
 }
 
-#elif defined(HAVE_ATOMIC_OPS) && !defined(__EMSCRIPTEN__) && !defined(__native_client__)
+#elif defined(HAVE_ATOMIC_OPS) && !defined(__EMSCRIPTEN__)
 
 static volatile int _sodium_lock;
 

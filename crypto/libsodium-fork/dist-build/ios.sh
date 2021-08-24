@@ -20,6 +20,12 @@ export XCODEDIR=$(xcode-select -p)
 export IOS_SIMULATOR_VERSION_MIN=${IOS_SIMULATOR_VERSION_MIN-"6.0.0"}
 export IOS_VERSION_MIN=${IOS_VERSION_MIN-"6.0.0"}
 
+echo
+echo "Warnings related to headers being present but not usable are due to functions"
+echo "that didn't exist in the specified minimum iOS version level."
+echo "They can be safely ignored."
+echo
+
 mkdir -p $SIMULATOR32_PREFIX $SIMULATOR64_PREFIX $IOS32_PREFIX $IOS32s_PREFIX $IOS64_PREFIX || exit 1
 
 # Build for the simulator
@@ -95,8 +101,8 @@ make distclean > /dev/null
 make -j${PROCESSORS} install || exit 1
 
 ## 64-bit iOS
-export CFLAGS="-fembed-bitcode -O2 -arch arm64 -isysroot ${SDK} -mios-version-min=${IOS_VERSION_MIN} -fembed-bitcode"
-export LDFLAGS="-fembed-bitcode -arch arm64 -isysroot ${SDK} -mios-version-min=${IOS_VERSION_MIN} -fembed-bitcode"
+export CFLAGS="-fembed-bitcode -O2 -arch arm64 -isysroot ${SDK} -mios-version-min=${IOS_VERSION_MIN}"
+export LDFLAGS="-fembed-bitcode -arch arm64 -isysroot ${SDK} -mios-version-min=${IOS_VERSION_MIN}"
 
 make distclean > /dev/null
 

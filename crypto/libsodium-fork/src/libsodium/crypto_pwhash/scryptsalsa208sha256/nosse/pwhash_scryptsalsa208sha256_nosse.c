@@ -106,7 +106,7 @@ blkxor(escrypt_block_t *dest, const escrypt_block_t *src, size_t len)
 #endif
 }
 
-/**
+/*
  * salsa20_8(B):
  * Apply the salsa20/8 core to the provided block.
  */
@@ -168,11 +168,12 @@ salsa20_8(uint32_t B[16])
     }
 }
 
-/**
+/*
  * blockmix_salsa8(Bin, Bout, X, r):
- * Compute Bout = BlockMix_{salsa20/8, r}(Bin).  The input Bin must be 128r
- * bytes in length; the output Bout must also be the same size.  The
- * temporary space X must be 64 bytes.
+ * Compute Bout = BlockMix_{salsa20/8, r}(Bin).
+ * The input Bin must be 128r bytes in length;
+ * The output Bout must also be the same size.
+ * The temporary space X must be 64 bytes.
  */
 static void
 blockmix_salsa8(const uint32_t *Bin, uint32_t *Bout, uint32_t *X, size_t r)
@@ -207,19 +208,19 @@ blockmix_salsa8(const uint32_t *Bin, uint32_t *Bout, uint32_t *X, size_t r)
     }
 }
 
-/**
+/*
  * integerify(B, r):
  * Return the result of parsing B_{2r-1} as a little-endian integer.
  */
 static inline uint64_t
 integerify(const void *B, size_t r)
 {
-    const uint32_t *X = (const uint32_t *) ((uintptr_t)(B) + (2 * r - 1) * 64);
+    const uint32_t *X = ((const uint32_t *) B) + (2 * r - 1) * 16;
 
-    return (((uint64_t)(X[1]) << 32) + X[0]);
+    return ((uint64_t) (X[1]) << 32) + X[0];
 }
 
-/**
+/*
  * smix(B, r, N, V, XY):
  * Compute B = SMix_r(B, N).  The input B must be 128r bytes in length;
  * the temporary storage V must be 128rN bytes in length; the temporary
@@ -282,7 +283,7 @@ smix(uint8_t *B, size_t r, uint64_t N, uint32_t *V, uint32_t *XY)
     }
 }
 
-/**
+/*
  * escrypt_kdf(local, passwd, passwdlen, salt, saltlen,
  *     N, r, p, buf, buflen):
  * Compute scrypt(passwd[0 .. passwdlen - 1], salt[0 .. saltlen - 1], N, r,
@@ -351,10 +352,10 @@ escrypt_kdf_nosse(escrypt_local_t *local, const uint8_t *passwd,
         return -1;
     }
     if (local->size < need) {
-        if (free_region(local)) {
+        if (escrypt_free_region(local)) {
             return -1;
         }
-        if (!alloc_region(local, need)) {
+        if (!escrypt_alloc_region(local, need)) {
             return -1;
         }
     }
@@ -363,7 +364,7 @@ escrypt_kdf_nosse(escrypt_local_t *local, const uint8_t *passwd,
     XY = (uint32_t *) ((uint8_t *) V + V_size);
 
     /* 1: (B_0 ... B_{p-1}) <-- PBKDF2(P, S, 1, p * MFLen) */
-    PBKDF2_SHA256(passwd, passwdlen, salt, saltlen, 1, B, B_size);
+    escrypt_PBKDF2_SHA256(passwd, passwdlen, salt, saltlen, 1, B, B_size);
 
     /* 2: for i = 0 to p - 1 do */
     for (i = 0; i < p; i++) {
@@ -372,7 +373,7 @@ escrypt_kdf_nosse(escrypt_local_t *local, const uint8_t *passwd,
     }
 
     /* 5: DK <-- PBKDF2(P, B, 1, dkLen) */
-    PBKDF2_SHA256(passwd, passwdlen, B, B_size, 1, buf, buflen);
+    escrypt_PBKDF2_SHA256(passwd, passwdlen, B, B_size, 1, buf, buflen);
 
     /* Success! */
     return 0;
