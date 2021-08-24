@@ -40,7 +40,8 @@ type XorFilter struct {
 // The Builder is not thread safe and should only be used by one thread at a time.
 func NewXor(hint int, builder *XorBuilder) *XorFilter {
 	return &XorFilter{
-		b: builder,
+		b:       builder,
+		holding: make([]uint64, 0, hint),
 	}
 }
 
@@ -93,28 +94,37 @@ func (xf *XorFilter) MarshalBinary() ([]byte, error) {
 // ErrBadBinary is returned when UnmarshalBinary fails
 var ErrBadBinary = errors.New("bad XorFilter binary")
 
+// TODO: make this an option to UnmarshalBinary, or a settable global, ...
+const maxFingerprints = 1000000
+
 // UnmarshalBinary implements encoding.BinaryUnmarshaller interface
 func (xf *XorFilter) UnmarshalBinary(data []byte) error {
 	pos := 0
 	var dp int
 	xor := new(xorfilter.Xor32)
 	xor.Seed, dp = binary.Uvarint(data[pos:])
-	if dp < 0 {
+	if dp <= 0 {
 		return ErrBadBinary
 	}
 	pos += dp
 	blockLength, dp := binary.Uvarint(data[pos:])
-	if dp < 0 {
+	if dp <= 0 {
 		return ErrBadBinary
 	}
 	xor.BlockLength = uint32(blockLength)
 	pos += dp
 	lenFingerprints, dp := binary.Uvarint(data[pos:])
-	if dp < 0 {
+	if dp <= 0 {
 		return ErrBadBinary
 	}
 	pos += dp
 	if lenFingerprints > 0 {
+		if lenFingerprints > maxFingerprints {
+			return ErrBadBinary
+		}
+		if (lenFingerprints * 4) > uint64(len(data)-pos) {
+			return ErrBadBinary
+		}
 		xor.Fingerprints = make([]uint32, lenFingerprints)
 		for i := 0; i < int(lenFingerprints); i++ {
 			xor.Fingerprints[i] = binary.LittleEndian.Uint32(data[pos:])
@@ -214,22 +224,28 @@ func (xf *XorFilter8) UnmarshalBinary(data []byte) error {
 	var dp int
 	xor := new(xorfilter.Xor8)
 	xor.Seed, dp = binary.Uvarint(data[pos:])
-	if dp < 0 {
+	if dp <= 0 {
 		return ErrBadBinary
 	}
 	pos += dp
 	blockLength, dp := binary.Uvarint(data[pos:])
-	if dp < 0 {
+	if dp <= 0 {
 		return ErrBadBinary
 	}
 	xor.BlockLength = uint32(blockLength)
 	pos += dp
 	lenFingerprints, dp := binary.Uvarint(data[pos:])
-	if dp < 0 {
+	if dp <= 0 {
 		return ErrBadBinary
 	}
 	pos += dp
 	if lenFingerprints > 0 {
+		if lenFingerprints > maxFingerprints {
+			return ErrBadBinary
+		}
+		if lenFingerprints > uint64(len(data)-pos) {
+			return ErrBadBinary
+		}
 		xor.Fingerprints = make([]byte, lenFingerprints)
 		copy(xor.Fingerprints, data[pos:])
 		xf.xor = xor
