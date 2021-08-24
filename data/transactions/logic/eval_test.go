@@ -4879,7 +4879,7 @@ func TestFirstValidTime(t *testing.T) {
 	ep, _ := makeSampleEnv()
 	source := "txn FirstValidTime; int 1; >="
 	ops := testProg(t, source, ep.Proto.LogicSigVersion)
-	err := CheckStateful(ops.Program, ep)
+	err := Check(ops.Program, ep)
 	require.NoError(t, err)
 
 	pass, _ := Eval(ops.Program, ep)

@@ -1677,7 +1677,7 @@ func (z *Header) MarshalMsg(b []byte) (o []byte) {
 		if (zb0002Mask & 0x8) == 0 { // if not empty
 			// string "fvt"
 			o = append(o, 0xa3, 0x66, 0x76, 0x74)
-			o = msgp.AppendUint64(o, (*z).FirstValidTime)
+			o = msgp.AppendInt64(o, (*z).FirstValidTime)
 		}
 		if (zb0002Mask & 0x10) == 0 { // if not empty
 			// string "gen"
@@ -1767,7 +1767,7 @@ func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			(*z).FirstValidTime, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).FirstValidTime, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "FirstValidTime")
 				return
@@ -1881,7 +1881,7 @@ func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "fvt":
-				(*z).FirstValidTime, bts, err = msgp.ReadUint64Bytes(bts)
+				(*z).FirstValidTime, bts, err = msgp.ReadInt64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "FirstValidTime")
 					return
@@ -1958,7 +1958,7 @@ func (_ *Header) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Header) Msgsize() (s int) {
-	s = 1 + 4 + (*z).Sender.Msgsize() + 4 + (*z).Fee.Msgsize() + 3 + (*z).FirstValid.Msgsize() + 4 + msgp.Uint64Size + 3 + (*z).LastValid.Msgsize() + 5 + msgp.BytesPrefixSize + len((*z).Note) + 4 + msgp.StringPrefixSize + len((*z).GenesisID) + 3 + (*z).GenesisHash.Msgsize() + 4 + (*z).Group.Msgsize() + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 6 + (*z).RekeyTo.Msgsize()
+	s = 1 + 4 + (*z).Sender.Msgsize() + 4 + (*z).Fee.Msgsize() + 3 + (*z).FirstValid.Msgsize() + 4 + msgp.Int64Size + 3 + (*z).LastValid.Msgsize() + 5 + msgp.BytesPrefixSize + len((*z).Note) + 4 + msgp.StringPrefixSize + len((*z).GenesisID) + 3 + (*z).GenesisHash.Msgsize() + 4 + (*z).Group.Msgsize() + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 6 + (*z).RekeyTo.Msgsize()
 	return
 }
 
@@ -4043,7 +4043,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte) {
 		if (zb0006Mask & 0x1000000000) == 0 { // if not empty
 			// string "fvt"
 			o = append(o, 0xa3, 0x66, 0x76, 0x74)
-			o = msgp.AppendUint64(o, (*z).Header.FirstValidTime)
+			o = msgp.AppendInt64(o, (*z).Header.FirstValidTime)
 		}
 		if (zb0006Mask & 0x2000000000) == 0 { // if not empty
 			// string "gen"
@@ -4186,7 +4186,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0006 > 0 {
 			zb0006--
-			(*z).Header.FirstValidTime, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).Header.FirstValidTime, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "FirstValidTime")
 				return
@@ -4678,7 +4678,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "fvt":
-				(*z).Header.FirstValidTime, bts, err = msgp.ReadUint64Bytes(bts)
+				(*z).Header.FirstValidTime, bts, err = msgp.ReadInt64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "FirstValidTime")
 					return
@@ -5061,7 +5061,7 @@ func (_ *Transaction) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Transaction) Msgsize() (s int) {
-	s = 3 + 5 + (*z).Type.Msgsize() + 4 + (*z).Header.Sender.Msgsize() + 4 + (*z).Header.Fee.Msgsize() + 3 + (*z).Header.FirstValid.Msgsize() + 4 + msgp.Uint64Size + 3 + (*z).Header.LastValid.Msgsize() + 5 + msgp.BytesPrefixSize + len((*z).Header.Note) + 4 + msgp.StringPrefixSize + len((*z).Header.GenesisID) + 3 + (*z).Header.GenesisHash.Msgsize() + 4 + (*z).Header.Group.Msgsize() + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 6 + (*z).Header.RekeyTo.Msgsize() + 8 + (*z).KeyregTxnFields.VotePK.Msgsize() + 7 + (*z).KeyregTxnFields.SelectionPK.Msgsize() + 8 + (*z).KeyregTxnFields.VoteFirst.Msgsize() + 8 + (*z).KeyregTxnFields.VoteLast.Msgsize() + 7 + msgp.Uint64Size + 8 + msgp.BoolSize + 4 + (*z).PaymentTxnFields.Receiver.Msgsize() + 4 + (*z).PaymentTxnFields.Amount.Msgsize() + 6 + (*z).PaymentTxnFields.CloseRemainderTo.Msgsize() + 5 + (*z).AssetConfigTxnFields.ConfigAsset.Msgsize() + 5 + (*z).AssetConfigTxnFields.AssetParams.Msgsize() + 5 + (*z).AssetTransferTxnFields.XferAsset.Msgsize() + 5 + msgp.Uint64Size + 5 + (*z).AssetTransferTxnFields.AssetSender.Msgsize() + 5 + (*z).AssetTransferTxnFields.AssetReceiver.Msgsize() + 7 + (*z).AssetTransferTxnFields.AssetCloseTo.Msgsize() + 5 + (*z).AssetFreezeTxnFields.FreezeAccount.Msgsize() + 5 + (*z).AssetFreezeTxnFields.FreezeAsset.Msgsize() + 5 + msgp.BoolSize + 5 + (*z).ApplicationCallTxnFields.ApplicationID.Msgsize() + 5 + msgp.Uint64Size + 5 + msgp.ArrayHeaderSize
+	s = 3 + 5 + (*z).Type.Msgsize() + 4 + (*z).Header.Sender.Msgsize() + 4 + (*z).Header.Fee.Msgsize() + 3 + (*z).Header.FirstValid.Msgsize() + 4 + msgp.Int64Size + 3 + (*z).Header.LastValid.Msgsize() + 5 + msgp.BytesPrefixSize + len((*z).Header.Note) + 4 + msgp.StringPrefixSize + len((*z).Header.GenesisID) + 3 + (*z).Header.GenesisHash.Msgsize() + 4 + (*z).Header.Group.Msgsize() + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 6 + (*z).Header.RekeyTo.Msgsize() + 8 + (*z).KeyregTxnFields.VotePK.Msgsize() + 7 + (*z).KeyregTxnFields.SelectionPK.Msgsize() + 8 + (*z).KeyregTxnFields.VoteFirst.Msgsize() + 8 + (*z).KeyregTxnFields.VoteLast.Msgsize() + 7 + msgp.Uint64Size + 8 + msgp.BoolSize + 4 + (*z).PaymentTxnFields.Receiver.Msgsize() + 4 + (*z).PaymentTxnFields.Amount.Msgsize() + 6 + (*z).PaymentTxnFields.CloseRemainderTo.Msgsize() + 5 + (*z).AssetConfigTxnFields.ConfigAsset.Msgsize() + 5 + (*z).AssetConfigTxnFields.AssetParams.Msgsize() + 5 + (*z).AssetTransferTxnFields.XferAsset.Msgsize() + 5 + msgp.Uint64Size + 5 + (*z).AssetTransferTxnFields.AssetSender.Msgsize() + 5 + (*z).AssetTransferTxnFields.AssetReceiver.Msgsize() + 7 + (*z).AssetTransferTxnFields.AssetCloseTo.Msgsize() + 5 + (*z).AssetFreezeTxnFields.FreezeAccount.Msgsize() + 5 + (*z).AssetFreezeTxnFields.FreezeAsset.Msgsize() + 5 + msgp.BoolSize + 5 + (*z).ApplicationCallTxnFields.ApplicationID.Msgsize() + 5 + msgp.Uint64Size + 5 + msgp.ArrayHeaderSize
 	for zb0002 := range (*z).ApplicationCallTxnFields.ApplicationArgs {
 		s += msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ApplicationArgs[zb0002])
 	}
