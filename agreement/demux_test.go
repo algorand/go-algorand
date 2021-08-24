@@ -423,7 +423,7 @@ type demuxTestClock struct {
 }
 
 // implement timers.Clock and timers.ClockFactory
-func (t *demuxTestClock) Zero() timers.Clock {
+func (t *demuxTestClock) Zero(label interface{}) timers.Clock {
 	// we don't care about this function in this test.
 	return t
 }

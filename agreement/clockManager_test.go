@@ -9,7 +9,7 @@ import (
 )
 
 func TestClockManagerSerialization(t *testing.T) {
-	cm := makeClockManager(&timers.Monotonic{})
+	cm := makeClockManager(&timers.MonotonicFactory{})
 	//clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 	rnd := makeRoundRandomBranch(350)
 	//cm.m[rnd] = clock
@@ -17,7 +17,7 @@ func TestClockManagerSerialization(t *testing.T) {
 
 	enc := cm.Encode()
 
-	cm2 := makeClockManager(&timers.Monotonic{})
+	cm2 := makeClockManager(&timers.MonotonicFactory{})
 	cm3, err := cm2.Decode(enc)
 	assert.NoError(t, err)
 	cm.mu, cm3.mu = deadlock.Mutex{}, deadlock.Mutex{}

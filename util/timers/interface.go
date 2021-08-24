@@ -21,12 +21,22 @@ import (
 	"time"
 )
 
+// ClockFactory provides a way to construct new clocks referenced to the
+// time of their creation (zero).
+type ClockFactory interface {
+	// Zero returns a reset Clock. TimeoutAt channels will use the point
+	// at which Zero was called as their reference point.  The label is
+	// used for test harnesses.
+	Zero(label interface{}) Clock
+
+	// Decode deserializes the Clock from a byte slice.
+	// A Clock which has been Decoded from an Encoded Clock should produce
+	// the same timeouts as the original Clock.
+	Decode([]byte) (Clock, error)
+}
+
 // Clock provides timeout events which fire at some point after a point in time.
 type Clock interface {
-	// Zero returns a reset Clock. TimeoutAt channels will use the point
-	// at which Zero was called as their reference point.
-	Zero() Clock
-
 	// GetTimeout returns the absolute time of the timeout target stored in this clock for duration delta.
 	GetTimeout(delta time.Duration) time.Time
 
@@ -38,9 +48,4 @@ type Clock interface {
 
 	// Encode serializes the Clock into a byte slice.
 	Encode() []byte
-
-	// Decode deserializes the Clock from a byte slice.
-	// A Clock which has been Decoded from an Encoded Clock should produce
-	// the same timeouts as the original Clock.
-	Decode([]byte) (Clock, error)
 }

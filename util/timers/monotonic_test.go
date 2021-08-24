@@ -32,13 +32,13 @@ func polled(ch <-chan time.Time) bool {
 }
 
 func TestMonotonicDelta(t *testing.T) {
-	var m Monotonic
+	var m MonotonicFactory
 	var c Clock
 	var ch <-chan time.Time
 
 	d := time.Millisecond * 100
 
-	c = m.Zero()
+	c = m.Zero(nil)
 	ch = c.TimeoutAt(d)
 	if polled(ch) {
 		t.Errorf("channel fired ~100ms early")
@@ -56,11 +56,11 @@ func TestMonotonicDelta(t *testing.T) {
 }
 
 func TestMonotonicZeroDelta(t *testing.T) {
-	var m Monotonic
+	var m MonotonicFactory
 	var c Clock
 	var ch <-chan time.Time
 
-	c = m.Zero()
+	c = m.Zero(nil)
 	ch = c.TimeoutAt(0)
 	if !polled(ch) {
 		t.Errorf("read failed on channel at zero timeout")
@@ -68,11 +68,11 @@ func TestMonotonicZeroDelta(t *testing.T) {
 }
 
 func TestMonotonicNegativeDelta(t *testing.T) {
-	var m Monotonic
+	var m MonotonicFactory
 	var c Clock
 	var ch <-chan time.Time
 
-	c = m.Zero()
+	c = m.Zero(nil)
 	ch = c.TimeoutAt(-time.Second)
 	if !polled(ch) {
 		t.Errorf("read failed on channel at negative timeout")
@@ -80,13 +80,13 @@ func TestMonotonicNegativeDelta(t *testing.T) {
 }
 
 func TestMonotonicZeroTwice(t *testing.T) {
-	var m Monotonic
+	var m MonotonicFactory
 	var c Clock
 	var ch <-chan time.Time
 
 	d := time.Millisecond * 100
 
-	c = m.Zero()
+	c = m.Zero(nil)
 	ch = c.TimeoutAt(d)
 	if polled(ch) {
 		t.Errorf("channel fired ~100ms early")
@@ -97,7 +97,7 @@ func TestMonotonicZeroTwice(t *testing.T) {
 		t.Errorf("channel failed to fire at 100ms")
 	}
 
-	c = c.Zero()
+	c = m.Zero(nil)
 	ch = c.TimeoutAt(d)
 	if polled(ch) {
 		t.Errorf("channel fired ~100ms early after call to Zero")
@@ -110,9 +110,9 @@ func TestMonotonicZeroTwice(t *testing.T) {
 }
 
 func TestMonotonicEncodeDecode(t *testing.T) {
-	singleTest := func(c Clock, descr string) {
+	singleTest := func(c Clock, f ClockFactory, descr string) {
 		data := c.Encode()
-		c0, err := c.Decode(data)
+		c0, err := f.Decode(data)
 		if err != nil {
 			t.Errorf("decoding error: %v", err)
 		}
@@ -123,12 +123,13 @@ func TestMonotonicEncodeDecode(t *testing.T) {
 
 	var c Clock
 	var m Monotonic
+	var mf MonotonicFactory
 
 	c = Clock(&m)
-	singleTest(c, "empty")
+	singleTest(c, &mf, "empty")
 
-	c = c.Zero()
-	singleTest(c, "Zero()'ed")
+	c = mf.Zero(nil)
+	singleTest(c, &mf, "Zero()'ed")
 
 	now := time.Now()
 	for i := 0; i < 100; i++ {
@@ -138,6 +139,6 @@ func TestMonotonicEncodeDecode(t *testing.T) {
 				zero: now.Add(r),
 			},
 		)
-		singleTest(c, "random")
+		singleTest(c, &mf, "random")
 	}
 }

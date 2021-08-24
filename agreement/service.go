@@ -77,7 +77,7 @@ type Parameters struct {
 	BlockFactory
 	RandomSource
 	EventsProcessingMonitor
-	timers.Clock
+	timers.ClockFactory
 	db.Accessor
 	logging.Logger
 	config.Local
@@ -106,7 +106,7 @@ func MakeService(p Parameters) *Service {
 	s := new(Service)
 
 	s.parameters = parameters(p)
-	s.clockManager = makeClockManager(s.Clock)
+	s.clockManager = makeClockManager(s.ClockFactory)
 
 	s.log = serviceLogger{Logger: p.Logger}
 

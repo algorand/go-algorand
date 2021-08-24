@@ -17,18 +17,18 @@ type clockManager struct {
 	mu deadlock.Mutex
 	m  map[round]timers.Clock
 
-	t0 timers.Clock
+	factory timers.ClockFactory
 }
 
-func makeClockManager(t0 timers.Clock) *clockManager {
-	return &clockManager{m: make(map[round]timers.Clock), t0: t0}
+func makeClockManager(factory timers.ClockFactory) *clockManager {
+	return &clockManager{m: make(map[round]timers.Clock), factory: factory}
 }
 
 func (cm *clockManager) setZero(r round) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
-	cm.m[r] = cm.t0.Zero()
+	cm.m[r] = cm.factory.Zero(r)
 }
 
 // nextDeadlineCh returns a timeout channel that will fire when the earliest Deadline among all of
@@ -91,13 +91,13 @@ func (cm *clockManager) Decode(data []byte) (*clockManager, error) {
 		if err != nil {
 			return nil, err
 		}
-		clk, err := cm.t0.Decode(rc.C)
+		clk, err := cm.factory.Decode(rc.C)
 		if err != nil {
 			return nil, err
 		}
 		m[r] = clk
 	}
-	return &clockManager{m: m, t0: cm.t0}, err
+	return &clockManager{m: m, factory: cm.factory}, err
 }
 
 func (cm *clockManager) Encode() []byte {

@@ -23,6 +23,21 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// MonotonicFactory allocates Monotonic clocks
+type MonotonicFactory struct{}
+
+// Zero returns a new Monotonic clock.
+func (_ *MonotonicFactory) Zero(label interface{}) Clock {
+	z := time.Now().UTC()
+	logging.Base().Debugf("Allocating new clock zeroed to %v", z)
+	return MakeMonotonicClock(z)
+}
+
+// MakeMonotonicClockFactory creates a new monotonic clock factory.
+func MakeMonotonicClockFactory() ClockFactory {
+	return &MonotonicFactory{}
+}
+
 // Monotonic uses the system's monotonic clock to emit timeouts.
 type Monotonic struct {
 	zero     time.Time
@@ -34,13 +49,6 @@ func MakeMonotonicClock(zero time.Time) Clock {
 	return &Monotonic{
 		zero: zero,
 	}
-}
-
-// Zero returns a new Clock reset to the current time.
-func (m *Monotonic) Zero() Clock {
-	z := time.Now().UTC()
-	logging.Base().Debugf("Clock zeroed to %v", z)
-	return MakeMonotonicClock(z)
 }
 
 // TimeoutAt returns a channel that will signal when the duration has elapsed.
@@ -72,7 +80,7 @@ func (m *Monotonic) Encode() []byte {
 }
 
 // Decode implements Clock.Decode.
-func (m *Monotonic) Decode(data []byte) (Clock, error) {
+func (_ *MonotonicFactory) Decode(data []byte) (Clock, error) {
 	var zero time.Time
 	err := protocol.DecodeReflect(data, &zero)
 	if err == nil {
