@@ -45,6 +45,16 @@ TEST_RUN_ID=$(${SCRIPT_PATH}/testrunid.py)
 export TEMPDIR=${SRCROOT}/tmp/out/e2e/${TEST_RUN_ID}
 echo "Test output can be found in ${TEMPDIR}"
 
+function cleanup() {
+  rm -rf "${TEMPDIR}"
+
+  if ! ${NO_BUILD} ; then
+      rm -rf ${PKG_ROOT}
+  fi
+}
+
+# Cleanup files created during tests.
+trap cleanup EXIT
 
 # ARM64 has an unoptimized scrypt() which can cause tests to timeout.
 # Run kmd with scrypt() configured to run less secure and fast to go through the motions for test.
@@ -129,6 +139,7 @@ fi # if E2E_TEST_FILTER == "" or == "SCRIPTS"
 if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "GO" ]; then
     # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
     # This allows us to clean up everything with our rm -rf trap.
+    mkdir "${TEMPDIR}/go"
     export TESTDIR=${TEMPDIR}/go
     export TESTDATADIR=${SRCROOT}/test/testdata
     export SRCROOT=${SRCROOT}
@@ -140,6 +151,7 @@ fi # if E2E_TEST_FILTER == "" or == "GO"
 if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "EXPECT" ]; then
     # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
     # This allows us to clean up everything with our rm -rf trap.
+    mkdir "${TEMPDIR}/expect"
     export TESTDIR=${TEMPDIR}/expect
     export TESTDATADIR=${SRCROOT}/test/testdata
     export SRCROOT=${SRCROOT}
@@ -147,13 +159,6 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "EXPECT" ]; then
     ./e2e_go_tests.sh -e ${GO_TEST_ARGS}
     duration "expect tests"
 fi # if E2E_TEST_FILTER == "" or == "EXPECT"
-
-# Cleanup files created during tests.
-rm -rf "${TEMPDIR}"
-
-if ! ${NO_BUILD} ; then
-    rm -rf ${PKG_ROOT}
-fi
 
 echo "----------------------------------------------------------------------"
 echo "  DONE: E2E"

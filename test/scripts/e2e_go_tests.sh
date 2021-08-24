@@ -35,7 +35,7 @@ while [ "$1" != "" ]; do
     shift
 done
 
-if [[ ! -z $TESTPATTERNS && ! -z $RUN_EXPECT ]]; then
+if [[ -n $TESTPATTERNS && -n $RUN_EXPECT ]]; then
     echo "-t and -e are mutually exclusive."
     exit 1
 fi
@@ -116,7 +116,7 @@ else
 fi
 
 if [ ${CLEANUP_TEMPDIR} -ne 0 ]; then
-    rm -rf ${TEMPDIR}
+    rm -rf "${TEMPDIR}"
 fi
 
 echo "----------------------------------------------------------------------"
