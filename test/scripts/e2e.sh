@@ -129,36 +129,31 @@ fi # if E2E_TEST_FILTER == "" or == "SCRIPTS"
 if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "GO" ]; then
     # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
     # This allows us to clean up everything with our rm -rf trap.
-    export TESTDIR=${TEMPDIR}
+    export TESTDIR=${TEMPDIR}/go
     export TESTDATADIR=${SRCROOT}/test/testdata
     export SRCROOT=${SRCROOT}
 
     ./e2e_go_tests.sh ${GO_TEST_ARGS}
     duration "go integration tests"
-
-    rm -rf "${TEMPDIR}"
-
-    if ! ${NO_BUILD} ; then
-        rm -rf ${PKG_ROOT}
-    fi
 fi # if E2E_TEST_FILTER == "" or == "GO"
 
 if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "EXPECT" ]; then
     # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
     # This allows us to clean up everything with our rm -rf trap.
-    export TESTDIR=${TEMPDIR}
+    export TESTDIR=${TEMPDIR}/expect
     export TESTDATADIR=${SRCROOT}/test/testdata
     export SRCROOT=${SRCROOT}
 
     ./e2e_go_tests.sh -e ${GO_TEST_ARGS}
     duration "expect tests"
-
-    rm -rf "${TEMPDIR}"
-
-    if ! ${NO_BUILD} ; then
-        rm -rf ${PKG_ROOT}
-    fi
 fi # if E2E_TEST_FILTER == "" or == "EXPECT"
+
+# Cleanup files created during tests.
+rm -rf "${TEMPDIR}"
+
+if ! ${NO_BUILD} ; then
+    rm -rf ${PKG_ROOT}
+fi
 
 echo "----------------------------------------------------------------------"
 echo "  DONE: E2E"
