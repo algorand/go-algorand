@@ -58,12 +58,14 @@ type asaParams struct {
 	Creator basics.Address
 }
 
-// Ledger is a convenient mock ledger that is used by both
-// data/transactions/logid and ledger/apply.  It can act as any of:
-// LogicForLedger, mockCowForLogicLedger, or (eventually) Balances,
-// making it a nice basis for many tests.
-// By putting it here, it is publicly exported, but will not be
-// imported by non-test code, so won't bloat binary.
+// Ledger is a convenient mock ledger that is used by
+// data/transactions/logic It is in its own package so that it can be
+// used by people developing teal code that need a fast testing setup,
+// rather than running against a real network.  It also might be
+// expanded to support the Balances interface so that we have fewer
+// mocks doing similar things.  By putting it here, it is publicly
+// exported, but will not be imported by non-test code, so won't bloat
+// binary.
 type Ledger struct {
 	balances          map[basics.Address]balanceRecord
 	applications      map[basics.AppIndex]appParams
@@ -75,6 +77,7 @@ type Ledger struct {
 	Logs              []transactions.LogItem // public because write-only in TEAL, tests need direct access
 }
 
+// MakeLedger constructs a Ledger with the given balances.
 func MakeLedger(balances map[basics.Address]uint64) *Ledger {
 	l := new(Ledger)
 	l.balances = make(map[basics.Address]balanceRecord)
@@ -88,6 +91,7 @@ func MakeLedger(balances map[basics.Address]uint64) *Ledger {
 	return l
 }
 
+// Reset removes all of the mods created by previous AVM execution
 func (l *Ledger) Reset() {
 	l.mods = make(map[basics.AppIndex]map[string]basics.ValueDelta)
 	for addr, br := range l.balances {
@@ -96,10 +100,15 @@ func (l *Ledger) Reset() {
 	}
 }
 
+// NewAccount adds a new account with a given balance to the Ledger.
 func (l *Ledger) NewAccount(addr basics.Address, balance uint64) {
 	l.balances[addr] = makeBalanceRecord(addr, balance)
 }
 
+// NewApp add a new AVM app to the Ledger, and arranges so that future
+// executions will act as though they are that app.  It only sets up
+// the id and schema, it inserts no code, since testing will want to
+// try many different code sequences.
 func (l *Ledger) NewApp(creator basics.Address, appID basics.AppIndex, params basics.AppParams) {
 	l.appID = appID
 	params = params.Clone()
@@ -118,6 +127,7 @@ func (l *Ledger) NewApp(creator basics.Address, appID basics.AppIndex, params ba
 	l.balances[creator] = br
 }
 
+// NewAsset adds an asset with the given id and params to the ledger.
 func (l *Ledger) NewAsset(creator basics.Address, assetID basics.AssetIndex, params basics.AssetParams) {
 	l.assets[assetID] = asaParams{
 		Creator:     creator,
@@ -131,6 +141,7 @@ func (l *Ledger) NewAsset(creator basics.Address, assetID basics.AssetIndex, par
 	l.balances[creator] = br
 }
 
+// NewHolding sets the ASA balance of a given account.
 func (l *Ledger) NewHolding(addr basics.Address, assetID uint64, amount uint64, frozen bool) {
 	br, ok := l.balances[addr]
 	if !ok {
@@ -140,26 +151,32 @@ func (l *Ledger) NewHolding(addr basics.Address, assetID uint64, amount uint64, 
 	l.balances[addr] = br
 }
 
+// NewLocals essentially "opts in" an address to an app id.
 func (l *Ledger) NewLocals(addr basics.Address, appID uint64) {
 	l.balances[addr].locals[basics.AppIndex(appID)] = basics.TealKeyValue{}
 }
 
+// NewLocal sets a local value of an app on an address
 func (l *Ledger) NewLocal(addr basics.Address, appID uint64, key string, value basics.TealValue) {
 	l.balances[addr].locals[basics.AppIndex(appID)][key] = value
 }
 
+// NoLocal removes a key from an address locals for an app.
 func (l *Ledger) NoLocal(addr basics.Address, appID uint64, key string) {
 	delete(l.balances[addr].locals[basics.AppIndex(appID)], key)
 }
 
+// NewGlobal sets a global value for an app
 func (l *Ledger) NewGlobal(appID uint64, key string, value basics.TealValue) {
 	l.applications[basics.AppIndex(appID)].GlobalState[key] = value
 }
 
+// NoGlobal removes a global key for an app
 func (l *Ledger) NoGlobal(appID uint64, key string) {
 	delete(l.applications[basics.AppIndex(appID)].GlobalState, key)
 }
 
+// Rekey sets the authAddr for an address.
 func (l *Ledger) Rekey(addr basics.Address, auth basics.Address) {
 	if br, ok := l.balances[addr]; ok {
 		br.auth = auth
@@ -167,14 +184,18 @@ func (l *Ledger) Rekey(addr basics.Address, auth basics.Address) {
 	}
 }
 
+// Round gives the current Round of the test ledger, which is random but consistent
 func (l *Ledger) Round() basics.Round {
 	return l.round()
 }
 
+// LatestTimestamp gives a uint64, chosen randomly.  It should
+// probably increase monotonically, but no tests care yet.
 func (l *Ledger) LatestTimestamp() int64 {
 	return int64(rand.Uint32() + 1)
 }
 
+// Balance returns the value in an account, as MicroAlgos
 func (l *Ledger) Balance(addr basics.Address) (amount basics.MicroAlgos, err error) {
 	br, ok := l.balances[addr]
 	if !ok {
@@ -183,6 +204,8 @@ func (l *Ledger) Balance(addr basics.Address) (amount basics.MicroAlgos, err err
 	return basics.MicroAlgos{Raw: br.balance}, nil
 }
 
+// MinBalance computes the MinBalance requirement for an account,
+// under the given consensus parameters.
 func (l *Ledger) MinBalance(addr basics.Address, proto *config.ConsensusParams) (amount basics.MicroAlgos, err error) {
 	br, ok := l.balances[addr]
 	if !ok {
@@ -216,6 +239,9 @@ func (l *Ledger) MinBalance(addr basics.Address, proto *config.ConsensusParams) 
 	return basics.MicroAlgos{Raw: min}, nil
 }
 
+// Authorizer returns the address that must authorize txns from a
+// given address.  It's either the address itself, or the value it has
+// been rekeyed to.
 func (l *Ledger) Authorizer(addr basics.Address) basics.Address {
 	br, ok := l.balances[addr]
 	if !ok {
@@ -227,6 +253,8 @@ func (l *Ledger) Authorizer(addr basics.Address) basics.Address {
 	return br.addr
 }
 
+// GetGlobal returns the current value of a global in an app, taking
+// into account the mods created by earlier teal execution.
 func (l *Ledger) GetGlobal(appIdx basics.AppIndex, key string) (basics.TealValue, bool, error) {
 	if appIdx == basics.AppIndex(0) {
 		appIdx = l.appID
@@ -251,6 +279,8 @@ func (l *Ledger) GetGlobal(appIdx basics.AppIndex, key string) (basics.TealValue
 	return val, ok, nil
 }
 
+// SetGlobal "sets" a global, but only through the mods mechanism, so
+// it can be removed with Reset()
 func (l *Ledger) SetGlobal(key string, value basics.TealValue) error {
 	appIdx := l.appID
 	params, ok := l.applications[appIdx]
@@ -274,6 +304,8 @@ func (l *Ledger) SetGlobal(key string, value basics.TealValue) error {
 	return nil
 }
 
+// DelGlobal "deletes" a global, but only through the mods mechanism, so
+// the deltion can be Reset()
 func (l *Ledger) DelGlobal(key string) error {
 	appIdx := l.appID
 	params, ok := l.applications[appIdx]
@@ -301,11 +333,8 @@ func (l *Ledger) DelGlobal(key string) error {
 	return nil
 }
 
-func (l *Ledger) BalanceRecord(addr basics.Address) (balanceRecord, bool) {
-	br, ok := l.balances[addr]
-	return br, ok
-}
-
+// GetLocal returns the current value bound to a local key, taking
+// into account mods caused by earlier executions.
 func (l *Ledger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (basics.TealValue, bool, error) {
 	if appIdx == 0 {
 		appIdx = l.appID
@@ -333,6 +362,8 @@ func (l *Ledger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key strin
 	return val, ok, nil
 }
 
+// SetLocal "sets" the current value bound to a local key using the
+// mods mechanism, so it can be Reset()
 func (l *Ledger) SetLocal(addr basics.Address, key string, value basics.TealValue, accountIdx uint64) error {
 	appIdx := l.appID
 
@@ -361,6 +392,8 @@ func (l *Ledger) SetLocal(addr basics.Address, key string, value basics.TealValu
 	return nil
 }
 
+// DelLocal "deletes" the current value bound to a local key using the
+// mods mechanism, so it can be Reset()
 func (l *Ledger) DelLocal(addr basics.Address, key string, accountIdx uint64) error {
 	appIdx := l.appID
 
@@ -392,6 +425,9 @@ func (l *Ledger) DelLocal(addr basics.Address, key string, accountIdx uint64) er
 	return nil
 }
 
+// OptedIn returns whether an Address has opted into the app (usually
+// from NewLocals, but potentially from executing AVM inner
+// transactions.
 func (l *Ledger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {
 	if appIdx == 0 {
 		appIdx = l.appID
@@ -404,14 +440,20 @@ func (l *Ledger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, err
 	return ok, nil
 }
 
+// SetTrackedCreatable remembers that the given cl "happened" in txn
+// groupIdx of the group, for use by GetCreatableID.
 func (l *Ledger) SetTrackedCreatable(groupIdx int, cl basics.CreatableLocator) {
 	l.trackedCreatables[groupIdx] = cl.Index
 }
 
+// GetCreatableID returns the creatable constructed in a given transaction
+// slot. For the test ledger, that's been set up by SetTrackedCreatable
 func (l *Ledger) GetCreatableID(groupIdx int) basics.CreatableIndex {
 	return l.trackedCreatables[groupIdx]
 }
 
+// AssetHolding gives the amount of an ASA held by an account, or
+// error if the account is not opted into the asset.
 func (l *Ledger) AssetHolding(addr basics.Address, assetID basics.AssetIndex) (basics.AssetHolding, error) {
 	if br, ok := l.balances[addr]; ok {
 		if asset, ok := br.holdings[assetID]; ok {
@@ -422,6 +464,7 @@ func (l *Ledger) AssetHolding(addr basics.Address, assetID basics.AssetIndex) (b
 	return basics.AssetHolding{}, fmt.Errorf("no such address")
 }
 
+// AssetParams gives the parameters of an ASA if it exists
 func (l *Ledger) AssetParams(assetID basics.AssetIndex) (basics.AssetParams, basics.Address, error) {
 	if asset, ok := l.assets[assetID]; ok {
 		return asset.AssetParams, asset.Creator, nil
@@ -429,6 +472,7 @@ func (l *Ledger) AssetParams(assetID basics.AssetIndex) (basics.AssetParams, bas
 	return basics.AssetParams{}, basics.Address{}, fmt.Errorf("no such asset")
 }
 
+// AppParams gives the parameters of an App if it exists
 func (l *Ledger) AppParams(appID basics.AppIndex) (basics.AppParams, basics.Address, error) {
 	if app, ok := l.applications[appID]; ok {
 		return app.AppParams, app.Creator, nil
@@ -436,15 +480,20 @@ func (l *Ledger) AppParams(appID basics.AppIndex) (basics.AppParams, basics.Addr
 	return basics.AppParams{}, basics.Address{}, fmt.Errorf("no such app")
 }
 
+// ApplicationID gives ID of the "currently running" app.  For this
+// test ledger, that is chosen explicitly.
 func (l *Ledger) ApplicationID() basics.AppIndex {
 	return l.appID
 }
 
+// CreatorAddress returns of the address that created the "currently running" app.
 func (l *Ledger) CreatorAddress() basics.Address {
 	_, addr, _ := l.AppParams(l.appID)
 	return addr
 }
 
+// GetDelta translates the mods set by AVM execution into the standard
+// format of an EvalDelta.
 func (l *Ledger) GetDelta(txn *transactions.Transaction) (evalDelta transactions.EvalDelta, err error) {
 	if tkv, ok := l.mods[l.appID]; ok {
 		evalDelta.GlobalDelta = tkv
@@ -599,6 +648,7 @@ func (l *Ledger) axfer(from basics.Address, xfer transactions.AssetTransferTxnFi
    require a whole new level of code duplication.
 */
 
+// Perform causes txn to "occur" against the ledger. The returned ad is empty.
 func (l *Ledger) Perform(txn *transactions.Transaction, spec transactions.SpecialAddresses) (transactions.ApplyData, error) {
 	var ad transactions.ApplyData
 
@@ -617,10 +667,13 @@ func (l *Ledger) Perform(txn *transactions.Transaction, spec transactions.Specia
 	return ad, err
 }
 
-// Get() through allocated() implement cowForLogicLedger, we can make
-// a logicLedger with this inside.  That let's us to write tests and
-// then poke around and see how the balance table inside is affected.
+// Get() through allocated() implement cowForLogicLedger, so we should
+// be able to make logicLedger with this inside.  That let's us to
+// write tests and then poke around and see how the balance table
+// inside is affected.
 
+// Get returns the AccountData of an address. This test ledger does
+// not handle rewards, so the pening rewards flag is ignored.
 func (l *Ledger) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
 	br, ok := l.balances[addr]
 	if !ok {
@@ -635,8 +688,7 @@ func (l *Ledger) Get(addr basics.Address, withPendingRewards bool) (basics.Accou
 	}, nil
 }
 
-// GetCreatableID was done for LedgerForLogic
-// func (l *Ledger) GetCreatableID(groupIdx int) basics.CreatableIndex { }
+// GetCreator returns the creator of the given creatable, an app or asa.
 func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	if ctype == basics.AssetCreatable {
 		params, found := l.assets[basics.AssetIndex(cidx)]
@@ -649,6 +701,7 @@ func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableTy
 	return basics.Address{}, false, fmt.Errorf("%v %d is not in test.Ledger", ctype, cidx)
 }
 
+// SetKey creates a new key-value in {addr, aidx, global} storage
 func (l *Ledger) SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue, accountIdx uint64) error {
 	if global {
 		l.NewGlobal(uint64(aidx), key, value)
@@ -657,6 +710,8 @@ func (l *Ledger) SetKey(addr basics.Address, aidx basics.AppIndex, global bool, 
 	}
 	return nil
 }
+
+// DelKey removes a key from {addr, aidx, global} storage
 func (l *Ledger) DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) error {
 	if global {
 		l.NoGlobal(uint64(aidx), key)
