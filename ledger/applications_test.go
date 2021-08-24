@@ -127,11 +127,6 @@ func (c *mockCowForLogicLedger) allocated(addr basics.Address, aidx basics.AppIn
 	return found, nil
 }
 
-func (c *mockCowForLogicLedger) AppendLog(aidx uint64, value string) error {
-	c.logs = append(c.logs, transactions.LogItem{ID: aidx, Message: value})
-	return nil
-}
-
 func newCowMock(creatables []modsData) *mockCowForLogicLedger {
 	var m mockCowForLogicLedger
 	m.cr = make(map[creatableLocator]basics.Address, len(creatables))
@@ -1370,34 +1365,4 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx]["lk0"].Bytes, "local0")
 	a.Contains(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx], "lk1")
 	a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx]["lk1"].Bytes, "local1")
-}
-
-func TestLogicLedgerAppendLog(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
-
-	addr := getRandomAddress(a)
-	aidx := basics.AppIndex(1)
-	c := newCowMock([]modsData{
-		{addr, basics.CreatableIndex(1), basics.AppCreatable},
-	})
-	l, err := newLogicLedger(c, aidx)
-	a.NoError(err)
-	a.NotNil(l)
-
-	appCallFields := transactions.ApplicationCallTxnFields{
-		OnCompletion:  transactions.NoOpOC,
-		ApplicationID: 0,
-		Accounts:      []basics.Address{},
-	}
-	appCall := transactions.Transaction{
-		Type:                     protocol.ApplicationCallTx,
-		ApplicationCallTxnFields: appCallFields,
-	}
-
-	err = l.AppendLog(&appCall, "a")
-	a.NoError(err)
-	a.Equal(len(c.logs), 1)
-	a.Equal(c.logs[0].Message, "a")
 }

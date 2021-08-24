@@ -456,12 +456,6 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 	return nil // note: deletion cannot cause us to violate maxCount
 }
 
-// AppendLog adds message in logs. idx is expected to be an index in txn.ForeignApps
-func (cb *roundCowState) AppendLog(idx uint64, value string) error {
-	cb.logs = append(cb.logs, transactions.LogItem{ID: idx, Message: value})
-	return nil
-}
-
 // MakeDebugBalances creates a ledger suitable for dryrun and debugger
 func MakeDebugBalances(l ledgerForCowBase, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
 	base := &roundCowBase{
@@ -491,7 +485,8 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 	}
 
 	// Eval the program
-	pass, err = logic.EvalStateful(program, params)
+	var cx *logic.EvalContext
+	pass, cx, err = logic.EvalStatefulCx(program, params)
 	if err != nil {
 		return false, transactions.EvalDelta{}, ledgercore.LogicEvalError{Err: err}
 	}
@@ -503,12 +498,15 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 			return false, transactions.EvalDelta{}, err
 		}
 		calf.commitToParent()
+		evalDelta.SetLogs(cx.Logs)
+		evalDelta.InnerTxns = cx.Effects
 	}
 
 	return pass, evalDelta, nil
 }
 
-// BuildEvalDelta converts internal sdeltas and logs into transactions.EvalDelta
+// BuildEvalDelta creates an EvalDelta by converting internal sdeltas
+// into the (Global|Local)Delta fields.
 func (cb *roundCowState) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (evalDelta transactions.EvalDelta, err error) {
 	// sdeltas
 	foundGlobal := false
@@ -557,9 +555,6 @@ func (cb *roundCowState) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.
 			}
 		}
 	}
-
-	// logs
-	evalDelta.Logs = cb.logs
 
 	return
 }

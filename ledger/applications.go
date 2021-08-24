@@ -42,8 +42,6 @@ type cowForLogicLedger interface {
 	SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue, accountIdx uint64) error
 	DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) error
 
-	AppendLog(idx uint64, value string) error
-
 	round() basics.Round
 	prevTimestamp() int64
 	allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
@@ -249,17 +247,6 @@ func (al *logicLedger) GetDelta(txn *transactions.Transaction) (evalDelta transa
 	return al.cow.BuildEvalDelta(al.aidx, txn)
 }
 
-func (al *logicLedger) AppendLog(txn *transactions.Transaction, value string) error {
-	idx, err := txn.IndexByAppID(txn.ApplicationID)
-	if idx != 0 {
-		return fmt.Errorf("index offset is not 0. logging is allowed for current app only")
-	}
-	if err != nil {
-		return err
-	}
-	return al.cow.AppendLog(idx, value)
-}
-
 func (al *logicLedger) balances() (apply.Balances, error) {
 	balances, ok := al.cow.(apply.Balances)
 	if !ok {
@@ -268,17 +255,18 @@ func (al *logicLedger) balances() (apply.Balances, error) {
 	return balances, nil
 }
 
-func (al *logicLedger) Perform(tx *transactions.Transaction, spec transactions.SpecialAddresses) error {
+func (al *logicLedger) Perform(tx *transactions.Transaction, spec transactions.SpecialAddresses) (transactions.ApplyData, error) {
+	var ad transactions.ApplyData
+
 	balances, err := al.balances()
 	if err != nil {
-		return err
+		return ad, err
 	}
 
-	var ad transactions.ApplyData
 	// move fee to pool
 	err = balances.Move(tx.Sender, spec.FeeSink, tx.Fee, &ad.SenderRewards, nil)
 	if err != nil {
-		return err
+		return ad, err
 	}
 
 	switch tx.Type {
@@ -290,7 +278,7 @@ func (al *logicLedger) Perform(tx *transactions.Transaction, spec transactions.S
 		err = fmt.Errorf("%s tx in AVM", tx.Type)
 	}
 	if err != nil {
-		return err
+		return ad, err
 	}
 
 	// We don't check min balances during in app txns.
@@ -301,9 +289,6 @@ func (al *logicLedger) Perform(tx *transactions.Transaction, spec transactions.S
 	// modifiedAccounts().  It seems it must, but this note will
 	// be here until confirmed.
 
-	if !ad.Equal(transactions.ApplyData{}) {
-		return fmt.Errorf("Perform caused unhandled ApplyData change %#v", ad)
-	}
-	return nil
+	return ad, nil
 
 }

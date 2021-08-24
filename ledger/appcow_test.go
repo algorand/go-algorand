@@ -600,8 +600,6 @@ func TestCowBuildDelta(t *testing.T) {
 		ed,
 	)
 
-	// check logDelta is added
-	cow.logs = []transactions.LogItem{{ID: 0, Message: "hello,world"}}
 	cow.sdeltas[sender][storagePtr{aidx, false}] = &storageDelta{
 		action: remainAllocAction,
 		kvCow: stateDelta{
@@ -615,6 +613,7 @@ func TestCowBuildDelta(t *testing.T) {
 		accountIdx: 1,
 	}
 	ed, err = cow.BuildEvalDelta(aidx, &txn)
+	ed.SetLogs([]string{"hello,world"})
 	a.NoError(err)
 	a.Equal(
 		transactions.EvalDelta{
@@ -1357,20 +1356,4 @@ func TestCowDelKey(t *testing.T) {
 	// ensure other requests go down to roundCowParent
 	a.Panics(func() { c.DelKey(getRandomAddress(a), aidx, false, key, 0) })
 	a.Panics(func() { c.DelKey(addr, aidx+1, false, key, 0) })
-}
-func TestCowAppendLog(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
-
-	addr := getRandomAddress(a)
-	aidx := basics.AppIndex(0)
-	c := getCow([]modsData{
-		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
-	})
-
-	c.logs = []transactions.LogItem{}
-	err := c.AppendLog(uint64(aidx), "val")
-	a.NoError(err)
-	a.Equal(len(c.logs), 1)
 }

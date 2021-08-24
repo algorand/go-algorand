@@ -593,12 +593,18 @@ func (l *Ledger) axfer(from basics.Address, xfer transactions.AssetTransferTxnFi
    (cowRoundState which implements Balances), as a better test. To
    allow that, we need to move our mocks into separate packages so
    they can be combined in yet *another* package, and avoid circular
-   imports. */
+   imports.
 
-func (l *Ledger) Perform(txn *transactions.Transaction, spec transactions.SpecialAddresses) error {
+   This is currently unable to fill the ApplyData objects.  That would
+   require a whole new level of code duplication.
+*/
+
+func (l *Ledger) Perform(txn *transactions.Transaction, spec transactions.SpecialAddresses) (transactions.ApplyData, error) {
+	var ad transactions.ApplyData
+
 	err := l.move(txn.Sender, spec.FeeSink, txn.Fee.Raw)
 	if err != nil {
-		return err
+		return ad, err
 	}
 	switch txn.Type {
 	case protocol.PaymentTx:
@@ -608,7 +614,7 @@ func (l *Ledger) Perform(txn *transactions.Transaction, spec transactions.Specia
 	default:
 		err = fmt.Errorf("%s txn in AVM", txn.Type)
 	}
-	return err
+	return ad, err
 }
 
 // Get() through allocated() implement cowForLogicLedger, we can make
@@ -657,21 +663,6 @@ func (l *Ledger) DelKey(addr basics.Address, aidx basics.AppIndex, global bool, 
 	} else {
 		l.NoLocal(addr, uint64(aidx), key)
 	}
-	return nil
-}
-
-func (l *Ledger) AppendLog(txn *transactions.Transaction, value string) error {
-
-	appIdx, err := txn.IndexByAppID(l.appID)
-	if err != nil {
-		return err
-	}
-	_, ok := l.applications[l.appID]
-	if !ok {
-		return fmt.Errorf("no such app")
-	}
-
-	l.Logs = append(l.Logs, transactions.LogItem{ID: appIdx, Message: value})
 	return nil
 }
 

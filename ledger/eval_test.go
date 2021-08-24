@@ -1165,12 +1165,17 @@ func (ledger *Ledger) endBlock(t testing.TB, eval *BlockEvaluator) *ValidatedBlo
 	return validatedBlock
 }
 
-// lookup gets the current accountdaa for an address
+// lookup gets the current accountdata for an address
 func (ledger *Ledger) lookup(t testing.TB, addr basics.Address) basics.AccountData {
 	rnd := ledger.Latest()
 	ad, err := ledger.Lookup(rnd, addr)
 	require.NoError(t, err)
 	return ad
+}
+
+// lookup gets the current microAlgo balance for an address
+func (ledger *Ledger) micros(t testing.TB, addr basics.Address) uint64 {
+	return ledger.lookup(t, addr).MicroAlgos.Raw
 }
 
 func (eval *BlockEvaluator) fillDefaults(txn *txntest.Txn) {

@@ -2948,10 +2948,10 @@ func TestShortBytecblock2(t *testing.T) {
 
 const panicString = "out of memory, buffer overrun, stack overflow, divide by zero, halt and catch fire"
 
-func opPanic(cx *evalContext) {
+func opPanic(cx *EvalContext) {
 	panic(panicString)
 }
-func checkPanic(cx *evalContext) error {
+func checkPanic(cx *EvalContext) error {
 	panic(panicString)
 }
 
@@ -4785,24 +4785,22 @@ func TestLog(t *testing.T) {
 		},
 	}
 
-	//track expected number of logs in ep.Ledger
-	count := 0
+	//track expected number of logs in cx.Logs
 	for i, s := range testCases {
 		ops := testProg(t, s.source, AssemblerMaxVersion)
 
 		err := CheckStateful(ops.Program, ep)
 		require.NoError(t, err, s)
 
-		pass, err := EvalStateful(ops.Program, ep)
+		pass, cx, err := EvalStatefulCx(ops.Program, ep)
 		require.NoError(t, err)
 		require.True(t, pass)
-		count += s.loglen
-		require.Len(t, ledger.Logs, count)
+		require.Len(t, cx.Logs, s.loglen)
 		if i == len(testCases)-1 {
-			require.Equal(t, strings.Repeat("a", MaxLogSize), ledger.Logs[count-1].Message)
+			require.Equal(t, strings.Repeat("a", MaxLogSize), cx.Logs[0])
 		} else {
-			for _, l := range ledger.Logs[count-s.loglen:] {
-				require.Equal(t, "a logging message", l.Message)
+			for _, l := range cx.Logs {
+				require.Equal(t, "a logging message", l)
 			}
 		}
 	}

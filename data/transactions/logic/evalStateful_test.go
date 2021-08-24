@@ -2384,7 +2384,7 @@ func TestReturnTypes(t *testing.T) {
 				var trace strings.Builder
 				ep.Trace = &trace
 
-				var cx evalContext
+				var cx EvalContext
 				cx.EvalParams = ep
 				cx.runModeFlags = m
 
@@ -2446,48 +2446,6 @@ func TestAppLoop(t *testing.T) {
 
 	// Infinite loop because multiply by one instead of two
 	testApp(t, stateful+"int 1; loop:; int 1; *; dup; int 10; <; bnz loop; int 16; ==", ep, "dynamic cost")
-}
-
-func TestWriteLogs(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	t.Parallel()
-
-	ep := defaultEvalParams(nil, nil)
-	txn := makeSampleTxn()
-	txn.Txn.ApplicationID = 100
-	ep.Txn = &txn
-	ledger := logictest.MakeLedger(
-		map[basics.Address]uint64{
-			txn.Txn.Sender: 1,
-		},
-	)
-	ep.Ledger = ledger
-	ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
-
-	// write int and bytes values
-	source := `int 1
-loop: byte "a"
-log
-int 1
-+
-dup
-int 30
-<
-bnz loop
-`
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	err = CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	pass, err := EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
-	delta, err := ledger.GetDelta(&ep.Txn.Txn)
-	require.NoError(t, err)
-	require.Empty(t, 0, delta.GlobalDelta)
-	require.Empty(t, delta.LocalDeltas)
-	require.Len(t, delta.Logs, 29)
 }
 
 func TestPooledAppCallsVerifyOp(t *testing.T) {

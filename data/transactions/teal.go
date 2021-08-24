@@ -95,3 +95,10 @@ func (ed EvalDelta) Equal(o EvalDelta) bool {
 
 	return true
 }
+
+func (ed *EvalDelta) SetLogs(msgs []string) {
+	ed.Logs = make([]LogItem, len(msgs))
+	for i, msg := range msgs {
+		ed.Logs[i] = LogItem{ID: 0, Message: msg}
+	}
+}

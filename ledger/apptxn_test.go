@@ -27,9 +27,9 @@ import (
 )
 
 // main wraps up some TEAL source in a header and footer so that it is
-// an app that does nothing at create time, but otherwise run source,
-// then approves, assuming that the source did not panic and left the
-// stack empty.
+// an app that does nothing at create time, but otherwise runs source,
+// then approves, if the source avoids panicing and leaves the stack
+// empty.
 func main(source string) string {
 	return fmt.Sprintf(`txn ApplicationID
             bz end
@@ -78,16 +78,17 @@ func TestPayAction(t *testing.T) {
 	eval.txns(t, &create, &fund, &payout1)
 	l.endBlock(t, eval)
 
-	ad0 := l.lookup(t, addrs[0])
-	ad1 := l.lookup(t, addrs[1])
-	app := l.lookup(t, basics.AppIndex(1).Address())
+	ad0 := l.micros(t, addrs[0])
+	ad1 := l.micros(t, addrs[1])
+	ad2 := l.micros(t, addrs[2])
+	app := l.micros(t, basics.AppIndex(1).Address())
 
 	// create(1000) and fund(1000 + 200000)
-	require.Equal(t, uint64(202000), genBalances.Balances[addrs[0]].MicroAlgos.Raw-ad0.MicroAlgos.Raw)
+	require.Equal(t, uint64(202000), genBalances.Balances[addrs[0]].MicroAlgos.Raw-ad0)
 	// paid 5000, but 1000 fee
-	require.Equal(t, uint64(4000), ad1.MicroAlgos.Raw-genBalances.Balances[addrs[1]].MicroAlgos.Raw)
+	require.Equal(t, uint64(4000), ad1-genBalances.Balances[addrs[1]].MicroAlgos.Raw)
 	// app still has 194000 (paid out 5000, and paid fee to do it)
-	require.Equal(t, uint64(194000), app.MicroAlgos.Raw)
+	require.Equal(t, uint64(194000), app)
 
 	// Build up Residue in RewardsState so it's ready to pay
 	for i := 1; i < 10; i++ {
@@ -107,16 +108,63 @@ func TestPayAction(t *testing.T) {
 
 	payInBlock := eval.block.Payset[0]
 	rewards := payInBlock.ApplyData.SenderRewards.Raw
-	t.Logf("%+v", payInBlock.ApplyData)
 	require.Greater(t, rewards, uint64(2000)) // some biggish number
+	inners := payInBlock.ApplyData.EvalDelta.InnerTxns
+	require.Len(t, inners, 1)
+
+	// addr[2] is going to get the same rewards as addr[1], who
+	// originally sent the top-level txn.  Both had their algo balance
+	// touched and has very nearly the same balance.
+	require.Equal(t, rewards, inners[0].ReceiverRewards.Raw)
+	// app gets none, because it has less than 1A
+	require.Equal(t, uint64(0), inners[0].SenderRewards.Raw)
 
 	// refresh balances
-	ad1 = l.lookup(t, addrs[1])
-	app = l.lookup(t, basics.AppIndex(1).Address())
+	ad0 = l.micros(t, addrs[0])
+	ad1 = l.micros(t, addrs[1])
+	ad2 = l.micros(t, addrs[2])
+	app = l.micros(t, basics.AppIndex(1).Address())
 
-	// paid 10000, but 2000 fee
-	require.Equal(t, rewards+8000, ad1.MicroAlgos.Raw-genBalances.Balances[addrs[1]].MicroAlgos.Raw)
+	// paid 5000, in first payout (only), but paid 1000 fee in each payout txn
+	require.Equal(t, rewards+3000, ad1-genBalances.Balances[addrs[1]].MicroAlgos.Raw)
 	// app still has 188000 (paid out 10000, and paid 2k fees to do it)
-	// why no rewards?
-	require.Equal(t, uint64(200000)-10000-2000, app.MicroAlgos.Raw)
+	// no rewards because owns less than an algo
+	require.Equal(t, uint64(200000)-10000-2000, app)
+
+	// paid 5000 by payout2, never paid any fees, got same rewards
+	require.Equal(t, rewards+uint64(5000), ad2-genBalances.Balances[addrs[2]].MicroAlgos.Raw)
+
+	// Now fund the app account much more, so we can confirm it gets rewards.
+	tenkalgos := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: basics.AppIndex(1).Address(),
+		Amount:   10 * 1000 * 1000000, // account min balance, plus fees
+	}
+	eval = l.nextBlock(t)
+	eval.txn(t, &tenkalgos)
+	l.endBlock(t, eval)
+	beforepay := l.micros(t, basics.AppIndex(1).Address())
+
+	// Build up Residue in RewardsState so it's ready to pay again
+	for i := 1; i < 10; i++ {
+		eval = l.nextBlock(t)
+		l.endBlock(t, eval)
+	}
+	eval = l.nextBlock(t)
+	payout3 := payout2
+	payout3.Note = []byte{0x01}
+	eval.txn(t, &payout3)
+	l.endBlock(t, eval)
+
+	afterpay := l.micros(t, basics.AppIndex(1).Address())
+
+	payInBlock = eval.block.Payset[0]
+	inners = payInBlock.ApplyData.EvalDelta.InnerTxns
+	require.Len(t, inners, 1)
+
+	appreward := inners[0].SenderRewards.Raw
+	require.Greater(t, appreward, uint64(1000))
+
+	require.Equal(t, beforepay+appreward-5000-1000, afterpay)
 }
