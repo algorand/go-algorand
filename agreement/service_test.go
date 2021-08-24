@@ -139,7 +139,8 @@ func makeTestingClock() *testingClock {
 }
 
 func (c *testingClock) GetTimeout(d time.Duration) time.Time {
-	panic("testingClock.GetTimeout not implemented")
+	var zero time.Time
+	return zero.Add(d)
 }
 
 func (c *testingClock) TimeoutAt(d time.Duration) <-chan time.Time {
