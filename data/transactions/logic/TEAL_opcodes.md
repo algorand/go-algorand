@@ -371,7 +371,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 0 | Sender | []byte | 32 byte address |
 | 1 | Fee | uint64 | micro-Algos |
 | 2 | FirstValid | uint64 | round number |
-| 3 | FirstValidTime | uint64 | Causes program to fail; reserved for future use |
+| 3 | FirstValidTime | uint64 | retrieves the block time stamp of FirstValid block |
 | 4 | LastValid | uint64 | round number |
 | 5 | Note | []byte | Any data up to 1024 bytes |
 | 6 | Lease | []byte | 32 byte lease value |
@@ -439,8 +439,6 @@ TypeEnum mapping:
 | 5 | afrz | AssetFreeze |
 | 6 | appl | ApplicationCall |
 
-
-FirstValidTime causes the program to fail. The field is reserved for future use.
 
 ## global f
 

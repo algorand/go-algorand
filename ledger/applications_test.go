@@ -216,6 +216,7 @@ func TestLogicLedgerGetters(t *testing.T) {
 	a.Equal(aidx, l.ApplicationID())
 	a.Equal(round, l.Round())
 	a.Equal(ts, l.LatestTimestamp())
+	a.Equal(ts, l.GetBlockTimeStamp(c.rnd))
 	a.True(l.OptedIn(addr1, 0))
 	a.True(l.OptedIn(addr1, aidx))
 	a.False(l.OptedIn(addr, 0))
