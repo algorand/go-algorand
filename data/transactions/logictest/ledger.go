@@ -496,10 +496,10 @@ func (l *Ledger) pay(from basics.Address, pay transactions.PaymentTxnFields) err
 	if !pay.CloseRemainderTo.IsZero() {
 		sbr := l.balances[from]
 		if len(sbr.holdings) > 0 {
-			return fmt.Errorf("Sender (%s) has holdings.", from)
+			return fmt.Errorf("unable to close, Sender (%s) has holdings", from)
 		}
 		if len(sbr.locals) > 0 {
-			return fmt.Errorf("Sender (%s) is opted in to apps.", from)
+			return fmt.Errorf("unable to close, Sender (%s) is opted in to apps", from)
 		}
 		// Should also check app creations.
 		// Need not check asa creations, as you can't opt out if you created.

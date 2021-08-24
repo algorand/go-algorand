@@ -80,7 +80,6 @@ func TestPayAction(t *testing.T) {
 
 	ad0 := l.micros(t, addrs[0])
 	ad1 := l.micros(t, addrs[1])
-	ad2 := l.micros(t, addrs[2])
 	app := l.micros(t, basics.AppIndex(1).Address())
 
 	// create(1000) and fund(1000 + 200000)
@@ -119,10 +118,8 @@ func TestPayAction(t *testing.T) {
 	// app gets none, because it has less than 1A
 	require.Equal(t, uint64(0), inners[0].SenderRewards.Raw)
 
-	// refresh balances
-	ad0 = l.micros(t, addrs[0])
 	ad1 = l.micros(t, addrs[1])
-	ad2 = l.micros(t, addrs[2])
+	ad2 := l.micros(t, addrs[2])
 	app = l.micros(t, basics.AppIndex(1).Address())
 
 	// paid 5000, in first payout (only), but paid 1000 fee in each payout txn

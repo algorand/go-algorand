@@ -96,6 +96,10 @@ func (ed EvalDelta) Equal(o EvalDelta) bool {
 	return true
 }
 
+// SetLogs taks a simple slice of log messages and creates LogItems
+// with a zero ID. LogItem should probably go away, since logs will
+// always appear with the app that produced them, a simple string list
+// would be fine.
 func (ed *EvalDelta) SetLogs(msgs []string) {
 	ed.Logs = make([]LogItem, len(msgs))
 	for i, msg := range msgs {

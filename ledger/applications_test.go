@@ -61,7 +61,6 @@ type mockCowForLogicLedger struct {
 	brs    map[basics.Address]basics.AccountData
 	stores map[storeLocator]basics.TealKeyValue
 	tcs    map[int]basics.CreatableIndex
-	logs   []transactions.LogItem
 }
 
 func (c *mockCowForLogicLedger) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
