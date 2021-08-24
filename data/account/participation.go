@@ -59,27 +59,33 @@ type Participation struct {
 
 // participationIDData is for msgpack encoding the participation data.
 type participationIDData struct {
-	_struct     struct{} `codec:""`
-	Parent      basics.Address
-	VRF         crypto.VRFSecrets
-	FirstValid  basics.Round
-	LastValid   basics.Round
-	KeyDilution uint64
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Parent      basics.Address    `codec:"addr"`
+	VRFSK       crypto.VrfPrivkey `codec:"vrfsk"`
+	FirstValid  basics.Round      `codec:"fv"`
+	LastValid   basics.Round      `codec:"lv"`
+	KeyDilution uint64            `codec:"kd"`
+}
+
+// ToBeHashed implements the Hashable interface.
+func (id *participationIDData) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.ParticipationKeys, protocol.Encode(id)
 }
 
 // ParticipationID computes a ParticipationID.
 func (part Participation) ParticipationID() ParticipationID {
-	copy := participationIDData{
+	idData := participationIDData{
 		Parent:      part.Parent,
 		FirstValid:  part.FirstValid,
 		LastValid:   part.LastValid,
 		KeyDilution: part.KeyDilution,
 	}
 	if part.VRF != nil {
-		copy.VRF = *part.VRF
+		copy(idData.VRFSK[:], part.VRF.SK[:])
 	}
 
-	return ParticipationID(crypto.Hash(copy.MarshalMsg(nil)))
+	return ParticipationID(crypto.HashObj(&idData))
 }
 
 // PersistedParticipation encapsulates the static state of the participation

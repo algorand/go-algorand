@@ -47,6 +47,7 @@ const (
 	Program           HashID = "Program"
 	ProgramData       HashID = "ProgData"
 	ProposerSeed      HashID = "PS"
+	ParticipationKeys HashID = "PK"
 	Seed              HashID = "SD"
 	SpecialAddr       HashID = "SpecialAddr"
 	SignedTxnInBlock  HashID = "STIB"

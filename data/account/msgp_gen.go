@@ -19,22 +19,58 @@ import (
 // MarshalMsg implements msgp.Marshaler
 func (z *participationIDData) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 5
-	// string "FirstValid"
-	o = append(o, 0x85, 0xaa, 0x46, 0x69, 0x72, 0x73, 0x74, 0x56, 0x61, 0x6c, 0x69, 0x64)
-	o = (*z).FirstValid.MarshalMsg(o)
-	// string "KeyDilution"
-	o = append(o, 0xab, 0x4b, 0x65, 0x79, 0x44, 0x69, 0x6c, 0x75, 0x74, 0x69, 0x6f, 0x6e)
-	o = msgp.AppendUint64(o, (*z).KeyDilution)
-	// string "LastValid"
-	o = append(o, 0xa9, 0x4c, 0x61, 0x73, 0x74, 0x56, 0x61, 0x6c, 0x69, 0x64)
-	o = (*z).LastValid.MarshalMsg(o)
-	// string "Parent"
-	o = append(o, 0xa6, 0x50, 0x61, 0x72, 0x65, 0x6e, 0x74)
-	o = (*z).Parent.MarshalMsg(o)
-	// string "VRF"
-	o = append(o, 0xa3, 0x56, 0x52, 0x46)
-	o = (*z).VRF.MarshalMsg(o)
+	// omitempty: check for empty values
+	zb0001Len := uint32(5)
+	var zb0001Mask uint8 /* 6 bits */
+	if (*z).Parent.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).FirstValid.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if (*z).KeyDilution == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	if (*z).LastValid.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x10
+	}
+	if (*z).VRFSK.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x20
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "addr"
+			o = append(o, 0xa4, 0x61, 0x64, 0x64, 0x72)
+			o = (*z).Parent.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "fv"
+			o = append(o, 0xa2, 0x66, 0x76)
+			o = (*z).FirstValid.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "kd"
+			o = append(o, 0xa2, 0x6b, 0x64)
+			o = msgp.AppendUint64(o, (*z).KeyDilution)
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not empty
+			// string "lv"
+			o = append(o, 0xa2, 0x6c, 0x76)
+			o = (*z).LastValid.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x20) == 0 { // if not empty
+			// string "vrfsk"
+			o = append(o, 0xa5, 0x76, 0x72, 0x66, 0x73, 0x6b)
+			o = (*z).VRFSK.MarshalMsg(o)
+		}
+	}
 	return
 }
 
@@ -66,9 +102,9 @@ func (z *participationIDData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).VRF.UnmarshalMsg(bts)
+			bts, err = (*z).VRFSK.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "VRF")
+				err = msgp.WrapError(err, "struct-from-array", "VRFSK")
 				return
 			}
 		}
@@ -119,31 +155,31 @@ func (z *participationIDData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "Parent":
+			case "addr":
 				bts, err = (*z).Parent.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Parent")
 					return
 				}
-			case "VRF":
-				bts, err = (*z).VRF.UnmarshalMsg(bts)
+			case "vrfsk":
+				bts, err = (*z).VRFSK.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "VRF")
+					err = msgp.WrapError(err, "VRFSK")
 					return
 				}
-			case "FirstValid":
+			case "fv":
 				bts, err = (*z).FirstValid.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "FirstValid")
 					return
 				}
-			case "LastValid":
+			case "lv":
 				bts, err = (*z).LastValid.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "LastValid")
 					return
 				}
-			case "KeyDilution":
+			case "kd":
 				(*z).KeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "KeyDilution")
@@ -169,11 +205,11 @@ func (_ *participationIDData) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *participationIDData) Msgsize() (s int) {
-	s = 1 + 7 + (*z).Parent.Msgsize() + 4 + (*z).VRF.Msgsize() + 11 + (*z).FirstValid.Msgsize() + 10 + (*z).LastValid.Msgsize() + 12 + msgp.Uint64Size
+	s = 1 + 5 + (*z).Parent.Msgsize() + 6 + (*z).VRFSK.Msgsize() + 3 + (*z).FirstValid.Msgsize() + 3 + (*z).LastValid.Msgsize() + 3 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *participationIDData) MsgIsZero() bool {
-	return ((*z).Parent.MsgIsZero()) && ((*z).VRF.MsgIsZero()) && ((*z).FirstValid.MsgIsZero()) && ((*z).LastValid.MsgIsZero()) && ((*z).KeyDilution == 0)
+	return ((*z).Parent.MsgIsZero()) && ((*z).VRFSK.MsgIsZero()) && ((*z).FirstValid.MsgIsZero()) && ((*z).LastValid.MsgIsZero()) && ((*z).KeyDilution == 0)
 }
