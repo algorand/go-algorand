@@ -1204,6 +1204,10 @@ txn FirstValid
 int 42
 ==
 &&
+txn FirstValidTime
+int 999999
+==
+&&
 txn LastValid
 int 1066
 ==
@@ -1420,16 +1424,6 @@ assert
 int 1
 `
 
-const testTxnProgramTextV5 = testTxnProgramTextV4 + `
-assert
-txn FirstValidTime
-int 999999
-==
-assert
-
-int 1
-`
-
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
@@ -1516,7 +1510,7 @@ func TestTxn(t *testing.T) {
 
 	t.Parallel()
 	for _, txnField := range TxnFieldNames {
-		if !strings.Contains(testTxnProgramTextV5, txnField) {
+		if !strings.Contains(testTxnProgramTextV4, txnField) {
 			t.Errorf("TestTxn missing field %v", txnField)
 		}
 	}
@@ -1526,7 +1520,6 @@ func TestTxn(t *testing.T) {
 		2: testTxnProgramTextV2,
 		3: testTxnProgramTextV3,
 		4: testTxnProgramTextV4,
-		5: testTxnProgramTextV5,
 	}
 
 	clearOps := testProg(t, "int 1", 1)
@@ -1731,6 +1724,10 @@ int 1066
 &&
 gtxn 1 FirstValid
 int 42
+==
+&&
+gtxn 0 FirstValidTime
+int 999999
 ==
 &&
 gtxn 1 LastValid
