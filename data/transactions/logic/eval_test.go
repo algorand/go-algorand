@@ -1516,10 +1516,8 @@ func TestTxn(t *testing.T) {
 
 	t.Parallel()
 	for _, txnField := range TxnFieldNames {
-		if !strings.Contains(testTxnProgramTextV4, txnField) {
-			if txnField != FirstValidTime.String() {
-				t.Errorf("TestTxn missing field %v", txnField)
-			}
+		if !strings.Contains(testTxnProgramTextV5, txnField) {
+			t.Errorf("TestTxn missing field %v", txnField)
 		}
 	}
 
