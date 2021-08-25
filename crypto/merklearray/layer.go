@@ -42,11 +42,6 @@ func (p *pair) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.MerkleArrayNode, buf[:]
 }
 
-// Hash implements an optimized version of crypto.HashObj(p).
-func (p *pair) Hash() crypto.Digest {
-	return crypto.Hash(p.Marshal())
-}
-
 func (p *pair) Marshal() []byte {
 	var buf [len(protocol.MerkleArrayNode) + 2*crypto.DigestSize]byte
 	s := buf[:0]
