@@ -88,7 +88,7 @@ func TestMerkle(t *testing.T) {
 
 	if !testing.Short() {
 		for i := uint64(0); i < 10; i++ {
-			testMerkle(t, crypto.Subsetsum, i)
+			testMerkle(t, crypto.Sumhash, i)
 		}
 	}
 
@@ -243,7 +243,7 @@ func BenchmarkMerkleCommit(b *testing.B) {
 
 			b.Run(fmt.Sprintf("Item%d/Count%d", sz, cnt), func(b *testing.B) {
 				for i := 0; i < b.N; i++ {
-					tree, err := Build(a, crypto.HashFactory{HashType: crypto.Subsetsum})
+					tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha512_256})
 					if err != nil {
 						b.Error(err)
 					}

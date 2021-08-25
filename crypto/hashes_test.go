@@ -32,7 +32,7 @@ func TestHashFactoryCreatingNewHashes(t *testing.T) {
 	a.NotNil(h)
 	a.Equal(32, h.Size())
 
-	hfactory = HashFactory{HashType: Subsetsum}
+	hfactory = HashFactory{HashType: Sumhash}
 	h, err = hfactory.NewHash()
 	a.NoError(err)
 	a.NotNil(h)

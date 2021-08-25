@@ -31,7 +31,13 @@ type HashType uint64
 // types of hashes
 const (
 	Sha512_256 HashType = iota
-	Subsetsum
+	Sumhash
+)
+
+//size of each hash
+const (
+	Sha512_256Size    = 32
+	SumhashDigestSize = 112
 )
 
 // HashFactory is responsible for generating new hashes accordingly to the type it stores.
@@ -47,7 +53,7 @@ func (h HashFactory) NewHash() (hash.Hash, error) {
 	switch h.HashType {
 	case Sha512_256:
 		return sha512.New512_256(), nil
-	case Subsetsum:
+	case Sumhash:
 		C := 4
 		N := 14
 		shk := sha3.NewShake256()
