@@ -43,12 +43,12 @@ func (pc PartCommit) Length() uint64 {
 	return uint64(len(pc.participants))
 }
 
-func (pc PartCommit) GetHash(pos uint64) (crypto.Digest, error) {
+func (pc PartCommit) Marshal(pos uint64) ([]byte, error) {
 	if pos >= uint64(len(pc.participants)) {
-		return crypto.Digest{}, fmt.Errorf("pos %d >= len %d", pos, len(pc.participants))
+		return nil, fmt.Errorf("pos %d >= len %d", pos, len(pc.participants))
 	}
 
-	return crypto.HashObj(pc.participants[pos]), nil
+	return crypto.HashRep(pc.participants[pos]), nil
 }
 
 func TestBuildVerify(t *testing.T) {
@@ -107,7 +107,7 @@ func TestBuildVerify(t *testing.T) {
 		sigs = append(sigs, sig)
 	}
 
-	partcom, err := merklearray.Build(PartCommit{parts})
+	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: crypto.Sha512_256})
 	if err != nil {
 		t.Error(err)
 	}
@@ -137,7 +137,7 @@ func TestBuildVerify(t *testing.T) {
 
 	certenc := protocol.Encode(cert)
 	fmt.Printf("Cert size:\n")
-	fmt.Printf("  %6d elems sigproofs\n", len(cert.SigProofs))
+	fmt.Printf("  %6d elems sigproofs\n", len(cert.SigProofs.Path))
 	fmt.Printf("  %6d bytes sigproofs\n", len(protocol.EncodeReflect(cert.SigProofs)))
 	fmt.Printf("  %6d bytes partproofs\n", len(protocol.EncodeReflect(cert.PartProofs)))
 	fmt.Printf("  %6d bytes sigproof per reveal\n", len(protocol.EncodeReflect(cert.SigProofs))/len(cert.Reveals))
@@ -147,7 +147,7 @@ func TestBuildVerify(t *testing.T) {
 	fmt.Printf("    %6d bytes reveals[*] total\n", len(protocol.Encode(&someReveal)))
 	fmt.Printf("  %6d bytes total\n", len(certenc))
 
-	verif := MkVerifier(param, partcom.Root())
+	verif := MkVerifier(param, partcom.Root().To32Byte())
 	err = verif.Verify(cert)
 	if err != nil {
 		t.Error(err)
@@ -185,7 +185,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 	}
 
 	var cert *Cert
-	partcom, err := merklearray.Build(PartCommit{parts})
+	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: crypto.Sha512_256})
 	if err != nil {
 		b.Error(err)
 	}
@@ -213,7 +213,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 
 	b.Run("Verify", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			verif := MkVerifier(param, partcom.Root())
+			verif := MkVerifier(param, partcom.Root().To32Byte())
 			err = verif.Verify(cert)
 			if err != nil {
 				b.Error(err)

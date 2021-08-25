@@ -221,7 +221,7 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 			}
 
 			proofconcat := make([]byte, 0)
-			for _, proofelem := range proof {
+			for _, proofelem := range proof.Path {
 				proofconcat = append(proofconcat, proofelem[:]...)
 			}
 
