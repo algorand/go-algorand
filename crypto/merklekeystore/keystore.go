@@ -25,6 +25,9 @@ import (
 	"github.com/algorand/go-deadlock"
 )
 
+// DigestSize is the size of the digest used by the tree in use in the merklekeystore.
+const DigestSize = 112
+
 type (
 	// CommittablePublicKey is a key tied to a specific round and is committed by the merklekeystore.Signer.
 	CommittablePublicKey struct {
@@ -70,7 +73,7 @@ type (
 	Verifier struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-		Root [112]byte `codec:"r"`
+		Root [DigestSize]byte `codec:"r"`
 
 		// indicates that this verifier corresponds to a specific array of ephemeral keys.
 		// this is used to distinguish between an empty structure, and nothing to commit to.
@@ -153,7 +156,7 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 
 // GetVerifier can be used to store the commitment and verifier for this signer.
 func (s *Signer) GetVerifier() *Verifier {
-	root := [112]byte{}
+	root := [DigestSize]byte{}
 	copy(root[:], s.Tree.Root().ToSlice())
 	return &Verifier{
 		Root:         root,
