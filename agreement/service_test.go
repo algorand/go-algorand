@@ -71,6 +71,7 @@ func (f *testingClockFactory) Zero(label interface{}) timers.Clock {
 		c.zeroes = prev.zeroes
 	}
 	c.zeroes++
+	c.roundNum = r.Number
 	f.clocks[r] = c
 	return c
 }
@@ -130,6 +131,7 @@ type testingClock struct {
 	TA map[time.Duration]chan time.Time // TimeoutAt
 	preparedToFire bool
 	zeroes uint
+	roundNum basics.Round
 }
 
 func makeTestingClock() *testingClock {
@@ -139,8 +141,10 @@ func makeTestingClock() *testingClock {
 }
 
 func (c *testingClock) GetTimeout(d time.Duration) time.Time {
+	// Hack to ensure that timeouts for earlier rounds are considered
+	// to be earlier by clockManager.nextDeadlineCh() and such.
 	var zero time.Time
-	return zero.Add(d)
+	return zero.Add(time.Duration(c.roundNum) * time.Minute).Add(d)
 }
 
 func (c *testingClock) TimeoutAt(d time.Duration) <-chan time.Time {
