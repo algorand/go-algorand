@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/karalabe/hid"
 )
@@ -81,6 +82,13 @@ func (l *LedgerUSB) WritePackets(msg []byte) error {
 		cc, err := l.hiddev.Write(packet[:])
 		if err != nil {
 			return err
+		}
+		// on Windows:
+		// The usb library adds one extra byte to the input passed to the USB device
+		// so the written bytes are larger than what we've send
+		// https://github.com/karalabe/hid/blob/9c14560f9ee858c43f40b5cd01392b167aacf4e8/hid_enabled.go#L167
+		if runtime.GOOS == "windows" && cc > 0 {
+			cc = cc - 1
 		}
 		if cc != len(packet) {
 			return fmt.Errorf("WritePackets: short write: %d != %d", cc, len(packet))
