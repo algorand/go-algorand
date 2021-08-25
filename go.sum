@@ -14,6 +14,8 @@ github.com/algorand/websocket v1.4.2 h1:zMB7ukz+c7tcef8rVqmKQTv6KQtxXtCFuiAqKaE7
 github.com/algorand/websocket v1.4.2/go.mod h1:0nFSn+xppw/GZS9hgWPS3b8/4FcA3Pj7XQxm+wqHGx8=
 github.com/aws/aws-sdk-go v1.16.5 h1:NVxzZXIuwX828VcJrpNxxWjur1tlOBISdMdDdHIKHcc=
 github.com/aws/aws-sdk-go v1.16.5/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
+github.com/chrismcguire/gobberish v0.0.0-20150821175641-1d8adb509a0e h1:CHPYEbz71w8DqJ7DRIq+MXyCQsdibK08vdcQTY4ufas=
+github.com/chrismcguire/gobberish v0.0.0-20150821175641-1d8adb509a0e/go.mod h1:6Xhs0ZlsRjXLIiSMLKafbZxML/j30pg9Z1priLuha5s=
 github.com/cpuguy83/go-md2man v1.0.8 h1:DwoNytLphI8hzS2Af4D0dfaEaiSq2bN05mEm4R6vf8M=
 github.com/cpuguy83/go-md2man v1.0.8/go.mod h1:N6JayAiVKtlHSnuTCeuLSQVs75hb8q+dYQLjr7cDsKY=
 github.com/cyberdelia/templates v0.0.0-20191230040416-20a325f050d4 h1:Fphwr1XDjkTR/KFbrrkLfY6D2CEOlHqFGomQQrxcHFs=

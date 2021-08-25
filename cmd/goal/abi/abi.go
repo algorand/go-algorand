@@ -1,3 +1,19 @@
+// Copyright (C) 2019-2021 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package abi
 
 import (
@@ -22,20 +38,31 @@ import (
             | (T1, ..., Tn)
 */
 
+// BaseType is an type-alias for uint32. A BaseType value indicates the type of an ABI value.
 type BaseType uint32
 
 const (
+	// Uint is the index (0) for `Uint` type in ABI encoding.
 	Uint BaseType = iota
+	// Byte is the index (1) for `Byte` type in ABI encoding.
 	Byte
+	// Ufixed is the index (2) for `UFixed` type in ABI encoding.
 	Ufixed
+	// Bool is the index (3) for `Bool` type in ABI encoding.
 	Bool
+	// ArrayStatic is the index (4) for static length array (<type>[length]) type in ABI encoding.
 	ArrayStatic
+	// Address is the index (5) for `Address` type in ABI encoding (an type alias of Byte[32]).
 	Address
+	// ArrayDynamic is the index (6) for dynamic length array (<type>[]) type in ABI encoding.
 	ArrayDynamic
+	// String is the index (7) for `String` type in ABI encoding (an type alias of Byte[]).
 	String
+	// Tuple is the index (8) for tuple `(<type 0>, ..., <type k>)` in ABI encoding.
 	Tuple
 )
 
+// Type is the struct that stores information about an ABI value's type.
 type Type struct {
 	typeFromEnum BaseType
 	childTypes   []Type
@@ -55,7 +82,7 @@ type Type struct {
 	staticLength uint16
 }
 
-// String serialization
+// String serialize an ABI Type to a string in ABI encoding.
 func (t Type) String() string {
 	switch t.typeFromEnum {
 	case Uint:
@@ -85,7 +112,7 @@ func (t Type) String() string {
 	}
 }
 
-// TypeFromString de-serialization
+// TypeFromString de-serialize ABI type from a string following ABI encoding.
 func TypeFromString(str string) (Type, error) {
 	switch {
 	case strings.HasSuffix(str, "[]"):
@@ -172,8 +199,11 @@ func TypeFromString(str string) (Type, error) {
 	}
 }
 
+// segmentIndex keeps track of the start and end of a segment in a string.
 type segmentIndex struct{ left, right int }
 
+// parseTupleContent splits an ABI encoded string for tuple type into multiple sub-strings.
+// Each sub-string represents a content type of the tuple type.
 func parseTupleContent(str string) ([]string, error) {
 	// argument str is the content between parentheses of tuple, i.e.
 	// (...... str ......)
@@ -204,7 +234,7 @@ func parseTupleContent(str string) ([]string, error) {
 
 	// kudos to Jason Paulos
 	if strings.Contains(str, ",,") {
-		return []string{}, fmt.Errorf("no consequtive commas")
+		return []string{}, fmt.Errorf("no consecutive commas")
 	}
 
 	// take out tuple-formed type str in tuple argument
@@ -235,6 +265,8 @@ func parseTupleContent(str string) ([]string, error) {
 	return segments, nil
 }
 
+// MakeUintType makes `Uint` ABI type by taking a type size argument.
+// The range of type size is [8, 512] and type size % 8 == 0.
 func MakeUintType(typeSize uint16) (Type, error) {
 	if typeSize%8 != 0 || typeSize < 8 || typeSize > 512 {
 		return Type{}, fmt.Errorf("type uint size mod 8 = 0, range [8, 512], error typesize: %d", typeSize)
@@ -245,12 +277,16 @@ func MakeUintType(typeSize uint16) (Type, error) {
 	}, nil
 }
 
+// MakeByteType makes `Byte` ABI type.
 func MakeByteType() Type {
 	return Type{
 		typeFromEnum: Byte,
 	}
 }
 
+// MakeUFixedType makes `UFixed` ABI type by taking type size and type precision as arguments.
+// The range of type size is [8, 512] and type size % 8 == 0.
+// The range of type precision is [1, 160].
 func MakeUFixedType(typeSize uint16, typePrecision uint16) (Type, error) {
 	if typeSize%8 != 0 || typeSize < 8 || typeSize > 512 {
 		return Type{}, fmt.Errorf("type uint size mod 8 = 0, range [8, 512], error typesize: %d", typeSize)
@@ -265,12 +301,15 @@ func MakeUFixedType(typeSize uint16, typePrecision uint16) (Type, error) {
 	}, nil
 }
 
+// MakeBoolType makes `Bool` ABI type.
 func MakeBoolType() Type {
 	return Type{
 		typeFromEnum: Bool,
 	}
 }
 
+// MakeStaticArrayType makes static length array ABI type by taking
+// array element type and array length as arguments.
 func MakeStaticArrayType(argumentType Type, arrayLength uint16) Type {
 	return Type{
 		typeFromEnum: ArrayStatic,
@@ -279,12 +318,14 @@ func MakeStaticArrayType(argumentType Type, arrayLength uint16) Type {
 	}
 }
 
+// MakeAddressType makes `Address` ABI type.
 func MakeAddressType() Type {
 	return Type{
 		typeFromEnum: Address,
 	}
 }
 
+// MakeDynamicArrayType makes dynamic length array by taking array element type as argument.
 func MakeDynamicArrayType(argumentType Type) Type {
 	return Type{
 		typeFromEnum: ArrayDynamic,
@@ -292,12 +333,14 @@ func MakeDynamicArrayType(argumentType Type) Type {
 	}
 }
 
+// MakeStringType makes `String` ABI type.
 func MakeStringType() Type {
 	return Type{
 		typeFromEnum: String,
 	}
 }
 
+// MakeTupleType makes tuple ABI type by taking an array of tuple element types as argument.
 func MakeTupleType(argumentTypes []Type) Type {
 	return Type{
 		typeFromEnum: Tuple,
@@ -306,6 +349,7 @@ func MakeTupleType(argumentTypes []Type) Type {
 	}
 }
 
+// Equal method decides the equality of two types: t == t0.
 func (t Type) Equal(t0 Type) bool {
 	// assume t and t0 are well-formed
 	switch t.typeFromEnum {
@@ -356,6 +400,7 @@ func (t Type) Equal(t0 Type) bool {
 	}
 }
 
+// IsDynamic method decides if an ABI type is dynamic or static.
 func (t Type) IsDynamic() bool {
 	switch t.typeFromEnum {
 	case ArrayStatic:
@@ -374,6 +419,7 @@ func (t Type) IsDynamic() bool {
 	}
 }
 
+// ByteLen method calculates the byte length of a static ABI type.
 func (t Type) ByteLen() (int, error) {
 	if t.IsDynamic() {
 		return -1, fmt.Errorf("dynamic type")
@@ -409,11 +455,14 @@ func (t Type) ByteLen() (int, error) {
 	}
 }
 
+// Value struct is the ABI Value, holding ABI Type information and the ABI value representation.
 type Value struct {
 	valueType Type
 	value     interface{}
 }
 
+// arrayToTuple casts an array-like ABI Value into an ABI Value of Tuple type.
+// This is used in both ABI Encoding and Decoding.
 func (v Value) arrayToTuple() (Value, error) {
 	var childT []Type
 	var valueArr []Value
@@ -454,7 +503,7 @@ func (v Value) arrayToTuple() (Value, error) {
 		}
 		valueArr = arrayElems
 	default:
-		return Value{}, fmt.Errorf("value type not supported to convertion to tuple")
+		return Value{}, fmt.Errorf("value type not supported to conversion to tuple")
 	}
 
 	return Value{
@@ -463,7 +512,7 @@ func (v Value) arrayToTuple() (Value, error) {
 	}, nil
 }
 
-// Encode serialization
+// Encode method serialize the ABI value into a byte string of ABI encoding rule.
 func (v Value) Encode() ([]byte, error) {
 	switch v.valueType.typeFromEnum {
 	case Uint:
@@ -495,9 +544,8 @@ func (v Value) Encode() ([]byte, error) {
 		}
 		if boolValue {
 			return []byte{0x80}, nil
-		} else {
-			return []byte{0x00}, nil
 		}
+		return []byte{0x00}, nil
 	case Byte:
 		bytesValue, err := GetByte(v)
 		if err != nil {
@@ -531,6 +579,9 @@ func (v Value) Encode() ([]byte, error) {
 	}
 }
 
+// findBoolLR takes a list of type, the current index, and search direction (+1/-1).
+// Assume that the current index on the list of type is an ABI bool type.
+// It returns the difference between the current index and the index of the furthest consecutive Bool type.
 func findBoolLR(typeList []Type, index int, delta int) int {
 	until := 0
 	for true {
@@ -551,6 +602,7 @@ func findBoolLR(typeList []Type, index int, delta int) int {
 	return until
 }
 
+// compressMultipleBool compress consecutive bool values into a byte in ABI tuple/array value.
 func compressMultipleBool(valueList []Value) (uint8, error) {
 	var res uint8 = 0
 	if len(valueList) > 8 {
@@ -571,6 +623,7 @@ func compressMultipleBool(valueList []Value) (uint8, error) {
 	return res, nil
 }
 
+// tupleEncoding encodes an ABI value of tuple type into an ABI encoded byte string.
 func tupleEncoding(v Value) ([]byte, error) {
 	if v.valueType.typeFromEnum != Tuple {
 		return []byte{}, fmt.Errorf("tupe not supported in tupleEncoding")
@@ -644,7 +697,8 @@ func tupleEncoding(v Value) ([]byte, error) {
 	return append(head, tail...), nil
 }
 
-// Decode de-serialization
+// Decode takes an ABI encoded byte string and a target ABI type,
+// and decodes the bytes into an ABI Value.
 func Decode(valueByte []byte, valueType Type) (Value, error) {
 	switch valueType.typeFromEnum {
 	case Uint:
@@ -729,6 +783,8 @@ func Decode(valueByte []byte, valueType Type) (Value, error) {
 	}
 }
 
+// tupleDecoding takes a byte string and an ABI tuple type,
+// and decodes the bytes into an ABI tuple value.
 func tupleDecoding(valueBytes []byte, valueType Type) (Value, error) {
 	dynamicSegments, valuePartition := make([]segmentIndex, 0), make([][]byte, 0)
 	iterIndex := 0
@@ -769,7 +825,7 @@ func tupleDecoding(valueBytes []byte, valueType Type) (Value, error) {
 						}
 					}
 					i += after
-					iterIndex += 1
+					iterIndex++
 				}
 			} else {
 				// not bool ...
@@ -833,26 +889,32 @@ func tupleDecoding(valueBytes []byte, valueType Type) (Value, error) {
 	}, nil
 }
 
+// MakeUint8 takes a go `uint8` and gives an ABI Value of ABI type `uint8`.
 func MakeUint8(value uint8) (Value, error) {
 	bigInt := big.NewInt(int64(value))
 	return MakeUint(bigInt, 8)
 }
 
+// MakeUint16 takes a go `uint16` and gives an ABI Value of ABI type `uint16`.
 func MakeUint16(value uint16) (Value, error) {
 	bigInt := big.NewInt(int64(value))
 	return MakeUint(bigInt, 16)
 }
 
+// MakeUint32 takes a go `uint32` and gives an ABI Value of ABI type `uint32`.
 func MakeUint32(value uint32) (Value, error) {
 	bigInt := big.NewInt(int64(value))
 	return MakeUint(bigInt, 32)
 }
 
+// MakeUint64 takes a go `uint64` and gives an ABI Value of ABI type `uint64`.
 func MakeUint64(value uint64) (Value, error) {
 	bigInt := big.NewInt(int64(0)).SetUint64(value)
 	return MakeUint(bigInt, 64)
 }
 
+// MakeUint takes a big integer representation and a type size,
+// and returns an ABI Value of ABI Uint<size> type.
 func MakeUint(value *big.Int, size uint16) (Value, error) {
 	typeUint, err := MakeUintType(size)
 	if err != nil {
@@ -868,6 +930,8 @@ func MakeUint(value *big.Int, size uint16) (Value, error) {
 	}, nil
 }
 
+// MakeUfixed takes a big rational number representation, a type size, and a type precision,
+// and returns an ABI Value of ABI UFixed<size>x<precision>
 func MakeUfixed(value *big.Rat, size uint16, precision uint16) (Value, error) {
 	ufixedValueType, err := MakeUFixedType(size, precision)
 	if err != nil {
@@ -891,6 +955,7 @@ func MakeUfixed(value *big.Rat, size uint16, precision uint16) (Value, error) {
 	}, nil
 }
 
+// MakeString takes a string and returns an ABI String type Value.
 func MakeString(value string) Value {
 	return Value{
 		valueType: MakeStringType(),
@@ -898,6 +963,7 @@ func MakeString(value string) Value {
 	}
 }
 
+// MakeByte takes a byte and returns an ABI Byte type value.
 func MakeByte(value byte) Value {
 	return Value{
 		valueType: MakeByteType(),
@@ -905,6 +971,7 @@ func MakeByte(value byte) Value {
 	}
 }
 
+// MakeAddress takes an [32]byte array and returns an ABI Address type value.
 func MakeAddress(value [32]byte) Value {
 	return Value{
 		valueType: MakeAddressType(),
@@ -912,6 +979,8 @@ func MakeAddress(value [32]byte) Value {
 	}
 }
 
+// MakeDynamicArray takes an array of ABI value of elemType,
+// and returns an ABI dynamic length array value.
 func MakeDynamicArray(values []Value, elemType Type) (Value, error) {
 	for i := 0; i < len(values); i++ {
 		if !values[i].valueType.Equal(elemType) {
@@ -925,6 +994,8 @@ func MakeDynamicArray(values []Value, elemType Type) (Value, error) {
 	}, nil
 }
 
+// MakeStaticArray takes an array of ABI value of elemType,
+// and returns an ABI static length array value.
 func MakeStaticArray(values []Value, elemType Type) (Value, error) {
 	for i := 0; i < len(values); i++ {
 		if !values[i].valueType.Equal(elemType) {
@@ -938,6 +1009,8 @@ func MakeStaticArray(values []Value, elemType Type) (Value, error) {
 	}, nil
 }
 
+// MakeTuple takes an array of ABI values and an array of ABI types,
+// and returns an ABI tuple value.
 func MakeTuple(values []Value, tupleType []Type) (Value, error) {
 	if len(values) != len(tupleType) {
 		return Value{}, fmt.Errorf("tuple make: tuple element number unmatch with tuple type number")
@@ -957,6 +1030,7 @@ func MakeTuple(values []Value, tupleType []Type) (Value, error) {
 	}, nil
 }
 
+// MakeBool takes a boolean value and returns an ABI bool value.
 func MakeBool(value bool) Value {
 	return Value{
 		valueType: MakeBoolType(),
@@ -964,6 +1038,7 @@ func MakeBool(value bool) Value {
 	}
 }
 
+// GetUint8 tries to retreve an uint8 from an ABI Value.
 func GetUint8(value Value) (uint8, error) {
 	if value.valueType.typeFromEnum != Uint || value.valueType.typeSize > 8 {
 		return 0, fmt.Errorf("value type unmatch or size too large")
@@ -975,6 +1050,7 @@ func GetUint8(value Value) (uint8, error) {
 	return uint8(bigIntForm.Uint64()), nil
 }
 
+// GetUint16 tries to retrieve an uint16 from an ABI Value.
 func GetUint16(value Value) (uint16, error) {
 	if value.valueType.typeFromEnum != Uint || value.valueType.typeSize > 16 {
 		return 0, fmt.Errorf("value type unmatch or size too large")
@@ -986,6 +1062,7 @@ func GetUint16(value Value) (uint16, error) {
 	return uint16(bigIntForm.Uint64()), nil
 }
 
+// GetUint32 tries to retrieve an uint32 from an ABI Value.
 func GetUint32(value Value) (uint32, error) {
 	if value.valueType.typeFromEnum != Uint || value.valueType.typeSize > 32 {
 		return 0, fmt.Errorf("value type unmatch or size too large")
@@ -997,6 +1074,7 @@ func GetUint32(value Value) (uint32, error) {
 	return uint32(bigIntForm.Uint64()), nil
 }
 
+// GetUint64 tries to retrieve an uint64 from an ABI Value.
 func GetUint64(value Value) (uint64, error) {
 	if value.valueType.typeFromEnum != Uint || value.valueType.typeSize > 64 {
 		return 0, fmt.Errorf("value type unmatch or size too large")
@@ -1008,6 +1086,7 @@ func GetUint64(value Value) (uint64, error) {
 	return bigIntForm.Uint64(), nil
 }
 
+// GetUint tries to retrieve an big uint from an ABI Value.
 func GetUint(value Value) (*big.Int, error) {
 	if value.valueType.typeFromEnum != Uint {
 		return nil, fmt.Errorf("value type unmatch")
@@ -1020,6 +1099,7 @@ func GetUint(value Value) (*big.Int, error) {
 	return bigIntForm, nil
 }
 
+// GetUfixed tries to retrieve an big rational number from an ABI Value.
 func GetUfixed(value Value) (*big.Rat, error) {
 	if value.valueType.typeFromEnum != Ufixed {
 		return nil, fmt.Errorf("value type unmatch, should be ufixed")
@@ -1040,6 +1120,7 @@ func GetUfixed(value Value) (*big.Rat, error) {
 	return ufixedForm, nil
 }
 
+// GetString tries to retrieve a string from ABI Value.
 func GetString(value Value) (string, error) {
 	if value.valueType.typeFromEnum != String {
 		return "", fmt.Errorf("value type unmatch, should be ufixed")
@@ -1048,6 +1129,7 @@ func GetString(value Value) (string, error) {
 	return stringForm, nil
 }
 
+// GetByte tries to retrieve a byte from ABI Value.
 func GetByte(value Value) (byte, error) {
 	if value.valueType.typeFromEnum != Byte {
 		return byte(0), fmt.Errorf("value type unmatch, should be bytes")
@@ -1056,6 +1138,7 @@ func GetByte(value Value) (byte, error) {
 	return bytesForm, nil
 }
 
+// GetAddress tries to retrieve a [32]byte array from ABI Value.
 func GetAddress(value Value) ([32]byte, error) {
 	if value.valueType.typeFromEnum != Address {
 		return [32]byte{}, fmt.Errorf("value type unmatch, should be address")
@@ -1064,6 +1147,7 @@ func GetAddress(value Value) ([32]byte, error) {
 	return addressForm, nil
 }
 
+// GetDynamicArrayByIndex takes an index and tries to retrieve the element ABI Value.
 func GetDynamicArrayByIndex(value Value, index uint16) (Value, error) {
 	if value.valueType.typeFromEnum != ArrayDynamic {
 		return Value{}, fmt.Errorf("value type unmatch, should be dynamic array")
@@ -1075,6 +1159,7 @@ func GetDynamicArrayByIndex(value Value, index uint16) (Value, error) {
 	return elements[index], nil
 }
 
+// GetStaticArrayByIndex takes an index and tries to retrieve the element ABI Value.
 func GetStaticArrayByIndex(value Value, index uint16) (Value, error) {
 	if value.valueType.typeFromEnum != ArrayStatic {
 		return Value{}, fmt.Errorf("value type unmatch, should be static array")
@@ -1086,6 +1171,7 @@ func GetStaticArrayByIndex(value Value, index uint16) (Value, error) {
 	return elements[index], nil
 }
 
+// GetTupleByIndex takes an index and tries to retrieve the eleemnt ABI Value.
 func GetTupleByIndex(value Value, index uint16) (Value, error) {
 	if value.valueType.typeFromEnum != Tuple {
 		return Value{}, fmt.Errorf("value type unmatch, should be tuple")
@@ -1097,6 +1183,7 @@ func GetTupleByIndex(value Value, index uint16) (Value, error) {
 	return elements[index], nil
 }
 
+// GetBool tries to retrieve a boolean value from the ABI Value.
 func GetBool(value Value) (bool, error) {
 	if value.valueType.typeFromEnum != Bool {
 		return false, fmt.Errorf("value type unmatch, should be bool")
