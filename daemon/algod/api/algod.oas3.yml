@@ -346,10 +346,6 @@
           "application/json": {
             "schema": {
               "properties": {
-                "cost": {
-                  "description": "Cost is the execution call of a stateful evaluation of an app call.",
-                  "type": "integer"
-                },
                 "error": {
                   "type": "string"
                 },
@@ -1250,6 +1246,10 @@
               "$ref": "#/components/schemas/DryrunState"
             },
             "type": "array"
+          },
+          "cost": {
+            "description": "Execution cost of app call transaction",
+            "type": "integer"
           },
           "disassembly": {
             "description": "Disassembled program line by line.",
@@ -2929,10 +2929,6 @@
               "application/json": {
                 "schema": {
                   "properties": {
-                    "cost": {
-                      "description": "Cost is the execution call of a stateful evaluation of an app call.",
-                      "type": "integer"
-                    },
                     "error": {
                       "type": "string"
                     },

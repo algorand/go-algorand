@@ -299,6 +299,9 @@ type DryrunTxnResult struct {
 	AppCallMessages *[]string      `json:"app-call-messages,omitempty"`
 	AppCallTrace    *[]DryrunState `json:"app-call-trace,omitempty"`
 
+	// Execution cost of app call transaction
+	Cost *uint64 `json:"cost,omitempty"`
+
 	// Disassembled program line by line.
 	Disassembly []string `json:"disassembly"`
 
@@ -493,10 +496,7 @@ type CompileResponse struct {
 
 // DryrunResponse defines model for DryrunResponse.
 type DryrunResponse struct {
-
-	// Cost is the execution call of a stateful evaluation of an app call.
-	Cost  *uint64 `json:"cost,omitempty"`
-	Error string  `json:"error"`
+	Error string `json:"error"`
 
 	// Protocol version is the protocol version Dryrun was operated under.
 	ProtocolVersion string            `json:"protocol-version"`

@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func unB64(x string) []byte {
@@ -1204,97 +1205,106 @@ return
 }
 
 func TestDryrunCost(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
-	ops, err := logic.AssembleString(`
-#pragma version 5
-byte "H"
-keccak256
-keccak256
-keccak256
-keccak256
-keccak256
-keccak256
-keccak256
-keccak256
-keccak256
-keccak256
-keccak256
-keccak256
-pop
-int 1
-`)
 
-	require.NoError(t, err)
-	approval := ops.Program
-	ops, err = logic.AssembleString("int 1")
-	clst := ops.Program
-	ops, err = logic.AssembleString("#pragma version 5 \nint 1 \nint 2 \npop")
-	approv := ops.Program
-	var appIdx basics.AppIndex = 1
-	creator := randomAddress()
-	sender := randomAddress()
-	dr := DryrunRequest{
-		Txns: []transactions.SignedTxn{
-			{
-				Txn: transactions.Transaction{
-					Header: transactions.Header{Sender: sender},
-					Type:   protocol.ApplicationCallTx,
-					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-						ApplicationID: appIdx,
-						OnCompletion:  transactions.OptInOC,
-					},
-				},
-			},
-			{
-				Txn: transactions.Transaction{
-					Header: transactions.Header{Sender: sender},
-					Type:   protocol.ApplicationCallTx,
-					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-						ApplicationID: appIdx + 1,
-						OnCompletion:  transactions.OptInOC,
-					},
-				},
-			},
-		},
-		Apps: []generated.Application{
-			{
-				Id: uint64(appIdx),
-				Params: generated.ApplicationParams{
-					Creator:           creator.String(),
-					ApprovalProgram:   approval,
-					ClearStateProgram: clst,
-					LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
-				},
-			},
-			{
-				Id: uint64(appIdx + 1),
-				Params: generated.ApplicationParams{
-					Creator:           creator.String(),
-					ApprovalProgram:   approv,
-					ClearStateProgram: clst,
-					LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
-				},
-			},
-		},
-		Accounts: []generated.Account{
-			{
-				Address: sender.String(),
-				Status:  "Online",
-				Amount:  10000000,
-			},
-		},
+	var tests = []struct {
+		msg       string
+		numHashes int
+	}{
+		{"REJECT", 12},
+		{"PASS", 5},
 	}
-	dr.ProtocolVersion = string(dryrunProtoVersion)
-	var response generated.DryrunResponse
-	doDryrunRequest(&dr, &response)
-	//dryrun call will execute but fail because the first program exceeds max possible cost
-	messages := *response.Txns[0].AppCallMessages
-	assert.GreaterOrEqual(t, len(messages), 1)
-	assert.Equal(t, "REJECT", messages[len(messages)-1])
-	require.NotNil(t, response.Cost)
-	require.Equal(t, uint64(1566), *response.Cost)
-	require.NoError(t, err)
-	if t.Failed() {
-		logResponse(t, &response)
+
+	for _, test := range tests {
+		t.Run(test.msg, func(t *testing.T) {
+
+			ops, err := logic.AssembleString("#pragma version 5\nbyte 0x41\n" + strings.Repeat("keccak256\n", test.numHashes) + "pop\nint 1\n")
+			require.NoError(t, err)
+			approval := ops.Program
+			approvalCost := 3 + test.numHashes*130
+
+			ops, err = logic.AssembleString("int 1")
+			require.NoError(t, err)
+			clst := ops.Program
+
+			ops, err = logic.AssembleString("#pragma version 5 \nint 1 \nint 2 \npop")
+			require.NoError(t, err)
+			approv := ops.Program
+			approvCost := 3
+
+			var appIdx basics.AppIndex = 1
+			creator := randomAddress()
+			sender := randomAddress()
+			dr := DryrunRequest{
+				Txns: []transactions.SignedTxn{
+					{
+						Txn: transactions.Transaction{
+							Header: transactions.Header{Sender: sender},
+							Type:   protocol.ApplicationCallTx,
+							ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+								ApplicationID: appIdx,
+								OnCompletion:  transactions.OptInOC,
+							},
+						},
+					},
+					{
+						Txn: transactions.Transaction{
+							Header: transactions.Header{Sender: sender},
+							Type:   protocol.ApplicationCallTx,
+							ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+								ApplicationID: appIdx + 1,
+								OnCompletion:  transactions.OptInOC,
+							},
+						},
+					},
+				},
+				Apps: []generated.Application{
+					{
+						Id: uint64(appIdx),
+						Params: generated.ApplicationParams{
+							Creator:           creator.String(),
+							ApprovalProgram:   approval,
+							ClearStateProgram: clst,
+							LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
+						},
+					},
+					{
+						Id: uint64(appIdx + 1),
+						Params: generated.ApplicationParams{
+							Creator:           creator.String(),
+							ApprovalProgram:   approv,
+							ClearStateProgram: clst,
+							LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
+						},
+					},
+				},
+				Accounts: []generated.Account{
+					{
+						Address: sender.String(),
+						Status:  "Online",
+						Amount:  10000000,
+					},
+				},
+			}
+			dr.ProtocolVersion = string(dryrunProtoVersion)
+			var response generated.DryrunResponse
+			doDryrunRequest(&dr, &response)
+			require.Empty(t, response.Error)
+			require.Equal(t, 2, len(response.Txns))
+
+			//dryrun call will execute but fail because the first program exceeds max possible cost
+			messages := *response.Txns[0].AppCallMessages
+			require.GreaterOrEqual(t, len(messages), 1)
+			require.Equal(t, test.msg, messages[len(messages)-1])
+			require.NotNil(t, *response.Txns[0].Cost)
+			require.Equal(t, uint64(approvalCost), *response.Txns[0].Cost)
+
+			messages = *response.Txns[1].AppCallMessages
+			require.GreaterOrEqual(t, len(messages), 1)
+			require.Equal(t, "PASS", messages[len(messages)-1])
+			require.NotNil(t, *response.Txns[1].Cost)
+			require.Equal(t, uint64(approvCost), *response.Txns[1].Cost)
+		})
 	}
 }

@@ -1750,6 +1750,10 @@
           "items": {
             "$ref": "#/definitions/LogItem"
           }
+        },
+        "cost": {
+          "description": "Execution cost of app call transaction",
+          "type": "integer"
         }
       }
     },
@@ -2509,10 +2513,6 @@
           "protocol-version": {
             "description": "Protocol version is the protocol version Dryrun was operated under.",
             "type": "string"
-          },
-          "cost": {
-            "description": "Cost is the execution call of a stateful evaluation of an app call.",
-            "type": "integer"
           }
         }
       }
