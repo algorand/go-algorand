@@ -216,6 +216,21 @@ func TestVerifyWithNoElements(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestEmptyTree(t *testing.T) {
+	a := require.New(t)
+
+	arr := make(TestArray, 0)
+	tree, err := Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+	a.Len(tree.Levels, 0)
+
+	arr = make(TestArray, 1)
+	tree, err = Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+	a.Len(tree.Levels, 1)
+	a.Equal(tree.Root().ToSlice(), tree.Levels[0][0].ToSlice())
+}
+
 func BenchmarkMerkleCommit(b *testing.B) {
 	for sz := 10; sz <= 100000; sz *= 100 {
 		msg := make(TestBuf, sz)
