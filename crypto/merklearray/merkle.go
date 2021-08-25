@@ -196,24 +196,14 @@ func Verify(root TreeDigest, elems map[uint64]Digest, proof *Proof) error {
 		if proof == nil || len(proof.Path) != 0 {
 			return fmt.Errorf("non-empty proof for empty set of elements")
 		}
-
 		return nil
 	}
 
-	pl := make(partialLayer, 0, len(elems))
-	for pos, elem := range elems {
-		pl = append(pl, layerItem{
-			pos:  pos,
-			hash: elem.ToSlice(),
-		})
-	}
-
-	sort.Slice(pl, func(i, j int) bool { return pl[i].pos < pl[j].pos })
-
-	return verify(root, proof, pl)
+	pl := buildPartialLayer(elems)
+	return verifyPath(root, proof, pl)
 }
 
-func verify(root TreeDigest, proof *Proof, pl partialLayer) error {
+func verifyPath(root TreeDigest, proof *Proof, pl partialLayer) error {
 	if proof == nil {
 		return inspectRoot(root, pl)
 	}
@@ -239,6 +229,19 @@ func verify(root TreeDigest, proof *Proof, pl partialLayer) error {
 	}
 
 	return inspectRoot(root, pl)
+}
+
+func buildPartialLayer(elems map[uint64]Digest) partialLayer {
+	pl := make(partialLayer, 0, len(elems))
+	for pos, elem := range elems {
+		pl = append(pl, layerItem{
+			pos:  pos,
+			hash: elem.ToSlice(),
+		})
+	}
+
+	sort.Slice(pl, func(i, j int) bool { return pl[i].pos < pl[j].pos })
+	return pl
 }
 
 func inspectRoot(root TreeDigest, pl partialLayer) error {
