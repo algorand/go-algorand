@@ -91,6 +91,30 @@ import (
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
 //
+// GenericDigest
+//       |-----> MarshalMsg
+//       |-----> CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> Msgsize
+//       |-----> MsgIsZero
+//
+// HashFactory
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
+//
+// HashType
+//     |-----> MarshalMsg
+//     |-----> CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> Msgsize
+//     |-----> MsgIsZero
+//
 // MasterDerivationKey
 //          |-----> (*) MarshalMsg
 //          |-----> (*) CanMarshalMsg
@@ -896,6 +920,212 @@ func (z *DilithiumVerifier) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *DilithiumVerifier) MsgIsZero() bool {
 	return ((*z).PublicKey == (DPublicKey{}))
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z GenericDigest) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, []byte(z))
+	return
+}
+
+func (_ GenericDigest) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(GenericDigest)
+	if !ok {
+		_, ok = (z).(*GenericDigest)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *GenericDigest) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 []byte
+		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = GenericDigest(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (_ *GenericDigest) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*GenericDigest)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z GenericDigest) Msgsize() (s int) {
+	s = msgp.BytesPrefixSize + len([]byte(z))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z GenericDigest) MsgIsZero() bool {
+	return len(z) == 0
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *HashFactory) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(1)
+	var zb0001Mask uint8 /* 2 bits */
+	if (*z).HashType == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "t"
+			o = append(o, 0xa1, 0x74)
+			o = msgp.AppendUint64(o, uint64((*z).HashType))
+		}
+	}
+	return
+}
+
+func (_ *HashFactory) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*HashFactory)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *HashFactory) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			{
+				var zb0003 uint64
+				zb0003, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "HashType")
+					return
+				}
+				(*z).HashType = HashType(zb0003)
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = HashFactory{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "t":
+				{
+					var zb0004 uint64
+					zb0004, bts, err = msgp.ReadUint64Bytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "HashType")
+						return
+					}
+					(*z).HashType = HashType(zb0004)
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *HashFactory) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*HashFactory)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *HashFactory) Msgsize() (s int) {
+	s = 1 + 2 + msgp.Uint64Size
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *HashFactory) MsgIsZero() bool {
+	return ((*z).HashType == 0)
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z HashType) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendUint64(o, uint64(z))
+	return
+}
+
+func (_ HashType) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(HashType)
+	if !ok {
+		_, ok = (z).(*HashType)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *HashType) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 uint64
+		zb0001, bts, err = msgp.ReadUint64Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = HashType(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (_ *HashType) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*HashType)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z HashType) Msgsize() (s int) {
+	s = msgp.Uint64Size
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z HashType) MsgIsZero() bool {
+	return z == 0
 }
 
 // MarshalMsg implements msgp.Marshaler

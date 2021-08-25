@@ -501,7 +501,7 @@ func (block Block) paysetCommit(t config.PaysetCommitType) (crypto.Digest, error
 		if err != nil {
 			return crypto.Digest{}, err
 		}
-		return tree.Root(), nil
+		return tree.Root().To32Byte(), nil
 	default:
 		return crypto.Digest{}, fmt.Errorf("unsupported payset commit type %d", t)
 	}

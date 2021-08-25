@@ -14,12 +14,19 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package merklearray
+package crypto
 
-// An Array represents a dense array of leaf elements that are
-// combined into a Merkle tree.  The Marshal method returns a byte slice that represents the object
-// and the Tree will use to hash the leaves.
-type Array interface {
-	Length() uint64
-	Marshal(pos uint64) ([]byte, error)
+// GenericDigest is a digest that implements CustumSizeDigest, and can be used as hash output.
+//msgp:allocbound GenericDigest
+type GenericDigest []byte
+
+// To32Byte is used to change the data into crypto.Digest.
+func (d GenericDigest) To32Byte() [32]byte {
+	var cpy [32]byte
+	copy(cpy[:], d)
+	return cpy
+
 }
+
+// ToSlice is used inside the Tree itself when interacting with TreeDigest
+func (d GenericDigest) ToSlice() []byte { return d }
