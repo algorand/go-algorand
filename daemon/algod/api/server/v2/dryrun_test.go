@@ -1293,18 +1293,33 @@ func TestDryrunCost(t *testing.T) {
 			require.Empty(t, response.Error)
 			require.Equal(t, 2, len(response.Txns))
 
-			//dryrun call will execute but fail because the first program exceeds max possible cost
 			messages := *response.Txns[0].AppCallMessages
 			require.GreaterOrEqual(t, len(messages), 1)
-			require.Equal(t, test.msg, messages[len(messages)-1])
 			require.NotNil(t, *response.Txns[0].Cost)
 			require.Equal(t, uint64(approvalCost), *response.Txns[0].Cost)
+			statusMatches := false
+			costExceedFound := false
+			for _, msg := range messages {
+				if strings.Contains(msg, "cost budget exceeded") {
+					costExceedFound = true
+				}
+				if msg == test.msg {
+					statusMatches = true
+				}
+			}
+			if test.msg == "REJECT" {
+				require.True(t, costExceedFound, "budget error not found in messages")
+			}
+			require.True(t, statusMatches, "expected status not found in messages")
 
 			messages = *response.Txns[1].AppCallMessages
 			require.GreaterOrEqual(t, len(messages), 1)
 			require.Equal(t, "PASS", messages[len(messages)-1])
 			require.NotNil(t, *response.Txns[1].Cost)
 			require.Equal(t, uint64(approvCost), *response.Txns[1].Cost)
+			for _, msg := range messages {
+				require.NotContains(t, msg, "cost budget exceeded")
+			}
 		})
 	}
 }

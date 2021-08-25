@@ -544,9 +544,11 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 					if !origEnableAppCostPooling {
 						if cost > uint64(proto.MaxAppProgramCost) {
 							pass = false
+							err = fmt.Errorf("cost budget exceeded: remaining budget is %d but program cost was %d", proto.MaxAppProgramCost, cost)
 						}
 					} else if cost > allowedBudget {
 						pass = false
+						err = fmt.Errorf("cost budget exceeded: remaining budget is %d but program cost was %d", allowedBudget, cost)
 					}
 				}
 				result.Cost = &cost
