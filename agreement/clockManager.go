@@ -71,6 +71,35 @@ func (cm *clockManager) nextDeadlineCh(es []externalDemuxSignals) (<-chan time.T
 	return c.TimeoutAt(es[0].Deadline), r
 }
 
+// nextPipelineDelayCh returns a timeout channel that will fire when the earliest PipelineDelay among all of
+// the rounds described in externalDemuxSignals has occurred. It also returns the corresponding
+// round (including speculative branch) this timeout channel corresponds to.
+func (cm *clockManager) nextPipelineDelayCh(es []externalDemuxSignals) (<-chan time.Time, round) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	sort.Slice(es, func(i, j int) bool {
+		ti := cm.m[es[i].CurrentRound].GetTimeout(es[i].PipelineDelay)
+		tj := cm.m[es[j].CurrentRound].GetTimeout(es[j].PipelineDelay)
+		return ti.Before(tj)
+	})
+
+	i := 0
+	for i < len(es) && es[i].PipelineDelay == 0 {
+		i++
+	}
+	if i >= len(es) {
+		return nil, roundZero
+	}
+	r := es[i].CurrentRound
+	c, ok := cm.m[r]
+	if !ok {
+		// no rezeroAction has set up this clock yet
+		panic(fmt.Sprintf("clockManager.nextPipelineDelayCh: no clock for round %+v\n", r))
+	}
+	return c.TimeoutAt(es[i].Deadline), r
+}
+
 // nextFastDeadlineCh returns a timeout channel that will fire when the earliest FastRecoveryDeadline among all of
 // the rounds described in externalDemuxSignals has occurred. It also returns the corresponding
 // round (including speculative branch) this timeout channel corresponds to.

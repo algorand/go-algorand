@@ -100,6 +100,14 @@ func (p *pipelinePlayer) handle(r routerHandle, e event) []action {
 
 	switch e := e.(type) {
 	case messageEvent, timeoutEvent:
+		if e.t() == pipelineTimeout {
+			state, ok := p.Players[ee.ConsensusRound()]
+			if ok {
+				state.PipelineDelay = 0
+				return p.adjustPlayers(r)
+			}
+		}
+
 		return p.handleRoundEvent(r, ee, ee.ConsensusRound())
 	case checkpointEvent:
 		// checkpointEvent.ConsensusRound() returns zero
@@ -217,7 +225,7 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 		// If some player has moved on beyond period 0, something
 		// is not on the fast path, and we should not speculate.
 		// Also wait for PipelineDelay before speculating.
-		if rp.Period > 0 || !rp.OkToPipeline {
+		if rp.Period > 0 || rp.PipelineDelay != 0 {
 			// XXX optimization: consider pausing speculation
 			// for any "child" rounds of rnd, if already present
 			// in p.Players.
@@ -299,6 +307,7 @@ func (p *pipelinePlayer) externalDemuxSignals() pipelineExternalDemuxSignals {
 		s = append(s, externalDemuxSignals{
 			Deadline:             p.Deadline,
 			FastRecoveryDeadline: p.FastRecoveryDeadline,
+			PipelineDelay:        p.PipelineDelay,
 			CurrentRound:         p.Round,
 		})
 	}

@@ -271,6 +271,9 @@ func (d *demux) next(s *Service, extSignals pipelineExternalDemuxSignals) (e ext
 		fastDeadlineCh, fastDeadlineRound = s.clockManager.nextFastDeadlineCh(fastDeadlineRounds)
 	}
 
+	// pick next pipelining deadline
+	pipelineDelayCh, pipelineDelayRound := s.clockManager.nextPipelineDelayCh(extSignals.signals)
+
 	d.UpdateEventsQueue(eventQueueDemux, 0)
 	d.monitor.dec(demuxCoserviceType)
 
@@ -332,6 +335,11 @@ func (d *demux) next(s *Service, extSignals pipelineExternalDemuxSignals) (e ext
 		d.monitor.dec(clockCoserviceType)
 	case <-fastDeadlineCh:
 		e = timeoutEvent{T: fastTimeout, RandomEntropy: s.RandomSource.Uint64(), Round: fastDeadlineRound}
+		d.UpdateEventsQueue(eventQueueDemux, 1)
+		d.monitor.inc(demuxCoserviceType)
+		d.monitor.dec(clockCoserviceType)
+	case <-pipelineDelayCh:
+		e = timeoutEvent{T: pipelineTimeout, RandomEntropy: s.RandomSource.Uint64(), Round: pipelineDelayRound}
 		d.UpdateEventsQueue(eventQueueDemux, 1)
 		d.monitor.inc(demuxCoserviceType)
 		d.monitor.dec(clockCoserviceType)

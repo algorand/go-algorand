@@ -91,6 +91,7 @@ type parameters Parameters
 type externalDemuxSignals struct {
 	Deadline             time.Duration
 	FastRecoveryDeadline time.Duration
+	PipelineDelay        time.Duration
 	CurrentRound         round
 }
 
