@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"fmt"
 	"math"
 	"sort"
 	"time"
@@ -338,7 +339,7 @@ func (p *Peer) getAcceptedMessages() []uint64 {
 	return acceptedMessages
 }
 
-func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.SignedTxGroup, sendWindow time.Duration, round basics.Round, bloomFilterSize int) (selectedTxns []transactions.SignedTxGroup, selectedTxnIDs []transactions.Txid, partialTransactionsSet bool) {
+func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.SignedTxGroup, sendWindow time.Duration, round basics.Round, currentMessageSize int) (selectedTxns []transactions.SignedTxGroup, selectedTxnIDs []transactions.Txid, partialTransactionsSet bool) {
 	// if peer is too far back, don't send it any transactions ( or if the peer is not interested in transactions )
 	if p.lastRound < round.SubSaturate(1) || (p.requestedTransactionsModulator == 0 && p.state != peerStateProposal) {
 		return nil, nil, false
@@ -360,7 +361,9 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 	}
 
 	windowLengthBytes := int(uint64(sendWindow) * p.dataExchangeRate / uint64(time.Second))
-	windowLengthBytes -= bloomFilterSize
+	windowLengthBytes -= currentMessageSize
+
+	fmt.Println(uint64(sendWindow), p.dataExchangeRate)
 
 	accumulatedSize := 0
 
@@ -586,6 +589,7 @@ func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound ba
 		// if so, we might be able to calculate the bandwidth.
 		timeSinceLastMessageWasSent := currentTime - p.lastSentMessageTimestamp
 		networkMessageSize := uint64(p.lastSentMessageSize + incomingMessageSize)
+		fmt.Println(timings.ResponseElapsedTime, timeSinceLastMessageWasSent, time.Duration(timings.ResponseElapsedTime), networkMessageSize, p.significantMessageThreshold)
 		if timings.ResponseElapsedTime != 0 && timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime) && networkMessageSize >= p.significantMessageThreshold {
 			networkTrasmitTime := timeSinceLastMessageWasSent - time.Duration(timings.ResponseElapsedTime)
 			dataExchangeRate := uint64(time.Second) * networkMessageSize / uint64(networkTrasmitTime)
@@ -597,6 +601,7 @@ func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound ba
 			}
 			// clamp data exchange rate to realistic metrics
 			p.dataExchangeRate = dataExchangeRate
+			fmt.Println("new exchange rate: ", dataExchangeRate)
 			//fmt.Printf("incoming message : updating data exchange to %d; network msg size = %d+%d, transmit time = %v\n", dataExchangeRate, p.lastSentMessageSize, incomingMessageSize, networkTrasmitTime)
 		}
 

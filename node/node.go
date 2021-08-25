@@ -1184,3 +1184,7 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 	}
 	return participations
 }
+
+func (node *AlgorandFullNode) FillTxnsFromTxPool(txids []transactions.Txid, txGroups []transactions.SignedTxGroup) (numFound int) {
+	return node.transactionPool.FindTxGroups(txids, txGroups)
+}

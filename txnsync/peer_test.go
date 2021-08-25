@@ -41,16 +41,19 @@ func TestGetSetTransactionGroupCounterTracker(t *testing.T) {
 
 	a.Equal(grp.get(0, 0, 0), uint64(0))
 
-	grp.set(0, 0, 2)
+	grp.set(0, 0, 0, 2)
 	a.Equal(grp.get(0, 0, 0), uint64(2))
-	grp.set(1, 0, 5)
+	grp.set(1, 0, 0, 5)
 	a.Equal(grp.get(1, 0, 0), uint64(5))
 	a.Equal(grp.get(0, 0, peerStateProposal), uint64(2))
+	grp.set(1, 0, peerStateProposal, 4)
+	a.Equal(grp.get(1, 0, peerStateProposal), uint64(4))
+	a.Equal(grp.get(1, 0, 0), uint64(5))
 
 	grp = transactionGroupCounterTracker{}
 
 	for i := 0; i < maxTransactionGroupTrackers+1; i++ {
-		grp.set(byte(i+1), 0, uint64(i+1))
+		grp.set(byte(i+1), 0, 0, uint64(i+1))
 	}
 
 	a.True(reflect.DeepEqual(grp[0], requestParamsGroupCounterState{offset: 2, groupCounters: [bloomFilterRetryCount]uint64{2, 0, 0}}))

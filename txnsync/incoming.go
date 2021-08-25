@@ -243,7 +243,8 @@ incomingMessageLoop:
 				// send proposal or proposal txns to handler
 				s.node.HandleProposalMessage(incomingMsg.message.RelayedProposal.RawBytes, incomingMsg.transactionGroups, peer)
 			}
-
+			peer.updateRequestParams(incomingMsg.message.UpdatedRequestParams.Modulator, incomingMsg.message.UpdatedRequestParams.Offset)
+			peer.updateIncomingMessageTiming(incomingMsg.message.MsgSync, s.round, s.clock.Since(), incomingMsg.encodedSize)
 
 			continue
 		}

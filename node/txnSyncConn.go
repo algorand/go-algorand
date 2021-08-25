@@ -294,10 +294,11 @@ func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataByte
 		for i, txid := range pc.TxGroupIds {
 			pc.txGroupIdIndex[txid] = i
 		}
+		// attempt to fill receivedTxns with txpool
+		pc.numTxGroupsReceived = tsnc.node.FillTxnsFromTxPool(pc.TxGroupIds, pc.txGroups)
 	} else { // fetch proposalCache from peerData
 		pc, _ = tsnc.node.net.GetPeerData(peer.GetNetworkPeer(), "proposalCache").(*proposalCache)
 	}
-	// TODO attempt to fill receivedTxns with txpool
 
 	for _, txGroup := range txGroups {
 		if index, found := pc.txGroupIdIndex[txGroup.Transactions.ID()]; found && pc.txGroups[index].Transactions == nil {

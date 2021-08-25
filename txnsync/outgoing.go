@@ -19,6 +19,7 @@ package txnsync
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/algorand/go-algorand/crypto"
 	"sort"
 	"time"
@@ -91,6 +92,7 @@ func (encoder *messageAsyncEncoder) asyncEncodeAndSend(interface{}) interface{} 
 	}
 
 	encodedMessage := encoder.messageData.message.MarshalMsg(getMessageBuffer())
+	fmt.Println(len(encodedMessage), len(encoder.messageData.message.TransactionGroups.Bytes))
 	encoder.messageData.encodedMessageSize = len(encodedMessage)
 	// now that the message is ready, we can discard the encoded transaction group slice to allow the GC to collect it.
 	releaseEncodedTransactionGroups(encoder.messageData.message.TransactionGroups.Bytes)
@@ -189,7 +191,7 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 		},
 	}
 
-	bloomFilterSize := 0
+	currentMessageSize := len(pendingTransactions.proposalRawBytes)
 
 	msgOps := peer.getMessageConstructionOps(s.isRelay, s.fetchTransactions)
 
@@ -220,7 +222,7 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 		if !metaMessage.filter.sameParams(peer.lastSentBloomFilter) {
 			bf, _ := metaMessage.filter.encode()
 			metaMessage.message.TxnBloomFilter = *bf
-			bloomFilterSize = metaMessage.message.TxnBloomFilter.Msgsize()
+			currentMessageSize += metaMessage.message.TxnBloomFilter.Msgsize()
 		}
 		profMakeBloomFilter.end()
 		s.lastBloomFilter = metaMessage.filter
@@ -236,7 +238,7 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 
 		profTxnsSelection := s.profiler.getElement(profElementTxnsSelection)
 		profTxnsSelection.start()
-		metaMessage.transactionGroups, metaMessage.sentTransactionsIDs, metaMessage.partialMessage = peer.selectPendingTransactions(transactionGroups, messageTimeWindow, s.round, bloomFilterSize)
+		metaMessage.transactionGroups, metaMessage.sentTransactionsIDs, metaMessage.partialMessage = peer.selectPendingTransactions(transactionGroups, messageTimeWindow, s.round, currentMessageSize)
 		profTxnsSelection.end()
 
 		// clear the last sent bloom filter on the end of a series of partial messages.
@@ -334,6 +336,9 @@ func (s *syncState) broadcastProposalFilter(proposalHash crypto.Digest, peers []
 func (s *syncState) broadcastProposal(p ProposalBroadcastRequest, peers []*Peer) {
 	currentTime := s.clock.Since()
 	proposalHash := crypto.Hash(p.proposalBytes)
+
+	s.interruptablePeers = nil
+	s.interruptablePeersMap = make(map[*Peer]int)
 
 	for _, peer := range peers {
 		// check if p.proposalBytes was filtered
