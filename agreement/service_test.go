@@ -127,13 +127,13 @@ func (f *testingClockFactory) roundHasZeroes(rnum basics.Round, zeroes uint) boo
 }
 
 type testingClock struct {
-	mu deadlock.Mutex
-	TA map[time.Duration]chan time.Time // TimeoutAt
+	mu             deadlock.Mutex
+	TA             map[time.Duration]chan time.Time // TimeoutAt
 	preparedToFire bool
-	zeroes uint
-	roundNum basics.Round
-	monitor *coserviceMonitor
-	gced bool
+	zeroes         uint
+	roundNum       basics.Round
+	monitor        *coserviceMonitor
+	gced           bool
 }
 
 func makeTestingClock(m *coserviceMonitor) *testingClock {

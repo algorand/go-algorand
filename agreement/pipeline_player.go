@@ -259,9 +259,9 @@ func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protoco
 	}
 
 	newPlayer := &player{
-		PipelineDelay: p.pipelineDelay(ver),
-		pipelined:     true,
-		notify:        p,
+		PipelineDelay:               p.pipelineDelay(ver),
+		pipelined:                   true,
+		notify:                      p,
 		firstUncommittedRoundSource: p,
 	}
 
