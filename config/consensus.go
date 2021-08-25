@@ -1003,7 +1003,8 @@ func initConsensusProtocols() {
 	// Enable pipelining.
 	vFuture.AgreementPipelineDepth = 5
 	vFuture.AgreementPipelineDelayHistory = 32
-	vFuture.AgreementPipelineDelay = 30
+	// vFuture.AgreementPipelineDelay = 30
+	vFuture.AgreementPipelineDelay = 0
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
