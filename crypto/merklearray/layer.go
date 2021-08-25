@@ -56,6 +56,8 @@ func (p *pair) Marshal() []byte {
 }
 
 func upWorker(ws *workerState, in Layer, out Layer, h hash.Hash) {
+	defer ws.wg.Done()
+
 	ws.started()
 	batchSize := uint64(2)
 
@@ -78,8 +80,6 @@ func upWorker(ws *workerState, in Layer, out Layer, h hash.Hash) {
 
 		batchSize += 2
 	}
-
-	ws.done()
 }
 
 // up takes a Layer representing some level in the tree,

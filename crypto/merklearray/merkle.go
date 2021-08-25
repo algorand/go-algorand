@@ -48,7 +48,8 @@ func (ch errorChannel) nonBlockingSend(e error) {
 }
 
 func buildWorker(ws *workerState, array Array, leaves Layer, h crypto.HashFactory, errs errorChannel) {
-	defer ws.done()
+	defer ws.wg.Done()
+
 	ws.started()
 	batchSize := uint64(1)
 	hash, err := h.NewHash()
