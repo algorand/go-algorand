@@ -99,15 +99,18 @@ func Build(array Array, factory crypto.HashFactory) (*Tree, error) {
 		Hash:   factory,
 	}
 
-	if arraylen > 0 {
-		tree.Levels = []Layer{leaves}
-
-		for len(tree.topLayer()) > 1 {
-			tree.Levels = append(tree.Levels, tree.up())
-		}
-	}
-
+	tree.buildLayers(leaves)
 	return tree, nil
+}
+
+func (tree *Tree) buildLayers(leaves Layer) {
+	if len(leaves) == 0 {
+		return
+	}
+	tree.Levels = []Layer{leaves}
+	for len(tree.topLayer()) > 1 {
+		tree.buildNextLayer()
+	}
 }
 
 // Root returns the root hash of the tree.
@@ -186,6 +189,22 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 		Path:        s.hints,
 		HashFactory: tree.Hash,
 	}, nil
+}
+
+func (tree *Tree) buildNextLayer() {
+	l := tree.topLayer()
+	n := len(l)
+	newLayer := make(Layer, (uint64(n)+1)/2)
+
+	ws := newWorkerState(uint64(n))
+	for ws.nextWorker() {
+		// no need to inspect error here -
+		// the factory should've been used to generate hash func in the first layer build
+		h, _ := tree.Hash.NewHash()
+		go upWorker(ws, l, newLayer, h)
+	}
+	ws.wait()
+	tree.Levels = append(tree.Levels, newLayer)
 }
 
 // Verify ensures that the positions in elems correspond to the respective hashes

@@ -76,23 +76,3 @@ func upWorker(ws *workerState, in Layer, out Layer, h hash.Hash) {
 		batchSize += 2
 	}
 }
-
-// up takes a Layer representing some level in the tree,
-// and returns the next-higher level in the tree,
-// represented as a Layer.
-func (t *Tree) up() Layer {
-	l := t.topLayer()
-	n := len(l)
-	res := make(Layer, (uint64(n)+1)/2)
-
-	ws := newWorkerState(uint64(n))
-	for ws.nextWorker() {
-		// no need to inspect error here -
-		// the factory should've been used to generate hash func in the first layer build
-		h, _ := t.Hash.NewHash()
-		go upWorker(ws, l, res, h)
-	}
-	ws.wait()
-
-	return res
-}
