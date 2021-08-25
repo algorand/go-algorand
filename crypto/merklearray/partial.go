@@ -19,6 +19,8 @@ package merklearray
 import (
 	"fmt"
 	"hash"
+
+	"github.com/algorand/go-algorand/crypto"
 )
 
 // siblings represents the siblings needed to compute the root hash
@@ -114,9 +116,7 @@ func (pl partialLayer) up(s *siblings, l uint64, doHash bool, hsh hash.Hash) (pa
 				p.l = siblingHash
 				p.r = posHash
 			}
-			hsh.Write(p.Marshal())
-			nextLayerHash = hsh.Sum(nil)
-			hsh.Reset()
+			nextLayerHash = crypto.HashSum(hsh, &p)
 		}
 
 		res = append(res, layerItem{

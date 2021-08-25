@@ -73,9 +73,7 @@ func upWorker(ws *workerState, in Layer, out Layer, h hash.Hash) {
 				p.r = in[i+1]
 			}
 
-			h.Write(p.Marshal())
-			out[i/2] = h.Sum(nil)
-			h.Reset()
+			out[i/2] = crypto.HashSum(h, &p)
 		}
 
 		batchSize += 2
