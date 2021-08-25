@@ -1218,11 +1218,12 @@ func TestDryrunCost(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.msg, func(t *testing.T) {
+			costs := make([]uint64, 2)
 
 			ops, err := logic.AssembleString("#pragma version 5\nbyte 0x41\n" + strings.Repeat("keccak256\n", test.numHashes) + "pop\nint 1\n")
 			require.NoError(t, err)
 			approval := ops.Program
-			approvalCost := 3 + test.numHashes*130
+			costs[0] = 3 + uint64(test.numHashes)*130
 
 			ops, err = logic.AssembleString("int 1")
 			require.NoError(t, err)
@@ -1231,7 +1232,7 @@ func TestDryrunCost(t *testing.T) {
 			ops, err = logic.AssembleString("#pragma version 5 \nint 1 \nint 2 \npop")
 			require.NoError(t, err)
 			approv := ops.Program
-			approvCost := 3
+			costs[1] = 3
 
 			var appIdx basics.AppIndex = 1
 			creator := randomAddress()
@@ -1293,32 +1294,25 @@ func TestDryrunCost(t *testing.T) {
 			require.Empty(t, response.Error)
 			require.Equal(t, 2, len(response.Txns))
 
-			messages := *response.Txns[0].AppCallMessages
-			require.GreaterOrEqual(t, len(messages), 1)
-			require.NotNil(t, *response.Txns[0].Cost)
-			require.Equal(t, uint64(approvalCost), *response.Txns[0].Cost)
-			statusMatches := false
-			costExceedFound := false
-			for _, msg := range messages {
-				if strings.Contains(msg, "cost budget exceeded") {
-					costExceedFound = true
+			for i, txn := range response.Txns {
+				messages := *txn.AppCallMessages
+				require.GreaterOrEqual(t, len(messages), 1)
+				require.NotNil(t, *txn.Cost)
+				require.Equal(t, costs[i], *txn.Cost)
+				statusMatches := false
+				costExceedFound := false
+				for _, msg := range messages {
+					if strings.Contains(msg, "cost budget exceeded") {
+						costExceedFound = true
+					}
+					if msg == test.msg {
+						statusMatches = true
+					}
 				}
-				if msg == test.msg {
-					statusMatches = true
+				if test.msg == "REJECT" {
+					require.True(t, costExceedFound, "budget error not found in messages")
 				}
-			}
-			if test.msg == "REJECT" {
-				require.True(t, costExceedFound, "budget error not found in messages")
-			}
-			require.True(t, statusMatches, "expected status not found in messages")
-
-			messages = *response.Txns[1].AppCallMessages
-			require.GreaterOrEqual(t, len(messages), 1)
-			require.Equal(t, "PASS", messages[len(messages)-1])
-			require.NotNil(t, *response.Txns[1].Cost)
-			require.Equal(t, uint64(approvCost), *response.Txns[1].Cost)
-			for _, msg := range messages {
-				require.NotContains(t, msg, "cost budget exceeded")
+				require.True(t, statusMatches, "expected status not found in messages")
 			}
 		})
 	}

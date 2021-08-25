@@ -406,6 +406,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 	maxCurrentBudget := uint64(proto.MaxAppProgramCost * 100)
 	pooledAppBudget := maxCurrentBudget
 	allowedBudget := uint64(0)
+	cumulativeCost := uint64(0)
 	for _, stxn := range dr.Txns {
 		if stxn.Txn.Type == protocol.ApplicationCallTx {
 			allowedBudget += uint64(proto.MaxAppProgramCost)
@@ -540,15 +541,16 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 				// ensure the program has not exceeded execution budget
 				cost := maxCurrentBudget - pooledAppBudget
 				maxCurrentBudget = pooledAppBudget
+				cumulativeCost += cost
 				if pass {
 					if !origEnableAppCostPooling {
 						if cost > uint64(proto.MaxAppProgramCost) {
 							pass = false
 							err = fmt.Errorf("cost budget exceeded: remaining budget is %d but program cost was %d", proto.MaxAppProgramCost, cost)
 						}
-					} else if cost > allowedBudget {
+					} else if cumulativeCost > allowedBudget {
 						pass = false
-						err = fmt.Errorf("cost budget exceeded: remaining budget is %d but program cost was %d", allowedBudget, cost)
+						err = fmt.Errorf("cost budget exceeded: remaining budget is %d but program cost was %d", allowedBudget, cumulativeCost)
 					}
 				}
 				result.Cost = &cost
