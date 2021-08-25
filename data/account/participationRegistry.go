@@ -281,7 +281,7 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 	}
 
 	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		_, err := tx.Exec(
+		result, err := tx.Exec(
 			insertKeysetQuery,
 			id[:],
 			record.Parent[:],
@@ -291,19 +291,29 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		if err != nil {
 			return fmt.Errorf("unable to insert keyset: %w", err)
 		}
-
-		// Fetch primary key
-		var pk int
-		row := tx.QueryRow(selectLastPK, id[:])
-		err = row.Scan(&pk)
+		rows, err := result.RowsAffected()
 		if err != nil {
-			return fmt.Errorf("unable to scan pk: %w", err)
+			return fmt.Errorf("unable to insert keyset: %w", err)
+		}
+		if rows != 1 {
+			return fmt.Errorf("unexpected number of rows")
+		}
+		pk, err := result.LastInsertId()
+		if err != nil {
+			return fmt.Errorf("unable to insert keyset: %w", err)
 		}
 
 		// Create Rolling entry
-		_, err = tx.Exec(insertRollingQuery, pk)
+		result, err = tx.Exec(insertRollingQuery, pk)
 		if err != nil {
 			return fmt.Errorf("unable insert rolling: %w", err)
+		}
+		rows, err = result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("unable to insert keyset: %w", err)
+		}
+		if rows != 1 {
+			return fmt.Errorf("unexpected number of rows")
 		}
 
 		return nil
@@ -543,41 +553,40 @@ func (db *participationDB) Record(account basics.Address, round basics.Round, pa
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
-	matches := make([]ParticipationRecord, 0)
-	// At most one id should be updated.
+	matches := make([]ParticipationRecord, 0, 1)
+
+	// At most one id should be updated, exit with error if a second is found.
 	for _, record := range db.cache {
 		if record.Account == account && recordActive(record, round) {
+			if len(matches) != 0 {
+				// This probably means there is a bug in the key participation registry Register implementation.
+				return ErrMultipleValidKeys
+			}
 			matches = append(matches, record)
 		}
 	}
 
+	if len(matches) == 0 {
+		// This indicates the participation registry is not synchronized with agreement.
+		return ErrActiveKeyNotFound
+	}
+
+	record := matches[0]
 	// Good case, one key found.
-	if len(matches) == 1 {
-		record := matches[0]
-
-		switch participationAction {
-		case Vote:
-			record.LastVote = round
-		case BlockProposal:
-			record.LastBlockProposal = round
-		case CompactCertificate:
-			record.LastCompactCertificate = round
-		default:
-			return ErrUnknownParticipationAction
-		}
-
-		db.dirty[record.ParticipationID] = struct{}{}
-		db.cache[record.ParticipationID] = record
-		return nil
+	switch participationAction {
+	case Vote:
+		record.LastVote = round
+	case BlockProposal:
+		record.LastBlockProposal = round
+	case CompactCertificate:
+		record.LastCompactCertificate = round
+	default:
+		return ErrUnknownParticipationAction
 	}
 
-	// This probably means there is a bug in the key participation registry Register implementation.
-	if len(matches) > 1 {
-		return ErrMultipleValidKeys
-	}
-
-	// This indicates the participation registry is not synchronized with agreement.
-	return ErrActiveKeyNotFound
+	db.dirty[record.ParticipationID] = struct{}{}
+	db.cache[record.ParticipationID] = record
+	return nil
 }
 
 func (db *participationDB) Flush() error {
