@@ -540,20 +540,20 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 
 				// ensure the program has not exceeded execution budget
 				cost := maxCurrentBudget - pooledAppBudget
-				maxCurrentBudget = pooledAppBudget
-				cumulativeCost += cost
 				if pass {
 					if !origEnableAppCostPooling {
 						if cost > uint64(proto.MaxAppProgramCost) {
 							pass = false
-							err = fmt.Errorf("cost budget exceeded: remaining budget is %d but program cost was %d", proto.MaxAppProgramCost, cost)
+							err = fmt.Errorf("cost budget exceeded: budget is %d but program cost was %d", proto.MaxAppProgramCost, cost)
 						}
-					} else if cumulativeCost > allowedBudget {
+					} else if cumulativeCost+cost > allowedBudget {
 						pass = false
-						err = fmt.Errorf("cost budget exceeded: remaining budget is %d but program cost was %d", allowedBudget, cumulativeCost)
+						err = fmt.Errorf("cost budget exceeded: budget is %d but program cost was %d", allowedBudget-cumulativeCost, cost)
 					}
 				}
 				result.Cost = &cost
+				maxCurrentBudget = pooledAppBudget
+				cumulativeCost += cost
 
 				var err3 error
 				result.Logs, err3 = DeltaLogToLog(delta.Logs, appIdx)
