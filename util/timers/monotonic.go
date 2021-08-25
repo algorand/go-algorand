@@ -100,5 +100,10 @@ func (m *Monotonic) GetTimeout(delta time.Duration) time.Time {
 	return m.zero.Add(delta)
 }
 
+// DurationUntil implements the Clock interface.
+func (m *Monotonic) DurationUntil(t time.Time) time.Duration {
+	return t.Sub(m.zero)
+}
+
 // GC implements the Clock interface.
 func (m *Monotonic) GC() {}

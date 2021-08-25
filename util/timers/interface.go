@@ -40,6 +40,9 @@ type Clock interface {
 	// GetTimeout returns the absolute time of the timeout target stored in this clock for duration delta.
 	GetTimeout(delta time.Duration) time.Time
 
+	// DurationUntil returns the duration elapsed from this clock's zero to t.
+	DurationUntil(t time.Time) time.Duration
+
 	// TimeoutAt returns a channel that fires delta time after Zero was called.
 	// If delta has already passed, it returns a closed channel.
 	//

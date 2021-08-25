@@ -89,6 +89,18 @@ func (cm *clockManager) nextFastDeadlineCh(es []externalDemuxSignals) (<-chan ti
 	return cm.m[es[0].CurrentRound].TimeoutAt(es[0].FastRecoveryDeadline), es[0].CurrentRound
 }
 
+func (cm *clockManager) durationUntil(r round, t time.Time) time.Duration {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	c, ok := cm.m[r]
+	if !ok {
+		return 0
+	}
+
+	return c.DurationUntil(t)
+}
+
 type clockManagerSerialized struct {
 	Clocks []struct{ R, C []byte }
 }

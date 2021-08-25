@@ -176,9 +176,12 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 			break
 		}
 
-		// XXX put actual arrival into proposal payload, store it
-		// in the player alongside with Decided, and use it here.
-		payloadArrival := FilterTimeout(0, p.FirstUncommittedVersion)
+		var payloadArrival time.Duration
+		if pp.Period == 0 {
+			payloadArrival = pp.FrozenProposalArrival
+		} else {
+			payloadArrival = FilterTimeout(0, p.FirstUncommittedVersion)
+		}
 
 		p.FirstUncommittedRound.Number += 1
 		p.FirstUncommittedRound.Branch = pp.Decided

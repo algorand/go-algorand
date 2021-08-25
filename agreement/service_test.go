@@ -150,6 +150,10 @@ func (c *testingClock) GetTimeout(d time.Duration) time.Time {
 	return zero.Add(time.Duration(c.roundNum) * time.Minute).Add(d)
 }
 
+func (c *testingClock) DurationUntil(t time.Time) time.Duration {
+	return 0
+}
+
 func (c *testingClock) TimeoutAt(d time.Duration) <-chan time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()

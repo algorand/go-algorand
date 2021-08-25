@@ -188,8 +188,14 @@ func (d *demux) next(s *Service, extSignals pipelineExternalDemuxSignals) (e ext
 		if !ok {
 			return
 		}
+
 		proto, err := d.ledger.ConsensusVersion(paramsRoundBranch(e.ConsensusRound()))
 		e = e.AttachConsensusVersion(ConsensusVersionView{Err: makeSerErr(err), Version: proto})
+
+		if e.t() == payloadVerified {
+			r := e.(messageEvent).Input.Proposal.roundBranch()
+			e = e.(messageEvent).AttachValidatedAt(s.clockManager.durationUntil(r, time.Now()))
+		}
 	}()
 
 	var pseudonodeEvents <-chan externalEvent

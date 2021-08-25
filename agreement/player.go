@@ -62,6 +62,10 @@ type player struct {
 	// is non-zero.
 	NextVersion protocol.ConsensusVersion
 
+	// FrozenProposalArrival is the time at which the final proposal (the
+	// one that ended up getting frozen) arrived.
+	FrozenProposalArrival time.Duration
+
 	// PipelineDelay is the time at which we should start pipelining the
 	// next block.
 	PipelineDelay time.Duration
@@ -393,6 +397,7 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 
 			p.Decided = bookkeeping.BlockHash(cert.Proposal.BlockDigest)
 			p.NextVersion = e.Proto
+			p.FrozenProposalArrival = res.Payload.validatedAt
 			as := p.notify.playerDecided(p, r)
 			return append(actions, as...)
 		}
@@ -667,6 +672,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 
 				p.Decided = e.Input.Proposal.Block.Hash()
 				p.NextVersion = delegatedE.Proto.Version
+				p.FrozenProposalArrival = e.Input.Proposal.validatedAt
 				as := p.notify.playerDecided(p, r)
 				return append(actions, as...)
 			}
