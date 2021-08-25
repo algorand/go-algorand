@@ -87,7 +87,7 @@ func TestMerkle(t *testing.T) {
 	}
 
 	if !testing.Short() {
-		for i := uint64(0); i < 1024; i++ {
+		for i := uint64(0); i < 10; i++ {
 			testMerkle(t, crypto.Subsetsum, i)
 		}
 	}

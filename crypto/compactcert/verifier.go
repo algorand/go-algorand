@@ -65,11 +65,11 @@ func (v *Verifier) Verify(c *Cert) error {
 		}
 	}
 
-	if err := merklearray.Verify(c.SigCommit, sigs, &c.SigProofs); err != nil {
+	if err := merklearray.Verify(c.SigCommit.ToSlice(), sigs, &c.SigProofs); err != nil {
 		return err
 	}
 
-	if err := merklearray.Verify(v.partcom, parts, &c.PartProofs); err != nil {
+	if err := merklearray.Verify(v.partcom.ToSlice(), parts, &c.PartProofs); err != nil {
 		return err
 	}
 

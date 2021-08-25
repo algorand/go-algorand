@@ -104,6 +104,6 @@ func TestTxnMerkleProof(t *testing.T) {
 	elems := make(map[uint64]crypto.GenericDigest)
 	tmp := crypto.Hash(merkleNode)
 	elems[proofresp.Idx] = tmp[:]
-	err = merklearray.Verify(blk.TxnRoot, elems, &proof)
+	err = merklearray.Verify(blk.TxnRoot.ToSlice(), elems, &proof)
 	a.NoError(err)
 }

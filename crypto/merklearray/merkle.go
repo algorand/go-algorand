@@ -122,7 +122,7 @@ func (tree *Tree) buildLayers(leaves Layer) {
 }
 
 // Root returns the root hash of the tree.
-func (tree *Tree) Root() TreeDigest {
+func (tree *Tree) Root() crypto.GenericDigest {
 	// Special case: commitment to zero-length array
 	if len(tree.Levels) == 0 {
 		return crypto.GenericDigest{}
@@ -218,7 +218,7 @@ func (tree *Tree) buildNextLayer() {
 // Verify ensures that the positions in elems correspond to the respective hashes
 // in a tree with the given root hash.  The proof is expected to be the proof
 // returned by Prove().
-func Verify(root TreeDigest, elems map[uint64]crypto.GenericDigest, proof *Proof) error {
+func Verify(root crypto.GenericDigest, elems map[uint64]crypto.GenericDigest, proof *Proof) error {
 	if len(elems) == 0 {
 		if proof == nil || len(proof.Path) != 0 {
 			return fmt.Errorf("non-empty proof for empty set of elements")
@@ -230,7 +230,7 @@ func Verify(root TreeDigest, elems map[uint64]crypto.GenericDigest, proof *Proof
 	return verifyPath(root, proof, pl)
 }
 
-func verifyPath(root TreeDigest, proof *Proof, pl partialLayer) error {
+func verifyPath(root crypto.GenericDigest, proof *Proof, pl partialLayer) error {
 	if proof == nil {
 		return inspectRoot(root, pl)
 	}
@@ -271,7 +271,7 @@ func buildPartialLayer(elems map[uint64]crypto.GenericDigest) partialLayer {
 	return pl
 }
 
-func inspectRoot(root TreeDigest, pl partialLayer) error {
+func inspectRoot(root crypto.GenericDigest, pl partialLayer) error {
 	computedroot := pl[0]
 	if computedroot.pos != 0 || !bytes.Equal(computedroot.hash[:], root.ToSlice()) {
 		return fmt.Errorf("root mismatch")

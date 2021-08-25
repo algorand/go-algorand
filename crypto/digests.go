@@ -16,7 +16,7 @@
 
 package crypto
 
-// GenericDigest is used as the digest the tree will use.
+// GenericDigest is a digest that implements CustumSizeDigest, and can be used as hash output.
 //msgp:allocbound GenericDigest
 type GenericDigest []byte
 
