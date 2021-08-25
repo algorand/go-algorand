@@ -786,39 +786,117 @@ func avgSendBufferHighPrioLength(wn *WebsocketNetwork) float64 {
 	return float64(sum) / float64(len(wn.peers))
 }
 
+type noWriteConn struct{}
+
+func (nc *noWriteConn) RemoteAddr() net.Addr {
+	return nil
+}
+func (nc *noWriteConn) NextReader() (int, io.Reader, error) {
+	return 0, nil, nil
+}
+func (nc *noWriteConn) WriteMessage(int, []byte) error {
+	time.Sleep(10 * time.Second)
+	return nil
+}
+func (nc *noWriteConn) WriteControl(int, []byte, time.Time) error {
+	return nil
+}
+func (nc *noWriteConn) SetReadLimit(limit int64) {
+}
+func (nc *noWriteConn) CloseWithoutFlush() error {
+	return nil
+}
+
+var noWriteConnSingleton = noWriteConn{}
+
 // TestSlowOutboundPeer tests what happens when one outbound peer is slow and the rest are fine.
 func TestSlowOutboundPeer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	nodeA := makeTestWebsocketNode(t)
+	nodeA.config.GossipFanout = 0
+	nodeA.Start()
+	defer nodeA.Stop()
+
+	addrA, postListenA := nodeA.Address()
+	require.True(t, postListenA)
+
+	nodeB := makeTestWebsocketNode(t)
+	nodeB.config.GossipFanout = 0
+	nodeB.Start()
+	defer nodeB.Stop()
+
+	addrB, postListenB := nodeB.Address()
+	require.True(t, postListenB)
+
 	node := makeTestWebsocketNode(t)
-	destPeers := make([]wsPeer, 5)
-	for i := range destPeers {
-		destPeers[i].closing = make(chan struct{})
-		destPeers[i].conn = &nopConnSingleton
-		destPeers[i].rootURL = fmt.Sprintf("fake %d", i)
-		node.addPeer(&destPeers[i])
-	}
+	node.config.GossipFanout = 2
+
+	node.phonebook.ReplacePeerList([]string{addrA, addrB}, "default", PhoneBookEntryRelayRole)
 	node.Start()
+	defer node.Stop()
 
-	// it shouldn't have closed for just sitting on the limit of full
-	require.False(t, peerIsClosed(&destPeers[0]))
+	msg := make([]byte, 1000*1000)
+	rand.Read(msg)
 
-	atomic.StoreInt64(&destPeers[0].intermittentOutgoingMessageEnqueueTime, int64(28*time.Second))
-	for x := 0; x < 100; x++ {
-		if peerIsClosed(&destPeers[0]) {
+	numHandledA := 0
+	waitMessageArriveHandlerA := func(msg IncomingMessage) (out OutgoingMessage) {
+		numHandledA++
+		time.Sleep(5 * time.Second)
+		return
+	}
+	nodeA.RegisterHandlers([]TaggedMessageHandler{
+		{
+			Tag:            protocol.AgreementVoteTag,
+			MessageHandler: HandlerFunc(waitMessageArriveHandlerA),
+		}})
+
+	numHandledB := 0
+	waitMessageArriveHandlerB := func(msg IncomingMessage) (out OutgoingMessage) {
+		numHandledB++
+		return
+	}
+	nodeB.RegisterHandlers([]TaggedMessageHandler{
+		{
+			Tag:            protocol.AgreementVoteTag,
+			MessageHandler: HandlerFunc(waitMessageArriveHandlerB),
+		}})
+
+	for i := 0; i < 100; i++ {
+		if len(node.peers) == 2 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	require.Equal(t, 2, len(node.peers))
+
+	rand.Read(msg)
+	x := 0
+	for ; x < 1000000; x++ {
+
+		if len(node.peers) != 2 {
+			break
+		}
+		node.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil)
+
+		if x%250 == 0 {
+			fmt.Printf("x=%d ha=%d bh=%d\n", x, numHandledA, numHandledB)
+		}
+		if x == 0 {
+			node.config.GossipFanout = 1
+		}
+	}
+
+	for i := 0; i < 100; i++ {
+		if numHandledB == x {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
+	require.Equal(t, numHandledB, x)
+	require.LessOrEqual(t, numHandledA, x/2)
 
-	// and now with the rest of the peers well and this one slow, we closed the slow one
-	for i := range destPeers {
-		if i == 0 {
-			require.True(t, peerIsClosed(&destPeers[i]))
-		} else {
-			require.False(t, peerIsClosed(&destPeers[i]))
-		}
-	}
+	require.Equal(t, 1, len(node.peers))
 }
 
 func makeTestFilterWebsocketNode(t *testing.T, nodename string) *WebsocketNetwork {
