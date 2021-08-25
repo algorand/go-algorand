@@ -75,7 +75,6 @@ func (*pipelinePlayer) decode(buf []byte) (serializableActor, error) {
 
 	// fill in fields that are not exported (and thus not serialized)
 	for _, pp := range p.Players {
-		pp.pipelined = true
 		pp.notify = p
 		pp.firstUncommittedRoundSource = p
 	}
@@ -309,7 +308,6 @@ func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protoco
 	newPlayer := &player{
 		PipelineDelay:               p.pipelineDelay(ver),
 		PipelineParentRound:         pipelineParent,
-		pipelined:                   true,
 		notify:                      p,
 		firstUncommittedRoundSource: p,
 	}

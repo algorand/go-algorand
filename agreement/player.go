@@ -239,10 +239,6 @@ func (p *player) handle(r routerHandle, e event) []action {
 			return actions
 		}
 	case roundInterruptionEvent:
-		if p.pipelined {
-			panic("player got roundInterruptionEvent in pipelinedPlayer mode")
-		}
-
 		return p.init(r, e.Round, e.Proto.Version)
 	case checkpointEvent:
 		return p.handleCheckpointEvent(r, e)
