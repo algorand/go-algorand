@@ -18,6 +18,7 @@ package fixtures
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -113,9 +114,16 @@ func MakeExpectTest(t *testing.T) *ExpectFixture {
 
 // Run Process all expect script files with suffix Test.exp within the current directory
 func (ef *ExpectFixture) Run() {
+	disabledTest := map[string]string{
+		"pingpongTest.exp":                    "broken",
+		"listExpiredParticipationKeyTest.exp": "flaky",
+	}
 	for testName := range ef.expectFiles {
 		if match, _ := regexp.MatchString(ef.testFilter, testName); match {
 			ef.t.Run(testName, func(t *testing.T) {
+				if reason, ok := disabledTest[testName]; ok {
+					t.Skip(fmt.Sprintf("Skipping %s test: %s", testName, reason))
+				}
 				partitiontest.PartitionTest(t) // Check if this expect test should by run, may SKIP
 
 				syncTest := SynchronizedTest(t)

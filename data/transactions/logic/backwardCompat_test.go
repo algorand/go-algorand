@@ -390,7 +390,7 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 
 	ledger := logictest.MakeLedger(nil)
 	for _, field := range fields {
-		text := fmt.Sprintf("global %s", field.gfield.String())
+		text := fmt.Sprintf("global %s", field.field.String())
 		// check assembler fails if version before introduction
 		testLine(t, text, assemblerNoVersion, "...available in version...")
 		for v := uint64(0); v < field.version; v++ {
@@ -417,19 +417,19 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		ops.Program[0] = 1 // set version to 1
 		_, err = Eval(ops.Program, ep)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid global[")
+		require.Contains(t, err.Error(), "invalid global field")
 		_, err = Eval(ops.Program, ep)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid global[")
+		require.Contains(t, err.Error(), "invalid global field")
 
 		// check opcodes failures
 		ops.Program[0] = 0 // set version to 0
 		_, err = Eval(ops.Program, ep)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid global[")
+		require.Contains(t, err.Error(), "invalid global field")
 		_, err = Eval(ops.Program, ep)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid global[")
+		require.Contains(t, err.Error(), "invalid global field")
 	}
 }
 
@@ -551,4 +551,13 @@ done:`
 			require.NoError(t, err)
 		})
 	}
+}
+
+func TestExplicitConstants(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	require.Equal(t, 4096, MaxStringSize, "constant changed, move it to consensus params")
+	require.Equal(t, 64, MaxByteMathSize, "constant changed, move it to consensus params")
+	require.Equal(t, 1024, MaxLogSize, "constant changed, move it to consensus params")
+	require.Equal(t, 32, MaxLogCalls, "constant changed, move it to consensus params")
 }

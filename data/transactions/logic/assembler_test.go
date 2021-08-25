@@ -1584,13 +1584,13 @@ func TestAssembleAsset(t *testing.T) {
 		testProg(t, "int 1; int 1; asset_holding_get ABC 1", v,
 			expect{3, "asset_holding_get expects one argument"})
 		testProg(t, "int 1; int 1; asset_holding_get ABC", v,
-			expect{3, "asset_holding_get unknown arg: \"ABC\""})
+			expect{3, "asset_holding_get unknown field: \"ABC\""})
 
 		testProg(t, "byte 0x1234; asset_params_get ABC 1", v,
 			expect{2, "asset_params_get ABC 1 arg 0 wanted type uint64..."})
 
 		testLine(t, "asset_params_get ABC 1", v, "asset_params_get expects one argument")
-		testLine(t, "asset_params_get ABC", v, "asset_params_get unknown arg: \"ABC\"")
+		testLine(t, "asset_params_get ABC", v, "asset_params_get unknown field: \"ABC\"")
 	}
 }
 

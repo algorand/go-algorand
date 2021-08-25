@@ -722,7 +722,7 @@ int 4141
 	testApp(t, strings.Replace(text, "int 1  // ForeignApps index", "global CurrentApplicationID", -1), now)
 }
 
-const assetsTestProgram = `int 0//account
+const assetsTestTemplate = `int 0//account
 int 55
 asset_holding_get AssetBalance
 !
@@ -819,33 +819,51 @@ bnz ok
 error:
 err
 ok:
+%s
+int 1
+`
+
+const v5extras = `
 int 0//params
 asset_params_get AssetCreator
 pop
 txn Sender
 ==
 assert
-int 1
 `
 
 func TestAssets(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
+	tests := map[uint64]string{
+		4: fmt.Sprintf(assetsTestTemplate, ""),
+		5: fmt.Sprintf(assetsTestTemplate, v5extras),
+	}
+
+	for v, source := range tests {
+		testAssetsByVersion(t, source, v)
+	}
+}
+
+func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64) {
 	for _, field := range AssetHoldingFieldNames {
-		if !strings.Contains(assetsTestProgram, field) {
+		fs := assetHoldingFieldSpecByName[field]
+		if fs.version <= version && !strings.Contains(assetsTestProgram, field) {
 			t.Errorf("TestAssets missing field %v", field)
 		}
 	}
 	for _, field := range AssetParamsFieldNames {
-		if !strings.Contains(assetsTestProgram, field) {
+		fs := assetParamsFieldSpecByName[field]
+		if fs.version <= version && !strings.Contains(assetsTestProgram, field) {
 			t.Errorf("TestAssets missing field %v", field)
 		}
 	}
 
 	txn := makeSampleTxn()
 	pre := defaultEvalParamsWithVersion(nil, &txn, directRefEnabledVersion-1)
-	now := defaultEvalParams(nil, &txn)
+	require.GreaterOrEqual(t, version, uint64(directRefEnabledVersion))
+	now := defaultEvalParamsWithVersion(nil, &txn, version)
 	ledger := logictest.MakeLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Sender: 1,
@@ -907,8 +925,12 @@ func TestAssets(t *testing.T) {
 
 	// but old code cannot
 	testProg(t, strings.Replace(assetsTestProgram, "int 0//account", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), directRefEnabledVersion-1, expect{3, "asset_holding_get AssetBalance arg 0 wanted type uint64..."})
-	testApp(t, strings.Replace(assetsTestProgram, "int 0//params", "int 55", -1), pre, "invalid Asset ref")
-	testApp(t, strings.Replace(assetsTestProgram, "int 55", "int 0", -1), pre, "err opcode")
+
+	if version < 5 {
+		// Can't run these with AppCreator anyway
+		testApp(t, strings.Replace(assetsTestProgram, "int 0//params", "int 55", -1), pre, "invalid Asset ref")
+		testApp(t, strings.Replace(assetsTestProgram, "int 55", "int 0", -1), pre, "err opcode")
+	}
 
 	// check holdings bool value
 	source := `intcblock 0 55 1
@@ -929,12 +951,12 @@ intc_2 // 1
 	testApp(t, source, now)
 
 	// check holdings invalid offsets
-	ops := testProg(t, source, AssemblerMaxVersion)
+	ops := testProg(t, source, version)
 	require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_holding_get"].Opcode, ops.Program[8])
 	ops.Program[9] = 0x02
 	_, err := EvalStateful(ops.Program, now)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid asset holding field 2")
+	require.Contains(t, err.Error(), "invalid asset_holding_get field 2")
 
 	// check holdings bool value
 	source = `intcblock 0 1
@@ -954,12 +976,12 @@ intc_1
 	ledger.NewAsset(txn.Txn.Sender, 55, params)
 	testApp(t, source, now)
 	// check holdings invalid offsets
-	ops = testProg(t, source, AssemblerMaxVersion)
+	ops = testProg(t, source, version)
 	require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_params_get"].Opcode, ops.Program[6])
 	ops.Program[7] = 0x20
 	_, err = EvalStateful(ops.Program, now)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid asset params field 32")
+	require.Contains(t, err.Error(), "invalid asset_params_get field 32")
 
 	// check empty string
 	source = `intcblock 0 1
@@ -2186,9 +2208,8 @@ func TestEnumFieldErrors(t *testing.T) {
 		TxnFieldTypes[Amount] = origTxnType
 	}()
 
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	_, err = Eval(ops.Program, ep)
+	ops := testProg(t, source, AssemblerMaxVersion)
+	_, err := Eval(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Amount expected field type is []byte but got uint64")
 	_, err = EvalStateful(ops.Program, ep)
@@ -2196,14 +2217,16 @@ func TestEnumFieldErrors(t *testing.T) {
 	require.Contains(t, err.Error(), "Amount expected field type is []byte but got uint64")
 
 	source = `global MinTxnFee`
-	origGlobalType := GlobalFieldTypes[MinTxnFee]
-	GlobalFieldTypes[MinTxnFee] = StackBytes
+
+	origMinTxnFs := globalFieldSpecByField[MinTxnFee]
+	badMinTxnFs := origMinTxnFs
+	badMinTxnFs.ftype = StackBytes
+	globalFieldSpecByField[MinTxnFee] = badMinTxnFs
 	defer func() {
-		GlobalFieldTypes[MinTxnFee] = origGlobalType
+		globalFieldSpecByField[MinTxnFee] = origMinTxnFs
 	}()
 
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops = testProg(t, source, AssemblerMaxVersion)
 	_, err = Eval(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "MinTxnFee expected field type is []byte but got uint64")
@@ -2239,14 +2262,15 @@ int 55
 asset_holding_get AssetBalance
 pop
 `
-	origAssetHoldingType := AssetHoldingFieldTypes[AssetBalance]
-	AssetHoldingFieldTypes[AssetBalance] = StackBytes
+	origBalanceFs := assetHoldingFieldSpecByField[AssetBalance]
+	badBalanceFs := origBalanceFs
+	badBalanceFs.ftype = StackBytes
+	assetHoldingFieldSpecByField[AssetBalance] = badBalanceFs
 	defer func() {
-		AssetHoldingFieldTypes[AssetBalance] = origAssetHoldingType
+		assetHoldingFieldSpecByField[AssetBalance] = origBalanceFs
 	}()
 
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops = testProg(t, source, AssemblerMaxVersion)
 	_, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "AssetBalance expected field type is []byte but got uint64")
@@ -2255,14 +2279,15 @@ pop
 asset_params_get AssetTotal
 pop
 `
-	origAssetTotalType := AssetParamsFieldTypes[AssetTotal]
-	AssetParamsFieldTypes[AssetTotal] = StackBytes
+	origTotalFs := assetParamsFieldSpecByField[AssetTotal]
+	badTotalFs := origTotalFs
+	badTotalFs.ftype = StackBytes
+	assetParamsFieldSpecByField[AssetTotal] = badTotalFs
 	defer func() {
-		AssetParamsFieldTypes[AssetTotal] = origAssetTotalType
+		assetParamsFieldSpecByField[AssetTotal] = origTotalFs
 	}()
 
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops = testProg(t, source, AssemblerMaxVersion)
 	_, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "AssetTotal expected field type is []byte but got uint64")

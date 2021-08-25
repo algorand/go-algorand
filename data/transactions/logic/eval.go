@@ -44,8 +44,8 @@ import (
 // EvalMaxVersion is the max version we can interpret and run
 const EvalMaxVersion = LogicVersion
 
-// EvalMaxScratchSize is the maximum number of scratch slots.
-const EvalMaxScratchSize = 255
+// The constants below control TEAL opcodes evaluation and MAY NOT be changed
+// without moving them into consensus parameters.
 
 // MaxStringSize is the limit of byte strings created by `concat`
 const MaxStringSize = 4096
@@ -57,7 +57,7 @@ const MaxByteMathSize = 64
 const MaxLogSize = 1024
 
 // MaxLogCalls is the limit of total log calls during a program execution
-const MaxLogCalls = config.MaxLogCalls
+const MaxLogCalls = 32
 
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
@@ -1797,27 +1797,25 @@ func opUncover(cx *EvalContext) {
 	cx.stack[topIdx] = sv
 }
 
-func (cx *EvalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, field uint64) (sv stackValue, err error) {
-	switch AssetHoldingField(field) {
+func (cx *EvalContext) assetHoldingToValue(holding *basics.AssetHolding, fs assetHoldingFieldSpec) (sv stackValue, err error) {
+	switch fs.field {
 	case AssetBalance:
 		sv.Uint = holding.Amount
 	case AssetFrozen:
 		sv.Uint = boolToUint(holding.Frozen)
 	default:
-		err = fmt.Errorf("invalid asset holding field %d", field)
+		err = fmt.Errorf("invalid asset_holding_get field %d", fs.field)
 		return
 	}
 
-	assetHoldingField := AssetHoldingField(field)
-	assetHoldingFieldType := AssetHoldingFieldTypes[assetHoldingField]
-	if !typecheck(assetHoldingFieldType, sv.argType()) {
-		err = fmt.Errorf("%s expected field type is %s but got %s", assetHoldingField.String(), assetHoldingFieldType.String(), sv.argType().String())
+	if !typecheck(fs.ftype, sv.argType()) {
+		err = fmt.Errorf("%s expected field type is %s but got %s", fs.field.String(), fs.ftype.String(), sv.argType().String())
 	}
 	return
 }
 
-func (cx *EvalContext) assetParamsEnumToValue(params *basics.AssetParams, creator basics.Address, field uint64) (sv stackValue, err error) {
-	switch AssetParamsField(field) {
+func (cx *EvalContext) assetParamsToValue(params *basics.AssetParams, creator basics.Address, fs assetParamsFieldSpec) (sv stackValue, err error) {
+	switch fs.field {
 	case AssetTotal:
 		sv.Uint = params.Total
 	case AssetDecimals:
@@ -1843,20 +1841,18 @@ func (cx *EvalContext) assetParamsEnumToValue(params *basics.AssetParams, creato
 	case AssetCreator:
 		sv.Bytes = creator[:]
 	default:
-		err = fmt.Errorf("invalid asset params field %d", field)
+		err = fmt.Errorf("invalid asset_params_get field %d", fs.field)
 		return
 	}
 
-	assetParamsField := AssetParamsField(field)
-	assetParamsFieldType := AssetParamsFieldTypes[assetParamsField]
-	if !typecheck(assetParamsFieldType, sv.argType()) {
-		err = fmt.Errorf("%s expected field type is %s but got %s", assetParamsField.String(), assetParamsFieldType.String(), sv.argType().String())
+	if !typecheck(fs.ftype, sv.argType()) {
+		err = fmt.Errorf("%s expected field type is %s but got %s", fs.field.String(), fs.ftype.String(), sv.argType().String())
 	}
 	return
 }
 
-func (cx *EvalContext) appParamsEnumToValue(params *basics.AppParams, field AppParamsField) (sv stackValue, err error) {
-	switch field {
+func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFieldSpec) (sv stackValue, err error) {
+	switch fs.field {
 	case AppApprovalProgram:
 		sv.Bytes = params.ApprovalProgram[:]
 	case AppClearStateProgram:
@@ -1872,14 +1868,13 @@ func (cx *EvalContext) appParamsEnumToValue(params *basics.AppParams, field AppP
 	case AppExtraProgramPages:
 		sv.Uint = uint64(params.ExtraProgramPages)
 	default:
-		// The pseudo fields AppCreator and AppAddress are handled outside this method
-		err = fmt.Errorf("invalid app params field %d", field)
+		// The pseudo fields AppCreator and AppAddress are handled before this method
+		err = fmt.Errorf("invalid app_params_get field %d", fs.field)
 		return
 	}
 
-	appParamsFieldType := AppParamsFieldTypes[field]
-	if !typecheck(appParamsFieldType, sv.argType()) {
-		err = fmt.Errorf("%s expected field type is %s but got %s", field.String(), appParamsFieldType.String(), sv.argType().String())
+	if !typecheck(fs.ftype, sv.argType()) {
+		err = fmt.Errorf("%s expected field type is %s but got %s", fs.field.String(), fs.ftype.String(), sv.argType().String())
 	}
 	return
 }
@@ -2352,8 +2347,8 @@ func (cx *EvalContext) getCreatorAddress() ([]byte, error) {
 
 var zeroAddress basics.Address
 
-func (cx *EvalContext) globalFieldToStack(field GlobalField) (sv stackValue, err error) {
-	switch field {
+func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, err error) {
+	switch fs.field {
 	case MinTxnFee:
 		sv.Uint = cx.Proto.MinTxnFee
 	case MinBalance:
@@ -2379,17 +2374,21 @@ func (cx *EvalContext) globalFieldToStack(field GlobalField) (sv stackValue, err
 	case CreatorAddress:
 		sv.Bytes, err = cx.getCreatorAddress()
 	default:
-		err = fmt.Errorf("invalid global[%d]", field)
+		err = fmt.Errorf("invalid global field %d", fs.field)
 	}
+
+	if !typecheck(fs.ftype, sv.argType()) {
+		err = fmt.Errorf("%s expected field type is %s but got %s", fs.field.String(), fs.ftype.String(), sv.argType().String())
+	}
+
 	return sv, err
 }
 
 func opGlobal(cx *EvalContext) {
-	gindex := uint64(cx.program[cx.pc+1])
-	globalField := GlobalField(gindex)
+	globalField := GlobalField(cx.program[cx.pc+1])
 	fs, ok := globalFieldSpecByField[globalField]
 	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid global[%d]", globalField)
+		cx.err = fmt.Errorf("invalid global field %d", globalField)
 		return
 	}
 	if (cx.runModeFlags & fs.mode) == 0 {
@@ -2397,15 +2396,9 @@ func opGlobal(cx *EvalContext) {
 		return
 	}
 
-	sv, err := cx.globalFieldToStack(globalField)
+	sv, err := cx.globalFieldToValue(fs)
 	if err != nil {
 		cx.err = err
-		return
-	}
-
-	globalFieldType := GlobalFieldTypes[globalField]
-	if !typecheck(globalFieldType, sv.argType()) {
-		cx.err = fmt.Errorf("%s expected field type is %s but got %s", globalField.String(), globalFieldType.String(), sv.argType().String())
 		return
 	}
 
@@ -3162,7 +3155,12 @@ func opAssetHoldingGet(cx *EvalContext) {
 		return
 	}
 
-	fieldIdx := uint64(cx.program[cx.pc+1])
+	holdingField := AssetHoldingField(cx.program[cx.pc+1])
+	fs, ok := assetHoldingFieldSpecByField[holdingField]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid asset_holding_get field %d", holdingField)
+		return
+	}
 
 	addr, _, err := cx.accountReference(cx.stack[prev])
 	if err != nil {
@@ -3181,7 +3179,7 @@ func opAssetHoldingGet(cx *EvalContext) {
 	if holding, err := cx.Ledger.AssetHolding(addr, asset); err == nil {
 		// the holding exist, read the value
 		exist = 1
-		value, err = cx.assetHoldingEnumToValue(&holding, fieldIdx)
+		value, err = cx.assetHoldingToValue(&holding, fs)
 		if err != nil {
 			cx.err = err
 			return
@@ -3200,7 +3198,12 @@ func opAssetParamsGet(cx *EvalContext) {
 		return
 	}
 
-	paramIdx := uint64(cx.program[cx.pc+1])
+	paramField := AssetParamsField(cx.program[cx.pc+1])
+	fs, ok := assetParamsFieldSpecByField[paramField]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid asset_params_get field %d", paramField)
+		return
+	}
 
 	asset, err := asaReference(cx, cx.stack[last].Uint, true)
 	if err != nil {
@@ -3213,7 +3216,7 @@ func opAssetParamsGet(cx *EvalContext) {
 	if params, creator, err := cx.Ledger.AssetParams(asset); err == nil {
 		// params exist, read the value
 		exist = 1
-		value, err = cx.assetParamsEnumToValue(&params, creator, paramIdx)
+		value, err = cx.assetParamsToValue(&params, creator, fs)
 		if err != nil {
 			cx.err = err
 			return
@@ -3232,7 +3235,12 @@ func opAppParamsGet(cx *EvalContext) {
 		return
 	}
 
-	paramIdx := uint64(cx.program[cx.pc+1])
+	paramField := AppParamsField(cx.program[cx.pc+1])
+	fs, ok := appParamsFieldSpecByField[paramField]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid app_params_get field %d", paramField)
+		return
+	}
 
 	app, err := appReference(cx, cx.stack[last].Uint, true)
 	if err != nil {
@@ -3246,15 +3254,14 @@ func opAppParamsGet(cx *EvalContext) {
 		// params exist, read the value
 		exist = 1
 
-		field := AppParamsField(paramIdx)
-		switch field {
+		switch fs.field {
 		case AppCreator:
 			value.Bytes = creator[:]
 		case AppAddress:
 			address := app.Address()
 			value.Bytes = address[:]
 		default:
-			value, err = cx.appParamsEnumToValue(&params, field)
+			value, err = cx.appParamsToValue(&params, fs)
 		}
 		if err != nil {
 			cx.err = err
