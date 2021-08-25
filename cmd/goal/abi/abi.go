@@ -584,7 +584,7 @@ func (v Value) Encode() ([]byte, error) {
 // It returns the difference between the current index and the index of the furthest consecutive Bool type.
 func findBoolLR(typeList []Type, index int, delta int) int {
 	until := 0
-	for true {
+	for {
 		curr := index + delta*until
 		if typeList[curr].typeFromEnum == Bool {
 			if curr != len(typeList)-1 && delta > 0 {
