@@ -46,6 +46,8 @@ export TEMPDIR=${SRCROOT}/tmp/out/e2e/${TEST_RUN_ID}
 echo "Test output can be found in ${TEMPDIR}"
 
 function cleanup() {
+  echo "Cleaning up temp dir."
+
   rm -rf "${TEMPDIR}"
 
   if ! ${NO_BUILD} ; then
@@ -131,9 +133,9 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     for script in "$SRCROOT"/test/scripts/e2e_subs/serial/*; do
         "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} $script
     done
-    duration "serial client runners"
 
     deactivate
+    duration "serial client runners"
 fi # if E2E_TEST_FILTER == "" or == "SCRIPTS"
 
 if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "GO" ]; then
