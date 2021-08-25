@@ -73,6 +73,12 @@ type player struct {
 	// PipelineParentRound is the parent round of this player, if pipelined.
 	PipelineParentRound round
 
+	// FrozenPipelining indicates that this player is currently frozen because
+	// something unexpected happened in the pipelining and the parent of this
+	// pipelined player might not actually get committed.  This flag causes
+	// the player to suppress relayActions.
+	FrozenPipelining bool
+
 	// pipelined is set to true if this player is part of a pipelinePlayer.
 	pipelined bool
 
@@ -619,7 +625,11 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			}
 			a = broadcastAction(protocol.ProposalPayloadTag, transmit)
 		}
-		return append(actions, a)
+		if p.FrozenPipelining {
+			return actions
+		} else {
+			return append(actions, a)
+		}
 	}
 
 	switch e.t() {
@@ -645,7 +655,9 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				return append(actions, vpa, ra)
 			}
 
-			actions = append(actions, ra)
+			if !p.FrozenPipelining {
+				actions = append(actions, ra)
+			}
 		}
 
 		// relay as the proposer
@@ -660,7 +672,9 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			up := e.Input.UnauthenticatedProposal
 
 			a := relayAction(e, protocol.ProposalPayloadTag, compoundMessage{Proposal: up, Vote: uv})
-			actions = append(actions, a)
+			if !p.FrozenPipelining {
+				actions = append(actions, a)
+			}
 		}
 
 		// If the payload is valid, check it against any received cert threshold.
@@ -703,7 +717,9 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			return append(actions, verifyVoteAction(e, uv.R.roundBranch(), uv.R.Period, 0))
 		} // else e.t() == voteVerified
 		v := e.Input.Vote
-		actions = append(actions, relayAction(e, protocol.AgreementVoteTag, v.u()))
+		if !p.FrozenPipelining {
+			actions = append(actions, relayAction(e, protocol.AgreementVoteTag, v.u()))
+		}
 		a1 := p.handle(r, ef)
 		return append(actions, a1...)
 
@@ -721,9 +737,11 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			ub := e.Input.UnauthenticatedBundle
 			return append(actions, verifyBundleAction(e, ub.roundBranch(), ub.Period, ub.Step))
 		}
-		a0 := relayAction(e, protocol.VoteBundleTag, ef.(thresholdEvent).Bundle)
-		a1 := p.handle(r, ef)
-		return append(append(actions, a0), a1...)
+		if !p.FrozenPipelining {
+			actions = append(actions, relayAction(e, protocol.VoteBundleTag, ef.(thresholdEvent).Bundle))
+		}
+		actions = append(actions, p.handle(r, ef)...)
+		return actions
 	}
 
 	panic("bad event")

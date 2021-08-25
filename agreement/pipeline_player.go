@@ -226,9 +226,7 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 		// is not on the fast path, and we should not speculate.
 		// Also wait for PipelineDelay before speculating.
 		if rp.Period > 0 || rp.PipelineDelay != 0 {
-			// XXX optimization: consider pausing speculation
-			// for any "child" rounds of rnd, if already present
-			// in p.Players.
+			p.freezeChildren(rnd)
 			continue
 		}
 
@@ -238,11 +236,36 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 			continue
 		}
 
+		// If we started pipelining for other payloads that were proposed for this round,
+		// freeze them for now..
+		p.freezeOtherChildren(rnd, bookkeeping.BlockHash(re.Proposal.BlockDigest))
+
 		nextrnd := round{Number: rnd.Number + 1, Branch: bookkeeping.BlockHash(re.Proposal.BlockDigest)}
 		actions = append(actions, p.ensurePlayer(r, nextrnd, re.Payload.prevVersion, rnd)...)
 	}
 
 	return actions
+}
+
+// freezeChildren freezes pipelining for all children of round r.
+func (p *pipelinePlayer) freezeChildren(r round) {
+	for rnd, rp := range p.Players {
+		if rp.PipelineParentRound == r {
+			rp.FrozenPipelining = true
+			p.freezeChildren(rnd)
+		}
+	}
+}
+
+// freezeOtherChildren freezes pipelining for all children of round r except those that
+// are speculating on round r having payload hash h.
+func (p *pipelinePlayer) freezeOtherChildren(r round, h bookkeeping.BlockHash) {
+	for rnd, rp := range p.Players {
+		if rp.PipelineParentRound == r && rnd.Branch != h {
+			rp.FrozenPipelining = true
+			p.freezeChildren(rnd)
+		}
+	}
 }
 
 // deleteRound deletes a round that is not possible (because its branch cannot
@@ -277,8 +300,9 @@ func (p *pipelinePlayer) pipelineDelay(ver protocol.ConsensusVersion) time.Durat
 
 // ensurePlayer creates a player for a particular round, if not already present.
 func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protocol.ConsensusVersion, pipelineParent round) []action {
-	_, ok := p.Players[nextrnd]
+	pp, ok := p.Players[nextrnd]
 	if ok {
+		pp.FrozenPipelining = false
 		return nil
 	}
 
@@ -300,7 +324,7 @@ func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protoco
 func (p *pipelinePlayer) externalDemuxSignals() pipelineExternalDemuxSignals {
 	s := make([]externalDemuxSignals, 0, len(p.Players))
 	for _, p := range p.Players {
-		if p.Decided != (bookkeeping.BlockHash{}) {
+		if p.Decided != (bookkeeping.BlockHash{}) || p.FrozenPipelining {
 			continue
 		}
 
