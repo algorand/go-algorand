@@ -285,6 +285,22 @@ func (l *testLedger) Wait(r basics.Round, leafBranch bookkeeping.BlockHash) chan
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	// Check for speculative blocks
+	for {
+		bc, ok := l.speculative[leafBranch]
+		if !ok {
+			break
+		}
+
+		if bc.block.Round() == r {
+			c := make(chan struct{})
+			close(c)
+			return c
+		}
+
+		leafBranch = bc.block.Branch
+	}
+
 	if _, ok := l.notifications[r]; !ok {
 		l.notifications[r] = makeSignal()
 	}
@@ -412,6 +428,15 @@ func (l *testLedger) EnsureBlock(e bookkeeping.Block, c Certificate) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	// Check if this is a speculative block.  If so, install the
+	// certificate for it.
+	_, specok := l.speculative[e.Hash()]
+	if specok {
+		l.speculative[e.Hash()] = blockAndCert{block: e, cert: c}
+		l.advanceSpeculative()
+		return
+	}
+
 	if _, ok := l.blocks[e.Round()]; ok {
 		if l.blocks[e.Round()].block.Digest() != e.Digest() {
 			err := fmt.Errorf("testLedger.EnsureBlock: called with conflicting entries in round %d", e.Round())
@@ -432,6 +457,24 @@ func (l *testLedger) EnsureBlock(e bookkeeping.Block, c Certificate) {
 	}
 
 	l.notify(e.Round())
+	l.advanceSpeculative()
+}
+
+func (l *testLedger) advanceSpeculative() {
+again:
+	for h, e := range l.speculative {
+		blk := e.block
+		if blk.Round() < l.nextRound {
+			delete(l.speculative, h)
+			continue
+		}
+		if blk.Round() == l.nextRound {
+			l.blocks[blk.Round()] = e
+			l.nextRound = blk.Round() + 1
+			l.notify(blk.Round())
+			goto again
+		}
+	}
 }
 
 func (l *testLedger) EnsureDigest(c Certificate, verifier *AsyncVoteVerifier) {
