@@ -91,6 +91,14 @@ import (
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
 //
+// GenericDigest
+//       |-----> MarshalMsg
+//       |-----> CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> Msgsize
+//       |-----> MsgIsZero
+//
 // HashFactory
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
@@ -912,6 +920,52 @@ func (z *DilithiumVerifier) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *DilithiumVerifier) MsgIsZero() bool {
 	return ((*z).PublicKey == (DPublicKey{}))
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z GenericDigest) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, []byte(z))
+	return
+}
+
+func (_ GenericDigest) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(GenericDigest)
+	if !ok {
+		_, ok = (z).(*GenericDigest)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *GenericDigest) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 []byte
+		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = GenericDigest(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (_ *GenericDigest) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*GenericDigest)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z GenericDigest) Msgsize() (s int) {
+	s = msgp.BytesPrefixSize + len([]byte(z))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z GenericDigest) MsgIsZero() bool {
+	return len(z) == 0
 }
 
 // MarshalMsg implements msgp.Marshaler

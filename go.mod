@@ -5,6 +5,7 @@ go 1.14
 require (
 	github.com/algonathan/sumhash v0.0.0-20210818111728-21c61e0451b8
 	github.com/algorand/dilithium v0.0.0-20210811122002-1ca237b9c9ac
+	github.com/algorand/go-algorand/cmd/partitiontest_linter v0.0.0-20210823195936-bd5a00092c8a // indirect
 	github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d
 	github.com/algorand/go-deadlock v0.2.1
 	github.com/algorand/graphtrace v0.0.0-20201117160756-e524ed1a6f64

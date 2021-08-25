@@ -53,8 +53,8 @@ func (v *Verifier) Verify(c *Cert) error {
 		return err
 	}
 	// Verify all of the reveals
-	sigs := make(map[uint64]merklearray.Digest)
-	parts := make(map[uint64]merklearray.Digest)
+	sigs := make(map[uint64]crypto.GenericDigest)
+	parts := make(map[uint64]crypto.GenericDigest)
 	for pos, r := range c.Reveals {
 		sigs[pos] = crypto.HashSum(hsh, r.SigSlot)
 		parts[pos] = crypto.HashSum(hsh, r.Part)

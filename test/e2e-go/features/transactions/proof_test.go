@@ -101,7 +101,7 @@ func TestTxnMerkleProof(t *testing.T) {
 	merkleNode = append(merkleNode, txid[:]...)
 	merkleNode = append(merkleNode, proofresp.Stibhash...)
 
-	elems := make(map[uint64]merklearray.Digest)
+	elems := make(map[uint64]crypto.GenericDigest)
 	tmp := crypto.Hash(merkleNode)
 	elems[proofresp.Idx] = tmp[:]
 	err = merklearray.Verify(blk.TxnRoot, elems, &proof)

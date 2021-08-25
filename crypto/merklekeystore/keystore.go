@@ -285,8 +285,8 @@ func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashabl
 
 	pos := roundToIndex(firstValid, round, interval)
 	isInTree := merklearray.Verify(
-		(merklearray.Digest)(v.Root[:]),
-		map[uint64]merklearray.Digest{pos: crypto.HashSum(hsh, &ephkey)},
+		(crypto.GenericDigest)(v.Root[:]),
+		map[uint64]crypto.GenericDigest{pos: crypto.HashSum(hsh, &ephkey)},
 		(*merklearray.Proof)(&sig.Proof),
 	)
 	if isInTree != nil {

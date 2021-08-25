@@ -83,7 +83,7 @@ func TestTxnMerkle(t *testing.T) {
 			proof, err := tree.Prove([]uint64{i})
 			require.NoError(t, err)
 
-			elemVerif := make(map[uint64]merklearray.Digest)
+			elemVerif := make(map[uint64]crypto.GenericDigest)
 
 			hsh.Write(elems[i].HashRepresentation())
 			elemVerif[i] = hsh.Sum(nil)

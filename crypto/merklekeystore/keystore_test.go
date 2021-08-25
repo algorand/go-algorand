@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
 )
@@ -292,7 +291,7 @@ func copySig(sig Signature) Signature {
 }
 
 func copyProof(proof Proof) Proof {
-	path := make([]merklearray.Digest, len(proof.Path))
+	path := make([]crypto.GenericDigest, len(proof.Path))
 	for i, digest := range proof.Path {
 		path[i] = make([]byte, len(digest))
 		copy(path[i], digest)

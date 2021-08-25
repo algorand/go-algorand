@@ -34,6 +34,14 @@ type Tree struct {
 	Hash   crypto.HashFactory `codec:"hsh"`
 }
 
+// Proof contains the merkle path, along with the hash factory that should be used.
+type Proof struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Path        []crypto.GenericDigest `codec:"pth,allocbound=-"`
+	HashFactory crypto.HashFactory     `codec:"hsh"`
+}
+
 func (tree *Tree) topLayer() Layer {
 	return tree.Levels[len(tree.Levels)-1]
 }
@@ -117,7 +125,7 @@ func (tree *Tree) buildLayers(leaves Layer) {
 func (tree *Tree) Root() TreeDigest {
 	// Special case: commitment to zero-length array
 	if len(tree.Levels) == 0 {
-		return Digest{}
+		return crypto.GenericDigest{}
 	}
 
 	return tree.topLayer()[0]
@@ -210,7 +218,7 @@ func (tree *Tree) buildNextLayer() {
 // Verify ensures that the positions in elems correspond to the respective hashes
 // in a tree with the given root hash.  The proof is expected to be the proof
 // returned by Prove().
-func Verify(root TreeDigest, elems map[uint64]Digest, proof *Proof) error {
+func Verify(root TreeDigest, elems map[uint64]crypto.GenericDigest, proof *Proof) error {
 	if len(elems) == 0 {
 		if proof == nil || len(proof.Path) != 0 {
 			return fmt.Errorf("non-empty proof for empty set of elements")
@@ -250,7 +258,7 @@ func verifyPath(root TreeDigest, proof *Proof, pl partialLayer) error {
 	return inspectRoot(root, pl)
 }
 
-func buildPartialLayer(elems map[uint64]Digest) partialLayer {
+func buildPartialLayer(elems map[uint64]crypto.GenericDigest) partialLayer {
 	pl := make(partialLayer, 0, len(elems))
 	for pos, elem := range elems {
 		pl = append(pl, layerItem{

@@ -29,12 +29,12 @@ import (
 // or use the set of sibling hints, if tree is nil.
 type siblings struct {
 	tree  *Tree
-	hints []Digest
+	hints []crypto.GenericDigest
 }
 
 // get returns the sibling from tree level l (0 being the leaves)
 // position i.
-func (s *siblings) get(l uint64, i uint64) (res Digest, err error) {
+func (s *siblings) get(l uint64, i uint64) (res crypto.GenericDigest, err error) {
 	if s.tree == nil {
 		if len(s.hints) > 0 {
 			res = s.hints[0].ToSlice()
@@ -67,7 +67,7 @@ type partialLayer []layerItem
 
 type layerItem struct {
 	pos  uint64
-	hash Digest
+	hash crypto.GenericDigest
 }
 
 // up takes a partial Layer at level l, and returns the next-higher (partial)
@@ -87,7 +87,7 @@ func (pl partialLayer) up(s *siblings, l uint64, doHash bool, hsh hash.Hash) (pa
 		posHash := item.hash
 
 		siblingPos := pos ^ 1
-		var siblingHash Digest
+		var siblingHash crypto.GenericDigest
 		if i+1 < len(pl) && pl[i+1].pos == siblingPos {
 			// If our sibling is also in the partial Layer, use its
 			// hash (and skip over its position).
@@ -103,7 +103,7 @@ func (pl partialLayer) up(s *siblings, l uint64, doHash bool, hsh hash.Hash) (pa
 		}
 
 		nextLayerPos := pos / 2
-		var nextLayerHash Digest
+		var nextLayerHash crypto.GenericDigest
 
 		if doHash {
 			var p pair
