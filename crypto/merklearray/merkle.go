@@ -68,9 +68,7 @@ func buildWorker(ws *workerState, array Array, leaves Layer, h crypto.HashFactor
 				errs.nonBlockingSend(err)
 				return
 			}
-			hash.Write(m)
-			leaves[i] = hash.Sum(nil)
-			hash.Reset()
+			leaves[i] = crypto.HashBytes(hash, m)
 		}
 
 		batchSize++

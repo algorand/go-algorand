@@ -49,8 +49,13 @@ func (h HashFactory) NewHash() (hash.Hash, error) {
 // HashSum Makes it easier to sum using hash interface and Hashable interface
 func HashSum(hsh hash.Hash, h Hashable) []byte {
 	rep := hashRep(h)
-	hsh.Write(rep)
-	out := hsh.Sum(nil)
-	hsh.Reset()
-	return out
+	return HashBytes(hsh, rep)
+}
+
+// HashBytes Makes it easier to sum using hash interface.
+func HashBytes(hash hash.Hash, m []byte) []byte {
+	hash.Write(m)
+	outhash := hash.Sum(nil)
+	hash.Reset()
+	return outhash
 }
