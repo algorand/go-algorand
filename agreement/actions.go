@@ -476,6 +476,8 @@ func zeroAction(t actionType) action {
 		return cryptoAction{}
 	case ensure:
 		return ensureAction{}
+	case ensureSpeculative:
+		return ensureSpeculativeAction{}
 	case rezero:
 		return rezeroAction{}
 	case attest, assemble, repropose:

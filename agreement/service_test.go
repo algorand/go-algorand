@@ -2388,7 +2388,7 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 	const expectNumRounds = 4
 	for i := 1; i < numNodes; i++ {
 		if ledgers[i].NextRound() != startRound+basics.Round(expectNumRounds) {
-			panic("did not progress 4 rounds")
+			t.Errorf("did not progress 4 rounds: node %d: %d != %d+%d", i, ledgers[i].NextRound(), startRound, expectNumRounds)
 		}
 	}
 	for j := 0; j < expectNumRounds; j++ {
@@ -2397,7 +2397,7 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 		for i := 1; i < numNodes; i++ {
 			ledger := ledgers[i].(*testLedger)
 			if ledger.blocks[startRound+basics.Round(j)].block.Digest() != reference {
-				panic("wrong block confirmed")
+				t.Errorf("wrong block confirmed: node %d", i)
 			}
 		}
 	}
