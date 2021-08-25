@@ -130,7 +130,7 @@ const validateProof = false
 func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 	if len(idxs) == 0 {
 		return &Proof{
-			HashFactory: crypto.HashFactory{},
+			HashFactory: tree.Hash,
 		}, nil
 	}
 
