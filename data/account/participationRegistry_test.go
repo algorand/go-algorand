@@ -23,9 +23,11 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -34,7 +36,7 @@ func getRegistry(t *testing.T) *participationDB {
 	rootDB, err := db.OpenPair(t.Name(), true)
 	require.NoError(t, err)
 
-	registry, err := makeParticipationRegistry(rootDB)
+	registry, err := makeParticipationRegistry(rootDB, logging.TestingLog(t))
 	require.NoError(t, err)
 	require.NotNil(t, registry)
 
@@ -288,6 +290,7 @@ func TestParticipation_Record(t *testing.T) {
 
 	test(registry)
 	registry.Flush()
+	a.Len(registry.dirty, 0)
 
 	// Re-initialize
 	registry.initializeCache()
@@ -365,26 +368,29 @@ func TestParticipation_RecordMultipleUpdates(t *testing.T) {
 
 	// Force the DB to have 2 active keys for one account by tampering with the private cache variable
 	recordCopy := registry.cache[p2.ParticipationID()]
-	recordCopy.FirstValid = p2.FirstValid
-	recordCopy.LastValid = p2.LastValid
+	recordCopy.RegisteredFirst = p2.FirstValid
+	recordCopy.RegisteredLast = p2.LastValid
 	registry.cache[p2.ParticipationID()] = recordCopy
 	registry.dirty[p2.ParticipationID()] = struct{}{}
 	registry.Flush()
+	a.Len(registry.dirty, 0)
 	registry.initializeCache()
 
 	// Verify bad state - both records are valid until round 3 million
+	a.NotEqual(p.ParticipationID(), p2.ParticipationID())
 	recordTest := make([]ParticipationRecord, 0)
+
 	recordP, err := registry.Get(p.ParticipationID())
 	a.NoError(err)
 	recordTest = append(recordTest, recordP)
+
 	recordP2, err := registry.Get(p2.ParticipationID())
 	a.NoError(err)
 	recordTest = append(recordTest, recordP2)
 
 	// Make sure both accounts are active for the test round
 	for _, record := range recordTest {
-		a.LessOrEqual(uint64(record.FirstValid), uint64(testRound))
-		a.GreaterOrEqual(uint64(record.LastValid), uint64(testRound))
+		a.True(recordActive(record, testRound), "both records should be active")
 	}
 
 	err = registry.Record(p.Parent, testRound, Vote)
@@ -474,10 +480,6 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 
 	// Now that the DB has multiple records for one participation ID, check that all the methods notice.
 
-	// Fetching by ID
-	_, err = registry.get(id)
-	a.EqualError(err, ErrMultipleKeysForID.Error())
-
 	// Initializing the cache
 	err = registry.initializeCache()
 	a.EqualError(err, ErrMultipleKeysForID.Error())
@@ -500,5 +502,29 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 	// Flushing changes detects that multiple records are updated
 	registry.dirty[id] = struct{}{}
 	err = registry.Flush()
+	a.Len(registry.dirty, 1)
 	a.EqualError(err, ErrMultipleKeysForID.Error())
 }
+
+func TestParticipation_NoKeyToUpdate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+	registry := getRegistry(t)
+	defer registry.Close()
+	
+	registry.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		record := ParticipationRecord{
+			ParticipationID: ParticipationID{},
+			Account:         basics.Address{},
+			FirstValid:      1,
+			LastValid:       2,
+			KeyDilution:     3,
+			RegisteredFirst: 4,
+			RegisteredLast:  5,
+		}
+		err := registry.updateRollingFields(ctx, tx, record)
+		a.EqualError(err, ErrNoKeyForID.Error())
+		return nil
+	})
+}
+
