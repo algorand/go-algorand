@@ -95,7 +95,8 @@ func (s *Signer) Length() uint64 {
 	return uint64(len(s.SignatureAlgorithms))
 }
 
-// Marshal Gets the hash of the VerifyingKey tied to the signatureAlgorithm in pos.
+// Marshal Gets []byte to represent a VerifyingKey tied to the signatureAlgorithm in a pos.
+// used to implement the merklearray.Array interface needed to build a tree.
 func (s *Signer) Marshal(pos uint64) ([]byte, error) {
 	signer, err := s.SignatureAlgorithms[pos].GetSigner()
 	if err != nil {
