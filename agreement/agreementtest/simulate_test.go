@@ -171,6 +171,19 @@ func (l *testLedger) Wait(r basics.Round, h bookkeeping.BlockHash) chan struct{}
 	return l.notifications[r].ch
 }
 
+func (l *testLedger) BlockHash(r basics.Round, h bookkeeping.BlockHash) (bookkeeping.BlockHash, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if r >= l.nextRound {
+		err := fmt.Errorf("BlockHash called on future round: %v > %v!", r, l.nextRound)
+		panic(err)
+	}
+
+	b := l.entries[r]
+	return b.Hash(), nil
+}
+
 // note: this must be called when any new entry is written
 // this should be called while the lock l.mu is held
 func (l *testLedger) notify(r basics.Round) {
@@ -243,6 +256,10 @@ func (l *testLedger) ConsensusParams(basics.Round, bookkeeping.BlockHash) (confi
 
 func (l *testLedger) ConsensusVersion(basics.Round, bookkeeping.BlockHash) (protocol.ConsensusVersion, error) {
 	return protocol.ConsensusCurrentVersion, nil
+}
+
+func (l *testLedger) EnsureSpeculativeBlock(e agreement.ValidatedBlock) {
+	panic("EnsureSpeculativeBlock not supported")
 }
 
 func (l *testLedger) EnsureValidatedBlock(e agreement.ValidatedBlock, c agreement.Certificate) {

@@ -76,11 +76,18 @@ func (i *instant) TimeoutAt(d time.Duration) <-chan time.Time {
 	return ta
 }
 
-func (i *instant) Zero() timers.Clock {
+func (i *instant) Zero(label interface{}) timers.Clock {
 	i.Z0 <- struct{}{}
 	// pause here until runRound is called
 	i.Z1 <- struct{}{}
 	return i
+}
+
+func (i *instant) DurationUntil(t time.Time) time.Duration {
+	return 0
+}
+
+func (i *instant) GC() {
 }
 
 func (i *instant) runRound(r basics.Round) {
@@ -161,7 +168,7 @@ func Simulate(dbname string, n basics.Round, roundDeadline time.Duration, ledger
 	parameters := agreement.Parameters{
 		Logger:         log,
 		Accessor:       accessor,
-		Clock:          stopwatch,
+		ClockFactory:   stopwatch,
 		Network:        gossip.WrapNetwork(new(blackhole), log),
 		Ledger:         ledger,
 		BlockFactory:   proposalFactory,
