@@ -17,6 +17,7 @@
 package merklearray
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 
@@ -29,53 +30,69 @@ type Tree struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// Level 0 is the leaves.
-	Levels []Layer `codec:"lvls,allocbound=-"`
+	Levels []Layer            `codec:"lvls,allocbound=-"`
+	Hash   crypto.HashFactory `codec:"hsh"`
+}
+
+// Proof contains the merkle path, along with the hash factory that should be used.
+type Proof struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Path        []crypto.GenericDigest `codec:"pth,allocbound=-"`
+	HashFactory crypto.HashFactory     `codec:"hsh"`
 }
 
 func (tree *Tree) topLayer() Layer {
 	return tree.Levels[len(tree.Levels)-1]
 }
 
-func buildWorker(ws *workerState, array Array, leaves Layer, errs chan error) {
+type errorChannel chan error
+
+func (ch errorChannel) nonBlockingSend(e error) {
+	select {
+	case ch <- e:
+	default:
+	}
+}
+
+func buildWorker(ws *workerState, array Array, leaves Layer, h crypto.HashFactory, errs errorChannel) {
+	defer ws.wg.Done()
+
 	ws.started()
 	batchSize := uint64(1)
-
+	hash, err := h.NewHash()
+	if err != nil {
+		errs.nonBlockingSend(err)
+		return
+	}
 	for {
 		off := ws.next(batchSize)
 		if off >= ws.maxidx {
-			goto done
+			return
 		}
 
 		for i := off; i < off+batchSize && i < ws.maxidx; i++ {
-			hash, err := array.GetHash(i)
+			m, err := array.Marshal(i)
 			if err != nil {
-				select {
-				case errs <- err:
-				default:
-				}
-
-				goto done
+				errs.nonBlockingSend(err)
+				return
 			}
-
-			leaves[i] = hash
+			leaves[i] = crypto.HashBytes(hash, m)
 		}
 
 		batchSize++
 	}
-
-done:
-	ws.done()
 }
 
 // Build constructs a Merkle tree given an array.
-func Build(array Array) (*Tree, error) {
+func Build(array Array, factory crypto.HashFactory) (*Tree, error) {
 	arraylen := array.Length()
 	leaves := make(Layer, arraylen)
 	errs := make(chan error, 1)
 
 	ws := newWorkerState(arraylen)
 	for ws.nextWorker() {
-		go buildWorker(ws, array, leaves, errs)
+		go buildWorker(ws, array, leaves, factory, errs)
 	}
 	ws.wait()
 
@@ -85,25 +102,30 @@ func Build(array Array) (*Tree, error) {
 	default:
 	}
 
-	tree := &Tree{}
-
-	if arraylen > 0 {
-		tree.Levels = []Layer{leaves}
-
-		for len(tree.topLayer()) > 1 {
-			tree.Levels = append(tree.Levels, tree.topLayer().up())
-		}
+	tree := &Tree{
+		Levels: nil,
+		Hash:   factory,
 	}
 
+	tree.buildLayers(leaves)
 	return tree, nil
 }
 
+func (tree *Tree) buildLayers(leaves Layer) {
+	if len(leaves) == 0 {
+		return
+	}
+	tree.Levels = []Layer{leaves}
+	for len(tree.topLayer()) > 1 {
+		tree.buildNextLayer()
+	}
+}
+
 // Root returns the root hash of the tree.
-func (tree *Tree) Root() crypto.Digest {
+func (tree *Tree) Root() crypto.GenericDigest {
 	// Special case: commitment to zero-length array
 	if len(tree.Levels) == 0 {
-		var zero crypto.Digest
-		return zero
+		return crypto.GenericDigest{}
 	}
 
 	return tree.topLayer()[0]
@@ -113,9 +135,11 @@ const validateProof = false
 
 // Prove constructs a proof for some set of positions in the array that was
 // used to construct the tree.
-func (tree *Tree) Prove(idxs []uint64) ([]crypto.Digest, error) {
+func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 	if len(idxs) == 0 {
-		return nil, nil
+		return &Proof{
+			HashFactory: tree.Hash,
+		}, nil
 	}
 
 	// Special case: commitment to zero-length array
@@ -145,10 +169,13 @@ func (tree *Tree) Prove(idxs []uint64) ([]crypto.Digest, error) {
 	s := &siblings{
 		tree: tree,
 	}
-
+	hs, err := tree.Hash.NewHash()
+	if err != nil {
+		return nil, err
+	}
 	for l := uint64(0); l < uint64(len(tree.Levels)-1); l++ {
 		var err error
-		pl, err = pl.up(s, l, validateProof)
+		pl, err = pl.up(s, l, validateProof, hs)
 		if err != nil {
 			return nil, err
 		}
@@ -160,45 +187,65 @@ func (tree *Tree) Prove(idxs []uint64) ([]crypto.Digest, error) {
 	}
 
 	if validateProof {
-		computedroot := pl[0]
-		if computedroot.pos != 0 || computedroot.hash != tree.topLayer()[0] {
-			return nil, fmt.Errorf("internal error: root mismatch during proof")
+		if err := inspectRoot(tree.topLayer()[0], pl); err != nil {
+			return nil, err
 		}
 	}
 
-	return s.hints, nil
+	return &Proof{
+		Path:        s.hints,
+		HashFactory: tree.Hash,
+	}, nil
+}
+
+func (tree *Tree) buildNextLayer() {
+	l := tree.topLayer()
+	n := len(l)
+	newLayer := make(Layer, (uint64(n)+1)/2)
+
+	ws := newWorkerState(uint64(n))
+	for ws.nextWorker() {
+		// no need to inspect error here -
+		// the factory should've been used to generate hash func in the first layer build
+		h, _ := tree.Hash.NewHash()
+		go upWorker(ws, l, newLayer, h)
+	}
+	ws.wait()
+	tree.Levels = append(tree.Levels, newLayer)
 }
 
 // Verify ensures that the positions in elems correspond to the respective hashes
 // in a tree with the given root hash.  The proof is expected to be the proof
 // returned by Prove().
-func Verify(root crypto.Digest, elems map[uint64]crypto.Digest, proof []crypto.Digest) error {
+func Verify(root crypto.GenericDigest, elems map[uint64]crypto.GenericDigest, proof *Proof) error {
 	if len(elems) == 0 {
-		if len(proof) != 0 {
+		if proof != nil && len(proof.Path) != 0 {
 			return fmt.Errorf("non-empty proof for empty set of elements")
 		}
-
 		return nil
 	}
 
-	pl := make(partialLayer, 0, len(elems))
-	for pos, elem := range elems {
-		pl = append(pl, layerItem{
-			pos:  pos,
-			hash: elem,
-		})
+	pl := buildPartialLayer(elems)
+	return verifyPath(root, proof, pl)
+}
+
+func verifyPath(root crypto.GenericDigest, proof *Proof, pl partialLayer) error {
+	if proof == nil {
+		return inspectRoot(root, pl)
 	}
 
-	sort.Slice(pl, func(i, j int) bool { return pl[i].pos < pl[j].pos })
+	hints := proof.Path
+	hsh, err := proof.HashFactory.NewHash()
+	if err != nil {
+		return err
+	}
 
 	s := &siblings{
-		hints: proof,
+		hints: hints,
 	}
 
 	for l := uint64(0); len(s.hints) > 0 || len(pl) > 1; l++ {
-		var err error
-		pl, err = pl.up(s, l, true)
-		if err != nil {
+		if pl, err = pl.up(s, l, true, hsh); err != nil {
 			return err
 		}
 
@@ -207,10 +254,26 @@ func Verify(root crypto.Digest, elems map[uint64]crypto.Digest, proof []crypto.D
 		}
 	}
 
-	computedroot := pl[0]
-	if computedroot.pos != 0 || computedroot.hash != root {
-		return fmt.Errorf("root mismatch")
+	return inspectRoot(root, pl)
+}
+
+func buildPartialLayer(elems map[uint64]crypto.GenericDigest) partialLayer {
+	pl := make(partialLayer, 0, len(elems))
+	for pos, elem := range elems {
+		pl = append(pl, layerItem{
+			pos:  pos,
+			hash: elem.ToSlice(),
+		})
 	}
 
+	sort.Slice(pl, func(i, j int) bool { return pl[i].pos < pl[j].pos })
+	return pl
+}
+
+func inspectRoot(root crypto.GenericDigest, pl partialLayer) error {
+	computedroot := pl[0]
+	if computedroot.pos != 0 || !bytes.Equal(computedroot.hash, root) {
+		return fmt.Errorf("root mismatch")
+	}
 	return nil
 }

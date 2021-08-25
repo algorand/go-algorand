@@ -129,12 +129,12 @@ func (sc sigsToCommit) Length() uint64 {
 	return uint64(len(sc))
 }
 
-func (sc sigsToCommit) GetHash(pos uint64) (crypto.Digest, error) {
+func (sc sigsToCommit) Marshal(pos uint64) ([]byte, error) {
 	if pos >= uint64(len(sc)) {
-		return crypto.Digest{}, fmt.Errorf("pos %d past end %d", pos, len(sc))
+		return nil, fmt.Errorf("pos %d past end %d", pos, len(sc))
 	}
 
-	return crypto.HashObj(&sc[pos].sigslotCommit), nil
+	return crypto.HashRep(&sc[pos].sigslotCommit), nil
 }
 
 // coinIndex returns the position pos in the sigs array such that the sum
@@ -187,14 +187,14 @@ func (b *Builder) Build() (*Cert, error) {
 	}
 	b.sigsHasValidL = true
 
-	sigtree, err := merklearray.Build(sigsToCommit(b.sigs))
+	sigtree, err := merklearray.Build(sigsToCommit(b.sigs), crypto.HashFactory{HashType: crypto.Sha512_256})
 	if err != nil {
 		return nil, err
 	}
 
 	// Reveal sufficient number of signatures
 	c := &Cert{
-		SigCommit:    sigtree.Root(),
+		SigCommit:    sigtree.Root().To32Byte(),
 		SignedWeight: b.signedWeight,
 		Reveals:      make(map[uint64]Reveal),
 	}
@@ -213,7 +213,7 @@ func (b *Builder) Build() (*Cert, error) {
 			SignedWeight: c.SignedWeight,
 			ProvenWeight: b.ProvenWeight,
 			Sigcom:       c.SigCommit,
-			Partcom:      b.parttree.Root(),
+			Partcom:      b.parttree.Root().To32Byte(),
 			MsgHash:      msgHash,
 		}
 
@@ -242,15 +242,18 @@ func (b *Builder) Build() (*Cert, error) {
 		proofPositions = append(proofPositions, pos)
 	}
 
-	c.SigProofs, err = sigtree.Prove(proofPositions)
+	sigProofs, err := sigtree.Prove(proofPositions)
 	if err != nil {
 		return nil, err
 	}
 
-	c.PartProofs, err = b.parttree.Prove(proofPositions)
+	partProofs, err := b.parttree.Prove(proofPositions)
 	if err != nil {
 		return nil, err
 	}
+
+	c.SigProofs = *sigProofs
+	c.PartProofs = *partProofs
 
 	return c, nil
 }

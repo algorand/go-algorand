@@ -17,6 +17,8 @@
 package merklearray
 
 import (
+	"hash"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -25,12 +27,12 @@ import (
 // level of the tree.  Hashes beyond the end of the array (e.g., if the
 // number of leaves is not an exact power of 2) are implicitly zero.
 //msgp:allocbound Layer -
-type Layer []crypto.Digest
+type Layer []crypto.GenericDigest
 
 // A pair represents an internal node in the Merkle tree.
 type pair struct {
-	l crypto.Digest
-	r crypto.Digest
+	l crypto.GenericDigest
+	r crypto.GenericDigest
 }
 
 func (p *pair) ToBeHashed() (protocol.HashID, []byte) {
@@ -40,17 +42,17 @@ func (p *pair) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.MerkleArrayNode, buf[:]
 }
 
-// Hash implements an optimized version of crypto.HashObj(p).
-func (p *pair) Hash() crypto.Digest {
+func (p *pair) Marshal() []byte {
 	var buf [len(protocol.MerkleArrayNode) + 2*crypto.DigestSize]byte
 	s := buf[:0]
 	s = append(s, protocol.MerkleArrayNode...)
 	s = append(s, p.l[:]...)
-	s = append(s, p.r[:]...)
-	return crypto.Hash(s)
+	return append(s, p.r[:]...)
 }
 
-func upWorker(ws *workerState, in Layer, out Layer) {
+func upWorker(ws *workerState, in Layer, out Layer, h hash.Hash) {
+	defer ws.wg.Done()
+
 	ws.started()
 	batchSize := uint64(2)
 
@@ -66,27 +68,10 @@ func upWorker(ws *workerState, in Layer, out Layer) {
 			if i+1 < ws.maxidx {
 				p.r = in[i+1]
 			}
-			out[i/2] = p.Hash()
+
+			out[i/2] = crypto.HashSum(h, &p)
 		}
 
 		batchSize += 2
 	}
-
-	ws.done()
-}
-
-// up takes a Layer representing some level in the tree,
-// and returns the next-higher level in the tree,
-// represented as a Layer.
-func (l Layer) up() Layer {
-	n := len(l)
-	res := make(Layer, (uint64(n)+1)/2)
-
-	ws := newWorkerState(uint64(n))
-	for ws.nextWorker() {
-		go upWorker(ws, l, res)
-	}
-	ws.wait()
-
-	return res
 }

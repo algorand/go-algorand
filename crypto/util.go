@@ -34,7 +34,8 @@ type Hashable interface {
 	ToBeHashed() (protocol.HashID, []byte)
 }
 
-func hashRep(h Hashable) []byte {
+// HashRep  is a tmp function to export hashRep.
+func HashRep(h Hashable) []byte {
 	hashid, data := h.ToBeHashed()
 	return append([]byte(hashid), data...)
 }
@@ -44,6 +45,16 @@ const DigestSize = sha512.Size256
 
 // Digest represents a 32-byte value holding the 256-bit Hash digest.
 type Digest [DigestSize]byte
+
+// To32Byte implements merklearray.TreeDigest
+func (d Digest) To32Byte() [32]byte {
+	return d
+}
+
+// ToSlice implements merklearray.TreeDigest
+func (d Digest) ToSlice() []byte {
+	return d[:]
+}
 
 // String returns the digest in a human-readable Base32 string
 func (d Digest) String() string {
@@ -81,7 +92,7 @@ func Hash(data []byte) Digest {
 
 // HashObj computes a hash of a Hashable object and its type
 func HashObj(h Hashable) Digest {
-	return Hash(hashRep(h))
+	return Hash(HashRep(h))
 }
 
 // NewHash returns a sha512-256 object to do the same operation as Hash()

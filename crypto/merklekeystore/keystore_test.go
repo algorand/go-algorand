@@ -193,7 +193,7 @@ func TestSignatureStructure(t *testing.T) {
 
 	proof, err := signer.Tree.Prove([]uint64{1})
 	a.NoError(err)
-	a.Equal(Proof(proof), sig.Proof)
+	a.Equal(Proof(*proof), sig.Proof)
 
 	a.NotEqual(nil, sig.ByteSignature)
 }
@@ -268,15 +268,38 @@ func TestBadMerkleProofInSignature(t *testing.T) {
 
 	hashable, sig := makeSig(signer, start, a)
 
-	sig2 := sig
-	sig2.Proof = sig2.Proof[:len(sig2.Proof)-1]
+	sig2 := copySig(sig)
+	sig2.Proof.Path = sig2.Proof.Path[:len(sig2.Proof.Path)-1]
 	a.Error(signer.GetVerifier().Verify(start, start, 1, hashable, sig2))
 
-	sig3 := sig
+	sig3 := copySig(sig)
 	someDigest := crypto.Digest{}
 	rand.Read(someDigest[:])
-	sig3.Proof[0] = someDigest
+	sig3.Proof.Path[0] = someDigest[:]
 	a.Error(signer.GetVerifier().Verify(start, start, 1, hashable, sig3))
+}
+
+func copySig(sig Signature) Signature {
+	bsig := make([]byte, len(sig.ByteSignature))
+	copy(bsig, sig.ByteSignature)
+
+	return Signature{
+		ByteSignature: bsig,
+		Proof:         copyProof(sig.Proof),
+		VerifyingKey:  sig.VerifyingKey,
+	}
+}
+
+func copyProof(proof Proof) Proof {
+	path := make([]crypto.GenericDigest, len(proof.Path))
+	for i, digest := range proof.Path {
+		path[i] = make([]byte, len(digest))
+		copy(path[i], digest)
+	}
+	return Proof{
+		Path:        path,
+		HashFactory: proof.HashFactory,
+	}
 }
 
 func TestIncorrectByteSignature(t *testing.T) {

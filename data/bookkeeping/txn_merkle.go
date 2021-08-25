@@ -31,7 +31,7 @@ import (
 // header), or to generate proofs of membership for transactions that are
 // in this block.
 func (block Block) TxnMerkleTree() (*merklearray.Tree, error) {
-	return merklearray.Build(&txnMerkleArray{block: block})
+	return merklearray.Build(&txnMerkleArray{block: block}, crypto.HashFactory{HashType: crypto.Sha512_256})
 }
 
 // txnMerkleArray is a representation of the transactions in this block,
@@ -46,9 +46,9 @@ func (tma *txnMerkleArray) Length() uint64 {
 }
 
 // Get implements the merklearray.Array interface.
-func (tma *txnMerkleArray) GetHash(pos uint64) (crypto.Digest, error) {
+func (tma *txnMerkleArray) Marshal(pos uint64) ([]byte, error) {
 	if pos >= uint64(len(tma.block.Payset)) {
-		return crypto.Digest{}, fmt.Errorf("txnMerkleArray.Get(%d): out of bounds, payset size %d", pos, len(tma.block.Payset))
+		return nil, fmt.Errorf("txnMerkleArray.Get(%d): out of bounds, payset size %d", pos, len(tma.block.Payset))
 	}
 
 	var elem txnMerkleElem
@@ -56,11 +56,11 @@ func (tma *txnMerkleArray) GetHash(pos uint64) (crypto.Digest, error) {
 
 	stxn, _, err := tma.block.DecodeSignedTxn(elem.stib)
 	if err != nil {
-		return crypto.Digest{}, err
+		return nil, err
 	}
 	elem.txn = stxn.Txn
 
-	return elem.Hash(), nil
+	return elem.HashRepresentation(), nil
 }
 
 // txnMerkleElem represents a leaf in the Merkle tree of all transactions
@@ -86,6 +86,10 @@ func (tme *txnMerkleElem) ToBeHashed() (protocol.HashID, []byte) {
 
 // Hash implements an optimized version of crypto.HashObj(tme).
 func (tme *txnMerkleElem) Hash() crypto.Digest {
+	return crypto.Hash(tme.HashRepresentation())
+}
+
+func (tme *txnMerkleElem) HashRepresentation() []byte {
 	txid := tme.txn.ID()
 	stib := tme.stib.Hash()
 
@@ -93,6 +97,5 @@ func (tme *txnMerkleElem) Hash() crypto.Digest {
 	s := buf[:0]
 	s = append(s, protocol.TxnMerkleLeaf...)
 	s = append(s, txid[:]...)
-	s = append(s, stib[:]...)
-	return crypto.Hash(s)
+	return append(s, stib[:]...)
 }

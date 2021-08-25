@@ -25,6 +25,9 @@ import (
 	"github.com/algorand/go-deadlock"
 )
 
+// RootSize is the size of the digest used by the tree in use in the merklekeystore.
+const RootSize = crypto.SumhashDigestSize
+
 type (
 	// CommittablePublicKey is a key tied to a specific round and is committed by the merklekeystore.Signer.
 	CommittablePublicKey struct {
@@ -35,8 +38,7 @@ type (
 	}
 
 	//Proof represent the merkle proof in each signature.
-	//msgp:allocbound Proof -
-	Proof []crypto.Digest
+	Proof merklearray.Proof
 
 	// Signature is a byte signature on a crypto.Hashable object,
 	// crypto.VerifyingKey and includes a merkle proof for the key.
@@ -44,7 +46,7 @@ type (
 		_struct              struct{} `codec:",omitempty,omitemptyarray"`
 		crypto.ByteSignature `codec:"bsig"`
 
-		Proof        `codec:"prf"`
+		Proof        Proof               `codec:"prf"`
 		VerifyingKey crypto.VerifyingKey `codec:"vkey"`
 	}
 
@@ -71,7 +73,7 @@ type (
 	Verifier struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-		Root crypto.Digest `codec:"r"`
+		Root [RootSize]byte `codec:"r"`
 
 		// indicates that this verifier corresponds to a specific array of ephemeral keys.
 		// this is used to distinguish between an empty structure, and nothing to commit to.
@@ -96,17 +98,19 @@ func (s *Signer) Length() uint64 {
 	return uint64(len(s.SignatureAlgorithms))
 }
 
-// GetHash Gets the hash of the VerifyingKey tied to the signatureAlgorithm in pos.
-func (s *Signer) GetHash(pos uint64) (crypto.Digest, error) {
+// Marshal Gets []byte to represent a VerifyingKey tied to the signatureAlgorithm in a pos.
+// used to implement the merklearray.Array interface needed to build a tree.
+func (s *Signer) Marshal(pos uint64) ([]byte, error) {
 	signer, err := s.SignatureAlgorithms[pos].GetSigner()
 	if err != nil {
-		return crypto.Digest{}, err
+		return nil, err
 	}
 	ephPK := CommittablePublicKey{
 		VerifyingKey: *signer.GetVerifyingKey(),
 		Round:        indexToRound(s.FirstValid, s.Interval, pos),
 	}
-	return crypto.HashObj(&ephPK), nil
+
+	return crypto.HashRep(&ephPK), nil
 }
 
 // New Generates a merklekeystore.Signer
@@ -141,7 +145,7 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 		Interval:            interval,
 		mu:                  deadlock.RWMutex{},
 	}
-	tree, err := merklearray.Build(s)
+	tree, err := merklearray.Build(s, crypto.HashFactory{HashType: crypto.Sumhash})
 	if err != nil {
 		return nil, err
 	}
@@ -152,8 +156,10 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 
 // GetVerifier can be used to store the commitment and verifier for this signer.
 func (s *Signer) GetVerifier() *Verifier {
+	root := [RootSize]byte{}
+	copy(root[:], s.Tree.Root().ToSlice())
 	return &Verifier{
-		Root:         s.Tree.Root(),
+		Root:         root,
 		HasValidRoot: true,
 	}
 }
@@ -180,7 +186,7 @@ func (s *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 
 	return Signature{
 		ByteSignature: signingKey.Sign(hashable),
-		Proof:         proof,
+		Proof:         Proof(*proof),
 		VerifyingKey:  *signingKey.GetVerifyingKey(),
 	}, nil
 }
@@ -267,6 +273,10 @@ func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashabl
 	if round < firstValid {
 		return errReceivedRoundIsBeforeFirst
 	}
+	hsh, err := sig.Proof.HashFactory.NewHash()
+	if err != nil {
+		return err
+	}
 
 	ephkey := CommittablePublicKey{
 		VerifyingKey: sig.VerifyingKey,
@@ -274,7 +284,11 @@ func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashabl
 	}
 
 	pos := roundToIndex(firstValid, round, interval)
-	isInTree := merklearray.Verify(v.Root, map[uint64]crypto.Digest{pos: crypto.HashObj(&ephkey)}, sig.Proof)
+	isInTree := merklearray.Verify(
+		(crypto.GenericDigest)(v.Root[:]),
+		map[uint64]crypto.GenericDigest{pos: crypto.HashSum(hsh, &ephkey)},
+		(*merklearray.Proof)(&sig.Proof),
+	)
 	if isInTree != nil {
 		return isInTree
 	}

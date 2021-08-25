@@ -48,12 +48,16 @@ func (v *Verifier) Verify(c *Cert) error {
 		return fmt.Errorf("cert signed weight %d <= proven weight %d", c.SignedWeight, v.ProvenWeight)
 	}
 
+	hsh, err := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
+	if err != nil {
+		return err
+	}
 	// Verify all of the reveals
-	sigs := make(map[uint64]crypto.Digest)
-	parts := make(map[uint64]crypto.Digest)
+	sigs := make(map[uint64]crypto.GenericDigest)
+	parts := make(map[uint64]crypto.GenericDigest)
 	for pos, r := range c.Reveals {
-		sigs[pos] = crypto.HashObj(r.SigSlot)
-		parts[pos] = crypto.HashObj(r.Part)
+		sigs[pos] = crypto.HashSum(hsh, r.SigSlot)
+		parts[pos] = crypto.HashSum(hsh, r.Part)
 
 		ephID := basics.OneTimeIDForRound(v.SigRound, r.Part.KeyDilution)
 		if !r.Part.PK.Verify(ephID, v.Msg, r.SigSlot.Sig.OneTimeSignature) {
@@ -61,13 +65,11 @@ func (v *Verifier) Verify(c *Cert) error {
 		}
 	}
 
-	err := merklearray.Verify(c.SigCommit, sigs, c.SigProofs)
-	if err != nil {
+	if err := merklearray.Verify(c.SigCommit.ToSlice(), sigs, &c.SigProofs); err != nil {
 		return err
 	}
 
-	err = merklearray.Verify(v.partcom, parts, c.PartProofs)
-	if err != nil {
+	if err := merklearray.Verify(v.partcom.ToSlice(), parts, &c.PartProofs); err != nil {
 		return err
 	}
 

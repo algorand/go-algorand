@@ -14,23 +14,45 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package merklearray
+package crypto
 
 import (
+	"math"
 	"testing"
 
-	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
-func TestLayerHash(t *testing.T) {
-	partitiontest.PartitionTest(t)
+func TestHashFactoryCreatingNewHashes(t *testing.T) {
+	a := require.New(t)
 
-	var p = pair{make([]byte, 32), make([]byte, 32)}
-	crypto.RandBytes(p.l[:])
-	crypto.RandBytes(p.r[:])
-	hsh, _ := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
+	hfactory := HashFactory{HashType: Sha512_256}
+	h, err := hfactory.NewHash()
+	a.NoError(err)
+	a.NotNil(h)
+	a.Equal(32, h.Size())
 
-	require.Equal(t, crypto.HashObj(&p).ToSlice(), crypto.HashBytes(hsh, p.Marshal()))
+	hfactory = HashFactory{HashType: Sumhash}
+	h, err = hfactory.NewHash()
+	a.NoError(err)
+	a.NotNil(h)
+	a.Equal(112, h.Size())
+
+	hfactory = HashFactory{HashType: HashType(math.MaxUint64)}
+	h, err = hfactory.NewHash()
+	a.Error(err)
+	a.Nil(h)
+}
+
+func TestHashSum(t *testing.T) {
+	a := require.New(t)
+
+	hfactory := HashFactory{HashType: Sha512_256}
+	h, err := hfactory.NewHash()
+	a.NoError(err)
+	a.NotNil(h)
+	a.Equal(32, h.Size())
+
+	dgst := HashObj(TestingHashable{})
+	a.Equal(HashSum(h, TestingHashable{}), dgst[:])
 }

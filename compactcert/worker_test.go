@@ -137,7 +137,7 @@ func (s *testWorkerStubs) CompactCertVoters(r basics.Round) (*ledgercore.VotersF
 		})
 	}
 
-	tree, err := merklearray.Build(voters.Participants)
+	tree, err := merklearray.Build(voters.Participants, crypto.HashFactory{HashType: crypto.Sha512_256})
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +266,7 @@ func TestWorkerAllSigs(t *testing.T) {
 			voters, err := s.CompactCertVoters(tx.Txn.CertRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
 			require.NoError(t, err)
 
-			verif := compactcert.MkVerifier(ccparams, voters.Tree.Root())
+			verif := compactcert.MkVerifier(ccparams, voters.Tree.Root().To32Byte())
 			err = verif.Verify(&tx.Txn.Cert)
 			require.NoError(t, err)
 			break
@@ -327,7 +327,7 @@ func TestWorkerPartialSigs(t *testing.T) {
 	voters, err := s.CompactCertVoters(tx.Txn.CertRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
 	require.NoError(t, err)
 
-	verif := compactcert.MkVerifier(ccparams, voters.Tree.Root())
+	verif := compactcert.MkVerifier(ccparams, voters.Tree.Root().To32Byte())
 	err = verif.Verify(&tx.Txn.Cert)
 	require.NoError(t, err)
 }
