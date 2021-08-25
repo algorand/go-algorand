@@ -831,6 +831,8 @@ func TestSlowOutboundPeer(t *testing.T) {
 
 	node := makeTestWebsocketNode(t)
 	node.config.GossipFanout = 2
+	dl := eventsDetailsLogger{Logger: logging.TestingLog(t), eventReceived: make(chan interface{}, 1), eventIdentifier: telemetryspec.DisconnectPeerEvent}
+	node.log = dl
 
 	node.phonebook.ReplacePeerList([]string{addrA, addrB}, "default", PhoneBookEntryRelayRole)
 	node.Start()
@@ -887,6 +889,20 @@ func TestSlowOutboundPeer(t *testing.T) {
 		}
 	}
 
+	select {
+	case eventDetails := <-dl.eventReceived:
+		switch disconnectPeerEventDetails := eventDetails.(type) {
+		case telemetryspec.DisconnectPeerEventDetails:
+			require.Equal(t, string(disconnectSlowConn), disconnectPeerEventDetails.Reason)
+		default:
+			require.FailNow(t, "Unexpected event was send : %v", eventDetails)
+		}
+
+	default:
+		require.FailNow(t, "The DisconnectPeerEvent was missing")
+	}
+
+	
 	for i := 0; i < 100; i++ {
 		if numHandledB == x {
 			break
@@ -1912,7 +1928,7 @@ func TestWebsocketDisconnection(t *testing.T) {
 	case eventDetails := <-dl.eventReceived:
 		switch disconnectPeerEventDetails := eventDetails.(type) {
 		case telemetryspec.DisconnectPeerEventDetails:
-			require.Equal(t, disconnectPeerEventDetails.Reason, string(disconnectRequestReceived))
+			require.Equal(t, string(disconnectRequestReceived), disconnectPeerEventDetails.Reason)
 		default:
 			require.FailNow(t, "Unexpected event was send : %v", eventDetails)
 		}
