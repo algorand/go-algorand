@@ -249,7 +249,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	agreementParameters := agreement.Parameters{
 		Logger:         log,
 		Accessor:       crashAccess,
-		Clock:          timers.MakeMonotonicClock(time.Now()),
+		ClockFactory:   timers.MakeMonotonicClockFactory(),
 		Local:          node.config,
 		Network:        gossip.WrapNetwork(node.net, log),
 		Ledger:         agreementLedger,

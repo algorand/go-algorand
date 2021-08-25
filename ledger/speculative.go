@@ -477,6 +477,16 @@ func (sl *SpeculativeLedger) BlockHdr(r basics.Round, leaf bookkeeping.BlockHash
 	return lfe.BlockHdr(r)
 }
 
+// BlockHash returns the hash of block header for round r.
+func (sl *SpeculativeLedger) BlockHash(r basics.Round, leaf bookkeeping.BlockHash) (bookkeeping.BlockHash, error) {
+	hdr, err := sl.BlockHdr(r, leaf)
+	if err != nil {
+		return bookkeeping.BlockHash{}, err
+	}
+
+	return hdr.Hash(), nil
+}
+
 // NextRound returns the next round for which no block has been committed.
 func (sl *SpeculativeLedger) NextRound() basics.Round {
 	return sl.l.Latest() + 1

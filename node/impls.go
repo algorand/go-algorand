@@ -77,6 +77,17 @@ func makeAgreementLedger(ledger *ledger.SpeculativeLedger, net network.GossipNod
 	}
 }
 
+// EnsureSpeculativeBlock implements agreement.LedgerWriter.EnsureSpeculativeBlock.
+func (l agreementLedger) EnsureSpeculativeBlock(ve agreement.ValidatedBlock) {
+	vb := ve.(validatedBlock).vb
+	err := l.SpeculativeLedger.AddSpeculativeBlock(*vb)
+	if err != nil {
+		logging.Base().Warnf("EnsureSpeculativeBlock(%d, %v): %v", vb.Block().Round(), vb.Block().Hash(), err)
+	}
+	// let the network know that we've made some progress.
+	l.n.OnNetworkAdvance()
+}
+
 // EnsureBlock implements agreement.LedgerWriter.EnsureBlock.
 func (l agreementLedger) EnsureBlock(e bookkeeping.Block, c agreement.Certificate) {
 	l.SpeculativeLedger.EnsureBlock(&e, c)
