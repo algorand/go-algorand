@@ -77,6 +77,7 @@ func (*pipelinePlayer) decode(buf []byte) (serializableActor, error) {
 	for _, pp := range p.Players {
 		pp.pipelined = true
 		pp.notify = p
+		pp.firstUncommittedRoundSource = p
 	}
 	return p, nil
 }
@@ -261,6 +262,7 @@ func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protoco
 		PipelineDelay: p.pipelineDelay(ver),
 		pipelined:     true,
 		notify:        p,
+		firstUncommittedRoundSource: p,
 	}
 
 	p.Players[nextrnd] = newPlayer

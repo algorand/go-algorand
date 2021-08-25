@@ -72,6 +72,10 @@ type player struct {
 	// notify receives a notification when this player reaches consensus
 	// for its round.
 	notify roundCompletionNotifier
+
+	// firstUncommittedRoundSource specifies where we should get the
+	// firstUncommittedRound (a pipelinePlayer, if present).
+	firstUncommittedRoundSource actor
 }
 
 func (p *player) T() stateMachineTag {
@@ -83,6 +87,10 @@ func (p *player) underlying() actor {
 }
 
 func (p *player) firstUncommittedRound() round {
+	if p.firstUncommittedRoundSource != nil {
+		return p.firstUncommittedRoundSource.firstUncommittedRound()
+	}
+
 	return p.Round
 }
 
