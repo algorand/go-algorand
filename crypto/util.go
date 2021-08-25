@@ -34,14 +34,10 @@ type Hashable interface {
 	ToBeHashed() (protocol.HashID, []byte)
 }
 
-func hashRep(h Hashable) []byte {
+// HashRep  is a tmp function to export hashRep.
+func HashRep(h Hashable) []byte {
 	hashid, data := h.ToBeHashed()
 	return append([]byte(hashid), data...)
-}
-
-// HashRep  is a tmp function to export hashRep. // TODO remove, and export HashRep
-func HashRep(h Hashable) []byte {
-	return hashRep(h)
 }
 
 // DigestSize is the number of bytes in the preferred hash Digest used here.
@@ -96,7 +92,7 @@ func Hash(data []byte) Digest {
 
 // HashObj computes a hash of a Hashable object and its type
 func HashObj(h Hashable) Digest {
-	return Hash(hashRep(h))
+	return Hash(HashRep(h))
 }
 
 // NewHash returns a sha512-256 object to do the same operation as Hash()

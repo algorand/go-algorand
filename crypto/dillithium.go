@@ -56,7 +56,7 @@ func NewDilithiumSigner() Signer {
 // Sign receives a message and generates a signature over that message.
 // the size of the signature should conform with cdilithium.SigSize.
 func (d *DilithiumSigner) Sign(message Hashable) ByteSignature {
-	hs := Hash(hashRep(message))
+	hs := Hash(HashRep(message))
 	return d.SignBytes(hs[:])
 }
 
@@ -87,7 +87,7 @@ type DilithiumVerifier struct {
 
 // Verify follows dilithium algorithm to verify a signature.
 func (d *DilithiumVerifier) Verify(message Hashable, sig ByteSignature) error {
-	hs := Hash(hashRep(message))
+	hs := Hash(HashRep(message))
 	return d.VerifyBytes(hs[:], sig)
 }
 
