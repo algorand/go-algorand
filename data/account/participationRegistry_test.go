@@ -19,22 +19,24 @@ package account
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/data/basics"
-	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 )
 
-func getRegistry(t *testing.T) ParticipationRegistry {
+func getRegistry(t *testing.T) *participationDB {
 	rootDB, err := db.OpenPair(t.Name(), true)
 	require.NoError(t, err)
 
-	registry, err := MakeParticipationRegistry(rootDB)
+	registry, err := makeParticipationRegistry(rootDB, logging.TestingLog(t))
 	require.NoError(t, err)
 	require.NotNil(t, registry)
 
@@ -83,12 +85,20 @@ func TestParticipation_InsertGet(t *testing.T) {
 	insertAndVerify(p)
 	insertAndVerify(p2)
 
-	// Verify GetAll.
+	// Data should be persisted immediately, re-initialize cache and verify GetAll.
+	registry.initializeCache()
 	results, err := registry.GetAll()
 	a.NoError(err)
 	a.Len(results, 2)
-	assertParticipation(t, p, results[0])
-	assertParticipation(t, p2, results[1])
+	for _, record := range results {
+		if record.Account == p.Parent {
+			assertParticipation(t, p, record)
+		} else if record.Account == p2.Parent {
+			assertParticipation(t, p2, record)
+		} else {
+			a.Fail("unexpected account")
+		}
+	}
 }
 
 // Make sure a record can be deleted by id.
@@ -123,7 +133,8 @@ func TestParticipation_Delete(t *testing.T) {
 	err = registry.Delete(p.ParticipationID())
 	a.NoError(err)
 
-	// Verify p removed in GetAll.
+	// Delete should be persisted immediately. Verify p removed in GetAll.
+	registry.initializeCache()
 	results, err := registry.GetAll()
 	a.NoError(err)
 	a.Len(results, 1)
@@ -193,8 +204,7 @@ func TestParticipation_RegisterInvalidID(t *testing.T) {
 	}
 
 	err := registry.Register(p.ParticipationID(), 10000000)
-	a.Error(err)
-	a.True(strings.Contains(err.Error(), "unable to lookup id"))
+	a.EqualError(err, ErrParticipationIDNotFound.Error())
 }
 
 // Test error attempting to register a key with an invalid range.
@@ -261,31 +271,68 @@ func TestParticipation_Record(t *testing.T) {
 	a.NoError(err)
 
 	// Verify that one and only one key was updated.
-	records, err := registry.GetAll()
-	a.NoError(err)
-	a.Len(records, 3)
-	for _, record := range records {
-		if record.ParticipationID == p.ParticipationID() {
-			require.Equal(t, 1000, int(record.LastVote))
-			require.Equal(t, 2000, int(record.LastBlockProposal))
-			require.Equal(t, 3000, int(record.LastCompactCertificate))
-		} else {
-			require.Equal(t, 0, int(record.LastVote))
-			require.Equal(t, 0, int(record.LastBlockProposal))
-			require.Equal(t, 0, int(record.LastCompactCertificate))
+	test := func(registry ParticipationRegistry) {
+		records, err := registry.GetAll()
+		a.NoError(err)
+		a.Len(records, 3)
+		for _, record := range records {
+			if record.ParticipationID == p.ParticipationID() {
+				require.Equal(t, 1000, int(record.LastVote))
+				require.Equal(t, 2000, int(record.LastBlockProposal))
+				require.Equal(t, 3000, int(record.LastCompactCertificate))
+			} else {
+				require.Equal(t, 0, int(record.LastVote))
+				require.Equal(t, 0, int(record.LastBlockProposal))
+				require.Equal(t, 0, int(record.LastCompactCertificate))
+			}
 		}
 	}
+
+	test(registry)
+	registry.Flush()
+	a.Len(registry.dirty, 0)
+
+	// Re-initialize
+	registry.initializeCache()
+	test(registry)
 }
 
 // Test that attempting to record an invalid action generates an error.
-func TestParticipation_RecordInvalidType(t *testing.T) {
+func TestParticipation_RecordInvalidActionAndOutOfRange(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	registry := getRegistry(t)
 	defer registry.Close()
 
-	err := registry.Record(basics.Address{}, 0, ParticipationAction(9000))
+	p := Participation{
+		FirstValid:  0,
+		LastValid:   3000000,
+		KeyDilution: 1,
+	}
+	p.Parent[0] = 1
+	id, err := registry.Insert(p)
+	a.NoError(err)
+	err = registry.Register(id, 0)
+	a.NoError(err)
+
+	err = registry.Record(p.Parent, 0, ParticipationAction(9000))
 	a.EqualError(err, ErrUnknownParticipationAction.Error())
+
+	err = registry.Record(p.Parent, 3000000, ParticipationAction(9000))
+	a.EqualError(err, ErrUnknownParticipationAction.Error())
+
+	err = registry.Record(p.Parent, 3000001, ParticipationAction(9000))
+	a.EqualError(err, ErrActiveKeyNotFound.Error())
+}
+
+func TestParticipation_RecordNoKey(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	registry := getRegistry(t)
+	defer registry.Close()
+
+	err := registry.Record(basics.Address{}, 0, Vote)
+	a.EqualError(err, ErrActiveKeyNotFound.Error())
 }
 
 // Test that an error is generated if the record function updates multiple records.
@@ -293,11 +340,11 @@ func TestParticipation_RecordInvalidType(t *testing.T) {
 func TestParticipation_RecordMultipleUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	rootDB, err := db.OpenPair(t.Name(), true)
-	require.NoError(t, err)
-	registry, err := MakeParticipationRegistry(rootDB)
-	require.NoError(t, err)
-	require.NotNil(t, registry)
+	registry := getRegistry(t)
+	defer registry.Close()
+
+	// We'll test that recording at this round fails because both keys are active
+	testRound := basics.Round(5000)
 
 	p := Participation{
 		FirstValid:  0,
@@ -312,23 +359,171 @@ func TestParticipation_RecordMultipleUpdates(t *testing.T) {
 	}
 	p2.Parent = p.Parent
 
-	_, err = registry.Insert(p)
+	_, err := registry.Insert(p)
 	a.NoError(err)
 	_, err = registry.Insert(p2)
 	a.NoError(err)
-	err = registry.Register(p.ParticipationID(), 1000)
+	err = registry.Register(p.ParticipationID(), p.FirstValid)
 	a.NoError(err)
 
-	// Force the DB into a bad state (2 active keys for one account).
-	rootDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		id := p2.ParticipationID()
-		_, err = tx.Exec(setRegistered, 1500, p2.LastValid, id[:])
-		if err != nil {
-			return fmt.Errorf("unable to update registered key: %w", err)
+	// Force the DB to have 2 active keys for one account by tampering with the private cache variable
+	recordCopy := registry.cache[p2.ParticipationID()]
+	recordCopy.RegisteredFirst = p2.FirstValid
+	recordCopy.RegisteredLast = p2.LastValid
+	registry.cache[p2.ParticipationID()] = recordCopy
+	registry.dirty[p2.ParticipationID()] = struct{}{}
+	registry.Flush()
+	a.Len(registry.dirty, 0)
+	registry.initializeCache()
+
+	// Verify bad state - both records are valid until round 3 million
+	a.NotEqual(p.ParticipationID(), p2.ParticipationID())
+	recordTest := make([]ParticipationRecord, 0)
+
+	recordP, err := registry.Get(p.ParticipationID())
+	a.NoError(err)
+	recordTest = append(recordTest, recordP)
+
+	recordP2, err := registry.Get(p2.ParticipationID())
+	a.NoError(err)
+	recordTest = append(recordTest, recordP2)
+
+	// Make sure both accounts are active for the test round
+	for _, record := range recordTest {
+		a.True(recordActive(record, testRound), "both records should be active")
+	}
+
+	err = registry.Record(p.Parent, testRound, Vote)
+	a.EqualError(err, ErrMultipleValidKeys.Error())
+}
+
+func TestParticipation_MultipleInsertError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	registry := getRegistry(t)
+	defer registry.Close()
+
+	p := Participation{
+		FirstValid:  1,
+		LastValid:   2,
+		KeyDilution: 3,
+	}
+	p.Parent[0] = 1
+
+	_, err := registry.Insert(p)
+	a.NoError(err)
+	_, err = registry.Insert(p)
+	a.Error(err, ErrAlreadyInserted.Error())
+}
+
+// This is a contrived test on every level. To workaround errors we setup the
+// DB and cache in ways that are impossible with public methods.
+//
+// Basically multiple records with the same ParticipationID are a big no-no and
+// it should be detected as quickly as possible.
+func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	registry := getRegistry(t)
+	defer registry.Close()
+
+	p := Participation{
+		FirstValid:  1,
+		LastValid:   2000000,
+		KeyDilution: 3,
+	}
+	p.Parent[0] = 1
+	id := p.ParticipationID()
+
+	// Insert the same record twice
+	// Pretty much copied from the Insert function without error checking.
+	err := registry.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		for i := 0; i < 2; i++ {
+			record := p
+			_, err := tx.Exec(
+				insertKeysetQuery,
+				id[:],
+				record.Parent[:],
+				record.FirstValid,
+				record.LastValid,
+				record.KeyDilution)
+			if err != nil {
+				return fmt.Errorf("unable to insert keyset: %w", err)
+			}
+
+			// Fetch primary key
+			var pk int
+			row := tx.QueryRow(selectLastPK, id[:])
+			err = row.Scan(&pk)
+			if err != nil {
+				return fmt.Errorf("unable to scan pk: %w", err)
+			}
+
+			// Create Rolling entry
+			_, err = tx.Exec(`INSERT INTO Rolling (pk, registeredFirstRound, registeredLastRound) VALUES (?, ?, ?)`, pk, 1, 2000000)
+			if err != nil {
+				return fmt.Errorf("unable insert rolling: %w", err)
+			}
+
+			var num int
+			row = tx.QueryRow(`SELECT COUNT(*) FROM Keysets WHERE participationID=?`, id[:])
+			err = row.Scan(&num)
+			if err != nil {
+				return fmt.Errorf("unable to scan pk: %w", err)
+			}
 		}
+
 		return nil
 	})
 
-	err = registry.Record(p.Parent, 5000, Vote)
-	a.EqualError(err, "too many rows effected: 2")
+	a.NoError(err)
+
+	// Now that the DB has multiple records for one participation ID, check that all the methods notice.
+
+	// Initializing the cache
+	err = registry.initializeCache()
+	a.EqualError(err, ErrMultipleKeysForID.Error())
+
+	// Registering the ID
+	registry.cache[id] = ParticipationRecord{
+		ParticipationID: id,
+		Account:         p.Parent,
+		FirstValid:      p.FirstValid,
+		LastValid:       p.LastValid,
+		KeyDilution:     p.KeyDilution,
+		RegisteredFirst: p.FirstValid,
+		RegisteredLast:  p.LastValid,
+	}
+	err = registry.Register(id, 1)
+	a.Error(err)
+	a.Contains(err.Error(), "unable to registering key with id")
+	a.EqualError(errors.Unwrap(err), ErrMultipleKeysForID.Error())
+
+	// Flushing changes detects that multiple records are updated
+	registry.dirty[id] = struct{}{}
+	err = registry.Flush()
+	a.Len(registry.dirty, 1)
+	a.EqualError(err, ErrMultipleKeysForID.Error())
+}
+
+func TestParticipation_NoKeyToUpdate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+	registry := getRegistry(t)
+	defer registry.Close()
+
+	registry.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		record := ParticipationRecord{
+			ParticipationID: ParticipationID{},
+			Account:         basics.Address{},
+			FirstValid:      1,
+			LastValid:       2,
+			KeyDilution:     3,
+			RegisteredFirst: 4,
+			RegisteredLast:  5,
+		}
+		err := registry.updateRollingFields(ctx, tx, record)
+		a.EqualError(err, ErrNoKeyForID.Error())
+		return nil
+	})
 }

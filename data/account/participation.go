@@ -17,10 +17,8 @@
 package account
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
-	"encoding/binary"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
@@ -43,6 +41,7 @@ import (
 // For correctness, all Roots should have no more than one Participation
 // globally active at any time. If this condition is violated, the Root may
 // equivocate. (Algorand tolerates a limited fraction of misbehaving accounts.)
+//msgp:ignore Participation
 type Participation struct {
 	Parent basics.Address
 
@@ -58,27 +57,41 @@ type Participation struct {
 	KeyDilution uint64
 }
 
+// participationIDData is for msgpack encoding the participation data.
+type participationIDData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Parent      basics.Address    `codec:"addr"`
+	VRFSK       crypto.VrfPrivkey `codec:"vrfsk"`
+	FirstValid  basics.Round      `codec:"fv"`
+	LastValid   basics.Round      `codec:"lv"`
+	KeyDilution uint64            `codec:"kd"`
+}
+
+// ToBeHashed implements the Hashable interface.
+func (id *participationIDData) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.ParticipationKeys, protocol.Encode(id)
+}
+
 // ParticipationID computes a ParticipationID.
 func (part Participation) ParticipationID() ParticipationID {
-	data := new(bytes.Buffer)
-
-	data.Write(part.Parent[:])
-	binary.Write(data, binary.LittleEndian, part.FirstValid)
-	binary.Write(data, binary.LittleEndian, part.LastValid)
-	binary.Write(data, binary.LittleEndian, part.KeyDilution)
+	idData := participationIDData{
+		Parent:      part.Parent,
+		FirstValid:  part.FirstValid,
+		LastValid:   part.LastValid,
+		KeyDilution: part.KeyDilution,
+	}
 	if part.VRF != nil {
-		data.Write(part.VRF.PK[:])
+		copy(idData.VRFSK[:], part.VRF.SK[:])
 	}
 
-	// this too?
-	//part.Write(part.Voting.SubKeyPK[:])
-
-	return ParticipationID(crypto.Hash(data.Bytes()))
+	return ParticipationID(crypto.HashObj(&idData))
 }
 
 // PersistedParticipation encapsulates the static state of the participation
 // for a single address at any given moment, while providing the ability
 // to handle persistence and deletion of secrets.
+//msgp:ignore PersistedParticipation
 type PersistedParticipation struct {
 	Participation
 
