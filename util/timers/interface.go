@@ -48,4 +48,7 @@ type Clock interface {
 
 	// Encode serializes the Clock into a byte slice.
 	Encode() []byte
+
+	// GC hints that this clock will not be needed anymore.
+	GC()
 }

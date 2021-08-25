@@ -99,3 +99,6 @@ func (m *Monotonic) String() string {
 func (m *Monotonic) GetTimeout(delta time.Duration) time.Time {
 	return m.zero.Add(delta)
 }
+
+// GC implements the Clock interface.
+func (m *Monotonic) GC() {}

@@ -62,7 +62,7 @@ func (f *testingClockFactory) Zero(label interface{}) timers.Clock {
 
 	r := label.(round)
 
-	c := makeTestingClock()
+	c := makeTestingClock(f.monitor)
 	prev := f.clocks[r]
 	if prev != nil {
 		if prev.preparedToFire {
@@ -77,7 +77,7 @@ func (f *testingClockFactory) Zero(label interface{}) timers.Clock {
 }
 
 func (f *testingClockFactory) Decode([]byte) (timers.Clock, error) {
-	return makeTestingClock(), nil // TODO
+	return makeTestingClock(nil), nil // TODO
 }
 
 func (f *testingClockFactory) prepareToFire(rnum basics.Round) {
@@ -85,7 +85,7 @@ func (f *testingClockFactory) prepareToFire(rnum basics.Round) {
 	defer f.mu.Unlock()
 
 	for r, c := range f.clocks {
-		if r.Number == rnum {
+		if r.Number == rnum && !c.gced {
 			if !c.preparedToFire {
 				c.preparedToFire = true
 				f.monitor.inc(clockCoserviceType)
@@ -100,7 +100,7 @@ func (f *testingClockFactory) fire(rnum basics.Round, d time.Duration) {
 
 	matches := 0
 	for r, c := range f.clocks {
-		if r.Number == rnum {
+		if r.Number == rnum && !c.gced {
 			c.fire(d)
 			matches++
 		}
@@ -132,11 +132,14 @@ type testingClock struct {
 	preparedToFire bool
 	zeroes uint
 	roundNum basics.Round
+	monitor *coserviceMonitor
+	gced bool
 }
 
-func makeTestingClock() *testingClock {
+func makeTestingClock(m *coserviceMonitor) *testingClock {
 	c := new(testingClock)
 	c.TA = make(map[time.Duration]chan time.Time)
+	c.monitor = m
 	return c
 }
 
@@ -172,6 +175,17 @@ func (c *testingClock) fire(d time.Duration) {
 	}
 	close(c.TA[d])
 	c.preparedToFire = false
+}
+
+func (c *testingClock) GC() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.preparedToFire {
+		c.preparedToFire = false
+		c.monitor.dec(clockCoserviceType)
+	}
+	c.gced = true
 }
 
 type testingNetwork struct {

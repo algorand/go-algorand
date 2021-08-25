@@ -12,7 +12,6 @@ import (
 )
 
 // clockManager managers multiple clocks used by different pipelined rounds.
-// XXX garbage-collect old rounds
 type clockManager struct {
 	mu deadlock.Mutex
 	m  map[round]timers.Clock
@@ -29,6 +28,23 @@ func (cm *clockManager) setZero(r round) {
 	defer cm.mu.Unlock()
 
 	cm.m[r] = cm.factory.Zero(r)
+}
+
+func (cm *clockManager) gc(es []externalDemuxSignals) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	active := make(map[round]struct{})
+	for _, e := range es {
+		active[e.CurrentRound] = struct{}{}
+	}
+	for r, clk := range cm.m {
+		_, isactive := active[r]
+		if !isactive {
+			clk.GC()
+			delete(cm.m, r)
+		}
+	}
 }
 
 // nextDeadlineCh returns a timeout channel that will fire when the earliest Deadline among all of
