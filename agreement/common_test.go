@@ -198,6 +198,11 @@ type blockAndCert struct {
 	cert  Certificate
 }
 
+type blockAndMaybeCert struct {
+	block bookkeeping.Block
+	cert  *Certificate
+}
+
 // If we try to read from high rounds, we panic and do not emit an error to find bugs during testing.
 type testLedger struct {
 	mu deadlock.Mutex
@@ -205,7 +210,7 @@ type testLedger struct {
 	blocks    map[basics.Round]blockAndCert
 	nextRound basics.Round
 
-	speculative map[bookkeeping.BlockHash]blockAndCert
+	speculative map[bookkeeping.BlockHash]blockAndMaybeCert
 
 	maxNumBlocks uint64
 
@@ -220,7 +225,7 @@ type testLedger struct {
 func makeTestLedger(state map[basics.Address]basics.AccountData) Ledger {
 	l := new(testLedger)
 	l.blocks = make(map[basics.Round]blockAndCert)
-	l.speculative = make(map[bookkeeping.BlockHash]blockAndCert)
+	l.speculative = make(map[bookkeeping.BlockHash]blockAndMaybeCert)
 	l.nextRound = 1
 
 	l.state = make(map[basics.Address]basics.AccountData)
@@ -239,7 +244,7 @@ func makeTestLedger(state map[basics.Address]basics.AccountData) Ledger {
 func makeTestLedgerWithConsensusVersion(state map[basics.Address]basics.AccountData, consensusVersion func(basics.Round, bookkeeping.BlockHash) (protocol.ConsensusVersion, error)) Ledger {
 	l := new(testLedger)
 	l.blocks = make(map[basics.Round]blockAndCert)
-	l.speculative = make(map[bookkeeping.BlockHash]blockAndCert)
+	l.speculative = make(map[bookkeeping.BlockHash]blockAndMaybeCert)
 	l.nextRound = 1
 
 	l.state = make(map[basics.Address]basics.AccountData)
@@ -256,7 +261,7 @@ func makeTestLedgerWithConsensusVersion(state map[basics.Address]basics.AccountD
 func makeTestLedgerMaxBlocks(state map[basics.Address]basics.AccountData, maxNumBlocks uint64) Ledger {
 	l := new(testLedger)
 	l.blocks = make(map[basics.Round]blockAndCert)
-	l.speculative = make(map[bookkeeping.BlockHash]blockAndCert)
+	l.speculative = make(map[bookkeeping.BlockHash]blockAndMaybeCert)
 	l.nextRound = 1
 
 	l.maxNumBlocks = maxNumBlocks
@@ -421,7 +426,7 @@ func (l *testLedger) EnsureSpeculativeBlock(e ValidatedBlock) {
 	defer l.mu.Unlock()
 
 	blk := e.Block()
-	l.speculative[blk.Hash()] = blockAndCert{block: blk}
+	l.speculative[blk.Hash()] = blockAndMaybeCert{block: blk}
 }
 
 func (l *testLedger) EnsureBlock(e bookkeeping.Block, c Certificate) {
@@ -432,7 +437,7 @@ func (l *testLedger) EnsureBlock(e bookkeeping.Block, c Certificate) {
 	// certificate for it.
 	_, specok := l.speculative[e.Hash()]
 	if specok {
-		l.speculative[e.Hash()] = blockAndCert{block: e, cert: c}
+		l.speculative[e.Hash()] = blockAndMaybeCert{block: e, cert: &c}
 		l.advanceSpeculative()
 		return
 	}
@@ -468,8 +473,8 @@ again:
 			delete(l.speculative, h)
 			continue
 		}
-		if blk.Round() == l.nextRound {
-			l.blocks[blk.Round()] = e
+		if blk.Round() == l.nextRound && e.cert != nil {
+			l.blocks[blk.Round()] = blockAndCert{block: e.block, cert: *e.cert}
 			l.nextRound = blk.Round() + 1
 			l.notify(blk.Round())
 			goto again
