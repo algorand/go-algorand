@@ -79,9 +79,6 @@ type player struct {
 	// the player to suppress relayActions.
 	FrozenPipelining bool
 
-	// pipelined is set to true if this player is part of a pipelinePlayer.
-	pipelined bool
-
 	// notify receives a notification when this player reaches consensus
 	// for its round.
 	notify roundCompletionNotifier

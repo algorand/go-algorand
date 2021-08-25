@@ -67,7 +67,7 @@ func TestAgreementSerializationPipeline(t *testing.T) {
 	status := &pipelinePlayer{
 		FirstUncommittedRound: makeRoundBranch(349, bookkeeping.BlockHash{}),
 		Players: map[round]*player{
-			rnd: &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second, pipelined: true}},
+			rnd: &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second}},
 	}
 	status.Players[rnd].notify = status
 
@@ -86,6 +86,7 @@ func TestAgreementSerializationPipeline(t *testing.T) {
 	require.Equal(t, status2.(*pipelinePlayer).Players[rnd].notify, status2)
 	status.Players[rnd].notify = nil
 	status2.(*pipelinePlayer).Players[rnd].notify = nil
+	status2.(*pipelinePlayer).Players[rnd].firstUncommittedRoundSource = nil
 
 	require.Equalf(t, clockManager, clockM2, "Clock wasn't serialized/deserialized correctly")
 	require.Equalf(t, status, status2, "Status wasn't serialized/deserialized correctly")
@@ -229,11 +230,12 @@ func TestPlayerSerialization(t *testing.T) {
 	status := &pipelinePlayer{
 		FirstUncommittedRound: makeRoundBranch(349, bookkeeping.BlockHash{}),
 		Players: map[round]*player{
-			rnd: &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second, pipelined: true}},
+			rnd: &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second}},
 	}
 	buf = encodePlayer(status)
 	status2, err := decodePlayer(buf)
 	require.NoError(t, err)
 	status2.(*pipelinePlayer).Players[rnd].notify = nil
+	status2.(*pipelinePlayer).Players[rnd].firstUncommittedRoundSource = nil
 	assert.Equal(t, status, status2)
 }
