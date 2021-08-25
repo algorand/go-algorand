@@ -54,8 +54,8 @@ func HashSum(hsh hash.Hash, h Hashable) []byte {
 
 // HashBytes Makes it easier to sum using hash interface.
 func HashBytes(hash hash.Hash, m []byte) []byte {
+	hash.Reset()
 	hash.Write(m)
 	outhash := hash.Sum(nil)
-	hash.Reset()
 	return outhash
 }
