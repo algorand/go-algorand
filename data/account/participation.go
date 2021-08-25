@@ -61,11 +61,8 @@ type Participation struct {
 type participationIDData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Parent      basics.Address    `codec:"addr"`
-	VRFSK       crypto.VrfPrivkey `codec:"vrfsk"`
-	FirstValid  basics.Round      `codec:"fv"`
-	LastValid   basics.Round      `codec:"lv"`
-	KeyDilution uint64            `codec:"kd"`
+	transactions.KeyregTxnFields
+	Parent basics.Address `codec:"addr"`
 }
 
 // ToBeHashed implements the Hashable interface.
@@ -73,19 +70,27 @@ func (id *participationIDData) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.ParticipationKeys, protocol.Encode(id)
 }
 
+// MakeParticipationID generates the ParticipationID from an address and a key registration.
+func MakeParticipationID(addr basics.Address, fields transactions.KeyregTxnFields) ParticipationID {
+	return ParticipationID(crypto.HashObj(&participationIDData{
+		KeyregTxnFields: fields,
+		Parent:          addr,
+	}))
+}
+
 // ParticipationID computes a ParticipationID.
 func (part Participation) ParticipationID() ParticipationID {
-	idData := participationIDData{
-		Parent:      part.Parent,
-		FirstValid:  part.FirstValid,
-		LastValid:   part.LastValid,
-		KeyDilution: part.KeyDilution,
-	}
-	if part.VRF != nil {
-		copy(idData.VRFSK[:], part.VRF.SK[:])
+	// Allow a panic if Voting or VRF are not present.
+	fields := transactions.KeyregTxnFields{
+		VotePK:           part.Voting.OneTimeSignatureVerifier,
+		SelectionPK:      part.VRF.PK,
+		VoteFirst:        part.FirstValid,
+		VoteLast:         part.LastValid,
+		VoteKeyDilution:  part.KeyDilution,
+		Nonparticipation: false,
 	}
 
-	return ParticipationID(crypto.HashObj(&idData))
+	return MakeParticipationID(part.Parent, fields)
 }
 
 // PersistedParticipation encapsulates the static state of the participation

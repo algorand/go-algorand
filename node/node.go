@@ -800,7 +800,7 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 		if err != nil {
 			if db.IsErrBusy(err) {
 				// this is a special case:
-				// we might get "database is locked" when we attempt to access a database that is conurrently updates it's participation keys.
+				// we might get "database is locked" when we attempt to access a database that is concurrently updating its participation keys.
 				// that database is clearly already on the account manager, and doesn't need to be processed through this logic, and therefore
 				// we can safely ignore that fail case.
 				continue
@@ -868,6 +868,18 @@ func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledgerco
 	node.lastRoundTimestamp = time.Now()
 	node.hasSyncedSinceStartup = true
 	node.syncStatusMu.Unlock()
+
+	// Look for keyreg events and notify the participationRegistry.
+	for _, tx := range block.Payset {
+		if tx.Txn.Type == protocol.KeyRegistrationTx {
+			id := account.MakeParticipationID(tx.Txn.Sender, tx.Txn.KeyregTxnFields)
+			err := node.participationRegistry.Register(id, block.BlockHeader.Round)
+			// If the key is not installed on this node, ErrParticipationIDNotFound is quickly returned.
+			if err != nil && err != account.ErrParticipationIDNotFound {
+				node.log.Error("Problem with participationRegistry.Register: %w", err)
+			}
+		}
+	}
 
 	// Wake up oldKeyDeletionThread(), non-blocking.
 	select {

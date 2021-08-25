@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -50,6 +51,18 @@ func assertParticipation(t *testing.T, p Participation, pr ParticipationRecord) 
 	require.Equal(t, p.Parent, pr.Account)
 }
 
+func makeTestParticipation(addrID byte, first, last basics.Round, dilution uint64) Participation {
+	p := Participation{
+		FirstValid:  first,
+		LastValid:   last,
+		KeyDilution: dilution,
+		Voting:      &crypto.OneTimeSignatureSecrets{},
+		VRF:         &crypto.VRFSecrets{},
+	}
+	p.Parent[0] = addrID
+	return p
+}
+
 // Insert participation records and make sure they can be fetched.
 func TestParticipation_InsertGet(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -57,19 +70,8 @@ func TestParticipation_InsertGet(t *testing.T) {
 	registry := getRegistry(t)
 	defer registry.Close()
 
-	p := Participation{
-		FirstValid:  1,
-		LastValid:   2,
-		KeyDilution: 3,
-	}
-	p.Parent[0] = 1
-
-	p2 := Participation{
-		FirstValid:  4,
-		LastValid:   5,
-		KeyDilution: 6,
-	}
-	p2.Parent[0] = 2
+	p := makeTestParticipation(1, 1, 2, 3)
+	p2 := makeTestParticipation(2, 4, 5, 6)
 
 	insertAndVerify := func(part Participation) {
 		id, err := registry.Insert(part)
@@ -108,19 +110,8 @@ func TestParticipation_Delete(t *testing.T) {
 	registry := getRegistry(t)
 	defer registry.Close()
 
-	p := Participation{
-		FirstValid:  1,
-		LastValid:   2,
-		KeyDilution: 3,
-	}
-	p.Parent[0] = 1
-
-	p2 := Participation{
-		FirstValid:  4,
-		LastValid:   5,
-		KeyDilution: 6,
-	}
-	p2.Parent[0] = 2
+	p := makeTestParticipation(1, 1, 2, 3)
+	p2 := makeTestParticipation(2, 4, 5, 6)
 
 	id, err := registry.Insert(p)
 	a.NoError(err)
@@ -149,19 +140,8 @@ func TestParticipation_Register(t *testing.T) {
 	defer registry.Close()
 
 	// Overlapping keys.
-	p := Participation{
-		FirstValid:  250000,
-		LastValid:   3000000,
-		KeyDilution: 1,
-	}
-	p.Parent[0] = 1
-
-	p2 := Participation{
-		FirstValid:  2000000,
-		LastValid:   4000000,
-		KeyDilution: 2,
-		Parent:      p.Parent,
-	}
+	p := makeTestParticipation(1, 250000, 3000000, 1)
+	p2 := makeTestParticipation(1, 200000, 4000000, 2)
 
 	id, err := registry.Insert(p)
 	a.NoError(err)
@@ -197,11 +177,7 @@ func TestParticipation_RegisterInvalidID(t *testing.T) {
 	registry := getRegistry(t)
 	defer registry.Close()
 
-	p := Participation{
-		FirstValid:  250000,
-		LastValid:   3000000,
-		KeyDilution: 1,
-	}
+	p := makeTestParticipation(0, 250000, 3000000, 1)
 
 	err := registry.Register(p.ParticipationID(), 10000000)
 	a.EqualError(err, ErrParticipationIDNotFound.Error())
@@ -214,11 +190,7 @@ func TestParticipation_RegisterInvalidRange(t *testing.T) {
 	registry := getRegistry(t)
 	defer registry.Close()
 
-	p := Participation{
-		FirstValid:  250000,
-		LastValid:   3000000,
-		KeyDilution: 1,
-	}
+	p := makeTestParticipation(0, 250000, 3000000, 1)
 
 	id, err := registry.Insert(p)
 	a.NoError(err)
@@ -237,18 +209,10 @@ func TestParticipation_Record(t *testing.T) {
 	defer registry.Close()
 
 	// Setup p
-	p := Participation{
-		FirstValid:  0,
-		LastValid:   3000000,
-		KeyDilution: 1,
-	}
-	p.Parent[0] = 1
-
+	p := makeTestParticipation(1, 0, 3000000, 1)
 	// Setup some other keys to make sure they are not updated.
-	p2 := p
-	p2.Parent[0] = 2
-	p3 := p
-	p3.Parent[0] = 3
+	p2 := makeTestParticipation(2, 0, 3000000, 1)
+	p3 := makeTestParticipation(3, 0, 3000000, 1)
 
 	// Install and register all of the keys
 	for _, part := range []Participation{p, p2, p3} {
@@ -304,12 +268,7 @@ func TestParticipation_RecordInvalidActionAndOutOfRange(t *testing.T) {
 	registry := getRegistry(t)
 	defer registry.Close()
 
-	p := Participation{
-		FirstValid:  0,
-		LastValid:   3000000,
-		KeyDilution: 1,
-	}
-	p.Parent[0] = 1
+	p := makeTestParticipation(1, 0, 3000000, 1)
 	id, err := registry.Insert(p)
 	a.NoError(err)
 	err = registry.Register(id, 0)
@@ -346,18 +305,8 @@ func TestParticipation_RecordMultipleUpdates(t *testing.T) {
 	// We'll test that recording at this round fails because both keys are active
 	testRound := basics.Round(5000)
 
-	p := Participation{
-		FirstValid:  0,
-		LastValid:   3000000,
-		KeyDilution: 1,
-	}
-	p.Parent[0] = 1
-	p2 := Participation{
-		FirstValid:  1,
-		LastValid:   3000000,
-		KeyDilution: 1,
-	}
-	p2.Parent = p.Parent
+	p := makeTestParticipation(1, 0, 3000000, 1)
+	p2 := makeTestParticipation(1, 1, 3000000, 1)
 
 	_, err := registry.Insert(p)
 	a.NoError(err)
@@ -403,12 +352,7 @@ func TestParticipation_MultipleInsertError(t *testing.T) {
 	registry := getRegistry(t)
 	defer registry.Close()
 
-	p := Participation{
-		FirstValid:  1,
-		LastValid:   2,
-		KeyDilution: 3,
-	}
-	p.Parent[0] = 1
+	p := makeTestParticipation(1, 1, 2, 3)
 
 	_, err := registry.Insert(p)
 	a.NoError(err)
@@ -427,12 +371,7 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 	registry := getRegistry(t)
 	defer registry.Close()
 
-	p := Participation{
-		FirstValid:  1,
-		LastValid:   2000000,
-		KeyDilution: 3,
-	}
-	p.Parent[0] = 1
+	p := makeTestParticipation(1, 1, 2000000, 3)
 	id := p.ParticipationID()
 
 	// Insert the same record twice

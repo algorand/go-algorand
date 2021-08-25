@@ -20,55 +20,73 @@ import (
 func (z *participationIDData) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(5)
-	var zb0001Mask uint8 /* 6 bits */
+	zb0001Len := uint32(7)
+	var zb0001Mask uint16 /* 9 bits */
 	if (*z).Parent.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x2
-	}
-	if (*z).FirstValid.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (*z).KeyDilution == 0 {
+	if (*z).KeyregTxnFields.Nonparticipation == false {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if (*z).LastValid.MsgIsZero() {
+	if (*z).KeyregTxnFields.SelectionPK.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
-	if (*z).VRFSK.MsgIsZero() {
+	if (*z).KeyregTxnFields.VoteFirst.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x20
+	}
+	if (*z).KeyregTxnFields.VoteKeyDilution == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x40
+	}
+	if (*z).KeyregTxnFields.VotePK.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x80
+	}
+	if (*z).KeyregTxnFields.VoteLast.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x100
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
-		if (zb0001Mask & 0x2) == 0 { // if not empty
+		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "addr"
 			o = append(o, 0xa4, 0x61, 0x64, 0x64, 0x72)
 			o = (*z).Parent.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x4) == 0 { // if not empty
-			// string "fv"
-			o = append(o, 0xa2, 0x66, 0x76)
-			o = (*z).FirstValid.MarshalMsg(o)
-		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
-			// string "kd"
-			o = append(o, 0xa2, 0x6b, 0x64)
-			o = msgp.AppendUint64(o, (*z).KeyDilution)
+			// string "nonpart"
+			o = append(o, 0xa7, 0x6e, 0x6f, 0x6e, 0x70, 0x61, 0x72, 0x74)
+			o = msgp.AppendBool(o, (*z).KeyregTxnFields.Nonparticipation)
 		}
 		if (zb0001Mask & 0x10) == 0 { // if not empty
-			// string "lv"
-			o = append(o, 0xa2, 0x6c, 0x76)
-			o = (*z).LastValid.MarshalMsg(o)
+			// string "selkey"
+			o = append(o, 0xa6, 0x73, 0x65, 0x6c, 0x6b, 0x65, 0x79)
+			o = (*z).KeyregTxnFields.SelectionPK.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x20) == 0 { // if not empty
-			// string "vrfsk"
-			o = append(o, 0xa5, 0x76, 0x72, 0x66, 0x73, 0x6b)
-			o = (*z).VRFSK.MarshalMsg(o)
+			// string "votefst"
+			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x66, 0x73, 0x74)
+			o = (*z).KeyregTxnFields.VoteFirst.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x40) == 0 { // if not empty
+			// string "votekd"
+			o = append(o, 0xa6, 0x76, 0x6f, 0x74, 0x65, 0x6b, 0x64)
+			o = msgp.AppendUint64(o, (*z).KeyregTxnFields.VoteKeyDilution)
+		}
+		if (zb0001Mask & 0x80) == 0 { // if not empty
+			// string "votekey"
+			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x6b, 0x65, 0x79)
+			o = (*z).KeyregTxnFields.VotePK.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x100) == 0 { // if not empty
+			// string "votelst"
+			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x6c, 0x73, 0x74)
+			o = (*z).KeyregTxnFields.VoteLast.MarshalMsg(o)
 		}
 	}
 	return
@@ -94,41 +112,57 @@ func (z *participationIDData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
+			bts, err = (*z).KeyregTxnFields.VotePK.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "VotePK")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).KeyregTxnFields.SelectionPK.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "SelectionPK")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).KeyregTxnFields.VoteFirst.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "VoteFirst")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).KeyregTxnFields.VoteLast.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "VoteLast")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).KeyregTxnFields.VoteKeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "VoteKeyDilution")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).KeyregTxnFields.Nonparticipation, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Nonparticipation")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
 			bts, err = (*z).Parent.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Parent")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
-			bts, err = (*z).VRFSK.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "VRFSK")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
-			bts, err = (*z).FirstValid.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
-			bts, err = (*z).LastValid.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "LastValid")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
-			(*z).KeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "KeyDilution")
 				return
 			}
 		}
@@ -155,34 +189,46 @@ func (z *participationIDData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
+			case "votekey":
+				bts, err = (*z).KeyregTxnFields.VotePK.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "VotePK")
+					return
+				}
+			case "selkey":
+				bts, err = (*z).KeyregTxnFields.SelectionPK.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "SelectionPK")
+					return
+				}
+			case "votefst":
+				bts, err = (*z).KeyregTxnFields.VoteFirst.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "VoteFirst")
+					return
+				}
+			case "votelst":
+				bts, err = (*z).KeyregTxnFields.VoteLast.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "VoteLast")
+					return
+				}
+			case "votekd":
+				(*z).KeyregTxnFields.VoteKeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "VoteKeyDilution")
+					return
+				}
+			case "nonpart":
+				(*z).KeyregTxnFields.Nonparticipation, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Nonparticipation")
+					return
+				}
 			case "addr":
 				bts, err = (*z).Parent.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Parent")
-					return
-				}
-			case "vrfsk":
-				bts, err = (*z).VRFSK.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "VRFSK")
-					return
-				}
-			case "fv":
-				bts, err = (*z).FirstValid.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "FirstValid")
-					return
-				}
-			case "lv":
-				bts, err = (*z).LastValid.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "LastValid")
-					return
-				}
-			case "kd":
-				(*z).KeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "KeyDilution")
 					return
 				}
 			default:
@@ -205,11 +251,11 @@ func (_ *participationIDData) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *participationIDData) Msgsize() (s int) {
-	s = 1 + 5 + (*z).Parent.Msgsize() + 6 + (*z).VRFSK.Msgsize() + 3 + (*z).FirstValid.Msgsize() + 3 + (*z).LastValid.Msgsize() + 3 + msgp.Uint64Size
+	s = 1 + 8 + (*z).KeyregTxnFields.VotePK.Msgsize() + 7 + (*z).KeyregTxnFields.SelectionPK.Msgsize() + 8 + (*z).KeyregTxnFields.VoteFirst.Msgsize() + 8 + (*z).KeyregTxnFields.VoteLast.Msgsize() + 7 + msgp.Uint64Size + 8 + msgp.BoolSize + 5 + (*z).Parent.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *participationIDData) MsgIsZero() bool {
-	return ((*z).Parent.MsgIsZero()) && ((*z).VRFSK.MsgIsZero()) && ((*z).FirstValid.MsgIsZero()) && ((*z).LastValid.MsgIsZero()) && ((*z).KeyDilution == 0)
+	return ((*z).KeyregTxnFields.VotePK.MsgIsZero()) && ((*z).KeyregTxnFields.SelectionPK.MsgIsZero()) && ((*z).KeyregTxnFields.VoteFirst.MsgIsZero()) && ((*z).KeyregTxnFields.VoteLast.MsgIsZero()) && ((*z).KeyregTxnFields.VoteKeyDilution == 0) && ((*z).KeyregTxnFields.Nonparticipation == false) && ((*z).Parent.MsgIsZero())
 }
