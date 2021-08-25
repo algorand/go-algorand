@@ -56,7 +56,6 @@ func upWorker(ws *workerState, in Layer, out Layer, h hash.Hash) {
 	ws.started()
 	batchSize := uint64(2)
 
-	h.Reset()
 	for {
 		off := ws.next(batchSize)
 		if off >= ws.maxidx {
