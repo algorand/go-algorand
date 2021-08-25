@@ -280,10 +280,12 @@ func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashabl
 		Round:        round,
 	}
 
-	hsh.Write(crypto.HashRep(&ephkey))
-
 	pos := roundToIndex(firstValid, round, interval)
-	isInTree := merklearray.Verify((merklearray.Digest)(v.Root[:]), map[uint64]merklearray.Digest{pos: hsh.Sum(nil)}, (*merklearray.Proof)(&sig.Proof))
+	isInTree := merklearray.Verify(
+		(merklearray.Digest)(v.Root[:]),
+		map[uint64]merklearray.Digest{pos: crypto.HashSum(hsh, &ephkey)},
+		(*merklearray.Proof)(&sig.Proof),
+	)
 	if isInTree != nil {
 		return isInTree
 	}
