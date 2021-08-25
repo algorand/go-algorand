@@ -228,9 +228,9 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 			stibhash := block.Payset[idx].Hash()
 
 			response := generated.ProofResponse{
-				Idx:      uint64(idx),
 				Proof:    proofconcat,
 				Stibhash: stibhash[:],
+				Idx:      uint64(idx),
 			}
 
 			return ctx.JSON(http.StatusOK, response)
