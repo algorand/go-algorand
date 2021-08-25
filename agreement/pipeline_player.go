@@ -203,11 +203,11 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 	// if that better proposal will be agreed on..
 	for rnd := range p.Players {
 		if rnd.Number < p.FirstUncommittedRound.Number {
-			p.deleteRound(rnd)
+			delete(p.Players, rnd)
 		}
 
 		if rnd.Number == p.FirstUncommittedRound.Number && rnd.Branch != p.FirstUncommittedRound.Branch {
-			p.deleteRound(rnd)
+			p.deleteRoundAndChildren(rnd)
 		}
 	}
 
@@ -224,7 +224,7 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 		// If some player has moved on beyond period 0, something
 		// is not on the fast path, and we should not speculate.
 		// Also wait for PipelineDelay before speculating.
-		if rp.Period > 0 || rp.PipelineDelay != 0 {
+		if rp.Period > 0 || rp.PipelineDelay != 0 || rp.FrozenPipelining {
 			p.freezeChildren(rnd)
 			continue
 		}
@@ -267,14 +267,14 @@ func (p *pipelinePlayer) freezeOtherChildren(r round, h bookkeeping.BlockHash) {
 	}
 }
 
-// deleteRound deletes a round that is not possible (because its branch cannot
+// deleteRoundAndChildren deletes a round that is not possible (because its branch cannot
 // be committed in the parent), and all children of that round.
-func (p *pipelinePlayer) deleteRound(r round) {
+func (p *pipelinePlayer) deleteRoundAndChildren(r round) {
 	delete(p.Players, r)
 
 	for rnd, rp := range p.Players {
 		if rp.PipelineParentRound == r {
-			p.deleteRound(rnd)
+			p.deleteRoundAndChildren(rnd)
 		}
 	}
 }
