@@ -163,6 +163,24 @@ func testMerkle(t *testing.T, hashtype crypto.HashType, size uint64) {
 	}
 }
 
+func TestEmptyProveStructure(t *testing.T) {
+	a := require.New(t)
+	size := uint64(10)
+	arr := make(TestArray, size)
+	for i := uint64(0); i < size; i++ {
+		crypto.RandBytes(arr[i][:])
+	}
+
+	tree, err := Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+
+	prf, err := tree.Prove(nil)
+	a.NoError(err)
+	a.NotNil(prf)
+	a.Nil(prf.Path)
+	a.Equal(prf.HashFactory, crypto.HashFactory{HashType: crypto.Sha512_256})
+}
+
 func BenchmarkMerkleCommit(b *testing.B) {
 	for sz := 10; sz <= 100000; sz *= 100 {
 		msg := make(TestBuf, sz)
