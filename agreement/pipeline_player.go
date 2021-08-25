@@ -322,7 +322,7 @@ func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protoco
 func (p *pipelinePlayer) externalDemuxSignals() pipelineExternalDemuxSignals {
 	s := make([]externalDemuxSignals, 0, len(p.Players))
 	for _, p := range p.Players {
-		if p.Decided != (bookkeeping.BlockHash{}) || p.FrozenPipelining {
+		if p.Decided != (bookkeeping.BlockHash{}) {
 			continue
 		}
 
