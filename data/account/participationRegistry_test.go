@@ -511,7 +511,7 @@ func TestParticipation_NoKeyToUpdate(t *testing.T) {
 	a := assert.New(t)
 	registry := getRegistry(t)
 	defer registry.Close()
-	
+
 	registry.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		record := ParticipationRecord{
 			ParticipationID: ParticipationID{},
@@ -527,4 +527,3 @@ func TestParticipation_NoKeyToUpdate(t *testing.T) {
 		return nil
 	})
 }
-

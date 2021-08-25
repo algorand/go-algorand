@@ -53,6 +53,7 @@ type ParticipationRecord struct {
 	// OneTimeSignatureSecrets
 }
 
+// Duplicate creates a copy of the current object. This is required once secrets are stored.
 func (r ParticipationRecord) Duplicate() ParticipationRecord {
 	return ParticipationRecord{
 		ParticipationID:        r.ParticipationID,
