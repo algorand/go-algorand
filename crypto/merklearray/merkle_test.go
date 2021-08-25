@@ -181,6 +181,41 @@ func TestEmptyProveStructure(t *testing.T) {
 	a.Equal(prf.HashFactory, crypto.HashFactory{HashType: crypto.Sha512_256})
 }
 
+type nonmarshalable []int
+
+func (n nonmarshalable) Length() uint64 {
+	return uint64(len(n))
+}
+
+func (n nonmarshalable) Marshal(pos uint64) ([]byte, error) {
+	return nil, fmt.Errorf("can't be marshaled")
+}
+
+func TestErrorInMarshal(t *testing.T) {
+	a := nonmarshalable{1}
+	_, err := Build(&a, crypto.HashFactory{})
+	require.Error(t, err)
+}
+
+func TestVerifyWithNoElements(t *testing.T) {
+	a := require.New(t)
+	size := uint64(10)
+	arr := make(TestArray, size)
+	for i := uint64(0); i < size; i++ {
+		crypto.RandBytes(arr[i][:])
+	}
+	tree, err := Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+
+	p, err := tree.Prove([]uint64{1})
+	a.NoError(err)
+	err = Verify(tree.Root(), map[uint64]crypto.GenericDigest{}, p)
+	require.Error(t, err)
+
+	err = Verify(tree.Root(), map[uint64]crypto.GenericDigest{}, nil)
+	require.NoError(t, err)
+}
+
 func BenchmarkMerkleCommit(b *testing.B) {
 	for sz := 10; sz <= 100000; sz *= 100 {
 		msg := make(TestBuf, sz)

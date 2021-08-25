@@ -187,9 +187,8 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 	}
 
 	if validateProof {
-		computedroot := pl[0]
-		if computedroot.pos != 0 || !bytes.Equal(computedroot.hash, tree.topLayer()[0]) {
-			return nil, fmt.Errorf("internal error: root mismatch during proof")
+		if err := inspectRoot(tree.topLayer()[0], pl); err != nil {
+			return nil, err
 		}
 	}
 
@@ -220,7 +219,7 @@ func (tree *Tree) buildNextLayer() {
 // returned by Prove().
 func Verify(root crypto.GenericDigest, elems map[uint64]crypto.GenericDigest, proof *Proof) error {
 	if len(elems) == 0 {
-		if proof == nil || len(proof.Path) != 0 {
+		if proof != nil && len(proof.Path) != 0 {
 			return fmt.Errorf("non-empty proof for empty set of elements")
 		}
 		return nil
@@ -273,7 +272,7 @@ func buildPartialLayer(elems map[uint64]crypto.GenericDigest) partialLayer {
 
 func inspectRoot(root crypto.GenericDigest, pl partialLayer) error {
 	computedroot := pl[0]
-	if computedroot.pos != 0 || !bytes.Equal(computedroot.hash[:], root.ToSlice()) {
+	if computedroot.pos != 0 || !bytes.Equal(computedroot.hash, root) {
 		return fmt.Errorf("root mismatch")
 	}
 	return nil
