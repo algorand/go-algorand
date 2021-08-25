@@ -24,12 +24,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 // TODO need a fuzz test for the parsing
 
 func TestMakeTypeValid(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// uint
 	for i := 8; i <= 512; i += 8 {
 		uintType, _ := MakeUintType(uint16(i))
@@ -139,6 +141,7 @@ func TestMakeTypeValid(t *testing.T) {
 }
 
 func TestMakeTypeInvalid(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// uint
 	for i := 0; i <= 1000; i++ {
 		randInput := rand.Uint32()
@@ -165,6 +168,7 @@ func TestMakeTypeInvalid(t *testing.T) {
 }
 
 func TestTypeFromStringValid(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// uint
 	for i := 8; i <= 512; i += 8 {
 		expected, _ := MakeUintType(uint16(i))
@@ -344,6 +348,7 @@ func TestTypeFromStringValid(t *testing.T) {
 }
 
 func TestTypeFromStringInvalid(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	for i := 0; i <= 1000; i++ {
 		randSize := rand.Uint64()
 		for randSize%8 == 0 && randSize <= 512 && randSize >= 8 {
@@ -433,6 +438,7 @@ func generateTupleType(baseTypes []Type, tupleTypes []Type) Type {
 }
 
 func TestTypeMISC(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	rand.Seed(time.Now().Unix())
 
 	var testpool = []Type{

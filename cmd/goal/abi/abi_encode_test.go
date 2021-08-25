@@ -22,11 +22,13 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/chrismcguire/gobberish"
 	"github.com/stretchr/testify/require"
 )
 
 func TestEncodeValid(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	for intSize := 8; intSize <= 512; intSize += 8 {
 		upperLimit := big.NewInt(0).Lsh(big.NewInt(1), uint(intSize))
 		for i := 0; i < 1000; i++ {
@@ -216,6 +218,7 @@ func TestEncodeValid(t *testing.T) {
 }
 
 func TestDecodeValid(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	for intSize := 8; intSize <= 512; intSize += 8 {
 		upperLimit := big.NewInt(0).Lsh(big.NewInt(1), uint(intSize))
 		for i := 0; i < 1000; i++ {
@@ -407,6 +410,7 @@ func TestDecodeValid(t *testing.T) {
 }
 
 func TestDecodeInvalid(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Run("corrupted static bool array decode", func(t *testing.T) {
 		inputBase := []byte{0b11111111}
 		arrayType := MakeStaticArrayType(MakeBoolType(), 9)
