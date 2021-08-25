@@ -148,7 +148,6 @@ func TestScheduleNewRound(t *testing.T) {
 
 	ps.scheduleNewRound([]*Peer{&peers2[0], &peers2[1], &peers2[2], &peers2[3]})
 	require.Equal(t, 4, ps.Len())
-	require.Equal(t, uint64(321), ps.peers[0].peer.lastSentMessageSequenceNumber)
 
 }
 
