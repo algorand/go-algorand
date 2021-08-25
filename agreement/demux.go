@@ -245,18 +245,16 @@ func (d *demux) next(s *Service, extSignals pipelineExternalDemuxSignals) (e ext
 	// pick next fastDeadlineCh from extSignals
 	var fastDeadlineRounds []externalDemuxSignals
 	for _, extSignal := range extSignals.signals {
-		fastPartitionRecoveryEnabled := false
 		if proto, err := d.ledger.ConsensusVersion(paramsRoundBranch(extSignal.CurrentRound)); err != nil {
 			logging.Base().Warnf("demux: could not get consensus parameters for round %d from round %+v: %v", ParamsRound(extSignal.CurrentRound.Number), extSignal.CurrentRound, err)
-			// this might happen during catchup, since the Ledger.Wait fires as soon as a new block is received by the ledger, which could be
-			// far before it's being committed. In these cases, it should be safe to default to the current consensus version. On subsequent
-			// iterations, it will get "corrected" since the ledger would finish flushing the blocks to disk.
-			fastPartitionRecoveryEnabled = config.Consensus[protocol.ConsensusCurrentVersion].FastPartitionRecovery
+			// this might happen during catchup, since the Ledger.Wait fires
+			// as soon as a new block is received by the ledger, which could be
+			// far before it's being committed. In these cases, it should be
+			// safe to ignore fast recovery; we will advance the ledger soon.
 		} else {
-			fastPartitionRecoveryEnabled = config.Consensus[proto].FastPartitionRecovery
-		}
-		if fastPartitionRecoveryEnabled {
-			fastDeadlineRounds = append(fastDeadlineRounds, extSignal)
+			if config.Consensus[proto].FastPartitionRecovery {
+				fastDeadlineRounds = append(fastDeadlineRounds, extSignal)
+			}
 		}
 	}
 
