@@ -70,6 +70,12 @@ type player struct {
 	// next block.
 	PipelineDelay time.Duration
 
+	// OkToPipeline indicates whether PipelineDelay expired.
+	OkToPipeline bool
+
+	// PipelineParentRound is the parent round of this player, if pipelined.
+	PipelineParentRound round
+
 	// pipelined is set to true if this player is part of a pipelinePlayer.
 	pipelined bool
 
@@ -112,6 +118,11 @@ func (p *player) init(r routerHandle, target round, proto protocol.ConsensusVers
 	p.Deadline = FilterTimeout(0, proto)
 	p.Decided = bookkeeping.BlockHash{}
 	p.NextVersion = ""
+	p.OkToPipeline = false
+
+	if p.PipelineDelay == 0 {
+		p.OkToPipeline = true
+	}
 
 	// update tracer state to match player
 	r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})

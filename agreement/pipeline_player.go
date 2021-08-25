@@ -196,18 +196,18 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 	// if that better proposal will be agreed on..
 	for rnd := range p.Players {
 		if rnd.Number < p.FirstUncommittedRound.Number {
-			delete(p.Players, rnd)
+			p.deleteRound(rnd)
 		}
 
 		if rnd.Number == p.FirstUncommittedRound.Number && rnd.Branch != p.FirstUncommittedRound.Branch {
-			delete(p.Players, rnd)
+			p.deleteRound(rnd)
 		}
 	}
 
 	// If we don't have a player for the first uncommitted round, create it.
 	// This could happen right at startup, or right after the player was GCed
 	// because it reached consensus.
-	actions = append(actions, p.ensurePlayer(r, p.FirstUncommittedRound, p.FirstUncommittedVersion)...)
+	actions = append(actions, p.ensurePlayer(r, p.FirstUncommittedRound, p.FirstUncommittedVersion, round{})...)
 
 	for rnd, rp := range p.Players {
 		if rnd.Number >= p.FirstUncommittedRound.Number+basics.Round(maxDepth) {
@@ -216,7 +216,8 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 
 		// If some player has moved on beyond period 0, something
 		// is not on the fast path, and we should not speculate.
-		if rp.Period > 0 {
+		// Also wait for PipelineDelay before speculating.
+		if rp.Period > 0 || !rp.OkToPipeline {
 			// XXX optimization: consider pausing speculation
 			// for any "child" rounds of rnd, if already present
 			// in p.Players.
@@ -230,10 +231,22 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 		}
 
 		nextrnd := round{Number: rnd.Number + 1, Branch: bookkeeping.BlockHash(re.Proposal.BlockDigest)}
-		actions = append(actions, p.ensurePlayer(r, nextrnd, re.Payload.prevVersion)...)
+		actions = append(actions, p.ensurePlayer(r, nextrnd, re.Payload.prevVersion, rnd)...)
 	}
 
 	return actions
+}
+
+// deleteRound deletes a round that is not possible (because its branch cannot
+// be committed in the parent), and all children of that round.
+func (p *pipelinePlayer) deleteRound(r round) {
+	delete(p.Players, r)
+
+	for rnd, rp := range p.Players {
+		if rp.PipelineParentRound == r {
+			p.deleteRound(rnd)
+		}
+	}
 }
 
 // pipelineDelay chooses the appropriate pipelining delay for a new player.
@@ -255,7 +268,7 @@ func (p *pipelinePlayer) pipelineDelay(ver protocol.ConsensusVersion) time.Durat
 }
 
 // ensurePlayer creates a player for a particular round, if not already present.
-func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protocol.ConsensusVersion) []action {
+func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protocol.ConsensusVersion, pipelineParent round) []action {
 	_, ok := p.Players[nextrnd]
 	if ok {
 		return nil
@@ -263,6 +276,7 @@ func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protoco
 
 	newPlayer := &player{
 		PipelineDelay:               p.pipelineDelay(ver),
+		PipelineParentRound:         pipelineParent,
 		pipelined:                   true,
 		notify:                      p,
 		firstUncommittedRoundSource: p,
