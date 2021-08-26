@@ -786,29 +786,6 @@ func avgSendBufferHighPrioLength(wn *WebsocketNetwork) float64 {
 	return float64(sum) / float64(len(wn.peers))
 }
 
-type noWriteConn struct{}
-
-func (nc *noWriteConn) RemoteAddr() net.Addr {
-	return nil
-}
-func (nc *noWriteConn) NextReader() (int, io.Reader, error) {
-	return 0, nil, nil
-}
-func (nc *noWriteConn) WriteMessage(int, []byte) error {
-	time.Sleep(10 * time.Second)
-	return nil
-}
-func (nc *noWriteConn) WriteControl(int, []byte, time.Time) error {
-	return nil
-}
-func (nc *noWriteConn) SetReadLimit(limit int64) {
-}
-func (nc *noWriteConn) CloseWithoutFlush() error {
-	return nil
-}
-
-var noWriteConnSingleton = noWriteConn{}
-
 // TestSlowOutboundPeer tests what happens when one outbound peer is slow and the rest are fine.
 func TestSlowOutboundPeer(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -831,20 +808,22 @@ func TestSlowOutboundPeer(t *testing.T) {
 
 	node := makeTestWebsocketNode(t)
 	node.config.GossipFanout = 2
-	dl := eventsDetailsLogger{Logger: logging.TestingLog(t), eventReceived: make(chan interface{}, 1), eventIdentifier: telemetryspec.DisconnectPeerEvent}
+	dl := eventsDetailsLogger{Logger: logging.TestingLog(t), eventReceived: make(chan interface{}, 100), eventIdentifier: telemetryspec.DisconnectPeerEvent}
 	node.log = dl
 
 	node.phonebook.ReplacePeerList([]string{addrA, addrB}, "default", PhoneBookEntryRelayRole)
 	node.Start()
 	defer node.Stop()
 
-	msg := make([]byte, 1000*1000)
+	msg := make([]byte, 100)
 	rand.Read(msg)
 
+	muHandleA := deadlock.Mutex{}
 	numHandledA := 0
 	waitMessageArriveHandlerA := func(msg IncomingMessage) (out OutgoingMessage) {
+		muHandleA.Lock()
+		defer muHandleA.Unlock()
 		numHandledA++
-		time.Sleep(5 * time.Second)
 		return
 	}
 	nodeA.RegisterHandlers([]TaggedMessageHandler{
@@ -853,8 +832,11 @@ func TestSlowOutboundPeer(t *testing.T) {
 			MessageHandler: HandlerFunc(waitMessageArriveHandlerA),
 		}})
 
+	muHandleB := deadlock.Mutex{}
 	numHandledB := 0
 	waitMessageArriveHandlerB := func(msg IncomingMessage) (out OutgoingMessage) {
+		muHandleB.Lock()
+		defer muHandleB.Unlock()
 		numHandledB++
 		return
 	}
@@ -864,55 +846,64 @@ func TestSlowOutboundPeer(t *testing.T) {
 			MessageHandler: HandlerFunc(waitMessageArriveHandlerB),
 		}})
 
-	for i := 0; i < 100; i++ {
-		if len(node.peers) == 2 {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
+	readyTimeout := time.NewTimer(2 * time.Second)	
+	waitReady(t, node, readyTimeout.C)
 	require.Equal(t, 2, len(node.peers))
 
+	callback := func(enqueued bool, sequenceNumber uint64) error {
+		time.Sleep(2 * maxMessageQueueDuration)
+		return nil
+	}
+	
 	rand.Read(msg)
 	x := 0
-	for ; x < 1000000; x++ {
-
-		if len(node.peers) != 2 {
-			break
-		}
-		node.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil)
-
-		if x%250 == 0 {
-			fmt.Printf("x=%d ha=%d bh=%d\n", x, numHandledA, numHandledB)
-		}
-		if x == 0 {
-			node.config.GossipFanout = 1
-		}
-	}
-
-	select {
-	case eventDetails := <-dl.eventReceived:
-		switch disconnectPeerEventDetails := eventDetails.(type) {
-		case telemetryspec.DisconnectPeerEventDetails:
-			require.Equal(t, string(disconnectSlowConn), disconnectPeerEventDetails.Reason)
+MAINLOOP:
+	for ; x < 1000; x++ {
+		select {
+		case eventDetails := <-dl.eventReceived:
+			switch disconnectPeerEventDetails := eventDetails.(type) {
+			case telemetryspec.DisconnectPeerEventDetails:
+				require.Equal(t, string(disconnectSlowConn), disconnectPeerEventDetails.Reason)
+			default:
+				require.FailNow(t, "Unexpected event was send : %v", eventDetails)
+			}
+			break MAINLOOP
 		default:
-			require.FailNow(t, "Unexpected event was send : %v", eventDetails)
 		}
-
-	default:
-		require.FailNow(t, "The DisconnectPeerEvent was missing")
+		
+		node.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil)		
+		if x == 0 {
+			node.peers[0].Unicast(context.Background(), msg, protocol.AgreementVoteTag, callback)			
+		}
+		time.Sleep(200 * time.Millisecond)
 	}
 
+	require.Less(t, x, 1000)
 	
-	for i := 0; i < 100; i++ {
-		if numHandledB == x {
+	maxNumHandled := 0
+	minNumHandled := 0
+	for i := 0; i < 10; i++ {
+		muHandleA.Lock()
+		a := numHandledA
+		muHandleA.Unlock()
+		
+		muHandleB.Lock()
+		b := numHandledB
+		muHandleB.Unlock()
+
+		maxNumHandled = b
+		minNumHandled = a
+		if maxNumHandled < a {
+			maxNumHandled = a
+			minNumHandled = b
+		}
+		if maxNumHandled == x {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	require.Equal(t, numHandledB, x)
-	require.LessOrEqual(t, numHandledA, x/2)
-
-	require.Equal(t, 1, len(node.peers))
+	require.Equal(t, maxNumHandled, x)
+	require.Less(t, minNumHandled, x/2)
 }
 
 func makeTestFilterWebsocketNode(t *testing.T, nodename string) *WebsocketNetwork {
