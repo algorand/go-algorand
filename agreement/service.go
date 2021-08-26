@@ -221,12 +221,13 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 		var nextVersion protocol.ConsensusVersion
 		for {
 			nextRound.Number = s.Ledger.NextRound()
-			nextRound.Branch, err = s.Ledger.BlockHash(nextRound.Number-1, bookkeeping.BlockHash{})
+			d, err := s.Ledger.LookupDigest(nextRound.Number-1, bookkeeping.BlockHash{})
 			if err != nil {
 				s.log.Errorf("unable to retrieve last block hash for round %d: %v", nextRound.Number-1, err)
 				time.Sleep(time.Second)
 				continue
 			}
+			nextRound.Branch = bookkeeping.BlockHash(d)
 
 			nextVersion, err = s.Ledger.ConsensusVersion(nextRound.Number-2, nextRound.Branch)
 			if err != nil {

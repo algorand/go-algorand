@@ -317,17 +317,6 @@ func (l *testLedger) Wait(r basics.Round, leafBranch bookkeeping.BlockHash) chan
 	return l.notifications[r].ch
 }
 
-func (l *testLedger) BlockHash(r basics.Round, leafBranch bookkeeping.BlockHash) (bookkeeping.BlockHash, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	if r >= l.nextRound {
-		return bookkeeping.BlockHash{}, fmt.Errorf("BlockHash(%d): no such round yet", r)
-	}
-
-	return l.blocks[r].block.Hash(), nil
-}
-
 // note: this must be called when any new block is written
 // this should be called while the lock l.mu is held
 func (l *testLedger) notify(r basics.Round) {

@@ -112,9 +112,6 @@ type LedgerReader interface {
 	// confirmed.
 	NextRound() basics.Round
 
-	// BlockHash returns the hash of the block header for a round.
-	BlockHash(round basics.Round, leafBranch bookkeeping.BlockHash) (bookkeeping.BlockHash, error)
-
 	// Wait returns a channel which fires when the specified round
 	// completes and is durably stored on disk.
 	Wait(round basics.Round, leafBranch bookkeeping.BlockHash) chan struct{}

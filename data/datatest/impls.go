@@ -94,14 +94,6 @@ func (i ledgerImpl) Seed(r basics.Round, leaf bookkeeping.BlockHash) (committee.
 	return block.Seed, nil
 }
 
-func (i ledgerImpl) BlockHash(r basics.Round, leaf bookkeeping.BlockHash) (bookkeeping.BlockHash, error) {
-	block, err := i.sl.BlockHdr(r, leaf)
-	if err != nil {
-		return bookkeeping.BlockHash{}, err
-	}
-	return block.Hash(), nil
-}
-
 func (i ledgerImpl) LookupDigest(r basics.Round, leaf bookkeeping.BlockHash) (crypto.Digest, error) {
 	blockhdr, err := i.sl.BlockHdr(r, leaf)
 	if err != nil {

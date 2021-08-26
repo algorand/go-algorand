@@ -487,11 +487,6 @@ func (t *demuxTester) Wait(basics.Round, bookkeeping.BlockHash) chan struct{} {
 }
 
 // implement Ledger
-func (t *demuxTester) BlockHash(basics.Round, bookkeeping.BlockHash) (bookkeeping.BlockHash, error) {
-	return bookkeeping.BlockHash{}, nil
-}
-
-// implement Ledger
 func (t *demuxTester) Seed(basics.Round, bookkeeping.BlockHash) (committee.Seed, error) {
 	// we don't care about this function in this test.
 	return committee.Seed{}, nil
