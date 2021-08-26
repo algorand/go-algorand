@@ -846,7 +846,7 @@ func TestSlowOutboundPeer(t *testing.T) {
 			MessageHandler: HandlerFunc(waitMessageArriveHandlerB),
 		}})
 
-	readyTimeout := time.NewTimer(2 * time.Second)	
+	readyTimeout := time.NewTimer(2 * time.Second)
 	waitReady(t, node, readyTimeout.C)
 	require.Equal(t, 2, len(node.peers))
 
@@ -854,7 +854,7 @@ func TestSlowOutboundPeer(t *testing.T) {
 		time.Sleep(2 * maxMessageQueueDuration)
 		return nil
 	}
-	
+
 	rand.Read(msg)
 	x := 0
 MAINLOOP:
@@ -870,23 +870,23 @@ MAINLOOP:
 			break MAINLOOP
 		default:
 		}
-		
-		node.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil)		
+
+		node.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil)
 		if x == 0 {
-			node.peers[0].Unicast(context.Background(), msg, protocol.AgreementVoteTag, callback)			
+			node.peers[0].Unicast(context.Background(), msg, protocol.AgreementVoteTag, callback)
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
 
 	require.Less(t, x, 1000)
-	
+
 	maxNumHandled := 0
 	minNumHandled := 0
 	for i := 0; i < 10; i++ {
 		muHandleA.Lock()
 		a := numHandledA
 		muHandleA.Unlock()
-		
+
 		muHandleB.Lock()
 		b := numHandledB
 		muHandleB.Unlock()
