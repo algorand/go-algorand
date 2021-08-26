@@ -825,6 +825,13 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 				return fmt.Errorf("AlgorandFullNode.loadParticipationKeys: cannot load account at %v: %v", info.Name(), err)
 			}
 		} else {
+			// Tell the ParticipationRegistry about the Participation (dupes don't matter)
+			// TODO: Put the registry in the AccountManager?
+			_, err := node.participationRegistry.Insert(part.Participation)
+			if err != nil && err != account.ErrAlreadyInserted {
+				node.log.Errorf("Failed to insert participation key.")
+			}
+
 			// Tell the AccountManager about the Participation (dupes don't matter)
 			added := node.accountManager.AddParticipation(part)
 			if added {
@@ -947,6 +954,18 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 		node.mu.Lock()
 		node.accountManager.DeleteOldKeys(latestHdr, ccSigs, agreementProto)
 		node.mu.Unlock()
+
+		// Delete expired records from participation registry.
+		records, err := node.participationRegistry.GetAll()
+		if err != nil {
+			node.log.Warnf("Problem reading from participation registry: %w", err)
+		} else {
+			for _, record := range records {
+				if record.LastVote < hdr.Round {
+					node.participationRegistry.Delete(record.ParticipationID)
+				}
+			}
+		}
 	}
 }
 

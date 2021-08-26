@@ -11,8 +11,8 @@ import (
 	"github.com/algorand/msgp/msgp"
 )
 
-func TestMarshalUnmarshalparticipationIDData(t *testing.T) {
-	v := participationIDData{}
+func TestMarshalUnmarshalParticipationKeyIdentity(t *testing.T) {
+	v := ParticipationKeyIdentity{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -31,12 +31,12 @@ func TestMarshalUnmarshalparticipationIDData(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingparticipationIDData(t *testing.T) {
-	protocol.RunEncodingTest(t, &participationIDData{})
+func TestRandomizedEncodingParticipationKeyIdentity(t *testing.T) {
+	protocol.RunEncodingTest(t, &ParticipationKeyIdentity{})
 }
 
-func BenchmarkMarshalMsgparticipationIDData(b *testing.B) {
-	v := participationIDData{}
+func BenchmarkMarshalMsgParticipationKeyIdentity(b *testing.B) {
+	v := ParticipationKeyIdentity{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -44,8 +44,8 @@ func BenchmarkMarshalMsgparticipationIDData(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgparticipationIDData(b *testing.B) {
-	v := participationIDData{}
+func BenchmarkAppendMsgParticipationKeyIdentity(b *testing.B) {
+	v := ParticipationKeyIdentity{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -56,8 +56,8 @@ func BenchmarkAppendMsgparticipationIDData(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalparticipationIDData(b *testing.B) {
-	v := participationIDData{}
+func BenchmarkUnmarshalParticipationKeyIdentity(b *testing.B) {
+	v := ParticipationKeyIdentity{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

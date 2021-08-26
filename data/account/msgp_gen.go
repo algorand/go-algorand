@@ -7,17 +7,17 @@ import (
 )
 
 // The following msgp objects are implemented in this file:
-// participationIDData
-//          |-----> (*) MarshalMsg
-//          |-----> (*) CanMarshalMsg
-//          |-----> (*) UnmarshalMsg
-//          |-----> (*) CanUnmarshalMsg
-//          |-----> (*) Msgsize
-//          |-----> (*) MsgIsZero
+// ParticipationKeyIdentity
+//             |-----> (*) MarshalMsg
+//             |-----> (*) CanMarshalMsg
+//             |-----> (*) UnmarshalMsg
+//             |-----> (*) CanUnmarshalMsg
+//             |-----> (*) Msgsize
+//             |-----> (*) MsgIsZero
 //
 
 // MarshalMsg implements msgp.Marshaler
-func (z *participationIDData) MarshalMsg(b []byte) (o []byte) {
+func (z *ParticipationKeyIdentity) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(7)
@@ -92,13 +92,13 @@ func (z *participationIDData) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ *participationIDData) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*participationIDData)
+func (_ *ParticipationKeyIdentity) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*ParticipationKeyIdentity)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *participationIDData) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *ParticipationKeyIdentity) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -179,7 +179,7 @@ func (z *participationIDData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		if zb0002 {
-			(*z) = participationIDData{}
+			(*z) = ParticipationKeyIdentity{}
 		}
 		for zb0001 > 0 {
 			zb0001--
@@ -244,18 +244,18 @@ func (z *participationIDData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
-func (_ *participationIDData) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*participationIDData)
+func (_ *ParticipationKeyIdentity) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*ParticipationKeyIdentity)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *participationIDData) Msgsize() (s int) {
+func (z *ParticipationKeyIdentity) Msgsize() (s int) {
 	s = 1 + 8 + (*z).KeyregTxnFields.VotePK.Msgsize() + 7 + (*z).KeyregTxnFields.SelectionPK.Msgsize() + 8 + (*z).KeyregTxnFields.VoteFirst.Msgsize() + 8 + (*z).KeyregTxnFields.VoteLast.Msgsize() + 7 + msgp.Uint64Size + 8 + msgp.BoolSize + 5 + (*z).Parent.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *participationIDData) MsgIsZero() bool {
+func (z *ParticipationKeyIdentity) MsgIsZero() bool {
 	return ((*z).KeyregTxnFields.VotePK.MsgIsZero()) && ((*z).KeyregTxnFields.SelectionPK.MsgIsZero()) && ((*z).KeyregTxnFields.VoteFirst.MsgIsZero()) && ((*z).KeyregTxnFields.VoteLast.MsgIsZero()) && ((*z).KeyregTxnFields.VoteKeyDilution == 0) && ((*z).KeyregTxnFields.Nonparticipation == false) && ((*z).Parent.MsgIsZero())
 }

@@ -22,32 +22,20 @@ import (
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// A ParticipationKeyIdentity defines the parameters that makes a pariticpation key unique.
-type ParticipationKeyIdentity struct {
-	basics.Address // the address this participation key is used to vote for.
-
-	// FirstValid and LastValid are inclusive.
-	FirstValid basics.Round
-	LastValid  basics.Round
-
-	VoteID      crypto.OneTimeSignatureVerifier
-	SelectionID crypto.VrfPubkey
-}
-
 // AccountManager loads and manages accounts for the node
 type AccountManager struct {
 	mu deadlock.Mutex
 
-	partKeys map[ParticipationKeyIdentity]account.PersistedParticipation
+	partKeys map[account.ParticipationKeyIdentity]account.PersistedParticipation
 
 	// Map to keep track of accounts for which we've sent
 	// AccountRegistered telemetry events
@@ -60,7 +48,7 @@ type AccountManager struct {
 func MakeAccountManager(log logging.Logger) *AccountManager {
 	manager := &AccountManager{}
 	manager.log = log
-	manager.partKeys = make(map[ParticipationKeyIdentity]account.PersistedParticipation)
+	manager.partKeys = make(map[account.ParticipationKeyIdentity]account.PersistedParticipation)
 	manager.registeredAccounts = make(map[string]bool)
 
 	return manager
@@ -103,12 +91,14 @@ func (manager *AccountManager) AddParticipation(participation account.PersistedP
 	address := participation.Address()
 
 	first, last := participation.ValidInterval()
-	partkeyID := ParticipationKeyIdentity{
-		Address:     address,
-		FirstValid:  first,
-		LastValid:   last,
-		VoteID:      participation.Voting.OneTimeSignatureVerifier,
-		SelectionID: participation.VRF.PK,
+	partkeyID := account.ParticipationKeyIdentity{
+		Parent:     address,
+		KeyregTxnFields: transactions.KeyregTxnFields{
+			VoteFirst: first,
+			VoteLast:  last,
+			SelectionPK: participation.VRF.PK,
+			VotePK: participation.Voting.OneTimeSignatureVerifier,
+		},
 	}
 
 	// Check if we already have participation keys for this address in this interval

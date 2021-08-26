@@ -57,8 +57,8 @@ type Participation struct {
 	KeyDilution uint64
 }
 
-// participationIDData is for msgpack encoding the participation data.
-type participationIDData struct {
+// ParticipationKeyIdentity is for msgpack encoding the participation data.
+type ParticipationKeyIdentity struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	transactions.KeyregTxnFields
@@ -66,16 +66,23 @@ type participationIDData struct {
 }
 
 // ToBeHashed implements the Hashable interface.
-func (id *participationIDData) ToBeHashed() (protocol.HashID, []byte) {
+func (id *ParticipationKeyIdentity) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.ParticipationKeys, protocol.Encode(id)
+}
+
+func (id ParticipationKeyIdentity) ToParticipationID() ParticipationID {
+	return ParticipationID(crypto.HashObj(&ParticipationKeyIdentity{
+		KeyregTxnFields: id.KeyregTxnFields,
+		Parent:          id.Parent,
+	}))
 }
 
 // MakeParticipationID generates the ParticipationID from an address and a key registration.
 func MakeParticipationID(addr basics.Address, fields transactions.KeyregTxnFields) ParticipationID {
-	return ParticipationID(crypto.HashObj(&participationIDData{
+	return ParticipationKeyIdentity{
 		KeyregTxnFields: fields,
 		Parent:          addr,
-	}))
+	}.ToParticipationID()
 }
 
 // ParticipationID computes a ParticipationID.

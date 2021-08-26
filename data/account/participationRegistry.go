@@ -277,7 +277,7 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 
 	id = record.ParticipationID()
 	if _, ok := db.cache[id]; ok {
-		return ParticipationID{}, ErrAlreadyInserted
+		return id, ErrAlreadyInserted
 	}
 
 	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
