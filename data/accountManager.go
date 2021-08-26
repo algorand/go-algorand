@@ -92,12 +92,12 @@ func (manager *AccountManager) AddParticipation(participation account.PersistedP
 
 	first, last := participation.ValidInterval()
 	partkeyID := account.ParticipationKeyIdentity{
-		Parent:     address,
+		Parent: address,
 		KeyregTxnFields: transactions.KeyregTxnFields{
-			VoteFirst: first,
-			VoteLast:  last,
+			VoteFirst:   first,
+			VoteLast:    last,
 			SelectionPK: participation.VRF.PK,
-			VotePK: participation.Voting.OneTimeSignatureVerifier,
+			VotePK:      participation.Voting.OneTimeSignatureVerifier,
 		},
 	}
 

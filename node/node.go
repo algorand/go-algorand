@@ -962,7 +962,9 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 		} else {
 			for _, record := range records {
 				if record.LastVote < hdr.Round {
-					node.participationRegistry.Delete(record.ParticipationID)
+					if err := node.participationRegistry.Delete(record.ParticipationID); err != nil {
+						node.log.Warnf("Problem deleting key from participation registry: %w", err)
+					}
 				}
 			}
 		}

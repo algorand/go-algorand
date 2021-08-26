@@ -70,6 +70,7 @@ func (id *ParticipationKeyIdentity) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.ParticipationKeys, protocol.Encode(id)
 }
 
+// ToParticipationID creates a ParticipationID hash from the identity file.
 func (id ParticipationKeyIdentity) ToParticipationID() ParticipationID {
 	return ParticipationID(crypto.HashObj(&ParticipationKeyIdentity{
 		KeyregTxnFields: id.KeyregTxnFields,
