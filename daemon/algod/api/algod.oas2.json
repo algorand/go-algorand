@@ -1977,6 +1977,10 @@
           "items": {
             "$ref": "#/definitions/LogItem"
           }
+        },
+        "cost": {
+          "description": "Execution cost of app call transaction",
+          "type": "integer"
         }
       }
     },
