@@ -536,6 +536,8 @@ func TestAsyncRecord(t *testing.T) {
 		Parent:     addr,
 		FirstValid: 0,
 		LastValid:  1000000,
+		Voting:     &crypto.OneTimeSignatureSecrets{},
+		VRF:        &crypto.VRFSecrets{},
 	}
 	id, err := node.participationRegistry.Insert(p)
 	require.NoError(t, err)
