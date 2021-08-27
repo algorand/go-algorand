@@ -44,6 +44,10 @@ func enablePipelining(cv protocol.ConsensusVersion) bool {
 	return os.Getenv("PIPELINE") != "" || config.Consensus[cv].AgreementPipelining
 }
 
+func enableShadowPlayer() bool {
+	return os.Getenv("PIPELINE_SHADOW") != ""
+}
+
 // Service represents an instance of an execution of Algorand's agreement protocol.
 type Service struct {
 	parameters
@@ -249,16 +253,20 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 
 		if enablePipelining(nextVersion) {
 			status = &pipelinePlayer{}
-			status2 = &player{}
+			if enableShadowPlayer() {
+				status2 = &player{}
+			}
 		} else {
 			status = &player{}
 		}
 
 		router = makeRootRouter(status)
-		router2 = makeRootRouter(status2)
+		if status2 != nil {
+			router2 = makeRootRouter(status2)
+		}
 
 		a = status.init(routerHandle{t: s.tracer, r: &router, src: status.T()}, nextRound, nextVersion)
-		if enablePipelining(nextVersion) {
+		if status2 != nil {
 			status2.init(routerHandle{t: s.tracer, r: &router2, src: status2.T()}, nextRound, nextVersion)
 		}
 	} else {
