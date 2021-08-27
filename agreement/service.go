@@ -38,7 +38,11 @@ const (
 	defaultCadaverName = "agreement"
 )
 
-var enablePipelining = (os.Getenv("PIPELINE") != "")
+// enablePipelining returns true if env var PIPELINE is set for testing (XXX remove) or the consensus parameter is set.
+// XXX mainLoop only checks this at startup time
+func enablePipelining(cv protocol.ConsensusVersion) bool {
+	return os.Getenv("PIPELINE") != "" || config.Consensus[cv].EnablePipelining
+}
 
 // Service represents an instance of an execution of Algorand's agreement protocol.
 type Service struct {
@@ -239,7 +243,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 			break
 		}
 
-		if enablePipelining {
+		if enablePipelining(nextVersion) {
 			status = &pipelinePlayer{}
 			status2 = &player{}
 		} else {
@@ -250,7 +254,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 		router2 = makeRootRouter(status2)
 
 		a = status.init(routerHandle{t: s.tracer, r: &router, src: status.T()}, nextRound, nextVersion)
-		if enablePipelining {
+		if enablePipelining(nextVersion) {
 			status2.init(routerHandle{t: s.tracer, r: &router2, src: status2.T()}, nextRound, nextVersion)
 		}
 	} else {
@@ -269,7 +273,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 		ac, a = router.submitTop(s.tracer, status, e)
 		status = ac.(serializableActor)
 
-		if enablePipelining { // double-check by feeding event to status2
+		if status2 != nil { // double-check by feeding event to status2
 			ac2, a2 = router2.submitTop(s.tracer, status2, e)
 			status2 = ac2.(serializableActor)
 

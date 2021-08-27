@@ -382,6 +382,9 @@ type ConsensusParams struct {
 	// 6. checking that in the case of going online the VoteFirst is less or equal to the next network round.
 	EnableKeyregCoherencyCheck bool
 
+	// EnablePipelining specifies whether to use the pipelined player.
+	EnablePipelining bool
+
 	// AgreementPipelineDepth specifies the maximum number of pipelined
 	// rounds that the agreement protocol can run ahead with.  This is
 	// the maximum difference between the first uncommitted round and
