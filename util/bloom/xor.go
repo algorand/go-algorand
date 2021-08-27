@@ -61,6 +61,8 @@ func (xf *XorFilter) Test(x []byte) bool {
 	return false
 }
 
+const sizeofInt32 = 4
+
 // MarshalBinary implements encoding.BinaryMarshaller interface
 func (xf *XorFilter) MarshalBinary() ([]byte, error) {
 	if len(xf.holding) != 0 {
@@ -78,14 +80,14 @@ func (xf *XorFilter) MarshalBinary() ([]byte, error) {
 		// TODO: some other encoding for empty set?
 		return nil, nil
 	}
-	out := make([]byte, binary.MaxVarintLen64+binary.MaxVarintLen32+binary.MaxVarintLen32+(len(xf.xor.Fingerprints)*4))
+	out := make([]byte, binary.MaxVarintLen64+binary.MaxVarintLen32+binary.MaxVarintLen32+(len(xf.xor.Fingerprints)*sizeofInt32))
 	pos := 0
 	pos += binary.PutUvarint(out[pos:], xf.xor.Seed)
 	pos += binary.PutUvarint(out[pos:], uint64(xf.xor.BlockLength))
 	pos += binary.PutUvarint(out[pos:], uint64(len(xf.xor.Fingerprints)))
 	for _, v := range xf.xor.Fingerprints {
 		binary.LittleEndian.PutUint32(out[pos:], v)
-		pos += 4
+		pos += sizeofInt32
 	}
 	out = out[:pos]
 	return out, nil
@@ -122,13 +124,13 @@ func (xf *XorFilter) UnmarshalBinary(data []byte) error {
 		if lenFingerprints > maxFingerprints {
 			return ErrBadBinary
 		}
-		if (lenFingerprints * 4) > uint64(len(data)-pos) {
+		if (lenFingerprints * sizeofInt32) > uint64(len(data)-pos) {
 			return ErrBadBinary
 		}
 		xor.Fingerprints = make([]uint32, lenFingerprints)
 		for i := 0; i < int(lenFingerprints); i++ {
 			xor.Fingerprints[i] = binary.LittleEndian.Uint32(data[pos:])
-			pos += 4
+			pos += sizeofInt32
 		}
 		xf.xor = xor
 	} else {
