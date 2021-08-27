@@ -382,8 +382,8 @@ type ConsensusParams struct {
 	// 6. checking that in the case of going online the VoteFirst is less or equal to the next network round.
 	EnableKeyregCoherencyCheck bool
 
-	// EnablePipelining specifies whether to use the pipelined player.
-	EnablePipelining bool
+	// AgreementPipelining specifies whether to use the pipelined player.
+	AgreementPipelining bool
 
 	// AgreementPipelineDepth specifies the maximum number of pipelined
 	// rounds that the agreement protocol can run ahead with.  This is
@@ -1004,6 +1004,7 @@ func initConsensusProtocols() {
 	vFuture.CompactCertSecKQ = 128
 
 	// Enable pipelining.
+	vFuture.AgreementPipelining = true
 	vFuture.AgreementPipelineDepth = 5
 	vFuture.AgreementPipelineDelayHistory = 32
 	// vFuture.AgreementPipelineDelay = 30

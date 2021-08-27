@@ -41,7 +41,7 @@ const (
 // enablePipelining returns true if env var PIPELINE is set for testing (XXX remove) or the consensus parameter is set.
 // XXX mainLoop only checks this at startup time
 func enablePipelining(cv protocol.ConsensusVersion) bool {
-	return os.Getenv("PIPELINE") != "" || config.Consensus[cv].EnablePipelining
+	return os.Getenv("PIPELINE") != "" || config.Consensus[cv].AgreementPipelining
 }
 
 // Service represents an instance of an execution of Algorand's agreement protocol.
