@@ -75,14 +75,14 @@ call "withdraw(uint64):void" --app-arg="int:20000" && exit 1
 [ "$(balance "$APPACCT")" = 119000 ]       # no change
 
 # Try to get app account below min balance b/c of fee
-call "withdraw(uint64):void" --app-arg="int:18001"
+call "withdraw(uint64):void" --app-arg="int:18001" && exit 1
 [ "$(balance "$ACCOUNT")" = 999999873000 ] # no change
 [ "$(balance "$APPACCT")" = 119000 ]       # no change
 
-# Show that it would have worked AT min balance
+# Show that it works AT exactly min balance
 call "withdraw(uint64):void" --app-arg="int:18000"
-[ "$(balance "$ACCOUNT")" = 999999890000 ] # no change
-[ "$(balance "$APPACCT")" = 100000 ]       # 18k + fee
+[ "$(balance "$ACCOUNT")" = 999999890000 ] # +17k (18k - fee)
+[ "$(balance "$APPACCT")" = 100000 ]       # -19k (18k + fee)
 
 
 date "+${scriptname} OK %Y%m%d_%H%M%S"
