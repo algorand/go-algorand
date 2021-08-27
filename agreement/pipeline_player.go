@@ -152,7 +152,7 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 	// pass event to corresponding child player for this round
 	a := state.handle(r, e)
 
-	if e.t() == payloadVerified {
+	if e.t() == payloadVerified && e.(messageEvent).Err == nil {
 		// Every verified payload gets added to the speculative ledger,
 		// so that we can refer to rounds using that payload's branch hash.
 		a = append(a, ensureSpeculativeAction{Payload: e.(messageEvent).Input.Proposal})

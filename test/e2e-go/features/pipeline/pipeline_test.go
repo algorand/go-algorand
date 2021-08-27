@@ -17,7 +17,7 @@ func TestPipeline(t *testing.T) {
 	configurableConsensus := make(config.ConsensusProtocols)
 	cp := config.Consensus[protocol.ConsensusCurrentVersion]
 	cp.AgreementPipelining = true
-	cp.AgreementPipelineDepth = 5
+	cp.AgreementPipelineDepth = 0 // 5
 	cp.AgreementPipelineDelayHistory = 32
 	// vFuture.AgreementPipelineDelay = 30
 	cp.AgreementPipelineDelay = 0
