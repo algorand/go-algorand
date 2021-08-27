@@ -225,17 +225,21 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 		var nextVersion protocol.ConsensusVersion
 		for {
 			nextRound.Number = s.Ledger.NextRound()
-			d, err := s.Ledger.LookupDigest(nextRound.Number-1, bookkeeping.BlockHash{})
-			if err != nil {
-				s.log.Errorf("unable to retrieve last block hash for round %d: %v", nextRound.Number-1, err)
-				time.Sleep(time.Second)
-				continue
+			if nextRound.Number == 0 {
+				nextRound.Branch = bookkeeping.BlockHash{}
+			} else {
+				d, err := s.Ledger.LookupDigest(nextRound.Number-1, bookkeeping.BlockHash{})
+				if err != nil {
+					s.log.Errorf("unable to retrieve last block hash for round %d: %v", nextRound.Number-1, err)
+					time.Sleep(time.Second)
+					continue
+				}
+				nextRound.Branch = bookkeeping.BlockHash(d)
 			}
-			nextRound.Branch = bookkeeping.BlockHash(d)
 
-			nextVersion, err = s.Ledger.ConsensusVersion(nextRound.Number-2, nextRound.Branch)
+			nextVersion, err = s.Ledger.ConsensusVersion(ParamsRound(nextRound.Number), nextRound.Branch)
 			if err != nil {
-				s.log.Errorf("unable to retrieve consensus version for round %d: %v", nextRound.Number-2, err)
+				s.log.Errorf("unable to retrieve consensus version for round %d: %v", ParamsRound(nextRound.Number), err)
 				time.Sleep(time.Second)
 				continue
 			}

@@ -3,6 +3,7 @@ package pipeline
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
@@ -25,9 +26,10 @@ func TestPipeline(t *testing.T) {
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
 	fixture.Setup(t, filepath.Join("nettemplates", "PipelineFiveNodes.json"))
-	defer fixture.Shutdown()
+	defer fixture.ShutdownImpl(true) // preserve logs in testdir
 
 	_, err := fixture.NC.AlgodClient()
 	r.NoError(err)
 
+	time.Sleep(30 * time.Second)
 }
