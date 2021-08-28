@@ -50,7 +50,10 @@ type EvalDelta struct {
 
 	Logs []LogItem `codec:"lg,allocbound=config.MaxLogCalls"`
 
-	InnerTxns []SignedTxnWithAD
+	// Intentionally, temporarily wrong - need to decide how to
+	// allocbound properly when structure is recursive.  Even a bound
+	// of 2 would allow arbitrarily large object if deep.
+	InnerTxns []SignedTxnWithAD `codec:"itx,allocbound=4"`
 }
 
 // Equal compares two EvalDeltas and returns whether or not they are
@@ -92,6 +95,8 @@ func (ed EvalDelta) Equal(o EvalDelta) bool {
 			return false
 		}
 	}
+
+	// TODO: check inner transactions are equal
 
 	return true
 }
