@@ -174,6 +174,6 @@ func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert,
 		return err
 	}
 
-	verif := compactcert.MkVerifier(ccParams, votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVoters)
+	verif := compactcert.MkVerifier(ccParams, compactcert.Commitment(votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVoters))
 	return verif.Verify(&cert)
 }
