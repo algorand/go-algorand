@@ -5,6 +5,7 @@ package compactcert
 import (
 	"sort"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/msgp/msgp"
 )
 
@@ -16,6 +17,14 @@ import (
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
+//
+// Commitment
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
 //
 // CompactOneTimeSignature
 //            |-----> (*) MarshalMsg
@@ -332,6 +341,34 @@ func (z *Cert) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Cert) MsgIsZero() bool {
 	return ((*z).SigCommit.MsgIsZero()) && ((*z).SignedWeight == 0) && ((*z).SigProofs.MsgIsZero()) && ((*z).PartProofs.MsgIsZero()) && (len((*z).Reveals) == 0)
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *Commitment) MarshalMsg(b []byte) []byte {
+	return ((*(crypto.GenericDigest))(z)).MarshalMsg(b)
+}
+func (_ *Commitment) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Commitment)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Commitment) UnmarshalMsg(bts []byte) ([]byte, error) {
+	return ((*(crypto.GenericDigest))(z)).UnmarshalMsg(bts)
+}
+func (_ *Commitment) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Commitment)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *Commitment) Msgsize() int {
+	return ((*(crypto.GenericDigest))(z)).Msgsize()
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *Commitment) MsgIsZero() bool {
+	return ((*(crypto.GenericDigest))(z)).MsgIsZero()
 }
 
 // MarshalMsg implements msgp.Marshaler

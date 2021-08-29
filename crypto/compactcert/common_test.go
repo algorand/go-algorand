@@ -27,9 +27,9 @@ func TestHashCoin(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var slots [32]uint64
-	var sigcom [32]byte
-	var partcom [32]byte
-	var msgHash crypto.Digest
+	var sigcom Commitment
+	var partcom Commitment
+	var msgHash crypto.GenericDigest
 
 	crypto.RandBytes(sigcom[:])
 	crypto.RandBytes(partcom[:])
@@ -64,9 +64,9 @@ func TestHashCoin(t *testing.T) {
 }
 
 func BenchmarkHashCoin(b *testing.B) {
-	var sigcom [32]byte
-	var partcom [32]byte
-	var msgHash crypto.Digest
+	var sigcom Commitment
+	var partcom Commitment
+	var msgHash crypto.GenericDigest
 
 	crypto.RandBytes(sigcom[:])
 	crypto.RandBytes(partcom[:])

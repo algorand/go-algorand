@@ -100,7 +100,7 @@ const maxProofDigests = 20 * maxReveals
 type Cert struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	SigCommit    crypto.Digest     `codec:"c"`
+	SigCommit    Commitment        `codec:"c"`
 	SignedWeight uint64            `codec:"w"`
 	SigProofs    merklearray.Proof `codec:"S,allocbound=maxProofDigests"`
 	PartProofs   merklearray.Proof `codec:"P,allocbound=maxProofDigests"`
