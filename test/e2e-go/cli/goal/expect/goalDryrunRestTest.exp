@@ -4,12 +4,17 @@ log_user 1
 
 proc TestGoalDryrun { DRREQ_FILE TEST_PRIMARY_NODE_DIR } {
     set PASSED 0
+    set COST 0
     set PROGRAM_TYPE ""
     spawn goal clerk dryrun-remote -d $TEST_PRIMARY_NODE_DIR -D $DRREQ_FILE -v
     expect {
         timeout { ::AlgorandGoal::Abort "goal clerk dryrun-remote timeout" }
+        "cost:" {set COST 1; exp_continue}
         -re {(ApprovalProgram)} {set PROGRAM_TYPE $expect_out(1,string); exp_continue}
         "PASS" {set PASSED 1; close}
+    }
+    if { $COST == 0 } {
+        ::AlgorandGoal::Abort "Response does not have cost"
     }
     if { $PASSED == 0 } {
         ::AlgorandGoal::Abort "Program did not pass"

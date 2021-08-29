@@ -32,6 +32,8 @@ if { [catch {
     # Determine primary account
     set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
 
+    set timeout 30
+
     # try to generate an expired transaction for 5 times before giving up.
     set TEST_TRANSACTION_EXPIRATION 5
     while {$TEST_TRANSACTION_EXPIRATION > 0} {
