@@ -249,7 +249,7 @@ func (tr *VotersForRound) loadTree(l ledgerForTracker, au *accountUpdates, hdr b
 		addrToPos[acct.Address] = uint64(i)
 	}
 
-	tree, err := merklearray.Build(participants, crypto.HashFactory{HashType: compactcert.HashType})
+	tree, err := merklearray.Build(participants, compactcert.NewHashFactory())
 	if err != nil {
 		return err
 	}

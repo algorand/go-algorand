@@ -187,7 +187,7 @@ func (b *Builder) Build() (*Cert, error) {
 	}
 	b.sigsHasValidL = true
 
-	hfactory := crypto.HashFactory{HashType: HashType}
+	hfactory := NewHashFactory()
 	sigtree, err := merklearray.Build(sigsToCommit(b.sigs), hfactory)
 	if err != nil {
 		return nil, err
