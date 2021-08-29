@@ -28,11 +28,11 @@ import (
 type sigslot struct {
 	// Weight is the weight of the participant signing this message.
 	// This information is tracked here for convenience, but it does
-	// not appear in the Commitment to the sigs array; it comes from
+	// not appear in the commitment to the sigs array; it comes from
 	// the Weight field of the corresponding participant.
 	Weight uint64
 
-	// Include the parts of the sigslot that form the Commitment to
+	// Include the parts of the sigslot that form the commitment to
 	// the sigs array.
 	sigslotCommit
 }
