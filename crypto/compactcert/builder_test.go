@@ -107,7 +107,7 @@ func TestBuildVerify(t *testing.T) {
 		sigs = append(sigs, sig)
 	}
 
-	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: crypto.Sumhash})
+	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: HashType})
 	if err != nil {
 		t.Error(err)
 	}
@@ -185,7 +185,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 	}
 
 	var cert *Cert
-	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: crypto.Sumhash})
+	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: HashType})
 	if err != nil {
 		b.Error(err)
 	}

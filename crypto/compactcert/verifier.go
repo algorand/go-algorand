@@ -24,6 +24,9 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
+// HashType is the hash function this package uses.
+const HashType = crypto.Sumhash
+
 // Commitment represents the commitment the compact cert will use.
 type Commitment crypto.GenericDigest
 
