@@ -1173,9 +1173,17 @@ func (ledger *Ledger) lookup(t testing.TB, addr basics.Address) basics.AccountDa
 	return ad
 }
 
-// lookup gets the current microAlgo balance for an address
+// micros gets the current microAlgo balance for an address
 func (ledger *Ledger) micros(t testing.TB, addr basics.Address) uint64 {
 	return ledger.lookup(t, addr).MicroAlgos.Raw
+}
+
+// asa gets the current balance and optin status for some asa for an address
+func (ledger *Ledger) asa(t testing.TB, addr basics.Address, asset basics.AssetIndex) (uint64, bool) {
+	if holding, ok := ledger.lookup(t, addr).Assets[asset]; ok {
+		return holding.Amount, true
+	}
+	return 0, false
 }
 
 func (eval *BlockEvaluator) fillDefaults(txn *txntest.Txn) {
@@ -1188,14 +1196,29 @@ func (eval *BlockEvaluator) fillDefaults(txn *txntest.Txn) {
 	txn.FillDefaults(eval.proto)
 }
 
-func (eval *BlockEvaluator) txn(t testing.TB, txn *txntest.Txn) {
+func (eval *BlockEvaluator) txn(t testing.TB, txn *txntest.Txn, problem ...string) {
 	t.Helper()
 	eval.fillDefaults(txn)
 	stxn := txn.SignedTxn()
 	err := eval.testTransaction(stxn, eval.state.child(1))
-	require.NoError(t, err)
+	if err != nil {
+		if len(problem) == 1 {
+			require.Contains(t, err.Error(), problem[0])
+		} else {
+			require.NoError(t, err) // Will obviously fail
+		}
+		return
+	}
 	err = eval.Transaction(stxn, transactions.ApplyData{})
-	require.NoError(t, err)
+	if err != nil {
+		if len(problem) == 1 {
+			require.Contains(t, err.Error(), problem[0])
+		} else {
+			require.NoError(t, err) // Will obviously fail
+		}
+		return
+	}
+	require.Len(t, problem, 0)
 }
 
 func (eval *BlockEvaluator) txns(t testing.TB, txns ...*txntest.Txn) {

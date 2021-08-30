@@ -102,6 +102,14 @@ type Txn struct {
 	Cert      compactcert.Cert
 }
 
+// Noted returns a new Txn with the given note field.
+func (tx *Txn) Noted(note string) *Txn {
+	copy := &Txn{}
+	*copy = *tx
+	copy.Note = []byte(note)
+	return copy
+}
+
 // FillDefaults populates some obvious defaults from config params,
 // unless they have already been set.
 func (tx *Txn) FillDefaults(params config.ConsensusParams) {

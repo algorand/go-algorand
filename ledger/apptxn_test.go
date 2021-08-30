@@ -37,7 +37,7 @@ func main(source string) string {
        end: int 1`, source)
 }
 
-// Test that a pay in teal affects balances
+// TestPayAction ensures a pay in teal affects balances
 func TestPayAction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -149,9 +149,7 @@ func TestPayAction(t *testing.T) {
 		l.endBlock(t, eval)
 	}
 	eval = l.nextBlock(t)
-	payout3 := payout2
-	payout3.Note = []byte{0x01}
-	eval.txn(t, &payout3)
+	eval.txn(t, payout2.Noted("2"))
 	l.endBlock(t, eval)
 
 	afterpay := l.micros(t, basics.AppIndex(1).Address())
@@ -164,4 +162,177 @@ func TestPayAction(t *testing.T) {
 	require.Greater(t, appreward, uint64(1000))
 
 	require.Equal(t, beforepay+appreward-5000-1000, afterpay)
+}
+
+// TestAxferAction ensures axfers in teal have the intended effects
+func TestAxferAction(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	asa := txntest.Txn{
+		Type:   "acfg",
+		Sender: addrs[0],
+		AssetParams: basics.AssetParams{
+			Total:     1000000,
+			Decimals:  3,
+			UnitName:  "oz",
+			AssetName: "Gold",
+			URL:       "https://gold.rush/",
+		},
+	}
+
+	app := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+         tx_begin
+         int axfer
+         tx_field TypeEnum
+         txn Assets 0
+         tx_field XferAsset
+
+         txn ApplicationArgs 0
+         byte "optin"
+         ==
+         bz withdraw
+         // let AssetAmount default to 0
+         global CurrentApplicationAddress
+         tx_field AssetReceiver
+         b submit
+withdraw:
+         txn ApplicationArgs 0
+         byte "close"
+         ==
+         bz noclose
+         txn Accounts 1
+         tx_field AssetCloseTo
+         b skipamount
+noclose: int 10000
+         tx_field AssetAmount
+skipamount:
+         txn Accounts 1
+         tx_field AssetReceiver
+submit:  tx_submit
+`),
+	}
+
+	eval := l.nextBlock(t)
+	eval.txns(t, &asa, &app)
+	l.endBlock(t, eval)
+
+	// Would be better to pull these out of block, or at least check them.
+	asaIndex := basics.AssetIndex(1)
+	appIndex := basics.AppIndex(2)
+
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: appIndex.Address(),
+		Amount:   300000, // account min balance, optin min balance, plus fees
+		// stay under 1M, to avoid rewards complications
+	}
+
+	eval = l.nextBlock(t)
+	eval.txn(t, &fund)
+	l.endBlock(t, eval)
+
+	fundgold := txntest.Txn{
+		Type:          "axfer",
+		Sender:        addrs[0],
+		XferAsset:     asaIndex,
+		AssetReceiver: appIndex.Address(),
+		AssetAmount:   20000,
+	}
+
+	// Fail, because app account is not opted in.
+	eval = l.nextBlock(t)
+	eval.txn(t, &fundgold, fmt.Sprintf("asset %d missing", asaIndex))
+	l.endBlock(t, eval)
+
+	amount, in := l.asa(t, appIndex.Address(), asaIndex)
+	require.False(t, in)
+	require.Equal(t, amount, uint64(0))
+
+	optin := txntest.Txn{
+		Type:            "appl",
+		ApplicationID:   appIndex,
+		Sender:          addrs[0],
+		ApplicationArgs: [][]byte{[]byte("optin")},
+		ForeignAssets:   []basics.AssetIndex{asaIndex},
+	}
+
+	// Tell the app to opt itself in.
+	eval = l.nextBlock(t)
+	eval.txn(t, &optin)
+	l.endBlock(t, eval)
+
+	amount, in = l.asa(t, appIndex.Address(), asaIndex)
+	require.True(t, in)
+	require.Equal(t, amount, uint64(0))
+
+	// Now, suceed, because opted in.
+	eval = l.nextBlock(t)
+	eval.txn(t, &fundgold)
+	l.endBlock(t, eval)
+
+	amount, in = l.asa(t, appIndex.Address(), asaIndex)
+	require.True(t, in)
+	require.Equal(t, amount, uint64(20000))
+
+	withdraw := txntest.Txn{
+		Type:            "appl",
+		ApplicationID:   appIndex,
+		Sender:          addrs[0],
+		ApplicationArgs: [][]byte{[]byte("withdraw")},
+		ForeignAssets:   []basics.AssetIndex{asaIndex},
+		Accounts:        []basics.Address{addrs[0]},
+	}
+	eval = l.nextBlock(t)
+	eval.txn(t, &withdraw)
+	l.endBlock(t, eval)
+
+	amount, in = l.asa(t, appIndex.Address(), asaIndex)
+	require.True(t, in)
+	require.Equal(t, amount, uint64(10000))
+
+	eval = l.nextBlock(t)
+	eval.txn(t, withdraw.Noted("2"))
+	l.endBlock(t, eval)
+
+	amount, in = l.asa(t, appIndex.Address(), asaIndex)
+	require.True(t, in) // Zero left, but still opted in
+	require.Equal(t, amount, uint64(0))
+
+	eval = l.nextBlock(t)
+	eval.txn(t, withdraw.Noted("3"), "underflow on subtracting")
+	l.endBlock(t, eval)
+
+	amount, in = l.asa(t, appIndex.Address(), asaIndex)
+	require.True(t, in) // Zero left, but still opted in
+	require.Equal(t, amount, uint64(0))
+
+	close := txntest.Txn{
+		Type:            "appl",
+		ApplicationID:   appIndex,
+		Sender:          addrs[0],
+		ApplicationArgs: [][]byte{[]byte("close")},
+		ForeignAssets:   []basics.AssetIndex{asaIndex},
+		Accounts:        []basics.Address{addrs[0]},
+	}
+
+	eval = l.nextBlock(t)
+	eval.txn(t, &close)
+	l.endBlock(t, eval)
+
+	amount, in = l.asa(t, appIndex.Address(), asaIndex)
+	require.False(t, in) // Zero left, not opted in
+	require.Equal(t, amount, uint64(0))
+
+	// Now, fail again, opted out
+	eval = l.nextBlock(t)
+	eval.txn(t, fundgold.Noted("2"), fmt.Sprintf("asset %d missing", asaIndex))
+	l.endBlock(t, eval)
 }
