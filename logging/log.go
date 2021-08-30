@@ -320,6 +320,10 @@ func (l logger) source() *logrus.Entry {
 	if !ok {
 		file = "<???>"
 		line = 1
+		event = event.WithFields(logrus.Fields{
+			"file": file,
+			"line": line,
+		})
 	} else {
 		// Add file name and number
 		slash := strings.LastIndex(file, "/")

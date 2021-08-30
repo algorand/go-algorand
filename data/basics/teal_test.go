@@ -24,9 +24,12 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestStateDeltaValid(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	// test pre-applications proto
@@ -82,6 +85,8 @@ func TestStateDeltaValid(t *testing.T) {
 }
 
 func TestStateDeltaValidV24(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	// v24: short key, value too long: hits MaxAppBytesValueLen
@@ -103,6 +108,8 @@ func TestStateDeltaValidV24(t *testing.T) {
 }
 
 func TestStateDeltaEqual(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	var d1 StateDelta = nil
@@ -138,6 +145,8 @@ func TestStateDeltaEqual(t *testing.T) {
 }
 
 func TestEvalDeltaEqual(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	d1 := EvalDelta{}
@@ -147,12 +156,14 @@ func TestEvalDeltaEqual(t *testing.T) {
 	d2 = EvalDelta{
 		GlobalDelta: nil,
 		LocalDeltas: nil,
+		Logs:        nil,
 	}
 	a.True(d1.Equal(d2))
 
 	d2 = EvalDelta{
 		GlobalDelta: StateDelta{},
 		LocalDeltas: map[uint64]StateDelta{},
+		Logs:        []LogItem{},
 	}
 	a.True(d1.Equal(d2))
 
@@ -212,4 +223,34 @@ func TestEvalDeltaEqual(t *testing.T) {
 		},
 	}
 	a.False(d1.Equal(d2))
+
+	d2 = EvalDelta{
+		Logs: []LogItem{{ID: 0, Message: "val"}},
+	}
+	a.False(d1.Equal(d2))
+
+	d1 = EvalDelta{
+		Logs: []LogItem{{ID: 0, Message: "val2"}},
+	}
+	a.False(d1.Equal(d2))
+
+	d1 = EvalDelta{
+		Logs: []LogItem{{ID: 1, Message: "val"}},
+	}
+	a.False(d1.Equal(d2))
+
+	d1 = EvalDelta{
+		Logs: []LogItem{{ID: 1, Message: "val2"}},
+	}
+	a.False(d1.Equal(d2))
+
+	d1 = EvalDelta{
+		Logs: []LogItem{{ID: 0, Message: "val"}, {ID: 0, Message: "val2"}},
+	}
+	a.False(d1.Equal(d2))
+
+	d1 = EvalDelta{
+		Logs: []LogItem{{ID: 0, Message: "val"}},
+	}
+	a.True(d1.Equal(d2))
 }

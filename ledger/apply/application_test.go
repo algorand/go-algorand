@@ -30,9 +30,12 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestApplicationCallFieldsEmpty(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	ac := transactions.ApplicationCallTxnFields{}
@@ -239,6 +242,7 @@ func (b *testBalancesPass) Put(addr basics.Address, ad basics.AccountData) error
 func (b *testBalancesPass) ConsensusParams() config.ConsensusParams {
 	return b.proto
 }
+
 func (b *testBalancesPass) Allocate(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error {
 	b.allocatedAppIdx = aidx
 	return nil
@@ -297,6 +301,8 @@ func (e *testEvaluator) InitLedger(balances Balances, appIdx basics.AppIndex, sc
 }
 
 func TestAppCallCloneEmpty(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	var ls map[basics.AppIndex]basics.AppLocalState
@@ -309,6 +315,8 @@ func TestAppCallCloneEmpty(t *testing.T) {
 }
 
 func TestAppCallGetParam(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	var b testBalances
@@ -347,6 +355,8 @@ func TestAppCallGetParam(t *testing.T) {
 }
 
 func TestAppCallAddressByIndex(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	sender := getRandomAddress(a)
@@ -372,6 +382,8 @@ func TestAppCallAddressByIndex(t *testing.T) {
 }
 
 func TestAppCallCheckPrograms(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	var ac transactions.ApplicationCallTxnFields
@@ -410,6 +422,8 @@ func TestAppCallCheckPrograms(t *testing.T) {
 }
 
 func TestAppCallCreate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	var b testBalances
@@ -449,6 +463,8 @@ func TestAppCallCreate(t *testing.T) {
 
 // TestAppCallApplyCreate carefully tracks and validates balance record updates
 func TestAppCallApplyCreate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	creator := getRandomAddress(a)
@@ -560,6 +576,8 @@ func TestAppCallApplyCreate(t *testing.T) {
 
 // TestAppCallApplyCreateOptIn checks balance record fields without tracking substages
 func TestAppCallApplyCreateOptIn(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	creator := getRandomAddress(a)
@@ -605,6 +623,8 @@ func TestAppCallApplyCreateOptIn(t *testing.T) {
 }
 
 func TestAppCallOptIn(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	sender := getRandomAddress(a)
@@ -673,6 +693,8 @@ func TestAppCallOptIn(t *testing.T) {
 }
 
 func TestAppCallClearState(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	creator := getRandomAddress(a)
@@ -818,9 +840,20 @@ func TestAppCallClearState(t *testing.T) {
 	a.Equal(0, len(br.AppLocalStates))
 	a.Equal(basics.StateSchema{}, br.TotalAppSchema)
 	a.Equal(basics.EvalDelta{GlobalDelta: gd}, ad.EvalDelta)
+
+	b.ResetWrites()
+	b.pass = true
+	b.err = nil
+	logs := []basics.LogItem{{ID: 0, Message: "a"}}
+	b.delta = basics.EvalDelta{Logs: []basics.LogItem{{ID: 0, Message: "a"}}}
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
+	a.NoError(err)
+	a.Equal(basics.EvalDelta{Logs: logs}, ad.EvalDelta)
 }
 
 func TestAppCallApplyCloseOut(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	creator := getRandomAddress(a)
@@ -898,9 +931,16 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 	a.Equal(basics.EvalDelta{GlobalDelta: gd}, ad.EvalDelta)
 	a.Equal(basics.StateSchema{NumUint: 0}, br.TotalAppSchema)
 
+	logs := []basics.LogItem{{ID: 0, Message: "a"}}
+	b.delta = basics.EvalDelta{Logs: []basics.LogItem{{ID: 0, Message: "a"}}}
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
+	a.NoError(err)
+	a.Equal(basics.EvalDelta{Logs: logs}, ad.EvalDelta)
 }
 
 func TestAppCallApplyUpdate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	creator := getRandomAddress(a)
@@ -990,6 +1030,12 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	b.balances[creator] = cp
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
+	logs := []basics.LogItem{{ID: 0, Message: "a"}}
+	b.delta = basics.EvalDelta{Logs: []basics.LogItem{{ID: 0, Message: "a"}}}
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
+	a.NoError(err)
+	a.Equal(basics.EvalDelta{Logs: logs}, ad.EvalDelta)
+
 	// check extraProgramPages is used
 	appr := make([]byte, 2*proto.MaxAppProgramLen+1)
 	appr[0] = 4 // version 4
@@ -1040,9 +1086,12 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.Error(err)
 	a.Contains(err.Error(), "updateApplication app programs too long")
+
 }
 
 func TestAppCallApplyDelete(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	creator := getRandomAddress(a)
@@ -1149,9 +1198,16 @@ func TestAppCallApplyDelete(t *testing.T) {
 		}
 		b.ResetWrites()
 	}
+	logs := []basics.LogItem{{ID: 0, Message: "a"}}
+	b.delta = basics.EvalDelta{Logs: []basics.LogItem{{ID: 0, Message: "a"}}}
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
+	a.NoError(err)
+	a.Equal(basics.EvalDelta{Logs: logs}, ad.EvalDelta)
 }
 
 func TestAppCallApplyCreateClearState(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	creator := getRandomAddress(a)
@@ -1200,6 +1256,8 @@ func TestAppCallApplyCreateClearState(t *testing.T) {
 }
 
 func TestAppCallApplyCreateDelete(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	creator := getRandomAddress(a)
@@ -1239,4 +1297,11 @@ func TestAppCallApplyCreateDelete(t *testing.T) {
 	a.Equal(basics.EvalDelta{GlobalDelta: gd}, ad.EvalDelta)
 	br := b.balances[creator]
 	a.Equal(basics.AppParams{}, br.AppParams[appIdx])
+
+	logs := []basics.LogItem{{ID: 0, Message: "a"}}
+	b.delta = basics.EvalDelta{Logs: []basics.LogItem{{ID: 0, Message: "a"}}}
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
+	a.NoError(err)
+	a.Equal(basics.EvalDelta{Logs: logs}, ad.EvalDelta)
+
 }

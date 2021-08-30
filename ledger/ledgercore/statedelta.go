@@ -47,6 +47,18 @@ type ModifiedCreatable struct {
 	Ndeltas int
 }
 
+// AccountAsset is used as a map key.
+type AccountAsset struct {
+	Address basics.Address
+	Asset   basics.AssetIndex
+}
+
+// AccountApp is used as a map key.
+type AccountApp struct {
+	Address basics.Address
+	App     basics.AppIndex
+}
+
 // A Txlease is a transaction (sender, lease) pair which uniquely specifies a
 // transaction lease.
 type Txlease struct {
@@ -78,13 +90,19 @@ type StateDelta struct {
 	// previous block timestamp
 	PrevTimestamp int64
 
+	// Modified local creatable states. The value is true if the creatable local state
+	// is created and false if deleted. Used by indexer.
+	ModifiedAssetHoldings  map[AccountAsset]bool
+	ModifiedAppLocalStates map[AccountApp]bool
+
 	// initial hint for allocating data structures for StateDelta
 	initialTransactionsCount int
 }
 
 // AccountDeltas stores ordered accounts and allows fast lookup by address
 type AccountDeltas struct {
-	// actual data
+	// Actual data. If an account is deleted, `accts` contains a balance record
+	// with empty `AccountData`.
 	accts []basics.BalanceRecord
 	// cache for addr to deltas index resolution
 	acctsCache map[basics.Address]int
@@ -104,9 +122,11 @@ func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int,
 		// asset or application creation are considered as rare events so do not pre-allocate space for them
 		Creatables:               make(map[basics.CreatableIndex]ModifiedCreatable),
 		Hdr:                      hdr,
-		PrevTimestamp:            prevTimestamp,
-		initialTransactionsCount: hint,
 		CompactCertNext:          compactCertNext,
+		PrevTimestamp:            prevTimestamp,
+		ModifiedAssetHoldings:    make(map[AccountAsset]bool),
+		ModifiedAppLocalStates:   make(map[AccountApp]bool),
+		initialTransactionsCount: hint,
 	}
 }
 

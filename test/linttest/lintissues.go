@@ -14,22 +14,23 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package components
+package linttest
 
-import "github.com/algorand/go-algorand/data/basics"
+import (
+	"fmt"
+)
 
-// NodeContext is an interface representing various context information regarding
-// a specific node instance (per AlgorandFullNode)
-type NodeContext interface {
-	// IsCatchingUp returns true if our sync routine is currently running
-	IsCatchingUp() bool
+type myStruct struct {
+	a int32
+	b float64
+	c bool
+}
 
-	// IsInitialCatchupComplete returns true if the initial sync has completed (doesn't mean it succeeded)
-	IsInitialCatchupComplete() bool
+func (m *myStruct) couldError() error {
+	return fmt.Errorf("an error occurred")
+}
 
-	// HasCaughtUp returns true if we have completely caught up at least once
-	HasCaughtUp() bool
-
-	// SetLastLiveRound is called to record observation of a round completion
-	SetLastLiveRound(round basics.Round)
+func doSomething() {
+	m := myStruct{a: 2, b: 2.0}
+	m.couldError()
 }

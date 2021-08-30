@@ -24,9 +24,12 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestApplicationCallFieldsNotChanged(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	af := ApplicationCallTxnFields{}
 	s := reflect.ValueOf(&af).Elem()
 
@@ -38,6 +41,8 @@ func TestApplicationCallFieldsNotChanged(t *testing.T) {
 }
 
 func TestApplicationCallFieldsEmpty(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	ac := ApplicationCallTxnFields{}
@@ -93,6 +98,8 @@ func TestApplicationCallFieldsEmpty(t *testing.T) {
 }
 
 func TestEncodedAppTxnAllocationBounds(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	// ensure that all the supported protocols have value limits less or
 	// equal to their corresponding codec allocbounds
 	for protoVer, proto := range config.Consensus {
@@ -109,4 +116,31 @@ func TestEncodedAppTxnAllocationBounds(t *testing.T) {
 			require.Failf(t, "proto.MaxAppTxnForeignAssets > encodedMaxForeignAssets", "protocol version = %s", protoVer)
 		}
 	}
+}
+
+func TestIDByIndex(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	ac := ApplicationCallTxnFields{}
+	ac.ApplicationID = 1
+	appID, err := ac.AppIDByIndex(0)
+	a.NoError(err)
+	a.Equal(basics.AppIndex(1), appID)
+	appID, err = ac.AppIDByIndex(1)
+	a.Contains(err.Error(), "invalid Foreign App reference")
+
+}
+
+func TestIndexByID(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	ac := ApplicationCallTxnFields{}
+	ac.ApplicationID = 1
+	aidx, err := ac.IndexByAppID(1)
+	a.NoError(err)
+	a.Equal(uint64(0), aidx)
+	aidx, err = ac.IndexByAppID(2)
+	a.Contains(err.Error(), "invalid Foreign App reference")
 }

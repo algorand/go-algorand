@@ -798,7 +798,7 @@ func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(fs.field))
-	ops.returns(TxnFieldTypes[fs.field])
+	ops.returns(fs.ftype)
 	return nil
 }
 
@@ -840,7 +840,7 @@ func assembleTxna(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(fs.field))
 	ops.pending.WriteByte(uint8(arrayFieldIdx))
-	ops.returns(TxnFieldTypes[fs.field])
+	ops.returns(fs.ftype)
 	return nil
 }
 
@@ -871,7 +871,7 @@ func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(slot))
 	ops.pending.WriteByte(uint8(fs.field))
-	ops.returns(TxnFieldTypes[fs.field])
+	ops.returns(fs.ftype)
 	return nil
 }
 
@@ -921,7 +921,7 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.WriteByte(uint8(slot))
 	ops.pending.WriteByte(uint8(fs.field))
 	ops.pending.WriteByte(uint8(arrayFieldIdx))
-	ops.returns(TxnFieldTypes[fs.field])
+	ops.returns(fs.ftype)
 	return nil
 }
 
@@ -947,7 +947,7 @@ func assembleGtxns(ops *OpStream, spec *OpSpec, args []string) error {
 
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(fs.field))
-	ops.returns(TxnFieldTypes[fs.field])
+	ops.returns(fs.ftype)
 	return nil
 }
 
@@ -976,7 +976,7 @@ func assembleGtxnsa(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(fs.field))
 	ops.pending.WriteByte(uint8(arrayFieldIdx))
-	ops.returns(TxnFieldTypes[fs.field])
+	ops.returns(fs.ftype)
 	return nil
 }
 
@@ -989,15 +989,15 @@ func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
 	if fs.version > ops.Version {
-		// no return here. we may as well continue to maintain typestack
-		ops.errorf("global %s available in version %d. Missed #pragma version?", args[0], fs.version)
+		//nolint:errcheck // we continue to maintain typestack
+		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], fs.version)
 	}
 
-	val := fs.gfield
+	val := fs.field
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(val))
-	ops.trace("%s (%s)", GlobalFieldNames[val], GlobalFieldTypes[val].String())
-	ops.returns(GlobalFieldTypes[val])
+	ops.trace("%s (%s)", fs.field.String(), fs.ftype.String())
+	ops.returns(fs.ftype)
 	return nil
 }
 
@@ -1005,13 +1005,20 @@ func assembleAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	val, ok := assetHoldingFields[args[0]]
+	fs, ok := assetHoldingFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("%s unknown arg: %#v", spec.Name, args[0])
+		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
+	if fs.version > ops.Version {
+		//nolint:errcheck // we continue to maintain typestack
+		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], fs.version)
+	}
+
+	val := fs.field
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(val))
-	ops.returns(AssetHoldingFieldTypes[val], StackUint64)
+	ops.trace("%s (%s)", fs.field.String(), fs.ftype.String())
+	ops.returns(fs.ftype, StackUint64)
 	return nil
 }
 
@@ -1019,13 +1026,20 @@ func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	val, ok := assetParamsFields[args[0]]
+	fs, ok := assetParamsFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("%s unknown arg: %#v", spec.Name, args[0])
+		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
+	if fs.version > ops.Version {
+		//nolint:errcheck // we continue to maintain typestack
+		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], fs.version)
+	}
+
+	val := fs.field
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(val))
-	ops.returns(AssetParamsFieldTypes[val], StackUint64)
+	ops.trace("%s (%s)", fs.field.String(), fs.ftype.String())
+	ops.returns(fs.ftype, StackUint64)
 	return nil
 }
 
@@ -1033,13 +1047,20 @@ func assembleAppParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	val, ok := appParamsFields[args[0]]
+	fs, ok := appParamsFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("%s unknown arg: %#v", spec.Name, args[0])
+		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
+	if fs.version > ops.Version {
+		//nolint:errcheck // we continue to maintain typestack
+		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], fs.version)
+	}
+
+	val := fs.field
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(val))
-	ops.returns(AppParamsFieldTypes[val], StackUint64)
+	ops.trace("%s (%s)", fs.field.String(), fs.ftype.String())
+	ops.returns(fs.ftype, StackUint64)
 	return nil
 }
 
@@ -1097,6 +1118,112 @@ func typeDig(ops *OpStream, args []string) (StackTypes, StackTypes) {
 		for i := idx + 1; i < len(ops.typeStack); i++ {
 			returns[i-idx-1] = ops.typeStack[i]
 		}
+	}
+	return anys, returns
+}
+
+func typeEquals(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	top := len(ops.typeStack) - 1
+	if top >= 0 {
+		//Require arg0 and arg1 to have same type
+		return StackTypes{ops.typeStack[top], ops.typeStack[top]}, oneInt
+	}
+	return oneAny.plus(oneAny), oneInt
+}
+
+func typeDup(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	top := len(ops.typeStack) - 1
+	if top >= 0 {
+		return StackTypes{ops.typeStack[top]}, StackTypes{ops.typeStack[top], ops.typeStack[top]}
+	}
+	return StackTypes{StackAny}, oneAny.plus(oneAny)
+}
+
+func typeDupTwo(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	topTwo := oneAny.plus(oneAny)
+	top := len(ops.typeStack) - 1
+	if top >= 0 {
+		topTwo[1] = ops.typeStack[top]
+		if top >= 1 {
+			topTwo[0] = ops.typeStack[top-1]
+		}
+	}
+	result := topTwo.plus(topTwo)
+	return topTwo, result
+}
+
+func typeSelect(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	selectArgs := twoAny.plus(oneInt)
+	top := len(ops.typeStack) - 1
+	if top >= 2 {
+		if ops.typeStack[top-1] == ops.typeStack[top-2] {
+			return selectArgs, StackTypes{ops.typeStack[top-1]}
+		}
+	}
+	return selectArgs, StackTypes{StackAny}
+}
+
+func typeSetBit(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	setBitArgs := oneAny.plus(twoInts)
+	top := len(ops.typeStack) - 1
+	if top >= 2 {
+		return setBitArgs, StackTypes{ops.typeStack[top-2]}
+	}
+	return setBitArgs, StackTypes{StackAny}
+}
+
+func typeCover(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	if len(args) == 0 {
+		return oneAny, oneAny
+	}
+	n, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		return oneAny, oneAny
+	}
+	depth := int(n) + 1
+	anys := make(StackTypes, depth)
+	for i := range anys {
+		anys[i] = StackAny
+	}
+	returns := make(StackTypes, depth)
+	for i := range returns {
+		returns[i] = StackAny
+	}
+	idx := len(ops.typeStack) - depth
+	if idx >= 0 {
+		sv := ops.typeStack[len(ops.typeStack)-1]
+		for i := idx; i < len(ops.typeStack)-1; i++ {
+			returns[i-idx+1] = ops.typeStack[i]
+		}
+		returns[len(returns)-depth] = sv
+	}
+	return anys, returns
+}
+
+func typeUncover(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	if len(args) == 0 {
+		return oneAny, oneAny
+	}
+	n, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		return oneAny, oneAny
+	}
+	depth := int(n) + 1
+	anys := make(StackTypes, depth)
+	for i := range anys {
+		anys[i] = StackAny
+	}
+	returns := make(StackTypes, depth)
+	for i := range returns {
+		returns[i] = StackAny
+	}
+	idx := len(ops.typeStack) - depth
+	if idx >= 0 {
+		sv := ops.typeStack[idx]
+		for i := idx + 1; i < len(ops.typeStack); i++ {
+			returns[i-idx-1] = ops.typeStack[i]
+		}
+		returns[len(returns)-1] = sv
 	}
 	return anys, returns
 }

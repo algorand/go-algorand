@@ -30,9 +30,11 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type mockUnicastPeer struct {
@@ -58,6 +60,7 @@ func (mup *mockUnicastPeer) Respond(ctx context.Context, reqMsg network.Incoming
 
 // TestHandleCatchupReqNegative covers the error reporting in handleCatchupReq
 func TestHandleCatchupReqNegative(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	reqMsg := network.IncomingMessage{
 		Sender: &mockUnicastPeer{},
@@ -112,6 +115,8 @@ func TestHandleCatchupReqNegative(t *testing.T) {
 
 // TestRedirectBasic tests the case when the block service redirects the request to elsewhere
 func TestRedirectFallbackArchiver(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	log := logging.TestingLog(t)
 
 	ledger1 := makeLedger(t, "l1")
@@ -164,6 +169,8 @@ func TestRedirectFallbackArchiver(t *testing.T) {
 
 // TestRedirectBasic tests the case when the block service redirects the request to elsewhere
 func TestRedirectFallbackEndpoints(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	log := logging.TestingLog(t)
 
 	ledger1 := makeLedger(t, "l1")
@@ -216,6 +223,8 @@ func TestRedirectFallbackEndpoints(t *testing.T) {
 // - the case when the peer is not a valid http peer
 // - the case when the block service keeps redirecting and cannot get a block
 func TestRedirectExceptions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	log := logging.TestingLog(t)
 
 	ledger1 := makeLedger(t, "l1")
@@ -276,7 +285,7 @@ func makeLedger(t *testing.T, namePostfix string) *data.Ledger {
 	}
 
 	log := logging.TestingLog(t)
-	genBal := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	genHash := crypto.Digest{0x42}
 	cfg := config.GetDefaultLocal()
 	const inMem = true

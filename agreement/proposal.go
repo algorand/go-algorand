@@ -197,13 +197,13 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 
 	if value.OriginalPeriod == 0 {
 		verifier := proposerRecord.SelectionID
-		ok, vrfOut := verifier.Verify(p.SeedProof, prevSeed)
+		ok, _ := verifier.Verify(p.SeedProof, prevSeed) // ignoring VrfOutput returned by Verify
 		if !ok {
 			return fmt.Errorf("payload seed proof malformed (%v, %v)", prevSeed, p.SeedProof)
 		}
 		// TODO remove the following Hash() call,
 		// redundant with the Verify() call above.
-		vrfOut, ok = p.SeedProof.Hash()
+		vrfOut, ok := p.SeedProof.Hash()
 		if !ok {
 			// If proof2hash fails on a proof we produced with VRF Prove, this indicates our VRF code has a dangerous bug.
 			// Panicking is the only safe thing to do.
