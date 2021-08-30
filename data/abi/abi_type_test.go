@@ -585,7 +585,7 @@ func TestTypeMISC(t *testing.T) {
 					}
 					actual, err := testType.ByteLen()
 					require.NoError(t, err, "%s should not return error on byteLen test")
-					require.Equal(t, expected, actual, "%s do not match calculated byte length %d",
+					require.Equal(t, int(expected), actual, "%s do not match calculated byte length %d",
 						testType.String(), expected)
 				} else {
 					childSize, err := testType.childTypes[0].ByteLen()
