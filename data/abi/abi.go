@@ -863,7 +863,7 @@ func tupleDecoding(valueBytes []byte, valueType Type) (Value, error) {
 	segIndex := 0
 	for i := 0; i < len(valueType.childTypes); i++ {
 		if valuePartition[i] == nil {
-			valuePartition[i] = valueBytes[dynamicSegments[segIndex].left : dynamicSegments[segIndex].right]
+			valuePartition[i] = valueBytes[dynamicSegments[segIndex].left:dynamicSegments[segIndex].right]
 			segIndex++
 		}
 	}
