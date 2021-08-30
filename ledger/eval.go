@@ -478,7 +478,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 		eval.block.BlockHeader.RewardsState = eval.prevHeader.NextRewardsState(hdr.Round, proto, incentivePoolData.MicroAlgos, prevTotals.RewardUnits())
 	}
 	// set the eval state with the current header
-	eval.state = makeRoundCowState(base, eval.block.BlockHeader, eval.prevHeader.TimeStamp, paysetHint)
+	eval.state = makeRoundCowState(base, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp, paysetHint)
 
 	if validate {
 		err := eval.block.BlockHeader.PreCheck(eval.prevHeader)
@@ -1129,7 +1129,14 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 		delta: eval.state.deltas(),
 	}
 	eval.blockGenerated = true
-	eval.state = makeRoundCowState(eval.state, eval.block.BlockHeader, eval.prevHeader.TimeStamp, len(eval.block.Payset))
+	proto, ok := config.Consensus[eval.block.BlockHeader.CurrentProtocol]
+	if !ok {
+		return nil, fmt.Errorf(
+			"unknown consensus version: %s", eval.block.BlockHeader.CurrentProtocol)
+	}
+	eval.state = makeRoundCowState(
+		eval.state, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp,
+		len(eval.block.Payset))
 	return &vb, nil
 }
 
