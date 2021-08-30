@@ -856,7 +856,9 @@ func TestCowCompactCert(t *testing.T) {
 	blocks := make(map[basics.Round]bookkeeping.BlockHeader)
 	blockErr := make(map[basics.Round]error)
 	ml := mockLedger{balanceMap: accts0, blocks: blocks, blockErr: blockErr}
-	c0 := makeRoundCowState(&ml, bookkeeping.BlockHeader{}, config.ConsensusParams{}, 0, 0)
+	c0 := makeRoundCowState(
+		&ml, bookkeeping.BlockHeader{}, config.Consensus[protocol.ConsensusCurrentVersion],
+		0, 0)
 
 	certType = protocol.CompactCertType(1234) // bad cert type
 	err := c0.compactCert(certRnd, certType, cert, atRound, validate)
