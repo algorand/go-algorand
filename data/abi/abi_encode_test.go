@@ -179,7 +179,7 @@ func TestEncodeValid(t *testing.T) {
 		expected := []byte{
 			0x00, 0x0A, 0b01010101, 0b01000000,
 		}
-		boolArr, err := MakeDynamicArray(arrayElems)
+		boolArr, err := MakeDynamicArray(arrayElems, MakeBoolType())
 		require.NoError(t, err, "make dynamic array should not return error")
 		boolArrEncode, err := boolArr.Encode()
 		require.NoError(t, err, "dynamic bool array encoding should not return error")
@@ -362,7 +362,7 @@ func TestDecodeValid(t *testing.T) {
 		for index, bVal := range inputBase {
 			arrayElems[index] = MakeBool(bVal)
 		}
-		expected, err := MakeDynamicArray(arrayElems)
+		expected, err := MakeDynamicArray(arrayElems, MakeBoolType())
 		require.NoError(t, err, "make expected value should not return error")
 		inputEncoded := []byte{
 			0x00, 0x0A, 0b01010101, 0b01000000,

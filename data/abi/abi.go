@@ -372,18 +372,14 @@ func (t Type) Equal(t0 Type) bool {
 // IsDynamic method decides if an ABI type is dynamic or static.
 func (t Type) IsDynamic() bool {
 	switch t.enumIndex {
-	case ArrayStatic:
-		return t.childTypes[0].IsDynamic()
 	case ArrayDynamic, String:
 		return true
-	case Tuple:
+	default:
 		for _, childT := range t.childTypes {
 			if childT.IsDynamic() {
 				return true
 			}
 		}
-		fallthrough
-	default:
 		return false
 	}
 }
@@ -406,12 +402,13 @@ func (t Type) ByteLen() (int, error) {
 				byteLen++
 			}
 			return byteLen, nil
+		} else {
+			elemByteLen, err := t.childTypes[0].ByteLen()
+			if err != nil {
+				return -1, err
+			}
+			return int(t.staticLength) * elemByteLen, nil
 		}
-		elemByteLen, err := t.childTypes[0].ByteLen()
-		if err != nil {
-			return -1, err
-		}
-		return int(t.staticLength) * elemByteLen, nil
 	case Tuple:
 		size := 0
 		for i := 0; i < len(t.childTypes); i++ {
@@ -969,20 +966,18 @@ func MakeAddress(value [32]byte) Value {
 }
 
 // MakeDynamicArray takes an array of ABI value and returns an ABI dynamic length array value.
-func MakeDynamicArray(values []Value) (Value, error) {
+func MakeDynamicArray(values []Value, elemType Type) (Value, error) {
 	if len(values) >= (1 << 16) {
 		return Value{}, fmt.Errorf("dynamic array make error: pass in argument number larger than 2^16")
-	} else if len(values) == 0 {
-		return Value{}, fmt.Errorf("dynamic array make error: 0 argument passed in")
 	}
 	for i := 0; i < len(values); i++ {
-		if !values[i].ABIType.Equal(values[0].ABIType) {
+		if !values[i].ABIType.Equal(elemType) {
 			return Value{}, fmt.Errorf("type mismatch: %s and %s",
-				values[i].ABIType.String(), values[0].ABIType.String())
+				values[i].ABIType.String(), elemType.String())
 		}
 	}
 	return Value{
-		ABIType: MakeDynamicArrayType(values[0].ABIType),
+		ABIType: MakeDynamicArrayType(elemType),
 		value:   values,
 	}, nil
 }

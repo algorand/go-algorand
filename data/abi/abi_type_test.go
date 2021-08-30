@@ -556,19 +556,45 @@ func TestTypeMISC(t *testing.T) {
 		} else {
 			if testType.enumIndex == Tuple {
 				sizeSum := 0
-				for _, childT := range testType.childTypes {
-					childSize, err := childT.ByteLen()
-					require.NoError(t, err, "valid tuple child type should not return error: %s", childT.String())
-					sizeSum += childSize
+				for i := 0; i < len(testType.childTypes); i++ {
+					if testType.childTypes[i].enumIndex == Bool {
+						// search previous bool
+						before := findBoolLR(testType.childTypes, i, -1)
+						// search after bool
+						after := findBoolLR(testType.childTypes, i, 1)
+						// append to heads and tails
+						require.True(t, before%8 == 0, "expected tuple bool compact by 8")
+						if after > 7 {
+							after = 7
+						}
+						i += after
+						sizeSum++
+					} else {
+						childByteSize, err := testType.childTypes[i].ByteLen()
+						require.NoError(t, err, "byteLen not expected to fail on tuple child type")
+						sizeSum += childByteSize
+					}
 				}
+
 				require.Equal(t, sizeSum, byteLen,
 					"%s do not match calculated byte length %d", testType.String(), sizeSum)
 			} else if testType.enumIndex == ArrayStatic {
-				childSize, err := testType.childTypes[0].ByteLen()
-				require.NoError(t, err, "%s should not return error", testType.childTypes[0].String())
-				expected := childSize * int(testType.staticLength)
-				require.Equal(t, expected, byteLen,
-					"%s do not match calculated byte length %d", testType.String(), expected)
+				if testType.childTypes[0].enumIndex == Bool {
+					expected := testType.staticLength / 8
+					if testType.staticLength%8 != 0 {
+						expected++
+					}
+					actual, err := testType.ByteLen()
+					require.NoError(t, err, "%s should not return error on byteLen test")
+					require.Equal(t, expected, actual, "%s do not match calculated byte length %d",
+						testType.String(), expected)
+				} else {
+					childSize, err := testType.childTypes[0].ByteLen()
+					require.NoError(t, err, "%s should not return error on byteLen test", testType.childTypes[0].String())
+					expected := childSize * int(testType.staticLength)
+					require.Equal(t, expected, byteLen,
+						"%s do not match calculated byte length %d", testType.String(), expected)
+				}
 			}
 		}
 		byteLenTestCount++
