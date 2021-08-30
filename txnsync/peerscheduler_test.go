@@ -86,9 +86,9 @@ func TestSchedulerBasics(t *testing.T) {
 	}
 
 	require.Equal(t, 0*time.Millisecond, ps.nextDuration())
-	ps.schedulerPeer(&peers[0], 2*time.Millisecond)
-	ps.schedulerPeer(&peers[1], 1*time.Millisecond)
-	ps.schedulerPeer(&peers[2], 3*time.Millisecond)
+	ps.schedulePeer(&peers[0], 2*time.Millisecond)
+	ps.schedulePeer(&peers[1], 1*time.Millisecond)
+	ps.schedulePeer(&peers[2], 3*time.Millisecond)
 
 	require.Equal(t, 3, ps.Len())
 
@@ -141,9 +141,9 @@ func TestScheduleNewRound(t *testing.T) {
 		},
 	}
 
-	ps.schedulerPeer(&peers[0], 2*time.Millisecond)
-	ps.schedulerPeer(&peers[1], 1*time.Millisecond)
-	ps.schedulerPeer(&peers[2], 3*time.Millisecond)
+	ps.schedulePeer(&peers[0], 2*time.Millisecond)
+	ps.schedulePeer(&peers[1], 1*time.Millisecond)
+	ps.schedulePeer(&peers[2], 3*time.Millisecond)
 	require.Equal(t, 3, ps.Len())
 
 	ps.scheduleNewRound([]*Peer{&peers2[0], &peers2[1], &peers2[2], &peers2[3]})
@@ -171,10 +171,10 @@ func TestNextPeers(t *testing.T) {
 		},
 	}
 
-	ps.schedulerPeer(&peers[0], 1*time.Millisecond)
-	ps.schedulerPeer(&peers[1], 2*time.Millisecond)
-	ps.schedulerPeer(&peers[1], 2*time.Millisecond)
-	ps.schedulerPeer(&peers[2], 2*time.Millisecond)
+	ps.schedulePeer(&peers[0], 1*time.Millisecond)
+	ps.schedulePeer(&peers[1], 2*time.Millisecond)
+	ps.schedulePeer(&peers[1], 2*time.Millisecond)
+	ps.schedulePeer(&peers[2], 2*time.Millisecond)
 
 	require.Equal(t, 4, ps.Len())
 

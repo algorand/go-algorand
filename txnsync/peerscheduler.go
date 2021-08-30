@@ -119,7 +119,7 @@ func (p *peerScheduler) nextPeers() (outPeers []*Peer) {
 	return
 }
 
-func (p *peerScheduler) schedulerPeer(peer *Peer, next time.Duration) {
+func (p *peerScheduler) schedulePeer(peer *Peer, next time.Duration) {
 	bucket := peerBucket{peer: peer, next: next}
 	heap.Push(p, bucket)
 }
