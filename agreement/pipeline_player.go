@@ -133,8 +133,18 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 			if rnd.Number == prnd.Number+1 {
 				re := readLowestEvent{T: readLowestPayload, Round: prnd}
 				re = r.dispatch(*rp, re, proposalMachineRound, prnd, 0, 0).(readLowestEvent)
-				if re.PayloadOK && bookkeeping.BlockHash(re.Proposal.BlockDigest) == rnd.Branch {
+				if bookkeeping.BlockHash(re.Proposal.BlockDigest) == rnd.Branch {
 					state = rp
+					// If we have not seen a payload for this parent round,
+					// it will not be in the speculative ledger.  Attach the
+					// grandparent as the ledger branch value, to enable the
+					// seed lookup to succeed when verifying votes.
+					if !re.PayloadOK {
+						me, ok := e.(messageEvent)
+						if ok {
+							e = me.AttachLedgerBranch(prnd.Branch)
+						}
+					}
 					break
 				}
 			}

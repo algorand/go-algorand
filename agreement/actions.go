@@ -184,6 +184,7 @@ type cryptoAction struct {
 	Step      step
 	Pinned    bool
 	TaskIndex int
+	LedgerBranch bookkeeping.BlockHash
 }
 
 func (a cryptoAction) t() actionType {
@@ -197,11 +198,11 @@ func (a cryptoAction) String() string {
 func (a cryptoAction) do(ctx context.Context, s *Service) {
 	switch a.T {
 	case verifyVote:
-		s.demux.verifyVote(ctx, a.M, a.TaskIndex, a.Round, a.Period)
+		s.demux.verifyVote(ctx, a.M, a.TaskIndex, a.Round, a.Period, a.LedgerBranch)
 	case verifyPayload:
-		s.demux.verifyPayload(ctx, a.M, a.Round, a.Period, a.Pinned)
+		s.demux.verifyPayload(ctx, a.M, a.Round, a.Period, a.Pinned, a.LedgerBranch)
 	case verifyBundle:
-		s.demux.verifyBundle(ctx, a.M, a.Round, a.Period, a.Step)
+		s.demux.verifyBundle(ctx, a.M, a.Round, a.Period, a.Step, a.LedgerBranch)
 	}
 }
 
@@ -455,15 +456,27 @@ func relayAction(e messageEvent, tag protocol.Tag, o interface{}) action {
 }
 
 func verifyVoteAction(e messageEvent, r round, p period, taskIndex int) action {
-	return cryptoAction{T: verifyVote, M: e.Input, Round: r, Period: p, TaskIndex: taskIndex}
+	ledgerBranch := e.LedgerBranch
+	if ledgerBranch == (bookkeeping.BlockHash{}) {
+		ledgerBranch = r.Branch
+	}
+	return cryptoAction{T: verifyVote, M: e.Input, Round: r, Period: p, TaskIndex: taskIndex, LedgerBranch: ledgerBranch}
 }
 
 func verifyPayloadAction(e messageEvent, r round, p period, pinned bool) action {
-	return cryptoAction{T: verifyPayload, M: e.Input, Round: r, Period: p, Pinned: pinned}
+	ledgerBranch := e.LedgerBranch
+	if ledgerBranch == (bookkeeping.BlockHash{}) {
+		ledgerBranch = r.Branch
+	}
+	return cryptoAction{T: verifyPayload, M: e.Input, Round: r, Period: p, Pinned: pinned, LedgerBranch: ledgerBranch}
 }
 
 func verifyBundleAction(e messageEvent, r round, p period, s step) action {
-	return cryptoAction{T: verifyBundle, M: e.Input, Round: r, Period: p, Step: s}
+	ledgerBranch := e.LedgerBranch
+	if ledgerBranch == (bookkeeping.BlockHash{}) {
+		ledgerBranch = r.Branch
+	}
+	return cryptoAction{T: verifyBundle, M: e.Input, Round: r, Period: p, Step: s, LedgerBranch: ledgerBranch}
 }
 
 func zeroAction(t actionType) action {

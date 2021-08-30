@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -291,6 +292,15 @@ type messageEvent struct {
 	Cancelled bool
 
 	Proto ConsensusVersionView
+
+	// LedgerBranch indicates the branch value that should be used when
+	// looking up ledger state for this message.  When zero, the branch
+	// of the round should be used.  This is important for cases when
+	// this message's round refers to a speculative parent branch that
+	// has not been added even to the speculative ledger yet, in which
+	// case speculative ledger lookups will fail, even if they should
+	// be legitimate due to sufficiently-far-back lookbacks.
+	LedgerBranch bookkeeping.BlockHash
 }
 
 func (e messageEvent) t() eventType {
@@ -325,6 +335,11 @@ func (e messageEvent) AttachConsensusVersion(v ConsensusVersionView) externalEve
 
 func (e messageEvent) AttachValidatedAt(d time.Duration) messageEvent {
 	e.Input.Proposal.validatedAt = d
+	return e
+}
+
+func (e messageEvent) AttachLedgerBranch(branch bookkeeping.BlockHash) messageEvent {
+	e.LedgerBranch = branch
 	return e
 }
 
