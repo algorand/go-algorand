@@ -41,6 +41,9 @@ import (
 // ErrNoSpace indicates insufficient space for transaction in block
 var ErrNoSpace = errors.New("block does not have space for transaction")
 
+// ErrRoundZero is self-explanatory
+var ErrRoundZero = errors.New("cannot start evaluator for round 0")
+
 // maxPaysetHint makes sure that we don't allocate too much memory up front
 // in the block evaluator, since there cannot reasonably be more than this
 // many transactions in a block.
@@ -384,13 +387,18 @@ func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint int) (*B
 
 func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto config.ConsensusParams, paysetHint int, validate bool, generate bool) (*BlockEvaluator, error) {
 	if hdr.Round == 0 {
-		return nil, fmt.Errorf("cannot start evaluator for round 0")
+		return nil, ErrRoundZero
 	}
 
 	prevHeader, err := l.BlockHdr(hdr.Round - 1)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"can't evaluate block %v without previous header: %v", hdr.Round, err)
+			"can't evaluate block %d without previous header: %v", hdr.Round, err)
+	}
+
+	prevProto, ok := config.Consensus[prevHeader.CurrentProtocol]
+	if !ok {
+		return nil, protocol.Error(prevHeader.CurrentProtocol)
 	}
 
 	base := &roundCowBase{
@@ -425,11 +433,6 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 	}
 
 	base.compactCertNextRnd = eval.prevHeader.CompactCert[protocol.CompactCertBasic].CompactCertNextRound
-
-	prevProto, ok := config.Consensus[prevHeader.CurrentProtocol]
-	if !ok {
-		return nil, protocol.Error(prevHeader.CurrentProtocol)
-	}
 
 	// Check if compact certs are being enabled as of this block.
 	if base.compactCertNextRnd == 0 && proto.CompactCertRounds != 0 {
