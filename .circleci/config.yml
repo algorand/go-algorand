@@ -62,6 +62,23 @@ workflows:
                 - /rel\/.*/
                 - /hotfix\/.*/
           context: slack-secrets
+      - amd64_e2e_expect:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
+      - amd64_e2e_expect_nightly:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
       - arm64_build
       - arm64_test:
           requires:
@@ -106,6 +123,23 @@ workflows:
                 - /rel\/.*/
                 - /hotfix\/.*/
       - arm64_e2e_subs_nightly:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
+      - arm64_e2e_expect:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
+      - arm64_e2e_expect_nightly:
           requires:
             - arm64_build
           filters:
@@ -166,7 +200,23 @@ workflows:
                 - /rel\/.*/
                 - /hotfix\/.*/
           context: slack-secrets
-      # - windows_x64_build
+      - mac_amd64_e2e_expect:
+          requires:
+            - mac_amd64_build
+          filters:
+            branches:
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
+      - mac_amd64_e2e_expect_nightly:
+          requires:
+            - mac_amd64_build
+          filters:
+            branches:
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
       - tests_verification_job:
           name: << matrix.job_type >>_<< matrix.job_version >>_verification
           matrix:
@@ -175,6 +225,7 @@ workflows:
               job_version: ["test", "test_nightly", "integration", "integration_nightly"]
           requires:
             - << matrix.job_type >>_<< matrix.job_version >>
+      #- windows_x64_build
 
 commands:
   prepare_go:
@@ -515,6 +566,33 @@ jobs:
           event: fail
           template: basic_fail_1
 
+  amd64_e2e_expect:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: large
+    environment:
+      E2E_TEST_FILTER: "EXPECT"
+    steps:
+      - prepare_go
+      - generic_integration:
+          result_subdir: amd64-e2e_subs
+          short_test_flag: "-short"
+
+  amd64_e2e_expect_nightly:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: large
+    environment:
+      E2E_TEST_FILTER: "EXPECT"
+    steps:
+      - prepare_go
+      - generic_integration:
+          result_subdir: amd64-e2e_subs_nightly
+          no_output_timeout: 45m
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
+
   arm64_build:
     machine:
       image: ubuntu-2004:202101-01
@@ -608,6 +686,35 @@ jobs:
       - prepare_go
       - generic_integration:
           result_subdir: arm64_e2e_subs_nightly
+          no_output_timeout: 45m
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
+
+  arm64_e2e_expect:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.large
+    environment:
+      E2E_TEST_FILTER: "EXPECT"
+    steps:
+      - checkout
+      - prepare_go
+      - generic_integration:
+          result_subdir: arm64-e2e_subs
+          short_test_flag: "-short"
+
+  arm64_e2e_expect_nightly:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.large
+    environment:
+      E2E_TEST_FILTER: "EXPECT"
+    steps:
+      - checkout
+      - prepare_go
+      - generic_integration:
+          result_subdir: arm64-e2e_subs-nightly
           no_output_timeout: 45m
       - slack/notify:
           event: fail
@@ -723,6 +830,39 @@ jobs:
       - prepare_go
       - generic_integration:
           result_subdir: mac_amd64_e2e_subs_nightly
+          circleci_home: /Users/distiller
+          no_output_timeout: 45m
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
+
+  mac_amd64_e2e_expect:
+    macos:
+      xcode: 12.0.1
+    resource_class: large
+    environment:
+      E2E_TEST_FILTER: "EXPECT"
+      HOMEBREW_NO_AUTO_UPDATE: "true"
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - prepare_go
+      - generic_integration:
+          result_subdir: mac-amd64-e2e_subs
+          circleci_home: /Users/distiller
+          short_test_flag: "-short"
+
+  mac_amd64_e2e_expect_nightly:
+    macos:
+      xcode: 12.0.1
+    resource_class: large
+    environment:
+      E2E_TEST_FILTER: "EXPECT"
+      HOMEBREW_NO_AUTO_UPDATE: "true"
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - prepare_go
+      - generic_integration:
+          result_subdir: mac-amd64-e2e_subs-nightly
           circleci_home: /Users/distiller
           no_output_timeout: 45m
       - slack/notify:
