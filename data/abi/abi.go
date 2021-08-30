@@ -242,8 +242,13 @@ func parseTupleContent(str string) ([]string, error) {
 		}
 	}
 
+	// check if the number of empty block placeholder is equal to number of sub-tuples
+	// if number do not match, this might be incurred by head/tail commas
+	// e.g. (,uint64,(bool,bool)) => ["", uint64, ""], with sub-tuple ["(bool,bool)"]
 	if len(emptyStrIndex) != len(parenSegmentRecord) {
-		return []string{}, fmt.Errorf("head tail comma is not allowed")
+		return []string{},
+			fmt.Errorf("parsing error: cannot replace tuple segment back: " +
+				"number of empty placeholder unmatch with sub-tuple number")
 	}
 
 	// replace back the tuple-formed type str
@@ -440,7 +445,7 @@ func (t Type) ByteLen() (int, error) {
 
 // Value struct is the ABI Value, holding ABI Type information and the ABI value representation.
 type Value struct {
-	abiType Type
+	ABIType Type
 	value   interface{}
 }
 
@@ -450,7 +455,7 @@ func (v Value) arrayToTuple() (Value, error) {
 	var childT []Type
 	var valueArr []Value
 
-	switch v.abiType.enumIndex {
+	switch v.ABIType.enumIndex {
 	case String:
 		strValue, err := v.GetString()
 		if err != nil {
@@ -473,16 +478,16 @@ func (v Value) arrayToTuple() (Value, error) {
 			valueArr[i] = MakeByte(addr[i])
 		}
 	case ArrayStatic:
-		childT = make([]Type, v.abiType.staticLength)
-		for i := 0; i < int(v.abiType.staticLength); i++ {
-			childT[i] = v.abiType.childTypes[0]
+		childT = make([]Type, v.ABIType.staticLength)
+		for i := 0; i < int(v.ABIType.staticLength); i++ {
+			childT[i] = v.ABIType.childTypes[0]
 		}
 		valueArr = v.value.([]Value)
 	case ArrayDynamic:
 		arrayElems := v.value.([]Value)
 		childT = make([]Type, len(arrayElems))
 		for i := 0; i < len(arrayElems); i++ {
-			childT[i] = v.abiType.childTypes[0]
+			childT[i] = v.ABIType.childTypes[0]
 		}
 		valueArr = arrayElems
 	default:
@@ -495,14 +500,14 @@ func (v Value) arrayToTuple() (Value, error) {
 	}
 
 	return Value{
-		abiType: castedTupleType,
+		ABIType: castedTupleType,
 		value:   valueArr,
 	}, nil
 }
 
 // Encode method serialize the ABI value into a byte string of ABI encoding rule.
 func (v Value) Encode() ([]byte, error) {
-	switch v.abiType.enumIndex {
+	switch v.ABIType.enumIndex {
 	case Uint:
 		bigIntValue, err := v.GetUint()
 		if err != nil {
@@ -510,7 +515,7 @@ func (v Value) Encode() ([]byte, error) {
 		}
 		// NOTE: ugly work-round for golang 1.14. if upgraded to 1.15, should use fillbytes
 		bigIntBytes := bigIntValue.Bytes()
-		buffer := make([]byte, v.abiType.size/8-uint16(len(bigIntBytes)))
+		buffer := make([]byte, v.ABIType.size/8-uint16(len(bigIntBytes)))
 		buffer = append(buffer, bigIntBytes...)
 		return buffer, nil
 	case Ufixed:
@@ -520,7 +525,7 @@ func (v Value) Encode() ([]byte, error) {
 		}
 		// NOTE: ugly work-round for golang 1.14. if upgraded to 1.15, should use fillbytes
 		encodeBuffer := ufixedValue.Bytes()
-		buffer := make([]byte, v.abiType.size/8-uint16(len(encodeBuffer)))
+		buffer := make([]byte, v.ABIType.size/8-uint16(len(encodeBuffer)))
 		buffer = append(buffer, encodeBuffer...)
 		return buffer, nil
 	case Bool:
@@ -549,7 +554,7 @@ func (v Value) Encode() ([]byte, error) {
 		if err != nil {
 			return []byte{}, err
 		}
-		length := len(convertedTuple.abiType.childTypes)
+		length := len(convertedTuple.ABIType.childTypes)
 		lengthEncode := make([]byte, 2)
 		binary.BigEndian.PutUint16(lengthEncode, uint16(length))
 
@@ -595,7 +600,7 @@ func compressMultipleBool(valueList []Value) (uint8, error) {
 		return 0, fmt.Errorf("value list passed in should be less than length 8")
 	}
 	for i := 0; i < len(valueList); i++ {
-		if valueList[i].abiType.enumIndex != Bool {
+		if valueList[i].ABIType.enumIndex != Bool {
 			return 0, fmt.Errorf("bool type not matching in compressMultipleBool")
 		}
 		boolVal, err := valueList[i].GetBool()
@@ -611,20 +616,20 @@ func compressMultipleBool(valueList []Value) (uint8, error) {
 
 // tupleEncoding encodes an ABI value of tuple type into an ABI encoded byte string.
 func tupleEncoding(v Value) ([]byte, error) {
-	if v.abiType.enumIndex != Tuple {
+	if v.ABIType.enumIndex != Tuple {
 		return []byte{}, fmt.Errorf("type not supported in tupleEncoding")
 	}
-	if len(v.abiType.childTypes) >= (1 << 16) {
+	if len(v.ABIType.childTypes) >= (1 << 16) {
 		return []byte{}, fmt.Errorf("value abi type exceed 2^16")
 	}
 	tupleElems := v.value.([]Value)
-	if len(tupleElems) != len(v.abiType.childTypes) {
+	if len(tupleElems) != len(v.ABIType.childTypes) {
 		return []byte{}, fmt.Errorf("tuple abi child type number unmatch with tuple argument number")
 	}
-	heads, tails := make([][]byte, len(v.abiType.childTypes)), make([][]byte, len(v.abiType.childTypes))
+	heads, tails := make([][]byte, len(v.ABIType.childTypes)), make([][]byte, len(v.ABIType.childTypes))
 	isDynamicIndex := make(map[int]bool)
-	for i := 0; i < len(v.abiType.childTypes); i++ {
-		if tupleElems[i].abiType.IsDynamic() {
+	for i := 0; i < len(v.ABIType.childTypes); i++ {
+		if tupleElems[i].ABIType.IsDynamic() {
 			headsPlaceholder := []byte{0x00, 0x00}
 			heads[i] = headsPlaceholder
 			isDynamicIndex[i] = true
@@ -634,11 +639,11 @@ func tupleEncoding(v Value) ([]byte, error) {
 			}
 			tails[i] = tailEncoding
 		} else {
-			if tupleElems[i].abiType.enumIndex == Bool {
+			if tupleElems[i].ABIType.enumIndex == Bool {
 				// search previous bool
-				before := findBoolLR(v.abiType.childTypes, i, -1)
+				before := findBoolLR(v.ABIType.childTypes, i, -1)
 				// search after bool
-				after := findBoolLR(v.abiType.childTypes, i, 1)
+				after := findBoolLR(v.ABIType.childTypes, i, 1)
 				// append to heads and tails
 				if before%8 != 0 {
 					return []byte{}, fmt.Errorf("expected before has number of bool mod 8 = 0")
@@ -682,7 +687,7 @@ func tupleEncoding(v Value) ([]byte, error) {
 	}
 
 	head, tail := make([]byte, 0), make([]byte, 0)
-	for i := 0; i < len(v.abiType.childTypes); i++ {
+	for i := 0; i < len(v.ABIType.childTypes); i++ {
 		head = append(head, heads[i]...)
 		tail = append(tail, tails[i]...)
 	}
@@ -733,7 +738,7 @@ func Decode(valueByte []byte, valueType Type) (Value, error) {
 		if err != nil {
 			return Value{}, err
 		}
-		tupleDecoded.abiType = valueType
+		tupleDecoded.ABIType = valueType
 		return tupleDecoded, nil
 	case Address:
 		if len(valueByte) != 32 {
@@ -759,7 +764,7 @@ func Decode(valueByte []byte, valueType Type) (Value, error) {
 		if err != nil {
 			return Value{}, err
 		}
-		tupleDecoded.abiType = valueType
+		tupleDecoded.ABIType = valueType
 		return tupleDecoded, nil
 	case String:
 		if len(valueByte) < 2 {
@@ -878,7 +883,7 @@ func tupleDecoding(valueBytes []byte, valueType Type) (Value, error) {
 		values = append(values, valueTi)
 	}
 	return Value{
-		abiType: valueType,
+		ABIType: valueType,
 		value:   values,
 	}, nil
 }
@@ -919,7 +924,7 @@ func MakeUint(value *big.Int, size uint16) (Value, error) {
 		return Value{}, fmt.Errorf("passed value larger than uint size %d", size)
 	}
 	return Value{
-		abiType: typeUint,
+		ABIType: typeUint,
 		value:   value,
 	}, nil
 }
@@ -935,14 +940,14 @@ func MakeUfixed(value *big.Int, size uint16, precision uint16) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	uintVal.abiType = ufixedValueType
+	uintVal.ABIType = ufixedValueType
 	return uintVal, nil
 }
 
 // MakeString takes a string and returns an ABI String type Value.
 func MakeString(value string) Value {
 	return Value{
-		abiType: MakeStringType(),
+		ABIType: MakeStringType(),
 		value:   value,
 	}
 }
@@ -950,7 +955,7 @@ func MakeString(value string) Value {
 // MakeByte takes a byte and returns an ABI Byte type value.
 func MakeByte(value byte) Value {
 	return Value{
-		abiType: MakeByteType(),
+		ABIType: MakeByteType(),
 		value:   value,
 	}
 }
@@ -958,7 +963,7 @@ func MakeByte(value byte) Value {
 // MakeAddress takes an [32]byte array and returns an ABI Address type value.
 func MakeAddress(value [32]byte) Value {
 	return Value{
-		abiType: MakeAddressType(),
+		ABIType: MakeAddressType(),
 		value:   value,
 	}
 }
@@ -971,13 +976,13 @@ func MakeDynamicArray(values []Value) (Value, error) {
 		return Value{}, fmt.Errorf("dynamic array make error: 0 argument passed in")
 	}
 	for i := 0; i < len(values); i++ {
-		if !values[i].abiType.Equal(values[0].abiType) {
+		if !values[i].ABIType.Equal(values[0].ABIType) {
 			return Value{}, fmt.Errorf("type mismatch: %s and %s",
-				values[i].abiType.String(), values[0].abiType.String())
+				values[i].ABIType.String(), values[0].ABIType.String())
 		}
 	}
 	return Value{
-		abiType: MakeDynamicArrayType(values[0].abiType),
+		ABIType: MakeDynamicArrayType(values[0].ABIType),
 		value:   values,
 	}, nil
 }
@@ -990,13 +995,13 @@ func MakeStaticArray(values []Value) (Value, error) {
 		return Value{}, fmt.Errorf("static array make error: 0 argument passed in")
 	}
 	for i := 0; i < len(values); i++ {
-		if !values[i].abiType.Equal(values[0].abiType) {
+		if !values[i].ABIType.Equal(values[0].ABIType) {
 			return Value{}, fmt.Errorf("type mismatch: %s and %s",
-				values[i].abiType.String(), values[0].abiType.String())
+				values[i].ABIType.String(), values[0].ABIType.String())
 		}
 	}
 	return Value{
-		abiType: MakeStaticArrayType(values[0].abiType, uint16(len(values))),
+		ABIType: MakeStaticArrayType(values[0].ABIType, uint16(len(values))),
 		value:   values,
 	}, nil
 }
@@ -1010,7 +1015,7 @@ func MakeTuple(values []Value) (Value, error) {
 	}
 	tupleType := make([]Type, len(values))
 	for i := 0; i < len(values); i++ {
-		tupleType[i] = values[i].abiType
+		tupleType[i] = values[i].ABIType
 	}
 
 	castedTupleType, err := MakeTupleType(tupleType)
@@ -1019,7 +1024,7 @@ func MakeTuple(values []Value) (Value, error) {
 	}
 
 	return Value{
-		abiType: castedTupleType,
+		ABIType: castedTupleType,
 		value:   values,
 	}, nil
 }
@@ -1027,14 +1032,14 @@ func MakeTuple(values []Value) (Value, error) {
 // MakeBool takes a boolean value and returns an ABI bool value.
 func MakeBool(value bool) Value {
 	return Value{
-		abiType: MakeBoolType(),
+		ABIType: MakeBoolType(),
 		value:   value,
 	}
 }
 
 // GetUint8 tries to retreve an uint8 from an ABI Value.
 func (v Value) GetUint8() (uint8, error) {
-	if v.abiType.enumIndex != Uint || v.abiType.size > 8 {
+	if v.ABIType.enumIndex != Uint || v.ABIType.size > 8 {
 		return 0, fmt.Errorf("value type unmatch or size too large")
 	}
 	bigIntForm, err := v.GetUint()
@@ -1046,7 +1051,7 @@ func (v Value) GetUint8() (uint8, error) {
 
 // GetUint16 tries to retrieve an uint16 from an ABI Value.
 func (v Value) GetUint16() (uint16, error) {
-	if v.abiType.enumIndex != Uint || v.abiType.size > 16 {
+	if v.ABIType.enumIndex != Uint || v.ABIType.size > 16 {
 		return 0, fmt.Errorf("value type unmatch or size too large")
 	}
 	bigIntForm, err := v.GetUint()
@@ -1058,7 +1063,7 @@ func (v Value) GetUint16() (uint16, error) {
 
 // GetUint32 tries to retrieve an uint32 from an ABI Value.
 func (v Value) GetUint32() (uint32, error) {
-	if v.abiType.enumIndex != Uint || v.abiType.size > 32 {
+	if v.ABIType.enumIndex != Uint || v.ABIType.size > 32 {
 		return 0, fmt.Errorf("value type unmatch or size too large")
 	}
 	bigIntForm, err := v.GetUint()
@@ -1070,7 +1075,7 @@ func (v Value) GetUint32() (uint32, error) {
 
 // GetUint64 tries to retrieve an uint64 from an ABI Value.
 func (v Value) GetUint64() (uint64, error) {
-	if v.abiType.enumIndex != Uint || v.abiType.size > 64 {
+	if v.ABIType.enumIndex != Uint || v.ABIType.size > 64 {
 		return 0, fmt.Errorf("value type unmatch or size too large")
 	}
 	bigIntForm, err := v.GetUint()
@@ -1082,11 +1087,11 @@ func (v Value) GetUint64() (uint64, error) {
 
 // GetUint tries to retrieve an big uint from an ABI Value.
 func (v Value) GetUint() (*big.Int, error) {
-	if v.abiType.enumIndex != Uint {
+	if v.ABIType.enumIndex != Uint {
 		return nil, fmt.Errorf("value type unmatch")
 	}
 	bigIntForm := v.value.(*big.Int)
-	sizeThreshold := big.NewInt(0).Lsh(big.NewInt(1), uint(v.abiType.size))
+	sizeThreshold := big.NewInt(0).Lsh(big.NewInt(1), uint(v.ABIType.size))
 	if sizeThreshold.Cmp(bigIntForm) <= 0 {
 		return nil, fmt.Errorf("value is larger than uint size")
 	}
@@ -1095,11 +1100,11 @@ func (v Value) GetUint() (*big.Int, error) {
 
 // GetUfixed tries to retrieve an big rational number from an ABI Value.
 func (v Value) GetUfixed() (*big.Int, error) {
-	if v.abiType.enumIndex != Ufixed {
+	if v.ABIType.enumIndex != Ufixed {
 		return nil, fmt.Errorf("value type unmatch, should be ufixed")
 	}
 	bigIntForm := v.value.(*big.Int)
-	sizeThreshold := big.NewInt(0).Lsh(big.NewInt(1), uint(v.abiType.size))
+	sizeThreshold := big.NewInt(0).Lsh(big.NewInt(1), uint(v.ABIType.size))
 	if sizeThreshold.Cmp(bigIntForm) <= 0 {
 		return nil, fmt.Errorf("value is larger than ufixed size")
 	}
@@ -1108,7 +1113,7 @@ func (v Value) GetUfixed() (*big.Int, error) {
 
 // GetString tries to retrieve a string from ABI Value.
 func (v Value) GetString() (string, error) {
-	if v.abiType.enumIndex != String {
+	if v.ABIType.enumIndex != String {
 		return "", fmt.Errorf("value type unmatch, should be ufixed")
 	}
 	stringForm := v.value.(string)
@@ -1117,7 +1122,7 @@ func (v Value) GetString() (string, error) {
 
 // GetByte tries to retrieve a byte from ABI Value.
 func (v Value) GetByte() (byte, error) {
-	if v.abiType.enumIndex != Byte {
+	if v.ABIType.enumIndex != Byte {
 		return byte(0), fmt.Errorf("value type unmatch, should be bytes")
 	}
 	bytesForm := v.value.(byte)
@@ -1126,7 +1131,7 @@ func (v Value) GetByte() (byte, error) {
 
 // GetAddress tries to retrieve a [32]byte array from ABI Value.
 func (v Value) GetAddress() ([32]byte, error) {
-	if v.abiType.enumIndex != Address {
+	if v.ABIType.enumIndex != Address {
 		return [32]byte{}, fmt.Errorf("value type unmatch, should be address")
 	}
 	addressForm := v.value.([32]byte)
@@ -1135,7 +1140,7 @@ func (v Value) GetAddress() ([32]byte, error) {
 
 // GetValueByIndex retrieve value element by the index passed in
 func (v Value) GetValueByIndex(index uint16) (Value, error) {
-	switch v.abiType.enumIndex {
+	switch v.ABIType.enumIndex {
 	case ArrayDynamic:
 		elements := v.value.([]Value)
 		if len(elements) <= int(index) {
@@ -1144,7 +1149,7 @@ func (v Value) GetValueByIndex(index uint16) (Value, error) {
 		return elements[index], nil
 	case ArrayStatic, Tuple:
 		elements := v.value.([]Value)
-		if v.abiType.staticLength <= index {
+		if v.ABIType.staticLength <= index {
 			return Value{}, fmt.Errorf("cannot get element: index out of scope")
 		}
 		return elements[index], nil
@@ -1155,7 +1160,7 @@ func (v Value) GetValueByIndex(index uint16) (Value, error) {
 
 // GetBool tries to retrieve a boolean value from the ABI Value.
 func (v Value) GetBool() (bool, error) {
-	if v.abiType.enumIndex != Bool {
+	if v.ABIType.enumIndex != Bool {
 		return false, fmt.Errorf("value type unmatch, should be bool")
 	}
 	boolForm := v.value.(bool)
