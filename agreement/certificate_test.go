@@ -37,7 +37,7 @@ func makeCertTesting(digest crypto.Digest, votes []vote, equiVotes []equivocatio
 }
 
 func verifyBundleAgainstLedger(b unauthenticatedBundle, l Ledger, avv *AsyncVoteVerifier) error {
-	_, err := b.verify(context.Background(), l, avv)
+	_, err := b.verify(context.Background(), LedgerWithoutBranch(l), avv)
 	return err
 }
 
@@ -65,7 +65,7 @@ func TestCertificateGoodCertificateBasic(t *testing.T) {
 
 	avv := MakeAsyncVoteVerifier(nil)
 	defer avv.Quit()
-	require.NoError(t, cert.Authenticate(block, ledger, avv))
+	require.NoError(t, cert.Authenticate(block, LedgerWithoutBranch(ledger), avv))
 }
 
 func TestCertificateGoodCertificateEarlyBreak(t *testing.T) {
@@ -92,7 +92,7 @@ func TestCertificateGoodCertificateEarlyBreak(t *testing.T) {
 
 	avv := MakeAsyncVoteVerifier(nil)
 	defer avv.Quit()
-	require.NoError(t, cert.Authenticate(block, ledger, avv))
+	require.NoError(t, cert.Authenticate(block, LedgerWithoutBranch(ledger), avv))
 }
 
 func TestCertificateFinalCert(t *testing.T) {
@@ -119,7 +119,7 @@ func TestCertificateFinalCert(t *testing.T) {
 
 	avv := MakeAsyncVoteVerifier(nil)
 	defer avv.Quit()
-	require.NoError(t, cert.Authenticate(block, ledger, avv))
+	require.NoError(t, cert.Authenticate(block, LedgerWithoutBranch(ledger), avv))
 }
 
 func TestCertificateBadCertificateWithFakeDoubleVote(t *testing.T) {
@@ -173,7 +173,7 @@ func TestCertificateBadCertificateWithFakeDoubleVote(t *testing.T) {
 
 	avv := MakeAsyncVoteVerifier(nil)
 	defer avv.Quit()
-	require.Error(t, cert.Authenticate(block, ledger, avv))
+	require.Error(t, cert.Authenticate(block, LedgerWithoutBranch(ledger), avv))
 }
 
 func TestCertificateDifferentBlock(t *testing.T) {
@@ -203,7 +203,7 @@ func TestCertificateDifferentBlock(t *testing.T) {
 	avv := MakeAsyncVoteVerifier(nil)
 	defer avv.Quit()
 	require.NoError(t, verifyBundleAgainstLedger(bundle, ledger, avv))
-	require.Error(t, cert.Authenticate(block, ledger, avv))
+	require.Error(t, cert.Authenticate(block, LedgerWithoutBranch(ledger), avv))
 }
 
 func TestCertificateNoCertStep(t *testing.T) {
@@ -289,7 +289,7 @@ func TestCertificateCertWrongRound(t *testing.T) {
 	avv := MakeAsyncVoteVerifier(nil)
 	defer avv.Quit()
 	require.NoError(t, verifyBundleAgainstLedger(bundle, ledger, avv))
-	require.Error(t, cert.Authenticate(block, ledger, avv))
+	require.Error(t, cert.Authenticate(block, LedgerWithoutBranch(ledger), avv))
 }
 
 func TestCertificateCertWithTooFewVotes(t *testing.T) {
@@ -353,5 +353,5 @@ func TestCertificateDupVote(t *testing.T) {
 	avv := MakeAsyncVoteVerifier(nil)
 	defer avv.Quit()
 	require.Error(t, verifyBundleAgainstLedger(bundle, ledger, avv))
-	require.Error(t, cert.Authenticate(block, ledger, avv))
+	require.Error(t, cert.Authenticate(block, LedgerWithoutBranch(ledger), avv))
 }

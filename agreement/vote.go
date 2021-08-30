@@ -93,7 +93,7 @@ type (
 )
 
 // verify verifies that a vote that was received from the network is valid.
-func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
+func (uv unauthenticatedVote) verify(l LedgerBranchReader) (vote, error) {
 	rv := uv.R
 	m, err := membership(l, rv.Sender, rv.roundBranch(), rv.Period, rv.Step)
 	if err != nil {
@@ -118,7 +118,7 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 		}
 	}
 
-	proto, err := l.ConsensusParams(paramsRoundBranch(rv.roundBranch()))
+	proto, err := l.ConsensusParams(ParamsRound(rv.Round))
 	if err != nil {
 		return vote{}, fmt.Errorf("unauthenticatedVote.verify: could not get consensus params for round %d: %v", ParamsRound(rv.Round), err)
 	}
@@ -148,13 +148,13 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 // makeVote creates a new unauthenticated vote from its constituent components.
 //
 // makeVote returns an error it it fails.
-func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecrets, l Ledger) (unauthenticatedVote, error) {
+func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecrets, l LedgerBranchReader) (unauthenticatedVote, error) {
 	m, err := membership(l, rv.Sender, rv.roundBranch(), rv.Period, rv.Step)
 	if err != nil {
 		return unauthenticatedVote{}, fmt.Errorf("makeVote: could not get membership parameters: %v", err)
 	}
 
-	proto, err := l.ConsensusParams(paramsRoundBranch(rv.roundBranch()))
+	proto, err := l.ConsensusParams(ParamsRound(rv.Round))
 	if err != nil {
 		return unauthenticatedVote{}, fmt.Errorf("makeVote: could not get consensus params for round %d: %v", ParamsRound(rv.Round), err)
 	}
@@ -202,7 +202,7 @@ func (v vote) u() unauthenticatedVote {
 	return unauthenticatedVote{R: v.R, Cred: v.Cred.UnauthenticatedCredential, Sig: v.Sig}
 }
 
-func (pair unauthenticatedEquivocationVote) verify(l LedgerReader) (equivocationVote, error) {
+func (pair unauthenticatedEquivocationVote) verify(l LedgerBranchReader) (equivocationVote, error) {
 	if pair.Proposals[0] == pair.Proposals[1] {
 		return equivocationVote{}, fmt.Errorf("isEquivocationPair: not an equivocation pair: identical vote (block hash %v == %v)", pair.Proposals[0], pair.Proposals[1])
 	}

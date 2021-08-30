@@ -141,13 +141,13 @@ func makeBundle(proto config.ConsensusParams, targetProposal proposalValue, vote
 //
 // - all the votes in the bundle are valid
 // - the senders of the votes are distinct and form a full, valid committee
-func (b unauthenticatedBundle) verify(ctx context.Context, l LedgerReader, avv *AsyncVoteVerifier) (bundle, error) {
+func (b unauthenticatedBundle) verify(ctx context.Context, l LedgerBranchReader, avv *AsyncVoteVerifier) (bundle, error) {
 	return b.verifyAsync(ctx, l, avv)()
 }
 
 // verifyAsync verifies a bundle in the background, returning a future
 // which contains the result of verification.
-func (b unauthenticatedBundle) verifyAsync(ctx context.Context, l LedgerReader, avv *AsyncVoteVerifier) func() (bundle, error) {
+func (b unauthenticatedBundle) verifyAsync(ctx context.Context, l LedgerBranchReader, avv *AsyncVoteVerifier) func() (bundle, error) {
 	// termErrorFn creates a future that immediately returns with an error.
 	termErrorFn := func(err error) func() (bundle, error) {
 		return func() (bundle, error) {
@@ -166,7 +166,7 @@ func (b unauthenticatedBundle) verifyAsync(ctx context.Context, l LedgerReader, 
 		return termFmtErrorFn("unauthenticatedBundle.verify: b.Step = %v", propose)
 	}
 
-	proto, err := l.ConsensusParams(paramsRoundBranch(b.roundBranch()))
+	proto, err := l.ConsensusParams(ParamsRound(b.Round))
 	if err != nil {
 		return termFmtErrorFn("unauthenticatedBundle.verify: could not get consensus params for round %d from round %+v: %v", ParamsRound(b.Round), b.roundBranch(), err)
 	}

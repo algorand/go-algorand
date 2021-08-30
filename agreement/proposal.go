@@ -147,19 +147,19 @@ func (i seedInput) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.ProposerSeed, protocol.Encode(&i)
 }
 
-func deriveNewSeed(address basics.Address, vrf *crypto.VRFSecrets, rnd round, period period, ledger LedgerReader) (newSeed committee.Seed, seedProof crypto.VRFProof, reterr error) {
+func deriveNewSeed(address basics.Address, vrf *crypto.VRFSecrets, rnd basics.Round, period period, ledger LedgerBranchReader) (newSeed committee.Seed, seedProof crypto.VRFProof, reterr error) {
 	var ok bool
 	var vrfOut crypto.VrfOutput
 
-	cparams, err := ledger.ConsensusParams(paramsRoundBranch(rnd))
+	cparams, err := ledger.ConsensusParams(ParamsRound(rnd))
 	if err != nil {
-		reterr = fmt.Errorf("failed to obtain consensus parameters in round %d from round %+v: %v", ParamsRound(rnd.Number), rnd, err)
+		reterr = fmt.Errorf("failed to obtain consensus parameters in round %d from round %v: %v", ParamsRound(rnd), rnd, err)
 		return
 	}
 	var alpha crypto.Digest
-	prevSeed, err := ledger.Seed(seedRound(rnd.Number, cparams), rnd.Branch)
+	prevSeed, err := ledger.Seed(seedRound(rnd, cparams))
 	if err != nil {
-		reterr = fmt.Errorf("failed read seed of round %d from round %+v: %v", seedRound(rnd.Number, cparams), rnd, err)
+		reterr = fmt.Errorf("failed read seed of round %d from round %v: %v", seedRound(rnd, cparams), rnd, err)
 		return
 	}
 
@@ -181,10 +181,10 @@ func deriveNewSeed(address basics.Address, vrf *crypto.VRFSecrets, rnd round, pe
 	}
 
 	input := seedInput{Alpha: alpha}
-	rerand := rnd.Number % basics.Round(cparams.SeedLookback*cparams.SeedRefreshInterval)
+	rerand := rnd % basics.Round(cparams.SeedLookback*cparams.SeedRefreshInterval)
 	if rerand < basics.Round(cparams.SeedLookback) {
-		digrnd := rnd.Number.SubSaturate(basics.Round(cparams.SeedLookback * cparams.SeedRefreshInterval))
-		oldDigest, err := ledger.LookupDigest(digrnd, bookkeeping.BlockHash{})
+		digrnd := rnd.SubSaturate(basics.Round(cparams.SeedLookback * cparams.SeedRefreshInterval))
+		oldDigest, err := ledger.LookupDigest(digrnd)
 		if err != nil {
 			reterr = fmt.Errorf("could not lookup old entry digest (for seed) from round %d: %v", digrnd, err)
 			return
@@ -195,24 +195,24 @@ func deriveNewSeed(address basics.Address, vrf *crypto.VRFSecrets, rnd round, pe
 	return
 }
 
-func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
+func verifyNewSeed(p unauthenticatedProposal, ledger LedgerBranchReader) error {
 	value := p.value()
-	rnd := p.roundBranch()
-	cparams, err := ledger.ConsensusParams(paramsRoundBranch(rnd))
+	rnd := p.Round()
+	cparams, err := ledger.ConsensusParams(ParamsRound(rnd))
 	if err != nil {
-		return fmt.Errorf("failed to obtain consensus parameters in round %d from round %+v: %v", ParamsRound(rnd.Number), rnd, err)
+		return fmt.Errorf("failed to obtain consensus parameters in round %d from round %d: %v", ParamsRound(rnd), rnd, err)
 	}
 
-	balanceRound := balanceRound(rnd.Number, cparams)
-	proposerRecord, err := ledger.Lookup(balanceRound, bookkeeping.BlockHash{}, value.OriginalProposer)
+	balanceRound := balanceRound(rnd, cparams)
+	proposerRecord, err := ledger.Lookup(balanceRound, value.OriginalProposer)
 	if err != nil {
 		return fmt.Errorf("failed to obtain balance record for address %v in round %d: %v", value.OriginalProposer, balanceRound, err)
 	}
 
 	var alpha crypto.Digest
-	prevSeed, err := ledger.Seed(seedRound(rnd.Number, cparams), rnd.Branch)
+	prevSeed, err := ledger.Seed(seedRound(rnd, cparams))
 	if err != nil {
-		return fmt.Errorf("failed read seed of round %d from rnd %+v: %v", seedRound(rnd.Number, cparams), rnd, err)
+		return fmt.Errorf("failed read seed of round %d from rnd %d: %v", seedRound(rnd, cparams), rnd, err)
 	}
 
 	if value.OriginalPeriod == 0 {
@@ -235,10 +235,10 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 	}
 
 	input := seedInput{Alpha: alpha}
-	rerand := rnd.Number % basics.Round(cparams.SeedLookback*cparams.SeedRefreshInterval)
+	rerand := rnd % basics.Round(cparams.SeedLookback*cparams.SeedRefreshInterval)
 	if rerand < basics.Round(cparams.SeedLookback) {
-		digrnd := rnd.Number.SubSaturate(basics.Round(cparams.SeedLookback * cparams.SeedRefreshInterval))
-		oldDigest, err := ledger.LookupDigest(digrnd, bookkeeping.BlockHash{})
+		digrnd := rnd.SubSaturate(basics.Round(cparams.SeedLookback * cparams.SeedRefreshInterval))
+		oldDigest, err := ledger.LookupDigest(digrnd)
 		if err != nil {
 			return fmt.Errorf("could not lookup old entry digest (for seed) from round %d: %v", digrnd, err)
 		}
@@ -250,11 +250,8 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 	return nil
 }
 
-func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve ValidatedBlock, period period, ledger LedgerReader) (proposal, proposalValue, error) {
-	rnd := round{
-		Number: ve.Block().Round(),
-		Branch: ve.Block().Branch,
-	}
+func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve ValidatedBlock, period period, ledger LedgerBranchReader) (proposal, proposalValue, error) {
+	rnd := ve.Block().Round()
 	newSeed, seedProof, err := deriveNewSeed(address, vrf, rnd, period, ledger)
 	if err != nil {
 		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could not derive new seed: %v", err)
@@ -262,9 +259,9 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve Validat
 
 	ve = ve.WithSeed(newSeed)
 
-	prevVersion, err := ledger.ConsensusVersion(rnd.Number-1, rnd.Branch)
+	prevVersion, err := ledger.ConsensusVersion(rnd-1)
 	if err != nil {
-		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could not get previous version for %d: %v", rnd.Number-1, err)
+		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could not get previous version for %d: %v", rnd-1, err)
 	}
 
 	proposal := makeProposal(ve, seedProof, period, address, prevVersion)
@@ -279,7 +276,7 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve Validat
 
 // validate returns true if the proposal is valid.
 // It checks the proposal seed and then calls validator.Validate.
-func (p unauthenticatedProposal) validate(ctx context.Context, current round, ledger LedgerReader, validator BlockValidator) (proposal, error) {
+func (p unauthenticatedProposal) validate(ctx context.Context, current round, ledger LedgerBranchReader, validator BlockValidator) (proposal, error) {
 	var invalid proposal
 	entry := p.Block
 
@@ -300,7 +297,7 @@ func (p unauthenticatedProposal) validate(ctx context.Context, current round, le
 		return invalid, fmt.Errorf("EntryValidator rejected entry: %v", err)
 	}
 
-	prevVersion, err := ledger.ConsensusVersion(entry.Round()-1, entry.Branch)
+	prevVersion, err := ledger.ConsensusVersion(entry.Round()-1)
 	if err != nil {
 		return invalid, fmt.Errorf("ConsensusVersion not available for %d: %v", entry.Round()-1, err)
 	}

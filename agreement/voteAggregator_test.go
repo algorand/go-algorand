@@ -58,10 +58,10 @@ func TestVoteAggregatorVotes(t *testing.T) {
 			address := addresses[i]
 			step := step(s)
 			rv := rawVote{Sender: address, Round: round.Number, Branch: round.Branch, Period: period, Step: step, Proposal: proposal}
-			uv, err := makeVote(rv, otSecrets[i], vrfSecrets[i], ledger)
+			uv, err := makeVote(rv, otSecrets[i], vrfSecrets[i], LedgerWithoutBranch(ledger))
 			assert.NoError(t, err)
 
-			vote, err := uv.verify(ledger)
+			vote, err := uv.verify(LedgerWithoutBranch(ledger))
 			if err != nil {
 				continue
 			}
@@ -112,10 +112,10 @@ func TestVoteAggregatorBundles(t *testing.T) {
 			address := addresses[i]
 			step := step(s)
 			rv := rawVote{Sender: address, Round: round.Number, Branch: round.Branch, Period: period, Step: step, Proposal: proposal}
-			uv, err := makeVote(rv, otSecrets[i], vrfSecrets[i], ledger)
+			uv, err := makeVote(rv, otSecrets[i], vrfSecrets[i], LedgerWithoutBranch(ledger))
 			assert.NoError(t, err)
 
-			vote, err := uv.verify(ledger)
+			vote, err := uv.verify(LedgerWithoutBranch(ledger))
 			if err != nil {
 				continue
 			}
@@ -124,7 +124,7 @@ func TestVoteAggregatorBundles(t *testing.T) {
 		}
 
 		ub := makeBundle(config.Consensus[protocol.ConsensusCurrentVersion], proposal, votes, nil)
-		bundle, err := ub.verify(context.Background(), ledger, avv)
+		bundle, err := ub.verify(context.Background(), LedgerWithoutBranch(ledger), avv)
 		if err != nil {
 			panic(err)
 		}
@@ -906,7 +906,7 @@ func TestVoteAggregatorOldVote(t *testing.T) {
 		address := addresses[i]
 		step := step(1)
 		rv := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal}
-		uv, err := makeVote(rv, otSecrets[i], vrfSecrets[i], ledger)
+		uv, err := makeVote(rv, otSecrets[i], vrfSecrets[i], LedgerWithoutBranch(ledger))
 		assert.NoError(t, err)
 		uvs = append(uvs, uv)
 	}
@@ -921,7 +921,7 @@ func TestVoteAggregatorOldVote(t *testing.T) {
 	results := make(chan asyncVerifyVoteResponse, len(uvs))
 
 	for i, uv := range uvs {
-		avv.verifyVote(context.Background(), ledger, uv, i, message{}, results)
+		avv.verifyVote(context.Background(), LedgerWithoutBranch(ledger), uv, i, message{}, results)
 		result := <-results
 		require.True(t, result.cancelled)
 	}

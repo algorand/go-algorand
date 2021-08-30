@@ -84,6 +84,7 @@ type (
 		Round     round           // The round that we're going to test against.
 		Period    period          // The period associated with the message we're going to test.
 		ctx       context.Context // A context for this request, if the context is cancelled then the request is stale.
+		ledger    LedgerBranchReader
 	}
 
 	cryptoProposalRequest struct {
@@ -93,6 +94,7 @@ type (
 		Period    period          // The period associated with the message we're going to test.
 		Pinned    bool            // A flag that is set if this is a pinned value for the given round.
 		ctx       context.Context // A context for this request, if the context is cancelled then the request is stale.
+		ledger    LedgerBranchReader
 	}
 
 	cryptoBundleRequest struct {
@@ -102,6 +104,7 @@ type (
 		Period    period          // The period associated with the message we're going to test.
 		Certify   bool            // A flag that set if this is a cert bundle.
 		ctx       context.Context // A context for this request, if the context is cancelled then the request is stale.
+		ledger    LedgerBranchReader
 	}
 
 	cryptoResult struct {
@@ -119,7 +122,6 @@ type (
 		bundles      bundleChanPair
 
 		validator        BlockValidator
-		ledger           LedgerReader
 		proposalContexts pendingRequestsContext
 		log              logging.Logger
 
@@ -150,9 +152,8 @@ type (
 	}
 )
 
-func makeCryptoVerifier(l LedgerReader, v BlockValidator, voteVerifier *AsyncVoteVerifier, logger logging.Logger) cryptoVerifier {
+func makeCryptoVerifier(v BlockValidator, voteVerifier *AsyncVoteVerifier, logger logging.Logger) cryptoVerifier {
 	c := &poolCryptoVerifier{
-		ledger:           l,
 		validator:        v,
 		proposalContexts: makePendingRequestsContext(),
 		quit:             make(chan struct{}),
@@ -205,7 +206,7 @@ func (c *poolCryptoVerifier) voteFillWorker(toBundleWait chan<- bundleFuture) {
 			}
 
 			uv := votereq.message.UnauthenticatedVote
-			c.voteVerifier.verifyVote(votereq.ctx, c.ledger, uv, votereq.TaskIndex, votereq.message, c.votes.out)
+			c.voteVerifier.verifyVote(votereq.ctx, votereq.ledger, uv, votereq.TaskIndex, votereq.message, c.votes.out)
 		case bundlereq, ok := <-bundlesin:
 			if !ok {
 				bundlesin = nil
@@ -216,7 +217,7 @@ func (c *poolCryptoVerifier) voteFillWorker(toBundleWait chan<- bundleFuture) {
 			}
 
 			// this sends messages down c.voteVerifier
-			fn := bundlereq.message.UnauthenticatedBundle.verifyAsync(bundlereq.ctx, c.ledger, c.voteVerifier)
+			fn := bundlereq.message.UnauthenticatedBundle.verifyAsync(bundlereq.ctx, bundlereq.ledger, c.voteVerifier)
 			future := bundleFuture{
 				message: bundlereq.message,
 				index:   bundlereq.TaskIndex,
@@ -359,7 +360,7 @@ func (c *poolCryptoVerifier) verifyProposalPayload(request cryptoProposalRequest
 	m := request.message
 	up := request.UnauthenticatedProposal
 
-	p, err := up.validate(request.ctx, request.Round, c.ledger, c.validator)
+	p, err := up.validate(request.ctx, request.Round, request.ledger, c.validator)
 	select {
 	case <-request.ctx.Done():
 		m.Proposal = p

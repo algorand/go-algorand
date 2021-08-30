@@ -44,7 +44,7 @@ func testSetup(periodCount uint64) (player, rootRouter, testAccountData, testBlo
 	return player, router, accs, f, ledger
 }
 
-func createProposalsTesting(accs testAccountData, round round, period period, factory BlockFactory, ledger Ledger) (ps []proposal, vs []vote) {
+func createProposalsTesting(accs testAccountData, round round, period period, factory BlockFactory, ledger LedgerBranchReader) (ps []proposal, vs []vote) {
 	ve, err := factory.AssembleSpeculativeBlock(round.Number, round.Branch, time.Now().Add(time.Minute))
 	if err != nil {
 		logging.Base().Errorf("Could not generate a proposal for round %d: %v", round, err)
@@ -76,7 +76,7 @@ func createProposalsTesting(accs testAccountData, round round, period period, fa
 	return proposals, votes
 }
 
-func createProposalEvents(t *testing.T, player player, accs testAccountData, f testBlockFactory, ledger Ledger) (voteBatch []event, payloadBatch []event, lowestProposal proposalValue) {
+func createProposalEvents(t *testing.T, player player, accs testAccountData, f testBlockFactory, ledger LedgerBranchReader) (voteBatch []event, payloadBatch []event, lowestProposal proposalValue) {
 	payloads, votes := createProposalsTesting(accs, player.Round, player.Period, f, ledger)
 	if len(votes) == 0 {
 		return
@@ -108,7 +108,7 @@ func createProposalEvents(t *testing.T, player player, accs testAccountData, f t
 func TestProposalCreation(t *testing.T) {
 	player, router, accounts, factory, ledger := testSetup(0)
 
-	proposalVoteEventBatch, _, _ := createProposalEvents(t, player, accounts, factory, ledger)
+	proposalVoteEventBatch, _, _ := createProposalEvents(t, player, accounts, factory, LedgerWithoutBranch(ledger))
 
 	simulateProposalVotes(t, &router, &player, proposalVoteEventBatch)
 }
@@ -123,7 +123,7 @@ func TestProposalFunctions(t *testing.T) {
 	validator := testBlockValidator{}
 
 	for i := range accs.addresses {
-		proposal, proposalValue, _ := proposalForBlock(accs.addresses[i], accs.vrfs[i], ve, period, ledger)
+		proposal, proposalValue, _ := proposalForBlock(accs.addresses[i], accs.vrfs[i], ve, period, LedgerWithoutBranch(ledger))
 
 		//validate returning unauthenticatedProposal from proposalPayload
 		unauthenticatedProposalResult := proposal
@@ -131,7 +131,7 @@ func TestProposalFunctions(t *testing.T) {
 
 		//  validate unauthenticatedProposal
 		unauthenticatedProposal := proposal.u()
-		validatedProposal, err := unauthenticatedProposal.validate(context.Background(), round, ledger, validator)
+		validatedProposal, err := unauthenticatedProposal.validate(context.Background(), round, LedgerWithoutBranch(ledger), validator)
 		require.NoError(t, err)
 		require.NotNil(t, validatedProposal)
 
@@ -162,38 +162,38 @@ func TestProposalUnauthenticated(t *testing.T) {
 
 	accountIndex := 0
 
-	proposal, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, period, ledger)
+	proposal, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, period, LedgerWithoutBranch(ledger))
 	accountIndex++
 
 	// validate a good unauthenticated proposal
 	unauthenticatedProposal := proposal.u()
 	block := unauthenticatedProposal.Block
 	require.NotNil(t, block)
-	proposal, err = unauthenticatedProposal.validate(context.Background(), round, ledger, validator)
+	proposal, err = unauthenticatedProposal.validate(context.Background(), round, LedgerWithoutBranch(ledger), validator)
 	require.NotNil(t, proposal)
 	require.NoError(t, err)
 
 	// test bad round number
 	rp1 := makeRoundBranch(round.Number+1, round.Branch)
-	proposal, err = unauthenticatedProposal.validate(context.Background(), rp1, ledger, validator)
+	proposal, err = unauthenticatedProposal.validate(context.Background(), rp1, LedgerWithoutBranch(ledger), validator)
 	require.Error(t, err)
-	proposal, err = unauthenticatedProposal.validate(context.Background(), round, ledger, validator)
+	proposal, err = unauthenticatedProposal.validate(context.Background(), round, LedgerWithoutBranch(ledger), validator)
 	require.NotNil(t, proposal)
 	require.NoError(t, err)
 
 	// validate a good unauthenticated proposal
-	proposal, _, _ = proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, period, ledger)
+	proposal, _, _ = proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, period, LedgerWithoutBranch(ledger))
 	accountIndex++
 	unauthenticatedProposal = proposal.u()
 	block = unauthenticatedProposal.Block
 	require.NotNil(t, block)
 
 	// validate corruption of SeedProof
-	proposal3, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, period, ledger)
+	proposal3, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, period, LedgerWithoutBranch(ledger))
 	accountIndex++
 	unauthenticatedProposal3 := proposal3.u()
 	unauthenticatedProposal3.SeedProof = unauthenticatedProposal.SeedProof
-	_, err = unauthenticatedProposal3.validate(context.Background(), round, ledger, validator)
+	_, err = unauthenticatedProposal3.validate(context.Background(), round, LedgerWithoutBranch(ledger), validator)
 	require.Error(t, err)
 }
 

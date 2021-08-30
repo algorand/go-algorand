@@ -36,7 +36,7 @@ type Certificate unauthenticatedBundle
 //
 // Callers may want to cache the result of this check, as it is relatively
 // expensive.
-func (c Certificate) Authenticate(e bookkeeping.Block, l LedgerReader, avv *AsyncVoteVerifier) (err error) {
+func (c Certificate) Authenticate(e bookkeeping.Block, l LedgerBranchReader, avv *AsyncVoteVerifier) (err error) {
 	if c.Step != cert {
 		return fmt.Errorf("certificate step is %v != Cert", c.Step)
 	}

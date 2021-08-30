@@ -26,7 +26,7 @@ import (
 
 type asyncVerifyVoteRequest struct {
 	ctx     context.Context
-	l       LedgerReader
+	l       LedgerBranchReader
 	uv      *unauthenticatedVote
 	uev     *unauthenticatedEquivocationVote
 	index   int
@@ -131,7 +131,7 @@ func (avv *AsyncVoteVerifier) executeEqVoteVerification(task interface{}) interf
 	}
 }
 
-func (avv *AsyncVoteVerifier) verifyVote(verctx context.Context, l LedgerReader, uv unauthenticatedVote, index int, message message, out chan<- asyncVerifyVoteResponse) {
+func (avv *AsyncVoteVerifier) verifyVote(verctx context.Context, l LedgerBranchReader, uv unauthenticatedVote, index int, message message, out chan<- asyncVerifyVoteResponse) {
 	select {
 	case <-avv.ctx.Done(): // if we're quitting, don't enqueue the request
 	// case <-verctx.Done(): DO NOT DO THIS! otherwise we will lose the vote (and forget to clean up)!
@@ -149,7 +149,7 @@ func (avv *AsyncVoteVerifier) verifyVote(verctx context.Context, l LedgerReader,
 	}
 }
 
-func (avv *AsyncVoteVerifier) verifyEqVote(verctx context.Context, l LedgerReader, uev unauthenticatedEquivocationVote, index int, message message, out chan<- asyncVerifyVoteResponse) {
+func (avv *AsyncVoteVerifier) verifyEqVote(verctx context.Context, l LedgerBranchReader, uev unauthenticatedEquivocationVote, index int, message message, out chan<- asyncVerifyVoteResponse) {
 	select {
 	case <-avv.ctx.Done(): // if we're quitting, don't enqueue the request
 	// case <-verctx.Done(): DO NOT DO THIS! otherwise we will lose the vote (and forget to clean up)!

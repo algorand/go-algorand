@@ -35,9 +35,11 @@ import (
 func TestBundleCreation(t *testing.T) {
 	t.Parallel()
 
-	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
-	round := ledger.NextRound()
+	xledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
+	round := xledger.NextRound()
 	period := period(0)
+
+	ledger := LedgerWithoutBranch(xledger)
 
 	var proposal proposalValue
 	proposal.BlockDigest = randomBlockHash()
@@ -73,7 +75,8 @@ func TestBundleCreationWithZeroVotes(t *testing.T) {
 	t.Parallel()
 
 	//ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
-	ledger, _, _, _ := readOnlyFixture100()
+	xledger, _, _, _ := readOnlyFixture100()
+	ledger := LedgerWithoutBranch(xledger)
 
 	var proposal proposalValue
 	proposal.BlockDigest = randomBlockHash()
@@ -111,9 +114,10 @@ func makeBundlePanicWrapper(t *testing.T, message string, proposal proposalValue
 func TestBundleCreationWithVotesFromSameAddress(t *testing.T) {
 	t.Parallel()
 
-	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture10()
-	round := ledger.NextRound()
+	xledger, addresses, vrfSecrets, otSecrets := readOnlyFixture10()
+	round := xledger.NextRound()
 	period := period(0)
+	ledger := LedgerWithoutBranch(xledger)
 
 	var proposal proposalValue
 	var proposal2 proposalValue
@@ -176,9 +180,10 @@ func TestBundleCreationWithVotesFromSameAddress(t *testing.T) {
 func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 	t.Parallel()
 
-	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture10()
-	round := ledger.NextRound()
+	xledger, addresses, vrfSecrets, otSecrets := readOnlyFixture10()
+	round := xledger.NextRound()
 	period := period(0)
+	ledger := LedgerWithoutBranch(xledger)
 
 	var proposal proposalValue
 	var proposal2 proposalValue
@@ -286,9 +291,10 @@ func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 func TestBundleCertificationWithEquivocationVotes(t *testing.T) {
 	t.Parallel()
 
-	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture10()
-	round := ledger.NextRound()
+	xledger, addresses, vrfSecrets, otSecrets := readOnlyFixture10()
+	round := xledger.NextRound()
 	period := period(0)
+	ledger := LedgerWithoutBranch(xledger)
 
 	var proposal proposalValue
 	var proposal2 proposalValue
@@ -361,9 +367,10 @@ func certificatePanicWrapper(t *testing.T, message string, ub unauthenticatedBun
 func TestBundleCreationWithEquivocationVotesUnderQuorum(t *testing.T) {
 	t.Parallel()
 
-	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
-	round := ledger.NextRound()
+	xledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
+	round := xledger.NextRound()
 	period := period(0)
+	ledger := LedgerWithoutBranch(xledger)
 
 	var proposal proposalValue
 	var proposal2 proposalValue

@@ -83,7 +83,7 @@ type demuxParams struct {
 // It must be called before other methods are called.
 func makeDemux(params demuxParams) (d *demux) {
 	d = new(demux)
-	d.crypto = makeCryptoVerifier(params.ledger, params.validator, params.voteVerifier, params.log)
+	d.crypto = makeCryptoVerifier(params.validator, params.voteVerifier, params.log)
 	d.log = params.log
 	d.ledger = params.ledger
 	d.monitor = params.monitor
@@ -161,23 +161,35 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 
 // verifyVote enqueues a vote message to be verified.
 func (d *demux) verifyVote(ctx context.Context, m message, taskIndex int, r round, p period) {
+	lbr := LedgerBranchReader{
+		lr: d.ledger,
+		branch: r.Branch,
+	}
 	d.UpdateEventsQueue(eventQueueCryptoVerifierVote, 1)
 	d.monitor.inc(cryptoVerifierCoserviceType)
-	d.crypto.VerifyVote(ctx, cryptoVoteRequest{message: m, TaskIndex: taskIndex, Round: r, Period: p})
+	d.crypto.VerifyVote(ctx, cryptoVoteRequest{message: m, TaskIndex: taskIndex, Round: r, Period: p, ledger: lbr})
 }
 
 // verifyPayload enqueues a proposal payload message to be verified.
 func (d *demux) verifyPayload(ctx context.Context, m message, r round, p period, pinned bool) {
+	lbr := LedgerBranchReader{
+		lr: d.ledger,
+		branch: r.Branch,
+	}
 	d.UpdateEventsQueue(eventQueueCryptoVerifierProposal, 1)
 	d.monitor.inc(cryptoVerifierCoserviceType)
-	d.crypto.VerifyProposal(ctx, cryptoProposalRequest{message: m, Round: r, Period: p, Pinned: pinned})
+	d.crypto.VerifyProposal(ctx, cryptoProposalRequest{message: m, Round: r, Period: p, Pinned: pinned, ledger: lbr})
 }
 
 // verifyBundle enqueues a bundle message to be verified.
 func (d *demux) verifyBundle(ctx context.Context, m message, r round, p period, s step) {
+	lbr := LedgerBranchReader{
+		lr: d.ledger,
+		branch: r.Branch,
+	}
 	d.UpdateEventsQueue(eventQueueCryptoVerifierBundle, 1)
 	d.monitor.inc(cryptoVerifierCoserviceType)
-	d.crypto.VerifyBundle(ctx, cryptoBundleRequest{message: m, Round: r, Period: p, Certify: s == cert})
+	d.crypto.VerifyBundle(ctx, cryptoBundleRequest{message: m, Round: r, Period: p, Certify: s == cert, ledger: lbr})
 }
 
 // next blocks until it observes an external input event of interest for the state machine.

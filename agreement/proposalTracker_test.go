@@ -35,9 +35,9 @@ func sortedVoteGen(t *testing.T) (votes []vote) {
 			EncodingDigest:   randomBlockHash(),
 		}
 		rv := rawVote{Round: ledger.NextRound(), Sender: addr, Proposal: pv}
-		uv, err := makeVote(rv, ots[i], vrfs[i], ledger)
+		uv, err := makeVote(rv, ots[i], vrfs[i], LedgerWithoutBranch(ledger))
 		require.NoError(t, err)
-		v, err := uv.verify(ledger)
+		v, err := uv.verify(LedgerWithoutBranch(ledger))
 		if err == nil {
 			votes = append(votes, v)
 		}
@@ -307,10 +307,10 @@ func setupProposalTrackerTests(t *testing.T) (votes []vote) {
 			Proposal: prop,
 		}
 
-		uv, err := makeVote(rv, ots[i], vrfs[i], ledger)
+		uv, err := makeVote(rv, ots[i], vrfs[i], LedgerWithoutBranch(ledger))
 		require.NoError(t, err)
 
-		v, err := uv.verify(ledger)
+		v, err := uv.verify(LedgerWithoutBranch(ledger))
 		if err == nil {
 			votes = append(votes, v)
 		}

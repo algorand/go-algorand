@@ -39,7 +39,7 @@ func init() {
 func TestProposalStoreCreation(t *testing.T) {
 	player, router, accounts, factory, ledger := testSetup(0)
 
-	proposalVoteEventBatch, _, _ := createProposalEvents(t, player, accounts, factory, ledger)
+	proposalVoteEventBatch, _, _ := createProposalEvents(t, player, accounts, factory, LedgerWithoutBranch(ledger))
 
 	simulateProposalVotes(t, &router, &player, proposalVoteEventBatch)
 }
@@ -64,7 +64,7 @@ func TestBlockAssemblerPipeline(t *testing.T) {
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", round, err)
 
 	accountIndex := 0
-	proposal, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, period, ledger)
+	proposal, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, period, LedgerWithoutBranch(ledger))
 	accountIndex++
 
 	uap := unauthenticatedProposal{}
@@ -131,7 +131,7 @@ func TestBlockAssemblerBind(t *testing.T) {
 
 	accountIndex := 0
 
-	proposal, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
+	proposal, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, LedgerWithoutBranch(ledger))
 	accountIndex++
 
 	uap := unauthenticatedProposal{}
@@ -195,7 +195,7 @@ func TestBlockAssemblerAuthenticator(t *testing.T) {
 	testBlockFactory, err := factory.AssembleSpeculativeBlock(player.Round.Number, player.Round.Branch, time.Now().Add(time.Minute))
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
-	proposalPayload, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
+	proposalPayload, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, LedgerWithoutBranch(ledger))
 
 	currentAccount := accounts.addresses[accountIndex]
 
@@ -259,7 +259,7 @@ func TestBlockAssemblerTrim(t *testing.T) {
 	testBlockFactory, err := factory.AssembleSpeculativeBlock(player.Round.Number, player.Round.Branch, time.Now().Add(time.Minute))
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
-	proposalPayload, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
+	proposalPayload, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, LedgerWithoutBranch(ledger))
 
 	currentAccount := accounts.addresses[accountIndex]
 
@@ -331,7 +331,7 @@ func TestProposalStoreT(t *testing.T) {
 	testBlockFactory, err := factory.AssembleSpeculativeBlock(player.Round.Number, player.Round.Branch, time.Now().Add(time.Minute))
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
-	proposalPayload, proposalV, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
+	proposalPayload, proposalV, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, LedgerWithoutBranch(ledger))
 
 	currentAccount := accounts.addresses[accountIndex]
 
@@ -403,7 +403,7 @@ func TestProposalStoreUnderlying(t *testing.T) {
 	testBlockFactory, err := factory.AssembleSpeculativeBlock(player.Round.Number, player.Round.Branch, time.Now().Add(time.Minute))
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
-	proposalPayload, proposalV, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
+	proposalPayload, proposalV, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, LedgerWithoutBranch(ledger))
 
 	currentAccount := accounts.addresses[accountIndex]
 
@@ -465,9 +465,9 @@ func TestProposalStoreHandle(t *testing.T) {
 	testBlockFactory, err := factory.AssembleSpeculativeBlock(pl.Round.Number, pl.Round.Branch, time.Now().Add(time.Minute))
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", pl.Round, err)
 	accountIndex := 0
-	_, proposalV0, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, pl.Period, ledger)
+	_, proposalV0, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, pl.Period, LedgerWithoutBranch(ledger))
 	accountIndex++
-	proposalPayload, proposalV, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, pl.Period, ledger)
+	proposalPayload, proposalV, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, pl.Period, LedgerWithoutBranch(ledger))
 
 	currentAccount := accounts.addresses[accountIndex]
 
@@ -655,7 +655,7 @@ func TestProposalStoreGetPinnedValue(t *testing.T) {
 		r:   &router,
 		src: proposalMachinePeriod,
 	}
-	payloadV, proposalV, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
+	payloadV, proposalV, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, LedgerWithoutBranch(ledger))
 
 	testProposalStore := proposalStore{
 		Relevant:   map[period]proposalValue{},

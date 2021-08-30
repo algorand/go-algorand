@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -102,6 +103,7 @@ type pseudonodeVotesTask struct {
 	step             step
 	prop             proposalValue
 	persistStateDone chan error
+	ledgerBranch     bookkeeping.BlockHash
 }
 
 type pseudonodeProposalsTask struct {
@@ -276,10 +278,12 @@ func (n asyncPseudonode) makeProposals(round round, period period, accounts []ac
 		return nil, nil
 	}
 
+	lbr := LedgerBranchReader{lr: n.ledger, branch: ve.Block().Branch}
+
 	votes := make([]unauthenticatedVote, 0, len(accounts))
 	proposals := make([]proposal, 0, len(accounts))
 	for _, account := range accounts {
-		payload, proposal, err := proposalForBlock(account.Address(), account.VRFSecrets(), ve, period, n.ledger)
+		payload, proposal, err := proposalForBlock(account.Address(), account.VRFSecrets(), ve, period, lbr)
 		if err != nil {
 			n.log.Errorf("pseudonode.makeProposals: could not create proposal for block (address %v): %v", account.Address(), err)
 			continue
@@ -287,7 +291,7 @@ func (n asyncPseudonode) makeProposals(round round, period period, accounts []ac
 
 		// attempt to make the vote
 		rv := rawVote{Sender: account.Address(), Round: round.Number, Branch: round.Branch, Period: period, Step: propose, Proposal: proposal}
-		uv, err := makeVote(rv, account.VotingSigner(), account.VRFSecrets(), n.ledger)
+		uv, err := makeVote(rv, account.VotingSigner(), account.VRFSecrets(), lbr)
 		if err != nil {
 			n.log.Warnf("pseudonode.makeProposals: could not create vote: %v", err)
 			continue
@@ -304,10 +308,11 @@ func (n asyncPseudonode) makeProposals(round round, period period, accounts []ac
 // makeVotes creates a slice of votes for a given proposal value in a given
 // round, period, and step.
 func (n asyncPseudonode) makeVotes(round round, period period, step step, proposal proposalValue, participation []account.Participation) []unauthenticatedVote {
+	lbr := LedgerBranchReader{lr: n.ledger, branch: round.Branch}
 	votes := make([]unauthenticatedVote, 0)
 	for _, account := range participation {
 		rv := rawVote{Sender: account.Address(), Round: round.Number, Branch: round.Branch, Period: period, Step: step, Proposal: proposal}
-		uv, err := makeVote(rv, account.VotingSigner(), account.VRFSecrets(), n.ledger)
+		uv, err := makeVote(rv, account.VotingSigner(), account.VRFSecrets(), lbr)
 		if err != nil {
 			n.log.Warnf("pseudonode.makeVotes: could not create vote: %v", err)
 			continue
@@ -369,7 +374,8 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 	results := make(chan asyncVerifyVoteResponse, len(unverifiedVotes))
 	for i, uv := range unverifiedVotes {
 		msg := message{Tag: protocol.AgreementVoteTag, UnauthenticatedVote: uv}
-		verifier.verifyVote(context.TODO(), t.node.ledger, uv, i, msg, results)
+		lbr := LedgerBranchReader{lr: t.node.ledger, branch: t.round.Branch}
+		verifier.verifyVote(context.TODO(), lbr, uv, i, msg, results)
 	}
 
 	orderedResults := make([]asyncVerifyVoteResponse, len(unverifiedVotes))
@@ -479,7 +485,8 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 	results := make(chan asyncVerifyVoteResponse, len(votes))
 	for i, uv := range votes {
 		msg := message{Tag: protocol.AgreementVoteTag, UnauthenticatedVote: uv}
-		verifier.verifyVote(context.TODO(), t.node.ledger, uv, i, msg, results)
+		lbr := LedgerBranchReader{lr: t.node.ledger, branch: t.round.Branch}
+		verifier.verifyVote(context.TODO(), lbr, uv, i, msg, results)
 	}
 
 	cryptoOutputs := make([]asyncVerifyVoteResponse, len(votes))

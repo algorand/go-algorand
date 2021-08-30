@@ -508,7 +508,9 @@ type testAccountData struct {
 	ots       []crypto.OneTimeSigner
 }
 
-func makeProposalsTesting(accs testAccountData, round round, period period, factory BlockFactory, ledger Ledger) (ps []proposal, vs []vote) {
+func makeProposalsTesting(accs testAccountData, round round, period period, factory BlockFactory, xledger Ledger) (ps []proposal, vs []vote) {
+	ledger := LedgerWithoutBranch(xledger)
+
 	ve, err := factory.AssembleSpeculativeBlock(round.Number, round.Branch, time.Now().Add(time.Minute))
 	if err != nil {
 		logging.Base().Errorf("Could not generate a proposal for round %d: %v", round, err)
@@ -546,7 +548,9 @@ func makeProposalsTesting(accs testAccountData, round round, period period, fact
 
 // makeVotes creates a slice of votes for a given proposal value in a given
 // round, period, and step.
-func makeVotesTesting(accs testAccountData, round round, period period, step step, proposal proposalValue, ledger Ledger) (vs []vote) {
+func makeVotesTesting(accs testAccountData, round round, period period, step step, proposal proposalValue, xledger Ledger) (vs []vote) {
+	ledger := LedgerWithoutBranch(xledger)
+
 	// TODO this common code should be refactored out
 	votes := make([]vote, 0)
 	for i := range accs.addresses {
