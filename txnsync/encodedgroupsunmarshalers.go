@@ -39,7 +39,7 @@ func nextSlice(src *[]byte, dst []byte, size int) error {
 
 // getNibble returns the nibble at the given index from the provided
 // byte array. A errDataMissing is returned if index is beyond the size
-// of teh array.
+// of the array.
 func getNibble(b []byte, index int) (byte, error) {
 	if index >= len(b)*2 {
 		return 0, errDataMissing
