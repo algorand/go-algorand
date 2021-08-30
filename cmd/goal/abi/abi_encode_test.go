@@ -62,13 +62,11 @@ func TestEncodeValid(t *testing.T) {
 			big.NewInt(1).Neg(big.NewInt(1)),
 		)
 		for precision := 1; precision <= 160; precision++ {
-			denomLimit := big.NewInt(0).Exp(big.NewInt(10), big.NewInt(int64(precision)), nil)
 			for i := 0; i < 10; i++ {
 				randomInt, err := rand.Int(rand.Reader, upperLimit)
 				require.NoError(t, err, "cryptographic random int init fail")
 
-				ufixedRational := big.NewRat(1, 1).SetFrac(randomInt, denomLimit)
-				valueUfixed, err := MakeUfixed(ufixedRational, uint16(size), uint16(precision))
+				valueUfixed, err := MakeUfixed(randomInt, uint16(size), uint16(precision))
 				require.NoError(t, err, "makeUfixed Fail")
 
 				encodedUfixed, err := valueUfixed.Encode()
@@ -80,12 +78,12 @@ func TestEncodeValid(t *testing.T) {
 				require.Equal(t, buffer, encodedUfixed, "encode ufixed not match with expected")
 			}
 			// (2^[size] - 1) / (10^[precision]) test
-			ufixedLargest := big.NewRat(1, 1).SetFrac(largest, denomLimit)
-			ufixedLargestValue, err := MakeUfixed(ufixedLargest, uint16(size), uint16(precision))
+			ufixedLargestValue, err := MakeUfixed(largest, uint16(size), uint16(precision))
 			require.NoError(t, err, "make largest ufixed fail")
 			ufixedLargestEncode, err := ufixedLargestValue.Encode()
 			require.NoError(t, err, "largest ufixed encode error")
-			require.Equal(t, largest.Bytes(), ufixedLargestEncode, "encode ufixed largest do not match with expected")
+			require.Equal(t, largest.Bytes(), ufixedLargestEncode,
+				"encode ufixed largest do not match with expected")
 		}
 	}
 
@@ -149,7 +147,7 @@ func TestEncodeValid(t *testing.T) {
 		expected := []byte{
 			0b10011000,
 		}
-		boolArr, err := MakeStaticArray(arrayElems, MakeBoolType())
+		boolArr, err := MakeStaticArray(arrayElems)
 		require.NoError(t, err, "make static array should not return error")
 		boolArrEncode, err := boolArr.Encode()
 		require.NoError(t, err, "static bool array encoding should not return error")
@@ -165,7 +163,7 @@ func TestEncodeValid(t *testing.T) {
 		expected := []byte{
 			0b00011010, 0b10100000,
 		}
-		boolArr, err := MakeStaticArray(arrayElems, MakeBoolType())
+		boolArr, err := MakeStaticArray(arrayElems)
 		require.NoError(t, err, "make static array should not return error")
 		boolArrEncode, err := boolArr.Encode()
 		require.NoError(t, err, "static bool array encoding should not return error")
@@ -181,7 +179,7 @@ func TestEncodeValid(t *testing.T) {
 		expected := []byte{
 			0x00, 0x0A, 0b01010101, 0b01000000,
 		}
-		boolArr, err := MakeDynamicArray(arrayElems, MakeBoolType())
+		boolArr, err := MakeDynamicArray(arrayElems)
 		require.NoError(t, err, "make dynamic array should not return error")
 		boolArrEncode, err := boolArr.Encode()
 		require.NoError(t, err, "dynamic bool array encoding should not return error")
@@ -207,9 +205,7 @@ func TestEncodeValid(t *testing.T) {
 			0x00, 0x03, byte('A'), byte('B'), byte('C'),
 			0x00, 0x03, byte('D'), byte('E'), byte('F'),
 		}
-		stringTuple, err := MakeTuple(tupleElems, []Type{
-			MakeStringType(), MakeBoolType(), MakeBoolType(), MakeBoolType(), MakeBoolType(), MakeStringType(),
-		})
+		stringTuple, err := MakeTuple(tupleElems)
 		require.NoError(t, err, "make string tuple should not return error")
 		stringTupleEncode, err := stringTuple.Encode()
 		require.NoError(t, err, "string tuple encoding should not return error")
@@ -239,19 +235,17 @@ func TestDecodeValid(t *testing.T) {
 	for size := 8; size <= 512; size += 8 {
 		upperLimit := big.NewInt(0).Lsh(big.NewInt(1), uint(size))
 		for precision := 1; precision <= 160; precision++ {
-			denomLimit := big.NewInt(0).Exp(big.NewInt(10), big.NewInt(int64(precision)), nil)
 			for i := 0; i < 10; i++ {
 				randomInt, err := rand.Int(rand.Reader, upperLimit)
 				require.NoError(t, err, "cryptographic random int init fail")
 
-				ufixedRational := big.NewRat(1, 1).SetFrac(randomInt, denomLimit)
-				valueUfixed, err := MakeUfixed(ufixedRational, uint16(size), uint16(precision))
+				valueUfixed, err := MakeUfixed(randomInt, uint16(size), uint16(precision))
 				require.NoError(t, err, "makeUfixed Fail")
 
 				encodedUfixed, err := valueUfixed.Encode()
 				require.NoError(t, err, "ufixed encode fail")
 
-				ufixedType, err := MakeUFixedType(uint16(size), uint16(precision))
+				ufixedType, err := MakeUfixedType(uint16(size), uint16(precision))
 				require.NoError(t, err, "ufixed type make fail")
 
 				decodedUfixed, err := Decode(encodedUfixed, ufixedType)
@@ -318,7 +312,7 @@ func TestDecodeValid(t *testing.T) {
 		for index, bVal := range inputBase {
 			arrayElems[index] = MakeBool(bVal)
 		}
-		expected, err := MakeStaticArray(arrayElems, MakeBoolType())
+		expected, err := MakeStaticArray(arrayElems)
 		require.NoError(t, err, "make expected value should not return error")
 		actual, err := Decode([]byte{0b10011000}, MakeStaticArrayType(MakeBoolType(), uint16(len(inputBase))))
 		require.NoError(t, err, "decoding static bool array should not return error")
@@ -331,7 +325,7 @@ func TestDecodeValid(t *testing.T) {
 		for index, bVal := range inputBase {
 			arrayElems[index] = MakeBool(bVal)
 		}
-		expected, err := MakeStaticArray(arrayElems, MakeBoolType())
+		expected, err := MakeStaticArray(arrayElems)
 		require.NoError(t, err, "make expected value should not return error")
 		actual, err := Decode(
 			[]byte{
@@ -353,7 +347,7 @@ func TestDecodeValid(t *testing.T) {
 		}
 		uintT, err := MakeUintType(64)
 		require.NoError(t, err, "make uint64 type should not return error")
-		expected, err := MakeStaticArray(arrayElems, uintT)
+		expected, err := MakeStaticArray(arrayElems)
 		require.NoError(t, err, "make uint64 static array should not return error")
 		arrayEncoded, err := expected.Encode()
 		require.NoError(t, err, "uint64 static array encode should not return error")
@@ -368,7 +362,7 @@ func TestDecodeValid(t *testing.T) {
 		for index, bVal := range inputBase {
 			arrayElems[index] = MakeBool(bVal)
 		}
-		expected, err := MakeDynamicArray(arrayElems, MakeBoolType())
+		expected, err := MakeDynamicArray(arrayElems)
 		require.NoError(t, err, "make expected value should not return error")
 		inputEncoded := []byte{
 			0x00, 0x0A, 0b01010101, 0b01000000,
@@ -397,13 +391,20 @@ func TestDecodeValid(t *testing.T) {
 				tupleElems[index] = MakeBool(temp)
 			}
 		}
-		expected, err := MakeTuple(tupleElems, []Type{
-			MakeStringType(), MakeBoolType(), MakeBoolType(), MakeBoolType(), MakeBoolType(), MakeStringType(),
-		})
+		expected, err := MakeTuple(tupleElems)
 		require.NoError(t, err, "make expected value should not return error")
-		actual, err := Decode(inputEncode, MakeTupleType([]Type{
-			MakeStringType(), MakeBoolType(), MakeBoolType(), MakeBoolType(), MakeBoolType(), MakeStringType(),
-		}))
+		actual, err := Decode(
+			inputEncode,
+			Type{
+				enumIndex: Tuple,
+				childTypes: []Type{
+					MakeStringType(),
+					MakeBoolType(), MakeBoolType(), MakeBoolType(), MakeBoolType(),
+					MakeStringType(),
+				},
+				staticLength: 6,
+			},
+		)
 		require.NoError(t, err, "decoding dynamic tuple should not return error")
 		require.Equal(t, expected, actual, "dynamic tuple not match with expected")
 	})
@@ -497,9 +498,17 @@ func TestDecodeInvalid(t *testing.T) {
 				tupleElems[index] = MakeBool(temp)
 			}
 		}
-		_, err := Decode(inputEncode, MakeTupleType([]Type{
-			MakeStringType(), MakeBoolType(), MakeBoolType(), MakeBoolType(), MakeBoolType(), MakeStringType(),
-		}))
+		_, err := Decode(
+			inputEncode,
+			Type{
+				enumIndex: Tuple,
+				childTypes: []Type{
+					MakeStringType(),
+					MakeBoolType(), MakeBoolType(), MakeBoolType(), MakeBoolType(),
+					MakeStringType(),
+				},
+			},
+		)
 		require.Error(t, err, "corrupted decoding dynamic tuple should return error")
 	})
 }
