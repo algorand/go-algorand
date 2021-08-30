@@ -45,6 +45,18 @@ TEST_RUN_ID=$(${SCRIPT_PATH}/testrunid.py)
 export TEMPDIR=${SRCROOT}/tmp/out/e2e/${TEST_RUN_ID}
 echo "Test output can be found in ${TEMPDIR}"
 
+function cleanup() {
+  echo "Cleaning up temp dir."
+
+  rm -rf "${TEMPDIR}"
+
+  if ! ${NO_BUILD} ; then
+      rm -rf ${PKG_ROOT}
+  fi
+}
+
+# Cleanup files created during tests.
+trap cleanup EXIT
 
 # ARM64 has an unoptimized scrypt() which can cause tests to timeout.
 # Run kmd with scrypt() configured to run less secure and fast to go through the motions for test.
@@ -101,7 +113,6 @@ export GOPATH=$(go env GOPATH)
 cd "${SCRIPT_PATH}"
 
 if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
-
     ./timeout 200 ./e2e_basic_start_stop.sh
     duration "e2e_basic_start_stop.sh"
 
@@ -122,28 +133,35 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     for script in "$SRCROOT"/test/scripts/e2e_subs/serial/*; do
         "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} $script
     done
-    duration "serial client runners"
 
     deactivate
+    duration "serial client runners"
 fi # if E2E_TEST_FILTER == "" or == "SCRIPTS"
 
 if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "GO" ]; then
     # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
     # This allows us to clean up everything with our rm -rf trap.
-    export TESTDIR=${TEMPDIR}
+    mkdir "${TEMPDIR}/go"
+    export TESTDIR=${TEMPDIR}/go
     export TESTDATADIR=${SRCROOT}/test/testdata
     export SRCROOT=${SRCROOT}
 
     ./e2e_go_tests.sh ${GO_TEST_ARGS}
-    duration "e2e_go_tests.sh"
-
-    rm -rf "${TEMPDIR}"
-
-    if ! ${NO_BUILD} ; then
-        rm -rf ${PKG_ROOT}
-    fi
-
-    echo "----------------------------------------------------------------------"
-    echo "  DONE: E2E"
-    echo "----------------------------------------------------------------------"
+    duration "go integration tests"
 fi # if E2E_TEST_FILTER == "" or == "GO"
+
+if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "EXPECT" ]; then
+    # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
+    # This allows us to clean up everything with our rm -rf trap.
+    mkdir "${TEMPDIR}/expect"
+    export TESTDIR=${TEMPDIR}/expect
+    export TESTDATADIR=${SRCROOT}/test/testdata
+    export SRCROOT=${SRCROOT}
+
+    ./e2e_go_tests.sh -e ${GO_TEST_ARGS}
+    duration "expect tests"
+fi # if E2E_TEST_FILTER == "" or == "EXPECT"
+
+echo "----------------------------------------------------------------------"
+echo "  DONE: E2E"
+echo "----------------------------------------------------------------------"

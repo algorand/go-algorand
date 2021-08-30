@@ -1163,6 +1163,10 @@ var dryrunRemoteCmd = &cobra.Command{
 						trace = *txnResult.LogicSigTrace
 					}
 				}
+				if txnResult.Cost != nil {
+					fmt.Fprintf(os.Stdout, "tx[%d] cost: %d\n", i, *txnResult.Cost)
+				}
+
 				fmt.Fprintf(os.Stdout, "tx[%d] messages:\n", i)
 				for _, msg := range msgs {
 					fmt.Fprintf(os.Stdout, "%s\n", msg)
