@@ -70,16 +70,16 @@ func (b *bitmask) trimBitmask(entries int) {
 		bestSize = (entries-numExists)*2 + 1
 	}
 	switch bitmaskType {
+	case 0:
+		*b = (*b)[:bestSize]
 	case 1:
 		(*b)[0] = 1
-		for i := entries; i < (len(*b) - 1) * 8; i++ {
-			b.setBit(i)
-		}
 		for i := range *b {
 			if i != 0 {
 				(*b)[i] = 255 - (*b)[i] // invert bits
 			}
 		}
+		*b = (*b)[:bestSize]
 	case 2:
 		newBitmask := make(bitmask, 1, bestSize)
 		newBitmask[0] = 2
@@ -93,7 +93,6 @@ func (b *bitmask) trimBitmask(entries int) {
 			}
 		}
 		*b = newBitmask
-		return
 	case 3:
 		newBitmask := make(bitmask, 1, bestSize)
 		newBitmask[0] = 3
@@ -107,11 +106,7 @@ func (b *bitmask) trimBitmask(entries int) {
 			}
 		}
 		*b = newBitmask
-		return
-	default:
 	}
-
-	*b = (*b)[:bestSize]
 }
 
 // iterate through the elements of bitmask without expanding it.
