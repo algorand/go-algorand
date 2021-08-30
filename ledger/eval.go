@@ -41,6 +41,9 @@ import (
 // ErrNoSpace indicates insufficient space for transaction in block
 var ErrNoSpace = errors.New("block does not have space for transaction")
 
+// ErrRoundZero is self-explanatory
+var ErrRoundZero = errors.New("cannot start evaluator for round 0")
+
 // maxPaysetHint makes sure that we don't allocate too much memory up front
 // in the block evaluator, since there cannot reasonably be more than this
 // many transactions in a block.
@@ -392,6 +395,21 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 		maxTxnBytesPerBlock = proto.MaxTxnBytesPerBlock
 	}
 
+	if hdr.Round == 0 {
+		return nil, ErrRoundZero
+	}
+
+	prevHeader, err := l.BlockHdr(hdr.Round - 1)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"can't evaluate block %d without previous header: %v", hdr.Round, err)
+	}
+
+	prevProto, ok := config.Consensus[prevHeader.CurrentProtocol]
+	if !ok {
+		return nil, protocol.Error(prevHeader.CurrentProtocol)
+	}
+
 	base := &roundCowBase{
 		l: l,
 		// round that lookups come from is previous block.  We validate
@@ -399,6 +417,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 		// If we are not validating, we must have previously checked
 		// an agreement.Certificate attesting that hdr is valid.
 		rnd:      hdr.Round - 1,
+		txnCount: prevHeader.TxnCounter,
 		proto:    proto,
 		accounts: make(map[basics.Address]basics.AccountData),
 	}
@@ -406,6 +425,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 	eval := &BlockEvaluator{
 		validate:            validate,
 		generate:            generate,
+		prevHeader:          prevHeader,
 		block:               bookkeeping.Block{BlockHeader: hdr},
 		proto:               proto,
 		genesisHash:         l.GenesisHash(),
@@ -422,35 +442,18 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 		eval.block.Payset = make([]transactions.SignedTxnInBlock, 0, paysetHint)
 	}
 
-	prevProto := proto
+	base.compactCertNextRnd = eval.prevHeader.CompactCert[protocol.CompactCertBasic].CompactCertNextRound
 
-	if hdr.Round > 0 {
-		var err error
-		eval.prevHeader, err = l.BlockHdr(base.rnd)
-		if err != nil {
-			return nil, fmt.Errorf("can't evaluate block %v without previous header: %v", hdr.Round, err)
-		}
+	// Check if compact certs are being enabled as of this block.
+	if base.compactCertNextRnd == 0 && proto.CompactCertRounds != 0 {
+		// Determine the first block that will contain a Merkle
+		// commitment to the voters.  We need to account for the
+		// fact that the voters come from CompactCertVotersLookback
+		// rounds ago.
+		votersRound := (hdr.Round + basics.Round(proto.CompactCertVotersLookback)).RoundUpToMultipleOf(basics.Round(proto.CompactCertRounds))
 
-		base.txnCount = eval.prevHeader.TxnCounter
-		base.compactCertNextRnd = eval.prevHeader.CompactCert[protocol.CompactCertBasic].CompactCertNextRound
-
-		var ok bool
-		prevProto, ok = config.Consensus[eval.prevHeader.CurrentProtocol]
-		if !ok {
-			return nil, protocol.Error(eval.prevHeader.CurrentProtocol)
-		}
-
-		// Check if compact certs are being enabled as of this block.
-		if base.compactCertNextRnd == 0 && proto.CompactCertRounds != 0 {
-			// Determine the first block that will contain a Merkle
-			// commitment to the voters.  We need to account for the
-			// fact that the voters come from CompactCertVotersLookback
-			// rounds ago.
-			votersRound := (hdr.Round + basics.Round(proto.CompactCertVotersLookback)).RoundUpToMultipleOf(basics.Round(proto.CompactCertRounds))
-
-			// The first compact cert will appear CompactCertRounds after that.
-			base.compactCertNextRnd = votersRound + basics.Round(proto.CompactCertRounds)
-		}
+		// The first compact cert will appear CompactCertRounds after that.
+		base.compactCertNextRnd = votersRound + basics.Round(proto.CompactCertRounds)
 	}
 
 	prevTotals, err := l.Totals(eval.prevHeader.Round)
