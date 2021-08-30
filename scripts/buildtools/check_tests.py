@@ -3,6 +3,7 @@ print("===== STARTED RUNNING check_tests.py =====")
 import json
 import sys
 import argparse
+NUMBER_OF_NODES = 4
 
 # Arguments parsing / help menu
 parser = argparse.ArgumentParser(description='Verify test results for skipped tests and tests with multiple passes.')
@@ -10,10 +11,8 @@ parser.add_argument('tests_results_filepath', metavar='RESULTS_FILE',
     help='json format test results file path (e.g. /tmp/results/testresults.json)')
 args = parser.parse_args()
 
-# Go through the given file one json object at a time, and record into lists
-total = set()
-passedWDupes = []
-partitionSkipped = set()
+# Go through the given file one json object at a time, and record into a dict
+AllTestResults = {}
 with open(args.tests_results_filepath) as f:
     for jsonObj in f:
         testDict = json.loads(jsonObj)
@@ -21,90 +20,90 @@ with open(args.tests_results_filepath) as f:
             continue
         
         fullTestName = testDict['Package'] + ' ' + testDict['Test']
-        total.add(fullTestName)
+        if fullTestName not in AllTestResults:
+            AllTestResults[fullTestName] = {}
+            AllTestResults[fullTestName]['ran'] = 0
+            AllTestResults[fullTestName]['skipped_due_to_partitioning'] = 0
+            # AllTestResults[fullTestName]['other_reasons'] = []
+
         # actions can be: output, run, skip, pass
         if 'pass' in testDict["Action"]:
-            passedWDupes.append(fullTestName)
-        if 'Output' in testDict and 'due to partitioning' in testDict['Output']:
-            partitionSkipped.add(fullTestName)
+            AllTestResults[fullTestName]['ran'] += 1
+        elif 'Output' in testDict:
+            if 'due to partitioning' in testDict['Output']:
+                AllTestResults[fullTestName]['skipped_due_to_partitioning'] += 1
+            # elif not any(x in testDict['Output']for x in ['--- SKIP', '=== RUN', '--- PASS', '=== PAUSE', '=== CONT']):
+                # AllTestResults[fullTestName]['other_reasons'].append(testDict['Output'])
+
+            
 
 f.close()
 
 # === Calculate results ===
 
-# Total seen (deduped)
-# total
-
-# Passed with duplicates (needed for checking which tests passed multiple times)
-# passedWDupes
-
-# Passed without duplicates (deduped)
-passed = set(passedWDupes)
-
-# Skipped at least once due to partition (deduped)
-# partitionSkipped
-
-# Skipped due to partition and never passed (deduped)
-partitionSkippedNotPass = partitionSkipped - passed
-
-# Skipped due to other reasons (deduped)
-skippedNotPartition = total - passed.union(partitionSkipped)
-
-# Total not passed (deduped)
-notPassed = total - passed
-
 # Sort and print messages with colored prefix
-red_text_color = "\033[0;31m"
-green_text_color = "\033[0;32m"
-yellow_text_color = "\033[0;33m"
-normal_text_color = "\033[0;0m"
-def printColor(message, color=normal_text_color):
-    print("{}{}{}".format(color, message, normal_text_color))
+RED_TEXT_COLOR = "\033[0;31m"
+GREEN_TEXT_COLOR = "\033[0;32m"
+YELLOW_TEXT_COLOR = "\033[0;33m"
+NORMAL_TEXT_COLOR = "\033[0;0m"
+def printColor(message, color=NORMAL_TEXT_COLOR):
+    print(f"{color}{message}{NORMAL_TEXT_COLOR}")
 
 # Record error message for sys.exit(errorMessage)
 errorMessage = ''
 
-# Check tests not passed for misc reasons
-print("==================================================")
-if len(skippedNotPartition):
-    print("{} tests didn't pass due to other reasons (Maybe on purpose)".format(len(skippedNotPartition)))
-    print("Here are the ones that didn't pass due to other reasons: ")
-    print(*sorted(list(skippedNotPartition)), sep = "\n")
+# Check for tests that ran multiple times
+printColor("=========== RAN MULTIPLE TIMES ===================", YELLOW_TEXT_COLOR)
+listOfMultipleRuns = []
+for x in AllTestResults:
+    if AllTestResults[x]['ran'] > 1:
+        listOfMultipleRuns.append(x + " -- ran " + str(AllTestResults[x]['ran']) + " times. (Can probably be fixed by adding \"partitiontest.PartitionTest()\")")
+countMultipleRuns = len(listOfMultipleRuns) 
+if countMultipleRuns:
+    printColor(f"The above {countMultipleRuns} tests ran multiple times:", RED_TEXT_COLOR)
+    [printColor(f"{x}", RED_TEXT_COLOR) for x in sorted(listOfMultipleRuns)]
+    printColor(f"The above {countMultipleRuns} tests ran multiple times:", RED_TEXT_COLOR)
 else:
-    print("No tests skipped for other reasons.")
-print("==================================================")
+    printColor("All tests that ran, ran only once ... OK", GREEN_TEXT_COLOR)
+printColor("==================================================", YELLOW_TEXT_COLOR)
 
-# Check for duplicates in the passed tests
-print("==================================================")
-if len(passedWDupes) != len(passed):
-    testDuplicates = set([testName + " - " + str(passedWDupes.count(testName)) for testName in passedWDupes if passedWDupes.count(testName) > 1])
-    print("{} tests passed multiple times!!".format(len(testDuplicates)))
-    print("Here are the duplicates and number of times passed: ")
-    print(*sorted(testDuplicates), sep = "\n")
+# Check intentionally skipped tests
+printColor("============= INTENTIONALLY SKIPPED ==============", YELLOW_TEXT_COLOR)
+# countSkippedOther = sum([1 for x in AllTestResults if 'other_reasons' in AllTestResults[x] and len(AllTestResults[x]['other_reasons'])])
+listOfSkippedIntentionally = []
+[listOfSkippedIntentionally.append(x) for x in AllTestResults if (AllTestResults[x]['ran'] == 0 and AllTestResults[x]['skipped_due_to_partitioning'] < NUMBER_OF_NODES)]
+countSkippedIntentionally = len(listOfSkippedIntentionally)
+if countSkippedIntentionally:
+    printColor(f"The following {countSkippedIntentionally} tests were skipped intentionally:", YELLOW_TEXT_COLOR)
+    [printColor(f"{x} -- skipped intentionally (please double check)", YELLOW_TEXT_COLOR) for x in sorted(listOfSkippedIntentionally)]
+    printColor(f"The above {countSkippedIntentionally} tests were skipped intentionally:", YELLOW_TEXT_COLOR)
 else:
-    print("All tests that passed, passed only once ... OK")
-print("==================================================")
+    printColor("No tests skipped intentionally.", GREEN_TEXT_COLOR)
+printColor("==================================================", YELLOW_TEXT_COLOR)
 
-# Check tests not passed due to partition
-print("==================================================")
-if len(partitionSkippedNotPass):
-    print("{} tests didn't pass due to partition!!".format(len(partitionSkippedNotPass)))
-    print("Here are the ones that didn't pass due to partition: ")
-    [printColor(x, red_text_color) for x in sorted(list(partitionSkippedNotPass))]
-    errorMessage += "{}FAIL ERROR:{} {} tests didn't pass due to partition!! (Scroll up top to see which)\n".format(red_text_color, normal_text_color, len(partitionSkippedNotPass))
+# Check tests unintentionally (due to partition)
+printColor("============= UNINTENTIONALLY SKIPPED ============", YELLOW_TEXT_COLOR)
+listOfSkippedUnintentionally = []
+[listOfSkippedUnintentionally.append(x) for x in AllTestResults if (AllTestResults[x]['ran'] == 0 and AllTestResults[x]['skipped_due_to_partitioning'] >= NUMBER_OF_NODES)]
+countSkippedUnintentionally = len(listOfSkippedIntentionally)
+if countSkippedUnintentionally:
+    printColor(f"{countSkippedUnintentionally} tests were skipped UNintentionally", RED_TEXT_COLOR)
+    [printColor(f"{x} -- skipped UNintentionally. (due to partitiontest.PartitionTest() being called twice?)", RED_TEXT_COLOR) for x in sorted(listOfSkippedIntentionally)]
+    printColor(f"{countSkippedUnintentionally} tests were skipped UNintentionally.", RED_TEXT_COLOR)
 else:
-    print("No tests skipped due to partition.")
-print("==================================================")
+    printColor("No tests skipped UNintentionally (due to partitioning).", GREEN_TEXT_COLOR)
+printColor("==================================================", YELLOW_TEXT_COLOR)
 
 # === Summary ===
-print("==================================================")
-print("Saw {} tests total".format(len(total)))
-print("{} passed before dedup".format(len(passedWDupes)))
-print("{} passed after dedup".format(len(passed)))
-print("{} skipped due to partition".format(len(partitionSkippedNotPass)))
-print("{} skipped for misc reasons (Maybe on purpose)".format(len(skippedNotPartition)))
-print("{} total skipped".format(len(notPassed)))
-print("==================================================")
+printColor("==================== SUMMARY =====================", YELLOW_TEXT_COLOR)
+
+printColor(f"Saw {len(AllTestResults)} unique tests", GREEN_TEXT_COLOR if countSkippedIntentionally != 0 else RED_TEXT_COLOR)
+print(f"{countSkippedIntentionally + countSkippedUnintentionally} tests skipped total")
+printColor(f"{sum(1 for x in AllTestResults if AllTestResults[x]['ran'] > 0)} tests ran", GREEN_TEXT_COLOR if countSkippedIntentionally != 0 else RED_TEXT_COLOR)
+printColor(f"{countSkippedIntentionally} tests were skipped intentionally. (They were probably disabled, please double check)", GREEN_TEXT_COLOR if countSkippedIntentionally == 0 else YELLOW_TEXT_COLOR)
+printColor(f"{countMultipleRuns} tests ran multiple times. (Can probably be fixed by adding \"partitiontest.PartitionTest()\")", GREEN_TEXT_COLOR if countMultipleRuns == 0 else RED_TEXT_COLOR)
+printColor(f"{countSkippedUnintentionally} tests were skipped UNintentionally. (Due to partitioning multiple times? maybe due to partitiontest.PartitionTest() being called twice?)", GREEN_TEXT_COLOR if countSkippedUnintentionally == 0 else RED_TEXT_COLOR)
+printColor("==================================================", YELLOW_TEXT_COLOR)
 
 print("===== FINISHED RUNNING check_tests.py =====")
 sys.exit(errorMessage)
