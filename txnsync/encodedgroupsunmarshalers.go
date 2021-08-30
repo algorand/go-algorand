@@ -37,8 +37,11 @@ func nextSlice(src *[]byte, dst []byte, size int) error {
 	return nil
 }
 
+// getNibble returns the nibble at the given index from the provided
+// byte array. A errDataMissing is returned if index is beyond the size
+// of teh array.
 func getNibble(b []byte, index int) (byte, error) {
-	if index > len(b)*2 {
+	if index >= len(b)*2 {
 		return 0, errDataMissing
 	}
 	if index%2 == 0 {
@@ -93,18 +96,18 @@ func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitm
 	return
 }
 
-func (stub *txGroupsEncodingStub) reconstructSignedTransactions(signedTxns []transactions.SignedTxn, genesisID string, genesisHash crypto.Digest) (err error) {
-	err = stub.BitmaskSig.iterate(int(stub.TotalTransactionsCount), len(stub.Sig)/len(crypto.Signature{}), func(i int, index int) error {
+func (stub *txGroupsEncodingStub) reconstructSignedTransactions(signedTxns []transactions.SignedTxn, genesisID string, genesisHash crypto.Digest) error {
+	err := stub.BitmaskSig.iterate(int(stub.TotalTransactionsCount), len(stub.Sig)/len(crypto.Signature{}), func(i int, _ int) error {
 		return nextSlice(&stub.Sig, signedTxns[i].Sig[:], len(crypto.Signature{}))
 	})
 	if err != nil {
 		return err
 	}
 
-	if err := stub.reconstructMsigs(signedTxns); err != nil {
+	if err = stub.reconstructMsigs(signedTxns); err != nil {
 		return fmt.Errorf("failed to msigs: %w", err)
 	}
-	if err := stub.reconstructLsigs(signedTxns); err != nil {
+	if err = stub.reconstructLsigs(signedTxns); err != nil {
 		return fmt.Errorf("failed to lsigs: %w", err)
 	}
 	err = stub.BitmaskAuthAddr.iterate(int(stub.TotalTransactionsCount), len(stub.AuthAddr)/crypto.DigestSize, func(i int, index int) error {
