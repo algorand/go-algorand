@@ -336,3 +336,83 @@ submit:  tx_submit
 	eval.txn(t, fundgold.Noted("2"), fmt.Sprintf("asset %d missing", asaIndex))
 	l.endBlock(t, eval)
 }
+
+// TestClawbackAction ensures an app address can act as clawback address.
+func TestClawbackAction(t *testing.T) {
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	// Would be better to pull these out of block, or at least check them.
+	asaIndex := basics.AssetIndex(1)
+	appIndex := basics.AppIndex(2)
+
+	asa := txntest.Txn{
+		Type:   "acfg",
+		Sender: addrs[0],
+		AssetParams: basics.AssetParams{
+			Total:     1000000,
+			Decimals:  3,
+			UnitName:  "oz",
+			AssetName: "Gold",
+			URL:       "https://gold.rush/",
+			Clawback:  appIndex.Address(),
+		},
+	}
+
+	app := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+         tx_begin
+
+         int axfer
+         tx_field TypeEnum
+
+         txn Assets 0
+         tx_field XferAsset
+
+         txn Accounts 1
+         tx_field AssetSender
+
+         txn Accounts 2
+         tx_field AssetReceiver
+
+         int 1000
+         tx_field AssetAmount
+
+         tx_submit
+`),
+	}
+
+	optin := txntest.Txn{
+		Type:          "axfer",
+		Sender:        addrs[1],
+		AssetReceiver: addrs[1],
+		XferAsset:     asaIndex,
+	}
+	eval := l.nextBlock(t)
+	eval.txns(t, &asa, &app, &optin)
+	l.endBlock(t, eval)
+
+	bystander := addrs[2] // Has no authority of its own
+	overpay := txntest.Txn{
+		Type:     "pay",
+		Sender:   bystander,
+		Receiver: bystander,
+		Fee:      2000, // Overpay fee so that app account can be unfunded
+	}
+	clawmove := txntest.Txn{
+		Type:          "appl",
+		Sender:        bystander,
+		ApplicationID: appIndex,
+		ForeignAssets: []basics.AssetIndex{asaIndex},
+		Accounts:      []basics.Address{addrs[0], addrs[1]},
+	}
+	eval = l.nextBlock(t)
+	eval.txgroup(t, &overpay, &clawmove)
+	l.endBlock(t, eval)
+
+	amount, _ := l.asa(t, addrs[1], asaIndex)
+	require.Equal(t, amount, uint64(1000))
+}
