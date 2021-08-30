@@ -338,8 +338,6 @@ func MakeStringType() Type {
 func MakeTupleType(argumentTypes []Type) (Type, error) {
 	if len(argumentTypes) >= (1<<16) || len(argumentTypes) == 0 {
 		return Type{}, fmt.Errorf("tuple type child type number >= 2^16 error")
-	} else if len(argumentTypes) == 0 {
-		return Type{}, fmt.Errorf("tuple type child type 0 error")
 	}
 	return Type{
 		enumIndex:    Tuple,
@@ -402,13 +400,12 @@ func (t Type) ByteLen() (int, error) {
 				byteLen++
 			}
 			return byteLen, nil
-		} else {
-			elemByteLen, err := t.childTypes[0].ByteLen()
-			if err != nil {
-				return -1, err
-			}
-			return int(t.staticLength) * elemByteLen, nil
 		}
+		elemByteLen, err := t.childTypes[0].ByteLen()
+		if err != nil {
+			return -1, err
+		}
+		return int(t.staticLength) * elemByteLen, nil
 	case Tuple:
 		size := 0
 		for i := 0; i < len(t.childTypes); i++ {
@@ -792,7 +789,7 @@ func tupleDecoding(valueBytes []byte, valueType Type) (Value, error) {
 			}
 			dynamicIndex := binary.BigEndian.Uint16(valueBytes[iterIndex : iterIndex+2])
 			if len(dynamicSegments) > 0 {
-				dynamicSegments[len(dynamicSegments)-1].right = int(dynamicIndex) - 1
+				dynamicSegments[len(dynamicSegments)-1].right = int(dynamicIndex)
 			}
 			dynamicSegments = append(dynamicSegments, segment{
 				left:  int(dynamicIndex),
@@ -838,7 +835,7 @@ func tupleDecoding(valueBytes []byte, valueType Type) (Value, error) {
 		}
 	}
 	if len(dynamicSegments) > 0 {
-		dynamicSegments[len(dynamicSegments)-1].right = len(valueBytes) - 1
+		dynamicSegments[len(dynamicSegments)-1].right = len(valueBytes)
 		iterIndex = len(valueBytes)
 	}
 	if iterIndex < len(valueBytes) {
@@ -853,11 +850,11 @@ func tupleDecoding(valueBytes []byte, valueType Type) (Value, error) {
 	}
 	for i := 0; i < len(segIndexArr); i++ {
 		if i%2 == 1 {
-			if i != len(segIndexArr)-1 && segIndexArr[i]+1 != segIndexArr[i+1] {
+			if i != len(segIndexArr)-1 && segIndexArr[i] != segIndexArr[i+1] {
 				return Value{}, fmt.Errorf("dynamic segment should sit next to each other")
 			}
 		} else {
-			if segIndexArr[i] >= segIndexArr[i+1] {
+			if segIndexArr[i] > segIndexArr[i+1] {
 				return Value{}, fmt.Errorf("dynamic segment should display a [l, r] space")
 			}
 		}
@@ -866,7 +863,7 @@ func tupleDecoding(valueBytes []byte, valueType Type) (Value, error) {
 	segIndex := 0
 	for i := 0; i < len(valueType.childTypes); i++ {
 		if valuePartition[i] == nil {
-			valuePartition[i] = valueBytes[dynamicSegments[segIndex].left : dynamicSegments[segIndex].right+1]
+			valuePartition[i] = valueBytes[dynamicSegments[segIndex].left : dynamicSegments[segIndex].right]
 			segIndex++
 		}
 	}
@@ -1005,8 +1002,6 @@ func MakeStaticArray(values []Value) (Value, error) {
 func MakeTuple(values []Value) (Value, error) {
 	if len(values) >= (1 << 16) {
 		return Value{}, fmt.Errorf("tuple make error: pass in argument number larger than 2^16")
-	} else if len(values) == 0 {
-		return Value{}, fmt.Errorf("tuple make error: 0 argument passed in")
 	}
 	tupleType := make([]Type, len(values))
 	for i := 0; i < len(values); i++ {

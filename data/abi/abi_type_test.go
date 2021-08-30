@@ -425,7 +425,6 @@ func TestTypeFromStringInvalid(t *testing.T) {
 		"(,uint128,byte[])",
 		"(address,ufixed64x5,)",
 		"(byte[16],somethingwrong)",
-		"()",
 		"(                )",
 		"((uint32)",
 		"(byte,,byte)",
