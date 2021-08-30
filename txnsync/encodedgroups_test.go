@@ -56,7 +56,7 @@ func badEncodeTransactionGroups(t *testing.T, s *syncState, inTxnGroups []transa
 	for _, txGroup := range inTxnGroups {
 		if len(txGroup.Transactions) > 1 {
 			for _, txn := range txGroup.Transactions {
-				err := stub.deconstructSignedTransactions(index, &txn)
+				err := stub.deconstructSignedTransaction(index, &txn)
 				require.NoError(t, err)
 				index++
 			}
@@ -73,7 +73,7 @@ func badEncodeTransactionGroups(t *testing.T, s *syncState, inTxnGroups []transa
 					}
 					stub.BitmaskGroup.setBit(index)
 				}
-				err := stub.deconstructSignedTransactions(index, &txn)
+				err := stub.deconstructSignedTransaction(index, &txn)
 				require.NoError(t, err)
 				index++
 			}

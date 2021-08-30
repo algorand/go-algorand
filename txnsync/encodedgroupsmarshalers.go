@@ -36,7 +36,7 @@ func compactNibblesArray(b []byte) []byte {
 }
 
 // deconstructs SignedTxn's into lists of fields and bitmasks
-func (stub *txGroupsEncodingStub) deconstructSignedTransactions(i int, txn *transactions.SignedTxn) error {
+func (stub *txGroupsEncodingStub) deconstructSignedTransaction(i int, txn *transactions.SignedTxn) error {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	if !txn.Sig.MsgIsZero() {
 		if len(stub.BitmaskSig) == 0 {

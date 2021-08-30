@@ -243,7 +243,7 @@ func TestEncodingDecoding(t *testing.T) {
 	s.node = &justRandomFakeNode{}
 	var encodingParams requestParams
 
-	filters := []func(int, *syncState) (filter bloom.GenericFilter, filterType bloomFilterTypes){
+	filters := []func(int, *syncState) (filter bloom.GenericFilter, filterType bloomFilterType){
 		filterFactoryXor8, filterFactoryXor32, filterFactoryBloom}
 
 	// For each filter type
@@ -284,7 +284,7 @@ func TestDecodingErrors(t *testing.T) {
 func TestBloomFilterTest(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	filters := []func(int, *syncState) (filter bloom.GenericFilter, filterType bloomFilterTypes){
+	filters := []func(int, *syncState) (filter bloom.GenericFilter, filterType bloomFilterType){
 		filterFactoryXor8, filterFactoryXor32, filterFactoryBloom}
 
 	for _, filterFactory = range filters {

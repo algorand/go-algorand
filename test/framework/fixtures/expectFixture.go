@@ -98,6 +98,10 @@ func (ef *ExpectFixture) removeTestDir(workingDir string) (err error) {
 
 // MakeExpectTest creates an expect test fixture for the current directory
 func MakeExpectTest(t *testing.T) *ExpectFixture {
+	if skipExpectTests() {
+		t.Skip("Expect tests disabled by environment variables.")
+	}
+
 	ef := &ExpectFixture{}
 	ef.expectFiles = make(map[string]string) // map expect test to full file name.
 	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
@@ -110,6 +114,33 @@ func MakeExpectTest(t *testing.T) *ExpectFixture {
 	err = ef.initialize(t)
 	require.NoError(SynchronizedTest(t), err)
 	return ef
+}
+
+func skipExpectTests() bool {
+	// Explicitly enabled.
+	if strings.ToUpper(os.Getenv("RUN_EXPECT")) == "TRUE" {
+		return false
+	}
+	if strings.ToUpper(os.Getenv("RUN_EXPECT")) == "FALSE" {
+		return true
+	}
+
+	// If any of the CI systems didn't set RUN_EXPECT, disable them.
+	if strings.ToUpper(os.Getenv("CI")) == "TRUE" {
+		return true
+	}
+	if strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
+		return true
+	}
+	if strings.ToUpper(os.Getenv("TRAVIS")) == "TRUE" {
+		return true
+	}
+	if strings.ToUpper(os.Getenv("JENKINS_URL")) != "" {
+		return true
+	}
+
+	// Implicitly enable for devs running tests.
+	return false
 }
 
 // Run Process all expect script files with suffix Test.exp within the current directory

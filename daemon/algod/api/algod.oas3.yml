@@ -1247,6 +1247,10 @@
             },
             "type": "array"
           },
+          "cost": {
+            "description": "Execution cost of app call transaction",
+            "type": "integer"
+          },
           "disassembly": {
             "description": "Disassembled program line by line.",
             "items": {

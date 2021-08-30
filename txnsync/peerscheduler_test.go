@@ -129,25 +129,25 @@ func TestScheduleNewRound(t *testing.T) {
 	peers2 := []Peer{
 		Peer{
 			lastSentMessageSequenceNumber: 321,
-			isOutgoing:                    false,
 		},
 		Peer{
 			lastSentMessageSequenceNumber: 654,
-			isOutgoing:                    true,
 		},
 		Peer{
 			lastSentMessageSequenceNumber: 987,
-			isOutgoing:                    true,
+		},
+		Peer{
+			lastSentMessageSequenceNumber: 146,
 		},
 	}
 
 	ps.schedulerPeer(&peers[0], 2*time.Millisecond)
 	ps.schedulerPeer(&peers[1], 1*time.Millisecond)
 	ps.schedulerPeer(&peers[2], 3*time.Millisecond)
+	require.Equal(t, 3, ps.Len())
 
-	ps.scheduleNewRound([]*Peer{&peers2[0], &peers2[1], &peers2[2]}, true)
-	require.Equal(t, 1, ps.Len())
-	require.Equal(t, uint64(321), ps.peers[0].peer.lastSentMessageSequenceNumber)
+	ps.scheduleNewRound([]*Peer{&peers2[0], &peers2[1], &peers2[2], &peers2[3]})
+	require.Equal(t, 4, ps.Len())
 
 }
 
