@@ -60,8 +60,7 @@ func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitm
 	// It stops at index nextSetBitIndex, or stops when all in txnGroups are visited.
 	addGroupHashesFunc := func(nextSetBitIndex int, count int) error {
 		remainingTxnGroups := txnGroups[tStart:]
-		for t := range remainingTxnGroups {
-			txns := remainingTxnGroups[t]
+		for t, txns := range remainingTxnGroups {
 			if len(txns.Transactions) == 1 && index != nextSetBitIndex {
 				index++
 				continue
