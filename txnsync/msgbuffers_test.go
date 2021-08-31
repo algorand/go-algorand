@@ -113,21 +113,31 @@ func TestMessageBuffersPool(t *testing.T) {
 // TestTxIDSlicePool tests that the transaction id pool can be retrieved and has proper length/capacity properties
 func TestTxIDSlicePool(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	maxTestCount := 200
+	for testCount := 0; testCount < maxTestCount; testCount++ {
+		for i := 10; i < 100; i += 10 {
+			txIDs := getTxIDSliceBuffer(i)
+			require.Equal(t, 0, len(txIDs))
+			require.GreaterOrEqual(t, cap(txIDs), i)
+			releaseTxIDSliceBuffer(txIDs)
+		}
 
-	for i := 10; i < 100; i += 10 {
-		txIDs := getTxIDSliceBuffer(i)
+		// Test that one of the previous buffers can be reused
+		// We can assess this because all the previous buffers created
+		// had a capacity greater than 10, so if one of these buffers
+		// has a buffer size of at least 10 (when we asked for 5), we can
+		// be assured that we have reused a previous buffer
+		txIDs := getTxIDSliceBuffer(5)
 		require.Equal(t, 0, len(txIDs))
-		require.GreaterOrEqual(t, cap(txIDs), i)
+		require.GreaterOrEqual(t, cap(txIDs), 5)
+		if cap(txIDs) < 10 {
+			// repeat this test again. it looks like the GC collected all the content
+			// of the pool and forced us to allocate a new buffer.
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
 		releaseTxIDSliceBuffer(txIDs)
+		return
 	}
-
-	// Test that one of the previous buffers can be reused
-	// We can assess this because all the previous buffers created
-	// had a capacity greater than 10, so if one of these buffers
-	// has a buffer size of at least 10 (when we asked for 5), we can
-	// be assured that we have reused a previous buffer
-	txIDs := getTxIDSliceBuffer(5)
-	require.Equal(t, 0, len(txIDs))
-	require.GreaterOrEqual(t, cap(txIDs), 10)
-	releaseTxIDSliceBuffer(txIDs)
+	require.FailNow(t, "failed to get a 5 entries buffer from slice pool")
 }

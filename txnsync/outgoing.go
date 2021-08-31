@@ -161,7 +161,7 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 			}
 		}
 		if (ops & peerOpsReschedule) == peerOpsReschedule {
-			s.scheduler.schedulerPeer(peer, currentTime+scheduleOffset)
+			s.scheduler.schedulePeer(peer, currentTime+scheduleOffset)
 		}
 
 		if deadline.Expired() {

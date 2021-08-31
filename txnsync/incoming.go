@@ -299,7 +299,7 @@ incomingMessageLoop:
 		// if we had another message coming from this peer previously, we need to ensure there are not scheduled tasks.
 		s.scheduler.peerDuration(peer)
 
-		s.scheduler.schedulerPeer(peer, s.clock.Since())
+		s.scheduler.schedulePeer(peer, s.clock.Since())
 	}
 	if transactionPoolSize > 0 || transactionHandlerBacklogFull {
 		s.onTransactionPoolChangedEvent(MakeTransactionPoolChangeEvent(transactionPoolSize+totalAccumulatedTransactionsCount, transactionHandlerBacklogFull))
