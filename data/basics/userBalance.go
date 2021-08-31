@@ -310,7 +310,8 @@ const (
 	// AppCreatable is the CreatableType corresponds to apps
 	AppCreatable CreatableType = 1
 
-	MetadataHashLength int  = 32
+	// MetadataHashLength is the number of bytes of the MetadataHash
+	MetadataHashLength int = 32
 )
 
 // CreatableLocator stores both the creator, whose balance record contains
