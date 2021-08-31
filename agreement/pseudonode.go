@@ -295,7 +295,7 @@ func (n asyncPseudonode) makeProposals(round round, period period, accounts []ac
 		}
 
 		// attempt to make the vote
-		rv := rawVote{Sender: account.Address(), Round: round.Number, Branch: round.Branch, Period: period, Step: propose, Proposal: proposal}
+		rv := rawVote{Sender: account.Address(), Round: round.Number, Period: period, Step: propose, Proposal: proposal}
 		if params.AgreementMessagesContainBranch {
 			rv.Branch = round.Branch
 		}
