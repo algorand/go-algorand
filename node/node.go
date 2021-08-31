@@ -869,18 +869,6 @@ func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledgerco
 	node.hasSyncedSinceStartup = true
 	node.syncStatusMu.Unlock()
 
-	// Look for keyreg events and notify the participationRegistry.
-	for _, tx := range block.Payset {
-		if tx.Txn.Type == protocol.KeyRegistrationTx {
-			id := account.MakeParticipationID(tx.Txn.Sender, tx.Txn.KeyregTxnFields)
-			err := node.participationRegistry.Register(id, block.BlockHeader.Round)
-			// If the key is not installed on this node, ErrParticipationIDNotFound is quickly returned.
-			if err != nil && err != account.ErrParticipationIDNotFound {
-				node.log.Error("Problem with participationRegistry.Register: %w", err)
-			}
-		}
-	}
-
 	// Wake up oldKeyDeletionThread(), non-blocking.
 	select {
 	case node.oldKeyDeletionNotify <- struct{}{}:
@@ -1173,6 +1161,12 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 		}
 		participations = append(participations, part)
 		matchingAccountsKeys[part.Address()] = true
+
+		// This is usually a no-op, but the first time it will update the DB.
+		err := node.participationRegistry.Register(part.ParticipationID(), keysRound)
+		if err != nil {
+			node.log.Error("Failed to register participation key (%s) with participation registry.", part.ParticipationID())
+		}
 	}
 	// write the warnings per account only if we couldn't find a single valid key for that account.
 	for mismatchingAddr, warningFlags := range mismatchingAccountsKeys {

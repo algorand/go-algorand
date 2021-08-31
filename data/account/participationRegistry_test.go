@@ -19,7 +19,6 @@ package account
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"testing"
 
@@ -78,8 +77,8 @@ func TestParticipation_InsertGet(t *testing.T) {
 		a.NoError(err)
 		a.Equal(part.ParticipationID(), id)
 
-		record, err := registry.Get(part.ParticipationID())
-		a.NoError(err)
+		record := registry.Get(part.ParticipationID())
+		a.False(record.IsZero())
 		assertParticipation(t, part, record)
 	}
 
@@ -89,8 +88,7 @@ func TestParticipation_InsertGet(t *testing.T) {
 
 	// Data should be persisted immediately, re-initialize cache and verify GetAll.
 	registry.initializeCache()
-	results, err := registry.GetAll()
-	a.NoError(err)
+	results := registry.GetAll()
 	a.Len(results, 2)
 	for _, record := range results {
 		if record.Account == p.Parent {
@@ -126,8 +124,7 @@ func TestParticipation_Delete(t *testing.T) {
 
 	// Delete should be persisted immediately. Verify p removed in GetAll.
 	registry.initializeCache()
-	results, err := registry.GetAll()
-	a.NoError(err)
+	results := registry.GetAll()
 	a.Len(results, 1)
 	assertParticipation(t, p2, results[0])
 }
@@ -152,10 +149,10 @@ func TestParticipation_Register(t *testing.T) {
 	a.Equal(p2.ParticipationID(), id)
 
 	verifyEffectiveRound := func(id ParticipationID, first, last int) {
-		record, err := registry.Get(id)
-		a.NoError(err)
-		require.Equal(t, first, int(record.RegisteredFirst))
-		require.Equal(t, last, int(record.RegisteredLast))
+		record := registry.Get(id)
+		a.False(record.IsZero())
+		require.Equal(t, first, int(record.EffectiveFirst))
+		require.Equal(t, last, int(record.EffectiveLast))
 	}
 
 	// Register the first key.
@@ -223,11 +220,10 @@ func TestParticipation_Record(t *testing.T) {
 		a.NoError(err)
 	}
 
-	all, err := registry.GetAll()
+	all := registry.GetAll()
 	a.NotNil(all)
-	a.NoError(err)
 
-	err = registry.Record(p.Parent, 1000, Vote)
+	err := registry.Record(p.Parent, 1000, Vote)
 	a.NoError(err)
 	err = registry.Record(p.Parent, 2000, BlockProposal)
 	a.NoError(err)
@@ -236,8 +232,7 @@ func TestParticipation_Record(t *testing.T) {
 
 	// Verify that one and only one key was updated.
 	test := func(registry ParticipationRegistry) {
-		records, err := registry.GetAll()
-		a.NoError(err)
+		records := registry.GetAll()
 		a.Len(records, 3)
 		for _, record := range records {
 			if record.ParticipationID == p.ParticipationID() {
@@ -317,8 +312,8 @@ func TestParticipation_RecordMultipleUpdates(t *testing.T) {
 
 	// Force the DB to have 2 active keys for one account by tampering with the private cache variable
 	recordCopy := registry.cache[p2.ParticipationID()]
-	recordCopy.RegisteredFirst = p2.FirstValid
-	recordCopy.RegisteredLast = p2.LastValid
+	recordCopy.EffectiveFirst = p2.FirstValid
+	recordCopy.EffectiveLast = p2.LastValid
 	registry.cache[p2.ParticipationID()] = recordCopy
 	registry.dirty[p2.ParticipationID()] = struct{}{}
 	registry.Flush()
@@ -329,12 +324,12 @@ func TestParticipation_RecordMultipleUpdates(t *testing.T) {
 	a.NotEqual(p.ParticipationID(), p2.ParticipationID())
 	recordTest := make([]ParticipationRecord, 0)
 
-	recordP, err := registry.Get(p.ParticipationID())
-	a.NoError(err)
+	recordP := registry.Get(p.ParticipationID())
+	a.False(recordP.IsZero())
 	recordTest = append(recordTest, recordP)
 
-	recordP2, err := registry.Get(p2.ParticipationID())
-	a.NoError(err)
+	recordP2 := registry.Get(p2.ParticipationID())
+	a.False(recordP2.IsZero())
 	recordTest = append(recordTest, recordP2)
 
 	// Make sure both accounts are active for the test round
@@ -399,7 +394,7 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 			}
 
 			// Create Rolling entry
-			_, err = tx.Exec(`INSERT INTO Rolling (pk, registeredFirstRound, registeredLastRound) VALUES (?, ?, ?)`, pk, 1, 2000000)
+			_, err = tx.Exec(`INSERT INTO Rolling (pk, effectiveFirstRound, effectiveLastRound) VALUES (?, ?, ?)`, pk, 1, 2000000)
 			if err != nil {
 				return fmt.Errorf("unable insert rolling: %w", err)
 			}
@@ -423,21 +418,6 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 	err = registry.initializeCache()
 	a.EqualError(err, ErrMultipleKeysForID.Error())
 
-	// Registering the ID
-	registry.cache[id] = ParticipationRecord{
-		ParticipationID: id,
-		Account:         p.Parent,
-		FirstValid:      p.FirstValid,
-		LastValid:       p.LastValid,
-		KeyDilution:     p.KeyDilution,
-		RegisteredFirst: p.FirstValid,
-		RegisteredLast:  p.LastValid,
-	}
-	err = registry.Register(id, 1)
-	a.Error(err)
-	a.Contains(err.Error(), "unable to registering key with id")
-	a.EqualError(errors.Unwrap(err), ErrMultipleKeysForID.Error())
-
 	// Flushing changes detects that multiple records are updated
 	registry.dirty[id] = struct{}{}
 	err = registry.Flush()
@@ -458,8 +438,8 @@ func TestParticipation_NoKeyToUpdate(t *testing.T) {
 			FirstValid:      1,
 			LastValid:       2,
 			KeyDilution:     3,
-			RegisteredFirst: 4,
-			RegisteredLast:  5,
+			EffectiveFirst:  4,
+			EffectiveLast:   5,
 		}
 		err := registry.updateRollingFields(ctx, tx, record)
 		a.EqualError(err, ErrNoKeyForID.Error())
