@@ -72,8 +72,13 @@ ${gcmd} clerk rawsend -f "$T/group.stx"
 [ "$(balance "$SMALL")" = 846000 ] # 2 fees, 150,000 deposited
 [ "$(balance "$APPACCT")" = 150000 ]
 
+# Withdraw 20,000 in app. Confirm that inner txn is visible to API.
 TXID=$(appl "withdraw(uint64):void" --app-arg="int:20000" | txid)
-[ $(rest "/v2/transactions/pending/$TXID" | jq '.["inner-txns"][0].txn.txn.amt') = 20000 ]
+[ $(rest "/v2/transactions/pending/$TXID" \
+        | jq '.["inner-txns"][0].txn.txn.amt') = 20000 ]
+[ $(rest "/v2/transactions/pending/$TXID?format=msgpack" | msgpacktool -d \
+        | jq '.["inner-txns"][0].txn.txn.type') = '"pay"' ]
+
 [ "$(balance "$SMALL")" = 865000 ]   # 1 fee, 20,000 withdrawn
 [ "$(balance "$APPACCT")" = 129000 ] # 20k withdraw, fee paid by app account
 
