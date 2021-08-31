@@ -517,6 +517,12 @@ func makeProposalsTesting(accs testAccountData, round round, period period, fact
 		return nil, nil
 	}
 
+	params, err := ledger.ConsensusParams(ParamsRound(round.Number))
+	if err != nil {
+		logging.Base().Errorf("Could not get params for %v (proposal round %d): %v", round, ParamsRound(round.Number), err)
+		return nil, nil
+	}
+
 	// TODO this common code should be refactored out
 	var votes []vote
 	proposals := make([]proposal, 0)
@@ -528,7 +534,10 @@ func makeProposalsTesting(accs testAccountData, round round, period period, fact
 		}
 
 		// attempt to make the vote
-		rv := rawVote{Sender: accs.addresses[i], Round: round.Number, Branch: round.Branch, Period: period, Step: propose, Proposal: proposal}
+		rv := rawVote{Sender: accs.addresses[i], Round: round.Number, Period: period, Step: propose, Proposal: proposal}
+		if params.AgreementMessagesContainBranch {
+			rv.Branch = round.Branch
+		}
 		uv, err := makeVote(rv, accs.ots[i], accs.vrfs[i], ledger)
 		if err != nil {
 			logging.Base().Errorf("AccountManager.makeVotes: Could not create vote: %v", err)
