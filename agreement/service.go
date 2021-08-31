@@ -252,9 +252,14 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 		}
 
 		if enablePipelining(nextVersion) {
-			status = &pipelinePlayer{}
-			if enableShadowPlayer() {
-				status2 = &player{}
+			if !config.Consensus[nextVersion].AgreementMessagesContainBranch {
+				s.log.Errorf("pipelining enabled in round %d but no branch in agreement messages; fallback to non-pipelining", nextRound.Number)
+				status = &player{}
+			} else {
+				status = &pipelinePlayer{}
+				if enableShadowPlayer() {
+					status2 = &player{}
+				}
 			}
 		} else {
 			status = &player{}
