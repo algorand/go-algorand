@@ -27,6 +27,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TODO need testcase (bool[2], bool[2]), empty dynamic array
+
 func TestEncodeValid(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	for intSize := 8; intSize <= 512; intSize += 8 {
@@ -210,6 +212,70 @@ func TestEncodeValid(t *testing.T) {
 		stringTupleEncode, err := stringTuple.Encode()
 		require.NoError(t, err, "string tuple encoding should not return error")
 		require.Equal(t, expected, stringTupleEncode, "string tuple encoding not match expected")
+	})
+
+	t.Run("static bool array tuple encoding", func(t *testing.T) {
+		boolArr := []bool{true, true}
+		boolValArr := make([]Value, 2)
+		for i := 0; i < 2; i++ {
+			boolValArr[i] = MakeBool(boolArr[i])
+		}
+		boolArrVal, err := MakeStaticArray(boolValArr)
+		require.NoError(t, err, "make bool static array should not return error")
+		tupleVal, err := MakeTuple([]Value{boolArrVal, boolArrVal})
+		require.NoError(t, err, "make tuple value should not return error")
+		expected := []byte{
+			0b11000000,
+			0b11000000,
+		}
+		actual, err := tupleVal.Encode()
+		require.NoError(t, err, "encode tuple value should not return error")
+		require.Equal(t, expected, actual, "encode static bool tuple should be equal")
+	})
+
+	t.Run("static/dynamic bool array tuple encoding", func(t *testing.T) {
+		boolArr := []bool{true, true}
+		boolValArr := make([]Value, 2)
+		for i := 0; i < 2; i++ {
+			boolValArr[i] = MakeBool(boolArr[i])
+		}
+		boolArrStaticVal, err := MakeStaticArray(boolValArr)
+		require.NoError(t, err, "make static bool array should not return error")
+		boolArrDynamicVal, err := MakeDynamicArray(boolValArr, MakeBoolType())
+		require.NoError(t, err, "make dynamic bool array should not return error")
+		tupleVal, err := MakeTuple([]Value{boolArrStaticVal, boolArrDynamicVal})
+		require.NoError(t, err, "make tuple for static/dynamic bool array should not return error")
+		expected := []byte{
+			0b11000000,
+			0x00, 0x03,
+			0x00, 0x02, 0b11000000,
+		}
+		actual, err := tupleVal.Encode()
+		require.NoError(t, err, "tuple value encoding should not return error")
+		require.Equal(t, expected, actual, "encode static/dynamic bool array tuple should not return error")
+	})
+
+	t.Run("empty dynamic array tuple encoding", func(t *testing.T) {
+		emptyDynamicArray, err := MakeDynamicArray([]Value{}, MakeBoolType())
+		require.NoError(t, err, "make empty dynamic array should not return error")
+		tupleVal, err := MakeTuple([]Value{emptyDynamicArray, emptyDynamicArray})
+		require.NoError(t, err, "make empty dynamic array tuple should not return error")
+		expected := []byte{
+			0x00, 0x04, 0x00, 0x06,
+			0x00, 0x00, 0x00, 0x00,
+		}
+		actual, err := tupleVal.Encode()
+		require.NoError(t, err, "encode empty dynamic array tuple should not return error")
+		require.Equal(t, expected, actual, "encode empty dynamic array tuple does not match with expected")
+	})
+
+	t.Run("empty tuple encoding", func(t *testing.T) {
+		emptyTuple, err := MakeTuple([]Value{})
+		require.NoError(t, err, "make empty tuple should not return error")
+		expected := []byte{}
+		actual, err := emptyTuple.Encode()
+		require.NoError(t, err, "encode empty tuple should not return error")
+		require.Equal(t, expected, actual, "empty tuple encode should not return error")
 	})
 }
 
@@ -407,6 +473,116 @@ func TestDecodeValid(t *testing.T) {
 		)
 		require.NoError(t, err, "decoding dynamic tuple should not return error")
 		require.Equal(t, expected, actual, "dynamic tuple not match with expected")
+	})
+
+	t.Run("static bool array tuple decoding", func(t *testing.T) {
+		boolArr := []bool{true, true}
+		boolValArr := make([]Value, 2)
+		for i := 0; i < 2; i++ {
+			boolValArr[i] = MakeBool(boolArr[i])
+		}
+		boolArrVal, err := MakeStaticArray(boolValArr)
+		require.NoError(t, err, "make bool static array should not return error")
+		tupleVal, err := MakeTuple([]Value{boolArrVal, boolArrVal})
+		require.NoError(t, err, "make tuple value should not return error")
+		encodedInput := []byte{
+			0b11000000,
+			0b11000000,
+		}
+		decoded, err := Decode(encodedInput, Type{
+			enumIndex:    Tuple,
+			staticLength: 2,
+			childTypes: []Type{
+				{
+					enumIndex:    ArrayStatic,
+					staticLength: 2,
+					childTypes:   []Type{MakeBoolType()},
+				},
+				{
+					enumIndex:    ArrayStatic,
+					staticLength: 2,
+					childTypes:   []Type{MakeBoolType()},
+				},
+			},
+		})
+		require.NoError(t, err, "decode tuple value should not return error")
+		require.Equal(t, tupleVal, decoded, "decoded tuple value do not match with expected")
+	})
+
+	t.Run("static/dynamic bool array tuple decoding", func(t *testing.T) {
+		boolArr := []bool{true, true}
+		boolValArr := make([]Value, 2)
+		for i := 0; i < 2; i++ {
+			boolValArr[i] = MakeBool(boolArr[i])
+		}
+		boolArrStaticVal, err := MakeStaticArray(boolValArr)
+		require.NoError(t, err, "make static bool array should not return error")
+		boolArrDynamicVal, err := MakeDynamicArray(boolValArr, MakeBoolType())
+		require.NoError(t, err, "make dynamic bool array should not return error")
+		tupleVal, err := MakeTuple([]Value{boolArrStaticVal, boolArrDynamicVal})
+		require.NoError(t, err, "make tuple for static/dynamic bool array should not return error")
+		encodedInput := []byte{
+			0b11000000,
+			0x00, 0x03,
+			0x00, 0x02, 0b11000000,
+		}
+		decoded, err := Decode(encodedInput, Type{
+			enumIndex:    Tuple,
+			staticLength: 2,
+			childTypes: []Type{
+				{
+					enumIndex:    ArrayStatic,
+					staticLength: 2,
+					childTypes:   []Type{MakeBoolType()},
+				},
+				{
+					enumIndex:  ArrayDynamic,
+					childTypes: []Type{MakeBoolType()},
+				},
+			},
+		})
+		require.NoError(t, err, "decode tuple for static/dynamic bool array should not return error")
+		require.Equal(t, tupleVal, decoded, "decoded tuple value do not match with expected")
+	})
+
+	t.Run("empty dynamic array tuple decoding", func(t *testing.T) {
+		emptyDynamicArray, err := MakeDynamicArray([]Value{}, MakeBoolType())
+		require.NoError(t, err, "make empty dynamic array should not return error")
+		tupleVal, err := MakeTuple([]Value{emptyDynamicArray, emptyDynamicArray})
+		require.NoError(t, err, "make empty dynamic array tuple should not return error")
+		encodedInput := []byte{
+			0x00, 0x04, 0x00, 0x06,
+			0x00, 0x00, 0x00, 0x00,
+		}
+		decoded, err := Decode(encodedInput, Type{
+			enumIndex:    Tuple,
+			staticLength: 2,
+			childTypes: []Type{
+				{
+					enumIndex:  ArrayDynamic,
+					childTypes: []Type{MakeBoolType()},
+				},
+				{
+					enumIndex:  ArrayDynamic,
+					childTypes: []Type{MakeBoolType()},
+				},
+			},
+		})
+		require.NoError(t, err, "decode tuple for empty dynamic array should not return error")
+		require.Equal(t, tupleVal, decoded, "decoded tuple value do not match with expected")
+	})
+
+	t.Run("empty tuple decoding", func(t *testing.T) {
+		emptyTuple, err := MakeTuple([]Value{})
+		require.NoError(t, err, "make empty tuple should not return error")
+		encodedInput := []byte{}
+		decoded, err := Decode(encodedInput, Type{
+			enumIndex:    Tuple,
+			staticLength: 0,
+			childTypes:   []Type{},
+		})
+		require.NoError(t, err, "decode empty tuple should not return error")
+		require.Equal(t, emptyTuple, decoded, "empty tuple encode should not return error")
 	})
 }
 
