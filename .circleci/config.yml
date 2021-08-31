@@ -222,7 +222,7 @@ workflows:
           matrix:
             parameters:
               job_type: ["amd64", "arm64", "mac_amd64"]
-              job_version: ["test", "test_nightly", "integration", "integration_nightly"]
+              job_version: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
           requires:
             - << matrix.job_type >>_<< matrix.job_version >>
       #- windows_x64_build
@@ -575,7 +575,7 @@ jobs:
     steps:
       - prepare_go
       - generic_integration:
-          result_subdir: amd64-e2e_subs
+          result_subdir: amd64_e2e_expect
           short_test_flag: "-short"
 
   amd64_e2e_expect_nightly:
@@ -587,7 +587,7 @@ jobs:
     steps:
       - prepare_go
       - generic_integration:
-          result_subdir: amd64-e2e_subs_nightly
+          result_subdir: amd64_e2e_expect_nightly
           no_output_timeout: 45m
       - slack/notify:
           event: fail
@@ -701,7 +701,7 @@ jobs:
       - checkout
       - prepare_go
       - generic_integration:
-          result_subdir: arm64-e2e_subs
+          result_subdir: arm64_e2e_expect
           short_test_flag: "-short"
 
   arm64_e2e_expect_nightly:
@@ -714,7 +714,7 @@ jobs:
       - checkout
       - prepare_go
       - generic_integration:
-          result_subdir: arm64-e2e_subs-nightly
+          result_subdir: arm64_e2e_expect_nightly
           no_output_timeout: 45m
       - slack/notify:
           event: fail
@@ -847,7 +847,7 @@ jobs:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
       - generic_integration:
-          result_subdir: mac-amd64-e2e_subs
+          result_subdir: mac_amd64_e2e_expect
           circleci_home: /Users/distiller
           short_test_flag: "-short"
 
@@ -862,7 +862,7 @@ jobs:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
       - generic_integration:
-          result_subdir: mac-amd64-e2e_subs-nightly
+          result_subdir: mac_amd64_e2e_expect_nightly
           circleci_home: /Users/distiller
           no_output_timeout: 45m
       - slack/notify:
@@ -894,7 +894,7 @@ jobs:
     parameters:
       job_type: # job_type: ["amd64", "arm64", "mac_amd64"]
         type: string
-      job_version: # job_version: ["test", "test_nightly", "integration", "integration_nightly"]
+      job_version: # job_version: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
         type: string
     steps:
       - checkout
