@@ -79,6 +79,10 @@ func TestAsyncIncomingMessageHandlerAndErrors(t *testing.T) {
 
 	// error decoding transaction groups
 	message.TxnBloomFilter.BloomFilterType = byte(xorBloomFilter32)
+	bf, _ := filterFactoryXor32(1, &s)
+	bf.Set([]byte("aoeu1234aoeu1234"))
+	message.TxnBloomFilter.BloomFilter, err = bf.MarshalBinary()
+	require.NoError(t, err)
 	message.TransactionGroups = packedTransactionGroups{Bytes: []byte{1}}
 	messageBytes = message.MarshalMsg(nil)
 	err = s.asyncIncomingMessageHandler(nil, nil, messageBytes, sequenceNumber)

@@ -25,14 +25,14 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func compactNibblesArray(b []byte) []byte {
-	if len(b)%2 == 1 {
-		b = append(b, byte(0))
+func compactNibblesArray(b *[]byte) {
+	if len(*b)%2 == 1 {
+		*b = append(*b, byte(0))
 	}
-	for index := 0; index*2 < len(b); index++ {
-		b[index] = b[index*2]*16 + b[index*2+1]
+	for index := 0; index*2 < len(*b); index++ {
+		(*b)[index] = (*b)[index*2]*16 + (*b)[index*2+1]
 	}
-	return b[0 : len(b)/2]
+	*b = (*b)[0 : len(*b)/2]
 }
 
 // deconstructs SignedTxn's into lists of fields and bitmasks
@@ -223,7 +223,7 @@ func (stub *txGroupsEncodingStub) finishDeconstructTxType() {
 	}
 	stub.TxType = newTxTypes
 	stub.TxTypeOffset = offset
-	stub.TxType = compactNibblesArray(stub.TxType)
+	compactNibblesArray(&stub.TxType)
 	stub.BitmaskTxType.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
@@ -640,7 +640,7 @@ func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn
 		stub.BitmaskForeignAssets.setBit(i)
 		stub.ForeignAssets = append(stub.ForeignAssets, txn.Txn.ForeignAssets)
 	}
-	if !txn.Txn.LocalStateSchema.MsgIsZero() {
+	if txn.Txn.LocalStateSchema.NumUint != 0 {
 		if len(stub.BitmaskLocalNumUint) == 0 {
 			stub.BitmaskLocalNumUint = make(bitmask, bitmaskLen)
 			stub.LocalNumUint = make([]uint64, 0, stub.TotalTransactionsCount)
@@ -648,7 +648,7 @@ func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn
 		stub.BitmaskLocalNumUint.setBit(i)
 		stub.LocalNumUint = append(stub.LocalNumUint, txn.Txn.LocalStateSchema.NumUint)
 	}
-	if !txn.Txn.LocalStateSchema.MsgIsZero() {
+	if txn.Txn.LocalStateSchema.NumByteSlice != 0 {
 		if len(stub.BitmaskLocalNumByteSlice) == 0 {
 			stub.BitmaskLocalNumByteSlice = make(bitmask, bitmaskLen)
 			stub.LocalNumByteSlice = make([]uint64, 0, stub.TotalTransactionsCount)
@@ -656,7 +656,7 @@ func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn
 		stub.BitmaskLocalNumByteSlice.setBit(i)
 		stub.LocalNumByteSlice = append(stub.LocalNumByteSlice, txn.Txn.LocalStateSchema.NumByteSlice)
 	}
-	if !txn.Txn.GlobalStateSchema.MsgIsZero() {
+	if txn.Txn.GlobalStateSchema.NumUint != 0 {
 		if len(stub.BitmaskGlobalNumUint) == 0 {
 			stub.BitmaskGlobalNumUint = make(bitmask, bitmaskLen)
 			stub.GlobalNumUint = make([]uint64, 0, stub.TotalTransactionsCount)
@@ -664,7 +664,7 @@ func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn
 		stub.BitmaskGlobalNumUint.setBit(i)
 		stub.GlobalNumUint = append(stub.GlobalNumUint, txn.Txn.GlobalStateSchema.NumUint)
 	}
-	if !txn.Txn.GlobalStateSchema.MsgIsZero() {
+	if txn.Txn.GlobalStateSchema.NumByteSlice != 0 {
 		if len(stub.BitmaskGlobalNumByteSlice) == 0 {
 			stub.BitmaskGlobalNumByteSlice = make(bitmask, bitmaskLen)
 			stub.GlobalNumByteSlice = make([]uint64, 0, stub.TotalTransactionsCount)
@@ -699,7 +699,7 @@ func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn
 }
 
 func (stub *txGroupsEncodingStub) finishDeconstructApplicationCallTxnFields() {
-	stub.OnCompletion = compactNibblesArray(stub.OnCompletion)
+	compactNibblesArray(&stub.OnCompletion)
 	stub.BitmaskApplicationID.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskOnCompletion.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskApplicationArgs.trimBitmask(int(stub.TotalTransactionsCount))

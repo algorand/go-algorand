@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"encoding/binary"
 	"errors"
 	"math"
 
@@ -94,7 +95,7 @@ func (bf *bloomFilter) encode() (out *encodedBloomFilter, err error) {
 	if bf.filter != nil {
 		out.BloomFilterType = byte(bf.filterType)
 		out.BloomFilter, err = bf.filter.MarshalBinary()
-		if err != nil {
+		if err != nil || len(out.BloomFilter) == 0 {
 			out = nil
 		} else {
 			bf.encoded = out
@@ -216,5 +217,5 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []tr
 }
 
 func txidToUint64(txID transactions.Txid) uint64 {
-	return uint64(txID[0]) + (uint64(txID[1]) << 8) + (uint64(txID[2]) << 16) + (uint64(txID[3]) << 24) + (uint64(txID[4]) << 32) + (uint64(txID[5]) << 40) + (uint64(txID[6]) << 48) + (uint64(txID[7]) << 56)
+	return binary.LittleEndian.Uint64(txID[:8])
 }

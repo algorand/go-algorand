@@ -17,7 +17,6 @@
 package txnsync
 
 import (
-	"bytes"
 	"errors"
 )
 
@@ -44,23 +43,23 @@ func (b *bitmask) trimBitmask(entries int) {
 	if *b == nil {
 		return
 	}
-	lastExists := 0
-	lastNotExists := 0
+	numBitsCase0 := 0
+	numBitsCase1 := 0
 	numExists := 0
 	for i := 0; i < entries; i++ {
 		byteIndex := i/8 + 1
 		if (*b)[byteIndex]&(1<<(i%8)) != 0 {
-			lastExists = i
+			numBitsCase0 = i + 1
 			numExists++
 		} else {
-			lastNotExists = i
+			numBitsCase1 = i + 1
 		}
 	}
 	bitmaskType := 0
-	bestSize := bytesNeededBitmask(lastExists)
-	if bestSize > bytesNeededBitmask(lastNotExists) {
+	bestSize := bytesNeededBitmask(numBitsCase0)
+	if bestSize > bytesNeededBitmask(numBitsCase1) {
 		bitmaskType = 1
-		bestSize = bytesNeededBitmask(lastNotExists)
+		bestSize = bytesNeededBitmask(numBitsCase1)
 	}
 	if bestSize > numExists*2+1 {
 		bitmaskType = 2
@@ -71,6 +70,8 @@ func (b *bitmask) trimBitmask(entries int) {
 		bestSize = (entries-numExists)*2 + 1
 	}
 	switch bitmaskType {
+	case 0:
+		*b = (*b)[:bestSize]
 	case 1:
 		(*b)[0] = 1
 		for i := range *b {
@@ -78,6 +79,7 @@ func (b *bitmask) trimBitmask(entries int) {
 				(*b)[i] = 255 - (*b)[i] // invert bits
 			}
 		}
+		*b = (*b)[:bestSize]
 	case 2:
 		newBitmask := make(bitmask, 1, bestSize)
 		newBitmask[0] = 2
@@ -91,7 +93,6 @@ func (b *bitmask) trimBitmask(entries int) {
 			}
 		}
 		*b = newBitmask
-		return
 	case 3:
 		newBitmask := make(bitmask, 1, bestSize)
 		newBitmask[0] = 3
@@ -105,11 +106,7 @@ func (b *bitmask) trimBitmask(entries int) {
 			}
 		}
 		*b = newBitmask
-		return
-	default:
 	}
-
-	*b = bytes.TrimRight(*b, "\x00")
 }
 
 // iterate through the elements of bitmask without expanding it.
@@ -127,7 +124,7 @@ func (b *bitmask) iterate(numTransactions int, numItems int, callback func(int, 
 	switch option {
 	case 0:
 		transactionIndex := 0
-		maxV := 1 + (numTransactions+7)/8
+		maxV := bytesNeededBitmask(numTransactions)
 		if len(*b) > maxV {
 			return errIndexNotFound
 		}
@@ -153,7 +150,7 @@ func (b *bitmask) iterate(numTransactions int, numItems int, callback func(int, 
 		}
 	case 1:
 		transactionIndex := 0
-		maxV := 1 + (numTransactions+7)/8
+		maxV := bytesNeededBitmask(numTransactions)
 		if len(*b) > maxV {
 			return errIndexNotFound
 		}
