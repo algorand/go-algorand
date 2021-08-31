@@ -248,7 +248,7 @@ func parseTupleContent(str string) ([]string, error) {
 	if len(emptyStrIndex) != len(parenSegmentRecord) {
 		return []string{},
 			fmt.Errorf("parsing error: cannot replace tuple segment back: " +
-				"number of empty placeholder unmatch with sub-tuple number")
+				"number of empty placeholders do not match with number of sub-tuples")
 	}
 
 	// replace back the tuple-formed type str
@@ -336,7 +336,7 @@ func MakeStringType() Type {
 
 // MakeTupleType makes tuple ABI type by taking an array of tuple element types as argument.
 func MakeTupleType(argumentTypes []Type) (Type, error) {
-	if len(argumentTypes) >= (1<<16) || len(argumentTypes) == 0 {
+	if len(argumentTypes) >= (1 << 16) {
 		return Type{}, fmt.Errorf("tuple type child type number >= 2^16 error")
 	}
 	return Type{
@@ -456,7 +456,10 @@ func (v Value) arrayToTuple() (Value, error) {
 			return Value{}, err
 		}
 		strByte := []byte(strValue)
-		childT, valueArr = make([]Type, len(strByte)), make([]Value, len(strByte))
+
+		childT = make([]Type, len(strByte))
+		valueArr = make([]Value, len(strByte))
+
 		for i := 0; i < len(strByte); i++ {
 			childT[i] = MakeByteType()
 			valueArr[i] = MakeByte(strByte[i])
@@ -466,7 +469,10 @@ func (v Value) arrayToTuple() (Value, error) {
 		if err != nil {
 			return Value{}, err
 		}
-		childT, valueArr = make([]Type, 32), make([]Value, 32)
+
+		childT = make([]Type, 32)
+		valueArr = make([]Value, 32)
+
 		for i := 0; i < 32; i++ {
 			childT[i] = MakeByteType()
 			valueArr[i] = MakeByte(addr[i])
@@ -620,8 +626,11 @@ func tupleEncoding(v Value) ([]byte, error) {
 	if len(tupleElems) != len(v.ABIType.childTypes) {
 		return []byte{}, fmt.Errorf("tuple abi child type number unmatch with tuple argument number")
 	}
-	heads, tails := make([][]byte, len(v.ABIType.childTypes)), make([][]byte, len(v.ABIType.childTypes))
+
+	heads := make([][]byte, len(v.ABIType.childTypes))
+	tails := make([][]byte, len(v.ABIType.childTypes))
 	isDynamicIndex := make(map[int]bool)
+
 	for i := 0; i < len(v.ABIType.childTypes); i++ {
 		if tupleElems[i].ABIType.IsDynamic() {
 			headsPlaceholder := []byte{0x00, 0x00}
@@ -780,12 +789,14 @@ func Decode(valueByte []byte, valueType Type) (Value, error) {
 // tupleDecoding takes a byte string and an ABI tuple type,
 // and decodes the bytes into an ABI tuple value.
 func tupleDecoding(valueBytes []byte, valueType Type) (Value, error) {
-	dynamicSegments, valuePartition := make([]segment, 0), make([][]byte, 0)
+	dynamicSegments := make([]segment, 0)
+	valuePartition := make([][]byte, 0)
 	iterIndex := 0
+
 	for i := 0; i < len(valueType.childTypes); i++ {
 		if valueType.childTypes[i].IsDynamic() {
 			if len(valueBytes[iterIndex:]) < 2 {
-				return Value{}, fmt.Errorf("ill formed tuple encoding")
+				return Value{}, fmt.Errorf("ill formed tuple dynamic typed value encoding")
 			}
 			dynamicIndex := binary.BigEndian.Uint16(valueBytes[iterIndex : iterIndex+2])
 			if len(dynamicSegments) > 0 {
@@ -819,6 +830,8 @@ func tupleDecoding(valueBytes []byte, valueType Type) (Value, error) {
 					}
 					i += after
 					iterIndex++
+				} else {
+					return Value{}, fmt.Errorf("expected before bool number mod 8 == 0")
 				}
 			} else {
 				// not bool ...
@@ -843,26 +856,18 @@ func tupleDecoding(valueBytes []byte, valueType Type) (Value, error) {
 	}
 
 	// check segment indices are valid
-	segIndexArr := make([]int, len(dynamicSegments)*2)
 	for index, seg := range dynamicSegments {
-		segIndexArr[index*2] = seg.left
-		segIndexArr[index*2+1] = seg.right
-	}
-	for i := 0; i < len(segIndexArr); i++ {
-		if i%2 == 1 {
-			if i != len(segIndexArr)-1 && segIndexArr[i] != segIndexArr[i+1] {
-				return Value{}, fmt.Errorf("dynamic segment should sit next to each other")
-			}
-		} else {
-			if segIndexArr[i] > segIndexArr[i+1] {
-				return Value{}, fmt.Errorf("dynamic segment should display a [l, r] space")
-			}
+		if seg.left > seg.right {
+			return Value{}, fmt.Errorf("dynamic segment should display a [l, r] space with l <= r")
+		}
+		if index != len(dynamicSegments)-1 && seg.right != dynamicSegments[index+1].left {
+			return Value{}, fmt.Errorf("dynamic segment should be consecutive")
 		}
 	}
 
 	segIndex := 0
 	for i := 0; i < len(valueType.childTypes); i++ {
-		if valuePartition[i] == nil {
+		if valueType.childTypes[i].IsDynamic() {
 			valuePartition[i] = valueBytes[dynamicSegments[segIndex].left:dynamicSegments[segIndex].right]
 			segIndex++
 		}
@@ -962,7 +967,8 @@ func MakeAddress(value [32]byte) Value {
 	}
 }
 
-// MakeDynamicArray takes an array of ABI value and returns an ABI dynamic length array value.
+// MakeDynamicArray takes an array of ABI value (can be empty) and element type,
+// returns an ABI dynamic length array value.
 func MakeDynamicArray(values []Value, elemType Type) (Value, error) {
 	if len(values) >= (1 << 16) {
 		return Value{}, fmt.Errorf("dynamic array make error: pass in argument number larger than 2^16")
