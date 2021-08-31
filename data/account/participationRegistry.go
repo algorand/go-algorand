@@ -53,6 +53,7 @@ type ParticipationRecord struct {
 	// OneTimeSignatureSecrets
 }
 
+// IsZero returns true if the object contains zero values.
 func (r ParticipationRecord) IsZero() bool {
 	return r == (ParticipationRecord{})
 }
