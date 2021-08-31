@@ -295,6 +295,41 @@ func convertToLogItems(txn node.TxnWithStatus, aidx *uint64) (*[]generated.LogIt
 	return logItems, nil
 }
 
+func convertInners(txn *node.TxnWithStatus) *[]preEncodedTxInfo {
+	inner := make([]preEncodedTxInfo, len(txn.ApplyData.EvalDelta.InnerTxns))
+	for i, itxn := range txn.ApplyData.EvalDelta.InnerTxns {
+		inner[i] = convertTxn(&itxn)
+	}
+	return &inner
+}
+
+func convertTxn(txn *transactions.SignedTxnWithAD) preEncodedTxInfo {
+	// This copies from handlers.PendingTransactionInformation, with
+	// simplifications because we have a SignedTxnWithAD rather than
+	// TxnWithStatus, and we know this txn has committed.
+
+	response := preEncodedTxInfo{Txn: txn.SignedTxn}
+
+	response.ClosingAmount = &txn.ApplyData.ClosingAmount.Raw
+	response.AssetClosingAmount = &txn.ApplyData.AssetClosingAmount
+	response.SenderRewards = &txn.ApplyData.SenderRewards.Raw
+	response.ReceiverRewards = &txn.ApplyData.ReceiverRewards.Raw
+	response.CloseRewards = &txn.ApplyData.CloseRewards.Raw
+
+	// Indexes can't be set until we allow acfg or appl
+	// response.AssetIndex = computeAssetIndexFromTxn(txn, v2.Node.Ledger())
+	// response.ApplicationIndex = computeAppIndexFromTxn(txn, v2.Node.Ledger())
+
+	// Deltas, Logs, and Inners can not be set until we allow appl
+	// response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)
+	//	response.Logs, err = convertToLogItems(txn, response.ApplicationIndex)
+	//	if err != nil {
+	//		return internalError(ctx, err, err.Error(), v2.Log)
+	//	}
+	//	response.Inners = convertInners(&txn)
+	return response
+}
+
 // printableUTF8OrEmpty checks to see if the entire string is a UTF8 printable string.
 // If this is the case, the string is returned as is. Otherwise, the empty string is returned.
 func printableUTF8OrEmpty(in string) string {

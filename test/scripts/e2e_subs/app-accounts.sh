@@ -4,6 +4,13 @@ filename=$(basename "$0")
 scriptname="${filename%.*}"
 date "+${scriptname} start %Y%m%d_%H%M%S"
 
+
+my_dir="$(dirname "$0")"
+source "$my_dir/rest.sh" "$@"
+function rest() {
+    curl -q -s -H "Authorization: Bearer $PUB_TOKEN" "$NET$1"
+}
+
 set -e
 set -x
 set -o pipefail
@@ -26,13 +33,16 @@ function balance {
     goal account balance -a "$acct" | awk '{print $1}'
 }
 
+function txid {
+    grep -o -E 'txid [A-Z0-9]{52}' | cut -c 6- | head -1
+}
 [ "$(balance "$ACCOUNT")" = 999998999000 ]
 [ "$(balance "$SMALL")" =        1000000 ]
 
 APPID=$(${gcmd} app create --creator "${SMALL}" --approval-prog=${TEAL}/app-escrow.teal --global-byteslices 4 --global-ints 0 --local-byteslices 0 --local-ints 1  --clear-prog=${TEAL}/approve-all.teal | grep Created | awk '{ print $6 }')
 [ "$(balance "$SMALL")" = 999000 ] # 1000 fee
 
-function call {
+function appl {
     method=$1; shift
     ${gcmd} app call --app-id="$APPID" --from="$SMALL" --app-arg="str:$method" "$@"
 }
@@ -53,40 +63,42 @@ function sign {
 ${gcmd} app optin --app-id "$APPID" --from "${SMALL}"
 [ "$(balance "$SMALL")" = 998000 ] # 1000 fee
 
-call "deposit():void" -o "$T/deposit.tx"
+appl "deposit():void" -o "$T/deposit.tx"
 payin 150000 -o "$T/pay1.tx"
 cat "$T/deposit.tx" "$T/pay1.tx" | ${gcmd} clerk group -i - -o "$T/group.tx"
 sign group
 ${gcmd} clerk rawsend -f "$T/group.stx"
+
 [ "$(balance "$SMALL")" = 846000 ] # 2 fees, 150,000 deposited
 [ "$(balance "$APPACCT")" = 150000 ]
 
-call "withdraw(uint64):void" --app-arg="int:20000"
+TXID=$(appl "withdraw(uint64):void" --app-arg="int:20000" | txid)
+[ $(rest "/v2/transactions/pending/$TXID" | jq '.["inner-txns"][0].txn.txn.amt') = 20000 ]
 [ "$(balance "$SMALL")" = 865000 ]   # 1 fee, 20,000 withdrawn
 [ "$(balance "$APPACCT")" = 129000 ] # 20k withdraw, fee paid by app account
 
-call "withdraw(uint64):void" --app-arg="int:10000" --fee 2000
+appl "withdraw(uint64):void" --app-arg="int:10000" --fee 2000
 [ "$(balance "$SMALL")" = 873000 ]   # 2000 fee, 10k withdrawn
 [ "$(balance "$APPACCT")" = 119000 ] # 10k withdraw, fee credit used
 
 # Try to get app account below zero
 # (By app logic, it's OK - 150k was deposited, but fees have cut in)
-call "withdraw(uint64):void" --app-arg="int:120000" && exit 1
+appl "withdraw(uint64):void" --app-arg="int:120000" && exit 1
 [ "$(balance "$SMALL")" = 873000 ]   # no change
 [ "$(balance "$APPACCT")" = 119000 ] # no change
 
 # Try to get app account below min balance by withdrawing too much
-call "withdraw(uint64):void" --app-arg="int:20000" && exit 1
+appl "withdraw(uint64):void" --app-arg="int:20000" && exit 1
 [ "$(balance "$SMALL")" = 873000 ]   # no change
 [ "$(balance "$APPACCT")" = 119000 ] # no change
 
 # Try to get app account below min balance b/c of fee
-call "withdraw(uint64):void" --app-arg="int:18001" && exit 1
+appl "withdraw(uint64):void" --app-arg="int:18001" && exit 1
 [ "$(balance "$SMALL")" = 873000 ]   # no change
 [ "$(balance "$APPACCT")" = 119000 ] # no change
 
 # Show that it works AT exactly min balance
-call "withdraw(uint64):void" --app-arg="int:18000"
+appl "withdraw(uint64):void" --app-arg="int:18000"
 [ "$(balance "$SMALL")" = 890000 ]   # +17k (18k - fee)
 [ "$(balance "$APPACCT")" = 100000 ] # -19k (18k + fee)
 
