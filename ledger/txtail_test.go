@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -40,7 +41,7 @@ func prepareTxTail(tail *txTail, lastRound basics.Round, lookback basics.Round, 
 				UpgradeState: bookkeeping.UpgradeState{
 					CurrentProtocol: protocol.ConsensusCurrentVersion,
 				},
-				TimeStamp: int64(crypto.RandUint64() % 100 * 1000),
+				TimeStamp: int64(crypto.RandUint64()%100*1000) + 1,
 			},
 		}
 
@@ -120,15 +121,15 @@ func TestTxTailGetBlockTimeStamp(t *testing.T) {
 
 	// Test timestamp retrieval
 	for rnd := basics.Round(1); rnd < lastRound; rnd++ {
-		ts, err := tail.getBlockTimeStamp(rnd - lastRound)
-		if rnd == lastRound-1 {
-			// Should error if we try to retrieve timestamp for 1002nd block
+		if rnd == 1 {
+			// Should error if we try to retrieve timestamp for round 1 since we loaded round 2 - 1002
+			_, err := tail.getBlockTimeStamp(rnd)
 			require.Errorf(t, err, "round %d", rnd)
 		} else {
-			require.True(t, ts >= 0)
+			ts, _ := tail.getBlockTimeStamp(rnd)
+			fmt.Println("ts {} rnd {}", ts, rnd)
+			require.True(t, ts > 0)
 		}
-		ts, _ = tail.getBlockTimeStamp(rnd)
-		require.True(t, ts >= 0)
 	}
 }
 
@@ -167,6 +168,7 @@ func (t *txTailTestLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 
 	return blk, nil
 }
+
 func makeTxTailTestTransaction(r basics.Round, txnIdx int) (txn transactions.SignedTxnInBlock) {
 	txn.Txn.FirstValid = r
 	txn.Txn.LastValid = r + testTxTailValidityRange

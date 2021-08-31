@@ -146,7 +146,6 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 }
 
 func (t *txTail) committedUpTo(rnd basics.Round) basics.Round {
-	// Keep maxlife + 1 blocks for timestamp queries
 	maxlife := basics.Round(t.recent[rnd].proto.MaxTxnLife)
 	for r := range t.recent {
 		if r+maxlife < rnd {
@@ -157,7 +156,8 @@ func (t *txTail) committedUpTo(rnd basics.Round) basics.Round {
 		delete(t.lastValid, t.lowWaterMark)
 	}
 
-	return (rnd + 1).SubSaturate(maxlife)
+	// Return one less block since tail keeps MaxTxnLife+1 blocks for timestamp queries
+	return (rnd).SubSaturate(maxlife)
 }
 
 // txtailMissingRound is returned by checkDup when requested for a round number below the low watermark
