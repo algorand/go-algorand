@@ -19,6 +19,8 @@ package account
 import (
 	"database/sql"
 	"fmt"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // PartTableSchemaName is the name of the table in the Schema Versions table storing the table + version details
@@ -39,12 +41,18 @@ func partInstallDatabase(tx *sql.Tx) error {
 		--* participation keys
 		vrf BLOB,         --*  msgpack encoding of ParticipationAccount.vrf
 		voting BLOB,      --*  msgpack encoding of ParticipationAccount.voting
-		blockProof BLOB,  --*  msgpack encoding of ParticipationAccount.BlockProof
 
 		firstValid INTEGER,
 		lastValid INTEGER,
 
 		keyDilution INTEGER NOT NULL DEFAULT 0
+		);`)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(`CREATE TABLE BlockProof (
+		blockProof BLOB  --*  msgpack encoding of ParticipationAccount.BlockProof
 	);`)
 	if err != nil {
 		return err
@@ -122,7 +130,14 @@ func updateDB(tx *sql.Tx, partVersion int) (int, error) {
 	}
 
 	if partVersion == 2 {
-		_, err := tx.Exec("ALTER TABLE ParticipationAccount ADD blockProof BLOB")
+		//_, err := tx.Exec("ALTER TABLE ParticipationAccount ADD blockProof BLOB")
+		_, err := tx.Exec("CREATE TABLE BlockProof (blockProof BLOB);")
+		if err != nil {
+			return 0, err
+		}
+
+		emptyBlockProofB := protocol.Encode(&merklekeystore.Signer{})
+		_, err = tx.Exec("INSERT INTO BlockProof (blockProof) VALUES (?)", emptyBlockProofB)
 		if err != nil {
 			return 0, err
 		}
