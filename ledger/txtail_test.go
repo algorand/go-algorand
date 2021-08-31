@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -121,13 +120,12 @@ func TestTxTailGetBlockTimeStamp(t *testing.T) {
 
 	// Test timestamp retrieval
 	for rnd := basics.Round(1); rnd < lastRound; rnd++ {
-		if rnd == 1 {
+		if rnd == basics.Round(1) {
 			// Should error if we try to retrieve timestamp for round 1 since we loaded round 2 - 1002
 			_, err := tail.getBlockTimeStamp(rnd)
 			require.Errorf(t, err, "round %d", rnd)
 		} else {
 			ts, _ := tail.getBlockTimeStamp(rnd)
-			fmt.Println("ts {} rnd {}", ts, rnd)
 			require.True(t, ts > 0)
 		}
 	}
