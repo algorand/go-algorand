@@ -122,16 +122,18 @@ func (bf *bloomFilter) test(txID transactions.Txid) bool {
 }
 
 func filterFactoryBloom(numEntries int, s *syncState) (filter bloom.GenericFilter, filterType bloomFilterType) {
-	shuffler := uint32(s.node.Random(0xffffffff))
+	shuffler := uint32(s.node.Random(math.MaxUint64))
 	sizeBits, numHashes := bloom.Optimal(numEntries, bloomFilterFalsePositiveRate)
 	return bloom.New(sizeBits, numHashes, shuffler), multiHashBloomFilter
 }
 
 func filterFactoryXor8(numEntries int, s *syncState) (filter bloom.GenericFilter, filterType bloomFilterType) { //nolint:deadcode,unused
+	s.xorBuilder.RandomNumberGeneratorSeed = s.node.Random(math.MaxUint64)
 	return bloom.NewXor8(numEntries, &s.xorBuilder), xorBloomFilter8
 }
 
 func filterFactoryXor32(numEntries int, s *syncState) (filter bloom.GenericFilter, filterType bloomFilterType) {
+	s.xorBuilder.RandomNumberGeneratorSeed = s.node.Random(math.MaxUint64)
 	return bloom.NewXor(numEntries, &s.xorBuilder), xorBloomFilter32
 }
 
