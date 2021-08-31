@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
@@ -274,16 +275,16 @@ func (stub *txGroupsEncodingStub) reconstructTxnHeader(signedTxns []transactions
 
 func (stub *txGroupsEncodingStub) reconstructKeyregTxnFields(signedTxns []transactions.SignedTxn) (err error) {
 	// should all have same number of elements
-	if len(stub.VotePK)/crypto.DigestSize != len(stub.VoteKeyDilution) || len(stub.SelectionPK)/crypto.DigestSize != len(stub.VoteKeyDilution) {
+	if len(stub.VotePK)/len(crypto.OneTimeSignatureVerifier{}) != len(stub.VoteKeyDilution) || len(stub.SelectionPK)/len(crypto.VRFVerifier{}) != len(stub.VoteKeyDilution) {
 		return errDataMissing
 	}
 	err = stub.BitmaskKeys.iterate(int(stub.TotalTransactionsCount), len(stub.VoteKeyDilution), func(i int, index int) error {
 		signedTxns[i].Txn.VoteKeyDilution = stub.VoteKeyDilution[index]
-		err := nextSlice(&stub.VotePK, signedTxns[i].Txn.VotePK[:], crypto.DigestSize)
+		err := nextSlice(&stub.VotePK, signedTxns[i].Txn.VotePK[:], len(crypto.OneTimeSignatureVerifier{}))
 		if err != nil {
 			return err
 		}
-		return nextSlice(&stub.SelectionPK, signedTxns[i].Txn.SelectionPK[:], crypto.DigestSize)
+		return nextSlice(&stub.SelectionPK, signedTxns[i].Txn.SelectionPK[:], len(crypto.VRFVerifier{}))
 	})
 	if err != nil {
 		return err
@@ -396,8 +397,8 @@ func (stub *txGroupsEncodingStub) reconstructAssetParams(signedTxns []transactio
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskMetadataHash.iterate(int(stub.TotalTransactionsCount), len(stub.MetadataHash)/crypto.DigestSize, func(i int, index int) error {
-		return nextSlice(&stub.MetadataHash, signedTxns[i].Txn.AssetParams.MetadataHash[:], crypto.DigestSize)
+	err = stub.BitmaskMetadataHash.iterate(int(stub.TotalTransactionsCount), len(stub.MetadataHash)/basics.MetadataHashLength, func(i int, index int) error {
+		return nextSlice(&stub.MetadataHash, signedTxns[i].Txn.AssetParams.MetadataHash[:], basics.MetadataHashLength)
 	})
 	if err != nil {
 		return err

@@ -309,6 +309,8 @@ const (
 
 	// AppCreatable is the CreatableType corresponds to apps
 	AppCreatable CreatableType = 1
+
+	MetadataHashLength int  = 32
 )
 
 // CreatableLocator stores both the creator, whose balance record contains
@@ -360,7 +362,7 @@ type AssetParams struct {
 
 	// MetadataHash specifies a commitment to some unspecified asset
 	// metadata. The format of this metadata is up to the application.
-	MetadataHash [32]byte `codec:"am"`
+	MetadataHash [MetadataHashLength]byte `codec:"am"`
 
 	// Manager specifies an account that is allowed to change the
 	// non-zero addresses in this AssetParams.
