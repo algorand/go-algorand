@@ -34,8 +34,16 @@ import (
 func makeVoteTesting(addr basics.Address, vrfSecs *crypto.VRFSecrets, otSecs crypto.OneTimeSigner, ledger Ledger, round round, period period, step step, digest crypto.Digest) (vote, error) {
 	var proposal proposalValue
 	proposal.BlockDigest = digest
-	rv := rawVote{Sender: addr, Round: round.Number, Branch: round.Branch, Period: period, Step: step, Proposal: proposal}
-	v, fatalerr := makeVote(rv, otSecs, vrfSecs, LedgerWithoutBranch(ledger))
+	l := LedgerWithoutBranch(ledger)
+	params, err := l.ConsensusParams(round.Number)
+	if err != nil {
+		return vote{}, err
+	}
+	rv := rawVote{Sender: addr, Round: round.Number, Period: period, Step: step, Proposal: proposal}
+	if params.AgreementMessagesContainBranch {
+		rv.Branch = round.Branch
+	}
+	v, fatalerr := makeVote(rv, otSecs, vrfSecs, l)
 	if fatalerr != nil {
 		panic(fatalerr)
 	}
