@@ -101,6 +101,10 @@ func (x *roundCowBase) checkDup(firstValid, lastValid basics.Round, txid transac
 	return x.l.CheckDup(x.proto, x.rnd+1, firstValid, lastValid, txid, TxLease{txl})
 }
 
+func (x *roundCowBase) getBlockTimeStamp(rnd basics.Round) (int64, error) {
+	return x.l.GetBlockTimeStamp(rnd)
+}
+
 func (x *roundCowBase) txnCounter() uint64 {
 	return x.txnCount
 }
@@ -367,6 +371,7 @@ type ledgerForCowBase interface {
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
+	GetBlockTimeStamp(basics.Round) (int64, error)
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header

@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -40,6 +41,10 @@ func (ml *mockLedger) lookup(addr basics.Address) (basics.AccountData, error) {
 
 func (ml *mockLedger) checkDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl ledgercore.Txlease) error {
 	return nil
+}
+
+func (ml *mockLedger) getBlockTimeStamp(rnd basics.Round) (int64, error) {
+	return int64(crypto.RandUint64() % 100 * 1000), nil
 }
 
 func (ml *mockLedger) getAssetCreator(assetIdx basics.AssetIndex) (basics.Address, bool, error) {

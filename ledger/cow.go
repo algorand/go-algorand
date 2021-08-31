@@ -39,6 +39,7 @@ import (
 type roundCowParent interface {
 	lookup(basics.Address) (basics.AccountData, error)
 	checkDup(basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
+	getBlockTimeStamp(basics.Round) (int64, error)
 	txnCounter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	compactCertNext() basics.Round
@@ -143,11 +144,6 @@ func (cb *roundCowState) prevTimestamp() int64 {
 	return cb.mods.PrevTimestamp
 }
 
-func (cb *roundCowState) getBlockTimeStamp(r basics.Round) int64 {
-	blockHdr, _ := cb.blockHdr(r)
-	return blockHdr.TimeStamp
-}
-
 func (cb *roundCowState) getCreatableIndex(groupIdx int) basics.CreatableIndex {
 	return cb.trackedCreatables[groupIdx]
 }
@@ -186,6 +182,10 @@ func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid trans
 	}
 
 	return cb.lookupParent.checkDup(firstValid, lastValid, txid, txl)
+}
+
+func (cb *roundCowState) getBlockTimeStamp(rnd basics.Round) (int64, error) {
+	return cb.lookupParent.getBlockTimeStamp(rnd)
 }
 
 func (cb *roundCowState) txnCounter() uint64 {

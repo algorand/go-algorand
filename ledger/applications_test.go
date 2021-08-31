@@ -122,8 +122,8 @@ func (c *mockCowForLogicLedger) prevTimestamp() int64 {
 	return c.ts
 }
 
-func (c *mockCowForLogicLedger) getBlockTimeStamp(r basics.Round) int64 {
-	return c.ts
+func (c *mockCowForLogicLedger) getBlockTimeStamp(r basics.Round) (int64, error) {
+	return c.ts, nil
 }
 
 func (c *mockCowForLogicLedger) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
@@ -216,7 +216,6 @@ func TestLogicLedgerGetters(t *testing.T) {
 	a.Equal(aidx, l.ApplicationID())
 	a.Equal(round, l.Round())
 	a.Equal(ts, l.LatestTimestamp())
-	a.Equal(ts, l.GetBlockTimeStamp(c.rnd))
 	a.True(l.OptedIn(addr1, 0))
 	a.True(l.OptedIn(addr1, aidx))
 	a.False(l.OptedIn(addr, 0))

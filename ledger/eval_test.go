@@ -1212,7 +1212,7 @@ func (ledger *Ledger) endBlock(t testing.TB, eval *BlockEvaluator) *ValidatedBlo
 	return validatedBlock
 }
 
-// lookup gets the current accountdaa for an address
+// lookup gets the current accountdata for an address
 func (ledger *Ledger) lookup(t testing.TB, addr basics.Address) basics.AccountData {
 	rnd := ledger.Latest()
 	ad, err := ledger.Lookup(rnd, addr)

@@ -477,6 +477,13 @@ func (l *Ledger) CheckDup(currentProto config.ConsensusParams, current basics.Ro
 	return l.txTail.checkDup(currentProto, current, firstValid, lastValid, txid, txl.Txlease)
 }
 
+// GetBlockTimeStamp returns the block Timestamp of a round.
+func (l *Ledger) GetBlockTimeStamp(rnd basics.Round) (int64, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.txTail.getBlockTimeStamp(rnd)
+}
+
 // Latest returns the latest known block round added to the ledger.
 func (l *Ledger) Latest() basics.Round {
 	return l.blockQ.latest()

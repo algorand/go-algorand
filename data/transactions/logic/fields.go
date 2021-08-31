@@ -178,7 +178,8 @@ var txnFieldSpecs = []txnFieldSpec{
 	{Sender, StackBytes, 0},
 	{Fee, StackUint64, 0},
 	{FirstValid, StackUint64, 0},
-	{FirstValidTime, StackUint64, 0},
+	// FirstValidTime was originally a dummy field in V0, and enabled in V5
+	{FirstValidTime, StackUint64, 5},
 	{LastValid, StackUint64, 0},
 	{Note, StackBytes, 0},
 	{Lease, StackBytes, 0},

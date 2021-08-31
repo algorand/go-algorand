@@ -920,6 +920,12 @@ func (aul *accountUpdatesLedgerEvaluator) CheckDup(config.ConsensusParams, basic
 	return fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initialization ")
 }
 
+// GetBlockTimeStamp gets the block timestamp of a specific round. It's not needed by the accountUpdatesLedgerEvaluator and implemented as a stub.
+func (aul *accountUpdatesLedgerEvaluator) GetBlockTimeStamp(rnd basics.Round) (int64, error) {
+	// this is a non-issue since this call will never be made on non-validating evaluation
+	return 0, fmt.Errorf("accountUpdatesLedgerEvaluator: tried to get block timestamp during accountUpdates initialization ")
+}
+
 // lookupWithoutRewards returns the account balance for a given address at a given round, without the reward
 func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
 	return aul.au.lookupWithoutRewards(rnd, addr, false /*don't sync*/)

@@ -29,8 +29,9 @@ import (
 const initialLastValidArrayLen = 256
 
 type roundTxMembers struct {
-	txleases map[ledgercore.Txlease]basics.Round // map of transaction lease to when it expires
-	proto    config.ConsensusParams
+	txleases  map[ledgercore.Txlease]basics.Round // map of transaction lease to when it expires
+	proto     config.ConsensusParams
+	timestamp int64
 }
 
 type txTail struct {
@@ -54,8 +55,9 @@ func (t *txTail) loadFromDisk(l ledgerForTracker) error {
 	// If the latest round is R, then any transactions from blocks strictly older than
 	// R + 1 - proto.MaxTxnLife
 	// could not be valid in the next round (R+1), and so are irrelevant.
-	// Thus we load the txids from blocks R+1-maxTxnLife to R, inclusive
-	old := (latest + 1).SubSaturate(basics.Round(proto.MaxTxnLife))
+	// We also want to query up to FirstValid - 1 block, so we load 1 extra block.
+	// Thus we load the txids from blocks R-maxTxnLife to R, inclusive.
+	old := (latest).SubSaturate(basics.Round(proto.MaxTxnLife))
 
 	t.lowWaterMark = latest
 	t.lastValid = make(map[basics.Round]map[transactions.Txid]struct{})
@@ -81,8 +83,9 @@ func (t *txTail) loadFromDisk(l ledgerForTracker) error {
 
 		consensusParams := config.Consensus[blk.CurrentProtocol]
 		t.recent[old] = roundTxMembers{
-			txleases: make(map[ledgercore.Txlease]basics.Round, len(payset)),
-			proto:    consensusParams,
+			txleases:  make(map[ledgercore.Txlease]basics.Round, len(payset)),
+			proto:     consensusParams,
+			timestamp: hdr.TimeStamp,
 		}
 
 		for _, txad := range payset {
@@ -132,8 +135,9 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	}
 
 	t.recent[rnd] = roundTxMembers{
-		txleases: delta.Txleases,
-		proto:    config.Consensus[blk.CurrentProtocol],
+		txleases:  delta.Txleases,
+		proto:     config.Consensus[blk.CurrentProtocol],
+		timestamp: blk.TimeStamp,
 	}
 
 	for txid, lv := range delta.Txids {
@@ -142,6 +146,7 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 }
 
 func (t *txTail) committedUpTo(rnd basics.Round) basics.Round {
+	// Keep maxlife + 1 blocks for timestamp queries
 	maxlife := basics.Round(t.recent[rnd].proto.MaxTxnLife)
 	for r := range t.recent {
 		if r+maxlife < rnd {
@@ -199,4 +204,12 @@ func (t *txTail) putLV(lastValid basics.Round, id transactions.Txid) {
 		t.lastValid[lastValid] = make(map[transactions.Txid]struct{})
 	}
 	t.lastValid[lastValid][id] = struct{}{}
+}
+
+func (t *txTail) getBlockTimeStamp(rnd basics.Round) (int64, error) {
+	if r, ok := t.recent[rnd]; ok {
+		return r.timestamp, nil
+	}
+	err := fmt.Errorf("txTail: tried to get timestamp in missing round %d", rnd)
+	return 0, err
 }

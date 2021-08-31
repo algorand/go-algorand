@@ -147,7 +147,7 @@ type LedgerForLogic interface {
 	MinBalance(addr basics.Address, proto *config.ConsensusParams) (basics.MicroAlgos, error)
 	Round() basics.Round
 	LatestTimestamp() int64
-	GetBlockTimeStamp(r basics.Round) int64
+	GetBlockTimeStamp(r basics.Round) (int64, error)
 
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
 	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error)
@@ -1873,10 +1873,13 @@ func (cx *evalContext) getFirstValidTimestamp(r basics.Round) (timestamp uint64,
 	if r > 0 {
 		r--
 	}
-	ts := cx.Ledger.GetBlockTimeStamp(r)
+	ts, err := cx.Ledger.GetBlockTimeStamp(r)
 	if ts < 0 {
 		err = fmt.Errorf("first valid timestamp %d < 0", ts)
 		return
+	}
+	if err != nil {
+		return 0, err
 	}
 	return uint64(ts), nil
 }
@@ -1891,14 +1894,11 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 	case FirstValid:
 		sv.Uint = uint64(txn.FirstValid)
 	case FirstValidTime:
-		// Check if the first valid time has already been set
-		if FirstValidTime == 0 {
-			ts, err := cx.getFirstValidTimestamp(txn.FirstValid)
-			if err == nil {
-				txn.FirstValidTime = int64(ts)
-			}
+		ts, err := cx.getFirstValidTimestamp(txn.FirstValid)
+		if err != nil {
+			return sv, err
 		}
-		sv.Uint = uint64(txn.FirstValidTime)
+		sv.Uint = ts
 	case LastValid:
 		sv.Uint = uint64(txn.LastValid)
 	case Note:

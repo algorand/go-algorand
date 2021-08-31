@@ -32,20 +32,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestTxTailCheckdup(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	ledger := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion)
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	tail := txTail{}
-	require.NoError(t, tail.loadFromDisk(ledger))
-
-	lastRound := basics.Round(proto.MaxTxnLife)
-	lookback := basics.Round(100)
-	txvalidity := basics.Round(10)
-	leasevalidity := basics.Round(32)
-
-	// push 1000 rounds into the txtail
+func prepareTxTail(tail *txTail, lastRound basics.Round, lookback basics.Round, leasevalidity basics.Round, txvalidity basics.Round) {
 	for rnd := basics.Round(1); rnd < lastRound; rnd++ {
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -53,6 +40,7 @@ func TestTxTailCheckdup(t *testing.T) {
 				UpgradeState: bookkeeping.UpgradeState{
 					CurrentProtocol: protocol.ConsensusCurrentVersion,
 				},
+				TimeStamp: int64(crypto.RandUint64() % 100 * 1000),
 			},
 		}
 
@@ -67,6 +55,23 @@ func TestTxTailCheckdup(t *testing.T) {
 		tail.newBlock(blk, delta)
 		tail.committedUpTo(rnd.SubSaturate(lookback))
 	}
+}
+
+func TestTxTailCheckdup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ledger := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	tail := txTail{}
+	require.NoError(t, tail.loadFromDisk(ledger))
+
+	lastRound := basics.Round(proto.MaxTxnLife)
+	lookback := basics.Round(100)
+	txvalidity := basics.Round(10)
+	leasevalidity := basics.Round(32)
+
+	// push 1000 rounds into the txtail
+	prepareTxTail(&tail, lastRound, lookback, leasevalidity, txvalidity)
 
 	// test txid duplication testing.
 	for rnd := basics.Round(1); rnd < lastRound; rnd++ {
@@ -94,6 +99,36 @@ func TestTxTailCheckdup(t *testing.T) {
 			var leaseInLedgerErr *ledgercore.LeaseInLedgerError
 			require.Truef(t, errors.As(err, &leaseInLedgerErr), "error a LeaseInLedgerError(%d) : %v ", rnd, err)
 		}
+	}
+}
+
+func TestTxTailGetBlockTimeStamp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ledger := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	tail := txTail{}
+	require.NoError(t, tail.loadFromDisk(ledger))
+
+	lastRound := basics.Round(proto.MaxTxnLife) + 3
+	lookback := basics.Round(0)
+	txvalidity := basics.Round(0)
+	leasevalidity := basics.Round(0)
+
+	// Try to push 1002 rounds into the txtail
+	prepareTxTail(&tail, lastRound, lookback, leasevalidity, txvalidity)
+
+	// Test timestamp retrieval
+	for rnd := basics.Round(1); rnd < lastRound; rnd++ {
+		ts, err := tail.getBlockTimeStamp(rnd - lastRound)
+		if rnd == lastRound-1 {
+			// Should error if we try to retrieve timestamp for 1002nd block
+			require.Errorf(t, err, "round %d", rnd)
+		} else {
+			require.True(t, ts >= 0)
+		}
+		ts, _ = tail.getBlockTimeStamp(rnd)
+		require.True(t, ts >= 0)
 	}
 }
 
@@ -152,7 +187,7 @@ func TestTxTailLoadFromDisk(t *testing.T) {
 
 	err := txtail.loadFromDisk(&ledger)
 	require.NoError(t, err)
-	require.Equal(t, int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife), len(txtail.recent))
+	require.Equal(t, int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife)+1, len(txtail.recent))
 	require.Equal(t, testTxTailValidityRange, len(txtail.lastValid))
 	require.Equal(t, ledger.Latest(), txtail.lowWaterMark)
 

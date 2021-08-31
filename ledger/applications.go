@@ -44,7 +44,7 @@ type cowForLogicLedger interface {
 
 	round() basics.Round
 	prevTimestamp() int64
-	getBlockTimeStamp(r basics.Round) int64
+	getBlockTimeStamp(basics.Round) (int64, error)
 	allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
 }
 
@@ -173,8 +173,12 @@ func (al *logicLedger) LatestTimestamp() int64 {
 	return al.cow.prevTimestamp()
 }
 
-func (al *logicLedger) GetBlockTimeStamp(r basics.Round) int64 {
-	return al.cow.getBlockTimeStamp(r)
+func (al *logicLedger) GetBlockTimeStamp(r basics.Round) (int64, error) {
+	ts, err := al.cow.getBlockTimeStamp(r)
+	if err != nil {
+		return 0, err
+	}
+	return ts, nil
 }
 
 func (al *logicLedger) ApplicationID() basics.AppIndex {

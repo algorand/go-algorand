@@ -50,6 +50,10 @@ func (ml *emptyLedger) checkDup(firstValid, lastValid basics.Round, txn transact
 	return nil
 }
 
+func (ml *emptyLedger) getBlockTimeStamp(rnd basics.Round) (int64, error) {
+	return 0, nil
+}
+
 func (ml *emptyLedger) getAssetCreator(assetIdx basics.AssetIndex) (basics.Address, bool, error) {
 	return basics.Address{}, false, nil
 }
