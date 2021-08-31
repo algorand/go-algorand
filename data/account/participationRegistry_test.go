@@ -19,6 +19,7 @@ package account
 import (
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"strings"
@@ -52,7 +53,7 @@ func assertParticipation(t *testing.T, p Participation, pr ParticipationRecord) 
 	require.Equal(t, p.Parent, pr.Account)
 }
 
-func makeTestParticipation(addrID byte, first, last basics.Round, dilution uint64) Participation {
+func makeTestParticipation(addrID int, first, last basics.Round, dilution uint64) Participation {
 	p := Participation{
 		FirstValid:  first,
 		LastValid:   last,
@@ -60,7 +61,7 @@ func makeTestParticipation(addrID byte, first, last basics.Round, dilution uint6
 		Voting:      &crypto.OneTimeSignatureSecrets{},
 		VRF:         &crypto.VRFSecrets{},
 	}
-	p.Parent[0] = addrID
+	binary.LittleEndian.PutUint32(p.Parent[:], uint32(addrID))
 	return p
 }
 
@@ -481,3 +482,57 @@ func TestParticipation_NoKeyToUpdate(t *testing.T) {
 		return nil
 	})
 }
+
+func benchmarkKeyRegistration(numKeys int, b *testing.B) {
+	// setup
+	rootDB, err := db.OpenPair(b.Name(), true)
+	if err != nil {
+		b.Fail()
+	}
+	registry, err := makeParticipationRegistry(rootDB, logging.TestingLog(b))
+	if err != nil {
+		b.Fail()
+	}
+
+	// Insert records so that we can t
+	b.Run("KeyInsert", func(b *testing.B) {
+		for n := 0; n < b.N; n++ {
+			for key := 0; key < numKeys; key++ {
+				p := makeTestParticipation(key, basics.Round(0), basics.Round(1000000), 3)
+				registry.Insert(p)
+			}
+		}
+	})
+
+	// The first call to Register updates the DB.
+	b.Run("KeyRegistered", func(b *testing.B) {
+		for n := 0; n < b.N; n++ {
+			for key := 0; key < numKeys; key++ {
+				p := makeTestParticipation(key, basics.Round(0), basics.Round(1000000), 3)
+
+				// Unfortunately we need to repeatedly clear out the registration fields to ensure the
+				// db update runs each time this is called.
+				record := registry.cache[p.ParticipationID()]
+				record.EffectiveFirst = 0
+				record.EffectiveLast = 0
+				registry.cache[p.ParticipationID()] = record
+				registry.Register(p.ParticipationID(), 50)
+			}
+		}
+	})
+
+	// The keys should now be updated, so Register is a no-op.
+	b.Run("NoOp", func(b *testing.B) {
+		for n := 0; n < b.N; n++ {
+			for key := 0; key < numKeys; key++ {
+				p := makeTestParticipation(key, basics.Round(0), basics.Round(1000000), 3)
+				registry.Register(p.ParticipationID(), 50)
+			}
+		}
+	})
+}
+
+func BenchmarkKeyRegistration1(b *testing.B) { benchmarkKeyRegistration(1, b) }
+func BenchmarkKeyRegistration5(b *testing.B) { benchmarkKeyRegistration(5, b) }
+func BenchmarkKeyRegistration10(b *testing.B) { benchmarkKeyRegistration(10, b) }
+func BenchmarkKeyRegistration50(b *testing.B) { benchmarkKeyRegistration(50, b) }
