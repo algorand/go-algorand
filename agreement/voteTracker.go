@@ -205,6 +205,7 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 			tracker.Equivocators[sender] = equivocationVote{
 				Sender:    oldVote.R.Sender,
 				Round:     oldVote.R.Round,
+				Branch:    oldVote.R.Branch,
 				Period:    oldVote.R.Period,
 				Step:      oldVote.R.Step,
 				Cred:      oldVote.Cred,
