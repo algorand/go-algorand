@@ -37,7 +37,8 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-var partableColumnNames = [...]string{"parent", "vrf", "voting", "blockProof", "firstValid", "lastValid", "keyDilution"}
+// TODO: add new tables and columns in the future
+var partableColumnNames = [...]string{"parent", "vrf", "voting", "firstValid", "lastValid", "keyDilution"}
 
 func TestParticipation_NewDB(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -241,7 +242,7 @@ func closeDBS(dbAccessor ...db.Accessor) {
 
 func assertionForRestoringFromDBAtLowVersion(a *require.Assertions, retrivedPart PersistedParticipation) {
 	a.NotNil(retrivedPart)
-	a.Nil(retrivedPart.BlockProof)
+	// a.Nil(retrivedPart.BlockProof) // TODO: test blockProof in updated DB
 }
 
 func TestMigrateFromVersion1(t *testing.T) {
@@ -362,7 +363,7 @@ type comparablePartition struct {
 
 	VRF        crypto.VRFSecrets
 	Voting     []byte
-	blockProof []byte
+	//blockProof []byte
 
 	FirstValid basics.Round
 	LastValid  basics.Round
@@ -375,7 +376,7 @@ func intoComparable(part PersistedParticipation) comparablePartition {
 		Parent:      part.Parent,
 		VRF:         *part.VRF,
 		Voting:      part.Voting.MarshalMsg(nil),
-		blockProof:  protocol.Encode(part.BlockProof),
+		//blockProof:  protocol.Encode(part.BlockProof),
 		FirstValid:  part.FirstValid,
 		LastValid:   part.LastValid,
 		KeyDilution: part.KeyDilution,
@@ -418,7 +419,8 @@ func BenchmarkFillDB(b *testing.B) {
 	if partt == nil {
 		return
 	}
-	out := protocol.Encode(partt.BlockProof)
-	outvoting := protocol.Encode(partt.Voting)
-	fmt.Println("merkle key store size:", len(out), "bytes.", "voting key size:", len(outvoting), "bytes.")
+	//TODO: test restored blockProof
+	//out := protocol.Encode(partt.BlockProof)
+	//outvoting := protocol.Encode(partt.Voting)
+	//fmt.Println("merkle key store size:", len(out), "bytes.", "voting key size:", len(outvoting), "bytes.")
 }
