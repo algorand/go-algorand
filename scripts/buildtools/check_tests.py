@@ -1,4 +1,4 @@
-print("===== STARTED RUNNING check_tests.py =====")
+print("===== STARTED RUNNING check_tests.py =====\n")
 
 import json
 import sys
@@ -65,7 +65,7 @@ if countMultipleRuns:
     printColor(f"The above {countMultipleRuns} tests ran multiple times:", RED_TEXT_COLOR)
 else:
     printColor("All tests that ran, ran only once ... OK", GREEN_TEXT_COLOR)
-printColor("==================================================", YELLOW_TEXT_COLOR)
+printColor("==================================================\n", YELLOW_TEXT_COLOR)
 
 # Check intentionally skipped tests
 printColor("============= INTENTIONALLY SKIPPED ==============", YELLOW_TEXT_COLOR)
@@ -79,31 +79,34 @@ if countSkippedIntentionally:
     printColor(f"The above {countSkippedIntentionally} tests were skipped intentionally:", YELLOW_TEXT_COLOR)
 else:
     printColor("No tests skipped intentionally.", GREEN_TEXT_COLOR)
-printColor("==================================================", YELLOW_TEXT_COLOR)
+printColor("==================================================\n", YELLOW_TEXT_COLOR)
 
 # Check tests unintentionally (due to partition)
 printColor("============= UNINTENTIONALLY SKIPPED ============", YELLOW_TEXT_COLOR)
 listOfSkippedUnintentionally = []
 [listOfSkippedUnintentionally.append(x) for x in AllTestResults if (AllTestResults[x]['ran'] == 0 and AllTestResults[x]['skipped_due_to_partitioning'] >= NUMBER_OF_NODES)]
-countSkippedUnintentionally = len(listOfSkippedIntentionally)
+countSkippedUnintentionally = len(listOfSkippedUnintentionally)
 if countSkippedUnintentionally:
     printColor(f"{countSkippedUnintentionally} tests were skipped UNintentionally", RED_TEXT_COLOR)
-    [printColor(f"{x} -- skipped UNintentionally. (due to partitiontest.PartitionTest() being called twice?)", RED_TEXT_COLOR) for x in sorted(listOfSkippedIntentionally)]
+    [printColor(f"{x} -- skipped UNintentionally. (due to partitiontest.PartitionTest() being called twice?)", RED_TEXT_COLOR) for x in sorted(listOfSkippedUnintentionally)]
     printColor(f"{countSkippedUnintentionally} tests were skipped UNintentionally.", RED_TEXT_COLOR)
 else:
     printColor("No tests skipped UNintentionally (due to partitioning).", GREEN_TEXT_COLOR)
-printColor("==================================================", YELLOW_TEXT_COLOR)
+printColor("==================================================\n", YELLOW_TEXT_COLOR)
 
 # === Summary ===
 printColor("==================== SUMMARY =====================", YELLOW_TEXT_COLOR)
+countUniqueTests = len(AllTestResults)
+countTotalSkipped = countSkippedIntentionally + countSkippedUnintentionally
+countRanTests = sum(1 for x in AllTestResults if AllTestResults[x]['ran'] > 0)
 
-printColor(f"Saw {len(AllTestResults)} unique tests", GREEN_TEXT_COLOR if countSkippedIntentionally != 0 else RED_TEXT_COLOR)
-print(f"{countSkippedIntentionally + countSkippedUnintentionally} tests skipped total")
-printColor(f"{sum(1 for x in AllTestResults if AllTestResults[x]['ran'] > 0)} tests ran", GREEN_TEXT_COLOR if countSkippedIntentionally != 0 else RED_TEXT_COLOR)
+printColor(f"Saw {countUniqueTests} unique tests", GREEN_TEXT_COLOR if countUniqueTests != 0 else RED_TEXT_COLOR)
+printColor(f"{countTotalSkipped} total skipped tests", GREEN_TEXT_COLOR if countTotalSkipped == 0 else YELLOW_TEXT_COLOR)
+printColor(f"{countRanTests} tests ran", GREEN_TEXT_COLOR if countRanTests != 0 else RED_TEXT_COLOR)
 printColor(f"{countSkippedIntentionally} tests were skipped intentionally. (They were probably disabled, please double check)", GREEN_TEXT_COLOR if countSkippedIntentionally == 0 else YELLOW_TEXT_COLOR)
-printColor(f"{countMultipleRuns} tests ran multiple times. (Can probably be fixed by adding \"partitiontest.PartitionTest()\")", GREEN_TEXT_COLOR if countMultipleRuns == 0 else RED_TEXT_COLOR)
 printColor(f"{countSkippedUnintentionally} tests were skipped UNintentionally. (Due to partitioning multiple times? maybe due to partitiontest.PartitionTest() being called twice?)", GREEN_TEXT_COLOR if countSkippedUnintentionally == 0 else RED_TEXT_COLOR)
-printColor("==================================================", YELLOW_TEXT_COLOR)
+printColor(f"{countMultipleRuns} tests ran multiple times. (Can probably be fixed by adding \"partitiontest.PartitionTest()\")", GREEN_TEXT_COLOR if countMultipleRuns == 0 else RED_TEXT_COLOR)
+printColor("==================================================\n", YELLOW_TEXT_COLOR)
 
 print("===== FINISHED RUNNING check_tests.py =====")
 sys.exit(errorMessage)
