@@ -25,7 +25,6 @@ import (
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -92,14 +91,11 @@ func (manager *AccountManager) AddParticipation(participation account.PersistedP
 
 	first, last := participation.ValidInterval()
 	partkeyID := account.ParticipationKeyIdentity{
-		Parent: address,
-		KeyregTxnFields: transactions.KeyregTxnFields{
-			VoteFirst:       first,
-			VoteLast:        last,
-			SelectionPK:     participation.VRF.PK,
-			VotePK:          participation.Voting.OneTimeSignatureVerifier,
-			VoteKeyDilution: participation.KeyDilution,
-		},
+		Parent:      address,
+		FirstValid:  first,
+		LastValid:   last,
+		VRFSK:       participation.VRF.SK,
+		KeyDilution: participation.KeyDilution,
 	}
 
 	// Check if we already have participation keys for this address in this interval

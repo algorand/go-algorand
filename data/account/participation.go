@@ -61,8 +61,11 @@ type Participation struct {
 type ParticipationKeyIdentity struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	transactions.KeyregTxnFields
-	Parent basics.Address `codec:"addr"`
+	Parent      basics.Address    `codec:"addr"`
+	VRFSK       crypto.VrfPrivkey `codec:"vrfsk"`
+	FirstValid  basics.Round      `codec:"fv"`
+	LastValid   basics.Round      `codec:"lv"`
+	KeyDilution uint64            `codec:"kd"`
 }
 
 // ToBeHashed implements the Hashable interface.
@@ -72,33 +75,22 @@ func (id *ParticipationKeyIdentity) ToBeHashed() (protocol.HashID, []byte) {
 
 // ToParticipationID creates a ParticipationID hash from the identity file.
 func (id ParticipationKeyIdentity) ToParticipationID() ParticipationID {
-	return ParticipationID(crypto.HashObj(&ParticipationKeyIdentity{
-		KeyregTxnFields: id.KeyregTxnFields,
-		Parent:          id.Parent,
-	}))
-}
-
-// MakeParticipationID generates the ParticipationID from an address and a key registration.
-func MakeParticipationID(addr basics.Address, fields transactions.KeyregTxnFields) ParticipationID {
-	return ParticipationKeyIdentity{
-		KeyregTxnFields: fields,
-		Parent:          addr,
-	}.ToParticipationID()
+	return ParticipationID(crypto.HashObj(&id))
 }
 
 // ParticipationID computes a ParticipationID.
 func (part Participation) ParticipationID() ParticipationID {
-	// Allow a panic if Voting or VRF are not present.
-	fields := transactions.KeyregTxnFields{
-		VotePK:           part.Voting.OneTimeSignatureVerifier,
-		SelectionPK:      part.VRF.PK,
-		VoteFirst:        part.FirstValid,
-		VoteLast:         part.LastValid,
-		VoteKeyDilution:  part.KeyDilution,
-		Nonparticipation: false,
+	idData := ParticipationKeyIdentity{
+		Parent:      part.Parent,
+		FirstValid:  part.FirstValid,
+		LastValid:   part.LastValid,
+		KeyDilution: part.KeyDilution,
+	}
+	if part.VRF != nil {
+		copy(idData.VRFSK[:], part.VRF.SK[:])
 	}
 
-	return MakeParticipationID(part.Parent, fields)
+	return ParticipationID(crypto.HashObj(&idData))
 }
 
 // PersistedParticipation encapsulates the static state of the participation
