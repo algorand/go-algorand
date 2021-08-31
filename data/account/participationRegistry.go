@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/algorand/go-deadlock"
 
@@ -606,7 +607,7 @@ func (db *participationDB) Flush() error {
 	// Verify that the dirty flag has not desynchronized from the cache.
 	for id := range db.dirty {
 		if _, ok := db.cache[id]; !ok {
-			db.log.Warn("participationDB fixing dirty flag de-synchronization for %s", id)
+			db.log.Warnf("participationDB fixing dirty flag de-synchronization for %s", id)
 			delete(db.cache, id)
 		}
 	}
@@ -616,12 +617,19 @@ func (db *participationDB) Flush() error {
 	}
 
 	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var errorStr strings.Builder
 		for id := range db.dirty {
 			err := db.updateRollingFields(ctx, tx, db.cache[id])
 			// This should only be updating key usage so ignoring missing keys is not a problem.
 			if err != nil && err != ErrNoKeyForID {
-				return err
+				if errorStr.Len() > 0 {
+					errorStr.WriteString(", ")
+				}
+				errorStr.WriteString(err.Error())
 			}
+		}
+		if errorStr.Len() > 0 {
+			return errors.New(errorStr.String())
 		}
 		return nil
 	})
@@ -636,7 +644,7 @@ func (db *participationDB) Flush() error {
 
 func (db *participationDB) Close() {
 	if err := db.Flush(); err != nil {
-		db.log.Warn("participationDB unhandled error during Close/Flush: %w", err)
+		db.log.Warnf("participationDB unhandled error during Close/Flush: %w", err)
 	}
 
 	db.store.Close()

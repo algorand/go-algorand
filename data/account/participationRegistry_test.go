@@ -19,7 +19,9 @@ package account
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -364,7 +366,6 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	registry := getRegistry(t)
-	defer registry.Close()
 
 	p := makeTestParticipation(1, 1, 2000000, 3)
 	id := p.ParticipationID()
@@ -394,7 +395,7 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 			}
 
 			// Create Rolling entry
-			_, err = tx.Exec(`INSERT INTO Rolling (pk, effectiveFirstRound, effectiveLastRound) VALUES (?, ?, ?)`, pk, 1, 2000000)
+			_, err = tx.Exec(`INSERT INTO Rolling (pk, effectiveFirstRound, effectiveLastRound) VALUES (?, ?, ?)`, pk, 1, 200000)
 			if err != nil {
 				return fmt.Errorf("unable insert rolling: %w", err)
 			}
@@ -418,11 +419,45 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 	err = registry.initializeCache()
 	a.EqualError(err, ErrMultipleKeysForID.Error())
 
+	// Registering the ID - No error because it is already registered so we don't try to re-register.
+	registry.cache[id] = ParticipationRecord{
+		ParticipationID: id,
+		Account:         p.Parent,
+		FirstValid:      p.FirstValid,
+		LastValid:       p.LastValid,
+		KeyDilution:     p.KeyDilution,
+		EffectiveFirst:  p.FirstValid,
+		EffectiveLast:   p.LastValid,
+	}
+	err = registry.Register(id, 1)
+	a.NoError(err)
+
+	// Clear the first/last so that the no-op registration can't be detected
+	record := registry.cache[id]
+	record.EffectiveFirst = 0
+	record.EffectiveLast = 0
+	registry.cache[id] = record
+
+	err = registry.Register(id, 1)
+	a.Error(err)
+	a.Contains(err.Error(), "unable to registering key with id")
+	a.EqualError(errors.Unwrap(err), ErrMultipleKeysForID.Error())
+
 	// Flushing changes detects that multiple records are updated
 	registry.dirty[id] = struct{}{}
 	err = registry.Flush()
 	a.Len(registry.dirty, 1)
 	a.EqualError(err, ErrMultipleKeysForID.Error())
+
+	err = registry.Flush()
+	a.EqualError(err, ErrMultipleKeysForID.Error())
+
+	// Make sure the error message is logged when closing the registry.
+	var logOutput strings.Builder
+	registry.log.SetOutput(&logOutput)
+	registry.Close()
+	a.Contains(logOutput.String(), "participationDB unhandled error during Close/Flush")
+	a.Contains(logOutput.String(), ErrMultipleKeysForID.Error())
 }
 
 func TestParticipation_NoKeyToUpdate(t *testing.T) {
