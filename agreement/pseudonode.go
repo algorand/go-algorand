@@ -279,6 +279,11 @@ func (n asyncPseudonode) makeProposals(round round, period period, accounts []ac
 	}
 
 	lbr := LedgerBranchReader{lr: n.ledger, branch: ve.Block().Branch}
+	params, err := lbr.ConsensusParams(ParamsRound(round.Number))
+	if err != nil {
+		n.log.Errorf("pseudonode.makeProposals: could not obtain params for %d (proposal round %d): %v", ParamsRound(round.Number), round.Number, err)
+		return nil, nil
+	}
 
 	votes := make([]unauthenticatedVote, 0, len(accounts))
 	proposals := make([]proposal, 0, len(accounts))
@@ -291,6 +296,9 @@ func (n asyncPseudonode) makeProposals(round round, period period, accounts []ac
 
 		// attempt to make the vote
 		rv := rawVote{Sender: account.Address(), Round: round.Number, Branch: round.Branch, Period: period, Step: propose, Proposal: proposal}
+		if params.AgreementMessagesContainBranch {
+			rv.Branch = round.Branch
+		}
 		uv, err := makeVote(rv, account.VotingSigner(), account.VRFSecrets(), lbr)
 		if err != nil {
 			n.log.Warnf("pseudonode.makeProposals: could not create vote: %v", err)
@@ -309,9 +317,18 @@ func (n asyncPseudonode) makeProposals(round round, period period, accounts []ac
 // round, period, and step.
 func (n asyncPseudonode) makeVotes(round round, period period, step step, proposal proposalValue, participation []account.Participation) []unauthenticatedVote {
 	lbr := LedgerBranchReader{lr: n.ledger, branch: round.Branch}
+	params, err := lbr.ConsensusParams(ParamsRound(round.Number))
+	if err != nil {
+		n.log.Errorf("pseudonode.makeProposals: could not obtain params for %d (proposal round %d): %v", ParamsRound(round.Number), round.Number, err)
+		return nil
+	}
+
 	votes := make([]unauthenticatedVote, 0)
 	for _, account := range participation {
-		rv := rawVote{Sender: account.Address(), Round: round.Number, Branch: round.Branch, Period: period, Step: step, Proposal: proposal}
+		rv := rawVote{Sender: account.Address(), Round: round.Number, Period: period, Step: step, Proposal: proposal}
+		if params.AgreementMessagesContainBranch {
+			rv.Branch = round.Branch
+		}
 		uv, err := makeVote(rv, account.VotingSigner(), account.VRFSecrets(), lbr)
 		if err != nil {
 			n.log.Warnf("pseudonode.makeVotes: could not create vote: %v", err)

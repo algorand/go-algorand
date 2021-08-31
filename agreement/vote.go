@@ -123,6 +123,10 @@ func (uv unauthenticatedVote) verify(l LedgerBranchReader) (vote, error) {
 		return vote{}, fmt.Errorf("unauthenticatedVote.verify: could not get consensus params for round %d: %v", ParamsRound(rv.Round), err)
 	}
 
+	if !proto.AgreementMessagesContainBranch && rv.Branch != (bookkeeping.BlockHash{}) {
+		return vote{}, fmt.Errorf("unauthenticatedVote.verify: vote by %v in round %d contains disallowed non-zero branch", rv.Sender, rv.Round)
+	}
+
 	if rv.Round < m.Record.VoteFirstValid {
 		return vote{}, fmt.Errorf("unauthenticatedVote.verify: vote by %v in round %d before VoteFirstValid %d: %+v", rv.Sender, rv.Round, m.Record.VoteFirstValid, uv)
 	}

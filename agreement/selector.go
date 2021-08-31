@@ -84,8 +84,12 @@ func membership(l LedgerBranchReader, addr basics.Address, r round, p period, s 
 		return
 	}
 
+	sel := selector{Seed: seed, Round: r.Number, Period: p, Step: s}
+	if cparams.AgreementMessagesContainBranch {
+		sel.Branch = r.Branch
+	}
 	m.Record = committee.BalanceRecord{AccountData: record, Addr: addr}
-	m.Selector = selector{Seed: seed, Round: r.Number, Branch: r.Branch, Period: p, Step: s}
+	m.Selector = sel
 	m.TotalMoney = total
 	return m, nil
 }

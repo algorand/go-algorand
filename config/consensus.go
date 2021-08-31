@@ -382,6 +382,10 @@ type ConsensusParams struct {
 	// 6. checking that in the case of going online the VoteFirst is less or equal to the next network round.
 	EnableKeyregCoherencyCheck bool
 
+	// AgreementMessagesContainBranch specifies whether the Branch field
+	// should be included in agreement messages.
+	AgreementMessagesContainBranch bool
+
 	// AgreementPipelining specifies whether to use the pipelined player.
 	AgreementPipelining bool
 
@@ -1004,6 +1008,7 @@ func initConsensusProtocols() {
 	vFuture.CompactCertSecKQ = 128
 
 	// Enable pipelining.
+	vFuture.AgreementMessagesContainBranch = true
 	vFuture.AgreementPipelining = true
 	vFuture.AgreementPipelineDepth = 5
 	vFuture.AgreementPipelineDelayHistory = 32
