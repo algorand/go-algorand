@@ -95,7 +95,7 @@ func (bf *bloomFilter) encode() (out *encodedBloomFilter, err error) {
 	if bf.filter != nil {
 		out.BloomFilterType = byte(bf.filterType)
 		out.BloomFilter, err = bf.filter.MarshalBinary()
-		if err != nil {
+		if err != nil || len(out.BloomFilter) == 0 {
 			out = nil
 		} else {
 			bf.encoded = out
