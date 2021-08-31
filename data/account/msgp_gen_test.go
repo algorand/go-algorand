@@ -8,10 +8,12 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalparticipationIDData(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := participationIDData{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -32,6 +34,7 @@ func TestMarshalUnmarshalparticipationIDData(t *testing.T) {
 }
 
 func TestRandomizedEncodingparticipationIDData(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	protocol.RunEncodingTest(t, &participationIDData{})
 }
 
