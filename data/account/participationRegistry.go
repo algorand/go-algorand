@@ -500,14 +500,14 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 		return ErrParticipationIDNotFound
 	}
 
-	// round out of valid range.
-	if on < recordToRegister.FirstValid || on > recordToRegister.LastValid {
-		return ErrInvalidRegisterRange
-	}
-
 	// No-op If the record is already active
 	if recordActive(recordToRegister, on) {
 		return nil
+	}
+
+	// round out of valid range.
+	if on < recordToRegister.FirstValid || on > recordToRegister.LastValid {
+		return ErrInvalidRegisterRange
 	}
 
 	updated := make(map[ParticipationID]ParticipationRecord)
