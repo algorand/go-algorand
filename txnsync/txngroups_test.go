@@ -49,7 +49,7 @@ func TestNibble(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		b = append(b, byte(i))
 	}
-	b = compactNibblesArray(b)
+	compactNibblesArray(&b)
 	for i := 0; i < 10; i++ {
 		val, err := getNibble(b, i)
 		require.NoError(t, err)

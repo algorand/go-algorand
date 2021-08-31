@@ -63,7 +63,7 @@ func badEncodeTransactionGroups(t *testing.T, s *syncState, inTxnGroups []transa
 			stub.TransactionGroupSizes = append(stub.TransactionGroupSizes, byte(len(txGroup.Transactions)-1))
 		}
 	}
-	stub.TransactionGroupSizes = compactNibblesArray(stub.TransactionGroupSizes)
+	compactNibblesArray(&stub.TransactionGroupSizes)
 	for _, txGroup := range inTxnGroups {
 		if len(txGroup.Transactions) == 1 {
 			for _, txn := range txGroup.Transactions {
