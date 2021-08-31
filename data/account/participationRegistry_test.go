@@ -495,7 +495,7 @@ func benchmarkKeyRegistration(numKeys int, b *testing.B) {
 	}
 
 	// Insert records so that we can t
-	b.Run("KeyInsert", func(b *testing.B) {
+	b.Run(fmt.Sprintf("KeyInsert_%d", numKeys), func(b *testing.B) {
 		for n := 0; n < b.N; n++ {
 			for key := 0; key < numKeys; key++ {
 				p := makeTestParticipation(key, basics.Round(0), basics.Round(1000000), 3)
@@ -505,7 +505,7 @@ func benchmarkKeyRegistration(numKeys int, b *testing.B) {
 	})
 
 	// The first call to Register updates the DB.
-	b.Run("KeyRegistered", func(b *testing.B) {
+	b.Run(fmt.Sprintf("KeyRegistered_%d", numKeys), func(b *testing.B) {
 		for n := 0; n < b.N; n++ {
 			for key := 0; key < numKeys; key++ {
 				p := makeTestParticipation(key, basics.Round(0), basics.Round(1000000), 3)
@@ -522,7 +522,7 @@ func benchmarkKeyRegistration(numKeys int, b *testing.B) {
 	})
 
 	// The keys should now be updated, so Register is a no-op.
-	b.Run("NoOp", func(b *testing.B) {
+	b.Run(fmt.Sprintf("NoOp_%d", numKeys), func(b *testing.B) {
 		for n := 0; n < b.N; n++ {
 			for key := 0; key < numKeys; key++ {
 				p := makeTestParticipation(key, basics.Round(0), basics.Round(1000000), 3)
@@ -532,7 +532,7 @@ func benchmarkKeyRegistration(numKeys int, b *testing.B) {
 	})
 }
 
-func BenchmarkKeyRegistration1(b *testing.B) { benchmarkKeyRegistration(1, b) }
-func BenchmarkKeyRegistration5(b *testing.B) { benchmarkKeyRegistration(5, b) }
+func BenchmarkKeyRegistration1(b *testing.B)  { benchmarkKeyRegistration(1, b) }
+func BenchmarkKeyRegistration5(b *testing.B)  { benchmarkKeyRegistration(5, b) }
 func BenchmarkKeyRegistration10(b *testing.B) { benchmarkKeyRegistration(10, b) }
 func BenchmarkKeyRegistration50(b *testing.B) { benchmarkKeyRegistration(50, b) }

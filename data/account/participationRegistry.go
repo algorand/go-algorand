@@ -54,9 +54,11 @@ type ParticipationRecord struct {
 	// OneTimeSignatureSecrets
 }
 
+var zeroParticipationRecord = ParticipationRecord{}
+
 // IsZero returns true if the object contains zero values.
 func (r ParticipationRecord) IsZero() bool {
-	return r == (ParticipationRecord{})
+	return r == zeroParticipationRecord
 }
 
 // Duplicate creates a copy of the current object. This is required once secrets are stored.
