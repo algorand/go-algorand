@@ -468,10 +468,6 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 			eval.block.BlockHeader.GenesisHash = eval.genesisHash
 		}
 		eval.block.BlockHeader.RewardsState = eval.prevHeader.NextRewardsState(hdr.Round, proto, incentivePoolData.MicroAlgos, prevTotals.RewardUnits())
-		eval.specials = transactions.SpecialAddresses{
-			FeeSink:     eval.block.BlockHeader.FeeSink,
-			RewardsPool: eval.block.BlockHeader.RewardsPool,
-		}
 	}
 	// set the eval state with the current header
 	eval.state = makeRoundCowState(base, eval.block.BlockHeader, eval.prevHeader.TimeStamp, paysetHint)

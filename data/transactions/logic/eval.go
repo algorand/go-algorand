@@ -317,7 +317,7 @@ type EvalContext struct {
 	subtxn *transactions.SignedTxn // place to build for tx_submit
 
 	// The transactions Performed() and their effects
-	Effects []transactions.SignedTxnWithAD
+	InnerTxns []transactions.SignedTxnWithAD
 
 	program []byte
 	pc      int
@@ -3314,15 +3314,10 @@ func opTxBegin(cx *EvalContext) {
 
 	fee := cx.Proto.MinTxnFee
 	if cx.FeeCredit != nil {
-		if fee < *cx.FeeCredit {
-			fee = 0
-		} else {
-			// Use up the overpay to shrink the fee
-			fee -= *cx.FeeCredit
-		}
-		// We don't change FeeCredit here, because they
-		// might never tx_submit, or they might change the fee
-		// (if we decide to allow that).  Do it in tx_submit.
+		// Use credit to shrink the fee, but don't change FeeCredit
+		// here, because they might never tx_submit, or they might
+		// change the fee.  Do it in tx_submit.
+		fee = basics.SubSaturate(fee, *cx.FeeCredit)
 	}
 	cx.subtxn.Txn.Header = transactions.Header{
 		Sender:     addr, // Default, to simplify usage
@@ -3354,11 +3349,11 @@ func opTxField(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	field := TxnField(uint64(cx.program[cx.pc+1]))
 	sv := cx.stack[last]
-	var i uint64
 	switch field {
 	case Type:
 		cx.subtxn.Txn.Type = protocol.TxType(sv.Bytes)
 	case TypeEnum:
+		var i uint64
 		i, cx.err = sv.uint()
 		if i < uint64(len(TxnTypeNames)) {
 			cx.subtxn.Txn.Type = protocol.TxType(TxnTypeNames[i])
@@ -3469,7 +3464,7 @@ func opTxSubmit(cx *EvalContext) {
 		cx.err = err
 		return
 	}
-	cx.Effects = append(cx.Effects, transactions.SignedTxnWithAD{
+	cx.InnerTxns = append(cx.InnerTxns, transactions.SignedTxnWithAD{
 		SignedTxn: *cx.subtxn,
 		ApplyData: ad,
 	})

@@ -499,7 +499,7 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 		}
 		calf.commitToParent()
 		evalDelta.SetLogs(cx.Logs)
-		evalDelta.InnerTxns = cx.Effects
+		evalDelta.InnerTxns = cx.InnerTxns
 	}
 
 	return pass, evalDelta, nil
