@@ -127,6 +127,10 @@ func (uv unauthenticatedVote) verify(l LedgerBranchReader) (vote, error) {
 		return vote{}, fmt.Errorf("unauthenticatedVote.verify: vote by %v in round %d contains disallowed non-zero branch", rv.Sender, rv.Round)
 	}
 
+	if proto.AgreementMessagesContainBranch && rv.Branch == (bookkeeping.BlockHash{}) {
+		return vote{}, fmt.Errorf("unauthenticatedVote.verify: vote by %v in round %d has no branch", rv.Sender, rv.Round)
+	}
+
 	if rv.Round < m.Record.VoteFirstValid {
 		return vote{}, fmt.Errorf("unauthenticatedVote.verify: vote by %v in round %d before VoteFirstValid %d: %+v", rv.Sender, rv.Round, m.Record.VoteFirstValid, uv)
 	}
