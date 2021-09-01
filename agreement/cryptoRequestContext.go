@@ -18,6 +18,8 @@ package agreement
 
 import (
 	"context"
+
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // periodRequestsContext keeps a context for all tasks associated with the same period, so we can cancel them if the period becomes irrelevant.
@@ -104,20 +106,8 @@ func (pending pendingRequestsContext) addBundle(request cryptoBundleRequest) con
 	return pending.getReqCtx(request.Round, pkey).ctx
 }
 
-// clearStaleContexts cancels contexts associated with cryptoRequests that are no longer relevant at the given round and period
-func (pending pendingRequestsContext) clearStaleContexts(r round, p period, pinned bool, certify bool) {
-	// at round r + 2 we can clear tasks from round r
-	oldRounds := make([]round, 0)
-	for round := range pending { // XXX need to make this branch-aware
-		if round.Number+2 <= r.Number {
-			oldRounds = append(oldRounds, round)
-		}
-	}
-	for _, oldRound := range oldRounds {
-		pending[oldRound].cancel()
-		delete(pending, oldRound)
-	}
-
+// clearStalePeriodContexts cancels contexts associated with cryptoRequests that are no longer relevant at the given period
+func (pending pendingRequestsContext) clearStalePeriodContexts(r round, p period, pinned bool, certify bool) {
 	// we got a new pinned proposal or a cert bundle:
 	// do not clear period tasks
 	if pinned || certify {
@@ -140,5 +130,19 @@ func (pending pendingRequestsContext) clearStaleContexts(r round, p period, pinn
 				delete(pending, r)
 			}
 		}
+	}
+}
+
+// clearStaleRoundContexts cancels contexts associated with cryptoRequests that are before the given round
+func (pending pendingRequestsContext) clearStaleRoundContexts(r basics.Round) {
+	oldRounds := make([]round, 0)
+	for round := range pending {
+		if round.Number < r {
+			oldRounds = append(oldRounds, round)
+		}
+	}
+	for _, oldRound := range oldRounds {
+		pending[oldRound].cancel()
+		delete(pending, oldRound)
 	}
 }

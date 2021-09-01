@@ -20,6 +20,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -76,6 +77,9 @@ type (
 
 		// Quit shuts down the verifier goroutines.
 		Quit()
+
+		// ClearRoundsBefore discards any pending verification of rounds before r.
+		ClearRoundsBefore(r basics.Round)
 	}
 
 	cryptoVoteRequest struct {
@@ -263,7 +267,7 @@ func (c *poolCryptoVerifier) bundleWaitWorker(fromVoteFill <-chan bundleFuture) 
 }
 
 func (c *poolCryptoVerifier) VerifyVote(ctx context.Context, request cryptoVoteRequest) {
-	c.proposalContexts.clearStaleContexts(request.Round, request.Period, false, false)
+	c.proposalContexts.clearStalePeriodContexts(request.Round, request.Period, false, false)
 	request.ctx = c.proposalContexts.addVote(request)
 	switch request.Tag {
 	case protocol.AgreementVoteTag:
@@ -277,7 +281,7 @@ func (c *poolCryptoVerifier) VerifyVote(ctx context.Context, request cryptoVoteR
 }
 
 func (c *poolCryptoVerifier) VerifyProposal(ctx context.Context, request cryptoProposalRequest) {
-	c.proposalContexts.clearStaleContexts(request.Round, request.Period, request.Pinned, false)
+	c.proposalContexts.clearStalePeriodContexts(request.Round, request.Period, request.Pinned, false)
 	request.ctx = c.proposalContexts.addProposal(request)
 	switch request.Tag {
 	case protocol.ProposalPayloadTag:
@@ -291,7 +295,7 @@ func (c *poolCryptoVerifier) VerifyProposal(ctx context.Context, request cryptoP
 }
 
 func (c *poolCryptoVerifier) VerifyBundle(ctx context.Context, request cryptoBundleRequest) {
-	c.proposalContexts.clearStaleContexts(request.Round, request.Period, false, request.Certify)
+	c.proposalContexts.clearStalePeriodContexts(request.Round, request.Period, false, request.Certify)
 	request.ctx = c.proposalContexts.addBundle(request)
 	switch request.Tag {
 	case protocol.VoteBundleTag:
@@ -302,6 +306,10 @@ func (c *poolCryptoVerifier) VerifyBundle(ctx context.Context, request cryptoBun
 	default:
 		logging.Base().Panicf("Verify action called on bad type: request is %v", request)
 	}
+}
+
+func (c *poolCryptoVerifier) ClearRoundsBefore(r basics.Round) {
+	c.proposalContexts.clearStaleRoundContexts(r)
 }
 
 func (c *poolCryptoVerifier) Verified(tag protocol.Tag) <-chan cryptoResult {

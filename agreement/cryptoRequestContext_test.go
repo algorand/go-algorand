@@ -216,14 +216,16 @@ func TestCryptoRequestContextCleanupByRound(t *testing.T) {
 		_, hasPeriod := pending[rnd].periods[cryptoRequestCtxKey{period: per}]
 		require.True(t, hasPeriod)
 
-		pending.clearStaleContexts(makeRound(rnd.Number+1), 20, false, false)
+		pending.clearStaleRoundContexts(rnd.Number.SubSaturate(1))
+		pending.clearStalePeriodContexts(makeRound(rnd.Number+1), 20, false, false)
 		select {
 		case <-ctx.Done():
 			t.Errorf("cancelled request")
 		default:
 		}
 
-		pending.clearStaleContexts(makeRound(rnd.Number+2), 20, false, false)
+		pending.clearStaleRoundContexts(rnd.Number+1)
+		pending.clearStalePeriodContexts(makeRound(rnd.Number+2), 20, false, false)
 		select {
 		case <-ctx.Done():
 		default:
@@ -269,14 +271,16 @@ func TestCryptoRequestContextCleanupByRoundPinnedCertify(t *testing.T) {
 			require.True(t, hasPeriod)
 		}
 
-		pending.clearStaleContexts(makeRound(rnd.Number+1), 20, false, false)
+		pending.clearStaleRoundContexts(rnd.Number)
+		pending.clearStalePeriodContexts(makeRound(rnd.Number+1), 20, false, false)
 		select {
 		case <-ctx.Done():
 			t.Errorf("cancelled request")
 		default:
 		}
 
-		pending.clearStaleContexts(makeRound(rnd.Number+2), 20, false, false)
+		pending.clearStaleRoundContexts(rnd.Number+1)
+		pending.clearStalePeriodContexts(makeRound(rnd.Number+2), 20, false, false)
 		select {
 		case <-ctx.Done():
 		default:
@@ -324,28 +328,32 @@ func TestCryptoRequestContextCleanupByPeriod(t *testing.T) {
 		_, hasPeriod := pending[rnd].periods[cryptoRequestCtxKey{period: per}]
 		require.True(t, hasPeriod)
 
-		pending.clearStaleContexts(rnd, per+2, false, false)
+		pending.clearStaleRoundContexts(rnd.Number.SubSaturate(1))
+		pending.clearStalePeriodContexts(rnd, per+2, false, false)
 		select {
 		case <-ctx.Done():
 			t.Errorf("cancelled request")
 		default:
 		}
 
-		pending.clearStaleContexts(rnd, per+3, true, false)
+		pending.clearStaleRoundContexts(rnd.Number.SubSaturate(1))
+		pending.clearStalePeriodContexts(rnd, per+3, true, false)
 		select {
 		case <-ctx.Done():
 			t.Errorf("cancelled request via pinned")
 		default:
 		}
 
-		pending.clearStaleContexts(rnd, per+3, false, true)
+		pending.clearStaleRoundContexts(rnd.Number.SubSaturate(1))
+		pending.clearStalePeriodContexts(rnd, per+3, false, true)
 		select {
 		case <-ctx.Done():
 			t.Errorf("cancelled request via certify")
 		default:
 		}
 
-		pending.clearStaleContexts(rnd, per+3, false, false)
+		pending.clearStaleRoundContexts(rnd.Number.SubSaturate(1))
+		pending.clearStalePeriodContexts(rnd, per+3, false, false)
 		select {
 		case <-ctx.Done():
 		default:
@@ -390,14 +398,16 @@ func TestCryptoRequestContextCleanupByPeriodPinned(t *testing.T) {
 			require.True(t, hasPeriod)
 		}
 
-		pending.clearStaleContexts(rnd, 12, false, false)
+		pending.clearStaleRoundContexts(rnd.Number.SubSaturate(1))
+		pending.clearStalePeriodContexts(rnd, 12, false, false)
 		select {
 		case <-ctx.Done():
 			t.Errorf("cancelled request")
 		default:
 		}
 
-		pending.clearStaleContexts(rnd, 13, false, false)
+		pending.clearStaleRoundContexts(rnd.Number.SubSaturate(1))
+		pending.clearStalePeriodContexts(rnd, 13, false, false)
 		select {
 		case <-ctx.Done():
 			t.Errorf("cancelled request but pinned/certify set")

@@ -558,6 +558,11 @@ func (t *demuxTester) VerifyVote(ctx context.Context, request cryptoVoteRequest)
 }
 
 // implement cryptoVerifier
+func (t *demuxTester) ClearRoundsBefore(r basics.Round) {
+	// we don't care about this function in this test.
+}
+
+// implement cryptoVerifier
 func (t *demuxTester) Verified(tag protocol.Tag) <-chan cryptoResult {
 	var cs testChanState
 	switch tag {

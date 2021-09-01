@@ -247,6 +247,9 @@ func (d *demux) next(s *Service, extSignals pipelineExternalDemuxSignals) (e ext
 	// garbage-collect clocks that the player no longer cares about
 	s.clockManager.gc(extSignals.signals)
 
+	// garbage-collect crypto verification tasks that the player no longer cares about
+	d.crypto.ClearRoundsBefore(extSignals.currentRound)
+
 	// XXX assert len(extSignals) > 0 and matches expected depth
 	// pick next deadlineCh from extSignals
 	ledgerNextRoundCh := s.Ledger.Wait(nextRound, bookkeeping.BlockHash{})
