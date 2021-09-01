@@ -235,7 +235,7 @@ var txnFieldSpecs = []txnFieldSpec{
 	{LocalNumUint, StackUint64, 3},
 	{LocalNumByteSlice, StackUint64, 3},
 	{ExtraProgramPages, StackUint64, 4},
-	{Nonparticipation, StackUint64, 0},
+	{Nonparticipation, StackUint64, 5},
 }
 
 // TxnaFieldNames are arguments to the 'txna' opcode

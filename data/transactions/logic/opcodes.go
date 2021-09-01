@@ -42,6 +42,11 @@ const backBranchEnabledVersion = 4
 // using an index into arrays.
 const directRefEnabledVersion = 4
 
+// keyRegPartFlagEnabledVersion is the version of TEAL where key registration
+// Nonparticipation flog was enabled. We use this to disallow a lower version
+// TEAL program from calling this txn field. Do not edit!
+const keyRegPartFlagEnabledVersion = 5
+
 // opDetails records details such as non-standard costs, immediate
 // arguments, or dynamic layout controlled by a check function.
 type opDetails struct {

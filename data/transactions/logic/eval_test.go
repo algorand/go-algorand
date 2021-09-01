@@ -1261,8 +1261,6 @@ txn Lease
 arg 8
 ==
 &&
-txn Nonparticipation
-pop
 `
 
 const testTxnProgramTextV2 = testTxnProgramTextV1 + `txn ApplicationID
@@ -1419,6 +1417,13 @@ assert
 int 1
 `
 
+const testTxnProgramTextV5 = testTxnProgramTextV4 + `
+txn Nonparticipation
+pop
+int 1
+==
+`
+
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
@@ -1505,7 +1510,7 @@ func TestTxn(t *testing.T) {
 
 	t.Parallel()
 	for _, txnField := range TxnFieldNames {
-		if !strings.Contains(testTxnProgramTextV4, txnField) {
+		if !strings.Contains(testTxnProgramTextV5, txnField) {
 			if txnField != FirstValidTime.String() {
 				t.Errorf("TestTxn missing field %v", txnField)
 			}
@@ -1517,6 +1522,7 @@ func TestTxn(t *testing.T) {
 		2: testTxnProgramTextV2,
 		3: testTxnProgramTextV3,
 		4: testTxnProgramTextV4,
+		5: testTxnProgramTextV5,
 	}
 
 	clearOps := testProg(t, "int 1", 1)
@@ -3945,7 +3951,7 @@ func TestApplicationsDisallowOldTeal(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
+func TestRaiseMinTealVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	const source = "int 1"
@@ -3973,6 +3979,13 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 	txn5.Txn.RekeyTo = basics.Address{1}
 	txngroup2 := []transactions.SignedTxn{txn4, txn5}
 
+	// Construct a group of one payment, one nonparticipating key registration
+	txn6 := makeSampleTxn()
+	txn6.Txn.Type = protocol.PaymentTx
+	txn7 := txn4
+	txn7.Txn.Nonparticipation = true
+	txngroup3 := []transactions.SignedTxn{txn6, txn7}
+
 	type testcase struct {
 		group            []transactions.SignedTxn
 		validFromVersion uint64
@@ -3982,6 +3995,7 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 		{txngroup0, 0},
 		{txngroup1, appsEnabledVersion},
 		{txngroup2, rekeyingEnabledVersion},
+		{txngroup3, keyRegPartFlagEnabledVersion},
 	}
 
 	for ci, cse := range cases {
