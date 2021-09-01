@@ -1261,6 +1261,8 @@ txn Lease
 arg 8
 ==
 &&
+txn Nonparticipation
+pop
 `
 
 const testTxnProgramTextV2 = testTxnProgramTextV1 + `txn ApplicationID
@@ -1435,6 +1437,7 @@ func makeSampleTxn() transactions.SignedTxn {
 	txn.Txn.VoteFirst = 1317
 	txn.Txn.VoteLast = 17776
 	txn.Txn.VoteKeyDilution = 1
+	txn.Txn.Nonparticipation = false
 	txn.Txn.Type = protocol.PaymentTx
 	txn.Txn.AssetAmount = 1234
 	txn.Txn.AssetSender = txn.Txn.Receiver

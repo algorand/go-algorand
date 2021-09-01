@@ -146,6 +146,9 @@ const (
 	// ExtraProgramPages AppParams.ExtraProgramPages
 	ExtraProgramPages
 
+	// Nonparticipation Transaction.Nonparticipation
+	Nonparticipation
+
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
 
@@ -232,6 +235,7 @@ var txnFieldSpecs = []txnFieldSpec{
 	{LocalNumUint, StackUint64, 3},
 	{LocalNumByteSlice, StackUint64, 3},
 	{ExtraProgramPages, StackUint64, 4},
+	{Nonparticipation, StackUint64, 0},
 }
 
 // TxnaFieldNames are arguments to the 'txna' opcode

@@ -1886,6 +1886,12 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 		sv.Uint = uint64(txn.VoteLast)
 	case VoteKeyDilution:
 		sv.Uint = txn.VoteKeyDilution
+	case Nonparticipation:
+		if txn.Nonparticipation {
+			sv.Uint = 1
+		} else {
+			sv.Uint = 0
+		}
 	case Type:
 		sv.Bytes = []byte(txn.Type)
 	case TypeEnum:
