@@ -27,23 +27,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TODO need testcase (bool[2], bool[2]), empty dynamic array
-
 func TestEncodeValid(t *testing.T) {
 	partitiontest.PartitionTest(t)
+
+	// encoding test for uint type, iterating through all uint sizes
+	// randomly pick 1000 valid uint values and check if encoded value match with expected
+	// also check if uint can contain max uint value (2^size - 1) under specific byte size
 	for intSize := 8; intSize <= 512; intSize += 8 {
 		upperLimit := big.NewInt(0).Lsh(big.NewInt(1), uint(intSize))
 		for i := 0; i < 1000; i++ {
 			randomInt, err := rand.Int(rand.Reader, upperLimit)
 			require.NoError(t, err, "cryptographic random int init fail")
-			valueUint, err := MakeUint(randomInt, uint16(intSize))
-			require.NoError(t, err, "makeUint Fail")
-			encodedUint, err := valueUint.Encode()
-			require.NoError(t, err, "uint encode fail")
+
 			randomIntByte := randomInt.Bytes()
-			buffer := make([]byte, intSize/8-len(randomIntByte))
-			buffer = append(buffer, randomIntByte...)
-			require.Equal(t, buffer, encodedUint, "encode uint not match with expected")
+			expected := make([]byte, intSize/8-len(randomIntByte))
+			expected = append(expected, randomIntByte...)
+
+			uintValue, err := MakeUint(randomInt, uint16(intSize))
+			require.NoError(t, err, "makeUint Fail")
+			uintBytesActual, err := uintValue.Encode()
+
+			require.NoError(t, err, "uint encode fail")
+			require.Equal(t, expected, uintBytesActual, "encode uint not match with expected")
 		}
 		// 2^[size] - 1 test
 		largest := big.NewInt(0).Add(
@@ -57,6 +62,9 @@ func TestEncodeValid(t *testing.T) {
 		require.Equal(t, largest.Bytes(), encoded, "encode uint largest do not match with expected")
 	}
 
+	// encoding test for ufixed, iterating through all the valid ufixed size and precision
+	// randomly generate 10 big int values for ufixed numerator and check if encoded value match with expected
+	// also check if ufixed can fit max numerator (2^size - 1) under specific byte size
 	for size := 8; size <= 512; size += 8 {
 		upperLimit := big.NewInt(0).Lsh(big.NewInt(1), uint(size))
 		largest := big.NewInt(0).Add(
@@ -89,24 +97,27 @@ func TestEncodeValid(t *testing.T) {
 		}
 	}
 
+	// encoding test for address, since address is 32 byte, it can be considered as 256 bit uint
+	// randomly generate 1000 uint256 and make address values, check if encoded value match with expected
 	upperLimit := big.NewInt(0).Lsh(big.NewInt(1), 256)
 	for i := 0; i < 1000; i++ {
 		randomAddrInt, err := rand.Int(rand.Reader, upperLimit)
 		require.NoError(t, err, "cryptographic random int init fail")
 
-		addressBytes := randomAddrInt.Bytes()
-		address := make([]byte, 32-len(addressBytes))
-		address = append(address, addressBytes...)
+		rand256Bytes := randomAddrInt.Bytes()
+		addrBytesExpected := make([]byte, 32-len(rand256Bytes))
+		addrBytesExpected = append(addrBytesExpected, rand256Bytes...)
 
 		var addrBytes [32]byte
-		copy(addrBytes[:], address[:32])
+		copy(addrBytes[:], addrBytesExpected[:32])
 
 		addressValue := MakeAddress(addrBytes)
-		addrEncode, err := addressValue.Encode()
+		addrBytesActual, err := addressValue.Encode()
 		require.NoError(t, err, "address encode fail")
-		require.Equal(t, address, addrEncode, "encode addr not match with expected")
+		require.Equal(t, addrBytesExpected, addrBytesActual, "encode addr not match with expected")
 	}
 
+	// encoding test for bool values
 	for i := 0; i < 2; i++ {
 		boolValue := MakeBool(i == 1)
 		boolEncode, err := boolValue.Encode()
@@ -118,6 +129,7 @@ func TestEncodeValid(t *testing.T) {
 		require.Equal(t, expected, boolEncode, "encode bool not match with expected")
 	}
 
+	// encoding test for byte values
 	for i := 0; i < (1 << 8); i++ {
 		byteValue := MakeByte(byte(i))
 		byteEncode, err := byteValue.Encode()
@@ -126,20 +138,30 @@ func TestEncodeValid(t *testing.T) {
 		require.Equal(t, expected, byteEncode, "encode byte not match with expected")
 	}
 
-	for length := 1; length <= 10; length++ {
+	// encoding test for string values, since strings in ABI contain utf-8 symbols
+	// we use `gobberish` to generate random utf-8 symbols
+	// randomly generate utf-8 str from length 1 to 100, each length draw 10 random strs
+	// check if encoded ABI str match with expected value
+	for length := 1; length <= 100; length++ {
 		for i := 0; i < 10; i++ {
+			// generate utf8 strings from `gobberish` at some length
 			utf8Str := gobberish.GenerateString(length)
 			strValue := MakeString(utf8Str)
+			// since string is just type alias of `byte[]`, we need to store number of bytes in encoding
 			utf8ByteLen := len([]byte(utf8Str))
-			head := make([]byte, 2)
-			binary.BigEndian.PutUint16(head, uint16(utf8ByteLen))
-			expected := append(head, []byte(utf8Str)...)
+			lengthBytes := make([]byte, 2)
+			binary.BigEndian.PutUint16(lengthBytes, uint16(utf8ByteLen))
+			expected := append(lengthBytes, []byte(utf8Str)...)
+
 			strEncode, err := strValue.Encode()
 			require.NoError(t, err, "string encode fail")
 			require.Equal(t, expected, strEncode, "encode string not match with expected")
 		}
 	}
 
+	// encoding test for static bool array, the expected behavior of encoding is to
+	// compress multiple bool into a single byte.
+	// input: {T, F, F, T, T}, encode expected: {0b10011000}
 	t.Run("static bool array encoding", func(t *testing.T) {
 		inputBase := []bool{true, false, false, true, true}
 		arrayElems := make([]Value, len(inputBase))
@@ -156,6 +178,8 @@ func TestEncodeValid(t *testing.T) {
 		require.Equal(t, expected, boolArrEncode, "static bool array encode not match expected")
 	})
 
+	// encoding test for static bool array
+	// input: {F, F, F, T, T, F, T, F, T, F, T}, encode expected: {0b00011010, 0b10100000}
 	t.Run("static bool array encoding", func(t *testing.T) {
 		inputBase := []bool{false, false, false, true, true, false, true, false, true, false, true}
 		arrayElems := make([]Value, len(inputBase))
@@ -172,6 +196,8 @@ func TestEncodeValid(t *testing.T) {
 		require.Equal(t, expected, boolArrEncode, "static bool array encode not match expected")
 	})
 
+	// encoding test for dynamic bool array
+	// input: {F, T, F, T, F, T, F, T, F, T}, encode expected: {0b01010101, 0b01000000}
 	t.Run("dynamic bool array encoding", func(t *testing.T) {
 		inputBase := []bool{false, true, false, true, false, true, false, true, false, true}
 		arrayElems := make([]Value, len(inputBase))
@@ -188,11 +214,25 @@ func TestEncodeValid(t *testing.T) {
 		require.Equal(t, expected, boolArrEncode, "dynamic bool array encode not match expected")
 	})
 
+	// encoding test for dynamic tuple values
+	// input type: (string, bool, bool, bool, bool, string)
+	// input value: ("ABC", T, F, T, F, "DEF")
+	/*
+	   encode expected:
+	   0x00, 0x05                        (first string start at 5th byte)
+	   0b10100000                        (4 bool tuple element compacted together)
+	   0x00, 0x0A                        (second string start at 10th byte)
+	   0x00, 0x03                        (first string byte length 3)
+	   byte('A'), byte('B'), byte('C')   (first string encoded bytes)
+	   0x00, 0x03                        (second string byte length 3)
+	   byte('D'), byte('E'), byte('F')   (second string encoded bytes)
+	*/
 	t.Run("dynamic tuple encoding", func(t *testing.T) {
 		inputBase := []interface{}{
 			"ABC", true, false, true, false, "DEF",
 		}
 		tupleElems := make([]Value, len(inputBase))
+		// make tuple element values
 		for index, bVal := range inputBase {
 			temp, ok := bVal.(string)
 			if ok {
@@ -214,6 +254,14 @@ func TestEncodeValid(t *testing.T) {
 		require.Equal(t, expected, stringTupleEncode, "string tuple encoding not match expected")
 	})
 
+	// encoding test for tuples with static bool arrays
+	// input type: {bool[2], bool[2]}
+	// input value: ({T, T}, {T, T})
+	/*
+	   encode expected:
+	   0b11000000      (first static bool array)
+	   0b11000000      (second static bool array)
+	*/
 	t.Run("static bool array tuple encoding", func(t *testing.T) {
 		boolArr := []bool{true, true}
 		boolValArr := make([]Value, 2)
@@ -233,6 +281,16 @@ func TestEncodeValid(t *testing.T) {
 		require.Equal(t, expected, actual, "encode static bool tuple should be equal")
 	})
 
+	// encoding test for tuples with static and dynamic bool arrays
+	// input type: (bool[2], bool[])
+	// input value: ({T, T}, {T, T})
+	/*
+	   encode expected:
+	   0b11000000      (first static bool array)
+	   0x00, 0x03      (second dynamic bool array starts at 3rd byte)
+	   0x00, 0x02      (dynamic bool array length 2)
+	   0b11000000      (second static bool array)
+	*/
 	t.Run("static/dynamic bool array tuple encoding", func(t *testing.T) {
 		boolArr := []bool{true, true}
 		boolValArr := make([]Value, 2)
@@ -255,6 +313,16 @@ func TestEncodeValid(t *testing.T) {
 		require.Equal(t, expected, actual, "encode static/dynamic bool array tuple should not return error")
 	})
 
+	// encoding test for tuples with all dynamic bool arrays
+	// input type: (bool[], bool[])
+	// input values: ({}, {})
+	/*
+	   encode expected:
+	   0x00, 0x04      (first dynamic bool array starts at 4th byte)
+	   0x00, 0x06      (second dynamic bool array starts at 6th byte)
+	   0x00, 0x00      (first dynamic bool array length 0)
+	   0x00, 0x00      (second dynamic bool array length 0)
+	*/
 	t.Run("empty dynamic array tuple encoding", func(t *testing.T) {
 		emptyDynamicArray, err := MakeDynamicArray([]Value{}, MakeBoolType())
 		require.NoError(t, err, "make empty dynamic array should not return error")
@@ -269,10 +337,12 @@ func TestEncodeValid(t *testing.T) {
 		require.Equal(t, expected, actual, "encode empty dynamic array tuple does not match with expected")
 	})
 
+	// encoding test for empty tuple
+	// input: (), expected encoding: ""
 	t.Run("empty tuple encoding", func(t *testing.T) {
 		emptyTuple, err := MakeTuple([]Value{})
 		require.NoError(t, err, "make empty tuple should not return error")
-		expected := []byte{}
+		expected := make([]byte, 0)
 		actual, err := emptyTuple.Encode()
 		require.NoError(t, err, "encode empty tuple should not return error")
 		require.Equal(t, expected, actual, "empty tuple encode should not return error")
@@ -281,23 +351,30 @@ func TestEncodeValid(t *testing.T) {
 
 func TestDecodeValid(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	// decoding test for uint, iterating through all valid uint size
+	// randomly take 1000 tests on each valid size
+	// generate bytes from random uint values and decode bytes with additional type information
 	for intSize := 8; intSize <= 512; intSize += 8 {
 		upperLimit := big.NewInt(0).Lsh(big.NewInt(1), uint(intSize))
 		for i := 0; i < 1000; i++ {
 			randomInt, err := rand.Int(rand.Reader, upperLimit)
 			require.NoError(t, err, "cryptographic random int init fail")
-			valueUint, err := MakeUint(randomInt, uint16(intSize))
+			expected, err := MakeUint(randomInt, uint16(intSize))
 			require.NoError(t, err, "makeUint Fail")
-			encodedUint, err := valueUint.Encode()
+			encodedUint, err := expected.Encode()
 			require.NoError(t, err, "uint encode fail")
+			// attempt to decode from given bytes: encodedUint
 			uintType, err := MakeUintType(uint16(intSize))
 			require.NoError(t, err, "uint type make fail")
-			decodedUint, err := Decode(encodedUint, uintType)
+			actual, err := Decode(encodedUint, uintType)
 			require.NoError(t, err, "decoding uint should not return error")
-			require.Equal(t, valueUint, decodedUint, "decode uint fail to match expected value")
+			require.Equal(t, expected, actual, "decode uint fail to match expected value")
 		}
 	}
 
+	// decoding test for ufixed, iterating through all valid ufixed size and precision
+	// randomly take 10 tests on each valid setting
+	// generate ufixed bytes and try to decode back with additional type information
 	for size := 8; size <= 512; size += 8 {
 		upperLimit := big.NewInt(0).Lsh(big.NewInt(1), uint(size))
 		for precision := 1; precision <= 160; precision++ {
@@ -321,6 +398,9 @@ func TestDecodeValid(t *testing.T) {
 		}
 	}
 
+	// decoding test for address, randomly take 1000 tests
+	// address is type alias of byte[32], we generate address value with random 256 bit big int values
+	// we make the expected address value and decode the encoding of expected, check if they match
 	upperLimit := big.NewInt(0).Lsh(big.NewInt(1), 256)
 	for i := 0; i < 1000; i++ {
 		randomAddrInt, err := rand.Int(rand.Reader, upperLimit)
@@ -342,6 +422,7 @@ func TestDecodeValid(t *testing.T) {
 		require.Equal(t, addressValue, addressDecoded, "decode addr not match with expected")
 	}
 
+	// bool value decoding test
 	for i := 0; i < 2; i++ {
 		boolValue := MakeBool(i == 1)
 		boolEncode, err := boolValue.Encode()
@@ -351,6 +432,7 @@ func TestDecodeValid(t *testing.T) {
 		require.Equal(t, boolValue, boolDecode, "decode bool not match with expected")
 	}
 
+	// byte value decoding test, iterating through 256 valid byte value
 	for i := 0; i < (1 << 8); i++ {
 		byteValue := MakeByte(byte(i))
 		byteEncode, err := byteValue.Encode()
@@ -360,7 +442,10 @@ func TestDecodeValid(t *testing.T) {
 		require.Equal(t, byteValue, byteDecode, "decode byte not match with expected")
 	}
 
-	for length := 1; length <= 10; length++ {
+	// string value decoding test, test from utf string length 1 to 100
+	// randomly take 10 utf-8 strings to make ABI string values
+	// decode the encoded expected value and check if they match
+	for length := 1; length <= 100; length++ {
 		for i := 0; i < 10; i++ {
 			utf8Str := gobberish.GenerateString(length)
 			strValue := MakeString(utf8Str)
@@ -372,6 +457,9 @@ func TestDecodeValid(t *testing.T) {
 		}
 	}
 
+	// decoding test for static bool array
+	// expected value: bool[5]: {T, F, F, T, T}
+	// input: 0b10011000
 	t.Run("static bool array decode", func(t *testing.T) {
 		inputBase := []bool{true, false, false, true, true}
 		arrayElems := make([]Value, len(inputBase))
@@ -380,11 +468,17 @@ func TestDecodeValid(t *testing.T) {
 		}
 		expected, err := MakeStaticArray(arrayElems)
 		require.NoError(t, err, "make expected value should not return error")
-		actual, err := Decode([]byte{0b10011000}, MakeStaticArrayType(MakeBoolType(), uint16(len(inputBase))))
+		actual, err := Decode(
+			[]byte{0b10011000},
+			MakeStaticArrayType(MakeBoolType(), uint16(len(inputBase))),
+		)
 		require.NoError(t, err, "decoding static bool array should not return error")
 		require.Equal(t, expected, actual, "static bool array decode do not match expected")
 	})
 
+	// decoding test for static bool array
+	// expected value: bool[11]: F, F, F, T, T, F, T, F, T, F, T
+	// input: 0b00011010, 0b10100000
 	t.Run("static bool array decode", func(t *testing.T) {
 		inputBase := []bool{false, false, false, true, true, false, true, false, true, false, true}
 		arrayElems := make([]Value, len(inputBase))
@@ -403,6 +497,18 @@ func TestDecodeValid(t *testing.T) {
 		require.Equal(t, expected, actual, "static bool array decode do not match expected")
 	})
 
+	// decoding test for static uint array
+	// expected input: uint64[8]: {1, 2, 3, 4, 5, 6, 7, 8}
+	/*
+		input: 0, 0, 0, 0, 0, 0, 0, 1      (encoding for uint64 1)
+		       0, 0, 0, 0, 0, 0, 0, 2      (encoding for uint64 2)
+		       0, 0, 0, 0, 0, 0, 0, 3      (encoding for uint64 3)
+		       0, 0, 0, 0, 0, 0, 0, 4      (encoding for uint64 4)
+		       0, 0, 0, 0, 0, 0, 0, 5      (encoding for uint64 5)
+		       0, 0, 0, 0, 0, 0, 0, 6      (encoding for uint64 6)
+		       0, 0, 0, 0, 0, 0, 0, 7      (encoding for uint64 7)
+		       0, 0, 0, 0, 0, 0, 0, 8      (encoding for uint64 8)
+	*/
 	t.Run("static uint array decode", func(t *testing.T) {
 		inputUint := []uint64{1, 2, 3, 4, 5, 6, 7, 8}
 		arrayElems := make([]Value, len(inputUint))
@@ -422,10 +528,16 @@ func TestDecodeValid(t *testing.T) {
 		require.Equal(t, expected, arrayDecoded, "uint64 static array decode do not match with expected value")
 	})
 
+	// decoding test for dynamic bool array
+	// expected value: bool[]: {F, T, F, T, F, T, F, T, F, T}
+	/*
+	   input bytes: 0x00, 0x0A                (dynamic bool array length 10)
+	                0b01010101, 0b01000000    (dynamic bool array encoding)
+	*/
 	t.Run("dynamic bool array decode", func(t *testing.T) {
-		inputBase := []bool{false, true, false, true, false, true, false, true, false, true}
-		arrayElems := make([]Value, len(inputBase))
-		for index, bVal := range inputBase {
+		inputBool := []bool{false, true, false, true, false, true, false, true, false, true}
+		arrayElems := make([]Value, len(inputBool))
+		for index, bVal := range inputBool {
 			arrayElems[index] = MakeBool(bVal)
 		}
 		expected, err := MakeDynamicArray(arrayElems, MakeBoolType())
@@ -438,6 +550,19 @@ func TestDecodeValid(t *testing.T) {
 		require.Equal(t, expected, actual, "decode dynamic array do not match expected")
 	})
 
+	// decoding test for dynamic tuple values
+	// expected value type: (string, bool, bool, bool, bool, string)
+	// expected value: ("ABC", T, F, T, F, "DEF")
+	/*
+	   input bytes:
+	   0x00, 0x05                        (first string start at 5th byte)
+	   0b10100000                        (4 bool tuple element compacted together)
+	   0x00, 0x0A                        (second string start at 10th byte)
+	   0x00, 0x03                        (first string byte length 3)
+	   byte('A'), byte('B'), byte('C')   (first string encoded bytes)
+	   0x00, 0x03                        (second string byte length 3)
+	   byte('D'), byte('E'), byte('F')   (second string encoded bytes)
+	*/
 	t.Run("dynamic tuple decoding", func(t *testing.T) {
 		inputEncode := []byte{
 			0x00, 0x05, 0b10100000, 0x00, 0x0A,
@@ -475,6 +600,14 @@ func TestDecodeValid(t *testing.T) {
 		require.Equal(t, expected, actual, "dynamic tuple not match with expected")
 	})
 
+	// decoding test for tuple with static bool array
+	// expected type: (bool[2], bool[2])
+	// expected value: ({T, T}, {T, T})
+	/*
+	   input bytes:
+	   0b11000000      (first static bool array)
+	   0b11000000      (second static bool array)
+	*/
 	t.Run("static bool array tuple decoding", func(t *testing.T) {
 		boolArr := []bool{true, true}
 		boolValArr := make([]Value, 2)
@@ -509,6 +642,16 @@ func TestDecodeValid(t *testing.T) {
 		require.Equal(t, tupleVal, decoded, "decoded tuple value do not match with expected")
 	})
 
+	// decoding test for tuple with static and dynamic bool array
+	// expected type: (bool[2], bool[])
+	// expected value: ({T, T}, {T, T})
+	/*
+	   input bytes:
+	   0b11000000      (first static bool array)
+	   0x00, 0x03      (second dynamic bool array starts at 3rd byte)
+	   0x00, 0x02      (dynamic bool array length 2)
+	   0b11000000      (second static bool array)
+	*/
 	t.Run("static/dynamic bool array tuple decoding", func(t *testing.T) {
 		boolArr := []bool{true, true}
 		boolValArr := make([]Value, 2)
@@ -545,6 +688,16 @@ func TestDecodeValid(t *testing.T) {
 		require.Equal(t, tupleVal, decoded, "decoded tuple value do not match with expected")
 	})
 
+	// decoding test for tuple with all dynamic bool array
+	// expected value: (bool[], bool[])
+	// expected value: ({}, {})
+	/*
+	   input bytes:
+	   0x00, 0x04      (first dynamic bool array starts at 4th byte)
+	   0x00, 0x06      (second dynamic bool array starts at 6th byte)
+	   0x00, 0x00      (first dynamic bool array length 0)
+	   0x00, 0x00      (second dynamic bool array length 0)
+	*/
 	t.Run("empty dynamic array tuple decoding", func(t *testing.T) {
 		emptyDynamicArray, err := MakeDynamicArray([]Value{}, MakeBoolType())
 		require.NoError(t, err, "make empty dynamic array should not return error")
@@ -572,10 +725,13 @@ func TestDecodeValid(t *testing.T) {
 		require.Equal(t, tupleVal, decoded, "decoded tuple value do not match with expected")
 	})
 
+	// decoding test for empty tuple
+	// expected value: ()
+	// byte input: ""
 	t.Run("empty tuple decoding", func(t *testing.T) {
 		emptyTuple, err := MakeTuple([]Value{})
 		require.NoError(t, err, "make empty tuple should not return error")
-		encodedInput := []byte{}
+		encodedInput := make([]byte, 0)
 		decoded, err := Decode(encodedInput, Type{
 			enumIndex:    Tuple,
 			staticLength: 0,
@@ -588,6 +744,10 @@ func TestDecodeValid(t *testing.T) {
 
 func TestDecodeInvalid(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	// decoding test for *corrupted* static bool array
+	// expected 9 elements for static bool array
+	// encoded bytes have only 8 bool values
+	// should throw error
 	t.Run("corrupted static bool array decode", func(t *testing.T) {
 		inputBase := []byte{0b11111111}
 		arrayType := MakeStaticArrayType(MakeBoolType(), 9)
@@ -595,6 +755,10 @@ func TestDecodeInvalid(t *testing.T) {
 		require.Error(t, err, "decoding corrupted static bool array should return error")
 	})
 
+	// decoding test for *corrupted* static bool array
+	// expected 8 elements for static bool array
+	// encoded bytes have 1 byte more (0b00000000)
+	// should throw error
 	t.Run("corrupted static bool array decode", func(t *testing.T) {
 		inputBase := []byte{0b01001011, 0b00000000}
 		arrayType := MakeStaticArrayType(MakeBoolType(), 8)
@@ -602,6 +766,10 @@ func TestDecodeInvalid(t *testing.T) {
 		require.Error(t, err, "decoding corrupted static bool array should return error")
 	})
 
+	// decoding test for *corrupted* static uint array
+	// expected 8 uint elements in static uint64[8] array
+	// encoded bytes provide only 7 uint64 encoding
+	// should throw error
 	t.Run("static uint array decode", func(t *testing.T) {
 		inputBase := []byte{
 			0, 0, 0, 0, 0, 0, 0, 0,
@@ -619,6 +787,10 @@ func TestDecodeInvalid(t *testing.T) {
 		require.Error(t, err, "corrupted uint64 static array decode should return error")
 	})
 
+	// decoding test for *corrupted* static uint array
+	// expected 7 uint elements in static uint64[7] array
+	// encoded bytes provide 8 uint64 encoding (one more uint64: 7)
+	// should throw error
 	t.Run("static uint array decode", func(t *testing.T) {
 		inputBase := []byte{
 			0, 0, 0, 0, 0, 0, 0, 0,
@@ -637,6 +809,10 @@ func TestDecodeInvalid(t *testing.T) {
 		require.Error(t, err, "corrupted uint64 static array decode should return error")
 	})
 
+	// decoding test for *corrupted* dynamic bool array
+	// expected 0x0A (10) bool elements in encoding head
+	// encoded bytes provide only 8 bool elements
+	// should throw error
 	t.Run("corrupted dynamic bool array decode", func(t *testing.T) {
 		inputBase := []byte{
 			0x00, 0x0A, 0b10101010,
@@ -646,6 +822,10 @@ func TestDecodeInvalid(t *testing.T) {
 		require.Error(t, err, "decode corrupted dynamic array should return error")
 	})
 
+	// decoding test for *corrupted* dynamic bool array
+	// expected 0x07 (7) bool elements in encoding head
+	// encoded bytes provide 1 byte more (0b00000000)
+	// should throw error
 	t.Run("corrupted dynamic bool array decode", func(t *testing.T) {
 		inputBase := []byte{
 			0x00, 0x07, 0b10101010, 0b00000000,
@@ -655,6 +835,22 @@ func TestDecodeInvalid(t *testing.T) {
 		require.Error(t, err, "decode corrupted dynamic array should return error")
 	})
 
+	// decoding test for *corrupted* dynamic tuple value
+	// expected type: (string, bool, bool, bool, bool, string)
+	// expected value: ("ABC", T, F, T, F, "DEF")
+	/*
+	   corrupted bytes:
+	   0x00, 0x04                        (corrupted: first string start at 4th byte, should be 5th)
+	   0b10100000                        (4 bool tuple element compacted together)
+	   0x00, 0x0A                        (second string start at 10th byte)
+	   0x00, 0x03                        (first string byte length 3)
+	   byte('A'), byte('B'), byte('C')   (first string encoded bytes)
+	   0x00, 0x03                        (second string byte length 3)
+	   byte('D'), byte('E'), byte('F')   (second string encoded bytes)
+	*/
+	// the result would be: first string have length 0x0A, 0x00
+	// the length exceeds the segment it allocated: 0x0A, 0x00, 0x03, byte('A'), byte('B'), byte('C')
+	// should throw error
 	t.Run("corrupted dynamic tuple decoding", func(t *testing.T) {
 		inputEncode := []byte{
 			0x00, 0x04, 0b10100000, 0x00, 0x0A,
@@ -686,5 +882,135 @@ func TestDecodeInvalid(t *testing.T) {
 			},
 		)
 		require.Error(t, err, "corrupted decoding dynamic tuple should return error")
+	})
+
+	// decoding test for *corrupted* tuple with static bool arrays
+	// expected type: (bool[2], bool[2])
+	// expected value: ({T, T}, {T, T})
+	/*
+		    corrupted bytes test case 0:
+			0b11000000
+			0b11000000
+		    0b00000000  <- corrupted byte, 1 byte more
+
+		   corrupted bytes test case 0:
+			0b11000000
+		                <- corrupted byte, 1 byte missing
+	*/
+	t.Run("corrupted static bool array tuple decoding", func(t *testing.T) {
+		expectedType := Type{
+			enumIndex:    Tuple,
+			staticLength: 2,
+			childTypes: []Type{
+				{
+					enumIndex:    ArrayStatic,
+					staticLength: 2,
+					childTypes:   []Type{MakeBoolType()},
+				},
+				{
+					enumIndex:    ArrayStatic,
+					staticLength: 2,
+					childTypes:   []Type{MakeBoolType()},
+				},
+			},
+		}
+
+		encodedInput0 := []byte{
+			0b11000000,
+			0b11000000,
+			0b00000000,
+		}
+		_, err := Decode(encodedInput0, expectedType)
+		require.Error(t, err, "decode corrupted tuple value should return error")
+
+		encodedInput1 := []byte{
+			0b11000000,
+		}
+		_, err = Decode(encodedInput1, expectedType)
+		require.Error(t, err, "decode corrupted tuple value should return error")
+	})
+
+	// decoding test for *corrupted* tuple with static and dynamic bool array
+	// expected type: (bool[2], bool[])
+	// expected value: ({T, T}, {T, T})
+	/*
+	   corrupted bytes:
+	   0b11000000      (first static bool array)
+	   0x03            <- corrupted, missing 0x00 byte (second dynamic bool array starts at 3rd byte)
+	   0x00, 0x02      (dynamic bool array length 2)
+	   0b11000000      (second static bool array)
+	*/
+	t.Run("corrupted static/dynamic bool array tuple decoding", func(t *testing.T) {
+		encodedInput := []byte{
+			0b11000000,
+			0x03,
+			0x00, 0x02, 0b11000000,
+		}
+		_, err := Decode(encodedInput, Type{
+			enumIndex:    Tuple,
+			staticLength: 2,
+			childTypes: []Type{
+				{
+					enumIndex:    ArrayStatic,
+					staticLength: 2,
+					childTypes:   []Type{MakeBoolType()},
+				},
+				{
+					enumIndex:  ArrayDynamic,
+					childTypes: []Type{MakeBoolType()},
+				},
+			},
+		})
+		require.Error(t, err, "decode corrupted tuple for static/dynamic bool array should return error")
+	})
+
+	// decoding test for *corrupted* tuple with dynamic bool array
+	// expected type: (bool[], bool[])
+	// expected value: ({}, {})
+	/*
+	   corrupted bytes:
+	   0x00, 0x04      (first dynamic bool array starts at 4th byte)
+	   0x00, 0x07      <- corrupted, should be 0x06 (second dynamic bool array starts at 6th byte)
+	   0x00, 0x00      (first dynamic bool array length 0)
+	   0x00, 0x00      (second dynamic bool array length 0)
+
+	   first dynamic array starts at 0x04, segment is 0x00, 0x00, 0x00, 1 byte 0x00 more
+	   second dynamic array starts at 0x07, and only have 0x00 1 byte
+	*/
+	// should return error
+	t.Run("corrupted empty dynamic array tuple decoding", func(t *testing.T) {
+		encodedInput := []byte{
+			0x00, 0x04, 0x00, 0x07,
+			0x00, 0x00, 0x00, 0x00,
+		}
+		_, err := Decode(encodedInput, Type{
+			enumIndex:    Tuple,
+			staticLength: 2,
+			childTypes: []Type{
+				{
+					enumIndex:  ArrayDynamic,
+					childTypes: []Type{MakeBoolType()},
+				},
+				{
+					enumIndex:  ArrayDynamic,
+					childTypes: []Type{MakeBoolType()},
+				},
+			},
+		})
+		require.Error(t, err, "decode corrupted tuple for empty dynamic array should return error")
+	})
+
+	// decoding test for *corrupted* empty tuple
+	// expected value: ()
+	// corrupted input: 0xFF, should be empty byte
+	// should return error
+	t.Run("corrupted empty tuple decoding", func(t *testing.T) {
+		encodedInput := []byte{0xFF}
+		_, err := Decode(encodedInput, Type{
+			enumIndex:    Tuple,
+			staticLength: 0,
+			childTypes:   []Type{},
+		})
+		require.Error(t, err, "decode corrupted empty tuple should return error")
 	})
 }
