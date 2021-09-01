@@ -32,7 +32,11 @@ with open(args.tests_results_filepath) as f:
         elif 'output' in testDict["Action"]:
             if '--- SKIP' in testDict['Output'] and 'due to partitioning' not in AllTestResults[fullTestName]['last_output']:
                 AllTestResults[fullTestName]['skipped_intentionally'] = True
-                AllTestResults[fullTestName]['skipped_reason'] = AllTestResults[fullTestName]['last_output']
+                if '=== RUN' in AllTestResults[fullTestName]['last_output']:
+                    AllTestResults[fullTestName]['skipped_reason'] = 'No reason given. PLEASE CHECK!!!'
+                else:
+                    AllTestResults[fullTestName]['skipped_reason'] = AllTestResults[fullTestName]['last_output']
+
             AllTestResults[fullTestName]['last_output'] = testDict['Output']
 
             
