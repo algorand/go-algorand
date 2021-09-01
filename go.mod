@@ -3,7 +3,7 @@ module github.com/algorand/go-algorand
 go 1.14
 
 require (
-	filippo.io/edwards25519 v1.0.0-rc.1
+	filippo.io/edwards25519 v0.0.0
 	github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d
 	github.com/algorand/go-deadlock v0.2.1
 	github.com/algorand/graphtrace v0.0.0-20201117160756-e524ed1a6f64
@@ -27,7 +27,6 @@ require (
 	github.com/gopherjs/gopherwasm v1.0.1 // indirect
 	github.com/gorilla/context v1.1.1 // indirect
 	github.com/gorilla/mux v1.6.2
-	github.com/gorilla/schema v1.0.2
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jmoiron/sqlx v1.2.0
@@ -55,3 +54,6 @@ require (
 	gopkg.in/toast.v1 v1.0.0-20180812000517-0a84660828b2 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
 )
+
+// vendored from upstream v1.0.0-rc.1 (ed0a5aec8230e)
+replace filippo.io/edwards25519 v0.0.0 => ./crypto/internal/edwards25519
