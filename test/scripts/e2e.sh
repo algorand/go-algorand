@@ -113,6 +113,7 @@ export GOPATH=$(go env GOPATH)
 cd "${SCRIPT_PATH}"
 
 if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
+
     ./timeout 200 ./e2e_basic_start_stop.sh
     duration "e2e_basic_start_stop.sh"
 
