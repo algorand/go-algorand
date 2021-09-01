@@ -3,7 +3,6 @@ print("===== STARTED RUNNING check_tests.py =====\n")
 import json
 import sys
 import argparse
-NUMBER_OF_NODES = 4
 
 # Arguments parsing / help menu
 parser = argparse.ArgumentParser(description='Verify test results for skipped tests and tests with multiple passes.')
@@ -23,17 +22,18 @@ with open(args.tests_results_filepath) as f:
         if fullTestName not in AllTestResults:
             AllTestResults[fullTestName] = {}
             AllTestResults[fullTestName]['ran'] = 0
-            AllTestResults[fullTestName]['skipped_due_to_partitioning'] = 0
-            # AllTestResults[fullTestName]['other_reasons'] = []
+            AllTestResults[fullTestName]['last_output'] = ''
+            AllTestResults[fullTestName]['skipped_intentionally'] = False
+            AllTestResults[fullTestName]['skipped_reason'] = ''
 
         # actions can be: output, run, skip, pass
         if 'pass' in testDict["Action"]:
             AllTestResults[fullTestName]['ran'] += 1
-        elif 'Output' in testDict:
-            if 'due to partitioning' in testDict['Output']:
-                AllTestResults[fullTestName]['skipped_due_to_partitioning'] += 1
-            # elif not any(x in testDict['Output']for x in ['--- SKIP', '=== RUN', '--- PASS', '=== PAUSE', '=== CONT']):
-                # AllTestResults[fullTestName]['other_reasons'].append(testDict['Output'])
+        elif 'output' in testDict["Action"]:
+            if '--- SKIP' in testDict['Output'] and 'due to partitioning' not in AllTestResults[fullTestName]['last_output']:
+                AllTestResults[fullTestName]['skipped_intentionally'] = True
+                AllTestResults[fullTestName]['skipped_reason'] = AllTestResults[fullTestName]['last_output']
+            AllTestResults[fullTestName]['last_output'] = testDict['Output']
 
             
 
@@ -69,13 +69,12 @@ printColor("==================================================\n", YELLOW_TEXT_C
 
 # Check intentionally skipped tests
 printColor("============= INTENTIONALLY SKIPPED ==============", YELLOW_TEXT_COLOR)
-# countSkippedOther = sum([1 for x in AllTestResults if 'other_reasons' in AllTestResults[x] and len(AllTestResults[x]['other_reasons'])])
 listOfSkippedIntentionally = []
-[listOfSkippedIntentionally.append(x) for x in AllTestResults if (AllTestResults[x]['ran'] == 0 and AllTestResults[x]['skipped_due_to_partitioning'] < NUMBER_OF_NODES)]
+[listOfSkippedIntentionally.append(x) for x in AllTestResults if (AllTestResults[x]['ran'] == 0 and AllTestResults[x]['skipped_intentionally'] == True )]
 countSkippedIntentionally = len(listOfSkippedIntentionally)
 if countSkippedIntentionally:
     printColor(f"The following {countSkippedIntentionally} tests were skipped intentionally:", YELLOW_TEXT_COLOR)
-    [printColor(f"{x} -- skipped intentionally (please double check)", YELLOW_TEXT_COLOR) for x in sorted(listOfSkippedIntentionally)]
+    [printColor(f"{x} -- skipped intentionally (please double check) Reason: {AllTestResults[x]['skipped_reason']}", YELLOW_TEXT_COLOR) for x in sorted(listOfSkippedIntentionally)]
     printColor(f"The above {countSkippedIntentionally} tests were skipped intentionally:", YELLOW_TEXT_COLOR)
 else:
     printColor("No tests skipped intentionally.", GREEN_TEXT_COLOR)
@@ -84,7 +83,7 @@ printColor("==================================================\n", YELLOW_TEXT_C
 # Check tests unintentionally (due to partition)
 printColor("============= UNINTENTIONALLY SKIPPED ============", YELLOW_TEXT_COLOR)
 listOfSkippedUnintentionally = []
-[listOfSkippedUnintentionally.append(x) for x in AllTestResults if (AllTestResults[x]['ran'] == 0 and AllTestResults[x]['skipped_due_to_partitioning'] >= NUMBER_OF_NODES)]
+[listOfSkippedUnintentionally.append(x) for x in AllTestResults if (AllTestResults[x]['ran'] == 0 and AllTestResults[x]['skipped_intentionally'] == False)]
 countSkippedUnintentionally = len(listOfSkippedUnintentionally)
 if countSkippedUnintentionally:
     printColor(f"{countSkippedUnintentionally} tests were skipped UNintentionally", RED_TEXT_COLOR)
