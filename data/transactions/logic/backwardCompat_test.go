@@ -296,13 +296,13 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	// ensure v1 program runs well on latest TEAL evaluator
 	require.Equal(t, uint8(1), program[0])
 
-	// Cost should stay exactly 2140
+	// Cost should stay exactly 2144
 	ep.Proto.LogicSigMaxCost = 2139
 	err = Check(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "static cost")
 
-	ep.Proto.LogicSigMaxCost = 2140
+	ep.Proto.LogicSigMaxCost = 2144
 	err = Check(program, ep)
 	require.NoError(t, err)
 
@@ -322,7 +322,7 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "static cost")
 
-	ep2.Proto.LogicSigMaxCost = 2308
+	ep2.Proto.LogicSigMaxCost = 2312
 	err = Check(opsV2.Program, ep2)
 	require.NoError(t, err)
 
@@ -350,7 +350,7 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	err = Check(program, ep)
 	require.Error(t, err)
 
-	ep.Proto.LogicSigMaxCost = 2140
+	ep.Proto.LogicSigMaxCost = 2144
 	err = Check(program, ep)
 	require.NoError(t, err)
 	pass, err = Eval(program, ep)
@@ -366,7 +366,7 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 
-	ep.Proto.LogicSigMaxCost = 2307
+	ep.Proto.LogicSigMaxCost = 2311
 	err = Check(program, ep)
 	require.NoError(t, err)
 	pass, err = Eval(program, ep)
