@@ -302,12 +302,12 @@ func (s *syncState) onNewRoundEvent(ent Event) {
 		newRoundPeers = incomingPeersOnly(newRoundPeers)
 	}
 	s.scheduler.scheduleNewRound(newRoundPeers)
-	s.updatePeersRequestParams(peers)
 	s.round = ent.roundSettings.Round
 	s.fetchTransactions = ent.roundSettings.FetchTransactions
 	if !s.isRelay {
 		s.nextOffsetRollingCh = s.clock.TimeoutAt(kickoffTime + 2*s.lastBeta)
 	}
+	s.updatePeersRequestParams(peers)
 }
 
 func (s *syncState) evaluatePeerStateChanges(currentTimeout time.Duration) {
