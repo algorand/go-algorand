@@ -314,11 +314,6 @@ type EvalContext struct {
 	stack     []stackValue
 	callstack []int
 
-	subtxn *transactions.SignedTxn // place to build for tx_submit
-
-	// The transactions Performed() and their effects
-	InnerTxns []transactions.SignedTxnWithAD
-
 	program []byte
 	pc      int
 	nextpc  int
@@ -327,6 +322,10 @@ type EvalContext struct {
 	bytec   [][]byte
 	version uint64
 	scratch scratchSpace
+
+	subtxn *transactions.SignedTxn // place to build for tx_submit
+	// The transactions Performed() and their effects
+	InnerTxns []transactions.SignedTxnWithAD
 
 	cost    int // cost incurred so far
 	Logs    []string
