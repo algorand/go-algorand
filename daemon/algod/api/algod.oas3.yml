@@ -1312,7 +1312,7 @@
           "global-state-delta": {
             "$ref": "#/components/schemas/StateDelta"
           },
-          "inner": {
+          "inner-txns": {
             "description": "Inner transactions produced by application execution.",
             "items": {
               "$ref": "#/components/schemas/PendingTransactionResponse"

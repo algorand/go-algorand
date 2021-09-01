@@ -372,7 +372,7 @@ type PendingTransactionResponse struct {
 	GlobalStateDelta *StateDelta `json:"global-state-delta,omitempty"`
 
 	// Inner transactions produced by application execution.
-	Inner *[]PendingTransactionResponse `json:"inner,omitempty"`
+	InnerTxns *[]PendingTransactionResponse `json:"inner-txns,omitempty"`
 
 	// \[ld\] Local state key/value changes for the application being executed by this transaction.
 	LocalStateDelta *[]AccountStateDelta `json:"local-state-delta,omitempty"`
