@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -133,4 +134,66 @@ func TestEvalDeltaEqual(t *testing.T) {
 		Logs: []LogItem{{ID: 0, Message: "val"}},
 	}
 	a.True(d1.Equal(d2))
+
+	// Test inner transaction equality
+	d1 = EvalDelta{
+		InnerTxns: []SignedTxnWithAD{},
+	}
+	d2 = EvalDelta{
+		InnerTxns: nil,
+	}
+	a.True(d1.Equal(d2))
+
+	// Test inner transaction equality
+	d1 = EvalDelta{
+		InnerTxns: []SignedTxnWithAD{{
+			SignedTxn: SignedTxn{
+				Lsig: LogicSig{
+					Logic: []byte{0x01},
+				},
+			},
+		}},
+	}
+	d2 = EvalDelta{
+		InnerTxns: []SignedTxnWithAD{{
+			SignedTxn: SignedTxn{
+				Lsig: LogicSig{
+					Logic: []byte{0x01},
+				},
+			},
+		}},
+	}
+	a.True(d1.Equal(d2))
+	d2 = EvalDelta{
+		InnerTxns: []SignedTxnWithAD{{
+			SignedTxn: SignedTxn{
+				Lsig: LogicSig{
+					Logic: []byte{0x02},
+					Args:  [][]byte{},
+				},
+			},
+		}},
+	}
+	a.False(d1.Equal(d2))
+
+	d1 = EvalDelta{
+		InnerTxns: []SignedTxnWithAD{{
+			SignedTxn: SignedTxn{
+				Txn: Transaction{
+					Type: protocol.TxType("pay"),
+				},
+			},
+		}},
+	}
+	d2 = EvalDelta{
+		InnerTxns: []SignedTxnWithAD{{
+			SignedTxn: SignedTxn{
+				Txn: Transaction{
+					Type: protocol.TxType("axfer"),
+				},
+			},
+		}},
+	}
+	a.False(d1.Equal(d2))
+
 }

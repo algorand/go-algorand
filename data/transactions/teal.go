@@ -17,7 +17,10 @@
 package transactions
 
 import (
+	"bytes"
+
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // LogItem contains logs for an application. ID is the offset into
@@ -90,15 +93,37 @@ func (ed EvalDelta) Equal(o EvalDelta) bool {
 		return false
 	}
 	for i, l := range ed.Logs {
-		ok := l.Equal(o.Logs[i])
-		if !ok {
+		if !l.Equal(o.Logs[i]) {
 			return false
 		}
 	}
 
-	// TODO: check inner transactions are equal
+	// InnerTxns must be equal
+	if len(ed.InnerTxns) != len(o.InnerTxns) {
+		return false
+	}
+	for i, txn := range ed.InnerTxns {
+		if !txn.SignedTxn.equal(o.InnerTxns[i].SignedTxn) {
+			return false
+		}
+		if !txn.ApplyData.Equal(o.InnerTxns[i].ApplyData) {
+			return false
+		}
+	}
 
 	return true
+}
+
+// equal compares two SignedTransactions for equality.  It's not
+// exported because it ouught to be written as (many, very, very
+// tedious) field comparisons. == is not defined on almost any of the
+// subfields because of slices.
+func (stx SignedTxn) equal(o SignedTxn) bool {
+	stxenc := stx.MarshalMsg(protocol.GetEncodingBuf())
+	defer protocol.PutEncodingBuf(stxenc)
+	oenc := o.MarshalMsg(protocol.GetEncodingBuf())
+	defer protocol.PutEncodingBuf(oenc)
+	return bytes.Equal(stxenc, oenc)
 }
 
 // SetLogs taks a simple slice of log messages and creates LogItems
