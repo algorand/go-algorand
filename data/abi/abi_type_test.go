@@ -28,8 +28,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TODO need a fuzz test for the parsing
-
 func TestMakeTypeValid(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	// uint
@@ -503,7 +501,7 @@ func TestTypeMISC(t *testing.T) {
 	}
 
 	testpoolTuple := make([]Type, 0)
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 100; i++ {
 		testpoolTuple = append(testpoolTuple, generateTupleType(testpool, testpoolTuple))
 	}
 	for _, testcaseTuple := range testpoolTuple {
@@ -511,7 +509,7 @@ func TestTypeMISC(t *testing.T) {
 	}
 
 	tupleTestCount := 0
-	for tupleTestCount < 1000 {
+	for tupleTestCount < 100 {
 		index0 := rand.Intn(len(testpoolTuple))
 		index1 := rand.Intn(len(testpoolTuple))
 		if testpoolTuple[index0].String() == testpoolTuple[index1].String() {
@@ -525,7 +523,7 @@ func TestTypeMISC(t *testing.T) {
 
 	testpool = append(testpool, testpoolTuple...)
 	isDynamicCount := 0
-	for isDynamicCount < 1000 {
+	for isDynamicCount < 100 {
 		index := rand.Intn(len(testpool))
 		isDynamicArr := strings.Contains(testpool[index].String(), "[]")
 		isDynamicStr := strings.Contains(testpool[index].String(), "string")
@@ -545,7 +543,7 @@ func TestTypeMISC(t *testing.T) {
 	require.Equal(t, 1, boolByteLen, "bool type bytelen should be 1")
 
 	byteLenTestCount := 0
-	for byteLenTestCount < 1000 {
+	for byteLenTestCount < 100 {
 		index := rand.Intn(len(testpool))
 		testType := testpool[index]
 		byteLen, err := testType.ByteLen()
