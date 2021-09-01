@@ -3951,7 +3951,7 @@ func TestApplicationsDisallowOldTeal(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestRaiseMinTealVersion(t *testing.T) {
+func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	const source = "int 1"
@@ -3979,13 +3979,6 @@ func TestRaiseMinTealVersion(t *testing.T) {
 	txn5.Txn.RekeyTo = basics.Address{1}
 	txngroup2 := []transactions.SignedTxn{txn4, txn5}
 
-	// Construct a group of one payment, one nonparticipating key registration
-	txn6 := makeSampleTxn()
-	txn6.Txn.Type = protocol.PaymentTx
-	txn7 := txn4
-	txn7.Txn.Nonparticipation = true
-	txngroup3 := []transactions.SignedTxn{txn6, txn7}
-
 	type testcase struct {
 		group            []transactions.SignedTxn
 		validFromVersion uint64
@@ -3995,7 +3988,6 @@ func TestRaiseMinTealVersion(t *testing.T) {
 		{txngroup0, 0},
 		{txngroup1, appsEnabledVersion},
 		{txngroup2, rekeyingEnabledVersion},
-		{txngroup3, keyRegPartFlagEnabledVersion},
 	}
 
 	for ci, cse := range cases {

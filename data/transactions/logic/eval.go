@@ -130,11 +130,6 @@ func ComputeMinTealVersion(group []transactions.SignedTxn) uint64 {
 				minVersion = appsEnabledVersion
 			}
 		}
-		if txn.Txn.Nonparticipation {
-			if minVersion < keyRegPartFlagEnabledVersion {
-				minVersion = keyRegPartFlagEnabledVersion
-			}
-		}
 	}
 	return minVersion
 }
