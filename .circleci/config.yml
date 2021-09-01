@@ -569,7 +569,8 @@ jobs:
   amd64_e2e_expect:
     machine:
       image: ubuntu-2004:202104-01
-    resource_class: large
+    resource_class: medium
+    parallelism: 2
     environment:
       E2E_TEST_FILTER: "EXPECT"
     steps:
@@ -581,7 +582,8 @@ jobs:
   amd64_e2e_expect_nightly:
     machine:
       image: ubuntu-2004:202104-01
-    resource_class: large
+    resource_class: medium
+    parallelism: 2
     environment:
       E2E_TEST_FILTER: "EXPECT"
     steps:
@@ -694,7 +696,8 @@ jobs:
   arm64_e2e_expect:
     machine:
       image: ubuntu-2004:202101-01
-    resource_class: arm.large
+    resource_class: arm.medium
+    parallelism: 2
     environment:
       E2E_TEST_FILTER: "EXPECT"
     steps:
@@ -707,7 +710,8 @@ jobs:
   arm64_e2e_expect_nightly:
     machine:
       image: ubuntu-2004:202101-01
-    resource_class: arm.large
+    resource_class: arm.medium
+    parallelism: 2
     environment:
       E2E_TEST_FILTER: "EXPECT"
     steps:
@@ -839,7 +843,8 @@ jobs:
   mac_amd64_e2e_expect:
     macos:
       xcode: 12.0.1
-    resource_class: large
+    resource_class: medium
+    parallelism: 2
     environment:
       E2E_TEST_FILTER: "EXPECT"
       HOMEBREW_NO_AUTO_UPDATE: "true"
@@ -854,7 +859,8 @@ jobs:
   mac_amd64_e2e_expect_nightly:
     macos:
       xcode: 12.0.1
-    resource_class: large
+    resource_class: medium
+    parallelism: 2
     environment:
       E2E_TEST_FILTER: "EXPECT"
       HOMEBREW_NO_AUTO_UPDATE: "true"
