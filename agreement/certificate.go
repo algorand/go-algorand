@@ -56,6 +56,10 @@ func (c Certificate) claimsToAuthenticate(e bookkeeping.Block) error {
 	if c.Round != e.Round() {
 		return fmt.Errorf("certificate claims to validate the wrong round: %v != %v", c.Round, e.Round())
 	}
+	// Right branch?
+	if c.Branch != (bookkeeping.BlockHash{}) && c.Branch != e.Branch {
+		return fmt.Errorf("certificate claims to validate the wrong branch: %v != %v", c.Branch, e.Branch)
+	}
 	// Check that the block header's hash matches the cert
 	if c.Proposal.BlockDigest != e.Digest() {
 		return fmt.Errorf("certificate claims to validate the wrong hash: %v != %v", c.Proposal.BlockDigest, e.Digest())
