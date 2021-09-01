@@ -18,6 +18,8 @@ package agreement
 
 import (
 	"fmt"
+
+	"github.com/algorand/go-algorand/data/bookkeeping"
 )
 
 type proposalManagerContract struct{}
@@ -31,8 +33,11 @@ func (c proposalManagerContract) pre(p player, in event) (pre []error) {
 
 	switch e := in.(type) {
 	case thresholdEvent:
-		if p.Round != e.Round {
-			pre = append(pre, fmt.Errorf("received a threshold event for the wrong round: %v != %v", p.Round, e.Round))
+		if p.Round.Number != e.Round.Number {
+			pre = append(pre, fmt.Errorf("received a threshold event for the wrong round number: %v != %v", p.Round, e.Round))
+		}
+		if p.Round.Branch != e.Round.Branch && p.Round.Branch != (bookkeeping.BlockHash{}) && e.Round.Branch != (bookkeeping.BlockHash{}) {
+			pre = append(pre, fmt.Errorf("received a threshold event for the wrong round branch: %v != %v", p.Round, e.Round))
 		}
 
 		if e.t() != certThreshold && p.Period > e.Period {

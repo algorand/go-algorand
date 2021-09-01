@@ -238,15 +238,16 @@ func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauth
 
 // voteFresh determines whether a proposal satisfies freshness rules.
 func proposalFresh(freshData freshnessData, vote unauthenticatedVote) error {
+	// Only check the round number; branch checks are handled by the router above.
 	switch vote.R.Round {
-	case freshData.PlayerRound.Number: // XXX check branch
+	case freshData.PlayerRound.Number:
 		if freshData.PlayerPeriod != 0 && freshData.PlayerPeriod-1 > vote.R.Period {
 			return fmt.Errorf("filtered stale proposal: period %d - 1 > %d", freshData.PlayerPeriod, vote.R.Period)
 		}
 		if freshData.PlayerPeriod+1 < vote.R.Period {
 			return fmt.Errorf("filtered premature proposal: period %d + 1 < %d", freshData.PlayerPeriod, vote.R.Period)
 		}
-	case freshData.PlayerRound.Number + 1: // XXX check branch
+	case freshData.PlayerRound.Number + 1:
 		if vote.R.Period != 0 {
 			return fmt.Errorf("filtered premature proposal from next round: period %d > 0", vote.R.Period)
 		}

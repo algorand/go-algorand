@@ -172,7 +172,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 	var pV = payload.value()
 	switch n {
 	case softVoteVerifiedEventSamePeriod:
-		vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
+		vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 		e = messageEvent{
 			T: voteVerified,
 			Input: message{
@@ -183,7 +183,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
 	case softVotePresentEventSamePeriod:
-		vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
+		vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 		e = messageEvent{
 			T: votePresent,
 			Input: message{
@@ -193,7 +193,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
 	case proposeVoteVerifiedEventNextPeriod:
-		vvote := helper.MakeVerifiedVote(t, 0, r, p+1, propose, pV)
+		vvote := helper.MakeVerifiedVote(t, 0, r, p+1, propose, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 		e = messageEvent{
 			T: voteVerified,
 			Input: message{
@@ -204,7 +204,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
 	case proposeVoteVerifiedEventSamePeriod:
-		vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV)
+		vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 		e = messageEvent{
 			T: voteVerified,
 			Input: message{
@@ -216,7 +216,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 			Proto:     ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
 	case proposeVotePresentEventSamePeriod:
-		vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV)
+		vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 		e = messageEvent{
 			T: votePresent,
 			Input: message{
@@ -253,7 +253,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 	case bundleVerifiedEventSamePeriod:
 		votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 		for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-			votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
+			votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 		}
 		bun := unauthenticatedBundle{
 			Round:    r.Number,
@@ -275,7 +275,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 	case bundlePresentEventSamePeriod:
 		votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 		for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-			votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
+			votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 		}
 		bun := unauthenticatedBundle{
 			Round:    r.Number,
@@ -291,7 +291,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
 	case softVoteVerifiedErrorEventSamePeriod:
-		vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
+		vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 		e = messageEvent{
 			T: voteVerified,
 			Input: message{
@@ -303,7 +303,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
 	case proposeVoteVerifiedErrorEventSamePeriod:
-		vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV)
+		vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 		e = messageEvent{
 			T: voteVerified,
 			Input: message{
@@ -393,27 +393,27 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 		switch eventN {
 		case softVoteVerifiedEventSamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
-			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
+			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
 			requireTraceContains(t, trace, ev(a), playerN, eventN)
 		case softVotePresentEventSamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
-			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
+			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			a := cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vvote.u()}, TaskIndex: 0}
 			requireTraceContains(t, trace, ev(a), playerN, eventN)
 		case proposeVoteVerifiedEventNextPeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
-			vvote := helper.MakeVerifiedVote(t, 0, r, p+1, propose, pV)
+			vvote := helper.MakeVerifiedVote(t, 0, r, p+1, propose, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
 			requireTraceContains(t, trace, ev(a), playerN, eventN)
 		case proposeVoteVerifiedEventSamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
-			vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV)
+			vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
 			requireTraceContains(t, trace, ev(a), playerN, eventN)
 		case proposeVotePresentEventSamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
-			vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV)
+			vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			a := cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vvote.u()}, TaskIndex: 0}
 			requireTraceContains(t, trace, ev(a), playerN, eventN)
 		case payloadPresentEvent, payloadVerifiedEvent, payloadVerifiedEventNoMessageHandle:
@@ -423,7 +423,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			requireActionCount(t, trace, 2, playerN, eventN)
 			votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
+				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			}
 			bun := unauthenticatedBundle{Round: r.Number, Branch: r.Branch, Period: p, Proposal: pV}
 			ra := networkAction{T: relay, Tag: protocol.VoteBundleTag, UnauthenticatedBundle: bun}
@@ -434,7 +434,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			requireActionCount(t, trace, 1, playerN, eventN)
 			votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
+				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			}
 			bun := unauthenticatedBundle{Round: r.Number, Branch: r.Branch, Period: p, Proposal: pV}
 			ca := cryptoAction{T: verifyBundle, M: message{Bundle: bundle{U: bun, Votes: votes}, UnauthenticatedBundle: bun}, TaskIndex: 0}
@@ -466,12 +466,12 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 		switch eventN {
 		case softVoteVerifiedEventSamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
-			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
+			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
 			requireTraceContains(t, trace, ev(a), playerN, eventN)
 		case softVotePresentEventSamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
-			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
+			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			a := cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vvote.u()}, TaskIndex: 0}
 			requireTraceContains(t, trace, ev(a), playerN, eventN)
 		case proposeVoteVerifiedEventNextPeriod:
@@ -479,14 +479,14 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			expectIgnore(t, trace, "Player should ignore future msg from bad period, player: %v, event: %v", playerN, eventN)
 		case proposeVoteVerifiedEventSamePeriod:
 			requireActionCount(t, trace, 2, playerN, eventN)
-			vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV)
+			vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
 			requireTraceContains(t, trace, ev(a), playerN, eventN)
 			na := networkAction{T: relay, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u()}}
 			requireTraceContains(t, trace, ev(na), playerN, eventN)
 		case proposeVotePresentEventSamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
-			vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV)
+			vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			a := cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vvote.u()}, TaskIndex: 0}
 			requireTraceContains(t, trace, ev(a), playerN, eventN)
 		case payloadPresentEvent, payloadVerifiedEvent, payloadVerifiedEventNoMessageHandle:
@@ -508,17 +508,17 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 		switch eventN {
 		case softVoteVerifiedEventSamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
-			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
+			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
 			requireTraceContains(t, trace, ev(a), playerN, eventN)
 		case softVotePresentEventSamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
-			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
+			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			a := cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vvote.u()}, TaskIndex: 0}
 			requireTraceContains(t, trace, ev(a), playerN, eventN)
 		case proposeVoteVerifiedEventNextPeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
-			vvote := helper.MakeVerifiedVote(t, 0, r, p+1, propose, pV)
+			vvote := helper.MakeVerifiedVote(t, 0, r, p+1, propose, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
 			requireTraceContains(t, trace, ev(a), playerN, eventN)
 		case proposeVoteVerifiedEventSamePeriod, proposeVotePresentEventSamePeriod:
@@ -540,7 +540,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			requireActionCount(t, trace, 2, playerN, eventN)
 			votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
+				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			}
 			bun := unauthenticatedBundle{Round: r.Number, Branch: r.Branch, Period: p, Proposal: pV}
 			ra := networkAction{T: relay, Tag: protocol.VoteBundleTag, UnauthenticatedBundle: bun}
@@ -551,7 +551,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			requireActionCount(t, trace, 1, playerN, eventN)
 			votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
+				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			}
 			bun := unauthenticatedBundle{Round: r.Number, Branch: r.Branch, Period: p, Proposal: pV}
 			ca := cryptoAction{T: verifyBundle, M: message{Bundle: bundle{U: bun, Votes: votes}, UnauthenticatedBundle: bun}, TaskIndex: 0}
@@ -570,17 +570,17 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 		switch eventN {
 		case softVoteVerifiedEventSamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
-			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
+			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
 			requireTraceContains(t, trace, ev(a), playerN, eventN)
 		case softVotePresentEventSamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
-			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
+			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			a := cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vvote.u()}, TaskIndex: 0}
 			requireTraceContains(t, trace, ev(a), playerN, eventN)
 		case proposeVoteVerifiedEventNextPeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
-			vvote := helper.MakeVerifiedVote(t, 0, r, p+1, propose, pV)
+			vvote := helper.MakeVerifiedVote(t, 0, r, p+1, propose, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
 			requireTraceContains(t, trace, ev(a), playerN, eventN)
 		case proposeVoteVerifiedEventSamePeriod, proposeVotePresentEventSamePeriod:
@@ -606,7 +606,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			requireActionCount(t, trace, 2, playerN, eventN)
 			votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
+				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			}
 			bun := unauthenticatedBundle{Round: r.Number, Branch: r.Branch, Period: p, Proposal: pV}
 			ra := networkAction{T: relay, Tag: protocol.VoteBundleTag, UnauthenticatedBundle: bun}
@@ -617,7 +617,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			requireActionCount(t, trace, 1, playerN, eventN)
 			votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
+				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			}
 			bun := unauthenticatedBundle{Round: r.Number, Branch: r.Branch, Period: p, Proposal: pV}
 			ca := cryptoAction{T: verifyBundle, M: message{Bundle: bundle{U: bun, Votes: votes}, UnauthenticatedBundle: bun}, TaskIndex: 0}
@@ -636,17 +636,17 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 		switch eventN {
 		case softVoteVerifiedEventSamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
-			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
+			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
 			requireTraceContains(t, trace, ev(a), playerN, eventN)
 		case softVotePresentEventSamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
-			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
+			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			a := cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vvote.u()}, TaskIndex: 0}
 			requireTraceContains(t, trace, ev(a), playerN, eventN)
 		case proposeVoteVerifiedEventNextPeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
-			vvote := helper.MakeVerifiedVote(t, 0, r, p+1, propose, pV)
+			vvote := helper.MakeVerifiedVote(t, 0, r, p+1, propose, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
 			requireTraceContains(t, trace, ev(a), playerN, eventN)
 		case proposeVoteVerifiedEventSamePeriod, proposeVotePresentEventSamePeriod:
@@ -683,7 +683,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			requireActionCount(t, trace, 1, playerN, eventN)
 			votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
+				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			}
 			bun := unauthenticatedBundle{Round: r.Number, Branch: r.Branch, Period: p, Proposal: pV}
 			ca := cryptoAction{T: verifyBundle, M: message{Bundle: bundle{U: bun, Votes: votes}, UnauthenticatedBundle: bun}, TaskIndex: 0}
@@ -702,17 +702,17 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 		switch eventN {
 		case softVoteVerifiedEventSamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
-			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
+			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
 			requireTraceContains(t, trace, ev(a), playerN, eventN)
 		case softVotePresentEventSamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
-			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
+			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			a := cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vvote.u()}, TaskIndex: 0}
 			requireTraceContains(t, trace, ev(a), playerN, eventN)
 		case proposeVoteVerifiedEventNextPeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
-			vvote := helper.MakeVerifiedVote(t, 0, r, p+1, propose, pV)
+			vvote := helper.MakeVerifiedVote(t, 0, r, p+1, propose, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			a := networkAction{T: broadcast, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u(), Vote: vvote.u()}}
 			requireTraceContains(t, trace, ev(a), playerN, eventN)
 		case proposeVoteVerifiedEventSamePeriod, proposeVotePresentEventSamePeriod:
@@ -725,7 +725,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			requireActionCount(t, trace, 4, playerN, eventN)
 			votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
+				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			}
 			bun := unauthenticatedBundle{Round: r.Number, Branch: r.Branch, Period: p, Proposal: pV}
 			na := networkAction{T: relay, Tag: protocol.VoteBundleTag, UnauthenticatedBundle: bun}
@@ -740,7 +740,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			requireActionCount(t, trace, 1, playerN, eventN)
 			votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
+				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV, config.Consensus[protocol.ConsensusCurrentVersion])
 			}
 			bun := unauthenticatedBundle{Round: r.Number, Branch: r.Branch, Period: p, Proposal: pV}
 			ca := cryptoAction{T: verifyBundle, M: message{Bundle: bundle{U: bun, Votes: votes}, UnauthenticatedBundle: bun}, TaskIndex: 0}

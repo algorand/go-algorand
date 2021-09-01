@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -33,6 +34,18 @@ var voteAggregatorTracer tracer
 
 func init() {
 	voteAggregatorTracer.log = serviceLogger{logging.Base()}
+}
+
+func maybeBranch(params config.ConsensusParams, b bookkeeping.BlockHash) bookkeeping.BlockHash {
+	if params.AgreementMessagesContainBranch {
+		return b
+	} else {
+		return bookkeeping.BlockHash{}
+	}
+}
+
+func maybeBranchCV(b bookkeeping.BlockHash) bookkeeping.BlockHash {
+	return maybeBranch(config.Consensus[protocol.ConsensusCurrentVersion], b)
 }
 
 func TestVoteAggregatorVotes(t *testing.T) {
@@ -53,11 +66,14 @@ func TestVoteAggregatorVotes(t *testing.T) {
 	var proposal proposalValue
 	proposal.BlockDigest = randomBlockHash()
 
+	params, err := ledger.ConsensusParams(round.Number, round.Branch)
+	require.NoError(t, err)
+
 	for s := 1; s <= 5; s++ {
 		for i := range addresses {
 			address := addresses[i]
 			step := step(s)
-			rv := rawVote{Sender: address, Round: round.Number, Branch: round.Branch, Period: period, Step: step, Proposal: proposal}
+			rv := rawVote{Sender: address, Round: round.Number, Branch: maybeBranch(params, round.Branch), Period: period, Step: step, Proposal: proposal}
 			uv, err := makeVote(rv, otSecrets[i], vrfSecrets[i], LedgerWithoutBranch(ledger))
 			assert.NoError(t, err)
 
@@ -105,13 +121,16 @@ func TestVoteAggregatorBundles(t *testing.T) {
 	avv := MakeAsyncVoteVerifier(nil)
 	defer avv.Quit()
 
+	params, err := ledger.ConsensusParams(round.Number, round.Branch)
+	require.NoError(t, err)
+
 	var bundles []bundle
 	for s := 1; s <= 5; s++ {
 		var votes []vote
 		for i := range addresses {
 			address := addresses[i]
 			step := step(s)
-			rv := rawVote{Sender: address, Round: round.Number, Branch: round.Branch, Period: period, Step: step, Proposal: proposal}
+			rv := rawVote{Sender: address, Round: round.Number, Branch: maybeBranch(params, round.Branch), Period: period, Step: step, Proposal: proposal}
 			uv, err := makeVote(rv, otSecrets[i], vrfSecrets[i], LedgerWithoutBranch(ledger))
 			assert.NoError(t, err)
 
@@ -181,7 +200,7 @@ func TestVoteAggregatorFiltersVotePresentStale(t *testing.T) {
 	}
 	// generate stale vote, make sure it is rejected
 	pV := helper.MakeRandomProposalValue()
-	uv := helper.MakeUnauthenticatedVote(t, 0, r100, period(1), soft, *pV)
+	uv := helper.MakeUnauthenticatedVote(t, 0, r100, period(1), soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -192,7 +211,7 @@ func TestVoteAggregatorFiltersVotePresentStale(t *testing.T) {
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 	// fresh vote should not be rejected
-	uv = helper.MakeUnauthenticatedVote(t, 1, r1, period(1), next, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 1, r1, period(1), next, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -203,7 +222,7 @@ func TestVoteAggregatorFiltersVotePresentStale(t *testing.T) {
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
 	// vote from next round not rejected
-	uv = helper.MakeUnauthenticatedVote(t, 1, r2, period(0), soft, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 1, r2, period(0), soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -215,7 +234,7 @@ func TestVoteAggregatorFiltersVotePresentStale(t *testing.T) {
 	b.AddInOutPair(inMsg, emptyEvent{})
 
 	// duplicate vote rejected
-	v := helper.MakeVerifiedVote(t, 1, r2, period(0), soft, *pV)
+	v := helper.MakeVerifiedVote(t, 1, r2, period(0), soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: voteVerified, // have the vote machine log the vote
@@ -225,7 +244,7 @@ func TestVoteAggregatorFiltersVotePresentStale(t *testing.T) {
 		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
-	uv = helper.MakeUnauthenticatedVote(t, 1, r2, period(0), soft, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 1, r2, period(0), soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = msgTemplate
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -270,7 +289,7 @@ func TestVoteAggregatorFiltersVoteVerifiedStale(t *testing.T) {
 	}
 	// generate stale vote, make sure it is rejected
 	pV := helper.MakeRandomProposalValue()
-	uv := helper.MakeVerifiedVote(t, 0, r100, period(1), soft, *pV)
+	uv := helper.MakeVerifiedVote(t, 0, r100, period(1), soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := msgTemplate // copy
 	// Err is all nil, should be fine
 	inMsg.messageEvent = messageEvent{
@@ -282,7 +301,7 @@ func TestVoteAggregatorFiltersVoteVerifiedStale(t *testing.T) {
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 	// fresh vote should not be rejected
-	uv = helper.MakeVerifiedVote(t, 1, r1, period(1), next, *pV)
+	uv = helper.MakeVerifiedVote(t, 1, r1, period(1), next, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: voteVerified,
@@ -293,7 +312,7 @@ func TestVoteAggregatorFiltersVoteVerifiedStale(t *testing.T) {
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
 	// vote from next round not rejected
-	uv = helper.MakeVerifiedVote(t, 1, r2, period(0), soft, *pV)
+	uv = helper.MakeVerifiedVote(t, 1, r2, period(0), soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: voteVerified,
@@ -304,7 +323,7 @@ func TestVoteAggregatorFiltersVoteVerifiedStale(t *testing.T) {
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
 	// malformed vote rejected
-	uv = helper.MakeVerifiedVote(t, 1, r2, period(0), soft, *pV)
+	uv = helper.MakeVerifiedVote(t, 1, r2, period(0), soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: voteVerified,
@@ -350,7 +369,7 @@ func TestVoteAggregatorFiltersVoteVerifiedThreshold(t *testing.T) {
 	// generate threshold, make sure we see it
 	// (this is based on the composition of machines...)
 	pV := helper.MakeRandomProposalValue()
-	v := helper.MakeVerifiedVote(t, 0, r1, period(1), soft, *pV)
+	v := helper.MakeVerifiedVote(t, 0, r1, period(1), soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	v.Cred = committee.Credential{Weight: soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])}
 	inMsg := msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
@@ -363,7 +382,7 @@ func TestVoteAggregatorFiltersVoteVerifiedThreshold(t *testing.T) {
 	b.AddInOutPair(inMsg, thresholdEvent{T: softThreshold, Proposal: *pV})
 
 	// same threshold for next round should not be emitted
-	v = helper.MakeVerifiedVote(t, 0, r2, period(0), soft, *pV)
+	v = helper.MakeVerifiedVote(t, 0, r2, period(0), soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	v.Cred = committee.Credential{Weight: soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])}
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
@@ -398,6 +417,8 @@ func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
 	r1001 := makeRoundRandomBranch(1001)
 	r1002 := makeRoundRandomBranch(1002)
 
+	params := config.Consensus[protocol.ConsensusCurrentVersion]
+
 	// define a current player state for freshness testing
 	msgTemplate := filterableMessageEvent{
 		FreshnessData: freshnessData{
@@ -410,7 +431,7 @@ func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
 	// generate acceptable bundles
 	bun := unauthenticatedBundle{
 		Round:  r1001.Number,
-		Branch: r1001.Branch,
+		Branch: maybeBranch(params, r1001.Branch),
 		Period: period(2),
 	}
 	inMsg := msgTemplate // copy
@@ -426,7 +447,7 @@ func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
 	// another acceptable bundle from future period
 	bun = unauthenticatedBundle{
 		Round:  r1001.Number,
-		Branch: r1001.Branch,
+		Branch: maybeBranch(params, r1001.Branch),
 		Period: period(200),
 	}
 	inMsg = msgTemplate // copy
@@ -442,7 +463,7 @@ func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
 	// generate bad bundle with r_bundle < r
 	bun = unauthenticatedBundle{
 		Round:  r1000.Number,
-		Branch: r1000.Branch,
+		Branch: maybeBranch(params, r1000.Branch),
 		Period: period(0),
 	}
 	inMsg = msgTemplate // copy
@@ -458,7 +479,7 @@ func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
 	// generate bad bundle with r_bundle > r
 	bun = unauthenticatedBundle{
 		Round:  r1002.Number,
-		Branch: r1002.Branch,
+		Branch: maybeBranch(params, r1002.Branch),
 		Period: period(0),
 	}
 	inMsg = msgTemplate // copy
@@ -474,7 +495,7 @@ func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
 	// generate bad bundle with p_k + 1 < p
 	bun = unauthenticatedBundle{
 		Round:  r1001.Number,
-		Branch: r1001.Branch,
+		Branch: maybeBranch(params, r1001.Branch),
 		Period: period(0),
 	}
 	inMsg = msgTemplate // copy
@@ -506,6 +527,8 @@ func TestVoteAggregatorFiltersBundleVerifiedThresholdStale(t *testing.T) {
 	helper.Setup()
 	b := testCaseBuilder{}
 
+	params := config.Consensus[protocol.ConsensusCurrentVersion]
+
 	r2099 := makeRoundRandomBranch(2099)
 
 	// define a current player state for freshness testing
@@ -520,7 +543,7 @@ func TestVoteAggregatorFiltersBundleVerifiedThresholdStale(t *testing.T) {
 	// generate malformed bundle
 	bun := unauthenticatedBundle{
 		Round:  r2099.Number,
-		Branch: r2099.Branch,
+		Branch: maybeBranch(params, r2099.Branch),
 		Period: period(201),
 	}
 	inMsg := msgTemplate // copy
@@ -539,7 +562,7 @@ func TestVoteAggregatorFiltersBundleVerifiedThresholdStale(t *testing.T) {
 	// generate empty bundle
 	bun = unauthenticatedBundle{
 		Round:  r2099.Number,
-		Branch: r2099.Branch,
+		Branch: maybeBranch(params, r2099.Branch),
 		Period: period(201),
 	}
 	inMsg = msgTemplate // copy
@@ -562,11 +585,11 @@ func TestVoteAggregatorFiltersBundleVerifiedThresholdStale(t *testing.T) {
 	p := period(201)
 	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun = unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranch(params, r.Branch),
 		Period:   p,
 		Proposal: *pV,
 	}
@@ -589,11 +612,11 @@ func TestVoteAggregatorFiltersBundleVerifiedThresholdStale(t *testing.T) {
 	p = period(2000)
 	votes = make([]vote, int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun = unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranch(params, r.Branch),
 		Period:   p,
 		Proposal: *pV,
 	}
@@ -629,6 +652,8 @@ func TestVoteAggregatorFiltersBundleVerifiedRelayStale(t *testing.T) {
 	helper.Setup()
 	b := testCaseBuilder{}
 
+	params := config.Consensus[protocol.ConsensusCurrentVersion]
+
 	r2099 := makeRoundRandomBranch(2099)
 
 	// define a current player state for freshness testing
@@ -649,11 +674,11 @@ func TestVoteAggregatorFiltersBundleVerifiedRelayStale(t *testing.T) {
 	p := period(201)
 	votes := make([]vote, int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranch(params, r.Branch),
 		Period:   p,
 		Proposal: *pV,
 	}
@@ -676,11 +701,11 @@ func TestVoteAggregatorFiltersBundleVerifiedRelayStale(t *testing.T) {
 	p = period(198)
 	votes = make([]vote, int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun = unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranch(params, r.Branch),
 		Period:   p,
 		Proposal: *pV,
 	}
@@ -703,13 +728,13 @@ func TestVoteAggregatorFiltersBundleVerifiedRelayStale(t *testing.T) {
 	r = r2099
 	p = period(201)
 	votes = make([]vote, 1)
-	votes[0] = helper.MakeVerifiedVote(t, 0, r, p, cert, *pV)
+	votes[0] = helper.MakeVerifiedVote(t, 0, r, p, cert, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 
 	equivocationVotes := make([]equivocationVote, 1)
-	equivocationVotes[0] = helper.MakeEquivocationVote(t, 1, r, p, cert, cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])-1)
+	equivocationVotes[0] = helper.MakeEquivocationVote(t, 1, r, p, cert, cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])-1, config.Consensus[protocol.ConsensusCurrentVersion])
 	bun = unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranch(params, r.Branch),
 		Period:   p,
 		Proposal: *pV,
 	}
@@ -762,7 +787,7 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 	}
 	// generate old next vote in same period, make sure it is rejected
 	pV := helper.MakeRandomProposalValue()
-	uv := helper.MakeUnauthenticatedVote(t, 0, r10, period(10), next+3, *pV)
+	uv := helper.MakeUnauthenticatedVote(t, 0, r10, period(10), next+3, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -773,7 +798,7 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
 	// super far away vote, even in same period, should be rejected
-	uv = helper.MakeUnauthenticatedVote(t, 1, r10, period(10), next+7, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 1, r10, period(10), next+7, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -784,7 +809,7 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
 	// me.next+1 should not be rejected
-	uv = helper.MakeUnauthenticatedVote(t, 1, r10, period(10), next+6, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 1, r10, period(10), next+6, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -795,7 +820,7 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 	b.AddInOutPair(inMsg, emptyEvent{})
 
 	// relevant next vote from previous period should not be rejected
-	uv = helper.MakeUnauthenticatedVote(t, 1, r10, period(9), lastConcludingStep, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 1, r10, period(9), lastConcludingStep, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -807,7 +832,7 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 
 	// a vote from subsequent round > period 0.next should be filtered
 	// they generally "don't matter"
-	uv = helper.MakeUnauthenticatedVote(t, 1, r11, period(1), soft, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 1, r11, period(1), soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -851,7 +876,7 @@ func TestVoteAggregatorFiltersVoteNextRound(t *testing.T) {
 	}
 	// generate old next vote in next round, period 0, step 1; make sure it is accepted
 	pV := helper.MakeRandomProposalValue()
-	uv := helper.MakeUnauthenticatedVote(t, 0, r11, period(0), soft, *pV)
+	uv := helper.MakeUnauthenticatedVote(t, 0, r11, period(0), soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -862,7 +887,7 @@ func TestVoteAggregatorFiltersVoteNextRound(t *testing.T) {
 	b.AddInOutPair(inMsg, emptyEvent{})
 
 	// next round, period 0, step > next should be rejected
-	uv = helper.MakeUnauthenticatedVote(t, 1, r11, period(0), next+1, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 1, r11, period(0), next+1, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -873,7 +898,7 @@ func TestVoteAggregatorFiltersVoteNextRound(t *testing.T) {
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
 	// next round, period 1 should be rejected
-	uv = helper.MakeUnauthenticatedVote(t, 1, r11, period(1), soft, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 1, r11, period(1), soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,

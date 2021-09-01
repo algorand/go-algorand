@@ -16,6 +16,10 @@
 
 package agreement
 
+import (
+	"github.com/algorand/go-algorand/data/bookkeeping"
+)
+
 // A stateMachineTag uniquely identifies the type of a state machine.
 //
 // Rounds, periods, and steps may be used to further identify different state machine instances of the same type.
@@ -117,7 +121,7 @@ func makeRootRouter(p actor) (res rootRouter) {
 	return
 }
 
-func (router *rootRouter) update(state actor, r round, gc bool) {
+func (router *rootRouter) update(state actor, r round, gc bool) (rc *roundRouter) {
 	if router.proposalRoot == nil {
 		router.proposalRoot = checkedListener{listener: &router.ProposalManager, listenerContract: proposalManagerContract{}}
 	}
@@ -127,8 +131,26 @@ func (router *rootRouter) update(state actor, r round, gc bool) {
 	if router.Children == nil {
 		router.Children = make(map[round]*roundRouter)
 	}
-	if router.Children[r] == nil {
-		router.Children[r] = new(roundRouter)
+	rc = router.Children[r]
+	if rc == nil {
+		// Check if we need to upgrade a zero-branch roundRouter to
+		// know about the branch value.
+		rNoBranch := round{Number: r.Number}
+		rc = router.Children[rNoBranch]
+		if rc != nil {
+			router.Children[r] = rc
+			delete(router.Children, rNoBranch)
+		} else {
+			for rr, rrc := range router.Children {
+				if r.Number == rr.Number && r.Branch == (bookkeeping.BlockHash{}) {
+					rc = rrc
+				}
+			}
+			if rc == nil {
+				rc = new(roundRouter)
+				router.Children[r] = rc
+			}
+		}
 	}
 
 	if gc {
@@ -140,6 +162,8 @@ func (router *rootRouter) update(state actor, r round, gc bool) {
 		}
 		router.Children = children
 	}
+
+	return
 }
 
 // submitTop is a convenience method used to submit the event directly into the root of the state machine tree
@@ -183,7 +207,7 @@ func (router *rootRouter) submitTopAutopsyXXX(t *tracer, p player, e event) (pla
 }
 
 func (router *rootRouter) dispatch(t *tracer, state player, e event, src stateMachineTag, dest stateMachineTag, r round, p period, s step) event {
-	router.update(&state, r, true)
+	rc := router.update(&state, r, true)
 	if router.proposalRoot.T() == dest {
 		handle := routerHandle{t: t, r: router, src: proposalMachine}
 		return router.proposalRoot.handle(handle, state, e)
@@ -192,7 +216,7 @@ func (router *rootRouter) dispatch(t *tracer, state player, e event, src stateMa
 		handle := routerHandle{t: t, r: router, src: voteMachine}
 		return router.voteRoot.handle(handle, state, e)
 	}
-	return router.Children[r].dispatch(t, state, e, src, dest, r, p, s)
+	return rc.dispatch(t, state, e, src, dest, r, p, s)
 }
 
 func (router *roundRouter) update(state player, p period, gc bool) {

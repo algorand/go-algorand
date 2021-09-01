@@ -540,7 +540,7 @@ func TestPlayerISVDoesNotSoftVoteBottom(t *testing.T) {
 
 	pV := &bottom
 
-	vv := helper.MakeVerifiedVote(t, 0, r, p, soft, *pV)
+	vv := helper.MakeVerifiedVote(t, 0, r, p, soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -567,11 +567,11 @@ func TestPlayerISVVoteForStartingValue(t *testing.T) {
 	pV := helper.MakeRandomProposalValue()
 	votes := make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p - 1,
 		Step:     next,
 		Proposal: *pV,
@@ -612,11 +612,11 @@ func TestPlayerISVVoteNoVoteSansProposal(t *testing.T) {
 	pV := &bottom
 	votes := make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p - 1,
 		Step:     next,
 		Proposal: *pV,
@@ -666,11 +666,11 @@ func TestPlayerISVVoteForReProposal(t *testing.T) {
 	pV := &bottom
 	votes := make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p - 1,
 		Step:     next,
 		Proposal: *pV,
@@ -695,11 +695,11 @@ func TestPlayerISVVoteForReProposal(t *testing.T) {
 	pV = helper.MakeRandomProposalValue()
 	votes = make([]vote, int((next + 1).threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int((next + 1).threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next+1, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next+1, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun = unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p - 1,
 		Step:     (next + 1),
 		Proposal: *pV,
@@ -722,7 +722,7 @@ func TestPlayerISVVoteForReProposal(t *testing.T) {
 
 	// now feed reproposal
 
-	vv := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV)
+	vv := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -755,11 +755,11 @@ func TestPlayerISVNoVoteForUnsupportedReProposal(t *testing.T) {
 	pV := &bottom
 	votes := make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p - 1,
 		Step:     next,
 		Proposal: *pV,
@@ -781,7 +781,7 @@ func TestPlayerISVNoVoteForUnsupportedReProposal(t *testing.T) {
 	require.NoError(t, panicErr)
 
 	// now feed reproposal
-	vv := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV)
+	vv := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -817,7 +817,7 @@ func TestPlayerICVOnSoftThresholdSamePeriod(t *testing.T) {
 	// now, dispatch a commitable proposal
 	//First, send a proposal vote
 	//Second, dispatch a payload
-	proposalVote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV)
+	proposalVote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -844,11 +844,11 @@ func TestPlayerICVOnSoftThresholdSamePeriod(t *testing.T) {
 
 	votes := make([]vote, int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p,
 		Step:     soft,
 		Proposal: *pV,
@@ -892,11 +892,11 @@ func TestPlayerICVOnSoftThresholdPrePayload(t *testing.T) {
 	payload, pV := helper.MakeRandomProposalPayload(t, r)
 	votes := make([]vote, int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p,
 		Step:     soft,
 		Proposal: *pV,
@@ -920,7 +920,7 @@ func TestPlayerICVOnSoftThresholdPrePayload(t *testing.T) {
 	// now, dispatch a commitable proposal
 	//First, send a proposal vote
 	//Second, dispatch a payload
-	proposalVote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV)
+	proposalVote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -961,11 +961,11 @@ func TestPlayerICVOnSoftThresholdThenPayloadNoProposalVote(t *testing.T) {
 	payload, pV := helper.MakeRandomProposalPayload(t, r)
 	votes := make([]vote, int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p,
 		Step:     soft,
 		Proposal: *pV,
@@ -1015,7 +1015,7 @@ func TestPlayerICVNoVoteForUncommittableProposal(t *testing.T) {
 
 	// now, dispatch an uncommitable proposal
 	// First, send a proposal vote, without corresponding payload.
-	proposalVote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV)
+	proposalVote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -1030,11 +1030,11 @@ func TestPlayerICVNoVoteForUncommittableProposal(t *testing.T) {
 
 	votes := make([]vote, int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p,
 		Step:     soft,
 		Proposal: *pV,
@@ -1070,11 +1070,11 @@ func TestPlayerICVPanicOnSoftBottomThreshold(t *testing.T) {
 	pV := &bottom
 	votes := make([]vote, int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p,
 		Proposal: *pV,
 	}
@@ -1108,11 +1108,11 @@ func TestPlayerFFSoftThreshold(t *testing.T) {
 	pV := helper.MakeRandomProposalValue()
 	votes := make([]vote, int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p+100, soft, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p+100, soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p + 100,
 		Step:     soft,
 		Proposal: *pV,
@@ -1148,7 +1148,7 @@ func TestPlayerFFSoftThresholdWithPayload(t *testing.T) {
 	// far in the future will be filtered, along with corresponding payload (if new)
 	//Second, dispatch a payload.
 	payload, pV := helper.MakeRandomProposalPayload(t, r)
-	proposalVote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV)
+	proposalVote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -1177,11 +1177,11 @@ func TestPlayerFFSoftThresholdWithPayload(t *testing.T) {
 
 	votes := make([]vote, int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p+100, soft, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p+100, soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p + 100,
 		Step:     soft,
 		Proposal: *pV,
@@ -1219,11 +1219,11 @@ func TestPlayerFFSoftThresholdLatePayloadCert(t *testing.T) {
 
 	votes := make([]vote, int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p+100, soft, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p+100, soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p + 100,
 		Step:     soft,
 		Proposal: *pV,
@@ -1248,7 +1248,7 @@ func TestPlayerFFSoftThresholdLatePayloadCert(t *testing.T) {
 	//First, send a proposal vote. Note that proposal votes for periods
 	// far in the future will be filtered, along with corresponding payload (if new)
 	//Second, dispatch a payload.
-	proposalVote := helper.MakeVerifiedVote(t, 0, r, p+100, propose, *pV)
+	proposalVote := helper.MakeVerifiedVote(t, 0, r, p+100, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -1291,11 +1291,11 @@ func TestPlayerFFNextThresholdBottom(t *testing.T) {
 	futureP := period(10)
 	votes := make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, futureP, next, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, futureP, next, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   futureP,
 		Proposal: *pV,
 	}
@@ -1327,11 +1327,11 @@ func TestPlayerFFNextThresholdValue(t *testing.T) {
 	futureP := period(10)
 	votes := make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, futureP, next, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, futureP, next, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   futureP,
 		Proposal: *pV,
 	}
@@ -1363,11 +1363,11 @@ func TestPlayerDoesNotFastForwardOldThresholdEvents(t *testing.T) {
 	pV := helper.MakeRandomProposalValue()
 	votes := make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p - 1,
 		Proposal: *pV,
 	}
@@ -1392,11 +1392,11 @@ func TestPlayerDoesNotFastForwardOldThresholdEvents(t *testing.T) {
 	pV = &bottom
 	votes = make([]vote, int((next + 1).threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int((next + 1).threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, (next + 1), *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, (next + 1), *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun = unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p - 1,
 		Proposal: *pV,
 	}
@@ -1418,7 +1418,7 @@ func TestPlayerDoesNotFastForwardOldThresholdEvents(t *testing.T) {
 	// allow soft voting for new proposal based on bottom
 	pV = helper.MakeRandomProposalValue()
 	pV.OriginalPeriod = p // we need to set this to trigger soft vote; else, its a reproposal
-	vv := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV)
+	vv := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -1454,11 +1454,11 @@ func TestPlayerProposesBottomBundle(t *testing.T) {
 	pV := &bottom
 	votes := make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p - 1,
 		Proposal: *pV,
 	}
@@ -1493,7 +1493,7 @@ func TestPlayerProposesNewRound(t *testing.T) {
 
 	// send a payload
 	// store an arbitrary proposal/payload
-	vVote := helper.MakeVerifiedVote(t, 0, rm1, p, propose, *pV)
+	vVote := helper.MakeVerifiedVote(t, 0, rm1, p, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -1518,11 +1518,11 @@ func TestPlayerProposesNewRound(t *testing.T) {
 	// gen cert to move into the next round
 	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, rm1, p, cert, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, rm1, p, cert, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    rm1.Number,
-		Branch:   rm1.Branch,
+		Branch:   maybeBranchCV(rm1.Branch),
 		Period:   p,
 		Proposal: *pV,
 	}
@@ -1559,11 +1559,11 @@ func TestPlayerCertificateThenPayloadEntersNewRound(t *testing.T) {
 	// gen cert; this should not advance into next round
 	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, rm1, p, cert, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, rm1, p, cert, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    rm1.Number,
-		Branch:   rm1.Branch,
+		Branch:   maybeBranchCV(rm1.Branch),
 		Period:   p,
 		Proposal: *pV,
 	}
@@ -1614,11 +1614,11 @@ func TestPlayerReproposesNextValueBundleWithoutPayload(t *testing.T) {
 	// gen next value bundle to fast forward into period 11
 	votes := make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p - 1,
 		Proposal: *pV,
 	}
@@ -1657,7 +1657,7 @@ func TestPlayerReproposesNextValueBundleRelaysPayload(t *testing.T) {
 	payload, pV := helper.MakeRandomProposalPayload(t, r)
 
 	// submit a proposal/payload
-	vv := helper.MakeVerifiedVote(t, 0, r, p-1, propose, *pV)
+	vv := helper.MakeVerifiedVote(t, 0, r, p-1, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -1684,11 +1684,11 @@ func TestPlayerReproposesNextValueBundleRelaysPayload(t *testing.T) {
 	// gen next value bundle to fast forward into period 11
 	votes := make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p - 1,
 		Proposal: *pV,
 	}
@@ -1717,7 +1717,7 @@ func TestPlayerReproposesNextValueBundleRelaysPayload(t *testing.T) {
 	require.Truef(t, pM.getTrace().Contains(relayEvent), "Player should relay freshest bundle = next value bundle")
 
 	// simulate the pseudonode
-	vote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV)
+	vote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = messageEvent{
 		T: votePresent,
 		Input: message{
@@ -1758,7 +1758,7 @@ func TestPlayerCommitsCertThreshold(t *testing.T) {
 
 	// send a payload
 	// store an arbitrary proposal/payload
-	vVote := helper.MakeVerifiedVote(t, 0, rm1, p, propose, *pV)
+	vVote := helper.MakeVerifiedVote(t, 0, rm1, p, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -1783,11 +1783,11 @@ func TestPlayerCommitsCertThreshold(t *testing.T) {
 	// gen cert to move into the next round
 	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, rm1, p, cert, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, rm1, p, cert, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    rm1.Number,
-		Branch:   rm1.Branch,
+		Branch:   maybeBranchCV(rm1.Branch),
 		Period:   p,
 		Proposal: *pV,
 	}
@@ -1828,11 +1828,11 @@ func TestPlayerRePropagatesFreshestBundle(t *testing.T) {
 	pV := helper.MakeRandomProposalValue()
 	votes := make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p - 1,
 		Proposal: *pV,
 	}
@@ -1888,7 +1888,7 @@ func TestPlayerPropagatesProposalPayload(t *testing.T) {
 	payload, pV := helper.MakeRandomProposalPayload(t, r)
 
 	// store an arbitrary proposal/payload
-	vVote := helper.MakeVerifiedVote(t, 0, r, 0, propose, *pV)
+	vVote := helper.MakeVerifiedVote(t, 0, r, 0, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -1924,7 +1924,7 @@ func TestPlayerPropagatesOwnProposalPayload(t *testing.T) {
 	payload, pV := helper.MakeRandomProposalPayload(t, r)
 
 	// store an arbitrary proposal/payload
-	vVote := helper.MakeVerifiedVote(t, 0, r, 0, propose, *pV)
+	vVote := helper.MakeVerifiedVote(t, 0, r, 0, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -1962,7 +1962,7 @@ func TestPlayerPropagatesProposalPayloadFutureRound(t *testing.T) {
 	payload, pV := helper.MakeRandomProposalPayload(t, rp1)
 
 	// store an arbitrary proposal/payload
-	vVote := helper.MakeVerifiedVote(t, 0, rp1, 0, propose, *pV)
+	vVote := helper.MakeVerifiedVote(t, 0, rp1, 0, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -2010,7 +2010,7 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 	payload, pV := helper.MakeRandomProposalPayload(t, r)
 
 	// store an arbitrary proposal/payload
-	vVote := helper.MakeVerifiedVote(t, 0, r, p-1, propose, *pV)
+	vVote := helper.MakeVerifiedVote(t, 0, r, p-1, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -2035,11 +2035,11 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 	// let's stage the value in period 10, so that we relay the block at the end of period 10
 	votes := make([]vote, int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, soft, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p - 1,
 		Proposal: *pV,
 	}
@@ -2061,11 +2061,11 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 	// gen next value bundle to fast forward into period 11
 	votes = make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun = unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p - 1,
 		Proposal: *pV,
 	}
@@ -2094,7 +2094,7 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 	require.Truef(t, pM.getTrace().Contains(relayPayloadEvent), "Player should relay payload on resynch")
 
 	// now, let's say someone saw the next value bundle, and they reproposed
-	vVote = helper.MakeVerifiedVote(t, 100, r, p, propose, *pV)
+	vVote = helper.MakeVerifiedVote(t, 100, r, p, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -2129,11 +2129,11 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 	payloadNext, pVNext := helper.MakeRandomProposalPayload(t, r)
 	votes = make([]vote, int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pVNext)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pVNext, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun = unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p,
 		Proposal: *pVNext,
 	}
@@ -2152,7 +2152,7 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
 	// Also deliver the payload this period.
-	vVote = helper.MakeVerifiedVote(t, 0, r, p, propose, *pVNext)
+	vVote = helper.MakeVerifiedVote(t, 0, r, p, propose, *pVNext, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -2194,7 +2194,7 @@ func TestPlayerPropagatesProposalVote(t *testing.T) {
 	_, pM, helper := setupP(t, r, 0, soft)
 	_, pV := helper.MakeRandomProposalPayload(t, r)
 
-	vVote := helper.MakeVerifiedVote(t, 0, r, 0, propose, *pV)
+	vVote := helper.MakeVerifiedVote(t, 0, r, 0, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -2217,7 +2217,7 @@ func TestPlayerPropagatesSoftVote(t *testing.T) {
 	_, pM, helper := setupP(t, r, 0, soft)
 	_, pV := helper.MakeRandomProposalPayload(t, r)
 
-	vVote := helper.MakeVerifiedVote(t, 0, r, 0, soft, *pV)
+	vVote := helper.MakeVerifiedVote(t, 0, r, 0, soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -2240,7 +2240,7 @@ func TestPlayerPropagatesCertVote(t *testing.T) {
 	_, pM, helper := setupP(t, r, 0, cert)
 	_, pV := helper.MakeRandomProposalPayload(t, r)
 
-	vVote := helper.MakeVerifiedVote(t, 0, r, 0, cert, *pV)
+	vVote := helper.MakeVerifiedVote(t, 0, r, 0, cert, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -2268,7 +2268,7 @@ func TestPlayerDisconnectsFromMalformedProposalVote(t *testing.T) {
 	verifyError := makeSerErrStr("test error")
 
 	// check disconnect on malformed proposal votes
-	proposalVote := helper.MakeVerifiedVote(t, 0, r, p, propose, bottom)
+	proposalVote := helper.MakeVerifiedVote(t, 0, r, p, propose, bottom, config.Consensus[protocol.ConsensusCurrentVersion])
 	m := message{
 		Vote:                proposalVote,
 		UnauthenticatedVote: proposalVote.u(),
@@ -2344,7 +2344,7 @@ func TestPlayerDisconnectsFromMalformedVotes(t *testing.T) {
 	verifyError := makeSerErrStr("test error")
 
 	// check disconnect on malformed votes
-	vv := helper.MakeVerifiedVote(t, 0, r, p, soft, bottom)
+	vv := helper.MakeVerifiedVote(t, 0, r, p, soft, bottom, config.Consensus[protocol.ConsensusCurrentVersion])
 	m := message{
 		Vote:                vv,
 		UnauthenticatedVote: vv.u(),
@@ -2419,7 +2419,7 @@ func TestPlayerRequestsVoteVerification(t *testing.T) {
 	const p = period(0)
 	_, pM, helper := setupP(t, r, p, cert)
 	pV := helper.MakeRandomProposalValue()
-	vote := helper.MakeVerifiedVote(t, 0, r, p, soft, *pV)
+	vote := helper.MakeVerifiedVote(t, 0, r, p, soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	m := message{
 		UnauthenticatedVote: vote.u(),
 	}
@@ -2441,7 +2441,7 @@ func TestPlayerRequestsProposalVoteVerification(t *testing.T) {
 	const p = period(0)
 	_, pM, helper := setupP(t, r, p, cert)
 	pV := helper.MakeRandomProposalValue()
-	vote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV)
+	vote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	m := message{
 		UnauthenticatedVote: vote.u(),
 	}
@@ -2490,7 +2490,7 @@ func TestPlayerRequestsPayloadVerification(t *testing.T) {
 	payload, pV := helper.MakeRandomProposalPayload(t, r)
 
 	// submit a proposal/initial payload
-	vv := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV)
+	vv := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -2529,7 +2529,7 @@ func TestPlayerRequestsPipelinedPayloadVerification(t *testing.T) {
 
 	// also make sure we ask for payload verification when entering a new round
 	payloadTwo, pVTwo := helper.MakeRandomProposalPayload(t, rp1)
-	vv := helper.MakeVerifiedVote(t, 0, rp1, 0, propose, *pVTwo)
+	vv := helper.MakeVerifiedVote(t, 0, rp1, 0, propose, *pVTwo, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -2559,7 +2559,7 @@ func TestPlayerRequestsPipelinedPayloadVerification(t *testing.T) {
 	pP, pV := helper.MakeProposalPayload(t, r, rBlock)
 	// send a payload
 	// store an arbitrary proposal/payload
-	vVote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV)
+	vVote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -2583,11 +2583,11 @@ func TestPlayerRequestsPipelinedPayloadVerification(t *testing.T) {
 
 	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p,
 		Proposal: *pV,
 	}
@@ -2631,7 +2631,7 @@ func TestPlayerHandlesPipelinedThresholds(t *testing.T) {
 	payload, pV := helper.MakeRandomProposalPayload(t, rp1)
 	votes := make([]vote, int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, rp1, p, soft, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, rp1, p, soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	// note: we can't just send a bundle - it will get rejected due to freshness rules
 	//bun := unauthenticatedBundle{
@@ -2669,7 +2669,7 @@ func TestPlayerHandlesPipelinedThresholds(t *testing.T) {
 	// now, enter next round
 	pPTwo, pVTwo := helper.MakeProposalPayload(t, r, rBlock)
 	// store pPTwo
-	vVote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pVTwo)
+	vVote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pVTwo, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -2693,11 +2693,11 @@ func TestPlayerHandlesPipelinedThresholds(t *testing.T) {
 
 	votes = make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, *pVTwo)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, *pVTwo, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p,
 		Proposal: *pVTwo,
 	}
@@ -2746,11 +2746,11 @@ func TestPlayerRegression_EnsuresCertThreshFromOldPeriod_8ba23942(t *testing.T) 
 	pP, pV := helper.MakeRandomProposalPayload(t, r)
 	votes := make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p, next, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p, next, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p,
 		Step:     next,
 		Proposal: *pV,
@@ -2785,7 +2785,7 @@ func TestPlayerRegression_EnsuresCertThreshFromOldPeriod_8ba23942(t *testing.T) 
 	require.NoError(t, panicErr)
 	votes = make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, *pV) // period 0
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, *pV, config.Consensus[protocol.ConsensusCurrentVersion]) // period 0
 		msg := messageEvent{
 			T: voteVerified,
 			Input: message{
@@ -2800,7 +2800,7 @@ func TestPlayerRegression_EnsuresCertThreshFromOldPeriod_8ba23942(t *testing.T) 
 	}
 	bun = unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p,
 		Step:     cert,
 		Proposal: *pV,
@@ -2821,7 +2821,7 @@ func TestPlayer_RejectsCertThresholdFromPreviousRound(t *testing.T) {
 	_, pV := helper.MakeRandomProposalPayload(t, r)
 	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, rm1, p+1, cert, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, rm1, p+1, cert, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 		msg := messageEvent{
 			T: voteVerified,
 			Input: message{
@@ -2837,7 +2837,7 @@ func TestPlayer_RejectsCertThresholdFromPreviousRound(t *testing.T) {
 	}
 	bun := unauthenticatedBundle{
 		Round:    rm1.Number,
-		Branch:   rm1.Branch,
+		Branch:   maybeBranchCV(rm1.Branch),
 		Period:   p + 1,
 		Step:     cert,
 		Proposal: *pV,
@@ -2859,11 +2859,11 @@ func TestPlayer_CommitsCertThresholdWithoutPreStaging(t *testing.T) {
 	pP, pV := helper.MakeRandomProposalPayload(t, r)
 	votes := make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p, next, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p, next, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p,
 		Step:     next,
 		Proposal: *pV,
@@ -2899,7 +2899,7 @@ func TestPlayer_CommitsCertThresholdWithoutPreStaging(t *testing.T) {
 	// generate a cert threshold for period 1. This should ensureBlock since we have the payload.
 	votes = make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p+1, cert, *pV) // period 0
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p+1, cert, *pV, config.Consensus[protocol.ConsensusCurrentVersion]) // period 0
 		msg := messageEvent{
 			T: voteVerified,
 			Input: message{
@@ -2914,7 +2914,7 @@ func TestPlayer_CommitsCertThresholdWithoutPreStaging(t *testing.T) {
 	}
 	bun = unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p + 1,
 		Step:     cert,
 		Proposal: *pV,
@@ -2935,7 +2935,7 @@ func TestPlayer_CertThresholdDoesNotBlock(t *testing.T) {
 	_, pV := helper.MakeRandomProposalPayload(t, r)
 	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 		msg := messageEvent{
 			T: voteVerified,
 			Input: message{
@@ -2950,7 +2950,7 @@ func TestPlayer_CertThresholdDoesNotBlock(t *testing.T) {
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p,
 		Step:     cert,
 		Proposal: *pV,
@@ -2971,7 +2971,7 @@ func TestPlayer_CertThresholdDoesNotBlockFuturePeriod(t *testing.T) {
 	_, pV := helper.MakeRandomProposalPayload(t, r)
 	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p+1, cert, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p+1, cert, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 		msg := messageEvent{
 			T: voteVerified,
 			Input: message{
@@ -2986,7 +2986,7 @@ func TestPlayer_CertThresholdDoesNotBlockFuturePeriod(t *testing.T) {
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p + 1,
 		Step:     cert,
 		Proposal: *pV,
@@ -3007,11 +3007,11 @@ func TestPlayer_CertThresholdFastForwards(t *testing.T) {
 	// send a bundle - individual votes will get filtered.
 	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p+2, cert, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p+2, cert, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p + 2,
 		Step:     cert,
 		Proposal: *pV,
@@ -3045,7 +3045,7 @@ func TestPlayer_CertThresholdCommitsFuturePeriodIfAlreadyHasBlock(t *testing.T) 
 
 	payload, pV := helper.MakeRandomProposalPayload(t, r)
 	// give player a proposal/payload.
-	proposalVote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV)
+	proposalVote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -3072,11 +3072,11 @@ func TestPlayer_CertThresholdCommitsFuturePeriodIfAlreadyHasBlock(t *testing.T) 
 	// send a bundle - individual votes will get filtered.
 	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p+2, cert, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p+2, cert, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p + 2,
 		Step:     cert,
 		Proposal: *pV,
@@ -3112,11 +3112,11 @@ func TestPlayer_PayloadAfterCertThresholdCommits(t *testing.T) {
 	// send a bundle - individual votes will get filtered.
 	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p+2, cert, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p+2, cert, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p + 2,
 		Step:     cert,
 		Proposal: *pV,
@@ -3169,7 +3169,7 @@ func TestPlayerAlwaysResynchsPinnedValue(t *testing.T) {
 	payload, pV := helper.MakeRandomProposalPayload(t, r)
 
 	// store a payload for period 10
-	vv := helper.MakeVerifiedVote(t, 0, r, p-2, propose, *pV)
+	vv := helper.MakeVerifiedVote(t, 0, r, p-2, propose, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -3196,11 +3196,11 @@ func TestPlayerAlwaysResynchsPinnedValue(t *testing.T) {
 	// gen next value bundle to fast forward into period 11
 	votes := make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p-2, next, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p-2, next, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p - 2,
 		Proposal: *pV,
 	}
@@ -3222,11 +3222,11 @@ func TestPlayerAlwaysResynchsPinnedValue(t *testing.T) {
 	// Generate one more to fast-forward into period 12; note that period 11 has no staged value.
 	votes = make([]vote, int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(next.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	}
 	bun = unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranchCV(r.Branch),
 		Period:   p - 1,
 		Proposal: *pV,
 	}

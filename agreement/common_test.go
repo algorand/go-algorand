@@ -560,10 +560,15 @@ func makeProposalsTesting(accs testAccountData, round round, period period, fact
 func makeVotesTesting(accs testAccountData, round round, period period, step step, proposal proposalValue, xledger Ledger) (vs []vote) {
 	ledger := LedgerWithoutBranch(xledger)
 
+	params, err := ledger.ConsensusParams(ParamsRound(round.Number))
+	if err != nil {
+		return nil
+	}
+
 	// TODO this common code should be refactored out
 	votes := make([]vote, 0)
 	for i := range accs.addresses {
-		rv := rawVote{Sender: accs.addresses[i], Round: round.Number, Branch: round.Branch, Period: period, Step: step, Proposal: proposal}
+		rv := rawVote{Sender: accs.addresses[i], Round: round.Number, Branch: maybeBranch(params, round.Branch), Period: period, Step: step, Proposal: proposal}
 		uv, err := makeVote(rv, accs.ots[i], accs.vrfs[i], ledger)
 		if err != nil {
 			logging.Base().Errorf("AccountManager.makeVotes: Could not create vote: %v", err)
@@ -677,20 +682,20 @@ func (v *voteMakerHelper) MakeValidVoteAccepted(t *testing.T, index int, step st
 	return v.MakeValidVoteAcceptedVal(t, index, step, *v.proposal)
 }
 
-func (v *voteMakerHelper) MakeRawVote(t *testing.T, index int, r round, p period, s step, value proposalValue) rawVote {
+func (v *voteMakerHelper) MakeRawVote(t *testing.T, index int, r round, p period, s step, value proposalValue, params config.ConsensusParams) rawVote {
 	if _, ok := v.addresses[index]; !ok {
 		v.addresses[index] = basics.Address(randomBlockHash())
 	}
-	return rawVote{Sender: v.addresses[index], Round: r.Number, Branch: r.Branch, Period: p, Step: s, Proposal: value}
+	return rawVote{Sender: v.addresses[index], Round: r.Number, Branch: maybeBranch(params, r.Branch), Period: p, Step: s, Proposal: value}
 }
 
-func (v *voteMakerHelper) MakeVerifiedVote(t *testing.T, index int, r round, p period, s step, value proposalValue) vote {
+func (v *voteMakerHelper) MakeVerifiedVote(t *testing.T, index int, r round, p period, s step, value proposalValue, params config.ConsensusParams) vote {
 	return vote{
-		R:    v.MakeRawVote(t, index, r, p, s, value),
+		R:    v.MakeRawVote(t, index, r, p, s, value, params),
 		Cred: committee.Credential{Weight: 1},
 	}
 }
-func (v *voteMakerHelper) MakeEquivocationVote(t *testing.T, index int, r round, p period, s step, weight uint64) equivocationVote {
+func (v *voteMakerHelper) MakeEquivocationVote(t *testing.T, index int, r round, p period, s step, weight uint64, params config.ConsensusParams) equivocationVote {
 	if _, ok := v.addresses[index]; !ok {
 		v.addresses[index] = basics.Address(randomBlockHash())
 	}
@@ -699,7 +704,7 @@ func (v *voteMakerHelper) MakeEquivocationVote(t *testing.T, index int, r round,
 	return equivocationVote{
 		Sender:    v.addresses[index],
 		Round:     r.Number,
-		Branch:    r.Branch,
+		Branch:    maybeBranch(params, r.Branch),
 		Period:    p,
 		Step:      s,
 		Cred:      committee.Credential{Weight: weight},
@@ -710,30 +715,30 @@ func (v *voteMakerHelper) MakeEquivocationVote(t *testing.T, index int, r round,
 // make a vote for specified proposal value
 func (v *voteMakerHelper) MakeValidVoteAcceptedVal(t *testing.T, index int, step step, value proposalValue) voteAcceptedEvent {
 	// these unit tests assume that the vote tracker doesn't validate the integrity of the vote event itself
-	vt := v.MakeVerifiedVote(t, index, roundZero, period(8), step, value) // XXX round(0) ?
+	vt := v.MakeVerifiedVote(t, index, roundZero, period(8), step, value, config.Consensus[protocol.ConsensusCurrentVersion]) // XXX round(0) ?
 	return voteAcceptedEvent{vt, protocol.ConsensusCurrentVersion}
 }
 
-func (v *voteMakerHelper) MakeUnauthenticatedVote(t *testing.T, index int, r round, p period, s step, value proposalValue) unauthenticatedVote {
+func (v *voteMakerHelper) MakeUnauthenticatedVote(t *testing.T, index int, r round, p period, s step, value proposalValue, params config.ConsensusParams) unauthenticatedVote {
 	return unauthenticatedVote{
-		R:    v.MakeRawVote(t, index, r, p, s, value),
+		R:    v.MakeRawVote(t, index, r, p, s, value, params),
 		Cred: committee.UnauthenticatedCredential{},
 	}
 }
 
 // MakeUnauthenticatedBundle creates a bundle where no participant has more than 1 weight
-func (v *voteMakerHelper) MakeUnauthenticatedBundle(t *testing.T, r round, p period, s step, value proposalValue) unauthenticatedBundle {
-	return v.MakeVerifiedBundle(t, r, p, s, value).U
+func (v *voteMakerHelper) MakeUnauthenticatedBundle(t *testing.T, r round, p period, s step, value proposalValue, params config.ConsensusParams) unauthenticatedBundle {
+	return v.MakeVerifiedBundle(t, r, p, s, value, params).U
 }
 
-func (v *voteMakerHelper) MakeVerifiedBundle(t *testing.T, r round, p period, s step, value proposalValue) bundle {
+func (v *voteMakerHelper) MakeVerifiedBundle(t *testing.T, r round, p period, s step, value proposalValue, params config.ConsensusParams) bundle {
 	votes := make([]vote, int(s.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(s.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = v.MakeVerifiedVote(t, i, r, p, s, value)
+		votes[i] = v.MakeVerifiedVote(t, i, r, p, s, value, params)
 	}
 	bun := unauthenticatedBundle{
 		Round:    r.Number,
-		Branch:   r.Branch,
+		Branch:   maybeBranch(params, r.Branch),
 		Period:   p,
 		Step:     s,
 		Proposal: value,

@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -35,7 +36,7 @@ func makeVoteTesting(addr basics.Address, vrfSecs *crypto.VRFSecrets, otSecs cry
 	var proposal proposalValue
 	proposal.BlockDigest = digest
 	l := LedgerWithoutBranch(ledger)
-	params, err := l.ConsensusParams(round.Number)
+	params, err := l.ConsensusParams(ParamsRound(round.Number))
 	if err != nil {
 		return vote{}, err
 	}
@@ -57,11 +58,14 @@ func TestVoteValidation(t *testing.T) {
 	period := period(0)
 	var processedVote = false
 
+	params, err := ledger.ConsensusParams(round.Number, round.Branch)
+	require.NoError(t, err)
+
 	for i, address := range addresses[:numAddresses] {
 		var proposal proposalValue
 		proposal.BlockDigest = randomBlockHash()
 		proposal.OriginalProposer = address
-		rv := rawVote{Sender: address, Round: round.Number, Branch: round.Branch, Period: period, Step: step(i), Proposal: proposal}
+		rv := rawVote{Sender: address, Round: round.Number, Branch: maybeBranch(params, round.Branch), Period: period, Step: step(i), Proposal: proposal}
 		unauthenticatedVote, err := makeVote(rv, otSecrets[i], vrfSecrets[i], LedgerWithoutBranch(ledger))
 		require.NoError(t, err)
 
@@ -77,7 +81,11 @@ func TestVoteValidation(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Equal(t, av.R.Round, round.Number)
-			require.Equal(t, av.R.Branch, round.Branch)
+			if params.AgreementMessagesContainBranch {
+				require.Equal(t, av.R.Branch, round.Branch)
+			} else {
+				require.Equal(t, av.R.Branch, bookkeeping.BlockHash{})
+			}
 			require.Equal(t, av.R.Period, period)
 			require.Equal(t, av.R.Step, step(i))
 
@@ -130,12 +138,15 @@ func TestVoteReproposalValidation(t *testing.T) {
 	per := period(1)
 	var processedVote = false
 
+	params, err := ledger.ConsensusParams(round.Number, round.Branch)
+	require.NoError(t, err)
+
 	for i, address := range addresses[:numAddresses] {
 		var proposal proposalValue
 		proposal.BlockDigest = randomBlockHash()
 		proposal.OriginalProposer = address
 		proposal.OriginalPeriod = per
-		rv := rawVote{Sender: address, Round: round.Number, Branch: round.Branch, Period: per, Step: step(0), Proposal: proposal}
+		rv := rawVote{Sender: address, Round: round.Number, Branch: maybeBranch(params, round.Branch), Period: per, Step: step(0), Proposal: proposal}
 		unauthenticatedVote, err := makeVote(rv, otSecrets[i], vrfSecrets[i], LedgerWithoutBranch(ledger))
 		require.NoError(t, err)
 
@@ -151,7 +162,7 @@ func TestVoteReproposalValidation(t *testing.T) {
 			require.NoError(t, err)
 
 			// good period-1 reproposal for a period-0 original proposal
-			rv = rawVote{Sender: address, Round: round.Number, Branch: round.Branch, Period: per, Step: step(0), Proposal: proposal}
+			rv = rawVote{Sender: address, Round: round.Number, Branch: maybeBranch(params, round.Branch), Period: per, Step: step(0), Proposal: proposal}
 			rv.Proposal.OriginalPeriod = period(0)
 			rv.Proposal.OriginalProposer = basics.Address(randomBlockHash())
 			reproposalVote, err := makeVote(rv, otSecrets[i], vrfSecrets[i], LedgerWithoutBranch(ledger))
@@ -160,7 +171,7 @@ func TestVoteReproposalValidation(t *testing.T) {
 			require.NoError(t, err)
 
 			// bad period-1 fresh proposal because original proposer is not sender
-			rv = rawVote{Sender: address, Round: round.Number, Branch: round.Branch, Period: per, Step: step(0), Proposal: proposal}
+			rv = rawVote{Sender: address, Round: round.Number, Branch: maybeBranch(params, round.Branch), Period: per, Step: step(0), Proposal: proposal}
 			rv.Proposal.OriginalPeriod = period(1)
 			rv.Proposal.OriginalProposer = basics.Address(randomBlockHash())
 			badReproposalVote, err := makeVote(rv, otSecrets[i], vrfSecrets[i], LedgerWithoutBranch(ledger))
@@ -169,7 +180,7 @@ func TestVoteReproposalValidation(t *testing.T) {
 			require.Error(t, err)
 
 			// bad period-1 reproposal for a period 2 original proposal
-			rv = rawVote{Sender: address, Round: round.Number, Branch: round.Branch, Period: per, Step: step(0), Proposal: proposal}
+			rv = rawVote{Sender: address, Round: round.Number, Branch: maybeBranch(params, round.Branch), Period: per, Step: step(0), Proposal: proposal}
 			rv.Proposal.OriginalPeriod = period(2)
 			rv.Proposal.OriginalProposer = address
 			badReproposalVote, err = makeVote(rv, otSecrets[i], vrfSecrets[i], LedgerWithoutBranch(ledger))
@@ -256,21 +267,24 @@ func TestEquivocationVoteValidation(t *testing.T) {
 	round := makeRoundRandomBranch(ledger.NextRound())
 	period := period(0)
 
+	params, err := ledger.ConsensusParams(round.Number, round.Branch)
+	require.NoError(t, err)
+
 	var processedVote = false
 	for i, address := range addresses[:numAddresses] {
 		var proposal1 proposalValue
 		proposal1.BlockDigest = randomBlockHash()
-		rv0 := rawVote{Sender: address, Round: round.Number, Branch: round.Branch, Period: period, Step: step(i), Proposal: proposal1}
+		rv0 := rawVote{Sender: address, Round: round.Number, Branch: maybeBranch(params, round.Branch), Period: period, Step: step(i), Proposal: proposal1}
 		unauthenticatedVote0, err := makeVote(rv0, otSecrets[i], vrfSecrets[i], LedgerWithoutBranch(ledger))
 		require.NoError(t, err)
 
-		rv0Copy := rawVote{Sender: address, Round: round.Number, Branch: round.Branch, Period: period, Step: step(i), Proposal: proposal1}
+		rv0Copy := rawVote{Sender: address, Round: round.Number, Branch: maybeBranch(params, round.Branch), Period: period, Step: step(i), Proposal: proposal1}
 		unauthenticatedVote0Copy, err := makeVote(rv0Copy, otSecrets[i], vrfSecrets[i], LedgerWithoutBranch(ledger))
 		require.NoError(t, err)
 
 		var proposal2 proposalValue
 		proposal2.BlockDigest = randomBlockHash()
-		rv1 := rawVote{Sender: address, Round: round.Number, Branch: round.Branch, Period: period, Step: step(i), Proposal: proposal2}
+		rv1 := rawVote{Sender: address, Round: round.Number, Branch: maybeBranch(params, round.Branch), Period: period, Step: step(i), Proposal: proposal2}
 		unauthenticatedVote1, err := makeVote(rv1, otSecrets[i], vrfSecrets[i], LedgerWithoutBranch(ledger))
 		require.NoError(t, err)
 
@@ -281,7 +295,7 @@ func TestEquivocationVoteValidation(t *testing.T) {
 		ev := unauthenticatedEquivocationVote{
 			Sender:    address,
 			Round:     round.Number,
-			Branch:    round.Branch,
+			Branch:    maybeBranch(params, round.Branch),
 			Period:    period,
 			Step:      step(i),
 			Cred:      unauthenticatedVote0.Cred,
@@ -292,7 +306,7 @@ func TestEquivocationVoteValidation(t *testing.T) {
 		evSameVote := unauthenticatedEquivocationVote{
 			Sender:    address,
 			Round:     round.Number,
-			Branch:    round.Branch,
+			Branch:    maybeBranch(params, round.Branch),
 			Period:    period,
 			Step:      step(i),
 			Cred:      unauthenticatedVote0.Cred,

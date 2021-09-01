@@ -103,9 +103,9 @@ func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res even
 		if err != nil {
 			return filteredEvent{T: voteFiltered, Err: makeSerErr(err)}
 		}
-		if v.R.Round == pr.Round.Number { // XXXX timer doesn't know branches
+		if v.R.Round == pr.Round.Number {
 			r.t.timeR().RecVoteReceived(v)
-		} else if v.R.Round == pr.Round.Number+1 { // XXX
+		} else if v.R.Round == pr.Round.Number+1 {
 			r.t.timeRPlus1().RecVoteReceived(v)
 		}
 
@@ -114,10 +114,9 @@ func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res even
 		if tE.t() == none {
 			return tE
 		}
-		//if tE.(thresholdEvent).Round.Number == e.FreshnessData.PlayerRound.Number {
-		if tE.(thresholdEvent).Round == e.FreshnessData.PlayerRound {
+		if tE.(thresholdEvent).Round.Number == e.FreshnessData.PlayerRound.Number {
 			return tE
-		} else if tE.(thresholdEvent).Round.Number == e.FreshnessData.PlayerRound.Number+1 { // XXXXX freshness data R+1 check not branch-aware
+		} else if tE.(thresholdEvent).Round.Number == e.FreshnessData.PlayerRound.Number+1 {
 			return emptyEvent{}
 		}
 		logging.Base().Panicf("bad round (%v, %v)", tE.(thresholdEvent).Round, e.FreshnessData.PlayerRound) // TODO this should be a postcondition check; move it
@@ -243,22 +242,14 @@ func voteStepFresh(descr string, proto protocol.ConsensusVersion, mine, vote ste
 	return nil
 }
 
-const alwaysFresh = false
-
 // voteFresh determines whether a vote satisfies freshness rules.
 func voteFresh(proto protocol.ConsensusVersion, freshData freshnessData, vote unauthenticatedVote) error {
-	// XXXXX update voteFresh rules for pipelining
-	if alwaysFresh { // XXX for now
-		return nil
-	}
-
-	// XXXX ignores branch for r+1 check
-	//if freshData.PlayerRound.Number != vote.R.roundBranch().Number && freshData.PlayerRound.Number+1 != vote.R.Round {
-	if freshData.PlayerRound != vote.R.roundBranch() && freshData.PlayerRound.Number+1 != vote.R.Round { // XXXX ignores branch for r+1 check
+	// Only compare round numbers here; branch checking is done by the router above.
+	if freshData.PlayerRound.Number != vote.R.Round && freshData.PlayerRound.Number+1 != vote.R.Round {
 		return fmt.Errorf("filtered vote from bad round: player.Round=%v; vote.Round=%v", freshData.PlayerRound, vote.R.roundBranch())
 	}
 
-	if freshData.PlayerRound.Number+1 == vote.R.Round { // XXX ignores branch
+	if freshData.PlayerRound.Number+1 == vote.R.Round {
 		if vote.R.Period > 0 {
 			return fmt.Errorf("filtered future vote from bad period: player.Round=%v; vote.(Round,Period,Step)=(%v,%v,%v)", freshData.PlayerRound, vote.R.Round, vote.R.Period, vote.R.Step)
 		}
@@ -284,11 +275,8 @@ func voteFresh(proto protocol.ConsensusVersion, freshData freshnessData, vote un
 
 // bundleFresh determines whether a bundle satisfies freshness rules.
 func bundleFresh(freshData freshnessData, b unauthenticatedBundle) error {
-	if alwaysFresh { // XXX for now
-		return nil
-	}
-
-	if freshData.PlayerRound != b.roundBranch() { // only allows one branch+round
+	// Only compare round numbers here; branch checking is done by the router above.
+	if freshData.PlayerRound.Number != b.Round { // only allows one branch+round
 		return fmt.Errorf("filtered bundle from different round: round %d != %d", freshData.PlayerRound, b.Round)
 	}
 

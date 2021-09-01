@@ -748,8 +748,11 @@ func (e thresholdEvent) fresherThan(o thresholdEvent) bool {
 		return true
 	}
 
-	if e.Round != o.Round {
-		logging.Base().Panicf("round mismatch: %v != %v", e.Round, o.Round)
+	if e.Round.Number != o.Round.Number {
+		logging.Base().Panicf("round number mismatch: %v != %v", e.Round, o.Round)
+	}
+	if e.Round.Branch != o.Round.Branch && e.Round.Branch != (bookkeeping.BlockHash{}) && o.Round.Branch != (bookkeeping.BlockHash{}) {
+		logging.Base().Panicf("round branch mismatch: %v != %v", e.Round, o.Round)
 	}
 
 	switch o.T {

@@ -20,6 +20,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // Creates a proposal manager, and returns it in automata and white box form, along
@@ -49,7 +52,7 @@ func TestProposalManagerThresholdSoftFastForward(t *testing.T) {
 
 	// create a soft threshold.
 	pV := helper.MakeRandomProposalValue()
-	b := helper.MakeUnauthenticatedBundle(t, r, p+3, soft, *pV)
+	b := helper.MakeUnauthenticatedBundle(t, r, p+3, soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := thresholdEvent{
 		T:        softThreshold,
 		Bundle:   b,
@@ -76,7 +79,7 @@ func TestProposalManagerThresholdSoftStage(t *testing.T) {
 
 	// create a soft threshold.
 	pV := helper.MakeRandomProposalValue()
-	b := helper.MakeUnauthenticatedBundle(t, r, p, soft, *pV)
+	b := helper.MakeUnauthenticatedBundle(t, r, p, soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	softThreshEvent := thresholdEvent{
 		T:        softThreshold,
 		Bundle:   b,
@@ -111,7 +114,7 @@ func TestProposalManagerThresholdCert(t *testing.T) {
 
 	// create a cert threshold.
 	pV := helper.MakeRandomProposalValue()
-	b := helper.MakeUnauthenticatedBundle(t, r, p, cert, *pV)
+	b := helper.MakeUnauthenticatedBundle(t, r, p, cert, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := thresholdEvent{
 		T:        certThreshold,
 		Bundle:   b,
@@ -147,7 +150,7 @@ func TestProposalManagerThresholdNext(t *testing.T) {
 
 	// create a next threshold.
 	pV := helper.MakeRandomProposalValue()
-	b := helper.MakeUnauthenticatedBundle(t, r, p, next, *pV)
+	b := helper.MakeUnauthenticatedBundle(t, r, p, next, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := thresholdEvent{
 		T:        nextThreshold,
 		Bundle:   b,
@@ -215,7 +218,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 
 	// generate vote in same round same period, should be fine
 	pV := helper.MakeRandomProposalValue()
-	uv := helper.MakeUnauthenticatedVote(t, 0, r, p, s, *pV)
+	uv := helper.MakeUnauthenticatedVote(t, 0, r, p, s, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
@@ -229,7 +232,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 
 	// vote in same round p + 1 should also be fine
 	pV = helper.MakeRandomProposalValue()
-	uv = helper.MakeUnauthenticatedVote(t, 0, r, p+1, s, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 0, r, p+1, s, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
@@ -243,7 +246,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 
 	// vote in same round p+ 2 should be filtered
 	pV = helper.MakeRandomProposalValue()
-	uv = helper.MakeUnauthenticatedVote(t, 0, r, p+2, s, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 0, r, p+2, s, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
@@ -257,7 +260,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 
 	// vote in same round p - 2 should be filtered
 	pV = helper.MakeRandomProposalValue()
-	uv = helper.MakeUnauthenticatedVote(t, 0, r, p-2, s, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 0, r, p-2, s, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
@@ -271,7 +274,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 
 	// vote in r + 1 should be filtered unless period 0
 	pV = helper.MakeRandomProposalValue()
-	uv = helper.MakeUnauthenticatedVote(t, 0, rp1, 1, s, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 0, rp1, 1, s, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
@@ -284,7 +287,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
 	pV = helper.MakeRandomProposalValue()
-	uv = helper.MakeUnauthenticatedVote(t, 0, rp1, 0, s, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 0, rp1, 0, s, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
@@ -298,7 +301,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 
 	// vote > r + 1 should be filtered
 	pV = helper.MakeRandomProposalValue()
-	uv = helper.MakeUnauthenticatedVote(t, 0, rp2, 0, s, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 0, rp2, 0, s, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
@@ -335,7 +338,7 @@ func TestProposalFreshAdjacentPeriodsVerified(t *testing.T) {
 
 	// generate vote in same round same period, should be fine
 	pV := helper.MakeRandomProposalValue()
-	v := helper.MakeVerifiedVote(t, 0, r, p, s, *pV)
+	v := helper.MakeVerifiedVote(t, 0, r, p, s, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
@@ -350,7 +353,7 @@ func TestProposalFreshAdjacentPeriodsVerified(t *testing.T) {
 
 	// vote in same round p + 1 should also be fine
 	pV = helper.MakeRandomProposalValue()
-	v = helper.MakeVerifiedVote(t, 0, r, p+1, s, *pV)
+	v = helper.MakeVerifiedVote(t, 0, r, p+1, s, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
@@ -365,7 +368,7 @@ func TestProposalFreshAdjacentPeriodsVerified(t *testing.T) {
 
 	// vote in same round p+ 2 should be filtered
 	pV = helper.MakeRandomProposalValue()
-	v = helper.MakeVerifiedVote(t, 0, r, p+2, s, *pV)
+	v = helper.MakeVerifiedVote(t, 0, r, p+2, s, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
@@ -380,7 +383,7 @@ func TestProposalFreshAdjacentPeriodsVerified(t *testing.T) {
 
 	// vote in same round p - 2 should be filtered
 	pV = helper.MakeRandomProposalValue()
-	v = helper.MakeVerifiedVote(t, 0, r, p-2, s, *pV)
+	v = helper.MakeVerifiedVote(t, 0, r, p-2, s, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
@@ -395,7 +398,7 @@ func TestProposalFreshAdjacentPeriodsVerified(t *testing.T) {
 
 	// vote in r + 1 should be filtered unless period 0
 	pV = helper.MakeRandomProposalValue()
-	v = helper.MakeVerifiedVote(t, 0, rp1, 1, s, *pV)
+	v = helper.MakeVerifiedVote(t, 0, rp1, 1, s, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
@@ -409,7 +412,7 @@ func TestProposalFreshAdjacentPeriodsVerified(t *testing.T) {
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
 	pV = helper.MakeRandomProposalValue()
-	v = helper.MakeVerifiedVote(t, 0, rp1, 0, s, *pV)
+	v = helper.MakeVerifiedVote(t, 0, rp1, 0, s, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
@@ -424,7 +427,7 @@ func TestProposalFreshAdjacentPeriodsVerified(t *testing.T) {
 
 	// vote > r + 1 should be filtered
 	pV = helper.MakeRandomProposalValue()
-	v = helper.MakeVerifiedVote(t, 0, rp2, 0, s, *pV)
+	v = helper.MakeVerifiedVote(t, 0, rp2, 0, s, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
@@ -457,7 +460,7 @@ func TestProposalManagerCancelledVoteFiltered(t *testing.T) {
 
 	// generate vote in same round same period, should be fine, but lets cancel it
 	pV := helper.MakeRandomProposalValue()
-	uv := helper.MakeUnauthenticatedVote(t, 0, r, p, s, *pV)
+	uv := helper.MakeUnauthenticatedVote(t, 0, r, p, s, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
 	inMsg := filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{

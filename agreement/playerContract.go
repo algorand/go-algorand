@@ -18,6 +18,8 @@ package agreement
 
 import (
 	"fmt"
+
+	"github.com/algorand/go-algorand/data/bookkeeping"
 )
 
 type playerContract struct{}
@@ -43,8 +45,11 @@ func (c playerContract) call(aold, anew actor, in event, out []action) (pre, pos
 		}
 
 	case thresholdEvent:
-		if e.Round != pold.Round {
-			pre = append(pre, fmt.Errorf("threshold delivered with wrong round: e.Round != pold.Round: %v != %v", e.Round, pold.Round))
+		if e.Round.Number != pold.Round.Number {
+			pre = append(pre, fmt.Errorf("threshold delivered with wrong round number: e.Round != pold.Round: %v != %v", e.Round, pold.Round))
+		}
+		if e.Round.Branch != pold.Round.Branch && e.Round.Branch != (bookkeeping.BlockHash{}) && pold.Round.Branch != (bookkeeping.BlockHash{}) {
+			pre = append(pre, fmt.Errorf("threshold delivered with wrong round branch: e.Round != pold.Round: %v != %v", e.Round, pold.Round))
 		}
 
 		switch e.t() {
