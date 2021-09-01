@@ -337,7 +337,7 @@ var txnFieldDocs = map[string]string{
 	"VoteFirst":                "The first round that the participation key is valid.",
 	"VoteLast":                 "The last round that the participation key is valid.",
 	"VoteKeyDilution":          "Dilution for the 2-level participation key",
-	"Nonparticipation":         "Key registration participation flag",
+	"Nonparticipation":         "Marks an account nonparticipating for rewards",
 	"Type":                     "Transaction type as bytes",
 	"TypeEnum":                 "See table below",
 	"XferAsset":                "Asset ID",

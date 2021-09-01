@@ -283,7 +283,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 54 | LocalNumUint | uint64 | Number of local state integers in ApplicationCall. LogicSigVersion >= 3. |
 | 55 | LocalNumByteSlice | uint64 | Number of local state byteslices in ApplicationCall. LogicSigVersion >= 3. |
 | 56 | ExtraProgramPages | uint64 | Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program. LogicSigVersion >= 4. |
-| 57 | Nonparticipation | uint64 | Key registration participation flag. LogicSigVersion >= 5. |
+| 57 | Nonparticipation | uint64 | Marks an account nonparticipating for rewards. LogicSigVersion >= 5. |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
