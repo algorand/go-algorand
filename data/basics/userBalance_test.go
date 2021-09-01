@@ -234,3 +234,22 @@ func TestEncodedAccountAllocationBounds(t *testing.T) {
 		}
 	}
 }
+
+func TestAppIndexHashing(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	i := AppIndex(12)
+	prefix, buf := i.ToBeHashed()
+	require.Equal(t, protocol.HashID("app"), prefix)
+	require.Equal(t, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0c}, buf)
+
+	i = AppIndex(12 << 16)
+	prefix, buf = i.ToBeHashed()
+	require.Equal(t, protocol.HashID("app"), prefix)
+	require.Equal(t, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x00}, buf)
+
+	// test value created with:
+	// python -c "import algosdk.encoding as e; print(e.encode_address(e.checksum(b'app'+($APPID).to_bytes(8, 'big'))))"
+	i = AppIndex(77)
+	require.Equal(t, "TB3CMU3MLX5LXZ3M26RPJFVMOQPNI2KT2QKBTHAYJIPNPARE7G3QVLNCIQ", i.Address().String())
+}
