@@ -20,12 +20,12 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
-	"runtime"
 
 	"github.com/karalabe/hid"
 )
 
 const ledgerVendorID = 0x2c97
+const ledgerUsagePage = 0xffa0
 
 // LedgerUSB is a wrapper around a Ledger USB HID device, used to implement
 // the protocol used for sending messages to the application running on the
@@ -87,10 +87,7 @@ func (l *LedgerUSB) WritePackets(msg []byte) error {
 		// The usb library adds one extra byte to the input passed to the USB device
 		// so the written bytes are larger than what we've send
 		// https://github.com/karalabe/hid/blob/9c14560f9ee858c43f40b5cd01392b167aacf4e8/hid_enabled.go#L167
-		if runtime.GOOS == "windows" && cc > 0 {
-			cc = cc - 1
-		}
-		if cc != len(packet) {
+		if cc < len(packet) {
 			return fmt.Errorf("WritePackets: short write: %d != %d", cc, len(packet))
 		}
 
@@ -214,7 +211,7 @@ func LedgerEnumerate() ([]hid.DeviceInfo, error) {
 	//  https://github.com/LedgerHQ/blue-loader-python/blob/master/ledgerblue/comm.py#L212
 	//  we search for the Ledger Vendor id and igonre devices that don't have specific usagepage or interface
 	for _, info := range hid.Enumerate(ledgerVendorID, 0) {
-		if info.UsagePage != 0xffa0 && info.Interface != 0 {
+		if info.UsagePage != ledgerUsagePage && info.Interface != 0 {
 			continue
 		}
 		infos = append(infos, info)
