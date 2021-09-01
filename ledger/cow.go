@@ -78,11 +78,11 @@ type roundCowState struct {
 	trackedCreatables map[int]basics.CreatableIndex
 }
 
-func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64, hint int) *roundCowState {
+func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, proto config.ConsensusParams, prevTimestamp int64, hint int) *roundCowState {
 	cb := roundCowState{
 		lookupParent:      b,
 		commitParent:      nil,
-		proto:             config.Consensus[hdr.CurrentProtocol],
+		proto:             proto,
 		mods:              ledgercore.MakeStateDelta(&hdr, prevTimestamp, hint, 0),
 		sdeltas:           make(map[basics.Address]map[storagePtr]*storageDelta),
 		trackedCreatables: make(map[int]basics.CreatableIndex),

@@ -112,6 +112,11 @@ def dictMin(dest, more):
             dest[k] = min(ov,v)
     return dest
 
+def meanOrZero(seq):
+    if not seq:
+        return 0
+    return statistics.mean(seq)
+
 class summary:
     def __init__(self):
         self.tpsMeanSum = 0
@@ -125,9 +130,9 @@ class summary:
             return
         self.nodes[nick] = ttr
         logger.debug('%d points from %s', len(ttr.tpsList), nick)
-        self.tpsMeanSum += statistics.mean(ttr.tpsList)
-        self.txBpsMeanSum += statistics.mean(ttr.txBpsList)
-        self.rxBpsMeanSum += statistics.mean(ttr.rxBpsList)
+        self.tpsMeanSum += meanOrZero(ttr.tpsList)
+        self.txBpsMeanSum += meanOrZero(ttr.txBpsList)
+        self.rxBpsMeanSum += meanOrZero(ttr.rxBpsList)
         self.sumsCount += 1
 
     def byMsg(self):
@@ -191,6 +196,28 @@ def anynickre(nick_re, nicks):
                 return True
     return False
 
+def gather_metrics_files_by_nick(metrics_files, metrics_dirs=None):
+    '''return {"node nickname":[path, path, ...], ...}'''
+    metrics_fname_re = re.compile(r'(.*)\.(.*).metrics')
+    filesByNick = {}
+    nonick = []
+    tf_inventory_path = None
+    for path in metrics_files:
+        fname = os.path.basename(path)
+        if fname == 'terraform-inventory.host':
+            tf_inventory_path = path
+            continue
+        if metrics_dirs is not None:
+            metrics_dirs.add(os.path.dirname(path))
+        m = metrics_fname_re.match(fname)
+        if not m:
+            logger.error('could not parse metrics file name %r', fname)
+            nonick.append(path)
+            continue
+        nick = m.group(1)
+        dapp(filesByNick, nick, path)
+    return filesByNick
+
 def main():
     test_metric_line_re()
     ap = argparse.ArgumentParser()
@@ -213,23 +240,7 @@ def main():
     if args.dir:
         metrics_dirs.add(args.dir)
         metrics_files += glob.glob(os.path.join(args.dir, '*.metrics'))
-    metrics_fname_re = re.compile(r'(.*)\.(.*).metrics')
-    filesByNick = {}
-    nonick = []
-    tf_inventory_path = None
-    for path in metrics_files:
-        fname = os.path.basename(path)
-        if fname == 'terraform-inventory.host':
-            tf_inventory_path = path
-            continue
-        metrics_dirs.add(os.path.dirname(path))
-        m = metrics_fname_re.match(fname)
-        if not m:
-            logger.error('could not parse metrics file name %r', fname)
-            nonick.append(path)
-            continue
-        nick = m.group(1)
-        dapp(filesByNick, nick, path)
+    filesByNick = gather_metrics_files_by_nick(metrics_files, metrics_dirs)
     if not tf_inventory_path:
         for md in metrics_dirs:
             tp = os.path.join(md, 'terraform-inventory.host')

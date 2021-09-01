@@ -28,6 +28,7 @@ if { [catch {
     # Determine primary account
     set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME $TEST_PRIMARY_NODE_DIR]
 
+    set timeout 30
     set FEE_AMOUNT 1000
 
     set TXN_FILE1 "$TEST_PRIMARY_NODE_DIR/txns1"
