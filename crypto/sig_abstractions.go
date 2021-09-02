@@ -149,6 +149,13 @@ func NewSigner(t AlgorithmType) (*SignatureAlgorithm, error) {
 		p = PackedSignatureAlgorithm{
 			DilithiumSigner: *signer,
 		}
+	case Ed25519Type:
+		var seed Seed
+		SystemRNG.RandBytes(seed[:])
+		key := GenerateEd25519Key(seed)
+		p = PackedSignatureAlgorithm{
+			Ed25519Singer: *key,
+		}
 	default:
 		return nil, errNonExistingSignatureAlgorithmType
 	}

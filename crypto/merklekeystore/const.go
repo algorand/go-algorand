@@ -21,4 +21,5 @@ import "github.com/algorand/go-algorand/crypto"
 // HashType/ hashSize relate to the type of hash this package uses.
 const (
 	KeyStoreHashFunction = crypto.Sha512_256
+	KeyStoreRootSize     = crypto.Sha512_256Size
 )

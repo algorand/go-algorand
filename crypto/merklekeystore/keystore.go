@@ -25,9 +25,6 @@ import (
 	"github.com/algorand/go-deadlock"
 )
 
-// RootSize is the size of the digest used by the tree in use in the merklekeystore.
-const RootSize = crypto.SumhashDigestSize
-
 type (
 	// CommittablePublicKey is a key tied to a specific round and is committed by the merklekeystore.Signer.
 	CommittablePublicKey struct {
@@ -73,7 +70,7 @@ type (
 	Verifier struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-		Root [RootSize]byte `codec:"r"`
+		Root [KeyStoreRootSize]byte `codec:"r"`
 
 		// indicates that this verifier corresponds to a specific array of ephemeral keys.
 		// this is used to distinguish between an empty structure, and nothing to commit to.
@@ -156,7 +153,7 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 
 // GetVerifier can be used to store the commitment and verifier for this signer.
 func (s *Signer) GetVerifier() *Verifier {
-	root := [RootSize]byte{}
+	root := [KeyStoreRootSize]byte{}
 	ss := s.Tree.Root().ToSlice()
 	copy(root[:], ss)
 	return &Verifier{
