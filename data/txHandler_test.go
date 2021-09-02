@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
@@ -160,22 +161,22 @@ func TestFilterAlreadyCommitted(t *testing.T) {
 
 	// add the first 10 transactions to the pool.
 	for i := 0; i < 10; i++ {
-		tp.Remember(transactions.SignedTxGroup{Transactions: []transactions.SignedTxn{signedTransactions[i]}})
+		tp.Remember(pooldata.SignedTxGroup{Transactions: []transactions.SignedTxn{signedTransactions[i]}})
 	}
 
-	allNew := []transactions.SignedTxGroup{
-		transactions.SignedTxGroup{
+	allNew := []pooldata.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: signedTransactions[10:11],
 		},
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: signedTransactions[11:12],
 		},
 	}
-	allNewRef := []transactions.SignedTxGroup{
-		transactions.SignedTxGroup{
+	allNewRef := []pooldata.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: signedTransactions[10:11],
 		},
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: signedTransactions[11:12],
 		},
 	}
@@ -183,16 +184,16 @@ func TestFilterAlreadyCommitted(t *testing.T) {
 	require.Equal(t, allNewRef, allNewTransactions)
 	require.False(t, allNewNonDupFilteredGroups)
 
-	firstTxDup := []transactions.SignedTxGroup{
-		transactions.SignedTxGroup{
+	firstTxDup := []pooldata.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: []transactions.SignedTxn{signedTransactions[1]},
 		},
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: signedTransactions[11:12],
 		},
 	}
-	firstTxExpectedOutput := []transactions.SignedTxGroup{
-		transactions.SignedTxGroup{
+	firstTxExpectedOutput := []pooldata.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: signedTransactions[11:12],
 		},
 	}
@@ -200,16 +201,16 @@ func TestFilterAlreadyCommitted(t *testing.T) {
 	require.Equal(t, firstTxExpectedOutput, firstTxDupTransactions)
 	require.False(t, firstTxDupNonDupFilteredGroups)
 
-	lastTxDup := []transactions.SignedTxGroup{
-		transactions.SignedTxGroup{
+	lastTxDup := []pooldata.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: signedTransactions[11:12],
 		},
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: []transactions.SignedTxn{signedTransactions[1]},
 		},
 	}
-	lastTxExpectedOutput := []transactions.SignedTxGroup{
-		transactions.SignedTxGroup{
+	lastTxExpectedOutput := []pooldata.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: signedTransactions[11:12],
 		},
 	}
@@ -217,46 +218,46 @@ func TestFilterAlreadyCommitted(t *testing.T) {
 	require.Equal(t, lastTxExpectedOutput, lastTxDupTransactions)
 	require.False(t, lastTxDupNonDupFilteredGroups)
 
-	midTxDup := []transactions.SignedTxGroup{
-		transactions.SignedTxGroup{
+	midTxDup := []pooldata.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: signedTransactions[10:11],
 		},
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: signedTransactions[11:12],
 		},
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: []transactions.SignedTxn{signedTransactions[1]},
 		},
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: signedTransactions[13:14],
 		},
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: signedTransactions[14:15],
 		},
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: []transactions.SignedTxn{signedTransactions[2]},
 		},
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: []transactions.SignedTxn{signedTransactions[3]},
 		},
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: signedTransactions[15:16],
 		},
 	}
-	midTxDupExpectedOutput := []transactions.SignedTxGroup{
-		transactions.SignedTxGroup{
+	midTxDupExpectedOutput := []pooldata.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: signedTransactions[10:11],
 		},
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: signedTransactions[11:12],
 		},
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: signedTransactions[13:14],
 		},
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: signedTransactions[14:15],
 		},
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: signedTransactions[15:16],
 		},
 	}

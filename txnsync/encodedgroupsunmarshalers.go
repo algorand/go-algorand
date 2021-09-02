@@ -22,6 +22,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
@@ -51,7 +52,7 @@ func getNibble(b []byte, index int) (byte, error) {
 	return b[index/2] % 16, nil
 }
 
-func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitmask) (err error) {
+func addGroupHashes(txnGroups []pooldata.SignedTxGroup, txnCount int, b bitmask) (err error) {
 	index := 0
 	txGroupHashes := make([]crypto.Digest, 16)
 	tStart := 0

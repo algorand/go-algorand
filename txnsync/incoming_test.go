@@ -28,6 +28,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -229,8 +230,8 @@ func TestEvaluateIncomingMessagePart2(t *testing.T) {
 	err = peer.incomingMessages.enqueue(
 		incomingMessage{
 			sequenceNumber: 4,
-			transactionGroups: []transactions.SignedTxGroup{
-				transactions.SignedTxGroup{
+			transactionGroups: []pooldata.SignedTxGroup{
+				pooldata.SignedTxGroup{
 					Transactions: []transactions.SignedTxn{
 						transactions.SignedTxn{}}}},
 			message: transactionBlockMessage{Round: 4}})
@@ -248,8 +249,8 @@ func TestEvaluateIncomingMessagePart2(t *testing.T) {
 	s.evaluateIncomingMessage(incomingMessage{
 		sequenceNumber: 5,
 		message:        transactionBlockMessage{Round: 5},
-		transactionGroups: []transactions.SignedTxGroup{
-			transactions.SignedTxGroup{
+		transactionGroups: []pooldata.SignedTxGroup{
+			pooldata.SignedTxGroup{
 				Transactions: []transactions.SignedTxn{
 					transactions.SignedTxn{}}}},
 	})

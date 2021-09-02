@@ -22,7 +22,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
-	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/pooldata"
 )
 
 var (
@@ -39,7 +39,7 @@ type incomingMessage struct {
 	peer              *Peer
 	encodedSize       int
 	bloomFilter       bloomFilter
-	transactionGroups []transactions.SignedTxGroup
+	transactionGroups []pooldata.SignedTxGroup
 }
 
 // incomingMessageQueue manages the global incoming message queue across all the incoming peers.

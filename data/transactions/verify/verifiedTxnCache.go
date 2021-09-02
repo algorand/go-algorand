@@ -21,6 +21,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
@@ -68,7 +69,7 @@ type VerifiedTransactionCache interface {
 	// Pin function would mark the given transaction group as pinned.
 	Pin(txgroup []transactions.SignedTxn) error
 	// PinGroups function would mark the given transaction groups as pinned.
-	PinGroups(txgroups []transactions.SignedTxGroup) error
+	PinGroups(txgroups []pooldata.SignedTxGroup) error
 }
 
 // verifiedTransactionCache provides an implementation of the VerifiedTransactionCache interface
@@ -212,7 +213,7 @@ func (v *verifiedTransactionCache) Pin(txgroup []transactions.SignedTxn) (err er
 }
 
 // PinGroups function would mark the given transaction groups as pinned.
-func (v *verifiedTransactionCache) PinGroups(txgroups []transactions.SignedTxGroup) error {
+func (v *verifiedTransactionCache) PinGroups(txgroups []pooldata.SignedTxGroup) error {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
 	var outError error
@@ -304,7 +305,7 @@ func (v *mockedCache) UpdatePinned(pinnedTxns map[transactions.Txid]transactions
 	return nil
 }
 
-func (v *mockedCache) PinGroups(txgroups []transactions.SignedTxGroup) error {
+func (v *mockedCache) PinGroups(txgroups []pooldata.SignedTxGroup) error {
 	return nil
 }
 

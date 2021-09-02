@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
@@ -58,7 +59,7 @@ func TestNibble(t *testing.T) {
 }
 
 // old encoding method
-func encodeTransactionGroupsOld(inTxnGroups []transactions.SignedTxGroup) []byte {
+func encodeTransactionGroupsOld(inTxnGroups []pooldata.SignedTxGroup) []byte {
 	stub := txGroupsEncodingStubOld{
 		TxnGroups: make([]txnGroups, len(inTxnGroups)),
 	}
@@ -70,7 +71,7 @@ func encodeTransactionGroupsOld(inTxnGroups []transactions.SignedTxGroup) []byte
 }
 
 // old decoding method
-func decodeTransactionGroupsOld(bytes []byte) (txnGroups []transactions.SignedTxGroup, err error) {
+func decodeTransactionGroupsOld(bytes []byte) (txnGroups []pooldata.SignedTxGroup, err error) {
 	if len(bytes) == 0 {
 		return nil, nil
 	}
@@ -79,9 +80,9 @@ func decodeTransactionGroupsOld(bytes []byte) (txnGroups []transactions.SignedTx
 	if err != nil {
 		return nil, err
 	}
-	txnGroups = make([]transactions.SignedTxGroup, len(stub.TxnGroups))
+	txnGroups = make([]pooldata.SignedTxGroup, len(stub.TxnGroups))
 	for i := range stub.TxnGroups {
-		txnGroups[i].Transactions = transactions.SignedTxnSlice(stub.TxnGroups[i])
+		txnGroups[i].Transactions = pooldata.SignedTxnSlice(stub.TxnGroups[i])
 	}
 	return txnGroups, nil
 }
@@ -92,8 +93,8 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 	genesisHash := crypto.Hash([]byte("gh"))
 	genesisID := "gID"
 
-	inTxnGroups := []transactions.SignedTxGroup{
-		transactions.SignedTxGroup{
+	inTxnGroups := []pooldata.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: []transactions.SignedTxn{
 				{
 					Txn: transactions.Transaction{
@@ -112,7 +113,7 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 				},
 			},
 		},
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: []transactions.SignedTxn{
 				{
 					Txn: transactions.Transaction{
@@ -143,7 +144,7 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 				},
 			},
 		},
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: []transactions.SignedTxn{
 				{
 					Txn: transactions.Transaction{
@@ -191,7 +192,7 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 }
 
 // txnGroupsData fetches a sample dataset of txns, specify numBlocks up to 969
-func txnGroupsData(numBlocks int) (txnGroups []transactions.SignedTxGroup, genesisID string, genesisHash crypto.Digest, err error) {
+func txnGroupsData(numBlocks int) (txnGroups []pooldata.SignedTxGroup, genesisID string, genesisHash crypto.Digest, err error) {
 	dat, err := ioutil.ReadFile("../test/testdata/mainnetblocks")
 	if err != nil {
 		return
@@ -218,7 +219,7 @@ func txnGroupsData(numBlocks int) (txnGroups []transactions.SignedTxGroup, genes
 			return
 		}
 		for _, txns := range payset {
-			var txnGroup transactions.SignedTxGroup
+			var txnGroup pooldata.SignedTxGroup
 			for _, txn := range txns {
 				txnGroup.Transactions = append(txnGroup.Transactions, txn.SignedTxn)
 			}
@@ -465,8 +466,8 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 			txn.Txn.Group = crypto.Digest{}
 			txns = append(txns, txn)
 		}
-		txnGroups := []transactions.SignedTxGroup{
-			transactions.SignedTxGroup{
+		txnGroups := []pooldata.SignedTxGroup{
+			pooldata.SignedTxGroup{
 				Transactions: txns,
 			},
 		}
@@ -505,14 +506,14 @@ func TestTxnGroupEncodingArchival(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		var txnGroups []transactions.SignedTxGroup
+		var txnGroups []pooldata.SignedTxGroup
 		genesisID := block.GenesisID()
 		genesisHash := block.GenesisHash()
 		var payset [][]transactions.SignedTxnWithAD
 		payset, err := block.DecodePaysetGroups()
 		require.NoError(t, err)
 		for _, txns := range payset {
-			var txnGroup transactions.SignedTxGroup
+			var txnGroup pooldata.SignedTxGroup
 			for _, txn := range txns {
 				txnGroup.Transactions = append(txnGroup.Transactions, txn.SignedTxn)
 			}

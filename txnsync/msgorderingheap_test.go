@@ -28,6 +28,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -146,17 +147,17 @@ func TestMultiThreaded(t *testing.T) {
 		{},
 	}
 
-	genTxnGrp := func(value int) []transactions.SignedTxGroup {
+	genTxnGrp := func(value int) []pooldata.SignedTxGroup {
 
 		if value%2 == 0 {
-			return []transactions.SignedTxGroup{
+			return []pooldata.SignedTxGroup{
 				{
 					GroupTransactionID: transactions.Txid{byte(value % 255)},
 				},
 			}
 		}
 
-		return []transactions.SignedTxGroup{
+		return []pooldata.SignedTxGroup{
 			{
 				GroupTransactionID: transactions.Txid{byte(value % 255)},
 			},

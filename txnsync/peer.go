@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
@@ -166,7 +167,7 @@ type Peer struct {
 	nextStateTimestamp time.Duration
 	// messageSeriesPendingTransactions contain the transactions we are sending in the current "message-series". It allows us to pick a given
 	// "snapshot" from the transaction pool, and send that "snapshot" to completion before attempting to re-iterate.
-	messageSeriesPendingTransactions []transactions.SignedTxGroup
+	messageSeriesPendingTransactions []pooldata.SignedTxGroup
 
 	// transactionPoolAckCh is passed to the transaction handler when incoming transaction arrives. The channel is passed upstream, so that once
 	// a transaction is added to the transaction pool, we can get some feedback for that.
@@ -319,7 +320,7 @@ func (p *Peer) getAcceptedMessages() []uint64 {
 	return acceptedMessages
 }
 
-func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.SignedTxGroup, sendWindow time.Duration, round basics.Round, bloomFilterSize int) (selectedTxns []transactions.SignedTxGroup, selectedTxnIDs []transactions.Txid, partialTransactionsSet bool) {
+func (p *Peer) selectPendingTransactions(pendingTransactions []pooldata.SignedTxGroup, sendWindow time.Duration, round basics.Round, bloomFilterSize int) (selectedTxns []pooldata.SignedTxGroup, selectedTxnIDs []transactions.Txid, partialTransactionsSet bool) {
 	// if peer is too far back, don't send it any transactions ( or if the peer is not interested in transactions )
 	if p.lastRound < round.SubSaturate(1) || p.requestedTransactionsModulator == 0 {
 		return nil, nil, false
@@ -356,7 +357,7 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 		selectedIDsSliceLength = p.lastSelectedTransactionsCount * 2
 	}
 	selectedTxnIDs = make([]transactions.Txid, 0, selectedIDsSliceLength)
-	selectedTxns = make([]transactions.SignedTxGroup, 0, selectedIDsSliceLength)
+	selectedTxns = make([]pooldata.SignedTxGroup, 0, selectedIDsSliceLength)
 
 	windowSizedReached := false
 	hasMorePendingTransactions := false
@@ -547,7 +548,7 @@ func (p *Peer) updateRequestParams(modulator, offset byte) {
 
 // update the recentSentTransactions with the incoming transaction groups. This would prevent us from sending the received transactions back to the
 // peer that sent it to us. This comes in addition to the bloom filter, if being sent by the other peer.
-func (p *Peer) updateIncomingTransactionGroups(txnGroups []transactions.SignedTxGroup) {
+func (p *Peer) updateIncomingTransactionGroups(txnGroups []pooldata.SignedTxGroup) {
 	for _, txnGroup := range txnGroups {
 		if len(txnGroup.Transactions) > 0 {
 			// The GroupTransactionID field is not yet updated, so we'll be calculating it's value here and passing it.

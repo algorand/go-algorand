@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -32,9 +33,9 @@ import (
 	"github.com/algorand/go-algorand/util/timers"
 )
 
-func getTxnGroups(genesisHash crypto.Digest, genesisID string) []transactions.SignedTxGroup {
-	return []transactions.SignedTxGroup{
-		transactions.SignedTxGroup{
+func getTxnGroups(genesisHash crypto.Digest, genesisID string) []pooldata.SignedTxGroup {
+	return []pooldata.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			GroupTransactionID: transactions.Txid{1},
 			Transactions: []transactions.SignedTxn{
 				{
@@ -54,7 +55,7 @@ func getTxnGroups(genesisHash crypto.Digest, genesisID string) []transactions.Si
 				},
 			},
 		},
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			GroupTransactionID: transactions.Txid{2},
 			Transactions: []transactions.SignedTxn{
 				{
@@ -86,7 +87,7 @@ func getTxnGroups(genesisHash crypto.Digest, genesisID string) []transactions.Si
 				},
 			},
 		},
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			GroupTransactionID: transactions.Txid{3},
 			Transactions: []transactions.SignedTxn{
 				{
@@ -341,10 +342,10 @@ func (fn *justRandomFakeNode) UpdatePeers(txsyncPeers []*Peer, netPeers []interf
 }
 func (fn *justRandomFakeNode) SendPeerMessage(netPeer interface{}, msg []byte, callback SendMessageCallback) {
 }
-func (fn *justRandomFakeNode) GetPendingTransactionGroups() (txGroups []transactions.SignedTxGroup, latestLocallyOriginatedGroupCounter uint64) {
+func (fn *justRandomFakeNode) GetPendingTransactionGroups() (txGroups []pooldata.SignedTxGroup, latestLocallyOriginatedGroupCounter uint64) {
 	return
 }
-func (fn *justRandomFakeNode) IncomingTransactionGroups(peer *Peer, messageSeq uint64, txGroups []transactions.SignedTxGroup) (transactionPoolSize int) {
+func (fn *justRandomFakeNode) IncomingTransactionGroups(peer *Peer, messageSeq uint64, txGroups []pooldata.SignedTxGroup) (transactionPoolSize int) {
 	return 0
 }
 func (fn *justRandomFakeNode) NotifyMonitor() chan struct{} { return nil }

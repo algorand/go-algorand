@@ -21,6 +21,7 @@ import (
 	"errors"
 	"math"
 
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/util/bloom"
 )
@@ -140,7 +141,7 @@ func filterFactoryXor32(numEntries int, s *syncState) (filter bloom.GenericFilte
 
 var filterFactory func(int, *syncState) (filter bloom.GenericFilter, filterType bloomFilterType) = filterFactoryXor32
 
-func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []transactions.SignedTxGroup, hintPrevBloomFilter *bloomFilter) (result bloomFilter) {
+func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []pooldata.SignedTxGroup, hintPrevBloomFilter *bloomFilter) (result bloomFilter) {
 	result.encodingParams = encodingParams
 	switch {
 	case encodingParams.Modulator == 0:

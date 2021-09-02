@@ -26,6 +26,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/timers"
@@ -61,8 +62,8 @@ type emulatedNode struct {
 	emulator                            *emulator
 	peers                               map[int]*networkPeer
 	nodeIndex                           int
-	expiredTx                           []transactions.SignedTxGroup
-	txpoolEntries                       []transactions.SignedTxGroup
+	expiredTx                           []pooldata.SignedTxGroup
+	txpoolEntries                       []pooldata.SignedTxGroup
 	txpoolIds                           map[transactions.Txid]bool
 	latestLocallyOriginatedGroupCounter uint64
 	name                                string
@@ -276,11 +277,11 @@ func (n *emulatedNode) SendPeerMessage(netPeer interface{}, msg []byte, callback
 	peer.outSeq++
 }
 
-func (n *emulatedNode) GetPendingTransactionGroups() ([]transactions.SignedTxGroup, uint64) {
+func (n *emulatedNode) GetPendingTransactionGroups() ([]pooldata.SignedTxGroup, uint64) {
 	return n.txpoolEntries, n.latestLocallyOriginatedGroupCounter
 }
 
-func (n *emulatedNode) IncomingTransactionGroups(peer *Peer, messageSeq uint64, txGroups []transactions.SignedTxGroup) (transactionPoolSize int) {
+func (n *emulatedNode) IncomingTransactionGroups(peer *Peer, messageSeq uint64, txGroups []pooldata.SignedTxGroup) (transactionPoolSize int) {
 	// add to transaction pool.
 	duplicateMessage := 0
 	duplicateMessageSize := 0
