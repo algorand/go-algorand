@@ -1022,7 +1022,7 @@ func initConsensusProtocols() {
 
 	// Enable App calls to pool budget in grouped transactions
 	vFuture.EnableAppCostPooling = true
-	vFuture.MaxInnerTransactions = 8
+	vFuture.MaxInnerTransactions = 16
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
