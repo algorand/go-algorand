@@ -1,10 +1,10 @@
-github.com/algonathan/sumhash v0.0.0-20210818111728-21c61e0451b8 h1:YgRrxxUAYF/naoLadSr8qLHWZFoH0IDt+1D5BrcoZE8=
-github.com/algonathan/sumhash v0.0.0-20210818111728-21c61e0451b8/go.mod h1:o3SSyNw1Njyqx5pFdH4e8wZ7QK8xAwGXl6QKPzHrAFo=
+github.com/algonathan/sumhash v0.0.0-20210902064122-c2f95258d5f3 h1:k3NpR7zWChaXtbLedjCE8g+N+HWZrp0bsTYOI0DgZEg=
+github.com/algonathan/sumhash v0.0.0-20210902064122-c2f95258d5f3/go.mod h1:o3SSyNw1Njyqx5pFdH4e8wZ7QK8xAwGXl6QKPzHrAFo=
 github.com/algorand/dilithium v0.0.0-20210811122002-1ca237b9c9ac h1:51AFAr+DP6/Dy80Q2n20UdTNImDvDym1F3N60/s/LYs=
 github.com/algorand/dilithium v0.0.0-20210811122002-1ca237b9c9ac/go.mod h1:uiTvM2HaPUdw/OcY7iZCQULVHzNN2oza0ICjm6fP4U8=
 github.com/algorand/go-algorand v0.0.0-20210810215942-dd7f7b6410af/go.mod h1:OHgE11gypiNBPQzngOs/JU314IjDNMx6R8t9iAWt47g=
-github.com/algorand/go-algorand/cmd/partitiontest_linter v0.0.0-20210823195936-bd5a00092c8a h1:nvaBkeqCdOBUlsNwklXXg2T+LMYacunQJatFTuzsEU0=
-github.com/algorand/go-algorand/cmd/partitiontest_linter v0.0.0-20210823195936-bd5a00092c8a/go.mod h1:PYp3ZpkUDrm/bItD8nJSjwtTmL+X+VMBtkWBkwEoUC4=
+github.com/algorand/go-algorand/cmd/partitiontest_linter v0.0.0-20210901212152-28d9e8666d74 h1:hTXiWgcNZoMLmfHp8yo521jwFUO3gMEAZliyuLpj04k=
+github.com/algorand/go-algorand/cmd/partitiontest_linter v0.0.0-20210901212152-28d9e8666d74/go.mod h1:PYp3ZpkUDrm/bItD8nJSjwtTmL+X+VMBtkWBkwEoUC4=
 github.com/algorand/go-codec v1.1.2 h1:QWS9YC3EEWBpJq5AqFPELcCJ2QPpTIg9aqR2K/sRDq4=
 github.com/algorand/go-codec v1.1.2/go.mod h1:A3YI4V24jUUnU1eNekNmx2fLi60FvlNssqOiUsyfNM8=
 github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d h1:W9MgGUodEl4Y4+CxeEr+T3fZ26kOcWA4yfqhjbFxxmI=
@@ -165,6 +165,8 @@ golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a h1:vclmkQCjlDX5OydZ9wv8rB
 golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
 golang.org/x/crypto v0.0.0-20210813211128-0a44fdfbc16e h1:VvfwVmMH40bpMeizC9/K7ipM5Qjucuu16RWfneFPyhQ=
 golang.org/x/crypto v0.0.0-20210813211128-0a44fdfbc16e/go.mod h1:GvvjBRRGRdwPK5ydBHafDWAxML/pGHZbMvKqRZ5+Abc=
+golang.org/x/crypto v0.0.0-20210817164053-32db794688a5 h1:HWj/xjIHfjYU5nVXpTM0s39J9CbLn7Cc5a7IC5rwsMQ=
+golang.org/x/crypto v0.0.0-20210817164053-32db794688a5/go.mod h1:GvvjBRRGRdwPK5ydBHafDWAxML/pGHZbMvKqRZ5+Abc=
 golang.org/x/mod v0.1.1-0.20191105210325-c90efee705ee/go.mod h1:QqPTAvyqsEbceGzBzNggFXnrqF1CaUcvgkdR5Ot7KZg=
 golang.org/x/mod v0.2.0 h1:KU7oHjnv3XNWfa5COkzUifxZmxp1TyI7ImMXqFxLwvQ=
 golang.org/x/mod v0.2.0/go.mod h1:s0Qsj1ACt9ePp/hMypM3fl4fZqREWJwdYDEqhRiZZUA=
@@ -206,6 +208,8 @@ golang.org/x/sys v0.0.0-20210330210617-4fbd30eecc44/go.mod h1:h1NjWce9XRLGQEsW7w
 golang.org/x/sys v0.0.0-20210510120138-977fb7262007/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1 h1:SrN+KX8Art/Sf4HNj6Zcz06G7VEz+7w9tdXTPOZ7+l4=
 golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.0.0-20210902050250-f475640dd07b h1:S7hKs0Flbq0bbc9xgYt4stIEG1zNDFqyrPwAX2Wj/sE=
+golang.org/x/sys v0.0.0-20210902050250-f475640dd07b/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1 h1:v+OssWQX+hTHEmOBgwxdZxK4zHq3yOs8F9J7mk0PY8E=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
