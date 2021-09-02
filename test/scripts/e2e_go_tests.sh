@@ -6,7 +6,6 @@ set -e
 set -o pipefail
 
 export GOPATH=$(go env GOPATH)
-export GO111MODULE=on
 GOTESTCOMMAND=${GOTESTCOMMAND:="go test"}
 
 # If one or more -t <pattern> are specified, use GOTESTCOMMAND -run <pattern> for each

@@ -74,7 +74,7 @@ function install_go_module {
         echo "Unable to install requested package '$1' (${MODULE}): no version listed in ${SCRIPTPATH}/go.mod"
         exit 1
     else
-        OUTPUT=$(GO111MODULE=on go install "${MODULE}@${VERSION}" 2>&1)
+        OUTPUT=$(go install "${MODULE}@${VERSION}" 2>&1)
     fi
     if [ $? != 0 ]; then
         echo "error: executing \"go install ${MODULE}\" failed : ${OUTPUT}"
