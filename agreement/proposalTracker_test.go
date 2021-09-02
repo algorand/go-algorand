@@ -23,10 +23,20 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/data/bookkeeping"
 )
 
 func sortedVoteGen(t *testing.T) (votes []vote) {
 	ledger, addresses, vrfs, ots := readOnlyFixture100()
+
+	nextRound := ledger.NextRound()
+
+	branch, err := ledger.LookupDigest(nextRound-1, bookkeeping.BlockHash{})
+	require.NoError(t, err)
+
+	params, err := ledger.ConsensusParams(ParamsRound(nextRound), bookkeeping.BlockHash(branch))
+	require.NoError(t, err)
 
 	for i, addr := range addresses {
 		pv := proposalValue{
@@ -34,7 +44,7 @@ func sortedVoteGen(t *testing.T) (votes []vote) {
 			BlockDigest:      randomBlockHash(),
 			EncodingDigest:   randomBlockHash(),
 		}
-		rv := rawVote{Round: ledger.NextRound(), Sender: addr, Proposal: pv}
+		rv := rawVote{Round: nextRound, Branch: maybeBranch(params, bookkeeping.BlockHash(branch)), Sender: addr, Proposal: pv}
 		uv, err := makeVote(rv, ots[i], vrfs[i], LedgerWithoutBranch(ledger))
 		require.NoError(t, err)
 		v, err := uv.verify(LedgerWithoutBranch(ledger))
@@ -293,6 +303,15 @@ func (s *proposalTrackerTestShadow) stageWithCert(pv proposalValue) {
 // create many proposal-votes, sorted in increasing credential-order.
 func setupProposalTrackerTests(t *testing.T) (votes []vote) {
 	ledger, addrs, vrfs, ots := readOnlyFixture100()
+
+	nextRound := ledger.NextRound()
+
+	branch, err := ledger.LookupDigest(nextRound-1, bookkeeping.BlockHash{})
+	require.NoError(t, err)
+
+	params, err := ledger.ConsensusParams(ParamsRound(nextRound), bookkeeping.BlockHash(branch))
+	require.NoError(t, err)
+
 	for i := range addrs {
 		prop := proposalValue{
 			OriginalPeriod:   0,
@@ -302,7 +321,8 @@ func setupProposalTrackerTests(t *testing.T) (votes []vote) {
 		}
 
 		rv := rawVote{
-			Round:    ledger.NextRound(),
+			Round:    nextRound,
+			Branch:   maybeBranch(params, bookkeeping.BlockHash(branch)),
 			Sender:   addrs[i],
 			Proposal: prop,
 		}

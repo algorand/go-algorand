@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -44,6 +45,12 @@ func TestBundleCreation(t *testing.T) {
 	var proposal proposalValue
 	proposal.BlockDigest = randomBlockHash()
 
+	params, err := ledger.ConsensusParams(round)
+	require.NoError(t, err)
+
+	branch, err := ledger.LookupDigest(round.SubSaturate(1))
+	require.NoError(t, err)
+
 	avv := MakeAsyncVoteVerifier(nil)
 	defer avv.Quit()
 	for s := 1; s <= 4; s++ {
@@ -51,7 +58,7 @@ func TestBundleCreation(t *testing.T) {
 		for i := range addresses {
 			address := addresses[i]
 			step := step(s)
-			rv := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal}
+			rv := rawVote{Sender: address, Round: round, Branch: maybeBranch(params, bookkeeping.BlockHash(branch)), Period: period, Step: step, Proposal: proposal}
 			uv, err := makeVote(rv, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 
@@ -124,6 +131,12 @@ func TestBundleCreationWithVotesFromSameAddress(t *testing.T) {
 	proposal.BlockDigest = randomBlockHash()
 	proposal2.BlockDigest = randomBlockHash()
 
+	params, err := ledger.ConsensusParams(round)
+	require.NoError(t, err)
+
+	branch, err := ledger.LookupDigest(round.SubSaturate(1))
+	require.NoError(t, err)
+
 	for s := 1; s <= 5; s++ {
 		var votes []vote
 		var equivocationVotes []equivocationVote
@@ -132,7 +145,7 @@ func TestBundleCreationWithVotesFromSameAddress(t *testing.T) {
 			address := addresses[i]
 			step := step(s)
 
-			rv0 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal}
+			rv0 := rawVote{Sender: address, Round: round, Branch: maybeBranch(params, bookkeeping.BlockHash(branch)), Period: period, Step: step, Proposal: proposal}
 			uv0, err := makeVote(rv0, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 			vote0, err := uv0.verify(ledger)
@@ -140,7 +153,7 @@ func TestBundleCreationWithVotesFromSameAddress(t *testing.T) {
 				continue
 			}
 
-			rv1 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal2}
+			rv1 := rawVote{Sender: address, Round: round, Branch: maybeBranch(params, bookkeeping.BlockHash(branch)), Period: period, Step: step, Proposal: proposal2}
 			uv1, err := makeVote(rv1, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 			vote1, err := uv1.verify(ledger)
@@ -156,6 +169,7 @@ func TestBundleCreationWithVotesFromSameAddress(t *testing.T) {
 				unauthenticatedEquivocationVote := unauthenticatedEquivocationVote{
 					Sender:    address,
 					Round:     round,
+					Branch:    maybeBranch(params, bookkeeping.BlockHash(branch)),
 					Period:    period,
 					Step:      step,
 					Cred:      uv1.Cred,
@@ -190,6 +204,12 @@ func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 	proposal.BlockDigest = randomBlockHash()
 	proposal2.BlockDigest = randomBlockHash()
 
+	params, err := ledger.ConsensusParams(round)
+	require.NoError(t, err)
+
+	branch, err := ledger.LookupDigest(round.SubSaturate(1))
+	require.NoError(t, err)
+
 	var unauthenticatedBundles []unauthenticatedBundle
 	for s := 1; s <= 10; s++ {
 		var votes []vote
@@ -199,7 +219,7 @@ func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 			address := addresses[i]
 			step := step(s)
 
-			rv0 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal}
+			rv0 := rawVote{Sender: address, Round: round, Branch: maybeBranch(params, bookkeeping.BlockHash(branch)), Period: period, Step: step, Proposal: proposal}
 			uv0, err := makeVote(rv0, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 			vote0, err := uv0.verify(ledger)
@@ -207,7 +227,7 @@ func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 				continue
 			}
 
-			rv1 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal2}
+			rv1 := rawVote{Sender: address, Round: round, Branch: maybeBranch(params, bookkeeping.BlockHash(branch)), Period: period, Step: step, Proposal: proposal2}
 			uv1, err := makeVote(rv1, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 			vote1, err := uv1.verify(ledger)
@@ -223,6 +243,7 @@ func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 				unauthenticatedEquivocationVote := unauthenticatedEquivocationVote{
 					Sender:    address,
 					Round:     round,
+					Branch:    maybeBranch(params, bookkeeping.BlockHash(branch)),
 					Period:    period,
 					Step:      step,
 					Cred:      uv1.Cred,
@@ -251,7 +272,7 @@ func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 
 	voteBadCredBundle := unauthenticatedBundles[0]
 	voteBadCredBundle.Votes[0].Cred = committee.UnauthenticatedCredential{}
-	_, err := voteBadCredBundle.verify(context.Background(), ledger, avv)
+	_, err = voteBadCredBundle.verify(context.Background(), ledger, avv)
 	require.Error(t, err)
 
 	voteBadSenderBundle := unauthenticatedBundles[1]
@@ -301,6 +322,12 @@ func TestBundleCertificationWithEquivocationVotes(t *testing.T) {
 	proposal.BlockDigest = randomBlockHash()
 	proposal2.BlockDigest = randomBlockHash()
 
+	params, err := ledger.ConsensusParams(round)
+	require.NoError(t, err)
+
+	branch, err := ledger.LookupDigest(round.SubSaturate(1))
+	require.NoError(t, err)
+
 	for s := 1; s <= 5; s++ {
 		var votes []vote
 		var equivocationVotes []equivocationVote
@@ -309,7 +336,7 @@ func TestBundleCertificationWithEquivocationVotes(t *testing.T) {
 			address := addresses[i]
 			step := step(s)
 
-			rv0 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal}
+			rv0 := rawVote{Sender: address, Round: round, Branch: maybeBranch(params, bookkeeping.BlockHash(branch)), Period: period, Step: step, Proposal: proposal}
 			uv0, err := makeVote(rv0, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 			vote0, err := uv0.verify(ledger)
@@ -317,7 +344,7 @@ func TestBundleCertificationWithEquivocationVotes(t *testing.T) {
 				continue
 			}
 
-			rv1 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal2}
+			rv1 := rawVote{Sender: address, Round: round, Branch: maybeBranch(params, bookkeeping.BlockHash(branch)), Period: period, Step: step, Proposal: proposal2}
 			uv1, err := makeVote(rv1, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 			vote1, err := uv1.verify(ledger)
@@ -333,6 +360,7 @@ func TestBundleCertificationWithEquivocationVotes(t *testing.T) {
 				unauthenticatedEquivocationVote := unauthenticatedEquivocationVote{
 					Sender:    address,
 					Round:     round,
+					Branch:    maybeBranch(params, bookkeeping.BlockHash(branch)),
 					Period:    period,
 					Step:      step,
 					Cred:      uv1.Cred,
@@ -377,6 +405,12 @@ func TestBundleCreationWithEquivocationVotesUnderQuorum(t *testing.T) {
 	proposal.BlockDigest = randomBlockHash()
 	proposal2.BlockDigest = randomBlockHash()
 
+	params, err := ledger.ConsensusParams(round)
+	require.NoError(t, err)
+
+	branch, err := ledger.LookupDigest(round.SubSaturate(1))
+	require.NoError(t, err)
+
 	for s := 1; s <= 5; s++ {
 		var votes []vote
 
@@ -384,7 +418,7 @@ func TestBundleCreationWithEquivocationVotesUnderQuorum(t *testing.T) {
 			address := addresses[i]
 			step := step(s)
 
-			rv0 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal}
+			rv0 := rawVote{Sender: address, Round: round, Branch: maybeBranch(params, bookkeeping.BlockHash(branch)), Period: period, Step: step, Proposal: proposal}
 			uv0, err := makeVote(rv0, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 			vote0, err := uv0.verify(ledger)
@@ -392,7 +426,7 @@ func TestBundleCreationWithEquivocationVotesUnderQuorum(t *testing.T) {
 				continue
 			}
 
-			rv1 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal2}
+			rv1 := rawVote{Sender: address, Round: round, Branch: maybeBranch(params, bookkeeping.BlockHash(branch)), Period: period, Step: step, Proposal: proposal2}
 			uv1, err := makeVote(rv1, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 			vote1, err := uv1.verify(ledger)
@@ -406,6 +440,7 @@ func TestBundleCreationWithEquivocationVotesUnderQuorum(t *testing.T) {
 			unauthenticatedEquivocationVote := unauthenticatedEquivocationVote{
 				Sender:    address,
 				Round:     round,
+				Branch:    maybeBranch(params, bookkeeping.BlockHash(branch)),
 				Period:    period,
 				Step:      step,
 				Cred:      uv1.Cred,
