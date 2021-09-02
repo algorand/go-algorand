@@ -55,7 +55,7 @@ func (v *Verifier) Verify(c *Cert) error {
 	if c.SignedWeight <= v.ProvenWeight {
 		return fmt.Errorf("cert signed weight %d <= proven weight %d", c.SignedWeight, v.ProvenWeight)
 	}
-	// TODO: use the cert.Proof hash factories to use that.
+
 	// Verify all of the reveals
 	sHash, err := c.SigProofs.HashFactory.NewHash()
 	if err != nil {
