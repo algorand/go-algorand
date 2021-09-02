@@ -51,7 +51,7 @@ const (
 //size of each hash
 const (
 	Sha512_256Size    = 32
-	SumhashDigestSize = 112
+	SumhashDigestSize = 32
 )
 
 // HashFactory is responsible for generating new hashes accordingly to the type it stores.
@@ -68,7 +68,7 @@ func (h HashFactory) NewHash() (hash.Hash, error) {
 	case Sha512_256:
 		return sha512.New512_256(), nil
 	case Sumhash:
-		return sumhash.New(compressor), nil
+		return sha512.New512_256(), nil
 	default:
 		return nil, errUnknownHash
 	}
