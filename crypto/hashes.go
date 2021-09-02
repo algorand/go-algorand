@@ -68,8 +68,8 @@ func (h HashFactory) NewHash() (hash.Hash, error) {
 	}
 }
 
-// HashSum Makes it easier to sum using hash interface and Hashable interface
-func HashSum(hsh hash.Hash, h Hashable) []byte {
+// GenereicHashObj Makes it easier to sum using hash interface and Hashable interface
+func GenereicHashObj(hsh hash.Hash, h Hashable) []byte {
 	rep := HashRep(h)
 	return HashBytes(hsh, rep)
 }

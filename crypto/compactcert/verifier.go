@@ -69,8 +69,8 @@ func (v *Verifier) Verify(c *Cert) error {
 	sigs := make(map[uint64]crypto.GenericDigest)
 	parts := make(map[uint64]crypto.GenericDigest)
 	for pos, r := range c.Reveals {
-		sigs[pos] = crypto.HashSum(sHash, r.SigSlot)
-		parts[pos] = crypto.HashSum(pHash, r.Part)
+		sigs[pos] = crypto.GenereicHashObj(sHash, r.SigSlot)
+		parts[pos] = crypto.GenereicHashObj(pHash, r.Part)
 
 		ephID := basics.OneTimeIDForRound(v.SigRound, r.Part.KeyDilution)
 		if !r.Part.PK.Verify(ephID, v.Msg, r.SigSlot.Sig.OneTimeSignature) {
@@ -95,7 +95,7 @@ func (v *Verifier) Verify(c *Cert) error {
 	if err != nil {
 		return err
 	}
-	msgHash := crypto.HashSum(h, v.Msg)
+	msgHash := crypto.GenereicHashObj(h, v.Msg)
 
 	for j := uint64(0); j < nr; j++ {
 		choice := coinChoice{

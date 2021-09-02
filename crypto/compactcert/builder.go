@@ -210,7 +210,7 @@ func (b *Builder) Build() (*Cert, error) {
 	if err != nil {
 		return nil, err
 	}
-	msgHash := crypto.HashSum(hash, b.Msg)
+	msgHash := crypto.GenereicHashObj(hash, b.Msg)
 
 	for j := uint64(0); j < nr; j++ {
 		choice := coinChoice{

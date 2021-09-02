@@ -118,14 +118,14 @@ func testMerkle(t *testing.T, hashtype crypto.HashType, size uint64) {
 		proof, err := tree.Prove([]uint64{i})
 		require.NoError(t, err)
 
-		err = Verify(root, map[uint64]crypto.GenericDigest{i: crypto.HashSum(hsh, a[i])}, proof)
+		err = Verify(root, map[uint64]crypto.GenericDigest{i: crypto.GenereicHashObj(hsh, a[i])}, proof)
 		require.NoError(t, err)
 
-		err = Verify(root, map[uint64]crypto.GenericDigest{i: crypto.HashSum(hsh, junk)}, proof)
+		err = Verify(root, map[uint64]crypto.GenericDigest{i: crypto.GenereicHashObj(hsh, junk)}, proof)
 		require.Error(t, err, "no error when verifying junk")
 
 		allpos = append(allpos, i)
-		allmap[i] = crypto.HashSum(hsh, a[i])
+		allmap[i] = crypto.GenereicHashObj(hsh, a[i])
 	}
 
 	proof, err := tree.Prove(allpos)
@@ -134,16 +134,16 @@ func testMerkle(t *testing.T, hashtype crypto.HashType, size uint64) {
 	err = Verify(root, allmap, proof)
 	require.NoError(t, err)
 
-	err = Verify(root, map[uint64]crypto.GenericDigest{0: crypto.HashSum(hsh, junk)}, proof)
+	err = Verify(root, map[uint64]crypto.GenericDigest{0: crypto.GenereicHashObj(hsh, junk)}, proof)
 	require.Error(t, err, "no error when verifying junk batch")
 
-	err = Verify(root, map[uint64]crypto.GenericDigest{0: crypto.HashSum(hsh, junk)}, nil)
+	err = Verify(root, map[uint64]crypto.GenericDigest{0: crypto.GenereicHashObj(hsh, junk)}, nil)
 	require.Error(t, err, "no error when verifying junk batch")
 
 	_, err = tree.Prove([]uint64{size})
 	require.Error(t, err, "no error when proving past the end")
 
-	err = Verify(root, map[uint64]crypto.GenericDigest{size: crypto.HashSum(hsh, junk)}, nil)
+	err = Verify(root, map[uint64]crypto.GenericDigest{size: crypto.GenereicHashObj(hsh, junk)}, nil)
 	require.Error(t, err, "no error when verifying past the end")
 
 	if size > 0 {
@@ -152,7 +152,7 @@ func testMerkle(t *testing.T, hashtype crypto.HashType, size uint64) {
 		for i := 0; i < 10; i++ {
 			pos := crypto.RandUint64() % size
 			somepos = append(somepos, pos)
-			somemap[pos] = crypto.HashSum(hsh, a[pos])
+			somemap[pos] = crypto.GenereicHashObj(hsh, a[pos])
 		}
 
 		proof, err = tree.Prove(somepos)
