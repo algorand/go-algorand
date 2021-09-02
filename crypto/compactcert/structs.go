@@ -100,10 +100,10 @@ const maxProofDigests = 20 * maxReveals
 type Cert struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	SigCommit    Commitment        `codec:"c"`
-	SignedWeight uint64            `codec:"w"`
-	SigProofs    merklearray.Proof `codec:"S,allocbound=maxProofDigests"`
-	PartProofs   merklearray.Proof `codec:"P,allocbound=maxProofDigests"`
+	SigCommit    crypto.GenericDigest `codec:"c"`
+	SignedWeight uint64               `codec:"w"`
+	SigProofs    merklearray.Proof    `codec:"S,allocbound=maxProofDigests"`
+	PartProofs   merklearray.Proof    `codec:"P,allocbound=maxProofDigests"`
 
 	// Reveals is a sparse map from the position being revealed
 	// to the corresponding elements from the sigs and participants

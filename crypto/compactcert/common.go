@@ -32,8 +32,8 @@ type coinChoice struct {
 	J            uint64               `codec:"j"`
 	SignedWeight uint64               `codec:"sigweight"`
 	ProvenWeight uint64               `codec:"provenweight"`
-	Sigcom       Commitment           `codec:"sigcom"`
-	Partcom      Commitment           `codec:"partcom"`
+	Sigcom       crypto.GenericDigest `codec:"sigcom"`
+	Partcom      crypto.GenericDigest `codec:"partcom"`
 	MsgHash      crypto.GenericDigest `codec:"msghash"`
 }
 

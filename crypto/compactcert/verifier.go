@@ -24,25 +24,17 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-// Commitment represents the commitment the compact cert will use.
-type Commitment crypto.GenericDigest
-
-// IsZero checks that the Commitment is empty.
-func (c Commitment) IsZero() bool {
-	return len(c) == 0
-}
-
 // Verifier is used to verify a compact certificate.
 type Verifier struct {
 	Params
 
-	partcom Commitment
+	partcom crypto.GenericDigest
 }
 
 // MkVerifier constructs a verifier to check the compact certificate
 // on the message specified in p, with partcom specifying the Merkle
 // root of the participants that must sign the message.
-func MkVerifier(p Params, partcom Commitment) *Verifier {
+func MkVerifier(p Params, partcom crypto.GenericDigest) *Verifier {
 	return &Verifier{
 		Params:  p,
 		partcom: partcom,

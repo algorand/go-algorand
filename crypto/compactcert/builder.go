@@ -195,7 +195,7 @@ func (b *Builder) Build() (*Cert, error) {
 
 	// Reveal sufficient number of signatures
 	c := &Cert{
-		SigCommit:    Commitment(sigtree.Root()),
+		SigCommit:    sigtree.Root(),
 		SignedWeight: b.signedWeight,
 		Reveals:      make(map[uint64]Reveal),
 	}
@@ -218,7 +218,7 @@ func (b *Builder) Build() (*Cert, error) {
 			SignedWeight: c.SignedWeight,
 			ProvenWeight: b.ProvenWeight,
 			Sigcom:       c.SigCommit,
-			Partcom:      Commitment(b.parttree.Root()),
+			Partcom:      b.parttree.Root(),
 			MsgHash:      msgHash,
 		}
 

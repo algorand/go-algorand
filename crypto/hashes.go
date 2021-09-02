@@ -53,7 +53,7 @@ const (
 //size of each hash
 const (
 	Sha512_256Size    = sha512.Size256
-	SumhashDigestSize = 128
+	SumhashDigestSize = 64
 )
 
 // HashFactory is responsible for generating new hashes accordingly to the type it stores.

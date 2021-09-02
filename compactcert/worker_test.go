@@ -271,7 +271,7 @@ func TestWorkerAllSigs(t *testing.T) {
 			voters, err := s.CompactCertVoters(tx.Txn.CertRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
 			require.NoError(t, err)
 
-			verif := compactcert.MkVerifier(ccparams, compactcert.Commitment(voters.Tree.Root()))
+			verif := compactcert.MkVerifier(ccparams, voters.Tree.Root())
 			err = verif.Verify(&tx.Txn.Cert)
 			require.NoError(t, err)
 			break
@@ -332,7 +332,7 @@ func TestWorkerPartialSigs(t *testing.T) {
 	voters, err := s.CompactCertVoters(tx.Txn.CertRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
 	require.NoError(t, err)
 
-	verif := compactcert.MkVerifier(ccparams, compactcert.Commitment(voters.Tree.Root()))
+	verif := compactcert.MkVerifier(ccparams, voters.Tree.Root())
 	err = verif.Verify(&tx.Txn.Cert)
 	require.NoError(t, err)
 }

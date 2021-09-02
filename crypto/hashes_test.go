@@ -30,13 +30,13 @@ func TestHashFactoryCreatingNewHashes(t *testing.T) {
 	h, err := hfactory.NewHash()
 	a.NoError(err)
 	a.NotNil(h)
-	a.Equal(32, h.Size())
+	a.Equal(Sha512_256Size, h.Size())
 
 	hfactory = HashFactory{HashType: Sumhash}
 	h, err = hfactory.NewHash()
 	a.NoError(err)
 	a.NotNil(h)
-	a.Equal(112, h.Size())
+	a.Equal(SumhashDigestSize, h.Size())
 
 	hfactory = HashFactory{HashType: HashType(math.MaxUint64)}
 	h, err = hfactory.NewHash()
