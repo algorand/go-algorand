@@ -19,6 +19,7 @@ package merklearray
 import (
 	"bytes"
 	"fmt"
+	"hash"
 	"sort"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -214,11 +215,7 @@ func (tree *Tree) buildNextLayer() {
 	tree.Levels = append(tree.Levels, newLayer)
 }
 
-func hashLeafs(elems map[uint64]crypto.Hashable, proof *Proof) (map[uint64]crypto.GenericDigest, error) {
-	hash, err := proof.HashFactory.NewHash()
-	if err != nil {
-		return nil, err
-	}
+func hashLeafs(elems map[uint64]crypto.Hashable, hash hash.Hash) (map[uint64]crypto.GenericDigest, error) {
 
 	hashedLeafs := make(map[uint64]crypto.GenericDigest)
 	for i, element := range elems {
@@ -238,15 +235,19 @@ func Verify(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *
 	}
 
 	if len(elems) == 0 {
-		if proof.Path != nil && len(proof.Path) != 0 {
+		if len(proof.Path) != 0 {
 			return fmt.Errorf("non-empty proof for empty set of elements")
 		}
 		return nil
 	}
 
-	var hashedLeafs map[uint64]crypto.GenericDigest
-	var err error
-	if hashedLeafs, err = hashLeafs(elems, proof); err != nil {
+	hash, err := proof.HashFactory.NewHash()
+	if err != nil {
+		return err
+	}
+
+	hashedLeafs, err := hashLeafs(elems, hash)
+	if err != nil {
 		return err
 	}
 
