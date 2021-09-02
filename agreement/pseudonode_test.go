@@ -133,7 +133,6 @@ func compareEventChannels(t *testing.T, ch1, ch2 <-chan externalEvent) bool {
 }
 
 func TestPseudonode(t *testing.T) {
-	t.Parallel()
 
 	// generate a nice, fixed hash.
 	rootSeed := sha256.Sum256([]byte(t.Name()))
@@ -389,7 +388,6 @@ func (k *KeyManagerProxy) VotingKeys(votingRound, balanceRound basics.Round) []a
 }
 
 func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
-	t.Parallel()
 
 	// generate a nice, fixed hash.
 	rootSeed := sha256.Sum256([]byte(t.Name()))

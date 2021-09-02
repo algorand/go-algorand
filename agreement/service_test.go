@@ -790,7 +790,9 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 
 	// logging
 	log := logging.Base()
-	f, _ := os.Create(t.Name() + ".log")
+	f, err := os.Create(t.Name() + ".log")
+	require.NoError(t, err)
+
 	log.SetJSONFormatter()
 	log.SetOutput(f)
 	log.SetLevel(logging.Debug)
@@ -952,7 +954,6 @@ func simulateAgreementWithConsensusVersion(t *testing.T, numNodes int, numRounds
 }
 
 func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) {
-	t.Parallel()
 
 	_, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, traceLevel, ledgerFactory)
 	startRound := baseLedger.NextRound()
@@ -1072,7 +1073,6 @@ func TestAgreementSynchronousFutureUpgrade(t *testing.T) {
 }
 
 func TestAgreementFastRecoveryDownEarly(t *testing.T) {
-	t.Parallel()
 
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
@@ -1130,7 +1130,6 @@ func TestAgreementFastRecoveryDownEarly(t *testing.T) {
 }
 
 func TestAgreementFastRecoveryDownMiss(t *testing.T) {
-	t.Parallel()
 
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
@@ -1211,7 +1210,6 @@ func TestAgreementFastRecoveryDownMiss(t *testing.T) {
 }
 
 func TestAgreementFastRecoveryLate(t *testing.T) {
-	t.Parallel()
 
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
@@ -1324,7 +1322,6 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 }
 
 func TestAgreementFastRecoveryRedo(t *testing.T) {
-	t.Parallel()
 
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
@@ -1790,7 +1787,6 @@ func TestAgreementRecoverGlobalStartingValueBadProposal(t *testing.T) {
 }
 
 func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
-	t.Parallel()
 
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
@@ -1916,7 +1912,6 @@ func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
 }
 
 func TestAgreementSlowPayloadsPreDeadline(t *testing.T) {
-	t.Parallel()
 
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
@@ -1974,7 +1969,6 @@ func TestAgreementSlowPayloadsPreDeadline(t *testing.T) {
 }
 
 func TestAgreementSlowPayloadsPostDeadline(t *testing.T) {
-	t.Parallel()
 
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
@@ -2039,7 +2033,6 @@ func TestAgreementSlowPayloadsPostDeadline(t *testing.T) {
 }
 
 func TestAgreementLargePeriods(t *testing.T) {
-	t.Parallel()
 
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)

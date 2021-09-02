@@ -140,7 +140,6 @@ func getSelectorCapacity(tag protocol.Tag) int {
 func TestCryptoVerifierBuffers(t *testing.T) {
 	t.Skip("Test is flaky")
 
-	t.Parallel()
 	xledger, addresses, selections, votings := readOnlyFixture100()
 	ledger := LedgerWithoutBranch(xledger)
 	ctx := context.Background()

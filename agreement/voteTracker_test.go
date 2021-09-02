@@ -36,7 +36,6 @@ func makeVoteTrackerZero() listener {
 // actual tests
 
 func TestVoteTrackerNoOp(t *testing.T) {
-	t.Parallel()
 	helper := voteMakerHelper{}
 	helper.Setup()
 
@@ -59,7 +58,6 @@ func TestVoteTrackerNoOp(t *testing.T) {
 }
 
 func TestVoteTrackerSoftQuorum(t *testing.T) {
-	t.Parallel()
 	helper := voteMakerHelper{}
 	helper.Setup()
 
@@ -102,7 +100,6 @@ func TestVoteTrackerSoftQuorum(t *testing.T) {
 
 // sanity check for cert quorums
 func TestVoteTrackerCertQuorum(t *testing.T) {
-	t.Parallel()
 	helper := voteMakerHelper{}
 	helper.Setup()
 
@@ -144,7 +141,6 @@ func TestVoteTrackerCertQuorum(t *testing.T) {
 
 // sanity check for next quorums
 func TestVoteTrackerNextQuorum(t *testing.T) {
-	t.Parallel()
 	helper := voteMakerHelper{}
 	helper.Setup()
 
@@ -186,7 +182,6 @@ func TestVoteTrackerNextQuorum(t *testing.T) {
 
 // sanity check propose votes don't trigger anything
 func TestVoteTrackerProposeNoOp(t *testing.T) {
-	t.Parallel()
 	helper := voteMakerHelper{}
 	helper.Setup()
 
@@ -213,7 +208,6 @@ func TestVoteTrackerProposeNoOp(t *testing.T) {
 }
 
 func TestVoteTrackerEquivocatorWeightCountedOnce(t *testing.T) {
-	t.Parallel()
 	helper := voteMakerHelper{}
 	helper.Setup()
 
@@ -242,7 +236,6 @@ func TestVoteTrackerEquivocatorWeightCountedOnce(t *testing.T) {
 }
 
 func TestVoteTrackerEquivDoesntReemitThreshold(t *testing.T) {
-	t.Parallel()
 	helper := voteMakerHelper{}
 	helper.Setup()
 
@@ -279,7 +272,6 @@ func TestVoteTrackerEquivDoesntReemitThreshold(t *testing.T) {
 }
 
 func TestVoteTrackerEquivocationsCount(t *testing.T) {
-	t.Parallel()
 	helper := voteMakerHelper{}
 	helper.Setup()
 
@@ -327,7 +319,6 @@ func TestVoteTrackerEquivocationsCount(t *testing.T) {
 
 // same test as before, except equivocations voting v2, v3 should also count towards quorum for v1
 func TestVoteTrackerSuperEquivocationsCount(t *testing.T) {
-	t.Parallel()
 	helper := voteMakerHelper{}
 	helper.Setup()
 
@@ -379,7 +370,6 @@ func TestVoteTrackerSuperEquivocationsCount(t *testing.T) {
 
 // check that SM panics on seeing two quorums
 func TestVoteTrackerPanicsOnTwoSoftQuorums(t *testing.T) {
-	t.Parallel()
 	helper := voteMakerHelper{}
 	helper.Setup()
 
@@ -421,7 +411,6 @@ func TestVoteTrackerPanicsOnTwoSoftQuorums(t *testing.T) {
 
 // check that SM panics on seeing soft quorum for bot (currently enforced by contract)
 func TestVoteTrackerPanicsOnSoftBotQuorum(t *testing.T) {
-	t.Parallel()
 	helper := voteMakerHelper{}
 	helper.Setup()
 
@@ -453,7 +442,6 @@ func TestVoteTrackerPanicsOnSoftBotQuorum(t *testing.T) {
 
 // check that SM panics on seeing two next quorums, in particular bot, val in same step.
 func TestVoteTrackerPanicsOnTwoNextQuorums(t *testing.T) {
-	t.Parallel()
 	helper := voteMakerHelper{}
 	helper.Setup()
 
@@ -492,7 +480,6 @@ func TestVoteTrackerPanicsOnTwoNextQuorums(t *testing.T) {
 }
 
 func TestVoteTrackerRejectsTooManyEquivocators(t *testing.T) {
-	t.Parallel()
 	helper := voteMakerHelper{}
 	helper.Setup()
 	Num := soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])
@@ -521,7 +508,6 @@ func TestVoteTrackerRejectsTooManyEquivocators(t *testing.T) {
 /* tests for filtering component of vote tracker */
 
 func TestVoteTrackerFiltersDuplicateVoteOnce(t *testing.T) {
-	t.Parallel()
 	helper := voteMakerHelper{}
 	helper.Setup()
 	v1 := randomBlockHash()
@@ -552,7 +538,6 @@ func TestVoteTrackerFiltersDuplicateVoteOnce(t *testing.T) {
 }
 
 func TestVoteTrackerForwardsFirstEquivocation(t *testing.T) {
-	t.Parallel()
 	helper := voteMakerHelper{}
 	helper.Setup()
 	const V1Bound = 10
@@ -620,7 +605,6 @@ func TestVoteTrackerForwardsFirstEquivocation(t *testing.T) {
 }
 
 func TestVoteTrackerFiltersFutureEquivocations(t *testing.T) {
-	t.Parallel()
 	helper := voteMakerHelper{}
 	helper.Setup()
 	const Num = 100
@@ -666,7 +650,6 @@ func TestVoteTrackerFiltersFutureEquivocations(t *testing.T) {
 /* Check that machine panics on unknown event */
 
 func TestVoteTrackerRejectsUnknownEvent(t *testing.T) {
-	t.Parallel()
 	testCase := determisticTraceTestCase{
 		inputs: []event{
 			emptyEvent{},
