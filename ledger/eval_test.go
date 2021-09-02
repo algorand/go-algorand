@@ -1031,7 +1031,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 					require.NoError(b, err)
 				}
 				newBlock = bookkeeping.MakeBlock(validatedBlock.blk.BlockHeader)
-				bev, err = l.StartEvaluator(newBlock.BlockHeader, 0)
+				bev, err = l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 				require.NoError(b, err)
 				numBlocks++
 			}
@@ -1054,7 +1054,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 		wg.Wait()
 
 		newBlock = bookkeeping.MakeBlock(validatedBlock.blk.BlockHeader)
-		bev, err = l.StartEvaluator(newBlock.BlockHeader, 0)
+		bev, err = l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 		require.NoError(b, err)
 	}
 
