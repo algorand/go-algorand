@@ -1016,6 +1016,9 @@ func initConsensusProtocols() {
 	// Enable App calls to pool budget in grouped transactions
 	vFuture.EnableAppCostPooling = true
 
+	// Allow 50 app opt ins
+	vFuture.MaxAppsOptedIn = 50
+
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 
