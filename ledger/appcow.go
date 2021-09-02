@@ -470,7 +470,7 @@ func MakeDebugBalances(l ledgerForCowBase, round basics.Round, proto protocol.Co
 		UpgradeState: bookkeeping.UpgradeState{CurrentProtocol: proto},
 	}
 	hint := 2
-	cb := makeRoundCowState(base, hdr, prevTimestamp, hint)
+	cb := makeRoundCowState(base, hdr, config.Consensus[proto], prevTimestamp, hint)
 	return cb
 }
 

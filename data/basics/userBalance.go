@@ -43,7 +43,7 @@ const (
 
 	// MaxEncodedAccountDataSize is a rough estimate for the worst-case scenario we're going to have of the account data and address serialized.
 	// this number is verified by the TestEncodedAccountDataSize function.
-	MaxEncodedAccountDataSize = 750000
+	MaxEncodedAccountDataSize = 850000
 
 	// encodedMaxAssetsPerAccount is the decoder limit of number of assets stored per account.
 	// it's being verified by the unit test TestEncodedAccountAllocationBounds to align

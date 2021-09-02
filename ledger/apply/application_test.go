@@ -126,6 +126,12 @@ const appIdxError basics.AppIndex = 0x11223344
 const appIdxOk basics.AppIndex = 1
 
 func (b *testBalances) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
+	if b.putBalances != nil {
+		ad, ok := b.putBalances[addr]
+		if ok {
+			return ad, nil
+		}
+	}
 	ad, ok := b.balances[addr]
 	if !ok {
 		return basics.AccountData{}, fmt.Errorf("mock balance not found")
@@ -515,15 +521,6 @@ func TestAppCallApplyCreate(t *testing.T) {
 
 	b.ResetWrites()
 
-	// now looking up the creator will succeed, but we reset writes, so
-	// they won't have the app params
-	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
-	a.Error(err)
-	a.Contains(err.Error(), fmt.Sprintf("app %d not found in account", appIdx))
-	a.Equal(1, b.put)
-
-	b.ResetWrites()
-
 	// now we give the creator the app params again
 	cp := basics.AccountData{}
 	cp.AppParams = cloneAppParams(saved.AppParams)
@@ -690,6 +687,42 @@ func TestAppCallOptIn(t *testing.T) {
 		},
 		br,
 	)
+
+	// check max optins
+
+	var optInCountTest = []struct {
+		proto protocol.ConsensusVersion
+	}{
+		{protocol.ConsensusV29},
+		{protocol.ConsensusFuture},
+	}
+
+	prevMaxAppsOptedIn := 0
+	for _, test := range optInCountTest {
+		cparams, ok := config.Consensus[test.proto]
+		a.True(ok)
+		a.Less(prevMaxAppsOptedIn, cparams.MaxAppsOptedIn)
+		prevMaxAppsOptedIn = cparams.MaxAppsOptedIn
+
+		b.SetParams(cparams)
+		aparams := basics.AppParams{
+			StateSchemas: basics.StateSchemas{
+				LocalStateSchema: basics.StateSchema{NumUint: 1},
+			},
+		}
+		sender = getRandomAddress(a)
+		b.balances = map[basics.Address]basics.AccountData{sender: {}}
+		var appIdx basics.AppIndex = appIdx
+		for i := 0; i < cparams.MaxAppsOptedIn; i++ {
+			appIdx = appIdx + basics.AppIndex(i)
+			err = optInApplication(&b, sender, appIdx, aparams)
+			a.NoError(err)
+		}
+		appIdx++
+		err = optInApplication(&b, sender, appIdx, aparams)
+		a.Error(err)
+		a.Contains(err.Error(), "max opted-in apps per acct")
+	}
 }
 
 func TestAppCallClearState(t *testing.T) {
@@ -931,8 +964,12 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 	a.Equal(transactions.EvalDelta{GlobalDelta: gd}, ad.EvalDelta)
 	a.Equal(basics.StateSchema{NumUint: 0}, br.TotalAppSchema)
 
+	b.ResetWrites()
 	logs := []transactions.LogItem{{ID: 0, Message: "a"}}
 	b.delta = transactions.EvalDelta{Logs: []transactions.LogItem{{ID: 0, Message: "a"}}}
+	b.balances[sender] = basics.AccountData{
+		AppLocalStates: map[basics.AppIndex]basics.AppLocalState{appIdx: {}},
+	}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(transactions.EvalDelta{Logs: logs}, ad.EvalDelta)
@@ -1062,6 +1099,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 		a.Contains(err.Error(), fmt.Sprintf("updateApplication %s program too long", test.name))
 	}
 
+	b.ResetWrites()
 	// check extraProgramPages allows length of proto.MaxAppProgramLen + 1
 	appr = make([]byte, proto.MaxAppProgramLen+1)
 	appr[0] = 4

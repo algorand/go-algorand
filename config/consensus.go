@@ -1024,6 +1024,9 @@ func initConsensusProtocols() {
 	vFuture.EnableAppCostPooling = true
 	vFuture.MaxInnerTransactions = 16
 
+	// Allow 50 app opt ins
+	vFuture.MaxAppsOptedIn = 50
+
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 
