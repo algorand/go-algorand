@@ -50,7 +50,7 @@ function app-txid {
     grep -o -E 'txid [A-Z0-9]{52}' | cut -c 6- | head -1
 }
 
-APPACCT=$(python -c "import algosdk.encoding as e; print(e.encode_address(e.checksum(b'app'+($APPID).to_bytes(8, 'big'))))")
+APPACCT=$(python -c "import algosdk.encoding as e; print(e.encode_address(e.checksum(b'appID'+($APPID).to_bytes(8, 'big'))))")
 
 function payin {
     amount=$1; shift
