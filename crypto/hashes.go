@@ -52,7 +52,7 @@ const (
 
 //size of each hash
 const (
-	Sha512_256Size    = 32
+	Sha512_256Size    = sha512.Size256
 	SumhashDigestSize = 128
 )
 
