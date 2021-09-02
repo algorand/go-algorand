@@ -34,6 +34,10 @@ type pipelinePlayer struct {
 	FirstUncommittedVersion protocol.ConsensusVersion
 	Players                 map[round]*player
 
+	// For players of rounds that do not support AgreementMessagesContainBranch,
+	// CompatBranch stores the branch for that round number.
+	CompatBranch map[basics.Round]bookkeeping.BlockHash
+
 	// Arrival delays of the winning proposal for recently decided rounds.
 	// Most recent rounds are at the end of this slice.
 	PayloadArrivals []time.Duration
@@ -50,6 +54,7 @@ func (p *pipelinePlayer) init(r routerHandle, target round, proto protocol.Conse
 	p.FirstUncommittedRound = target
 	p.FirstUncommittedVersion = proto
 	p.Players = make(map[round]*player)
+	p.CompatBranch = make(map[basics.Round]bookkeeping.BlockHash)
 	p.PayloadArrivals = nil
 	p.resizeArrivals()
 	return p.adjustPlayers(r)
@@ -128,12 +133,25 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 
 	state, ok := p.Players[rnd]
 	if !ok {
+		// Check if this is a compat round without a branch value.
+		compatBranch, compatOk := p.CompatBranch[rnd.Number]
+		if compatOk && rnd.Branch == (bookkeeping.BlockHash{}) {
+			rnd.Branch = compatBranch
+		}
+		state, ok = p.Players[rnd]
+	}
+	if !ok {
 		// See if we can find the parent player; otherwise, drop.
 		for prnd, rp := range p.Players {
 			if rnd.Number == prnd.Number+1 {
+				// To determine if this is the right player, we check for two cases.
+				// First, it might be that rnd's Branch exactly matches the proposal
+				// value (even if the payload is missing).  Second, it might be that
+				// rnd doesn't support branches in agreement messages; if the branch
+				// is zero, we will route it to any player.
 				re := readLowestEvent{T: readLowestPayload, Round: prnd}
 				re = r.dispatch(*rp, re, proposalMachineRound, prnd, 0, 0).(readLowestEvent)
-				if bookkeeping.BlockHash(re.Proposal.BlockDigest) == rnd.Branch {
+				if rnd.Branch == bookkeeping.BlockHash(re.Proposal.BlockDigest) || rnd.Branch == (bookkeeping.BlockHash{}) {
 					state = rp
 					// If we have not seen a payload for this parent round,
 					// it will not be in the speculative ledger.  Attach the
@@ -221,6 +239,12 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 		}
 	}
 
+	for rnd := range p.CompatBranch {
+		if rnd < p.FirstUncommittedRound.Number {
+			delete(p.CompatBranch, rnd)
+		}
+	}
+
 	// If we don't have a player for the first uncommitted round, create it.
 	// This could happen right at startup, or right after the player was GCed
 	// because it reached consensus.
@@ -242,6 +266,11 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 		re := readLowestEvent{T: readLowestPayload, Round: rp.Round, Period: rp.Period}
 		re = r.dispatch(*rp, re, proposalMachineRound, rp.Round, rp.Period, 0).(readLowestEvent)
 		if !re.PayloadOK {
+			continue
+		}
+
+		// If that round does not support branches in agreement votes, we cannot pipeline it.
+		if !config.Consensus[re.Payload.prevVersion].AgreementMessagesContainBranch {
 			continue
 		}
 
@@ -324,6 +353,12 @@ func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protoco
 
 	p.Players[nextrnd] = newPlayer
 
+	// If the version does not support branches in agreement messages,
+	// register the branch in CompatBranch.
+	if !config.Consensus[ver].AgreementMessagesContainBranch {
+		p.CompatBranch[nextrnd.Number] = nextrnd.Branch
+	}
+
 	return newPlayer.init(r, nextrnd, ver)
 }
 
@@ -332,6 +367,8 @@ func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protoco
 func (p *pipelinePlayer) externalDemuxSignals() pipelineExternalDemuxSignals {
 	s := make([]externalDemuxSignals, 0, len(p.Players))
 	for _, p := range p.Players {
+		// Skip players that have already decided; we do not expect any
+		// more timeouts for them.
 		if p.Decided != (bookkeeping.BlockHash{}) {
 			continue
 		}
