@@ -343,6 +343,25 @@ submit:  tx_submit
 	eval = l.nextBlock(t)
 	eval.txn(t, fundgold.Noted("2"), fmt.Sprintf("asset %d missing", asaIndex))
 	l.endBlock(t, eval)
+
+	// Do it all again, so we can test closeTo when we have a non-zero balance
+	// Tell the app to opt itself in.
+	eval = l.nextBlock(t)
+	eval.txns(t, optin.Noted("a"), fundgold.Noted("a"))
+	l.endBlock(t, eval)
+
+	amount, _ = l.asa(t, appIndex.Address(), asaIndex)
+	require.Equal(t, uint64(20000), amount)
+	left, _ := l.asa(t, addrs[0], asaIndex)
+
+	eval = l.nextBlock(t)
+	eval.txn(t, close.Noted("a"))
+	l.endBlock(t, eval)
+
+	amount, _ = l.asa(t, appIndex.Address(), asaIndex)
+	require.Equal(t, uint64(0), amount)
+	back, _ := l.asa(t, addrs[0], asaIndex)
+	require.Equal(t, uint64(20000), back-left)
 }
 
 // TestClawbackAction ensures an app address can act as clawback address.

@@ -240,12 +240,12 @@ func TestAppIndexHashing(t *testing.T) {
 
 	i := AppIndex(12)
 	prefix, buf := i.ToBeHashed()
-	require.Equal(t, protocol.HashID("app"), prefix)
+	require.Equal(t, protocol.HashID("appID"), prefix)
 	require.Equal(t, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0c}, buf)
 
 	i = AppIndex(12 << 16)
 	prefix, buf = i.ToBeHashed()
-	require.Equal(t, protocol.HashID("app"), prefix)
+	require.Equal(t, protocol.HashID("appID"), prefix)
 	require.Equal(t, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x00}, buf)
 
 	// test value created with:
