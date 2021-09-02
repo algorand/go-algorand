@@ -262,3 +262,26 @@ func TestExtraFields(t *testing.T) {
 	testApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+pay, ep,
 		"non-zero fields for type axfer")
 }
+
+func TestNumInner(t *testing.T) {
+	pay := `
+  tx_begin
+  int 1
+  tx_field Amount
+  txn Accounts 1
+  tx_field Receiver
+  int pay
+  tx_field TypeEnum
+  tx_submit
+`
+
+	ep, ledger := makeSampleEnv()
+	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(ledger.ApplicationID().Address(), 1000000)
+	testApp(t, pay+";int 1", ep)
+	testApp(t, pay+pay+";int 1", ep)
+	testApp(t, pay+pay+pay+";int 1", ep)
+	testApp(t, pay+pay+pay+pay+";int 1", ep)
+	// In the sample proto, MaxInnerTransactions = 4
+	testApp(t, pay+pay+pay+pay+pay+";int 1", ep, "tx_submit with MaxInnerTransactions")
+}

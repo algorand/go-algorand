@@ -2756,6 +2756,14 @@ func opExtract64Bits(cx *EvalContext) {
 	opExtractNBytes(cx, 8) // extract 8 bytes
 }
 
+// accountReference yields the address and Accounts offset designated
+// by a stackValue. If the stackValue is the app account, it need not
+// be in the Accounts array, therefore len(Accounts) + 1 is returned
+// as the index. This unusual convention is based on the existing
+// convention that 0 is the sender, 1-len(Accounts) are indexes into
+// Accounts array, and so len+1 is the next available value.  This
+// will allow encoding into EvalDelta efficiently when it becomes
+// necessary (when apps change local state on their own account).
 func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uint64, error) {
 	if account.argType() == StackUint64 {
 		addr, err := cx.Txn.Txn.AddressByIndex(account.Uint, cx.Txn.Txn.Sender)
@@ -2769,7 +2777,7 @@ func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uin
 		// Application address is acceptable. index is meaningless though
 		appAddr, _ := cx.getApplicationAddress()
 		if appAddr == addr {
-			return addr, uint64(0xffffffffffffffff), nil
+			return addr, uint64(len(cx.Txn.Txn.Accounts) + 1), nil
 		}
 	}
 
@@ -3410,6 +3418,11 @@ func opTxSubmit(cx *EvalContext) {
 
 	if cx.subtxn == nil {
 		cx.err = errors.New("tx_submit without tx_begin")
+		return
+	}
+
+	if len(cx.InnerTxns) >= cx.Proto.MaxInnerTransactions {
+		cx.err = errors.New("tx_submit with MaxInnerTransactions")
 		return
 	}
 

@@ -56,7 +56,7 @@ type EvalDelta struct {
 	// Intentionally, temporarily wrong - need to decide how to
 	// allocbound properly when structure is recursive.  Even a bound
 	// of 2 would allow arbitrarily large object if deep.
-	InnerTxns []SignedTxnWithAD `codec:"itx,allocbound=4"`
+	InnerTxns []SignedTxnWithAD `codec:"itx,allocbound=config.MaxInnerTransactions"`
 }
 
 // Equal compares two EvalDeltas and returns whether or not they are

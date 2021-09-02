@@ -64,6 +64,8 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 		SchemaUintMinBalance:     1004,
 		SchemaBytesMinBalance:    1005,
 
+		MaxInnerTransactions: 4,
+
 		// With the addition of tx_perform, which relies on
 		// machinery outside logic package for validity
 		// checking, we need a more realistic set of consenus
