@@ -371,7 +371,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 0 | Sender | []byte | 32 byte address |
 | 1 | Fee | uint64 | micro-Algos |
 | 2 | FirstValid | uint64 | round number |
-| 3 | FirstValidTime | uint64 | timestamp of FirstValid-1 block. Panics if used before Teal V5. LogicSigVersion >= 5. |
+| 3 | FirstValidTime | uint64 | Timestamp recorded on the block header at round FirstValid-1. LogicSigVersion >= 5. |
 | 4 | LastValid | uint64 | round number |
 | 5 | Note | []byte | Any data up to 1024 bytes |
 | 6 | Lease | []byte | 32 byte lease value |
