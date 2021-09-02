@@ -35,7 +35,7 @@ with open(args.tests_results_filepath) as f:
                 if '=== RUN' in AllTestResults[fullTestName]['last_output']:
                     AllTestResults[fullTestName]['skipped_reason'] = 'No reason given. PLEASE CHECK!!!'
                 else:
-                    AllTestResults[fullTestName]['skipped_reason'] = AllTestResults[fullTestName]['last_output']
+                    AllTestResults[fullTestName]['skipped_reason'] = AllTestResults[fullTestName]['last_output'].strip()
 
             AllTestResults[fullTestName]['last_output'] = testDict['Output']
 
