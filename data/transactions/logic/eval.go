@@ -1870,7 +1870,12 @@ func (cx *evalContext) getFirstValidTimestamp(r basics.Round) (timestamp uint64,
 		return
 	}
 	// Get the FirstValid-1 block timestamp
-	r.SubSaturate(1)
+	if r == 0 {
+		err = errors.New("cannot get first valid timestamp on rnd 0")
+		return 0, err
+	}
+	r = r.SubSaturate(1)
+
 	ts, err := cx.Ledger.GetBlockTimeStamp(r)
 	if err != nil {
 		return 0, err

@@ -324,7 +324,7 @@ var txnFieldDocs = map[string]string{
 	"Sender":                   "32 byte address",
 	"Fee":                      "micro-Algos",
 	"FirstValid":               "round number",
-	"FirstValidTime":           "timestamp of FirstValid-1 block. Panics if used before Teal V5",
+	"FirstValidTime":           "Timestamp of FirstValid-1 block. ",
 	"LastValid":                "round number",
 	"Note":                     "Any data up to 1024 bytes",
 	"Lease":                    "32 byte lease value",
