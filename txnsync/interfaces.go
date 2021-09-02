@@ -80,9 +80,9 @@ type NodeConnector interface {
 	UpdatePeers(txsyncPeers []*Peer, netPeers []interface{}, peersAverageDataExchangeRate uint64)
 	SendPeerMessage(netPeer interface{}, msg []byte, callback SendMessageCallback)
 	// GetPendingTransactionGroups is called by the transaction sync when it needs to look into the transaction
-	// pool and get the updated set of pending transactions. The second returned argument is the latest group counter
-	// within the given transaction groups list. If there is no group that is locally originated, the expected value is
-	// InvalidSignedTxGroupCounter.
+	// pool and get the updated set of pending transactions. The second returned argument is the latest locally originated
+	// group counter within the given transaction groups list. If there is no group that is locally originated, the expected
+	// value is InvalidSignedTxGroupCounter.
 	GetPendingTransactionGroups() (txGroups []transactions.SignedTxGroup, latestLocallyOriginatedGroupCounter uint64)
 	// IncomingTransactionGroups is called by the transaction sync when transactions have been received and need
 	// to be stored in the transaction pool. The method returns the number of transactions in the transaction

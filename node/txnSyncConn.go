@@ -145,12 +145,10 @@ func (tsnc *transactionSyncNodeConnector) SendPeerMessage(netPeer interface{}, m
 		return
 	}
 
-	if err := unicastPeer.Unicast(context.Background(), msg, protocol.Txn2Tag, func(enqueued bool, sequenceNumber uint64) error {
-		// this might return an error to the network package callback routine. Returning an error signal the network package
-		// that we want to disconnect from this peer. This aligns with the transaction sync txnsync.SendMessageCallback function
-		// behaviour.
-		return callback(enqueued, sequenceNumber)
-	}); err != nil {
+	// this might return an error to the network package callback routine. Returning an error signal the network package
+	// that we want to disconnect from this peer. This aligns with the transaction sync txnsync.SendMessageCallback function
+	// behaviour.
+	if err := unicastPeer.Unicast(context.Background(), msg, protocol.Txn2Tag, network.UnicastWebsocketMessageStateCallback(callback)); err != nil {
 		if callbackErr := callback(false, 0); callbackErr != nil {
 			// disconnect from peer - the transaction sync wasn't able to process message sending confirmation
 			tsnc.node.net.Disconnect(unicastPeer)
@@ -158,7 +156,10 @@ func (tsnc *transactionSyncNodeConnector) SendPeerMessage(netPeer interface{}, m
 	}
 }
 
-// TODO : add description.
+// GetPendingTransactionGroups is called by the transaction sync when it needs to look into the transaction
+// pool and get the updated set of pending transactions. The second returned argument is the latest locally originated
+// group counter within the given transaction groups list. If there is no group that is locally originated, the expected
+// value is InvalidSignedTxGroupCounter.
 func (tsnc *transactionSyncNodeConnector) GetPendingTransactionGroups() ([]transactions.SignedTxGroup, uint64) {
 	return tsnc.node.transactionPool.PendingTxGroups()
 }
@@ -215,13 +216,13 @@ func (tsnc *transactionSyncNodeConnector) Handle(raw network.IncomingMessage) ne
 	}
 
 	err := tsnc.messageHandler(raw.Sender, peer, raw.Data, raw.Sequence)
-	if err == nil {
+	if err != nil {
 		return network.OutgoingMessage{
-			Action: network.Ignore,
+			Action: network.Disconnect,
 		}
 	}
 	return network.OutgoingMessage{
-		Action: network.Disconnect,
+		Action: network.Ignore,
 	}
 }
 
