@@ -30,13 +30,6 @@ func (d GenericDigest) To32Byte() [Sha512_256Size]byte {
 
 }
 
-// ToSumhashDigest converts the generic hash into a byte array of size: SumhashDigestSize
-func (d GenericDigest) ToSumhashDigest() [SumhashDigestSize]byte {
-	var cpy [SumhashDigestSize]byte
-	copy(cpy[:], d)
-	return cpy
-}
-
 // ToSlice is used inside the Tree itself when interacting with TreeDigest
 func (d GenericDigest) ToSlice() []byte { return d }
 
