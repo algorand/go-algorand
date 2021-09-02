@@ -356,34 +356,18 @@ func TestPrepareEvalParams(t *testing.T) {
 	}
 
 	// Create some sample transactions
-	payment := transactions.SignedTxnWithAD{
-		SignedTxn: transactions.SignedTxn{
-			Txn: transactions.Transaction{
-				Type: protocol.PaymentTx,
-				Header: transactions.Header{
-					Sender: basics.Address{1, 2, 3, 4},
-				},
-				PaymentTxnFields: transactions.PaymentTxnFields{
-					Receiver: basics.Address{4, 3, 2, 1},
-					Amount:   basics.MicroAlgos{Raw: 100},
-				},
-			},
-		},
-	}
+	payment := txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   basics.Address{1, 2, 3, 4},
+		Receiver: basics.Address{4, 3, 2, 1},
+		Amount:   100,
+	}.SignedTxnWithAD()
 
-	appcall1 := transactions.SignedTxnWithAD{
-		SignedTxn: transactions.SignedTxn{
-			Txn: transactions.Transaction{
-				Type: protocol.ApplicationCallTx,
-				Header: transactions.Header{
-					Sender: basics.Address{1, 2, 3, 4},
-				},
-				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-					ApplicationID: basics.AppIndex(1),
-				},
-			},
-		},
-	}
+	appcall1 := txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        basics.Address{1, 2, 3, 4},
+		ApplicationID: basics.AppIndex(1),
+	}.SignedTxnWithAD()
 
 	appcall2 := appcall1
 	appcall2.SignedTxn.Txn.ApplicationCallTxnFields.ApplicationID = basics.AppIndex(2)

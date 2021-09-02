@@ -103,6 +103,14 @@ func TestPayAction(t *testing.T) {
 		Accounts:      []basics.Address{addrs[2]}, // pay other
 	}
 	eval.txn(t, &payout2)
+	// confirm that modifiedAccounts can see account in inner txn
+	found := false
+	for _, addr := range eval.state.modifiedAccounts() {
+		if addr == addrs[2] {
+			found = true
+		}
+	}
+	require.True(t, found)
 	l.endBlock(t, eval)
 
 	payInBlock := eval.block.Payset[0]

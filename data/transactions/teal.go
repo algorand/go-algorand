@@ -115,7 +115,7 @@ func (ed EvalDelta) Equal(o EvalDelta) bool {
 }
 
 // equal compares two SignedTransactions for equality.  It's not
-// exported because it ouught to be written as (many, very, very
+// exported because it ought to be written as (many, very, very
 // tedious) field comparisons. == is not defined on almost any of the
 // subfields because of slices.
 func (stx SignedTxn) equal(o SignedTxn) bool {

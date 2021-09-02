@@ -283,11 +283,9 @@ func (al *logicLedger) Perform(tx *transactions.Transaction, spec transactions.S
 
 	// We don't check min balances during in app txns.
 
-	// func (eval *BlockEvaluator) checkMinBalance will take care
-	// of it when the top-level txn concludes, as long as we
-	// ensure that cow there returns all changed accounts in
-	// modifiedAccounts().  It seems it must, but this note will
-	// be here until confirmed.
+	// func (eval *BlockEvaluator) checkMinBalance will take care of
+	// it when the top-level txn concludes, as because cow will return
+	// all changed accounts in modifiedAccounts().
 
 	return ad, nil
 
