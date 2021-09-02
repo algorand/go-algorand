@@ -1929,3 +1929,98 @@ func TestCowBaseCreatorsCache(t *testing.T) {
 		}
 	}
 }
+
+// TestExpiredAccountGeneration test that expired accounts are added to a block header and validated
+func TestExpiredAccountGeneration(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genesisInitState, addrs, keys := genesis(10)
+
+	sendAddr := addrs[0]
+	recvAddr := addrs[1]
+
+	// the last round that the recvAddr is valid for
+	recvAddrLastValidRound := basics.Round(2)
+
+	// the target round we want to advance the evaluator to
+	targetRound := basics.Round(4)
+
+	// Set all to online except the sending address
+	for _, addr := range addrs {
+		if addr == sendAddr {
+			continue
+		}
+		tmp := genesisInitState.Accounts[addr]
+		tmp.Status = basics.Online
+		genesisInitState.Accounts[addr] = tmp
+	}
+
+	// Choose recvAddr to have a last valid round less than genesis block round
+	{
+		tmp := genesisInitState.Accounts[recvAddr]
+		tmp.VoteLastValid = recvAddrLastValidRound
+		genesisInitState.Accounts[recvAddr] = tmp
+	}
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+
+	// Advance the evaluator a couple rounds...
+	for i := uint64(0); i < uint64(targetRound); i++ {
+		l.endBlock(t, eval)
+		eval = l.nextBlock(t)
+	}
+
+	require.Greater(t, uint64(eval.Round()), uint64(recvAddrLastValidRound))
+
+	genHash := genesisInitState.Block.BlockHeader.GenesisHash
+	txn := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      sendAddr,
+			Fee:         minFee,
+			FirstValid:  newBlock.Round(),
+			LastValid:   eval.Round(),
+			GenesisHash: genHash,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: recvAddr,
+			Amount:   basics.MicroAlgos{Raw: 100},
+		},
+	}
+
+	st := txn.Sign(keys[0])
+	err = eval.Transaction(st, transactions.ApplyData{})
+	require.NoError(t, err)
+
+	// Make sure we validate our block as well
+	eval.validate = true
+
+	validatedBlock, err := eval.GenerateBlock()
+	require.NoError(t, err)
+
+	listOfExpiredAccounts := validatedBlock.Block().ParticipationUpdates.ExpiredParticipationAccounts
+
+	require.Equal(t, 1, len(listOfExpiredAccounts))
+	expiredAccount := listOfExpiredAccounts[0]
+	require.Equal(t, expiredAccount, recvAddr)
+
+	recvAcct, err := eval.state.lookup(recvAddr)
+	require.NoError(t, err)
+	require.Equal(t, recvAcct.Status, basics.Offline)
+	require.Equal(t, recvAcct.VoteFirstValid, basics.Round(0))
+	require.Equal(t, recvAcct.VoteLastValid, basics.Round(0))
+	require.Equal(t, recvAcct.VoteKeyDilution, uint64(0))
+	require.Equal(t, recvAcct.VoteID, crypto.OneTimeSignatureVerifier{})
+	require.Equal(t, recvAcct.SelectionID, crypto.VRFVerifier{})
+
+}

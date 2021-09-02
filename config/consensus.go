@@ -391,6 +391,10 @@ type ConsensusParams struct {
 	EnableKeyregCoherencyCheck bool
 
 	EnableExtraPagesOnAppUpdate bool
+
+	// MaxExpiredAccountsToProcess is the maximum number of accounts to process in one block
+	// when seeing if accounts should be taken offline
+	MaxExpiredAccountsToProcess int
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -465,6 +469,10 @@ var MaxExtraAppProgramLen int
 //supported supported by any of the consensus protocols. used for decoding purposes.
 var MaxAvailableAppProgramLen int
 
+// MaxExpiredAccountsToProcess is the maximum number of accounts to process in one block
+// when seeing if accounts should be taken offline
+var MaxExpiredAccountsToProcess int
+
 func checkSetMax(value int, curMax *int) {
 	if value > *curMax {
 		*curMax = value
@@ -501,6 +509,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	// Its value is much larger than any possible reasonable MaxLogCalls value in future
 	checkSetMax(p.MaxAppProgramLen, &MaxLogCalls)
 	checkSetMax(p.MaxInnerTransactions, &MaxInnerTransactions)
+	checkSetMax(p.MaxExpiredAccountsToProcess, &MaxExpiredAccountsToProcess)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
@@ -1044,6 +1053,8 @@ func initConsensusProtocols() {
 
 	// Enable TEAL 6 / AVM 1.1
 	vFuture.LogicSigVersion = 6
+
+	vFuture.MaxExpiredAccountsToProcess = 128
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
