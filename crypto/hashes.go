@@ -25,6 +25,20 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+var compressor sumhash.LookupTable
+
+func init() {
+	C := 4
+	N := 14
+	shk := sha3.NewShake256()
+	seed := []byte("I have nothing up my sleeve...")
+	_, err := shk.Write(seed)
+	if err != nil {
+		panic(err)
+	}
+	compressor = sumhash.RandomMatrix(shk, N, C).LookupTable()
+}
+
 // HashType enum type for signing algorithms
 type HashType uint64
 
@@ -54,15 +68,7 @@ func (h HashFactory) NewHash() (hash.Hash, error) {
 	case Sha512_256:
 		return sha512.New512_256(), nil
 	case Sumhash:
-		C := 4
-		N := 14
-		shk := sha3.NewShake256()
-		seed := []byte("I have nothing up my sleeve...")
-		_, err := shk.Write(seed)
-		if err != nil {
-			return nil, err
-		}
-		return sumhash.New(sumhash.RandomMatrix(shk, N, C)), nil
+		return sumhash.New(compressor), nil
 	default:
 		return nil, errUnknownHash
 	}
