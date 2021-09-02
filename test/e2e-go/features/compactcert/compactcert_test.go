@@ -133,7 +133,7 @@ func TestCompactCerts(t *testing.T) {
 			err = protocol.Decode(nextCertBlockRaw, &nextCertBlockDecoded)
 			r.NoError(err)
 
-			var votersRoot = make([]byte, len(lastCertBlock.CompactCertVoters))
+			var votersRoot = make([]byte, compactcert.HashSize)
 			copy(votersRoot[:], lastCertBlock.CompactCertVoters)
 
 			provenWeight, overflowed := basics.Muldiv(lastCertBlock.CompactCertVotersTotal, uint64(consensusParams.CompactCertWeightThreshold), 1<<32)
