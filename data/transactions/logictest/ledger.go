@@ -74,7 +74,6 @@ type Ledger struct {
 	appID             basics.AppIndex
 	mods              map[basics.AppIndex]map[string]basics.ValueDelta
 	rnd               basics.Round
-	Logs              []transactions.LogItem // public because write-only in TEAL, tests need direct access
 }
 
 // MakeLedger constructs a Ledger with the given balances.
@@ -513,7 +512,6 @@ func (l *Ledger) GetDelta(txn *transactions.Transaction) (evalDelta transactions
 			}
 		}
 	}
-	evalDelta.Logs = l.Logs
 	return
 }
 

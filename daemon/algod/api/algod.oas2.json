@@ -1751,7 +1751,7 @@
         "logs": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/LogItem"
+            "type": "string"
           }
         },
         "cost": {
@@ -1924,24 +1924,6 @@
         }
       }
     },
-    "LogItem": {
-      "description": "Application Log",
-      "type": "object",
-      "required": [
-        "id",
-        "value"
-      ],
-      "properties": {
-        "id": {
-          "description": "unique application identifier",
-          "type": "integer"
-        },
-        "value": {
-          "description": " base64 encoded log message",
-          "type": "string"
-        }
-      }
-    },
     "PendingTransactionResponse": {
       "description": "Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.",
       "type": "object",
@@ -2001,7 +1983,7 @@
           "description": "\\[lg\\] Logs for the application being executed by this transaction.",
           "type": "array",
           "items": {
-            "$ref": "#/definitions/LogItem"
+            "type": "string"
           }
         },
         "inner-txns": {

@@ -601,35 +601,6 @@ func TestCowBuildDelta(t *testing.T) {
 		},
 		ed,
 	)
-
-	cow.sdeltas[sender][storagePtr{aidx, false}] = &storageDelta{
-		action: remainAllocAction,
-		kvCow: stateDelta{
-			"key1": valueDelta{
-				old:       basics.TealValue{Type: basics.TealUintType, Uint: 1},
-				new:       basics.TealValue{Type: basics.TealUintType, Uint: 2},
-				oldExists: true,
-				newExists: true,
-			},
-		},
-		accountIdx: 1,
-	}
-	ed, err = cow.BuildEvalDelta(aidx, &txn)
-	ed.SetLogs([]string{"hello,world"})
-	a.NoError(err)
-	a.Equal(
-		transactions.EvalDelta{
-			GlobalDelta: basics.StateDelta(nil),
-			LocalDeltas: map[uint64]basics.StateDelta{
-				0: {
-					"key1": basics.ValueDelta{Action: basics.SetUintAction, Uint: 2},
-				},
-			},
-			Logs: []transactions.LogItem{{ID: 0, Message: "hello,world"}},
-		},
-		ed,
-	)
-
 }
 
 func TestCowDeltaSerialize(t *testing.T) {

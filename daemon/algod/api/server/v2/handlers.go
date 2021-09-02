@@ -484,7 +484,7 @@ type preEncodedTxInfo struct {
 	ReceiverRewards    *uint64                        `codec:"receiver-rewards,omitempty"`
 	SenderRewards      *uint64                        `codec:"sender-rewards,omitempty"`
 	Txn                transactions.SignedTxn         `codec:"txn"`
-	Logs               *[]generated.LogItem           `codec:"logs,omitempty"`
+	Logs               *[]string                      `codec:"logs,omitempty"`
 	Inners             *[]preEncodedTxInfo            `codec:"inner-txns,omitempty"`
 }
 
@@ -533,10 +533,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		response.AssetIndex = computeAssetIndexFromTxn(txn, v2.Node.Ledger())
 		response.ApplicationIndex = computeAppIndexFromTxn(txn, v2.Node.Ledger())
 		response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)
-		response.Logs, err = convertToLogItems(txn, response.ApplicationIndex)
-		if err != nil {
-			return internalError(ctx, err, err.Error(), v2.Log)
-		}
+		response.Logs = convertLogs(txn)
 		response.Inners = convertInners(&txn)
 	}
 

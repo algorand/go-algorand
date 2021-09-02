@@ -23,22 +23,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// LogItem contains logs for an application. ID is the offset into
-// Txn.ForeignApps
-type LogItem struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	ID      uint64 `codec:"i"`
-	Message string `codec:"m"`
-}
-
-// Equal checks whether two LogItems are equal.
-func (l LogItem) Equal(o LogItem) bool {
-
-	return l.ID == o.ID && l.Message == o.Message
-
-}
-
 // EvalDelta stores StateDeltas for an application's global key/value store, as
 // well as StateDeltas for some number of accounts holding local state for that
 // application
@@ -51,7 +35,7 @@ type EvalDelta struct {
 	// [txn.Sender, txn.Accounts[0], txn.Accounts[1], ...]
 	LocalDeltas map[uint64]basics.StateDelta `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`
 
-	Logs []LogItem `codec:"lg,allocbound=config.MaxLogCalls"`
+	Logs []string `codec:"lg,allocbound=config.MaxLogCalls"`
 
 	// Intentionally, temporarily wrong - need to decide how to
 	// allocbound properly when structure is recursive.  Even a bound
@@ -93,7 +77,7 @@ func (ed EvalDelta) Equal(o EvalDelta) bool {
 		return false
 	}
 	for i, l := range ed.Logs {
-		if !l.Equal(o.Logs[i]) {
+		if l != o.Logs[i] {
 			return false
 		}
 	}
@@ -124,15 +108,4 @@ func (stx SignedTxn) equal(o SignedTxn) bool {
 	oenc := o.MarshalMsg(protocol.GetEncodingBuf())
 	defer protocol.PutEncodingBuf(oenc)
 	return bytes.Equal(stxenc, oenc)
-}
-
-// SetLogs taks a simple slice of log messages and creates LogItems
-// with a zero ID. LogItem should probably go away, since logs will
-// always appear with the app that produced them, a simple string list
-// would be fine.
-func (ed *EvalDelta) SetLogs(msgs []string) {
-	ed.Logs = make([]LogItem, len(msgs))
-	for i, msg := range msgs {
-		ed.Logs[i] = LogItem{ID: 0, Message: msg}
-	}
 }
