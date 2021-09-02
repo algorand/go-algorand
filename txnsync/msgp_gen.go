@@ -9,6 +9,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/msgp/msgp"
@@ -35421,7 +35422,7 @@ func (z *txGroupsEncodingStubOld) MsgIsZero() bool {
 
 // MarshalMsg implements msgp.Marshaler
 func (z *txnGroups) MarshalMsg(b []byte) []byte {
-	return ((*(transactions.SignedTxnSlice))(z)).MarshalMsg(b)
+	return ((*(pooldata.SignedTxnSlice))(z)).MarshalMsg(b)
 }
 func (_ *txnGroups) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(*txnGroups)
@@ -35430,7 +35431,7 @@ func (_ *txnGroups) CanMarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *txnGroups) UnmarshalMsg(bts []byte) ([]byte, error) {
-	return ((*(transactions.SignedTxnSlice))(z)).UnmarshalMsg(bts)
+	return ((*(pooldata.SignedTxnSlice))(z)).UnmarshalMsg(bts)
 }
 func (_ *txnGroups) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*txnGroups)
@@ -35439,10 +35440,10 @@ func (_ *txnGroups) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *txnGroups) Msgsize() int {
-	return ((*(transactions.SignedTxnSlice))(z)).Msgsize()
+	return ((*(pooldata.SignedTxnSlice))(z)).Msgsize()
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *txnGroups) MsgIsZero() bool {
-	return ((*(transactions.SignedTxnSlice))(z)).MsgIsZero()
+	return ((*(pooldata.SignedTxnSlice))(z)).MsgIsZero()
 }

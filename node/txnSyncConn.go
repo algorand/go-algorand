@@ -23,7 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -160,7 +160,7 @@ func (tsnc *transactionSyncNodeConnector) SendPeerMessage(netPeer interface{}, m
 // pool and get the updated set of pending transactions. The second returned argument is the latest locally originated
 // group counter within the given transaction groups list. If there is no group that is locally originated, the expected
 // value is InvalidSignedTxGroupCounter.
-func (tsnc *transactionSyncNodeConnector) GetPendingTransactionGroups() ([]transactions.SignedTxGroup, uint64) {
+func (tsnc *transactionSyncNodeConnector) GetPendingTransactionGroups() ([]pooldata.SignedTxGroup, uint64) {
 	return tsnc.node.transactionPool.PendingTxGroups()
 }
 
@@ -230,7 +230,7 @@ func (tsnc *transactionSyncNodeConnector) stop() {
 	tsnc.txHandler.Stop()
 }
 
-func (tsnc *transactionSyncNodeConnector) IncomingTransactionGroups(peer *txnsync.Peer, messageSeq uint64, txGroups []transactions.SignedTxGroup) (transactionPoolSize int) {
+func (tsnc *transactionSyncNodeConnector) IncomingTransactionGroups(peer *txnsync.Peer, messageSeq uint64, txGroups []pooldata.SignedTxGroup) (transactionPoolSize int) {
 	if tsnc.txHandler.HandleTransactionGroups(peer.GetNetworkPeer(), peer.GetTransactionPoolAckChannel(), messageSeq, txGroups) {
 		transactionPoolSize = tsnc.node.transactionPool.PendingCount()
 	} else {

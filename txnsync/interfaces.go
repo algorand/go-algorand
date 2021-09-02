@@ -18,7 +18,7 @@ package txnsync
 
 import (
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/util/timers"
 )
 
@@ -83,12 +83,12 @@ type NodeConnector interface {
 	// pool and get the updated set of pending transactions. The second returned argument is the latest locally originated
 	// group counter within the given transaction groups list. If there is no group that is locally originated, the expected
 	// value is InvalidSignedTxGroupCounter.
-	GetPendingTransactionGroups() (txGroups []transactions.SignedTxGroup, latestLocallyOriginatedGroupCounter uint64)
+	GetPendingTransactionGroups() (txGroups []pooldata.SignedTxGroup, latestLocallyOriginatedGroupCounter uint64)
 	// IncomingTransactionGroups is called by the transaction sync when transactions have been received and need
 	// to be stored in the transaction pool. The method returns the number of transactions in the transaction
 	// pool before the txGroups is applied. A negative value is returned if the provided txGroups could not be applied
 	// to the transaction pool.
-	IncomingTransactionGroups(peer *Peer, messageSeq uint64, txGroups []transactions.SignedTxGroup) (transactionPoolSize int)
+	IncomingTransactionGroups(peer *Peer, messageSeq uint64, txGroups []pooldata.SignedTxGroup) (transactionPoolSize int)
 	NotifyMonitor() chan struct{}
 }
 

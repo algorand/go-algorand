@@ -21,7 +21,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -40,7 +40,7 @@ func TestBadBitmask(t *testing.T) {
 }
 
 // corrupted bitmask may bcause panic during decoding. This test is to make sure it is an error and not a panic
-func badEncodeTransactionGroups(t *testing.T, s *syncState, inTxnGroups []transactions.SignedTxGroup, dataExchangeRate uint64) (packedTransactionGroups, error) {
+func badEncodeTransactionGroups(t *testing.T, s *syncState, inTxnGroups []pooldata.SignedTxGroup, dataExchangeRate uint64) (packedTransactionGroups, error) {
 	txnCount := 0
 	for _, txGroup := range inTxnGroups {
 		txnCount += len(txGroup.Transactions)

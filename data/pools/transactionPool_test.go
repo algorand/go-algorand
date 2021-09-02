@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger"
@@ -58,7 +59,7 @@ var minBalance = config.Consensus[protocol.ConsensusCurrentVersion].MinBalance
 // RememberOne stores the provided transaction.
 // Precondition: Only RememberOne() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
 func (pool *TransactionPool) RememberOne(t transactions.SignedTxn) error {
-	txgroup := transactions.SignedTxGroup{
+	txgroup := pooldata.SignedTxGroup{
 		Transactions: []transactions.SignedTxn{t},
 	}
 	return pool.Remember(txgroup)
@@ -862,11 +863,11 @@ func TestRemove(t *testing.T) {
 	signedTx := tx.Sign(secrets[0])
 	require.NoError(t, transactionPool.RememberOne(signedTx))
 	pendingTxGroups, _ := transactionPool.PendingTxGroups()
-	require.Equal(t, []transactions.SignedTxGroup{
+	require.Equal(t, []pooldata.SignedTxGroup{
 		{
 			Transactions:       []transactions.SignedTxn{signedTx},
 			GroupCounter:       1,
-			GroupTransactionID: (transactions.SignedTxnSlice{signedTx}).ID(),
+			GroupTransactionID: (pooldata.SignedTxnSlice{signedTx}).ID(),
 			EncodedLength:      len(signedTx.MarshalMsg([]byte{})),
 		},
 	}, pendingTxGroups)
@@ -1255,7 +1256,7 @@ func TestTxPoolSizeLimits(t *testing.T) {
 	}
 
 	for groupSize := config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize; groupSize > 0; groupSize-- {
-		var txgroup transactions.SignedTxGroup
+		var txgroup pooldata.SignedTxGroup
 		// fill the transaction group with groupSize transactions.
 		for i := 0; i < groupSize; i++ {
 			tx := transactions.Transaction{

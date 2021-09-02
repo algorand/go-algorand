@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -104,9 +105,9 @@ func (m mockAsyncNodeConnector) SendPeerMessage(netPeer interface{}, msg []byte,
 	*m.called = true
 }
 
-func (m mockAsyncNodeConnector) GetPendingTransactionGroups() (txGroups []transactions.SignedTxGroup, latestLocallyOriginatedGroupCounter uint64) {
+func (m mockAsyncNodeConnector) GetPendingTransactionGroups() (txGroups []pooldata.SignedTxGroup, latestLocallyOriginatedGroupCounter uint64) {
 	if m.largeTxnGroup {
-		rval := []transactions.SignedTxGroup{}
+		rval := []pooldata.SignedTxGroup{}
 		for i := 0; i < 100000; i++ {
 			// Because we use this with non-relay nodes, the syncState will
 			// use the locallyGeneratedTransactions() function.
@@ -114,12 +115,12 @@ func (m mockAsyncNodeConnector) GetPendingTransactionGroups() (txGroups []transa
 			// set every value here to be locally originated
 			// Additionally, we want the encoded length to be 1000 (or something rather large)
 			// to make sure that we can attain partial messages (see TestSendMessageLoop test)
-			rval = append(rval, transactions.SignedTxGroup{EncodedLength: 1000, LocallyOriginated: true})
+			rval = append(rval, pooldata.SignedTxGroup{EncodedLength: 1000, LocallyOriginated: true})
 		}
 
 		return rval, 1
 	}
-	return []transactions.SignedTxGroup{}, 1
+	return []pooldata.SignedTxGroup{}, 1
 }
 
 // TestAsyncEncodeAndSendErr Tests response when encodeTransactionGroups doesn't return an error
@@ -136,8 +137,8 @@ func TestAsyncEncodeAndSendNonErr(t *testing.T) {
 	s.node = mockAsyncNodeConnector{called: &sendPeerMessageCalled}
 	s.messageSendWaitGroup = sync.WaitGroup{}
 
-	txnGrps := []transactions.SignedTxGroup{
-		transactions.SignedTxGroup{
+	txnGrps := []pooldata.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: []transactions.SignedTxn{
 				transactions.SignedTxn{
 					Txn: transactions.Transaction{
@@ -185,8 +186,8 @@ func TestAsyncEncodeAndSendErr(t *testing.T) {
 	s.node = mockAsyncNodeConnector{called: &sendPeerMessageCalled}
 	s.messageSendWaitGroup = sync.WaitGroup{}
 
-	txnGrps := []transactions.SignedTxGroup{
-		transactions.SignedTxGroup{
+	txnGrps := []pooldata.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			Transactions: []transactions.SignedTxn{
 				transactions.SignedTxn{
 					Txn: transactions.Transaction{
@@ -270,8 +271,8 @@ func TestAssemblePeerMessage_messageConstBloomFilter(t *testing.T) {
 	peer := Peer{}
 
 	pendingTransactions := pendingTransactionGroupsSnapshot{
-		pendingTransactionsGroups: []transactions.SignedTxGroup{
-			transactions.SignedTxGroup{},
+		pendingTransactionsGroups: []pooldata.SignedTxGroup{
+			pooldata.SignedTxGroup{},
 		},
 	}
 
@@ -312,8 +313,8 @@ func TestAssemblePeerMessage_messageConstBloomFilterNonRelay(t *testing.T) {
 	peer := Peer{}
 
 	pendingTransactions := pendingTransactionGroupsSnapshot{
-		pendingTransactionsGroups: []transactions.SignedTxGroup{
-			transactions.SignedTxGroup{},
+		pendingTransactionsGroups: []pooldata.SignedTxGroup{
+			pooldata.SignedTxGroup{},
 		},
 	}
 
@@ -386,8 +387,8 @@ func TestAssemblePeerMessage_messageConstTransactions(t *testing.T) {
 
 	pendingTransactions := pendingTransactionGroupsSnapshot{
 		latestLocallyOriginatedGroupCounter: 1,
-		pendingTransactionsGroups: []transactions.SignedTxGroup{
-			transactions.SignedTxGroup{
+		pendingTransactionsGroups: []pooldata.SignedTxGroup{
+			pooldata.SignedTxGroup{
 				LocallyOriginated: true,
 				EncodedLength:     2,
 			},
@@ -424,37 +425,37 @@ func TestLocallyGeneratedTransactions(t *testing.T) {
 
 	pendingTransactions.latestLocallyOriginatedGroupCounter = 1
 
-	a.Equal(s.locallyGeneratedTransactions(pendingTransactions), []transactions.SignedTxGroup{})
+	a.Equal(s.locallyGeneratedTransactions(pendingTransactions), []pooldata.SignedTxGroup{})
 
-	pendingTransactions.pendingTransactionsGroups = []transactions.SignedTxGroup{
-		transactions.SignedTxGroup{
+	pendingTransactions.pendingTransactionsGroups = []pooldata.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			LocallyOriginated: true,
 			EncodedLength:     2,
 		},
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			LocallyOriginated: false,
 			EncodedLength:     1,
 		},
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			LocallyOriginated: true,
 			EncodedLength:     3,
 		},
 	}
 
-	pendingTransactions.latestLocallyOriginatedGroupCounter = transactions.InvalidSignedTxGroupCounter
+	pendingTransactions.latestLocallyOriginatedGroupCounter = pooldata.InvalidSignedTxGroupCounter
 
-	a.Equal(s.locallyGeneratedTransactions(pendingTransactions), []transactions.SignedTxGroup{})
+	a.Equal(s.locallyGeneratedTransactions(pendingTransactions), []pooldata.SignedTxGroup{})
 
 	pendingTransactions.latestLocallyOriginatedGroupCounter = 1
 
-	expected := []transactions.SignedTxGroup{
+	expected := []pooldata.SignedTxGroup{
 
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			LocallyOriginated: true,
 			EncodedLength:     2,
 		},
 
-		transactions.SignedTxGroup{
+		pooldata.SignedTxGroup{
 			LocallyOriginated: true,
 			EncodedLength:     3,
 		},

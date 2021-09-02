@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
@@ -75,16 +76,16 @@ func (mock mockPendingTxAggregate) PendingTxIDs() []transactions.Txid {
 	}
 	return ids
 }
-func makeSignedTxGroup(source [][]transactions.SignedTxn) (result []transactions.SignedTxGroup) {
-	result = make([]transactions.SignedTxGroup, len(source))
+func makeSignedTxGroup(source [][]transactions.SignedTxn) (result []pooldata.SignedTxGroup) {
+	result = make([]pooldata.SignedTxGroup, len(source))
 	for i := range source {
 		result[i].Transactions = source[i]
 	}
 	return
 }
 
-func (mock mockPendingTxAggregate) PendingTxGroups() ([]transactions.SignedTxGroup, uint64) {
-	return makeSignedTxGroup(bookkeeping.SignedTxnsToGroups(mock.txns)), transactions.InvalidSignedTxGroupCounter
+func (mock mockPendingTxAggregate) PendingTxGroups() ([]pooldata.SignedTxGroup, uint64) {
+	return makeSignedTxGroup(bookkeeping.SignedTxnsToGroups(mock.txns)), pooldata.InvalidSignedTxGroupCounter
 }
 
 type mockHandler struct {
@@ -105,7 +106,7 @@ type mockRunner struct {
 	done          chan *rpc.Call
 	failWithNil   bool
 	failWithError bool
-	txgroups      []transactions.SignedTxGroup
+	txgroups      []pooldata.SignedTxGroup
 }
 
 type mockRPCClient struct {
