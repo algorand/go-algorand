@@ -173,8 +173,8 @@ func (al *logicLedger) LatestTimestamp() int64 {
 	return al.cow.prevTimestamp()
 }
 
-func (al *logicLedger) GetBlockTimeStamp(r basics.Round) (int64, error) {
-	ts, err := al.cow.getBlockTimeStamp(r)
+func (al *logicLedger) GetBlockTimeStamp(rnd basics.Round) (int64, error) {
+	ts, err := al.cow.getBlockTimeStamp(rnd)
 	if err != nil {
 		return 0, err
 	}

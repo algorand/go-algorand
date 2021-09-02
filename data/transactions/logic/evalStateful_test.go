@@ -169,8 +169,9 @@ func (l *testLedger) LatestTimestamp() int64 {
 	return int64(rand.Uint32() + 1)
 }
 
-func (l *testLedger) GetBlockTimeStamp(r basics.Round) (int64, error) {
-	return int64(rand.Uint32() + 1), nil
+func (l *testLedger) GetBlockTimeStamp(rnd basics.Round) (int64, error) {
+	ts := basics.MulSaturate(uint64(rnd), 5)
+	return int64(ts), nil
 }
 
 func (l *testLedger) Balance(addr basics.Address) (amount basics.MicroAlgos, err error) {

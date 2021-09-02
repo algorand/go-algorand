@@ -1864,19 +1864,19 @@ func (cx *evalContext) getTxID(txn *transactions.Transaction, groupIndex int) tr
 	return txid
 }
 
-func (cx *evalContext) getFirstValidTimestamp(r basics.Round) (timestamp uint64, err error) {
+func (cx *evalContext) getFirstValidTimestamp(rnd basics.Round) (timestamp uint64, err error) {
 	if cx.Ledger == nil {
 		err = errors.New("ledger not available")
 		return
 	}
 	// Get the FirstValid-1 block timestamp
-	if r == 0 {
+	if rnd == 0 {
 		err = errors.New("cannot get first valid timestamp on rnd 0")
 		return 0, err
 	}
-	r = r.SubSaturate(1)
+	rnd = rnd.SubSaturate(1)
 
-	ts, err := cx.Ledger.GetBlockTimeStamp(r)
+	ts, err := cx.Ledger.GetBlockTimeStamp(rnd)
 	if err != nil {
 		return 0, err
 	}

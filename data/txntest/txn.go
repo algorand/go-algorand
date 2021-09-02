@@ -46,17 +46,16 @@ import (
 type Txn struct {
 	Type protocol.TxType
 
-	Sender         basics.Address
-	Fee            basics.MicroAlgos
-	FirstValid     basics.Round
-	FirstValidTime int64
-	LastValid      basics.Round
-	Note           []byte
-	GenesisID      string
-	GenesisHash    crypto.Digest
-	Group          crypto.Digest
-	Lease          [32]byte
-	RekeyTo        basics.Address
+	Sender      basics.Address
+	Fee         basics.MicroAlgos
+	FirstValid  basics.Round
+	LastValid   basics.Round
+	Note        []byte
+	GenesisID   string
+	GenesisHash crypto.Digest
+	Group       crypto.Digest
+	Lease       [32]byte
+	RekeyTo     basics.Address
 
 	VotePK           crypto.OneTimeSignatureVerifier
 	SelectionPK      crypto.VRFVerifier
