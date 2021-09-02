@@ -78,7 +78,7 @@ func TestAppPay(t *testing.T) {
 	ledger.NewAccount(ledger.ApplicationID().Address(), 1000000)
 
 	// You might expect this to fail because of min balance issue
-	// (receiving account only gets 100 algos).  It does not fail at
+	// (receiving account only gets 100 microalgos).  It does not fail at
 	// this level, instead, we must be certain that the existing min
 	// balance check in eval.transaction() properly notices and fails
 	// the transaction later.  This fits with the model that we check
@@ -236,6 +236,27 @@ func TestAppAxfer(t *testing.T) {
 		fmt.Sprintf("Receiver (%s) not opted in", ep.Txn.Txn.Sender)) // txn.Sender (receiver of the axfer) isn't opted in
 	testApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100000"+axfer, ep,
 		"insufficient balance")
+
+	// Temporarily remove from ForeignAssets to ensure App Account
+	// doesn't get some sort of free pass to send arbitrary assets.
+	save := ep.Txn.Txn.ForeignAssets
+	ep.Txn.Txn.ForeignAssets = []basics.AssetIndex{6, 10}
+	testApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100000"+axfer, ep,
+		"invalid Asset reference 77")
+	ep.Txn.Txn.ForeignAssets = save
+
+	noid := `
+  tx_begin
+  tx_field AssetAmount
+  tx_field AssetReceiver
+  tx_field Sender
+  int axfer
+  tx_field TypeEnum
+  tx_submit
+`
+	testApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+noid+"int 1", ep,
+		fmt.Sprintf("Sender (%s) not opted in to 0", ledger.ApplicationID().Address()))
+
 	testApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+axfer+"int 1", ep)
 
 	// 100 of 3000 spent

@@ -66,10 +66,9 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 
 		MaxInnerTransactions: 4,
 
-		// With the addition of tx_perform, which relies on
-		// machinery outside logic package for validity
-		// checking, we need a more realistic set of consenus
-		// paramaters.
+		// With the addition of tx_perform, which relies on machinery
+		// outside logic package for validity checking, we need a more
+		// realistic set of consensus paramaters.
 		Asset: true,
 	}
 }
@@ -704,7 +703,7 @@ int 1
 
 func TestMulDiv(t *testing.T) {
 	// Demonstrate a "function" that expects three u64s on stack,
-	// and calculates B*C/A. (Following opcode documentaion
+	// and calculates B*C/A. (Following opcode documentation
 	// convention, C is top-of-stack, B is below it, and A is
 	// below B.
 

@@ -424,3 +424,104 @@ func TestClawbackAction(t *testing.T) {
 	amount, _ := l.asa(t, addrs[1], asaIndex)
 	require.Equal(t, amount, uint64(1000))
 }
+
+// TestRekeyAction ensures an app can transact for a rekeyed account
+func TestRekeyAction(t *testing.T) {
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	appIndex := basics.AppIndex(1)
+	ezpayer := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[5],
+		ApprovalProgram: main(`
+         tx_begin
+         int pay
+         tx_field TypeEnum
+         int 5000
+         tx_field Amount
+         txn Accounts 1
+         tx_field Sender
+         txn Accounts 2
+         tx_field Receiver
+         txn NumAccounts
+         int 3
+         ==
+         bz skipclose
+         txn Accounts 3
+         tx_field CloseRemainderTo
+skipclose:
+         tx_submit
+`),
+	}
+
+	rekey := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: addrs[0],
+		RekeyTo:  appIndex.Address(),
+	}
+
+	eval := l.nextBlock(t)
+	eval.txns(t, &ezpayer, &rekey)
+	l.endBlock(t, eval)
+
+	useacct := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[1],
+		ApplicationID: appIndex,
+		Accounts:      []basics.Address{addrs[0], addrs[2]}, // pay 2 from 0 (which was rekeyed)
+	}
+	eval = l.nextBlock(t)
+	eval.txn(t, &useacct)
+	l.endBlock(t, eval)
+
+	// App was never funded (didn't spend from it's own acct)
+	require.Equal(t, uint64(0), l.micros(t, basics.AppIndex(1).Address()))
+	// addrs[2] got paid
+	require.Equal(t, uint64(5000), l.micros(t, addrs[2])-l.micros(t, addrs[6]))
+	// addrs[0] paid 5k + rekey fee + inner txn fee
+	require.Equal(t, uint64(7000), l.micros(t, addrs[6])-l.micros(t, addrs[0]))
+
+	baduse := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[1],
+		ApplicationID: appIndex,
+		Accounts:      []basics.Address{addrs[2], addrs[0]}, // pay 0 from 2
+	}
+	eval = l.nextBlock(t)
+	eval.txn(t, &baduse, "unauthorized")
+	l.endBlock(t, eval)
+
+	// Now, we close addrs[0], which wipes its rekey status.  Reopen
+	// it, and make sure the app can't spend.
+
+	close := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[1],
+		ApplicationID: appIndex,
+		Accounts:      []basics.Address{addrs[0], addrs[2], addrs[3]}, // close to 3
+	}
+	eval = l.nextBlock(t)
+	eval.txn(t, &close)
+	l.endBlock(t, eval)
+
+	require.Equal(t, uint64(0), l.micros(t, addrs[0]))
+
+	payback := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[3],
+		Receiver: addrs[0],
+		Amount:   10_000_000,
+	}
+	eval = l.nextBlock(t)
+	eval.txn(t, &payback)
+	l.endBlock(t, eval)
+
+	require.Equal(t, uint64(10_000_000), l.micros(t, addrs[0]))
+
+	eval = l.nextBlock(t)
+	eval.txn(t, useacct.Noted("2"), "unauthorized")
+	l.endBlock(t, eval)
+}

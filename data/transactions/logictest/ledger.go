@@ -305,7 +305,7 @@ func (l *Ledger) SetGlobal(key string, value basics.TealValue) error {
 }
 
 // DelGlobal "deletes" a global, but only through the mods mechanism, so
-// the deltion can be Reset()
+// the deletion can be Reset()
 func (l *Ledger) DelGlobal(key string) error {
 	appIdx := l.appID
 	params, ok := l.applications[appIdx]
