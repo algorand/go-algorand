@@ -20,13 +20,8 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 )
 
-// hashType/ hashSize relate to the type of hash this package uses.
+// HashType/ hashSize relate to the type of hash this package uses.
 const (
-	hashType = crypto.Sumhash
+	HashType = crypto.Sumhash
 	HashSize = crypto.SumhashDigestSize
 )
-
-// NewHashFactory outputs a ready hash factory that is being used throughout this package
-func NewHashFactory() crypto.HashFactory {
-	return crypto.HashFactory{HashType: hashType}
-}
