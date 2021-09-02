@@ -1417,6 +1417,13 @@ assert
 int 1
 `
 
+const testTxnProgramTextV5 = testTxnProgramTextV4 + `
+txn Nonparticipation
+pop
+int 1
+==
+`
+
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
@@ -1435,6 +1442,7 @@ func makeSampleTxn() transactions.SignedTxn {
 	txn.Txn.VoteFirst = 1317
 	txn.Txn.VoteLast = 17776
 	txn.Txn.VoteKeyDilution = 1
+	txn.Txn.Nonparticipation = false
 	txn.Txn.Type = protocol.PaymentTx
 	txn.Txn.AssetAmount = 1234
 	txn.Txn.AssetSender = txn.Txn.Receiver
@@ -1502,7 +1510,7 @@ func TestTxn(t *testing.T) {
 
 	t.Parallel()
 	for _, txnField := range TxnFieldNames {
-		if !strings.Contains(testTxnProgramTextV4, txnField) {
+		if !strings.Contains(testTxnProgramTextV5, txnField) {
 			if txnField != FirstValidTime.String() {
 				t.Errorf("TestTxn missing field %v", txnField)
 			}
@@ -1514,6 +1522,7 @@ func TestTxn(t *testing.T) {
 		2: testTxnProgramTextV2,
 		3: testTxnProgramTextV3,
 		4: testTxnProgramTextV4,
+		5: testTxnProgramTextV5,
 	}
 
 	clearOps := testProg(t, "int 1", 1)
