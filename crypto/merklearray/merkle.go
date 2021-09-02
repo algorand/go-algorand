@@ -214,26 +214,47 @@ func (tree *Tree) buildNextLayer() {
 	tree.Levels = append(tree.Levels, newLayer)
 }
 
+func hashLeafs(elems map[uint64]crypto.Hashable, proof *Proof) (map[uint64]crypto.GenericDigest, error) {
+	hash, err := proof.HashFactory.NewHash()
+	if err != nil {
+		return nil, err
+	}
+
+	hashedLeafs := make(map[uint64]crypto.GenericDigest)
+	for i, element := range elems {
+		hashedLeafs[i] = crypto.GenereicHashObj(hash, element)
+	}
+
+	return hashedLeafs, nil
+}
+
 // Verify ensures that the positions in elems correspond to the respective hashes
 // in a tree with the given root hash.  The proof is expected to be the proof
 // returned by Prove().
-func Verify(root crypto.GenericDigest, elems map[uint64]crypto.GenericDigest, proof *Proof) error {
+func Verify(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *Proof) error {
+
+	if proof == nil {
+		return fmt.Errorf("proof should not be nil")
+	}
+
 	if len(elems) == 0 {
-		if proof != nil && len(proof.Path) != 0 {
+		if proof.Path != nil && len(proof.Path) != 0 {
 			return fmt.Errorf("non-empty proof for empty set of elements")
 		}
 		return nil
 	}
 
-	pl := buildPartialLayer(elems)
+	var hashedLeafs map[uint64]crypto.GenericDigest
+	var err error
+	if hashedLeafs, err = hashLeafs(elems, proof); err != nil {
+		return err
+	}
+
+	pl := buildPartialLayer(hashedLeafs)
 	return verifyPath(root, proof, pl)
 }
 
 func verifyPath(root crypto.GenericDigest, proof *Proof, pl partialLayer) error {
-	if proof == nil {
-		return inspectRoot(root, pl)
-	}
-
 	hints := proof.Path
 	hsh, err := proof.HashFactory.NewHash()
 	if err != nil {

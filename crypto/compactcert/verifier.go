@@ -48,21 +48,11 @@ func (v *Verifier) Verify(c *Cert) error {
 		return fmt.Errorf("cert signed weight %d <= proven weight %d", c.SignedWeight, v.ProvenWeight)
 	}
 
-	// Verify all of the reveals
-	sHash, err := c.SigProofs.HashFactory.NewHash()
-	if err != nil {
-		return err
-	}
-
-	pHash, err := c.PartProofs.HashFactory.NewHash()
-	if err != nil {
-		return err
-	}
-	sigs := make(map[uint64]crypto.GenericDigest)
-	parts := make(map[uint64]crypto.GenericDigest)
+	sigs := make(map[uint64]crypto.Hashable)
+	parts := make(map[uint64]crypto.Hashable)
 	for pos, r := range c.Reveals {
-		sigs[pos] = crypto.GenereicHashObj(sHash, r.SigSlot)
-		parts[pos] = crypto.GenereicHashObj(pHash, r.Part)
+		sigs[pos] = r.SigSlot
+		parts[pos] = r.Part
 
 		ephID := basics.OneTimeIDForRound(v.SigRound, r.Part.KeyDilution)
 		if !r.Part.PK.Verify(ephID, v.Msg, r.SigSlot.Sig.OneTimeSignature) {

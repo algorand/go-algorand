@@ -145,7 +145,7 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 		Interval:            interval,
 		mu:                  deadlock.RWMutex{},
 	}
-	tree, err := merklearray.Build(s, crypto.HashFactory{HashType: crypto.Sumhash})
+	tree, err := merklearray.Build(s, crypto.HashFactory{HashType: crypto.Sha512_256})
 	if err != nil {
 		return nil, err
 	}
@@ -274,10 +274,6 @@ func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashabl
 	if round < firstValid {
 		return errReceivedRoundIsBeforeFirst
 	}
-	hsh, err := sig.Proof.HashFactory.NewHash()
-	if err != nil {
-		return err
-	}
 
 	ephkey := CommittablePublicKey{
 		VerifyingKey: sig.VerifyingKey,
@@ -287,7 +283,7 @@ func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashabl
 	pos := roundToIndex(firstValid, round, interval)
 	isInTree := merklearray.Verify(
 		(crypto.GenericDigest)(v.Root[:]),
-		map[uint64]crypto.GenericDigest{pos: crypto.GenereicHashObj(hsh, &ephkey)},
+		map[uint64]crypto.Hashable{pos: &ephkey},
 		(*merklearray.Proof)(&sig.Proof),
 	)
 	if isInTree != nil {
