@@ -49,7 +49,7 @@ var defaultPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0
 var defaultIncentivePoolBalanceAtInception uint64 = 125e6 * 1e6
 
 // TotalMoney represents the total amount of MicroAlgos in the system
-const TotalMoney uint64 = 10 * 1e9 * 1e6
+const TotalMoney uint64 = 1000 * 1e9 * 1e6
 
 type genesisAllocation struct {
 	Name   string
