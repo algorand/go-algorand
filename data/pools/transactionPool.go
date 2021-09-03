@@ -85,6 +85,7 @@ type TransactionPool struct {
 	pendingTxGroups []transactions.SignedTxGroup
 	// pendingTxids is a map of the pending *transaction ids* included in the pendingTxGroups array.
 	pendingTxids map[transactions.Txid]transactions.SignedTxn
+	pendingTxGroupids map[transactions.Txid]transactions.SignedTxGroup
 	// pendingCounter is a monotomic counter, indicating the next pending transaction group counter value.
 	pendingCounter uint64
 	// pendingLatestLocal is the value of the last transaction group counter which is associated with a transaction that was
@@ -98,6 +99,7 @@ type TransactionPool struct {
 	// to PendingTxGroups().
 	rememberedTxGroups []transactions.SignedTxGroup
 	rememberedTxids    map[transactions.Txid]transactions.SignedTxn
+	rememberedTxGroupids    map[transactions.Txid]transactions.SignedTxGroup
 	// rememberedLatestLocal is the value of the last transaction group counter which is associated with a transaction that was
 	// locally originated ( i.e. posted to this node via the REST API ). This variable is used when OnNewBlock is called and
 	// we filter out the pending transaction through the evaluator.
@@ -114,6 +116,8 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	pool := TransactionPool{
 		pendingTxids:         make(map[transactions.Txid]transactions.SignedTxn),
 		rememberedTxids:      make(map[transactions.Txid]transactions.SignedTxn),
+		pendingTxGroupids:         make(map[transactions.Txid]transactions.SignedTxGroup),
+		rememberedTxGroupids:      make(map[transactions.Txid]transactions.SignedTxGroup),
 		expiredTxCount:       make(map[basics.Round]int),
 		ledger:               ledger,
 		statusCache:          makeStatusCache(cfg.TxPoolSize),
@@ -179,9 +183,11 @@ var ErrStaleBlockAssemblyRequest = fmt.Errorf("AssembleBlock: requested block as
 // Reset resets the content of the transaction pool
 func (pool *TransactionPool) Reset() {
 	pool.pendingTxids = make(map[transactions.Txid]transactions.SignedTxn)
+	pool.pendingTxGroupids = make(map[transactions.Txid]transactions.SignedTxGroup)
 	pool.pendingTxGroups = nil
 	pool.pendingLatestLocal = transactions.InvalidSignedTxGroupCounter
 	pool.rememberedTxids = make(map[transactions.Txid]transactions.SignedTxn)
+	pool.rememberedTxGroupids = make(map[transactions.Txid]transactions.SignedTxGroup)
 	pool.rememberedTxGroups = nil
 	pool.expiredTxCount = make(map[basics.Round]int)
 	pool.numPendingWholeBlocks = 0
@@ -245,6 +251,7 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 	if flush {
 		pool.pendingTxGroups = pool.rememberedTxGroups
 		pool.pendingTxids = pool.rememberedTxids
+		pool.pendingTxGroupids = pool.rememberedTxGroupids
 		pool.pendingLatestLocal = pool.rememberedLatestLocal
 		pool.ledger.VerifiedTransactionCache().UpdatePinned(pool.pendingTxids)
 	} else {
@@ -270,6 +277,9 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 		for txid, txn := range pool.rememberedTxids {
 			pool.pendingTxids[txid] = txn
 		}
+		for txid, txgroup := range pool.rememberedTxGroupids {
+			pool.pendingTxGroupids[txid] = txgroup
+		}
 	}
 
 	pool.resetRememberedTransactionGroups()
@@ -280,6 +290,7 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 func (pool *TransactionPool) resetRememberedTransactionGroups() {
 	pool.rememberedTxGroups = nil
 	pool.rememberedTxids = make(map[transactions.Txid]transactions.SignedTxn)
+	pool.rememberedTxGroupids = make(map[transactions.Txid]transactions.SignedTxGroup)
 	pool.rememberedLatestLocal = transactions.InvalidSignedTxGroupCounter
 }
 
@@ -466,6 +477,7 @@ func (pool *TransactionPool) ingest(txgroup transactions.SignedTxGroup, params p
 	for _, t := range txgroup.Transactions {
 		pool.rememberedTxids[t.ID()] = t
 	}
+	pool.rememberedTxGroupids[txgroup.GroupTransactionID] = txgroup
 
 	return nil
 }
@@ -539,6 +551,37 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 	}
 
 	return pool.statusCache.check(txid)
+}
+
+func (pool *TransactionPool) FindTxGroups(txids []transactions.Txid, txGroups []transactions.SignedTxGroup) (numFound int) {
+	pool.pendingMu.RLock()
+
+	if pool.pendingTxGroupids != nil {
+		for i, txid := range txids {
+			var found bool
+			if txGroups[i].Transactions == nil {
+				if txGroups[i], found = pool.pendingTxGroupids[txid]; found {
+					numFound++
+				}
+			}
+		}
+	}
+
+	pool.pendingMu.RUnlock()
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	if pool.rememberedTxGroupids != nil {
+		for i, txid := range txids {
+			var found bool
+			if txGroups[i].Transactions == nil {
+				if txGroups[i], found = pool.rememberedTxGroupids[txid]; found {
+					numFound++
+				}
+			}
+		}
+	}
+	return
 }
 
 // OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired

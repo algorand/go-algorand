@@ -21,6 +21,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -43,6 +44,7 @@ type transactionSyncNodeConnector struct {
 	messageHandler txnsync.IncomingMessageHandler
 	txHandler      data.SolicitedAsyncTxHandler
 	openStateCh    chan struct{}
+	proposalCh     chan agreement.TxnSyncProposal
 }
 
 type proposalData struct {
@@ -295,7 +297,7 @@ func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataByte
 			pc.txGroupIdIndex[txid] = i
 		}
 		// attempt to fill receivedTxns with txpool
-		pc.numTxGroupsReceived = tsnc.node.FillTxnsFromTxPool(pc.TxGroupIds, pc.txGroups)
+		pc.numTxGroupsReceived = tsnc.node.transactionPool.FindTxGroups(pc.TxGroupIds, pc.txGroups)
 	} else { // fetch proposalCache from peerData
 		pc, _ = tsnc.node.net.GetPeerData(peer.GetNetworkPeer(), "proposalCache").(*proposalCache)
 	}
@@ -309,6 +311,14 @@ func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataByte
 
 	if pc.numTxGroupsReceived == len(pc.txGroups) {
 		// TODO send proposal to agreement
+		var flattenedTxns []transactions.SignedTxn
+		for _, txgroup := range pc.txGroups {
+			flattenedTxns = append(flattenedTxns, txgroup.Transactions...)
+		}
+		tsnc.proposalCh <- agreement.TxnSyncProposal{
+			ProposalBytes: pc.ProposalBytes,
+			Txns: flattenedTxns,
+		}
 		tsnc.eventsCh <- txnsync.MakeBroadcastProposalFilterEvent(protocol.Encode(&pc.proposalData))
 
 		pc.ProposalBytes = nil

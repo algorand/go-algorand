@@ -228,6 +228,9 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.ledgerService = rpcs.MakeLedgerService(cfg, node.ledger, p2pNode, node.genesisID)
 	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
 
+	node.txnSyncConnector = makeTransactionSyncNodeConnector(node)
+	node.txnSyncService = txnsync.MakeTransactionSyncService(node.log, &node.txnSyncConnector, cfg.NetAddress != "", node.genesisID, node.genesisHash, node.config, node.lowPriorityCryptoVerificationPool)
+
 	crashPathname := filepath.Join(genesisDir, config.CrashFilename)
 	crashAccess, err := db.MakeAccessor(crashPathname, false, false)
 	if err != nil {
@@ -254,6 +257,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		BlockValidator: blockValidator,
 		KeyManager:     node,
 		RandomSource:   node,
+		TxnSync:        node,
 		BacklogPool:    node.highPriorityCryptoVerificationPool,
 	}
 	node.agreementService = agreement.MakeService(agreementParameters)
@@ -261,8 +265,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
-	node.txnSyncConnector = makeTransactionSyncNodeConnector(node)
-	node.txnSyncService = txnsync.MakeTransactionSyncService(node.log, &node.txnSyncConnector, cfg.NetAddress != "", node.genesisID, node.genesisHash, node.config, node.lowPriorityCryptoVerificationPool)
 
 	err = node.loadParticipationKeys()
 	if err != nil {
@@ -1185,6 +1187,10 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 	return participations
 }
 
-func (node *AlgorandFullNode) FillTxnsFromTxPool(txids []transactions.Txid, txGroups []transactions.SignedTxGroup) (numFound int) {
-	return node.transactionPool.FindTxGroups(txids, txGroups)
+func (node *AlgorandFullNode) ProposalsChannel() <-chan agreement.TxnSyncProposal {
+	return node.txnSyncConnector.proposalCh
+}
+
+func (node *AlgorandFullNode) RelayProposal(proposalBytes []byte, txnSlices []transactions.SignedTxnSlice) {
+	node.txnSyncConnector.RelayProposal(proposalBytes, txnSlices)
 }

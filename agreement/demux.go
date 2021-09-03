@@ -19,6 +19,7 @@ package agreement
 import (
 	"context"
 	"fmt"
+	"github.com/algorand/go-algorand/data/transactions"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -58,6 +59,8 @@ type demux struct {
 	rawProposals <-chan message
 	rawBundles   <-chan message
 
+	txnsyncProposals <-chan TxnSyncProposal
+
 	queue             []<-chan externalEvent
 	processingMonitor EventsProcessingMonitor
 	monitor           *coserviceMonitor
@@ -75,6 +78,7 @@ type demuxParams struct {
 	processingMonitor EventsProcessingMonitor
 	log               logging.Logger
 	monitor           *coserviceMonitor
+	txnSync           TxnSync
 }
 
 // makeDemux initializes the goroutines needed to process external events, setting up the appropriate channels.
@@ -94,6 +98,8 @@ func makeDemux(params demuxParams) (d *demux) {
 	d.rawProposals = d.tokenizeMessages(tokenizerCtx, params.net, protocol.ProposalPayloadTag, decodeProposal)
 	d.rawBundles = d.tokenizeMessages(tokenizerCtx, params.net, protocol.VoteBundleTag, decodeBundle)
 	d.cancelTokenizers = cancelTokenizers
+
+	d.txnsyncProposals = params.txnSync.ProposalsChannel()
 
 	return d
 }
@@ -332,6 +338,34 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		d.UpdateEventsQueue(eventQueueTokenized[protocol.VoteBundleTag], 0)
 		d.monitor.inc(demuxCoserviceType)
 		d.monitor.dec(tokenizerCoserviceType)
+
+	case pd, open := <-d.txnsyncProposals:
+		if !open {
+			return emptyEvent{}, false
+		}
+		p, err := decodeProposal(pd.ProposalBytes)
+		if err != nil {
+			logging.Base().Warnf("disconnecting from peer: error decoding message tagged %v: %v", protocol.ProposalPayloadTag, err)
+			//net.Disconnect(raw.MessageHandle)
+			//d.UpdateEventsQueue(eventQueueTokenizing[tag], 0)
+		}
+		m := message{
+			Tag: protocol.ProposalPayloadTag,
+			CompoundMessage: p.(compoundMessage),
+		}
+		m.CompoundMessage.Proposal.Payset = make(transactions.Payset, len(pd.Txns))
+		for i, txn := range(pd.Txns) {
+			m.CompoundMessage.Proposal.Payset[i], err = m.CompoundMessage.Proposal.Block.EncodeSignedTxn(txn, transactions.ApplyData{})
+			if err != nil {
+				// TODO figure out expected behavior
+			}
+		}
+		e = setupCompoundMessage(d.ledger, m)
+		d.UpdateEventsQueue(eventQueueDemux, 1)
+		d.UpdateEventsQueue(eventQueueTokenized[protocol.ProposalPayloadTag], 0)
+		d.monitor.inc(demuxCoserviceType)
+		d.monitor.dec(tokenizerCoserviceType)
+
 
 	// authenticated
 	case r := <-d.crypto.VerifiedVotes():

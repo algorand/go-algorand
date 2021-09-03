@@ -19,6 +19,7 @@ package agreement
 import (
 	"context"
 	"errors"
+	"github.com/algorand/go-algorand/data/transactions"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -303,6 +304,16 @@ type Message struct {
 // client to monitor the activity of the various events queues.
 type EventsProcessingMonitor interface {
 	UpdateEventsQueue(queueName string, queueLength int)
+}
+
+type TxnSync interface {
+	ProposalsChannel() <-chan TxnSyncProposal
+	RelayProposal(proposalBytes []byte, txnSlices []transactions.SignedTxnSlice)
+}
+
+type TxnSyncProposal struct {
+	ProposalBytes []byte
+	Txns []transactions.SignedTxn
 }
 
 // LedgerDroppedRoundError is a wrapper error for when the ledger cannot return a Lookup query because

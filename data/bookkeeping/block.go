@@ -613,6 +613,32 @@ func (block Block) DecodePaysetGroups() ([][]transactions.SignedTxnWithAD, error
 	return res, nil
 }
 
+// DecodePaysetGroupsNoAD decodes block.Payset using DecodeSignedTxn, and returns
+// the transactions in groups without ApplyData.
+func (block Block) DecodePaysetGroupsNoAD() ([]transactions.SignedTxnSlice, error) {
+	var res []transactions.SignedTxnSlice
+	var lastGroup transactions.SignedTxnSlice
+	for _, txib := range block.Payset {
+		var err error
+		var stxn transactions.SignedTxn
+		stxn, _, err = block.DecodeSignedTxn(txib)
+		if err != nil {
+			return nil, err
+		}
+
+		if lastGroup != nil && (lastGroup[0].Txn.Group != stxn.Txn.Group || lastGroup[0].Txn.Group.IsZero()) {
+			res = append(res, lastGroup)
+			lastGroup = nil
+		}
+
+		lastGroup = append(lastGroup, stxn)
+	}
+	if lastGroup != nil {
+		res = append(res, lastGroup)
+	}
+	return res, nil
+}
+
 // DecodePaysetFlat decodes block.Payset using DecodeSignedTxn, and
 // flattens groups.
 func (block Block) DecodePaysetFlat() ([]transactions.SignedTxnWithAD, error) {

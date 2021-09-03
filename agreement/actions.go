@@ -150,11 +150,17 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 		data = protocol.Encode(&a.UnauthenticatedBundle)
 	case protocol.ProposalPayloadTag:
 		msg := a.CompoundMessage
+		txns, err := msg.Proposal.Block.DecodePaysetGroupsNoAD()
+		if err != nil {
+			// TODO error handling
+		}
+		msg.Proposal.Payset = nil
 		payload := transmittedPayload{
 			unauthenticatedProposal: msg.Proposal,
 			PriorVote:               msg.Vote,
 		}
 		data = protocol.Encode(&payload)
+		s.TxnSync.RelayProposal(data, txns)
 	}
 
 	switch a.T {
