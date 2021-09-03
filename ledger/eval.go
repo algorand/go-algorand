@@ -1294,6 +1294,25 @@ type loadedTransactionGroup struct {
 	err error
 }
 
+// Return the maximum number of addresses referenced in any given transaction.
+func maxAddressesInTxn(proto *config.ConsensusParams) int {
+	return 7 + proto.MaxAppTxnAccounts
+}
+
+// Return a list of addresses referenced in `txn`. Addresses might repeat.
+func getTxnAddresses(txn *transactions.Transaction, proto *config.ConsensusParams) []basics.Address {
+	res := make([]basics.Address, 0, maxAddressesInTxn(proto))
+
+	res = append(
+		res, txn.Sender, txn.Receiver, txn.CloseRemainderTo, txn.AssetSender,
+		txn.AssetReceiver, txn.AssetCloseTo, txn.FreezeAccount)
+	for _, addr := range txn.ApplicationCallTxnFields.Accounts {
+		res = append(res, addr)
+	}
+
+	return res
+}
+
 // loadAccounts loads the account data for the provided transaction group list. It also loads the feeSink account and add it to the first returned transaction group.
 // The order of the transaction groups returned by the channel is identical to the one in the input array.
 func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) chan loadedTransactionGroup {
@@ -1320,8 +1339,7 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 		defer close(outChan)
 
 		accountTasks := make(map[basics.Address]*addrTask)
-		maxAddressesPerTransaction := 7 + consensusParams.MaxAppTxnAccounts
-		addressesCh := make(chan *addrTask, len(groups)*consensusParams.MaxTxGroupSize*maxAddressesPerTransaction)
+		addressesCh := make(chan *addrTask, len(groups)*consensusParams.MaxTxGroupSize*maxAddressesInTxn(&consensusParams))
 		// totalBalances counts the total number of balances over all the transaction groups
 		totalBalances := 0
 
@@ -1362,15 +1380,9 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 			task := &groupTask{}
 			groupsReady[i] = task
 			for _, stxn := range group {
-				initAccount(stxn.Txn.Sender, task)
-				initAccount(stxn.Txn.Receiver, task)
-				initAccount(stxn.Txn.CloseRemainderTo, task)
-				initAccount(stxn.Txn.AssetSender, task)
-				initAccount(stxn.Txn.AssetReceiver, task)
-				initAccount(stxn.Txn.AssetCloseTo, task)
-				initAccount(stxn.Txn.FreezeAccount, task)
-				for _, xa := range stxn.Txn.Accounts {
-					initAccount(xa, task)
+				addresses := getTxnAddresses(&stxn.Txn, &consensusParams)
+				for _, address := range addresses {
+					initAccount(address, task)
 				}
 			}
 		}
@@ -1501,6 +1513,23 @@ func (vb ValidatedBlock) WithSeed(s committee.Seed) ValidatedBlock {
 		blk:   newblock,
 		delta: vb.delta,
 	}
+}
+
+// GetBlockAddresses returns all addresses referenced in `block`.
+func GetBlockAddresses(block *bookkeeping.Block, proto config.ConsensusParams) map[basics.Address]struct{} {
+	// Reserve a reasonable memory size for the map.
+	res := make(map[basics.Address]struct{}, len(block.Payset)+2)
+	res[block.FeeSink] = struct{}{}
+	res[block.RewardsPool] = struct{}{}
+
+	for _, stib := range block.Payset {
+		txnAddresses := getTxnAddresses(&stib.Txn, &proto)
+		for _, address := range txnAddresses {
+			res[address] = struct{}{}
+		}
+	}
+
+	return res
 }
 
 // Eval evaluates a block without validation using the given `proto`. Return the state
