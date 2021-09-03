@@ -134,10 +134,18 @@ func (pk VrfPubkey) verifyBytes(proof VrfProof, msg []byte) (bool, VrfOutput) {
 	return ret == 0, out
 }
 
+// validateGoVerify is a temporary helper that allows testing both C and Go VRF implementations (this will be removed before this branch is merged).
+var validateGoVerify func(pk VrfPubkey, p VrfProof, message Hashable, ok bool, out VrfOutput)
+
 // Verify checks a VRF proof of a given Hashable. If the proof is valid the pseudorandom VrfOutput will be returned.
 // For a given public key and message, there are potentially multiple valid proofs.
 // However, given a public key and message, all valid proofs will yield the same output.
 // Moreover, the output is indistinguishable from random to anyone without the proof or the secret key.
 func (pk VrfPubkey) Verify(p VrfProof, message Hashable) (bool, VrfOutput) {
-	return pk.verifyBytes(p, HashRep(message))
+	ok, out := pk.verifyBytes(p, hashRep(message))
+	// Temporary addition to enable build tag based setting of an implementation to compare C and Go implementations.
+	if validateGoVerify != nil {
+		validateGoVerify(pk, p, message, ok, out)
+	}
+	return ok, out
 }
