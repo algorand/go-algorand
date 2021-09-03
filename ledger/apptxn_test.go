@@ -548,3 +548,79 @@ skipclose:
 	eval.txn(t, useacct.Noted("2"), "unauthorized")
 	l.endBlock(t, eval)
 }
+
+// TestRekeyActionCloseAccount ensures closing and reopening a rekeyed account in a single app call
+// properly removes the app as an authorizer for the account
+func TestRekeyActionCloseAccount(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	appIndex := basics.AppIndex(1)
+	create := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[5],
+		ApprovalProgram: main(`
+         // close account 1
+         tx_begin
+         int pay
+         tx_field TypeEnum
+         txn Accounts 1
+         tx_field Sender
+         txn Accounts 2
+         tx_field CloseRemainderTo
+         tx_submit
+
+         // reopen account 1
+         tx_begin
+         int pay
+         tx_field TypeEnum
+         int 5000
+         tx_field Amount
+         txn Accounts 1
+         tx_field Receiver
+         tx_submit
+         // send from account 1 again (should fail because closing an account erases rekeying)
+         tx_begin
+         int pay
+         tx_field TypeEnum
+         int 1
+         tx_field Amount
+         txn Accounts 1
+         tx_field Sender
+         txn Accounts 2
+         tx_field Receiver
+         tx_submit
+`),
+	}
+
+	rekey := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: addrs[0],
+		RekeyTo:  appIndex.Address(),
+	}
+
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[1],
+		Receiver: appIndex.Address(),
+		Amount:   1_000_000,
+	}
+
+	eval := l.nextBlock(t)
+	eval.txns(t, &create, &rekey, &fund)
+	l.endBlock(t, eval)
+
+	useacct := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[1],
+		ApplicationID: appIndex,
+		Accounts:      []basics.Address{addrs[0], addrs[2]},
+	}
+	eval = l.nextBlock(t)
+	eval.txn(t, &useacct, "unauthorized")
+	l.endBlock(t, eval)
+}
