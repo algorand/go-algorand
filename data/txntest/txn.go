@@ -228,9 +228,11 @@ func (tx Txn) SignedTxnWithAD() transactions.SignedTxnWithAD {
 // GroupIDs set properly to make them a transaction group. Maybe
 // another name is more approrpriate
 func SignedTxns(txns ...*Txn) []transactions.SignedTxn {
-	var txgroup transactions.TxGroup
-	txgroup.TxGroupHashes = make([]crypto.Digest, len(txns))
+	txgroup := transactions.TxGroup{
+		TxGroupHashes: make([]crypto.Digest, len(txns)),
+	}
 	for i, txn := range txns {
+		txn.Group = crypto.Digest{}
 		txgroup.TxGroupHashes[i] = crypto.HashObj(txn.Txn())
 	}
 	group := crypto.HashObj(txgroup)

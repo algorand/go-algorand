@@ -3439,7 +3439,7 @@ func opTxSubmit(cx *EvalContext) {
 	case protocol.PaymentTx, protocol.AssetTransferTx:
 		// only pay and axfer for now
 	default:
-		cx.err = fmt.Errorf("Invalid action type %s", cx.subtxn.Txn.Type)
+		cx.err = fmt.Errorf("Invalid inner transaction type %s", cx.subtxn.Txn.Type)
 		return
 	}
 

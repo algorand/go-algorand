@@ -27,20 +27,20 @@ func TestActionTypes(t *testing.T) {
 	ep, ledger := makeSampleEnv()
 	testApp(t, "tx_submit; int 1;", ep, "tx_submit without tx_begin")
 	testApp(t, "int pay; tx_field TypeEnum; tx_submit; int 1;", ep, "tx_field without tx_begin")
-	testApp(t, "tx_begin; tx_submit; int 1;", ep, "Invalid action type")
+	testApp(t, "tx_begin; tx_submit; int 1;", ep, "Invalid inner transaction type")
 	// bad type
-	testApp(t, "tx_begin; byte \"pya\"; tx_field Type; tx_submit; int 1;", ep, "Invalid action type")
+	testApp(t, "tx_begin; byte \"pya\"; tx_field Type; tx_submit; int 1;", ep, "Invalid inner transaction type")
 
 	// good types, not alllowed yet
-	testApp(t, "tx_begin; byte \"keyreg\"; tx_field Type; tx_submit; int 1;", ep, "Invalid action type")
-	testApp(t, "tx_begin; byte \"acfg\"; tx_field Type; tx_submit; int 1;", ep, "Invalid action type")
-	testApp(t, "tx_begin; byte \"afrz\"; tx_field Type; tx_submit; int 1;", ep, "Invalid action type")
-	testApp(t, "tx_begin; byte \"appl\"; tx_field Type; tx_submit; int 1;", ep, "Invalid action type")
+	testApp(t, "tx_begin; byte \"keyreg\"; tx_field Type; tx_submit; int 1;", ep, "Invalid inner transaction type")
+	testApp(t, "tx_begin; byte \"acfg\"; tx_field Type; tx_submit; int 1;", ep, "Invalid inner transaction type")
+	testApp(t, "tx_begin; byte \"afrz\"; tx_field Type; tx_submit; int 1;", ep, "Invalid inner transaction type")
+	testApp(t, "tx_begin; byte \"appl\"; tx_field Type; tx_submit; int 1;", ep, "Invalid inner transaction type")
 	// same, as enums
-	testApp(t, "tx_begin; int keyreg; tx_field TypeEnum; tx_submit; int 1;", ep, "Invalid action type")
-	testApp(t, "tx_begin; int acfg; tx_field TypeEnum; tx_submit; int 1;", ep, "Invalid action type")
-	testApp(t, "tx_begin; int afrz; tx_field TypeEnum; tx_submit; int 1;", ep, "Invalid action type")
-	testApp(t, "tx_begin; int appl; tx_field TypeEnum; tx_submit; int 1;", ep, "Invalid action type")
+	testApp(t, "tx_begin; int keyreg; tx_field TypeEnum; tx_submit; int 1;", ep, "Invalid inner transaction type")
+	testApp(t, "tx_begin; int acfg; tx_field TypeEnum; tx_submit; int 1;", ep, "Invalid inner transaction type")
+	testApp(t, "tx_begin; int afrz; tx_field TypeEnum; tx_submit; int 1;", ep, "Invalid inner transaction type")
+	testApp(t, "tx_begin; int appl; tx_field TypeEnum; tx_submit; int 1;", ep, "Invalid inner transaction type")
 
 	// "insufficient balance" because app account is charged fee
 	// (defaults make these 0 pay|axfer to zero address, from app account)
