@@ -686,7 +686,7 @@ func (cfg Local) DNSSecurityTelemeryAddrEnforced() bool {
 }
 
 // ProposalAssemblyTime is the max amount of time to spend on generating a proposal block. This should eventually have it's own configurable value.
-const ProposalAssemblyTime time.Duration = 250 * time.Millisecond
+const ProposalAssemblyTime time.Duration = 500 * time.Millisecond
 
 const (
 	catchupValidationModeCertificate                 = 1
