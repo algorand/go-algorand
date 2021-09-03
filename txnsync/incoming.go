@@ -133,7 +133,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 	}
 
 	// if the peer sent us a bloom filter, decode it
-	if incomingMessage.message.TxnBloomFilter.BloomFilterType != 0 {
+	if !incomingMessage.message.TxnBloomFilter.MsgIsZero() {
 		bloomFilter, err := decodeBloomFilter(incomingMessage.message.TxnBloomFilter)
 		if err != nil {
 			s.log.Infof("Invalid bloom filter received from peer : %v", err)

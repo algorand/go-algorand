@@ -111,6 +111,7 @@ func TestPopSequence(t *testing.T) {
 	_, heapSeqNum, err := heap.popSequence(3)
 	a.Equal(heap.Len(), messageOrderingHeapLimit)
 	a.Equal(heapSeqNum, uint64(0), errSequenceNumberMismatch)
+	a.Error(err, errSequenceNumberMismatch)
 
 	msg, heapSeqNum, err := heap.popSequence(0)
 
@@ -118,7 +119,7 @@ func TestPopSequence(t *testing.T) {
 	a.Equal(heap.Len(), messageOrderingHeapLimit-1)
 	a.Equal(msg.sequenceNumber, uint64(0))
 	a.Equal(heapSeqNum, uint64(0))
-	a.Nil(err)
+	a.NoError(err)
 
 }
 
