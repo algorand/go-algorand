@@ -285,7 +285,7 @@ func generateNetworkGoalTemplate(templateFilename string, wallets, relays, nodes
 	}
 
 	if npnHosts > 0 {
-		for walletIndex < wallets {
+		for walletIndex < npnHosts {
 			for nodei, node := range template.Nodes {
 				if node.Name[0:4] != "nonP" {
 					continue
@@ -296,11 +296,11 @@ func generateNetworkGoalTemplate(templateFilename string, wallets, relays, nodes
 				}
 				template.Nodes[nodei].Wallets = append(template.Nodes[nodei].Wallets, wallet)
 				walletIndex++
-				if walletIndex >= wallets {
+				if walletIndex >= npnHosts {
 					break
 				}
 			}
-			if walletIndex >= wallets {
+			if walletIndex >= npnHosts {
 				break
 			}
 		}
@@ -399,9 +399,10 @@ func generateNetworkTemplate(templateFilename string, wallets, relays, nodeHosts
 		}
 	}
 
+	// one wallet per NPN host to concentrate stake
 	if npnHosts > 0 {
 		walletIndex := 0
-		for walletIndex < wallets {
+		for walletIndex < npnHosts {
 			for hosti := range network.Hosts {
 				for nodei, node := range network.Hosts[hosti].Nodes {
 					if node.Name[0:4] != "nonP" {
@@ -413,11 +414,11 @@ func generateNetworkTemplate(templateFilename string, wallets, relays, nodeHosts
 					}
 					network.Hosts[hosti].Nodes[nodei].Wallets = append(network.Hosts[hosti].Nodes[nodei].Wallets, wallet)
 					walletIndex++
-					if walletIndex >= wallets {
+					if walletIndex >= npnHosts {
 						break
 					}
 				}
-				if walletIndex >= wallets {
+				if walletIndex >= npnHosts {
 					break
 				}
 			}
@@ -466,18 +467,16 @@ func saveGoalTemplateToDisk(template netdeploy.NetworkTemplate, filename string)
 
 func generateWalletGenesisData(wallets, npnHosts int) gen.GenesisData {
 	data := gen.DefaultGenesis
-	if npnHosts > 0 {
-		wallets = 2 * wallets
-	}
-	data.Wallets = make([]gen.WalletData, wallets)
-	stake := big.NewRat(int64(100), int64(wallets))
+	totalWallets := wallets + npnHosts
+	data.Wallets = make([]gen.WalletData, totalWallets)
+	stake := big.NewRat(int64(100), int64(totalWallets))
 
 	ratZero := big.NewRat(int64(0), int64(1))
 	ratHundred := big.NewRat(int64(100), int64(1))
 
 	stakeSum := new(big.Rat).Set(ratZero)
-	for i := 0; i < wallets; i++ {
-		if i == (wallets - 1) {
+	for i := 0; i < totalWallets; i++ {
+		if i == (totalWallets - 1) {
 			// use the last wallet to workaround roundoff and get back to 1.0
 			stake = stake.Sub(new(big.Rat).Set(ratHundred), stakeSum)
 		}
@@ -486,7 +485,7 @@ func generateWalletGenesisData(wallets, npnHosts int) gen.GenesisData {
 			Name:  "Wallet" + strconv.Itoa(i+1), // Wallet names are 1-based for this template
 			Stake: floatStake,
 		}
-		if (i < (wallets / 2)) || (npnHosts == 0) {
+		if i < wallets {
 			w.Online = true
 		}
 		stakeSum = stakeSum.Add(stakeSum, stake)
