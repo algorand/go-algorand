@@ -72,7 +72,7 @@ func TestOpGroupCoverage(t *testing.T) {
 	}
 	for name, seen := range opsSeen {
 		if !seen {
-			t.Errorf("warning: op %#v not in any group of OpGroupList\n", name)
+			t.Errorf("warning: op %#v not in any group of OpGroups\n", name)
 		}
 	}
 }

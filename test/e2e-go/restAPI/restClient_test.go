@@ -990,12 +990,10 @@ return
 	a.NotNil(txn.Logs)
 	a.Equal(32, len(*txn.Logs))
 	for i, l := range *txn.Logs {
-		a.Equal(*txn.ApplicationIndex, l.Id)
-		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), l.Value)
+		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), l)
 	}
 
 	//check non-create app call
-	expectedAppID := *txn.ApplicationIndex
 	wh, err = testClient.GetUnencryptedWalletHandle()
 	a.NoError(err)
 	addresses, err = testClient.ListAddresses(wh)
@@ -1029,8 +1027,7 @@ return
 	a.NotNil(txn.Logs)
 	a.Equal(32, len(*txn.Logs))
 	for i, l := range *txn.Logs {
-		a.Equal(expectedAppID, l.Id)
-		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), l.Value)
+		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), l)
 	}
 
 }

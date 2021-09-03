@@ -114,7 +114,7 @@ type testBalances struct {
 
 	// logic evaluator control
 	pass  bool
-	delta basics.EvalDelta
+	delta transactions.EvalDelta
 	err   error
 }
 
@@ -225,7 +225,7 @@ func (b *testBalances) DeallocateAsset(addr basics.Address, index basics.AssetIn
 	return nil
 }
 
-func (b *testBalances) StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (passed bool, evalDelta basics.EvalDelta, err error) {
+func (b *testBalances) StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (passed bool, evalDelta transactions.EvalDelta, err error) {
 	return b.pass, b.delta, b.err
 }
 
@@ -258,7 +258,7 @@ func (b *testBalancesPass) Deallocate(addr basics.Address, aidx basics.AppIndex,
 	return nil
 }
 
-func (b *testBalancesPass) StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (passed bool, evalDelta basics.EvalDelta, err error) {
+func (b *testBalancesPass) StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (passed bool, evalDelta transactions.EvalDelta, err error) {
 	return true, b.delta, nil
 }
 
@@ -281,14 +281,14 @@ func (b *testBalances) SetParams(params config.ConsensusParams) {
 
 type testEvaluator struct {
 	pass   bool
-	delta  basics.EvalDelta
+	delta  transactions.EvalDelta
 	appIdx basics.AppIndex
 }
 
 // Eval for tests that fail on program version > 10 and returns pass/delta from its own state rather than running the program
-func (e *testEvaluator) Eval(program []byte) (pass bool, stateDelta basics.EvalDelta, err error) {
+func (e *testEvaluator) Eval(program []byte) (pass bool, stateDelta transactions.EvalDelta, err error) {
 	if len(program) < 1 || program[0] > 10 {
-		return false, basics.EvalDelta{}, fmt.Errorf("mock eval error")
+		return false, transactions.EvalDelta{}, fmt.Errorf("mock eval error")
 	}
 	return e.pass, e.delta, nil
 }
@@ -604,7 +604,7 @@ func TestAppCallApplyCreateOptIn(t *testing.T) {
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
 	gd := map[string]basics.ValueDelta{"uint": {Action: basics.SetUintAction, Uint: 1}}
-	b.delta = basics.EvalDelta{GlobalDelta: gd}
+	b.delta = transactions.EvalDelta{GlobalDelta: gd}
 
 	err := ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
@@ -801,7 +801,7 @@ func TestAppCallClearState(t *testing.T) {
 	br = b.putBalances[sender]
 	a.Equal(0, len(br.AppLocalStates))
 	a.Equal(basics.StateSchema{}, br.TotalAppSchema)
-	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
+	a.Equal(transactions.EvalDelta{}, ad.EvalDelta)
 
 	b.ResetWrites()
 
@@ -820,7 +820,7 @@ func TestAppCallClearState(t *testing.T) {
 
 	// one put: to opt out
 	b.pass = false
-	b.delta = basics.EvalDelta{GlobalDelta: nil}
+	b.delta = transactions.EvalDelta{GlobalDelta: nil}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(1, b.put)
@@ -834,7 +834,7 @@ func TestAppCallClearState(t *testing.T) {
 	// check existing application with logic err ClearStateProgram.
 	// one to opt out, one deallocate, no error from ApplicationCall
 	b.pass = true
-	b.delta = basics.EvalDelta{GlobalDelta: nil}
+	b.delta = transactions.EvalDelta{GlobalDelta: nil}
 	b.err = ledgercore.LogicEvalError{Err: fmt.Errorf("test error")}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
@@ -849,7 +849,7 @@ func TestAppCallClearState(t *testing.T) {
 	// check existing application with non-logic err ClearStateProgram.
 	// ApplicationCall must fail
 	b.pass = true
-	b.delta = basics.EvalDelta{GlobalDelta: nil}
+	b.delta = transactions.EvalDelta{GlobalDelta: nil}
 	b.err = fmt.Errorf("test error")
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.Error(err)
@@ -865,23 +865,23 @@ func TestAppCallClearState(t *testing.T) {
 	b.pass = true
 	b.err = nil
 	gd := basics.StateDelta{"uint": {Action: basics.SetUintAction, Uint: 1}}
-	b.delta = basics.EvalDelta{GlobalDelta: gd}
+	b.delta = transactions.EvalDelta{GlobalDelta: gd}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(1, b.put)
 	a.Equal(appIdx, b.deAllocatedAppIdx)
 	a.Equal(0, len(br.AppLocalStates))
 	a.Equal(basics.StateSchema{}, br.TotalAppSchema)
-	a.Equal(basics.EvalDelta{GlobalDelta: gd}, ad.EvalDelta)
+	a.Equal(transactions.EvalDelta{GlobalDelta: gd}, ad.EvalDelta)
 
 	b.ResetWrites()
 	b.pass = true
 	b.err = nil
-	logs := []basics.LogItem{{ID: 0, Message: "a"}}
-	b.delta = basics.EvalDelta{Logs: []basics.LogItem{{ID: 0, Message: "a"}}}
+	logs := []string{"a"}
+	b.delta = transactions.EvalDelta{Logs: []string{"a"}}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
-	a.Equal(basics.EvalDelta{Logs: logs}, ad.EvalDelta)
+	a.Equal(transactions.EvalDelta{Logs: logs}, ad.EvalDelta)
 }
 
 func TestAppCallApplyCloseOut(t *testing.T) {
@@ -932,7 +932,7 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 	a.Equal(0, b.put)
 	br := b.balances[creator]
 	a.Equal(cbr, br)
-	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
+	a.Equal(transactions.EvalDelta{}, ad.EvalDelta)
 
 	// check closing on empty sender's balance record
 	b.pass = true
@@ -943,13 +943,13 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 	a.Equal(0, b.put)
 	br = b.balances[creator]
 	a.Equal(cbr, br)
-	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
+	a.Equal(transactions.EvalDelta{}, ad.EvalDelta)
 
 	b.ResetWrites()
 
 	// check a happy case
 	gd := map[string]basics.ValueDelta{"uint": {Action: basics.SetUintAction, Uint: 1}}
-	b.delta = basics.EvalDelta{GlobalDelta: gd}
+	b.delta = transactions.EvalDelta{GlobalDelta: gd}
 	b.balances[sender] = basics.AccountData{
 		AppLocalStates: map[basics.AppIndex]basics.AppLocalState{appIdx: {}},
 	}
@@ -961,18 +961,18 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 	a.Equal(basics.TealKeyValue(nil), br.AppParams[appIdx].GlobalState)
 	br = b.putBalances[sender]
 	a.Equal(0, len(br.AppLocalStates))
-	a.Equal(basics.EvalDelta{GlobalDelta: gd}, ad.EvalDelta)
+	a.Equal(transactions.EvalDelta{GlobalDelta: gd}, ad.EvalDelta)
 	a.Equal(basics.StateSchema{NumUint: 0}, br.TotalAppSchema)
 
 	b.ResetWrites()
-	logs := []basics.LogItem{{ID: 0, Message: "a"}}
-	b.delta = basics.EvalDelta{Logs: []basics.LogItem{{ID: 0, Message: "a"}}}
+	logs := []string{"a"}
+	b.delta = transactions.EvalDelta{Logs: []string{"a"}}
 	b.balances[sender] = basics.AccountData{
 		AppLocalStates: map[basics.AppIndex]basics.AppLocalState{appIdx: {}},
 	}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
-	a.Equal(basics.EvalDelta{Logs: logs}, ad.EvalDelta)
+	a.Equal(transactions.EvalDelta{Logs: logs}, ad.EvalDelta)
 }
 
 func TestAppCallApplyUpdate(t *testing.T) {
@@ -1025,7 +1025,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	a.Equal(0, b.put)
 	br := b.balances[creator]
 	a.Equal(cbr, br)
-	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
+	a.Equal(transactions.EvalDelta{}, ad.EvalDelta)
 
 	// check updating on empty sender's balance record - happy case
 	b.pass = true
@@ -1038,7 +1038,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	br = b.putBalances[creator]
 	a.Equal([]byte{2}, br.AppParams[appIdx].ApprovalProgram)
 	a.Equal([]byte{2}, br.AppParams[appIdx].ClearStateProgram)
-	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
+	a.Equal(transactions.EvalDelta{}, ad.EvalDelta)
 
 	//check program len check happens in future consensus proto version
 	b.SetProto(protocol.ConsensusFuture)
@@ -1067,11 +1067,11 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	b.balances[creator] = cp
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
-	logs := []basics.LogItem{{ID: 0, Message: "a"}}
-	b.delta = basics.EvalDelta{Logs: []basics.LogItem{{ID: 0, Message: "a"}}}
+	logs := []string{"a"}
+	b.delta = transactions.EvalDelta{Logs: []string{"a"}}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
-	a.Equal(basics.EvalDelta{Logs: logs}, ad.EvalDelta)
+	a.Equal(transactions.EvalDelta{Logs: logs}, ad.EvalDelta)
 
 	// check extraProgramPages is used
 	appr := make([]byte, 2*proto.MaxAppProgramLen+1)
@@ -1180,7 +1180,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 	a.Equal(0, b.put)
 	br := b.balances[creator]
 	a.Equal(cbr, br)
-	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
+	a.Equal(transactions.EvalDelta{}, ad.EvalDelta)
 
 	// check calculation on ConsensusV28. TotalExtraAppPages does not change
 	b.SetProto(protocol.ConsensusV28)
@@ -1198,7 +1198,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 	br = b.putBalances[creator]
 	a.Equal(basics.AppParams{}, br.AppParams[appIdx])
 	a.Equal(basics.StateSchema{}, br.TotalAppSchema)
-	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
+	a.Equal(transactions.EvalDelta{}, ad.EvalDelta)
 	a.Equal(uint32(1), br.TotalExtraAppPages)
 	b.ResetWrites()
 
@@ -1228,7 +1228,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 		br = b.putBalances[creator]
 		a.Equal(basics.AppParams{}, br.AppParams[appIdx])
 		a.Equal(basics.StateSchema{}, br.TotalAppSchema)
-		a.Equal(basics.EvalDelta{}, ad.EvalDelta)
+		a.Equal(transactions.EvalDelta{}, ad.EvalDelta)
 		if initTotalExtraPages <= params.ExtraProgramPages {
 			a.Equal(uint32(0), br.TotalExtraAppPages)
 		} else {
@@ -1236,11 +1236,11 @@ func TestAppCallApplyDelete(t *testing.T) {
 		}
 		b.ResetWrites()
 	}
-	logs := []basics.LogItem{{ID: 0, Message: "a"}}
-	b.delta = basics.EvalDelta{Logs: []basics.LogItem{{ID: 0, Message: "a"}}}
+	logs := []string{"a"}
+	b.delta = transactions.EvalDelta{Logs: []string{"a"}}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
-	a.Equal(basics.EvalDelta{Logs: logs}, ad.EvalDelta)
+	a.Equal(transactions.EvalDelta{Logs: logs}, ad.EvalDelta)
 }
 
 func TestAppCallApplyCreateClearState(t *testing.T) {
@@ -1276,14 +1276,14 @@ func TestAppCallApplyCreateClearState(t *testing.T) {
 
 	b.pass = true
 	gd := map[string]basics.ValueDelta{"uint": {Action: basics.SetUintAction, Uint: 1}}
-	b.delta = basics.EvalDelta{GlobalDelta: gd}
+	b.delta = transactions.EvalDelta{GlobalDelta: gd}
 
 	// check creation on empty balance record
 	err := ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.Error(err)
 	a.Contains(err.Error(), "not currently opted in")
 	a.Equal(appIdx, b.allocatedAppIdx)
-	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
+	a.Equal(transactions.EvalDelta{}, ad.EvalDelta)
 	br := b.balances[creator]
 	a.Equal([]byte{1}, br.AppParams[appIdx].ApprovalProgram)
 	a.Equal([]byte{2}, br.AppParams[appIdx].ClearStateProgram)
@@ -1326,20 +1326,20 @@ func TestAppCallApplyCreateDelete(t *testing.T) {
 
 	b.pass = true
 	gd := map[string]basics.ValueDelta{"uint": {Action: basics.SetUintAction, Uint: 1}}
-	b.delta = basics.EvalDelta{GlobalDelta: gd}
+	b.delta = transactions.EvalDelta{GlobalDelta: gd}
 
 	// check creation on empty balance record
 	err := ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(appIdx, b.allocatedAppIdx)
-	a.Equal(basics.EvalDelta{GlobalDelta: gd}, ad.EvalDelta)
+	a.Equal(transactions.EvalDelta{GlobalDelta: gd}, ad.EvalDelta)
 	br := b.balances[creator]
 	a.Equal(basics.AppParams{}, br.AppParams[appIdx])
 
-	logs := []basics.LogItem{{ID: 0, Message: "a"}}
-	b.delta = basics.EvalDelta{Logs: []basics.LogItem{{ID: 0, Message: "a"}}}
+	logs := []string{"a"}
+	b.delta = transactions.EvalDelta{Logs: []string{"a"}}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
-	a.Equal(basics.EvalDelta{Logs: logs}, ad.EvalDelta)
+	a.Equal(transactions.EvalDelta{Logs: logs}, ad.EvalDelta)
 
 }

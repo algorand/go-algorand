@@ -33,11 +33,15 @@
 package txntest
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -47,7 +51,7 @@ type Txn struct {
 	Type protocol.TxType
 
 	Sender      basics.Address
-	Fee         basics.MicroAlgos
+	Fee         uint64
 	FirstValid  basics.Round
 	LastValid   basics.Round
 	Note        []byte
@@ -65,7 +69,7 @@ type Txn struct {
 	Nonparticipation bool
 
 	Receiver         basics.Address
-	Amount           basics.MicroAlgos
+	Amount           uint64
 	CloseRemainderTo basics.Address
 
 	ConfigAsset basics.AssetIndex
@@ -89,8 +93,8 @@ type Txn struct {
 	ForeignAssets     []basics.AssetIndex
 	LocalStateSchema  basics.StateSchema
 	GlobalStateSchema basics.StateSchema
-	ApprovalProgram   []byte
-	ClearStateProgram []byte
+	ApprovalProgram   string
+	ClearStateProgram string
 	ExtraProgramPages uint32
 
 	CertRound basics.Round
@@ -98,15 +102,46 @@ type Txn struct {
 	Cert      compactcert.Cert
 }
 
+// Noted returns a new Txn with the given note field.
+func (tx *Txn) Noted(note string) *Txn {
+	copy := &Txn{}
+	*copy = *tx
+	copy.Note = []byte(note)
+	return copy
+}
+
 // FillDefaults populates some obvious defaults from config params,
 // unless they have already been set.
 func (tx *Txn) FillDefaults(params config.ConsensusParams) {
-	if tx.Fee.IsZero() {
-		tx.Fee = basics.MicroAlgos{Raw: params.MinTxnFee}
+	if tx.Fee == 0 {
+		tx.Fee = params.MinTxnFee
 	}
 	if tx.LastValid == 0 {
 		tx.LastValid = tx.FirstValid + basics.Round(params.MaxTxnLife)
 	}
+	if tx.ApprovalProgram != "" && !strings.Contains(tx.ApprovalProgram, "#pragma version") {
+		pragma := fmt.Sprintf("#pragma version %d\n", params.LogicSigVersion)
+		tx.ApprovalProgram = pragma + tx.ApprovalProgram
+	}
+	if tx.ApprovalProgram != "" && tx.ClearStateProgram == "" {
+		tx.ClearStateProgram = "int 0"
+	}
+	if tx.ClearStateProgram != "" && !strings.Contains(tx.ClearStateProgram, "#pragma version") {
+		pragma := fmt.Sprintf("#pragma version %d\n", params.LogicSigVersion)
+		tx.ClearStateProgram = pragma + tx.ClearStateProgram
+	}
+}
+
+func assemble(source string) []byte {
+	if source == "" {
+		return nil
+	}
+	ops, err := logic.AssembleString(source)
+	if err != nil {
+		fmt.Printf("Bad program %v", ops.Errors)
+		panic(ops.Errors)
+	}
+	return ops.Program
 }
 
 // Txn produces a transactions.Transaction from the fields in this Txn
@@ -115,7 +150,7 @@ func (tx Txn) Txn() transactions.Transaction {
 		Type: tx.Type,
 		Header: transactions.Header{
 			Sender:      tx.Sender,
-			Fee:         tx.Fee,
+			Fee:         basics.MicroAlgos{Raw: tx.Fee},
 			FirstValid:  tx.FirstValid,
 			LastValid:   tx.LastValid,
 			Note:        tx.Note,
@@ -135,7 +170,7 @@ func (tx Txn) Txn() transactions.Transaction {
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver:         tx.Receiver,
-			Amount:           tx.Amount,
+			Amount:           basics.MicroAlgos{Raw: tx.Amount},
 			CloseRemainderTo: tx.CloseRemainderTo,
 		},
 		AssetConfigTxnFields: transactions.AssetConfigTxnFields{
@@ -163,8 +198,8 @@ func (tx Txn) Txn() transactions.Transaction {
 			ForeignAssets:     tx.ForeignAssets,
 			LocalStateSchema:  tx.LocalStateSchema,
 			GlobalStateSchema: tx.GlobalStateSchema,
-			ApprovalProgram:   tx.ApprovalProgram,
-			ClearStateProgram: tx.ClearStateProgram,
+			ApprovalProgram:   assemble(tx.ApprovalProgram),
+			ClearStateProgram: assemble(tx.ClearStateProgram),
 			ExtraProgramPages: tx.ExtraProgramPages,
 		},
 		CompactCertTxnFields: transactions.CompactCertTxnFields{
@@ -180,4 +215,35 @@ func (tx Txn) Txn() transactions.Transaction {
 // again, for convenience when driving tests.
 func (tx Txn) SignedTxn() transactions.SignedTxn {
 	return transactions.SignedTxn{Txn: tx.Txn()}
+}
+
+// SignedTxnWithAD produces unsigned, transactions.SignedTxnWithAD
+// from the fields in this Txn.  This seemingly pointless operation
+// exists, again, for convenience when driving tests.
+func (tx Txn) SignedTxnWithAD() transactions.SignedTxnWithAD {
+	return transactions.SignedTxnWithAD{SignedTxn: tx.SignedTxn()}
+}
+
+// SignedTxns turns a list of Txns into a slice of SignedTxns with
+// GroupIDs set properly to make them a transaction group. Maybe
+// another name is more approrpriate
+func SignedTxns(txns ...*Txn) []transactions.SignedTxn {
+	txgroup := transactions.TxGroup{
+		TxGroupHashes: make([]crypto.Digest, len(txns)),
+	}
+	for i, txn := range txns {
+		txn.Group = crypto.Digest{}
+		txgroup.TxGroupHashes[i] = crypto.HashObj(txn.Txn())
+	}
+	group := crypto.HashObj(txgroup)
+	for _, txn := range txns {
+		txn.Group = group
+	}
+
+	stxns := make([]transactions.SignedTxn, len(txns))
+	for i, txn := range txns {
+		stxns[i] = txn.SignedTxn()
+	}
+	return stxns
+
 }

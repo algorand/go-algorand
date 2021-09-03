@@ -203,6 +203,14 @@ func randomizeValue(v reflect.Value, datapath string, tag string) error {
 		return nil
 	}
 
+	/* Consider cutting off recursive structures by stopping at some datapath depth.
+
+	    if len(datapath) > 200 {
+			// Cut off recursive structures
+			return nil
+		}
+	*/
+
 	switch v.Kind() {
 	case reflect.Uint, reflect.Uintptr, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		v.SetUint(rand.Uint64())
