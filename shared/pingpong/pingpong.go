@@ -781,7 +781,6 @@ func (pps *WorkerState) sendFromTo(
 					fromBalanceChange -= int64(txn.Fee.Raw + amt)
 					toBalanceChange += int64(amt)
 					signer = to
-					// Tsachi : I think this is incorrect.
 				} else {
 					txn, signer, err = pps.constructTxn(to, from, fee, amt, 0, client)
 					toBalanceChange -= int64(txn.Fee.Raw + amt)
