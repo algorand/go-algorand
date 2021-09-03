@@ -38,7 +38,7 @@ type incomingMessage struct {
 	sequenceNumber    uint64
 	peer              *Peer
 	encodedSize       int
-	bloomFilter       bloomFilter
+	bloomFilter       *testableBloomFilter
 	transactionGroups []pooldata.SignedTxGroup
 }
 
@@ -242,7 +242,7 @@ incomingMessageLoop:
 		}
 
 		// if the peer sent us a bloom filter, store this.
-		if (incomingMsg.bloomFilter != bloomFilter{}) {
+		if incomingMsg.bloomFilter != nil {
 			peer.addIncomingBloomFilter(incomingMsg.message.Round, incomingMsg.bloomFilter, s.round)
 		}
 

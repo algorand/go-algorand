@@ -653,16 +653,13 @@ func TestAddIncomingBloomFilter(t *testing.T) {
 	p := makePeer(nil, true, true, &config)
 
 	for i := 0; i < 2*maxIncomingBloomFilterHistory; i++ {
-		bf := bloomFilter{
+		bf := &testableBloomFilter{
 			encodingParams: requestParams{
 				_struct:   struct{}{},
 				Offset:    byte(i),
 				Modulator: 0,
 			},
-			filter:             nil,
-			containedTxnsRange: transactionsRange{},
-			encoded:            nil,
-			filterType:         0,
+			filter: nil,
 		}
 		p.addIncomingBloomFilter(basics.Round(i), bf, basics.Round(i))
 	}
@@ -670,16 +667,13 @@ func TestAddIncomingBloomFilter(t *testing.T) {
 	a.Equal(len(p.recentIncomingBloomFilters), 2)
 
 	for i := 0; i < 2*maxIncomingBloomFilterHistory; i++ {
-		bf := bloomFilter{
+		bf := &testableBloomFilter{
 			encodingParams: requestParams{
 				_struct:   struct{}{},
 				Offset:    byte(i),
 				Modulator: 0,
 			},
-			filter:             nil,
-			containedTxnsRange: transactionsRange{},
-			encoded:            nil,
-			filterType:         0,
+			filter: nil,
 		}
 		p.addIncomingBloomFilter(basics.Round(i), bf, 0)
 	}

@@ -86,7 +86,7 @@ const (
 // incomingBloomFilter stores an incoming bloom filter, along with the associated round number.
 // the round number allow us to prune filters from rounds n-2 and below.
 type incomingBloomFilter struct {
-	filter bloomFilter
+	filter *testableBloomFilter
 	round  basics.Round
 }
 
@@ -138,7 +138,8 @@ type Peer struct {
 	lastSentMessageTimestamp time.Duration
 	// lastSentMessageSize is the encoded message size of the last sent message
 	lastSentMessageSize int
-	// lastSentBloomFilter is the last bloom filter that was sent to this peer. This bloom filter could be stale if no bloom filter was included in the last message.
+	// lastSentBloomFilter is the last bloom filter that was sent to this peer.
+	// This bloom filter could be stale if no bloom filter was included in the last message.
 	lastSentBloomFilter bloomFilter
 
 	// lastConfirmedMessageSeqReceived is the last message sequence number that was confirmed by the peer to have been accepted.
@@ -492,7 +493,7 @@ func incomingPeersOnly(peers []*Peer) (incomingPeers []*Peer) {
 
 // incoming related functions
 
-func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter bloomFilter, currentRound basics.Round) {
+func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter *testableBloomFilter, currentRound basics.Round) {
 	bf := incomingBloomFilter{
 		round:  round,
 		filter: incomingFilter,

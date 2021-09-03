@@ -44,7 +44,6 @@ type encodedBloomFilter struct {
 
 	BloomFilterType byte          `codec:"t"`
 	EncodingParams  requestParams `codec:"p"`
-	Shuffler        byte          `codec:"s"`
 	BloomFilter     []byte        `codec:"f,allocbound=maxBloomFilterSize"`
 }
 

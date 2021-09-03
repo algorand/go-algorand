@@ -222,7 +222,7 @@ func TestEvaluateIncomingMessagePart2(t *testing.T) {
 	err = peer.incomingMessages.enqueue(
 		incomingMessage{
 			sequenceNumber: 3,
-			bloomFilter:    bloomFilter{filterType: xorBloomFilter32},
+			bloomFilter:    &testableBloomFilter{encodingParams: requestParams{Offset: 8}},
 			message:        transactionBlockMessage{Round: 4}})
 	require.NoError(t, err)
 
@@ -241,7 +241,7 @@ func TestEvaluateIncomingMessagePart2(t *testing.T) {
 	// receive a message not in order
 	s.evaluateIncomingMessage(incomingMessage{sequenceNumber: 11})
 	require.Equal(t, "received message out of order; seq = 11, expecting seq = 5\n", incLogger.lastLogged)
-	require.Equal(t, xorBloomFilter32, peer.recentIncomingBloomFilters[0].filter.filterType)
+	require.Equal(t, uint8(8), peer.recentIncomingBloomFilters[0].filter.encodingParams.Offset)
 
 	// currentTransactionPoolSize is -1
 	peer.incomingMessages = messageOrderingHeap{}

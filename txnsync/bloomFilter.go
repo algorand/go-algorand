@@ -64,7 +64,18 @@ type bloomFilter struct {
 	filterType bloomFilterType
 }
 
-func decodeBloomFilter(enc encodedBloomFilter) (outFilter bloomFilter, err error) {
+// testableBloomFilter is used for a bloom filters that were received from the network, decoded
+// and are ready to be tested against.
+type testableBloomFilter struct {
+	encodingParams requestParams
+
+	filter bloom.GenericFilter
+}
+
+func decodeBloomFilter(enc encodedBloomFilter) (outFilter *testableBloomFilter, err error) {
+	outFilter = &testableBloomFilter{
+		encodingParams: enc.EncodingParams,
+	}
 	switch bloomFilterType(enc.BloomFilterType) {
 	case multiHashBloomFilter:
 		outFilter.filter, err = bloom.UnmarshalBinary(enc.BloomFilter)
@@ -75,15 +86,14 @@ func decodeBloomFilter(enc encodedBloomFilter) (outFilter bloomFilter, err error
 		outFilter.filter = new(bloom.XorFilter8)
 		err = outFilter.filter.UnmarshalBinary(enc.BloomFilter)
 	default:
-		return bloomFilter{}, errInvalidBloomFilterEncoding
+		return nil, errInvalidBloomFilterEncoding
 	}
 
 	if err != nil {
-		return bloomFilter{}, err
+		return nil, err
 	}
-	outFilter.filterType = bloomFilterType(enc.BloomFilterType)
 	outFilter.encodingParams = enc.EncodingParams
-	return outFilter, nil
+	return
 }
 
 func (bf *bloomFilter) encode() (out *encodedBloomFilter, err error) {
@@ -111,16 +121,13 @@ func (bf *bloomFilter) sameParams(other bloomFilter) bool {
 	return (bf.encodingParams == other.encodingParams) && (bf.containedTxnsRange == other.containedTxnsRange)
 }
 
-func (bf *bloomFilter) test(txID transactions.Txid) bool {
-	if bf.filter != nil {
-		if bf.encodingParams.Modulator > 1 {
-			if txidToUint64(txID)%uint64(bf.encodingParams.Modulator) != uint64(bf.encodingParams.Offset) {
-				return false
-			}
+func (bf *testableBloomFilter) test(txID transactions.Txid) bool {
+	if bf.encodingParams.Modulator > 1 {
+		if txidToUint64(txID)%uint64(bf.encodingParams.Modulator) != uint64(bf.encodingParams.Offset) {
+			return false
 		}
-		return bf.filter.Test(txID[:])
 	}
-	return false
+	return bf.filter.Test(txID[:])
 }
 
 func filterFactoryBloom(numEntries int, s *syncState) (filter bloom.GenericFilter, filterType bloomFilterType) {
