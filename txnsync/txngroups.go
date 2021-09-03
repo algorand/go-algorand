@@ -20,7 +20,9 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/util/compress"
 )
@@ -33,7 +35,7 @@ const minEncodedTransactionGroupsCompressionThreshold = 1000
 
 const maxCompressionRatio = 20 // don't allow more than 95% compression
 
-func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup, dataExchangeRate uint64) (packedTransactionGroups, error) {
+func (s *syncState) encodeTransactionGroups(inTxnGroups []pooldata.SignedTxGroup, dataExchangeRate uint64) (packedTransactionGroups, error) {
 	txnCount := 0
 	for _, txGroup := range inTxnGroups {
 		txnCount += len(txGroup.Transactions)
@@ -49,7 +51,7 @@ func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxG
 	for _, txGroup := range inTxnGroups {
 		if len(txGroup.Transactions) > 1 {
 			for _, txn := range txGroup.Transactions {
-				if err := stub.deconstructSignedTransactions(index, &txn); err != nil {
+				if err := stub.deconstructSignedTransaction(index, &txn); err != nil {
 					return packedTransactionGroups{}, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
 				}
 				index++
@@ -57,7 +59,7 @@ func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxG
 			stub.TransactionGroupSizes = append(stub.TransactionGroupSizes, byte(len(txGroup.Transactions)-1))
 		}
 	}
-	stub.TransactionGroupSizes = compactNibblesArray(stub.TransactionGroupSizes)
+	compactNibblesArray(&stub.TransactionGroupSizes)
 	for _, txGroup := range inTxnGroups {
 		if len(txGroup.Transactions) == 1 {
 			for _, txn := range txGroup.Transactions {
@@ -67,7 +69,7 @@ func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxG
 					}
 					stub.BitmaskGroup.setBit(index)
 				}
-				if err := stub.deconstructSignedTransactions(index, &txn); err != nil {
+				if err := stub.deconstructSignedTransaction(index, &txn); err != nil {
 					return packedTransactionGroups{}, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
 				}
 				index++
@@ -127,7 +129,7 @@ func (s *syncState) compressTransactionGroupsBytes(uncompressedData []byte) ([]b
 	return compressedData, compressionFormatDeflate
 }
 
-func decodeTransactionGroups(ptg packedTransactionGroups, genesisID string, genesisHash crypto.Digest) (txnGroups []transactions.SignedTxGroup, err error) {
+func decodeTransactionGroups(ptg packedTransactionGroups, genesisID string, genesisHash crypto.Digest) (txnGroups []pooldata.SignedTxGroup, err error) {
 	data := ptg.Bytes
 	if len(data) == 0 {
 		return nil, nil
@@ -154,6 +156,10 @@ func decodeTransactionGroups(ptg packedTransactionGroups, genesisID string, gene
 		return nil, errors.New("invalid TransactionGroupCount")
 	}
 
+	if stub.TotalTransactionsCount > uint64(maxEncodedTransactionGroup*config.MaxTxGroupSize) {
+		return nil, errors.New("invalid TotalTransactionsCount")
+	}
+
 	stx := make([]transactions.SignedTxn, stub.TotalTransactionsCount)
 
 	err = stub.reconstructSignedTransactions(stx, genesisID, genesisHash)
@@ -161,7 +167,7 @@ func decodeTransactionGroups(ptg packedTransactionGroups, genesisID string, gene
 		return nil, err
 	}
 
-	txnGroups = make([]transactions.SignedTxGroup, stub.TransactionGroupCount)
+	txnGroups = make([]pooldata.SignedTxGroup, stub.TransactionGroupCount)
 	for txnCounter, txnGroupIndex := 0, 0; txnCounter < int(stub.TotalTransactionsCount); txnGroupIndex++ {
 		size := 1
 		if txnGroupIndex < len(stub.TransactionGroupSizes)*2 {

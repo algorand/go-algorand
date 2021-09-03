@@ -96,7 +96,7 @@ type sendMessage struct {
 	data         []byte
 	enqueued     time.Time                            // the time at which the message was first generated
 	peerEnqueued time.Time                            // the time at which the peer was attempting to enqueue the message
-	msgTags      map[protocol.Tag]bool                // when msgTags is speficied ( i.e. non-nil ), the send goroutine is to replace the message tag filter with this one. No data would be accompanied to this message.
+	msgTags      map[protocol.Tag]bool                // when msgTags is specified ( i.e. non-nil ), the send goroutine is to replace the message tag filter with this one. No data would be accompanied to this message.
 	callback     UnicastWebsocketMessageStateCallback // when non-nil, the callback function would be called after entry would be placed on the outgoing websocket queue
 	ctx          context.Context
 }
@@ -369,7 +369,7 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 
 	// if we're on an older version, then add the old style transaction message to the send messages tag.
 	// once we deprecate old style transaction sending, this part can go away.
-	if wp.version != "2.5" {
+	if wp.version != "3.0" {
 		txSendMsgTags := make(map[protocol.Tag]bool)
 		for tag := range wp.sendMessageTag {
 			txSendMsgTags[tag] = true

@@ -22,7 +22,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -35,7 +35,7 @@ const maxAddressBytes = maxEncodedTransactionGroupEntries * crypto.DigestSize
 var errInvalidTxType = errors.New("invalid txtype")
 
 //msgp:allocbound txnGroups maxEncodedTransactionGroupEntries
-type txnGroups transactions.SignedTxnSlice //nolint:unused
+type txnGroups pooldata.SignedTxnSlice //nolint:unused
 
 // old data structure for encoding (only used for testing)
 type txGroupsEncodingStubOld struct { //nolint:unused

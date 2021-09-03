@@ -71,7 +71,7 @@ var defaultLocal = Local{
 	ForceFetchTransactions:                     false,
 	ForceRelayMessages:                         false,
 	GossipFanout:                               4,
-	IncomingConnectionsLimit:                   10000,
+	IncomingConnectionsLimit:                   800,
 	IncomingMessageFilterBucketCount:           5,
 	IncomingMessageFilterBucketSize:            512,
 	IsIndexerActive:                            false,

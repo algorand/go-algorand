@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -591,11 +592,11 @@ func TestUpdateIncomingTransactionGroups(t *testing.T) {
 
 	a := require.New(t)
 
-	var txnGroups []transactions.SignedTxGroup
+	var txnGroups []pooldata.SignedTxGroup
 
 	for i := 0; i < 10; i++ {
 
-		tmp := transactions.SignedTxGroup{
+		tmp := pooldata.SignedTxGroup{
 			Transactions: []transactions.SignedTxn{transactions.SignedTxn{
 				Sig:      crypto.Signature{},
 				Msig:     crypto.MultisigSig{},
@@ -652,16 +653,13 @@ func TestAddIncomingBloomFilter(t *testing.T) {
 	p := makePeer(nil, true, true, &config)
 
 	for i := 0; i < 2*maxIncomingBloomFilterHistory; i++ {
-		bf := bloomFilter{
+		bf := &testableBloomFilter{
 			encodingParams: requestParams{
 				_struct:   struct{}{},
 				Offset:    byte(i),
 				Modulator: 0,
 			},
-			filter:             nil,
-			containedTxnsRange: transactionsRange{},
-			encoded:            nil,
-			filterType:         0,
+			filter: nil,
 		}
 		p.addIncomingBloomFilter(basics.Round(i), bf, basics.Round(i))
 	}
@@ -669,16 +667,13 @@ func TestAddIncomingBloomFilter(t *testing.T) {
 	a.Equal(len(p.recentIncomingBloomFilters), 2)
 
 	for i := 0; i < 2*maxIncomingBloomFilterHistory; i++ {
-		bf := bloomFilter{
+		bf := &testableBloomFilter{
 			encodingParams: requestParams{
 				_struct:   struct{}{},
 				Offset:    byte(i),
 				Modulator: 0,
 			},
-			filter:             nil,
-			containedTxnsRange: transactionsRange{},
-			encoded:            nil,
-			filterType:         0,
+			filter: nil,
 		}
 		p.addIncomingBloomFilter(basics.Round(i), bf, 0)
 	}
@@ -692,14 +687,14 @@ func TestSelectPendingTransactions(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	type args struct {
-		pendingTransactions []transactions.SignedTxGroup
+		pendingTransactions []pooldata.SignedTxGroup
 		sendWindow          time.Duration
 		round               basics.Round
 		bloomFilterSize     int
 	}
 
 	type results struct {
-		selectedTxns           []transactions.SignedTxGroup
+		selectedTxns           []pooldata.SignedTxGroup
 		selectedTxnIDs         []transactions.Txid
 		partialTransactionsSet bool
 	}
@@ -712,7 +707,7 @@ func TestSelectPendingTransactions(t *testing.T) {
 	}{
 		{"Case 1", func(p *Peer) { p.lastRound = 98 }, args{nil, time.Millisecond, 100, 0}, results{nil, nil, false}},
 		{"Case 2", func(p *Peer) { p.lastRound = 101; p.requestedTransactionsModulator = 0 }, args{nil, time.Millisecond, 100, 0}, results{nil, nil, false}},
-		{"Case 3", func(p *Peer) { p.lastRound = 200; p.messageSeriesPendingTransactions = nil }, args{[]transactions.SignedTxGroup{}, time.Millisecond, 100, 0}, results{nil, nil, false}},
+		{"Case 3", func(p *Peer) { p.lastRound = 200; p.messageSeriesPendingTransactions = nil }, args{[]pooldata.SignedTxGroup{}, time.Millisecond, 100, 0}, results{nil, nil, false}},
 	}
 	config := config.GetDefaultLocal()
 	for _, test := range tests {
@@ -759,13 +754,13 @@ func TestSelectedMessagesModulator(t *testing.T) {
 	a.Equal(txidToUint64(transactions.Txid(dig5)), uint64(5))
 	a.Equal(txidToUint64(transactions.Txid(dig6)), uint64(6))
 
-	pendingTransations := []transactions.SignedTxGroup{
-		transactions.SignedTxGroup{GroupCounter: 1, GroupTransactionID: transactions.Txid(dig1), EncodedLength: 1},
-		transactions.SignedTxGroup{GroupCounter: 2, GroupTransactionID: transactions.Txid(dig2), EncodedLength: 1},
-		transactions.SignedTxGroup{GroupCounter: 3, GroupTransactionID: transactions.Txid(dig3), EncodedLength: 1},
-		transactions.SignedTxGroup{GroupCounter: 4, GroupTransactionID: transactions.Txid(dig4), EncodedLength: 1},
-		transactions.SignedTxGroup{GroupCounter: 5, GroupTransactionID: transactions.Txid(dig5), EncodedLength: 1},
-		transactions.SignedTxGroup{GroupCounter: 6, GroupTransactionID: transactions.Txid(dig6), EncodedLength: 1},
+	pendingTransations := []pooldata.SignedTxGroup{
+		pooldata.SignedTxGroup{GroupCounter: 1, GroupTransactionID: transactions.Txid(dig1), EncodedLength: 1},
+		pooldata.SignedTxGroup{GroupCounter: 2, GroupTransactionID: transactions.Txid(dig2), EncodedLength: 1},
+		pooldata.SignedTxGroup{GroupCounter: 3, GroupTransactionID: transactions.Txid(dig3), EncodedLength: 1},
+		pooldata.SignedTxGroup{GroupCounter: 4, GroupTransactionID: transactions.Txid(dig4), EncodedLength: 1},
+		pooldata.SignedTxGroup{GroupCounter: 5, GroupTransactionID: transactions.Txid(dig5), EncodedLength: 1},
+		pooldata.SignedTxGroup{GroupCounter: 6, GroupTransactionID: transactions.Txid(dig6), EncodedLength: 1},
 	}
 
 	selectedTxns, _, _ := peer.selectPendingTransactions(pendingTransations, time.Millisecond, 5, 0)

@@ -21,6 +21,8 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
@@ -37,8 +39,11 @@ func nextSlice(src *[]byte, dst []byte, size int) error {
 	return nil
 }
 
+// getNibble returns the nibble at the given index from the provided
+// byte array. A errDataMissing is returned if index is beyond the size
+// of the array.
 func getNibble(b []byte, index int) (byte, error) {
-	if index > len(b)*2 {
+	if index >= len(b)*2 {
 		return 0, errDataMissing
 	}
 	if index%2 == 0 {
@@ -47,7 +52,7 @@ func getNibble(b []byte, index int) (byte, error) {
 	return b[index/2] % 16, nil
 }
 
-func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitmask) (err error) {
+func addGroupHashes(txnGroups []pooldata.SignedTxGroup, txnCount int, b bitmask) (err error) {
 	index := 0
 	txGroupHashes := make([]crypto.Digest, 16)
 	tStart := 0
@@ -57,8 +62,7 @@ func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitm
 	// It stops at index nextSetBitIndex, or stops when all in txnGroups are visited.
 	addGroupHashesFunc := func(nextSetBitIndex int, count int) error {
 		remainingTxnGroups := txnGroups[tStart:]
-		for t := range remainingTxnGroups {
-			txns := remainingTxnGroups[t]
+		for t, txns := range remainingTxnGroups {
 			if len(txns.Transactions) == 1 && index != nextSetBitIndex {
 				index++
 				continue
@@ -93,21 +97,21 @@ func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitm
 	return
 }
 
-func (stub *txGroupsEncodingStub) reconstructSignedTransactions(signedTxns []transactions.SignedTxn, genesisID string, genesisHash crypto.Digest) (err error) {
-	err = stub.BitmaskSig.iterate(int(stub.TotalTransactionsCount), len(stub.Sig)/len(crypto.Signature{}), func(i int, index int) error {
+func (stub *txGroupsEncodingStub) reconstructSignedTransactions(signedTxns []transactions.SignedTxn, genesisID string, genesisHash crypto.Digest) error {
+	err := stub.BitmaskSig.iterate(int(stub.TotalTransactionsCount), len(stub.Sig)/len(crypto.Signature{}), func(i int, _ int) error {
 		return nextSlice(&stub.Sig, signedTxns[i].Sig[:], len(crypto.Signature{}))
 	})
 	if err != nil {
 		return err
 	}
 
-	if err := stub.reconstructMsigs(signedTxns); err != nil {
+	if err = stub.reconstructMsigs(signedTxns); err != nil {
 		return fmt.Errorf("failed to msigs: %w", err)
 	}
-	if err := stub.reconstructLsigs(signedTxns); err != nil {
+	if err = stub.reconstructLsigs(signedTxns); err != nil {
 		return fmt.Errorf("failed to lsigs: %w", err)
 	}
-	err = stub.BitmaskAuthAddr.iterate(int(stub.TotalTransactionsCount), len(stub.AuthAddr), func(i int, index int) error {
+	err = stub.BitmaskAuthAddr.iterate(int(stub.TotalTransactionsCount), len(stub.AuthAddr)/crypto.DigestSize, func(i int, index int) error {
 		return nextSlice(&stub.AuthAddr, signedTxns[i].AuthAddr[:], crypto.DigestSize)
 	})
 	if err != nil {
@@ -272,16 +276,16 @@ func (stub *txGroupsEncodingStub) reconstructTxnHeader(signedTxns []transactions
 
 func (stub *txGroupsEncodingStub) reconstructKeyregTxnFields(signedTxns []transactions.SignedTxn) (err error) {
 	// should all have same number of elements
-	if len(stub.VotePK)/crypto.DigestSize != len(stub.VoteKeyDilution) || len(stub.SelectionPK)/crypto.DigestSize != len(stub.VoteKeyDilution) {
+	if len(stub.VotePK)/len(crypto.OneTimeSignatureVerifier{}) != len(stub.VoteKeyDilution) || len(stub.SelectionPK)/len(crypto.VRFVerifier{}) != len(stub.VoteKeyDilution) {
 		return errDataMissing
 	}
 	err = stub.BitmaskKeys.iterate(int(stub.TotalTransactionsCount), len(stub.VoteKeyDilution), func(i int, index int) error {
 		signedTxns[i].Txn.VoteKeyDilution = stub.VoteKeyDilution[index]
-		err := nextSlice(&stub.VotePK, signedTxns[i].Txn.VotePK[:], crypto.DigestSize)
+		err := nextSlice(&stub.VotePK, signedTxns[i].Txn.VotePK[:], len(crypto.OneTimeSignatureVerifier{}))
 		if err != nil {
 			return err
 		}
-		return nextSlice(&stub.SelectionPK, signedTxns[i].Txn.SelectionPK[:], crypto.DigestSize)
+		return nextSlice(&stub.SelectionPK, signedTxns[i].Txn.SelectionPK[:], len(crypto.VRFVerifier{}))
 	})
 	if err != nil {
 		return err
@@ -394,8 +398,8 @@ func (stub *txGroupsEncodingStub) reconstructAssetParams(signedTxns []transactio
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskMetadataHash.iterate(int(stub.TotalTransactionsCount), len(stub.MetadataHash)/crypto.DigestSize, func(i int, index int) error {
-		return nextSlice(&stub.MetadataHash, signedTxns[i].Txn.AssetParams.MetadataHash[:], crypto.DigestSize)
+	err = stub.BitmaskMetadataHash.iterate(int(stub.TotalTransactionsCount), len(stub.MetadataHash)/basics.MetadataHashLength, func(i int, index int) error {
+		return nextSlice(&stub.MetadataHash, signedTxns[i].Txn.AssetParams.MetadataHash[:], basics.MetadataHashLength)
 	})
 	if err != nil {
 		return err

@@ -786,71 +786,124 @@ func avgSendBufferHighPrioLength(wn *WebsocketNetwork) float64 {
 	return float64(sum) / float64(len(wn.peers))
 }
 
-// TestSlowOutboundPeer tests what happens when one outbound peer is slow and the rest are fine. Current logic is to disconnect the one slow peer when its outbound channel is full.
-//
-// This is a deeply invasive test that reaches into the guts of WebsocketNetwork and wsPeer. If the implementation chainges consider throwing away or totally reimplementing this test.
+// TestSlowOutboundPeer tests what happens when one outbound peer is slow and the rest are fine.
 func TestSlowOutboundPeer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	t.Skip() // todo - update this test to reflect the new implementation.
-	xtag := protocol.ProposalPayloadTag
+	nodeA := makeTestWebsocketNode(t)
+	nodeA.config.GossipFanout = 0
+	nodeA.Start()
+	defer nodeA.Stop()
+
+	addrA, postListenA := nodeA.Address()
+	require.True(t, postListenA)
+
+	nodeB := makeTestWebsocketNode(t)
+	nodeB.config.GossipFanout = 0
+	nodeB.Start()
+	defer nodeB.Stop()
+
+	addrB, postListenB := nodeB.Address()
+	require.True(t, postListenB)
+
 	node := makeTestWebsocketNode(t)
-	destPeers := make([]wsPeer, 5)
-	for i := range destPeers {
-		destPeers[i].closing = make(chan struct{})
-		destPeers[i].net = node
-		destPeers[i].sendBufferHighPrio = make(chan sendMessages, sendBufferLength)
-		destPeers[i].sendBufferBulk = make(chan sendMessages, sendBufferLength)
-		destPeers[i].conn = &nopConnSingleton
-		destPeers[i].rootURL = fmt.Sprintf("fake %d", i)
-		node.addPeer(&destPeers[i])
-	}
+	node.config.GossipFanout = 2
+	dl := eventsDetailsLogger{Logger: logging.TestingLog(t), eventReceived: make(chan interface{}, 100), eventIdentifier: telemetryspec.DisconnectPeerEvent}
+	node.log = dl
+
+	node.phonebook.ReplacePeerList([]string{addrA, addrB}, "default", PhoneBookEntryRelayRole)
 	node.Start()
-	tctx, cf := context.WithTimeout(context.Background(), 5*time.Second)
-	for i := 0; i < sendBufferLength; i++ {
-		t.Logf("broadcast %d", i)
-		sent := node.Broadcast(tctx, xtag, []byte{byte(i)}, true, nil)
-		require.NoError(t, sent)
-	}
-	cf()
-	ok := false
-	for i := 0; i < 10; i++ {
-		time.Sleep(time.Millisecond)
-		aoql := avgSendBufferHighPrioLength(node)
-		if aoql == sendBufferLength {
-			ok = true
-			break
-		}
-		t.Logf("node.avgOutboundQueueLength() %f", aoql)
-	}
-	require.True(t, ok)
-	for p := range destPeers {
-		if p == 0 {
-			continue
-		}
-		for j := 0; j < sendBufferLength; j++ {
-			// throw away a message as if sent
-			<-destPeers[p].sendBufferHighPrio
-		}
-	}
-	aoql := avgSendBufferHighPrioLength(node)
-	if aoql > (sendBufferLength / 2) {
-		t.Fatalf("avgOutboundQueueLength=%f wanted <%f", aoql, sendBufferLength/2.0)
+	defer node.Stop()
+
+	msg := make([]byte, 100)
+	rand.Read(msg)
+
+	muHandleA := deadlock.Mutex{}
+	numHandledA := 0
+	waitMessageArriveHandlerA := func(msg IncomingMessage) (out OutgoingMessage) {
+		muHandleA.Lock()
+		defer muHandleA.Unlock()
+		numHandledA++
 		return
 	}
-	// it shouldn't have closed for just sitting on the limit of full
-	require.False(t, peerIsClosed(&destPeers[0]))
+	nodeA.RegisterHandlers([]TaggedMessageHandler{
+		{
+			Tag:            protocol.AgreementVoteTag,
+			MessageHandler: HandlerFunc(waitMessageArriveHandlerA),
+		}})
 
-	// function context just to contain defer cf()
-	func() {
-		timeout, cf := context.WithTimeout(context.Background(), time.Second)
-		defer cf()
-		sent := node.Broadcast(timeout, xtag, []byte{byte(42)}, true, nil)
-		assert.NoError(t, sent)
-	}()
+	muHandleB := deadlock.Mutex{}
+	numHandledB := 0
+	waitMessageArriveHandlerB := func(msg IncomingMessage) (out OutgoingMessage) {
+		muHandleB.Lock()
+		defer muHandleB.Unlock()
+		numHandledB++
+		return
+	}
+	nodeB.RegisterHandlers([]TaggedMessageHandler{
+		{
+			Tag:            protocol.AgreementVoteTag,
+			MessageHandler: HandlerFunc(waitMessageArriveHandlerB),
+		}})
 
-	// and now with the rest of the peers well and this one slow, we closed the slow one
-	require.True(t, peerIsClosed(&destPeers[0]))
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, node, readyTimeout.C)
+	require.Equal(t, 2, len(node.peers))
+
+	callback := func(enqueued bool, sequenceNumber uint64) error {
+		time.Sleep(2 * maxMessageQueueDuration)
+		return nil
+	}
+
+	rand.Read(msg)
+	x := 0
+MAINLOOP:
+	for ; x < 1000; x++ {
+		select {
+		case eventDetails := <-dl.eventReceived:
+			switch disconnectPeerEventDetails := eventDetails.(type) {
+			case telemetryspec.DisconnectPeerEventDetails:
+				require.Equal(t, string(disconnectSlowConn), disconnectPeerEventDetails.Reason)
+			default:
+				require.FailNow(t, "Unexpected event was send : %v", eventDetails)
+			}
+			break MAINLOOP
+		default:
+		}
+
+		node.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil)
+		if x == 0 {
+			node.peers[0].Unicast(context.Background(), msg, protocol.AgreementVoteTag, callback)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	require.Less(t, x, 1000)
+
+	maxNumHandled := 0
+	minNumHandled := 0
+	for i := 0; i < 10; i++ {
+		muHandleA.Lock()
+		a := numHandledA
+		muHandleA.Unlock()
+
+		muHandleB.Lock()
+		b := numHandledB
+		muHandleB.Unlock()
+
+		maxNumHandled = b
+		minNumHandled = a
+		if maxNumHandled < a {
+			maxNumHandled = a
+			minNumHandled = b
+		}
+		if maxNumHandled == x {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	require.Equal(t, maxNumHandled, x)
+	require.Less(t, minNumHandled, x/2)
 }
 
 func makeTestFilterWebsocketNode(t *testing.T, nodename string) *WebsocketNetwork {
@@ -1866,7 +1919,7 @@ func TestWebsocketDisconnection(t *testing.T) {
 	case eventDetails := <-dl.eventReceived:
 		switch disconnectPeerEventDetails := eventDetails.(type) {
 		case telemetryspec.DisconnectPeerEventDetails:
-			require.Equal(t, disconnectPeerEventDetails.Reason, string(disconnectRequestReceived))
+			require.Equal(t, string(disconnectRequestReceived), disconnectPeerEventDetails.Reason)
 		default:
 			require.FailNow(t, "Unexpected event was send : %v", eventDetails)
 		}
@@ -2067,6 +2120,7 @@ func TestParseHostOrURL(t *testing.T) {
 		{"1.2.3.4:123", url.URL{Scheme: "http", Host: "1.2.3.4:123"}},
 		{"[::]:123", url.URL{Scheme: "http", Host: "[::]:123"}},
 		{"r2-devnet.devnet.algodev.network:4560", url.URL{Scheme: "http", Host: "r2-devnet.devnet.algodev.network:4560"}},
+		{"::11.22.33.44:123", url.URL{Scheme: "http", Host: "::11.22.33.44:123"}},
 	}
 	badUrls := []string{
 		"justahost",
@@ -2078,6 +2132,15 @@ func TestParseHostOrURL(t *testing.T) {
 		"//localhost:WAT",
 		"://badaddress", // See rpcs/blockService_test.go TestRedirectFallbackEndpoints
 		"://localhost:1234",
+		":xxx",
+		":xxx:1234",
+		"::11.22.33.44",
+		":a:1",
+		":a:",
+		":1",
+		":a",
+		":",
+		"",
 	}
 	for _, tc := range urlTestCases {
 		t.Run(tc.text, func(t *testing.T) {

@@ -28,6 +28,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -55,8 +56,11 @@ func TestAsyncIncomingMessageHandlerAndErrors(t *testing.T) {
 	incLogger := incomingLogger{}
 
 	cfg := config.GetDefaultLocal()
+	mNodeConnector := &mockNodeConnector{transactionPoolSize: 3}
 	s := syncState{
-		log: wrapLogger(&incLogger, &cfg)}
+		log:  wrapLogger(&incLogger, &cfg),
+		node: mNodeConnector,
+	}
 
 	// expect UnmarshalMsg error
 	messageBytes[0] = 0
@@ -79,6 +83,10 @@ func TestAsyncIncomingMessageHandlerAndErrors(t *testing.T) {
 
 	// error decoding transaction groups
 	message.TxnBloomFilter.BloomFilterType = byte(xorBloomFilter32)
+	bf, _ := filterFactoryXor32(1, &s)
+	bf.Set([]byte("aoeu1234aoeu1234"))
+	message.TxnBloomFilter.BloomFilter, err = bf.MarshalBinary()
+	require.NoError(t, err)
 	message.TransactionGroups = packedTransactionGroups{Bytes: []byte{1}}
 	messageBytes = message.MarshalMsg(nil)
 	err = s.asyncIncomingMessageHandler(nil, nil, messageBytes, sequenceNumber)
@@ -214,7 +222,7 @@ func TestEvaluateIncomingMessagePart2(t *testing.T) {
 	err = peer.incomingMessages.enqueue(
 		incomingMessage{
 			sequenceNumber: 3,
-			bloomFilter:    bloomFilter{filterType: xorBloomFilter32},
+			bloomFilter:    &testableBloomFilter{encodingParams: requestParams{Offset: 8}},
 			message:        transactionBlockMessage{Round: 4}})
 	require.NoError(t, err)
 
@@ -222,8 +230,8 @@ func TestEvaluateIncomingMessagePart2(t *testing.T) {
 	err = peer.incomingMessages.enqueue(
 		incomingMessage{
 			sequenceNumber: 4,
-			transactionGroups: []transactions.SignedTxGroup{
-				transactions.SignedTxGroup{
+			transactionGroups: []pooldata.SignedTxGroup{
+				pooldata.SignedTxGroup{
 					Transactions: []transactions.SignedTxn{
 						transactions.SignedTxn{}}}},
 			message: transactionBlockMessage{Round: 4}})
@@ -233,7 +241,7 @@ func TestEvaluateIncomingMessagePart2(t *testing.T) {
 	// receive a message not in order
 	s.evaluateIncomingMessage(incomingMessage{sequenceNumber: 11})
 	require.Equal(t, "received message out of order; seq = 11, expecting seq = 5\n", incLogger.lastLogged)
-	require.Equal(t, xorBloomFilter32, peer.recentIncomingBloomFilters[0].filter.filterType)
+	require.Equal(t, uint8(8), peer.recentIncomingBloomFilters[0].filter.encodingParams.Offset)
 
 	// currentTransactionPoolSize is -1
 	peer.incomingMessages = messageOrderingHeap{}
@@ -241,8 +249,8 @@ func TestEvaluateIncomingMessagePart2(t *testing.T) {
 	s.evaluateIncomingMessage(incomingMessage{
 		sequenceNumber: 5,
 		message:        transactionBlockMessage{Round: 5},
-		transactionGroups: []transactions.SignedTxGroup{
-			transactions.SignedTxGroup{
+		transactionGroups: []pooldata.SignedTxGroup{
+			pooldata.SignedTxGroup{
 				Transactions: []transactions.SignedTxn{
 					transactions.SignedTxn{}}}},
 	})

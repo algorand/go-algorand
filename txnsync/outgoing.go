@@ -22,6 +22,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/util/timers"
 )
@@ -43,7 +44,7 @@ type sentMessageMetadata struct {
 	sequenceNumber          uint64
 	partialMessage          bool
 	filter                  bloomFilter
-	transactionGroups       []transactions.SignedTxGroup
+	transactionGroups       []pooldata.SignedTxGroup
 	projectedSequenceNumber uint64
 }
 
@@ -119,7 +120,7 @@ func (encoder *messageAsyncEncoder) enqueue() {
 // The goal is to ensure we're "capturing"  this only once per `sendMessageLoop` call. In order to do so, we allocate that structure on the stack, and passing
 // a pointer to that structure downstream.
 type pendingTransactionGroupsSnapshot struct {
-	pendingTransactionsGroups           []transactions.SignedTxGroup
+	pendingTransactionsGroups           []pooldata.SignedTxGroup
 	latestLocallyOriginatedGroupCounter uint64
 }
 
@@ -161,7 +162,7 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 			}
 		}
 		if (ops & peerOpsReschedule) == peerOpsReschedule {
-			s.scheduler.schedulerPeer(peer, currentTime+scheduleOffset)
+			s.scheduler.schedulePeer(peer, currentTime+scheduleOffset)
 		}
 
 		if deadline.Expired() {
@@ -208,10 +209,9 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 		profMakeBloomFilter.start()
 		// generate a bloom filter that matches the requests params.
 		metaMessage.filter = s.makeBloomFilter(metaMessage.message.UpdatedRequestParams, pendingTransactions.pendingTransactionsGroups, lastBloomFilter)
-		if !metaMessage.filter.sameParams(peer.lastSentBloomFilter) {
-			bf, _ := metaMessage.filter.encode()
-			metaMessage.message.TxnBloomFilter = *bf
-			bloomFilterSize = metaMessage.message.TxnBloomFilter.Msgsize()
+		if !metaMessage.filter.sameParams(peer.lastSentBloomFilter) && metaMessage.filter.encodedLength > 0 {
+			metaMessage.message.TxnBloomFilter = metaMessage.filter.encoded
+			bloomFilterSize = metaMessage.filter.encodedLength
 		}
 		profMakeBloomFilter.end()
 		s.lastBloomFilter = metaMessage.filter
@@ -272,9 +272,9 @@ func (s *syncState) evaluateOutgoingMessage(msgData sentMessageMetadata) {
 }
 
 // locallyGeneratedTransactions return a subset of the given transactionGroups array by filtering out transactions that are not locally generated.
-func (s *syncState) locallyGeneratedTransactions(pendingTransactions *pendingTransactionGroupsSnapshot) (result []transactions.SignedTxGroup) {
-	if pendingTransactions.latestLocallyOriginatedGroupCounter == transactions.InvalidSignedTxGroupCounter || len(pendingTransactions.pendingTransactionsGroups) == 0 {
-		return []transactions.SignedTxGroup{}
+func (s *syncState) locallyGeneratedTransactions(pendingTransactions *pendingTransactionGroupsSnapshot) (result []pooldata.SignedTxGroup) {
+	if pendingTransactions.latestLocallyOriginatedGroupCounter == pooldata.InvalidSignedTxGroupCounter || len(pendingTransactions.pendingTransactionsGroups) == 0 {
+		return []pooldata.SignedTxGroup{}
 	}
 	n := sort.Search(len(pendingTransactions.pendingTransactionsGroups), func(i int) bool {
 		return pendingTransactions.pendingTransactionsGroups[i].GroupCounter >= pendingTransactions.latestLocallyOriginatedGroupCounter
@@ -282,7 +282,7 @@ func (s *syncState) locallyGeneratedTransactions(pendingTransactions *pendingTra
 	if n == len(pendingTransactions.pendingTransactionsGroups) {
 		n--
 	}
-	result = make([]transactions.SignedTxGroup, n+1)
+	result = make([]pooldata.SignedTxGroup, n+1)
 
 	count := 0
 	for i := 0; i <= n; i++ {

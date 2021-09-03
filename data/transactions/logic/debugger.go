@@ -87,7 +87,7 @@ func GetProgramID(program []byte) string {
 }
 
 func makeDebugState(cx *evalContext) DebugState {
-	disasm, dsInfo, err := disassembleInstrumented(cx.program)
+	disasm, dsInfo, err := disassembleInstrumented(cx.program, nil)
 	if err != nil {
 		// Report disassembly error as program text
 		disasm = err.Error()
@@ -103,13 +103,13 @@ func makeDebugState(cx *evalContext) DebugState {
 		Proto:       cx.Proto,
 	}
 
-	globals := make([]basics.TealValue, len(GlobalFieldNames))
-	for fieldIdx := range GlobalFieldNames {
-		sv, err := cx.globalFieldToStack(GlobalField(fieldIdx))
+	globals := make([]basics.TealValue, len(globalFieldSpecs))
+	for _, fs := range globalFieldSpecs {
+		sv, err := cx.globalFieldToValue(fs)
 		if err != nil {
 			sv = stackValue{Bytes: []byte(err.Error())}
 		}
-		globals[fieldIdx] = stackValueToTealValue(&sv)
+		globals[fs.field] = stackValueToTealValue(&sv)
 	}
 	ds.Globals = globals
 

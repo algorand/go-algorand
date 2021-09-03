@@ -17,7 +17,6 @@
 package txnsync
 
 import (
-	"bytes"
 	"errors"
 )
 
@@ -44,23 +43,23 @@ func (b *bitmask) trimBitmask(entries int) {
 	if *b == nil {
 		return
 	}
-	lastExists := 0
-	lastNotExists := 0
+	numBitsCase0 := 0
+	numBitsCase1 := 0
 	numExists := 0
 	for i := 0; i < entries; i++ {
 		byteIndex := i/8 + 1
 		if (*b)[byteIndex]&(1<<(i%8)) != 0 {
-			lastExists = i
+			numBitsCase0 = i + 1
 			numExists++
 		} else {
-			lastNotExists = i
+			numBitsCase1 = i + 1
 		}
 	}
 	bitmaskType := 0
-	bestSize := bytesNeededBitmask(lastExists)
-	if bestSize > bytesNeededBitmask(lastNotExists) {
+	bestSize := bytesNeededBitmask(numBitsCase0)
+	if bestSize > bytesNeededBitmask(numBitsCase1) {
 		bitmaskType = 1
-		bestSize = bytesNeededBitmask(lastNotExists)
+		bestSize = bytesNeededBitmask(numBitsCase1)
 	}
 	if bestSize > numExists*2+1 {
 		bitmaskType = 2
@@ -71,6 +70,8 @@ func (b *bitmask) trimBitmask(entries int) {
 		bestSize = (entries-numExists)*2 + 1
 	}
 	switch bitmaskType {
+	case 0:
+		*b = (*b)[:bestSize]
 	case 1:
 		(*b)[0] = 1
 		for i := range *b {
@@ -78,6 +79,7 @@ func (b *bitmask) trimBitmask(entries int) {
 				(*b)[i] = 255 - (*b)[i] // invert bits
 			}
 		}
+		*b = (*b)[:bestSize]
 	case 2:
 		newBitmask := make(bitmask, 1, bestSize)
 		newBitmask[0] = 2
@@ -91,7 +93,6 @@ func (b *bitmask) trimBitmask(entries int) {
 			}
 		}
 		*b = newBitmask
-		return
 	case 3:
 		newBitmask := make(bitmask, 1, bestSize)
 		newBitmask[0] = 3
@@ -105,103 +106,136 @@ func (b *bitmask) trimBitmask(entries int) {
 			}
 		}
 		*b = newBitmask
-		return
-	default:
 	}
-
-	*b = bytes.TrimRight(*b, "\x00")
 }
 
 // iterate through the elements of bitmask without expanding it.
-// If more than maxIndex set bits are found, return error. For each set value, call callback.
-func (b *bitmask) iterate(entries int, maxIndex int, callback func(int, int) error) error {
+// call the func(entriesCount, setBitIndex) for every set bit
+// numTransactions: is the size of the array that transactionIndex is accessing: transactionIndex < numTransactions
+// numItems: is the size of the array that itemIndex is accessing: itemIndex < numItems (itemIndex is also the set bit counter)
+func (b *bitmask) iterate(numTransactions int, numItems int, callback func(int, int) error) error {
 	option := 0
 	if len(*b) > 0 {
 		option = int((*b)[0])
 	} else { // nothing to iterate
 		return nil
 	}
-	index := 0
+	itemIndex := 0
 	switch option {
 	case 0:
+		transactionIndex := 0
+		maxV := bytesNeededBitmask(numTransactions)
+		if len(*b) > maxV {
+			return errIndexNotFound
+		}
 		for i, v := range (*b)[1:] {
-			for j := 0; j < 8 && v > 0; j++ {
+			for ; transactionIndex < numTransactions && v > 0; transactionIndex++ {
 				if v&1 != 0 {
-					if index >= maxIndex {
+					if itemIndex >= numItems {
 						return errDataMissing
 					}
-					if err := callback(8*i+j, index); err != nil {
+					if err := callback(transactionIndex, itemIndex); err != nil {
 						return err
 					}
-					index++
+					itemIndex++
 				}
 				v >>= 1
 			}
-		}
-	case 1:
-		for i, v := range (*b)[1:] {
-			for j := 0; j < 8 && v < 255; j++ {
-				if v&1 == 0 {
-					if index >= maxIndex {
-						return errDataMissing
-					}
-					if err := callback(8*i+j, index); err != nil {
-						return err
-					}
-					index++
-				}
-				v >>= 1
-			}
-		}
-		for i := (len(*b) - 1) * 8; i < entries; i++ {
-			if index >= maxIndex {
-				return errDataMissing
-			}
-			if err := callback(i, index); err != nil {
-				return err
-			}
-			index++
-		}
-	case 2:
-		sum := 0
-		for index := 0; index*2+2 < len(*b); index++ {
-			sum += int((*b)[index*2+1])*256 + int((*b)[index*2+2])
-			if sum >= entries {
+			if v > 0 {
+				// remaining set bits, but transactionIndex exceeded numTransactions
 				return errIndexNotFound
 			}
-			if index >= maxIndex {
-				return errDataMissing
+			// in case the loop is cut short because there are no more set bits in the byte
+			transactionIndex = (i + 1) * 8
+		}
+	case 1:
+		transactionIndex := 0
+		maxV := bytesNeededBitmask(numTransactions)
+		if len(*b) > maxV {
+			return errIndexNotFound
+		}
+		for _, v := range (*b)[1:] {
+			// after the first iteration of the loop below, v will be less than 255
+			if v >= 255 {
+				transactionIndex += 8
+				continue
 			}
-			if err := callback(sum, index); err != nil {
+			maxJ := 8
+			if maxJ > numTransactions-transactionIndex {
+				maxJ = numTransactions - transactionIndex
+			}
+			for j := 0; j < maxJ; j++ {
+				if v&1 == 0 {
+					if itemIndex >= numItems {
+						return errDataMissing
+					}
+					if err := callback(transactionIndex, itemIndex); err != nil {
+						return err
+					}
+					itemIndex++
+				}
+				v >>= 1
+				transactionIndex++
+			}
+			if 255>>maxJ != v {
+				// The remaining of the bits must be 1
+				return errIndexNotFound
+			}
+		}
+		if numTransactions-transactionIndex > numItems-itemIndex {
+			return errDataMissing
+		}
+		for ; transactionIndex < numTransactions; transactionIndex++ {
+			if err := callback(transactionIndex, itemIndex); err != nil {
+				return err
+			}
+			itemIndex++
+		}
+	case 2:
+		sum := 0 // transactionIndex
+		elementsCount := (len(*b) - 1) / 2
+		if elementsCount > numItems {
+			return errDataMissing
+		}
+		for itemIndex := 0; itemIndex < elementsCount; itemIndex++ {
+			sum += int((*b)[itemIndex*2+1])*256 + int((*b)[itemIndex*2+2])
+			if sum >= numTransactions {
+				return errIndexNotFound
+			}
+			if err := callback(sum, itemIndex); err != nil {
 				return err
 			}
 		}
 	case 3:
 		sum := 0
-		j := 0
+		// This is the least amount of elements can be set.
+		// There could be more, if the numbers are corrupted
+		// i.e. when sum >= numTransactions
+		elementsCount := numTransactions - (len(*b)-1)/2
+		if elementsCount > numItems || elementsCount < 0 {
+			return errDataMissing
+		}
+		transactionIndex := 0
 		for i := 0; i*2+2 < len(*b); i++ {
 			sum += int((*b)[i*2+1])*256 + int((*b)[i*2+2])
-			for j < sum && j < entries {
-				if index >= maxIndex {
-					return errDataMissing
-				}
-				if err := callback(j, index); err != nil {
+			if sum >= numTransactions {
+				return errIndexNotFound
+			}
+			for transactionIndex < sum {
+				if err := callback(transactionIndex, itemIndex); err != nil {
 					return err
 				}
-				j++
-				index++
+				transactionIndex++
+				itemIndex++
 			}
-			j++
+			transactionIndex++
 		}
-		for j < entries {
-			if index >= maxIndex {
-				return errDataMissing
-			}
-			if err := callback(j, index); err != nil {
+		for transactionIndex < numTransactions {
+			if err := callback(transactionIndex, itemIndex); err != nil {
 				return err
 			}
-			j++
-			index++
+			transactionIndex++
+			itemIndex++
 		}
 	default:
 		return errInvalidBitmaskType

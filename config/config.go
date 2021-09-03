@@ -97,7 +97,8 @@ type Local struct {
 
 	// IncomingConnectionsLimit specifies the max number of long-lived incoming
 	// connections.  0 means no connections allowed.  -1 is unbounded.
-	IncomingConnectionsLimit int `version[0]:"-1" version[1]:"10000"`
+	// Estimating 5MB per incoming connection, 5MB*800 = 4GB
+	IncomingConnectionsLimit int `version[0]:"-1" version[1]:"10000" version[17]:"800"`
 
 	// BroadcastConnectionsLimit specifies the number of connections that
 	// will receive broadcast (gossip) messages from this node.  If the

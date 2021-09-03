@@ -22,7 +22,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
-	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/pooldata"
 )
 
 var (
@@ -38,8 +38,8 @@ type incomingMessage struct {
 	sequenceNumber    uint64
 	peer              *Peer
 	encodedSize       int
-	bloomFilter       bloomFilter
-	transactionGroups []transactions.SignedTxGroup
+	bloomFilter       *testableBloomFilter
+	transactionGroups []pooldata.SignedTxGroup
 }
 
 // incomingMessageQueue manages the global incoming message queue across all the incoming peers.
@@ -133,7 +133,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 	}
 
 	// if the peer sent us a bloom filter, decode it
-	if incomingMessage.message.TxnBloomFilter.BloomFilterType != 0 {
+	if !incomingMessage.message.TxnBloomFilter.MsgIsZero() {
 		bloomFilter, err := decodeBloomFilter(incomingMessage.message.TxnBloomFilter)
 		if err != nil {
 			s.log.Infof("Invalid bloom filter received from peer : %v", err)
@@ -242,7 +242,7 @@ incomingMessageLoop:
 		}
 
 		// if the peer sent us a bloom filter, store this.
-		if (incomingMsg.bloomFilter != bloomFilter{}) {
+		if incomingMsg.bloomFilter != nil {
 			peer.addIncomingBloomFilter(incomingMsg.message.Round, incomingMsg.bloomFilter, s.round)
 		}
 
@@ -299,7 +299,7 @@ incomingMessageLoop:
 		// if we had another message coming from this peer previously, we need to ensure there are not scheduled tasks.
 		s.scheduler.peerDuration(peer)
 
-		s.scheduler.schedulerPeer(peer, s.clock.Since())
+		s.scheduler.schedulePeer(peer, s.clock.Since())
 	}
 	if transactionPoolSize > 0 || transactionHandlerBacklogFull {
 		s.onTransactionPoolChangedEvent(MakeTransactionPoolChangeEvent(transactionPoolSize+totalAccumulatedTransactionsCount, transactionHandlerBacklogFull))

@@ -42,7 +42,7 @@ const (
 
 	// MaxEncodedAccountDataSize is a rough estimate for the worst-case scenario we're going to have of the account data and address serialized.
 	// this number is verified by the TestEncodedAccountDataSize function.
-	MaxEncodedAccountDataSize = 750000
+	MaxEncodedAccountDataSize = 850000
 
 	// encodedMaxAssetsPerAccount is the decoder limit of number of assets stored per account.
 	// it's being verified by the unit test TestEncodedAccountAllocationBounds to align
@@ -309,6 +309,9 @@ const (
 
 	// AppCreatable is the CreatableType corresponds to apps
 	AppCreatable CreatableType = 1
+
+	// MetadataHashLength is the number of bytes of the MetadataHash
+	MetadataHashLength int = 32
 )
 
 // CreatableLocator stores both the creator, whose balance record contains
@@ -360,7 +363,7 @@ type AssetParams struct {
 
 	// MetadataHash specifies a commitment to some unspecified asset
 	// metadata. The format of this metadata is up to the application.
-	MetadataHash [32]byte `codec:"am"`
+	MetadataHash [MetadataHashLength]byte `codec:"am"`
 
 	// Manager specifies an account that is allowed to change the
 	// non-zero addresses in this AssetParams.

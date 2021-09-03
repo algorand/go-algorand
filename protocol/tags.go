@@ -23,6 +23,7 @@ type Tag string
 // Tags, in lexicographic sort order of tag values to avoid duplicates.
 // These tags must not contain a comma character because lists of tags
 // are encoded using a comma separator (see network/msgOfInterest.go).
+// The tags must be 2 bytes long.
 const (
 	UnknownMsgTag      Tag = "??"
 	AgreementVoteTag   Tag = "AV"

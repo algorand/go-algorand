@@ -371,17 +371,25 @@ func ensureFullClient(dataDir string) libgoal.Client {
 	return ensureGoalClient(dataDir, libgoal.FullClient)
 }
 
-func ensureGoalClient(dataDir string, clientType libgoal.ClientType) libgoal.Client {
+func getGoalClient(dataDir string, clientType libgoal.ClientType) (client libgoal.Client, err error) {
 	clientConfig := libgoal.ClientConfig{
 		AlgodDataDir: dataDir,
 		KMDDataDir:   resolveKmdDataDir(dataDir),
 		CacheDir:     ensureCacheDir(dataDir),
 	}
-	client, err := libgoal.MakeClientFromConfig(clientConfig, clientType)
+	client, err = libgoal.MakeClientFromConfig(clientConfig, clientType)
+	if err != nil {
+		return
+	}
+	client.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
+	return
+}
+
+func ensureGoalClient(dataDir string, clientType libgoal.ClientType) libgoal.Client {
+	client, err := getGoalClient(dataDir, clientType)
 	if err != nil {
 		reportErrorf(errorNodeStatus, err)
 	}
-	client.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
 	return client
 }
 
@@ -404,7 +412,10 @@ func getWalletHandleMaybePassword(dataDir string, walletName string, getPassword
 	var dup bool
 
 	accountList := makeAccountsList(dataDir)
-	kmd := ensureKmdClient(dataDir)
+	kmd, err := getGoalClient(dataDir, libgoal.KmdClient)
+	if err != nil {
+		return nil, nil, fmt.Errorf("kmd client init error: %w", err)
+	}
 
 	// If the user didn't manually specify a wallet, use the default wallet ID
 	if walletName == "" {

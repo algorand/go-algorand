@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
@@ -85,7 +86,7 @@ const (
 // incomingBloomFilter stores an incoming bloom filter, along with the associated round number.
 // the round number allow us to prune filters from rounds n-2 and below.
 type incomingBloomFilter struct {
-	filter bloomFilter
+	filter *testableBloomFilter
 	round  basics.Round
 }
 
@@ -137,7 +138,8 @@ type Peer struct {
 	lastSentMessageTimestamp time.Duration
 	// lastSentMessageSize is the encoded message size of the last sent message
 	lastSentMessageSize int
-	// lastSentBloomFilter is the last bloom filter that was sent to this peer. This bloom filter could be stale if no bloom filter was included in the last message.
+	// lastSentBloomFilter is the last bloom filter that was sent to this peer.
+	// This bloom filter could be stale if no bloom filter was included in the last message.
 	lastSentBloomFilter bloomFilter
 
 	// lastConfirmedMessageSeqReceived is the last message sequence number that was confirmed by the peer to have been accepted.
@@ -166,7 +168,7 @@ type Peer struct {
 	nextStateTimestamp time.Duration
 	// messageSeriesPendingTransactions contain the transactions we are sending in the current "message-series". It allows us to pick a given
 	// "snapshot" from the transaction pool, and send that "snapshot" to completion before attempting to re-iterate.
-	messageSeriesPendingTransactions []transactions.SignedTxGroup
+	messageSeriesPendingTransactions []pooldata.SignedTxGroup
 
 	// transactionPoolAckCh is passed to the transaction handler when incoming transaction arrives. The channel is passed upstream, so that once
 	// a transaction is added to the transaction pool, we can get some feedback for that.
@@ -319,7 +321,7 @@ func (p *Peer) getAcceptedMessages() []uint64 {
 	return acceptedMessages
 }
 
-func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.SignedTxGroup, sendWindow time.Duration, round basics.Round, bloomFilterSize int) (selectedTxns []transactions.SignedTxGroup, selectedTxnIDs []transactions.Txid, partialTransactionsSet bool) {
+func (p *Peer) selectPendingTransactions(pendingTransactions []pooldata.SignedTxGroup, sendWindow time.Duration, round basics.Round, bloomFilterSize int) (selectedTxns []pooldata.SignedTxGroup, selectedTxnIDs []transactions.Txid, partialTransactionsSet bool) {
 	// if peer is too far back, don't send it any transactions ( or if the peer is not interested in transactions )
 	if p.lastRound < round.SubSaturate(1) || p.requestedTransactionsModulator == 0 {
 		return nil, nil, false
@@ -356,7 +358,7 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 		selectedIDsSliceLength = p.lastSelectedTransactionsCount * 2
 	}
 	selectedTxnIDs = make([]transactions.Txid, 0, selectedIDsSliceLength)
-	selectedTxns = make([]transactions.SignedTxGroup, 0, selectedIDsSliceLength)
+	selectedTxns = make([]pooldata.SignedTxGroup, 0, selectedIDsSliceLength)
 
 	windowSizedReached := false
 	hasMorePendingTransactions := false
@@ -372,7 +374,7 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 		effectiveBloomFilters = append(effectiveBloomFilters, filterIdx)
 	}
 
-	//removedTxn := 0
+	// removedTxn := 0
 	grpIdx := startIndex
 scanLoop:
 	for ; grpIdx < len(pendingTransactions); grpIdx++ {
@@ -394,7 +396,7 @@ scanLoop:
 		// check if the peer already received these messages from a different source other than us.
 		for _, filterIdx := range effectiveBloomFilters {
 			if p.recentIncomingBloomFilters[filterIdx].filter.test(txID) {
-				//removedTxn++
+				// removedTxn++
 				continue scanLoop
 			}
 		}
@@ -443,7 +445,7 @@ scanLoop:
 		p.messageSeriesPendingTransactions = nil
 	}
 
-	//fmt.Printf("selectPendingTransactions : selected %d transactions, %d not needed and aborted after exceeding data length %d/%d more = %v\n", len(selectedTxnIDs), removedTxn, accumulatedSize, windowLengthBytes, hasMorePendingTransactions)
+	// fmt.Printf("selectPendingTransactions : selected %d transactions, %d not needed and aborted after exceeding data length %d/%d more = %v\n", len(selectedTxnIDs), removedTxn, accumulatedSize, windowLengthBytes, hasMorePendingTransactions)
 
 	return selectedTxns, selectedTxnIDs, hasMorePendingTransactions
 }
@@ -460,7 +462,7 @@ func (p *Peer) updateMessageSent(txMsg *transactionBlockMessage, selectedTxnIDs 
 	p.lastSentMessageRound = txMsg.Round
 	p.lastSentMessageTimestamp = timestamp
 	p.lastSentMessageSize = messageSize
-	if filter.filter != nil {
+	if filter.encodedLength > 0 {
 		p.lastSentBloomFilter = filter
 	}
 }
@@ -491,7 +493,7 @@ func incomingPeersOnly(peers []*Peer) (incomingPeers []*Peer) {
 
 // incoming related functions
 
-func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter bloomFilter, currentRound basics.Round) {
+func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter *testableBloomFilter, currentRound basics.Round) {
 	bf := incomingBloomFilter{
 		round:  round,
 		filter: incomingFilter,
@@ -547,7 +549,7 @@ func (p *Peer) updateRequestParams(modulator, offset byte) {
 
 // update the recentSentTransactions with the incoming transaction groups. This would prevent us from sending the received transactions back to the
 // peer that sent it to us. This comes in addition to the bloom filter, if being sent by the other peer.
-func (p *Peer) updateIncomingTransactionGroups(txnGroups []transactions.SignedTxGroup) {
+func (p *Peer) updateIncomingTransactionGroups(txnGroups []pooldata.SignedTxGroup) {
 	for _, txnGroup := range txnGroups {
 		if len(txnGroup.Transactions) > 0 {
 			// The GroupTransactionID field is not yet updated, so we'll be calculating it's value here and passing it.
@@ -574,7 +576,7 @@ func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound ba
 			}
 			// clamp data exchange rate to realistic metrics
 			p.dataExchangeRate = dataExchangeRate
-			//fmt.Printf("incoming message : updating data exchange to %d; network msg size = %d+%d, transmit time = %v\n", dataExchangeRate, p.lastSentMessageSize, incomingMessageSize, networkTrasmitTime)
+			// fmt.Printf("incoming message : updating data exchange to %d; network msg size = %d+%d, transmit time = %v\n", dataExchangeRate, p.lastSentMessageSize, incomingMessageSize, networkTrasmitTime)
 		}
 
 		// given that we've (maybe) updated the data exchange rate, we need to clear out the lastSendMessage information
@@ -671,7 +673,7 @@ func (p *Peer) advancePeerState(currenTime time.Duration, isRelay bool) (ops pee
 			// todo : log
 		}
 	}
-	return
+	return ops
 }
 
 // getMessageConstructionOps constructs the messageConstructionOps that would be needed when
@@ -725,7 +727,7 @@ func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (
 			ops |= messageConstUpdateRequestParams
 		}
 	}
-	return
+	return ops
 }
 
 // getNextScheduleOffset is called after a message was sent to the peer, and we need to evaluate the next
@@ -784,9 +786,8 @@ func (p *Peer) getNextScheduleOffset(isRelay bool, beta time.Duration, partialMe
 					bloomMessageExtrapolatedSendingTime := messageTimeWindow
 					// try to improve the sending time by using the last sent bloom filter as the expected message size.
 					if p.lastSentBloomFilter.containedTxnsRange.transactionsCount > 0 {
-						bf, _ := p.lastSentBloomFilter.encode()
-						lastBloomFilterSize := uint64(len(bf.BloomFilter))
-						bloomMessageExtrapolatedSendingTime = time.Duration(lastBloomFilterSize * uint64(p.dataExchangeRate))
+						lastBloomFilterSize := uint64(p.lastSentBloomFilter.encodedLength)
+						bloomMessageExtrapolatedSendingTime = time.Duration(lastBloomFilterSize * p.dataExchangeRate)
 					}
 
 					next := p.nextStateTimestamp - bloomMessageExtrapolatedSendingTime - currentTime

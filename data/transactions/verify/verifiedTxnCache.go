@@ -21,12 +21,12 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 )
 
-const entriesPerBucket = 8179 // the default bucket size; a prime number could promote a lower hash collisions in case the hash function isn't perfect.
 const maxPinnedEntries = 500000
 
 // VerifiedTxnCacheError helps to identify the errors of a cache error and diffrenciate these from a general verification errors.
@@ -69,11 +69,13 @@ type VerifiedTransactionCache interface {
 	// Pin function would mark the given transaction group as pinned.
 	Pin(txgroup []transactions.SignedTxn) error
 	// PinGroups function would mark the given transaction groups as pinned.
-	PinGroups(txgroups []transactions.SignedTxGroup) error
+	PinGroups(txgroups []pooldata.SignedTxGroup) error
 }
 
 // verifiedTransactionCache provides an implementation of the VerifiedTransactionCache interface
 type verifiedTransactionCache struct {
+	// Number of entries in each map (bucket).
+	entriesPerBucket int
 	// bucketsLock is the lock for syncornizing the access to the cache
 	bucketsLock deadlock.Mutex
 	// buckets is the circular cache buckets buffer
@@ -86,14 +88,14 @@ type verifiedTransactionCache struct {
 
 // MakeVerifiedTransactionCache creates an instance of verifiedTransactionCache and returns it.
 func MakeVerifiedTransactionCache(cacheSize int) VerifiedTransactionCache {
-	bucketsCount := 1 + (cacheSize / entriesPerBucket)
 	impl := &verifiedTransactionCache{
-		buckets: make([]map[transactions.Txid]*GroupContext, bucketsCount),
-		pinned:  make(map[transactions.Txid]*GroupContext, cacheSize),
-		base:    0,
+		entriesPerBucket: (cacheSize + 1) / 2,
+		buckets:          make([]map[transactions.Txid]*GroupContext, 3),
+		pinned:           make(map[transactions.Txid]*GroupContext, cacheSize),
+		base:             0,
 	}
-	for i := 0; i < bucketsCount; i++ {
-		impl.buckets[i] = make(map[transactions.Txid]*GroupContext, entriesPerBucket)
+	for i := 0; i < len(impl.buckets); i++ {
+		impl.buckets[i] = make(map[transactions.Txid]*GroupContext, impl.entriesPerBucket)
 	}
 	return impl
 }
@@ -211,7 +213,7 @@ func (v *verifiedTransactionCache) Pin(txgroup []transactions.SignedTxn) (err er
 }
 
 // PinGroups function would mark the given transaction groups as pinned.
-func (v *verifiedTransactionCache) PinGroups(txgroups []transactions.SignedTxGroup) error {
+func (v *verifiedTransactionCache) PinGroups(txgroups []pooldata.SignedTxGroup) error {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
 	var outError error
@@ -266,10 +268,10 @@ func (v *verifiedTransactionCache) pin(txgroup []transactions.SignedTxn) (err er
 
 // add is the internal implementation of Add/AddPayset which adds a transaction group to the buffer.
 func (v *verifiedTransactionCache) add(txgroup []transactions.SignedTxn, groupCtx *GroupContext) {
-	if len(v.buckets[v.base])+len(txgroup) > entriesPerBucket {
+	if len(v.buckets[v.base])+len(txgroup) > v.entriesPerBucket {
 		// move to the next bucket while deleting the content of the next bucket.
 		v.base = (v.base + 1) % len(v.buckets)
-		v.buckets[v.base] = make(map[transactions.Txid]*GroupContext, entriesPerBucket)
+		v.buckets[v.base] = make(map[transactions.Txid]*GroupContext, v.entriesPerBucket)
 	}
 	currentBucket := v.buckets[v.base]
 	for _, txn := range txgroup {
@@ -303,7 +305,7 @@ func (v *mockedCache) UpdatePinned(pinnedTxns map[transactions.Txid]transactions
 	return nil
 }
 
-func (v *mockedCache) PinGroups(txgroups []transactions.SignedTxGroup) error {
+func (v *mockedCache) PinGroups(txgroups []pooldata.SignedTxGroup) error {
 	return nil
 }
 

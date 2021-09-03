@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
@@ -176,7 +177,7 @@ func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
 	verifiedTxGroup := wi.unverifiedTxGroup
 
 	// save the transaction, if it has high enough fee and not already in the cache
-	err := handler.txPool.Remember(transactions.SignedTxGroup{Transactions: verifiedTxGroup})
+	err := handler.txPool.Remember(pooldata.SignedTxGroup{Transactions: verifiedTxGroup})
 	if err != nil {
 		logging.Base().Debugf("could not remember tx: %v", err)
 		return
@@ -302,7 +303,7 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 	verifiedTxGroup := unverifiedTxGroup
 
 	// save the transaction, if it has high enough fee and not already in the cache
-	err = handler.txPool.Remember(transactions.SignedTxGroup{Transactions: verifiedTxGroup})
+	err = handler.txPool.Remember(pooldata.SignedTxGroup{Transactions: verifiedTxGroup})
 	if err != nil {
 		logging.Base().Debugf("could not remember tx: %v", err)
 		return false
@@ -322,34 +323,31 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 // the resulting slice is using the *same* underlying array as the input slice, and the caller must ensure that this would not
 // cause issue on the caller side. The nonDuplicatedFilteredGroups describe whether any of the removed transacation groups was
 // removed for a reason *other* than being duplicate ( for instance, malformed transaction )
-func (handler *TxHandler) filterAlreadyCommitted(unverifiedTxGroups []transactions.SignedTxGroup) (filteredGroups []transactions.SignedTxGroup, nonDuplicatedFilteredGroups bool) {
+func (handler *TxHandler) filterAlreadyCommitted(unverifiedTxGroups []pooldata.SignedTxGroup) (filteredGroups []pooldata.SignedTxGroup, nonDuplicatedFilteredGroups bool) {
 	remainedTxnsGroupOffset := 0
 	for idx, utxng := range unverifiedTxGroups {
 		err := handler.txPool.Test(utxng.Transactions)
 		switch err.(type) {
 		case nil:
 			// no error was generated.
+			if remainedTxnsGroupOffset != idx {
+				unverifiedTxGroups[remainedTxnsGroupOffset] = utxng
+			}
+			remainedTxnsGroupOffset++
 		case *ledgercore.TransactionInLedgerError:
 			// this is a duplicate transaction group.
-			continue
 		default:
 			// some non-duplicate error was reported on this group.
 			nonDuplicatedFilteredGroups = true
-			continue
 		}
-
-		if remainedTxnsGroupOffset != idx {
-			unverifiedTxGroups[remainedTxnsGroupOffset] = utxng
-		}
-		remainedTxnsGroupOffset++
 	}
 	return unverifiedTxGroups[:remainedTxnsGroupOffset], nonDuplicatedFilteredGroups
 }
 
 // processDecodedArray receives a slice of transaction groups and attempt to add them to the transaction pool.
 // The processDecodedArray returns whether the node should be disconnecting from the source of these transactions ( in case a malicious transaction is found )
-// as well as whether all the provided transactions were included in the transaction pool by the time the method returns.
-func (handler *TxHandler) processDecodedArray(unverifiedTxGroups []transactions.SignedTxGroup) (disconnect, allTransactionIncluded bool) {
+// as well as whether all the provided transactions were included in the transaction pool or committed.
+func (handler *TxHandler) processDecodedArray(unverifiedTxGroups []pooldata.SignedTxGroup) (disconnect, allTransactionIncluded bool) {
 	var nonDuplicatedFilteredGroups bool
 	unverifiedTxGroups, nonDuplicatedFilteredGroups = handler.filterAlreadyCommitted(unverifiedTxGroups)
 
@@ -361,8 +359,11 @@ func (handler *TxHandler) processDecodedArray(unverifiedTxGroups []transactions.
 	latest := handler.ledger.Latest()
 	latestHdr, err := handler.ledger.BlockHdr(latest)
 	if err != nil {
-		logging.Base().Warnf("Could not get header for previous block %v: %v", latest, err)
-		return false, false
+		// being unable to retrieve the last's block header is not something a working node is expected to expirience ( ever ).
+		logging.Base().Errorf("Could not get header for previous block %d: %v", latest, err)
+		// returning a disconnect=true, would not fix the problem for the local node, but would force the remote node to pick a different
+		// relay, which ( hopefully ! ) would not have the same issue as this one.
+		return true, false
 	}
 
 	unverifiedTxnGroups := make([][]transactions.SignedTxn, len(unverifiedTxGroups))
@@ -387,7 +388,7 @@ func (handler *TxHandler) processDecodedArray(unverifiedTxGroups []transactions.
 	// original backing storage ( which includes transactions that won't go into the
 	// transaction pool ) to be garbge collected.
 	for i, group := range verifiedTxGroup {
-		copiedTransactions := make(transactions.SignedTxnSlice, len(group.Transactions))
+		copiedTransactions := make(pooldata.SignedTxnSlice, len(group.Transactions))
 		copy(copiedTransactions, group.Transactions)
 		verifiedTxGroup[i].Transactions = copiedTransactions
 	}
@@ -431,14 +432,15 @@ func (handler *solicitedTxHandler) Handle(txgroup []transactions.SignedTxn) erro
 	return nil
 }
 
-// SolicitedAsyncTxHandler handles messages received through channels other than the gossip network.
-// It therefore circumvents the notion of incoming/outgoing messages
+// SolicitedAsyncTxHandler handles slices of transaction groups received from the transaction sync.
+// It provides a non-blocking queueing for the processing of these transaction groups, which allows
+// the single-threaded transaction sync to keep processing other messages.
 type SolicitedAsyncTxHandler interface {
 	// HandleTransactionGroups enqueues the given slice of transaction groups that came from the given network peer with
 	// the given message sequence number. The provided acknowledgement channel provides a feedback for the transaction sync
 	// that the entire transaction group slice was added ( or already included ) within the transaction pool. The method
 	// return true if it's able to enqueue the processing task, or false if it's unable to enqueue the processing task.
-	HandleTransactionGroups(networkPeer interface{}, ackCh chan uint64, messageSeq uint64, groups []transactions.SignedTxGroup) bool
+	HandleTransactionGroups(networkPeer interface{}, ackCh chan uint64, messageSeq uint64, groups []pooldata.SignedTxGroup) bool
 	Start()
 	Stop()
 }
@@ -460,7 +462,7 @@ type txGroups struct {
 	// the message sequence number, which would be written back to the feedback channel
 	messageSeq uint64
 	// the transactions groups slice
-	txGroups []transactions.SignedTxGroup
+	txGroups []pooldata.SignedTxGroup
 }
 
 // SolicitedAsyncTxHandler converts a transaction handler to a SolicitedTxHandler
@@ -477,7 +479,7 @@ func (handler *TxHandler) SolicitedAsyncTxHandler() SolicitedAsyncTxHandler {
 // the given message sequence number. The provided acknowledgement channel provides a feedback for the transaction sync
 // that the entire transaction group slice was added ( or already included ) within the transaction pool. The method
 // return true if it's able to enqueue the processing task, or false if it's unable to enqueue the processing task.
-func (handler *solicitedAyncTxHandler) HandleTransactionGroups(networkPeer interface{}, ackCh chan uint64, messageSeq uint64, groups []transactions.SignedTxGroup) (enqueued bool) {
+func (handler *solicitedAyncTxHandler) HandleTransactionGroups(networkPeer interface{}, ackCh chan uint64, messageSeq uint64, groups []pooldata.SignedTxGroup) (enqueued bool) {
 	select {
 	case handler.backlogGroups <- &txGroups{networkPeer: networkPeer, txGroups: groups, ackCh: ackCh, messageSeq: messageSeq}:
 		// reset the skipNextBacklogWarning once the number of pending items on the backlogGroups channels goes to
@@ -514,6 +516,7 @@ func (handler *solicitedAyncTxHandler) Stop() {
 		handler.stopCtxFunc = nil
 	}
 }
+
 func (handler *solicitedAyncTxHandler) loop(ctx context.Context) {
 	defer handler.stopped.Done()
 	var groups *txGroups
