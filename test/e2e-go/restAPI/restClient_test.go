@@ -18,7 +18,6 @@ package restapi
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"flag"
 	"math"
@@ -990,7 +989,7 @@ return
 	a.NotNil(txn.Logs)
 	a.Equal(32, len(*txn.Logs))
 	for i, l := range *txn.Logs {
-		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), l)
+		assert.Equal(t, []byte(string(rune('B'+i))), l)
 	}
 
 	//check non-create app call
@@ -1027,7 +1026,7 @@ return
 	a.NotNil(txn.Logs)
 	a.Equal(32, len(*txn.Logs))
 	for i, l := range *txn.Logs {
-		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), l)
+		assert.Equal(t, []byte(string(rune('B'+i))), l)
 	}
 
 }
