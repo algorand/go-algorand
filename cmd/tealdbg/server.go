@@ -72,7 +72,7 @@ type DebugParams struct {
 	ProgramBlobs     [][]byte
 	Proto            string
 	TxnBlob          []byte
-	GroupIndex       int
+	GroupIndex       byte
 	PastSideEffects  []logic.EvalSideEffects
 	BalanceBlob      []byte
 	DdrBlob          []byte

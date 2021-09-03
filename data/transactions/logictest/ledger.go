@@ -70,7 +70,7 @@ type Ledger struct {
 	balances          map[basics.Address]balanceRecord
 	applications      map[basics.AppIndex]appParams
 	assets            map[basics.AssetIndex]asaParams
-	trackedCreatables map[int]basics.CreatableIndex
+	trackedCreatables map[byte]basics.CreatableIndex
 	appID             basics.AppIndex
 	mods              map[basics.AppIndex]map[string]basics.ValueDelta
 	rnd               basics.Round
@@ -85,7 +85,7 @@ func MakeLedger(balances map[basics.Address]uint64) *Ledger {
 	}
 	l.applications = make(map[basics.AppIndex]appParams)
 	l.assets = make(map[basics.AssetIndex]asaParams)
-	l.trackedCreatables = make(map[int]basics.CreatableIndex)
+	l.trackedCreatables = make(map[byte]basics.CreatableIndex)
 	l.mods = make(map[basics.AppIndex]map[string]basics.ValueDelta)
 	return l
 }
@@ -441,13 +441,13 @@ func (l *Ledger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, err
 
 // SetTrackedCreatable remembers that the given cl "happened" in txn
 // groupIdx of the group, for use by GetCreatableID.
-func (l *Ledger) SetTrackedCreatable(groupIdx int, cl basics.CreatableLocator) {
+func (l *Ledger) SetTrackedCreatable(groupIdx byte, cl basics.CreatableLocator) {
 	l.trackedCreatables[groupIdx] = cl.Index
 }
 
 // GetCreatableID returns the creatable constructed in a given transaction
 // slot. For the test ledger, that's been set up by SetTrackedCreatable
-func (l *Ledger) GetCreatableID(groupIdx int) basics.CreatableIndex {
+func (l *Ledger) GetCreatableID(groupIdx byte) basics.CreatableIndex {
 	return l.trackedCreatables[groupIdx]
 }
 

@@ -64,7 +64,7 @@ type DebugState struct {
 	Disassembly string                   `codec:"disasm"`
 	PCOffset    []PCOffset               `codec:"pctooffset"`
 	TxnGroup    []transactions.SignedTxn `codec:"txngroup"`
-	GroupIndex  int                      `codec:"gindex"`
+	GroupIndex  byte                     `codec:"gindex"`
 	Proto       *config.ConsensusParams  `codec:"proto"`
 	Globals     []basics.TealValue       `codec:"globals"`
 

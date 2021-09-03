@@ -169,7 +169,7 @@ type LedgerForLogic interface {
 	AppParams(aidx basics.AppIndex) (basics.AppParams, basics.Address, error)
 	ApplicationID() basics.AppIndex
 	OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error)
-	GetCreatableID(groupIdx int) basics.CreatableIndex
+	GetCreatableID(groupIdx byte) basics.CreatableIndex
 
 	GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (value basics.TealValue, exists bool, err error)
 	SetLocal(addr basics.Address, key string, value basics.TealValue, accountIdx uint64) error
@@ -221,7 +221,7 @@ type EvalParams struct {
 	TxnGroup []transactions.SignedTxn
 
 	// GroupIndex should point to Txn within TxnGroup
-	GroupIndex int
+	GroupIndex byte
 
 	PastSideEffects []EvalSideEffects
 
@@ -342,7 +342,7 @@ type EvalContext struct {
 	instructionStarts map[int]bool
 
 	programHashCached crypto.Digest
-	txidCache         map[int]transactions.Txid
+	txidCache         map[byte]transactions.Txid
 	appAddrCache      map[basics.AppIndex]basics.Address
 
 	// Stores state & disassembly for the optional debugger
@@ -1753,8 +1753,8 @@ func opDup2(cx *EvalContext) {
 }
 
 func opDig(cx *EvalContext) {
-	depth := int(uint(cx.program[cx.pc+1]))
-	idx := len(cx.stack) - 1 - depth
+	depth := cx.program[cx.pc+1]
+	idx := len(cx.stack) - 1 - int(depth)
 	// Need to check stack size explicitly here because checkArgs() doesn't understand dig
 	// so we can't expect our stack to be prechecked.
 	if idx < 0 {
@@ -1879,16 +1879,16 @@ func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFi
 }
 
 // TxnFieldToTealValue is a thin wrapper for txnFieldToStack for external use
-func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field TxnField, arrayFieldIdx uint64) (basics.TealValue, error) {
+func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex byte, field TxnField, arrayFieldIdx uint64) (basics.TealValue, error) {
 	cx := EvalContext{EvalParams: EvalParams{GroupIndex: groupIndex}}
 	sv, err := cx.txnFieldToStack(txn, field, arrayFieldIdx, groupIndex)
 	return sv.toTealValue(), err
 }
 
-func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int) transactions.Txid {
+func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex byte) transactions.Txid {
 	// Initialize txidCache if necessary
 	if cx.txidCache == nil {
-		cx.txidCache = make(map[int]transactions.Txid, len(cx.TxnGroup))
+		cx.txidCache = make(map[byte]transactions.Txid, len(cx.TxnGroup))
 	}
 
 	// Hashes are expensive, so we cache computed TxIDs
@@ -1901,7 +1901,7 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int) tr
 	return txid
 }
 
-func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, field TxnField, arrayFieldIdx uint64, groupIndex int) (sv stackValue, err error) {
+func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, field TxnField, arrayFieldIdx uint64, groupIndex byte) (sv stackValue, err error) {
 	err = nil
 	switch field {
 	case Sender:
@@ -2107,13 +2107,13 @@ func opTxna(cx *EvalContext) {
 }
 
 func opGtxn(cx *EvalContext) {
-	gtxid := int(uint(cx.program[cx.pc+1]))
-	if gtxid >= len(cx.TxnGroup) {
+	gtxid := cx.program[cx.pc+1]
+	if int(gtxid) >= len(cx.TxnGroup) {
 		cx.err = fmt.Errorf("gtxn lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(uint64(cx.program[cx.pc+2]))
+	field := TxnField(cx.program[cx.pc+2])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -2140,8 +2140,8 @@ func opGtxn(cx *EvalContext) {
 }
 
 func opGtxna(cx *EvalContext) {
-	gtxid := int(uint(cx.program[cx.pc+1]))
-	if gtxid >= len(cx.TxnGroup) {
+	gtxid := cx.program[cx.pc+1]
+	if int(gtxid) >= len(cx.TxnGroup) {
 		cx.err = fmt.Errorf("gtxna lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
 		return
 	}
@@ -2168,8 +2168,12 @@ func opGtxna(cx *EvalContext) {
 
 func opGtxns(cx *EvalContext) {
 	last := len(cx.stack) - 1
-	gtxid := int(cx.stack[last].Uint)
-	if gtxid >= len(cx.TxnGroup) {
+	gtxid := cx.stack[last].Uint
+	if gtxid >= math.MaxUint8 {
+		cx.err = fmt.Errorf("Group index %d too large", gtxid)
+		return
+	}
+	if int(gtxid) >= len(cx.TxnGroup) {
 		cx.err = fmt.Errorf("gtxns lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
 		return
 	}
@@ -2191,7 +2195,7 @@ func opGtxns(cx *EvalContext) {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = uint64(gtxid)
 	} else {
-		sv, err = cx.txnFieldToStack(tx, field, 0, gtxid)
+		sv, err = cx.txnFieldToStack(tx, field, 0, byte(gtxid))
 		if err != nil {
 			cx.err = err
 			return
@@ -2202,8 +2206,12 @@ func opGtxns(cx *EvalContext) {
 
 func opGtxnsa(cx *EvalContext) {
 	last := len(cx.stack) - 1
-	gtxid := int(cx.stack[last].Uint)
-	if gtxid >= len(cx.TxnGroup) {
+	gtxid := cx.stack[last].Uint
+	if gtxid >= math.MaxUint8 {
+		cx.err = fmt.Errorf("Group index %d too large", gtxid)
+		return
+	}
+	if int(gtxid) >= len(cx.TxnGroup) {
 		cx.err = fmt.Errorf("gtxnsa lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
 		return
 	}
@@ -2220,7 +2228,7 @@ func opGtxnsa(cx *EvalContext) {
 		return
 	}
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
-	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, byte(gtxid))
 	if err != nil {
 		cx.err = err
 		return
@@ -2228,8 +2236,8 @@ func opGtxnsa(cx *EvalContext) {
 	cx.stack[last] = sv
 }
 
-func opGaidImpl(cx *EvalContext, groupIdx int, opName string) (sv stackValue, err error) {
-	if groupIdx >= len(cx.TxnGroup) {
+func opGaidImpl(cx *EvalContext, groupIdx byte, opName string) (sv stackValue, err error) {
+	if int(groupIdx) >= len(cx.TxnGroup) {
 		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
 		return
 	} else if groupIdx > cx.GroupIndex {
@@ -2256,7 +2264,7 @@ func opGaidImpl(cx *EvalContext, groupIdx int, opName string) (sv stackValue, er
 }
 
 func opGaid(cx *EvalContext) {
-	groupIdx := int(uint(cx.program[cx.pc+1]))
+	groupIdx := cx.program[cx.pc+1]
 	sv, err := opGaidImpl(cx, groupIdx, "gaid")
 	if err != nil {
 		cx.err = err
@@ -2268,8 +2276,12 @@ func opGaid(cx *EvalContext) {
 
 func opGaids(cx *EvalContext) {
 	last := len(cx.stack) - 1
-	groupIdx := int(cx.stack[last].Uint)
-	sv, err := opGaidImpl(cx, groupIdx, "gaids")
+	groupIdx := cx.stack[last].Uint
+	if groupIdx >= math.MaxUint8 {
+		cx.err = fmt.Errorf("Group index %d too large", groupIdx)
+		return
+	}
+	sv, err := opGaidImpl(cx, byte(groupIdx), "gaids")
 	if err != nil {
 		cx.err = err
 		return
@@ -2327,7 +2339,7 @@ func (cx *EvalContext) getApplicationAddress() (basics.Address, error) {
 	return appAddr, nil
 }
 
-func (cx *EvalContext) getCreatableID(groupIndex int) (cid uint64, err error) {
+func (cx *EvalContext) getCreatableID(groupIndex byte) (cid uint64, err error) {
 	if cx.Ledger == nil {
 		err = fmt.Errorf("ledger not available")
 		return
@@ -2457,23 +2469,20 @@ func opEd25519verify(cx *EvalContext) {
 }
 
 func opLoad(cx *EvalContext) {
-	gindex := int(uint(cx.program[cx.pc+1]))
+	gindex := cx.program[cx.pc+1]
 	cx.stack = append(cx.stack, cx.scratch[gindex])
 }
 
 func opStore(cx *EvalContext) {
-	gindex := int(uint(cx.program[cx.pc+1]))
+	gindex := cx.program[cx.pc+1]
 	last := len(cx.stack) - 1
 	cx.scratch[gindex] = cx.stack[last]
 	cx.stack = cx.stack[:last]
 }
 
-func opGloadImpl(cx *EvalContext, groupIdx int, scratchIdx int, opName string) (scratchValue stackValue, err error) {
-	if groupIdx >= len(cx.TxnGroup) {
+func opGloadImpl(cx *EvalContext, groupIdx byte, scratchIdx byte, opName string) (scratchValue stackValue, err error) {
+	if int(groupIdx) >= len(cx.TxnGroup) {
 		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
-		return
-	} else if scratchIdx >= 256 {
-		err = fmt.Errorf("invalid Scratch index %d", scratchIdx)
 		return
 	} else if txn := cx.TxnGroup[groupIdx].Txn; txn.Type != protocol.ApplicationCallTx {
 		err = fmt.Errorf("can't use %s on non-app call txn with index %d", opName, groupIdx)
@@ -2491,9 +2500,9 @@ func opGloadImpl(cx *EvalContext, groupIdx int, scratchIdx int, opName string) (
 }
 
 func opGload(cx *EvalContext) {
-	groupIdx := int(uint(cx.program[cx.pc+1]))
-	scratchIdx := int(uint(cx.program[cx.pc+2]))
-	scratchValue, err := opGloadImpl(cx, groupIdx, scratchIdx, "gload")
+	groupIdx := cx.program[cx.pc+1]
+	scratchIdx := cx.program[cx.pc+2]
+	scratchValue, err := opGloadImpl(cx, byte(groupIdx), scratchIdx, "gload")
 	if err != nil {
 		cx.err = err
 		return
@@ -2504,9 +2513,13 @@ func opGload(cx *EvalContext) {
 
 func opGloads(cx *EvalContext) {
 	last := len(cx.stack) - 1
-	groupIdx := int(cx.stack[last].Uint)
-	scratchIdx := int(uint(cx.program[cx.pc+1]))
-	scratchValue, err := opGloadImpl(cx, groupIdx, scratchIdx, "gloads")
+	groupIdx := cx.stack[last].Uint
+	if groupIdx >= math.MaxUint8 {
+		cx.err = fmt.Errorf("Group index %d too large", groupIdx)
+		return
+	}
+	scratchIdx := cx.program[cx.pc+1]
+	scratchValue, err := opGloadImpl(cx, byte(groupIdx), scratchIdx, "gloads")
 	if err != nil {
 		cx.err = err
 		return

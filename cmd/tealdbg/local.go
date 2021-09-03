@@ -209,7 +209,7 @@ type evaluation struct {
 	source          string
 	offsetToLine    map[int]int
 	name            string
-	groupIndex      int
+	groupIndex      byte
 	pastSideEffects []logic.EvalSideEffects
 	mode            modeType
 	aidx            basics.AppIndex
@@ -357,7 +357,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			err = fmt.Errorf("invalid group index %d for a single transaction", dp.GroupIndex)
 			return
 		}
-		if len(r.txnGroup) > 0 && dp.GroupIndex >= len(r.txnGroup) {
+		if len(r.txnGroup) > 0 && int(dp.GroupIndex) >= len(r.txnGroup) {
 			err = fmt.Errorf("invalid group index %d for a txn in a transaction group of %d", dp.GroupIndex, len(r.txnGroup))
 			return
 		}
@@ -431,7 +431,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 		if len(stxn.Lsig.Logic) > 0 {
 			run := evaluation{
 				program:    stxn.Lsig.Logic,
-				groupIndex: gi,
+				groupIndex: byte(gi),
 				mode:       modeLogicsig,
 			}
 			r.runs = append(r.runs, run)
@@ -443,7 +443,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 				if len(stxn.Txn.ApprovalProgram) > 0 {
 					appIdx = basics.AppIndex(dp.AppID)
 					b, states, err = makeBalancesAdapter(
-						balances, r.txnGroup, gi,
+						balances, r.txnGroup, byte(gi),
 						r.protoName, dp.Round, dp.LatestTimestamp,
 						appIdx, dp.Painless, dp.IndexerURL, dp.IndexerToken,
 					)
@@ -452,7 +452,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 					}
 					run := evaluation{
 						program:         stxn.Txn.ApprovalProgram,
-						groupIndex:      gi,
+						groupIndex:      byte(gi),
 						pastSideEffects: dp.PastSideEffects,
 						mode:            modeStateful,
 						aidx:            appIdx,
@@ -479,7 +479,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 								return
 							}
 							b, states, err = makeBalancesAdapter(
-								balances, r.txnGroup, gi,
+								balances, r.txnGroup, byte(gi),
 								r.protoName, dp.Round, dp.LatestTimestamp,
 								appIdx, dp.Painless, dp.IndexerURL, dp.IndexerToken,
 							)
@@ -488,7 +488,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 							}
 							run := evaluation{
 								program:         program,
-								groupIndex:      gi,
+								groupIndex:      byte(gi),
 								pastSideEffects: dp.PastSideEffects,
 								mode:            modeStateful,
 								aidx:            appIdx,

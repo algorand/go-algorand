@@ -60,7 +60,7 @@ type mockCowForLogicLedger struct {
 	cr     map[creatableLocator]basics.Address
 	brs    map[basics.Address]basics.AccountData
 	stores map[storeLocator]basics.TealKeyValue
-	tcs    map[int]basics.CreatableIndex
+	tcs    map[byte]basics.CreatableIndex
 }
 
 func (c *mockCowForLogicLedger) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
@@ -71,7 +71,7 @@ func (c *mockCowForLogicLedger) Get(addr basics.Address, withPendingRewards bool
 	return br, nil
 }
 
-func (c *mockCowForLogicLedger) GetCreatableID(groupIdx int) basics.CreatableIndex {
+func (c *mockCowForLogicLedger) GetCreatableID(groupIdx byte) basics.CreatableIndex {
 	return c.tcs[groupIdx]
 }
 

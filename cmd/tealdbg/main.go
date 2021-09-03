@@ -265,7 +265,7 @@ func debugLocal(args []string) {
 		ProgramBlobs:     programBlobs,
 		Proto:            proto,
 		TxnBlob:          txnBlob,
-		GroupIndex:       groupIndex,
+		GroupIndex:       byte(groupIndex),
 		BalanceBlob:      balanceBlob,
 		DdrBlob:          ddrBlob,
 		IndexerURL:       indexerURL,

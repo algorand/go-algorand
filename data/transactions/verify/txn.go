@@ -99,7 +99,7 @@ func (g *GroupContext) Equal(other *GroupContext) bool {
 
 // Txn verifies a SignedTxn as being signed and having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
-func Txn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
+func Txn(s *transactions.SignedTxn, txnIdx byte, groupCtx *GroupContext) error {
 	batchVerifier := crypto.MakeBatchVerifierDefaultSize()
 
 	if err := TxnBatchVerify(s, txnIdx, groupCtx, batchVerifier); err != nil {
@@ -119,7 +119,7 @@ func Txn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
 // TxnBatchVerify verifies a SignedTxn having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
 // it is the caller responsibility to call batchVerifier.verify()
-func TxnBatchVerify(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, verifier *crypto.BatchVerifier) error {
+func TxnBatchVerify(s *transactions.SignedTxn, txnIdx byte, groupCtx *GroupContext, verifier *crypto.BatchVerifier) error {
 	if !groupCtx.consensusParams.SupportRekeying && (s.AuthAddr != basics.Address{}) {
 		return errors.New("nonempty AuthAddr but rekeying not supported")
 	}
@@ -161,7 +161,7 @@ func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 	minFeeCount := uint64(0)
 	feesPaid := uint64(0)
 	for i, stxn := range stxs {
-		err = TxnBatchVerify(&stxn, i, groupCtx, verifier)
+		err = TxnBatchVerify(&stxn, byte(i), groupCtx, verifier)
 		if err != nil {
 			err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
 			return
@@ -191,7 +191,7 @@ func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 	return
 }
 
-func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
+func stxnVerifyCore(s *transactions.SignedTxn, txnIdx byte, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
 	numSigs := 0
 	hasSig := false
 	hasMsig := false
@@ -245,7 +245,7 @@ func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 
 // LogicSigSanityCheck checks that the signature is valid and that the program is basically well formed.
 // It does not evaluate the logic.
-func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext) error {
+func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex byte, groupCtx *GroupContext) error {
 	batchVerifier := crypto.MakeBatchVerifierDefaultSize()
 
 	if err := LogicSigSanityCheckBatchVerify(txn, groupIndex, groupCtx, batchVerifier); err != nil {
@@ -266,7 +266,7 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 // LogicSigSanityCheckBatchVerify checks that the signature is valid and that the program is basically well formed.
 // It does not evaluate the logic.
 // it is the caller responsibility to call batchVerifier.verify()
-func LogicSigSanityCheckBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
+func LogicSigSanityCheckBatchVerify(txn *transactions.SignedTxn, groupIndex byte, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
 	lsig := txn.Lsig
 
 	if groupCtx.consensusParams.LogicSigVersion == 0 {
@@ -334,7 +334,7 @@ func LogicSigSanityCheckBatchVerify(txn *transactions.SignedTxn, groupIndex int,
 
 // logicSigBatchVerify checks that the signature is valid, executing the program.
 // it is the caller responsibility to call batchVerifier.verify()
-func logicSigBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext, batchverifier *crypto.BatchVerifier) error {
+func logicSigBatchVerify(txn *transactions.SignedTxn, groupIndex byte, groupCtx *GroupContext, batchverifier *crypto.BatchVerifier) error {
 	err := LogicSigSanityCheck(txn, groupIndex, groupCtx)
 	if err != nil {
 		return err

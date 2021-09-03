@@ -70,9 +70,9 @@ type roundCowState struct {
 	compatibilityGetKeyCache map[basics.Address]map[storagePtr]uint64
 
 	// index of a txn within a group; used in conjunction with trackedCreatables
-	groupIdx int
+	groupIdx byte
 	// track creatables created during each transaction in the round
-	trackedCreatables map[int]basics.CreatableIndex
+	trackedCreatables map[byte]basics.CreatableIndex
 }
 
 func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, proto config.ConsensusParams, prevTimestamp int64, hint int) *roundCowState {
@@ -82,7 +82,7 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, proto conf
 		proto:             proto,
 		mods:              ledgercore.MakeStateDelta(&hdr, prevTimestamp, hint, 0),
 		sdeltas:           make(map[basics.Address]map[storagePtr]*storageDelta),
-		trackedCreatables: make(map[int]basics.CreatableIndex),
+		trackedCreatables: make(map[byte]basics.CreatableIndex),
 	}
 
 	// compatibilityMode retains producing application' eval deltas under the following rule:
@@ -139,7 +139,7 @@ func (cb *roundCowState) prevTimestamp() int64 {
 	return cb.mods.PrevTimestamp
 }
 
-func (cb *roundCowState) getCreatableIndex(groupIdx int) basics.CreatableIndex {
+func (cb *roundCowState) getCreatableIndex(groupIdx byte) basics.CreatableIndex {
 	return cb.trackedCreatables[groupIdx]
 }
 
@@ -219,7 +219,7 @@ func (cb *roundCowState) child(hint int) *roundCowState {
 	}
 
 	// clone tracked creatables
-	ch.trackedCreatables = make(map[int]basics.CreatableIndex)
+	ch.trackedCreatables = make(map[byte]basics.CreatableIndex)
 	for i, tc := range cb.trackedCreatables {
 		ch.trackedCreatables[i] = tc
 	}
@@ -232,7 +232,7 @@ func (cb *roundCowState) child(hint int) *roundCowState {
 }
 
 // setGroupIdx sets this transaction's index within its group
-func (cb *roundCowState) setGroupIdx(txnIdx int) {
+func (cb *roundCowState) setGroupIdx(txnIdx byte) {
 	cb.groupIdx = txnIdx
 }
 

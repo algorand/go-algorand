@@ -420,7 +420,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 			Txn:                     &stxn,
 			Proto:                   &proto,
 			TxnGroup:                dr.Txns,
-			GroupIndex:              ti,
+			GroupIndex:              byte(ti),
 			PastSideEffects:         pse,
 			PooledApplicationBudget: &pooledAppBudget,
 		}

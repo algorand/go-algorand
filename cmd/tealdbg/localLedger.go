@@ -60,7 +60,7 @@ type ApplicationIndexerResponse struct {
 type localLedger struct {
 	balances        map[basics.Address]basics.AccountData
 	txnGroup        []transactions.SignedTxn
-	groupIndex      int
+	groupIndex      byte
 	round           uint64
 	aidx            basics.AppIndex
 	latestTimestamp int64
@@ -68,11 +68,11 @@ type localLedger struct {
 
 func makeBalancesAdapter(
 	balances map[basics.Address]basics.AccountData, txnGroup []transactions.SignedTxn,
-	groupIndex int, proto string, round uint64, latestTimestamp int64,
+	groupIndex byte, proto string, round uint64, latestTimestamp int64,
 	appIdx basics.AppIndex, painless bool, indexerURL string, indexerToken string,
 ) (apply.Balances, AppState, error) {
 
-	if groupIndex >= len(txnGroup) {
+	if int(groupIndex) >= len(txnGroup) {
 		return nil, AppState{}, fmt.Errorf("invalid groupIndex %d exceed txn group length %d", groupIndex, len(txnGroup))
 	}
 	txn := txnGroup[groupIndex]

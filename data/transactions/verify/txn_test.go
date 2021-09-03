@@ -425,7 +425,7 @@ func BenchmarkTxn(b *testing.B) {
 		groupCtx, err := PrepareGroupContext(txnGroup, blk.BlockHeader)
 		require.NoError(b, err)
 		for i, txn := range txnGroup {
-			err := Txn(&txn, i, groupCtx)
+			err := Txn(&txn, byte(i), groupCtx)
 			require.NoError(b, err)
 		}
 	}

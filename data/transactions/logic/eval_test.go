@@ -163,7 +163,7 @@ func TestTxnFieldToTealValue(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	txn := transactions.Transaction{}
-	groupIndex := 0
+	groupIndex := byte(0)
 	field := FirstValid
 	values := [6]uint64{0, 1, 2, 0xffffffff, 0xffffffffffffffff}
 
@@ -2395,7 +2395,7 @@ int 1`,
 					Proto:           &proto,
 					Txn:             &txgroup[j],
 					TxnGroup:        txgroup,
-					GroupIndex:      j,
+					GroupIndex:      byte(j),
 					PastSideEffects: pastSideEffects,
 				}
 			}
@@ -2469,7 +2469,7 @@ int 1`,
 					Proto:           &proto,
 					Txn:             &txgroup[j],
 					TxnGroup:        txgroup,
-					GroupIndex:      j,
+					GroupIndex:      byte(j),
 					PastSideEffects: pastSideEffects,
 				}
 			}
@@ -2542,7 +2542,7 @@ byte "txn 2"
 			Proto:           &proto,
 			Txn:             &txgroup[j],
 			TxnGroup:        txgroup,
-			GroupIndex:      j,
+			GroupIndex:      byte(j),
 			PastSideEffects: pastSideEffects,
 		}
 	}

@@ -241,7 +241,7 @@ func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basi
 	return acct, nil
 }
 
-func (cs *roundCowState) GetCreatableID(groupIdx int) basics.CreatableIndex {
+func (cs *roundCowState) GetCreatableID(groupIdx byte) basics.CreatableIndex {
 	return cs.getCreatableIndex(groupIdx)
 }
 
@@ -705,7 +705,7 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 			Txn:                     &groupNoAD[i],
 			Proto:                   &eval.proto,
 			TxnGroup:                groupNoAD,
-			GroupIndex:              i,
+			GroupIndex:              byte(i),
 			PastSideEffects:         pastSideEffects,
 			MinTealVersion:          &minTealVersion,
 			PooledApplicationBudget: &pooledApplicationBudget,
@@ -741,7 +741,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		cow.setGroupIdx(gi)
+		cow.setGroupIdx(byte(gi))
 		err := eval.transaction(txad.SignedTxn, evalParams[gi], txad.ApplyData, cow, &txib)
 		if err != nil {
 			return err

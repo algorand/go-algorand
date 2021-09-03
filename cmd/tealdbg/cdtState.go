@@ -38,7 +38,7 @@ type cdtState struct {
 	disassembly string
 	proto       *config.ConsensusParams
 	txnGroup    []transactions.SignedTxn
-	groupIndex  int
+	groupIndex  byte
 	globals     []basics.TealValue
 
 	// mutable program state
@@ -90,7 +90,7 @@ var txnFileTypeHints = map[logic.TxnField]typeHint{
 	logic.FreezeAssetAccount:  addressHint,
 }
 
-func (s *cdtState) Init(disassembly string, proto *config.ConsensusParams, txnGroup []transactions.SignedTxn, groupIndex int, globals []basics.TealValue) {
+func (s *cdtState) Init(disassembly string, proto *config.ConsensusParams, txnGroup []transactions.SignedTxn, groupIndex byte, globals []basics.TealValue) {
 	s.disassembly = disassembly
 	s.proto = proto
 	s.txnGroup = txnGroup
@@ -140,7 +140,7 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.R
 	maker, ok := objectDescMap[objID]
 	if !ok {
 		if idx, ok := decodeGroupTxnID(objID); ok {
-			if idx >= len(s.txnGroup) || idx < 0 {
+			if int(idx) >= len(s.txnGroup) || idx < 0 {
 				err = fmt.Errorf("invalid group idx: %d", idx)
 				return
 			}
@@ -357,7 +357,7 @@ func prepareGlobals(globals []basics.TealValue) []fieldDesc {
 	return result
 }
 
-func prepareTxn(txn *transactions.Transaction, groupIndex int) []fieldDesc {
+func prepareTxn(txn *transactions.Transaction, groupIndex byte) []fieldDesc {
 	result := make([]fieldDesc, 0, len(logic.TxnFieldNames))
 	for field, name := range logic.TxnFieldNames {
 		if field == int(logic.FirstValidTime) ||
@@ -456,7 +456,7 @@ func makeIntPreview(n int) (prop []cdt.RuntimePropertyPreview) {
 	return
 }
 
-func makeTxnPreview(txnGroup []transactions.SignedTxn, groupIndex int) cdt.RuntimeObjectPreview {
+func makeTxnPreview(txnGroup []transactions.SignedTxn, groupIndex byte) cdt.RuntimeObjectPreview {
 	var prop []cdt.RuntimePropertyPreview
 	if len(txnGroup) > 0 {
 		fields := prepareTxn(&txnGroup[groupIndex].Txn, groupIndex)
@@ -513,14 +513,14 @@ func makeGlobalsPreview(globals []basics.TealValue) cdt.RuntimeObjectPreview {
 
 var gtxnObjIDPrefix = fmt.Sprintf("%s_gid_", gtxnObjID)
 
-func encodeGroupTxnID(groupIndex int) string {
-	return gtxnObjIDPrefix + strconv.Itoa(groupIndex)
+func encodeGroupTxnID(groupIndex byte) string {
+	return gtxnObjIDPrefix + strconv.Itoa(int(groupIndex))
 }
 
-func decodeGroupTxnID(objID string) (int, bool) {
+func decodeGroupTxnID(objID string) (byte, bool) {
 	if strings.HasPrefix(objID, gtxnObjIDPrefix) {
 		if val, err := strconv.ParseInt(objID[len(gtxnObjIDPrefix):], 10, 32); err == nil {
-			return int(val), true
+			return byte(val), true
 		}
 	}
 	return 0, false
@@ -611,11 +611,11 @@ func decodeAppLocalsAppID(objID string) (string, uint64, bool) {
 
 var txnArrayFieldPrefix = fmt.Sprintf("%s__", txnArrayFieldObjID)
 
-func encodeTxnArrayField(groupIndex int, field int) string {
+func encodeTxnArrayField(groupIndex byte, field int) string {
 	return fmt.Sprintf("%s%d_%d", txnArrayFieldPrefix, groupIndex, field)
 }
 
-func decodeTxnArrayField(objID string) (int, int, bool) {
+func decodeTxnArrayField(objID string) (byte, int, bool) {
 	if strings.HasPrefix(objID, txnArrayFieldPrefix) {
 		encoded := objID[len(txnArrayFieldPrefix):]
 		parts := strings.Split(encoded, "_")
@@ -627,7 +627,7 @@ func decodeTxnArrayField(objID string) (int, int, bool) {
 		if fieldIndex, err = strconv.ParseInt(parts[1], 10, 32); err != nil {
 			return 0, 0, false
 		}
-		return int(groupIndex), int(fieldIndex), true
+		return byte(groupIndex), int(fieldIndex), true
 	}
 	return 0, 0, false
 }
@@ -705,14 +705,14 @@ func makeGlobals(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescripto
 }
 
 func makeTxn(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
-	if len(s.txnGroup) > 0 && s.groupIndex < len(s.txnGroup) && s.groupIndex >= 0 {
+	if len(s.txnGroup) > 0 && int(s.groupIndex) < len(s.txnGroup) && s.groupIndex >= 0 {
 		return makeTxnImpl(&s.txnGroup[s.groupIndex].Txn, s.groupIndex, preview)
 	}
 	desc = make([]cdt.RuntimePropertyDescriptor, 0)
 	return
 }
 
-func makeTxnImpl(txn *transactions.Transaction, groupIndex int, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
+func makeTxnImpl(txn *transactions.Transaction, groupIndex byte, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	fields := prepareTxn(txn, groupIndex)
 	for _, field := range fields {
 		desc = append(desc, makePrimitive(field))
@@ -750,7 +750,7 @@ func makeTxnImpl(txn *transactions.Transaction, groupIndex int, preview bool) (d
 	return
 }
 
-func txnFieldToArrayFieldDesc(txn *transactions.Transaction, groupIndex int, field logic.TxnField, length int) (desc []fieldDesc) {
+func txnFieldToArrayFieldDesc(txn *transactions.Transaction, groupIndex byte, field logic.TxnField, length int) (desc []fieldDesc) {
 	for i := 0; i < length; i++ {
 		tv, err := logic.TxnFieldToTealValue(txn, groupIndex, field, uint64(i))
 		if err != nil {
@@ -765,8 +765,8 @@ func txnFieldToArrayFieldDesc(txn *transactions.Transaction, groupIndex int, fie
 	return
 }
 
-func makeTxnArrayField(s *cdtState, groupIndex int, fieldIdx int) (desc []cdt.RuntimePropertyDescriptor) {
-	if len(s.txnGroup) > 0 && s.groupIndex < len(s.txnGroup) && s.groupIndex >= 0 && fieldIdx >= 0 && fieldIdx < len(logic.TxnFieldNames) {
+func makeTxnArrayField(s *cdtState, groupIndex byte, fieldIdx int) (desc []cdt.RuntimePropertyDescriptor) {
+	if len(s.txnGroup) > 0 && int(s.groupIndex) < len(s.txnGroup) && s.groupIndex >= 0 && fieldIdx >= 0 && fieldIdx < len(logic.TxnFieldNames) {
 		txn := s.txnGroup[groupIndex].Txn
 		var length int
 		switch logic.TxnField(fieldIdx) {
@@ -793,9 +793,9 @@ func makeTxnArrayField(s *cdtState, groupIndex int, fieldIdx int) (desc []cdt.Ru
 func makeTxnGroup(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	desc = make([]cdt.RuntimePropertyDescriptor, 0, len(s.txnGroup))
 	for i := 0; i < len(s.txnGroup); i++ {
-		item := makeObject(strconv.Itoa(i), encodeGroupTxnID(i))
+		item := makeObject(strconv.Itoa(i), encodeGroupTxnID(byte(i)))
 		if preview {
-			txnPreview := makeTxnPreview(s.txnGroup, i)
+			txnPreview := makeTxnPreview(s.txnGroup, byte(i))
 			item.Value.Preview = &txnPreview
 		}
 		desc = append(desc, item)
