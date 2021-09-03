@@ -87,13 +87,15 @@ func (al *logicLedger) MinBalance(addr basics.Address, proto *config.ConsensusPa
 	return record.MinBalance(proto), nil
 }
 
-func (al *logicLedger) Authorizer(addr basics.Address) basics.Address {
+func (al *logicLedger) Authorizer(addr basics.Address) (basics.Address, error) {
 	record, err := al.cow.Get(addr, false) // pending rewards unneeded
-	if err != nil || record.AuthAddr.IsZero() {
-		return addr
+	if err != nil {
+		return basics.Address{}, err
 	}
-
-	return record.AuthAddr
+	if !record.AuthAddr.IsZero() {
+		return record.AuthAddr, nil
+	}
+	return addr, nil
 }
 
 func (al *logicLedger) GetCreatableID(groupIdx int) basics.CreatableIndex {

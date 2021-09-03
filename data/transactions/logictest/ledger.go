@@ -241,15 +241,15 @@ func (l *Ledger) MinBalance(addr basics.Address, proto *config.ConsensusParams) 
 // Authorizer returns the address that must authorize txns from a
 // given address.  It's either the address itself, or the value it has
 // been rekeyed to.
-func (l *Ledger) Authorizer(addr basics.Address) basics.Address {
+func (l *Ledger) Authorizer(addr basics.Address) (basics.Address, error) {
 	br, ok := l.balances[addr]
 	if !ok {
-		return addr // Not rekeyed if not present
+		return addr, nil // Not rekeyed if not present
 	}
 	if !br.auth.IsZero() {
-		return br.auth
+		return br.auth, nil
 	}
-	return br.addr
+	return br.addr, nil
 }
 
 // GetGlobal returns the current value of a global in an app, taking

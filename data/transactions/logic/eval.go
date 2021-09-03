@@ -160,7 +160,7 @@ func (sv *stackValue) toTealValue() (tv basics.TealValue) {
 type LedgerForLogic interface {
 	Balance(addr basics.Address) (basics.MicroAlgos, error)
 	MinBalance(addr basics.Address, proto *config.ConsensusParams) (basics.MicroAlgos, error)
-	Authorizer(addr basics.Address) basics.Address
+	Authorizer(addr basics.Address) (basics.Address, error)
 	Round() basics.Round
 	LatestTimestamp() int64
 
@@ -3306,7 +3306,11 @@ func authorizedSender(cx *EvalContext, addr basics.Address) bool {
 	if err != nil {
 		return false
 	}
-	return appAddr == cx.Ledger.Authorizer(addr)
+	authorizer, err := cx.Ledger.Authorizer(addr)
+	if err != nil {
+		return false
+	}
+	return appAddr == authorizer
 }
 
 func opTxBegin(cx *EvalContext) {
