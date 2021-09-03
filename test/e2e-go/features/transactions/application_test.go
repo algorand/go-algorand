@@ -32,12 +32,12 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func checkEqual(expected []transactions.LogItem, actual []transactions.LogItem) bool {
+func checkEqual(expected []string, actual []string) bool {
 	if len(expected) != len(actual) {
 		return false
 	}
 	for i, e := range expected {
-		if !e.Equal(actual[i]) {
+		if e != actual[i] {
 			return false
 		}
 	}
@@ -113,12 +113,12 @@ log
 	round, err = client.CurrentRound()
 	a.NoError(err)
 
-	logs := make([]transactions.LogItem, 32)
+	logs := make([]string, 32)
 	for i := range logs {
-		logs[i] = transactions.LogItem{ID: 0, Message: "a"}
+		logs[i] = "a"
 	}
-	logs[30] = transactions.LogItem{ID: 0, Message: "b"}
-	logs[31] = transactions.LogItem{ID: 0, Message: "c"}
+	logs[30] = "b"
+	logs[31] = "c"
 
 	b, err := client.BookkeepingBlock(round)
 	for _, ps := range b.Payset {
