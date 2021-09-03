@@ -2771,8 +2771,10 @@ func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uin
 		addr, err := cx.Txn.Txn.AddressByIndex(account.Uint, cx.Txn.Txn.Sender)
 		return addr, account.Uint, err
 	}
-	addr := basics.Address{}
-	copy(addr[:], account.Bytes)
+	addr, err := account.address()
+	if err != nil {
+		return addr, 0, err
+	}
 	idx, err := cx.Txn.Txn.IndexByAddress(addr, cx.Txn.Txn.Sender)
 
 	if err != nil {

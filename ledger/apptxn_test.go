@@ -366,6 +366,8 @@ submit:  tx_submit
 
 // TestClawbackAction ensures an app address can act as clawback address.
 func TestClawbackAction(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	genBalances, addrs, _ := newTestGenesis()
 	l := newTestLedger(t, genBalances)
 	defer l.Close()
@@ -446,6 +448,8 @@ func TestClawbackAction(t *testing.T) {
 
 // TestRekeyAction ensures an app can transact for a rekeyed account
 func TestRekeyAction(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	genBalances, addrs, _ := newTestGenesis()
 	l := newTestLedger(t, genBalances)
 	defer l.Close()
