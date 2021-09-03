@@ -30,12 +30,8 @@ type XorBuilder = xorfilter.Builder
 // XorFilter is a faster more efficient alternative to a Bloom filter
 // An XorFilter object can be used as is or with optional adittional setup.
 type XorFilter struct {
-	// xor is the underlying xor filter instance. it's mutually exclusive with the marshaled field. ( i.e. after we marshal the filter, we can't use it as a filter anymore )
-	xor *xorfilter.Xor32
-	// holding contains the staging slice of the uint64 we want the xor filter to contains.
+	xor     *xorfilter.Xor32
 	holding []uint64
-	// marshaled is the serialized form the marshaled xor filter. The marshaled is mutually exclusive with the holding and the underlying xor filter instance.
-	marshaled []byte
 
 	b *XorBuilder
 }
@@ -69,9 +65,6 @@ const sizeofInt32 = 4
 
 // MarshalBinary implements encoding.BinaryMarshaller interface
 func (xf *XorFilter) MarshalBinary() ([]byte, error) {
-	if xf.marshaled != nil {
-		return xf.marshaled, nil
-	}
 	if len(xf.holding) != 0 {
 		var err error
 		if xf.b != nil {
@@ -97,9 +90,6 @@ func (xf *XorFilter) MarshalBinary() ([]byte, error) {
 		pos += sizeofInt32
 	}
 	out = out[:pos]
-	xf.marshaled = out
-	xf.holding = nil
-	xf.xor = nil
 	return out, nil
 }
 
@@ -182,8 +172,7 @@ type XorFilter8 struct {
 // The Builder is not thread safe and should only be used by one thread at a time.
 func NewXor8(hint int, builder *XorBuilder) *XorFilter8 {
 	return &XorFilter8{
-		b:       builder,
-		holding: make([]uint64, 0, hint),
+		b: builder,
 	}
 }
 
