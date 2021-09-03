@@ -5,7 +5,7 @@ import sys
 import argparse
 
 # Arguments parsing / help menu
-parser = argparse.ArgumentParser(description='Verify test results for skipped tests and tests with multiple passes.')
+parser = argparse.ArgumentParser(description='Check test results for intentionally and unintentionally skipped tests, as well as tests that ran multiple times.')
 parser.add_argument('tests_results_filepath', metavar='RESULTS_FILE',
     help='json format test results file path (e.g. /tmp/results/testresults.json)')
 args = parser.parse_args()
@@ -84,18 +84,18 @@ else:
     printColor("No tests skipped intentionally.", GREEN_TEXT_COLOR)
 printColor("==================================================\n", YELLOW_TEXT_COLOR)
 
-# Check tests unintentionally (due to partition)
+# Check unintentionally skipped tests (due to partition)
 printColor("============= UNINTENTIONALLY SKIPPED ============", YELLOW_TEXT_COLOR)
 listOfSkippedUnintentionally = []
 [listOfSkippedUnintentionally.append(x) for x in AllTestResults if (AllTestResults[x]['ran'] == 0 and AllTestResults[x]['skipped_intentionally'] == False)]
 countSkippedUnintentionally = len(listOfSkippedUnintentionally)
 if countSkippedUnintentionally:
-    printColor(f"{countSkippedUnintentionally} tests were skipped UNintentionally", RED_TEXT_COLOR)
-    [printColor(f"{x} -- skipped UNintentionally. (due to partitiontest.PartitionTest() being called twice?)", RED_TEXT_COLOR) for x in sorted(listOfSkippedUnintentionally)]
-    printColor(f"{countSkippedUnintentionally} tests were skipped UNintentionally.", RED_TEXT_COLOR)
-    errorMessage += f"{countSkippedUnintentionally} tests were skipped UNintentionally";
+    printColor(f"{countSkippedUnintentionally} tests were skipped unintentionally", RED_TEXT_COLOR)
+    [printColor(f"{x} -- skipped unintentionally. (due to partitiontest.PartitionTest() being called twice?)", RED_TEXT_COLOR) for x in sorted(listOfSkippedUnintentionally)]
+    printColor(f"{countSkippedUnintentionally} tests were skipped unintentionally.", RED_TEXT_COLOR)
+    errorMessage += f"{countSkippedUnintentionally} tests were skipped unintentionally";
 else:
-    printColor("No tests skipped UNintentionally (due to partitioning).", GREEN_TEXT_COLOR)
+    printColor("No tests skipped unintentionally (due to partitioning).", GREEN_TEXT_COLOR)
 printColor("==================================================\n", YELLOW_TEXT_COLOR)
 
 # === Summary ===
@@ -108,7 +108,7 @@ printColor(f"Saw {countUniqueTests} unique tests", GREEN_TEXT_COLOR if countUniq
 printColor(f"{countTotalSkipped} total skipped tests", GREEN_TEXT_COLOR if countTotalSkipped == 0 else YELLOW_TEXT_COLOR)
 printColor(f"{countRanTests} tests ran", GREEN_TEXT_COLOR if countRanTests != 0 else RED_TEXT_COLOR)
 printColor(f"{countSkippedIntentionally} tests were skipped intentionally. (They were probably disabled, please double check)", GREEN_TEXT_COLOR if countSkippedIntentionally == 0 else YELLOW_TEXT_COLOR)
-printColor(f"{countSkippedUnintentionally} tests were skipped UNintentionally. (Due to partitioning multiple times? maybe due to partitiontest.PartitionTest() being called twice?)", GREEN_TEXT_COLOR if countSkippedUnintentionally == 0 else RED_TEXT_COLOR)
+printColor(f"{countSkippedUnintentionally} tests were skipped unintentionally. (Due to partitioning multiple times? maybe due to partitiontest.PartitionTest() being called twice?)", GREEN_TEXT_COLOR if countSkippedUnintentionally == 0 else RED_TEXT_COLOR)
 printColor(f"{countMultipleRuns} tests ran multiple times. (Can probably be fixed by adding \"partitiontest.PartitionTest()\")", GREEN_TEXT_COLOR if countMultipleRuns == 0 else RED_TEXT_COLOR)
 printColor("==================================================\n", YELLOW_TEXT_COLOR)
 
