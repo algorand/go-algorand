@@ -899,26 +899,19 @@ func opSHA512_256(cx *EvalContext) {
 func opPlus(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
-	cx.stack[prev].Uint += cx.stack[last].Uint
-	if cx.stack[prev].Uint < cx.stack[last].Uint {
+	sum, carry := bits.Add64(cx.stack[prev].Uint, cx.stack[last].Uint, 0)
+	if carry > 0 {
 		cx.err = errors.New("+ overflowed")
 		return
 	}
+	cx.stack[prev].Uint = sum
 	cx.stack = cx.stack[:last]
-}
-
-func opAddwImpl(x, y uint64) (carry uint64, sum uint64) {
-	sum = x + y
-	if sum < x {
-		carry = 1
-	}
-	return
 }
 
 func opAddw(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
-	carry, sum := opAddwImpl(cx.stack[prev].Uint, cx.stack[last].Uint)
+	sum, carry := bits.Add64(cx.stack[prev].Uint, cx.stack[last].Uint, 0)
 	cx.stack[prev].Uint = carry
 	cx.stack[last].Uint = sum
 }
@@ -994,45 +987,19 @@ func opModulo(cx *EvalContext) {
 func opMul(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
-	a := cx.stack[prev].Uint
-	b := cx.stack[last].Uint
-	v := a * b
-	if (a != 0) && (b != 0) && (v/a != b) {
+	high, low := bits.Mul64(cx.stack[prev].Uint, cx.stack[last].Uint)
+	if high > 0 {
 		cx.err = errors.New("* overflowed")
 		return
 	}
-	cx.stack[prev].Uint = v
+	cx.stack[prev].Uint = low
 	cx.stack = cx.stack[:last]
-}
-
-func opMulwImpl(x, y uint64) (high64 uint64, low64 uint64, err error) {
-	var a, b, v big.Int
-	a.SetUint64(x)
-	b.SetUint64(y)
-	v.Mul(&a, &b)
-
-	var maxUint, high, low big.Int
-	maxUint.SetUint64(math.MaxUint64)
-	low.And(&v, &maxUint)
-	high.Rsh(&v, 64)
-	if !low.IsUint64() || !high.IsUint64() {
-		err = errors.New("mulw overflowed")
-		return
-	}
-
-	high64 = high.Uint64()
-	low64 = low.Uint64()
-	return
 }
 
 func opMulw(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
-	high, low, err := opMulwImpl(cx.stack[prev].Uint, cx.stack[last].Uint)
-	if err != nil {
-		cx.err = err
-		return
-	}
+	high, low := bits.Mul64(cx.stack[prev].Uint, cx.stack[last].Uint)
 	cx.stack[prev].Uint = high
 	cx.stack[last].Uint = low
 }
