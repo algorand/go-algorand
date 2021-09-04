@@ -505,35 +505,14 @@ func TestMulOverflow(t *testing.T) {
 	testPanics(t, "int 0x111111111; int 0x222222222; *; pop; int 1", 1)
 }
 
-func TestMulwImpl(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	t.Parallel()
-	high, low, err := opMulwImpl(1, 2)
-	require.NoError(t, err)
-	require.Equal(t, uint64(0), high)
-	require.Equal(t, uint64(2), low)
-
-	high, low, err = opMulwImpl(0x111111111, 0x222222222)
-	require.NoError(t, err)
-	require.Equal(t, uint64(2), high)
-	require.Equal(t, uint64(0x468acf130eca8642), low)
-
-	high, low, err = opMulwImpl(1, 0)
-	require.NoError(t, err)
-	require.Equal(t, uint64(0), high)
-	require.Equal(t, uint64(0), low)
-
-	high, low, err = opMulwImpl((1<<64)-1, (1<<64)-1)
-	require.NoError(t, err)
-	require.Equal(t, uint64(0xfffffffffffffffe), high)
-	require.Equal(t, uint64(1), low)
-}
-
 func TestMulw(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
+	testAccepts(t, "int 1; int 2; mulw; int 2; ==; assert; int 0; ==", 3)
+	testAccepts(t, "int 0x111111111; int 0x222222222; mulw; int 0x468acf130eca8642; ==; assert; int 2; ==", 3)
+	testAccepts(t, "int 1; int 0; mulw; int 0; ==; assert; int 0; ==", 3)
+	testAccepts(t, "int 0xFFFFFFFFFFFFFFFF; int 0xFFFFFFFFFFFFFFFF; mulw; int 1; ==; assert; int 0xFFFFFFFFFFFFFFFe; ==", 3)
 	testAccepts(t, `
 int 0x111111111
 int 0x222222222
@@ -552,31 +531,15 @@ int 1                   // ret 1
 `, 1)
 }
 
-func TestAddwImpl(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	t.Parallel()
-	carry, sum := opAddwImpl(1, 2)
-	require.Equal(t, uint64(0), carry)
-	require.Equal(t, uint64(3), sum)
-
-	carry, sum = opAddwImpl(0xFFFFFFFFFFFFFFFD, 0x45)
-	require.Equal(t, uint64(1), carry)
-	require.Equal(t, uint64(0x42), sum)
-
-	carry, sum = opAddwImpl(0, 0)
-	require.Equal(t, uint64(0), carry)
-	require.Equal(t, uint64(0), sum)
-
-	carry, sum = opAddwImpl((1<<64)-1, (1<<64)-1)
-	require.Equal(t, uint64(1), carry)
-	require.Equal(t, uint64((1<<64)-2), sum)
-}
-
 func TestAddw(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
+	testAccepts(t, "int 1; int 2; addw; int 3; ==; assert; int 0; ==", 3)
+	testAccepts(t, "int 0xFFFFFFFFFFFFFFFD; int 0x45; addw; int 0x42; ==; assert; int 1; ==", 3)
+	testAccepts(t, "int 0; int 0; addw; int 0; ==; assert; int 0; ==", 3)
+	testAccepts(t, "int 0xFFFFFFFFFFFFFFFF; dup; addw; int 0xFFFFFFFFFFFFFFFe; ==; assert; int 1; ==", 3)
+
 	testAccepts(t, `
 int 0xFFFFFFFFFFFFFFFF
 int 0x43
@@ -3529,8 +3492,10 @@ func BenchmarkUintMath(b *testing.B) {
 		{"pop1", "", "int 1234576; pop", "int 1"},
 		{"pop", "", "int 1234576; int 6712; pop; pop", "int 1"},
 		{"add", "", "int 1234576; int 6712; +; pop", "int 1"},
+		{"addw", "", "int 21276237623; int 32387238723; addw; pop; pop", "int 1"},
 		{"sub", "", "int 1234576; int 2; -; pop", "int 1"},
 		{"mul", "", "int 212; int 323; *; pop", "int 1"},
+		{"mulw", "", "int 21276237623; int 32387238723; mulw; pop; pop", "int 1"},
 		{"div", "", "int 736247364; int 892; /; pop", "int 1"},
 		{"divmodw", "", "int 736247364; int 892; int 126712; int 71672; divmodw; pop; pop; pop; pop", "int 1"},
 		{"sqrt", "", "int 736247364; sqrt; pop", "int 1"},
