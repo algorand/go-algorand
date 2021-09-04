@@ -404,6 +404,7 @@ var globalFieldDocs = map[string]string{
 	"CurrentApplicationID":      "ID of current application executing. Fails if no such application is executing",
 	"CreatorAddress":            "Address of the creator of the current application. Fails if no such application is executing",
 	"CurrentApplicationAddress": "Address that the current application controls. Fails if no such application is executing",
+	"GroupID":                   "ID of the transaction group. 32 zero bytes if the transaction is not part of a group.",
 }
 
 // GlobalFieldDocs are notes on fields available in `global` with extra versioning info if any

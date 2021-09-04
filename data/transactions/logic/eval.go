@@ -2346,6 +2346,10 @@ func (cx *EvalContext) getCreatorAddress() ([]byte, error) {
 	return creator[:], nil
 }
 
+func (cx *EvalContext) getGroupID() []byte {
+	return cx.Txn.Txn.Group[:]
+}
+
 var zeroAddress basics.Address
 
 func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, err error) {
@@ -2374,6 +2378,8 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		sv.Bytes = addr[:]
 	case CreatorAddress:
 		sv.Bytes, err = cx.getCreatorAddress()
+	case GroupID:
+		sv.Bytes = cx.getGroupID()
 	default:
 		err = fmt.Errorf("invalid global field %d", fs.field)
 	}
