@@ -3342,6 +3342,21 @@ func opTxBegin(cx *EvalContext) {
 	}
 }
 
+// availableAccount is used instead of accountReference for more recent opcodes
+// that don't need (or want!) to allow low numbers to represent the account at
+// that index in Accounts array.
+func (cx *EvalContext) availableAccount(sv stackValue) (basics.Address, error) {
+	if sv.argType() != StackBytes {
+		return basics.Address{}, fmt.Errorf("not an address")
+	}
+
+	addr, _, err := cx.accountReference(sv)
+	return addr, err
+}
+
+// availableAsset is used instead of asaReference for more recent opcodes that
+// don't need (or want!) to allow low numbers to represent the asset at that
+// index in ForeignAssets array.
 func (cx *EvalContext) availableAsset(sv stackValue) (basics.AssetIndex, error) {
 	aid, err := sv.uint()
 	if err != nil {
@@ -3366,6 +3381,9 @@ func opTxField(cx *EvalContext) {
 	sv := cx.stack[last]
 	switch field {
 	case Type:
+		if sv.Bytes == nil {
+			cx.err = fmt.Errorf("Type arg not a byte array")
+		}
 		cx.subtxn.Txn.Type = protocol.TxType(sv.Bytes)
 	case TypeEnum:
 		var i uint64
@@ -3375,7 +3393,7 @@ func opTxField(cx *EvalContext) {
 		}
 
 	case Sender:
-		cx.subtxn.Txn.Sender, _, cx.err = cx.accountReference(sv)
+		cx.subtxn.Txn.Sender, cx.err = cx.availableAccount(sv)
 	case Fee:
 		cx.subtxn.Txn.Fee.Raw, cx.err = sv.uint()
 	// FirstValid, LastValid unsettable: no motivation
@@ -3388,22 +3406,22 @@ func opTxField(cx *EvalContext) {
 	// KeyReg not allowed yet, so no fields settable
 
 	case Receiver:
-		cx.subtxn.Txn.Receiver, _, cx.err = cx.accountReference(sv)
+		cx.subtxn.Txn.Receiver, cx.err = cx.availableAccount(sv)
 	case Amount:
 		cx.subtxn.Txn.Amount.Raw, cx.err = sv.uint()
 	case CloseRemainderTo:
-		cx.subtxn.Txn.CloseRemainderTo, _, cx.err = cx.accountReference(sv)
+		cx.subtxn.Txn.CloseRemainderTo, cx.err = cx.availableAccount(sv)
 
 	case XferAsset:
 		cx.subtxn.Txn.XferAsset, cx.err = cx.availableAsset(sv)
 	case AssetAmount:
 		cx.subtxn.Txn.AssetAmount, cx.err = sv.uint()
 	case AssetSender:
-		cx.subtxn.Txn.AssetSender, _, cx.err = cx.accountReference(sv)
+		cx.subtxn.Txn.AssetSender, cx.err = cx.availableAccount(sv)
 	case AssetReceiver:
-		cx.subtxn.Txn.AssetReceiver, _, cx.err = cx.accountReference(sv)
+		cx.subtxn.Txn.AssetReceiver, cx.err = cx.availableAccount(sv)
 	case AssetCloseTo:
-		cx.subtxn.Txn.AssetCloseTo, _, cx.err = cx.accountReference(sv)
+		cx.subtxn.Txn.AssetCloseTo, cx.err = cx.availableAccount(sv)
 
 	// acfg likely next
 

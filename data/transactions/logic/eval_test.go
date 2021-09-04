@@ -4573,17 +4573,21 @@ func TestShifts(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
+	testAccepts(t, "int 1; int 0; shl; int 1; ==", 4)
 	testAccepts(t, "int 1; int 1; shl; int 2; ==", 4)
 	testAccepts(t, "int 1; int 2; shl; int 4; ==", 4)
 	testAccepts(t, "int 3; int 2; shl; int 12; ==", 4)
 	testAccepts(t, "int 2; int 63; shl; int 0; ==", 4)
 
+	testAccepts(t, "int 3; int 0; shr; int 3; ==", 4)
 	testAccepts(t, "int 1; int 1; shr; int 0; ==", 4)
 	testAccepts(t, "int 1; int 2; shr; int 0; ==", 4)
 	testAccepts(t, "int 3; int 1; shr; int 1; ==", 4)
 	testAccepts(t, "int 96; int 3; shr; int 12; ==", 4)
 	testAccepts(t, "int 8756675; int 63; shr; int 0; ==", 4)
 
+	testPanics(t, "int 8756675; int 64; shr; int 0; ==", 4)
+	testPanics(t, "int 8756675; int 64; shl; int 0; ==", 4)
 }
 
 func TestSqrt(t *testing.T) {
@@ -4623,6 +4627,10 @@ func TestExp(t *testing.T) {
 	testAccepts(t, "int 3; int 1; exp; int 3; ==", 4)
 	testAccepts(t, "int 96; int 3; exp; int 884736; ==", 4)
 	testPanics(t, "int 96; int 15; exp; int 884736; >", 4)
+
+	// These seem the same but check different code paths
+	testPanics(t, "int 2; int 64; exp; pop; int 1", 4)
+	testPanics(t, "int 4; int 32; exp; pop; int 1", 4)
 }
 
 func TestExpw(t *testing.T) {
@@ -4639,6 +4647,10 @@ func TestExpw(t *testing.T) {
 	testPanics(t, "int 64; int 22; expw; pop; pop; int 1", 4)  // (2^6)^22 = 2^132
 
 	testAccepts(t, "int 97; int 15; expw; int 10271255586529954209; ==; assert; int 34328615749; ==;", 4)
+
+	testPanics(t, "int 2; int 128; expw; pop; pop; int 1", 4) // 2^128 is too big
+	// looks the same, but different code path
+	testPanics(t, "int 4; int 64; expw; pop; pop; int 1", 4) // 2^128 is too big
 }
 
 func TestBitLen(t *testing.T) {
@@ -4744,6 +4756,9 @@ func TestBytesBits(t *testing.T) {
 
 	testAccepts(t, "int 3; bzero; byte 0x000000; ==", 4)
 	testAccepts(t, "int 33; bzero; byte 0x000000000000000000000000000000000000000000000000000000000000000000; ==", 4)
+
+	testAccepts(t, "int 4096; bzero; len; int 4096; ==", 4)
+	testPanics(t, "int 4097; bzero; len; int 4097; ==", 4)
 }
 
 func TestBytesConversions(t *testing.T) {
