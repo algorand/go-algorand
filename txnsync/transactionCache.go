@@ -24,7 +24,10 @@ import (
 )
 
 // cachedEntriesPerMap is the number of entries the longTermTransactionCache will have in each of it's
-// buckets.
+// buckets. When looking up an entry, we don't want to have too many entries, hence, the number of maps we
+// maintain shouldn't be too high. On the flip side, keeping small number of maps means that we drop out
+// large portion of our cache. The number 917 here was picked as a sufficiently large prime number, which
+// would mean that if longTermRecentTransactionsSentBufferLength=15K, then we would have about 16 maps.
 const cachedEntriesPerMap = 917
 
 // cacheHistoryDuration is the time we will keep a transaction in the cache, assuming that the cache
@@ -232,7 +235,7 @@ func (lt *longTermTransactionCache) add(slice []transactions.Txid, timestamp tim
 		}
 		lt.transactionsMap[lt.current] = txMap
 
-		// remove the ones we've alread added from the slice.
+		// remove the ones we've already added from the slice.
 		slice = slice[availableEntries:]
 
 		// move to the next map.
