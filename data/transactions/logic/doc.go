@@ -151,7 +151,10 @@ var opDocByName = map[string]string{
 	"b^":  "A bitwise-xor B, where A and B are byte-arrays, zero-left extended to the greater of their lengths",
 	"b~":  "X with all bits inverted",
 
-	"log": "write bytes to log state of the current application",
+	"log":       "write bytes to log state of the current application",
+	"tx_begin":  "Prepare a new application action",
+	"tx_field":  "Set field F of the current application action",
+	"tx_submit": "Execute the current application action. Panic on any failure.",
 }
 
 // OpDoc returns a description of the op
@@ -191,6 +194,7 @@ var opcodeImmediateNotes = map[string]string{
 	"asset_holding_get": "{uint8 asset holding field index}",
 	"asset_params_get":  "{uint8 asset params field index}",
 	"app_params_get":    "{uint8 app params field index}",
+	"tx_field":          "{uint8 transaction field index}",
 }
 
 // OpImmediateNote returns a short string about immediate data which follows the op byte
@@ -248,13 +252,14 @@ func OpDocExtra(opName string) string {
 
 // OpGroups is groupings of ops for documentation purposes.
 var OpGroups = map[string][]string{
-	"Arithmetic":           {"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
-	"Byte Array Slicing":   {"substring", "substring3", "extract", "extract3", "extract16bits", "extract32bits", "extract64bits"},
-	"Byteslice Arithmetic": {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%"},
-	"Byteslice Logic":      {"b|", "b&", "b^", "b~"},
-	"Loading Values":       {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "gtxns", "gtxnsa", "global", "load", "store", "gload", "gloads", "gaid", "gaids"},
-	"Flow Control":         {"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "cover", "uncover", "swap", "select", "assert", "callsub", "retsub"},
-	"State Access":         {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "log"},
+	"Arithmetic":            {"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
+	"Byte Array Slicing":    {"substring", "substring3", "extract", "extract3", "extract16bits", "extract32bits", "extract64bits"},
+	"Byte Array Arithmetic": {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%"},
+	"Byte Array Logic":      {"b|", "b&", "b^", "b~"},
+	"Loading Values":        {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "gtxns", "gtxnsa", "global", "load", "store", "gload", "gloads", "gaid", "gaids"},
+	"Flow Control":          {"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "cover", "uncover", "swap", "select", "assert", "callsub", "retsub"},
+	"State Access":          {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "log"},
+	"Inner Transactions":    {"tx_begin", "tx_field", "tx_submit"},
 }
 
 // OpCost indicates the cost of an operation over the range of
@@ -388,16 +393,17 @@ func TxnFieldDocs() map[string]string {
 }
 
 var globalFieldDocs = map[string]string{
-	"MinTxnFee":            "micro Algos",
-	"MinBalance":           "micro Algos",
-	"MaxTxnLife":           "rounds",
-	"ZeroAddress":          "32 byte address of all zero bytes",
-	"GroupSize":            "Number of transactions in this atomic transaction group. At least 1",
-	"LogicSigVersion":      "Maximum supported TEAL version",
-	"Round":                "Current round number",
-	"LatestTimestamp":      "Last confirmed block UNIX timestamp. Fails if negative",
-	"CurrentApplicationID": "ID of current application executing. Fails if no such application is executing",
-	"CreatorAddress":       "Address of the creator of the current application. Fails if no such application is executing",
+	"MinTxnFee":                 "micro Algos",
+	"MinBalance":                "micro Algos",
+	"MaxTxnLife":                "rounds",
+	"ZeroAddress":               "32 byte address of all zero bytes",
+	"GroupSize":                 "Number of transactions in this atomic transaction group. At least 1",
+	"LogicSigVersion":           "Maximum supported TEAL version",
+	"Round":                     "Current round number",
+	"LatestTimestamp":           "Last confirmed block UNIX timestamp. Fails if negative",
+	"CurrentApplicationID":      "ID of current application executing. Fails if no such application is executing",
+	"CreatorAddress":            "Address of the creator of the current application. Fails if no such application is executing",
+	"CurrentApplicationAddress": "Address that the current application controls. Fails if no such application is executing",
 }
 
 // GlobalFieldDocs are notes on fields available in `global` with extra versioning info if any
@@ -460,4 +466,5 @@ var AppParamsFieldDocs = map[string]string{
 	"AppLocalNumByteSlice":  "Number of byte array values allowed in Local State",
 	"AppExtraProgramPages":  "Number of Extra Program Pages of code space",
 	"AppCreator":            "Creator address",
+	"AppAddress":            "Address for which this application has authority",
 }

@@ -77,6 +77,11 @@ For three-argument ops, `A` is the element two below the top, `B` is the penulti
 
 @@ Arithmetic.md @@
 
+These opcodes return portions of byte arrays, accessed by position, in
+various sizes.
+
+@@ Byte_Array_Slicing.md @@
+
 These opcodes take byte-array values that are interpreted as
 big-endian unsigned integers.  For mathematical operators, the
 returned values are the shortest byte-array that can represent the
@@ -89,7 +94,7 @@ explicitly restricted, though only `b*` and `b+` can produce a larger
 output than their inputs, so there is an implicit length limit of 128
 bytes on outputs.
 
-@@ Byteslice_Arithmetic.md @@
+@@ Byte_Array_Arithmetic.md @@
 
 These opcodes operate on the bits of byte-array values.  The shorter
 array is interpeted as though left padded with zeros until it is the
@@ -97,7 +102,12 @@ same length as the other input.  The returned values are the same
 length as the longest input.  Therefore, unlike array arithmetic,
 these results may contain leading zero bytes.
 
-@@ Byteslice_Logic.md @@
+@@ Byte_Array_Logic.md @@
+
+The following opcodes allow for the construction and submission of
+"inner transaction"
+
+@@ Inner_Transactions.md @@
 
 
 ### Loading Values

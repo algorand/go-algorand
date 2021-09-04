@@ -115,7 +115,6 @@ var byteInt = StackTypes{StackBytes, StackUint64}
 var byteIntInt = StackTypes{StackBytes, StackUint64, StackUint64}
 var oneInt = StackTypes{StackUint64}
 var twoInts = StackTypes{StackUint64, StackUint64}
-var threeInts = StackTypes{StackUint64, StackUint64, StackUint64}
 var oneAny = StackTypes{StackAny}
 var twoAny = StackTypes{StackAny, StackAny}
 var anyInt = StackTypes{StackAny, StackUint64}
@@ -296,8 +295,11 @@ var OpSpecs = []OpSpec{
 	{0xae, "b~", opBytesBitNot, asmDefault, disDefault, oneBytes, oneBytes, 4, modeAny, costly(4)},
 	{0xaf, "bzero", opBytesZero, asmDefault, disDefault, oneInt, oneBytes, 4, modeAny, opDefault},
 
-	// ABI support opcodes.
+	// AVM "effects"
 	{0xb0, "log", opLog, asmDefault, disDefault, oneBytes, nil, 5, runModeApplication, opDefault},
+	{0xb1, "tx_begin", opTxBegin, asmDefault, disDefault, nil, nil, 5, runModeApplication, opDefault},
+	{0xb2, "tx_field", opTxField, asmTxField, disTxField, oneAny, nil, 5, runModeApplication, stacky(typeTxField, "f")},
+	{0xb3, "tx_submit", opTxSubmit, asmDefault, disDefault, nil, nil, 5, runModeApplication, opDefault},
 }
 
 type sortByOpcode []OpSpec

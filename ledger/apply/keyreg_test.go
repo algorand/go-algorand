@@ -78,8 +78,8 @@ func (balances keyregTestBalances) DeallocateAsset(addr basics.Address, index ba
 	return nil
 }
 
-func (balances keyregTestBalances) StatefulEval(logic.EvalParams, basics.AppIndex, []byte) (bool, basics.EvalDelta, error) {
-	return false, basics.EvalDelta{}, nil
+func (balances keyregTestBalances) StatefulEval(logic.EvalParams, basics.AppIndex, []byte) (bool, transactions.EvalDelta, error) {
+	return false, transactions.EvalDelta{}, nil
 }
 
 func TestKeyregApply(t *testing.T) {
