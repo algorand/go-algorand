@@ -109,7 +109,7 @@ func (st *synchTest) Fail() {
 	st.Lock()
 	defer st.Unlock()
 	if !st.failed {
-		st.failed = true		
+		st.failed = true
 		st.t.Fail()
 	}
 }
@@ -117,7 +117,7 @@ func (st *synchTest) FailNow() {
 	st.Lock()
 	defer st.Unlock()
 	if !st.failed {
-		st.failed = true		
+		st.failed = true
 		st.t.FailNow()
 	}
 }
