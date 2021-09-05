@@ -14,31 +14,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package crypto
+package merklekeystore
 
-import "bytes"
+import "github.com/algorand/go-algorand/crypto"
 
-// GenericDigest is a digest that implements CustumSizeDigest, and can be used as hash output.
-//msgp:allocbound GenericDigest
-type GenericDigest []byte
-
-// To32Byte is used to change the data into crypto.Digest.
-func (d GenericDigest) To32Byte() [Sha512_256Size]byte {
-	var cpy [Sha512_256Size]byte
-	copy(cpy[:], d)
-	return cpy
-
-}
-
-// ToSlice is used inside the Tree itself when interacting with TreeDigest
-func (d GenericDigest) ToSlice() []byte { return d }
-
-// IsEqual compare two digests
-func (d GenericDigest) IsEqual(other GenericDigest) bool {
-	return bytes.Equal(d, other)
-}
-
-// IsEmpty checks wether the generic digest is an empty one or not
-func (d GenericDigest) IsEmpty() bool {
-	return len(d) == 0
-}
+// HashType/ hashSize relate to the type of hash this package uses.
+const (
+	KeyStoreHashFunction = crypto.Sha512_256
+	KeyStoreRootSize     = crypto.Sha512_256Size
+)

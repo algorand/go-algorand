@@ -109,23 +109,20 @@ func testMerkle(t *testing.T, hashtype crypto.HashType, size uint64) {
 	root := tree.Root()
 
 	var allpos []uint64
-	allmap := make(map[uint64]crypto.GenericDigest)
-
-	hsh, err := crypto.HashFactory{HashType: hashtype}.NewHash()
-	require.NoError(t, err)
+	allmap := make(map[uint64]crypto.Hashable)
 
 	for i := uint64(0); i < size; i++ {
 		proof, err := tree.Prove([]uint64{i})
 		require.NoError(t, err)
 
-		err = Verify(root, map[uint64]crypto.GenericDigest{i: crypto.HashSum(hsh, a[i])}, proof)
+		err = Verify(root, map[uint64]crypto.Hashable{i: a[i]}, proof)
 		require.NoError(t, err)
 
-		err = Verify(root, map[uint64]crypto.GenericDigest{i: crypto.HashSum(hsh, junk)}, proof)
+		err = Verify(root, map[uint64]crypto.Hashable{i: junk}, proof)
 		require.Error(t, err, "no error when verifying junk")
 
 		allpos = append(allpos, i)
-		allmap[i] = crypto.HashSum(hsh, a[i])
+		allmap[i] = a[i]
 	}
 
 	proof, err := tree.Prove(allpos)
@@ -134,25 +131,25 @@ func testMerkle(t *testing.T, hashtype crypto.HashType, size uint64) {
 	err = Verify(root, allmap, proof)
 	require.NoError(t, err)
 
-	err = Verify(root, map[uint64]crypto.GenericDigest{0: crypto.HashSum(hsh, junk)}, proof)
+	err = Verify(root, map[uint64]crypto.Hashable{0: junk}, proof)
 	require.Error(t, err, "no error when verifying junk batch")
 
-	err = Verify(root, map[uint64]crypto.GenericDigest{0: crypto.HashSum(hsh, junk)}, nil)
+	err = Verify(root, map[uint64]crypto.Hashable{0: junk}, nil)
 	require.Error(t, err, "no error when verifying junk batch")
 
 	_, err = tree.Prove([]uint64{size})
 	require.Error(t, err, "no error when proving past the end")
 
-	err = Verify(root, map[uint64]crypto.GenericDigest{size: crypto.HashSum(hsh, junk)}, nil)
+	err = Verify(root, map[uint64]crypto.Hashable{size: junk}, nil)
 	require.Error(t, err, "no error when verifying past the end")
 
 	if size > 0 {
 		var somepos []uint64
-		somemap := make(map[uint64]crypto.GenericDigest)
+		somemap := make(map[uint64]crypto.Hashable)
 		for i := 0; i < 10; i++ {
 			pos := crypto.RandUint64() % size
 			somepos = append(somepos, pos)
-			somemap[pos] = crypto.HashSum(hsh, a[pos])
+			somemap[pos] = a[pos]
 		}
 
 		proof, err = tree.Prove(somepos)
@@ -209,10 +206,13 @@ func TestVerifyWithNoElements(t *testing.T) {
 
 	p, err := tree.Prove([]uint64{1})
 	a.NoError(err)
-	err = Verify(tree.Root(), map[uint64]crypto.GenericDigest{}, p)
+	err = Verify(tree.Root(), map[uint64]crypto.Hashable{}, p)
 	require.Error(t, err)
 
-	err = Verify(tree.Root(), map[uint64]crypto.GenericDigest{}, nil)
+	err = Verify(tree.Root(), map[uint64]crypto.Hashable{}, nil)
+	require.Error(t, err)
+
+	err = Verify(tree.Root(), map[uint64]crypto.Hashable{}, &Proof{HashFactory: crypto.HashFactory{HashType: crypto.Sha512_256}})
 	require.NoError(t, err)
 }
 
@@ -300,7 +300,7 @@ func BenchmarkMerkleVerify1M(b *testing.B) {
 	b.ResetTimer()
 
 	for i := uint64(0); i < uint64(b.N); i++ {
-		err := Verify(root, map[uint64]crypto.GenericDigest{i % a.count: crypto.HashObj(msg).ToSlice()}, proofs[i])
+		err := Verify(root, map[uint64]crypto.Hashable{i % a.count: msg}, proofs[i])
 		if err != nil {
 			b.Error(err)
 		}

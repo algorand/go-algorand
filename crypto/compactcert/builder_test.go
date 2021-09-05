@@ -107,7 +107,7 @@ func TestBuildVerify(t *testing.T) {
 		sigs = append(sigs, sig)
 	}
 
-	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: crypto.Sha512_256})
+	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: HashType})
 	if err != nil {
 		t.Error(err)
 	}
@@ -147,7 +147,7 @@ func TestBuildVerify(t *testing.T) {
 	fmt.Printf("    %6d bytes reveals[*] total\n", len(protocol.Encode(&someReveal)))
 	fmt.Printf("  %6d bytes total\n", len(certenc))
 
-	verif := MkVerifier(param, partcom.Root().To32Byte())
+	verif := MkVerifier(param, partcom.Root())
 	err = verif.Verify(cert)
 	if err != nil {
 		t.Error(err)
@@ -185,7 +185,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 	}
 
 	var cert *Cert
-	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: crypto.Sha512_256})
+	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: HashType})
 	if err != nil {
 		b.Error(err)
 	}
@@ -213,9 +213,8 @@ func BenchmarkBuildVerify(b *testing.B) {
 
 	b.Run("Verify", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			verif := MkVerifier(param, partcom.Root().To32Byte())
-			err = verif.Verify(cert)
-			if err != nil {
+			verif := MkVerifier(param, partcom.Root())
+			if err = verif.Verify(cert); err != nil {
 				b.Error(err)
 			}
 		}

@@ -187,14 +187,15 @@ func (b *Builder) Build() (*Cert, error) {
 	}
 	b.sigsHasValidL = true
 
-	sigtree, err := merklearray.Build(sigsToCommit(b.sigs), crypto.HashFactory{HashType: crypto.Sha512_256})
+	hfactory := crypto.HashFactory{HashType: HashType}
+	sigtree, err := merklearray.Build(sigsToCommit(b.sigs), hfactory)
 	if err != nil {
 		return nil, err
 	}
 
 	// Reveal sufficient number of signatures
 	c := &Cert{
-		SigCommit:    sigtree.Root().To32Byte(),
+		SigCommit:    sigtree.Root(),
 		SignedWeight: b.signedWeight,
 		Reveals:      make(map[uint64]Reveal),
 	}
@@ -205,7 +206,11 @@ func (b *Builder) Build() (*Cert, error) {
 	}
 
 	var proofPositions []uint64
-	msgHash := crypto.HashObj(b.Msg)
+	hash, err := hfactory.NewHash()
+	if err != nil {
+		return nil, err
+	}
+	msgHash := crypto.GenereicHashObj(hash, b.Msg)
 
 	for j := uint64(0); j < nr; j++ {
 		choice := coinChoice{
@@ -213,7 +218,7 @@ func (b *Builder) Build() (*Cert, error) {
 			SignedWeight: c.SignedWeight,
 			ProvenWeight: b.ProvenWeight,
 			Sigcom:       c.SigCommit,
-			Partcom:      b.parttree.Root().To32Byte(),
+			Partcom:      b.parttree.Root(),
 			MsgHash:      msgHash,
 		}
 
