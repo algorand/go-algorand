@@ -77,7 +77,11 @@ func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 	hdr.Round = s.latest
 	hdr.CurrentProtocol = protocol.ConsensusFuture
 
-	var ccBasic bookkeeping.CompactCertState
+	var ccBasic = bookkeeping.CompactCertState{
+		CompactCertVoters:      make([]byte, compactcert.HashSize),
+		CompactCertVotersTotal: basics.MicroAlgos{},
+		CompactCertNextRound:   0,
+	}
 	ccBasic.CompactCertVotersTotal.Raw = uint64(s.totalWeight)
 
 	if hdr.Round > 0 {
@@ -266,7 +270,7 @@ func TestWorkerAllSigs(t *testing.T) {
 			voters, err := s.CompactCertVoters(tx.Txn.CertRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
 			require.NoError(t, err)
 
-			verif := compactcert.MkVerifier(ccparams, voters.Tree.Root().To32Byte())
+			verif := compactcert.MkVerifier(ccparams, voters.Tree.Root())
 			err = verif.Verify(&tx.Txn.Cert)
 			require.NoError(t, err)
 			break
@@ -327,7 +331,7 @@ func TestWorkerPartialSigs(t *testing.T) {
 	voters, err := s.CompactCertVoters(tx.Txn.CertRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
 	require.NoError(t, err)
 
-	verif := compactcert.MkVerifier(ccparams, voters.Tree.Root().To32Byte())
+	verif := compactcert.MkVerifier(ccparams, voters.Tree.Root())
 	err = verif.Verify(&tx.Txn.Cert)
 	require.NoError(t, err)
 }

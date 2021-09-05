@@ -25,6 +25,22 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+var sumhashCompressor sumhash.LookupTable
+
+func init() {
+	shk := sha3.NewShake256()
+	seed := []byte("Algorand")
+	_, err := shk.Write(seed)
+	if err != nil {
+		panic(err)
+	}
+	mat, err := sumhash.RandomMatrix(shk, 8, 1024)
+	if err != nil {
+		panic(err)
+	}
+	sumhashCompressor = mat.LookupTable()
+}
+
 // HashType enum type for signing algorithms
 type HashType uint64
 
@@ -36,8 +52,8 @@ const (
 
 //size of each hash
 const (
-	Sha512_256Size    = 32
-	SumhashDigestSize = 112
+	Sha512_256Size    = sha512.Size256
+	SumhashDigestSize = 64
 )
 
 // HashFactory is responsible for generating new hashes accordingly to the type it stores.
@@ -54,22 +70,14 @@ func (h HashFactory) NewHash() (hash.Hash, error) {
 	case Sha512_256:
 		return sha512.New512_256(), nil
 	case Sumhash:
-		C := 4
-		N := 14
-		shk := sha3.NewShake256()
-		seed := []byte("I have nothing up my sleeve...")
-		_, err := shk.Write(seed)
-		if err != nil {
-			return nil, err
-		}
-		return sumhash.New(sumhash.RandomMatrix(shk, N, C)), nil
+		return sumhash.New(sumhashCompressor), nil
 	default:
 		return nil, errUnknownHash
 	}
 }
 
-// HashSum Makes it easier to sum using hash interface and Hashable interface
-func HashSum(hsh hash.Hash, h Hashable) []byte {
+// GenereicHashObj Makes it easier to sum using hash interface and Hashable interface
+func GenereicHashObj(hsh hash.Hash, h Hashable) []byte {
 	rep := HashRep(h)
 	return HashBytes(hsh, rep)
 }

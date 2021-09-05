@@ -37,6 +37,7 @@ const (
 	minAlgorithmType AlgorithmType = iota
 
 	DilithiumType
+	Ed25519Type
 
 	maxAlgorithmType
 )
@@ -100,6 +101,7 @@ type PackedVerifyingKey struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	DilithiumPublicKey DilithiumVerifier `codec:"dpk"`
+	Ed25519PublicKey   Ed25519PublicKey  `codec:"edpk"`
 }
 
 var errUnknownVerifier = errors.New("could not find stored Verifier")
@@ -108,6 +110,8 @@ func (p *PackedVerifyingKey) getVerifier(t AlgorithmType) (Verifier, error) {
 	switch t {
 	case DilithiumType:
 		return &p.DilithiumPublicKey, nil
+	case Ed25519Type:
+		return &p.Ed25519PublicKey, nil
 	default:
 		return nil, errUnknownVerifier
 	}
@@ -118,6 +122,7 @@ type PackedSignatureAlgorithm struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	DilithiumSigner DilithiumSigner `codec:"ds"`
+	Ed25519Singer   Ed25519Key      `codec:"edds"`
 }
 
 var errUnknownSigner = errors.New("could not find stored signer")
@@ -126,6 +131,8 @@ func (p *PackedSignatureAlgorithm) getSigner(t AlgorithmType) (Signer, error) {
 	switch t {
 	case DilithiumType:
 		return &p.DilithiumSigner, nil
+	case Ed25519Type:
+		return &p.Ed25519Singer, nil
 	default:
 		return nil, errUnknownSigner
 	}
@@ -141,6 +148,13 @@ func NewSigner(t AlgorithmType) (*SignatureAlgorithm, error) {
 		signer := NewDilithiumSigner().(*DilithiumSigner)
 		p = PackedSignatureAlgorithm{
 			DilithiumSigner: *signer,
+		}
+	case Ed25519Type:
+		var seed Seed
+		SystemRNG.RandBytes(seed[:])
+		key := GenerateEd25519Key(seed)
+		p = PackedSignatureAlgorithm{
+			Ed25519Singer: *key,
 		}
 	default:
 		return nil, errNonExistingSignatureAlgorithmType

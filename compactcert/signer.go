@@ -113,7 +113,7 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 		return
 	}
 
-	if votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsZero() {
+	if votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsEmpty() {
 		// No voter commitment, perhaps because compact certs were
 		// just enabled.
 		return
