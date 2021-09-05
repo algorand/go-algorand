@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -193,14 +194,19 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	// Generate a new VRF key, which lives in the participation keys db
 	vrf := crypto.GenerateVRFSecrets()
 
-	compactCertRound := config.Consensus[protocol.ConsensusCurrentVersion].CompactCertRounds
-	if compactCertRound < 300000 {
-		compactCertRound = 300000
-	}
+	compactCertRound := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
+
 	// Generate a new key which signs the compact certificates
-	blockProof, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), compactCertRound, crypto.Ed25519Type)
+	blockProof, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), compactCertRound, crypto.DilithiumType)
 	if err != nil {
 		return PersistedParticipation{}, err
+	}
+	blockProof = &merklekeystore.Signer{
+		SignatureAlgorithms: nil,
+		FirstValid:          0,
+		ArrayBase:           0,
+		Interval:            0,
+		Tree:                merklearray.Tree{},
 	}
 
 	// Construct the Participation containing these keys to be persisted
