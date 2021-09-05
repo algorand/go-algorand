@@ -70,22 +70,10 @@ type txnMerkleElem struct {
 	stib transactions.SignedTxnInBlock
 }
 
-// TxnMerkleElemRaw this struct help client to validate a proof of a txn
-type TxnMerkleElemRaw struct {
-	Txn  []byte // txn id
-	Stib []byte // hash value of transactions.SignedTxnInBlock
-}
-
-func concatHashes(txid []byte, stib []byte) []byte {
-	var buf [2 * crypto.DigestSize]byte
-	copy(buf[:crypto.DigestSize], txid[:])
-	copy(buf[crypto.DigestSize:], stib[:])
-	return buf[:]
-}
-
-// ToBeHashed implements the crypto.Hashable interface.
-func (tme *TxnMerkleElemRaw) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.TxnMerkleLeaf, concatHashes(tme.Txn, tme.Stib)
+func txnMerkleToRaw(txid []byte, stib []byte) []byte {
+	buf := make([]byte, 0, 2*crypto.DigestSize)
+	buf = append(buf, txid...)
+	return append(buf, stib...)
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
@@ -95,7 +83,7 @@ func (tme *txnMerkleElem) ToBeHashed() (protocol.HashID, []byte) {
 	txid := tme.txn.ID()
 	stib := crypto.HashObj(&tme.stib)
 
-	return protocol.TxnMerkleLeaf, concatHashes(txid[:], stib[:])
+	return protocol.TxnMerkleLeaf, txnMerkleToRaw(txid[:], stib[:])
 }
 
 // Hash implements an optimized version of crypto.HashObj(tme).
@@ -110,6 +98,6 @@ func (tme *txnMerkleElem) HashRepresentation() []byte {
 	var buf [len(protocol.TxnMerkleLeaf) + 2*crypto.DigestSize]byte
 	s := buf[:0]
 	s = append(s, protocol.TxnMerkleLeaf...)
-	s = append(s, concatHashes(txid[:], stib[:])...)
+	s = append(s, txnMerkleToRaw(txid[:], stib[:])...)
 	return s
 }

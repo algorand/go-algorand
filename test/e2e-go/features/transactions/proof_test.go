@@ -22,11 +22,28 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
-	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
+
+// TxnMerkleElemRaw this struct helps creates a hashable struct from the bytes
+type TxnMerkleElemRaw struct {
+	Txn  []byte // txn id
+	Stib []byte // hash value of transactions.SignedTxnInBlock
+}
+
+func txnMerkleToRaw(txid []byte, stib []byte) []byte {
+	buf := make([]byte, 0, 2*crypto.DigestSize)
+	buf = append(buf, txid...)
+	return append(buf, stib...)
+}
+
+// ToBeHashed implements the crypto.Hashable interface.
+func (tme *TxnMerkleElemRaw) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.TxnMerkleLeaf, txnMerkleToRaw(tme.Txn, tme.Stib)
+}
 
 func TestTxnMerkleProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -97,7 +114,7 @@ func TestTxnMerkleProof(t *testing.T) {
 	blk, err := client.BookkeepingBlock(confirmedTx.ConfirmedRound)
 	a.NoError(err)
 
-	element := bookkeeping.TxnMerkleElemRaw{Txn: txid[:], Stib: proofresp.Stibhash}
+	element := TxnMerkleElemRaw{Txn: txid[:], Stib: proofresp.Stibhash}
 
 	elems := make(map[uint64]crypto.Hashable)
 

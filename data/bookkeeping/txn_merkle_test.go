@@ -30,6 +30,17 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+// TxnMerkleElemRaw this struct helps creates a hashable struct from the bytes
+type TxnMerkleElemRaw struct {
+	Txn  []byte // txn id
+	Stib []byte // hash value of transactions.SignedTxnInBlock
+}
+
+// ToBeHashed implements the crypto.Hashable interface.
+func (tme *TxnMerkleElemRaw) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.TxnMerkleLeaf, txnMerkleToRaw(tme.Txn, tme.Stib)
+}
+
 func TestTxnMerkleElemHash(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
