@@ -111,7 +111,8 @@ Opted In Apps:
     puts "Creating global state app"
     set GSTATE_GLOBAL_BYTE_SLICES 10
     set GSTATE_LOCAL_BYTE_SLICES 0
-    set GSTATE_APP_ID [::AlgorandGoal::AppCreate $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS ${TEAL_PROGS_DIR}/globwrite.teal "str:value_to_write" $GSTATE_GLOBAL_BYTE_SLICES $GSTATE_LOCAL_BYTE_SLICES ${TEAL_PROGS_DIR}/clear_program_state.teal $TEST_PRIMARY_NODE_DIR]
+    set GSTATE_EXTRA_PAGES 2
+    set GSTATE_APP_ID [::AlgorandGoal::AppCreateExPages $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS ${TEAL_PROGS_DIR}/globwrite.teal "str:value_to_write" $GSTATE_GLOBAL_BYTE_SLICES $GSTATE_LOCAL_BYTE_SLICES ${TEAL_PROGS_DIR}/clear_program_state.teal $TEST_PRIMARY_NODE_DIR $GSTATE_EXTRA_PAGES]
 
     puts "Creating local state app"
     set LSTATE_GLOBAL_BYTE_SLICES 0
@@ -133,7 +134,7 @@ Held Assets:
 \tID $CCOIN_ASSET_ID, C-Coin, balance 1000 units
 \tID $DCOIN_ASSET_ID, D-Coin, balance 10.00 $DCOIN_UNIT_NAME (frozen)
 Created Apps:
-\tID $GSTATE_APP_ID, global state used 0/0 uints, 1/$GSTATE_GLOBAL_BYTE_SLICES byte slices
+\tID $GSTATE_APP_ID, $GSTATE_EXTRA_PAGES extra pages, global state used 0/0 uints, 1/$GSTATE_GLOBAL_BYTE_SLICES byte slices
 \tID $LSTATE_APP_ID, global state used 0/0 uints, 0/$LSTATE_GLOBAL_BYTE_SLICES byte slices
 Opted In Apps:
 \tID $LSTATE_APP_ID, local state used 0/1 uints, 1/$LSTATE_LOCAL_BYTE_SLICES byte slices"

@@ -283,6 +283,9 @@ type ConsensusParams struct {
 	// maximum sum of the lengths of the key and value of one app state entry
 	MaxAppSumKeyValueLens int
 
+	// maximum number of inner transactions that can be created by an app call
+	MaxInnerTransactions int
+
 	// maximum number of applications a single account can create and store
 	// AppParams for at once
 	MaxAppsCreated int
@@ -433,6 +436,9 @@ var MaxStateDeltaKeys int
 // any version, used only for decoding purposes. Never decrease this value.
 var MaxLogCalls int
 
+// MaxInnerTransactions is the maximum number of inner transactions that may be created in an app call.
+var MaxInnerTransactions int
+
 // MaxLogicSigMaxSize is the largest logical signature appear in any of the supported
 // protocols, used for decoding purposes.
 var MaxLogicSigMaxSize int
@@ -496,6 +502,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	// There is no consensus parameter for MaxLogCalls and MaxAppProgramLen as an approximation
 	// Its value is much larger than any possible reasonable MaxLogCalls value in future
 	checkSetMax(p.MaxAppProgramLen, &MaxLogCalls)
+	checkSetMax(p.MaxInnerTransactions, &MaxInnerTransactions)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
@@ -1019,6 +1026,10 @@ func initConsensusProtocols() {
 	vFuture.EnableBlockProofKeyregCheck = true
 	// Enable App calls to pool budget in grouped transactions
 	vFuture.EnableAppCostPooling = true
+	vFuture.MaxInnerTransactions = 16
+
+	// Allow 50 app opt ins
+	vFuture.MaxAppsOptedIn = 50
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

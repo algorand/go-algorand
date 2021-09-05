@@ -146,7 +146,7 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 		Lsig: lsig,
 	}
 	ad := transactions.ApplyData{
-		EvalDelta: basics.EvalDelta{
+		EvalDelta: transactions.EvalDelta{
 			LocalDeltas: map[uint64]basics.StateDelta{
 				1: {"key": basics.ValueDelta{Action: 1}},
 			},

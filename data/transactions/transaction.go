@@ -114,7 +114,7 @@ type ApplyData struct {
 	SenderRewards   basics.MicroAlgos `codec:"rs"`
 	ReceiverRewards basics.MicroAlgos `codec:"rr"`
 	CloseRewards    basics.MicroAlgos `codec:"rc"`
-	EvalDelta       basics.EvalDelta  `codec:"dt"`
+	EvalDelta       EvalDelta         `codec:"dt"`
 }
 
 // Equal returns true if two ApplyDatas are equal, ignoring nilness equality on

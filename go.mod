@@ -21,7 +21,7 @@ require (
 	github.com/google/go-querystring v1.0.0
 	github.com/gorilla/mux v1.6.2
 	github.com/jmoiron/sqlx v1.2.0
-	github.com/karalabe/hid v0.0.0-20181128192157-d815e0c1a2e2
+	github.com/karalabe/hid v1.0.0
 	github.com/labstack/echo/v4 v4.1.17
 	github.com/mattn/go-sqlite3 v1.10.0
 	github.com/miekg/dns v1.1.27

@@ -425,6 +425,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 54 | LocalNumUint | uint64 | Number of local state integers in ApplicationCall. LogicSigVersion >= 3. |
 | 55 | LocalNumByteSlice | uint64 | Number of local state byteslices in ApplicationCall. LogicSigVersion >= 3. |
 | 56 | ExtraProgramPages | uint64 | Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program. LogicSigVersion >= 4. |
+| 57 | Nonparticipation | uint64 | Marks an account nonparticipating for rewards. LogicSigVersion >= 5. |
 
 
 TypeEnum mapping:
@@ -463,6 +464,7 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 | 7 | LatestTimestamp | uint64 | Last confirmed block UNIX timestamp. Fails if negative. LogicSigVersion >= 2. |
 | 8 | CurrentApplicationID | uint64 | ID of current application executing. Fails if no such application is executing. LogicSigVersion >= 2. |
 | 9 | CreatorAddress | []byte | Address of the creator of the current application. Fails if no such application is executing. LogicSigVersion >= 3. |
+| 10 | CurrentApplicationAddress | []byte | Address that the current application controls. Fails if no such application is executing. LogicSigVersion >= 5. |
 
 
 ## gtxn t f
@@ -958,6 +960,7 @@ params: Before v4, Txn.ForeignAssets offset. Since v4, Txn.ForeignAssets offset 
 | 5 | AppLocalNumByteSlice | uint64 | Number of byte array values allowed in Local State |
 | 6 | AppExtraProgramPages | uint64 | Number of Extra Program Pages of code space |
 | 7 | AppCreator | []byte | Creator address |
+| 8 | AppAddress | []byte | Address for which this application has authority |
 
 
 params: Txn.ForeignApps offset or an app id that appears in Txn.ForeignApps. Return: did_exist flag (1 if exist and 0 otherwise), value.
@@ -1212,3 +1215,30 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Mode: Application
 
 `log` can be called up to MaxLogCalls times in a program, and log up to a total of 1k bytes.
+
+## tx_begin
+
+- Opcode: 0xb1
+- Pops: _None_
+- Pushes: _None_
+- Prepare a new application action
+- LogicSigVersion >= 5
+- Mode: Application
+
+## tx_field f
+
+- Opcode: 0xb2 {uint8 transaction field index}
+- Pops: *... stack*, any
+- Pushes: _None_
+- Set field F of the current application action
+- LogicSigVersion >= 5
+- Mode: Application
+
+## tx_submit
+
+- Opcode: 0xb3
+- Pops: _None_
+- Pushes: _None_
+- Execute the current application action. Panic on any failure.
+- LogicSigVersion >= 5
+- Mode: Application

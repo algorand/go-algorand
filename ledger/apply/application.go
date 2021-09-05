@@ -317,7 +317,7 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 		// If we are returning a non-nil error, then don't return a
 		// non-empty EvalDelta. Not required for correctness.
 		if err != nil && ad != nil {
-			ad.EvalDelta = basics.EvalDelta{}
+			ad.EvalDelta = transactions.EvalDelta{}
 		}
 	}()
 

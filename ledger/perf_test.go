@@ -36,8 +36,11 @@ import (
 )
 
 func genesis(naccts int) (InitState, []basics.Address, []*crypto.SignatureSecrets) {
+	return genesisWithProto(naccts, protocol.ConsensusCurrentVersion)
+}
+func genesisWithProto(naccts int, proto protocol.ConsensusVersion) (InitState, []basics.Address, []*crypto.SignatureSecrets) {
 	blk := bookkeeping.Block{}
-	blk.CurrentProtocol = protocol.ConsensusCurrentVersion
+	blk.CurrentProtocol = proto
 	blk.BlockHeader.GenesisID = "test"
 	blk.FeeSink = testSinkAddr
 	blk.RewardsPool = testPoolAddr

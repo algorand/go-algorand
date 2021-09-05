@@ -140,6 +140,19 @@ For three-argument ops, `A` is the element two below the top, `B` is the penulti
 | `setbyte` | pop a byte-array A, integer B, and small integer C (between 0..255). Set the Bth byte of A to C, and push the result |
 | `concat` | pop two byte-arrays A and B and join them, push the result |
 
+These opcodes return portions of byte arrays, accessed by position, in
+various sizes.
+
+| Op | Description |
+| --- | --- |
+| `substring s e` | pop a byte-array A. For immediate values in 0..255 S and E: extract a range of bytes from A starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails |
+| `substring3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the array length, the program fails |
+| `extract s l` | pop a byte-array A. For immediate values in 0..255 S and L: extract a range of bytes from A starting at S up to but not including S+L, push the substring result. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails |
+| `extract3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including B+C, push the substring result. If B or B+C is larger than the array length, the program fails |
+| `extract16bits` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B or B+2 is larger than the array length, the program fails |
+| `extract32bits` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B or B+4 is larger than the array length, the program fails |
+| `extract64bits` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B or B+8 is larger than the array length, the program fails |
+
 These opcodes take byte-array values that are interpreted as
 big-endian unsigned integers.  For mathematical operators, the
 returned values are the shortest byte-array that can represent the
@@ -178,6 +191,15 @@ these results may contain leading zero bytes.
 | `b&` | A bitwise-and B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
 | `b^` | A bitwise-xor B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
 | `b~` | X with all bits inverted |
+
+The following opcodes allow for the construction and submission of
+"inner transaction"
+
+| Op | Description |
+| --- | --- |
+| `tx_begin` | Prepare a new application action |
+| `tx_field f` | Set field F of the current application action |
+| `tx_submit` | Execute the current application action. Panic on any failure. |
 
 
 ### Loading Values
@@ -283,6 +305,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 54 | LocalNumUint | uint64 | Number of local state integers in ApplicationCall. LogicSigVersion >= 3. |
 | 55 | LocalNumByteSlice | uint64 | Number of local state byteslices in ApplicationCall. LogicSigVersion >= 3. |
 | 56 | ExtraProgramPages | uint64 | Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program. LogicSigVersion >= 4. |
+| 57 | Nonparticipation | uint64 | Marks an account nonparticipating for rewards. LogicSigVersion >= 5. |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
@@ -303,6 +326,7 @@ Global fields are fields that are common to all the transactions in the group. I
 | 7 | LatestTimestamp | uint64 | Last confirmed block UNIX timestamp. Fails if negative. LogicSigVersion >= 2. |
 | 8 | CurrentApplicationID | uint64 | ID of current application executing. Fails if no such application is executing. LogicSigVersion >= 2. |
 | 9 | CreatorAddress | []byte | Address of the creator of the current application. Fails if no such application is executing. LogicSigVersion >= 3. |
+| 10 | CurrentApplicationAddress | []byte | Address that the current application controls. Fails if no such application is executing. LogicSigVersion >= 5. |
 
 
 **Asset Fields**
@@ -345,6 +369,7 @@ App fields used in the `app_params_get` opcode.
 | 5 | AppLocalNumByteSlice | uint64 | Number of byte array values allowed in Local State |
 | 6 | AppExtraProgramPages | uint64 | Number of Extra Program Pages of code space |
 | 7 | AppCreator | []byte | Creator address |
+| 8 | AppAddress | []byte | Address for which this application has authority |
 
 
 ### Flow Control

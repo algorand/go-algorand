@@ -1,8 +1,12 @@
 {
-	"numRounds":65000,
+	"numRounds": 5000,
 	"roundTransactionsCount": 1000,
-	"generatedAccountsCount": 7000000,
-	"generatedAssetsCount": 200000,
-	"generatedApplicationCount": 1000000,
-	"sourceWalletName": "wallet1"
+	"generatedAccountsCount": 30000000,
+	"generatedAssetsCount": 20000,
+	"generatedApplicationCount": 20000,
+	"sourceWalletName": "wallet1",
+	"acctBalanceRange": [
+		100000,
+		1000000
+	]
 }
