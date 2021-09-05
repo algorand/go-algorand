@@ -508,7 +508,7 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 		CompactCertNextRound:   uint64(b.CompactCert[protocol.CompactCertBasic].CompactCertNextRound),
 	}
 
-	if !b.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsZero() {
+	if !b.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsEmpty() {
 		voters := b.CompactCert[protocol.CompactCertBasic].CompactCertVoters
 		block.CompactCertVoters = voters[:]
 	}

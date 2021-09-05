@@ -198,7 +198,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 		compactCertRound = 300000
 	}
 	// Generate a new key which signs the compact certificates
-	blockProof, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), compactCertRound, crypto.DilithiumType)
+	blockProof, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), compactCertRound, crypto.Ed25519Type)
 	if err != nil {
 		return PersistedParticipation{}, err
 	}

@@ -69,7 +69,7 @@ func upWorker(ws *workerState, in Layer, out Layer, h hash.Hash) {
 				p.r = in[i+1]
 			}
 
-			out[i/2] = crypto.HashSum(h, &p)
+			out[i/2] = crypto.GenereicHashObj(h, &p)
 		}
 
 		batchSize += 2
