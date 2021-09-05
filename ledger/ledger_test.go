@@ -868,7 +868,7 @@ int 1
 		ApplicationCallTxnFields: appcreateFields,
 	}
 
-	ad := transactions.ApplyData{EvalDelta: basics.EvalDelta{GlobalDelta: basics.StateDelta{
+	ad := transactions.ApplyData{EvalDelta: transactions.EvalDelta{GlobalDelta: basics.StateDelta{
 		"counter": basics.ValueDelta{Action: basics.SetUintAction, Uint: 1},
 	}}}
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, appcreate, ad))
@@ -893,7 +893,7 @@ int 1
 		ApplicationCallTxnFields: appcallFields,
 	}
 	appcall.ApplicationID = appIdx
-	ad = transactions.ApplyData{EvalDelta: basics.EvalDelta{
+	ad = transactions.ApplyData{EvalDelta: transactions.EvalDelta{
 		GlobalDelta: basics.StateDelta{
 			"counter": basics.ValueDelta{Action: basics.SetUintAction, Uint: 2},
 		},
@@ -995,7 +995,7 @@ int 1                   // [1]
 		ApplicationCallTxnFields: appcreateFields,
 	}
 
-	ad := transactions.ApplyData{EvalDelta: basics.EvalDelta{GlobalDelta: basics.StateDelta{
+	ad := transactions.ApplyData{EvalDelta: transactions.EvalDelta{GlobalDelta: basics.StateDelta{
 		"key": basics.ValueDelta{Action: basics.SetUintAction, Uint: uint64(value)},
 	}}}
 
@@ -1034,7 +1034,7 @@ int 1                   // [1]
 				Header:                   correctTxHeader,
 				ApplicationCallTxnFields: appcallFields1,
 			}
-			ad1 := transactions.ApplyData{EvalDelta: basics.EvalDelta{GlobalDelta: basics.StateDelta{
+			ad1 := transactions.ApplyData{EvalDelta: transactions.EvalDelta{GlobalDelta: basics.StateDelta{
 				"key": basics.ValueDelta{Action: basics.SetUintAction, Uint: uint64(base + value1)},
 			}}}
 
@@ -1050,7 +1050,7 @@ int 1                   // [1]
 				Header:                   correctTxHeader,
 				ApplicationCallTxnFields: appcallFields2,
 			}
-			ad2 := transactions.ApplyData{EvalDelta: basics.EvalDelta{GlobalDelta: basics.StateDelta{
+			ad2 := transactions.ApplyData{EvalDelta: transactions.EvalDelta{GlobalDelta: basics.StateDelta{
 				"key": basics.ValueDelta{Action: basics.SetUintAction, Uint: uint64(base + value1 + value2)},
 			}}}
 

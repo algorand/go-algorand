@@ -478,6 +478,9 @@ func MakeBlock(prev BlockHeader) Block {
 	if err != nil {
 		logging.Base().Warnf("MakeBlock: computing empty TxnRoot: %v", err)
 	}
+	// We can't know the entire RewardsState yet, but we can carry over the special addresses.
+	blk.BlockHeader.RewardsState.FeeSink = prev.RewardsState.FeeSink
+	blk.BlockHeader.RewardsState.RewardsPool = prev.RewardsState.RewardsPool
 	return blk
 }
 
