@@ -42,9 +42,9 @@ type event interface {
 }
 
 // A ConsensusVersionView is a view of the consensus version as read from a
-// LedgerReader, associated with some round.
+// LedgerReader, associated with some round.  An empty Version string means
+// there is no information about the consensus version for that round.
 type ConsensusVersionView struct {
-	Err     serializableError
 	Version protocol.ConsensusVersion
 }
 

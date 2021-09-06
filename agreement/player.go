@@ -245,8 +245,8 @@ func (p *player) handle(r routerHandle, e event) []action {
 }
 
 func (p *player) handleFastTimeout(r routerHandle, e timeoutEvent) []action {
-	if e.Proto.Err != nil {
-		r.t.log.Errorf("failed to read protocol version for fastTimeout event (proto %v): %v", e.Proto.Version, e.Proto.Err)
+	if e.Proto.Version == "" {
+		r.t.log.Errorf("failed to read protocol version for fastTimeout event")
 		return nil
 	}
 

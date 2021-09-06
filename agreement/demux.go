@@ -205,7 +205,11 @@ func (d *demux) next(s *Service, extSignals pipelineExternalDemuxSignals) (e ext
 		}
 
 		proto, err := d.ledger.ConsensusVersion(paramsRoundBranch(e.ConsensusRound()))
-		e = e.AttachConsensusVersion(ConsensusVersionView{Err: makeSerErr(err), Version: proto})
+		if err != nil {
+			logging.Base().Warnf("demux: could not get consensus version for %v: %v", e.ConsensusRound(), err)
+		} else {
+			e = e.AttachConsensusVersion(ConsensusVersionView{Version: proto})
+		}
 
 		if e.t() == payloadVerified {
 			r := e.(messageEvent).Input.Proposal.roundBranch()
@@ -426,7 +430,11 @@ func setupCompoundMessage(l LedgerReader, m message) (res externalEvent) {
 	tailmsg := message{MessageHandle: m.MessageHandle, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: compound.Proposal}
 	synthetic := messageEvent{T: payloadPresent, Input: tailmsg}
 	proto, err := l.ConsensusVersion(paramsRoundBranch(synthetic.ConsensusRound()))
-	synthetic = synthetic.AttachConsensusVersion(ConsensusVersionView{Err: makeSerErr(err), Version: proto}).(messageEvent)
+	if err != nil {
+		logging.Base().Warnf("setupCompoundMessage: could not get consensus version for %v: %v", synthetic.ConsensusRound(), err)
+	} else {
+		synthetic = synthetic.AttachConsensusVersion(ConsensusVersionView{Version: proto}).(messageEvent)
+	}
 
 	m.Tag = protocol.AgreementVoteTag
 	m.UnauthenticatedVote = compound.Vote

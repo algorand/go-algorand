@@ -77,8 +77,8 @@ func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res even
 
 	switch e.t() {
 	case votePresent:
-		if e.Proto.Err != nil {
-			return filteredEvent{T: voteFiltered, Err: e.Proto.Err}
+		if e.Proto.Version == "" {
+			return filteredEvent{T: voteFiltered, Err: makeSerErrStr("missing version")}
 		}
 
 		uv := e.Input.UnauthenticatedVote
@@ -92,8 +92,8 @@ func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res even
 		if e.Cancelled {
 			return filteredEvent{T: voteFiltered, Err: e.Err}
 		}
-		if e.Proto.Err != nil {
-			return filteredEvent{T: voteFiltered, Err: e.Err}
+		if e.Proto.Version == "" {
+			return filteredEvent{T: voteFiltered, Err: makeSerErrStr("missing version")}
 		}
 		if e.Err != nil {
 			return filteredEvent{T: voteMalformed, Err: e.Err}
@@ -133,8 +133,8 @@ func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res even
 		if e.Cancelled {
 			return filteredEvent{T: bundleFiltered, Err: e.Err}
 		}
-		if e.Proto.Err != nil {
-			return filteredEvent{T: bundleFiltered, Err: e.Err}
+		if e.Proto.Version == "" {
+			return filteredEvent{T: bundleFiltered, Err: makeSerErrStr("missing version")}
 		}
 		if e.Err != nil {
 			return filteredEvent{T: bundleMalformed, Err: e.Err}
