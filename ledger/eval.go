@@ -44,6 +44,9 @@ var ErrNoSpace = errors.New("block does not have space for transaction")
 // ErrRoundZero is self-explanatory
 var ErrRoundZero = errors.New("cannot start evaluator for round 0")
 
+// ErrNonSequentialBlockEval returns when an attempt to evaluate block X is being made where the latest ledger block is other than block X-1
+var ErrNonSequentialBlockEval = errors.New("block evaluation requires sequential evaluation")
+
 // maxPaysetHint makes sure that we don't allocate too much memory up front
 // in the block evaluator, since there cannot reasonably be more than this
 // many transactions in a block.
@@ -361,7 +364,7 @@ type BlockEvaluator struct {
 type ledgerForEvaluator interface {
 	ledgerForCowBase
 	GenesisHash() crypto.Digest
-	Totals(basics.Round) (ledgercore.AccountTotals, error)
+	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
 	CompactCertVoters(basics.Round) (*VotersForRound, error)
 }
 
@@ -451,9 +454,12 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 		base.compactCertNextRnd = votersRound + basics.Round(proto.CompactCertRounds)
 	}
 
-	prevTotals, err := l.Totals(eval.prevHeader.Round)
+	latestRound, prevTotals, err := l.LatestTotals()
 	if err != nil {
 		return nil, err
+	}
+	if latestRound != eval.prevHeader.Round {
+		return nil, ErrNonSequentialBlockEval
 	}
 
 	poolAddr := eval.prevHeader.RewardsPool

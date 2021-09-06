@@ -463,11 +463,24 @@ func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ba
 	return data, validThrough, nil
 }
 
-// Totals returns the totals of all accounts at the end of round rnd.
-func (l *Ledger) Totals(rnd basics.Round) (ledgercore.AccountTotals, error) {
+// LatestTotals returns the totals of all accounts for the most recent round, as well as the round number.
+func (l *Ledger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.Totals(rnd)
+	rnd := l.blockQ.latest()
+	totals, err := l.accts.Totals(rnd)
+	return rnd, totals, err
+}
+
+// OnlineTotals returns the online totals of all accounts at the end of round rnd.
+func (l *Ledger) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	totals, err := l.accts.Totals(rnd)
+	if err != nil {
+		return basics.MicroAlgos{}, err
+	}
+	return totals.Online.Money, nil
 }
 
 // CheckDup return whether a transaction is a duplicate one.
