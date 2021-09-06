@@ -21,7 +21,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
-	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 )
 
 //msgp:ignore sigslot
@@ -81,7 +81,7 @@ func (b *Builder) Present(pos uint64) bool {
 // Add a signature to the set of signatures available for building a certificate.
 // verifySig should be set to true in production; setting it to false is useful
 // for benchmarking to avoid the cost of signature checks.
-func (b *Builder) Add(pos uint64, sig crypto.OneTimeSignature, verifySig bool) error {
+func (b *Builder) Add(pos uint64, sig merklekeystore.Signature, verifySig bool) error {
 	if b.Present(pos) {
 		return fmt.Errorf("position %d already added", pos)
 	}
@@ -98,14 +98,16 @@ func (b *Builder) Add(pos uint64, sig crypto.OneTimeSignature, verifySig bool) e
 	}
 
 	// Check signature
-	ephID := basics.OneTimeIDForRound(b.SigRound, p.KeyDilution)
-	if verifySig && !p.PK.Verify(ephID, b.Msg, sig) {
-		return fmt.Errorf("signature does not verify under ID %v", ephID)
+
+	if verifySig {
+		if err := p.PK.Verify(p.FirstValid, uint64(b.SigRound), b.CompactCertRounds, b.Msg, sig); err != nil {
+			return err
+		}
 	}
 
 	// Remember the signature
 	b.sigs[pos].Weight = p.Weight
-	b.sigs[pos].Sig.OneTimeSignature = sig
+	b.sigs[pos].Sig.Signature = sig
 	b.signedWeight += p.Weight
 	b.cert = nil
 	b.sigsHasValidL = false
@@ -187,7 +189,7 @@ func (b *Builder) Build() (*Cert, error) {
 	}
 	b.sigsHasValidL = true
 
-	hfactory := crypto.HashFactory{HashType: HashType}
+	hfactory := crypto.HashFactory{HashType: CompactCertHashType}
 	sigtree, err := merklearray.Build(sigsToCommit(b.sigs), hfactory)
 	if err != nil {
 		return nil, err

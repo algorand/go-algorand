@@ -27,9 +27,9 @@ func TestHashCoin(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var slots [32]uint64
-	var sigcom = make(crypto.GenericDigest, HashSize)
-	var partcom = make(crypto.GenericDigest, HashSize)
-	var msgHash = make(crypto.GenericDigest, crypto.Sha512_256Size)
+	var sigcom = make(crypto.GenericDigest, CompactCertHashSize)
+	var partcom = make(crypto.GenericDigest, CompactCertHashSize)
+	var msgHash = make(crypto.GenericDigest, CompactCertHashSize)
 
 	crypto.RandBytes(sigcom[:])
 	crypto.RandBytes(partcom[:])
@@ -64,9 +64,9 @@ func TestHashCoin(t *testing.T) {
 }
 
 func BenchmarkHashCoin(b *testing.B) {
-	var sigcom = make(crypto.GenericDigest, HashSize)
-	var partcom = make(crypto.GenericDigest, HashSize)
-	var msgHash = make(crypto.GenericDigest, crypto.Sha512_256Size)
+	var sigcom = make(crypto.GenericDigest, CompactCertHashSize)
+	var partcom = make(crypto.GenericDigest, CompactCertHashSize)
+	var msgHash = make(crypto.GenericDigest, CompactCertHashSize)
 
 	crypto.RandBytes(sigcom[:])
 	crypto.RandBytes(partcom[:])

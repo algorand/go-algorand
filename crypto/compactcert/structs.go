@@ -19,22 +19,24 @@ package compactcert
 import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
 
 // Params defines common parameters for the verifier and builder.
 type Params struct {
-	Msg          crypto.Hashable // Message to be cerified
-	ProvenWeight uint64          // Weight threshold proven by the certificate
-	SigRound     basics.Round    // Ephemeral signature round to expect
-	SecKQ        uint64          // Security parameter (k+q) from analysis document
+	Msg               crypto.Hashable // Message to be cerified
+	ProvenWeight      uint64          // Weight threshold proven by the certificate
+	SigRound          basics.Round    // The round for which the ephemeral key is committed to
+	SecKQ             uint64          // Security parameter (k+q) from analysis document
+	CompactCertRounds uint64          // the frequency in which CC are being formed
 }
 
 // CompactOneTimeSignature is crypto.OneTimeSignature with omitempty
 type CompactOneTimeSignature struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
-	crypto.OneTimeSignature
+	merklekeystore.Signature
 }
 
 // A sigslotCommit is a single slot in the sigs array that forms the certificate.
