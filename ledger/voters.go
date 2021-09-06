@@ -236,20 +236,15 @@ func (tr *VotersForRound) loadTree(l ledgerForTracker, au *accountUpdates, hdr b
 			return fmt.Errorf("votersTracker.loadTree: overflow computing totalWeight %d + %d", totalWeight.ToUint64(), money.ToUint64())
 		}
 
-		keyDilution := acct.VoteKeyDilution
-		if keyDilution == 0 {
-			keyDilution = tr.Proto.DefaultKeyDilution
-		}
-
 		participants[i] = compactcert.Participant{
-			PK:          acct.VoteID,
-			Weight:      money.ToUint64(),
-			KeyDilution: keyDilution,
+			PK:         acct.BlockProofID,
+			Weight:     money.ToUint64(),
+			FirstValid: uint64(acct.VoteFirstValid),
 		}
 		addrToPos[acct.Address] = uint64(i)
 	}
 
-	tree, err := merklearray.Build(participants, crypto.HashFactory{HashType: compactcert.HashType})
+	tree, err := merklearray.Build(participants, crypto.HashFactory{HashType: compactcert.CompactCertHashType})
 	if err != nil {
 		return err
 	}

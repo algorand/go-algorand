@@ -22,6 +22,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 
@@ -54,6 +55,7 @@ func (pc PartCommit) Marshal(pos uint64) ([]byte, error) {
 func TestBuildVerify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	currentRound := basics.Round(128)
 	// Doing a full test of 1M accounts takes too much CPU time in CI.
 	doLargeTest := false
 
@@ -69,22 +71,25 @@ func TestBuildVerify(t *testing.T) {
 	npart := npartHi + npartLo
 
 	param := Params{
-		Msg:          TestMessage("hello world"),
-		ProvenWeight: uint64(totalWeight / 2),
-		SigRound:     0,
-		SecKQ:        128,
+		Msg:               TestMessage("hello world"),
+		ProvenWeight:      uint64(totalWeight / 2),
+		SigRound:          currentRound,
+		SecKQ:             128,
+		CompactCertRounds: 128,
 	}
 
 	// Share the key; we allow the same vote key to appear in multiple accounts..
-	key := crypto.GenerateOneTimeSignatureSecrets(0, 1)
+	key, err := merklekeystore.New(0, uint64(param.CompactCertRounds)+1, param.CompactCertRounds, crypto.DilithiumType)
+
+	require.NoError(t, err, "failed to create keys")
 
 	var parts []Participant
-	var sigs []crypto.OneTimeSignature
+	var sigs []merklekeystore.Signature
 	for i := 0; i < npartHi; i++ {
 		part := Participant{
-			PK:          key.OneTimeSignatureVerifier,
-			Weight:      uint64(totalWeight / 2 / npartHi),
-			KeyDilution: 10000,
+			PK:         *key.GetVerifier(),
+			Weight:     uint64(totalWeight / 2 / npartHi),
+			FirstValid: 0,
 		}
 
 		parts = append(parts, part)
@@ -92,22 +97,22 @@ func TestBuildVerify(t *testing.T) {
 
 	for i := 0; i < npartLo; i++ {
 		part := Participant{
-			PK:          key.OneTimeSignatureVerifier,
-			Weight:      uint64(totalWeight / 2 / npartLo),
-			KeyDilution: 10000,
+			PK:         *key.GetVerifier(),
+			Weight:     uint64(totalWeight / 2 / npartLo),
+			FirstValid: 0,
 		}
 
 		parts = append(parts, part)
 	}
 
-	ephID := basics.OneTimeIDForRound(0, parts[0].KeyDilution)
-	sig := key.Sign(ephID, param.Msg)
+	sig, err := key.Sign(param.Msg, uint64(currentRound))
+	require.NoError(t, err, "failed to create keys")
 
 	for i := 0; i < npart; i++ {
 		sigs = append(sigs, sig)
 	}
 
-	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: HashType})
+	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: CompactCertHashType})
 	if err != nil {
 		t.Error(err)
 	}
@@ -149,35 +154,36 @@ func TestBuildVerify(t *testing.T) {
 
 	verif := MkVerifier(param, partcom.Root())
 	err = verif.Verify(cert)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err, "failed to verify the compact cert")
 }
 
 func BenchmarkBuildVerify(b *testing.B) {
 	totalWeight := 1000000
 	npart := 10000
+	currentRound := basics.Round(128)
 
 	param := Params{
-		Msg:          TestMessage("hello world"),
-		ProvenWeight: uint64(totalWeight / 2),
-		SigRound:     0,
-		SecKQ:        128,
+		Msg:               TestMessage("hello world"),
+		ProvenWeight:      uint64(totalWeight / 2),
+		SigRound:          0,
+		SecKQ:             128,
+		CompactCertRounds: 128,
 	}
 
 	var parts []Participant
-	var partkeys []*crypto.OneTimeSignatureSecrets
-	var sigs []crypto.OneTimeSignature
+	var partkeys []*merklekeystore.Signer
+	var sigs []merklekeystore.Signature
 	for i := 0; i < npart; i++ {
-		key := crypto.GenerateOneTimeSignatureSecrets(0, 1)
+		key, err := merklekeystore.New(0, uint64(param.CompactCertRounds)+1, param.CompactCertRounds, crypto.Ed25519Type)
+		require.NoError(b, err, "failed to generate keys")
 		part := Participant{
-			PK:          key.OneTimeSignatureVerifier,
-			Weight:      uint64(totalWeight / npart),
-			KeyDilution: 10000,
+			PK:         *key.GetVerifier(),
+			Weight:     uint64(totalWeight / npart),
+			FirstValid: 0,
 		}
 
-		ephID := basics.OneTimeIDForRound(0, part.KeyDilution)
-		sig := key.Sign(ephID, param.Msg)
+		sig, err := key.Sign(param.Msg, uint64(currentRound))
+		require.NoError(b, err, "failed to create keys")
 
 		partkeys = append(partkeys, key)
 		sigs = append(sigs, sig)
@@ -185,7 +191,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 	}
 
 	var cert *Cert
-	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: HashType})
+	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: CompactCertHashType})
 	if err != nil {
 		b.Error(err)
 	}

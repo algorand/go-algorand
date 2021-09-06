@@ -338,64 +338,37 @@ func (z *Cert) MsgIsZero() bool {
 func (z *CompactOneTimeSignature) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(6)
-	var zb0001Mask uint8 /* 8 bits */
-	if (*z).OneTimeSignature.PK.MsgIsZero() {
+	zb0001Len := uint32(3)
+	var zb0001Mask uint8 /* 5 bits */
+	if (*z).Signature.ByteSignature.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (*z).OneTimeSignature.PK1Sig.MsgIsZero() {
+	if (*z).Signature.Proof.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if (*z).OneTimeSignature.PK2.MsgIsZero() {
+	if (*z).Signature.VerifyingKey.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x10
-	}
-	if (*z).OneTimeSignature.PK2Sig.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x20
-	}
-	if (*z).OneTimeSignature.PKSigOld.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x40
-	}
-	if (*z).OneTimeSignature.Sig.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x80
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
 		if (zb0001Mask & 0x4) == 0 { // if not empty
-			// string "p"
-			o = append(o, 0xa1, 0x70)
-			o = (*z).OneTimeSignature.PK.MarshalMsg(o)
+			// string "bsig"
+			o = append(o, 0xa4, 0x62, 0x73, 0x69, 0x67)
+			o = (*z).Signature.ByteSignature.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
-			// string "p1s"
-			o = append(o, 0xa3, 0x70, 0x31, 0x73)
-			o = (*z).OneTimeSignature.PK1Sig.MarshalMsg(o)
+			// string "prf"
+			o = append(o, 0xa3, 0x70, 0x72, 0x66)
+			o = (*z).Signature.Proof.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x10) == 0 { // if not empty
-			// string "p2"
-			o = append(o, 0xa2, 0x70, 0x32)
-			o = (*z).OneTimeSignature.PK2.MarshalMsg(o)
-		}
-		if (zb0001Mask & 0x20) == 0 { // if not empty
-			// string "p2s"
-			o = append(o, 0xa3, 0x70, 0x32, 0x73)
-			o = (*z).OneTimeSignature.PK2Sig.MarshalMsg(o)
-		}
-		if (zb0001Mask & 0x40) == 0 { // if not empty
-			// string "ps"
-			o = append(o, 0xa2, 0x70, 0x73)
-			o = (*z).OneTimeSignature.PKSigOld.MarshalMsg(o)
-		}
-		if (zb0001Mask & 0x80) == 0 { // if not empty
-			// string "s"
-			o = append(o, 0xa1, 0x73)
-			o = (*z).OneTimeSignature.Sig.MarshalMsg(o)
+			// string "vkey"
+			o = append(o, 0xa4, 0x76, 0x6b, 0x65, 0x79)
+			o = (*z).Signature.VerifyingKey.MarshalMsg(o)
 		}
 	}
 	return
@@ -421,49 +394,25 @@ func (z *CompactOneTimeSignature) UnmarshalMsg(bts []byte) (o []byte, err error)
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).OneTimeSignature.Sig.UnmarshalMsg(bts)
+			bts, err = (*z).Signature.ByteSignature.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sig")
+				err = msgp.WrapError(err, "struct-from-array", "ByteSignature")
 				return
 			}
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).OneTimeSignature.PK.UnmarshalMsg(bts)
+			bts, err = (*z).Signature.Proof.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PK")
+				err = msgp.WrapError(err, "struct-from-array", "Proof")
 				return
 			}
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).OneTimeSignature.PKSigOld.UnmarshalMsg(bts)
+			bts, err = (*z).Signature.VerifyingKey.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PKSigOld")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
-			bts, err = (*z).OneTimeSignature.PK2.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PK2")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
-			bts, err = (*z).OneTimeSignature.PK1Sig.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PK1Sig")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
-			bts, err = (*z).OneTimeSignature.PK2Sig.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PK2Sig")
+				err = msgp.WrapError(err, "struct-from-array", "VerifyingKey")
 				return
 			}
 		}
@@ -490,40 +439,22 @@ func (z *CompactOneTimeSignature) UnmarshalMsg(bts []byte) (o []byte, err error)
 				return
 			}
 			switch string(field) {
-			case "s":
-				bts, err = (*z).OneTimeSignature.Sig.UnmarshalMsg(bts)
+			case "bsig":
+				bts, err = (*z).Signature.ByteSignature.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Sig")
+					err = msgp.WrapError(err, "ByteSignature")
 					return
 				}
-			case "p":
-				bts, err = (*z).OneTimeSignature.PK.UnmarshalMsg(bts)
+			case "prf":
+				bts, err = (*z).Signature.Proof.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "PK")
+					err = msgp.WrapError(err, "Proof")
 					return
 				}
-			case "ps":
-				bts, err = (*z).OneTimeSignature.PKSigOld.UnmarshalMsg(bts)
+			case "vkey":
+				bts, err = (*z).Signature.VerifyingKey.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "PKSigOld")
-					return
-				}
-			case "p2":
-				bts, err = (*z).OneTimeSignature.PK2.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "PK2")
-					return
-				}
-			case "p1s":
-				bts, err = (*z).OneTimeSignature.PK1Sig.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "PK1Sig")
-					return
-				}
-			case "p2s":
-				bts, err = (*z).OneTimeSignature.PK2Sig.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "PK2Sig")
+					err = msgp.WrapError(err, "VerifyingKey")
 					return
 				}
 			default:
@@ -546,13 +477,13 @@ func (_ *CompactOneTimeSignature) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *CompactOneTimeSignature) Msgsize() (s int) {
-	s = 1 + 2 + (*z).OneTimeSignature.Sig.Msgsize() + 2 + (*z).OneTimeSignature.PK.Msgsize() + 3 + (*z).OneTimeSignature.PKSigOld.Msgsize() + 3 + (*z).OneTimeSignature.PK2.Msgsize() + 4 + (*z).OneTimeSignature.PK1Sig.Msgsize() + 4 + (*z).OneTimeSignature.PK2Sig.Msgsize()
+	s = 1 + 5 + (*z).Signature.ByteSignature.Msgsize() + 4 + (*z).Signature.Proof.Msgsize() + 5 + (*z).Signature.VerifyingKey.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *CompactOneTimeSignature) MsgIsZero() bool {
-	return ((*z).OneTimeSignature.Sig.MsgIsZero()) && ((*z).OneTimeSignature.PK.MsgIsZero()) && ((*z).OneTimeSignature.PKSigOld.MsgIsZero()) && ((*z).OneTimeSignature.PK2.MsgIsZero()) && ((*z).OneTimeSignature.PK1Sig.MsgIsZero()) && ((*z).OneTimeSignature.PK2Sig.MsgIsZero())
+	return ((*z).Signature.ByteSignature.MsgIsZero()) && ((*z).Signature.Proof.MsgIsZero()) && ((*z).Signature.VerifyingKey.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -561,7 +492,7 @@ func (z *Participant) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)
 	var zb0001Mask uint8 /* 4 bits */
-	if (*z).KeyDilution == 0 {
+	if (*z).FirstValid == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
@@ -577,9 +508,9 @@ func (z *Participant) MarshalMsg(b []byte) (o []byte) {
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
-			// string "d"
-			o = append(o, 0xa1, 0x64)
-			o = msgp.AppendUint64(o, (*z).KeyDilution)
+			// string "fv"
+			o = append(o, 0xa2, 0x66, 0x76)
+			o = msgp.AppendUint64(o, (*z).FirstValid)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "p"
@@ -631,9 +562,9 @@ func (z *Participant) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			(*z).KeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).FirstValid, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "KeyDilution")
+				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
 				return
 			}
 		}
@@ -672,10 +603,10 @@ func (z *Participant) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Weight")
 					return
 				}
-			case "d":
-				(*z).KeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
+			case "fv":
+				(*z).FirstValid, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "KeyDilution")
+					err = msgp.WrapError(err, "FirstValid")
 					return
 				}
 			default:
@@ -698,13 +629,13 @@ func (_ *Participant) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Participant) Msgsize() (s int) {
-	s = 1 + 2 + (*z).PK.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size
+	s = 1 + 2 + (*z).PK.Msgsize() + 2 + msgp.Uint64Size + 3 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Participant) MsgIsZero() bool {
-	return ((*z).PK.MsgIsZero()) && ((*z).Weight == 0) && ((*z).KeyDilution == 0)
+	return ((*z).PK.MsgIsZero()) && ((*z).Weight == 0) && ((*z).FirstValid == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
