@@ -226,7 +226,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 		// in this case, we don't have valid state
 		// pretend a new round has just started, and propose a block
 		var nextRound round
-		var nextVersion protocol.ConsensusVersion
+		var nextVersions [2]protocol.ConsensusVersion
 		for {
 			nextRound.Number = s.Ledger.NextRound()
 			if nextRound.Number == 0 {
@@ -241,9 +241,16 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 				nextRound.Branch = bookkeeping.BlockHash(d)
 			}
 
-			nextVersion, err = s.Ledger.ConsensusVersion(ParamsRound(nextRound.Number), nextRound.Branch)
+			nextVersions[0], err = s.Ledger.ConsensusVersion(ParamsRound(nextRound.Number), nextRound.Branch)
 			if err != nil {
 				s.log.Errorf("unable to retrieve consensus version for round %d: %v", ParamsRound(nextRound.Number), err)
+				time.Sleep(time.Second)
+				continue
+			}
+
+			nextVersions[1], err = s.Ledger.ConsensusVersion(ParamsRound(nextRound.Number+1), nextRound.Branch)
+			if err != nil {
+				s.log.Errorf("unable to retrieve consensus version for round %d+1: %v", ParamsRound(nextRound.Number), err)
 				time.Sleep(time.Second)
 				continue
 			}
@@ -251,7 +258,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 			break
 		}
 
-		if enablePipelining(nextVersion) {
+		if enablePipelining(nextVersions[0]) {
 			status = &pipelinePlayer{}
 			if enableShadowPlayer() {
 				status2 = &player{}
@@ -265,9 +272,9 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 			router2 = makeRootRouter(status2)
 		}
 
-		a = status.init(routerHandle{t: s.tracer, r: &router, src: status.T()}, nextRound, nextVersion)
+		a = status.init(routerHandle{t: s.tracer, r: &router, src: status.T()}, nextRound, nextVersions)
 		if status2 != nil {
-			status2.init(routerHandle{t: s.tracer, r: &router2, src: status2.T()}, nextRound, nextVersion)
+			status2.init(routerHandle{t: s.tracer, r: &router2, src: status2.T()}, nextRound, nextVersions)
 		}
 	} else {
 		s.clockManager = clockManager

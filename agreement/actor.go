@@ -49,8 +49,9 @@ type actor interface {
 	// handle should return a sequence of actions to be performed given the event.
 	handle(routerHandle, event) []action
 
-	// init initializes the actor.
-	init(routerHandle, round, protocol.ConsensusVersion) []action
+	// init initializes the actor.  The consensus versions are for the specified
+	// round and the one after it.
+	init(routerHandle, round, [2]protocol.ConsensusVersion) []action
 }
 
 type serializableActor interface {

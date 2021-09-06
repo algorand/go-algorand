@@ -31,7 +31,7 @@ import (
 // It tracks the current (first uncommitted) agreement round, and manages additional speculative agreement rounds.
 type pipelinePlayer struct {
 	FirstUncommittedRound   round
-	FirstUncommittedVersion protocol.ConsensusVersion
+	FirstUncommittedVersion [2]protocol.ConsensusVersion // for the next two rounds
 	Players                 map[round]*player
 
 	// For players of rounds that do not support AgreementMessagesContainBranch,
@@ -50,7 +50,7 @@ func (p *pipelinePlayer) firstUncommittedRound() round {
 	return p.FirstUncommittedRound
 }
 
-func (p *pipelinePlayer) init(r routerHandle, target round, proto protocol.ConsensusVersion) []action {
+func (p *pipelinePlayer) init(r routerHandle, target round, proto [2]protocol.ConsensusVersion) []action {
 	p.FirstUncommittedRound = target
 	p.FirstUncommittedVersion = proto
 	p.Players = make(map[round]*player)
@@ -61,12 +61,12 @@ func (p *pipelinePlayer) init(r routerHandle, target round, proto protocol.Conse
 }
 
 func (p *pipelinePlayer) resizeArrivals() {
-	proto := config.Consensus[p.FirstUncommittedVersion]
+	proto := config.Consensus[p.FirstUncommittedVersion[0]]
 	if len(p.PayloadArrivals) > proto.AgreementPipelineDelayHistory {
 		p.PayloadArrivals = p.PayloadArrivals[len(p.PayloadArrivals)-proto.AgreementPipelineDelayHistory:]
 	}
 	for len(p.PayloadArrivals) < proto.AgreementPipelineDelayHistory {
-		p.PayloadArrivals = append([]time.Duration{FilterTimeout(0, p.FirstUncommittedVersion)}, p.PayloadArrivals...)
+		p.PayloadArrivals = append([]time.Duration{FilterTimeout(0, p.FirstUncommittedVersion[0])}, p.PayloadArrivals...)
 	}
 }
 
@@ -198,7 +198,7 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 // adjustPlayers creates and garbage-collects players as needed
 func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 	var actions []action
-	maxDepth := config.Consensus[p.FirstUncommittedVersion].AgreementPipelineDepth
+	maxDepth := config.Consensus[p.FirstUncommittedVersion[0]].AgreementPipelineDepth
 
 	// Advance FirstUncommittedRound to account for any decided players.
 	for {
@@ -215,12 +215,13 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 		if pp.Period == 0 {
 			payloadArrival = pp.FrozenProposalArrival
 		} else {
-			payloadArrival = FilterTimeout(0, p.FirstUncommittedVersion)
+			payloadArrival = FilterTimeout(0, p.FirstUncommittedVersion[0])
 		}
 
 		p.FirstUncommittedRound.Number += 1
 		p.FirstUncommittedRound.Branch = pp.Decided
-		p.FirstUncommittedVersion = pp.NextVersion
+		p.FirstUncommittedVersion[0] = p.FirstUncommittedVersion[1]
+		p.FirstUncommittedVersion[1] = pp.Versions[2]
 		p.PayloadArrivals = append(p.PayloadArrivals, payloadArrival)
 		p.resizeArrivals()
 	}
@@ -263,14 +264,14 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 			continue
 		}
 
-		re := readLowestEvent{T: readLowestPayload, Round: rp.Round, Period: rp.Period}
-		re = r.dispatch(*rp, re, proposalMachineRound, rp.Round, rp.Period, 0).(readLowestEvent)
-		if !re.PayloadOK {
+		// If that round does not support branches in agreement votes, we cannot pipeline it.
+		if !config.Consensus[rp.Versions[1]].AgreementMessagesContainBranch {
 			continue
 		}
 
-		// If that round does not support branches in agreement votes, we cannot pipeline it.
-		if !config.Consensus[re.Payload.prevVersion].AgreementMessagesContainBranch {
+		re := readLowestEvent{T: readLowestPayload, Round: rp.Round, Period: rp.Period}
+		re = r.dispatch(*rp, re, proposalMachineRound, rp.Round, rp.Period, 0).(readLowestEvent)
+		if !re.PayloadOK {
 			continue
 		}
 
@@ -279,7 +280,12 @@ func (p *pipelinePlayer) adjustPlayers(r routerHandle) []action {
 		p.freezeOtherChildren(rnd, bookkeeping.BlockHash(re.Proposal.BlockDigest))
 
 		nextrnd := round{Number: rnd.Number + 1, Branch: bookkeeping.BlockHash(re.Proposal.BlockDigest)}
-		actions = append(actions, p.ensurePlayer(r, nextrnd, re.Payload.prevVersion, rnd)...)
+		nextvers := [2]protocol.ConsensusVersion{
+			rp.Versions[1],
+			re.Payload.ve.Block().CurrentProtocol,
+		}
+
+		actions = append(actions, p.ensurePlayer(r, nextrnd, nextvers, rnd)...)
 	}
 
 	return actions
@@ -337,7 +343,7 @@ func (p *pipelinePlayer) pipelineDelay(ver protocol.ConsensusVersion) time.Durat
 }
 
 // ensurePlayer creates a player for a particular round, if not already present.
-func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protocol.ConsensusVersion, pipelineParent round) []action {
+func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver [2]protocol.ConsensusVersion, pipelineParent round) []action {
 	pp, ok := p.Players[nextrnd]
 	if ok {
 		pp.FrozenPipelining = false
@@ -345,7 +351,7 @@ func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protoco
 	}
 
 	newPlayer := &player{
-		PipelineDelay:               p.pipelineDelay(ver),
+		PipelineDelay:               p.pipelineDelay(ver[0]),
 		PipelineParentRound:         pipelineParent,
 		notify:                      p,
 		firstUncommittedRoundSource: p,
@@ -355,7 +361,7 @@ func (p *pipelinePlayer) ensurePlayer(r routerHandle, nextrnd round, ver protoco
 
 	// If the version does not support branches in agreement messages,
 	// register the branch in CompatBranch.
-	if !config.Consensus[ver].AgreementMessagesContainBranch {
+	if !config.Consensus[ver[0]].AgreementMessagesContainBranch {
 		p.CompatBranch[nextrnd.Number] = nextrnd.Branch
 	}
 

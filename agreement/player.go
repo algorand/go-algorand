@@ -58,9 +58,10 @@ type player struct {
 	// value indicates no agreement yet.
 	Decided bookkeeping.BlockHash
 
-	// NextVersion is the protocol version for the next block, set if Decided
-	// is non-zero.
-	NextVersion protocol.ConsensusVersion
+	// Versions contain the protocol versions to use for this block,
+	// the next block, and the block after that.  The latter is set
+	// if Decided is non-zero.
+	Versions [3]protocol.ConsensusVersion
 
 	// FrozenProposalArrival is the time at which the final proposal (the
 	// one that ended up getting frozen) arrived.
@@ -104,7 +105,7 @@ func (p *player) firstUncommittedRound() round {
 	return p.Round
 }
 
-func (p *player) init(r routerHandle, target round, proto protocol.ConsensusVersion) []action {
+func (p *player) init(r routerHandle, target round, proto [2]protocol.ConsensusVersion) []action {
 	if p.notify == nil {
 		p.notify = p
 	}
@@ -115,9 +116,11 @@ func (p *player) init(r routerHandle, target round, proto protocol.ConsensusVers
 	p.LastConcluding = 0
 	p.Napping = false
 	p.FastRecoveryDeadline = 0
-	p.Deadline = FilterTimeout(0, proto)
+	p.Deadline = FilterTimeout(0, proto[0])
 	p.Decided = bookkeeping.BlockHash{}
-	p.NextVersion = ""
+	p.Versions[0] = proto[0]
+	p.Versions[1] = proto[1]
+	p.Versions[2] = ""
 
 	// update tracer state to match player
 	r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})
@@ -236,7 +239,7 @@ func (p *player) handle(r routerHandle, e event) []action {
 			return actions
 		}
 	case roundInterruptionEvent:
-		return p.init(r, e.Round, e.Proto.Versions[0])
+		return p.init(r, e.Round, e.Proto.Versions)
 	case checkpointEvent:
 		return p.handleCheckpointEvent(r, e)
 	default:
@@ -398,7 +401,7 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 			actions = append(actions, a0)
 
 			p.Decided = bookkeeping.BlockHash(cert.Proposal.BlockDigest)
-			p.NextVersion = e.Proto
+			p.Versions[2] = res.Payload.ve.Block().CurrentProtocol
 			p.FrozenProposalArrival = res.Payload.validatedAt
 			as := p.notify.playerDecided(p, r)
 			return append(actions, as...)
@@ -481,7 +484,8 @@ type roundCompletionNotifier interface {
 }
 
 func (p *player) playerDecided(_ *player, r routerHandle) []action {
-	return p.init(r, makeRoundBranch(p.Round.Number+1, p.Decided), p.NextVersion)
+	return p.init(r, makeRoundBranch(p.Round.Number+1, p.Decided),
+		[2]protocol.ConsensusVersion{p.Versions[1], p.Versions[2]})
 }
 
 // partitionPolicy checks if the player is in a partition, and if it is,
@@ -681,7 +685,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				actions = append(actions, a0)
 
 				p.Decided = e.Input.Proposal.Block.Hash()
-				p.NextVersion = delegatedE.Proto.Versions[0]
+				p.Versions[2] = e.Input.Proposal.Block.CurrentProtocol
 				p.FrozenProposalArrival = e.Input.Proposal.validatedAt
 				as := p.notify.playerDecided(p, r)
 				return append(actions, as...)
