@@ -17,7 +17,9 @@
 package agreement
 
 import (
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // A stateMachineTag uniquely identifies the type of a state machine.
@@ -121,49 +123,48 @@ func makeRootRouter(p actor) (res rootRouter) {
 	return
 }
 
-func (router *rootRouter) update(state actor, r round, gc bool) (rc *roundRouter) {
+func (router *rootRouter) update(state actor, r round, gc bool) *roundRouter {
 	if router.proposalRoot == nil {
 		router.proposalRoot = checkedListener{listener: &router.ProposalManager, listenerContract: proposalManagerContract{}}
 	}
 	if router.voteRoot == nil {
 		router.voteRoot = checkedListener{listener: &router.VoteAggregator, listenerContract: voteAggregatorContract{}}
 	}
-	if router.Children == nil {
-		router.Children = make(map[round]*roundRouter)
-	}
-	rc = router.Children[r]
-	if rc == nil {
-		// Check if we need to upgrade a zero-branch roundRouter to
-		// know about the branch value.
-		rNoBranch := round{Number: r.Number}
-		rc = router.Children[rNoBranch]
-		if rc != nil {
-			router.Children[r] = rc
-			delete(router.Children, rNoBranch)
-		} else {
-			for rr, rrc := range router.Children {
-				if r.Number == rr.Number && r.Branch == (bookkeeping.BlockHash{}) {
-					rc = rrc
-				}
-			}
-			if rc == nil {
-				rc = new(roundRouter)
-				router.Children[r] = rc
-			}
+
+	p, ok := state.(*player)
+	if ok {
+		var rver protocol.ConsensusVersion
+		if r.Number == p.Round.Number {
+			rver = p.Versions[0]
+		}
+		if r.Number == p.Round.Number+1 {
+			rver = p.Versions[1]
+		}
+		if rver != "" && !config.Consensus[rver].AgreementMessagesContainBranch {
+			r.Branch = bookkeeping.BlockHash{}
 		}
 	}
 
+	if router.Children == nil {
+		router.Children = make(map[round]*roundRouter)
+	}
+	if router.Children[r] == nil {
+		router.Children[r] = new(roundRouter)
+	}
+
 	if gc {
+		firstUncommittedRound := state.firstUncommittedRound().Number
+
 		children := make(map[round]*roundRouter)
 		for r, c := range router.Children {
-			if r.Number >= state.firstUncommittedRound().Number {
+			if r.Number >= firstUncommittedRound {
 				children[r] = c
 			}
 		}
 		router.Children = children
 	}
 
-	return
+	return router.Children[r]
 }
 
 // submitTop is a convenience method used to submit the event directly into the root of the state machine tree
