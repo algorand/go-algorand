@@ -87,6 +87,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 				MessageHandle:           "uniquemessage",
 				UnauthenticatedProposal: rPayload.u(),
 			},
+			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		})
 	case playerSameRoundProcessedProposalVote: // already processed proposal vote
 		plyr, pMachine, helper = setupP(t, r, p, soft)
@@ -232,6 +233,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 				MessageHandle:           "uniquemessage",
 				UnauthenticatedProposal: payload.u(),
 			},
+			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
 	case payloadVerifiedEvent:
 		e = messageEvent{
@@ -241,6 +243,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 				UnauthenticatedProposal: payload.u(),
 				Proposal:                *payload,
 			},
+			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
 	case payloadVerifiedEventNoMessageHandle:
 		e = messageEvent{
@@ -249,6 +252,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 				UnauthenticatedProposal: payload.u(),
 				Proposal:                *payload,
 			},
+			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
 	case bundleVerifiedEventSamePeriod:
 		votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
@@ -323,6 +327,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 				MessageHandle:         "uniquemalformedBundle",
 			},
 			Err: errTestVerifyFailed,
+			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
 	case payloadVerifiedErrorEvent:
 		e = messageEvent{
@@ -332,6 +337,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 				Proposal:                *payload,
 			},
 			Err: errTestVerifyFailed,
+			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
 	default:
 		require.Fail(t, "messageEvent permutation %v does not exist", n)

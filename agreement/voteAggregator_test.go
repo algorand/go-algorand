@@ -785,6 +785,9 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 		Input: message{
 			UnauthenticatedVote: uv,
 		},
+		Proto: ConsensusVersionView{
+			Version: protocol.ConsensusCurrentVersion,
+		},
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
@@ -795,6 +798,9 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 		T: votePresent,
 		Input: message{
 			UnauthenticatedVote: uv,
+		},
+		Proto: ConsensusVersionView{
+			Version: protocol.ConsensusCurrentVersion,
 		},
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
@@ -807,6 +813,9 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 		Input: message{
 			UnauthenticatedVote: uv,
 		},
+		Proto: ConsensusVersionView{
+			Version: protocol.ConsensusCurrentVersion,
+		},
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
 
@@ -817,6 +826,9 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 		T: votePresent,
 		Input: message{
 			UnauthenticatedVote: uv,
+		},
+		Proto: ConsensusVersionView{
+			Version: protocol.ConsensusCurrentVersion,
 		},
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
@@ -829,6 +841,9 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 		T: votePresent,
 		Input: message{
 			UnauthenticatedVote: uv,
+		},
+		Proto: ConsensusVersionView{
+			Version: protocol.ConsensusCurrentVersion,
 		},
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
@@ -873,6 +888,9 @@ func TestVoteAggregatorFiltersVoteNextRound(t *testing.T) {
 		Input: message{
 			UnauthenticatedVote: uv,
 		},
+		Proto: ConsensusVersionView{
+			Version: protocol.ConsensusCurrentVersion,
+		},
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
 
@@ -884,6 +902,9 @@ func TestVoteAggregatorFiltersVoteNextRound(t *testing.T) {
 		Input: message{
 			UnauthenticatedVote: uv,
 		},
+		Proto: ConsensusVersionView{
+			Version: protocol.ConsensusCurrentVersion,
+		},
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
@@ -894,6 +915,9 @@ func TestVoteAggregatorFiltersVoteNextRound(t *testing.T) {
 		T: votePresent,
 		Input: message{
 			UnauthenticatedVote: uv,
+		},
+		Proto: ConsensusVersionView{
+			Version: protocol.ConsensusCurrentVersion,
 		},
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
