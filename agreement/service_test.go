@@ -778,10 +778,13 @@ func (testingRand) Uint64() uint64 {
 
 func setupAgreement(t *testing.T, numNodes int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.ClockFactory, []Ledger, *activityMonitor) {
 	var validator testBlockValidator
-	return setupAgreementWithValidator(t, numNodes, traceLevel, validator, ledgerFactory)
+	blockFactoryProto := func (basics.Round) (protocol.ConsensusVersion, error) {
+		return protocol.ConsensusCurrentVersion, nil
+	}
+	return setupAgreementWithValidator(t, numNodes, traceLevel, validator, ledgerFactory, blockFactoryProto)
 }
 
-func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLevel, validator BlockValidator, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.ClockFactory, []Ledger, *activityMonitor) {
+func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLevel, validator BlockValidator, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger, blockFactoryProto func (basics.Round) (protocol.ConsensusVersion, error)) (*testingNetwork, Ledger, func(), []*Service, []timers.ClockFactory, []Ledger, *activityMonitor) {
 	bufCap := 1000 // max number of buffered messages
 
 	// system state setup: keygen, stake initialization
@@ -826,7 +829,7 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 			Network:        endpoint,
 			KeyManager:     keys,
 			BlockValidator: validator,
-			BlockFactory:   testBlockFactory{Owner: i},
+			BlockFactory:   testBlockFactory{Owner: i, ConsensusVersion: blockFactoryProto},
 			ClockFactory:   clocks[i],
 			Accessor:       accessor,
 			Local:          config.Local{CadaverSizeTarget: 10000000},
@@ -943,19 +946,20 @@ func sanityCheck(startRound basics.Round, numRounds basics.Round, ledgers []Ledg
 }
 
 func simulateAgreement(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel) {
-	simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, makeTestLedger)
+	simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, makeTestLedger, func (basics.Round) (protocol.ConsensusVersion, error) { return protocol.ConsensusCurrentVersion, nil })
 }
 
-func simulateAgreementWithConsensusVersion(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, consensusVersion func(basics.Round, bookkeeping.BlockHash) (protocol.ConsensusVersion, error)) {
+func simulateAgreementWithConsensusVersion(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, consensusVersion func(basics.Round) (protocol.ConsensusVersion, error)) {
 	ledgerFactory := func(data map[basics.Address]basics.AccountData) Ledger {
 		return makeTestLedgerWithConsensusVersion(data, consensusVersion)
 	}
-	simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, ledgerFactory)
+	simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, ledgerFactory, consensusVersion)
 }
 
-func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) {
+func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger, blockFactoryProto func(basics.Round) (protocol.ConsensusVersion, error)) {
 
-	_, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, traceLevel, ledgerFactory)
+	var validator testBlockValidator
+	_, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreementWithValidator(t, numNodes, traceLevel, validator, ledgerFactory, blockFactoryProto)
 	startRound := baseLedger.NextRound()
 	defer cleanupFn()
 
@@ -1041,7 +1045,7 @@ func TestAgreementSynchronousFuture1(t *testing.T) {
 	//	t.Skip("Skipping agreement integration test")
 	//}
 
-	consensusVersion := func(r basics.Round, h bookkeeping.BlockHash) (protocol.ConsensusVersion, error) {
+	consensusVersion := func(r basics.Round) (protocol.ConsensusVersion, error) {
 		return protocol.ConsensusFuture, nil
 	}
 	simulateAgreementWithConsensusVersion(t, 1, 5, disabled, consensusVersion)
@@ -1052,7 +1056,7 @@ func TestAgreementSynchronousFuture5(t *testing.T) {
 		t.Skip("Skipping agreement integration test")
 	}
 
-	consensusVersion := func(r basics.Round, h bookkeeping.BlockHash) (protocol.ConsensusVersion, error) {
+	consensusVersion := func(r basics.Round) (protocol.ConsensusVersion, error) {
 		return protocol.ConsensusFuture, nil
 	}
 	simulateAgreementWithConsensusVersion(t, 5, 5, disabled, consensusVersion)
@@ -1063,7 +1067,7 @@ func TestAgreementSynchronousFutureUpgrade(t *testing.T) {
 		t.Skip("Skipping agreement integration test")
 	}
 
-	consensusVersion := func(r basics.Round, h bookkeeping.BlockHash) (protocol.ConsensusVersion, error) {
+	consensusVersion := func(r basics.Round) (protocol.ConsensusVersion, error) {
 		if r >= 5 {
 			return protocol.ConsensusFuture, nil
 		}
@@ -2131,7 +2135,10 @@ func (v *testSuspendableBlockValidator) suspend() chan struct{} {
 func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942(t *testing.T) {
 	numNodes := 5
 	validator := makeTestSuspendableBlockValidator()
-	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreementWithValidator(t, numNodes, disabled, validator, makeTestLedger)
+	blockFactoryProto := func (basics.Round) (protocol.ConsensusVersion, error) {
+		return protocol.ConsensusCurrentVersion, nil
+	}
+	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreementWithValidator(t, numNodes, disabled, validator, makeTestLedger, blockFactoryProto)
 	startRound := baseLedger.NextRound()
 	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound(), bookkeeping.BlockHash{})
 	defer cleanupFn()
@@ -2411,7 +2418,7 @@ func TestAgreementServiceStartDeadline(t *testing.T) {
 		delete(config.Consensus, testConsensusProtocolVersion)
 	}()
 
-	baseLedger.consensusVersion = func(basics.Round, bookkeeping.BlockHash) (protocol.ConsensusVersion, error) {
+	baseLedger.consensusVersion = func(basics.Round) (protocol.ConsensusVersion, error) {
 		return testConsensusProtocolVersion, nil
 	}
 

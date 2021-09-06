@@ -29,8 +29,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func makeRandomProposalPayload(r round) *proposal {
-	f := testBlockFactory{Owner: 1}
+func makeRandomProposalPayload(r round, proto protocol.ConsensusVersion) *proposal {
+	f := testBlockFactory{Owner: 1, ConsensusVersion: func(basics.Round) (protocol.ConsensusVersion, error) { return proto, nil }}
 	ve, _ := f.AssembleSpeculativeBlock(r.Number, r.Branch, time.Time{})
 
 	var payload unauthenticatedProposal
@@ -64,9 +64,9 @@ const (
 
 func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomata, helper *voteMakerHelper, r round) {
 	rm1 := makeRoundRandomBranch(208)
-	rm1Block := helper.MakeRandomBlock(t, rm1)
+	rm1Block := helper.MakeRandomBlock(t, rm1, protocol.ConsensusCurrentVersion)
 	r = makeRoundBranch(209, bookkeeping.BlockHash(rm1Block.Block().Digest()))
-	rBlock := helper.MakeRandomBlock(t, r)
+	rBlock := helper.MakeRandomBlock(t, r, protocol.ConsensusCurrentVersion)
 	rp1 := makeRoundBranch(210, bookkeeping.BlockHash(rBlock.Block().Digest()))
 	const p = period(0)
 
@@ -169,7 +169,7 @@ const (
 func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r round) (e messageEvent) {
 	//r := makeRoundRandomBranch(209)
 	const p = period(0)
-	var payload = makeRandomProposalPayload(r)
+	var payload = makeRandomProposalPayload(r, protocol.ConsensusCurrentVersion)
 	var pV = payload.value()
 	switch n {
 	case softVoteVerifiedEventSamePeriod:
@@ -390,7 +390,7 @@ func requireTraceContains(t *testing.T, trace ioTrace, expected event, playerN, 
 func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, helper *voteMakerHelper, r round, trace ioTrace) {
 	//r := makeRoundRandomBranch(209)
 	const p = period(0)
-	var payload = makeRandomProposalPayload(r)
+	var payload = makeRandomProposalPayload(r, protocol.ConsensusCurrentVersion)
 	var pV = payload.value()
 	rp1 := makeRoundBranch(210, bookkeeping.BlockHash(payload.Digest()))
 

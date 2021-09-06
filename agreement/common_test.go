@@ -183,13 +183,22 @@ func (v testBlockValidator) Validate(ctx context.Context, e bookkeeping.Block) (
 
 type testBlockFactory struct {
 	Owner int
+	ConsensusVersion func(basics.Round) (protocol.ConsensusVersion, error)
 }
 
 func (f testBlockFactory) AssembleSpeculativeBlock(r basics.Round, prev bookkeeping.BlockHash, deadline time.Time) (ValidatedBlock, error) {
+	proto, err := f.ConsensusVersion(r)
+	if err != nil {
+		return testValidatedBlock{}, err
+	}
+
 	return testValidatedBlock{Inside: bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
 			Round:  r,
 			Branch: prev,
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: proto,
+			},
 		}}}, nil
 }
 
@@ -219,7 +228,7 @@ type testLedger struct {
 
 	notifications map[basics.Round]signal
 
-	consensusVersion func(basics.Round, bookkeeping.BlockHash) (protocol.ConsensusVersion, error)
+	consensusVersion func(basics.Round) (protocol.ConsensusVersion, error)
 }
 
 func makeTestLedger(state map[basics.Address]basics.AccountData) Ledger {
@@ -235,13 +244,13 @@ func makeTestLedger(state map[basics.Address]basics.AccountData) Ledger {
 
 	l.notifications = make(map[basics.Round]signal)
 
-	l.consensusVersion = func(r basics.Round, h bookkeeping.BlockHash) (protocol.ConsensusVersion, error) {
+	l.consensusVersion = func(r basics.Round) (protocol.ConsensusVersion, error) {
 		return protocol.ConsensusCurrentVersion, nil
 	}
 	return l
 }
 
-func makeTestLedgerWithConsensusVersion(state map[basics.Address]basics.AccountData, consensusVersion func(basics.Round, bookkeeping.BlockHash) (protocol.ConsensusVersion, error)) Ledger {
+func makeTestLedgerWithConsensusVersion(state map[basics.Address]basics.AccountData, consensusVersion func(basics.Round) (protocol.ConsensusVersion, error)) Ledger {
 	l := new(testLedger)
 	l.blocks = make(map[basics.Round]blockAndCert)
 	l.speculative = make(map[bookkeeping.BlockHash]blockAndMaybeCert)
@@ -273,7 +282,7 @@ func makeTestLedgerMaxBlocks(state map[basics.Address]basics.AccountData, maxNum
 
 	l.notifications = make(map[basics.Round]signal)
 
-	l.consensusVersion = func(r basics.Round, h bookkeeping.BlockHash) (protocol.ConsensusVersion, error) {
+	l.consensusVersion = func(r basics.Round) (protocol.ConsensusVersion, error) {
 		return protocol.ConsensusCurrentVersion, nil
 	}
 	return l
@@ -497,7 +506,7 @@ func (l *testLedger) ConsensusParams(r basics.Round, leafBranch bookkeeping.Bloc
 }
 
 func (l *testLedger) ConsensusVersion(r basics.Round, leafBranch bookkeeping.BlockHash) (protocol.ConsensusVersion, error) {
-	return l.consensusVersion(r, leafBranch)
+	return l.consensusVersion(r)
 }
 
 // simulation helpers
@@ -637,8 +646,8 @@ func (v *voteMakerHelper) MakeRandomProposalValue() *proposalValue {
 	}
 }
 
-func (v *voteMakerHelper) MakeRandomBlock(t *testing.T, r round) ValidatedBlock {
-	f := testBlockFactory{Owner: 1}
+func (v *voteMakerHelper) MakeRandomBlock(t *testing.T, r round, proto protocol.ConsensusVersion) ValidatedBlock {
+	f := testBlockFactory{Owner: 1, ConsensusVersion: func(basics.Round) (protocol.ConsensusVersion, error) { return proto, nil }}
 	ve, err := f.AssembleSpeculativeBlock(r.Number, r.Branch, time.Now().Add(time.Minute))
 	require.NoError(t, err)
 	return ve
@@ -659,8 +668,8 @@ func (v *voteMakerHelper) MakeProposalPayload(t *testing.T, r round, ve Validate
 	return &proposal{unauthenticatedProposal: payload, ve: ve}, &propVal
 }
 
-func (v *voteMakerHelper) MakeRandomProposalPayload(t *testing.T, r round) (*proposal, *proposalValue) {
-	f := testBlockFactory{Owner: 1}
+func (v *voteMakerHelper) MakeRandomProposalPayload(t *testing.T, r round, proto protocol.ConsensusVersion) (*proposal, *proposalValue) {
+	f := testBlockFactory{Owner: 1, ConsensusVersion: func(basics.Round) (protocol.ConsensusVersion, error) { return proto, nil }}
 	ve, err := f.AssembleSpeculativeBlock(r.Number, r.Branch, time.Now().Add(time.Minute))
 	require.NoError(t, err)
 

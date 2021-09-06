@@ -144,7 +144,7 @@ func TestPseudonode(t *testing.T) {
 
 	keyManager := simpleKeyManager(accounts)
 	pb := makePseudonode(pseudonodeParams{
-		factory:      testBlockFactory{Owner: 0},
+		factory:      testBlockFactory{Owner: 0, ConsensusVersion: func(basics.Round) (protocol.ConsensusVersion, error) { return protocol.ConsensusCurrentVersion, nil }},
 		validator:    testBlockValidator{},
 		keys:         keyManager,
 		ledger:       ledger,
@@ -153,7 +153,7 @@ func TestPseudonode(t *testing.T) {
 		monitor:      nil,
 	})
 	defer pb.Quit()
-	spn := makeSerializedPseudonode(testBlockFactory{Owner: 0}, testBlockValidator{}, keyManager, ledger)
+	spn := makeSerializedPseudonode(testBlockFactory{Owner: 0, ConsensusVersion: func(basics.Round) (protocol.ConsensusVersion, error) { return protocol.ConsensusCurrentVersion, nil }}, testBlockValidator{}, keyManager, ledger)
 	defer spn.Quit()
 
 	startRound := makeRoundRandomBranch(ledger.NextRound())
@@ -399,7 +399,7 @@ func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
 
 	keyManager := simpleKeyManager(accounts)
 	pb := makePseudonode(pseudonodeParams{
-		factory:      testBlockFactory{Owner: 0},
+		factory:      testBlockFactory{Owner: 0, ConsensusVersion: func(basics.Round) (protocol.ConsensusVersion, error) { return protocol.ConsensusCurrentVersion, nil }},
 		validator:    testBlockValidator{},
 		keys:         keyManager,
 		ledger:       ledger,

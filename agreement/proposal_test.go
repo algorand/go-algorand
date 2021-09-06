@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -39,7 +40,7 @@ func testSetup(periodCount uint64) (player, rootRouter, testAccountData, testBlo
 	var p actor = ioLoggedActor{checkedActor{actor: &player, actorContract: playerContract{}}, playerTracer}
 	router := routerFixture
 	router.root = p
-	f := testBlockFactory{Owner: 1} // TODO this should change with given address
+	f := testBlockFactory{Owner: 1, ConsensusVersion: func(basics.Round) (protocol.ConsensusVersion, error) { return protocol.ConsensusCurrentVersion, nil }} // TODO this should change with given address
 
 	return player, router, accs, f, ledger
 }

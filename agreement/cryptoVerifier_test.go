@@ -314,7 +314,7 @@ func BenchmarkCryptoVerifierProposalVertification(b *testing.B) {
 	}
 
 	pn := &asyncPseudonode{
-		factory:   testBlockFactory{Owner: 0},
+		factory:   testBlockFactory{Owner: 0, ConsensusVersion: func(basics.Round) (protocol.ConsensusVersion, error) { return protocol.ConsensusCurrentVersion, nil }},
 		validator: testBlockValidator{},
 		keys:      simpleKeyManager(participations),
 		ledger:    ledger,
