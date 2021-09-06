@@ -87,7 +87,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 				MessageHandle:           "uniquemessage",
 				UnauthenticatedProposal: rPayload.u(),
 			},
-			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+			Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
 		})
 	case playerSameRoundProcessedProposalVote: // already processed proposal vote
 		plyr, pMachine, helper = setupP(t, r, p, soft)
@@ -181,7 +181,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 				Vote:                vvote,
 				UnauthenticatedVote: vvote.u(),
 			},
-			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+			Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
 		}
 	case softVotePresentEventSamePeriod:
 		vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV, config.Consensus[protocol.ConsensusCurrentVersion])
@@ -191,7 +191,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 				MessageHandle:       "uniquemessage",
 				UnauthenticatedVote: vvote.u(),
 			},
-			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+			Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
 		}
 	case proposeVoteVerifiedEventNextPeriod:
 		vvote := helper.MakeVerifiedVote(t, 0, r, p+1, propose, pV, config.Consensus[protocol.ConsensusCurrentVersion])
@@ -202,7 +202,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 				Vote:                vvote,
 				UnauthenticatedVote: vvote.u(),
 			},
-			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+			Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
 		}
 	case proposeVoteVerifiedEventSamePeriod:
 		vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV, config.Consensus[protocol.ConsensusCurrentVersion])
@@ -214,7 +214,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 				UnauthenticatedVote: vvote.u(),
 			},
 			TaskIndex: 1,
-			Proto:     ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+			Proto:     ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
 		}
 	case proposeVotePresentEventSamePeriod:
 		vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV, config.Consensus[protocol.ConsensusCurrentVersion])
@@ -224,7 +224,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 				MessageHandle:       "uniquemessage",
 				UnauthenticatedVote: vvote.u(),
 			},
-			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+			Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
 		}
 	case payloadPresentEvent:
 		e = messageEvent{
@@ -233,7 +233,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 				MessageHandle:           "uniquemessage",
 				UnauthenticatedProposal: payload.u(),
 			},
-			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+			Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
 		}
 	case payloadVerifiedEvent:
 		e = messageEvent{
@@ -243,7 +243,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 				UnauthenticatedProposal: payload.u(),
 				Proposal:                *payload,
 			},
-			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+			Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
 		}
 	case payloadVerifiedEventNoMessageHandle:
 		e = messageEvent{
@@ -252,7 +252,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 				UnauthenticatedProposal: payload.u(),
 				Proposal:                *payload,
 			},
-			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+			Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
 		}
 	case bundleVerifiedEventSamePeriod:
 		votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
@@ -274,7 +274,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 				},
 				UnauthenticatedBundle: bun,
 			},
-			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+			Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
 		}
 	case bundlePresentEventSamePeriod:
 		votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
@@ -292,7 +292,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 			Input: message{
 				UnauthenticatedBundle: bun,
 			},
-			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+			Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
 		}
 	case softVoteVerifiedErrorEventSamePeriod:
 		vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV, config.Consensus[protocol.ConsensusCurrentVersion])
@@ -304,7 +304,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 				UnauthenticatedVote: vvote.u(),
 			},
 			Err:   errTestVerifyFailed,
-			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+			Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
 		}
 	case proposeVoteVerifiedErrorEventSamePeriod:
 		vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV, config.Consensus[protocol.ConsensusCurrentVersion])
@@ -316,7 +316,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 				UnauthenticatedVote: vvote.u(),
 			},
 			Err:   errTestVerifyFailed,
-			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+			Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
 		}
 	case bundleVerifiedErrorEvent:
 		e = messageEvent{
@@ -327,7 +327,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 				MessageHandle:         "uniquemalformedBundle",
 			},
 			Err: errTestVerifyFailed,
-			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+			Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
 		}
 	case payloadVerifiedErrorEvent:
 		e = messageEvent{
@@ -337,7 +337,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r 
 				Proposal:                *payload,
 			},
 			Err: errTestVerifyFailed,
-			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+			Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
 		}
 	default:
 		require.Fail(t, "messageEvent permutation %v does not exist", n)

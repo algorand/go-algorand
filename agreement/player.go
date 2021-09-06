@@ -236,7 +236,7 @@ func (p *player) handle(r routerHandle, e event) []action {
 			return actions
 		}
 	case roundInterruptionEvent:
-		return p.init(r, e.Round, e.Proto.Version)
+		return p.init(r, e.Round, e.Proto.Versions[0])
 	case checkpointEvent:
 		return p.handleCheckpointEvent(r, e)
 	default:
@@ -245,12 +245,12 @@ func (p *player) handle(r routerHandle, e event) []action {
 }
 
 func (p *player) handleFastTimeout(r routerHandle, e timeoutEvent) []action {
-	if e.Proto.Version == "" {
+	if e.Proto.Versions[0] == "" {
 		r.t.log.Errorf("failed to read protocol version for fastTimeout event")
 		return nil
 	}
 
-	lambda := config.Consensus[e.Proto.Version].FastRecoveryLambda
+	lambda := config.Consensus[e.Proto.Versions[0]].FastRecoveryLambda
 	k := (p.FastRecoveryDeadline + lambda - 1) / lambda // round up
 	lower, upper := k*lambda, (k+1)*lambda
 	delta := time.Duration(e.RandomEntropy % uint64(upper-lower))
@@ -681,7 +681,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				actions = append(actions, a0)
 
 				p.Decided = e.Input.Proposal.Block.Hash()
-				p.NextVersion = delegatedE.Proto.Version
+				p.NextVersion = delegatedE.Proto.Versions[0]
 				p.FrozenProposalArrival = e.Input.Proposal.validatedAt
 				as := p.notify.playerDecided(p, r)
 				return append(actions, as...)

@@ -41,11 +41,14 @@ type event interface {
 	ComparableStr() string
 }
 
-// A ConsensusVersionView is a view of the consensus version as read from a
+// A ConsensusVersionView is a view of the consensus versions as read from a
 // LedgerReader, associated with some round.  An empty Version string means
 // there is no information about the consensus version for that round.
+//
+// The two versions are for ParamsRound(ConsensusRound()) and for
+// ParamsRound(ConsensusRound()+1), respectively.
 type ConsensusVersionView struct {
-	Version protocol.ConsensusVersion
+	Versions [2]protocol.ConsensusVersion
 }
 
 // An externalEvent represents an event delivered to the top-level state machine.

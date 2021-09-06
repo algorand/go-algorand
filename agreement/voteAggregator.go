@@ -77,12 +77,12 @@ func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res even
 
 	switch e.t() {
 	case votePresent:
-		if e.Proto.Version == "" {
+		if e.Proto.Versions[0] == "" {
 			return filteredEvent{T: voteFiltered, Err: makeSerErrStr("missing version")}
 		}
 
 		uv := e.Input.UnauthenticatedVote
-		err := agg.filterVote(e.Proto.Version, pr, r, uv, e.FreshnessData)
+		err := agg.filterVote(e.Proto.Versions[0], pr, r, uv, e.FreshnessData)
 		if err != nil {
 			return filteredEvent{T: voteFiltered, Err: makeSerErr(err)}
 		}
@@ -92,14 +92,14 @@ func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res even
 		if e.Cancelled {
 			return filteredEvent{T: voteFiltered, Err: e.Err}
 		}
-		if e.Proto.Version == "" {
+		if e.Proto.Versions[0] == "" {
 			return filteredEvent{T: voteFiltered, Err: makeSerErrStr("missing version")}
 		}
 		if e.Err != nil {
 			return filteredEvent{T: voteMalformed, Err: e.Err}
 		}
 		v := e.Input.Vote
-		err := agg.filterVote(e.Proto.Version, pr, r, v.u(), e.FreshnessData)
+		err := agg.filterVote(e.Proto.Versions[0], pr, r, v.u(), e.FreshnessData)
 		if err != nil {
 			return filteredEvent{T: voteFiltered, Err: makeSerErr(err)}
 		}
@@ -109,7 +109,7 @@ func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res even
 			r.t.timeRPlus1().RecVoteReceived(v)
 		}
 
-		deliver := voteAcceptedEvent{Vote: v, Proto: e.Proto.Version}
+		deliver := voteAcceptedEvent{Vote: v, Proto: e.Proto.Versions[0]}
 		tE := r.dispatch(pr, deliver, voteMachineRound, v.R.roundBranch(), v.R.Period, v.R.Step)
 		if tE.t() == none {
 			return tE
@@ -133,7 +133,7 @@ func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res even
 		if e.Cancelled {
 			return filteredEvent{T: bundleFiltered, Err: e.Err}
 		}
-		if e.Proto.Version == "" {
+		if e.Proto.Versions[0] == "" {
 			return filteredEvent{T: bundleFiltered, Err: makeSerErrStr("missing version")}
 		}
 		if e.Err != nil {
@@ -165,7 +165,7 @@ func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res even
 		// partway through an equivocation vote
 		var threshEvent event
 		for _, vote := range votes {
-			deliver := voteAcceptedEvent{Vote: vote, Proto: e.Proto.Version}
+			deliver := voteAcceptedEvent{Vote: vote, Proto: e.Proto.Versions[0]}
 			e := r.dispatch(pr, deliver, voteMachineRound, vote.R.roundBranch(), vote.R.Period, vote.R.Step)
 			switch e.t() {
 			case softThreshold, certThreshold, nextThreshold:

@@ -204,11 +204,19 @@ func (d *demux) next(s *Service, extSignals pipelineExternalDemuxSignals) (e ext
 			return
 		}
 
-		proto, err := d.ledger.ConsensusVersion(paramsRoundBranch(e.ConsensusRound()))
+		var protos [2]protocol.ConsensusVersion
+		var err error
+		cr := e.ConsensusRound()
+		protos[0], err = d.ledger.ConsensusVersion(ParamsRound(cr.Number), cr.Branch)
 		if err != nil {
-			logging.Base().Warnf("demux: could not get consensus version for %v: %v", e.ConsensusRound(), err)
+			logging.Base().Warnf("demux: could not get consensus version for %v: %v", cr, err)
 		} else {
-			e = e.AttachConsensusVersion(ConsensusVersionView{Version: proto})
+			protos[1], err = d.ledger.ConsensusVersion(ParamsRound(cr.Number+1), cr.Branch)
+			if err != nil {
+				logging.Base().Warnf("demux: could not get consensus version for %v+1: %v", cr, err)
+			} else {
+				e = e.AttachConsensusVersion(ConsensusVersionView{Versions: protos})
+			}
 		}
 
 		if e.t() == payloadVerified {
@@ -429,11 +437,20 @@ func setupCompoundMessage(l LedgerReader, m message) (res externalEvent) {
 
 	tailmsg := message{MessageHandle: m.MessageHandle, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: compound.Proposal}
 	synthetic := messageEvent{T: payloadPresent, Input: tailmsg}
-	proto, err := l.ConsensusVersion(paramsRoundBranch(synthetic.ConsensusRound()))
+
+	var protos [2]protocol.ConsensusVersion
+	var err error
+	cr := synthetic.ConsensusRound()
+	protos[0], err = l.ConsensusVersion(ParamsRound(cr.Number), cr.Branch)
 	if err != nil {
-		logging.Base().Warnf("setupCompoundMessage: could not get consensus version for %v: %v", synthetic.ConsensusRound(), err)
+		logging.Base().Warnf("setupCompoundMessage: could not get consensus version for %v: %v", cr, err)
 	} else {
-		synthetic = synthetic.AttachConsensusVersion(ConsensusVersionView{Version: proto}).(messageEvent)
+		protos[1], err = l.ConsensusVersion(ParamsRound(cr.Number+1), cr.Branch)
+		if err != nil {
+			logging.Base().Warnf("setupCompoundMessage: could not get consensus version for %v+1: %v", synthetic.ConsensusRound(), err)
+		} else {
+			synthetic = synthetic.AttachConsensusVersion(ConsensusVersionView{Versions: protos}).(messageEvent)
+		}
 	}
 
 	m.Tag = protocol.AgreementVoteTag
