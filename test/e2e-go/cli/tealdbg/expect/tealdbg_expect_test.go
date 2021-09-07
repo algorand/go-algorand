@@ -19,10 +19,12 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // TestTealdbgWithExpect processes all expect script files with suffix Test.exp within the test/e2e-go/cli/tealdbg/expect directory
 func TestTealdbgWithExpect(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	et := fixtures.MakeExpectTest(t)
 	et.Run()
 }
