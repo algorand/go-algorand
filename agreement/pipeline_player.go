@@ -144,14 +144,26 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 		// See if we can find the parent player; otherwise, drop.
 		for prnd, rp := range p.Players {
 			if rnd.Number == prnd.Number+1 {
-				// To determine if this is the right player, we check for two cases.
-				// First, it might be that rnd's Branch exactly matches the proposal
-				// value (even if the payload is missing).  Second, it might be that
-				// rnd doesn't support branches in agreement messages; if the branch
-				// is zero, we will route it to any player.
+				// If the seed lookback is already committed, then it doesn't matter
+				// which player gets this "pipelined" message; any one of them is OK.
+				// This covers the backwards-compatibility case when agreement messages
+				// do not have branches (AgreementMessagesContainBranch=false), and the
+				// case when there is no pipelining (AgreementPipelineDepth=0).
+				proto := config.Consensus[rp.Versions[1]]
+				if p.FirstUncommittedRound.Number + basics.Round(proto.SeedLookback) > rnd.Number {
+					// No need to consider AttachLedgerBranch, since we are not
+					// going to be relying on any speculative blocks in the ledger.
+					state = rp
+					break
+				}
+
+				// The correct seed value depends on the speculative branch we are
+				// taking, so we need to find the correct player.  It might be that
+				// rnd's Branch exactly matches the proposal value (even if the
+				// payload is missing).  Then, this player is the right choice.
 				re := readLowestEvent{T: readLowestPayload, Round: prnd}
 				re = r.dispatch(*rp, re, proposalMachineRound, prnd, 0, 0).(readLowestEvent)
-				if rnd.Branch == bookkeeping.BlockHash(re.Proposal.BlockDigest) || rnd.Branch == (bookkeeping.BlockHash{}) {
+				if rnd.Branch == bookkeeping.BlockHash(re.Proposal.BlockDigest) {
 					state = rp
 					// If we have not seen a payload for this parent round,
 					// it will not be in the speculative ledger.  Attach the
