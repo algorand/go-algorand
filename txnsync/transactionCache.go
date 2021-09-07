@@ -53,12 +53,19 @@ type ackPendingTxids struct {
 	timestamp time.Duration
 }
 
+//msgp:ignore shortTermCacheEntry
+type shortTermCacheEntry struct {
+	txid transactions.Txid
+	prev *shortTermCacheEntry
+	next *shortTermCacheEntry
+}
+
 //msgp:ignore shortTermTransactionCache
 type shortTermTransactionCache struct {
 	size            int
-	transactionsIDs []transactions.Txid
-	transactionsMap map[transactions.Txid]bool
-	oldest          int
+	first           *shortTermCacheEntry
+	free            *shortTermCacheEntry
+	transactionsMap map[transactions.Txid]*shortTermCacheEntry
 }
 
 //msgp:ignore longTermTransactionCache
@@ -73,8 +80,7 @@ func makeTransactionCache(shortTermSize, longTermSize, pendingAckTxids int) *tra
 	txnCache := &transactionCache{
 		shortTermCache: shortTermTransactionCache{
 			size:            shortTermSize,
-			transactionsIDs: make([]transactions.Txid, shortTermSize),
-			transactionsMap: make(map[transactions.Txid]bool, shortTermSize),
+			transactionsMap: make(map[transactions.Txid]*shortTermCacheEntry, shortTermSize),
 		},
 		ackPendingTxids: make([]ackPendingTxids, 0, pendingAckTxids),
 		longTermCache: longTermTransactionCache{
@@ -167,33 +173,121 @@ func (lru *transactionCache) acknowledge(seqs []uint64) {
 	}
 }
 
+/*
+first           shortTermCacheEntry
+free            shortTermCacheEntry
+transactionsMap map[transactions.Txid]bool
+*/
+func (ce *shortTermCacheEntry) detach() bool {
+	if ce.next == ce.prev {
+		return false
+	}
+	ce.prev.next = ce.next
+	ce.next.prev = ce.prev
+	return true
+}
+
+func (ce *shortTermCacheEntry) addToList(firstListEntry *shortTermCacheEntry) {
+	lastListEntry := firstListEntry.prev
+	lastListEntry.next = ce
+	firstListEntry.prev = ce
+	ce.prev = lastListEntry
+	ce.next = firstListEntry
+}
+
 // add a given transaction ID to the short term cache.
 func (st *shortTermTransactionCache) add(txid transactions.Txid) {
-	if st.transactionsMap[txid] {
+	entry, exists := st.transactionsMap[txid]
+	if exists {
+		// promote
+		if entry.detach() {
+			// there are other elements on the list.
+			if entry == st.first {
+				st.first = entry.next
+			}
+			// add to the end of the list.
+			entry.addToList(st.first)
+		} else {
+			// no other elements on the list -
+			// nothing to do in this case.
+		}
 		return
 	}
+
 	mapLen := len(st.transactionsMap)
 	if mapLen >= st.size {
 		// we reached size, delete the oldest entry.
-		delete(st.transactionsMap, st.transactionsIDs[st.oldest])
-		st.transactionsIDs[st.oldest] = txid
-		st.transactionsMap[txid] = true
-		st.oldest = (st.oldest + 1) % st.size
+		t := st.first
+
+		// disconnect the current one; no need to test return code since we know
+		// there will be more elements on the list.
+		t.detach()
+
+		// replace the first entry with the next one.
+		st.first = t.next
+
+		// delete the current value from the map.
+		delete(st.transactionsMap, t.txid)
+
+		// copy the new transaction id into the existing object.
+		copy(t.txid[:], txid[:])
+
+		// place the new entry as the last entry on the list.
+		t.addToList(st.first)
+
+		// add the new entry to the map
+		st.transactionsMap[txid] = t
 		return
 	}
-	st.transactionsIDs[mapLen] = txid
-	st.transactionsMap[txid] = true
+
+	// grab an entry from the free list ( if any )
+	entry = st.free
+	if entry != nil {
+		if entry.detach() {
+			st.free = entry.next
+		} else {
+			st.free = nil
+		}
+	} else {
+		// the free list doesn't have an entry - allocate a new one.
+		entry = &shortTermCacheEntry{
+			txid: txid,
+		}
+	}
+	if st.first == nil {
+		st.first = entry
+		entry.next = entry
+		entry.prev = entry
+	} else {
+		entry.addToList(st.first)
+	}
+	st.transactionsMap[txid] = entry
 }
 
 // contained checks if the given transaction id presents in the short term cache
 func (st *shortTermTransactionCache) contained(txid transactions.Txid) bool {
-	return st.transactionsMap[txid]
+	return st.transactionsMap[txid] != nil
 }
 
 // reset clears the short term cache
 func (st *shortTermTransactionCache) reset() {
-	st.transactionsMap = make(map[transactions.Txid]bool, st.size)
-	st.oldest = 0
+	if st.first == nil {
+		return
+	}
+	st.transactionsMap = make(map[transactions.Txid]*shortTermCacheEntry, st.size)
+	if st.free == nil {
+		st.free = st.first
+		st.first = nil
+		return
+	}
+	used := st.first
+	free := st.free
+	free.prev.next = used
+	used.prev.next = free
+	lastFree := free.prev
+	free.prev = used.prev
+	used.prev = lastFree
+	st.first = nil
 }
 
 // contained checks if the given transaction id presents in the log term cache

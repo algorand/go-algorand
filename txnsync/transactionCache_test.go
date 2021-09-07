@@ -67,14 +67,16 @@ func TestTransactionCache(t *testing.T) {
 	txid[0] = 0
 	require.False(t, a.contained(txid))
 
-	// adding a seventh forgets the second
+	// adding a seventh forgets the third
 	txid[0] = 6
 	a.add(txid)
-	for i := 2; i < 7; i++ {
+	for i := 3; i < 7; i++ {
 		txid[0] = byte(i)
-		require.True(t, a.contained(txid))
+		require.True(t, a.contained(txid), "txid: %v", txid[:])
 	}
 	txid[0] = 1
+	require.True(t, a.contained(txid), "txid: %v", txid[:])
+	txid[0] = 2
 	require.False(t, a.contained(txid))
 }
 
@@ -138,7 +140,8 @@ func TestAddSliceCapacity(t *testing.T) {
 func TestShortTermCacheReset(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	tc := makeTransactionCache(5, 10, 5)
-	require.Equal(t, 0, tc.shortTermCache.oldest)
+	require.Nil(t, tc.shortTermCache.first)
+	require.Nil(t, tc.shortTermCache.free)
 	require.Equal(t, 0, len(tc.shortTermCache.transactionsMap))
 
 	var txid transactions.Txid
@@ -147,12 +150,14 @@ func TestShortTermCacheReset(t *testing.T) {
 		tc.add(txid)
 	}
 
-	require.Equal(t, 1, tc.shortTermCache.oldest)
+	require.Nil(t, tc.shortTermCache.free)
+	require.NotNil(t, tc.shortTermCache.first)
 	require.Equal(t, 5, len(tc.shortTermCache.transactionsMap))
 
 	tc.reset()
 
-	require.Equal(t, 0, tc.shortTermCache.oldest)
+	require.Nil(t, tc.shortTermCache.first)
+	require.NotNil(t, tc.shortTermCache.free)
 	require.Equal(t, 0, len(tc.shortTermCache.transactionsMap))
 }
 
