@@ -276,7 +276,11 @@ incomingMessageLoop:
 			currentTransactionPoolSize := s.node.IncomingTransactionGroups(peer, peer.nextReceivedMessageSeq-1, incomingMsg.transactionGroups)
 			// was the call reached the transaction handler queue ?
 			if currentTransactionPoolSize >= 0 {
-				// we want to store in transactionPoolSize only the first call to IncomingTransactionGroups
+				// we want to store in transactionPoolSize only the first call to IncomingTransactionGroups:
+				// when multiple IncomingTransactionGroups calls are made within this for-loop, we want to get the current transaction pool size,
+				// plus an estimate for the optimistic size after all the transaction groups would get added. For that purpose, it would be sufficient
+				// to get the transaction pool size once. The precise size of the transaction pool here is not critical - we use it only for the purpose
+				// of calculating the beta number as well as figure if the transaction pool is full or not ( both of them are range-based ).
 				if transactionPoolSize == 0 {
 					transactionPoolSize = currentTransactionPoolSize
 				}
