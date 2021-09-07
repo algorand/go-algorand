@@ -41,7 +41,9 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
+	"github.com/algorand/go-codec/codec"
 )
 
 func setupTestForMethodGet(t *testing.T) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
@@ -313,6 +315,43 @@ func getPendingTransactionsTest(t *testing.T, format string, max uint64, expecte
 
 		require.Equal(t, response.TotalTransactions, uint64(len(txnPoolGolden)))
 		require.GreaterOrEqual(t, response.TotalTransactions, uint64(len(response.TopTransactions)))
+	}
+}
+
+func TestPendingTransactionLogsEncoding(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	response := generated.PendingTransactionResponse{
+		Logs: &[][]byte{
+			{},
+			[]byte(string("a")),
+			[]byte(string("test")),
+			{0},
+			{0, 1, 2},
+		},
+	}
+
+	// log messages should be base64 encoded
+	expected := `{
+  "logs": [
+    "",
+    "YQ==",
+    "dGVzdA==",
+    "AA==",
+    "AAEC"
+  ],
+  "pool-error": "",
+  "txn": null
+}`
+
+	for _, handle := range []codec.Handle{protocol.JSONHandle, protocol.JSONStrictHandle} {
+		var output []byte
+		enc := codec.NewEncoderBytes(&output, handle)
+
+		err := enc.Encode(response)
+		require.NoError(t, err)
+
+		require.Equal(t, expected, string(output))
 	}
 }
 

@@ -484,7 +484,7 @@ type preEncodedTxInfo struct {
 	ReceiverRewards    *uint64                        `codec:"receiver-rewards,omitempty"`
 	SenderRewards      *uint64                        `codec:"sender-rewards,omitempty"`
 	Txn                transactions.SignedTxn         `codec:"txn"`
-	Logs               *[]string                      `codec:"logs,omitempty"`
+	Logs               *[][]byte                      `codec:"logs,omitempty"`
 	Inners             *[]preEncodedTxInfo            `codec:"inner-txns,omitempty"`
 }
 

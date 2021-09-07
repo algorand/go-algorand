@@ -266,13 +266,13 @@ func convertToDeltas(txn node.TxnWithStatus) (*[]generated.AccountStateDelta, *g
 	return localStateDelta, stateDeltaToStateDelta(txn.ApplyData.EvalDelta.GlobalDelta)
 }
 
-func convertLogs(txn node.TxnWithStatus) *[]string {
-	var logItems *[]string
+func convertLogs(txn node.TxnWithStatus) *[][]byte {
+	var logItems *[][]byte
 	if len(txn.ApplyData.EvalDelta.Logs) > 0 {
-		l := make([]string, len(txn.ApplyData.EvalDelta.Logs))
+		l := make([][]byte, len(txn.ApplyData.EvalDelta.Logs))
 
 		for i, log := range txn.ApplyData.EvalDelta.Logs {
-			l[i] = base64.StdEncoding.EncodeToString([]byte(log))
+			l[i] = []byte(log)
 		}
 
 		logItems = &l
