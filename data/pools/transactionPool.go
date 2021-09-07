@@ -84,7 +84,7 @@ type TransactionPool struct {
 	// pendingTxGroups is a slice of the pending transaction groups.
 	pendingTxGroups []transactions.SignedTxGroup
 	// pendingTxids is a map of the pending *transaction ids* included in the pendingTxGroups array.
-	pendingTxids map[transactions.Txid]transactions.SignedTxn
+	pendingTxids      map[transactions.Txid]transactions.SignedTxn
 	pendingTxGroupids map[transactions.Txid]transactions.SignedTxGroup
 	// pendingCounter is a monotomic counter, indicating the next pending transaction group counter value.
 	pendingCounter uint64
@@ -97,9 +97,9 @@ type TransactionPool struct {
 	// pendingTxGroups and pendingTxids.  This allows us to batch the
 	// changes in OnNewBlock() without preventing a concurrent call
 	// to PendingTxGroups().
-	rememberedTxGroups []transactions.SignedTxGroup
-	rememberedTxids    map[transactions.Txid]transactions.SignedTxn
-	rememberedTxGroupids    map[transactions.Txid]transactions.SignedTxGroup
+	rememberedTxGroups   []transactions.SignedTxGroup
+	rememberedTxids      map[transactions.Txid]transactions.SignedTxn
+	rememberedTxGroupids map[transactions.Txid]transactions.SignedTxGroup
 	// rememberedLatestLocal is the value of the last transaction group counter which is associated with a transaction that was
 	// locally originated ( i.e. posted to this node via the REST API ). This variable is used when OnNewBlock is called and
 	// we filter out the pending transaction through the evaluator.
@@ -116,8 +116,8 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	pool := TransactionPool{
 		pendingTxids:         make(map[transactions.Txid]transactions.SignedTxn),
 		rememberedTxids:      make(map[transactions.Txid]transactions.SignedTxn),
-		pendingTxGroupids:         make(map[transactions.Txid]transactions.SignedTxGroup),
-		rememberedTxGroupids:      make(map[transactions.Txid]transactions.SignedTxGroup),
+		pendingTxGroupids:    make(map[transactions.Txid]transactions.SignedTxGroup),
+		rememberedTxGroupids: make(map[transactions.Txid]transactions.SignedTxGroup),
 		expiredTxCount:       make(map[basics.Round]int),
 		ledger:               ledger,
 		statusCache:          makeStatusCache(cfg.TxPoolSize),
@@ -553,6 +553,7 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 	return pool.statusCache.check(txid)
 }
 
+// FindTxGroups looks up transaction groups specified by txid and fills them into the provided array
 func (pool *TransactionPool) FindTxGroups(txids []transactions.Txid, txGroups []transactions.SignedTxGroup) (numFound int) {
 	pool.pendingMu.RLock()
 

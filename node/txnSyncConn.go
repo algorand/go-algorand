@@ -59,8 +59,8 @@ type proposalData struct {
 type proposalCache struct {
 	proposalData
 
-	txGroupIdIndex map[transactions.Txid]int
-	txGroups []transactions.SignedTxGroup
+	txGroupIDIndex      map[transactions.Txid]int
+	txGroups            []transactions.SignedTxGroup
 	numTxGroupsReceived int
 }
 
@@ -260,7 +260,7 @@ func (tsnc *transactionSyncNodeConnector) IncomingTransactionGroups(peer *txnsyn
 func (tsnc *transactionSyncNodeConnector) RelayProposal(proposalBytes []byte, txnSlices []transactions.SignedTxnSlice) {
 	data := proposalData{
 		ProposalBytes: proposalBytes,
-		TxGroupIds: make([]transactions.Txid, len(txnSlices)),
+		TxGroupIds:    make([]transactions.Txid, len(txnSlices)),
 	}
 
 	txGroups := make([]transactions.SignedTxGroup, len(txnSlices))
@@ -288,13 +288,13 @@ func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataByte
 
 	if proposalDataBytes != nil {
 		pc = &proposalCache{
-			proposalData: data,
-			txGroupIdIndex: make(map[transactions.Txid]int, len(data.TxGroupIds)),
-			txGroups: make([]transactions.SignedTxGroup, len(data.TxGroupIds)),
+			proposalData:   data,
+			txGroupIDIndex: make(map[transactions.Txid]int, len(data.TxGroupIds)),
+			txGroups:       make([]transactions.SignedTxGroup, len(data.TxGroupIds)),
 		}
 		tsnc.node.net.SetPeerData(peer.GetNetworkPeer(), "proposalCache", pc)
 		for i, txid := range pc.TxGroupIds {
-			pc.txGroupIdIndex[txid] = i
+			pc.txGroupIDIndex[txid] = i
 		}
 		// attempt to fill receivedTxns with txpool
 		pc.numTxGroupsReceived = tsnc.node.transactionPool.FindTxGroups(pc.TxGroupIds, pc.txGroups)
@@ -303,7 +303,7 @@ func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataByte
 	}
 
 	for _, txGroup := range txGroups {
-		if index, found := pc.txGroupIdIndex[txGroup.Transactions.ID()]; found && pc.txGroups[index].Transactions == nil {
+		if index, found := pc.txGroupIDIndex[txGroup.Transactions.ID()]; found && pc.txGroups[index].Transactions == nil {
 			pc.txGroups[index] = txGroup
 			pc.numTxGroupsReceived++
 		}
@@ -317,14 +317,14 @@ func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataByte
 		}
 		tsnc.proposalCh <- agreement.TxnSyncProposal{
 			ProposalBytes: pc.ProposalBytes,
-			Txns: flattenedTxns,
+			Txns:          flattenedTxns,
 		}
 		tsnc.eventsCh <- txnsync.MakeBroadcastProposalFilterEvent(protocol.Encode(&pc.proposalData))
 
 		pc.ProposalBytes = nil
 		pc.txGroups = nil
 		pc.TxGroupIds = nil
-		pc.txGroupIdIndex = nil
+		pc.txGroupIDIndex = nil
 		pc.numTxGroupsReceived = 0
 	}
 }

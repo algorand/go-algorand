@@ -1187,10 +1187,13 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 	return participations
 }
 
+// ProposalsChannel returns the channel that the txnsync uses to pass proposals
+// to the agreement.
 func (node *AlgorandFullNode) ProposalsChannel() <-chan agreement.TxnSyncProposal {
 	return node.txnSyncConnector.proposalCh
 }
 
+// RelayProposal sends proposals to the txnsync for relaying.
 func (node *AlgorandFullNode) RelayProposal(proposalBytes []byte, txnSlices []transactions.SignedTxnSlice) {
 	node.txnSyncConnector.RelayProposal(proposalBytes, txnSlices)
 }

@@ -306,14 +306,19 @@ type EventsProcessingMonitor interface {
 	UpdateEventsQueue(queueName string, queueLength int)
 }
 
+// TxnSync is an abstraction over the transaction sync node connector.
+// It allows for the agreement to receive and send proposals from
+// the transaction sync.
 type TxnSync interface {
 	ProposalsChannel() <-chan TxnSyncProposal
 	RelayProposal(proposalBytes []byte, txnSlices []transactions.SignedTxnSlice)
 }
 
+// TxnSyncProposal contains the data sent by the transaction sync
+// that is needed to reconstruct a proposal.
 type TxnSyncProposal struct {
 	ProposalBytes []byte
-	Txns []transactions.SignedTxn
+	Txns          []transactions.SignedTxn
 }
 
 // LedgerDroppedRoundError is a wrapper error for when the ledger cannot return a Lookup query because

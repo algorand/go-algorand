@@ -349,6 +349,8 @@ func (fn *justRandomFakeNode) IncomingTransactionGroups(peer *Peer, messageSeq u
 }
 func (fn *justRandomFakeNode) NotifyMonitor() chan struct{} { return nil }
 
-func (fn *justRandomFakeNode) RelayProposal(proposalBytes []byte, txnSlices []transactions.SignedTxnSlice) {}
+func (fn *justRandomFakeNode) RelayProposal(proposalBytes []byte, txnSlices []transactions.SignedTxnSlice) {
+}
 
-func (fn *justRandomFakeNode) HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup, peer *Peer) {}
+func (fn *justRandomFakeNode) HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup, peer *Peer) {
+}

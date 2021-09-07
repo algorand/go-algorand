@@ -59,13 +59,13 @@ type nodeTransactions []nodeTransaction
 
 type nodeProposal struct {
 	proposalBytes []byte
-	complete bool
+	complete      bool
 }
 
 type nodeProposals []nodeProposal
 
 type emulatorResult struct {
-	nodeTxns []nodeTransactions
+	nodeTxns      []nodeTransactions
 	nodeProposals []nodeProposals
 }
 
@@ -242,7 +242,7 @@ func (e *emulator) initNodes() {
 
 	for i, initProposal := range e.scenario.initialProposals {
 		node := e.nodes[initProposal.node]
-		proposalBytes := []byte{byte(i+1)}
+		proposalBytes := []byte{byte(i + 1)}
 		var txGroups []transactions.SignedTxGroup
 		for i := 0; i < initProposal.transactionsCount; i++ {
 			var group = transactions.SignedTxGroup{}
@@ -253,8 +253,8 @@ func (e *emulator) initNodes() {
 					Txn: transactions.Transaction{
 						Type: protocol.PaymentTx,
 						Header: transactions.Header{
-							Note:      make([]byte, initProposal.transactionSize-senderEncodingSize, initProposal.transactionSize-senderEncodingSize),
-							Sender:    defaultSender,
+							Note:   make([]byte, initProposal.transactionSize-senderEncodingSize, initProposal.transactionSize-senderEncodingSize),
+							Sender: defaultSender,
 						},
 					},
 				},
@@ -295,7 +295,7 @@ func (e *emulator) collectResult() (result emulatorResult) {
 		for _, pc := range node.proposals {
 			proposals = append(proposals, nodeProposal{
 				proposalBytes: pc.ProposalBytes,
-				complete: pc.numTxGroupsReceived == len(pc.TxGroupIds),
+				complete:      pc.numTxGroupsReceived == len(pc.TxGroupIds),
 			})
 		}
 		result.nodeTxns[i] = txns

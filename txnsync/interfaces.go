@@ -128,11 +128,10 @@ func MakeBroadcastProposalFilterEvent(proposalBytes []byte) Event {
 		eventType: proposalBroadcastRequestEvent,
 		proposalBroadcastRequest: ProposalBroadcastRequest{
 			proposalBytes: proposalBytes,
-			isFilterMsg: true,
+			isFilterMsg:   true,
 		},
 	}
 }
-
 
 // MakeBroadcastProposalRequestEvent creates an event for sending a proposal
 func MakeBroadcastProposalRequestEvent(proposalBytes []byte, txGroups []transactions.SignedTxGroup) Event {

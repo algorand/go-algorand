@@ -350,11 +350,11 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 			//d.UpdateEventsQueue(eventQueueTokenizing[tag], 0)
 		}
 		m := message{
-			Tag: protocol.ProposalPayloadTag,
+			Tag:             protocol.ProposalPayloadTag,
 			CompoundMessage: p.(compoundMessage),
 		}
 		m.CompoundMessage.Proposal.Payset = make(transactions.Payset, len(pd.Txns))
-		for i, txn := range(pd.Txns) {
+		for i, txn := range pd.Txns {
 			m.CompoundMessage.Proposal.Payset[i], err = m.CompoundMessage.Proposal.Block.EncodeSignedTxn(txn, transactions.ApplyData{})
 			if err != nil {
 				// TODO figure out expected behavior
@@ -365,7 +365,6 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		d.UpdateEventsQueue(eventQueueTokenized[protocol.ProposalPayloadTag], 0)
 		d.monitor.inc(demuxCoserviceType)
 		d.monitor.dec(tokenizerCoserviceType)
-
 
 	// authenticated
 	case r := <-d.crypto.VerifiedVotes():

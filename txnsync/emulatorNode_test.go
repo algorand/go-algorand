@@ -80,7 +80,7 @@ type proposalData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	ProposalBytes []byte              `codec:"b,allocbound=maxNumProposalBytes"`
-	TxGroupIds []transactions.Txid    `codec:"h,allocbound=maxNumTxGroupHashesBytes"` // TODO: make this []byte
+	TxGroupIds    []transactions.Txid `codec:"h,allocbound=maxNumTxGroupHashesBytes"` // TODO: make this []byte
 }
 
 const maxNumProposalBytes = 30000       // sizeof(block header)
@@ -291,8 +291,8 @@ func (z *proposalData) MsgIsZero() bool {
 type proposalCache struct {
 	proposalData
 
-	txGroupIdIndex map[transactions.Txid]int
-	txGroups []transactions.SignedTxGroup
+	txGroupIDIndex      map[transactions.Txid]int
+	txGroups            []transactions.SignedTxGroup
 	numTxGroupsReceived int
 }
 
@@ -616,7 +616,7 @@ func (p *networkPeer) GetAddress() string {
 func (n *emulatedNode) RelayProposal(proposalBytes []byte, txGroups []transactions.SignedTxGroup) {
 	data := proposalData{
 		ProposalBytes: proposalBytes,
-		TxGroupIds: make([]transactions.Txid, len(txGroups)),
+		TxGroupIds:    make([]transactions.Txid, len(txGroups)),
 	}
 
 	for i, txGroup := range txGroups {
@@ -635,13 +635,13 @@ func (n *emulatedNode) HandleProposalMessage(proposalDataBytes []byte, txGroups 
 
 	if proposalDataBytes != nil {
 		pc = &proposalCache{
-			proposalData: data,
-			txGroupIdIndex: make(map[transactions.Txid]int, len(data.TxGroupIds)),
-			txGroups: make([]transactions.SignedTxGroup, len(data.TxGroupIds)),
+			proposalData:   data,
+			txGroupIDIndex: make(map[transactions.Txid]int, len(data.TxGroupIds)),
+			txGroups:       make([]transactions.SignedTxGroup, len(data.TxGroupIds)),
 		}
 		n.proposals = append(n.proposals, pc)
 		for i, txid := range pc.TxGroupIds {
-			pc.txGroupIdIndex[txid] = i
+			pc.txGroupIDIndex[txid] = i
 		}
 	} else {
 		pc = n.proposals[len(n.proposals)-1]
@@ -649,7 +649,7 @@ func (n *emulatedNode) HandleProposalMessage(proposalDataBytes []byte, txGroups 
 	// TODO attempt to fill receivedTxns with txpool
 
 	for _, txGroup := range txGroups {
-		if index, found := pc.txGroupIdIndex[txGroup.Transactions.ID()]; found && pc.txGroups[index].Transactions == nil {
+		if index, found := pc.txGroupIDIndex[txGroup.Transactions.ID()]; found && pc.txGroups[index].Transactions == nil {
 			pc.txGroups[index] = txGroup
 			pc.numTxGroupsReceived++
 		}

@@ -161,6 +161,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 		}
 		data = protocol.Encode(&payload)
 		s.TxnSync.RelayProposal(data, txns)
+		return
 	}
 
 	switch a.T {

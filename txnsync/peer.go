@@ -285,7 +285,7 @@ func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool, c
 		transactionPoolAckCh:        make(chan uint64, maxAcceptedMsgSeq),
 		transactionPoolAckMessages:  make([]uint64, 0, maxAcceptedMsgSeq),
 		significantMessageThreshold: defaultSignificantMessageThreshold,
-		proposalFilterCache:        makeProposalFilterCache(maxProposalFilterCacheSize),
+		proposalFilterCache:         makeProposalFilterCache(maxProposalFilterCacheSize),
 	}
 	if isLocalNodeRelay {
 		p.requestedTransactionsModulator = 1
@@ -827,7 +827,7 @@ func (p *Peer) getNextScheduleOffset(isRelay bool, beta time.Duration, partialMe
 	} else {
 		// since we are done sending the proposal transactions, update the state
 		if p.state == peerStateProposal {
-			p.state = peerStateHoldsoff  // TODO think about what state to transition to
+			p.state = peerStateHoldsoff // TODO think about what state to transition to
 			return time.Duration(node.Random(uint64(randomRange))), peerOpsReschedule
 		}
 		if isRelay {

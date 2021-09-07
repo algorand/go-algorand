@@ -51,7 +51,7 @@ type initialTransactionsAllocation struct {
 }
 
 type initialProposalAllocation struct {
-	node int
+	node              int
 	transactionsCount int
 	transactionSize   int
 }
@@ -60,12 +60,12 @@ type initialProposalAllocation struct {
 // initial transaction distribution, test duration, dynamic transactions creation as well
 // as expected test outcomes.
 type scenario struct {
-	netConfig       networkConfiguration
-	testDuration    time.Duration
-	step            time.Duration
-	initialAlloc    []initialTransactionsAllocation
+	netConfig        networkConfiguration
+	testDuration     time.Duration
+	step             time.Duration
+	initialAlloc     []initialTransactionsAllocation
 	initialProposals []initialProposalAllocation
-	expectedResults emulatorResult
+	expectedResults  emulatorResult
 }
 
 func TestEmulatedTrivialTransactionsExchange(t *testing.T) {
@@ -827,7 +827,6 @@ func TestEmulatedTwentyNodesFourRelays(t *testing.T) {
 	emulateScenario(t, testScenario)
 }
 
-
 func TestEmulatedTrivialProposalsExchange(t *testing.T) {
 	testScenario := scenario{
 		netConfig: networkConfiguration{
@@ -859,9 +858,9 @@ func TestEmulatedTrivialProposalsExchange(t *testing.T) {
 		},
 		initialProposals: []initialProposalAllocation{
 			initialProposalAllocation{
-				node: 1,
+				node:              1,
 				transactionsCount: 250,
-				transactionSize: 270,
+				transactionSize:   270,
 			},
 		},
 		expectedResults: emulatorResult{
@@ -883,13 +882,13 @@ func TestEmulatedTrivialProposalsExchange(t *testing.T) {
 				{
 					nodeProposal{
 						proposalBytes: []byte{byte(1)},
-						complete: true,
+						complete:      true,
 					},
 				},
 				{
 					nodeProposal{
 						proposalBytes: []byte{byte(1)},
-						complete: true,
+						complete:      true,
 					},
 				},
 			},
@@ -951,14 +950,14 @@ func TestEmulatedProposalsExchangeCancel(t *testing.T) {
 		testDuration: 20000 * time.Millisecond,
 		initialProposals: []initialProposalAllocation{
 			initialProposalAllocation{
-				node: 1,
+				node:              1,
 				transactionsCount: 250,
-				transactionSize: 270,
+				transactionSize:   270,
 			},
 			initialProposalAllocation{
-				node: 1,
+				node:              1,
 				transactionsCount: 250,
-				transactionSize: 270,
+				transactionSize:   270,
 			},
 		},
 		expectedResults: emulatorResult{
@@ -970,21 +969,21 @@ func TestEmulatedProposalsExchangeCancel(t *testing.T) {
 				{
 					nodeProposal{
 						proposalBytes: []byte{byte(1)},
-						complete: false,
+						complete:      false,
 					},
 					nodeProposal{
 						proposalBytes: []byte{byte(2)},
-						complete: true,
+						complete:      true,
 					},
 				},
 				{
 					nodeProposal{
 						proposalBytes: []byte{byte(1)},
-						complete: true,
+						complete:      true,
 					},
 					nodeProposal{
 						proposalBytes: []byte{byte(2)},
-						complete: true,
+						complete:      true,
 					},
 				},
 			},
