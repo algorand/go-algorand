@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/require"
 )
@@ -36,6 +37,8 @@ func success(ctx echo.Context) error {
 }
 
 func TestAuth(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	tokens := []string{"token1", "token2"}
 
 	tests := []struct {
