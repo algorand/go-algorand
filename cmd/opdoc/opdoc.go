@@ -159,7 +159,11 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 			if cost.From == cost.To {
 				fmt.Fprintf(out, "   - %d (LogicSigVersion = %d)\n", cost.Cost, cost.To)
 			} else {
-				fmt.Fprintf(out, "   - %d (%d <= LogicSigVersion <= %d)\n", cost.Cost, cost.From, cost.To)
+				if cost.To < logic.LogicVersion {
+					fmt.Fprintf(out, "   - %d (%d <= LogicSigVersion <= %d)\n", cost.Cost, cost.From, cost.To)
+				} else {
+					fmt.Fprintf(out, "   - %d (LogicSigVersion => %d)\n", cost.Cost, cost.From)
+				}
 			}
 		}
 	} else {

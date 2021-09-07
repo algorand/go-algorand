@@ -100,7 +100,7 @@ var opDocByName = map[string]string{
 	"dup":           "duplicate last value on stack",
 	"dup2":          "duplicate two last values on stack: A, B -> A, B, A, B",
 	"dig":           "push the Nth value from the top of the stack. dig 0 is equivalent to dup",
-	"cover":         "remove top of stack, and place it down the stack such that N elements are above it",
+	"cover":         "remove top of stack, and place it deeper in the stack such that N elements are above it",
 	"uncover":       "remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack",
 	"swap":          "swaps two last values on stack: A, B -> B, A",
 	"select":        "selects one of two values based on top-of-stack: A, B, C -> (if C != 0 then B else A)",
@@ -112,10 +112,10 @@ var opDocByName = map[string]string{
 	"getbyte":       "pop a byte-array A and integer B. Extract the Bth byte of A and push it as an integer",
 	"setbyte":       "pop a byte-array A, integer B, and small integer C (between 0..255). Set the Bth byte of A to C, and push the result",
 	"extract":       "pop a byte-array A. For immediate values in 0..255 S and L: extract a range of bytes from A starting at S up to but not including S+L, push the substring result. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails",
-	"extract3":      "pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including B+C, push the substring result. If B or B+C is larger than the array length, the program fails",
-	"extract16bits": "pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B or B+2 is larger than the array length, the program fails",
-	"extract32bits": "pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B or B+4 is larger than the array length, the program fails",
-	"extract64bits": "pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B or B+8 is larger than the array length, the program fails",
+	"extract3":      "pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including B+C, push the substring result. If B+C is larger than the array length, the program fails",
+	"extract16bits": "pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B+2 is larger than the array length, the program fails",
+	"extract32bits": "pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B+4 is larger than the array length, the program fails",
+	"extract64bits": "pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B+8 is larger than the array length, the program fails",
 
 	"balance":           "get balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.",
 	"min_balance":       "get minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes.",
@@ -152,9 +152,9 @@ var opDocByName = map[string]string{
 	"b~":  "X with all bits inverted",
 
 	"log":       "write bytes to log state of the current application",
-	"tx_begin":  "Prepare a new application action",
-	"tx_field":  "Set field F of the current application action",
-	"tx_submit": "Execute the current application action. Panic on any failure.",
+	"tx_begin":  "Begin preparation of a new inner transaction",
+	"tx_field":  "Set field F of the current inner transaction to X",
+	"tx_submit": "Execute the current inner transaction. Panic on any failure.",
 }
 
 // OpDoc returns a description of the op

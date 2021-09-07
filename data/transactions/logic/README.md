@@ -148,10 +148,10 @@ various sizes.
 | `substring s e` | pop a byte-array A. For immediate values in 0..255 S and E: extract a range of bytes from A starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails |
 | `substring3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the array length, the program fails |
 | `extract s l` | pop a byte-array A. For immediate values in 0..255 S and L: extract a range of bytes from A starting at S up to but not including S+L, push the substring result. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails |
-| `extract3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including B+C, push the substring result. If B or B+C is larger than the array length, the program fails |
-| `extract16bits` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B or B+2 is larger than the array length, the program fails |
-| `extract32bits` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B or B+4 is larger than the array length, the program fails |
-| `extract64bits` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B or B+8 is larger than the array length, the program fails |
+| `extract3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including B+C, push the substring result. If B+C is larger than the array length, the program fails |
+| `extract16bits` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B+2 is larger than the array length, the program fails |
+| `extract32bits` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B+4 is larger than the array length, the program fails |
+| `extract64bits` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B+8 is larger than the array length, the program fails |
 
 These opcodes take byte-array values that are interpreted as
 big-endian unsigned integers.  For mathematical operators, the
@@ -197,9 +197,9 @@ The following opcodes allow for the construction and submission of
 
 | Op | Description |
 | --- | --- |
-| `tx_begin` | Prepare a new application action |
-| `tx_field f` | Set field F of the current application action |
-| `tx_submit` | Execute the current application action. Panic on any failure. |
+| `tx_begin` | Begin preparation of a new inner transaction |
+| `tx_field f` | Set field F of the current inner transaction to X |
+| `tx_submit` | Execute the current inner transaction. Panic on any failure. |
 
 
 ### Loading Values
@@ -386,7 +386,7 @@ App fields used in the `app_params_get` opcode.
 | `dup` | duplicate last value on stack |
 | `dup2` | duplicate two last values on stack: A, B -> A, B, A, B |
 | `dig n` | push the Nth value from the top of the stack. dig 0 is equivalent to dup |
-| `cover n` | remove top of stack, and place it down the stack such that N elements are above it |
+| `cover n` | remove top of stack, and place it deeper in the stack such that N elements are above it |
 | `uncover n` | remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack |
 | `swap` | swaps two last values on stack: A, B -> B, A |
 | `select` | selects one of two values based on top-of-stack: A, B, C -> (if C != 0 then B else A) |
