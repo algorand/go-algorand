@@ -469,13 +469,21 @@ func generateWalletGenesisData(wallets, npnHosts int) gen.GenesisData {
 	data := gen.DefaultGenesis
 	totalWallets := wallets + npnHosts
 	data.Wallets = make([]gen.WalletData, totalWallets)
-	stake := big.NewRat(int64(100), int64(totalWallets))
+	// split participating an non participating stake evenly
+	participatingNodeStake := big.NewRat(int64(50), int64(wallets))
+	nonParticipatingNodeStake := big.NewRat(int64(50), int64(npnHosts))
 
 	ratZero := big.NewRat(int64(0), int64(1))
 	ratHundred := big.NewRat(int64(100), int64(1))
-
+	stake := ratZero
 	stakeSum := new(big.Rat).Set(ratZero)
 	for i := 0; i < totalWallets; i++ {
+
+		if i < wallets {
+			stake = participatingNodeStake
+		} else {
+			stake = nonParticipatingNodeStake
+		}
 		if i == (totalWallets - 1) {
 			// use the last wallet to workaround roundoff and get back to 1.0
 			stake = stake.Sub(new(big.Rat).Set(ratHundred), stakeSum)
