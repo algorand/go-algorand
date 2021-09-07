@@ -2166,7 +2166,7 @@ func opGtxna(cx *EvalContext) {
 func opGtxnas(cx *EvalContext) {
 	last := len(cx.stack) - 1
 
-	gtxid := int(uint(cx.program[cx.pc+1]))
+	gtxid := int(cx.program[cx.pc+1])
 	if gtxid >= len(cx.TxnGroup) {
 		cx.err = fmt.Errorf("gtxnas lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
 		return
