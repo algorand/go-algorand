@@ -2170,6 +2170,9 @@ func opGtxnas(cx *EvalContext) {
 	if gtxid >= len(cx.TxnGroup) {
 		cx.err = fmt.Errorf("gtxnas lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
 		return
+	} else if gtxid < 0 {
+		cx.err = fmt.Errorf("gtxnas lookup %d cannot be negative", gtxid)
+		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
 	field := TxnField(cx.program[cx.pc+2])
@@ -2260,7 +2263,10 @@ func opGtxnsas(cx *EvalContext) {
 
 	gtxid := int(cx.stack[prev].Uint)
 	if gtxid >= len(cx.TxnGroup) {
-		cx.err = fmt.Errorf("gtxnsa lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
+		cx.err = fmt.Errorf("gtxnsas lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
+		return
+	} else if gtxid < 0 {
+		cx.err = fmt.Errorf("gtxnsas lookup %d cannot be negative", gtxid)
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
@@ -2272,7 +2278,7 @@ func opGtxnsas(cx *EvalContext) {
 	}
 	_, ok = txnaFieldSpecByField[field]
 	if !ok {
-		cx.err = fmt.Errorf("gtxnsa unsupported field %d", field)
+		cx.err = fmt.Errorf("gtxnsas unsupported field %d", field)
 		return
 	}
 	arrayFieldIdx := cx.stack[last].Uint

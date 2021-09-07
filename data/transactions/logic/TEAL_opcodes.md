@@ -1217,7 +1217,33 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 
 `log` can be called up to MaxLogCalls times in a program, and log up to a total of 1k bytes.
 
-<<<<<<< HEAD
+## tx_begin
+
+- Opcode: 0xb1
+- Pops: _None_
+- Pushes: _None_
+- Prepare a new application action
+- LogicSigVersion >= 5
+- Mode: Application
+
+## tx_field f
+
+- Opcode: 0xb2 {uint8 transaction field index}
+- Pops: *... stack*, any
+- Pushes: _None_
+- Set field F of the current application action
+- LogicSigVersion >= 5
+- Mode: Application
+
+## tx_submit
+
+- Opcode: 0xb3
+- Pops: _None_
+- Pushes: _None_
+- Execute the current application action. Panic on any failure.
+- LogicSigVersion >= 5
+- Mode: Application
+
 ## txnas f
 
 - Opcode: 0xc0 {uint8 transaction field index}
@@ -1250,31 +1276,3 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - push Xth LogicSig argument to stack
 - LogicSigVersion >= 5
 - Mode: Signature
-=======
-## tx_begin
-
-- Opcode: 0xb1
-- Pops: _None_
-- Pushes: _None_
-- Prepare a new application action
-- LogicSigVersion >= 5
-- Mode: Application
-
-## tx_field f
-
-- Opcode: 0xb2 {uint8 transaction field index}
-- Pops: *... stack*, any
-- Pushes: _None_
-- Set field F of the current application action
-- LogicSigVersion >= 5
-- Mode: Application
-
-## tx_submit
-
-- Opcode: 0xb3
-- Pops: _None_
-- Pushes: _None_
-- Execute the current application action. Panic on any failure.
-- LogicSigVersion >= 5
-- Mode: Application
->>>>>>> cd832b3c85fdc2ad3d98593b49cbe34b7a6dfc2a

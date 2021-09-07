@@ -1806,7 +1806,7 @@ int 2
 &&
 `
 
-	gtxnText := gtxnTextV4 + `int 0
+	gtxnTextV5 := gtxnTextV4 + `int 0
 gtxnas 0 Accounts
 gtxn 0 Sender
 ==
@@ -1823,7 +1823,7 @@ gtxn 0 Sender
 		1: gtxnTextV1,
 		2: gtxnTextV2,
 		4: gtxnTextV4,
-		5: gtxnText,
+		5: gtxnTextV5,
 	}
 
 	for v, source := range tests {
