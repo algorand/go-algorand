@@ -173,11 +173,6 @@ func (lru *transactionCache) acknowledge(seqs []uint64) {
 	}
 }
 
-/*
-first           shortTermCacheEntry
-free            shortTermCacheEntry
-transactionsMap map[transactions.Txid]bool
-*/
 func (ce *shortTermCacheEntry) detach() bool {
 	if ce.next == ce.prev {
 		return false
