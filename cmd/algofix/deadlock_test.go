@@ -25,6 +25,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -130,6 +131,7 @@ func main() {
 `
 
 func TestDeadlockRewrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Run("simple", func(t *testing.T) { testDeadlock(t, deadlockSimpleSrc, deadlockSimpleDest) })
 	t.Run("onoff", func(t *testing.T) { testDeadlock(t, deadlockTestSrc, deadlockTestFin) })
 }

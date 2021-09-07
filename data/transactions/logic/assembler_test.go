@@ -1397,6 +1397,7 @@ func TestConstantDisassembly(t *testing.T) {
 }
 
 func TestConstantArgs(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		testProg(t, "int", v, expect{1, "int needs one argument"})
@@ -2142,6 +2143,7 @@ flip:                 // [x]
 }
 
 func TestSwapTypeCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	/* reconfirm that we detect this type error */
 	testProg(t, "int 1; byte 0x1234; +", AssemblerMaxVersion, expect{3, "+ arg 1..."})
@@ -2151,6 +2153,7 @@ func TestSwapTypeCheck(t *testing.T) {
 }
 
 func TestDigAsm(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testProg(t, "int 1; dig; +", AssemblerMaxVersion, expect{2, "dig expects 1 immediate..."})
 	testProg(t, "int 1; dig junk; +", AssemblerMaxVersion, expect{2, "...invalid syntax..."})
@@ -2170,6 +2173,7 @@ func TestDigAsm(t *testing.T) {
 }
 
 func TestEqualsTypeCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testProg(t, "int 1; byte 0x1234; ==", AssemblerMaxVersion, expect{3, "== arg 0..."})
 	testProg(t, "int 1; byte 0x1234; !=", AssemblerMaxVersion, expect{3, "!= arg 0..."})
@@ -2178,6 +2182,7 @@ func TestEqualsTypeCheck(t *testing.T) {
 }
 
 func TestDupTypeCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testProg(t, "byte 0x1234; dup; int 1; +", AssemblerMaxVersion, expect{4, "+ arg 0..."})
 	testProg(t, "byte 0x1234; int 1; dup; +", AssemblerMaxVersion)
@@ -2192,18 +2197,21 @@ func TestDupTypeCheck(t *testing.T) {
 }
 
 func TestSelectTypeCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testProg(t, "int 1; int 2; int 3; select; len", AssemblerMaxVersion, expect{5, "len arg 0..."})
 	testProg(t, "byte 0x1234; byte 0x5678; int 3; select; !", AssemblerMaxVersion, expect{5, "! arg 0..."})
 }
 
 func TestSetBitTypeCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testProg(t, "int 1; int 2; int 3; setbit; len", AssemblerMaxVersion, expect{5, "len arg 0..."})
 	testProg(t, "byte 0x1234; int 2; int 3; setbit; !", AssemblerMaxVersion, expect{5, "! arg 0..."})
 }
 
 func TestCoverAsm(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testProg(t, `int 4; byte "john"; int 5; cover 2; pop; +`, AssemblerMaxVersion)
 	testProg(t, `int 4; byte "ayush"; int 5; cover 1; pop; +`, AssemblerMaxVersion)
@@ -2212,6 +2220,7 @@ func TestCoverAsm(t *testing.T) {
 }
 
 func TestUncoverAsm(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testProg(t, `int 4; byte "john"; int 5; uncover 2; +`, AssemblerMaxVersion)
 	testProg(t, `int 4; byte "ayush"; int 5; uncover 1; pop; +`, AssemblerMaxVersion)

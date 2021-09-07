@@ -25,6 +25,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+
 	//ossignal "os/signal"
 	"path/filepath"
 	//"runtime/pprof"
@@ -36,6 +37,7 @@ import (
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-deadlock"
+
 	//"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -105,6 +107,7 @@ func testConfig(t *testing.T, config NetworkConfig) (network *Network) {
 */
 
 func TestCircularNetworkTopology(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var nodeCounts []int
 	if testing.Short() {
 		nodeCounts = []int{4, 6}
@@ -422,6 +425,7 @@ type FuzzerTestFile struct {
 }
 
 func TestFuzzer(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	jsonFiles := make(map[string]string) // map json test to full json file name.
 	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
 		if strings.HasSuffix(info.Name(), ".json") {
@@ -475,6 +479,7 @@ func TestFuzzer(t *testing.T) {
 }
 
 func TestNetworkBandwidth(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// travis rans out of memory when we get a high nodes count.. so we'll skip it for now.
 	if testing.Short() {
 		t.Skip()

@@ -26,9 +26,11 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestAccount(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	proto := config.Consensus[protocol.ConsensusFuture]
 	appIdx1 := basics.AppIndex(1)
 	appIdx2 := basics.AppIndex(2)

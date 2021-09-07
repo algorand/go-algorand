@@ -29,6 +29,7 @@ import (
 )
 
 func TestDecorateUnknownTransactionTypeError(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	type TestCase struct {
 		err             error
 		txn             node.TxnWithStatus

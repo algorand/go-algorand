@@ -190,5 +190,6 @@ func (s *TestSuite) TestGetTransactionByID() {
 	assert.Equal(s.T(), callsBefore+1, s.calls)
 }
 func TestTestSuite(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	suite.Run(t, new(TestSuite))
 }
