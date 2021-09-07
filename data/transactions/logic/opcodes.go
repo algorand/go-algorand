@@ -206,6 +206,10 @@ var OpSpecs = []OpSpec{
 	{0x3c, "gaid", opGaid, asmDefault, disDefault, nil, oneInt, 4, runModeApplication, immediates("t")},
 	{0x3d, "gaids", opGaids, asmDefault, disDefault, oneInt, oneInt, 4, runModeApplication, opDefault},
 
+	// Like load/store, but scratch slot taken from TOS instead of immediate
+	{0x3e, "loads", opLoads, asmDefault, disDefault, oneInt, oneAny, 5, modeAny, opDefault},
+	{0x3f, "stores", opStores, asmDefault, disDefault, oneAny.plus(oneInt), nil, 5, modeAny, opDefault},
+
 	{0x40, "bnz", opBnz, assembleBranch, disBranch, oneInt, nil, 1, modeAny, opBranch},
 	{0x41, "bz", opBz, assembleBranch, disBranch, oneInt, nil, 2, modeAny, opBranch},
 	{0x42, "b", opB, assembleBranch, disBranch, nil, nil, 2, modeAny, opBranch},

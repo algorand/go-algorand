@@ -233,19 +233,21 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `txn f` | push field F of current transaction to stack |
 | `gtxn t f` | push field F of the Tth transaction in the current group |
 | `txna f i` | push Ith value of the array field F of the current transaction |
+| `txnas f` | push Xth value of the array field F of the current transaction |
 | `gtxna t f i` | push Ith value of the array field F from the Tth transaction in the current group |
+| `gtxnas t f` | push Xth value of the array field F from the Tth transaction in the current group |
 | `gtxns f` | push field F of the Xth transaction in the current group |
 | `gtxnsa f i` | push Ith value of the array field F from the Xth transaction in the current group |
+| `gtxnsas f` | pop an index A and an index B. push Bth value of the array field F from the Ath transaction in the current group |
 | `global f` | push value from globals to stack |
 | `load i` | copy a value from scratch space to the stack |
-| `store i` | pop a value from the stack and store to scratch space |
+| `loads` | copy a value from the Xth scratch space to the stack |
+| `store i` | pop value X. store X to the Ith scratch space |
+| `stores` | pop indexes A and B. store A to the Bth scratch space |
 | `gload t i` | push Ith scratch space index of the Tth transaction in the current group |
 | `gloads i` | push Ith scratch space index of the Xth transaction in the current group |
 | `gaid t` | push the ID of the asset or application created in the Tth transaction of the current group |
 | `gaids` | push the ID of the asset or application created in the Xth transaction of the current group |
-| `txnas f` | push Xth value of the array field F of the current transaction |
-| `gtxnas t f` | push Xth value of the array field F from the Tth transaction in the current group |
-| `gtxnsas f` | pop an index A and an index B. push Bth value of the array field F from the Ath transaction in the current group |
 | `args` | push Xth LogicSig argument to stack |
 
 **Transaction Fields**

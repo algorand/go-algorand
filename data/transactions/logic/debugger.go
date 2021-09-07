@@ -98,7 +98,7 @@ func makeDebugState(cx *EvalContext) DebugState {
 		ExecID:      GetProgramID(cx.program),
 		Disassembly: disasm,
 		PCOffset:    dsInfo.pcOffset,
-		GroupIndex:  cx.GroupIndex,
+		GroupIndex:  int(cx.GroupIndex),
 		TxnGroup:    cx.TxnGroup,
 		Proto:       cx.Proto,
 	}

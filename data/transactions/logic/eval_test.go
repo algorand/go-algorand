@@ -905,7 +905,7 @@ func TestArg(t *testing.T) {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			source := "arg 0; arg 1; ==; arg 2; arg 3; !=; &&; arg 4; len; int 9; <; &&;"
 			if v >= 5 {
-				source += "int 0; args; int 1; args; ==; assert;"
+				source += "int 0; args; int 1; args; ==; assert; int 2; args; int 3; args; !=; assert"
 			}
 			ops := testProg(t, source, v)
 			err := Check(ops.Program, defaultEvalParams(nil, nil))
@@ -2338,6 +2338,33 @@ load 1
 &&`, 1)
 }
 
+func TestLoadStoreStack(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	testAccepts(t, `int 37
+int 37
+int 1
+stores
+byte 0xabbacafe
+int 42
+stores
+int 37
+==
+int 0
+stores
+int 42
+loads
+byte 0xabbacafe
+==
+int 0
+loads
+int 1
+loads
++
+&&`, 5)
+}
+
 func TestLoadStore2(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -2462,7 +2489,7 @@ int 1`,
 					Proto:           &proto,
 					Txn:             &txgroup[j],
 					TxnGroup:        txgroup,
-					GroupIndex:      j,
+					GroupIndex:      uint64(j),
 					PastSideEffects: pastSideEffects,
 				}
 			}
@@ -2536,7 +2563,7 @@ int 1`,
 					Proto:           &proto,
 					Txn:             &txgroup[j],
 					TxnGroup:        txgroup,
-					GroupIndex:      j,
+					GroupIndex:      uint64(j),
 					PastSideEffects: pastSideEffects,
 				}
 			}
@@ -2609,7 +2636,7 @@ byte "txn 2"
 			Proto:           &proto,
 			Txn:             &txgroup[j],
 			TxnGroup:        txgroup,
-			GroupIndex:      j,
+			GroupIndex:      uint64(j),
 			PastSideEffects: pastSideEffects,
 		}
 	}
