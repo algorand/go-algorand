@@ -1249,7 +1249,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xc0 {uint8 transaction field index}
 - Pops: *... stack*, uint64
 - Pushes: any
-- pop an index A. push Ath value of the array field F of the current transaction
+- push Xth value of the array field F of the current transaction
 - LogicSigVersion >= 5
 
 ## gtxnas t f
@@ -1257,7 +1257,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xc1 {uint8 transaction group index} {uint8 transaction field index}
 - Pops: *... stack*, uint64
 - Pushes: any
-- pop an index A. push Ath value of the array field F from the Tth transaction in the current group
+- push Xth value of the array field F from the Tth transaction in the current group
 - LogicSigVersion >= 5
 
 ## gtxnsas f

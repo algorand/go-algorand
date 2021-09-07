@@ -156,8 +156,8 @@ var opDocByName = map[string]string{
 	"tx_field":  "Set field F of the current application action",
 	"tx_submit": "Execute the current application action. Panic on any failure.",
 
-	"txnas":   "pop an index A. push Ath value of the array field F of the current transaction",
-	"gtxnas":  "pop an index A. push Ath value of the array field F from the Tth transaction in the current group",
+	"txnas":   "push Xth value of the array field F of the current transaction",
+	"gtxnas":  "push Xth value of the array field F from the Tth transaction in the current group",
 	"gtxnsas": "pop an index A and an index B. push Bth value of the array field F from the Ath transaction in the current group",
 	"args":    "push Xth LogicSig argument to stack",
 }
