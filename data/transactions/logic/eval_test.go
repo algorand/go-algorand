@@ -997,6 +997,10 @@ len
 int 32
 ==
 &&
+global GroupID
+byte 0x0706000000000000000000000000000000000000000000000000000000000000
+==
+&&
 `
 
 func TestGlobal(t *testing.T) {
@@ -1025,7 +1029,7 @@ func TestGlobal(t *testing.T) {
 			EvalStateful, CheckStateful,
 		},
 		5: {
-			CurrentApplicationAddress, globalV5TestProgram,
+			GroupID, globalV5TestProgram,
 			EvalStateful, CheckStateful,
 		},
 	}
@@ -1054,6 +1058,7 @@ func TestGlobal(t *testing.T) {
 			require.NoError(t, err)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
+			txn.Txn.Group = crypto.Digest{0x07, 0x06}
 			txgroup := make([]transactions.SignedTxn, 1)
 			txgroup[0] = txn
 			sb := strings.Builder{}
