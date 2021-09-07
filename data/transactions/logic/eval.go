@@ -2527,6 +2527,145 @@ func opEd25519verify(cx *EvalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
+// opEcDsaVerify verifies ECDSA signature.
+// It accepts both compressed and uncompressed forms of PK because
+// the underlying secp256k1.VerifySignature decompressed it anyway.
+// Rationale here is the fact compressed PKs look more commonly used in Eth world rather uncompressed.
+func opEcDsaVerify(cx *EvalContext) {
+	ecdsaCurve := EcDsaCurve(cx.program[cx.pc+1])
+	fs, ok := ecDsaCurveSpecByField[ecdsaCurve]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid curve %d", ecdsaCurve)
+		return
+	}
+
+	if fs.field != Secp256k1 {
+		cx.err = fmt.Errorf("unsupported curve %d", fs.field)
+		return
+	}
+
+	last := len(cx.stack) - 1 // index of PK x uncompressed or a full PK compressed
+	prev := last - 1          // index of PK y uncompressed or empty
+	pprev := prev - 1         // index of signature r
+	fourth := pprev - 1       // index of signature s
+	fifth := fourth - 1       // index of data
+
+	pkX := cx.stack[last].Bytes
+	pkY := cx.stack[prev].Bytes
+	sigR := cx.stack[pprev].Bytes
+	sigS := cx.stack[fourth].Bytes
+	msg := cx.stack[fifth].Bytes
+
+	var pubkey []byte
+	// if PK y component is set then interpret it as uncompressed PK
+	if len(pkY) != 0 {
+		x := new(big.Int).SetBytes(pkX)
+		y := new(big.Int).SetBytes(pkY)
+		pubkey = secp256k1.CompressPubkey(x, y)
+	} else {
+		// otherwise it is compressed PK
+		pubkey = pkX
+	}
+
+	signature := make([]byte, 0, len(sigR)+len(sigS))
+	signature = append(signature, sigR...)
+	signature = append(signature, sigS...)
+
+	var result bool
+
+	// secp256k1.VerifySignature easily panics on invalid input, catch it here and convert to an error
+	result = func() bool {
+		defer func() {
+			if x := recover(); x != nil {
+				cx.err = fmt.Errorf("ecdsa verify error: %v", x)
+				result = false
+			}
+		}()
+		return secp256k1.VerifySignature(pubkey, msg, signature)
+	}()
+
+	if result {
+		cx.stack[fifth].Uint = 1
+	} else {
+		cx.stack[fifth].Uint = 0
+	}
+	cx.stack[fifth].Bytes = nil
+	cx.stack = cx.stack[:fourth]
+}
+
+func opEcDsaPkDecompress(cx *EvalContext) {
+	ecdsaCurve := EcDsaCurve(cx.program[cx.pc+1])
+	fs, ok := ecDsaCurveSpecByField[ecdsaCurve]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid curve %d", ecdsaCurve)
+		return
+	}
+
+	if fs.field != Secp256k1 {
+		cx.err = fmt.Errorf("unsupported curve %d", fs.field)
+		return
+	}
+
+	last := len(cx.stack) - 1 // compressed PK
+
+	pubkey := cx.stack[last].Bytes
+	x, y := secp256k1.DecompressPubkey(pubkey)
+	if x == nil || y == nil {
+		cx.err = fmt.Errorf("invalid pubkey")
+		return
+	}
+
+	cx.stack[last].Uint = 0
+	cx.stack[last].Bytes = y.Bytes()
+
+	var sv stackValue
+	sv.Bytes = x.Bytes()
+	cx.stack = append(cx.stack, sv)
+}
+
+func opEcDsaPkRecover(cx *EvalContext) {
+	ecdsaCurve := EcDsaCurve(cx.program[cx.pc+1])
+	fs, ok := ecDsaCurveSpecByField[ecdsaCurve]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid curve %d", ecdsaCurve)
+		return
+	}
+
+	if fs.field != Secp256k1 {
+		cx.err = fmt.Errorf("unsupported curve %d", fs.field)
+		return
+	}
+
+	last := len(cx.stack) - 1 // index of signature r
+	prev := last - 1          // index of signature s
+	pprev := prev - 1         // recover id
+	fourth := pprev - 1       // index of data
+
+	sigR := cx.stack[last].Bytes
+	sigS := cx.stack[prev].Bytes
+	recid := cx.stack[pprev].Uint
+	msg := cx.stack[fourth].Bytes
+
+	if recid > 3 {
+		cx.err = fmt.Errorf("invalid recovery id: %d", recid)
+		return
+	}
+
+	signature := make([]byte, 0, len(sigR)+len(sigS)+1)
+	signature = append(signature, sigR...)
+	signature = append(signature, sigS...)
+	signature = append(signature, uint8(recid))
+
+	pk, err := secp256k1.RecoverPubkey(msg, signature)
+	if err != nil {
+		cx.err = fmt.Errorf("pubkey recover failed: %s", err.Error())
+		return
+	}
+
+	cx.stack[fourth].Bytes = pk
+	cx.stack = cx.stack[:pprev]
+}
+
 func opLoad(cx *EvalContext) {
 	n := cx.program[cx.pc+1]
 	cx.stack = append(cx.stack, cx.scratch[n])

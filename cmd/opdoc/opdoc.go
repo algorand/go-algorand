@@ -75,12 +75,20 @@ func integerConstantsTableMarkdown(out io.Writer) {
 }
 
 func fieldTableMarkdown(out io.Writer, names []string, types []logic.StackType, extra map[string]string) {
-	fmt.Fprintf(out, "| Index | Name | Type | Notes |\n")
-	fmt.Fprintf(out, "| --- | --- | --- | --- |\n")
+	if types != nil {
+		fmt.Fprintf(out, "| Index | Name | Type | Notes |\n")
+		fmt.Fprintf(out, "| --- | --- | --- | --- |\n")
+	} else {
+		fmt.Fprintf(out, "| Index | Name | Notes |\n")
+		fmt.Fprintf(out, "| --- | --- | --- |\n")
+	}
 	for i, name := range names {
-		gfType := types[i]
-		estr := extra[name]
-		fmt.Fprintf(out, "| %d | %s | %s | %s |\n", i, markdownTableEscape(name), markdownTableEscape(gfType.String()), estr)
+		str := fmt.Sprintf("| %d | %s", i, markdownTableEscape(name))
+		if types != nil {
+			gfType := types[i]
+			str = fmt.Sprintf("%s | %s", str, markdownTableEscape(gfType.String()))
+		}
+		fmt.Fprintf(out, "%s | %s |\n", str, extra[name])
 	}
 	out.Write([]byte("\n"))
 }
@@ -108,6 +116,11 @@ func assetParamsFieldsMarkdown(out io.Writer) {
 func appParamsFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`app_params_get` Fields:\n\n")
 	fieldTableMarkdown(out, logic.AppParamsFieldNames, logic.AppParamsFieldTypes, logic.AppParamsFieldDocs)
+}
+
+func ecDsaCurvesMarkdown(out io.Writer) {
+	fmt.Fprintf(out, "\n`ECDSA` Curves:\n\n")
+	fieldTableMarkdown(out, logic.EcDsaCurveNames, nil, logic.EcDsaCurveDocs)
 }
 
 func immediateMarkdown(op *logic.OpSpec) string {
@@ -190,6 +203,8 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 		assetParamsFieldsMarkdown(out)
 	} else if op.Name == "app_params_get" {
 		appParamsFieldsMarkdown(out)
+	} else if strings.HasPrefix(op.Name, "ecdsa") {
+		ecDsaCurvesMarkdown(out)
 	}
 	ode := logic.OpDocExtra(op.Name)
 	if ode != "" {

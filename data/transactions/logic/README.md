@@ -139,6 +139,9 @@ For three-argument ops, `A` is the element two below the top, `B` is the penulti
 | `getbyte` | pop a byte-array A and integer B. Extract the Bth byte of A and push it as an integer |
 | `setbyte` | pop a byte-array A, integer B, and small integer C (between 0..255). Set the Bth byte of A to C, and push the result |
 | `concat` | pop two byte-arrays A and B and join them, push the result |
+| `ecdsa_verify c` | for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1} |
+| `ecdsa_pk_recover c` | for (data A, recovery id B, signature C, D) recover a public compressed key |
+| `ecdsa_pk_decompress c` | decompress pubkey A into components X, Y => [*... stack*, Y, X] |
 
 These opcodes return portions of byte arrays, accessed by position, in
 various sizes.

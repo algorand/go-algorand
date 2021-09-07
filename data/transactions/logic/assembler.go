@@ -1156,6 +1156,26 @@ func asmTxField(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
+func assembleEcDsa(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 1 {
+		return ops.errorf("%s expects one argument", spec.Name)
+	}
+
+	cs, ok := ecDsaCurveSpecByName[args[0]]
+	if !ok {
+		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
+	}
+	if cs.version > ops.Version {
+		//nolint:errcheck // we continue to maintain typestack
+		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], cs.version)
+	}
+
+	val := cs.field
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(val))
+	return nil
+}
+
 type assembleFunc func(*OpStream, *OpSpec, []string) error
 
 // Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
@@ -2555,6 +2575,20 @@ func disTxField(dis *disassembleState, spec *OpSpec) (string, error) {
 		return "", fmt.Errorf("invalid %s arg index %d at pc=%d", spec.Name, arg, dis.pc)
 	}
 	return fmt.Sprintf("%s %s", spec.Name, TxnFieldNames[arg]), nil
+}
+
+func disEcDsa(dis *disassembleState, spec *OpSpec) (string, error) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+	}
+	dis.nextpc = dis.pc + 2
+	arg := dis.program[dis.pc+1]
+	if int(arg) >= len(EcDsaCurveNames) {
+		return "", fmt.Errorf("invalid curve arg index %d at pc=%d", arg, dis.pc)
+	}
+	return fmt.Sprintf("%s %s", spec.Name, EcDsaCurveNames[arg]), nil
 }
 
 type disInfo struct {
