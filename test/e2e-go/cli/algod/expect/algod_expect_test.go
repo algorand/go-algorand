@@ -19,12 +19,10 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // TestAlgodWithExpect Process all expect script files with suffix Test.exp within the test/e2e-go/cli/algod/expect directory
 func TestAlgodWithExpect(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	et := fixtures.MakeExpectTest(t)
 	et.Run()
 }
