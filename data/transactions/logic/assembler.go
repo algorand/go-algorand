@@ -2476,7 +2476,7 @@ func disTxField(dis *disassembleState, spec *OpSpec) (string, error) {
 	dis.nextpc = dis.pc + 2
 	arg := dis.program[dis.pc+1]
 	if int(arg) >= len(TxnFieldNames) {
-		return "", fmt.Errorf("invalid txfield arg index %d at pc=%d", arg, dis.pc)
+		return "", fmt.Errorf("invalid %s arg index %d at pc=%d", spec.Name, arg, dis.pc)
 	}
 	return fmt.Sprintf("%s %s", spec.Name, TxnFieldNames[arg]), nil
 }

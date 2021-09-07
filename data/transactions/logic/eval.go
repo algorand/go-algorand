@@ -3363,8 +3363,14 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 		if err != nil {
 			return
 		}
+		// i != 0 is so that the error reports 0 instead of Unknown
 		if i != 0 && i < uint64(len(TxnTypeNames)) {
-			txn.Type = protocol.TxType(TxnTypeNames[i])
+			txType, ok := innerTxnTypes[TxnTypeNames[i]]
+			if ok {
+				txn.Type = txType
+			} else {
+				err = fmt.Errorf("%s is not a valid Type for tx_field", TxnTypeNames[i])
+			}
 		} else {
 			err = fmt.Errorf("%d is not a valid TypeEnum", i)
 		}
@@ -3405,7 +3411,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 	// appl needs to wait. Can't call AVM from AVM.
 
 	default:
-		return fmt.Errorf("invalid txfield %s", fs.field)
+		return fmt.Errorf("invalid tx_field %s", fs.field)
 	}
 	return
 }
