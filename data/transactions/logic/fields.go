@@ -331,6 +331,13 @@ const (
 	// CreatorAddress [32]byte
 	CreatorAddress
 
+	// v5
+
+	// CurrentApplicationAddress [32]byte
+	CurrentApplicationAddress
+	// GroupID [32]byte
+	GroupID
+
 	invalidGlobalField
 )
 
@@ -358,6 +365,8 @@ var globalFieldSpecs = []globalFieldSpec{
 	{LatestTimestamp, StackUint64, runModeApplication, 2},
 	{CurrentApplicationID, StackUint64, runModeApplication, 2},
 	{CreatorAddress, StackBytes, runModeApplication, 3},
+	{CurrentApplicationAddress, StackBytes, runModeApplication, 5},
+	{GroupID, StackBytes, modeAny, 5},
 }
 
 // GlobalFieldSpecByField maps GlobalField to spec
@@ -512,6 +521,9 @@ const (
 	// AppCreator is not *in* the Params, but it is uniquely determined.
 	AppCreator
 
+	// AppAddress is also not *in* the Params, but can be derived
+	AppAddress
+
 	invalidAppParamsField
 )
 
@@ -536,6 +548,7 @@ var appParamsFieldSpecs = []appParamsFieldSpec{
 	{AppLocalNumByteSlice, StackUint64, 5},
 	{AppExtraProgramPages, StackUint64, 5},
 	{AppCreator, StackBytes, 5},
+	{AppAddress, StackBytes, 5},
 }
 
 var appParamsFieldSpecByField map[AppParamsField]appParamsFieldSpec

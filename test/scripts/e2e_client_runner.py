@@ -402,6 +402,7 @@ _logging_datefmt = '%Y%m%d_%H%M%S'
 def main():
     start = time.time()
     ap = argparse.ArgumentParser()
+    ap.add_argument('--interactive', default=False, action='store_true')
     ap.add_argument('scripts', nargs='*', help='scripts to run')
     ap.add_argument('--keep-temps', default=False, action='store_true', help='if set, keep all the test files')
     ap.add_argument('--timeout', default=500, type=int, help='integer seconds to wait for the scripts to run')
@@ -447,13 +448,12 @@ def main():
         create_kmd_config_with_unsafe_scrypt(env['ALGORAND_DATA'])
         create_kmd_config_with_unsafe_scrypt(env['ALGORAND_DATA2'])
 
-
     xrun(['goal', '-v'], env=env, timeout=5)
     xrun(['goal', 'node', 'status'], env=env, timeout=5)
 
     rs = RunSet(env)
     for scriptname in args.scripts:
-        rs.start(scriptname, args.timeout-10)
+        rs.start(os.path.abspath(scriptname), args.timeout-10)
     rs.wait(args.timeout)
     if rs.errors:
         retcode = 1
@@ -461,6 +461,10 @@ def main():
     else:
         logger.info('finished OK %f seconds', time.time() - start)
     logger.info('statuses-json: %s', json.dumps(rs.statuses))
+
+    if args.interactive:
+        os.environ['ALGORAND_DATA'] = env['ALGORAND_DATA']
+        os.system(os.environ['SHELL'])
 
     # ensure 'network stop' and 'network delete' also make they job
     goal_network_stop(netdir, env, normal_cleanup=True)

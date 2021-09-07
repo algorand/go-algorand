@@ -93,12 +93,14 @@ func _() {
 	_ = x[LatestTimestamp-7]
 	_ = x[CurrentApplicationID-8]
 	_ = x[CreatorAddress-9]
-	_ = x[invalidGlobalField-10]
+	_ = x[CurrentApplicationAddress-10]
+	_ = x[GroupID-11]
+	_ = x[invalidGlobalField-12]
 }
 
-const _GlobalField_name = "MinTxnFeeMinBalanceMaxTxnLifeZeroAddressGroupSizeLogicSigVersionRoundLatestTimestampCurrentApplicationIDCreatorAddressinvalidGlobalField"
+const _GlobalField_name = "MinTxnFeeMinBalanceMaxTxnLifeZeroAddressGroupSizeLogicSigVersionRoundLatestTimestampCurrentApplicationIDCreatorAddressCurrentApplicationAddressGroupIDinvalidGlobalField"
 
-var _GlobalField_index = [...]uint8{0, 9, 19, 29, 40, 49, 64, 69, 84, 104, 118, 136}
+var _GlobalField_index = [...]uint8{0, 9, 19, 29, 40, 49, 64, 69, 84, 104, 118, 143, 150, 168}
 
 func (i GlobalField) String() string {
 	if i >= GlobalField(len(_GlobalField_index)-1) {
@@ -147,12 +149,13 @@ func _() {
 	_ = x[AppLocalNumByteSlice-5]
 	_ = x[AppExtraProgramPages-6]
 	_ = x[AppCreator-7]
-	_ = x[invalidAppParamsField-8]
+	_ = x[AppAddress-8]
+	_ = x[invalidAppParamsField-9]
 }
 
-const _AppParamsField_name = "AppApprovalProgramAppClearStateProgramAppGlobalNumUintAppGlobalNumByteSliceAppLocalNumUintAppLocalNumByteSliceAppExtraProgramPagesAppCreatorinvalidAppParamsField"
+const _AppParamsField_name = "AppApprovalProgramAppClearStateProgramAppGlobalNumUintAppGlobalNumByteSliceAppLocalNumUintAppLocalNumByteSliceAppExtraProgramPagesAppCreatorAppAddressinvalidAppParamsField"
 
-var _AppParamsField_index = [...]uint8{0, 18, 38, 54, 75, 90, 110, 130, 140, 161}
+var _AppParamsField_index = [...]uint8{0, 18, 38, 54, 75, 90, 110, 130, 140, 150, 171}
 
 func (i AppParamsField) String() string {
 	if i < 0 || i >= AppParamsField(len(_AppParamsField_index)-1) {

@@ -19,6 +19,7 @@ package apply
 import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -65,8 +66,8 @@ func (balances mockBalances) DeallocateAsset(addr basics.Address, index basics.A
 	return nil
 }
 
-func (balances mockBalances) StatefulEval(logic.EvalParams, basics.AppIndex, []byte) (bool, basics.EvalDelta, error) {
-	return false, basics.EvalDelta{}, nil
+func (balances mockBalances) StatefulEval(logic.EvalParams, basics.AppIndex, []byte) (bool, transactions.EvalDelta, error) {
+	return false, transactions.EvalDelta{}, nil
 }
 
 func (balances mockBalances) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {

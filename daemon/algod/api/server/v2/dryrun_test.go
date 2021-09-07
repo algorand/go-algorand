@@ -1193,7 +1193,7 @@ return
 	logs := *response.Txns[0].Logs
 	assert.Equal(t, 32, len(logs))
 	for i, m := range logs {
-		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), m.Value)
+		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), m)
 	}
 	encoded := string(protocol.EncodeJSON(response.Txns[0]))
 	assert.Contains(t, encoded, "logs")
