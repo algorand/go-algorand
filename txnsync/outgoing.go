@@ -209,11 +209,9 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 		profMakeBloomFilter.start()
 		// generate a bloom filter that matches the requests params.
 		metaMessage.filter = s.makeBloomFilter(metaMessage.message.UpdatedRequestParams, pendingTransactions.pendingTransactionsGroups, lastBloomFilter)
-		if !metaMessage.filter.sameParams(peer.lastSentBloomFilter) {
-			if bf, _ := metaMessage.filter.encode(); bf != nil {
-				metaMessage.message.TxnBloomFilter = *bf
-				bloomFilterSize = metaMessage.message.TxnBloomFilter.Msgsize()
-			}
+		if !metaMessage.filter.sameParams(peer.lastSentBloomFilter) && metaMessage.filter.encodedLength > 0 {
+			metaMessage.message.TxnBloomFilter = metaMessage.filter.encoded
+			bloomFilterSize = metaMessage.filter.encodedLength
 		}
 		profMakeBloomFilter.end()
 		s.lastBloomFilter = metaMessage.filter
