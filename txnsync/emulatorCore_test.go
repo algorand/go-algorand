@@ -163,8 +163,6 @@ func (e *emulator) initNodes() {
 	e.nodes = make([]*emulatedNode, e.nodeCount, e.nodeCount)
 	for i := 0; i < e.nodeCount; i++ {
 		e.nodes[i] = makeEmulatedNode(e, i)
-	}
-	for i := 0; i < e.nodeCount; i++ {
 		syncer := MakeTransactionSyncService(
 			makeNodeLogger(e.log, e.nodes[i]),
 			e.nodes[i],
