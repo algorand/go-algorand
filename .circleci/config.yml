@@ -16,7 +16,7 @@ workflows:
             - amd64_build
           filters:
             branches:
-              only:
+              ignore:
                 - /rel\/.*/
                 - /hotfix\/.*/
       - amd64_test_nightly:
@@ -24,7 +24,7 @@ workflows:
             - amd64_build
           filters:
             branches:
-              ignore:
+              only:
                 - /rel\/.*/
                 - /hotfix\/.*/
           context: slack-secrets
@@ -33,7 +33,7 @@ workflows:
             - amd64_build
           filters:
             branches:
-              only:
+              ignore:
                 - /rel\/.*/
                 - /hotfix\/.*/
       - amd64_integration_nightly:
@@ -41,7 +41,7 @@ workflows:
             - amd64_build
           filters:
             branches:
-              ignore:
+              only:
                 - /rel\/.*/
                 - /hotfix\/.*/
           context: slack-secrets
@@ -50,7 +50,7 @@ workflows:
             - amd64_build
           filters:
             branches:
-              only:
+              ignore:
                 - /rel\/.*/
                 - /hotfix\/.*/
       - amd64_e2e_subs_nightly:
@@ -58,7 +58,7 @@ workflows:
             - amd64_build
           filters:
             branches:
-              ignore:
+              only:
                 - /rel\/.*/
                 - /hotfix\/.*/
           context: slack-secrets
@@ -67,7 +67,7 @@ workflows:
             - amd64_build
           filters:
             branches:
-              only:
+              ignore:
                 - /rel\/.*/
                 - /hotfix\/.*/
       - amd64_e2e_expect_nightly:
@@ -75,7 +75,7 @@ workflows:
             - amd64_build
           filters:
             branches:
-              ignore:
+              only:
                 - /rel\/.*/
                 - /hotfix\/.*/
           context: slack-secrets
@@ -85,7 +85,7 @@ workflows:
             - arm64_build
           filters:
             branches:
-              only:
+              ignore:
                 - /rel\/.*/
                 - /hotfix\/.*/
       - arm64_test_nightly:
@@ -93,7 +93,7 @@ workflows:
             - arm64_build
           filters:
             branches:
-              ignore:
+              only:
                 - /rel\/.*/
                 - /hotfix\/.*/
           context: slack-secrets
@@ -102,7 +102,7 @@ workflows:
             - arm64_build
           filters:
             branches:
-              only:
+              ignore:
                 - /rel\/.*/
                 - /hotfix\/.*/
       - arm64_integration_nightly:
@@ -110,7 +110,7 @@ workflows:
             - arm64_build
           filters:
             branches:
-              ignore:
+              only:
                 - /rel\/.*/
                 - /hotfix\/.*/
           context: slack-secrets
@@ -119,7 +119,7 @@ workflows:
             - arm64_build
           filters:
             branches:
-              only:
+              ignore:
                 - /rel\/.*/
                 - /hotfix\/.*/
       - arm64_e2e_subs_nightly:
@@ -127,7 +127,7 @@ workflows:
             - arm64_build
           filters:
             branches:
-              ignore:
+              only:
                 - /rel\/.*/
                 - /hotfix\/.*/
           context: slack-secrets
@@ -136,7 +136,7 @@ workflows:
             - arm64_build
           filters:
             branches:
-              only:
+              ignore:
                 - /rel\/.*/
                 - /hotfix\/.*/
       - arm64_e2e_expect_nightly:
@@ -144,7 +144,7 @@ workflows:
             - arm64_build
           filters:
             branches:
-              ignore:
+              only:
                 - /rel\/.*/
                 - /hotfix\/.*/
           context: slack-secrets
@@ -154,7 +154,7 @@ workflows:
             - mac_amd64_build
           filters:
             branches:
-              only:
+              ignore:
                 - /rel\/.*/
                 - /hotfix\/.*/
       - mac_amd64_test_nightly:
@@ -162,7 +162,7 @@ workflows:
             - mac_amd64_build
           filters:
             branches:
-              ignore:
+              only:
                 - /rel\/.*/
                 - /hotfix\/.*/
           context: slack-secrets
@@ -171,7 +171,7 @@ workflows:
             - mac_amd64_build
           filters:
             branches:
-              only:
+              ignore:
                 - /rel\/.*/
                 - /hotfix\/.*/
       - mac_amd64_integration_nightly:
@@ -179,7 +179,7 @@ workflows:
             - mac_amd64_build
           filters:
             branches:
-              ignore:
+              only:
                 - /rel\/.*/
                 - /hotfix\/.*/
           context: slack-secrets
@@ -188,7 +188,7 @@ workflows:
             - mac_amd64_build
           filters:
             branches:
-              only:
+              ignore:
                 - /rel\/.*/
                 - /hotfix\/.*/
       - mac_amd64_e2e_subs_nightly:
@@ -196,7 +196,7 @@ workflows:
             - mac_amd64_build
           filters:
             branches:
-              ignore:
+              only:
                 - /rel\/.*/
                 - /hotfix\/.*/
           context: slack-secrets
@@ -205,7 +205,7 @@ workflows:
             - mac_amd64_build
           filters:
             branches:
-              only:
+              ignore:
                 - /rel\/.*/
                 - /hotfix\/.*/
       - mac_amd64_e2e_expect_nightly:
@@ -213,7 +213,7 @@ workflows:
             - mac_amd64_build
           filters:
             branches:
-              ignore:
+              only:
                 - /rel\/.*/
                 - /hotfix\/.*/
           context: slack-secrets
