@@ -314,9 +314,20 @@ func TestBloomFilterTest(t *testing.T) {
 
 		testableBf, err := decodeBloomFilter(enc)
 		require.NoError(t, err)
-		for _, tx := range txnGroups {
-			ans := testableBf.test(tx.GroupTransactionID)
-			require.True(t, ans)
+
+		for testableBf.encodingParams.Modulator = 0; testableBf.encodingParams.Modulator < 7; testableBf.encodingParams.Modulator++ {
+			for testableBf.encodingParams.Offset = 0; testableBf.encodingParams.Offset < testableBf.encodingParams.Modulator; testableBf.encodingParams.Offset++ {
+				for _, tx := range txnGroups {
+					ans := testableBf.test(tx.GroupTransactionID)
+					expected := true
+					if testableBf.encodingParams.Modulator > 1 {
+						if txidToUint64(tx.GroupTransactionID)%uint64(testableBf.encodingParams.Modulator) != uint64(testableBf.encodingParams.Offset) {
+							expected = false
+						}
+					}
+					require.Equal(t, expected, ans)
+				}
+			}
 		}
 	}
 
