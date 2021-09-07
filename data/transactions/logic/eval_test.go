@@ -903,18 +903,11 @@ func TestArg(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `arg 0
-arg 1
-==
-arg 2
-arg 3
-!=
-&&
-arg 4
-len
-int 9
-<
-&&`, v)
+			source := "arg 0; arg 1; ==; arg 2; arg 3; !=; &&; arg 4; len; int 9; <; &&;"
+			if v >= 5 {
+				source += "int 0; args; int 1; args; ==; assert;"
+			}
+			ops := testProg(t, source, v)
 			err := Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
 			var txn transactions.SignedTxn
@@ -1428,6 +1421,19 @@ txn Nonparticipation
 pop
 int 1
 ==
+assert
+txn ConfigAssetMetadataHash
+int 2
+txnas ApplicationArgs
+==
+assert
+txn Sender
+int 0
+args
+==
+assert
+
+int 1
 `
 
 func makeSampleTxn() transactions.SignedTxn {
@@ -1790,7 +1796,7 @@ int 1
 ==
 &&
 `
-	gtxnText := gtxnTextV2 + ` gtxn 0 ExtraProgramPages
+	gtxnTextV4 := gtxnTextV2 + ` gtxn 0 ExtraProgramPages
 int 0
 ==
 &&
@@ -1800,10 +1806,24 @@ int 2
 &&
 `
 
+	gtxnTextV5 := gtxnTextV4 + `int 0
+gtxnas 0 Accounts
+gtxn 0 Sender
+==
+&&
+int 0
+int 0
+gtxnsas Accounts
+gtxn 0 Sender
+==
+&&
+`
+
 	tests := map[uint64]string{
 		1: gtxnTextV1,
 		2: gtxnTextV2,
-		4: gtxnText,
+		4: gtxnTextV4,
+		5: gtxnTextV5,
 	}
 
 	for v, source := range tests {
@@ -2034,6 +2054,85 @@ global ZeroAddress
 	pass, err = Eval(ops2.Program, ep2)
 	require.NoError(t, err)
 	require.True(t, pass)
+}
+
+func TestTxnas(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+
+	source := `int 1
+txnas Accounts
+int 0
+txnas ApplicationArgs
+==
+`
+	ops := testProg(t, source, AssemblerMaxVersion)
+	var txn transactions.SignedTxn
+	txn.Txn.Accounts = make([]basics.Address, 1)
+	txn.Txn.Accounts[0] = txn.Txn.Sender
+	txn.Txn.ApplicationArgs = make([][]byte, 1)
+	txn.Txn.ApplicationArgs[0] = []byte(protocol.PaymentTx)
+	txgroup := make([]transactions.SignedTxn, 1)
+	txgroup[0] = txn
+	ep := defaultEvalParams(nil, &txn)
+	ep.TxnGroup = txgroup
+	_, err := Eval(ops.Program, ep)
+	require.NoError(t, err)
+
+	// check special case: Account 0 == Sender
+	// even without any additional context
+	source = `int 0
+txnas Accounts
+txn Sender
+==
+`
+	ops2 := testProg(t, source, AssemblerMaxVersion)
+	var txn2 transactions.SignedTxn
+	copy(txn2.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
+	ep2 := defaultEvalParams(nil, &txn2)
+	pass, err := Eval(ops2.Program, ep2)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// check gtxnas
+	source = `int 1
+gtxnas 0 Accounts
+txna ApplicationArgs 0
+==`
+	ops = testProg(t, source, AssemblerMaxVersion)
+	require.NoError(t, err)
+	_, err = Eval(ops.Program, ep)
+	require.NoError(t, err)
+
+	// check special case: Account 0 == Sender
+	// even without any additional context
+	source = `int 0
+gtxnas 0 Accounts
+txn Sender
+==
+	`
+	ops3 := testProg(t, source, AssemblerMaxVersion)
+	var txn3 transactions.SignedTxn
+	copy(txn2.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
+	txgroup3 := make([]transactions.SignedTxn, 1)
+	txgroup3[0] = txn3
+	ep3 := defaultEvalParams(nil, &txn3)
+	ep3.TxnGroup = txgroup3
+	pass, err = Eval(ops3.Program, ep3)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// check gtxnsas
+	source = `int 0
+int 1
+gtxnsas Accounts
+txna ApplicationArgs 0
+==`
+	ops = testProg(t, source, AssemblerMaxVersion)
+	require.NoError(t, err)
+	_, err = Eval(ops.Program, ep)
+	require.NoError(t, err)
 }
 
 func TestBitOps(t *testing.T) {
