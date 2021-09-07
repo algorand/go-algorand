@@ -174,7 +174,7 @@ func (s tfNameSpecMap) getExtraFor(name string) (extra string) {
 type txnFieldSpec struct {
 	field      TxnField
 	ftype      StackType
-	version    uint64 // When this field become availabe to txn/gtxn. 0=always
+	version    uint64 // When this field become available to txn/gtxn. 0=always
 	itxVersion uint64 // When this field become available to tx_field. 0=never
 }
 
