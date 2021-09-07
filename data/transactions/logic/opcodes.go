@@ -298,6 +298,17 @@ var OpSpecs = []OpSpec{
 
 	// ABI support opcodes.
 	{0xb0, "log", opLog, asmDefault, disDefault, oneBytes, nil, 5, runModeApplication, opDefault},
+
+	// {0x36, "txna", opTxna, assembleTxna, disTxna, nil, oneAny, 2, modeAny, immediates("f", "i")},
+	// {0x37, "gtxna", opGtxna, assembleGtxna, disGtxna, nil, oneAny, 2, modeAny, immediates("t", "f", "i")},
+	// // Like gtxn, but gets txn index from stack, rather than immediate arg
+	// {0x38, "gtxns", opGtxns, assembleGtxns, disTxn, oneInt, oneAny, 3, modeAny, immediates("f")},
+	// {0x39, "gtxnsa", opGtxnsa, assembleGtxns, disTxna, oneInt, oneAny, 3, modeAny, immediates("f", "i")},
+
+	// Dynamically indexing into LogicSigs
+	{0xc0, "txnas", opTxnas, assembleTxnas, disTxn, oneInt, oneAny, 5, modeAny, immediates("f")},
+	{0xc1, "gtxnas", opGtxnas, assembleGtxnas, disGtxn, oneInt, oneAny, 5, modeAny, immediates("t", "f")},
+	{0xc2, "gtxnsas", opGtxnsas, assembleGtxnsas, disTxn, twoInts, oneAny, 5, modeAny, immediates("f")},
 }
 
 type sortByOpcode []OpSpec

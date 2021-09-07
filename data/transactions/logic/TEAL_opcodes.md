@@ -1213,3 +1213,27 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Mode: Application
 
 `log` can be called up to MaxLogCalls times in a program, and log up to a total of 1k bytes.
+
+## txnas f
+
+- Opcode: 0xc0 {uint8 transaction field index}
+- Pops: *... stack*, uint64
+- Pushes: any
+- pop an index A. push Ath value of the array field F of the current transaction
+- LogicSigVersion >= 5
+
+## gtxnas t f
+
+- Opcode: 0xc1 {uint8 transaction group index} {uint8 transaction field index}
+- Pops: *... stack*, uint64
+- Pushes: any
+- pop an index A. push Ath value of the array field F from the Tth transaction in the current group
+- LogicSigVersion >= 5
+
+## gtxnsas f
+
+- Opcode: 0xc2 {uint8 transaction field index}
+- Pops: *... stack*, {uint64 A}, {uint64 B}
+- Pushes: any
+- pop an index A and an index B. push Bth value of the array field F from the Ath transaction in the current group
+- LogicSigVersion >= 5

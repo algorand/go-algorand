@@ -2062,6 +2062,29 @@ func opTxna(cx *evalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
+func opTxnas(cx *evalContext) {
+	last := len(cx.stack) - 1
+
+	field := TxnField(uint64(cx.program[cx.pc+1]))
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if !ok {
+		cx.err = fmt.Errorf("txnas unsupported field %d", field)
+		return
+	}
+	arrayFieldIdx := cx.stack[last].Uint
+	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx, cx.GroupIndex)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack[last] = sv
+}
+
 func opGtxn(cx *evalContext) {
 	gtxid := int(uint(cx.program[cx.pc+1]))
 	if gtxid >= len(cx.TxnGroup) {
@@ -2120,6 +2143,35 @@ func opGtxna(cx *evalContext) {
 		return
 	}
 	cx.stack = append(cx.stack, sv)
+}
+
+func opGtxnas(cx *evalContext) {
+	last := len(cx.stack) - 1
+
+	gtxid := int(uint(cx.program[cx.pc+1]))
+	if gtxid >= len(cx.TxnGroup) {
+		cx.err = fmt.Errorf("gtxnas lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
+		return
+	}
+	tx := &cx.TxnGroup[gtxid].Txn
+	field := TxnField(uint64(cx.program[cx.pc+2]))
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if !ok {
+		cx.err = fmt.Errorf("gtxnas unsupported field %d", field)
+		return
+	}
+	arrayFieldIdx := cx.stack[last].Uint
+	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack[last] = sv
 }
 
 func opGtxns(cx *evalContext) {
@@ -2182,6 +2234,37 @@ func opGtxnsa(cx *evalContext) {
 		return
 	}
 	cx.stack[last] = sv
+}
+
+func opGtxnsas(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+
+	gtxid := int(cx.stack[prev].Uint)
+	if gtxid >= len(cx.TxnGroup) {
+		cx.err = fmt.Errorf("gtxnsa lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
+		return
+	}
+	tx := &cx.TxnGroup[gtxid].Txn
+	field := TxnField(uint64(cx.program[cx.pc+1]))
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if !ok {
+		cx.err = fmt.Errorf("gtxnsa unsupported field %d", field)
+		return
+	}
+	arrayFieldIdx := cx.stack[last].Uint
+	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack[prev] = sv
+	cx.stack = cx.stack[:last]
 }
 
 func opGaidImpl(cx *evalContext, groupIdx int, opName string) (sv stackValue, err error) {

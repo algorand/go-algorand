@@ -152,6 +152,10 @@ var opDocByName = map[string]string{
 	"b~":  "X with all bits inverted",
 
 	"log": "write bytes to log state of the current application",
+
+	"txnas":   "pop an index A. push Ath value of the array field F of the current transaction",
+	"gtxnas":  "pop an index A. push Ath value of the array field F from the Tth transaction in the current group",
+	"gtxnsas": "pop an index A and an index B. push Bth value of the array field F from the Ath transaction in the current group",
 }
 
 // OpDoc returns a description of the op
@@ -191,6 +195,9 @@ var opcodeImmediateNotes = map[string]string{
 	"asset_holding_get": "{uint8 asset holding field index}",
 	"asset_params_get":  "{uint8 asset params field index}",
 	"app_params_get":    "{uint8 app params field index}",
+	"txnas":             "{uint8 transaction field index}",
+	"gtxnas":            "{uint8 transaction group index} {uint8 transaction field index}",
+	"gtxnsas":           "{uint8 transaction field index}",
 }
 
 // OpImmediateNote returns a short string about immediate data which follows the op byte
@@ -252,7 +259,7 @@ var OpGroups = map[string][]string{
 	"Byte Array Slicing":   {"substring", "substring3", "extract", "extract3", "extract16bits", "extract32bits", "extract64bits"},
 	"Byteslice Arithmetic": {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%"},
 	"Byteslice Logic":      {"b|", "b&", "b^", "b~"},
-	"Loading Values":       {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "gtxns", "gtxnsa", "global", "load", "store", "gload", "gloads", "gaid", "gaids"},
+	"Loading Values":       {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "gtxns", "gtxnsa", "global", "load", "store", "gload", "gloads", "gaid", "gaids", "txnas", "gtxnas", "gtxnsas"},
 	"Flow Control":         {"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "cover", "uncover", "swap", "select", "assert", "callsub", "retsub"},
 	"State Access":         {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "log"},
 }
