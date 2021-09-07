@@ -310,7 +310,7 @@ func BenchmarkTxnGroupCompression(b *testing.B) {
 		require.Equal(b, compressionFormat, compressionFormatDeflate)
 		size = len(compressedGroupBytes)
 	}
-	loopDuration := time.Now().Sub(loopStartTime)
+	loopDuration := time.Since(loopStartTime)
 	b.StopTimer()
 	b.ReportMetric(float64(len(ptg.Bytes)*b.N)/loopDuration.Seconds(), "estimatedGzipCompressionSpeed")
 	b.ReportMetric(float64(len(ptg.Bytes)-size)/float64(len(ptg.Bytes)), "estimatedGzipCompressionGains")
