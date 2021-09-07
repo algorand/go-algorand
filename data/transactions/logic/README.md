@@ -224,6 +224,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `txnas f` | pop an index A. push Ath value of the array field F of the current transaction |
 | `gtxnas t f` | pop an index A. push Ath value of the array field F from the Tth transaction in the current group |
 | `gtxnsas f` | pop an index A and an index B. push Bth value of the array field F from the Ath transaction in the current group |
+| `args` | push Xth LogicSig argument to stack |
 
 **Transaction Fields**
 

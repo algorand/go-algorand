@@ -1237,3 +1237,12 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Pushes: any
 - pop an index A and an index B. push Bth value of the array field F from the Ath transaction in the current group
 - LogicSigVersion >= 5
+
+## args
+
+- Opcode: 0xc3
+- Pops: *... stack*, uint64
+- Pushes: []byte
+- push Xth LogicSig argument to stack
+- LogicSigVersion >= 5
+- Mode: Signature

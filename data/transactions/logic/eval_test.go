@@ -905,18 +905,11 @@ func TestArg(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `arg 0
-arg 1
-==
-arg 2
-arg 3
-!=
-&&
-arg 4
-len
-int 9
-<
-&&`, v)
+			source := "arg 0; arg 1; ==; arg 2; arg 3; !=; &&; arg 4; len; int 9; <; &&;"
+			if v >= 5 {
+				source += "int 0; args; int 1; args; ==; assert;"
+			}
+			ops := testProg(t, source, v)
 			err := Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
 			var txn transactions.SignedTxn
@@ -1426,6 +1419,11 @@ assert
 txn ConfigAssetMetadataHash
 int 2
 txnas ApplicationArgs
+==
+assert
+txn Sender
+int 0
+args
 ==
 assert
 

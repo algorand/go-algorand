@@ -1598,6 +1598,13 @@ func opArg2(cx *evalContext) {
 func opArg3(cx *evalContext) {
 	opArgN(cx, 3)
 }
+func opArgs(cx *evalContext) {
+	last := len(cx.stack) - 1
+	n := cx.stack[last].Uint
+	// Pop the index and push the result back on the stack.
+	cx.stack = cx.stack[:last]
+	opArgN(cx, n)
+}
 
 func branchTarget(cx *evalContext) (int, error) {
 	offset := int16(uint16(cx.program[cx.pc+1])<<8 | uint16(cx.program[cx.pc+2]))

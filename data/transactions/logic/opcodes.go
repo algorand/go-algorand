@@ -303,6 +303,7 @@ var OpSpecs = []OpSpec{
 	{0xc0, "txnas", opTxnas, assembleTxnas, disTxn, oneInt, oneAny, 5, modeAny, immediates("f")},
 	{0xc1, "gtxnas", opGtxnas, assembleGtxnas, disGtxn, oneInt, oneAny, 5, modeAny, immediates("t", "f")},
 	{0xc2, "gtxnsas", opGtxnsas, assembleGtxnsas, disTxn, twoInts, oneAny, 5, modeAny, immediates("f")},
+	{0xc3, "args", opArgs, asmDefault, disDefault, oneInt, oneBytes, 5, runModeSignature, opDefault},
 }
 
 type sortByOpcode []OpSpec
