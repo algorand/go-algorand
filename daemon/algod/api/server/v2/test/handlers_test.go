@@ -41,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-codec/codec"
 )
@@ -318,6 +319,8 @@ func getPendingTransactionsTest(t *testing.T, format string, max uint64, expecte
 }
 
 func TestPendingTransactionLogsEncoding(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	response := generated.PendingTransactionResponse{
 		Logs: &[][]byte{
 			{},
