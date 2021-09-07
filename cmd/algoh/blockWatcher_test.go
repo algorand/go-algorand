@@ -24,6 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1" v1
 )
 
 func bw(client Client) *blockWatcher {
