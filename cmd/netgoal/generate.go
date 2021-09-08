@@ -466,15 +466,19 @@ func saveGoalTemplateToDisk(template netdeploy.NetworkTemplate, filename string)
 }
 
 func generateWalletGenesisData(wallets, npnHosts int) gen.GenesisData {
+	ratZero := big.NewRat(int64(0), int64(1))
+	ratHundred := big.NewRat(int64(100), int64(1))
 	data := gen.DefaultGenesis
 	totalWallets := wallets + npnHosts
 	data.Wallets = make([]gen.WalletData, totalWallets)
-	// split participating an non participating stake evenly
-	participatingNodeStake := big.NewRat(int64(50), int64(wallets))
-	nonParticipatingNodeStake := big.NewRat(int64(50), int64(npnHosts))
+	participatingNodeStake := big.NewRat(int64(100), int64(wallets))
+	nonParticipatingNodeStake := ratZero
+	if npnHosts > 0 {
+		// split participating an non participating stake evenly
+		participatingNodeStake = big.NewRat(int64(50), int64(wallets))
+		nonParticipatingNodeStake = big.NewRat(int64(50), int64(npnHosts))
+	}
 
-	ratZero := big.NewRat(int64(0), int64(1))
-	ratHundred := big.NewRat(int64(100), int64(1))
 	stake := ratZero
 	stakeSum := new(big.Rat).Set(ratZero)
 	for i := 0; i < totalWallets; i++ {
