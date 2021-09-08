@@ -29,9 +29,11 @@ import (
 
 	"github.com/algorand/go-algorand/cmd/tealdbg/cdt"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestCdtHandlers(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	params := CdtFrontendParams{
 		router:     mux.NewRouter(),
 		apiAddress: "127.0.0.1:12345",
@@ -142,6 +144,7 @@ func (c *MockDebugControl) GetStates(s *logic.DebugState) AppState {
 }
 
 func TestCdtFrontendSessionStarted(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	params := CdtFrontendParams{
 		router:     mux.NewRouter(),
 		apiAddress: "127.0.0.1:12345",
@@ -178,6 +181,7 @@ func TestCdtFrontendSessionStarted(t *testing.T) {
 }
 
 func TestCdtAdapterSessionEnded(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	params := CdtFrontendParams{
 		router:     mux.NewRouter(),
 		apiAddress: "127.0.0.1:12345",

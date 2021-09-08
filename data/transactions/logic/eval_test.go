@@ -2250,6 +2250,7 @@ len`, 2)
 }
 
 func TestExtractOp(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testAccepts(t, "byte 0x123456789abc; extract 1 2; byte 0x3456; ==", 5)
 	testAccepts(t, "byte 0x123456789abc; extract 0 6; byte 0x123456789abc; ==", 5)
@@ -2266,6 +2267,7 @@ func TestExtractOp(t *testing.T) {
 }
 
 func TestExtractFlop(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	// fails in compiler
 	testProg(t, `byte 0xf000000000000000
@@ -4457,6 +4459,7 @@ func TestBytes(t *testing.T) {
 }
 
 func TestMethod(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	// Although 'method' is new around the time of v5, it is a
 	// pseudo-op, so it's ok to use it earlier, as it compiles to
@@ -4493,6 +4496,7 @@ func TestDig(t *testing.T) {
 }
 
 func TestCover(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testAccepts(t, "int 4; int 3; int 2; int 1; cover 0; int 1; ==; return", 5)
 	testAccepts(t, "int 4; int 3; int 2; int 1; cover 1; int 2; ==; return", 5)
@@ -4503,6 +4507,7 @@ func TestCover(t *testing.T) {
 }
 
 func TestUncover(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testAccepts(t, "int 4; int 3; int 2; int 1; uncover 0; int 1; ==; return", 5)
 	testAccepts(t, "int 4; int 3; int 2; int 1; uncover 2; int 3; ==; return", 5)

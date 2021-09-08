@@ -1039,6 +1039,7 @@ intc_1
 }
 
 func TestAppParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	ep, ledger := makeSampleEnv()
 	ledger.NewAccount(ep.Txn.Txn.Sender, 1)

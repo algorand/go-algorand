@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -53,6 +54,7 @@ var txnSample string = `{
 `
 
 func TestTxnJSONInput(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	dp := DebugParams{
@@ -73,6 +75,7 @@ func TestTxnJSONInput(t *testing.T) {
 }
 
 func TestTxnMessagePackInput(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	var txn transactions.SignedTxn
@@ -232,6 +235,7 @@ func makeSampleSerializedBalanceRecord(addr basics.Address, toJSON bool) []byte 
 }
 
 func TestBalanceJSONInput(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	addr, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
@@ -254,6 +258,7 @@ func TestBalanceJSONInput(t *testing.T) {
 }
 
 func TestBalanceMessagePackInput(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	addr, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
 	a.NoError(err)
@@ -281,6 +286,7 @@ func TestBalanceMessagePackInput(t *testing.T) {
 }
 
 func TestDebugEnvironment(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
@@ -521,6 +527,7 @@ byte 0x676c6f62616c // global
 }
 
 func TestDebugFromPrograms(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	txnBlob := []byte("[" + strings.Join([]string{string(txnSample), txnSample}, ",") + "]")
@@ -599,6 +606,7 @@ func TestDebugFromPrograms(t *testing.T) {
 }
 
 func TestRunMode(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	txnBlob := []byte("[" + strings.Join([]string{string(txnSample), txnSample}, ",") + "]")
@@ -685,6 +693,7 @@ func TestRunMode(t *testing.T) {
 }
 
 func TestDebugFromTxn(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
@@ -904,6 +913,7 @@ func checkBalanceAdapter(
 }
 
 func TestLocalBalanceAdapter(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
@@ -964,6 +974,7 @@ func TestLocalBalanceAdapter(t *testing.T) {
 }
 
 func TestLocalBalanceAdapterIndexer(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
