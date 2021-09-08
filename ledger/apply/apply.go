@@ -19,6 +19,7 @@ package apply
 import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
@@ -51,9 +52,9 @@ type Balances interface {
 	DeallocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error
 
 	// StatefulEval executes a TEAL program in stateful mode on the balances.
-	// It returns whether the program passed and its error.  It alo returns
+	// It returns whether the program passed and its error.  It also returns
 	// an EvalDelta that contains the changes made by the program.
-	StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (passed bool, evalDelta basics.EvalDelta, err error)
+	StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (passed bool, evalDelta transactions.EvalDelta, err error)
 
 	// Move MicroAlgos from one account to another, doing all necessary overflow checking (convenience method)
 	// TODO: Does this need to be part of the balances interface, or can it just be implemented here as a function that calls Put and Get?

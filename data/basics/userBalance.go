@@ -17,6 +17,7 @@
 package basics
 
 import (
+	"encoding/binary"
 	"fmt"
 	"reflect"
 
@@ -380,6 +381,18 @@ type AssetParams struct {
 	// Clawback specifies an account that is allowed to take units
 	// of this asset from any account.
 	Clawback Address `codec:"c"`
+}
+
+// ToBeHashed implements crypto.Hashable
+func (app AppIndex) ToBeHashed() (protocol.HashID, []byte) {
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, uint64(app))
+	return protocol.AppIndex, buf
+}
+
+// Address yields the "app address" of the app
+func (app AppIndex) Address() Address {
+	return Address(crypto.HashObj(app))
 }
 
 // MakeAccountData returns a UserToken

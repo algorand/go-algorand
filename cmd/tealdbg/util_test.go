@@ -19,10 +19,12 @@ package main
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestVLQ(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	a.Equal("AAAA", MakeSourceMapLine(0, 0, 0, 0))

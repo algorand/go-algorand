@@ -811,7 +811,10 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/responses/PendingTransactionResponse"
+            "description": "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round \u003e 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\n\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.",
+            "schema": {
+              "$ref": "#/definitions/PendingTransactionResponse"
+            }
           },
           "400": {
             "description": "Bad Request",
@@ -1748,7 +1751,8 @@
         "logs": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/LogItem"
+            "type": "string",
+            "format": "byte"
           }
         },
         "cost": {
@@ -1921,21 +1925,80 @@
         }
       }
     },
-    "LogItem": {
-      "description": "Application Log",
+    "PendingTransactionResponse": {
+      "description": "Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.",
       "type": "object",
       "required": [
-        "id",
-        "value"
+        "txn",
+        "pool-error"
       ],
       "properties": {
-        "id": {
-          "description": "unique application identifier",
+        "asset-index": {
+          "description": "The asset index if the transaction was found and it created an asset.",
+          "type": "integer"
+          },
+        "application-index": {
+          "description": "The application index if the transaction was found and it created an application.",
           "type": "integer"
         },
-        "value": {
-          "description": " base64 encoded log message",
+        "close-rewards": {
+          "description": "Rewards in microalgos applied to the close remainder to account.",
+          "type": "integer"
+        },
+        "closing-amount": {
+          "description": "Closing amount for the transaction.",
+          "type": "integer"
+        },
+        "asset-closing-amount": {
+          "description": "The number of the asset's unit that were transferred to the close-to address.",
+          "type": "integer"
+        },
+        "confirmed-round": {
+          "description": "The round where this transaction was confirmed, if present.",
+          "type": "integer"
+        },
+        "pool-error": {
+          "description": "Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.\n",
           "type": "string"
+        },
+        "receiver-rewards": {
+          "description": "Rewards in microalgos applied to the receiver account.",
+          "type": "integer"
+        },
+        "sender-rewards": {
+          "description": "Rewards in microalgos applied to the sender account.",
+          "type": "integer"
+        },
+        "local-state-delta": {
+          "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AccountStateDelta"
+          }
+        },
+        "global-state-delta": {
+          "description": "\\[gd\\] Global state key/value changes for the application being executed by this transaction.",
+          "$ref": "#/definitions/StateDelta"
+        },
+        "logs": {
+          "description": "\\[lg\\] Logs for the application being executed by this transaction.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "inner-txns": {
+          "description": "Inner transactions produced by application execution.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PendingTransactionResponse"
+          }
+        },
+        "txn": {
+          "description": "The raw signed transaction.",
+            "type": "object",
+          "x-algorand-format": "SignedTransaction"
         }
       }
     }
@@ -2274,78 +2337,6 @@
           "catchpoint-acquired-blocks": {
             "description": "The number of blocks that have already been obtained by the node as part of the catchup",
             "type": "integer"
-          }
-        }
-      }
-    },
-    "PendingTransactionResponse": {
-      "description": "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round \u003e 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\n\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.",
-      "schema": {
-        "description": "Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.",
-        "type": "object",
-        "required": [
-          "txn",
-          "pool-error"
-        ],
-        "properties": {
-          "asset-index": {
-            "description": "The asset index if the transaction was found and it created an asset.",
-            "type": "integer"
-          },
-          "application-index": {
-            "description": "The application index if the transaction was found and it created an application.",
-            "type": "integer"
-          },
-          "close-rewards": {
-            "description": "Rewards in microalgos applied to the close remainder to account.",
-            "type": "integer"
-          },
-          "closing-amount": {
-            "description": "Closing amount for the transaction.",
-            "type": "integer"
-          },
-          "asset-closing-amount": {
-            "description": "The number of the asset's unit that were transferred to the close-to address.",
-            "type": "integer"
-          },
-          "confirmed-round": {
-            "description": "The round where this transaction was confirmed, if present.",
-            "type": "integer"
-          },
-          "pool-error": {
-            "description": "Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.\n",
-            "type": "string"
-          },
-          "receiver-rewards": {
-            "description": "Rewards in microalgos applied to the receiver account.",
-            "type": "integer"
-          },
-          "sender-rewards": {
-            "description": "Rewards in microalgos applied to the sender account.",
-            "type": "integer"
-          },
-          "local-state-delta": {
-            "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
-            "type": "array",
-            "items": {
-              "$ref": "#/definitions/AccountStateDelta"
-            }
-          },
-          "global-state-delta": {
-            "description": "\\[gd\\] Global state key/value changes for the application being executed by this transaction.",
-            "$ref": "#/definitions/StateDelta"
-          },
-          "logs": {
-            "description": "\\[lg\\] Logs for the application being executed by this transaction.",
-            "type": "array",
-            "items": {
-              "$ref": "#/definitions/LogItem"
-            }
-          },
-          "txn": {
-            "description": "The raw signed transaction.",
-            "type": "object",
-            "x-algorand-format": "SignedTransaction"
           }
         }
       }
