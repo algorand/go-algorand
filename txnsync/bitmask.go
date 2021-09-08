@@ -28,6 +28,7 @@ type bitmask []byte
 
 // assumed to be in mode 0, sets bit at index to 1
 func (b *bitmask) setBit(index int) {
+	// bitmask type is stored at index 0, so the rest of the data is stored after.
 	byteIndex := index/8 + 1
 	(*b)[byteIndex] |= 1 << (index % 8)
 }
