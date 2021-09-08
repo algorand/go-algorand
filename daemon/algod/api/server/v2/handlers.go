@@ -471,6 +471,23 @@ func (v2 *Handlers) TransactionParams(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
+type preEncodedTxInfo struct {
+	AssetIndex         *uint64                        `codec:"asset-index,omitempty"`
+	AssetClosingAmount *uint64                        `codec:"asset-closing-amount,omitempty"`
+	ApplicationIndex   *uint64                        `codec:"application-index,omitempty"`
+	CloseRewards       *uint64                        `codec:"close-rewards,omitempty"`
+	ClosingAmount      *uint64                        `codec:"closing-amount,omitempty"`
+	ConfirmedRound     *uint64                        `codec:"confirmed-round,omitempty"`
+	GlobalStateDelta   *generated.StateDelta          `codec:"global-state-delta,omitempty"`
+	LocalStateDelta    *[]generated.AccountStateDelta `codec:"local-state-delta,omitempty"`
+	PoolError          string                         `codec:"pool-error"`
+	ReceiverRewards    *uint64                        `codec:"receiver-rewards,omitempty"`
+	SenderRewards      *uint64                        `codec:"sender-rewards,omitempty"`
+	Txn                transactions.SignedTxn         `codec:"txn"`
+	Logs               *[][]byte                      `codec:"logs,omitempty"`
+	Inners             *[]preEncodedTxInfo            `codec:"inner-txns,omitempty"`
+}
+
 // PendingTransactionInformation returns a transaction with the specified txID
 // from the transaction pool. If not found looks for the transaction in the
 // last proto.MaxTxnLife rounds
@@ -500,27 +517,8 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 	}
 
 	// Encoding wasn't working well without embedding "real" objects.
-	response := struct {
-		AssetIndex         *uint64                        `codec:"asset-index,omitempty"`
-		AssetClosingAmount *uint64                        `codec:"asset-closing-amount,omitempty"`
-		ApplicationIndex   *uint64                        `codec:"application-index,omitempty"`
-		CloseRewards       *uint64                        `codec:"close-rewards,omitempty"`
-		ClosingAmount      *uint64                        `codec:"closing-amount,omitempty"`
-		ConfirmedRound     *uint64                        `codec:"confirmed-round,omitempty"`
-		GlobalStateDelta   *generated.StateDelta          `codec:"global-state-delta,omitempty"`
-		LocalStateDelta    *[]generated.AccountStateDelta `codec:"local-state-delta,omitempty"`
-		PoolError          string                         `codec:"pool-error"`
-		ReceiverRewards    *uint64                        `codec:"receiver-rewards,omitempty"`
-		SenderRewards      *uint64                        `codec:"sender-rewards,omitempty"`
-		Txn                transactions.SignedTxn         `codec:"txn"`
-		Logs               *[]generated.LogItem           `codec:"logs,omitempty"`
-	}{
+	response := preEncodedTxInfo{
 		Txn: txn.Txn,
-	}
-
-	handle, contentType, err := getCodecHandle(params.Format)
-	if err != nil {
-		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
 
 	if txn.ConfirmedRound != 0 {
@@ -535,11 +533,13 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		response.AssetIndex = computeAssetIndexFromTxn(txn, v2.Node.Ledger())
 		response.ApplicationIndex = computeAppIndexFromTxn(txn, v2.Node.Ledger())
 		response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)
-		response.Logs, err = convertToLogItems(txn, response.ApplicationIndex)
-		if err != nil {
-			return internalError(ctx, err, err.Error(), v2.Log)
-		}
+		response.Logs = convertLogs(txn)
+		response.Inners = convertInners(&txn)
+	}
 
+	handle, contentType, err := getCodecHandle(params.Format)
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
 	data, err := encode(handle, response)
 	if err != nil {

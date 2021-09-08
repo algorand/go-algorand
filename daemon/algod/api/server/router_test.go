@@ -56,14 +56,16 @@ func (s *TestSuite) SetupTest() {
 	s.calls = 0
 }
 func (s *TestSuite) TestBaselineRoute() {
-	partitiontest.PartitionTest(s.T())
+	// partitiontest.PartitionTest(s.T())
+	// Partitioning in TestTestSuite()
 	ctx := s.e.NewContext(nil, nil)
 	s.e.Router().Find(http.MethodGet, "/v0/this/is/no/endpoint", ctx)
 	assert.Equal(s.T(), echo.ErrNotFound, ctx.Handler()(ctx))
 	assert.Equal(s.T(), 0, s.calls)
 }
 func (s *TestSuite) TestAccountPendingTransaction() {
-	partitiontest.PartitionTest(s.T())
+	// partitiontest.PartitionTest(s.T())
+	// Partitioning in TestTestSuite()
 	ctx := s.e.NewContext(nil, nil)
 	s.e.Router().Find(http.MethodGet, "/v1/account/address-param/transactions/pending", ctx)
 	assert.Equal(s.T(), "/v1/account/:addr/transactions/pending", ctx.Path())
@@ -75,7 +77,8 @@ func (s *TestSuite) TestAccountPendingTransaction() {
 	assert.Equal(s.T(), callsBefore+1, s.calls)
 }
 func (s *TestSuite) TestWaitAfterBlock() {
-	partitiontest.PartitionTest(s.T())
+	// partitiontest.PartitionTest(s.T())
+	// Partitioning in TestTestSuite()
 	ctx := s.e.NewContext(nil, nil)
 	s.e.Router().Find(http.MethodGet, "/v1/status/wait-for-block-after/123456", ctx)
 	assert.Equal(s.T(), "/v1/status/wait-for-block-after/:round", ctx.Path())
@@ -87,7 +90,8 @@ func (s *TestSuite) TestWaitAfterBlock() {
 	assert.Equal(s.T(), callsBefore+1, s.calls)
 }
 func (s *TestSuite) TestAccountInformation() {
-	partitiontest.PartitionTest(s.T())
+	// partitiontest.PartitionTest(s.T())
+	// Partitioning in TestTestSuite()
 	ctx := s.e.NewContext(nil, nil)
 	s.e.Router().Find(http.MethodGet, "/v1/account/ZBBRQD73JH5KZ7XRED6GALJYJUXOMBBP3X2Z2XFA4LATV3MUJKKMKG7SHA", ctx)
 	assert.Equal(s.T(), "/v1/account/:addr", ctx.Path())
@@ -99,7 +103,8 @@ func (s *TestSuite) TestAccountInformation() {
 	assert.Equal(s.T(), callsBefore+1, s.calls)
 }
 func (s *TestSuite) TestTransactionInformation() {
-	partitiontest.PartitionTest(s.T())
+	// partitiontest.PartitionTest(s.T())
+	// Partitioning in TestTestSuite()
 	ctx := s.e.NewContext(nil, nil)
 	addr := "ZBBRQD73JH5KZ7XRED6GALJYJUXOMBBP3X2Z2XFA4LATV3MUJKKMKG7SHA"
 	txid := "ASPB5E72OT2UWSOCQGD5OPT3W4KV4LZZDL7L5MBCC3EBAIJCDHAA"
@@ -114,7 +119,8 @@ func (s *TestSuite) TestTransactionInformation() {
 	assert.Equal(s.T(), callsBefore+1, s.calls)
 }
 func (s *TestSuite) TestAccountTransaction() {
-	partitiontest.PartitionTest(s.T())
+	// partitiontest.PartitionTest(s.T())
+	// Partitioning in TestTestSuite()
 	ctx := s.e.NewContext(nil, nil)
 	addr := "ZBBRQD73JH5KZ7XRED6GALJYJUXOMBBP3X2Z2XFA4LATV3MUJKKMKG7SHA"
 	s.e.Router().Find(http.MethodGet, "/v1/account/"+addr+"/transactions", ctx)
@@ -127,7 +133,8 @@ func (s *TestSuite) TestAccountTransaction() {
 	assert.Equal(s.T(), callsBefore+1, s.calls)
 }
 func (s *TestSuite) TestBlock() {
-	partitiontest.PartitionTest(s.T())
+	// partitiontest.PartitionTest(s.T())
+	// Partitioning in TestTestSuite()
 	ctx := s.e.NewContext(nil, nil)
 	s.e.Router().Find(http.MethodGet, "/v1/block/123456", ctx)
 	assert.Equal(s.T(), "/v1/block/:round", ctx.Path())
@@ -139,7 +146,8 @@ func (s *TestSuite) TestBlock() {
 	assert.Equal(s.T(), callsBefore+1, s.calls)
 }
 func (s *TestSuite) TestPendingTransactionID() {
-	partitiontest.PartitionTest(s.T())
+	// partitiontest.PartitionTest(s.T())
+	// Partitioning in TestTestSuite()
 	ctx := s.e.NewContext(nil, nil)
 	txid := "ASPB5E72OT2UWSOCQGD5OPT3W4KV4LZZDL7L5MBCC3EBAIJCDHAA"
 	s.e.Router().Find(http.MethodGet, "/v1/transactions/pending/"+txid, ctx)
@@ -152,7 +160,8 @@ func (s *TestSuite) TestPendingTransactionID() {
 	assert.Equal(s.T(), callsBefore+1, s.calls)
 }
 func (s *TestSuite) TestPendingTransactionInformationByAddress() {
-	partitiontest.PartitionTest(s.T())
+	// partitiontest.PartitionTest(s.T())
+	// Partitioning in TestTestSuite()
 	ctx := s.e.NewContext(nil, nil)
 	addr := "ZBBRQD73JH5KZ7XRED6GALJYJUXOMBBP3X2Z2XFA4LATV3MUJKKMKG7SHA"
 	s.e.Router().Find(http.MethodGet, "/v1/account/"+addr+"/transactions/pending", ctx)
@@ -165,7 +174,8 @@ func (s *TestSuite) TestPendingTransactionInformationByAddress() {
 	assert.Equal(s.T(), callsBefore+1, s.calls)
 }
 func (s *TestSuite) TestGetAsset() {
-	partitiontest.PartitionTest(s.T())
+	// partitiontest.PartitionTest(s.T())
+	// Partitioning in TestTestSuite()
 	ctx := s.e.NewContext(nil, nil)
 	s.e.Router().Find(http.MethodGet, "/v1/asset/123456", ctx)
 	assert.Equal(s.T(), "/v1/asset/:index", ctx.Path())
@@ -177,7 +187,8 @@ func (s *TestSuite) TestGetAsset() {
 	assert.Equal(s.T(), callsBefore+1, s.calls)
 }
 func (s *TestSuite) TestGetTransactionByID() {
-	partitiontest.PartitionTest(s.T())
+	// partitiontest.PartitionTest(s.T())
+	// Partitioning in TestTestSuite()
 	ctx := s.e.NewContext(nil, nil)
 	txid := "ASPB5E72OT2UWSOCQGD5OPT3W4KV4LZZDL7L5MBCC3EBAIJCDHAA"
 	s.e.Router().Find(http.MethodGet, "/v1/transaction/"+txid, ctx)
@@ -190,5 +201,6 @@ func (s *TestSuite) TestGetTransactionByID() {
 	assert.Equal(s.T(), callsBefore+1, s.calls)
 }
 func TestTestSuite(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	suite.Run(t, new(TestSuite))
 }

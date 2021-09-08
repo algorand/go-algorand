@@ -24,6 +24,8 @@ import (
 
 // TestGoalWithExpect Process all expect script files with suffix Test.exp within the test/e2e-go/cli/goal/expect directory
 func TestGoalWithExpect(t *testing.T) {
+	// partitiontest.PartitionTest(t)
+	// Causes double partition, so commented out on purpose
 	et := fixtures.MakeExpectTest(t)
 	et.Run()
 }

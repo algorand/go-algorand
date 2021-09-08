@@ -23,10 +23,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_loadTelemetryConfig(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	sample := TelemetryConfig{
 		Enable:             true,
@@ -58,6 +60,7 @@ func Test_loadTelemetryConfig(t *testing.T) {
 }
 
 func Test_CreateSaveLoadTelemetryConfig(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	testDir := os.Getenv("TESTDIR")
 
@@ -92,6 +95,7 @@ func Test_CreateSaveLoadTelemetryConfig(t *testing.T) {
 }
 
 func Test_SanitizeTelemetryString(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	type testcase struct {
 		input    string
 		expected string
@@ -110,6 +114,7 @@ func Test_SanitizeTelemetryString(t *testing.T) {
 }
 
 func TestLoadTelemetryConfig(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	testLoggingConfigFileName := "../test/testdata/configs/logging/logging.config.test1"
 	tc, err := loadTelemetryConfig(testLoggingConfigFileName)
 	require.NoError(t, err)
@@ -122,7 +127,7 @@ func TestLoadTelemetryConfig(t *testing.T) {
 }
 
 func TestLoadTelemetryConfigBlankUsernamePassword(t *testing.T) {
-
+	partitiontest.PartitionTest(t)
 	testLoggingConfigFileName := "../test/testdata/configs/logging/logging.config.test2"
 	tc, err := loadTelemetryConfig(testLoggingConfigFileName)
 	require.NoError(t, err)
@@ -133,6 +138,7 @@ func TestLoadTelemetryConfigBlankUsernamePassword(t *testing.T) {
 }
 
 func TestSaveTelemetryConfigBlankUsernamePassword(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	testDir := os.Getenv("TESTDIR")
 
