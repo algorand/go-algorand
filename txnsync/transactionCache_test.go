@@ -83,6 +83,39 @@ func TestTransactionCache(t *testing.T) {
 	}
 }
 
+// TestTransactionCacheResetting is a simple reset testing, ensuring we know how to recycle entries from the free list.
+func TestTransactionCacheResetting(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var txid transactions.Txid
+	a := makeTransactionCache(5, 10, 20)
+	// add 5
+	for i := 0; i < 5; i++ {
+		txid[0] = byte(i)
+		a.add(txid)
+	}
+	// re-add the first one again, to promote it.
+	txid[0] = 0
+	a.add(txid)
+	a.reset()
+	// add 3
+	for i := 0; i < 3; i++ {
+		txid[0] = byte(i)
+		a.add(txid)
+	}
+	a.reset()
+	// add 2
+	for i := 0; i < 2; i++ {
+		txid[0] = byte(i)
+		a.add(txid)
+	}
+	// verify the two are there.
+	for i := 0; i < 2; i++ {
+		txid[0] = byte(i)
+		require.True(t, a.contained(txid), "txid: %v", txid[:])
+	}
+}
+
 // TestTransactionCacheAddSlice tests addSlice functionality of the transaction cache
 func TestTransactionCacheAddSlice(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -139,29 +172,53 @@ func TestAddSliceCapacity(t *testing.T) {
 
 }
 
+func (ce *shortTermCacheEntry) getLength() int {
+	length := 0
+	if ce == nil {
+		return length
+	}
+	length++
+	cur := ce
+	for ; cur != nil && ce != cur.next; cur = cur.next {
+		length++
+	}
+	return length
+}
+
 // TestShortTermCacheReset tests that the short term cache is reset
 func TestShortTermCacheReset(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	tc := makeTransactionCache(5, 10, 5)
-	require.Nil(t, tc.shortTermCache.first)
+	require.Nil(t, tc.shortTermCache.head)
 	require.Nil(t, tc.shortTermCache.free)
 	require.Equal(t, 0, len(tc.shortTermCache.transactionsMap))
 
 	var txid transactions.Txid
-	for i := 0; i < 6; i++ {
+	for i := 0; i < 5; i++ {
+		txid[0] = byte(i)
+		tc.add(txid)
+	}
+	require.Equal(t, 5, tc.shortTermCache.head.getLength())
+
+	require.Nil(t, tc.shortTermCache.free)
+	require.NotNil(t, tc.shortTermCache.head)
+	require.Equal(t, 5, len(tc.shortTermCache.transactionsMap))
+
+	tc.reset()
+	require.Equal(t, 0, tc.shortTermCache.head.getLength())
+	require.Equal(t, 5, tc.shortTermCache.free.getLength())
+
+	require.Nil(t, tc.shortTermCache.head)
+	require.NotNil(t, tc.shortTermCache.free)
+	require.Equal(t, 0, len(tc.shortTermCache.transactionsMap))
+
+	for i := 0; i < 2; i++ {
 		txid[0] = byte(i)
 		tc.add(txid)
 	}
 
-	require.Nil(t, tc.shortTermCache.free)
-	require.NotNil(t, tc.shortTermCache.first)
-	require.Equal(t, 5, len(tc.shortTermCache.transactionsMap))
-
 	tc.reset()
-
-	require.Nil(t, tc.shortTermCache.first)
-	require.NotNil(t, tc.shortTermCache.free)
-	require.Equal(t, 0, len(tc.shortTermCache.transactionsMap))
+	require.Equal(t, 5, tc.shortTermCache.free.getLength())
 }
 
 // TestCacheAcknowledge tests that the acknowledge function correctly adds entries
