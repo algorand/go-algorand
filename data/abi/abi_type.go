@@ -380,6 +380,28 @@ func (t Type) IsDynamic() bool {
 	}
 }
 
+// Assume that the current index on the list of type is an ABI bool type.
+// It returns the difference between the current index and the index of the furthest consecutive Bool type.
+func findBoolLR(typeList []Type, index int, delta int) int {
+	until := 0
+	for {
+		curr := index + delta*until
+		if typeList[curr].enumIndex == Bool {
+			if curr != len(typeList)-1 && delta > 0 {
+				until++
+			} else if curr > 0 && delta < 0 {
+				until++
+			} else {
+				break
+			}
+		} else {
+			until--
+			break
+		}
+	}
+	return until
+}
+
 // ByteLen method calculates the byte length of a static ABI type.
 func (t Type) ByteLen() (int, error) {
 	switch t.enumIndex {
