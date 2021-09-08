@@ -1231,12 +1231,12 @@ func opExpImpl(base uint64, exp uint64) (uint64, error) {
 	if exp == 0 || base == 1 {
 		return 1, nil
 	}
-	// base is now at least 2, so exp can not be over 64
-	if exp > 64 {
+	// base is now at least 2, so exp can not be 64
+	if exp >= 64 {
 		return 0, fmt.Errorf("%d^%d overflow", base, exp)
 	}
 	answer := base
-	// safe to cast exp, because it is known to fit in int (it's <= 64)
+	// safe to cast exp, because it is known to fit in int (it's < 64)
 	for i := 1; i < int(exp); i++ {
 		next := answer * base
 		if next/answer != base {
@@ -1274,14 +1274,14 @@ func opExpwImpl(base uint64, exp uint64) (*big.Int, error) {
 	if exp == 0 || base == 1 {
 		return new(big.Int).SetUint64(1), nil
 	}
-	// base is now at least 2, so exp can not be over 128
-	if exp > 128 {
+	// base is now at least 2, so exp can not be 128
+	if exp >= 128 {
 		return &big.Int{}, fmt.Errorf("%d^%d overflow", base, exp)
 	}
 
 	answer := new(big.Int).SetUint64(base)
 	bigbase := new(big.Int).SetUint64(base)
-	// safe to cast exp, because it is known to fit in int (it's <= 128)
+	// safe to cast exp, because it is known to fit in int (it's < 128)
 	for i := 1; i < int(exp); i++ {
 		next := answer.Mul(answer, bigbase)
 		answer = next
