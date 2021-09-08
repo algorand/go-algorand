@@ -300,6 +300,12 @@ var OpSpecs = []OpSpec{
 	{0xb1, "tx_begin", opTxBegin, asmDefault, disDefault, nil, nil, 5, runModeApplication, opDefault},
 	{0xb2, "tx_field", opTxField, asmTxField, disTxField, oneAny, nil, 5, runModeApplication, stacky(typeTxField, "f")},
 	{0xb3, "tx_submit", opTxSubmit, asmDefault, disDefault, nil, nil, 5, runModeApplication, opDefault},
+
+	// Dynamically indexing into LogicSigs
+	{0xc0, "txnas", opTxnas, assembleTxnas, disTxn, oneInt, oneAny, 5, modeAny, immediates("f")},
+	{0xc1, "gtxnas", opGtxnas, assembleGtxnas, disGtxn, oneInt, oneAny, 5, modeAny, immediates("t", "f")},
+	{0xc2, "gtxnsas", opGtxnsas, assembleGtxnsas, disTxn, twoInts, oneAny, 5, modeAny, immediates("f")},
+	{0xc3, "args", opArgs, asmDefault, disDefault, oneInt, oneBytes, 5, runModeSignature, opDefault},
 }
 
 type sortByOpcode []OpSpec

@@ -1243,3 +1243,36 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Execute the current inner transaction. Panic on any failure.
 - LogicSigVersion >= 5
 - Mode: Application
+
+## txnas f
+
+- Opcode: 0xc0 {uint8 transaction field index}
+- Pops: *... stack*, uint64
+- Pushes: any
+- push Xth value of the array field F of the current transaction
+- LogicSigVersion >= 5
+
+## gtxnas t f
+
+- Opcode: 0xc1 {uint8 transaction group index} {uint8 transaction field index}
+- Pops: *... stack*, uint64
+- Pushes: any
+- push Xth value of the array field F from the Tth transaction in the current group
+- LogicSigVersion >= 5
+
+## gtxnsas f
+
+- Opcode: 0xc2 {uint8 transaction field index}
+- Pops: *... stack*, {uint64 A}, {uint64 B}
+- Pushes: any
+- pop an index A and an index B. push Bth value of the array field F from the Ath transaction in the current group
+- LogicSigVersion >= 5
+
+## args
+
+- Opcode: 0xc3
+- Pops: *... stack*, uint64
+- Pushes: []byte
+- push Xth LogicSig argument to stack
+- LogicSigVersion >= 5
+- Mode: Signature

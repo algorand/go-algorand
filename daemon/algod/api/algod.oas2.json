@@ -1751,7 +1751,8 @@
         "logs": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "format": "byte"
           }
         },
         "cost": {
@@ -1983,7 +1984,8 @@
           "description": "\\[lg\\] Logs for the application being executed by this transaction.",
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "format": "byte"
           }
         },
         "inner-txns": {

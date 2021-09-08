@@ -604,15 +604,15 @@ func StateDeltaToStateDelta(sd basics.StateDelta) *generated.StateDelta {
 }
 
 // DeltaLogToLog base64 encode the logs
-func DeltaLogToLog(logs []string) (*[]string, error) {
+func DeltaLogToLog(logs []string) (*[][]byte, error) {
 	if len(logs) == 0 {
 		return nil, nil
 	}
-	encodedLogs := make([]string, len(logs))
+	logsAsBytes := make([][]byte, len(logs))
 	for i, log := range logs {
-		encodedLogs[i] = base64.StdEncoding.EncodeToString([]byte(log))
+		logsAsBytes[i] = []byte(log)
 	}
-	return &encodedLogs, nil
+	return &logsAsBytes, nil
 }
 
 // MergeAppParams merges values, existing in "base" take priority over new in "update"
