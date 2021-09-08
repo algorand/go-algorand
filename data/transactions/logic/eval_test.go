@@ -4401,6 +4401,7 @@ func TestBits(t *testing.T) {
 	testPanics(t, "int 1; int 64; getbit; int 0; ==", 3)
 
 	testAccepts(t, "int 0; int 3; int 1; setbit; int 8; ==", 3)
+	testPanics(t, "int 0; int 3; int 2; setbit; pop; int 1", 3)
 	testAccepts(t, "int 8; int 3; getbit; int 1; ==", 3)
 
 	testAccepts(t, "int 15; int 3; int 0; setbit; int 7; ==", 3)
@@ -4442,6 +4443,7 @@ func TestBytes(t *testing.T) {
 	testPanics(t, `byte "john"; int 4; getbyte; int 1; ==`, 3)    // past end
 
 	testAccepts(t, `byte "john"; int 2; int 105; setbyte; byte "join"; ==`, 3)
+	testPanics(t, `byte "john"; int 2; int 256; setbyte; pop; int 1;`, 3)
 
 	testPanics(t, `global ZeroAddress; dup; concat; int 64; int 7; setbyte; int 1; return`, 3)
 	testAccepts(t, `global ZeroAddress; dup; concat; int 63; int 7; setbyte; int 1; return`, 3)
@@ -4784,6 +4786,8 @@ func TestBytesCompare(t *testing.T) {
 
 	testAccepts(t, "byte 0x10; byte 0x10; b<; !", 4)
 	testAccepts(t, "byte 0x10; byte 0x10; b<=", 4)
+	testAccepts(t, "byte 0x10; int 64; bzero; b>", 4)
+	testPanics(t, "byte 0x10; int 65; bzero; b>", 4)
 
 	testAccepts(t, "byte 0x11; byte 0x10; b>", 4)
 	testAccepts(t, "byte 0x11; byte 0x0010; b>", 4)
@@ -4794,6 +4798,8 @@ func TestBytesCompare(t *testing.T) {
 	testAccepts(t, "byte 0x11; byte 0x11; b==", 4)
 	testAccepts(t, "byte 0x0011; byte 0x11; b==", 4)
 	testAccepts(t, "byte 0x11; byte 0x00000000000011; b==", 4)
+	testAccepts(t, "byte 0x00; int 64; bzero; b==", 4)
+	testPanics(t, "byte 0x00; int 65; bzero; b==", 4)
 
 	testAccepts(t, "byte 0x11; byte 0x00; b!=", 4)
 	testAccepts(t, "byte 0x0011; byte 0x1100; b!=", 4)

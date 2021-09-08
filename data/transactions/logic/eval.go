@@ -2040,7 +2040,7 @@ func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 }
 
 func opTxn(cx *EvalContext) {
-	field := TxnField(uint64(cx.program[cx.pc+1]))
+	field := TxnField(cx.program[cx.pc+1])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -2060,7 +2060,7 @@ func opTxn(cx *EvalContext) {
 }
 
 func opTxna(cx *EvalContext) {
-	field := TxnField(uint64(cx.program[cx.pc+1]))
+	field := TxnField(cx.program[cx.pc+1])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -2110,7 +2110,7 @@ func opGtxn(cx *EvalContext) {
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(uint64(cx.program[cx.pc+2]))
+	field := TxnField(cx.program[cx.pc+2])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -2123,7 +2123,7 @@ func opGtxn(cx *EvalContext) {
 	}
 	var sv stackValue
 	var err error
-	if TxnField(field) == GroupIndex {
+	if field == GroupIndex {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = uint64(gtxid)
 	} else {
@@ -2143,7 +2143,7 @@ func opGtxna(cx *EvalContext) {
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(uint64(cx.program[cx.pc+2]))
+	field := TxnField(cx.program[cx.pc+2])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -2203,7 +2203,7 @@ func opGtxns(cx *EvalContext) {
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(uint64(cx.program[cx.pc+1]))
+	field := TxnField(cx.program[cx.pc+1])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -2216,7 +2216,7 @@ func opGtxns(cx *EvalContext) {
 	}
 	var sv stackValue
 	var err error
-	if TxnField(field) == GroupIndex {
+	if field == GroupIndex {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = uint64(gtxid)
 	} else {
@@ -2237,7 +2237,7 @@ func opGtxnsa(cx *EvalContext) {
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(uint64(cx.program[cx.pc+1]))
+	field := TxnField(cx.program[cx.pc+1])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -3415,7 +3415,7 @@ func opTxBegin(cx *EvalContext) {
 // that don't need (or want!) to allow low numbers to represent the account at
 // that index in Accounts array.
 func (cx *EvalContext) availableAccount(sv stackValue) (basics.Address, error) {
-	if sv.argType() != StackBytes {
+	if sv.argType() != StackBytes || len(sv.Bytes) != crypto.DigestSize {
 		return basics.Address{}, fmt.Errorf("not an address")
 	}
 
@@ -3440,31 +3440,40 @@ func (cx *EvalContext) availableAsset(sv stackValue) (basics.AssetIndex, error) 
 	return basics.AssetIndex(0), fmt.Errorf("invalid Asset reference %d", aid)
 }
 
-func opTxField(cx *EvalContext) {
-	if cx.subtxn == nil {
-		cx.err = errors.New("tx_field without tx_begin")
-		return
-	}
-	last := len(cx.stack) - 1
-	field := TxnField(uint64(cx.program[cx.pc+1]))
-	sv := cx.stack[last]
-	switch field {
+func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *transactions.Transaction) (err error) {
+	switch fs.field {
 	case Type:
 		if sv.Bytes == nil {
-			cx.err = fmt.Errorf("Type arg not a byte array")
+			err = fmt.Errorf("Type arg not a byte array")
+			return
 		}
-		cx.subtxn.Txn.Type = protocol.TxType(sv.Bytes)
+		txType, ok := innerTxnTypes[string(sv.Bytes)]
+		if ok {
+			txn.Type = txType
+		} else {
+			err = fmt.Errorf("%s is not a valid Type for tx_field", sv.Bytes)
+		}
 	case TypeEnum:
 		var i uint64
-		i, cx.err = sv.uint()
-		if i < uint64(len(TxnTypeNames)) {
-			cx.subtxn.Txn.Type = protocol.TxType(TxnTypeNames[i])
+		i, err = sv.uint()
+		if err != nil {
+			return
 		}
-
+		// i != 0 is so that the error reports 0 instead of Unknown
+		if i != 0 && i < uint64(len(TxnTypeNames)) {
+			txType, ok := innerTxnTypes[TxnTypeNames[i]]
+			if ok {
+				txn.Type = txType
+			} else {
+				err = fmt.Errorf("%s is not a valid Type for tx_field", TxnTypeNames[i])
+			}
+		} else {
+			err = fmt.Errorf("%d is not a valid TypeEnum", i)
+		}
 	case Sender:
-		cx.subtxn.Txn.Sender, cx.err = cx.availableAccount(sv)
+		txn.Sender, err = cx.availableAccount(sv)
 	case Fee:
-		cx.subtxn.Txn.Fee.Raw, cx.err = sv.uint()
+		txn.Fee.Raw, err = sv.uint()
 	// FirstValid, LastValid unsettable: no motivation
 	// Note unsettable: would be strange, as this "Note" would not end up "chain-visible"
 	// GenesisID, GenesisHash unsettable: surely makes no sense
@@ -3475,22 +3484,21 @@ func opTxField(cx *EvalContext) {
 	// KeyReg not allowed yet, so no fields settable
 
 	case Receiver:
-		cx.subtxn.Txn.Receiver, cx.err = cx.availableAccount(sv)
+		txn.Receiver, err = cx.availableAccount(sv)
 	case Amount:
-		cx.subtxn.Txn.Amount.Raw, cx.err = sv.uint()
+		txn.Amount.Raw, err = sv.uint()
 	case CloseRemainderTo:
-		cx.subtxn.Txn.CloseRemainderTo, cx.err = cx.availableAccount(sv)
-
+		txn.CloseRemainderTo, err = cx.availableAccount(sv)
 	case XferAsset:
-		cx.subtxn.Txn.XferAsset, cx.err = cx.availableAsset(sv)
+		txn.XferAsset, err = cx.availableAsset(sv)
 	case AssetAmount:
-		cx.subtxn.Txn.AssetAmount, cx.err = sv.uint()
+		txn.AssetAmount, err = sv.uint()
 	case AssetSender:
-		cx.subtxn.Txn.AssetSender, cx.err = cx.availableAccount(sv)
+		txn.AssetSender, err = cx.availableAccount(sv)
 	case AssetReceiver:
-		cx.subtxn.Txn.AssetReceiver, cx.err = cx.availableAccount(sv)
+		txn.AssetReceiver, err = cx.availableAccount(sv)
 	case AssetCloseTo:
-		cx.subtxn.Txn.AssetCloseTo, cx.err = cx.availableAccount(sv)
+		txn.AssetCloseTo, err = cx.availableAccount(sv)
 
 	// acfg likely next
 
@@ -3499,9 +3507,24 @@ func opTxField(cx *EvalContext) {
 	// appl needs to wait. Can't call AVM from AVM.
 
 	default:
-		cx.err = fmt.Errorf("invalid txfield %s", field)
+		return fmt.Errorf("invalid tx_field %s", fs.field)
 	}
+	return
+}
 
+func opTxField(cx *EvalContext) {
+	if cx.subtxn == nil {
+		cx.err = errors.New("tx_field without tx_begin")
+		return
+	}
+	last := len(cx.stack) - 1
+	field := TxnField(cx.program[cx.pc+1])
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.itxVersion == 0 || fs.itxVersion > cx.version {
+		cx.err = fmt.Errorf("invalid tx_field field %d", field)
+	}
+	sv := cx.stack[last]
+	cx.err = cx.stackIntoTxnField(sv, fs, &cx.subtxn.Txn)
 	cx.stack = cx.stack[:last] // pop
 }
 
