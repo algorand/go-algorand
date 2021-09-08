@@ -208,7 +208,7 @@ var OpSpecs = []OpSpec{
 
 	// Like load/store, but scratch slot taken from TOS instead of immediate
 	{0x3e, "loads", opLoads, asmDefault, disDefault, oneInt, oneAny, 5, modeAny, opDefault},
-	{0x3f, "stores", opStores, asmDefault, disDefault, oneAny.plus(oneInt), nil, 5, modeAny, opDefault},
+	{0x3f, "stores", opStores, asmDefault, disDefault, oneInt.plus(oneAny), nil, 5, modeAny, opDefault},
 
 	{0x40, "bnz", opBnz, assembleBranch, disBranch, oneInt, nil, 1, modeAny, opBranch},
 	{0x41, "bz", opBz, assembleBranch, disBranch, oneInt, nil, 2, modeAny, opBranch},

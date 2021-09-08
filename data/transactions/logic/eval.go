@@ -2551,12 +2551,12 @@ func opStore(cx *EvalContext) {
 func opStores(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
-	n := cx.stack[last].Uint
+	n := cx.stack[prev].Uint
 	if n >= uint64(len(cx.scratch)) {
 		cx.err = fmt.Errorf("invalid Scratch index %d", n)
 		return
 	}
-	cx.scratch[n] = cx.stack[prev]
+	cx.scratch[n] = cx.stack[last]
 	cx.stack = cx.stack[:prev]
 }
 

@@ -2343,15 +2343,16 @@ func TestLoadStoreStack(t *testing.T) {
 
 	t.Parallel()
 	testAccepts(t, `int 37
-int 37
 int 1
+int 37
 stores
-byte 0xabbacafe
 int 42
+byte 0xabbacafe
 stores
 int 37
 ==
 int 0
+swap
 stores
 int 42
 loads
@@ -4348,6 +4349,7 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 	var outer error
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			t.Helper()
 			if v < introduced {
 				testProg(t, obfuscate(program), v, expect{0, "...was introduced..."})
 				return
@@ -4389,17 +4391,20 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 }
 
 func testAccepts(t *testing.T, program string, introduced uint64) {
+	t.Helper()
 	testEvaluation(t, program, introduced, func(pass bool, err error) bool {
 		return pass && err == nil
 	})
 }
 func testRejects(t *testing.T, program string, introduced uint64) {
+	t.Helper()
 	testEvaluation(t, program, introduced, func(pass bool, err error) bool {
 		// Returned False, but didn't panic
 		return !pass && err == nil
 	})
 }
 func testPanics(t *testing.T, program string, introduced uint64) error {
+	t.Helper()
 	return testEvaluation(t, program, introduced, func(pass bool, err error) bool {
 		// TEAL panic! not just reject at exit
 		return !pass && err != nil
