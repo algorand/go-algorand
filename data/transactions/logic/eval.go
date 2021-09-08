@@ -2527,10 +2527,6 @@ func opEd25519verify(cx *EvalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
-// opEcDsaVerify verifies ECDSA signature.
-// It accepts both compressed and uncompressed forms of PK because
-// the underlying secp256k1.VerifySignature decompressed it anyway.
-// Rationale here is the fact compressed PKs look more commonly used in Eth world rather uncompressed.
 func opEcDsaVerify(cx *EvalContext) {
 	ecdsaCurve := EcDsaCurve(cx.program[cx.pc+1])
 	fs, ok := ecDsaCurveSpecByField[ecdsaCurve]
@@ -2544,8 +2540,8 @@ func opEcDsaVerify(cx *EvalContext) {
 		return
 	}
 
-	last := len(cx.stack) - 1 // index of PK x uncompressed or a full PK compressed
-	prev := last - 1          // index of PK y uncompressed or empty
+	last := len(cx.stack) - 1 // index of PK x
+	prev := last - 1          // index of PK y
 	pprev := prev - 1         // index of signature r
 	fourth := pprev - 1       // index of signature s
 	fifth := fourth - 1       // index of data
@@ -2556,33 +2552,15 @@ func opEcDsaVerify(cx *EvalContext) {
 	sigS := cx.stack[fourth].Bytes
 	msg := cx.stack[fifth].Bytes
 
-	var pubkey []byte
-	// if PK y component is set then interpret it as uncompressed PK
-	if len(pkY) != 0 {
-		x := new(big.Int).SetBytes(pkX)
-		y := new(big.Int).SetBytes(pkY)
-		pubkey = secp256k1.CompressPubkey(x, y)
-	} else {
-		// otherwise it is compressed PK
-		pubkey = pkX
-	}
+	x := new(big.Int).SetBytes(pkX)
+	y := new(big.Int).SetBytes(pkY)
+	pubkey := secp256k1.S256().Marshal(x, y)
 
 	signature := make([]byte, 0, len(sigR)+len(sigS))
 	signature = append(signature, sigR...)
 	signature = append(signature, sigS...)
 
-	var result bool
-
-	// secp256k1.VerifySignature easily panics on invalid input, catch it here and convert to an error
-	result = func() bool {
-		defer func() {
-			if x := recover(); x != nil {
-				cx.err = fmt.Errorf("ecdsa verify error: %v", x)
-				result = false
-			}
-		}()
-		return secp256k1.VerifySignature(pubkey, msg, signature)
-	}()
+	result := secp256k1.VerifySignature(pubkey, msg, signature)
 
 	if result {
 		cx.stack[fifth].Uint = 1
@@ -2591,6 +2569,21 @@ func opEcDsaVerify(cx *EvalContext) {
 	}
 	cx.stack[fifth].Bytes = nil
 	cx.stack = cx.stack[:fourth]
+}
+
+// leadingZeros needs to be replaced by big.Int.FillBytes
+func leadingZeros(size int, b *big.Int) ([]byte, error) {
+	data := b.Bytes()
+	if size < len(data) {
+		return nil, fmt.Errorf("insufficient buffer size: %d < %d", size, len(data))
+	}
+	if size == len(data) {
+		return data, nil
+	}
+
+	buf := make([]byte, size)
+	copy(buf[size-len(data):], data)
+	return buf, nil
 }
 
 func opEcDsaPkDecompress(cx *EvalContext) {
@@ -2610,16 +2603,26 @@ func opEcDsaPkDecompress(cx *EvalContext) {
 
 	pubkey := cx.stack[last].Bytes
 	x, y := secp256k1.DecompressPubkey(pubkey)
-	if x == nil || y == nil {
+	if x == nil {
 		cx.err = fmt.Errorf("invalid pubkey")
 		return
 	}
 
+	var err error
 	cx.stack[last].Uint = 0
-	cx.stack[last].Bytes = y.Bytes()
+	cx.stack[last].Bytes, err = leadingZeros(32, y)
+	if err != nil {
+		cx.err = fmt.Errorf("y component zeroing failed: %s", err.Error())
+		return
+	}
 
 	var sv stackValue
-	sv.Bytes = x.Bytes()
+	sv.Bytes, err = leadingZeros(32, x)
+	if err != nil {
+		cx.err = fmt.Errorf("x component zeroing failed: %s", err.Error())
+		return
+	}
+
 	cx.stack = append(cx.stack, sv)
 }
 
@@ -2638,7 +2641,7 @@ func opEcDsaPkRecover(cx *EvalContext) {
 
 	last := len(cx.stack) - 1 // index of signature r
 	prev := last - 1          // index of signature s
-	pprev := prev - 1         // recover id
+	pprev := prev - 1         // index of recovery id
 	fourth := pprev - 1       // index of data
 
 	sigR := cx.stack[last].Bytes
@@ -2658,12 +2661,28 @@ func opEcDsaPkRecover(cx *EvalContext) {
 
 	pk, err := secp256k1.RecoverPubkey(msg, signature)
 	if err != nil {
-		cx.err = fmt.Errorf("pubkey recover failed: %s", err.Error())
+		cx.err = fmt.Errorf("pubkey recovery failed: %s", err.Error())
+		return
+	}
+	x, y := secp256k1.S256().Unmarshal(pk)
+	if x == nil {
+		cx.err = fmt.Errorf("pubkey unmarshal failed")
 		return
 	}
 
-	cx.stack[fourth].Bytes = pk
-	cx.stack = cx.stack[:pprev]
+	cx.stack[fourth].Uint = 0
+	cx.stack[fourth].Bytes, err = leadingZeros(32, y)
+	if err != nil {
+		cx.err = fmt.Errorf("y component zeroing failed: %s", err.Error())
+		return
+	}
+	cx.stack[pprev].Uint = 0
+	cx.stack[pprev].Bytes, err = leadingZeros(32, x)
+	if err != nil {
+		cx.err = fmt.Errorf("x component zeroing failed: %s", err.Error())
+		return
+	}
+	cx.stack = cx.stack[:prev]
 }
 
 func opLoad(cx *EvalContext) {
