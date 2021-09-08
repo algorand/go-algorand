@@ -66,14 +66,14 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 | 0 | Secp256k1 | secp256k1 curve |
 
 
-The 33 byte X-component of a public key is the last element on the stack, preceded by Y-component of a pubkey (can be empty, so the X-component then interpreted as a compressed pubkey), preceded by R and S components of a signature, preceded by the data that is fifth element on the stack.
+The 33 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack.
 
 ## ecdsa_pk_decompress c
 
 - Opcode: 0x06 {uint8 curve index}
 - Pops: *... stack*, []byte
 - Pushes: *... stack*, []byte, []byte
-- decompress pubkey A into components X, Y => [*... stack*, Y, X]
+- decompress pubkey A into components X, Y => [*... stack*, X, Y]
 - **Cost**: 100
 - LogicSigVersion >= 5
 
@@ -84,14 +84,14 @@ The 33 byte X-component of a public key is the last element on the stack, preced
 | 0 | Secp256k1 | secp256k1 curve |
 
 
-The 33 byte public key decompressed into X (top) and Y components.
+The 33 byte public key decompressed into X and Y (top) components.
 
 ## ecdsa_pk_recover c
 
 - Opcode: 0x07 {uint8 curve index}
 - Pops: *... stack*, {[]byte A}, {uint64 B}, {[]byte C}, {[]byte D}
-- Pushes: []byte
-- for (data A, recovery id B, signature C, D) recover a public compressed key
+- Pushes: *... stack*, []byte, []byte
+- for (data A, recovery id B, signature C, D) recover a public compressed key => [*... stack*, X, Y]
 - **Cost**: 100
 - LogicSigVersion >= 5
 

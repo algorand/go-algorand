@@ -2527,6 +2527,21 @@ func opEd25519verify(cx *EvalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
+// leadingZeros needs to be replaced by big.Int.FillBytes
+func leadingZeros(size int, b *big.Int) ([]byte, error) {
+	data := b.Bytes()
+	if size < len(data) {
+		return nil, fmt.Errorf("insufficient buffer size: %d < %d", size, len(data))
+	}
+	if size == len(data) {
+		return data, nil
+	}
+
+	buf := make([]byte, size)
+	copy(buf[size-len(data):], data)
+	return buf, nil
+}
+
 func opEcDsaVerify(cx *EvalContext) {
 	ecdsaCurve := EcDsaCurve(cx.program[cx.pc+1])
 	fs, ok := ecDsaCurveSpecByField[ecdsaCurve]
@@ -2540,16 +2555,16 @@ func opEcDsaVerify(cx *EvalContext) {
 		return
 	}
 
-	last := len(cx.stack) - 1 // index of PK x
-	prev := last - 1          // index of PK y
-	pprev := prev - 1         // index of signature r
-	fourth := pprev - 1       // index of signature s
+	last := len(cx.stack) - 1 // index of PK y
+	prev := last - 1          // index of PK x
+	pprev := prev - 1         // index of signature s
+	fourth := pprev - 1       // index of signature r
 	fifth := fourth - 1       // index of data
 
-	pkX := cx.stack[last].Bytes
-	pkY := cx.stack[prev].Bytes
-	sigR := cx.stack[pprev].Bytes
-	sigS := cx.stack[fourth].Bytes
+	pkY := cx.stack[last].Bytes
+	pkX := cx.stack[prev].Bytes
+	sigS := cx.stack[pprev].Bytes
+	sigR := cx.stack[fourth].Bytes
 	msg := cx.stack[fifth].Bytes
 
 	x := new(big.Int).SetBytes(pkX)
@@ -2569,21 +2584,6 @@ func opEcDsaVerify(cx *EvalContext) {
 	}
 	cx.stack[fifth].Bytes = nil
 	cx.stack = cx.stack[:fourth]
-}
-
-// leadingZeros needs to be replaced by big.Int.FillBytes
-func leadingZeros(size int, b *big.Int) ([]byte, error) {
-	data := b.Bytes()
-	if size < len(data) {
-		return nil, fmt.Errorf("insufficient buffer size: %d < %d", size, len(data))
-	}
-	if size == len(data) {
-		return data, nil
-	}
-
-	buf := make([]byte, size)
-	copy(buf[size-len(data):], data)
-	return buf, nil
 }
 
 func opEcDsaPkDecompress(cx *EvalContext) {
@@ -2610,16 +2610,16 @@ func opEcDsaPkDecompress(cx *EvalContext) {
 
 	var err error
 	cx.stack[last].Uint = 0
-	cx.stack[last].Bytes, err = leadingZeros(32, y)
+	cx.stack[last].Bytes, err = leadingZeros(32, x)
 	if err != nil {
-		cx.err = fmt.Errorf("y component zeroing failed: %s", err.Error())
+		cx.err = fmt.Errorf("x component zeroing failed: %s", err.Error())
 		return
 	}
 
 	var sv stackValue
-	sv.Bytes, err = leadingZeros(32, x)
+	sv.Bytes, err = leadingZeros(32, y)
 	if err != nil {
-		cx.err = fmt.Errorf("x component zeroing failed: %s", err.Error())
+		cx.err = fmt.Errorf("y component zeroing failed: %s", err.Error())
 		return
 	}
 
@@ -2639,13 +2639,13 @@ func opEcDsaPkRecover(cx *EvalContext) {
 		return
 	}
 
-	last := len(cx.stack) - 1 // index of signature r
-	prev := last - 1          // index of signature s
+	last := len(cx.stack) - 1 // index of signature s
+	prev := last - 1          // index of signature r
 	pprev := prev - 1         // index of recovery id
 	fourth := pprev - 1       // index of data
 
-	sigR := cx.stack[last].Bytes
-	sigS := cx.stack[prev].Bytes
+	sigS := cx.stack[last].Bytes
+	sigR := cx.stack[prev].Bytes
 	recid := cx.stack[pprev].Uint
 	msg := cx.stack[fourth].Bytes
 
@@ -2661,7 +2661,7 @@ func opEcDsaPkRecover(cx *EvalContext) {
 
 	pk, err := secp256k1.RecoverPubkey(msg, signature)
 	if err != nil {
-		cx.err = fmt.Errorf("pubkey recovery failed: %s", err.Error())
+		cx.err = fmt.Errorf("pubkey recover failed: %s", err.Error())
 		return
 	}
 	x, y := secp256k1.S256().Unmarshal(pk)
@@ -2671,15 +2671,15 @@ func opEcDsaPkRecover(cx *EvalContext) {
 	}
 
 	cx.stack[fourth].Uint = 0
-	cx.stack[fourth].Bytes, err = leadingZeros(32, y)
+	cx.stack[fourth].Bytes, err = leadingZeros(32, x)
 	if err != nil {
-		cx.err = fmt.Errorf("y component zeroing failed: %s", err.Error())
+		cx.err = fmt.Errorf("x component zeroing failed: %s", err.Error())
 		return
 	}
 	cx.stack[pprev].Uint = 0
-	cx.stack[pprev].Bytes, err = leadingZeros(32, x)
+	cx.stack[pprev].Bytes, err = leadingZeros(32, y)
 	if err != nil {
-		cx.err = fmt.Errorf("x component zeroing failed: %s", err.Error())
+		cx.err = fmt.Errorf("y component zeroing failed: %s", err.Error())
 		return
 	}
 	cx.stack = cx.stack[:prev]

@@ -227,7 +227,7 @@ byte 0x%s
 	}
 	for _, test := range decompressTests {
 		t.Run(fmt.Sprintf("decompress/pass=%v", test.pass), func(t *testing.T) {
-			src := fmt.Sprintf(source, hex.EncodeToString(test.key), hex.EncodeToString(y), hex.EncodeToString(x))
+			src := fmt.Sprintf(source, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
 				testAccepts(t, src, 5)
 			} else {
@@ -268,7 +268,7 @@ ecdsa_verify Secp256k1
 	}
 	for _, test := range verifyTests {
 		t.Run(fmt.Sprintf("verify/pass=%v", test.pass), func(t *testing.T) {
-			src := fmt.Sprintf(source, hex.EncodeToString(s), hex.EncodeToString(test.r), hex.EncodeToString(y), hex.EncodeToString(x))
+			src := fmt.Sprintf(source, hex.EncodeToString(test.r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
 				testAccepts(t, src, 5)
 			} else {
@@ -284,13 +284,24 @@ int %d
 byte 0x%s
 byte 0x%s
 ecdsa_pk_recover Secp256k1
+dup2
 store 0
 byte 0x%s
 ==
 load 0
 byte 0x%s
 ==
-&&`
+&&
+store 1
+concat // X + Y
+byte 0x04
+swap
+concat // 0x04 + X + Y
+byte 0x%s
+==
+load 1
+&&
+`
 	var recoverTests = []struct {
 		v       int
 		checker func(t *testing.T, program string, introduced uint64)
@@ -301,9 +312,11 @@ byte 0x%s
 			testPanics(t, program, introduced)
 		}},
 	}
+	pkExpanded := secp256k1.S256().Marshal(key.PublicKey.X, key.PublicKey.Y)
+
 	for i, test := range recoverTests {
 		t.Run(fmt.Sprintf("recover/%d", i), func(t *testing.T) {
-			src := fmt.Sprintf(source, hex.EncodeToString(msg[:]), test.v, hex.EncodeToString(s), hex.EncodeToString(r), hex.EncodeToString(y), hex.EncodeToString(x))
+			src := fmt.Sprintf(source, hex.EncodeToString(msg[:]), test.v, hex.EncodeToString(r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y), hex.EncodeToString(pkExpanded))
 			test.checker(t, src, 5)
 		})
 	}

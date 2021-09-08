@@ -30,8 +30,8 @@ var opDocByName = map[string]string{
 	"sha512_256":          "SHA512_256 hash of value X, yields [32]byte",
 	"ed25519verify":       "for (data A, signature B, pubkey C) verify the signature of (\"ProgData\" || program_hash || data) against the pubkey => {0 or 1}",
 	"ecdsa_verify":        "for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}",
-	"ecdsa_pk_decompress": "decompress pubkey A into components X, Y => [*... stack*, Y, X]",
-	"ecdsa_pk_recover":    "for (data A, recovery id B, signature C, D) recover a public compressed key",
+	"ecdsa_pk_decompress": "decompress pubkey A into components X, Y => [*... stack*, X, Y]",
+	"ecdsa_pk_recover":    "for (data A, recovery id B, signature C, D) recover a public compressed key => [*... stack*, X, Y]",
 	"+":                   "A plus B. Panic on overflow.",
 	"-":                   "A minus B. Panic if B > A.",
 	"/":                   "A divided by B (truncated division). Panic if B == 0.",
@@ -221,8 +221,8 @@ func OpImmediateNote(opName string) string {
 // further documentation on the function of the opcode
 var opDocExtras = map[string]string{
 	"ed25519verify":       "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.",
-	"ecdsa_verify":        "The 33 byte X-component of a public key is the last element on the stack, preceded by Y-component of a pubkey (can be empty, so the X-component then interpreted as a compressed pubkey), preceded by R and S components of a signature, preceded by the data that is fifth element on the stack.",
-	"ecdsa_pk_decompress": "The 33 byte public key decompressed into X (top) and Y components.",
+	"ecdsa_verify":        "The 33 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack.",
+	"ecdsa_pk_decompress": "The 33 byte public key decompressed into X and Y (top) components.",
 	"ecdsa_pk_recover":    "S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to deriver a public key in compressed format.",
 	"bnz":                 "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Starting at v4, the offset is treated as a signed 16 bit integer allowing for backward branches and looping. In prior version (v1 to v3), branch offsets are limited to forward branches only, 0-0x7fff.\n\nAt v2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before v2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)",
 	"bz":                  "See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.",
