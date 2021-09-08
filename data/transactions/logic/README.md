@@ -243,7 +243,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `load i` | copy a value from scratch space to the stack |
 | `loads` | copy a value from the Xth scratch space to the stack |
 | `store i` | pop value X. store X to the Ith scratch space |
-| `stores` | pop indexes A and B. store A to the Bth scratch space |
+| `stores` | pop indexes A and B. store B to the Ath scratch space |
 | `gload t i` | push Ith scratch space index of the Tth transaction in the current group |
 | `gloads i` | push Ith scratch space index of the Xth transaction in the current group |
 | `gaid t` | push the ID of the asset or application created in the Tth transaction of the current group |

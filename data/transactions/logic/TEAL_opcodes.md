@@ -580,9 +580,9 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 ## stores
 
 - Opcode: 0x3f
-- Pops: *... stack*, {any A}, {uint64 B}
+- Pops: *... stack*, {uint64 A}, {any B}
 - Pushes: _None_
-- pop indexes A and B. store A to the Bth scratch space
+- pop indexes A and B. store B to the Ath scratch space
 - LogicSigVersion >= 5
 
 ## bnz target
