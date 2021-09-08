@@ -32,7 +32,6 @@ func TestEncodeValid(t *testing.T) {
 
 	// encoding test for uint type, iterating through all uint sizes
 	// randomly pick 1000 valid uint values and check if encoded value match with expected
-	// also check if uint can contain max uint value (2^size - 1) under specific byte size
 	for intSize := 8; intSize <= 512; intSize += 8 {
 		upperLimit := big.NewInt(0).Lsh(big.NewInt(1), uint(intSize))
 		for i := 0; i < 1000; i++ {
@@ -51,6 +50,7 @@ func TestEncodeValid(t *testing.T) {
 			require.Equal(t, expected, uintBytesActual, "encode uint not match with expected")
 		}
 		// 2^[size] - 1 test
+		// check if uint<size> can contain max uint value (2^size - 1)
 		largest := big.NewInt(0).Add(
 			upperLimit,
 			big.NewInt(1).Neg(big.NewInt(1)),
