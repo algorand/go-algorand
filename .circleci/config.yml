@@ -10,34 +10,28 @@ executors:
     machine:
       image: ubuntu-2004:202104-01
     resource_class: medium
-    working_directory: /cibuild
   amd64_large:
     machine:
       image: ubuntu-2004:202104-01
     resource_class: large
-    working_directory: /cibuild
   arm64_medium:
     machine:
       image: ubuntu-2004:202101-01
     resource_class: arm.medium
-    working_directory: /cibuild
   arm64_large:
     machine:
       image: ubuntu-2004:202101-01
     resource_class: arm.large
-    working_directory: /cibuild
   mac_amd64_medium:
     macos:
       xcode: 12.0.1
     resource_class: medium
-    working_directory: /cibuild
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   mac_amd64_large:
     macos:
       xcode: 12.0.1
     resource_class: large
-    working_directory: /cibuild
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
 
@@ -152,6 +146,15 @@ commands:
     steps:
       - run: |
           sudo rm -rf ${HOME}/.go_workspace /usr/local/go
+  prepare_build_dir:
+    description: Set up build directory
+    parameters:
+      build_dir:
+        type: string
+        default: "/cibuild"
+    steps:
+      - run: |
+          sudo chown -R $USER:$USER << parameters.build_dir >>
   prepare_windows:
     description: Prepare windows image
     steps:
@@ -392,7 +395,9 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
+    working_directory: /cibuild
     steps:
+      - prepare_build_dir
       - checkout
       - prepare_go
       - generic_build
@@ -402,8 +407,10 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
+    working_directory: /cibuild
     parallelism: 4
     steps:
+      - prepare_build_dir
       - prepare_go
       - generic_test:
           result_subdir: << parameters.platform >>_test
@@ -415,8 +422,10 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
+    working_directory: /cibuild
     parallelism: 4
     steps:
+      - prepare_build_dir
       - prepare_go
       - generic_test:
           result_subdir: << parameters.platform >>_test_nightly
@@ -431,10 +440,12 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
+    working_directory: /cibuild
     parallelism: 2
     environment:
       E2E_TEST_FILTER: "GO"
     steps:
+      - prepare_build_dir
       - prepare_go
       - generic_integration:
           result_subdir: << parameters.platform >>_integration
@@ -445,10 +456,12 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
+    working_directory: /cibuild
     parallelism: 2
     environment:
       E2E_TEST_FILTER: "GO"
     steps:
+      - prepare_build_dir
       - prepare_go
       - generic_integration:
           result_subdir: << parameters.platform >>_integration_nightly
@@ -461,10 +474,12 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
+    working_directory: /cibuild
     parallelism: 2
     environment:
       E2E_TEST_FILTER: "EXPECT"
     steps:
+      - prepare_build_dir
       - prepare_go
       - generic_integration:
           result_subdir: << parameters.platform >>_e2e_expect
@@ -475,10 +490,12 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
+    working_directory: /cibuild
     parallelism: 2
     environment:
       E2E_TEST_FILTER: "EXPECT"
     steps:
+      - prepare_build_dir
       - prepare_go
       - generic_integration:
           result_subdir: << parameters.platform>>_e2e_expect_nightly
@@ -491,9 +508,11 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_large
+    working_directory: /cibuild
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
     steps:
+      - prepare_build_dir
       - prepare_go
       - generic_integration:
           result_subdir: << parameters.platform >>_e2e_subs
@@ -504,9 +523,11 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_large
+    working_directory: /cibuild
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
     steps:
+      - prepare_build_dir
       - prepare_go
       - generic_integration:
           result_subdir: << parameters.platform >>_e2e_subs_nightly
