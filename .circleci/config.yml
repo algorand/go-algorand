@@ -151,7 +151,7 @@ commands:
     parameters:
       build_dir:
         type: string
-        default: "/cibuild"
+        default: "/opt/cibuild"
     steps:
       - run:
           working_directory: /tmp
@@ -180,7 +180,7 @@ commands:
     parameters:
       build_dir:
         type: string
-        default: "/cibuild"
+        default: "/opt/cibuild"
     steps:
       - restore_libsodium
       - restore_cache:
@@ -192,7 +192,7 @@ commands:
       - run:
           name: scripts/travis/build.sh --make_debug
           command: |
-            export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
             export GOPATH="<< parameters.build_dir >>/go"
             export ALGORAND_DEADLOCK=enable
             scripts/travis/build.sh --make_debug
@@ -243,7 +243,7 @@ commands:
     parameters:
       build_dir:
         type: string
-        default: "/cibuild"
+        default: "/opt/cibuild"
       result_subdir:
         type: string
       no_output_timeout:
@@ -313,7 +313,7 @@ commands:
     parameters:
       build_dir:
         type: string
-        default: "/cibuild"
+        default: "/opt/cibuild"
       result_subdir:
         type: string
       no_output_timeout:
@@ -398,7 +398,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
-    working_directory: /cibuild
+    working_directory: /opt/cibuild
     steps:
       - prepare_build_dir
       - checkout
@@ -410,7 +410,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
-    working_directory: /cibuild
+    working_directory: /opt/cibuild
     parallelism: 4
     steps:
       - prepare_build_dir
@@ -425,7 +425,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
-    working_directory: /cibuild
+    working_directory: /opt/cibuild
     parallelism: 4
     steps:
       - prepare_build_dir
@@ -443,7 +443,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
-    working_directory: /cibuild
+    working_directory: /opt/cibuild
     parallelism: 2
     environment:
       E2E_TEST_FILTER: "GO"
@@ -459,7 +459,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
-    working_directory: /cibuild
+    working_directory: /opt/cibuild
     parallelism: 2
     environment:
       E2E_TEST_FILTER: "GO"
@@ -477,7 +477,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
-    working_directory: /cibuild
+    working_directory: /opt/cibuild
     parallelism: 2
     environment:
       E2E_TEST_FILTER: "EXPECT"
@@ -493,7 +493,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
-    working_directory: /cibuild
+    working_directory: /opt/cibuild
     parallelism: 2
     environment:
       E2E_TEST_FILTER: "EXPECT"
@@ -511,7 +511,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_large
-    working_directory: /cibuild
+    working_directory: /opt/cibuild
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
     steps:
@@ -526,7 +526,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_large
-    working_directory: /cibuild
+    working_directory: /opt/cibuild
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
     steps:
