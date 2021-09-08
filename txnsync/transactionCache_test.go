@@ -35,49 +35,52 @@ func TestTransactionCache(t *testing.T) {
 
 	var txid transactions.Txid
 	a := makeTransactionCache(5, 10, 20)
-	// add 5
-	for i := 0; i < 5; i++ {
-		txid[0] = byte(i)
+	for repeat := 0; repeat < 2; repeat++ {
+		// add 5
+		for i := 0; i < 5; i++ {
+			txid[0] = byte(i)
+			a.add(txid)
+		}
+
+		// all 5 still there
+		for i := 0; i < 5; i++ {
+			txid[0] = byte(i)
+			require.True(t, a.contained(txid), "txid: %v", txid[:])
+		}
+
+		// repeatedly adding existing data doesn't lose anything
+		txid[0] = 1
 		a.add(txid)
-	}
+		a.add(txid)
+		a.add(txid)
+		for i := 0; i < 5; i++ {
+			txid[0] = byte(i)
+			require.True(t, a.contained(txid), "txid: %v", txid[:])
+		}
 
-	// all 5 still there
-	for i := 0; i < 5; i++ {
-		txid[0] = byte(i)
-		require.True(t, a.contained(txid))
-	}
+		// adding a sixth forgets the first
+		txid[0] = 5
+		a.add(txid)
+		for i := 1; i < 6; i++ {
+			txid[0] = byte(i)
+			require.True(t, a.contained(txid), "txid: %v", txid[:])
+		}
+		txid[0] = 0
+		require.False(t, a.contained(txid))
 
-	// repeatedly adding existing data doesn't lose anything
-	txid[0] = 1
-	a.add(txid)
-	a.add(txid)
-	a.add(txid)
-	for i := 0; i < 5; i++ {
-		txid[0] = byte(i)
-		require.True(t, a.contained(txid))
-	}
-
-	// adding a sixth forgets the first
-	txid[0] = 5
-	a.add(txid)
-	for i := 1; i < 6; i++ {
-		txid[0] = byte(i)
-		require.True(t, a.contained(txid))
-	}
-	txid[0] = 0
-	require.False(t, a.contained(txid))
-
-	// adding a seventh forgets the third
-	txid[0] = 6
-	a.add(txid)
-	for i := 3; i < 7; i++ {
-		txid[0] = byte(i)
+		// adding a seventh forgets the third
+		txid[0] = 6
+		a.add(txid)
+		for i := 3; i < 7; i++ {
+			txid[0] = byte(i)
+			require.True(t, a.contained(txid), "txid: %v", txid[:])
+		}
+		txid[0] = 1
 		require.True(t, a.contained(txid), "txid: %v", txid[:])
+		txid[0] = 2
+		require.False(t, a.contained(txid))
+		a.reset()
 	}
-	txid[0] = 1
-	require.True(t, a.contained(txid), "txid: %v", txid[:])
-	txid[0] = 2
-	require.False(t, a.contained(txid))
 }
 
 // TestTransactionCacheAddSlice tests addSlice functionality of the transaction cache

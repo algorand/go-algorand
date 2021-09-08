@@ -53,19 +53,21 @@ type ackPendingTxids struct {
 	timestamp time.Duration
 }
 
+// shortTermCacheEntry is used as the data container of a single linked list item
+// in the shortTermTransactionCache object.
 //msgp:ignore shortTermCacheEntry
 type shortTermCacheEntry struct {
-	txid transactions.Txid
-	prev *shortTermCacheEntry
-	next *shortTermCacheEntry
+	txid transactions.Txid    // the transaction ID
+	prev *shortTermCacheEntry // previous entry in the circular linked list
+	next *shortTermCacheEntry // next entry in the circular linked list
 }
 
 //msgp:ignore shortTermTransactionCache
 type shortTermTransactionCache struct {
-	size            int
-	first           *shortTermCacheEntry
-	free            *shortTermCacheEntry
-	transactionsMap map[transactions.Txid]*shortTermCacheEntry
+	size            int                                        // the maximum number of elements in the short term cache
+	first           *shortTermCacheEntry                       // pointer to first element
+	free            *shortTermCacheEntry                       // pointer to a free element list
+	transactionsMap map[transactions.Txid]*shortTermCacheEntry // map of the entries included
 }
 
 //msgp:ignore longTermTransactionCache
@@ -73,6 +75,27 @@ type longTermTransactionCache struct {
 	current         int
 	transactionsMap []map[transactions.Txid]bool
 	timestamps      []time.Duration
+}
+
+// detach remove the entry from the list it's currently part of.
+// the return value is false if the item is the only entry in the list
+// or true otherwise.
+func (ce *shortTermCacheEntry) detach() bool {
+	if ce.next == ce.prev {
+		return false
+	}
+	ce.prev.next = ce.next
+	ce.next.prev = ce.prev
+	return true
+}
+
+// addToList add the element to the tail of the list who's head is firstListEntry.
+func (ce *shortTermCacheEntry) addToList(firstListEntry *shortTermCacheEntry) {
+	lastListEntry := firstListEntry.prev
+	lastListEntry.next = ce
+	firstListEntry.prev = ce
+	ce.prev = lastListEntry
+	ce.next = firstListEntry
 }
 
 // makeTransactionCache creates the transaction cache
@@ -173,23 +196,6 @@ func (lru *transactionCache) acknowledge(seqs []uint64) {
 	}
 }
 
-func (ce *shortTermCacheEntry) detach() bool {
-	if ce.next == ce.prev {
-		return false
-	}
-	ce.prev.next = ce.next
-	ce.next.prev = ce.prev
-	return true
-}
-
-func (ce *shortTermCacheEntry) addToList(firstListEntry *shortTermCacheEntry) {
-	lastListEntry := firstListEntry.prev
-	lastListEntry.next = ce
-	firstListEntry.prev = ce
-	ce.prev = lastListEntry
-	ce.next = firstListEntry
-}
-
 // add a given transaction ID to the short term cache.
 func (st *shortTermTransactionCache) add(txid transactions.Txid) {
 	entry, exists := st.transactionsMap[txid]
@@ -197,10 +203,12 @@ func (st *shortTermTransactionCache) add(txid transactions.Txid) {
 		// promote
 		if entry.detach() {
 			// there are other elements on the list.
+			// if the given entry happen to be the first entry, then pick
+			// the next entry.
 			if entry == st.first {
 				st.first = entry.next
 			}
-			// add to the end of the list.
+			// add to the tail of the list.
 			entry.addToList(st.first)
 		} else {
 			// no other elements on the list -
@@ -243,6 +251,7 @@ func (st *shortTermTransactionCache) add(txid transactions.Txid) {
 		} else {
 			st.free = nil
 		}
+		copy(entry.txid[:], txid[:])
 	} else {
 		// the free list doesn't have an entry - allocate a new one.
 		entry = &shortTermCacheEntry{
