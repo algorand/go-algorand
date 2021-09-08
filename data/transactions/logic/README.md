@@ -243,6 +243,10 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `gloads i` | push Ith scratch space index of the Xth transaction in the current group |
 | `gaid t` | push the ID of the asset or application created in the Tth transaction of the current group |
 | `gaids` | push the ID of the asset or application created in the Xth transaction of the current group |
+| `txnas f` | push Xth value of the array field F of the current transaction |
+| `gtxnas t f` | push Xth value of the array field F from the Tth transaction in the current group |
+| `gtxnsas f` | pop an index A and an index B. push Bth value of the array field F from the Ath transaction in the current group |
+| `args` | push Xth LogicSig argument to stack |
 
 **Transaction Fields**
 
@@ -327,6 +331,7 @@ Global fields are fields that are common to all the transactions in the group. I
 | 8 | CurrentApplicationID | uint64 | ID of current application executing. Fails if no such application is executing. LogicSigVersion >= 2. |
 | 9 | CreatorAddress | []byte | Address of the creator of the current application. Fails if no such application is executing. LogicSigVersion >= 3. |
 | 10 | CurrentApplicationAddress | []byte | Address that the current application controls. Fails if no such application is executing. LogicSigVersion >= 5. |
+| 11 | GroupID | []byte | ID of the transaction group. 32 zero bytes if the transaction is not part of a group. LogicSigVersion >= 5. |
 
 
 **Asset Fields**

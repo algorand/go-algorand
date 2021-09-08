@@ -2384,6 +2384,10 @@ func TestReturnTypes(t *testing.T) {
 		"pushbytes":         `pushbytes "jojogoodgorilla"`,
 		"app_params_get":    "app_params_get AppGlobalNumUint",
 		"extract":           "extract 0 2",
+		"txnas":             "txnas ApplicationArgs",
+		"gtxnas":            "gtxnas 0 ApplicationArgs",
+		"gtxnsas":           "pop; pop; int 0; int 0; gtxnsas ApplicationArgs",
+		"args":              "args",
 	}
 
 	byName := OpsByName[LogicVersion]

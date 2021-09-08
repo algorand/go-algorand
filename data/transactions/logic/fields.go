@@ -335,6 +335,8 @@ const (
 
 	// CurrentApplicationAddress [32]byte
 	CurrentApplicationAddress
+	// GroupID [32]byte
+	GroupID
 
 	invalidGlobalField
 )
@@ -364,6 +366,7 @@ var globalFieldSpecs = []globalFieldSpec{
 	{CurrentApplicationID, StackUint64, runModeApplication, 2},
 	{CreatorAddress, StackBytes, runModeApplication, 3},
 	{CurrentApplicationAddress, StackBytes, runModeApplication, 5},
+	{GroupID, StackBytes, modeAny, 5},
 }
 
 // GlobalFieldSpecByField maps GlobalField to spec

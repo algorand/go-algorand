@@ -1610,6 +1610,13 @@ func opArg2(cx *EvalContext) {
 func opArg3(cx *EvalContext) {
 	opArgN(cx, 3)
 }
+func opArgs(cx *EvalContext) {
+	last := len(cx.stack) - 1
+	n := cx.stack[last].Uint
+	// Pop the index and push the result back on the stack.
+	cx.stack = cx.stack[:last]
+	opArgN(cx, n)
+}
 
 func branchTarget(cx *EvalContext) (int, error) {
 	offset := int16(uint16(cx.program[cx.pc+1])<<8 | uint16(cx.program[cx.pc+2]))
@@ -2073,6 +2080,29 @@ func opTxna(cx *EvalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
+func opTxnas(cx *EvalContext) {
+	last := len(cx.stack) - 1
+
+	field := TxnField(cx.program[cx.pc+1])
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if !ok {
+		cx.err = fmt.Errorf("txnas unsupported field %d", field)
+		return
+	}
+	arrayFieldIdx := cx.stack[last].Uint
+	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx, cx.GroupIndex)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack[last] = sv
+}
+
 func opGtxn(cx *EvalContext) {
 	gtxid := int(uint(cx.program[cx.pc+1]))
 	if gtxid >= len(cx.TxnGroup) {
@@ -2131,6 +2161,38 @@ func opGtxna(cx *EvalContext) {
 		return
 	}
 	cx.stack = append(cx.stack, sv)
+}
+
+func opGtxnas(cx *EvalContext) {
+	last := len(cx.stack) - 1
+
+	gtxid := int(cx.program[cx.pc+1])
+	if gtxid >= len(cx.TxnGroup) {
+		cx.err = fmt.Errorf("gtxnas lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
+		return
+	} else if gtxid < 0 {
+		cx.err = fmt.Errorf("gtxnas lookup %d cannot be negative", gtxid)
+		return
+	}
+	tx := &cx.TxnGroup[gtxid].Txn
+	field := TxnField(cx.program[cx.pc+2])
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if !ok {
+		cx.err = fmt.Errorf("gtxnas unsupported field %d", field)
+		return
+	}
+	arrayFieldIdx := cx.stack[last].Uint
+	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack[last] = sv
 }
 
 func opGtxns(cx *EvalContext) {
@@ -2193,6 +2255,40 @@ func opGtxnsa(cx *EvalContext) {
 		return
 	}
 	cx.stack[last] = sv
+}
+
+func opGtxnsas(cx *EvalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+
+	gtxid := int(cx.stack[prev].Uint)
+	if gtxid >= len(cx.TxnGroup) {
+		cx.err = fmt.Errorf("gtxnsas lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
+		return
+	} else if gtxid < 0 {
+		cx.err = fmt.Errorf("gtxnsas lookup %d cannot be negative", gtxid)
+		return
+	}
+	tx := &cx.TxnGroup[gtxid].Txn
+	field := TxnField(cx.program[cx.pc+1])
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if !ok {
+		cx.err = fmt.Errorf("gtxnsas unsupported field %d", field)
+		return
+	}
+	arrayFieldIdx := cx.stack[last].Uint
+	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack[prev] = sv
+	cx.stack = cx.stack[:last]
 }
 
 func opGaidImpl(cx *EvalContext, groupIdx int, opName string) (sv stackValue, err error) {
@@ -2313,6 +2409,10 @@ func (cx *EvalContext) getCreatorAddress() ([]byte, error) {
 	return creator[:], nil
 }
 
+func (cx *EvalContext) getGroupID() []byte {
+	return cx.Txn.Txn.Group[:]
+}
+
 var zeroAddress basics.Address
 
 func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, err error) {
@@ -2341,6 +2441,8 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		sv.Bytes = addr[:]
 	case CreatorAddress:
 		sv.Bytes, err = cx.getCreatorAddress()
+	case GroupID:
+		sv.Bytes = cx.getGroupID()
 	default:
 		err = fmt.Errorf("invalid global field %d", fs.field)
 	}
@@ -3309,6 +3411,21 @@ func opTxBegin(cx *EvalContext) {
 	}
 }
 
+// availableAccount is used instead of accountReference for more recent opcodes
+// that don't need (or want!) to allow low numbers to represent the account at
+// that index in Accounts array.
+func (cx *EvalContext) availableAccount(sv stackValue) (basics.Address, error) {
+	if sv.argType() != StackBytes {
+		return basics.Address{}, fmt.Errorf("not an address")
+	}
+
+	addr, _, err := cx.accountReference(sv)
+	return addr, err
+}
+
+// availableAsset is used instead of asaReference for more recent opcodes that
+// don't need (or want!) to allow low numbers to represent the asset at that
+// index in ForeignAssets array.
 func (cx *EvalContext) availableAsset(sv stackValue) (basics.AssetIndex, error) {
 	aid, err := sv.uint()
 	if err != nil {
@@ -3333,6 +3450,9 @@ func opTxField(cx *EvalContext) {
 	sv := cx.stack[last]
 	switch field {
 	case Type:
+		if sv.Bytes == nil {
+			cx.err = fmt.Errorf("Type arg not a byte array")
+		}
 		cx.subtxn.Txn.Type = protocol.TxType(sv.Bytes)
 	case TypeEnum:
 		var i uint64
@@ -3342,7 +3462,7 @@ func opTxField(cx *EvalContext) {
 		}
 
 	case Sender:
-		cx.subtxn.Txn.Sender, _, cx.err = cx.accountReference(sv)
+		cx.subtxn.Txn.Sender, cx.err = cx.availableAccount(sv)
 	case Fee:
 		cx.subtxn.Txn.Fee.Raw, cx.err = sv.uint()
 	// FirstValid, LastValid unsettable: no motivation
@@ -3355,22 +3475,22 @@ func opTxField(cx *EvalContext) {
 	// KeyReg not allowed yet, so no fields settable
 
 	case Receiver:
-		cx.subtxn.Txn.Receiver, _, cx.err = cx.accountReference(sv)
+		cx.subtxn.Txn.Receiver, cx.err = cx.availableAccount(sv)
 	case Amount:
 		cx.subtxn.Txn.Amount.Raw, cx.err = sv.uint()
 	case CloseRemainderTo:
-		cx.subtxn.Txn.CloseRemainderTo, _, cx.err = cx.accountReference(sv)
+		cx.subtxn.Txn.CloseRemainderTo, cx.err = cx.availableAccount(sv)
 
 	case XferAsset:
 		cx.subtxn.Txn.XferAsset, cx.err = cx.availableAsset(sv)
 	case AssetAmount:
 		cx.subtxn.Txn.AssetAmount, cx.err = sv.uint()
 	case AssetSender:
-		cx.subtxn.Txn.AssetSender, _, cx.err = cx.accountReference(sv)
+		cx.subtxn.Txn.AssetSender, cx.err = cx.availableAccount(sv)
 	case AssetReceiver:
-		cx.subtxn.Txn.AssetReceiver, _, cx.err = cx.accountReference(sv)
+		cx.subtxn.Txn.AssetReceiver, cx.err = cx.availableAccount(sv)
 	case AssetCloseTo:
-		cx.subtxn.Txn.AssetCloseTo, _, cx.err = cx.accountReference(sv)
+		cx.subtxn.Txn.AssetCloseTo, cx.err = cx.availableAccount(sv)
 
 	// acfg likely next
 
