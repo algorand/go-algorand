@@ -48,17 +48,17 @@ workflows:
       - codegen_verification
 
       - build:
-          name: << matrix.arch >>_build
+          name: << matrix.platform >>_build
           matrix: &matrix-default
             parameters:
               platform: ["amd64", "arm64", "mac_amd64"]
 
       - test:
-          name: << matrix.arch >>_test
+          name: << matrix.platform >>_test
           matrix:
             <<: *matrix-default
           requires:
-            - << matrix.arch >>_build
+            - << matrix.platform >>_build
           filters: &filters-default
             branches:
               ignore:
@@ -66,11 +66,11 @@ workflows:
                 - /hotfix\/.*/
 
       - test_nightly:
-          name: << matrix.arch >>_test_nightly
+          name: << matrix.platform >>_test_nightly
           matrix:
             <<: *matrix-default
           requires:
-            - << matrix.arch >>_build
+            - << matrix.platform >>_build
           filters: &filters-nightly
             branches:
               only:
@@ -79,58 +79,58 @@ workflows:
           context: slack-secrets
 
       - integration:
-          name: << matrix.arch >>_integration
+          name: << matrix.platform >>_integration
           matrix:
             <<: *matrix-default
           requires:
-            - << matrix.arch >>_build
+            - << matrix.platform >>_build
           filters:
             <<: *filters-default
 
       - integration_nightly:
-          name: << matrix.arch >>_integration_nightly
+          name: << matrix.platform >>_integration_nightly
           matrix:
             <<: *matrix-default
           requires:
-            - << matrix.arch >>_build
+            - << matrix.platform >>_build
           filters:
             <<: *filters-nightly
           context: slack-secrets
 
       - e2e_expect:
-          name: << matrix.arch >>_e2e_expect
+          name: << matrix.platform >>_e2e_expect
           matrix:
             <<: *matrix-default
           requires:
-            - << matrix.arch >>_build
+            - << matrix.platform >>_build
           filters:
             <<: *filters-default
 
       - e2e_expect_nightly:
-          name: << matrix.arch >>_e2e_expect_nightly
+          name: << matrix.platform >>_e2e_expect_nightly
           matrix:
             <<: *matrix-default
           requires:
-            - << matrix.arch >>_build
+            - << matrix.platform >>_build
           filters:
             <<: *filters-nightly
           context: slack-secrets
 
       - e2e_subs:
-          name: << matrix.arch >>_e2e_subs
+          name: << matrix.platform >>_e2e_subs
           matrix:
             <<: *matrix-default
           requires:
-            - << matrix.arch >>_build
+            - << matrix.platform >>_build
           filters:
             <<: *filters-default
 
       - e2e_subs_nightly:
-          name: << matrix.arch >>_e2e_subs_nightly
+          name: << matrix.platform >>_e2e_subs_nightly
           matrix:
             <<: *matrix-default
           requires:
-            - << matrix.arch >>_build
+            - << matrix.platform >>_build
           filters:
             <<: *filters-nightly
           context: slack-secrets
