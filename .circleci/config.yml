@@ -400,7 +400,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
-    working_directory: /opt/cibuild
+    working_directory: /opt/cibuild/project
     steps:
       - prepare_build_dir
       - checkout
@@ -412,7 +412,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
-    working_directory: /opt/cibuild
+    working_directory: /opt/cibuild/project
     parallelism: 4
     steps:
       - prepare_build_dir
@@ -427,7 +427,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
-    working_directory: /opt/cibuild
+    working_directory: /opt/cibuild/project
     parallelism: 4
     steps:
       - prepare_build_dir
@@ -445,7 +445,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
-    working_directory: /opt/cibuild
+    working_directory: /opt/cibuild/project
     parallelism: 2
     environment:
       E2E_TEST_FILTER: "GO"
@@ -461,7 +461,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
-    working_directory: /opt/cibuild
+    working_directory: /opt/cibuild/project
     parallelism: 2
     environment:
       E2E_TEST_FILTER: "GO"
@@ -479,7 +479,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
-    working_directory: /opt/cibuild
+    working_directory: /opt/cibuild/project
     parallelism: 2
     environment:
       E2E_TEST_FILTER: "EXPECT"
@@ -495,7 +495,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
-    working_directory: /opt/cibuild
+    working_directory: /opt/cibuild/project
     parallelism: 2
     environment:
       E2E_TEST_FILTER: "EXPECT"
@@ -513,7 +513,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_large
-    working_directory: /opt/cibuild
+    working_directory: /opt/cibuild/project
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
     steps:
@@ -528,7 +528,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_large
-    working_directory: /opt/cibuild
+    working_directory: /opt/cibuild/project
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
     steps:
