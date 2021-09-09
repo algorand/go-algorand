@@ -19,7 +19,7 @@ package ledger
 import (
 	"bytes"
 
-	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -33,10 +33,9 @@ type onlineAccount struct {
 	MicroAlgos              basics.MicroAlgos
 	RewardsBase             uint64
 	NormalizedOnlineBalance uint64
-	VoteID                  crypto.OneTimeSignatureVerifier
 	VoteFirstValid          basics.Round
 	VoteLastValid           basics.Round
-	VoteKeyDilution         uint64
+	BlockProofID            merklekeystore.Verifier
 }
 
 // onlineTopHeap implements heap.Interface for tracking top N online accounts.

@@ -136,9 +136,9 @@ func (s *testWorkerStubs) CompactCertVoters(r basics.Round) (*ledger.VotersForRo
 	for i, k := range s.keysForVoters {
 		voters.AddrToPos[k.Parent] = uint64(i)
 		voters.Participants = append(voters.Participants, compactcert.Participant{
-			PK:          k.Voting.OneTimeSignatureVerifier,
-			Weight:      1,
-			KeyDilution: config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution,
+			PK:         *k.BlockProof.GetVerifier(),
+			Weight:     1,
+			FirstValid: uint64(k.FirstValid),
 		})
 	}
 
@@ -211,7 +211,7 @@ func newPartKey(t testing.TB, parent basics.Address) account.Participation {
 	partDB, err := db.MakeAccessor(fn, false, true)
 	require.NoError(t, err)
 
-	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, 1024*1024, config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
+	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, 1024, config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
 	require.NoError(t, err)
 	part.Close()
 	return part.Participation
@@ -262,10 +262,11 @@ func TestWorkerAllSigs(t *testing.T) {
 			require.False(t, overflowed)
 
 			ccparams := compactcert.Params{
-				Msg:          signedHdr,
-				ProvenWeight: provenWeight,
-				SigRound:     basics.Round(signedHdr.Round + 1),
-				SecKQ:        proto.CompactCertSecKQ,
+				Msg:               signedHdr,
+				ProvenWeight:      provenWeight,
+				SigRound:          basics.Round(signedHdr.Round),
+				SecKQ:             proto.CompactCertSecKQ,
+				CompactCertRounds: proto.CompactCertRounds,
 			}
 
 			voters, err := s.CompactCertVoters(tx.Txn.CertRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
@@ -323,10 +324,11 @@ func TestWorkerPartialSigs(t *testing.T) {
 	require.False(t, overflowed)
 
 	ccparams := compactcert.Params{
-		Msg:          signedHdr,
-		ProvenWeight: provenWeight,
-		SigRound:     basics.Round(signedHdr.Round + 1),
-		SecKQ:        proto.CompactCertSecKQ,
+		Msg:               signedHdr,
+		ProvenWeight:      provenWeight,
+		SigRound:          basics.Round(signedHdr.Round),
+		SecKQ:             proto.CompactCertSecKQ,
+		CompactCertRounds: proto.CompactCertRounds,
 	}
 
 	voters, err := s.CompactCertVoters(tx.Txn.CertRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
