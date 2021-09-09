@@ -131,6 +131,7 @@ var dryrunProtoVersion protocol.ConsensusVersion = protocol.ConsensusFuture
 var dryrunMakeLedgerProto protocol.ConsensusVersion = "dryrunMakeLedgerProto"
 
 func TestDryrunLogicSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	t.Parallel()
 
@@ -155,6 +156,7 @@ func TestDryrunLogicSig(t *testing.T) {
 }
 
 func TestDryrunLogicSigSource(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	t.Parallel()
 
@@ -386,6 +388,7 @@ func checkAppCallPass(t *testing.T, response *generated.DryrunResponse) {
 }
 
 func TestDryrunGlobal1(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	t.Parallel()
 
@@ -434,6 +437,7 @@ func TestDryrunGlobal1(t *testing.T) {
 }
 
 func TestDryrunGlobal2(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	t.Parallel()
 
@@ -486,6 +490,7 @@ func TestDryrunGlobal2(t *testing.T) {
 }
 
 func TestDryrunLocal1(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	t.Parallel()
 
@@ -559,6 +564,7 @@ func TestDryrunLocal1(t *testing.T) {
 }
 
 func TestDryrunLocal1A(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	t.Parallel()
 
@@ -639,6 +645,7 @@ func TestDryrunLocal1A(t *testing.T) {
 }
 
 func TestDryrunLocalCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	t.Parallel()
 	var dr DryrunRequest
@@ -693,6 +700,7 @@ func TestDryrunLocalCheck(t *testing.T) {
 }
 
 func TestDryrunMultipleTxns(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	var dr DryrunRequest
@@ -740,6 +748,7 @@ func TestDryrunMultipleTxns(t *testing.T) {
 }
 
 func TestDryrunEncodeDecode(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	var gdr generated.DryrunRequest
@@ -844,6 +853,7 @@ func TestDryrunEncodeDecode(t *testing.T) {
 }
 
 func TestDryrunMakeLedger(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	var dr DryrunRequest
@@ -956,6 +966,7 @@ var dataJSON = []byte(`{
 }`)
 
 func TestDryrunRequestJSON(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	var gdr generated.DryrunRequest
@@ -982,6 +993,7 @@ func TestDryrunRequestJSON(t *testing.T) {
 }
 
 func TestStateDeltaToStateDelta(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	sd := basics.StateDelta{
 		"byteskey": {
@@ -1032,6 +1044,7 @@ func randomAddress() basics.Address {
 }
 
 func TestDryrunOptIn(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	ops, err := logic.AssembleString(`#pragma version 2
@@ -1095,6 +1108,7 @@ int 1`)
 }
 
 func TestDryrunLogs(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	ops, err := logic.AssembleString(`
@@ -1193,7 +1207,7 @@ return
 	logs := *response.Txns[0].Logs
 	assert.Equal(t, 32, len(logs))
 	for i, m := range logs {
-		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), m)
+		assert.Equal(t, []byte(string(rune('B'+i))), m)
 	}
 	encoded := string(protocol.EncodeJSON(response.Txns[0]))
 	assert.Contains(t, encoded, "logs")

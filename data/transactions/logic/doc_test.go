@@ -96,6 +96,8 @@ func TestOpImmediateNote(t *testing.T) {
 }
 
 func TestAllImmediatesDocumented(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	for _, op := range OpSpecs {
 		count := len(op.Details.Immediates)
 		note := OpImmediateNote(op.Name)

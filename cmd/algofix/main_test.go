@@ -9,6 +9,8 @@ import (
 	"go/parser"
 	"strings"
 	"testing"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type testCase struct {
@@ -73,6 +75,7 @@ func parseFixPrint(t *testing.T, fn func(*ast.File) bool, desc, in string, mustB
 }
 
 func TestRewrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	for _, tt := range testCases {
 		// Apply fix: should get tt.Out.
 		out, fixed, ok := parseFixPrint(t, tt.Fn, tt.Name, tt.In, true)
