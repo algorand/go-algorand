@@ -385,7 +385,6 @@ type timeoutEvent struct {
 	RandomEntropy uint64
 
 	Round round
-	Proto ConsensusVersionView
 }
 
 func (e timeoutEvent) t() eventType {
