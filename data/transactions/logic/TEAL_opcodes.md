@@ -18,7 +18,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - SHA256 hash of value X, yields [32]byte
 - **Cost**:
    - 7 (LogicSigVersion = 1)
-   - 35 (2 <= LogicSigVersion <= 5)
+   - 35 (LogicSigVersion >= 2)
 
 ## keccak256
 
@@ -28,7 +28,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Keccak256 hash of value X, yields [32]byte
 - **Cost**:
    - 26 (LogicSigVersion = 1)
-   - 130 (2 <= LogicSigVersion <= 5)
+   - 130 (LogicSigVersion >= 2)
 
 ## sha512_256
 
@@ -38,7 +38,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - SHA512_256 hash of value X, yields [32]byte
 - **Cost**:
    - 9 (LogicSigVersion = 1)
-   - 45 (2 <= LogicSigVersion <= 5)
+   - 45 (LogicSigVersion >= 2)
 
 ## ed25519verify
 
@@ -489,7 +489,7 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 - Opcode: 0x35 {uint8 position in scratch space to store to}
 - Pops: *... stack*, any
 - Pushes: _None_
-- pop a value from the stack and store to scratch space
+- pop value X. store X to the Ith scratch space
 
 ## txna f i
 
@@ -568,6 +568,22 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 - Mode: Application
 
 `gaids` fails unless the requested transaction created an asset or application and X < GroupIndex.
+
+## loads
+
+- Opcode: 0x3e
+- Pops: *... stack*, uint64
+- Pushes: any
+- copy a value from the Xth scratch space to the stack
+- LogicSigVersion >= 5
+
+## stores
+
+- Opcode: 0x3f
+- Pops: *... stack*, {uint64 A}, {any B}
+- Pushes: _None_
+- pop indexes A and B. store B to the Ath scratch space
+- LogicSigVersion >= 5
 
 ## bnz target
 
@@ -667,7 +683,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Opcode: 0x4e {uint8 depth}
 - Pops: *... stack*, any
 - Pushes: any
-- remove top of stack, and place it down the stack such that N elements are above it
+- remove top of stack, and place it deeper in the stack such that N elements are above it
 - LogicSigVersion >= 5
 
 ## uncover n
@@ -753,7 +769,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - Opcode: 0x58
 - Pops: *... stack*, {[]byte A}, {uint64 B}, {uint64 C}
 - Pushes: []byte
-- pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including B+C, push the substring result. If B or B+C is larger than the array length, the program fails
+- pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including B+C, push the substring result. If B+C is larger than the array length, the program fails
 - LogicSigVersion >= 5
 
 ## extract16bits
@@ -761,7 +777,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - Opcode: 0x59
 - Pops: *... stack*, {[]byte A}, {uint64 B}
 - Pushes: uint64
-- pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B or B+2 is larger than the array length, the program fails
+- pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B+2 is larger than the array length, the program fails
 - LogicSigVersion >= 5
 
 ## extract32bits
@@ -769,7 +785,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - Opcode: 0x5a
 - Pops: *... stack*, {[]byte A}, {uint64 B}
 - Pushes: uint64
-- pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B or B+4 is larger than the array length, the program fails
+- pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B+4 is larger than the array length, the program fails
 - LogicSigVersion >= 5
 
 ## extract64bits
@@ -777,7 +793,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - Opcode: 0x5b
 - Pops: *... stack*, {[]byte A}, {uint64 B}
 - Pushes: uint64
-- pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B or B+8 is larger than the array length, the program fails
+- pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B+8 is larger than the array length, the program fails
 - LogicSigVersion >= 5
 
 ## balance
@@ -1222,7 +1238,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xb1
 - Pops: _None_
 - Pushes: _None_
-- Prepare a new application action
+- Begin preparation of a new inner transaction
 - LogicSigVersion >= 5
 - Mode: Application
 
@@ -1231,7 +1247,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xb2 {uint8 transaction field index}
 - Pops: *... stack*, any
 - Pushes: _None_
-- Set field F of the current application action
+- Set field F of the current inner transaction to X
 - LogicSigVersion >= 5
 - Mode: Application
 
@@ -1240,7 +1256,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xb3
 - Pops: _None_
 - Pushes: _None_
-- Execute the current application action. Panic on any failure.
+- Execute the current inner transaction. Panic on any failure.
 - LogicSigVersion >= 5
 - Mode: Application
 

@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -53,6 +54,7 @@ var txnSample string = `{
 `
 
 func TestTxnJSONInput(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	dp := DebugParams{
@@ -73,6 +75,7 @@ func TestTxnJSONInput(t *testing.T) {
 }
 
 func TestTxnMessagePackInput(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	var txn transactions.SignedTxn
@@ -232,6 +235,7 @@ func makeSampleSerializedBalanceRecord(addr basics.Address, toJSON bool) []byte 
 }
 
 func TestBalanceJSONInput(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	addr, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
@@ -254,6 +258,7 @@ func TestBalanceJSONInput(t *testing.T) {
 }
 
 func TestBalanceMessagePackInput(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	addr, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
 	a.NoError(err)
@@ -281,6 +286,7 @@ func TestBalanceMessagePackInput(t *testing.T) {
 }
 
 func TestDebugEnvironment(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
@@ -521,6 +527,7 @@ byte 0x676c6f62616c // global
 }
 
 func TestDebugFromPrograms(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	txnBlob := []byte("[" + strings.Join([]string{string(txnSample), txnSample}, ",") + "]")
@@ -571,7 +578,7 @@ func TestDebugFromPrograms(t *testing.T) {
 	err = l.Setup(&dp)
 	a.NoError(err)
 	a.Equal(1, len(l.runs))
-	a.Equal(0, l.runs[0].groupIndex)
+	a.Equal(uint64(0), l.runs[0].groupIndex)
 	a.Nil(l.runs[0].ba)
 	a.Equal(modeLogicsig, l.runs[0].mode)
 	a.Empty(l.runs[0].aidx)
@@ -587,8 +594,8 @@ func TestDebugFromPrograms(t *testing.T) {
 	err = l.Setup(&dp)
 	a.NoError(err)
 	a.Equal(2, len(l.runs))
-	a.Equal(0, l.runs[0].groupIndex)
-	a.Equal(0, l.runs[1].groupIndex)
+	a.Equal(uint64(0), l.runs[0].groupIndex)
+	a.Equal(uint64(0), l.runs[1].groupIndex)
 	a.Nil(l.runs[0].ba)
 	a.Equal(modeLogicsig, l.runs[0].mode)
 	a.Empty(l.runs[0].aidx)
@@ -599,6 +606,7 @@ func TestDebugFromPrograms(t *testing.T) {
 }
 
 func TestRunMode(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	txnBlob := []byte("[" + strings.Join([]string{string(txnSample), txnSample}, ",") + "]")
@@ -617,7 +625,7 @@ func TestRunMode(t *testing.T) {
 	err := l.Setup(&dp)
 	a.NoError(err)
 	a.Equal(1, len(l.runs))
-	a.Equal(0, l.runs[0].groupIndex)
+	a.Equal(uint64(0), l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.NotNil(l.runs[0].ba)
 	a.Equal(modeStateful, l.runs[0].mode)
@@ -640,7 +648,7 @@ func TestRunMode(t *testing.T) {
 	err = l.Setup(&dp)
 	a.NoError(err)
 	a.Equal(1, len(l.runs))
-	a.Equal(0, l.runs[0].groupIndex)
+	a.Equal(uint64(0), l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.Nil(l.runs[0].ba)
 	a.Equal(modeLogicsig, l.runs[0].mode)
@@ -659,7 +667,7 @@ func TestRunMode(t *testing.T) {
 	err = l.Setup(&dp)
 	a.NoError(err)
 	a.Equal(1, len(l.runs))
-	a.Equal(0, l.runs[0].groupIndex)
+	a.Equal(uint64(0), l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.NotNil(l.runs[0].ba)
 	a.Equal(modeStateful, l.runs[0].mode)
@@ -677,7 +685,7 @@ func TestRunMode(t *testing.T) {
 	err = l.Setup(&dp)
 	a.NoError(err)
 	a.Equal(1, len(l.runs))
-	a.Equal(0, l.runs[0].groupIndex)
+	a.Equal(uint64(0), l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.Nil(l.runs[0].ba)
 	a.Equal(modeLogicsig, l.runs[0].mode)
@@ -685,6 +693,7 @@ func TestRunMode(t *testing.T) {
 }
 
 func TestDebugFromTxn(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
@@ -738,7 +747,7 @@ func TestDebugFromTxn(t *testing.T) {
 	err = l.Setup(&dp)
 	a.NoError(err)
 	a.Equal(1, len(l.runs))
-	a.Equal(1, l.runs[0].groupIndex)
+	a.Equal(uint64(1), l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.Equal([]byte{3}, l.runs[0].program)
 	a.Nil(l.runs[0].ba)
@@ -764,7 +773,7 @@ func TestDebugFromTxn(t *testing.T) {
 	a.NoError(err)
 	a.Equal(2, len(l.txnGroup))
 	a.Equal(1, len(l.runs))
-	a.Equal(0, l.runs[0].groupIndex)
+	a.Equal(uint64(0), l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.Equal([]byte{1}, l.runs[0].program)
 	a.NotNil(l.runs[0].ba)
@@ -787,7 +796,7 @@ func TestDebugFromTxn(t *testing.T) {
 	a.NoError(err)
 	a.Equal(2, len(l.txnGroup))
 	a.Equal(1, len(l.runs))
-	a.Equal(0, l.runs[0].groupIndex)
+	a.Equal(uint64(0), l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.Equal([]byte{1, 1}, l.runs[0].program)
 	a.NotNil(l.runs[0].ba)
@@ -812,7 +821,7 @@ func TestDebugFromTxn(t *testing.T) {
 	a.NoError(err)
 	a.Equal(1, len(l.txnGroup))
 	a.Equal(1, len(l.runs))
-	a.Equal(0, l.runs[0].groupIndex)
+	a.Equal(uint64(0), l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.Equal([]byte{4}, l.runs[0].program)
 	a.NotNil(l.runs[0].ba)
@@ -904,6 +913,7 @@ func checkBalanceAdapter(
 }
 
 func TestLocalBalanceAdapter(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
@@ -949,7 +959,7 @@ func TestLocalBalanceAdapter(t *testing.T) {
 	a.NoError(err)
 	a.Equal(2, len(l.txnGroup))
 	a.Equal(1, len(l.runs))
-	a.Equal(0, l.runs[0].groupIndex)
+	a.Equal(uint64(0), l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.Equal([]byte{1}, l.runs[0].program)
 	a.NotNil(l.runs[0].ba)
@@ -964,6 +974,7 @@ func TestLocalBalanceAdapter(t *testing.T) {
 }
 
 func TestLocalBalanceAdapterIndexer(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
@@ -1039,7 +1050,7 @@ func TestLocalBalanceAdapterIndexer(t *testing.T) {
 	a.NoError(err)
 	a.Equal(2, len(l.txnGroup))
 	a.Equal(1, len(l.runs))
-	a.Equal(0, l.runs[0].groupIndex)
+	a.Equal(uint64(0), l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.Equal([]byte{1}, l.runs[0].program)
 	a.NotNil(l.runs[0].ba)

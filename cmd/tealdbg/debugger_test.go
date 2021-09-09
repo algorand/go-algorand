@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type testDbgAdapter struct {
@@ -91,6 +92,7 @@ func (d *testDbgAdapter) eventLoop() {
 }
 
 func TestDebuggerSimple(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	proto := config.Consensus[protocol.ConsensusV18]
 	require.Greater(t, proto.LogicSigVersion, uint64(0))
 	debugger := MakeDebugger()
@@ -122,6 +124,7 @@ int 1
 }
 
 func TestSession(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	source := fmt.Sprintf("#pragma version %d\nint 1\ndup\n+\n", logic.LogicVersion)
 	ops, err := logic.AssembleStringWithVersion(source, logic.LogicVersion)
 	require.NoError(t, err)

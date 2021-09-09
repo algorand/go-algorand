@@ -66,6 +66,7 @@ func setupTestForMethodGet(t *testing.T) (v2.Handlers, echo.Context, *httptest.R
 }
 
 func TestSimpleMockBuilding(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	handler, _, _, _, _, releasefunc := setupTestForMethodGet(t)
@@ -89,6 +90,7 @@ func accountInformationTest(t *testing.T, address string, expectedCode int) {
 }
 
 func TestAccountInformation(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	accountInformationTest(t, poolAddr.String(), 200)
@@ -104,6 +106,7 @@ func getBlockTest(t *testing.T, blockNum uint64, format string, expectedCode int
 }
 
 func TestGetBlock(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	getBlockTest(t, 0, "json", 200)
@@ -113,6 +116,7 @@ func TestGetBlock(t *testing.T) {
 }
 
 func TestGetBlockJsonEncoding(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
@@ -208,6 +212,7 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 }
 
 func TestGetSupply(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	handler, c, _, _, _, releasefunc := setupTestForMethodGet(t)
@@ -217,6 +222,7 @@ func TestGetSupply(t *testing.T) {
 }
 
 func TestGetStatus(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
@@ -248,6 +254,7 @@ func TestGetStatus(t *testing.T) {
 }
 
 func TestGetStatusAfterBlock(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
@@ -260,6 +267,7 @@ func TestGetStatusAfterBlock(t *testing.T) {
 }
 
 func TestGetTransactionParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
@@ -283,6 +291,7 @@ func pendingTransactionInformationTest(t *testing.T, txidToUse int, format strin
 }
 
 func TestPendingTransactionInformation(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	pendingTransactionInformationTest(t, 0, "json", 200)
@@ -356,6 +365,7 @@ func TestPendingTransactionLogsEncoding(t *testing.T) {
 }
 
 func TestPendingTransactions(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	getPendingTransactionsTest(t, "json", 0, 200)
@@ -383,6 +393,7 @@ func pendingTransactionsByAddressTest(t *testing.T, rootkeyToUse int, format str
 }
 
 func TestPendingTransactionsByAddress(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	pendingTransactionsByAddressTest(t, 0, "json", 200)
@@ -420,6 +431,7 @@ func postTransactionTest(t *testing.T, txnToUse, expectedCode int) {
 }
 
 func TestPostTransaction(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	postTransactionTest(t, -1, 400)
@@ -449,6 +461,7 @@ func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expected
 }
 
 func TestStartCatchup(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	goodCatchPoint := "5894690#DVFRZUYHEFKRLK5N6DNJRR4IABEVN2D6H76F3ZSEPIE6MKXMQWQA"
@@ -489,6 +502,7 @@ func abortCatchupTest(t *testing.T, catchpoint string, expectedCode int) {
 }
 
 func TestAbortCatchup(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	goodCatchPoint := "5894690#DVFRZUYHEFKRLK5N6DNJRR4IABEVN2D6H76F3ZSEPIE6MKXMQWQA"
@@ -521,6 +535,7 @@ func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int, enableDe
 }
 
 func TestTealCompile(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	tealCompileTest(t, nil, 200, true) // nil program should work
@@ -582,6 +597,7 @@ func tealDryrunTest(
 }
 
 func TestTealDryrun(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	var gdr generated.DryrunRequest

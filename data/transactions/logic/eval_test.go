@@ -905,7 +905,7 @@ func TestArg(t *testing.T) {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			source := "arg 0; arg 1; ==; arg 2; arg 3; !=; &&; arg 4; len; int 9; <; &&;"
 			if v >= 5 {
-				source += "int 0; args; int 1; args; ==; assert;"
+				source += "int 0; args; int 1; args; ==; assert; int 2; args; int 3; args; !=; assert"
 			}
 			ops := testProg(t, source, v)
 			err := Check(ops.Program, defaultEvalParams(nil, nil))
@@ -2250,6 +2250,7 @@ len`, 2)
 }
 
 func TestExtractOp(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testAccepts(t, "byte 0x123456789abc; extract 1 2; byte 0x3456; ==", 5)
 	testAccepts(t, "byte 0x123456789abc; extract 0 6; byte 0x123456789abc; ==", 5)
@@ -2266,6 +2267,7 @@ func TestExtractOp(t *testing.T) {
 }
 
 func TestExtractFlop(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	// fails in compiler
 	testProg(t, `byte 0xf000000000000000
@@ -2336,6 +2338,34 @@ load 0
 load 1
 +
 &&`, 1)
+}
+
+func TestLoadStoreStack(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	testAccepts(t, `int 37
+int 1
+int 37
+stores
+int 42
+byte 0xabbacafe
+stores
+int 37
+==
+int 0
+swap
+stores
+int 42
+loads
+byte 0xabbacafe
+==
+int 0
+loads
+int 1
+loads
++
+&&`, 5)
 }
 
 func TestLoadStore2(t *testing.T) {
@@ -2462,7 +2492,7 @@ int 1`,
 					Proto:           &proto,
 					Txn:             &txgroup[j],
 					TxnGroup:        txgroup,
-					GroupIndex:      j,
+					GroupIndex:      uint64(j),
 					PastSideEffects: pastSideEffects,
 				}
 			}
@@ -2536,7 +2566,7 @@ int 1`,
 					Proto:           &proto,
 					Txn:             &txgroup[j],
 					TxnGroup:        txgroup,
-					GroupIndex:      j,
+					GroupIndex:      uint64(j),
 					PastSideEffects: pastSideEffects,
 				}
 			}
@@ -2609,7 +2639,7 @@ byte "txn 2"
 			Proto:           &proto,
 			Txn:             &txgroup[j],
 			TxnGroup:        txgroup,
-			GroupIndex:      j,
+			GroupIndex:      uint64(j),
 			PastSideEffects: pastSideEffects,
 		}
 	}
@@ -4321,6 +4351,7 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 	var outer error
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			t.Helper()
 			if v < introduced {
 				testProg(t, obfuscate(program), v, expect{0, "...was introduced..."})
 				return
@@ -4362,17 +4393,20 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 }
 
 func testAccepts(t *testing.T, program string, introduced uint64) {
+	t.Helper()
 	testEvaluation(t, program, introduced, func(pass bool, err error) bool {
 		return pass && err == nil
 	})
 }
 func testRejects(t *testing.T, program string, introduced uint64) {
+	t.Helper()
 	testEvaluation(t, program, introduced, func(pass bool, err error) bool {
 		// Returned False, but didn't panic
 		return !pass && err == nil
 	})
 }
 func testPanics(t *testing.T, program string, introduced uint64) error {
+	t.Helper()
 	return testEvaluation(t, program, introduced, func(pass bool, err error) bool {
 		// TEAL panic! not just reject at exit
 		return !pass && err != nil
@@ -4401,6 +4435,7 @@ func TestBits(t *testing.T) {
 	testPanics(t, "int 1; int 64; getbit; int 0; ==", 3)
 
 	testAccepts(t, "int 0; int 3; int 1; setbit; int 8; ==", 3)
+	testPanics(t, "int 0; int 3; int 2; setbit; pop; int 1", 3)
 	testAccepts(t, "int 8; int 3; getbit; int 1; ==", 3)
 
 	testAccepts(t, "int 15; int 3; int 0; setbit; int 7; ==", 3)
@@ -4442,6 +4477,7 @@ func TestBytes(t *testing.T) {
 	testPanics(t, `byte "john"; int 4; getbyte; int 1; ==`, 3)    // past end
 
 	testAccepts(t, `byte "john"; int 2; int 105; setbyte; byte "join"; ==`, 3)
+	testPanics(t, `byte "john"; int 2; int 256; setbyte; pop; int 1;`, 3)
 
 	testPanics(t, `global ZeroAddress; dup; concat; int 64; int 7; setbyte; int 1; return`, 3)
 	testAccepts(t, `global ZeroAddress; dup; concat; int 63; int 7; setbyte; int 1; return`, 3)
@@ -4455,6 +4491,7 @@ func TestBytes(t *testing.T) {
 }
 
 func TestMethod(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	// Although 'method' is new around the time of v5, it is a
 	// pseudo-op, so it's ok to use it earlier, as it compiles to
@@ -4491,6 +4528,7 @@ func TestDig(t *testing.T) {
 }
 
 func TestCover(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testAccepts(t, "int 4; int 3; int 2; int 1; cover 0; int 1; ==; return", 5)
 	testAccepts(t, "int 4; int 3; int 2; int 1; cover 1; int 2; ==; return", 5)
@@ -4501,6 +4539,7 @@ func TestCover(t *testing.T) {
 }
 
 func TestUncover(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testAccepts(t, "int 4; int 3; int 2; int 1; uncover 0; int 1; ==; return", 5)
 	testAccepts(t, "int 4; int 3; int 2; int 1; uncover 2; int 3; ==; return", 5)
@@ -4784,6 +4823,8 @@ func TestBytesCompare(t *testing.T) {
 
 	testAccepts(t, "byte 0x10; byte 0x10; b<; !", 4)
 	testAccepts(t, "byte 0x10; byte 0x10; b<=", 4)
+	testAccepts(t, "byte 0x10; int 64; bzero; b>", 4)
+	testPanics(t, "byte 0x10; int 65; bzero; b>", 4)
 
 	testAccepts(t, "byte 0x11; byte 0x10; b>", 4)
 	testAccepts(t, "byte 0x11; byte 0x0010; b>", 4)
@@ -4794,6 +4835,8 @@ func TestBytesCompare(t *testing.T) {
 	testAccepts(t, "byte 0x11; byte 0x11; b==", 4)
 	testAccepts(t, "byte 0x0011; byte 0x11; b==", 4)
 	testAccepts(t, "byte 0x11; byte 0x00000000000011; b==", 4)
+	testAccepts(t, "byte 0x00; int 64; bzero; b==", 4)
+	testPanics(t, "byte 0x00; int 65; bzero; b==", 4)
 
 	testAccepts(t, "byte 0x11; byte 0x00; b!=", 4)
 	testAccepts(t, "byte 0x0011; byte 0x1100; b!=", 4)
