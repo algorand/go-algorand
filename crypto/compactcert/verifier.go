@@ -53,7 +53,14 @@ func (v *Verifier) Verify(c *Cert) error {
 		sigs[pos] = r.SigSlot
 		parts[pos] = r.Part
 
-		if err := r.Part.PK.Verify(uint64(r.Part.FirstValid), uint64(v.SigRound), v.CompactCertRounds, v.Msg, r.SigSlot.Sig.Signature); err != nil {
+		err := r.Part.PK.Verify(
+			uint64(r.Part.FirstValid),
+			uint64(v.SigRound),
+			v.CompactCertRounds,
+			v.Msg,
+			r.SigSlot.Sig.Signature)
+
+		if err != nil {
 			return fmt.Errorf("signature in reveal pos %d does not verify. error is %s", pos, err)
 		}
 	}
