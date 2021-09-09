@@ -195,6 +195,8 @@ commands:
             export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
             export GOPATH="<< parameters.build_dir >>/go"
             export ALGORAND_DEADLOCK=enable
+            export GIMME_ENV_PREFIX=<< parameters.build_dir >>/.gimme/envs
+            export GIMME_VERSION_PREFIX=<< parameters.build_dir >>/.gimme/versions
             scripts/travis/build.sh --make_debug
       - cache_libsodium
       - save_cache:
@@ -273,9 +275,9 @@ commands:
             export GOPATH="<< parameters.build_dir >>/go"
             export PATH="${PATH}:${GOPATH}/bin"
             export ALGORAND_DEADLOCK=enable
+            export GIMME_ENV_PREFIX=<< parameters.build_dir >>/.gimme/envs
+            export GIMME_VERSION_PREFIX=<< parameters.build_dir >>/.gimme/versions
             GOLANG_VERSION=$(./scripts/get_golang_version.sh)
-            GIMME_ENV_PREFIX=<< parameters.build_dir >>/.gimme/envs
-            GIMME_VERSION_PREFIX=<< parameters.build_dir >>/.gimme/versions
             eval "$(~/gimme "${GOLANG_VERSION}")"
             scripts/configure_dev.sh
             scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
@@ -340,9 +342,9 @@ commands:
             export PATH="${PATH}:${GOPATH}/bin"
             export ALGORAND_DEADLOCK=enable
             export BUILD_TYPE=integration
+            export GIMME_ENV_PREFIX=<< parameters.build_dir >>/.gimme/envs
+            export GIMME_VERSION_PREFIX=<< parameters.build_dir >>/.gimme/versions
             GOLANG_VERSION=$(./scripts/get_golang_version.sh)
-            GIMME_ENV_PREFIX=<< parameters.build_dir >>/.gimme/envs
-            GIMME_VERSION_PREFIX=<< parameters.build_dir >>/.gimme/versions
             eval "$(~/gimme "${GOLANG_VERSION}")"
             scripts/configure_dev.sh
             scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
