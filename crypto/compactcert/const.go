@@ -22,12 +22,11 @@ import (
 
 // HashType/ hashSize relate to the type of hash this package uses.
 const (
-	CompactCertHashType = crypto.Sha512_256
-	CompactCertHashSize = crypto.Sha512_256Size
+	HashType = crypto.Sha512_256
+	HashSize = crypto.Sha512_256Size
 )
 
 const (
 	// maxReveals is a bound on allocation and on numReveals to limit log computation
-	maxReveals      = 1024
-	maxProofDigests = 20 * maxReveals
+	maxReveals = 1024
 )

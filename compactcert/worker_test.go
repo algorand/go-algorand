@@ -78,7 +78,7 @@ func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 	hdr.CurrentProtocol = protocol.ConsensusFuture
 
 	var ccBasic = bookkeeping.CompactCertState{
-		CompactCertVoters:      make([]byte, compactcert.CompactCertHashSize),
+		CompactCertVoters:      make([]byte, compactcert.HashSize),
 		CompactCertVotersTotal: basics.MicroAlgos{},
 		CompactCertNextRound:   0,
 	}

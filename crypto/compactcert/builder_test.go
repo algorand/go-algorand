@@ -52,6 +52,21 @@ func (pc PartCommit) Marshal(pos uint64) ([]byte, error) {
 	return crypto.HashRep(pc.participants[pos]), nil
 }
 
+func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key *merklekeystore.Signer) []Participant {
+	parts := make([]Participant, 0, numberOfParticipant)
+
+	for i := 0; i < numberOfParticipant; i++ {
+		part := Participant{
+			PK:         *key.GetVerifier(),
+			Weight:     uint64(totalWeight / 2 / numberOfParticipant),
+			FirstValid: 0,
+		}
+
+		parts = append(parts, part)
+	}
+	return parts
+}
+
 func TestBuildVerify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -79,7 +94,7 @@ func TestBuildVerify(t *testing.T) {
 	}
 
 	// Share the key; we allow the same vote key to appear in multiple accounts..
-	key, err := merklekeystore.New(0, uint64(param.CompactCertRounds)+1, param.CompactCertRounds, crypto.DilithiumType)
+	key, err := merklekeystore.New(0, uint64(param.CompactCertRounds)+1, param.CompactCertRounds, crypto.Ed25519Type)
 
 	require.NoError(t, err, "failed to create keys")
 
@@ -112,7 +127,7 @@ func TestBuildVerify(t *testing.T) {
 		sigs = append(sigs, sig)
 	}
 
-	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: CompactCertHashType})
+	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: HashType})
 	if err != nil {
 		t.Error(err)
 	}
@@ -165,7 +180,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 	param := Params{
 		Msg:               TestMessage("hello world"),
 		ProvenWeight:      uint64(totalWeight / 2),
-		SigRound:          0,
+		SigRound:          128,
 		SecKQ:             128,
 		CompactCertRounds: 128,
 	}
@@ -190,7 +205,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 	}
 
 	var cert *Cert
-	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: CompactCertHashType})
+	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: HashType})
 	if err != nil {
 		b.Error(err)
 	}
