@@ -73,6 +73,8 @@ func makeApplicationUpgradeConsensus(t *testing.T) (appConsensus config.Consensu
 func TestApplicationsUpgradeOverREST(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	defer fixtures.TerminateTestFailures(t)
+	
 	smallLambdaMs := 500
 	consensus := makeApplicationUpgradeConsensus(t)
 

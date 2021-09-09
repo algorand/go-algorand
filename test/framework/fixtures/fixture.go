@@ -86,8 +86,18 @@ func SynchronizedTest(tb TestingTB) TestingTB {
 
 type synchTest struct {
 	deadlock.Mutex
-	t      TestingTB
-	failed bool
+	t                  TestingTB
+	dontReportFailures bool
+}
+
+// TerminateTestFailures should be called within each test using a shared fixture.
+// It ensures the base test will no longer get t.finished modified and cause a data race.
+// It should be called in the form of "defer fixtures.TerminateTestFailures(t)"
+func TerminateTestFailures(t TestingTB) {
+	st := SynchronizedTest(t).(*synchTest)
+	st.Lock()
+	defer st.Unlock()
+	st.dontReportFailures = true
 }
 
 func (st *synchTest) Cleanup(f func()) {
@@ -108,16 +118,16 @@ func (st *synchTest) Errorf(format string, args ...interface{}) {
 func (st *synchTest) Fail() {
 	st.Lock()
 	defer st.Unlock()
-	if !st.failed {
-		st.failed = true
+	if !st.dontReportFailures {
+		st.dontReportFailures = true
 		st.t.Fail()
 	}
 }
 func (st *synchTest) FailNow() {
 	st.Lock()
 	defer st.Unlock()
-	if !st.failed {
-		st.failed = true
+	if !st.dontReportFailures {
+		st.dontReportFailures = true
 		st.t.FailNow()
 	}
 }
