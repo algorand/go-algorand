@@ -128,6 +128,15 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint
 		return nil
 	}
 
+	aid := uint64(tx.ApplyData.ConfigAsset)
+	if aid > 0 {
+		return &aid
+	}
+	// If there is no ConfigAsset in the ApplyData, it must be a
+	// transaction before inner transactions were activated. Therefore
+	// the computeCreatableIndexInPayset function will work properly
+	// to deduce the aid. Proceed.
+
 	// Look up block where transaction was confirmed
 	blk, err := l.Block(tx.ConfirmedRound)
 	if err != nil {
@@ -162,6 +171,15 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint64
 	if tx.Txn.Txn.ApplicationCallTxnFields.ApplicationID != 0 {
 		return nil
 	}
+
+	aid := uint64(tx.ApplyData.ApplicationID)
+	if aid > 0 {
+		return &aid
+	}
+	// If there is no ApplicationID in the ApplyData, it must be a
+	// transaction before inner transactions were activated. Therefore
+	// the computeCreatableIndexInPayset function will work properly
+	// to deduce the aid. Proceed.
 
 	// Look up block where transaction was confirmed
 	blk, err := l.Block(tx.ConfirmedRound)

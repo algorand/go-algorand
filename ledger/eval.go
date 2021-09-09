@@ -1283,7 +1283,7 @@ transactionGroupLoop:
 	return eval.state.deltas(), nil
 }
 
-// loadedTransactionGroup is a helper struct to allow asyncronious loading of the account data needed by the transaction groups
+// loadedTransactionGroup is a helper struct to allow asynchronous loading of the account data needed by the transaction groups
 type loadedTransactionGroup struct {
 	// group is the transaction group
 	group []transactions.SignedTxnWithAD

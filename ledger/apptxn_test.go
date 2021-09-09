@@ -625,6 +625,67 @@ func TestRekeyActionCloseAccount(t *testing.T) {
 	l.endBlock(t, eval)
 }
 
+// TestPayAction ensures a pay in teal affects balances
+func TestDuplicatePayAction(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	create := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+         tx_begin
+         int pay
+         tx_field TypeEnum
+         int 5000
+         tx_field Amount
+         txn Accounts 1
+         tx_field Receiver
+         tx_submit
+         tx_begin
+         int pay
+         tx_field TypeEnum
+         int 5000
+         tx_field Amount
+         txn Accounts 1
+         tx_field Receiver
+         tx_submit
+`),
+	}
+
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: basics.AppIndex(1).Address(),
+		Amount:   200000, // account min balance, plus fees
+	}
+
+	paytwice := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[1],
+		ApplicationID: basics.AppIndex(1),
+		Accounts:      []basics.Address{addrs[1]}, // pay self
+	}
+
+	eval := l.nextBlock(t)
+	eval.txns(t, &create, &fund, &paytwice)
+	l.endBlock(t, eval)
+
+	ad0 := l.micros(t, addrs[0])
+	ad1 := l.micros(t, addrs[1])
+	app := l.micros(t, basics.AppIndex(1).Address())
+
+	// create(1000) and fund(1000 + 200000)
+	require.Equal(t, 202000, int(genBalances.Balances[addrs[0]].MicroAlgos.Raw-ad0))
+	// paid 10000, but 1000 fee on tx
+	require.Equal(t, 9000, int(ad1-genBalances.Balances[addrs[1]].MicroAlgos.Raw))
+	// app still has 188000 (paid out 10000, and paid 2 x fee to do it)
+	require.Equal(t, 188000, int(app))
+}
+
 // TestInnerTxCount ensures that inner transactions increment the TxnCounter
 func TestInnerTxnCount(t *testing.T) {
 	partitiontest.PartitionTest(t)
