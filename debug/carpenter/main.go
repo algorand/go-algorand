@@ -113,6 +113,7 @@ func (h hash) Format(f fmt.State, c rune) {
 
 type roundperiodstep struct {
 	round  uint64
+	branch string
 	period uint64
 	step   uint64
 }
@@ -123,7 +124,7 @@ func (rps roundperiodstep) Format(f fmt.State, c rune) {
 		width = 6
 	}
 	if rps.round == 0 {
-		fmt.Fprintf(f, "%*s", width, " ")
+		fmt.Fprintf(f, "%*s", width, "")
 		return
 	}
 	r := strconv.FormatUint(rps.round, 10)
@@ -131,9 +132,9 @@ func (rps roundperiodstep) Format(f fmt.State, c rune) {
 	s := strconv.FormatUint(rps.step, 10)
 	leadingspaces := ""
 	if len(r)+len(p)+len(s)+2 < width {
-		leadingspaces = fmt.Sprintf("%*s", width-len(r)-len(p)-len(s)-2, " ")
+		leadingspaces = fmt.Sprintf("%*s", width-len(r)-5-len(p)-len(s)-3, "")
 	}
-	fmt.Fprintf(f, "%s%s.%s.%s", leadingspaces, colorize(r), colorize(p), colorize(s))
+	fmt.Fprintf(f, "%s%s.%v.%s.%s", leadingspaces, colorize(r), hash(rps.branch), colorize(p), colorize(s))
 }
 
 //
@@ -354,11 +355,11 @@ func showAgreement(line string) (string, error) {
 	}
 	timestamp := fmt.Sprintf("%02d:%02d:%02d.%03d", event.Time.Hour(), event.Time.Minute(), event.Time.Second(), event.Time.Nanosecond()/int(time.Millisecond))
 	eventHash := hash(event.Hash)
-	rps := roundperiodstep{event.Round, event.Period, event.Step}
-	objrps := roundperiodstep{event.ObjectRound, event.ObjectPeriod, event.ObjectStep}
-	cell := fmt.Sprintf("%12v %7v:%30.30s %5v-%7v", timestamp, rps, eventType, eventHash, objrps)
+	rps := roundperiodstep{event.Round, event.Branch, event.Period, event.Step}
+	objrps := roundperiodstep{event.ObjectRound, event.ObjectBranch, event.ObjectPeriod, event.ObjectStep}
+	cell := fmt.Sprintf("%12v %12v:%30.30s %5v-%12v", timestamp, rps, eventType, eventHash, objrps)
 	if strings.Contains(eventType, "Conclude") {
-		cell = fmt.Sprintf("%12v %7v:%38.38s %v-%v", timestamp, rps, bold(eventType), eventHash, objrps)
+		cell = fmt.Sprintf("%12v %12v:%38.38s %5v-%12v", timestamp, rps, bold(eventType), eventHash, objrps)
 		if strings.Contains(eventType, "Round") {
 			cell += " "
 		}
@@ -379,7 +380,7 @@ func showLedger(line string) (string, error) {
 	}
 	switch event.Type {
 	case logspec.WroteBlock:
-		return bold(fmt.Sprintf("%v:Wrote block:%v (%d txns)     ", roundperiodstep{event.Round, 0, 0}, hash(event.Hash), event.TxnCount)), nil
+		return bold(fmt.Sprintf("%v:Wrote block:%v (%d txns)     ", roundperiodstep{event.Round, event.Branch, 0, 0}, hash(event.Hash), event.TxnCount)), nil
 	default:
 		return "", errors.New("unknown ledger event type")
 	}

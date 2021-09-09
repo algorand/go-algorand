@@ -42,6 +42,9 @@ type LedgerEvent struct {
 	// Round of the block just written
 	Round uint64
 
+	// Branch is the digest of the block committed in the previous round.
+	Branch string
+
 	// Hash is the block hash of the block just written
 	Hash string
 
