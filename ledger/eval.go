@@ -905,7 +905,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	}
 
 	// Remember this txn
-	cow.addTx(txn.Txn, txid)
+	cow.addTx(txn.Txn, txid, uint64(len(applyData.EvalDelta.InnerTxns))) // Will need to be recursive when inners are
 
 	return nil
 }

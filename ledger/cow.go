@@ -57,6 +57,10 @@ type roundCowState struct {
 	proto        config.ConsensusParams
 	mods         ledgercore.StateDelta
 
+	// count of transactions. Formerly, we used len(cb.mods), but that
+	// does not count inner transactions.
+	txnCount uint64
+
 	// storage deltas populated as side effects of AppCall transaction
 	// 1. Opt-in/Close actions (see Allocate/Deallocate)
 	// 2. Stateful TEAL evaluation (see SetKey/DelKey)
@@ -180,7 +184,7 @@ func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid trans
 }
 
 func (cb *roundCowState) txnCounter() uint64 {
-	return cb.lookupParent.txnCounter() + uint64(len(cb.mods.Txids))
+	return cb.lookupParent.txnCounter() + cb.txnCount
 }
 
 func (cb *roundCowState) compactCertNext() basics.Round {
@@ -198,8 +202,9 @@ func (cb *roundCowState) trackCreatable(creatableIndex basics.CreatableIndex) {
 	cb.trackedCreatables[cb.groupIdx] = creatableIndex
 }
 
-func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.Txid) {
+func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.Txid, inners uint64) {
 	cb.mods.Txids[txid] = txn.LastValid
+	cb.txnCount += 1 + inners
 	if txn.Lease != [32]byte{} {
 		cb.mods.Txleases[ledgercore.Txlease{Sender: txn.Sender, Lease: txn.Lease}] = txn.LastValid
 	}
@@ -242,6 +247,8 @@ func (cb *roundCowState) commitToParent() {
 	for txid, lv := range cb.mods.Txids {
 		cb.commitParent.mods.Txids[txid] = lv
 	}
+	cb.commitParent.txnCount += cb.txnCount
+
 	for txl, expires := range cb.mods.Txleases {
 		cb.commitParent.mods.Txleases[txl] = expires
 	}

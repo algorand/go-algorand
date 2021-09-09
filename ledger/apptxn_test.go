@@ -624,3 +624,51 @@ func TestRekeyActionCloseAccount(t *testing.T) {
 	eval.txn(t, &useacct, "unauthorized")
 	l.endBlock(t, eval)
 }
+
+// TestInnerTxCount ensures that inner transactions increment the TxnCounter
+func TestInnerTxnCount(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	create := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+         tx_begin
+         int pay
+         tx_field TypeEnum
+         int 5000
+         tx_field Amount
+         txn Accounts 1
+         tx_field Receiver
+         tx_submit
+`),
+	}
+
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: basics.AppIndex(1).Address(),
+		Amount:   200000, // account min balance, plus fees
+	}
+
+	payout1 := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[1],
+		ApplicationID: basics.AppIndex(1),
+		Accounts:      []basics.Address{addrs[1]}, // pay self
+	}
+
+	eval := l.nextBlock(t)
+	eval.txns(t, &create, &fund)
+	vb := l.endBlock(t, eval)
+	require.Equal(t, 2, int(vb.blk.TxnCounter))
+
+	eval = l.nextBlock(t)
+	eval.txns(t, &payout1)
+	vb = l.endBlock(t, eval)
+	require.Equal(t, 4, int(vb.blk.TxnCounter))
+}
