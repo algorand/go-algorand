@@ -282,6 +282,9 @@ type blkcert struct {
 }
 
 func (sl *SpeculativeLedger) loadFromDisk() error {
+	sl.mu.Lock()
+	defer sl.mu.Unlock()
+
 	var blocks []blkcert
 
 	err := sl.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -364,6 +367,9 @@ func (sl *SpeculativeLedger) loadFromDisk() error {
 }
 
 func (sl *SpeculativeLedger) OnNewBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
+	sl.mu.Lock()
+	defer sl.mu.Unlock()
+
 	for h, specblk := range sl.blocks {
 		if specblk.lfe.vb.blk.Round() < blk.Round() {
 			// Older blocks hanging around for whatever reason.
