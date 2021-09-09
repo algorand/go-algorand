@@ -16,11 +16,11 @@ func TestPipeline(t *testing.T) {
 
 	configurableConsensus := make(config.ConsensusProtocols)
 	cp := config.Consensus[protocol.ConsensusCurrentVersion]
+	cp.AgreementMessagesContainBranch = true
 	cp.AgreementPipelining = true
-	cp.AgreementPipelineDepth = 0 // 5
+	cp.AgreementPipelineDepth = 5
 	cp.AgreementPipelineDelayHistory = 32
-	// vFuture.AgreementPipelineDelay = 30
-	cp.AgreementPipelineDelay = 0
+	cp.AgreementPipelineDelay = 0 // 30
 	configurableConsensus[protocol.ConsensusVersion("vPipeline")] = cp
 
 	var fixture fixtures.RestClientFixture
@@ -31,5 +31,5 @@ func TestPipeline(t *testing.T) {
 	_, err := fixture.NC.AlgodClient()
 	r.NoError(err)
 
-	time.Sleep(30 * time.Second)
+	time.Sleep(60 * time.Second)
 }
