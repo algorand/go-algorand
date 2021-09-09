@@ -115,7 +115,7 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 	}
 
 	sigs := make([]sigFromAddr, 0, len(keys))
-	sigkeys := make([]merklekeystore.Verifier, 0, len(keys))
+
 	for _, key := range keys {
 		if key.FirstValid > hdr.Round || hdr.Round > key.LastValid {
 			continue
@@ -132,7 +132,6 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 			Round:  hdr.Round,
 			Sig:    sig,
 		})
-		sigkeys = append(sigkeys, *key.BlockProof.GetVerifier())
 	}
 
 	for _, sfa := range sigs {
