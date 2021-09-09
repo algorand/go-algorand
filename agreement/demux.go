@@ -204,21 +204,6 @@ func (d *demux) next(s *Service, extSignals pipelineExternalDemuxSignals) (e ext
 			return
 		}
 
-		var protos [2]protocol.ConsensusVersion
-		var err error
-		cr := e.ConsensusRound()
-		protos[0], err = d.ledger.ConsensusVersion(ParamsRound(cr.Number), cr.Branch)
-		if err != nil {
-			logging.Base().Warnf("demux: could not get consensus version for %v: %v", cr, err)
-		} else {
-			protos[1], err = d.ledger.ConsensusVersion(ParamsRound(cr.Number+1), cr.Branch)
-			if err != nil {
-				logging.Base().Warnf("demux: could not get consensus version for %v+1: %v", cr, err)
-			} else {
-				e = e.AttachConsensusVersion(ConsensusVersionView{Versions: protos})
-			}
-		}
-
 		if e.t() == payloadVerified {
 			r := e.(messageEvent).Input.Proposal.roundBranch()
 			e = e.(messageEvent).AttachValidatedAt(s.clockManager.durationUntil(r, time.Now()))
@@ -335,16 +320,32 @@ func (d *demux) next(s *Service, extSignals pipelineExternalDemuxSignals) (e ext
 		previousRound := nextRound
 
 		var nextRoundBranch round
+		var nextRoundProtos [2]protocol.ConsensusVersion
 		for {
 			nextRoundBranch.Number = s.Ledger.NextRound()
 			d, err := s.Ledger.LookupDigest(nextRoundBranch.Number-1, bookkeeping.BlockHash{})
 			if err != nil {
-				logging.Base().Warnf("demux: cannot get block hash for %d: %v", nextRoundBranch.Number-1, err)
+				s.log.Warnf("demux: cannot get block hash for %d: %v", nextRoundBranch.Number-1, err)
 				time.Sleep(time.Second)
-			} else {
-				nextRoundBranch.Branch = bookkeeping.BlockHash(d)
-				break
+				continue
 			}
+			nextRoundBranch.Branch = bookkeeping.BlockHash(d)
+
+			nextRoundProtos[0], err = s.Ledger.ConsensusVersion(ParamsRound(nextRoundBranch.Number), nextRoundBranch.Branch)
+			if err != nil {
+				s.log.Warnf("demux: unable to retrieve consensus version for round %d: %v", ParamsRound(nextRoundBranch.Number), err)
+				time.Sleep(time.Second)
+				continue
+			}
+
+			nextRoundProtos[1], err = s.Ledger.ConsensusVersion(ParamsRound(nextRoundBranch.Number+1), nextRoundBranch.Branch)
+			if err != nil {
+				s.log.Warnf("demux: unable to retrieve consensus version for round %d+1: %v", ParamsRound(nextRoundBranch.Number), err)
+				time.Sleep(time.Second)
+				continue
+			}
+
+			break
 		}
 
 		logEvent := logspec.AgreementEvent{
@@ -353,7 +354,10 @@ func (d *demux) next(s *Service, extSignals pipelineExternalDemuxSignals) (e ext
 		}
 
 		s.log.with(logEvent).Infof("agreement: round %d ended early due to concurrent write; next round is %d", previousRound, nextRound)
-		e = roundInterruptionEvent{Round: nextRoundBranch}
+		e = roundInterruptionEvent{
+			Round:  nextRoundBranch,
+			Protos: nextRoundProtos,
+		}
 		d.UpdateEventsQueue(eventQueueDemux, 1)
 		d.monitor.inc(demuxCoserviceType)
 	case <-deadlineCh:
@@ -437,21 +441,6 @@ func setupCompoundMessage(l LedgerReader, m message) (res externalEvent) {
 
 	tailmsg := message{MessageHandle: m.MessageHandle, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: compound.Proposal}
 	synthetic := messageEvent{T: payloadPresent, Input: tailmsg}
-
-	var protos [2]protocol.ConsensusVersion
-	var err error
-	cr := synthetic.ConsensusRound()
-	protos[0], err = l.ConsensusVersion(ParamsRound(cr.Number), cr.Branch)
-	if err != nil {
-		logging.Base().Warnf("setupCompoundMessage: could not get consensus version for %v: %v", cr, err)
-	} else {
-		protos[1], err = l.ConsensusVersion(ParamsRound(cr.Number+1), cr.Branch)
-		if err != nil {
-			logging.Base().Warnf("setupCompoundMessage: could not get consensus version for %v+1: %v", synthetic.ConsensusRound(), err)
-		} else {
-			synthetic = synthetic.AttachConsensusVersion(ConsensusVersionView{Versions: protos}).(messageEvent)
-		}
-	}
 
 	m.Tag = protocol.AgreementVoteTag
 	m.UnauthenticatedVote = compound.Vote

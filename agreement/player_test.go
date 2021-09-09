@@ -49,12 +49,12 @@ func generateProposalEvents(t *testing.T, player player, accs testAccountData, f
 	for i := range votes {
 		vote := votes[i]
 		msg := message{Tag: protocol.AgreementVoteTag, Vote: vote, UnauthenticatedVote: vote.u()}
-		e := messageEvent{T: voteVerified, Input: msg, Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}}}
+		e := messageEvent{T: voteVerified, Input: msg, Proto: protocol.ConsensusCurrentVersion}
 		voteBatch = append(voteBatch, e)
 
 		payload := payloads[i]
 		msg = message{Tag: protocol.ProposalPayloadTag, Proposal: payload, UnauthenticatedProposal: payload.u()}
-		e = messageEvent{T: payloadVerified, Input: msg, Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}}}
+		e = messageEvent{T: payloadVerified, Input: msg, Proto: protocol.ConsensusCurrentVersion}
 		payloadBatch = append(payloadBatch, e)
 	}
 
@@ -75,7 +75,7 @@ func generateVoteEvents(t *testing.T, player player, step step, accs testAccount
 	for i := range votes {
 		vote := votes[i]
 		msg := message{Tag: protocol.AgreementVoteTag, Vote: vote, UnauthenticatedVote: vote.u()}
-		e := messageEvent{T: voteVerified, Input: msg, Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}}}
+		e := messageEvent{T: voteVerified, Input: msg, Proto: protocol.ConsensusCurrentVersion}
 		batch = append(batch, e)
 	}
 	return batch
@@ -547,7 +547,7 @@ func TestPlayerISVDoesNotSoftVoteBottom(t *testing.T) {
 			Vote:                vv,
 			UnauthenticatedVote: vv.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -585,7 +585,7 @@ func TestPlayerISVVoteForStartingValue(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -629,7 +629,7 @@ func TestPlayerISVVoteNoVoteSansProposal(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -682,7 +682,7 @@ func TestPlayerISVVoteForReProposal(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -711,7 +711,7 @@ func TestPlayerISVVoteForReProposal(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -726,7 +726,7 @@ func TestPlayerISVVoteForReProposal(t *testing.T) {
 			Vote:                vv,
 			UnauthenticatedVote: vv.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -770,7 +770,7 @@ func TestPlayerISVNoVoteForUnsupportedReProposal(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -784,7 +784,7 @@ func TestPlayerISVNoVoteForUnsupportedReProposal(t *testing.T) {
 			Vote:                vv,
 			UnauthenticatedVote: vv.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -819,7 +819,7 @@ func TestPlayerICVOnSoftThresholdSamePeriod(t *testing.T) {
 			Vote:                proposalVote,
 			UnauthenticatedVote: proposalVote.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -831,7 +831,7 @@ func TestPlayerICVOnSoftThresholdSamePeriod(t *testing.T) {
 			Proposal:                *payload,
 			UnauthenticatedProposal: payload.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -858,7 +858,7 @@ func TestPlayerICVOnSoftThresholdSamePeriod(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -905,7 +905,7 @@ func TestPlayerICVOnSoftThresholdPrePayload(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -921,7 +921,7 @@ func TestPlayerICVOnSoftThresholdPrePayload(t *testing.T) {
 			Vote:                proposalVote,
 			UnauthenticatedVote: proposalVote.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -933,7 +933,7 @@ func TestPlayerICVOnSoftThresholdPrePayload(t *testing.T) {
 			Proposal:                *payload,
 			UnauthenticatedProposal: payload.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -973,7 +973,7 @@ func TestPlayerICVOnSoftThresholdThenPayloadNoProposalVote(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -986,7 +986,7 @@ func TestPlayerICVOnSoftThresholdThenPayloadNoProposalVote(t *testing.T) {
 			Proposal:                *payload,
 			UnauthenticatedProposal: payload.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1014,7 +1014,7 @@ func TestPlayerICVNoVoteForUncommittableProposal(t *testing.T) {
 			Vote:                proposalVote,
 			UnauthenticatedVote: proposalVote.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1041,7 +1041,7 @@ func TestPlayerICVNoVoteForUncommittableProposal(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1078,7 +1078,7 @@ func TestPlayerICVPanicOnSoftBottomThreshold(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1117,7 +1117,7 @@ func TestPlayerFFSoftThreshold(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1144,7 +1144,7 @@ func TestPlayerFFSoftThresholdWithPayload(t *testing.T) {
 			Vote:                proposalVote,
 			UnauthenticatedVote: proposalVote.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1158,7 +1158,7 @@ func TestPlayerFFSoftThresholdWithPayload(t *testing.T) {
 			Proposal:                *payload,
 			UnauthenticatedProposal: payload.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1185,7 +1185,7 @@ func TestPlayerFFSoftThresholdWithPayload(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1226,7 +1226,7 @@ func TestPlayerFFSoftThresholdLatePayloadCert(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1242,7 +1242,7 @@ func TestPlayerFFSoftThresholdLatePayloadCert(t *testing.T) {
 		Input: message{
 			Vote: proposalVote,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1256,7 +1256,7 @@ func TestPlayerFFSoftThresholdLatePayloadCert(t *testing.T) {
 			Proposal:                *payload,
 			UnauthenticatedProposal: payload.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1295,7 +1295,7 @@ func TestPlayerFFNextThresholdBottom(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1330,7 +1330,7 @@ func TestPlayerFFNextThresholdValue(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1365,7 +1365,7 @@ func TestPlayerDoesNotFastForwardOldThresholdEvents(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1394,7 +1394,7 @@ func TestPlayerDoesNotFastForwardOldThresholdEvents(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1410,7 +1410,7 @@ func TestPlayerDoesNotFastForwardOldThresholdEvents(t *testing.T) {
 			Vote:                vv,
 			UnauthenticatedVote: vv.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1455,7 +1455,7 @@ func TestPlayerProposesBottomBundle(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1483,7 +1483,7 @@ func TestPlayerProposesNewRound(t *testing.T) {
 			Vote:                vVote,
 			UnauthenticatedVote: vVote.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1493,7 +1493,7 @@ func TestPlayerProposesNewRound(t *testing.T) {
 		Input: message{
 			Proposal: *pP,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1519,7 +1519,7 @@ func TestPlayerProposesNewRound(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1559,7 +1559,7 @@ func TestPlayerCertificateThenPayloadEntersNewRound(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1575,7 +1575,7 @@ func TestPlayerCertificateThenPayloadEntersNewRound(t *testing.T) {
 		Input: message{
 			Proposal: *pP,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1613,7 +1613,7 @@ func TestPlayerReproposesNextValueBundleWithoutPayload(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1645,7 +1645,7 @@ func TestPlayerReproposesNextValueBundleRelaysPayload(t *testing.T) {
 			Vote:                vv,
 			UnauthenticatedVote: vv.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1656,7 +1656,7 @@ func TestPlayerReproposesNextValueBundleRelaysPayload(t *testing.T) {
 			Proposal:                *payload,
 			UnauthenticatedProposal: payload.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1682,7 +1682,7 @@ func TestPlayerReproposesNextValueBundleRelaysPayload(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1704,7 +1704,7 @@ func TestPlayerReproposesNextValueBundleRelaysPayload(t *testing.T) {
 		Input: message{
 			UnauthenticatedVote: vote.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1717,7 +1717,7 @@ func TestPlayerReproposesNextValueBundleRelaysPayload(t *testing.T) {
 			Vote:                vote,
 			UnauthenticatedVote: vote.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1745,7 +1745,7 @@ func TestPlayerCommitsCertThreshold(t *testing.T) {
 			Vote:                vVote,
 			UnauthenticatedVote: vVote.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1755,7 +1755,7 @@ func TestPlayerCommitsCertThreshold(t *testing.T) {
 		Input: message{
 			Proposal: *pP,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1781,7 +1781,7 @@ func TestPlayerCommitsCertThreshold(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1825,7 +1825,7 @@ func TestPlayerRePropagatesFreshestBundle(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1874,7 +1874,7 @@ func TestPlayerPropagatesProposalPayload(t *testing.T) {
 			Vote:                vVote,
 			UnauthenticatedVote: vVote.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1887,7 +1887,7 @@ func TestPlayerPropagatesProposalPayload(t *testing.T) {
 	inMsg = messageEvent{
 		T:     payloadPresent,
 		Input: m,
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1911,7 +1911,7 @@ func TestPlayerPropagatesOwnProposalPayload(t *testing.T) {
 			Vote:                vVote,
 			UnauthenticatedVote: vVote.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1924,7 +1924,7 @@ func TestPlayerPropagatesOwnProposalPayload(t *testing.T) {
 	inMsg = messageEvent{
 		T:     payloadVerified,
 		Input: m,
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1950,7 +1950,7 @@ func TestPlayerPropagatesProposalPayloadFutureRound(t *testing.T) {
 			Vote:                vVote,
 			UnauthenticatedVote: vVote.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1963,7 +1963,7 @@ func TestPlayerPropagatesProposalPayloadFutureRound(t *testing.T) {
 	inMsg = messageEvent{
 		T:     payloadPresent,
 		Input: m,
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -1999,7 +1999,7 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 			Vote:                vVote,
 			UnauthenticatedVote: vVote.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2009,7 +2009,7 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 		Input: message{
 			Proposal: *payload,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2035,7 +2035,7 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2061,7 +2061,7 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2084,7 +2084,7 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 			Vote:                vVote,
 			UnauthenticatedVote: vVote.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2129,7 +2129,7 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2142,7 +2142,7 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 			Vote:                vVote,
 			UnauthenticatedVote: vVote.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2152,7 +2152,7 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 		Input: message{
 			Proposal: *payloadNext,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2184,7 +2184,7 @@ func TestPlayerPropagatesProposalVote(t *testing.T) {
 			Vote:                vVote,
 			UnauthenticatedVote: vVote.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2206,7 +2206,7 @@ func TestPlayerPropagatesSoftVote(t *testing.T) {
 			Vote:                vVote,
 			UnauthenticatedVote: vVote.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2228,7 +2228,7 @@ func TestPlayerPropagatesCertVote(t *testing.T) {
 			Vote:                vVote,
 			UnauthenticatedVote: vVote.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2257,7 +2257,7 @@ func TestPlayerDisconnectsFromMalformedProposalVote(t *testing.T) {
 		T:     voteVerified,
 		Input: m,
 		Err:   verifyError,
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2295,7 +2295,7 @@ func TestPlayerIgnoresMalformedPayload(t *testing.T) {
 		T:     payloadVerified,
 		Input: m,
 		Err:   verifyError,
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2334,9 +2334,7 @@ func TestPlayerDisconnectsFromMalformedVotes(t *testing.T) {
 		T:     voteVerified,
 		Input: m,
 		Err:   verifyError,
-		Proto: ConsensusVersionView{
-			Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion},
-		},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2374,9 +2372,7 @@ func TestPlayerDisconnectsFromMalformedBundles(t *testing.T) {
 		Err:   verifyError,
 		T:     bundleVerified,
 		Input: m,
-		Proto: ConsensusVersionView{
-			Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion},
-		},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2410,9 +2406,7 @@ func TestPlayerRequestsVoteVerification(t *testing.T) {
 	inMsg := messageEvent{
 		T:     votePresent,
 		Input: m,
-		Proto: ConsensusVersionView{
-			Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion},
-		},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2434,9 +2428,7 @@ func TestPlayerRequestsProposalVoteVerification(t *testing.T) {
 	inMsg := messageEvent{
 		T:     votePresent,
 		Input: m,
-		Proto: ConsensusVersionView{
-			Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion},
-		},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2461,9 +2453,7 @@ func TestPlayerRequestsBundleVerification(t *testing.T) {
 	inMsg := messageEvent{
 		T:     bundlePresent,
 		Input: m,
-		Proto: ConsensusVersionView{
-			Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion},
-		},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2487,7 +2477,7 @@ func TestPlayerRequestsPayloadVerification(t *testing.T) {
 			Vote:                vv,
 			UnauthenticatedVote: vv.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2498,7 +2488,7 @@ func TestPlayerRequestsPayloadVerification(t *testing.T) {
 	inMsg = messageEvent{
 		T:     payloadPresent,
 		Input: m,
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2527,7 +2517,7 @@ func TestPlayerRequestsPipelinedPayloadVerification(t *testing.T) {
 			Vote:                vv,
 			UnauthenticatedVote: vv.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2539,7 +2529,7 @@ func TestPlayerRequestsPipelinedPayloadVerification(t *testing.T) {
 	inMsg = messageEvent{
 		T:     payloadPresent,
 		Input: m,
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2559,7 +2549,7 @@ func TestPlayerRequestsPipelinedPayloadVerification(t *testing.T) {
 			Vote:                vVote,
 			UnauthenticatedVote: vVote.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2569,7 +2559,7 @@ func TestPlayerRequestsPipelinedPayloadVerification(t *testing.T) {
 		Input: message{
 			Proposal: *pP,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2594,7 +2584,7 @@ func TestPlayerRequestsPipelinedPayloadVerification(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2641,7 +2631,7 @@ func TestPlayerHandlesPipelinedThresholds(t *testing.T) {
 	//		},
 	//		UnauthenticatedBundle: bun,
 	//	},
-	//	Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+	//	Proto: protocol.ConsensusCurrentVersion,
 	//}
 	//err, panicErr := pM.transition(inMsg)
 	//require.NoError(t, err)
@@ -2653,7 +2643,7 @@ func TestPlayerHandlesPipelinedThresholds(t *testing.T) {
 				Vote:                v,
 				UnauthenticatedVote: v.u(),
 			},
-			Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+			Proto: protocol.ConsensusCurrentVersion,
 		}
 		err, panicErr := pM.transition(inMsg)
 		require.NoError(t, err)
@@ -2670,7 +2660,7 @@ func TestPlayerHandlesPipelinedThresholds(t *testing.T) {
 			Vote:                vVote,
 			UnauthenticatedVote: vVote.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2680,7 +2670,7 @@ func TestPlayerHandlesPipelinedThresholds(t *testing.T) {
 		Input: message{
 			Proposal: *pPTwo,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2705,7 +2695,7 @@ func TestPlayerHandlesPipelinedThresholds(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2720,7 +2710,7 @@ func TestPlayerHandlesPipelinedThresholds(t *testing.T) {
 	inMsg = messageEvent{
 		T:     payloadPresent,
 		Input: m,
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2758,7 +2748,7 @@ func TestPlayerRegression_EnsuresCertThreshFromOldPeriod_8ba23942(t *testing.T) 
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2772,7 +2762,7 @@ func TestPlayerRegression_EnsuresCertThreshFromOldPeriod_8ba23942(t *testing.T) 
 		Input: message{
 			Proposal: *pP,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2786,7 +2776,7 @@ func TestPlayerRegression_EnsuresCertThreshFromOldPeriod_8ba23942(t *testing.T) 
 				Vote:                votes[i],
 				UnauthenticatedVote: votes[i].u(),
 			},
-			Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+			Proto: protocol.ConsensusCurrentVersion,
 		}
 		err, panicErr = pM.transition(msg)
 		require.NoError(t, err)
@@ -2821,7 +2811,7 @@ func TestPlayer_RejectsCertThresholdFromPreviousRound(t *testing.T) {
 				Vote:                votes[i],
 				UnauthenticatedVote: votes[i].u(),
 			},
-			Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+			Proto: protocol.ConsensusCurrentVersion,
 		}
 		err, panicErr := pM.transition(msg)
 		require.NoError(t, err)
@@ -2869,7 +2859,7 @@ func TestPlayer_CommitsCertThresholdWithoutPreStaging(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2882,7 +2872,7 @@ func TestPlayer_CommitsCertThresholdWithoutPreStaging(t *testing.T) {
 		Input: message{
 			Proposal: *pP,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -2898,7 +2888,7 @@ func TestPlayer_CommitsCertThresholdWithoutPreStaging(t *testing.T) {
 				Vote:                votes[i],
 				UnauthenticatedVote: votes[i].u(),
 			},
-			Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+			Proto: protocol.ConsensusCurrentVersion,
 		}
 		err, panicErr = pM.transition(msg)
 		require.NoError(t, err)
@@ -2933,7 +2923,7 @@ func TestPlayer_CertThresholdDoesNotBlock(t *testing.T) {
 				Vote:                votes[i],
 				UnauthenticatedVote: votes[i].u(),
 			},
-			Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+			Proto: protocol.ConsensusCurrentVersion,
 		}
 		err, panicErr := pM.transition(msg)
 		require.NoError(t, err)
@@ -2968,7 +2958,7 @@ func TestPlayer_CertThresholdDoesNotBlockFuturePeriod(t *testing.T) {
 				Vote:                votes[i],
 				UnauthenticatedVote: votes[i].u(),
 			},
-			Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+			Proto: protocol.ConsensusCurrentVersion,
 		}
 		err, panicErr := pM.transition(msg)
 		require.NoError(t, err)
@@ -3014,7 +3004,7 @@ func TestPlayer_CertThresholdFastForwards(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -3040,7 +3030,7 @@ func TestPlayer_CertThresholdCommitsFuturePeriodIfAlreadyHasBlock(t *testing.T) 
 			Vote:                proposalVote,
 			UnauthenticatedVote: proposalVote.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -3051,7 +3041,7 @@ func TestPlayer_CertThresholdCommitsFuturePeriodIfAlreadyHasBlock(t *testing.T) 
 			Proposal:                *payload,
 			UnauthenticatedProposal: payload.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -3078,7 +3068,7 @@ func TestPlayer_CertThresholdCommitsFuturePeriodIfAlreadyHasBlock(t *testing.T) 
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -3117,7 +3107,7 @@ func TestPlayer_PayloadAfterCertThresholdCommits(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -3136,7 +3126,7 @@ func TestPlayer_PayloadAfterCertThresholdCommits(t *testing.T) {
 			Proposal:                *pP,
 			UnauthenticatedProposal: pP.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -3162,7 +3152,7 @@ func TestPlayerAlwaysResynchsPinnedValue(t *testing.T) {
 			Vote:                vv,
 			UnauthenticatedVote: vv.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
@@ -3173,7 +3163,7 @@ func TestPlayerAlwaysResynchsPinnedValue(t *testing.T) {
 			Proposal:                *payload,
 			UnauthenticatedProposal: payload.u(),
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -3199,7 +3189,7 @@ func TestPlayerAlwaysResynchsPinnedValue(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
@@ -3225,7 +3215,7 @@ func TestPlayerAlwaysResynchsPinnedValue(t *testing.T) {
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	pM.resetTrace() // clean up the history
 	err, panicErr = pM.transition(inMsg)

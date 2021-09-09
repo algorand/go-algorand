@@ -42,28 +42,19 @@ type event interface {
 }
 
 // A ConsensusVersionView is a view of the consensus versions as read from a
-// LedgerReader, associated with some round.  An empty Version string means
+// LedgerReader, associated with some round.  An empty version string means
 // there is no information about the consensus version for that round.
-//
-// The two versions are for ParamsRound(ConsensusRound()) and for
-// ParamsRound(ConsensusRound()+1), respectively.
-type ConsensusVersionView struct {
-	Versions [2]protocol.ConsensusVersion
-}
+type ConsensusVersionView = protocol.ConsensusVersion
 
 // An externalEvent represents an event delivered to the top-level state machine.
 //
-// External events are associated with a round and a view of consensus version
-// on that round.
+// External events are associated with a round, which is used to dispatch the
+// event to the appropriate player under pipelining.
 type externalEvent interface {
 	event
 
-	// ConsensusRound is the round related to this event.
-	ConsensusRound() round
-
-	// AttachConsensusVersion returns a copy of this externalEvent with a
-	// ConsensusVersion attached.
-	AttachConsensusVersion(v ConsensusVersionView) externalEvent
+	// DispatchRound is the round related to this event.
+	DispatchRound() round
 }
 
 // An eventType identifies the particular type of event emitted.
@@ -262,12 +253,8 @@ func (e emptyEvent) ComparableStr() string {
 	return e.String()
 }
 
-func (e emptyEvent) ConsensusRound() round {
+func (e emptyEvent) DispatchRound() round {
 	return roundZero
-}
-
-func (e emptyEvent) AttachConsensusVersion(v ConsensusVersionView) externalEvent {
-	return e
 }
 
 type messageEvent struct {
@@ -294,6 +281,8 @@ type messageEvent struct {
 	// whether the corresponding request was cancelled
 	Cancelled bool
 
+	// Proto is filled in by the player to reflect the protocol that
+	// should be used for processing this message.
 	Proto ConsensusVersionView
 
 	// LedgerBranch indicates the branch value that should be used when
@@ -318,7 +307,7 @@ func (e messageEvent) ComparableStr() string {
 	return e.T.String()
 }
 
-func (e messageEvent) ConsensusRound() round {
+func (e messageEvent) DispatchRound() round {
 	switch e.T {
 	case votePresent, voteVerified:
 		return e.Input.UnauthenticatedVote.R.roundBranch()
@@ -331,7 +320,7 @@ func (e messageEvent) ConsensusRound() round {
 	}
 }
 
-func (e messageEvent) AttachConsensusVersion(v ConsensusVersionView) externalEvent {
+func (e messageEvent) AttachConsensusVersion(v ConsensusVersionView) messageEvent {
 	e.Proto = v
 	return e
 }
@@ -368,7 +357,9 @@ type roundInterruptionEvent struct {
 	// this event.
 	Round round
 
-	Proto ConsensusVersionView
+	// Round interruption event needs to inform the state machine about the
+	// next two upcoming consensus protocol versions.
+	Protos [2]ConsensusVersionView
 }
 
 func (e roundInterruptionEvent) t() eventType {
@@ -383,13 +374,8 @@ func (e roundInterruptionEvent) ComparableStr() string {
 	return e.String()
 }
 
-func (e roundInterruptionEvent) ConsensusRound() round {
+func (e roundInterruptionEvent) DispatchRound() round {
 	return e.Round
-}
-
-func (e roundInterruptionEvent) AttachConsensusVersion(v ConsensusVersionView) externalEvent {
-	e.Proto = v
-	return e
 }
 
 type timeoutEvent struct {
@@ -414,13 +400,8 @@ func (e timeoutEvent) ComparableStr() string {
 	return e.t().String()
 }
 
-func (e timeoutEvent) ConsensusRound() round {
+func (e timeoutEvent) DispatchRound() round {
 	return e.Round
-}
-
-func (e timeoutEvent) AttachConsensusVersion(v ConsensusVersionView) externalEvent {
-	e.Proto = v
-	return e
 }
 
 type newRoundEvent struct{}
@@ -996,10 +977,6 @@ func (e checkpointEvent) ComparableStr() string {
 	return e.String()
 }
 
-func (e checkpointEvent) ConsensusRound() round {
+func (e checkpointEvent) DispatchRound() round {
 	return roundZero
-}
-
-func (e checkpointEvent) AttachConsensusVersion(v ConsensusVersionView) externalEvent {
-	return e
 }

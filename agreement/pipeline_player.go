@@ -105,19 +105,20 @@ func (p *pipelinePlayer) handle(r routerHandle, e event) []action {
 	switch e := e.(type) {
 	case messageEvent, timeoutEvent:
 		if e.t() == pipelineTimeout {
-			state, ok := p.Players[ee.ConsensusRound()]
+			state, ok := p.Players[ee.DispatchRound()]
 			if ok {
 				state.PipelineDelay = 0
 				return p.adjustPlayers(r)
 			}
 		}
 
-		return p.handleRoundEvent(r, ee, ee.ConsensusRound())
+		return p.handleRoundEvent(r, ee, ee.DispatchRound())
 	case checkpointEvent:
 		// checkpointEvent.ConsensusRound() returns zero
 		return p.handleRoundEvent(r, ee, e.Round) // XXX make checkpointAction in pipelinePlayer?
 	case roundInterruptionEvent:
 		p.FirstUncommittedRound = e.Round
+		p.FirstUncommittedVersion = e.Protos
 		return p.adjustPlayers(r)
 	default:
 		panic("bad event")

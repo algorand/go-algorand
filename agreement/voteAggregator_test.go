@@ -86,7 +86,7 @@ func TestVoteAggregatorVotes(t *testing.T) {
 				Vote:                vote,
 				UnauthenticatedVote: vote.u(),
 			}
-			eM := messageEvent{T: voteVerified, Input: msg, Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}}}
+			eM := messageEvent{T: voteVerified, Input: msg, Proto: protocol.ConsensusCurrentVersion}
 			e := filterableMessageEvent{messageEvent: eM, FreshnessData: freshnessData{
 				PlayerRound:          round,
 				PlayerPeriod:         period,
@@ -154,7 +154,7 @@ func TestVoteAggregatorBundles(t *testing.T) {
 			Bundle:                bundle,
 			UnauthenticatedBundle: bundle.u(),
 		}
-		eM := messageEvent{T: bundleVerified, Input: msg, Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}}}
+		eM := messageEvent{T: bundleVerified, Input: msg, Proto: protocol.ConsensusCurrentVersion}
 		e := filterableMessageEvent{messageEvent: eM, FreshnessData: freshnessData{
 			PlayerRound:          round,
 			PlayerPeriod:         period,
@@ -204,7 +204,7 @@ func TestVoteAggregatorFiltersVotePresentStale(t *testing.T) {
 		Input: message{
 			UnauthenticatedVote: uv,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 	// fresh vote should not be rejected
@@ -215,7 +215,7 @@ func TestVoteAggregatorFiltersVotePresentStale(t *testing.T) {
 		Input: message{
 			UnauthenticatedVote: uv,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
 	// vote from next round not rejected
@@ -226,7 +226,7 @@ func TestVoteAggregatorFiltersVotePresentStale(t *testing.T) {
 		Input: message{
 			UnauthenticatedVote: uv,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
 
@@ -238,7 +238,7 @@ func TestVoteAggregatorFiltersVotePresentStale(t *testing.T) {
 		Input: message{
 			Vote: v,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
 	uv = helper.MakeUnauthenticatedVote(t, 1, r2, period(0), soft, *pV, config.Consensus[protocol.ConsensusCurrentVersion])
@@ -248,7 +248,7 @@ func TestVoteAggregatorFiltersVotePresentStale(t *testing.T) {
 		Input: message{
 			UnauthenticatedVote: uv,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
@@ -293,7 +293,7 @@ func TestVoteAggregatorFiltersVoteVerifiedStale(t *testing.T) {
 		Input: message{
 			Vote: uv,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 	// fresh vote should not be rejected
@@ -304,7 +304,7 @@ func TestVoteAggregatorFiltersVoteVerifiedStale(t *testing.T) {
 		Input: message{
 			Vote: uv,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
 	// vote from next round not rejected
@@ -315,7 +315,7 @@ func TestVoteAggregatorFiltersVoteVerifiedStale(t *testing.T) {
 		Input: message{
 			Vote: uv,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
 	// malformed vote rejected
@@ -327,7 +327,7 @@ func TestVoteAggregatorFiltersVoteVerifiedStale(t *testing.T) {
 			Vote: uv,
 		},
 		Err:   makeSerErrStr("Test Error"),
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: voteMalformed})
 
@@ -372,7 +372,7 @@ func TestVoteAggregatorFiltersVoteVerifiedThreshold(t *testing.T) {
 		Input: message{
 			Vote: v,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, thresholdEvent{T: softThreshold, Proposal: *pV})
 
@@ -385,7 +385,7 @@ func TestVoteAggregatorFiltersVoteVerifiedThreshold(t *testing.T) {
 		Input: message{
 			Vote: v,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
 
@@ -434,7 +434,7 @@ func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
 		Input: message{
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
 
@@ -450,7 +450,7 @@ func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
 		Input: message{
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
 
@@ -466,7 +466,7 @@ func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
 		Input: message{
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: bundleFiltered})
 
@@ -482,7 +482,7 @@ func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
 		Input: message{
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: bundleFiltered})
 
@@ -498,7 +498,7 @@ func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
 		Input: message{
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: bundleFiltered})
 
@@ -548,7 +548,7 @@ func TestVoteAggregatorFiltersBundleVerifiedThresholdStale(t *testing.T) {
 			},
 		},
 		Err:   makeSerErrStr("Fake error"),
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: bundleMalformed})
 
@@ -566,7 +566,7 @@ func TestVoteAggregatorFiltersBundleVerifiedThresholdStale(t *testing.T) {
 				U: bun,
 			},
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: bundleFiltered})
 
@@ -595,7 +595,7 @@ func TestVoteAggregatorFiltersBundleVerifiedThresholdStale(t *testing.T) {
 				Votes: votes,
 			},
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, thresholdEvent{T: certThreshold, Proposal: *pV})
 
@@ -622,7 +622,7 @@ func TestVoteAggregatorFiltersBundleVerifiedThresholdStale(t *testing.T) {
 				Votes: votes,
 			},
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}}}
+		Proto: protocol.ConsensusCurrentVersion}
 	// this won't make it through the stack, a soft bundle is not fresher than a cert
 	b.AddInOutPair(inMsg, filteredEvent{T: bundleFiltered})
 
@@ -683,7 +683,7 @@ func TestVoteAggregatorFiltersBundleVerifiedRelayStale(t *testing.T) {
 				Votes: votes,
 			},
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, thresholdEvent{T: softThreshold, Proposal: *pV})
 
@@ -710,7 +710,7 @@ func TestVoteAggregatorFiltersBundleVerifiedRelayStale(t *testing.T) {
 				Votes: votes,
 			},
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	// this won't make it through the stack, a soft bundle is not fresher than a cert
 	b.AddInOutPair(inMsg, filteredEvent{T: bundleFiltered})
@@ -740,7 +740,7 @@ func TestVoteAggregatorFiltersBundleVerifiedRelayStale(t *testing.T) {
 				EquivocationVotes: equivocationVotes,
 			},
 		},
-		Proto: ConsensusVersionView{Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion}},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	// this won't make it through the stack, a soft bundle is not fresher than a cert
 	b.AddInOutPair(inMsg, thresholdEvent{T: certThreshold, Proposal: *pV})
@@ -785,9 +785,7 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 		Input: message{
 			UnauthenticatedVote: uv,
 		},
-		Proto: ConsensusVersionView{
-			Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion},
-		},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
@@ -799,9 +797,7 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 		Input: message{
 			UnauthenticatedVote: uv,
 		},
-		Proto: ConsensusVersionView{
-			Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion},
-		},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
@@ -813,9 +809,7 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 		Input: message{
 			UnauthenticatedVote: uv,
 		},
-		Proto: ConsensusVersionView{
-			Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion},
-		},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
 
@@ -827,9 +821,7 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 		Input: message{
 			UnauthenticatedVote: uv,
 		},
-		Proto: ConsensusVersionView{
-			Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion},
-		},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
 
@@ -842,9 +834,7 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 		Input: message{
 			UnauthenticatedVote: uv,
 		},
-		Proto: ConsensusVersionView{
-			Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion},
-		},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
@@ -888,9 +878,7 @@ func TestVoteAggregatorFiltersVoteNextRound(t *testing.T) {
 		Input: message{
 			UnauthenticatedVote: uv,
 		},
-		Proto: ConsensusVersionView{
-			Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion},
-		},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
 
@@ -902,9 +890,7 @@ func TestVoteAggregatorFiltersVoteNextRound(t *testing.T) {
 		Input: message{
 			UnauthenticatedVote: uv,
 		},
-		Proto: ConsensusVersionView{
-			Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion},
-		},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
@@ -916,9 +902,7 @@ func TestVoteAggregatorFiltersVoteNextRound(t *testing.T) {
 		Input: message{
 			UnauthenticatedVote: uv,
 		},
-		Proto: ConsensusVersionView{
-			Versions: [2]protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusCurrentVersion},
-		},
+		Proto: protocol.ConsensusCurrentVersion,
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 

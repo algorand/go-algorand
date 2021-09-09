@@ -239,7 +239,7 @@ func (p *player) handle(r routerHandle, e event) []action {
 			return actions
 		}
 	case roundInterruptionEvent:
-		return p.init(r, e.Round, e.Proto.Versions)
+		return p.init(r, e.Round, e.Protos)
 	case checkpointEvent:
 		return p.handleCheckpointEvent(r, e)
 	default:
@@ -248,12 +248,7 @@ func (p *player) handle(r routerHandle, e event) []action {
 }
 
 func (p *player) handleFastTimeout(r routerHandle, e timeoutEvent) []action {
-	if e.Proto.Versions[0] == "" {
-		r.t.log.Errorf("failed to read protocol version for fastTimeout event")
-		return nil
-	}
-
-	lambda := config.Consensus[e.Proto.Versions[0]].FastRecoveryLambda
+	lambda := config.Consensus[p.Versions[0]].FastRecoveryLambda
 	k := (p.FastRecoveryDeadline + lambda - 1) / lambda // round up
 	lower, upper := k*lambda, (k+1)*lambda
 	delta := time.Duration(e.RandomEntropy % uint64(upper-lower))
@@ -559,6 +554,15 @@ func (p *player) partitioned() bool {
 }
 
 func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []action) {
+	// fill in the protocol version
+	dr := e.DispatchRound()
+	if dr.Number == p.Round.Number {
+		e = e.AttachConsensusVersion(p.Versions[0])
+	}
+	if dr.Number == p.Round.Number+1 {
+		e = e.AttachConsensusVersion(p.Versions[1])
+	}
+
 	// is it a proposal-vote? (i.e., vote where step = 0)
 	proposalVote := false
 	switch e.t() {
