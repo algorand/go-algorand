@@ -144,9 +144,9 @@ func bitIntFillBytes(b *big.Int, buf []byte) []byte {
 	return buf
 }
 
-func keyToByte(t *testing.T, b *big.Int) []byte {
+func keyToByte(tb testing.TB, b *big.Int) []byte {
 	k := make([]byte, 32)
-	require.NotPanics(t, func() {
+	require.NotPanics(tb, func() {
 		k = bitIntFillBytes(b, k)
 	})
 	return k
@@ -209,8 +209,7 @@ byte 0x%s
 load 0
 byte 0x%s
 ==
-&&
-`
+&&`
 	pkTampered1 := make([]byte, len(pk))
 	copy(pkTampered1, pk)
 	pkTampered1[0] = 0
@@ -300,8 +299,7 @@ concat // 0x04 + X + Y
 byte 0x%s
 ==
 load 1
-&&
-`
+&&`
 	var recoverTests = []struct {
 		v       int
 		checker func(t *testing.T, program string, introduced uint64)
@@ -320,6 +318,22 @@ load 1
 			test.checker(t, src, 5)
 		})
 	}
+
+	// sample sequencing: decompress + verify
+	source = fmt.Sprintf(`#pragma version 5
+byte "testdata"
+sha512_256
+byte 0x%s
+byte 0x%s
+byte 0x%s
+ecdsa_pk_decompress Secp256k1
+ecdsa_verify Secp256k1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.EncodeToString(pk))
+	ops := testProg(t, source, 5)
+	var txn transactions.SignedTxn
+	txn.Lsig.Logic = ops.Program
+	pass, err := Eval(ops.Program, defaultEvalParamsWithVersion(nil, &txn, 5))
+	require.NoError(t, err)
+	require.True(t, pass)
 }
 
 func BenchmarkHash(b *testing.B) {
@@ -396,4 +410,102 @@ ed25519verify`, pkStr), AssemblerMaxVersion)
 			require.True(b, pass)
 		}
 	}
+}
+
+type benchmarkEcDsaData struct {
+	x        []byte
+	y        []byte
+	pk       []byte
+	msg      [32]byte
+	r        []byte
+	s        []byte
+	v        int
+	programs []byte
+}
+
+func benchmarkEcDsaGenData(b *testing.B) (data []benchmarkEcDsaData) {
+	data = make([]benchmarkEcDsaData, b.N)
+	for i := 0; i < b.N; i++ {
+		key, err := ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
+		require.NoError(b, err)
+		sk := keyToByte(b, key.D)
+		data[i].x = keyToByte(b, key.PublicKey.X)
+		data[i].y = keyToByte(b, key.PublicKey.Y)
+		data[i].pk = secp256k1.CompressPubkey(key.PublicKey.X, key.PublicKey.Y)
+
+		d := []byte("testdata")
+		data[i].msg = sha512.Sum512_256(d)
+
+		sign, err := secp256k1.Sign(data[i].msg[:], sk)
+		require.NoError(b, err)
+		data[i].r = sign[:32]
+		data[i].s = sign[32:64]
+		data[i].v = int(sign[64])
+	}
+	return data
+}
+
+func benchmarkEcDsa(b *testing.B, source string) {
+	data := benchmarkEcDsaGenData(b)
+	ops, err := AssembleStringWithVersion(source, 5)
+	require.NoError(b, err)
+	for i := 0; i < b.N; i++ {
+		data[i].programs = ops.Program
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var txn transactions.SignedTxn
+		txn.Lsig.Logic = data[i].programs
+		txn.Lsig.Args = [][]byte{data[i].msg[:], data[i].r, data[i].s, data[i].x, data[i].y, data[i].pk, {uint8(data[i].v)}}
+		sb := strings.Builder{}
+		ep := defaultEvalParams(&sb, &txn)
+		pass, err := Eval(data[i].programs, ep)
+		if !pass {
+			b.Log(hex.EncodeToString(data[i].programs))
+			b.Log(sb.String())
+		}
+		if err != nil {
+			require.NoError(b, err)
+		}
+		if !pass {
+			require.True(b, pass)
+		}
+	}
+}
+
+func BenchmarkEcDsa(b *testing.B) {
+	b.Run("ecdsa_verify", func(b *testing.B) {
+		source := `#pragma version 5
+arg 0
+arg 1
+arg 2
+arg 3
+arg 4
+ecdsa_verify Secp256k1`
+		benchmarkEcDsa(b, source)
+	})
+	b.Run("ecdsa_pk_decompress", func(b *testing.B) {
+		source := `#pragma version 5
+arg 5
+ecdsa_pk_decompress Secp256k1
+pop
+pop
+int 1`
+		benchmarkEcDsa(b, source)
+	})
+
+	b.Run("ecdsa_pk_recover", func(b *testing.B) {
+		source := `#pragma version 5
+arg 0
+arg 6
+btoi
+arg 1
+arg 2
+ecdsa_pk_recover Secp256k1
+pop
+pop
+int 1`
+		benchmarkEcDsa(b, source)
+	})
 }

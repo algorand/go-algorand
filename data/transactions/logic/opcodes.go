@@ -149,9 +149,9 @@ var OpSpecs = []OpSpec{
 	{0x04, "ed25519verify", opEd25519verify, asmDefault, disDefault, threeBytes, oneInt, 1, runModeSignature, costly(1900)},
 	{0x04, "ed25519verify", opEd25519verify, asmDefault, disDefault, threeBytes, oneInt, 5, modeAny, costly(1900)},
 
-	{0x05, "ecdsa_verify", opEcDsaVerify, assembleEcDsa, disEcDsa, threeBytes.plus(twoBytes), oneInt, 5, modeAny, costlyImm(1900, "c")},
-	{0x06, "ecdsa_pk_decompress", opEcDsaPkDecompress, assembleEcDsa, disEcDsa, oneBytes, twoBytes, 5, modeAny, costlyImm(100, "c")},
-	{0x07, "ecdsa_pk_recover", opEcDsaPkRecover, assembleEcDsa, disEcDsa, oneBytes.plus(oneInt).plus(twoBytes), twoBytes, 5, modeAny, costlyImm(100, "c")},
+	{0x05, "ecdsa_verify", opEcDsaVerify, assembleEcDsa, disEcDsa, threeBytes.plus(twoBytes), oneInt, 5, modeAny, costlyImm(1700, "c")},
+	{0x06, "ecdsa_pk_decompress", opEcDsaPkDecompress, assembleEcDsa, disEcDsa, oneBytes, twoBytes, 5, modeAny, costlyImm(650, "c")},
+	{0x07, "ecdsa_pk_recover", opEcDsaPkRecover, assembleEcDsa, disEcDsa, oneBytes.plus(oneInt).plus(twoBytes), twoBytes, 5, modeAny, costlyImm(2000, "c")},
 
 	{0x08, "+", opPlus, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
 	{0x09, "-", opMinus, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},

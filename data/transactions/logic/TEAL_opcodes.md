@@ -56,7 +56,7 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 - Pops: *... stack*, {[]byte A}, {[]byte B}, {[]byte C}, {[]byte D}, {[]byte E}
 - Pushes: uint64
 - for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}
-- **Cost**: 1900
+- **Cost**: 1700
 - LogicSigVersion >= 5
 
 `ECDSA` Curves:
@@ -66,7 +66,7 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 | 0 | Secp256k1 | secp256k1 curve |
 
 
-The 33 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack.
+The 32 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack. The signed data must be 32 bytes long, and signatures in lower-S form are only accepted.
 
 ## ecdsa_pk_decompress c
 
@@ -74,7 +74,7 @@ The 33 byte Y-component of a public key is the last element on the stack, preced
 - Pops: *... stack*, []byte
 - Pushes: *... stack*, []byte, []byte
 - decompress pubkey A into components X, Y => [*... stack*, X, Y]
-- **Cost**: 100
+- **Cost**: 650
 - LogicSigVersion >= 5
 
 `ECDSA` Curves:
@@ -84,7 +84,7 @@ The 33 byte Y-component of a public key is the last element on the stack, preced
 | 0 | Secp256k1 | secp256k1 curve |
 
 
-The 33 byte public key decompressed into X and Y (top) components.
+The 33 byte public key in a compressed form to be decompressed into X and Y (top) components.
 
 ## ecdsa_pk_recover c
 
@@ -92,7 +92,7 @@ The 33 byte public key decompressed into X and Y (top) components.
 - Pops: *... stack*, {[]byte A}, {uint64 B}, {[]byte C}, {[]byte D}
 - Pushes: *... stack*, []byte, []byte
 - for (data A, recovery id B, signature C, D) recover a public compressed key => [*... stack*, X, Y]
-- **Cost**: 100
+- **Cost**: 2000
 - LogicSigVersion >= 5
 
 `ECDSA` Curves:
@@ -102,7 +102,7 @@ The 33 byte public key decompressed into X and Y (top) components.
 | 0 | Secp256k1 | secp256k1 curve |
 
 
-S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to deriver a public key in compressed format.
+S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to deriver a public key in compressed format. The signed data must be 32 bytes long.
 
 ## +
 
