@@ -79,6 +79,7 @@ type BitCurve struct {
 	BitSize int      // the size of the underlying field
 }
 
+// Params returns param
 func (BitCurve *BitCurve) Params() *elliptic.CurveParams {
 	return &elliptic.CurveParams{
 		P:       BitCurve.P,

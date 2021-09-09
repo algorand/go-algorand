@@ -52,13 +52,20 @@ func init() {
 }
 
 var (
-	ErrInvalidMsgLen       = errors.New("invalid message length, need 32 bytes")
+	// ErrInvalidMsgLen message
+	ErrInvalidMsgLen = errors.New("invalid message length, need 32 bytes")
+	// ErrInvalidSignatureLen message
 	ErrInvalidSignatureLen = errors.New("invalid signature length")
-	ErrInvalidRecoveryID   = errors.New("invalid signature recovery id")
-	ErrInvalidKey          = errors.New("invalid private key")
-	ErrInvalidPubkey       = errors.New("invalid public key")
-	ErrSignFailed          = errors.New("signing failed")
-	ErrRecoverFailed       = errors.New("recovery failed")
+	// ErrInvalidRecoveryID message
+	ErrInvalidRecoveryID = errors.New("invalid signature recovery id")
+	// ErrInvalidKey message
+	ErrInvalidKey = errors.New("invalid private key")
+	// ErrInvalidPubkey message
+	ErrInvalidPubkey = errors.New("invalid public key")
+	// ErrSignFailed message
+	ErrSignFailed = errors.New("signing failed")
+	// ErrRecoverFailed message
+	ErrRecoverFailed = errors.New("recovery failed")
 )
 
 // Sign creates a recoverable ECDSA signature.
