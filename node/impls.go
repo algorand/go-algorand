@@ -39,7 +39,9 @@ type blockAuthenticatorImpl struct {
 }
 
 func (i blockAuthenticatorImpl) Authenticate(block *bookkeeping.Block, cert *agreement.Certificate) error {
-	return cert.Authenticate(*block, i.SpeculativeLedger, i.AsyncVoteVerifier)
+	// This block authenticator is used during catchup, where we don't
+	// have any speculative blocks.
+	return cert.Authenticate(*block, agreement.LedgerWithoutBranch(i.SpeculativeLedger), i.AsyncVoteVerifier)
 }
 
 func (i blockAuthenticatorImpl) Quit() {
