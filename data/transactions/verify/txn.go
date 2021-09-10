@@ -66,11 +66,17 @@ type GroupContext struct {
 	consensusParams  config.ConsensusParams
 	minTealVersion   uint64
 	signedGroupTxns  []transactions.SignedTxn
+	timestamper      FirstValidTimeStamper
+}
+
+// FirstValidTimeStamper is an interface to the ledger to obtain block timestamps
+type FirstValidTimeStamper interface {
+	GetBlockTimeStamp(rnd basics.Round) (int64, error)
 }
 
 // PrepareGroupContext prepares a verification group parameter object for a given transaction
 // group.
-func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader) (*GroupContext, error) {
+func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, timestamper FirstValidTimeStamper) (*GroupContext, error) {
 	if len(group) == 0 {
 		return nil, nil
 	}
@@ -87,6 +93,7 @@ func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.
 		consensusParams:  consensusParams,
 		minTealVersion:   logic.ComputeMinTealVersion(group),
 		signedGroupTxns:  group,
+		timestamper:      timestamper,
 	}, nil
 }
 
@@ -132,10 +139,10 @@ func TxnBatchVerify(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 }
 
 // TxnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data.
-func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache) (groupCtx *GroupContext, err error) {
+func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, timestamper FirstValidTimeStamper) (groupCtx *GroupContext, err error) {
 	batchVerifier := crypto.MakeBatchVerifierDefaultSize()
 
-	if groupCtx, err = TxnGroupBatchVerify(stxs, contextHdr, cache, batchVerifier); err != nil {
+	if groupCtx, err = TxnGroupBatchVerify(stxs, contextHdr, cache, timestamper, batchVerifier); err != nil {
 		return nil, err
 	}
 
@@ -152,8 +159,8 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 
 // TxnGroupBatchVerify verifies a []SignedTxn having no obviously inconsistent data.
 // it is the caller responsibility to call batchVerifier.verify()
-func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, verifier *crypto.BatchVerifier) (groupCtx *GroupContext, err error) {
-	groupCtx, err = PrepareGroupContext(stxs, contextHdr)
+func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, timestamper FirstValidTimeStamper, verifier *crypto.BatchVerifier) (groupCtx *GroupContext, err error) {
+	groupCtx, err = PrepareGroupContext(stxs, contextHdr, timestamper)
 	if err != nil {
 		return nil, err
 	}
@@ -346,12 +353,21 @@ func logicSigBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 	if groupIndex < 0 {
 		return errors.New("Negative groupIndex")
 	}
+
+	var ts int64
+	if groupCtx.consensusParams.EnableFirstValidTimeStamp {
+		ts, err = groupCtx.timestamper.GetBlockTimeStamp(txn.Txn.FirstValid.SubSaturate(1))
+		if err != nil {
+			return err
+		}
+	}
 	ep := logic.EvalParams{
-		Txn:            txn,
-		Proto:          &groupCtx.consensusParams,
-		TxnGroup:       groupCtx.signedGroupTxns,
-		GroupIndex:     uint64(groupIndex),
-		MinTealVersion: &groupCtx.minTealVersion,
+		Txn:                 txn,
+		Proto:               &groupCtx.consensusParams,
+		TxnGroup:            groupCtx.signedGroupTxns,
+		GroupIndex:          uint64(groupIndex),
+		MinTealVersion:      &groupCtx.minTealVersion,
+		FirstValidTimestamp: uint64(ts),
 	}
 	pass, err := logic.Eval(txn.Lsig.Logic, ep)
 	if err != nil {
@@ -373,7 +389,7 @@ func logicSigBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 // a PaysetGroups may be well-formed, but a payset might contain an overspend.
 //
 // This version of verify is performing the verification over the provided execution pool.
-func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHeader bookkeeping.BlockHeader, verificationPool execpool.BacklogPool, cache VerifiedTransactionCache) (err error) {
+func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHeader bookkeeping.BlockHeader, verificationPool execpool.BacklogPool, cache VerifiedTransactionCache, timestamper FirstValidTimeStamper) (err error) {
 	if len(payset) == 0 {
 		return nil
 	}
@@ -409,7 +425,7 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 
 					batchVerifier := crypto.MakeBatchVerifier(len(payset))
 					for i, signTxnsGrp := range txnGroups {
-						groupCtxs[i], grpErr = TxnGroupBatchVerify(signTxnsGrp, blkHeader, nil, batchVerifier)
+						groupCtxs[i], grpErr = TxnGroupBatchVerify(signTxnsGrp, blkHeader, nil, timestamper, batchVerifier)
 						// abort only if it's a non-cache error.
 						if grpErr != nil {
 							return grpErr

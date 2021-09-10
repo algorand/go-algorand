@@ -342,11 +342,16 @@ func TestRekeying(t *testing.T) {
 func TestPrepareEvalParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	genBalances, _, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
 	eval := BlockEvaluator{
 		prevHeader: bookkeeping.BlockHeader{
 			TimeStamp: 1234,
 			Round:     2345,
 		},
+		l: l,
 	}
 
 	params := []config.ConsensusParams{
@@ -402,7 +407,8 @@ func TestPrepareEvalParams(t *testing.T) {
 		for j, testCase := range cases {
 			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
 				eval.proto = param
-				res := eval.prepareEvalParams(testCase.group)
+				res, err := eval.prepareEvalParams(testCase.group)
+				require.NoError(t, err)
 				require.Equal(t, len(res), len(testCase.group))
 
 				// Compute the expected transaction group without ApplyData for

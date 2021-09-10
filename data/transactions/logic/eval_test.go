@@ -1432,7 +1432,6 @@ int 0
 args
 ==
 assert
-assert
 txn FirstValidTime
 int 0
 >
@@ -1575,6 +1574,7 @@ func TestTxn(t *testing.T) {
 			ep := defaultEvalParams(&sb, &txn)
 			ep.Ledger = logictest.MakeLedger(nil)
 			ep.GroupIndex = 3
+			ep.FirstValidTimestamp = 1
 			pass, err := Eval(ops.Program, ep)
 			if !pass {
 				t.Log(hex.EncodeToString(ops.Program))
@@ -1849,7 +1849,8 @@ int 0
 			}
 			ep := defaultEvalParams(nil, &txn)
 			ep.TxnGroup = makeSampleTxnGroup(txn)
-			ep.Ledger = makeTestLedger(nil)
+			ep.Ledger = logictest.MakeLedger(nil)
+			ep.FirstValidTimestamp = 1
 			testLogic(t, source, v, ep)
 			if v >= 3 {
 				gtxnsProg := strings.ReplaceAll(source, "gtxn 0", "int 0; gtxns")
@@ -1906,6 +1907,7 @@ txna ApplicationArgs 0
 	txgroup[0] = txn
 	ep := defaultEvalParams(nil, &txn)
 	ep.TxnGroup = txgroup
+	ep.FirstValidTimestamp = 1
 	_, err := Eval(ops.Program, ep)
 	require.NoError(t, err)
 
@@ -5015,6 +5017,7 @@ func TestFirstValidTime(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	ep, _ := makeSampleEnv()
+	ep.FirstValidTimestamp = 1
 	source := "txn FirstValidTime; int 1; >="
 	ops := testProg(t, source, ep.Proto.LogicSigVersion)
 	err := Check(ops.Program, ep)

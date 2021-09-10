@@ -121,11 +121,6 @@ func (c *mockCowForLogicLedger) prevTimestamp() int64 {
 	return c.ts
 }
 
-func (c *mockCowForLogicLedger) getBlockTimeStamp(rnd basics.Round) (int64, error) {
-	ts := basics.MulSaturate(uint64(rnd), 5)
-	return int64(ts), nil
-}
-
 func (c *mockCowForLogicLedger) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
 	_, found := c.stores[storeLocator{addr, aidx, global}]
 	return found, nil

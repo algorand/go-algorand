@@ -63,11 +63,6 @@ func makeOldAndNewEnv(version uint64) (EvalParams, EvalParams, *logictest.Ledger
 	old.Ledger = sharedLedger
 	return old, new, sharedLedger
 }
-func (l *testLedger) GetBlockTimeStamp(rnd basics.Round) (int64, error) {
-	ts := basics.MulSaturate(uint64(rnd), 5)
-	return int64(ts), nil
-}
-
 
 func TestEvalModes(t *testing.T) {
 	partitiontest.PartitionTest(t)

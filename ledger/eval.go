@@ -104,10 +104,6 @@ func (x *roundCowBase) checkDup(firstValid, lastValid basics.Round, txid transac
 	return x.l.CheckDup(x.proto, x.rnd+1, firstValid, lastValid, txid, TxLease{txl})
 }
 
-func (x *roundCowBase) getBlockTimeStamp(rnd basics.Round) (int64, error) {
-	return x.l.GetBlockTimeStamp(rnd)
-}
-
 func (x *roundCowBase) txnCounter() uint64 {
 	return x.txnCount
 }
@@ -676,7 +672,7 @@ func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithA
 
 // prepareEvalParams creates a logic.EvalParams for each ApplicationCall
 // transaction in the group
-func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWithAD) []*logic.EvalParams {
+func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWithAD) ([]*logic.EvalParams, error) {
 	var groupNoAD []transactions.SignedTxn
 	var pastSideEffects []logic.EvalSideEffects
 	var minTealVersion uint64
@@ -706,6 +702,15 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 			// intentionally ignoring error here, fees had to have been enough to get here
 		}
 
+		var ts int64
+		var err error
+		if eval.proto.EnableFirstValidTimeStamp {
+			ts, err = eval.l.GetBlockTimeStamp(txn.Txn.FirstValid.SubSaturate(1))
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		res[i] = &logic.EvalParams{
 			Txn:                     &groupNoAD[i],
 			Proto:                   &eval.proto,
@@ -716,9 +721,10 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 			PooledApplicationBudget: &pooledApplicationBudget,
 			FeeCredit:               &credit,
 			Specials:                &eval.specials,
+			FirstValidTimestamp:     uint64(ts),
 		}
 	}
-	return res
+	return res, nil
 }
 
 // transactionGroup tentatively executes a group of transactions as part of this block evaluation.
@@ -739,7 +745,10 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	var groupTxBytes int
 
 	cow := eval.state.child(len(txgroup))
-	evalParams := eval.prepareEvalParams(txgroup)
+	evalParams, err := eval.prepareEvalParams(txgroup)
+	if err != nil {
+		return err
+	}
 
 	// Evaluate each transaction in the group
 	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
@@ -1143,7 +1152,7 @@ type evalTxValidator struct {
 	done     chan error
 }
 
-func (validator *evalTxValidator) run() {
+func (validator *evalTxValidator) run(l ledgerForEvaluator) {
 	defer close(validator.done)
 	specialAddresses := transactions.SpecialAddresses{
 		FeeSink:     validator.block.BlockHeader.FeeSink,
@@ -1167,7 +1176,7 @@ func (validator *evalTxValidator) run() {
 
 	unverifiedTxnGroups = validator.txcache.GetUnverifiedTranscationGroups(unverifiedTxnGroups, specialAddresses, validator.block.BlockHeader.CurrentProtocol)
 
-	err := verify.PaysetGroups(validator.ctx, unverifiedTxnGroups, validator.block.BlockHeader, validator.verificationPool, validator.txcache)
+	err := verify.PaysetGroups(validator.ctx, unverifiedTxnGroups, validator.block.BlockHeader, validator.verificationPool, validator.txcache, l)
 	if err != nil {
 		validator.done <- err
 	}
@@ -1226,7 +1235,7 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 		txvalidator.ctx = validationCtx
 		txvalidator.txgroups = paysetgroups
 		txvalidator.done = make(chan error, 1)
-		go txvalidator.run()
+		go txvalidator.run(l)
 
 	}
 

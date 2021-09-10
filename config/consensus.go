@@ -391,6 +391,9 @@ type ConsensusParams struct {
 	EnableKeyregCoherencyCheck bool
 
 	EnableExtraPagesOnAppUpdate bool
+
+	// Allow querying txn.FirstValid - 1 timestamp
+	EnableFirstValidTimeStamp bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1019,6 +1022,7 @@ func initConsensusProtocols() {
 
 	// Enable TEAL 5 / AVM 1.0
 	vFuture.LogicSigVersion = 5
+	vFuture.EnableFirstValidTimeStamp = true
 
 	// Enable App calls to pool budget in grouped transactions
 	vFuture.EnableAppCostPooling = true

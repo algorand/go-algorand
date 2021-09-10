@@ -207,6 +207,11 @@ func (t *txTail) putLV(lastValid basics.Round, id transactions.Txid) {
 }
 
 func (t *txTail) getBlockTimeStamp(rnd basics.Round) (int64, error) {
+	// allow timestamps in a first block
+	if rnd == 0 {
+		return 0, nil
+	}
+
 	if r, ok := t.recent[rnd]; ok {
 		return r.timestamp, nil
 	}

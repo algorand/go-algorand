@@ -143,8 +143,6 @@ func (bq *blockQueue) syncer() {
 			bq.mu.Unlock()
 
 			minToSave := bq.l.notifyCommit(committed)
-			// Save one extra block in the queue for checking timestamps
-
 			bfstart := time.Now()
 			ledgerSyncBlockforgetCount.Inc(nil)
 			err = bq.l.blockDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {

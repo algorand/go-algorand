@@ -203,7 +203,7 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 		logging.Base().Warnf("Could not get header for previous block %d: %v", latest, err)
 	} else {
 		// we can't use PaysetGroups here since it's using a execpool like this go-routine and we don't want to deadlock.
-		_, tx.verificationErr = verify.TxnGroup(tx.unverifiedTxGroup, latestHdr, handler.ledger.VerifiedTransactionCache())
+		_, tx.verificationErr = verify.TxnGroup(tx.unverifiedTxGroup, latestHdr, handler.ledger.VerifiedTransactionCache(), handler.ledger)
 	}
 
 	select {
@@ -295,7 +295,7 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 	}
 
 	unverifiedTxnGroups := bookkeeping.SignedTxnsToGroups(unverifiedTxGroup)
-	err = verify.PaysetGroups(context.Background(), unverifiedTxnGroups, latestHdr, handler.txVerificationPool, handler.ledger.VerifiedTransactionCache())
+	err = verify.PaysetGroups(context.Background(), unverifiedTxnGroups, latestHdr, handler.txVerificationPool, handler.ledger.VerifiedTransactionCache(), handler.ledger)
 	if err != nil {
 		// transaction is invalid
 		logging.Base().Warnf("One or more transactions were malformed: %v", err)

@@ -44,11 +44,6 @@ func (ml *mockLedger) checkDup(firstValid, lastValid basics.Round, txn transacti
 	return nil
 }
 
-func (ml *mockLedger) getBlockTimeStamp(rnd basics.Round) (int64, error) {
-	ts := basics.MulSaturate(uint64(rnd), 5)
-	return int64(ts), nil
-}
-
 func (ml *mockLedger) getAssetCreator(assetIdx basics.AssetIndex) (basics.Address, bool, error) {
 	return basics.Address{}, false, nil
 }

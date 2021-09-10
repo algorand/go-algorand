@@ -163,7 +163,6 @@ type LedgerForLogic interface {
 	Authorizer(addr basics.Address) (basics.Address, error)
 	Round() basics.Round
 	LatestTimestamp() int64
-	GetBlockTimeStamp(r basics.Round) (int64, error)
 
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
 	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error)
@@ -251,6 +250,9 @@ type EvalParams struct {
 
 	// Total pool of app call budget in a group transaction
 	PooledApplicationBudget *uint64
+
+	// A timestamp of the Txn's (FirstValid - 1) block
+	FirstValidTimestamp uint64
 }
 
 type opEvalFunc func(cx *EvalContext)
@@ -1879,30 +1881,7 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex uint64)
 	return txid
 }
 
-func (cx *evalContext) getFirstValidTimestamp(rnd basics.Round) (timestamp uint64, err error) {
-	if cx.Ledger == nil {
-		err = errors.New("ledger not available")
-		return
-	}
-	// Get the FirstValid-1 block timestamp
-	if rnd == 0 {
-		err = errors.New("cannot get first valid timestamp on rnd 0")
-		return 0, err
-	}
-	rnd = rnd.SubSaturate(1)
-
-	ts, err := cx.Ledger.GetBlockTimeStamp(rnd)
-	if err != nil {
-		return 0, err
-	}
-	if ts < 0 {
-		err = fmt.Errorf("first valid timestamp %d < 0", ts)
-		return
-	}
-	return uint64(ts), nil
-}
-
-func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnField, arrayFieldIdx uint64, groupIndex int) (sv stackValue, err error) {
+func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, field TxnField, arrayFieldIdx uint64, groupIndex uint64) (sv stackValue, err error) {
 	err = nil
 	switch field {
 	case Sender:
@@ -1912,11 +1891,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 	case FirstValid:
 		sv.Uint = uint64(txn.FirstValid)
 	case FirstValidTime:
-		ts, err := cx.getFirstValidTimestamp(txn.FirstValid)
-		if err != nil {
-			return sv, err
-		}
-		sv.Uint = ts
+		sv.Uint = cx.EvalParams.FirstValidTimestamp
 	case LastValid:
 		sv.Uint = uint64(txn.LastValid)
 	case Note:
