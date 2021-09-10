@@ -72,9 +72,10 @@ func makeApplicationUpgradeConsensus(t *testing.T) (appConsensus config.Consensu
 // any application transaction and after the upgrade is complete, it would support that.
 func TestApplicationsUpgradeOverREST(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	defer fixtures.TerminateTestFailures(t)
-	
+
 	smallLambdaMs := 500
 	consensus := makeApplicationUpgradeConsensus(t)
 
@@ -304,6 +305,7 @@ int 1
 // any application transaction and after the upgrade is complete, it would support that.
 func TestApplicationsUpgradeOverGossip(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	smallLambdaMs := 500

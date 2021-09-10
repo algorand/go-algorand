@@ -27,7 +27,9 @@ import (
 )
 
 func TestClerkSendNoteEncoding(t *testing.T) {
+	defer fixtures.ShutdownSynchronizedTest(t)
 	defer fixture.SetTestContext(t)()
+
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	// wait for consensus on first round prior to sending transactions, time out after 2 minutes

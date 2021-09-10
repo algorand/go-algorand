@@ -116,6 +116,7 @@ func (f *LibGoalFixture) nodeExitWithError(nc *nodecontrol.NodeController, err e
 	}
 	exitError, ok := err.(*exec.ExitError)
 	if !ok {
+		time.Sleep(10*time.Second)
 		require.NoError(f.t, err, "Node at %s has terminated with an error", nc.GetDataDir())
 		return
 	}

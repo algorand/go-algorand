@@ -28,7 +28,9 @@ const statusOffline = "[offline]"
 const statusOnline = "[online]"
 
 func TestAccountNew(t *testing.T) {
+	defer fixtures.ShutdownSynchronizedTest(t)
 	defer fixture.SetTestContext(t)()
+
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	newAcctName := "new_account"
@@ -53,6 +55,7 @@ func TestAccountNew(t *testing.T) {
 }
 
 func TestAccountNewDuplicateFails(t *testing.T) {
+	defer fixtures.ShutdownSynchronizedTest(t)
 	defer fixture.SetTestContext(t)()
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -68,6 +71,7 @@ func TestAccountNewDuplicateFails(t *testing.T) {
 }
 
 func TestAccountRename(t *testing.T) {
+	defer fixtures.ShutdownSynchronizedTest(t)
 	defer fixture.SetTestContext(t)()
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -98,6 +102,7 @@ func TestAccountRename(t *testing.T) {
 
 // Importing an account multiple times should not be considered an error by goal
 func TestAccountMultipleImportRootKey(t *testing.T) {
+	defer fixtures.ShutdownSynchronizedTest(t)
 	defer fixture.SetTestContext(t)()
 	a := require.New(fixtures.SynchronizedTest(t))
 

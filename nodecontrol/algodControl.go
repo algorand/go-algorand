@@ -229,6 +229,7 @@ func (nc *NodeController) StartAlgod(args AlgodStartArgs) (alreadyRunning bool, 
 		case <-startAlgodCompletedChan:
 			// we've already exited this function, so we want to report to the error to the callback.
 			if args.ExitErrorCallback != nil {
+				err = fmt.Errorf("some error")
 				args.ExitErrorCallback(nc, err)
 			}
 		default:
