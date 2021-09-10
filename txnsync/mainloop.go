@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"container/heap"
 	"context"
 	"math"
 	"sync"
@@ -239,11 +240,13 @@ func (s *syncState) onTransactionPoolChangedEvent(ent Event) {
 	s.lastBeta = newBeta
 
 	peers := make([]*Peer, 0, len(s.interruptablePeers))
+	peersMap := make(map[*Peer]interface{})
 	for _, peer := range s.interruptablePeers {
 		if peer == nil {
 			continue
 		}
 		peers = append(peers, peer)
+		peersMap[peer] = nil
 		peer.state = peerStateHoldsoff
 	}
 
@@ -254,18 +257,26 @@ func (s *syncState) onTransactionPoolChangedEvent(ent Event) {
 	s.sendMessageLoop(s.clock.Since(), deadlineMonitor, peers)
 
 	currentTimeout := s.clock.Since()
-	for _, peer := range peers {
-		peerNext := s.scheduler.peerDuration(peer)
-		if peerNext < currentTimeout {
-			// shouldn't be, but let's reschedule it if this is the case.
-			s.scheduler.schedulePeer(peer, currentTimeout+s.lastBeta)
+
+	for i := 0; i < len(s.scheduler.peers); i++ {
+		if _, ok := peersMap[s.scheduler.peers[i].peer]; !ok {
 			continue
 		}
-		// given that peerNext is after currentTimeout, find out what's the difference, and divide by the beta.
-		betaCount := (peerNext - currentTimeout) / s.lastBeta
-		peerNext = currentTimeout + s.lastBeta*betaCount
-		s.scheduler.schedulePeer(peer, peerNext)
+		delete(peersMap, s.scheduler.peers[i].peer)
+		if s.scheduler.peers[i].next < currentTimeout {
+			// shouldn't be, but let's reschedule it if this is the case.
+			s.scheduler.peers[i].next = currentTimeout + s.lastBeta
+		} else {
+			// given that peerNext is after currentTimeout, find out what's the difference, and divide by the beta.
+			betaCount := (s.scheduler.peers[i].next - currentTimeout) / s.lastBeta
+			s.scheduler.peers[i] = peerBucket{peer: s.scheduler.peers[i].peer, next: currentTimeout + s.lastBeta*betaCount}
+		}
 	}
+	for peer := range peersMap {
+		s.scheduler.schedulePeer(peer, currentTimeout+s.lastBeta)
+		s.scheduler.peers = append(s.scheduler.peers, peerBucket{peer: peer, next: currentTimeout + s.lastBeta})
+	}
+	heap.Init(&s.scheduler)
 }
 
 // calculate the beta parameter, based on the transaction pool size.

@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -68,4 +69,43 @@ func TestShouldUpdateBeta(t *testing.T) {
 	// no change in beta is expected
 	require.False(t, shouldUpdateBeta(beta5000, beta5100, betaGranularChangeThreshold))
 	require.False(t, shouldUpdateBeta(beta6000, beta5900, betaGranularChangeThreshold))
+}
+
+func TestOnTransactionPoolChangedEvent(t *testing.T) {
+
+	var ent Event
+
+	incLogger := incomingLogger{}
+	mNodeConnector := &mockNodeConnector{transactionPoolSize: 30}
+	cfg := config.GetDefaultLocal()
+	s := syncState{
+		node:       &mockNodeConnector{},
+		log:        wrapLogger(&incLogger, &cfg),
+		clock:      mNodeConnector.Clock(),
+		threadpool: &mockBacklogThreadPool{},
+		lastBeta:   42855521800}
+	s.interruptablePeers = make([]*Peer, 1, 4)
+	s.scheduler.peers = make(peerBuckets, 0, 8)
+
+	somePeers := make([]Peer, 0, 10)
+	for x := 0; x < 10; x++ {
+		somePeers = append(somePeers,
+			Peer{nextStateTimestamp: time.Duration(22855521800 * (x + 1)),
+				lastSelectedTransactionsCount: x})
+	}
+
+	for x := 0; x < 8; x++ {
+		s.scheduler.peers = append(s.scheduler.peers, peerBucket{
+			peer: &somePeers[x], next: time.Duration(int64(x) * int64(time.Second))})
+	}
+
+	pf := profiler{}
+	pf.createElements()
+	s.profiler = &pf
+
+	for x := 0; x < 10; x += 3 {
+		s.interruptablePeers = append(s.interruptablePeers, &somePeers[x])
+	}
+	s.onTransactionPoolChangedEvent(ent)
+
 }

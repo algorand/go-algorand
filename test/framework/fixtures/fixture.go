@@ -86,7 +86,8 @@ func SynchronizedTest(tb TestingTB) TestingTB {
 
 type synchTest struct {
 	deadlock.Mutex
-	t TestingTB
+	t      TestingTB
+	failed bool
 }
 
 func (st *synchTest) Cleanup(f func()) {
@@ -107,12 +108,18 @@ func (st *synchTest) Errorf(format string, args ...interface{}) {
 func (st *synchTest) Fail() {
 	st.Lock()
 	defer st.Unlock()
-	st.t.Fail()
+	if !st.failed {
+		st.failed = true		
+		st.t.Fail()
+	}
 }
 func (st *synchTest) FailNow() {
 	st.Lock()
 	defer st.Unlock()
-	st.t.FailNow()
+	if !st.failed {
+		st.failed = true		
+		st.t.FailNow()
+	}
 }
 func (st *synchTest) Failed() bool {
 	st.Lock()
