@@ -461,7 +461,7 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) uint64 {
 	if aidx > 0 {
 		return aidx
 	}
-	// If there is no ConfigAsset in the ApplyData, it must be a
+	// If there is no ApplicationID in the ApplyData, it must be a
 	// transaction before inner transactions were activated. Therefore
 	// the computeCreatableIndexInPayset function will work properly
 	// to deduce the aidx. Proceed.
