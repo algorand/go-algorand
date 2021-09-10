@@ -8,7 +8,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Opcode: 0x00
 - Pops: _None_
 - Pushes: _None_
-- Error. Panic immediately. This is primarily a fencepost against accidental zero bytes getting compiled into programs.
+- Error. Fail immediately. This is primarily a fencepost against accidental zero bytes getting compiled into programs.
 
 ## sha256
 
@@ -55,7 +55,7 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 - Opcode: 0x08
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64
-- A plus B. Panic on overflow.
+- A plus B. Fail on overflow.
 
 Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `addw`.
 
@@ -64,14 +64,14 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Opcode: 0x09
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64
-- A minus B. Panic if B > A.
+- A minus B. Fail if B > A.
 
 ## /
 
 - Opcode: 0x0a
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64
-- A divided by B (truncated division). Panic if B == 0.
+- A divided by B (truncated division). Fail if B == 0.
 
 `divmodw` is available to divide the two-element values produced by `mulw` and `addw`.
 
@@ -80,7 +80,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Opcode: 0x0b
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64
-- A times B. Panic on overflow.
+- A times B. Fail on overflow.
 
 Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `mulw`.
 
@@ -168,14 +168,14 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Pushes: uint64
 - converts bytes X as big endian to uint64
 
-`btoi` panics if the input is longer than 8 bytes.
+`btoi` fails if the input is longer than 8 bytes.
 
 ## %
 
 - Opcode: 0x18
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64
-- A modulo B. Panic if B == 0.
+- A modulo B. Fail if B == 0.
 
 ## |
 
@@ -462,9 +462,9 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 | 5 | LogicSigVersion | uint64 | Maximum supported TEAL version. LogicSigVersion >= 2. |
 | 6 | Round | uint64 | Current round number. LogicSigVersion >= 2. |
 | 7 | LatestTimestamp | uint64 | Last confirmed block UNIX timestamp. Fails if negative. LogicSigVersion >= 2. |
-| 8 | CurrentApplicationID | uint64 | ID of current application executing. Fails if no such application is executing. LogicSigVersion >= 2. |
+| 8 | CurrentApplicationID | uint64 | ID of current application executing. Fails in LogicSigs. LogicSigVersion >= 2. |
 | 9 | CreatorAddress | []byte | Address of the creator of the current application. Fails if no such application is executing. LogicSigVersion >= 3. |
-| 10 | CurrentApplicationAddress | []byte | Address that the current application controls. Fails if no such application is executing. LogicSigVersion >= 5. |
+| 10 | CurrentApplicationAddress | []byte | Address that the current application controls. Fails in LogicSigs. LogicSigVersion >= 5. |
 | 11 | GroupID | []byte | ID of the transaction group. 32 zero bytes if the transaction is not part of a group. LogicSigVersion >= 5. |
 
 
@@ -482,7 +482,7 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 - Opcode: 0x34 {uint8 position in scratch space to load from}
 - Pops: _None_
 - Pushes: any
-- copy a value from scratch space to the stack
+- copy a value from scratch space to the stack. All scratch spaces are 0 at program start.
 
 ## store i
 
@@ -574,7 +574,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 - Opcode: 0x3e
 - Pops: *... stack*, uint64
 - Pushes: any
-- copy a value from the Xth scratch space to the stack
+- copy a value from the Xth scratch space to the stack.  All scratch spaces are 0 at program start.
 - LogicSigVersion >= 5
 
 ## stores
@@ -702,7 +702,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - pop two byte-arrays A and B and join them, push the result
 - LogicSigVersion >= 2
 
-`concat` panics if the result would be greater than 4096 bytes.
+`concat` fails if the result would be greater than 4096 bytes.
 
 ## substring s e
 
@@ -1073,7 +1073,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0x94
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64
-- A raised to the Bth power. Panic if A == B == 0 and on overflow
+- A raised to the Bth power. Fail if A == B == 0 and on overflow
 - LogicSigVersion >= 4
 
 ## expw
@@ -1081,7 +1081,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0x95
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: *... stack*, uint64, uint64
-- A raised to the Bth power as a 128-bit long result as low (top) and high uint64 values on the stack. Panic if A == B == 0 or if the results exceeds 2^128-1
+- A raised to the Bth power as a 128-bit long result as low (top) and high uint64 values on the stack. Fail if A == B == 0 or if the results exceeds 2^128-1
 - **Cost**: 10
 - LogicSigVersion >= 4
 
@@ -1099,7 +1099,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xa1
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
-- A minus B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic on underflow.
+- A minus B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Fail on underflow.
 - **Cost**: 10
 - LogicSigVersion >= 4
 
@@ -1108,7 +1108,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xa2
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
-- A divided by B (truncated division), where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero.
+- A divided by B (truncated division), where A and B are byte-arrays interpreted as big-endian unsigned integers. Fail if B is zero.
 - **Cost**: 20
 - LogicSigVersion >= 4
 
@@ -1174,7 +1174,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xaa
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
-- A modulo B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero.
+- A modulo B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Fail if B is zero.
 - **Cost**: 20
 - LogicSigVersion >= 4
 
@@ -1231,7 +1231,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - LogicSigVersion >= 5
 - Mode: Application
 
-`log` can be called up to MaxLogCalls times in a program, and log up to a total of 1k bytes.
+`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds 1024 bytes.
 
 ## tx_begin
 
@@ -1247,7 +1247,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xb2 {uint8 transaction field index}
 - Pops: *... stack*, any
 - Pushes: _None_
-- Set field F of the current inner transaction to X
+- Set field F of the current inner transaction to X. Fail if X is the wrong type for F.
 - LogicSigVersion >= 5
 - Mode: Application
 
@@ -1256,7 +1256,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xb3
 - Pops: _None_
 - Pushes: _None_
-- Execute the current inner transaction. Panic on any failure.
+- Execute the current inner transaction. Fail if 16 inner transactions have already been executed, or if the transaction fails
 - LogicSigVersion >= 5
 - Mode: Application
 

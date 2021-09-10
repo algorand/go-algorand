@@ -2264,6 +2264,9 @@ func TestExtractOp(t *testing.T) {
 	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract32bits; int 0x3456789a; ==", 5)
 	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract64bits; int 0x123456789abcdef0; ==", 5)
 	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract64bits; int 0x123456789abcdef; !=", 5)
+
+	testAccepts(t, `byte "hello"; extract 5 0; byte ""; ==`, 5)
+	testAccepts(t, `byte "hello"; int 5; int 0; extract3; byte ""; ==`, 5)
 }
 
 func TestExtractFlop(t *testing.T) {
@@ -2323,6 +2326,8 @@ func TestLoadStore(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
+	testAccepts(t, "load 3; int 0; ==;", 1)
+
 	testAccepts(t, `int 37
 int 37
 store 1
@@ -2344,6 +2349,7 @@ func TestLoadStoreStack(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
+	testAccepts(t, "itn 3; loads; int 0; ==;", 1)
 	testAccepts(t, `int 37
 int 1
 int 37

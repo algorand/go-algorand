@@ -104,10 +104,10 @@ For three-argument ops, `A` is the element two below the top, `B` is the penulti
 | `keccak256` | Keccak256 hash of value X, yields [32]byte |
 | `sha512_256` | SHA512_256 hash of value X, yields [32]byte |
 | `ed25519verify` | for (data A, signature B, pubkey C) verify the signature of ("ProgData" \|\| program_hash \|\| data) against the pubkey => {0 or 1} |
-| `+` | A plus B. Panic on overflow. |
-| `-` | A minus B. Panic if B > A. |
-| `/` | A divided by B (truncated division). Panic if B == 0. |
-| `*` | A times B. Panic on overflow. |
+| `+` | A plus B. Fail on overflow. |
+| `-` | A minus B. Fail if B > A. |
+| `/` | A divided by B (truncated division). Fail if B == 0. |
+| `*` | A times B. Fail on overflow. |
 | `<` | A less than B => {0 or 1} |
 | `>` | A greater than B => {0 or 1} |
 | `<=` | A less than or equal to B => {0 or 1} |
@@ -118,14 +118,14 @@ For three-argument ops, `A` is the element two below the top, `B` is the penulti
 | `shr` | A divided by 2^B |
 | `sqrt` | The largest integer B such that B^2 <= X |
 | `bitlen` | The highest set bit in X. If X is a byte-array, it is interpreted as a big-endian unsigned integer. bitlen of 0 is 0, bitlen of 8 is 4 |
-| `exp` | A raised to the Bth power. Panic if A == B == 0 and on overflow |
+| `exp` | A raised to the Bth power. Fail if A == B == 0 and on overflow |
 | `==` | A is equal to B => {0 or 1} |
 | `!=` | A is not equal to B => {0 or 1} |
 | `!` | X == 0 yields 1; else 0 |
 | `len` | yields length of byte value X |
 | `itob` | converts uint64 X to big endian bytes |
 | `btoi` | converts bytes X as big endian to uint64 |
-| `%` | A modulo B. Panic if B == 0. |
+| `%` | A modulo B. Fail if B == 0. |
 | `\|` | A bitwise-or B |
 | `&` | A bitwise-and B |
 | `^` | A bitwise-xor B |
@@ -133,7 +133,7 @@ For three-argument ops, `A` is the element two below the top, `B` is the penulti
 | `mulw` | A times B out to 128-bit long result as low (top) and high uint64 values on the stack |
 | `addw` | A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack |
 | `divmodw` | Pop four uint64 values.  The deepest two are interpreted as a uint128 dividend (deepest value is high word), the top two are interpreted as a uint128 divisor.  Four uint64 values are pushed to the stack. The deepest two are the quotient (deeper value is the high uint64). The top two are the remainder, low bits on top. |
-| `expw` | A raised to the Bth power as a 128-bit long result as low (top) and high uint64 values on the stack. Panic if A == B == 0 or if the results exceeds 2^128-1 |
+| `expw` | A raised to the Bth power as a 128-bit long result as low (top) and high uint64 values on the stack. Fail if A == B == 0 or if the results exceeds 2^128-1 |
 | `getbit` | pop a target A (integer or byte-array), and index B. Push the Bth bit of A. |
 | `setbit` | pop a target A, index B, and bit C. Set the Bth bit of A to C, and push the result |
 | `getbyte` | pop a byte-array A and integer B. Extract the Bth byte of A and push it as an integer |
@@ -168,8 +168,8 @@ bytes on outputs.
 | Op | Description |
 | --- | --- |
 | `b+` | A plus B, where A and B are byte-arrays interpreted as big-endian unsigned integers |
-| `b-` | A minus B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic on underflow. |
-| `b/` | A divided by B (truncated division), where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero. |
+| `b-` | A minus B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Fail on underflow. |
+| `b/` | A divided by B (truncated division), where A and B are byte-arrays interpreted as big-endian unsigned integers. Fail if B is zero. |
 | `b*` | A times B, where A and B are byte-arrays interpreted as big-endian unsigned integers. |
 | `b<` | A is less than B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
 | `b>` | A is greater than B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
@@ -177,7 +177,7 @@ bytes on outputs.
 | `b>=` | A is greater than or equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
 | `b==` | A is equals to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
 | `b!=` | A is not equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
-| `b%` | A modulo B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero. |
+| `b%` | A modulo B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Fail if B is zero. |
 
 These opcodes operate on the bits of byte-array values.  The shorter
 array is interpeted as though left padded with zeros until it is the
@@ -198,8 +198,8 @@ The following opcodes allow for the construction and submission of
 | Op | Description |
 | --- | --- |
 | `tx_begin` | Begin preparation of a new inner transaction |
-| `tx_field f` | Set field F of the current inner transaction to X |
-| `tx_submit` | Execute the current inner transaction. Panic on any failure. |
+| `tx_field f` | Set field F of the current inner transaction to X. Fail if X is the wrong type for F. |
+| `tx_submit` | Execute the current inner transaction. Fail if 16 inner transactions have already been executed, or if the transaction fails |
 
 
 ### Loading Values
@@ -230,6 +230,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `arg_1` | push LogicSig argument 1 to stack |
 | `arg_2` | push LogicSig argument 2 to stack |
 | `arg_3` | push LogicSig argument 3 to stack |
+| `args` | push Xth LogicSig argument to stack |
 | `txn f` | push field F of current transaction to stack |
 | `gtxn t f` | push field F of the Tth transaction in the current group |
 | `txna f i` | push Ith value of the array field F of the current transaction |
@@ -240,15 +241,14 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `gtxnsa f i` | push Ith value of the array field F from the Xth transaction in the current group |
 | `gtxnsas f` | pop an index A and an index B. push Bth value of the array field F from the Ath transaction in the current group |
 | `global f` | push value from globals to stack |
-| `load i` | copy a value from scratch space to the stack |
-| `loads` | copy a value from the Xth scratch space to the stack |
+| `load i` | copy a value from scratch space to the stack. All scratch spaces are 0 at program start. |
+| `loads` | copy a value from the Xth scratch space to the stack.  All scratch spaces are 0 at program start. |
 | `store i` | pop value X. store X to the Ith scratch space |
 | `stores` | pop indexes A and B. store B to the Ath scratch space |
 | `gload t i` | push Ith scratch space index of the Tth transaction in the current group |
 | `gloads i` | push Ith scratch space index of the Xth transaction in the current group |
 | `gaid t` | push the ID of the asset or application created in the Tth transaction of the current group |
 | `gaids` | push the ID of the asset or application created in the Xth transaction of the current group |
-| `args` | push Xth LogicSig argument to stack |
 
 **Transaction Fields**
 
@@ -330,9 +330,9 @@ Global fields are fields that are common to all the transactions in the group. I
 | 5 | LogicSigVersion | uint64 | Maximum supported TEAL version. LogicSigVersion >= 2. |
 | 6 | Round | uint64 | Current round number. LogicSigVersion >= 2. |
 | 7 | LatestTimestamp | uint64 | Last confirmed block UNIX timestamp. Fails if negative. LogicSigVersion >= 2. |
-| 8 | CurrentApplicationID | uint64 | ID of current application executing. Fails if no such application is executing. LogicSigVersion >= 2. |
+| 8 | CurrentApplicationID | uint64 | ID of current application executing. Fails in LogicSigs. LogicSigVersion >= 2. |
 | 9 | CreatorAddress | []byte | Address of the creator of the current application. Fails if no such application is executing. LogicSigVersion >= 3. |
-| 10 | CurrentApplicationAddress | []byte | Address that the current application controls. Fails if no such application is executing. LogicSigVersion >= 5. |
+| 10 | CurrentApplicationAddress | []byte | Address that the current application controls. Fails in LogicSigs. LogicSigVersion >= 5. |
 | 11 | GroupID | []byte | ID of the transaction group. 32 zero bytes if the transaction is not part of a group. LogicSigVersion >= 5. |
 
 
@@ -383,7 +383,7 @@ App fields used in the `app_params_get` opcode.
 
 | Op | Description |
 | --- | --- |
-| `err` | Error. Panic immediately. This is primarily a fencepost against accidental zero bytes getting compiled into programs. |
+| `err` | Error. Fail immediately. This is primarily a fencepost against accidental zero bytes getting compiled into programs. |
 | `bnz target` | branch to TARGET if value X is not zero |
 | `bz target` | branch to TARGET if value X is zero |
 | `b target` | branch unconditionally to TARGET |

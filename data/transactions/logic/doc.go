@@ -24,15 +24,15 @@ import (
 
 // short description of every op
 var opDocByName = map[string]string{
-	"err":           "Error. Panic immediately. This is primarily a fencepost against accidental zero bytes getting compiled into programs.",
+	"err":           "Error. Fail immediately. This is primarily a fencepost against accidental zero bytes getting compiled into programs.",
 	"sha256":        "SHA256 hash of value X, yields [32]byte",
 	"keccak256":     "Keccak256 hash of value X, yields [32]byte",
 	"sha512_256":    "SHA512_256 hash of value X, yields [32]byte",
 	"ed25519verify": "for (data A, signature B, pubkey C) verify the signature of (\"ProgData\" || program_hash || data) against the pubkey => {0 or 1}",
-	"+":             "A plus B. Panic on overflow.",
-	"-":             "A minus B. Panic if B > A.",
-	"/":             "A divided by B (truncated division). Panic if B == 0.",
-	"*":             "A times B. Panic on overflow.",
+	"+":             "A plus B. Fail on overflow.",
+	"-":             "A minus B. Fail if B > A.",
+	"/":             "A divided by B (truncated division). Fail if B == 0.",
+	"*":             "A times B. Fail on overflow.",
 	"<":             "A less than B => {0 or 1}",
 	">":             "A greater than B => {0 or 1}",
 	"<=":            "A less than or equal to B => {0 or 1}",
@@ -45,7 +45,7 @@ var opDocByName = map[string]string{
 	"len":           "yields length of byte value X",
 	"itob":          "converts uint64 X to big endian bytes",
 	"btoi":          "converts bytes X as big endian to uint64",
-	"%":             "A modulo B. Panic if B == 0.",
+	"%":             "A modulo B. Fail if B == 0.",
 	"|":             "A bitwise-or B",
 	"&":             "A bitwise-and B",
 	"^":             "A bitwise-xor B",
@@ -54,8 +54,8 @@ var opDocByName = map[string]string{
 	"shr":           "A divided by 2^B",
 	"sqrt":          "The largest integer B such that B^2 <= X",
 	"bitlen":        "The highest set bit in X. If X is a byte-array, it is interpreted as a big-endian unsigned integer. bitlen of 0 is 0, bitlen of 8 is 4",
-	"exp":           "A raised to the Bth power. Panic if A == B == 0 and on overflow",
-	"expw":          "A raised to the Bth power as a 128-bit long result as low (top) and high uint64 values on the stack. Panic if A == B == 0 or if the results exceeds 2^128-1",
+	"exp":           "A raised to the Bth power. Fail if A == B == 0 and on overflow",
+	"expw":          "A raised to the Bth power as a 128-bit long result as low (top) and high uint64 values on the stack. Fail if A == B == 0 or if the results exceeds 2^128-1",
 	"mulw":          "A times B out to 128-bit long result as low (top) and high uint64 values on the stack",
 	"addw":          "A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack",
 	"divmodw":       "Pop four uint64 values.  The deepest two are interpreted as a uint128 dividend (deepest value is high word), the top two are interpreted as a uint128 divisor.  Four uint64 values are pushed to the stack. The deepest two are the quotient (deeper value is the high uint64). The top two are the remainder, low bits on top.",
@@ -79,16 +79,20 @@ var opDocByName = map[string]string{
 	"arg_1":         "push LogicSig argument 1 to stack",
 	"arg_2":         "push LogicSig argument 2 to stack",
 	"arg_3":         "push LogicSig argument 3 to stack",
+	"args":          "push Xth LogicSig argument to stack",
 	"txn":           "push field F of current transaction to stack",
 	"gtxn":          "push field F of the Tth transaction in the current group",
 	"gtxns":         "push field F of the Xth transaction in the current group",
 	"txna":          "push Ith value of the array field F of the current transaction",
 	"gtxna":         "push Ith value of the array field F from the Tth transaction in the current group",
 	"gtxnsa":        "push Ith value of the array field F from the Xth transaction in the current group",
+	"txnas":         "push Xth value of the array field F of the current transaction",
+	"gtxnas":        "push Xth value of the array field F from the Tth transaction in the current group",
+	"gtxnsas":       "pop an index A and an index B. push Bth value of the array field F from the Ath transaction in the current group",
 	"global":        "push value from globals to stack",
-	"load":          "copy a value from scratch space to the stack",
+	"load":          "copy a value from scratch space to the stack. All scratch spaces are 0 at program start.",
 	"store":         "pop value X. store X to the Ith scratch space",
-	"loads":         "copy a value from the Xth scratch space to the stack",
+	"loads":         "copy a value from the Xth scratch space to the stack.  All scratch spaces are 0 at program start.",
 	"stores":        "pop indexes A and B. store B to the Ath scratch space",
 	"gload":         "push Ith scratch space index of the Tth transaction in the current group",
 	"gloads":        "push Ith scratch space index of the Xth transaction in the current group",
@@ -138,8 +142,8 @@ var opDocByName = map[string]string{
 	"retsub":            "pop the top instruction from the call stack and branch to it",
 
 	"b+":  "A plus B, where A and B are byte-arrays interpreted as big-endian unsigned integers",
-	"b-":  "A minus B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic on underflow.",
-	"b/":  "A divided by B (truncated division), where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero.",
+	"b-":  "A minus B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Fail on underflow.",
+	"b/":  "A divided by B (truncated division), where A and B are byte-arrays interpreted as big-endian unsigned integers. Fail if B is zero.",
 	"b*":  "A times B, where A and B are byte-arrays interpreted as big-endian unsigned integers.",
 	"b<":  "A is less than B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1}",
 	"b>":  "A is greater than B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1}",
@@ -147,7 +151,7 @@ var opDocByName = map[string]string{
 	"b>=": "A is greater than or equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1}",
 	"b==": "A is equals to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1}",
 	"b!=": "A is not equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1}",
-	"b%":  "A modulo B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero.",
+	"b%":  "A modulo B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Fail if B is zero.",
 	"b|":  "A bitwise-or B, where A and B are byte-arrays, zero-left extended to the greater of their lengths",
 	"b&":  "A bitwise-and B, where A and B are byte-arrays, zero-left extended to the greater of their lengths",
 	"b^":  "A bitwise-xor B, where A and B are byte-arrays, zero-left extended to the greater of their lengths",
@@ -155,13 +159,8 @@ var opDocByName = map[string]string{
 
 	"log":       "write bytes to log state of the current application",
 	"tx_begin":  "Begin preparation of a new inner transaction",
-	"tx_field":  "Set field F of the current inner transaction to X",
-	"tx_submit": "Execute the current inner transaction. Panic on any failure.",
-
-	"txnas":   "push Xth value of the array field F of the current transaction",
-	"gtxnas":  "push Xth value of the array field F from the Tth transaction in the current group",
-	"gtxnsas": "pop an index A and an index B. push Bth value of the array field F from the Ath transaction in the current group",
-	"args":    "push Xth LogicSig argument to stack",
+	"tx_field":  "Set field F of the current inner transaction to X. Fail if X is the wrong type for F.",
+	"tx_submit": "Execute the current inner transaction. Fail if 16 inner transactions have already been executed, or if the transaction fails",
 }
 
 // OpDoc returns a description of the op
@@ -233,8 +232,8 @@ var opDocExtras = map[string]string{
 	"gloads":            "`gloads` fails unless the requested transaction is an ApplicationCall and X < GroupIndex.",
 	"gaid":              "`gaid` fails unless the requested transaction created an asset or application and T < GroupIndex.",
 	"gaids":             "`gaids` fails unless the requested transaction created an asset or application and X < GroupIndex.",
-	"btoi":              "`btoi` panics if the input is longer than 8 bytes.",
-	"concat":            "`concat` panics if the result would be greater than 4096 bytes.",
+	"btoi":              "`btoi` fails if the input is longer than 8 bytes.",
+	"concat":            "`concat` fails if the result would be greater than 4096 bytes.",
 	"pushbytes":         "pushbytes args are not added to the bytecblock during assembly processes",
 	"pushint":           "pushint args are not added to the intcblock during assembly processes",
 	"getbit":            "see explanation of bit ordering in setbit",
@@ -252,7 +251,7 @@ var opDocExtras = map[string]string{
 	"asset_holding_get": "params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if exist and 0 otherwise), value.",
 	"asset_params_get":  "params: Before v4, Txn.ForeignAssets offset. Since v4, Txn.ForeignAssets offset or an asset id that appears in Txn.ForeignAssets. Return: did_exist flag (1 if exist and 0 otherwise), value.",
 	"app_params_get":    "params: Txn.ForeignApps offset or an app id that appears in Txn.ForeignApps. Return: did_exist flag (1 if exist and 0 otherwise), value.",
-	"log":               "`log` can be called up to MaxLogCalls times in a program, and log up to a total of 1k bytes.",
+	"log":               "`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds 1024 bytes.",
 }
 
 // OpDocExtra returns extra documentation text about an op
@@ -260,13 +259,15 @@ func OpDocExtra(opName string) string {
 	return opDocExtras[opName]
 }
 
-// OpGroups is groupings of ops for documentation purposes.
+// OpGroups is groupings of ops for documentation purposes. The order
+// here is the order args opcodes are presented, so place related
+// opcodes consecutively, even if their opcode values are not.
 var OpGroups = map[string][]string{
 	"Arithmetic":            {"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
 	"Byte Array Slicing":    {"substring", "substring3", "extract", "extract3", "extract16bits", "extract32bits", "extract64bits"},
 	"Byte Array Arithmetic": {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%"},
 	"Byte Array Logic":      {"b|", "b&", "b^", "b~"},
-	"Loading Values":        {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gaid", "gaids", "args"},
+	"Loading Values":        {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gaid", "gaids"},
 	"Flow Control":          {"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "cover", "uncover", "swap", "select", "assert", "callsub", "retsub"},
 	"State Access":          {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "log"},
 	"Inner Transactions":    {"tx_begin", "tx_field", "tx_submit"},
@@ -411,9 +412,9 @@ var globalFieldDocs = map[string]string{
 	"LogicSigVersion":           "Maximum supported TEAL version",
 	"Round":                     "Current round number",
 	"LatestTimestamp":           "Last confirmed block UNIX timestamp. Fails if negative",
-	"CurrentApplicationID":      "ID of current application executing. Fails if no such application is executing",
+	"CurrentApplicationID":      "ID of current application executing. Fails in LogicSigs",
 	"CreatorAddress":            "Address of the creator of the current application. Fails if no such application is executing",
-	"CurrentApplicationAddress": "Address that the current application controls. Fails if no such application is executing",
+	"CurrentApplicationAddress": "Address that the current application controls. Fails in LogicSigs",
 	"GroupID":                   "ID of the transaction group. 32 zero bytes if the transaction is not part of a group.",
 }
 
