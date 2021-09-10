@@ -19,6 +19,7 @@ package node
 
 import (
 	"context"
+	"github.com/algorand/go-algorand/logging"
 	"time"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -71,6 +72,7 @@ func makeTransactionSyncNodeConnector(node *AlgorandFullNode) transactionSyncNod
 		clock:       timers.MakeMonotonicClock(time.Now()),
 		txHandler:   node.txHandler.SolicitedAsyncTxHandler(),
 		openStateCh: make(chan struct{}),
+		proposalCh: make(chan agreement.TxnSyncProposal, 1),
 	}
 }
 
@@ -309,7 +311,10 @@ func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataByte
 		}
 	}
 
+	logging.Base().Info("received part of proposal message")
+
 	if pc.numTxGroupsReceived == len(pc.txGroups) {
+		logging.Base().Info("sending proposal to agreement")
 		// TODO send proposal to agreement
 		var flattenedTxns []transactions.SignedTxn
 		for _, txgroup := range pc.txGroups {

@@ -388,6 +388,10 @@ type ConsensusParams struct {
 	EnableKeyregCoherencyCheck bool
 
 	EnableExtraPagesOnAppUpdate bool
+
+	// EvalSkipCheckApplyData specifies whether we should check that the provided apply data
+	// matches the computed one.
+	EvalSkipCheckApplyData bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1015,6 +1019,8 @@ func initConsensusProtocols() {
 
 	// Enable App calls to pool budget in grouped transactions
 	vFuture.EnableAppCostPooling = true
+
+	vFuture.EvalSkipCheckApplyData = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

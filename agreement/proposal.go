@@ -19,6 +19,7 @@ package agreement
 import (
 	"context"
 	"fmt"
+	"github.com/algorand/go-algorand/data/transactions"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -67,6 +68,12 @@ func (p unauthenticatedProposal) ToBeHashed() (protocol.HashID, []byte) {
 
 // value returns the proposal-value associated with this proposal.
 func (p unauthenticatedProposal) value() proposalValue {
+	payset := make(transactions.Payset, len(p.Payset))
+	for i := range(payset) {
+		payset[i] = p.Payset[i]
+		payset[i].ApplyData = transactions.ApplyData{}
+	}
+	p.Payset = payset
 	return proposalValue{
 		OriginalPeriod:   p.OriginalPeriod,
 		OriginalProposer: p.OriginalProposer,
@@ -239,12 +246,7 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve Validat
 
 	ve = ve.WithSeed(newSeed)
 	proposal := makeProposal(ve, seedProof, period, address)
-	value := proposalValue{
-		OriginalPeriod:   period,
-		OriginalProposer: address,
-		BlockDigest:      proposal.Block.Digest(),
-		EncodingDigest:   crypto.HashObj(proposal),
-	}
+	value := proposal.value()
 	return proposal, value, nil
 }
 

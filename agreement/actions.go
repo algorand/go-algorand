@@ -19,6 +19,7 @@ package agreement
 import (
 	"context"
 	"fmt"
+	"github.com/algorand/go-algorand/logging"
 
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -153,6 +154,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 		txns, err := msg.Proposal.Block.DecodePaysetGroupsNoAD()
 		if err != nil {
 			// TODO error handling
+			logging.Base().Warnf("Failed to decode proposal payset: %v", err)
 		}
 		msg.Proposal.Payset = nil
 		payload := transmittedPayload{
@@ -160,6 +162,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 			PriorVote:               msg.Vote,
 		}
 		data = protocol.Encode(&payload)
+		logging.Base().Info("sending proposal")
 		s.TxnSync.RelayProposal(data, txns)
 		return
 	}

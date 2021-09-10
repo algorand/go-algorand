@@ -884,7 +884,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	// Validate applyData if we are validating an existing block.
 	// If we are validating and generating, we have no ApplyData yet.
 	if eval.validate && !eval.generate {
-		if eval.proto.ApplyData {
+		if eval.proto.ApplyData && !eval.proto.EvalSkipCheckApplyData {
 			if !ad.Equal(applyData) {
 				return fmt.Errorf("transaction %v: applyData mismatch: %v != %v", txid, ad, applyData)
 			}

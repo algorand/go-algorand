@@ -358,9 +358,11 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 			m.CompoundMessage.Proposal.Payset[i], err = m.CompoundMessage.Proposal.Block.EncodeSignedTxn(txn, transactions.ApplyData{})
 			if err != nil {
 				// TODO figure out expected behavior
+				logging.Base().Infof("failed to decode transaction")
 			}
 		}
 		e = setupCompoundMessage(d.ledger, m)
+		logging.Base().Info("received proposal")
 		d.UpdateEventsQueue(eventQueueDemux, 1)
 		d.UpdateEventsQueue(eventQueueTokenized[protocol.ProposalPayloadTag], 0)
 		d.monitor.inc(demuxCoserviceType)
