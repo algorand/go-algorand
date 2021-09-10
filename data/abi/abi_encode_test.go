@@ -49,8 +49,8 @@ func TestEncodeValid(t *testing.T) {
 			require.NoError(t, err, "uint encode fail")
 			require.Equal(t, expected, uintBytesActual, "encode uint not match with expected")
 		}
-		// 2^[size] - 1 test
-		// check if uint<size> can contain max uint value (2^size - 1)
+		// 2^[bitSize] - 1 test
+		// check if uint<bitSize> can contain max uint value (2^bitSize - 1)
 		largest := big.NewInt(0).Add(
 			upperLimit,
 			big.NewInt(1).Neg(big.NewInt(1)),
@@ -62,9 +62,9 @@ func TestEncodeValid(t *testing.T) {
 		require.Equal(t, largest.Bytes(), encoded, "encode uint largest do not match with expected")
 	}
 
-	// encoding test for ufixed, iterating through all the valid ufixed size and precision
+	// encoding test for ufixed, iterating through all the valid ufixed bitSize and precision
 	// randomly generate 10 big int values for ufixed numerator and check if encoded value match with expected
-	// also check if ufixed can fit max numerator (2^size - 1) under specific byte size
+	// also check if ufixed can fit max numerator (2^bitSize - 1) under specific byte bitSize
 	for size := 8; size <= 512; size += 8 {
 		upperLimit := big.NewInt(0).Lsh(big.NewInt(1), uint(size))
 		largest := big.NewInt(0).Add(
@@ -87,7 +87,7 @@ func TestEncodeValid(t *testing.T) {
 				buffer = append(buffer, randomBytes...)
 				require.Equal(t, buffer, encodedUfixed, "encode ufixed not match with expected")
 			}
-			// (2^[size] - 1) / (10^[precision]) test
+			// (2^[bitSize] - 1) / (10^[precision]) test
 			ufixedLargestValue, err := MakeUfixed(largest, uint16(size), uint16(precision))
 			require.NoError(t, err, "make largest ufixed fail")
 			ufixedLargestEncode, err := ufixedLargestValue.Encode()
@@ -351,8 +351,8 @@ func TestEncodeValid(t *testing.T) {
 
 func TestDecodeValid(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	// decoding test for uint, iterating through all valid uint size
-	// randomly take 1000 tests on each valid size
+	// decoding test for uint, iterating through all valid uint bitSize
+	// randomly take 1000 tests on each valid bitSize
 	// generate bytes from random uint values and decode bytes with additional type information
 	for intSize := 8; intSize <= 512; intSize += 8 {
 		upperLimit := big.NewInt(0).Lsh(big.NewInt(1), uint(intSize))
@@ -372,7 +372,7 @@ func TestDecodeValid(t *testing.T) {
 		}
 	}
 
-	// decoding test for ufixed, iterating through all valid ufixed size and precision
+	// decoding test for ufixed, iterating through all valid ufixed bitSize and precision
 	// randomly take 10 tests on each valid setting
 	// generate ufixed bytes and try to decode back with additional type information
 	for size := 8; size <= 512; size += 8 {
@@ -587,7 +587,7 @@ func TestDecodeValid(t *testing.T) {
 		actual, err := Decode(
 			inputEncode,
 			Type{
-				enumIndex: Tuple,
+				abiTypeID: Tuple,
 				childTypes: []Type{
 					MakeStringType(),
 					MakeBoolType(), MakeBoolType(), MakeBoolType(), MakeBoolType(),
@@ -623,16 +623,16 @@ func TestDecodeValid(t *testing.T) {
 			0b11000000,
 		}
 		decoded, err := Decode(encodedInput, Type{
-			enumIndex:    Tuple,
+			abiTypeID:    Tuple,
 			staticLength: 2,
 			childTypes: []Type{
 				{
-					enumIndex:    ArrayStatic,
+					abiTypeID:    ArrayStatic,
 					staticLength: 2,
 					childTypes:   []Type{MakeBoolType()},
 				},
 				{
-					enumIndex:    ArrayStatic,
+					abiTypeID:    ArrayStatic,
 					staticLength: 2,
 					childTypes:   []Type{MakeBoolType()},
 				},
@@ -670,16 +670,16 @@ func TestDecodeValid(t *testing.T) {
 			0x00, 0x02, 0b11000000,
 		}
 		decoded, err := Decode(encodedInput, Type{
-			enumIndex:    Tuple,
+			abiTypeID:    Tuple,
 			staticLength: 2,
 			childTypes: []Type{
 				{
-					enumIndex:    ArrayStatic,
+					abiTypeID:    ArrayStatic,
 					staticLength: 2,
 					childTypes:   []Type{MakeBoolType()},
 				},
 				{
-					enumIndex:  ArrayDynamic,
+					abiTypeID:  ArrayDynamic,
 					childTypes: []Type{MakeBoolType()},
 				},
 			},
@@ -708,15 +708,15 @@ func TestDecodeValid(t *testing.T) {
 			0x00, 0x00, 0x00, 0x00,
 		}
 		decoded, err := Decode(encodedInput, Type{
-			enumIndex:    Tuple,
+			abiTypeID:    Tuple,
 			staticLength: 2,
 			childTypes: []Type{
 				{
-					enumIndex:  ArrayDynamic,
+					abiTypeID:  ArrayDynamic,
 					childTypes: []Type{MakeBoolType()},
 				},
 				{
-					enumIndex:  ArrayDynamic,
+					abiTypeID:  ArrayDynamic,
 					childTypes: []Type{MakeBoolType()},
 				},
 			},
@@ -733,7 +733,7 @@ func TestDecodeValid(t *testing.T) {
 		require.NoError(t, err, "make empty tuple should not return error")
 		encodedInput := make([]byte, 0)
 		decoded, err := Decode(encodedInput, Type{
-			enumIndex:    Tuple,
+			abiTypeID:    Tuple,
 			staticLength: 0,
 			childTypes:   []Type{},
 		})
@@ -873,7 +873,7 @@ func TestDecodeInvalid(t *testing.T) {
 		_, err := Decode(
 			inputEncode,
 			Type{
-				enumIndex: Tuple,
+				abiTypeID: Tuple,
 				childTypes: []Type{
 					MakeStringType(),
 					MakeBoolType(), MakeBoolType(), MakeBoolType(), MakeBoolType(),
@@ -899,16 +899,16 @@ func TestDecodeInvalid(t *testing.T) {
 	*/
 	t.Run("corrupted static bool array tuple decoding", func(t *testing.T) {
 		expectedType := Type{
-			enumIndex:    Tuple,
+			abiTypeID:    Tuple,
 			staticLength: 2,
 			childTypes: []Type{
 				{
-					enumIndex:    ArrayStatic,
+					abiTypeID:    ArrayStatic,
 					staticLength: 2,
 					childTypes:   []Type{MakeBoolType()},
 				},
 				{
-					enumIndex:    ArrayStatic,
+					abiTypeID:    ArrayStatic,
 					staticLength: 2,
 					childTypes:   []Type{MakeBoolType()},
 				},
@@ -947,16 +947,16 @@ func TestDecodeInvalid(t *testing.T) {
 			0x00, 0x02, 0b11000000,
 		}
 		_, err := Decode(encodedInput, Type{
-			enumIndex:    Tuple,
+			abiTypeID:    Tuple,
 			staticLength: 2,
 			childTypes: []Type{
 				{
-					enumIndex:    ArrayStatic,
+					abiTypeID:    ArrayStatic,
 					staticLength: 2,
 					childTypes:   []Type{MakeBoolType()},
 				},
 				{
-					enumIndex:  ArrayDynamic,
+					abiTypeID:  ArrayDynamic,
 					childTypes: []Type{MakeBoolType()},
 				},
 			},
@@ -984,15 +984,15 @@ func TestDecodeInvalid(t *testing.T) {
 			0x00, 0x00, 0x00, 0x00,
 		}
 		_, err := Decode(encodedInput, Type{
-			enumIndex:    Tuple,
+			abiTypeID:    Tuple,
 			staticLength: 2,
 			childTypes: []Type{
 				{
-					enumIndex:  ArrayDynamic,
+					abiTypeID:  ArrayDynamic,
 					childTypes: []Type{MakeBoolType()},
 				},
 				{
-					enumIndex:  ArrayDynamic,
+					abiTypeID:  ArrayDynamic,
 					childTypes: []Type{MakeBoolType()},
 				},
 			},
@@ -1007,10 +1007,55 @@ func TestDecodeInvalid(t *testing.T) {
 	t.Run("corrupted empty tuple decoding", func(t *testing.T) {
 		encodedInput := []byte{0xFF}
 		_, err := Decode(encodedInput, Type{
-			enumIndex:    Tuple,
+			abiTypeID:    Tuple,
 			staticLength: 0,
 			childTypes:   []Type{},
 		})
 		require.Error(t, err, "decode corrupted empty tuple should return error")
 	})
+}
+
+func TestEncodeDecodeRandomTuple(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	var testValuePool [][]Value = make([][]Value, 8)
+	for i := 8; i <= 512; i += 8 {
+		max := big.NewInt(1).Lsh(big.NewInt(1), uint(i))
+		for j := 0; j < 200; j++ {
+			randVal, err := rand.Int(rand.Reader, max)
+			require.NoError(t, err, "generate largest number bound, should be no error")
+			uintTemp, err := MakeUint(randVal, uint16(i))
+			require.NoError(t, err, "generate random ABI uint should not return error")
+			testValuePool[Uint] = append(testValuePool[Uint], uintTemp)
+		}
+		for j := 1; j < 160; j++ {
+			randVal, err := rand.Int(rand.Reader, max)
+			require.NoError(t, err, "generate largest number bound, should be no error")
+			ufixedTemp, err := MakeUfixed(randVal, uint16(i), uint16(j))
+			require.NoError(t, err, "generate random ABI ufixed should not return error")
+			testValuePool[Ufixed] = append(testValuePool[Ufixed], ufixedTemp)
+		}
+	}
+	for i := 0; i < (1 << 8); i++ {
+		testValuePool[Byte] = append(testValuePool[Byte], MakeByte(byte(i)))
+	}
+	for i := 0; i < 2; i++ {
+		testValuePool[Bool] = append(testValuePool[Bool], MakeBool(i == 1))
+	}
+	for i := 0; i < 500; i++ {
+		max := big.NewInt(1).Lsh(big.NewInt(1), 256)
+		randVal, err := rand.Int(rand.Reader, max)
+		require.NoError(t, err, "generate largest number bound, should be no error")
+		addrBytes := randVal.Bytes()
+		remainBytes := make([]byte, 32-len(addrBytes))
+		addrBytes = append(remainBytes, addrBytes...)
+		var addrBytesToMake [32]byte
+		copy(addrBytesToMake[:], addrBytes)
+		testValuePool[Address] = append(testValuePool[Address], MakeAddress(addrBytesToMake))
+	}
+	for i := 1; i <= 100; i++ {
+		for j := 0; j < 4; j++ {
+			abiString := MakeString(gobberish.GenerateString(i))
+			testValuePool[String] = append(testValuePool[String], abiString)
+		}
+	}
 }

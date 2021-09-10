@@ -61,8 +61,8 @@ func TestMakeTypeValid(t *testing.T) {
 		{
 			input: MakeDynamicArrayType(
 				Type{
-					enumIndex: Uint,
-					size:      uint16(32),
+					abiTypeID: Uint,
+					bitSize:   uint16(32),
 				},
 			),
 			testType: "dynamic array",
@@ -80,8 +80,8 @@ func TestMakeTypeValid(t *testing.T) {
 		{
 			input: MakeStaticArrayType(
 				Type{
-					enumIndex: Ufixed,
-					size:      uint16(128),
+					abiTypeID: Ufixed,
+					bitSize:   uint16(128),
 					precision: uint16(10),
 				},
 				uint16(100),
@@ -103,22 +103,22 @@ func TestMakeTypeValid(t *testing.T) {
 		// tuple type
 		{
 			input: Type{
-				enumIndex: Tuple,
+				abiTypeID: Tuple,
 				childTypes: []Type{
 					{
-						enumIndex: Uint,
-						size:      uint16(32),
+						abiTypeID: Uint,
+						bitSize:   uint16(32),
 					},
 					{
-						enumIndex: Tuple,
+						abiTypeID: Tuple,
 						childTypes: []Type{
 							MakeAddressType(),
 							MakeByteType(),
 							MakeStaticArrayType(MakeBoolType(), uint16(10)),
 							MakeDynamicArrayType(
 								Type{
-									enumIndex: Ufixed,
-									size:      uint16(256),
+									abiTypeID: Ufixed,
+									bitSize:   uint16(256),
 									precision: uint16(10),
 								},
 							),
@@ -152,7 +152,7 @@ func TestMakeTypeInvalid(t *testing.T) {
 		}
 		// note: if a var mod 8 = 0 (or not) in uint32, then it should mod 8 = 0 (or not) in uint16.
 		_, err := MakeUintType(uint16(randInput))
-		require.Error(t, err, "MakeUintType: should throw error on size input %d", randInput)
+		require.Error(t, err, "MakeUintType: should throw error on bitSize input %d", randInput)
 	}
 	// ufixed
 	for i := 0; i <= 10000; i++ {
@@ -165,7 +165,7 @@ func TestMakeTypeInvalid(t *testing.T) {
 			randPrecision = rand.Uint32()
 		}
 		_, err := MakeUfixedType(uint16(randSize), uint16(randPrecision))
-		require.Error(t, err, "MakeUintType: should throw error on size input %d", randSize)
+		require.Error(t, err, "MakeUintType: should throw error on bitSize input %d", randSize)
 	}
 }
 
@@ -201,15 +201,15 @@ func TestTypeFromStringValid(t *testing.T) {
 		{
 			input:    "uint256[]",
 			testType: "dynamic array",
-			expected: MakeDynamicArrayType(Type{enumIndex: Uint, size: 256}),
+			expected: MakeDynamicArrayType(Type{abiTypeID: Uint, bitSize: 256}),
 		},
 		{
 			input:    "ufixed256x64[]",
 			testType: "dynamic array",
 			expected: MakeDynamicArrayType(
 				Type{
-					enumIndex: Ufixed,
-					size:      256,
+					abiTypeID: Ufixed,
+					bitSize:   256,
 					precision: 64,
 				},
 			),
@@ -241,7 +241,7 @@ func TestTypeFromStringValid(t *testing.T) {
 			testType: "static array",
 			expected: MakeStaticArrayType(
 				MakeDynamicArrayType(
-					Type{enumIndex: Uint, size: uint16(64)},
+					Type{abiTypeID: Uint, bitSize: uint16(64)},
 				),
 				uint16(200),
 			),
@@ -251,22 +251,22 @@ func TestTypeFromStringValid(t *testing.T) {
 			input:    "(uint32,(address,byte,bool[10],ufixed256x10[]),byte[])",
 			testType: "tuple type",
 			expected: Type{
-				enumIndex: Tuple,
+				abiTypeID: Tuple,
 				childTypes: []Type{
 					{
-						enumIndex: Uint,
-						size:      uint16(32),
+						abiTypeID: Uint,
+						bitSize:   uint16(32),
 					},
 					{
-						enumIndex: Tuple,
+						abiTypeID: Tuple,
 						childTypes: []Type{
 							MakeAddressType(),
 							MakeByteType(),
 							MakeStaticArrayType(MakeBoolType(), uint16(10)),
 							MakeDynamicArrayType(
 								Type{
-									enumIndex: Ufixed,
-									size:      uint16(256),
+									abiTypeID: Ufixed,
+									bitSize:   uint16(256),
 									precision: uint16(10),
 								},
 							),
@@ -282,25 +282,25 @@ func TestTypeFromStringValid(t *testing.T) {
 			input:    "(uint32,(address,byte,bool[10],(ufixed256x10[])))",
 			testType: "tuple type",
 			expected: Type{
-				enumIndex: Tuple,
+				abiTypeID: Tuple,
 				childTypes: []Type{
 					{
-						enumIndex: Uint,
-						size:      uint16(32),
+						abiTypeID: Uint,
+						bitSize:   uint16(32),
 					},
 					{
-						enumIndex: Tuple,
+						abiTypeID: Tuple,
 						childTypes: []Type{
 							MakeAddressType(),
 							MakeByteType(),
 							MakeStaticArrayType(MakeBoolType(), uint16(10)),
 							{
-								enumIndex: Tuple,
+								abiTypeID: Tuple,
 								childTypes: []Type{
 									MakeDynamicArrayType(
 										Type{
-											enumIndex: Ufixed,
-											size:      uint16(256),
+											abiTypeID: Ufixed,
+											bitSize:   uint16(256),
 											precision: uint16(10),
 										},
 									),
@@ -318,31 +318,31 @@ func TestTypeFromStringValid(t *testing.T) {
 			input:    "((uint32),(address,(byte,bool[10],ufixed256x10[])))",
 			testType: "tuple type",
 			expected: Type{
-				enumIndex: Tuple,
+				abiTypeID: Tuple,
 				childTypes: []Type{
 					{
-						enumIndex: Tuple,
+						abiTypeID: Tuple,
 						childTypes: []Type{
 							{
-								enumIndex: Uint,
-								size:      uint16(32),
+								abiTypeID: Uint,
+								bitSize:   uint16(32),
 							},
 						},
 						staticLength: 1,
 					},
 					{
-						enumIndex: Tuple,
+						abiTypeID: Tuple,
 						childTypes: []Type{
 							MakeAddressType(),
 							{
-								enumIndex: Tuple,
+								abiTypeID: Tuple,
 								childTypes: []Type{
 									MakeByteType(),
 									MakeStaticArrayType(MakeBoolType(), uint16(10)),
 									MakeDynamicArrayType(
 										Type{
-											enumIndex: Ufixed,
-											size:      uint16(256),
+											abiTypeID: Ufixed,
+											bitSize:   uint16(256),
 											precision: uint16(10),
 										},
 									),
@@ -376,7 +376,7 @@ func TestTypeFromStringInvalid(t *testing.T) {
 		}
 		errorInput := "uint" + strconv.FormatUint(randSize, 10)
 		_, err := TypeFromString(errorInput)
-		require.Error(t, err, "MakeUintType: should throw error on size input %d", randSize)
+		require.Error(t, err, "MakeUintType: should throw error on bitSize input %d", randSize)
 	}
 	for i := 0; i <= 10000; i++ {
 		randSize := rand.Uint64()
@@ -389,7 +389,7 @@ func TestTypeFromStringInvalid(t *testing.T) {
 		}
 		errorInput := "ufixed" + strconv.FormatUint(randSize, 10) + "x" + strconv.FormatUint(randPrecision, 10)
 		_, err := TypeFromString(errorInput)
-		require.Error(t, err, "MakeUintType: should throw error on size input %d", randSize)
+		require.Error(t, err, "MakeUintType: should throw error on bitSize input %d", randSize)
 	}
 	var testcases = []string{
 		// uint
@@ -453,7 +453,7 @@ func generateTupleType(baseTypes []Type, tupleTypes []Type) Type {
 			resultTypes[i] = baseTypes[rand.Intn(len(baseTypes))]
 		}
 	}
-	return Type{enumIndex: Tuple, childTypes: resultTypes, staticLength: uint16(tupleLen)}
+	return Type{abiTypeID: Tuple, childTypes: resultTypes, staticLength: uint16(tupleLen)}
 }
 
 func TestTypeMISC(t *testing.T) {
@@ -551,10 +551,10 @@ func TestTypeMISC(t *testing.T) {
 			require.Error(t, err, "byteLen test error on %s dynamic type, should have error",
 				testType.String())
 		} else {
-			if testType.enumIndex == Tuple {
+			if testType.abiTypeID == Tuple {
 				sizeSum := 0
 				for i := 0; i < len(testType.childTypes); i++ {
-					if testType.childTypes[i].enumIndex == Bool {
+					if testType.childTypes[i].abiTypeID == Bool {
 						// search previous bool
 						before := findBoolLR(testType.childTypes, i, -1)
 						// search after bool
@@ -575,8 +575,8 @@ func TestTypeMISC(t *testing.T) {
 
 				require.Equal(t, sizeSum, byteLen,
 					"%s do not match calculated byte length %d", testType.String(), sizeSum)
-			} else if testType.enumIndex == ArrayStatic {
-				if testType.childTypes[0].enumIndex == Bool {
+			} else if testType.abiTypeID == ArrayStatic {
+				if testType.childTypes[0].abiTypeID == Bool {
 					expected := testType.staticLength / 8
 					if testType.staticLength%8 != 0 {
 						expected++

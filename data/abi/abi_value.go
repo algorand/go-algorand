@@ -51,8 +51,8 @@ func MakeUint64(value uint64) (Value, error) {
 	return MakeUint(bigInt, 64)
 }
 
-// MakeUint takes a big integer representation and a type size,
-// and returns an ABI Value of ABI Uint<size> type.
+// MakeUint takes a big integer representation and a type bitSize,
+// and returns an ABI Value of ABI Uint<bitSize> type.
 func MakeUint(value *big.Int, size uint16) (Value, error) {
 	typeUint, err := MakeUintType(size)
 	if err != nil {
@@ -60,7 +60,7 @@ func MakeUint(value *big.Int, size uint16) (Value, error) {
 	}
 	upperLimit := big.NewInt(0).Lsh(big.NewInt(1), uint(size))
 	if value.Cmp(upperLimit) >= 0 {
-		return Value{}, fmt.Errorf("passed value larger than uint size %d", size)
+		return Value{}, fmt.Errorf("passed value larger than uint bitSize %d", size)
 	}
 	return Value{
 		ABIType: typeUint,
@@ -68,8 +68,8 @@ func MakeUint(value *big.Int, size uint16) (Value, error) {
 	}, nil
 }
 
-// MakeUfixed takes a big rational number representation, a type size, and a type precision,
-// and returns an ABI Value of ABI UFixed<size>x<precision>
+// MakeUfixed takes a big rational number representation, a type bitSize, and a type precision,
+// and returns an ABI Value of ABI UFixed<bitSize>x<precision>
 func MakeUfixed(value *big.Int, size uint16, precision uint16) (Value, error) {
 	ufixedValueType, err := MakeUfixedType(size, precision)
 	if err != nil {
@@ -175,8 +175,8 @@ func MakeBool(value bool) Value {
 
 // GetUint8 tries to retreve an uint8 from an ABI Value.
 func (v Value) GetUint8() (uint8, error) {
-	if v.ABIType.enumIndex != Uint || v.ABIType.size > 8 {
-		return 0, fmt.Errorf("value type unmatch or size too large")
+	if v.ABIType.abiTypeID != Uint || v.ABIType.bitSize > 8 {
+		return 0, fmt.Errorf("value type unmatch or bitSize too large")
 	}
 	bigIntForm, err := v.GetUint()
 	if err != nil {
@@ -187,8 +187,8 @@ func (v Value) GetUint8() (uint8, error) {
 
 // GetUint16 tries to retrieve an uint16 from an ABI Value.
 func (v Value) GetUint16() (uint16, error) {
-	if v.ABIType.enumIndex != Uint || v.ABIType.size > 16 {
-		return 0, fmt.Errorf("value type unmatch or size too large")
+	if v.ABIType.abiTypeID != Uint || v.ABIType.bitSize > 16 {
+		return 0, fmt.Errorf("value type unmatch or bitSize too large")
 	}
 	bigIntForm, err := v.GetUint()
 	if err != nil {
@@ -199,8 +199,8 @@ func (v Value) GetUint16() (uint16, error) {
 
 // GetUint32 tries to retrieve an uint32 from an ABI Value.
 func (v Value) GetUint32() (uint32, error) {
-	if v.ABIType.enumIndex != Uint || v.ABIType.size > 32 {
-		return 0, fmt.Errorf("value type unmatch or size too large")
+	if v.ABIType.abiTypeID != Uint || v.ABIType.bitSize > 32 {
+		return 0, fmt.Errorf("value type unmatch or bitSize too large")
 	}
 	bigIntForm, err := v.GetUint()
 	if err != nil {
@@ -211,8 +211,8 @@ func (v Value) GetUint32() (uint32, error) {
 
 // GetUint64 tries to retrieve an uint64 from an ABI Value.
 func (v Value) GetUint64() (uint64, error) {
-	if v.ABIType.enumIndex != Uint || v.ABIType.size > 64 {
-		return 0, fmt.Errorf("value type unmatch or size too large")
+	if v.ABIType.abiTypeID != Uint || v.ABIType.bitSize > 64 {
+		return 0, fmt.Errorf("value type unmatch or bitSize too large")
 	}
 	bigIntForm, err := v.GetUint()
 	if err != nil {
@@ -223,33 +223,33 @@ func (v Value) GetUint64() (uint64, error) {
 
 // GetUint tries to retrieve an big uint from an ABI Value.
 func (v Value) GetUint() (*big.Int, error) {
-	if v.ABIType.enumIndex != Uint {
+	if v.ABIType.abiTypeID != Uint {
 		return nil, fmt.Errorf("value type unmatch")
 	}
 	bigIntForm := v.value.(*big.Int)
-	sizeThreshold := big.NewInt(0).Lsh(big.NewInt(1), uint(v.ABIType.size))
+	sizeThreshold := big.NewInt(0).Lsh(big.NewInt(1), uint(v.ABIType.bitSize))
 	if sizeThreshold.Cmp(bigIntForm) <= 0 {
-		return nil, fmt.Errorf("value is larger than uint size")
+		return nil, fmt.Errorf("value is larger than uint bitSize")
 	}
 	return bigIntForm, nil
 }
 
 // GetUfixed tries to retrieve an big rational number from an ABI Value.
 func (v Value) GetUfixed() (*big.Int, error) {
-	if v.ABIType.enumIndex != Ufixed {
+	if v.ABIType.abiTypeID != Ufixed {
 		return nil, fmt.Errorf("value type unmatch, should be ufixed")
 	}
 	bigIntForm := v.value.(*big.Int)
-	sizeThreshold := big.NewInt(0).Lsh(big.NewInt(1), uint(v.ABIType.size))
+	sizeThreshold := big.NewInt(0).Lsh(big.NewInt(1), uint(v.ABIType.bitSize))
 	if sizeThreshold.Cmp(bigIntForm) <= 0 {
-		return nil, fmt.Errorf("value is larger than ufixed size")
+		return nil, fmt.Errorf("value is larger than ufixed bitSize")
 	}
 	return bigIntForm, nil
 }
 
 // GetString tries to retrieve a string from ABI Value.
 func (v Value) GetString() (string, error) {
-	if v.ABIType.enumIndex != String {
+	if v.ABIType.abiTypeID != String {
 		return "", fmt.Errorf("value type unmatch, should be ufixed")
 	}
 	stringForm := v.value.(string)
@@ -258,7 +258,7 @@ func (v Value) GetString() (string, error) {
 
 // GetByte tries to retrieve a byte from ABI Value.
 func (v Value) GetByte() (byte, error) {
-	if v.ABIType.enumIndex != Byte {
+	if v.ABIType.abiTypeID != Byte {
 		return byte(0), fmt.Errorf("value type unmatch, should be bytes")
 	}
 	bytesForm := v.value.(byte)
@@ -267,7 +267,7 @@ func (v Value) GetByte() (byte, error) {
 
 // GetAddress tries to retrieve a [32]byte array from ABI Value.
 func (v Value) GetAddress() ([32]byte, error) {
-	if v.ABIType.enumIndex != Address {
+	if v.ABIType.abiTypeID != Address {
 		return [32]byte{}, fmt.Errorf("value type unmatch, should be address")
 	}
 	addressForm := v.value.([32]byte)
@@ -276,7 +276,7 @@ func (v Value) GetAddress() ([32]byte, error) {
 
 // GetValueByIndex retrieve value element by the index passed in
 func (v Value) GetValueByIndex(index uint16) (Value, error) {
-	switch v.ABIType.enumIndex {
+	switch v.ABIType.abiTypeID {
 	case ArrayDynamic:
 		elements := v.value.([]Value)
 		if len(elements) <= int(index) {
@@ -296,7 +296,7 @@ func (v Value) GetValueByIndex(index uint16) (Value, error) {
 
 // GetBool tries to retrieve a boolean value from the ABI Value.
 func (v Value) GetBool() (bool, error) {
-	if v.ABIType.enumIndex != Bool {
+	if v.ABIType.abiTypeID != Bool {
 		return false, fmt.Errorf("value type unmatch, should be bool")
 	}
 	boolForm := v.value.(bool)

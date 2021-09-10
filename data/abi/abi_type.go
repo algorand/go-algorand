@@ -61,11 +61,11 @@ const (
 
 // Type is the struct that stores information about an ABI value's type.
 type Type struct {
-	enumIndex  BaseType
+	abiTypeID  BaseType
 	childTypes []Type
 
-	// only can be applied to `uint` size <N> or `ufixed` size <N>
-	size uint16
+	// only can be applied to `uint` bitSize <N> or `ufixed` bitSize <N>
+	bitSize uint16
 	// only can be applied to `ufixed` precision <M>
 	precision uint16
 
@@ -81,13 +81,13 @@ type Type struct {
 
 // String serialize an ABI Type to a string in ABI encoding.
 func (t Type) String() string {
-	switch t.enumIndex {
+	switch t.abiTypeID {
 	case Uint:
-		return "uint" + strconv.Itoa(int(t.size))
+		return "uint" + strconv.Itoa(int(t.bitSize))
 	case Byte:
 		return "byte"
 	case Ufixed:
-		return "ufixed" + strconv.Itoa(int(t.size)) + "x" + strconv.Itoa(int(t.precision))
+		return "ufixed" + strconv.Itoa(int(t.bitSize)) + "x" + strconv.Itoa(int(t.precision))
 	case Bool:
 		return "bool"
 	case ArrayStatic:
@@ -109,23 +109,55 @@ func (t Type) String() string {
 	}
 }
 
+var staticArrayRegexp *regexp.Regexp = nil
+var ufixedRegexp *regexp.Regexp = nil
+var regexpInitialized = false
+
+func initRegexps() (err error) {
+	if regexpInitialized {
+		return nil
+	}
+	// Note that we allow only decimal static array length
+	staticArrayRegexp, err = regexp.Compile(`^([a-z\d\[\](),]+)\[([1-9][\d]*)]$`)
+	if err != nil {
+		return
+	}
+	ufixedRegexp, err = regexp.Compile(`^ufixed([1-9][\d]*)x([1-9][\d]*)$`)
+	if err != nil {
+		return
+	}
+	regexpInitialized = true
+	return
+}
+
 // TypeFromString de-serialize ABI type from a string following ABI encoding.
 func TypeFromString(str string) (Type, error) {
+	// if the regexps for type str matching are not initialized
+	// attempt to initialize with `initRegexps`
+	// if error return err
+	if !regexpInitialized {
+		err := initRegexps()
+		if err != nil {
+			return Type{}, err
+		}
+	}
+
 	switch {
 	case strings.HasSuffix(str, "[]"):
 		arrayArgType, err := TypeFromString(str[:len(str)-2])
 		if err != nil {
-			return arrayArgType, err
+			return Type{}, err
 		}
 		return MakeDynamicArrayType(arrayArgType), nil
 	case strings.HasSuffix(str, "]"):
-		stringMatches := regexp.MustCompile(`^([a-z\d\[\](),]+)\[([1-9][\d]*)]$`).FindStringSubmatch(str)
+		stringMatches := staticArrayRegexp.FindStringSubmatch(str)
 		// match the string itself, array element type, then array length
 		if len(stringMatches) != 3 {
 			return Type{}, fmt.Errorf("static array ill formated: %s", str)
 		}
 		// guaranteed that the length of array is existing
 		arrayLengthStr := stringMatches[2]
+		// allowing only decimal static array length, with limit size to 2^16 - 1
 		arrayLength, err := strconv.ParseUint(arrayLengthStr, 10, 16)
 		if err != nil {
 			return Type{}, err
@@ -145,8 +177,8 @@ func TypeFromString(str string) (Type, error) {
 	case str == "byte":
 		return MakeByteType(), nil
 	case strings.HasPrefix(str, "ufixed"):
-		stringMatches := regexp.MustCompile(`^ufixed([1-9][\d]*)x([1-9][\d]*)$`).FindStringSubmatch(str)
-		// match string itself, then type-size, and type-precision
+		stringMatches := ufixedRegexp.FindStringSubmatch(str)
+		// match string itself, then type-bitSize, and type-precision
 		if len(stringMatches) != 3 {
 			return Type{}, fmt.Errorf("ill formed ufixed type: %s", str)
 		}
@@ -190,14 +222,33 @@ type segment struct{ left, right int }
 
 // parseTupleContent splits an ABI encoded string for tuple type into multiple sub-strings.
 // Each sub-string represents a content type of the tuple type.
+// The argument str is the content between parentheses of tuple, i.e.
+// (...... str ......)
+//  ^               ^
 func parseTupleContent(str string) ([]string, error) {
-	// argument str is the content between parentheses of tuple, i.e.
-	// (...... str ......)
-	//  ^               ^
-	parenSegmentRecord := make([]segment, 0)
-	stack := make([]int, 0)
+	// the following 2 checks want to make sure input string can be separated by comma
+	// with form: "...substr_0,...substr_1,...,...substr_k"
+
+	// str should noe have leading/tailing comma
+	if strings.HasSuffix(str, ",") || strings.HasPrefix(str, ",") {
+		return []string{},
+			fmt.Errorf("parsing error: cannot replace tuple segment back: " +
+				"number of empty placeholders do not match with number of sub-tuples")
+	}
+
+	// str should not have consecutive commas contained
+	if strings.Contains(str, ",,") {
+		return []string{}, fmt.Errorf("no consecutive commas")
+	}
+
+	var parenSegmentRecord = make([]segment, 0)
+	var stack []int
+
 	// get the most exterior parentheses segment (not overlapped by other parentheses)
 	// illustration: "*****,(*****),*****" => ["*****", "(*****)", "*****"]
+	// once iterate to left paren (, stack up by 1 in stack
+	// iterate to right paren ), pop 1 in stack
+	// if iterate to right paren ) with stack height 0, find a parenthesis segment "(******)"
 	for index, chr := range str {
 		if chr == '(' {
 			stack = append(stack, index)
@@ -219,11 +270,6 @@ func parseTupleContent(str string) ([]string, error) {
 		return []string{}, fmt.Errorf("unpaired parentheses: %s", str)
 	}
 
-	// kudos to Jason Paulos
-	if strings.Contains(str, ",,") {
-		return []string{}, fmt.Errorf("no consecutive commas")
-	}
-
 	// take out tuple-formed type str in tuple argument
 	strCopied := str
 	for i := len(parenSegmentRecord) - 1; i >= 0; i-- {
@@ -231,64 +277,55 @@ func parseTupleContent(str string) ([]string, error) {
 		strCopied = strCopied[:parenSeg.left] + strCopied[parenSeg.right+1:]
 	}
 
-	// maintain list of empty strings as placeholders for tuple-formed type str
+	// split the string without parenthesis segments
 	tupleStrSegs := strings.Split(strCopied, ",")
-	emptyStrIndex := make([]int, 0)
+
+	// the empty strings are placeholders for parenthesis segments
+	// put the parenthesis segments back into segment list
+	parenSegCount := 0
 	for index, segStr := range tupleStrSegs {
 		if segStr == "" {
-			emptyStrIndex = append(emptyStrIndex, index)
+			parenSeg := parenSegmentRecord[parenSegCount]
+			tupleStrSegs[index] = str[parenSeg.left : parenSeg.right+1]
+			parenSegCount++
 		}
-	}
-
-	// check if the number of empty block placeholder is equal to number of sub-tuples
-	// if number do not match, this might be incurred by head/tail commas
-	// e.g. (,uint64,(bool,bool)) => ["", uint64, ""], with sub-tuple ["(bool,bool)"]
-	if len(emptyStrIndex) != len(parenSegmentRecord) {
-		return []string{},
-			fmt.Errorf("parsing error: cannot replace tuple segment back: " +
-				"number of empty placeholders do not match with number of sub-tuples")
-	}
-
-	// replace back the tuple-formed type str
-	for index, replaceIndex := range emptyStrIndex {
-		tupleStrSegs[replaceIndex] = str[parenSegmentRecord[index].left : parenSegmentRecord[index].right+1]
 	}
 
 	return tupleStrSegs, nil
 }
 
-// MakeUintType makes `Uint` ABI type by taking a type size argument.
-// The range of type size is [8, 512] and type size % 8 == 0.
+// MakeUintType makes `Uint` ABI type by taking a type bitSize argument.
+// The range of type bitSize is [8, 512] and type bitSize % 8 == 0.
 func MakeUintType(typeSize uint16) (Type, error) {
 	if typeSize%8 != 0 || typeSize < 8 || typeSize > 512 {
-		return Type{}, fmt.Errorf("unsupported uint type size: %d", typeSize)
+		return Type{}, fmt.Errorf("unsupported uint type bitSize: %d", typeSize)
 	}
 	return Type{
-		enumIndex: Uint,
-		size:      typeSize,
+		abiTypeID: Uint,
+		bitSize:   typeSize,
 	}, nil
 }
 
 // MakeByteType makes `Byte` ABI type.
 func MakeByteType() Type {
 	return Type{
-		enumIndex: Byte,
+		abiTypeID: Byte,
 	}
 }
 
-// MakeUfixedType makes `UFixed` ABI type by taking type size and type precision as arguments.
-// The range of type size is [8, 512] and type size % 8 == 0.
+// MakeUfixedType makes `UFixed` ABI type by taking type bitSize and type precision as arguments.
+// The range of type bitSize is [8, 512] and type bitSize % 8 == 0.
 // The range of type precision is [1, 160].
 func MakeUfixedType(typeSize uint16, typePrecision uint16) (Type, error) {
 	if typeSize%8 != 0 || typeSize < 8 || typeSize > 512 {
-		return Type{}, fmt.Errorf("unsupported ufixed type size: %d", typeSize)
+		return Type{}, fmt.Errorf("unsupported ufixed type bitSize: %d", typeSize)
 	}
 	if typePrecision > 160 || typePrecision < 1 {
 		return Type{}, fmt.Errorf("unsupported ufixed type precision: %d", typePrecision)
 	}
 	return Type{
-		enumIndex: Ufixed,
-		size:      typeSize,
+		abiTypeID: Ufixed,
+		bitSize:   typeSize,
 		precision: typePrecision,
 	}, nil
 }
@@ -296,7 +333,7 @@ func MakeUfixedType(typeSize uint16, typePrecision uint16) (Type, error) {
 // MakeBoolType makes `Bool` ABI type.
 func MakeBoolType() Type {
 	return Type{
-		enumIndex: Bool,
+		abiTypeID: Bool,
 	}
 }
 
@@ -304,7 +341,7 @@ func MakeBoolType() Type {
 // array element type and array length as arguments.
 func MakeStaticArrayType(argumentType Type, arrayLength uint16) Type {
 	return Type{
-		enumIndex:    ArrayStatic,
+		abiTypeID:    ArrayStatic,
 		childTypes:   []Type{argumentType},
 		staticLength: arrayLength,
 	}
@@ -313,14 +350,14 @@ func MakeStaticArrayType(argumentType Type, arrayLength uint16) Type {
 // MakeAddressType makes `Address` ABI type.
 func MakeAddressType() Type {
 	return Type{
-		enumIndex: Address,
+		abiTypeID: Address,
 	}
 }
 
 // MakeDynamicArrayType makes dynamic length array by taking array element type as argument.
 func MakeDynamicArrayType(argumentType Type) Type {
 	return Type{
-		enumIndex:  ArrayDynamic,
+		abiTypeID:  ArrayDynamic,
 		childTypes: []Type{argumentType},
 	}
 }
@@ -328,7 +365,7 @@ func MakeDynamicArrayType(argumentType Type) Type {
 // MakeStringType makes `String` ABI type.
 func MakeStringType() Type {
 	return Type{
-		enumIndex: String,
+		abiTypeID: String,
 	}
 }
 
@@ -338,7 +375,7 @@ func MakeTupleType(argumentTypes []Type) (Type, error) {
 		return Type{}, fmt.Errorf("tuple type child type number >= 2^16 error")
 	}
 	return Type{
-		enumIndex:    Tuple,
+		abiTypeID:    Tuple,
 		childTypes:   argumentTypes,
 		staticLength: uint16(len(argumentTypes)),
 	}, nil
@@ -346,9 +383,9 @@ func MakeTupleType(argumentTypes []Type) (Type, error) {
 
 // Equal method decides the equality of two types: t == t0.
 func (t Type) Equal(t0 Type) bool {
-	if t.enumIndex != t0.enumIndex {
+	if t.abiTypeID != t0.abiTypeID {
 		return false
-	} else if t.precision != t0.precision || t.size != t0.size {
+	} else if t.precision != t0.precision || t.bitSize != t0.bitSize {
 		return false
 	} else if t.staticLength != t0.staticLength {
 		return false
@@ -367,7 +404,7 @@ func (t Type) Equal(t0 Type) bool {
 
 // IsDynamic method decides if an ABI type is dynamic or static.
 func (t Type) IsDynamic() bool {
-	switch t.enumIndex {
+	switch t.abiTypeID {
 	case ArrayDynamic, String:
 		return true
 	default:
@@ -386,7 +423,7 @@ func findBoolLR(typeList []Type, index int, delta int) int {
 	until := 0
 	for {
 		curr := index + delta*until
-		if typeList[curr].enumIndex == Bool {
+		if typeList[curr].abiTypeID == Bool {
 			if curr != len(typeList)-1 && delta > 0 {
 				until++
 			} else if curr > 0 && delta < 0 {
@@ -402,19 +439,26 @@ func findBoolLR(typeList []Type, index int, delta int) int {
 	return until
 }
 
+const (
+	addressByteSize      = 32
+	singleByteSize       = 1
+	singleBoolSize       = 1
+	lengthEncodeByteSize = 2
+)
+
 // ByteLen method calculates the byte length of a static ABI type.
 func (t Type) ByteLen() (int, error) {
-	switch t.enumIndex {
+	switch t.abiTypeID {
 	case Address:
-		return 32, nil
+		return addressByteSize, nil
 	case Byte:
-		return 1, nil
+		return singleByteSize, nil
 	case Uint, Ufixed:
-		return int(t.size / 8), nil
+		return int(t.bitSize / 8), nil
 	case Bool:
-		return 1, nil
+		return singleBoolSize, nil
 	case ArrayStatic:
-		if t.childTypes[0].enumIndex == Bool {
+		if t.childTypes[0].abiTypeID == Bool {
 			byteLen := int(t.staticLength) / 8
 			if t.staticLength%8 != 0 {
 				byteLen++
@@ -429,20 +473,14 @@ func (t Type) ByteLen() (int, error) {
 	case Tuple:
 		size := 0
 		for i := 0; i < len(t.childTypes); i++ {
-			if t.childTypes[i].enumIndex == Bool {
-				// search previous bool
-				before := findBoolLR(t.childTypes, i, -1)
+			if t.childTypes[i].abiTypeID == Bool {
 				// search after bool
 				after := findBoolLR(t.childTypes, i, 1)
-				// append to heads and tails
-				if before%8 != 0 {
-					return -1, fmt.Errorf("expected before has number of bool mod 8 = 0")
-				}
-				if after > 7 {
-					after = 7
-				}
 				i += after
-				size++
+				size = after / 8
+				if after%8 != 0 {
+					size++
+				}
 			} else {
 				childByteSize, err := t.childTypes[i].ByteLen()
 				if err != nil {
