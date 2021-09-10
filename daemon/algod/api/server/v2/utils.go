@@ -110,7 +110,7 @@ func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, pay
 // computeAssetIndexFromTxn returns the created asset index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
-func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint64) {
+func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) *uint64 {
 	// Must have ledger
 	if l == nil {
 		return nil
@@ -154,7 +154,7 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint
 // computeAppIndexFromTxn returns the created app index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
-func computeAppIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint64) {
+func computeAppIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) *uint64 {
 	// Must have ledger
 	if l == nil {
 		return nil

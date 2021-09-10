@@ -60,27 +60,31 @@ func TestPayAction(t *testing.T) {
 `),
 	}
 
+	ai := basics.AppIndex(1)
 	fund := txntest.Txn{
 		Type:     "pay",
 		Sender:   addrs[0],
-		Receiver: basics.AppIndex(1).Address(),
+		Receiver: ai.Address(),
 		Amount:   200000, // account min balance, plus fees
 	}
 
 	payout1 := txntest.Txn{
 		Type:          "appl",
 		Sender:        addrs[1],
-		ApplicationID: basics.AppIndex(1),
+		ApplicationID: ai,
 		Accounts:      []basics.Address{addrs[1]}, // pay self
 	}
 
 	eval := l.nextBlock(t)
 	eval.txns(t, &create, &fund, &payout1)
-	l.endBlock(t, eval)
+	vb := l.endBlock(t, eval)
+
+	// AD contains expected appIndex
+	require.Equal(t, ai, vb.blk.Payset[0].ApplyData.ApplicationID)
 
 	ad0 := l.micros(t, addrs[0])
 	ad1 := l.micros(t, addrs[1])
-	app := l.micros(t, basics.AppIndex(1).Address())
+	app := l.micros(t, ai.Address())
 
 	// create(1000) and fund(1000 + 200000)
 	require.Equal(t, uint64(202000), genBalances.Balances[addrs[0]].MicroAlgos.Raw-ad0)
@@ -99,7 +103,7 @@ func TestPayAction(t *testing.T) {
 	payout2 := txntest.Txn{
 		Type:          "appl",
 		Sender:        addrs[1],
-		ApplicationID: basics.AppIndex(1),
+		ApplicationID: ai,
 		Accounts:      []basics.Address{addrs[2]}, // pay other
 	}
 	eval.txn(t, &payout2)
@@ -128,7 +132,7 @@ func TestPayAction(t *testing.T) {
 
 	ad1 = l.micros(t, addrs[1])
 	ad2 := l.micros(t, addrs[2])
-	app = l.micros(t, basics.AppIndex(1).Address())
+	app = l.micros(t, ai.Address())
 
 	// paid 5000, in first payout (only), but paid 1000 fee in each payout txn
 	require.Equal(t, rewards+3000, ad1-genBalances.Balances[addrs[1]].MicroAlgos.Raw)
@@ -143,13 +147,13 @@ func TestPayAction(t *testing.T) {
 	tenkalgos := txntest.Txn{
 		Type:     "pay",
 		Sender:   addrs[0],
-		Receiver: basics.AppIndex(1).Address(),
+		Receiver: ai.Address(),
 		Amount:   10 * 1000 * 1000000, // account min balance, plus fees
 	}
 	eval = l.nextBlock(t)
 	eval.txn(t, &tenkalgos)
 	l.endBlock(t, eval)
-	beforepay := l.micros(t, basics.AppIndex(1).Address())
+	beforepay := l.micros(t, ai.Address())
 
 	// Build up Residue in RewardsState so it's ready to pay again
 	for i := 1; i < 10; i++ {
@@ -160,7 +164,7 @@ func TestPayAction(t *testing.T) {
 	eval.txn(t, payout2.Noted("2"))
 	l.endBlock(t, eval)
 
-	afterpay := l.micros(t, basics.AppIndex(1).Address())
+	afterpay := l.micros(t, ai.Address())
 
 	payInBlock = eval.block.Payset[0]
 	inners = payInBlock.ApplyData.EvalDelta.InnerTxns
@@ -229,11 +233,12 @@ submit:  tx_submit
 
 	eval := l.nextBlock(t)
 	eval.txns(t, &asa, &app)
-	l.endBlock(t, eval)
+	vb := l.endBlock(t, eval)
 
-	// Would be better to pull these out of block, or at least check them.
 	asaIndex := basics.AssetIndex(1)
+	require.Equal(t, asaIndex, vb.blk.Payset[0].ApplyData.ConfigAsset)
 	appIndex := basics.AppIndex(2)
+	require.Equal(t, appIndex, vb.blk.Payset[1].ApplyData.ApplicationID)
 
 	fund := txntest.Txn{
 		Type:     "pay",
@@ -372,7 +377,6 @@ func TestClawbackAction(t *testing.T) {
 	l := newTestLedger(t, genBalances)
 	defer l.Close()
 
-	// Would be better to pull these out of block, or at least check them.
 	asaIndex := basics.AssetIndex(1)
 	appIndex := basics.AppIndex(2)
 
@@ -422,7 +426,10 @@ func TestClawbackAction(t *testing.T) {
 	}
 	eval := l.nextBlock(t)
 	eval.txns(t, &asa, &app, &optin)
-	l.endBlock(t, eval)
+	vb := l.endBlock(t, eval)
+
+	require.Equal(t, asaIndex, vb.blk.Payset[0].ApplyData.ConfigAsset)
+	require.Equal(t, appIndex, vb.blk.Payset[1].ApplyData.ApplicationID)
 
 	bystander := addrs[2] // Has no authority of its own
 	overpay := txntest.Txn{
