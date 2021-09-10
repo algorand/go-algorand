@@ -861,7 +861,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 			pool.log.Warnf("AssembleBlock: ran out of time for round %d", round)
 			stats.StopReason = telemetryspec.AssembleBlockTimeout
 			if emptyBlockErr != nil {
-				emptyBlockErr = fmt.Errorf("AssembleBlock: failed to construct empty block : %v", emptyBlockErr)
+				emptyBlockErr = fmt.Errorf("AssembleBlock: failed to construct empty block : %w", emptyBlockErr)
 			}
 			return emptyBlock, emptyBlockErr
 		}
