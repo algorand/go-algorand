@@ -243,7 +243,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
-	blockValidator := blockValidatorImpl{l: node.ledger, verificationPool: node.highPriorityCryptoVerificationPool}
+	blockValidator := blockValidatorImpl{l: node.specledger, verificationPool: node.highPriorityCryptoVerificationPool}
 	agreementLedger := makeAgreementLedger(node.specledger, node.net)
 
 	agreementParameters := agreement.Parameters{

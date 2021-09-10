@@ -609,7 +609,7 @@ func (sl *SpeculativeLedger) AddSpeculativeBlock(vblk ValidatedBlock) error {
 
 // AddBlock adds a certificate together with a block to the ledger.
 func (sl *SpeculativeLedger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) error {
-	vb, err := sl.Validate(context.Background(), blk.Branch, blk)
+	vb, err := sl.Validate(context.Background(), blk.Branch, blk, nil)
 	if err != nil {
 		return err
 	}
@@ -656,8 +656,8 @@ func (sl *SpeculativeLedger) AddValidatedBlock(vb ValidatedBlock, cert agreement
 }
 
 // Validate validates whether a block is valid, on a particular leaf branch.
-func (sl *SpeculativeLedger) Validate(ctx context.Context, leaf bookkeeping.BlockHash, blk bookkeeping.Block) (*ValidatedBlock, error) {
-	state, err := sl.eval(ctx, leaf, blk, true, nil)
+func (sl *SpeculativeLedger) Validate(ctx context.Context, leaf bookkeeping.BlockHash, blk bookkeeping.Block, pool execpool.BacklogPool) (*ValidatedBlock, error) {
+	state, err := sl.eval(ctx, leaf, blk, true, pool)
 	if err != nil {
 		return nil, err
 	}

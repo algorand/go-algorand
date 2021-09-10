@@ -22,7 +22,6 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/catchup"
-	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
@@ -49,14 +48,14 @@ func (i blockAuthenticatorImpl) Quit() {
 }
 
 type blockValidatorImpl struct {
-	l                *data.Ledger
+	l                *ledger.SpeculativeLedger
 	verificationPool execpool.BacklogPool
 }
 
 // Validate implements BlockValidator.Validate.
 func (i blockValidatorImpl) Validate(ctx context.Context, e bookkeeping.Block) (agreement.ValidatedBlock, error) {
 	b := &e
-	lvb, err := i.l.Validate(ctx, *b, i.verificationPool)
+	lvb, err := i.l.Validate(ctx, e.Branch, *b, i.verificationPool)
 	if err != nil {
 		return nil, err
 	}
