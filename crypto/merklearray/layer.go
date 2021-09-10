@@ -36,19 +36,20 @@ type pair struct {
 }
 
 func (p *pair) ToBeHashed() (protocol.HashID, []byte) {
-	buf := make([]byte, 0, len(p.l)+len(p.r))
-	buf = append(buf, p.l...)
-	buf = append(buf, p.r...)
+	buf := make([]byte, len(p.l)+len(p.r))
+	copy(buf[:], p.l[:])
+	copy(buf[len(p.l):], p.r[:])
 	return protocol.MerkleArrayNode, buf[:]
 }
 
 func (p *pair) Marshal() []byte {
 
-	buf := make([]byte, 0, len(p.l)+len(p.r)+len(protocol.MerkleArrayNode))
-	s := buf[:0]
-	s = append(s, protocol.MerkleArrayNode...)
-	s = append(s, p.l...)
-	return append(s, p.r...)
+	buf := make([]byte, len(p.l)+len(p.r)+len(protocol.MerkleArrayNode))
+	copy(buf[:], protocol.MerkleArrayNode)
+	copy(buf[len(protocol.MerkleArrayNode):], p.l[:])
+	copy(buf[len(protocol.MerkleArrayNode)+len(p.l):], p.r[:])
+
+	return buf
 }
 
 func upWorker(ws *workerState, in Layer, out Layer, h hash.Hash) {
