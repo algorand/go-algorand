@@ -252,6 +252,8 @@ var opDocExtras = map[string]string{
 	"asset_params_get":  "params: Before v4, Txn.ForeignAssets offset. Since v4, Txn.ForeignAssets offset or an asset id that appears in Txn.ForeignAssets. Return: did_exist flag (1 if exist and 0 otherwise), value.",
 	"app_params_get":    "params: Txn.ForeignApps offset or an app id that appears in Txn.ForeignApps. Return: did_exist flag (1 if exist and 0 otherwise), value.",
 	"log":               "`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds 1024 bytes.",
+	"tx_begin":          "`tx_begin` sets Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; and FirstValid/LastValid to the values in the top-level transaction.",
+	"tx_field":          "The following fields may be set by `tx_field` - Sender, Fee, Receiver, Amount, CloseRemainderTo, Type, TypeEnum, XferAsset, AssetAmount, AssetSender, AssetReceiver, AssetCloseTo",
 }
 
 // OpDocExtra returns extra documentation text about an op
