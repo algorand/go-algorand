@@ -19,7 +19,6 @@ package transactions
 import (
 	"errors"
 	"fmt"
-	"math"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -113,7 +112,7 @@ type ApplyData struct {
 	SenderRewards   basics.MicroAlgos `codec:"rs"`
 	ReceiverRewards basics.MicroAlgos `codec:"rr"`
 	CloseRewards    basics.MicroAlgos `codec:"rc"`
-	EvalDelta       basics.EvalDelta  `codec:"dt"`
+	EvalDelta       EvalDelta         `codec:"dt"`
 }
 
 // Equal returns true if two ApplyDatas are equal, ignoring nilness equality on
@@ -650,41 +649,3 @@ func (tc ExplicitTxnContext) GenesisID() string {
 func (tc ExplicitTxnContext) GenesisHash() crypto.Digest {
 	return tc.GenHash
 }
-
-// SignedTxGroup used as the in-memory representation of a signed transaction group.
-// unlike the plain array of signed transactions, this includes transaction origination and counter
-// used by the transaction pool and the transaction sync
-//msgp: ignore SignedTxGroup
-type SignedTxGroup struct {
-	// Transactions contains the signed transactions that are included in this transaction group.
-	Transactions SignedTxnSlice
-	// LocallyOriginated specify whether the trancation group was inroduced via the REST API or
-	// by the transaction sync.
-	LocallyOriginated bool
-	// GroupCounter is a monotonic increasing counter, that provides an identify for each transaction group.
-	// The transaction sync is using it as a way to scan the transactions group list more efficiently, as it
-	// can continue scanning the list from the place where it last stopped.
-	// GroupCounter is local, assigned when the group is first seen by the local transaction pool.
-	GroupCounter uint64
-	// GroupTransactionID is the hash of the entire transaction group.
-	GroupTransactionID Txid
-	// EncodedLength is the length, in bytes, of the messagepack encoding of all the transaction
-	// within this transaction group.
-	EncodedLength int
-}
-
-// SignedTxnSlice is a slice of SignedTxn(s), allowing us to
-// easily define the ID() function.
-//msgp:allocbound SignedTxnSlice config.MaxTxGroupSize
-type SignedTxnSlice []SignedTxn
-
-// ID calculate the hash of the signed transaction group.
-func (s SignedTxnSlice) ID() Txid {
-	enc := s.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.TxGroup)...))
-	defer protocol.PutEncodingBuf(enc)
-	return Txid(crypto.Hash(enc))
-}
-
-// InvalidSignedTxGroupCounter is used to represent an invalid GroupCounter value. It's being used to indicate
-// the absence of an entry within a []SignedTxGroup with a particular GroupCounter value.
-const InvalidSignedTxGroupCounter = uint64(math.MaxUint64)

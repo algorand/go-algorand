@@ -18,7 +18,9 @@ package bloom
 
 // GenericFilter is the interface for either bloom.Filter or bloom.XorFilter
 type GenericFilter interface {
+	// The input x is expected to be a slice with a length of 8 bytes or more.
 	Set(x []byte)
+	// The input x is expected to be a slice with a length of 8 bytes or more.
 	Test(x []byte) bool
 	MarshalBinary() ([]byte, error)
 	UnmarshalBinary(data []byte) error

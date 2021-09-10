@@ -1876,15 +1876,15 @@ const ProtocolVersionHeader = "X-Algorand-Version"
 const ProtocolAcceptVersionHeader = "X-Algorand-Accept-Version"
 
 // SupportedProtocolVersions contains the list of supported protocol versions by this node ( in order of preference ).
-var SupportedProtocolVersions = []string{"2.5", "2.1"}
+var SupportedProtocolVersions = []string{"3.0", "2.1"}
 
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
 /* Version history:
  *  1   Catchup service over websocket connections with unicast messages between peers
  *  2.1 Introduced topic key/data pairs and enabled services over the gossip connections
- *  2.5 Introduced new transaction gossiping protocol
+ *  3.0 Introduced new transaction gossiping protocol
  */
-const ProtocolVersion = "2.5"
+const ProtocolVersion = "3.0"
 
 // TelemetryIDHeader HTTP header for telemetry-id for logging
 const TelemetryIDHeader = "X-Algorand-TelId"
@@ -1924,6 +1924,8 @@ var errBcastQFull = errors.New("broadcast queue full")
 
 var errURLNoHost = errors.New("could not parse a host from url")
 
+var errURLColonHost = errors.New("host name starts with a colon")
+
 // HostColonPortPattern matches "^[-a-zA-Z0-9.]+:\\d+$" e.g. "foo.com.:1234"
 var HostColonPortPattern = regexp.MustCompile("^[-a-zA-Z0-9.]+:\\d+$")
 
@@ -1948,6 +1950,11 @@ func ParseHostOrURL(addr string) (*url.URL, error) {
 	// This turns "[::]:4601" into "http://[::]:4601" which url.Parse can do
 	parsed, e2 := url.Parse("http://" + addr)
 	if e2 == nil {
+		// https://datatracker.ietf.org/doc/html/rfc1123#section-2
+		// first character is relaxed to allow either a letter or a digit
+		if parsed.Host[0] == ':' && (len(parsed.Host) < 2 || parsed.Host[1] != ':') {
+			return nil, errURLColonHost
+		}
 		return parsed, nil
 	}
 	return parsed, err /* return original err, not our prefix altered try */

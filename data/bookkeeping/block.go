@@ -18,6 +18,7 @@ package bookkeeping
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -478,6 +479,9 @@ func MakeBlock(prev BlockHeader) Block {
 	if err != nil {
 		logging.Base().Warnf("MakeBlock: computing empty TxnRoot: %v", err)
 	}
+	// We can't know the entire RewardsState yet, but we can carry over the special addresses.
+	blk.BlockHeader.RewardsState.FeeSink = prev.RewardsState.FeeSink
+	blk.BlockHeader.RewardsState.RewardsPool = prev.RewardsState.RewardsPool
 	return blk
 }
 
@@ -615,9 +619,9 @@ func (block Block) DecodePaysetGroups() ([][]transactions.SignedTxnWithAD, error
 
 // DecodePaysetGroupsNoAD decodes block.Payset using DecodeSignedTxn, and returns
 // the transactions in groups without ApplyData.
-func (block Block) DecodePaysetGroupsNoAD() ([]transactions.SignedTxnSlice, error) {
-	var res []transactions.SignedTxnSlice
-	var lastGroup transactions.SignedTxnSlice
+func (block Block) DecodePaysetGroupsNoAD() ([]pooldata.SignedTxnSlice, error) {
+	var res []pooldata.SignedTxnSlice
+	var lastGroup pooldata.SignedTxnSlice
 	for _, txib := range block.Payset {
 		var err error
 		var stxn transactions.SignedTxn

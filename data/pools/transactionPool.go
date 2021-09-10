@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -82,10 +83,10 @@ type TransactionPool struct {
 	// pendingMu protects pendingTxGroups, pendingTxids, pendingCounter and pendingLatestLocal
 	pendingMu deadlock.RWMutex
 	// pendingTxGroups is a slice of the pending transaction groups.
-	pendingTxGroups []transactions.SignedTxGroup
+	pendingTxGroups []pooldata.SignedTxGroup
 	// pendingTxids is a map of the pending *transaction ids* included in the pendingTxGroups array.
 	pendingTxids      map[transactions.Txid]transactions.SignedTxn
-	pendingTxGroupids map[transactions.Txid]transactions.SignedTxGroup
+	pendingTxGroupids map[transactions.Txid]pooldata.SignedTxGroup
 	// pendingCounter is a monotomic counter, indicating the next pending transaction group counter value.
 	pendingCounter uint64
 	// pendingLatestLocal is the value of the last transaction group counter which is associated with a transaction that was
@@ -97,9 +98,9 @@ type TransactionPool struct {
 	// pendingTxGroups and pendingTxids.  This allows us to batch the
 	// changes in OnNewBlock() without preventing a concurrent call
 	// to PendingTxGroups().
-	rememberedTxGroups   []transactions.SignedTxGroup
+	rememberedTxGroups   []pooldata.SignedTxGroup
 	rememberedTxids      map[transactions.Txid]transactions.SignedTxn
-	rememberedTxGroupids map[transactions.Txid]transactions.SignedTxGroup
+	rememberedTxGroupids map[transactions.Txid]pooldata.SignedTxGroup
 	// rememberedLatestLocal is the value of the last transaction group counter which is associated with a transaction that was
 	// locally originated ( i.e. posted to this node via the REST API ). This variable is used when OnNewBlock is called and
 	// we filter out the pending transaction through the evaluator.
@@ -116,8 +117,8 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	pool := TransactionPool{
 		pendingTxids:         make(map[transactions.Txid]transactions.SignedTxn),
 		rememberedTxids:      make(map[transactions.Txid]transactions.SignedTxn),
-		pendingTxGroupids:    make(map[transactions.Txid]transactions.SignedTxGroup),
-		rememberedTxGroupids: make(map[transactions.Txid]transactions.SignedTxGroup),
+		pendingTxGroupids:    make(map[transactions.Txid]pooldata.SignedTxGroup),
+		rememberedTxGroupids: make(map[transactions.Txid]pooldata.SignedTxGroup),
 		expiredTxCount:       make(map[basics.Round]int),
 		ledger:               ledger,
 		statusCache:          makeStatusCache(cfg.TxPoolSize),
@@ -183,11 +184,11 @@ var ErrStaleBlockAssemblyRequest = fmt.Errorf("AssembleBlock: requested block as
 // Reset resets the content of the transaction pool
 func (pool *TransactionPool) Reset() {
 	pool.pendingTxids = make(map[transactions.Txid]transactions.SignedTxn)
-	pool.pendingTxGroupids = make(map[transactions.Txid]transactions.SignedTxGroup)
+	pool.pendingTxGroupids = make(map[transactions.Txid]pooldata.SignedTxGroup)
 	pool.pendingTxGroups = nil
-	pool.pendingLatestLocal = transactions.InvalidSignedTxGroupCounter
+	pool.pendingLatestLocal = pooldata.InvalidSignedTxGroupCounter
 	pool.rememberedTxids = make(map[transactions.Txid]transactions.SignedTxn)
-	pool.rememberedTxGroupids = make(map[transactions.Txid]transactions.SignedTxGroup)
+	pool.rememberedTxGroupids = make(map[transactions.Txid]pooldata.SignedTxGroup)
 	pool.rememberedTxGroups = nil
 	pool.expiredTxCount = make(map[basics.Round]int)
 	pool.numPendingWholeBlocks = 0
@@ -220,8 +221,9 @@ func (pool *TransactionPool) PendingTxIDs() []transactions.Txid {
 }
 
 // PendingTxGroups returns a list of transaction groups that should be proposed
-// in the next block, in order.
-func (pool *TransactionPool) PendingTxGroups() ([]transactions.SignedTxGroup, uint64) {
+// in the next block, in order. As the second return value, it returns the transaction
+// group counter of the latest local generated transaction group.
+func (pool *TransactionPool) PendingTxGroups() ([]pooldata.SignedTxGroup, uint64) {
 	pool.pendingMu.RLock()
 	defer pool.pendingMu.RUnlock()
 	// note that this operation is safe for the sole reason that arrays in go are immutable.
@@ -290,8 +292,8 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 func (pool *TransactionPool) resetRememberedTransactionGroups() {
 	pool.rememberedTxGroups = nil
 	pool.rememberedTxids = make(map[transactions.Txid]transactions.SignedTxn)
-	pool.rememberedTxGroupids = make(map[transactions.Txid]transactions.SignedTxGroup)
-	pool.rememberedLatestLocal = transactions.InvalidSignedTxGroupCounter
+	pool.rememberedTxGroupids = make(map[transactions.Txid]pooldata.SignedTxGroup)
+	pool.rememberedLatestLocal = pooldata.InvalidSignedTxGroupCounter
 }
 
 // PendingCount returns the number of transactions currently pending in the pool.
@@ -370,7 +372,7 @@ func (pool *TransactionPool) computeFeePerByte() uint64 {
 
 // checkSufficientFee take a set of signed transactions and verifies that each transaction has
 // sufficient fee to get into the transaction pool
-func (pool *TransactionPool) checkSufficientFee(txgroup transactions.SignedTxGroup) error {
+func (pool *TransactionPool) checkSufficientFee(txgroup pooldata.SignedTxGroup) error {
 	// Special case: the compact cert transaction, if issued from the
 	// special compact-cert-sender address, in a singleton group, pays
 	// no fee.
@@ -418,7 +420,7 @@ type poolIngestParams struct {
 }
 
 // remember attempts to add a transaction group to the pool.
-func (pool *TransactionPool) remember(txgroup transactions.SignedTxGroup) error {
+func (pool *TransactionPool) remember(txgroup pooldata.SignedTxGroup) error {
 	params := poolIngestParams{
 		recomputing: false,
 	}
@@ -427,7 +429,7 @@ func (pool *TransactionPool) remember(txgroup transactions.SignedTxGroup) error 
 
 // add tries to add the transaction group to the pool, bypassing the fee
 // priority checks.
-func (pool *TransactionPool) add(txgroup transactions.SignedTxGroup, stats *telemetryspec.AssembleBlockMetrics) error {
+func (pool *TransactionPool) add(txgroup pooldata.SignedTxGroup, stats *telemetryspec.AssembleBlockMetrics) error {
 	params := poolIngestParams{
 		recomputing: true,
 		stats:       stats,
@@ -440,7 +442,7 @@ func (pool *TransactionPool) add(txgroup transactions.SignedTxGroup, stats *tele
 //
 // ingest assumes that pool.mu is locked.  It might release the lock
 // while it waits for OnNewBlock() to be called.
-func (pool *TransactionPool) ingest(txgroup transactions.SignedTxGroup, params poolIngestParams) error {
+func (pool *TransactionPool) ingest(txgroup pooldata.SignedTxGroup, params poolIngestParams) error {
 	if pool.pendingBlockEvaluator == nil {
 		return fmt.Errorf("TransactionPool.ingest: no pending block evaluator")
 	}
@@ -486,7 +488,7 @@ func (pool *TransactionPool) ingest(txgroup transactions.SignedTxGroup, params p
 // Precondition: Only Remember() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
 // The function is called by the transaction handler ( i.e. txsync or gossip ) or by the node when
 // transaction is coming from a REST API call.
-func (pool *TransactionPool) Remember(txgroup transactions.SignedTxGroup) error {
+func (pool *TransactionPool) Remember(txgroup pooldata.SignedTxGroup) error {
 	if err := pool.checkPendingQueueSize(len(txgroup.Transactions)); err != nil {
 		return err
 	}
@@ -506,7 +508,7 @@ func (pool *TransactionPool) Remember(txgroup transactions.SignedTxGroup) error 
 // RememberArray stores the provided transaction group.
 // Precondition: Only RememberArray() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
 // The function is called by the transaction handler ( i.e. txsync )
-func (pool *TransactionPool) RememberArray(txgroups []transactions.SignedTxGroup) error {
+func (pool *TransactionPool) RememberArray(txgroups []pooldata.SignedTxGroup) error {
 	totalSize := 0
 	for _, txGroup := range txgroups {
 		totalSize += len(txGroup.Transactions)
@@ -554,7 +556,7 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 }
 
 // FindTxGroups looks up transaction groups specified by txid and fills them into the provided array
-func (pool *TransactionPool) FindTxGroups(txids []transactions.Txid, txGroups []transactions.SignedTxGroup) (numFound int) {
+func (pool *TransactionPool) FindTxGroups(txids []transactions.Txid, txGroups []pooldata.SignedTxGroup) (numFound int) {
 	pool.pendingMu.RLock()
 
 	if pool.pendingTxGroupids != nil {
@@ -666,7 +668,7 @@ func (pool *TransactionPool) isAssemblyTimedOut() bool {
 	return time.Now().After(pool.assemblyDeadline.Add(-generateBlockDuration))
 }
 
-func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup transactions.SignedTxGroup, recomputing bool, stats *telemetryspec.AssembleBlockMetrics) error {
+func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup pooldata.SignedTxGroup, recomputing bool, stats *telemetryspec.AssembleBlockMetrics) error {
 	r := pool.pendingBlockEvaluator.Round() + pool.numPendingWholeBlocks
 	for _, tx := range txgroup.Transactions {
 		if tx.Txn.LastValid < r {
@@ -731,7 +733,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup transactions
 	return err
 }
 
-func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup transactions.SignedTxGroup, recomputing bool, stats *telemetryspec.AssembleBlockMetrics) error {
+func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup pooldata.SignedTxGroup, recomputing bool, stats *telemetryspec.AssembleBlockMetrics) error {
 	err := pool.addToPendingBlockEvaluatorOnce(txgroup, recomputing, stats)
 	if err == ledger.ErrNoSpace {
 		pool.numPendingWholeBlocks++

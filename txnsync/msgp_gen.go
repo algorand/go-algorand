@@ -9,6 +9,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/msgp/msgp"
@@ -6193,8 +6194,8 @@ func (z *encodedAssetTransferTxnFields) MsgIsZero() bool {
 func (z *encodedBloomFilter) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(4)
-	var zb0001Mask uint8 /* 5 bits */
+	zb0001Len := uint32(3)
+	var zb0001Mask uint8 /* 4 bits */
 	if len((*z).BloomFilter) == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -6203,13 +6204,9 @@ func (z *encodedBloomFilter) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (*z).Shuffler == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x8
-	}
 	if (*z).BloomFilterType == 0 {
 		zb0001Len--
-		zb0001Mask |= 0x10
+		zb0001Mask |= 0x8
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -6247,11 +6244,6 @@ func (z *encodedBloomFilter) MarshalMsg(b []byte) (o []byte) {
 			}
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
-			// string "s"
-			o = append(o, 0xa1, 0x73)
-			o = msgp.AppendByte(o, (*z).Shuffler)
-		}
-		if (zb0001Mask & 0x10) == 0 { // if not empty
 			// string "t"
 			o = append(o, 0xa1, 0x74)
 			o = msgp.AppendByte(o, (*z).BloomFilterType)
@@ -6356,14 +6348,6 @@ func (z *encodedBloomFilter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						}
 					}
 				}
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
-			(*z).Shuffler, bts, err = msgp.ReadByteBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Shuffler")
-				return
 			}
 		}
 		if zb0001 > 0 {
@@ -6483,12 +6467,6 @@ func (z *encodedBloomFilter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						}
 					}
 				}
-			case "s":
-				(*z).Shuffler, bts, err = msgp.ReadByteBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Shuffler")
-					return
-				}
 			case "f":
 				var zb0008 int
 				zb0008, err = msgp.ReadBytesBytesHeader(bts)
@@ -6525,13 +6503,13 @@ func (_ *encodedBloomFilter) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *encodedBloomFilter) Msgsize() (s int) {
-	s = 1 + 2 + msgp.ByteSize + 2 + 1 + 2 + msgp.ByteSize + 2 + msgp.ByteSize + 2 + msgp.ByteSize + 2 + msgp.BytesPrefixSize + len((*z).BloomFilter)
+	s = 1 + 2 + msgp.ByteSize + 2 + 1 + 2 + msgp.ByteSize + 2 + msgp.ByteSize + 2 + msgp.BytesPrefixSize + len((*z).BloomFilter)
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *encodedBloomFilter) MsgIsZero() bool {
-	return ((*z).BloomFilterType == 0) && (((*z).EncodingParams.Offset == 0) && ((*z).EncodingParams.Modulator == 0)) && ((*z).Shuffler == 0) && (len((*z).BloomFilter) == 0)
+	return ((*z).BloomFilterType == 0) && (((*z).EncodingParams.Offset == 0) && ((*z).EncodingParams.Modulator == 0)) && (len((*z).BloomFilter) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -35421,7 +35399,7 @@ func (z *txGroupsEncodingStubOld) MsgIsZero() bool {
 
 // MarshalMsg implements msgp.Marshaler
 func (z *txnGroups) MarshalMsg(b []byte) []byte {
-	return ((*(transactions.SignedTxnSlice))(z)).MarshalMsg(b)
+	return ((*(pooldata.SignedTxnSlice))(z)).MarshalMsg(b)
 }
 func (_ *txnGroups) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(*txnGroups)
@@ -35430,7 +35408,7 @@ func (_ *txnGroups) CanMarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *txnGroups) UnmarshalMsg(bts []byte) ([]byte, error) {
-	return ((*(transactions.SignedTxnSlice))(z)).UnmarshalMsg(bts)
+	return ((*(pooldata.SignedTxnSlice))(z)).UnmarshalMsg(bts)
 }
 func (_ *txnGroups) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*txnGroups)
@@ -35439,10 +35417,10 @@ func (_ *txnGroups) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *txnGroups) Msgsize() int {
-	return ((*(transactions.SignedTxnSlice))(z)).Msgsize()
+	return ((*(pooldata.SignedTxnSlice))(z)).Msgsize()
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *txnGroups) MsgIsZero() bool {
-	return ((*(transactions.SignedTxnSlice))(z)).MsgIsZero()
+	return ((*(pooldata.SignedTxnSlice))(z)).MsgIsZero()
 }

@@ -146,6 +146,9 @@ const (
 	// ExtraProgramPages AppParams.ExtraProgramPages
 	ExtraProgramPages
 
+	// Nonparticipation Transaction.Nonparticipation
+	Nonparticipation
+
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
 
@@ -169,76 +172,78 @@ func (s tfNameSpecMap) getExtraFor(name string) (extra string) {
 }
 
 type txnFieldSpec struct {
-	field   TxnField
-	ftype   StackType
-	version uint64
+	field      TxnField
+	ftype      StackType
+	version    uint64 // When this field become available to txn/gtxn. 0=always
+	itxVersion uint64 // When this field become available to tx_field. 0=never
 }
 
 var txnFieldSpecs = []txnFieldSpec{
-	{Sender, StackBytes, 0},
-	{Fee, StackUint64, 0},
-	{FirstValid, StackUint64, 0},
-	{FirstValidTime, StackUint64, 0},
-	{LastValid, StackUint64, 0},
-	{Note, StackBytes, 0},
-	{Lease, StackBytes, 0},
-	{Receiver, StackBytes, 0},
-	{Amount, StackUint64, 0},
-	{CloseRemainderTo, StackBytes, 0},
-	{VotePK, StackBytes, 0},
-	{SelectionPK, StackBytes, 0},
-	{VoteFirst, StackUint64, 0},
-	{VoteLast, StackUint64, 0},
-	{VoteKeyDilution, StackUint64, 0},
-	{Type, StackBytes, 0},
-	{TypeEnum, StackUint64, 0},
-	{XferAsset, StackUint64, 0},
-	{AssetAmount, StackUint64, 0},
-	{AssetSender, StackBytes, 0},
-	{AssetReceiver, StackBytes, 0},
-	{AssetCloseTo, StackBytes, 0},
-	{GroupIndex, StackUint64, 0},
-	{TxID, StackBytes, 0},
-	{ApplicationID, StackUint64, 2},
-	{OnCompletion, StackUint64, 2},
-	{ApplicationArgs, StackBytes, 2},
-	{NumAppArgs, StackUint64, 2},
-	{Accounts, StackBytes, 2},
-	{NumAccounts, StackUint64, 2},
-	{ApprovalProgram, StackBytes, 2},
-	{ClearStateProgram, StackBytes, 2},
-	{RekeyTo, StackBytes, 2},
-	{ConfigAsset, StackUint64, 2},
-	{ConfigAssetTotal, StackUint64, 2},
-	{ConfigAssetDecimals, StackUint64, 2},
-	{ConfigAssetDefaultFrozen, StackUint64, 2},
-	{ConfigAssetUnitName, StackBytes, 2},
-	{ConfigAssetName, StackBytes, 2},
-	{ConfigAssetURL, StackBytes, 2},
-	{ConfigAssetMetadataHash, StackBytes, 2},
-	{ConfigAssetManager, StackBytes, 2},
-	{ConfigAssetReserve, StackBytes, 2},
-	{ConfigAssetFreeze, StackBytes, 2},
-	{ConfigAssetClawback, StackBytes, 2},
-	{FreezeAsset, StackUint64, 2},
-	{FreezeAssetAccount, StackBytes, 2},
-	{FreezeAssetFrozen, StackUint64, 2},
-	{Assets, StackUint64, 3},
-	{NumAssets, StackUint64, 3},
-	{Applications, StackUint64, 3},
-	{NumApplications, StackUint64, 3},
-	{GlobalNumUint, StackUint64, 3},
-	{GlobalNumByteSlice, StackUint64, 3},
-	{LocalNumUint, StackUint64, 3},
-	{LocalNumByteSlice, StackUint64, 3},
-	{ExtraProgramPages, StackUint64, 4},
+	{Sender, StackBytes, 0, 5},
+	{Fee, StackUint64, 0, 5},
+	{FirstValid, StackUint64, 0, 0},
+	{FirstValidTime, StackUint64, 0, 0},
+	{LastValid, StackUint64, 0, 0},
+	{Note, StackBytes, 0, 0},
+	{Lease, StackBytes, 0, 0},
+	{Receiver, StackBytes, 0, 5},
+	{Amount, StackUint64, 0, 5},
+	{CloseRemainderTo, StackBytes, 0, 5},
+	{VotePK, StackBytes, 0, 0},
+	{SelectionPK, StackBytes, 0, 0},
+	{VoteFirst, StackUint64, 0, 0},
+	{VoteLast, StackUint64, 0, 0},
+	{VoteKeyDilution, StackUint64, 0, 0},
+	{Type, StackBytes, 0, 5},
+	{TypeEnum, StackUint64, 0, 5},
+	{XferAsset, StackUint64, 0, 5},
+	{AssetAmount, StackUint64, 0, 5},
+	{AssetSender, StackBytes, 0, 5},
+	{AssetReceiver, StackBytes, 0, 5},
+	{AssetCloseTo, StackBytes, 0, 5},
+	{GroupIndex, StackUint64, 0, 0},
+	{TxID, StackBytes, 0, 0},
+	{ApplicationID, StackUint64, 2, 0},
+	{OnCompletion, StackUint64, 2, 0},
+	{ApplicationArgs, StackBytes, 2, 0},
+	{NumAppArgs, StackUint64, 2, 0},
+	{Accounts, StackBytes, 2, 0},
+	{NumAccounts, StackUint64, 2, 0},
+	{ApprovalProgram, StackBytes, 2, 0},
+	{ClearStateProgram, StackBytes, 2, 0},
+	{RekeyTo, StackBytes, 2, 0},
+	{ConfigAsset, StackUint64, 2, 0},
+	{ConfigAssetTotal, StackUint64, 2, 0},
+	{ConfigAssetDecimals, StackUint64, 2, 0},
+	{ConfigAssetDefaultFrozen, StackUint64, 2, 0},
+	{ConfigAssetUnitName, StackBytes, 2, 0},
+	{ConfigAssetName, StackBytes, 2, 0},
+	{ConfigAssetURL, StackBytes, 2, 0},
+	{ConfigAssetMetadataHash, StackBytes, 2, 0},
+	{ConfigAssetManager, StackBytes, 2, 0},
+	{ConfigAssetReserve, StackBytes, 2, 0},
+	{ConfigAssetFreeze, StackBytes, 2, 0},
+	{ConfigAssetClawback, StackBytes, 2, 0},
+	{FreezeAsset, StackUint64, 2, 0},
+	{FreezeAssetAccount, StackBytes, 2, 0},
+	{FreezeAssetFrozen, StackUint64, 2, 0},
+	{Assets, StackUint64, 3, 0},
+	{NumAssets, StackUint64, 3, 0},
+	{Applications, StackUint64, 3, 0},
+	{NumApplications, StackUint64, 3, 0},
+	{GlobalNumUint, StackUint64, 3, 0},
+	{GlobalNumByteSlice, StackUint64, 3, 0},
+	{LocalNumUint, StackUint64, 3, 0},
+	{LocalNumByteSlice, StackUint64, 3, 0},
+	{ExtraProgramPages, StackUint64, 4, 0},
+	{Nonparticipation, StackUint64, 5, 0},
 }
 
 // TxnaFieldNames are arguments to the 'txna' opcode
 // It is a subset of txn transaction fields so initialized here in-place
 var TxnaFieldNames = []string{ApplicationArgs.String(), Accounts.String(), Assets.String(), Applications.String()}
 
-// TxnaFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames
+// TxnaFieldTypes is StackBytes or StackUint64 parallel to TxnaFieldNames
 var TxnaFieldTypes = []StackType{
 	txnaFieldSpecByField[ApplicationArgs].ftype,
 	txnaFieldSpecByField[Accounts].ftype,
@@ -247,10 +252,15 @@ var TxnaFieldTypes = []StackType{
 }
 
 var txnaFieldSpecByField = map[TxnField]txnFieldSpec{
-	ApplicationArgs: {ApplicationArgs, StackBytes, 2},
-	Accounts:        {Accounts, StackBytes, 2},
-	Assets:          {Assets, StackUint64, 3},
-	Applications:    {Applications, StackUint64, 3},
+	ApplicationArgs: {ApplicationArgs, StackBytes, 2, 0},
+	Accounts:        {Accounts, StackBytes, 2, 0},
+	Assets:          {Assets, StackUint64, 3, 0},
+	Applications:    {Applications, StackUint64, 3, 0},
+}
+
+var innerTxnTypes = map[string]protocol.TxType{
+	string(protocol.PaymentTx):       protocol.PaymentTx,
+	string(protocol.AssetTransferTx): protocol.AssetTransferTx,
 }
 
 // TxnTypeNames is the values of Txn.Type in enum order
@@ -327,6 +337,13 @@ const (
 	// CreatorAddress [32]byte
 	CreatorAddress
 
+	// v5
+
+	// CurrentApplicationAddress [32]byte
+	CurrentApplicationAddress
+	// GroupID [32]byte
+	GroupID
+
 	invalidGlobalField
 )
 
@@ -337,7 +354,7 @@ var GlobalFieldNames []string
 var GlobalFieldTypes []StackType
 
 type globalFieldSpec struct {
-	gfield  GlobalField
+	field   GlobalField
 	ftype   StackType
 	mode    runMode
 	version uint64
@@ -354,6 +371,8 @@ var globalFieldSpecs = []globalFieldSpec{
 	{LatestTimestamp, StackUint64, runModeApplication, 2},
 	{CurrentApplicationID, StackUint64, runModeApplication, 2},
 	{CreatorAddress, StackBytes, runModeApplication, 3},
+	{CurrentApplicationAddress, StackBytes, runModeApplication, 5},
+	{GroupID, StackBytes, modeAny, 5},
 }
 
 // GlobalFieldSpecByField maps GlobalField to spec
@@ -384,20 +403,33 @@ const (
 // AssetHoldingFieldNames are arguments to the 'asset_holding_get' opcode
 var AssetHoldingFieldNames []string
 
-type assetHoldingFieldType struct {
-	field AssetHoldingField
-	ftype StackType
-}
-
-var assetHoldingFieldTypeList = []assetHoldingFieldType{
-	{AssetBalance, StackUint64},
-	{AssetFrozen, StackUint64},
-}
-
 // AssetHoldingFieldTypes is StackUint64 StackBytes in parallel with AssetHoldingFieldNames
 var AssetHoldingFieldTypes []StackType
 
-var assetHoldingFields map[string]uint64
+type assetHoldingFieldSpec struct {
+	field   AssetHoldingField
+	ftype   StackType
+	version uint64
+}
+
+var assetHoldingFieldSpecs = []assetHoldingFieldSpec{
+	{AssetBalance, StackUint64, 2},
+	{AssetFrozen, StackUint64, 2},
+}
+
+var assetHoldingFieldSpecByField map[AssetHoldingField]assetHoldingFieldSpec
+var assetHoldingFieldSpecByName ahfNameSpecMap
+
+// simple interface used by doc generator for fields versioning
+type ahfNameSpecMap map[string]assetHoldingFieldSpec
+
+func (s ahfNameSpecMap) getExtraFor(name string) (extra string) {
+	// Uses 2 here because asset fields were introduced in 2
+	if s[name].version > 2 {
+		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
+	}
+	return
+}
 
 // AssetParamsField is an enum for `asset_params_get` opcode
 type AssetParamsField int
@@ -435,30 +467,43 @@ const (
 // AssetParamsFieldNames are arguments to the 'asset_params_get' opcode
 var AssetParamsFieldNames []string
 
-type assetParamsFieldType struct {
-	field AssetParamsField
-	ftype StackType
-}
-
-var assetParamsFieldTypeList = []assetParamsFieldType{
-	{AssetTotal, StackUint64},
-	{AssetDecimals, StackUint64},
-	{AssetDefaultFrozen, StackUint64},
-	{AssetUnitName, StackBytes},
-	{AssetName, StackBytes},
-	{AssetURL, StackBytes},
-	{AssetMetadataHash, StackBytes},
-	{AssetManager, StackBytes},
-	{AssetReserve, StackBytes},
-	{AssetFreeze, StackBytes},
-	{AssetClawback, StackBytes},
-	{AssetCreator, StackBytes},
-}
-
 // AssetParamsFieldTypes is StackUint64 StackBytes in parallel with AssetParamsFieldNames
 var AssetParamsFieldTypes []StackType
 
-var assetParamsFields map[string]uint64
+type assetParamsFieldSpec struct {
+	field   AssetParamsField
+	ftype   StackType
+	version uint64
+}
+
+var assetParamsFieldSpecs = []assetParamsFieldSpec{
+	{AssetTotal, StackUint64, 2},
+	{AssetDecimals, StackUint64, 2},
+	{AssetDefaultFrozen, StackUint64, 2},
+	{AssetUnitName, StackBytes, 2},
+	{AssetName, StackBytes, 2},
+	{AssetURL, StackBytes, 2},
+	{AssetMetadataHash, StackBytes, 2},
+	{AssetManager, StackBytes, 2},
+	{AssetReserve, StackBytes, 2},
+	{AssetFreeze, StackBytes, 2},
+	{AssetClawback, StackBytes, 2},
+	{AssetCreator, StackBytes, 5},
+}
+
+var assetParamsFieldSpecByField map[AssetParamsField]assetParamsFieldSpec
+var assetParamsFieldSpecByName apfNameSpecMap
+
+// simple interface used by doc generator for fields versioning
+type apfNameSpecMap map[string]assetParamsFieldSpec
+
+func (s apfNameSpecMap) getExtraFor(name string) (extra string) {
+	// Uses 2 here because asset fields were introduced in 2
+	if s[name].version > 2 {
+		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
+	}
+	return
+}
 
 // AppParamsField is an enum for `app_params_get` opcode
 type AppParamsField int
@@ -482,32 +527,49 @@ const (
 	// AppCreator is not *in* the Params, but it is uniquely determined.
 	AppCreator
 
+	// AppAddress is also not *in* the Params, but can be derived
+	AppAddress
+
 	invalidAppParamsField
 )
 
 // AppParamsFieldNames are arguments to the 'app_params_get' opcode
 var AppParamsFieldNames []string
 
-type appParamsFieldType struct {
-	field AppParamsField
-	ftype StackType
-}
-
-var appParamsFieldTypeList = []appParamsFieldType{
-	{AppApprovalProgram, StackBytes},
-	{AppClearStateProgram, StackBytes},
-	{AppGlobalNumUint, StackUint64},
-	{AppGlobalNumByteSlice, StackUint64},
-	{AppLocalNumUint, StackUint64},
-	{AppLocalNumByteSlice, StackUint64},
-	{AppExtraProgramPages, StackUint64},
-	{AppCreator, StackBytes},
-}
-
 // AppParamsFieldTypes is StackUint64 StackBytes in parallel with AppParamsFieldNames
 var AppParamsFieldTypes []StackType
 
-var appParamsFields map[string]uint64
+type appParamsFieldSpec struct {
+	field   AppParamsField
+	ftype   StackType
+	version uint64
+}
+
+var appParamsFieldSpecs = []appParamsFieldSpec{
+	{AppApprovalProgram, StackBytes, 5},
+	{AppClearStateProgram, StackBytes, 5},
+	{AppGlobalNumUint, StackUint64, 5},
+	{AppGlobalNumByteSlice, StackUint64, 5},
+	{AppLocalNumUint, StackUint64, 5},
+	{AppLocalNumByteSlice, StackUint64, 5},
+	{AppExtraProgramPages, StackUint64, 5},
+	{AppCreator, StackBytes, 5},
+	{AppAddress, StackBytes, 5},
+}
+
+var appParamsFieldSpecByField map[AppParamsField]appParamsFieldSpec
+var appParamsFieldSpecByName appNameSpecMap
+
+// simple interface used by doc generator for fields versioning
+type appNameSpecMap map[string]appParamsFieldSpec
+
+func (s appNameSpecMap) getExtraFor(name string) (extra string) {
+	// Uses 2 here because app fields were introduced in 5
+	if s[name].version > 5 {
+		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
+	}
+	return
+}
 
 func init() {
 	TxnFieldNames = make([]string, int(invalidTxnField))
@@ -535,8 +597,8 @@ func init() {
 	GlobalFieldTypes = make([]StackType, len(GlobalFieldNames))
 	globalFieldSpecByField = make(map[GlobalField]globalFieldSpec, len(GlobalFieldNames))
 	for _, s := range globalFieldSpecs {
-		GlobalFieldTypes[int(s.gfield)] = s.ftype
-		globalFieldSpecByField[s.gfield] = s
+		GlobalFieldTypes[int(s.field)] = s.ftype
+		globalFieldSpecByField[s.field] = s
 	}
 	globalFieldSpecByName = make(gfNameSpecMap, len(GlobalFieldNames))
 	for i, gfn := range GlobalFieldNames {
@@ -548,12 +610,14 @@ func init() {
 		AssetHoldingFieldNames[int(i)] = i.String()
 	}
 	AssetHoldingFieldTypes = make([]StackType, len(AssetHoldingFieldNames))
-	for _, ft := range assetHoldingFieldTypeList {
-		AssetHoldingFieldTypes[int(ft.field)] = ft.ftype
+	assetHoldingFieldSpecByField = make(map[AssetHoldingField]assetHoldingFieldSpec, len(AssetHoldingFieldNames))
+	for _, s := range assetHoldingFieldSpecs {
+		AssetHoldingFieldTypes[int(s.field)] = s.ftype
+		assetHoldingFieldSpecByField[s.field] = s
 	}
-	assetHoldingFields = make(map[string]uint64)
-	for i, fn := range AssetHoldingFieldNames {
-		assetHoldingFields[fn] = uint64(i)
+	assetHoldingFieldSpecByName = make(ahfNameSpecMap, len(AssetHoldingFieldNames))
+	for i, ahfn := range AssetHoldingFieldNames {
+		assetHoldingFieldSpecByName[ahfn] = assetHoldingFieldSpecByField[AssetHoldingField(i)]
 	}
 
 	AssetParamsFieldNames = make([]string, int(invalidAssetParamsField))
@@ -561,12 +625,14 @@ func init() {
 		AssetParamsFieldNames[int(i)] = i.String()
 	}
 	AssetParamsFieldTypes = make([]StackType, len(AssetParamsFieldNames))
-	for _, ft := range assetParamsFieldTypeList {
-		AssetParamsFieldTypes[int(ft.field)] = ft.ftype
+	assetParamsFieldSpecByField = make(map[AssetParamsField]assetParamsFieldSpec, len(AssetParamsFieldNames))
+	for _, s := range assetParamsFieldSpecs {
+		AssetParamsFieldTypes[int(s.field)] = s.ftype
+		assetParamsFieldSpecByField[s.field] = s
 	}
-	assetParamsFields = make(map[string]uint64)
-	for i, fn := range AssetParamsFieldNames {
-		assetParamsFields[fn] = uint64(i)
+	assetParamsFieldSpecByName = make(apfNameSpecMap, len(AssetParamsFieldNames))
+	for i, apfn := range AssetParamsFieldNames {
+		assetParamsFieldSpecByName[apfn] = assetParamsFieldSpecByField[AssetParamsField(i)]
 	}
 
 	AppParamsFieldNames = make([]string, int(invalidAppParamsField))
@@ -574,12 +640,14 @@ func init() {
 		AppParamsFieldNames[int(i)] = i.String()
 	}
 	AppParamsFieldTypes = make([]StackType, len(AppParamsFieldNames))
-	for _, ft := range appParamsFieldTypeList {
-		AppParamsFieldTypes[int(ft.field)] = ft.ftype
+	appParamsFieldSpecByField = make(map[AppParamsField]appParamsFieldSpec, len(AppParamsFieldNames))
+	for _, s := range appParamsFieldSpecs {
+		AppParamsFieldTypes[int(s.field)] = s.ftype
+		appParamsFieldSpecByField[s.field] = s
 	}
-	appParamsFields = make(map[string]uint64)
-	for i, fn := range AppParamsFieldNames {
-		appParamsFields[fn] = uint64(i)
+	appParamsFieldSpecByName = make(appNameSpecMap, len(AppParamsFieldNames))
+	for i, apfn := range AppParamsFieldNames {
+		appParamsFieldSpecByName[apfn] = appParamsFieldSpecByField[AppParamsField(i)]
 	}
 
 	txnTypeIndexes = make(map[string]uint64, len(TxnTypeNames))

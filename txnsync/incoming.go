@@ -23,7 +23,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
-	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/pooldata"
 )
 
 var (
@@ -39,8 +39,8 @@ type incomingMessage struct {
 	sequenceNumber    uint64
 	peer              *Peer
 	encodedSize       int
-	bloomFilter       bloomFilter
-	transactionGroups []transactions.SignedTxGroup
+	bloomFilter       *testableBloomFilter
+	transactionGroups []pooldata.SignedTxGroup
 }
 
 // incomingMessageQueue manages the global incoming message queue across all the incoming peers.
@@ -134,7 +134,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 	}
 
 	// if the peer sent us a bloom filter, decode it
-	if incomingMessage.message.TxnBloomFilter.BloomFilterType != 0 {
+	if !incomingMessage.message.TxnBloomFilter.MsgIsZero() {
 		bloomFilter, err := decodeBloomFilter(incomingMessage.message.TxnBloomFilter)
 		if err != nil {
 			s.log.Infof("Invalid bloom filter received from peer : %v", err)
@@ -258,7 +258,7 @@ incomingMessageLoop:
 		}
 
 		// if the peer sent us a bloom filter, store this.
-		if (incomingMsg.bloomFilter != bloomFilter{}) {
+		if incomingMsg.bloomFilter != nil {
 			peer.addIncomingBloomFilter(incomingMsg.message.Round, incomingMsg.bloomFilter, s.round)
 		}
 
@@ -292,7 +292,11 @@ incomingMessageLoop:
 			currentTransactionPoolSize := s.node.IncomingTransactionGroups(peer, peer.nextReceivedMessageSeq-1, incomingMsg.transactionGroups)
 			// was the call reached the transaction handler queue ?
 			if currentTransactionPoolSize >= 0 {
-				// we want to store in transactionPoolSize only the first call to IncomingTransactionGroups
+				// we want to store in transactionPoolSize only the first call to IncomingTransactionGroups:
+				// when multiple IncomingTransactionGroups calls are made within this for-loop, we want to get the current transaction pool size,
+				// plus an estimate for the optimistic size after all the transaction groups would get added. For that purpose, it would be sufficient
+				// to get the transaction pool size once. The precise size of the transaction pool here is not critical - we use it only for the purpose
+				// of calculating the beta number as well as figure if the transaction pool is full or not ( both of them are range-based ).
 				if transactionPoolSize == 0 {
 					transactionPoolSize = currentTransactionPoolSize
 				}
@@ -315,7 +319,7 @@ incomingMessageLoop:
 		// if we had another message coming from this peer previously, we need to ensure there are not scheduled tasks.
 		s.scheduler.peerDuration(peer)
 
-		s.scheduler.schedulerPeer(peer, s.clock.Since())
+		s.scheduler.schedulePeer(peer, s.clock.Since())
 	}
 	if transactionPoolSize > 0 || transactionHandlerBacklogFull {
 		s.onTransactionPoolChangedEvent(MakeTransactionPoolChangeEvent(transactionPoolSize+totalAccumulatedTransactionsCount, transactionHandlerBacklogFull))

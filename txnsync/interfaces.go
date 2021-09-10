@@ -18,7 +18,7 @@ package txnsync
 
 import (
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/util/timers"
 )
 
@@ -40,7 +40,7 @@ type RoundSettings struct {
 // ProposalBroadcastRequest is used for the node connector to request a proposal broadcast
 type ProposalBroadcastRequest struct {
 	proposalBytes []byte
-	txGroups      []transactions.SignedTxGroup
+	txGroups      []pooldata.SignedTxGroup
 	isFilterMsg   bool
 }
 
@@ -89,17 +89,17 @@ type NodeConnector interface {
 	UpdatePeers(txsyncPeers []*Peer, netPeers []interface{}, peersAverageDataExchangeRate uint64)
 	SendPeerMessage(netPeer interface{}, msg []byte, callback SendMessageCallback)
 	// GetPendingTransactionGroups is called by the transaction sync when it needs to look into the transaction
-	// pool and get the updated set of pending transactions. The second returned argument is the latest group counter
-	// within the given transaction groups list. If there is no group that is locally originated, the expected value is
-	// InvalidSignedTxGroupCounter.
-	GetPendingTransactionGroups() (txGroups []transactions.SignedTxGroup, latestLocallyOriginatedGroupCounter uint64)
+	// pool and get the updated set of pending transactions. The second returned argument is the latest locally originated
+	// group counter within the given transaction groups list. If there is no group that is locally originated, the expected
+	// value is InvalidSignedTxGroupCounter.
+	GetPendingTransactionGroups() (txGroups []pooldata.SignedTxGroup, latestLocallyOriginatedGroupCounter uint64)
 	// IncomingTransactionGroups is called by the transaction sync when transactions have been received and need
 	// to be stored in the transaction pool. The method returns the number of transactions in the transaction
 	// pool before the txGroups is applied. A negative value is returned if the provided txGroups could not be applied
 	// to the transaction pool.
-	IncomingTransactionGroups(peer *Peer, messageSeq uint64, txGroups []transactions.SignedTxGroup) (transactionPoolSize int)
+	IncomingTransactionGroups(peer *Peer, messageSeq uint64, txGroups []pooldata.SignedTxGroup) (transactionPoolSize int)
 	NotifyMonitor() chan struct{}
-	HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup, peer *Peer)
+	HandleProposalMessage(proposalDataBytes []byte, txGroups []pooldata.SignedTxGroup, peer *Peer)
 }
 
 // MakeTransactionPoolChangeEvent creates an event for when a txn pool size has changed.
@@ -134,7 +134,7 @@ func MakeBroadcastProposalFilterEvent(proposalBytes []byte) Event {
 }
 
 // MakeBroadcastProposalRequestEvent creates an event for sending a proposal
-func MakeBroadcastProposalRequestEvent(proposalBytes []byte, txGroups []transactions.SignedTxGroup) Event {
+func MakeBroadcastProposalRequestEvent(proposalBytes []byte, txGroups []pooldata.SignedTxGroup) Event {
 	return Event{
 		eventType: proposalBroadcastRequestEvent,
 		proposalBroadcastRequest: ProposalBroadcastRequest{

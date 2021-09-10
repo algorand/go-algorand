@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
@@ -528,7 +529,7 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 		return err
 	}
 
-	err = node.transactionPool.Remember(transactions.SignedTxGroup{Transactions: txgroup, LocallyOriginated: true})
+	err = node.transactionPool.Remember(pooldata.SignedTxGroup{Transactions: txgroup, LocallyOriginated: true})
 	if err != nil {
 		node.log.Infof("rejected by local pool: %v - transaction group was %+v", err, txgroup)
 		return err
@@ -1194,6 +1195,6 @@ func (node *AlgorandFullNode) ProposalsChannel() <-chan agreement.TxnSyncProposa
 }
 
 // RelayProposal sends proposals to the txnsync for relaying.
-func (node *AlgorandFullNode) RelayProposal(proposalBytes []byte, txnSlices []transactions.SignedTxnSlice) {
+func (node *AlgorandFullNode) RelayProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice) {
 	node.txnSyncConnector.RelayProposal(proposalBytes, txnSlices)
 }

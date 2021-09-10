@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
@@ -75,16 +76,16 @@ func (mock mockPendingTxAggregate) PendingTxIDs() []transactions.Txid {
 	}
 	return ids
 }
-func makeSignedTxGroup(source [][]transactions.SignedTxn) (result []transactions.SignedTxGroup) {
-	result = make([]transactions.SignedTxGroup, len(source))
+func makeSignedTxGroup(source [][]transactions.SignedTxn) (result []pooldata.SignedTxGroup) {
+	result = make([]pooldata.SignedTxGroup, len(source))
 	for i := range source {
 		result[i].Transactions = source[i]
 	}
 	return
 }
 
-func (mock mockPendingTxAggregate) PendingTxGroups() ([]transactions.SignedTxGroup, uint64) {
-	return makeSignedTxGroup(bookkeeping.SignedTxnsToGroups(mock.txns)), transactions.InvalidSignedTxGroupCounter
+func (mock mockPendingTxAggregate) PendingTxGroups() ([]pooldata.SignedTxGroup, uint64) {
+	return makeSignedTxGroup(bookkeeping.SignedTxnsToGroups(mock.txns)), pooldata.InvalidSignedTxGroupCounter
 }
 
 type mockHandler struct {
@@ -105,7 +106,7 @@ type mockRunner struct {
 	done          chan *rpc.Call
 	failWithNil   bool
 	failWithError bool
-	txgroups      []transactions.SignedTxGroup
+	txgroups      []pooldata.SignedTxGroup
 }
 
 type mockRPCClient struct {
@@ -294,16 +295,23 @@ func TestNoClientsSync(t *testing.T) {
 func TestStartAndStop(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	t.Skip("TODO: replace this test in new client paradigm")
-	pool := makeMockPendingTxAggregate(3)
+	pool := makeMockPendingTxAggregate(1)
+	nodeA := basicRPCNode{}
+	txservice := makeTxService(pool, "test genesisID", config.GetDefaultLocal().TxPoolSize, config.GetDefaultLocal().TxSyncServeResponseSize)
+	nodeA.RegisterHTTPHandler(TxServiceHTTPPath, txservice)
+	nodeA.start()
+	nodeAURL := nodeA.rootURL()
+
 	poolTxGroups, _ := pool.PendingTxGroups()
 	runner := mockRunner{failWithNil: false, failWithError: false, txgroups: poolTxGroups[len(poolTxGroups)-1:], done: make(chan *rpc.Call)}
-	client := mockRPCClient{client: &runner, log: logging.TestingLog(t)}
+	client := mockRPCClient{client: &runner, rootURL: nodeAURL, log: logging.TestingLog(t)}
 	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
 	handler := mockHandler{}
+
+	syncerPool := makeMockPendingTxAggregate(0)
 	syncInterval := time.Second
 	syncTimeout := time.Second
-	syncer := MakeTxSyncer(pool, &clientAgg, &handler, syncInterval, syncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
+	syncer := MakeTxSyncer(syncerPool, &clientAgg, &handler, syncInterval, syncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
 	syncer.log = logging.TestingLog(t)
 
 	// ensure that syncing doesn't start
@@ -314,7 +322,12 @@ func TestStartAndStop(t *testing.T) {
 
 	// signal that syncing can start
 	close(canStart)
-	time.Sleep(2 * time.Second)
+	for x := 0; x < 20; x++ {
+		time.Sleep(100 * time.Millisecond)
+		if atomic.LoadInt32(&handler.messageCounter) != 0 {
+			break
+		}
+	}
 	require.Equal(t, int32(1), atomic.LoadInt32(&handler.messageCounter))
 
 	// stop syncing and ensure it doesn't happen

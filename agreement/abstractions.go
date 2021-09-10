@@ -19,6 +19,7 @@ package agreement
 import (
 	"context"
 	"errors"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"time"
 
@@ -311,7 +312,7 @@ type EventsProcessingMonitor interface {
 // the transaction sync.
 type TxnSync interface {
 	ProposalsChannel() <-chan TxnSyncProposal
-	RelayProposal(proposalBytes []byte, txnSlices []transactions.SignedTxnSlice)
+	RelayProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice)
 }
 
 // TxnSyncProposal contains the data sent by the transaction sync

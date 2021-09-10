@@ -99,6 +99,21 @@ func (sv *stackValue) String() string {
 	return fmt.Sprintf("%d 0x%x", sv.Uint, sv.Uint)
 }
 
+func (sv *stackValue) address() (addr basics.Address, err error) {
+	if len(sv.Bytes) != len(addr) {
+		return basics.Address{}, errors.New("not an address")
+	}
+	copy(addr[:], sv.Bytes)
+	return
+}
+
+func (sv *stackValue) uint() (uint64, error) {
+	if sv.Bytes != nil {
+		return 0, errors.New("not a uint64")
+	}
+	return sv.Uint, nil
+}
+
 func stackValueFromTealValue(tv *basics.TealValue) (sv stackValue, err error) {
 	switch tv.Type {
 	case basics.TealBytesType:
@@ -145,6 +160,7 @@ func (sv *stackValue) toTealValue() (tv basics.TealValue) {
 type LedgerForLogic interface {
 	Balance(addr basics.Address) (basics.MicroAlgos, error)
 	MinBalance(addr basics.Address, proto *config.ConsensusParams) (basics.MicroAlgos, error)
+	Authorizer(addr basics.Address) (basics.Address, error)
 	Round() basics.Round
 	LatestTimestamp() int64
 
@@ -152,7 +168,6 @@ type LedgerForLogic interface {
 	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error)
 	AppParams(aidx basics.AppIndex) (basics.AppParams, basics.Address, error)
 	ApplicationID() basics.AppIndex
-	CreatorAddress() basics.Address
 	OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error)
 	GetCreatableID(groupIdx int) basics.CreatableIndex
 
@@ -164,9 +179,9 @@ type LedgerForLogic interface {
 	SetGlobal(key string, value basics.TealValue) error
 	DelGlobal(key string) error
 
-	GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error)
+	GetDelta(txn *transactions.Transaction) (evalDelta transactions.EvalDelta, err error)
 
-	AppendLog(txn *transactions.Transaction, value string) error
+	Perform(txn *transactions.Transaction, spec transactions.SpecialAddresses) (transactions.ApplyData, error)
 }
 
 // EvalSideEffects contains data returned from evaluation
@@ -206,7 +221,7 @@ type EvalParams struct {
 	TxnGroup []transactions.SignedTxn
 
 	// GroupIndex should point to Txn within TxnGroup
-	GroupIndex int
+	GroupIndex uint64
 
 	PastSideEffects []EvalSideEffects
 
@@ -222,6 +237,14 @@ type EvalParams struct {
 	// MinTealVersion is nil, we will compute it ourselves
 	MinTealVersion *uint64
 
+	// Amount "overpaid" by the top-level transactions of the
+	// group.  Often 0.  When positive, it is spent by application
+	// actions.  Shared value across a group's txns, so that it
+	// can be updated. nil is interpretted as 0.
+	FeeCredit *uint64
+
+	Specials *transactions.SpecialAddresses
+
 	// determines eval mode: runModeSignature or runModeApplication
 	runModeFlags runMode
 
@@ -229,8 +252,8 @@ type EvalParams struct {
 	PooledApplicationBudget *uint64
 }
 
-type opEvalFunc func(cx *evalContext)
-type opCheckFunc func(cx *evalContext) error
+type opEvalFunc func(cx *EvalContext)
+type opCheckFunc func(cx *EvalContext) error
 
 type runMode uint64
 
@@ -281,23 +304,32 @@ func (ep EvalParams) log() logging.Logger {
 
 type scratchSpace = [256]stackValue
 
-type evalContext struct {
+// EvalContext is the execution context of AVM bytecode.  It contains
+// the full state of the running program, and tracks some of the
+// things that the program has been done, like log message and inner
+// transactions.
+type EvalContext struct {
 	EvalParams
 
 	stack     []stackValue
 	callstack []int
-	program   []byte // txn.Lsig.Logic ?
-	pc        int
-	nextpc    int
-	err       error
-	intc      []uint64
-	bytec     [][]byte
-	version   uint64
-	scratch   scratchSpace
 
-	cost     int // cost incurred so far
-	logCalls int // number of log calls so far
-	logSize  int // log size of the program so far
+	program []byte
+	pc      int
+	nextpc  int
+	err     error
+	intc    []uint64
+	bytec   [][]byte
+	version uint64
+	scratch scratchSpace
+
+	subtxn *transactions.SignedTxn // place to build for tx_submit
+	// The transactions Performed() and their effects
+	InnerTxns []transactions.SignedTxnWithAD
+
+	cost    int // cost incurred so far
+	Logs    []string
+	logSize int // total log size so far
 
 	// Set of PC values that branches we've seen so far might
 	// go. So, if checkStep() skips one, that branch is trying to
@@ -310,7 +342,8 @@ type evalContext struct {
 	instructionStarts map[int]bool
 
 	programHashCached crypto.Digest
-	txidCache         map[int]transactions.Txid
+	txidCache         map[uint64]transactions.Txid
+	appAddrCache      map[basics.AppIndex]basics.Address
 
 	// Stores state & disassembly for the optional debugger
 	debugState DebugState
@@ -365,26 +398,38 @@ func (pe PanicError) Error() string {
 var errLogicSigNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
-// EvalStateful executes stateful TEAL program
-func EvalStateful(program []byte, params EvalParams) (pass bool, err error) {
-	var cx evalContext
+// EvalStatefulCx executes stateful TEAL program
+func EvalStatefulCx(program []byte, params EvalParams) (bool, *EvalContext, error) {
+	var cx EvalContext
 	cx.EvalParams = params
 	cx.runModeFlags = runModeApplication
-	pass, err = eval(program, &cx)
-	if cx.EvalParams.Proto.EnableAppCostPooling && cx.EvalParams.PooledApplicationBudget != nil {
-		// if eval passes, then budget is always greater than cost, so should not have underflow
-		*cx.EvalParams.PooledApplicationBudget = basics.SubSaturate(*cx.EvalParams.PooledApplicationBudget, uint64(cx.cost))
-	}
+	pass, err := eval(program, &cx)
 
-	// set side effects
+	// The following two updates show a need for something like a
+	// GroupEvalContext, as we are currently tucking things into the
+	// EvalParams so that they are available to later calls.
+
+	// update pooled budget
+	if cx.Proto.EnableAppCostPooling && cx.PooledApplicationBudget != nil {
+		// if eval passes, then budget is always greater than cost, so should not have underflow
+		*cx.PooledApplicationBudget = basics.SubSaturate(*cx.PooledApplicationBudget, uint64(cx.cost))
+	}
+	// update side effects
 	cx.PastSideEffects[cx.GroupIndex].setScratchSpace(cx.scratch)
-	return
+
+	return pass, &cx, err
+}
+
+// EvalStateful is a lighter weight interface that doesn't return the EvalContext
+func EvalStateful(program []byte, params EvalParams) (bool, error) {
+	pass, _, err := EvalStatefulCx(program, params)
+	return pass, err
 }
 
 // Eval checks to see if a transaction passes logic
 // A program passes successfully if it finishes with one int element on the stack that is non-zero.
 func Eval(program []byte, params EvalParams) (pass bool, err error) {
-	var cx evalContext
+	var cx EvalContext
 	cx.EvalParams = params
 	cx.runModeFlags = runModeSignature
 	return eval(program, &cx)
@@ -392,7 +437,7 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 
 // eval implementation
 // A program passes successfully if it finishes with one int element on the stack that is non-zero.
-func eval(program []byte, cx *evalContext) (pass bool, err error) {
+func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			buf := make([]byte, 16*1024)
@@ -558,7 +603,7 @@ func check(program []byte, params EvalParams) (err error) {
 		return fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", minVersion, version)
 	}
 
-	var cx evalContext
+	var cx EvalContext
 	cx.version = version
 	cx.pc = vlen
 	cx.EvalParams = params
@@ -616,7 +661,7 @@ func boolToUint(x bool) uint64 {
 // MaxStackDepth should move to consensus params
 const MaxStackDepth = 1000
 
-func (cx *evalContext) step() {
+func (cx *EvalContext) step() {
 	opcode := cx.program[cx.pc]
 	spec := &opsByOpcode[cx.version][opcode]
 
@@ -691,7 +736,7 @@ func (cx *evalContext) step() {
 		// perhaps we could have an interface that allows
 		// disassembly to use the cx directly.  But for now,
 		// we don't want to worry about the dissassembly
-		// routines mucking about in the excution context
+		// routines mucking about in the execution context
 		// (changing the pc, for example) and this gives a big
 		// improvement of dryrun readability
 		dstate := &disassembleState{program: cx.program, pc: cx.pc, numericTargets: true, intc: cx.intc, bytec: cx.bytec}
@@ -741,7 +786,7 @@ func (cx *evalContext) step() {
 	}
 }
 
-func (cx *evalContext) checkStep() (int, error) {
+func (cx *EvalContext) checkStep() (int, error) {
 	cx.instructionStarts[cx.pc] = true
 	opcode := cx.program[cx.pc]
 	spec := &opsByOpcode[cx.version][opcode]
@@ -783,11 +828,11 @@ func (cx *evalContext) checkStep() (int, error) {
 	return deets.Cost, nil
 }
 
-func opErr(cx *evalContext) {
+func opErr(cx *EvalContext) {
 	cx.err = errors.New("TEAL runtime encountered err opcode")
 }
 
-func opReturn(cx *evalContext) {
+func opReturn(cx *EvalContext) {
 	// Achieve the end condition:
 	// Take the last element on the stack and make it the return value (only element on the stack)
 	// Move the pc to the end of the program
@@ -797,7 +842,7 @@ func opReturn(cx *evalContext) {
 	cx.nextpc = len(cx.program)
 }
 
-func opAssert(cx *evalContext) {
+func opAssert(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	if cx.stack[last].Uint != 0 {
 		cx.stack = cx.stack[:last]
@@ -806,13 +851,13 @@ func opAssert(cx *evalContext) {
 	cx.err = fmt.Errorf("assert failed pc=%d", cx.pc)
 }
 
-func opSwap(cx *evalContext) {
+func opSwap(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cx.stack[last], cx.stack[prev] = cx.stack[prev], cx.stack[last]
 }
 
-func opSelect(cx *evalContext) {
+func opSelect(cx *EvalContext) {
 	last := len(cx.stack) - 1 // condition on top
 	prev := last - 1          // true is one down
 	pprev := prev - 1         // false below that
@@ -823,14 +868,14 @@ func opSelect(cx *evalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
-func opSHA256(cx *evalContext) {
+func opSHA256(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	hash := sha256.Sum256(cx.stack[last].Bytes)
 	cx.stack[last].Bytes = hash[:]
 }
 
 // The Keccak256 variant of SHA-3 is implemented for compatibility with Ethereum
-func opKeccak256(cx *evalContext) {
+func opKeccak256(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	hasher := sha3.NewLegacyKeccak256()
 	hasher.Write(cx.stack[last].Bytes)
@@ -845,35 +890,28 @@ func opKeccak256(cx *evalContext) {
 // stability and portability in case the rest of Algorand ever moves
 // to a different default hash. For stability of this language, at
 // that time a new opcode should be made with the new hash.
-func opSHA512_256(cx *evalContext) {
+func opSHA512_256(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	hash := sha512.Sum512_256(cx.stack[last].Bytes)
 	cx.stack[last].Bytes = hash[:]
 }
 
-func opPlus(cx *evalContext) {
+func opPlus(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
-	cx.stack[prev].Uint += cx.stack[last].Uint
-	if cx.stack[prev].Uint < cx.stack[last].Uint {
+	sum, carry := bits.Add64(cx.stack[prev].Uint, cx.stack[last].Uint, 0)
+	if carry > 0 {
 		cx.err = errors.New("+ overflowed")
 		return
 	}
+	cx.stack[prev].Uint = sum
 	cx.stack = cx.stack[:last]
 }
 
-func opAddwImpl(x, y uint64) (carry uint64, sum uint64) {
-	sum = x + y
-	if sum < x {
-		carry = 1
-	}
-	return
-}
-
-func opAddw(cx *evalContext) {
+func opAddw(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
-	carry, sum := opAddwImpl(cx.stack[prev].Uint, cx.stack[last].Uint)
+	sum, carry := bits.Add64(cx.stack[prev].Uint, cx.stack[last].Uint, 0)
 	cx.stack[prev].Uint = carry
 	cx.stack[last].Uint = sum
 }
@@ -896,7 +934,7 @@ func opDivModwImpl(hiNum, loNum, hiDen, loDen uint64) (hiQuo uint64, loQuo uint6
 		rem.Uint64()
 }
 
-func opDivModw(cx *evalContext) {
+func opDivModw(cx *EvalContext) {
 	loDen := len(cx.stack) - 1
 	hiDen := loDen - 1
 	if cx.stack[loDen].Uint == 0 && cx.stack[hiDen].Uint == 0 {
@@ -913,7 +951,7 @@ func opDivModw(cx *evalContext) {
 	cx.stack[loDen].Uint = loRem
 }
 
-func opMinus(cx *evalContext) {
+func opMinus(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	if cx.stack[last].Uint > cx.stack[prev].Uint {
@@ -924,7 +962,7 @@ func opMinus(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opDiv(cx *evalContext) {
+func opDiv(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	if cx.stack[last].Uint == 0 {
@@ -935,7 +973,7 @@ func opDiv(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opModulo(cx *evalContext) {
+func opModulo(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	if cx.stack[last].Uint == 0 {
@@ -946,53 +984,27 @@ func opModulo(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opMul(cx *evalContext) {
+func opMul(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
-	a := cx.stack[prev].Uint
-	b := cx.stack[last].Uint
-	v := a * b
-	if (a != 0) && (b != 0) && (v/a != b) {
+	high, low := bits.Mul64(cx.stack[prev].Uint, cx.stack[last].Uint)
+	if high > 0 {
 		cx.err = errors.New("* overflowed")
 		return
 	}
-	cx.stack[prev].Uint = v
+	cx.stack[prev].Uint = low
 	cx.stack = cx.stack[:last]
 }
 
-func opMulwImpl(x, y uint64) (high64 uint64, low64 uint64, err error) {
-	var a, b, v big.Int
-	a.SetUint64(x)
-	b.SetUint64(y)
-	v.Mul(&a, &b)
-
-	var maxUint, high, low big.Int
-	maxUint.SetUint64(math.MaxUint64)
-	low.And(&v, &maxUint)
-	high.Rsh(&v, 64)
-	if !low.IsUint64() || !high.IsUint64() {
-		err = errors.New("mulw overflowed")
-		return
-	}
-
-	high64 = high.Uint64()
-	low64 = low.Uint64()
-	return
-}
-
-func opMulw(cx *evalContext) {
+func opMulw(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
-	high, low, err := opMulwImpl(cx.stack[prev].Uint, cx.stack[last].Uint)
-	if err != nil {
-		cx.err = err
-		return
-	}
+	high, low := bits.Mul64(cx.stack[prev].Uint, cx.stack[last].Uint)
 	cx.stack[prev].Uint = high
 	cx.stack[last].Uint = low
 }
 
-func opLt(cx *evalContext) {
+func opLt(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cond := cx.stack[prev].Uint < cx.stack[last].Uint
@@ -1004,22 +1016,22 @@ func opLt(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opGt(cx *evalContext) {
+func opGt(cx *EvalContext) {
 	opSwap(cx)
 	opLt(cx)
 }
 
-func opLe(cx *evalContext) {
+func opLe(cx *EvalContext) {
 	opGt(cx)
 	opNot(cx)
 }
 
-func opGe(cx *evalContext) {
+func opGe(cx *EvalContext) {
 	opLt(cx)
 	opNot(cx)
 }
 
-func opAnd(cx *evalContext) {
+func opAnd(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cond := (cx.stack[prev].Uint != 0) && (cx.stack[last].Uint != 0)
@@ -1031,7 +1043,7 @@ func opAnd(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opOr(cx *evalContext) {
+func opOr(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cond := (cx.stack[prev].Uint != 0) || (cx.stack[last].Uint != 0)
@@ -1043,7 +1055,7 @@ func opOr(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opEq(cx *evalContext) {
+func opEq(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	ta := cx.stack[prev].argType()
@@ -1067,12 +1079,12 @@ func opEq(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opNeq(cx *evalContext) {
+func opNeq(cx *EvalContext) {
 	opEq(cx)
 	opNot(cx)
 }
 
-func opNot(cx *evalContext) {
+func opNot(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	cond := cx.stack[last].Uint == 0
 	if cond {
@@ -1082,13 +1094,13 @@ func opNot(cx *evalContext) {
 	}
 }
 
-func opLen(cx *evalContext) {
+func opLen(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	cx.stack[last].Uint = uint64(len(cx.stack[last].Bytes))
 	cx.stack[last].Bytes = nil
 }
 
-func opItob(cx *evalContext) {
+func opItob(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	ibytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(ibytes, cx.stack[last].Uint)
@@ -1097,7 +1109,7 @@ func opItob(cx *evalContext) {
 	cx.stack[last].Bytes = ibytes
 }
 
-func opBtoi(cx *evalContext) {
+func opBtoi(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	ibytes := cx.stack[last].Bytes
 	if len(ibytes) > 8 {
@@ -1113,33 +1125,33 @@ func opBtoi(cx *evalContext) {
 	cx.stack[last].Bytes = nil
 }
 
-func opBitOr(cx *evalContext) {
+func opBitOr(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cx.stack[prev].Uint = cx.stack[prev].Uint | cx.stack[last].Uint
 	cx.stack = cx.stack[:last]
 }
 
-func opBitAnd(cx *evalContext) {
+func opBitAnd(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cx.stack[prev].Uint = cx.stack[prev].Uint & cx.stack[last].Uint
 	cx.stack = cx.stack[:last]
 }
 
-func opBitXor(cx *evalContext) {
+func opBitXor(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cx.stack[prev].Uint = cx.stack[prev].Uint ^ cx.stack[last].Uint
 	cx.stack = cx.stack[:last]
 }
 
-func opBitNot(cx *evalContext) {
+func opBitNot(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	cx.stack[last].Uint = cx.stack[last].Uint ^ 0xffffffffffffffff
 }
 
-func opShiftLeft(cx *evalContext) {
+func opShiftLeft(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	if cx.stack[last].Uint > 63 {
@@ -1150,7 +1162,7 @@ func opShiftLeft(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opShiftRight(cx *evalContext) {
+func opShiftRight(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	if cx.stack[last].Uint > 63 {
@@ -1161,7 +1173,7 @@ func opShiftRight(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opSqrt(cx *evalContext) {
+func opSqrt(cx *EvalContext) {
 	/*
 		        It would not be safe to use math.Sqrt, because we would have to
 			convert our u64 to an f64, but f64 cannot represent all u64s exactly.
@@ -1188,7 +1200,7 @@ func opSqrt(cx *evalContext) {
 	cx.stack[last].Uint = root >> 1
 }
 
-func opBitLen(cx *evalContext) {
+func opBitLen(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	if cx.stack[last].argType() == StackUint64 {
 		cx.stack[last].Uint = uint64(bits.Len64(cx.stack[last].Uint))
@@ -1219,12 +1231,12 @@ func opExpImpl(base uint64, exp uint64) (uint64, error) {
 	if exp == 0 || base == 1 {
 		return 1, nil
 	}
-	// base is now at least 2, so exp can not be over 64
-	if exp > 64 {
+	// base is now at least 2, so exp can not be 64
+	if exp >= 64 {
 		return 0, fmt.Errorf("%d^%d overflow", base, exp)
 	}
 	answer := base
-	// safe to cast exp, because it is known to fit in int (it's <= 64)
+	// safe to cast exp, because it is known to fit in int (it's < 64)
 	for i := 1; i < int(exp); i++ {
 		next := answer * base
 		if next/answer != base {
@@ -1235,7 +1247,7 @@ func opExpImpl(base uint64, exp uint64) (uint64, error) {
 	return answer, nil
 }
 
-func opExp(cx *evalContext) {
+func opExp(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 
@@ -1262,14 +1274,14 @@ func opExpwImpl(base uint64, exp uint64) (*big.Int, error) {
 	if exp == 0 || base == 1 {
 		return new(big.Int).SetUint64(1), nil
 	}
-	// base is now at least 2, so exp can not be over 128
-	if exp > 128 {
+	// base is now at least 2, so exp can not be 128
+	if exp >= 128 {
 		return &big.Int{}, fmt.Errorf("%d^%d overflow", base, exp)
 	}
 
 	answer := new(big.Int).SetUint64(base)
 	bigbase := new(big.Int).SetUint64(base)
-	// safe to cast exp, because it is known to fit in int (it's <= 128)
+	// safe to cast exp, because it is known to fit in int (it's < 128)
 	for i := 1; i < int(exp); i++ {
 		next := answer.Mul(answer, bigbase)
 		answer = next
@@ -1281,7 +1293,7 @@ func opExpwImpl(base uint64, exp uint64) (*big.Int, error) {
 
 }
 
-func opExpw(cx *evalContext) {
+func opExpw(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 
@@ -1299,7 +1311,7 @@ func opExpw(cx *evalContext) {
 	cx.stack[last].Uint = lo
 }
 
-func opBytesBinOp(cx *evalContext, result *big.Int, op func(x, y *big.Int) *big.Int) {
+func opBytesBinOp(cx *EvalContext, result *big.Int, op func(x, y *big.Int) *big.Int) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 
@@ -1319,17 +1331,17 @@ func opBytesBinOp(cx *evalContext, result *big.Int, op func(x, y *big.Int) *big.
 	cx.stack = cx.stack[:last]
 }
 
-func opBytesPlus(cx *evalContext) {
+func opBytesPlus(cx *EvalContext) {
 	result := new(big.Int)
 	opBytesBinOp(cx, result, result.Add)
 }
 
-func opBytesMinus(cx *evalContext) {
+func opBytesMinus(cx *EvalContext) {
 	result := new(big.Int)
 	opBytesBinOp(cx, result, result.Sub)
 }
 
-func opBytesDiv(cx *evalContext) {
+func opBytesDiv(cx *EvalContext) {
 	result := new(big.Int)
 	checkDiv := func(x, y *big.Int) *big.Int {
 		if y.BitLen() == 0 {
@@ -1341,12 +1353,12 @@ func opBytesDiv(cx *evalContext) {
 	opBytesBinOp(cx, result, checkDiv)
 }
 
-func opBytesMul(cx *evalContext) {
+func opBytesMul(cx *EvalContext) {
 	result := new(big.Int)
 	opBytesBinOp(cx, result, result.Mul)
 }
 
-func opBytesLt(cx *evalContext) {
+func opBytesLt(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 
@@ -1366,22 +1378,22 @@ func opBytesLt(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opBytesGt(cx *evalContext) {
+func opBytesGt(cx *EvalContext) {
 	opSwap(cx)
 	opBytesLt(cx)
 }
 
-func opBytesLe(cx *evalContext) {
+func opBytesLe(cx *EvalContext) {
 	opBytesGt(cx)
 	opNot(cx)
 }
 
-func opBytesGe(cx *evalContext) {
+func opBytesGe(cx *EvalContext) {
 	opBytesLt(cx)
 	opNot(cx)
 }
 
-func opBytesEq(cx *evalContext) {
+func opBytesEq(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 
@@ -1401,12 +1413,12 @@ func opBytesEq(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opBytesNeq(cx *evalContext) {
+func opBytesNeq(cx *EvalContext) {
 	opBytesEq(cx)
 	opNot(cx)
 }
 
-func opBytesModulo(cx *evalContext) {
+func opBytesModulo(cx *EvalContext) {
 	result := new(big.Int)
 	checkMod := func(x, y *big.Int) *big.Int {
 		if y.BitLen() == 0 {
@@ -1429,7 +1441,7 @@ func zpad(smaller []byte, size int) []byte {
 // They can be returned in either order, but the first slice returned
 // must be newly allocated, and already in place at the top of stack
 // (the original top having been popped).
-func opBytesBinaryLogicPrep(cx *evalContext) ([]byte, []byte) {
+func opBytesBinaryLogicPrep(cx *EvalContext) ([]byte, []byte) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 
@@ -1447,28 +1459,28 @@ func opBytesBinaryLogicPrep(cx *evalContext) ([]byte, []byte) {
 	return fresh, other
 }
 
-func opBytesBitOr(cx *evalContext) {
+func opBytesBitOr(cx *EvalContext) {
 	a, b := opBytesBinaryLogicPrep(cx)
 	for i := range a {
 		a[i] = a[i] | b[i]
 	}
 }
 
-func opBytesBitAnd(cx *evalContext) {
+func opBytesBitAnd(cx *EvalContext) {
 	a, b := opBytesBinaryLogicPrep(cx)
 	for i := range a {
 		a[i] = a[i] & b[i]
 	}
 }
 
-func opBytesBitXor(cx *evalContext) {
+func opBytesBitXor(cx *EvalContext) {
 	a, b := opBytesBinaryLogicPrep(cx)
 	for i := range a {
 		a[i] = a[i] ^ b[i]
 	}
 }
 
-func opBytesBitNot(cx *evalContext) {
+func opBytesBitNot(cx *EvalContext) {
 	last := len(cx.stack) - 1
 
 	fresh := make([]byte, len(cx.stack[last].Bytes))
@@ -1478,7 +1490,7 @@ func opBytesBitNot(cx *evalContext) {
 	cx.stack[last].Bytes = fresh
 }
 
-func opBytesZero(cx *evalContext) {
+func opBytesZero(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	length := cx.stack[last].Uint
 	if length > MaxStringSize {
@@ -1488,35 +1500,35 @@ func opBytesZero(cx *evalContext) {
 	cx.stack[last].Bytes = make([]byte, length)
 }
 
-func opIntConstBlock(cx *evalContext) {
+func opIntConstBlock(cx *EvalContext) {
 	cx.intc, cx.nextpc, cx.err = parseIntcblock(cx.program, cx.pc)
 }
 
-func opIntConstN(cx *evalContext, n uint) {
+func opIntConstN(cx *EvalContext, n uint) {
 	if n >= uint(len(cx.intc)) {
 		cx.err = fmt.Errorf("intc [%d] beyond %d constants", n, len(cx.intc))
 		return
 	}
 	cx.stack = append(cx.stack, stackValue{Uint: cx.intc[n]})
 }
-func opIntConstLoad(cx *evalContext) {
+func opIntConstLoad(cx *EvalContext) {
 	n := uint(cx.program[cx.pc+1])
 	opIntConstN(cx, n)
 }
-func opIntConst0(cx *evalContext) {
+func opIntConst0(cx *EvalContext) {
 	opIntConstN(cx, 0)
 }
-func opIntConst1(cx *evalContext) {
+func opIntConst1(cx *EvalContext) {
 	opIntConstN(cx, 1)
 }
-func opIntConst2(cx *evalContext) {
+func opIntConst2(cx *EvalContext) {
 	opIntConstN(cx, 2)
 }
-func opIntConst3(cx *evalContext) {
+func opIntConst3(cx *EvalContext) {
 	opIntConstN(cx, 3)
 }
 
-func opPushInt(cx *evalContext) {
+func opPushInt(cx *EvalContext) {
 	val, bytesUsed := binary.Uvarint(cx.program[cx.pc+1:])
 	if bytesUsed <= 0 {
 		cx.err = fmt.Errorf("could not decode int at pc=%d", cx.pc+1)
@@ -1527,35 +1539,35 @@ func opPushInt(cx *evalContext) {
 	cx.nextpc = cx.pc + 1 + bytesUsed
 }
 
-func opByteConstBlock(cx *evalContext) {
+func opByteConstBlock(cx *EvalContext) {
 	cx.bytec, cx.nextpc, cx.err = parseBytecBlock(cx.program, cx.pc)
 }
 
-func opByteConstN(cx *evalContext, n uint) {
+func opByteConstN(cx *EvalContext, n uint) {
 	if n >= uint(len(cx.bytec)) {
 		cx.err = fmt.Errorf("bytec [%d] beyond %d constants", n, len(cx.bytec))
 		return
 	}
 	cx.stack = append(cx.stack, stackValue{Bytes: cx.bytec[n]})
 }
-func opByteConstLoad(cx *evalContext) {
+func opByteConstLoad(cx *EvalContext) {
 	n := uint(cx.program[cx.pc+1])
 	opByteConstN(cx, n)
 }
-func opByteConst0(cx *evalContext) {
+func opByteConst0(cx *EvalContext) {
 	opByteConstN(cx, 0)
 }
-func opByteConst1(cx *evalContext) {
+func opByteConst1(cx *EvalContext) {
 	opByteConstN(cx, 1)
 }
-func opByteConst2(cx *evalContext) {
+func opByteConst2(cx *EvalContext) {
 	opByteConstN(cx, 2)
 }
-func opByteConst3(cx *evalContext) {
+func opByteConst3(cx *EvalContext) {
 	opByteConstN(cx, 3)
 }
 
-func opPushBytes(cx *evalContext) {
+func opPushBytes(cx *EvalContext) {
 	pos := cx.pc + 1
 	length, bytesUsed := binary.Uvarint(cx.program[pos:])
 	if bytesUsed <= 0 {
@@ -1573,7 +1585,7 @@ func opPushBytes(cx *evalContext) {
 	cx.nextpc = int(end)
 }
 
-func opArgN(cx *evalContext, n uint64) {
+func opArgN(cx *EvalContext, n uint64) {
 	if n >= uint64(len(cx.Txn.Lsig.Args)) {
 		cx.err = fmt.Errorf("cannot load arg[%d] of %d", n, len(cx.Txn.Lsig.Args))
 		return
@@ -1582,24 +1594,31 @@ func opArgN(cx *evalContext, n uint64) {
 	cx.stack = append(cx.stack, stackValue{Bytes: val})
 }
 
-func opArg(cx *evalContext) {
+func opArg(cx *EvalContext) {
 	n := uint64(cx.program[cx.pc+1])
 	opArgN(cx, n)
 }
-func opArg0(cx *evalContext) {
+func opArg0(cx *EvalContext) {
 	opArgN(cx, 0)
 }
-func opArg1(cx *evalContext) {
+func opArg1(cx *EvalContext) {
 	opArgN(cx, 1)
 }
-func opArg2(cx *evalContext) {
+func opArg2(cx *EvalContext) {
 	opArgN(cx, 2)
 }
-func opArg3(cx *evalContext) {
+func opArg3(cx *EvalContext) {
 	opArgN(cx, 3)
 }
+func opArgs(cx *EvalContext) {
+	last := len(cx.stack) - 1
+	n := cx.stack[last].Uint
+	// Pop the index and push the result back on the stack.
+	cx.stack = cx.stack[:last]
+	opArgN(cx, n)
+}
 
-func branchTarget(cx *evalContext) (int, error) {
+func branchTarget(cx *EvalContext) (int, error) {
 	offset := int16(uint16(cx.program[cx.pc+1])<<8 | uint16(cx.program[cx.pc+2]))
 	if offset < 0 && cx.version < backBranchEnabledVersion {
 		return 0, fmt.Errorf("negative branch offset %x", offset)
@@ -1620,7 +1639,7 @@ func branchTarget(cx *evalContext) (int, error) {
 }
 
 // checks any branch that is {op} {int16 be offset}
-func checkBranch(cx *evalContext) error {
+func checkBranch(cx *EvalContext) error {
 	cx.nextpc = cx.pc + 3
 	target, err := branchTarget(cx)
 	if err != nil {
@@ -1635,7 +1654,7 @@ func checkBranch(cx *evalContext) error {
 	cx.branchTargets[target] = true
 	return nil
 }
-func opBnz(cx *evalContext) {
+func opBnz(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	cx.nextpc = cx.pc + 3
 	isNonZero := cx.stack[last].Uint != 0
@@ -1650,7 +1669,7 @@ func opBnz(cx *evalContext) {
 	}
 }
 
-func opBz(cx *evalContext) {
+func opBz(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	cx.nextpc = cx.pc + 3
 	isZero := cx.stack[last].Uint == 0
@@ -1665,7 +1684,7 @@ func opBz(cx *evalContext) {
 	}
 }
 
-func opB(cx *evalContext) {
+func opB(cx *EvalContext) {
 	target, err := branchTarget(cx)
 	if err != nil {
 		cx.err = err
@@ -1674,12 +1693,12 @@ func opB(cx *evalContext) {
 	cx.nextpc = target
 }
 
-func opCallSub(cx *evalContext) {
+func opCallSub(cx *EvalContext) {
 	cx.callstack = append(cx.callstack, cx.pc+3)
 	opB(cx)
 }
 
-func opRetSub(cx *evalContext) {
+func opRetSub(cx *EvalContext) {
 	top := len(cx.callstack) - 1
 	if top < 0 {
 		cx.err = errors.New("retsub with empty callstack")
@@ -1690,24 +1709,24 @@ func opRetSub(cx *evalContext) {
 	cx.nextpc = target
 }
 
-func opPop(cx *evalContext) {
+func opPop(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	cx.stack = cx.stack[:last]
 }
 
-func opDup(cx *evalContext) {
+func opDup(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	sv := cx.stack[last]
 	cx.stack = append(cx.stack, sv)
 }
 
-func opDup2(cx *evalContext) {
+func opDup2(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cx.stack = append(cx.stack, cx.stack[prev:]...)
 }
 
-func opDig(cx *evalContext) {
+func opDig(cx *EvalContext) {
 	depth := int(uint(cx.program[cx.pc+1]))
 	idx := len(cx.stack) - 1 - depth
 	// Need to check stack size explicitly here because checkArgs() doesn't understand dig
@@ -1720,7 +1739,7 @@ func opDig(cx *evalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
-func opCover(cx *evalContext) {
+func opCover(cx *EvalContext) {
 	depth := int(cx.program[cx.pc+1])
 	topIdx := len(cx.stack) - 1
 	idx := topIdx - depth
@@ -1735,7 +1754,7 @@ func opCover(cx *evalContext) {
 	cx.stack[idx] = sv
 }
 
-func opUncover(cx *evalContext) {
+func opUncover(cx *EvalContext) {
 	depth := int(cx.program[cx.pc+1])
 	topIdx := len(cx.stack) - 1
 	idx := topIdx - depth
@@ -1751,27 +1770,25 @@ func opUncover(cx *evalContext) {
 	cx.stack[topIdx] = sv
 }
 
-func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, field uint64) (sv stackValue, err error) {
-	switch AssetHoldingField(field) {
+func (cx *EvalContext) assetHoldingToValue(holding *basics.AssetHolding, fs assetHoldingFieldSpec) (sv stackValue, err error) {
+	switch fs.field {
 	case AssetBalance:
 		sv.Uint = holding.Amount
 	case AssetFrozen:
 		sv.Uint = boolToUint(holding.Frozen)
 	default:
-		err = fmt.Errorf("invalid asset holding field %d", field)
+		err = fmt.Errorf("invalid asset_holding_get field %d", fs.field)
 		return
 	}
 
-	assetHoldingField := AssetHoldingField(field)
-	assetHoldingFieldType := AssetHoldingFieldTypes[assetHoldingField]
-	if !typecheck(assetHoldingFieldType, sv.argType()) {
-		err = fmt.Errorf("%s expected field type is %s but got %s", assetHoldingField.String(), assetHoldingFieldType.String(), sv.argType().String())
+	if !typecheck(fs.ftype, sv.argType()) {
+		err = fmt.Errorf("%s expected field type is %s but got %s", fs.field.String(), fs.ftype.String(), sv.argType().String())
 	}
 	return
 }
 
-func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, creator basics.Address, field uint64) (sv stackValue, err error) {
-	switch AssetParamsField(field) {
+func (cx *EvalContext) assetParamsToValue(params *basics.AssetParams, creator basics.Address, fs assetParamsFieldSpec) (sv stackValue, err error) {
+	switch fs.field {
 	case AssetTotal:
 		sv.Uint = params.Total
 	case AssetDecimals:
@@ -1797,20 +1814,18 @@ func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, creato
 	case AssetCreator:
 		sv.Bytes = creator[:]
 	default:
-		err = fmt.Errorf("invalid asset params field %d", field)
+		err = fmt.Errorf("invalid asset_params_get field %d", fs.field)
 		return
 	}
 
-	assetParamsField := AssetParamsField(field)
-	assetParamsFieldType := AssetParamsFieldTypes[assetParamsField]
-	if !typecheck(assetParamsFieldType, sv.argType()) {
-		err = fmt.Errorf("%s expected field type is %s but got %s", assetParamsField.String(), assetParamsFieldType.String(), sv.argType().String())
+	if !typecheck(fs.ftype, sv.argType()) {
+		err = fmt.Errorf("%s expected field type is %s but got %s", fs.field.String(), fs.ftype.String(), sv.argType().String())
 	}
 	return
 }
 
-func (cx *evalContext) appParamsEnumToValue(params *basics.AppParams, creator basics.Address, field uint64) (sv stackValue, err error) {
-	switch AppParamsField(field) {
+func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFieldSpec) (sv stackValue, err error) {
+	switch fs.field {
 	case AppApprovalProgram:
 		sv.Bytes = params.ApprovalProgram[:]
 	case AppClearStateProgram:
@@ -1825,32 +1840,32 @@ func (cx *evalContext) appParamsEnumToValue(params *basics.AppParams, creator ba
 		sv.Uint = params.LocalStateSchema.NumByteSlice
 	case AppExtraProgramPages:
 		sv.Uint = uint64(params.ExtraProgramPages)
-	case AppCreator:
-		sv.Bytes = creator[:]
 	default:
-		err = fmt.Errorf("invalid app params field %d", field)
+		// The pseudo fields AppCreator and AppAddress are handled before this method
+		err = fmt.Errorf("invalid app_params_get field %d", fs.field)
 		return
 	}
 
-	appParamsField := AppParamsField(field)
-	appParamsFieldType := AppParamsFieldTypes[appParamsField]
-	if !typecheck(appParamsFieldType, sv.argType()) {
-		err = fmt.Errorf("%s expected field type is %s but got %s", appParamsField.String(), appParamsFieldType.String(), sv.argType().String())
+	if !typecheck(fs.ftype, sv.argType()) {
+		err = fmt.Errorf("%s expected field type is %s but got %s", fs.field.String(), fs.ftype.String(), sv.argType().String())
 	}
 	return
 }
 
 // TxnFieldToTealValue is a thin wrapper for txnFieldToStack for external use
 func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field TxnField, arrayFieldIdx uint64) (basics.TealValue, error) {
-	cx := evalContext{EvalParams: EvalParams{GroupIndex: groupIndex}}
-	sv, err := cx.txnFieldToStack(txn, field, arrayFieldIdx, groupIndex)
+	if groupIndex < 0 {
+		return basics.TealValue{}, fmt.Errorf("negative groupIndex %d", groupIndex)
+	}
+	cx := EvalContext{EvalParams: EvalParams{GroupIndex: uint64(groupIndex)}}
+	sv, err := cx.txnFieldToStack(txn, field, arrayFieldIdx, uint64(groupIndex))
 	return sv.toTealValue(), err
 }
 
-func (cx *evalContext) getTxID(txn *transactions.Transaction, groupIndex int) transactions.Txid {
+func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex uint64) transactions.Txid {
 	// Initialize txidCache if necessary
 	if cx.txidCache == nil {
-		cx.txidCache = make(map[int]transactions.Txid, len(cx.TxnGroup))
+		cx.txidCache = make(map[uint64]transactions.Txid, len(cx.TxnGroup))
 	}
 
 	// Hashes are expensive, so we cache computed TxIDs
@@ -1863,7 +1878,7 @@ func (cx *evalContext) getTxID(txn *transactions.Transaction, groupIndex int) tr
 	return txid
 }
 
-func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnField, arrayFieldIdx uint64, groupIndex int) (sv stackValue, err error) {
+func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, field TxnField, arrayFieldIdx uint64, groupIndex uint64) (sv stackValue, err error) {
 	err = nil
 	switch field {
 	case Sender:
@@ -1892,6 +1907,8 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 		sv.Uint = uint64(txn.VoteLast)
 	case VoteKeyDilution:
 		sv.Uint = txn.VoteKeyDilution
+	case Nonparticipation:
+		sv.Uint = boolToUint(txn.Nonparticipation)
 	case Type:
 		sv.Bytes = []byte(txn.Type)
 	case TypeEnum:
@@ -1907,7 +1924,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 	case AssetCloseTo:
 		sv.Bytes = txn.AssetCloseTo[:]
 	case GroupIndex:
-		sv.Uint = uint64(groupIndex)
+		sv.Uint = groupIndex
 	case TxID:
 		txid := cx.getTxID(txn, groupIndex)
 		sv.Bytes = txid[:]
@@ -2025,8 +2042,8 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 	return
 }
 
-func opTxn(cx *evalContext) {
-	field := TxnField(uint64(cx.program[cx.pc+1]))
+func opTxn(cx *EvalContext) {
+	field := TxnField(cx.program[cx.pc+1])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -2045,8 +2062,8 @@ func opTxn(cx *evalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
-func opTxna(cx *evalContext) {
-	field := TxnField(uint64(cx.program[cx.pc+1]))
+func opTxna(cx *EvalContext) {
+	field := TxnField(cx.program[cx.pc+1])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -2066,14 +2083,37 @@ func opTxna(cx *evalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
-func opGtxn(cx *evalContext) {
-	gtxid := int(uint(cx.program[cx.pc+1]))
-	if gtxid >= len(cx.TxnGroup) {
+func opTxnas(cx *EvalContext) {
+	last := len(cx.stack) - 1
+
+	field := TxnField(cx.program[cx.pc+1])
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if !ok {
+		cx.err = fmt.Errorf("txnas unsupported field %d", field)
+		return
+	}
+	arrayFieldIdx := cx.stack[last].Uint
+	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx, cx.GroupIndex)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack[last] = sv
+}
+
+func opGtxn(cx *EvalContext) {
+	gtxid := cx.program[cx.pc+1]
+	if int(gtxid) >= len(cx.TxnGroup) {
 		cx.err = fmt.Errorf("gtxn lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(uint64(cx.program[cx.pc+2]))
+	field := TxnField(cx.program[cx.pc+2])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -2086,11 +2126,11 @@ func opGtxn(cx *evalContext) {
 	}
 	var sv stackValue
 	var err error
-	if TxnField(field) == GroupIndex {
+	if field == GroupIndex {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = uint64(gtxid)
 	} else {
-		sv, err = cx.txnFieldToStack(tx, field, 0, gtxid)
+		sv, err = cx.txnFieldToStack(tx, field, 0, uint64(gtxid))
 		if err != nil {
 			cx.err = err
 			return
@@ -2099,14 +2139,14 @@ func opGtxn(cx *evalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
-func opGtxna(cx *evalContext) {
+func opGtxna(cx *EvalContext) {
 	gtxid := int(uint(cx.program[cx.pc+1]))
 	if gtxid >= len(cx.TxnGroup) {
 		cx.err = fmt.Errorf("gtxna lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(uint64(cx.program[cx.pc+2]))
+	field := TxnField(cx.program[cx.pc+2])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -2118,7 +2158,7 @@ func opGtxna(cx *evalContext) {
 		return
 	}
 	arrayFieldIdx := uint64(cx.program[cx.pc+3])
-	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, uint64(gtxid))
 	if err != nil {
 		cx.err = err
 		return
@@ -2126,15 +2166,44 @@ func opGtxna(cx *evalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
-func opGtxns(cx *evalContext) {
+func opGtxnas(cx *EvalContext) {
 	last := len(cx.stack) - 1
-	gtxid := int(cx.stack[last].Uint)
-	if gtxid >= len(cx.TxnGroup) {
+
+	gtxid := cx.program[cx.pc+1]
+	if int(gtxid) >= len(cx.TxnGroup) {
+		cx.err = fmt.Errorf("gtxnas lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
+		return
+	}
+	tx := &cx.TxnGroup[gtxid].Txn
+	field := TxnField(cx.program[cx.pc+2])
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if !ok {
+		cx.err = fmt.Errorf("gtxnas unsupported field %d", field)
+		return
+	}
+	arrayFieldIdx := cx.stack[last].Uint
+	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, uint64(gtxid))
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack[last] = sv
+}
+
+func opGtxns(cx *EvalContext) {
+	last := len(cx.stack) - 1
+	gtxid := cx.stack[last].Uint
+	if gtxid >= uint64(len(cx.TxnGroup)) {
 		cx.err = fmt.Errorf("gtxns lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(uint64(cx.program[cx.pc+1]))
+	field := TxnField(cx.program[cx.pc+1])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -2147,9 +2216,9 @@ func opGtxns(cx *evalContext) {
 	}
 	var sv stackValue
 	var err error
-	if TxnField(field) == GroupIndex {
+	if field == GroupIndex {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
-		sv.Uint = uint64(gtxid)
+		sv.Uint = gtxid
 	} else {
 		sv, err = cx.txnFieldToStack(tx, field, 0, gtxid)
 		if err != nil {
@@ -2160,15 +2229,15 @@ func opGtxns(cx *evalContext) {
 	cx.stack[last] = sv
 }
 
-func opGtxnsa(cx *evalContext) {
+func opGtxnsa(cx *EvalContext) {
 	last := len(cx.stack) - 1
-	gtxid := int(cx.stack[last].Uint)
-	if gtxid >= len(cx.TxnGroup) {
+	gtxid := cx.stack[last].Uint
+	if gtxid >= uint64(len(cx.TxnGroup)) {
 		cx.err = fmt.Errorf("gtxnsa lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(uint64(cx.program[cx.pc+1]))
+	field := TxnField(cx.program[cx.pc+1])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -2188,8 +2257,39 @@ func opGtxnsa(cx *evalContext) {
 	cx.stack[last] = sv
 }
 
-func opGaidImpl(cx *evalContext, groupIdx int, opName string) (sv stackValue, err error) {
-	if groupIdx >= len(cx.TxnGroup) {
+func opGtxnsas(cx *EvalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+
+	gtxid := cx.stack[prev].Uint
+	if gtxid >= uint64(len(cx.TxnGroup)) {
+		cx.err = fmt.Errorf("gtxnsas lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
+		return
+	}
+	tx := &cx.TxnGroup[gtxid].Txn
+	field := TxnField(cx.program[cx.pc+1])
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if !ok {
+		cx.err = fmt.Errorf("gtxnsas unsupported field %d", field)
+		return
+	}
+	arrayFieldIdx := cx.stack[last].Uint
+	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack[prev] = sv
+	cx.stack = cx.stack[:last]
+}
+
+func opGaidImpl(cx *EvalContext, groupIdx uint64, opName string) (sv stackValue, err error) {
+	if groupIdx >= uint64(len(cx.TxnGroup)) {
 		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
 		return
 	} else if groupIdx > cx.GroupIndex {
@@ -2215,9 +2315,9 @@ func opGaidImpl(cx *evalContext, groupIdx int, opName string) (sv stackValue, er
 	return
 }
 
-func opGaid(cx *evalContext) {
-	groupIdx := int(uint(cx.program[cx.pc+1]))
-	sv, err := opGaidImpl(cx, groupIdx, "gaid")
+func opGaid(cx *EvalContext) {
+	groupIdx := cx.program[cx.pc+1]
+	sv, err := opGaidImpl(cx, uint64(groupIdx), "gaid")
 	if err != nil {
 		cx.err = err
 		return
@@ -2226,9 +2326,9 @@ func opGaid(cx *evalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
-func opGaids(cx *evalContext) {
+func opGaids(cx *EvalContext) {
 	last := len(cx.stack) - 1
-	groupIdx := int(cx.stack[last].Uint)
+	groupIdx := cx.stack[last].Uint
 	sv, err := opGaidImpl(cx, groupIdx, "gaids")
 	if err != nil {
 		cx.err = err
@@ -2238,7 +2338,7 @@ func opGaids(cx *evalContext) {
 	cx.stack[last] = sv
 }
 
-func (cx *evalContext) getRound() (rnd uint64, err error) {
+func (cx *EvalContext) getRound() (rnd uint64, err error) {
 	if cx.Ledger == nil {
 		err = fmt.Errorf("ledger not available")
 		return
@@ -2246,7 +2346,7 @@ func (cx *evalContext) getRound() (rnd uint64, err error) {
 	return uint64(cx.Ledger.Round()), nil
 }
 
-func (cx *evalContext) getLatestTimestamp() (timestamp uint64, err error) {
+func (cx *EvalContext) getLatestTimestamp() (timestamp uint64, err error) {
 	if cx.Ledger == nil {
 		err = fmt.Errorf("ledger not available")
 		return
@@ -2259,34 +2359,65 @@ func (cx *evalContext) getLatestTimestamp() (timestamp uint64, err error) {
 	return uint64(ts), nil
 }
 
-func (cx *evalContext) getApplicationID() (rnd uint64, err error) {
+func (cx *EvalContext) getApplicationID() (uint64, error) {
 	if cx.Ledger == nil {
-		err = fmt.Errorf("ledger not available")
-		return
+		return 0, fmt.Errorf("ledger not available")
 	}
 	return uint64(cx.Ledger.ApplicationID()), nil
 }
 
-func (cx *evalContext) getCreatableID(groupIndex int) (cid uint64, err error) {
+func (cx *EvalContext) getApplicationAddress() (basics.Address, error) {
+	if cx.Ledger == nil {
+		return basics.Address{}, fmt.Errorf("ledger not available")
+	}
+
+	// Initialize appAddrCache if necessary
+	if cx.appAddrCache == nil {
+		cx.appAddrCache = make(map[basics.AppIndex]basics.Address)
+	}
+
+	appID := cx.Ledger.ApplicationID()
+	// Hashes are expensive, so we cache computed app addrs
+	appAddr, ok := cx.appAddrCache[appID]
+	if !ok {
+		appAddr = appID.Address()
+		cx.appAddrCache[appID] = appAddr
+	}
+
+	return appAddr, nil
+}
+
+func (cx *EvalContext) getCreatableID(groupIndex uint64) (cid uint64, err error) {
 	if cx.Ledger == nil {
 		err = fmt.Errorf("ledger not available")
 		return
 	}
-	return uint64(cx.Ledger.GetCreatableID(groupIndex)), nil
+	gi := int(groupIndex)
+	if gi < 0 {
+		return 0, fmt.Errorf("groupIndex %d too high", groupIndex)
+	}
+	return uint64(cx.Ledger.GetCreatableID(gi)), nil
 }
 
-func (cx *evalContext) getCreatorAddress() ([]byte, error) {
+func (cx *EvalContext) getCreatorAddress() ([]byte, error) {
 	if cx.Ledger == nil {
 		return nil, fmt.Errorf("ledger not available")
 	}
-	addr := cx.Ledger.CreatorAddress()
-	return addr[:], nil
+	_, creator, err := cx.Ledger.AppParams(cx.Ledger.ApplicationID())
+	if err != nil {
+		return nil, fmt.Errorf("No params for current app")
+	}
+	return creator[:], nil
+}
+
+func (cx *EvalContext) getGroupID() []byte {
+	return cx.Txn.Txn.Group[:]
 }
 
 var zeroAddress basics.Address
 
-func (cx *evalContext) globalFieldToStack(field GlobalField) (sv stackValue, err error) {
-	switch field {
+func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, err error) {
+	switch fs.field {
 	case MinTxnFee:
 		sv.Uint = cx.Proto.MinTxnFee
 	case MinBalance:
@@ -2305,20 +2436,30 @@ func (cx *evalContext) globalFieldToStack(field GlobalField) (sv stackValue, err
 		sv.Uint, err = cx.getLatestTimestamp()
 	case CurrentApplicationID:
 		sv.Uint, err = cx.getApplicationID()
+	case CurrentApplicationAddress:
+		var addr basics.Address
+		addr, err = cx.getApplicationAddress()
+		sv.Bytes = addr[:]
 	case CreatorAddress:
 		sv.Bytes, err = cx.getCreatorAddress()
+	case GroupID:
+		sv.Bytes = cx.getGroupID()
 	default:
-		err = fmt.Errorf("invalid global[%d]", field)
+		err = fmt.Errorf("invalid global field %d", fs.field)
 	}
+
+	if !typecheck(fs.ftype, sv.argType()) {
+		err = fmt.Errorf("%s expected field type is %s but got %s", fs.field.String(), fs.ftype.String(), sv.argType().String())
+	}
+
 	return sv, err
 }
 
-func opGlobal(cx *evalContext) {
-	gindex := uint64(cx.program[cx.pc+1])
-	globalField := GlobalField(gindex)
+func opGlobal(cx *EvalContext) {
+	globalField := GlobalField(cx.program[cx.pc+1])
 	fs, ok := globalFieldSpecByField[globalField]
 	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid global[%d]", globalField)
+		cx.err = fmt.Errorf("invalid global field %d", globalField)
 		return
 	}
 	if (cx.runModeFlags & fs.mode) == 0 {
@@ -2326,15 +2467,9 @@ func opGlobal(cx *evalContext) {
 		return
 	}
 
-	sv, err := cx.globalFieldToStack(globalField)
+	sv, err := cx.globalFieldToValue(fs)
 	if err != nil {
 		cx.err = err
-		return
-	}
-
-	globalFieldType := GlobalFieldTypes[globalField]
-	if !typecheck(globalFieldType, sv.argType()) {
-		cx.err = fmt.Errorf("%s expected field type is %s but got %s", globalField.String(), globalFieldType.String(), sv.argType().String())
 		return
 	}
 
@@ -2355,14 +2490,14 @@ func (msg Msg) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 // programHash lets us lazily compute H(cx.program)
-func (cx *evalContext) programHash() crypto.Digest {
+func (cx *EvalContext) programHash() crypto.Digest {
 	if cx.programHashCached == (crypto.Digest{}) {
 		cx.programHashCached = crypto.HashObj(Program(cx.program))
 	}
 	return cx.programHashCached
 }
 
-func opEd25519verify(cx *evalContext) {
+func opEd25519verify(cx *EvalContext) {
 	last := len(cx.stack) - 1 // index of PK
 	prev := last - 1          // index of signature
 	pprev := prev - 1         // index of data
@@ -2391,23 +2526,45 @@ func opEd25519verify(cx *evalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
-func opLoad(cx *evalContext) {
-	gindex := int(uint(cx.program[cx.pc+1]))
-	cx.stack = append(cx.stack, cx.scratch[gindex])
+func opLoad(cx *EvalContext) {
+	n := cx.program[cx.pc+1]
+	cx.stack = append(cx.stack, cx.scratch[n])
 }
 
-func opStore(cx *evalContext) {
-	gindex := int(uint(cx.program[cx.pc+1]))
+func opLoads(cx *EvalContext) {
 	last := len(cx.stack) - 1
-	cx.scratch[gindex] = cx.stack[last]
+	n := cx.stack[last].Uint
+	if n >= uint64(len(cx.scratch)) {
+		cx.err = fmt.Errorf("invalid Scratch index %d", n)
+		return
+	}
+	cx.stack[last] = cx.scratch[n]
+}
+
+func opStore(cx *EvalContext) {
+	n := cx.program[cx.pc+1]
+	last := len(cx.stack) - 1
+	cx.scratch[n] = cx.stack[last]
 	cx.stack = cx.stack[:last]
 }
 
-func opGloadImpl(cx *evalContext, groupIdx int, scratchIdx int, opName string) (scratchValue stackValue, err error) {
-	if groupIdx >= len(cx.TxnGroup) {
+func opStores(cx *EvalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	n := cx.stack[prev].Uint
+	if n >= uint64(len(cx.scratch)) {
+		cx.err = fmt.Errorf("invalid Scratch index %d", n)
+		return
+	}
+	cx.scratch[n] = cx.stack[last]
+	cx.stack = cx.stack[:prev]
+}
+
+func opGloadImpl(cx *EvalContext, groupIdx uint64, scratchIdx byte, opName string) (scratchValue stackValue, err error) {
+	if groupIdx >= uint64(len(cx.TxnGroup)) {
 		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
 		return
-	} else if scratchIdx >= 256 {
+	} else if int(scratchIdx) >= len(cx.scratch) {
 		err = fmt.Errorf("invalid Scratch index %d", scratchIdx)
 		return
 	} else if txn := cx.TxnGroup[groupIdx].Txn; txn.Type != protocol.ApplicationCallTx {
@@ -2421,13 +2578,13 @@ func opGloadImpl(cx *evalContext, groupIdx int, scratchIdx int, opName string) (
 		return
 	}
 
-	scratchValue = cx.PastSideEffects[groupIdx].getScratchValue(uint8(scratchIdx))
+	scratchValue = cx.PastSideEffects[groupIdx].getScratchValue(scratchIdx)
 	return
 }
 
-func opGload(cx *evalContext) {
-	groupIdx := int(uint(cx.program[cx.pc+1]))
-	scratchIdx := int(uint(cx.program[cx.pc+2]))
+func opGload(cx *EvalContext) {
+	groupIdx := uint64(cx.program[cx.pc+1])
+	scratchIdx := cx.program[cx.pc+2]
 	scratchValue, err := opGloadImpl(cx, groupIdx, scratchIdx, "gload")
 	if err != nil {
 		cx.err = err
@@ -2437,10 +2594,10 @@ func opGload(cx *evalContext) {
 	cx.stack = append(cx.stack, scratchValue)
 }
 
-func opGloads(cx *evalContext) {
+func opGloads(cx *EvalContext) {
 	last := len(cx.stack) - 1
-	groupIdx := int(cx.stack[last].Uint)
-	scratchIdx := int(uint(cx.program[cx.pc+1]))
+	groupIdx := cx.stack[last].Uint
+	scratchIdx := cx.program[cx.pc+1]
 	scratchValue, err := opGloadImpl(cx, groupIdx, scratchIdx, "gloads")
 	if err != nil {
 		cx.err = err
@@ -2450,7 +2607,7 @@ func opGloads(cx *evalContext) {
 	cx.stack[last] = scratchValue
 }
 
-func opConcat(cx *evalContext) {
+func opConcat(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	a := cx.stack[prev].Bytes
@@ -2478,14 +2635,14 @@ func substring(x []byte, start, end int) (out []byte, err error) {
 	return
 }
 
-func opSubstring(cx *evalContext) {
+func opSubstring(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	start := cx.program[cx.pc+1]
 	end := cx.program[cx.pc+2]
 	cx.stack[last].Bytes, cx.err = substring(cx.stack[last].Bytes, int(start), int(end))
 }
 
-func opSubstring3(cx *evalContext) {
+func opSubstring3(cx *EvalContext) {
 	last := len(cx.stack) - 1 // end
 	prev := last - 1          // start
 	pprev := prev - 1         // bytes
@@ -2499,7 +2656,7 @@ func opSubstring3(cx *evalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
-func opGetBit(cx *evalContext) {
+func opGetBit(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	idx := cx.stack[last].Uint
@@ -2536,7 +2693,7 @@ func opGetBit(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opSetBit(cx *evalContext) {
+func opSetBit(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	pprev := prev - 1
@@ -2588,7 +2745,7 @@ func opSetBit(cx *evalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
-func opGetByte(cx *evalContext) {
+func opGetByte(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 
@@ -2604,7 +2761,7 @@ func opGetByte(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opSetByte(cx *evalContext) {
+func opSetByte(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	pprev := prev - 1
@@ -2633,7 +2790,7 @@ func opExtractImpl(x []byte, start, length int) (out []byte, err error) {
 	return
 }
 
-func opExtract(cx *evalContext) {
+func opExtract(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	startIdx := cx.program[cx.pc+1]
 	lengthIdx := cx.program[cx.pc+2]
@@ -2645,7 +2802,7 @@ func opExtract(cx *evalContext) {
 	cx.stack[last].Bytes, cx.err = opExtractImpl(cx.stack[last].Bytes, int(startIdx), length)
 }
 
-func opExtract3(cx *evalContext) {
+func opExtract3(cx *EvalContext) {
 	last := len(cx.stack) - 1 // length
 	prev := last - 1          // start
 	byteArrayIdx := prev - 1  // bytes
@@ -2670,7 +2827,7 @@ func convertBytesToInt(x []byte) (out uint64) {
 	return
 }
 
-func opExtractNBytes(cx *evalContext, n int) {
+func opExtractNBytes(cx *EvalContext, n int) {
 	last := len(cx.stack) - 1 // start
 	prev := last - 1          // bytes
 	startIdx := cx.stack[last].Uint
@@ -2681,35 +2838,54 @@ func opExtractNBytes(cx *evalContext, n int) {
 	cx.stack = cx.stack[:last]
 }
 
-func opExtract16Bits(cx *evalContext) {
+func opExtract16Bits(cx *EvalContext) {
 	opExtractNBytes(cx, 2) // extract 2 bytes
 }
 
-func opExtract32Bits(cx *evalContext) {
+func opExtract32Bits(cx *EvalContext) {
 	opExtractNBytes(cx, 4) // extract 4 bytes
 }
 
-func opExtract64Bits(cx *evalContext) {
+func opExtract64Bits(cx *EvalContext) {
 	opExtractNBytes(cx, 8) // extract 8 bytes
 }
 
-func accountReference(cx *evalContext, account stackValue) (basics.Address, uint64, error) {
+// accountReference yields the address and Accounts offset designated
+// by a stackValue. If the stackValue is the app account, it need not
+// be in the Accounts array, therefore len(Accounts) + 1 is returned
+// as the index. This unusual convention is based on the existing
+// convention that 0 is the sender, 1-len(Accounts) are indexes into
+// Accounts array, and so len+1 is the next available value.  This
+// will allow encoding into EvalDelta efficiently when it becomes
+// necessary (when apps change local state on their own account).
+func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uint64, error) {
 	if account.argType() == StackUint64 {
 		addr, err := cx.Txn.Txn.AddressByIndex(account.Uint, cx.Txn.Txn.Sender)
 		return addr, account.Uint, err
 	}
-	addr := basics.Address{}
-	copy(addr[:], account.Bytes)
+	addr, err := account.address()
+	if err != nil {
+		return addr, 0, err
+	}
 	idx, err := cx.Txn.Txn.IndexByAddress(addr, cx.Txn.Txn.Sender)
+
+	if err != nil {
+		// Application address is acceptable. index is meaningless though
+		appAddr, _ := cx.getApplicationAddress()
+		if appAddr == addr {
+			return addr, uint64(len(cx.Txn.Txn.Accounts) + 1), nil
+		}
+	}
+
 	return addr, idx, err
 }
 
 type opQuery func(basics.Address, *config.ConsensusParams) (basics.MicroAlgos, error)
 
-func opBalanceQuery(cx *evalContext, query opQuery, item string) error {
+func opBalanceQuery(cx *EvalContext, query opQuery, item string) error {
 	last := len(cx.stack) - 1 // account (index or actual address)
 
-	addr, _, err := accountReference(cx, cx.stack[last])
+	addr, _, err := cx.accountReference(cx.stack[last])
 	if err != nil {
 		return err
 	}
@@ -2723,7 +2899,7 @@ func opBalanceQuery(cx *evalContext, query opQuery, item string) error {
 	cx.stack[last].Uint = microAlgos.Raw
 	return nil
 }
-func opBalance(cx *evalContext) {
+func opBalance(cx *EvalContext) {
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
@@ -2737,7 +2913,7 @@ func opBalance(cx *evalContext) {
 		cx.err = err
 	}
 }
-func opMinBalance(cx *evalContext) {
+func opMinBalance(cx *EvalContext) {
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
@@ -2749,7 +2925,7 @@ func opMinBalance(cx *evalContext) {
 	}
 }
 
-func opAppOptedIn(cx *evalContext) {
+func opAppOptedIn(cx *EvalContext) {
 	last := len(cx.stack) - 1 // app
 	prev := last - 1          // account
 
@@ -2758,7 +2934,7 @@ func opAppOptedIn(cx *evalContext) {
 		return
 	}
 
-	addr, _, err := accountReference(cx, cx.stack[prev])
+	addr, _, err := cx.accountReference(cx.stack[prev])
 	if err != nil {
 		cx.err = err
 		return
@@ -2786,7 +2962,7 @@ func opAppOptedIn(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opAppLocalGet(cx *evalContext) {
+func opAppLocalGet(cx *EvalContext) {
 	last := len(cx.stack) - 1 // state key
 	prev := last - 1          // account
 
@@ -2802,7 +2978,7 @@ func opAppLocalGet(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opAppLocalGetEx(cx *evalContext) {
+func opAppLocalGetEx(cx *EvalContext) {
 	last := len(cx.stack) - 1 // state key
 	prev := last - 1          // app id
 	pprev := prev - 1         // account
@@ -2826,13 +3002,13 @@ func opAppLocalGetEx(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opAppLocalGetImpl(cx *evalContext, appID uint64, key []byte, acct stackValue) (result stackValue, ok bool, err error) {
+func opAppLocalGetImpl(cx *EvalContext, appID uint64, key []byte, acct stackValue) (result stackValue, ok bool, err error) {
 	if cx.Ledger == nil {
 		err = fmt.Errorf("ledger not available")
 		return
 	}
 
-	addr, accountIdx, err := accountReference(cx, acct)
+	addr, accountIdx, err := cx.accountReference(acct)
 	if err != nil {
 		return
 	}
@@ -2854,7 +3030,7 @@ func opAppLocalGetImpl(cx *evalContext, appID uint64, key []byte, acct stackValu
 	return
 }
 
-func opAppGetGlobalStateImpl(cx *evalContext, appIndex uint64, key []byte) (result stackValue, ok bool, err error) {
+func opAppGetGlobalStateImpl(cx *EvalContext, appIndex uint64, key []byte) (result stackValue, ok bool, err error) {
 	if cx.Ledger == nil {
 		err = fmt.Errorf("ledger not available")
 		return
@@ -2876,7 +3052,7 @@ func opAppGetGlobalStateImpl(cx *evalContext, appIndex uint64, key []byte) (resu
 	return
 }
 
-func opAppGlobalGet(cx *evalContext) {
+func opAppGlobalGet(cx *EvalContext) {
 	last := len(cx.stack) - 1 // state key
 
 	key := cx.stack[last].Bytes
@@ -2890,7 +3066,7 @@ func opAppGlobalGet(cx *evalContext) {
 	cx.stack[last] = result
 }
 
-func opAppGlobalGetEx(cx *evalContext) {
+func opAppGlobalGetEx(cx *EvalContext) {
 	last := len(cx.stack) - 1 // state key
 	prev := last - 1          // app
 
@@ -2911,7 +3087,7 @@ func opAppGlobalGetEx(cx *evalContext) {
 	cx.stack[last] = isOk
 }
 
-func opAppLocalPut(cx *evalContext) {
+func opAppLocalPut(cx *EvalContext) {
 	last := len(cx.stack) - 1 // value
 	prev := last - 1          // state key
 	pprev := prev - 1         // account
@@ -2924,7 +3100,7 @@ func opAppLocalPut(cx *evalContext) {
 		return
 	}
 
-	addr, accountIdx, err := accountReference(cx, cx.stack[pprev])
+	addr, accountIdx, err := cx.accountReference(cx.stack[pprev])
 	if err == nil {
 		err = cx.Ledger.SetLocal(addr, key, sv.toTealValue(), accountIdx)
 	}
@@ -2937,7 +3113,7 @@ func opAppLocalPut(cx *evalContext) {
 	cx.stack = cx.stack[:pprev]
 }
 
-func opAppGlobalPut(cx *evalContext) {
+func opAppGlobalPut(cx *EvalContext) {
 	last := len(cx.stack) - 1 // value
 	prev := last - 1          // state key
 
@@ -2958,7 +3134,7 @@ func opAppGlobalPut(cx *evalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
-func opAppLocalDel(cx *evalContext) {
+func opAppLocalDel(cx *EvalContext) {
 	last := len(cx.stack) - 1 // key
 	prev := last - 1          // account
 
@@ -2969,7 +3145,7 @@ func opAppLocalDel(cx *evalContext) {
 		return
 	}
 
-	addr, accountIdx, err := accountReference(cx, cx.stack[prev])
+	addr, accountIdx, err := cx.accountReference(cx.stack[prev])
 	if err == nil {
 		err = cx.Ledger.DelLocal(addr, key, accountIdx)
 	}
@@ -2981,7 +3157,7 @@ func opAppLocalDel(cx *evalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
-func opAppGlobalDel(cx *evalContext) {
+func opAppGlobalDel(cx *EvalContext) {
 	last := len(cx.stack) - 1 // key
 
 	key := string(cx.stack[last].Bytes)
@@ -3006,7 +3182,7 @@ func opAppGlobalDel(cx *evalContext) {
 // often called an "index".  But it was not a basics.AssetIndex or
 // basics.ApplicationIndex.
 
-func appReference(cx *evalContext, ref uint64, foreign bool) (basics.AppIndex, error) {
+func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, error) {
 	if cx.version >= directRefEnabledVersion {
 		if ref == 0 {
 			return cx.Ledger.ApplicationID(), nil
@@ -3046,7 +3222,7 @@ func appReference(cx *evalContext, ref uint64, foreign bool) (basics.AppIndex, e
 	return basics.AppIndex(0), fmt.Errorf("invalid App reference %d", ref)
 }
 
-func asaReference(cx *evalContext, ref uint64, foreign bool) (basics.AssetIndex, error) {
+func asaReference(cx *EvalContext, ref uint64, foreign bool) (basics.AssetIndex, error) {
 	if cx.version >= directRefEnabledVersion {
 		// In recent versions, accept either kind of ASA reference
 		if ref < uint64(len(cx.Txn.Txn.ForeignAssets)) {
@@ -3073,7 +3249,7 @@ func asaReference(cx *evalContext, ref uint64, foreign bool) (basics.AssetIndex,
 
 }
 
-func opAssetHoldingGet(cx *evalContext) {
+func opAssetHoldingGet(cx *EvalContext) {
 	last := len(cx.stack) - 1 // asset
 	prev := last - 1          // account
 
@@ -3082,9 +3258,14 @@ func opAssetHoldingGet(cx *evalContext) {
 		return
 	}
 
-	fieldIdx := uint64(cx.program[cx.pc+1])
+	holdingField := AssetHoldingField(cx.program[cx.pc+1])
+	fs, ok := assetHoldingFieldSpecByField[holdingField]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid asset_holding_get field %d", holdingField)
+		return
+	}
 
-	addr, _, err := accountReference(cx, cx.stack[prev])
+	addr, _, err := cx.accountReference(cx.stack[prev])
 	if err != nil {
 		cx.err = err
 		return
@@ -3101,7 +3282,7 @@ func opAssetHoldingGet(cx *evalContext) {
 	if holding, err := cx.Ledger.AssetHolding(addr, asset); err == nil {
 		// the holding exist, read the value
 		exist = 1
-		value, err = cx.assetHoldingEnumToValue(&holding, fieldIdx)
+		value, err = cx.assetHoldingToValue(&holding, fs)
 		if err != nil {
 			cx.err = err
 			return
@@ -3112,7 +3293,7 @@ func opAssetHoldingGet(cx *evalContext) {
 	cx.stack[last].Uint = exist
 }
 
-func opAssetParamsGet(cx *evalContext) {
+func opAssetParamsGet(cx *EvalContext) {
 	last := len(cx.stack) - 1 // asset
 
 	if cx.Ledger == nil {
@@ -3120,7 +3301,12 @@ func opAssetParamsGet(cx *evalContext) {
 		return
 	}
 
-	paramIdx := uint64(cx.program[cx.pc+1])
+	paramField := AssetParamsField(cx.program[cx.pc+1])
+	fs, ok := assetParamsFieldSpecByField[paramField]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid asset_params_get field %d", paramField)
+		return
+	}
 
 	asset, err := asaReference(cx, cx.stack[last].Uint, true)
 	if err != nil {
@@ -3133,7 +3319,7 @@ func opAssetParamsGet(cx *evalContext) {
 	if params, creator, err := cx.Ledger.AssetParams(asset); err == nil {
 		// params exist, read the value
 		exist = 1
-		value, err = cx.assetParamsEnumToValue(&params, creator, paramIdx)
+		value, err = cx.assetParamsToValue(&params, creator, fs)
 		if err != nil {
 			cx.err = err
 			return
@@ -3144,7 +3330,7 @@ func opAssetParamsGet(cx *evalContext) {
 	cx.stack = append(cx.stack, stackValue{Uint: exist})
 }
 
-func opAppParamsGet(cx *evalContext) {
+func opAppParamsGet(cx *EvalContext) {
 	last := len(cx.stack) - 1 // app
 
 	if cx.Ledger == nil {
@@ -3152,7 +3338,12 @@ func opAppParamsGet(cx *evalContext) {
 		return
 	}
 
-	paramIdx := uint64(cx.program[cx.pc+1])
+	paramField := AppParamsField(cx.program[cx.pc+1])
+	fs, ok := appParamsFieldSpecByField[paramField]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid app_params_get field %d", paramField)
+		return
+	}
 
 	app, err := appReference(cx, cx.stack[last].Uint, true)
 	if err != nil {
@@ -3165,7 +3356,16 @@ func opAppParamsGet(cx *evalContext) {
 	if params, creator, err := cx.Ledger.AppParams(app); err == nil {
 		// params exist, read the value
 		exist = 1
-		value, err = cx.appParamsEnumToValue(&params, creator, paramIdx)
+
+		switch fs.field {
+		case AppCreator:
+			value.Bytes = creator[:]
+		case AppAddress:
+			address := app.Address()
+			value.Bytes = address[:]
+		default:
+			value, err = cx.appParamsToValue(&params, fs)
+		}
 		if err != nil {
 			cx.err = err
 			return
@@ -3176,25 +3376,250 @@ func opAppParamsGet(cx *evalContext) {
 	cx.stack = append(cx.stack, stackValue{Uint: exist})
 }
 
-func opLog(cx *evalContext) {
+func opLog(cx *EvalContext) {
 	last := len(cx.stack) - 1
 
-	if cx.logCalls == MaxLogCalls {
+	if len(cx.Logs) == MaxLogCalls {
 		cx.err = fmt.Errorf("too many log calls in program. up to %d is allowed", MaxLogCalls)
 		return
 	}
-	cx.logCalls++
 	log := cx.stack[last]
 	cx.logSize += len(log.Bytes)
 	if cx.logSize > MaxLogSize {
 		cx.err = fmt.Errorf("program logs too large. %d bytes >  %d bytes limit", cx.logSize, MaxLogSize)
 		return
 	}
-	// write log to applyData
-	err := cx.Ledger.AppendLog(&cx.Txn.Txn, string(log.Bytes))
+	cx.Logs = append(cx.Logs, string(log.Bytes))
+	cx.stack = cx.stack[:last]
+}
+
+func authorizedSender(cx *EvalContext, addr basics.Address) bool {
+	appAddr, err := cx.getApplicationAddress()
+	if err != nil {
+		return false
+	}
+	authorizer, err := cx.Ledger.Authorizer(addr)
+	if err != nil {
+		return false
+	}
+	return appAddr == authorizer
+}
+
+func opTxBegin(cx *EvalContext) {
+	if cx.subtxn != nil {
+		cx.err = errors.New("tx_begin without tx_submit")
+		return
+	}
+	// Start fresh
+	cx.subtxn = &transactions.SignedTxn{}
+	// Fill in defaults.
+	addr, err := cx.getApplicationAddress()
 	if err != nil {
 		cx.err = err
 		return
 	}
-	cx.stack = cx.stack[:last]
+
+	fee := cx.Proto.MinTxnFee
+	if cx.FeeCredit != nil {
+		// Use credit to shrink the fee, but don't change FeeCredit
+		// here, because they might never tx_submit, or they might
+		// change the fee.  Do it in tx_submit.
+		fee = basics.SubSaturate(fee, *cx.FeeCredit)
+	}
+	cx.subtxn.Txn.Header = transactions.Header{
+		Sender:     addr, // Default, to simplify usage
+		Fee:        basics.MicroAlgos{Raw: fee},
+		FirstValid: cx.Txn.Txn.FirstValid,
+		LastValid:  cx.Txn.Txn.LastValid,
+	}
+}
+
+// availableAccount is used instead of accountReference for more recent opcodes
+// that don't need (or want!) to allow low numbers to represent the account at
+// that index in Accounts array.
+func (cx *EvalContext) availableAccount(sv stackValue) (basics.Address, error) {
+	if sv.argType() != StackBytes || len(sv.Bytes) != crypto.DigestSize {
+		return basics.Address{}, fmt.Errorf("not an address")
+	}
+
+	addr, _, err := cx.accountReference(sv)
+	return addr, err
+}
+
+// availableAsset is used instead of asaReference for more recent opcodes that
+// don't need (or want!) to allow low numbers to represent the asset at that
+// index in ForeignAssets array.
+func (cx *EvalContext) availableAsset(sv stackValue) (basics.AssetIndex, error) {
+	aid, err := sv.uint()
+	if err != nil {
+		return basics.AssetIndex(0), err
+	}
+	// Ensure that aid is in Foreign Assets
+	for _, assetID := range cx.Txn.Txn.ForeignAssets {
+		if assetID == basics.AssetIndex(aid) {
+			return basics.AssetIndex(aid), nil
+		}
+	}
+	return basics.AssetIndex(0), fmt.Errorf("invalid Asset reference %d", aid)
+}
+
+func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *transactions.Transaction) (err error) {
+	switch fs.field {
+	case Type:
+		if sv.Bytes == nil {
+			err = fmt.Errorf("Type arg not a byte array")
+			return
+		}
+		txType, ok := innerTxnTypes[string(sv.Bytes)]
+		if ok {
+			txn.Type = txType
+		} else {
+			err = fmt.Errorf("%s is not a valid Type for tx_field", sv.Bytes)
+		}
+	case TypeEnum:
+		var i uint64
+		i, err = sv.uint()
+		if err != nil {
+			return
+		}
+		// i != 0 is so that the error reports 0 instead of Unknown
+		if i != 0 && i < uint64(len(TxnTypeNames)) {
+			txType, ok := innerTxnTypes[TxnTypeNames[i]]
+			if ok {
+				txn.Type = txType
+			} else {
+				err = fmt.Errorf("%s is not a valid Type for tx_field", TxnTypeNames[i])
+			}
+		} else {
+			err = fmt.Errorf("%d is not a valid TypeEnum", i)
+		}
+	case Sender:
+		txn.Sender, err = cx.availableAccount(sv)
+	case Fee:
+		txn.Fee.Raw, err = sv.uint()
+	// FirstValid, LastValid unsettable: no motivation
+	// Note unsettable: would be strange, as this "Note" would not end up "chain-visible"
+	// GenesisID, GenesisHash unsettable: surely makes no sense
+	// Group unsettable: Can't make groups from AVM (yet?)
+	// Lease unsettable: This seems potentially useful.
+	// RekeyTo unsettable: Feels dangerous for first release.
+
+	// KeyReg not allowed yet, so no fields settable
+
+	case Receiver:
+		txn.Receiver, err = cx.availableAccount(sv)
+	case Amount:
+		txn.Amount.Raw, err = sv.uint()
+	case CloseRemainderTo:
+		txn.CloseRemainderTo, err = cx.availableAccount(sv)
+	case XferAsset:
+		txn.XferAsset, err = cx.availableAsset(sv)
+	case AssetAmount:
+		txn.AssetAmount, err = sv.uint()
+	case AssetSender:
+		txn.AssetSender, err = cx.availableAccount(sv)
+	case AssetReceiver:
+		txn.AssetReceiver, err = cx.availableAccount(sv)
+	case AssetCloseTo:
+		txn.AssetCloseTo, err = cx.availableAccount(sv)
+
+	// acfg likely next
+
+	// afrz seems easy but not high demand
+
+	// appl needs to wait. Can't call AVM from AVM.
+
+	default:
+		return fmt.Errorf("invalid tx_field %s", fs.field)
+	}
+	return
+}
+
+func opTxField(cx *EvalContext) {
+	if cx.subtxn == nil {
+		cx.err = errors.New("tx_field without tx_begin")
+		return
+	}
+	last := len(cx.stack) - 1
+	field := TxnField(cx.program[cx.pc+1])
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.itxVersion == 0 || fs.itxVersion > cx.version {
+		cx.err = fmt.Errorf("invalid tx_field field %d", field)
+	}
+	sv := cx.stack[last]
+	cx.err = cx.stackIntoTxnField(sv, fs, &cx.subtxn.Txn)
+	cx.stack = cx.stack[:last] // pop
+}
+
+func opTxSubmit(cx *EvalContext) {
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	if cx.subtxn == nil {
+		cx.err = errors.New("tx_submit without tx_begin")
+		return
+	}
+
+	if len(cx.InnerTxns) >= cx.Proto.MaxInnerTransactions {
+		cx.err = errors.New("tx_submit with MaxInnerTransactions")
+		return
+	}
+
+	// Error out on anything unusual.  Allow pay, axfer.
+	switch cx.subtxn.Txn.Type {
+	case protocol.PaymentTx, protocol.AssetTransferTx:
+		// only pay and axfer for now
+	default:
+		cx.err = fmt.Errorf("Invalid inner transaction type %s", cx.subtxn.Txn.Type)
+		return
+	}
+
+	// The goal is to follow the same invariants used by the
+	// transaction pool. Namely that any transaction that makes it
+	// to Perform (which is equivalent to eval.applyTransaction)
+	// is authorized, and WellFormed.
+	if !authorizedSender(cx, cx.subtxn.Txn.Sender) {
+		cx.err = fmt.Errorf("unauthorized")
+		return
+	}
+
+	// Recall that WellFormed does not care about individual
+	// transaction fees because of fee pooling. So we check below.
+	cx.err = cx.subtxn.Txn.WellFormed(*cx.Specials, *cx.Proto)
+	if cx.err != nil {
+		return
+	}
+
+	paid := cx.subtxn.Txn.Fee.Raw
+	if paid >= cx.Proto.MinTxnFee {
+		// Over paying - accumulate into FeeCredit
+		overpaid := paid - cx.Proto.MinTxnFee
+		if cx.FeeCredit == nil {
+			cx.FeeCredit = new(uint64)
+		}
+		*cx.FeeCredit = basics.AddSaturate(*cx.FeeCredit, overpaid)
+	} else {
+		underpaid := cx.Proto.MinTxnFee - paid
+		// Try to pay with FeeCredit, else fail.
+		if cx.FeeCredit != nil && *cx.FeeCredit >= underpaid {
+			*cx.FeeCredit -= underpaid
+		} else {
+			// This should be impossible until we allow changing the Fee
+			cx.err = fmt.Errorf("fee too small")
+			return
+		}
+	}
+
+	ad, err := cx.Ledger.Perform(&cx.subtxn.Txn, *cx.Specials)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.InnerTxns = append(cx.InnerTxns, transactions.SignedTxnWithAD{
+		SignedTxn: *cx.subtxn,
+		ApplyData: ad,
+	})
+	cx.subtxn = nil
 }

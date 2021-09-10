@@ -19,10 +19,12 @@ package crypto
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestEncodeDecode(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	toBeHashed := []byte("this is a test")
 	hashed := Hash(toBeHashed)
 	hashedStr := hashed.String()
@@ -33,6 +35,7 @@ func TestEncodeDecode(t *testing.T) {
 }
 
 func TestDigest_IsZero(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	d := Digest{}
 	require.True(t, d.IsZero())
 	require.Zero(t, d)

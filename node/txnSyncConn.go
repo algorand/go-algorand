@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/network"
@@ -35,6 +36,9 @@ import (
 
 const maxNumProposalBytes = 30000       // sizeof(block header)
 const maxNumTxGroupHashesBytes = 320000 // 10K * 32
+// txnsyncPeerDataKey is the key name by which we're going to store the
+// transaction sync internal data object inside the network peer.
+const txnsyncPeerDataKey = "txsync"
 
 // transactionSyncNodeConnector implements the txnsync.NodeConnector interface, allowing the
 // transaction sync communicate with the node and it's child objects.
@@ -61,7 +65,7 @@ type proposalCache struct {
 	proposalData
 
 	txGroupIDIndex      map[transactions.Txid]int
-	txGroups            []transactions.SignedTxGroup
+	txGroups            []pooldata.SignedTxGroup
 	numTxGroupsReceived int
 }
 
@@ -95,8 +99,8 @@ func (tsnc *transactionSyncNodeConnector) NotifyMonitor() chan struct{} {
 	return tsnc.openStateCh
 }
 
-func (tsnc *transactionSyncNodeConnector) Random(rng uint64) uint64 {
-	return tsnc.node.Uint64() % rng
+func (tsnc *transactionSyncNodeConnector) Random(upperBound uint64) uint64 {
+	return tsnc.node.Uint64() % upperBound
 }
 
 func (tsnc *transactionSyncNodeConnector) Clock() timers.WallClock {
@@ -109,7 +113,7 @@ func (tsnc *transactionSyncNodeConnector) GetPeer(networkPeer interface{}) txnsy
 		return txnsync.PeerInfo{}
 	}
 
-	peerData := tsnc.node.net.GetPeerData(networkPeer, "txsync")
+	peerData := tsnc.node.net.GetPeerData(networkPeer, txnsyncPeerDataKey)
 	if peerData == nil {
 		return txnsync.PeerInfo{
 			IsOutgoing:  unicastPeer.IsOutgoing(),
@@ -133,12 +137,12 @@ func (tsnc *transactionSyncNodeConnector) GetPeers() (peersInfo []txnsync.PeerIn
 			continue
 		}
 		// check version.
-		if unicastPeer.Version() != "2.5" {
+		if unicastPeer.Version() != "3.0" {
 			continue
 		}
 		peersInfo[k].IsOutgoing = unicastPeer.IsOutgoing()
 		peersInfo[k].NetworkPeer = networkPeers[i]
-		peerData := tsnc.node.net.GetPeerData(networkPeers[i], "txsync")
+		peerData := tsnc.node.net.GetPeerData(networkPeers[i], txnsyncPeerDataKey)
 		if peerData != nil {
 			peersInfo[k].TxnSyncPeer = peerData.(*txnsync.Peer)
 		}
@@ -150,7 +154,7 @@ func (tsnc *transactionSyncNodeConnector) GetPeers() (peersInfo []txnsync.PeerIn
 
 func (tsnc *transactionSyncNodeConnector) UpdatePeers(txsyncPeers []*txnsync.Peer, netPeers []interface{}, averageDataExchangeRate uint64) {
 	for i, netPeer := range netPeers {
-		tsnc.node.net.SetPeerData(netPeer, "txsync", txsyncPeers[i])
+		tsnc.node.net.SetPeerData(netPeer, txnsyncPeerDataKey, txsyncPeers[i])
 	}
 	// The average peers data exchange rate has been updated.
 	if averageDataExchangeRate > 0 {
@@ -165,12 +169,10 @@ func (tsnc *transactionSyncNodeConnector) SendPeerMessage(netPeer interface{}, m
 		return
 	}
 
-	if err := unicastPeer.Unicast(context.Background(), msg, protocol.Txn2Tag, func(enqueued bool, sequenceNumber uint64) error {
-		// this might return an error to the network package callback routine. Returning an error signal the network package
-		// that we want to disconnect from this peer. This aligns with the transaction sync txnsync.SendMessageCallback function
-		// behaviour.
-		return callback(enqueued, sequenceNumber)
-	}); err != nil {
+	// this might return an error to the network package callback routine. Returning an error signal the network package
+	// that we want to disconnect from this peer. This aligns with the transaction sync txnsync.SendMessageCallback function
+	// behaviour.
+	if err := unicastPeer.Unicast(context.Background(), msg, protocol.Txn2Tag, network.UnicastWebsocketMessageStateCallback(callback)); err != nil {
 		if callbackErr := callback(false, 0); callbackErr != nil {
 			// disconnect from peer - the transaction sync wasn't able to process message sending confirmation
 			tsnc.node.net.Disconnect(unicastPeer)
@@ -178,8 +180,11 @@ func (tsnc *transactionSyncNodeConnector) SendPeerMessage(netPeer interface{}, m
 	}
 }
 
-// TODO : add description.
-func (tsnc *transactionSyncNodeConnector) GetPendingTransactionGroups() ([]transactions.SignedTxGroup, uint64) {
+// GetPendingTransactionGroups is called by the transaction sync when it needs to look into the transaction
+// pool and get the updated set of pending transactions. The second returned argument is the latest locally originated
+// group counter within the given transaction groups list. If there is no group that is locally originated, the expected
+// value is InvalidSignedTxGroupCounter.
+func (tsnc *transactionSyncNodeConnector) GetPendingTransactionGroups() ([]pooldata.SignedTxGroup, uint64) {
 	return tsnc.node.transactionPool.PendingTxGroups()
 }
 
@@ -216,33 +221,32 @@ func (tsnc *transactionSyncNodeConnector) start() {
 		{Tag: protocol.Txn2Tag, MessageHandler: tsnc},
 	}
 	tsnc.node.net.RegisterHandlers(handlers)
-	tsnc.txHandler.Start()
 }
 
 func (tsnc *transactionSyncNodeConnector) Handle(raw network.IncomingMessage) network.OutgoingMessage {
 	unicastPeer := raw.Sender.(network.UnicastPeer)
 	if unicastPeer != nil {
 		// check version.
-		if unicastPeer.Version() != "2.5" {
+		if unicastPeer.Version() != "3.0" {
 			return network.OutgoingMessage{
 				Action: network.Ignore,
 			}
 		}
 	}
 	var peer *txnsync.Peer
-	peerData := tsnc.node.net.GetPeerData(raw.Sender, "txsync")
+	peerData := tsnc.node.net.GetPeerData(raw.Sender, txnsyncPeerDataKey)
 	if peerData != nil {
 		peer = peerData.(*txnsync.Peer)
 	}
 
 	err := tsnc.messageHandler(raw.Sender, peer, raw.Data, raw.Sequence)
-	if err == nil {
+	if err != nil {
 		return network.OutgoingMessage{
-			Action: network.Ignore,
+			Action: network.Disconnect,
 		}
 	}
 	return network.OutgoingMessage{
-		Action: network.Disconnect,
+		Action: network.Ignore,
 	}
 }
 
@@ -250,7 +254,7 @@ func (tsnc *transactionSyncNodeConnector) stop() {
 	tsnc.txHandler.Stop()
 }
 
-func (tsnc *transactionSyncNodeConnector) IncomingTransactionGroups(peer *txnsync.Peer, messageSeq uint64, txGroups []transactions.SignedTxGroup) (transactionPoolSize int) {
+func (tsnc *transactionSyncNodeConnector) IncomingTransactionGroups(peer *txnsync.Peer, messageSeq uint64, txGroups []pooldata.SignedTxGroup) (transactionPoolSize int) {
 	if tsnc.txHandler.HandleTransactionGroups(peer.GetNetworkPeer(), peer.GetTransactionPoolAckChannel(), messageSeq, txGroups) {
 		transactionPoolSize = tsnc.node.transactionPool.PendingCount()
 	} else {
@@ -259,17 +263,17 @@ func (tsnc *transactionSyncNodeConnector) IncomingTransactionGroups(peer *txnsyn
 	return
 }
 
-func (tsnc *transactionSyncNodeConnector) RelayProposal(proposalBytes []byte, txnSlices []transactions.SignedTxnSlice) {
+func (tsnc *transactionSyncNodeConnector) RelayProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice) {
 	data := proposalData{
 		ProposalBytes: proposalBytes,
 		TxGroupIds:    make([]transactions.Txid, len(txnSlices)),
 	}
 
-	txGroups := make([]transactions.SignedTxGroup, len(txnSlices))
+	txGroups := make([]pooldata.SignedTxGroup, len(txnSlices))
 	encodingBuf := protocol.GetEncodingBuf()
 	for i, txnSlice := range txnSlices {
 		data.TxGroupIds[i] = txnSlice.ID()
-		txGroups[i] = transactions.SignedTxGroup{
+		txGroups[i] = pooldata.SignedTxGroup{
 			Transactions:       txnSlice,
 			GroupTransactionID: data.TxGroupIds[i],
 		}
@@ -283,7 +287,7 @@ func (tsnc *transactionSyncNodeConnector) RelayProposal(proposalBytes []byte, tx
 	tsnc.eventsCh <- txnsync.MakeBroadcastProposalRequestEvent(protocol.Encode(&data), txGroups)
 }
 
-func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup, peer *txnsync.Peer) {
+func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataBytes []byte, txGroups []pooldata.SignedTxGroup, peer *txnsync.Peer) {
 	var data proposalData
 	var pc *proposalCache
 	protocol.Decode(proposalDataBytes, &data)
@@ -292,7 +296,7 @@ func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataByte
 		pc = &proposalCache{
 			proposalData:   data,
 			txGroupIDIndex: make(map[transactions.Txid]int, len(data.TxGroupIds)),
-			txGroups:       make([]transactions.SignedTxGroup, len(data.TxGroupIds)),
+			txGroups:       make([]pooldata.SignedTxGroup, len(data.TxGroupIds)),
 		}
 		tsnc.node.net.SetPeerData(peer.GetNetworkPeer(), "proposalCache", pc)
 		for i, txid := range pc.TxGroupIds {

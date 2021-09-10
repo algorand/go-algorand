@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/data"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
@@ -32,7 +33,7 @@ import (
 // PendingTxAggregate is a container of pending transactions
 type PendingTxAggregate interface {
 	PendingTxIDs() []transactions.Txid
-	PendingTxGroups() ([]transactions.SignedTxGroup, uint64)
+	PendingTxGroups() ([]pooldata.SignedTxGroup, uint64)
 }
 
 // TxSyncClient abstracts sync-ing pending transactions from a peer.

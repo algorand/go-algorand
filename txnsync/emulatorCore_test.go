@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -187,8 +188,6 @@ func (e *emulator) initNodes() {
 	e.nodes = make([]*emulatedNode, e.nodeCount, e.nodeCount)
 	for i := 0; i < e.nodeCount; i++ {
 		e.nodes[i] = makeEmulatedNode(e, i)
-	}
-	for i := 0; i < e.nodeCount; i++ {
 		syncer := MakeTransactionSyncService(
 			makeNodeLogger(e.log, e.nodes[i]),
 			e.nodes[i],
@@ -208,7 +207,7 @@ func (e *emulator) initNodes() {
 	for _, initAlloc := range e.scenario.initialAlloc {
 		node := e.nodes[initAlloc.node]
 		for i := 0; i < initAlloc.transactionsCount; i++ {
-			var group = transactions.SignedTxGroup{}
+			var group = pooldata.SignedTxGroup{}
 			group.LocallyOriginated = true
 			group.GroupCounter = uint64(len(node.txpoolEntries))
 			group.Transactions = []transactions.SignedTxn{

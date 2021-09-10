@@ -262,13 +262,13 @@ func (s *syncState) onTransactionPoolChangedEvent(ent Event) {
 		peerNext := s.scheduler.peerDuration(peer)
 		if peerNext < currentTimeout {
 			// shouldn't be, but let's reschedule it if this is the case.
-			s.scheduler.schedulerPeer(peer, currentTimeout+s.lastBeta)
+			s.scheduler.schedulePeer(peer, currentTimeout+s.lastBeta)
 			continue
 		}
 		// given that peerNext is after currentTimeout, find out what's the difference, and divide by the beta.
 		betaCount := (peerNext - currentTimeout) / s.lastBeta
 		peerNext = currentTimeout + s.lastBeta*betaCount
-		s.scheduler.schedulerPeer(peer, peerNext)
+		s.scheduler.schedulePeer(peer, peerNext)
 	}
 }
 
@@ -305,13 +305,13 @@ func (s *syncState) onNewRoundEvent(ent Event) {
 		// rather then a periodic message transmission.
 		newRoundPeers = incomingPeersOnly(newRoundPeers)
 	}
-	s.scheduler.scheduleNewRound(newRoundPeers, s.isRelay)
-	s.updatePeersRequestParams(peers)
+	s.scheduler.scheduleNewRound(newRoundPeers)
 	s.round = ent.roundSettings.Round
 	s.fetchTransactions = ent.roundSettings.FetchTransactions
 	if !s.isRelay {
 		s.nextOffsetRollingCh = s.clock.TimeoutAt(kickoffTime + 2*s.lastBeta)
 	}
+	s.updatePeersRequestParams(peers)
 }
 
 func (s *syncState) evaluatePeerStateChanges(currentTimeout time.Duration) {
@@ -340,7 +340,7 @@ func (s *syncState) evaluatePeerStateChanges(currentTimeout time.Duration) {
 			}
 		}
 		if (ops & peerOpsReschedule) == peerOpsReschedule {
-			s.scheduler.schedulerPeer(peer, currentTimeout+s.lastBeta)
+			s.scheduler.schedulePeer(peer, currentTimeout+s.lastBeta)
 		}
 	}
 
@@ -377,7 +377,7 @@ func (s *syncState) rollOffsets() {
 		}
 		if currentTimeOffset+sendMessagesTime > nextSchedule {
 			// there was a message scheduled already in less than 20ms, so keep that one.
-			s.scheduler.schedulerPeer(peer, nextSchedule)
+			s.scheduler.schedulePeer(peer, nextSchedule)
 			continue
 		}
 

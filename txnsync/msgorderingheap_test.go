@@ -28,6 +28,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -110,6 +111,7 @@ func TestPopSequence(t *testing.T) {
 	_, heapSeqNum, err := heap.popSequence(3)
 	a.Equal(heap.Len(), messageOrderingHeapLimit)
 	a.Equal(heapSeqNum, uint64(0), errSequenceNumberMismatch)
+	a.Error(err, errSequenceNumberMismatch)
 
 	msg, heapSeqNum, err := heap.popSequence(0)
 
@@ -117,7 +119,7 @@ func TestPopSequence(t *testing.T) {
 	a.Equal(heap.Len(), messageOrderingHeapLimit-1)
 	a.Equal(msg.sequenceNumber, uint64(0))
 	a.Equal(heapSeqNum, uint64(0))
-	a.Nil(err)
+	a.NoError(err)
 
 }
 
@@ -146,17 +148,17 @@ func TestMultiThreaded(t *testing.T) {
 		{},
 	}
 
-	genTxnGrp := func(value int) []transactions.SignedTxGroup {
+	genTxnGrp := func(value int) []pooldata.SignedTxGroup {
 
 		if value%2 == 0 {
-			return []transactions.SignedTxGroup{
+			return []pooldata.SignedTxGroup{
 				{
 					GroupTransactionID: transactions.Txid{byte(value % 255)},
 				},
 			}
 		}
 
-		return []transactions.SignedTxGroup{
+		return []pooldata.SignedTxGroup{
 			{
 				GroupTransactionID: transactions.Txid{byte(value % 255)},
 			},
