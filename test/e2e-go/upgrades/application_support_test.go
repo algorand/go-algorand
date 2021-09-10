@@ -74,8 +74,6 @@ func TestApplicationsUpgradeOverREST(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	defer fixtures.TerminateTestFailures(t)
-
 	smallLambdaMs := 500
 	consensus := makeApplicationUpgradeConsensus(t)
 

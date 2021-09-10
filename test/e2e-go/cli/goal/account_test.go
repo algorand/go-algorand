@@ -30,7 +30,6 @@ const statusOnline = "[online]"
 func TestAccountNew(t *testing.T) {
 	defer fixtures.ShutdownSynchronizedTest(t)
 	defer fixture.SetTestContext(t)()
-
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	newAcctName := "new_account"
