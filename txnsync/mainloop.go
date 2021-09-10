@@ -49,6 +49,8 @@ const (
 	// Changes to the beta value only takes effect once the difference is sufficiently big enough
 	// comared to the current beta value.
 	betaGranularChangeThreshold = 0.1
+
+	minBetaThreshold = 0.08 // 80 ms
 )
 
 type syncState struct {
@@ -276,6 +278,9 @@ func beta(txPoolSize int) time.Duration {
 		txPoolSize = 10000
 	}
 	beta := 1.0 / (2 * 3.6923 * math.Exp(float64(txPoolSize)*0.00026))
+	if beta < minBetaThreshold {
+		beta = minBetaThreshold
+	}
 	return time.Duration(float64(time.Second) * beta)
 
 }
