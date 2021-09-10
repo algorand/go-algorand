@@ -209,7 +209,7 @@ type evaluation struct {
 	source          string
 	offsetToLine    map[int]int
 	name            string
-	groupIndex      int
+	groupIndex      uint64
 	pastSideEffects []logic.EvalSideEffects
 	mode            modeType
 	aidx            basics.AppIndex
@@ -387,7 +387,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 					r.runs[i].source = source
 				}
 			}
-			r.runs[i].groupIndex = dp.GroupIndex
+			r.runs[i].groupIndex = uint64(dp.GroupIndex)
 			r.runs[i].pastSideEffects = dp.PastSideEffects
 			r.runs[i].name = dp.ProgramNames[i]
 
@@ -431,7 +431,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 		if len(stxn.Lsig.Logic) > 0 {
 			run := evaluation{
 				program:    stxn.Lsig.Logic,
-				groupIndex: gi,
+				groupIndex: uint64(gi),
 				mode:       modeLogicsig,
 			}
 			r.runs = append(r.runs, run)
@@ -452,7 +452,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 					}
 					run := evaluation{
 						program:         stxn.Txn.ApprovalProgram,
-						groupIndex:      gi,
+						groupIndex:      uint64(gi),
 						pastSideEffects: dp.PastSideEffects,
 						mode:            modeStateful,
 						aidx:            appIdx,
@@ -488,7 +488,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 							}
 							run := evaluation{
 								program:         program,
-								groupIndex:      gi,
+								groupIndex:      uint64(gi),
 								pastSideEffects: dp.PastSideEffects,
 								mode:            modeStateful,
 								aidx:            appIdx,

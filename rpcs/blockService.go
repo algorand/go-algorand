@@ -252,7 +252,7 @@ func (bs *BlockService) listenForCatchupReq(reqs <-chan network.IncomingMessage,
 const noRoundNumberErrMsg = "can't find the round number"
 const noDataTypeErrMsg = "can't find the data-type"
 const roundNumberParseErrMsg = "unable to parse round number"
-const blockNotAvailabeErrMsg = "requested block is not available"
+const blockNotAvailableErrMsg = "requested block is not available"
 const datatypeUnsupportedErrMsg = "requested data type is unsupported"
 
 // a blocking function for handling a catchup request
@@ -360,7 +360,7 @@ func topicBlockBytes(log logging.Logger, dataLedger *data.Ledger, round basics.R
 			log.Infof("BlockService topicBlockBytes: %s", err)
 		}
 		return network.Topics{
-			network.MakeTopic(network.ErrorKey, []byte(blockNotAvailabeErrMsg))}
+			network.MakeTopic(network.ErrorKey, []byte(blockNotAvailableErrMsg))}
 	}
 	switch requestType {
 	case BlockAndCertValue:

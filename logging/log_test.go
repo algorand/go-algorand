@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -42,6 +43,7 @@ func isJSON(s string) bool {
 }
 
 func TestFileOutputNewLogger(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	// Create a buffer (mimics a file) for the output
@@ -59,6 +61,7 @@ func TestFileOutputNewLogger(t *testing.T) {
 }
 
 func TestSetLevelNewLogger(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	//Create a buffer (mimics a file) for the output
@@ -79,6 +82,7 @@ func TestSetLevelNewLogger(t *testing.T) {
 }
 
 func TestWithFieldsNewLogger(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	// Create a buffer (mimics a file) for the output
@@ -93,6 +97,7 @@ func TestWithFieldsNewLogger(t *testing.T) {
 }
 
 func TestSetJSONFormatter(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	// Create a buffer (mimics a file) for the output

@@ -87,7 +87,9 @@ var opDocByName = map[string]string{
 	"gtxnsa":        "push Ith value of the array field F from the Xth transaction in the current group",
 	"global":        "push value from globals to stack",
 	"load":          "copy a value from scratch space to the stack",
-	"store":         "pop a value from the stack and store to scratch space",
+	"store":         "pop value X. store X to the Ith scratch space",
+	"loads":         "copy a value from the Xth scratch space to the stack",
+	"stores":        "pop indexes A and B. store B to the Ath scratch space",
 	"gload":         "push Ith scratch space index of the Tth transaction in the current group",
 	"gloads":        "push Ith scratch space index of the Xth transaction in the current group",
 	"gaid":          "push the ID of the asset or application created in the Tth transaction of the current group",
@@ -100,7 +102,7 @@ var opDocByName = map[string]string{
 	"dup":           "duplicate last value on stack",
 	"dup2":          "duplicate two last values on stack: A, B -> A, B, A, B",
 	"dig":           "push the Nth value from the top of the stack. dig 0 is equivalent to dup",
-	"cover":         "remove top of stack, and place it down the stack such that N elements are above it",
+	"cover":         "remove top of stack, and place it deeper in the stack such that N elements are above it",
 	"uncover":       "remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack",
 	"swap":          "swaps two last values on stack: A, B -> B, A",
 	"select":        "selects one of two values based on top-of-stack: A, B, C -> (if C != 0 then B else A)",
@@ -112,10 +114,10 @@ var opDocByName = map[string]string{
 	"getbyte":       "pop a byte-array A and integer B. Extract the Bth byte of A and push it as an integer",
 	"setbyte":       "pop a byte-array A, integer B, and small integer C (between 0..255). Set the Bth byte of A to C, and push the result",
 	"extract":       "pop a byte-array A. For immediate values in 0..255 S and L: extract a range of bytes from A starting at S up to but not including S+L, push the substring result. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails",
-	"extract3":      "pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including B+C, push the substring result. If B or B+C is larger than the array length, the program fails",
-	"extract16bits": "pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B or B+2 is larger than the array length, the program fails",
-	"extract32bits": "pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B or B+4 is larger than the array length, the program fails",
-	"extract64bits": "pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B or B+8 is larger than the array length, the program fails",
+	"extract3":      "pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including B+C, push the substring result. If B+C is larger than the array length, the program fails",
+	"extract16bits": "pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B+2 is larger than the array length, the program fails",
+	"extract32bits": "pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B+4 is larger than the array length, the program fails",
+	"extract64bits": "pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B+8 is larger than the array length, the program fails",
 
 	"balance":           "get balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.",
 	"min_balance":       "get minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes.",
@@ -151,7 +153,15 @@ var opDocByName = map[string]string{
 	"b^":  "A bitwise-xor B, where A and B are byte-arrays, zero-left extended to the greater of their lengths",
 	"b~":  "X with all bits inverted",
 
-	"log": "write bytes to log state of the current application",
+	"log":       "write bytes to log state of the current application",
+	"tx_begin":  "Begin preparation of a new inner transaction",
+	"tx_field":  "Set field F of the current inner transaction to X",
+	"tx_submit": "Execute the current inner transaction. Panic on any failure.",
+
+	"txnas":   "push Xth value of the array field F of the current transaction",
+	"gtxnas":  "push Xth value of the array field F from the Tth transaction in the current group",
+	"gtxnsas": "pop an index A and an index B. push Bth value of the array field F from the Ath transaction in the current group",
+	"args":    "push Xth LogicSig argument to stack",
 }
 
 // OpDoc returns a description of the op
@@ -191,6 +201,10 @@ var opcodeImmediateNotes = map[string]string{
 	"asset_holding_get": "{uint8 asset holding field index}",
 	"asset_params_get":  "{uint8 asset params field index}",
 	"app_params_get":    "{uint8 app params field index}",
+	"tx_field":          "{uint8 transaction field index}",
+	"txnas":             "{uint8 transaction field index}",
+	"gtxnas":            "{uint8 transaction group index} {uint8 transaction field index}",
+	"gtxnsas":           "{uint8 transaction field index}",
 }
 
 // OpImmediateNote returns a short string about immediate data which follows the op byte
@@ -247,13 +261,14 @@ func OpDocExtra(opName string) string {
 
 // OpGroups is groupings of ops for documentation purposes.
 var OpGroups = map[string][]string{
-	"Arithmetic":           {"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
-	"Byte Array Slicing":   {"substring", "substring3", "extract", "extract3", "extract16bits", "extract32bits", "extract64bits"},
-	"Byteslice Arithmetic": {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%"},
-	"Byteslice Logic":      {"b|", "b&", "b^", "b~"},
-	"Loading Values":       {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "gtxns", "gtxnsa", "global", "load", "store", "gload", "gloads", "gaid", "gaids"},
-	"Flow Control":         {"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "cover", "uncover", "swap", "select", "assert", "callsub", "retsub"},
-	"State Access":         {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "log"},
+	"Arithmetic":            {"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
+	"Byte Array Slicing":    {"substring", "substring3", "extract", "extract3", "extract16bits", "extract32bits", "extract64bits"},
+	"Byte Array Arithmetic": {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%"},
+	"Byte Array Logic":      {"b|", "b&", "b^", "b~"},
+	"Loading Values":        {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gaid", "gaids", "args"},
+	"Flow Control":          {"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "cover", "uncover", "swap", "select", "assert", "callsub", "retsub"},
+	"State Access":          {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "log"},
+	"Inner Transactions":    {"tx_begin", "tx_field", "tx_submit"},
 }
 
 // OpCost indicates the cost of an operation over the range of
@@ -336,6 +351,7 @@ var txnFieldDocs = map[string]string{
 	"VoteFirst":                "The first round that the participation key is valid.",
 	"VoteLast":                 "The last round that the participation key is valid.",
 	"VoteKeyDilution":          "Dilution for the 2-level participation key",
+	"Nonparticipation":         "Marks an account nonparticipating for rewards",
 	"Type":                     "Transaction type as bytes",
 	"TypeEnum":                 "See table below",
 	"XferAsset":                "Asset ID",
@@ -386,16 +402,18 @@ func TxnFieldDocs() map[string]string {
 }
 
 var globalFieldDocs = map[string]string{
-	"MinTxnFee":            "micro Algos",
-	"MinBalance":           "micro Algos",
-	"MaxTxnLife":           "rounds",
-	"ZeroAddress":          "32 byte address of all zero bytes",
-	"GroupSize":            "Number of transactions in this atomic transaction group. At least 1",
-	"LogicSigVersion":      "Maximum supported TEAL version",
-	"Round":                "Current round number",
-	"LatestTimestamp":      "Last confirmed block UNIX timestamp. Fails if negative",
-	"CurrentApplicationID": "ID of current application executing. Fails if no such application is executing",
-	"CreatorAddress":       "Address of the creator of the current application. Fails if no such application is executing",
+	"MinTxnFee":                 "micro Algos",
+	"MinBalance":                "micro Algos",
+	"MaxTxnLife":                "rounds",
+	"ZeroAddress":               "32 byte address of all zero bytes",
+	"GroupSize":                 "Number of transactions in this atomic transaction group. At least 1",
+	"LogicSigVersion":           "Maximum supported TEAL version",
+	"Round":                     "Current round number",
+	"LatestTimestamp":           "Last confirmed block UNIX timestamp. Fails if negative",
+	"CurrentApplicationID":      "ID of current application executing. Fails if no such application is executing",
+	"CreatorAddress":            "Address of the creator of the current application. Fails if no such application is executing",
+	"CurrentApplicationAddress": "Address that the current application controls. Fails if no such application is executing",
+	"GroupID":                   "ID of the transaction group. 32 zero bytes if the transaction is not part of a group.",
 }
 
 // GlobalFieldDocs are notes on fields available in `global` with extra versioning info if any
@@ -458,4 +476,5 @@ var AppParamsFieldDocs = map[string]string{
 	"AppLocalNumByteSlice":  "Number of byte array values allowed in Local State",
 	"AppExtraProgramPages":  "Number of Extra Program Pages of code space",
 	"AppCreator":            "Creator address",
+	"AppAddress":            "Address for which this application has authority",
 }

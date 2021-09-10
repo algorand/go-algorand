@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -294,6 +295,8 @@ func (l *testLedger) EnsureDigest(c agreement.Certificate, verifier *agreement.A
 }
 
 func TestSimulate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	f, _ := os.Create(t.Name() + ".log")
 	logging.Base().SetJSONFormatter()
 	logging.Base().SetOutput(f)

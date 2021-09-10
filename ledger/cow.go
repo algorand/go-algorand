@@ -64,9 +64,6 @@ type roundCowState struct {
 	// must be incorporated into mods.accts before passing deltas forward
 	sdeltas map[basics.Address]map[storagePtr]*storageDelta
 
-	// logs populated in AppCall transaction
-	logs []basics.LogItem
-
 	// either or not maintain compatibility with original app refactoring behavior
 	// this is needed for generating old eval delta in new code
 	compatibilityMode bool
@@ -79,15 +76,14 @@ type roundCowState struct {
 	trackedCreatables map[int]basics.CreatableIndex
 }
 
-func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64, hint int) *roundCowState {
+func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, proto config.ConsensusParams, prevTimestamp int64, hint int) *roundCowState {
 	cb := roundCowState{
 		lookupParent:      b,
 		commitParent:      nil,
-		proto:             config.Consensus[hdr.CurrentProtocol],
+		proto:             proto,
 		mods:              ledgercore.MakeStateDelta(&hdr, prevTimestamp, hint, 0),
 		sdeltas:           make(map[basics.Address]map[storagePtr]*storageDelta),
 		trackedCreatables: make(map[int]basics.CreatableIndex),
-		logs:              make([]basics.LogItem, 0),
 	}
 
 	// compatibilityMode retains producing application' eval deltas under the following rule:

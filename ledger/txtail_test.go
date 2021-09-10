@@ -182,6 +182,7 @@ func makeTxTailTestTransaction(r basics.Round, txnIdx int) (txn transactions.Sig
 }
 
 func TestTxTailLoadFromDisk(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var ledger txTailTestLedger
 	txtail := txTail{}
 
