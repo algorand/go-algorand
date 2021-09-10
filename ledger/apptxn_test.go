@@ -640,6 +640,7 @@ func TestDuplicatePayAction(t *testing.T) {
 	l := newTestLedger(t, genBalances)
 	defer l.Close()
 
+	appIndex := basics.AppIndex(1)
 	create := txntest.Txn{
 		Type:   "appl",
 		Sender: addrs[0],
@@ -666,31 +667,44 @@ func TestDuplicatePayAction(t *testing.T) {
 	fund := txntest.Txn{
 		Type:     "pay",
 		Sender:   addrs[0],
-		Receiver: basics.AppIndex(1).Address(),
+		Receiver: appIndex.Address(),
 		Amount:   200000, // account min balance, plus fees
 	}
 
 	paytwice := txntest.Txn{
 		Type:          "appl",
 		Sender:        addrs[1],
-		ApplicationID: basics.AppIndex(1),
+		ApplicationID: appIndex,
 		Accounts:      []basics.Address{addrs[1]}, // pay self
 	}
 
 	eval := l.nextBlock(t)
-	eval.txns(t, &create, &fund, &paytwice)
-	l.endBlock(t, eval)
+	eval.txns(t, &create, &fund, &paytwice, create.Noted("in same block"))
+	vb := l.endBlock(t, eval)
+
+	require.Equal(t, appIndex, vb.blk.Payset[0].ApplyData.ApplicationID)
+	require.Equal(t, 4, len(vb.blk.Payset))
+	// create=1, fund=2, payTwice=3,4,5
+	require.Equal(t, basics.AppIndex(6), vb.blk.Payset[3].ApplyData.ApplicationID)
 
 	ad0 := l.micros(t, addrs[0])
 	ad1 := l.micros(t, addrs[1])
-	app := l.micros(t, basics.AppIndex(1).Address())
+	app := l.micros(t, appIndex.Address())
 
-	// create(1000) and fund(1000 + 200000)
-	require.Equal(t, 202000, int(genBalances.Balances[addrs[0]].MicroAlgos.Raw-ad0))
+	// create(1000) and fund(1000 + 200000), extra create (1000)
+	require.Equal(t, 203000, int(genBalances.Balances[addrs[0]].MicroAlgos.Raw-ad0))
 	// paid 10000, but 1000 fee on tx
 	require.Equal(t, 9000, int(ad1-genBalances.Balances[addrs[1]].MicroAlgos.Raw))
 	// app still has 188000 (paid out 10000, and paid 2 x fee to do it)
 	require.Equal(t, 188000, int(app))
+
+	// Now create another app, and see if it gets the index we expect.
+	eval = l.nextBlock(t)
+	eval.txns(t, create.Noted("again"))
+	vb = l.endBlock(t, eval)
+
+	// create=1, fund=2, payTwice=3,4,5, insameblock=6
+	require.Equal(t, basics.AppIndex(7), vb.blk.Payset[0].ApplyData.ApplicationID)
 }
 
 // TestInnerTxCount ensures that inner transactions increment the TxnCounter
