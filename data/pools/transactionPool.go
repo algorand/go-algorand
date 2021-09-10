@@ -17,6 +17,7 @@
 package pools
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -667,6 +668,13 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	}
 	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint)
 	if err != nil {
+		var nonSeqBlockEval ledgercore.ErrNonSequentialBlockEval
+		if errors.As(err, &nonSeqBlockEval) {
+			if nonSeqBlockEval.EvaluatorRound <= nonSeqBlockEval.LatestRound {
+				pool.log.Infof("TransactionPool.recomputeBlockEvaluator: skipped creating block evaluator for round %d since ledger already caught up with that round", nonSeqBlockEval.EvaluatorRound)
+				return
+			}
+		}
 		pool.log.Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
 		return
 	}
