@@ -153,14 +153,19 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []po
 			return
 		}
 
+		var prevFilter *testableBloomFilter
 		if hintPrevBloomFilter != nil {
 			if result.sameParams(*hintPrevBloomFilter) {
 				return *hintPrevBloomFilter
 			}
+			prevFilter, _ = decodeBloomFilter(hintPrevBloomFilter.encoded)
 		}
 
 		filter, filterType := filterFactory(len(txnGroups), s)
 		for _, group := range txnGroups {
+			if prevFilter != nil && prevFilter.test(group.GroupTransactionID) {
+				continue
+			}
 			filter.Set(group.GroupTransactionID[:])
 		}
 		err := result.encode(filter, filterType)
@@ -168,6 +173,9 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []po
 			// fall back to standard bloom filter
 			filter, filterType = filterFactoryBloom(len(txnGroups), s)
 			for _, group := range txnGroups {
+				if prevFilter != nil && prevFilter.test(group.GroupTransactionID) {
+					continue
+				}
 				filter.Set(group.GroupTransactionID[:])
 			}
 			result.encode(filter, filterType) //nolint:errcheck
@@ -193,10 +201,12 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []po
 
 		result.containedTxnsRange.transactionsCount = uint64(len(filteredTransactionsIDs))
 
+		var prevFilter *testableBloomFilter
 		if hintPrevBloomFilter != nil {
 			if result.sameParams(*hintPrevBloomFilter) {
 				return *hintPrevBloomFilter
 			}
+			prevFilter, _ = decodeBloomFilter(hintPrevBloomFilter.encoded)
 		}
 
 		if len(filteredTransactionsIDs) == 0 {
@@ -206,6 +216,9 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []po
 		filter, filterType := filterFactory(len(filteredTransactionsIDs), s)
 
 		for _, txid := range filteredTransactionsIDs {
+			if prevFilter != nil && prevFilter.test(txid) {
+				continue
+			}
 			filter.Set(txid[:])
 		}
 		err := result.encode(filter, filterType)
@@ -213,6 +226,9 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []po
 			// fall back to standard bloom filter
 			filter, filterType = filterFactoryBloom(len(filteredTransactionsIDs), s)
 			for _, txid := range filteredTransactionsIDs {
+				if prevFilter != nil && prevFilter.test(txid) {
+					continue
+				}
 				filter.Set(txid[:])
 			}
 			result.encode(filter, filterType) //nolint:errcheck
