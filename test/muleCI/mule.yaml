@@ -35,6 +35,7 @@ agents:
       - NETWORK=$NETWORK
       - VERSION=$VERSION
       - BUILD_NUMBER=$BUILD_NUMBER
+      - GOHOSTARCH=arm64
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=arm64v8
@@ -48,6 +49,7 @@ agents:
       - NETWORK=$NETWORK
       - VERSION=$VERSION
       - BUILD_NUMBER=$BUILD_NUMBER
+      - GOHOSTARCH=arm
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=arm32v6
@@ -195,11 +197,11 @@ jobs:
   build-linux-arm64:
     tasks:
       - docker.Make.build.arm64
-      - stash.Stash.linux-arm64
+      #- stash.Stash.linux-arm64
   build-linux-arm32:
     tasks:
       - docker.Make.build.arm
-      - stash.Stash.linux-arm
+      #- stash.Stash.linux-arm
   package-linux-amd64:
     tasks:
       - stash.Unstash.linux-amd64
