@@ -203,7 +203,7 @@ func (l *testLedger) LookupDigest(r basics.Round) (crypto.Digest, error) {
 	return l.entries[r].Digest(), nil
 }
 
-func (l *testLedger) Lookup(r basics.Round, a basics.Address) (basics.AccountData, error) {
+func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.AccountData, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
