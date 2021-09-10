@@ -902,7 +902,15 @@ func (pool *TransactionPool) assembleEmptyBlock(round basics.Round) (assembled *
 	next := bookkeeping.MakeBlock(prev)
 	blockEval, err := pool.ledger.StartEvaluator(next.BlockHeader, 0)
 	if err != nil {
-		err = fmt.Errorf("TransactionPool.assembleEmptyBlock: cannot start evaluator for %d: %v", round, err)
+		var nonSeqBlockEval ledgercore.ErrNonSequentialBlockEval
+		if errors.As(err, &nonSeqBlockEval) {
+			if nonSeqBlockEval.EvaluatorRound <= nonSeqBlockEval.LatestRound {
+				// in the case that the ledger have already moved beyond that round, just let the agreement know that
+				// we don't generate a block and it's perfectly fine.
+				return nil, ErrStaleBlockAssemblyRequest
+			}
+		}
+		err = fmt.Errorf("TransactionPool.assembleEmptyBlock: cannot start evaluator for %d: %w", round, err)
 		return nil, err
 	}
 	return blockEval.GenerateBlock()
