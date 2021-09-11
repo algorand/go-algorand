@@ -89,7 +89,6 @@ func decodeBloomFilter(enc encodedBloomFilter) (outFilter *testableBloomFilter, 
 	if err != nil {
 		return nil, err
 	}
-	outFilter.encodingParams = enc.EncodingParams
 	return
 }
 
@@ -181,22 +180,27 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []po
 	filteredTransactionsIDs := getTxIDSliceBuffer(len(txnGroups))
 	defer releaseTxIDSliceBuffer(filteredTransactionsIDs)
 
+	excludedTransactions := 0
 	for _, group := range txnGroups {
 		txID := group.GroupTransactionID
 		if txidToUint64(txID)%uint64(encodingParams.Modulator) != uint64(encodingParams.Offset) {
 			continue
 		}
-		if excludeTransactions != nil && excludeTransactions.contained(txID) {
-			continue
-		}
-		filteredTransactionsIDs = append(filteredTransactionsIDs, txID)
+
 		if result.containedTxnsRange.firstCounter == math.MaxUint64 {
 			result.containedTxnsRange.firstCounter = group.GroupCounter
 		}
 		result.containedTxnsRange.lastCounter = group.GroupCounter
+
+		if excludeTransactions != nil && excludeTransactions.contained(txID) {
+			excludedTransactions++
+			continue
+		}
+
+		filteredTransactionsIDs = append(filteredTransactionsIDs, txID)
 	}
 
-	result.containedTxnsRange.transactionsCount = uint64(len(filteredTransactionsIDs))
+	result.containedTxnsRange.transactionsCount = uint64(len(filteredTransactionsIDs) + excludedTransactions)
 
 	if hintPrevBloomFilter != nil {
 		if result.sameParams(*hintPrevBloomFilter) {

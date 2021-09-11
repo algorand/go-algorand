@@ -286,7 +286,7 @@ func TestAssemblePeerMessage_messageConstBloomFilter(t *testing.T) {
 	peer.isOutgoing = true
 	peer.state = peerStateLateBloom
 
-	metaMessage := s.assemblePeerMessage(&peer, &pendingTransactions)
+	metaMessage, _ := s.assemblePeerMessage(&peer, &pendingTransactions)
 
 	a.Equal(metaMessage.message.UpdatedRequestParams.Modulator, byte(222))
 	a.Equal(metaMessage.message.UpdatedRequestParams.Offset, byte(111))
@@ -329,7 +329,7 @@ func TestAssemblePeerMessage_messageConstBloomFilterNonRelay(t *testing.T) {
 	peer.isOutgoing = true
 	peer.state = peerStateLateBloom
 
-	metaMessage := s.assemblePeerMessage(&peer, &pendingTransactions)
+	metaMessage, _ := s.assemblePeerMessage(&peer, &pendingTransactions)
 
 	a.Equal(metaMessage.message.UpdatedRequestParams.Modulator, byte(222))
 	a.Equal(metaMessage.message.UpdatedRequestParams.Offset, byte(111))
@@ -337,7 +337,7 @@ func TestAssemblePeerMessage_messageConstBloomFilterNonRelay(t *testing.T) {
 	a.Equal(metaMessage.message.Version, int32(txnBlockMessageVersion))
 	a.Equal(metaMessage.message.Round, s.round)
 	a.True(metaMessage.message.MsgSync.ResponseElapsedTime != 0)
-	a.Equal(s.lastBloomFilter, expectedFilter)
+	a.NotEqual(s.lastBloomFilter, expectedFilter)
 }
 
 // TestAssemblePeerMessage_messageConstNextMinDelay_messageConstUpdateRequestParams Tests assemblePeerMessage with messageConstNextMinDelay | messageConstUpdateRequestParams msgOps
@@ -361,7 +361,7 @@ func TestAssemblePeerMessage_messageConstNextMinDelay_messageConstUpdateRequestP
 	s.isRelay = true
 	s.lastBeta = 123 * time.Nanosecond
 
-	metaMessage := s.assemblePeerMessage(&peer, &pendingTransactions)
+	metaMessage, _ := s.assemblePeerMessage(&peer, &pendingTransactions)
 
 	a.Equal(metaMessage.message.UpdatedRequestParams.Modulator, byte(222))
 	a.Equal(metaMessage.message.UpdatedRequestParams.Offset, byte(111))
@@ -405,7 +405,7 @@ func TestAssemblePeerMessage_messageConstTransactions(t *testing.T) {
 	peer.isOutgoing = true
 	peer.state = peerStateHoldsoff
 
-	metaMessage := s.assemblePeerMessage(&peer, &pendingTransactions)
+	metaMessage, _ := s.assemblePeerMessage(&peer, &pendingTransactions)
 
 	a.Equal(len(metaMessage.transactionGroups), 1)
 	a.True(reflect.DeepEqual(metaMessage.transactionGroups[0], pendingTransactions.pendingTransactionsGroups[0]))
