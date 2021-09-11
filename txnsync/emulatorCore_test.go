@@ -18,6 +18,7 @@ package txnsync
 
 import (
 	"context"
+	"encoding/binary"
 	"sort"
 	"testing"
 	"time"
@@ -174,7 +175,8 @@ func (e *emulator) initNodes() {
 		)
 		e.syncers = append(e.syncers, syncer)
 	}
-	randCounter := 0
+	randCounter := uint64(0)
+	var randBuf [8]byte
 	// we want to place a sender on all transaction so that they would be *somewhat* compressible.
 	defaultSender := basics.Address{1, 2, 3, 4}
 	const senderEncodingSize = 35
@@ -197,9 +199,11 @@ func (e *emulator) initNodes() {
 					},
 				},
 			}
-			for i := 0; i < 1+(initAlloc.transactionSize-senderEncodingSize)/32; i++ {
-				digest := crypto.Hash([]byte{byte(randCounter), byte(randCounter >> 8), byte(randCounter >> 16), byte(randCounter >> 24)})
-				copy(group.Transactions[0].Txn.Note[i*32:], digest[:])
+			// fill up the note field with pseudo-random data.
+			for i := 0; i < len(group.Transactions[0].Txn.Note); i += crypto.DigestSize {
+				binary.LittleEndian.PutUint64(randBuf[:], randCounter)
+				digest := crypto.Hash(randBuf[:])
+				copy(group.Transactions[0].Txn.Note[i:], digest[:])
 				randCounter++
 			}
 			group.GroupTransactionID = group.Transactions.ID()
