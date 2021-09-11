@@ -632,7 +632,7 @@ func TestRekeyActionCloseAccount(t *testing.T) {
 	l.endBlock(t, eval)
 }
 
-// TestPayAction ensures a pay in teal affects balances
+// TestDuplicatePayAction shows two pays with same parameters can be done as inner tarnsactions
 func TestDuplicatePayAction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -753,4 +753,142 @@ func TestInnerTxnCount(t *testing.T) {
 	eval.txns(t, &payout1)
 	vb = l.endBlock(t, eval)
 	require.Equal(t, 4, int(vb.blk.TxnCounter))
+}
+
+// TestAcfgAction ensures assets can be created and configured in teal
+func TestAcfgAction(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	appIndex := basics.AppIndex(1)
+	app := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+         tx_begin
+         int acfg
+         tx_field TypeEnum
+
+         txn ApplicationArgs 0
+         byte "create"
+         ==
+         bz manager
+		 int 1000000
+		 tx_field ConfigAssetTotal
+		 int 3
+		 tx_field ConfigAssetDecimals
+		 byte "oz"
+		 tx_field ConfigAssetUnitName
+		 byte "Gold"
+		 tx_field ConfigAssetName
+		 byte "https:://gold.rush/"
+		 tx_field ConfigAssetURL
+		 global CurrentApplicationAddress
+         dup
+         dup2
+		 tx_field ConfigAssetManager
+		 tx_field ConfigAssetReserve
+		 tx_field ConfigAssetFreeze
+		 tx_field ConfigAssetClawback
+         b submit
+manager:
+         txn ApplicationArgs 0
+         byte "manager"
+         ==
+         bz reserve
+reserve:
+         txn ApplicationArgs 0
+         byte "reserve"
+         ==
+         bz freeze
+freeze:
+         txn ApplicationArgs 0
+         byte "freeze"
+         ==
+         bz clawback
+clawback:
+         txn ApplicationArgs 0
+         byte "manager"
+         ==
+submit:  tx_submit
+`),
+	}
+
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: appIndex.Address(),
+		Amount:   200000, // exactly account min balance + one asset
+	}
+
+	eval := l.nextBlock(t)
+	eval.txns(t, &app, &fund)
+	l.endBlock(t, eval)
+
+	create_asa := txntest.Txn{
+		Type:            "appl",
+		Sender:          addrs[1],
+		ApplicationID:   appIndex,
+		ApplicationArgs: [][]byte{[]byte("create")},
+	}
+
+	eval = l.nextBlock(t)
+	// Can't create an asset if you have exactly 200,000 and need to pay fee
+	eval.txn(t, &create_asa, "balance 199000 below min 200000")
+	// fund it some more and try again
+	eval.txns(t, fund.Noted("more!"), &create_asa)
+	vb := l.endBlock(t, eval)
+
+	asaIndex := vb.blk.Payset[1].EvalDelta.InnerTxns[0].ConfigAsset
+	require.Equal(t, basics.AssetIndex(5), asaIndex)
+}
+
+// TestAsaDuringInit ensures an ASA can be made while initilizing an
+// app.  In practice, this is impossible, because you would not be
+// able to prefund the account - you don't know the app id.  But here
+// we can know, so it helps exercise txncounter changes.
+func TestAsaDuringInit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	appIndex := basics.AppIndex(2)
+	prefund := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: appIndex.Address(),
+		Amount:   300000, // plenty for min balances, fees
+	}
+
+	app := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: `
+         tx_begin
+         int acfg
+         tx_field TypeEnum
+		 int 1000000
+		 tx_field ConfigAssetTotal
+		 byte "oz"
+		 tx_field ConfigAssetUnitName
+		 byte "Gold"
+		 tx_field ConfigAssetName
+         tx_submit
+         int 1
+`,
+	}
+
+	eval := l.nextBlock(t)
+	eval.txns(t, &prefund, &app)
+	vb := l.endBlock(t, eval)
+
+	require.Equal(t, appIndex, vb.blk.Payset[1].ApplicationID)
+
+	asaIndex := vb.blk.Payset[1].EvalDelta.InnerTxns[0].ConfigAsset
+	require.Equal(t, basics.AssetIndex(3), asaIndex)
 }

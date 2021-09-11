@@ -37,13 +37,9 @@ func TestActionTypes(t *testing.T) {
 
 	// good types, not alllowed yet
 	testApp(t, "tx_begin; byte \"keyreg\"; tx_field Type; tx_submit; int 1;", ep, "keyreg is not a valid Type for tx_field")
-	testApp(t, "tx_begin; byte \"acfg\"; tx_field Type; tx_submit; int 1;", ep, "acfg is not a valid Type for tx_field")
-	testApp(t, "tx_begin; byte \"afrz\"; tx_field Type; tx_submit; int 1;", ep, "afrz is not a valid Type for tx_field")
 	testApp(t, "tx_begin; byte \"appl\"; tx_field Type; tx_submit; int 1;", ep, "appl is not a valid Type for tx_field")
 	// same, as enums
 	testApp(t, "tx_begin; int keyreg; tx_field TypeEnum; tx_submit; int 1;", ep, "keyreg is not a valid Type for tx_field")
-	testApp(t, "tx_begin; int acfg; tx_field TypeEnum; tx_submit; int 1;", ep, "acfg is not a valid Type for tx_field")
-	testApp(t, "tx_begin; int afrz; tx_field TypeEnum; tx_submit; int 1;", ep, "afrz is not a valid Type for tx_field")
 	testApp(t, "tx_begin; int appl; tx_field TypeEnum; tx_submit; int 1;", ep, "appl is not a valid Type for tx_field")
 	testApp(t, "tx_begin; int 42; tx_field TypeEnum; tx_submit; int 1;", ep, "42 is not a valid TypeEnum")
 	testApp(t, "tx_begin; int 0; tx_field TypeEnum; tx_submit; int 1;", ep, "0 is not a valid TypeEnum")
@@ -55,12 +51,24 @@ func TestActionTypes(t *testing.T) {
 	testApp(t, "tx_begin; int pay; tx_field TypeEnum; tx_submit; int 1;", ep, "insufficient balance")
 	testApp(t, "tx_begin; int axfer; tx_field TypeEnum; tx_submit; int 1;", ep, "insufficient balance")
 
+	testApp(t, "tx_begin; byte \"acfg\"; tx_field Type; tx_submit; int 1;", ep, "insufficient balance")
+	testApp(t, "tx_begin; byte \"afrz\"; tx_field Type; tx_submit; int 1;", ep, "insufficient balance")
+	testApp(t, "tx_begin; int acfg; tx_field TypeEnum; tx_submit; int 1;", ep, "insufficient balance")
+	testApp(t, "tx_begin; int afrz; tx_field TypeEnum; tx_submit; int 1;", ep, "insufficient balance")
+
 	// Establish 888 as the app id, and fund it.
 	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(basics.AppIndex(888).Address(), 200000)
 
 	testApp(t, "tx_begin; byte \"pay\"; tx_field Type; tx_submit; int 1;", ep)
 	testApp(t, "tx_begin; int pay; tx_field TypeEnum; tx_submit; int 1;", ep)
+	// Can't submit because we haven't finished setup, but type passes tx_field
+	testApp(t, "tx_begin; byte \"axfer\"; tx_field Type; int 1;", ep)
+	testApp(t, "tx_begin; int axfer; tx_field TypeEnum; int 1;", ep)
+	testApp(t, "tx_begin; byte \"acfg\"; tx_field Type; int 1;", ep)
+	testApp(t, "tx_begin; int acfg; tx_field TypeEnum; int 1;", ep)
+	testApp(t, "tx_begin; byte \"afrz\"; tx_field Type; int 1;", ep)
+	testApp(t, "tx_begin; int afrz; tx_field TypeEnum; int 1;", ep)
 }
 
 func TestFieldTypes(t *testing.T) {
@@ -351,4 +359,65 @@ func TestNumInner(t *testing.T) {
 	testApp(t, pay+pay+pay+pay+";int 1", ep)
 	// In the sample proto, MaxInnerTransactions = 4
 	testApp(t, pay+pay+pay+pay+pay+";int 1", ep, "tx_submit with MaxInnerTransactions")
+}
+
+func TestAssetCreate(t *testing.T) {
+	create := `
+  tx_begin
+  int acfg
+  tx_field TypeEnum
+  int 1000000
+  tx_field ConfigAssetTotal
+  int 3
+  tx_field ConfigAssetDecimals
+  byte "oz"
+  tx_field ConfigAssetUnitName
+  byte "Gold"
+  tx_field ConfigAssetName
+  byte "https:://gold.rush/"
+  tx_field ConfigAssetURL
+  tx_submit
+  int 1
+`
+	ep, ledger := makeSampleEnv()
+	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
+	testApp(t, create, ep, "insufficient balance")
+	// Give it enough for fee.  Recall that we don't check min balance at this level.
+	ledger.NewAccount(ledger.ApplicationID().Address(), defaultEvalProto().MinTxnFee)
+	testApp(t, create, ep)
+}
+
+func TestAssetFreeze(t *testing.T) {
+	create := `
+  tx_begin
+  int acfg                         ; tx_field TypeEnum
+  int 1000000                      ; tx_field ConfigAssetTotal
+  int 3                            ; tx_field ConfigAssetDecimals
+  byte "oz"                        ; tx_field ConfigAssetUnitName
+  byte "Gold"                      ; tx_field ConfigAssetName
+  byte "https:://gold.rush/"       ; tx_field ConfigAssetURL
+  global CurrentApplicationAddress ; tx_field ConfigAssetFreeze;
+  tx_submit
+  int 1
+`
+	ep, ledger := makeSampleEnv()
+	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
+	// Give it enough for fees.  Recall that we don't check min balance at this level.
+	ledger.NewAccount(ledger.ApplicationID().Address(), 12*defaultEvalProto().MinTxnFee)
+	testApp(t, create, ep)
+
+	freeze := `
+  tx_begin
+  int afrz        ; tx_field TypeEnum
+  int 889         ; tx_field FreezeAsset
+  int 1           ; tx_field FreezeAssetFrozen
+  txn Accounts 1  ; tx_field FreezeAssetAccount
+  tx_submit
+  int 1
+`
+	testApp(t, freeze, ep, "invalid Asset reference")
+	ep.Txn.Txn.ForeignAssets = []basics.AssetIndex{basics.AssetIndex(889)}
+	testApp(t, freeze, ep, "does not hold Asset")
+	ledger.NewHolding(ep.Txn.Txn.Receiver, 889, 55, false)
+	testApp(t, freeze, ep)
 }

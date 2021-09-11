@@ -66,10 +66,14 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 
 		MaxInnerTransactions: 4,
 
-		// With the addition of tx_perform, which relies on machinery
-		// outside logic package for validity checking, we need a more
-		// realistic set of consensus paramaters.
-		Asset: true,
+		// With the addition of tx_field, tx_submit, which rely on
+		// machinery outside logic package for validity checking, we
+		// need a more realistic set of consensus paramaters.
+		Asset:                 true,
+		MaxAssetNameBytes:     12,
+		MaxAssetUnitNameBytes: 6,
+		MaxAssetURLBytes:      32,
+		MaxAssetDecimals:      4,
 	}
 }
 

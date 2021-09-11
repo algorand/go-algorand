@@ -559,8 +559,8 @@ func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.
 	return
 }
 
-// TxnCounter returns the number of transactions that have been added to the block evaluator so far.
-func (eval *BlockEvaluator) TxnCounter() int {
+// PaySetSize returns the number of top-level transactions that have been added to the block evaluator so far.
+func (eval *BlockEvaluator) PaySetSize() int {
 	return len(eval.block.Payset)
 }
 
@@ -912,7 +912,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	}
 
 	// Remember this txn
-	cow.addTx(txn.Txn, txid, uint64(len(applyData.EvalDelta.InnerTxns))) // Will need to be recursive when inners are
+	cow.addTx(txn.Txn, txid)
 
 	return nil
 }

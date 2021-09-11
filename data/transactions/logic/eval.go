@@ -114,6 +114,30 @@ func (sv *stackValue) uint() (uint64, error) {
 	return sv.Uint, nil
 }
 
+func (sv *stackValue) bool() (bool, error) {
+	u64, err := sv.uint()
+	if err != nil {
+		return false, err
+	}
+	if u64 == 1 {
+		return true, nil
+	}
+	if u64 == 0 {
+		return false, nil
+	}
+	return false, fmt.Errorf("boolean is neither 1 nor 0: %d", u64)
+}
+
+func (sv *stackValue) string(limit int) (string, error) {
+	if sv.Bytes == nil {
+		return "", errors.New("not a byte array")
+	}
+	if len(sv.Bytes) > limit {
+		return "", errors.New("value is too long")
+	}
+	return string(sv.Bytes), nil
+}
+
 func stackValueFromTealValue(tv *basics.TealValue) (sv stackValue, err error) {
 	switch tv.Type {
 	case basics.TealBytesType:
@@ -3506,12 +3530,14 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 
 	// KeyReg not allowed yet, so no fields settable
 
+	// Payment
 	case Receiver:
 		txn.Receiver, err = cx.availableAccount(sv)
 	case Amount:
 		txn.Amount.Raw, err = sv.uint()
 	case CloseRemainderTo:
 		txn.CloseRemainderTo, err = cx.availableAccount(sv)
+	// AssetTransfer
 	case XferAsset:
 		txn.XferAsset, err = cx.availableAsset(sv)
 	case AssetAmount:
@@ -3522,10 +3548,52 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 		txn.AssetReceiver, err = cx.availableAccount(sv)
 	case AssetCloseTo:
 		txn.AssetCloseTo, err = cx.availableAccount(sv)
-
-	// acfg likely next
-
-	// afrz seems easy but not high demand
+	// AssetConfig
+	case ConfigAsset:
+		txn.ConfigAsset, err = cx.availableAsset(sv)
+	case ConfigAssetTotal:
+		txn.AssetParams.Total, err = sv.uint()
+	case ConfigAssetDecimals:
+		var decimals uint64
+		decimals, err = sv.uint()
+		if err == nil {
+			if decimals > uint64(cx.Proto.MaxAssetDecimals) {
+				err = fmt.Errorf("too many decimals")
+			} else {
+				txn.AssetParams.Decimals = uint32(decimals)
+			}
+		}
+	case ConfigAssetDefaultFrozen:
+		txn.AssetParams.DefaultFrozen, err = sv.bool()
+	case ConfigAssetUnitName:
+		txn.AssetParams.UnitName, err = sv.string(cx.Proto.MaxAssetUnitNameBytes)
+	case ConfigAssetName:
+		txn.AssetParams.AssetName, err = sv.string(cx.Proto.MaxAssetNameBytes)
+	case ConfigAssetURL:
+		txn.AssetParams.URL, err = sv.string(cx.Proto.MaxAssetURLBytes)
+	case ConfigAssetMetadataHash:
+		if sv.Bytes == nil {
+			err = fmt.Errorf("ConfigAssetMetadataHash must be bytes")
+		} else if len(sv.Bytes) > 32 {
+			err = fmt.Errorf("ConfigAssetMetadataHash must be <= 32 bytes")
+		} else {
+			copy(txn.AssetParams.MetadataHash[:], sv.Bytes)
+		}
+	case ConfigAssetManager:
+		txn.AssetParams.Manager, err = sv.address()
+	case ConfigAssetReserve:
+		txn.AssetParams.Reserve, err = sv.address()
+	case ConfigAssetFreeze:
+		txn.AssetParams.Freeze, err = sv.address()
+	case ConfigAssetClawback:
+		txn.AssetParams.Clawback, err = sv.address()
+	// Freeze
+	case FreezeAsset:
+		txn.FreezeAsset, err = cx.availableAsset(sv)
+	case FreezeAssetAccount:
+		txn.FreezeAccount, err = cx.availableAccount(sv)
+	case FreezeAssetFrozen:
+		txn.AssetFrozen, err = sv.bool()
 
 	// appl needs to wait. Can't call AVM from AVM.
 
@@ -3569,10 +3637,10 @@ func opTxSubmit(cx *EvalContext) {
 
 	// Error out on anything unusual.  Allow pay, axfer.
 	switch cx.subtxn.Txn.Type {
-	case protocol.PaymentTx, protocol.AssetTransferTx:
-		// only pay and axfer for now
+	case protocol.PaymentTx, protocol.AssetTransferTx, protocol.AssetConfigTx, protocol.AssetFreezeTx:
+		// only pay, axfer, acfg, afrz for now
 	default:
-		cx.err = fmt.Errorf("Invalid inner transaction type %s", cx.subtxn.Txn.Type)
+		cx.err = fmt.Errorf("Invalid inner transaction type %#v", cx.subtxn.Txn.Type)
 		return
 	}
 

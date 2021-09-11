@@ -61,6 +61,7 @@ type mockCowForLogicLedger struct {
 	brs    map[basics.Address]basics.AccountData
 	stores map[storeLocator]basics.TealKeyValue
 	tcs    map[int]basics.CreatableIndex
+	txc    uint64
 }
 
 func (c *mockCowForLogicLedger) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
@@ -124,6 +125,14 @@ func (c *mockCowForLogicLedger) prevTimestamp() int64 {
 func (c *mockCowForLogicLedger) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
 	_, found := c.stores[storeLocator{addr, aidx, global}]
 	return found, nil
+}
+
+func (c *mockCowForLogicLedger) incTxnCount() {
+	c.txc++
+}
+
+func (c *mockCowForLogicLedger) txnCounter() uint64 {
+	return c.txc
 }
 
 func newCowMock(creatables []modsData) *mockCowForLogicLedger {

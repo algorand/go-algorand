@@ -140,6 +140,20 @@ func (l *Ledger) NewAsset(creator basics.Address, assetID basics.AssetIndex, par
 	l.balances[creator] = br
 }
 
+// freshID gets a new creatable ID that isn't in use
+func (l *Ledger) freshID() uint64 {
+	for try := l.appID + 1; true; try++ {
+		if _, ok := l.assets[basics.AssetIndex(try)]; ok {
+			continue
+		}
+		if _, ok := l.applications[basics.AppIndex(try)]; ok {
+			continue
+		}
+		return uint64(try)
+	}
+	panic("wow")
+}
+
 // NewHolding sets the ASA balance of a given account.
 func (l *Ledger) NewHolding(addr basics.Address, assetID uint64, amount uint64, frozen bool) {
 	br, ok := l.balances[addr]
@@ -635,6 +649,43 @@ func (l *Ledger) axfer(from basics.Address, xfer transactions.AssetTransferTxnFi
 	return nil
 }
 
+func (l *Ledger) acfg(from basics.Address, cfg transactions.AssetConfigTxnFields) error {
+	if cfg.ConfigAsset == 0 {
+		l.NewAsset(from, basics.AssetIndex(l.freshID()), cfg.AssetParams)
+		return nil
+	}
+	// This is just a mock.  We don't check all the rules about
+	// not setting fields that have been zeroed. Nor do we keep
+	// anything from before.
+	l.assets[cfg.ConfigAsset] = asaParams{
+		Creator:     from,
+		AssetParams: cfg.AssetParams,
+	}
+	return nil
+}
+
+func (l *Ledger) afrz(from basics.Address, frz transactions.AssetFreezeTxnFields) error {
+	aid := frz.FreezeAsset
+	params, ok := l.assets[aid]
+	if !ok {
+		return fmt.Errorf("Asset (%d) does not exist", aid)
+	}
+	if params.Freeze != from {
+		return fmt.Errorf("Asset (%d) can not be frozen by %s", aid, from)
+	}
+	br, ok := l.balances[frz.FreezeAccount]
+	if !ok {
+		return fmt.Errorf("%s does not hold anything", from)
+	}
+	holding, ok := br.holdings[aid]
+	if !ok {
+		return fmt.Errorf("%s does not hold Asset (%d)", from, aid)
+	}
+	holding.Frozen = frz.AssetFrozen
+	br.holdings[aid] = holding
+	return nil
+}
+
 /* It's gross to reimplement this here, rather than have a way to use
    a ledger that's backed by our mock, but uses the "real" code
    (cowRoundState which implements Balances), as a better test. To
@@ -659,6 +710,10 @@ func (l *Ledger) Perform(txn *transactions.Transaction, spec transactions.Specia
 		err = l.pay(txn.Sender, txn.PaymentTxnFields)
 	case protocol.AssetTransferTx:
 		err = l.axfer(txn.Sender, txn.AssetTransferTxnFields)
+	case protocol.AssetConfigTx:
+		err = l.acfg(txn.Sender, txn.AssetConfigTxnFields)
+	case protocol.AssetFreezeTx:
+		err = l.afrz(txn.Sender, txn.AssetFreezeTxnFields)
 	default:
 		err = fmt.Errorf("%s txn in AVM", txn.Type)
 	}

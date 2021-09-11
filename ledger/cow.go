@@ -202,9 +202,13 @@ func (cb *roundCowState) trackCreatable(creatableIndex basics.CreatableIndex) {
 	cb.trackedCreatables[cb.groupIdx] = creatableIndex
 }
 
-func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.Txid, inners uint64) {
+func (cb *roundCowState) incTxnCount() {
+	cb.txnCount++
+}
+
+func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.Txid) {
 	cb.mods.Txids[txid] = txn.LastValid
-	cb.txnCount += 1 + inners
+	cb.incTxnCount()
 	if txn.Lease != [32]byte{} {
 		cb.mods.Txleases[ledgercore.Txlease{Sender: txn.Sender, Lease: txn.Lease}] = txn.LastValid
 	}
