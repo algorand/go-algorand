@@ -467,9 +467,7 @@ func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ba
 func (l *Ledger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	rnd := l.blockQ.latest()
-	totals, err := l.accts.Totals(rnd)
-	return rnd, totals, err
+	return l.accts.LatestTotals()
 }
 
 // OnlineTotals returns the online totals of all accounts at the end of round rnd.

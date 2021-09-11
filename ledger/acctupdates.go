@@ -794,6 +794,13 @@ func (au *accountUpdates) Totals(rnd basics.Round) (totals ledgercore.AccountTot
 	return au.totalsImpl(rnd)
 }
 
+// LatestTotals returns the totals of all accounts for the most recent round, as well as the round number
+func (au *accountUpdates) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+	return au.latestTotalsImpl()
+}
+
 // ReadCloseSizer interface implements the standard io.Reader and io.Closer as well
 // as supporting the Size() function that let the caller know what the size of the stream would be (in bytes).
 type ReadCloseSizer interface {
