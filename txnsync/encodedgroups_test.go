@@ -17,11 +17,13 @@
 package txnsync
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/pooldata"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -120,4 +122,9 @@ func badEncodeTransactionGroups(t *testing.T, s *syncState, inTxnGroups []poolda
 		Bytes:             encoded,
 		CompressionFormat: compressionFormatNone,
 	}, nil
+}
+func TestInvalidByteToTxType(t *testing.T) {
+	for i := len(protocol.TxnTypes); i <= math.MaxUint8; i++ {
+		require.Equal(t, protocol.UnknownTx, ByteToTxType(byte(i)))
+	}
 }

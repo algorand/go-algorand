@@ -27,7 +27,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestTrimBitmaskNi(t *testing.T) {
+func TestTrimBitmaskNil(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var b bitmask

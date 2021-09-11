@@ -310,7 +310,7 @@ type DryrunTxnResult struct {
 	LocalDeltas      *[]AccountStateDelta `json:"local-deltas,omitempty"`
 	LogicSigMessages *[]string            `json:"logic-sig-messages,omitempty"`
 	LogicSigTrace    *[]DryrunState       `json:"logic-sig-trace,omitempty"`
-	Logs             *[]LogItem           `json:"logs,omitempty"`
+	Logs             *[][]byte            `json:"logs,omitempty"`
 }
 
 // ErrorResponse defines model for ErrorResponse.
@@ -340,14 +340,50 @@ type EvalDeltaKeyValue struct {
 	Value EvalDelta `json:"value"`
 }
 
-// LogItem defines model for LogItem.
-type LogItem struct {
+// PendingTransactionResponse defines model for PendingTransactionResponse.
+type PendingTransactionResponse struct {
 
-	// unique application identifier
-	Id uint64 `json:"id"`
+	// The application index if the transaction was found and it created an application.
+	ApplicationIndex *uint64 `json:"application-index,omitempty"`
 
-	//  base64 encoded log message
-	Value string `json:"value"`
+	// The number of the asset's unit that were transferred to the close-to address.
+	AssetClosingAmount *uint64 `json:"asset-closing-amount,omitempty"`
+
+	// The asset index if the transaction was found and it created an asset.
+	AssetIndex *uint64 `json:"asset-index,omitempty"`
+
+	// Rewards in microalgos applied to the close remainder to account.
+	CloseRewards *uint64 `json:"close-rewards,omitempty"`
+
+	// Closing amount for the transaction.
+	ClosingAmount *uint64 `json:"closing-amount,omitempty"`
+
+	// The round where this transaction was confirmed, if present.
+	ConfirmedRound *uint64 `json:"confirmed-round,omitempty"`
+
+	// Application state delta.
+	GlobalStateDelta *StateDelta `json:"global-state-delta,omitempty"`
+
+	// Inner transactions produced by application execution.
+	InnerTxns *[]PendingTransactionResponse `json:"inner-txns,omitempty"`
+
+	// \[ld\] Local state key/value changes for the application being executed by this transaction.
+	LocalStateDelta *[]AccountStateDelta `json:"local-state-delta,omitempty"`
+
+	// \[lg\] Logs for the application being executed by this transaction.
+	Logs *[][]byte `json:"logs,omitempty"`
+
+	// Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.
+	PoolError string `json:"pool-error"`
+
+	// Rewards in microalgos applied to the receiver account.
+	ReceiverRewards *uint64 `json:"receiver-rewards,omitempty"`
+
+	// Rewards in microalgos applied to the sender account.
+	SenderRewards *uint64 `json:"sender-rewards,omitempty"`
+
+	// The raw signed transaction.
+	Txn map[string]interface{} `json:"txn"`
 }
 
 // StateDelta defines model for StateDelta.
@@ -550,49 +586,6 @@ type NodeStatusResponse struct {
 
 	// TimeSinceLastRound in nanoseconds
 	TimeSinceLastRound uint64 `json:"time-since-last-round"`
-}
-
-// PendingTransactionResponse defines model for PendingTransactionResponse.
-type PendingTransactionResponse struct {
-
-	// The application index if the transaction was found and it created an application.
-	ApplicationIndex *uint64 `json:"application-index,omitempty"`
-
-	// The number of the asset's unit that were transferred to the close-to address.
-	AssetClosingAmount *uint64 `json:"asset-closing-amount,omitempty"`
-
-	// The asset index if the transaction was found and it created an asset.
-	AssetIndex *uint64 `json:"asset-index,omitempty"`
-
-	// Rewards in microalgos applied to the close remainder to account.
-	CloseRewards *uint64 `json:"close-rewards,omitempty"`
-
-	// Closing amount for the transaction.
-	ClosingAmount *uint64 `json:"closing-amount,omitempty"`
-
-	// The round where this transaction was confirmed, if present.
-	ConfirmedRound *uint64 `json:"confirmed-round,omitempty"`
-
-	// Application state delta.
-	GlobalStateDelta *StateDelta `json:"global-state-delta,omitempty"`
-
-	// \[ld\] Local state key/value changes for the application being executed by this transaction.
-	LocalStateDelta *[]AccountStateDelta `json:"local-state-delta,omitempty"`
-
-	// \[lg\] Logs for the application being executed by this transaction.
-	Logs *[]LogItem `json:"logs,omitempty"`
-
-	// Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.
-	PoolError string `json:"pool-error"`
-
-	// Rewards in microalgos applied to the receiver account.
-	ReceiverRewards *uint64 `json:"receiver-rewards,omitempty"`
-
-	// Rewards in microalgos applied to the sender account.
-	SenderRewards *uint64 `json:"sender-rewards,omitempty"`
-
-	// The raw signed transaction.
-	Txn map[string]interface{} `json:"txn"`
 }
 
 // PendingTransactionsResponse defines model for PendingTransactionsResponse.

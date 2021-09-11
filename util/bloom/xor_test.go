@@ -244,6 +244,39 @@ func TestMemBloom(t *testing.T) {
 	memTestFilter(t, bff, filterSetSize)
 }
 
+// TestFilterSize tests different sizes of inputs against xor8 and xor32 and check
+// that the generated marshaled byte representation aligns with the expected size.
+func TestFilterSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	var builder XorBuilder
+	for size := 1000; size < 50000; size = ((size + size/2) / 100) * 100 {
+		xor := NewXor(size, &builder)
+		for i := 0; i < size; i++ {
+			digest := crypto.Hash([]byte{byte(i), byte(i >> 8), byte(i >> 16)})
+			xor.Set(digest[:])
+		}
+		out, err := xor.MarshalBinary()
+		require.NoError(t, err)
+		bytesElement := float32(len(out)) / float32(size)
+		fmt.Printf("Xor32 filter for %d elements takes %d bytes, %f bytes/element\n", size, len(out), bytesElement)
+		require.GreaterOrEqual(t, bytesElement, float32(4.9))
+		require.LessOrEqual(t, bytesElement, float32(5.1))
+	}
+	for size := 1000; size < 50000; size = ((size + size/2) / 100) * 100 {
+		xor := NewXor8(size, &builder)
+		for i := 0; i < size; i++ {
+			digest := crypto.Hash([]byte{byte(i), byte(i >> 8), byte(i >> 16)})
+			xor.Set(digest[:])
+		}
+		out, err := xor.MarshalBinary()
+		require.NoError(t, err)
+		bytesElement := float32(len(out)) / float32(size)
+		fmt.Printf("Xor8 filter for %d elements takes %d bytes, %f bytes/element\n", size, len(out), bytesElement)
+		require.GreaterOrEqual(t, bytesElement, float32(1.23))
+		require.LessOrEqual(t, bytesElement, float32(1.28))
+	}
+}
+
 // BenchmarkCreateLargeXorFilter should have the same structure as bloom_test.go BenchmarkCreateLargeBloomFilter
 func BenchmarkCreateLargeXorFilter(b *testing.B) {
 	// dialing mu=25000; 3 servers; so each mailbox is 75000 real and 75000 noise

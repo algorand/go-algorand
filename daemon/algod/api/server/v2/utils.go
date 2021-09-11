@@ -266,33 +266,50 @@ func convertToDeltas(txn node.TxnWithStatus) (*[]generated.AccountStateDelta, *g
 	return localStateDelta, stateDeltaToStateDelta(txn.ApplyData.EvalDelta.GlobalDelta)
 }
 
-func convertToLogItems(txn node.TxnWithStatus, aidx *uint64) (*[]generated.LogItem, error) {
-	var logItems *[]generated.LogItem
+func convertLogs(txn node.TxnWithStatus) *[][]byte {
+	var logItems *[][]byte
 	if len(txn.ApplyData.EvalDelta.Logs) > 0 {
-		l := make([]generated.LogItem, 0, len(txn.ApplyData.EvalDelta.Logs))
+		l := make([][]byte, len(txn.ApplyData.EvalDelta.Logs))
 
-		for _, v := range txn.ApplyData.EvalDelta.Logs {
-			// Resolve appid from index
-			var appid uint64
-			if v.ID != 0 {
-				return nil, fmt.Errorf("logging for a foreign app is not supported")
-			} else if txn.Txn.Txn.ApplicationID == 0 {
-				if aidx == nil {
-					return nil, fmt.Errorf("app index cannot be nil")
-				}
-				appid = *aidx
-			} else {
-				appid = uint64(txn.Txn.Txn.ApplicationID)
-			}
-			l = append(l, generated.LogItem{
-				Id:    appid,
-				Value: base64.StdEncoding.EncodeToString([]byte(v.Message)),
-			})
+		for i, log := range txn.ApplyData.EvalDelta.Logs {
+			l[i] = []byte(log)
 		}
 
 		logItems = &l
 	}
-	return logItems, nil
+	return logItems
+}
+
+func convertInners(txn *node.TxnWithStatus) *[]preEncodedTxInfo {
+	inner := make([]preEncodedTxInfo, len(txn.ApplyData.EvalDelta.InnerTxns))
+	for i, itxn := range txn.ApplyData.EvalDelta.InnerTxns {
+		inner[i] = convertTxn(&itxn)
+	}
+	return &inner
+}
+
+func convertTxn(txn *transactions.SignedTxnWithAD) preEncodedTxInfo {
+	// This copies from handlers.PendingTransactionInformation, with
+	// simplifications because we have a SignedTxnWithAD rather than
+	// TxnWithStatus, and we know this txn has committed.
+
+	response := preEncodedTxInfo{Txn: txn.SignedTxn}
+
+	response.ClosingAmount = &txn.ApplyData.ClosingAmount.Raw
+	response.AssetClosingAmount = &txn.ApplyData.AssetClosingAmount
+	response.SenderRewards = &txn.ApplyData.SenderRewards.Raw
+	response.ReceiverRewards = &txn.ApplyData.ReceiverRewards.Raw
+	response.CloseRewards = &txn.ApplyData.CloseRewards.Raw
+
+	// Indexes can't be set until we allow acfg or appl
+	// response.AssetIndex = computeAssetIndexFromTxn(txn, v2.Node.Ledger())
+	// response.ApplicationIndex = computeAppIndexFromTxn(txn, v2.Node.Ledger())
+
+	// Deltas, Logs, and Inners can not be set until we allow appl
+	// response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)
+	// response.Logs = convertLogs(txn)
+	// response.Inners = convertInners(&txn)
+	return response
 }
 
 // printableUTF8OrEmpty checks to see if the entire string is a UTF8 printable string.

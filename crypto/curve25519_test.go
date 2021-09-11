@@ -19,6 +19,8 @@ package crypto
 import (
 	"bytes"
 	"testing"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func makeCurve25519Secret() *SignatureSecrets {
@@ -28,6 +30,7 @@ func makeCurve25519Secret() *SignatureSecrets {
 }
 
 func TestSignVerifyEmptyMessage(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	pk, sk := ed25519GenerateKey()
 	sig := ed25519Sign(sk, []byte{})
 	if !ed25519Verify(pk, []byte{}, sig) {
@@ -36,6 +39,7 @@ func TestSignVerifyEmptyMessage(t *testing.T) {
 }
 
 func TestVerifyZeros(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var pk SignatureVerifier
 	var sig Signature
 	for x := byte(0); x < 255; x++ {
@@ -46,6 +50,7 @@ func TestVerifyZeros(t *testing.T) {
 }
 
 func TestGenerateSignatureSecrets(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var s Seed
 	RandBytes(s[:])
 	ref := GenerateSignatureSecrets(s)
@@ -63,10 +68,12 @@ func TestGenerateSignatureSecrets(t *testing.T) {
 }
 
 func TestCurve25519SignVerify(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	signVerify(t, makeCurve25519Secret(), makeCurve25519Secret())
 }
 
 func TestVRFProveVerify(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	proveVerifyVrf(t, GenerateVRFSecrets(), GenerateVRFSecrets())
 }
 

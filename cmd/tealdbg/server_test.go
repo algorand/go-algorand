@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/require"
 )
@@ -124,10 +125,12 @@ func serverTestImpl(t *testing.T, run func(t *testing.T, ds *DebugServer) bool, 
 }
 
 func TestServerRemote(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	serverTestImpl(t, tryStartingServerRemote, &DebugParams{})
 }
 
 func TestServerLocal(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	txnBlob := []byte("[" + strings.Join([]string{string(txnSample), txnSample}, ",") + "]")
 	dp := DebugParams{
 		ProgramNames: []string{"test"},

@@ -25,10 +25,12 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestDecorateUnknownTransactionTypeError(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	type TestCase struct {
 		err             error
 		txn             node.TxnWithStatus

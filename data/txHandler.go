@@ -321,9 +321,9 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 // filterAlreadyCommitted scan the list of signed transaction groups, and filter out the ones that have already been included,
 // or that should not be added to the transaction pool.
 // the resulting slice is using the *same* underlying array as the input slice, and the caller must ensure that this would not
-// cause issue on the caller side. The nonDuplicatedFilteredGroups describe whether any of the removed transacation groups was
+// cause issue on the caller side. The hasError describe whether any of the removed transacation groups was
 // removed for a reason *other* than being duplicate ( for instance, malformed transaction )
-func (handler *TxHandler) filterAlreadyCommitted(unverifiedTxGroups []pooldata.SignedTxGroup) (filteredGroups []pooldata.SignedTxGroup, nonDuplicatedFilteredGroups bool) {
+func (handler *TxHandler) filterAlreadyCommitted(unverifiedTxGroups []pooldata.SignedTxGroup) (filteredGroups []pooldata.SignedTxGroup, hasError bool) {
 	remainedTxnsGroupOffset := 0
 	for idx, utxng := range unverifiedTxGroups {
 		err := handler.txPool.Test(utxng.Transactions)
@@ -338,21 +338,21 @@ func (handler *TxHandler) filterAlreadyCommitted(unverifiedTxGroups []pooldata.S
 			// this is a duplicate transaction group.
 		default:
 			// some non-duplicate error was reported on this group.
-			nonDuplicatedFilteredGroups = true
+			hasError = true
 		}
 	}
-	return unverifiedTxGroups[:remainedTxnsGroupOffset], nonDuplicatedFilteredGroups
+	return unverifiedTxGroups[:remainedTxnsGroupOffset], hasError
 }
 
 // processDecodedArray receives a slice of transaction groups and attempt to add them to the transaction pool.
 // The processDecodedArray returns whether the node should be disconnecting from the source of these transactions ( in case a malicious transaction is found )
 // as well as whether all the provided transactions were included in the transaction pool or committed.
 func (handler *TxHandler) processDecodedArray(unverifiedTxGroups []pooldata.SignedTxGroup) (disconnect, allTransactionIncluded bool) {
-	var nonDuplicatedFilteredGroups bool
-	unverifiedTxGroups, nonDuplicatedFilteredGroups = handler.filterAlreadyCommitted(unverifiedTxGroups)
+	var hasError bool
+	unverifiedTxGroups, hasError = handler.filterAlreadyCommitted(unverifiedTxGroups)
 
 	if len(unverifiedTxGroups) == 0 {
-		return false, !nonDuplicatedFilteredGroups
+		return false, !hasError
 	}
 
 	// build the transaction verification context
@@ -406,7 +406,7 @@ func (handler *TxHandler) processDecodedArray(unverifiedTxGroups []pooldata.Sign
 		logging.Base().Warnf("unable to pin transaction: %v", err)
 	}
 
-	return false, !nonDuplicatedFilteredGroups
+	return false, !hasError
 }
 
 // SolicitedTxHandler handles messages received through channels other than the gossip network.

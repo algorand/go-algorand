@@ -177,7 +177,7 @@ func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 		return
 	}
 	// feesPaid may have saturated. That's ok. Since we know
-	// feeNeeded did not overlfow, simple comparison tells us
+	// feeNeeded did not overflow, simple comparison tells us
 	// feesPaid was enough.
 	if feesPaid < feeNeeded {
 		err = fmt.Errorf("txgroup had %d in fees, which is less than the minimum %d * %d",
@@ -286,11 +286,14 @@ func LogicSigSanityCheckBatchVerify(txn *transactions.SignedTxn, groupIndex int,
 		return errors.New("LogicSig.Logic too long")
 	}
 
+	if groupIndex < 0 {
+		return errors.New("Negative groupIndex")
+	}
 	ep := logic.EvalParams{
 		Txn:            txn,
 		Proto:          &groupCtx.consensusParams,
 		TxnGroup:       groupCtx.signedGroupTxns,
-		GroupIndex:     groupIndex,
+		GroupIndex:     uint64(groupIndex),
 		MinTealVersion: &groupCtx.minTealVersion,
 	}
 	err := logic.Check(lsig.Logic, ep)
@@ -340,11 +343,14 @@ func logicSigBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 		return err
 	}
 
+	if groupIndex < 0 {
+		return errors.New("Negative groupIndex")
+	}
 	ep := logic.EvalParams{
 		Txn:            txn,
 		Proto:          &groupCtx.consensusParams,
 		TxnGroup:       groupCtx.signedGroupTxns,
-		GroupIndex:     groupIndex,
+		GroupIndex:     uint64(groupIndex),
 		MinTealVersion: &groupCtx.minTealVersion,
 	}
 	pass, err := logic.Eval(txn.Lsig.Logic, ep)

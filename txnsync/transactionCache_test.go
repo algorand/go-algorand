@@ -35,47 +35,85 @@ func TestTransactionCache(t *testing.T) {
 
 	var txid transactions.Txid
 	a := makeTransactionCache(5, 10, 20)
+	for repeat := 0; repeat < 2; repeat++ {
+		// add 5
+		for i := 0; i < 5; i++ {
+			txid[0] = byte(i)
+			a.add(txid)
+		}
+
+		// all 5 still there
+		for i := 0; i < 5; i++ {
+			txid[0] = byte(i)
+			require.True(t, a.contained(txid), "txid: %v", txid[:])
+		}
+
+		// repeatedly adding existing data doesn't lose anything
+		txid[0] = 1
+		a.add(txid)
+		a.add(txid)
+		a.add(txid)
+		for i := 0; i < 5; i++ {
+			txid[0] = byte(i)
+			require.True(t, a.contained(txid), "txid: %v", txid[:])
+		}
+
+		// adding a sixth forgets the first
+		txid[0] = 5
+		a.add(txid)
+		for i := 1; i < 6; i++ {
+			txid[0] = byte(i)
+			require.True(t, a.contained(txid), "txid: %v", txid[:])
+		}
+		txid[0] = 0
+		require.False(t, a.contained(txid))
+
+		// adding a seventh forgets the third
+		txid[0] = 6
+		a.add(txid)
+		for i := 3; i < 7; i++ {
+			txid[0] = byte(i)
+			require.True(t, a.contained(txid), "txid: %v", txid[:])
+		}
+		txid[0] = 1
+		require.True(t, a.contained(txid), "txid: %v", txid[:])
+		txid[0] = 2
+		require.False(t, a.contained(txid))
+		a.reset()
+	}
+}
+
+// TestTransactionCacheResetting is a simple reset testing, ensuring we know how to recycle entries from the free list.
+func TestTransactionCacheResetting(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var txid transactions.Txid
+	a := makeTransactionCache(5, 10, 20)
 	// add 5
 	for i := 0; i < 5; i++ {
 		txid[0] = byte(i)
 		a.add(txid)
 	}
-
-	// all 5 still there
-	for i := 0; i < 5; i++ {
-		txid[0] = byte(i)
-		require.True(t, a.contained(txid))
-	}
-
-	// repeatedly adding existing data doesn't lose anything
-	txid[0] = 1
-	a.add(txid)
-	a.add(txid)
-	a.add(txid)
-	for i := 0; i < 5; i++ {
-		txid[0] = byte(i)
-		require.True(t, a.contained(txid))
-	}
-
-	// adding a sixth forgets the first
-	txid[0] = 5
-	a.add(txid)
-	for i := 1; i < 6; i++ {
-		txid[0] = byte(i)
-		require.True(t, a.contained(txid))
-	}
+	// re-add the first one again, to promote it.
 	txid[0] = 0
-	require.False(t, a.contained(txid))
-
-	// adding a seventh forgets the second
-	txid[0] = 6
 	a.add(txid)
-	for i := 2; i < 7; i++ {
+	a.reset()
+	// add 3
+	for i := 0; i < 3; i++ {
 		txid[0] = byte(i)
-		require.True(t, a.contained(txid))
+		a.add(txid)
 	}
-	txid[0] = 1
-	require.False(t, a.contained(txid))
+	a.reset()
+	// add 2
+	for i := 0; i < 2; i++ {
+		txid[0] = byte(i)
+		a.add(txid)
+	}
+	// verify the two are there.
+	for i := 0; i < 2; i++ {
+		txid[0] = byte(i)
+		require.True(t, a.contained(txid), "txid: %v", txid[:])
+	}
 }
 
 // TestTransactionCacheAddSlice tests addSlice functionality of the transaction cache
@@ -134,26 +172,53 @@ func TestAddSliceCapacity(t *testing.T) {
 
 }
 
+func (ce *shortTermCacheEntry) getLength() int {
+	length := 0
+	if ce == nil {
+		return length
+	}
+	length++
+	cur := ce
+	for ; cur != nil && ce != cur.next; cur = cur.next {
+		length++
+	}
+	return length
+}
+
 // TestShortTermCacheReset tests that the short term cache is reset
 func TestShortTermCacheReset(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	tc := makeTransactionCache(5, 10, 5)
-	require.Equal(t, 0, tc.shortTermCache.oldest)
+	require.Nil(t, tc.shortTermCache.head)
+	require.Nil(t, tc.shortTermCache.free)
 	require.Equal(t, 0, len(tc.shortTermCache.transactionsMap))
 
 	var txid transactions.Txid
-	for i := 0; i < 6; i++ {
+	for i := 0; i < 5; i++ {
+		txid[0] = byte(i)
+		tc.add(txid)
+	}
+	require.Equal(t, 5, tc.shortTermCache.head.getLength())
+
+	require.Nil(t, tc.shortTermCache.free)
+	require.NotNil(t, tc.shortTermCache.head)
+	require.Equal(t, 5, len(tc.shortTermCache.transactionsMap))
+
+	tc.reset()
+	require.Equal(t, 0, tc.shortTermCache.head.getLength())
+	require.Equal(t, 5, tc.shortTermCache.free.getLength())
+
+	require.Nil(t, tc.shortTermCache.head)
+	require.NotNil(t, tc.shortTermCache.free)
+	require.Equal(t, 0, len(tc.shortTermCache.transactionsMap))
+
+	for i := 0; i < 2; i++ {
 		txid[0] = byte(i)
 		tc.add(txid)
 	}
 
-	require.Equal(t, 1, tc.shortTermCache.oldest)
-	require.Equal(t, 5, len(tc.shortTermCache.transactionsMap))
-
 	tc.reset()
-
-	require.Equal(t, 0, tc.shortTermCache.oldest)
-	require.Equal(t, 0, len(tc.shortTermCache.transactionsMap))
+	require.Equal(t, 5, tc.shortTermCache.free.getLength())
 }
 
 // TestCacheAcknowledge tests that the acknowledge function correctly adds entries

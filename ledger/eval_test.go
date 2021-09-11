@@ -74,6 +74,7 @@ func TestBlockEvaluator(t *testing.T) {
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
 	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+	require.Equal(t, eval.specials.FeeSink, testSinkAddr)
 	require.NoError(t, err)
 
 	genHash := genesisInitState.Block.BlockHeader.GenesisHash
@@ -355,34 +356,18 @@ func TestPrepareEvalParams(t *testing.T) {
 	}
 
 	// Create some sample transactions
-	payment := transactions.SignedTxnWithAD{
-		SignedTxn: transactions.SignedTxn{
-			Txn: transactions.Transaction{
-				Type: protocol.PaymentTx,
-				Header: transactions.Header{
-					Sender: basics.Address{1, 2, 3, 4},
-				},
-				PaymentTxnFields: transactions.PaymentTxnFields{
-					Receiver: basics.Address{4, 3, 2, 1},
-					Amount:   basics.MicroAlgos{Raw: 100},
-				},
-			},
-		},
-	}
+	payment := txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   basics.Address{1, 2, 3, 4},
+		Receiver: basics.Address{4, 3, 2, 1},
+		Amount:   100,
+	}.SignedTxnWithAD()
 
-	appcall1 := transactions.SignedTxnWithAD{
-		SignedTxn: transactions.SignedTxn{
-			Txn: transactions.Transaction{
-				Type: protocol.ApplicationCallTx,
-				Header: transactions.Header{
-					Sender: basics.Address{1, 2, 3, 4},
-				},
-				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-					ApplicationID: basics.AppIndex(1),
-				},
-			},
-		},
-	}
+	appcall1 := txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        basics.Address{1, 2, 3, 4},
+		ApplicationID: basics.AppIndex(1),
+	}.SignedTxnWithAD()
 
 	appcall2 := appcall1
 	appcall2.SignedTxn.Txn.ApplicationCallTxnFields.ApplicationID = basics.AppIndex(2)
@@ -433,7 +418,7 @@ func TestPrepareEvalParams(t *testing.T) {
 					if present {
 						require.NotNil(t, res[k])
 						require.NotNil(t, res[k].PastSideEffects)
-						require.Equal(t, res[k].GroupIndex, k)
+						require.Equal(t, res[k].GroupIndex, uint64(k))
 						require.Equal(t, res[k].TxnGroup, expGroupNoAD)
 						require.Equal(t, *res[k].Proto, eval.proto)
 						require.Equal(t, *res[k].Txn, testCase.group[k].SignedTxn)
@@ -538,14 +523,14 @@ ok:
 		{
 			SignedTxn: stxn1,
 			ApplyData: transactions.ApplyData{
-				EvalDelta: basics.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
+				EvalDelta: transactions.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
 					"creator": {Action: basics.SetBytesAction, Bytes: string(addrs[0][:])}},
 				}},
 		},
 		{
 			SignedTxn: stxn2,
 			ApplyData: transactions.ApplyData{
-				EvalDelta: basics.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
+				EvalDelta: transactions.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
 					"caller": {Action: basics.SetBytesAction, Bytes: string(addrs[0][:])}},
 				}},
 		},
@@ -585,86 +570,37 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
 }
 
-func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalProgram string, consensusVersion protocol.ConsensusVersion) (*BlockEvaluator, error) {
-	genesisInitState, addrs, keys := genesis(10)
-
-	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	const inMem = true
-	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
-	require.NoError(t, err)
+func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalProgram string, consensusVersion protocol.ConsensusVersion) error {
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
 	defer l.Close()
 
-	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
-	require.NoError(t, err)
+	eval := l.nextBlock(t)
 	eval.validate = true
 	eval.generate = false
+
 	eval.proto = config.Consensus[consensusVersion]
 
-	ops, err := logic.AssembleString(approvalProgram)
-	require.NoError(t, err, ops.Errors)
-	approval := ops.Program
-	ops, err = logic.AssembleString("#pragma version 4\nint 1")
-	require.NoError(t, err)
-	clear := ops.Program
-
-	genHash := genesisInitState.Block.BlockHeader.GenesisHash
-	header := transactions.Header{
-		Sender:      addrs[0],
-		Fee:         minFee,
-		FirstValid:  newBlock.Round(),
-		LastValid:   newBlock.Round(),
-		GenesisHash: genHash,
-	}
-	appcall1 := transactions.Transaction{
-		Type:   protocol.ApplicationCallTx,
-		Header: header,
-		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-			GlobalStateSchema: schema,
-			ApprovalProgram:   approval,
-			ClearStateProgram: clear,
-		},
+	appcall1 := txntest.Txn{
+		Sender:            addrs[0],
+		Type:              protocol.ApplicationCallTx,
+		GlobalStateSchema: schema,
+		ApprovalProgram:   approvalProgram,
 	}
 
-	appcall2 := transactions.Transaction{
-		Type:   protocol.ApplicationCallTx,
-		Header: header,
-		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-			ApplicationID: basics.AppIndex(1),
-		},
+	appcall2 := txntest.Txn{
+		Sender:        addrs[0],
+		Type:          protocol.ApplicationCallTx,
+		ApplicationID: basics.AppIndex(1),
 	}
 
-	appcall3 := appcall2
-	appcall3.Header.Sender = addrs[1]
-
-	var group transactions.TxGroup
-	group.TxGroupHashes = []crypto.Digest{crypto.HashObj(appcall1), crypto.HashObj(appcall2), crypto.HashObj(appcall3)}
-	appcall1.Group = crypto.HashObj(group)
-	appcall2.Group = crypto.HashObj(group)
-	appcall3.Group = crypto.HashObj(group)
-	stxn1 := appcall1.Sign(keys[0])
-	stxn2 := appcall2.Sign(keys[0])
-	stxn3 := appcall3.Sign(keys[1])
-
-	g := []transactions.SignedTxnWithAD{
-		{
-			SignedTxn: stxn1,
-		},
-		{
-			SignedTxn: stxn2,
-		},
-		{
-			SignedTxn: stxn3,
-		},
+	appcall3 := txntest.Txn{
+		Sender:        addrs[1],
+		Type:          protocol.ApplicationCallTx,
+		ApplicationID: basics.AppIndex(1),
 	}
-	txgroup := []transactions.SignedTxn{stxn1, stxn2, stxn3}
-	err = eval.TestTransactionGroup(txgroup)
-	if err != nil {
-		return eval, err
-	}
-	err = eval.transactionGroup(g)
-	return eval, err
+
+	return eval.txgroup(t, &appcall1, &appcall2, &appcall3)
 }
 
 // TestEvalAppPooledBudgetWithTxnGroup ensures 3 app call txns can successfully pool
@@ -706,7 +642,7 @@ func TestEvalAppPooledBudgetWithTxnGroup(t *testing.T) {
 	for i, param := range params {
 		for j, testCase := range cases {
 			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
-				_, err := testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, testCase.prog, param)
+				err := testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, testCase.prog, param)
 				if !testCase.isSuccessV29 && reflect.DeepEqual(param, protocol.ConsensusV29) {
 					require.Error(t, err)
 					require.Contains(t, err.Error(), testCase.expectedErrorV29)
@@ -1303,7 +1239,7 @@ func TestModifiedAssetHoldings(t *testing.T) {
 	createTxn := txntest.Txn{
 		Type:   "acfg",
 		Sender: addrs[0],
-		Fee:    basics.MicroAlgos{Raw: 2000},
+		Fee:    2000,
 		AssetParams: basics.AssetParams{
 			Total:    3,
 			Decimals: 0,
@@ -1317,7 +1253,7 @@ func TestModifiedAssetHoldings(t *testing.T) {
 	optInTxn := txntest.Txn{
 		Type:          "axfer",
 		Sender:        addrs[1],
-		Fee:           basics.MicroAlgos{Raw: 2000},
+		Fee:           2000,
 		XferAsset:     assetid,
 		AssetAmount:   0,
 		AssetReceiver: addrs[1],
@@ -1349,7 +1285,7 @@ func TestModifiedAssetHoldings(t *testing.T) {
 	optOutTxn := txntest.Txn{
 		Type:          "axfer",
 		Sender:        addrs[1],
-		Fee:           basics.MicroAlgos{Raw: 1000},
+		Fee:           1000,
 		XferAsset:     assetid,
 		AssetReceiver: addrs[0],
 		AssetCloseTo:  addrs[0],
@@ -1358,7 +1294,7 @@ func TestModifiedAssetHoldings(t *testing.T) {
 	closeTxn := txntest.Txn{
 		Type:        "acfg",
 		Sender:      addrs[0],
-		Fee:         basics.MicroAlgos{Raw: 1000},
+		Fee:         1000,
 		ConfigAsset: assetid,
 	}
 
@@ -1427,7 +1363,9 @@ func newTestGenesis() (bookkeeping.GenesisBalances, []basics.Address, []*crypto.
 		Status:     basics.NotParticipating,
 	}
 
-	accts[rewards] = basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: amount}}
+	accts[rewards] = basics.AccountData{
+		MicroAlgos: basics.MicroAlgos{Raw: amount},
+	}
 
 	genBalances := bookkeeping.MakeGenesisBalances(accts, sink, rewards)
 
@@ -1450,7 +1388,8 @@ func newTestLedgerImpl(t testing.TB, balances bookkeeping.GenesisBalances, inMem
 	crypto.RandBytes(genHash[:])
 	genBlock, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture,
 		balances, "test", genHash)
-
+	require.False(t, genBlock.FeeSink.IsZero())
+	require.False(t, genBlock.RewardsPool.IsZero())
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
@@ -1468,8 +1407,9 @@ func (ledger *Ledger) nextBlock(t testing.TB) *BlockEvaluator {
 	rnd := ledger.Latest()
 	hdr, err := ledger.BlockHdr(rnd)
 	require.NoError(t, err)
-	eval, err := startEvaluator(ledger, bookkeeping.MakeBlock(hdr).BlockHeader,
-		config.Consensus[hdr.CurrentProtocol], 0, false, true, 0)
+
+	nextHdr := bookkeeping.MakeBlock(hdr).BlockHeader
+	eval, err := ledger.StartEvaluator(nextHdr, 0, 0)
 	require.NoError(t, err)
 	return eval
 }
@@ -1491,7 +1431,20 @@ func (ledger *Ledger) lookup(t testing.TB, addr basics.Address) basics.AccountDa
 	return ad
 }
 
-func (eval *BlockEvaluator) txn(t testing.TB, txn *txntest.Txn) {
+// micros gets the current microAlgo balance for an address
+func (ledger *Ledger) micros(t testing.TB, addr basics.Address) uint64 {
+	return ledger.lookup(t, addr).MicroAlgos.Raw
+}
+
+// asa gets the current balance and optin status for some asa for an address
+func (ledger *Ledger) asa(t testing.TB, addr basics.Address, asset basics.AssetIndex) (uint64, bool) {
+	if holding, ok := ledger.lookup(t, addr).Assets[asset]; ok {
+		return holding.Amount, true
+	}
+	return 0, false
+}
+
+func (eval *BlockEvaluator) fillDefaults(txn *txntest.Txn) {
 	if txn.GenesisHash.IsZero() {
 		txn.GenesisHash = eval.genesisHash
 	}
@@ -1499,17 +1452,54 @@ func (eval *BlockEvaluator) txn(t testing.TB, txn *txntest.Txn) {
 		txn.FirstValid = eval.Round()
 	}
 	txn.FillDefaults(eval.proto)
+}
+
+func (eval *BlockEvaluator) txn(t testing.TB, txn *txntest.Txn, problem ...string) {
+	t.Helper()
+	eval.fillDefaults(txn)
 	stxn := txn.SignedTxn()
 	err := eval.testTransaction(stxn, eval.state.child(1))
-	require.NoError(t, err)
+	if err != nil {
+		if len(problem) == 1 {
+			require.Contains(t, err.Error(), problem[0])
+		} else {
+			require.NoError(t, err) // Will obviously fail
+		}
+		return
+	}
 	err = eval.Transaction(stxn, transactions.ApplyData{})
-	require.NoError(t, err)
+	if err != nil {
+		if len(problem) == 1 {
+			require.Contains(t, err.Error(), problem[0])
+		} else {
+			require.NoError(t, err) // Will obviously fail
+		}
+		return
+	}
+	require.Len(t, problem, 0)
 }
 
 func (eval *BlockEvaluator) txns(t testing.TB, txns ...*txntest.Txn) {
+	t.Helper()
 	for _, txn := range txns {
 		eval.txn(t, txn)
 	}
+}
+
+func (eval *BlockEvaluator) txgroup(t testing.TB, txns ...*txntest.Txn) error {
+	t.Helper()
+	for _, txn := range txns {
+		eval.fillDefaults(txn)
+	}
+	txgroup := txntest.SignedTxns(txns...)
+
+	err := eval.TestTransactionGroup(txgroup)
+	if err != nil {
+		return err
+	}
+
+	err = eval.transactionGroup(transactions.WrapSignedTxnsWithAD(txgroup))
+	return err
 }
 
 func TestRewardsInAD(t *testing.T) {
@@ -1616,10 +1606,9 @@ func TestModifiedAppLocalStates(t *testing.T) {
 	const appid basics.AppIndex = 1
 
 	createTxn := txntest.Txn{
-		Type:              "appl",
-		Sender:            addrs[0],
-		ApprovalProgram:   []byte{0x02, 0x20, 0x01, 0x01, 0x22},
-		ClearStateProgram: []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+		Type:            "appl",
+		Sender:          addrs[0],
+		ApprovalProgram: "int 1",
 	}
 
 	optInTxn := txntest.Txn{
@@ -1797,12 +1786,11 @@ func TestAppInsMinBalance(t *testing.T) {
 	for i := 0; i < maxAppsOptedIn; i++ {
 		creator := addrs[acctIdx]
 		createTxn := txntest.Txn{
-			Type:              protocol.ApplicationCallTx,
-			Sender:            creator,
-			ApprovalProgram:   []byte{0x02, 0x20, 0x01, 0x01, 0x22},
-			ClearStateProgram: []byte{0x02, 0x20, 0x01, 0x01, 0x22},
-			LocalStateSchema:  basics.StateSchema{NumByteSlice: maxLocalSchemaEntries},
-			Note:              randomNote(),
+			Type:             protocol.ApplicationCallTx,
+			Sender:           creator,
+			ApprovalProgram:  "int 1",
+			LocalStateSchema: basics.StateSchema{NumByteSlice: maxLocalSchemaEntries},
+			Note:             randomNote(),
 		}
 		txnsCreate = append(txnsCreate, &createTxn)
 		count := appsCreated[creator]

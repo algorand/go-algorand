@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -105,6 +106,7 @@ func TestLoadSingleRootKeyConcurrent(t *testing.T) {
 }
 
 func TestGenesisRoundoff(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	verbosity := strings.Builder{}
 	genesisData := DefaultGenesis
 	genesisData.NetworkName = "wat"
