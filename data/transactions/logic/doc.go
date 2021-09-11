@@ -31,7 +31,7 @@ var opDocByName = map[string]string{
 	"ed25519verify":       "for (data A, signature B, pubkey C) verify the signature of (\"ProgData\" || program_hash || data) against the pubkey => {0 or 1}",
 	"ecdsa_verify":        "for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}",
 	"ecdsa_pk_decompress": "decompress pubkey A into components X, Y => [*... stack*, X, Y]",
-	"ecdsa_pk_recover":    "for (data A, recovery id B, signature C, D) recover a public compressed key => [*... stack*, X, Y]",
+	"ecdsa_pk_recover":    "for (data A, recovery id B, signature C, D) recover a public key => [*... stack*, X, Y]",
 	"+":                   "A plus B. Panic on overflow.",
 	"-":                   "A minus B. Panic if B > A.",
 	"/":                   "A divided by B (truncated division). Panic if B == 0.",
@@ -221,9 +221,9 @@ func OpImmediateNote(opName string) string {
 // further documentation on the function of the opcode
 var opDocExtras = map[string]string{
 	"ed25519verify":       "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.",
-	"ecdsa_verify":        "The 32 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack. The signed data must be 32 bytes long, and signatures in lower-S form are only accepted.",
-	"ecdsa_pk_decompress": "The 33 byte public key in a compressed form to be decompressed into X and Y (top) components.",
-	"ecdsa_pk_recover":    "S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to deriver a public key in compressed format. The signed data must be 32 bytes long.",
+	"ecdsa_verify":        "The 32 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack. All values are big-endian encoded. The signed data must be 32 bytes long, and signatures in lower-S form are only accepted.",
+	"ecdsa_pk_decompress": "The 33 byte public key in a compressed form to be decompressed into X and Y (top) components. All values are big-endian encoded.",
+	"ecdsa_pk_recover":    "S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to deriver a public key. All values are big-endian encoded. The signed data must be 32 bytes long.",
 	"bnz":                 "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Starting at v4, the offset is treated as a signed 16 bit integer allowing for backward branches and looping. In prior version (v1 to v3), branch offsets are limited to forward branches only, 0-0x7fff.\n\nAt v2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before v2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)",
 	"bz":                  "See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.",
 	"b":                   "See `bnz` for details on how branches work. `b` always jumps to the offset.",
@@ -271,7 +271,7 @@ func OpDocExtra(opName string) string {
 
 // OpGroups is groupings of ops for documentation purposes.
 var OpGroups = map[string][]string{
-	"Arithmetic":            {"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress"},
+	"Arithmetic":            {"sha256", "keccak256", "sha512_256", "ed25519verify", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
 	"Byte Array Slicing":    {"substring", "substring3", "extract", "extract3", "extract16bits", "extract32bits", "extract64bits"},
 	"Byte Array Arithmetic": {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%"},
 	"Byte Array Logic":      {"b|", "b&", "b^", "b~"},
@@ -489,7 +489,7 @@ var AppParamsFieldDocs = map[string]string{
 	"AppAddress":            "Address for which this application has authority",
 }
 
-// EcDsaCurveDocs are notes on curves available in `ecdsa_` opcodes
-var EcDsaCurveDocs = map[string]string{
+// EcdsaCurveDocs are notes on curves available in `ecdsa_` opcodes
+var EcdsaCurveDocs = map[string]string{
 	"Secp256k1": "secp256k1 curve",
 }

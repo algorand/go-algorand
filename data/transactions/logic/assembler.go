@@ -1156,12 +1156,12 @@ func asmTxField(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleEcDsa(ops *OpStream, spec *OpSpec, args []string) error {
+func assembleEcdsa(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
 
-	cs, ok := ecDsaCurveSpecByName[args[0]]
+	cs, ok := ecdsaCurveSpecByName[args[0]]
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
@@ -2577,7 +2577,7 @@ func disTxField(dis *disassembleState, spec *OpSpec) (string, error) {
 	return fmt.Sprintf("%s %s", spec.Name, TxnFieldNames[arg]), nil
 }
 
-func disEcDsa(dis *disassembleState, spec *OpSpec) (string, error) {
+func disEcdsa(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + 1
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
@@ -2585,10 +2585,10 @@ func disEcDsa(dis *disassembleState, spec *OpSpec) (string, error) {
 	}
 	dis.nextpc = dis.pc + 2
 	arg := dis.program[dis.pc+1]
-	if int(arg) >= len(EcDsaCurveNames) {
+	if int(arg) >= len(EcdsaCurveNames) {
 		return "", fmt.Errorf("invalid curve arg index %d at pc=%d", arg, dis.pc)
 	}
-	return fmt.Sprintf("%s %s", spec.Name, EcDsaCurveNames[arg]), nil
+	return fmt.Sprintf("%s %s", spec.Name, EcdsaCurveNames[arg]), nil
 }
 
 type disInfo struct {

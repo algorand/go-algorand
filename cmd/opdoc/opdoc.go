@@ -120,7 +120,7 @@ func appParamsFieldsMarkdown(out io.Writer) {
 
 func ecDsaCurvesMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`ECDSA` Curves:\n\n")
-	fieldTableMarkdown(out, logic.EcDsaCurveNames, nil, logic.EcDsaCurveDocs)
+	fieldTableMarkdown(out, logic.EcdsaCurveNames, nil, logic.EcdsaCurveDocs)
 }
 
 func immediateMarkdown(op *logic.OpSpec) string {

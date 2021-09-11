@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AssetHoldingField,OnCompletionConstType,EcDsaCurve -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve -output=fields_string.go
 
 // TxnField is an enum type for `txn` and `gtxn`
 type TxnField int
@@ -389,32 +389,32 @@ func (s gfNameSpecMap) getExtraFor(name string) (extra string) {
 	return
 }
 
-// EcDsaCurve is an enum for `ecdsa_` opcodes
-type EcDsaCurve int
+// EcdsaCurve is an enum for `ecdsa_` opcodes
+type EcdsaCurve int
 
 const (
 	// Secp256k1 curve for bitcoin/ethereum
-	Secp256k1 EcDsaCurve = iota
-	invalidEcDsaCurve
+	Secp256k1 EcdsaCurve = iota
+	invalidEcdsaCurve
 )
 
-// EcDsaCurveNames are arguments to the 'ecdsa_' opcode
-var EcDsaCurveNames []string
+// EcdsaCurveNames are arguments to the 'ecdsa_' opcode
+var EcdsaCurveNames []string
 
-type ecDsaCurveSpec struct {
-	field   EcDsaCurve
+type ecdsaCurveSpec struct {
+	field   EcdsaCurve
 	version uint64
 }
 
-var ecDsaCurveSpecs = []ecDsaCurveSpec{
+var ecdsaCurveSpecs = []ecdsaCurveSpec{
 	{Secp256k1, 5},
 }
 
-var ecDsaCurveSpecByField map[EcDsaCurve]ecDsaCurveSpec
-var ecDsaCurveSpecByName ecDsaCurveNameSpecMap
+var ecdsaCurveSpecByField map[EcdsaCurve]ecdsaCurveSpec
+var ecdsaCurveSpecByName ecDsaCurveNameSpecMap
 
 // simple interface used by doc generator for fields versioning
-type ecDsaCurveNameSpecMap map[string]ecDsaCurveSpec
+type ecDsaCurveNameSpecMap map[string]ecdsaCurveSpec
 
 func (s ecDsaCurveNameSpecMap) getExtraFor(name string) (extra string) {
 	// Uses 5 here because ecdsa fields were introduced in 5
@@ -640,18 +640,18 @@ func init() {
 		globalFieldSpecByName[gfn] = globalFieldSpecByField[GlobalField(i)]
 	}
 
-	EcDsaCurveNames = make([]string, int(invalidEcDsaCurve))
-	for i := Secp256k1; i < invalidEcDsaCurve; i++ {
-		EcDsaCurveNames[int(i)] = i.String()
+	EcdsaCurveNames = make([]string, int(invalidEcdsaCurve))
+	for i := Secp256k1; i < invalidEcdsaCurve; i++ {
+		EcdsaCurveNames[int(i)] = i.String()
 	}
-	ecDsaCurveSpecByField = make(map[EcDsaCurve]ecDsaCurveSpec, len(EcDsaCurveNames))
-	for _, s := range ecDsaCurveSpecs {
-		ecDsaCurveSpecByField[s.field] = s
+	ecdsaCurveSpecByField = make(map[EcdsaCurve]ecdsaCurveSpec, len(EcdsaCurveNames))
+	for _, s := range ecdsaCurveSpecs {
+		ecdsaCurveSpecByField[s.field] = s
 	}
 
-	ecDsaCurveSpecByName = make(ecDsaCurveNameSpecMap, len(EcDsaCurveNames))
-	for i, ahfn := range EcDsaCurveNames {
-		ecDsaCurveSpecByName[ahfn] = ecDsaCurveSpecByField[EcDsaCurve(i)]
+	ecdsaCurveSpecByName = make(ecDsaCurveNameSpecMap, len(EcdsaCurveNames))
+	for i, ahfn := range EcdsaCurveNames {
+		ecdsaCurveSpecByName[ahfn] = ecdsaCurveSpecByField[EcdsaCurve(i)]
 	}
 
 	AssetHoldingFieldNames = make([]string, int(invalidAssetHoldingField))

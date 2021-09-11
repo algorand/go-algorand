@@ -2542,9 +2542,9 @@ func leadingZeros(size int, b *big.Int) ([]byte, error) {
 	return buf, nil
 }
 
-func opEcDsaVerify(cx *EvalContext) {
-	ecdsaCurve := EcDsaCurve(cx.program[cx.pc+1])
-	fs, ok := ecDsaCurveSpecByField[ecdsaCurve]
+func opEcdsaVerify(cx *EvalContext) {
+	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
+	fs, ok := ecdsaCurveSpecByField[ecdsaCurve]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid curve %d", ecdsaCurve)
 		return
@@ -2586,9 +2586,9 @@ func opEcDsaVerify(cx *EvalContext) {
 	cx.stack = cx.stack[:fourth]
 }
 
-func opEcDsaPkDecompress(cx *EvalContext) {
-	ecdsaCurve := EcDsaCurve(cx.program[cx.pc+1])
-	fs, ok := ecDsaCurveSpecByField[ecdsaCurve]
+func opEcdsaPkDecompress(cx *EvalContext) {
+	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
+	fs, ok := ecdsaCurveSpecByField[ecdsaCurve]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid curve %d", ecdsaCurve)
 		return
@@ -2626,9 +2626,9 @@ func opEcDsaPkDecompress(cx *EvalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
-func opEcDsaPkRecover(cx *EvalContext) {
-	ecdsaCurve := EcDsaCurve(cx.program[cx.pc+1])
-	fs, ok := ecDsaCurveSpecByField[ecdsaCurve]
+func opEcdsaPkRecover(cx *EvalContext) {
+	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
+	fs, ok := ecdsaCurveSpecByField[ecdsaCurve]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid curve %d", ecdsaCurve)
 		return

@@ -188,7 +188,7 @@ func TestLeadingZeros(t *testing.T) {
 	require.Equal(t, v31z, keyToByte(t, b))
 }
 
-func TestEcDsa(t *testing.T) {
+func TestEcdsa(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -237,7 +237,7 @@ byte 0x%s
 
 	// ecdsa verify tests
 	source = `
-byte "testdata"
+byte "%s"
 sha512_256
 byte 0x%s
 byte 0x%s
@@ -259,15 +259,17 @@ ecdsa_verify Secp256k1
 	rTampered[0] = 0
 
 	var verifyTests = []struct {
+		data string
 		r    []byte
 		pass bool
 	}{
-		{r, true},
-		{rTampered, false},
+		{"testdata", r, true},
+		{"testdata", rTampered, false},
+		{"testdata1", r, false},
 	}
 	for _, test := range verifyTests {
 		t.Run(fmt.Sprintf("verify/pass=%v", test.pass), func(t *testing.T) {
-			src := fmt.Sprintf(source, hex.EncodeToString(test.r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y))
+			src := fmt.Sprintf(source, test.data, hex.EncodeToString(test.r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
 				testAccepts(t, src, 5)
 			} else {
@@ -334,6 +336,34 @@ ecdsa_verify Secp256k1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.Encod
 	pass, err := Eval(ops.Program, defaultEvalParamsWithVersion(nil, &txn, 5))
 	require.NoError(t, err)
 	require.True(t, pass)
+}
+
+// test compatibility with ethereum signatures
+func TestEcdsaEthAddress(t *testing.T) {
+	/*
+		pip install eth-keys pycryptodome
+		from eth_keys import keys
+		pk = keys.PrivateKey(b"\xb2\\}\xb3\x1f\xee\xd9\x12''\xbf\t9\xdcv\x9a\x96VK-\xe4\xc4rm\x03[6\xec\xf1\xe5\xb3d")
+		msg=b"hello from ethereum"
+		print("msg: '{}'".format(msg.decode()))
+		signature = pk.sign_msg(msg)
+		print("v:", signature.v)
+		print("r:", signature.r.to_bytes(32, byteorder="big").hex())
+		print("s:", signature.s.to_bytes(32, byteorder="big").hex())
+		print("addr:", pk.public_key.to_address())
+	*/
+	progText := `byte "hello from ethereum" // msg
+keccak256
+int 0 // v
+byte 0x745e8f55ac6189ee89ed707c36694868e3903988fbf776c8096c45da2e60c638 // r
+byte 0x30c8e4a9b5d2eb53ddc6294587dd00bed8afe2c45dd72f6b4cf752e46d5ba681 // s
+ecdsa_pk_recover Secp256k1
+concat // convert public key X and Y to ethereum addr
+keccak256
+substring 12 32
+byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
+==`
+	testAccepts(t, progText, 5)
 }
 
 func BenchmarkHash(b *testing.B) {
@@ -412,7 +442,7 @@ ed25519verify`, pkStr), AssemblerMaxVersion)
 	}
 }
 
-type benchmarkEcDsaData struct {
+type benchmarkEcdsaData struct {
 	x        []byte
 	y        []byte
 	pk       []byte
@@ -423,8 +453,8 @@ type benchmarkEcDsaData struct {
 	programs []byte
 }
 
-func benchmarkEcDsaGenData(b *testing.B) (data []benchmarkEcDsaData) {
-	data = make([]benchmarkEcDsaData, b.N)
+func benchmarkEcdsaGenData(b *testing.B) (data []benchmarkEcdsaData) {
+	data = make([]benchmarkEcdsaData, b.N)
 	for i := 0; i < b.N; i++ {
 		key, err := ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
 		require.NoError(b, err)
@@ -445,8 +475,8 @@ func benchmarkEcDsaGenData(b *testing.B) (data []benchmarkEcDsaData) {
 	return data
 }
 
-func benchmarkEcDsa(b *testing.B, source string) {
-	data := benchmarkEcDsaGenData(b)
+func benchmarkEcdsa(b *testing.B, source string) {
+	data := benchmarkEcdsaGenData(b)
 	ops, err := AssembleStringWithVersion(source, 5)
 	require.NoError(b, err)
 	for i := 0; i < b.N; i++ {
@@ -474,7 +504,7 @@ func benchmarkEcDsa(b *testing.B, source string) {
 	}
 }
 
-func BenchmarkEcDsa(b *testing.B) {
+func BenchmarkEcdsa(b *testing.B) {
 	b.Run("ecdsa_verify", func(b *testing.B) {
 		source := `#pragma version 5
 arg 0
@@ -483,7 +513,7 @@ arg 2
 arg 3
 arg 4
 ecdsa_verify Secp256k1`
-		benchmarkEcDsa(b, source)
+		benchmarkEcdsa(b, source)
 	})
 	b.Run("ecdsa_pk_decompress", func(b *testing.B) {
 		source := `#pragma version 5
@@ -492,7 +522,7 @@ ecdsa_pk_decompress Secp256k1
 pop
 pop
 int 1`
-		benchmarkEcDsa(b, source)
+		benchmarkEcdsa(b, source)
 	})
 
 	b.Run("ecdsa_pk_recover", func(b *testing.B) {
@@ -506,6 +536,6 @@ ecdsa_pk_recover Secp256k1
 pop
 pop
 int 1`
-		benchmarkEcDsa(b, source)
+		benchmarkEcdsa(b, source)
 	})
 }

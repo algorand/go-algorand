@@ -51,7 +51,7 @@ func TestOpDocs(t *testing.T) {
 	require.Len(t, AssetParamsFieldDocs, len(AssetParamsFieldNames))
 	require.Len(t, AppParamsFieldDocs, len(AppParamsFieldNames))
 	require.Len(t, TypeNameDescriptions, len(TxnTypeNames))
-	require.Len(t, EcDsaCurveDocs, len(EcDsaCurveNames))
+	require.Len(t, EcdsaCurveDocs, len(EcdsaCurveNames))
 }
 
 func TestOpGroupCoverage(t *testing.T) {
