@@ -1,7 +1,7 @@
 run:
   timeout: 5m
   tests: true
-  
+
 linters:
   disable-all: true
   enable:
@@ -73,4 +73,7 @@ issues:
         - deadcode
         - gosimple
         - unused
+        - partitiontest
+    - path: crypto/secp256k1/secp256_test\.go
+      linters:
         - partitiontest
