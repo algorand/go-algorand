@@ -1441,6 +1441,21 @@ func (ledger *Ledger) asa(t testing.TB, addr basics.Address, asset basics.AssetI
 	return 0, false
 }
 
+// asaParams gets the asset params for a given asa index
+func (ledger *Ledger) asaParams(t testing.TB, asset basics.AssetIndex) (basics.AssetParams, error) {
+	creator, ok, err := ledger.GetCreator(basics.CreatableIndex(asset), basics.AssetCreatable)
+	if err != nil {
+		return basics.AssetParams{}, err
+	}
+	if !ok {
+		return basics.AssetParams{}, fmt.Errorf("no asset")
+	}
+	if params, ok := ledger.lookup(t, creator).AssetParams[asset]; ok {
+		return params, nil
+	}
+	return basics.AssetParams{}, fmt.Errorf("bad lookup")
+}
+
 func (eval *BlockEvaluator) fillDefaults(txn *txntest.Txn) {
 	if txn.GenesisHash.IsZero() {
 		txn.GenesisHash = eval.genesisHash

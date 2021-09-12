@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/stretchr/testify/require"
 )
 
 func TestActionTypes(t *testing.T) {
@@ -408,16 +409,25 @@ func TestAssetFreeze(t *testing.T) {
 
 	freeze := `
   tx_begin
-  int afrz        ; tx_field TypeEnum
-  int 889         ; tx_field FreezeAsset
-  int 1           ; tx_field FreezeAssetFrozen
-  txn Accounts 1  ; tx_field FreezeAssetAccount
+  int afrz                    ; tx_field TypeEnum
+  int 889                     ; tx_field FreezeAsset
+  txn ApplicationArgs 0; btoi ; tx_field FreezeAssetFrozen
+  txn Accounts 1              ; tx_field FreezeAssetAccount
   tx_submit
   int 1
 `
 	testApp(t, freeze, ep, "invalid Asset reference")
 	ep.Txn.Txn.ForeignAssets = []basics.AssetIndex{basics.AssetIndex(889)}
+	ep.Txn.Txn.ApplicationArgs = [][]byte{{0x01}}
 	testApp(t, freeze, ep, "does not hold Asset")
 	ledger.NewHolding(ep.Txn.Txn.Receiver, 889, 55, false)
 	testApp(t, freeze, ep)
+	holding, err := ledger.AssetHolding(ep.Txn.Txn.Receiver, 889)
+	require.NoError(t, err)
+	require.Equal(t, true, holding.Frozen)
+	ep.Txn.Txn.ApplicationArgs = [][]byte{{0x00}}
+	testApp(t, freeze, ep)
+	holding, err = ledger.AssetHolding(ep.Txn.Txn.Receiver, 889)
+	require.NoError(t, err)
+	require.Equal(t, false, holding.Frozen)
 }

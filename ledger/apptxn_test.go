@@ -821,14 +821,14 @@ submit:  tx_submit
 		Type:     "pay",
 		Sender:   addrs[0],
 		Receiver: appIndex.Address(),
-		Amount:   200000, // exactly account min balance + one asset
+		Amount:   200_000, // exactly account min balance + one asset
 	}
 
 	eval := l.nextBlock(t)
 	eval.txns(t, &app, &fund)
 	l.endBlock(t, eval)
 
-	create_asa := txntest.Txn{
+	createAsa := txntest.Txn{
 		Type:            "appl",
 		Sender:          addrs[1],
 		ApplicationID:   appIndex,
@@ -837,13 +837,23 @@ submit:  tx_submit
 
 	eval = l.nextBlock(t)
 	// Can't create an asset if you have exactly 200,000 and need to pay fee
-	eval.txn(t, &create_asa, "balance 199000 below min 200000")
+	eval.txn(t, &createAsa, "balance 199000 below min 200000")
 	// fund it some more and try again
-	eval.txns(t, fund.Noted("more!"), &create_asa)
+	eval.txns(t, fund.Noted("more!"), &createAsa)
 	vb := l.endBlock(t, eval)
 
 	asaIndex := vb.blk.Payset[1].EvalDelta.InnerTxns[0].ConfigAsset
 	require.Equal(t, basics.AssetIndex(5), asaIndex)
+
+	asaParams, err := l.asaParams(t, basics.AssetIndex(5))
+	require.NoError(t, err)
+
+	require.Equal(t, 1_000_000, int(asaParams.Total))
+	require.Equal(t, 3, int(asaParams.Decimals))
+	require.Equal(t, "oz", asaParams.UnitName)
+	require.Equal(t, "Gold", asaParams.AssetName)
+	require.Equal(t, "https:://gold.rush/", asaParams.URL)
+
 }
 
 // TestAsaDuringInit ensures an ASA can be made while initilizing an
