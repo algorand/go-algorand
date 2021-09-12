@@ -245,6 +245,8 @@ type OpStream struct {
 	// map opcode offsets to source line
 	OffsetToLine map[int]int
 
+	TemplateLabels map[string]TemplateVariable
+
 	HasStatefulOps bool
 }
 
@@ -478,24 +480,60 @@ func asmPushInt(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s needs one argument", spec.Name)
 	}
-	val, err := strconv.ParseUint(args[0], 0, 64)
-	if err != nil {
-		return ops.error(err)
+
+	var (
+		val uint64
+		err error
+	)
+
+	if len(args[0]) > 5 && args[0][:5] == "TMPL_" {
+		val = 0
+		ops.TemplateLabels[args[0]] = TemplateVariable{
+			SourceLine: uint64(ops.sourceLine),
+			IsBytes:    false,
+			Position:   uint64(ops.pending.Len()),
+		}
+	} else {
+		val, err = strconv.ParseUint(args[0], 0, 64)
+		if err != nil {
+			return ops.error(err)
+		}
 	}
+
 	ops.pending.WriteByte(spec.Opcode)
 	var scratch [binary.MaxVarintLen64]byte
 	vlen := binary.PutUvarint(scratch[:], val)
 	ops.pending.Write(scratch[:vlen])
+
 	return nil
 }
 func asmPushBytes(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s needs one argument", spec.Name)
 	}
-	val, _, err := parseBinaryArgs(args)
-	if err != nil {
-		return ops.error(err)
+
+	var (
+		val []byte
+		err error
+	)
+	print("hi")
+	if len(args[0]) > 5 && args[0][:5] == "TMPL_" {
+		print("hi" + args[0])
+		val = []byte{}
+		ops.TemplateLabels[args[0]] = TemplateVariable{
+			SourceLine: uint64(ops.sourceLine),
+			IsBytes:    true,
+			Position:   uint64(ops.pending.Len()),
+		}
+	} else {
+		print("ok?" + args[0])
+		val, _, err = parseBinaryArgs(args)
+		if err != nil {
+			return ops.error(err)
+		}
+
 	}
+
 	ops.pending.WriteByte(spec.Opcode)
 	var scratch [binary.MaxVarintLen64]byte
 	vlen := binary.PutUvarint(scratch[:], uint64(len(val)))
@@ -706,15 +744,31 @@ func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	bvals := make([][]byte, 0, len(args))
 	rest := args
 	for len(rest) > 0 {
-		val, consumed, err := parseBinaryArgs(rest)
-		if err != nil {
-			// Would be nice to keep going, as in
-			// intcblock, but parseBinaryArgs would have
-			// to return a useful consumed value even in
-			// the face of errors.  Hard.
-			ops.error(err)
-			return nil
+
+		var (
+			val      []byte
+			err      error
+			consumed int 
+		)
+		if len(rest[0]) > 5 && rest[0][:5] == "TMPL_" {
+			ops.TemplateLabels[rest[0]] = TemplateVariable{
+				SourceLine: uint64(ops.sourceLine),
+				IsBytes:    true,
+				Position:   uint64(ops.pending.Len()),
+			}
+			consumed = 1
+		} else {
+			val, consumed, err = parseBinaryArgs(rest)
+			if err != nil {
+				// Would be nice to keep going, as in
+				// intcblock, but parseBinaryArgs would have
+				// to return a useful consumed value even in
+				// the face of errors.  Hard.
+				ops.error(err)
+				return nil
+			}
 		}
+
 		bvals = append(bvals, val)
 		rest = rest[consumed:]
 	}
@@ -2086,7 +2140,7 @@ func AssembleString(text string) (*OpStream, error) {
 // and therefore we might need to pass in explicitly a higher version.
 func AssembleStringWithVersion(text string, version uint64) (*OpStream, error) {
 	sr := strings.NewReader(text)
-	ops := OpStream{Version: version}
+	ops := OpStream{Version: version, TemplateLabels: map[string]TemplateVariable{}}
 	err := ops.assemble(sr)
 	return &ops, err
 }

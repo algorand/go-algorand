@@ -921,7 +921,7 @@ func mustReadFile(fname string) []byte {
 	return contents
 }
 
-func assembleFileDetails(fname string) (program []byte, lineMap []int) {
+func assembleFileDetails(fname string) (program []byte, deets AssemblyDetails) {
 	text, err := readFile(fname)
 	if err != nil {
 		reportErrorf("%s: %s", fname, err)
@@ -942,7 +942,7 @@ func assembleFileDetails(fname string) (program []byte, lineMap []int) {
 		}
 	}
 
-	return ops.Program, ops.GetLineToOffset()
+	return ops.Program, AssemblyDetails{LineMap: ops.GetLineToOffset(), TemplateLabels: ops.TemplateLabels}
 }
 
 func assembleFile(fname string) (program []byte) {
@@ -1010,7 +1010,8 @@ func disassembleFile(fname, outname string) {
 // the assembled program but may contain other details like ABI spec or Template Variable
 // relative positions in the future
 type AssemblyDetails struct {
-	LineMap []int `json:"line_map"`
+	TemplateLabels map[string]logic.TemplateVariable `json:"template_labels"`
+	LineMap        []int                             `json:"line_map"`
 }
 
 var compileCmd = &cobra.Command{
@@ -1024,7 +1025,7 @@ var compileCmd = &cobra.Command{
 				continue
 			}
 
-			program, lineMap := assembleFileDetails(fname)
+			program, details := assembleFileDetails(fname)
 
 			outblob := program
 			outname := outFilename
@@ -1066,8 +1067,8 @@ var compileCmd = &cobra.Command{
 					reportErrorf("%s: %s", outname, err)
 				}
 
-				mapname := outname + ".map.json"
-				pcblob, err := json.Marshal(AssemblyDetails{LineMap: lineMap})
+				mapname := outname + ".deets.json"
+				pcblob, err := json.Marshal(details)
 				if err != nil {
 					reportErrorf("%s: %s", mapname, err)
 				}
