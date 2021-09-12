@@ -486,7 +486,7 @@ func asmPushInt(ops *OpStream, spec *OpSpec, args []string) error {
 		err error
 	)
 
-	if len(args[0]) > 5 && args[0][:5] == "TMPL_" {
+	if len(args[0]) > 5 && args[0][:5] == TmplPrefix {
 		val = 0
 		ops.TemplateLabels[args[0]] = TemplateVariable{
 			SourceLine: uint64(ops.sourceLine),
@@ -516,9 +516,7 @@ func asmPushBytes(ops *OpStream, spec *OpSpec, args []string) error {
 		val []byte
 		err error
 	)
-	print("hi")
-	if len(args[0]) > 5 && args[0][:5] == "TMPL_" {
-		print("hi" + args[0])
+	if len(args[0]) > 5 && args[0][:5] == TmplPrefix {
 		val = []byte{}
 		ops.TemplateLabels[args[0]] = TemplateVariable{
 			SourceLine: uint64(ops.sourceLine),
@@ -526,7 +524,6 @@ func asmPushBytes(ops *OpStream, spec *OpSpec, args []string) error {
 			Position:   uint64(ops.pending.Len()),
 		}
 	} else {
-		print("ok?" + args[0])
 		val, _, err = parseBinaryArgs(args)
 		if err != nil {
 			return ops.error(err)
@@ -748,9 +745,9 @@ func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 		var (
 			val      []byte
 			err      error
-			consumed int 
+			consumed int
 		)
-		if len(rest[0]) > 5 && rest[0][:5] == "TMPL_" {
+		if len(rest[0]) > 5 && rest[0][:5] == TmplPrefix {
 			ops.TemplateLabels[rest[0]] = TemplateVariable{
 				SourceLine: uint64(ops.sourceLine),
 				IsBytes:    true,
