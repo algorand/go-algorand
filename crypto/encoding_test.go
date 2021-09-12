@@ -18,11 +18,14 @@ package crypto
 
 import (
 	"testing"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 	// "github.com/stretchr/testify/require"
 	// "github.com/algorand/go-algorand/protocol"
 )
 
 func TestEmptyEncoding(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// TODO systematically add checks for empty encodings
 
 	// var s SignatureSecrets

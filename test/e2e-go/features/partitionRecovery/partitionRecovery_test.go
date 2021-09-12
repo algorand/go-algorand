@@ -135,6 +135,10 @@ func runTestWithStaggeredStopStart(t *testing.T, fixture *fixtures.RestClientFix
 	// Stop Node1
 	nc1.FullStop()
 
+	status, err := fixture.LibGoalClient.Status()
+	a.NoError(err)
+	roundAfterStop := status.LastRound
+
 	time.Sleep(inducePartitionTime)
 
 	// Use the fixture to start the node again so it supplies the correct peer addresses
@@ -152,10 +156,10 @@ func runTestWithStaggeredStopStart(t *testing.T, fixture *fixtures.RestClientFix
 	a.NoError(err)
 
 	// Now wait for us to make progress again.
-	status, err := fixture.LibGoalClient.Status()
+	status, err = fixture.LibGoalClient.Status()
 	a.NoError(err)
 
-	a.Equal(waitForRound, status.LastRound, "We should not have made progress since stopping the first node")
+	a.Equal(roundAfterStop, status.LastRound, "We should not have made progress since stopping the first node")
 
 	err = fixture.WaitForRound(status.LastRound+1, partitionRecoveryTime)
 	a.NoError(err)
@@ -193,6 +197,10 @@ func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
 	// Stop Node1
 	nc1.FullStop()
 
+	status, err := fixture.LibGoalClient.Status()
+	a.NoError(err)
+	roundAfterStop := status.LastRound
+
 	// Stop the 2nd node and give network a chance to stall
 	nc2, err := fixture.GetNodeController("Node2")
 	a.NoError(err)
@@ -205,10 +213,10 @@ func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
 	a.NoError(err)
 
 	// Now wait for us to make progress again.
-	status, err := fixture.LibGoalClient.Status()
+	status, err = fixture.LibGoalClient.Status()
 	a.NoError(err)
 
-	a.Equal(waitForRound, status.LastRound, "We should not have made progress since stopping the first node")
+	a.Equal(roundAfterStop, status.LastRound, "We should not have made progress since stopping the first node")
 
 	err = fixture.WaitForRound(status.LastRound+1, partitionRecoveryTime)
 	a.NoError(err)
@@ -253,12 +261,16 @@ func TestPartitionHalfOffline(t *testing.T) {
 	a.NoError(err)
 	nc3.FullStop()
 
+	status, err := client.Status()
+	a.NoError(err)
+	roundAfterStop := status.LastRound
+
 	time.Sleep(inducePartitionTime)
 
 	// Get main client to monitor
-	status, err := client.Status()
+	status, err = client.Status()
 	a.NoError(err)
-	a.Equal(waitForRound, status.LastRound, "We should not have made progress since stopping the nodes")
+	a.Equal(roundAfterStop, status.LastRound, "We should not have made progress since stopping the nodes")
 
 	// Start 40 of 50% of the stake
 	_, err = fixture.StartNode(nc1.GetDataDir())

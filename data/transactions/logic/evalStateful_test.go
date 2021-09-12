@@ -1039,6 +1039,7 @@ intc_1
 }
 
 func TestAppParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	ep, ledger := makeSampleEnv()
 	ledger.NewAccount(ep.Txn.Txn.Sender, 1)
@@ -2384,6 +2385,10 @@ func TestReturnTypes(t *testing.T) {
 		"pushbytes":         `pushbytes "jojogoodgorilla"`,
 		"app_params_get":    "app_params_get AppGlobalNumUint",
 		"extract":           "extract 0 2",
+		"txnas":             "txnas ApplicationArgs",
+		"gtxnas":            "gtxnas 0 ApplicationArgs",
+		"gtxnsas":           "pop; pop; int 0; int 0; gtxnsas ApplicationArgs",
+		"args":              "args",
 	}
 
 	byName := OpsByName[LogicVersion]

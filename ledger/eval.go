@@ -705,7 +705,7 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 			Txn:                     &groupNoAD[i],
 			Proto:                   &eval.proto,
 			TxnGroup:                groupNoAD,
-			GroupIndex:              i,
+			GroupIndex:              uint64(i),
 			PastSideEffects:         pastSideEffects,
 			MinTealVersion:          &minTealVersion,
 			PooledApplicationBudget: &pooledApplicationBudget,

@@ -29,18 +29,24 @@ func TestActionTypes(t *testing.T) {
 	testApp(t, "int pay; tx_field TypeEnum; tx_submit; int 1;", ep, "tx_field without tx_begin")
 	testApp(t, "tx_begin; tx_submit; int 1;", ep, "Invalid inner transaction type")
 	// bad type
-	testApp(t, "tx_begin; byte \"pya\"; tx_field Type; tx_submit; int 1;", ep, "Invalid inner transaction type")
+	testApp(t, "tx_begin; byte \"pya\"; tx_field Type; tx_submit; int 1;", ep, "pya is not a valid Type")
+	// mixed up the int form for the byte form
+	testApp(t, obfuscate("tx_begin; int pay; tx_field Type; tx_submit; int 1;"), ep, "Type arg not a byte array")
+	// or vice versa
+	testApp(t, obfuscate("tx_begin; byte \"pay\"; tx_field TypeEnum; tx_submit; int 1;"), ep, "not a uint64")
 
 	// good types, not alllowed yet
-	testApp(t, "tx_begin; byte \"keyreg\"; tx_field Type; tx_submit; int 1;", ep, "Invalid inner transaction type")
-	testApp(t, "tx_begin; byte \"acfg\"; tx_field Type; tx_submit; int 1;", ep, "Invalid inner transaction type")
-	testApp(t, "tx_begin; byte \"afrz\"; tx_field Type; tx_submit; int 1;", ep, "Invalid inner transaction type")
-	testApp(t, "tx_begin; byte \"appl\"; tx_field Type; tx_submit; int 1;", ep, "Invalid inner transaction type")
+	testApp(t, "tx_begin; byte \"keyreg\"; tx_field Type; tx_submit; int 1;", ep, "keyreg is not a valid Type for tx_field")
+	testApp(t, "tx_begin; byte \"acfg\"; tx_field Type; tx_submit; int 1;", ep, "acfg is not a valid Type for tx_field")
+	testApp(t, "tx_begin; byte \"afrz\"; tx_field Type; tx_submit; int 1;", ep, "afrz is not a valid Type for tx_field")
+	testApp(t, "tx_begin; byte \"appl\"; tx_field Type; tx_submit; int 1;", ep, "appl is not a valid Type for tx_field")
 	// same, as enums
-	testApp(t, "tx_begin; int keyreg; tx_field TypeEnum; tx_submit; int 1;", ep, "Invalid inner transaction type")
-	testApp(t, "tx_begin; int acfg; tx_field TypeEnum; tx_submit; int 1;", ep, "Invalid inner transaction type")
-	testApp(t, "tx_begin; int afrz; tx_field TypeEnum; tx_submit; int 1;", ep, "Invalid inner transaction type")
-	testApp(t, "tx_begin; int appl; tx_field TypeEnum; tx_submit; int 1;", ep, "Invalid inner transaction type")
+	testApp(t, "tx_begin; int keyreg; tx_field TypeEnum; tx_submit; int 1;", ep, "keyreg is not a valid Type for tx_field")
+	testApp(t, "tx_begin; int acfg; tx_field TypeEnum; tx_submit; int 1;", ep, "acfg is not a valid Type for tx_field")
+	testApp(t, "tx_begin; int afrz; tx_field TypeEnum; tx_submit; int 1;", ep, "afrz is not a valid Type for tx_field")
+	testApp(t, "tx_begin; int appl; tx_field TypeEnum; tx_submit; int 1;", ep, "appl is not a valid Type for tx_field")
+	testApp(t, "tx_begin; int 42; tx_field TypeEnum; tx_submit; int 1;", ep, "42 is not a valid TypeEnum")
+	testApp(t, "tx_begin; int 0; tx_field TypeEnum; tx_submit; int 1;", ep, "0 is not a valid TypeEnum")
 
 	// "insufficient balance" because app account is charged fee
 	// (defaults make these 0 pay|axfer to zero address, from app account)
@@ -55,6 +61,26 @@ func TestActionTypes(t *testing.T) {
 
 	testApp(t, "tx_begin; byte \"pay\"; tx_field Type; tx_submit; int 1;", ep)
 	testApp(t, "tx_begin; int pay; tx_field TypeEnum; tx_submit; int 1;", ep)
+}
+
+func TestFieldTypes(t *testing.T) {
+	ep, _ := makeSampleEnv()
+	testApp(t, "tx_begin; byte \"pay\"; tx_field Sender;", ep, "not an address")
+	testApp(t, obfuscate("tx_begin; int 7; tx_field Receiver;"), ep, "not an address")
+	testApp(t, "tx_begin; byte \"\"; tx_field CloseRemainderTo;", ep, "not an address")
+	testApp(t, "tx_begin; byte \"\"; tx_field AssetSender;", ep, "not an address")
+	// can't really tell if it's an addres, so 32 bytes gets further
+	testApp(t, "tx_begin; byte \"01234567890123456789012345678901\"; tx_field AssetReceiver;",
+		ep, "invalid Account reference")
+	// but a b32 string rep is not an account
+	testApp(t, "tx_begin; byte \"GAYTEMZUGU3DOOBZGAYTEMZUGU3DOOBZGAYTEMZUGU3DOOBZGAYZIZD42E\"; tx_field AssetCloseTo;",
+		ep, "not an address")
+
+	testApp(t, obfuscate("tx_begin; byte \"pay\"; tx_field Fee;"), ep, "not a uint64")
+	testApp(t, obfuscate("tx_begin; byte 0x01; tx_field Amount;"), ep, "not a uint64")
+	testApp(t, obfuscate("tx_begin; byte 0x01; tx_field XferAsset;"), ep, "not a uint64")
+	testApp(t, obfuscate("tx_begin; byte 0x01; tx_field AssetAmount;"), ep, "not a uint64")
+
 }
 
 func TestAppPay(t *testing.T) {
@@ -282,6 +308,26 @@ func TestExtraFields(t *testing.T) {
 	testApp(t, "txn Sender; txn Accounts 1; int 100"+pay, ep, "unauthorized")
 	testApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+pay, ep,
 		"non-zero fields for type axfer")
+}
+
+func TestBadField(t *testing.T) {
+	pay := `
+  tx_begin
+  int 7; tx_field AssetAmount;
+  tx_field Amount
+  tx_field Receiver
+  tx_field Sender
+  int pay
+  tx_field TypeEnum
+  txn Receiver
+  tx_field RekeyTo				// NOT ALLOWED
+  tx_submit
+`
+
+	ep, ledger := makeSampleEnv()
+	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
+	testApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+pay, ep,
+		"invalid tx_field RekeyTo")
 }
 
 func TestNumInner(t *testing.T) {
