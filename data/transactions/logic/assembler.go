@@ -248,6 +248,7 @@ type OpStream struct {
 	HasStatefulOps bool
 }
 
+// GetLineToOffset returns a slice mapping TEAL source line to PC
 func (ops *OpStream) GetLineToOffset() []int {
 	maxLines := 0
 	for _, line := range ops.OffsetToLine {

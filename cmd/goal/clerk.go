@@ -1005,6 +1005,10 @@ func disassembleFile(fname, outname string) {
 	}
 }
 
+// AssemblyDetails contains details from the source to assembly process
+// Right now it is just the map of line number to program counter or byte position in
+// the assembled program but may contain other details like ABI spec or Template Variable
+// relative positions in the future
 type AssemblyDetails struct {
 	LineMap []int `json:"line_map"`
 }
