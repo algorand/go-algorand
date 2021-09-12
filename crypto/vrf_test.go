@@ -20,6 +20,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"testing"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func mustDecode(t *testing.T, out []byte, hexIn string) {
@@ -72,6 +74,7 @@ func testVector(t *testing.T, skHex, pkHex, alphaHex, piHex, betaHex string) {
 
 // ECVRF-ED25519-SHA512-Elligator2 test vectors from: https://www.ietf.org/id/draft-irtf-cfrg-vrf-03.txt appendix A.4
 func TestVRFTestVectors(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	testVector(t,
 		"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60", //sk
 		"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", //pk

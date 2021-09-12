@@ -23,6 +23,8 @@ import (
 
 // TestTealdbgWithExpect processes all expect script files with suffix Test.exp within the test/e2e-go/cli/tealdbg/expect directory
 func TestTealdbgWithExpect(t *testing.T) {
+	// partitiontest.PartitionTest(t)
+	// Causes double partition, so commented out on purpose
 	et := fixtures.MakeExpectTest(t)
 	et.Run()
 }

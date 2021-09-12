@@ -2053,6 +2053,7 @@ type urlCase struct {
 }
 
 func TestParseHostOrURL(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	urlTestCases := []urlCase{
 		{"localhost:123", url.URL{Scheme: "http", Host: "localhost:123"}},
 		{"http://localhost:123", url.URL{Scheme: "http", Host: "localhost:123"}},
