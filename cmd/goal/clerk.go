@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -920,6 +921,30 @@ func mustReadFile(fname string) []byte {
 	return contents
 }
 
+func assembleFileDetails(fname string) (program []byte, lineMap []int) {
+	text, err := readFile(fname)
+	if err != nil {
+		reportErrorf("%s: %s", fname, err)
+	}
+	ops, err := logic.AssembleString(string(text))
+	if err != nil {
+		ops.ReportProblems(fname)
+		reportErrorf("%s: %s", fname, err)
+	}
+	_, params := getProto(protoVersion)
+	if ops.HasStatefulOps {
+		if len(ops.Program) > config.MaxAvailableAppProgramLen {
+			reportErrorf(tealAppSize, fname, len(ops.Program), config.MaxAvailableAppProgramLen)
+		}
+	} else {
+		if uint64(len(ops.Program)) > params.LogicSigMaxSize {
+			reportErrorf(tealLogicSigSize, fname, len(ops.Program), params.LogicSigMaxSize)
+		}
+	}
+
+	return ops.Program, ops.GetLineToOffset()
+}
+
 func assembleFile(fname string) (program []byte) {
 	text, err := readFile(fname)
 	if err != nil {
@@ -980,6 +1005,10 @@ func disassembleFile(fname, outname string) {
 	}
 }
 
+type AssemblyDetails struct {
+	LineMap []int `json:"line_map"`
+}
+
 var compileCmd = &cobra.Command{
 	Use:   "compile [input file 1] [input file 2]...",
 	Short: "Compile a contract program",
@@ -990,7 +1019,9 @@ var compileCmd = &cobra.Command{
 				disassembleFile(fname, outFilename)
 				continue
 			}
-			program := assembleFile(fname)
+
+			program, lineMap := assembleFileDetails(fname)
+
 			outblob := program
 			outname := outFilename
 			if outname == "" {
@@ -1000,6 +1031,7 @@ var compileCmd = &cobra.Command{
 					outname = fmt.Sprintf("%s.tok", fname)
 				}
 			}
+
 			if signProgram {
 				dataDir := ensureSingleDataDir()
 				accountList := makeAccountsList(dataDir)
@@ -1023,10 +1055,21 @@ var compileCmd = &cobra.Command{
 				ls := transactions.LogicSig{Logic: program, Sig: signature}
 				outblob = protocol.Encode(&ls)
 			}
+
 			if !noProgramOutput {
 				err := writeFile(outname, outblob, 0666)
 				if err != nil {
 					reportErrorf("%s: %s", outname, err)
+				}
+
+				mapname := outname + ".map.json"
+				pcblob, err := json.Marshal(AssemblyDetails{LineMap: lineMap})
+				if err != nil {
+					reportErrorf("%s: %s", mapname, err)
+				}
+				err = writeFile(mapname, pcblob, 0666)
+				if err != nil {
+					reportErrorf("%s: %s", mapname, err)
 				}
 			}
 			if !signProgram && outname != stdoutFilenameValue {

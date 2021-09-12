@@ -248,6 +248,22 @@ type OpStream struct {
 	HasStatefulOps bool
 }
 
+func (ops *OpStream) GetLineToOffset() []int {
+	maxLines := 0
+	for _, line := range ops.OffsetToLine {
+		if line > maxLines {
+			maxLines = line
+		}
+	}
+
+	lto := make([]int, maxLines+1)
+	for pc, line := range ops.OffsetToLine {
+		lto[line] = pc
+	}
+
+	return lto
+}
+
 // GetVersion returns the LogicSigVersion we're building to
 func (ops *OpStream) GetVersion() uint64 {
 	if ops.Version == 0 {
