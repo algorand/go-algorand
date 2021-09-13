@@ -20,7 +20,6 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"math/big"
-	mrand "math/rand"
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -1054,7 +1053,9 @@ func generateStaticArray(t *testing.T, testValuePool *[][]Value) {
 	// bool
 	boolArrayList := make([]Value, 20)
 	for boolIndex := 0; boolIndex < 20; boolIndex++ {
-		valIndex := mrand.Int31n(2)
+		valBig, err := rand.Int(rand.Reader, big.NewInt(2))
+		require.NoError(t, err, "generate random bool index should not return error")
+		valIndex := valBig.Int64()
 		boolArrayList[boolIndex] = (*testValuePool)[Bool][valIndex]
 	}
 	boolStaticArray, err := MakeStaticArray(boolArrayList)
@@ -1100,7 +1101,9 @@ func generateDynamicArray(t *testing.T, testValuePool *[][]Value) {
 	// bool
 	boolArrayList := make([]Value, 20)
 	for boolIndex := 0; boolIndex < 20; boolIndex++ {
-		valIndex := mrand.Int31n(2)
+		valBig, err := rand.Int(rand.Reader, big.NewInt(2))
+		require.NoError(t, err, "generate random bool index should not return error")
+		valIndex := valBig.Int64()
 		boolArrayList[boolIndex] = (*testValuePool)[Bool][valIndex]
 	}
 	boolDynamicArray, err := MakeDynamicArray(boolArrayList, MakeBoolType())
@@ -1110,12 +1113,19 @@ func generateDynamicArray(t *testing.T, testValuePool *[][]Value) {
 
 func generateTuples(t *testing.T, testValuePool *[][]Value, slotRange int) {
 	for i := 0; i < 100; i++ {
-		tupleLen := 1 + mrand.Int31n(25)
+		tupleLenBig, err := rand.Int(rand.Reader, big.NewInt(2))
+		require.NoError(t, err, "generate random tuple length should not return error")
+		tupleLen := 1 + tupleLenBig.Int64()
 		tupleValList := make([]Value, tupleLen)
 		for tupleElemIndex := 0; tupleElemIndex < int(tupleLen); tupleElemIndex++ {
-			tupleTypeIndex := mrand.Int31n(int32(slotRange))
+			tupleTypeIndexBig, err := rand.Int(rand.Reader, big.NewInt(int64(slotRange)))
+			require.NoError(t, err, "generate random tuple element type index should not return error")
+			tupleTypeIndex := tupleTypeIndexBig.Int64()
 			tupleElemChoiceRange := len((*testValuePool)[tupleTypeIndex])
-			tupleElemRangeIndex := mrand.Intn(tupleElemChoiceRange)
+
+			tupleElemRangeIndexBig, err := rand.Int(rand.Reader, big.NewInt(int64(tupleElemChoiceRange)))
+			require.NoError(t, err, "generate random tuple element index in test pool should not return error")
+			tupleElemRangeIndex := tupleElemRangeIndexBig.Int64()
 			tupleElem := (*testValuePool)[tupleTypeIndex][tupleElemRangeIndex]
 			tupleValList[tupleElemIndex] = tupleElem
 		}
