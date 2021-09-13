@@ -1571,7 +1571,6 @@ func TestTxn(t *testing.T) {
 			}
 			sb := strings.Builder{}
 			ep := defaultEvalParams(&sb, &txn)
-			ep.Ledger = logictest.MakeLedger(nil)
 			ep.GroupIndex = 3
 			ep.FirstValidTimestamp = 1
 			pass, err := Eval(ops.Program, ep)
@@ -1848,7 +1847,6 @@ int 0
 			}
 			ep := defaultEvalParams(nil, &txn)
 			ep.TxnGroup = makeSampleTxnGroup(txn)
-			ep.Ledger = logictest.MakeLedger(nil)
 			ep.FirstValidTimestamp = 1
 			testLogic(t, source, v, ep)
 			if v >= 3 {
@@ -4844,13 +4842,38 @@ func TestLog(t *testing.T) {
 func TestFirstValidTime(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	ep, _ := makeSampleEnv()
-	ep.FirstValidTimestamp = 1
-	source := "txn FirstValidTime; int 1; >="
-	ops := testProg(t, source, ep.Proto.LogicSigVersion)
-	err := Check(ops.Program, ep)
-	require.NoError(t, err)
 
-	pass, _ := Eval(ops.Program, ep)
-	require.True(t, pass)
+	txn := makeSampleTxn()
+	var tests = []struct {
+		ver  uint64
+		ts   uint64
+		pass bool
+	}{
+		{4, 0, false},
+		{4, 1, false},
+		{5, 0, false},
+		{5, 1, true},
+	}
+	firstValidVersion := txnFieldSpecByName["FirstValidTime"].version
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("v=%d/ts=%d", test.ver, test.ts), func(t *testing.T) {
+			ep := defaultEvalParamsWithVersion(nil, &txn, test.ver)
+			source := "txn FirstValidTime; int 1; >="
+			var ops *OpStream
+			var expects []expect
+			var errChecker func(t require.TestingT, err error, msgAndArgs ...interface{}) = require.NoError
+			if test.ver < firstValidVersion {
+				expects = append(expects, expect{1, "...available in version..."})
+				errChecker = require.Error
+			}
+			ops = testProg(t, source, test.ver, expects...)
+			err := Check(ops.Program, ep)
+			errChecker(t, err)
+
+			ep.FirstValidTimestamp = test.ts
+			pass, err := Eval(ops.Program, ep)
+			errChecker(t, err)
+			require.Equal(t, test.pass, pass)
+		})
+	}
 }
