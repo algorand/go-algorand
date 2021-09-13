@@ -109,7 +109,7 @@ if [[ "${ARCHTYPE}" = arm* ]]; then
 fi
 
 PACKAGES="./..."
-if [ "$RUN_EXPECT" != "" ]; then
+if [ "$RUN_EXPECT" = "TRUE" ]; then
   PACKAGES=$(go list ./...|grep expect)
 fi
 

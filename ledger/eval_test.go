@@ -418,7 +418,7 @@ func TestPrepareEvalParams(t *testing.T) {
 					if present {
 						require.NotNil(t, res[k])
 						require.NotNil(t, res[k].PastSideEffects)
-						require.Equal(t, res[k].GroupIndex, k)
+						require.Equal(t, res[k].GroupIndex, uint64(k))
 						require.Equal(t, res[k].TxnGroup, expGroupNoAD)
 						require.Equal(t, *res[k].Proto, eval.proto)
 						require.Equal(t, *res[k].Txn, testCase.group[k].SignedTxn)
