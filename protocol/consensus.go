@@ -158,7 +158,7 @@ const ConsensusV29 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/abc54f79f9ad679d2d22f0fb9909fb005c16f8a1",
 )
 
-// v30 introduces AVM 1.0 and TEAL 5, increases the app opt in limit to 50,
+// ConsensusV30 introduces AVM 1.0 and TEAL 5, increases the app opt in limit to 50,
 // and allows costs to be pooled in grouped stateful transactions.
 const ConsensusV30 = ConsensusVersion(
 	// TODO: Add the actual hash here
