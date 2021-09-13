@@ -78,6 +78,7 @@ func spendToNonParticipating(t *testing.T, fixture *fixtures.RestClientFixture, 
 
 func TestOnlineOfflineRewards(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 	r := require.New(fixtures.SynchronizedTest(t))
@@ -136,6 +137,7 @@ func TestOnlineOfflineRewards(t *testing.T) {
 
 func TestPartkeyOnlyRewards(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	if runtime.GOOS == "darwin" {
 		t.Skip()
@@ -187,6 +189,7 @@ func TestPartkeyOnlyRewards(t *testing.T) {
 
 func TestRewardUnitThreshold(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 	r := require.New(fixtures.SynchronizedTest(t))
@@ -308,6 +311,7 @@ var defaultPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0
 
 func TestRewardRateRecalculation(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 	r := require.New(fixtures.SynchronizedTest(t))
