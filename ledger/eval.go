@@ -1374,14 +1374,20 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 
 		// iterate over the transaction groups and add all their account addresses to the list
 		groupsReady := make([]*groupTask, len(groups))
-		refAddresses := make([]basics.Address, 0, maxAddressesInTxn(&consensusParams))
 		for i, group := range groups {
 			task := &groupTask{}
 			groupsReady[i] = task
 			for _, stxn := range group {
-				getTxnAddresses(&stxn.Txn, &refAddresses)
-				for _, address := range refAddresses {
-					initAccount(address, task)
+				// If you add new addresses here, also add them in getTxnAddresses().
+				initAccount(stxn.Txn.Sender, task)
+				initAccount(stxn.Txn.Receiver, task)
+				initAccount(stxn.Txn.CloseRemainderTo, task)
+				initAccount(stxn.Txn.AssetSender, task)
+				initAccount(stxn.Txn.AssetReceiver, task)
+				initAccount(stxn.Txn.AssetCloseTo, task)
+				initAccount(stxn.Txn.FreezeAccount, task)
+				for _, xa := range stxn.Txn.Accounts {
+					initAccount(xa, task)
 				}
 			}
 		}
