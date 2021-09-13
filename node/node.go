@@ -800,7 +800,7 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 		if err != nil {
 			if db.IsErrBusy(err) {
 				// this is a special case:
-				// we might get "database is locked" when we attempt to access a database that is conurrently updates it's participation keys.
+				// we might get "database is locked" when we attempt to access a database that is concurrently updating its participation keys.
 				// that database is clearly already on the account manager, and doesn't need to be processed through this logic, and therefore
 				// we can safely ignore that fail case.
 				continue
@@ -1161,6 +1161,12 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 		}
 		participations = append(participations, part)
 		matchingAccountsKeys[part.Address()] = true
+
+		// This is usually a no-op, but the first time it will update the DB.
+		err := node.participationRegistry.Register(part.ParticipationID(), keysRound)
+		if err != nil {
+			node.log.Warn("Failed to register participation key (%s) with participation registry.", part.ParticipationID())
+		}
 	}
 	// write the warnings per account only if we couldn't find a single valid key for that account.
 	for mismatchingAddr, warningFlags := range mismatchingAccountsKeys {
