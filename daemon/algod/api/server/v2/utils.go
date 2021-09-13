@@ -301,12 +301,12 @@ func convertLogs(txn node.TxnWithStatus) *[][]byte {
 func convertInners(txn *node.TxnWithStatus) *[]preEncodedTxInfo {
 	inner := make([]preEncodedTxInfo, len(txn.ApplyData.EvalDelta.InnerTxns))
 	for i, itxn := range txn.ApplyData.EvalDelta.InnerTxns {
-		inner[i] = convertTxn(&itxn)
+		inner[i] = convertInnerTxn(&itxn)
 	}
 	return &inner
 }
 
-func convertTxn(txn *transactions.SignedTxnWithAD) preEncodedTxInfo {
+func convertInnerTxn(txn *transactions.SignedTxnWithAD) preEncodedTxInfo {
 	// This copies from handlers.PendingTransactionInformation, with
 	// simplifications because we have a SignedTxnWithAD rather than
 	// TxnWithStatus, and we know this txn has committed.
@@ -319,8 +319,10 @@ func convertTxn(txn *transactions.SignedTxnWithAD) preEncodedTxInfo {
 	response.ReceiverRewards = &txn.ApplyData.ReceiverRewards.Raw
 	response.CloseRewards = &txn.ApplyData.CloseRewards.Raw
 
-	response.AssetIndex = (*uint64)(&txn.ApplyData.ConfigAsset)
-	response.ApplicationIndex = (*uint64)(&txn.ApplyData.ApplicationID)
+	// Since this is an inner txn, we know these indexes will be populated. No
+	// need to search payset for IDs
+	response.AssetIndex = numOrNil(uint64(txn.ApplyData.ConfigAsset))
+	response.ApplicationIndex = numOrNil(uint64(txn.ApplyData.ApplicationID))
 
 	// Deltas, Logs, and Inners can not be set until we allow appl
 	// response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)
