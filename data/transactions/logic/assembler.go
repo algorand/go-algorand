@@ -513,16 +513,13 @@ func asmPushBytes(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 
 	var (
-		val []byte
-		err error
+		val  []byte
+		err  error
+		tmpl bool
 	)
 	if len(args[0]) > 5 && args[0][:5] == TmplPrefix {
 		val = []byte{}
-		ops.TemplateLabels[args[0]] = TemplateVariable{
-			SourceLine: uint64(ops.sourceLine),
-			IsBytes:    true,
-			Position:   uint64(ops.pending.Len()),
-		}
+		tmpl = true
 	} else {
 		val, _, err = parseBinaryArgs(args)
 		if err != nil {
@@ -535,6 +532,15 @@ func asmPushBytes(ops *OpStream, spec *OpSpec, args []string) error {
 	var scratch [binary.MaxVarintLen64]byte
 	vlen := binary.PutUvarint(scratch[:], uint64(len(val)))
 	ops.pending.Write(scratch[:vlen])
+
+	if tmpl {
+		ops.TemplateLabels[args[0]] = TemplateVariable{
+			SourceLine: uint64(ops.sourceLine),
+			IsBytes:    true,
+			Position:   uint64(ops.pending.Len()),
+		}
+	}
+
 	ops.pending.Write(val)
 	return nil
 }
@@ -739,20 +745,17 @@ func assembleIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.WriteByte(spec.Opcode)
 	bvals := make([][]byte, 0, len(args))
+	tvars := make([]string, 0, len(args))
 	rest := args
 	for len(rest) > 0 {
-
 		var (
 			val      []byte
 			err      error
 			consumed int
+			tvar     string
 		)
 		if len(rest[0]) > 5 && rest[0][:5] == TmplPrefix {
-			ops.TemplateLabels[rest[0]] = TemplateVariable{
-				SourceLine: uint64(ops.sourceLine),
-				IsBytes:    true,
-				Position:   uint64(ops.pending.Len()),
-			}
+			tvar = rest[0]
 			consumed = 1
 		} else {
 			val, consumed, err = parseBinaryArgs(rest)
@@ -766,15 +769,28 @@ func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 			}
 		}
 
+		tvars = append(tvars, tvar)
 		bvals = append(bvals, val)
 		rest = rest[consumed:]
 	}
+
 	var scratch [binary.MaxVarintLen64]byte
 	l := binary.PutUvarint(scratch[:], uint64(len(bvals)))
 	ops.pending.Write(scratch[:l])
-	for _, bv := range bvals {
+
+	for idx, bv := range bvals {
+
 		l := binary.PutUvarint(scratch[:], uint64(len(bv)))
 		ops.pending.Write(scratch[:l])
+
+		if tvars[idx] != "" {
+			ops.TemplateLabels[tvars[idx]] = TemplateVariable{
+				SourceLine: uint64(ops.sourceLine),
+				Position:   uint64(ops.pending.Len()),
+				IsBytes:    true,
+			}
+		}
+
 		ops.pending.Write(bv)
 	}
 	ops.bytecRefs = nil
