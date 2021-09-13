@@ -18,6 +18,7 @@ package txnsync
 
 import (
 	"container/heap"
+	"sort"
 	"time"
 )
 
@@ -25,8 +26,16 @@ import (
 type peerBuckets []peerBucket
 
 type peerScheduler struct {
-	peers peerBuckets
-	node  NodeConnector
+	peers     peerBuckets
+	nextPeers map[*Peer][]int // nextPeers holds an array of ordered indices where this Peer object is on the peers peerBuckets
+	node      NodeConnector
+}
+
+// makePeerScheduler initializes a peer scheduler object.
+func makePeerScheduler() peerScheduler {
+	return peerScheduler{
+		nextPeers: make(map[*Peer][]int),
+	}
 }
 
 //msgp:ignore peerBucket
@@ -39,12 +48,27 @@ type peerBucket struct {
 func (p *peerScheduler) Push(x interface{}) {
 	entry := x.(peerBucket)
 	p.peers = append(p.peers, entry)
+	p.nextPeers[entry.peer] = append(p.nextPeers[entry.peer], len(p.peers)-1)
 }
 
 // Pop implements heap.Interface
 func (p *peerScheduler) Pop() interface{} {
 	end := len(p.peers) - 1
 	res := p.peers[end]
+
+	// delete from the map only if it's the last entry
+	peerIndices := p.nextPeers[res.peer]
+
+	// the peer index must be the last entry.
+	peerIndices = peerIndices[:len(peerIndices)-1]
+
+	// store if non-empty.
+	if len(peerIndices) > 0 {
+		p.nextPeers[res.peer] = peerIndices
+	} else {
+		delete(p.nextPeers, res.peer)
+	}
+
 	p.peers[end] = peerBucket{}
 	p.peers = p.peers[0:end]
 	return res
@@ -55,9 +79,45 @@ func (p *peerScheduler) Len() int {
 	return len(p.peers)
 }
 
+// find returns the smallest index i at which x == a[i],
+// or len(a) if there is no such index.
+func find(a []int, x int) int {
+	for i, n := range a {
+		if x == n {
+			return i
+		}
+	}
+	return len(a)
+}
+
+func replaceIndices(indices []int, i, j int) {
+	k := sort.SearchInts(indices, i)
+	if k >= len(indices) {
+		return
+	}
+	if indices[k] == i {
+		indices[k] = j
+	}
+	k = k + 1 + sort.SearchInts(indices[k+1:], i)
+	if k >= len(indices) {
+		goto done
+	}
+	if indices[k] == j {
+		indices[k] = i
+	}
+done:
+	sort.IntSlice(indices).Sort()
+}
+
 // Swap implements heap.Interface
 func (p *peerScheduler) Swap(i, j int) {
+	if i > j {
+		i, j = j, i
+	}
 	p.peers[i], p.peers[j] = p.peers[j], p.peers[i]
+
+	replaceIndices(p.nextPeers[p.peers[i].peer], j, i)
+	replaceIndices(p.nextPeers[p.peers[j].peer], i, j)
 }
 
 // Less implements heap.Interface
@@ -69,14 +129,15 @@ func (p *peerScheduler) Less(i, j int) bool {
 func (p *peerScheduler) scheduleNewRound(peers []*Peer) {
 	// clear the existings peers list.
 	p.peers = make(peerBuckets, 0, len(peers))
+	p.nextPeers = make(map[*Peer][]int)
 	for _, peer := range peers {
 		peerEntry := peerBucket{peer: peer}
 		peerEntry.next = kickoffTime + time.Duration(p.node.Random(uint64(randomRange)))
 
 		p.peers = append(p.peers, peerEntry)
+		p.nextPeers[peer] = []int{len(p.peers) - 1}
 	}
 	heap.Init(p)
-
 }
 
 func (p *peerScheduler) nextDuration() time.Duration {
@@ -86,7 +147,7 @@ func (p *peerScheduler) nextDuration() time.Duration {
 	return p.peers[0].next
 }
 
-func (p *peerScheduler) nextPeers() (outPeers []*Peer) {
+func (p *peerScheduler) getNextPeers() (outPeers []*Peer) {
 	next := p.nextDuration()
 
 	// pull out of the heap all the entries that have next smaller or equal to the above next.
@@ -125,12 +186,10 @@ func (p *peerScheduler) schedulePeer(peer *Peer, next time.Duration) {
 }
 
 func (p *peerScheduler) peerDuration(peer *Peer) time.Duration {
-	for i := 0; i < len(p.peers); i++ {
-		if p.peers[i].peer != peer {
-			continue
-		}
-		bucket := heap.Remove(p, i).(peerBucket)
-		return bucket.next
+	peerIndices := p.nextPeers[peer]
+	if len(peerIndices) == 0 {
+		return time.Duration(0)
 	}
-	return time.Duration(0)
+	bucket := heap.Remove(p, peerIndices[0]).(peerBucket)
+	return bucket.next
 }

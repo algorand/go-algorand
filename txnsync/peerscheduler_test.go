@@ -29,7 +29,7 @@ import (
 func TestBasics(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	ps := peerScheduler{}
+	ps := makePeerScheduler()
 
 	require.Equal(t, 0, ps.Len())
 
@@ -71,7 +71,7 @@ func TestBasics(t *testing.T) {
 func TestSchedulerBasics(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	ps := peerScheduler{}
+	ps := makePeerScheduler()
 
 	peers := []Peer{
 		Peer{
@@ -110,9 +110,8 @@ func TestSchedulerBasics(t *testing.T) {
 func TestScheduleNewRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	ps := peerScheduler{
-		node: &mockNodeConnector{},
-	}
+	ps := makePeerScheduler()
+	ps.node = &mockNodeConnector{}
 
 	peers := []Peer{
 		Peer{
@@ -155,9 +154,8 @@ func TestScheduleNewRound(t *testing.T) {
 func TestNextPeers(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	ps := peerScheduler{
-		node: &mockNodeConnector{},
-	}
+	ps := makePeerScheduler()
+	ps.node = &mockNodeConnector{}
 
 	peers := []Peer{
 		Peer{
@@ -178,13 +176,13 @@ func TestNextPeers(t *testing.T) {
 
 	require.Equal(t, 4, ps.Len())
 
-	outPeers := ps.nextPeers()
+	outPeers := ps.getNextPeers()
 
 	require.Equal(t, 3, ps.Len())
 	require.Equal(t, 1, len(outPeers))
 	require.Equal(t, uint64(1), outPeers[0].lastSentMessageSequenceNumber)
 
-	outPeers = ps.nextPeers()
+	outPeers = ps.getNextPeers()
 
 	require.Equal(t, 0, ps.Len())
 	require.Equal(t, 2, len(outPeers))

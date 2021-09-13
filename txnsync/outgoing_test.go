@@ -521,7 +521,10 @@ func TestSendMessageLoop(t *testing.T) {
 
 	enqueueCalled := 0
 
-	s := syncState{clock: timers.MakeMonotonicClock(time.Now())}
+	s := syncState{
+		clock:     timers.MakeMonotonicClock(time.Now()),
+		scheduler: makePeerScheduler(),
+	}
 	s.log = mockAsyncLogger{}
 	// Get a large amount of signed txns with a low data exchange rate
 	// to get partial messages to trigger peerOpsClearInterruptible
