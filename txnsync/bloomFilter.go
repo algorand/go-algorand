@@ -157,7 +157,9 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []po
 			if result.sameParams(*hintPrevBloomFilter) {
 				return *hintPrevBloomFilter
 			}
-			prevFilter, _ = decodeBloomFilter(hintPrevBloomFilter.encoded)
+			if hintPrevBloomFilter.encoded.EncodingParams == encodingParams {
+				prevFilter, _ = decodeBloomFilter(hintPrevBloomFilter.encoded)
+			}
 		}
 
 		filter, filterType := filterFactory(len(txnGroups), s)
@@ -193,7 +195,9 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []po
 		if result.sameParams(*hintPrevBloomFilter) {
 			return *hintPrevBloomFilter
 		}
-		prevFilter, _ = decodeBloomFilter(hintPrevBloomFilter.encoded)
+		if hintPrevBloomFilter.encoded.EncodingParams == encodingParams {
+			prevFilter, _ = decodeBloomFilter(hintPrevBloomFilter.encoded)
+		}
 	}
 
 	excludedTransactions := 0
