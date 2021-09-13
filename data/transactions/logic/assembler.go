@@ -482,17 +482,15 @@ func asmPushInt(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 
 	var (
-		val uint64
-		err error
+		val  uint64
+		err  error
+		tmpl string
 	)
 
 	if len(args[0]) > 5 && args[0][:5] == TmplPrefix {
+
 		val = 0
-		ops.TemplateLabels[args[0]] = TemplateVariable{
-			SourceLine: uint64(ops.sourceLine),
-			IsBytes:    false,
-			Position:   uint64(ops.pending.Len()),
-		}
+		tmpl = args[0]
 	} else {
 		val, err = strconv.ParseUint(args[0], 0, 64)
 		if err != nil {
@@ -501,6 +499,15 @@ func asmPushInt(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 
 	ops.pending.WriteByte(spec.Opcode)
+
+	if tmpl != "" {
+		ops.TemplateLabels[tmpl] = TemplateVariable{
+			SourceLine: uint64(ops.sourceLine),
+			IsBytes:    false,
+			Position:   uint64(ops.pending.Len() + 1), // Adding 1 to get to value byte
+		}
+	}
+
 	var scratch [binary.MaxVarintLen64]byte
 	vlen := binary.PutUvarint(scratch[:], val)
 	ops.pending.Write(scratch[:vlen])
