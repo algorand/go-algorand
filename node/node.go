@@ -1181,7 +1181,7 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 		// This is usually a no-op, but the first time it will update the DB.
 		err := node.participationRegistry.Register(part.ParticipationID(), keysRound)
 		if err != nil {
-			node.log.Error("Failed to register participation key (%s) with participation registry.", part.ParticipationID())
+			node.log.Warn("Failed to register participation key (%s) with participation registry.", part.ParticipationID())
 		}
 	}
 	// write the warnings per account only if we couldn't find a single valid key for that account.

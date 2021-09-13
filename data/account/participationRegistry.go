@@ -510,6 +510,8 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 		return ErrInvalidRegisterRange
 	}
 
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
 	updated := make(map[ParticipationID]ParticipationRecord)
 	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// Disable active key if there is one
@@ -550,9 +552,6 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 
 	// Update cache
 	if err == nil {
-		db.mutex.Lock()
-		defer db.mutex.Unlock()
-
 		for id, record := range updated {
 			delete(db.dirty, id)
 			db.cache[id] = record
