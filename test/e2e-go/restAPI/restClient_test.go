@@ -190,6 +190,7 @@ func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, tx
 
 func TestClientCanGetStatus(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -206,6 +207,7 @@ func TestClientCanGetStatus(t *testing.T) {
 
 func TestClientCanGetStatusAfterBlock(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -221,6 +223,7 @@ func TestClientCanGetStatusAfterBlock(t *testing.T) {
 
 func TestTransactionsByAddr(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture
@@ -269,6 +272,7 @@ func TestTransactionsByAddr(t *testing.T) {
 
 func TestClientCanGetVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -280,6 +284,7 @@ func TestClientCanGetVersion(t *testing.T) {
 
 func TestClientCanGetSuggestedFee(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -291,6 +296,7 @@ func TestClientCanGetSuggestedFee(t *testing.T) {
 
 func TestClientCanGetMinTxnFee(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -302,6 +308,7 @@ func TestClientCanGetMinTxnFee(t *testing.T) {
 
 func TestClientCanGetBlockInfo(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -314,6 +321,7 @@ func TestClientCanGetBlockInfo(t *testing.T) {
 
 func TestClientRejectsBadFromAddressWhenSending(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -330,6 +338,7 @@ func TestClientRejectsBadFromAddressWhenSending(t *testing.T) {
 
 func TestClientRejectsBadToAddressWhenSending(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -346,6 +355,7 @@ func TestClientRejectsBadToAddressWhenSending(t *testing.T) {
 
 func TestClientRejectsMutatedFromAddressWhenSending(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -369,6 +379,7 @@ func TestClientRejectsMutatedFromAddressWhenSending(t *testing.T) {
 
 func TestClientRejectsMutatedToAddressWhenSending(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -392,6 +403,7 @@ func TestClientRejectsMutatedToAddressWhenSending(t *testing.T) {
 
 func TestClientRejectsSendingMoneyFromAccountForWhichItHasNoKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -408,6 +420,7 @@ func TestClientRejectsSendingMoneyFromAccountForWhichItHasNoKey(t *testing.T) {
 
 func TestClientOversizedNote(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -433,6 +446,7 @@ func TestClientOversizedNote(t *testing.T) {
 
 func TestClientCanSendAndGetNote(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -458,6 +472,7 @@ func TestClientCanSendAndGetNote(t *testing.T) {
 
 func TestClientCanGetTransactionStatus(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -482,6 +497,7 @@ func TestClientCanGetTransactionStatus(t *testing.T) {
 
 func TestAccountBalance(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -511,6 +527,7 @@ func TestAccountBalance(t *testing.T) {
 
 func TestAccountParticipationInfo(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -574,6 +591,7 @@ func TestAccountParticipationInfo(t *testing.T) {
 
 func TestSupply(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -587,6 +605,7 @@ func TestSupply(t *testing.T) {
 
 func TestClientCanGetGoRoutines(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -601,6 +620,7 @@ func TestClientCanGetGoRoutines(t *testing.T) {
 
 func TestSendingTooMuchFails(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -642,6 +662,7 @@ func TestSendingTooMuchFails(t *testing.T) {
 
 func TestSendingFromEmptyAccountFails(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -681,6 +702,7 @@ func TestSendingFromEmptyAccountFails(t *testing.T) {
 
 func TestSendingTooLittleToEmptyAccountFails(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -713,6 +735,7 @@ func TestSendingTooLittleToEmptyAccountFails(t *testing.T) {
 
 func TestSendingLowFeeFails(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -748,6 +771,7 @@ func TestSendingLowFeeFails(t *testing.T) {
 
 func TestSendingNotClosingAccountFails(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	// use a local fixture because we might really mess with the balances
@@ -794,6 +818,7 @@ func TestSendingNotClosingAccountFails(t *testing.T) {
 
 func TestClientCanGetPendingTransactions(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture
@@ -827,6 +852,7 @@ func TestClientCanGetPendingTransactions(t *testing.T) {
 
 func TestClientTruncatesPendingTransactions(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture
@@ -867,6 +893,7 @@ func TestClientTruncatesPendingTransactions(t *testing.T) {
 
 func TestClientPrioritizesPendingTransactions(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Skip("new FIFO pool does not have prioritization")
 	a := require.New(fixtures.SynchronizedTest(t))
@@ -909,6 +936,7 @@ func TestClientPrioritizesPendingTransactions(t *testing.T) {
 
 func TestClientCanGetPendingTransactionInfo(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture

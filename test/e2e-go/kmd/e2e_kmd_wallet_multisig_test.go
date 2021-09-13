@@ -41,6 +41,7 @@ func addrToPK(t *testing.T, addr string) crypto.PublicKey {
 
 func TestMultisigImportList(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -90,6 +91,7 @@ func TestMultisigImportList(t *testing.T) {
 
 func TestMultisigExportDelete(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -162,6 +164,7 @@ func TestMultisigExportDelete(t *testing.T) {
 
 func TestMultisigSign(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -237,6 +240,7 @@ func TestMultisigSign(t *testing.T) {
 
 func TestMultisigSignWithSigner(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -319,6 +323,7 @@ func TestMultisigSignWithSigner(t *testing.T) {
 
 func TestMultisigSignWithWrongSigner(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -378,6 +383,7 @@ func TestMultisigSignWithWrongSigner(t *testing.T) {
 
 func TestMultisigSignProgram(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()

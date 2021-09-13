@@ -32,12 +32,14 @@ const transactionFee = uint64(0)
 
 func TestAccountsCanChangeOnlineState(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	testAccountsCanChangeOnlineState(t, filepath.Join("nettemplates", "TwoNodesPartlyOffline.json"))
 }
 
 func TestAccountsCanChangeOnlineStateInTheFuture(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	testAccountsCanChangeOnlineState(t, filepath.Join("nettemplates", "TwoNodesPartlyOfflineVFuture.json"))
 }
