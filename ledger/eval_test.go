@@ -1448,12 +1448,12 @@ func (ledger *Ledger) asaParams(t testing.TB, asset basics.AssetIndex) (basics.A
 		return basics.AssetParams{}, err
 	}
 	if !ok {
-		return basics.AssetParams{}, fmt.Errorf("no asset")
+		return basics.AssetParams{}, fmt.Errorf("no asset (%d)", asset)
 	}
 	if params, ok := ledger.lookup(t, creator).AssetParams[asset]; ok {
 		return params, nil
 	}
-	return basics.AssetParams{}, fmt.Errorf("bad lookup")
+	return basics.AssetParams{}, fmt.Errorf("bad lookup (%d)", asset)
 }
 
 func (eval *BlockEvaluator) fillDefaults(txn *txntest.Txn) {

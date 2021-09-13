@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -375,7 +376,7 @@ func TestAssetCreate(t *testing.T) {
   tx_field ConfigAssetUnitName
   byte "Gold"
   tx_field ConfigAssetName
-  byte "https:://gold.rush/"
+  byte "https://gold.rush/"
   tx_field ConfigAssetURL
   tx_submit
   int 1
@@ -396,7 +397,7 @@ func TestAssetFreeze(t *testing.T) {
   int 3                            ; tx_field ConfigAssetDecimals
   byte "oz"                        ; tx_field ConfigAssetUnitName
   byte "Gold"                      ; tx_field ConfigAssetName
-  byte "https:://gold.rush/"       ; tx_field ConfigAssetURL
+  byte "https://gold.rush/"       ; tx_field ConfigAssetURL
   global CurrentApplicationAddress ; tx_field ConfigAssetFreeze;
   tx_submit
   int 1

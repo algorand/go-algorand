@@ -784,7 +784,7 @@ func TestAcfgAction(t *testing.T) {
 		 tx_field ConfigAssetUnitName
 		 byte "Gold"
 		 tx_field ConfigAssetName
-		 byte "https:://gold.rush/"
+		 byte "https://gold.rush/"
 		 tx_field ConfigAssetURL
 		 global CurrentApplicationAddress
          dup
@@ -852,7 +852,7 @@ submit:  tx_submit
 	require.Equal(t, 3, int(asaParams.Decimals))
 	require.Equal(t, "oz", asaParams.UnitName)
 	require.Equal(t, "Gold", asaParams.AssetName)
-	require.Equal(t, "https:://gold.rush/", asaParams.URL)
+	require.Equal(t, "https://gold.rush/", asaParams.URL)
 
 }
 

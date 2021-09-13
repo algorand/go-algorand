@@ -119,13 +119,14 @@ func (sv *stackValue) bool() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if u64 == 1 {
-		return true, nil
-	}
-	if u64 == 0 {
+	switch u64 {
+	case 0:
 		return false, nil
+	case 1:
+		return true, nil
+	default:
+		return false, fmt.Errorf("boolean is neither 1 nor 0: %d", u64)
 	}
-	return false, fmt.Errorf("boolean is neither 1 nor 0: %d", u64)
 }
 
 func (sv *stackValue) string(limit int) (string, error) {
@@ -3558,7 +3559,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 		decimals, err = sv.uint()
 		if err == nil {
 			if decimals > uint64(cx.Proto.MaxAssetDecimals) {
-				err = fmt.Errorf("too many decimals")
+				err = fmt.Errorf("too many decimals (%d)", decimals)
 			} else {
 				txn.AssetParams.Decimals = uint32(decimals)
 			}
