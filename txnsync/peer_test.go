@@ -858,13 +858,16 @@ func TestUpdateMessageSent(t *testing.T) {
 
 	a.False(p.recentSentTransactions.contained(txnIds[0]))
 
-	p.updateMessageSent(txMsg, txnIds, timestamp, sequenceNumber, messageSize, bFilter)
+	p.updateMessageSent(txMsg, txnIds, timestamp, sequenceNumber, messageSize)
 
 	a.True(p.recentSentTransactions.contained(txnIds[0]))
 	a.Equal(p.lastSentMessageSequenceNumber, sequenceNumber)
 	a.Equal(p.lastSentMessageRound, txMsg.Round)
 	a.Equal(p.lastSentMessageTimestamp, timestamp)
 	a.Equal(p.lastSentMessageSize, messageSize)
+
+	p.updateSentBoomFilter(bFilter)
+
 	a.Equal(p.lastSentBloomFilter, bFilter)
 
 }

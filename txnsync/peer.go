@@ -456,12 +456,16 @@ func (p *Peer) getLocalRequestParams() (offset, modulator byte) {
 }
 
 // update the peer once the message was sent successfully.
-func (p *Peer) updateMessageSent(txMsg *transactionBlockMessage, selectedTxnIDs []transactions.Txid, timestamp time.Duration, sequenceNumber uint64, messageSize int, filter bloomFilter) {
+func (p *Peer) updateMessageSent(txMsg *transactionBlockMessage, selectedTxnIDs []transactions.Txid, timestamp time.Duration, sequenceNumber uint64, messageSize int) {
 	p.recentSentTransactions.addSlice(selectedTxnIDs, sequenceNumber, timestamp)
 	p.lastSentMessageSequenceNumber = sequenceNumber
 	p.lastSentMessageRound = txMsg.Round
 	p.lastSentMessageTimestamp = timestamp
 	p.lastSentMessageSize = messageSize
+}
+
+// update the peer's lastSentBloomFilter.
+func (p *Peer) updateSentBoomFilter(filter bloomFilter) {
 	if filter.encodedLength > 0 {
 		p.lastSentBloomFilter = filter
 	}
