@@ -3573,10 +3573,8 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 	case ConfigAssetURL:
 		txn.AssetParams.URL, err = sv.string(cx.Proto.MaxAssetURLBytes)
 	case ConfigAssetMetadataHash:
-		if sv.Bytes == nil {
-			err = fmt.Errorf("ConfigAssetMetadataHash must be bytes")
-		} else if len(sv.Bytes) > 32 {
-			err = fmt.Errorf("ConfigAssetMetadataHash must be <= 32 bytes")
+		if len(sv.Bytes) != 32 {
+			err = fmt.Errorf("ConfigAssetMetadataHash must be 32 bytes")
 		} else {
 			copy(txn.AssetParams.MetadataHash[:], sv.Bytes)
 		}
