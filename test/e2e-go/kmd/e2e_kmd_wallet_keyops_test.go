@@ -34,6 +34,7 @@ import (
 
 func TestGenerateAndListKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -88,6 +89,7 @@ func TestGenerateAndListKeys(t *testing.T) {
 
 func TestImportKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -140,6 +142,7 @@ func TestImportKey(t *testing.T) {
 
 func TestExportKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -204,6 +207,7 @@ func TestExportKey(t *testing.T) {
 
 func TestDeleteKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -270,6 +274,7 @@ func TestDeleteKey(t *testing.T) {
 
 func TestSignTransaction(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -330,6 +335,7 @@ func TestSignTransaction(t *testing.T) {
 
 func TestSignProgram(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -431,6 +437,7 @@ func BenchmarkSignTransaction(b *testing.B) {
 
 func TestMasterKeyImportExport(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -600,6 +607,7 @@ func TestMasterKeyImportExport(t *testing.T) {
 
 func TestMasterKeyGeneratePastImportedKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()

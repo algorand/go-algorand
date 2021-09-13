@@ -43,6 +43,7 @@ func GenerateRandomBytes(n int) []byte {
 // as they send each other money many times
 func TestAccountsCanSendMoney(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	numberOfSends := 25
 	if testing.Short() {
@@ -54,6 +55,8 @@ func TestAccountsCanSendMoney(t *testing.T) {
 // this test checks that two accounts' balances stay up to date
 // as they send each other money many times
 func TestDevModeAccountsCanSendMoney(t *testing.T) {
+	defer fixtures.ShutdownSynchronizedTest(t)
+
 	numberOfSends := 25
 	if testing.Short() {
 		numberOfSends = 3

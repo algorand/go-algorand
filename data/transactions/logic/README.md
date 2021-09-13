@@ -104,6 +104,9 @@ For three-argument ops, `A` is the element two below the top, `B` is the penulti
 | `keccak256` | Keccak256 hash of value X, yields [32]byte |
 | `sha512_256` | SHA512_256 hash of value X, yields [32]byte |
 | `ed25519verify` | for (data A, signature B, pubkey C) verify the signature of ("ProgData" \|\| program_hash \|\| data) against the pubkey => {0 or 1} |
+| `ecdsa_verify v` | for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1} |
+| `ecdsa_pk_recover v` | for (data A, recovery id B, signature C, D) recover a public key => [*... stack*, X, Y] |
+| `ecdsa_pk_decompress v` | decompress pubkey A into components X, Y => [*... stack*, X, Y] |
 | `+` | A plus B. Panic on overflow. |
 | `-` | A minus B. Panic if B > A. |
 | `/` | A divided by B (truncated division). Panic if B == 0. |
@@ -257,7 +260,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 0 | Sender | []byte | 32 byte address |
 | 1 | Fee | uint64 | micro-Algos |
 | 2 | FirstValid | uint64 | round number |
-| 3 | FirstValidTime | uint64 | Timestamp recorded on the block header at round FirstValid-1. LogicSigVersion >= 5. |
+| 3 | FirstValidTime | uint64 | Timestamp recorded on the block header at round FirstValid-1. |
 | 4 | LastValid | uint64 | round number |
 | 5 | Note | []byte | Any data up to 1024 bytes |
 | 6 | Lease | []byte | 32 byte lease value |
