@@ -1299,18 +1299,16 @@ func maxAddressesInTxn(proto *config.ConsensusParams) int {
 	return 7 + proto.MaxAppTxnAccounts
 }
 
-// Return a list of addresses referenced in `txn`. Addresses might repeat.
-func getTxnAddresses(txn *transactions.Transaction, proto *config.ConsensusParams) []basics.Address {
-	res := make([]basics.Address, 0, maxAddressesInTxn(proto))
+// Write the list of addresses referenced in `txn` to `out`. Addresses might repeat.
+func getTxnAddresses(txn *transactions.Transaction, out *[]basics.Address) {
+	*out = (*out)[:0]
 
-	res = append(
-		res, txn.Sender, txn.Receiver, txn.CloseRemainderTo, txn.AssetSender,
+	*out = append(
+		*out, txn.Sender, txn.Receiver, txn.CloseRemainderTo, txn.AssetSender,
 		txn.AssetReceiver, txn.AssetCloseTo, txn.FreezeAccount)
 	for _, addr := range txn.ApplicationCallTxnFields.Accounts {
-		res = append(res, addr)
+		*out = append(*out, addr)
 	}
-
-	return res
 }
 
 // loadAccounts loads the account data for the provided transaction group list. It also loads the feeSink account and add it to the first returned transaction group.
@@ -1376,12 +1374,13 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 
 		// iterate over the transaction groups and add all their account addresses to the list
 		groupsReady := make([]*groupTask, len(groups))
+		refAddresses := make([]basics.Address, 0, maxAddressesInTxn(&consensusParams))
 		for i, group := range groups {
 			task := &groupTask{}
 			groupsReady[i] = task
 			for _, stxn := range group {
-				addresses := getTxnAddresses(&stxn.Txn, &consensusParams)
-				for _, address := range addresses {
+				getTxnAddresses(&stxn.Txn, &refAddresses)
+				for _, address := range refAddresses {
 					initAccount(address, task)
 				}
 			}
@@ -1516,15 +1515,16 @@ func (vb ValidatedBlock) WithSeed(s committee.Seed) ValidatedBlock {
 }
 
 // GetBlockAddresses returns all addresses referenced in `block`.
-func GetBlockAddresses(block *bookkeeping.Block, proto config.ConsensusParams) map[basics.Address]struct{} {
+func GetBlockAddresses(block *bookkeeping.Block) map[basics.Address]struct{} {
 	// Reserve a reasonable memory size for the map.
 	res := make(map[basics.Address]struct{}, len(block.Payset)+2)
 	res[block.FeeSink] = struct{}{}
 	res[block.RewardsPool] = struct{}{}
 
+	var refAddresses []basics.Address
 	for _, stib := range block.Payset {
-		txnAddresses := getTxnAddresses(&stib.Txn, &proto)
-		for _, address := range txnAddresses {
+		getTxnAddresses(&stib.Txn, &refAddresses)
+		for _, address := range refAddresses {
 			res[address] = struct{}{}
 		}
 	}
