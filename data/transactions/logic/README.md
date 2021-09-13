@@ -104,6 +104,9 @@ For three-argument ops, `A` is the element two below the top, `B` is the penulti
 | `keccak256` | Keccak256 hash of value X, yields [32]byte |
 | `sha512_256` | SHA512_256 hash of value X, yields [32]byte |
 | `ed25519verify` | for (data A, signature B, pubkey C) verify the signature of ("ProgData" \|\| program_hash \|\| data) against the pubkey => {0 or 1} |
+| `ecdsa_verify v` | for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1} |
+| `ecdsa_pk_recover v` | for (data A, recovery id B, signature C, D) recover a public key => [*... stack*, X, Y] |
+| `ecdsa_pk_decompress v` | decompress pubkey A into components X, Y => [*... stack*, X, Y] |
 | `+` | A plus B. Fail on overflow. |
 | `-` | A minus B. Fail if B > A. |
 | `/` | A divided by B (truncated division). Fail if B == 0. |
