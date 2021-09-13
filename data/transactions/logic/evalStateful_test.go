@@ -2376,7 +2376,6 @@ func TestReturnTypes(t *testing.T) {
 		"bytec_2":           "bytecblock 0x32 0x33 0x34; bytec_2",
 		"bytec_3":           "bytecblock 0x32 0x33 0x34 0x35; bytec_3",
 		"substring":         "substring 0 2",
-		"ed25519verify":     "pop; pop; pop; int 1", // ignore
 		"asset_params_get":  "asset_params_get AssetTotal",
 		"asset_holding_get": "asset_holding_get AssetBalance",
 		"gtxns":             "gtxns Sender",
@@ -2391,11 +2390,19 @@ func TestReturnTypes(t *testing.T) {
 		"args":              "args",
 	}
 
+	// these require special input data and tested separately
+	skipCmd := map[string]bool{
+		"ed25519verify":       true,
+		"ecdsa_verify":        true,
+		"ecdsa_pk_recover":    true,
+		"ecdsa_pk_decompress": true,
+	}
+
 	byName := OpsByName[LogicVersion]
 	for _, m := range []runMode{runModeSignature, runModeApplication} {
 		t.Run(fmt.Sprintf("m=%s", m.String()), func(t *testing.T) {
 			for name, spec := range byName {
-				if len(spec.Returns) == 0 || (m&spec.Modes) == 0 {
+				if len(spec.Returns) == 0 || (m&spec.Modes) == 0 || skipCmd[name] {
 					continue
 				}
 				var sb strings.Builder
