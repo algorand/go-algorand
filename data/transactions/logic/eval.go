@@ -3675,7 +3675,9 @@ func opTxSubmit(cx *EvalContext) {
 		if cx.FeeCredit != nil && *cx.FeeCredit >= underpaid {
 			*cx.FeeCredit -= underpaid
 		} else {
-			// This should be impossible until we allow changing the Fee
+			// We allow changing the fee. One pattern might be for an
+			// app to unilaterally set its Fee to 0. The idea would be
+			// that other transactions were supposed to overpay.
 			cx.err = fmt.Errorf("fee too small")
 			return
 		}
