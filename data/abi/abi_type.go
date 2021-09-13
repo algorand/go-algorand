@@ -476,9 +476,12 @@ func (t Type) ByteLen() (int, error) {
 			if t.childTypes[i].abiTypeID == Bool {
 				// search after bool
 				after := findBoolLR(t.childTypes, i, 1)
+				// shift the index
 				i += after
-				size = after / 8
-				if after%8 != 0 {
+				// get number of bool
+				boolNum := after + 1
+				size += boolNum / 8
+				if boolNum%8 != 0 {
 					size++
 				}
 			} else {

@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"math/big"
+	mrand "math/rand"
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -1015,9 +1016,124 @@ func TestDecodeInvalid(t *testing.T) {
 	})
 }
 
+func generateStaticArray(t *testing.T, testValuePool *[][]Value) {
+	// int
+	for intIndex := 0; intIndex < len((*testValuePool)[Uint]); intIndex += 200 {
+		staticArrayList := make([]Value, 20)
+		for i := 0; i < 20; i++ {
+			staticArrayList[i] = (*testValuePool)[Uint][intIndex+i]
+		}
+		staticArray, err := MakeStaticArray(staticArrayList)
+		require.NoError(t, err, "make static array for uint should not return error")
+		(*testValuePool)[ArrayStatic] = append((*testValuePool)[ArrayStatic], staticArray)
+	}
+	// byte
+	byteArrayList := make([]Value, 20)
+	for byteIndex := 0; byteIndex < 20; byteIndex++ {
+		byteArrayList[byteIndex] = (*testValuePool)[Byte][byteIndex]
+	}
+	byteStaticArray, err := MakeStaticArray(byteArrayList)
+	require.NoError(t, err, "make static array for byte should not return error")
+	(*testValuePool)[ArrayStatic] = append((*testValuePool)[ArrayStatic], byteStaticArray)
+	// address
+	addressArrayList := make([]Value, 20)
+	for addrIndex := 0; addrIndex < 20; addrIndex++ {
+		addressArrayList[addrIndex] = (*testValuePool)[Address][addrIndex]
+	}
+	addressStaticArray, err := MakeStaticArray(addressArrayList)
+	require.NoError(t, err, "make static array for address should not return error")
+	(*testValuePool)[ArrayStatic] = append((*testValuePool)[ArrayStatic], addressStaticArray)
+	// string
+	stringArrayList := make([]Value, 20)
+	for strIndex := 0; strIndex < 20; strIndex++ {
+		stringArrayList[strIndex] = (*testValuePool)[String][strIndex]
+	}
+	stringStaticArray, err := MakeStaticArray(stringArrayList)
+	require.NoError(t, err, "make static array for string should not return error")
+	(*testValuePool)[ArrayStatic] = append((*testValuePool)[ArrayStatic], stringStaticArray)
+	// bool
+	boolArrayList := make([]Value, 20)
+	for boolIndex := 0; boolIndex < 20; boolIndex++ {
+		valIndex := mrand.Int31n(2)
+		boolArrayList[boolIndex] = (*testValuePool)[Bool][valIndex]
+	}
+	boolStaticArray, err := MakeStaticArray(boolArrayList)
+	require.NoError(t, err, "make static array for bool should not return error")
+	(*testValuePool)[ArrayStatic] = append((*testValuePool)[ArrayStatic], boolStaticArray)
+}
+
+func generateDynamicArray(t *testing.T, testValuePool *[][]Value) {
+	// int
+	for intIndex := 0; intIndex < len((*testValuePool)[Uint]); intIndex += 200 {
+		dynamicArrayList := make([]Value, 20)
+		for i := 0; i < 20; i++ {
+			dynamicArrayList[i] = (*testValuePool)[Uint][intIndex+i]
+		}
+		dynamicArray, err := MakeDynamicArray(dynamicArrayList, dynamicArrayList[0].ABIType)
+		require.NoError(t, err, "make static array for uint should not return error")
+		(*testValuePool)[ArrayDynamic] = append((*testValuePool)[ArrayDynamic], dynamicArray)
+	}
+	// byte
+	byteArrayList := make([]Value, 20)
+	for byteIndex := 0; byteIndex < 20; byteIndex++ {
+		byteArrayList[byteIndex] = (*testValuePool)[Byte][byteIndex]
+	}
+	byteDynamicArray, err := MakeDynamicArray(byteArrayList, byteArrayList[0].ABIType)
+	require.NoError(t, err, "make dynamic array for byte should not return error")
+	(*testValuePool)[ArrayDynamic] = append((*testValuePool)[ArrayDynamic], byteDynamicArray)
+	// address
+	addressArrayList := make([]Value, 20)
+	for addrIndex := 0; addrIndex < 20; addrIndex++ {
+		addressArrayList[addrIndex] = (*testValuePool)[Address][addrIndex]
+	}
+	addressDynamicArray, err := MakeDynamicArray(addressArrayList, MakeAddressType())
+	require.NoError(t, err, "make dynamic array for address should not return error")
+	(*testValuePool)[ArrayDynamic] = append((*testValuePool)[ArrayDynamic], addressDynamicArray)
+	// string
+	stringArrayList := make([]Value, 20)
+	for strIndex := 0; strIndex < 20; strIndex++ {
+		stringArrayList[strIndex] = (*testValuePool)[String][strIndex]
+	}
+	stringDynamicArray, err := MakeDynamicArray(stringArrayList, MakeStringType())
+	require.NoError(t, err, "make dynamic array for string should not return error")
+	(*testValuePool)[ArrayDynamic] = append((*testValuePool)[ArrayDynamic], stringDynamicArray)
+	// bool
+	boolArrayList := make([]Value, 20)
+	for boolIndex := 0; boolIndex < 20; boolIndex++ {
+		valIndex := mrand.Int31n(2)
+		boolArrayList[boolIndex] = (*testValuePool)[Bool][valIndex]
+	}
+	boolDynamicArray, err := MakeDynamicArray(boolArrayList, MakeBoolType())
+	require.NoError(t, err, "make dynamic array for bool should not return error")
+	(*testValuePool)[ArrayDynamic] = append((*testValuePool)[ArrayDynamic], boolDynamicArray)
+}
+
+func generateTuples(t *testing.T, testValuePool *[][]Value, slotRange int) {
+	for i := 0; i < 100; i++ {
+		tupleLen := 1 + mrand.Int31n(25)
+		tupleValList := make([]Value, tupleLen)
+		for tupleElemIndex := 0; tupleElemIndex < int(tupleLen); tupleElemIndex++ {
+			tupleTypeIndex := mrand.Int31n(int32(slotRange))
+			tupleElemChoiceRange := len((*testValuePool)[tupleTypeIndex])
+			tupleElemRangeIndex := mrand.Intn(tupleElemChoiceRange)
+			tupleElem := (*testValuePool)[tupleTypeIndex][tupleElemRangeIndex]
+			tupleValList[tupleElemIndex] = tupleElem
+		}
+		tupleVal, err := MakeTuple(tupleValList)
+		require.NoError(t, err, "make tuple should not return error")
+		(*testValuePool)[Tuple] = append((*testValuePool)[Tuple], tupleVal)
+	}
+}
+
+// round-trip test for random tuple elements
+// first we generate base type elements to each slot of testValuePool
+// then we generate static/dynamic array based on the pre-generated random values
+// we generate base tuples based on base-type elements/static arrays/dynamic arrays
+// we also generate cascaded tuples (tuples with tuple elements)
 func TestEncodeDecodeRandomTuple(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	var testValuePool [][]Value = make([][]Value, 8)
+	// test pool for 9 distinct types
+	testValuePool := make([][]Value, 9)
 	for i := 8; i <= 512; i += 8 {
 		max := big.NewInt(1).Lsh(big.NewInt(1), uint(i))
 		for j := 0; j < 200; j++ {
@@ -1057,5 +1173,23 @@ func TestEncodeDecodeRandomTuple(t *testing.T) {
 			abiString := MakeString(gobberish.GenerateString(i))
 			testValuePool[String] = append(testValuePool[String], abiString)
 		}
+	}
+	// Array static
+	generateStaticArray(t, &testValuePool)
+	// Array dynamic
+	generateDynamicArray(t, &testValuePool)
+	// tuple generation
+	generateTuples(t, &testValuePool, 8)
+	// generate cascaded tuples
+	generateTuples(t, &testValuePool, 9)
+	// test tuple encode-decode round-trip
+	for _, tuple := range testValuePool[Tuple] {
+		t.Run("random tuple encode-decode test", func(t *testing.T) {
+			encoded, err := tuple.Encode()
+			require.NoError(t, err, "encode tuple should not have error")
+			decoded, err := Decode(encoded, tuple.ABIType)
+			require.NoError(t, err, "decode tuple should not have error")
+			require.Equal(t, tuple, decoded, "encoded-decoded tuple should match with expected")
+		})
 	}
 }

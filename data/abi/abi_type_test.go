@@ -146,19 +146,19 @@ func TestMakeTypeInvalid(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	// uint
 	for i := 0; i <= 1000; i++ {
-		randInput := rand.Uint32()
+		randInput := rand.Uint32() % (1 << 16)
 		for randInput%8 == 0 && randInput <= 512 && randInput >= 8 {
-			randInput = rand.Uint32()
+			randInput = rand.Uint32() % (1 << 16)
 		}
 		// note: if a var mod 8 = 0 (or not) in uint32, then it should mod 8 = 0 (or not) in uint16.
 		_, err := MakeUintType(uint16(randInput))
-		require.Error(t, err, "MakeUintType: should throw error on bitSize input %d", randInput)
+		require.Error(t, err, "MakeUintType: should throw error on bitSize input %d", uint16(randInput))
 	}
 	// ufixed
 	for i := 0; i <= 10000; i++ {
-		randSize := rand.Uint64()
+		randSize := rand.Uint64() % (1 << 16)
 		for randSize%8 == 0 && randSize <= 512 && randSize >= 8 {
-			randSize = rand.Uint64()
+			randSize = rand.Uint64() % (1 << 16)
 		}
 		randPrecision := rand.Uint32()
 		for randPrecision >= 1 && randPrecision <= 160 {
