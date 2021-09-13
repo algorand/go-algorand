@@ -278,9 +278,12 @@ func beta(txPoolSize int) time.Duration {
 		txPoolSize = 10000
 	}
 	beta := 1.0 / (2 * 3.6923 * math.Exp(float64(txPoolSize)*0.00026))
-	if beta < minBetaThreshold {
-		beta = minBetaThreshold
-	}
+	/*
+	// TODO: minBeta breaks tests...
+			if beta < minBetaThreshold {
+				beta = minBetaThreshold
+			}
+	*/
 	return time.Duration(float64(time.Second) * beta)
 
 }
