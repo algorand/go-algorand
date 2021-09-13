@@ -1306,7 +1306,7 @@ func getTxnAddresses(txn *transactions.Transaction, out *[]basics.Address) {
 	*out = append(
 		*out, txn.Sender, txn.Receiver, txn.CloseRemainderTo, txn.AssetSender,
 		txn.AssetReceiver, txn.AssetCloseTo, txn.FreezeAccount)
-	*out = append(txn.ApplicationCallTxnFields.Accounts)
+	*out = append(*out, txn.ApplicationCallTxnFields.Accounts...)
 }
 
 // loadAccounts loads the account data for the provided transaction group list. It also loads the feeSink account and add it to the first returned transaction group.
