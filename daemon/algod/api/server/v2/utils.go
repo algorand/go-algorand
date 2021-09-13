@@ -319,9 +319,8 @@ func convertTxn(txn *transactions.SignedTxnWithAD) preEncodedTxInfo {
 	response.ReceiverRewards = &txn.ApplyData.ReceiverRewards.Raw
 	response.CloseRewards = &txn.ApplyData.CloseRewards.Raw
 
-	// Indexes can't be set until we allow acfg or appl
-	// response.AssetIndex = computeAssetIndexFromTxn(txn, v2.Node.Ledger())
-	// response.ApplicationIndex = computeAppIndexFromTxn(txn, v2.Node.Ledger())
+	response.AssetIndex = (*uint64)(&txn.ApplyData.ConfigAsset)
+	response.ApplicationIndex = (*uint64)(&txn.ApplyData.ApplicationID)
 
 	// Deltas, Logs, and Inners can not be set until we allow appl
 	// response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)
