@@ -175,7 +175,7 @@ type txnFieldSpec struct {
 	field      TxnField
 	ftype      StackType
 	version    uint64 // When this field become available to txn/gtxn. 0=always
-	itxVersion uint64 // When this field become available to tx_field. 0=never
+	itxVersion uint64 // When this field become available to itxn_field. 0=never
 }
 
 var txnFieldSpecs = []txnFieldSpec{

@@ -312,9 +312,9 @@ extract16bits
 log
 txn Nonparticipation
 gtxn 0 Nonparticipation
-tx_begin
-tx_field Sender
-tx_submit
+itxn_begin
+itxn_field Sender
+itxn_submit
 int 1
 txnas ApplicationArgs
 int 0
@@ -2250,11 +2250,11 @@ func TestUncoverAsm(t *testing.T) {
 }
 
 func TestTxTypes(t *testing.T) {
-	testProg(t, "tx_begin; tx_field Sender", 5, expect{2, "tx_field Sender expects 1 stack argument..."})
-	testProg(t, "tx_begin; int 1; tx_field Sender", 5, expect{3, "...wanted type []byte got uint64"})
-	testProg(t, "tx_begin; byte 0x56127823; tx_field Sender", 5)
+	testProg(t, "itxn_begin; itxn_field Sender", 5, expect{2, "itxn_field Sender expects 1 stack argument..."})
+	testProg(t, "itxn_begin; int 1; itxn_field Sender", 5, expect{3, "...wanted type []byte got uint64"})
+	testProg(t, "itxn_begin; byte 0x56127823; itxn_field Sender", 5)
 
-	testProg(t, "tx_begin; tx_field Amount", 5, expect{2, "tx_field Amount expects 1 stack argument..."})
-	testProg(t, "tx_begin; byte 0x87123376; tx_field Amount", 5, expect{3, "...wanted type uint64 got []byte"})
-	testProg(t, "tx_begin; int 1; tx_field Amount", 5)
+	testProg(t, "itxn_begin; itxn_field Amount", 5, expect{2, "itxn_field Amount expects 1 stack argument..."})
+	testProg(t, "itxn_begin; byte 0x87123376; itxn_field Amount", 5, expect{3, "...wanted type uint64 got []byte"})
+	testProg(t, "itxn_begin; int 1; itxn_field Amount", 5)
 }

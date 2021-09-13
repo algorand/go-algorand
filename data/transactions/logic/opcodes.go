@@ -301,9 +301,9 @@ var OpSpecs = []OpSpec{
 
 	// AVM "effects"
 	{0xb0, "log", opLog, asmDefault, disDefault, oneBytes, nil, 5, runModeApplication, opDefault},
-	{0xb1, "tx_begin", opTxBegin, asmDefault, disDefault, nil, nil, 5, runModeApplication, opDefault},
-	{0xb2, "tx_field", opTxField, asmTxField, disTxField, oneAny, nil, 5, runModeApplication, stacky(typeTxField, "f")},
-	{0xb3, "tx_submit", opTxSubmit, asmDefault, disDefault, nil, nil, 5, runModeApplication, opDefault},
+	{0xb1, "itxn_begin", opTxBegin, asmDefault, disDefault, nil, nil, 5, runModeApplication, opDefault},
+	{0xb2, "itxn_field", opTxField, asmTxField, disTxField, oneAny, nil, 5, runModeApplication, stacky(typeTxField, "f")},
+	{0xb3, "itxn_submit", opTxSubmit, asmDefault, disDefault, nil, nil, 5, runModeApplication, opDefault},
 
 	// Dynamically indexing into LogicSigs
 	{0xc0, "txnas", opTxnas, assembleTxnas, disTxn, oneInt, oneAny, 5, modeAny, immediates("f")},

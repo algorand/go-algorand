@@ -1233,7 +1233,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 
 `log` can be called up to MaxLogCalls times in a program, and log up to a total of 1k bytes.
 
-## tx_begin
+## itxn_begin
 
 - Opcode: 0xb1
 - Pops: _None_
@@ -1242,7 +1242,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - LogicSigVersion >= 5
 - Mode: Application
 
-## tx_field f
+## itxn_field f
 
 - Opcode: 0xb2 {uint8 transaction field index}
 - Pops: *... stack*, any
@@ -1251,7 +1251,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - LogicSigVersion >= 5
 - Mode: Application
 
-## tx_submit
+## itxn_submit
 
 - Opcode: 0xb3
 - Pops: _None_

@@ -56,7 +56,7 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 		// These must be identical to keep an old backward compat test working
 		MinTxnFee:  1001,
 		MinBalance: 1001,
-		// Our sample txn is 42-1066 (and that's used as default in tx_begin)
+		// Our sample txn is 42-1066 (and that's used as default in itxn_begin)
 		MaxTxnLife: 1500,
 		// Strange choices below so that we test against conflating them
 		AppFlatParamsMinBalance:  1002,
@@ -66,7 +66,7 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 
 		MaxInnerTransactions: 4,
 
-		// With the addition of tx_field, tx_submit, which rely on
+		// With the addition of itxn_field, itxn_submit, which rely on
 		// machinery outside logic package for validity checking, we
 		// need a more realistic set of consensus paramaters.
 		Asset:                 true,

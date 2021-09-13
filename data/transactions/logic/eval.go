@@ -348,7 +348,7 @@ type EvalContext struct {
 	version uint64
 	scratch scratchSpace
 
-	subtxn *transactions.SignedTxn // place to build for tx_submit
+	subtxn *transactions.SignedTxn // place to build for itxn_submit
 	// The transactions Performed() and their effects
 	InnerTxns []transactions.SignedTxnWithAD
 
@@ -3432,7 +3432,7 @@ func authorizedSender(cx *EvalContext, addr basics.Address) bool {
 
 func opTxBegin(cx *EvalContext) {
 	if cx.subtxn != nil {
-		cx.err = errors.New("tx_begin without tx_submit")
+		cx.err = errors.New("itxn_begin without itxn_submit")
 		return
 	}
 	// Start fresh
@@ -3447,8 +3447,8 @@ func opTxBegin(cx *EvalContext) {
 	fee := cx.Proto.MinTxnFee
 	if cx.FeeCredit != nil {
 		// Use credit to shrink the fee, but don't change FeeCredit
-		// here, because they might never tx_submit, or they might
-		// change the fee.  Do it in tx_submit.
+		// here, because they might never itxn_submit, or they might
+		// change the fee.  Do it in itxn_submit.
 		fee = basics.SubSaturate(fee, *cx.FeeCredit)
 	}
 	cx.subtxn.Txn.Header = transactions.Header{
@@ -3499,7 +3499,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 		if ok {
 			txn.Type = txType
 		} else {
-			err = fmt.Errorf("%s is not a valid Type for tx_field", sv.Bytes)
+			err = fmt.Errorf("%s is not a valid Type for itxn_field", sv.Bytes)
 		}
 	case TypeEnum:
 		var i uint64
@@ -3513,7 +3513,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 			if ok {
 				txn.Type = txType
 			} else {
-				err = fmt.Errorf("%s is not a valid Type for tx_field", TxnTypeNames[i])
+				err = fmt.Errorf("%s is not a valid Type for itxn_field", TxnTypeNames[i])
 			}
 		} else {
 			err = fmt.Errorf("%d is not a valid TypeEnum", i)
@@ -3597,21 +3597,21 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 	// appl needs to wait. Can't call AVM from AVM.
 
 	default:
-		return fmt.Errorf("invalid tx_field %s", fs.field)
+		return fmt.Errorf("invalid itxn_field %s", fs.field)
 	}
 	return
 }
 
 func opTxField(cx *EvalContext) {
 	if cx.subtxn == nil {
-		cx.err = errors.New("tx_field without tx_begin")
+		cx.err = errors.New("itxn_field without itxn_begin")
 		return
 	}
 	last := len(cx.stack) - 1
 	field := TxnField(cx.program[cx.pc+1])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.itxVersion == 0 || fs.itxVersion > cx.version {
-		cx.err = fmt.Errorf("invalid tx_field field %d", field)
+		cx.err = fmt.Errorf("invalid itxn_field field %d", field)
 	}
 	sv := cx.stack[last]
 	cx.err = cx.stackIntoTxnField(sv, fs, &cx.subtxn.Txn)
@@ -3625,12 +3625,12 @@ func opTxSubmit(cx *EvalContext) {
 	}
 
 	if cx.subtxn == nil {
-		cx.err = errors.New("tx_submit without tx_begin")
+		cx.err = errors.New("itxn_submit without itxn_begin")
 		return
 	}
 
 	if len(cx.InnerTxns) >= cx.Proto.MaxInnerTransactions {
-		cx.err = errors.New("tx_submit with MaxInnerTransactions")
+		cx.err = errors.New("itxn_submit with MaxInnerTransactions")
 		return
 	}
 

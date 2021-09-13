@@ -197,9 +197,9 @@ The following opcodes allow for the construction and submission of
 
 | Op | Description |
 | --- | --- |
-| `tx_begin` | Begin preparation of a new inner transaction |
-| `tx_field f` | Set field F of the current inner transaction to X |
-| `tx_submit` | Execute the current inner transaction. Panic on any failure. |
+| `itxn_begin` | Begin preparation of a new inner transaction |
+| `itxn_field f` | Set field F of the current inner transaction to X |
+| `itxn_submit` | Execute the current inner transaction. Panic on any failure. |
 
 
 ### Loading Values
