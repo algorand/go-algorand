@@ -109,8 +109,8 @@ var opDocByName = map[string]string{
 	"dup":                 "duplicate last value on stack",
 	"dup2":                "duplicate two last values on stack: A, B -> A, B, A, B",
 	"dig":                 "push the Nth value from the top of the stack. dig 0 is equivalent to dup",
-	"cover":               "remove top of stack, and place it deeper in the stack such that N elements are above it",
-	"uncover":             "remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack",
+	"cover":               "remove top of stack, and place it deeper in the stack such that N elements are above it. Fails if stack depth <= N.",
+	"uncover":             "remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack. Fails if stack depth <= N.",
 	"swap":                "swaps two last values on stack: A, B -> B, A",
 	"select":              "selects one of two values based on top-of-stack: A, B, C -> (if C != 0 then B else A)",
 	"concat":              "pop two byte-arrays A and B and join them, push the result",
@@ -261,8 +261,8 @@ var opDocExtras = map[string]string{
 	"asset_params_get":    "params: Before v4, Txn.ForeignAssets offset. Since v4, Txn.ForeignAssets offset or an asset id that appears in Txn.ForeignAssets. Return: did_exist flag (1 if exist and 0 otherwise), value.",
 	"app_params_get":      "params: Txn.ForeignApps offset or an app id that appears in Txn.ForeignApps. Return: did_exist flag (1 if exist and 0 otherwise), value.",
 	"log":                 "`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds 1024 bytes.",
-	"tx_begin":            "`tx_begin` sets Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; and FirstValid/LastValid to the values in the top-level transaction.",
-	"tx_field":            "The following fields may be set by `tx_field` - Sender, Fee, Receiver, Amount, CloseRemainderTo, Type, TypeEnum, XferAsset, AssetAmount, AssetSender, AssetReceiver, AssetCloseTo",
+	"tx_begin":            "`tx_begin` initializes Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; FirstValid/LastValid to the values in the top-level transaction, and all other fields to zero values.",
+	"tx_field":            "`tx_field` fails if X is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `tx_field` also fails if X is an account or asset that does not appear in `txn.Accounts` or `txn.ForeignAssets` of the top-level transaction. (Setting addresses in asset creation are exempted from this requirement.)",
 }
 
 // OpDocExtra returns extra documentation text about an op
@@ -463,8 +463,8 @@ var AssetHoldingFieldDocs = map[string]string{
 	"AssetFrozen":  "Is the asset frozen or not",
 }
 
-// AssetParamsFieldDocs are notes on fields available in `asset_params_get`
-var AssetParamsFieldDocs = map[string]string{
+// assetParamsFieldDocs are notes on fields available in `asset_params_get`
+var assetParamsFieldDocs = map[string]string{
 	"AssetTotal":         "Total number of units of this asset",
 	"AssetDecimals":      "See AssetParams.Decimals",
 	"AssetDefaultFrozen": "Frozen by default or not",
@@ -479,8 +479,13 @@ var AssetParamsFieldDocs = map[string]string{
 	"AssetCreator":       "Creator address",
 }
 
-// AppParamsFieldDocs are notes on fields available in `app_params_get`
-var AppParamsFieldDocs = map[string]string{
+// AssetParamsFieldDocs are notes on fields available in `asset_params_get` with extra versioning info if any
+func AssetParamsFieldDocs() map[string]string {
+	return fieldsDocWithExtra(assetParamsFieldDocs, assetParamsFieldSpecByName)
+}
+
+// appParamsFieldDocs are notes on fields available in `app_params_get`
+var appParamsFieldDocs = map[string]string{
 	"AppApprovalProgram":    "Bytecode of Approval Program",
 	"AppClearStateProgram":  "Bytecode of Clear State Program",
 	"AppGlobalNumUint":      "Number of uint64 values allowed in Global State",
@@ -490,6 +495,11 @@ var AppParamsFieldDocs = map[string]string{
 	"AppExtraProgramPages":  "Number of Extra Program Pages of code space",
 	"AppCreator":            "Creator address",
 	"AppAddress":            "Address for which this application has authority",
+}
+
+// AppParamsFieldDocs are notes on fields available in `app_params_get` with extra versioning info if any
+func AppParamsFieldDocs() map[string]string {
+	return fieldsDocWithExtra(appParamsFieldDocs, appParamsFieldSpecByName)
 }
 
 // EcdsaCurveDocs are notes on curves available in `ecdsa_` opcodes

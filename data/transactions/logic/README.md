@@ -33,7 +33,7 @@ TEAL LogicSigs run in Algorand nodes as part of testing a proposed transaction t
 
 If an authorized program executes and finishes with a single non-zero uint64 value on the stack then that program has validated the transaction it is attached to.
 
-The TEAL program has access to data from the transaction it is attached to (`txn` op), any transactions in a transaction group it is part of (`gtxn` op), and a few global values like consensus parameters (`global` op). Some "Args" may be attached to a transaction being validated by a TEAL program. Args are an array of byte strings. A common pattern would be to have the key to unlock some contract as an Arg. Args are recorded on the blockchain and publicly visible when the transaction is submitted to the network. These LogicSig Args are _not_signed.
+The TEAL program has access to data from the transaction it is attached to (`txn` op), any transactions in a transaction group it is part of (`gtxn` op), and a few global values like consensus parameters (`global` op). Some "Args" may be attached to a transaction being validated by a TEAL program. Args are an array of byte strings. A common pattern would be to have the key to unlock some contract as an Arg. Args are recorded on the blockchain and publicly visible when the transaction is submitted to the network. These LogicSig Args are _not_ signed.
 
 A program can either authorize some delegated action on a normal private key signed or multisig account or be wholly in charge of a contract account.
 
@@ -357,7 +357,7 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in the
 | 8 | AssetReserve | []byte | Reserve address |
 | 9 | AssetFreeze | []byte | Freeze address |
 | 10 | AssetClawback | []byte | Clawback address |
-| 11 | AssetCreator | []byte | Creator address |
+| 11 | AssetCreator | []byte | Creator address. LogicSigVersion >= 5. |
 
 
 **App Fields**
@@ -390,8 +390,8 @@ App fields used in the `app_params_get` opcode.
 | `dup` | duplicate last value on stack |
 | `dup2` | duplicate two last values on stack: A, B -> A, B, A, B |
 | `dig n` | push the Nth value from the top of the stack. dig 0 is equivalent to dup |
-| `cover n` | remove top of stack, and place it deeper in the stack such that N elements are above it |
-| `uncover n` | remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack |
+| `cover n` | remove top of stack, and place it deeper in the stack such that N elements are above it. Fails if stack depth <= N. |
+| `uncover n` | remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack. Fails if stack depth <= N. |
 | `swap` | swaps two last values on stack: A, B -> B, A |
 | `select` | selects one of two values based on top-of-stack: A, B, C -> (if C != 0 then B else A) |
 | `assert` | immediately fail unless value X is a non-zero number |

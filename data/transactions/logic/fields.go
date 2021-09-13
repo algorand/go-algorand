@@ -599,7 +599,7 @@ var appParamsFieldSpecByName appNameSpecMap
 type appNameSpecMap map[string]appParamsFieldSpec
 
 func (s appNameSpecMap) getExtraFor(name string) (extra string) {
-	// Uses 2 here because app fields were introduced in 5
+	// Uses 5 here because app fields were introduced in 5
 	if s[name].version > 5 {
 		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
 	}

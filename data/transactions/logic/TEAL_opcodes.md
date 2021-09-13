@@ -737,7 +737,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Opcode: 0x4e {uint8 depth}
 - Pops: *... stack*, any
 - Pushes: any
-- remove top of stack, and place it deeper in the stack such that N elements are above it
+- remove top of stack, and place it deeper in the stack such that N elements are above it. Fails if stack depth <= N.
 - LogicSigVersion >= 5
 
 ## uncover n
@@ -745,7 +745,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Opcode: 0x4f {uint8 depth}
 - Pops: *... stack*, any
 - Pushes: any
-- remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack
+- remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack. Fails if stack depth <= N.
 - LogicSigVersion >= 5
 
 ## concat
@@ -1005,7 +1005,7 @@ params: Txn.Accounts offset (or, since v4, an account address that appears in Tx
 | 8 | AssetReserve | []byte | Reserve address |
 | 9 | AssetFreeze | []byte | Freeze address |
 | 10 | AssetClawback | []byte | Clawback address |
-| 11 | AssetCreator | []byte | Creator address |
+| 11 | AssetCreator | []byte | Creator address. LogicSigVersion >= 5. |
 
 
 params: Before v4, Txn.ForeignAssets offset. Since v4, Txn.ForeignAssets offset or an asset id that appears in Txn.ForeignAssets. Return: did_exist flag (1 if exist and 0 otherwise), value.
@@ -1296,7 +1296,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - LogicSigVersion >= 5
 - Mode: Application
 
-`tx_begin` sets Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; and FirstValid/LastValid to the values in the top-level transaction.
+`tx_begin` initializes Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; FirstValid/LastValid to the values in the top-level transaction, and all other fields to zero values.
 
 ## tx_field f
 
@@ -1307,7 +1307,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - LogicSigVersion >= 5
 - Mode: Application
 
-The following fields may be set by `tx_field` - Sender, Fee, Receiver, Amount, CloseRemainderTo, Type, TypeEnum, XferAsset, AssetAmount, AssetSender, AssetReceiver, AssetCloseTo
+`tx_field` fails if X is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `tx_field` also fails if X is an account or asset that does not appear in `txn.Accounts` or `txn.ForeignAssets` of the top-level transaction. (Setting addresses in asset creation are exempted from this requirement.)
 
 ## tx_submit
 
