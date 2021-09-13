@@ -37,6 +37,7 @@ import (
 
 func TestCompactCerts(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Skip("Disabling since they need work and shouldn't block releases")
 	t.Parallel()

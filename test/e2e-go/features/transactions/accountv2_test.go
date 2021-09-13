@@ -77,6 +77,7 @@ func checkEvalDelta(t *testing.T, client *libgoal.Client, startRnd, endRnd uint6
 
 func TestAccountInformationV2(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))

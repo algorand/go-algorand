@@ -28,7 +28,7 @@ require (
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jmoiron/sqlx v1.2.0
-	github.com/karalabe/hid v0.0.0-20181128192157-d815e0c1a2e2
+	github.com/karalabe/hid v1.0.0
 	github.com/labstack/echo/v4 v4.1.17
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-sqlite3 v1.10.0

@@ -76,7 +76,7 @@ type DebugState struct {
 	Error   string             `codec:"error"`
 
 	// global/local state changes are updated every step. Stateful TEAL only.
-	basics.EvalDelta
+	transactions.EvalDelta
 }
 
 // GetProgramID returns program or execution ID that is string representation of sha256 checksum.
@@ -86,7 +86,7 @@ func GetProgramID(program []byte) string {
 	return hex.EncodeToString(hash[:])
 }
 
-func makeDebugState(cx *evalContext) DebugState {
+func makeDebugState(cx *EvalContext) DebugState {
 	disasm, dsInfo, err := disassembleInstrumented(cx.program, nil)
 	if err != nil {
 		// Report disassembly error as program text
@@ -98,7 +98,7 @@ func makeDebugState(cx *evalContext) DebugState {
 		ExecID:      GetProgramID(cx.program),
 		Disassembly: disasm,
 		PCOffset:    dsInfo.pcOffset,
-		GroupIndex:  cx.GroupIndex,
+		GroupIndex:  int(cx.GroupIndex),
 		TxnGroup:    cx.TxnGroup,
 		Proto:       cx.Proto,
 	}
@@ -194,7 +194,7 @@ func valueDeltaToValueDelta(vd *basics.ValueDelta) basics.ValueDelta {
 	}
 }
 
-func (cx *evalContext) refreshDebugState() *DebugState {
+func (cx *EvalContext) refreshDebugState() *DebugState {
 	ds := &cx.debugState
 
 	// Update pc, line, error, stack, and scratch space
@@ -204,12 +204,12 @@ func (cx *evalContext) refreshDebugState() *DebugState {
 		ds.Error = cx.err.Error()
 	}
 
-	stack := make([]basics.TealValue, len(cx.stack), len(cx.stack))
+	stack := make([]basics.TealValue, len(cx.stack))
 	for i, sv := range cx.stack {
 		stack[i] = stackValueToTealValue(&sv)
 	}
 
-	scratch := make([]basics.TealValue, len(cx.scratch), len(cx.scratch))
+	scratch := make([]basics.TealValue, len(cx.scratch))
 	for i, sv := range cx.scratch {
 		scratch[i] = stackValueToTealValue(&sv)
 	}
