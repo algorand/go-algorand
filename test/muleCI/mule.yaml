@@ -9,6 +9,7 @@ agents:
       - NETWORK=$NETWORK
       - VERSION=$VERSION
       - BUILD_NUMBER=$BUILD_NUMBER
+      - GOHOSTARCH=amd64
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=amd64
@@ -22,6 +23,7 @@ agents:
       - NETWORK=$NETWORK
       - VERSION=$VERSION
       - BUILD_NUMBER=$BUILD_NUMBER
+      - GOHOSTARCH=amd64
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=amd64
@@ -62,6 +64,7 @@ agents:
       - NETWORK=$NETWORK
       - VERSION=$VERSION
       - BUILD_NUMBER=$BUILD_NUMBER
+      - GOHOSTARCH=amd64
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     volumes:
@@ -75,6 +78,7 @@ agents:
       - NETWORK=$NETWORK
       - VERSION=$VERSION
       - BUILD_NUMBER=$BUILD_NUMBER
+      - GOHOSTARCH=amd64
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     volumes:
