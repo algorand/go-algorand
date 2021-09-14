@@ -1346,10 +1346,10 @@ gtxn 12 Fee
 txn ExtraProgramPages
 txn Nonparticipation
 global CurrentApplicationAddress
-txna Logs 1
-txn NumLogs
-txn EvalConfigAsset
-txn EvalApplicationID
+itxna Logs 1
+itxn NumLogs
+itxn CreatedAssetID
+itxn CreatedApplicationID
 `, AssemblerMaxVersion)
 	for _, globalField := range GlobalFieldNames {
 		if !strings.Contains(text, globalField) {

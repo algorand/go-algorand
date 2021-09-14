@@ -889,9 +889,17 @@ func TestAsaDuringInit(t *testing.T) {
 		 byte "Gold"
 		 itxn_field ConfigAssetName
          itxn_submit
-         itxn EvalConfigAsset
+         itxn CreatedAssetID
          int 3
-         assert
+         ==
+         itxn CreatedApplicationID
+         int 0
+         ==
+         &&
+         itxn NumLogs
+         int 0
+         ==
+         &&
 `,
 	}
 

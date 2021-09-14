@@ -400,7 +400,7 @@ func TestAssetFreeze(t *testing.T) {
   byte "https://gold.rush/"        ; itxn_field ConfigAssetURL
   global CurrentApplicationAddress ; itxn_field ConfigAssetFreeze;
   itxn_submit
-  itxn EvalConfigAsset
+  itxn CreatedAssetID
   int 889
   ==
 `

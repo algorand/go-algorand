@@ -482,8 +482,8 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 57 | Nonparticipation | uint64 | Marks an account nonparticipating for rewards. LogicSigVersion >= 5. |
 | 58 | Logs | []byte | Log messages emitted by an application call (itxn only). LogicSigVersion >= 5. |
 | 59 | NumLogs | uint64 | Number of Logs (itxn only). LogicSigVersion >= 5. |
-| 60 | EvalConfigAsset | uint64 | Asset ID allocated by the creation of an ASA (itxn only). LogicSigVersion >= 5. |
-| 61 | EvalApplicationID | uint64 | ApplicationID allocated by the creation of an application (itxn only). LogicSigVersion >= 5. |
+| 60 | CreatedAssetID | uint64 | Asset ID allocated by the creation of an ASA (itxn only). LogicSigVersion >= 5. |
+| 61 | CreatedApplicationID | uint64 | ApplicationID allocated by the creation of an application (itxn only). LogicSigVersion >= 5. |
 
 
 TypeEnum mapping:

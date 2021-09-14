@@ -155,11 +155,11 @@ const (
 	// NumLogs len(Logs)
 	NumLogs
 
-	// EvalConfigAsset Transaction.ApplyData.EvalDelta.ConfigAsset
-	EvalConfigAsset
+	// CreatedAssetID Transaction.ApplyData.EvalDelta.ConfigAsset
+	CreatedAssetID
 
-	// EvalApplicationID Transaction.ApplyData.EvalDelta.ApplicationID
-	EvalApplicationID
+	// CreatedApplicationID Transaction.ApplyData.EvalDelta.ApplicationID
+	CreatedApplicationID
 
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
@@ -253,8 +253,8 @@ var txnFieldSpecs = []txnFieldSpec{
 
 	{Logs, StackBytes, 5, 5, true},
 	{NumLogs, StackUint64, 5, 5, true},
-	{EvalConfigAsset, StackUint64, 5, 5, true},
-	{EvalApplicationID, StackUint64, 5, 5, true},
+	{CreatedAssetID, StackUint64, 5, 5, true},
+	{CreatedApplicationID, StackUint64, 5, 5, true},
 }
 
 // TxnaFieldNames are arguments to the 'txna' opcode

@@ -433,10 +433,10 @@ var txnFieldDocs = map[string]string{
 	"FreezeAssetAccount": "32 byte address of the account whose asset slot is being frozen or un-frozen",
 	"FreezeAssetFrozen":  "The new frozen value, 0 or 1",
 
-	"Logs":              "Log messages emitted by an application call (itxn only)",
-	"NumLogs":           "Number of Logs (itxn only)",
-	"EvalConfigAsset":   "Asset ID allocated by the creation of an ASA (itxn only)",
-	"EvalApplicationID": "ApplicationID allocated by the creation of an application (itxn only)",
+	"Logs":                 "Log messages emitted by an application call (itxn only)",
+	"NumLogs":              "Number of Logs (itxn only)",
+	"CreatedAssetID":       "Asset ID allocated by the creation of an ASA (itxn only)",
+	"CreatedApplicationID": "ApplicationID allocated by the creation of an application (itxn only)",
 }
 
 // TxnFieldDocs are notes on fields available by `txn` and `gtxn` with extra versioning info if any
