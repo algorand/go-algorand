@@ -1012,6 +1012,11 @@ func initConsensusProtocols() {
 
 	// Enable App calls to pool budget in grouped transactions
 	v30.EnableAppCostPooling = true
+
+	// Enable Inner Transactions, and set maximum number. 0 value is
+	// disabled.  Value > 0 also activates storage of creatable IDs in
+	// ApplyData, as that is required to support REST API when inner
+	// transactions are activated.
 	v30.MaxInnerTransactions = 16
 
 	// Allow 50 app opt ins

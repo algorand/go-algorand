@@ -373,6 +373,7 @@ func BenchmarkUnmarshalBalanceRecord(b *testing.B) {
 }
 
 func TestMarshalUnmarshalStateDelta(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := StateDelta{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
