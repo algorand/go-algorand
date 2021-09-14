@@ -50,6 +50,7 @@ func cascadeCreateAndFundAccounts(amountToSend, transactionFee uint64, fundingAc
 // sends them all money, and sends them online
 func TestManyAccountsCanGoOnline(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))

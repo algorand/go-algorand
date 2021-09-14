@@ -33,6 +33,7 @@ import (
 // try to transact with 3 sigs: expect success
 func TestBasicMultisig(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 
@@ -110,6 +111,7 @@ func TestBasicMultisig(t *testing.T) {
 // create a 0-of-3 multisig address: expect failure
 func TestZeroThreshold(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 
@@ -139,6 +141,7 @@ func TestZeroThreshold(t *testing.T) {
 // create a 3-of-0 multisig address: expect failure
 func TestZeroSigners(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 
@@ -164,6 +167,7 @@ func TestZeroSigners(t *testing.T) {
 // then try to transact
 func TestDuplicateKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 

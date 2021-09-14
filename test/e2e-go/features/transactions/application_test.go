@@ -46,6 +46,7 @@ func checkEqual(expected []string, actual []string) bool {
 
 func TestApplication(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))

@@ -33,6 +33,7 @@ import (
 // TestRekeyUpgrade tests that the rekey does not work before the upgrade and works well after
 func TestRekeyUpgrade(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 

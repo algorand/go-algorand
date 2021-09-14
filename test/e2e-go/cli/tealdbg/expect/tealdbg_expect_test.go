@@ -25,6 +25,7 @@ import (
 func TestTealdbgWithExpect(t *testing.T) {
 	// partitiontest.PartitionTest(t)
 	// Causes double partition, so commented out on purpose
+	defer fixtures.ShutdownSynchronizedTest(t)
 	et := fixtures.MakeExpectTest(t)
 	et.Run()
 }
