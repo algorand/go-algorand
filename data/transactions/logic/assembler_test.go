@@ -304,11 +304,11 @@ int 0
 int 8
 extract3
 int 0
-extract64bits
+extract_uint64
 int 0
-extract32bits
+extract_uint32
 int 0
-extract16bits
+extract_uint16
 log
 txn Nonparticipation
 gtxn 0 Nonparticipation

@@ -160,12 +160,12 @@ The following opcodes allow for "inner transactions". Inner
 transactions allow stateful applications to have many of the effects
 of a true top-level transaction, programatically.  However, they are
 different in significant ways.  The most important differences are
-that they are not signed, and do not appear in the block in the usual
-away. Instead, their effects are noted in metadata associated with the
-associated top-level application call transaction.  An inner
-transaction's `Sender` must be the SHA512_256 hash of the application
-ID (prefixed by "appID"), or an account that has been rekeyed to that
-hash.
+that they are not signed, duplicates are not rejected, and they do not
+appear in the block in the usual away. Instead, their effects are
+noted in metadata associated with the associated top-level application
+call transaction.  An inner transaction's `Sender` must be the
+SHA512_256 hash of the application ID (prefixed by "appID"), or an
+account that has been rekeyed to that hash.
 
 Currently, inner transactions may perform `pay`, `axfer`, `acfg`, and
 `afrz` effects.  After executing an inner transaction with
@@ -180,6 +180,16 @@ allows, for example, clawback transactions, asset opt-ins, and asset
 creates in addtion to the more common uses of `axfer` and `acfg`.  All
 fields default to the zero value, except those described under
 `itxn_begin`.
+
+Fields may be set multiple times, but may not be read. The most recent
+setting is used when `itxn_submit` executes. (For this purpose `Type`
+and `TypeEnum` are considered to be the same field.) `itxn_field`
+fails immediately for unsupported fields, unsupported transaction
+types, or improperly typed values for a particular field. `itxn_field`
+makes aceptance decisions entirely from the field and value provided,
+never considering previously set fields. Illegal interactions between
+fields, such as setting fields that belong to two different
+transaction types, are rejected by `itxn_submit`.
 
 @@ Inner_Transactions.md @@
 
