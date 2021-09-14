@@ -3013,6 +3013,12 @@ func opExtractUvarint(cx *EvalContext) {
 	last := len(cx.stack) - 1 // start
 	prev := last - 1          // bytes
 	startIdx := cx.stack[last].Uint
+
+	if int(startIdx) >= len(cx.stack[prev].Bytes) {
+		cx.err = errors.New("extract start beyond length of string")
+		return
+	}
+
 	x, n := binary.Uvarint(cx.stack[last].Bytes[startIdx:])
 
 	cx.stack[prev].Uint = uint64(n)
