@@ -114,10 +114,14 @@ func (p *peerScheduler) replaceIndices(indices []int, i, j int) {
 // Swap implements heap.Interface
 func (p *peerScheduler) Swap(i, j int) {
 	p.peers[i], p.peers[j] = p.peers[j], p.peers[i]
-	p.replaceIndices(p.nextPeers[p.peers[i].peer], i, j)
-	if p.peers[i] == p.peers[j] {
+	if p.peers[i].peer == p.peers[j].peer {
+		indices := p.nextPeers[p.peers[i].peer]
+		sort.Slice(indices, func(i, j int) bool {
+			return p.peers[indices[i]].next < p.peers[indices[j]].next
+		})
 		return
 	}
+	p.replaceIndices(p.nextPeers[p.peers[i].peer], i, j)
 	p.replaceIndices(p.nextPeers[p.peers[j].peer], i, j)
 }
 
