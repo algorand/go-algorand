@@ -191,7 +191,7 @@ bytes on outputs.
 | `b%` | A modulo B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Fail if B is zero. |
 
 These opcodes operate on the bits of byte-array values.  The shorter
-array is interpeted as though left padded with zeros until it is the
+array is interpreted as though left padded with zeros until it is the
 same length as the other input.  The returned values are the same
 length as the longest input.  Therefore, unlike array arithmetic,
 these results may contain leading zero bytes.

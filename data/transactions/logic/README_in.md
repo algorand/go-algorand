@@ -105,7 +105,7 @@ bytes on outputs.
 @@ Byte_Array_Arithmetic.md @@
 
 These opcodes operate on the bits of byte-array values.  The shorter
-array is interpeted as though left padded with zeros until it is the
+array is interpreted as though left padded with zeros until it is the
 same length as the other input.  The returned values are the same
 length as the longest input.  Therefore, unlike array arithmetic,
 these results may contain leading zero bytes.
