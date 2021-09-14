@@ -559,8 +559,8 @@ func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.
 	return
 }
 
-// TxnCounter returns the number of transactions that have been added to the block evaluator so far.
-func (eval *BlockEvaluator) TxnCounter() int {
+// PaySetSize returns the number of top-level transactions that have been added to the block evaluator so far.
+func (eval *BlockEvaluator) PaySetSize() int {
 	return len(eval.block.Payset)
 }
 
@@ -901,6 +901,13 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		err := eval.checkMinBalance(cow)
 		if err != nil {
 			return fmt.Errorf("transaction %v: %w", txid, err)
+		}
+	}
+
+	// We are not allowing InnerTxns to have InnerTxns yet.  Error if that happens.
+	for _, itx := range applyData.EvalDelta.InnerTxns {
+		if len(itx.ApplyData.EvalDelta.InnerTxns) > 0 {
+			return fmt.Errorf("inner transaction has inner transactions %v", itx)
 		}
 	}
 
@@ -1283,7 +1290,7 @@ transactionGroupLoop:
 	return eval.state.deltas(), nil
 }
 
-// loadedTransactionGroup is a helper struct to allow asyncronious loading of the account data needed by the transaction groups
+// loadedTransactionGroup is a helper struct to allow asynchronous loading of the account data needed by the transaction groups
 type loadedTransactionGroup struct {
 	// group is the transaction group
 	group []transactions.SignedTxnWithAD
@@ -1292,6 +1299,21 @@ type loadedTransactionGroup struct {
 	// err indicates whether any of the balances in this structure have failed to load. In case of an error, at least
 	// one of the entries in the balances would be uninitialized.
 	err error
+}
+
+// Return the maximum number of addresses referenced in any given transaction.
+func maxAddressesInTxn(proto *config.ConsensusParams) int {
+	return 7 + proto.MaxAppTxnAccounts
+}
+
+// Write the list of addresses referenced in `txn` to `out`. Addresses might repeat.
+func getTxnAddresses(txn *transactions.Transaction, out *[]basics.Address) {
+	*out = (*out)[:0]
+
+	*out = append(
+		*out, txn.Sender, txn.Receiver, txn.CloseRemainderTo, txn.AssetSender,
+		txn.AssetReceiver, txn.AssetCloseTo, txn.FreezeAccount)
+	*out = append(*out, txn.ApplicationCallTxnFields.Accounts...)
 }
 
 // loadAccounts loads the account data for the provided transaction group list. It also loads the feeSink account and add it to the first returned transaction group.
@@ -1320,8 +1342,7 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 		defer close(outChan)
 
 		accountTasks := make(map[basics.Address]*addrTask)
-		maxAddressesPerTransaction := 7 + consensusParams.MaxAppTxnAccounts
-		addressesCh := make(chan *addrTask, len(groups)*consensusParams.MaxTxGroupSize*maxAddressesPerTransaction)
+		addressesCh := make(chan *addrTask, len(groups)*consensusParams.MaxTxGroupSize*maxAddressesInTxn(&consensusParams))
 		// totalBalances counts the total number of balances over all the transaction groups
 		totalBalances := 0
 
@@ -1362,6 +1383,7 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 			task := &groupTask{}
 			groupsReady[i] = task
 			for _, stxn := range group {
+				// If you add new addresses here, also add them in getTxnAddresses().
 				initAccount(stxn.Txn.Sender, task)
 				initAccount(stxn.Txn.Receiver, task)
 				initAccount(stxn.Txn.CloseRemainderTo, task)
@@ -1501,6 +1523,24 @@ func (vb ValidatedBlock) WithSeed(s committee.Seed) ValidatedBlock {
 		blk:   newblock,
 		delta: vb.delta,
 	}
+}
+
+// GetBlockAddresses returns all addresses referenced in `block`.
+func GetBlockAddresses(block *bookkeeping.Block) map[basics.Address]struct{} {
+	// Reserve a reasonable memory size for the map.
+	res := make(map[basics.Address]struct{}, len(block.Payset)+2)
+	res[block.FeeSink] = struct{}{}
+	res[block.RewardsPool] = struct{}{}
+
+	var refAddresses []basics.Address
+	for _, stib := range block.Payset {
+		getTxnAddresses(&stib.Txn, &refAddresses)
+		for _, address := range refAddresses {
+			res[address] = struct{}{}
+		}
+	}
+
+	return res
 }
 
 // Eval evaluates a block without validation using the given `proto`. Return the state
