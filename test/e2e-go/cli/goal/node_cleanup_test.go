@@ -26,7 +26,9 @@ import (
 )
 
 func TestGoalNodeCleanup(t *testing.T) {
+	defer fixtures.ShutdownSynchronizedTest(t)
 	defer fixture.SetTestContext(t)()
+
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	primaryDir := fixture.PrimaryDataDir()

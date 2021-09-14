@@ -86,7 +86,18 @@ func SynchronizedTest(tb TestingTB) TestingTB {
 
 type synchTest struct {
 	deadlock.Mutex
-	t TestingTB
+	t                  TestingTB
+	dontReportFailures bool
+}
+
+// ShutdownSynchronizedTest should be called within each test using synchTest.
+// It ensures the base test will no longer get t.finished modified and cause a data race.
+// It should be called in the form of "defer fixtures.ShutdownSynchronizedTest(t)"
+func ShutdownSynchronizedTest(t TestingTB) {
+	st := SynchronizedTest(t).(*synchTest)
+	st.Lock()
+	defer st.Unlock()
+	st.dontReportFailures = true
 }
 
 func (st *synchTest) Cleanup(f func()) {
@@ -97,22 +108,34 @@ func (st *synchTest) Cleanup(f func()) {
 func (st *synchTest) Error(args ...interface{}) {
 	st.Lock()
 	defer st.Unlock()
-	st.t.Error(args...)
+	if !st.dontReportFailures {
+		st.dontReportFailures = true
+		st.t.Error(args...)
+	}
 }
 func (st *synchTest) Errorf(format string, args ...interface{}) {
 	st.Lock()
 	defer st.Unlock()
-	st.t.Errorf(format, args...)
+	if !st.dontReportFailures {
+		st.dontReportFailures = true
+		st.t.Errorf(format, args...)
+	}
 }
 func (st *synchTest) Fail() {
 	st.Lock()
 	defer st.Unlock()
-	st.t.Fail()
+	if !st.dontReportFailures {
+		st.dontReportFailures = true
+		st.t.Fail()
+	}
 }
 func (st *synchTest) FailNow() {
 	st.Lock()
 	defer st.Unlock()
-	st.t.FailNow()
+	if !st.dontReportFailures {
+		st.dontReportFailures = true
+		st.t.FailNow()
+	}
 }
 func (st *synchTest) Failed() bool {
 	st.Lock()
@@ -122,12 +145,18 @@ func (st *synchTest) Failed() bool {
 func (st *synchTest) Fatal(args ...interface{}) {
 	st.Lock()
 	defer st.Unlock()
-	st.t.Fatal(args...)
+	if !st.dontReportFailures {
+		st.dontReportFailures = true
+		st.t.Fatal(args...)
+	}
 }
 func (st *synchTest) Fatalf(format string, args ...interface{}) {
 	st.Lock()
 	defer st.Unlock()
-	st.t.Fatalf(format, args...)
+	if !st.dontReportFailures {
+		st.dontReportFailures = true
+		st.t.Fatalf(format, args...)
+	}
 }
 func (st *synchTest) Helper() {
 	st.Lock()
@@ -152,17 +181,26 @@ func (st *synchTest) Name() string {
 func (st *synchTest) Skip(args ...interface{}) {
 	st.Lock()
 	defer st.Unlock()
-	st.t.Skip(args...)
+	if !st.dontReportFailures {
+		st.dontReportFailures = true
+		st.t.Skip(args...)
+	}
 }
 func (st *synchTest) SkipNow() {
 	st.Lock()
 	defer st.Unlock()
-	st.t.SkipNow()
+	if !st.dontReportFailures {
+		st.dontReportFailures = true
+		st.t.SkipNow()
+	}
 }
 func (st *synchTest) Skipf(format string, args ...interface{}) {
 	st.Lock()
 	defer st.Unlock()
-	st.t.Skipf(format, args...)
+	if !st.dontReportFailures {
+		st.dontReportFailures = true
+		st.t.Skipf(format, args...)
+	}
 }
 func (st *synchTest) Skipped() bool {
 	st.Lock()

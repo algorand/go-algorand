@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AssetHoldingField,OnCompletionConstType -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve -output=fields_string.go
 
 // TxnField is an enum type for `txn` and `gtxn`
 type TxnField int
@@ -389,6 +389,41 @@ func (s gfNameSpecMap) getExtraFor(name string) (extra string) {
 	return
 }
 
+// EcdsaCurve is an enum for `ecdsa_` opcodes
+type EcdsaCurve int
+
+const (
+	// Secp256k1 curve for bitcoin/ethereum
+	Secp256k1 EcdsaCurve = iota
+	invalidEcdsaCurve
+)
+
+// EcdsaCurveNames are arguments to the 'ecdsa_' opcode
+var EcdsaCurveNames []string
+
+type ecdsaCurveSpec struct {
+	field   EcdsaCurve
+	version uint64
+}
+
+var ecdsaCurveSpecs = []ecdsaCurveSpec{
+	{Secp256k1, 5},
+}
+
+var ecdsaCurveSpecByField map[EcdsaCurve]ecdsaCurveSpec
+var ecdsaCurveSpecByName ecDsaCurveNameSpecMap
+
+// simple interface used by doc generator for fields versioning
+type ecDsaCurveNameSpecMap map[string]ecdsaCurveSpec
+
+func (s ecDsaCurveNameSpecMap) getExtraFor(name string) (extra string) {
+	// Uses 5 here because ecdsa fields were introduced in 5
+	if s[name].version > 5 {
+		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
+	}
+	return
+}
+
 // AssetHoldingField is an enum for `asset_holding_get` opcode
 type AssetHoldingField int
 
@@ -603,6 +638,20 @@ func init() {
 	globalFieldSpecByName = make(gfNameSpecMap, len(GlobalFieldNames))
 	for i, gfn := range GlobalFieldNames {
 		globalFieldSpecByName[gfn] = globalFieldSpecByField[GlobalField(i)]
+	}
+
+	EcdsaCurveNames = make([]string, int(invalidEcdsaCurve))
+	for i := Secp256k1; i < invalidEcdsaCurve; i++ {
+		EcdsaCurveNames[int(i)] = i.String()
+	}
+	ecdsaCurveSpecByField = make(map[EcdsaCurve]ecdsaCurveSpec, len(EcdsaCurveNames))
+	for _, s := range ecdsaCurveSpecs {
+		ecdsaCurveSpecByField[s.field] = s
+	}
+
+	ecdsaCurveSpecByName = make(ecDsaCurveNameSpecMap, len(EcdsaCurveNames))
+	for i, ahfn := range EcdsaCurveNames {
+		ecdsaCurveSpecByName[ahfn] = ecdsaCurveSpecByField[EcdsaCurve(i)]
 	}
 
 	AssetHoldingFieldNames = make([]string, int(invalidAssetHoldingField))
