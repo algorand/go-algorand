@@ -17,7 +17,6 @@
 package txnsync
 
 import (
-	"fmt"
 	"container/heap"
 	"sort"
 	"time"
@@ -51,15 +50,11 @@ func (p *peerScheduler) Push(x interface{}) {
 	p.peers = append(p.peers, entry)
 	p.nextPeers[entry.peer] = append(p.nextPeers[entry.peer], len(p.peers)-1)
 
-
 	if len(p.nextPeers[entry.peer]) > 1 {
 		peerIndices := p.nextPeers[entry.peer]
 		sort.Slice(peerIndices, func(i, j int) bool {
 			return p.peers[peerIndices[i]].next < p.peers[peerIndices[j]].next
 		})
-		if p.peers[peerIndices[0]].next > p.peers[peerIndices[1]].next {
-			fmt.Println("push boom")
-		}
 	}
 
 }
@@ -74,12 +69,9 @@ func (p *peerScheduler) Pop() interface{} {
 
 	if peerIndices[0] != end {
 		// this case is possible when the peer has two elements in p.peers.
-		// and both have the same next value. 
+		// and both have the same next value.
 		for idx, x := range peerIndices {
 			if x == end {
-				if p.peers[peerIndices[0]].next != p.peers[peerIndices[idx]].next {
-					fmt.Println("nboom")
-				}
 				peerIndices[0], peerIndices[idx] = peerIndices[idx], peerIndices[0]
 				break
 			}
@@ -87,7 +79,6 @@ func (p *peerScheduler) Pop() interface{} {
 	}
 	// the peer index must be the first entry.
 	peerIndices = peerIndices[1:]
-
 
 	// store if non-empty.
 	if len(peerIndices) > 0 {
@@ -122,8 +113,8 @@ func (p *peerScheduler) replaceIndices(indices []int, i, j int) {
 	for idx, x := range indices {
 		if x == i {
 			indices[idx] = j
-		} else if x ==j {
-			indices[idx] = i 
+		} else if x == j {
+			indices[idx] = i
 		}
 	}
 	sort.Slice(indices, func(i, j int) bool {
@@ -210,9 +201,6 @@ func (p *peerScheduler) peerDuration(peer *Peer) time.Duration {
 	peerIndices := p.nextPeers[peer]
 	if len(peerIndices) == 0 {
 		return time.Duration(0)
-	}
-	if len(peerIndices) > 1 && p.peers[peerIndices[0]].next > p.peers[peerIndices[1]].next {
-		fmt.Println("boom")
 	}
 	bucket := heap.Remove(p, peerIndices[0]).(peerBucket)
 	return bucket.next
