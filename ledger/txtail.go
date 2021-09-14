@@ -207,13 +207,13 @@ func (t *txTail) putLV(lastValid basics.Round, id transactions.Txid) {
 }
 
 func (t *txTail) getBlockTimeStamp(rnd basics.Round) (int64, error) {
+	if r, ok := t.recent[rnd]; ok {
+		return r.timestamp, nil
+	}
+
 	// allow timestamps in a first block
 	if rnd == 0 {
 		return 0, nil
-	}
-
-	if r, ok := t.recent[rnd]; ok {
-		return r.timestamp, nil
 	}
 	err := fmt.Errorf("txTail: tried to get timestamp in missing round %d", rnd)
 	return 0, err
