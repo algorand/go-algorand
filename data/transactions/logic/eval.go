@@ -1921,12 +1921,13 @@ func (cx *EvalContext) itxnFieldToStack(itxn *transactions.SignedTxnWithAD, fs t
 		case EvalApplicationID:
 			sv.Uint = uint64(itxn.ApplyData.ApplicationID)
 		}
+		return
+	}
+
+	if fs.field == GroupIndex {
+		err = errors.New("inner txn has no GroupIndex")
 	} else {
-		if fs.field == GroupIndex {
-			err = errors.New("inner txn has no GroupIndex")
-		} else {
-			sv, err = cx.txnFieldToStack(&itxn.Txn, fs, arrayFieldIdx, 0)
-		}
+		sv, err = cx.txnFieldToStack(&itxn.Txn, fs, arrayFieldIdx, 0)
 	}
 	return
 }
