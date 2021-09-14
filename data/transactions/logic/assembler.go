@@ -1055,7 +1055,7 @@ func assembleGtxnsas(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-// asmItxn delegates to asmItxnInternal or asmItxna depending on number of operands
+// asmItxn delegates to asmItxnOnly or asmItxna depending on number of operands
 func asmItxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 1 {
 		return asmItxnOnly(ops, spec, args)

@@ -1916,17 +1916,20 @@ func (cx *EvalContext) itxnFieldToStack(itxn *transactions.SignedTxnWithAD, fs t
 			sv.Bytes = nilToEmpty([]byte(itxn.EvalDelta.Logs[arrayFieldIdx]))
 		case NumLogs:
 			sv.Uint = uint64(len(itxn.EvalDelta.Logs))
-		case EvalConfigAsset:
+		case CreatedAssetID:
 			sv.Uint = uint64(itxn.ApplyData.ConfigAsset)
-		case EvalApplicationID:
+		case CreatedApplicationID:
 			sv.Uint = uint64(itxn.ApplyData.ApplicationID)
+		default:
+			err = fmt.Errorf("invalid txn field %d", fs.field)
 		}
+		return
+	}
+
+	if fs.field == GroupIndex || fs.field == TxID {
+		err = fmt.Errorf("illegal field for inner transaction %s", fs.field)
 	} else {
-		if fs.field == GroupIndex {
-			err = errors.New("inner txn has no GroupIndex")
-		} else {
-			sv, err = cx.txnFieldToStack(&itxn.Txn, fs, arrayFieldIdx, 0)
-		}
+		sv, err = cx.txnFieldToStack(&itxn.Txn, fs, arrayFieldIdx, 0)
 	}
 	return
 }

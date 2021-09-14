@@ -480,10 +480,10 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 55 | LocalNumByteSlice | uint64 | Number of local state byteslices in ApplicationCall. LogicSigVersion >= 3. |
 | 56 | ExtraProgramPages | uint64 | Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program. LogicSigVersion >= 4. |
 | 57 | Nonparticipation | uint64 | Marks an account nonparticipating for rewards. LogicSigVersion >= 5. |
-| 58 | Logs | []byte | Log messages emitted by an application call. LogicSigVersion >= 5. |
-| 59 | NumLogs | uint64 | Number of Logs. LogicSigVersion >= 5. |
-| 60 | EvalConfigAsset | uint64 | Asset ID allocated by the creation of an ASA. LogicSigVersion >= 5. |
-| 61 | EvalApplicationID | uint64 | ApplicationID allocated by the creation of an application. LogicSigVersion >= 5. |
+| 58 | Logs | []byte | Log messages emitted by an application call (itxn only). LogicSigVersion >= 5. |
+| 59 | NumLogs | uint64 | Number of Logs (itxn only). LogicSigVersion >= 5. |
+| 60 | CreatedAssetID | uint64 | Asset ID allocated by the creation of an ASA (itxn only). LogicSigVersion >= 5. |
+| 61 | CreatedApplicationID | uint64 | ApplicationID allocated by the creation of an application (itxn only). LogicSigVersion >= 5. |
 
 
 TypeEnum mapping:
@@ -1336,7 +1336,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xb5 {uint8 transaction field index} {uint8 transaction field array index}
 - Pops: _None_
 - Pushes: any
-- push Ith valoue of the array field F of the last inner transaction to stack
+- push Ith value of the array field F of the last inner transaction to stack
 - LogicSigVersion >= 5
 - Mode: Application
 
