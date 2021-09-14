@@ -96,7 +96,7 @@ var opDocByName = map[string]string{
 	"gtxnas":  "push Xth value of the array field F from the Tth transaction in the current group",
 	"gtxnsas": "pop an index A and an index B. push Bth value of the array field F from the Ath transaction in the current group",
 	"itxn":    "push field F of the last inner transaction to stack",
-	"itxna":   "push Ith valoue of the array field F of the last inner transaction to stack",
+	"itxna":   "push Ith value of the array field F of the last inner transaction to stack",
 
 	"global": "push value from globals to stack",
 	"load":   "copy a value from scratch space to the stack. All scratch spaces are 0 at program start.",
@@ -433,10 +433,10 @@ var txnFieldDocs = map[string]string{
 	"FreezeAssetAccount": "32 byte address of the account whose asset slot is being frozen or un-frozen",
 	"FreezeAssetFrozen":  "The new frozen value, 0 or 1",
 
-	"Logs":              "Log messages emitted by an application call",
-	"NumLogs":           "Number of Logs",
-	"EvalConfigAsset":   "Asset ID allocated by the creation of an ASA",
-	"EvalApplicationID": "ApplicationID allocated by the creation of an application",
+	"Logs":              "Log messages emitted by an application call (itxn only)",
+	"NumLogs":           "Number of Logs (itxn only)",
+	"EvalConfigAsset":   "Asset ID allocated by the creation of an ASA (itxn only)",
+	"EvalApplicationID": "ApplicationID allocated by the creation of an application (itxn only)",
 }
 
 // TxnFieldDocs are notes on fields available by `txn` and `gtxn` with extra versioning info if any

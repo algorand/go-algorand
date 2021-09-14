@@ -313,10 +313,10 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 55 | LocalNumByteSlice | uint64 | Number of local state byteslices in ApplicationCall. LogicSigVersion >= 3. |
 | 56 | ExtraProgramPages | uint64 | Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program. LogicSigVersion >= 4. |
 | 57 | Nonparticipation | uint64 | Marks an account nonparticipating for rewards. LogicSigVersion >= 5. |
-| 58 | Logs | []byte | Log messages emitted by an application call. LogicSigVersion >= 5. |
-| 59 | NumLogs | uint64 | Number of Logs. LogicSigVersion >= 5. |
-| 60 | EvalConfigAsset | uint64 | Asset ID allocated by the creation of an ASA. LogicSigVersion >= 5. |
-| 61 | EvalApplicationID | uint64 | ApplicationID allocated by the creation of an application. LogicSigVersion >= 5. |
+| 58 | Logs | []byte | Log messages emitted by an application call (itxn only). LogicSigVersion >= 5. |
+| 59 | NumLogs | uint64 | Number of Logs (itxn only). LogicSigVersion >= 5. |
+| 60 | EvalConfigAsset | uint64 | Asset ID allocated by the creation of an ASA (itxn only). LogicSigVersion >= 5. |
+| 61 | EvalApplicationID | uint64 | ApplicationID allocated by the creation of an application (itxn only). LogicSigVersion >= 5. |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
@@ -468,7 +468,7 @@ transaction types, are rejected by `itxn_submit`.
 | `itxn_field f` | Set field F of the current inner transaction to X |
 | `itxn_submit` | Execute the current inner transaction. Fail if 16 inner transactions have already been executed, or if the transaction itself fails. |
 | `itxn f` | push field F of the last inner transaction to stack |
-| `itxna f i` | push Ith valoue of the array field F of the last inner transaction to stack |
+| `itxna f i` | push Ith value of the array field F of the last inner transaction to stack |
 
 
 # Assembler Syntax
