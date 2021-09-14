@@ -2389,7 +2389,7 @@ func TestReturnTypes(t *testing.T) {
 		"gtxnas":            "gtxnas 0 ApplicationArgs",
 		"gtxnsas":           "pop; pop; int 0; int 0; gtxnsas ApplicationArgs",
 		"args":              "args",
-		"itxn":              "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxn CreatedConfigID",
+		"itxn":              "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxn CreatedAssetID",
 		// This next one is a cop out.  Can't use itxna Logs until we have inner appl
 		"itxna": "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxn NumLogs",
 	}
