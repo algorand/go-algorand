@@ -161,7 +161,7 @@ const ConsensusV29 = ConsensusVersion(
 // ConsensusV30 introduces AVM 1.0 and TEAL 5, increases the app opt in limit to 50,
 // and allows costs to be pooled in grouped stateful transactions.
 const ConsensusV30 = ConsensusVersion(
-	"https://github.com/algorandfoundation/specs/tree/5a72f5e95ec44371b5958913a2db8737562a0d13",
+	"https://github.com/algorandfoundation/specs/tree/bc36005dbd776e6d1eaf0c560619bb183215645c",
 )
 
 // ConsensusFuture is a protocol that should not appear in any production
