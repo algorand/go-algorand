@@ -1300,6 +1300,8 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - LogicSigVersion >= 5
 - Mode: Application
 
+`itxn_begin` initializes Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; FirstValid/LastValid to the values in the top-level transaction, and all other fields to zero values.
+
 ## itxn_field f
 
 - Opcode: 0xb2 {uint8 transaction field index}
@@ -1309,12 +1311,14 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - LogicSigVersion >= 5
 - Mode: Application
 
+`itxn_field` fails if X is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `tx_field` also fails if X is an account or asset that does not appear in `txn.Accounts` or `txn.ForeignAssets` of the top-level transaction. (Setting addresses in asset creation are exempted from this requirement.)
+
 ## itxn_submit
 
 - Opcode: 0xb3
 - Pops: _None_
 - Pushes: _None_
-- Execute the current inner transaction. Panic on any failure.
+- Execute the current inner transaction. Fail if the transaction can not be applied.
 - LogicSigVersion >= 5
 - Mode: Application
 

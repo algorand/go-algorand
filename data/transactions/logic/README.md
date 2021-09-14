@@ -442,7 +442,7 @@ Currently, inner transactions may perform `pay`, `axfer`, `acfg`, and
 | --- | --- |
 | `itxn_begin` | Begin preparation of a new inner transaction |
 | `itxn_field f` | Set field F of the current inner transaction to X |
-| `itxn_submit` | Execute the current inner transaction. Panic on any failure. |
+| `itxn_submit` | Execute the current inner transaction. Fail if the transaction can not be applied. |
 | `itxn f` | push field F of the last inner transaction to stack |
 | `itxna f i` | push Ith valoue of the array field F of the last inner transaction to stack |
 
