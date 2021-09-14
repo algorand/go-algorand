@@ -283,7 +283,7 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
-	id = record.ParticipationID()
+	id = record.ID()
 	if _, ok := db.cache[id]; ok {
 		return id, ErrAlreadyInserted
 	}

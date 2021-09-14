@@ -61,11 +61,12 @@ type Participation struct {
 type ParticipationKeyIdentity struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Parent      basics.Address    `codec:"addr"`
-	VRFSK       crypto.VrfPrivkey `codec:"vrfsk"`
-	FirstValid  basics.Round      `codec:"fv"`
-	LastValid   basics.Round      `codec:"lv"`
-	KeyDilution uint64            `codec:"kd"`
+	Parent      basics.Address                  `codec:"addr"`
+	VRFSK       crypto.VrfPrivkey               `codec:"vrfsk"`
+	VoteID      crypto.OneTimeSignatureVerifier `codec:"vote-id"`
+	FirstValid  basics.Round                    `codec:"fv"`
+	LastValid   basics.Round                    `codec:"lv"`
+	KeyDilution uint64                          `codec:"kd"`
 }
 
 // ToBeHashed implements the Hashable interface.
@@ -73,13 +74,13 @@ func (id *ParticipationKeyIdentity) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.ParticipationKeys, protocol.Encode(id)
 }
 
-// ToParticipationID creates a ParticipationID hash from the identity file.
-func (id ParticipationKeyIdentity) ToParticipationID() ParticipationID {
+// ID creates a ParticipationID hash from the identity file.
+func (id ParticipationKeyIdentity) ID() ParticipationID {
 	return ParticipationID(crypto.HashObj(&id))
 }
 
-// ParticipationID computes a ParticipationID.
-func (part Participation) ParticipationID() ParticipationID {
+// ID computes a ParticipationID.
+func (part Participation) ID() ParticipationID {
 	idData := ParticipationKeyIdentity{
 		Parent:      part.Parent,
 		FirstValid:  part.FirstValid,
@@ -88,6 +89,9 @@ func (part Participation) ParticipationID() ParticipationID {
 	}
 	if part.VRF != nil {
 		copy(idData.VRFSK[:], part.VRF.SK[:])
+	}
+	if part.Voting != nil {
+		copy(idData.VoteID[:], part.Voting.OneTimeSignatureVerifier[:])
 	}
 
 	return ParticipationID(crypto.HashObj(&idData))

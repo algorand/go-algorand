@@ -95,6 +95,7 @@ func (manager *AccountManager) AddParticipation(participation account.PersistedP
 		FirstValid:  first,
 		LastValid:   last,
 		VRFSK:       participation.VRF.SK,
+		VoteID:      participation.Voting.OneTimeSignatureVerifier,
 		KeyDilution: participation.KeyDilution,
 	}
 
