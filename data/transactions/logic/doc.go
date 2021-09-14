@@ -171,7 +171,7 @@ var opDocByName = map[string]string{
 	"log":         "write bytes to log state of the current application",
 	"itxn_begin":  "Begin preparation of a new inner transaction",
 	"itxn_field":  "Set field F of the current inner transaction to X",
-	"itxn_submit": "Execute the current inner transaction. Panic on any failure.",
+	"itxn_submit": "Execute the current inner transaction. Fail if the transaction can not be applied.",
 }
 
 // OpDoc returns a description of the op
@@ -279,8 +279,8 @@ var opDocExtras = map[string]string{
 	"asset_params_get":    "params: Before v4, Txn.ForeignAssets offset. Since v4, Txn.ForeignAssets offset or an asset id that appears in Txn.ForeignAssets. Return: did_exist flag (1 if exist and 0 otherwise), value.",
 	"app_params_get":      "params: Txn.ForeignApps offset or an app id that appears in Txn.ForeignApps. Return: did_exist flag (1 if exist and 0 otherwise), value.",
 	"log":                 "`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds 1024 bytes.",
-	"tx_begin":            "`tx_begin` initializes Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; FirstValid/LastValid to the values in the top-level transaction, and all other fields to zero values.",
-	"tx_field":            "`tx_field` fails if X is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `tx_field` also fails if X is an account or asset that does not appear in `txn.Accounts` or `txn.ForeignAssets` of the top-level transaction. (Setting addresses in asset creation are exempted from this requirement.)",
+	"itxn_begin":          "`itxn_begin` initializes Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; FirstValid/LastValid to the values in the top-level transaction, and all other fields to zero values.",
+	"itxn_field":          "`itxn_field` fails if X is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `tx_field` also fails if X is an account or asset that does not appear in `txn.Accounts` or `txn.ForeignAssets` of the top-level transaction. (Setting addresses in asset creation are exempted from this requirement.)",
 }
 
 // OpDocExtra returns extra documentation text about an op

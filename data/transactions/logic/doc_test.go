@@ -54,6 +54,17 @@ func TestOpDocs(t *testing.T) {
 	require.Len(t, EcdsaCurveDocs, len(EcdsaCurveNames))
 }
 
+func TestDocStragglers(t *testing.T) {
+	for op := range opDocExtras {
+		_, ok := opDocByName[op]
+		require.True(t, ok, "%s is in opDocExtra, but not opDocByName", op)
+	}
+	for op := range opcodeImmediateNotes {
+		_, ok := opDocByName[op]
+		require.True(t, ok, "%s is in opcodeImmediateNotes, but not opDocByName", op)
+	}
+}
+
 func TestOpGroupCoverage(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
