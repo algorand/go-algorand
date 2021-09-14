@@ -830,7 +830,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including B+C, push the substring result. If B+C is larger than the array length, the program fails
 - LogicSigVersion >= 5
 
-## extract16bits
+## extract_uint16
 
 - Opcode: 0x59
 - Pops: *... stack*, {[]byte A}, {uint64 B}
@@ -838,7 +838,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B+2 is larger than the array length, the program fails
 - LogicSigVersion >= 5
 
-## extract32bits
+## extract_uint32
 
 - Opcode: 0x5a
 - Pops: *... stack*, {[]byte A}, {uint64 B}
@@ -846,7 +846,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B+4 is larger than the array length, the program fails
 - LogicSigVersion >= 5
 
-## extract64bits
+## extract_uint64
 
 - Opcode: 0x5b
 - Pops: *... stack*, {[]byte A}, {uint64 B}

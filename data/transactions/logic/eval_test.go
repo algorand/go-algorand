@@ -2264,10 +2264,10 @@ func TestExtractOp(t *testing.T) {
 
 	testAccepts(t, "byte 0x123456789abc; int 5; int 1; extract3; byte 0xbc; ==", 5)
 
-	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract16bits; int 0x3456; ==", 5)
-	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract32bits; int 0x3456789a; ==", 5)
-	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract64bits; int 0x123456789abcdef0; ==", 5)
-	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract64bits; int 0x123456789abcdef; !=", 5)
+	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract_uint16; int 0x3456; ==", 5)
+	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract_uint32; int 0x3456789a; ==", 5)
+	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract_uint64; int 0x123456789abcdef0; ==", 5)
+	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract_uint64; int 0x123456789abcdef; !=", 5)
 
 	testAccepts(t, `byte "hello"; extract 5 0; byte ""; ==`, 5)
 	testAccepts(t, `byte "hello"; int 5; int 0; extract3; byte ""; ==`, 5)
@@ -2312,17 +2312,17 @@ func TestExtractFlop(t *testing.T) {
 
 	err = testPanics(t, `byte 0xf000000000000000
 	int 55
-	extract16bits`, 5)
+	extract_uint16`, 5)
 	require.Contains(t, err.Error(), "extract range beyond length of string")
 
 	err = testPanics(t, `byte 0xf000000000000000
 	int 9
-	extract32bits`, 5)
+	extract_uint32`, 5)
 	require.Contains(t, err.Error(), "extract range beyond length of string")
 
 	err = testPanics(t, `byte 0xf000000000000000
 	int 1
-	extract64bits`, 5)
+	extract_uint64`, 5)
 	require.Contains(t, err.Error(), "extract range beyond length of string")
 }
 
