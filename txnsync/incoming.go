@@ -19,6 +19,7 @@ package txnsync
 import (
 	"errors"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/logging"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -241,7 +242,13 @@ incomingMessageLoop:
 					peer.proposalFilterCache.insert(hash)
 				}
 				// send proposal or proposal txns to handler
-				s.node.HandleProposalMessage(incomingMsg.message.RelayedProposal.RawBytes, incomingMsg.transactionGroups, peer)
+				logging.Base().Info("HandleProposalMessage")
+				completedProposalBytes := s.node.HandleProposalMessage(incomingMsg.message.RelayedProposal.RawBytes, incomingMsg.transactionGroups, peer)
+				if completedProposalBytes != nil {
+					peers := s.getPeers()
+					s.broadcastProposalFilter(crypto.Hash(completedProposalBytes), peers)
+				}
+				logging.Base().Info("HandleProposalMessage")
 			}
 			peer.updateRequestParams(incomingMsg.message.UpdatedRequestParams.Modulator, incomingMsg.message.UpdatedRequestParams.Offset)
 			peer.updateIncomingMessageTiming(incomingMsg.message.MsgSync, s.round, s.clock.Since(), incomingMsg.encodedSize)

@@ -18,6 +18,7 @@ package txnsync
 
 import (
 	"context"
+	"github.com/algorand/go-algorand/logging"
 	"math"
 	"sync"
 	"time"
@@ -131,6 +132,8 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			nextPeerStateCh = nil
 		}
 
+		logging.Base().Info("new state 0")
+
 		select {
 		case ent := <-externalEvents:
 			switch ent.eventType {
@@ -143,7 +146,9 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 				s.onNewRoundEvent(ent)
 				profNewRounnd.end()
 			case proposalBroadcastRequestEvent:
+				logging.Base().Info("broadcast proposal event")
 				s.onBroadcastProposalRequestEvent(ent)
+				logging.Base().Info("broadcast proposal event")
 			}
 			continue
 		case <-nextPeerStateCh:
@@ -171,6 +176,8 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 		default:
 		}
 
+		logging.Base().Info("new state 1")
+
 		profIdle.start()
 		select {
 		case ent := <-externalEvents:
@@ -185,7 +192,9 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 				s.onNewRoundEvent(ent)
 				profNewRounnd.end()
 			case proposalBroadcastRequestEvent:
+				logging.Base().Info("broadcast proposal event")
 				s.onBroadcastProposalRequestEvent(ent)
+				logging.Base().Info("broadcast proposal event")
 			}
 		case <-nextPeerStateCh:
 			profIdle.end()
@@ -441,9 +450,5 @@ func (s *syncState) updatePeersRequestParams(peers []*Peer) {
 
 func (s *syncState) onBroadcastProposalRequestEvent(ent Event) {
 	peers := s.getPeers()
-	if ent.proposalBroadcastRequest.isFilterMsg {
-		s.broadcastProposalFilter(crypto.Hash(ent.proposalBroadcastRequest.proposalBytes), peers)
-	} else {
-		s.broadcastProposal(ent.proposalBroadcastRequest, peers)
-	}
+	s.broadcastProposal(ent.proposalBroadcastRequest, peers)
 }

@@ -76,7 +76,7 @@ func makeTransactionSyncNodeConnector(node *AlgorandFullNode) transactionSyncNod
 		clock:       timers.MakeMonotonicClock(time.Now()),
 		txHandler:   node.txHandler.SolicitedAsyncTxHandler(),
 		openStateCh: make(chan struct{}),
-		proposalCh: make(chan agreement.TxnSyncProposal, 1),
+		proposalCh:  make(chan agreement.TxnSyncProposal, 1),
 	}
 }
 
@@ -287,7 +287,10 @@ func (tsnc *transactionSyncNodeConnector) RelayProposal(proposalBytes []byte, tx
 	tsnc.eventsCh <- txnsync.MakeBroadcastProposalRequestEvent(protocol.Encode(&data), txGroups)
 }
 
-func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataBytes []byte, txGroups []pooldata.SignedTxGroup, peer *txnsync.Peer) {
+// HandleProposalMessage handles the receiving of a proposal message and sends completed
+// proposal messages to the agreement.
+// Returns the proposal data if proposal completed.
+func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataBytes []byte, txGroups []pooldata.SignedTxGroup, peer *txnsync.Peer) []byte {
 	var data proposalData
 	var pc *proposalCache
 	protocol.Decode(proposalDataBytes, &data)
@@ -328,12 +331,13 @@ func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataByte
 			ProposalBytes: pc.ProposalBytes,
 			Txns:          flattenedTxns,
 		}
-		tsnc.eventsCh <- txnsync.MakeBroadcastProposalFilterEvent(protocol.Encode(&pc.proposalData))
-
 		pc.ProposalBytes = nil
 		pc.txGroups = nil
 		pc.TxGroupIds = nil
 		pc.txGroupIDIndex = nil
 		pc.numTxGroupsReceived = 0
+
+		return protocol.Encode(&pc.proposalData)
 	}
+	return nil
 }

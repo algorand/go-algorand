@@ -293,7 +293,7 @@ type proposalCache struct {
 	proposalData
 
 	txGroupIDIndex      map[transactions.Txid]int
-	txGroups            []transactions.SignedTxGroup
+	txGroups            []pooldata.SignedTxGroup
 	numTxGroupsReceived int
 }
 
@@ -614,7 +614,7 @@ func (p *networkPeer) GetAddress() string {
 	return fmt.Sprintf("%d", p.target)
 }
 
-func (n *emulatedNode) RelayProposal(proposalBytes []byte, txGroups []transactions.SignedTxGroup) {
+func (n *emulatedNode) RelayProposal(proposalBytes []byte, txGroups []pooldata.SignedTxGroup) {
 	data := proposalData{
 		ProposalBytes: proposalBytes,
 		TxGroupIds:    make([]transactions.Txid, len(txGroups)),
@@ -629,7 +629,7 @@ func (n *emulatedNode) RelayProposal(proposalBytes []byte, txGroups []transactio
 	n.externalEvents <- MakeBroadcastProposalRequestEvent(protocol.Encode(&data), txGroups)
 }
 
-func (n *emulatedNode) HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup, peer *Peer) {
+func (n *emulatedNode) HandleProposalMessage(proposalDataBytes []byte, txGroups []pooldata.SignedTxGroup, peer *Peer) []byte {
 	var data proposalData
 	var pc *proposalCache
 	protocol.Decode(proposalDataBytes, &data)
@@ -638,7 +638,7 @@ func (n *emulatedNode) HandleProposalMessage(proposalDataBytes []byte, txGroups 
 		pc = &proposalCache{
 			proposalData:   data,
 			txGroupIDIndex: make(map[transactions.Txid]int, len(data.TxGroupIds)),
-			txGroups:       make([]transactions.SignedTxGroup, len(data.TxGroupIds)),
+			txGroups:       make([]pooldata.SignedTxGroup, len(data.TxGroupIds)),
 		}
 		n.proposals = append(n.proposals, pc)
 		for i, txid := range pc.TxGroupIds {
@@ -658,6 +658,7 @@ func (n *emulatedNode) HandleProposalMessage(proposalDataBytes []byte, txGroups 
 
 	if pc.numTxGroupsReceived == len(pc.txGroups) {
 		// TODO send proposal to agreement
-		n.externalEvents <- MakeBroadcastProposalFilterEvent(protocol.Encode(&pc.proposalData))
+		return protocol.Encode(&pc.proposalData)
 	}
+	return nil
 }

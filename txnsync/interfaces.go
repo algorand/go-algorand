@@ -41,7 +41,6 @@ type RoundSettings struct {
 type ProposalBroadcastRequest struct {
 	proposalBytes []byte
 	txGroups      []pooldata.SignedTxGroup
-	isFilterMsg   bool
 }
 
 // Event is an external triggering event
@@ -99,7 +98,7 @@ type NodeConnector interface {
 	// to the transaction pool.
 	IncomingTransactionGroups(peer *Peer, messageSeq uint64, txGroups []pooldata.SignedTxGroup) (transactionPoolSize int)
 	NotifyMonitor() chan struct{}
-	HandleProposalMessage(proposalDataBytes []byte, txGroups []pooldata.SignedTxGroup, peer *Peer)
+	HandleProposalMessage(proposalDataBytes []byte, txGroups []pooldata.SignedTxGroup, peer *Peer) []byte
 }
 
 // MakeTransactionPoolChangeEvent creates an event for when a txn pool size has changed.
@@ -118,17 +117,6 @@ func MakeNewRoundEvent(roundNumber basics.Round, fetchTransactions bool) Event {
 		roundSettings: RoundSettings{
 			Round:             roundNumber,
 			FetchTransactions: fetchTransactions,
-		},
-	}
-}
-
-// MakeBroadcastProposalFilterEvent creates an event for sending a proposal filter message
-func MakeBroadcastProposalFilterEvent(proposalBytes []byte) Event {
-	return Event{
-		eventType: proposalBroadcastRequestEvent,
-		proposalBroadcastRequest: ProposalBroadcastRequest{
-			proposalBytes: proposalBytes,
-			isFilterMsg:   true,
 		},
 	}
 }

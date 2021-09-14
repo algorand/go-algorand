@@ -143,7 +143,7 @@ func (e *emulator) run() {
 func (e *emulator) nextRound() {
 	e.currentRound++
 
-	txnSlices := make([]transactions.SignedTxnSlice, 1000)
+	txnSlices := make([]pooldata.SignedTxnSlice, 1000)
 	for i := 0; i < len(txnSlices); i++ {
 		txnSlices[i] = []transactions.SignedTxn{
 			transactions.SignedTxn{
@@ -242,9 +242,9 @@ func (e *emulator) initNodes() {
 	for i, initProposal := range e.scenario.initialProposals {
 		node := e.nodes[initProposal.node]
 		proposalBytes := []byte{byte(i + 1)}
-		var txGroups []transactions.SignedTxGroup
+		var txGroups []pooldata.SignedTxGroup
 		for i := 0; i < initProposal.transactionsCount; i++ {
-			var group = transactions.SignedTxGroup{}
+			var group = pooldata.SignedTxGroup{}
 			group.LocallyOriginated = true
 			group.GroupCounter = uint64(len(node.txpoolEntries))
 			group.Transactions = []transactions.SignedTxn{
