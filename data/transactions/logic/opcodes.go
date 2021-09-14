@@ -312,11 +312,13 @@ var OpSpecs = []OpSpec{
 
 	// AVM "effects"
 	{0xb0, "log", opLog, asmDefault, disDefault, oneBytes, nil, 5, runModeApplication, opDefault},
-	{0xb1, "tx_begin", opTxBegin, asmDefault, disDefault, nil, nil, 5, runModeApplication, opDefault},
-	{0xb2, "tx_field", opTxField, asmTxField, disTxField, oneAny, nil, 5, runModeApplication, stacky(typeTxField, "f")},
-	{0xb3, "tx_submit", opTxSubmit, asmDefault, disDefault, nil, nil, 5, runModeApplication, opDefault},
+	{0xb1, "itxn_begin", opTxBegin, asmDefault, disDefault, nil, nil, 5, runModeApplication, opDefault},
+	{0xb2, "itxn_field", opTxField, asmTxField, disTxField, oneAny, nil, 5, runModeApplication, stacky(typeTxField, "f")},
+	{0xb3, "itxn_submit", opTxSubmit, asmDefault, disDefault, nil, nil, 5, runModeApplication, opDefault},
+	{0xb4, "itxn", opItxn, asmItxn, disTxn, nil, oneAny, 5, runModeApplication, immediates("f")},
+	{0xb5, "itxna", opItxna, asmItxna, disTxna, nil, oneAny, 5, runModeApplication, immediates("f", "i")},
 
-	// Dynamically indexing into LogicSigs
+	// Dynamic indexing
 	{0xc0, "txnas", opTxnas, assembleTxnas, disTxn, oneInt, oneAny, 5, modeAny, immediates("f")},
 	{0xc1, "gtxnas", opGtxnas, assembleGtxnas, disGtxn, oneInt, oneAny, 5, modeAny, immediates("t", "f")},
 	{0xc2, "gtxnsas", opGtxnsas, assembleGtxnsas, disTxn, twoInts, oneAny, 5, modeAny, immediates("f")},

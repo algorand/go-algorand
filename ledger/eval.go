@@ -559,8 +559,8 @@ func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.
 	return
 }
 
-// TxnCounter returns the number of transactions that have been added to the block evaluator so far.
-func (eval *BlockEvaluator) TxnCounter() int {
+// PaySetSize returns the number of top-level transactions that have been added to the block evaluator so far.
+func (eval *BlockEvaluator) PaySetSize() int {
 	return len(eval.block.Payset)
 }
 
@@ -901,6 +901,13 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		err := eval.checkMinBalance(cow)
 		if err != nil {
 			return fmt.Errorf("transaction %v: %w", txid, err)
+		}
+	}
+
+	// We are not allowing InnerTxns to have InnerTxns yet.  Error if that happens.
+	for _, itx := range applyData.EvalDelta.InnerTxns {
+		if len(itx.ApplyData.EvalDelta.InnerTxns) > 0 {
+			return fmt.Errorf("inner transaction has inner transactions %v", itx)
 		}
 	}
 
@@ -1283,7 +1290,7 @@ transactionGroupLoop:
 	return eval.state.deltas(), nil
 }
 
-// loadedTransactionGroup is a helper struct to allow asyncronious loading of the account data needed by the transaction groups
+// loadedTransactionGroup is a helper struct to allow asynchronous loading of the account data needed by the transaction groups
 type loadedTransactionGroup struct {
 	// group is the transaction group
 	group []transactions.SignedTxnWithAD

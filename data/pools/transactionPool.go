@@ -539,7 +539,7 @@ func (pool *TransactionPool) isAssemblyTimedOut() bool {
 		// we have no deadline, so no reason to timeout.
 		return false
 	}
-	generateBlockDuration := generateBlockBaseDuration + time.Duration(pool.pendingBlockEvaluator.TxnCounter())*generateBlockTransactionDuration
+	generateBlockDuration := generateBlockBaseDuration + time.Duration(pool.pendingBlockEvaluator.PaySetSize())*generateBlockTransactionDuration
 	return time.Now().After(pool.assemblyDeadline.Add(-generateBlockDuration))
 }
 
