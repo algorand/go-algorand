@@ -2945,10 +2945,7 @@ func opGetUvarint(cx *EvalContext) {
 	cx.stack[last].Uint = uint64(n)
 	cx.stack[last].Bytes = nil
 
-	cx.stack[last+1].Uint = x
-	cx.stack[last+1].Bytes = nil
-
-	cx.stack = cx.stack[:last+1]
+	cx.stack = append(cx.stack, stackValue{Uint: x})
 }
 
 func opExtractImpl(x []byte, start, length int) (out []byte, err error) {
