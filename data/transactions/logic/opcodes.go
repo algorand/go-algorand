@@ -244,6 +244,7 @@ var OpSpecs = []OpSpec{
 	{0x54, "setbit", opSetBit, asmDefault, disDefault, anyIntInt, oneAny, 3, modeAny, stacky(typeSetBit)},
 	{0x55, "getbyte", opGetByte, asmDefault, disDefault, byteInt, oneInt, 3, modeAny, opDefault},
 	{0x56, "setbyte", opSetByte, asmDefault, disDefault, byteIntInt, oneBytes, 3, modeAny, opDefault},
+	{0x5c, "getuvarint", opGetUvarint, asmDefault, disDefault, oneBytes, twoInts, 5, modeAny, opDefault},
 	{0x57, "extract", opExtract, asmDefault, disDefault, oneBytes, oneBytes, 5, modeAny, immediates("s", "l")},
 	{0x58, "extract3", opExtract3, asmDefault, disDefault, byteIntInt, oneBytes, 5, modeAny, opDefault},
 	{0x59, "extract16bits", opExtract16Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},

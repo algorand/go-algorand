@@ -2938,6 +2938,19 @@ func opSetByte(cx *EvalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
+func opGetUvarint(cx *EvalContext) {
+	last := len(cx.stack) - 1
+	x, n := binary.Uvarint(cx.stack[last].Bytes)
+
+	cx.stack[last].Uint = uint64(n)
+	cx.stack[last].Bytes = nil
+
+	cx.stack[last+1].Uint = x
+	cx.stack[last+1].Bytes = nil
+
+	cx.stack = cx.stack[:last+1]
+}
+
 func opExtractImpl(x []byte, start, length int) (out []byte, err error) {
 	out = x
 	end := start + length
