@@ -5,7 +5,10 @@ also execute as _Applications_ which are invoked with explicit application call 
 
 ## The Stack
 
-The stack starts empty and contains values of either uint64 or bytes (`bytes` are implemented in Go as a []byte slice). Most operations act on the stack, popping arguments from it and pushing results to it.
+The stack starts empty and contains values of either uint64 or bytes
+(`bytes` are implemented in Go as a []byte slice and may not exceed
+4096 bytes in length). Most operations act on the stack, popping
+arguments from it and pushing results to it.
 
 The maximum stack depth is currently 1000.
 
@@ -165,7 +168,18 @@ ID (prefixed by "appID"), or an account that has been rekeyed to that
 hash.
 
 Currently, inner transactions may perform `pay`, `axfer`, `acfg`, and
-`afrz` effects.
+`afrz` effects.  After executing an inner transaction with
+`itxn_submit`, the effects of the transaction are visible begining
+with the next instruction with, for example, `balance` and
+`min_balance` checks.
+
+Of the transaction Header fields, only a few fields may be set:
+`Type`/`TypeEnum`, `Sender`, and `Fee`. For the specific fields of
+each transaction types, any field, except `RekeyTo` may be set.  This
+allows, for example, clawback transactions, asset opt-ins, and asset
+creates in addtion to the more common uses of `axfer` and `acfg`.  All
+fields default to the zero value, except those described under
+`itxn_begin`.
 
 @@ Inner_Transactions.md @@
 
