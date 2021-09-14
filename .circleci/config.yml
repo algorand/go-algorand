@@ -7,7 +7,7 @@ orbs:
 
 workflows:
   version: 2
-  "CircleCI Tests":
+  "build_and_test":
     jobs:
       - codegen_verification
       - amd64_build
