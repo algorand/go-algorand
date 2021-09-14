@@ -649,10 +649,11 @@ func (l *Ledger) axfer(from basics.Address, xfer transactions.AssetTransferTxnFi
 	return nil
 }
 
-func (l *Ledger) acfg(from basics.Address, cfg transactions.AssetConfigTxnFields) error {
+func (l *Ledger) acfg(from basics.Address, cfg transactions.AssetConfigTxnFields) (transactions.ApplyData, error) {
 	if cfg.ConfigAsset == 0 {
-		l.NewAsset(from, basics.AssetIndex(l.freshID()), cfg.AssetParams)
-		return nil
+		aid := basics.AssetIndex(l.freshID())
+		l.NewAsset(from, aid, cfg.AssetParams)
+		return transactions.ApplyData{ConfigAsset: aid}, nil
 	}
 	// This is just a mock.  We don't check all the rules about
 	// not setting fields that have been zeroed. Nor do we keep
@@ -661,7 +662,7 @@ func (l *Ledger) acfg(from basics.Address, cfg transactions.AssetConfigTxnFields
 		Creator:     from,
 		AssetParams: cfg.AssetParams,
 	}
-	return nil
+	return transactions.ApplyData{}, nil
 }
 
 func (l *Ledger) afrz(from basics.Address, frz transactions.AssetFreezeTxnFields) error {
@@ -711,7 +712,7 @@ func (l *Ledger) Perform(txn *transactions.Transaction, spec transactions.Specia
 	case protocol.AssetTransferTx:
 		err = l.axfer(txn.Sender, txn.AssetTransferTxnFields)
 	case protocol.AssetConfigTx:
-		err = l.acfg(txn.Sender, txn.AssetConfigTxnFields)
+		ad, err = l.acfg(txn.Sender, txn.AssetConfigTxnFields)
 	case protocol.AssetFreezeTx:
 		err = l.afrz(txn.Sender, txn.AssetFreezeTxnFields)
 	default:

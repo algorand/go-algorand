@@ -1883,7 +1883,8 @@ func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field Tx
 		return basics.TealValue{}, fmt.Errorf("negative groupIndex %d", groupIndex)
 	}
 	cx := EvalContext{EvalParams: EvalParams{GroupIndex: uint64(groupIndex)}}
-	sv, err := cx.txnFieldToStack(txn, field, arrayFieldIdx, uint64(groupIndex))
+	fs := txnFieldSpecByField[field]
+	sv, err := cx.txnFieldToStack(txn, fs, arrayFieldIdx, uint64(groupIndex))
 	return sv.toTealValue(), err
 }
 
@@ -1903,9 +1904,38 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex uint64)
 	return txid
 }
 
-func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, field TxnField, arrayFieldIdx uint64, groupIndex uint64) (sv stackValue, err error) {
+func (cx *EvalContext) itxnFieldToStack(itxn *transactions.SignedTxnWithAD, fs txnFieldSpec, arrayFieldIdx uint64) (sv stackValue, err error) {
+	if fs.effects {
+		switch fs.field {
+		case Logs:
+			if arrayFieldIdx >= uint64(len(itxn.EvalDelta.Logs)) {
+				err = fmt.Errorf("invalid Logs index %d", arrayFieldIdx)
+				return
+			}
+			sv.Bytes = nilToEmpty([]byte(itxn.EvalDelta.Logs[arrayFieldIdx]))
+		case NumLogs:
+			sv.Uint = uint64(len(itxn.EvalDelta.Logs))
+		case EvalConfigAsset:
+			sv.Uint = uint64(itxn.ApplyData.ConfigAsset)
+		case EvalApplicationID:
+			sv.Uint = uint64(itxn.ApplyData.ApplicationID)
+		}
+	} else {
+		if fs.field == GroupIndex {
+			err = errors.New("inner txn has no GroupIndex")
+		} else {
+			sv, err = cx.txnFieldToStack(&itxn.Txn, fs, arrayFieldIdx, 0)
+		}
+	}
+	return
+}
+
+func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, fs txnFieldSpec, arrayFieldIdx uint64, groupIndex uint64) (sv stackValue, err error) {
+	if fs.effects {
+		return sv, errors.New("Unable to obtain effects from top-level transactions")
+	}
 	err = nil
-	switch field {
+	switch fs.field {
 	case Sender:
 		sv.Bytes = txn.Sender[:]
 	case Fee:
@@ -2055,14 +2085,13 @@ func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 	case ExtraProgramPages:
 		sv.Uint = uint64(txn.ExtraProgramPages)
 	default:
-		err = fmt.Errorf("invalid txn field %d", field)
+		err = fmt.Errorf("invalid txn field %d", fs.field)
 		return
 	}
 
-	txnField := TxnField(field)
-	txnFieldType := TxnFieldTypes[txnField]
+	txnFieldType := TxnFieldTypes[fs.field]
 	if !typecheck(txnFieldType, sv.argType()) {
-		err = fmt.Errorf("%s expected field type is %s but got %s", txnField.String(), txnFieldType.String(), sv.argType().String())
+		err = fmt.Errorf("%s expected field type is %s but got %s", fs.field.String(), txnFieldType.String(), sv.argType().String())
 	}
 	return
 }
@@ -2079,7 +2108,7 @@ func opTxn(cx *EvalContext) {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
 		return
 	}
-	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, field, 0, cx.GroupIndex)
+	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, fs, 0, cx.GroupIndex)
 	if err != nil {
 		cx.err = err
 		return
@@ -2100,7 +2129,7 @@ func opTxna(cx *EvalContext) {
 		return
 	}
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
-	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx, cx.GroupIndex)
+	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, fs, arrayFieldIdx, cx.GroupIndex)
 	if err != nil {
 		cx.err = err
 		return
@@ -2123,7 +2152,7 @@ func opTxnas(cx *EvalContext) {
 		return
 	}
 	arrayFieldIdx := cx.stack[last].Uint
-	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx, cx.GroupIndex)
+	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, fs, arrayFieldIdx, cx.GroupIndex)
 	if err != nil {
 		cx.err = err
 		return
@@ -2155,7 +2184,7 @@ func opGtxn(cx *EvalContext) {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = uint64(gtxid)
 	} else {
-		sv, err = cx.txnFieldToStack(tx, field, 0, uint64(gtxid))
+		sv, err = cx.txnFieldToStack(tx, fs, 0, uint64(gtxid))
 		if err != nil {
 			cx.err = err
 			return
@@ -2183,7 +2212,7 @@ func opGtxna(cx *EvalContext) {
 		return
 	}
 	arrayFieldIdx := uint64(cx.program[cx.pc+3])
-	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, uint64(gtxid))
+	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, uint64(gtxid))
 	if err != nil {
 		cx.err = err
 		return
@@ -2212,7 +2241,7 @@ func opGtxnas(cx *EvalContext) {
 		return
 	}
 	arrayFieldIdx := cx.stack[last].Uint
-	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, uint64(gtxid))
+	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, uint64(gtxid))
 	if err != nil {
 		cx.err = err
 		return
@@ -2245,7 +2274,7 @@ func opGtxns(cx *EvalContext) {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = gtxid
 	} else {
-		sv, err = cx.txnFieldToStack(tx, field, 0, gtxid)
+		sv, err = cx.txnFieldToStack(tx, fs, 0, gtxid)
 		if err != nil {
 			cx.err = err
 			return
@@ -2274,7 +2303,7 @@ func opGtxnsa(cx *EvalContext) {
 		return
 	}
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
-	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, gtxid)
 	if err != nil {
 		cx.err = err
 		return
@@ -2304,13 +2333,68 @@ func opGtxnsas(cx *EvalContext) {
 		return
 	}
 	arrayFieldIdx := cx.stack[last].Uint
-	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, gtxid)
 	if err != nil {
 		cx.err = err
 		return
 	}
 	cx.stack[prev] = sv
 	cx.stack = cx.stack[:last]
+}
+
+func opItxn(cx *EvalContext) {
+	field := TxnField(cx.program[cx.pc+1])
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid itxn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if ok {
+		cx.err = fmt.Errorf("invalid itxn field %d", field)
+		return
+	}
+
+	if len(cx.InnerTxns) == 0 {
+		cx.err = fmt.Errorf("no inner transaction available %d", field)
+		return
+	}
+
+	itxn := &cx.InnerTxns[len(cx.InnerTxns)-1]
+	sv, err := cx.itxnFieldToStack(itxn, fs, 0)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack = append(cx.stack, sv)
+}
+
+func opItxna(cx *EvalContext) {
+	field := TxnField(cx.program[cx.pc+1])
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid itxn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if !ok {
+		cx.err = fmt.Errorf("itxna unsupported field %d", field)
+		return
+	}
+	arrayFieldIdx := uint64(cx.program[cx.pc+2])
+
+	if len(cx.InnerTxns) == 0 {
+		cx.err = fmt.Errorf("no inner transaction available %d", field)
+		return
+	}
+
+	itxn := &cx.InnerTxns[len(cx.InnerTxns)-1]
+	sv, err := cx.itxnFieldToStack(itxn, fs, arrayFieldIdx)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack = append(cx.stack, sv)
 }
 
 func opGaidImpl(cx *EvalContext, groupIdx uint64, opName string) (sv stackValue, err error) {

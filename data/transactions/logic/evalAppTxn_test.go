@@ -397,10 +397,12 @@ func TestAssetFreeze(t *testing.T) {
   int 3                            ; itxn_field ConfigAssetDecimals
   byte "oz"                        ; itxn_field ConfigAssetUnitName
   byte "Gold"                      ; itxn_field ConfigAssetName
-  byte "https://gold.rush/"       ; itxn_field ConfigAssetURL
+  byte "https://gold.rush/"        ; itxn_field ConfigAssetURL
   global CurrentApplicationAddress ; itxn_field ConfigAssetFreeze;
   itxn_submit
-  int 1
+  itxn EvalConfigAsset
+  int 889
+  ==
 `
 	ep, ledger := makeSampleEnv()
 	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})

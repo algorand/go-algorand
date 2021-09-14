@@ -1525,8 +1525,9 @@ func TestTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	for _, txnField := range TxnFieldNames {
-		if !strings.Contains(testTxnProgramTextV5, txnField) {
+	for i, txnField := range TxnFieldNames {
+		fs := txnFieldSpecByField[TxnField(i)]
+		if !fs.effects && !strings.Contains(testTxnProgramTextV5, txnField) {
 			if txnField != FirstValidTime.String() {
 				t.Errorf("TestTxn missing field %v", txnField)
 			}
