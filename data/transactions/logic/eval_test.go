@@ -2263,6 +2263,9 @@ func TestExtractOp(t *testing.T) {
 	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract32bits; int 0x3456789a; ==", 5)
 	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract64bits; int 0x123456789abcdef0; ==", 5)
 	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract64bits; int 0x123456789abcdef; !=", 5)
+
+	testAccepts(t, "byte 0xff; int 0; extractUintvar; int 1 ==; int 255; ==", 5)
+	testAccepts(t, "byte 0xffff; int 0; extract64bits; int 2 ==; int 65535; !=", 5)
 }
 
 func TestExtractFlop(t *testing.T) {

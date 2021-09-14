@@ -2938,16 +2938,6 @@ func opSetByte(cx *EvalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
-func opGetUvarint(cx *EvalContext) {
-	last := len(cx.stack) - 1
-	x, n := binary.Uvarint(cx.stack[last].Bytes)
-
-	cx.stack[last].Uint = x
-	cx.stack[last].Bytes = nil
-
-	cx.stack = append(cx.stack, stackValue{Uint: uint64(n)})
-}
-
 func opExtractImpl(x []byte, start, length int) (out []byte, err error) {
 	out = x
 	end := start + length
@@ -3017,6 +3007,19 @@ func opExtract32Bits(cx *EvalContext) {
 
 func opExtract64Bits(cx *EvalContext) {
 	opExtractNBytes(cx, 8) // extract 8 bytes
+}
+
+func opExtractUvarint(cx *EvalContext) {
+	last := len(cx.stack) - 1 // start
+	prev := last - 1          // bytes
+	startIdx := cx.stack[last].Uint
+	x, n := binary.Uvarint(cx.stack[last].Bytes[startIdx:])
+
+	cx.stack[prev].Uint = uint64(n)
+	cx.stack[prev].Bytes = nil
+
+	cx.stack[last].Uint = x
+	cx.stack[last].Bytes = nil
 }
 
 // accountReference yields the address and Accounts offset designated
