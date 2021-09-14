@@ -54,7 +54,11 @@ func TestOpDocs(t *testing.T) {
 	require.Len(t, EcdsaCurveDocs, len(EcdsaCurveNames))
 }
 
+// TestDocStragglers confirms that we don't have any docs laying
+// around for non-existent opcodes, most likely from a rename.
 func TestDocStragglers(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	for op := range opDocExtras {
 		_, ok := opDocByName[op]
 		require.True(t, ok, "%s is in opDocExtra, but not opDocByName", op)
