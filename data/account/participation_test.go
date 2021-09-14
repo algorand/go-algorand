@@ -388,37 +388,55 @@ func BenchmarkFillDB(b *testing.B) {
 
 	tmp := config.Consensus[protocol.ConsensusCurrentVersion]
 	cpy := config.Consensus[protocol.ConsensusCurrentVersion]
-	cpy.CompactCertRounds = 1000
+	cpy.CompactCertRounds = 128
 	config.Consensus[protocol.ConsensusCurrentVersion] = cpy
 	defer func() { config.Consensus[protocol.ConsensusCurrentVersion] = tmp }()
-	secondsPerRound := 4
-	numSecondsInDay := 60 * 60 * 24
-	numSecondsInMonth := numSecondsInDay * 30
-	numSecondsInHalfYear := 6 * numSecondsInMonth
-	numRoundsInHalfAYear := numSecondsInHalfYear / secondsPerRound
-	var partt *PersistedParticipation
+
 	for i := 0; i < b.N; i++ {
-		part, err := FillDBWithParticipationKeys(partDB, root.Address(), 1, basics.Round(numRoundsInHalfAYear+1), config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+		part, err := FillDBWithParticipationKeys(partDB, root.Address(), 0, 3000000, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
 		a.NoError(err)
-		a.NotNil(part)
+		_ = part
 
 		b.StopTimer()
-		err = partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			_, err := tx.Exec("DROP TABLE ParticipationAccount;")
-			if err != nil {
-				return err
-			}
-			_, err = tx.Exec("DROP TABLE schema;")
-			return err
-		})
-		a.NoError(err)
-		partt = &part
+		a.NoError(dropTables(partDB))
 		b.StartTimer()
 	}
-	if partt == nil {
-		return
+}
+
+func dropTables(partDB db.Accessor) error {
+	return partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec("DROP TABLE ParticipationAccount;")
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec("DROP TABLE schema;")
+		return err
+	})
+}
+
+func BenchmarkParticipationKeyRestoration(b *testing.B) {
+	a := require.New(b)
+
+	var rootAddr basics.Address
+	crypto.RandBytes(rootAddr[:])
+
+	dbname := b.Name() + "_part"
+	defer os.Remove(dbname)
+
+	partDB, err := db.MakeErasableAccessor(dbname)
+	a.NoError(err)
+
+	part, err := FillDBWithParticipationKeys(partDB, rootAddr, 0, 3000000, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+	a.NoError(err)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		out, err := RestoreParticipation(partDB)
+		a.NoError(err)
+
+		b.StopTimer()
+		a.Equal(intoComparable(part), intoComparable(out))
+		b.StartTimer()
 	}
-	out := protocol.Encode(partt.BlockProof)
-	outvoting := protocol.Encode(partt.Voting)
-	fmt.Println("merkle key store size:", len(out), "bytes.", "voting key size:", len(outvoting), "bytes.")
+	part.Close()
 }
