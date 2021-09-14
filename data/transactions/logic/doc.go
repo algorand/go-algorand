@@ -433,7 +433,7 @@ var txnFieldDocs = map[string]string{
 	"FreezeAssetAccount": "32 byte address of the account whose asset slot is being frozen or un-frozen",
 	"FreezeAssetFrozen":  "The new frozen value, 0 or 1",
 
-	"Logs":              "Log messages emmitted by an application call",
+	"Logs":              "Log messages emitted by an application call",
 	"NumLogs":           "Number of Logs",
 	"EvalConfigAsset":   "Asset ID allocated by the creation of an ASA",
 	"EvalApplicationID": "ApplicationID allocated by the creation of an application",
