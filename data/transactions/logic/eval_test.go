@@ -17,7 +17,6 @@
 package logic
 
 import (
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
@@ -2269,6 +2268,9 @@ func TestExtractOp(t *testing.T) {
 	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract32bits; int 0x3456789a; ==", 5)
 	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract64bits; int 0x123456789abcdef0; ==", 5)
 	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract64bits; int 0x123456789abcdef; !=", 5)
+
+	testAccepts(t, `byte "hello"; extract 5 0; byte ""; ==`, 5)
+	testAccepts(t, `byte "hello"; int 5; int 0; extract3; byte ""; ==`, 5)
 }
 
 func TestExtractFlop(t *testing.T) {
@@ -2328,6 +2330,8 @@ func TestLoadStore(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
+	testAccepts(t, "load 3; int 0; ==;", 1)
+
 	testAccepts(t, `int 37
 int 37
 store 1
@@ -2349,6 +2353,7 @@ func TestLoadStoreStack(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
+	testAccepts(t, "int 3; loads; int 0; ==;", 5)
 	testAccepts(t, `int 37
 int 1
 int 37
@@ -2722,44 +2727,6 @@ func TestCompares(t *testing.T) {
 
 	t.Parallel()
 	testAccepts(t, testCompareProgramText, 1)
-}
-
-func TestKeccak256(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	t.Parallel()
-	/*
-		pip install sha3
-		import sha3
-		blob=b'fnord'
-		sha3.keccak_256(blob).hexdigest()
-	*/
-	progText := `byte 0x666E6F7264
-keccak256
-byte 0xc195eca25a6f4c82bfba0287082ddb0d602ae9230f9cf1f1a40b68f8e2c41567
-==`
-	testAccepts(t, progText, 1)
-}
-
-func TestSHA512_256(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	t.Parallel()
-	/*
-		pip cryptography
-		from cryptography.hazmat.backends import default_backend
-		from cryptography.hazmat.primitives import hashes
-		import base64
-		digest = hashes.Hash(hashes.SHA512_256(), backend=default_backend())
-		digest.update(b'fnord')
-		base64.b16encode(digest.finalize())
-	*/
-	progText := `byte 0x666E6F7264
-sha512_256
-
-byte 0x98D2C31612EA500279B6753E5F6E780CA63EBA8274049664DAD66A2565ED1D2A
-==`
-	testAccepts(t, progText, 1)
 }
 
 func TestSlowLogic(t *testing.T) {
@@ -3724,22 +3691,6 @@ func BenchmarkBigMath(b *testing.B) {
 	}
 }
 
-func BenchmarkHash(b *testing.B) {
-	for _, hash := range []string{"sha256", "keccak256", "sha512_256"} {
-		b.Run(hash+"-small", func(b *testing.B) { // hash 32 bytes
-			benchmarkOperation(b, "int 32; bzero", hash, "pop; int 1")
-		})
-		b.Run(hash+"-med", func(b *testing.B) { // hash 128 bytes
-			benchmarkOperation(b, "int 32; bzero",
-				"dup; concat; dup; concat;"+hash, "pop; int 1")
-		})
-		b.Run(hash+"-big", func(b *testing.B) { // hash 512 bytes
-			benchmarkOperation(b, "int 32; bzero",
-				"dup; concat; dup; concat; dup; concat; dup; concat;"+hash, "pop; int 1")
-		})
-	}
-}
-
 func BenchmarkAddx64(b *testing.B) {
 	progs := [][]string{
 		{"add long stack", addBenchmarkSource},
@@ -3754,123 +3705,6 @@ func BenchmarkAddx64(b *testing.B) {
 
 func BenchmarkNopPassx1(b *testing.B) {
 	benchmarkBasicProgram(b, "int 1")
-}
-
-func BenchmarkSha256Raw(b *testing.B) {
-	addr, _ := basics.UnmarshalChecksumAddress("OC6IROKUJ7YCU5NV76AZJEDKYQG33V2CJ7HAPVQ4ENTAGMLIOINSQ6EKGE")
-	a := addr[:]
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		t := sha256.Sum256(a)
-		a = t[:]
-	}
-}
-
-func TestEd25519verify(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	t.Parallel()
-	var s crypto.Seed
-	crypto.RandBytes(s[:])
-	c := crypto.GenerateSignatureSecrets(s)
-	msg := "62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
-	data, err := hex.DecodeString(msg)
-	require.NoError(t, err)
-	pk := basics.Address(c.SignatureVerifier)
-	pkStr := pk.String()
-
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(fmt.Sprintf(`arg 0
-arg 1
-addr %s
-ed25519verify`, pkStr), v)
-			require.NoError(t, err)
-			sig := c.Sign(Msg{
-				ProgramHash: crypto.HashObj(Program(ops.Program)),
-				Data:        data[:],
-			})
-			var txn transactions.SignedTxn
-			txn.Lsig.Logic = ops.Program
-			txn.Lsig.Args = [][]byte{data[:], sig[:]}
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, &txn))
-			if !pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.True(t, pass)
-			require.NoError(t, err)
-
-			// short sig will fail
-			txn.Lsig.Args[1] = sig[1:]
-			pass, err = Eval(ops.Program, defaultEvalParams(nil, &txn))
-			require.False(t, pass)
-			require.Error(t, err)
-			isNotPanic(t, err)
-
-			// flip a bit and it should not pass
-			msg1 := "52fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
-			data1, err := hex.DecodeString(msg1)
-			require.NoError(t, err)
-			txn.Lsig.Args = [][]byte{data1, sig[:]}
-			sb1 := strings.Builder{}
-			pass1, err := Eval(ops.Program, defaultEvalParams(&sb1, &txn))
-			require.False(t, pass1)
-			require.NoError(t, err)
-			isNotPanic(t, err)
-		})
-	}
-}
-
-func BenchmarkEd25519Verifyx1(b *testing.B) {
-	//benchmark setup
-	var data [][32]byte
-	var programs [][]byte
-	var signatures []crypto.Signature
-
-	for i := 0; i < b.N; i++ {
-		var buffer [32]byte //generate data to be signed
-		crypto.RandBytes(buffer[:])
-		data = append(data, buffer)
-
-		var s crypto.Seed //generate programs and signatures
-		crypto.RandBytes(s[:])
-		secret := crypto.GenerateSignatureSecrets(s)
-		pk := basics.Address(secret.SignatureVerifier)
-		pkStr := pk.String()
-		ops, err := AssembleStringWithVersion(fmt.Sprintf(`arg 0
-arg 1
-addr %s
-ed25519verify`, pkStr), AssemblerMaxVersion)
-		require.NoError(b, err)
-		programs = append(programs, ops.Program)
-		sig := secret.Sign(Msg{
-			ProgramHash: crypto.HashObj(Program(ops.Program)),
-			Data:        buffer[:],
-		})
-		signatures = append(signatures, sig)
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		var txn transactions.SignedTxn
-		txn.Lsig.Logic = programs[i]
-		txn.Lsig.Args = [][]byte{data[i][:], signatures[i][:]}
-		sb := strings.Builder{}
-		ep := defaultEvalParams(&sb, &txn)
-		pass, err := Eval(programs[i], ep)
-		if !pass {
-			b.Log(hex.EncodeToString(programs[i]))
-			b.Log(sb.String())
-		}
-		if err != nil {
-			require.NoError(b, err)
-		}
-		if !pass {
-			require.True(b, pass)
-		}
-	}
 }
 
 func BenchmarkCheckx5(b *testing.B) {

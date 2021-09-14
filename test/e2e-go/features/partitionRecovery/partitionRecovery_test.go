@@ -32,6 +32,7 @@ const inducePartitionTime = 6 * time.Second    // Try to minimize change of proc
 
 func TestBasicPartitionRecovery(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	if testing.Short() {
 		t.Skip()
@@ -78,6 +79,7 @@ func TestBasicPartitionRecovery(t *testing.T) {
 
 func TestPartitionRecoverySwapStartup(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	if testing.Short() {
 		t.Skip()
@@ -100,6 +102,7 @@ func TestPartitionRecoverySwapStartup(t *testing.T) {
 
 func TestPartitionRecoveryStaggerRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	if testing.Short() {
 		t.Skip()
@@ -167,6 +170,7 @@ func runTestWithStaggeredStopStart(t *testing.T, fixture *fixtures.RestClientFix
 
 func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	if testing.Short() {
 		t.Skip()
@@ -224,6 +228,7 @@ func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
 
 func TestPartitionHalfOffline(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	if testing.Short() {
 		t.Skip()

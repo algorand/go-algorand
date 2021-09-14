@@ -35,6 +35,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/secp256k1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
@@ -2632,6 +2633,164 @@ func opEd25519verify(cx *EvalContext) {
 		cx.stack[pprev].Uint = 0
 	}
 	cx.stack[pprev].Bytes = nil
+	cx.stack = cx.stack[:prev]
+}
+
+// leadingZeros needs to be replaced by big.Int.FillBytes
+func leadingZeros(size int, b *big.Int) ([]byte, error) {
+	data := b.Bytes()
+	if size < len(data) {
+		return nil, fmt.Errorf("insufficient buffer size: %d < %d", size, len(data))
+	}
+	if size == len(data) {
+		return data, nil
+	}
+
+	buf := make([]byte, size)
+	copy(buf[size-len(data):], data)
+	return buf, nil
+}
+
+func opEcdsaVerify(cx *EvalContext) {
+	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
+	fs, ok := ecdsaCurveSpecByField[ecdsaCurve]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid curve %d", ecdsaCurve)
+		return
+	}
+
+	if fs.field != Secp256k1 {
+		cx.err = fmt.Errorf("unsupported curve %d", fs.field)
+		return
+	}
+
+	last := len(cx.stack) - 1 // index of PK y
+	prev := last - 1          // index of PK x
+	pprev := prev - 1         // index of signature s
+	fourth := pprev - 1       // index of signature r
+	fifth := fourth - 1       // index of data
+
+	pkY := cx.stack[last].Bytes
+	pkX := cx.stack[prev].Bytes
+	sigS := cx.stack[pprev].Bytes
+	sigR := cx.stack[fourth].Bytes
+	msg := cx.stack[fifth].Bytes
+
+	x := new(big.Int).SetBytes(pkX)
+	y := new(big.Int).SetBytes(pkY)
+	pubkey := secp256k1.S256().Marshal(x, y)
+
+	signature := make([]byte, 0, len(sigR)+len(sigS))
+	signature = append(signature, sigR...)
+	signature = append(signature, sigS...)
+
+	result := secp256k1.VerifySignature(pubkey, msg, signature)
+
+	if result {
+		cx.stack[fifth].Uint = 1
+	} else {
+		cx.stack[fifth].Uint = 0
+	}
+	cx.stack[fifth].Bytes = nil
+	cx.stack = cx.stack[:fourth]
+}
+
+func opEcdsaPkDecompress(cx *EvalContext) {
+	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
+	fs, ok := ecdsaCurveSpecByField[ecdsaCurve]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid curve %d", ecdsaCurve)
+		return
+	}
+
+	if fs.field != Secp256k1 {
+		cx.err = fmt.Errorf("unsupported curve %d", fs.field)
+		return
+	}
+
+	last := len(cx.stack) - 1 // compressed PK
+
+	pubkey := cx.stack[last].Bytes
+	x, y := secp256k1.DecompressPubkey(pubkey)
+	if x == nil {
+		cx.err = fmt.Errorf("invalid pubkey")
+		return
+	}
+
+	var err error
+	cx.stack[last].Uint = 0
+	cx.stack[last].Bytes, err = leadingZeros(32, x)
+	if err != nil {
+		cx.err = fmt.Errorf("x component zeroing failed: %s", err.Error())
+		return
+	}
+
+	var sv stackValue
+	sv.Bytes, err = leadingZeros(32, y)
+	if err != nil {
+		cx.err = fmt.Errorf("y component zeroing failed: %s", err.Error())
+		return
+	}
+
+	cx.stack = append(cx.stack, sv)
+}
+
+func opEcdsaPkRecover(cx *EvalContext) {
+	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
+	fs, ok := ecdsaCurveSpecByField[ecdsaCurve]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid curve %d", ecdsaCurve)
+		return
+	}
+
+	if fs.field != Secp256k1 {
+		cx.err = fmt.Errorf("unsupported curve %d", fs.field)
+		return
+	}
+
+	last := len(cx.stack) - 1 // index of signature s
+	prev := last - 1          // index of signature r
+	pprev := prev - 1         // index of recovery id
+	fourth := pprev - 1       // index of data
+
+	sigS := cx.stack[last].Bytes
+	sigR := cx.stack[prev].Bytes
+	recid := cx.stack[pprev].Uint
+	msg := cx.stack[fourth].Bytes
+
+	if recid > 3 {
+		cx.err = fmt.Errorf("invalid recovery id: %d", recid)
+		return
+	}
+
+	signature := make([]byte, 0, len(sigR)+len(sigS)+1)
+	signature = append(signature, sigR...)
+	signature = append(signature, sigS...)
+	signature = append(signature, uint8(recid))
+
+	pk, err := secp256k1.RecoverPubkey(msg, signature)
+	if err != nil {
+		cx.err = fmt.Errorf("pubkey recover failed: %s", err.Error())
+		return
+	}
+	x, y := secp256k1.S256().Unmarshal(pk)
+	if x == nil {
+		cx.err = fmt.Errorf("pubkey unmarshal failed")
+		return
+	}
+
+	cx.stack[fourth].Uint = 0
+	cx.stack[fourth].Bytes, err = leadingZeros(32, x)
+	if err != nil {
+		cx.err = fmt.Errorf("x component zeroing failed: %s", err.Error())
+		return
+	}
+	cx.stack[pprev].Uint = 0
+	cx.stack[pprev].Bytes, err = leadingZeros(32, y)
+	if err != nil {
+		cx.err = fmt.Errorf("y component zeroing failed: %s", err.Error())
+		return
+	}
 	cx.stack = cx.stack[:prev]
 }
 
