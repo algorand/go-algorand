@@ -97,17 +97,6 @@ func (p *peerScheduler) Len() int {
 	return len(p.peers)
 }
 
-// find returns the smallest index i at which x == a[i],
-// or len(a) if there is no such index.
-func find(a []int, x int) int {
-	for i, n := range a {
-		if x == n {
-			return i
-		}
-	}
-	return len(a)
-}
-
 func (p *peerScheduler) replaceIndices(indices []int, i, j int) {
 
 	for idx, x := range indices {
