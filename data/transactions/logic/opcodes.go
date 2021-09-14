@@ -249,7 +249,7 @@ var OpSpecs = []OpSpec{
 	{0x59, "extract16bits", opExtract16Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},
 	{0x5a, "extract32bits", opExtract32Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},
 	{0x5b, "extract64bits", opExtract64Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},
-	{0x5c, "extractuvarint", opExtractUvarint, asmDefault, disDefault, byteInt, twoInts, 5, modeAny, opDefault},
+	{0x5c, "extract_uvarint", opExtractUvarint, asmDefault, disDefault, byteInt, twoInts, 5, modeAny, opDefault},
 
 	{0x60, "balance", opBalance, asmDefault, disDefault, oneInt, oneInt, 2, runModeApplication, opDefault},
 	{0x60, "balance", opBalance, asmDefault, disDefault, oneAny, oneInt, directRefEnabledVersion, runModeApplication, opDefault},
