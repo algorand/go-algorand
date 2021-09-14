@@ -2347,6 +2347,7 @@ func TestReturnTypes(t *testing.T) {
 	require.NoError(t, err)
 	algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
 	ledger.NewLocal(txn.Txn.Receiver, 1, string(key), algoValue)
+	ledger.NewAccount(basics.AppIndex(1).Address(), 1000000)
 
 	ep.Ledger = ledger
 
@@ -2388,6 +2389,9 @@ func TestReturnTypes(t *testing.T) {
 		"gtxnas":            "gtxnas 0 ApplicationArgs",
 		"gtxnsas":           "pop; pop; int 0; int 0; gtxnsas ApplicationArgs",
 		"args":              "args",
+		"itxn":              "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxn CreatedAssetID",
+		// This next one is a cop out.  Can't use itxna Logs until we have inner appl
+		"itxna": "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxn NumLogs",
 	}
 
 	// these require special input data and tested separately
