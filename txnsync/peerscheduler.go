@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"fmt"
 	"container/heap"
 	"sort"
 	"time"
@@ -49,6 +50,18 @@ func (p *peerScheduler) Push(x interface{}) {
 	entry := x.(peerBucket)
 	p.peers = append(p.peers, entry)
 	p.nextPeers[entry.peer] = append(p.nextPeers[entry.peer], len(p.peers)-1)
+
+
+	if len(p.nextPeers[entry.peer]) > 1 {
+		peerIndices := p.nextPeers[entry.peer]
+		sort.Slice(peerIndices, func(i, j int) bool {
+			return p.peers[peerIndices[i]].next < p.peers[peerIndices[j]].next
+		})
+		if p.peers[peerIndices[0]].next > p.peers[peerIndices[1]].next {
+			fmt.Println("push boom")
+		}
+	}
+
 }
 
 // Pop implements heap.Interface
@@ -59,8 +72,22 @@ func (p *peerScheduler) Pop() interface{} {
 	// delete from the map only if it's the last entry
 	peerIndices := p.nextPeers[res.peer]
 
-	// the peer index must be the last entry.
-	peerIndices = peerIndices[:len(peerIndices)-1]
+	if peerIndices[0] != end {
+		// this case is possible when the peer has two elements in p.peers.
+		// and both have the same next value. 
+		for idx, x := range peerIndices {
+			if x == end {
+				if p.peers[peerIndices[0]].next != p.peers[peerIndices[idx]].next {
+					fmt.Println("nboom")
+				}
+				peerIndices[0], peerIndices[idx] = peerIndices[idx], peerIndices[0]
+				break
+			}
+		}
+	}
+	// the peer index must be the first entry.
+	peerIndices = peerIndices[1:]
+
 
 	// store if non-empty.
 	if len(peerIndices) > 0 {
@@ -90,34 +117,28 @@ func find(a []int, x int) int {
 	return len(a)
 }
 
-func replaceIndices(indices []int, i, j int) {
-	k := sort.SearchInts(indices, i)
-	if k >= len(indices) {
-		return
+func (p *peerScheduler) replaceIndices(indices []int, i, j int) {
+
+	for idx, x := range indices {
+		if x == i {
+			indices[idx] = j
+		} else if x ==j {
+			indices[idx] = i 
+		}
 	}
-	if indices[k] == i {
-		indices[k] = j
-	}
-	k = k + 1 + sort.SearchInts(indices[k+1:], i)
-	if k >= len(indices) {
-		goto done
-	}
-	if indices[k] == j {
-		indices[k] = i
-	}
-done:
-	sort.IntSlice(indices).Sort()
+	sort.Slice(indices, func(i, j int) bool {
+		return p.peers[indices[i]].next < p.peers[indices[j]].next
+	})
 }
 
 // Swap implements heap.Interface
 func (p *peerScheduler) Swap(i, j int) {
-	if i > j {
-		i, j = j, i
-	}
 	p.peers[i], p.peers[j] = p.peers[j], p.peers[i]
-
-	replaceIndices(p.nextPeers[p.peers[i].peer], j, i)
-	replaceIndices(p.nextPeers[p.peers[j].peer], i, j)
+	p.replaceIndices(p.nextPeers[p.peers[i].peer], i, j)
+	if p.peers[i] == p.peers[j] {
+		return
+	}
+	p.replaceIndices(p.nextPeers[p.peers[j].peer], i, j)
 }
 
 // Less implements heap.Interface
@@ -189,6 +210,9 @@ func (p *peerScheduler) peerDuration(peer *Peer) time.Duration {
 	peerIndices := p.nextPeers[peer]
 	if len(peerIndices) == 0 {
 		return time.Duration(0)
+	}
+	if len(peerIndices) > 1 && p.peers[peerIndices[0]].next > p.peers[peerIndices[1]].next {
+		fmt.Println("boom")
 	}
 	bucket := heap.Remove(p, peerIndices[0]).(peerBucket)
 	return bucket.next
