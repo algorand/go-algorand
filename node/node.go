@@ -108,8 +108,6 @@ type AlgorandFullNode struct {
 
 	indexer *indexer.Indexer
 
-	participationRegistry account.ParticipationRegistry
-
 	rootDir     string
 	genesisID   string
 	genesisHash crypto.Digest
@@ -179,7 +177,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	}
 	p2pNode.SetPrioScheme(node)
 	node.net = p2pNode
-	node.accountManager = data.MakeAccountManager(log)
 
 	accountListener := makeTopAccountListener(log)
 
@@ -269,11 +266,12 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
-	node.participationRegistry, err = ensureParticipationDB(genesisDir, node.log)
+	registry, err := ensureParticipationDB(genesisDir, node.log)
 	if err != nil {
 		log.Errorf("unable to initialize the participation registry database: %v", err)
 		return nil, err
 	}
+	node.accountManager = data.MakeAccountManager(log, registry)
 
 	err = node.loadParticipationKeys()
 	if err != nil {
@@ -825,13 +823,6 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 				return fmt.Errorf("AlgorandFullNode.loadParticipationKeys: cannot load account at %v: %v", info.Name(), err)
 			}
 		} else {
-			// Tell the ParticipationRegistry about the Participation (dupes don't matter)
-			// TODO: Put the registry in the AccountManager?
-			_, err := node.participationRegistry.Insert(part.Participation)
-			if err != nil && err != account.ErrAlreadyInserted {
-				node.log.Errorf("Failed to insert participation key.")
-			}
-
 			// Tell the AccountManager about the Participation (dupes don't matter)
 			added := node.accountManager.AddParticipation(part)
 			if added {
@@ -895,9 +886,6 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 		case <-node.oldKeyDeletionNotify:
 		}
 
-		// Persist metrics to database.
-		node.participationRegistry.Flush()
-
 		r := node.ledger.Latest()
 
 		// We need the latest header to determine the next compact cert
@@ -943,14 +931,8 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 		node.accountManager.DeleteOldKeys(latestHdr, ccSigs, agreementProto)
 		node.mu.Unlock()
 
-		// Delete expired records from participation registry.
-		for _, record := range node.participationRegistry.GetAll() {
-			if record.LastVote < hdr.Round {
-				if err := node.participationRegistry.Delete(record.ParticipationID); err != nil {
-					node.log.Warnf("Problem deleting key from participation registry: %w", err)
-				}
-			}
-		}
+		// Persist participation registry metrics.
+		node.accountManager.FlushRegistry()
 	}
 }
 
@@ -1177,12 +1159,6 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 		}
 		participations = append(participations, part)
 		matchingAccountsKeys[part.Address()] = true
-
-		// This is usually a no-op, but the first time it will update the DB.
-		err := node.participationRegistry.Register(part.ID(), keysRound)
-		if err != nil {
-			node.log.Warn("Failed to register participation key (%s) with participation registry.", part.ID())
-		}
 	}
 	// write the warnings per account only if we couldn't find a single valid key for that account.
 	for mismatchingAddr, warningFlags := range mismatchingAccountsKeys {
@@ -1203,9 +1179,5 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 
 // RecordAsync forwards participation record calls to the participation registry.
 func (node *AlgorandFullNode) RecordAsync(account basics.Address, round basics.Round, participationType account.ParticipationAction) {
-	// This function updates a cache in the ParticipationRegistry, we must call Flush to persist the changes.
-	err := node.participationRegistry.Record(account, round, participationType)
-	if err != nil {
-		node.log.Warnf("node.RecordAsync: Account %v not able to record participation (%d) on round %d: %w", account, participationType, round, err)
-	}
+	node.accountManager.RecordAsync(account, round, participationType)
 }
