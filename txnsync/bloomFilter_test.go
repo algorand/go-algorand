@@ -255,9 +255,9 @@ func TestEncodingDecoding(t *testing.T) {
 	var testableBf *testableBloomFilter
 	var remarshaled []byte
 	// For each filter type
-	for _, filterFactory = range filters {
+	for _, ff := range filters {
 
-		filter, filterType := filterFactory(len(randomEntries), &s)
+		filter, filterType := ff(len(randomEntries), &s)
 		for i := range randomEntries {
 			filter.Set(randomEntries[i][:])
 		}
@@ -296,14 +296,14 @@ func TestBloomFilterTest(t *testing.T) {
 	filters := []func(int, *syncState) (filter bloom.GenericFilter, filterType bloomFilterType){
 		filterFactoryXor8, filterFactoryXor32, filterFactoryBloom}
 
-	for _, filterFactory = range filters {
+	for _, ff := range filters {
 
 		var s syncState
 		s.node = &justRandomFakeNode{}
 		var err error
 		txnGroups := getTxnGroups(testingGenesisHash, testingGenesisID)
 
-		filter, filterType := filterFactory(len(txnGroups), &s)
+		filter, filterType := ff(len(txnGroups), &s)
 		for _, txnGroup := range txnGroups {
 			filter.Set(txnGroup.GroupTransactionID[:])
 		}
