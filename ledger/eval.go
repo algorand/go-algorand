@@ -1525,8 +1525,108 @@ func (vb ValidatedBlock) WithSeed(s committee.Seed) ValidatedBlock {
 	}
 }
 
-// GetBlockAddresses returns all addresses referenced in `block`.
-func GetBlockAddresses(block *bookkeeping.Block) map[basics.Address]struct{} {
+// FoundAddress is a wrapper for an address and a boolean.
+type FoundAddress struct {
+	Address basics.Address
+	Exists  bool
+}
+
+// A ledger interface that Indexer implements. This is a simplified version of the
+// ledgerForEvaluator interface. Certain functions that the evaluator doesn't use
+// in the trusting mode are excluded, and the present functions only request data
+// at the latest round.
+type indexerLedgerForEval interface {
+	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
+	// The value of the returned map is nil iff the account was not found.
+	LookupWithoutRewards(map[basics.Address]struct{}) (map[basics.Address]*basics.AccountData, error)
+	GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]FoundAddress, error)
+	GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]FoundAddress, error)
+	Totals() (ledgercore.AccountTotals, error)
+}
+
+// Converter between indexerLedgerForEval and ledgerForEvaluator interfaces.
+type indexerLedgerConnector struct {
+	il          indexerLedgerForEval
+	genesisHash crypto.Digest
+}
+
+// BlockHdr is part of ledgerForEvaluator interface.
+func (l indexerLedgerConnector) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
+	return l.il.BlockHdr(round)
+}
+
+// CheckDup is part of ledgerForEvaluator interface.
+func (l indexerLedgerConnector) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error {
+	// This function is not used by evaluator.
+	return errors.New("CheckDup() not implemented")
+}
+
+// LookupWithoutRewards is part of ledgerForEvaluator interface.
+func (l indexerLedgerConnector) LookupWithoutRewards(round basics.Round, address basics.Address) (basics.AccountData, basics.Round, error) {
+	accountDataMap, err :=
+		l.il.LookupWithoutRewards(map[basics.Address]struct{}{address: {}})
+	if err != nil {
+		return basics.AccountData{}, basics.Round(0), err
+	}
+
+	accountData := accountDataMap[address]
+	if accountData == nil {
+		return basics.AccountData{}, round, nil
+	}
+	return *accountData, round, nil
+}
+
+// GetCreatorForRound is part of ledgerForEvaluator interface.
+func (l indexerLedgerConnector) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+	var foundAddress FoundAddress
+
+	switch ctype {
+	case basics.AssetCreatable:
+		foundAddresses, err :=
+			l.il.GetAssetCreator(map[basics.AssetIndex]struct{}{basics.AssetIndex(cindex): {}})
+		if err != nil {
+			return basics.Address{}, false, err
+		}
+		foundAddress = foundAddresses[basics.AssetIndex(cindex)]
+	case basics.AppCreatable:
+		foundAddresses, err :=
+			l.il.GetAppCreator(map[basics.AppIndex]struct{}{basics.AppIndex(cindex): {}})
+		if err != nil {
+			return basics.Address{}, false, err
+		}
+		foundAddress = foundAddresses[basics.AppIndex(cindex)]
+	default:
+		return basics.Address{}, false, fmt.Errorf("unknown creatable type %v", ctype)
+	}
+
+	return foundAddress.Address, foundAddress.Exists, nil
+}
+
+// GenesisHash is part of ledgerForEvaluator interface.
+func (l indexerLedgerConnector) GenesisHash() crypto.Digest {
+	return l.genesisHash
+}
+
+// Totals is part of ledgerForEvaluator interface.
+func (l indexerLedgerConnector) Totals(_ basics.Round) (ledgercore.AccountTotals, error) {
+	return l.il.Totals()
+}
+
+// CompactCertVoters is part of ledgerForEvaluator interface.
+func (l indexerLedgerConnector) CompactCertVoters(_ basics.Round) (*VotersForRound, error) {
+	// This function is not used by evaluator.
+	return nil, errors.New("CompactCertVoters() not implemented")
+}
+
+func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Digest) indexerLedgerConnector {
+	return indexerLedgerConnector{
+		il:          il,
+		genesisHash: genesisHash,
+	}
+}
+
+// Returns all addresses referenced in `block`.
+func getBlockAddresses(block *bookkeeping.Block) map[basics.Address]struct{} {
 	// Reserve a reasonable memory size for the map.
 	res := make(map[basics.Address]struct{}, len(block.Payset)+2)
 	res[block.FeeSink] = struct{}{}
@@ -1548,29 +1648,52 @@ func GetBlockAddresses(block *bookkeeping.Block) map[basics.Address]struct{} {
 // This function is used by Indexer which modifies `proto` to retrieve the asset
 // close amount for each transaction even when the real consensus parameters do not
 // support it.
-func Eval(l ledgerForEvaluator, blk *bookkeeping.Block, proto config.ConsensusParams) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
+func Eval(il indexerLedgerForEval, block *bookkeeping.Block, proto config.ConsensusParams) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
+	ilc := makeIndexerLedgerConnector(il, block.GenesisHash())
+
 	eval, err := startEvaluator(
-		l, blk.BlockHeader, proto, len(blk.Payset), false, false)
+		ilc, block.BlockHeader, proto, len(block.Payset), false, false)
 	if err != nil {
-		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{}, err
+		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
+			fmt.Errorf("Eval() err: %w", err)
 	}
 
-	paysetgroups, err := blk.DecodePaysetGroups()
+	// Preload most needed accounts.
+	{
+		accountDataMap, err := il.LookupWithoutRewards(getBlockAddresses(block))
+		if err != nil {
+			return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
+				fmt.Errorf("Eval() err: %w", err)
+		}
+		base := eval.state.lookupParent.(*roundCowBase)
+		for address, accountData := range accountDataMap {
+			if accountData == nil {
+				base.accounts[address] = basics.AccountData{}
+			} else {
+				base.accounts[address] = *accountData
+			}
+		}
+	}
+
+	paysetgroups, err := block.DecodePaysetGroups()
 	if err != nil {
-		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{}, err
+		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
+			fmt.Errorf("Eval() err: %w", err)
 	}
 
 	for _, group := range paysetgroups {
 		err = eval.TransactionGroup(group)
 		if err != nil {
-			return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{}, err
+			return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
+				fmt.Errorf("Eval() err: %w", err)
 		}
 	}
 
 	// Finally, process any pending end-of-block state changes.
 	err = eval.endOfBlock()
 	if err != nil {
-		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{}, err
+		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
+			fmt.Errorf("Eval() err: %w", err)
 	}
 
 	return eval.state.deltas(), eval.block.Payset, nil
