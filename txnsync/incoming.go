@@ -242,13 +242,13 @@ incomingMessageLoop:
 					peer.proposalFilterCache.insert(hash)
 				}
 				// send proposal or proposal txns to handler
-				logging.Base().Info("HandleProposalMessage")
+				logging.Base().Info("HandleProposalMessage start")
 				completedProposalBytes := s.node.HandleProposalMessage(incomingMsg.message.RelayedProposal.RawBytes, incomingMsg.transactionGroups, peer)
 				if completedProposalBytes != nil {
 					peers := s.getPeers()
 					s.broadcastProposalFilter(crypto.Hash(completedProposalBytes), peers)
 				}
-				logging.Base().Info("HandleProposalMessage")
+				logging.Base().Info("HandleProposalMessage done")
 			}
 			peer.updateRequestParams(incomingMsg.message.UpdatedRequestParams.Modulator, incomingMsg.message.UpdatedRequestParams.Offset)
 			peer.updateIncomingMessageTiming(incomingMsg.message.MsgSync, s.round, s.clock.Since(), incomingMsg.encodedSize)

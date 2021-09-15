@@ -341,6 +341,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 
 	case pd, open := <-d.txnsyncProposals:
 		if !open {
+			logging.Base().Warnf("channel was closed")
 			return emptyEvent{}, false
 		}
 		p, err := decodeProposal(pd.ProposalBytes)

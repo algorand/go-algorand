@@ -132,36 +132,39 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			nextPeerStateCh = nil
 		}
 
-		logging.Base().Info("new state 0")
-
 		select {
 		case ent := <-externalEvents:
 			switch ent.eventType {
 			case transactionPoolChangedEvent:
+				logging.Base().Info("transactionPoolChangedEvent")
 				profTxChange.start()
 				s.onTransactionPoolChangedEvent(ent)
 				profTxChange.end()
 			case newRoundEvent:
+				logging.Base().Info("newRoundEvent")
 				profNewRounnd.start()
 				s.onNewRoundEvent(ent)
 				profNewRounnd.end()
 			case proposalBroadcastRequestEvent:
-				logging.Base().Info("broadcast proposal event")
+				logging.Base().Info("broadcast proposal event start")
 				s.onBroadcastProposalRequestEvent(ent)
-				logging.Base().Info("broadcast proposal event")
+				logging.Base().Info("broadcast proposal event end")
 			}
 			continue
 		case <-nextPeerStateCh:
+			logging.Base().Info("nextPeerStateCh")
 			profPeerState.start()
 			s.evaluatePeerStateChanges(nextPeerStateTime)
 			profPeerState.end()
 			continue
 		case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
+			logging.Base().Info("getIncomingMessageChannel")
 			profIncomingMsg.start()
 			s.evaluateIncomingMessage(incomingMsg)
 			profIncomingMsg.end()
 			continue
 		case msgSent := <-s.outgoingMessagesCallbackCh:
+			logging.Base().Info("outgoingMessagesCallbackCh")
 			profOutgoingMsg.start()
 			s.evaluateOutgoingMessage(msgSent)
 			profOutgoingMsg.end()
@@ -176,37 +179,40 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 		default:
 		}
 
-		logging.Base().Info("new state 1")
-
 		profIdle.start()
 		select {
 		case ent := <-externalEvents:
 			profIdle.end()
 			switch ent.eventType {
 			case transactionPoolChangedEvent:
+				logging.Base().Info("transactionPoolChangedEvent")
 				profTxChange.start()
 				s.onTransactionPoolChangedEvent(ent)
 				profTxChange.end()
 			case newRoundEvent:
+				logging.Base().Info("newRoundEvent")
 				profNewRounnd.start()
 				s.onNewRoundEvent(ent)
 				profNewRounnd.end()
 			case proposalBroadcastRequestEvent:
-				logging.Base().Info("broadcast proposal event")
+				logging.Base().Info("broadcast proposal event start")
 				s.onBroadcastProposalRequestEvent(ent)
-				logging.Base().Info("broadcast proposal event")
+				logging.Base().Info("broadcast proposal event end")
 			}
 		case <-nextPeerStateCh:
+			logging.Base().Info("nextPeerStateCh")
 			profIdle.end()
 			profPeerState.start()
 			s.evaluatePeerStateChanges(nextPeerStateTime)
 			profPeerState.end()
 		case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
+			logging.Base().Info("getIncomingMessageChannel")
 			profIdle.end()
 			profIncomingMsg.start()
 			s.evaluateIncomingMessage(incomingMsg)
 			profIncomingMsg.end()
 		case msgSent := <-s.outgoingMessagesCallbackCh:
+			logging.Base().Info("outgoingMessagesCallbackCh")
 			profIdle.end()
 			profOutgoingMsg.start()
 			s.evaluateOutgoingMessage(msgSent)

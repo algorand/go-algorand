@@ -165,6 +165,7 @@ func (s *Service) demuxLoop(ctx context.Context, input chan<- externalEvent, out
 		s.do(ctx, a)
 		extSignals := <-ready
 		e, ok := s.demux.next(s, extSignals.Deadline, extSignals.FastRecoveryDeadline, extSignals.CurrentRound)
+		logging.Base().Infof("demux event: %v, %v", e.t(), ok)
 		if !ok {
 			close(input)
 			break
