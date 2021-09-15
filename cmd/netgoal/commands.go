@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -32,6 +34,8 @@ func init() {
 
 	log.Out = os.Stdout
 	log.SetLevel(logrus.DebugLevel)
+	// disable the deadlock detection for this tool.
+	deadlock.Opts.Disable = true
 }
 
 var rootCmd = &cobra.Command{

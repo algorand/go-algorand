@@ -77,6 +77,12 @@ func varies(checker opCheckFunc, name string, kind immKind) opDetails {
 	return opDetails{1, 0, checker, []immediate{{name, kind}}, nil}
 }
 
+func costlyImm(cost int, names ...string) opDetails {
+	opd := immediates(names...)
+	opd.Cost = cost
+	return opd
+}
+
 // immType describes the immediate arguments to an opcode
 type immKind byte
 
@@ -115,7 +121,6 @@ var byteInt = StackTypes{StackBytes, StackUint64}
 var byteIntInt = StackTypes{StackBytes, StackUint64, StackUint64}
 var oneInt = StackTypes{StackUint64}
 var twoInts = StackTypes{StackUint64, StackUint64}
-var threeInts = StackTypes{StackUint64, StackUint64, StackUint64}
 var oneAny = StackTypes{StackAny}
 var twoAny = StackTypes{StackAny, StackAny}
 var anyInt = StackTypes{StackAny, StackUint64}
@@ -143,6 +148,11 @@ var OpSpecs = []OpSpec{
 
 	{0x04, "ed25519verify", opEd25519verify, asmDefault, disDefault, threeBytes, oneInt, 1, runModeSignature, costly(1900)},
 	{0x04, "ed25519verify", opEd25519verify, asmDefault, disDefault, threeBytes, oneInt, 5, modeAny, costly(1900)},
+
+	{0x05, "ecdsa_verify", opEcdsaVerify, assembleEcdsa, disEcdsa, threeBytes.plus(twoBytes), oneInt, 5, modeAny, costlyImm(1700, "v")},
+	{0x06, "ecdsa_pk_decompress", opEcdsaPkDecompress, assembleEcdsa, disEcdsa, oneBytes, twoBytes, 5, modeAny, costlyImm(650, "v")},
+	{0x07, "ecdsa_pk_recover", opEcdsaPkRecover, assembleEcdsa, disEcdsa, oneBytes.plus(oneInt).plus(twoBytes), twoBytes, 5, modeAny, costlyImm(2000, "v")},
+
 	{0x08, "+", opPlus, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
 	{0x09, "-", opMinus, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
 	{0x0a, "/", opDiv, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
@@ -207,6 +217,10 @@ var OpSpecs = []OpSpec{
 	{0x3c, "gaid", opGaid, asmDefault, disDefault, nil, oneInt, 4, runModeApplication, immediates("t")},
 	{0x3d, "gaids", opGaids, asmDefault, disDefault, oneInt, oneInt, 4, runModeApplication, opDefault},
 
+	// Like load/store, but scratch slot taken from TOS instead of immediate
+	{0x3e, "loads", opLoads, asmDefault, disDefault, oneInt, oneAny, 5, modeAny, opDefault},
+	{0x3f, "stores", opStores, asmDefault, disDefault, oneInt.plus(oneAny), nil, 5, modeAny, opDefault},
+
 	{0x40, "bnz", opBnz, assembleBranch, disBranch, oneInt, nil, 1, modeAny, opBranch},
 	{0x41, "bz", opBz, assembleBranch, disBranch, oneInt, nil, 2, modeAny, opBranch},
 	{0x42, "b", opB, assembleBranch, disBranch, nil, nil, 2, modeAny, opBranch},
@@ -232,9 +246,9 @@ var OpSpecs = []OpSpec{
 	{0x56, "setbyte", opSetByte, asmDefault, disDefault, byteIntInt, oneBytes, 3, modeAny, opDefault},
 	{0x57, "extract", opExtract, asmDefault, disDefault, oneBytes, oneBytes, 5, modeAny, immediates("s", "l")},
 	{0x58, "extract3", opExtract3, asmDefault, disDefault, byteIntInt, oneBytes, 5, modeAny, opDefault},
-	{0x59, "extract16bits", opExtract16Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},
-	{0x5a, "extract32bits", opExtract32Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},
-	{0x5b, "extract64bits", opExtract64Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},
+	{0x59, "extract_uint16", opExtract16Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},
+	{0x5a, "extract_uint32", opExtract32Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},
+	{0x5b, "extract_uint64", opExtract64Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},
 
 	{0x60, "balance", opBalance, asmDefault, disDefault, oneInt, oneInt, 2, runModeApplication, opDefault},
 	{0x60, "balance", opBalance, asmDefault, disDefault, oneAny, oneInt, directRefEnabledVersion, runModeApplication, opDefault},
@@ -296,8 +310,19 @@ var OpSpecs = []OpSpec{
 	{0xae, "b~", opBytesBitNot, asmDefault, disDefault, oneBytes, oneBytes, 4, modeAny, costly(4)},
 	{0xaf, "bzero", opBytesZero, asmDefault, disDefault, oneInt, oneBytes, 4, modeAny, opDefault},
 
-	// ABI support opcodes.
+	// AVM "effects"
 	{0xb0, "log", opLog, asmDefault, disDefault, oneBytes, nil, 5, runModeApplication, opDefault},
+	{0xb1, "itxn_begin", opTxBegin, asmDefault, disDefault, nil, nil, 5, runModeApplication, opDefault},
+	{0xb2, "itxn_field", opTxField, asmTxField, disTxField, oneAny, nil, 5, runModeApplication, stacky(typeTxField, "f")},
+	{0xb3, "itxn_submit", opTxSubmit, asmDefault, disDefault, nil, nil, 5, runModeApplication, opDefault},
+	{0xb4, "itxn", opItxn, asmItxn, disTxn, nil, oneAny, 5, runModeApplication, immediates("f")},
+	{0xb5, "itxna", opItxna, asmItxna, disTxna, nil, oneAny, 5, runModeApplication, immediates("f", "i")},
+
+	// Dynamic indexing
+	{0xc0, "txnas", opTxnas, assembleTxnas, disTxn, oneInt, oneAny, 5, modeAny, immediates("f")},
+	{0xc1, "gtxnas", opGtxnas, assembleGtxnas, disGtxn, oneInt, oneAny, 5, modeAny, immediates("t", "f")},
+	{0xc2, "gtxnsas", opGtxnsas, assembleGtxnsas, disTxn, twoInts, oneAny, 5, modeAny, immediates("f")},
+	{0xc3, "args", opArgs, asmDefault, disDefault, oneInt, oneBytes, 5, runModeSignature, opDefault},
 }
 
 type sortByOpcode []OpSpec

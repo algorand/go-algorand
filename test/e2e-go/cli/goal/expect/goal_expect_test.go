@@ -24,7 +24,9 @@ import (
 
 // TestGoalWithExpect Process all expect script files with suffix Test.exp within the test/e2e-go/cli/goal/expect directory
 func TestGoalWithExpect(t *testing.T) {
-	t.Skip("goal expect test are disabled due to flakiness")
+	// partitiontest.PartitionTest(t)
+	// Causes double partition, so commented out on purpose
+	defer fixtures.ShutdownSynchronizedTest(t)
 	et := fixtures.MakeExpectTest(t)
 	et.Run()
 }

@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func unB64(x string) []byte {
@@ -126,9 +127,11 @@ func logResponse(t *testing.T, response *generated.DryrunResponse) {
 	}
 }
 
-var dryrunProtoVersion protocol.ConsensusVersion = "dryrunTestProto"
+var dryrunProtoVersion protocol.ConsensusVersion = protocol.ConsensusFuture
+var dryrunMakeLedgerProto protocol.ConsensusVersion = "dryrunMakeLedgerProto"
 
 func TestDryrunLogicSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	t.Parallel()
 
@@ -153,6 +156,7 @@ func TestDryrunLogicSig(t *testing.T) {
 }
 
 func TestDryrunLogicSigSource(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	t.Parallel()
 
@@ -353,7 +357,7 @@ func init() {
 	proto.MaxAppBytesValueLen = 64
 	proto.MaxAppSumKeyValueLens = 128
 
-	config.Consensus[dryrunProtoVersion] = proto
+	config.Consensus[dryrunMakeLedgerProto] = proto
 }
 
 func checkLogicSigPass(t *testing.T, response *generated.DryrunResponse) {
@@ -384,6 +388,7 @@ func checkAppCallPass(t *testing.T, response *generated.DryrunResponse) {
 }
 
 func TestDryrunGlobal1(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	t.Parallel()
 
@@ -432,6 +437,7 @@ func TestDryrunGlobal1(t *testing.T) {
 }
 
 func TestDryrunGlobal2(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	t.Parallel()
 
@@ -484,6 +490,7 @@ func TestDryrunGlobal2(t *testing.T) {
 }
 
 func TestDryrunLocal1(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	t.Parallel()
 
@@ -557,6 +564,7 @@ func TestDryrunLocal1(t *testing.T) {
 }
 
 func TestDryrunLocal1A(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	t.Parallel()
 
@@ -637,6 +645,7 @@ func TestDryrunLocal1A(t *testing.T) {
 }
 
 func TestDryrunLocalCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	t.Parallel()
 	var dr DryrunRequest
@@ -691,6 +700,7 @@ func TestDryrunLocalCheck(t *testing.T) {
 }
 
 func TestDryrunMultipleTxns(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	var dr DryrunRequest
@@ -738,6 +748,7 @@ func TestDryrunMultipleTxns(t *testing.T) {
 }
 
 func TestDryrunEncodeDecode(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	var gdr generated.DryrunRequest
@@ -842,6 +853,7 @@ func TestDryrunEncodeDecode(t *testing.T) {
 }
 
 func TestDryrunMakeLedger(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	var dr DryrunRequest
@@ -954,6 +966,7 @@ var dataJSON = []byte(`{
 }`)
 
 func TestDryrunRequestJSON(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	var gdr generated.DryrunRequest
@@ -980,6 +993,7 @@ func TestDryrunRequestJSON(t *testing.T) {
 }
 
 func TestStateDeltaToStateDelta(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	sd := basics.StateDelta{
 		"byteskey": {
@@ -1030,6 +1044,7 @@ func randomAddress() basics.Address {
 }
 
 func TestDryrunOptIn(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	ops, err := logic.AssembleString(`#pragma version 2
@@ -1093,6 +1108,7 @@ int 1`)
 }
 
 func TestDryrunLogs(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	ops, err := logic.AssembleString(`
@@ -1191,7 +1207,7 @@ return
 	logs := *response.Txns[0].Logs
 	assert.Equal(t, 32, len(logs))
 	for i, m := range logs {
-		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), m.Value)
+		assert.Equal(t, []byte(string(rune('B'+i))), m)
 	}
 	encoded := string(protocol.EncodeJSON(response.Txns[0]))
 	assert.Contains(t, encoded, "logs")
@@ -1200,4 +1216,118 @@ return
 	encoded = string(protocol.EncodeJSON(response.Txns[1]))
 	assert.NotContains(t, encoded, "logs")
 
+}
+
+func TestDryrunCost(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var tests = []struct {
+		msg       string
+		numHashes int
+	}{
+		{"REJECT", 12},
+		{"PASS", 5},
+	}
+
+	for _, test := range tests {
+		t.Run(test.msg, func(t *testing.T) {
+			costs := make([]uint64, 2)
+
+			ops, err := logic.AssembleString("#pragma version 5\nbyte 0x41\n" + strings.Repeat("keccak256\n", test.numHashes) + "pop\nint 1\n")
+			require.NoError(t, err)
+			approval := ops.Program
+			costs[0] = 3 + uint64(test.numHashes)*130
+
+			ops, err = logic.AssembleString("int 1")
+			require.NoError(t, err)
+			clst := ops.Program
+
+			ops, err = logic.AssembleString("#pragma version 5 \nint 1 \nint 2 \npop")
+			require.NoError(t, err)
+			approv := ops.Program
+			costs[1] = 3
+
+			var appIdx basics.AppIndex = 1
+			creator := randomAddress()
+			sender := randomAddress()
+			dr := DryrunRequest{
+				Txns: []transactions.SignedTxn{
+					{
+						Txn: transactions.Transaction{
+							Header: transactions.Header{Sender: sender},
+							Type:   protocol.ApplicationCallTx,
+							ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+								ApplicationID: appIdx,
+								OnCompletion:  transactions.OptInOC,
+							},
+						},
+					},
+					{
+						Txn: transactions.Transaction{
+							Header: transactions.Header{Sender: sender},
+							Type:   protocol.ApplicationCallTx,
+							ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+								ApplicationID: appIdx + 1,
+								OnCompletion:  transactions.OptInOC,
+							},
+						},
+					},
+				},
+				Apps: []generated.Application{
+					{
+						Id: uint64(appIdx),
+						Params: generated.ApplicationParams{
+							Creator:           creator.String(),
+							ApprovalProgram:   approval,
+							ClearStateProgram: clst,
+							LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
+						},
+					},
+					{
+						Id: uint64(appIdx + 1),
+						Params: generated.ApplicationParams{
+							Creator:           creator.String(),
+							ApprovalProgram:   approv,
+							ClearStateProgram: clst,
+							LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
+						},
+					},
+				},
+				Accounts: []generated.Account{
+					{
+						Address: sender.String(),
+						Status:  "Online",
+						Amount:  10000000,
+					},
+				},
+			}
+			dr.ProtocolVersion = string(dryrunProtoVersion)
+			var response generated.DryrunResponse
+			doDryrunRequest(&dr, &response)
+			require.Empty(t, response.Error)
+			require.Equal(t, 2, len(response.Txns))
+
+			for i, txn := range response.Txns {
+				messages := *txn.AppCallMessages
+				require.GreaterOrEqual(t, len(messages), 1)
+				require.NotNil(t, *txn.Cost)
+				require.Equal(t, costs[i], *txn.Cost)
+				statusMatches := false
+				costExceedFound := false
+				for _, msg := range messages {
+					if strings.Contains(msg, "cost budget exceeded") {
+						costExceedFound = true
+					}
+					if msg == test.msg {
+						statusMatches = true
+					}
+				}
+				if test.msg == "REJECT" {
+					require.True(t, costExceedFound, "budget error not found in messages")
+				}
+				require.True(t, statusMatches, "expected status not found in messages")
+			}
+		})
+	}
 }

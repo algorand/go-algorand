@@ -32,6 +32,7 @@ import (
 
 func TestGroupTransactions(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
@@ -104,6 +105,7 @@ func TestGroupTransactions(t *testing.T) {
 
 func TestGroupTransactionsDifferentSizes(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
@@ -212,6 +214,7 @@ func TestGroupTransactionsDifferentSizes(t *testing.T) {
 
 func TestGroupTransactionsSubmission(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))

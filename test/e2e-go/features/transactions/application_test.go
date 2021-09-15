@@ -32,12 +32,12 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func checkEqual(expected []basics.LogItem, actual []basics.LogItem) bool {
+func checkEqual(expected []string, actual []string) bool {
 	if len(expected) != len(actual) {
 		return false
 	}
 	for i, e := range expected {
-		if !e.Equal(actual[i]) {
+		if e != actual[i] {
 			return false
 		}
 	}
@@ -46,6 +46,7 @@ func checkEqual(expected []basics.LogItem, actual []basics.LogItem) bool {
 
 func TestApplication(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
@@ -113,12 +114,12 @@ log
 	round, err = client.CurrentRound()
 	a.NoError(err)
 
-	logs := make([]basics.LogItem, 32)
+	logs := make([]string, 32)
 	for i := range logs {
-		logs[i] = basics.LogItem{ID: 0, Message: "a"}
+		logs[i] = "a"
 	}
-	logs[30] = basics.LogItem{ID: 0, Message: "b"}
-	logs[31] = basics.LogItem{ID: 0, Message: "c"}
+	logs[30] = "b"
+	logs[31] = "c"
 
 	b, err := client.BookkeepingBlock(round)
 	for _, ps := range b.Payset {

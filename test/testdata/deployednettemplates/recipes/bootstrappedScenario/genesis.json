@@ -1,7 +1,7 @@
 {
 	"NetworkName": "",
 	"VersionModifier": "",
-	"ConsensusProtocol": "future",
+	"ConsensusProtocol": "",
 	"FirstPartKeyRound": 0,
 	"LastPartKeyRound": 3000000,
 	"PartKeyDilution": 0,
@@ -1009,5 +1009,6 @@
 	],
 	"FeeSink": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
 	"RewardsPool": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+	"DevMode": false,
 	"Comment": ""
 }

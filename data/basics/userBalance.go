@@ -17,6 +17,7 @@
 package basics
 
 import (
+	"encoding/binary"
 	"fmt"
 	"reflect"
 
@@ -42,7 +43,7 @@ const (
 
 	// MaxEncodedAccountDataSize is a rough estimate for the worst-case scenario we're going to have of the account data and address serialized.
 	// this number is verified by the TestEncodedAccountDataSize function.
-	MaxEncodedAccountDataSize = 750000
+	MaxEncodedAccountDataSize = 850000
 
 	// encodedMaxAssetsPerAccount is the decoder limit of number of assets stored per account.
 	// it's being verified by the unit test TestEncodedAccountAllocationBounds to align
@@ -377,6 +378,18 @@ type AssetParams struct {
 	// Clawback specifies an account that is allowed to take units
 	// of this asset from any account.
 	Clawback Address `codec:"c"`
+}
+
+// ToBeHashed implements crypto.Hashable
+func (app AppIndex) ToBeHashed() (protocol.HashID, []byte) {
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, uint64(app))
+	return protocol.AppIndex, buf
+}
+
+// Address yields the "app address" of the app
+func (app AppIndex) Address() Address {
+	return Address(crypto.HashObj(app))
 }
 
 // MakeAccountData returns a UserToken

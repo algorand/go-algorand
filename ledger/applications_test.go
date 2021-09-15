@@ -61,7 +61,7 @@ type mockCowForLogicLedger struct {
 	brs    map[basics.Address]basics.AccountData
 	stores map[storeLocator]basics.TealKeyValue
 	tcs    map[int]basics.CreatableIndex
-	logs   []basics.LogItem
+	txc    uint64
 }
 
 func (c *mockCowForLogicLedger) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
@@ -90,8 +90,8 @@ func (c *mockCowForLogicLedger) GetKey(addr basics.Address, aidx basics.AppIndex
 	return tv, found, nil
 }
 
-func (c *mockCowForLogicLedger) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error) {
-	return basics.EvalDelta{}, nil
+func (c *mockCowForLogicLedger) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (evalDelta transactions.EvalDelta, err error) {
+	return transactions.EvalDelta{}, nil
 }
 
 func (c *mockCowForLogicLedger) SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue, accountIdx uint64) error {
@@ -127,9 +127,12 @@ func (c *mockCowForLogicLedger) allocated(addr basics.Address, aidx basics.AppIn
 	return found, nil
 }
 
-func (c *mockCowForLogicLedger) AppendLog(aidx uint64, value string) error {
-	c.logs = append(c.logs, basics.LogItem{ID: aidx, Message: value})
-	return nil
+func (c *mockCowForLogicLedger) incTxnCount() {
+	c.txc++
+}
+
+func (c *mockCowForLogicLedger) txnCounter() uint64 {
+	return c.txc
 }
 
 func newCowMock(creatables []modsData) *mockCowForLogicLedger {
@@ -242,6 +245,7 @@ func TestLogicLedgerAsset(t *testing.T) {
 	c.brs = map[basics.Address]basics.AccountData{
 		addr1: {AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx: {Total: 1000}}},
 	}
+
 	ap, creator, err := l.AssetParams(assetIdx)
 	a.NoError(err)
 	a.Equal(addr1, creator)
@@ -488,7 +492,7 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{})
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
 	a.NoError(err)
 
 	appIdx := basics.AppIndex(1) // first tnx => idx = 1
@@ -533,7 +537,7 @@ return`
 		ApplicationCallTxnFields: appCallFields,
 	}
 	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall,
-		transactions.ApplyData{EvalDelta: basics.EvalDelta{
+		transactions.ApplyData{EvalDelta: transactions.EvalDelta{
 			LocalDeltas: map[uint64]basics.StateDelta{0: {"lk": basics.ValueDelta{Action: basics.SetBytesAction, Bytes: "local"}}}},
 		})
 	a.NoError(err)
@@ -581,7 +585,7 @@ return`
 		ApplicationCallTxnFields: appCallFields,
 	}
 	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall,
-		transactions.ApplyData{EvalDelta: basics.EvalDelta{
+		transactions.ApplyData{EvalDelta: transactions.EvalDelta{
 			GlobalDelta: basics.StateDelta{"gk": basics.ValueDelta{Action: basics.SetBytesAction, Bytes: "global"}}},
 		})
 	a.NoError(err)
@@ -599,7 +603,7 @@ return`
 		ApplicationCallTxnFields: appCallFields,
 	}
 	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall,
-		transactions.ApplyData{EvalDelta: basics.EvalDelta{
+		transactions.ApplyData{EvalDelta: transactions.EvalDelta{
 			LocalDeltas: map[uint64]basics.StateDelta{0: {"lk": basics.ValueDelta{Action: basics.SetBytesAction, Bytes: "local"}}}},
 		})
 	a.NoError(err)
@@ -707,7 +711,7 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{})
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
 	a.NoError(err)
 
 	appIdx := basics.AppIndex(1) // first tnx => idx = 1
@@ -724,7 +728,7 @@ return`
 		ApplicationCallTxnFields: appCallFields,
 	}
 	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall, transactions.ApplyData{
-		EvalDelta: basics.EvalDelta{
+		EvalDelta: transactions.EvalDelta{
 			LocalDeltas: map[uint64]basics.StateDelta{0: {"lk": basics.ValueDelta{
 				Action: basics.SetBytesAction,
 				Bytes:  "local",
@@ -787,7 +791,7 @@ return`
 		ApplicationCallTxnFields: appCallFields,
 	}
 	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall,
-		transactions.ApplyData{EvalDelta: basics.EvalDelta{
+		transactions.ApplyData{EvalDelta: transactions.EvalDelta{
 			GlobalDelta: basics.StateDelta{"gk": basics.ValueDelta{Action: basics.SetBytesAction, Bytes: "global"}}},
 		})
 	a.NoError(err)
@@ -856,7 +860,7 @@ return`
 
 	blk = makeNewEmptyBlock(t, l, genesisID, genesisInitState.Accounts)
 	ad1 := transactions.ApplyData{
-		EvalDelta: basics.EvalDelta{
+		EvalDelta: transactions.EvalDelta{
 			LocalDeltas: map[uint64]basics.StateDelta{0: {"lk1": basics.ValueDelta{
 				Action: basics.SetBytesAction,
 				Bytes:  "local1",
@@ -962,7 +966,7 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{})
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
 	a.NoError(err)
 
 	appIdx := basics.AppIndex(1) // first tnx => idx = 1
@@ -979,7 +983,7 @@ return`
 		ApplicationCallTxnFields: appCallFields,
 	}
 	err = l.appendUnvalidatedTx(t, nil, initKeys, appCall, transactions.ApplyData{
-		EvalDelta: basics.EvalDelta{
+		EvalDelta: transactions.EvalDelta{
 			LocalDeltas: map[uint64]basics.StateDelta{0: {"lk": basics.ValueDelta{
 				Action: basics.SetBytesAction,
 				Bytes:  "local",
@@ -1121,7 +1125,7 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{})
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
 	a.NoError(err)
 
 	appIdx := basics.AppIndex(1) // first tnx => idx = 1
@@ -1154,7 +1158,7 @@ return`
 	stx2 := sign(initKeys, payment)
 
 	blk := makeNewEmptyBlock(t, l, genesisID, genesisInitState.Accounts)
-	txib1, err := blk.EncodeSignedTxn(stx1, transactions.ApplyData{EvalDelta: basics.EvalDelta{
+	txib1, err := blk.EncodeSignedTxn(stx1, transactions.ApplyData{EvalDelta: transactions.EvalDelta{
 		GlobalDelta: basics.StateDelta{
 			"gk": basics.ValueDelta{Action: basics.SetBytesAction, Bytes: "global"},
 		}},
@@ -1340,7 +1344,7 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 		ApplicationCallTxnFields: appCallFields,
 	}
 	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall, transactions.ApplyData{
-		EvalDelta: basics.EvalDelta{
+		EvalDelta: transactions.EvalDelta{
 			LocalDeltas: map[uint64]basics.StateDelta{
 				accountIdx: {
 					"lk0": basics.ValueDelta{
@@ -1369,34 +1373,4 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx]["lk0"].Bytes, "local0")
 	a.Contains(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx], "lk1")
 	a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx]["lk1"].Bytes, "local1")
-}
-
-func TestLogicLedgerAppendLog(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
-
-	addr := getRandomAddress(a)
-	aidx := basics.AppIndex(1)
-	c := newCowMock([]modsData{
-		{addr, basics.CreatableIndex(1), basics.AppCreatable},
-	})
-	l, err := newLogicLedger(c, aidx)
-	a.NoError(err)
-	a.NotNil(l)
-
-	appCallFields := transactions.ApplicationCallTxnFields{
-		OnCompletion:  transactions.NoOpOC,
-		ApplicationID: 0,
-		Accounts:      []basics.Address{},
-	}
-	appCall := transactions.Transaction{
-		Type:                     protocol.ApplicationCallTx,
-		ApplicationCallTxnFields: appCallFields,
-	}
-
-	err = l.AppendLog(&appCall, "a")
-	a.NoError(err)
-	a.Equal(len(c.logs), 1)
-	a.Equal(c.logs[0].Message, "a")
 }

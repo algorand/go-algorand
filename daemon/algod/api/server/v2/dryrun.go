@@ -397,16 +397,32 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 		return
 	}
 	proto := config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
+	origEnableAppCostPooling := proto.EnableAppCostPooling
+	// Enable EnableAppCostPooling so that dryrun
+	// 1) can determine cost 2) reports actual cost for large programs that fail
+	proto.EnableAppCostPooling = true
+
+	// allow a huge execution budget
+	maxCurrentBudget := uint64(proto.MaxAppProgramCost * 100)
+	pooledAppBudget := maxCurrentBudget
+	allowedBudget := uint64(0)
+	cumulativeCost := uint64(0)
+	for _, stxn := range dr.Txns {
+		if stxn.Txn.Type == protocol.ApplicationCallTx {
+			allowedBudget += uint64(proto.MaxAppProgramCost)
+		}
+	}
 
 	response.Txns = make([]generated.DryrunTxnResult, len(dr.Txns))
 	for ti, stxn := range dr.Txns {
 		pse := logic.MakePastSideEffects(len(dr.Txns))
 		ep := logic.EvalParams{
-			Txn:             &stxn,
-			Proto:           &proto,
-			TxnGroup:        dr.Txns,
-			GroupIndex:      ti,
-			PastSideEffects: pse,
+			Txn:                     &stxn,
+			Proto:                   &proto,
+			TxnGroup:                dr.Txns,
+			GroupIndex:              uint64(ti),
+			PastSideEffects:         pse,
+			PooledApplicationBudget: &pooledAppBudget,
 		}
 		var result generated.DryrunTxnResult
 		if len(stxn.Lsig.Logic) > 0 {
@@ -522,8 +538,25 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 					result.LocalDeltas = &localDeltas
 				}
 
+				// ensure the program has not exceeded execution budget
+				cost := maxCurrentBudget - pooledAppBudget
+				if pass {
+					if !origEnableAppCostPooling {
+						if cost > uint64(proto.MaxAppProgramCost) {
+							pass = false
+							err = fmt.Errorf("cost budget exceeded: budget is %d but program cost was %d", proto.MaxAppProgramCost, cost)
+						}
+					} else if cumulativeCost+cost > allowedBudget {
+						pass = false
+						err = fmt.Errorf("cost budget exceeded: budget is %d but program cost was %d", allowedBudget-cumulativeCost, cost)
+					}
+				}
+				result.Cost = &cost
+				maxCurrentBudget = pooledAppBudget
+				cumulativeCost += cost
+
 				var err3 error
-				result.Logs, err3 = DeltaLogToLog(delta.Logs, appIdx)
+				result.Logs, err3 = DeltaLogToLog(delta.Logs)
 				if err3 != nil {
 					messages = append(messages, err3.Error())
 				}
@@ -570,20 +603,16 @@ func StateDeltaToStateDelta(sd basics.StateDelta) *generated.StateDelta {
 	return &gsd
 }
 
-// DeltaLogToLog EvalDelta.Logs to generated.LogItem
-func DeltaLogToLog(logs []basics.LogItem, appIdx basics.AppIndex) (*[]generated.LogItem, error) {
+// DeltaLogToLog base64 encode the logs
+func DeltaLogToLog(logs []string) (*[][]byte, error) {
 	if len(logs) == 0 {
 		return nil, nil
 	}
-	encodedLogs := make([]generated.LogItem, 0, len(logs))
-	for _, log := range logs {
-		if log.ID != 0 {
-			return nil, fmt.Errorf("logging for a foreign app is not supported")
-		}
-		msg := base64.StdEncoding.EncodeToString([]byte(log.Message))
-		encodedLogs = append(encodedLogs, generated.LogItem{Id: uint64(appIdx), Value: msg})
+	logsAsBytes := make([][]byte, len(logs))
+	for i, log := range logs {
+		logsAsBytes[i] = []byte(log)
 	}
-	return &encodedLogs, nil
+	return &logsAsBytes, nil
 }
 
 // MergeAppParams merges values, existing in "base" take priority over new in "update"

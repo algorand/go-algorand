@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AssetHoldingField,OnCompletionConstType -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve -output=fields_string.go
 
 // TxnField is an enum type for `txn` and `gtxn`
 type TxnField int
@@ -146,6 +146,21 @@ const (
 	// ExtraProgramPages AppParams.ExtraProgramPages
 	ExtraProgramPages
 
+	// Nonparticipation Transaction.Nonparticipation
+	Nonparticipation
+
+	// Logs Transaction.ApplyData.EvalDelta.Logs
+	Logs
+
+	// NumLogs len(Logs)
+	NumLogs
+
+	// CreatedAssetID Transaction.ApplyData.EvalDelta.ConfigAsset
+	CreatedAssetID
+
+	// CreatedApplicationID Transaction.ApplyData.EvalDelta.ApplicationID
+	CreatedApplicationID
+
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
 
@@ -169,88 +184,106 @@ func (s tfNameSpecMap) getExtraFor(name string) (extra string) {
 }
 
 type txnFieldSpec struct {
-	field   TxnField
-	ftype   StackType
-	version uint64
+	field      TxnField
+	ftype      StackType
+	version    uint64 // When this field become available to txn/gtxn. 0=always
+	itxVersion uint64 // When this field become available to itxn_field. 0=never
+	effects    bool   // Is this a field on the "effects"? That is, something in ApplyData
 }
 
 var txnFieldSpecs = []txnFieldSpec{
-	{Sender, StackBytes, 0},
-	{Fee, StackUint64, 0},
-	{FirstValid, StackUint64, 0},
-	{FirstValidTime, StackUint64, 0},
-	{LastValid, StackUint64, 0},
-	{Note, StackBytes, 0},
-	{Lease, StackBytes, 0},
-	{Receiver, StackBytes, 0},
-	{Amount, StackUint64, 0},
-	{CloseRemainderTo, StackBytes, 0},
-	{VotePK, StackBytes, 0},
-	{SelectionPK, StackBytes, 0},
-	{VoteFirst, StackUint64, 0},
-	{VoteLast, StackUint64, 0},
-	{VoteKeyDilution, StackUint64, 0},
-	{Type, StackBytes, 0},
-	{TypeEnum, StackUint64, 0},
-	{XferAsset, StackUint64, 0},
-	{AssetAmount, StackUint64, 0},
-	{AssetSender, StackBytes, 0},
-	{AssetReceiver, StackBytes, 0},
-	{AssetCloseTo, StackBytes, 0},
-	{GroupIndex, StackUint64, 0},
-	{TxID, StackBytes, 0},
-	{ApplicationID, StackUint64, 2},
-	{OnCompletion, StackUint64, 2},
-	{ApplicationArgs, StackBytes, 2},
-	{NumAppArgs, StackUint64, 2},
-	{Accounts, StackBytes, 2},
-	{NumAccounts, StackUint64, 2},
-	{ApprovalProgram, StackBytes, 2},
-	{ClearStateProgram, StackBytes, 2},
-	{RekeyTo, StackBytes, 2},
-	{ConfigAsset, StackUint64, 2},
-	{ConfigAssetTotal, StackUint64, 2},
-	{ConfigAssetDecimals, StackUint64, 2},
-	{ConfigAssetDefaultFrozen, StackUint64, 2},
-	{ConfigAssetUnitName, StackBytes, 2},
-	{ConfigAssetName, StackBytes, 2},
-	{ConfigAssetURL, StackBytes, 2},
-	{ConfigAssetMetadataHash, StackBytes, 2},
-	{ConfigAssetManager, StackBytes, 2},
-	{ConfigAssetReserve, StackBytes, 2},
-	{ConfigAssetFreeze, StackBytes, 2},
-	{ConfigAssetClawback, StackBytes, 2},
-	{FreezeAsset, StackUint64, 2},
-	{FreezeAssetAccount, StackBytes, 2},
-	{FreezeAssetFrozen, StackUint64, 2},
-	{Assets, StackUint64, 3},
-	{NumAssets, StackUint64, 3},
-	{Applications, StackUint64, 3},
-	{NumApplications, StackUint64, 3},
-	{GlobalNumUint, StackUint64, 3},
-	{GlobalNumByteSlice, StackUint64, 3},
-	{LocalNumUint, StackUint64, 3},
-	{LocalNumByteSlice, StackUint64, 3},
-	{ExtraProgramPages, StackUint64, 4},
+	{Sender, StackBytes, 0, 5, false},
+	{Fee, StackUint64, 0, 5, false},
+	{FirstValid, StackUint64, 0, 0, false},
+	{FirstValidTime, StackUint64, 0, 0, false},
+	{LastValid, StackUint64, 0, 0, false},
+	{Note, StackBytes, 0, 0, false},
+	{Lease, StackBytes, 0, 0, false},
+	{Receiver, StackBytes, 0, 5, false},
+	{Amount, StackUint64, 0, 5, false},
+	{CloseRemainderTo, StackBytes, 0, 5, false},
+	{VotePK, StackBytes, 0, 0, false},
+	{SelectionPK, StackBytes, 0, 0, false},
+	{VoteFirst, StackUint64, 0, 0, false},
+	{VoteLast, StackUint64, 0, 0, false},
+	{VoteKeyDilution, StackUint64, 0, 0, false},
+	{Type, StackBytes, 0, 5, false},
+	{TypeEnum, StackUint64, 0, 5, false},
+	{XferAsset, StackUint64, 0, 5, false},
+	{AssetAmount, StackUint64, 0, 5, false},
+	{AssetSender, StackBytes, 0, 5, false},
+	{AssetReceiver, StackBytes, 0, 5, false},
+	{AssetCloseTo, StackBytes, 0, 5, false},
+	{GroupIndex, StackUint64, 0, 0, false},
+	{TxID, StackBytes, 0, 0, false},
+	{ApplicationID, StackUint64, 2, 0, false},
+	{OnCompletion, StackUint64, 2, 0, false},
+	{ApplicationArgs, StackBytes, 2, 0, false},
+	{NumAppArgs, StackUint64, 2, 0, false},
+	{Accounts, StackBytes, 2, 0, false},
+	{NumAccounts, StackUint64, 2, 0, false},
+	{ApprovalProgram, StackBytes, 2, 0, false},
+	{ClearStateProgram, StackBytes, 2, 0, false},
+	{RekeyTo, StackBytes, 2, 0, false},
+	{ConfigAsset, StackUint64, 2, 5, false},
+	{ConfigAssetTotal, StackUint64, 2, 5, false},
+	{ConfigAssetDecimals, StackUint64, 2, 5, false},
+	{ConfigAssetDefaultFrozen, StackUint64, 2, 5, false},
+	{ConfigAssetUnitName, StackBytes, 2, 5, false},
+	{ConfigAssetName, StackBytes, 2, 5, false},
+	{ConfigAssetURL, StackBytes, 2, 5, false},
+	{ConfigAssetMetadataHash, StackBytes, 2, 5, false},
+	{ConfigAssetManager, StackBytes, 2, 5, false},
+	{ConfigAssetReserve, StackBytes, 2, 5, false},
+	{ConfigAssetFreeze, StackBytes, 2, 5, false},
+	{ConfigAssetClawback, StackBytes, 2, 5, false},
+	{FreezeAsset, StackUint64, 2, 5, false},
+	{FreezeAssetAccount, StackBytes, 2, 5, false},
+	{FreezeAssetFrozen, StackUint64, 2, 5, false},
+	{Assets, StackUint64, 3, 0, false},
+	{NumAssets, StackUint64, 3, 0, false},
+	{Applications, StackUint64, 3, 0, false},
+	{NumApplications, StackUint64, 3, 0, false},
+	{GlobalNumUint, StackUint64, 3, 0, false},
+	{GlobalNumByteSlice, StackUint64, 3, 0, false},
+	{LocalNumUint, StackUint64, 3, 0, false},
+	{LocalNumByteSlice, StackUint64, 3, 0, false},
+	{ExtraProgramPages, StackUint64, 4, 0, false},
+	{Nonparticipation, StackUint64, 5, 0, false},
+
+	{Logs, StackBytes, 5, 5, true},
+	{NumLogs, StackUint64, 5, 5, true},
+	{CreatedAssetID, StackUint64, 5, 5, true},
+	{CreatedApplicationID, StackUint64, 5, 5, true},
 }
 
 // TxnaFieldNames are arguments to the 'txna' opcode
 // It is a subset of txn transaction fields so initialized here in-place
-var TxnaFieldNames = []string{ApplicationArgs.String(), Accounts.String(), Assets.String(), Applications.String()}
+var TxnaFieldNames = []string{ApplicationArgs.String(), Accounts.String(), Assets.String(), Applications.String(), Logs.String()}
 
-// TxnaFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames
+// TxnaFieldTypes is StackBytes or StackUint64 parallel to TxnaFieldNames
 var TxnaFieldTypes = []StackType{
 	txnaFieldSpecByField[ApplicationArgs].ftype,
 	txnaFieldSpecByField[Accounts].ftype,
 	txnaFieldSpecByField[Assets].ftype,
 	txnaFieldSpecByField[Applications].ftype,
+	txnaFieldSpecByField[Logs].ftype,
 }
 
 var txnaFieldSpecByField = map[TxnField]txnFieldSpec{
-	ApplicationArgs: {ApplicationArgs, StackBytes, 2},
-	Accounts:        {Accounts, StackBytes, 2},
-	Assets:          {Assets, StackUint64, 3},
-	Applications:    {Applications, StackUint64, 3},
+	ApplicationArgs: {ApplicationArgs, StackBytes, 2, 0, false},
+	Accounts:        {Accounts, StackBytes, 2, 0, false},
+	Assets:          {Assets, StackUint64, 3, 0, false},
+	Applications:    {Applications, StackUint64, 3, 0, false},
+
+	Logs: {Logs, StackBytes, 5, 5, true},
+}
+
+var innerTxnTypes = map[string]protocol.TxType{
+	string(protocol.PaymentTx):       protocol.PaymentTx,
+	string(protocol.AssetTransferTx): protocol.AssetTransferTx,
+	string(protocol.AssetConfigTx):   protocol.AssetConfigTx,
+	string(protocol.AssetFreezeTx):   protocol.AssetFreezeTx,
 }
 
 // TxnTypeNames is the values of Txn.Type in enum order
@@ -327,6 +360,13 @@ const (
 	// CreatorAddress [32]byte
 	CreatorAddress
 
+	// v5
+
+	// CurrentApplicationAddress [32]byte
+	CurrentApplicationAddress
+	// GroupID [32]byte
+	GroupID
+
 	invalidGlobalField
 )
 
@@ -354,6 +394,8 @@ var globalFieldSpecs = []globalFieldSpec{
 	{LatestTimestamp, StackUint64, runModeApplication, 2},
 	{CurrentApplicationID, StackUint64, runModeApplication, 2},
 	{CreatorAddress, StackBytes, runModeApplication, 3},
+	{CurrentApplicationAddress, StackBytes, runModeApplication, 5},
+	{GroupID, StackBytes, modeAny, 5},
 }
 
 // GlobalFieldSpecByField maps GlobalField to spec
@@ -365,6 +407,41 @@ type gfNameSpecMap map[string]globalFieldSpec
 
 func (s gfNameSpecMap) getExtraFor(name string) (extra string) {
 	if s[name].version > 1 {
+		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
+	}
+	return
+}
+
+// EcdsaCurve is an enum for `ecdsa_` opcodes
+type EcdsaCurve int
+
+const (
+	// Secp256k1 curve for bitcoin/ethereum
+	Secp256k1 EcdsaCurve = iota
+	invalidEcdsaCurve
+)
+
+// EcdsaCurveNames are arguments to the 'ecdsa_' opcode
+var EcdsaCurveNames []string
+
+type ecdsaCurveSpec struct {
+	field   EcdsaCurve
+	version uint64
+}
+
+var ecdsaCurveSpecs = []ecdsaCurveSpec{
+	{Secp256k1, 5},
+}
+
+var ecdsaCurveSpecByField map[EcdsaCurve]ecdsaCurveSpec
+var ecdsaCurveSpecByName ecDsaCurveNameSpecMap
+
+// simple interface used by doc generator for fields versioning
+type ecDsaCurveNameSpecMap map[string]ecdsaCurveSpec
+
+func (s ecDsaCurveNameSpecMap) getExtraFor(name string) (extra string) {
+	// Uses 5 here because ecdsa fields were introduced in 5
+	if s[name].version > 5 {
 		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
 	}
 	return
@@ -508,6 +585,9 @@ const (
 	// AppCreator is not *in* the Params, but it is uniquely determined.
 	AppCreator
 
+	// AppAddress is also not *in* the Params, but can be derived
+	AppAddress
+
 	invalidAppParamsField
 )
 
@@ -532,6 +612,7 @@ var appParamsFieldSpecs = []appParamsFieldSpec{
 	{AppLocalNumByteSlice, StackUint64, 5},
 	{AppExtraProgramPages, StackUint64, 5},
 	{AppCreator, StackBytes, 5},
+	{AppAddress, StackBytes, 5},
 }
 
 var appParamsFieldSpecByField map[AppParamsField]appParamsFieldSpec
@@ -541,7 +622,7 @@ var appParamsFieldSpecByName appNameSpecMap
 type appNameSpecMap map[string]appParamsFieldSpec
 
 func (s appNameSpecMap) getExtraFor(name string) (extra string) {
-	// Uses 2 here because app fields were introduced in 5
+	// Uses 5 here because app fields were introduced in 5
 	if s[name].version > 5 {
 		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
 	}
@@ -580,6 +661,20 @@ func init() {
 	globalFieldSpecByName = make(gfNameSpecMap, len(GlobalFieldNames))
 	for i, gfn := range GlobalFieldNames {
 		globalFieldSpecByName[gfn] = globalFieldSpecByField[GlobalField(i)]
+	}
+
+	EcdsaCurveNames = make([]string, int(invalidEcdsaCurve))
+	for i := Secp256k1; i < invalidEcdsaCurve; i++ {
+		EcdsaCurveNames[int(i)] = i.String()
+	}
+	ecdsaCurveSpecByField = make(map[EcdsaCurve]ecdsaCurveSpec, len(EcdsaCurveNames))
+	for _, s := range ecdsaCurveSpecs {
+		ecdsaCurveSpecByField[s.field] = s
+	}
+
+	ecdsaCurveSpecByName = make(ecDsaCurveNameSpecMap, len(EcdsaCurveNames))
+	for i, ahfn := range EcdsaCurveNames {
+		ecdsaCurveSpecByName[ahfn] = ecdsaCurveSpecByField[EcdsaCurve(i)]
 	}
 
 	AssetHoldingFieldNames = make([]string, int(invalidAssetHoldingField))
