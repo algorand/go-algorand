@@ -1536,7 +1536,7 @@ type FoundAddress struct {
 // in the trusting mode are excluded, and the present functions only request data
 // at the latest round.
 type indexerLedgerForEval interface {
-	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
+	LatestBlockHdr() (bookkeeping.BlockHeader, error)
 	// The value of the returned map is nil iff the account was not found.
 	LookupWithoutRewards(map[basics.Address]struct{}) (map[basics.Address]*basics.AccountData, error)
 	GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]FoundAddress, error)
@@ -1548,11 +1548,18 @@ type indexerLedgerForEval interface {
 type indexerLedgerConnector struct {
 	il          indexerLedgerForEval
 	genesisHash crypto.Digest
+	latestRound basics.Round
 }
 
 // BlockHdr is part of ledgerForEvaluator interface.
 func (l indexerLedgerConnector) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
-	return l.il.BlockHdr(round)
+	if round != l.latestRound {
+		return bookkeeping.BlockHeader{}, fmt.Errorf(
+			"BlockHdr() evaluator called this function for the wrong round %d, "+
+				"latest round is %d",
+			round, l.latestRound)
+	}
+	return l.il.LatestBlockHdr()
 }
 
 // CheckDup is part of ledgerForEvaluator interface.
@@ -1608,7 +1615,13 @@ func (l indexerLedgerConnector) GenesisHash() crypto.Digest {
 }
 
 // Totals is part of ledgerForEvaluator interface.
-func (l indexerLedgerConnector) Totals(_ basics.Round) (ledgercore.AccountTotals, error) {
+func (l indexerLedgerConnector) Totals(round basics.Round) (ledgercore.AccountTotals, error) {
+	if round != l.latestRound {
+		return ledgercore.AccountTotals{}, fmt.Errorf(
+			"Totals() evaluator called this function for the wrong round %d, "+
+				"latest round is %d",
+			round, l.latestRound)
+	}
 	return l.il.Totals()
 }
 
@@ -1618,10 +1631,11 @@ func (l indexerLedgerConnector) CompactCertVoters(_ basics.Round) (*VotersForRou
 	return nil, errors.New("CompactCertVoters() not implemented")
 }
 
-func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Digest) indexerLedgerConnector {
+func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Digest, latestRound basics.Round) indexerLedgerConnector {
 	return indexerLedgerConnector{
 		il:          il,
 		genesisHash: genesisHash,
+		latestRound: latestRound,
 	}
 }
 
@@ -1649,7 +1663,7 @@ func getBlockAddresses(block *bookkeeping.Block) map[basics.Address]struct{} {
 // close amount for each transaction even when the real consensus parameters do not
 // support it.
 func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto config.ConsensusParams) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
-	ilc := makeIndexerLedgerConnector(il, block.GenesisHash())
+	ilc := makeIndexerLedgerConnector(il, block.GenesisHash(), block.Round()-1)
 
 	eval, err := startEvaluator(
 		ilc, block.BlockHeader, proto, len(block.Payset), false, false)

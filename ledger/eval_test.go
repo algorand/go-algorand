@@ -1678,12 +1678,12 @@ func TestModifiedAppLocalStates(t *testing.T) {
 }
 
 type indexerLedgerForEvalImpl struct {
-	l     *Ledger
-	round basics.Round
+	l           *Ledger
+	latestRound basics.Round
 }
 
-func (il indexerLedgerForEvalImpl) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
-	return il.l.BlockHdr(round)
+func (il indexerLedgerForEvalImpl) LatestBlockHdr() (bookkeeping.BlockHeader, error) {
+	return il.l.BlockHdr(il.latestRound)
 }
 
 // The value of the returned map is nil iff the account was not found.
@@ -1691,7 +1691,7 @@ func (il indexerLedgerForEvalImpl) LookupWithoutRewards(addresses map[basics.Add
 	res := make(map[basics.Address]*basics.AccountData)
 
 	for address := range addresses {
-		accountData, _, err := il.l.LookupWithoutRewards(il.round, address)
+		accountData, _, err := il.l.LookupWithoutRewards(il.latestRound, address)
 		if err != nil {
 			return nil, err
 		}
@@ -1719,7 +1719,7 @@ func (il indexerLedgerForEvalImpl) GetAppCreator(map[basics.AppIndex]struct{}) (
 }
 
 func (il indexerLedgerForEvalImpl) Totals() (ledgercore.AccountTotals, error) {
-	return il.l.Totals(il.round)
+	return il.l.Totals(il.latestRound)
 }
 
 // Test that overriding the consensus parameters effects the generated apply data.
@@ -1812,8 +1812,8 @@ func TestCustomProtocolParams(t *testing.T) {
 	}
 
 	il := indexerLedgerForEvalImpl{
-		l:     l,
-		round: 0,
+		l:           l,
+		latestRound: 0,
 	}
 	proto.EnableAssetCloseAmount = true
 	_, modifiedTxns, err := EvalForIndexer(il, &block, proto)
