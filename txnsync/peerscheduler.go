@@ -116,8 +116,8 @@ func (p *peerScheduler) Swap(i, j int) {
 	p.peers[i], p.peers[j] = p.peers[j], p.peers[i]
 	if p.peers[i].peer == p.peers[j].peer {
 		indices := p.nextPeers[p.peers[i].peer]
-		sort.Slice(indices, func(i, j int) bool {
-			return p.peers[indices[i]].next < p.peers[indices[j]].next
+		sort.Slice(indices, func(x, y int) bool {
+			return p.peers[indices[x]].next < p.peers[indices[y]].next
 		})
 		return
 	}
