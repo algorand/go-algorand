@@ -41,7 +41,7 @@ type AccountManager struct {
 	registeredAccounts map[string]bool
 
 	registry account.ParticipationRegistry
-	log logging.Logger
+	log      logging.Logger
 }
 
 // MakeAccountManager creates a new AccountManager with a custom logger
