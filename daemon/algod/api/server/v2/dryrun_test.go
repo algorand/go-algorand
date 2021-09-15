@@ -1331,3 +1331,64 @@ func TestDryrunCost(t *testing.T) {
 		})
 	}
 }
+
+func TestDryrunBalanceWithReward(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ops, err := logic.AssembleString(`#pragma version 5
+int 0
+balance
+int 0
+>`)
+	require.NoError(t, err)
+	approval := ops.Program
+	ops, err = logic.AssembleString("int 1")
+	clst := ops.Program
+	require.NoError(t, err)
+	var appIdx basics.AppIndex = 1
+	creator := randomAddress()
+	rewardBase := uint64(10000000)
+	dr := DryrunRequest{
+		Txns: []transactions.SignedTxn{
+			{
+				Txn: transactions.Transaction{
+					Header: transactions.Header{Sender: creator},
+					Type:   protocol.ApplicationCallTx,
+					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+						ApplicationID: appIdx,
+					},
+				},
+			},
+		},
+		Apps: []generated.Application{
+			{
+				Id: uint64(appIdx),
+				Params: generated.ApplicationParams{
+					Creator:           creator.String(),
+					ApprovalProgram:   approval,
+					ClearStateProgram: clst,
+					LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
+				},
+			},
+		},
+		Accounts: []generated.Account{
+			{
+				Address:                     creator.String(),
+				Status:                      "Online",
+				Amount:                      10000000,
+				AmountWithoutPendingRewards: 10000000,
+				RewardBase:                  &rewardBase,
+			},
+		},
+	}
+	dr.ProtocolVersion = string(dryrunProtoVersion)
+
+	var response generated.DryrunResponse
+	doDryrunRequest(&dr, &response)
+	require.NoError(t, err)
+	checkAppCallPass(t, &response)
+	if t.Failed() {
+		logResponse(t, &response)
+	}
+}
