@@ -1677,6 +1677,51 @@ func TestModifiedAppLocalStates(t *testing.T) {
 	}
 }
 
+type indexerLedgerForEvalImpl struct {
+	l     *Ledger
+	round basics.Round
+}
+
+func (il indexerLedgerForEvalImpl) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
+	return il.l.BlockHdr(round)
+}
+
+// The value of the returned map is nil iff the account was not found.
+func (il indexerLedgerForEvalImpl) LookupWithoutRewards(addresses map[basics.Address]struct{}) (map[basics.Address]*basics.AccountData, error) {
+	res := make(map[basics.Address]*basics.AccountData)
+
+	for address := range addresses {
+		accountData, _, err := il.l.LookupWithoutRewards(il.round, address)
+		if err != nil {
+			return nil, err
+		}
+
+		if accountData.IsZero() {
+			res[address] = nil
+		} else {
+			accountDataCopy := new(basics.AccountData)
+			*accountDataCopy = accountData
+			res[address] = accountDataCopy
+		}
+	}
+
+	return res, nil
+}
+
+func (il indexerLedgerForEvalImpl) GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]FoundAddress, error) {
+	// This function is unused.
+	return nil, errors.New("GetAssetCreator() not implemented")
+}
+
+func (il indexerLedgerForEvalImpl) GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]FoundAddress, error) {
+	// This function is unused.
+	return nil, errors.New("GetAppCreator() not implemented")
+}
+
+func (il indexerLedgerForEvalImpl) Totals() (ledgercore.AccountTotals, error) {
+	return il.l.Totals(il.round)
+}
+
 // Test that overriding the consensus parameters effects the generated apply data.
 func TestCustomProtocolParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -1766,8 +1811,12 @@ func TestCustomProtocolParams(t *testing.T) {
 		createStib, optInStib, fundStib, optOutStib,
 	}
 
+	il := indexerLedgerForEvalImpl{
+		l:     l,
+		round: 0,
+	}
 	proto.EnableAssetCloseAmount = true
-	_, modifiedTxns, err := Eval(l, &block, proto)
+	_, modifiedTxns, err := EvalForIndexer(il, &block, proto)
 	require.NoError(t, err)
 
 	require.Equal(t, 4, len(modifiedTxns))

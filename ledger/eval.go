@@ -1643,12 +1643,12 @@ func getBlockAddresses(block *bookkeeping.Block) map[basics.Address]struct{} {
 	return res
 }
 
-// Eval evaluates a block without validation using the given `proto`. Return the state
-// delta and transactions with modified apply data according to `proto`.
+// EvalForIndexer evaluates a block without validation using the given `proto`.
+// Return the state delta and transactions with modified apply data according to `proto`.
 // This function is used by Indexer which modifies `proto` to retrieve the asset
 // close amount for each transaction even when the real consensus parameters do not
 // support it.
-func Eval(il indexerLedgerForEval, block *bookkeeping.Block, proto config.ConsensusParams) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
+func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto config.ConsensusParams) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
 	ilc := makeIndexerLedgerConnector(il, block.GenesisHash())
 
 	eval, err := startEvaluator(
