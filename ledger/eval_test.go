@@ -525,7 +525,9 @@ ok:
 			ApplyData: transactions.ApplyData{
 				EvalDelta: transactions.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
 					"creator": {Action: basics.SetBytesAction, Bytes: string(addrs[0][:])}},
-				}},
+				},
+				ApplicationID: 1,
+			},
 		},
 		{
 			SignedTxn: stxn2,
