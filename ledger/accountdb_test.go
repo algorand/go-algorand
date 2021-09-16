@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -833,21 +834,25 @@ func BenchmarkReadingRandomBalancesDisk(b *testing.B) {
 }
 func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 	totalStartupAccountsNumber := 5000000
+	if tot, err := strconv.Atoi(os.Getenv("TOTAL_ACCOUNTS")); err == nil && tot != 0 {
+		totalStartupAccountsNumber = tot
+	}
 	batchCount := 1000
 	startupAcct := 5
-	initDatabase := func() (*sql.Tx, func(), error) {
+	inMem := false
+	initDatabase := func() (db.Pair, func()) {
 		proto := config.Consensus[protocol.ConsensusCurrentVersion]
-		dbs, fn := dbOpenTest(b, false)
+		dbs, fn := dbOpenTest(b, inMem)
 		setDbLogging(b, dbs)
 		cleanup := func() {
-			cleanupTestDb(dbs, fn, false)
+			cleanupTestDb(dbs, fn, inMem)
 		}
 
 		benchmarkInitBalances(b, startupAcct, dbs, proto)
 		dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeOff, false)
 
 		// insert 1M accounts data, in batches of 1000
-		for batch := 0; batch <= batchCount; batch++ {
+		for batch := 0; batch < batchCount; batch++ {
 			fmt.Printf("\033[M\r %d / %d accounts written", totalStartupAccountsNumber*batch/batchCount, totalStartupAccountsNumber)
 
 			tx, err := dbs.Wdb.Handle.Begin()
@@ -867,10 +872,8 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 			require.NoError(b, err)
 		}
 		dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeFull, true)
-		tx, err := dbs.Wdb.Handle.Begin()
-		require.NoError(b, err)
 		fmt.Printf("\033[M\r")
-		return tx, cleanup, err
+		return dbs, cleanup
 	}
 
 	selectAccounts := func(tx *sql.Tx) (accountsAddress [][]byte, accountsRowID []int) {
@@ -891,68 +894,109 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 		return
 	}
 
-	tx, cleanup, err := initDatabase()
-	require.NoError(b, err)
+	dbs, cleanup := initDatabase()
 	defer cleanup()
 
-	accountsAddress, accountsRowID := selectAccounts(tx)
+	var accountsAddress [][]byte
+	var accountsRowID []int
+	err := dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		accountsAddress, accountsRowID = selectAccounts(tx)
+		return nil
+	})
+	require.NoError(b, err)
+	b.Logf("len accountsAddress %d", len(accountsAddress))
+	b.Logf("len accountsRowID %d", len(accountsRowID))
+	require.Len(b, accountsAddress, totalStartupAccountsNumber+startupAcct)
+	require.Len(b, accountsRowID, totalStartupAccountsNumber+startupAcct)
+
+	// write account updates in batches of 10K or BATCH_SIZE
+	batchSize := 10000
+	if bs, err := strconv.Atoi(os.Getenv("BATCH_SIZE")); err == nil && bs != 0 {
+		batchSize = bs
+	}
+
+	type updateAcct struct {
+		index int    // index into address / rowID array
+		data  []byte // account data
+	}
+
+	// pre-calculate random AccountData blobs and batches of accounts to run
+	makeBatches := func(b *testing.B, numAccounts int) [][]updateAcct {
+		b.Logf("updating b.N=%d accounts in batches of %d", b.N, batchSize)
+		var batches [][]updateAcct
+		for i := 0; i < b.N; i += batchSize {
+			batchLen := batchSize
+			if i+batchLen > b.N {
+				batchLen = b.N - i
+			}
+			var batch []updateAcct
+			for j := 0; j < batchLen; j++ {
+				update := updateAcct{index: rand.Intn(numAccounts), data: make([]byte, 200)}
+				crypto.RandBytes(update.data)
+				batch = append(batch, update)
+			}
+			batches = append(batches, batch)
+		}
+		return batches
+	}
 
 	b.Run("ByAddr", func(b *testing.B) {
-		preparedUpdate, err := tx.Prepare("UPDATE accountbase SET data = ? WHERE address = ?")
-		require.NoError(b, err)
-		defer preparedUpdate.Close()
 		// updates accounts by address
-		randomAccountData := make([]byte, 200)
-		crypto.RandBytes(randomAccountData)
-		updateOrder := rand.Perm(len(accountsRowID))
+		batches := makeBatches(b, len(accountsAddress))
+
 		b.ResetTimer()
 		startTime := time.Now()
-		for n := 0; n < b.N; n++ {
-			for _, acctIdx := range updateOrder {
-				res, err := preparedUpdate.Exec(randomAccountData[:], accountsAddress[acctIdx])
+		n := 0
+		for _, batch := range batches {
+			// run one transaction per batch
+			err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+				preparedUpdate, err := tx.Prepare("UPDATE accountbase SET data = ? WHERE address = ?")
 				require.NoError(b, err)
-				rowsAffected, err := res.RowsAffected()
-				require.NoError(b, err)
-				require.Equal(b, int64(1), rowsAffected)
-				n++
-				if n == b.N {
-					break
+				defer preparedUpdate.Close()
+				for _, update := range batch {
+					res, err := preparedUpdate.Exec(update.data, accountsAddress[update.index])
+					require.NoError(b, err)
+					rowsAffected, err := res.RowsAffected()
+					require.NoError(b, err)
+					require.Equal(b, int64(1), rowsAffected)
+					n++
 				}
-			}
-
+				return nil
+			})
+			require.NoError(b, err)
 		}
+		require.Equal(b, b.N, n)
 		b.ReportMetric(float64(int(time.Now().Sub(startTime))/b.N), "ns/acct_update")
 	})
 
 	b.Run("ByRowID", func(b *testing.B) {
-		preparedUpdate, err := tx.Prepare("UPDATE accountbase SET data = ? WHERE rowid = ?")
-		require.NoError(b, err)
-		defer preparedUpdate.Close()
-		// updates accounts by address
-		randomAccountData := make([]byte, 200)
-		crypto.RandBytes(randomAccountData)
-		updateOrder := rand.Perm(len(accountsRowID))
+		// updates accounts by row ID
+		batches := makeBatches(b, len(accountsRowID))
+
 		b.ResetTimer()
 		startTime := time.Now()
-		for n := 0; n < b.N; n++ {
-			for _, acctIdx := range updateOrder {
-				res, err := preparedUpdate.Exec(randomAccountData[:], accountsRowID[acctIdx])
+		n := 0
+		for _, batch := range batches {
+			// run one transaction per batch
+			err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+				preparedUpdate, err := tx.Prepare("UPDATE accountbase SET data = ? WHERE rowid = ?")
 				require.NoError(b, err)
-				rowsAffected, err := res.RowsAffected()
-				require.NoError(b, err)
-				require.Equal(b, int64(1), rowsAffected)
-				n++
-				if n == b.N {
-					break
+				defer preparedUpdate.Close()
+				for _, update := range batch {
+					res, err := preparedUpdate.Exec(update.data, accountsRowID[update.index])
+					require.NoError(b, err)
+					rowsAffected, err := res.RowsAffected()
+					require.NoError(b, err)
+					require.Equal(b, int64(1), rowsAffected)
+					n++
 				}
-			}
+				return nil
+			})
+			require.NoError(b, err)
 		}
+		require.Equal(b, b.N, n)
 		b.ReportMetric(float64(int(time.Now().Sub(startTime))/b.N), "ns/acct_update")
-
 	})
-
-	err = tx.Commit()
-	require.NoError(b, err)
 }
 func TestAccountsReencoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
