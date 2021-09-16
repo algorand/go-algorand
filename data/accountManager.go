@@ -188,7 +188,9 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 	}
 
 	// Delete expired records from participation registry.
-	manager.registry.DeleteExpired(latestHdr.Round)
+	if err := manager.registry.DeleteExpired(latestHdr.Round); err != nil {
+		manager.log.Warnf("error while deleting expired records from participation registry: %w", err)
+	}
 }
 
 // Registry fetches the ParticipationRegistry.
