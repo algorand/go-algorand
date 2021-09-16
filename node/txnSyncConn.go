@@ -76,7 +76,7 @@ func makeTransactionSyncNodeConnector(node *AlgorandFullNode) transactionSyncNod
 		clock:       timers.MakeMonotonicClock(time.Now()),
 		txHandler:   node.txHandler.SolicitedAsyncTxHandler(),
 		openStateCh: make(chan struct{}),
-		proposalCh:  make(chan agreement.TxnSyncProposal, 1),
+		proposalCh:  make(chan agreement.TxnSyncProposal),
 	}
 }
 
