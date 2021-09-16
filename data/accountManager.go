@@ -188,15 +188,7 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 	}
 
 	// Delete expired records from participation registry.
-	// TODO: add registry.DeleteExpiredAt(latestHdr.Round) function.
-	for _, record := range manager.registry.GetAll() {
-		if record.LastVote < latestHdr.Round {
-			if err := manager.registry.Delete(record.ParticipationID); err != nil {
-				manager.log.Warnf("Problem deleting key from participation registry: %w", err)
-			}
-		}
-	}
-
+	manager.registry.DeleteExpired(latestHdr.Round)
 }
 
 // Registry fetches the ParticipationRegistry.

@@ -132,6 +132,30 @@ func TestParticipation_Delete(t *testing.T) {
 	assertParticipation(t, p2, results[0])
 }
 
+func TestParticipation_DeleteExpired(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	registry := getRegistry(t)
+	defer registry.Close()
+
+	for i := 10; i < 20; i++ {
+		p := makeTestParticipation(i, 1, basics.Round(i), 1)
+		id, err := registry.Insert(p)
+		a.NoError(err)
+		a.Equal(p.ID(), id)
+	}
+
+	err := registry.DeleteExpired(15)
+	a.NoError(err)
+
+	a.Len(registry.GetAll(), 5, "The first 5 should be deleted.")
+
+	// Delete should be persisted immediately. Verify by re-initializing the cache.
+	err = registry.initializeCache()
+	a.NoError(err)
+	a.Len(registry.GetAll(), 5, "The first 5 should be deleted.")
+}
+
 // Make sure the register function properly sets effective first/last for all effected records.
 func TestParticipation_Register(t *testing.T) {
 	partitiontest.PartitionTest(t)
