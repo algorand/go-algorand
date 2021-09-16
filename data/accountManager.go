@@ -199,6 +199,11 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 
 }
 
+// Registry fetches the ParticipationRegistry.
+func (manager *AccountManager) Registry() account.ParticipationRegistry {
+	return manager.registry
+}
+
 // FlushRegistry tells the underlying participation registry to flush it's change cache to the DB.
 func (manager *AccountManager) FlushRegistry() {
 	manager.registry.Flush()
