@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/logging"
 	"sort"
 	"time"
 
@@ -71,6 +72,7 @@ func (encoder *messageAsyncEncoder) asyncMessageSent(enqueued bool, sequenceNumb
 
 	select {
 	case encoder.state.outgoingMessagesCallbackCh <- encoder.messageData:
+		logging.Base().Infof("adding to outgoingmsgch: %v", len(encoder.state.outgoingMessagesCallbackCh))
 		return nil
 	default:
 		// if we can't place it on the channel, return an error so that the node could disconnect from this peer.
