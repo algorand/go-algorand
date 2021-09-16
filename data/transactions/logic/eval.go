@@ -3121,23 +3121,38 @@ func opExtract64Bits(cx *EvalContext) {
 	opExtractNBytes(cx, 8) // extract 8 bytes
 }
 
-func opExtractUvarint(cx *EvalContext) {
+func opDecodeUvarint(cx *EvalContext) {
 	last := len(cx.stack) - 1 // start
 	prev := last - 1          // bytes
 	startIdx := cx.stack[last].Uint
 
 	if int(startIdx) >= len(cx.stack[prev].Bytes) {
-		cx.err = errors.New("extract start beyond length of string")
+		cx.err = errors.New("decode start beyond length of string")
 		return
 	}
 
-	x, n := binary.Uvarint(cx.stack[last].Bytes[startIdx:])
+	x, n := binary.Uvarint(cx.stack[prev].Bytes[startIdx:])
 
-	cx.stack[prev].Uint = uint64(n)
-	cx.stack[prev].Bytes = nil
+	if n < 0 {
+		cx.err = errors.New("value larger than 64 bits")
+		return
+	}
 
-	cx.stack[last].Uint = x
+	cx.stack[last].Uint = uint64(n)
 	cx.stack[last].Bytes = nil
+
+	cx.stack[prev].Uint = x
+	cx.stack[prev].Bytes = nil
+}
+
+func opEncodeUvarint(cx *EvalContext) {
+	last := len(cx.stack) - 1 // uint64
+	buf := make([]byte, binary.MaxVarintLen64)
+
+	n := binary.PutUvarint(buf, cx.stack[last].Uint)
+
+	cx.stack[last].Uint = 0
+	cx.stack[last].Bytes = buf[:n]
 }
 
 // accountReference yields the address and Accounts offset designated

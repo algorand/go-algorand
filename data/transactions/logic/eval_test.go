@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math/rand"
 	"strconv"
 	"strings"
 	"testing"
@@ -2272,8 +2273,31 @@ func TestExtractOp(t *testing.T) {
 	testAccepts(t, `byte "hello"; extract 5 0; byte ""; ==`, 5)
 	testAccepts(t, `byte "hello"; int 5; int 0; extract3; byte ""; ==`, 5)
 
-	testAccepts(t, "byte 0xff; int 0; extract_uvarint; int 1; ==; int 255; ==", 5)
-	testAccepts(t, "byte 0xffff; int 0; extract_uvarint; int 2; ==; int 65535; ==", 5)
+}
+
+func TestUvarintOp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testAccepts(t, "byte 0xff01; int 0; decode_uvarint; int 2; ==; assert; int 255; ==", 5)
+	testAccepts(t, "byte 0xffff01; int 0; decode_uvarint; int 3; ==; assert; int 32767; ==", 5)
+
+	testAccepts(t, "int 255; encode_uvarint; dup; len; int 2; ==; assert; byte 0xff01; ==", 5)
+	testAccepts(t, "int 32767; encode_uvarint; dup; len; int 3; ==; assert; byte 0xffff01; ==", 5)
+
+	teal := `
+int %d
+dup
+encode_uvarint
+int 0
+decode_uvarint
+pop
+==
+	`
+	for i := 0; i < 10; i++ {
+		x := rand.Int63()
+		testAccepts(t, fmt.Sprintf(teal, x), 5)
+	}
 }
 
 func TestExtractFlop(t *testing.T) {
