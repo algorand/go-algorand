@@ -233,7 +233,7 @@ incomingMessageLoop:
 		// skip txnsync messages with proposalData for now
 		if !incomingMsg.message.RelayedProposal.MsgIsZero() {
 			if !incomingMsg.message.RelayedProposal.ExcludeProposal.MsgIsZero() {
-				logging.Base().Info("received proposal filter msg")
+				logging.Base().Info("received proposal filter msg", incomingMsg.message.RelayedProposal.ExcludeProposal)
 				// add filtered proposal to proposalFilterCache
 				peer.proposalFilterCache.insert(incomingMsg.message.RelayedProposal.ExcludeProposal)
 			} else {

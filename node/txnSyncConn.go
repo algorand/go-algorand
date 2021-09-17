@@ -331,13 +331,16 @@ func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataByte
 			ProposalBytes: pc.ProposalBytes,
 			Txns:          flattenedTxns,
 		}
+		
+		completedProposalBytes := protocol.Encode(&pc.proposalData)
+
 		pc.ProposalBytes = nil
 		pc.txGroups = nil
 		pc.TxGroupIds = nil
 		pc.txGroupIDIndex = nil
 		pc.numTxGroupsReceived = 0
 
-		return protocol.Encode(&pc.proposalData)
+		return completedProposalBytes
 	}
 	return nil
 }
