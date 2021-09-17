@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-func polled(ch <-chan time.Time) bool {
+func polled(ch <-chan struct{}) bool {
 	select {
 	case <-ch:
 		return true
@@ -34,7 +34,7 @@ func polled(ch <-chan time.Time) bool {
 func TestMonotonicDelta(t *testing.T) {
 	var m MonotonicFactory
 	var c Clock
-	var ch <-chan time.Time
+	var ch <-chan struct{}
 
 	d := time.Millisecond * 100
 
@@ -58,7 +58,7 @@ func TestMonotonicDelta(t *testing.T) {
 func TestMonotonicZeroDelta(t *testing.T) {
 	var m MonotonicFactory
 	var c Clock
-	var ch <-chan time.Time
+	var ch <-chan struct{}
 
 	c = m.Zero(nil)
 	ch = c.TimeoutAt(0)
@@ -70,7 +70,7 @@ func TestMonotonicZeroDelta(t *testing.T) {
 func TestMonotonicNegativeDelta(t *testing.T) {
 	var m MonotonicFactory
 	var c Clock
-	var ch <-chan time.Time
+	var ch <-chan struct{}
 
 	c = m.Zero(nil)
 	ch = c.TimeoutAt(-time.Second)
@@ -82,7 +82,7 @@ func TestMonotonicNegativeDelta(t *testing.T) {
 func TestMonotonicZeroTwice(t *testing.T) {
 	var m MonotonicFactory
 	var c Clock
-	var ch <-chan time.Time
+	var ch <-chan struct{}
 
 	d := time.Millisecond * 100
 

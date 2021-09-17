@@ -263,7 +263,7 @@ func (d *demux) next(s *Service, extSignals pipelineExternalDemuxSignals) (e ext
 	// pick next deadlineCh from extSignals
 	ledgerNextRoundCh := s.Ledger.Wait(nextRound, bookkeeping.BlockHash{})
 	deadlineCh, deadlineRound := s.clockManager.nextDeadlineCh(extSignals.signals)
-	var fastDeadlineCh <-chan time.Time
+	var fastDeadlineCh <-chan struct{}
 	var fastDeadlineRound round
 
 	// pick next fastDeadlineCh from extSignals

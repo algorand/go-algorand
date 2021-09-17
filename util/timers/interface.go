@@ -47,7 +47,7 @@ type Clock interface {
 	// If delta has already passed, it returns a closed channel.
 	//
 	// TimeoutAt must be called after Zero; otherwise, the channel's behavior is undefined.
-	TimeoutAt(delta time.Duration) <-chan time.Time
+	TimeoutAt(delta time.Duration) <-chan struct{}
 
 	// Encode serializes the Clock into a byte slice.
 	Encode() []byte

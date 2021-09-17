@@ -50,7 +50,7 @@ func (cm *clockManager) gc(es []externalDemuxSignals) {
 // nextDeadlineCh returns a timeout channel that will fire when the earliest Deadline among all of
 // the rounds described in externalDemuxSignals has occurred. It also returns the corresponding
 // round (including speculative branch) this timeout channel corresponds to.
-func (cm *clockManager) nextDeadlineCh(es []externalDemuxSignals) (<-chan time.Time, round) {
+func (cm *clockManager) nextDeadlineCh(es []externalDemuxSignals) (<-chan struct{}, round) {
 	if len(es) == 0 {
 		return nil, roundZero
 	}
@@ -74,7 +74,7 @@ func (cm *clockManager) nextDeadlineCh(es []externalDemuxSignals) (<-chan time.T
 // nextPipelineDelayCh returns a timeout channel that will fire when the earliest PipelineDelay among all of
 // the rounds described in externalDemuxSignals has occurred. It also returns the corresponding
 // round (including speculative branch) this timeout channel corresponds to.
-func (cm *clockManager) nextPipelineDelayCh(es []externalDemuxSignals) (<-chan time.Time, round) {
+func (cm *clockManager) nextPipelineDelayCh(es []externalDemuxSignals) (<-chan struct{}, round) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
@@ -103,7 +103,7 @@ func (cm *clockManager) nextPipelineDelayCh(es []externalDemuxSignals) (<-chan t
 // nextFastDeadlineCh returns a timeout channel that will fire when the earliest FastRecoveryDeadline among all of
 // the rounds described in externalDemuxSignals has occurred. It also returns the corresponding
 // round (including speculative branch) this timeout channel corresponds to.
-func (cm *clockManager) nextFastDeadlineCh(es []externalDemuxSignals) (<-chan time.Time, round) {
+func (cm *clockManager) nextFastDeadlineCh(es []externalDemuxSignals) (<-chan struct{}, round) {
 	if len(es) == 0 {
 		return nil, roundZero
 	}

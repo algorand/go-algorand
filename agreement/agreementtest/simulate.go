@@ -61,8 +61,8 @@ func (i *instant) Encode() []byte {
 	return nil
 }
 
-func (i *instant) TimeoutAt(d time.Duration) <-chan time.Time {
-	ta := make(chan time.Time)
+func (i *instant) TimeoutAt(d time.Duration) <-chan struct{} {
+	ta := make(chan struct{})
 	select {
 	case <-i.timeoutAtCalled:
 	default:

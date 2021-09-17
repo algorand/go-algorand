@@ -41,7 +41,7 @@ func MakeMonotonicClockFactory() ClockFactory {
 // Monotonic uses the system's monotonic clock to emit timeouts.
 type Monotonic struct {
 	zero     time.Time
-	timeouts map[time.Duration]<-chan time.Time
+	timeouts map[time.Duration]<-chan struct{}
 }
 
 // MakeMonotonicClock creates a new monotonic clock with a given zero point.
@@ -52,9 +52,9 @@ func MakeMonotonicClock(zero time.Time) Clock {
 }
 
 // TimeoutAt returns a channel that will signal when the duration has elapsed.
-func (m *Monotonic) TimeoutAt(delta time.Duration) <-chan time.Time {
+func (m *Monotonic) TimeoutAt(delta time.Duration) <-chan struct{} {
 	if m.timeouts == nil {
-		m.timeouts = make(map[time.Duration]<-chan time.Time)
+		m.timeouts = make(map[time.Duration]<-chan struct{})
 	}
 	timeoutCh, ok := m.timeouts[delta]
 	if ok {
@@ -63,13 +63,16 @@ func (m *Monotonic) TimeoutAt(delta time.Duration) <-chan time.Time {
 
 	target := m.zero.Add(delta)
 	left := time.Until(target)
-	if left < 0 {
-		timeout := make(chan time.Time)
-		close(timeout)
-		timeoutCh = timeout
+
+	timeout := make(chan struct{})
+	closer := func() { close(timeout) }
+	if left > 0 {
+		time.AfterFunc(left, func() { close(timeout) })
 	} else {
-		timeoutCh = time.After(left)
+		closer()
 	}
+
+	timeoutCh = timeout
 	m.timeouts[delta] = timeoutCh
 	return timeoutCh
 }
