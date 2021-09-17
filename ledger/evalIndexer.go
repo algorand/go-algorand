@@ -172,7 +172,7 @@ func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto con
 		ilc, block.BlockHeader, proto, len(block.Payset), false, false)
 	if err != nil {
 		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
-			fmt.Errorf("Eval() err: %w", err)
+			fmt.Errorf("EvalForIndexer() err: %w", err)
 	}
 
 	// Preload most needed accounts.
@@ -180,7 +180,7 @@ func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto con
 		accountDataMap, err := il.LookupWithoutRewards(getBlockAddresses(block))
 		if err != nil {
 			return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
-				fmt.Errorf("Eval() err: %w", err)
+				fmt.Errorf("EvalForIndexer() err: %w", err)
 		}
 		base := eval.state.lookupParent.(*roundCowBase)
 		for address, accountData := range accountDataMap {
@@ -195,14 +195,14 @@ func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto con
 	paysetgroups, err := block.DecodePaysetGroups()
 	if err != nil {
 		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
-			fmt.Errorf("Eval() err: %w", err)
+			fmt.Errorf("EvalForIndexer() err: %w", err)
 	}
 
 	for _, group := range paysetgroups {
 		err = eval.TransactionGroup(group)
 		if err != nil {
 			return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
-				fmt.Errorf("Eval() err: %w", err)
+				fmt.Errorf("EvalForIndexer() err: %w", err)
 		}
 	}
 
@@ -210,7 +210,7 @@ func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto con
 	err = eval.endOfBlock()
 	if err != nil {
 		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
-			fmt.Errorf("Eval() err: %w", err)
+			fmt.Errorf("EvalForIndexer() err: %w", err)
 	}
 
 	return eval.state.deltas(), eval.block.Payset, nil
