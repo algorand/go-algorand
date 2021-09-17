@@ -188,6 +188,7 @@ type ledgerForSpeculation interface {
 	Latest() basics.Round
 	AddBlock(blk bookkeeping.Block, c agreement.Certificate) error
 	AddValidatedBlock(vb ValidatedBlock, c agreement.Certificate) error
+	EnsureValidatedBlock(vb *ValidatedBlock, c agreement.Certificate)
 	Wait(basics.Round) chan struct{}
 
 	TrackerDB() db.Pair
@@ -404,7 +405,7 @@ func (sl *SpeculativeLedger) OnNewBlock(blk bookkeeping.Block, delta ledgercore.
 			// the ledger to call our newBlock() again, which will
 			// commit any subsequent blocks that already have certs.
 			if specblk.cert != nil {
-				sl.EnsureValidatedBlock(specblk.lfe.vb, *specblk.cert)
+				sl.l.EnsureValidatedBlock(specblk.lfe.vb, *specblk.cert)
 			}
 		}
 	}
@@ -627,7 +628,7 @@ func (sl *SpeculativeLedger) AddValidatedBlock(vb ValidatedBlock, cert agreement
 	// concurrent insertion of blocks, but the latest round returned
 	// by the ledger is monotonically increasing, so if it increments
 	// concurrently with us, the block insertion should error out anyway.
-	if vb.blk.Round() == sl.l.Latest()+1 {
+	if vb.blk.Round() <= sl.l.Latest()+1 {
 		sl.mu.Unlock()
 		return sl.l.AddValidatedBlock(vb, cert)
 	}
@@ -733,7 +734,7 @@ func (sl *SpeculativeLedger) EnsureValidatedBlock(vb *ValidatedBlock, c agreemen
 	// As a fallback, bail out if the base (non-speculative) ledger has a
 	// block for the same round number.
 	for sl.l.Latest() < round {
-		err := sl.l.AddValidatedBlock(*vb, c)
+		err := sl.AddValidatedBlock(*vb, c)
 		if err == nil {
 			break
 		}
