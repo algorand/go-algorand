@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"runtime/pprof"
 	"sort"
 	"strconv"
 	"strings"
@@ -40,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-algorand/util/kvstore"
 )
 
 func randomAddress() basics.Address {
@@ -832,56 +834,86 @@ func BenchmarkReadingRandomBalancesRAM(b *testing.B) {
 func BenchmarkReadingRandomBalancesDisk(b *testing.B) {
 	benchmarkReadingRandomBalances(b, false)
 }
-func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
-	totalStartupAccountsNumber := 5000000
-	if tot, err := strconv.Atoi(os.Getenv("TOTAL_ACCOUNTS")); err == nil && tot != 0 {
-		totalStartupAccountsNumber = tot
-	}
-	batchCount := 1000
+
+type benchmarkDB interface {
+	selectAccounts(b *testing.B, totalStartupAccountsNumber int) (accountsAddress [][]byte, accountsRowID []int)
+	updateAddr(b *testing.B, batch []updateAcct, accountsAddress [][]byte) (int, error)
+	updateRowID(b *testing.B, batch []updateAcct, accountsRowID []int) (int, error)
+	cleanup()
+}
+
+type updateAcct struct {
+	index int    // index into address / rowID array
+	data  []byte // account data
+}
+
+type sqliteBenchmarkDB struct {
+	startupAcct int
+	dbs         db.Pair
+	cleanupFn   func()
+}
+
+func (db *sqliteBenchmarkDB) cleanup() { db.cleanupFn() }
+
+func newSQLiteBenchmarkDB(b *testing.B, totalStartupAccountsNumber int, batchCount int, inMem bool) *sqliteBenchmarkDB {
 	startupAcct := 5
-	inMem := false
-	initDatabase := func() (db.Pair, func()) {
-		proto := config.Consensus[protocol.ConsensusCurrentVersion]
-		dbs, fn := dbOpenTest(b, inMem)
-		setDbLogging(b, dbs)
-		cleanup := func() {
-			cleanupTestDb(dbs, fn, inMem)
-		}
 
-		benchmarkInitBalances(b, startupAcct, dbs, proto)
-		dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeOff, false)
-
-		// insert 1M accounts data, in batches of 1000
-		for batch := 0; batch < batchCount; batch++ {
-			fmt.Printf("\033[M\r %d / %d accounts written", totalStartupAccountsNumber*batch/batchCount, totalStartupAccountsNumber)
-
-			tx, err := dbs.Wdb.Handle.Begin()
-
-			require.NoError(b, err)
-
-			acctsData := generateRandomTestingAccountBalances(totalStartupAccountsNumber / batchCount)
-			replaceStmt, err := tx.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
-			require.NoError(b, err)
-			defer replaceStmt.Close()
-			for addr, acctData := range acctsData {
-				_, err = replaceStmt.Exec(addr[:], uint64(0), protocol.Encode(&acctData))
-				require.NoError(b, err)
-			}
-
-			err = tx.Commit()
-			require.NoError(b, err)
-		}
-		dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeFull, true)
-		fmt.Printf("\033[M\r")
-		return dbs, cleanup
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	dbs, fn := dbOpenTest(b, inMem)
+	setDbLogging(b, dbs)
+	cleanup := func() {
+		cleanupTestDb(dbs, fn, inMem)
 	}
 
-	selectAccounts := func(tx *sql.Tx) (accountsAddress [][]byte, accountsRowID []int) {
-		accountsAddress = make([][]byte, 0, totalStartupAccountsNumber+startupAcct)
-		accountsRowID = make([]int, 0, totalStartupAccountsNumber+startupAcct)
+	benchmarkInitBalances(b, startupAcct, dbs, proto)
+	dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeOff, false)
 
+	dupmap := make(map[basics.Address]bool)
+
+	cnt := 0
+	// insert 1M accounts data, in batches of 1000
+	for batch := 0; batch < batchCount; batch++ {
+		tx, err := dbs.Wdb.Handle.Begin()
+
+		require.NoError(b, err)
+
+		acctsData := generateRandomTestingAccountBalances(totalStartupAccountsNumber / batchCount)
+
+		// check for duplicates (very unlikely to happen)
+		for addr := range acctsData {
+			_, exists := dupmap[addr]
+			require.False(b, exists)
+			dupmap[addr] = true
+		}
+
+		replaceStmt, err := tx.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
+		require.NoError(b, err)
+		defer replaceStmt.Close()
+		for addr, acctData := range acctsData {
+			encAcct := protocol.Encode(&acctData)
+			_, err = replaceStmt.Exec(addr[:], uint64(0), encAcct)
+			require.NoError(b, err)
+			cnt++
+		}
+
+		err = tx.Commit()
+		require.NoError(b, err)
+		fmt.Printf("\033[M\r %d / %d accounts written", cnt, totalStartupAccountsNumber)
+
+	}
+	dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeFull, true)
+	fmt.Printf("\033[M\r")
+	return &sqliteBenchmarkDB{startupAcct: startupAcct, dbs: dbs, cleanupFn: cleanup}
+}
+
+func (db *sqliteBenchmarkDB) selectAccounts(b *testing.B, totalStartupAccountsNumber int) (accountsAddress [][]byte, accountsRowID []int) {
+	accountsAddress = make([][]byte, 0)
+	accountsRowID = make([]int, 0)
+
+	err := db.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// read all the accounts to obtain the addrs.
 		rows, err := tx.Query("SELECT rowid, address FROM accountbase")
+		require.NoError(b, err)
 		defer rows.Close()
 		for rows.Next() {
 			var addrbuf []byte
@@ -891,33 +923,147 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 			accountsAddress = append(accountsAddress, addrbuf)
 			accountsRowID = append(accountsRowID, rowid)
 		}
-		return
-	}
-
-	dbs, cleanup := initDatabase()
-	defer cleanup()
-
-	var accountsAddress [][]byte
-	var accountsRowID []int
-	err := dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		accountsAddress, accountsRowID = selectAccounts(tx)
 		return nil
 	})
 	require.NoError(b, err)
+	require.Len(b, accountsAddress, totalStartupAccountsNumber+db.startupAcct)
+	require.Len(b, accountsRowID, totalStartupAccountsNumber+db.startupAcct)
+	return
+}
+
+func (db *sqliteBenchmarkDB) updateAddr(b *testing.B, batch []updateAcct, accountsAddress [][]byte) (int, error) {
+	n := 0
+	// run one transaction per batch
+	err := db.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		preparedUpdate, err := tx.Prepare("UPDATE accountbase SET data = ? WHERE address = ?")
+		require.NoError(b, err)
+		defer preparedUpdate.Close()
+		for _, update := range batch {
+			res, err := preparedUpdate.Exec(update.data, accountsAddress[update.index])
+			require.NoError(b, err)
+			rowsAffected, err := res.RowsAffected()
+			require.NoError(b, err)
+			require.Equal(b, int64(1), rowsAffected)
+			n++
+		}
+		return nil
+	})
+	return n, err
+}
+
+func (db *sqliteBenchmarkDB) updateRowID(b *testing.B, batch []updateAcct, accountsRowID []int) (int, error) {
+	n := 0
+	// run one transaction per batch
+	err := db.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		preparedUpdate, err := tx.Prepare("UPDATE accountbase SET data = ? WHERE rowid = ?")
+		require.NoError(b, err)
+		defer preparedUpdate.Close()
+		for _, update := range batch {
+			res, err := preparedUpdate.Exec(update.data, accountsRowID[update.index])
+			require.NoError(b, err)
+			rowsAffected, err := res.RowsAffected()
+			require.NoError(b, err)
+			require.Equal(b, int64(1), rowsAffected)
+			n++
+		}
+		return nil
+	})
+	return n, err
+}
+
+type kvBenchmarkDB struct {
+	kv              kvstore.KVStore
+	accountsAddress [][]byte
+}
+
+func newKVBenchmarkDB(b *testing.B, total int, batchCount int, inMem bool) *kvBenchmarkDB {
+	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(b.Name(), "/", "."), crypto.RandUint64())
+	kv, err := kvstore.NewBadgerDB(fn, inMem)
+	require.NoErrorf(b, err, "Filename : %s\nInMemory: %v", fn, inMem)
+	db := &kvBenchmarkDB{kv: kv}
+
+	dupmap := make(map[basics.Address]bool)
+
+	cnt := 0
+	for batch := 0; batch < batchCount; batch++ {
+
+		wb := kv.NewBatch()
+		acctsData := generateRandomTestingAccountBalances(total / batchCount)
+
+		// check for duplicates (very unlikely to happen)
+		for addr := range acctsData {
+			_, exists := dupmap[addr]
+			require.False(b, exists)
+			dupmap[addr] = true
+		}
+
+		for addr, acctData := range acctsData {
+			err = wb.Set(addr[:], protocol.Encode(&acctData))
+			require.NoError(b, err)
+			db.accountsAddress = append(db.accountsAddress, addr[:])
+			cnt++
+		}
+
+		err = wb.Commit()
+		require.NoError(b, err)
+		fmt.Printf("\033[M\r %d / %d accounts written", cnt, total)
+	}
+
+	fmt.Printf("\033[M\r")
+	return db
+}
+
+func (db *kvBenchmarkDB) selectAccounts(b *testing.B, totalStartupAccountsNumber int) (accountsAddress [][]byte, accountsRowID []int) {
+	// XXX reads not implemented
+	return db.accountsAddress, nil
+}
+
+func (db *kvBenchmarkDB) updateAddr(b *testing.B, batch []updateAcct, accountsAddress [][]byte) (int, error) {
+	n := 0
+	wb := db.kv.NewBatch()
+	for _, update := range batch {
+		err := wb.Set(accountsAddress[update.index], update.data)
+		require.NoError(b, err)
+		n++
+	}
+	return n, wb.Commit()
+}
+
+func (db *kvBenchmarkDB) updateRowID(b *testing.B, batch []updateAcct, accountsRowID []int) (int, error) {
+	return 0, nil
+}
+
+func (db *kvBenchmarkDB) cleanup() {
+	db.kv.Close()
+}
+
+func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
+	totalStartupAccountsNumber := 5000000
+	if tot, err := strconv.Atoi(os.Getenv("TOTAL_ACCOUNTS")); err == nil && tot != 0 {
+		totalStartupAccountsNumber = tot
+	}
+	batchCount := 1000
+
+	var db benchmarkDB
+	initStart := time.Now()
+	if os.Getenv("KVSTORE") != "" {
+		db = newKVBenchmarkDB(b, totalStartupAccountsNumber, batchCount, false)
+	} else {
+		db = newSQLiteBenchmarkDB(b, totalStartupAccountsNumber, batchCount, false)
+	}
+	b.Logf("Creating DB with %d accounts took %v", totalStartupAccountsNumber, time.Since(initStart))
+	defer db.cleanup()
+
+	var accountsAddress [][]byte
+	var accountsRowID []int
+	accountsAddress, accountsRowID = db.selectAccounts(b, totalStartupAccountsNumber)
 	b.Logf("len accountsAddress %d", len(accountsAddress))
 	b.Logf("len accountsRowID %d", len(accountsRowID))
-	require.Len(b, accountsAddress, totalStartupAccountsNumber+startupAcct)
-	require.Len(b, accountsRowID, totalStartupAccountsNumber+startupAcct)
 
 	// write account updates in batches of 10K or BATCH_SIZE
 	batchSize := 10000
 	if bs, err := strconv.Atoi(os.Getenv("BATCH_SIZE")); err == nil && bs != 0 {
 		batchSize = bs
-	}
-
-	type updateAcct struct {
-		index int    // index into address / rowID array
-		data  []byte // account data
 	}
 
 	// pre-calculate random AccountData blobs and batches of accounts to run
@@ -944,55 +1090,52 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 		// updates accounts by address
 		batches := makeBatches(b, len(accountsAddress))
 
+		if os.Getenv("PROFILE") != "" {
+			f, err := os.Create("byaddr.prof")
+			require.NoError(b, err)
+			defer f.Close()
+			err = pprof.StartCPUProfile(f)
+			require.NoError(b, err)
+			defer pprof.StopCPUProfile()
+		}
+
 		b.ResetTimer()
 		startTime := time.Now()
 		n := 0
 		for _, batch := range batches {
-			// run one transaction per batch
-			err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-				preparedUpdate, err := tx.Prepare("UPDATE accountbase SET data = ? WHERE address = ?")
-				require.NoError(b, err)
-				defer preparedUpdate.Close()
-				for _, update := range batch {
-					res, err := preparedUpdate.Exec(update.data, accountsAddress[update.index])
-					require.NoError(b, err)
-					rowsAffected, err := res.RowsAffected()
-					require.NoError(b, err)
-					require.Equal(b, int64(1), rowsAffected)
-					n++
-				}
-				return nil
-			})
+			// perform a batch of updates by address
+			cnt, err := db.updateAddr(b, batch, accountsAddress)
 			require.NoError(b, err)
+			n += cnt
 		}
 		require.Equal(b, b.N, n)
 		b.ReportMetric(float64(int(time.Now().Sub(startTime))/b.N), "ns/acct_update")
 	})
 
 	b.Run("ByRowID", func(b *testing.B) {
+		if len(accountsRowID) == 0 {
+			b.Skip()
+		}
+
 		// updates accounts by row ID
 		batches := makeBatches(b, len(accountsRowID))
+
+		if os.Getenv("PROFILE") != "" {
+			f, err := os.Create("byrowid.prof")
+			require.NoError(b, err)
+			defer f.Close()
+			err = pprof.StartCPUProfile(f)
+			require.NoError(b, err)
+			defer pprof.StopCPUProfile()
+		}
 
 		b.ResetTimer()
 		startTime := time.Now()
 		n := 0
 		for _, batch := range batches {
-			// run one transaction per batch
-			err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-				preparedUpdate, err := tx.Prepare("UPDATE accountbase SET data = ? WHERE rowid = ?")
-				require.NoError(b, err)
-				defer preparedUpdate.Close()
-				for _, update := range batch {
-					res, err := preparedUpdate.Exec(update.data, accountsRowID[update.index])
-					require.NoError(b, err)
-					rowsAffected, err := res.RowsAffected()
-					require.NoError(b, err)
-					require.Equal(b, int64(1), rowsAffected)
-					n++
-				}
-				return nil
-			})
+			cnt, err := db.updateRowID(b, batch, accountsRowID)
 			require.NoError(b, err)
+			n += cnt
 		}
 		require.Equal(b, b.N, n)
 		b.ReportMetric(float64(int(time.Now().Sub(startTime))/b.N), "ns/acct_update")
