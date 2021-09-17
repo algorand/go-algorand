@@ -265,7 +265,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	require.Equal(t, 1, len(phBookData))
 
 	// simulate passing a unit of time
-	for rct, _ := range entries.data[addr1].recentConnectionTimes {
+	for rct := range entries.data[addr1].recentConnectionTimes {
 		entries.data[addr1].recentConnectionTimes[rct] = entries.data[addr1].recentConnectionTimes[rct].Add(-1 * timeUnit)
 	}
 
@@ -277,7 +277,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	require.Equal(t, 2, len(phBookData))
 
 	// simulate passing a unit of time
-	for rct, _ := range entries.data[addr1].recentConnectionTimes {
+	for rct := range entries.data[addr1].recentConnectionTimes {
 		entries.data[addr1].recentConnectionTimes[rct] =
 			entries.data[addr1].recentConnectionTimes[rct].Add(-1 * timeUnit)
 	}
@@ -305,7 +305,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 
 	// introduce a gap between the two requests so that only the first will be removed later when waited
 	// simulate passing a unit of time
-	for rct, _ := range entries.data[addr2].recentConnectionTimes {
+	for rct := range entries.data[addr2].recentConnectionTimes {
 		entries.data[addr2].recentConnectionTimes[rct] =
 			entries.data[addr2].recentConnectionTimes[rct].Add(-1 * timeUnit)
 	}
@@ -333,7 +333,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	require.Equal(t, phBookData[2], phBookData2[2])
 
 	// simulate passing of the waitTime duration
-	for rct, _ := range entries.data[addr2].recentConnectionTimes {
+	for rct := range entries.data[addr2].recentConnectionTimes {
 		entries.data[addr2].recentConnectionTimes[rct] =
 			entries.data[addr2].recentConnectionTimes[rct].Add(-1 * waitTime)
 	}
