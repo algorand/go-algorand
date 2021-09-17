@@ -23,6 +23,7 @@ type Filter struct {
 	prefix                [4]byte
 	hashStagingBuffer     []uint32
 	preimageStagingBuffer []byte
+	actualEntries         int
 }
 
 // New creates a new Bloom filter
@@ -67,6 +68,7 @@ func (f *Filter) makePreimage(x []byte) (preimage []byte) {
 
 // Set marks x as present in the filter
 func (f *Filter) Set(x []byte) {
+	f.actualEntries++
 	withPrefix := f.makePreimage(x)
 	hs := f.hash(withPrefix)
 	f.preimageStagingBuffer = withPrefix[:len(f.prefix)]
@@ -88,6 +90,10 @@ func (f *Filter) Test(x []byte) bool {
 		}
 	}
 	return true
+}
+
+func (f *Filter) NumEntries() int {
+	return f.actualEntries
 }
 
 // Len returns the size of the filter in bytes

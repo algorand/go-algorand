@@ -49,6 +49,9 @@ const (
 	// Changes to the beta value only takes effect once the difference is sufficiently big enough
 	// comared to the current beta value.
 	betaGranularChangeThreshold = 0.1
+
+	// incomingFilterPoolFactor says that we should limit filters to approximately this many full transaction-pools worth of transactions
+	incomingFilterPoolFactor = 3
 )
 
 type syncState struct {

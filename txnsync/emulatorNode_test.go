@@ -22,6 +22,7 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
+	"testing"
 	"time"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -308,7 +309,7 @@ func (n *emulatedNode) IncomingTransactionGroups(peer *Peer, messageSeq uint64, 
 		n.txpoolEntries = append(n.txpoolEntries, group)
 	}
 	protocol.PutEncodingBuf(encodingBuf)
-	if duplicateMessage > 0 {
+	if duplicateMessage > 0 && testing.Verbose() {
 		fmt.Printf("%s : %d duplicate messages recieved\n", n.name, duplicateMessage)
 	}
 	atomic.AddUint64(&n.emulator.totalDuplicateTransactions, uint64(duplicateMessage))

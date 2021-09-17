@@ -36,7 +36,7 @@ type peersOps int
 //msgp:ignore messageConstructionOps
 type messageConstructionOps int
 
-const maxIncomingBloomFilterHistory = 20
+const maxIncomingBloomFilterHistory = 200
 
 // shortTermRecentTransactionsSentBufferLength is the size of the short term storage for the recently sent transaction ids.
 // it should be configured sufficiently high so that any number of transaction sent would not exceed that number before
@@ -118,6 +118,8 @@ type Peer struct {
 	// array to determine if the peer already has this message.
 	recentIncomingBloomFilters []incomingBloomFilter
 
+	recentIncomingBloomFiltersNext int
+
 	// recentSentTransactions contains the recently sent transactions. It's needed since we don't want to rely on the other peer's bloom filter while
 	// sending back-to-back messages.
 	recentSentTransactions *transactionCache
@@ -141,6 +143,8 @@ type Peer struct {
 	// lastSentBloomFilter is the last bloom filter that was sent to this peer.
 	// This bloom filter could be stale if no bloom filter was included in the last message.
 	lastSentBloomFilter bloomFilter
+
+	lastSentFilterGroupCounter uint64
 
 	// lastConfirmedMessageSeqReceived is the last message sequence number that was confirmed by the peer to have been accepted.
 	lastConfirmedMessageSeqReceived    uint64
@@ -497,7 +501,44 @@ func incomingPeersOnly(peers []*Peer) (incomingPeers []*Peer) {
 
 // incoming related functions
 
-func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter *testableBloomFilter, currentRound basics.Round) {
+// addIncomingBloomFilter keeps the most recent {maxIncomingBloomFilterHistory} filters
+func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter *testableBloomFilter, currentRound basics.Round, maxIncomingFilterElements int) {
+	bf := incomingBloomFilter{
+		round:  round,
+		filter: incomingFilter,
+	}
+	activeElements := int(bf.filter.elementsFiltered)
+	if len(p.recentIncomingBloomFilters) < maxIncomingBloomFilterHistory {
+		p.recentIncomingBloomFilters = append(p.recentIncomingBloomFilters, bf)
+		prev := len(p.recentIncomingBloomFilters) - 2
+		for prev >= 0 {
+			if activeElements >= maxIncomingFilterElements {
+				p.recentIncomingBloomFilters[prev].filter = nil
+			} else {
+				activeElements += int(p.recentIncomingBloomFilters[prev].filter.elementsFiltered)
+			}
+			prev--
+		}
+		return
+	}
+
+	p.recentIncomingBloomFilters[p.recentIncomingBloomFiltersNext] = bf
+	prev := (p.recentIncomingBloomFiltersNext + maxIncomingBloomFilterHistory - 1) % maxIncomingBloomFilterHistory
+	for prev != p.recentIncomingBloomFiltersNext {
+		if activeElements >= maxIncomingFilterElements {
+			p.recentIncomingBloomFilters[prev].filter = nil
+		} else {
+			activeElements += int(p.recentIncomingBloomFilters[prev].filter.elementsFiltered)
+		}
+		prev = (prev + maxIncomingBloomFilterHistory - 1) % maxIncomingBloomFilterHistory
+	}
+
+	p.recentIncomingBloomFiltersNext = (p.recentIncomingBloomFiltersNext + 1) % maxIncomingBloomFilterHistory
+
+	// TODO: limit total elements to maxIncomingFilterElements
+}
+
+func (p *Peer) addIncomingBloomFilterOLD(round basics.Round, incomingFilter *testableBloomFilter, currentRound basics.Round) {
 	bf := incomingBloomFilter{
 		round:  round,
 		filter: incomingFilter,

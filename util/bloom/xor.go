@@ -61,6 +61,10 @@ func (xf *XorFilter) Test(x []byte) bool {
 	return false
 }
 
+func (xf *XorFilter) NumEntries() int {
+	return len(xf.holding)
+}
+
 const sizeofInt32 = 4
 
 // MarshalBinary implements encoding.BinaryMarshaller interface
@@ -190,6 +194,10 @@ func (xf *XorFilter8) Test(x []byte) bool {
 		return xf.xor.Contains(k)
 	}
 	return false
+}
+
+func (xf *XorFilter8) NumEntries() int {
+	return len(xf.holding)
 }
 
 // MarshalBinary implements encoding.BinaryMarshaller interface

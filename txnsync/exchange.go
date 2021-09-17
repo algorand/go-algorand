@@ -42,9 +42,10 @@ type transactionBlockMessage struct {
 type encodedBloomFilter struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
-	BloomFilterType byte          `codec:"t"`
-	EncodingParams  requestParams `codec:"p"`
-	BloomFilter     []byte        `codec:"f,allocbound=maxBloomFilterSize"`
+	BloomFilterType  byte          `codec:"t"`
+	EncodingParams   requestParams `codec:"p"`
+	BloomFilter      []byte        `codec:"f,allocbound=maxBloomFilterSize"`
+	ElementsFiltered int32         `codec:"l"`
 }
 
 type requestParams struct {

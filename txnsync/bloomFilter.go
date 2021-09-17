@@ -67,11 +67,14 @@ type testableBloomFilter struct {
 	encodingParams requestParams
 
 	filter bloom.GenericFilter
+
+	elementsFiltered int32
 }
 
 func decodeBloomFilter(enc encodedBloomFilter) (outFilter *testableBloomFilter, err error) {
 	outFilter = &testableBloomFilter{
-		encodingParams: enc.EncodingParams,
+		encodingParams:   enc.EncodingParams,
+		elementsFiltered: enc.ElementsFiltered,
 	}
 	switch bloomFilterType(enc.BloomFilterType) {
 	case multiHashBloomFilter:
@@ -95,6 +98,7 @@ func decodeBloomFilter(enc encodedBloomFilter) (outFilter *testableBloomFilter, 
 func (bf *bloomFilter) encode(filter bloom.GenericFilter, filterType bloomFilterType) (err error) {
 	bf.encoded.BloomFilterType = byte(filterType)
 	bf.encoded.BloomFilter, err = filter.MarshalBinary()
+	bf.encoded.ElementsFiltered = int32(filter.NumEntries())
 	bf.encodedLength = len(bf.encoded.BloomFilter)
 	if err != nil || bf.encodedLength == 0 {
 		return errEncodingBloomFilterFailed
@@ -142,6 +146,10 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []po
 		// we want none.
 		return
 	}
+	minGroupCounter := uint64(0)
+	if hintPrevBloomFilter != nil {
+		minGroupCounter = hintPrevBloomFilter.containedTxnsRange.lastCounter
+	}
 	if encodingParams.Modulator == 1 && excludeTransactions == nil {
 		// we want all.
 		if len(txnGroups) > 0 {
@@ -160,6 +168,9 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []po
 
 		filter, filterType := filterFactory(len(txnGroups), s)
 		for _, group := range txnGroups {
+			if group.GroupCounter < minGroupCounter {
+				continue
+			}
 			filter.Set(group.GroupTransactionID[:])
 		}
 		err := result.encode(filter, filterType)
@@ -167,6 +178,9 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []po
 			// fall back to standard bloom filter
 			filter, filterType = filterFactoryBloom(len(txnGroups), s)
 			for _, group := range txnGroups {
+				if group.GroupCounter < minGroupCounter {
+					continue
+				}
 				filter.Set(group.GroupTransactionID[:])
 			}
 			result.encode(filter, filterType) //nolint:errcheck
@@ -182,6 +196,9 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []po
 
 	excludedTransactions := 0
 	for _, group := range txnGroups {
+		if group.GroupCounter < minGroupCounter {
+			continue
+		}
 		txID := group.GroupTransactionID
 		if txidToUint64(txID)%uint64(encodingParams.Modulator) != uint64(encodingParams.Offset) {
 			continue
