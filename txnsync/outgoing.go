@@ -19,7 +19,6 @@ package txnsync
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"sort"
@@ -72,7 +71,7 @@ func (encoder *messageAsyncEncoder) asyncMessageSent(enqueued bool, sequenceNumb
 
 	select {
 	case encoder.state.outgoingMessagesCallbackCh <- encoder.messageData:
-		logging.Base().Infof("adding to outgoingmsgch: %v, message: %v", len(encoder.state.outgoingMessagesCallbackCh), crypto.Hash(encoder.messageData.message.RelayedProposal.RawBytes))
+		logging.Base().Infof("adding to outgoingmsgch: %v, message: %v, len: %v", len(encoder.state.outgoingMessagesCallbackCh), crypto.Hash(encoder.messageData.message.RelayedProposal.RawBytes), len(encoder.messageData.message.RelayedProposal.RawBytes))
 		return nil
 	default:
 		// if we can't place it on the channel, return an error so that the node could disconnect from this peer.
@@ -95,7 +94,6 @@ func (encoder *messageAsyncEncoder) asyncEncodeAndSend(interface{}) interface{} 
 	}
 
 	encodedMessage := encoder.messageData.message.MarshalMsg(getMessageBuffer())
-	fmt.Println(len(encodedMessage), len(encoder.messageData.message.TransactionGroups.Bytes))
 	encoder.messageData.encodedMessageSize = len(encodedMessage)
 	// now that the message is ready, we can discard the encoded transaction group slice to allow the GC to collect it.
 	releaseEncodedTransactionGroups(encoder.messageData.message.TransactionGroups.Bytes)
@@ -372,6 +370,9 @@ func (s *syncState) broadcastProposal(p ProposalBroadcastRequest, peers []*Peer)
 		}
 		msgEncoder.messageData = s.assemblePeerMessage(peer, &pendingTransactions)
 		isPartialMessage := msgEncoder.messageData.partialMessage
+
+		logging.Base().Infof("raw bytes: %v, len: %v", crypto.Hash(msgEncoder.messageData.message.RelayedProposal.RawBytes), len(msgEncoder.messageData.message.RelayedProposal.RawBytes))
+
 		msgEncoder.enqueue()
 
 		scheduleOffset, ops := peer.getNextScheduleOffset(s.isRelay, s.lastBeta, isPartialMessage, currentTime, s.node)

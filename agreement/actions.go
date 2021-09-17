@@ -150,20 +150,22 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 	case protocol.VoteBundleTag:
 		data = protocol.Encode(&a.UnauthenticatedBundle)
 	case protocol.ProposalPayloadTag:
-		msg := a.CompoundMessage
-		txns, err := msg.Proposal.Block.DecodePaysetGroupsNoAD()
-		if err != nil {
-			// TODO error handling
-			logging.Base().Warnf("Failed to decode proposal payset: %v", err)
+		if a.T == broadcast || a.T == relay {
+			msg := a.CompoundMessage
+			txns, err := msg.Proposal.Block.DecodePaysetGroupsNoAD()
+			if err != nil {
+				// TODO error handling
+				logging.Base().Warnf("Failed to decode proposal payset: %v", err)
+			}
+			msg.Proposal.Payset = nil
+			payload := transmittedPayload{
+				unauthenticatedProposal: msg.Proposal,
+				PriorVote:               msg.Vote,
+			}
+			data = protocol.Encode(&payload)
+			logging.Base().Info("sending proposal")
+			s.TxnSync.RelayProposal(data, txns)
 		}
-		msg.Proposal.Payset = nil
-		payload := transmittedPayload{
-			unauthenticatedProposal: msg.Proposal,
-			PriorVote:               msg.Vote,
-		}
-		data = protocol.Encode(&payload)
-		logging.Base().Info("sending proposal")
-		s.TxnSync.RelayProposal(data, txns)
 		return
 	}
 

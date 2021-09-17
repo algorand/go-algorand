@@ -59,7 +59,7 @@ type demux struct {
 	rawProposals <-chan message
 	rawBundles   <-chan message
 
-	txnsyncProposals <-chan TxnSyncProposal
+	txnsyncProposals <-chan message
 
 	queue             []<-chan externalEvent
 	processingMonitor EventsProcessingMonitor
@@ -99,7 +99,7 @@ func makeDemux(params demuxParams) (d *demux) {
 	d.rawBundles = d.tokenizeMessages(tokenizerCtx, params.net, protocol.VoteBundleTag, decodeBundle)
 	d.cancelTokenizers = cancelTokenizers
 
-	d.txnsyncProposals = params.txnSync.ProposalsChannel()
+	d.txnsyncProposals = d.reconstructProposals(tokenizerCtx, params.txnSync.ProposalsChannel())
 
 	return d
 }
@@ -153,6 +153,52 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 
 				select {
 				case decoded <- msg:
+				case <-ctx.Done():
+					return
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return decoded
+}
+
+func (d *demux) reconstructProposals(ctx context.Context, ch <-chan TxnSyncProposal) <-chan message {
+	decoded := make(chan message)
+	go func() {
+		defer func() {
+			close(decoded)
+		}()
+		for {
+			select {
+			case pd, ok := <-ch:
+				if !ok {
+					return
+				}
+
+				p, err := decodeProposal(pd.ProposalBytes)
+				if err != nil {
+					logging.Base().Warnf("disconnecting from peer: error decoding message tagged %v: %v", protocol.ProposalPayloadTag, err)
+					//net.Disconnect(raw.MessageHandle)
+					//d.UpdateEventsQueue(eventQueueTokenizing[tag], 0)
+					continue
+				}
+				m := message{
+					Tag:             protocol.ProposalPayloadTag,
+					CompoundMessage: p.(compoundMessage),
+				}
+				m.CompoundMessage.Proposal.Payset = make(transactions.Payset, len(pd.Txns))
+				for i, txn := range pd.Txns {
+					m.CompoundMessage.Proposal.Payset[i], err = m.CompoundMessage.Proposal.Block.EncodeSignedTxn(txn, transactions.ApplyData{})
+					if err != nil {
+						// TODO figure out expected behavior
+						logging.Base().Infof("failed to decode transaction")
+					}
+				}
+
+				select {
+				case decoded <- m:
 				case <-ctx.Done():
 					return
 				}
@@ -329,6 +375,17 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		d.UpdateEventsQueue(eventQueueTokenized[protocol.ProposalPayloadTag], 0)
 		d.monitor.inc(demuxCoserviceType)
 		d.monitor.dec(tokenizerCoserviceType)
+	case m, open := <-d.txnsyncProposals:
+		if !open {
+			logging.Base().Warnf("channel was closed")
+			return emptyEvent{}, false
+		}
+		e = setupCompoundMessage(d.ledger, m)
+		logging.Base().Info("received proposal")
+		d.UpdateEventsQueue(eventQueueDemux, 1)
+		d.UpdateEventsQueue(eventQueueTokenized[protocol.ProposalPayloadTag], 0)
+		d.monitor.inc(demuxCoserviceType)
+		d.monitor.dec(tokenizerCoserviceType)
 	case m, open := <-rawBundles:
 		if !open {
 			return emptyEvent{}, false
@@ -336,36 +393,6 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		e = messageEvent{T: bundlePresent, Input: m}
 		d.UpdateEventsQueue(eventQueueDemux, 1)
 		d.UpdateEventsQueue(eventQueueTokenized[protocol.VoteBundleTag], 0)
-		d.monitor.inc(demuxCoserviceType)
-		d.monitor.dec(tokenizerCoserviceType)
-
-	case pd, open := <-d.txnsyncProposals:
-		if !open {
-			logging.Base().Warnf("channel was closed")
-			return emptyEvent{}, false
-		}
-		p, err := decodeProposal(pd.ProposalBytes)
-		if err != nil {
-			logging.Base().Warnf("disconnecting from peer: error decoding message tagged %v: %v", protocol.ProposalPayloadTag, err)
-			//net.Disconnect(raw.MessageHandle)
-			//d.UpdateEventsQueue(eventQueueTokenizing[tag], 0)
-		}
-		m := message{
-			Tag:             protocol.ProposalPayloadTag,
-			CompoundMessage: p.(compoundMessage),
-		}
-		m.CompoundMessage.Proposal.Payset = make(transactions.Payset, len(pd.Txns))
-		for i, txn := range pd.Txns {
-			m.CompoundMessage.Proposal.Payset[i], err = m.CompoundMessage.Proposal.Block.EncodeSignedTxn(txn, transactions.ApplyData{})
-			if err != nil {
-				// TODO figure out expected behavior
-				logging.Base().Infof("failed to decode transaction")
-			}
-		}
-		e = setupCompoundMessage(d.ledger, m)
-		logging.Base().Info("received proposal")
-		d.UpdateEventsQueue(eventQueueDemux, 1)
-		d.UpdateEventsQueue(eventQueueTokenized[protocol.ProposalPayloadTag], 0)
 		d.monitor.inc(demuxCoserviceType)
 		d.monitor.dec(tokenizerCoserviceType)
 

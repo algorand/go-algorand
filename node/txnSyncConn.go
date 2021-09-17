@@ -19,6 +19,7 @@ package node
 
 import (
 	"context"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"time"
 
@@ -39,6 +40,7 @@ const maxNumTxGroupHashesBytes = 320000 // 10K * 32
 // txnsyncPeerDataKey is the key name by which we're going to store the
 // transaction sync internal data object inside the network peer.
 const txnsyncPeerDataKey = "txsync"
+const proposalBufferSize = 25
 
 // transactionSyncNodeConnector implements the txnsync.NodeConnector interface, allowing the
 // transaction sync communicate with the node and it's child objects.
@@ -76,7 +78,7 @@ func makeTransactionSyncNodeConnector(node *AlgorandFullNode) transactionSyncNod
 		clock:       timers.MakeMonotonicClock(time.Now()),
 		txHandler:   node.txHandler.SolicitedAsyncTxHandler(),
 		openStateCh: make(chan struct{}),
-		proposalCh:  make(chan agreement.TxnSyncProposal),
+		proposalCh:  make(chan agreement.TxnSyncProposal, proposalBufferSize),
 	}
 }
 
@@ -331,8 +333,9 @@ func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataByte
 			ProposalBytes: pc.ProposalBytes,
 			Txns:          flattenedTxns,
 		}
-		
+
 		completedProposalBytes := protocol.Encode(&pc.proposalData)
+		logging.Base().Infof("expected: %v, len: %v, actual: %v", crypto.Hash(proposalDataBytes), len(proposalDataBytes), crypto.Hash(completedProposalBytes))
 
 		pc.ProposalBytes = nil
 		pc.txGroups = nil

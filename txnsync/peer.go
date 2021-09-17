@@ -17,7 +17,6 @@
 package txnsync
 
 import (
-	"fmt"
 	"github.com/algorand/go-algorand/logging"
 	"math"
 	"sort"
@@ -366,8 +365,6 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []pooldata.SignedTx
 
 	windowLengthBytes := int(uint64(sendWindow) * p.dataExchangeRate / uint64(time.Second))
 	windowLengthBytes -= currentMessageSize
-
-	fmt.Println(uint64(sendWindow), p.dataExchangeRate)
 
 	accumulatedSize := 0
 
