@@ -56,7 +56,7 @@ type NetworkFacade struct {
 	downstreamMu                   deadlock.Mutex
 	clockSync                      deadlock.Mutex
 	zeroClock                      int
-	clocks                         map[int]chan time.Time
+	clocks                         map[int]chan struct{}
 	pendingOutgoingMsg             []NetworkFacadeMessage
 	pendingOutgoingMsgMu           deadlock.Mutex
 	pendingIncomingMsg             []NetworkFacadeMessage
@@ -78,7 +78,7 @@ func MakeNetworkFacade(fuzzer *Fuzzer, nodeID int) *NetworkFacade {
 		fuzzer:         fuzzer,
 		nodeID:         nodeID,
 		mux:            network.MakeMultiplexer(fuzzer.log),
-		clocks:         make(map[int]chan time.Time),
+		clocks:         make(map[int]chan struct{}),
 		eventsQueues:   make(map[string]int),
 		eventsQueuesCh: make(chan int, 1000),
 		rand:           rand.New(rand.NewSource(int64(nodeID))),
@@ -356,7 +356,7 @@ func (n *NetworkFacade) Zero() timers.Clock {
 	// it also means that we're not in the demux loop, so no one is blocking
 	// on any of the clocks.
 
-	n.clocks = make(map[int]chan time.Time)
+	n.clocks = make(map[int]chan struct{})
 	if n.debugMessages {
 		fmt.Printf("NetworkFacade service-%v zero clock = %d\n", n.nodeID, n.zeroClock)
 	}
@@ -372,7 +372,7 @@ func (n *NetworkFacade) Rezero() {
 	}
 }
 
-func (n *NetworkFacade) TimeoutAt(d time.Duration) <-chan time.Time {
+func (n *NetworkFacade) TimeoutAt(d time.Duration) <-chan struct{} {
 	defer n.timeoutAtInitOnce.Do(func() {
 		n.timeoutAtInitWait.Done()
 	})
@@ -385,7 +385,7 @@ func (n *NetworkFacade) TimeoutAt(d time.Duration) <-chan time.Time {
 		return ch
 	}
 
-	ch = make(chan time.Time)
+	ch = make(chan struct{})
 	if targetTick == 0 {
 		close(ch)
 	} else {
@@ -415,7 +415,7 @@ func (n *NetworkFacade) Decode(in []byte) (timers.Clock, error) {
 	n.clockSync.Lock()
 	defer n.clockSync.Unlock()
 
-	n.clocks = make(map[int]chan time.Time)
+	n.clocks = make(map[int]chan struct{})
 	buf := bytes.NewReader(in)
 	var encodedZero int32
 
@@ -435,7 +435,7 @@ func (n *NetworkFacade) Decode(in []byte) (timers.Clock, error) {
 			}
 			return nil, err
 		}
-		n.clocks[int(targetTick)] = make(chan time.Time)
+		n.clocks[int(targetTick)] = make(chan struct{})
 	}
 	return n, nil
 }

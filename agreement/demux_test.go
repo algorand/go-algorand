@@ -429,15 +429,14 @@ func (t *demuxTestClock) Zero(label interface{}) timers.Clock {
 }
 
 // implement timers.Clock
-func (t *demuxTestClock) TimeoutAt(delta time.Duration) <-chan time.Time {
+func (t *demuxTestClock) TimeoutAt(delta time.Duration) <-chan struct{} {
 	if delta == fastTimeoutChTime {
 		return nil
 	}
 
-	c := make(chan time.Time, 2)
+	c := make(chan struct{}, 2)
 	if t.dt.currentUsecase.deadlineReached {
 		// return a closed channel.
-		c <- time.Now()
 		close(c)
 		return c
 	}

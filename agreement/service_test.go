@@ -128,7 +128,7 @@ func (f *testingClockFactory) roundHasZeroes(rnum basics.Round, zeroes uint) boo
 
 type testingClock struct {
 	mu             deadlock.Mutex
-	TA             map[time.Duration]chan time.Time // TimeoutAt
+	TA             map[time.Duration]chan struct{} // TimeoutAt
 	preparedToFire bool
 	zeroes         uint
 	roundNum       basics.Round
@@ -138,7 +138,7 @@ type testingClock struct {
 
 func makeTestingClock(m *coserviceMonitor) *testingClock {
 	c := new(testingClock)
-	c.TA = make(map[time.Duration]chan time.Time)
+	c.TA = make(map[time.Duration]chan struct{})
 	c.monitor = m
 	return c
 }
@@ -154,13 +154,13 @@ func (c *testingClock) DurationUntil(t time.Time) time.Duration {
 	return 0
 }
 
-func (c *testingClock) TimeoutAt(d time.Duration) <-chan time.Time {
+func (c *testingClock) TimeoutAt(d time.Duration) <-chan struct{} {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	ta := c.TA[d]
 	if ta == nil {
-		c.TA[d] = make(chan time.Time)
+		c.TA[d] = make(chan struct{})
 		ta = c.TA[d]
 	}
 	return ta
@@ -175,7 +175,7 @@ func (c *testingClock) fire(d time.Duration) {
 	defer c.mu.Unlock()
 
 	if c.TA[d] == nil {
-		c.TA[d] = make(chan time.Time)
+		c.TA[d] = make(chan struct{})
 	}
 	close(c.TA[d])
 	c.preparedToFire = false
