@@ -1,0 +1,14 @@
+{
+    "Genesis": {
+        "NetworkName": "tbd",
+        "ConsensusProtocol": "vPipeline",
+        "Wallets": [
+            { "Name": "Wallet0", "Stake": 50, "Online": true },
+            { "Name": "Wallet1", "Stake": 50, "Online": true }
+        ]
+    },
+    "Nodes": [
+        { "Name": "Node0", "IsRelay": true,  "Wallets": [ { "Name": "Wallet0", "ParticipationOnly": false } ] },
+        { "Name": "Node1", "IsRelay": false, "Wallets": [ { "Name": "Wallet1", "ParticipationOnly": false } ] }
+    ]
+}

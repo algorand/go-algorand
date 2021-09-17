@@ -25,7 +25,7 @@ func TestPipeline(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
-	fixture.Setup(t, filepath.Join("nettemplates", "PipelineFiveNodes.json"))
+	fixture.Setup(t, filepath.Join("nettemplates", "PipelineTwoNodes.json"))
 	defer fixture.ShutdownImpl(true) // preserve logs in testdir
 
 	_, err := fixture.NC.AlgodClient()
