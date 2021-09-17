@@ -19,6 +19,8 @@ package txnsync
 import (
 	"container/heap"
 	"errors"
+	"github.com/algorand/go-algorand/logging"
+
 	"github.com/algorand/go-deadlock"
 )
 
@@ -66,6 +68,7 @@ func (p *messageOrderingHeap) Less(i, j int) bool {
 }
 
 func (p *messageOrderingHeap) enqueue(msg incomingMessage) error {
+	logging.Base().Infof("enqueued msg: %d", msg.sequenceNumber)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if len(p.messages) >= messageOrderingHeapLimit {
@@ -76,6 +79,7 @@ func (p *messageOrderingHeap) enqueue(msg incomingMessage) error {
 }
 
 func (p *messageOrderingHeap) popSequence(sequenceNumber uint64) (msg incomingMessage, heapSequenceNumber uint64, err error) {
+	logging.Base().Infof("dequeued msg: %d", sequenceNumber)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if len(p.messages) == 0 {
