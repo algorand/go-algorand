@@ -149,7 +149,7 @@ func TestBloomFallback(t *testing.T) {
 
 	for encodingParams.Modulator = 1; encodingParams.Modulator < 3; encodingParams.Modulator++ {
 		txnGroups := getTxnGroups(testingGenesisHash, testingGenesisID)
-		bf := s.makeBloomFilter(encodingParams, txnGroups, nil)
+		bf := s.makeBloomFilter(encodingParams, txnGroups, nil, nil)
 
 		switch bloomFilterType(bf.encoded.BloomFilterType) {
 		case multiHashBloomFilter:
@@ -169,7 +169,7 @@ func TestBloomFallback(t *testing.T) {
 		stg := txnGroups[1]
 		txnGroups = append(txnGroups, stg)
 
-		bf = s.makeBloomFilter(encodingParams, txnGroups, nil)
+		bf = s.makeBloomFilter(encodingParams, txnGroups, nil, nil)
 		switch bloomFilterType(bf.encoded.BloomFilterType) {
 		case multiHashBloomFilter:
 			// ok
@@ -194,7 +194,7 @@ func TestHint(t *testing.T) {
 
 	for encodingParams.Modulator = 1; encodingParams.Modulator < 3; encodingParams.Modulator++ {
 		txnGroups := getTxnGroups(testingGenesisHash, testingGenesisID)
-		bf := s.makeBloomFilter(encodingParams, txnGroups, nil)
+		bf := s.makeBloomFilter(encodingParams, txnGroups, nil, nil)
 
 		switch bloomFilterType(bf.encoded.BloomFilterType) {
 		case xorBloomFilter32:
@@ -208,7 +208,7 @@ func TestHint(t *testing.T) {
 		bf.encoded.BloomFilterType = byte(xorBloomFilter8)
 
 		// Pass bf as a hint.
-		bf2 := s.makeBloomFilter(encodingParams, txnGroups, &bf)
+		bf2 := s.makeBloomFilter(encodingParams, txnGroups, nil, &bf)
 
 		// If the filter of bf2 is not defaultFilterType (i.e. is XorFilter8), then the hint was used.
 		// The hint must be used, and the filter should not be the default filter.
@@ -224,7 +224,7 @@ func TestHint(t *testing.T) {
 		for i := range txnGroups {
 			txnGroups[i].GroupCounter += uint64(len(txnGroups))
 		}
-		bf2 = s.makeBloomFilter(encodingParams, txnGroups, &bf)
+		bf2 = s.makeBloomFilter(encodingParams, txnGroups, nil, &bf)
 
 		// If the filter of bf2 is XorFilter (i.e. defaultFilterType), then the hint was not used
 		switch bloomFilterType(bf2.encoded.BloomFilterType) {
@@ -255,9 +255,9 @@ func TestEncodingDecoding(t *testing.T) {
 	var testableBf *testableBloomFilter
 	var remarshaled []byte
 	// For each filter type
-	for _, filterFactory = range filters {
+	for _, ff := range filters {
 
-		filter, filterType := filterFactory(len(randomEntries), &s)
+		filter, filterType := ff(len(randomEntries), &s)
 		for i := range randomEntries {
 			filter.Set(randomEntries[i][:])
 		}
@@ -296,14 +296,14 @@ func TestBloomFilterTest(t *testing.T) {
 	filters := []func(int, *syncState) (filter bloom.GenericFilter, filterType bloomFilterType){
 		filterFactoryXor8, filterFactoryXor32, filterFactoryBloom}
 
-	for _, filterFactory = range filters {
+	for _, ff := range filters {
 
 		var s syncState
 		s.node = &justRandomFakeNode{}
 		var err error
 		txnGroups := getTxnGroups(testingGenesisHash, testingGenesisID)
 
-		filter, filterType := filterFactory(len(txnGroups), &s)
+		filter, filterType := ff(len(txnGroups), &s)
 		for _, txnGroup := range txnGroups {
 			filter.Set(txnGroup.GroupTransactionID[:])
 		}

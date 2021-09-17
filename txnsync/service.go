@@ -46,6 +46,7 @@ func MakeTransactionSyncService(log logging.Logger, conn NodeConnector, isRelay 
 			genesisHash: genesisHash,
 			config:      cfg,
 			threadpool:  threadpool,
+			scheduler:   makePeerScheduler(),
 		},
 	}
 	s.state.service = s

@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -29,7 +30,7 @@ import (
 func TestBasics(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	ps := peerScheduler{}
+	ps := makePeerScheduler()
 
 	require.Equal(t, 0, ps.Len())
 
@@ -71,7 +72,7 @@ func TestBasics(t *testing.T) {
 func TestSchedulerBasics(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	ps := peerScheduler{}
+	ps := makePeerScheduler()
 
 	peers := []Peer{
 		Peer{
@@ -110,9 +111,8 @@ func TestSchedulerBasics(t *testing.T) {
 func TestScheduleNewRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	ps := peerScheduler{
-		node: &mockNodeConnector{},
-	}
+	ps := makePeerScheduler()
+	ps.node = &mockNodeConnector{}
 
 	peers := []Peer{
 		Peer{
@@ -155,9 +155,8 @@ func TestScheduleNewRound(t *testing.T) {
 func TestNextPeers(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	ps := peerScheduler{
-		node: &mockNodeConnector{},
-	}
+	ps := makePeerScheduler()
+	ps.node = &mockNodeConnector{}
 
 	peers := []Peer{
 		Peer{
@@ -178,17 +177,107 @@ func TestNextPeers(t *testing.T) {
 
 	require.Equal(t, 4, ps.Len())
 
-	outPeers := ps.nextPeers()
+	outPeers := ps.getNextPeers()
 
 	require.Equal(t, 3, ps.Len())
 	require.Equal(t, 1, len(outPeers))
 	require.Equal(t, uint64(1), outPeers[0].lastSentMessageSequenceNumber)
 
-	outPeers = ps.nextPeers()
+	outPeers = ps.getNextPeers()
 
 	require.Equal(t, 0, ps.Len())
 	require.Equal(t, 2, len(outPeers))
 	require.Equal(t, uint64(3), outPeers[0].lastSentMessageSequenceNumber)
 	require.Equal(t, uint64(2), outPeers[1].lastSentMessageSequenceNumber)
 
+}
+
+func TestNextPeersLargeSet(t *testing.T) {
+
+	partitiontest.PartitionTest(t)
+
+	ps := makePeerScheduler()
+	ps.node = &mockNodeConnector{}
+
+	numPeers := 100
+	dupTimesPerPeer := 3
+	numTimeSamples := 10
+
+	peers := make([]*Peer, 0, numPeers)
+	for x := 1; x <= numPeers; x++ {
+		peer := Peer{lastSentMessageSequenceNumber: uint64(x)}
+		peers = append(peers, &peer)
+	}
+	require.Equal(t, int64(0), int64(ps.nextDuration()))
+
+	// Add peers with random next values
+	ps.scheduleNewRound(peers)
+	checkMonotonicNexts(&ps, t)
+	checkIndexMatch(&ps, t)
+
+	// Add nexts with defined values to guarantee duplicate values
+	for dups := 0; dups < dupTimesPerPeer; dups++ {
+		for x := 1; x <= numTimeSamples; x++ {
+			for p := 0; p < len(peers); p++ {
+				val := int64(math.Abs(math.Sin(float64(x))) * 100.00)
+				ps.schedulePeer(peers[p], time.Millisecond*time.Duration(val))
+			}
+		}
+	}
+	outPeers := ps.getNextPeers()
+	require.Equal(t, numPeers, len(outPeers))
+	checkMonotonicNexts(&ps, t)
+	checkIndexMatch(&ps, t)
+
+	// Repeatedly schedule and remove peers, and varify the invariants are honored
+	for dups := 0; dups < dupTimesPerPeer; dups++ {
+		for x := 1; x <= numTimeSamples*numPeers; {
+			for p := 0; p < len(peers); p++ {
+				val := int64(math.Abs(math.Sin(float64(x))) * 10.00)
+				ps.schedulePeer(peers[p], time.Millisecond*time.Duration(val))
+				x++
+			}
+			checkMonotonicNexts(&ps, t)
+			checkIndexMatch(&ps, t)
+			outPeers := ps.getNextPeers()
+			require.GreaterOrEqual(t, len(outPeers), 0)
+		}
+	}
+
+	// Drain the peers and make sure goes down to 0 without errors
+	for _, peerB := range ps.peers {
+		prev := int64(0)
+		for {
+			dur := int64(ps.peerDuration(peerB.peer))
+			if dur == 0 {
+				break
+			}
+			require.GreaterOrEqual(t, dur, prev)
+			prev = dur
+		}
+		checkMonotonicNexts(&ps, t)
+		checkIndexMatch(&ps, t)
+	}
+}
+
+func checkMonotonicNexts(ps *peerScheduler, t *testing.T) {
+	for _, s := range ps.nextPeers {
+		prevIdx := -1
+		for _, idx := range s {
+			if prevIdx == -1 {
+				prevIdx = idx
+			}
+			require.LessOrEqual(t, int64(ps.peers[prevIdx].next), int64(ps.peers[idx].next))
+			prevIdx = idx
+		}
+	}
+}
+
+func checkIndexMatch(ps *peerScheduler, t *testing.T) {
+	for peer, s := range ps.nextPeers {
+		for _, peerIdx := range s {
+			require.Equal(t, peer, ps.peers[peerIdx].peer)
+
+		}
+	}
 }

@@ -45,7 +45,6 @@ type sentMessageMetadata struct {
 	sentTimestamp           time.Duration
 	sequenceNumber          uint64
 	partialMessage          bool
-	filter                  bloomFilter
 	transactionGroups       []pooldata.SignedTxGroup
 	projectedSequenceNumber uint64
 }
@@ -136,6 +135,7 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 	var pendingTransactions pendingTransactionGroupsSnapshot
 	profGetTxnsGroups := s.profiler.getElement(profElementGetTxnsGroups)
 	profAssembleMessage := s.profiler.getElement(profElementAssembleMessage)
+	var assembledBloomFilter bloomFilter
 	profGetTxnsGroups.start()
 	pendingTransactions.pendingTransactionsGroups, pendingTransactions.latestLocallyOriginatedGroupCounter = s.node.GetPendingTransactionGroups()
 	profGetTxnsGroups.end()
@@ -146,7 +146,7 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 			peerDataExchangeRate: peer.dataExchangeRate,
 		}
 		profAssembleMessage.start()
-		msgEncoder.messageData = s.assemblePeerMessage(peer, &pendingTransactions)
+		msgEncoder.messageData, assembledBloomFilter = s.assemblePeerMessage(peer, &pendingTransactions)
 		profAssembleMessage.end()
 		isPartialMessage := msgEncoder.messageData.partialMessage
 		// The message that we've just encoded is expected to be sent out with the next sequence number.
@@ -155,6 +155,12 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 		// so we can have accurate elapsed time measurements for the data exchange rate calculations.
 		msgEncoder.messageData.projectedSequenceNumber = peer.lastSentMessageSequenceNumber + 1
 		msgEncoder.enqueue()
+
+		// update the bloom filter right here, since we want to make sure the peer contains the
+		// correct sent bloom filter, regardless of the message sending timing. If and when we
+		// generate the next message, we need to ensure that we're aware of this bloom filter, since
+		// it would affect whether we re-generate another bloom filter or not.
+		peer.updateSentBoomFilter(assembledBloomFilter)
 
 		scheduleOffset, ops := peer.getNextScheduleOffset(s.isRelay, s.lastBeta, isPartialMessage, currentTime, s.node)
 		if (ops & peerOpsSetInterruptible) == peerOpsSetInterruptible {
@@ -180,7 +186,7 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 	}
 }
 
-func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pendingTransactionGroupsSnapshot) (metaMessage sentMessageMetadata) {
+func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pendingTransactionGroupsSnapshot) (metaMessage sentMessageMetadata, assembledBloomFilter bloomFilter) {
 	metaMessage = sentMessageMetadata{
 		peer: peer,
 		message: &transactionBlockMessage{
@@ -208,6 +214,7 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 
 	if (msgOps&messageConstBloomFilter == messageConstBloomFilter) && len(pendingTransactions.pendingTransactionsGroups) > 0 {
 		var lastBloomFilter *bloomFilter
+		var excludeTransactions *transactionCache
 		// for relays, where we send a full bloom filter to everyone, we want to coordinate that with a single
 		// copy of the bloom filter, to prevent re-creation.
 		if s.isRelay {
@@ -215,19 +222,26 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 		} else {
 			// for peers, we want to make sure we don't regenerate the same bloom filter as before.
 			lastBloomFilter = &peer.lastSentBloomFilter
+
+			// for non-relays, we want to be more picky and send bloom filter that excludes the transactions that were send from that relay
+			// ( since the relay already knows that it sent us these transactions ). we cannot do the same for relay->relay since it would
+			// conflict with the bloom filters being calculated only once.
+			excludeTransactions = peer.recentSentTransactions
 		}
 		profMakeBloomFilter := s.profiler.getElement(profElementMakeBloomFilter)
 		profMakeBloomFilter.start()
 		// generate a bloom filter that matches the requests params.
-		metaMessage.filter = s.makeBloomFilter(metaMessage.message.UpdatedRequestParams, pendingTransactions.pendingTransactionsGroups, lastBloomFilter)
+		assembledBloomFilter = s.makeBloomFilter(metaMessage.message.UpdatedRequestParams, pendingTransactions.pendingTransactionsGroups, excludeTransactions, lastBloomFilter)
 		// we check here to see if the bloom filter we need happen to be the same as the one that was previously sent to the peer.
 		// ( note that we check here againt the peer, whereas the hint to makeBloomFilter could be the cached one for the relay )
-		if !metaMessage.filter.sameParams(peer.lastSentBloomFilter) && metaMessage.filter.encodedLength > 0 {
-			metaMessage.message.TxnBloomFilter = metaMessage.filter.encoded
-			currentMessageSize = metaMessage.filter.encodedLength
+		if !assembledBloomFilter.sameParams(peer.lastSentBloomFilter) && assembledBloomFilter.encodedLength > 0 {
+			metaMessage.message.TxnBloomFilter = assembledBloomFilter.encoded
+			currentMessageSize += assembledBloomFilter.encodedLength
 		}
 		profMakeBloomFilter.end()
-		s.lastBloomFilter = metaMessage.filter
+		if s.isRelay {
+			s.lastBloomFilter = assembledBloomFilter
+		}
 	}
 
 	if msgOps&messageConstTransactions == messageConstTransactions {
@@ -284,7 +298,7 @@ func (s *syncState) evaluateOutgoingMessage(msgData sentMessageMetadata) {
 		// incoming message handler to identify that we shouldn't use this timestamp for calculating the data exchange rate.
 		timestamp = 0
 	}
-	msgData.peer.updateMessageSent(msgData.message, msgData.sentTransactionsIDs, timestamp, msgData.sequenceNumber, msgData.encodedMessageSize, msgData.filter)
+	msgData.peer.updateMessageSent(msgData.message, msgData.sentTransactionsIDs, timestamp, msgData.sequenceNumber, msgData.encodedMessageSize)
 	s.log.outgoingMessage(msgStats{msgData.sequenceNumber, msgData.message.Round, len(msgData.sentTransactionsIDs), msgData.message.UpdatedRequestParams, len(msgData.message.TxnBloomFilter.BloomFilter), msgData.message.MsgSync.NextMsgMinDelay, msgData.peer.networkAddress()})
 }
 
@@ -368,8 +382,9 @@ func (s *syncState) broadcastProposal(p ProposalBroadcastRequest, peers []*Peer)
 			roundClock:           s.clock,
 			peerDataExchangeRate: peer.dataExchangeRate,
 		}
-		msgEncoder.messageData = s.assemblePeerMessage(peer, &pendingTransactions)
+		msgEncoder.messageData, _ = s.assemblePeerMessage(peer, &pendingTransactions)
 		isPartialMessage := msgEncoder.messageData.partialMessage
+		msgEncoder.messageData.projectedSequenceNumber = peer.lastSentMessageSequenceNumber + 1
 
 		logging.Base().Infof("raw bytes: %v, len: %v", crypto.Hash(msgEncoder.messageData.message.RelayedProposal.RawBytes), len(msgEncoder.messageData.message.RelayedProposal.RawBytes))
 

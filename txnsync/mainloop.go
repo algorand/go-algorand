@@ -330,7 +330,7 @@ func (s *syncState) onNewRoundEvent(ent Event) {
 }
 
 func (s *syncState) evaluatePeerStateChanges(currentTimeout time.Duration) {
-	peers := s.scheduler.nextPeers()
+	peers := s.scheduler.getNextPeers()
 	if len(peers) == 0 {
 		return
 	}

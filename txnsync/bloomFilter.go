@@ -89,7 +89,6 @@ func decodeBloomFilter(enc encodedBloomFilter) (outFilter *testableBloomFilter, 
 	if err != nil {
 		return nil, err
 	}
-	outFilter.encodingParams = enc.EncodingParams
 	return
 }
 
@@ -137,13 +136,13 @@ func filterFactoryXor32(numEntries int, s *syncState) (filter bloom.GenericFilte
 
 var filterFactory func(int, *syncState) (filter bloom.GenericFilter, filterType bloomFilterType) = filterFactoryXor32
 
-func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []pooldata.SignedTxGroup, hintPrevBloomFilter *bloomFilter) (result bloomFilter) {
+func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []pooldata.SignedTxGroup, excludeTransactions *transactionCache, hintPrevBloomFilter *bloomFilter) (result bloomFilter) {
 	result.encoded.EncodingParams = encodingParams
-	switch {
-	case encodingParams.Modulator == 0:
+	if encodingParams.Modulator == 0 {
 		// we want none.
 		return
-	case encodingParams.Modulator == 1:
+	}
+	if encodingParams.Modulator == 1 && excludeTransactions == nil {
 		// we want all.
 		if len(txnGroups) > 0 {
 			result.containedTxnsRange.firstCounter = txnGroups[0].GroupCounter
@@ -173,51 +172,60 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []po
 			result.encode(filter, filterType) //nolint:errcheck
 			// the error in the above case can be silently ignored.
 		}
-	default:
-		// we want subset.
-		result.containedTxnsRange.firstCounter = math.MaxUint64
-		filteredTransactionsIDs := getTxIDSliceBuffer(len(txnGroups))
-		defer releaseTxIDSliceBuffer(filteredTransactionsIDs)
+		return result
+	}
 
-		for _, group := range txnGroups {
-			txID := group.GroupTransactionID
-			if txidToUint64(txID)%uint64(encodingParams.Modulator) != uint64(encodingParams.Offset) {
-				continue
-			}
-			filteredTransactionsIDs = append(filteredTransactionsIDs, txID)
-			if result.containedTxnsRange.firstCounter == math.MaxUint64 {
-				result.containedTxnsRange.firstCounter = group.GroupCounter
-			}
-			result.containedTxnsRange.lastCounter = group.GroupCounter
+	// we want subset.
+	result.containedTxnsRange.firstCounter = math.MaxUint64
+	filteredTransactionsIDs := getTxIDSliceBuffer(len(txnGroups))
+	defer releaseTxIDSliceBuffer(filteredTransactionsIDs)
+
+	excludedTransactions := 0
+	for _, group := range txnGroups {
+		txID := group.GroupTransactionID
+		if txidToUint64(txID)%uint64(encodingParams.Modulator) != uint64(encodingParams.Offset) {
+			continue
 		}
 
-		result.containedTxnsRange.transactionsCount = uint64(len(filteredTransactionsIDs))
+		if result.containedTxnsRange.firstCounter == math.MaxUint64 {
+			result.containedTxnsRange.firstCounter = group.GroupCounter
+		}
+		result.containedTxnsRange.lastCounter = group.GroupCounter
 
-		if hintPrevBloomFilter != nil {
-			if result.sameParams(*hintPrevBloomFilter) {
-				return *hintPrevBloomFilter
-			}
+		if excludeTransactions != nil && excludeTransactions.contained(txID) {
+			excludedTransactions++
+			continue
 		}
 
-		if len(filteredTransactionsIDs) == 0 {
-			return
+		filteredTransactionsIDs = append(filteredTransactionsIDs, txID)
+	}
+
+	result.containedTxnsRange.transactionsCount = uint64(len(filteredTransactionsIDs) + excludedTransactions)
+
+	if hintPrevBloomFilter != nil {
+		if result.sameParams(*hintPrevBloomFilter) {
+			return *hintPrevBloomFilter
 		}
+	}
 
-		filter, filterType := filterFactory(len(filteredTransactionsIDs), s)
+	if len(filteredTransactionsIDs) == 0 {
+		return
+	}
 
+	filter, filterType := filterFactory(len(filteredTransactionsIDs), s)
+
+	for _, txid := range filteredTransactionsIDs {
+		filter.Set(txid[:])
+	}
+	err := result.encode(filter, filterType)
+	if err != nil {
+		// fall back to standard bloom filter
+		filter, filterType = filterFactoryBloom(len(filteredTransactionsIDs), s)
 		for _, txid := range filteredTransactionsIDs {
 			filter.Set(txid[:])
 		}
-		err := result.encode(filter, filterType)
-		if err != nil {
-			// fall back to standard bloom filter
-			filter, filterType = filterFactoryBloom(len(filteredTransactionsIDs), s)
-			for _, txid := range filteredTransactionsIDs {
-				filter.Set(txid[:])
-			}
-			result.encode(filter, filterType) //nolint:errcheck
-			// the error in the above case can be silently ignored.
-		}
+		result.encode(filter, filterType) //nolint:errcheck
+		// the error in the above case can be silently ignored.
 	}
 
 	return result

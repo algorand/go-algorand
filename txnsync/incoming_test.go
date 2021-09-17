@@ -272,12 +272,14 @@ func TestEvaluateIncomingMessagePart3(t *testing.T) {
 	mNodeConnector.peerInfo.TxnSyncPeer = peer
 
 	s := syncState{
-		node:    mNodeConnector,
-		log:     wrapLogger(&incLogger, &cfg),
-		clock:   mNodeConnector.Clock(),
-		round:   1,
-		config:  cfg,
-		isRelay: true}
+		node:      mNodeConnector,
+		log:       wrapLogger(&incLogger, &cfg),
+		clock:     mNodeConnector.Clock(),
+		round:     1,
+		config:    cfg,
+		isRelay:   true,
+		scheduler: makePeerScheduler(),
+	}
 
 	// the peer will be added to s.scheduler
 	s.evaluateIncomingMessage(incomingMessage{
