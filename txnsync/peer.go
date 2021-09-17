@@ -18,6 +18,7 @@ package txnsync
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/logging"
 	"math"
 	"sort"
 	"time"
@@ -279,6 +280,7 @@ func (t *transactionGroupCounterTracker) index(offset, modulator byte) int {
 }
 
 func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool, cfg *config.Local) *Peer {
+	logging.Base().Info("make peer")
 	p := &Peer{
 		networkPeer:                 networkPeer,
 		isOutgoing:                  isOutgoing,
