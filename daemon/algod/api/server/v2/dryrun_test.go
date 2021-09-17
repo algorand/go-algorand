@@ -830,6 +830,7 @@ func TestDryrunEncodeDecode(t *testing.T) {
 	dr1, err := DryrunRequestFromGenerated(&gdr)
 	require.NoError(t, err)
 	encoded, err = encode(protocol.CodecHandle, &dr)
+	require.NoError(t, err)
 	encoded2 := protocol.EncodeReflect(&dr)
 	require.Equal(t, encoded, encoded2)
 
@@ -840,7 +841,6 @@ func TestDryrunEncodeDecode(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dr1, dr2)
 
-	dec = protocol.NewDecoder(buf)
 	dr2 = DryrunRequest{}
 	err = decode(protocol.CodecHandle, encoded, &dr2)
 	require.NoError(t, err)
@@ -1136,6 +1136,7 @@ return
 	require.NoError(t, err)
 	approval := ops.Program
 	ops, err = logic.AssembleString("int 1")
+	require.NoError(t, err)
 	clst := ops.Program
 	ops, err = logic.AssembleString("#pragma version 5 \nint 1")
 	approv := ops.Program
@@ -1329,6 +1330,98 @@ func TestDryrunCost(t *testing.T) {
 				require.True(t, statusMatches, "expected status not found in messages")
 			}
 		})
+	}
+}
+
+func TestDebugTxSubmit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	source := `#pragma version 5
+itxn_begin
+int acfg
+itxn_field TypeEnum
+int 1000000
+itxn_field ConfigAssetTotal
+int 3
+itxn_field ConfigAssetDecimals
+byte "oz"
+itxn_field ConfigAssetUnitName
+byte "Gold"
+itxn_field ConfigAssetName
+byte "https://gold.rush/"
+itxn_field ConfigAssetURL
+byte 0x67f0cd61653bd34316160bc3f5cd3763c85b114d50d38e1f4e72c3b994411e7b
+itxn_field ConfigAssetMetadataHash
+itxn_submit
+int 1`
+
+	ops, err := logic.AssembleString(source)
+	require.NoError(t, err)
+	approval := ops.Program
+
+	ops, err = logic.AssembleString("int 1")
+	clst := ops.Program
+	require.NoError(t, err)
+
+	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
+	a.NoError(err)
+	app, err := basics.UnmarshalChecksumAddress("6BPQU5WNZMTO4X72A2THZCGNJNTTE7YL6AWCYSUUTZEIYMJSEPJCQQ6DQI")
+	a.NoError(err)
+
+	// make balance records
+	appIdx := basics.AppIndex(100)
+	dr := DryrunRequest{
+		Txns: []transactions.SignedTxn{{
+			Txn: transactions.Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: transactions.Header{
+					Sender: sender,
+					Fee:    basics.MicroAlgos{Raw: 100},
+					Note:   []byte{1, 2, 3},
+				},
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID: appIdx,
+				},
+			},
+		}},
+		Apps: []generated.Application{
+			{
+				Id: uint64(appIdx),
+				Params: generated.ApplicationParams{
+					Creator:           sender.String(),
+					ApprovalProgram:   approval,
+					ClearStateProgram: clst,
+				},
+			},
+		},
+		Accounts: []generated.Account{
+			{
+				Address:                     sender.String(),
+				Status:                      "Online",
+				Amount:                      10000000,
+				AmountWithoutPendingRewards: 10000000,
+			},
+			{
+				Address:                     app.String(),
+				Status:                      "Offline",
+				Amount:                      10000000,
+				AmountWithoutPendingRewards: 10000000,
+			},
+			{
+				Address: basics.Address{}.String(),
+				Status:  "Offline",
+			},
+		},
+	}
+
+	dr.ProtocolVersion = string(dryrunProtoVersion)
+
+	var response generated.DryrunResponse
+	doDryrunRequest(&dr, &response)
+	require.NoError(t, err)
+	checkAppCallPass(t, &response)
+	if t.Failed() {
+		logResponse(t, &response)
 	}
 }
 
