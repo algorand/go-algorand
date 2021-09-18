@@ -1,9 +1,8 @@
 package logic
 
-// AssemblyDetails contains details from the source to assembly process
-// Right now it is just the map of line number to program counter or byte position in
-// the assembled program but may contain other details like ABI spec or Template Variable
-// relative positions in the future
+// AssemblyMap contains details from the source to assembly process
+// currently contains map of TEAL source line number to assembled bytecode position
+// and details about the template varirables contained in the source file
 type AssemblyMap struct {
 	TemplateLabels map[string]TemplateVariable `json:"template_labels"`
 	LineMap        []int                       `json:"line_map"`
