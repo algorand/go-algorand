@@ -1090,7 +1090,7 @@ func (eval *BlockEvaluator) finalValidation() error {
 		}
 	}
 
-	return nil
+	return eval.state.CalculateTotals()
 }
 
 // GenerateBlock produces a complete block from the BlockEvaluator.  This is
@@ -1115,11 +1115,6 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 	}
 
 	err = eval.finalValidation()
-	if err != nil {
-		return nil, err
-	}
-
-	err = eval.state.CalculateTotals()
 	if err != nil {
 		return nil, err
 	}
@@ -1274,7 +1269,7 @@ transactionGroupLoop:
 
 	// If validating, do final block checks that depend on our new state
 	if validate {
-		// wait for the validation to complete.
+		// wait for the signature validation to complete.
 		select {
 		case <-ctx.Done():
 			return ledgercore.StateDelta{}, ctx.Err()
@@ -1286,10 +1281,11 @@ transactionGroupLoop:
 				return ledgercore.StateDelta{}, err
 			}
 		}
-		err = eval.finalValidation()
-		if err != nil {
-			return ledgercore.StateDelta{}, err
-		}
+	}
+
+	err = eval.finalValidation()
+	if err != nil {
+		return ledgercore.StateDelta{}, err
 	}
 
 	return eval.state.deltas(), nil
