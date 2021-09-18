@@ -20,12 +20,13 @@ func TestPipeline(t *testing.T) {
 	cp.AgreementPipelining = true
 	cp.AgreementPipelineDepth = 5
 	cp.AgreementPipelineDelayHistory = 32
-	cp.AgreementPipelineDelay = 0 // 30
+	cp.AgreementPipelineDelay = 4
 	configurableConsensus[protocol.ConsensusVersion("vPipeline")] = cp
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
 	fixture.Setup(t, filepath.Join("nettemplates", "PipelineTwoNodes.json"))
+	// fixture.Setup(t, filepath.Join("nettemplates", "PipelineFiveNodes.json"))
 	defer fixture.ShutdownImpl(true) // preserve logs in testdir
 
 	_, err := fixture.NC.AlgodClient()
