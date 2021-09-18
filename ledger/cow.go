@@ -316,6 +316,12 @@ func (cb *roundCowState) totals() (ledgercore.AccountTotals, error) {
 		return ledgercore.AccountTotals{}, err
 	}
 
+	var ot basics.OverflowTracker
+	t.ApplyRewards(cb.dtotals.RewardsLevel, &ot)
+	if ot.Overflowed {
+		return ledgercore.AccountTotals{}, fmt.Errorf("roundCowState.totals(): level %d: overflow applying rewards", cb.dtotals.RewardsLevel)
+	}
+
 	err = t.Add(&cb.dtotals)
 	if err != nil {
 		return ledgercore.AccountTotals{}, err
