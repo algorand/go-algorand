@@ -58,6 +58,9 @@ func main() {
 
 	// write logo
 	tf, err := ioutil.TempFile("", "algorand-logo.png")
+	if err != nil {
+		panic(err)
+	}
 	tfname = tf.Name()
 	defer func() {
 		time.Sleep(retireIn)
