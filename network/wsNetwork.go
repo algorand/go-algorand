@@ -371,7 +371,7 @@ type WebsocketNetwork struct {
 	// connPerfMonitor is used on outgoing connections to measure their relative message timing
 	connPerfMonitor *connectionPerformanceMonitor
 
-	// lastNetworkAdvanceMu syncronized teh access to lastNetworkAdvance
+	// lastNetworkAdvanceMu syncronized the access to lastNetworkAdvance
 	lastNetworkAdvanceMu deadlock.Mutex
 
 	// lastNetworkAdvance contains the last timestamp where the agreement protocol was able to make a notable progress.
@@ -402,6 +402,12 @@ type WebsocketNetwork struct {
 	// that messagesOfInterestEnc does not change once it is set during
 	// network start.
 	messagesOfInterestMu deadlock.Mutex
+
+	// peersConnectivityCheckTicker is the timer for testing that all the connected peers
+	// are still transmitting or receiving information. The channel produced by this ticker
+	// is consumed by any of the messageHandlerThread(s). The ticker itself is created during
+	// Start(), and being shut down when Stop() is called.
+	peersConnectivityCheckTicker *time.Ticker
 }
 
 type broadcastRequest struct {
@@ -429,7 +435,7 @@ func (wn *WebsocketNetwork) Address() (string, bool) {
 }
 
 // PublicAddress what we tell other nodes to connect to.
-// Might be different than our locally percieved network address due to NAT/etc.
+// Might be different than our locally perceived network address due to NAT/etc.
 // Returns config "PublicAddress" if available, otherwise local addr.
 func (wn *WebsocketNetwork) PublicAddress() string {
 	if len(wn.config.PublicAddress) > 0 {
@@ -789,9 +795,15 @@ func (wn *WebsocketNetwork) Start() {
 		wn.wg.Add(1)
 		go wn.pingThread()
 	}
+	// we shouldn't have any ticker here.. but in case we do - just stop it.
+	if wn.peersConnectivityCheckTicker != nil {
+		wn.peersConnectivityCheckTicker.Stop()
+	}
+	wn.peersConnectivityCheckTicker = time.NewTicker(connectionActivityMonitorInterval)
 	for i := 0; i < incomingThreads; i++ {
 		wn.wg.Add(1)
-		go wn.messageHandlerThread()
+		// We pass the peersConnectivityCheckTicker.C here so that we don't need to syncronize the access to the ticker's data structure.
+		go wn.messageHandlerThread(wn.peersConnectivityCheckTicker.C)
 	}
 	wn.wg.Add(1)
 	go wn.broadcastThread()
@@ -832,6 +844,12 @@ func (wn *WebsocketNetwork) innerStop() {
 func (wn *WebsocketNetwork) Stop() {
 	wn.handlers.ClearHandlers([]Tag{})
 
+	// if we have a working ticker, just stop it and clear it out. The access to this variable is safe since the Start()/Stop() are synced by the
+	// caller, and the WebsocketNetwork doesn't access wn.peersConnectivityCheckTicker directly.
+	if wn.peersConnectivityCheckTicker != nil {
+		wn.peersConnectivityCheckTicker.Stop()
+		wn.peersConnectivityCheckTicker = nil
+	}
 	wn.innerStop()
 	var listenAddr string
 	if wn.listener != nil {
@@ -1126,10 +1144,9 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	incomingPeers.Set(float64(wn.numIncomingPeers()), nil)
 }
 
-func (wn *WebsocketNetwork) messageHandlerThread() {
+func (wn *WebsocketNetwork) messageHandlerThread(peersConnectivityCheckCh <-chan time.Time) {
 	defer wn.wg.Done()
-	inactivityCheckTicker := time.NewTicker(connectionActivityMonitorInterval)
-	defer inactivityCheckTicker.Stop()
+
 	for {
 		select {
 		case <-wn.ctx.Done():
@@ -1172,7 +1189,7 @@ func (wn *WebsocketNetwork) messageHandlerThread() {
 				}
 			default:
 			}
-		case <-inactivityCheckTicker.C:
+		case <-peersConnectivityCheckCh:
 			// go over the peers and ensure we have some type of communication going on.
 			wn.checkPeersConnectivity()
 		}
@@ -1346,7 +1363,7 @@ func (wn *WebsocketNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {
 		// clear out the unused portion of the peers array to allow the GC to cleanup unused peers.
 		remainderPeers := dest[len(wn.peers):cap(dest)]
 		for i := range remainderPeers {
-			// we want to delete only up to the first nil peer, since we're always writing to this array from the begining to the end
+			// we want to delete only up to the first nil peer, since we're always writing to this array from the beginning to the end
 			if remainderPeers[i] == nil {
 				break
 			}
@@ -1854,7 +1871,7 @@ var SupportedProtocolVersions = []string{"2.1"}
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
 /* Version history:
  *  1   Catchup service over websocket connections with unicast messages between peers
- *  2.1 Introducted topic key/data pairs and enabled services over the gossip connections
+ *  2.1 Introduced topic key/data pairs and enabled services over the gossip connections
  */
 const ProtocolVersion = "2.1"
 
@@ -1923,7 +1940,7 @@ func (wn *WebsocketNetwork) addrToGossipAddr(addr string) (string, error) {
 	return parsedURL.String(), nil
 }
 
-// tryConnectReserveAddr synchronously checks that addr is not already being connected to, returns (websocket URL or "", true if connection may procede)
+// tryConnectReserveAddr synchronously checks that addr is not already being connected to, returns (websocket URL or "", true if connection may proceed)
 func (wn *WebsocketNetwork) tryConnectReserveAddr(addr string) (gossipAddr string, ok bool) {
 	wn.tryConnectLock.Lock()
 	defer wn.tryConnectLock.Unlock()
@@ -1949,7 +1966,7 @@ func (wn *WebsocketNetwork) tryConnectReserveAddr(addr string) (gossipAddr strin
 	return gossipAddr, true
 }
 
-// tryConnectReleaseAddr should be called when connection succedes and becomes a peer or fails and is no longer being attempted
+// tryConnectReleaseAddr should be called when connection succeeds and becomes a peer or fails and is no longer being attempted
 func (wn *WebsocketNetwork) tryConnectReleaseAddr(addr, gossipAddr string) {
 	wn.tryConnectLock.Lock()
 	defer wn.tryConnectLock.Unlock()
@@ -2001,7 +2018,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	for _, supportedProtocolVersion := range SupportedProtocolVersions {
 		requestHeader.Add(ProtocolAcceptVersionHeader, supportedProtocolVersion)
 	}
-	// for backward compatability, include the ProtocolVersion header as well.
+	// for backward compatibility, include the ProtocolVersion header as well.
 	requestHeader.Set(ProtocolVersionHeader, ProtocolVersion)
 	SetUserAgentHeader(requestHeader)
 	myInstanceName := wn.log.GetInstanceName()

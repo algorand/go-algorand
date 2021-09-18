@@ -44,7 +44,7 @@ func TestBasicLRUAccounts(t *testing.T) {
 		baseAcct.write(acct)
 	}
 
-	// verify that all these accounts are truely there.
+	// verify that all these accounts are truly there.
 	for i := 0; i < accountsNum; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseAcct.read(addr)
@@ -177,7 +177,7 @@ func TestLRUAccountsOmittedPendingWrites(t *testing.T) {
 
 	baseAcct.flushPendingWrites()
 
-	// verify that all these accounts are truely there.
+	// verify that all these accounts are truly there.
 	for i := 0; i < pendingWritesBuffer; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseAcct.read(addr)

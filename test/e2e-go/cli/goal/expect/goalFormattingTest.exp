@@ -12,7 +12,7 @@ if { [catch {
 
     set TIME_STAMP [clock seconds]
 
-    # generate invalid transaction file. ( we want to see that goal is ommitting the control characters when printing out the error message )
+    # generate invalid transaction file. ( we want to see that goal is omitting the control characters when printing out the error message )
     exec echo {{ "\u001b[0G\u001b[0K\u001b[33munexpected_key\u001b[0m": 2 }} > $TEST_ALGO_DIR/tx.json
     exec cat $TEST_ALGO_DIR/tx.json | msgpacktool -e -b32 > $TEST_ALGO_DIR/tx
     exec rm $TEST_ALGO_DIR/tx.json

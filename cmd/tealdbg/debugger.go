@@ -29,7 +29,7 @@ import (
 )
 
 // Notification is sent to the client over their websocket connection
-// on each new TEAL execution/update/complation
+// on each new TEAL execution/update/completion
 type Notification struct {
 	Event      string           `codec:"event"`
 	DebugState logic.DebugState `codec:"state"`
@@ -41,7 +41,7 @@ type DebugAdapter interface {
 	// Control interface must be used to manage execution (step, break, resume, etc).
 	// Notification channel must be used for receiving events from the debugger.
 	SessionStarted(sid string, debugger Control, ch chan Notification)
-	// SessionStarted is called by the debugging core on the competion of execution.
+	// SessionStarted is called by the debugging core on the competition of execution.
 	SessionEnded(sid string)
 	// WaitForCompletion must returns only when all session were completed and block otherwise.
 	WaitForCompletion()

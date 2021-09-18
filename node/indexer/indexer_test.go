@@ -110,7 +110,7 @@ func (s *IndexSuite) TestIndexer_GetRoundsByAddress() {
 }
 
 func (s *IndexSuite) TestIndexer_DuplicateRounds() {
-	// Get Transactions (we're guranteed to have more than one txn per address per block)
+	// Get Transactions (we're guaranteed to have more than one txn per address per block)
 
 	res, err := s.idx.GetRoundsByAddress(s.addrs[0].String(), 100)
 

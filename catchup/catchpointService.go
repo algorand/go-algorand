@@ -174,7 +174,7 @@ func (cs *CatchpointCatchupService) GetLatestBlockHeader() bookkeeping.BlockHead
 	return cs.lastBlockHeader
 }
 
-// run is the main stage-swtiching background service function. It switches the current stage into the correct stage handler.
+// run is the main stage-switching background service function. It switches the current stage into the correct stage handler.
 func (cs *CatchpointCatchupService) run() {
 	defer cs.running.Done()
 	var err error

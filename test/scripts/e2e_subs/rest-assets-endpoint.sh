@@ -9,7 +9,7 @@ date "+$0 start %Y%m%d_%H%M%S"
 
 ASSET_ID=$(${gcmd} asset create --creator "${ACCOUNT}" --total 10000 --decimals 19 --name "spanish coin" --unitname "doubloon" | grep "Created asset with asset index" | rev | cut -d ' ' -f 1 | rev)
 
-# Good request, non-existant asset id
+# Good request, non-existent asset id
 call_and_verify "Should not find asset." "/v2/assets/987654321" 404 'asset does not exist'
 # Good request
 call_and_verify "Should contain asset data." "/v2/assets/$ASSET_ID" 200 '","decimals":19,"default-frozen":false,"freeze":"'

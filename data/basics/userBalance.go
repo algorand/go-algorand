@@ -34,7 +34,7 @@ const (
 	Offline Status = iota
 	// Online indicates that the associated account participates in the consensus and receive rewards.
 	Online
-	// NotParticipating indicates that the associated account neither participates in the consensus, nor recieves rewards.
+	// NotParticipating indicates that the associated account neither participates in the consensus, nor receives rewards.
 	// Accounts that are marked as NotParticipating cannot change their status, but can receive and send Algos to other accounts.
 	// Two special accounts that are defined as NotParticipating are the incentive pool (also know as rewards pool) and the fee sink.
 	// These two accounts also have additional Algo transfer restrictions.

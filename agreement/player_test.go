@@ -3077,7 +3077,7 @@ func TestPlayer_CertThresholdCommitsFuturePeriodIfAlreadyHasBlock(t *testing.T) 
 	require.Equalf(t, r.Number+1, pWhite.Round.Number, "player did not enter new round... bad!")
 	require.Equalf(t, period(0), pWhite.Period, "player should have entered period 0 of new round but didn't")
 	commitEvent := ev(ensureAction{Certificate: Certificate(bun), Payload: *payload})
-	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should have commited a block but didn't")
+	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should have committed a block but didn't")
 }
 
 func TestPlayer_PayloadAfterCertThresholdCommits(t *testing.T) {
