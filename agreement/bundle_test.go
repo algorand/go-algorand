@@ -30,10 +30,12 @@ import (
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // Test Bundle Creation
 func TestBundleCreation(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	xledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := xledger.NextRound()
@@ -78,6 +80,7 @@ func TestBundleCreation(t *testing.T) {
 
 // Test Bundle validation with Zero Votes
 func TestBundleCreationWithZeroVotes(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	//ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	xledger, _, _, _ := readOnlyFixture100()
@@ -117,6 +120,7 @@ func makeBundlePanicWrapper(t *testing.T, message string, proposal proposalValue
 
 //Test Bundle Creation with Validation for duplicate votes from same sender
 func TestBundleCreationWithVotesFromSameAddress(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	xledger, addresses, vrfSecrets, otSecrets := readOnlyFixture10()
 	round := xledger.NextRound()
@@ -189,6 +193,7 @@ func TestBundleCreationWithVotesFromSameAddress(t *testing.T) {
 
 //Test Bundle Creation with Validation
 func TestBundleCreationWithEquivocationVotes(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	xledger, addresses, vrfSecrets, otSecrets := readOnlyFixture10()
 	round := xledger.NextRound()
@@ -306,6 +311,7 @@ func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 
 //Test Bundle Creation with Validation
 func TestBundleCertificationWithEquivocationVotes(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	xledger, addresses, vrfSecrets, otSecrets := readOnlyFixture10()
 	round := xledger.NextRound()
@@ -388,6 +394,7 @@ func certificatePanicWrapper(t *testing.T, message string, ub unauthenticatedBun
 
 // Test Bundle Creation with Equivocation Votes under Quorum
 func TestBundleCreationWithEquivocationVotesUnderQuorum(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	xledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := xledger.NextRound()

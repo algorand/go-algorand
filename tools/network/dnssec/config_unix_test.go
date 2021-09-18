@@ -23,10 +23,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestConfigEmpty(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	s, tm, err := systemConfig(nil)
@@ -48,6 +51,8 @@ func TestConfigEmpty(t *testing.T) {
 }
 
 func TestConfig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	b := bytes.NewBuffer([]byte("nameserver 127.0.0.1\n"))

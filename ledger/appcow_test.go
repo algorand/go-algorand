@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type addrApp struct {
@@ -193,6 +194,8 @@ func randomAddrApps(n int) ([]storagePtr, []basics.Address) {
 }
 
 func TestCowStorage(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ml := emptyLedger{}
 	var bh bookkeeping.BlockHeader
 	bh.CurrentProtocol = protocol.ConsensusCurrentVersion
@@ -359,6 +362,8 @@ func TestCowStorage(t *testing.T) {
 }
 
 func TestCowBuildDelta(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	creator := randomAddress()
@@ -602,6 +607,8 @@ func TestCowBuildDelta(t *testing.T) {
 }
 
 func TestCowDeltaSerialize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	d := stateDelta{
@@ -668,6 +675,8 @@ func TestCowDeltaSerialize(t *testing.T) {
 }
 
 func TestApplyChild(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	emptyStorageDelta := func(action storageAction) storageDelta {
@@ -798,6 +807,8 @@ func TestApplyChild(t *testing.T) {
 }
 
 func TestApplyStorageDelta(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	created := valueDelta{
@@ -926,6 +937,8 @@ func TestApplyStorageDelta(t *testing.T) {
 }
 
 func TestCowAllocated(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	aidx := basics.AppIndex(1)
@@ -953,6 +966,8 @@ func TestCowAllocated(t *testing.T) {
 }
 
 func TestCowGetCreator(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	addr := getRandomAddress(a)
@@ -974,6 +989,8 @@ func TestCowGetCreator(t *testing.T) {
 }
 
 func TestCowGetters(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	addr := getRandomAddress(a)
@@ -990,6 +1007,8 @@ func TestCowGetters(t *testing.T) {
 }
 
 func TestCowGet(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	addr := getRandomAddress(a)
@@ -1013,6 +1032,8 @@ func TestCowGet(t *testing.T) {
 }
 
 func TestCowGetKey(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	addr := getRandomAddress(a)
@@ -1084,6 +1105,8 @@ func TestCowGetKey(t *testing.T) {
 }
 
 func TestCowSetKey(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	addr := getRandomAddress(a)
@@ -1177,6 +1200,8 @@ func TestCowSetKey(t *testing.T) {
 }
 
 func TestCowSetKeyVFuture(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	addr := getRandomAddress(a)
@@ -1210,6 +1235,8 @@ func TestCowSetKeyVFuture(t *testing.T) {
 }
 
 func TestCowAccountIdx(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	l := emptyLedger{}
@@ -1256,6 +1283,8 @@ func TestCowAccountIdx(t *testing.T) {
 }
 
 func TestCowDelKey(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	addr := getRandomAddress(a)

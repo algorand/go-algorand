@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 var proto = config.Consensus[protocol.ConsensusCurrentVersion]
@@ -135,6 +136,8 @@ func initAccFixed(initAddrs []basics.Address, bal uint64) map[basics.Address]bas
 const testPoolSize = 1000
 
 func TestMinBalanceOK(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	numOfAccounts := 5
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -179,6 +182,8 @@ func TestMinBalanceOK(t *testing.T) {
 }
 
 func TestSenderGoesBelowMinBalance(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	numOfAccounts := 5
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -223,6 +228,8 @@ func TestSenderGoesBelowMinBalance(t *testing.T) {
 }
 
 func TestSenderGoesBelowMinBalanceDueToAssets(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	numOfAccounts := 5
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -296,6 +303,8 @@ func TestSenderGoesBelowMinBalanceDueToAssets(t *testing.T) {
 }
 
 func TestCloseAccount(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	numOfAccounts := 5
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -360,6 +369,8 @@ func TestCloseAccount(t *testing.T) {
 }
 
 func TestCloseAccountWhileTxIsPending(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	numOfAccounts := 5
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -424,6 +435,8 @@ func TestCloseAccountWhileTxIsPending(t *testing.T) {
 }
 
 func TestClosingAccountBelowMinBalance(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	numOfAccounts := 5
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -470,6 +483,8 @@ func TestClosingAccountBelowMinBalance(t *testing.T) {
 }
 
 func TestRecipientGoesBelowMinBalance(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	numOfAccounts := 5
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -514,6 +529,8 @@ func TestRecipientGoesBelowMinBalance(t *testing.T) {
 }
 
 func TestRememberForget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	numOfAccounts := 5
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -582,6 +599,8 @@ func TestRememberForget(t *testing.T) {
 
 //	Test that clean up works
 func TestCleanUp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	numOfAccounts := 10
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -662,6 +681,8 @@ func TestCleanUp(t *testing.T) {
 }
 
 func TestFixOverflowOnNewBlock(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	numOfAccounts := 10
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -759,6 +780,8 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 }
 
 func TestOverspender(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	numOfAccounts := 2
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -823,6 +846,8 @@ func TestOverspender(t *testing.T) {
 }
 
 func TestRemove(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	numOfAccounts := 2
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -867,6 +892,8 @@ func TestRemove(t *testing.T) {
 }
 
 func TestLogicSigOK(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	oparams := config.Consensus[protocol.ConsensusCurrentVersion]
 	params := oparams
 	params.LogicSigMaxCost = 20000
@@ -928,6 +955,8 @@ func TestLogicSigOK(t *testing.T) {
 }
 
 func TestTransactionPool_CurrentFeePerByte(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	numOfAccounts := 5
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -1212,6 +1241,8 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 }
 
 func TestTxPoolSizeLimits(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	numOfAccounts := 2
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)

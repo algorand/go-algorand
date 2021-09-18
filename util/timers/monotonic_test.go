@@ -17,6 +17,7 @@
 package timers
 
 import (
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"math/rand"
 	"testing"
 	"time"
@@ -32,6 +33,8 @@ func polled(ch <-chan struct{}) bool {
 }
 
 func TestMonotonicDelta(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	var m MonotonicFactory
 	var c Clock
 	var ch <-chan struct{}
@@ -56,6 +59,8 @@ func TestMonotonicDelta(t *testing.T) {
 }
 
 func TestMonotonicZeroDelta(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	var m MonotonicFactory
 	var c Clock
 	var ch <-chan struct{}
@@ -68,6 +73,8 @@ func TestMonotonicZeroDelta(t *testing.T) {
 }
 
 func TestMonotonicNegativeDelta(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	var m MonotonicFactory
 	var c Clock
 	var ch <-chan struct{}
@@ -80,6 +87,8 @@ func TestMonotonicNegativeDelta(t *testing.T) {
 }
 
 func TestMonotonicZeroTwice(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	var m MonotonicFactory
 	var c Clock
 	var ch <-chan struct{}
@@ -110,6 +119,8 @@ func TestMonotonicZeroTwice(t *testing.T) {
 }
 
 func TestMonotonicEncodeDecode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	singleTest := func(c Clock, f ClockFactory, descr string) {
 		data := c.Encode()
 		c0, err := f.Decode(data)

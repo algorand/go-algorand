@@ -42,6 +42,7 @@ import (
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 var fixture fixtures.RestClientFixture
@@ -186,6 +187,8 @@ func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, tx
 }
 
 func TestClientCanGetStatus(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -200,6 +203,8 @@ func TestClientCanGetStatus(t *testing.T) {
 }
 
 func TestClientCanGetStatusAfterBlock(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -213,6 +218,8 @@ func TestClientCanGetStatusAfterBlock(t *testing.T) {
 }
 
 func TestTransactionsByAddr(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture
 	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
@@ -259,6 +266,8 @@ func TestTransactionsByAddr(t *testing.T) {
 }
 
 func TestClientCanGetVersion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -268,6 +277,8 @@ func TestClientCanGetVersion(t *testing.T) {
 }
 
 func TestClientCanGetSuggestedFee(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -277,6 +288,8 @@ func TestClientCanGetSuggestedFee(t *testing.T) {
 }
 
 func TestClientCanGetMinTxnFee(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -286,6 +299,8 @@ func TestClientCanGetMinTxnFee(t *testing.T) {
 }
 
 func TestClientCanGetBlockInfo(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -296,6 +311,8 @@ func TestClientCanGetBlockInfo(t *testing.T) {
 }
 
 func TestClientRejectsBadFromAddressWhenSending(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -310,6 +327,8 @@ func TestClientRejectsBadFromAddressWhenSending(t *testing.T) {
 }
 
 func TestClientRejectsBadToAddressWhenSending(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -324,6 +343,8 @@ func TestClientRejectsBadToAddressWhenSending(t *testing.T) {
 }
 
 func TestClientRejectsMutatedFromAddressWhenSending(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -345,6 +366,8 @@ func TestClientRejectsMutatedFromAddressWhenSending(t *testing.T) {
 }
 
 func TestClientRejectsMutatedToAddressWhenSending(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -366,6 +389,8 @@ func TestClientRejectsMutatedToAddressWhenSending(t *testing.T) {
 }
 
 func TestClientRejectsSendingMoneyFromAccountForWhichItHasNoKey(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -380,6 +405,8 @@ func TestClientRejectsSendingMoneyFromAccountForWhichItHasNoKey(t *testing.T) {
 }
 
 func TestClientOversizedNote(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -403,6 +430,8 @@ func TestClientOversizedNote(t *testing.T) {
 }
 
 func TestClientCanSendAndGetNote(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -426,6 +455,8 @@ func TestClientCanSendAndGetNote(t *testing.T) {
 }
 
 func TestClientCanGetTransactionStatus(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -448,6 +479,8 @@ func TestClientCanGetTransactionStatus(t *testing.T) {
 }
 
 func TestAccountBalance(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -475,6 +508,8 @@ func TestAccountBalance(t *testing.T) {
 }
 
 func TestAccountParticipationInfo(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -536,6 +571,8 @@ func TestAccountParticipationInfo(t *testing.T) {
 }
 
 func TestSupply(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -547,6 +584,8 @@ func TestSupply(t *testing.T) {
 }
 
 func TestClientCanGetGoRoutines(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.AlgodClient
@@ -559,6 +598,8 @@ func TestClientCanGetGoRoutines(t *testing.T) {
 }
 
 func TestSendingTooMuchFails(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -598,6 +639,8 @@ func TestSendingTooMuchFails(t *testing.T) {
 }
 
 func TestSendingFromEmptyAccountFails(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -635,6 +678,8 @@ func TestSendingFromEmptyAccountFails(t *testing.T) {
 }
 
 func TestSendingTooLittleToEmptyAccountFails(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -665,6 +710,8 @@ func TestSendingTooLittleToEmptyAccountFails(t *testing.T) {
 }
 
 func TestSendingLowFeeFails(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -698,6 +745,8 @@ func TestSendingLowFeeFails(t *testing.T) {
 }
 
 func TestSendingNotClosingAccountFails(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	// use a local fixture because we might really mess with the balances
 	var localFixture fixtures.RestClientFixture
@@ -742,6 +791,8 @@ func TestSendingNotClosingAccountFails(t *testing.T) {
 }
 
 func TestClientCanGetPendingTransactions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture
 	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
@@ -773,6 +824,8 @@ func TestClientCanGetPendingTransactions(t *testing.T) {
 }
 
 func TestClientTruncatesPendingTransactions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture
 	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
@@ -809,4 +862,46 @@ func TestClientTruncatesPendingTransactions(t *testing.T) {
 		delete(txIDsSeen, tx.TxID)
 	}
 	a.True(len(txIDsSeen) == NumTxns-MaxTxns)
+}
+
+func TestClientPrioritizesPendingTransactions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Skip("new FIFO pool does not have prioritization")
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+	wh, _ := testClient.GetUnencryptedWalletHandle()
+	addresses, _ := testClient.ListAddresses(wh)
+	fromAddress := addresses[0]
+	toAddress, _ := testClient.GenerateAddress(wh)
+	nc, _ := localFixture.GetNodeController("Node")
+	err := nc.FullStop()
+	a.NoError(err)
+
+	minTxnFee, minAcctBalance, err := localFixture.CurrentMinFeeAndBalance()
+	a.NoError(err)
+
+	NumTxns := 5
+	MaxTxns := 3
+	for i := 0; i < NumTxns; i++ {
+		toAddress2, _ := testClient.GenerateAddress(wh)
+		_, err := testClient.SendPaymentFromUnencryptedWallet(fromAddress, toAddress2, minTxnFee, minAcctBalance, nil)
+		a.NoError(err)
+	}
+
+	// Add a very high fee transaction. This should have first priority
+	// (even if we don't know the encoding length of the underlying signed txn)
+	txHigh, err := testClient.SendPaymentFromUnencryptedWallet(fromAddress, toAddress, minTxnFee*10, minAcctBalance, nil)
+	a.NoError(err)
+
+	statusResponse, err := testClient.GetPendingTransactions(uint64(MaxTxns))
+	a.NoError(err)
+	a.NotEmpty(statusResponse)
+	a.True(int(statusResponse.TotalTxns) == NumTxns+1)
+	a.True(len(statusResponse.TruncatedTxns.Transactions) == MaxTxns)
+	a.True(statusResponse.TruncatedTxns.Transactions[0].TxID == txHigh.ID().String())
 }

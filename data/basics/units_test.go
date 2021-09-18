@@ -20,10 +20,13 @@ import (
 	"math"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestSubSaturate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := Round(1)
 	b := Round(2)
 	require.Equal(t, a.SubSaturate(b), Round(0))
@@ -49,6 +52,8 @@ func TestAddSaturate32(t *testing.T) {
 }
 
 func TestRoundUpToMultipleOf(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	r := Round(24)
 	for n := Round(1); n < Round(100); n++ {
 		nextMul := r.RoundUpToMultipleOf(n)

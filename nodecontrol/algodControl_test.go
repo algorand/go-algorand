@@ -20,10 +20,13 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestStopAlgodErrorNotRunning(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	nodeController := MakeNodeController("", ".")
 	err := nodeController.StopAlgod()
 	var e *NodeNotRunningError
@@ -31,6 +34,8 @@ func TestStopAlgodErrorNotRunning(t *testing.T) {
 }
 
 func TestStopAlgodErrorInvalidDirectory(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	nodeController := MakeNodeController("", "[][]")
 	err := nodeController.StopAlgod()
 	var e *MissingDataDirError
