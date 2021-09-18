@@ -54,7 +54,7 @@ type mockLedgerForTracker struct {
 	consensusParams config.ConsensusParams
 }
 
-func acculateTotals(t testing.TB, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, rewardLevel uint64) (totals ledgercore.AccountTotals) {
+func accumulateTotals(t testing.TB, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, rewardLevel uint64) (totals ledgercore.AccountTotals) {
 	var ot basics.OverflowTracker
 	proto := config.Consensus[consensusVersion]
 	totals.RewardsLevel = rewardLevel
@@ -76,7 +76,7 @@ func makeMockLedgerForTracker(t testing.TB, inMemory bool, initialBlocksCount in
 
 	blocks := randomInitChain(consensusVersion, initialBlocksCount)
 	deltas := make([]ledgercore.StateDelta, initialBlocksCount)
-	totals := acculateTotals(t, consensusVersion, accts, 0)
+	totals := accumulateTotals(t, consensusVersion, accts, 0)
 	for i := range deltas {
 		deltas[i] = ledgercore.StateDelta{
 			Hdr:    &bookkeeping.BlockHeader{},
@@ -395,7 +395,7 @@ func TestAcctUpdates(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
-		delta.Totals = acculateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
@@ -1649,7 +1649,7 @@ func TestCachesInitialization(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Totals = acculateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
 		au.committedUpTo(basics.Round(i))
@@ -1749,7 +1749,7 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Totals = acculateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
@@ -1784,7 +1784,7 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Totals = acculateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
@@ -1865,7 +1865,7 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Totals = acculateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
@@ -1899,7 +1899,7 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Totals = acculateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
@@ -1935,7 +1935,7 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Totals = acculateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
