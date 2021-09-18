@@ -50,6 +50,7 @@ var (
 	rejectsFilename string
 	closeToAddress  string
 	noProgramOutput bool
+	writeMap        bool
 	signProgram     bool
 	programSource   string
 	argB64Strings   []string
@@ -124,6 +125,7 @@ func init() {
 
 	compileCmd.Flags().BoolVarP(&disassemble, "disassemble", "D", false, "disassemble a compiled program")
 	compileCmd.Flags().BoolVarP(&noProgramOutput, "no-out", "n", false, "don't write contract program binary")
+	compileCmd.Flags().BoolVarP(&writeMap, "map", "m", false, "write out assembly map")
 	compileCmd.Flags().BoolVarP(&signProgram, "sign", "s", false, "sign program, output is a binary signed LogicSig record")
 	compileCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename to write program bytes or signed LogicSig to")
 	compileCmd.Flags().StringVarP(&account, "account", "a", "", "Account address to sign the program (If not specified, uses default account)")
@@ -921,7 +923,7 @@ func mustReadFile(fname string) []byte {
 	return contents
 }
 
-func assembleFileDetails(fname string) (program []byte, deets AssemblyDetails) {
+func assembleFileMap(fname string) (program []byte, deets logic.AssemblyMap) {
 	text, err := readFile(fname)
 	if err != nil {
 		reportErrorf("%s: %s", fname, err)
@@ -942,7 +944,7 @@ func assembleFileDetails(fname string) (program []byte, deets AssemblyDetails) {
 		}
 	}
 
-	return ops.Program, AssemblyDetails{LineMap: ops.GetLineToOffset(), TemplateLabels: ops.TemplateLabels}
+	return ops.Program, ops.GetAssemblyMap()
 }
 
 func assembleFile(fname string) (program []byte) {
@@ -1005,15 +1007,6 @@ func disassembleFile(fname, outname string) {
 	}
 }
 
-// AssemblyDetails contains details from the source to assembly process
-// Right now it is just the map of line number to program counter or byte position in
-// the assembled program but may contain other details like ABI spec or Template Variable
-// relative positions in the future
-type AssemblyDetails struct {
-	TemplateLabels map[string]logic.TemplateVariable `json:"template_labels"`
-	LineMap        []int                             `json:"line_map"`
-}
-
 var compileCmd = &cobra.Command{
 	Use:   "compile [input file 1] [input file 2]...",
 	Short: "Compile a contract program",
@@ -1025,7 +1018,7 @@ var compileCmd = &cobra.Command{
 				continue
 			}
 
-			program, details := assembleFileDetails(fname)
+			program, sourceMap := assembleFileMap(fname)
 
 			outblob := program
 			outname := outFilename
@@ -1066,9 +1059,11 @@ var compileCmd = &cobra.Command{
 				if err != nil {
 					reportErrorf("%s: %s", outname, err)
 				}
+			}
 
-				mapname := outname + ".deets.json"
-				pcblob, err := json.Marshal(details)
+			if writeMap {
+				mapname := fname + ".map.json"
+				pcblob, err := json.Marshal(sourceMap)
 				if err != nil {
 					reportErrorf("%s: %s", mapname, err)
 				}
@@ -1077,6 +1072,7 @@ var compileCmd = &cobra.Command{
 					reportErrorf("%s: %s", mapname, err)
 				}
 			}
+
 			if !signProgram && outname != stdoutFilenameValue {
 				pd := logic.HashProgram(program)
 				addr := basics.Address(pd)

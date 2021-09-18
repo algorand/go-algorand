@@ -250,8 +250,9 @@ type OpStream struct {
 	HasStatefulOps bool
 }
 
-// GetLineToOffset returns a slice mapping TEAL source line to PC
-func (ops *OpStream) GetLineToOffset() []int {
+// GetAssemblyMap returns a struct containing details about
+// the assembled file and mappings to the source file
+func (ops *OpStream) GetAssemblyMap() AssemblyMap {
 	maxLines := 0
 	for _, line := range ops.OffsetToLine {
 		if line > maxLines {
@@ -264,7 +265,7 @@ func (ops *OpStream) GetLineToOffset() []int {
 		lto[line] = pc
 	}
 
-	return lto
+	return AssemblyMap{LineMap: lto, TemplateLabels: ops.TemplateLabels}
 }
 
 // GetVersion returns the LogicSigVersion we're building to
