@@ -126,17 +126,17 @@ not_deposit:
         -
         app_local_put
 
-        tx_begin
+        itxn_begin
          int pay
-         tx_field TypeEnum
+         itxn_field TypeEnum
 
          txn ApplicationArgs 1
          btoi
-         tx_field Amount
+         itxn_field Amount
 
          txn Sender
-         tx_field Receiver
-        tx_submit
+         itxn_field Receiver
+        itxn_submit
 
         int 1
         return
