@@ -220,15 +220,16 @@ func TestLogicLedgerAsset(t *testing.T) {
 	a.NoError(err)
 	a.NotNil(l)
 
-	_, err = l.AssetParams(basics.AssetIndex(aidx))
+	_, _, err = l.AssetParams(basics.AssetIndex(aidx))
 	a.Error(err)
 	a.Contains(err.Error(), fmt.Sprintf("asset %d does not exist", aidx))
 
 	c.brs = map[basics.Address]basics.AccountData{
 		addr1: {AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx: {Total: 1000}}},
 	}
-	ap, err := l.AssetParams(assetIdx)
+	ap, creator, err := l.AssetParams(assetIdx)
 	a.NoError(err)
+	a.Equal(addr1, creator)
 	a.Equal(uint64(1000), ap.Total)
 
 	_, err = l.AssetHolding(addr1, assetIdx)

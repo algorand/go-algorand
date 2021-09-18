@@ -18,6 +18,7 @@ package network
 
 import (
 	"container/heap"
+	"sync/atomic"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
@@ -125,6 +126,7 @@ func (pt *prioTracker) setPriority(peer *wsPeer, addr basics.Address, weight uin
 	peer.prioAddress = addr
 	peer.prioWeight = weight
 	heap.Fix(peersHeap{wn}, peer.peerIndex)
+	atomic.AddInt32(&wn.peersChangeCounter, 1)
 }
 
 func (pt *prioTracker) removePeer(peer *wsPeer) {
