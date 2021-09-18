@@ -97,7 +97,7 @@ func (cm *clockManager) nextPipelineDelayCh(es []externalDemuxSignals) (<-chan s
 		// no rezeroAction has set up this clock yet
 		panic(fmt.Sprintf("clockManager.nextPipelineDelayCh: no clock for round %+v\n", r))
 	}
-	return c.TimeoutAt(es[i].Deadline), r
+	return c.TimeoutAt(es[i].PipelineDelay), r
 }
 
 // nextFastDeadlineCh returns a timeout channel that will fire when the earliest FastRecoveryDeadline among all of
