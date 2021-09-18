@@ -341,18 +341,30 @@ func (p *pipelinePlayer) deleteRoundAndChildren(r round) {
 func (p *pipelinePlayer) pipelineDelay(ver protocol.ConsensusVersion) time.Duration {
 	proto := config.Consensus[ver]
 
+	var dynamicDelay time.Duration
 	if proto.AgreementPipelineDelay <= 0 {
-		return 0
+		dynamicDelay = 0
+	} else if proto.AgreementPipelineDelay > len(p.PayloadArrivals) {
+		dynamicDelay = FilterTimeout(0, ver)
+	} else {
+		sortedArrivals := make([]time.Duration, len(p.PayloadArrivals))
+		copy(sortedArrivals[:], p.PayloadArrivals[:])
+		sort.Slice(sortedArrivals, func(i, j int) bool { return sortedArrivals[i] < sortedArrivals[j] })
+		dynamicDelay = sortedArrivals[proto.AgreementPipelineDelay-1]
 	}
 
-	if proto.AgreementPipelineDelay > len(p.PayloadArrivals) {
-		return FilterTimeout(0, ver)
+	// Make sure the dynamic delay is not too small; we want to
+	// evenly space out the pipelined rounds across FilterTimeout,
+	// which is the fastest we could agree on blocks anyway (not
+	// including the soft vote / cert vote times).
+	if proto.AgreementPipelineDepth > 0 {
+		evenSpacing := FilterTimeout(0, ver) / time.Duration(proto.AgreementPipelineDepth)
+		if dynamicDelay < evenSpacing {
+			dynamicDelay = evenSpacing
+		}
 	}
 
-	sortedArrivals := make([]time.Duration, len(p.PayloadArrivals))
-	copy(sortedArrivals[:], p.PayloadArrivals[:])
-	sort.Slice(sortedArrivals, func(i, j int) bool { return sortedArrivals[i] < sortedArrivals[j] })
-	return sortedArrivals[proto.AgreementPipelineDelay-1]
+	return dynamicDelay
 }
 
 // ensurePlayer creates a player for a particular round, if not already present.
