@@ -157,17 +157,17 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			s.evaluatePeerStateChanges(nextPeerStateTime)
 			profPeerState.end()
 			continue
-		case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
-			logging.Base().Info("getIncomingMessageChannel")
-			profIncomingMsg.start()
-			s.evaluateIncomingMessage(incomingMsg)
-			profIncomingMsg.end()
-			continue
 		case msgSent := <-s.outgoingMessagesCallbackCh:
 			logging.Base().Info("outgoingMessagesCallbackCh")
 			profOutgoingMsg.start()
 			s.evaluateOutgoingMessage(msgSent)
 			profOutgoingMsg.end()
+			continue
+		case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
+			logging.Base().Info("getIncomingMessageChannel")
+			profIncomingMsg.start()
+			s.evaluateIncomingMessage(incomingMsg)
+			profIncomingMsg.end()
 			continue
 		case <-s.nextOffsetRollingCh:
 			profNextOffset.start()
@@ -205,18 +205,18 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			profPeerState.start()
 			s.evaluatePeerStateChanges(nextPeerStateTime)
 			profPeerState.end()
-		case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
-			logging.Base().Info("getIncomingMessageChannel")
-			profIdle.end()
-			profIncomingMsg.start()
-			s.evaluateIncomingMessage(incomingMsg)
-			profIncomingMsg.end()
 		case msgSent := <-s.outgoingMessagesCallbackCh:
 			logging.Base().Info("outgoingMessagesCallbackCh")
 			profIdle.end()
 			profOutgoingMsg.start()
 			s.evaluateOutgoingMessage(msgSent)
 			profOutgoingMsg.end()
+		case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
+			logging.Base().Info("getIncomingMessageChannel")
+			profIdle.end()
+			profIncomingMsg.start()
+			s.evaluateIncomingMessage(incomingMsg)
+			profIncomingMsg.end()
 		case <-s.nextOffsetRollingCh:
 			profIdle.end()
 			profNextOffset.start()
