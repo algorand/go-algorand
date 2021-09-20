@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
@@ -34,7 +36,6 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
-	"sync"
 )
 
 // ErrNoSpace indicates insufficient space for transaction in block
@@ -1132,7 +1133,6 @@ func (eval *BlockEvaluator) modifyOfflineAccounts() error {
 
 		// Update the account information
 		eval.state.Put(accountAddr, acctData)
-		//eval.state.mods.Accts.Upsert(accountAddr, acctData)
 	}
 	return nil
 }
