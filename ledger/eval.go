@@ -1132,7 +1132,10 @@ func (eval *BlockEvaluator) modifyOfflineAccounts() error {
 		acctData.SelectionID = crypto.VRFVerifier{}
 
 		// Update the account information
-		eval.state.Put(accountAddr, acctData)
+		err = eval.state.Put(accountAddr, acctData)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
