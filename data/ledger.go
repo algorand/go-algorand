@@ -184,7 +184,7 @@ func (l *Ledger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 		}
 	}
 
-	totals, err := l.OnlineTotals(r)
+	totals, err := l.OnlineTotals(r) //nolint:typecheck
 	if err != nil {
 		return basics.MicroAlgos{}, err
 	}
