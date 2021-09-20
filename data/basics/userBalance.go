@@ -397,7 +397,6 @@ func MakeAccountData(status Status, algos MicroAlgos) AccountData {
 	return AccountData{Status: status, MicroAlgos: algos}
 }
 
-
 // ClearOnlineState sets the appropriate fields to be offline
 func (u *AccountData) ClearOnlineState() {
 	u.Status = Offline

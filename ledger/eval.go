@@ -1206,7 +1206,7 @@ func (eval *BlockEvaluator) finalValidation() error {
 			}
 
 			if !pastCurrentRound {
-				return fmt.Errorf("finalValidation found %v round (%v) was not less than current round (%v)", accountAddr, acctData.VoteLastValid, currentRound)
+				return fmt.Errorf("finalValidation found %v round (%d) was not less than current round (%d)", accountAddr, acctData.VoteLastValid, currentRound)
 			}
 		}
 	}

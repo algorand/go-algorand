@@ -8,12 +8,10 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalBlock(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := Block{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -73,7 +71,6 @@ func BenchmarkUnmarshalBlock(b *testing.B) {
 }
 
 func TestMarshalUnmarshalBlockHeader(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := BlockHeader{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -133,7 +130,6 @@ func BenchmarkUnmarshalBlockHeader(b *testing.B) {
 }
 
 func TestMarshalUnmarshalCompactCertState(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := CompactCertState{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -193,7 +189,6 @@ func BenchmarkUnmarshalCompactCertState(b *testing.B) {
 }
 
 func TestMarshalUnmarshalGenesis(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := Genesis{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -253,7 +248,6 @@ func BenchmarkUnmarshalGenesis(b *testing.B) {
 }
 
 func TestMarshalUnmarshalGenesisAllocation(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := GenesisAllocation{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -312,8 +306,66 @@ func BenchmarkUnmarshalGenesisAllocation(b *testing.B) {
 	}
 }
 
+func TestMarshalUnmarshalParticipationUpdates(t *testing.T) {
+	v := ParticipationUpdates{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingParticipationUpdates(t *testing.T) {
+	protocol.RunEncodingTest(t, &ParticipationUpdates{})
+}
+
+func BenchmarkMarshalMsgParticipationUpdates(b *testing.B) {
+	v := ParticipationUpdates{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgParticipationUpdates(b *testing.B) {
+	v := ParticipationUpdates{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalParticipationUpdates(b *testing.B) {
+	v := ParticipationUpdates{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestMarshalUnmarshalRewardsState(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := RewardsState{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -373,7 +425,6 @@ func BenchmarkUnmarshalRewardsState(b *testing.B) {
 }
 
 func TestMarshalUnmarshalUpgradeVote(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := UpgradeVote{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
