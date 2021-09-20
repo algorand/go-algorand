@@ -17,13 +17,15 @@
 package participation
 
 import (
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
-	"path/filepath"
-	"testing"
 )
 
 func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, finalStatus basics.Status, protocolCheck string) {
