@@ -134,6 +134,8 @@ type (
 	// ParticipationUpdates represents participation account data that
 	// needs to be checked/acted on by the network
 	ParticipationUpdates struct {
+		_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 		// ExpiredParticipationAccounts contains a list of online accounts
 		// that needs to be converted to offline since their
 		// participation key expired.

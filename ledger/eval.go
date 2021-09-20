@@ -1055,12 +1055,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		modifiedAccounts := eval.state.mods.Accts.ModifiedAccounts()
 		currentRound := eval.Round()
 
-		proto, ok := config.Consensus[eval.block.BlockHeader.CurrentProtocol]
-		if !ok {
-			return fmt.Errorf("unknown consensus version: %s", eval.block.BlockHeader.CurrentProtocol)
-		}
-
-		expectedMaxNumberOfExpiredAccounts := proto.MaxExpiredAccountsToProcess
+		expectedMaxNumberOfExpiredAccounts := eval.proto.MaxExpiredAccountsToProcess
 
 		for i := 0; i < len(modifiedAccounts) && len(eval.block.ParticipationUpdates.ExpiredParticipationAccounts) < expectedMaxNumberOfExpiredAccounts; i++ {
 			accountAddr := modifiedAccounts[i]
@@ -1102,12 +1097,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 // modifyOfflineAccounts after all transactions and rewards are processed, modify the accounts so that their status is offline
 func (eval *BlockEvaluator) modifyOfflineAccounts() error {
 
-	proto, ok := config.Consensus[eval.block.BlockHeader.CurrentProtocol]
-	if !ok {
-		return fmt.Errorf("unknown consensus version: %s", eval.block.BlockHeader.CurrentProtocol)
-	}
-
-	expectedMaxNumberOfExpiredAccounts := proto.MaxExpiredAccountsToProcess
+	expectedMaxNumberOfExpiredAccounts := eval.proto.MaxExpiredAccountsToProcess
 	lengthOfExpiredParticipationAccounts := len(eval.block.ParticipationUpdates.ExpiredParticipationAccounts)
 
 	// If the length of the array is strictly greater than our max then we have an error.
@@ -1120,16 +1110,11 @@ func (eval *BlockEvaluator) modifyOfflineAccounts() error {
 	for _, accountAddr := range eval.block.ParticipationUpdates.ExpiredParticipationAccounts {
 		acctData, err := eval.state.lookup(accountAddr)
 		if err != nil {
-			return fmt.Errorf("modifyOfflineAccounts wrong: %v was not found", accountAddr)
+			return fmt.Errorf("modifyOfflineAccounts was unable to retrieve account %v : %w", accountAddr, err)
 		}
 
 		// Reset the appropriate account data
-		acctData.Status = basics.Offline
-		acctData.VoteFirstValid = basics.Round(0)
-		acctData.VoteLastValid = basics.Round(0)
-		acctData.VoteKeyDilution = 0
-		acctData.VoteID = crypto.OneTimeSignatureVerifier{}
-		acctData.SelectionID = crypto.VRFVerifier{}
+		acctData.ClearOnlineState()
 
 		// Update the account information
 		err = eval.state.Put(accountAddr, acctData)
@@ -1180,12 +1165,7 @@ func (eval *BlockEvaluator) finalValidation() error {
 			}
 		}
 
-		proto, ok := config.Consensus[eval.block.BlockHeader.CurrentProtocol]
-		if !ok {
-			return fmt.Errorf("unknown consensus version: %s", eval.block.BlockHeader.CurrentProtocol)
-		}
-
-		expectedMaxNumberOfExpiredAccounts := proto.MaxExpiredAccountsToProcess
+		expectedMaxNumberOfExpiredAccounts := eval.proto.MaxExpiredAccountsToProcess
 		lengthOfExpiredParticipationAccounts := len(eval.block.ParticipationUpdates.ExpiredParticipationAccounts)
 
 		// If the length of the array is strictly greater than our max then we have an error.
@@ -1197,7 +1177,7 @@ func (eval *BlockEvaluator) finalValidation() error {
 
 		// For security reasons, we need to make sure that all addresses in the expired participation accounts
 		// are unique.  We make this map to keep track of previously seen address
-		addressSet := make(map[basics.Address]bool)
+		addressSet := make(map[basics.Address]bool, lengthOfExpiredParticipationAccounts)
 
 		// Validate that all expired accounts meet the current criteria
 		currentRound := eval.Round()
@@ -1213,7 +1193,7 @@ func (eval *BlockEvaluator) finalValidation() error {
 
 			acctData, err := eval.state.lookup(accountAddr)
 			if err != nil {
-				return fmt.Errorf("ExpiredParticipationAccount wrong: %v was not found", accountAddr)
+				return fmt.Errorf("finalValidation was unable to retrieve account %v : %w", accountAddr, err)
 			}
 
 			// true if the account is online
@@ -1222,16 +1202,21 @@ func (eval *BlockEvaluator) finalValidation() error {
 			pastCurrentRound := acctData.VoteLastValid < currentRound
 
 			if !isOnline {
-				return fmt.Errorf("ExpiredParticipationAccount wrong: %v was not online but %v", accountAddr, acctData.Status)
+				return fmt.Errorf("finalValidation found %v was not online but %v", accountAddr, acctData.Status)
 			}
 
 			if !pastCurrentRound {
-				return fmt.Errorf("ExpiredParticipationAccount wrong: %v round (%v) was not less than current round (%v)", accountAddr, acctData.VoteLastValid, currentRound)
+				return fmt.Errorf("finalValidation found %v round (%v) was not less than current round (%v)", accountAddr, acctData.VoteLastValid, currentRound)
 			}
 		}
 	}
 
-	return eval.state.CalculateTotals()
+err := eval.state.CalculateTotals()
+
+if err != nil {
+    return err
+}
+
 }
 
 // GenerateBlock produces a complete block from the BlockEvaluator.  This is
@@ -1256,11 +1241,6 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 	}
 
 	err = eval.finalValidation()
-	if err != nil {
-		return nil, err
-	}
-
-	err = eval.modifyOfflineAccounts()
 	if err != nil {
 		return nil, err
 	}
