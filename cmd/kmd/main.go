@@ -88,7 +88,7 @@ func runKmd(dataDir string, timeoutSecs uint64) {
 	tryMlockall(log)
 
 	// Create a "kill" channel to allow the server to shut down gracefully
-	kill := make(chan os.Signal)
+	kill := make(chan os.Signal, 1)
 
 	// Timeouts can also send on the kill channel; because signal.Notify
 	// will not block, this shouldn't cause an issue. From docs: "Package

@@ -45,6 +45,18 @@ TEST_RUN_ID=$(${SCRIPT_PATH}/testrunid.py)
 export TEMPDIR=${SRCROOT}/tmp/out/e2e/${TEST_RUN_ID}
 echo "Test output can be found in ${TEMPDIR}"
 
+function cleanup() {
+  echo "Cleaning up temp dir."
+
+  rm -rf "${TEMPDIR}"
+
+  if ! ${NO_BUILD} ; then
+      rm -rf ${PKG_ROOT}
+  fi
+}
+
+# Cleanup files created during tests.
+trap cleanup EXIT
 
 # ARM64 has an unoptimized scrypt() which can cause tests to timeout.
 # Run kmd with scrypt() configured to run less secure and fast to go through the motions for test.
@@ -100,52 +112,55 @@ export GOPATH=$(go env GOPATH)
 # Change current directory to test/scripts so we can just use ./test.sh to exec.
 cd "${SCRIPT_PATH}"
 
-if [ "${SKIP_E2E_SUBS}" = "" ]; then
+if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
+    ./timeout 200 ./e2e_basic_start_stop.sh
+    duration "e2e_basic_start_stop.sh"
 
-./timeout 200 ./e2e_basic_start_stop.sh
-duration "e2e_basic_start_stop.sh"
+    python3 -m venv "${TEMPDIR}/ve"
+    . "${TEMPDIR}/ve/bin/activate"
+    "${TEMPDIR}/ve/bin/pip3" install --upgrade pip
+    "${TEMPDIR}/ve/bin/pip3" install --upgrade py-algorand-sdk cryptography
+    duration "e2e client setup"
 
-python3 -m venv "${TEMPDIR}/ve"
-. "${TEMPDIR}/ve/bin/activate"
-"${TEMPDIR}/ve/bin/pip3" install --upgrade pip
-"${TEMPDIR}/ve/bin/pip3" install --upgrade py-algorand-sdk cryptography
-duration "e2e client setup"
+    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.sh
+    duration "parallel client runner"
 
-"${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.sh
-duration "parallel client runner"
+    for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
+        "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} --version "$(basename "$vdir")" "$vdir"/*.sh
+    done
+    duration "vdir client runners"
 
-for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
-    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} --version "$(basename "$vdir")" "$vdir"/*.sh
-done
-duration "vdir client runners"
+    for script in "$SRCROOT"/test/scripts/e2e_subs/serial/*; do
+        "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} $script
+    done
 
-for script in "$SRCROOT"/test/scripts/e2e_subs/serial/*; do
-    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} $script
-done
-duration "serial client runners"
+    deactivate
+    duration "serial client runners"
+fi # if E2E_TEST_FILTER == "" or == "SCRIPTS"
 
-deactivate
+if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "GO" ]; then
+    # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
+    # This allows us to clean up everything with our rm -rf trap.
+    mkdir "${TEMPDIR}/go"
+    export TESTDIR=${TEMPDIR}/go
+    export TESTDATADIR=${SRCROOT}/test/testdata
+    export SRCROOT=${SRCROOT}
 
-fi # if $SKIP_E2E_SUBS = ""
+    ./e2e_go_tests.sh ${GO_TEST_ARGS}
+    duration "go integration tests"
+fi # if E2E_TEST_FILTER == "" or == "GO"
 
-if [ "${E2E_SUBS_ONLY}" != "" ]; then
-    exit 0
-fi
+if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "EXPECT" ]; then
+    # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
+    # This allows us to clean up everything with our rm -rf trap.
+    mkdir "${TEMPDIR}/expect"
+    export TESTDIR=${TEMPDIR}/expect
+    export TESTDATADIR=${SRCROOT}/test/testdata
+    export SRCROOT=${SRCROOT}
 
-# Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
-# This allows us to clean up everything with our rm -rf trap.
-export TESTDIR=${TEMPDIR}
-export TESTDATADIR=${SRCROOT}/test/testdata
-export SRCROOT=${SRCROOT}
-
-./e2e_go_tests.sh ${GO_TEST_ARGS}
-duration "e2e_go_tests.sh"
-
-rm -rf "${TEMPDIR}"
-
-if ! ${NO_BUILD} ; then
-    rm -rf ${PKG_ROOT}
-fi
+    ./e2e_go_tests.sh -e ${GO_TEST_ARGS}
+    duration "expect tests"
+fi # if E2E_TEST_FILTER == "" or == "EXPECT"
 
 echo "----------------------------------------------------------------------"
 echo "  DONE: E2E"

@@ -478,6 +478,9 @@ func MakeBlock(prev BlockHeader) Block {
 	if err != nil {
 		logging.Base().Warnf("MakeBlock: computing empty TxnRoot: %v", err)
 	}
+	// We can't know the entire RewardsState yet, but we can carry over the special addresses.
+	blk.BlockHeader.RewardsState.FeeSink = prev.RewardsState.FeeSink
+	blk.BlockHeader.RewardsState.RewardsPool = prev.RewardsState.RewardsPool
 	return blk
 }
 
@@ -672,7 +675,11 @@ func (bh BlockHeader) DecodeSignedTxn(stb transactions.SignedTxnInBlock) (transa
 	st := stb.SignedTxn
 	ad := stb.ApplyData
 
-	proto := config.Consensus[bh.CurrentProtocol]
+	proto, ok := config.Consensus[bh.CurrentProtocol]
+	if !ok {
+		return transactions.SignedTxn{}, transactions.ApplyData{},
+			fmt.Errorf("consensus protocol %s not found", bh.CurrentProtocol)
+	}
 	if !proto.SupportSignedTxnInBlock {
 		return st, transactions.ApplyData{}, nil
 	}
@@ -708,7 +715,11 @@ func (bh BlockHeader) DecodeSignedTxn(stb transactions.SignedTxnInBlock) (transa
 func (bh BlockHeader) EncodeSignedTxn(st transactions.SignedTxn, ad transactions.ApplyData) (transactions.SignedTxnInBlock, error) {
 	var stb transactions.SignedTxnInBlock
 
-	proto := config.Consensus[bh.CurrentProtocol]
+	proto, ok := config.Consensus[bh.CurrentProtocol]
+	if !ok {
+		return transactions.SignedTxnInBlock{},
+			fmt.Errorf("consensus protocol %s not found", bh.CurrentProtocol)
+	}
 	if !proto.SupportSignedTxnInBlock {
 		stb.SignedTxn = st
 		return stb, nil

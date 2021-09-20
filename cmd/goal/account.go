@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/passphrase"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	algodAcct "github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -476,7 +476,7 @@ var listCmd = &cobra.Command{
 
 		// For each address, request information about it from algod
 		for _, addr := range addrs {
-			response, _ := client.AccountInformation(addr.Addr)
+			response, _ := client.AccountInformationV2(addr.Addr)
 			// it's okay to proceed without algod info
 
 			// Display this information to the user
@@ -512,7 +512,7 @@ var infoCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		response, err := client.AccountInformation(accountAddress)
+		response, err := client.AccountInformationV2(accountAddress)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
@@ -524,36 +524,50 @@ var infoCmd = &cobra.Command{
 	},
 }
 
-func sortUint64Slice(slice []uint64) {
-	sort.Slice(slice, func(i, j int) bool {
-		return slice[i] < slice[j]
-	})
-}
-
-func printAccountInfo(client libgoal.Client, address string, account v1.Account) bool {
-	createdAssets := []uint64{}
-	for id := range account.AssetParams {
-		createdAssets = append(createdAssets, id)
+func printAccountInfo(client libgoal.Client, address string, account generatedV2.Account) bool {
+	var createdAssets []generatedV2.Asset
+	if account.CreatedAssets != nil {
+		createdAssets = make([]generatedV2.Asset, len(*account.CreatedAssets))
+		for i, asset := range *account.CreatedAssets {
+			createdAssets[i] = asset
+		}
+		sort.Slice(createdAssets, func(i, j int) bool {
+			return createdAssets[i].Index < createdAssets[j].Index
+		})
 	}
-	sortUint64Slice(createdAssets)
 
-	heldAssets := []uint64{}
-	for id := range account.Assets {
-		heldAssets = append(heldAssets, id)
+	var heldAssets []generatedV2.AssetHolding
+	if account.Assets != nil {
+		heldAssets = make([]generatedV2.AssetHolding, len(*account.Assets))
+		for i, assetHolding := range *account.Assets {
+			heldAssets[i] = assetHolding
+		}
+		sort.Slice(heldAssets, func(i, j int) bool {
+			return heldAssets[i].AssetId < heldAssets[j].AssetId
+		})
 	}
-	sortUint64Slice(heldAssets)
 
-	createdApps := []uint64{}
-	for id := range account.AppParams {
-		createdApps = append(createdApps, id)
+	var createdApps []generatedV2.Application
+	if account.CreatedApps != nil {
+		createdApps = make([]generatedV2.Application, len(*account.CreatedApps))
+		for i, app := range *account.CreatedApps {
+			createdApps[i] = app
+		}
+		sort.Slice(createdApps, func(i, j int) bool {
+			return createdApps[i].Id < createdApps[j].Id
+		})
 	}
-	sortUint64Slice(createdApps)
 
-	optedInApps := []uint64{}
-	for id := range account.AppLocalStates {
-		optedInApps = append(optedInApps, id)
+	var optedInApps []generatedV2.ApplicationLocalState
+	if account.AppsLocalState != nil {
+		optedInApps = make([]generatedV2.ApplicationLocalState, len(*account.AppsLocalState))
+		for i, appLocalState := range *account.AppsLocalState {
+			optedInApps[i] = appLocalState
+		}
+		sort.Slice(optedInApps, func(i, j int) bool {
+			return optedInApps[i].Id < optedInApps[j].Id
+		})
 	}
-	sortUint64Slice(optedInApps)
 
 	report := &strings.Builder{}
 	errorReport := &strings.Builder{}
@@ -563,103 +577,116 @@ func printAccountInfo(client libgoal.Client, address string, account v1.Account)
 	if len(createdAssets) == 0 {
 		fmt.Fprintln(report, "\t<none>")
 	}
-	for _, id := range createdAssets {
-		assetParams := account.AssetParams[id]
+	for _, createdAsset := range createdAssets {
+		name := "<unnamed>"
+		if createdAsset.Params.Name != nil {
+			_, name = unicodePrintable(*createdAsset.Params.Name)
+		}
 
-		name := assetParams.AssetName
-		if len(name) == 0 {
-			name = "<unnamed>"
+		units := "units"
+		if createdAsset.Params.UnitName != nil {
+			_, units = unicodePrintable(*createdAsset.Params.UnitName)
 		}
-		_, name = unicodePrintable(name)
-		units := assetParams.UnitName
-		if len(units) == 0 {
-			units = "units"
-		}
-		_, units = unicodePrintable(units)
-		total := assetDecimalsFmt(assetParams.Total, assetParams.Decimals)
+
+		total := assetDecimalsFmt(createdAsset.Params.Total, uint32(createdAsset.Params.Decimals))
+
 		url := ""
-		if len(assetParams.URL) != 0 {
-			url = fmt.Sprintf(", %s", assetParams.URL)
+		if createdAsset.Params.Url != nil {
+			_, safeURL := unicodePrintable(*createdAsset.Params.Url)
+			url = fmt.Sprintf(", %s", safeURL)
 		}
 
-		fmt.Fprintf(report, "\tID %d, %s, supply %s %s%s\n", id, name, total, units, url)
+		fmt.Fprintf(report, "\tID %d, %s, supply %s %s%s\n", createdAsset.Index, name, total, units, url)
 	}
 
 	fmt.Fprintln(report, "Held Assets:")
 	if len(heldAssets) == 0 {
 		fmt.Fprintln(report, "\t<none>")
 	}
-	for _, id := range heldAssets {
-		assetHolding := account.Assets[id]
-		assetParams, err := client.AssetInformationV2(id)
+	for _, assetHolding := range heldAssets {
+		assetParams, err := client.AssetInformationV2(assetHolding.AssetId)
 		if err != nil {
 			hasError = true
-			fmt.Fprintf(errorReport, "Error: Unable to retrieve asset information for asset %d referred to by account %s: %v\n", id, address, err)
-			fmt.Fprintf(report, "\tID %d, error\n", id)
+			fmt.Fprintf(errorReport, "Error: Unable to retrieve asset information for asset %d referred to by account %s: %v\n", assetHolding.AssetId, address, err)
+			fmt.Fprintf(report, "\tID %d, error\n", assetHolding.AssetId)
 		}
 
 		amount := assetDecimalsFmt(assetHolding.Amount, uint32(assetParams.Params.Decimals))
 
-		var assetName string
+		assetName := "<unnamed>"
 		if assetParams.Params.Name != nil {
-			assetName = *assetParams.Params.Name
+			_, assetName = unicodePrintable(*assetParams.Params.Name)
 		}
-		if len(assetName) == 0 {
-			assetName = "<unnamed>"
-		}
-		_, assetName = unicodePrintable(assetName)
 
-		var unitName string
+		unitName := "units"
 		if assetParams.Params.UnitName != nil {
-			unitName = *assetParams.Params.UnitName
+			_, unitName = unicodePrintable(*assetParams.Params.UnitName)
 		}
-		if len(unitName) == 0 {
-			unitName = "units"
-		}
-		_, unitName = unicodePrintable(unitName)
 
 		frozen := ""
-		if assetHolding.Frozen {
+		if assetHolding.IsFrozen {
 			frozen = " (frozen)"
 		}
 
-		fmt.Fprintf(report, "\tID %d, %s, balance %s %s%s\n", id, assetName, amount, unitName, frozen)
+		fmt.Fprintf(report, "\tID %d, %s, balance %s %s%s\n", assetHolding.AssetId, assetName, amount, unitName, frozen)
 	}
 
 	fmt.Fprintln(report, "Created Apps:")
 	if len(createdApps) == 0 {
 		fmt.Fprintln(report, "\t<none>")
 	}
-	for _, id := range createdApps {
-		appParams := account.AppParams[id]
-		usedInts := 0
-		usedBytes := 0
-		for _, value := range appParams.GlobalState {
-			if value.Type == "u" {
-				usedInts++
-			} else {
-				usedBytes++
+	for _, app := range createdApps {
+		allocatedInts := uint64(0)
+		allocatedBytes := uint64(0)
+		if app.Params.GlobalStateSchema != nil {
+			allocatedInts = app.Params.GlobalStateSchema.NumUint
+			allocatedBytes = app.Params.GlobalStateSchema.NumByteSlice
+		}
+
+		usedInts := uint64(0)
+		usedBytes := uint64(0)
+		if app.Params.GlobalState != nil {
+			for _, value := range *app.Params.GlobalState {
+				if basics.TealType(value.Value.Type) == basics.TealUintType {
+					usedInts++
+				} else {
+					usedBytes++
+				}
 			}
 		}
-		fmt.Fprintf(report, "\tID %d, global state used %d/%d uints, %d/%d byte slices\n", id, usedInts, appParams.GlobalStateSchema.NumUint, usedBytes, appParams.GlobalStateSchema.NumByteSlice)
+
+		extraPages := ""
+		if app.Params.ExtraProgramPages != nil && *app.Params.ExtraProgramPages != 0 {
+			plural := ""
+			if *app.Params.ExtraProgramPages != 1 {
+				plural = "s"
+			}
+			extraPages = fmt.Sprintf(", %d extra page%s", *app.Params.ExtraProgramPages, plural)
+		}
+
+		fmt.Fprintf(report, "\tID %d%s, global state used %d/%d uints, %d/%d byte slices\n", app.Id, extraPages, usedInts, allocatedInts, usedBytes, allocatedBytes)
 	}
 
 	fmt.Fprintln(report, "Opted In Apps:")
 	if len(optedInApps) == 0 {
 		fmt.Fprintln(report, "\t<none>")
 	}
-	for _, id := range optedInApps {
-		localState := account.AppLocalStates[id]
-		usedInts := 0
-		usedBytes := 0
-		for _, value := range localState.KeyValue {
-			if value.Type == "u" {
-				usedInts++
-			} else {
-				usedBytes++
+	for _, localState := range optedInApps {
+		allocatedInts := localState.Schema.NumUint
+		allocatedBytes := localState.Schema.NumByteSlice
+
+		usedInts := uint64(0)
+		usedBytes := uint64(0)
+		if localState.KeyValue != nil {
+			for _, value := range *localState.KeyValue {
+				if basics.TealType(value.Value.Type) == basics.TealUintType {
+					usedInts++
+				} else {
+					usedBytes++
+				}
 			}
 		}
-		fmt.Fprintf(report, "\tID %d, local state used %d/%d uints, %d/%d byte slices\n", id, usedInts, localState.Schema.NumUint, usedBytes, localState.Schema.NumByteSlice)
+		fmt.Fprintf(report, "\tID %d, local state used %d/%d uints, %d/%d byte slices\n", localState.Id, usedInts, allocatedInts, usedBytes, allocatedBytes)
 	}
 
 	if hasError {
@@ -750,7 +777,13 @@ var changeOnlineCmd = &cobra.Command{
 		}
 
 		dataDir := ensureSingleDataDir()
-		client := ensureFullClient(dataDir)
+		var client libgoal.Client
+		if statusChangeTxFile != "" {
+			// writing out a txn, don't need kmd
+			client = ensureAlgodClient(dataDir)
+		} else {
+			client = ensureFullClient(dataDir)
+		}
 
 		var part *algodAcct.Participation
 		if partKeyFile != "" {

@@ -87,7 +87,7 @@ func (dr *DryrunRequest) ExpandSources() error {
 	for i, s := range dr.Sources {
 		ops, err := logic.AssembleString(s.Source)
 		if err != nil {
-			return fmt.Errorf("Dryrun Source[%d]: %v", i, err)
+			return fmt.Errorf("dryrun Source[%d]: %v", i, err)
 		}
 		switch s.FieldName {
 		case "lsig":
@@ -104,7 +104,7 @@ func (dr *DryrunRequest) ExpandSources() error {
 				}
 			}
 		default:
-			return fmt.Errorf("Dryrun Source[%d]: bad field name %#v", i, s.FieldName)
+			return fmt.Errorf("dryrun Source[%d]: bad field name %#v", i, s.FieldName)
 		}
 	}
 	return nil
@@ -273,6 +273,9 @@ func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Addre
 			return basics.AccountData{}, 0, err
 		}
 		out.MicroAlgos.Raw = acct.AmountWithoutPendingRewards
+		// Clear RewardsBase since dryrun has no idea about rewards level so the underlying calculation with reward will fail.
+		// The amount needed is known as acct.Amount but this method must return AmountWithoutPendingRewards
+		out.RewardsBase = 0
 	}
 	appi, ok := dl.accountApps[addr]
 	if ok {
@@ -335,41 +338,6 @@ func (dl *dryrunLedger) GetCreatorForRound(rnd basics.Round, cidx basics.Creatab
 	return basics.Address{}, false, fmt.Errorf("unknown creatable type %d", ctype)
 }
 
-func (dl *dryrunLedger) getAppParams(addr basics.Address, aidx basics.AppIndex) (params basics.AppParams, err error) {
-	idx, ok := dl.accountApps[addr]
-	if !ok {
-		err = fmt.Errorf("addr %s is not know to dryrun", addr.String())
-		return
-	}
-	if aidx != basics.AppIndex(dl.dr.Apps[idx].Id) {
-		err = fmt.Errorf("creator addr %s does not match to app id %d", addr.String(), aidx)
-		return
-	}
-	if params, err = ApplicationParamsToAppParams(&dl.dr.Apps[idx].Params); err != nil {
-		return
-	}
-	return
-}
-
-func (dl *dryrunLedger) getLocalKV(addr basics.Address, aidx basics.AppIndex) (kv basics.TealKeyValue, err error) {
-	idx, ok := dl.accountsIn[addr]
-	if !ok {
-		err = fmt.Errorf("addr %s is not know to dryrun", addr.String())
-		return
-	}
-	var ad basics.AccountData
-	if ad, err = AccountToAccountData(&dl.dr.Accounts[idx]); err != nil {
-		return
-	}
-	loc, ok := ad.AppLocalStates[aidx]
-	if !ok {
-		err = fmt.Errorf("addr %s not opted in to app %d, cannot fetch state", addr.String(), aidx)
-		return
-	}
-	kv = loc.KeyValue
-	return
-}
-
 func makeBalancesAdapter(dl *dryrunLedger, txn *transactions.Transaction, appIdx basics.AppIndex) (ba apply.Balances, err error) {
 	ba = ledger.MakeDebugBalances(dl, basics.Round(dl.dr.Round), protocol.ConsensusVersion(dl.dr.ProtocolVersion), dl.dr.LatestTimestamp)
 
@@ -397,16 +365,33 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 		return
 	}
 	proto := config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
+	origEnableAppCostPooling := proto.EnableAppCostPooling
+	// Enable EnableAppCostPooling so that dryrun
+	// 1) can determine cost 2) reports actual cost for large programs that fail
+	proto.EnableAppCostPooling = true
+
+	// allow a huge execution budget
+	maxCurrentBudget := uint64(proto.MaxAppProgramCost * 100)
+	pooledAppBudget := maxCurrentBudget
+	allowedBudget := uint64(0)
+	cumulativeCost := uint64(0)
+	for _, stxn := range dr.Txns {
+		if stxn.Txn.Type == protocol.ApplicationCallTx {
+			allowedBudget += uint64(proto.MaxAppProgramCost)
+		}
+	}
 
 	response.Txns = make([]generated.DryrunTxnResult, len(dr.Txns))
 	for ti, stxn := range dr.Txns {
 		pse := logic.MakePastSideEffects(len(dr.Txns))
 		ep := logic.EvalParams{
-			Txn:             &stxn,
-			Proto:           &proto,
-			TxnGroup:        dr.Txns,
-			GroupIndex:      ti,
-			PastSideEffects: pse,
+			Txn:                     &stxn,
+			Proto:                   &proto,
+			TxnGroup:                dr.Txns,
+			GroupIndex:              uint64(ti),
+			PastSideEffects:         pse,
+			PooledApplicationBudget: &pooledAppBudget,
+			Specials:                &transactions.SpecialAddresses{},
 		}
 		var result generated.DryrunTxnResult
 		if len(stxn.Lsig.Logic) > 0 {
@@ -521,6 +506,30 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 					}
 					result.LocalDeltas = &localDeltas
 				}
+
+				// ensure the program has not exceeded execution budget
+				cost := maxCurrentBudget - pooledAppBudget
+				if pass {
+					if !origEnableAppCostPooling {
+						if cost > uint64(proto.MaxAppProgramCost) {
+							pass = false
+							err = fmt.Errorf("cost budget exceeded: budget is %d but program cost was %d", proto.MaxAppProgramCost, cost)
+						}
+					} else if cumulativeCost+cost > allowedBudget {
+						pass = false
+						err = fmt.Errorf("cost budget exceeded: budget is %d but program cost was %d", allowedBudget-cumulativeCost, cost)
+					}
+				}
+				result.Cost = &cost
+				maxCurrentBudget = pooledAppBudget
+				cumulativeCost += cost
+
+				var err3 error
+				result.Logs, err3 = DeltaLogToLog(delta.Logs)
+				if err3 != nil {
+					messages = append(messages, err3.Error())
+				}
+
 				if pass {
 					messages = append(messages, "PASS")
 				} else {
@@ -561,6 +570,18 @@ func StateDeltaToStateDelta(sd basics.StateDelta) *generated.StateDelta {
 	}
 
 	return &gsd
+}
+
+// DeltaLogToLog base64 encode the logs
+func DeltaLogToLog(logs []string) (*[][]byte, error) {
+	if len(logs) == 0 {
+		return nil, nil
+	}
+	logsAsBytes := make([][]byte, len(logs))
+	for i, log := range logs {
+		logsAsBytes[i] = []byte(log)
+	}
+	return &logsAsBytes, nil
 }
 
 // MergeAppParams merges values, existing in "base" take priority over new in "update"

@@ -48,9 +48,25 @@ func TestOpDocs(t *testing.T) {
 	require.Len(t, onCompletionDescriptions, len(OnCompletionNames))
 	require.Len(t, globalFieldDocs, len(GlobalFieldNames))
 	require.Len(t, AssetHoldingFieldDocs, len(AssetHoldingFieldNames))
-	require.Len(t, AssetParamsFieldDocs, len(AssetParamsFieldNames))
-	require.Len(t, AppParamsFieldDocs, len(AppParamsFieldNames))
+	require.Len(t, assetParamsFieldDocs, len(AssetParamsFieldNames))
+	require.Len(t, appParamsFieldDocs, len(AppParamsFieldNames))
 	require.Len(t, TypeNameDescriptions, len(TxnTypeNames))
+	require.Len(t, EcdsaCurveDocs, len(EcdsaCurveNames))
+}
+
+// TestDocStragglers confirms that we don't have any docs laying
+// around for non-existent opcodes, most likely from a rename.
+func TestDocStragglers(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	for op := range opDocExtras {
+		_, ok := opDocByName[op]
+		require.True(t, ok, "%s is in opDocExtra, but not opDocByName", op)
+	}
+	for op := range opcodeImmediateNotes {
+		_, ok := opDocByName[op]
+		require.True(t, ok, "%s is in opcodeImmediateNotes, but not opDocByName", op)
+	}
 }
 
 func TestOpGroupCoverage(t *testing.T) {
@@ -72,7 +88,7 @@ func TestOpGroupCoverage(t *testing.T) {
 	}
 	for name, seen := range opsSeen {
 		if !seen {
-			t.Errorf("warning: op %#v not in any group of OpGroupList\n", name)
+			t.Errorf("warning: op %#v not in any group of OpGroups\n", name)
 		}
 	}
 }
@@ -96,6 +112,8 @@ func TestOpImmediateNote(t *testing.T) {
 }
 
 func TestAllImmediatesDocumented(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	for _, op := range OpSpecs {
 		count := len(op.Details.Immediates)
 		note := OpImmediateNote(op.Name)

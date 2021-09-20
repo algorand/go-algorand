@@ -1,17 +1,23 @@
 # Transaction Execution Approval Language (TEAL)
 
 TEAL is a bytecode based stack language that executes inside Algorand transactions. TEAL programs can be used to check the parameters of the transaction and approve the transaction as if by a signature. This use of TEAL is called a _LogicSig_. Starting with v2, TEAL programs may
-also execute as _Applications_ which are invoked with explicit application call transactions. Programs have read-only access to the transaction they are attached to, transactions in their atomic transaction group, and a few global values. In addition, _Application_ programs have access to limited state that is global to the application and per-account local state for each account that has opted-in to the application. Programs cannot modify or create transactions, only reject or approve them. For both types of program, approval is signaled by finishing with the stack containing a single non-zero uint64 value.
+also execute as _Applications_ which are invoked with explicit application call transactions. Programs have read-only access to the transaction they are attached to, transactions in their atomic transaction group, and a few global values. In addition, _Application_ programs have access to limited state that is global to the application and per-account local state for each account that has opted-in to the application. For both types of program, approval is signaled by finishing with the stack containing a single non-zero uint64 value.
 
 ## The Stack
 
-The stack starts empty and contains values of either uint64 or bytes (`bytes` are implemented in Go as a []byte slice). Most operations act on the stack, popping arguments from it and pushing results to it.
+The stack starts empty and contains values of either uint64 or bytes
+(`bytes` are implemented in Go as a []byte slice and may not exceed
+4096 bytes in length). Most operations act on the stack, popping
+arguments from it and pushing results to it.
 
 The maximum stack depth is currently 1000.
 
 ## Scratch Space
 
-In addition to the stack there are 256 positions of scratch space, also uint64-bytes union values, accessed by the `load` and `store` ops moving data from or to scratch space, respectively.
+In addition to the stack there are 256 positions of scratch space,
+also uint64-bytes union values, each initialized as uint64
+zero. Scratch space is acccesed by the `load(s)` and `store(s)` ops
+moving data from or to scratch space, respectively.
 
 ## Execution Modes
 
@@ -30,14 +36,14 @@ TEAL LogicSigs run in Algorand nodes as part of testing a proposed transaction t
 
 If an authorized program executes and finishes with a single non-zero uint64 value on the stack then that program has validated the transaction it is attached to.
 
-The TEAL program has access to data from the transaction it is attached to (`txn` op), any transactions in a transaction group it is part of (`gtxn` op), and a few global values like consensus parameters (`global` op). Some "Args" may be attached to a transaction being validated by a TEAL program. Args are an array of byte strings. A common pattern would be to have the key to unlock some contract as an Arg. Args are recorded on the blockchain and publicly visible when the transaction is submitted to the network.
+The TEAL program has access to data from the transaction it is attached to (`txn` op), any transactions in a transaction group it is part of (`gtxn` op), and a few global values like consensus parameters (`global` op). Some "Args" may be attached to a transaction being validated by a TEAL program. Args are an array of byte strings. A common pattern would be to have the key to unlock some contract as an Arg. Args are recorded on the blockchain and publicly visible when the transaction is submitted to the network. These LogicSig Args are _not_ signed.
 
 A program can either authorize some delegated action on a normal private key signed or multisig account or be wholly in charge of a contract account.
 
 * If the account has signed the program (an ed25519 signature on "Program" concatenated with the program bytes) then if the program returns true the transaction is authorized as if the account had signed it. This allows an account to hand out a signed program so that other users can carry out delegated actions which are approved by the program.
 * If the SHA512_256 hash of the program (prefixed by "Program") is equal to the transaction Sender address then this is a contract account wholly controlled by the program. No other signature is necessary or possible. The only way to execute a transaction against the contract account is for the program to approve it.
 
-The TEAL bytecode plus the length of any Args must add up to less than 1000 bytes (consensus parameter LogicSigMaxSize). Each TEAL op has an associated cost and the program cost must total less than 20000 (consensus parameter LogicSigMaxCost). Most ops have a cost of 1, but a few slow crypto ops are much higher. Prior to v4, the program's cost was estimated as the static sum of all the opcode costs in the program (whether they were actually executed or not). Beginning with v4, the program's cost is tracked dynamically, while being evaluated. If the program exceeds its budget, it fails.
+The TEAL bytecode plus the length of all Args must add up to no more than 1000 bytes (consensus parameter LogicSigMaxSize). Each TEAL op has an associated cost and the program cost must total no more than 20000 (consensus parameter LogicSigMaxCost). Most ops have a cost of 1, but a few slow crypto ops are much higher. Prior to v4, the program's cost was estimated as the static sum of all the opcode costs in the program (whether they were actually executed or not). Beginning with v4, the program's cost is tracked dynamically, while being evaluated. If the program exceeds its budget, it fails.
 
 ## Constants
 
@@ -63,7 +69,7 @@ Many programs need only a few dozen instructions. The instruction set has some o
 
 This summary is supplemented by more detail in the [opcodes document](TEAL_opcodes.md).
 
-Some operations 'panic' and immediately end execution of the program.
+Some operations 'panic' and immediately fail the program.
 A transaction checked by a program that panics is not valid.
 A contract account governed by a buggy program might not have a way to get assets back out of it. Code carefully.
 
@@ -77,6 +83,13 @@ For three-argument ops, `A` is the element two below the top, `B` is the penulti
 
 @@ Arithmetic.md @@
 
+These opcodes return portions of byte arrays, accessed by position, in
+various sizes.
+
+### Byte Array Manipulation
+
+@@ Byte_Array_Slicing.md @@
+
 These opcodes take byte-array values that are interpreted as
 big-endian unsigned integers.  For mathematical operators, the
 returned values are the shortest byte-array that can represent the
@@ -89,16 +102,15 @@ explicitly restricted, though only `b*` and `b+` can produce a larger
 output than their inputs, so there is an implicit length limit of 128
 bytes on outputs.
 
-@@ Byteslice_Arithmetic.md @@
+@@ Byte_Array_Arithmetic.md @@
 
 These opcodes operate on the bits of byte-array values.  The shorter
-array is interpeted as though left padded with zeros until it is the
+array is interpreted as though left padded with zeros until it is the
 same length as the other input.  The returned values are the same
 length as the longest input.  Therefore, unlike array arithmetic,
 these results may contain leading zero bytes.
 
-@@ Byteslice_Logic.md @@
-
+@@ Byte_Array_Logic.md @@
 
 ### Loading Values
 
@@ -141,6 +153,46 @@ App fields used in the `app_params_get` opcode.
 ### State Access
 
 @@ State_Access.md @@
+
+### Inner Transactions
+
+The following opcodes allow for "inner transactions". Inner
+transactions allow stateful applications to have many of the effects
+of a true top-level transaction, programatically.  However, they are
+different in significant ways.  The most important differences are
+that they are not signed, duplicates are not rejected, and they do not
+appear in the block in the usual away. Instead, their effects are
+noted in metadata associated with the associated top-level application
+call transaction.  An inner transaction's `Sender` must be the
+SHA512_256 hash of the application ID (prefixed by "appID"), or an
+account that has been rekeyed to that hash.
+
+Currently, inner transactions may perform `pay`, `axfer`, `acfg`, and
+`afrz` effects.  After executing an inner transaction with
+`itxn_submit`, the effects of the transaction are visible begining
+with the next instruction with, for example, `balance` and
+`min_balance` checks.
+
+Of the transaction Header fields, only a few fields may be set:
+`Type`/`TypeEnum`, `Sender`, and `Fee`. For the specific fields of
+each transaction types, any field, except `RekeyTo` may be set.  This
+allows, for example, clawback transactions, asset opt-ins, and asset
+creates in addtion to the more common uses of `axfer` and `acfg`.  All
+fields default to the zero value, except those described under
+`itxn_begin`.
+
+Fields may be set multiple times, but may not be read. The most recent
+setting is used when `itxn_submit` executes. (For this purpose `Type`
+and `TypeEnum` are considered to be the same field.) `itxn_field`
+fails immediately for unsupported fields, unsupported transaction
+types, or improperly typed values for a particular field. `itxn_field`
+makes aceptance decisions entirely from the field and value provided,
+never considering previously set fields. Illegal interactions between
+fields, such as setting fields that belong to two different
+transaction types, are rejected by `itxn_submit`.
+
+@@ Inner_Transactions.md @@
+
 
 # Assembler Syntax
 
@@ -212,7 +264,6 @@ A '[proto-buf style variable length unsigned int](https://developers.google.com/
 
 Design and implementation limitations to be aware of with various versions of TEAL.
 
-* TEAL cannot create or change a transaction, only approve or reject.
 * Stateless TEAL cannot lookup balances of Algos or other assets. (Standard transaction accounting will apply after TEAL has run and authorized a transaction. A TEAL-approved transaction could still be invalid by other accounting rules just as a standard signed transaction could be invalid. e.g. I can't give away money I don't have.)
 * TEAL cannot access information in previous blocks. TEAL cannot access most information in other transactions in the current block. (TEAL can access fields of the transaction it is attached to and the transactions in an atomic transaction group.)
 * TEAL cannot know exactly what round the current transaction will commit in (but it is somewhere in FirstValid through LastValid).

@@ -276,15 +276,22 @@ func TestNoClientsSync(t *testing.T) {
 func TestStartAndStop(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	t.Skip("TODO: replace this test in new client paradigm")
-	pool := makeMockPendingTxAggregate(3)
+	pool := makeMockPendingTxAggregate(1)
+	nodeA := basicRPCNode{}
+	txservice := makeTxService(pool, "test genesisID", config.GetDefaultLocal().TxPoolSize, config.GetDefaultLocal().TxSyncServeResponseSize)
+	nodeA.RegisterHTTPHandler(TxServiceHTTPPath, txservice)
+	nodeA.start()
+	nodeAURL := nodeA.rootURL()
+
 	runner := mockRunner{failWithNil: false, failWithError: false, txgroups: pool.PendingTxGroups()[len(pool.PendingTxGroups())-1:], done: make(chan *rpc.Call)}
-	client := mockRPCClient{client: &runner, log: logging.TestingLog(t)}
+	client := mockRPCClient{client: &runner, rootURL: nodeAURL, log: logging.TestingLog(t)}
 	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
 	handler := mockHandler{}
+
+	syncerPool := makeMockPendingTxAggregate(0)
 	syncInterval := time.Second
 	syncTimeout := time.Second
-	syncer := MakeTxSyncer(pool, &clientAgg, &handler, syncInterval, syncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
+	syncer := MakeTxSyncer(syncerPool, &clientAgg, &handler, syncInterval, syncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
 	syncer.log = logging.TestingLog(t)
 
 	// ensure that syncing doesn't start
@@ -295,7 +302,12 @@ func TestStartAndStop(t *testing.T) {
 
 	// signal that syncing can start
 	close(canStart)
-	time.Sleep(2 * time.Second)
+	for x := 0; x < 20; x++ {
+		time.Sleep(100 * time.Millisecond)
+		if atomic.LoadInt32(&handler.messageCounter) != 0 {
+			break
+		}
+	}
 	require.Equal(t, int32(1), atomic.LoadInt32(&handler.messageCounter))
 
 	// stop syncing and ensure it doesn't happen

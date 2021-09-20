@@ -25,10 +25,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestLogFilterExamples(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// iterate on all the example files in the local directory.
 	exampleFiles := []string{}
 	filepath.Walk(".", func(path string, info os.FileInfo, err error) error {

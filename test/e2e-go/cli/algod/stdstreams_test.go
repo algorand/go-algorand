@@ -30,6 +30,7 @@ import (
 
 func TestAlgodLogsToFile(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 

@@ -240,7 +240,12 @@ func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
 func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	entries := MakePhonebook(3, 200*time.Millisecond).(*phonebookImpl)
+	// make the connectionsRateLimitingWindow long enough to avoid triggering it when the
+	// test is running in a slow environment
+	// The test will artificially simulate time passing
+	timeUnit := 2000 * time.Second
+	connectionsRateLimitingWindow := 2 * timeUnit
+	entries := MakePhonebook(3, connectionsRateLimitingWindow).(*phonebookImpl)
 	addr1 := "addrABC"
 	addr2 := "addrXYZ"
 
@@ -259,8 +264,10 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	phBookData := entries.data[addr1].recentConnectionTimes
 	require.Equal(t, 1, len(phBookData))
 
-	// introduce a gap between the two requests
-	time.Sleep(100 * time.Millisecond)
+	// simulate passing a unit of time
+	for rct := range entries.data[addr1].recentConnectionTimes {
+		entries.data[addr1].recentConnectionTimes[rct] = entries.data[addr1].recentConnectionTimes[rct].Add(-1 * timeUnit)
+	}
 
 	// add another value to addr
 	addrInPhonebook, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr1)
@@ -269,8 +276,11 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	phBookData = entries.data[addr1].recentConnectionTimes
 	require.Equal(t, 2, len(phBookData))
 
-	// wait for the time the first element should be removed
-	time.Sleep(100 * time.Millisecond)
+	// simulate passing a unit of time
+	for rct := range entries.data[addr1].recentConnectionTimes {
+		entries.data[addr1].recentConnectionTimes[rct] =
+			entries.data[addr1].recentConnectionTimes[rct].Add(-1 * timeUnit)
+	}
 
 	// the first time should be removed and a new one added
 	// there should not be any wait
@@ -294,7 +304,11 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	require.Equal(t, true, entries.UpdateConnectionTime(addr2, provisionalTime))
 
 	// introduce a gap between the two requests so that only the first will be removed later when waited
-	time.Sleep(100 * time.Millisecond)
+	// simulate passing a unit of time
+	for rct := range entries.data[addr2].recentConnectionTimes {
+		entries.data[addr2].recentConnectionTimes[rct] =
+			entries.data[addr2].recentConnectionTimes[rct].Add(-1 * timeUnit)
+	}
 
 	// value 2
 	addrInPhonebook, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
@@ -318,7 +332,11 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	require.Equal(t, phBookData[1], phBookData2[1])
 	require.Equal(t, phBookData[2], phBookData2[2])
 
-	time.Sleep(waitTime)
+	// simulate passing of the waitTime duration
+	for rct := range entries.data[addr2].recentConnectionTimes {
+		entries.data[addr2].recentConnectionTimes[rct] =
+			entries.data[addr2].recentConnectionTimes[rct].Add(-1 * waitTime)
+	}
 
 	// The wait should be sufficient
 	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
@@ -326,7 +344,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	require.Equal(t, true, entries.UpdateConnectionTime(addr2, provisionalTime))
 	// only one element should be removed, and one added
 	phBookData2 = entries.data[addr2].recentConnectionTimes
-	require.Equal(t, 3, len(phBookData))
+	require.Equal(t, 3, len(phBookData2))
 
 	// make sure the right time was removed
 	require.Equal(t, phBookData[1], phBookData2[0])

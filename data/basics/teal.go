@@ -123,51 +123,6 @@ func (sd StateDelta) Valid(proto *config.ConsensusParams) error {
 	return nil
 }
 
-// EvalDelta stores StateDeltas for an application's global key/value store, as
-// well as StateDeltas for some number of accounts holding local state for that
-// application
-type EvalDelta struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	GlobalDelta StateDelta `codec:"gd"`
-
-	// When decoding EvalDeltas, the integer key represents an offset into
-	// [txn.Sender, txn.Accounts[0], txn.Accounts[1], ...]
-	LocalDeltas map[uint64]StateDelta `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`
-}
-
-// Equal compares two EvalDeltas and returns whether or not they are
-// equivalent. It does not care about nilness equality of LocalDeltas,
-// because the msgpack codec will encode/decode an empty map as nil, and we want
-// an empty generated EvalDelta to equal an empty one we decode off the wire.
-func (ed EvalDelta) Equal(o EvalDelta) bool {
-	// LocalDeltas length should be the same
-	if len(ed.LocalDeltas) != len(o.LocalDeltas) {
-		return false
-	}
-
-	// All keys and local StateDeltas should be the same
-	for k, v := range ed.LocalDeltas {
-		// Other LocalDelta must have value for key
-		ov, ok := o.LocalDeltas[k]
-		if !ok {
-			return false
-		}
-
-		// Other LocalDelta must have same value for key
-		if !ov.Equal(v) {
-			return false
-		}
-	}
-
-	// GlobalDeltas must be equal
-	if !ed.GlobalDelta.Equal(o.GlobalDelta) {
-		return false
-	}
-
-	return true
-}
-
 // StateSchema sets maximums on the number of each type that may be stored
 type StateSchema struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`

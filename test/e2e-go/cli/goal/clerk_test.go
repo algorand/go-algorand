@@ -27,6 +27,7 @@ import (
 )
 
 func TestClerkSendNoteEncoding(t *testing.T) {
+	defer fixtures.ShutdownSynchronizedTest(t)
 	defer fixture.SetTestContext(t)()
 	a := require.New(fixtures.SynchronizedTest(t))
 

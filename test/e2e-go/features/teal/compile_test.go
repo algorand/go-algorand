@@ -30,6 +30,7 @@ import (
 
 func TestTealCompile(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	if testing.Short() {
 		t.Skip()

@@ -61,6 +61,7 @@ type mockCowForLogicLedger struct {
 	brs    map[basics.Address]basics.AccountData
 	stores map[storeLocator]basics.TealKeyValue
 	tcs    map[int]basics.CreatableIndex
+	txc    uint64
 }
 
 func (c *mockCowForLogicLedger) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
@@ -89,8 +90,8 @@ func (c *mockCowForLogicLedger) GetKey(addr basics.Address, aidx basics.AppIndex
 	return tv, found, nil
 }
 
-func (c *mockCowForLogicLedger) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error) {
-	return basics.EvalDelta{}, nil
+func (c *mockCowForLogicLedger) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (evalDelta transactions.EvalDelta, err error) {
+	return transactions.EvalDelta{}, nil
 }
 
 func (c *mockCowForLogicLedger) SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue, accountIdx uint64) error {
@@ -124,6 +125,14 @@ func (c *mockCowForLogicLedger) prevTimestamp() int64 {
 func (c *mockCowForLogicLedger) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
 	_, found := c.stores[storeLocator{addr, aidx, global}]
 	return found, nil
+}
+
+func (c *mockCowForLogicLedger) incTxnCount() {
+	c.txc++
+}
+
+func (c *mockCowForLogicLedger) txnCounter() uint64 {
+	return c.txc
 }
 
 func newCowMock(creatables []modsData) *mockCowForLogicLedger {
@@ -236,6 +245,7 @@ func TestLogicLedgerAsset(t *testing.T) {
 	c.brs = map[basics.Address]basics.AccountData{
 		addr1: {AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx: {Total: 1000}}},
 	}
+
 	ap, creator, err := l.AssetParams(assetIdx)
 	a.NoError(err)
 	a.Equal(addr1, creator)
@@ -450,6 +460,14 @@ return`
 	l, err := OpenLedger(logging.Base(), "TestAppAccountData", true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
+	l.accts.ctxCancel() // force commitSyncer to exit
+
+	// wait commitSyncer to exit
+	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
+	select {
+	case <-l.accts.commitSyncerClosed:
+		break
+	}
 
 	txHeader := transactions.Header{
 		Sender:      creator,
@@ -474,7 +492,7 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{})
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
 	a.NoError(err)
 
 	appIdx := basics.AppIndex(1) // first tnx => idx = 1
@@ -506,7 +524,7 @@ return`
 	// save data into DB and write into local state
 	l.accts.accountsWriting.Add(1)
 	l.accts.commitRound(3, 0, 0)
-	l.reloadLedger()
+	l.accts.accountsWriting.Wait()
 
 	appCallFields = transactions.ApplicationCallTxnFields{
 		OnCompletion:    0,
@@ -519,7 +537,7 @@ return`
 		ApplicationCallTxnFields: appCallFields,
 	}
 	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall,
-		transactions.ApplyData{EvalDelta: basics.EvalDelta{
+		transactions.ApplyData{EvalDelta: transactions.EvalDelta{
 			LocalDeltas: map[uint64]basics.StateDelta{0: {"lk": basics.ValueDelta{Action: basics.SetBytesAction, Bytes: "local"}}}},
 		})
 	a.NoError(err)
@@ -527,7 +545,7 @@ return`
 	// save data into DB
 	l.accts.accountsWriting.Add(1)
 	l.accts.commitRound(1, 3, 0)
-	l.reloadLedger()
+	l.accts.accountsWriting.Wait()
 
 	// dump accounts
 	var rowid int64
@@ -567,7 +585,7 @@ return`
 		ApplicationCallTxnFields: appCallFields,
 	}
 	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall,
-		transactions.ApplyData{EvalDelta: basics.EvalDelta{
+		transactions.ApplyData{EvalDelta: transactions.EvalDelta{
 			GlobalDelta: basics.StateDelta{"gk": basics.ValueDelta{Action: basics.SetBytesAction, Bytes: "global"}}},
 		})
 	a.NoError(err)
@@ -585,7 +603,7 @@ return`
 		ApplicationCallTxnFields: appCallFields,
 	}
 	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall,
-		transactions.ApplyData{EvalDelta: basics.EvalDelta{
+		transactions.ApplyData{EvalDelta: transactions.EvalDelta{
 			LocalDeltas: map[uint64]basics.StateDelta{0: {"lk": basics.ValueDelta{Action: basics.SetBytesAction, Bytes: "local"}}}},
 		})
 	a.NoError(err)
@@ -660,6 +678,14 @@ return`
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
+	l.accts.ctxCancel() // force commitSyncer to exit
+
+	// wait commitSyncer to exit
+	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
+	select {
+	case <-l.accts.commitSyncerClosed:
+		break
+	}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -685,7 +711,7 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{})
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
 	a.NoError(err)
 
 	appIdx := basics.AppIndex(1) // first tnx => idx = 1
@@ -702,7 +728,7 @@ return`
 		ApplicationCallTxnFields: appCallFields,
 	}
 	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall, transactions.ApplyData{
-		EvalDelta: basics.EvalDelta{
+		EvalDelta: transactions.EvalDelta{
 			LocalDeltas: map[uint64]basics.StateDelta{0: {"lk": basics.ValueDelta{
 				Action: basics.SetBytesAction,
 				Bytes:  "local",
@@ -727,7 +753,7 @@ return`
 	// save data into DB and write into local state
 	l.accts.accountsWriting.Add(1)
 	l.accts.commitRound(3, 0, 0)
-	l.reloadLedger()
+	l.accts.accountsWriting.Wait()
 
 	// check first write
 	blk, err := l.Block(2)
@@ -765,7 +791,7 @@ return`
 		ApplicationCallTxnFields: appCallFields,
 	}
 	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall,
-		transactions.ApplyData{EvalDelta: basics.EvalDelta{
+		transactions.ApplyData{EvalDelta: transactions.EvalDelta{
 			GlobalDelta: basics.StateDelta{"gk": basics.ValueDelta{Action: basics.SetBytesAction, Bytes: "global"}}},
 		})
 	a.NoError(err)
@@ -783,7 +809,7 @@ return`
 	// save data into DB
 	l.accts.accountsWriting.Add(1)
 	l.accts.commitRound(2, 3, 0)
-	l.reloadLedger()
+	l.accts.accountsWriting.Wait()
 
 	// check first write
 	blk, err = l.Block(4)
@@ -834,7 +860,7 @@ return`
 
 	blk = makeNewEmptyBlock(t, l, genesisID, genesisInitState.Accounts)
 	ad1 := transactions.ApplyData{
-		EvalDelta: basics.EvalDelta{
+		EvalDelta: transactions.EvalDelta{
 			LocalDeltas: map[uint64]basics.StateDelta{0: {"lk1": basics.ValueDelta{
 				Action: basics.SetBytesAction,
 				Bytes:  "local1",
@@ -907,6 +933,14 @@ return`
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
+	l.accts.ctxCancel() // force commitSyncer to exit
+
+	// wait commitSyncer to exit
+	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
+	select {
+	case <-l.accts.commitSyncerClosed:
+		break
+	}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -932,7 +966,7 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{})
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
 	a.NoError(err)
 
 	appIdx := basics.AppIndex(1) // first tnx => idx = 1
@@ -949,7 +983,7 @@ return`
 		ApplicationCallTxnFields: appCallFields,
 	}
 	err = l.appendUnvalidatedTx(t, nil, initKeys, appCall, transactions.ApplyData{
-		EvalDelta: basics.EvalDelta{
+		EvalDelta: transactions.EvalDelta{
 			LocalDeltas: map[uint64]basics.StateDelta{0: {"lk": basics.ValueDelta{
 				Action: basics.SetBytesAction,
 				Bytes:  "local",
@@ -1002,7 +1036,7 @@ return`
 	// save data into DB and write into local state
 	l.accts.accountsWriting.Add(1)
 	l.accts.commitRound(3, 0, 0)
-	l.reloadLedger()
+	l.accts.accountsWriting.Wait()
 
 	// check first write
 	blk, err = l.Block(2)
@@ -1058,6 +1092,14 @@ return`
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
+	l.accts.ctxCancel() // force commitSyncer to exit
+
+	// wait commitSyncer to exit
+	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
+	select {
+	case <-l.accts.commitSyncerClosed:
+		break
+	}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -1083,7 +1125,7 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{})
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
 	a.NoError(err)
 
 	appIdx := basics.AppIndex(1) // first tnx => idx = 1
@@ -1116,7 +1158,7 @@ return`
 	stx2 := sign(initKeys, payment)
 
 	blk := makeNewEmptyBlock(t, l, genesisID, genesisInitState.Accounts)
-	txib1, err := blk.EncodeSignedTxn(stx1, transactions.ApplyData{EvalDelta: basics.EvalDelta{
+	txib1, err := blk.EncodeSignedTxn(stx1, transactions.ApplyData{EvalDelta: transactions.EvalDelta{
 		GlobalDelta: basics.StateDelta{
 			"gk": basics.ValueDelta{Action: basics.SetBytesAction, Bytes: "global"},
 		}},
@@ -1134,7 +1176,7 @@ return`
 	// save data into DB and write into local state
 	l.accts.accountsWriting.Add(1)
 	l.accts.commitRound(2, 0, 0)
-	l.reloadLedger()
+	l.accts.accountsWriting.Wait()
 
 	// check first write
 	blk, err = l.Block(1)
@@ -1251,6 +1293,14 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
+	l.accts.ctxCancel() // force commitSyncer to exit
+
+	// wait commitSyncer to exit
+	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
+	select {
+	case <-l.accts.commitSyncerClosed:
+		break
+	}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -1294,7 +1344,7 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 		ApplicationCallTxnFields: appCallFields,
 	}
 	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall, transactions.ApplyData{
-		EvalDelta: basics.EvalDelta{
+		EvalDelta: transactions.EvalDelta{
 			LocalDeltas: map[uint64]basics.StateDelta{
 				accountIdx: {
 					"lk0": basics.ValueDelta{
@@ -1313,7 +1363,7 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	// save data into DB and write into local state
 	l.accts.accountsWriting.Add(1)
 	l.accts.commitRound(2, 0, 0)
-	l.reloadLedger()
+	l.accts.accountsWriting.Wait()
 
 	// check first write
 	blk, err := l.Block(2)

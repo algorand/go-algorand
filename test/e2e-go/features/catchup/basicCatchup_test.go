@@ -33,6 +33,7 @@ import (
 
 func TestBasicCatchup(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	if testing.Short() {
 		t.Skip()
@@ -80,6 +81,7 @@ func TestBasicCatchup(t *testing.T) {
 // The current versions are the original v1 and the upgraded to v2.1
 func TestCatchupOverGossip(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 
@@ -201,6 +203,7 @@ const consensusTestUnupgradedToProtocol = protocol.ConsensusVersion("test-unupgr
 
 func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	if testing.Short() {
 		t.Skip()

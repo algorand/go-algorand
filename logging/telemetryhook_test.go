@@ -26,9 +26,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestTelemetryConfig(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	cfg := createTelemetryConfig()
@@ -41,6 +43,7 @@ func TestTelemetryConfig(t *testing.T) {
 }
 
 func TestLoadDefaultConfig(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	configDir, err := ioutil.TempDir("", "testdir")
@@ -64,6 +67,7 @@ func isDefault(cfg TelemetryConfig) bool {
 }
 
 func TestLoggingConfigDataDirFirst(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	globalConfigRoot, err := ioutil.TempDir("", "globalConfigRoot")
@@ -108,6 +112,7 @@ func TestLoggingConfigDataDirFirst(t *testing.T) {
 }
 
 func TestLoggingConfigGlobalSecond(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	globalConfigRoot, err := ioutil.TempDir("", "globalConfigRoot")
@@ -139,6 +144,7 @@ func TestLoggingConfigGlobalSecond(t *testing.T) {
 }
 
 func TestSaveLoadConfig(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	globalConfigRoot, err := ioutil.TempDir("", "globalConfigRoot")
@@ -170,6 +176,7 @@ func TestSaveLoadConfig(t *testing.T) {
 }
 
 func TestAsyncTelemetryHook_CloseDrop(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	const entryCount = 100
 
 	filling := make(chan struct{})
@@ -195,6 +202,7 @@ func TestAsyncTelemetryHook_CloseDrop(t *testing.T) {
 }
 
 func TestAsyncTelemetryHook_QueueDepth(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	const entryCount = 100
 	const maxDepth = 10
 

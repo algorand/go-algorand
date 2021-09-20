@@ -23,6 +23,9 @@ import (
 
 // TestAlgohWithExpect Process all expect script files with suffix Test.exp within the test/e2e-go/cli/algoh/expect directory
 func TestAlgohWithExpect(t *testing.T) {
+	// partitiontest.PartitionTest(t)
+	// Causes double partition, so commented out on purpose
+	defer fixtures.ShutdownSynchronizedTest(t)
 	et := fixtures.MakeExpectTest(t)
 	et.Run()
 }

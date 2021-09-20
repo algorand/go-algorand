@@ -77,16 +77,13 @@ fi
 
 # App create with extra pages, v4 teal
 RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${BIG_TEAL_V4_FILE}" --clear-prog "${BIG_TEAL_V4_FILE}" --extra-pages 3 --global-byteslices 1 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
-EXPERROR="pc=704 dynamic cost budget of 700 exceeded, executing intc_0"
+EXPERROR="pc=704 dynamic cost budget exceeded, executing intc_0: remaining budget is 700 but program cost was 701"
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-extra-pages-test FAIL the application creation should fail %Y%m%d_%H%M%S'
     false
 fi
 
 # App create with extra pages, succeeded
-${gcmd} app create --creator ${ACCOUNT} --approval-prog "${SMALL_TEAL_FILE}" --clear-prog "${SMALL_TEAL_FILE}" --extra-pages 1 --global-byteslices 1 --global-ints 0 --local-byteslices 0 --local-ints 0
-
-# App update
 RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${SMALL_TEAL_FILE}" --clear-prog "${SMALL_TEAL_FILE}" --extra-pages 1 --global-byteslices 1 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
 EXP="Created app"
 APPID=$(echo $RES | awk '{print $NF}')
@@ -97,8 +94,13 @@ fi
 
 RES=$(${gcmd} app info --app-id ${APPID}  2>&1 || true)
 PROGHASH="Approval hash:         7356635AKR4FJOOKXXBWNN6HDJ5U3O2YWAOSK6NZBPMOGIQSWCL2N74VT4"
+EXTRAPAGES="Extra program pages:   1"
 if [[ $RES != *"${PROGHASH}"* ]]; then
-    date '+app-extra-pages-test FAIL the application info should succeed %Y%m%d_%H%M%S'
+    date '+app-extra-pages-test FAIL the application approval program hash is incorrect %Y%m%d_%H%M%S'
+    false
+fi
+if [[ $RES != *"${EXTRAPAGES}"* ]]; then
+    date '+app-extra-pages-test FAIL the application extra pages value is incorrect %Y%m%d_%H%M%S'
     false
 fi
 
@@ -112,5 +114,9 @@ fi
 RES=$(${gcmd} app info --app-id ${APPID}  2>&1 || true)
 if [[ $RES == *"${PROGHASH}"* ]]; then
     date '+app-extra-pages-test FAIL the application approval program should have been updated %Y%m%d_%H%M%S'
+    false
+fi
+if [[ $RES != *"${EXTRAPAGES}"* ]]; then
+    date '+app-extra-pages-test FAIL the application extra pages value is incorrect after update %Y%m%d_%H%M%S'
     false
 fi

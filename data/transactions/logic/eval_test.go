@@ -17,7 +17,6 @@
 package logic
 
 import (
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
@@ -33,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logictest"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -42,10 +42,6 @@ import (
 // we check that TEAL v1 and v2 programs are compatible with the latest evaluator
 func defaultEvalProto() config.ConsensusParams {
 	return defaultEvalProtoWithVersion(LogicVersion)
-}
-
-func defaultEvalProtoV1() config.ConsensusParams {
-	return defaultEvalProtoWithVersion(1)
 }
 
 func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
@@ -59,11 +55,24 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 		// These must be identical to keep an old backward compat test working
 		MinTxnFee:  1001,
 		MinBalance: 1001,
+		// Our sample txn is 42-1066 (and that's used as default in itxn_begin)
+		MaxTxnLife: 1500,
 		// Strange choices below so that we test against conflating them
 		AppFlatParamsMinBalance:  1002,
 		SchemaMinBalancePerEntry: 1003,
 		SchemaUintMinBalance:     1004,
 		SchemaBytesMinBalance:    1005,
+
+		MaxInnerTransactions: 4,
+
+		// With the addition of itxn_field, itxn_submit, which rely on
+		// machinery outside logic package for validity checking, we
+		// need a more realistic set of consensus paramaters.
+		Asset:                 true,
+		MaxAssetNameBytes:     12,
+		MaxAssetUnitNameBytes: 6,
+		MaxAssetURLBytes:      32,
+		MaxAssetDecimals:      4,
 	}
 }
 
@@ -88,14 +97,14 @@ func defaultEvalParamsWithVersion(sb *strings.Builder, txn *transactions.SignedT
 	if txn != nil {
 		pt = txn
 	} else {
-		var at transactions.SignedTxn
-		pt = &at
+		pt = &transactions.SignedTxn{}
 	}
 
 	ep := EvalParams{}
 	ep.Proto = &proto
 	ep.Txn = pt
 	ep.PastSideEffects = MakePastSideEffects(5)
+	ep.Specials = &transactions.SpecialAddresses{}
 	if sb != nil { // have to do this since go's nil semantics: https://golang.org/doc/faq#nil_error
 		ep.Trace = sb
 	}
@@ -499,35 +508,14 @@ func TestMulOverflow(t *testing.T) {
 	testPanics(t, "int 0x111111111; int 0x222222222; *; pop; int 1", 1)
 }
 
-func TestMulwImpl(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	t.Parallel()
-	high, low, err := opMulwImpl(1, 2)
-	require.NoError(t, err)
-	require.Equal(t, uint64(0), high)
-	require.Equal(t, uint64(2), low)
-
-	high, low, err = opMulwImpl(0x111111111, 0x222222222)
-	require.NoError(t, err)
-	require.Equal(t, uint64(2), high)
-	require.Equal(t, uint64(0x468acf130eca8642), low)
-
-	high, low, err = opMulwImpl(1, 0)
-	require.NoError(t, err)
-	require.Equal(t, uint64(0), high)
-	require.Equal(t, uint64(0), low)
-
-	high, low, err = opMulwImpl((1<<64)-1, (1<<64)-1)
-	require.NoError(t, err)
-	require.Equal(t, uint64(0xfffffffffffffffe), high)
-	require.Equal(t, uint64(1), low)
-}
-
 func TestMulw(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
+	testAccepts(t, "int 1; int 2; mulw; int 2; ==; assert; int 0; ==", 3)
+	testAccepts(t, "int 0x111111111; int 0x222222222; mulw; int 0x468acf130eca8642; ==; assert; int 2; ==", 3)
+	testAccepts(t, "int 1; int 0; mulw; int 0; ==; assert; int 0; ==", 3)
+	testAccepts(t, "int 0xFFFFFFFFFFFFFFFF; int 0xFFFFFFFFFFFFFFFF; mulw; int 1; ==; assert; int 0xFFFFFFFFFFFFFFFe; ==", 3)
 	testAccepts(t, `
 int 0x111111111
 int 0x222222222
@@ -546,31 +534,15 @@ int 1                   // ret 1
 `, 1)
 }
 
-func TestAddwImpl(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	t.Parallel()
-	carry, sum := opAddwImpl(1, 2)
-	require.Equal(t, uint64(0), carry)
-	require.Equal(t, uint64(3), sum)
-
-	carry, sum = opAddwImpl(0xFFFFFFFFFFFFFFFD, 0x45)
-	require.Equal(t, uint64(1), carry)
-	require.Equal(t, uint64(0x42), sum)
-
-	carry, sum = opAddwImpl(0, 0)
-	require.Equal(t, uint64(0), carry)
-	require.Equal(t, uint64(0), sum)
-
-	carry, sum = opAddwImpl((1<<64)-1, (1<<64)-1)
-	require.Equal(t, uint64(1), carry)
-	require.Equal(t, uint64((1<<64)-2), sum)
-}
-
 func TestAddw(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
+	testAccepts(t, "int 1; int 2; addw; int 3; ==; assert; int 0; ==", 3)
+	testAccepts(t, "int 0xFFFFFFFFFFFFFFFD; int 0x45; addw; int 0x42; ==; assert; int 1; ==", 3)
+	testAccepts(t, "int 0; int 0; addw; int 0; ==; assert; int 0; ==", 3)
+	testAccepts(t, "int 0xFFFFFFFFFFFFFFFF; dup; addw; int 0xFFFFFFFFFFFFFFFe; ==; assert; int 1; ==", 3)
+
 	testAccepts(t, `
 int 0xFFFFFFFFFFFFFFFF
 int 0x43
@@ -693,6 +665,35 @@ int 1
 			testAccepts(t, fmt.Sprintf(pattern, i+j<<40, (i*j)<<40+j), 4)
 		}
 	}
+}
+
+func TestMulDiv(t *testing.T) {
+	// Demonstrate a "function" that expects three u64s on stack,
+	// and calculates B*C/A. (Following opcode documentation
+	// convention, C is top-of-stack, B is below it, and A is
+	// below B.
+
+	muldiv := `
+muldiv:
+mulw				// multiply B*C. puts TWO u64s on stack
+int 0				// high word of C as a double-word
+dig 3				// pull C to TOS
+divmodw
+pop				// pop unneeded remainder low word
+pop                             // pop unneeded remainder high word
+swap
+int 0
+==
+assert				// ensure high word of quotient was 0
+swap				// bring C to surface
+pop				// in order to get rid of it
+retsub
+`
+	testAccepts(t, "int 5; int 8; int 10; callsub muldiv; int 16; ==; return;"+muldiv, 4)
+
+	testRejects(t, "int 5; int 8; int 10; callsub muldiv; int 15; ==; return;"+muldiv, 4)
+
+	testAccepts(t, "int 500000000000; int 80000000000; int 100000000000; callsub muldiv; int 16000000000; ==; return;"+muldiv, 4)
 }
 
 func TestDivZero(t *testing.T) {
@@ -905,18 +906,11 @@ func TestArg(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `arg 0
-arg 1
-==
-arg 2
-arg 3
-!=
-&&
-arg 4
-len
-int 9
-<
-&&`, v)
+			source := "arg 0; arg 1; ==; arg 2; arg 3; !=; &&; arg 4; len; int 9; <; &&;"
+			if v >= 5 {
+				source += "int 0; args; int 1; args; ==; assert; int 2; args; int 3; args; !=; assert"
+			}
+			ops := testProg(t, source, v)
 			err := Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
 			var txn transactions.SignedTxn
@@ -994,7 +988,15 @@ const globalV4TestProgram = globalV3TestProgram + `
 `
 
 const globalV5TestProgram = globalV4TestProgram + `
-// No new globals in v5
+global CurrentApplicationAddress
+len
+int 32
+==
+&&
+global GroupID
+byte 0x0706000000000000000000000000000000000000000000000000000000000000
+==
+&&
 `
 
 func TestGlobal(t *testing.T) {
@@ -1023,18 +1025,18 @@ func TestGlobal(t *testing.T) {
 			EvalStateful, CheckStateful,
 		},
 		5: {
-			CreatorAddress, globalV5TestProgram,
+			GroupID, globalV5TestProgram,
 			EvalStateful, CheckStateful,
 		},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
-	ledger := makeTestLedger(nil)
-	ledger.appID = 42
+
+	ledger := logictest.MakeLedger(nil)
 	addr, err := basics.UnmarshalChecksumAddress(testAddr)
 	require.NoError(t, err)
-	ledger.creatorAddr = addr
-	for v := uint64(0); v <= AssemblerMaxVersion; v++ {
+	ledger.NewApp(addr, basics.AppIndex(42), basics.AppParams{})
+	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		_, ok := tests[v]
 		require.True(t, ok)
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
@@ -1052,12 +1054,10 @@ func TestGlobal(t *testing.T) {
 			require.NoError(t, err)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
+			txn.Txn.Group = crypto.Digest{0x07, 0x06}
 			txgroup := make([]transactions.SignedTxn, 1)
 			txgroup[0] = txn
 			sb := strings.Builder{}
-			block := bookkeeping.Block{}
-			block.BlockHeader.Round = 999999
-			block.BlockHeader.TimeStamp = 2069
 			proto := config.ConsensusParams{
 				MinTxnFee:         123,
 				MinBalance:        1000000,
@@ -1116,9 +1116,8 @@ txn TypeEnum
 int %s
 ==
 &&`, symbol, string(tt))
-					ops, err := AssembleStringWithVersion(text, v)
-					require.NoError(t, err)
-					err = Check(ops.Program, defaultEvalParams(nil, nil))
+					ops := testProg(t, text, v)
+					err := Check(ops.Program, defaultEvalParams(nil, nil))
 					require.NoError(t, err)
 					var txn transactions.SignedTxn
 					txn.Txn.Type = tt
@@ -1420,6 +1419,26 @@ assert
 int 1
 `
 
+const testTxnProgramTextV5 = testTxnProgramTextV4 + `
+txn Nonparticipation
+pop
+int 1
+==
+assert
+txn ConfigAssetMetadataHash
+int 2
+txnas ApplicationArgs
+==
+assert
+txn Sender
+int 0
+args
+==
+assert
+
+int 1
+`
+
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
@@ -1438,6 +1457,7 @@ func makeSampleTxn() transactions.SignedTxn {
 	txn.Txn.VoteFirst = 1317
 	txn.Txn.VoteLast = 17776
 	txn.Txn.VoteKeyDilution = 1
+	txn.Txn.Nonparticipation = false
 	txn.Txn.Type = protocol.PaymentTx
 	txn.Txn.AssetAmount = 1234
 	txn.Txn.AssetSender = txn.Txn.Receiver
@@ -1504,8 +1524,9 @@ func TestTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	for _, txnField := range TxnFieldNames {
-		if !strings.Contains(testTxnProgramTextV4, txnField) {
+	for i, txnField := range TxnFieldNames {
+		fs := txnFieldSpecByField[TxnField(i)]
+		if !fs.effects && !strings.Contains(testTxnProgramTextV5, txnField) {
 			if txnField != FirstValidTime.String() {
 				t.Errorf("TestTxn missing field %v", txnField)
 			}
@@ -1517,6 +1538,7 @@ func TestTxn(t *testing.T) {
 		2: testTxnProgramTextV2,
 		3: testTxnProgramTextV3,
 		4: testTxnProgramTextV4,
+		5: testTxnProgramTextV5,
 	}
 
 	clearOps := testProg(t, "int 1", 1)
@@ -1553,7 +1575,7 @@ func TestTxn(t *testing.T) {
 			}
 			sb := strings.Builder{}
 			ep := defaultEvalParams(&sb, &txn)
-			ep.Ledger = makeTestLedger(nil)
+			ep.Ledger = logictest.MakeLedger(nil)
 			ep.GroupIndex = 3
 			pass, err := Eval(ops.Program, ep)
 			if !pass {
@@ -1609,10 +1631,9 @@ fail:
 int 0
 return
 `
-	ops, err := AssembleStringWithVersion(cachedTxnProg, 2)
-	require.NoError(t, err)
+	ops := testProg(t, cachedTxnProg, 2)
 	sb := strings.Builder{}
-	err = Check(ops.Program, defaultEvalParams(&sb, nil))
+	err := Check(ops.Program, defaultEvalParams(&sb, nil))
 	if err != nil {
 		t.Log(hex.EncodeToString(ops.Program))
 		t.Log(sb.String())
@@ -1657,10 +1678,8 @@ int 100
 	targetTxn.Txn.Type = protocol.AssetConfigTx
 	txgroup[0] = targetTxn
 	sb := strings.Builder{}
-	ledger := makeTestLedger(nil)
-	ledger.setTrackedCreatable(0, basics.CreatableLocator{
-		Index: 100,
-	})
+	ledger := logictest.MakeLedger(nil)
+	ledger.SetTrackedCreatable(0, basics.CreatableLocator{Index: 100})
 	ep := defaultEvalParams(&sb, &txn)
 	ep.Ledger = ledger
 	ep.TxnGroup = txgroup
@@ -1701,8 +1720,7 @@ int 0
 	ep.TxnGroup[0].Txn.Type = protocol.AssetConfigTx
 
 	// should fail when no creatable was created
-	var nilIndex basics.CreatableIndex
-	ledger.trackedCreatables[0] = nilIndex
+	ledger.SetTrackedCreatable(0, basics.CreatableLocator{})
 	_, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "the txn did not create anything")
@@ -1782,7 +1800,7 @@ int 1
 ==
 &&
 `
-	gtxnText := gtxnTextV2 + ` gtxn 0 ExtraProgramPages
+	gtxnTextV4 := gtxnTextV2 + ` gtxn 0 ExtraProgramPages
 int 0
 ==
 &&
@@ -1792,10 +1810,24 @@ int 2
 &&
 `
 
+	gtxnTextV5 := gtxnTextV4 + `int 0
+gtxnas 0 Accounts
+gtxn 0 Sender
+==
+&&
+int 0
+int 0
+gtxnsas Accounts
+gtxn 0 Sender
+==
+&&
+`
+
 	tests := map[uint64]string{
 		1: gtxnTextV1,
 		2: gtxnTextV2,
-		4: gtxnText,
+		4: gtxnTextV4,
+		5: gtxnTextV5,
 	}
 
 	for v, source := range tests {
@@ -2028,6 +2060,85 @@ global ZeroAddress
 	require.True(t, pass)
 }
 
+func TestTxnas(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+
+	source := `int 1
+txnas Accounts
+int 0
+txnas ApplicationArgs
+==
+`
+	ops := testProg(t, source, AssemblerMaxVersion)
+	var txn transactions.SignedTxn
+	txn.Txn.Accounts = make([]basics.Address, 1)
+	txn.Txn.Accounts[0] = txn.Txn.Sender
+	txn.Txn.ApplicationArgs = make([][]byte, 1)
+	txn.Txn.ApplicationArgs[0] = []byte(protocol.PaymentTx)
+	txgroup := make([]transactions.SignedTxn, 1)
+	txgroup[0] = txn
+	ep := defaultEvalParams(nil, &txn)
+	ep.TxnGroup = txgroup
+	_, err := Eval(ops.Program, ep)
+	require.NoError(t, err)
+
+	// check special case: Account 0 == Sender
+	// even without any additional context
+	source = `int 0
+txnas Accounts
+txn Sender
+==
+`
+	ops2 := testProg(t, source, AssemblerMaxVersion)
+	var txn2 transactions.SignedTxn
+	copy(txn2.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
+	ep2 := defaultEvalParams(nil, &txn2)
+	pass, err := Eval(ops2.Program, ep2)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// check gtxnas
+	source = `int 1
+gtxnas 0 Accounts
+txna ApplicationArgs 0
+==`
+	ops = testProg(t, source, AssemblerMaxVersion)
+	require.NoError(t, err)
+	_, err = Eval(ops.Program, ep)
+	require.NoError(t, err)
+
+	// check special case: Account 0 == Sender
+	// even without any additional context
+	source = `int 0
+gtxnas 0 Accounts
+txn Sender
+==
+	`
+	ops3 := testProg(t, source, AssemblerMaxVersion)
+	var txn3 transactions.SignedTxn
+	copy(txn2.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
+	txgroup3 := make([]transactions.SignedTxn, 1)
+	txgroup3[0] = txn3
+	ep3 := defaultEvalParams(nil, &txn3)
+	ep3.TxnGroup = txgroup3
+	pass, err = Eval(ops3.Program, ep3)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// check gtxnsas
+	source = `int 0
+int 1
+gtxnsas Accounts
+txna ApplicationArgs 0
+==`
+	ops = testProg(t, source, AssemblerMaxVersion)
+	require.NoError(t, err)
+	_, err = Eval(ops.Program, ep)
+	require.NoError(t, err)
+}
+
 func TestBitOps(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -2143,6 +2254,7 @@ len`, 2)
 }
 
 func TestExtractOp(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testAccepts(t, "byte 0x123456789abc; extract 1 2; byte 0x3456; ==", 5)
 	testAccepts(t, "byte 0x123456789abc; extract 0 6; byte 0x123456789abc; ==", 5)
@@ -2152,13 +2264,17 @@ func TestExtractOp(t *testing.T) {
 
 	testAccepts(t, "byte 0x123456789abc; int 5; int 1; extract3; byte 0xbc; ==", 5)
 
-	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract16bits; int 0x3456; ==", 5)
-	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract32bits; int 0x3456789a; ==", 5)
-	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract64bits; int 0x123456789abcdef0; ==", 5)
-	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract64bits; int 0x123456789abcdef; !=", 5)
+	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract_uint16; int 0x3456; ==", 5)
+	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract_uint32; int 0x3456789a; ==", 5)
+	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract_uint64; int 0x123456789abcdef0; ==", 5)
+	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract_uint64; int 0x123456789abcdef; !=", 5)
+
+	testAccepts(t, `byte "hello"; extract 5 0; byte ""; ==`, 5)
+	testAccepts(t, `byte "hello"; int 5; int 0; extract3; byte ""; ==`, 5)
 }
 
 func TestExtractFlop(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	// fails in compiler
 	testProg(t, `byte 0xf000000000000000
@@ -2196,17 +2312,17 @@ func TestExtractFlop(t *testing.T) {
 
 	err = testPanics(t, `byte 0xf000000000000000
 	int 55
-	extract16bits`, 5)
+	extract_uint16`, 5)
 	require.Contains(t, err.Error(), "extract range beyond length of string")
 
 	err = testPanics(t, `byte 0xf000000000000000
 	int 9
-	extract32bits`, 5)
+	extract_uint32`, 5)
 	require.Contains(t, err.Error(), "extract range beyond length of string")
 
 	err = testPanics(t, `byte 0xf000000000000000
 	int 1
-	extract64bits`, 5)
+	extract_uint64`, 5)
 	require.Contains(t, err.Error(), "extract range beyond length of string")
 }
 
@@ -2214,6 +2330,8 @@ func TestLoadStore(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
+	testAccepts(t, "load 3; int 0; ==;", 1)
+
 	testAccepts(t, `int 37
 int 37
 store 1
@@ -2229,6 +2347,35 @@ load 0
 load 1
 +
 &&`, 1)
+}
+
+func TestLoadStoreStack(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	testAccepts(t, "int 3; loads; int 0; ==;", 5)
+	testAccepts(t, `int 37
+int 1
+int 37
+stores
+int 42
+byte 0xabbacafe
+stores
+int 37
+==
+int 0
+swap
+stores
+int 42
+loads
+byte 0xabbacafe
+==
+int 0
+loads
+int 1
+loads
++
+&&`, 5)
 }
 
 func TestLoadStore2(t *testing.T) {
@@ -2355,7 +2502,7 @@ int 1`,
 					Proto:           &proto,
 					Txn:             &txgroup[j],
 					TxnGroup:        txgroup,
-					GroupIndex:      j,
+					GroupIndex:      uint64(j),
 					PastSideEffects: pastSideEffects,
 				}
 			}
@@ -2429,7 +2576,7 @@ int 1`,
 					Proto:           &proto,
 					Txn:             &txgroup[j],
 					TxnGroup:        txgroup,
-					GroupIndex:      j,
+					GroupIndex:      uint64(j),
 					PastSideEffects: pastSideEffects,
 				}
 			}
@@ -2502,7 +2649,7 @@ byte "txn 2"
 			Proto:           &proto,
 			Txn:             &txgroup[j],
 			TxnGroup:        txgroup,
-			GroupIndex:      j,
+			GroupIndex:      uint64(j),
 			PastSideEffects: pastSideEffects,
 		}
 	}
@@ -2582,44 +2729,6 @@ func TestCompares(t *testing.T) {
 	testAccepts(t, testCompareProgramText, 1)
 }
 
-func TestKeccak256(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	t.Parallel()
-	/*
-		pip install sha3
-		import sha3
-		blob=b'fnord'
-		sha3.keccak_256(blob).hexdigest()
-	*/
-	progText := `byte 0x666E6F7264
-keccak256
-byte 0xc195eca25a6f4c82bfba0287082ddb0d602ae9230f9cf1f1a40b68f8e2c41567
-==`
-	testAccepts(t, progText, 1)
-}
-
-func TestSHA512_256(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	t.Parallel()
-	/*
-		pip cryptography
-		from cryptography.hazmat.backends import default_backend
-		from cryptography.hazmat.primitives import hashes
-		import base64
-		digest = hashes.Hash(hashes.SHA512_256(), backend=default_backend())
-		digest.update(b'fnord')
-		base64.b16encode(digest.finalize())
-	*/
-	progText := `byte 0x666E6F7264
-sha512_256
-
-byte 0x98D2C31612EA500279B6753E5F6E780CA63EBA8274049664DAD66A2565ED1D2A
-==`
-	testAccepts(t, progText, 1)
-}
-
 func TestSlowLogic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -2684,10 +2793,9 @@ func TestStackUnderflow(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 1`, v)
+			ops := testProg(t, `int 1`, v)
 			ops.Program = append(ops.Program, 0x08) // +
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
+			err := Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
@@ -2707,10 +2815,9 @@ func TestWrongStackTypeRuntime(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 1`, v)
-			require.NoError(t, err)
+			ops := testProg(t, `int 1`, v)
 			ops.Program = append(ops.Program, 0x01, 0x15) // sha256, len
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
+			err := Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
@@ -2730,11 +2837,9 @@ func TestEqMismatch(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`byte 0x1234
-int 1`, v)
-			require.NoError(t, err)
+			ops := testProg(t, `byte 0x1234; int 1`, v)
 			ops.Program = append(ops.Program, 0x12) // ==
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
+			err := Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err) // TODO: Check should know the type stack was wrong
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
@@ -2754,11 +2859,9 @@ func TestNeqMismatch(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`byte 0x1234
-int 1`, v)
-			require.NoError(t, err)
+			ops := testProg(t, `byte 0x1234; int 1`, v)
 			ops.Program = append(ops.Program, 0x13) // !=
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
+			err := Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err) // TODO: Check should know the type stack was wrong
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
@@ -2778,11 +2881,9 @@ func TestWrongStackTypeRuntime2(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`byte 0x1234
-int 1`, v)
-			require.NoError(t, err)
+			ops := testProg(t, `byte 0x1234; int 1`, v)
 			ops.Program = append(ops.Program, 0x08) // +
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
+			err := Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
 			sb := strings.Builder{}
 			pass, _ := Eval(ops.Program, defaultEvalParams(&sb, nil))
@@ -2802,15 +2903,14 @@ func TestIllegalOp(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 1`, v)
-			require.NoError(t, err)
+			ops := testProg(t, `int 1`, v)
 			for opcode, spec := range opsByOpcode[v] {
 				if spec.op == nil {
 					ops.Program = append(ops.Program, byte(opcode))
 					break
 				}
 			}
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
+			err := Check(ops.Program, defaultEvalParams(nil, nil))
 			require.Error(t, err)
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
@@ -2830,15 +2930,14 @@ func TestShortProgram(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 1
+			ops := testProg(t, `int 1
 bnz done
 done:
 int 1
 `, v)
-			require.NoError(t, err)
 			// cut two last bytes - intc_1 and last byte of bnz
 			ops.Program = ops.Program[:len(ops.Program)-2]
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
+			err := Check(ops.Program, defaultEvalParams(nil, nil))
 			require.Error(t, err)
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
@@ -2928,10 +3027,10 @@ func TestShortBytecblock2(t *testing.T) {
 
 const panicString = "out of memory, buffer overrun, stack overflow, divide by zero, halt and catch fire"
 
-func opPanic(cx *evalContext) {
+func opPanic(cx *EvalContext) {
 	panic(panicString)
 }
-func checkPanic(cx *evalContext) error {
+func checkPanic(cx *EvalContext) error {
 	panic(panicString)
 }
 
@@ -3470,20 +3569,9 @@ func evalLoop(b *testing.B, runs int, program []byte) {
 }
 
 func benchmarkBasicProgram(b *testing.B, source string) {
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops := testProg(b, source, AssemblerMaxVersion)
+	err := Check(ops.Program, defaultEvalParams(nil, nil))
 	require.NoError(b, err)
-	err = Check(ops.Program, defaultEvalParams(nil, nil))
-	require.NoError(b, err)
-	evalLoop(b, b.N, ops.Program)
-}
-
-func benchmarkExpensiveProgram(b *testing.B, source string) {
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(b, err)
-	err = Check(ops.Program, defaultEvalParams(nil, nil))
-	require.NoError(b, err)
-	_, err = Eval(ops.Program, defaultEvalParams(nil, nil))
-	require.Error(b, err) // excessive cost
 	evalLoop(b, b.N, ops.Program)
 }
 
@@ -3498,9 +3586,8 @@ func benchmarkOperation(b *testing.B, prefix string, operation string, suffix st
 	inst := strings.Count(operation, ";") + strings.Count(operation, "\n")
 	source := prefix + ";" + strings.Repeat(operation+";", 2000) + ";" + suffix
 	source = strings.ReplaceAll(source, ";", "\n")
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(b, err)
-	err = Check(ops.Program, defaultEvalParams(nil, nil))
+	ops := testProg(b, source, AssemblerMaxVersion)
+	err := Check(ops.Program, defaultEvalParams(nil, nil))
 	require.NoError(b, err)
 	evalLoop(b, runs, ops.Program)
 	b.ReportMetric(float64(inst)*15.0, "waste/op")
@@ -3511,8 +3598,10 @@ func BenchmarkUintMath(b *testing.B) {
 		{"pop1", "", "int 1234576; pop", "int 1"},
 		{"pop", "", "int 1234576; int 6712; pop; pop", "int 1"},
 		{"add", "", "int 1234576; int 6712; +; pop", "int 1"},
+		{"addw", "", "int 21276237623; int 32387238723; addw; pop; pop", "int 1"},
 		{"sub", "", "int 1234576; int 2; -; pop", "int 1"},
 		{"mul", "", "int 212; int 323; *; pop", "int 1"},
+		{"mulw", "", "int 21276237623; int 32387238723; mulw; pop; pop", "int 1"},
 		{"div", "", "int 736247364; int 892; /; pop", "int 1"},
 		{"divmodw", "", "int 736247364; int 892; int 126712; int 71672; divmodw; pop; pop; pop; pop", "int 1"},
 		{"sqrt", "", "int 736247364; sqrt; pop", "int 1"},
@@ -3602,22 +3691,6 @@ func BenchmarkBigMath(b *testing.B) {
 	}
 }
 
-func BenchmarkHash(b *testing.B) {
-	for _, hash := range []string{"sha256", "keccak256", "sha512_256"} {
-		b.Run(hash+"-small", func(b *testing.B) { // hash 32 bytes
-			benchmarkOperation(b, "int 32; bzero", hash, "pop; int 1")
-		})
-		b.Run(hash+"-med", func(b *testing.B) { // hash 128 bytes
-			benchmarkOperation(b, "int 32; bzero",
-				"dup; concat; dup; concat;"+hash, "pop; int 1")
-		})
-		b.Run(hash+"-big", func(b *testing.B) { // hash 512 bytes
-			benchmarkOperation(b, "int 32; bzero",
-				"dup; concat; dup; concat; dup; concat; dup; concat;"+hash, "pop; int 1")
-		})
-	}
-}
-
 func BenchmarkAddx64(b *testing.B) {
 	progs := [][]string{
 		{"add long stack", addBenchmarkSource},
@@ -3632,123 +3705,6 @@ func BenchmarkAddx64(b *testing.B) {
 
 func BenchmarkNopPassx1(b *testing.B) {
 	benchmarkBasicProgram(b, "int 1")
-}
-
-func BenchmarkSha256Raw(b *testing.B) {
-	addr, _ := basics.UnmarshalChecksumAddress("OC6IROKUJ7YCU5NV76AZJEDKYQG33V2CJ7HAPVQ4ENTAGMLIOINSQ6EKGE")
-	a := addr[:]
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		t := sha256.Sum256(a)
-		a = t[:]
-	}
-}
-
-func TestEd25519verify(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	t.Parallel()
-	var s crypto.Seed
-	crypto.RandBytes(s[:])
-	c := crypto.GenerateSignatureSecrets(s)
-	msg := "62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
-	data, err := hex.DecodeString(msg)
-	require.NoError(t, err)
-	pk := basics.Address(c.SignatureVerifier)
-	pkStr := pk.String()
-
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(fmt.Sprintf(`arg 0
-arg 1
-addr %s
-ed25519verify`, pkStr), v)
-			require.NoError(t, err)
-			sig := c.Sign(Msg{
-				ProgramHash: crypto.HashObj(Program(ops.Program)),
-				Data:        data[:],
-			})
-			var txn transactions.SignedTxn
-			txn.Lsig.Logic = ops.Program
-			txn.Lsig.Args = [][]byte{data[:], sig[:]}
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, &txn))
-			if !pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.True(t, pass)
-			require.NoError(t, err)
-
-			// short sig will fail
-			txn.Lsig.Args[1] = sig[1:]
-			pass, err = Eval(ops.Program, defaultEvalParams(nil, &txn))
-			require.False(t, pass)
-			require.Error(t, err)
-			isNotPanic(t, err)
-
-			// flip a bit and it should not pass
-			msg1 := "52fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
-			data1, err := hex.DecodeString(msg1)
-			require.NoError(t, err)
-			txn.Lsig.Args = [][]byte{data1, sig[:]}
-			sb1 := strings.Builder{}
-			pass1, err := Eval(ops.Program, defaultEvalParams(&sb1, &txn))
-			require.False(t, pass1)
-			require.NoError(t, err)
-			isNotPanic(t, err)
-		})
-	}
-}
-
-func BenchmarkEd25519Verifyx1(b *testing.B) {
-	//benchmark setup
-	var data [][32]byte
-	var programs [][]byte
-	var signatures []crypto.Signature
-
-	for i := 0; i < b.N; i++ {
-		var buffer [32]byte //generate data to be signed
-		crypto.RandBytes(buffer[:])
-		data = append(data, buffer)
-
-		var s crypto.Seed //generate programs and signatures
-		crypto.RandBytes(s[:])
-		secret := crypto.GenerateSignatureSecrets(s)
-		pk := basics.Address(secret.SignatureVerifier)
-		pkStr := pk.String()
-		ops, err := AssembleStringWithVersion(fmt.Sprintf(`arg 0
-arg 1
-addr %s
-ed25519verify`, pkStr), AssemblerMaxVersion)
-		require.NoError(b, err)
-		programs = append(programs, ops.Program)
-		sig := secret.Sign(Msg{
-			ProgramHash: crypto.HashObj(Program(ops.Program)),
-			Data:        buffer[:],
-		})
-		signatures = append(signatures, sig)
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		var txn transactions.SignedTxn
-		txn.Lsig.Logic = programs[i]
-		txn.Lsig.Args = [][]byte{data[i][:], signatures[i][:]}
-		sb := strings.Builder{}
-		ep := defaultEvalParams(&sb, &txn)
-		pass, err := Eval(programs[i], ep)
-		if !pass {
-			b.Log(hex.EncodeToString(programs[i]))
-			b.Log(sb.String())
-		}
-		if err != nil {
-			require.NoError(b, err)
-		}
-		if !pass {
-			require.True(b, pass)
-		}
-	}
 }
 
 func BenchmarkCheckx5(b *testing.B) {
@@ -4064,14 +4020,14 @@ func TestAllowedOpcodesV2(t *testing.T) {
 		"dup2":              "int 1; int 2; dup2",
 		"concat":            "byte 0x41; dup; concat",
 		"substring":         "byte 0x41; substring 0 1",
-		"substring3":        "byte 0x41; dup; dup; substring3",
+		"substring3":        "byte 0x41; int 0; int 1; substring3",
 		"balance":           "int 1; balance",
 		"app_opted_in":      "int 0; dup; app_opted_in",
 		"app_local_get":     "int 0; byte 0x41; app_local_get",
 		"app_local_get_ex":  "int 0; dup; byte 0x41; app_local_get_ex",
 		"app_global_get":    "int 0; byte 0x41; app_global_get",
 		"app_global_get_ex": "int 0; byte 0x41; app_global_get_ex",
-		"app_local_put":     "int 0; dup; byte 0x41; app_local_put",
+		"app_local_put":     "int 0; byte 0x41; dup; app_local_put",
 		"app_global_put":    "byte 0x41; dup; app_global_put",
 		"app_local_del":     "int 0; byte 0x41; app_local_del",
 		"app_global_del":    "byte 0x41; app_global_del",
@@ -4234,6 +4190,7 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 	var outer error
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			t.Helper()
 			if v < introduced {
 				testProg(t, obfuscate(program), v, expect{0, "...was introduced..."})
 				return
@@ -4275,17 +4232,20 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 }
 
 func testAccepts(t *testing.T, program string, introduced uint64) {
+	t.Helper()
 	testEvaluation(t, program, introduced, func(pass bool, err error) bool {
 		return pass && err == nil
 	})
 }
 func testRejects(t *testing.T, program string, introduced uint64) {
+	t.Helper()
 	testEvaluation(t, program, introduced, func(pass bool, err error) bool {
 		// Returned False, but didn't panic
 		return !pass && err == nil
 	})
 }
 func testPanics(t *testing.T, program string, introduced uint64) error {
+	t.Helper()
 	return testEvaluation(t, program, introduced, func(pass bool, err error) bool {
 		// TEAL panic! not just reject at exit
 		return !pass && err != nil
@@ -4314,6 +4274,7 @@ func TestBits(t *testing.T) {
 	testPanics(t, "int 1; int 64; getbit; int 0; ==", 3)
 
 	testAccepts(t, "int 0; int 3; int 1; setbit; int 8; ==", 3)
+	testPanics(t, "int 0; int 3; int 2; setbit; pop; int 1", 3)
 	testAccepts(t, "int 8; int 3; getbit; int 1; ==", 3)
 
 	testAccepts(t, "int 15; int 3; int 0; setbit; int 7; ==", 3)
@@ -4355,6 +4316,7 @@ func TestBytes(t *testing.T) {
 	testPanics(t, `byte "john"; int 4; getbyte; int 1; ==`, 3)    // past end
 
 	testAccepts(t, `byte "john"; int 2; int 105; setbyte; byte "join"; ==`, 3)
+	testPanics(t, `byte "john"; int 2; int 256; setbyte; pop; int 1;`, 3)
 
 	testPanics(t, `global ZeroAddress; dup; concat; int 64; int 7; setbyte; int 1; return`, 3)
 	testAccepts(t, `global ZeroAddress; dup; concat; int 63; int 7; setbyte; int 1; return`, 3)
@@ -4368,6 +4330,7 @@ func TestBytes(t *testing.T) {
 }
 
 func TestMethod(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	// Although 'method' is new around the time of v5, it is a
 	// pseudo-op, so it's ok to use it earlier, as it compiles to
@@ -4404,6 +4367,7 @@ func TestDig(t *testing.T) {
 }
 
 func TestCover(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testAccepts(t, "int 4; int 3; int 2; int 1; cover 0; int 1; ==; return", 5)
 	testAccepts(t, "int 4; int 3; int 2; int 1; cover 1; int 2; ==; return", 5)
@@ -4414,6 +4378,7 @@ func TestCover(t *testing.T) {
 }
 
 func TestUncover(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testAccepts(t, "int 4; int 3; int 2; int 1; uncover 0; int 1; ==; return", 5)
 	testAccepts(t, "int 4; int 3; int 2; int 1; uncover 2; int 3; ==; return", 5)
@@ -4555,17 +4520,21 @@ func TestShifts(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
+	testAccepts(t, "int 1; int 0; shl; int 1; ==", 4)
 	testAccepts(t, "int 1; int 1; shl; int 2; ==", 4)
 	testAccepts(t, "int 1; int 2; shl; int 4; ==", 4)
 	testAccepts(t, "int 3; int 2; shl; int 12; ==", 4)
 	testAccepts(t, "int 2; int 63; shl; int 0; ==", 4)
 
+	testAccepts(t, "int 3; int 0; shr; int 3; ==", 4)
 	testAccepts(t, "int 1; int 1; shr; int 0; ==", 4)
 	testAccepts(t, "int 1; int 2; shr; int 0; ==", 4)
 	testAccepts(t, "int 3; int 1; shr; int 1; ==", 4)
 	testAccepts(t, "int 96; int 3; shr; int 12; ==", 4)
 	testAccepts(t, "int 8756675; int 63; shr; int 0; ==", 4)
 
+	testPanics(t, "int 8756675; int 64; shr; int 0; ==", 4)
+	testPanics(t, "int 8756675; int 64; shl; int 0; ==", 4)
 }
 
 func TestSqrt(t *testing.T) {
@@ -4605,6 +4574,10 @@ func TestExp(t *testing.T) {
 	testAccepts(t, "int 3; int 1; exp; int 3; ==", 4)
 	testAccepts(t, "int 96; int 3; exp; int 884736; ==", 4)
 	testPanics(t, "int 96; int 15; exp; int 884736; >", 4)
+
+	// These seem the same but check different code paths
+	testPanics(t, "int 2; int 64; exp; pop; int 1", 4)
+	testPanics(t, "int 4; int 32; exp; pop; int 1", 4)
 }
 
 func TestExpw(t *testing.T) {
@@ -4621,6 +4594,10 @@ func TestExpw(t *testing.T) {
 	testPanics(t, "int 64; int 22; expw; pop; pop; int 1", 4)  // (2^6)^22 = 2^132
 
 	testAccepts(t, "int 97; int 15; expw; int 10271255586529954209; ==; assert; int 34328615749; ==;", 4)
+
+	testPanics(t, "int 2; int 128; expw; pop; pop; int 1", 4) // 2^128 is too big
+	// looks the same, but different code path
+	testPanics(t, "int 4; int 64; expw; pop; pop; int 1", 4) // 2^128 is too big
 }
 
 func TestBitLen(t *testing.T) {
@@ -4685,6 +4662,8 @@ func TestBytesCompare(t *testing.T) {
 
 	testAccepts(t, "byte 0x10; byte 0x10; b<; !", 4)
 	testAccepts(t, "byte 0x10; byte 0x10; b<=", 4)
+	testAccepts(t, "byte 0x10; int 64; bzero; b>", 4)
+	testPanics(t, "byte 0x10; int 65; bzero; b>", 4)
 
 	testAccepts(t, "byte 0x11; byte 0x10; b>", 4)
 	testAccepts(t, "byte 0x11; byte 0x0010; b>", 4)
@@ -4695,6 +4674,8 @@ func TestBytesCompare(t *testing.T) {
 	testAccepts(t, "byte 0x11; byte 0x11; b==", 4)
 	testAccepts(t, "byte 0x0011; byte 0x11; b==", 4)
 	testAccepts(t, "byte 0x11; byte 0x00000000000011; b==", 4)
+	testAccepts(t, "byte 0x00; int 64; bzero; b==", 4)
+	testPanics(t, "byte 0x00; int 65; bzero; b==", 4)
 
 	testAccepts(t, "byte 0x11; byte 0x00; b!=", 4)
 	testAccepts(t, "byte 0x0011; byte 0x1100; b!=", 4)
@@ -4726,6 +4707,9 @@ func TestBytesBits(t *testing.T) {
 
 	testAccepts(t, "int 3; bzero; byte 0x000000; ==", 4)
 	testAccepts(t, "int 33; bzero; byte 0x000000000000000000000000000000000000000000000000000000000000000000; ==", 4)
+
+	testAccepts(t, "int 4096; bzero; len; int 4096; ==", 4)
+	testPanics(t, "int 4097; bzero; len; int 4097; ==", 4)
 }
 
 func TestBytesConversions(t *testing.T) {
@@ -4733,4 +4717,128 @@ func TestBytesConversions(t *testing.T) {
 
 	testAccepts(t, "byte 0x11; byte 0x10; b+; btoi; int 0x21; ==", 4)
 	testAccepts(t, "byte 0x0011; byte 0x10; b+; btoi; int 0x21; ==", 4)
+}
+
+func TestLog(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	proto := defaultEvalProtoWithVersion(LogicVersion)
+	txn := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Type: protocol.ApplicationCallTx,
+		},
+	}
+	ledger := logictest.MakeLedger(nil)
+	ledger.NewApp(txn.Txn.Receiver, 0, basics.AppParams{})
+	sb := strings.Builder{}
+	ep := defaultEvalParams(&sb, &txn)
+	ep.Proto = &proto
+	ep.Ledger = ledger
+	testCases := []struct {
+		source string
+		loglen int
+	}{
+		{
+			source: `byte  "a logging message"; log; int 1`,
+			loglen: 1,
+		},
+		{
+			source: `byte  "a logging message"; log; byte  "a logging message"; log; int 1`,
+			loglen: 2,
+		},
+		{
+			source: fmt.Sprintf(`%s int 1`, strings.Repeat(`byte "a logging message"; log;`, MaxLogCalls)),
+			loglen: MaxLogCalls,
+		},
+		{
+			source: `int 1; loop: byte "a logging message"; log; int 1; +; dup; int 30; <=; bnz loop;`,
+			loglen: 30,
+		},
+		{
+			source: fmt.Sprintf(`byte "%s"; log; int 1`, strings.Repeat("a", MaxLogSize)),
+			loglen: 1,
+		},
+	}
+
+	//track expected number of logs in cx.Logs
+	for i, s := range testCases {
+		ops := testProg(t, s.source, AssemblerMaxVersion)
+
+		err := CheckStateful(ops.Program, ep)
+		require.NoError(t, err, s)
+
+		pass, cx, err := EvalStatefulCx(ops.Program, ep)
+		require.NoError(t, err)
+		require.True(t, pass)
+		require.Len(t, cx.Logs, s.loglen)
+		if i == len(testCases)-1 {
+			require.Equal(t, strings.Repeat("a", MaxLogSize), cx.Logs[0])
+		} else {
+			for _, l := range cx.Logs {
+				require.Equal(t, "a logging message", l)
+			}
+		}
+	}
+
+	msg := strings.Repeat("a", 400)
+	failCases := []struct {
+		source      string
+		runMode     runMode
+		errContains string
+	}{
+		{
+			source:      fmt.Sprintf(`byte  "%s"; log; int 1`, strings.Repeat("a", MaxLogSize+1)),
+			errContains: fmt.Sprintf(">  %d bytes limit", MaxLogSize),
+			runMode:     runModeApplication,
+		},
+		{
+			source:      fmt.Sprintf(`byte  "%s"; log; byte  "%s"; log; byte  "%s"; log; int 1`, msg, msg, msg),
+			errContains: fmt.Sprintf(">  %d bytes limit", MaxLogSize),
+			runMode:     runModeApplication,
+		},
+		{
+			source:      fmt.Sprintf(`%s; int 1`, strings.Repeat(`byte "a"; log;`, MaxLogCalls+1)),
+			errContains: "too many log calls",
+			runMode:     runModeApplication,
+		},
+		{
+			source:      `int 1; loop: byte "a"; log; int 1; +; dup; int 35; <; bnz loop;`,
+			errContains: "too many log calls",
+			runMode:     runModeApplication,
+		},
+		{
+			source:      fmt.Sprintf(`int 1; loop: byte "%s"; log; int 1; +; dup; int 6; <; bnz loop;`, strings.Repeat(`a`, 400)),
+			errContains: fmt.Sprintf(">  %d bytes limit", MaxLogSize),
+			runMode:     runModeApplication,
+		},
+		{
+			source:      `load 0; log`,
+			errContains: "log arg 0 wanted []byte but got uint64",
+			runMode:     runModeApplication,
+		},
+		{
+			source:      `byte  "a logging message"; log; int 1`,
+			errContains: "log not allowed in current mode",
+			runMode:     runModeSignature,
+		},
+	}
+
+	for _, c := range failCases {
+		ops := testProg(t, c.source, AssemblerMaxVersion)
+
+		err := CheckStateful(ops.Program, ep)
+		require.NoError(t, err, c)
+
+		var pass bool
+		switch c.runMode {
+		case runModeApplication:
+			pass, err = EvalStateful(ops.Program, ep)
+		default:
+			pass, err = Eval(ops.Program, ep)
+
+		}
+		require.Contains(t, err.Error(), c.errContains)
+		require.False(t, pass)
+	}
 }

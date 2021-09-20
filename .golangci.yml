@@ -1,35 +1,25 @@
 run:
   timeout: 5m
-  tests: true
+  tests: false
   
 linters:
+  disable-all: true
   enable:
+    - errcheck
+    - gofmt
     - golint
-    - misspell
     - govet
     - ineffassign
-    - partitiontest
+    - misspell
 
-  disable:
-    - deadcode
-    - errcheck
-    - gosimple
-    - staticcheck
-    - structcheck
-    - unused
-    - varcheck
-    
-linters-settings:
-  custom:
-    partitiontest:
-      path: cmd/partitiontest_linter/plugin.so
-      description: This custom linter checks files that end in '_test.go', specifically functions that start with 'Test' and have testing argument, for a line 'partitiontest.ParitionTest(<testing arg>)'
-      original-url: github.com/algorand/go-algorand/cmd/partitiontest_linter
-#  govet:
-#    check-shadowing: true
+severity:
+  default-severity: error
 
 issues:
-  # don't use default exclude rules listed in `golangci-lint run --help`
+  # use these new lint checks on code since #2574
+  new-from-rev: eb019291beed556ec6ac1ceb4a15114ce4df0c57
+
+  # Disable default exclude rules listed in `golangci-lint run --help` (selectively re-enable some below)
   exclude-use-default: false
 
   # Maximum issues count per one linter. Set to 0 to disable. Default is 50.
@@ -38,12 +28,27 @@ issues:
   # Maximum count of issues with the same text. Set to 0 to disable. Default is 3.
   max-same-issues: 0
 
-  exclude-rules:
+  exclude:
     # ignore govet false positive fixed in https://github.com/golang/go/issues/45043
-    - linters:
-        - govet
-      text: "sigchanyzer: misuse of unbuffered os.Signal channel as argument to signal.Notify"
+    - "sigchanyzer: misuse of unbuffered os.Signal channel as argument to signal.Notify"
     # ignore golint false positive fixed in https://github.com/golang/lint/pull/487
-    - linters:
+    - "exported method (.*).Unwrap` should have comment or be unexported"
+    # ignore issues about the way we use _struct fields to define encoding settings
+    - "`_struct` is unused"
+
+    # Enable some golangci-lint default exception rules:
+    # "EXC0001 errcheck: Almost all programs ignore errors on these functions and in most cases it's ok"
+    - Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*print(f|ln)?|os\.(Un)?Setenv). is not checked
+    # "EXC0005 staticcheck: Developers tend to write in C-style with an explicit 'break' in a 'switch', so it's ok to ignore"
+    - ineffective break statement. Did you mean to break out of the outer loop
+
+  exclude-rules:
+    # Add all linters here -- Comment this block out for testing linters
+    - path: test/linttest/lintissues\.go
+      linters:
+        - errcheck
+        - gofmt
         - golint
-      text: "exported method (.*).Unwrap` should have comment or be unexported"
+        - govet
+        - ineffassign
+        - misspell

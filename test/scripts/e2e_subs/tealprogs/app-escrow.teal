@@ -1,0 +1,166 @@
+#pragma version 5
+        // This application accepts payments in algo, and holds them
+        // until the requester asks for them back. Depositors invoke
+        // the app with "deposit" as arg[0], and make a pay
+        // transaction to the app account in the following txn slot.
+        // The app records the deposit in the user's local state (so
+        // the user must be opted-in), though they may do so in their
+        // initial call.
+
+        // To withdraw, users call with "withdraw" in arg[0], and a
+        // big-endian integer amount in arg[1].  If the withdrawal
+        // amount is less than the amount deposited, the app pays out
+        // the request, and decrements the user's balance.
+
+        // ApplicationID is zero in inital creation txn
+        txn ApplicationID
+        bz handle_createapp
+
+        // Handle possible OnCompletion type. We don't have to
+        // worry about handling ClearState, because the
+        // ClearStateProgram will execute in that case, not the
+        // ApprovalProgram.
+
+        txn OnCompletion
+        int NoOp
+        ==
+        bnz handle_noop
+
+        txn OnCompletion
+        int OptIn
+        ==
+        bnz handle_optin
+
+        txn OnCompletion
+        int CloseOut
+        ==
+        bnz handle_closeout
+
+        txn OnCompletion
+        int UpdateApplication
+        ==
+        bnz handle_updateapp
+
+        txn OnCompletion
+        int DeleteApplication
+        ==
+        bnz handle_deleteapp
+        // Unexpected OnCompletion value. Should be unreachable.
+        err
+
+handle_createapp:
+        int 1
+        return
+
+handle_optin:
+        // Let anyone optin with a single txn, with no arguments.  If
+        // it's not a single txn, fall through to handle_noop, so that
+        // a deposit can be made while opting in.
+        // We should standardize a behaviour like this in ABI.
+        global GroupSize
+        int 1
+        ==
+        bz handle_noop
+        int 1
+        return
+
+
+handle_noop:
+        txn ApplicationArgs 0
+        byte "deposit():void"
+        ==
+        bz not_deposit
+
+
+        byte "deposit"
+        callsub debug
+
+        // Handle a deposit.  Next txn slot must pay our app account
+        txn GroupIndex
+        int 1
+        +
+        dup
+        dup
+
+        gtxns TypeEnum
+        int pay                 // axfer if we want an ASA escrower
+        ==
+        assert
+
+        gtxns Receiver
+        global CurrentApplicationAddress
+        ==
+        assert
+
+        gtxns Amount           // For ASA escrow, use AssetAmount
+
+
+        // Track the amount this sender deposited in their local state
+        int 0
+        byte "balance"
+        dup2
+        app_local_get
+        uncover 3             // pull up the Amount
+        +
+        app_local_put
+
+        int 1
+        return
+
+not_deposit:
+        txn ApplicationArgs 0
+        byte "withdraw(uint64):void"
+        ==
+        bz not_withdraw
+
+        // Handle withdraw.
+
+        int 0
+        byte "balance"
+        dup2
+        app_local_get
+
+        // Subtract the request and replace. Rejects on underflow
+        txn ApplicationArgs 1
+        btoi
+        -
+        app_local_put
+
+        itxn_begin
+         int pay
+         itxn_field TypeEnum
+
+         txn ApplicationArgs 1
+         btoi
+         itxn_field Amount
+
+         txn Sender
+         itxn_field Receiver
+        itxn_submit
+
+        int 1
+        return
+not_withdraw:
+        // Unknown call "method"
+        err
+
+handle_closeout:
+        int 1
+        return
+
+handle_updateapp:
+handle_deleteapp:
+        txn Sender
+        global CreatorAddress
+        ==
+        return
+
+
+bad:
+        err
+
+debug:
+        byte "debug"
+        swap
+        app_global_put
+        retsub
