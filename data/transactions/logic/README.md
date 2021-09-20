@@ -250,7 +250,6 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `gloads i` | push Ith scratch space index of the Xth transaction in the current group |
 | `gaid t` | push the ID of the asset or application created in the Tth transaction of the current group |
 | `gaids` | push the ID of the asset or application created in the Xth transaction of the current group |
-| `args` | push Xth LogicSig argument to stack |
 
 **Transaction Fields**
 
