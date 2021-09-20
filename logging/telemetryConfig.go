@@ -33,8 +33,8 @@ import (
 // TelemetryConfigFilename default file name for telemetry config "logging.config"
 var TelemetryConfigFilename = "logging.config"
 
-var defaultTelemetryUsername = "telemetry-v9"
-var defaultTelemetryPassword = "oq%$FA1TOJ!yYeMEcJ7D688eEOE#MGCu"
+var defaultTelemetryUsername = "telemetry-v10"
+var defaultTelemetryPassword = "ndn9lNvmoRD46i5gMljBZg"
 
 const hostnameLength = 255
 
