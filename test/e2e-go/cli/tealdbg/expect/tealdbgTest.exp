@@ -81,7 +81,7 @@ if { [catch {
     spawn tealdbg debug -v $TEAL_PROG_FILE -p $PROTOCOL_VERSION_2 --remote-debugging-port 9392 --listen 127.0.0.1
     expect {
         timeout { puts "tealdbg debug timed out"; exit 1 }
-        -re {Debug error: Program version \([0-9]+\) is beyond the maximum supported protocol version \([0-9]+\)} { set FAILED 1; close }
+        -re {Debug error: program version \([0-9]+\) is beyond the maximum supported protocol version \([0-9]+\)} { set FAILED 1; close }
     }
     if { $FAILED == 0 } {
         puts "ERROR: the command should have failed"
