@@ -836,10 +836,11 @@ func BenchmarkReadingRandomBalancesDisk(b *testing.B) {
 }
 
 type benchmarkDB interface {
-	selectAccounts(b *testing.B, totalStartupAccountsNumber int) (accountsAddress [][]byte, accountsRowID []int)
-	updateAddr(b *testing.B, batch []updateAcct, accountsAddress [][]byte) (int, error)
-	updateRowID(b *testing.B, batch []updateAcct, accountsRowID []int) (int, error)
-	cleanup()
+	selectAccounts(b testing.TB, totalStartupAccountsNumber int) (accountsAddress [][]byte, accountsRowID []int)
+	updateAddr(b testing.TB, batch []updateAcct, accountsAddress [][]byte) (int, error)
+	checkUpdateAddr(b testing.TB, batch []updateAcct, accountsAddress [][]byte) error
+	updateRowID(b testing.TB, batch []updateAcct, accountsRowID []int) (int, error)
+	cleanup() error
 }
 
 type updateAcct struct {
@@ -850,19 +851,20 @@ type updateAcct struct {
 type sqliteBenchmarkDB struct {
 	startupAcct int
 	dbs         db.Pair
-	cleanupFn   func()
+	cleanupFn   func() error
 }
 
-func (db *sqliteBenchmarkDB) cleanup() { db.cleanupFn() }
+func (db *sqliteBenchmarkDB) cleanup() error { return db.cleanupFn() }
 
-func newSQLiteBenchmarkDB(b *testing.B, totalStartupAccountsNumber int, batchCount int, inMem bool) *sqliteBenchmarkDB {
+func newSQLiteBenchmarkDB(b testing.TB, totalStartupAccountsNumber int, batchCount int, inMem bool) *sqliteBenchmarkDB {
 	startupAcct := 5
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	dbs, fn := dbOpenTest(b, inMem)
 	setDbLogging(b, dbs)
-	cleanup := func() {
+	cleanup := func() error {
 		cleanupTestDb(dbs, fn, inMem)
+		return nil
 	}
 
 	benchmarkInitBalances(b, startupAcct, dbs, proto)
@@ -879,7 +881,7 @@ func newSQLiteBenchmarkDB(b *testing.B, totalStartupAccountsNumber int, batchCou
 
 		acctsData := generateRandomTestingAccountBalances(totalStartupAccountsNumber / batchCount)
 
-		// check for duplicates (very unlikely to happen)
+		// sanity check for duplicates (should not happen)
 		for addr := range acctsData {
 			_, exists := dupmap[addr]
 			require.False(b, exists)
@@ -906,7 +908,7 @@ func newSQLiteBenchmarkDB(b *testing.B, totalStartupAccountsNumber int, batchCou
 	return &sqliteBenchmarkDB{startupAcct: startupAcct, dbs: dbs, cleanupFn: cleanup}
 }
 
-func (db *sqliteBenchmarkDB) selectAccounts(b *testing.B, totalStartupAccountsNumber int) (accountsAddress [][]byte, accountsRowID []int) {
+func (db *sqliteBenchmarkDB) selectAccounts(b testing.TB, totalStartupAccountsNumber int) (accountsAddress [][]byte, accountsRowID []int) {
 	accountsAddress = make([][]byte, 0)
 	accountsRowID = make([]int, 0)
 
@@ -931,7 +933,7 @@ func (db *sqliteBenchmarkDB) selectAccounts(b *testing.B, totalStartupAccountsNu
 	return
 }
 
-func (db *sqliteBenchmarkDB) updateAddr(b *testing.B, batch []updateAcct, accountsAddress [][]byte) (int, error) {
+func (db *sqliteBenchmarkDB) updateAddr(b testing.TB, batch []updateAcct, accountsAddress [][]byte) (int, error) {
 	n := 0
 	// run one transaction per batch
 	err := db.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -951,7 +953,11 @@ func (db *sqliteBenchmarkDB) updateAddr(b *testing.B, batch []updateAcct, accoun
 	return n, err
 }
 
-func (db *sqliteBenchmarkDB) updateRowID(b *testing.B, batch []updateAcct, accountsRowID []int) (int, error) {
+func (db *sqliteBenchmarkDB) checkUpdateAddr(b testing.TB, batch []updateAcct, accountsAddress [][]byte) error {
+	return nil
+}
+
+func (db *sqliteBenchmarkDB) updateRowID(b testing.TB, batch []updateAcct, accountsRowID []int) (int, error) {
 	n := 0
 	// run one transaction per batch
 	err := db.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -972,11 +978,10 @@ func (db *sqliteBenchmarkDB) updateRowID(b *testing.B, batch []updateAcct, accou
 }
 
 type kvBenchmarkDB struct {
-	kv              kvstore.KVStore
-	accountsAddress [][]byte
+	kv kvstore.KVStore
 }
 
-func newKVBenchmarkDB(b *testing.B, total int, batchCount int, inMem bool) *kvBenchmarkDB {
+func newKVBenchmarkDB(b testing.TB, total int, batchCount int, inMem bool) *kvBenchmarkDB {
 	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(b.Name(), "/", "."), crypto.RandUint64())
 	kv, err := kvstore.NewBadgerDB(fn, inMem)
 	require.NoErrorf(b, err, "Filename : %s\nInMemory: %v", fn, inMem)
@@ -985,12 +990,16 @@ func newKVBenchmarkDB(b *testing.B, total int, batchCount int, inMem bool) *kvBe
 	dupmap := make(map[basics.Address]bool)
 
 	cnt := 0
+
+	//b.Logf("MaxBatchSize %v", kv.Bdb.MaxBatchSize())
+
+	var datalens []int
 	for batch := 0; batch < batchCount; batch++ {
 
 		wb := kv.NewBatch()
 		acctsData := generateRandomTestingAccountBalances(total / batchCount)
 
-		// check for duplicates (very unlikely to happen)
+		// sanity check for duplicates (should not happen)
 		for addr := range acctsData {
 			_, exists := dupmap[addr]
 			require.False(b, exists)
@@ -998,9 +1007,13 @@ func newKVBenchmarkDB(b *testing.B, total int, batchCount int, inMem bool) *kvBe
 		}
 
 		for addr, acctData := range acctsData {
-			err = wb.Set(addr[:], protocol.Encode(&acctData))
+			data := protocol.Encode(&acctData) // avg 505 bytes
+			//data := make([]byte, 200)
+			//crypto.RandBytes(data)
+			datalens = append(datalens, len(data))
+			addrCopy := addr // copy address out of loop variable (otherwise will be updated in next iter)
+			err = wb.Set(addrCopy[:], data)
 			require.NoError(b, err)
-			db.accountsAddress = append(db.accountsAddress, addr[:])
 			cnt++
 		}
 
@@ -1008,17 +1021,32 @@ func newKVBenchmarkDB(b *testing.B, total int, batchCount int, inMem bool) *kvBe
 		require.NoError(b, err)
 		fmt.Printf("\033[M\r %d / %d accounts written", cnt, total)
 	}
-
 	fmt.Printf("\033[M\r")
+
+	totlen := 0
+	for _, l := range datalens {
+		totlen += l
+	}
+	b.Logf("avg encoded account data len: %v", float64(totlen)/float64(len(datalens)))
+	require.Equal(b, total, len(dupmap))
+	require.Equal(b, total, cnt)
 	return db
 }
 
-func (db *kvBenchmarkDB) selectAccounts(b *testing.B, totalStartupAccountsNumber int) (accountsAddress [][]byte, accountsRowID []int) {
-	// XXX reads not implemented
-	return db.accountsAddress, nil
+func TestNewKVBenchmarkDB(t *testing.T) {
+	kv := newKVBenchmarkDB(t, 5000000, 1000, false)
+	err := kv.cleanup()
+	require.NoError(t, err)
 }
 
-func (db *kvBenchmarkDB) updateAddr(b *testing.B, batch []updateAcct, accountsAddress [][]byte) (int, error) {
+func (db *kvBenchmarkDB) selectAccounts(b testing.TB, totalStartupAccountsNumber int) (accountsAddress [][]byte, accountsRowID []int) {
+	for iter := db.kv.Iterator(nil, nil); iter.Valid(); iter.Next() {
+		accountsAddress = append(accountsAddress, iter.Key())
+	}
+	return
+}
+
+func (db *kvBenchmarkDB) updateAddr(b testing.TB, batch []updateAcct, accountsAddress [][]byte) (int, error) {
 	n := 0
 	wb := db.kv.NewBatch()
 	for _, update := range batch {
@@ -1029,12 +1057,21 @@ func (db *kvBenchmarkDB) updateAddr(b *testing.B, batch []updateAcct, accountsAd
 	return n, wb.Commit()
 }
 
-func (db *kvBenchmarkDB) updateRowID(b *testing.B, batch []updateAcct, accountsRowID []int) (int, error) {
+func (db *kvBenchmarkDB) checkUpdateAddr(b testing.TB, batch []updateAcct, accountsAddress [][]byte) error {
+	for i, update := range batch {
+		v, err := db.kv.Get(accountsAddress[update.index])
+		require.NoError(b, err)
+		require.Equal(b, v, update.data, "update %d for key %v didn't match", i, accountsAddress[update.index])
+	}
+	return nil
+}
+
+func (db *kvBenchmarkDB) updateRowID(b testing.TB, batch []updateAcct, accountsRowID []int) (int, error) {
 	return 0, nil
 }
 
-func (db *kvBenchmarkDB) cleanup() {
-	db.kv.Close()
+func (db *kvBenchmarkDB) cleanup() error {
+	return db.kv.Close()
 }
 
 func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
@@ -1052,7 +1089,7 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 		db = newSQLiteBenchmarkDB(b, totalStartupAccountsNumber, batchCount, false)
 	}
 	b.Logf("Creating DB with %d accounts took %v", totalStartupAccountsNumber, time.Since(initStart))
-	defer db.cleanup()
+	defer func() { require.NoError(b, db.cleanup()) }()
 
 	var accountsAddress [][]byte
 	var accountsRowID []int
@@ -1104,12 +1141,23 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 		n := 0
 		for _, batch := range batches {
 			// perform a batch of updates by address
+			//b.Logf("writing batch %d with %d updates", i, len(batch))
 			cnt, err := db.updateAddr(b, batch, accountsAddress)
 			require.NoError(b, err)
 			n += cnt
 		}
 		require.Equal(b, b.N, n)
 		b.ReportMetric(float64(int(time.Now().Sub(startTime))/b.N), "ns/acct_update")
+		b.StopTimer()
+
+		// sanity check: verify accounts were updated as described
+		if os.Getenv("SANITY_CHECK_READ") != "" {
+			for i, batch := range batches {
+				b.Logf("checking KVs were updated: reading batch %d of %d KVs", i, len(batch))
+				err := db.checkUpdateAddr(b, batch, accountsAddress)
+				require.NoError(b, err)
+			}
+		}
 	})
 
 	b.Run("ByRowID", func(b *testing.B) {
