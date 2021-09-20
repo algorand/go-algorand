@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
@@ -291,13 +292,16 @@ func (cb *roundCowState) modifiedAccounts() []basics.Address {
 	return cb.mods.Accts.ModifiedAccounts()
 }
 
+// errUnsupportedChildCowTotalCalculation is returned by CalculateTotals when called by a child roundCowState instance
+var errUnsupportedChildCowTotalCalculation = errors.New("the method CalculateTotals should be called only on a top-level roundCowState")
+
 // CalculateTotals calculates the totals given the changes in the StateDelta.
 // these changes allow the validator to validate that the totals still align with the
 // expected values. ( i.e. total amount of algos in the system should remain consistent )
 func (cb *roundCowState) CalculateTotals() error {
 	// this method applies only for the top level roundCowState
 	if cb.commitParent != nil {
-		return nil
+		return errUnsupportedChildCowTotalCalculation
 	}
 	totals := cb.prevTotals
 	var ot basics.OverflowTracker
@@ -312,12 +316,14 @@ func (cb *roundCowState) CalculateTotals() error {
 		totals.DelAccount(cb.proto, previousAccountData, &ot)
 		totals.AddAccount(cb.proto, updatedAccountData, &ot)
 	}
-	cb.mods.Totals = totals
+
 	if ot.Overflowed {
 		return fmt.Errorf("roundCowState: CalculateTotals %d overflowed totals", cb.mods.Hdr.Round)
 	}
 	if totals.All() != cb.prevTotals.All() {
 		return fmt.Errorf("roundCowState: CalculateTotals sum of money changed from %d to %d", cb.prevTotals.All().Raw, totals.All().Raw)
 	}
+
+	cb.mods.Totals = totals
 	return nil
 }
