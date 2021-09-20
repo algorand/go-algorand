@@ -92,7 +92,8 @@ func (manager *AccountManager) HasLiveKeys(from, to basics.Round) bool {
 // The return value indicates if the key has been added (true) or
 // if this is a duplicate key (false).
 func (manager *AccountManager) AddParticipation(participation account.PersistedParticipation) bool {
-	// Tell the ParticipationRegistry about the Participation (dupes don't matter)
+	// Tell the ParticipationRegistry about the Participation. Duplicate entries
+	// are ignored.
 	_, err := manager.registry.Insert(participation.Participation)
 	if err != nil && err != account.ErrAlreadyInserted {
 		manager.log.Warnf("Failed to insert participation key.")
