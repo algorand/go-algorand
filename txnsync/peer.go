@@ -372,6 +372,9 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []pooldata.SignedTx
 	var effectiveBloomFilters []int
 	effectiveBloomFilters = make([]int, 0, len(p.recentIncomingBloomFilters))
 	for filterIdx := len(p.recentIncomingBloomFilters) - 1; filterIdx >= 0; filterIdx-- {
+		if p.recentIncomingBloomFilters[filterIdx].filter == nil {
+			continue
+		}
 		if p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Modulator == p.requestedTransactionsModulator && p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Offset != p.requestedTransactionsOffset {
 			continue
 		}
