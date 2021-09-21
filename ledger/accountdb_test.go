@@ -877,7 +877,6 @@ func newSQLiteBenchmarkDB(b testing.TB, totalStartupAccountsNumber int, batchCou
 	// insert 1M accounts data, in batches of 1000
 	for batch := 0; batch < batchCount; batch++ {
 		tx, err := dbs.Wdb.Handle.Begin()
-
 		require.NoError(b, err)
 
 		acctsData := generateRandomTestingAccountBalances(totalStartupAccountsNumber / batchCount)
@@ -913,21 +912,23 @@ func (db *sqliteBenchmarkDB) selectAccounts(b testing.TB, totalStartupAccountsNu
 	accountsAddress = make([][]byte, 0)
 	accountsRowID = make([]int, 0)
 
-	err := db.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		// read all the accounts to obtain the addrs.
-		rows, err := tx.Query("SELECT rowid, address FROM accountbase")
+	tx, err := db.dbs.Rdb.Handle.Begin()
+	require.NoError(b, err)
+
+	// read all the accounts to obtain the addrs.
+	rows, err := tx.Query("SELECT rowid, address FROM accountbase")
+	require.NoError(b, err)
+	defer rows.Close()
+	for rows.Next() {
+		var addrbuf []byte
+		var rowid int
+		err = rows.Scan(&rowid, &addrbuf)
 		require.NoError(b, err)
-		defer rows.Close()
-		for rows.Next() {
-			var addrbuf []byte
-			var rowid int
-			err = rows.Scan(&rowid, &addrbuf)
-			require.NoError(b, err)
-			accountsAddress = append(accountsAddress, addrbuf)
-			accountsRowID = append(accountsRowID, rowid)
-		}
-		return nil
-	})
+		accountsAddress = append(accountsAddress, addrbuf)
+		accountsRowID = append(accountsRowID, rowid)
+	}
+
+	err = tx.Commit()
 	require.NoError(b, err)
 	require.Len(b, accountsAddress, totalStartupAccountsNumber+db.startupAcct)
 	require.Len(b, accountsRowID, totalStartupAccountsNumber+db.startupAcct)
@@ -937,20 +938,22 @@ func (db *sqliteBenchmarkDB) selectAccounts(b testing.TB, totalStartupAccountsNu
 func (db *sqliteBenchmarkDB) updateAddr(b testing.TB, batch []updateAcct, accountsAddress [][]byte, batchIdx int) (int, error) {
 	n := 0
 	// run one transaction per batch
-	err := db.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		preparedUpdate, err := tx.Prepare("UPDATE accountbase SET data = ? WHERE address = ?")
+	tx, err := db.dbs.Wdb.Handle.Begin()
+	require.NoError(b, err)
+
+	preparedUpdate, err := tx.Prepare("UPDATE accountbase SET data = ? WHERE address = ?")
+	require.NoError(b, err)
+	defer preparedUpdate.Close()
+	for _, update := range batch {
+		res, err := preparedUpdate.Exec(update.data, accountsAddress[update.index])
 		require.NoError(b, err)
-		defer preparedUpdate.Close()
-		for _, update := range batch {
-			res, err := preparedUpdate.Exec(update.data, accountsAddress[update.index])
-			require.NoError(b, err)
-			rowsAffected, err := res.RowsAffected()
-			require.NoError(b, err)
-			require.Equal(b, int64(1), rowsAffected)
-			n++
-		}
-		return nil
-	})
+		rowsAffected, err := res.RowsAffected()
+		require.NoError(b, err)
+		require.Equal(b, int64(1), rowsAffected)
+		n++
+	}
+	err = tx.Commit()
+	require.NoError(b, err)
 	return n, err
 }
 
@@ -961,20 +964,22 @@ func (db *sqliteBenchmarkDB) checkUpdateAddr(b testing.TB, batches [][]updateAcc
 func (db *sqliteBenchmarkDB) updateRowID(b testing.TB, batch []updateAcct, accountsRowID []int) (int, error) {
 	n := 0
 	// run one transaction per batch
-	err := db.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		preparedUpdate, err := tx.Prepare("UPDATE accountbase SET data = ? WHERE rowid = ?")
+	tx, err := db.dbs.Wdb.Handle.Begin()
+	require.NoError(b, err)
+
+	preparedUpdate, err := tx.Prepare("UPDATE accountbase SET data = ? WHERE rowid = ?")
+	require.NoError(b, err)
+	defer preparedUpdate.Close()
+	for _, update := range batch {
+		res, err := preparedUpdate.Exec(update.data, accountsRowID[update.index])
 		require.NoError(b, err)
-		defer preparedUpdate.Close()
-		for _, update := range batch {
-			res, err := preparedUpdate.Exec(update.data, accountsRowID[update.index])
-			require.NoError(b, err)
-			rowsAffected, err := res.RowsAffected()
-			require.NoError(b, err)
-			require.Equal(b, int64(1), rowsAffected)
-			n++
-		}
-		return nil
-	})
+		rowsAffected, err := res.RowsAffected()
+		require.NoError(b, err)
+		require.Equal(b, int64(1), rowsAffected)
+		n++
+	}
+	err = tx.Commit()
+	require.NoError(b, err)
 	return n, err
 }
 

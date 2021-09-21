@@ -32,7 +32,7 @@ type Iterator interface {
 	Close()
 }
 
-// Slices must be freed, and may be backed by *C.char
+// Slice must be freed, and may be backed by *C.char (gorocksdb.Slice)
 // XXX for some Iterator implementations, could be faster to specify Slice is only valid until iter.Next()
 type Slice interface {
 	Data() []byte
