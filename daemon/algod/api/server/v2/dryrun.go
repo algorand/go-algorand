@@ -260,7 +260,7 @@ func (dl *dryrunLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Ro
 	return nil
 }
 
-func (dl *dryrunLedger) GetBlockTimeStamp(rnd basics.Round) (int64, error) {
+func (dl *dryrunLedger) BlockTimeStamp(rnd basics.Round) (int64, error) {
 	return 0, nil
 }
 

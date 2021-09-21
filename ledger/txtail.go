@@ -206,7 +206,7 @@ func (t *txTail) putLV(lastValid basics.Round, id transactions.Txid) {
 	t.lastValid[lastValid][id] = struct{}{}
 }
 
-func (t *txTail) getBlockTimeStamp(rnd basics.Round) (int64, error) {
+func (t *txTail) blockTimeStamp(rnd basics.Round) (int64, error) {
 	if r, ok := t.recent[rnd]; ok {
 		return r.timestamp, nil
 	}

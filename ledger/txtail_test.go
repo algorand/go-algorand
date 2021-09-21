@@ -103,7 +103,7 @@ func TestTxTailCheckdup(t *testing.T) {
 	}
 }
 
-func TestTxTailGetBlockTimeStamp(t *testing.T) {
+func TestTxTailBlockTimeStamp(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	accts := randomAccounts(10, false)
@@ -125,10 +125,10 @@ func TestTxTailGetBlockTimeStamp(t *testing.T) {
 	for rnd := basics.Round(1); rnd < lastRound; rnd++ {
 		if rnd == basics.Round(1) {
 			// Should error if we try to retrieve timestamp for round 1 since we loaded round 2 - 1002
-			_, err := tail.getBlockTimeStamp(rnd)
+			_, err := tail.blockTimeStamp(rnd)
 			require.Errorf(t, err, "round %d", rnd)
 		} else {
-			ts, _ := tail.getBlockTimeStamp(rnd)
+			ts, _ := tail.blockTimeStamp(rnd)
 			require.True(t, ts > 0)
 		}
 	}

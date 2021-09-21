@@ -888,6 +888,13 @@ type accountUpdatesLedgerEvaluator struct {
 	// prevHeader is the previous header to the current one. The usage of this is only in the context of initializeCaches where we iteratively
 	// building the ledgercore.StateDelta, which requires a peek on the "previous" header information.
 	prevHeader bookkeeping.BlockHeader
+	// blockTimeStamps contains block timestamps needed for txn evaluation while catching account db round up to block db round.
+	// in this mode au uses accountUpdatesLedgerEvaluator as a ledger, that is enough because balances are available in the underlying accountdb.
+	// unfortunately this does not work anymore after allowing smart contact accessing block header timestamps up to MaxTxnLife.
+	// block db and TxTail has required info (TxTail tracker provides timestamps in a normal evaluation mode)
+	// but calling TxTail from accountUpdatesLedgerEvaluator introduces trackers' dependency and locking problems.
+	// instead, caching timestamps in the same manner as TxTail prevents dependency and ledgerForTracker interface pollution.
+	blockTimeStamps map[basics.Round]int64
 }
 
 // GenesisHash returns the genesis hash
@@ -920,14 +927,16 @@ func (aul *accountUpdatesLedgerEvaluator) CheckDup(config.ConsensusParams, basic
 	return fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initialization ")
 }
 
-// GetBlockTimeStamp gets the block timestamp of a specific round. It's not needed by the accountUpdatesLedgerEvaluator and implemented as a stub.
-func (aul *accountUpdatesLedgerEvaluator) GetBlockTimeStamp(rnd basics.Round) (int64, error) {
-	// TODO: fix while refactoring txTail
-	// GetBlockTimeStamp must lookup into txTail
+// BlockTimeStamp gets the block timestamp of a specific round. It's not needed by the accountUpdatesLedgerEvaluator and implemented as a stub.
+func (aul *accountUpdatesLedgerEvaluator) BlockTimeStamp(rnd basics.Round) (int64, error) {
+	if ts, ok := aul.blockTimeStamps[rnd]; ok {
+		return ts, nil
+	}
 	hdr, err := aul.au.ledger.BlockHdr(rnd)
 	if err != nil {
 		return 0, err
 	}
+	aul.blockTimeStamps[rnd] = hdr.TimeStamp
 	return hdr.TimeStamp, nil
 }
 
@@ -962,12 +971,20 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 	accLedgerEval := accountUpdatesLedgerEvaluator{
 		au: au,
 	}
+	var blockTimeStampsSize uint64 = 1
 	if lastBalancesRound < lastestBlockRound {
 		accLedgerEval.prevHeader, err = au.ledger.BlockHdr(lastBalancesRound)
 		if err != nil {
 			return
 		}
+		proto, ok := config.Consensus[accLedgerEval.prevHeader.CurrentProtocol]
+		if !ok {
+			au.log.Warnf("initializeCaches failed to find protocol %s", accLedgerEval.prevHeader.CurrentProtocol)
+		}
+		blockTimeStampsSize = proto.MaxTxnLife + 1
 	}
+
+	accLedgerEval.blockTimeStamps = make(map[basics.Round]int64, blockTimeStampsSize)
 
 	skipAccountCacheMessage := make(chan struct{})
 	writeAccountCacheMessageCompleted := make(chan struct{})

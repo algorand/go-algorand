@@ -68,6 +68,10 @@ func (wl *wrappedLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, er
 	return wl.l.BlockHdr(rnd)
 }
 
+func (wl *wrappedLedger) BlockTimeStamp(rnd basics.Round) (int64, error) {
+	return wl.l.BlockTimeStamp(rnd)
+}
+
 func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (ledgercore.StateDelta, error) {
 	return wl.l.trackerEvalVerified(blk, accUpdatesLedger)
 }

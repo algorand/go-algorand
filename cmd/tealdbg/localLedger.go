@@ -284,7 +284,7 @@ func (l *localLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Roun
 	return nil
 }
 
-func (l *localLedger) GetBlockTimeStamp(rnd basics.Round) (int64, error) {
+func (l *localLedger) BlockTimeStamp(rnd basics.Round) (int64, error) {
 	return 0, nil
 }
 

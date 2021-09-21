@@ -94,6 +94,7 @@ type ledgerForTracker interface {
 	Latest() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
+	BlockTimeStamp(basics.Round) (int64, error)
 	GenesisHash() crypto.Digest
 	GenesisProto() config.ConsensusParams
 }
