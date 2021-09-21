@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // A ledger interface that Indexer implements. This is a simplified version of the
@@ -154,6 +155,79 @@ func getBlockAddresses(block *bookkeeping.Block) map[basics.Address]struct{} {
 	return res
 }
 
+func preloadInCowBase(il indexerLedgerForEval, block *bookkeeping.Block, base *roundCowBase) error {
+	addresses := getBlockAddresses(block)
+	assets := make(map[basics.AssetIndex]struct{})
+	apps := make(map[basics.AppIndex]struct{})
+
+	for _, stib := range block.Payset {
+		switch stib.Txn.Type {
+		case protocol.AssetConfigTx:
+			if stib.Txn.ConfigAsset != 0 {
+				assets[stib.Txn.ConfigAsset] = struct{}{}
+			}
+		case protocol.AssetTransferTx:
+			if stib.Txn.XferAsset != 0 {
+				assets[stib.Txn.XferAsset] = struct{}{}
+			}
+		case protocol.AssetFreezeTx:
+			if stib.Txn.FreezeAsset != 0 {
+				assets[stib.Txn.FreezeAsset] = struct{}{}
+			}
+		case protocol.ApplicationCallTx:
+			if stib.Txn.ApplicationID != 0 {
+				apps[stib.Txn.ApplicationID] = struct{}{}
+			}
+		}
+	}
+
+	assetCreators, err := il.GetAssetCreator(assets)
+	if err != nil {
+		return fmt.Errorf("preloadInCowBase() err: %w", err)
+	}
+	for index, foundAddress := range assetCreators {
+		creatable := creatable{
+			cindex: basics.CreatableIndex(index),
+			ctype:  basics.AssetCreatable,
+		}
+		base.creators[creatable] = foundAddress
+
+		if foundAddress.Exists {
+			addresses[foundAddress.Address] = struct{}{}
+		}
+	}
+
+	appCreators, err := il.GetAppCreator(apps)
+	if err != nil {
+		return fmt.Errorf("preloadInCowBase() err: %w", err)
+	}
+	for index, foundAddress := range appCreators {
+		creatable := creatable{
+			cindex: basics.CreatableIndex(index),
+			ctype:  basics.AppCreatable,
+		}
+		base.creators[creatable] = foundAddress
+
+		if foundAddress.Exists {
+			addresses[foundAddress.Address] = struct{}{}
+		}
+	}
+
+	accountDataMap, err := il.LookupWithoutRewards(addresses)
+	if err != nil {
+		return fmt.Errorf("preloadInCowBase() err: %w", err)
+	}
+	for address, accountData := range accountDataMap {
+		if accountData == nil {
+			base.accounts[address] = basics.AccountData{}
+		} else {
+			base.accounts[address] = *accountData
+		}
+	}
+
+	return nil
+}
+
 // EvalForIndexer evaluates a block without validation using the given `proto`.
 // Return the state delta and transactions with modified apply data according to `proto`.
 // This function is used by Indexer which modifies `proto` to retrieve the asset
@@ -169,21 +243,10 @@ func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto con
 			fmt.Errorf("EvalForIndexer() err: %w", err)
 	}
 
-	// Preload most needed accounts.
-	{
-		accountDataMap, err := il.LookupWithoutRewards(getBlockAddresses(block))
-		if err != nil {
-			return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
-				fmt.Errorf("EvalForIndexer() err: %w", err)
-		}
-		base := eval.state.lookupParent.(*roundCowBase)
-		for address, accountData := range accountDataMap {
-			if accountData == nil {
-				base.accounts[address] = basics.AccountData{}
-			} else {
-				base.accounts[address] = *accountData
-			}
-		}
+	err = preloadInCowBase(il, block, eval.state.lookupParent.(*roundCowBase))
+	if err != nil {
+		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
+			fmt.Errorf("EvalForIndexer() err: %w", err)
 	}
 
 	paysetgroups, err := block.DecodePaysetGroups()
