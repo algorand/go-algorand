@@ -1,201 +1,241 @@
 os: linux
 dist: bionic
 language: minimal
+
+# Don't build tags
 if: tag IS blank
+
 stages:
-- name: build_commit
-  if: NOT (branch =~ /^hotfix\//) AND NOT (branch =~ /^rel\//) AND type != pull_request
-- name: build_pr
-  if: type = pull_request
-- name: build_release
-  if: "(branch =~ /^hotfix\\// OR branch =~ /^rel\\//) AND type != pull_request"
-- name: deploy
-  if: branch =~ /^rel\// AND type != pull_request
-- name: post_deploy
-  if: branch =~ /^rel\// AND type != pull_request
+  - name: build_commit
+    if: NOT (branch =~ /^hotfix\//) AND NOT (branch =~ /^rel\//) AND type != pull_request
+  - name: build_pr
+    if: type = pull_request
+  - name: build_release
+    if: (branch =~ /^hotfix\// OR branch =~ /^rel\//) AND type != pull_request
+  - name: deploy
+    if: branch =~ /^rel\// AND type != pull_request
+  - name: post_deploy
+    if: branch =~ /^rel\// AND type != pull_request
+
 jobs:
   allow_failures:
-  - name: External ARM64 Deploy
-  - name: External ARM64 Integration Test
-  - name: External ARM Build
-  - name: External ARM Deploy
-  - name: Test Release Builds
+    - name: External ARM64 Deploy
+    - name: External ARM64 Integration Test
+    - name: External ARM Build
+    - name: External ARM Deploy
+    - name: Test Release Builds
   include:
-  - stage: build_commit
-    os: linux
-    script:
-    - scripts/travis/build_test.sh
-  - stage: build_pr
-    os: linux
-    name: Ubuntu AMD64 Build
-    script:
-    - scripts/travis/build_test.sh
-  - os: linux
-    name: Ubuntu AMD64 Integration Test
-    script:
-    - "./scripts/travis/integration_test.sh"
-  - name: External ARM64 Build
-    os: linux
-    env:
-    - BUILD_TYPE: external_build
-    - TARGET_PLATFORM: linux-arm64
-    addons:
-      apt:
-        packages:
-        - awscli
-    script:
-    - scripts/travis/external_build.sh ./scripts/travis/build_test.sh
-  - name: External ARM64 Integration Test
-    os: linux
-    env:
-    - BUILD_TYPE: external_build
-    - TARGET_PLATFORM: linux-arm64
-    addons:
-      apt:
-        packages:
-        - awscli
-    script:
-    - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
-  - os: osx
-    osx_image: xcode11
-    name: MacOS AMD64 Build
-    script:
-    - scripts/travis/build_test.sh
-  - os: osx
-    osx_image: xcode11
-    name: MacOS AMD64 Integration Test
-    script:
-    - "./scripts/travis/integration_test.sh"
-  - os: windows
-    name: Windows x64 Build
-    cache:
-      directories:
-      - "$HOME/AppData/Local/Temp/chocolatey"
-      - "/C/tools/msys64"
-    script:
-    - "$mingw64 scripts/travis/build_test.sh"
-  - stage: build_release
-    os: linux
-    name: Ubuntu AMD64 Build
-    script:
-    - "./scripts/travis/build_test.sh"
-  - os: linux
-    name: Ubuntu AMD64 Integration Test
-    script:
-    - "./scripts/travis/integration_test.sh"
-  - name: External ARM64 Build
-    os: linux
-    env:
-    - BUILD_TYPE: external_build
-    - TARGET_PLATFORM: linux-arm64
-    addons:
-      apt:
-        packages:
-        - awscli
-    script:
-    - scripts/travis/external_build.sh ./scripts/travis/build_test.sh
-  - name: External ARM64 Integration Test
-    os: linux
-    env:
-    - BUILD_TYPE: external_build
-    - TARGET_PLATFORM: linux-arm64
-    addons:
-      apt:
-        packages:
-        - awscli
-    script:
-    - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
-  - os: osx
-    osx_image: xcode11
-    name: MacOS AMD64 Build
-    script:
-    - scripts/travis/build_test.sh
-  - os: osx
-    osx_image: xcode11
-    name: MacOS AMD64 Integration Test
-    script:
-    - "./scripts/travis/integration_test.sh"
-  - os: windows
-    name: Windows x64 Build
-    cache:
-      directories:
-      - "$HOME/AppData/Local/Temp/chocolatey"
-      - "/C/tools/msys64"
-    script:
-    - "$mingw64 scripts/travis/build_test.sh"
-  - stage: deploy
-    name: Ubuntu Deploy
-    os: linux
-    script:
-    - scripts/travis/deploy_packages.sh
-    - scripts/travis/test_release.sh
-  - name: MacOS Deploy
-    os: osx
-    osx_image: xcode11
-    script: scripts/travis/deploy_packages.sh
-  - name: External ARM64 Deploy
-    os: linux
-    env:
-    - BUILD_TYPE: external_build
-    - TARGET_PLATFORM: linux-arm64
-    addons:
-      apt:
-        packages:
-        - awscli
-    script:
-    - scripts/travis/external_build.sh ./scripts/travis/deploy_packages.sh
+    - stage: build_commit
+      os: linux
+      script:
+        - scripts/travis/build_test.sh
+
+    - stage: build_pr
+      os: linux
+      name: Ubuntu AMD64 CodeGen Verification
+      script:
+        - scripts/travis/codegen_verification.sh
+    - # same stage, parallel job
+      os: linux
+      name: Ubuntu AMD64 Build
+      script:
+        - scripts/travis/build_test.sh
+    - # same stage, parallel job
+      os: linux
+      name: Ubuntu AMD64 Integration Test
+      script:
+        - ./scripts/travis/integration_test.sh
+    - # same stage, parallel job
+      name: External ARM64 Build
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm64"
+      addons:
+        apt:
+          packages:
+            - awscli
+      script:
+        - scripts/travis/external_build.sh ./scripts/travis/build_test.sh
+    - # same stage, parallel job
+      name: External ARM64 Integration Test
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm64"
+      addons:
+        apt:
+          packages:
+            - awscli
+      script:
+        - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
+    - # same stage, parallel job
+      os: osx
+      osx_image: xcode11
+      name: MacOS AMD64 Build
+      script:
+        - scripts/travis/build_test.sh
+    - # same stage, parallel job
+      os: osx
+      osx_image: xcode11
+      name: MacOS AMD64 Integration Test
+      script:
+        - ./scripts/travis/integration_test.sh
+    - # same stage, parallel job
+       os: windows
+       name: Windows x64 Build
+       cache:
+         directories:
+           - $HOME/AppData/Local/Temp/chocolatey
+           - /C/tools/msys64
+       script:
+         - $mingw64 scripts/travis/build_test.sh
+
+    - stage: build_release
+      os: linux
+      name: Ubuntu AMD64 CodeGen Verification
+      script:
+        - scripts/travis/codegen_verification.sh
+    - # same stage, parallel job
+      os: linux
+      name: Ubuntu AMD64 Build
+      script:
+        - ./scripts/travis/build_test.sh
+    - # same stage, parallel job
+      os: linux
+      name: Ubuntu AMD64 Integration Test
+      script:
+        - ./scripts/travis/integration_test.sh
+    - # same stage, parallel job
+      name: External ARM64 Build
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm64"
+      addons:
+        apt:
+          packages:
+            - awscli
+      script:
+        - scripts/travis/external_build.sh ./scripts/travis/build_test.sh
+    - # same stage, parallel job
+      name: External ARM64 Integration Test
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm64"
+      addons:
+        apt:
+          packages:
+            - awscli
+      script:
+        - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
+    - # same stage, parallel job
+      os: osx
+      osx_image: xcode11
+      name: MacOS AMD64 Build
+      script:
+        - scripts/travis/build_test.sh
+    - # same stage, parallel job
+      os: osx
+      osx_image: xcode11
+      name: MacOS AMD64 Integration Test
+      script:
+        - ./scripts/travis/integration_test.sh
+    - # same stage, parallel job
+       os: windows
+       name: Windows x64 Build
+       cache:
+         directories:
+           - $HOME/AppData/Local/Temp/chocolatey
+           - /C/tools/msys64
+       script:
+         - $mingw64 scripts/travis/build_test.sh
+
+    - stage: deploy
+      name: Ubuntu Deploy
+      os: linux
+      script:
+        - scripts/travis/deploy_packages.sh
+        - scripts/travis/test_release.sh
+    - # same stage, parallel job
+      name: MacOS Deploy
+      os: osx
+      osx_image: xcode11
+      script: scripts/travis/deploy_packages.sh
+    - # same stage, parallel job
+      name: External ARM64 Deploy
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm64"
+      addons:
+        apt:
+          packages:
+            - awscli
+      script:
+        - scripts/travis/external_build.sh ./scripts/travis/deploy_packages.sh
+
+# Don't rebuild libsodium every time
 cache:
   directories:
-  - crypto/lib
-  - "$HOME/docker_cache"
+    - crypto/lib
+    - $HOME/docker_cache
+
 before_install:
 - |-
-  case $TRAVIS_OS_NAME in
-  linux)
-    # Disable sometimes-broken sources.list in Travis base images
-    sudo rm -vf /etc/apt/sources.list.d/*
-    ;;
-  windows)
-    [[ ! -f C:/tools/msys64/msys2_shell.cmd ]] && rm -rf C:/tools/msys64
-    choco uninstall -y mingw
-    choco upgrade --no-progress -y msys2
-    export msys2='cmd //C RefreshEnv.cmd '
-    export msys2+='& set MSYS=winsymlinks:nativestrict '
-    export msys2+='& C:\\tools\\msys64\\msys2_shell.cmd -defterm -no-start'
-    export mingw64="$msys2 -mingw64 -full-path -here -c "\"\$@"\" --"
-    export msys2+=" -msys2 -c "\"\$@"\" --"
-    $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain unzip
-    ## Install more MSYS2 packages from https://packages.msys2.org/base here
-    taskkill //IM gpg-agent.exe //F  # https://travis-ci.community/t/4967
-    export PATH=/C/tools/msys64/mingw64/bin:$PATH
-    export MAKE=mingw32-make  # so that Autotools can find it
-    ;;
-  esac
-  docker load -i $HOME/docker_cache/images.tar || true
+   case $TRAVIS_OS_NAME in
+   linux)
+     # Disable sometimes-broken sources.list in Travis base images
+     sudo rm -vf /etc/apt/sources.list.d/*
+     ;;
+   windows)
+     [[ ! -f C:/tools/msys64/msys2_shell.cmd ]] && rm -rf C:/tools/msys64
+     choco uninstall -y mingw
+     choco upgrade --no-progress -y msys2
+     export msys2='cmd //C RefreshEnv.cmd '
+     export msys2+='& set MSYS=winsymlinks:nativestrict '
+     export msys2+='& C:\\tools\\msys64\\msys2_shell.cmd -defterm -no-start'
+     export mingw64="$msys2 -mingw64 -full-path -here -c "\"\$@"\" --"
+     export msys2+=" -msys2 -c "\"\$@"\" --"
+     $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain unzip
+     ## Install more MSYS2 packages from https://packages.msys2.org/base here
+     taskkill //IM gpg-agent.exe //F  # https://travis-ci.community/t/4967
+     export PATH=/C/tools/msys64/mingw64/bin:$PATH
+     export MAKE=mingw32-make  # so that Autotools can find it
+     ;;
+   esac
+   docker load -i $HOME/docker_cache/images.tar || true
+
 before_cache:
 - |-
-  case $TRAVIS_OS_NAME in
-  windows)
-    # https://unix.stackexchange.com/a/137322/107554
-    $msys2 pacman --sync --clean --noconfirm
-    ;;
-  esac
-  docker save -o $HOME/docker_cache/images.tar $(docker images -a -q)
+   case $TRAVIS_OS_NAME in
+   windows)
+     # https://unix.stackexchange.com/a/137322/107554
+     $msys2 pacman --sync --clean --noconfirm
+     ;;
+   esac
+   docker save -o $HOME/docker_cache/images.tar $(docker images -a -q)
+
+#after_success:
+#  - scripts/travis/upload_coverage.sh || true
+
 addons:
   apt:
     packages:
-    - libboost-all-dev
-    - fakeroot
-    - rpm
-    - python3-venv
-    - libssl-dev
-    - libffi-dev
+      - libboost-all-dev
+      - fakeroot
+      - rpm
+      - python3-venv
+      - libssl-dev
+      - libffi-dev
   artifacts:
-    s3_region: us-east-1
+    s3_region: "us-east-1"
     paths:
-    - $(git ls-files -o | grep -v crypto/libs | grep -v crypto/copies | grep -v crypto/libsodium-fork | grep -v crypto/lib/ | grep -v ^gen/ | grep -v swagger.json.validated | tr "\n" ":")
+      - $(git ls-files -o | grep -v crypto/libs | grep -v crypto/copies | grep -v crypto/libsodium-fork | grep -v crypto/lib/ | grep -v ^gen/ | grep -v swagger.json.validated | tr "\n" ":")
+
 notifications:
   slack:
     if: branch = "rel/nightly"
     rooms:
-      secure: FvM+GHkfVQyJqounsRO8kcQT2fYljdBp/fODIlgNE1pcd08WKqHa14cpjQN2T/zC7/eeJAwDuk4ADUqgLdb85vSd6KgcYwBaPMLj8b1La/JY17ULpVuD1uke3uDb+OhC084Uo7cYUAcmpPOtX7ujRVXbeRFoj5R6xqyCYEBGeRNaQIJh36Jd1jkKjQGZgcQIMy0JZXTnVwxP1o3ed6mYtVMt0qlBCzHKXTr7CUTFp+TwFoZ99jxvjNEA6cpn1UE82uq08CiQ4ANY51SCMqq6L9y76SRREznjtR3CGGhZYlmewVnlsco6IB0Xe5k4j8GlIlZfV+bJiBaE4GqNKOpt0DcB/hxZtDbe7LcSfdtwU/NG8L1rw4Ktj+ALcEJDuprRhYaafEaL6iOVsOy6YwW2Tbj6xcJzeorTs/p0URkSJ/M1Us7zdOTzLkVeUKAcHIIl4SClHq3svzSwoSyjlwuq18Wp2VWNfQFY3qFd7eZo/meM8UuhRrTai18eX5ZJ9leAdwvwfma1uxS2ZlG8aDupx2Ww19AOZZ8txQtDTn+rzP8U1UnlaOMJStOmdEKfExGy348f1yQcJtOv4armZuEuC6eoIkeznNS8wO/ZkRSWuxDcc5Q1DsQADXfGSMEL36Aa6aDU5Hy7els00qYDImPVL+7rd2pAfSUzFCfA+7klefg=
+      - secure: FvM+GHkfVQyJqounsRO8kcQT2fYljdBp/fODIlgNE1pcd08WKqHa14cpjQN2T/zC7/eeJAwDuk4ADUqgLdb85vSd6KgcYwBaPMLj8b1La/JY17ULpVuD1uke3uDb+OhC084Uo7cYUAcmpPOtX7ujRVXbeRFoj5R6xqyCYEBGeRNaQIJh36Jd1jkKjQGZgcQIMy0JZXTnVwxP1o3ed6mYtVMt0qlBCzHKXTr7CUTFp+TwFoZ99jxvjNEA6cpn1UE82uq08CiQ4ANY51SCMqq6L9y76SRREznjtR3CGGhZYlmewVnlsco6IB0Xe5k4j8GlIlZfV+bJiBaE4GqNKOpt0DcB/hxZtDbe7LcSfdtwU/NG8L1rw4Ktj+ALcEJDuprRhYaafEaL6iOVsOy6YwW2Tbj6xcJzeorTs/p0URkSJ/M1Us7zdOTzLkVeUKAcHIIl4SClHq3svzSwoSyjlwuq18Wp2VWNfQFY3qFd7eZo/meM8UuhRrTai18eX5ZJ9leAdwvwfma1uxS2ZlG8aDupx2Ww19AOZZ8txQtDTn+rzP8U1UnlaOMJStOmdEKfExGy348f1yQcJtOv4armZuEuC6eoIkeznNS8wO/ZkRSWuxDcc5Q1DsQADXfGSMEL36Aa6aDU5Hy7els00qYDImPVL+7rd2pAfSUzFCfA+7klefg=
