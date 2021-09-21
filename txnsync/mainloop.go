@@ -125,6 +125,7 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 	externalEvents := s.node.Events()
 	var nextPeerStateCh <-chan time.Time
 	for {
+		logging.Base().Info("random log msg")
 		nextPeerStateTime := s.scheduler.nextDuration()
 		if nextPeerStateTime != time.Duration(0) {
 			nextPeerStateCh = s.clock.TimeoutAt(nextPeerStateTime)
