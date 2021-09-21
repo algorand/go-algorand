@@ -158,6 +158,12 @@ const ConsensusV29 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/abc54f79f9ad679d2d22f0fb9909fb005c16f8a1",
 )
 
+// ConsensusV30 introduces AVM 1.0 and TEAL 5, increases the app opt in limit to 50,
+// and allows costs to be pooled in grouped stateful transactions.
+const ConsensusV30 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/bc36005dbd776e6d1eaf0c560619bb183215645c",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -170,7 +176,7 @@ const ConsensusFuture = ConsensusVersion(
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV29
+const ConsensusCurrentVersion = ConsensusV30
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion

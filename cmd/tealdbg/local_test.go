@@ -1064,3 +1064,77 @@ func TestLocalBalanceAdapterIndexer(t *testing.T) {
 	ba := l.runs[0].ba
 	checkBalanceAdapter(a, ba, sender, payTxn.Txn.Receiver, assetIdx, appIdx)
 }
+
+func TestDebugTxSubmit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
+	a.NoError(err)
+	app, err := basics.UnmarshalChecksumAddress("6BPQU5WNZMTO4X72A2THZCGNJNTTE7YL6AWCYSUUTZEIYMJSEPJCQQ6DQI")
+	a.NoError(err)
+
+	// make balance records
+	assetIdx := basics.AssetIndex(50)
+	appIdx := basics.AppIndex(100)
+	brs := makeSampleBalanceRecord(sender, assetIdx, appIdx)
+	bra := makeSampleBalanceRecord(app, assetIdx, appIdx)
+	balanceBlob := protocol.EncodeMsgp(&brs)
+	balanceBlob = append(balanceBlob, protocol.EncodeMsgp(&bra)...)
+
+	txn := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Type: protocol.ApplicationCallTx,
+			Header: transactions.Header{
+				Sender: sender,
+				Fee:    basics.MicroAlgos{Raw: 100},
+				Note:   []byte{1, 2, 3},
+			},
+			ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+				ApplicationID: appIdx,
+			},
+		},
+	}
+
+	txnEnc := protocol.EncodeJSON(&txn)
+	txnBlob := []byte("[" + strings.Join([]string{string(txnEnc), txnSample}, ",") + "]")
+
+	source := `#pragma version 5
+itxn_begin
+int acfg
+itxn_field TypeEnum
+int 1000000
+itxn_field ConfigAssetTotal
+int 3
+itxn_field ConfigAssetDecimals
+byte "oz"
+itxn_field ConfigAssetUnitName
+byte "Gold"
+itxn_field ConfigAssetName
+byte "https://gold.rush/"
+itxn_field ConfigAssetURL
+byte 0x67f0cd61653bd34316160bc3f5cd3763c85b114d50d38e1f4e72c3b994411e7b
+itxn_field ConfigAssetMetadataHash
+itxn_submit
+int 1`
+
+	ds := DebugParams{
+		ProgramNames:    []string{"test"},
+		ProgramBlobs:    [][]byte{[]byte(source)},
+		BalanceBlob:     balanceBlob,
+		TxnBlob:         txnBlob,
+		Proto:           string(protocol.ConsensusCurrentVersion),
+		Round:           222,
+		LatestTimestamp: 333,
+		GroupIndex:      0,
+		RunMode:         "application",
+	}
+
+	local := MakeLocalRunner(nil) // no debugger
+	err = local.Setup(&ds)
+	a.NoError(err)
+
+	pass, err := local.Run()
+	a.NoError(err)
+	a.True(pass)
+}
