@@ -28,12 +28,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
-// FoundAddress is a wrapper for an address and a boolean.
-type FoundAddress struct {
-	Address basics.Address
-	Exists  bool
-}
-
 // A ledger interface that Indexer implements. This is a simplified version of the
 // ledgerForEvaluator interface. Certain functions that the evaluator doesn't use
 // in the trusting mode are excluded, and the present functions only request data
