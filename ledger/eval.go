@@ -476,7 +476,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 		eval.block.BlockHeader.RewardsState = eval.prevHeader.NextRewardsState(hdr.Round, proto, incentivePoolData.MicroAlgos, prevTotals.RewardUnits())
 	}
 	// set the eval state with the current header
-	eval.state = makeRoundCowState(base, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp, paysetHint)
+	eval.state = makeRoundCowState(base, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp, prevTotals, paysetHint)
 
 	if validate {
 		err := eval.block.BlockHeader.PreCheck(eval.prevHeader)
@@ -1093,7 +1093,7 @@ func (eval *BlockEvaluator) finalValidation() error {
 		}
 	}
 
-	return nil
+	return eval.state.CalculateTotals()
 }
 
 // GenerateBlock produces a complete block from the BlockEvaluator.  This is
@@ -1133,7 +1133,7 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 			"unknown consensus version: %s", eval.block.BlockHeader.CurrentProtocol)
 	}
 	eval.state = makeRoundCowState(
-		eval.state, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp,
+		eval.state, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp, eval.state.mods.Totals,
 		len(eval.block.Payset))
 	return &vb, nil
 }
@@ -1272,7 +1272,7 @@ transactionGroupLoop:
 
 	// If validating, do final block checks that depend on our new state
 	if validate {
-		// wait for the validation to complete.
+		// wait for the signature validation to complete.
 		select {
 		case <-ctx.Done():
 			return ledgercore.StateDelta{}, ctx.Err()
@@ -1284,10 +1284,11 @@ transactionGroupLoop:
 				return ledgercore.StateDelta{}, err
 			}
 		}
-		err = eval.finalValidation()
-		if err != nil {
-			return ledgercore.StateDelta{}, err
-		}
+	}
+
+	err = eval.finalValidation()
+	if err != nil {
+		return ledgercore.StateDelta{}, err
 	}
 
 	return eval.state.deltas(), nil

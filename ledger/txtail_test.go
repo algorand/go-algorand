@@ -35,7 +35,8 @@ import (
 func TestTxTailCheckdup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	ledger := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion)
+	accts := randomAccounts(10, false)
+	ledger := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{accts})
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	tail := txTail{}
 	require.NoError(t, tail.loadFromDisk(ledger))
