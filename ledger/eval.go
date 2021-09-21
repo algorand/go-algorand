@@ -1211,11 +1211,13 @@ func (eval *BlockEvaluator) finalValidation() error {
 		}
 	}
 
-err := eval.state.CalculateTotals()
+	err := eval.state.CalculateTotals()
 
-if err != nil {
-    return err
-}
+	if err != nil {
+		return err
+	}
+
+	return eval.modifyOfflineAccounts()
 
 }
 
