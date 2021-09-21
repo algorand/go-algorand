@@ -999,6 +999,10 @@ byte 0x0706000000000000000000000000000000000000000000000000000000000000
 &&
 `
 
+const globalV6TestProgram = globalV5TestProgram + `
+// No new globals in v4
+`
+
 func TestGlobal(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1026,6 +1030,10 @@ func TestGlobal(t *testing.T) {
 		},
 		5: {
 			GroupID, globalV5TestProgram,
+			EvalStateful, CheckStateful,
+		},
+		6: {
+			GroupID, globalV6TestProgram,
 			EvalStateful, CheckStateful,
 		},
 	}
@@ -1435,6 +1443,11 @@ int 0
 args
 ==
 assert
+int 1
+`
+
+const testTxnProgramTextV6 = testTxnProgramTextV5 + `
+assert
 txn FirstValidTime
 int 0
 >
@@ -1529,7 +1542,7 @@ func TestTxn(t *testing.T) {
 	t.Parallel()
 	for i, txnField := range TxnFieldNames {
 		fs := txnFieldSpecByField[TxnField(i)]
-		if !fs.effects && !strings.Contains(testTxnProgramTextV5, txnField) {
+		if !fs.effects && !strings.Contains(testTxnProgramTextV6, txnField) {
 			t.Errorf("TestTxn missing field %v", txnField)
 		}
 	}
@@ -1540,6 +1553,7 @@ func TestTxn(t *testing.T) {
 		3: testTxnProgramTextV3,
 		4: testTxnProgramTextV4,
 		5: testTxnProgramTextV5,
+		6: testTxnProgramTextV6,
 	}
 
 	clearOps := testProg(t, "int 1", 1)
@@ -1822,6 +1836,9 @@ gtxnsas Accounts
 gtxn 0 Sender
 ==
 &&
+`
+
+	gtxnTextV6 := gtxnTextV5 + `
 gtxn 0 FirstValidTime
 int 0
 >
@@ -1833,6 +1850,7 @@ int 0
 		2: gtxnTextV2,
 		4: gtxnTextV4,
 		5: gtxnTextV5,
+		6: gtxnTextV6,
 	}
 
 	for v, source := range tests {
@@ -4863,7 +4881,8 @@ func TestFirstValidTime(t *testing.T) {
 		{4, 0, false},
 		{4, 1, false},
 		{5, 0, false},
-		{5, 1, true},
+		{5, 1, false},
+		{6, 1, true},
 	}
 	firstValidVersion := txnFieldSpecByName["FirstValidTime"].version
 	for _, test := range tests {

@@ -134,6 +134,10 @@ func (l indexerLedgerConnector) CompactCertVoters(_ basics.Round) (*VotersForRou
 	return nil, errors.New("CompactCertVoters() not implemented")
 }
 
+func (l indexerLedgerConnector) GetBlockTimeStamp(r basics.Round) (int64, error) {
+	return l.GetBlockTimeStamp(r)
+}
+
 func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Digest, latestRound basics.Round) indexerLedgerConnector {
 	return indexerLedgerConnector{
 		il:          il,

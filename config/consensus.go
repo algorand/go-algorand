@@ -1044,7 +1044,13 @@ func initConsensusProtocols() {
 	vFuture.CompactCertVotersLookback = 16
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
+
+	// Enable TEAL 6 / AVM 1.1
+	vFuture.LogicSigVersion = 6
+
+	// FirstValid timestamp in apps and logic sig
 	vFuture.EnableFirstValidTimeStamp = true
+
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 

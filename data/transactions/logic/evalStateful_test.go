@@ -2493,7 +2493,7 @@ func TestPooledAppCallsVerifyOp(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	source := `#pragma version 5
+	source := `
 	global CurrentApplicationID
 	pop
 	byte 0x01
