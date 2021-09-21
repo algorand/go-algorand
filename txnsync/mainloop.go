@@ -162,6 +162,15 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			logging.Base().Info("outgoingMessagesCallbackCh")
 			profOutgoingMsg.start()
 			s.evaluateOutgoingMessage(msgSent)
+			done := false
+			for !done {
+				select {
+				case msgSent = <-s.outgoingMessagesCallbackCh:
+					s.evaluateOutgoingMessage(msgSent)
+				default:
+					done = true
+				}
+			}
 			profOutgoingMsg.end()
 			continue
 		case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
@@ -211,6 +220,15 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			profIdle.end()
 			profOutgoingMsg.start()
 			s.evaluateOutgoingMessage(msgSent)
+			done := false
+			for !done {
+				select {
+				case msgSent = <-s.outgoingMessagesCallbackCh:
+					s.evaluateOutgoingMessage(msgSent)
+				default:
+					done = true
+				}
+			}
 			profOutgoingMsg.end()
 		case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
 			logging.Base().Info("getIncomingMessageChannel")
