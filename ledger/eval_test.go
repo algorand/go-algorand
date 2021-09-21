@@ -1934,7 +1934,7 @@ func TestCowBaseCreatorsCache(t *testing.T) {
 func TestExpiredAccountGeneration(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genesisInitState, addrs, keys := genesis(10)
+	genesisInitState, addrs, keys := genesisWithProto(10, protocol.ConsensusFuture)
 
 	sendAddr := addrs[0]
 	recvAddr := addrs[1]
