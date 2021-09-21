@@ -125,6 +125,7 @@ func (bs *BlockService) Start() {
 		bs.net.RegisterHandlers(handlers)
 	}
 	bs.stop = make(chan struct{})
+	bs.ledger.WaitGroupAdd()
 	go bs.listenForCatchupReq(bs.catchupReqs, bs.stop)
 }
 
@@ -239,6 +240,7 @@ func (bs *BlockService) processIncomingMessage(msg network.IncomingMessage) (n n
 func (bs *BlockService) listenForCatchupReq(reqs <-chan network.IncomingMessage, stop chan struct{}) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	defer bs.ledger.WaitGroupDone()
 	for {
 		select {
 		case reqMsg := <-reqs:

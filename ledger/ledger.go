@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -84,6 +85,9 @@ type Ledger struct {
 
 	// verifiedTxnCache holds all the verified transactions state
 	verifiedTxnCache verify.VerifiedTransactionCache
+
+	// wg to wait for the termination of goroutines using ledger/blockQ
+	wg sync.WaitGroup
 }
 
 // InitState structure defines blockchain init params
@@ -340,6 +344,8 @@ func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchi
 // Close reclaims resources used by the ledger (namely, the database connection
 // and goroutines used by trackers).
 func (l *Ledger) Close() {
+	l.wg.Wait()
+
 	// we shut the the blockqueue first, since it's sync goroutine dispatches calls
 	// back to the trackers.
 	if l.blockQ != nil {
@@ -644,6 +650,16 @@ func (l *Ledger) IsWritingCatchpointFile() bool {
 // VerifiedTransactionCache returns the verify.VerifiedTransactionCache
 func (l *Ledger) VerifiedTransactionCache() verify.VerifiedTransactionCache {
 	return l.verifiedTxnCache
+}
+
+// WaitGroupAdd adds a dependent routine on ledger/blockQ
+func (l *Ledger) WaitGroupAdd() {
+	l.wg.Add(1)
+}
+
+// WaitGroupDone removes a dependent routine on ledger/blockQ
+func (l *Ledger) WaitGroupDone() {
+	l.wg.Done()
 }
 
 // TxLease is an exported version of txlease
