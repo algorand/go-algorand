@@ -124,6 +124,8 @@ func badEncodeTransactionGroups(t *testing.T, s *syncState, inTxnGroups []poolda
 	}, nil
 }
 func TestInvalidByteToTxType(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	for i := len(protocol.TxnTypes); i <= math.MaxUint8; i++ {
 		require.Equal(t, protocol.UnknownTx, ByteToTxType(byte(i)))
 	}
