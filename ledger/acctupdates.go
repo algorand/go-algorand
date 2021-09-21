@@ -922,8 +922,13 @@ func (aul *accountUpdatesLedgerEvaluator) CheckDup(config.ConsensusParams, basic
 
 // GetBlockTimeStamp gets the block timestamp of a specific round. It's not needed by the accountUpdatesLedgerEvaluator and implemented as a stub.
 func (aul *accountUpdatesLedgerEvaluator) GetBlockTimeStamp(rnd basics.Round) (int64, error) {
-	// this is a non-issue since this call will never be made on non-validating evaluation
-	return 0, fmt.Errorf("accountUpdatesLedgerEvaluator: tried to get block timestamp during accountUpdates initialization ")
+	// TODO: fix while refactoring txTail
+	// GetBlockTimeStamp must lookup into txTail
+	hdr, err := aul.au.ledger.BlockHdr(rnd)
+	if err != nil {
+		return 0, err
+	}
+	return hdr.TimeStamp, nil
 }
 
 // lookupWithoutRewards returns the account balance for a given address at a given round, without the reward
@@ -1163,6 +1168,9 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	}
 
 	au.accountsq, err = accountsDbInit(au.dbs.Rdb.Handle, au.dbs.Wdb.Handle)
+	if err != nil {
+		return
+	}
 	au.lastCatchpointLabel, _, err = au.accountsq.readCatchpointStateString(context.Background(), catchpointStateLastCatchpoint)
 	if err != nil {
 		return
