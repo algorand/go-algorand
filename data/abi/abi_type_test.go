@@ -175,7 +175,7 @@ func TestTypeFromStringValid(t *testing.T) {
 	for i := 8; i <= 512; i += 8 {
 		expected, _ := MakeUintType(uint16(i))
 		actual, err := TypeFromString(expected.String())
-		require.Equal(t, nil, err, "TypeFromString: uint parsing error: %s", expected.String())
+		require.NoError(t, err, "TypeFromString: uint parsing error: %s", expected.String())
 		require.Equal(t, expected, actual,
 			"TypeFromString: expected %s, actual %s", expected.String(), actual.String())
 	}
@@ -184,7 +184,7 @@ func TestTypeFromStringValid(t *testing.T) {
 		for j := 1; j <= 160; j++ {
 			expected, _ := MakeUfixedType(uint16(i), uint16(j))
 			actual, err := TypeFromString("ufixed" + strconv.Itoa(i) + "x" + strconv.Itoa(j))
-			require.Equal(t, nil, err, "TypeFromString ufixed parsing error: %s", expected.String())
+			require.NoError(t, err, "TypeFromString ufixed parsing error: %s", expected.String())
 			require.Equal(t, expected, actual,
 				"TypeFromString ufixed: expected %s, actual %s", expected.String(), actual.String())
 		}
@@ -360,7 +360,7 @@ func TestTypeFromStringValid(t *testing.T) {
 	for _, testcase := range testcases {
 		t.Run(fmt.Sprintf("TypeFromString test %s", testcase.testType), func(t *testing.T) {
 			actual, err := TypeFromString(testcase.input)
-			require.Equal(t, nil, err, "TypeFromString %s parsing error", testcase.testType)
+			require.NoError(t, err, "TypeFromString %s parsing error", testcase.testType)
 			require.Equal(t, testcase.expected, actual, "TestFromString %s: expected %s, actual %s",
 				testcase.testType, testcase.expected.String(), actual.String())
 		})
