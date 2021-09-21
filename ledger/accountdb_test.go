@@ -839,7 +839,7 @@ func BenchmarkReadingRandomBalancesDisk(b *testing.B) {
 type benchmarkDB interface {
 	selectAccounts(b testing.TB, totalStartupAccountsNumber int) (accountsAddress [][]byte, accountsRowID []int)
 	updateAddr(b testing.TB, batch []updateAcct, accountsAddress [][]byte, batchIdx int) (int, error)
-	checkUpdateAddr(b testing.TB, batch []updateAcct, accountsAddress [][]byte, batchIdx int) error
+	checkUpdateAddr(b testing.TB, batches [][]updateAcct, accountsAddress [][]byte) error
 	updateRowID(b testing.TB, batch []updateAcct, accountsRowID []int) (int, error)
 	cleanup() error
 }
@@ -954,7 +954,7 @@ func (db *sqliteBenchmarkDB) updateAddr(b testing.TB, batch []updateAcct, accoun
 	return n, err
 }
 
-func (db *sqliteBenchmarkDB) checkUpdateAddr(b testing.TB, batch []updateAcct, accountsAddress [][]byte, batchIdx int) error {
+func (db *sqliteBenchmarkDB) checkUpdateAddr(b testing.TB, batches [][]updateAcct, accountsAddress [][]byte) error {
 	return nil
 }
 
@@ -1052,8 +1052,12 @@ func (db *kvBenchmarkDB) selectAccounts(b testing.TB, totalStartupAccountsNumber
 
 func (db *kvBenchmarkDB) updateAddr(b testing.TB, batch []updateAcct, accountsAddress [][]byte, batchIdx int) (int, error) {
 	n := 0
+	// f, err := os.Create(fmt.Sprintf("batch%d.log", batchIdx))
+	// require.NoError(b, err)
+	// defer f.Close()
 	wb := db.kv.NewBatch()
 	for i := range batch {
+		// f.WriteString(fmt.Sprintf("set KV %s %s\n", hex.EncodeToString(accountsAddress[batch[i].index]), hex.EncodeToString(batch[i].data)))
 		err := wb.Set(accountsAddress[batch[i].index], batch[i].data)
 		require.NoError(b, err)
 		n++
@@ -1061,17 +1065,23 @@ func (db *kvBenchmarkDB) updateAddr(b testing.TB, batch []updateAcct, accountsAd
 	return n, wb.Commit()
 }
 
-func (db *kvBenchmarkDB) checkUpdateAddr(b testing.TB, batch []updateAcct, accountsAddress [][]byte, batchIdx int) error {
-	// apply updates to map in order (to handle multiple updates to same address)
+func (db *kvBenchmarkDB) checkUpdateAddr(b testing.TB, batches [][]updateAcct, accountsAddress [][]byte) error {
+	// apply updates to map in order (to handle multiple updates to same address across different batches)
 	kvs := make(map[int][]byte)
-	for _, u := range batch {
-		kvs[u.index] = u.data
+	for _, batch := range batches {
+		for _, u := range batch {
+			kvs[u.index] = u.data
+		}
 	}
+	start := time.Now()
+	cnt := 0
 	for index, data := range kvs {
 		v, err := db.kv.Get(accountsAddress[index])
 		require.NoError(b, err)
-		require.Equal(b, data, v, "update for batch %d key %v didn't match", batchIdx, hex.EncodeToString(accountsAddress[index]))
+		require.Equal(b, data, v, "updated key %v didn't match", hex.EncodeToString(accountsAddress[index]))
+		cnt++
 	}
+	b.Logf("checking %d KVs took %v", cnt, time.Since(start))
 	return nil
 }
 
@@ -1170,11 +1180,9 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 
 		// sanity check: verify accounts were updated as described
 		if os.Getenv("SANITY_CHECK_READ") != "" {
-			for i, batch := range batches {
-				b.Logf("checking KVs were updated: reading batch %d of %d KVs", i, len(batch))
-				err := db.checkUpdateAddr(b, batch, accountsAddress, i)
-				require.NoError(b, err)
-			}
+			b.Logf("sanity-checking KVs were updated across %d batches", len(batches))
+			err := db.checkUpdateAddr(b, batches, accountsAddress)
+			require.NoError(b, err)
 		}
 	})
 
