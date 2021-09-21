@@ -109,6 +109,20 @@ func (i *badgerIterator) Next()                  { i.iter.Next() }
 func (i *badgerIterator) Key() []byte            { return i.iter.Item().KeyCopy(nil) }
 func (i *badgerIterator) Value() ([]byte, error) { return i.iter.Item().ValueCopy(nil) }
 
+// XXX could provide Item().Key() with guidance that Slice only valid until iter.Next()
+func (i *badgerIterator) KeySlice() Slice { return badgerSlice(i.iter.Item().KeyCopy(nil)) }
+func (i *badgerIterator) ValueSlice() (Slice, error) {
+	ret, err := i.iter.Item().ValueCopy(nil)
+	return badgerSlice(ret), err
+}
+
+type badgerSlice []byte
+
+func (s badgerSlice) Data() []byte { return s }
+func (s badgerSlice) Free()        {}
+func (s badgerSlice) Size() int    { return len(s) }
+func (s badgerSlice) Exists() bool { return s != nil }
+
 func (i *badgerIterator) Close() {
 	i.iter.Close()
 	i.txn.Discard()

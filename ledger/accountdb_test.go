@@ -1073,6 +1073,42 @@ func (db *kvBenchmarkDB) checkUpdateAddr(b testing.TB, batches [][]updateAcct, a
 			kvs[u.index] = u.data
 		}
 	}
+	b.Logf("got %d KVs to check", len(kvs))
+
+	if len(kvs) >= len(accountsAddress)/2 { // updated >50% of the accounts; do a scan instead of many gets
+		b.Logf("checking %d KVs were updated by scanning with iterator rather than get", len(kvs))
+		updates := make(map[[32]byte][]byte)
+		seen := make(map[[32]byte]bool)
+		for _, batch := range batches {
+			for _, u := range batch {
+				var key [32]byte
+				copy(key[:], accountsAddress[u.index])
+				updates[key] = u.data
+			}
+		}
+		start := time.Now()
+		for iter := db.kv.NewIterator(nil, nil); iter.Valid(); iter.Next() {
+			var k [32]byte
+			ik := iter.KeySlice()
+			require.Equal(b, ik.Size(), 32)
+			copy(k[:], ik.Data())
+			ik.Free()
+			v, ok := updates[k]
+			if !ok {
+				// skip this key, not in list of updates to check
+				continue
+			}
+			iv, err := iter.ValueSlice()
+			require.NoError(b, err)
+			require.Equal(b, v, iv.Data())
+			iv.Free()
+			seen[k] = true
+		}
+		require.Equal(b, len(updates), len(seen))
+		b.Logf("checking %d KVs took %v", len(seen), time.Since(start))
+		return nil
+	}
+
 	start := time.Now()
 	cnt := 0
 	for index, data := range kvs {
@@ -1112,7 +1148,9 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 
 	var accountsAddress [][]byte
 	var accountsRowID []int
+	selectStart := time.Now()
 	accountsAddress, accountsRowID = db.selectAccounts(b, totalStartupAccountsNumber)
+	b.Logf("Selecting %d accounts took %v", len(accountsAddress), time.Since(selectStart))
 	b.Logf("len accountsAddress %d", len(accountsAddress))
 	b.Logf("len accountsRowID %d", len(accountsRowID))
 

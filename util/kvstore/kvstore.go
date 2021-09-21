@@ -25,9 +25,20 @@ type BatchWriter interface {
 type Iterator interface {
 	Next()
 	Key() []byte
+	KeySlice() Slice
 	Value() ([]byte, error)
+	ValueSlice() (Slice, error)
 	Valid() bool
 	Close()
+}
+
+// Slices must be freed, and may be backed by *C.char
+// XXX for some Iterator implementations, could be faster to specify Slice is only valid until iter.Next()
+type Slice interface {
+	Data() []byte
+	Free()
+	Size() int
+	Exists() bool
 }
 
 type kvFactory interface {

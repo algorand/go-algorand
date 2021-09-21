@@ -108,10 +108,16 @@ func (db *RocksDB) NewIterator(start, end []byte) Iterator {
 	return &rocksIterator{iter: iter}
 }
 
-func (i *rocksIterator) Next()                  { i.iter.Next() }
-func (i *rocksIterator) Key() []byte            { return sliceBytes(i.iter.Key()) }
-func (i *rocksIterator) Value() ([]byte, error) { return sliceBytes(i.iter.Value()), nil }
-func (i *rocksIterator) Close()                 { i.iter.Close() }
+func (i *rocksIterator) Next()                      { i.iter.Next() }
+func (i *rocksIterator) Key() []byte                { return sliceBytes(i.iter.Key()) }
+func (i *rocksIterator) Value() ([]byte, error)     { return sliceBytes(i.iter.Value()), nil }
+func (i *rocksIterator) Close()                     { i.iter.Close() }
+func (i *rocksIterator) KeySlice() Slice            { return &rocksSlice{i.iter.Key()} }
+func (i *rocksIterator) ValueSlice() (Slice, error) { return &rocksSlice{i.iter.Value()}, nil }
+
+type rocksSlice struct {
+	*gorocksdb.Slice
+}
 
 func (i *rocksIterator) Valid() bool {
 	if !i.iter.Valid() {
