@@ -12,7 +12,7 @@ require (
 	github.com/aws/aws-sdk-go v1.16.5
 	github.com/davidlazar/go-crypto v0.0.0-20170701192655-dcfb0a7ac018
 	github.com/dchest/siphash v1.2.1
-	github.com/dgraph-io/badger/v3 v3.2103.1 // indirect
+	github.com/dgraph-io/badger/v3 v3.2103.1
 	github.com/fatih/color v1.7.0
 	github.com/fortytw2/leaktest v1.3.0 // indirect
 	github.com/gen2brain/beeep v0.0.0-20180718162406-4e430518395f
@@ -41,7 +41,8 @@ require (
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/testify v1.7.0
+	github.com/tecbot/gorocksdb v0.0.0-20191217155057-f0fad39f321c
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
 	golang.org/x/net v0.0.0-20201021035429-f5854403a974
 	golang.org/x/sys v0.0.0-20210124154548-22da62e12c0c
@@ -51,3 +52,8 @@ require (
 	gopkg.in/toast.v1 v1.0.0-20180812000517-0a84660828b2 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
 )
+
+// rocksdb >= 6.16 forks
+//replace github.com/tecbot/gorocksdb => github.com/roysc/gorocksdb v1.1.0 // requires fork of RocksDB with optimistic transactions C bindings
+replace github.com/tecbot/gorocksdb => github.com/flier/gorocksdb v0.0.0-20210322072530-996557beed98 // requires build tag "rocksdb_6_16"
+
