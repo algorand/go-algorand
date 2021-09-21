@@ -55,7 +55,7 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 		// These must be identical to keep an old backward compat test working
 		MinTxnFee:  1001,
 		MinBalance: 1001,
-		// Our sample txn is 42-1066 (and that's used as default in tx_begin)
+		// Our sample txn is 42-1066 (and that's used as default in itxn_begin)
 		MaxTxnLife: 1500,
 		// Strange choices below so that we test against conflating them
 		AppFlatParamsMinBalance:  1002,
@@ -65,10 +65,14 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 
 		MaxInnerTransactions: 4,
 
-		// With the addition of tx_perform, which relies on machinery
-		// outside logic package for validity checking, we need a more
-		// realistic set of consensus paramaters.
-		Asset: true,
+		// With the addition of itxn_field, itxn_submit, which rely on
+		// machinery outside logic package for validity checking, we
+		// need a more realistic set of consensus paramaters.
+		Asset:                 true,
+		MaxAssetNameBytes:     12,
+		MaxAssetUnitNameBytes: 6,
+		MaxAssetURLBytes:      32,
+		MaxAssetDecimals:      4,
 	}
 }
 
@@ -1523,8 +1527,9 @@ func TestTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	for _, txnField := range TxnFieldNames {
-		if !strings.Contains(testTxnProgramTextV5, txnField) {
+	for i, txnField := range TxnFieldNames {
+		fs := txnFieldSpecByField[TxnField(i)]
+		if !fs.effects && !strings.Contains(testTxnProgramTextV5, txnField) {
 			t.Errorf("TestTxn missing field %v", txnField)
 		}
 	}
@@ -2266,10 +2271,13 @@ func TestExtractOp(t *testing.T) {
 
 	testAccepts(t, "byte 0x123456789abc; int 5; int 1; extract3; byte 0xbc; ==", 5)
 
-	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract16bits; int 0x3456; ==", 5)
-	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract32bits; int 0x3456789a; ==", 5)
-	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract64bits; int 0x123456789abcdef0; ==", 5)
-	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract64bits; int 0x123456789abcdef; !=", 5)
+	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract_uint16; int 0x3456; ==", 5)
+	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract_uint32; int 0x3456789a; ==", 5)
+	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract_uint64; int 0x123456789abcdef0; ==", 5)
+	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract_uint64; int 0x123456789abcdef; !=", 5)
+
+	testAccepts(t, `byte "hello"; extract 5 0; byte ""; ==`, 5)
+	testAccepts(t, `byte "hello"; int 5; int 0; extract3; byte ""; ==`, 5)
 }
 
 func TestExtractFlop(t *testing.T) {
@@ -2311,17 +2319,17 @@ func TestExtractFlop(t *testing.T) {
 
 	err = testPanics(t, `byte 0xf000000000000000
 	int 55
-	extract16bits`, 5)
+	extract_uint16`, 5)
 	require.Contains(t, err.Error(), "extract range beyond length of string")
 
 	err = testPanics(t, `byte 0xf000000000000000
 	int 9
-	extract32bits`, 5)
+	extract_uint32`, 5)
 	require.Contains(t, err.Error(), "extract range beyond length of string")
 
 	err = testPanics(t, `byte 0xf000000000000000
 	int 1
-	extract64bits`, 5)
+	extract_uint64`, 5)
 	require.Contains(t, err.Error(), "extract range beyond length of string")
 }
 
@@ -2329,6 +2337,8 @@ func TestLoadStore(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
+	testAccepts(t, "load 3; int 0; ==;", 1)
+
 	testAccepts(t, `int 37
 int 37
 store 1
@@ -2350,6 +2360,7 @@ func TestLoadStoreStack(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
+	testAccepts(t, "int 3; loads; int 0; ==;", 5)
 	testAccepts(t, `int 37
 int 1
 int 37

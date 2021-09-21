@@ -393,7 +393,9 @@ func TestLatestSigsFromThisNode(t *testing.T) {
 	}
 
 	// Add a block that claims the compact cert is formed.
+	s.mu.Lock()
 	s.addBlock(3 * basics.Round(proto.CompactCertRounds))
+	s.mu.Unlock()
 
 	// Wait for the builder to discard the signatures.
 	time.Sleep(time.Second)

@@ -100,6 +100,13 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 			return err
 		}
 
+		// Record the index used. No separate config for activating
+		// storage in AD because inner transactions can't be turned on
+		// without this change.
+		if balances.ConsensusParams().MaxInnerTransactions > 0 {
+			ad.ConfigAsset = newidx
+		}
+
 		// Tell the cow what asset we created
 		err = balances.AllocateAsset(header.Sender, newidx, true)
 		if err != nil {

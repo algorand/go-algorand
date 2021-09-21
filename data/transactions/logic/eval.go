@@ -115,6 +115,31 @@ func (sv *stackValue) uint() (uint64, error) {
 	return sv.Uint, nil
 }
 
+func (sv *stackValue) bool() (bool, error) {
+	u64, err := sv.uint()
+	if err != nil {
+		return false, err
+	}
+	switch u64 {
+	case 0:
+		return false, nil
+	case 1:
+		return true, nil
+	default:
+		return false, fmt.Errorf("boolean is neither 1 nor 0: %d", u64)
+	}
+}
+
+func (sv *stackValue) string(limit int) (string, error) {
+	if sv.Bytes == nil {
+		return "", errors.New("not a byte array")
+	}
+	if len(sv.Bytes) > limit {
+		return "", errors.New("value is too long")
+	}
+	return string(sv.Bytes), nil
+}
+
 func stackValueFromTealValue(tv *basics.TealValue) (sv stackValue, err error) {
 	switch tv.Type {
 	case basics.TealBytesType:
@@ -327,7 +352,7 @@ type EvalContext struct {
 	version uint64
 	scratch scratchSpace
 
-	subtxn *transactions.SignedTxn // place to build for tx_submit
+	subtxn *transactions.SignedTxn // place to build for itxn_submit
 	// The transactions Performed() and their effects
 	InnerTxns []transactions.SignedTxnWithAD
 
@@ -1862,7 +1887,8 @@ func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field Tx
 		return basics.TealValue{}, fmt.Errorf("negative groupIndex %d", groupIndex)
 	}
 	cx := EvalContext{EvalParams: EvalParams{GroupIndex: uint64(groupIndex)}}
-	sv, err := cx.txnFieldToStack(txn, field, arrayFieldIdx, uint64(groupIndex))
+	fs := txnFieldSpecByField[field]
+	sv, err := cx.txnFieldToStack(txn, fs, arrayFieldIdx, uint64(groupIndex))
 	return sv.toTealValue(), err
 }
 
@@ -1882,9 +1908,41 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex uint64)
 	return txid
 }
 
-func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, field TxnField, arrayFieldIdx uint64, groupIndex uint64) (sv stackValue, err error) {
+func (cx *EvalContext) itxnFieldToStack(itxn *transactions.SignedTxnWithAD, fs txnFieldSpec, arrayFieldIdx uint64) (sv stackValue, err error) {
+	if fs.effects {
+		switch fs.field {
+		case Logs:
+			if arrayFieldIdx >= uint64(len(itxn.EvalDelta.Logs)) {
+				err = fmt.Errorf("invalid Logs index %d", arrayFieldIdx)
+				return
+			}
+			sv.Bytes = nilToEmpty([]byte(itxn.EvalDelta.Logs[arrayFieldIdx]))
+		case NumLogs:
+			sv.Uint = uint64(len(itxn.EvalDelta.Logs))
+		case CreatedAssetID:
+			sv.Uint = uint64(itxn.ApplyData.ConfigAsset)
+		case CreatedApplicationID:
+			sv.Uint = uint64(itxn.ApplyData.ApplicationID)
+		default:
+			err = fmt.Errorf("invalid txn field %d", fs.field)
+		}
+		return
+	}
+
+	if fs.field == GroupIndex || fs.field == TxID {
+		err = fmt.Errorf("illegal field for inner transaction %s", fs.field)
+	} else {
+		sv, err = cx.txnFieldToStack(&itxn.Txn, fs, arrayFieldIdx, 0)
+	}
+	return
+}
+
+func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, fs txnFieldSpec, arrayFieldIdx uint64, groupIndex uint64) (sv stackValue, err error) {
+	if fs.effects {
+		return sv, errors.New("Unable to obtain effects from top-level transactions")
+	}
 	err = nil
-	switch field {
+	switch fs.field {
 	case Sender:
 		sv.Bytes = txn.Sender[:]
 	case Fee:
@@ -2036,14 +2094,13 @@ func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 	case ExtraProgramPages:
 		sv.Uint = uint64(txn.ExtraProgramPages)
 	default:
-		err = fmt.Errorf("invalid txn field %d", field)
+		err = fmt.Errorf("invalid txn field %d", fs.field)
 		return
 	}
 
-	txnField := TxnField(field)
-	txnFieldType := TxnFieldTypes[txnField]
+	txnFieldType := TxnFieldTypes[fs.field]
 	if !typecheck(txnFieldType, sv.argType()) {
-		err = fmt.Errorf("%s expected field type is %s but got %s", txnField.String(), txnFieldType.String(), sv.argType().String())
+		err = fmt.Errorf("%s expected field type is %s but got %s", fs.field.String(), txnFieldType.String(), sv.argType().String())
 	}
 	return
 }
@@ -2060,7 +2117,7 @@ func opTxn(cx *EvalContext) {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
 		return
 	}
-	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, field, 0, cx.GroupIndex)
+	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, fs, 0, cx.GroupIndex)
 	if err != nil {
 		cx.err = err
 		return
@@ -2081,7 +2138,7 @@ func opTxna(cx *EvalContext) {
 		return
 	}
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
-	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx, cx.GroupIndex)
+	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, fs, arrayFieldIdx, cx.GroupIndex)
 	if err != nil {
 		cx.err = err
 		return
@@ -2104,7 +2161,7 @@ func opTxnas(cx *EvalContext) {
 		return
 	}
 	arrayFieldIdx := cx.stack[last].Uint
-	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx, cx.GroupIndex)
+	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, fs, arrayFieldIdx, cx.GroupIndex)
 	if err != nil {
 		cx.err = err
 		return
@@ -2136,7 +2193,7 @@ func opGtxn(cx *EvalContext) {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = uint64(gtxid)
 	} else {
-		sv, err = cx.txnFieldToStack(tx, field, 0, uint64(gtxid))
+		sv, err = cx.txnFieldToStack(tx, fs, 0, uint64(gtxid))
 		if err != nil {
 			cx.err = err
 			return
@@ -2164,7 +2221,7 @@ func opGtxna(cx *EvalContext) {
 		return
 	}
 	arrayFieldIdx := uint64(cx.program[cx.pc+3])
-	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, uint64(gtxid))
+	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, uint64(gtxid))
 	if err != nil {
 		cx.err = err
 		return
@@ -2193,7 +2250,7 @@ func opGtxnas(cx *EvalContext) {
 		return
 	}
 	arrayFieldIdx := cx.stack[last].Uint
-	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, uint64(gtxid))
+	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, uint64(gtxid))
 	if err != nil {
 		cx.err = err
 		return
@@ -2226,7 +2283,7 @@ func opGtxns(cx *EvalContext) {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = gtxid
 	} else {
-		sv, err = cx.txnFieldToStack(tx, field, 0, gtxid)
+		sv, err = cx.txnFieldToStack(tx, fs, 0, gtxid)
 		if err != nil {
 			cx.err = err
 			return
@@ -2255,7 +2312,7 @@ func opGtxnsa(cx *EvalContext) {
 		return
 	}
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
-	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, gtxid)
 	if err != nil {
 		cx.err = err
 		return
@@ -2285,13 +2342,68 @@ func opGtxnsas(cx *EvalContext) {
 		return
 	}
 	arrayFieldIdx := cx.stack[last].Uint
-	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, gtxid)
 	if err != nil {
 		cx.err = err
 		return
 	}
 	cx.stack[prev] = sv
 	cx.stack = cx.stack[:last]
+}
+
+func opItxn(cx *EvalContext) {
+	field := TxnField(cx.program[cx.pc+1])
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid itxn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if ok {
+		cx.err = fmt.Errorf("invalid itxn field %d", field)
+		return
+	}
+
+	if len(cx.InnerTxns) == 0 {
+		cx.err = fmt.Errorf("no inner transaction available %d", field)
+		return
+	}
+
+	itxn := &cx.InnerTxns[len(cx.InnerTxns)-1]
+	sv, err := cx.itxnFieldToStack(itxn, fs, 0)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack = append(cx.stack, sv)
+}
+
+func opItxna(cx *EvalContext) {
+	field := TxnField(cx.program[cx.pc+1])
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid itxn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if !ok {
+		cx.err = fmt.Errorf("itxna unsupported field %d", field)
+		return
+	}
+	arrayFieldIdx := uint64(cx.program[cx.pc+2])
+
+	if len(cx.InnerTxns) == 0 {
+		cx.err = fmt.Errorf("no inner transaction available %d", field)
+		return
+	}
+
+	itxn := &cx.InnerTxns[len(cx.InnerTxns)-1]
+	sv, err := cx.itxnFieldToStack(itxn, fs, arrayFieldIdx)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack = append(cx.stack, sv)
 }
 
 func opGaidImpl(cx *EvalContext, groupIdx uint64, opName string) (sv stackValue, err error) {
@@ -3571,7 +3683,7 @@ func authorizedSender(cx *EvalContext, addr basics.Address) bool {
 
 func opTxBegin(cx *EvalContext) {
 	if cx.subtxn != nil {
-		cx.err = errors.New("tx_begin without tx_submit")
+		cx.err = errors.New("itxn_begin without itxn_submit")
 		return
 	}
 	// Start fresh
@@ -3586,8 +3698,8 @@ func opTxBegin(cx *EvalContext) {
 	fee := cx.Proto.MinTxnFee
 	if cx.FeeCredit != nil {
 		// Use credit to shrink the fee, but don't change FeeCredit
-		// here, because they might never tx_submit, or they might
-		// change the fee.  Do it in tx_submit.
+		// here, because they might never itxn_submit, or they might
+		// change the fee.  Do it in itxn_submit.
 		fee = basics.SubSaturate(fee, *cx.FeeCredit)
 	}
 	cx.subtxn.Txn.Header = transactions.Header{
@@ -3638,7 +3750,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 		if ok {
 			txn.Type = txType
 		} else {
-			err = fmt.Errorf("%s is not a valid Type for tx_field", sv.Bytes)
+			err = fmt.Errorf("%s is not a valid Type for itxn_field", sv.Bytes)
 		}
 	case TypeEnum:
 		var i uint64
@@ -3652,7 +3764,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 			if ok {
 				txn.Type = txType
 			} else {
-				err = fmt.Errorf("%s is not a valid Type for tx_field", TxnTypeNames[i])
+				err = fmt.Errorf("%s is not a valid Type for itxn_field", TxnTypeNames[i])
 			}
 		} else {
 			err = fmt.Errorf("%d is not a valid TypeEnum", i)
@@ -3670,12 +3782,14 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 
 	// KeyReg not allowed yet, so no fields settable
 
+	// Payment
 	case Receiver:
 		txn.Receiver, err = cx.availableAccount(sv)
 	case Amount:
 		txn.Amount.Raw, err = sv.uint()
 	case CloseRemainderTo:
 		txn.CloseRemainderTo, err = cx.availableAccount(sv)
+	// AssetTransfer
 	case XferAsset:
 		txn.XferAsset, err = cx.availableAsset(sv)
 	case AssetAmount:
@@ -3686,29 +3800,69 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 		txn.AssetReceiver, err = cx.availableAccount(sv)
 	case AssetCloseTo:
 		txn.AssetCloseTo, err = cx.availableAccount(sv)
-
-	// acfg likely next
-
-	// afrz seems easy but not high demand
+	// AssetConfig
+	case ConfigAsset:
+		txn.ConfigAsset, err = cx.availableAsset(sv)
+	case ConfigAssetTotal:
+		txn.AssetParams.Total, err = sv.uint()
+	case ConfigAssetDecimals:
+		var decimals uint64
+		decimals, err = sv.uint()
+		if err == nil {
+			if decimals > uint64(cx.Proto.MaxAssetDecimals) {
+				err = fmt.Errorf("too many decimals (%d)", decimals)
+			} else {
+				txn.AssetParams.Decimals = uint32(decimals)
+			}
+		}
+	case ConfigAssetDefaultFrozen:
+		txn.AssetParams.DefaultFrozen, err = sv.bool()
+	case ConfigAssetUnitName:
+		txn.AssetParams.UnitName, err = sv.string(cx.Proto.MaxAssetUnitNameBytes)
+	case ConfigAssetName:
+		txn.AssetParams.AssetName, err = sv.string(cx.Proto.MaxAssetNameBytes)
+	case ConfigAssetURL:
+		txn.AssetParams.URL, err = sv.string(cx.Proto.MaxAssetURLBytes)
+	case ConfigAssetMetadataHash:
+		if len(sv.Bytes) != 32 {
+			err = fmt.Errorf("ConfigAssetMetadataHash must be 32 bytes")
+		} else {
+			copy(txn.AssetParams.MetadataHash[:], sv.Bytes)
+		}
+	case ConfigAssetManager:
+		txn.AssetParams.Manager, err = sv.address()
+	case ConfigAssetReserve:
+		txn.AssetParams.Reserve, err = sv.address()
+	case ConfigAssetFreeze:
+		txn.AssetParams.Freeze, err = sv.address()
+	case ConfigAssetClawback:
+		txn.AssetParams.Clawback, err = sv.address()
+	// Freeze
+	case FreezeAsset:
+		txn.FreezeAsset, err = cx.availableAsset(sv)
+	case FreezeAssetAccount:
+		txn.FreezeAccount, err = cx.availableAccount(sv)
+	case FreezeAssetFrozen:
+		txn.AssetFrozen, err = sv.bool()
 
 	// appl needs to wait. Can't call AVM from AVM.
 
 	default:
-		return fmt.Errorf("invalid tx_field %s", fs.field)
+		return fmt.Errorf("invalid itxn_field %s", fs.field)
 	}
 	return
 }
 
 func opTxField(cx *EvalContext) {
 	if cx.subtxn == nil {
-		cx.err = errors.New("tx_field without tx_begin")
+		cx.err = errors.New("itxn_field without itxn_begin")
 		return
 	}
 	last := len(cx.stack) - 1
 	field := TxnField(cx.program[cx.pc+1])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.itxVersion == 0 || fs.itxVersion > cx.version {
-		cx.err = fmt.Errorf("invalid tx_field field %d", field)
+		cx.err = fmt.Errorf("invalid itxn_field field %d", field)
 	}
 	sv := cx.stack[last]
 	cx.err = cx.stackIntoTxnField(sv, fs, &cx.subtxn.Txn)
@@ -3722,21 +3876,21 @@ func opTxSubmit(cx *EvalContext) {
 	}
 
 	if cx.subtxn == nil {
-		cx.err = errors.New("tx_submit without tx_begin")
+		cx.err = errors.New("itxn_submit without itxn_begin")
 		return
 	}
 
 	if len(cx.InnerTxns) >= cx.Proto.MaxInnerTransactions {
-		cx.err = errors.New("tx_submit with MaxInnerTransactions")
+		cx.err = errors.New("itxn_submit with MaxInnerTransactions")
 		return
 	}
 
 	// Error out on anything unusual.  Allow pay, axfer.
 	switch cx.subtxn.Txn.Type {
-	case protocol.PaymentTx, protocol.AssetTransferTx:
-		// only pay and axfer for now
+	case protocol.PaymentTx, protocol.AssetTransferTx, protocol.AssetConfigTx, protocol.AssetFreezeTx:
+		// only pay, axfer, acfg, afrz for now
 	default:
-		cx.err = fmt.Errorf("Invalid inner transaction type %s", cx.subtxn.Txn.Type)
+		cx.err = fmt.Errorf("Invalid inner transaction type %#v", cx.subtxn.Txn.Type)
 		return
 	}
 
@@ -3770,7 +3924,9 @@ func opTxSubmit(cx *EvalContext) {
 		if cx.FeeCredit != nil && *cx.FeeCredit >= underpaid {
 			*cx.FeeCredit -= underpaid
 		} else {
-			// This should be impossible until we allow changing the Fee
+			// We allow changing the fee. One pattern might be for an
+			// app to unilaterally set its Fee to 0. The idea would be
+			// that other transactions were supposed to overpay.
 			cx.err = fmt.Errorf("fee too small")
 			return
 		}

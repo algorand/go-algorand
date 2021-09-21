@@ -149,6 +149,18 @@ const (
 	// Nonparticipation Transaction.Nonparticipation
 	Nonparticipation
 
+	// Logs Transaction.ApplyData.EvalDelta.Logs
+	Logs
+
+	// NumLogs len(Logs)
+	NumLogs
+
+	// CreatedAssetID Transaction.ApplyData.EvalDelta.ConfigAsset
+	CreatedAssetID
+
+	// CreatedApplicationID Transaction.ApplyData.EvalDelta.ApplicationID
+	CreatedApplicationID
+
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
 
@@ -175,76 +187,82 @@ type txnFieldSpec struct {
 	field      TxnField
 	ftype      StackType
 	version    uint64 // When this field become available to txn/gtxn. 0=always
-	itxVersion uint64 // When this field become available to tx_field. 0=never
+	itxVersion uint64 // When this field become available to itxn_field. 0=never
+	effects    bool   // Is this a field on the "effects"? That is, something in ApplyData
 }
 
 var txnFieldSpecs = []txnFieldSpec{
-	{Sender, StackBytes, 0, 5},
-	{Fee, StackUint64, 0, 5},
-	{FirstValid, StackUint64, 0, 0},
-	// FirstValidTime was originally a dummy field in V0, and enabled in V5.
-	// Setting version to 5 will cause assembling programs with version 0-4 to fail
-	// but it does not matter since FirstValidTime is invalid runtime field on TEAL v0-v4
-	{FirstValidTime, StackUint64, 5, 5},
-	{LastValid, StackUint64, 0, 0},
-	{Note, StackBytes, 0, 0},
-	{Lease, StackBytes, 0, 0},
-	{Receiver, StackBytes, 0, 5},
-	{Amount, StackUint64, 0, 5},
-	{CloseRemainderTo, StackBytes, 0, 5},
-	{VotePK, StackBytes, 0, 0},
-	{SelectionPK, StackBytes, 0, 0},
-	{VoteFirst, StackUint64, 0, 0},
-	{VoteLast, StackUint64, 0, 0},
-	{VoteKeyDilution, StackUint64, 0, 0},
-	{Type, StackBytes, 0, 5},
-	{TypeEnum, StackUint64, 0, 5},
-	{XferAsset, StackUint64, 0, 5},
-	{AssetAmount, StackUint64, 0, 5},
-	{AssetSender, StackBytes, 0, 5},
-	{AssetReceiver, StackBytes, 0, 5},
-	{AssetCloseTo, StackBytes, 0, 5},
-	{GroupIndex, StackUint64, 0, 0},
-	{TxID, StackBytes, 0, 0},
-	{ApplicationID, StackUint64, 2, 0},
-	{OnCompletion, StackUint64, 2, 0},
-	{ApplicationArgs, StackBytes, 2, 0},
-	{NumAppArgs, StackUint64, 2, 0},
-	{Accounts, StackBytes, 2, 0},
-	{NumAccounts, StackUint64, 2, 0},
-	{ApprovalProgram, StackBytes, 2, 0},
-	{ClearStateProgram, StackBytes, 2, 0},
-	{RekeyTo, StackBytes, 2, 0},
-	{ConfigAsset, StackUint64, 2, 0},
-	{ConfigAssetTotal, StackUint64, 2, 0},
-	{ConfigAssetDecimals, StackUint64, 2, 0},
-	{ConfigAssetDefaultFrozen, StackUint64, 2, 0},
-	{ConfigAssetUnitName, StackBytes, 2, 0},
-	{ConfigAssetName, StackBytes, 2, 0},
-	{ConfigAssetURL, StackBytes, 2, 0},
-	{ConfigAssetMetadataHash, StackBytes, 2, 0},
-	{ConfigAssetManager, StackBytes, 2, 0},
-	{ConfigAssetReserve, StackBytes, 2, 0},
-	{ConfigAssetFreeze, StackBytes, 2, 0},
-	{ConfigAssetClawback, StackBytes, 2, 0},
-	{FreezeAsset, StackUint64, 2, 0},
-	{FreezeAssetAccount, StackBytes, 2, 0},
-	{FreezeAssetFrozen, StackUint64, 2, 0},
-	{Assets, StackUint64, 3, 0},
-	{NumAssets, StackUint64, 3, 0},
-	{Applications, StackUint64, 3, 0},
-	{NumApplications, StackUint64, 3, 0},
-	{GlobalNumUint, StackUint64, 3, 0},
-	{GlobalNumByteSlice, StackUint64, 3, 0},
-	{LocalNumUint, StackUint64, 3, 0},
-	{LocalNumByteSlice, StackUint64, 3, 0},
-	{ExtraProgramPages, StackUint64, 4, 0},
-	{Nonparticipation, StackUint64, 5, 0},
+	{Sender, StackBytes, 0, 5, false},
+	{Fee, StackUint64, 0, 5, false},
+	{FirstValid, StackUint64, 0, 0, false},
+	// FirstValidTime was originally a dummy field in v0, and enabled in v6.
+	// Setting version to 6 will cause assembling programs with version 0-5 to fail
+	// but it does not matter since FirstValidTime is invalid runtime field on TEAL v0-v5
+	{FirstValidTime, StackUint64, 6, 6, false},
+	{LastValid, StackUint64, 0, 0, false},
+	{Note, StackBytes, 0, 0, false},
+	{Lease, StackBytes, 0, 0, false},
+	{Receiver, StackBytes, 0, 5, false},
+	{Amount, StackUint64, 0, 5, false},
+	{CloseRemainderTo, StackBytes, 0, 5, false},
+	{VotePK, StackBytes, 0, 0, false},
+	{SelectionPK, StackBytes, 0, 0, false},
+	{VoteFirst, StackUint64, 0, 0, false},
+	{VoteLast, StackUint64, 0, 0, false},
+	{VoteKeyDilution, StackUint64, 0, 0, false},
+	{Type, StackBytes, 0, 5, false},
+	{TypeEnum, StackUint64, 0, 5, false},
+	{XferAsset, StackUint64, 0, 5, false},
+	{AssetAmount, StackUint64, 0, 5, false},
+	{AssetSender, StackBytes, 0, 5, false},
+	{AssetReceiver, StackBytes, 0, 5, false},
+	{AssetCloseTo, StackBytes, 0, 5, false},
+	{GroupIndex, StackUint64, 0, 0, false},
+	{TxID, StackBytes, 0, 0, false},
+	{ApplicationID, StackUint64, 2, 0, false},
+	{OnCompletion, StackUint64, 2, 0, false},
+	{ApplicationArgs, StackBytes, 2, 0, false},
+	{NumAppArgs, StackUint64, 2, 0, false},
+	{Accounts, StackBytes, 2, 0, false},
+	{NumAccounts, StackUint64, 2, 0, false},
+	{ApprovalProgram, StackBytes, 2, 0, false},
+	{ClearStateProgram, StackBytes, 2, 0, false},
+	{RekeyTo, StackBytes, 2, 0, false},
+	{ConfigAsset, StackUint64, 2, 5, false},
+	{ConfigAssetTotal, StackUint64, 2, 5, false},
+	{ConfigAssetDecimals, StackUint64, 2, 5, false},
+	{ConfigAssetDefaultFrozen, StackUint64, 2, 5, false},
+	{ConfigAssetUnitName, StackBytes, 2, 5, false},
+	{ConfigAssetName, StackBytes, 2, 5, false},
+	{ConfigAssetURL, StackBytes, 2, 5, false},
+	{ConfigAssetMetadataHash, StackBytes, 2, 5, false},
+	{ConfigAssetManager, StackBytes, 2, 5, false},
+	{ConfigAssetReserve, StackBytes, 2, 5, false},
+	{ConfigAssetFreeze, StackBytes, 2, 5, false},
+	{ConfigAssetClawback, StackBytes, 2, 5, false},
+	{FreezeAsset, StackUint64, 2, 5, false},
+	{FreezeAssetAccount, StackBytes, 2, 5, false},
+	{FreezeAssetFrozen, StackUint64, 2, 5, false},
+	{Assets, StackUint64, 3, 0, false},
+	{NumAssets, StackUint64, 3, 0, false},
+	{Applications, StackUint64, 3, 0, false},
+	{NumApplications, StackUint64, 3, 0, false},
+	{GlobalNumUint, StackUint64, 3, 0, false},
+	{GlobalNumByteSlice, StackUint64, 3, 0, false},
+	{LocalNumUint, StackUint64, 3, 0, false},
+	{LocalNumByteSlice, StackUint64, 3, 0, false},
+	{ExtraProgramPages, StackUint64, 4, 0, false},
+	{Nonparticipation, StackUint64, 5, 0, false},
+
+	{Logs, StackBytes, 5, 5, true},
+	{NumLogs, StackUint64, 5, 5, true},
+	{CreatedAssetID, StackUint64, 5, 5, true},
+	{CreatedApplicationID, StackUint64, 5, 5, true},
 }
 
 // TxnaFieldNames are arguments to the 'txna' opcode
 // It is a subset of txn transaction fields so initialized here in-place
-var TxnaFieldNames = []string{ApplicationArgs.String(), Accounts.String(), Assets.String(), Applications.String()}
+var TxnaFieldNames = []string{ApplicationArgs.String(), Accounts.String(), Assets.String(), Applications.String(), Logs.String()}
 
 // TxnaFieldTypes is StackBytes or StackUint64 parallel to TxnaFieldNames
 var TxnaFieldTypes = []StackType{
@@ -252,18 +270,23 @@ var TxnaFieldTypes = []StackType{
 	txnaFieldSpecByField[Accounts].ftype,
 	txnaFieldSpecByField[Assets].ftype,
 	txnaFieldSpecByField[Applications].ftype,
+	txnaFieldSpecByField[Logs].ftype,
 }
 
 var txnaFieldSpecByField = map[TxnField]txnFieldSpec{
-	ApplicationArgs: {ApplicationArgs, StackBytes, 2, 0},
-	Accounts:        {Accounts, StackBytes, 2, 0},
-	Assets:          {Assets, StackUint64, 3, 0},
-	Applications:    {Applications, StackUint64, 3, 0},
+	ApplicationArgs: {ApplicationArgs, StackBytes, 2, 0, false},
+	Accounts:        {Accounts, StackBytes, 2, 0, false},
+	Assets:          {Assets, StackUint64, 3, 0, false},
+	Applications:    {Applications, StackUint64, 3, 0, false},
+
+	Logs: {Logs, StackBytes, 5, 5, true},
 }
 
 var innerTxnTypes = map[string]protocol.TxType{
 	string(protocol.PaymentTx):       protocol.PaymentTx,
 	string(protocol.AssetTransferTx): protocol.AssetTransferTx,
+	string(protocol.AssetConfigTx):   protocol.AssetConfigTx,
+	string(protocol.AssetFreezeTx):   protocol.AssetFreezeTx,
 }
 
 // TxnTypeNames is the values of Txn.Type in enum order
@@ -602,7 +625,7 @@ var appParamsFieldSpecByName appNameSpecMap
 type appNameSpecMap map[string]appParamsFieldSpec
 
 func (s appNameSpecMap) getExtraFor(name string) (extra string) {
-	// Uses 2 here because app fields were introduced in 5
+	// Uses 5 here because app fields were introduced in 5
 	if s[name].version > 5 {
 		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
 	}
