@@ -4,7 +4,6 @@ package kvstore
 
 import (
 	"bytes"
-	"path/filepath"
 	"runtime"
 
 	"github.com/tecbot/gorocksdb"
@@ -37,8 +36,7 @@ func NewRocksDB(dbdir string) (*RocksDB, error) {
 	// 1.5GB maximum memory use for writebuffer.
 	opts.OptimizeLevelStyleCompaction(512 * 1024 * 1024)
 
-	dbPath := filepath.Join(dbdir + ".db")
-	db, err := gorocksdb.OpenDb(opts, dbPath)
+	db, err := gorocksdb.OpenDb(opts, dbdir+".db")
 	if err != nil {
 		return nil, err
 	}

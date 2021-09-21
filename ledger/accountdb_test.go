@@ -892,8 +892,7 @@ func newSQLiteBenchmarkDB(b testing.TB, totalStartupAccountsNumber int, batchCou
 		require.NoError(b, err)
 		defer replaceStmt.Close()
 		for addr, acctData := range acctsData {
-			encAcct := protocol.Encode(&acctData)
-			_, err = replaceStmt.Exec(addr[:], uint64(0), encAcct)
+			_, err = replaceStmt.Exec(addr[:], uint64(0), protocol.Encode(&acctData))
 			require.NoError(b, err)
 			cnt++
 		}
@@ -988,7 +987,11 @@ type kvBenchmarkDB struct {
 }
 
 func newKVBenchmarkDB(b testing.TB, kvImpl string, total int, batchCount int, inMem bool) *kvBenchmarkDB {
-	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(b.Name(), "/", "."), crypto.RandUint64())
+	dbDir := "."
+	if d := os.Getenv("DBDIR"); d != "" {
+		dbDir = d
+	}
+	fn := fmt.Sprintf("%s/%s.%d", dbDir, strings.ReplaceAll(b.Name(), "/", "."), crypto.RandUint64())
 	kv, err := kvstore.NewKVStore(kvImpl, fn, inMem)
 	if err != nil && strings.HasPrefix(kvImpl, "rocks") {
 		fmt.Printf("XXX: RocksDB needs -tags kv_rocksdb,rocksdb_6_16 to run (or -tags kv_rocksdb for RocksDB < 6.16)\n")
