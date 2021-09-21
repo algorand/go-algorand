@@ -217,5 +217,11 @@ func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto con
 			fmt.Errorf("EvalForIndexer() err: %w", err)
 	}
 
+	err = eval.finalValidation()
+	if err != nil {
+		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
+			fmt.Errorf("EvalForIndexer() err: %w", err)
+	}
+
 	return eval.state.deltas(), eval.block.Payset, nil
 }
