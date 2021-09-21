@@ -1671,7 +1671,6 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDe
 // newBlockImpl is the accountUpdates implementation of the ledgerTracker interface. This is the "internal" facing function
 // which assumes that no lock need to be taken.
 func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.StateDelta) {
-	proto := config.Consensus[blk.CurrentProtocol]
 	rnd := blk.Round()
 
 	if rnd <= au.latest() {
@@ -1688,33 +1687,10 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	au.roundDigest = append(au.roundDigest, blk.Digest())
 	au.deltasAccum = append(au.deltasAccum, delta.Accts.Len()+au.deltasAccum[len(au.deltasAccum)-1])
 
-	var ot basics.OverflowTracker
-	newTotals := au.roundTotals[len(au.roundTotals)-1]
-	allBefore := newTotals.All()
-	newTotals.ApplyRewards(delta.Hdr.RewardsLevel, &ot)
-
 	au.baseAccounts.flushPendingWrites()
 
-	var previousAccountData basics.AccountData
 	for i := 0; i < delta.Accts.Len(); i++ {
 		addr, data := delta.Accts.GetByIdx(i)
-		if latestAcctData, has := au.accounts[addr]; has {
-			previousAccountData = latestAcctData.data
-		} else if baseAccountData, has := au.baseAccounts.read(addr); has {
-			previousAccountData = baseAccountData.accountData
-		} else {
-			// it's missing from the base accounts, so we'll try to load it from disk.
-			if acctData, err := au.accountsq.lookup(addr); err != nil {
-				au.log.Panicf("accountUpdates: newBlockImpl failed to lookup account %v when processing round %d : %v", addr, rnd, err)
-			} else {
-				previousAccountData = acctData.accountData
-				au.baseAccounts.write(acctData)
-			}
-		}
-
-		newTotals.DelAccount(proto, previousAccountData, &ot)
-		newTotals.AddAccount(proto, data, &ot)
-
 		macct := au.accounts[addr]
 		macct.ndeltas++
 		macct.data = data
@@ -1730,15 +1706,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		au.creatables[cidx] = mcreat
 	}
 
-	if ot.Overflowed {
-		au.log.Panicf("accountUpdates: newBlockImpl %d overflowed totals", rnd)
-	}
-	allAfter := newTotals.All()
-	if allBefore != allAfter {
-		au.log.Panicf("accountUpdates: newBlockImpl sum of money changed from %d to %d", allBefore.Raw, allAfter.Raw)
-	}
-
-	au.roundTotals = append(au.roundTotals, newTotals)
+	au.roundTotals = append(au.roundTotals, delta.Totals)
 
 	// calling prune would drop old entries from the base accounts.
 	newBaseAccountSize := (len(au.accounts) + 1) + baseAccountsPendingAccountsBufferSize
