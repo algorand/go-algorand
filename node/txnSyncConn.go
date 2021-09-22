@@ -335,7 +335,7 @@ func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataByte
 		}
 
 		completedProposalBytes := protocol.Encode(&pc.proposalData)
-		logging.Base().Infof("expected: %v, len: %v, actual: %v", crypto.Hash(proposalDataBytes), len(proposalDataBytes), crypto.Hash(completedProposalBytes))
+		logging.Base().Infof("expected: %v, len: %v, actual: %v, len: %v", crypto.Hash(proposalDataBytes), len(proposalDataBytes), crypto.Hash(completedProposalBytes), len(pc.ProposalBytes))
 
 		pc.ProposalBytes = nil
 		pc.txGroups = nil

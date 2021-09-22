@@ -179,7 +179,7 @@ func (d *demux) reconstructProposals(ctx context.Context, ch <-chan TxnSyncPropo
 
 				p, err := decodeProposal(pd.ProposalBytes)
 				if err != nil {
-					logging.Base().Warnf("disconnecting from peer: error decoding message tagged %v: %v", protocol.ProposalPayloadTag, err)
+					logging.Base().Warnf("disconnecting from peer: error decoding message tagged %v: %v, len: %v", protocol.ProposalPayloadTag, err, len(pd.ProposalBytes))
 					//net.Disconnect(raw.MessageHandle)
 					//d.UpdateEventsQueue(eventQueueTokenizing[tag], 0)
 					continue

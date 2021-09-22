@@ -125,7 +125,6 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 	externalEvents := s.node.Events()
 	var nextPeerStateCh <-chan time.Time
 	for {
-		logging.Base().Info("random log msg")
 		nextPeerStateTime := s.scheduler.nextDuration()
 		if nextPeerStateTime != time.Duration(0) {
 			nextPeerStateCh = s.clock.TimeoutAt(nextPeerStateTime)
@@ -149,7 +148,6 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			case proposalBroadcastRequestEvent:
 				logging.Base().Info("broadcast proposal event start")
 				s.onBroadcastProposalRequestEvent(ent)
-				logging.Base().Info("broadcast proposal event end")
 			}
 			continue
 		case <-nextPeerStateCh:
@@ -177,6 +175,15 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			logging.Base().Info("getIncomingMessageChannel")
 			profIncomingMsg.start()
 			s.evaluateIncomingMessage(incomingMsg)
+			done := false
+			for !done {
+				select {
+				case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
+					s.evaluateIncomingMessage(incomingMsg)
+				default:
+					done = true
+				}
+			}
 			profIncomingMsg.end()
 			continue
 		case <-s.nextOffsetRollingCh:
@@ -235,6 +242,15 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			profIdle.end()
 			profIncomingMsg.start()
 			s.evaluateIncomingMessage(incomingMsg)
+			done := false
+			for !done {
+				select {
+				case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
+					s.evaluateIncomingMessage(incomingMsg)
+				default:
+					done = true
+				}
+			}
 			profIncomingMsg.end()
 		case <-s.nextOffsetRollingCh:
 			profIdle.end()
