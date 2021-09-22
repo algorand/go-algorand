@@ -1296,7 +1296,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xb1
 - Pops: _None_
 - Pushes: _None_
-- Begin preparation of a new inner transaction
+- begin preparation of a new inner transaction
 - LogicSigVersion >= 5
 - Mode: Application
 
@@ -1307,7 +1307,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xb2 {uint8 transaction field index}
 - Pops: *... stack*, any
 - Pushes: _None_
-- Set field F of the current inner transaction to X
+- set field F of the current inner transaction to X
 - LogicSigVersion >= 5
 - Mode: Application
 
@@ -1318,9 +1318,11 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xb3
 - Pops: _None_
 - Pushes: _None_
-- Execute the current inner transaction. Fail if 16 inner transactions have already been executed, or if the transaction itself fails.
+- execute the current inner transaction. Fail if 16 inner transactions have already been executed, or if the transaction itself fails.
 - LogicSigVersion >= 5
 - Mode: Application
+
+`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.
 
 ## itxn f
 
