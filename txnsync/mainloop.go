@@ -119,7 +119,7 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 	profNewRounnd := s.profiler.getElement(profElementNewRound)
 	profPeerState := s.profiler.getElement(profElementPeerState)
 	profIncomingMsg := s.profiler.getElement(profElementIncomingMsg)
-	profOutgoingMsg := s.profiler.getElement(profElementOutgoingMsg)
+	//profOutgoingMsg := s.profiler.getElement(profElementOutgoingMsg)
 	profNextOffset := s.profiler.getElement(profElementNextOffset)
 
 	externalEvents := s.node.Events()
@@ -130,6 +130,16 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			nextPeerStateCh = s.clock.TimeoutAt(nextPeerStateTime)
 		} else {
 			nextPeerStateCh = nil
+		}
+
+		done := false
+		for !done {
+			select {
+			case msgSent := <-s.outgoingMessagesCallbackCh:
+				s.evaluateOutgoingMessage(msgSent)
+			default:
+				done = true
+			}
 		}
 
 		select {
@@ -156,21 +166,21 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			s.evaluatePeerStateChanges(nextPeerStateTime)
 			profPeerState.end()
 			continue
-		case msgSent := <-s.outgoingMessagesCallbackCh:
-			logging.Base().Info("outgoingMessagesCallbackCh")
-			profOutgoingMsg.start()
-			s.evaluateOutgoingMessage(msgSent)
-			done := false
-			for !done {
-				select {
-				case msgSent = <-s.outgoingMessagesCallbackCh:
-					s.evaluateOutgoingMessage(msgSent)
-				default:
-					done = true
-				}
-			}
-			profOutgoingMsg.end()
-			continue
+		//case msgSent := <-s.outgoingMessagesCallbackCh:
+		//	logging.Base().Info("outgoingMessagesCallbackCh")
+		//	profOutgoingMsg.start()
+		//	s.evaluateOutgoingMessage(msgSent)
+		//	done := false
+		//	for !done {
+		//		select {
+		//		case msgSent = <-s.outgoingMessagesCallbackCh:
+		//			s.evaluateOutgoingMessage(msgSent)
+		//		default:
+		//			done = true
+		//		}
+		//	}
+		//	profOutgoingMsg.end()
+		//	continue
 		case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
 			logging.Base().Info("getIncomingMessageChannel")
 			profIncomingMsg.start()
@@ -221,21 +231,21 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			profPeerState.start()
 			s.evaluatePeerStateChanges(nextPeerStateTime)
 			profPeerState.end()
-		case msgSent := <-s.outgoingMessagesCallbackCh:
-			logging.Base().Info("outgoingMessagesCallbackCh")
-			profIdle.end()
-			profOutgoingMsg.start()
-			s.evaluateOutgoingMessage(msgSent)
-			done := false
-			for !done {
-				select {
-				case msgSent = <-s.outgoingMessagesCallbackCh:
-					s.evaluateOutgoingMessage(msgSent)
-				default:
-					done = true
-				}
-			}
-			profOutgoingMsg.end()
+		//case msgSent := <-s.outgoingMessagesCallbackCh:
+		//	logging.Base().Info("outgoingMessagesCallbackCh")
+		//	profIdle.end()
+		//	profOutgoingMsg.start()
+		//	s.evaluateOutgoingMessage(msgSent)
+		//	done := false
+		//	for !done {
+		//		select {
+		//		case msgSent = <-s.outgoingMessagesCallbackCh:
+		//			s.evaluateOutgoingMessage(msgSent)
+		//		default:
+		//			done = true
+		//		}
+		//	}
+		//	profOutgoingMsg.end()
 		case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
 			logging.Base().Info("getIncomingMessageChannel")
 			profIdle.end()
