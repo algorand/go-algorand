@@ -420,7 +420,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 			Txn:                     &stxn,
 			Proto:                   &proto,
 			TxnGroup:                dr.Txns,
-			GroupIndex:              ti,
+			GroupIndex:              uint64(ti),
 			PastSideEffects:         pse,
 			PooledApplicationBudget: &pooledAppBudget,
 		}
@@ -556,7 +556,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 				cumulativeCost += cost
 
 				var err3 error
-				result.Logs, err3 = DeltaLogToLog(delta.Logs, appIdx)
+				result.Logs, err3 = DeltaLogToLog(delta.Logs)
 				if err3 != nil {
 					messages = append(messages, err3.Error())
 				}
@@ -603,20 +603,16 @@ func StateDeltaToStateDelta(sd basics.StateDelta) *generated.StateDelta {
 	return &gsd
 }
 
-// DeltaLogToLog EvalDelta.Logs to generated.LogItem
-func DeltaLogToLog(logs []basics.LogItem, appIdx basics.AppIndex) (*[]generated.LogItem, error) {
+// DeltaLogToLog base64 encode the logs
+func DeltaLogToLog(logs []string) (*[][]byte, error) {
 	if len(logs) == 0 {
 		return nil, nil
 	}
-	encodedLogs := make([]generated.LogItem, 0, len(logs))
-	for _, log := range logs {
-		if log.ID != 0 {
-			return nil, fmt.Errorf("logging for a foreign app is not supported")
-		}
-		msg := base64.StdEncoding.EncodeToString([]byte(log.Message))
-		encodedLogs = append(encodedLogs, generated.LogItem{Id: uint64(appIdx), Value: msg})
+	logsAsBytes := make([][]byte, len(logs))
+	for i, log := range logs {
+		logsAsBytes[i] = []byte(log)
 	}
-	return &encodedLogs, nil
+	return &logsAsBytes, nil
 }
 
 // MergeAppParams merges values, existing in "base" take priority over new in "update"

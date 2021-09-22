@@ -23,6 +23,7 @@ type HashID string
 // Hash IDs for specific object types, in lexicographic order.
 // Hash IDs must be PREFIX-FREE (no hash ID is a prefix of another).
 const (
+	AppIndex          HashID = "appID"
 	AuctionBid        HashID = "aB"
 	AuctionDeposit    HashID = "aD"
 	AuctionOutcomes   HashID = "aO"
