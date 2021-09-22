@@ -28,6 +28,7 @@ func NewLevelDB(dbdir string) (*LevelDB, error) {
 	opts := levigo.NewOptions()
 	opts.SetCache(levigo.NewLRUCache(1 << 30))
 	opts.SetCreateIfMissing(true)
+	opts.SetWriteBufferSize(64 * 1024 * 1024) // RocksDB default is 64MB
 	opts.SetFilterPolicy(levigo.NewBloomFilter(10))
 
 	db, err := levigo.Open(dbdir+".leveldb", opts)

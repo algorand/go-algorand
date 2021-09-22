@@ -930,7 +930,6 @@ func (db *sqliteBenchmarkDB) selectAccounts(b testing.TB, totalStartupAccountsNu
 	err = tx.Commit()
 	require.NoError(b, err)
 	require.Len(b, accountsAddress, totalStartupAccountsNumber+db.startupAcct)
-	require.Len(b, accountsAddress[0], 32)
 	require.Len(b, accountsRowID, totalStartupAccountsNumber+db.startupAcct)
 	return
 }
@@ -1166,6 +1165,8 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 	b.Logf("Selecting %d accounts took %v", len(accountsAddress), time.Since(selectStart))
 	b.Logf("len accountsAddress %d", len(accountsAddress))
 	b.Logf("len accountsRowID %d", len(accountsRowID))
+	require.True(b, len(accountsAddress) >= totalStartupAccountsNumber)
+	require.Len(b, accountsAddress[0], 32)
 
 	// write account updates in batches of 10K or BATCH_SIZE
 	batchSize := 10000
@@ -1204,7 +1205,9 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 
 	b.Run("ByAddr", func(b *testing.B) {
 		// updates accounts by address
+		makeStart := time.Now()
 		batches := makeBatches(b, len(accountsAddress))
+		b.Logf("finished generating batches, took %v", time.Since(makeStart))
 
 		if os.Getenv("PROFILE") != "" {
 			f, err := os.Create("byaddr.prof")
