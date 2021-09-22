@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+if [ ! -z "${GOHOSTARCH+x}" ]; then
+    echo "${GOHOSTARCH}"
+    exit 0
+fi
+
 ARCH=$(uname -m)
 
 if [[ "${ARCH}" = "x86_64" ]]; then
