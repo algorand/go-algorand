@@ -1211,14 +1211,12 @@ func (eval *BlockEvaluator) finalValidation() error {
 		}
 	}
 
-	err := eval.state.CalculateTotals()
-
+	err := eval.modifyOfflineAccounts()
 	if err != nil {
 		return err
 	}
 
-	return eval.modifyOfflineAccounts()
-
+	return eval.state.CalculateTotals()
 }
 
 // GenerateBlock produces a complete block from the BlockEvaluator.  This is
