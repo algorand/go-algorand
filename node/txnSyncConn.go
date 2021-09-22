@@ -311,6 +311,9 @@ func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataByte
 		pc.numTxGroupsReceived = tsnc.node.transactionPool.FindTxGroups(pc.TxGroupIds, pc.txGroups)
 	} else { // fetch proposalCache from peerData
 		pc, _ = tsnc.node.net.GetPeerData(peer.GetNetworkPeer(), "proposalCache").(*proposalCache)
+		if pc.ProposalBytes == nil { // no actual proposal to be filling
+			return nil
+		}
 	}
 
 	for _, txGroup := range txGroups {
