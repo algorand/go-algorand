@@ -36,7 +36,7 @@ func NewRocksDB(dbdir string) (*RocksDB, error) {
 	// 1.5GB maximum memory use for writebuffer.
 	opts.OptimizeLevelStyleCompaction(512 * 1024 * 1024)
 
-	db, err := gorocksdb.OpenDb(opts, dbdir+".db")
+	db, err := gorocksdb.OpenDb(opts, dbdir+".rocksdb")
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +103,7 @@ func (db *RocksDB) NewIterator(start, end []byte) Iterator {
 	} else {
 		iter.SeekToFirst()
 	}
-	return &rocksIterator{iter: iter}
+	return &rocksIterator{iter: iter, end: end}
 }
 
 func (i *rocksIterator) Next()                      { i.iter.Next() }

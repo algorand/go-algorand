@@ -1052,9 +1052,11 @@ func TestNewKVBenchmarkDB(t *testing.T) {
 }
 
 func (db *kvBenchmarkDB) selectAccounts(b testing.TB, totalStartupAccountsNumber int) (accountsAddress [][]byte, accountsRowID []int) {
-	for iter := db.kv.NewIterator(nil, nil); iter.Valid(); iter.Next() {
+	iter := db.kv.NewIterator(nil, nil)
+	for ; iter.Valid(); iter.Next() {
 		accountsAddress = append(accountsAddress, iter.Key())
 	}
+	iter.Close()
 	return
 }
 
@@ -1095,7 +1097,8 @@ func (db *kvBenchmarkDB) checkUpdateAddr(b testing.TB, batches [][]updateAcct, a
 			}
 		}
 		start := time.Now()
-		for iter := db.kv.NewIterator(nil, nil); iter.Valid(); iter.Next() {
+		iter := db.kv.NewIterator(nil, nil)
+		for ; iter.Valid(); iter.Next() {
 			var k [32]byte
 			ik := iter.KeySlice()
 			require.Equal(b, ik.Size(), 32)
@@ -1112,6 +1115,7 @@ func (db *kvBenchmarkDB) checkUpdateAddr(b testing.TB, batches [][]updateAcct, a
 			iv.Free()
 			seen[k] = true
 		}
+		iter.Close()
 		require.Equal(b, len(updates), len(seen))
 		b.Logf("checking %d KVs took %v", len(seen), time.Since(start))
 		return nil

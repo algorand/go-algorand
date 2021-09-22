@@ -24,7 +24,7 @@ type BadgerDB struct {
 
 // NewBadgerDB opens a BadgerDB in the specified directory
 func NewBadgerDB(dbdir string, inMem bool) (*BadgerDB, error) {
-	opts := badger.DefaultOptions(dbdir).WithInMemory(inMem)
+	opts := badger.DefaultOptions(dbdir + ".badgerdb").WithInMemory(inMem)
 	opts = opts.WithSyncWrites(true) // XXX
 	db, err := badger.Open(opts)
 	if err != nil {

@@ -10,6 +10,7 @@ require (
 	github.com/algorand/oapi-codegen v1.3.5-algorand5
 	github.com/algorand/websocket v1.4.2
 	github.com/aws/aws-sdk-go v1.16.5
+	github.com/cockroachdb/pebble v0.0.0-20210921163819-944a8bc953e8 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20170701192655-dcfb0a7ac018
 	github.com/dchest/siphash v1.2.1
 	github.com/dgraph-io/badger/v3 v3.2103.1
@@ -27,6 +28,7 @@ require (
 	github.com/gorilla/schema v1.0.2
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
+	github.com/jmhodges/levigo v1.0.0 // indirect
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/karalabe/hid v1.0.0
 	github.com/labstack/echo/v4 v4.1.17
@@ -56,4 +58,3 @@ require (
 // rocksdb >= 6.16 forks
 //replace github.com/tecbot/gorocksdb => github.com/roysc/gorocksdb v1.1.0 // requires fork of RocksDB with optimistic transactions C bindings
 replace github.com/tecbot/gorocksdb => github.com/flier/gorocksdb v0.0.0-20210322072530-996557beed98 // requires build tag "rocksdb_6_16"
-
