@@ -18,6 +18,7 @@ package txnsync
 
 import (
 	"math"
+	"math/rand"
 	"sort"
 	"time"
 
@@ -375,7 +376,7 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []pooldata.SignedTx
 		if p.recentIncomingBloomFilters[filterIdx].filter == nil {
 			continue
 		}
-		if p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Modulator == p.requestedTransactionsModulator && p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Offset != p.requestedTransactionsOffset {
+		if p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Modulator != p.requestedTransactionsModulator || p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Offset != p.requestedTransactionsOffset {
 			continue
 		}
 		effectiveBloomFilters = append(effectiveBloomFilters, filterIdx)
@@ -506,39 +507,71 @@ func incomingPeersOnly(peers []*Peer) (incomingPeers []*Peer) {
 
 // addIncomingBloomFilter keeps the most recent {maxIncomingBloomFilterHistory} filters
 func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter *testableBloomFilter, currentRound basics.Round, maxIncomingFilterElements int) {
+	minRound := currentRound.SubSaturate(2)
+	if round < minRound {
+		// ignore data from the past
+		return
+	}
 	bf := incomingBloomFilter{
 		round:  round,
 		filter: incomingFilter,
 	}
-	activeElements := int(bf.filter.elementsFiltered)
-	if len(p.recentIncomingBloomFilters) < maxIncomingBloomFilterHistory {
-		p.recentIncomingBloomFilters = append(p.recentIncomingBloomFilters, bf)
-		prev := len(p.recentIncomingBloomFilters) - 2
-		for prev >= 0 {
-			if activeElements >= maxIncomingFilterElements {
-				p.recentIncomingBloomFilters[prev].filter = nil
-			} else {
-				activeElements += int(p.recentIncomingBloomFilters[prev].filter.elementsFiltered)
-			}
-			prev--
+	elemOk := func(i int) bool {
+		ribf := p.recentIncomingBloomFilters[i]
+		if ribf.filter == nil {
+			return false
 		}
+		if ribf.round < minRound {
+			return false
+		}
+		if incomingFilter.clearPrevious && ribf.filter.encodingParams.Offset == incomingFilter.encodingParams.Offset && ribf.filter.encodingParams.Modulator == incomingFilter.encodingParams.Modulator {
+			return false
+		}
+		return true
+	}
+	// compact the prior list to the front of the array.
+	// order doesn't matter.
+	pos := 0
+	last := len(p.recentIncomingBloomFilters) - 1
+	oldestRound := currentRound
+	for pos <= last {
+		if elemOk(pos) {
+			if p.recentIncomingBloomFilters[pos].round < oldestRound {
+				oldestRound = p.recentIncomingBloomFilters[pos].round
+			}
+			pos++
+			continue
+		}
+		p.recentIncomingBloomFilters[pos] = p.recentIncomingBloomFilters[last]
+		p.recentIncomingBloomFilters[last].filter = nil // GC
+		last--
+	}
+	p.recentIncomingBloomFilters = p.recentIncomingBloomFilters[:last+1]
+	// Simple case: append
+	if last+1 < maxIncomingBloomFilterHistory {
+		p.recentIncomingBloomFilters = append(p.recentIncomingBloomFilters, bf)
 		return
 	}
-
-	p.recentIncomingBloomFilters[p.recentIncomingBloomFiltersNext] = bf
-	prev := (p.recentIncomingBloomFiltersNext + maxIncomingBloomFilterHistory - 1) % maxIncomingBloomFilterHistory
-	for prev != p.recentIncomingBloomFiltersNext {
-		if activeElements >= maxIncomingFilterElements {
-			p.recentIncomingBloomFilters[prev].filter = nil
-		} else {
-			activeElements += int(p.recentIncomingBloomFilters[prev].filter.elementsFiltered)
+	// Too much traffic case: random eviction from oldest round held
+	numAtOldestRound := 0
+	for _, ribf := range p.recentIncomingBloomFilters {
+		if ribf.round == oldestRound {
+			numAtOldestRound++
 		}
-		prev = (prev + maxIncomingBloomFilterHistory - 1) % maxIncomingBloomFilterHistory
 	}
-
-	p.recentIncomingBloomFiltersNext = (p.recentIncomingBloomFiltersNext + 1) % maxIncomingBloomFilterHistory
-
-	// TODO: limit total elements to maxIncomingFilterElements
+	// fast simple rand is fine, don't need crypto rand
+	evictIndex := rand.Intn(numAtOldestRound)
+	ari := 0
+	for i, ribf := range p.recentIncomingBloomFilters {
+		if ribf.round == oldestRound {
+			if ari == evictIndex {
+				p.recentIncomingBloomFilters[i] = bf
+				return
+			}
+			ari++
+		}
+	}
+	panic("p.recentIncomingBloomFilters changed out from under addIncomingBloomFilter")
 }
 
 func (p *Peer) addIncomingBloomFilterOLD(round basics.Round, incomingFilter *testableBloomFilter, currentRound basics.Round) {

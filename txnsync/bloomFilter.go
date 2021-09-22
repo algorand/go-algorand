@@ -69,12 +69,14 @@ type testableBloomFilter struct {
 	filter bloom.GenericFilter
 
 	elementsFiltered int32
+
+	clearPrevious bool
 }
 
 func decodeBloomFilter(enc encodedBloomFilter) (outFilter *testableBloomFilter, err error) {
 	outFilter = &testableBloomFilter{
-		encodingParams:   enc.EncodingParams,
-		elementsFiltered: enc.ElementsFiltered,
+		encodingParams: enc.EncodingParams,
+		clearPrevious:  enc.ClearPrevious != 0,
 	}
 	switch bloomFilterType(enc.BloomFilterType) {
 	case multiHashBloomFilter:
@@ -98,7 +100,6 @@ func decodeBloomFilter(enc encodedBloomFilter) (outFilter *testableBloomFilter, 
 func (bf *bloomFilter) encode(filter bloom.GenericFilter, filterType bloomFilterType) (err error) {
 	bf.encoded.BloomFilterType = byte(filterType)
 	bf.encoded.BloomFilter, err = filter.MarshalBinary()
-	bf.encoded.ElementsFiltered = int32(filter.NumEntries())
 	bf.encodedLength = len(bf.encoded.BloomFilter)
 	if err != nil || bf.encodedLength == 0 {
 		return errEncodingBloomFilterFailed

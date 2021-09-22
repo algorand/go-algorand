@@ -6196,11 +6196,11 @@ func (z *encodedBloomFilter) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(4)
 	var zb0001Mask uint8 /* 5 bits */
-	if len((*z).BloomFilter) == 0 {
+	if (*z).ClearPrevious == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (*z).ElementsFiltered == 0 {
+	if len((*z).BloomFilter) == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
@@ -6216,14 +6216,14 @@ func (z *encodedBloomFilter) MarshalMsg(b []byte) (o []byte) {
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "c"
+			o = append(o, 0xa1, 0x63)
+			o = msgp.AppendByte(o, (*z).ClearPrevious)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "f"
 			o = append(o, 0xa1, 0x66)
 			o = msgp.AppendBytes(o, (*z).BloomFilter)
-		}
-		if (zb0001Mask & 0x4) == 0 { // if not empty
-			// string "l"
-			o = append(o, 0xa1, 0x6c)
-			o = msgp.AppendInt32(o, (*z).ElementsFiltered)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "p"
@@ -6379,9 +6379,9 @@ func (z *encodedBloomFilter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			(*z).ElementsFiltered, bts, err = msgp.ReadInt32Bytes(bts)
+			(*z).ClearPrevious, bts, err = msgp.ReadByteBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ElementsFiltered")
+				err = msgp.WrapError(err, "struct-from-array", "ClearPrevious")
 				return
 			}
 		}
@@ -6500,10 +6500,10 @@ func (z *encodedBloomFilter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "BloomFilter")
 					return
 				}
-			case "l":
-				(*z).ElementsFiltered, bts, err = msgp.ReadInt32Bytes(bts)
+			case "c":
+				(*z).ClearPrevious, bts, err = msgp.ReadByteBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "ElementsFiltered")
+					err = msgp.WrapError(err, "ClearPrevious")
 					return
 				}
 			default:
@@ -6526,13 +6526,13 @@ func (_ *encodedBloomFilter) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *encodedBloomFilter) Msgsize() (s int) {
-	s = 1 + 2 + msgp.ByteSize + 2 + 1 + 2 + msgp.ByteSize + 2 + msgp.ByteSize + 2 + msgp.BytesPrefixSize + len((*z).BloomFilter) + 2 + msgp.Int32Size
+	s = 1 + 2 + msgp.ByteSize + 2 + 1 + 2 + msgp.ByteSize + 2 + msgp.ByteSize + 2 + msgp.BytesPrefixSize + len((*z).BloomFilter) + 2 + msgp.ByteSize
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *encodedBloomFilter) MsgIsZero() bool {
-	return ((*z).BloomFilterType == 0) && (((*z).EncodingParams.Offset == 0) && ((*z).EncodingParams.Modulator == 0)) && (len((*z).BloomFilter) == 0) && ((*z).ElementsFiltered == 0)
+	return ((*z).BloomFilterType == 0) && (((*z).EncodingParams.Offset == 0) && ((*z).EncodingParams.Modulator == 0)) && (len((*z).BloomFilter) == 0) && ((*z).ClearPrevious == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
