@@ -120,7 +120,7 @@ func MakeDynamicArray(values []Value, elemType Type) (Value, error) {
 	}
 	for i := 0; i < len(values); i++ {
 		if !values[i].ABIType.Equal(elemType) {
-			return Value{}, fmt.Errorf("type unmatch: %s and %s",
+			return Value{}, fmt.Errorf("type mismatch: %s and %s",
 				values[i].ABIType.String(), elemType.String())
 		}
 	}
@@ -139,7 +139,7 @@ func MakeStaticArray(values []Value) (Value, error) {
 	}
 	for i := 0; i < len(values); i++ {
 		if !values[i].ABIType.Equal(values[0].ABIType) {
-			return Value{}, fmt.Errorf("type unmatch: %s and %s",
+			return Value{}, fmt.Errorf("type mismatch: %s and %s",
 				values[i].ABIType.String(), values[0].ABIType.String())
 		}
 	}
@@ -185,7 +185,7 @@ func checkUintValid(t Type, bitSize uint16) bool {
 // GetUint8 tries to retreve an uint8 from an ABI Value.
 func (v Value) GetUint8() (uint8, error) {
 	if !checkUintValid(v.ABIType, 8) {
-		return 0, fmt.Errorf("value type unmatch or bitSize too large")
+		return 0, fmt.Errorf("value type mismatch or bitSize too large")
 	}
 	bigIntForm, err := v.GetUint()
 	if err != nil {
@@ -197,7 +197,7 @@ func (v Value) GetUint8() (uint8, error) {
 // GetUint16 tries to retrieve an uint16 from an ABI Value.
 func (v Value) GetUint16() (uint16, error) {
 	if !checkUintValid(v.ABIType, 16) {
-		return 0, fmt.Errorf("value type unmatch or bitSize too large")
+		return 0, fmt.Errorf("value type mismatch or bitSize too large")
 	}
 	bigIntForm, err := v.GetUint()
 	if err != nil {
@@ -209,7 +209,7 @@ func (v Value) GetUint16() (uint16, error) {
 // GetUint32 tries to retrieve an uint32 from an ABI Value.
 func (v Value) GetUint32() (uint32, error) {
 	if !checkUintValid(v.ABIType, 32) {
-		return 0, fmt.Errorf("value type unmatch or bitSize too large")
+		return 0, fmt.Errorf("value type mismatch or bitSize too large")
 	}
 	bigIntForm, err := v.GetUint()
 	if err != nil {
@@ -221,7 +221,7 @@ func (v Value) GetUint32() (uint32, error) {
 // GetUint64 tries to retrieve an uint64 from an ABI Value.
 func (v Value) GetUint64() (uint64, error) {
 	if !checkUintValid(v.ABIType, 64) {
-		return 0, fmt.Errorf("value type unmatch or bitSize too large")
+		return 0, fmt.Errorf("value type mismatch or bitSize too large")
 	}
 	bigIntForm, err := v.GetUint()
 	if err != nil {
@@ -233,7 +233,7 @@ func (v Value) GetUint64() (uint64, error) {
 // GetUint tries to retrieve an big uint from an ABI Value.
 func (v Value) GetUint() (*big.Int, error) {
 	if v.ABIType.abiTypeID != Uint {
-		return nil, fmt.Errorf("value type unmatch")
+		return nil, fmt.Errorf("value type mismatch")
 	}
 	bigIntForm := v.value.(*big.Int)
 	sizeThreshold := new(big.Int).Lsh(big.NewInt(1), uint(v.ABIType.bitSize))
@@ -246,7 +246,7 @@ func (v Value) GetUint() (*big.Int, error) {
 // GetUfixed tries to retrieve an big integer number from an ABI Value.
 func (v Value) GetUfixed() (*big.Int, error) {
 	if v.ABIType.abiTypeID != Ufixed {
-		return nil, fmt.Errorf("value type unmatch, should be ufixed")
+		return nil, fmt.Errorf("value type mismatch, should be ufixed")
 	}
 	bigIntForm := v.value.(*big.Int)
 	sizeThreshold := new(big.Int).Lsh(big.NewInt(1), uint(v.ABIType.bitSize))
@@ -259,7 +259,7 @@ func (v Value) GetUfixed() (*big.Int, error) {
 // GetString tries to retrieve a string from ABI Value.
 func (v Value) GetString() (string, error) {
 	if v.ABIType.abiTypeID != String {
-		return "", fmt.Errorf("value type unmatch, should be ufixed")
+		return "", fmt.Errorf("value type mismatch, should be ufixed")
 	}
 	stringForm := v.value.(string)
 	return stringForm, nil
@@ -268,7 +268,7 @@ func (v Value) GetString() (string, error) {
 // GetByte tries to retrieve a byte from ABI Value.
 func (v Value) GetByte() (byte, error) {
 	if v.ABIType.abiTypeID != Byte {
-		return byte(0), fmt.Errorf("value type unmatch, should be bytes")
+		return byte(0), fmt.Errorf("value type mismatch, should be bytes")
 	}
 	bytesForm := v.value.(byte)
 	return bytesForm, nil
@@ -277,7 +277,7 @@ func (v Value) GetByte() (byte, error) {
 // GetAddress tries to retrieve a [32]byte array from ABI Value.
 func (v Value) GetAddress() ([32]byte, error) {
 	if v.ABIType.abiTypeID != Address {
-		return [32]byte{}, fmt.Errorf("value type unmatch, should be address")
+		return [32]byte{}, fmt.Errorf("value type mismatch, should be address")
 	}
 	addressForm := v.value.([32]byte)
 	return addressForm, nil
@@ -306,7 +306,7 @@ func (v Value) GetValueByIndex(index uint16) (Value, error) {
 // GetBool tries to retrieve a boolean value from the ABI Value.
 func (v Value) GetBool() (bool, error) {
 	if v.ABIType.abiTypeID != Bool {
-		return false, fmt.Errorf("value type unmatch, should be bool")
+		return false, fmt.Errorf("value type mismatch, should be bool")
 	}
 	boolForm := v.value.(bool)
 	return boolForm, nil
