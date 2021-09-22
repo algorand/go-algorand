@@ -18,6 +18,7 @@ package abi
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -362,8 +363,8 @@ func MakeStringType() Type {
 
 // MakeTupleType makes tuple ABI type by taking an array of tuple element types as argument.
 func MakeTupleType(argumentTypes []Type) (Type, error) {
-	if len(argumentTypes) >= (1 << 16) {
-		return Type{}, fmt.Errorf("tuple type child type number >= 2^16 error")
+	if len(argumentTypes) >= math.MaxUint16 {
+		return Type{}, fmt.Errorf("tuple type child type number larger than maximum uint16 error")
 	}
 	return Type{
 		abiTypeID:    Tuple,

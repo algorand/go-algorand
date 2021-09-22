@@ -88,7 +88,7 @@ func TestMakeTypeValid(t *testing.T) {
 				},
 				uint16(100),
 			),
-			testType: "dynamic array",
+			testType: "static array",
 			expected: "ufixed128x10[100]",
 		},
 		{
