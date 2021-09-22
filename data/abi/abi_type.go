@@ -198,7 +198,7 @@ func TypeFromString(str string) (Type, error) {
 		return MakeAddressType(), nil
 	case str == "string":
 		return MakeStringType(), nil
-	case len(str) > 2 && str[0] == '(' && str[len(str)-1] == ')':
+	case len(str) >= 2 && str[0] == '(' && str[len(str)-1] == ')':
 		tupleContent, err := parseTupleContent(str[1 : len(str)-1])
 		if err != nil {
 			return Type{}, err
@@ -226,6 +226,12 @@ type segment struct{ left, right int }
 // (...... str ......)
 //  ^               ^
 func parseTupleContent(str string) ([]string, error) {
+	// if the tuple type content is empty (which is also allowed)
+	// just return the empty string list
+	if len(str) == 0 {
+		return []string{}, nil
+	}
+
 	// the following 2 checks want to make sure input string can be separated by comma
 	// with form: "...substr_0,...substr_1,...,...substr_k"
 

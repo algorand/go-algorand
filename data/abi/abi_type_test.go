@@ -248,6 +248,15 @@ func TestTypeFromStringValid(t *testing.T) {
 		},
 		// tuple type
 		{
+			input:    "()",
+			testType: "tuple type",
+			expected: Type{
+				abiTypeID:    Tuple,
+				childTypes:   []Type{},
+				staticLength: 0,
+			},
+		},
+		{
 			input:    "(uint32,(address,byte,bool[10],ufixed256x10[]),byte[])",
 			testType: "tuple type",
 			expected: Type{
