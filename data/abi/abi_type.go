@@ -105,7 +105,7 @@ func (t Type) String() string {
 		}
 		return "(" + strings.Join(typeStrings, ",") + ")"
 	default:
-		panic("Type Serialization Error, fail to infer from abiTypeID")
+		panic("Type Serialization Error, fail to infer from abiTypeID (bruh you shouldn't be here)")
 	}
 }
 

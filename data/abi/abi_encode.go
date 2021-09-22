@@ -145,7 +145,7 @@ func (v Value) Encode() ([]byte, error) {
 	case Tuple:
 		return tupleEncoding(v)
 	default:
-		return []byte{}, fmt.Errorf("Encoding: unknown type error")
+		return []byte{}, fmt.Errorf("Encoding: unknown type error (bruh why you are here)")
 	}
 }
 
