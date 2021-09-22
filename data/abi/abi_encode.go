@@ -258,7 +258,7 @@ func tupleEncoding(v Value) ([]byte, error) {
 	}
 
 	// concat everything as the abi encoded bytes
-	encoded := make([]byte, 0)
+	encoded := make([]byte, 0, headLength+tailCurrLength)
 	for _, head := range heads {
 		encoded = append(encoded, head...)
 	}
