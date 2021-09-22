@@ -179,16 +179,12 @@ func MakeBool(value bool) Value {
 }
 
 func checkUintValid(t Type, bitSize uint16) bool {
-	if t.abiTypeID != Uint || t.bitSize > bitSize {
-		return false
-	} else {
-		return true
-	}
+	return t.abiTypeID == Uint && t.bitSize <= bitSize
 }
 
 // GetUint8 tries to retreve an uint8 from an ABI Value.
 func (v Value) GetUint8() (uint8, error) {
-	if checkUintValid(v.ABIType, 8) {
+	if !checkUintValid(v.ABIType, 8) {
 		return 0, fmt.Errorf("value type unmatch or bitSize too large")
 	}
 	bigIntForm, err := v.GetUint()
@@ -200,7 +196,7 @@ func (v Value) GetUint8() (uint8, error) {
 
 // GetUint16 tries to retrieve an uint16 from an ABI Value.
 func (v Value) GetUint16() (uint16, error) {
-	if checkUintValid(v.ABIType, 16) {
+	if !checkUintValid(v.ABIType, 16) {
 		return 0, fmt.Errorf("value type unmatch or bitSize too large")
 	}
 	bigIntForm, err := v.GetUint()
@@ -212,7 +208,7 @@ func (v Value) GetUint16() (uint16, error) {
 
 // GetUint32 tries to retrieve an uint32 from an ABI Value.
 func (v Value) GetUint32() (uint32, error) {
-	if checkUintValid(v.ABIType, 32) {
+	if !checkUintValid(v.ABIType, 32) {
 		return 0, fmt.Errorf("value type unmatch or bitSize too large")
 	}
 	bigIntForm, err := v.GetUint()
@@ -224,7 +220,7 @@ func (v Value) GetUint32() (uint32, error) {
 
 // GetUint64 tries to retrieve an uint64 from an ABI Value.
 func (v Value) GetUint64() (uint64, error) {
-	if checkUintValid(v.ABIType, 16) {
+	if !checkUintValid(v.ABIType, 64) {
 		return 0, fmt.Errorf("value type unmatch or bitSize too large")
 	}
 	bigIntForm, err := v.GetUint()
