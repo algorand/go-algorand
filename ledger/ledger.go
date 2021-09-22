@@ -478,7 +478,7 @@ func (l *Ledger) CheckDup(currentProto config.ConsensusParams, current basics.Ro
 }
 
 // BlockTimeStamp returns the block Timestamp of a round.
-func (l *Ledger) BlockTimeStamp(rnd basics.Round) (int64, error) {
+func (l *Ledger) BlockTimeStamp(rnd basics.Round) int64 {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.txTail.blockTimeStamp(rnd)

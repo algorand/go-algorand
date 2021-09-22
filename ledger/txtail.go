@@ -206,15 +206,7 @@ func (t *txTail) putLV(lastValid basics.Round, id transactions.Txid) {
 	t.lastValid[lastValid][id] = struct{}{}
 }
 
-func (t *txTail) blockTimeStamp(rnd basics.Round) (int64, error) {
-	if r, ok := t.recent[rnd]; ok {
-		return r.timestamp, nil
-	}
-
-	// allow timestamps in a first block
-	if rnd == 0 {
-		return 0, nil
-	}
-	err := fmt.Errorf("txTail: tried to get timestamp in missing round %d", rnd)
-	return 0, err
+func (t *txTail) blockTimeStamp(rnd basics.Round) int64 {
+	// return 0 when no such block
+	return t.recent[rnd].timestamp
 }

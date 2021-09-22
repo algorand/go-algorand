@@ -260,8 +260,8 @@ func (dl *dryrunLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Ro
 	return nil
 }
 
-func (dl *dryrunLedger) BlockTimeStamp(rnd basics.Round) (int64, error) {
-	return 0, nil
+func (dl *dryrunLedger) BlockTimeStamp(rnd basics.Round) int64 {
+	return 0
 }
 
 func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {

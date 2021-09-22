@@ -68,7 +68,7 @@ func (wl *wrappedLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, er
 	return wl.l.BlockHdr(rnd)
 }
 
-func (wl *wrappedLedger) BlockTimeStamp(rnd basics.Round) (int64, error) {
+func (wl *wrappedLedger) BlockTimeStamp(rnd basics.Round) int64 {
 	return wl.l.BlockTimeStamp(rnd)
 }
 

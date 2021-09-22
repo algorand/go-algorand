@@ -371,7 +371,7 @@ type ledgerForCowBase interface {
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
-	BlockTimeStamp(basics.Round) (int64, error)
+	BlockTimeStamp(basics.Round) int64
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
@@ -702,14 +702,7 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 			// intentionally ignoring error here, fees had to have been enough to get here
 		}
 
-		var ts int64
-		var err error
-		if eval.proto.EnableFirstValidTimeStamp {
-			ts, err = eval.l.BlockTimeStamp(txn.Txn.FirstValid.SubSaturate(1))
-			if err != nil {
-				return nil, err
-			}
-		}
+		ts := eval.l.BlockTimeStamp(txn.Txn.FirstValid.SubSaturate(1))
 
 		res[i] = &logic.EvalParams{
 			Txn:                     &groupNoAD[i],

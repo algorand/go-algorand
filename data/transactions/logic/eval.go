@@ -1939,7 +1939,7 @@ func (cx *EvalContext) itxnFieldToStack(itxn *transactions.SignedTxnWithAD, fs t
 
 func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, fs txnFieldSpec, arrayFieldIdx uint64, groupIndex uint64) (sv stackValue, err error) {
 	if fs.effects {
-		return sv, errors.New("Unable to obtain effects from top-level transactions")
+		return sv, errors.New("unable to obtain effects from top-level transactions")
 	}
 	err = nil
 	switch fs.field {
@@ -1950,6 +1950,9 @@ func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, fs txnFiel
 	case FirstValid:
 		sv.Uint = uint64(txn.FirstValid)
 	case FirstValidTime:
+		if cx.EvalParams.FirstValidTimestamp == 0 {
+			return sv, fmt.Errorf("unable to obtain timestamp for %d", txn.FirstValid-1)
+		}
 		sv.Uint = cx.EvalParams.FirstValidTimestamp
 	case LastValid:
 		sv.Uint = uint64(txn.LastValid)

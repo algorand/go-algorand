@@ -71,7 +71,7 @@ type GroupContext struct {
 
 // FirstValidTimeStamper is an interface to the ledger to obtain block timestamps
 type FirstValidTimeStamper interface {
-	BlockTimeStamp(rnd basics.Round) (int64, error)
+	BlockTimeStamp(rnd basics.Round) int64
 }
 
 // PrepareGroupContext prepares a verification group parameter object for a given transaction
@@ -354,13 +354,7 @@ func logicSigBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 		return errors.New("Negative groupIndex")
 	}
 
-	var ts int64
-	if groupCtx.consensusParams.EnableFirstValidTimeStamp {
-		ts, err = groupCtx.timestamper.BlockTimeStamp(txn.Txn.FirstValid.SubSaturate(1))
-		if err != nil {
-			return err
-		}
-	}
+	ts := groupCtx.timestamper.BlockTimeStamp(txn.Txn.FirstValid.SubSaturate(1))
 	ep := logic.EvalParams{
 		Txn:                 txn,
 		Proto:               &groupCtx.consensusParams,

@@ -124,12 +124,12 @@ func TestTxTailBlockTimeStamp(t *testing.T) {
 	// Test timestamp retrieval
 	for rnd := basics.Round(1); rnd < lastRound; rnd++ {
 		if rnd == basics.Round(1) {
-			// Should error if we try to retrieve timestamp for round 1 since we loaded round 2 - 1002
-			_, err := tail.blockTimeStamp(rnd)
-			require.Errorf(t, err, "round %d", rnd)
+			// Should return 0 if we try to retrieve timestamp for round 1 since we loaded round 2 - 1002
+			r := tail.blockTimeStamp(rnd)
+			require.Equal(t, r, int64(0))
 		} else {
-			ts, _ := tail.blockTimeStamp(rnd)
-			require.True(t, ts > 0)
+			ts := tail.blockTimeStamp(rnd)
+			require.Greater(t, ts, int64(0))
 		}
 	}
 }

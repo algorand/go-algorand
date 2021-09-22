@@ -172,12 +172,12 @@ func (ml *mockLedgerForTracker) BlockHdr(rnd basics.Round) (bookkeeping.BlockHea
 	return ml.blocks[int(rnd)].block.BlockHeader, nil
 }
 
-func (ml *mockLedgerForTracker) BlockTimeStamp(rnd basics.Round) (int64, error) {
+func (ml *mockLedgerForTracker) BlockTimeStamp(rnd basics.Round) int64 {
 	if rnd > ml.Latest() {
-		return 0, fmt.Errorf("rnd %d out of bounds", rnd)
+		return 0
 	}
 
-	return ml.blocks[int(rnd)].block.BlockHeader.TimeStamp, nil
+	return ml.blocks[int(rnd)].block.BlockHeader.TimeStamp
 }
 
 func (ml *mockLedgerForTracker) trackerDB() db.Pair {

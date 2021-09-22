@@ -81,8 +81,8 @@ func (il indexerLedgerForEvalImpl) Totals() (ledgercore.AccountTotals, error) {
 	return il.l.Totals(il.latestRound)
 }
 
-func (il indexerLedgerForEvalImpl) BlockTimeStamp(r basics.Round) (int64, error) {
-	return 0, nil
+func (il indexerLedgerForEvalImpl) BlockTimeStamp(r basics.Round) int64 {
+	return 0
 }
 
 // Test that overriding the consensus parameters effects the generated apply data.

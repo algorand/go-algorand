@@ -927,17 +927,14 @@ func (aul *accountUpdatesLedgerEvaluator) CheckDup(config.ConsensusParams, basic
 	return fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initialization ")
 }
 
-// BlockTimeStamp gets the block timestamp of a specific round. It's not needed by the accountUpdatesLedgerEvaluator and implemented as a stub.
-func (aul *accountUpdatesLedgerEvaluator) BlockTimeStamp(rnd basics.Round) (int64, error) {
+// BlockTimeStamp gets the block timestamp of a specific round.
+func (aul *accountUpdatesLedgerEvaluator) BlockTimeStamp(rnd basics.Round) int64 {
 	if ts, ok := aul.blockTimeStamps[rnd]; ok {
-		return ts, nil
+		return ts
 	}
-	hdr, err := aul.au.ledger.BlockHdr(rnd)
-	if err != nil {
-		return 0, err
-	}
+	hdr, _ := aul.au.ledger.BlockHdr(rnd)
 	aul.blockTimeStamps[rnd] = hdr.TimeStamp
-	return hdr.TimeStamp, nil
+	return hdr.TimeStamp
 }
 
 // lookupWithoutRewards returns the account balance for a given address at a given round, without the reward

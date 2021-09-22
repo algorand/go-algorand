@@ -45,8 +45,8 @@ type indexerLedgerForEval interface {
 	GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]FoundAddress, error)
 	GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]FoundAddress, error)
 	Totals() (ledgercore.AccountTotals, error)
-	// BlockTimeStamp returns timestamp for a block with possible range [TxnMaxLife - 1, Latest]
-	BlockTimeStamp(rnd basics.Round) (int64, error)
+	// BlockTimeStamp returns timestamp for a block up to TxnMaxLife-1 back from Latest, or 0 if not exist
+	BlockTimeStamp(rnd basics.Round) int64
 }
 
 // Converter between indexerLedgerForEval and ledgerForEvaluator interfaces.
@@ -136,7 +136,7 @@ func (l indexerLedgerConnector) CompactCertVoters(_ basics.Round) (*VotersForRou
 	return nil, errors.New("CompactCertVoters() not implemented")
 }
 
-func (l indexerLedgerConnector) BlockTimeStamp(r basics.Round) (int64, error) {
+func (l indexerLedgerConnector) BlockTimeStamp(r basics.Round) int64 {
 	return l.il.BlockTimeStamp(r)
 }
 

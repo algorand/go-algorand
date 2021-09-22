@@ -196,10 +196,10 @@ var txnFieldSpecs = []txnFieldSpec{
 	{Fee, StackUint64, 0, 5, false},
 	{FirstValid, StackUint64, 0, 0, false},
 
-	// FirstValidTime was originally a dummy field in , and enabled in v6.
+	// FirstValidTime was originally a dummy field in v0-v5, and enabled in v6.
 	// Setting version to 6 will cause assembling programs with version 0-5 to fail
 	// but it does not matter since FirstValidTime is invalid runtime field on TEAL v0-v5
-	{FirstValidTime, StackUint64, 6, 6, false},
+	{FirstValidTime, StackUint64, 6, 0, false},
 
 	{LastValid, StackUint64, 0, 0, false},
 	{Note, StackBytes, 0, 0, false},

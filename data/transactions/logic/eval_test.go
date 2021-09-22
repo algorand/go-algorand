@@ -1000,7 +1000,7 @@ byte 0x0706000000000000000000000000000000000000000000000000000000000000
 `
 
 const globalV6TestProgram = globalV5TestProgram + `
-// No new globals in v4
+// No new globals in v6
 `
 
 func TestGlobal(t *testing.T) {
@@ -1449,8 +1449,8 @@ int 1
 const testTxnProgramTextV6 = testTxnProgramTextV5 + `
 assert
 txn FirstValidTime
-int 0
->
+int 1
+==
 assert
 int 1
 `
@@ -4883,7 +4883,9 @@ func TestFirstValidTime(t *testing.T) {
 		{5, 0, false},
 		{5, 1, false},
 		{6, 1, true},
+		{6, 0, false},
 	}
+	type asserter func(t require.TestingT, err error, msgAndArgs ...interface{})
 	firstValidVersion := txnFieldSpecByName["FirstValidTime"].version
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("v=%d/ts=%d", test.ver, test.ts), func(t *testing.T) {
@@ -4891,10 +4893,14 @@ func TestFirstValidTime(t *testing.T) {
 			source := "txn FirstValidTime; int 1; >="
 			var ops *OpStream
 			var expects []expect
-			var errChecker func(t require.TestingT, err error, msgAndArgs ...interface{}) = require.NoError
+			var errChecker asserter = require.NoError
+			var errEvaluator asserter = require.NoError
 			if test.ver < firstValidVersion {
 				expects = append(expects, expect{1, "...available in version..."})
 				errChecker = require.Error
+				errEvaluator = require.Error
+			} else if test.ts == 0 {
+				errEvaluator = require.Error
 			}
 			ops = testProg(t, source, test.ver, expects...)
 			err := Check(ops.Program, ep)
@@ -4902,7 +4908,7 @@ func TestFirstValidTime(t *testing.T) {
 
 			ep.FirstValidTimestamp = test.ts
 			pass, err := Eval(ops.Program, ep)
-			errChecker(t, err)
+			errEvaluator(t, err)
 			require.Equal(t, test.pass, pass)
 		})
 	}
