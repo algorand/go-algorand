@@ -71,11 +71,11 @@ func (db *PebbleDB) Close() error { return db.Pdb.Close() }
 
 // Get a key
 func (db *PebbleDB) Get(key []byte) ([]byte, error) {
-	var ret []byte
 	key, closer, err := db.Pdb.Get(key)
 	if err != nil {
 		return nil, err
 	}
+	ret := make([]byte, len(key))
 	copy(ret, key)
 	closer.Close()
 	return ret, nil
@@ -116,15 +116,15 @@ func (i *pebbleIterator) Valid() bool { return i.iter.Valid() }
 func (i *pebbleIterator) Close()      { i.iter.Close() }
 
 func (i *pebbleIterator) Key() []byte {
-	var ret []byte
 	k := i.iter.Key()
+	ret := make([]byte, len(k))
 	copy(ret, k)
 	return ret
 }
 
 func (i *pebbleIterator) Value() ([]byte, error) {
-	var ret []byte
 	v := i.iter.Value()
+	ret := make([]byte, len(v))
 	copy(ret, v)
 	return ret, nil
 }

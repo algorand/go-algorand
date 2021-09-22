@@ -930,6 +930,7 @@ func (db *sqliteBenchmarkDB) selectAccounts(b testing.TB, totalStartupAccountsNu
 	err = tx.Commit()
 	require.NoError(b, err)
 	require.Len(b, accountsAddress, totalStartupAccountsNumber+db.startupAcct)
+	require.Len(b, accountsAddress[0], 32)
 	require.Len(b, accountsRowID, totalStartupAccountsNumber+db.startupAcct)
 	return
 }
@@ -1126,7 +1127,7 @@ func (db *kvBenchmarkDB) checkUpdateAddr(b testing.TB, batches [][]updateAcct, a
 	for index, data := range kvs {
 		v, err := db.kv.Get(accountsAddress[index])
 		require.NoError(b, err)
-		require.Equal(b, data, v, "updated key %v didn't match", hex.EncodeToString(accountsAddress[index]))
+		require.Equal(b, data, v, "updated key %s didn't match", hex.EncodeToString(accountsAddress[index]))
 		cnt++
 	}
 	b.Logf("checking %d KVs took %v", cnt, time.Since(start))
