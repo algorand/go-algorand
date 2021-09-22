@@ -215,8 +215,14 @@ class Goal:
                 source = f.read()
         except FileNotFoundError:
             source = source.encode('utf-8')
-        proc = subprocess.run(["goal", "clerk", "compile", "-"], input=source,
-                              capture_output=True)
+
+        # CI runs with Python 3.6, which does not have capture_output.
+        # proc = subprocess.run(["goal", "clerk", "compile", "-"],
+        #                       input=source, capture_output=True)
+        proc = subprocess.run(["goal", "clerk", "compile", "-"],
+                              input=source,
+                              stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE)
         assert proc.returncode == 0, proc.stderr.decode()
         return proc.stdout
 
