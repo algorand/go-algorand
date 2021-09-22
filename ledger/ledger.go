@@ -74,7 +74,6 @@ type Ledger struct {
 	txTail   txTail
 	bulletin bulletin
 	notifier blockNotifier
-	time     timeTracker
 	metrics  metricsTracker
 
 	trackers  trackerRegistry
@@ -188,7 +187,6 @@ func (l *Ledger) reloadLedger() error {
 	}
 
 	l.trackers.register(&l.accts)    // update the balances
-	l.trackers.register(&l.time)     // tracks the block timestamps
 	l.trackers.register(&l.txTail)   // update the transaction tail, tracking the recent 1000 txn
 	l.trackers.register(&l.bulletin) // provide closed channel signaling support for completed rounds
 	l.trackers.register(&l.notifier) // send OnNewBlocks to subscribers
@@ -575,14 +573,6 @@ func (l *Ledger) Wait(r basics.Round) chan struct{} {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.bulletin.Wait(r)
-}
-
-// Timestamp uses the timestamp tracker to return the timestamp
-// from block r.
-func (l *Ledger) Timestamp(r basics.Round) (int64, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	return l.time.timestamp(r)
 }
 
 // GenesisHash returns the genesis hash for this ledger.
