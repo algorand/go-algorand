@@ -7,21 +7,21 @@ import (
 )
 
 // The following msgp objects are implemented in this file:
-// participationIDData
-//          |-----> (*) MarshalMsg
-//          |-----> (*) CanMarshalMsg
-//          |-----> (*) UnmarshalMsg
-//          |-----> (*) CanUnmarshalMsg
-//          |-----> (*) Msgsize
-//          |-----> (*) MsgIsZero
+// ParticipationKeyIdentity
+//             |-----> (*) MarshalMsg
+//             |-----> (*) CanMarshalMsg
+//             |-----> (*) UnmarshalMsg
+//             |-----> (*) CanUnmarshalMsg
+//             |-----> (*) Msgsize
+//             |-----> (*) MsgIsZero
 //
 
 // MarshalMsg implements msgp.Marshaler
-func (z *participationIDData) MarshalMsg(b []byte) (o []byte) {
+func (z *ParticipationKeyIdentity) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(5)
-	var zb0001Mask uint8 /* 6 bits */
+	zb0001Len := uint32(6)
+	var zb0001Mask uint8 /* 7 bits */
 	if (*z).Parent.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -38,9 +38,13 @@ func (z *participationIDData) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
-	if (*z).VRFSK.MsgIsZero() {
+	if (*z).VoteID.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x20
+	}
+	if (*z).VRFSK.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x40
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -66,6 +70,11 @@ func (z *participationIDData) MarshalMsg(b []byte) (o []byte) {
 			o = (*z).LastValid.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x20) == 0 { // if not empty
+			// string "vote-id"
+			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x2d, 0x69, 0x64)
+			o = (*z).VoteID.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x40) == 0 { // if not empty
 			// string "vrfsk"
 			o = append(o, 0xa5, 0x76, 0x72, 0x66, 0x73, 0x6b)
 			o = (*z).VRFSK.MarshalMsg(o)
@@ -74,13 +83,13 @@ func (z *participationIDData) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ *participationIDData) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*participationIDData)
+func (_ *ParticipationKeyIdentity) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*ParticipationKeyIdentity)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *participationIDData) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *ParticipationKeyIdentity) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -105,6 +114,14 @@ func (z *participationIDData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			bts, err = (*z).VRFSK.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "VRFSK")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).VoteID.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "VoteID")
 				return
 			}
 		}
@@ -145,7 +162,7 @@ func (z *participationIDData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		if zb0002 {
-			(*z) = participationIDData{}
+			(*z) = ParticipationKeyIdentity{}
 		}
 		for zb0001 > 0 {
 			zb0001--
@@ -165,6 +182,12 @@ func (z *participationIDData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				bts, err = (*z).VRFSK.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "VRFSK")
+					return
+				}
+			case "vote-id":
+				bts, err = (*z).VoteID.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "VoteID")
 					return
 				}
 			case "fv":
@@ -198,18 +221,18 @@ func (z *participationIDData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
-func (_ *participationIDData) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*participationIDData)
+func (_ *ParticipationKeyIdentity) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*ParticipationKeyIdentity)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *participationIDData) Msgsize() (s int) {
-	s = 1 + 5 + (*z).Parent.Msgsize() + 6 + (*z).VRFSK.Msgsize() + 3 + (*z).FirstValid.Msgsize() + 3 + (*z).LastValid.Msgsize() + 3 + msgp.Uint64Size
+func (z *ParticipationKeyIdentity) Msgsize() (s int) {
+	s = 1 + 5 + (*z).Parent.Msgsize() + 6 + (*z).VRFSK.Msgsize() + 8 + (*z).VoteID.Msgsize() + 3 + (*z).FirstValid.Msgsize() + 3 + (*z).LastValid.Msgsize() + 3 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *participationIDData) MsgIsZero() bool {
-	return ((*z).Parent.MsgIsZero()) && ((*z).VRFSK.MsgIsZero()) && ((*z).FirstValid.MsgIsZero()) && ((*z).LastValid.MsgIsZero()) && ((*z).KeyDilution == 0)
+func (z *ParticipationKeyIdentity) MsgIsZero() bool {
+	return ((*z).Parent.MsgIsZero()) && ((*z).VRFSK.MsgIsZero()) && ((*z).VoteID.MsgIsZero()) && ((*z).FirstValid.MsgIsZero()) && ((*z).LastValid.MsgIsZero()) && ((*z).KeyDilution == 0)
 }

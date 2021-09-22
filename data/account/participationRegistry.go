@@ -126,6 +126,9 @@ type ParticipationRegistry interface {
 	// Delete removes a record from storage.
 	Delete(id ParticipationID) error
 
+	// DeleteExpired removes all records from storage which are expired on the given round.
+	DeleteExpired(round basics.Round) error
+
 	// Get a participation record.
 	Get(id ParticipationID) ParticipationRecord
 
@@ -283,9 +286,9 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
-	id = record.ParticipationID()
+	id = record.ID()
 	if _, ok := db.cache[id]; ok {
-		return ParticipationID{}, ErrAlreadyInserted
+		return id, ErrAlreadyInserted
 	}
 
 	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -385,6 +388,19 @@ func (db *participationDB) Delete(id ParticipationID) error {
 	}
 
 	return err
+}
+
+func (db *participationDB) DeleteExpired(round basics.Round) error {
+	// This could be optimized to delete everything with one query.
+	for _, v := range db.GetAll() {
+		if v.LastValid < round {
+			err := db.Delete(v.ParticipationID)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // scanRecords is a helper to manage scanning participation records.

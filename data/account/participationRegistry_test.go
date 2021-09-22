@@ -78,9 +78,9 @@ func TestParticipation_InsertGet(t *testing.T) {
 	insertAndVerify := func(part Participation) {
 		id, err := registry.Insert(part)
 		a.NoError(err)
-		a.Equal(part.ParticipationID(), id)
+		a.Equal(part.ID(), id)
 
-		record := registry.Get(part.ParticipationID())
+		record := registry.Get(part.ID())
 		a.False(record.IsZero())
 		assertParticipation(t, part, record)
 	}
@@ -116,13 +116,13 @@ func TestParticipation_Delete(t *testing.T) {
 
 	id, err := registry.Insert(p)
 	a.NoError(err)
-	a.Equal(p.ParticipationID(), id)
+	a.Equal(p.ID(), id)
 
 	id, err = registry.Insert(p2)
 	a.NoError(err)
-	a.Equal(p2.ParticipationID(), id)
+	a.Equal(p2.ID(), id)
 
-	err = registry.Delete(p.ParticipationID())
+	err = registry.Delete(p.ID())
 	a.NoError(err)
 
 	// Delete should be persisted immediately. Verify p removed in GetAll.
@@ -130,6 +130,30 @@ func TestParticipation_Delete(t *testing.T) {
 	results := registry.GetAll()
 	a.Len(results, 1)
 	assertParticipation(t, p2, results[0])
+}
+
+func TestParticipation_DeleteExpired(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	registry := getRegistry(t)
+	defer registry.Close()
+
+	for i := 10; i < 20; i++ {
+		p := makeTestParticipation(i, 1, basics.Round(i), 1)
+		id, err := registry.Insert(p)
+		a.NoError(err)
+		a.Equal(p.ID(), id)
+	}
+
+	err := registry.DeleteExpired(15)
+	a.NoError(err)
+
+	a.Len(registry.GetAll(), 5, "The first 5 should be deleted.")
+
+	// Delete should be persisted immediately. Verify by re-initializing the cache.
+	err = registry.initializeCache()
+	a.NoError(err)
+	a.Len(registry.GetAll(), 5, "The first 5 should be deleted.")
 }
 
 // Make sure the register function properly sets effective first/last for all effected records.
@@ -145,11 +169,11 @@ func TestParticipation_Register(t *testing.T) {
 
 	id, err := registry.Insert(p)
 	a.NoError(err)
-	a.Equal(p.ParticipationID(), id)
+	a.Equal(p.ID(), id)
 
 	id, err = registry.Insert(p2)
 	a.NoError(err)
-	a.Equal(p2.ParticipationID(), id)
+	a.Equal(p2.ID(), id)
 
 	verifyEffectiveRound := func(id ParticipationID, first, last int) {
 		record := registry.Get(id)
@@ -159,15 +183,15 @@ func TestParticipation_Register(t *testing.T) {
 	}
 
 	// Register the first key.
-	err = registry.Register(p.ParticipationID(), 500000)
+	err = registry.Register(p.ID(), 500000)
 	a.NoError(err)
-	verifyEffectiveRound(p.ParticipationID(), 500000, int(p.LastValid))
+	verifyEffectiveRound(p.ID(), 500000, int(p.LastValid))
 
 	// Register second key.
-	err = registry.Register(p2.ParticipationID(), 2500000)
+	err = registry.Register(p2.ID(), 2500000)
 	a.NoError(err)
-	verifyEffectiveRound(p.ParticipationID(), 500000, 2500000)
-	verifyEffectiveRound(p2.ParticipationID(), 2500000, int(p2.LastValid))
+	verifyEffectiveRound(p.ID(), 500000, 2500000)
+	verifyEffectiveRound(p2.ID(), 2500000, int(p2.LastValid))
 }
 
 // Test error when registering a non-existing participation ID.
@@ -179,7 +203,7 @@ func TestParticipation_RegisterInvalidID(t *testing.T) {
 
 	p := makeTestParticipation(0, 250000, 3000000, 1)
 
-	err := registry.Register(p.ParticipationID(), 10000000)
+	err := registry.Register(p.ID(), 10000000)
 	a.EqualError(err, ErrParticipationIDNotFound.Error())
 }
 
@@ -194,10 +218,10 @@ func TestParticipation_RegisterInvalidRange(t *testing.T) {
 
 	id, err := registry.Insert(p)
 	a.NoError(err)
-	a.Equal(p.ParticipationID(), id)
+	a.Equal(p.ID(), id)
 
 	// Register the first key.
-	err = registry.Register(p.ParticipationID(), 1000000000)
+	err = registry.Register(p.ID(), 1000000000)
 	a.EqualError(err, ErrInvalidRegisterRange.Error())
 }
 
@@ -218,8 +242,8 @@ func TestParticipation_Record(t *testing.T) {
 	for _, part := range []Participation{p, p2, p3} {
 		id, err := registry.Insert(part)
 		a.NoError(err)
-		a.Equal(part.ParticipationID(), id)
-		err = registry.Register(part.ParticipationID(), 0)
+		a.Equal(part.ID(), id)
+		err = registry.Register(part.ID(), 0)
 		a.NoError(err)
 	}
 
@@ -238,7 +262,7 @@ func TestParticipation_Record(t *testing.T) {
 		records := registry.GetAll()
 		a.Len(records, 3)
 		for _, record := range records {
-			if record.ParticipationID == p.ParticipationID() {
+			if record.ParticipationID == p.ID() {
 				require.Equal(t, 1000, int(record.LastVote))
 				require.Equal(t, 2000, int(record.LastBlockProposal))
 				require.Equal(t, 3000, int(record.LastCompactCertificate))
@@ -310,28 +334,28 @@ func TestParticipation_RecordMultipleUpdates(t *testing.T) {
 	a.NoError(err)
 	_, err = registry.Insert(p2)
 	a.NoError(err)
-	err = registry.Register(p.ParticipationID(), p.FirstValid)
+	err = registry.Register(p.ID(), p.FirstValid)
 	a.NoError(err)
 
 	// Force the DB to have 2 active keys for one account by tampering with the private cache variable
-	recordCopy := registry.cache[p2.ParticipationID()]
+	recordCopy := registry.cache[p2.ID()]
 	recordCopy.EffectiveFirst = p2.FirstValid
 	recordCopy.EffectiveLast = p2.LastValid
-	registry.cache[p2.ParticipationID()] = recordCopy
-	registry.dirty[p2.ParticipationID()] = struct{}{}
+	registry.cache[p2.ID()] = recordCopy
+	registry.dirty[p2.ID()] = struct{}{}
 	registry.Flush()
 	a.Len(registry.dirty, 0)
 	registry.initializeCache()
 
 	// Verify bad state - both records are valid until round 3 million
-	a.NotEqual(p.ParticipationID(), p2.ParticipationID())
+	a.NotEqual(p.ID(), p2.ID())
 	recordTest := make([]ParticipationRecord, 0)
 
-	recordP := registry.Get(p.ParticipationID())
+	recordP := registry.Get(p.ID())
 	a.False(recordP.IsZero())
 	recordTest = append(recordTest, recordP)
 
-	recordP2 := registry.Get(p2.ParticipationID())
+	recordP2 := registry.Get(p2.ID())
 	a.False(recordP2.IsZero())
 	recordTest = append(recordTest, recordP2)
 
@@ -369,7 +393,7 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 	registry := getRegistry(t)
 
 	p := makeTestParticipation(1, 1, 2000000, 3)
-	id := p.ParticipationID()
+	id := p.ID()
 
 	// Insert the same record twice
 	// Pretty much copied from the Insert function without error checking.
@@ -512,11 +536,11 @@ func benchmarkKeyRegistration(numKeys int, b *testing.B) {
 
 				// Unfortunately we need to repeatedly clear out the registration fields to ensure the
 				// db update runs each time this is called.
-				record := registry.cache[p.ParticipationID()]
+				record := registry.cache[p.ID()]
 				record.EffectiveFirst = 0
 				record.EffectiveLast = 0
-				registry.cache[p.ParticipationID()] = record
-				registry.Register(p.ParticipationID(), 50)
+				registry.cache[p.ID()] = record
+				registry.Register(p.ID(), 50)
 			}
 		}
 	})
@@ -526,7 +550,7 @@ func benchmarkKeyRegistration(numKeys int, b *testing.B) {
 		for n := 0; n < b.N; n++ {
 			for key := 0; key < numKeys; key++ {
 				p := makeTestParticipation(key, basics.Round(0), basics.Round(1000000), 3)
-				registry.Register(p.ParticipationID(), 50)
+				registry.Register(p.ID(), 50)
 			}
 		}
 	})

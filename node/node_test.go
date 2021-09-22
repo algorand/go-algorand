@@ -539,16 +539,16 @@ func TestAsyncRecord(t *testing.T) {
 		Voting:     &crypto.OneTimeSignatureSecrets{},
 		VRF:        &crypto.VRFSecrets{},
 	}
-	id, err := node.participationRegistry.Insert(p)
+	id, err := node.accountManager.Registry().Insert(p)
 	require.NoError(t, err)
-	err = node.participationRegistry.Register(id, 0)
+	err = node.accountManager.Registry().Register(id, 0)
 	require.NoError(t, err)
 
 	node.RecordAsync(addr, 10000, account.Vote)
 	node.RecordAsync(addr, 20000, account.BlockProposal)
 
 	time.Sleep(5000 * time.Millisecond)
-	records := node.participationRegistry.GetAll()
+	records := node.accountManager.Registry().GetAll()
 	require.Len(t, records, 1)
 	require.Equal(t, 10000, int(records[0].LastVote))
 	require.Equal(t, 20000, int(records[0].LastBlockProposal))

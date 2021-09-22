@@ -108,8 +108,6 @@ type AlgorandFullNode struct {
 
 	indexer *indexer.Indexer
 
-	participationRegistry account.ParticipationRegistry
-
 	rootDir     string
 	genesisID   string
 	genesisHash crypto.Digest
@@ -179,7 +177,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	}
 	p2pNode.SetPrioScheme(node)
 	node.net = p2pNode
-	node.accountManager = data.MakeAccountManager(log)
 
 	accountListener := makeTopAccountListener(log)
 
@@ -269,11 +266,12 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
-	node.participationRegistry, err = ensureParticipationDB(genesisDir, node.log)
+	registry, err := ensureParticipationDB(genesisDir, node.log)
 	if err != nil {
 		log.Errorf("unable to initialize the participation registry database: %v", err)
 		return nil, err
 	}
+	node.accountManager = data.MakeAccountManager(log, registry)
 
 	err = node.loadParticipationKeys()
 	if err != nil {
@@ -888,9 +886,6 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 		case <-node.oldKeyDeletionNotify:
 		}
 
-		// Persist metrics to database.
-		node.participationRegistry.Flush()
-
 		r := node.ledger.Latest()
 
 		// We need the latest header to determine the next compact cert
@@ -935,6 +930,9 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 		node.mu.Lock()
 		node.accountManager.DeleteOldKeys(latestHdr, ccSigs, agreementProto)
 		node.mu.Unlock()
+
+		// Persist participation registry metrics.
+		node.accountManager.FlushRegistry()
 	}
 }
 
@@ -1161,12 +1159,6 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 		}
 		participations = append(participations, part)
 		matchingAccountsKeys[part.Address()] = true
-
-		// This is usually a no-op, but the first time it will update the DB.
-		err := node.participationRegistry.Register(part.ParticipationID(), keysRound)
-		if err != nil {
-			node.log.Warn("Failed to register participation key (%s) with participation registry.", part.ParticipationID())
-		}
 	}
 	// write the warnings per account only if we couldn't find a single valid key for that account.
 	for mismatchingAddr, warningFlags := range mismatchingAccountsKeys {
@@ -1187,9 +1179,5 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 
 // RecordAsync forwards participation record calls to the participation registry.
 func (node *AlgorandFullNode) RecordAsync(account basics.Address, round basics.Round, participationType account.ParticipationAction) {
-	// This function updates a cache in the ParticipationRegistry, we must call Flush to persist the changes.
-	err := node.participationRegistry.Record(account, round, participationType)
-	if err != nil {
-		node.log.Warnf("node.RecordAsync: Account %v not able to record participation (%d) on round %d: %w", account, participationType, round, err)
-	}
+	node.accountManager.RecordAsync(account, round, participationType)
 }

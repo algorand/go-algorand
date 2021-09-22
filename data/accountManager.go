@@ -22,7 +22,6 @@ import (
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -31,37 +30,27 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// A ParticipationKeyIdentity defines the parameters that makes a pariticpation key unique.
-type ParticipationKeyIdentity struct {
-	basics.Address // the address this participation key is used to vote for.
-
-	// FirstValid and LastValid are inclusive.
-	FirstValid basics.Round
-	LastValid  basics.Round
-
-	VoteID      crypto.OneTimeSignatureVerifier
-	SelectionID crypto.VrfPubkey
-}
-
 // AccountManager loads and manages accounts for the node
 type AccountManager struct {
 	mu deadlock.Mutex
 
-	partKeys map[ParticipationKeyIdentity]account.PersistedParticipation
+	partKeys map[account.ParticipationKeyIdentity]account.PersistedParticipation
 
 	// Map to keep track of accounts for which we've sent
 	// AccountRegistered telemetry events
 	registeredAccounts map[string]bool
 
-	log logging.Logger
+	registry account.ParticipationRegistry
+	log      logging.Logger
 }
 
 // MakeAccountManager creates a new AccountManager with a custom logger
-func MakeAccountManager(log logging.Logger) *AccountManager {
+func MakeAccountManager(log logging.Logger, registry account.ParticipationRegistry) *AccountManager {
 	manager := &AccountManager{}
 	manager.log = log
-	manager.partKeys = make(map[ParticipationKeyIdentity]account.PersistedParticipation)
+	manager.partKeys = make(map[account.ParticipationKeyIdentity]account.PersistedParticipation)
 	manager.registeredAccounts = make(map[string]bool)
+	manager.registry = registry
 
 	return manager
 }
@@ -74,6 +63,12 @@ func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participati
 	for _, part := range manager.partKeys {
 		if part.OverlapsInterval(rnd, rnd) {
 			out = append(out, part.Participation)
+
+			// This is usually a no-op, but the first time it will update the DB.
+			err := manager.registry.Register(part.ID(), rnd)
+			if err != nil {
+				manager.log.Warn("Failed to register participation key (%s) with participation registry.", part.ID())
+			}
 		}
 	}
 	return out
@@ -97,18 +92,26 @@ func (manager *AccountManager) HasLiveKeys(from, to basics.Round) bool {
 // The return value indicates if the key has been added (true) or
 // if this is a duplicate key (false).
 func (manager *AccountManager) AddParticipation(participation account.PersistedParticipation) bool {
+	// Tell the ParticipationRegistry about the Participation. Duplicate entries
+	// are ignored.
+	_, err := manager.registry.Insert(participation.Participation)
+	if err != nil && err != account.ErrAlreadyInserted {
+		manager.log.Warnf("Failed to insert participation key.")
+	}
+
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 
 	address := participation.Address()
 
 	first, last := participation.ValidInterval()
-	partkeyID := ParticipationKeyIdentity{
-		Address:     address,
+	partkeyID := account.ParticipationKeyIdentity{
+		Parent:      address,
 		FirstValid:  first,
 		LastValid:   last,
+		VRFSK:       participation.VRF.SK,
 		VoteID:      participation.Voting.OneTimeSignatureVerifier,
-		SelectionID: participation.VRF.PK,
+		KeyDilution: participation.KeyDilution,
 	}
 
 	// Check if we already have participation keys for this address in this interval
@@ -177,11 +180,35 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 		}
 	}()
 
-	// wait all all disk flushes, and report errors as they appear.
+	// wait for all disk flushes, and report errors as they appear.
 	for errString, errCh := range pendingItems {
 		err := <-errCh
 		if err != nil {
 			logging.Base().Warnf("%s: %v", errString, err)
 		}
+	}
+
+	// Delete expired records from participation registry.
+	if err := manager.registry.DeleteExpired(latestHdr.Round); err != nil {
+		manager.log.Warnf("error while deleting expired records from participation registry: %w", err)
+	}
+}
+
+// Registry fetches the ParticipationRegistry.
+func (manager *AccountManager) Registry() account.ParticipationRegistry {
+	return manager.registry
+}
+
+// FlushRegistry tells the underlying participation registry to flush it's change cache to the DB.
+func (manager *AccountManager) FlushRegistry() {
+	manager.registry.Flush()
+}
+
+// RecordAsync asynchronously records a participation key usage event.
+func (manager *AccountManager) RecordAsync(account basics.Address, round basics.Round, participationType account.ParticipationAction) {
+	// This function updates a cache in the ParticipationRegistry, we must call Flush to persist the changes.
+	err := manager.registry.Record(account, round, participationType)
+	if err != nil {
+		manager.log.Warnf("node.RecordAsync: Account %v not able to record participation (%d) on round %d: %w", account, participationType, round, err)
 	}
 }
