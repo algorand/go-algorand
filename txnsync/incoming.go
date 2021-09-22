@@ -322,7 +322,7 @@ incomingMessageLoop:
 
 	// if we're a relay, this is an outgoing peer and we've processed a valid message,
 	// then we want to respond right away as well as schedule bloom message.
-	if messageProcessed && peer.isOutgoing && s.isRelay && peer.lastReceivedMessageNextMsgMinDelay != time.Duration(0) {
+	if messageProcessed && peer.isOutgoing && s.isRelay && peer.lastReceivedMessageNextMsgMinDelay != time.Duration(0) && peer.state != peerStateProposal {
 		peer.state = peerStateStartup
 		// if we had another message coming from this peer previously, we need to ensure there are not scheduled tasks.
 		s.scheduler.peerDuration(peer)
