@@ -32,7 +32,8 @@ func TestMakeTypeValid(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	// uint
 	for i := 8; i <= 512; i += 8 {
-		uintType, _ := MakeUintType(uint16(i))
+		uintType, err := MakeUintType(uint16(i))
+		require.NoError(t, err, "make uint type in valid space should not return error")
 		expected := "uint" + strconv.Itoa(i)
 		actual := uintType.String()
 		require.Equal(t, expected, actual, "MakeUintType: expected %s, actual %s", expected, actual)
@@ -40,7 +41,8 @@ func TestMakeTypeValid(t *testing.T) {
 	// ufixed
 	for i := 8; i <= 512; i += 8 {
 		for j := 1; j <= 160; j++ {
-			ufixedType, _ := MakeUfixedType(uint16(i), uint16(j))
+			ufixedType, err := MakeUfixedType(uint16(i), uint16(j))
+			require.NoError(t, err, "make ufixed type in valid space should not return error")
 			expected := "ufixed" + strconv.Itoa(i) + "x" + strconv.Itoa(j)
 			actual := ufixedType.String()
 			require.Equal(t, expected, actual,
@@ -97,7 +99,7 @@ func TestMakeTypeValid(t *testing.T) {
 				),
 				uint16(256),
 			),
-			testType: "dynamic array",
+			testType: "static array",
 			expected: "bool[128][256]",
 		},
 		// tuple type
@@ -165,7 +167,7 @@ func TestMakeTypeInvalid(t *testing.T) {
 			randPrecision = rand.Uint32()
 		}
 		_, err := MakeUfixedType(uint16(randSize), uint16(randPrecision))
-		require.Error(t, err, "MakeUintType: should throw error on bitSize input %d", randSize)
+		require.Error(t, err, "MakeUfixedType: should throw error on bitSize %d, precision %d", randSize, randPrecision)
 	}
 }
 
@@ -173,7 +175,8 @@ func TestTypeFromStringValid(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	// uint
 	for i := 8; i <= 512; i += 8 {
-		expected, _ := MakeUintType(uint16(i))
+		expected, err := MakeUintType(uint16(i))
+		require.NoError(t, err, "make uint type in valid space should not return error")
 		actual, err := TypeFromString(expected.String())
 		require.NoError(t, err, "TypeFromString: uint parsing error: %s", expected.String())
 		require.Equal(t, expected, actual,
@@ -182,7 +185,8 @@ func TestTypeFromStringValid(t *testing.T) {
 	// ufixed
 	for i := 8; i <= 512; i += 8 {
 		for j := 1; j <= 160; j++ {
-			expected, _ := MakeUfixedType(uint16(i), uint16(j))
+			expected, err := MakeUfixedType(uint16(i), uint16(j))
+			require.NoError(t, err, "make ufixed type in valid space should not return error")
 			actual, err := TypeFromString("ufixed" + strconv.Itoa(i) + "x" + strconv.Itoa(j))
 			require.NoError(t, err, "TypeFromString ufixed parsing error: %s", expected.String())
 			require.Equal(t, expected, actual,
@@ -483,7 +487,7 @@ func TestTypeMISC(t *testing.T) {
 	for i := 8; i <= 512; i += 8 {
 		for j := 1; j <= 160; j++ {
 			ufixedT, err := MakeUfixedType(uint16(i), uint16(j))
-			require.NoError(t, err, "make ufixed type error")
+			require.NoError(t, err, "make ufixed type error: bitSize %d, precision %d", i, j)
 			testpool = append(testpool, ufixedT)
 		}
 	}
@@ -560,6 +564,7 @@ func TestTypeMISC(t *testing.T) {
 			require.Error(t, err, "byteLen test error on %s dynamic type, should have error",
 				testType.String())
 		} else {
+			require.NoError(t, err, "byteLen test error on %s dynamic type, should not have error")
 			if testType.abiTypeID == Tuple {
 				sizeSum := 0
 				for i := 0; i < len(testType.childTypes); i++ {

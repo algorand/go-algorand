@@ -111,37 +111,22 @@ func (t Type) String() string {
 
 var staticArrayRegexp *regexp.Regexp = nil
 var ufixedRegexp *regexp.Regexp = nil
-var regexpInitialized = false
 
-func initRegexps() (err error) {
-	if regexpInitialized {
-		return nil
-	}
+func init() {
+	var err error
 	// Note that we allow only decimal static array length
 	staticArrayRegexp, err = regexp.Compile(`^([a-z\d\[\](),]+)\[([1-9][\d]*)]$`)
 	if err != nil {
-		return
+		panic(err.Error())
 	}
 	ufixedRegexp, err = regexp.Compile(`^ufixed([1-9][\d]*)x([1-9][\d]*)$`)
 	if err != nil {
-		return
+		panic(err.Error())
 	}
-	regexpInitialized = true
-	return
 }
 
 // TypeFromString de-serialize ABI type from a string following ABI encoding.
 func TypeFromString(str string) (Type, error) {
-	// if the regexps for type str matching are not initialized
-	// attempt to initialize with `initRegexps`
-	// if error return err
-	if !regexpInitialized {
-		err := initRegexps()
-		if err != nil {
-			return Type{}, err
-		}
-	}
-
 	switch {
 	case strings.HasSuffix(str, "[]"):
 		arrayArgType, err := TypeFromString(str[:len(str)-2])
@@ -391,20 +376,22 @@ func MakeTupleType(argumentTypes []Type) (Type, error) {
 func (t Type) Equal(t0 Type) bool {
 	if t.abiTypeID != t0.abiTypeID {
 		return false
-	} else if t.precision != t0.precision || t.bitSize != t0.bitSize {
+	}
+	if t.precision != t0.precision || t.bitSize != t0.bitSize {
 		return false
-	} else if t.staticLength != t0.staticLength {
+	}
+	if t.staticLength != t0.staticLength {
 		return false
-	} else {
-		if len(t.childTypes) != len(t0.childTypes) {
+	}
+	if len(t.childTypes) != len(t0.childTypes) {
+		return false
+	}
+	for i := 0; i < len(t.childTypes); i++ {
+		if !t.childTypes[i].Equal(t0.childTypes[i]) {
 			return false
 		}
-		for i := 0; i < len(t.childTypes); i++ {
-			if !t.childTypes[i].Equal(t0.childTypes[i]) {
-				return false
-			}
-		}
 	}
+
 	return true
 }
 

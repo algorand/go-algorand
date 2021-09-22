@@ -258,12 +258,14 @@ func tupleEncoding(v Value) ([]byte, error) {
 	}
 
 	// concat everything as the abi encoded bytes
-	head, tail := make([]byte, 0), make([]byte, 0)
-	for i := 0; i < len(v.ABIType.childTypes); i++ {
-		head = append(head, heads[i]...)
-		tail = append(tail, tails[i]...)
+	encoded := make([]byte, 0)
+	for _, head := range heads {
+		encoded = append(encoded, head...)
 	}
-	return append(head, tail...), nil
+	for _, tail := range tails {
+		encoded = append(encoded, tail...)
+	}
+	return encoded, nil
 }
 
 // Decode takes an ABI encoded byte string and a target ABI type,
@@ -276,7 +278,7 @@ func Decode(valueByte []byte, valueType Type) (Value, error) {
 				fmt.Errorf("uint%d decode: expected byte length %d, but got byte length %d",
 					valueType.bitSize, valueType.bitSize/8, len(valueByte))
 		}
-		uintValue := big.NewInt(0).SetBytes(valueByte)
+		uintValue := new(big.Int).SetBytes(valueByte)
 		return MakeUint(uintValue, valueType.bitSize)
 	case Ufixed:
 		if len(valueByte) != int(valueType.bitSize)/8 {
@@ -284,7 +286,7 @@ func Decode(valueByte []byte, valueType Type) (Value, error) {
 				fmt.Errorf("ufixed%dx%d decode: expected length %d, got byte length %d",
 					valueType.bitSize, valueType.precision, valueType.bitSize/8, len(valueByte))
 		}
-		ufixedNumerator := big.NewInt(0).SetBytes(valueByte)
+		ufixedNumerator := new(big.Int).SetBytes(valueByte)
 		return MakeUfixed(ufixedNumerator, valueType.bitSize, valueType.precision)
 	case Bool:
 		if len(valueByte) != 1 {

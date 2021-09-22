@@ -513,9 +513,7 @@ func TestDecodeValid(t *testing.T) {
 		inputUint := []uint64{1, 2, 3, 4, 5, 6, 7, 8}
 		arrayElems := make([]Value, len(inputUint))
 		for index, uintVal := range inputUint {
-			temp, err := MakeUint64(uintVal)
-			require.NoError(t, err, "make uint64 should not return error")
-			arrayElems[index] = temp
+			arrayElems[index] = MakeUint64(uintVal)
 		}
 		uintT, err := MakeUintType(64)
 		require.NoError(t, err, "make uint64 type should not return error")

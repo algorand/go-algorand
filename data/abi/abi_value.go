@@ -18,6 +18,7 @@ package abi
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 )
 
@@ -28,27 +29,31 @@ type Value struct {
 }
 
 // MakeUint8 takes a go `uint8` and gives an ABI Value of ABI type `uint8`.
-func MakeUint8(value uint8) (Value, error) {
+func MakeUint8(value uint8) Value {
 	bigInt := big.NewInt(int64(value))
-	return MakeUint(bigInt, 8)
+	res, _ := MakeUint(bigInt, 8)
+	return res
 }
 
 // MakeUint16 takes a go `uint16` and gives an ABI Value of ABI type `uint16`.
-func MakeUint16(value uint16) (Value, error) {
+func MakeUint16(value uint16) Value {
 	bigInt := big.NewInt(int64(value))
-	return MakeUint(bigInt, 16)
+	res, _ := MakeUint(bigInt, 16)
+	return res
 }
 
 // MakeUint32 takes a go `uint32` and gives an ABI Value of ABI type `uint32`.
-func MakeUint32(value uint32) (Value, error) {
+func MakeUint32(value uint32) Value {
 	bigInt := big.NewInt(int64(value))
-	return MakeUint(bigInt, 32)
+	res, _ := MakeUint(bigInt, 32)
+	return res
 }
 
 // MakeUint64 takes a go `uint64` and gives an ABI Value of ABI type `uint64`.
-func MakeUint64(value uint64) (Value, error) {
-	bigInt := big.NewInt(int64(0)).SetUint64(value)
-	return MakeUint(bigInt, 64)
+func MakeUint64(value uint64) Value {
+	bigInt := new(big.Int).SetUint64(value)
+	res, _ := MakeUint(bigInt, 64)
+	return res
 }
 
 // MakeUint takes a big integer representation and a type bitSize,
@@ -58,7 +63,7 @@ func MakeUint(value *big.Int, size uint16) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	upperLimit := big.NewInt(0).Lsh(big.NewInt(1), uint(size))
+	upperLimit := new(big.Int).Lsh(big.NewInt(1), uint(size))
 	if value.Cmp(upperLimit) >= 0 {
 		return Value{}, fmt.Errorf("passed value larger than uint bitSize %d", size)
 	}
@@ -68,7 +73,7 @@ func MakeUint(value *big.Int, size uint16) (Value, error) {
 	}, nil
 }
 
-// MakeUfixed takes a big rational number representation, a type bitSize, and a type precision,
+// MakeUfixed takes a big integer representation, a type bitSize, and a type precision,
 // and returns an ABI Value of ABI UFixed<bitSize>x<precision>
 func MakeUfixed(value *big.Int, size uint16, precision uint16) (Value, error) {
 	ufixedValueType, err := MakeUfixedType(size, precision)
@@ -110,12 +115,12 @@ func MakeAddress(value [32]byte) Value {
 // MakeDynamicArray takes an array of ABI value (can be empty) and element type,
 // returns an ABI dynamic length array value.
 func MakeDynamicArray(values []Value, elemType Type) (Value, error) {
-	if len(values) >= (1 << 16) {
-		return Value{}, fmt.Errorf("dynamic array make error: pass in argument number larger than 2^16")
+	if len(values) >= math.MaxUint16 {
+		return Value{}, fmt.Errorf("dynamic array make error: pass in array length larger than maximum of uint16")
 	}
 	for i := 0; i < len(values); i++ {
 		if !values[i].ABIType.Equal(elemType) {
-			return Value{}, fmt.Errorf("type mismatch: %s and %s",
+			return Value{}, fmt.Errorf("type unmatch: %s and %s",
 				values[i].ABIType.String(), elemType.String())
 		}
 	}
@@ -127,14 +132,14 @@ func MakeDynamicArray(values []Value, elemType Type) (Value, error) {
 
 // MakeStaticArray takes an array of ABI value and returns an ABI static length array value.
 func MakeStaticArray(values []Value) (Value, error) {
-	if len(values) >= (1 << 16) {
-		return Value{}, fmt.Errorf("static array make error: pass in argument number larger than 2^16")
+	if len(values) >= math.MaxUint16 {
+		return Value{}, fmt.Errorf("static array make error: pass in array length larger than maximum of uint16")
 	} else if len(values) == 0 {
-		return Value{}, fmt.Errorf("static array make error: 0 argument passed in")
+		return Value{}, fmt.Errorf("static array make error: 0 array element passed in")
 	}
 	for i := 0; i < len(values); i++ {
 		if !values[i].ABIType.Equal(values[0].ABIType) {
-			return Value{}, fmt.Errorf("type mismatch: %s and %s",
+			return Value{}, fmt.Errorf("type unmatch: %s and %s",
 				values[i].ABIType.String(), values[0].ABIType.String())
 		}
 	}
@@ -146,8 +151,8 @@ func MakeStaticArray(values []Value) (Value, error) {
 
 // MakeTuple takes an array of ABI values and returns an ABI tuple value.
 func MakeTuple(values []Value) (Value, error) {
-	if len(values) >= (1 << 16) {
-		return Value{}, fmt.Errorf("tuple make error: pass in argument number larger than 2^16")
+	if len(values) >= math.MaxUint16 {
+		return Value{}, fmt.Errorf("tuple make error: pass in tuple length larger than maximum of uint16")
 	}
 	tupleType := make([]Type, len(values))
 	for i := 0; i < len(values); i++ {
@@ -173,9 +178,17 @@ func MakeBool(value bool) Value {
 	}
 }
 
+func checkUintValid(t Type, bitSize uint16) bool {
+	if t.abiTypeID != Uint || t.bitSize > bitSize {
+		return false
+	} else {
+		return true
+	}
+}
+
 // GetUint8 tries to retreve an uint8 from an ABI Value.
 func (v Value) GetUint8() (uint8, error) {
-	if v.ABIType.abiTypeID != Uint || v.ABIType.bitSize > 8 {
+	if checkUintValid(v.ABIType, 8) {
 		return 0, fmt.Errorf("value type unmatch or bitSize too large")
 	}
 	bigIntForm, err := v.GetUint()
@@ -187,7 +200,7 @@ func (v Value) GetUint8() (uint8, error) {
 
 // GetUint16 tries to retrieve an uint16 from an ABI Value.
 func (v Value) GetUint16() (uint16, error) {
-	if v.ABIType.abiTypeID != Uint || v.ABIType.bitSize > 16 {
+	if checkUintValid(v.ABIType, 16) {
 		return 0, fmt.Errorf("value type unmatch or bitSize too large")
 	}
 	bigIntForm, err := v.GetUint()
@@ -199,7 +212,7 @@ func (v Value) GetUint16() (uint16, error) {
 
 // GetUint32 tries to retrieve an uint32 from an ABI Value.
 func (v Value) GetUint32() (uint32, error) {
-	if v.ABIType.abiTypeID != Uint || v.ABIType.bitSize > 32 {
+	if checkUintValid(v.ABIType, 32) {
 		return 0, fmt.Errorf("value type unmatch or bitSize too large")
 	}
 	bigIntForm, err := v.GetUint()
@@ -211,7 +224,7 @@ func (v Value) GetUint32() (uint32, error) {
 
 // GetUint64 tries to retrieve an uint64 from an ABI Value.
 func (v Value) GetUint64() (uint64, error) {
-	if v.ABIType.abiTypeID != Uint || v.ABIType.bitSize > 64 {
+	if checkUintValid(v.ABIType, 16) {
 		return 0, fmt.Errorf("value type unmatch or bitSize too large")
 	}
 	bigIntForm, err := v.GetUint()
@@ -227,22 +240,22 @@ func (v Value) GetUint() (*big.Int, error) {
 		return nil, fmt.Errorf("value type unmatch")
 	}
 	bigIntForm := v.value.(*big.Int)
-	sizeThreshold := big.NewInt(0).Lsh(big.NewInt(1), uint(v.ABIType.bitSize))
+	sizeThreshold := new(big.Int).Lsh(big.NewInt(1), uint(v.ABIType.bitSize))
 	if sizeThreshold.Cmp(bigIntForm) <= 0 {
-		return nil, fmt.Errorf("value is larger than uint bitSize")
+		return nil, fmt.Errorf("value exceeds uint bitSize scope")
 	}
 	return bigIntForm, nil
 }
 
-// GetUfixed tries to retrieve an big rational number from an ABI Value.
+// GetUfixed tries to retrieve an big integer number from an ABI Value.
 func (v Value) GetUfixed() (*big.Int, error) {
 	if v.ABIType.abiTypeID != Ufixed {
 		return nil, fmt.Errorf("value type unmatch, should be ufixed")
 	}
 	bigIntForm := v.value.(*big.Int)
-	sizeThreshold := big.NewInt(0).Lsh(big.NewInt(1), uint(v.ABIType.bitSize))
+	sizeThreshold := new(big.Int).Lsh(big.NewInt(1), uint(v.ABIType.bitSize))
 	if sizeThreshold.Cmp(bigIntForm) <= 0 {
-		return nil, fmt.Errorf("value is larger than ufixed bitSize")
+		return nil, fmt.Errorf("value exceeds ufixed bitSize scope")
 	}
 	return bigIntForm, nil
 }
