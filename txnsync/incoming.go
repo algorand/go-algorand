@@ -233,7 +233,6 @@ incomingMessageLoop:
 		// skip txnsync messages with proposalData for now
 		if !incomingMsg.message.RelayedProposal.MsgIsZero() {
 			if !incomingMsg.message.RelayedProposal.ExcludeProposal.MsgIsZero() {
-				logging.Base().Info("received proposal filter msg ", incomingMsg.message.RelayedProposal.ExcludeProposal)
 				// add filtered proposal to proposalFilterCache
 				peer.proposalFilterCache.insert(incomingMsg.message.RelayedProposal.ExcludeProposal)
 			} else {
@@ -247,6 +246,7 @@ incomingMessageLoop:
 				completedProposalBytes := s.node.HandleProposalMessage(incomingMsg.message.RelayedProposal.RawBytes, incomingMsg.transactionGroups, peer)
 				if completedProposalBytes != nil {
 					peers := s.getPeers()
+					logging.Base().Info("sending proposal filter")
 					s.broadcastProposalFilter(crypto.Hash(completedProposalBytes), peers)
 				}
 				logging.Base().Info("HandleProposalMessage done")

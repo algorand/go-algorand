@@ -18,8 +18,6 @@ package txnsync
 
 import (
 	"container/list"
-	"github.com/algorand/go-algorand/logging"
-
 	"github.com/algorand/go-algorand/crypto"
 )
 
@@ -39,7 +37,6 @@ func makeProposalFilterCache(limit int) proposalFilterCache {
 }
 
 func (c *proposalFilterCache) insert(proposalHash crypto.Digest) {
-	logging.Base().Infof("proposal cache insert: %v", proposalHash)
 	element, found := c.store[proposalHash]
 	if found {
 		c.orderedMsgs.MoveToBack(element)
@@ -57,6 +54,5 @@ func (c *proposalFilterCache) insert(proposalHash crypto.Digest) {
 
 func (c *proposalFilterCache) exists(proposalHash crypto.Digest) bool {
 	_, exists := c.store[proposalHash]
-	logging.Base().Infof("proposal cache check: %v, exists: %v", proposalHash, exists)
 	return exists
 }

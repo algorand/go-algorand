@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/logging"
 	"sort"
 	"time"
 
@@ -70,7 +69,6 @@ func (encoder *messageAsyncEncoder) asyncMessageSent(enqueued bool, sequenceNumb
 
 	select {
 	case encoder.state.outgoingMessagesCallbackCh <- encoder.messageData:
-		logging.Base().Infof("adding to outgoingmsgch: %v, message: %v, len: %v", len(encoder.state.outgoingMessagesCallbackCh), crypto.Hash(encoder.messageData.message.RelayedProposal.RawBytes), len(encoder.messageData.message.RelayedProposal.RawBytes))
 		return nil
 	default:
 		// if we can't place it on the channel, return an error so that the node could disconnect from this peer.
@@ -359,7 +357,6 @@ func (s *syncState) broadcastProposal(p ProposalBroadcastRequest, peers []*Peer)
 	for _, peer := range peers {
 		// check if p.proposalBytes was filtered
 		if peer.proposalFilterCache.exists(proposalHash) {
-			logging.Base().Infof("proposal send filtered: %v", proposalHash)
 			continue
 		}
 
@@ -385,8 +382,6 @@ func (s *syncState) broadcastProposal(p ProposalBroadcastRequest, peers []*Peer)
 		msgEncoder.messageData, _ = s.assemblePeerMessage(peer, &pendingTransactions)
 		isPartialMessage := msgEncoder.messageData.partialMessage
 		msgEncoder.messageData.projectedSequenceNumber = peer.lastSentMessageSequenceNumber + 1
-
-		logging.Base().Infof("raw bytes: %v, len: %v", crypto.Hash(msgEncoder.messageData.message.RelayedProposal.RawBytes), len(msgEncoder.messageData.message.RelayedProposal.RawBytes))
 
 		msgEncoder.enqueue()
 

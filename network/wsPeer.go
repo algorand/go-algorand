@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/algorand/go-algorand/logging"
 	"io"
 	"net"
 	"net/http"
@@ -300,7 +299,7 @@ func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag, cal
 		digest = crypto.Hash(mbytes)
 	}
 
-	logging.Base().Infof("unicast, peer: %v,  tag: %v, queue sizes: %v %v", wp.peerIndex, tag, len(wp.sendBufferHighPrio), len(wp.sendBufferBulk))
+	//logging.Base().Infof("unicast, peer: %v,  tag: %v, queue sizes: %v %v", wp.peerIndex, tag, len(wp.sendBufferHighPrio), len(wp.sendBufferBulk))
 	ok := wp.writeNonBlock(ctx, mbytes, false, digest, time.Now(), callback)
 	if !ok {
 		networkBroadcastsDropped.Inc(nil)

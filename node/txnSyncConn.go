@@ -19,7 +19,6 @@ package node
 
 import (
 	"context"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"time"
 
@@ -326,7 +325,6 @@ func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataByte
 	logging.Base().Info("received part of proposal message")
 
 	if pc.numTxGroupsReceived == len(pc.txGroups) {
-		logging.Base().Info("sending proposal to agreement")
 		// TODO send proposal to agreement
 		var flattenedTxns []transactions.SignedTxn
 		for _, txgroup := range pc.txGroups {
@@ -338,7 +336,7 @@ func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataByte
 		}
 
 		completedProposalBytes := protocol.Encode(&pc.proposalData)
-		logging.Base().Infof("expected: %v, len: %v, actual: %v, len: %v", crypto.Hash(proposalDataBytes), len(proposalDataBytes), crypto.Hash(completedProposalBytes), len(pc.ProposalBytes))
+		logging.Base().Info("sent proposal to agreement")
 
 		pc.ProposalBytes = nil
 		pc.txGroups = nil
