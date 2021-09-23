@@ -22,10 +22,6 @@ type GenericFilter interface {
 	Set(x []byte)
 	// The input x is expected to be a slice with a length of 8 bytes or more.
 	Test(x []byte) bool
-
-	// NumEntries is the number of times Set() was called
-	NumEntries() int
-
 	MarshalBinary() ([]byte, error)
 	UnmarshalBinary(data []byte) error
 }
