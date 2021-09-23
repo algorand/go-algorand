@@ -124,6 +124,13 @@ func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
 }
 
 func verifyAccountsCanSendMoneyAcrossUpgrade(c libgoal.Client, a *require.Assertions, fixture *fixtures.RestClientFixture) {
+	pingBalance, pongBalance, expectedPingBalance, expectedPongBalance := runUntilProtocolUpgrades(c, a, fixture)
+
+	a.True(expectedPingBalance <= pingBalance, "ping balance is different than expected")
+	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected")
+}
+
+func runUntilProtocolUpgrades(c libgoal.Client, a *require.Assertions, fixture *fixtures.RestClientFixture) (uint64, uint64, uint64, uint64) {
 	initialStatus, err := c.Status()
 	a.NoError(err, "getting status")
 
@@ -256,7 +263,5 @@ func verifyAccountsCanSendMoneyAcrossUpgrade(c libgoal.Client, a *require.Assert
 	a.NoError(err)
 	pongBalance, err = c.GetBalance(pongAccount)
 	a.NoError(err)
-
-	a.True(expectedPingBalance <= pingBalance, "ping balance is different than expected")
-	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected")
+	return pingBalance, pongBalance, expectedPingBalance, expectedPongBalance
 }
