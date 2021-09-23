@@ -985,6 +985,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 			wg.Add(1)
 			// committing might take a long time, do it parallel
 			go func(l *Ledger) {
+				//nolint:staticcheck // accountsWriting.Add(1) needed by commitRound
 				l.accts.accountsWriting.Add(1)
 				l.accts.commitRound(numBlocks, 0, 0)
 				l.accts.accountsWriting.Wait()
@@ -1380,19 +1381,19 @@ func newTestGenesis() (bookkeeping.GenesisBalances, []basics.Address, []*crypto.
 // newTestLedger creates a in memory Ledger that is as realistic as
 // possible.  It has Rewards and FeeSink properly configured.
 func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *Ledger {
-	l, _, _ := newTestLedgerImpl(t, balances, true)
+	l, _, _ := newTestLedgerWithProto(t, balances, true, protocol.ConsensusFuture)
 	return l
 }
 
 func newTestLedgerOnDisk(t testing.TB, balances bookkeeping.GenesisBalances) (*Ledger, string, bookkeeping.Block) {
-	return newTestLedgerImpl(t, balances, false)
+	return newTestLedgerWithProto(t, balances, false, protocol.ConsensusFuture)
 }
 
-func newTestLedgerImpl(t testing.TB, balances bookkeeping.GenesisBalances, inMem bool) (*Ledger, string, bookkeeping.Block) {
+func newTestLedgerWithProto(t testing.TB, balances bookkeeping.GenesisBalances, inMem bool, proto protocol.ConsensusVersion) (*Ledger, string, bookkeeping.Block) {
 	var genHash crypto.Digest
 	crypto.RandBytes(genHash[:])
-	genBlock, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture,
-		balances, "test", genHash)
+	genBlock, err := bookkeeping.MakeGenesisBlock(proto, balances, "test", genHash)
+	require.NoError(t, err)
 	require.False(t, genBlock.FeeSink.IsZero())
 	require.False(t, genBlock.RewardsPool.IsZero())
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
@@ -1474,11 +1475,9 @@ func (eval *BlockEvaluator) fillDefaults(txn *txntest.Txn) {
 	txn.FillDefaults(eval.proto)
 }
 
-func (eval *BlockEvaluator) txn(t testing.TB, txn *txntest.Txn, problem ...string) {
+func (eval *BlockEvaluator) stxn(t testing.TB, stxn *transactions.SignedTxn, problem ...string) {
 	t.Helper()
-	eval.fillDefaults(txn)
-	stxn := txn.SignedTxn()
-	err := eval.testTransaction(stxn, eval.state.child(1))
+	err := eval.testTransaction(*stxn, eval.state.child(1))
 	if err != nil {
 		if len(problem) == 1 {
 			require.Contains(t, err.Error(), problem[0])
@@ -1487,7 +1486,7 @@ func (eval *BlockEvaluator) txn(t testing.TB, txn *txntest.Txn, problem ...strin
 		}
 		return
 	}
-	err = eval.Transaction(stxn, transactions.ApplyData{})
+	err = eval.Transaction(*stxn, transactions.ApplyData{})
 	if err != nil {
 		if len(problem) == 1 {
 			require.Contains(t, err.Error(), problem[0])
@@ -1497,6 +1496,13 @@ func (eval *BlockEvaluator) txn(t testing.TB, txn *txntest.Txn, problem ...strin
 		return
 	}
 	require.Len(t, problem, 0)
+}
+
+func (eval *BlockEvaluator) txn(t testing.TB, txn *txntest.Txn, problem ...string) {
+	t.Helper()
+	eval.fillDefaults(txn)
+	stxn := txn.SignedTxn()
+	eval.stxn(t, &stxn, problem...)
 }
 
 func (eval *BlockEvaluator) txns(t testing.TB, txns ...*txntest.Txn) {
@@ -1737,4 +1743,102 @@ func TestAppInsMinBalance(t *testing.T) {
 	eval.txns(t, txns...)
 	vb := l.endBlock(t, eval)
 	assert.Len(t, vb.delta.ModifiedAppLocalStates, 50)
+}
+
+func TestFistValidTime(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// make a new proto with shorter MaxTxnLife (cut MaxBalLookback as well)
+	maxTxnLife := 10
+	maxLookback := 1
+	actual := config.Consensus[protocol.ConsensusFuture]
+	modified := actual
+	modified.MaxTxnLife = uint64(maxTxnLife)
+	modified.MaxBalLookback = uint64(maxLookback)
+	config.Consensus[protocol.ConsensusFuture] = modified
+	defer func() {
+		config.Consensus[protocol.ConsensusFuture] = actual
+	}()
+
+	// prepare test program
+	source := `#pragma version 6
+txn FirstValidTime
+int 1
+>`
+	ops, err := logic.AssembleString(source)
+	require.NoError(t, err)
+	prog := ops.Program
+
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	l.archival = false
+	defer l.Close()
+
+	// add maxTxnLife-1 blocks in order to preserve block 0
+	for i := 1; i <= maxTxnLife-1; i++ {
+		eval := l.nextBlock(t)
+		l.endBlock(t, eval)
+	}
+
+	// check all blocks including genesis one can be fetched
+	for i := 0; i <= maxTxnLife-1; i++ {
+		hdr, err := l.BlockHdr(basics.Round(i))
+		require.NoError(t, err)
+		require.Greater(t, hdr.TimeStamp, int64(0))
+	}
+
+	nextRound := maxTxnLife
+
+	header := transactions.Header{
+		Sender:      addrs[0],
+		FirstValid:  0,
+		LastValid:   basics.Round(nextRound),
+		GenesisHash: l.GenesisHash(),
+	}
+
+	stxn := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Type:   protocol.ApplicationCallTx,
+			Header: header,
+			ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+				ApprovalProgram:   prog,
+				ClearStateProgram: prog,
+			},
+		},
+	}
+
+	// ensure it is accepted: block 0 exists and has some valid timestamp
+	eval := l.nextBlock(t)
+	eval.stxn(t, &stxn)
+	l.endBlock(t, eval)
+
+	// wait maxTxnLife round to be committed
+	// at this moment db has blocks 0...maxTxnLife
+	// technically txTail and block db have maxTxnLife+1 blocks
+	// but the deletion does not happen because
+	// the condition `r+maxlife < rnd` is not met for r=0 and rnd=maxlife
+	l.blockQ.waitCommit(basics.Round(nextRound))
+
+	// check round 0 is out of maxTxnLife range and txn fails
+	nextRound++
+	stxn.Txn.FirstValid = 0
+	stxn.Txn.LastValid = basics.Round(nextRound)
+	eval = l.nextBlock(t)
+	eval.stxn(t, &stxn, "transaction window size excessive (0--11)")
+
+	// because block 0 is not deleted FirstValid-1 still accessible
+	stxn.Txn.FirstValid = 1
+	stxn.Txn.LastValid = basics.Round(nextRound)
+	eval.stxn(t, &stxn)
+	l.endBlock(t, eval)
+
+	// now block 0 will be deleted but FirstValid = 1 is not valid anymore
+	l.blockQ.waitCommit(basics.Round(nextRound))
+
+	nextRound++
+	stxn.Txn.FirstValid = 1
+	stxn.Txn.LastValid = basics.Round(nextRound)
+	eval = l.nextBlock(t)
+	eval.stxn(t, &stxn, "transaction window size excessive (1--12)")
+	l.endBlock(t, eval)
 }
