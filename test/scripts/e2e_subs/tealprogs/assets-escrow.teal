@@ -1,16 +1,15 @@
 #pragma version 5
-        // This application creates assets and pays out an asset for some algo. It
-        // also accepts assets, and holds them until the requester asks for them back.
-        // Depositors invoke the app with "deposit" as arg[0], and make a pay
-        // transaction to the app account in the following txn slot.
-        // The app records the deposit in the user's local state (so
-        // the user must be opted-in), though they may do so in their
-        // initial call.
-
-        // To withdraw, users call with "withdraw" in arg[0], and a
-        // big-endian integer amount in arg[1].  If the withdrawal
-        // amount is less than the amount deposited, the app pays out
-        // the request, and decrements the user's balance.
+        // This application accepts these actions on assets
+        // optin():void  - opt in the app to an asset
+        // close():void - opt out the app from an asset
+        // deposit():void - deposit assets on app and hold until withdraw is requested;
+        //                  update the asset balance in app's local state
+        // withdraw(uint64):void - withdraw assets from and update the asset balance in app's local state.
+        //                         approve if withdraw amount < balance
+        // transfer(uint64):void - app has clawback auth to transfer assets between accounts
+        // create(uint64):void - app creates assets
+        // mint():void - withdraw assets created by app
+        // freeze(uint64):void - freeze/unfreeze an asset on an account
 
         // ApplicationID is zero in inital creation txn
         txn ApplicationID
@@ -65,6 +64,7 @@ handle_optin:
         return
 
 handle_noop:
+        // opt in app to asset to enable axfer
         txn ApplicationArgs 0
         byte "optin():void"
         ==
@@ -79,8 +79,7 @@ handle_noop:
          int 0
          itxn_field AssetAmount
 
-         txn ApplicationArgs 1
-         btoi
+         txna Assets 0
          itxn_field XferAsset
 
          global CurrentApplicationAddress
@@ -122,7 +121,7 @@ not_optin:
         byte "balance"
         dup2
         app_local_get
-        uncover 3                   // pull up the Amount
+        uncover 3    // pull up the Amount
         +
         app_local_put
 
@@ -142,7 +141,7 @@ not_deposit:
         app_local_get
 
         // Subtract the request and replace. Rejects on underflow
-        txn ApplicationArgs 2
+        txn ApplicationArgs 1
         btoi
         -
         app_local_put
@@ -151,11 +150,10 @@ not_deposit:
          int axfer
          itxn_field TypeEnum
 
-         txn ApplicationArgs 1
-         btoi
+         txna Assets 0
          itxn_field XferAsset
 
-         txn ApplicationArgs 2
+         txn ApplicationArgs 1
          btoi
          itxn_field AssetAmount
 
@@ -167,7 +165,7 @@ not_deposit:
         return
 not_withdraw:
         txn ApplicationArgs 0
-        byte "close(uint64):void"
+        byte "close():void"
         ==
         bz not_close
 
@@ -176,8 +174,7 @@ not_withdraw:
             int axfer
             itxn_field TypeEnum
 
-            txn ApplicationArgs 1
-            btoi
+            txna Assets 0
             itxn_field XferAsset
 
             int 0
@@ -203,18 +200,17 @@ not_close:
             int axfer
             itxn_field TypeEnum
 
-            txn ApplicationArgs 1
-            btoi
+            txna Assets 0
             itxn_field XferAsset
 
-            txn ApplicationArgs 2
+            txn ApplicationArgs 1
             btoi
             itxn_field AssetAmount
 
             txn Sender
             itxn_field AssetSender
 
-            txn ApplicationArgs 3
+            txna Accounts 1
             itxn_field AssetReceiver
 
         itxn_submit
@@ -223,6 +219,95 @@ not_close:
         return
 
 not_transfer:
+        txn ApplicationArgs 0
+        byte "create(uint64):void"
+        ==
+        bz not_create
+        // Handle create.
+        itxn_begin
+          int acfg
+          itxn_field TypeEnum
+
+          txn ApplicationArgs 1
+          btoi
+          itxn_field ConfigAssetTotal
+          int 0
+          itxn_field ConfigAssetDecimals
+          byte "x"
+          itxn_field ConfigAssetUnitName
+          byte "X"
+          itxn_field ConfigAssetName
+          global CurrentApplicationAddress
+          itxn_field ConfigAssetFreeze
+
+        itxn_submit
+        int 1
+        return
+not_create:
+        txn ApplicationArgs 0
+        byte "mint():void"
+        ==
+        bz not_mint
+        // Handle mint.  Next txn slot must pay our app account
+        txn GroupIndex
+        int 1
+        +
+        dup
+        dup
+
+        gtxns TypeEnum
+        int pay
+        ==
+        assert
+
+        gtxns Receiver
+        global CurrentApplicationAddress
+        ==
+        assert
+
+        // mint asset
+        itxn_begin
+         int axfer
+         itxn_field TypeEnum
+
+         txna Assets 0
+         itxn_field XferAsset
+
+         gtxns Amount
+         itxn_field AssetAmount
+
+         txn Sender
+         itxn_field AssetReceiver
+        itxn_submit
+
+        int 1
+        return
+not_mint:
+        txn ApplicationArgs 0
+        byte "freeze(uint64):void"
+        ==
+        bz not_freeze
+
+        //Handle freeze
+        itxn_begin
+          int afrz
+          itxn_field TypeEnum
+
+          txna Assets 0
+          itxn_field FreezeAsset
+
+          txn ApplicationArgs 1
+          btoi
+          itxn_field FreezeAssetFrozen
+
+          txn Sender
+          itxn_field FreezeAssetAccount
+
+        itxn_submit
+
+        int 1
+        return
+not_freeze:
         // Unknown call "method"
         err
 
