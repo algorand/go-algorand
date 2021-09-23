@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/libgoal"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -124,6 +125,10 @@ func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
 	defer fixture.Shutdown()
 	c := fixture.LibGoalClient
 
+	verifyAccountsCanSendMoneyAcrossUpgrade(c, a, &fixture)
+}
+
+func verifyAccountsCanSendMoneyAcrossUpgrade(c libgoal.Client, a *require.Assertions, fixture *fixtures.RestClientFixture) {
 	initialStatus, err := c.Status()
 	a.NoError(err, "getting status")
 

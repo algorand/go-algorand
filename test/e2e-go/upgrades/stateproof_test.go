@@ -26,25 +26,19 @@ func TestKeysWithoutStateProofKeyCannotRegister(t *testing.T) {
 
 	verifyAccountsCanSendMoneyAcrossUpgrade(c, a, &fixture)
 
-	//defer fixture.Shutdown()
-	//
-	//c := fixture.LibGoalClient
-	//
-	//// upgrading the consensus version
-	//testAccountsCanSendMoneyAcrossUpgrade(c, a, &fixture)
-	//
-	//// now we are certain the system is set in the next version.
-	//
-	//nodeclient := fixture.GetLibGoalClientForNamedNode("Node")
-	////
-	//wallet, err := nodeclient.GetUnencryptedWalletHandle()
-	//a.NoError(err)
-	//
-	//cls, err := c.ListAddresses(wallet)
-	//a.NoError(err)
-	//
-	//key, path, err := c.GenParticipationKeys(cls[0], 0, 1000000, 10000)
-	//a.NoError(err)
-	//_, _ = key, path
-	//log.Println(cls)
+	// now we are certain the system is set in the next version.
+
+	client1 := fixture.GetLibGoalClientForNamedNode("Node")
+
+	wh1, err := client1.GetUnencryptedWalletHandle()
+	a.NoError(err)
+
+	accountList, err := client1.ListAddresses(wh1)
+	a.NoError(err)
+
+	partKey, db, err := client1.GenParticipationKeys(accountList[0], 1, 1000*5, 1000)
+	a.NoError(err)
+
+	_, _ = partKey, db
+	partKey.GenerateRegistrationTransaction()
 }
