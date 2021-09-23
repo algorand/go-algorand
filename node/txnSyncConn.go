@@ -353,21 +353,34 @@ func (tsnc *transactionSyncNodeConnector) handleProposalLoop() {
 				for _, txgroup := range pc.txGroups {
 					flattenedTxns = append(flattenedTxns, txgroup.Transactions...)
 				}
-				tsnc.agreementProposalCh <- agreement.TxnSyncProposal{
+
+				agreementProposal := agreement.TxnSyncProposal{
 					ProposalBytes: pc.ProposalBytes,
 					Txns:          flattenedTxns,
 				}
 
+				select {
+				case tsnc.agreementProposalCh <- agreementProposal:
+					logging.Base().Info("sent proposal to agreement")
+					continue
+				default:
+					logging.Base().Info("failed to send proposal to agreement")
+				}
+
 				completedProposalBytes := protocol.Encode(&pc.proposalData)
-				logging.Base().Info("sent proposal to agreement")
 
 				pc.ProposalBytes = nil
 				pc.txGroups = nil
 				pc.TxGroupIds = nil
 				pc.txGroupIDIndex = nil
 				pc.numTxGroupsReceived = 0
+				select {
+				case tsnc.proposalFilterCh <- completedProposalBytes:
+					continue
+				default:
+					logging.Base().Info("failed to enqueue proposal filter")
+				}
 
-				tsnc.proposalFilterCh <- completedProposalBytes
 			}
 		case <-tsnc.ctx.Done():
 			return
