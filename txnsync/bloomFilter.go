@@ -68,8 +68,6 @@ type testableBloomFilter struct {
 
 	filter bloom.GenericFilter
 
-	elementsFiltered int32
-
 	clearPrevious bool
 }
 
@@ -141,15 +139,11 @@ func filterFactoryXor32(numEntries int, s *syncState) (filter bloom.GenericFilte
 
 var filterFactory func(int, *syncState) (filter bloom.GenericFilter, filterType bloomFilterType) = filterFactoryXor32
 
-func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []pooldata.SignedTxGroup, excludeTransactions *transactionCache, hintPrevBloomFilter *bloomFilter) (result bloomFilter) {
+func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []pooldata.SignedTxGroup, excludeTransactions *transactionCache, hintPrevBloomFilter *bloomFilter, minGroupCounter uint64) (result bloomFilter) {
 	result.encoded.EncodingParams = encodingParams
 	if encodingParams.Modulator == 0 {
 		// we want none.
 		return
-	}
-	minGroupCounter := uint64(0)
-	if hintPrevBloomFilter != nil {
-		minGroupCounter = hintPrevBloomFilter.containedTxnsRange.lastCounter
 	}
 	if encodingParams.Modulator == 1 && excludeTransactions == nil {
 		// we want all.

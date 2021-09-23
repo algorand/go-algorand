@@ -145,7 +145,7 @@ type Peer struct {
 	// This bloom filter could be stale if no bloom filter was included in the last message.
 	lastSentBloomFilter bloomFilter
 
-	lastSentFilterGroupCounter uint64
+	sentFilterParams sentFilters
 
 	// lastConfirmedMessageSeqReceived is the last message sequence number that was confirmed by the peer to have been accepted.
 	lastConfirmedMessageSeqReceived    uint64
@@ -473,9 +473,10 @@ func (p *Peer) updateMessageSent(txMsg *transactionBlockMessage, selectedTxnIDs 
 }
 
 // update the peer's lastSentBloomFilter.
-func (p *Peer) updateSentBoomFilter(filter bloomFilter) {
+func (p *Peer) updateSentBoomFilter(filter bloomFilter, encodingParams requestParams) {
 	if filter.encodedLength > 0 {
 		p.lastSentBloomFilter = filter
+		p.sentFilterParams.setSentFilter(filter, encodingParams)
 	}
 }
 
@@ -622,10 +623,8 @@ func (p *Peer) addIncomingBloomFilterOLD(round basics.Round, incomingFilter *tes
 }
 
 func (p *Peer) updateRequestParams(modulator, offset byte) {
-	if p.requestedTransactionsModulator == modulator && p.requestedTransactionsOffset == offset {
-		return
-	}
-	p.requestedTransactionsModulator, p.requestedTransactionsOffset = modulator, offset
+	p.requestedTransactionsModulator = modulator
+	p.requestedTransactionsOffset = offset
 }
 
 // update the recentSentTransactions with the incoming transaction groups. This would prevent us from sending the received transactions back to the

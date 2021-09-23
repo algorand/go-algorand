@@ -660,8 +660,7 @@ func TestAddIncomingBloomFilter(t *testing.T) {
 				Offset:    byte(i),
 				Modulator: 0,
 			},
-			filter:           nil,
-			elementsFiltered: 0,
+			filter: nil,
 		}
 		p.addIncomingBloomFilter(basics.Round(i), bf, basics.Round(i), 999999)
 	}
@@ -675,20 +674,12 @@ func TestAddIncomingBloomFilter(t *testing.T) {
 				Offset:    byte(i),
 				Modulator: 0,
 			},
-			filter:           nil,
-			elementsFiltered: 500,
+			filter: nil,
 		}
 		p.addIncomingBloomFilter(basics.Round(i), bf, 0, 999999)
 	}
 
-	//a.Equal(len(p.recentIncomingBloomFilters), maxIncomingBloomFilterHistory)
-	activeElements := 0
-	for _, fi := range p.recentIncomingBloomFilters {
-		if fi.filter != nil {
-			activeElements += int(fi.filter.elementsFiltered)
-		}
-	}
-	a.Equal(1000, activeElements)
+	a.Equal(len(p.recentIncomingBloomFilters), maxIncomingBloomFilterHistory)
 }
 
 // TestSelectPendingTransactions tests selectPendingTransactions
@@ -875,7 +866,7 @@ func TestUpdateMessageSent(t *testing.T) {
 	a.Equal(p.lastSentMessageTimestamp, timestamp)
 	a.Equal(p.lastSentMessageSize, messageSize)
 
-	p.updateSentBoomFilter(bFilter)
+	p.updateSentBoomFilter(bFilter, requestParams{})
 
 	a.Equal(p.lastSentBloomFilter, bFilter)
 
