@@ -92,6 +92,7 @@ func (f *Filter) Test(x []byte) bool {
 	return true
 }
 
+// NumEntries is the number of times Set() was called
 func (f *Filter) NumEntries() int {
 	return f.actualEntries
 }

@@ -61,6 +61,7 @@ func (xf *XorFilter) Test(x []byte) bool {
 	return false
 }
 
+// NumEntries is the number of times Set() was called
 func (xf *XorFilter) NumEntries() int {
 	return len(xf.holding)
 }
@@ -196,6 +197,7 @@ func (xf *XorFilter8) Test(x []byte) bool {
 	return false
 }
 
+// NumEntries is the number of times Set() was called
 func (xf *XorFilter8) NumEntries() int {
 	return len(xf.holding)
 }
