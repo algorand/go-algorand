@@ -54,6 +54,17 @@ const maxPaysetHint = 20000
 // transaction group.
 const asyncAccountLoadingThreadCount = 4
 
+type creatable struct {
+	cindex basics.CreatableIndex
+	ctype  basics.CreatableType
+}
+
+// FoundAddress is a wrapper for an address and a boolean.
+type FoundAddress struct {
+	Address basics.Address
+	Exists  bool
+}
+
 type roundCowBase struct {
 	l ledgerForCowBase
 
@@ -79,10 +90,26 @@ type roundCowBase struct {
 	// are beyond the scope of this cache.
 	// The account data store here is always the account data without the rewards.
 	accounts map[basics.Address]basics.AccountData
+
+	// Similar cache for asset/app creators.
+	creators map[creatable]FoundAddress
 }
 
 func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
-	return x.l.GetCreatorForRound(x.rnd, cidx, ctype)
+	creatable := creatable{cindex: cidx, ctype: ctype}
+
+	if foundAddress, ok := x.creators[creatable]; ok {
+		return foundAddress.Address, foundAddress.Exists, nil
+	}
+
+	address, exists, err := x.l.GetCreatorForRound(x.rnd, cidx, ctype)
+	if err != nil {
+		return basics.Address{}, false, fmt.Errorf(
+			"roundCowBase.getCreator() cidx: %d ctype: %v err: %w", cidx, ctype, err)
+	}
+
+	x.creators[creatable] = FoundAddress{Address: address, Exists: exists}
+	return address, exists, nil
 }
 
 // lookup returns the non-rewarded account data for the provided account address. It uses the internal per-round cache
@@ -413,6 +440,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 		txnCount: prevHeader.TxnCounter,
 		proto:    proto,
 		accounts: make(map[basics.Address]basics.AccountData),
+		creators: make(map[creatable]FoundAddress),
 	}
 
 	eval := &BlockEvaluator{
