@@ -50,7 +50,12 @@ type transactionSyncNodeConnector struct {
 	messageHandler txnsync.IncomingMessageHandler
 	txHandler      data.SolicitedAsyncTxHandler
 	openStateCh    chan struct{}
-	proposalCh     chan agreement.TxnSyncProposal
+	agreementProposalCh     chan agreement.TxnSyncProposal
+	proposalMsgCh  chan incomingProposalRequest
+	proposalFilterCh chan []byte
+
+	ctx       context.Context
+	cancelCtx context.CancelFunc
 }
 
 type proposalData struct {
@@ -70,6 +75,12 @@ type proposalCache struct {
 	numTxGroupsReceived int
 }
 
+type incomingProposalRequest struct {
+	proposalBytes []byte
+	txGroups            []pooldata.SignedTxGroup
+	peer *txnsync.Peer
+}
+
 func makeTransactionSyncNodeConnector(node *AlgorandFullNode) transactionSyncNodeConnector {
 	return transactionSyncNodeConnector{
 		node:        node,
@@ -77,12 +88,18 @@ func makeTransactionSyncNodeConnector(node *AlgorandFullNode) transactionSyncNod
 		clock:       timers.MakeMonotonicClock(time.Now()),
 		txHandler:   node.txHandler.SolicitedAsyncTxHandler(),
 		openStateCh: make(chan struct{}),
-		proposalCh:  make(chan agreement.TxnSyncProposal, proposalBufferSize),
+		agreementProposalCh:  make(chan agreement.TxnSyncProposal, proposalBufferSize),
+		proposalMsgCh:  make(chan incomingProposalRequest, proposalBufferSize),
+		proposalFilterCh:  make(chan []byte, proposalBufferSize),
 	}
 }
 
 func (tsnc *transactionSyncNodeConnector) Events() <-chan txnsync.Event {
 	return tsnc.eventsCh
+}
+
+func (tsnc *transactionSyncNodeConnector) ProposalFilterCh() <-chan []byte {
+	return tsnc.proposalFilterCh
 }
 
 // GetCurrentRoundSettings is called when the txsync is starting up, proving
@@ -222,6 +239,8 @@ func (tsnc *transactionSyncNodeConnector) start() {
 		{Tag: protocol.Txn2Tag, MessageHandler: tsnc},
 	}
 	tsnc.node.net.RegisterHandlers(handlers)
+	tsnc.ctx, tsnc.cancelCtx = context.WithCancel(context.Background())
+	go tsnc.handleProposalLoop()
 }
 
 func (tsnc *transactionSyncNodeConnector) Handle(raw network.IncomingMessage) network.OutgoingMessage {
@@ -253,6 +272,7 @@ func (tsnc *transactionSyncNodeConnector) Handle(raw network.IncomingMessage) ne
 
 func (tsnc *transactionSyncNodeConnector) stop() {
 	tsnc.txHandler.Stop()
+	tsnc.cancelCtx()
 }
 
 func (tsnc *transactionSyncNodeConnector) IncomingTransactionGroups(peer *txnsync.Peer, messageSeq uint64, txGroups []pooldata.SignedTxGroup) (transactionPoolSize int) {
@@ -288,63 +308,79 @@ func (tsnc *transactionSyncNodeConnector) RelayProposal(proposalBytes []byte, tx
 	tsnc.eventsCh <- txnsync.MakeBroadcastProposalRequestEvent(protocol.Encode(&data), txGroups)
 }
 
+func (tsnc *transactionSyncNodeConnector) handleProposalLoop() {
+	for {
+		select {
+		case proposalRequest := <-tsnc.proposalMsgCh:
+			proposalDataBytes := proposalRequest.proposalBytes
+			txGroups := proposalRequest.txGroups
+			peer := proposalRequest.peer
+			var data proposalData
+			var pc *proposalCache
+			protocol.Decode(proposalDataBytes, &data)
+
+			if proposalDataBytes != nil {
+				pc = &proposalCache{
+					proposalData:   data,
+					txGroupIDIndex: make(map[transactions.Txid]int, len(data.TxGroupIds)),
+					txGroups:       make([]pooldata.SignedTxGroup, len(data.TxGroupIds)),
+				}
+				tsnc.node.net.SetPeerData(peer.GetNetworkPeer(), "proposalCache", pc)
+				for i, txid := range pc.TxGroupIds {
+					pc.txGroupIDIndex[txid] = i
+				}
+				// attempt to fill receivedTxns with txpool
+				pc.numTxGroupsReceived = tsnc.node.transactionPool.FindTxGroups(pc.TxGroupIds, pc.txGroups)
+			} else { // fetch proposalCache from peerData
+				pc, _ = tsnc.node.net.GetPeerData(peer.GetNetworkPeer(), "proposalCache").(*proposalCache)
+				if pc.ProposalBytes == nil { // no actual proposal to be filling
+					continue
+				}
+			}
+
+			for _, txGroup := range txGroups {
+				if index, found := pc.txGroupIDIndex[txGroup.Transactions.ID()]; found && pc.txGroups[index].Transactions == nil {
+					pc.txGroups[index] = txGroup
+					pc.numTxGroupsReceived++
+				}
+			}
+
+			logging.Base().Info("received part of proposal message")
+
+			if pc.numTxGroupsReceived == len(pc.txGroups) {
+				// TODO send proposal to agreement
+				var flattenedTxns []transactions.SignedTxn
+				for _, txgroup := range pc.txGroups {
+					flattenedTxns = append(flattenedTxns, txgroup.Transactions...)
+				}
+				tsnc.agreementProposalCh <- agreement.TxnSyncProposal{
+					ProposalBytes: pc.ProposalBytes,
+					Txns:          flattenedTxns,
+				}
+
+				completedProposalBytes := protocol.Encode(&pc.proposalData)
+				logging.Base().Info("sent proposal to agreement")
+
+				pc.ProposalBytes = nil
+				pc.txGroups = nil
+				pc.TxGroupIds = nil
+				pc.txGroupIDIndex = nil
+				pc.numTxGroupsReceived = 0
+
+				tsnc.proposalFilterCh <- completedProposalBytes
+			}
+		case <-tsnc.ctx.Done():
+			return
+		}
+	}
+}
+
 // HandleProposalMessage handles the receiving of a proposal message and sends completed
 // proposal messages to the agreement.
 // Returns the proposal data if proposal completed.
-func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataBytes []byte, txGroups []pooldata.SignedTxGroup, peer *txnsync.Peer) []byte {
-	var data proposalData
-	var pc *proposalCache
-	protocol.Decode(proposalDataBytes, &data)
-
-	if proposalDataBytes != nil {
-		pc = &proposalCache{
-			proposalData:   data,
-			txGroupIDIndex: make(map[transactions.Txid]int, len(data.TxGroupIds)),
-			txGroups:       make([]pooldata.SignedTxGroup, len(data.TxGroupIds)),
-		}
-		tsnc.node.net.SetPeerData(peer.GetNetworkPeer(), "proposalCache", pc)
-		for i, txid := range pc.TxGroupIds {
-			pc.txGroupIDIndex[txid] = i
-		}
-		// attempt to fill receivedTxns with txpool
-		pc.numTxGroupsReceived = tsnc.node.transactionPool.FindTxGroups(pc.TxGroupIds, pc.txGroups)
-	} else { // fetch proposalCache from peerData
-		pc, _ = tsnc.node.net.GetPeerData(peer.GetNetworkPeer(), "proposalCache").(*proposalCache)
-		if pc.ProposalBytes == nil { // no actual proposal to be filling
-			return nil
-		}
+func (tsnc *transactionSyncNodeConnector) HandleProposalMessage(proposalDataBytes []byte, txGroups []pooldata.SignedTxGroup, peer *txnsync.Peer) {
+	if len(tsnc.proposalMsgCh) == cap(tsnc.proposalMsgCh) {
+		logging.Base().Info("proposalmsgch full")
 	}
-
-	for _, txGroup := range txGroups {
-		if index, found := pc.txGroupIDIndex[txGroup.Transactions.ID()]; found && pc.txGroups[index].Transactions == nil {
-			pc.txGroups[index] = txGroup
-			pc.numTxGroupsReceived++
-		}
-	}
-
-	logging.Base().Info("received part of proposal message")
-
-	if pc.numTxGroupsReceived == len(pc.txGroups) {
-		// TODO send proposal to agreement
-		var flattenedTxns []transactions.SignedTxn
-		for _, txgroup := range pc.txGroups {
-			flattenedTxns = append(flattenedTxns, txgroup.Transactions...)
-		}
-		tsnc.proposalCh <- agreement.TxnSyncProposal{
-			ProposalBytes: pc.ProposalBytes,
-			Txns:          flattenedTxns,
-		}
-
-		completedProposalBytes := protocol.Encode(&pc.proposalData)
-		logging.Base().Info("sent proposal to agreement")
-
-		pc.ProposalBytes = nil
-		pc.txGroups = nil
-		pc.TxGroupIds = nil
-		pc.txGroupIDIndex = nil
-		pc.numTxGroupsReceived = 0
-
-		return completedProposalBytes
-	}
-	return nil
+	tsnc.proposalMsgCh <- incomingProposalRequest{proposalBytes: proposalDataBytes, txGroups: txGroups, peer: peer}
 }

@@ -75,6 +75,7 @@ type networkPeerAddress interface {
 // NodeConnector is used by the transaction sync for communicating with components external to the txnsync package.
 type NodeConnector interface {
 	Events() <-chan Event
+	ProposalFilterCh() <-chan []byte
 	GetCurrentRoundSettings() RoundSettings // return the current round settings from the node
 	Clock() timers.WallClock
 	Random(uint64) uint64
@@ -98,7 +99,7 @@ type NodeConnector interface {
 	// to the transaction pool.
 	IncomingTransactionGroups(peer *Peer, messageSeq uint64, txGroups []pooldata.SignedTxGroup) (transactionPoolSize int)
 	NotifyMonitor() chan struct{}
-	HandleProposalMessage(proposalDataBytes []byte, txGroups []pooldata.SignedTxGroup, peer *Peer) []byte
+	HandleProposalMessage(proposalDataBytes []byte, txGroups []pooldata.SignedTxGroup, peer *Peer)
 }
 
 // MakeTransactionPoolChangeEvent creates an event for when a txn pool size has changed.

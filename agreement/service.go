@@ -162,19 +162,14 @@ func (s *Service) Shutdown() {
 // demuxLoop repeatedly executes pending actions and then requests the next event from the Service.demux.
 func (s *Service) demuxLoop(ctx context.Context, input chan<- externalEvent, output <-chan []action, ready <-chan externalDemuxSignals) {
 	for a := range output {
-		logging.Base().Infof("received action: %v", len(a))
 		s.do(ctx, a)
 		extSignals := <-ready
-		logging.Base().Infof("ready to demux")
 		e, ok := s.demux.next(s, extSignals.Deadline, extSignals.FastRecoveryDeadline, extSignals.CurrentRound)
-		logging.Base().Infof("demux event: %v, %v", e.t(), ok)
 		if !ok {
 			close(input)
-			logging.Base().Warnf("shutting down demuxLoop")
 			break
 		}
 		input <- e
-		logging.Base().Info("event went through")
 	}
 	s.demux.quit()
 	s.loopback.Quit()

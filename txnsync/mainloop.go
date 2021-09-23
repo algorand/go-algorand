@@ -123,6 +123,7 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 	profNextOffset := s.profiler.getElement(profElementNextOffset)
 
 	externalEvents := s.node.Events()
+	proposalFilterCh := s.node.ProposalFilterCh()
 	var nextPeerStateCh <-chan time.Time
 	for {
 		nextPeerStateTime := s.scheduler.nextDuration()
@@ -195,6 +196,10 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			//}
 			profIncomingMsg.end()
 			continue
+		case proposalFilter := <-proposalFilterCh:
+			logging.Base().Info("proposalFilter")
+			peers := s.getPeers()
+			s.broadcastProposalFilter(crypto.Hash(proposalFilter), peers)
 		case <-s.nextOffsetRollingCh:
 			profNextOffset.start()
 			s.rollOffsets()
@@ -260,6 +265,10 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			//	}
 			//}
 			profIncomingMsg.end()
+		case proposalFilter := <-proposalFilterCh:
+			logging.Base().Info("proposalFilter")
+			peers := s.getPeers()
+			s.broadcastProposalFilter(crypto.Hash(proposalFilter), peers)
 		case <-s.nextOffsetRollingCh:
 			profIdle.end()
 			profNextOffset.start()

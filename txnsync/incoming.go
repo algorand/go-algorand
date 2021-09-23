@@ -19,7 +19,6 @@ package txnsync
 import (
 	"errors"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/logging"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -230,7 +229,7 @@ incomingMessageLoop:
 		// increase the message sequence number, since we're processing this message.
 		peer.nextReceivedMessageSeq++
 
-		// skip txnsync messages with proposalData for now
+		// handle proposal txnsync messages
 		if !incomingMsg.message.RelayedProposal.MsgIsZero() {
 			if !incomingMsg.message.RelayedProposal.ExcludeProposal.MsgIsZero() {
 				// add filtered proposal to proposalFilterCache
@@ -242,14 +241,14 @@ incomingMessageLoop:
 					peer.proposalFilterCache.insert(hash)
 				}
 				// send proposal or proposal txns to handler
-				logging.Base().Info("HandleProposalMessage start")
-				completedProposalBytes := s.node.HandleProposalMessage(incomingMsg.message.RelayedProposal.RawBytes, incomingMsg.transactionGroups, peer)
-				if completedProposalBytes != nil {
-					peers := s.getPeers()
-					logging.Base().Info("sending proposal filter")
-					s.broadcastProposalFilter(crypto.Hash(completedProposalBytes), peers)
-				}
-				logging.Base().Info("HandleProposalMessage done")
+				//logging.Base().Info("HandleProposalMessage start")
+				s.node.HandleProposalMessage(incomingMsg.message.RelayedProposal.RawBytes, incomingMsg.transactionGroups, peer)
+				//if completedProposalBytes != nil {
+				//	peers := s.getPeers()
+				//	logging.Base().Info("sending proposal filter")
+				//	s.broadcastProposalFilter(crypto.Hash(completedProposalBytes), peers)
+				//}
+				//logging.Base().Info("HandleProposalMessage done")
 			}
 			peer.updateRequestParams(incomingMsg.message.UpdatedRequestParams.Modulator, incomingMsg.message.UpdatedRequestParams.Offset)
 			peer.updateIncomingMessageTiming(incomingMsg.message.MsgSync, s.round, s.clock.Since(), incomingMsg.encodedSize)
