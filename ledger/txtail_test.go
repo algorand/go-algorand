@@ -121,6 +121,7 @@ func TestTxTailBlockTimeStamp(t *testing.T) {
 	// Try to push 1002 rounds into the txtail
 	prepareTxTail(&tail, lastRound, lookback, leasevalidity, txvalidity)
 
+	require.Equal(t, proto.MaxTxnLife+1, uint64(len(tail.recent)))
 	// Test timestamp retrieval
 	for rnd := basics.Round(1); rnd < lastRound; rnd++ {
 		if rnd == basics.Round(1) {

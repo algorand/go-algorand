@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -1745,6 +1746,11 @@ func TestAppInsMinBalance(t *testing.T) {
 	assert.Len(t, vb.delta.ModifiedAppLocalStates, 50)
 }
 
+// TestFistValidTime verifies content of blockdb and txTail
+// by adding some blocks into the ledger, checking counts and calling the app
+// with txn FirstValidTime command.
+// In order to make deterministic, need to disable account updates commit syncer,
+// otherwise it might require blockdb to store older blocks than txTail
 func TestFistValidTime(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1774,11 +1780,65 @@ int 1
 	l.archival = false
 	defer l.Close()
 
+	// force commitSyncer to exit
+	// the test calls commitRound directly and does not need commitSyncer
+	// this is needed in order to prevent l.accts tracker from forcing the blockq storing older blocks
+	l.accts.ctxCancel()
+
+	// wait commitSyncer to exit
+	<-l.accts.commitSyncerClosed
+
+	// purge au committing events triggered by committedUpTo
+	ctx, cf := context.WithCancel(context.Background())
+	defer cf()
+	go func(ctx context.Context) {
+		for {
+			select {
+			case <-l.accts.committedOffset:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}(ctx)
+
+	// commitAcct commits accountdb and supposed to be called at each new block
+	commitAcct := func(dbRound basics.Round) {
+		l.accts.accountsWriting.Add(1)
+		l.accts.commitRound(1, dbRound, 0)
+		l.accts.accountsWriting.Wait()
+	}
+
+	waitForEarliestRound := func(target basics.Round) {
+		ctx, cf := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cf()
+
+		var rnd basics.Round
+		for rnd != basics.Round(target) {
+			err = l.blockDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+				rnd, err = blockEarliest(tx)
+				return err
+			})
+			require.NoError(t, err)
+			time.Sleep(100 * time.Microsecond)
+
+			select {
+			case <-ctx.Done():
+				require.FailNow(t, fmt.Sprintf("waitRound timeout for round %d, earliest %d", target, rnd))
+				return
+			default:
+			}
+		}
+	}
+
 	// add maxTxnLife-1 blocks in order to preserve block 0
 	for i := 1; i <= maxTxnLife-1; i++ {
 		eval := l.nextBlock(t)
 		l.endBlock(t, eval)
+		commitAcct(basics.Round(i - 1))
 	}
+
+	l.blockQ.waitCommit(basics.Round(maxTxnLife - 1))
+	waitForEarliestRound(0)
 
 	// check all blocks including genesis one can be fetched
 	for i := 0; i <= maxTxnLife-1; i++ {
@@ -1786,6 +1846,8 @@ int 1
 		require.NoError(t, err)
 		require.Greater(t, hdr.TimeStamp, int64(0))
 	}
+	// check txTail has the same amount of entries
+	require.Equal(t, maxTxnLife, len(l.txTail.recent))
 
 	nextRound := maxTxnLife
 
@@ -1811,13 +1873,13 @@ int 1
 	eval := l.nextBlock(t)
 	eval.stxn(t, &stxn)
 	l.endBlock(t, eval)
+	commitAcct(basics.Round(nextRound - 1))
 
 	// wait maxTxnLife round to be committed
 	// at this moment db has blocks 0...maxTxnLife
-	// technically txTail and block db have maxTxnLife+1 blocks
-	// but the deletion does not happen because
-	// the condition `r+maxlife < rnd` is not met for r=0 and rnd=maxlife
+	// txTail and block db have maxTxnLife+1 blocks as the should
 	l.blockQ.waitCommit(basics.Round(nextRound))
+	waitForEarliestRound(0)
 
 	// check round 0 is out of maxTxnLife range and txn fails
 	nextRound++
@@ -1831,9 +1893,11 @@ int 1
 	stxn.Txn.LastValid = basics.Round(nextRound)
 	eval.stxn(t, &stxn)
 	l.endBlock(t, eval)
+	commitAcct(basics.Round(nextRound - 1))
 
-	// now block 0 will be deleted but FirstValid = 1 is not valid anymore
+	// now block 0 will be deleted and FirstValid = 1 is not valid anymore
 	l.blockQ.waitCommit(basics.Round(nextRound))
+	waitForEarliestRound(1)
 
 	nextRound++
 	stxn.Txn.FirstValid = 1
@@ -1841,4 +1905,44 @@ int 1
 	eval = l.nextBlock(t)
 	eval.stxn(t, &stxn, "transaction window size excessive (1--12)")
 	l.endBlock(t, eval)
+	commitAcct(basics.Round(nextRound - 1))
+
+	// advance to round maxTxnLife * 2 = 20
+	// both txTail and blockdb must have entries from maxTxnLife to maxTxnLife * 2
+	nextRound++
+	for nextRound <= maxTxnLife*2 {
+		eval := l.nextBlock(t)
+		l.endBlock(t, eval)
+		commitAcct(basics.Round(nextRound))
+		nextRound++
+	}
+
+	l.blockQ.waitCommit(basics.Round(maxTxnLife * 2))
+	waitForEarliestRound(basics.Round(maxTxnLife))
+
+	// check all blocks including genesis one can be fetched
+	for i := maxTxnLife; i <= maxTxnLife*2; i++ {
+		hdr, err := l.BlockHdr(basics.Round(i))
+		require.NoError(t, err)
+		require.Greater(t, hdr.TimeStamp, int64(0))
+	}
+
+	require.Equal(t, maxTxnLife+1, len(l.txTail.recent))
+	require.Contains(t, l.txTail.recent, basics.Round(maxTxnLife))
+	require.Contains(t, l.txTail.recent, basics.Round(maxTxnLife*2))
+
+	// check maxTxnLife - 1 cannot be accessed
+	stxn.Txn.FirstValid = basics.Round(maxTxnLife)
+	stxn.Txn.LastValid = basics.Round(nextRound)
+	eval = l.nextBlock(t)
+	eval.stxn(t, &stxn, "transaction window size excessive (10--21)")
+
+	// check maxTxnLife successfully accessed
+	stxn.Txn.FirstValid = basics.Round(maxTxnLife + 1)
+	stxn.Txn.LastValid = basics.Round(nextRound)
+	eval = l.nextBlock(t)
+	eval.stxn(t, &stxn)
+
+	l.endBlock(t, eval)
+	commitAcct(basics.Round(nextRound))
 }
