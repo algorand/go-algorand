@@ -61,6 +61,7 @@ type mockCowForLogicLedger struct {
 	brs    map[basics.Address]basics.AccountData
 	stores map[storeLocator]basics.TealKeyValue
 	tcs    map[int]basics.CreatableIndex
+	txc    uint64
 }
 
 func (c *mockCowForLogicLedger) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
@@ -124,6 +125,14 @@ func (c *mockCowForLogicLedger) prevTimestamp() int64 {
 func (c *mockCowForLogicLedger) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
 	_, found := c.stores[storeLocator{addr, aidx, global}]
 	return found, nil
+}
+
+func (c *mockCowForLogicLedger) incTxnCount() {
+	c.txc++
+}
+
+func (c *mockCowForLogicLedger) txnCounter() uint64 {
+	return c.txc
 }
 
 func newCowMock(creatables []modsData) *mockCowForLogicLedger {
@@ -483,7 +492,7 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{})
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
 	a.NoError(err)
 
 	appIdx := basics.AppIndex(1) // first tnx => idx = 1
@@ -702,7 +711,7 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{})
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
 	a.NoError(err)
 
 	appIdx := basics.AppIndex(1) // first tnx => idx = 1
@@ -957,7 +966,7 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{})
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
 	a.NoError(err)
 
 	appIdx := basics.AppIndex(1) // first tnx => idx = 1
@@ -1116,7 +1125,7 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{})
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
 	a.NoError(err)
 
 	appIdx := basics.AppIndex(1) // first tnx => idx = 1

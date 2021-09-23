@@ -38,7 +38,7 @@ func protoFromString(protoString string) (name string, proto config.ConsensusPar
 		var ok bool
 		proto, ok = config.Consensus[protocol.ConsensusVersion(protoString)]
 		if !ok {
-			err = fmt.Errorf("Unknown protocol %s", protoString)
+			err = fmt.Errorf("unknown protocol %s", protoString)
 			return
 		}
 		name = protoString
@@ -369,7 +369,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 				source := string(data)
 				ops, err := logic.AssembleString(source)
 				if ops.Version > r.proto.LogicSigVersion {
-					return fmt.Errorf("Program version (%d) is beyond the maximum supported protocol version (%d)", ops.Version, r.proto.LogicSigVersion)
+					return fmt.Errorf("program version (%d) is beyond the maximum supported protocol version (%d)", ops.Version, r.proto.LogicSigVersion)
 				}
 				if err != nil {
 					errorLines := ""
@@ -534,6 +534,7 @@ func (r *LocalRunner) RunAll() error {
 			TxnGroup:        r.txnGroup,
 			GroupIndex:      run.groupIndex,
 			PastSideEffects: run.pastSideEffects,
+			Specials:        &transactions.SpecialAddresses{},
 		}
 
 		run.result.pass, run.result.err = run.eval(ep)
@@ -562,6 +563,7 @@ func (r *LocalRunner) Run() (bool, error) {
 		TxnGroup:        r.txnGroup,
 		GroupIndex:      run.groupIndex,
 		PastSideEffects: run.pastSideEffects,
+		Specials:        &transactions.SpecialAddresses{},
 	}
 
 	// Workaround for Go's nil/empty interfaces nil check after nil assignment, i.e.
