@@ -34,7 +34,7 @@ type sentFilterStat struct {
 // There should be at most one entry per (Modulator,Offset)
 type sentFilters []sentFilterStat
 
-const maxSentFilterSet = 100
+const maxSentFilterSet = 10
 
 func (sf *sentFilters) setSentFilter(filter bloomFilter, round basics.Round) {
 	encodingParams := filter.encoded.EncodingParams
@@ -50,8 +50,24 @@ func (sf *sentFilters) setSentFilter(filter bloomFilter, round basics.Round) {
 		lastCounter:    filter.containedTxnsRange.lastCounter,
 		round:          round,
 	}
-	// TODO: enforce limit (but as built there will probably be less than 4 entries per peer)
 	*sf = append(*sf, nsf)
+	// trim oldest content if we're too long
+	for len(*sf) > maxSentFilterSet {
+		oldestRound := round
+		for _, sfs := range *sf {
+			if sfs.round < oldestRound {
+				oldestRound = sfs.round
+			}
+		}
+		for i, sfs := range *sf {
+			if sfs.round == oldestRound {
+				last := len(*sf) - 1
+				(*sf)[i] = (*sf)[last]
+				*sf = (*sf)[:last]
+				break
+			}
+		}
+	}
 }
 
 func (sf *sentFilters) nextFilterGroup(encodingParams requestParams) (lastCounter uint64, round basics.Round) {
