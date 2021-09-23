@@ -387,13 +387,13 @@ func TestLatestSigsFromThisNode(t *testing.T) {
 
 	var latestSigs map[basics.Address]basics.Round
 	var err error
-	for x := 0; x < 100; x++ {
+	for x := 0; x < 10; x++ {
 		latestSigs, err = w.LatestSigsFromThisNode()
 		require.NoError(t, err)
-		if len(latestSigs) == 10 {
+		if len(latestSigs) == len(keys) {
 			break
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(256 * time.Millisecond)
 	}
 	require.Equal(t, len(keys), len(latestSigs))
 	for _, k := range keys {
@@ -406,13 +406,13 @@ func TestLatestSigsFromThisNode(t *testing.T) {
 	s.mu.Unlock()
 
 	// Wait for the builder to discard the signatures.
-	for x := 0; x < 100; x++ {
+	for x := 0; x < 10; x++ {
 		latestSigs, err = w.LatestSigsFromThisNode()
 		require.NoError(t, err)
 		if len(latestSigs) == 0 {
 			break
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(256 * time.Millisecond)
 	}
 	require.Equal(t, 0, len(latestSigs))
 }
