@@ -152,7 +152,7 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 		// correct sent bloom filter, regardless of the message sending timing. If and when we
 		// generate the next message, we need to ensure that we're aware of this bloom filter, since
 		// it would affect whether we re-generate another bloom filter or not.
-		peer.updateSentBoomFilter(assembledBloomFilter, msgEncoder.messageData.message.UpdatedRequestParams, s.round)
+		peer.updateSentBoomFilter(assembledBloomFilter, s.round)
 
 		scheduleOffset, ops := peer.getNextScheduleOffset(s.isRelay, s.lastBeta, isPartialMessage, currentTime)
 		if (ops & peerOpsSetInterruptible) == peerOpsSetInterruptible {

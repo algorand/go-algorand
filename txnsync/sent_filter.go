@@ -36,7 +36,8 @@ type sentFilters []sentFilterStat
 
 const maxSentFilterSet = 100
 
-func (sf *sentFilters) setSentFilter(filter bloomFilter, encodingParams requestParams, round basics.Round) {
+func (sf *sentFilters) setSentFilter(filter bloomFilter, round basics.Round) {
+	encodingParams := filter.encoded.EncodingParams
 	for i, sfs := range *sf {
 		if sfs.EncodingParams == encodingParams {
 			(*sf)[i].lastCounter = filter.containedTxnsRange.lastCounter
@@ -49,7 +50,7 @@ func (sf *sentFilters) setSentFilter(filter bloomFilter, encodingParams requestP
 		lastCounter:    filter.containedTxnsRange.lastCounter,
 		round:          round,
 	}
-	// TODO: enforce limit
+	// TODO: enforce limit (but as built there will probably be less than 4 entries per peer)
 	*sf = append(*sf, nsf)
 }
 

@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -261,10 +262,12 @@ func TestGetNextScheduleOffset(t *testing.T) {
 		},
 	}
 	config := config.GetDefaultLocal()
+	tlog := logging.TestingLog(t)
+	log := wrapLogger(tlog, &config)
 
 	for i, test := range tests {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			p := makePeer(nil, true, true, &config)
+			p := makePeer(nil, true, true, &config, log)
 			if test.fxn != nil {
 				test.fxn(p)
 			}
@@ -391,9 +394,11 @@ func TestGetMessageConstructionOps(t *testing.T) {
 		},
 	}
 	config := config.GetDefaultLocal()
+	tlog := logging.TestingLog(t)
+	log := wrapLogger(tlog, &config)
 	for i, test := range tests {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			p := makePeer(nil, true, true, &config)
+			p := makePeer(nil, true, true, &config, log)
 			if test.fxn != nil {
 				test.fxn(p)
 			}
@@ -518,9 +523,11 @@ func TestAdvancePeerState(t *testing.T) {
 		},
 	}
 	config := config.GetDefaultLocal()
+	tlog := logging.TestingLog(t)
+	log := wrapLogger(tlog, &config)
 	for i, test := range tests {
 		t.Run(string(rune(i)), func(t *testing.T) {
-			p := makePeer(nil, true, true, &config)
+			p := makePeer(nil, true, true, &config, log)
 			if test.fxn != nil {
 				test.fxn(p)
 			}
@@ -545,7 +552,9 @@ func TestUpdateIncomingMessageTiming(t *testing.T) {
 
 	a := require.New(t)
 	config := config.GetDefaultLocal()
-	p := makePeer(nil, true, true, &config)
+	tlog := logging.TestingLog(t)
+	log := wrapLogger(tlog, &config)
+	p := makePeer(nil, true, true, &config, log)
 
 	currentRound := basics.Round(1)
 	currentTime := time.Millisecond * 123
@@ -613,7 +622,9 @@ func TestUpdateIncomingTransactionGroups(t *testing.T) {
 	}
 
 	config := config.GetDefaultLocal()
-	p := makePeer(nil, true, true, &config)
+	tlog := logging.TestingLog(t)
+	log := wrapLogger(tlog, &config)
+	p := makePeer(nil, true, true, &config, log)
 
 	p.recentSentTransactions.reset()
 
@@ -630,7 +641,9 @@ func TestUpdateRequestParams(t *testing.T) {
 
 	a := require.New(t)
 	config := config.GetDefaultLocal()
-	p := makePeer(nil, true, true, &config)
+	tlog := logging.TestingLog(t)
+	log := wrapLogger(tlog, &config)
+	p := makePeer(nil, true, true, &config, log)
 	oldModulator := p.requestedTransactionsModulator
 	oldOffset := p.requestedTransactionsOffset
 
@@ -644,14 +657,32 @@ func TestUpdateRequestParams(t *testing.T) {
 
 }
 
+// bloom.GenericFilter
+type nopFilter struct{}
+
+func (nf *nopFilter) Set(x []byte) {}
+func (nf *nopFilter) Test(x []byte) bool {
+	return false
+}
+func (nf *nopFilter) NumEntries() int {
+	return 0
+}
+func (nf *nopFilter) MarshalBinary() ([]byte, error) {
+	return nil, nil
+}
+func (nf *nopFilter) UnmarshalBinary(data []byte) error {
+	return nil
+}
+
 // TestAddIncomingBloomFilter tests adding an incoming bloom filter
 func TestAddIncomingBloomFilter(t *testing.T) {
-	t.Skip("TODO: behavior has changed, make test sane again")
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
 	config := config.GetDefaultLocal()
-	p := makePeer(nil, true, true, &config)
+	tlog := logging.TestingLog(t)
+	log := wrapLogger(tlog, &config)
+	p := makePeer(nil, true, true, &config, log)
 
 	for i := 0; i < 2*maxIncomingBloomFilterHistory; i++ {
 		bf := &testableBloomFilter{
@@ -660,12 +691,13 @@ func TestAddIncomingBloomFilter(t *testing.T) {
 				Offset:    byte(i),
 				Modulator: 0,
 			},
-			filter: nil,
+			filter: &nopFilter{},
 		}
 		p.addIncomingBloomFilter(basics.Round(i), bf, basics.Round(i), 999999)
 	}
 
-	a.Equal(maxIncomingBloomFilterHistory, len(p.recentIncomingBloomFilters))
+	// filters from current round, -1, and -2 are kept. => 3
+	a.Equal(3, len(p.recentIncomingBloomFilters))
 
 	for i := 0; i < 2*maxIncomingBloomFilterHistory; i++ {
 		bf := &testableBloomFilter{
@@ -674,12 +706,12 @@ func TestAddIncomingBloomFilter(t *testing.T) {
 				Offset:    byte(i),
 				Modulator: 0,
 			},
-			filter: nil,
+			filter: &nopFilter{},
 		}
 		p.addIncomingBloomFilter(basics.Round(i), bf, 0, 999999)
 	}
 
-	a.Equal(len(p.recentIncomingBloomFilters), maxIncomingBloomFilterHistory)
+	a.Equal(maxIncomingBloomFilterHistory, len(p.recentIncomingBloomFilters))
 }
 
 // TestSelectPendingTransactions tests selectPendingTransactions
@@ -710,9 +742,11 @@ func TestSelectPendingTransactions(t *testing.T) {
 		{"Case 3", func(p *Peer) { p.lastRound = 200; p.messageSeriesPendingTransactions = nil }, args{[]pooldata.SignedTxGroup{}, time.Millisecond, 100, 0}, results{nil, nil, false}},
 	}
 	config := config.GetDefaultLocal()
+	tlog := logging.TestingLog(t)
+	log := wrapLogger(tlog, &config)
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			p := makePeer(nil, true, true, &config)
+			p := makePeer(nil, true, true, &config, log)
 			if test.fxn != nil {
 				test.fxn(p)
 			}
@@ -777,7 +811,9 @@ func TestGetAcceptedMessages(t *testing.T) {
 
 	a := require.New(t)
 	config := config.GetDefaultLocal()
-	p := makePeer(nil, true, true, &config)
+	tlog := logging.TestingLog(t)
+	log := wrapLogger(tlog, &config)
+	p := makePeer(nil, true, true, &config, log)
 
 	var testList []uint64
 	chPtr := &p.transactionPoolAckCh
@@ -800,7 +836,9 @@ func TestDequeuePendingTransactionPoolAckMessages(t *testing.T) {
 
 	a := require.New(t)
 	config := config.GetDefaultLocal()
-	p := makePeer(nil, true, true, &config)
+	tlog := logging.TestingLog(t)
+	log := wrapLogger(tlog, &config)
+	p := makePeer(nil, true, true, &config, log)
 
 	ch := p.transactionPoolAckCh
 	var testList []uint64
@@ -843,7 +881,9 @@ func TestUpdateMessageSent(t *testing.T) {
 
 	a := require.New(t)
 	config := config.GetDefaultLocal()
-	p := makePeer(nil, true, true, &config)
+	tlog := logging.TestingLog(t)
+	log := wrapLogger(tlog, &config)
+	p := makePeer(nil, true, true, &config, log)
 
 	txMsg := &transactionBlockMessage{
 		Version: txnBlockMessageVersion,
@@ -866,7 +906,7 @@ func TestUpdateMessageSent(t *testing.T) {
 	a.Equal(p.lastSentMessageTimestamp, timestamp)
 	a.Equal(p.lastSentMessageSize, messageSize)
 
-	p.updateSentBoomFilter(bFilter, requestParams{}, 0)
+	p.updateSentBoomFilter(bFilter, 0)
 
 	a.Equal(p.lastSentBloomFilter, bFilter)
 
@@ -878,10 +918,12 @@ func TestIncomingPeersOnly(t *testing.T) {
 
 	a := require.New(t)
 	config := config.GetDefaultLocal()
-	p1 := makePeer(nil, true, true, &config)
-	p2 := makePeer(nil, true, false, &config)
-	p3 := makePeer(nil, false, true, &config)
-	p4 := makePeer(nil, false, false, &config)
+	tlog := logging.TestingLog(t)
+	log := wrapLogger(tlog, &config)
+	p1 := makePeer(nil, true, true, &config, log)
+	p2 := makePeer(nil, true, false, &config, log)
+	p3 := makePeer(nil, false, true, &config, log)
+	p4 := makePeer(nil, false, false, &config, log)
 
 	peers := []*Peer{p1, p2, p3, p4}
 
@@ -898,7 +940,9 @@ func TestLocalRequestParams(t *testing.T) {
 
 	a := require.New(t)
 	config := config.GetDefaultLocal()
-	p := makePeer(nil, true, true, &config)
+	tlog := logging.TestingLog(t)
+	log := wrapLogger(tlog, &config)
+	p := makePeer(nil, true, true, &config, log)
 
 	p.setLocalRequestParams(256, 256)
 	offset, modulator := p.getLocalRequestParams()
@@ -919,7 +963,9 @@ func TestSimpleGetters(t *testing.T) {
 	a := require.New(t)
 	var sentinelInterface interface{}
 	config := config.GetDefaultLocal()
-	p := makePeer(sentinelInterface, true, true, &config)
+	tlog := logging.TestingLog(t)
+	log := wrapLogger(tlog, &config)
+	p := makePeer(sentinelInterface, true, true, &config, log)
 
 	a.Equal(p.GetNetworkPeer(), sentinelInterface)
 	a.Equal(p.GetTransactionPoolAckChannel(), p.transactionPoolAckCh)
@@ -933,7 +979,9 @@ func TestMakePeer(t *testing.T) {
 
 	var sentinelInterface interface{}
 	config := config.GetDefaultLocal()
-	p1 := makePeer(sentinelInterface, true, true, &config)
+	tlog := logging.TestingLog(t)
+	log := wrapLogger(tlog, &config)
+	p1 := makePeer(sentinelInterface, true, true, &config, log)
 
 	a.NotNil(p1)
 	a.Equal(p1.networkPeer, sentinelInterface)
@@ -943,7 +991,7 @@ func TestMakePeer(t *testing.T) {
 	a.Equal(p1.dataExchangeRate, uint64(defaultRelayToRelayDataExchangeRate))
 
 	// Check that we have different values if the local node relay is false
-	p2 := makePeer(sentinelInterface, true, false, &config)
+	p2 := makePeer(sentinelInterface, true, false, &config, log)
 
 	a.NotNil(p2)
 	a.Equal(p1.networkPeer, sentinelInterface)
