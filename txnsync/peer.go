@@ -473,10 +473,10 @@ func (p *Peer) updateMessageSent(txMsg *transactionBlockMessage, selectedTxnIDs 
 }
 
 // update the peer's lastSentBloomFilter.
-func (p *Peer) updateSentBoomFilter(filter bloomFilter, encodingParams requestParams) {
+func (p *Peer) updateSentBoomFilter(filter bloomFilter, encodingParams requestParams, round basics.Round) {
 	if filter.encodedLength > 0 {
 		p.lastSentBloomFilter = filter
-		p.sentFilterParams.setSentFilter(filter, encodingParams)
+		p.sentFilterParams.setSentFilter(filter, encodingParams, round)
 	}
 }
 

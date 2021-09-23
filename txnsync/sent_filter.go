@@ -16,12 +16,18 @@
 
 package txnsync
 
+import (
+	"github.com/algorand/go-algorand/data/basics"
+)
+
 type sentFilterStat struct {
 	// .Modulator .Offset
 	EncodingParams requestParams
 
 	// lastCounter is the group counter of the last txn group included in a sent filter
 	lastCounter uint64
+
+	round basics.Round
 }
 
 // sentFilters is the set of filter stats for one peer to another peer.
@@ -30,26 +36,28 @@ type sentFilters []sentFilterStat
 
 const maxSentFilterSet = 100
 
-func (sf *sentFilters) setSentFilter(filter bloomFilter, encodingParams requestParams) {
+func (sf *sentFilters) setSentFilter(filter bloomFilter, encodingParams requestParams, round basics.Round) {
 	for i, sfs := range *sf {
 		if sfs.EncodingParams == encodingParams {
 			(*sf)[i].lastCounter = filter.containedTxnsRange.lastCounter
+			(*sf)[i].round = round
 			return
 		}
 	}
 	nsf := sentFilterStat{
 		EncodingParams: encodingParams,
 		lastCounter:    filter.containedTxnsRange.lastCounter,
+		round:          round,
 	}
 	// TODO: enforce limit
 	*sf = append(*sf, nsf)
 }
 
-func (sf *sentFilters) nextFilterGroup(encodingParams requestParams) (lastCounter uint64) {
+func (sf *sentFilters) nextFilterGroup(encodingParams requestParams) (lastCounter uint64, round basics.Round) {
 	for _, sfs := range *sf {
 		if sfs.EncodingParams == encodingParams {
-			return sfs.lastCounter + 1
+			return sfs.lastCounter + 1, sfs.round
 		}
 	}
-	return 0 // include everything since the start
+	return 0, 0 // include everything since the start
 }

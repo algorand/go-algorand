@@ -866,7 +866,7 @@ func TestUpdateMessageSent(t *testing.T) {
 	a.Equal(p.lastSentMessageTimestamp, timestamp)
 	a.Equal(p.lastSentMessageSize, messageSize)
 
-	p.updateSentBoomFilter(bFilter, requestParams{})
+	p.updateSentBoomFilter(bFilter, requestParams{}, 0)
 
 	a.Equal(p.lastSentBloomFilter, bFilter)
 
