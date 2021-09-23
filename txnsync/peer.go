@@ -534,7 +534,7 @@ func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter *testab
 	// order doesn't matter.
 	pos := 0
 	last := len(p.recentIncomingBloomFilters) - 1
-	oldestRound := currentRound
+	oldestRound := currentRound + 1
 	firstOfOldest := -1
 	for pos <= last {
 		if elemOk(pos) {
@@ -560,6 +560,7 @@ func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter *testab
 		p.recentIncomingBloomFilters[firstOfOldest] = bf
 		return
 	}
+	// This line should be unreachable, but putting in an error log to test that assumption.
 	p.log.Error("addIncomingBloomFilter failed to trim p.recentIncomingBloomFilters (new filter lost)")
 }
 
