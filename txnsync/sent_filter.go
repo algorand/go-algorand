@@ -54,18 +54,18 @@ func (sf *sentFilters) setSentFilter(filter bloomFilter, round basics.Round) {
 	// trim oldest content if we're too long
 	for len(*sf) > maxSentFilterSet {
 		oldestRound := round
-		for _, sfs := range *sf {
+		popCandidate := -1
+		for i, sfs := range *sf {
 			if sfs.round < oldestRound {
 				oldestRound = sfs.round
+				popCandidate = i
 			}
 		}
-		for i, sfs := range *sf {
-			if sfs.round == oldestRound {
-				last := len(*sf) - 1
-				(*sf)[i] = (*sf)[last]
-				*sf = (*sf)[:last]
-				break
-			}
+		if popCandidate >= 0 {
+			last := len(*sf) - 1
+			(*sf)[popCandidate] = (*sf)[last]
+			*sf = (*sf)[:last]
+			break
 		}
 	}
 }

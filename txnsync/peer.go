@@ -535,10 +535,12 @@ func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter *testab
 	pos := 0
 	last := len(p.recentIncomingBloomFilters) - 1
 	oldestRound := currentRound
+	firstOfOldest := -1
 	for pos <= last {
 		if elemOk(pos) {
 			if p.recentIncomingBloomFilters[pos].round < oldestRound {
 				oldestRound = p.recentIncomingBloomFilters[pos].round
+				firstOfOldest = pos
 			}
 			pos++
 			continue
@@ -554,13 +556,11 @@ func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter *testab
 		return
 	}
 	// Too much traffic case: replace the first thing we find of the oldest round
-	for i, ribf := range p.recentIncomingBloomFilters {
-		if ribf.round == oldestRound {
-			p.recentIncomingBloomFilters[i] = bf
-			return
-		}
+	if firstOfOldest >= 0 {
+		p.recentIncomingBloomFilters[firstOfOldest] = bf
+		return
 	}
-	p.log.Error("p.recentIncomingBloomFilters changed out from under addIncomingBloomFilter (new filter lost)")
+	p.log.Error("addIncomingBloomFilter failed to trim p.recentIncomingBloomFilters (new filter lost)")
 }
 
 func (p *Peer) updateRequestParams(modulator, offset byte) {
