@@ -223,9 +223,7 @@ func parseTupleContent(str string) ([]string, error) {
 
 	// str should noe have leading/tailing comma
 	if strings.HasSuffix(str, ",") || strings.HasPrefix(str, ",") {
-		return []string{},
-			fmt.Errorf("parsing error: cannot replace tuple segment back: " +
-				"number of empty placeholders do not match with number of sub-tuples")
+		return []string{}, fmt.Errorf("parsing error: tuple content should not start with comma")
 	}
 
 	// str should not have consecutive commas contained
