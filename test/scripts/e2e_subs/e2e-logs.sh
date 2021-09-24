@@ -29,7 +29,7 @@ TEAL=test/scripts/e2e_subs/tealprogs
 gcmd="goal -w ${WALLET}"
 
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
-EXP=(B C D E F G H I J K L M N O P Q R S T U V W X Y Z [ \\ ] ^ _ \` a b )
+EXP=(B C D E F G H I J K L M N O P Q R S T U V W X Y Z \[ \\ \] ^ _ \` a b )
 
 # app create
 TXID=$(${gcmd} app create --creator "${ACCOUNT}" --approval-prog=${TEAL}/logs.teal --global-byteslices 4 --global-ints 0 --local-byteslices 0 --local-ints 1  --clear-prog=${TEAL}/approve-all.teal | app_txid)
@@ -42,7 +42,7 @@ for log in $(echo "$response" | jq -r '.logs | .[]')
   do
     c=`echo -n "${log}" | base64 --decode`
     [ "$c" = "${EXP[i]}" ]
-    ((i++))
+    i=$((i+1))
   done
 
 # app call
@@ -57,7 +57,7 @@ for log in $(echo "$response" | jq -r '.logs | .[]')
   do
     c=`echo -n "${log}" | base64 --decode`
     [ "$c" = "${EXP[i]}" ]
-    ((i++))
+    i=$((i+1))
   done
 
 date "+${scriptname} OK %Y%m%d_%H%M%S"
