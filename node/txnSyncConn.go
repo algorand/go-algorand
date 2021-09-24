@@ -381,7 +381,6 @@ func (tsnc *transactionSyncNodeConnector) handleProposalLoop() {
 				case tsnc.agreementProposalCh <- agreementProposal:
 					logging.Base().Info("sent proposal to agreement")
 					tsnc.proposalFilterCache.Insert(proposalDataHash)
-					continue
 				default:
 					logging.Base().Info("failed to send proposal to agreement")
 				}
@@ -393,7 +392,6 @@ func (tsnc *transactionSyncNodeConnector) handleProposalLoop() {
 				pc.numTxGroupsReceived = 0
 				select {
 				case tsnc.proposalFilterCh <- proposalDataHash:
-					continue
 				default:
 					logging.Base().Info("failed to enqueue proposal filter")
 				}
