@@ -41,6 +41,9 @@ type indexerLedgerForEval interface {
 	LatestTotals() (ledgercore.AccountTotals, error)
 }
 
+// EvalForIndexerResources contains resources preloaded from the Indexer database.
+// Indexer is able to do the preloading more efficiently than the evaluator loading
+// resources one by one.
 type EvalForIndexerResources struct {
 	// The map value is nil iff the account does not exist.
 	accounts map[basics.Address]*basics.AccountData
