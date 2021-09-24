@@ -224,10 +224,10 @@ IDs="
 $ASSETID \n
 $ASSETID3 \n
 "
-[[ "$(assets "$APPACCT")" = "$IDs" ]] # account has 2 assets
+[[ "$(asset_ids "$APPACCT")" = "$IDs" ]] # account has 2 assets
 appl "close():void" --foreign-asset="$ASSETID" --from="$SMALL"
 appl "close():void" --foreign-asset="$ASSETID3" --from="$SMALL"
-[[ "$(assets "$APPACCT")" = "" ]] # account has no assets
+[[ "$(asset_ids "$APPACCT")" = "" ]] # account has no assets
 
 # app creates asset
 appl "create(uint64):void" --app-arg="int:1000000" --from="$SMALL"
@@ -249,7 +249,7 @@ $ASSETID2 \n
 $ASSETID3 \n
 $APPASSETID
 "
-[[ "$(assets "$SMALL")" = "$IDs" ]] # has new asset
+[[ "$(asset_ids "$SMALL")" = "$IDs" ]] # has new asset
 [[ "$(asset_bal "$SMALL")" = "999100\n1000000\n1000000\n1000" ]] # correct balances
 [ "$(asset_bal "$APPACCT")" = 999000 ] # 1k sent
 
