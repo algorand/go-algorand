@@ -28,12 +28,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
-// FoundAddress is a wrapper for an address and a boolean.
-type FoundAddress struct {
-	Address basics.Address
-	Exists  bool
-}
-
 // A ledger interface that Indexer implements. This is a simplified version of the
 // ledgerForEvaluator interface. Certain functions that the evaluator doesn't use
 // in the trusting mode are excluded, and the present functions only request data
@@ -209,11 +203,10 @@ func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto con
 			fmt.Errorf("EvalForIndexer() err: %w", err)
 	}
 
-	err = eval.finalValidation()
-	if err != nil {
-		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
-			fmt.Errorf("EvalForIndexer() err: %w", err)
-	}
+	// here, in the EvalForIndexer, we don't want to call finalValidation(). This would
+	// skip the calculation of the account totals in the state delta, which is a serious
+	// issue if it were to be used by algod, but it's perfectly fine for the indexer since
+	// it doesn't track any totals and therefore cannot calculate the new totals.
 
 	return eval.state.deltas(), eval.block.Payset, nil
 }

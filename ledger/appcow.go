@@ -463,6 +463,7 @@ func MakeDebugBalances(l ledgerForCowBase, round basics.Round, proto protocol.Co
 		rnd:      round - 1,
 		proto:    config.Consensus[proto],
 		accounts: make(map[basics.Address]basics.AccountData),
+		creators: make(map[creatable]FoundAddress),
 	}
 
 	hdr := bookkeeping.BlockHeader{
