@@ -144,13 +144,7 @@ func TestParticipationWithoutStateProofKeys(t *testing.T) {
 
 	a.NotEmpty(address)
 
-	// TODO: taken from onlineOfflineParticipation_test.go. i don't like that it is arbitrary.
-	// allow "a few" rounds to pass so accounts can participate
-
-	// the below window controls the likelihood a block will be proposed by the account under test
-	// since block proposer selection is probabilistic, it is not guaranteed that the account will be chosen
-	// it is a trade-off between test flakiness and test duration
-	proposalWindow := 50 // arbitrary
+	proposalWindow := 50 // giving 50 rounds to participate, should be able to participate every second round.
 	blockWasProposedByPartkeyOnlyAccountRecently := waitForAccountToProposeBlock(a, &fixture, address, proposalWindow)
 	a.True(blockWasProposedByPartkeyOnlyAccountRecently, "partkey-only account should be proposing blocks")
 }
