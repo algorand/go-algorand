@@ -217,14 +217,27 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 			// conflict with the bloom filters being calculated only once.
 			excludeTransactions = peer.recentSentTransactions
 		}
-		profMakeBloomFilter := s.profiler.getElement(profElementMakeBloomFilter)
-		profMakeBloomFilter.start()
+		filterTxns := pendingTransactions.pendingTransactionsGroups
 		minGroupCounter, lastGroupRound := peer.sentFilterParams.nextFilterGroup(metaMessage.message.UpdatedRequestParams)
 		if lastGroupRound != s.round {
 			minGroupCounter = 0
 		}
+		if minGroupCounter > 0 {
+			mgi := sort.Search(
+				len(filterTxns),
+				func(i int) bool {
+					return filterTxns[i].GroupCounter >= minGroupCounter
+				},
+			)
+			if mgi >= len(filterTxns) {
+				goto notxns
+			}
+			filterTxns = filterTxns[mgi:]
+		}
+		profMakeBloomFilter := s.profiler.getElement(profElementMakeBloomFilter)
+		profMakeBloomFilter.start()
 		// generate a bloom filter that matches the requests params.
-		assembledBloomFilter = s.makeBloomFilter(metaMessage.message.UpdatedRequestParams, pendingTransactions.pendingTransactionsGroups, excludeTransactions, lastBloomFilter, minGroupCounter)
+		assembledBloomFilter = s.makeBloomFilter(metaMessage.message.UpdatedRequestParams, filterTxns, excludeTransactions, lastBloomFilter)
 		// we check here to see if the bloom filter we need happen to be the same as the one that was previously sent to the peer.
 		// ( note that we check here againt the peer, whereas the hint to makeBloomFilter could be the cached one for the relay )
 		if !assembledBloomFilter.sameParams(peer.lastSentBloomFilter) && assembledBloomFilter.encodedLength > 0 {
@@ -239,6 +252,7 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 			s.lastBloomFilter = assembledBloomFilter
 		}
 	}
+notxns:
 
 	if msgOps&messageConstTransactions == messageConstTransactions {
 		transactionGroups := pendingTransactions.pendingTransactionsGroups

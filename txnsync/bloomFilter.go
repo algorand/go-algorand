@@ -139,7 +139,7 @@ func filterFactoryXor32(numEntries int, s *syncState) (filter bloom.GenericFilte
 
 var filterFactory func(int, *syncState) (filter bloom.GenericFilter, filterType bloomFilterType) = filterFactoryXor32
 
-func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []pooldata.SignedTxGroup, excludeTransactions *transactionCache, hintPrevBloomFilter *bloomFilter, minGroupCounter uint64) (result bloomFilter) {
+func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []pooldata.SignedTxGroup, excludeTransactions *transactionCache, hintPrevBloomFilter *bloomFilter) (result bloomFilter) {
 	result.encoded.EncodingParams = encodingParams
 	if encodingParams.Modulator == 0 {
 		// we want none.
@@ -163,9 +163,6 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []po
 
 		filter, filterType := filterFactory(len(txnGroups), s)
 		for _, group := range txnGroups {
-			if group.GroupCounter < minGroupCounter {
-				continue
-			}
 			filter.Set(group.GroupTransactionID[:])
 		}
 		err := result.encode(filter, filterType)
@@ -173,9 +170,6 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []po
 			// fall back to standard bloom filter
 			filter, filterType = filterFactoryBloom(len(txnGroups), s)
 			for _, group := range txnGroups {
-				if group.GroupCounter < minGroupCounter {
-					continue
-				}
 				filter.Set(group.GroupTransactionID[:])
 			}
 			result.encode(filter, filterType) //nolint:errcheck
@@ -191,9 +185,6 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []po
 
 	excludedTransactions := 0
 	for _, group := range txnGroups {
-		if group.GroupCounter < minGroupCounter {
-			continue
-		}
 		txID := group.GroupTransactionID
 		if txidToUint64(txID)%uint64(encodingParams.Modulator) != uint64(encodingParams.Offset) {
 			continue

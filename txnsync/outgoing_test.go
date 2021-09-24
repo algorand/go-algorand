@@ -280,7 +280,7 @@ func TestAssemblePeerMessage_messageConstBloomFilter(t *testing.T) {
 	peer.lastReceivedMessageTimestamp = 100
 	peer.lastReceivedMessageLocalRound = s.round
 
-	expectedFilter := s.makeBloomFilter(requestParams{Offset: 111, Modulator: 222}, pendingTransactions.pendingTransactionsGroups, nil, &s.lastBloomFilter, 0)
+	expectedFilter := s.makeBloomFilter(requestParams{Offset: 111, Modulator: 222}, pendingTransactions.pendingTransactionsGroups, nil, &s.lastBloomFilter)
 
 	s.isRelay = true
 	peer.isOutgoing = true
@@ -322,7 +322,7 @@ func TestAssemblePeerMessage_messageConstBloomFilterNonRelay(t *testing.T) {
 	peer.lastReceivedMessageTimestamp = 100
 	peer.lastReceivedMessageLocalRound = s.round
 
-	expectedFilter := s.makeBloomFilter(requestParams{Offset: 111, Modulator: 222}, pendingTransactions.pendingTransactionsGroups, nil, &s.lastBloomFilter, 0)
+	expectedFilter := s.makeBloomFilter(requestParams{Offset: 111, Modulator: 222}, pendingTransactions.pendingTransactionsGroups, nil, &s.lastBloomFilter)
 
 	s.isRelay = false
 	s.fetchTransactions = true
