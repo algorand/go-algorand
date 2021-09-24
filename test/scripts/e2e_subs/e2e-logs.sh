@@ -13,8 +13,7 @@ function rest() {
 
 function app_txid {
     # When app (call or optin) submits, this is how the txid is
-    # printed.  Not in appl() because appl is also used with -o to
-    # create tx
+    # printed.
     grep -o -E 'txid [A-Z0-9]{52}' | cut -c 6- | head -1
 }
 
