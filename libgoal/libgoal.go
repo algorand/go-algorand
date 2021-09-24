@@ -1063,7 +1063,8 @@ func MakeDryrunStateGenerated(client Client, txnOrStxn interface{}, otherTxns []
 			for _, acc := range accounts {
 				var info generatedV2.Account
 				if info, err = client.AccountInformationV2(acc.String()); err != nil {
-					// ignore error and continue
+					// ignore error - accounts might have app addresses that were not funded
+					continue
 				}
 				dr.Accounts = append(dr.Accounts, info)
 			}
