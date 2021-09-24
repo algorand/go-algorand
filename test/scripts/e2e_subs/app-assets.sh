@@ -211,8 +211,7 @@ appl "optin():void" --foreign-asset="$ASSETID2" --from="$SMALL"
 ASSETID3=$(asset-create 1000000  --name "beta" --unitname "b"  | asset-id)
 appl "optin():void" --foreign-asset="$ASSETID3" --from="$SMALL"
 
-IDs="
-$ASSETID
+IDs="$ASSETID
 $ASSETID2
 $ASSETID3
 "
@@ -220,8 +219,7 @@ $ASSETID3
 
 # opt out of assets
 appl "close():void"  --foreign-asset="$ASSETID2" --from="$SMALL"
-IDs="
-$ASSETID
+IDs="$ASSETID
 $ASSETID3
 "
 [[ "$(asset_ids "$APPACCT")" = "$IDs" ]] # account has 2 assets
@@ -243,8 +241,7 @@ cat "$T/mint.tx" "$T/pay1.tx" | ${gcmd} clerk group -i - -o "$T/group.tx"
 sign group
 ${gcmd} clerk rawsend -f "$T/group.stx"
 
-IDs="
-$ASSETID
+IDs="$ASSETID
 $ASSETID2
 $ASSETID3
 $APPASSETID
