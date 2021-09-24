@@ -1338,16 +1338,6 @@ func maxAddressesInTxn(proto *config.ConsensusParams) int {
 	return 7 + proto.MaxAppTxnAccounts
 }
 
-// Write the list of addresses referenced in `txn` to `out`. Addresses might repeat.
-func getTxnAddresses(txn *transactions.Transaction, out *[]basics.Address) {
-	*out = (*out)[:0]
-
-	*out = append(
-		*out, txn.Sender, txn.Receiver, txn.CloseRemainderTo, txn.AssetSender,
-		txn.AssetReceiver, txn.AssetCloseTo, txn.FreezeAccount)
-	*out = append(*out, txn.ApplicationCallTxnFields.Accounts...)
-}
-
 // loadAccounts loads the account data for the provided transaction group list. It also loads the feeSink account and add it to the first returned transaction group.
 // The order of the transaction groups returned by the channel is identical to the one in the input array.
 func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) chan loadedTransactionGroup {
