@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"math"
 	"sort"
@@ -188,6 +189,8 @@ type Peer struct {
 
 	// ProposalFilterCache keeps track of the most recent proposal bytes that the peer does not want to receive
 	proposalFilterCache ProposalFilterCache
+
+	currentProposalHash crypto.Digest
 }
 
 // requestParamsGroupCounterState stores the latest group counters for a given set of request params.
@@ -399,6 +402,9 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []pooldata.SignedTx
 
 	// removedTxn := 0
 	grpIdx := startIndex
+	if p.state == peerStateProposal && p.proposalFilterCache.Exists(p.currentProposalHash) {
+		grpIdx = len(pendingTransactions)
+	}
 scanLoop:
 	for ; grpIdx < len(pendingTransactions); grpIdx++ {
 		txID := pendingTransactions[grpIdx].GroupTransactionID

@@ -347,6 +347,11 @@ func (tsnc *transactionSyncNodeConnector) handleProposalLoop() {
 				proposalDataBytes = protocol.Encode(&pc.proposalData)
 				proposalDataHash = crypto.Hash(proposalDataBytes)
 				if tsnc.proposalFilterCache.Exists(proposalDataHash) {
+					pc.ProposalBytes = nil
+					pc.txGroups = nil
+					pc.TxGroupIds = nil
+					pc.txGroupIDIndex = nil
+					pc.numTxGroupsReceived = 0
 					continue
 				}
 			}
