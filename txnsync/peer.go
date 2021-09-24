@@ -507,7 +507,7 @@ func incomingPeersOnly(peers []*Peer) (incomingPeers []*Peer) {
 // incoming related functions
 
 // addIncomingBloomFilter keeps the most recent {maxIncomingBloomFilterHistory} filters
-func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter *testableBloomFilter, currentRound basics.Round, maxIncomingFilterElements int) {
+func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter *testableBloomFilter, currentRound basics.Round) {
 	minRound := currentRound.SubSaturate(2)
 	if round < minRound {
 		// ignore data from the past

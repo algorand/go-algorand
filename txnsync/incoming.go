@@ -212,7 +212,6 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 	transactionPoolSize := 0
 	totalAccumulatedTransactionsCount := 0 // the number of transactions that were added during the execution of this method
 	transactionHandlerBacklogFull := false
-	maxIncomingFilterElements := s.config.TxPoolSize * incomingFilterPoolFactor
 incomingMessageLoop:
 	for {
 		incomingMsg, seq, err := peer.incomingMessages.popSequence(peer.nextReceivedMessageSeq)
@@ -244,7 +243,7 @@ incomingMessageLoop:
 
 		// if the peer sent us a bloom filter, store this.
 		if incomingMsg.bloomFilter != nil {
-			peer.addIncomingBloomFilter(incomingMsg.message.Round, incomingMsg.bloomFilter, s.round, maxIncomingFilterElements)
+			peer.addIncomingBloomFilter(incomingMsg.message.Round, incomingMsg.bloomFilter, s.round)
 		}
 
 		peer.updateRequestParams(incomingMsg.message.UpdatedRequestParams.Modulator, incomingMsg.message.UpdatedRequestParams.Offset)

@@ -693,7 +693,7 @@ func TestAddIncomingBloomFilter(t *testing.T) {
 			},
 			filter: &nopFilter{},
 		}
-		p.addIncomingBloomFilter(basics.Round(i), bf, basics.Round(i), 999999)
+		p.addIncomingBloomFilter(basics.Round(i), bf, basics.Round(i))
 	}
 
 	// filters from current round, -1, and -2 are kept. => 3
@@ -708,7 +708,7 @@ func TestAddIncomingBloomFilter(t *testing.T) {
 			},
 			filter: &nopFilter{},
 		}
-		p.addIncomingBloomFilter(basics.Round(i), bf, 0, 999999)
+		p.addIncomingBloomFilter(basics.Round(i), bf, 0)
 	}
 
 	a.Equal(maxIncomingBloomFilterHistory, len(p.recentIncomingBloomFilters))
