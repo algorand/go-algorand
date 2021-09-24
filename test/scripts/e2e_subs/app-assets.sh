@@ -216,7 +216,7 @@ $ASSETID \n
 $ASSETID2 \n
 $ASSETID3 \n
 "
-[[ "$(assets "$APPACCT")" = $IDs ]]  # account has 3 assets
+[[ "$(asset_ids "$APPACCT")" = $IDs ]]  # account has 3 assets
 
 # opt out of assets
 appl "close():void"  --foreign-asset="$ASSETID2" --from="$SMALL"
