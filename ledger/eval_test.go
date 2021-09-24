@@ -1735,3 +1735,72 @@ func TestAppInsMinBalance(t *testing.T) {
 	vb := l.endBlock(t, eval)
 	assert.Len(t, vb.delta.ModifiedAppLocalStates, 50)
 }
+
+type getCreatorForRoundResult struct {
+	address basics.Address
+	exists  bool
+}
+
+type testCowBaseLedger struct {
+	creators []getCreatorForRoundResult
+}
+
+func (l *testCowBaseLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) {
+	return bookkeeping.BlockHeader{}, errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error {
+	return errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error) {
+	return basics.AccountData{}, basics.Round(0), errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+	res := l.creators[0]
+	l.creators = l.creators[1:]
+	return res.address, res.exists, nil
+}
+
+func TestCowBaseCreatorsCache(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	addresses := make([]basics.Address, 3)
+	for i := 0; i < len(addresses); i++ {
+		_, err := rand.Read(addresses[i][:])
+		require.NoError(t, err)
+	}
+
+	creators := []getCreatorForRoundResult{
+		{address: addresses[0], exists: true},
+		{address: basics.Address{}, exists: false},
+		{address: addresses[1], exists: true},
+		{address: basics.Address{}, exists: false},
+	}
+	l := testCowBaseLedger{
+		creators: creators,
+	}
+
+	base := roundCowBase{
+		l:        &l,
+		creators: map[creatable]FoundAddress{},
+	}
+
+	cindex := []basics.CreatableIndex{9, 10, 9, 10}
+	ctype := []basics.CreatableType{
+		basics.AssetCreatable,
+		basics.AssetCreatable,
+		basics.AppCreatable,
+		basics.AppCreatable,
+	}
+	for i := 0; i < 2; i++ {
+		for j, expected := range creators {
+			address, exists, err := base.getCreator(cindex[j], ctype[j])
+			require.NoError(t, err)
+
+			assert.Equal(t, expected.address, address)
+			assert.Equal(t, expected.exists, exists)
+		}
+	}
+}

@@ -97,11 +97,6 @@ locking.
 - `Totals(round)` returns the totals of accounts, using the account
   tracker.
 
-### Time tracker
-
-- `Timestamp(round)` uses the time tracker to return the time as
-  of `round`.
-
 ### Recent transactions tracker
 
 - `Committed(txnid)` returns whether `txid` has been recently committed,
