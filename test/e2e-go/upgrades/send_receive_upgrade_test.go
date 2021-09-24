@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/libgoal"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -118,25 +117,26 @@ func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
 	fixture.SetConsensus(consensus)
 	fixture.Setup(t, templatePath)
 	defer fixture.Shutdown()
-	c := fixture.LibGoalClient
 
-	verifyAccountsCanSendMoneyAcrossUpgrade(c, a, &fixture)
+	verifyAccountsCanSendMoneyAcrossUpgrade(a, &fixture)
 }
 
-func verifyAccountsCanSendMoneyAcrossUpgrade(c libgoal.Client, a *require.Assertions, fixture *fixtures.RestClientFixture) {
-	pingBalance, pongBalance, expectedPingBalance, expectedPongBalance := runUntilProtocolUpgrades(c, a, fixture)
+func verifyAccountsCanSendMoneyAcrossUpgrade(a *require.Assertions, fixture *fixtures.RestClientFixture) {
+	pingBalance, pongBalance, expectedPingBalance, expectedPongBalance := runUntilProtocolUpgrades(a, fixture)
 
 	a.True(expectedPingBalance <= pingBalance, "ping balance is different than expected")
 	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected")
 }
 
-func runUntilProtocolUpgrades(c libgoal.Client, a *require.Assertions, fixture *fixtures.RestClientFixture) (uint64, uint64, uint64, uint64) {
+func runUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClientFixture) (uint64, uint64, uint64, uint64) {
+	c := fixture.LibGoalClient
 	initialStatus, err := c.Status()
 	a.NoError(err, "getting status")
 
 	pingClient := fixture.LibGoalClient
 	pingAccountList, err := fixture.GetWalletsSortedByBalance()
 	a.NoError(err, "fixture should be able to get wallets sorted by balance")
+	a.NotEmpty(pingAccountList)
 	pingAccount := pingAccountList[0].Address
 
 	pongClient := fixture.GetLibGoalClientForNamedNode("Node")

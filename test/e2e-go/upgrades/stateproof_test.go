@@ -31,23 +31,18 @@ import (
 func TestKeysWithoutStateProofKeyCannotRegister(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 
-	consensus := generateFastUpgradeConsensus()
-
-	// TODO: set inside concensus file!
-	consensus[consensusTestFastUpgrade(protocol.ConsensusV29)].
-		ApprovedUpgrades[consensusTestFastUpgrade(protocol.ConsensusFuture)] = 0
+	consensus := getStateProofConcensus()
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(consensus)
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodesWithoutStateProofPartkeys.json"))
 	defer fixture.Shutdown()
-	c := fixture.LibGoalClient
 	lastValid := uint64(1000 * 5)
 
 	a.NoError(registerKey(&fixture, a, lastValid, protocol.ConsensusV29))
 	a.Error(registerKey(&fixture, a, lastValid+1, protocol.ConsensusFuture))
 
-	runUntilProtocolUpgrades(c, a, &fixture)
+	runUntilProtocolUpgrades(a, &fixture)
 
 	a.Error(registerKey(&fixture, a, lastValid+2, protocol.ConsensusV29))
 	a.NoError(registerKey(&fixture, a, lastValid+3, protocol.ConsensusFuture))
@@ -89,4 +84,13 @@ func registerKey(fixture *fixtures.RestClientFixture, a *require.Assertions, las
 
 	_, err = client.SignAndBroadcastTransaction(wh, nil, tx)
 	return err
+}
+
+func getStateProofConcensus() config.ConsensusProtocols {
+	consensus := generateFastUpgradeConsensus()
+
+	// TODO: set inside concensus file!
+	consensus[consensusTestFastUpgrade(protocol.ConsensusV29)].
+		ApprovedUpgrades[consensusTestFastUpgrade(protocol.ConsensusFuture)] = 0
+	return consensus
 }
