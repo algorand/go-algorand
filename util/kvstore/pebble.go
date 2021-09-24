@@ -27,7 +27,7 @@ type PebbleDB struct {
 
 // NewPebbleDB opens a PebbleDB in the specified directory
 func NewPebbleDB(dbdir string, inMem bool) (*PebbleDB, error) {
-	cache := pebble.NewCache(1 << 30)
+	cache := pebble.NewCache(4 * 1024 * 1024)
 	defer cache.Unref()
 	// based on cockroach DB's DefaultPebbleOptions()
 	opts := &pebble.Options{

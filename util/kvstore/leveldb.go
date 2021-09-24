@@ -26,7 +26,7 @@ type LevelDB struct {
 
 func NewLevelDB(dbdir string) (*LevelDB, error) {
 	opts := levigo.NewOptions()
-	opts.SetCache(levigo.NewLRUCache(1 << 30))
+	opts.SetCache(levigo.NewLRUCache(4 * 1024 * 1024))
 	opts.SetCreateIfMissing(true)
 	opts.SetWriteBufferSize(64 * 1024 * 1024) // RocksDB default is 64MB
 	opts.SetFilterPolicy(levigo.NewBloomFilter(10))

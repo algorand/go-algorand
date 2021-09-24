@@ -26,7 +26,7 @@ type RocksDB struct {
 
 func NewRocksDB(dbdir string) (*RocksDB, error) {
 	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
-	bbto.SetBlockCache(gorocksdb.NewLRUCache(1 << 30))
+	bbto.SetBlockCache(gorocksdb.NewLRUCache(4 * 1024 * 1024))
 	bbto.SetFilterPolicy(gorocksdb.NewBloomFilter(10))
 
 	opts := gorocksdb.NewDefaultOptions()
