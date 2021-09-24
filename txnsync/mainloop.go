@@ -267,6 +267,7 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			profIncomingMsg.end()
 		case proposalFilter := <-proposalFilterCh:
 			logging.Base().Info("proposalFilter")
+			profIdle.end()
 			peers := s.getPeers()
 			s.broadcastProposalFilter(crypto.Hash(proposalFilter), peers)
 		case <-s.nextOffsetRollingCh:

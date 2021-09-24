@@ -89,7 +89,7 @@ func makeTransactionSyncNodeConnector(node *AlgorandFullNode) transactionSyncNod
 		txHandler:   node.txHandler.SolicitedAsyncTxHandler(),
 		openStateCh: make(chan struct{}),
 		agreementProposalCh:  make(chan agreement.TxnSyncProposal, proposalBufferSize),
-		proposalMsgCh:  make(chan incomingProposalRequest, proposalBufferSize),
+		proposalMsgCh:  make(chan incomingProposalRequest, 128),
 		proposalFilterCh:  make(chan []byte, proposalBufferSize),
 	}
 }
@@ -333,7 +333,7 @@ func (tsnc *transactionSyncNodeConnector) handleProposalLoop() {
 				pc.numTxGroupsReceived = tsnc.node.transactionPool.FindTxGroups(pc.TxGroupIds, pc.txGroups)
 			} else { // fetch proposalCache from peerData
 				pc, _ = tsnc.node.net.GetPeerData(peer.GetNetworkPeer(), "proposalCache").(*proposalCache)
-				if pc.ProposalBytes == nil { // no actual proposal to be filling
+				if pc == nil || pc.ProposalBytes == nil { // no actual proposal to be filling
 					continue
 				}
 			}
