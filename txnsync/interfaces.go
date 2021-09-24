@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/util/timers"
@@ -75,7 +76,7 @@ type networkPeerAddress interface {
 // NodeConnector is used by the transaction sync for communicating with components external to the txnsync package.
 type NodeConnector interface {
 	Events() <-chan Event
-	ProposalFilterCh() <-chan []byte
+	ProposalFilterCh() <-chan crypto.Digest
 	GetCurrentRoundSettings() RoundSettings // return the current round settings from the node
 	Clock() timers.WallClock
 	Random(uint64) uint64

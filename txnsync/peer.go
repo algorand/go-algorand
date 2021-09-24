@@ -186,8 +186,8 @@ type Peer struct {
 	// this value is used to optimize the memory preallocation for the selection IDs array.
 	lastSelectedTransactionsCount int
 
-	// proposalFilterCache keeps track of the most recent proposal bytes that the peer does not want to receive
-	proposalFilterCache proposalFilterCache
+	// ProposalFilterCache keeps track of the most recent proposal bytes that the peer does not want to receive
+	proposalFilterCache ProposalFilterCache
 }
 
 // requestParamsGroupCounterState stores the latest group counters for a given set of request params.
@@ -288,7 +288,7 @@ func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool, c
 		transactionPoolAckCh:        make(chan uint64, maxAcceptedMsgSeq),
 		transactionPoolAckMessages:  make([]uint64, 0, maxAcceptedMsgSeq),
 		significantMessageThreshold: defaultSignificantMessageThreshold,
-		proposalFilterCache:         makeProposalFilterCache(maxProposalFilterCacheSize),
+		proposalFilterCache:         MakeProposalFilterCache(maxProposalFilterCacheSize),
 	}
 	if isLocalNodeRelay {
 		p.requestedTransactionsModulator = 1

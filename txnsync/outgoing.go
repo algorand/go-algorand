@@ -356,7 +356,7 @@ func (s *syncState) broadcastProposal(p ProposalBroadcastRequest, peers []*Peer)
 
 	for _, peer := range peers {
 		// check if p.proposalBytes was filtered
-		if peer.proposalFilterCache.exists(proposalHash) {
+		if peer.proposalFilterCache.Exists(proposalHash) {
 			continue
 		}
 

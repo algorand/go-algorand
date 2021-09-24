@@ -19,6 +19,7 @@ package node
 
 import (
 	"context"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"time"
 
@@ -52,7 +53,8 @@ type transactionSyncNodeConnector struct {
 	openStateCh    chan struct{}
 	agreementProposalCh     chan agreement.TxnSyncProposal
 	proposalMsgCh  chan incomingProposalRequest
-	proposalFilterCh chan []byte
+	proposalFilterCh chan crypto.Digest
+	proposalFilterCache txnsync.ProposalFilterCache
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -90,7 +92,8 @@ func makeTransactionSyncNodeConnector(node *AlgorandFullNode) transactionSyncNod
 		openStateCh: make(chan struct{}),
 		agreementProposalCh:  make(chan agreement.TxnSyncProposal, proposalBufferSize),
 		proposalMsgCh:  make(chan incomingProposalRequest, 128),
-		proposalFilterCh:  make(chan []byte, proposalBufferSize),
+		proposalFilterCh:  make(chan crypto.Digest, proposalBufferSize),
+		proposalFilterCache:         txnsync.MakeProposalFilterCache(proposalBufferSize),
 	}
 }
 
@@ -98,7 +101,7 @@ func (tsnc *transactionSyncNodeConnector) Events() <-chan txnsync.Event {
 	return tsnc.eventsCh
 }
 
-func (tsnc *transactionSyncNodeConnector) ProposalFilterCh() <-chan []byte {
+func (tsnc *transactionSyncNodeConnector) ProposalFilterCh() <-chan crypto.Digest {
 	return tsnc.proposalFilterCh
 }
 
@@ -313,13 +316,18 @@ func (tsnc *transactionSyncNodeConnector) handleProposalLoop() {
 		select {
 		case proposalRequest := <-tsnc.proposalMsgCh:
 			proposalDataBytes := proposalRequest.proposalBytes
+			var proposalDataHash crypto.Digest
 			txGroups := proposalRequest.txGroups
 			peer := proposalRequest.peer
-			var data proposalData
 			var pc *proposalCache
-			protocol.Decode(proposalDataBytes, &data)
 
 			if proposalDataBytes != nil {
+				proposalDataHash = crypto.Hash(proposalDataBytes)
+				if tsnc.proposalFilterCache.Exists(proposalDataHash) {
+					continue
+				}
+				var data proposalData
+				protocol.Decode(proposalDataBytes, &data)
 				pc = &proposalCache{
 					proposalData:   data,
 					txGroupIDIndex: make(map[transactions.Txid]int, len(data.TxGroupIds)),
@@ -334,6 +342,11 @@ func (tsnc *transactionSyncNodeConnector) handleProposalLoop() {
 			} else { // fetch proposalCache from peerData
 				pc, _ = tsnc.node.net.GetPeerData(peer.GetNetworkPeer(), "proposalCache").(*proposalCache)
 				if pc == nil || pc.ProposalBytes == nil { // no actual proposal to be filling
+					continue
+				}
+				proposalDataBytes = protocol.Encode(&pc.proposalData)
+				proposalDataHash = crypto.Hash(proposalDataBytes)
+				if tsnc.proposalFilterCache.Exists(proposalDataHash) {
 					continue
 				}
 			}
@@ -362,12 +375,11 @@ func (tsnc *transactionSyncNodeConnector) handleProposalLoop() {
 				select {
 				case tsnc.agreementProposalCh <- agreementProposal:
 					logging.Base().Info("sent proposal to agreement")
+					tsnc.proposalFilterCache.Insert(proposalDataHash)
 					continue
 				default:
 					logging.Base().Info("failed to send proposal to agreement")
 				}
-
-				completedProposalBytes := protocol.Encode(&pc.proposalData)
 
 				pc.ProposalBytes = nil
 				pc.txGroups = nil
@@ -375,7 +387,7 @@ func (tsnc *transactionSyncNodeConnector) handleProposalLoop() {
 				pc.txGroupIDIndex = nil
 				pc.numTxGroupsReceived = 0
 				select {
-				case tsnc.proposalFilterCh <- completedProposalBytes:
+				case tsnc.proposalFilterCh <- proposalDataHash:
 					continue
 				default:
 					logging.Base().Info("failed to enqueue proposal filter")

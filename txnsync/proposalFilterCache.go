@@ -22,21 +22,21 @@ import (
 )
 
 // cache used by the peer to keep track of which proposals not to send
-type proposalFilterCache struct {
+type ProposalFilterCache struct {
 	store       map[crypto.Digest]*list.Element
 	orderedMsgs *list.List
 	limit       int
 }
 
-func makeProposalFilterCache(limit int) proposalFilterCache {
-	c := proposalFilterCache{}
+func MakeProposalFilterCache(limit int) ProposalFilterCache {
+	c := ProposalFilterCache{}
 	c.store = make(map[crypto.Digest]*list.Element)
 	c.orderedMsgs = list.New()
 	c.limit = limit
 	return c
 }
 
-func (c *proposalFilterCache) insert(proposalHash crypto.Digest) {
+func (c *ProposalFilterCache) Insert(proposalHash crypto.Digest) {
 	element, found := c.store[proposalHash]
 	if found {
 		c.orderedMsgs.MoveToBack(element)
@@ -52,7 +52,7 @@ func (c *proposalFilterCache) insert(proposalHash crypto.Digest) {
 	}
 }
 
-func (c *proposalFilterCache) exists(proposalHash crypto.Digest) bool {
+func (c *ProposalFilterCache) Exists(proposalHash crypto.Digest) bool {
 	_, exists := c.store[proposalHash]
 	return exists
 }

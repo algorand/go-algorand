@@ -199,7 +199,7 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 		case proposalFilter := <-proposalFilterCh:
 			logging.Base().Info("proposalFilter")
 			peers := s.getPeers()
-			s.broadcastProposalFilter(crypto.Hash(proposalFilter), peers)
+			s.broadcastProposalFilter(proposalFilter, peers)
 		case <-s.nextOffsetRollingCh:
 			profNextOffset.start()
 			s.rollOffsets()
@@ -269,7 +269,7 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			logging.Base().Info("proposalFilter")
 			profIdle.end()
 			peers := s.getPeers()
-			s.broadcastProposalFilter(crypto.Hash(proposalFilter), peers)
+			s.broadcastProposalFilter(proposalFilter, peers)
 		case <-s.nextOffsetRollingCh:
 			profIdle.end()
 			profNextOffset.start()

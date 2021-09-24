@@ -232,13 +232,13 @@ incomingMessageLoop:
 		// handle proposal txnsync messages
 		if !incomingMsg.message.RelayedProposal.MsgIsZero() {
 			if !incomingMsg.message.RelayedProposal.ExcludeProposal.MsgIsZero() {
-				// add filtered proposal to proposalFilterCache
-				peer.proposalFilterCache.insert(incomingMsg.message.RelayedProposal.ExcludeProposal)
+				// add filtered proposal to ProposalFilterCache
+				peer.proposalFilterCache.Insert(incomingMsg.message.RelayedProposal.ExcludeProposal)
 			} else {
 				if incomingMsg.message.RelayedProposal.RawBytes != nil {
 					// add received proposal to proposalFilterCache
 					hash := crypto.Hash(incomingMsg.message.RelayedProposal.RawBytes)
-					peer.proposalFilterCache.insert(hash)
+					peer.proposalFilterCache.Insert(hash)
 				}
 				// send proposal or proposal txns to handler
 				//logging.Base().Info("HandleProposalMessage start")
