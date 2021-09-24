@@ -144,6 +144,8 @@ type Peer struct {
 	// This bloom filter could be stale if no bloom filter was included in the last message.
 	lastSentBloomFilter bloomFilter
 
+	// sentFilterParams records the Round and max txn group counter of the last filter sent to a peer (for each {Modulator,Offset}).
+	// From this an efficient next filter can be calculated for just the new txns, or a full filter after a Round turnover.
 	sentFilterParams sentFilters
 
 	// lastConfirmedMessageSeqReceived is the last message sequence number that was confirmed by the peer to have been accepted.
