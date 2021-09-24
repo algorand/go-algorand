@@ -176,7 +176,7 @@ func TestEvalForIndexerCustomProtocolParams(t *testing.T) {
 		latestRound: 0,
 	}
 	proto.EnableAssetCloseAmount = true
-	_, modifiedTxns, err := EvalForIndexer(il, &block, proto)
+	_, modifiedTxns, err := EvalForIndexer(il, &block, proto, EvalForIndexerResources{})
 	require.NoError(t, err)
 
 	require.Equal(t, 4, len(modifiedTxns))
