@@ -31,7 +31,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -434,19 +433,13 @@ var createAppCmd = &cobra.Command{
 			}
 		} else {
 			if dumpForDryrun {
-				// Write dryrun data to file
-				proto, _ := getProto(protoVersion)
-				data, err := libgoal.MakeDryrunStateBytes(client, tx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
-				if err != nil {
-					reportErrorf(err.Error())
-				}
-				writeFile(outFilename, data, 0600)
+				err = writeDryrunReqToFile(client, tx, outFilename)
 			} else {
 				// Write transaction to file
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
-				if err != nil {
-					reportErrorf(err.Error())
-				}
+			}
+			if err != nil {
+				reportErrorf(err.Error())
 			}
 		}
 	},
@@ -513,18 +506,12 @@ var updateAppCmd = &cobra.Command{
 			}
 		} else {
 			if dumpForDryrun {
-				// Write dryrun data to file
-				proto, _ := getProto(protoVersion)
-				data, err := libgoal.MakeDryrunStateBytes(client, tx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
-				if err != nil {
-					reportErrorf(err.Error())
-				}
-				writeFile(outFilename, data, 0600)
+				err = writeDryrunReqToFile(client, tx, outFilename)
 			} else {
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
-				if err != nil {
-					reportErrorf(err.Error())
-				}
+			}
+			if err != nil {
+				reportErrorf(err.Error())
 			}
 		}
 	},
@@ -590,18 +577,12 @@ var optInAppCmd = &cobra.Command{
 			}
 		} else {
 			if dumpForDryrun {
-				// Write dryrun data to file
-				proto, _ := getProto(protoVersion)
-				data, err := libgoal.MakeDryrunStateBytes(client, tx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
-				if err != nil {
-					reportErrorf(err.Error())
-				}
-				writeFile(outFilename, data, 0600)
+				err = writeDryrunReqToFile(client, tx, outFilename)
 			} else {
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
-				if err != nil {
-					reportErrorf(err.Error())
-				}
+			}
+			if err != nil {
+				reportErrorf(err.Error())
 			}
 		}
 	},
@@ -667,18 +648,12 @@ var closeOutAppCmd = &cobra.Command{
 			}
 		} else {
 			if dumpForDryrun {
-				// Write dryrun data to file
-				proto, _ := getProto(protoVersion)
-				data, err := libgoal.MakeDryrunStateBytes(client, tx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
-				if err != nil {
-					reportErrorf(err.Error())
-				}
-				writeFile(outFilename, data, 0600)
+				err = writeDryrunReqToFile(client, tx, outFilename)
 			} else {
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
-				if err != nil {
-					reportErrorf(err.Error())
-				}
+			}
+			if err != nil {
+				reportErrorf(err.Error())
 			}
 		}
 	},
@@ -744,18 +719,12 @@ var clearAppCmd = &cobra.Command{
 			}
 		} else {
 			if dumpForDryrun {
-				// Write dryrun data to file
-				proto, _ := getProto(protoVersion)
-				data, err := libgoal.MakeDryrunStateBytes(client, tx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
-				if err != nil {
-					reportErrorf(err.Error())
-				}
-				writeFile(outFilename, data, 0600)
+				err = writeDryrunReqToFile(client, tx, outFilename)
 			} else {
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
-				if err != nil {
-					reportErrorf(err.Error())
-				}
+			}
+			if err != nil {
+				reportErrorf(err.Error())
 			}
 		}
 	},
@@ -821,18 +790,12 @@ var callAppCmd = &cobra.Command{
 			}
 		} else {
 			if dumpForDryrun {
-				// Write dryrun data to file
-				proto, _ := getProto(protoVersion)
-				data, err := libgoal.MakeDryrunStateBytes(client, tx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
-				if err != nil {
-					reportErrorf(err.Error())
-				}
-				writeFile(outFilename, data, 0600)
+				err = writeDryrunReqToFile(client, tx, outFilename)
 			} else {
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
-				if err != nil {
-					reportErrorf(err.Error())
-				}
+			}
+			if err != nil {
+				reportErrorf(err.Error())
 			}
 		}
 	},
@@ -898,18 +861,13 @@ var deleteAppCmd = &cobra.Command{
 			}
 		} else {
 			if dumpForDryrun {
-				// Write dryrun data to file
-				proto, _ := getProto(protoVersion)
-				data, err := libgoal.MakeDryrunStateBytes(client, tx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
-				if err != nil {
-					reportErrorf(err.Error())
-				}
-				writeFile(outFilename, data, 0600)
+				err = writeDryrunReqToFile(client, tx, outFilename)
 			} else {
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
-				if err != nil {
-					reportErrorf(err.Error())
-				}
+
+			}
+			if err != nil {
+				reportErrorf(err.Error())
 			}
 		}
 	},
