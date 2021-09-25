@@ -84,15 +84,15 @@ type Type struct {
 func (t Type) String() string {
 	switch t.abiTypeID {
 	case Uint:
-		return "uint" + strconv.Itoa(int(t.bitSize))
+		return fmt.Sprintf("uint%d", t.bitSize)
 	case Byte:
 		return "byte"
 	case Ufixed:
-		return "ufixed" + strconv.Itoa(int(t.bitSize)) + "x" + strconv.Itoa(int(t.precision))
+		return fmt.Sprintf("ufixed%dx%d", t.bitSize, t.precision)
 	case Bool:
 		return "bool"
 	case ArrayStatic:
-		return t.childTypes[0].String() + "[" + strconv.Itoa(int(t.staticLength)) + "]"
+		return fmt.Sprintf("%s[%d]", t.childTypes[0].String(), t.staticLength)
 	case Address:
 		return "address"
 	case ArrayDynamic:
@@ -110,21 +110,8 @@ func (t Type) String() string {
 	}
 }
 
-var staticArrayRegexp *regexp.Regexp = nil
-var ufixedRegexp *regexp.Regexp = nil
-
-func init() {
-	var err error
-	// Note that we allow only decimal static array length
-	staticArrayRegexp, err = regexp.Compile(`^([a-z\d\[\](),]+)\[([1-9][\d]*)]$`)
-	if err != nil {
-		panic(err.Error())
-	}
-	ufixedRegexp, err = regexp.Compile(`^ufixed([1-9][\d]*)x([1-9][\d]*)$`)
-	if err != nil {
-		panic(err.Error())
-	}
-}
+var staticArrayRegexp *regexp.Regexp = regexp.MustCompile(`^([a-z\d\[\](),]+)\[([1-9][\d]*)]$`)
+var ufixedRegexp *regexp.Regexp = regexp.MustCompile(`^ufixed([1-9][\d]*)x([1-9][\d]*)$`)
 
 // TypeFromString de-serialize ABI type from a string following ABI encoding.
 func TypeFromString(str string) (Type, error) {
