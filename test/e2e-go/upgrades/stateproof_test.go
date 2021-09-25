@@ -49,7 +49,12 @@ func TestKeysWithoutStateProofKeyCannotRegister(t *testing.T) {
 }
 
 func registerKey(fixture *fixtures.RestClientFixture, a *require.Assertions, lastValid uint64, ver protocol.ConsensusVersion) error {
-	client := fixture.GetLibGoalClientForNamedNode("Node")
+	_, err := registerKeyInto("Node", fixture, a, lastValid, ver)
+	return err
+}
+
+func registerKeyInto(nodeName string, fixture *fixtures.RestClientFixture, a *require.Assertions, lastValid uint64, ver protocol.ConsensusVersion) (string, error) {
+	client := fixture.GetLibGoalClientForNamedNode(nodeName)
 	wh, err := client.GetUnencryptedWalletHandle()
 	a.NoError(err)
 	actList, err := client.ListAddresses(wh)
@@ -82,8 +87,7 @@ func registerKey(fixture *fixtures.RestClientFixture, a *require.Assertions, las
 		tx.GenesisHash = genHash
 	}
 
-	_, err = client.SignAndBroadcastTransaction(wh, nil, tx)
-	return err
+	return client.SignAndBroadcastTransaction(wh, nil, tx)
 }
 
 func getStateProofConcensus() config.ConsensusProtocols {
@@ -147,4 +151,40 @@ func TestParticipationWithoutStateProofKeys(t *testing.T) {
 	proposalWindow := 50 // giving 50 rounds to participate, should be able to participate every second round.
 	blockWasProposedByPartkeyOnlyAccountRecently := waitForAccountToProposeBlock(a, &fixture, address, proposalWindow)
 	a.True(blockWasProposedByPartkeyOnlyAccountRecently, "partkey-only account should be proposing blocks")
+}
+
+func TestLargeKeyRegistration(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	consensus := getStateProofConcensus()
+
+	tmp := config.Consensus[protocol.ConsensusFuture]
+	newVer := config.Consensus[protocol.ConsensusFuture]
+	newVer.CompactCertRounds = 64
+	config.Consensus[protocol.ConsensusFuture] = newVer
+	defer func() { config.Consensus[protocol.ConsensusFuture] = tmp }()
+
+	var fixture fixtures.RestClientFixture
+	fixture.SetConsensus(consensus)
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodesWithoutStateProofPartkeys.json"))
+	defer fixture.Shutdown()
+
+	runUntilProtocolUpgrades(a, &fixture)
+
+	txid, err := registerKeyInto("Node", &fixture, a, 300000, protocol.ConsensusFuture)
+	a.NoError(err)
+
+	client := fixture.LibGoalClient
+
+	for {
+		// Check if we know about the transaction yet
+		txn, err := client.PendingTransactionInformation(txid)
+		a.NoError(err)
+
+		if txn.ConfirmedRound > 0 {
+			break
+		}
+
+		a.Empty(txn.PoolError)
+	}
 }
