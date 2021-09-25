@@ -36,7 +36,7 @@ type peersOps int
 //msgp:ignore messageConstructionOps
 type messageConstructionOps int
 
-const maxIncomingBloomFilterHistory = 20
+const maxIncomingBloomFilterHistory = 200
 
 // shortTermRecentTransactionsSentBufferLength is the size of the short term storage for the recently sent transaction ids.
 // it should be configured sufficiently high so that any number of transaction sent would not exceed that number before
@@ -104,6 +104,8 @@ type Peer struct {
 	// state defines the peer state ( in terms of state machine state ). It's touched only by the sync main state machine
 	state peerState
 
+	log Logger
+
 	// lastRound is the latest round reported by the peer.
 	lastRound basics.Round
 
@@ -141,6 +143,10 @@ type Peer struct {
 	// lastSentBloomFilter is the last bloom filter that was sent to this peer.
 	// This bloom filter could be stale if no bloom filter was included in the last message.
 	lastSentBloomFilter bloomFilter
+
+	// sentFilterParams records the Round and max txn group counter of the last filter sent to a peer (for each {Modulator,Offset}).
+	// From this an efficient next filter can be calculated for just the new txns, or a full filter after a Round turnover.
+	sentFilterParams sentFilters
 
 	// lastConfirmedMessageSeqReceived is the last message sequence number that was confirmed by the peer to have been accepted.
 	lastConfirmedMessageSeqReceived    uint64
@@ -259,7 +265,7 @@ func (t *transactionGroupCounterTracker) index(offset, modulator byte) int {
 	return -1
 }
 
-func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool, cfg *config.Local) *Peer {
+func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool, cfg *config.Local, log Logger) *Peer {
 	p := &Peer{
 		networkPeer:                 networkPeer,
 		isOutgoing:                  isOutgoing,
@@ -268,6 +274,7 @@ func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool, c
 		transactionPoolAckCh:        make(chan uint64, maxAcceptedMsgSeq),
 		transactionPoolAckMessages:  make([]uint64, 0, maxAcceptedMsgSeq),
 		significantMessageThreshold: defaultSignificantMessageThreshold,
+		log:                         log,
 	}
 	if isLocalNodeRelay {
 		p.requestedTransactionsModulator = 1
@@ -368,7 +375,10 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []pooldata.SignedTx
 	var effectiveBloomFilters []int
 	effectiveBloomFilters = make([]int, 0, len(p.recentIncomingBloomFilters))
 	for filterIdx := len(p.recentIncomingBloomFilters) - 1; filterIdx >= 0; filterIdx-- {
-		if p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Modulator == p.requestedTransactionsModulator && p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Offset != p.requestedTransactionsOffset {
+		if p.recentIncomingBloomFilters[filterIdx].filter == nil {
+			continue
+		}
+		if p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Modulator != p.requestedTransactionsModulator || p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Offset != p.requestedTransactionsOffset {
 			continue
 		}
 		effectiveBloomFilters = append(effectiveBloomFilters, filterIdx)
@@ -465,9 +475,10 @@ func (p *Peer) updateMessageSent(txMsg *transactionBlockMessage, selectedTxnIDs 
 }
 
 // update the peer's lastSentBloomFilter.
-func (p *Peer) updateSentBoomFilter(filter bloomFilter) {
+func (p *Peer) updateSentBoomFilter(filter bloomFilter, round basics.Round) {
 	if filter.encodedLength > 0 {
 		p.lastSentBloomFilter = filter
+		p.sentFilterParams.setSentFilter(filter, round)
 	}
 }
 
@@ -497,58 +508,67 @@ func incomingPeersOnly(peers []*Peer) (incomingPeers []*Peer) {
 
 // incoming related functions
 
+// addIncomingBloomFilter keeps the most recent {maxIncomingBloomFilterHistory} filters
 func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter *testableBloomFilter, currentRound basics.Round) {
+	minRound := currentRound.SubSaturate(2)
+	if round < minRound {
+		// ignore data from the past
+		return
+	}
 	bf := incomingBloomFilter{
 		round:  round,
 		filter: incomingFilter,
 	}
-	// scan the current list and find if we can removed entries.
-	firstValidEntry := sort.Search(len(p.recentIncomingBloomFilters), func(i int) bool {
-		return p.recentIncomingBloomFilters[i].round >= currentRound.SubSaturate(1)
-	})
-	// clear out the existing bloom filters.
-	for i := 0; i < firstValidEntry; i++ {
-		p.recentIncomingBloomFilters[i] = incomingBloomFilter{}
-	}
-	if firstValidEntry == len(p.recentIncomingBloomFilters) {
-		// all bloom filters are too old  -
-		// reset the slice length
-		p.recentIncomingBloomFilters = p.recentIncomingBloomFilters[:0]
-	} else {
-		// delete some of the old entries.
-		copy(p.recentIncomingBloomFilters[0:], p.recentIncomingBloomFilters[firstValidEntry:])
-		// adjust slice length
-		p.recentIncomingBloomFilters = p.recentIncomingBloomFilters[0 : len(p.recentIncomingBloomFilters)-firstValidEntry]
-	}
-
-	// reset the counter, since we might need to re-evaluate some of the transaction group with the new bloom filter.
-	p.lastTransactionSelectionTracker.roll(incomingFilter.encodingParams.Offset, incomingFilter.encodingParams.Modulator)
-
-	// scan the existing bloom filter, and ensure we have only one bloom filter for every
-	// set of encoding parameters. This would allow us to avoid accumulating false positive.
-	// i.e. testing if a transaction is included in two bloom filters have a higher chance
-	// of being "wrong" compared to test it against only a single bloom filter.
-	for idx, bloomFltr := range p.recentIncomingBloomFilters {
-		if bloomFltr.filter.encodingParams == incomingFilter.encodingParams {
-			// replace.
-			p.recentIncomingBloomFilters[idx] = bf
-			return
+	elemOk := func(i int) bool {
+		ribf := p.recentIncomingBloomFilters[i]
+		if ribf.filter == nil {
+			return false
 		}
+		if ribf.round < minRound {
+			return false
+		}
+		if incomingFilter.clearPrevious && ribf.filter.encodingParams.Offset == incomingFilter.encodingParams.Offset && ribf.filter.encodingParams.Modulator == incomingFilter.encodingParams.Modulator {
+			return false
+		}
+		return true
 	}
-
-	if len(p.recentIncomingBloomFilters) == maxIncomingBloomFilterHistory {
-		copy(p.recentIncomingBloomFilters[0:], p.recentIncomingBloomFilters[1:])
-		p.recentIncomingBloomFilters[maxIncomingBloomFilterHistory-1] = bf
-	} else {
+	// compact the prior list to the front of the array.
+	// order doesn't matter.
+	pos := 0
+	last := len(p.recentIncomingBloomFilters) - 1
+	oldestRound := currentRound + 1
+	firstOfOldest := -1
+	for pos <= last {
+		if elemOk(pos) {
+			if p.recentIncomingBloomFilters[pos].round < oldestRound {
+				oldestRound = p.recentIncomingBloomFilters[pos].round
+				firstOfOldest = pos
+			}
+			pos++
+			continue
+		}
+		p.recentIncomingBloomFilters[pos] = p.recentIncomingBloomFilters[last]
+		p.recentIncomingBloomFilters[last].filter = nil // GC
+		last--
+	}
+	p.recentIncomingBloomFilters = p.recentIncomingBloomFilters[:last+1]
+	// Simple case: append
+	if last+1 < maxIncomingBloomFilterHistory {
 		p.recentIncomingBloomFilters = append(p.recentIncomingBloomFilters, bf)
+		return
 	}
+	// Too much traffic case: replace the first thing we find of the oldest round
+	if firstOfOldest >= 0 {
+		p.recentIncomingBloomFilters[firstOfOldest] = bf
+		return
+	}
+	// This line should be unreachable, but putting in an error log to test that assumption.
+	p.log.Error("addIncomingBloomFilter failed to trim p.recentIncomingBloomFilters (new filter lost)")
 }
 
 func (p *Peer) updateRequestParams(modulator, offset byte) {
-	if p.requestedTransactionsModulator == modulator && p.requestedTransactionsOffset == offset {
-		return
-	}
-	p.requestedTransactionsModulator, p.requestedTransactionsOffset = modulator, offset
+	p.requestedTransactionsModulator = modulator
+	p.requestedTransactionsOffset = offset
 }
 
 // update the recentSentTransactions with the incoming transaction groups. This would prevent us from sending the received transactions back to the

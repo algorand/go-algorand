@@ -45,6 +45,7 @@ type encodedBloomFilter struct {
 	BloomFilterType byte          `codec:"t"`
 	EncodingParams  requestParams `codec:"p"`
 	BloomFilter     []byte        `codec:"f,allocbound=maxBloomFilterSize"`
+	ClearPrevious   byte          `codec:"c"`
 }
 
 type requestParams struct {
