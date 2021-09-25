@@ -664,9 +664,6 @@ func (nf *nopFilter) Set(x []byte) {}
 func (nf *nopFilter) Test(x []byte) bool {
 	return false
 }
-func (nf *nopFilter) NumEntries() int {
-	return 0
-}
 func (nf *nopFilter) MarshalBinary() ([]byte, error) {
 	return nil, nil
 }
