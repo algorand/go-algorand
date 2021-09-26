@@ -463,6 +463,7 @@ func MakeDebugBalances(l ledgerForCowBase, round basics.Round, proto protocol.Co
 		rnd:      round - 1,
 		proto:    config.Consensus[proto],
 		accounts: make(map[basics.Address]basics.AccountData),
+		creators: make(map[creatable]FoundAddress),
 	}
 
 	hdr := bookkeeping.BlockHeader{
@@ -470,7 +471,8 @@ func MakeDebugBalances(l ledgerForCowBase, round basics.Round, proto protocol.Co
 		UpgradeState: bookkeeping.UpgradeState{CurrentProtocol: proto},
 	}
 	hint := 2
-	cb := makeRoundCowState(base, hdr, config.Consensus[proto], prevTimestamp, hint)
+	// passing an empty AccountTotals here is fine since it's only being used by the top level cow state object.
+	cb := makeRoundCowState(base, hdr, config.Consensus[proto], prevTimestamp, ledgercore.AccountTotals{}, hint)
 	return cb
 }
 
