@@ -244,7 +244,7 @@ $ASSETID2
 $ASSETID3
 $APPASSETID"
 [[ "$(asset_ids "$SMALL")" = $IDs ]] # has new asset
-[ "$(asset_bal "$SMALL" | awk 'FNR==4{print $0}')" = 1000 ] # correct balances
+[ "$(asset_bal "$SMALL" | awk 'FNR==4{print $0}')" = "1000 " ] # correct balances
 [ "$(asset_bal "$APPACCT")" = 999000 ] # 1k sent
 
 # freeze asset
@@ -262,6 +262,6 @@ payin 1000 -o "$T/pay1.tx"
 cat "$T/mint.tx" "$T/pay1.tx" | ${gcmd} clerk group -i - -o "$T/group.tx"
 sign group
 ${gcmd} clerk rawsend -f "$T/group.stx"
-[ "$(asset_bal "$SMALL" | awk 'FNR==4{print $0}')" = 2000 ] # minted 1000
+[ "$(asset_bal "$SMALL" | awk 'FNR==4{print $0}')" = " 2000" ] # minted 1000
 
 date "+${scriptname} OK %Y%m%d_%H%M%S"
