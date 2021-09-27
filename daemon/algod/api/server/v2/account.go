@@ -401,8 +401,10 @@ func ApplicationParamsToAppParams(gap *generated.ApplicationParams) (basics.AppP
 func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *basics.AppParams) generated.Application {
 	globalState := convertTKVToGenerated(&appParams.GlobalState)
 	extraProgramPages := uint64(appParams.ExtraProgramPages)
+	addr := basics.AppIndex(appIdx).Address().String()
 	app := generated.Application{
-		Id: uint64(appIdx),
+		Id:      uint64(appIdx),
+		Address: &addr,
 		Params: generated.ApplicationParams{
 			Creator:           creator,
 			ApprovalProgram:   appParams.ApprovalProgram,

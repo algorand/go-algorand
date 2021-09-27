@@ -784,6 +784,10 @@
             "description": "\\[appidx\\] application index.",
             "type": "integer"
           },
+          "address":{
+            "description":"\\[appaddr\\] application address",
+            "type":"string"
+          },
           "params": {
             "$ref": "#/components/schemas/ApplicationParams"
           }

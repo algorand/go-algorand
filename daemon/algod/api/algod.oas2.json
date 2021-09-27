@@ -1616,6 +1616,10 @@
           "description": "\\[appidx\\] application index.",
           "type": "integer"
         },
+        "address":{
+          "description":"\\[appaddr\\] application address",
+          "type":"string"
+        },
         "params": {
           "description": "\\[appparams\\] application parameters.",
           "$ref": "#/definitions/ApplicationParams"

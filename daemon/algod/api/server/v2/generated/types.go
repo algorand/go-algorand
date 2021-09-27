@@ -107,6 +107,9 @@ type AccountStateDelta struct {
 // Application defines model for Application.
 type Application struct {
 
+	// \[appaddr\] application address
+	Address *string `json:"address,omitempty"`
+
 	// \[appidx\] application index.
 	Id uint64 `json:"id"`
 
