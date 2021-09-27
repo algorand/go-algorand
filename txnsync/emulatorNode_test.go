@@ -19,7 +19,7 @@ package txnsync
 import (
 	"errors"
 	"fmt"
-	"github.com/algorand/msgp/msgp"
+	"github.com/algorand/go-algorand/txnsync/testing"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -77,220 +77,9 @@ type emulatedNode struct {
 	nodeRunning                         chan struct{} // channel is closed when node is running.
 }
 
-type proposalData struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	ProposalBytes []byte              `codec:"b,allocbound=maxNumProposalBytes"`
-	TxGroupIds    []transactions.Txid `codec:"h,allocbound=maxNumTxGroupHashesBytes"` // TODO: make this []byte
-}
-
-const maxNumProposalBytes = 30000       // sizeof(block header)
-const maxNumTxGroupHashesBytes = 320000 // 10K * 32
-
-// MarshalMsg implements msgp.Marshaler
-func (z *proposalData) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	// omitempty: check for empty values
-	zb0002Len := uint32(2)
-	var zb0002Mask uint8 /* 3 bits */
-	if len((*z).ProposalBytes) == 0 {
-		zb0002Len--
-		zb0002Mask |= 0x2
-	}
-	if len((*z).TxGroupIds) == 0 {
-		zb0002Len--
-		zb0002Mask |= 0x4
-	}
-	// variable map header, size zb0002Len
-	o = append(o, 0x80|uint8(zb0002Len))
-	if zb0002Len != 0 {
-		if (zb0002Mask & 0x2) == 0 { // if not empty
-			// string "b"
-			o = append(o, 0xa1, 0x62)
-			o = msgp.AppendBytes(o, (*z).ProposalBytes)
-		}
-		if (zb0002Mask & 0x4) == 0 { // if not empty
-			// string "h"
-			o = append(o, 0xa1, 0x68)
-			if (*z).TxGroupIds == nil {
-				o = msgp.AppendNil(o)
-			} else {
-				o = msgp.AppendArrayHeader(o, uint32(len((*z).TxGroupIds)))
-			}
-			for zb0001 := range (*z).TxGroupIds {
-				o = (*z).TxGroupIds[zb0001].MarshalMsg(o)
-			}
-		}
-	}
-	return
-}
-
-func (_ *proposalData) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*proposalData)
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *proposalData) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0002 int
-	var zb0003 bool
-	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 > 0 {
-			zb0002--
-			var zb0004 int
-			zb0004, err = msgp.ReadBytesBytesHeader(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ProposalBytes")
-				return
-			}
-			if zb0004 > maxNumProposalBytes {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(maxNumProposalBytes))
-				return
-			}
-			(*z).ProposalBytes, bts, err = msgp.ReadBytesBytes(bts, (*z).ProposalBytes)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ProposalBytes")
-				return
-			}
-		}
-		if zb0002 > 0 {
-			zb0002--
-			var zb0005 int
-			var zb0006 bool
-			zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "TxGroupIds")
-				return
-			}
-			if zb0005 > maxNumTxGroupHashesBytes {
-				err = msgp.ErrOverflow(uint64(zb0005), uint64(maxNumTxGroupHashesBytes))
-				err = msgp.WrapError(err, "struct-from-array", "TxGroupIds")
-				return
-			}
-			if zb0006 {
-				(*z).TxGroupIds = nil
-			} else if (*z).TxGroupIds != nil && cap((*z).TxGroupIds) >= zb0005 {
-				(*z).TxGroupIds = ((*z).TxGroupIds)[:zb0005]
-			} else {
-				(*z).TxGroupIds = make([]transactions.Txid, zb0005)
-			}
-			for zb0001 := range (*z).TxGroupIds {
-				bts, err = (*z).TxGroupIds[zb0001].UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "TxGroupIds", zb0001)
-					return
-				}
-			}
-		}
-		if zb0002 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0002)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0003 {
-			(*z) = proposalData{}
-		}
-		for zb0002 > 0 {
-			zb0002--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-			switch string(field) {
-			case "b":
-				var zb0007 int
-				zb0007, err = msgp.ReadBytesBytesHeader(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "ProposalBytes")
-					return
-				}
-				if zb0007 > maxNumProposalBytes {
-					err = msgp.ErrOverflow(uint64(zb0007), uint64(maxNumProposalBytes))
-					return
-				}
-				(*z).ProposalBytes, bts, err = msgp.ReadBytesBytes(bts, (*z).ProposalBytes)
-				if err != nil {
-					err = msgp.WrapError(err, "ProposalBytes")
-					return
-				}
-			case "h":
-				var zb0008 int
-				var zb0009 bool
-				zb0008, zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "TxGroupIds")
-					return
-				}
-				if zb0008 > maxNumTxGroupHashesBytes {
-					err = msgp.ErrOverflow(uint64(zb0008), uint64(maxNumTxGroupHashesBytes))
-					err = msgp.WrapError(err, "TxGroupIds")
-					return
-				}
-				if zb0009 {
-					(*z).TxGroupIds = nil
-				} else if (*z).TxGroupIds != nil && cap((*z).TxGroupIds) >= zb0008 {
-					(*z).TxGroupIds = ((*z).TxGroupIds)[:zb0008]
-				} else {
-					(*z).TxGroupIds = make([]transactions.Txid, zb0008)
-				}
-				for zb0001 := range (*z).TxGroupIds {
-					bts, err = (*z).TxGroupIds[zb0001].UnmarshalMsg(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "TxGroupIds", zb0001)
-						return
-					}
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-func (_ *proposalData) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*proposalData)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *proposalData) Msgsize() (s int) {
-	s = 1 + 2 + msgp.BytesPrefixSize + len((*z).ProposalBytes) + 2 + msgp.ArrayHeaderSize
-	for zb0001 := range (*z).TxGroupIds {
-		s += (*z).TxGroupIds[zb0001].Msgsize()
-	}
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *proposalData) MsgIsZero() bool {
-	return (len((*z).ProposalBytes) == 0) && (len((*z).TxGroupIds) == 0)
-}
-
 // cache used by the peer to keep track of which proposals not to send
 type proposalCache struct {
-	proposalData
+	testing.ProposalData
 
 	txGroupIDIndex      map[transactions.Txid]int
 	txGroups            []pooldata.SignedTxGroup
@@ -344,6 +133,10 @@ func makeEmulatedNode(emulator *emulator, nodeIdx int) *emulatedNode {
 
 func (n *emulatedNode) Events() <-chan Event {
 	return n.externalEvents
+}
+
+func (n *emulatedNode) ProposalFilterCh() <-chan crypto.Digest {
+	return nil
 }
 
 func (n *emulatedNode) NotifyMonitor() chan struct{} {
@@ -615,7 +408,7 @@ func (p *networkPeer) GetAddress() string {
 }
 
 func (n *emulatedNode) RelayProposal(proposalBytes []byte, txGroups []pooldata.SignedTxGroup) {
-	data := proposalData{
+	data := testing.ProposalData{
 		ProposalBytes: proposalBytes,
 		TxGroupIds:    make([]transactions.Txid, len(txGroups)),
 	}
@@ -624,19 +417,19 @@ func (n *emulatedNode) RelayProposal(proposalBytes []byte, txGroups []pooldata.S
 		data.TxGroupIds[i] = txGroup.GroupTransactionID
 	}
 
-	n.proposals = append(n.proposals, &proposalCache{proposalData: data, txGroups: txGroups, numTxGroupsReceived: len(txGroups)})
+	n.proposals = append(n.proposals, &proposalCache{ProposalData: data, txGroups: txGroups, numTxGroupsReceived: len(txGroups)})
 
 	n.externalEvents <- MakeBroadcastProposalRequestEvent(protocol.Encode(&data), txGroups)
 }
 
-func (n *emulatedNode) HandleProposalMessage(proposalDataBytes []byte, txGroups []pooldata.SignedTxGroup, peer *Peer) []byte {
-	var data proposalData
+func (n *emulatedNode) HandleProposalMessage(proposalDataBytes []byte, txGroups []pooldata.SignedTxGroup, peer *Peer) {
+	var data testing.ProposalData
 	var pc *proposalCache
 	protocol.Decode(proposalDataBytes, &data)
 
 	if proposalDataBytes != nil {
 		pc = &proposalCache{
-			proposalData:   data,
+			ProposalData:   data,
 			txGroupIDIndex: make(map[transactions.Txid]int, len(data.TxGroupIds)),
 			txGroups:       make([]pooldata.SignedTxGroup, len(data.TxGroupIds)),
 		}
@@ -647,7 +440,6 @@ func (n *emulatedNode) HandleProposalMessage(proposalDataBytes []byte, txGroups 
 	} else {
 		pc = n.proposals[len(n.proposals)-1]
 	}
-	// TODO attempt to fill receivedTxns with txpool
 
 	for _, txGroup := range txGroups {
 		if index, found := pc.txGroupIDIndex[txGroup.Transactions.ID()]; found && pc.txGroups[index].Transactions == nil {
@@ -655,10 +447,4 @@ func (n *emulatedNode) HandleProposalMessage(proposalDataBytes []byte, txGroups 
 			pc.numTxGroupsReceived++
 		}
 	}
-
-	if pc.numTxGroupsReceived == len(pc.txGroups) {
-		// TODO send proposal to agreement
-		return protocol.Encode(&pc.proposalData)
-	}
-	return nil
 }

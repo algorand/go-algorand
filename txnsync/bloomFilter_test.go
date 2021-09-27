@@ -338,6 +338,8 @@ type justRandomFakeNode struct {
 
 func (fn *justRandomFakeNode) Events() <-chan Event { return nil }
 
+func (fn *justRandomFakeNode) ProposalFilterCh() <-chan crypto.Digest { return nil }
+
 func (fn *justRandomFakeNode) GetCurrentRoundSettings() (out RoundSettings) { return }
 
 func (fn *justRandomFakeNode) Clock() (out timers.WallClock) { return }
@@ -368,6 +370,5 @@ func (fn *justRandomFakeNode) NotifyMonitor() chan struct{} { return nil }
 func (fn *justRandomFakeNode) RelayProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice) {
 }
 
-func (fn *justRandomFakeNode) HandleProposalMessage(proposalDataBytes []byte, txGroups []pooldata.SignedTxGroup, peer *Peer) []byte {
-	return nil
+func (fn *justRandomFakeNode) HandleProposalMessage(proposalDataBytes []byte, txGroups []pooldata.SignedTxGroup, peer *Peer) {
 }

@@ -56,6 +56,10 @@ func (fn *mockNodeConnector) Events() <-chan Event {
 	return nil
 }
 
+func (fn *mockNodeConnector) ProposalFilterCh() <-chan crypto.Digest {
+	return nil
+}
+
 func (fn *mockNodeConnector) GetCurrentRoundSettings() (out RoundSettings) { return }
 
 func (fn *mockNodeConnector) Clock() (out timers.WallClock) {
@@ -91,8 +95,7 @@ func (fn *mockNodeConnector) NotifyMonitor() chan struct{} { return nil }
 func (fn *mockNodeConnector) RelayProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice) {
 }
 
-func (fn *mockNodeConnector) HandleProposalMessage(proposalDataBytes []byte, txGroups []pooldata.SignedTxGroup, peer *Peer) []byte {
-	return nil
+func (fn *mockNodeConnector) HandleProposalMessage(proposalDataBytes []byte, txGroups []pooldata.SignedTxGroup, peer *Peer) {
 }
 
 type mockThreadPool struct {
