@@ -18,11 +18,11 @@ package txnsync
 
 import (
 	"errors"
-	"github.com/algorand/go-algorand/crypto"
 	"time"
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/pooldata"
 )
 

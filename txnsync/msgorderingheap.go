@@ -19,6 +19,7 @@ package txnsync
 import (
 	"container/heap"
 	"errors"
+
 	"github.com/algorand/go-deadlock"
 )
 

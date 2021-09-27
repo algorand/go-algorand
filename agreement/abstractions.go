@@ -19,8 +19,6 @@ package agreement
 import (
 	"context"
 	"errors"
-	"github.com/algorand/go-algorand/data/pooldata"
-	"github.com/algorand/go-algorand/data/transactions"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -29,6 +27,8 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
+	"github.com/algorand/go-algorand/data/pooldata"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
 

@@ -19,10 +19,10 @@ package txnsync
 import (
 	"context"
 	"errors"
-	"github.com/algorand/go-algorand/crypto"
 	"sort"
 	"time"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/util/timers"
