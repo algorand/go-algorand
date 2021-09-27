@@ -1951,7 +1951,7 @@ func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, fs txnFiel
 		sv.Uint = uint64(txn.FirstValid)
 	case FirstValidTime:
 		if cx.EvalParams.FirstValidTimestamp == 0 {
-			return sv, fmt.Errorf("unable to obtain timestamp for %d", txn.FirstValid-1)
+			return sv, fmt.Errorf("unable to obtain timestamp for round %d", txn.FirstValid.SubSaturate(1))
 		}
 		sv.Uint = cx.EvalParams.FirstValidTimestamp
 	case LastValid:
