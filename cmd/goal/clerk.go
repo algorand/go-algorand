@@ -131,6 +131,7 @@ func init() {
 	dryrunCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "consensus protocol version id string")
 	dryrunCmd.Flags().BoolVar(&dumpForDryrun, "dryrun-dump", false, "Dump in dryrun format acceptable by dryrun REST api instead of running")
 	dryrunCmd.Flags().Var(&dumpForDryrunFormat, "dryrun-dump-format", "Dryrun dump format: "+dumpForDryrunFormat.AllowedString())
+	dryrunCmd.Flags().StringSliceVar(&dumpForDryrunAccts, "dryrun-accounts", nil, "additional accounts to include into dryrun request obj")
 	dryrunCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing dryrun state object")
 	dryrunCmd.MarkFlagRequired("txfile")
 
@@ -484,18 +485,12 @@ var sendCmd = &cobra.Command{
 			}
 		} else {
 			if dumpForDryrun {
-				// Write dryrun data to file
-				proto, _ := getProto(protoVersion)
-				data, err := libgoal.MakeDryrunStateBytes(client, stx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
-				if err != nil {
-					reportErrorf(err.Error())
-				}
-				writeFile(outFilename, data, 0600)
+				err = writeDryrunReqToFile(client, stx, outFilename)
 			} else {
 				err = writeFile(outFilename, protocol.Encode(&stx), 0600)
-				if err != nil {
-					reportErrorf(err.Error())
-				}
+			}
+			if err != nil {
+				reportErrorf(err.Error())
 			}
 		}
 	},
@@ -1069,7 +1064,11 @@ var dryrunCmd = &cobra.Command{
 			// Write dryrun data to file
 			dataDir := ensureSingleDataDir()
 			client := ensureFullClient(dataDir)
-			data, err := libgoal.MakeDryrunStateBytes(client, nil, txgroup, string(proto), dumpForDryrunFormat.String())
+			accts, err := unmarshalSlice(dumpForDryrunAccts)
+			if err != nil {
+				reportErrorf(err.Error())
+			}
+			data, err := libgoal.MakeDryrunStateBytes(client, nil, txgroup, accts, string(proto), dumpForDryrunFormat.String())
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -1181,4 +1180,17 @@ var dryrunRemoteCmd = &cobra.Command{
 			}
 		}
 	},
+}
+
+// unmarshalSlice converts string addresses to basics.Address
+func unmarshalSlice(accts []string) ([]basics.Address, error) {
+	result := make([]basics.Address, 0, len(accts))
+	for _, acct := range accts {
+		addr, err := basics.UnmarshalChecksumAddress(acct)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, addr)
+	}
+	return result, nil
 }

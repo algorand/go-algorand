@@ -10,7 +10,8 @@ The stack starts empty and contains values of either uint64 or bytes
 4096 bytes in length). Most operations act on the stack, popping
 arguments from it and pushing results to it.
 
-The maximum stack depth is currently 1000.
+The maximum stack depth is currently 1000. If the stack depth is
+exceed or if a `bytes` element exceed 4096 bytes, the program fails.
 
 ## Scratch Space
 
@@ -36,11 +37,12 @@ TEAL LogicSigs run in Algorand nodes as part of testing a proposed transaction t
 
 If an authorized program executes and finishes with a single non-zero uint64 value on the stack then that program has validated the transaction it is attached to.
 
-The TEAL program has access to data from the transaction it is attached to (`txn` op), any transactions in a transaction group it is part of (`gtxn` op), and a few global values like consensus parameters (`global` op). Some "Args" may be attached to a transaction being validated by a TEAL program. Args are an array of byte strings. A common pattern would be to have the key to unlock some contract as an Arg. Args are recorded on the blockchain and publicly visible when the transaction is submitted to the network. These LogicSig Args are _not_ signed.
+The TEAL program has access to data from the transaction it is attached to (`txn` op), any transactions in a transaction group it is part of (`gtxn` op), and a few global values like consensus parameters (`global` op). Some "Args" may be attached to a transaction being validated by a TEAL program. Args are an array of byte strings. A common pattern would be to have the key to unlock some contract as an Arg. Args are recorded on the blockchain and publicly visible when the transaction is submitted to the network. These LogicSig Args are _not_ part of the transaction ID nor of the TxGroup hash. They also cannot be read from other TEAL programs in the group of transactions.
 
 A program can either authorize some delegated action on a normal private key signed or multisig account or be wholly in charge of a contract account.
 
-* If the account has signed the program (an ed25519 signature on "Program" concatenated with the program bytes) then if the program returns true the transaction is authorized as if the account had signed it. This allows an account to hand out a signed program so that other users can carry out delegated actions which are approved by the program.
+* If the account has signed the program (an ed25519 signature on "Program" concatenated with the program bytes) then if the program returns true the transaction is authorized as if the account had signed it. This allows an account to hand out a signed program so that other users can carry out delegated actions which are approved by the program. Note that LogicSig Args are _not_ signed.
+
 * If the SHA512_256 hash of the program (prefixed by "Program") is equal to the transaction Sender address then this is a contract account wholly controlled by the program. No other signature is necessary or possible. The only way to execute a transaction against the contract account is for the program to approve it.
 
 The TEAL bytecode plus the length of all Args must add up to no more than 1000 bytes (consensus parameter LogicSigMaxSize). Each TEAL op has an associated cost and the program cost must total no more than 20000 (consensus parameter LogicSigMaxCost). Most ops have a cost of 1, but a few slow crypto ops are much higher. Prior to v4, the program's cost was estimated as the static sum of all the opcode costs in the program (whether they were actually executed or not). Beginning with v4, the program's cost is tracked dynamically, while being evaluated. If the program exceeds its budget, it fails.
@@ -464,9 +466,9 @@ transaction types, are rejected by `itxn_submit`.
 
 | Op | Description |
 | --- | --- |
-| `itxn_begin` | Begin preparation of a new inner transaction |
-| `itxn_field f` | Set field F of the current inner transaction to X |
-| `itxn_submit` | Execute the current inner transaction. Fail if 16 inner transactions have already been executed, or if the transaction itself fails. |
+| `itxn_begin` | begin preparation of a new inner transaction |
+| `itxn_field f` | set field F of the current inner transaction to X |
+| `itxn_submit` | execute the current inner transaction. Fail if 16 inner transactions have already been executed, or if the transaction itself fails. |
 | `itxn f` | push field F of the last inner transaction to stack |
 | `itxna f i` | push Ith value of the array field F of the last inner transaction to stack |
 

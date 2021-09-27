@@ -51,7 +51,7 @@ type Txn struct {
 	Type protocol.TxType
 
 	Sender      basics.Address
-	Fee         uint64
+	Fee         interface{} // basics.MicroAlgos, uint64, int, or nil
 	FirstValid  basics.Round
 	LastValid   basics.Round
 	Note        []byte
@@ -113,7 +113,7 @@ func (tx *Txn) Noted(note string) *Txn {
 // FillDefaults populates some obvious defaults from config params,
 // unless they have already been set.
 func (tx *Txn) FillDefaults(params config.ConsensusParams) {
-	if tx.Fee == 0 {
+	if tx.Fee == nil {
 		tx.Fee = params.MinTxnFee
 	}
 	if tx.LastValid == 0 {
@@ -146,11 +146,23 @@ func assemble(source string) []byte {
 
 // Txn produces a transactions.Transaction from the fields in this Txn
 func (tx Txn) Txn() transactions.Transaction {
+	switch fee := tx.Fee.(type) {
+	case basics.MicroAlgos:
+		// nothing, already have MicroAlgos
+	case uint64:
+		tx.Fee = basics.MicroAlgos{Raw: fee}
+	case int:
+		if fee >= 0 {
+			tx.Fee = basics.MicroAlgos{Raw: uint64(fee)}
+		}
+	case nil:
+		tx.Fee = basics.MicroAlgos{}
+	}
 	return transactions.Transaction{
 		Type: tx.Type,
 		Header: transactions.Header{
 			Sender:      tx.Sender,
-			Fee:         basics.MicroAlgos{Raw: tx.Fee},
+			Fee:         tx.Fee.(basics.MicroAlgos),
 			FirstValid:  tx.FirstValid,
 			LastValid:   tx.LastValid,
 			Note:        tx.Note,
