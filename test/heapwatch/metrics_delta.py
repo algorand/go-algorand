@@ -8,6 +8,7 @@ import glob
 import gzip
 import logging
 import json
+import math
 import os
 import re
 import statistics
@@ -179,12 +180,20 @@ class summary:
             mins.append(min(txp))
             maxs.append(max(txp))
             means.append(statistics.mean(txp))
+        if not means or not maxs or not mins:
+            return 'txnpool(no stats)'
         return 'txnpool({} {} {} {} {})'.format(
             min(mins), min(means), statistics.mean(means), max(means), max(maxs)
         )
 
     def __str__(self):
-        return '{}\n{}\nsummary: {:0.2f} TPS, {:0.0f} tx B/s, {:0.0f} rx B/s'.format(self.byMsg(), self.txPool(), self.tpsMeanSum/self.sumsCount, self.txBpsMeanSum/self.sumsCount, self.rxBpsMeanSum/self.sumsCount)
+        if not self.sumsCount:
+            tps, txbps, rxbps = math.nan, math.nan, math.nan
+        else:
+            tps = self.tpsMeanSum/self.sumsCount
+            txbps = self.txBpsMeanSum/self.sumsCount
+            rxbps = self.rxBpsMeanSum/self.sumsCount
+        return '{}\n{}\nsummary: {:0.2f} TPS, {:0.0f} tx B/s, {:0.0f} rx B/s'.format(self.byMsg(), self.txPool(), tps, txbps, rxbps)
 
 def anynickre(nick_re, nicks):
     if not nick_re:
@@ -216,7 +225,7 @@ def gather_metrics_files_by_nick(metrics_files, metrics_dirs=None):
             continue
         nick = m.group(1)
         dapp(filesByNick, nick, path)
-    return filesByNick
+    return tf_inventory_path, filesByNick
 
 def main():
     test_metric_line_re()
@@ -240,7 +249,7 @@ def main():
     if args.dir:
         metrics_dirs.add(args.dir)
         metrics_files += glob.glob(os.path.join(args.dir, '*.metrics'))
-    filesByNick = gather_metrics_files_by_nick(metrics_files, metrics_dirs)
+    tf_inventory_path, filesByNick = gather_metrics_files_by_nick(metrics_files, metrics_dirs)
     if not tf_inventory_path:
         for md in metrics_dirs:
             tp = os.path.join(md, 'terraform-inventory.host')
@@ -270,7 +279,7 @@ def main():
             elif len(found) > 1:
                 logger.warning('ip %s (%s) found in nicks: %r', ip, name, found)
             else:
-                logger.warning('ip %s no nick')
+                logger.warning('ip %s (%s) no nick', ip, name)
         #logger.debug('nick_to_tfname %r', nick_to_tfname)
 
     if args.nick_re:
