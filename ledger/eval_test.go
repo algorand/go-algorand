@@ -408,8 +408,7 @@ func TestPrepareEvalParams(t *testing.T) {
 		for j, testCase := range cases {
 			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
 				eval.proto = param
-				res, err := eval.prepareEvalParams(testCase.group)
-				require.NoError(t, err)
+				res := eval.prepareEvalParams(testCase.group)
 				require.Equal(t, len(res), len(testCase.group))
 
 				// Compute the expected transaction group without ApplyData for

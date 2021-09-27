@@ -39,7 +39,7 @@ type indexerLedgerForEval interface {
 	GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]FoundAddress, error)
 	GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]FoundAddress, error)
 	Totals() (ledgercore.AccountTotals, error)
-	// BlockTimeStamp returns timestamp for a block up to TxnMaxLife-1 back from Latest, or 0 if not exist
+	// BlockTimeStamp returns timestamp for a block up to TxnMaxLife+1 back from Latest, or 0 if not exist
 	BlockTimeStamp(rnd basics.Round) int64
 }
 

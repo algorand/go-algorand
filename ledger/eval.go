@@ -700,7 +700,7 @@ func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithA
 
 // prepareEvalParams creates a logic.EvalParams for each ApplicationCall
 // transaction in the group
-func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWithAD) ([]*logic.EvalParams, error) {
+func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWithAD) []*logic.EvalParams {
 	var groupNoAD []transactions.SignedTxn
 	var pastSideEffects []logic.EvalSideEffects
 	var minTealVersion uint64
@@ -745,7 +745,7 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 			FirstValidTimestamp:     uint64(ts),
 		}
 	}
-	return res, nil
+	return res
 }
 
 // transactionGroup tentatively executes a group of transactions as part of this block evaluation.
@@ -766,10 +766,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	var groupTxBytes int
 
 	cow := eval.state.child(len(txgroup))
-	evalParams, err := eval.prepareEvalParams(txgroup)
-	if err != nil {
-		return err
-	}
+	evalParams := eval.prepareEvalParams(txgroup)
 
 	// Evaluate each transaction in the group
 	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))

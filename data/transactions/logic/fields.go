@@ -35,7 +35,7 @@ const (
 	Fee
 	// FirstValid Transaction.FirstValid
 	FirstValid
-	// FirstValidTime Transaction.FirstValidTime
+	// FirstValidTime is pseudo (runtime) field holding value of blocks[FirstValid-1].TimeStamp
 	FirstValidTime
 	// LastValid Transaction.LastValid
 	LastValid
