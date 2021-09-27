@@ -244,7 +244,7 @@ $ASSETID2
 $ASSETID3
 $APPASSETID"
 [[ "$(asset_ids "$SMALL")" = $IDs ]] # has new asset
-[ "$(asset_bal "$SMALL" | awk 'FNR==4{print $0}')" = "1000 " ] # correct balances
+[ "$(asset_bal "$SMALL" | awk 'FNR==4{print $0}')" = " 1000" ] # correct balances
 [ "$(asset_bal "$APPACCT")" = 999000 ] # 1k sent
 
 # freeze asset
