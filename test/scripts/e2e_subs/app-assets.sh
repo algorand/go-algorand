@@ -213,16 +213,14 @@ appl "optin():void" --foreign-asset="$ASSETID3" --from="$SMALL"
 
 IDs="$ASSETID
 $ASSETID2
-$ASSETID3
-"
+$ASSETID3"
 [[ "$(asset_ids "$APPACCT")" = $IDs ]]  # account has 3 assets
 
 # opt out of assets
 appl "close():void"  --foreign-asset="$ASSETID2" --from="$SMALL"
 IDs="$ASSETID
-$ASSETID3
-"
-[[ "$(asset_ids "$APPACCT")" = "$IDs" ]] # account has 2 assets
+$ASSETID3"
+[[ "$(asset_ids "$APPACCT")" = $IDs ]] # account has 2 assets
 appl "close():void" --foreign-asset="$ASSETID" --from="$SMALL"
 appl "close():void" --foreign-asset="$ASSETID3" --from="$SMALL"
 [[ "$(asset_ids "$APPACCT")" = "" ]] # account has no assets
@@ -244,10 +242,9 @@ ${gcmd} clerk rawsend -f "$T/group.stx"
 IDs="$ASSETID
 $ASSETID2
 $ASSETID3
-$APPASSETID
-"
-[[ "$(asset_ids "$SMALL")" = "$IDs" ]] # has new asset
-[[ "$(asset_bal "$SMALL")" = "999100\n1000000\n1000000\n1000" ]] # correct balances
+$APPASSETID"
+[[ "$(asset_ids "$SMALL")" = $IDs ]] # has new asset
+[ "$(asset_bal "$SMALL" | awk 'FNR==4{print $0}')" = 1000 ] # correct balances
 [ "$(asset_bal "$APPACCT")" = 999000 ] # 1k sent
 
 # freeze asset
@@ -265,6 +262,6 @@ payin 1000 -o "$T/pay1.tx"
 cat "$T/mint.tx" "$T/pay1.tx" | ${gcmd} clerk group -i - -o "$T/group.tx"
 sign group
 ${gcmd} clerk rawsend -f "$T/group.stx"
-[[ "$(asset_bal "$SMALL")" = "999100\n1000000\n1000000\n2000" ]] # minted 1000
+[ "$(asset_bal "$SMALL" | awk 'FNR==4{print $0}')" = 2000 ] # minted 1000
 
 date "+${scriptname} OK %Y%m%d_%H%M%S"
