@@ -786,33 +786,78 @@ func TestAcfgAction(t *testing.T) {
 		 itxn_field ConfigAssetName
 		 byte "https://gold.rush/"
 		 itxn_field ConfigAssetURL
-		 global CurrentApplicationAddress
+
+         global CurrentApplicationAddress
          dup
          dup2
-		 itxn_field ConfigAssetManager
-		 itxn_field ConfigAssetReserve
-		 itxn_field ConfigAssetFreeze
-		 itxn_field ConfigAssetClawback
+         itxn_field ConfigAssetManager
+         itxn_field ConfigAssetReserve
+         itxn_field ConfigAssetFreeze
+         itxn_field ConfigAssetClawback
          b submit
 manager:
+         // Put the current values in the itxn
+         txn Assets 0
+         asset_params_get AssetManager
+         assert // exists
+		 itxn_field ConfigAssetManager
+
+         txn Assets 0
+         asset_params_get AssetReserve
+         assert // exists
+		 itxn_field ConfigAssetReserve
+
+         txn Assets 0
+         asset_params_get AssetFreeze
+         assert // exists
+		 itxn_field ConfigAssetFreeze
+
+         txn Assets 0
+         asset_params_get AssetClawback
+         assert // exists
+		 itxn_field ConfigAssetClawback
+
+
          txn ApplicationArgs 0
          byte "manager"
          ==
          bz reserve
+         txn Assets 0
+         itxn_field ConfigAsset
+         txn ApplicationArgs 1
+		 itxn_field ConfigAssetManager
+         b submit
 reserve:
          txn ApplicationArgs 0
          byte "reserve"
          ==
          bz freeze
+         txn Assets 0
+         itxn_field ConfigAsset
+         txn ApplicationArgs 1
+		 itxn_field ConfigAssetReserve
+         b submit
 freeze:
          txn ApplicationArgs 0
          byte "freeze"
          ==
          bz clawback
+         txn Assets 0
+         itxn_field ConfigAsset
+         txn ApplicationArgs 1
+		 itxn_field ConfigAssetFreeze
+         b submit
 clawback:
          txn ApplicationArgs 0
-         byte "manager"
+         byte "clawback"
          ==
+         bz error
+         txn Assets 0
+         itxn_field ConfigAsset
+         txn ApplicationArgs 1
+		 itxn_field ConfigAssetClawback
+         b submit
+error:   err
 submit:  itxn_submit
 `),
 	}
@@ -853,6 +898,33 @@ submit:  itxn_submit
 	require.Equal(t, "oz", asaParams.UnitName)
 	require.Equal(t, "Gold", asaParams.AssetName)
 	require.Equal(t, "https://gold.rush/", asaParams.URL)
+
+	require.Equal(t, appIndex.Address(), asaParams.Manager)
+
+	for _, a := range []string{"reserve", "freeze", "clawback", "manager"} {
+		check := txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[1],
+			ApplicationID:   appIndex,
+			ApplicationArgs: [][]byte{[]byte(a), []byte("junkjunkjunkjunkjunkjunkjunkjunk")},
+			ForeignAssets:   []basics.AssetIndex{asaIndex},
+		}
+		eval = l.nextBlock(t)
+		t.Log(a)
+		eval.txn(t, &check)
+		l.endBlock(t, eval)
+	}
+	// Not the manager anymore so this won't work
+	nodice := txntest.Txn{
+		Type:            "appl",
+		Sender:          addrs[1],
+		ApplicationID:   appIndex,
+		ApplicationArgs: [][]byte{[]byte("freeze"), []byte("junkjunkjunkjunkjunkjunkjunkjunk")},
+		ForeignAssets:   []basics.AssetIndex{asaIndex},
+	}
+	eval = l.nextBlock(t)
+	eval.txn(t, &nodice, "this transaction should be issued by the manager")
+	l.endBlock(t, eval)
 
 }
 
