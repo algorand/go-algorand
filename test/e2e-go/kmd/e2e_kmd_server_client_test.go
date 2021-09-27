@@ -30,6 +30,7 @@ import (
 
 func TestServerStartsStopsSuccessfully(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -46,6 +47,7 @@ func TestServerStartsStopsSuccessfully(t *testing.T) {
 
 func TestBadAuthFails(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
@@ -67,6 +69,7 @@ func TestBadAuthFails(t *testing.T) {
 
 func TestGoodAuthSucceeds(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()

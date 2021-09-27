@@ -22,6 +22,8 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/apply"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 type logicLedger struct {
@@ -35,16 +37,16 @@ type cowForLogicLedger interface {
 	GetCreatableID(groupIdx int) basics.CreatableIndex
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error)
-	BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (basics.EvalDelta, error)
+	BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (transactions.EvalDelta, error)
 
 	SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue, accountIdx uint64) error
 	DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) error
 
-	AppendLog(idx uint64, value string) error
-
 	round() basics.Round
 	prevTimestamp() int64
 	allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
+	txnCounter() uint64
+	incTxnCount()
 }
 
 func newLogicLedger(cow cowForLogicLedger, aidx basics.AppIndex) (*logicLedger, error) {
@@ -85,6 +87,17 @@ func (al *logicLedger) MinBalance(addr basics.Address, proto *config.ConsensusPa
 	}
 
 	return record.MinBalance(proto), nil
+}
+
+func (al *logicLedger) Authorizer(addr basics.Address) (basics.Address, error) {
+	record, err := al.cow.Get(addr, false) // pending rewards unneeded
+	if err != nil {
+		return basics.Address{}, err
+	}
+	if !record.AuthAddr.IsZero() {
+		return record.AuthAddr, nil
+	}
+	return addr, nil
 }
 
 func (al *logicLedger) GetCreatableID(groupIdx int) basics.CreatableIndex {
@@ -234,17 +247,65 @@ func (al *logicLedger) DelGlobal(key string) error {
 	return al.cow.DelKey(al.creator, al.aidx, true, key, 0)
 }
 
-func (al *logicLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error) {
+func (al *logicLedger) GetDelta(txn *transactions.Transaction) (evalDelta transactions.EvalDelta, err error) {
 	return al.cow.BuildEvalDelta(al.aidx, txn)
 }
 
-func (al *logicLedger) AppendLog(txn *transactions.Transaction, value string) error {
-	idx, err := txn.IndexByAppID(txn.ApplicationID)
-	if idx != 0 {
-		return fmt.Errorf("index offset is not 0. logging is allowed for current app only")
+func (al *logicLedger) balances() (apply.Balances, error) {
+	balances, ok := al.cow.(apply.Balances)
+	if !ok {
+		return nil, fmt.Errorf("cannot get a Balances object from %v", al)
+	}
+	return balances, nil
+}
+
+func (al *logicLedger) Perform(tx *transactions.Transaction, spec transactions.SpecialAddresses) (transactions.ApplyData, error) {
+	var ad transactions.ApplyData
+
+	balances, err := al.balances()
+	if err != nil {
+		return ad, err
+	}
+
+	// move fee to pool
+	err = balances.Move(tx.Sender, spec.FeeSink, tx.Fee, &ad.SenderRewards, nil)
+	if err != nil {
+		return ad, err
+	}
+
+	// compared to eval.transaction() it may seem strange that we
+	// increment the transaction count *before* transaction
+	// processing, rather than after. But we need to account for the
+	// fact that our outer transaction has not yet incremented their
+	// count (in addTx()), so we need to increment ahead of use, so we
+	// don't use the same index.  If eval.transaction() incremented
+	// ahead of processing, we'd have to do ours *after* so that we'd
+	// use the next id.  So either way, this would seem backwards at
+	// first glance.
+	al.cow.incTxnCount()
+
+	switch tx.Type {
+	case protocol.PaymentTx:
+		err = apply.Payment(tx.PaymentTxnFields, tx.Header, balances, spec, &ad)
+	case protocol.AssetTransferTx:
+		err = apply.AssetTransfer(tx.AssetTransferTxnFields, tx.Header, balances, spec, &ad)
+	case protocol.AssetConfigTx:
+		err = apply.AssetConfig(tx.AssetConfigTxnFields, tx.Header, balances, spec, &ad, al.cow.txnCounter())
+	case protocol.AssetFreezeTx:
+		err = apply.AssetFreeze(tx.AssetFreezeTxnFields, tx.Header, balances, spec, &ad)
+	default:
+		err = fmt.Errorf("%s tx in AVM", tx.Type)
 	}
 	if err != nil {
-		return err
+		return ad, err
 	}
-	return al.cow.AppendLog(idx, value)
+
+	// We don't check min balances during in app txns.
+
+	// func (eval *BlockEvaluator) checkMinBalance will take care of
+	// it when the top-level txn concludes, as because cow will return
+	// all changed accounts in modifiedAccounts().
+
+	return ad, nil
+
 }

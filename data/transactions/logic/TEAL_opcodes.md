@@ -8,7 +8,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Opcode: 0x00
 - Pops: _None_
 - Pushes: _None_
-- Error. Panic immediately. This is primarily a fencepost against accidental zero bytes getting compiled into programs.
+- Error. Fail immediately. This is primarily a fencepost against accidental zero bytes getting compiled into programs.
 
 ## sha256
 
@@ -18,7 +18,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - SHA256 hash of value X, yields [32]byte
 - **Cost**:
    - 7 (LogicSigVersion = 1)
-   - 35 (2 <= LogicSigVersion <= 5)
+   - 35 (LogicSigVersion >= 2)
 
 ## keccak256
 
@@ -28,7 +28,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Keccak256 hash of value X, yields [32]byte
 - **Cost**:
    - 26 (LogicSigVersion = 1)
-   - 130 (2 <= LogicSigVersion <= 5)
+   - 130 (LogicSigVersion >= 2)
 
 ## sha512_256
 
@@ -38,7 +38,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - SHA512_256 hash of value X, yields [32]byte
 - **Cost**:
    - 9 (LogicSigVersion = 1)
-   - 45 (2 <= LogicSigVersion <= 5)
+   - 45 (LogicSigVersion >= 2)
 
 ## ed25519verify
 
@@ -50,12 +50,66 @@ Ops have a 'cost' of 1 unless otherwise specified.
 
 The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.
 
+## ecdsa_verify v
+
+- Opcode: 0x05 {uint8 curve index}
+- Pops: *... stack*, {[]byte A}, {[]byte B}, {[]byte C}, {[]byte D}, {[]byte E}
+- Pushes: uint64
+- for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}
+- **Cost**: 1700
+- LogicSigVersion >= 5
+
+`ECDSA` Curves:
+
+| Index | Name | Notes |
+| --- | --- | --- |
+| 0 | Secp256k1 | secp256k1 curve |
+
+
+The 32 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack. All values are big-endian encoded. The signed data must be 32 bytes long, and signatures in lower-S form are only accepted.
+
+## ecdsa_pk_decompress v
+
+- Opcode: 0x06 {uint8 curve index}
+- Pops: *... stack*, []byte
+- Pushes: *... stack*, []byte, []byte
+- decompress pubkey A into components X, Y => [*... stack*, X, Y]
+- **Cost**: 650
+- LogicSigVersion >= 5
+
+`ECDSA` Curves:
+
+| Index | Name | Notes |
+| --- | --- | --- |
+| 0 | Secp256k1 | secp256k1 curve |
+
+
+The 33 byte public key in a compressed form to be decompressed into X and Y (top) components. All values are big-endian encoded.
+
+## ecdsa_pk_recover v
+
+- Opcode: 0x07 {uint8 curve index}
+- Pops: *... stack*, {[]byte A}, {uint64 B}, {[]byte C}, {[]byte D}
+- Pushes: *... stack*, []byte, []byte
+- for (data A, recovery id B, signature C, D) recover a public key => [*... stack*, X, Y]
+- **Cost**: 2000
+- LogicSigVersion >= 5
+
+`ECDSA` Curves:
+
+| Index | Name | Notes |
+| --- | --- | --- |
+| 0 | Secp256k1 | secp256k1 curve |
+
+
+S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to deriver a public key. All values are big-endian encoded. The signed data must be 32 bytes long.
+
 ## +
 
 - Opcode: 0x08
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64
-- A plus B. Panic on overflow.
+- A plus B. Fail on overflow.
 
 Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `addw`.
 
@@ -64,14 +118,14 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Opcode: 0x09
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64
-- A minus B. Panic if B > A.
+- A minus B. Fail if B > A.
 
 ## /
 
 - Opcode: 0x0a
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64
-- A divided by B (truncated division). Panic if B == 0.
+- A divided by B (truncated division). Fail if B == 0.
 
 `divmodw` is available to divide the two-element values produced by `mulw` and `addw`.
 
@@ -80,7 +134,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Opcode: 0x0b
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64
-- A times B. Panic on overflow.
+- A times B. Fail on overflow.
 
 Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `mulw`.
 
@@ -168,14 +222,14 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Pushes: uint64
 - converts bytes X as big endian to uint64
 
-`btoi` panics if the input is longer than 8 bytes.
+`btoi` fails if the input is longer than 8 bytes.
 
 ## %
 
 - Opcode: 0x18
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64
-- A modulo B. Panic if B == 0.
+- A modulo B. Fail if B == 0.
 
 ## |
 
@@ -425,6 +479,11 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 54 | LocalNumUint | uint64 | Number of local state integers in ApplicationCall. LogicSigVersion >= 3. |
 | 55 | LocalNumByteSlice | uint64 | Number of local state byteslices in ApplicationCall. LogicSigVersion >= 3. |
 | 56 | ExtraProgramPages | uint64 | Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program. LogicSigVersion >= 4. |
+| 57 | Nonparticipation | uint64 | Marks an account nonparticipating for rewards. LogicSigVersion >= 5. |
+| 58 | Logs | []byte | Log messages emitted by an application call (itxn only). LogicSigVersion >= 5. |
+| 59 | NumLogs | uint64 | Number of Logs (itxn only). LogicSigVersion >= 5. |
+| 60 | CreatedAssetID | uint64 | Asset ID allocated by the creation of an ASA (itxn only). LogicSigVersion >= 5. |
+| 61 | CreatedApplicationID | uint64 | ApplicationID allocated by the creation of an application (itxn only). LogicSigVersion >= 5. |
 
 
 TypeEnum mapping:
@@ -461,8 +520,10 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 | 5 | LogicSigVersion | uint64 | Maximum supported TEAL version. LogicSigVersion >= 2. |
 | 6 | Round | uint64 | Current round number. LogicSigVersion >= 2. |
 | 7 | LatestTimestamp | uint64 | Last confirmed block UNIX timestamp. Fails if negative. LogicSigVersion >= 2. |
-| 8 | CurrentApplicationID | uint64 | ID of current application executing. Fails if no such application is executing. LogicSigVersion >= 2. |
+| 8 | CurrentApplicationID | uint64 | ID of current application executing. Fails in LogicSigs. LogicSigVersion >= 2. |
 | 9 | CreatorAddress | []byte | Address of the creator of the current application. Fails if no such application is executing. LogicSigVersion >= 3. |
+| 10 | CurrentApplicationAddress | []byte | Address that the current application controls. Fails in LogicSigs. LogicSigVersion >= 5. |
+| 11 | GroupID | []byte | ID of the transaction group. 32 zero bytes if the transaction is not part of a group. LogicSigVersion >= 5. |
 
 
 ## gtxn t f
@@ -479,14 +540,14 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 - Opcode: 0x34 {uint8 position in scratch space to load from}
 - Pops: _None_
 - Pushes: any
-- copy a value from scratch space to the stack
+- copy a value from scratch space to the stack. All scratch spaces are 0 at program start.
 
 ## store i
 
 - Opcode: 0x35 {uint8 position in scratch space to store to}
 - Pops: *... stack*, any
 - Pushes: _None_
-- pop a value from the stack and store to scratch space
+- pop value X. store X to the Ith scratch space
 
 ## txna f i
 
@@ -565,6 +626,22 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 - Mode: Application
 
 `gaids` fails unless the requested transaction created an asset or application and X < GroupIndex.
+
+## loads
+
+- Opcode: 0x3e
+- Pops: *... stack*, uint64
+- Pushes: any
+- copy a value from the Xth scratch space to the stack.  All scratch spaces are 0 at program start.
+- LogicSigVersion >= 5
+
+## stores
+
+- Opcode: 0x3f
+- Pops: *... stack*, {uint64 A}, {any B}
+- Pushes: _None_
+- pop indexes A and B. store B to the Ath scratch space
+- LogicSigVersion >= 5
 
 ## bnz target
 
@@ -664,7 +741,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Opcode: 0x4e {uint8 depth}
 - Pops: *... stack*, any
 - Pushes: any
-- remove top of stack, and place it down the stack such that N elements are above it
+- remove top of stack, and place it deeper in the stack such that N elements are above it. Fails if stack depth <= N.
 - LogicSigVersion >= 5
 
 ## uncover n
@@ -672,7 +749,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Opcode: 0x4f {uint8 depth}
 - Pops: *... stack*, any
 - Pushes: any
-- remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack
+- remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack. Fails if stack depth <= N.
 - LogicSigVersion >= 5
 
 ## concat
@@ -683,7 +760,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - pop two byte-arrays A and B and join them, push the result
 - LogicSigVersion >= 2
 
-`concat` panics if the result would be greater than 4096 bytes.
+`concat` fails if the result would be greater than 4096 bytes.
 
 ## substring s e
 
@@ -750,31 +827,31 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - Opcode: 0x58
 - Pops: *... stack*, {[]byte A}, {uint64 B}, {uint64 C}
 - Pushes: []byte
-- pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including B+C, push the substring result. If B or B+C is larger than the array length, the program fails
+- pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including B+C, push the substring result. If B+C is larger than the array length, the program fails
 - LogicSigVersion >= 5
 
-## extract16bits
+## extract_uint16
 
 - Opcode: 0x59
 - Pops: *... stack*, {[]byte A}, {uint64 B}
 - Pushes: uint64
-- pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B or B+2 is larger than the array length, the program fails
+- pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B+2 is larger than the array length, the program fails
 - LogicSigVersion >= 5
 
-## extract32bits
+## extract_uint32
 
 - Opcode: 0x5a
 - Pops: *... stack*, {[]byte A}, {uint64 B}
 - Pushes: uint64
-- pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B or B+4 is larger than the array length, the program fails
+- pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B+4 is larger than the array length, the program fails
 - LogicSigVersion >= 5
 
-## extract64bits
+## extract_uint64
 
 - Opcode: 0x5b
 - Pops: *... stack*, {[]byte A}, {uint64 B}
 - Pushes: uint64
-- pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B or B+8 is larger than the array length, the program fails
+- pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B+8 is larger than the array length, the program fails
 - LogicSigVersion >= 5
 
 ## balance
@@ -819,7 +896,7 @@ params: Txn.Accounts offset (or, since v4, an account address that appears in Tx
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), application id (or, since v4, a Txn.ForeignApps offset), state key. Return: did_exist flag (top of the stack, 1 if exist and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.
+params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), application id (or, since v4, a Txn.ForeignApps offset), state key. Return: did_exist flag (top of the stack, 1 if the application existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.
 
 ## app_global_get
 
@@ -841,7 +918,7 @@ params: state key. Return: value. The value is zero (of type uint64) if the key 
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: Txn.ForeignApps offset (or, since v4, an application id that appears in Txn.ForeignApps or is the CurrentApplicationID), state key. Return: did_exist flag (top of the stack, 1 if exist and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.
+params: Txn.ForeignApps offset (or, since v4, an application id that appears in Txn.ForeignApps or is the CurrentApplicationID), state key. Return: did_exist flag (top of the stack, 1 if the application existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.
 
 ## app_local_put
 
@@ -906,7 +983,7 @@ Deleting a key which is already absent has no effect on the application global s
 | 1 | AssetFrozen | uint64 | Is the asset frozen or not |
 
 
-params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if exist and 0 otherwise), value.
+params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if the asset existed and 0 otherwise), value.
 
 ## asset_params_get i
 
@@ -932,10 +1009,10 @@ params: Txn.Accounts offset (or, since v4, an account address that appears in Tx
 | 8 | AssetReserve | []byte | Reserve address |
 | 9 | AssetFreeze | []byte | Freeze address |
 | 10 | AssetClawback | []byte | Clawback address |
-| 11 | AssetCreator | []byte | Creator address |
+| 11 | AssetCreator | []byte | Creator address. LogicSigVersion >= 5. |
 
 
-params: Before v4, Txn.ForeignAssets offset. Since v4, Txn.ForeignAssets offset or an asset id that appears in Txn.ForeignAssets. Return: did_exist flag (1 if exist and 0 otherwise), value.
+params: Before v4, Txn.ForeignAssets offset. Since v4, Txn.ForeignAssets offset or an asset id that appears in Txn.ForeignAssets. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.
 
 ## app_params_get i
 
@@ -958,9 +1035,10 @@ params: Before v4, Txn.ForeignAssets offset. Since v4, Txn.ForeignAssets offset 
 | 5 | AppLocalNumByteSlice | uint64 | Number of byte array values allowed in Local State |
 | 6 | AppExtraProgramPages | uint64 | Number of Extra Program Pages of code space |
 | 7 | AppCreator | []byte | Creator address |
+| 8 | AppAddress | []byte | Address for which this application has authority |
 
 
-params: Txn.ForeignApps offset or an app id that appears in Txn.ForeignApps. Return: did_exist flag (1 if exist and 0 otherwise), value.
+params: Txn.ForeignApps offset or an app id that appears in Txn.ForeignApps. Return: did_exist flag (1 if the application existed and 0 otherwise), value.
 
 ## min_balance
 
@@ -1053,7 +1131,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0x94
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64
-- A raised to the Bth power. Panic if A == B == 0 and on overflow
+- A raised to the Bth power. Fail if A == B == 0 and on overflow
 - LogicSigVersion >= 4
 
 ## expw
@@ -1061,7 +1139,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0x95
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: *... stack*, uint64, uint64
-- A raised to the Bth power as a 128-bit long result as low (top) and high uint64 values on the stack. Panic if A == B == 0 or if the results exceeds 2^128-1
+- A raised to the Bth power as a 128-bit long result as low (top) and high uint64 values on the stack. Fail if A == B == 0 or if the results exceeds 2^128-1
 - **Cost**: 10
 - LogicSigVersion >= 4
 
@@ -1079,7 +1157,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xa1
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
-- A minus B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic on underflow.
+- A minus B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Fail on underflow.
 - **Cost**: 10
 - LogicSigVersion >= 4
 
@@ -1088,7 +1166,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xa2
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
-- A divided by B (truncated division), where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero.
+- A divided by B (truncated division), where A and B are byte-arrays interpreted as big-endian unsigned integers. Fail if B is zero.
 - **Cost**: 20
 - LogicSigVersion >= 4
 
@@ -1154,7 +1232,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xaa
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
-- A modulo B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero.
+- A modulo B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Fail if B is zero.
 - **Cost**: 20
 - LogicSigVersion >= 4
 
@@ -1211,4 +1289,86 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - LogicSigVersion >= 5
 - Mode: Application
 
-`log` can be called up to MaxLogCalls times in a program, and log up to a total of 1k bytes.
+`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds 1024 bytes.
+
+## itxn_begin
+
+- Opcode: 0xb1
+- Pops: _None_
+- Pushes: _None_
+- Begin preparation of a new inner transaction
+- LogicSigVersion >= 5
+- Mode: Application
+
+`itxn_begin` initializes Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; FirstValid/LastValid to the values in the top-level transaction, and all other fields to zero values.
+
+## itxn_field f
+
+- Opcode: 0xb2 {uint8 transaction field index}
+- Pops: *... stack*, any
+- Pushes: _None_
+- Set field F of the current inner transaction to X
+- LogicSigVersion >= 5
+- Mode: Application
+
+`itxn_field` fails if X is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if X is an account or asset that does not appear in `txn.Accounts` or `txn.ForeignAssets` of the top-level transaction. (Setting addresses in asset creation are exempted from this requirement.)
+
+## itxn_submit
+
+- Opcode: 0xb3
+- Pops: _None_
+- Pushes: _None_
+- Execute the current inner transaction. Fail if 16 inner transactions have already been executed, or if the transaction itself fails.
+- LogicSigVersion >= 5
+- Mode: Application
+
+## itxn f
+
+- Opcode: 0xb4 {uint8 transaction field index}
+- Pops: _None_
+- Pushes: any
+- push field F of the last inner transaction to stack
+- LogicSigVersion >= 5
+- Mode: Application
+
+## itxna f i
+
+- Opcode: 0xb5 {uint8 transaction field index} {uint8 transaction field array index}
+- Pops: _None_
+- Pushes: any
+- push Ith value of the array field F of the last inner transaction to stack
+- LogicSigVersion >= 5
+- Mode: Application
+
+## txnas f
+
+- Opcode: 0xc0 {uint8 transaction field index}
+- Pops: *... stack*, uint64
+- Pushes: any
+- push Xth value of the array field F of the current transaction
+- LogicSigVersion >= 5
+
+## gtxnas t f
+
+- Opcode: 0xc1 {uint8 transaction group index} {uint8 transaction field index}
+- Pops: *... stack*, uint64
+- Pushes: any
+- push Xth value of the array field F from the Tth transaction in the current group
+- LogicSigVersion >= 5
+
+## gtxnsas f
+
+- Opcode: 0xc2 {uint8 transaction field index}
+- Pops: *... stack*, {uint64 A}, {uint64 B}
+- Pushes: any
+- pop an index A and an index B. push Bth value of the array field F from the Ath transaction in the current group
+- LogicSigVersion >= 5
+
+## args
+
+- Opcode: 0xc3
+- Pops: *... stack*, uint64
+- Pushes: []byte
+- push Xth LogicSig argument to stack
+- LogicSigVersion >= 5
+- Mode: Signature

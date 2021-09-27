@@ -22,6 +22,7 @@ import (
 	"io"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -46,11 +47,13 @@ func createFixture(maxDepth uint) logBufferTestFixture {
 }
 
 func TestLogBufferEmpty(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	fixture := createFixture(10)
 	require.Equal(t, "", fixture.lb.string())
 }
 
 func TestLogBufferString(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	fixture := createFixture(10)
 	lb := fixture.lb
 	w := fixture.w
@@ -62,6 +65,7 @@ func TestLogBufferString(t *testing.T) {
 }
 
 func TestLogBufferStrings(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	fixture := createFixture(10)
 	w := fixture.w
 	fmt.Fprint(w, testString1)
@@ -75,6 +79,7 @@ func TestLogBufferStrings(t *testing.T) {
 }
 
 func TestLogBufferZeroMaxDepth(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	fixture := createFixture(0)
 	w := fixture.w
 	fmt.Fprint(w, testString1)
@@ -86,6 +91,7 @@ func TestLogBufferZeroMaxDepth(t *testing.T) {
 }
 
 func TestLogBufferMaxDepth(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	fixture := createFixture(2)
 	w := fixture.w
 	fmt.Fprint(w, testString1)
@@ -101,6 +107,7 @@ func TestLogBufferMaxDepth(t *testing.T) {
 }
 
 func TestLogBufferTrim(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	maxDepth := uint(9)
 	entryCount := maxDepth + 2
 	lb := createLogBuffer(maxDepth)
