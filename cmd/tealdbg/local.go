@@ -528,8 +528,8 @@ func (r *LocalRunner) RunAll() error {
 	credit, _ := transactions.FeeCredit(r.txnGroup, r.proto.MinTxnFee)
 	// ignore error since fees are not important for debugging in most cases
 
-	evalParams := make([]logic.EvalParams, 0, len(r.runs))
-	for _, run := range r.runs {
+	evalParams := make([]logic.EvalParams, len(r.runs))
+	for i, run := range r.runs {
 		if run.mode == modeStateful {
 			if r.proto.EnableAppCostPooling {
 				pooledApplicationBudget += uint64(r.proto.MaxAppProgramCost)
@@ -548,7 +548,7 @@ func (r *LocalRunner) RunAll() error {
 			FeeCredit:               &credit,
 			PooledApplicationBudget: &pooledApplicationBudget,
 		}
-		evalParams = append(evalParams, ep)
+		evalParams[i] = ep
 	}
 
 	for i := range r.runs {
@@ -577,8 +577,8 @@ func (r *LocalRunner) Run() (bool, error) {
 	credit, _ := transactions.FeeCredit(r.txnGroup, r.proto.MinTxnFee)
 	// ignore error since fees are not important for debugging in most cases
 
-	evalParams := make([]logic.EvalParams, 0, len(r.runs))
-	for _, run := range r.runs {
+	evalParams := make([]logic.EvalParams, len(r.runs))
+	for i, run := range r.runs {
 		if run.mode == modeStateful {
 			if r.proto.EnableAppCostPooling {
 				pooledApplicationBudget += uint64(r.proto.MaxAppProgramCost)
@@ -606,7 +606,7 @@ func (r *LocalRunner) Run() (bool, error) {
 			ep.Debugger = r.debugger
 		}
 
-		evalParams = append(evalParams, ep)
+		evalParams[i] = ep
 	}
 
 	run := r.runs[0]
