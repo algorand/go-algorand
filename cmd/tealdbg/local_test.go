@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -226,14 +227,6 @@ func makeSampleBalanceRecord(addr basics.Address, assetIdx basics.AssetIndex, ap
 	return br
 }
 
-func makeSampleSerializedBalanceRecord(addr basics.Address, toJSON bool) []byte {
-	br := makeSampleBalanceRecord(addr, 50, 100)
-	if toJSON {
-		return protocol.EncodeJSON(&br)
-	}
-	return protocol.EncodeMsgp(&br)
-}
-
 func TestBalanceJSONInput(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -325,7 +318,7 @@ func TestDebugEnvironment(t *testing.T) {
 		Txn: transactions.Transaction{
 			Header: transactions.Header{
 				Sender: sender,
-				Fee:    basics.MicroAlgos{Raw: 100},
+				Fee:    basics.MicroAlgos{Raw: 1000},
 				Note:   []byte{1, 2, 3},
 			},
 			ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
@@ -1087,7 +1080,7 @@ func TestDebugTxSubmit(t *testing.T) {
 			Type: protocol.ApplicationCallTx,
 			Header: transactions.Header{
 				Sender: sender,
-				Fee:    basics.MicroAlgos{Raw: 100},
+				Fee:    basics.MicroAlgos{Raw: 1000},
 				Note:   []byte{1, 2, 3},
 			},
 			ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
@@ -1137,4 +1130,223 @@ int 1`
 	pass, err := local.Run()
 	a.NoError(err)
 	a.True(pass)
+}
+
+func TestDebugFeePooling(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
+	a.NoError(err)
+
+	source := `#pragma version 5
+itxn_begin
+int pay
+itxn_field TypeEnum
+int 0
+itxn_field Amount
+txn Sender
+itxn_field Receiver
+itxn_submit
+int 1`
+
+	ops, err := logic.AssembleString(source)
+	a.NoError(err)
+	prog := ops.Program
+
+	stxn := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Type: protocol.ApplicationCallTx,
+			Header: transactions.Header{
+				Sender: sender,
+				Note:   []byte{1, 2, 3},
+			},
+			ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+				ApplicationID:     0,
+				ApprovalProgram:   prog,
+				ClearStateProgram: prog,
+			},
+		},
+	}
+
+	appIdx := basics.AppIndex(1)
+	br := basics.BalanceRecord{
+		Addr: sender,
+		AccountData: basics.AccountData{
+			MicroAlgos: basics.MicroAlgos{Raw: 5000000},
+			AppParams: map[basics.AppIndex]basics.AppParams{
+				appIdx: {
+					ApprovalProgram:   prog,
+					ClearStateProgram: prog,
+				},
+			},
+		},
+	}
+	balanceBlob := protocol.EncodeMsgp(&br)
+
+	// two testcase: success with enough fees and fail otherwise
+	var tests = []struct {
+		pass bool
+		fee  uint64
+	}{
+		{true, 2000},
+		{false, 1500},
+	}
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("fee=%d", test.fee), func(t *testing.T) {
+
+			stxn.Txn.Fee = basics.MicroAlgos{Raw: test.fee}
+			encoded := protocol.EncodeJSON(&stxn)
+
+			ds := DebugParams{
+				ProgramNames:    []string{"test"},
+				BalanceBlob:     balanceBlob,
+				TxnBlob:         encoded,
+				Proto:           string(protocol.ConsensusCurrentVersion),
+				Round:           222,
+				LatestTimestamp: 333,
+				GroupIndex:      0,
+				RunMode:         "application",
+				AppID:           uint64(appIdx),
+			}
+
+			local := MakeLocalRunner(nil)
+			err = local.Setup(&ds)
+			a.NoError(err)
+
+			pass, err := local.Run()
+			if test.pass {
+				a.NoError(err)
+				a.True(pass)
+			} else {
+				a.Error(err)
+				a.False(pass)
+			}
+		})
+	}
+}
+
+func TestDebugCostPooling(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
+	a.NoError(err)
+
+	// cost is 2000 (ecdsa_pk_recover) + 130 (keccak256) + 8 (rest opcodes)
+	// needs 4 app calls to pool together
+	source := `#pragma version 5
+byte "hello from ethereum" // msg
+keccak256
+int 0 // v
+byte 0x745e8f55ac6189ee89ed707c36694868e3903988fbf776c8096c45da2e60c638 // r
+byte 0x30c8e4a9b5d2eb53ddc6294587dd00bed8afe2c45dd72f6b4cf752e46d5ba681 // s
+ecdsa_pk_recover Secp256k1
+concat // convert public key X and Y to ethereum addr
+keccak256
+substring 12 32
+byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
+==
+`
+	ops, err := logic.AssembleString(source)
+	a.NoError(err)
+	prog := ops.Program
+
+	ops, err = logic.AssembleString("#pragma version 2\nint 1")
+	a.NoError(err)
+	trivial := ops.Program
+
+	stxn := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Type: protocol.ApplicationCallTx,
+			Header: transactions.Header{
+				Sender: sender,
+				Fee:    basics.MicroAlgos{Raw: 1000},
+				Note:   []byte{1, 2, 3},
+			},
+			ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+				ApplicationID:     0,
+				ApprovalProgram:   prog,
+				ClearStateProgram: trivial,
+			},
+		},
+	}
+
+	appIdx := basics.AppIndex(1)
+	trivialAppIdx := basics.AppIndex(2)
+	trivialStxn := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Type: protocol.ApplicationCallTx,
+			Header: transactions.Header{
+				Sender: sender,
+				Fee:    basics.MicroAlgos{Raw: 1000},
+			},
+			ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+				ApplicationID: trivialAppIdx,
+			},
+		},
+	}
+
+	br := basics.BalanceRecord{
+		Addr: sender,
+		AccountData: basics.AccountData{
+			MicroAlgos: basics.MicroAlgos{Raw: 5000000},
+			AppParams: map[basics.AppIndex]basics.AppParams{
+				appIdx: {
+					ApprovalProgram:   prog,
+					ClearStateProgram: trivial,
+				},
+				trivialAppIdx: {
+					ApprovalProgram:   trivial,
+					ClearStateProgram: trivial,
+				},
+			},
+		},
+	}
+	balanceBlob := protocol.EncodeMsgp(&br)
+
+	var tests = []struct {
+		pass           bool
+		additionalApps int
+	}{
+		{false, 2},
+		{true, 3},
+	}
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("txn-count=%d", test.additionalApps+1), func(t *testing.T) {
+			txnBlob := protocol.EncodeMsgp(&stxn)
+			for i := 0; i < test.additionalApps; i++ {
+				val, err := getRandomAddress()
+				a.NoError(err)
+				trivialStxn.Txn.Note = val[:]
+				txnBlob = append(txnBlob, protocol.EncodeMsgp(&trivialStxn)...)
+			}
+
+			ds := DebugParams{
+				ProgramNames:    []string{"test"},
+				BalanceBlob:     balanceBlob,
+				TxnBlob:         txnBlob,
+				Proto:           string(protocol.ConsensusCurrentVersion),
+				Round:           222,
+				LatestTimestamp: 333,
+				GroupIndex:      0,
+				RunMode:         "application",
+				AppID:           uint64(appIdx),
+			}
+
+			local := MakeLocalRunner(nil)
+			err = local.Setup(&ds)
+			a.NoError(err)
+
+			pass, err := local.Run()
+			if test.pass {
+				a.NoError(err)
+				a.True(pass)
+			} else {
+				a.Error(err)
+				a.Contains(err.Error(), "dynamic cost budget exceeded")
+				a.False(pass)
+			}
+		})
+	}
 }
