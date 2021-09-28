@@ -45,15 +45,15 @@ const proposalBufferSize = 25
 // transactionSyncNodeConnector implements the txnsync.NodeConnector interface, allowing the
 // transaction sync communicate with the node and it's child objects.
 type transactionSyncNodeConnector struct {
-	node           *AlgorandFullNode
-	eventsCh       chan txnsync.Event
-	clock          timers.WallClock
-	messageHandler txnsync.IncomingMessageHandler
-	txHandler      data.SolicitedAsyncTxHandler
-	openStateCh    chan struct{}
-	agreementProposalCh     chan agreement.TxnSyncProposal
-	proposalMsgCh  chan incomingProposalRequest
-	proposalFilterCh chan crypto.Digest
+	node                *AlgorandFullNode
+	eventsCh            chan txnsync.Event
+	clock               timers.WallClock
+	messageHandler      txnsync.IncomingMessageHandler
+	txHandler           data.SolicitedAsyncTxHandler
+	openStateCh         chan struct{}
+	agreementProposalCh chan agreement.TxnSyncProposal
+	proposalMsgCh       chan incomingProposalRequest
+	proposalFilterCh    chan crypto.Digest
 	proposalFilterCache txnsync.ProposalFilterCache
 
 	ctx       context.Context
@@ -79,21 +79,21 @@ type proposalCache struct {
 
 type incomingProposalRequest struct {
 	proposalBytes []byte
-	txGroups            []pooldata.SignedTxGroup
-	peer *txnsync.Peer
+	txGroups      []pooldata.SignedTxGroup
+	peer          *txnsync.Peer
 }
 
 func makeTransactionSyncNodeConnector(node *AlgorandFullNode) transactionSyncNodeConnector {
 	return transactionSyncNodeConnector{
-		node:        node,
-		eventsCh:    make(chan txnsync.Event, 1),
-		clock:       timers.MakeMonotonicClock(time.Now()),
-		txHandler:   node.txHandler.SolicitedAsyncTxHandler(),
-		openStateCh: make(chan struct{}),
-		agreementProposalCh:  make(chan agreement.TxnSyncProposal, proposalBufferSize),
-		proposalMsgCh:  make(chan incomingProposalRequest, 128),
-		proposalFilterCh:  make(chan crypto.Digest, proposalBufferSize),
-		proposalFilterCache:         txnsync.MakeProposalFilterCache(proposalBufferSize),
+		node:                node,
+		eventsCh:            make(chan txnsync.Event, 1),
+		clock:               timers.MakeMonotonicClock(time.Now()),
+		txHandler:           node.txHandler.SolicitedAsyncTxHandler(),
+		openStateCh:         make(chan struct{}),
+		agreementProposalCh: make(chan agreement.TxnSyncProposal, proposalBufferSize),
+		proposalMsgCh:       make(chan incomingProposalRequest, 128),
+		proposalFilterCh:    make(chan crypto.Digest, proposalBufferSize),
+		proposalFilterCache: txnsync.MakeProposalFilterCache(proposalBufferSize),
 	}
 }
 

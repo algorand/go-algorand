@@ -21,13 +21,14 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 )
 
-// cache used by the peer to keep track of which proposals not to send
+// ProposalFilterCache is a cache used by the peer to keep track of which proposals not to send
 type ProposalFilterCache struct {
 	store       map[crypto.Digest]*list.Element
 	orderedMsgs *list.List
 	limit       int
 }
 
+// MakeProposalFilterCache creates a ProposalFilterCache with given cache size
 func MakeProposalFilterCache(limit int) ProposalFilterCache {
 	c := ProposalFilterCache{}
 	c.store = make(map[crypto.Digest]*list.Element)
@@ -36,6 +37,7 @@ func MakeProposalFilterCache(limit int) ProposalFilterCache {
 	return c
 }
 
+// Insert into the cache
 func (c *ProposalFilterCache) Insert(proposalHash crypto.Digest) {
 	element, found := c.store[proposalHash]
 	if found {
@@ -52,6 +54,7 @@ func (c *ProposalFilterCache) Insert(proposalHash crypto.Digest) {
 	}
 }
 
+// Exists checks whether an item is in the cache
 func (c *ProposalFilterCache) Exists(proposalHash crypto.Digest) bool {
 	_, exists := c.store[proposalHash]
 	return exists

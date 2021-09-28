@@ -69,7 +69,7 @@ func (p unauthenticatedProposal) ToBeHashed() (protocol.HashID, []byte) {
 // value returns the proposal-value associated with this proposal.
 func (p unauthenticatedProposal) value() proposalValue {
 	payset := make(transactions.Payset, len(p.Payset))
-	for i := range(payset) {
+	for i := range payset {
 		payset[i] = p.Payset[i]
 		payset[i].ApplyData = transactions.ApplyData{}
 	}

@@ -21,6 +21,7 @@ import "github.com/algorand/go-algorand/data/transactions"
 const maxNumProposalBytes = 30000       // sizeof(block header)
 const maxNumTxGroupHashesBytes = 320000 // 10K * 32
 
+// ProposalData contains the data of a proposal, just used for testing
 type ProposalData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
