@@ -1733,6 +1733,134 @@ func TestAppInsMinBalance(t *testing.T) {
 	assert.Len(t, vb.delta.ModifiedAppLocalStates, 50)
 }
 
+// TestGhostTransactions confirms that accounts that don't even exist
+// can be the Sender in some situations.  If some other transaction
+// covers the fee, and the transaction itself does not require an
+// asset or a min balance, it's fine.
+func TestGhostTransactions(t *testing.T) {
+	t.Skip("Behavior should be changed so test passes.")
+
+	/*
+		I think we have a behavior we should fix.  I’m going to call these
+		transactions where the Sender has no account and the fee=0 “ghost”
+		transactions.  In a ghost transaction, we still call balances.Move to
+		“pay” the fee.  Further, Move does not short-circuit a Move of 0 (for
+		good reason, allowing compounding).  Therefore, in Move, we do rewards
+		processing on the “ghost” account.  That causes us to want to write a
+		new accountdata for them.  But if we do that, the minimum balance
+		checker will catch it, and kill the transaction because the ghost isn’t
+		allowed to have a balance of 0.  I don’t think we can short-circuit
+		Move(0) because a zero pay is a known way to get your rewards
+		actualized. Instead, I advocate that we short-circuit the call to Move
+		for 0 fees.
+
+		// move fee to pool
+		if !tx.Fee.IsZero() {
+			err = balances.Move(tx.Sender, eval.specials.FeeSink, tx.Fee, &ad.SenderRewards, nil)
+			if err != nil {
+				return
+			}
+		}
+
+		I think this must be controlled by consensus upgrade, but I would love
+		to be told I’m wrong.  The other option is to outlaw these
+		transactions, but even that requires changing code if we want to be
+		exactly correct, because they are currently allowed when there are no
+		rewards to get paid out (as would happen in a new network, or if we
+		stop participation rewards - notice that this test only fails on the
+		4th attempt, once rewards have accumulated).
+
+		Will suggested that we could treat Ghost accounts as non-partipating.
+		Maybe that would allow the Move code to avoid trying to update
+		accountdata.
+	*/
+
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	asaIndex := basics.AssetIndex(1)
+
+	asa := txntest.Txn{
+		Type:   "acfg",
+		Sender: addrs[0],
+		AssetParams: basics.AssetParams{
+			Total:     1000000,
+			Decimals:  3,
+			UnitName:  "oz",
+			AssetName: "Gold",
+			URL:       "https://gold.rush/",
+			Clawback:  basics.Address{0x0c, 0x0b, 0x0a, 0x0c},
+			Freeze:    basics.Address{0x0f, 0x0e, 0xe, 0xe},
+			Manager:   basics.Address{0x0a, 0x0a, 0xe},
+		},
+	}
+
+	eval := l.nextBlock(t)
+	eval.txn(t, &asa)
+	l.endBlock(t, eval)
+
+	benefactor := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: addrs[0],
+		Fee:      2000,
+	}
+
+	ghost := basics.Address{0x01}
+	ephemeral := []txntest.Txn{
+		{
+			Type:     "pay",
+			Amount:   0,
+			Sender:   ghost,
+			Receiver: ghost,
+			Fee:      0,
+		},
+		{
+			Type:          "axfer",
+			AssetAmount:   0,
+			Sender:        ghost,
+			AssetReceiver: basics.Address{0x02},
+			XferAsset:     basics.AssetIndex(1),
+			Fee:           0,
+		},
+		{
+			Type:          "axfer",
+			AssetAmount:   0,
+			Sender:        basics.Address{0x0c, 0x0b, 0x0a, 0x0c},
+			AssetReceiver: addrs[0],
+			AssetSender:   addrs[1],
+			XferAsset:     asaIndex,
+			Fee:           0,
+		},
+		{
+			Type:          "afrz",
+			Sender:        basics.Address{0x0f, 0x0e, 0xe, 0xe},
+			FreezeAccount: addrs[0], // creator, therefore is opted in
+			FreezeAsset:   asaIndex,
+			AssetFrozen:   true,
+			Fee:           0,
+		},
+		{
+			Type:          "afrz",
+			Sender:        basics.Address{0x0f, 0x0e, 0xe, 0xe},
+			FreezeAccount: addrs[0], // creator, therefore is opted in
+			FreezeAsset:   asaIndex,
+			AssetFrozen:   false,
+			Fee:           0,
+		},
+	}
+
+	for i, e := range ephemeral {
+		eval = l.nextBlock(t)
+		err := eval.txgroup(t, &benefactor, &e)
+		require.NoError(t, err, "i=%d %s", i, e.Type)
+		l.endBlock(t, eval)
+	}
+}
+
 type getCreatorForRoundResult struct {
 	address basics.Address
 	exists  bool

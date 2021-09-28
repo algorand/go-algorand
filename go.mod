@@ -10,6 +10,7 @@ require (
 	github.com/algorand/oapi-codegen v1.3.5-algorand5
 	github.com/algorand/websocket v1.4.2
 	github.com/aws/aws-sdk-go v1.16.5
+	github.com/chrismcguire/gobberish v0.0.0-20150821175641-1d8adb509a0e
 	github.com/cpuguy83/go-md2man v1.0.8 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20170701192655-dcfb0a7ac018
 	github.com/dchest/siphash v1.2.1
