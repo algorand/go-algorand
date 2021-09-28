@@ -18,7 +18,6 @@ package txnsync
 
 import (
 	"context"
-	"github.com/algorand/go-algorand/logging"
 	"math"
 	"sync"
 	"time"
@@ -26,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/bloom"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/timers"
@@ -119,7 +119,7 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 	profNewRounnd := s.profiler.getElement(profElementNewRound)
 	profPeerState := s.profiler.getElement(profElementPeerState)
 	profIncomingMsg := s.profiler.getElement(profElementIncomingMsg)
-	//profOutgoingMsg := s.profiler.getElement(profElementOutgoingMsg)
+	profOutgoingMsg := s.profiler.getElement(profElementOutgoingMsg)
 	profNextOffset := s.profiler.getElement(profElementNextOffset)
 
 	externalEvents := s.node.Events()
@@ -131,16 +131,6 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			nextPeerStateCh = s.clock.TimeoutAt(nextPeerStateTime)
 		} else {
 			nextPeerStateCh = nil
-		}
-
-		done := false
-		for !done {
-			select {
-			case msgSent := <-s.outgoingMessagesCallbackCh:
-				s.evaluateOutgoingMessage(msgSent)
-			default:
-				done = true
-			}
 		}
 
 		select {
@@ -167,34 +157,16 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			s.evaluatePeerStateChanges(nextPeerStateTime)
 			profPeerState.end()
 			continue
-		//case msgSent := <-s.outgoingMessagesCallbackCh:
-		//	logging.Base().Info("outgoingMessagesCallbackCh")
-		//	profOutgoingMsg.start()
-		//	s.evaluateOutgoingMessage(msgSent)
-		//	done := false
-		//	for !done {
-		//		select {
-		//		case msgSent = <-s.outgoingMessagesCallbackCh:
-		//			s.evaluateOutgoingMessage(msgSent)
-		//		default:
-		//			done = true
-		//		}
-		//	}
-		//	profOutgoingMsg.end()
-		//	continue
 		case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
 			logging.Base().Info("getIncomingMessageChannel")
 			profIncomingMsg.start()
 			s.evaluateIncomingMessage(incomingMsg)
-			//numMsgs := len(s.incomingMessagesQ.getIncomingMessageChannel())
-			//for i := 0; i < numMsgs; i++ {
-			//	select {
-			//	case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
-			//		s.evaluateIncomingMessage(incomingMsg)
-			//	default:
-			//	}
-			//}
 			profIncomingMsg.end()
+			continue
+		case msgSent := <-s.outgoingMessagesCallbackCh:
+			profOutgoingMsg.start()
+			s.evaluateOutgoingMessage(msgSent)
+			profOutgoingMsg.end()
 			continue
 		case proposalFilter := <-proposalFilterCh:
 			logging.Base().Info("proposalFilter")
@@ -236,35 +208,19 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			profPeerState.start()
 			s.evaluatePeerStateChanges(nextPeerStateTime)
 			profPeerState.end()
-		//case msgSent := <-s.outgoingMessagesCallbackCh:
-		//	logging.Base().Info("outgoingMessagesCallbackCh")
-		//	profIdle.end()
-		//	profOutgoingMsg.start()
-		//	s.evaluateOutgoingMessage(msgSent)
-		//	done := false
-		//	for !done {
-		//		select {
-		//		case msgSent = <-s.outgoingMessagesCallbackCh:
-		//			s.evaluateOutgoingMessage(msgSent)
-		//		default:
-		//			done = true
-		//		}
-		//	}
-		//	profOutgoingMsg.end()
 		case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
 			logging.Base().Info("getIncomingMessageChannel")
 			profIdle.end()
 			profIncomingMsg.start()
 			s.evaluateIncomingMessage(incomingMsg)
-			//numMsgs := len(s.incomingMessagesQ.getIncomingMessageChannel())
-			//for i := 0; i < numMsgs; i++ {
-			//	select {
-			//	case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
-			//		s.evaluateIncomingMessage(incomingMsg)
-			//	default:
-			//	}
-			//}
 			profIncomingMsg.end()
+			continue
+		case msgSent := <-s.outgoingMessagesCallbackCh:
+			profIdle.end()
+			profOutgoingMsg.start()
+			s.evaluateOutgoingMessage(msgSent)
+			profOutgoingMsg.end()
+			continue
 		case proposalFilter := <-proposalFilterCh:
 			logging.Base().Info("proposalFilter")
 			profIdle.end()

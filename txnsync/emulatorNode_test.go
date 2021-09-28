@@ -19,7 +19,6 @@ package txnsync
 import (
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/txnsync/testing"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -30,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/txnsync/testing"
 	"github.com/algorand/go-algorand/util/timers"
 )
 
