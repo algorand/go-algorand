@@ -23,7 +23,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 	"testing"
 	"time"
 
@@ -56,26 +55,24 @@ var defaultConfig = config.Local{
 	IncomingConnectionsLimit: -1,
 }
 
-func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationPool execpool.BacklogPool, customConsensus config.ConsensusProtocols) ([]*AlgorandFullNode, []string, []string) {
+func setupStartFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationPool execpool.BacklogPool, customConsensus config.ConsensusProtocols) ([]*AlgorandFullNode, []string, []string) {
 	util.RaiseRlimit(1000)
 	f, _ := os.Create(t.Name() + ".log")
 	logging.Base().SetJSONFormatter()
 	logging.Base().SetOutput(f)
 	logging.Base().SetLevel(logging.Debug)
 
+	consensus := config.Consensus[protocol.ConsensusCurrentVersion]
+	
 	numAccounts := 10
-	minMoneyAtStart := 10000
-	maxMoneyAtStart := 100000
+	minMoneyAtStart := consensus.MinBalance * 2000
+	maxMoneyAtStart := consensus.MinBalance * 200000
 
 	firstRound := basics.Round(0)
 	lastRound := basics.Round(200)
 
 	genesis := make(map[basics.Address]basics.AccountData)
 	gen := rand.New(rand.NewSource(2))
-	neighbors := make([]string, numAccounts)
-	for i := range neighbors {
-		neighbors[i] = "127.0.0.1:" + strconv.Itoa(10000+i)
-	}
 
 	wallets := make([]string, numAccounts)
 	nodes := make([]*AlgorandFullNode, numAccounts)
@@ -90,6 +87,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		Network:     config.Devtestnet,
 		FeeSink:     sinkAddr.String(),
 		RewardsPool: poolAddr.String(),
+		DevMode:     false,
 	}
 
 	for i := range wallets {
@@ -128,7 +126,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		if err != nil {
 			panic(err)
 		}
-		part, err := account.FillDBWithParticipationKeys(access, root.Address(), firstRound, lastRound, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+		part, err := account.FillDBWithParticipationKeys(access, root.Address(), firstRound, lastRound, consensus.DefaultKeyDilution)
 		access.Close()
 		if err != nil {
 			panic(err)
@@ -136,12 +134,16 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 
 		data := basics.AccountData{
 			Status:      basics.Online,
-			MicroAlgos:  basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))},
+			MicroAlgos:  basics.MicroAlgos{Raw: minMoneyAtStart + uint64(gen.Int() % int((maxMoneyAtStart - minMoneyAtStart)))},
 			SelectionID: part.VRFSecrets().PK,
 			VoteID:      part.VotingSecrets().OneTimeSignatureVerifier,
 		}
 		short := root.Address()
 		genesis[short] = data
+		genesis[poolAddr] = basics.AccountData{
+			Status:     basics.Online,
+			MicroAlgos: basics.MicroAlgos{Raw: consensus.MinBalance * 200},
+		}
 	}
 
 	bootstrap := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
@@ -160,18 +162,24 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		cfg, err := config.LoadConfigFromDisk(rootDirectory)
 		require.NoError(t, err)
 		cfg.Archival = true
-		_, err = data.LoadLedger(logging.Base().With("name", nodeID), ledgerFilenamePrefix, inMem, g.Proto, bootstrap, "", crypto.Digest{}, nil, cfg)
+		_, err = data.LoadLedger(logging.Base().With("name", nodeID), ledgerFilenamePrefix, inMem,
+			g.Proto, bootstrap, g.ID(), crypto.HashObj(g), nil, cfg)
+
 		require.NoError(t, err)
 	}
 
+	neighbors := make([]string, 0, numAccounts)
 	for i := range nodes {
 		rootDirectory := rootDirs[i]
 		cfg, err := config.LoadConfigFromDisk(rootDirectory)
 		require.NoError(t, err)
 
-		node, err := MakeFull(logging.Base().With("source", t.Name()+strconv.Itoa(i)), rootDirectory, cfg, []string{}, g)
-		nodes[i] = node
+		node, err := MakeFull(logging.Base().With("source", t.Name()+strconv.Itoa(i)), rootDirectory, cfg, neighbors, g)
 		require.NoError(t, err)
+		node.Start()
+		address, _ := node.net.Address()
+		neighbors = append(neighbors, address)
+		nodes[i] = node
 	}
 
 	return nodes, wallets, rootDirs
@@ -180,12 +188,10 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 func TestSyncingFullNode(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	t.Skip("This is failing randomly again - PLEASE FIX!")
-
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	nodes, wallets, rootDirs := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
+	nodes, wallets, rootDirs := setupStartFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
 		defer os.RemoveAll(rootDirs[i])
@@ -193,8 +199,6 @@ func TestSyncingFullNode(t *testing.T) {
 	}
 
 	initialRound := nodes[0].ledger.NextRound()
-
-	startAndConnectNodes(nodes, true)
 
 	counter := 0
 	for tests := uint64(0); tests < 16; tests++ {
@@ -244,15 +248,13 @@ func TestInitialSync(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	nodes, wallets, rootdirs := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
+	nodes, wallets, rootdirs := setupStartFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
 		defer os.RemoveAll(rootdirs[i])
 		defer nodes[i].Stop()
 	}
 	initialRound := nodes[0].ledger.NextRound()
-
-	startAndConnectNodes(nodes, true)
 
 	select {
 	case <-nodes[0].ledger.Wait(initialRound):
@@ -313,7 +315,7 @@ func TestSimpleUpgrade(t *testing.T) {
 	testParams1.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	configurableConsensus[consensusTest1] = testParams1
 
-	nodes, wallets, rootDirs := setupFullNodes(t, consensusTest0, backlogPool, configurableConsensus)
+	nodes, wallets, rootDirs := setupStartFullNodes(t, consensusTest0, backlogPool, configurableConsensus)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
 		defer os.RemoveAll(rootDirs[i])
@@ -321,8 +323,6 @@ func TestSimpleUpgrade(t *testing.T) {
 	}
 
 	initialRound := nodes[0].ledger.NextRound()
-
-	startAndConnectNodes(nodes, false)
 
 	maxRounds := basics.Round(16)
 	roundsCheckedForUpgrade := 0
@@ -369,57 +369,6 @@ func TestSimpleUpgrade(t *testing.T) {
 	}
 
 	require.Equal(t, 2, roundsCheckedForUpgrade)
-}
-
-func startAndConnectNodes(nodes []*AlgorandFullNode, delayStartFirstNode bool) {
-	var wg sync.WaitGroup
-	for i := range nodes {
-		if delayStartFirstNode && i == 0 {
-			continue
-		}
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			nodes[i].Start()
-		}(i)
-	}
-	wg.Wait()
-
-	if delayStartFirstNode {
-		connectPeers(nodes[1:])
-		delayStartNode(nodes[0], nodes[1:], 20*time.Second)
-	} else {
-		connectPeers(nodes)
-	}
-}
-
-func connectPeers(nodes []*AlgorandFullNode) {
-	neighbors := make([]string, 0)
-	for _, node := range nodes {
-		neighbors = append(neighbors, node.config.NetAddress)
-	}
-
-	for _, node := range nodes {
-		//		node.ExtendPeerList(neighbors...)
-		node.net.RequestConnectOutgoing(false, nil)
-	}
-}
-
-func delayStartNode(node *AlgorandFullNode, peers []*AlgorandFullNode, delay time.Duration) {
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		time.Sleep(delay)
-		node.Start()
-	}()
-	wg.Wait()
-
-	//	node0Addr := node.config.NetAddress
-	for _, peer := range peers {
-		//		peer.ExtendPeerList(node0Addr)
-		peer.net.RequestConnectOutgoing(false, nil)
-	}
 }
 
 func TestStatusReport_TimeSinceLastRound(t *testing.T) {
