@@ -169,9 +169,9 @@ var opDocByName = map[string]string{
 	"b~":  "X with all bits inverted",
 
 	"log":         "write bytes to log state of the current application",
-	"itxn_begin":  "Begin preparation of a new inner transaction",
-	"itxn_field":  "Set field F of the current inner transaction to X",
-	"itxn_submit": "Execute the current inner transaction. Fail if 16 inner transactions have already been executed, or if the transaction itself fails.",
+	"itxn_begin":  "begin preparation of a new inner transaction",
+	"itxn_field":  "set field F of the current inner transaction to X",
+	"itxn_submit": "execute the current inner transaction. Fail if 16 inner transactions have already been executed, or if the transaction itself fails.",
 }
 
 // OpDoc returns a description of the op
@@ -281,6 +281,7 @@ var opDocExtras = map[string]string{
 	"log":                 "`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds 1024 bytes.",
 	"itxn_begin":          "`itxn_begin` initializes Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; FirstValid/LastValid to the values in the top-level transaction, and all other fields to zero values.",
 	"itxn_field":          "`itxn_field` fails if X is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if X is an account or asset that does not appear in `txn.Accounts` or `txn.ForeignAssets` of the top-level transaction. (Setting addresses in asset creation are exempted from this requirement.)",
+	"itxn_submit":         "`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.",
 }
 
 // OpDocExtra returns extra documentation text about an op
