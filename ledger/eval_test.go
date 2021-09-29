@@ -1907,6 +1907,12 @@ int 1
 	l.archival = false
 	defer l.Close()
 
+	// close au.voters to have more control on au.dbRound
+	l.accts.accountsMu.Lock()
+	l.accts.voters.close()
+	l.accts.voters = nil
+	l.accts.accountsMu.Unlock()
+
 	// force commitSyncer to exit
 	// the test calls commitRound directly and does not need commitSyncer
 	// this is needed in order to prevent l.accts tracker from forcing the blockq storing older blocks
@@ -1922,6 +1928,7 @@ int 1
 		for {
 			select {
 			case <-l.accts.committedOffset:
+				l.accts.accountsWriting.Done()
 			case <-ctx.Done():
 				return
 			}
@@ -1950,7 +1957,7 @@ int 1
 
 			select {
 			case <-ctx.Done():
-				require.FailNow(t, fmt.Sprintf("waitRound timeout for round %d, earliest %d", target, rnd))
+				require.FailNow(t, fmt.Sprintf("waitForEarliestRound timeout for round %d, earliest %d", target, rnd))
 				return
 			default:
 			}
@@ -2022,9 +2029,10 @@ int 1
 	l.endBlock(t, eval)
 	commitAcct(basics.Round(nextRound - 1))
 
-	// now block 0 will be deleted and FirstValid = 1 is not valid anymore
+	// FirstValid = 1 is not valid anymore
+	// block 0 would have been deleted but account updates wants dbRound - maxTxnLife
 	l.blockQ.waitCommit(basics.Round(nextRound))
-	waitForEarliestRound(1)
+	waitForEarliestRound(basics.Round(0))
 
 	nextRound++
 	stxn.Txn.FirstValid = 1
@@ -2040,14 +2048,14 @@ int 1
 	for nextRound <= maxTxnLife*2 {
 		eval := l.nextBlock(t)
 		l.endBlock(t, eval)
-		commitAcct(basics.Round(nextRound))
+		commitAcct(basics.Round(nextRound - 1))
 		nextRound++
 	}
 
 	l.blockQ.waitCommit(basics.Round(maxTxnLife * 2))
-	waitForEarliestRound(basics.Round(maxTxnLife))
+	waitForEarliestRound(basics.Round(maxTxnLife).SubSaturate(basics.Round(maxLookback)))
 
-	// check all blocks including genesis one can be fetched
+	// check all required blocks can be fetched
 	for i := maxTxnLife; i <= maxTxnLife*2; i++ {
 		hdr, err := l.BlockHdr(basics.Round(i))
 		require.NoError(t, err)
@@ -2072,6 +2080,72 @@ int 1
 
 	l.endBlock(t, eval)
 	commitAcct(basics.Round(nextRound))
+}
+
+// TestFistValidTimeInitAuTracker checks account update tracker initialization on a full and partial blockdb
+func TestFistValidTimeInitAuTracker(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	source := `#pragma version 6
+txn FirstValidTime
+int 1
+>`
+	ops, err := logic.AssembleString(source)
+	require.NoError(t, err)
+	prog := ops.Program
+
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	l.archival = false
+	defer l.Close()
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	header := transactions.Header{
+		Sender:      addrs[0],
+		FirstValid:  0,
+		LastValid:   basics.Round(proto.MaxTxnLife),
+		GenesisHash: l.GenesisHash(),
+	}
+
+	stxn := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Type:   protocol.ApplicationCallTx,
+			Header: header,
+			ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+				ApprovalProgram:   prog,
+				ClearStateProgram: prog,
+			},
+		},
+	}
+	// add maxTxnLife-1 blocks in order to preserve block 0
+	// 1..maxTxnLife-2 empty
+	for i := 1; i <= int(proto.MaxTxnLife-2); i++ {
+		eval := l.nextBlock(t)
+		l.endBlock(t, eval)
+	}
+	// maxTxnLife-1
+	eval := l.nextBlock(t)
+	eval.stxn(t, &stxn)
+	l.endBlock(t, eval)
+
+	l.blockQ.waitCommit(basics.Round(proto.MaxTxnLife - 1))
+
+	// check reload on a partial (less than MaxTxnLife) block db
+	err = l.reloadLedger()
+	require.NoError(t, err)
+
+	// add MaxTxnLife/2 more blocks
+	latest := l.Latest()
+	extraRounds := int(proto.MaxTxnLife / 2)
+	for i := 1; i <= extraRounds; i++ {
+		eval := l.nextBlock(t)
+		l.endBlock(t, eval)
+	}
+	l.blockQ.waitCommit(basics.Round(extraRounds) + latest)
+
+	// check reload on a full (at least MaxTxnLife) block db
+	err = l.reloadLedger()
+	require.NoError(t, err)
 }
 
 type getCreatorForRoundResult struct {

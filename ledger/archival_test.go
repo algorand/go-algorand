@@ -28,6 +28,7 @@ import (
 	"reflect"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -727,8 +728,14 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	log := logging.TestingLog(t)
 	l, err := OpenLedger(log, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
-	blk := genesisInitState.Block
 
+	// close au.voters to have more control on au.dbRound
+	l.accts.accountsMu.Lock()
+	l.accts.voters.close()
+	l.accts.voters = nil
+	l.accts.accountsMu.Unlock()
+
+	blk := genesisInitState.Block
 	const maxBlocks = 2000
 	for i := 0; i < maxBlocks; i++ {
 		blk.BlockHeader.Round++
@@ -750,6 +757,29 @@ func TestArchivalFromNonArchival(t *testing.T) {
 		require.NoError(t, err)
 	}
 	l.WaitForCommit(blk.Round())
+
+	// wait until accountdb advances to maxBlocks - proto.MaxBalLookback
+	proto := config.Consensus[protocol.ConsensusFuture]
+	target := maxBlocks - proto.MaxBalLookback
+	func() {
+		ctx, cf := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cf()
+
+		var rnd basics.Round
+		for rnd < basics.Round(target) {
+			l.accts.accountsMu.RLock()
+			rnd = l.accts.dbRound
+			l.accts.accountsMu.RUnlock()
+
+			select {
+			case <-ctx.Done():
+				require.FailNow(t, fmt.Sprintf("timeout waiting for round %d, dbRound %d", target, rnd))
+				return
+			default:
+			}
+			time.Sleep(100 * time.Microsecond)
+		}
+	}()
 
 	var latest, earliest basics.Round
 	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -826,9 +856,14 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 
 		cleanTracker.close()
 
+		proto := wl.GenesisProto()
+		earliestRoundTimeStampInit := wl.Latest().SubSaturate(basics.Round(proto.MaxTxnLife))
 		// Special case: initAccounts reflects state after block 0,
 		// so it's OK to return minSave=0 but query block 1.
-		if minSave > wl.minQueriedBlock && minSave != 0 && wl.minQueriedBlock != 1 {
+		// Special case 2: initializeCaches checks proto.MaxTxnLife - 1 round exists
+		// so it's OK to query proto.MaxTxnLife - 1 block
+		if minSave > wl.minQueriedBlock &&
+			minSave != 0 && wl.minQueriedBlock != 1 && wl.minQueriedBlock != earliestRoundTimeStampInit {
 			return minMinSave, fmt.Errorf("tracker %v: committed %d, minSave %d > minQuery %d", trackerType, rnd, minSave, wl.minQueriedBlock)
 		}
 	}

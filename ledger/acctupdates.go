@@ -346,7 +346,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	au.accountsMu.Lock()
 	defer au.accountsMu.Unlock()
 	var writingCatchpointRound uint64
-	lastBalancesRound, lastestBlockRound, err := au.initializeFromDisk(l)
+	lastBalancesRound, latestBlockRound, err := au.initializeFromDisk(l)
 
 	if err != nil {
 		return err
@@ -359,7 +359,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 		return err
 	}
 
-	writingCatchpointDigest, err = au.initializeCaches(lastBalancesRound, lastestBlockRound, basics.Round(writingCatchpointRound))
+	writingCatchpointDigest, err = au.initializeCaches(lastBalancesRound, latestBlockRound, basics.Round(writingCatchpointRound))
 	if err != nil {
 		return err
 	}
@@ -655,6 +655,18 @@ func (au *accountUpdates) GetCreatorForRound(rnd basics.Round, cidx basics.Creat
 // operation to a syncer goroutine. The one caveat is that when storing a catchpoint round, we would want to
 // wait until the catchpoint creation is done, so that the persistence of the catchpoint file would have an
 // uninterrupted view of the balances at a given point of time.
+//
+// FirstValidTime implemention requires to store au.dbRound - proto.MaxTxnLife rounds
+// in order to update account db to the latest round.
+//
+//  R-1000   au.dbRound R                          Latest
+//   ^                | |  X  |    Lookback (320)    |
+// --+----------------+-+-----+----------------------+
+//   |                  |
+//   +------------------+
+//
+// At round R > au.dbRound blockdb must have a block with round number R - MaxTxnLife
+// in order to make FirstValidTime work
 func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound basics.Round) {
 	var isCatchpointRound, hasMultipleIntermediateCatchpoint bool
 	var offset uint64
@@ -674,7 +686,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 		return
 	}
 
-	retRound = au.dbRound
+	retRound = au.dbRound.SubSaturate(basics.Round(config.Consensus[au.versions[0]].MaxTxnLife))
 	newBase := committedRound - lookback
 	if newBase <= au.dbRound {
 		// Already forgotten
@@ -739,7 +751,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 	//   so that all the instances of the catchpoint would contain exactly the same data )
 	flushTime := time.Now()
 	if !flushTime.After(au.lastFlushTime.Add(balancesFlushInterval)) && !isCatchpointRound && pendingDeltas < pendingDeltasFlushThreshold {
-		return au.dbRound
+		return
 	}
 
 	if isCatchpointRound && au.archivalLedger {
@@ -959,9 +971,9 @@ func (au *accountUpdates) totalsImpl(rnd basics.Round) (totals ledgercore.Accoun
 }
 
 // initializeCaches fills up the accountUpdates cache with the most recent ~320 blocks ( on normal execution ).
-// the method also support balances recovery in cases where the difference between the lastBalancesRound and the lastestBlockRound
+// the method also support balances recovery in cases where the difference between the lastBalancesRound and the latestBlockRound
 // is far greater than 320; in these cases, it would flush to disk periodically in order to avoid high memory consumption.
-func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound, writingCatchpointRound basics.Round) (catchpointBlockDigest crypto.Digest, err error) {
+func (au *accountUpdates) initializeCaches(lastBalancesRound, latestBlockRound, writingCatchpointRound basics.Round) (catchpointBlockDigest crypto.Digest, err error) {
 	var blk bookkeeping.Block
 	var delta ledgercore.StateDelta
 
@@ -969,7 +981,7 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 		au: au,
 	}
 	var blockTimeStampsSize uint64 = 1
-	if lastBalancesRound < lastestBlockRound {
+	if lastBalancesRound < latestBlockRound {
 		accLedgerEval.prevHeader, err = au.ledger.BlockHdr(lastBalancesRound)
 		if err != nil {
 			return
@@ -979,6 +991,18 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 			au.log.Warnf("initializeCaches failed to find protocol %s", accLedgerEval.prevHeader.CurrentProtocol)
 		}
 		blockTimeStampsSize = proto.MaxTxnLife + 1
+
+		// ensure the block db has all the MaxTxnLife + 1 blocks:
+		// the earlist is either 0 if latestBlockRound less than proto.MaxTxnLife
+		// or it is latestBlockRound - proto.MaxTxnLife otherwise
+		if proto.CheckBlockDBSizeOnStartup {
+			earliestRoundNeeded := latestBlockRound.SubSaturate(basics.Round(proto.MaxTxnLife))
+			_, err = au.ledger.BlockHdr(earliestRoundNeeded)
+			if err != nil {
+				err = fmt.Errorf("initializeCaches: not enough blocks in blockdb for initialization: %s", err.Error())
+				return
+			}
+		}
 	}
 
 	accLedgerEval.blockTimeStamps = make(map[basics.Round]int64, blockTimeStampsSize)
@@ -1013,7 +1037,7 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 	var blockRetrievalError error
 	go func() {
 		defer close(blocksStream)
-		for roundNumber := lastBalancesRound + 1; roundNumber <= lastestBlockRound; roundNumber++ {
+		for roundNumber := lastBalancesRound + 1; roundNumber <= latestBlockRound; roundNumber++ {
 			blk, blockRetrievalError = au.ledger.Block(roundNumber)
 			if blockRetrievalError != nil {
 				return
@@ -1057,7 +1081,7 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 		// 1. if we have loaded up more than initializeCachesRoundFlushInterval rounds since the last time we flushed the data to disk
 		// 2. if we completed the loading and we loaded up more than 320 rounds.
 		flushIntervalExceed := blk.Round()-lastFlushedRound > initializeCachesRoundFlushInterval
-		loadCompleted := (lastestBlockRound == blk.Round() && lastBalancesRound+basics.Round(blk.ConsensusProtocol().MaxBalLookback) < lastestBlockRound)
+		loadCompleted := (latestBlockRound == blk.Round() && lastBalancesRound+basics.Round(blk.ConsensusProtocol().MaxBalLookback) < latestBlockRound)
 		if flushIntervalExceed || loadCompleted {
 			// adjust the last flush time, so that we would not hold off the flushing due to "working too fast"
 			au.lastFlushTime = time.Now().Add(-balancesFlushInterval)
@@ -1113,7 +1137,7 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 				close(writeAccountCacheMessageCompleted)
 			default:
 			}
-			au.log.Infof("initializeCaches is still initializing account data caches, %d rounds loaded out of %d rounds", blk.Round()-lastBalancesRound, lastestBlockRound-lastBalancesRound)
+			au.log.Infof("initializeCaches is still initializing account data caches, %d rounds loaded out of %d rounds", blk.Round()-lastBalancesRound, latestBlockRound-lastBalancesRound)
 			lastProgressMessage = time.Now()
 		}
 
@@ -1129,7 +1153,7 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 
 // initializeFromDisk performs the atomic operation of loading the accounts data information from disk
 // and preparing the accountUpdates for operation, including initializing the commitSyncer goroutine.
-func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRound, lastestBlockRound basics.Round, err error) {
+func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRound, latestBlockRound basics.Round, err error) {
 	au.dbs = l.trackerDB()
 	au.log = l.trackerLog()
 	au.ledger = l
@@ -1139,7 +1163,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 		return
 	}
 
-	lastestBlockRound = l.Latest()
+	latestBlockRound = l.Latest()
 	start := time.Now()
 	ledgerAccountsinitCount.Inc(nil)
 	err = au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -1149,8 +1173,8 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 			return err0
 		}
 		// Check for blocks DB and tracker DB un-sync
-		if au.dbRound > lastestBlockRound {
-			au.log.Warnf("accountUpdates.initializeFromDisk: resetting accounts DB (on round %v, but blocks DB's latest is %v)", au.dbRound, lastestBlockRound)
+		if au.dbRound > latestBlockRound {
+			au.log.Warnf("accountUpdates.initializeFromDisk: resetting accounts DB (on round %v, but blocks DB's latest is %v)", au.dbRound, latestBlockRound)
 			err0 = accountsReset(tx)
 			if err0 != nil {
 				return err0

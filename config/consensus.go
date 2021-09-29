@@ -391,6 +391,10 @@ type ConsensusParams struct {
 	EnableKeyregCoherencyCheck bool
 
 	EnableExtraPagesOnAppUpdate bool
+
+	// CheckBlockDBSizeOnStartup forces ledger to check the blockDB size on opening.
+	// The blockDB must have at MaxTxnLife blocks back from the trackerDB round number.
+	CheckBlockDBSizeOnStartup bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1044,6 +1048,9 @@ func initConsensusProtocols() {
 
 	// Enable TEAL 6 / AVM 1.1
 	vFuture.LogicSigVersion = 6
+
+	// Check blockDB size for FirstValidTime calculation
+	vFuture.CheckBlockDBSizeOnStartup = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
