@@ -45,7 +45,7 @@ type indexerLedgerForEval interface {
 // Indexer is able to do the preloading more efficiently than the evaluator loading
 // resources one by one.
 type EvalForIndexerResources struct {
-	// The map value is nil iff the account does not exist.
+	// The map value is nil iff the account does not exist. The account data is owned here.
 	accounts map[basics.Address]*basics.AccountData
 	creators map[creatable]FoundAddress
 }
