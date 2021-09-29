@@ -758,22 +758,22 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	}
 	l.WaitForCommit(blk.Round())
 
-	// wait until accountdb advances to maxBlocks - proto.MaxBalLookback
+	// wait until accountdb advances to somewhere between (maxBlocks - proto.MaxTxnLife +1, maxBlocks - proto.MaxBalLookback]
 	proto := config.Consensus[protocol.ConsensusFuture]
-	target := maxBlocks - proto.MaxBalLookback
+	targetLow := maxBlocks - proto.MaxTxnLife + 1
 	func() {
-		ctx, cf := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cf := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cf()
 
 		var rnd basics.Round
-		for rnd < basics.Round(target) {
+		for rnd < basics.Round(targetLow) {
 			l.accts.accountsMu.RLock()
 			rnd = l.accts.dbRound
 			l.accts.accountsMu.RUnlock()
 
 			select {
 			case <-ctx.Done():
-				require.FailNow(t, fmt.Sprintf("timeout waiting for round %d, dbRound %d", target, rnd))
+				require.FailNow(t, fmt.Sprintf("timeout waiting for round %d, dbRound %d", targetLow, rnd))
 				return
 			default:
 			}
