@@ -214,7 +214,7 @@ func (st *shortTermTransactionCache) add(txid transactions.Txid) {
 			}
 			// add to the tail of the list.
 			entry.addToList(st.head)
-		} else {
+		} else { //nolint:staticcheck
 			// no other elements on the list -
 			// nothing to do in this case.
 		}

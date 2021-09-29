@@ -342,6 +342,11 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 		if err != nil {
 			return
 		}
+		// No separate config for activating storage in AD because
+		// inner transactions can't be turned on without this change.
+		if balances.ConsensusParams().MaxInnerTransactions > 0 {
+			ad.ApplicationID = appIdx
+		}
 	}
 
 	// Fetch the application parameters, if they exist

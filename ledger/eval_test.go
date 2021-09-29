@@ -525,7 +525,9 @@ ok:
 			ApplyData: transactions.ApplyData{
 				EvalDelta: transactions.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
 					"creator": {Action: basics.SetBytesAction, Bytes: string(addrs[0][:])}},
-				}},
+				},
+				ApplicationID: 1,
+			},
 		},
 		{
 			SignedTxn: stxn2,
@@ -1055,7 +1057,7 @@ func TestCowCompactCert(t *testing.T) {
 	ml := mockLedger{balanceMap: accts0, blocks: blocks, blockErr: blockErr}
 	c0 := makeRoundCowState(
 		&ml, bookkeeping.BlockHeader{}, config.Consensus[protocol.ConsensusCurrentVersion],
-		0, 0)
+		0, ledgercore.AccountTotals{}, 0)
 
 	certType = protocol.CompactCertType(1234) // bad cert type
 	err := c0.compactCert(certRnd, certType, cert, atRound, validate)
@@ -1444,6 +1446,21 @@ func (ledger *Ledger) asa(t testing.TB, addr basics.Address, asset basics.AssetI
 	return 0, false
 }
 
+// asaParams gets the asset params for a given asa index
+func (ledger *Ledger) asaParams(t testing.TB, asset basics.AssetIndex) (basics.AssetParams, error) {
+	creator, ok, err := ledger.GetCreator(basics.CreatableIndex(asset), basics.AssetCreatable)
+	if err != nil {
+		return basics.AssetParams{}, err
+	}
+	if !ok {
+		return basics.AssetParams{}, fmt.Errorf("no asset (%d)", asset)
+	}
+	if params, ok := ledger.lookup(t, creator).AssetParams[asset]; ok {
+		return params, nil
+	}
+	return basics.AssetParams{}, fmt.Errorf("bad lookup (%d)", asset)
+}
+
 func (eval *BlockEvaluator) fillDefaults(txn *txntest.Txn) {
 	if txn.GenesisHash.IsZero() {
 		txn.GenesisHash = eval.genesisHash
@@ -1663,103 +1680,6 @@ func TestModifiedAppLocalStates(t *testing.T) {
 	}
 }
 
-// Test that overriding the consensus parameters effects the generated apply data.
-func TestCustomProtocolParams(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	genesisBalances, addrs, _ := newTestGenesis()
-
-	var genHash crypto.Digest
-	crypto.RandBytes(genHash[:])
-	block, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusV24,
-		genesisBalances, "test", genHash)
-
-	dbName := fmt.Sprintf("%s", t.Name())
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, true, InitState{
-		Block:       block,
-		Accounts:    genesisBalances.Balances,
-		GenesisHash: genHash,
-	}, cfg)
-	require.NoError(t, err)
-	defer l.Close()
-
-	const assetid basics.AssetIndex = 1
-	proto := config.Consensus[protocol.ConsensusV24]
-
-	block = bookkeeping.MakeBlock(block.BlockHeader)
-
-	createTxn := txntest.Txn{
-		Type:        "acfg",
-		Sender:      addrs[0],
-		GenesisHash: block.GenesisHash(),
-		AssetParams: basics.AssetParams{
-			Total:    200,
-			Decimals: 0,
-			Manager:  addrs[0],
-			Reserve:  addrs[0],
-			Freeze:   addrs[0],
-			Clawback: addrs[0],
-		},
-	}
-	createTxn.FillDefaults(proto)
-	createStib, err := block.BlockHeader.EncodeSignedTxn(
-		createTxn.SignedTxn(), transactions.ApplyData{})
-	require.NoError(t, err)
-
-	optInTxn := txntest.Txn{
-		Type:          "axfer",
-		Sender:        addrs[1],
-		GenesisHash:   block.GenesisHash(),
-		XferAsset:     assetid,
-		AssetAmount:   0,
-		AssetReceiver: addrs[1],
-	}
-	optInTxn.FillDefaults(proto)
-	optInStib, err := block.BlockHeader.EncodeSignedTxn(
-		optInTxn.SignedTxn(), transactions.ApplyData{})
-	require.NoError(t, err)
-
-	fundTxn := txntest.Txn{
-		Type:          "axfer",
-		Sender:        addrs[0],
-		GenesisHash:   block.GenesisHash(),
-		XferAsset:     assetid,
-		AssetAmount:   100,
-		AssetReceiver: addrs[1],
-	}
-	fundTxn.FillDefaults(proto)
-	fundStib, err := block.BlockHeader.EncodeSignedTxn(
-		fundTxn.SignedTxn(), transactions.ApplyData{})
-	require.NoError(t, err)
-
-	optOutTxn := txntest.Txn{
-		Type:          "axfer",
-		Sender:        addrs[1],
-		GenesisHash:   block.GenesisHash(),
-		XferAsset:     assetid,
-		AssetAmount:   30,
-		AssetReceiver: addrs[0],
-		AssetCloseTo:  addrs[0],
-	}
-	optOutTxn.FillDefaults(proto)
-	optOutStib, err := block.BlockHeader.EncodeSignedTxn(
-		optOutTxn.SignedTxn(), transactions.ApplyData{})
-	require.NoError(t, err)
-
-	block.Payset = []transactions.SignedTxnInBlock{
-		createStib, optInStib, fundStib, optOutStib,
-	}
-
-	proto.EnableAssetCloseAmount = true
-	_, modifiedTxns, err := Eval(l, &block, proto)
-	require.NoError(t, err)
-
-	require.Equal(t, 4, len(modifiedTxns))
-	assert.Equal(t, uint64(70), modifiedTxns[3].AssetClosingAmount)
-}
-
 // TestAppInsMinBalance checks that accounts with MaxAppsOptedIn are accepted by block evaluator
 // and do not cause any MaximumMinimumBalance problems
 func TestAppInsMinBalance(t *testing.T) {
@@ -1814,4 +1734,201 @@ func TestAppInsMinBalance(t *testing.T) {
 	eval.txns(t, txns...)
 	vb := l.endBlock(t, eval)
 	assert.Len(t, vb.delta.ModifiedAppLocalStates, 50)
+}
+
+// TestGhostTransactions confirms that accounts that don't even exist
+// can be the Sender in some situations.  If some other transaction
+// covers the fee, and the transaction itself does not require an
+// asset or a min balance, it's fine.
+func TestGhostTransactions(t *testing.T) {
+	t.Skip("Behavior should be changed so test passes.")
+
+	/*
+		I think we have a behavior we should fix.  I’m going to call these
+		transactions where the Sender has no account and the fee=0 “ghost”
+		transactions.  In a ghost transaction, we still call balances.Move to
+		“pay” the fee.  Further, Move does not short-circuit a Move of 0 (for
+		good reason, allowing compounding).  Therefore, in Move, we do rewards
+		processing on the “ghost” account.  That causes us to want to write a
+		new accountdata for them.  But if we do that, the minimum balance
+		checker will catch it, and kill the transaction because the ghost isn’t
+		allowed to have a balance of 0.  I don’t think we can short-circuit
+		Move(0) because a zero pay is a known way to get your rewards
+		actualized. Instead, I advocate that we short-circuit the call to Move
+		for 0 fees.
+
+		// move fee to pool
+		if !tx.Fee.IsZero() {
+			err = balances.Move(tx.Sender, eval.specials.FeeSink, tx.Fee, &ad.SenderRewards, nil)
+			if err != nil {
+				return
+			}
+		}
+
+		I think this must be controlled by consensus upgrade, but I would love
+		to be told I’m wrong.  The other option is to outlaw these
+		transactions, but even that requires changing code if we want to be
+		exactly correct, because they are currently allowed when there are no
+		rewards to get paid out (as would happen in a new network, or if we
+		stop participation rewards - notice that this test only fails on the
+		4th attempt, once rewards have accumulated).
+
+		Will suggested that we could treat Ghost accounts as non-partipating.
+		Maybe that would allow the Move code to avoid trying to update
+		accountdata.
+	*/
+
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	asaIndex := basics.AssetIndex(1)
+
+	asa := txntest.Txn{
+		Type:   "acfg",
+		Sender: addrs[0],
+		AssetParams: basics.AssetParams{
+			Total:     1000000,
+			Decimals:  3,
+			UnitName:  "oz",
+			AssetName: "Gold",
+			URL:       "https://gold.rush/",
+			Clawback:  basics.Address{0x0c, 0x0b, 0x0a, 0x0c},
+			Freeze:    basics.Address{0x0f, 0x0e, 0xe, 0xe},
+			Manager:   basics.Address{0x0a, 0x0a, 0xe},
+		},
+	}
+
+	eval := l.nextBlock(t)
+	eval.txn(t, &asa)
+	l.endBlock(t, eval)
+
+	benefactor := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: addrs[0],
+		Fee:      2000,
+	}
+
+	ghost := basics.Address{0x01}
+	ephemeral := []txntest.Txn{
+		{
+			Type:     "pay",
+			Amount:   0,
+			Sender:   ghost,
+			Receiver: ghost,
+			Fee:      0,
+		},
+		{
+			Type:          "axfer",
+			AssetAmount:   0,
+			Sender:        ghost,
+			AssetReceiver: basics.Address{0x02},
+			XferAsset:     basics.AssetIndex(1),
+			Fee:           0,
+		},
+		{
+			Type:          "axfer",
+			AssetAmount:   0,
+			Sender:        basics.Address{0x0c, 0x0b, 0x0a, 0x0c},
+			AssetReceiver: addrs[0],
+			AssetSender:   addrs[1],
+			XferAsset:     asaIndex,
+			Fee:           0,
+		},
+		{
+			Type:          "afrz",
+			Sender:        basics.Address{0x0f, 0x0e, 0xe, 0xe},
+			FreezeAccount: addrs[0], // creator, therefore is opted in
+			FreezeAsset:   asaIndex,
+			AssetFrozen:   true,
+			Fee:           0,
+		},
+		{
+			Type:          "afrz",
+			Sender:        basics.Address{0x0f, 0x0e, 0xe, 0xe},
+			FreezeAccount: addrs[0], // creator, therefore is opted in
+			FreezeAsset:   asaIndex,
+			AssetFrozen:   false,
+			Fee:           0,
+		},
+	}
+
+	for i, e := range ephemeral {
+		eval = l.nextBlock(t)
+		err := eval.txgroup(t, &benefactor, &e)
+		require.NoError(t, err, "i=%d %s", i, e.Type)
+		l.endBlock(t, eval)
+	}
+}
+
+type getCreatorForRoundResult struct {
+	address basics.Address
+	exists  bool
+}
+
+type testCowBaseLedger struct {
+	creators []getCreatorForRoundResult
+}
+
+func (l *testCowBaseLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) {
+	return bookkeeping.BlockHeader{}, errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error {
+	return errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error) {
+	return basics.AccountData{}, basics.Round(0), errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+	res := l.creators[0]
+	l.creators = l.creators[1:]
+	return res.address, res.exists, nil
+}
+
+func TestCowBaseCreatorsCache(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	addresses := make([]basics.Address, 3)
+	for i := 0; i < len(addresses); i++ {
+		_, err := rand.Read(addresses[i][:])
+		require.NoError(t, err)
+	}
+
+	creators := []getCreatorForRoundResult{
+		{address: addresses[0], exists: true},
+		{address: basics.Address{}, exists: false},
+		{address: addresses[1], exists: true},
+		{address: basics.Address{}, exists: false},
+	}
+	l := testCowBaseLedger{
+		creators: creators,
+	}
+
+	base := roundCowBase{
+		l:        &l,
+		creators: map[creatable]FoundAddress{},
+	}
+
+	cindex := []basics.CreatableIndex{9, 10, 9, 10}
+	ctype := []basics.CreatableType{
+		basics.AssetCreatable,
+		basics.AssetCreatable,
+		basics.AppCreatable,
+		basics.AppCreatable,
+	}
+	for i := 0; i < 2; i++ {
+		for j, expected := range creators {
+			address, exists, err := base.getCreator(cindex[j], ctype[j])
+			require.NoError(t, err)
+
+			assert.Equal(t, expected.address, address)
+			assert.Equal(t, expected.exists, exists)
+		}
+	}
 }

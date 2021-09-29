@@ -67,11 +67,14 @@ type testableBloomFilter struct {
 	encodingParams requestParams
 
 	filter bloom.GenericFilter
+
+	clearPrevious bool
 }
 
 func decodeBloomFilter(enc encodedBloomFilter) (outFilter *testableBloomFilter, err error) {
 	outFilter = &testableBloomFilter{
 		encodingParams: enc.EncodingParams,
+		clearPrevious:  enc.ClearPrevious != 0,
 	}
 	switch bloomFilterType(enc.BloomFilterType) {
 	case multiHashBloomFilter:

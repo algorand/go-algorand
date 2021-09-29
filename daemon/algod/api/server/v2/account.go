@@ -105,7 +105,7 @@ func AccountDataToAccount(
 	amount := record.MicroAlgos
 	pendingRewards, overflowed := basics.OSubA(amount, amountWithoutPendingRewards)
 	if overflowed {
-		return generated.Account{}, errors.New("overflow on pending reward calcuation")
+		return generated.Account{}, errors.New("overflow on pending reward calculation")
 	}
 
 	return generated.Account{

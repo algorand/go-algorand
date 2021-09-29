@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"testing"
 
 	"github.com/algorand/go-algorand/logging"
 )
@@ -133,7 +134,9 @@ func (e emulatorNodeLogger) printMsgStats(mstat msgStats, mode msgMode) {
 	}
 
 	out += fmt.Sprintf("%"+fmt.Sprintf("%d", e.longestName)+"s", destName)
-	fmt.Printf("%s\n", out)
+	if testing.Verbose() {
+		fmt.Printf("%s\n", out)
+	}
 }
 
 func wrapRollingLowColor(color int, s string) (out string) {
