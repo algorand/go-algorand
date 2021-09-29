@@ -97,7 +97,7 @@ func registerKeyInto(nodeName string, fixture *fixtures.RestClientFixture, a *re
 func getStateProofConcensus() config.ConsensusProtocols {
 	consensus := generateFastUpgradeConsensus()
 
-	// TODO: set inside concensus file!
+	// TODO: when upgrading from v29, need to change this from future to v30.
 	consensus[consensusTestFastUpgrade(protocol.ConsensusV29)].
 		ApprovedUpgrades[consensusTestFastUpgrade(protocol.ConsensusFuture)] = 0
 	return consensus
