@@ -77,6 +77,7 @@ func setupStartFullNodes(t *testing.T, proto protocol.ConsensusVersion, verifica
 	wallets := make([]string, numAccounts)
 	nodes := make([]*AlgorandFullNode, numAccounts)
 	rootDirs := make([]string, 0)
+	ledgers := make([]*data.Ledger, numAccounts)
 
 	// The genesis configuration is missing allocations, but that's OK
 	// because we explicitly generated the sqlite database above (in
@@ -103,7 +104,8 @@ func setupStartFullNodes(t *testing.T, proto protocol.ConsensusVersion, verifica
 		require.NoError(t, err)
 
 		genesisDir := filepath.Join(rootDirectory, g.ID())
-		os.Mkdir(genesisDir, 0700)
+		err = os.Mkdir(genesisDir, 0700)
+		require.NoError(t, err)
 
 		wname := config.RootKeyFilename(t.Name() + "wallet" + strconv.Itoa(i))
 		pname := config.PartKeyFilename(t.Name()+"wallet"+strconv.Itoa(i), uint64(firstRound), uint64(lastRound))
@@ -112,25 +114,19 @@ func setupStartFullNodes(t *testing.T, proto protocol.ConsensusVersion, verifica
 
 		filename := filepath.Join(genesisDir, wname)
 		access, err := db.MakeAccessor(filename, false, false)
-		if err != nil {
-			panic(err)
-		}
+		require.NoError(t, err)
+
 		root, err := account.GenerateRoot(access)
 		access.Close()
-		if err != nil {
-			panic(err)
-		}
+		require.NoError(t, err)
 
 		filename = filepath.Join(genesisDir, pname)
 		access, err = db.MakeAccessor(filename, false, false)
-		if err != nil {
-			panic(err)
-		}
+		require.NoError(t, err)
+
 		part, err := account.FillDBWithParticipationKeys(access, root.Address(), firstRound, lastRound, consensus.DefaultKeyDilution)
 		access.Close()
-		if err != nil {
-			panic(err)
-		}
+		require.NoError(t, err)
 
 		data := basics.AccountData{
 			Status:      basics.Online,
@@ -140,10 +136,11 @@ func setupStartFullNodes(t *testing.T, proto protocol.ConsensusVersion, verifica
 		}
 		short := root.Address()
 		genesis[short] = data
-		genesis[poolAddr] = basics.AccountData{
-			Status:     basics.Online,
-			MicroAlgos: basics.MicroAlgos{Raw: consensus.MinBalance * 200},
-		}
+	}
+
+	genesis[poolAddr] = basics.AccountData{
+		Status:     basics.Online,
+		MicroAlgos: basics.MicroAlgos{Raw: consensus.MinBalance * 200},
 	}
 
 	bootstrap := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
@@ -153,19 +150,21 @@ func setupStartFullNodes(t *testing.T, proto protocol.ConsensusVersion, verifica
 		ledgerFilenamePrefix := filepath.Join(genesisDir, config.LedgerFilenamePrefix)
 		if customConsensus != nil {
 			err := config.SaveConfigurableConsensus(genesisDir, customConsensus)
-			require.Nil(t, err)
+			require.NoError(t, err)
 		}
-		err1 := config.LoadConfigurableConsensusProtocols(genesisDir)
-		require.Nil(t, err1)
+		err := config.LoadConfigurableConsensusProtocols(genesisDir)
+		require.NoError(t, err)
+
 		nodeID := fmt.Sprintf("Node%d", i)
 		const inMem = false
 		cfg, err := config.LoadConfigFromDisk(rootDirectory)
 		require.NoError(t, err)
-		cfg.Archival = true
-		_, err = data.LoadLedger(logging.Base().With("name", nodeID), ledgerFilenamePrefix, inMem,
-			g.Proto, bootstrap, g.ID(), crypto.HashObj(g), nil, cfg)
 
+		cfg.Archival = true
+		ledgers[i], err = data.LoadLedger(logging.Base().With("name", nodeID), ledgerFilenamePrefix, inMem,
+			g.Proto, bootstrap, g.ID(), crypto.HashObj(g), nil, cfg)
 		require.NoError(t, err)
+		defer ledgers[i].Close()
 	}
 
 	neighbors := make([]string, 0, numAccounts)
