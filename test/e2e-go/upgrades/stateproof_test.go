@@ -19,11 +19,9 @@ package upgrades
 import (
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
@@ -192,75 +190,5 @@ func TestLargeKeyRegistration(t *testing.T) {
 		}
 
 		a.Empty(txn.PoolError)
-	}
-}
-
-func TestCompactCertificatesAreCreatedAfterVersionUpgrade(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(fixtures.SynchronizedTest(t))
-
-	consensus := getStateProofConcensus()
-	verName := consensusTestFastUpgrade(protocol.ConsensusFuture)
-
-	consensusParams := consensus[verName]
-
-	// params taken from compactCert e2e test.
-	consensusParams.CompactCertRounds = 16
-	consensusParams.CompactCertTopVoters = 1024
-	consensusParams.CompactCertVotersLookback = 2
-	consensusParams.CompactCertWeightThreshold = (1 << 32) * 30 / 100
-	consensusParams.CompactCertSecKQ = 128
-	consensus[verName] = consensusParams
-
-	var fixture fixtures.RestClientFixture
-	fixture.SetConsensus(consensus)
-	fixture.Setup(t, filepath.Join("nettemplates", "UpgradeIntoCompactCert.json"))
-	defer fixture.Shutdown()
-
-	runUntilProtocolUpgrades(a, &fixture)
-	// inspect whether there are, or not... compact certificates..
-
-	node0Client := fixture.GetLibGoalClientForNamedNode("Primary")
-	node0Wallet, err := node0Client.GetUnencryptedWalletHandle()
-	a.NoError(err)
-	node0AccountList, err := node0Client.ListAddresses(node0Wallet)
-	a.NoError(err)
-	node0Account := node0AccountList[0]
-
-	node1Client := fixture.GetLibGoalClientForNamedNode("Node")
-	node1Wallet, err := node1Client.GetUnencryptedWalletHandle()
-	a.NoError(err)
-	node1AccountList, err := node1Client.ListAddresses(node1Wallet)
-	a.NoError(err)
-	node1Account := node1AccountList[0]
-
-	var lastCertBlock v1.Block
-	libgoal := fixture.LibGoalClient
-	for rnd := uint64(1); rnd <= consensusParams.CompactCertRounds*3; rnd++ {
-		// send a dummy payment transaction.
-		minTxnFee, _, err := fixture.CurrentMinFeeAndBalance()
-		a.NoError(err)
-
-		_, err = node0Client.SendPaymentFromUnencryptedWallet(node0Account, node1Account, minTxnFee, rnd, nil)
-		a.NoError(err)
-
-		a.NoError(fixture.WaitForRound(rnd, 30*time.Second))
-
-		blk, err := libgoal.Block(rnd)
-		a.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
-
-		t.Logf("Round %d, block %v\n", rnd, blk)
-
-		if (rnd % consensusParams.CompactCertRounds) == 0 {
-			// Must have a merkle commitment for participants
-			a.True(len(blk.CompactCertVoters) > 0)
-			a.True(blk.CompactCertVotersTotal != 0)
-
-			// Special case: bootstrap validation with the first block
-			// that has a merkle root.
-			if lastCertBlock.Round == 0 {
-				lastCertBlock = blk
-			}
-		}
 	}
 }
