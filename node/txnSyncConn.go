@@ -363,7 +363,7 @@ func (tsnc *transactionSyncNodeConnector) handleProposalLoop() {
 				}
 			}
 
-			logging.Base().Info("received part of proposal message")
+			logging.Base().Infof("received part of proposal message: %v out of %v", pc.numTxGroupsReceived, len(pc.txGroups))
 
 			if pc.numTxGroupsReceived == len(pc.txGroups) {
 				// TODO send proposal to agreement
