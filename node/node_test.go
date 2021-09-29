@@ -63,7 +63,7 @@ func setupStartFullNodes(t *testing.T, proto protocol.ConsensusVersion, verifica
 	logging.Base().SetLevel(logging.Debug)
 
 	consensus := config.Consensus[protocol.ConsensusCurrentVersion]
-	
+
 	numAccounts := 10
 	minMoneyAtStart := consensus.MinBalance * 2000
 	maxMoneyAtStart := consensus.MinBalance * 200000
@@ -134,7 +134,7 @@ func setupStartFullNodes(t *testing.T, proto protocol.ConsensusVersion, verifica
 
 		data := basics.AccountData{
 			Status:      basics.Online,
-			MicroAlgos:  basics.MicroAlgos{Raw: minMoneyAtStart + uint64(gen.Int() % int((maxMoneyAtStart - minMoneyAtStart)))},
+			MicroAlgos:  basics.MicroAlgos{Raw: minMoneyAtStart + uint64(gen.Int()%int((maxMoneyAtStart-minMoneyAtStart)))},
 			SelectionID: part.VRFSecrets().PK,
 			VoteID:      part.VotingSecrets().OneTimeSignatureVerifier,
 		}
