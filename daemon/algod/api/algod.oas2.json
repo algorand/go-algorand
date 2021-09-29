@@ -1529,7 +1529,7 @@
       ],
       "properties": {
         "type": {
-          "description": "\\[tt\\] value type.",
+          "description": "\\[tt\\] value type. Value `1` refers to **bytes**, value `2` refers to **uint**",
           "type": "integer"
         },
         "bytes": {
@@ -1657,7 +1657,7 @@
           "$ref": "#/definitions/ApplicationStateSchema"
         },
         "global-state-schema": {
-          "description": "[\\lsch\\] global schema",
+          "description": "[\\gsch\\] global schema",
           "$ref": "#/definitions/ApplicationStateSchema"
         },
         "global-state": {
