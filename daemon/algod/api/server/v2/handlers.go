@@ -244,8 +244,7 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 // GetSupply gets the current supply reported by the ledger.
 // (GET /v2/ledger/supply)
 func (v2 *Handlers) GetSupply(ctx echo.Context) error {
-	latest := v2.Node.Ledger().Latest()
-	totals, err := v2.Node.Ledger().Totals(latest)
+	latest, totals, err := v2.Node.Ledger().LatestTotals()
 	if err != nil {
 		err = fmt.Errorf("GetSupply(): round %d, failed: %v", latest, err)
 		return internalError(ctx, err, errInternalFailure, v2.Log)

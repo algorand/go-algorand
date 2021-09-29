@@ -1637,8 +1637,7 @@ func GetSupply(ctx lib.ReqContext, context echo.Context) {
 
 	w := context.Response().Writer
 
-	latest := ctx.Node.Ledger().Latest()
-	totals, err := ctx.Node.Ledger().Totals(latest)
+	latest, totals, err := ctx.Node.Ledger().LatestTotals()
 	if err != nil {
 		err = fmt.Errorf("GetSupply(): round %d failed: %v", latest, err)
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errInternalFailure, ctx.Log)
