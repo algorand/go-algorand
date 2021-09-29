@@ -77,8 +77,9 @@ func (il indexerLedgerForEvalImpl) GetAppCreator(map[basics.AppIndex]struct{}) (
 	return nil, errors.New("GetAppCreator() not implemented")
 }
 
-func (il indexerLedgerForEvalImpl) Totals() (ledgercore.AccountTotals, error) {
-	return il.l.Totals(il.latestRound)
+func (il indexerLedgerForEvalImpl) LatestTotals() (totals ledgercore.AccountTotals, err error) {
+	_, totals, err = il.l.LatestTotals()
+	return
 }
 
 func (il indexerLedgerForEvalImpl) BlockTimeStamp(r basics.Round) int64 {
