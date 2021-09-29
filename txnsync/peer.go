@@ -400,6 +400,7 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []pooldata.SignedTx
 		if p.recentIncomingBloomFilters[filterIdx].filter == nil {
 			continue
 		}
+		// TODO: should this use all bloom filters for proposal sending?
 		if p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Modulator != p.requestedTransactionsModulator || p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Offset != p.requestedTransactionsOffset {
 			continue
 		}
