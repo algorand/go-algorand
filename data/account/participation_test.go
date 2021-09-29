@@ -393,11 +393,10 @@ func BenchmarkFillDB(b *testing.B) {
 	defer func() { config.Consensus[protocol.ConsensusCurrentVersion] = tmp }()
 
 	for i := 0; i < b.N; i++ {
-		part, err := FillDBWithParticipationKeys(partDB, root.Address(), 0, 3000000, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
-		a.NoError(err)
-		_ = part
-
+		_, err := FillDBWithParticipationKeys(partDB, root.Address(), 0, 3000000, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
 		b.StopTimer()
+		a.NoError(err)
+
 		a.NoError(dropTables(partDB))
 		b.StartTimer()
 	}
