@@ -1171,13 +1171,14 @@ type evalTxValidator struct {
 	txcache          verify.VerifiedTransactionCache
 	block            bookkeeping.Block
 	verificationPool execpool.BacklogPool
+	ledger           ledgerForEvaluator
 
 	ctx      context.Context
 	txgroups [][]transactions.SignedTxnWithAD
 	done     chan error
 }
 
-func (validator *evalTxValidator) run(l ledgerForEvaluator) {
+func (validator *evalTxValidator) run() {
 	defer close(validator.done)
 	specialAddresses := transactions.SpecialAddresses{
 		FeeSink:     validator.block.BlockHeader.FeeSink,
@@ -1201,7 +1202,7 @@ func (validator *evalTxValidator) run(l ledgerForEvaluator) {
 
 	unverifiedTxnGroups = validator.txcache.GetUnverifiedTranscationGroups(unverifiedTxnGroups, specialAddresses, validator.block.BlockHeader.CurrentProtocol)
 
-	err := verify.PaysetGroups(validator.ctx, unverifiedTxnGroups, validator.block.BlockHeader, validator.verificationPool, validator.txcache, l)
+	err := verify.PaysetGroups(validator.ctx, unverifiedTxnGroups, validator.block.BlockHeader, validator.verificationPool, validator.txcache, validator.ledger)
 	if err != nil {
 		validator.done <- err
 	}
@@ -1256,11 +1257,12 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 		txvalidator.txcache = txcache
 		txvalidator.block = blk
 		txvalidator.verificationPool = executionPool
+		txvalidator.ledger = l
 
 		txvalidator.ctx = validationCtx
 		txvalidator.txgroups = paysetgroups
 		txvalidator.done = make(chan error, 1)
-		go txvalidator.run(l)
+		go txvalidator.run()
 
 	}
 
