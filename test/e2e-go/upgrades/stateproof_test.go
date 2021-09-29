@@ -27,10 +27,12 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestKeysWithoutStateProofKeyCannotRegister(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensus := getStateProofConcensus()
@@ -131,6 +133,7 @@ func waitForAccountToProposeBlock(a *require.Assertions, fixture *fixtures.RestC
 // This test starts with participation keys in Version29, then attempts to let the richest user participate even after
 //  consensus upgrade.
 func TestParticipationWithoutStateProofKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensus := getStateProofConcensus()
@@ -156,6 +159,7 @@ func TestParticipationWithoutStateProofKeys(t *testing.T) {
 }
 
 func TestLargeKeyRegistration(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensus := getStateProofConcensus()
@@ -192,6 +196,7 @@ func TestLargeKeyRegistration(t *testing.T) {
 }
 
 func TestCompactCertificatesAreCreatedAfterVersionUpgrade(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensus := getStateProofConcensus()
