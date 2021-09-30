@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -1928,6 +1929,128 @@ func TestCowBaseCreatorsCache(t *testing.T) {
 			assert.Equal(t, expected.exists, exists)
 		}
 	}
+}
+
+// TestEvalFunctionForExpiredAccounts tests that the eval function will correctly mark accounts as offline
+func TestEvalFunctionForExpiredAccounts(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genesisInitState, addrs, keys := genesisWithProto(10, protocol.ConsensusFuture)
+
+	sendAddr := addrs[0]
+	recvAddr := addrs[1]
+
+	// the last round that the recvAddr is valid for
+	recvAddrLastValidRound := basics.Round(2)
+
+	// the target round we want to advance the evaluator to
+	targetRound := basics.Round(4)
+
+	// Set all to online except the sending address
+	for _, addr := range addrs {
+		if addr == sendAddr {
+			continue
+		}
+		tmp := genesisInitState.Accounts[addr]
+		tmp.Status = basics.Online
+		genesisInitState.Accounts[addr] = tmp
+	}
+
+	// Choose recvAddr to have a last valid round less than genesis block round
+	{
+		tmp := genesisInitState.Accounts[recvAddr]
+		tmp.VoteLastValid = recvAddrLastValidRound
+		genesisInitState.Accounts[recvAddr] = tmp
+	}
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+
+	blkEval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+
+	// Advance the evaluator a couple rounds...
+	for i := uint64(0); i < uint64(targetRound); i++ {
+		l.endBlock(t, blkEval)
+		blkEval = l.nextBlock(t)
+	}
+
+	require.Greater(t, uint64(blkEval.Round()), uint64(recvAddrLastValidRound))
+
+	genHash := genesisInitState.Block.BlockHeader.GenesisHash
+	txn := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      sendAddr,
+			Fee:         minFee,
+			FirstValid:  newBlock.Round(),
+			LastValid:   blkEval.Round(),
+			GenesisHash: genHash,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: recvAddr,
+			Amount:   basics.MicroAlgos{Raw: 100},
+		},
+	}
+
+	st := txn.Sign(keys[0])
+	err = blkEval.Transaction(st, transactions.ApplyData{})
+	require.NoError(t, err)
+
+	// Make sure we validate our block as well
+	blkEval.validate = true
+
+	validatedBlock, err := blkEval.GenerateBlock()
+	require.NoError(t, err)
+
+	_, err = eval(context.Background(), l, validatedBlock.blk, false, nil, nil)
+	require.NoError(t, err)
+
+	badBlock := *validatedBlock
+
+	// First validate that bad block is fine if we dont touch it...
+	_, err = eval(context.Background(), l, badBlock.blk, true, verify.GetMockedCache(true), nil)
+	require.NoError(t, err)
+
+	badBlock = *validatedBlock
+
+	// Introduce an unknown address to introduce an error
+	badBlock.blk.ExpiredParticipationAccounts = append(badBlock.blk.ExpiredParticipationAccounts, basics.Address{1})
+
+	_, err = eval(context.Background(), l, badBlock.blk, true, verify.GetMockedCache(true), nil)
+	require.Error(t, err)
+
+	badBlock = *validatedBlock
+
+	addressToCopy := badBlock.blk.ExpiredParticipationAccounts[0]
+
+	// Add more than the expected number of accounts
+
+	for i := 0; i < blkEval.proto.MaxExpiredAccountsToProcess+1; i++ {
+		badBlock.blk.ExpiredParticipationAccounts = append(badBlock.blk.ExpiredParticipationAccounts, addressToCopy)
+	}
+
+	_, err = eval(context.Background(), l, badBlock.blk, true, verify.GetMockedCache(true), nil)
+	require.Error(t, err)
+
+	badBlock = *validatedBlock
+
+	// Duplicate an address
+	badBlock.blk.ExpiredParticipationAccounts = append(badBlock.blk.ExpiredParticipationAccounts, badBlock.blk.ExpiredParticipationAccounts[0])
+
+	_, err = eval(context.Background(), l, badBlock.blk, true, verify.GetMockedCache(true), nil)
+	require.Error(t, err)
+
+	badBlock = *validatedBlock
+	// sanity check that bad block is being actually copied and not just the pointer
+	_, err = eval(context.Background(), l, badBlock.blk, true, verify.GetMockedCache(true), nil)
+	require.NoError(t, err)
+
 }
 
 // TestExpiredAccountGeneration test that expired accounts are added to a block header and validated
