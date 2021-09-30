@@ -490,13 +490,31 @@ func TestAssetFreeze(t *testing.T) {
 	require.Equal(t, false, holding.Frozen)
 }
 
-func TestNoteSetting(t *testing.T) {
-	good := "itxn_begin; int 500; bzero; itxn_field Note; int 1"
-	bad := "itxn_begin; int 501; bzero; itxn_field Note; int 1"
+func TestFieldSetting(t *testing.T) {
 	ep, ledger := makeSampleEnv()
 	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
-	// Give it enough for fees.  Recall that we don't check min balance at this level.
-	ledger.NewAccount(ledger.ApplicationID().Address(), 12*defaultEvalProto().MinTxnFee)
-	testApp(t, good, ep)
-	testApp(t, bad, ep, "Note may not exceed")
+	ledger.NewAccount(ledger.ApplicationID().Address(), 10*defaultEvalProto().MinTxnFee)
+	testApp(t, "itxn_begin; int 500; bzero; itxn_field Note; int 1", ep)
+	testApp(t, "itxn_begin; int 501; bzero; itxn_field Note; int 1", ep,
+		"Note may not exceed")
+
+	testApp(t, "itxn_begin; int 32; bzero; itxn_field VotePK; int 1", ep)
+	testApp(t, "itxn_begin; int 31; bzero; itxn_field VotePK; int 1", ep,
+		"VotePK must be 32")
+
+	testApp(t, "itxn_begin; int 32; bzero; itxn_field SelectionPK; int 1", ep)
+	testApp(t, "itxn_begin; int 33; bzero; itxn_field SelectionPK; int 1", ep,
+		"SelectionPK must be 32")
+
+	testApp(t, "itxn_begin; int 32; bzero; itxn_field RekeyTo; int 1", ep)
+	testApp(t, "itxn_begin; int 31; bzero; itxn_field RekeyTo; int 1", ep,
+		"not an address")
+
+	testApp(t, "itxn_begin; int 6; bzero; itxn_field ConfigAssetUnitName; int 1", ep)
+	testApp(t, "itxn_begin; int 7; bzero; itxn_field ConfigAssetUnitName; int 1", ep,
+		"value is too long")
+
+	testApp(t, "itxn_begin; int 12; bzero; itxn_field ConfigAssetName; int 1", ep)
+	testApp(t, "itxn_begin; int 13; bzero; itxn_field ConfigAssetName; int 1", ep,
+		"value is too long")
 }

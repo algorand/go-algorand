@@ -1036,6 +1036,54 @@ func TestRekey(t *testing.T) {
 
 }
 
+func TestNote(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	app := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  itxn_begin
+   int pay
+   itxn_field TypeEnum
+   int 0
+   itxn_field Amount
+   global CurrentApplicationAddress
+   itxn_field Receiver
+   byte "abcdefghijklmnopqrstuvwxyz01234567890"
+   itxn_field Note
+  itxn_submit
+`),
+	}
+
+	eval := l.nextBlock(t)
+	eval.txns(t, &app)
+	vb := l.endBlock(t, eval)
+	appIndex := vb.blk.Payset[0].ApplicationID
+	require.Equal(t, basics.AppIndex(1), appIndex)
+
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: appIndex.Address(),
+		Amount:   1_000_000,
+	}
+	note := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[1],
+		ApplicationID: appIndex,
+	}
+	eval = l.nextBlock(t)
+	eval.txns(t, &fund, &note)
+	vb = l.endBlock(t, eval)
+	alphabet := vb.blk.Payset[1].EvalDelta.InnerTxns[0].Txn.Note
+	require.Equal(t, "abcdefghijklmnopqrstuvwxyz01234567890", string(alphabet))
+}
+
 func TestKeyreg(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

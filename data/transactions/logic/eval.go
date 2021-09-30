@@ -3774,8 +3774,9 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 	// round, and separation by MaxLifetime (check lifetime in submit, not here)
 	case Note:
 		if len(sv.Bytes) > cx.Proto.MaxTxnNoteBytes {
-			err = fmt.Errorf("Note may not exceed %d bytes", cx.Proto.MaxTxnNoteBytes)
+			err = fmt.Errorf("%s may not exceed %d bytes", fs.field, cx.Proto.MaxTxnNoteBytes)
 		} else {
+			txn.Note = make([]byte, len(sv.Bytes))
 			copy(txn.Note[:], sv.Bytes)
 		}
 	// GenesisID, GenesisHash unsettable: surely makes no sense
@@ -3788,13 +3789,13 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 	// KeyReg
 	case VotePK:
 		if len(sv.Bytes) != 32 {
-			err = fmt.Errorf("VotePK must be 32 bytes")
+			err = fmt.Errorf("%s must be 32 bytes", fs.field)
 		} else {
 			copy(txn.VotePK[:], sv.Bytes)
 		}
 	case SelectionPK:
 		if len(sv.Bytes) != 32 {
-			err = fmt.Errorf("SelectionPK must be 32 bytes")
+			err = fmt.Errorf("%s must be 32 bytes", fs.field)
 		} else {
 			copy(txn.SelectionPK[:], sv.Bytes)
 		}
@@ -3854,7 +3855,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 		txn.AssetParams.URL, err = sv.string(cx.Proto.MaxAssetURLBytes)
 	case ConfigAssetMetadataHash:
 		if len(sv.Bytes) != 32 {
-			err = fmt.Errorf("ConfigAssetMetadataHash must be 32 bytes")
+			err = fmt.Errorf("%s must be 32 bytes", fs.field)
 		} else {
 			copy(txn.AssetParams.MetadataHash[:], sv.Bytes)
 		}
