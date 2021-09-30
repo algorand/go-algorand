@@ -490,8 +490,11 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 	var cx *logic.EvalContext
 	pass, cx, err = logic.EvalStatefulCx(program, params)
 	if err != nil {
-		pc, det := cx.PcDetails()
-		details := fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
+		var details string
+		if cx != nil {
+			pc, det := cx.PcDetails()
+			details = fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
+		}
 		return false, transactions.EvalDelta{}, ledgercore.LogicEvalError{Err: err, Details: details}
 	}
 

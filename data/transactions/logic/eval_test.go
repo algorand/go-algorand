@@ -4855,6 +4855,7 @@ func TestPcDetails(t *testing.T) {
 		{"int 1; int 2; -", 5, "pushint 1\npushint 2\n-\n"},
 		{"int 1; err", 3, "pushint 1\nerr\n"},
 		{"int 1; dup; int 2; -; +", 6, "dup\npushint 2\n-\n"},
+		{"b end; end:", 4, ""},
 	}
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {

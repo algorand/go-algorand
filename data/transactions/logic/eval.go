@@ -3943,23 +3943,25 @@ func opTxSubmit(cx *EvalContext) {
 func (cx *EvalContext) PcDetails() (pc int, dis string) {
 	const maxNumAdditionalOpcodes = 2
 	text, ds, err := disassembleInstrumented(cx.program, nil)
-	if err == nil {
-		for i := 0; i < len(ds.pcOffset); i++ {
-			if ds.pcOffset[i].PC == cx.pc {
-				start := 0
-				if i >= maxNumAdditionalOpcodes {
-					start = i - maxNumAdditionalOpcodes
-				}
+	if err != nil {
+		return cx.pc, dis
+	}
 
-				startTextPos := ds.pcOffset[start].Offset
-				endTextPos := len(text)
-				if i+1 < len(ds.pcOffset) {
-					endTextPos = ds.pcOffset[i+1].Offset
-				}
-
-				dis = text[startTextPos:endTextPos]
-				break
+	for i := 0; i < len(ds.pcOffset); i++ {
+		if ds.pcOffset[i].PC == cx.pc {
+			start := 0
+			if i >= maxNumAdditionalOpcodes {
+				start = i - maxNumAdditionalOpcodes
 			}
+
+			startTextPos := ds.pcOffset[start].Offset
+			endTextPos := len(text)
+			if i+1 < len(ds.pcOffset) {
+				endTextPos = ds.pcOffset[i+1].Offset
+			}
+
+			dis = text[startTextPos:endTextPos]
+			break
 		}
 	}
 	return cx.pc, dis
