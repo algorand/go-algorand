@@ -339,6 +339,7 @@ func (tsnc *transactionSyncNodeConnector) handleProposalLoop() {
 				}
 				// attempt to fill receivedTxns with txpool
 				pc.numTxGroupsReceived = tsnc.node.transactionPool.FindTxGroups(pc.TxGroupIds, pc.txGroups)
+				logging.Base().Infof("skipped txns: %v out of %v", pc.numTxGroupsReceived, len(pc.txGroups))
 			} else { // fetch proposalCache from peerData
 				pc, _ = tsnc.node.net.GetPeerData(peer.GetNetworkPeer(), "proposalCache").(*proposalCache)
 				if pc == nil || pc.ProposalBytes == nil { // no actual proposal to be filling

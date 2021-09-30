@@ -150,7 +150,8 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 	case protocol.VoteBundleTag:
 		data = protocol.Encode(&a.UnauthenticatedBundle)
 	case protocol.ProposalPayloadTag:
-		if a.T == broadcast || a.T == relay {
+		switch a.T {
+		case broadcast, relay:
 			msg := a.CompoundMessage
 			txns, err := msg.Proposal.Block.DecodePaysetGroupsNoAD()
 			if err != nil {
@@ -165,6 +166,10 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 			data = protocol.Encode(&payload)
 			logging.Base().Info("sending proposal")
 			s.TxnSync.RelayProposal(data, txns)
+		case disconnect:
+			s.Network.Disconnect(a.h)
+		case ignore:
+			// pass
 		}
 		return
 	}

@@ -1218,7 +1218,7 @@ func (validator *evalTxValidator) run() {
 // Validate: eval(ctx, l, blk, true, txcache, executionPool, true)
 // AddBlock: eval(context.Background(), l, blk, false, txcache, nil, true)
 // tracker:  eval(context.Background(), l, blk, false, txcache, nil, false)
-func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
+func eval(ctx context.Context, l ledgerForEvaluator, blk *bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
 	proto, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]
 	if !ok {
 		return ledgercore.StateDelta{}, protocol.Error(blk.BlockHeader.CurrentProtocol)
@@ -1259,7 +1259,7 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 			return ledgercore.StateDelta{}, protocol.Error(blk.CurrentProtocol)
 		}
 		txvalidator.txcache = txcache
-		txvalidator.block = blk
+		txvalidator.block = *blk
 		txvalidator.verificationPool = executionPool
 
 		txvalidator.ctx = validationCtx
@@ -1324,6 +1324,8 @@ transactionGroupLoop:
 	if err != nil {
 		return ledgercore.StateDelta{}, err
 	}
+
+	blk.Payset = eval.block.Payset
 
 	return eval.state.deltas(), nil
 }
@@ -1527,7 +1529,7 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 // not a valid block (e.g., it has duplicate transactions, overspends some
 // account, etc).
 func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ValidatedBlock, error) {
-	delta, err := eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool)
+	delta, err := eval(ctx, l, &blk, true, l.verifiedTxnCache, executionPool)
 	if err != nil {
 		return nil, err
 	}
