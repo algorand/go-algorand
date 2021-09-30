@@ -388,7 +388,7 @@ type BlockEvaluator struct {
 type ledgerForEvaluator interface {
 	ledgerForCowBase
 	GenesisHash() crypto.Digest
-	Totals(basics.Round) (ledgercore.AccountTotals, error)
+	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
 	CompactCertVoters(basics.Round) (*VotersForRound, error)
 }
 
@@ -479,9 +479,12 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 		base.compactCertNextRnd = votersRound + basics.Round(proto.CompactCertRounds)
 	}
 
-	prevTotals, err := l.Totals(eval.prevHeader.Round)
+	latestRound, prevTotals, err := l.LatestTotals()
 	if err != nil {
 		return nil, err
+	}
+	if latestRound != eval.prevHeader.Round {
+		return nil, ledgercore.ErrNonSequentialBlockEval{EvaluatorRound: hdr.Round, LatestRound: latestRound}
 	}
 
 	poolAddr := eval.prevHeader.RewardsPool

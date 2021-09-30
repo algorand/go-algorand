@@ -86,3 +86,15 @@ type LogicEvalError struct {
 func (err LogicEvalError) Error() string {
 	return fmt.Sprintf("logic eval error: %v", err.Err)
 }
+
+// ErrNonSequentialBlockEval provides feedback when the evaluator cannot be created for
+// stale/future rounds.
+type ErrNonSequentialBlockEval struct {
+	EvaluatorRound basics.Round // EvaluatorRound is the round the evaluator was created for
+	LatestRound    basics.Round // LatestRound is the latest round available on disk
+}
+
+// Error satisfies builtin interface `error`
+func (err ErrNonSequentialBlockEval) Error() string {
+	return fmt.Sprintf("block evaluation for round %d requires sequential evaluation while the latest round is %d", err.EvaluatorRound, err.LatestRound)
+}
