@@ -120,9 +120,9 @@ TXID=$(${gcmd} app optin --app-id "$APPID" --from "${SMALL}" | app-txid)
 ASSETID=$(asset-create 1000000  --name "e2e" --unitname "e" | asset-id)
 [ "$(balance "$SMALL")" = 996000 ] # 1000 fee
 
-${gcmd} clerk send -a 1000000 -f "$ACCOUNT" -t "$APPACCT"
+${gcmd} clerk send -a 999000 -f "$ACCOUNT" -t "$APPACCT"
 appl "optin():void" --foreign-asset="$ASSETID" --from="$SMALL"
-[ "$(balance "$APPACCT")" = 999000 ] # 1000 fee
+[ "$(balance "$APPACCT")" = 998000 ] # 1000 fee
 [ "$(balance "$SMALL")" = 995000 ]
 
 appl "deposit():void" -o "$T/deposit.tx" --from="$SMALL"
@@ -136,7 +136,7 @@ ${gcmd} clerk rawsend -f "$T/group.stx"
 [ "$(asset_ids "$APPACCT")" = $ASSETID ]
 [ "$(asset_bal "$APPACCT")" = 1000 ]
 [ "$(balance "$SMALL")" =        993000 ] # 2 fees
-[ "$(balance "$APPACCT")" =      999000 ]
+[ "$(balance "$APPACCT")" =      998000 ]
 
 # Withdraw 100 in app. Confirm that inner txn is visible to transaction API.
 TXID=$(appl "withdraw(uint64):void" --app-arg="int:100"  --foreign-asset="$ASSETID" --from="$SMALL" | app-txid)
@@ -151,27 +151,27 @@ rest "/v2/blocks/$ROUND" | jq .block.txns[0].dt.itx
 [ "$(asset_bal "$SMALL")" = 999100 ]   #  100 asset withdrawn
 [ "$(asset_bal "$APPACCT")" = 900 ] # 100 asset withdrawn
 [ "$(balance "$SMALL")" =        992000 ] # 1 fee
-[ "$(balance "$APPACCT")" =        998000 ] # fee paid by app
+[ "$(balance "$APPACCT")" =        997000 ] # fee paid by app
 
 appl "withdraw(uint64):void" --app-arg="int:100" --foreign-asset="$ASSETID"  --fee 2000 --from="$SMALL"
 [ "$(asset_bal "$SMALL")" = 999200 ]   #  100 asset withdrawn
 [ "$(balance "$SMALL")" = 990000 ]   # 2000 fee
 [ "$(asset_bal "$APPACCT")" = 800 ] # 100 asset  withdrawn
-[ "$(balance "$APPACCT")" = 998000 ] # fee credit used
+[ "$(balance "$APPACCT")" = 997000 ] # fee credit used
 
 # Try to withdraw too much
 appl "withdraw(uint64):void" --app-arg="int:1000"  --foreign-asset="$ASSETID" --from="$SMALL"  && exit 1
 [ "$(asset_bal "$SMALL")" = 999200 ]   # no change
 [ "$(asset_bal "$APPACCT")" = 800 ]   # no change
 [ "$(balance "$SMALL")" = 990000 ]
-[ "$(balance "$APPACCT")" = 998000 ]
+[ "$(balance "$APPACCT")" = 997000 ]
 
 # Show that it works AT exact asset balance
 appl "withdraw(uint64):void" --app-arg="int:800" --foreign-asset="$ASSETID" --from="$SMALL"
 [ "$(asset_bal "$SMALL")" = 1000000 ]
 [ "$(asset_bal "$APPACCT")" = 0 ]
 [ "$(balance "$SMALL")" = 989000 ]
-[ "$(balance "$APPACCT")" = 997000 ]
+[ "$(balance "$APPACCT")" = 996000 ]
 
 USER=$(${gcmd} account new | awk '{ print $6 }') #new account
 ${gcmd} clerk send -a 999000 -f "$ACCOUNT" -t "$USER" #fund account
