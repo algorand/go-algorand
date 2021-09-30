@@ -25,11 +25,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestActionTypes(t *testing.T) {
+func TestInnerTypesV5(t *testing.T) {
+	v5, _ := makeSampleEnvWithVersion(5)
+	// not alllowed in v5
+	testApp(t, "itxn_begin; byte \"keyreg\"; itxn_field Type; itxn_submit; int 1;", v5, "keyreg is not a valid Type for itxn_field")
+	testApp(t, "itxn_begin; int keyreg; itxn_field TypeEnum; itxn_submit; int 1;", v5, "keyreg is not a valid Type for itxn_field")
+}
+
+func TestCurrentInnerTypes(t *testing.T) {
 	ep, ledger := makeSampleEnv()
 	testApp(t, "itxn_submit; int 1;", ep, "itxn_submit without itxn_begin")
 	testApp(t, "int pay; itxn_field TypeEnum; itxn_submit; int 1;", ep, "itxn_field without itxn_begin")
-	testApp(t, "itxn_begin; itxn_submit; int 1;", ep, "Invalid inner transaction type")
+	testApp(t, "itxn_begin; itxn_submit; int 1;", ep, "unknown tx type")
 	// bad type
 	testApp(t, "itxn_begin; byte \"pya\"; itxn_field Type; itxn_submit; int 1;", ep, "pya is not a valid Type")
 	// mixed up the int form for the byte form
@@ -37,11 +44,9 @@ func TestActionTypes(t *testing.T) {
 	// or vice versa
 	testApp(t, obfuscate("itxn_begin; byte \"pay\"; itxn_field TypeEnum; itxn_submit; int 1;"), ep, "not a uint64")
 
-	// good types, not alllowed yet
-	testApp(t, "itxn_begin; byte \"keyreg\"; itxn_field Type; itxn_submit; int 1;", ep, "keyreg is not a valid Type for itxn_field")
+	// good types, not allowed yet
 	testApp(t, "itxn_begin; byte \"appl\"; itxn_field Type; itxn_submit; int 1;", ep, "appl is not a valid Type for itxn_field")
 	// same, as enums
-	testApp(t, "itxn_begin; int keyreg; itxn_field TypeEnum; itxn_submit; int 1;", ep, "keyreg is not a valid Type for itxn_field")
 	testApp(t, "itxn_begin; int appl; itxn_field TypeEnum; itxn_submit; int 1;", ep, "appl is not a valid Type for itxn_field")
 	testApp(t, "itxn_begin; int 42; itxn_field TypeEnum; itxn_submit; int 1;", ep, "42 is not a valid TypeEnum")
 	testApp(t, "itxn_begin; int 0; itxn_field TypeEnum; itxn_submit; int 1;", ep, "0 is not a valid TypeEnum")
@@ -57,6 +62,10 @@ func TestActionTypes(t *testing.T) {
 	testApp(t, "itxn_begin; byte \"afrz\"; itxn_field Type; itxn_submit; int 1;", ep, "insufficient balance")
 	testApp(t, "itxn_begin; int acfg; itxn_field TypeEnum; itxn_submit; int 1;", ep, "insufficient balance")
 	testApp(t, "itxn_begin; int afrz; itxn_field TypeEnum; itxn_submit; int 1;", ep, "insufficient balance")
+
+	// alllowed since v6
+	testApp(t, "itxn_begin; byte \"keyreg\"; itxn_field Type; itxn_submit; int 1;", ep, "insufficient balance")
+	testApp(t, "itxn_begin; int keyreg; itxn_field TypeEnum; itxn_submit; int 1;", ep, "insufficient balance")
 
 	// Establish 888 as the app id, and fund it.
 	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
@@ -220,6 +229,30 @@ func TestRekeyPay(t *testing.T) {
 	// See explanation in logicLedger's Perform()
 }
 
+func TestRekeyBack(t *testing.T) {
+	pay_and_unkey := `
+  itxn_begin
+  itxn_field Amount
+  itxn_field Receiver
+  itxn_field Sender
+  int pay
+  itxn_field TypeEnum
+  txn Sender
+  itxn_field RekeyTo
+  itxn_submit
+`
+
+	ep, ledger := makeSampleEnv()
+	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
+	testApp(t, "txn Sender; balance; int 0; ==;", ep)
+	testApp(t, "txn Sender; txn Accounts 1; int 100"+pay_and_unkey, ep, "unauthorized")
+	ledger.NewAccount(ep.Txn.Txn.Sender, 120+3*ep.Proto.MinTxnFee)
+	ledger.Rekey(ep.Txn.Txn.Sender, basics.AppIndex(888).Address())
+	testApp(t, "txn Sender; txn Accounts 1; int 100"+pay_and_unkey+"; int 1", ep)
+	// now rekeyed back to original
+	testApp(t, "txn Sender; txn Accounts 1; int 100"+pay_and_unkey, ep, "unauthorized")
+}
+
 func TestDefaultSender(t *testing.T) {
 	pay := `
   itxn_begin
@@ -320,7 +353,7 @@ func TestExtraFields(t *testing.T) {
 		"non-zero fields for type axfer")
 }
 
-func TestBadField(t *testing.T) {
+func TestBadFieldV5(t *testing.T) {
 	pay := `
   itxn_begin
   int 7; itxn_field AssetAmount;
@@ -334,10 +367,32 @@ func TestBadField(t *testing.T) {
   itxn_submit
 `
 
-	ep, ledger := makeSampleEnv()
+	ep, ledger := makeSampleEnvWithVersion(5)
 	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
 	testApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+pay, ep,
 		"invalid itxn_field RekeyTo")
+}
+
+func TestBadField(t *testing.T) {
+	pay := `
+  itxn_begin
+  int 7; itxn_field AssetAmount;
+  itxn_field Amount
+  itxn_field Receiver
+  itxn_field Sender
+  int pay
+  itxn_field TypeEnum
+  txn Receiver
+  itxn_field RekeyTo				// ALLOWED, since v6
+  int 10
+  itxn_field FirstValid				// NOT ALLOWED
+  itxn_submit
+`
+
+	ep, ledger := makeSampleEnv()
+	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
+	testApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+pay, ep,
+		"invalid itxn_field FirstValid")
 }
 
 func TestNumInner(t *testing.T) {
