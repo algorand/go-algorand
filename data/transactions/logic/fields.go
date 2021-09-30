@@ -197,7 +197,7 @@ var txnFieldSpecs = []txnFieldSpec{
 	{FirstValid, StackUint64, 0, 0, false},
 	{FirstValidTime, StackUint64, 0, 0, false},
 	{LastValid, StackUint64, 0, 0, false},
-	{Note, StackBytes, 0, 0, false},
+	{Note, StackBytes, 0, 6, false},
 	{Lease, StackBytes, 0, 0, false},
 	{Receiver, StackBytes, 0, 5, false},
 	{Amount, StackUint64, 0, 5, false},

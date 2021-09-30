@@ -230,7 +230,7 @@ func TestRekeyPay(t *testing.T) {
 }
 
 func TestRekeyBack(t *testing.T) {
-	pay_and_unkey := `
+	payAndUnkey := `
   itxn_begin
   itxn_field Amount
   itxn_field Receiver
@@ -245,12 +245,12 @@ func TestRekeyBack(t *testing.T) {
 	ep, ledger := makeSampleEnv()
 	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
 	testApp(t, "txn Sender; balance; int 0; ==;", ep)
-	testApp(t, "txn Sender; txn Accounts 1; int 100"+pay_and_unkey, ep, "unauthorized")
+	testApp(t, "txn Sender; txn Accounts 1; int 100"+payAndUnkey, ep, "unauthorized")
 	ledger.NewAccount(ep.Txn.Txn.Sender, 120+3*ep.Proto.MinTxnFee)
 	ledger.Rekey(ep.Txn.Txn.Sender, basics.AppIndex(888).Address())
-	testApp(t, "txn Sender; txn Accounts 1; int 100"+pay_and_unkey+"; int 1", ep)
+	testApp(t, "txn Sender; txn Accounts 1; int 100"+payAndUnkey+"; int 1", ep)
 	// now rekeyed back to original
-	testApp(t, "txn Sender; txn Accounts 1; int 100"+pay_and_unkey, ep, "unauthorized")
+	testApp(t, "txn Sender; txn Accounts 1; int 100"+payAndUnkey, ep, "unauthorized")
 }
 
 func TestDefaultSender(t *testing.T) {
@@ -488,4 +488,15 @@ func TestAssetFreeze(t *testing.T) {
 	holding, err = ledger.AssetHolding(ep.Txn.Txn.Receiver, 889)
 	require.NoError(t, err)
 	require.Equal(t, false, holding.Frozen)
+}
+
+func TestNoteSetting(t *testing.T) {
+	good := "itxn_begin; int 500; bzero; itxn_field Note; int 1"
+	bad := "itxn_begin; int 501; bzero; itxn_field Note; int 1"
+	ep, ledger := makeSampleEnv()
+	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
+	// Give it enough for fees.  Recall that we don't check min balance at this level.
+	ledger.NewAccount(ledger.ApplicationID().Address(), 12*defaultEvalProto().MinTxnFee)
+	testApp(t, good, ep)
+	testApp(t, bad, ep, "Note may not exceed")
 }

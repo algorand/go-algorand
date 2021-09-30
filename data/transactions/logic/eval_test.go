@@ -74,6 +74,7 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 		MaxAssetURLBytes:      32,
 		MaxAssetDecimals:      4,
 		SupportRekeying:       true,
+		MaxTxnNoteBytes:       500,
 	}
 }
 

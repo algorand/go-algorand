@@ -3774,7 +3774,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 	// round, and separation by MaxLifetime (check lifetime in submit, not here)
 	case Note:
 		if len(sv.Bytes) > cx.Proto.MaxTxnNoteBytes {
-			err = fmt.Errorf("Note may not exceed %d", cx.Proto.MaxTxnNoteBytes)
+			err = fmt.Errorf("Note may not exceed %d bytes", cx.Proto.MaxTxnNoteBytes)
 		} else {
 			copy(txn.Note[:], sv.Bytes)
 		}
