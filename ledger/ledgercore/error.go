@@ -79,12 +79,17 @@ func (err ErrNoEntry) Error() string {
 
 // LogicEvalError indicates TEAL evaluation failure
 type LogicEvalError struct {
-	Err error
+	Err     error
+	Details string
 }
 
 // Error satisfies builtin interface `error`
 func (err LogicEvalError) Error() string {
-	return fmt.Sprintf("logic eval error: %v", err.Err)
+	msg := fmt.Sprintf("logic eval error: %v", err.Err)
+	if len(err.Details) > 0 {
+		msg = fmt.Sprintf("%s. Details: %s", msg, err.Details)
+	}
+	return msg
 }
 
 // ErrNonSequentialBlockEval provides feedback when the evaluator cannot be created for
