@@ -1091,6 +1091,60 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		}
 	}
 
+	if eval.validate {
+		expectedMaxNumberOfExpiredAccounts := eval.proto.MaxExpiredAccountsToProcess
+		lengthOfExpiredParticipationAccounts := len(eval.block.ParticipationUpdates.ExpiredParticipationAccounts)
+
+		// If the length of the array is strictly greater than our max then we have an error.
+		// This works when the expected number of accounts is zero (i.e. it is disabled) as well
+		if lengthOfExpiredParticipationAccounts > expectedMaxNumberOfExpiredAccounts {
+			return fmt.Errorf("length of expired accounts (%d) was greater than expected (%d)",
+				lengthOfExpiredParticipationAccounts, expectedMaxNumberOfExpiredAccounts)
+		}
+
+		// For security reasons, we need to make sure that all addresses in the expired participation accounts
+		// are unique.  We make this map to keep track of previously seen address
+		addressSet := make(map[basics.Address]bool, lengthOfExpiredParticipationAccounts)
+
+		// Validate that all expired accounts meet the current criteria
+		currentRound := eval.Round()
+		for _, accountAddr := range eval.block.ParticipationUpdates.ExpiredParticipationAccounts {
+
+			if _, exists := addressSet[accountAddr]; exists {
+				// We shouldn't have duplicate addresses...
+				return fmt.Errorf("duplicate address found: %v", accountAddr)
+			}
+
+			// Record that we have seen this address
+			addressSet[accountAddr] = true
+
+			acctData, err := eval.state.lookup(accountAddr)
+			if err != nil {
+				return fmt.Errorf("finalValidation was unable to retrieve account %v : %w", accountAddr, err)
+			}
+
+			// true if the account is online
+			isOnline := acctData.Status == basics.Online
+			// true if the accounts last valid round has passed
+			pastCurrentRound := acctData.VoteLastValid < currentRound
+
+			if !isOnline {
+				return fmt.Errorf("finalValidation found %v was not online but %v", accountAddr, acctData.Status)
+			}
+
+			if !pastCurrentRound {
+				return fmt.Errorf("finalValidation found %v round (%d) was not less than current round (%d)", accountAddr, acctData.VoteLastValid, currentRound)
+			}
+		}
+
+	}
+
+	err := eval.modifyOfflineAccounts()
+
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -1165,55 +1219,6 @@ func (eval *BlockEvaluator) finalValidation() error {
 			}
 		}
 
-		expectedMaxNumberOfExpiredAccounts := eval.proto.MaxExpiredAccountsToProcess
-		lengthOfExpiredParticipationAccounts := len(eval.block.ParticipationUpdates.ExpiredParticipationAccounts)
-
-		// If the length of the array is strictly greater than our max then we have an error.
-		// This works when the expected number of accounts is zero (i.e. it is disabled) as well
-		if lengthOfExpiredParticipationAccounts > expectedMaxNumberOfExpiredAccounts {
-			return fmt.Errorf("length of expired accounts (%d) was greater than expected (%d)",
-				lengthOfExpiredParticipationAccounts, expectedMaxNumberOfExpiredAccounts)
-		}
-
-		// For security reasons, we need to make sure that all addresses in the expired participation accounts
-		// are unique.  We make this map to keep track of previously seen address
-		addressSet := make(map[basics.Address]bool, lengthOfExpiredParticipationAccounts)
-
-		// Validate that all expired accounts meet the current criteria
-		currentRound := eval.Round()
-		for _, accountAddr := range eval.block.ParticipationUpdates.ExpiredParticipationAccounts {
-
-			if _, exists := addressSet[accountAddr]; exists {
-				// We shouldn't have duplicate addresses...
-				return fmt.Errorf("duplicate address found: %v", accountAddr)
-			}
-
-			// Record that we have seen this address
-			addressSet[accountAddr] = true
-
-			acctData, err := eval.state.lookup(accountAddr)
-			if err != nil {
-				return fmt.Errorf("finalValidation was unable to retrieve account %v : %w", accountAddr, err)
-			}
-
-			// true if the account is online
-			isOnline := acctData.Status == basics.Online
-			// true if the accounts last valid round has passed
-			pastCurrentRound := acctData.VoteLastValid < currentRound
-
-			if !isOnline {
-				return fmt.Errorf("finalValidation found %v was not online but %v", accountAddr, acctData.Status)
-			}
-
-			if !pastCurrentRound {
-				return fmt.Errorf("finalValidation found %v round (%d) was not less than current round (%d)", accountAddr, acctData.VoteLastValid, currentRound)
-			}
-		}
-	}
-
-	err := eval.modifyOfflineAccounts()
-	if err != nil {
-		return err
 	}
 
 	return eval.state.CalculateTotals()
