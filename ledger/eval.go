@@ -1120,7 +1120,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 
 			acctData, err := eval.state.lookup(accountAddr)
 			if err != nil {
-				return fmt.Errorf("finalValidation was unable to retrieve account %v : %w", accountAddr, err)
+				return fmt.Errorf("endOfBlock was unable to retrieve account %v : %w", accountAddr, err)
 			}
 
 			// true if the account is online
@@ -1129,11 +1129,11 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			pastCurrentRound := acctData.VoteLastValid < currentRound
 
 			if !isOnline {
-				return fmt.Errorf("finalValidation found %v was not online but %v", accountAddr, acctData.Status)
+				return fmt.Errorf("endOfBlock found %v was not online but %v", accountAddr, acctData.Status)
 			}
 
 			if !pastCurrentRound {
-				return fmt.Errorf("finalValidation found %v round (%d) was not less than current round (%d)", accountAddr, acctData.VoteLastValid, currentRound)
+				return fmt.Errorf("endOfBlock found %v round (%d) was not less than current round (%d)", accountAddr, acctData.VoteLastValid, currentRound)
 			}
 		}
 

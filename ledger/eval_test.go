@@ -2053,6 +2053,104 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 
 }
 
+type failRoundCowParent struct {
+	roundCowBase
+}
+
+func (p *failRoundCowParent) lookup(basics.Address) (basics.AccountData, error) {
+	return basics.AccountData{}, fmt.Errorf("disk I/O fail (on purpose)")
+}
+
+// TestExpiredAccountGenerationWithDiskFailure tests edge cases where disk failures can lead to ledger look up failures
+func TestExpiredAccountGenerationWithDiskFailure(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genesisInitState, addrs, keys := genesisWithProto(10, protocol.ConsensusFuture)
+
+	sendAddr := addrs[0]
+	recvAddr := addrs[1]
+
+	// the last round that the recvAddr is valid for
+	recvAddrLastValidRound := basics.Round(10)
+
+	// the target round we want to advance the evaluator to
+	targetRound := basics.Round(4)
+
+	// Set all to online except the sending address
+	for _, addr := range addrs {
+		if addr == sendAddr {
+			continue
+		}
+		tmp := genesisInitState.Accounts[addr]
+		tmp.Status = basics.Online
+		genesisInitState.Accounts[addr] = tmp
+	}
+
+	// Choose recvAddr to have a last valid round less than genesis block round
+	{
+		tmp := genesisInitState.Accounts[recvAddr]
+		tmp.VoteLastValid = recvAddrLastValidRound
+		genesisInitState.Accounts[recvAddr] = tmp
+	}
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+
+	// Advance the evaluator a couple rounds...
+	for i := uint64(0); i < uint64(targetRound); i++ {
+		l.endBlock(t, eval)
+		eval = l.nextBlock(t)
+	}
+
+	genHash := genesisInitState.Block.BlockHeader.GenesisHash
+	txn := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      sendAddr,
+			Fee:         minFee,
+			FirstValid:  newBlock.Round(),
+			LastValid:   eval.Round(),
+			GenesisHash: genHash,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: recvAddr,
+			Amount:   basics.MicroAlgos{Raw: 100},
+		},
+	}
+
+	st := txn.Sign(keys[0])
+	err = eval.Transaction(st, transactions.ApplyData{})
+	require.NoError(t, err)
+
+	eval.validate = true
+	eval.generate = false
+
+	eval.block.ExpiredParticipationAccounts = append(eval.block.ExpiredParticipationAccounts, recvAddr)
+
+	err = eval.endOfBlock()
+	require.Error(t, err)
+
+	eval.block.ExpiredParticipationAccounts = []basics.Address{
+		basics.Address{},
+	}
+	eval.state.mods.Accts = ledgercore.AccountDeltas{}
+	eval.state.lookupParent = &failRoundCowParent{}
+	err = eval.endOfBlock()
+	require.Error(t, err)
+
+	err = eval.modifyOfflineAccounts()
+	require.Error(t, err)
+
+}
+
 // TestExpiredAccountGeneration test that expired accounts are added to a block header and validated
 func TestExpiredAccountGeneration(t *testing.T) {
 	partitiontest.PartitionTest(t)
