@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package internal
 
 import (
 	"testing"
@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -96,7 +97,7 @@ func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.
 		require.Equal(t, d, data)
 	}
 
-	d, err := cow.lookup(randomAddress())
+	d, err := cow.lookup(ledgertesting.RandomAddress())
 	require.NoError(t, err)
 	require.Equal(t, d, basics.AccountData{})
 }
@@ -111,7 +112,7 @@ func applyUpdates(cow *roundCowState, updates ledgercore.AccountDeltas) {
 func TestCowBalance(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	accts0 := randomAccounts(20, true)
+	accts0 := ledgertesting.RandomAccounts(20, true)
 	ml := mockLedger{balanceMap: accts0}
 
 	c0 := makeRoundCowState(
@@ -123,7 +124,7 @@ func TestCowBalance(t *testing.T) {
 	checkCow(t, c0, accts0)
 	checkCow(t, c1, accts0)
 
-	updates1, accts1, _ := randomDeltas(10, accts0, 0)
+	updates1, accts1, _ := ledgertesting.RandomDeltas(10, accts0, 0)
 	applyUpdates(c1, updates1)
 	checkCow(t, c0, accts0)
 	checkCow(t, c1, accts1)
@@ -133,7 +134,7 @@ func TestCowBalance(t *testing.T) {
 	checkCow(t, c1, accts1)
 	checkCow(t, c2, accts1)
 
-	updates2, accts2, _ := randomDeltas(10, accts1, 0)
+	updates2, accts2, _ := ledgertesting.RandomDeltas(10, accts1, 0)
 	applyUpdates(c2, updates2)
 	checkCow(t, c0, accts0)
 	checkCow(t, c1, accts1)

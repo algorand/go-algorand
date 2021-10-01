@@ -474,7 +474,7 @@ func (node *AlgorandFullNode) Ledger() *data.Ledger {
 
 // writeDevmodeBlock generates a new block for a devmode, and write it to the ledger.
 func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
-	var vb *ledger.ValidatedBlock
+	var vb *ledgercore.ValidatedBlock
 	vb, err = node.transactionPool.AssembleDevModeBlock()
 	if err != nil || vb == nil {
 		return
@@ -1068,7 +1068,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 
 // validatedBlock satisfies agreement.ValidatedBlock
 type validatedBlock struct {
-	vb *ledger.ValidatedBlock
+	vb *ledgercore.ValidatedBlock
 }
 
 // WithSeed satisfies the agreement.ValidatedBlock interface.

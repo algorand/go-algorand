@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -67,12 +68,12 @@ func (il indexerLedgerForEvalImpl) LookupWithoutRewards(addresses map[basics.Add
 	return res, nil
 }
 
-func (il indexerLedgerForEvalImpl) GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]FoundAddress, error) {
+func (il indexerLedgerForEvalImpl) GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]ledgercore.FoundAddress, error) {
 	// This function is unused.
 	return nil, errors.New("GetAssetCreator() not implemented")
 }
 
-func (il indexerLedgerForEvalImpl) GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]FoundAddress, error) {
+func (il indexerLedgerForEvalImpl) GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]ledgercore.FoundAddress, error) {
 	// This function is unused.
 	return nil, errors.New("GetAppCreator() not implemented")
 }
@@ -86,7 +87,7 @@ func (il indexerLedgerForEvalImpl) LatestTotals() (totals ledgercore.AccountTota
 func TestEvalForIndexerCustomProtocolParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genesisBalances, addrs, _ := newTestGenesis()
+	genesisBalances, addrs, _ := ledgertesting.NewTestGenesis()
 
 	var genHash crypto.Digest
 	crypto.RandBytes(genHash[:])
@@ -96,7 +97,7 @@ func TestEvalForIndexerCustomProtocolParams(t *testing.T) {
 	dbName := fmt.Sprintf("%s", t.Name())
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, true, InitState{
+	l, err := OpenLedger(logging.Base(), dbName, true, ledgercore.InitState{
 		Block:       block,
 		Accounts:    genesisBalances.Balances,
 		GenesisHash: genHash,

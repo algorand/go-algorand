@@ -14,36 +14,24 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package internal
 
 import (
-	"crypto/rand"
-	"encoding/hex"
+	//"encoding/hex"
 	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
+	//"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/protocol"
+	//"github.com/algorand/go-algorand/data/transactions/logic"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
+	//"github.com/algorand/go-algorand/logging"
+	//"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
-
-func getRandomAddress(a *require.Assertions) basics.Address {
-	const rl = 16
-	b := make([]byte, rl)
-	n, err := rand.Read(b)
-	a.NoError(err)
-	a.Equal(rl, n)
-
-	address := crypto.Hash(b)
-	return basics.Address(address)
-}
 
 type creatableLocator struct {
 	cidx  basics.CreatableIndex
@@ -153,7 +141,7 @@ func TestLogicLedgerMake(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), "cannot make logic ledger for app index 0")
 
-	addr := getRandomAddress(a)
+	addr := ledgertesting.RandomAddress()
 	aidx := basics.AppIndex(1)
 
 	c := &mockCowForLogicLedger{}
@@ -178,14 +166,14 @@ func TestLogicLedgerBalances(t *testing.T) {
 
 	a := require.New(t)
 
-	addr := getRandomAddress(a)
+	addr := ledgertesting.RandomAddress()
 	aidx := basics.AppIndex(1)
 	c := newCowMock([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
 	l, err := newLogicLedger(c, aidx)
 	a.NoError(err)
 	a.NotNil(l)
 
-	addr1 := getRandomAddress(a)
+	addr1 := ledgertesting.RandomAddress()
 	ble := basics.MicroAlgos{Raw: 100}
 	c.brs = map[basics.Address]basics.AccountData{addr1: {MicroAlgos: ble}}
 	bla, err := l.Balance(addr1)
@@ -198,7 +186,7 @@ func TestLogicLedgerGetters(t *testing.T) {
 
 	a := require.New(t)
 
-	addr := getRandomAddress(a)
+	addr := ledgertesting.RandomAddress()
 	aidx := basics.AppIndex(1)
 	c := newCowMock([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
 	l, err := newLogicLedger(c, aidx)
@@ -210,7 +198,7 @@ func TestLogicLedgerGetters(t *testing.T) {
 	ts := int64(11223344)
 	c.ts = ts
 
-	addr1 := getRandomAddress(a)
+	addr1 := ledgertesting.RandomAddress()
 	c.stores = map[storeLocator]basics.TealKeyValue{{addr1, aidx, false}: {}}
 	a.Equal(aidx, l.ApplicationID())
 	a.Equal(round, l.Round())
@@ -226,8 +214,8 @@ func TestLogicLedgerAsset(t *testing.T) {
 
 	a := require.New(t)
 
-	addr := getRandomAddress(a)
-	addr1 := getRandomAddress(a)
+	addr := ledgertesting.RandomAddress()
+	addr1 := ledgertesting.RandomAddress()
 	aidx := basics.AppIndex(1)
 	assetIdx := basics.AssetIndex(2)
 	c := newCowMock([]modsData{
@@ -272,8 +260,8 @@ func TestLogicLedgerGetKey(t *testing.T) {
 
 	a := require.New(t)
 
-	addr := getRandomAddress(a)
-	addr1 := getRandomAddress(a)
+	addr := ledgertesting.RandomAddress()
+	addr1 := ledgertesting.RandomAddress()
 	aidx := basics.AppIndex(1)
 	assetIdx := basics.AssetIndex(2)
 	c := newCowMock([]modsData{
@@ -315,7 +303,7 @@ func TestLogicLedgerSetKey(t *testing.T) {
 
 	a := require.New(t)
 
-	addr := getRandomAddress(a)
+	addr := ledgertesting.RandomAddress()
 	aidx := basics.AppIndex(1)
 	c := newCowMock([]modsData{
 		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
@@ -345,7 +333,7 @@ func TestLogicLedgerDelKey(t *testing.T) {
 
 	a := require.New(t)
 
-	addr := getRandomAddress(a)
+	addr := ledgertesting.RandomAddress()
 	aidx := basics.AppIndex(1)
 	c := newCowMock([]modsData{
 		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
@@ -363,7 +351,7 @@ func TestLogicLedgerDelKey(t *testing.T) {
 	err = l.DelGlobal("gkey")
 	a.NoError(err)
 
-	addr1 := getRandomAddress(a)
+	addr1 := ledgertesting.RandomAddress()
 	c.stores = map[storeLocator]basics.TealKeyValue{{addr1, aidx, false}: {"lkey": tv}}
 	err = l.DelLocal(addr1, "lkey", 0)
 	a.NoError(err)
@@ -374,6 +362,7 @@ func TestLogicLedgerDelKey(t *testing.T) {
 // before and after application code refactoring
 // 2) writing into empty (opted-in) local state's KeyValue works after reloading
 // Hardcoded values are from commit 9a0b439 (pre app refactor commit)
+/*
 func TestAppAccountDataStorage(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1270,6 +1259,7 @@ int 1
 	testAppAccountDeltaIndicesCompatibility(t, source, 1)
 }
 
+
 func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accountIdx uint64) {
 	a := require.New(t)
 	ops, err := logic.AssembleString(source)
@@ -1374,3 +1364,4 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	a.Contains(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx], "lk1")
 	a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx]["lk1"].Bytes, "local1")
 }
+*/

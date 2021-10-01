@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package internal
 
 import (
 	"context"
@@ -22,11 +22,12 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"path/filepath"
+	//"path/filepath"
+	"bytes"
 	"reflect"
 	"runtime/pprof"
 	"strings"
-	"sync"
+	//"sync"
 	"testing"
 	"time"
 
@@ -42,9 +43,11 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/logging"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
+	//"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -62,22 +65,23 @@ func init() {
 func TestBlockEvaluator(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genesisInitState, addrs, keys := genesis(10)
+	genesisInitState, addrs, keys := ledgertesting.Genesis(10)
 
-	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
-	require.NoError(t, err)
-	defer l.Close()
+	genesisBalances := bookkeeping.GenesisBalances{
+		Balances:    genesisInitState.Accounts,
+		FeeSink:     testSinkAddr,
+		RewardsPool: testPoolAddr,
+		Timestamp:   0,
+	}
+	l := newTestLedger(t, genesisBalances)
 
-	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+	genesisBlockHeader, err := l.BlockHdr(basics.Round(0))
+	newBlock := bookkeeping.MakeBlock(genesisBlockHeader)
 	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
-	require.Equal(t, eval.specials.FeeSink, testSinkAddr)
 	require.NoError(t, err)
+	require.Equal(t, eval.specials.FeeSink, testSinkAddr)
 
-	genHash := genesisInitState.Block.BlockHeader.GenesisHash
+	genHash := l.GenesisHash()
 	txn := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
@@ -245,18 +249,18 @@ func TestRekeying(t *testing.T) {
 	}()
 
 	// Bring up a ledger
-	genesisInitState, addrs, keys := genesis(10)
-	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
-	require.NoError(t, err)
-	defer l.Close()
+	genesisInitState, addrs, keys := ledgertesting.Genesis(10)
+	genesisBalances := bookkeeping.GenesisBalances{
+		Balances:    genesisInitState.Accounts,
+		FeeSink:     testSinkAddr,
+		RewardsPool: testPoolAddr,
+		Timestamp:   0,
+	}
+	l := newTestLedger(t, genesisBalances)
 
 	// Make a new block
 	nextRound := l.Latest() + basics.Round(1)
-	genHash := genesisInitState.Block.BlockHeader.GenesisHash
+	genHash := l.GenesisHash()
 
 	// Test plan
 	// Syntax: [A -> B][C, D] means transaction from A that rekeys to B with authaddr C and actual sig from D
@@ -284,8 +288,9 @@ func TestRekeying(t *testing.T) {
 		// We'll make a block using the evaluator.
 		// When generating a block, the evaluator doesn't check transaction sigs -- it assumes the transaction pool already did that.
 		// So the ValidatedBlock that comes out isn't necessarily actually a valid block. We'll call Validate ourselves.
-
-		newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+		genesisHdr, err := l.BlockHdr(basics.Round(0))
+		require.NoError(t, err)
+		newBlock := bookkeeping.MakeBlock(genesisHdr)
 		eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
 		require.NoError(t, err)
 
@@ -323,7 +328,7 @@ func TestRekeying(t *testing.T) {
 		makeTxn(addrs[0], addrs[0], addrs[1], keys[1], 3),                 // [A -> A][B,B]
 		makeTxn(addrs[0], basics.Address{}, basics.Address{}, keys[0], 4), // [A -> 0][0,A]
 	}
-	err = tryBlock(test1txns)
+	err := tryBlock(test1txns)
 	require.NoError(t, err)
 
 	// Test 2: Use old key after rekeying
@@ -438,6 +443,7 @@ func TestPrepareEvalParams(t *testing.T) {
 	}
 }
 
+/*
 func testLedgerCleanup(l *Ledger, dbName string, inMem bool) {
 	l.Close()
 	if !inMem {
@@ -449,19 +455,22 @@ func testLedgerCleanup(l *Ledger, dbName string, inMem bool) {
 			os.Remove(fname)
 		}
 	}
-}
+}*/
 
 func testEvalAppGroup(t *testing.T, schema basics.StateSchema) (*BlockEvaluator, basics.Address, error) {
-	genesisInitState, addrs, keys := genesis(10)
+	genesisInitState, addrs, keys := ledgertesting.Genesis(10)
 
-	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	const inMem = true
-	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	genesisBalances := bookkeeping.GenesisBalances{
+		Balances:    genesisInitState.Accounts,
+		FeeSink:     testSinkAddr,
+		RewardsPool: testPoolAddr,
+		Timestamp:   0,
+	}
+	l := newTestLedger(t, genesisBalances)
+
+	blkHeader, err := l.BlockHdr(basics.Round(0))
 	require.NoError(t, err)
-	defer l.Close()
-
-	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+	newBlock := bookkeeping.MakeBlock(blkHeader)
 	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
 	require.NoError(t, err)
 	eval.validate = true
@@ -486,7 +495,7 @@ ok:
 	require.NoError(t, err)
 	clear := ops.Program
 
-	genHash := genesisInitState.Block.BlockHeader.GenesisHash
+	genHash := l.GenesisHash()
 	header := transactions.Header{
 		Sender:      addrs[0],
 		Fee:         minFee,
@@ -542,7 +551,7 @@ ok:
 	if err != nil {
 		return eval, addrs[0], err
 	}
-	err = eval.transactionGroup(g)
+	err = eval.TransactionGroup(g)
 	return eval, addrs[0], err
 }
 
@@ -575,7 +584,6 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalProgram string, consensusVersion protocol.ConsensusVersion) error {
 	genBalances, addrs, _ := newTestGenesis()
 	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	eval := l.nextBlock(t)
 	eval.proto = config.Consensus[consensusVersion]
@@ -731,7 +739,7 @@ func (g *BenchAppOptInsTxnGenerator) Prepare(tb testing.TB, addrs []basics.Addre
 				FirstValid:  rnd,
 				LastValid:   rnd + basics.Round(expectedNumOfBlocks),
 				GenesisHash: gh,
-				Note:        randomNote(),
+				Note:        ledgertesting.RandomNote(),
 			},
 			ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
 				ApprovalProgram:   g.Program,
@@ -809,7 +817,7 @@ func (g *BenchAppOptInsTxnGenerator) Txn(tb testing.TB, addrs []basics.Address, 
 			FirstValid:  rnd,
 			LastValid:   rnd,
 			GenesisHash: gh,
-			Note:        randomNote(),
+			Note:        ledgertesting.RandomNote(),
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver: addrs[receiverIdx],
@@ -887,19 +895,20 @@ done:
 	benchmarkBlockEvaluator(b, false, false, protocol.ConsensusFuture, &g)
 }
 
-// this variant focuses on benchmarking ledger.go `eval()`, the rest is setup, it runs eval() b.N times.
+// this variant focuses on benchmarking ledger.go `Eval()`, the rest is setup, it runs Eval() b.N times.
 func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto protocol.ConsensusVersion, txnSource BenchTxnGenerator) {
+	// TODO - fix this one.
 	deadlockDisable := deadlock.Opts.Disable
 	deadlock.Opts.Disable = true
 	defer func() { deadlock.Opts.Disable = deadlockDisable }()
 	start := time.Now()
-	genesisInitState, addrs, keys := genesisWithProto(100000, proto)
+	genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(100000, proto)
 	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
 	cparams := config.Consensus[genesisInitState.Block.CurrentProtocol]
 	cparams.MaxTxnBytesPerBlock = 1000000000 // very big, no limit
 	config.Consensus[protocol.ConsensusVersion(dbName)] = cparams
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusVersion(dbName)
-	cfg := config.GetDefaultLocal()
+	/*cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
@@ -908,7 +917,15 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 	dbName2 := dbName + "_2"
 	l2, err := OpenLedger(logging.Base(), dbName2, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
-	defer testLedgerCleanup(l2, dbName2, inMem)
+	defer testLedgerCleanup(l2, dbName2, inMem)*/
+	genesisBalances := bookkeeping.GenesisBalances{
+		Balances:    genesisInitState.Accounts,
+		FeeSink:     testSinkAddr,
+		RewardsPool: testPoolAddr,
+		Timestamp:   0,
+	}
+	l := newTestLedger(b, genesisBalances)
+	l2 := newTestLedger(b, genesisBalances)
 
 	bepprof := os.Getenv("BLOCK_EVAL_PPROF")
 	if len(bepprof) > 0 {
@@ -930,7 +947,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 	bev, err := l.StartEvaluator(newBlock.BlockHeader, 0)
 	require.NoError(b, err)
 
-	genHash := genesisInitState.Block.BlockHeader.GenesisHash
+	genHash := l.GenesisHash()
 
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
@@ -939,7 +956,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 	initSignedTxns, maxTxnPerBlock := txnSource.Prepare(b, addrs, keys, newBlock.Round(), genHash)
 	if len(initSignedTxns) > 0 {
 		// all init transactions need to be written to ledger before reopening and benchmarking
-		for _, l := range []*Ledger{l, l2} {
+		/*for _, l := range []*evalTestLedger{l, l2} {
 			l.accts.ctxCancel() // force commitSyncer to exit
 
 			// wait commitSyncer to exit
@@ -948,10 +965,10 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 			case <-l.accts.commitSyncerClosed:
 				break
 			}
-		}
+		}*/
 
 		var numBlocks uint64 = 0
-		var validatedBlock *ValidatedBlock
+		var validatedBlock *ledgercore.ValidatedBlock
 
 		// there are might more transactions than MaxTxnBytesPerBlock allows
 		// so make smaller blocks to fit
@@ -961,11 +978,11 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 			if maxTxnPerBlock > 0 && i%maxTxnPerBlock == 0 || i == len(initSignedTxns)-1 {
 				validatedBlock, err = bev.GenerateBlock()
 				require.NoError(b, err)
-				for _, l := range []*Ledger{l, l2} {
+				for _, l := range []*evalTestLedger{l, l2} {
 					err = l.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
 					require.NoError(b, err)
 				}
-				newBlock = bookkeeping.MakeBlock(validatedBlock.blk.BlockHeader)
+				newBlock = bookkeeping.MakeBlock(validatedBlock.Block().BlockHeader)
 				bev, err = l.StartEvaluator(newBlock.BlockHeader, 0)
 				require.NoError(b, err)
 				numBlocks++
@@ -974,8 +991,8 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 
 		// wait until everying is written and then reload ledgers in order
 		// to start reading accounts from DB and not from caches/deltas
-		var wg sync.WaitGroup
-		for _, l := range []*Ledger{l, l2} {
+		/*var wg sync.WaitGroup
+		for _, l := range []*evalTestLedger{l, l2} {
 			wg.Add(1)
 			// committing might take a long time, do it parallel
 			go func(l *Ledger) {
@@ -986,9 +1003,9 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 				wg.Done()
 			}(l)
 		}
-		wg.Wait()
+		wg.Wait()*/
 
-		newBlock = bookkeeping.MakeBlock(validatedBlock.blk.BlockHeader)
+		newBlock = bookkeeping.MakeBlock(validatedBlock.Block().BlockHeader)
 		bev, err = l.StartEvaluator(newBlock.BlockHeader, 0)
 		require.NoError(b, err)
 	}
@@ -1022,16 +1039,16 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 
 	// test speed of block validation
 	// This should be the same as the eval line in ledger.go AddBlock()
-	// This is pulled out to isolate eval() time from db ops of AddValidatedBlock()
+	// This is pulled out to isolate Eval() time from db ops of AddValidatedBlock()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	/*for i := 0; i < b.N; i++ {
 		if withCrypto {
-			_, err = l2.Validate(context.Background(), validatedBlock.blk, backlogPool)
+			_, err = l2.Validate(context.Background(), validatedBlock.Block(), backlogPool)
 		} else {
-			_, err = eval(context.Background(), l2, validatedBlock.blk, false, nil, nil)
+			_, err = Eval(context.Background(), l2, validatedBlock.Block(), false, nil, nil)
 		}
 		require.NoError(b, err)
-	}
+	}*/
 
 	abDone := time.Now()
 	abTime := abDone.Sub(avbDone)
@@ -1048,7 +1065,7 @@ func TestCowCompactCert(t *testing.T) {
 	var cert compactcert.Cert
 	var atRound basics.Round
 	var validate bool
-	accts0 := randomAccounts(20, true)
+	accts0 := ledgertesting.RandomAccounts(20, true)
 	blocks := make(map[basics.Round]bookkeeping.BlockHeader)
 	blockErr := make(map[basics.Round]error)
 	ml := mockLedger{balanceMap: accts0, blocks: blocks, blockErr: blockErr}
@@ -1123,18 +1140,18 @@ func TestPrivateTransactionGroup(t *testing.T) {
 
 	var txgroup []transactions.SignedTxnWithAD
 	eval := BlockEvaluator{}
-	err := eval.transactionGroup(txgroup)
+	err := eval.TransactionGroup(txgroup)
 	require.NoError(t, err) // nothing to do, no problem
 
 	eval.proto = config.Consensus[protocol.ConsensusCurrentVersion]
 	txgroup = make([]transactions.SignedTxnWithAD, eval.proto.MaxTxGroupSize+1)
-	err = eval.transactionGroup(txgroup)
+	err = eval.TransactionGroup(txgroup)
 	require.Error(t, err) // too many
 }
 
 // BlockEvaluator.workaroundOverspentRewards() fixed a couple issues on testnet.
 // This is now part of history and has to be re-created when running catchup on testnet. So, test to ensure it keeps happenning.
-func TestTestnetFixup(t *testing.T) {
+/*func TestTestnetFixup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	eval := &BlockEvaluator{}
@@ -1170,7 +1187,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	testnetGenesisHash, _ := crypto.DigestFromString("JBR3KGFEWPEE5SAQ6IWU6EEBZMHXD4CZU6WCBXWGF57XBZIJHIRA")
 	// big setup so we can move some algos
 	// boilerplate like TestBlockEvaluator, but pretend to be testnet
-	genesisInitState, addrs, keys := genesis(10)
+	genesisInitState, addrs, keys := ledgertesting.Genesis(10)
 	genesisInitState.Block.BlockHeader.GenesisHash = testnetGenesisHash
 	genesisInitState.Block.BlockHeader.GenesisID = "testnet"
 	genesisInitState.GenesisHash = testnetGenesisHash
@@ -1224,6 +1241,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	require.Equal(t, nextPoolBalance, poolOld.MicroAlgos.Raw)
 	require.NoError(t, err)
 }
+*/
 
 // Test that ModifiedAssetHoldings in StateDelta is set correctly.
 func TestModifiedAssetHoldings(t *testing.T) {
@@ -1231,7 +1249,6 @@ func TestModifiedAssetHoldings(t *testing.T) {
 
 	genBalances, addrs, _ := newTestGenesis()
 	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	const assetid basics.AssetIndex = 1
 
@@ -1267,7 +1284,7 @@ func TestModifiedAssetHoldings(t *testing.T) {
 			Address: addrs[0],
 			Asset:   assetid,
 		}
-		created, ok := vb.delta.ModifiedAssetHoldings[aa]
+		created, ok := vb.Delta().ModifiedAssetHoldings[aa]
 		require.True(t, ok)
 		assert.True(t, created)
 	}
@@ -1276,7 +1293,7 @@ func TestModifiedAssetHoldings(t *testing.T) {
 			Address: addrs[1],
 			Asset:   assetid,
 		}
-		created, ok := vb.delta.ModifiedAssetHoldings[aa]
+		created, ok := vb.Delta().ModifiedAssetHoldings[aa]
 		require.True(t, ok)
 		assert.True(t, created)
 	}
@@ -1306,7 +1323,7 @@ func TestModifiedAssetHoldings(t *testing.T) {
 			Address: addrs[0],
 			Asset:   assetid,
 		}
-		created, ok := vb.delta.ModifiedAssetHoldings[aa]
+		created, ok := vb.Delta().ModifiedAssetHoldings[aa]
 		require.True(t, ok)
 		assert.False(t, created)
 	}
@@ -1315,7 +1332,7 @@ func TestModifiedAssetHoldings(t *testing.T) {
 			Address: addrs[1],
 			Asset:   assetid,
 		}
-		created, ok := vb.delta.ModifiedAssetHoldings[aa]
+		created, ok := vb.Delta().ModifiedAssetHoldings[aa]
 		require.True(t, ok)
 		assert.False(t, created)
 	}
@@ -1371,38 +1388,176 @@ func newTestGenesis() (bookkeeping.GenesisBalances, []basics.Address, []*crypto.
 	return genBalances, addrs, secrets
 }
 
+type evalTestLedger struct {
+	blocks        map[basics.Round]bookkeeping.Block
+	roundBalances map[basics.Round]map[basics.Address]basics.AccountData
+	genesisHash   crypto.Digest
+	feeSink       basics.Address
+	rewardsPool   basics.Address
+	latestTotals  ledgercore.AccountTotals
+}
+
 // newTestLedger creates a in memory Ledger that is as realistic as
 // possible.  It has Rewards and FeeSink properly configured.
-func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *Ledger {
-	l, _, _ := newTestLedgerImpl(t, balances, true)
+func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *evalTestLedger {
+	l := &evalTestLedger{
+		blocks:        make(map[basics.Round]bookkeeping.Block),
+		roundBalances: make(map[basics.Round]map[basics.Address]basics.AccountData),
+		feeSink:       balances.FeeSink,
+		rewardsPool:   balances.RewardsPool,
+	}
+
+	crypto.RandBytes(l.genesisHash[:])
+	genBlock, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture,
+		balances, "test", l.genesisHash)
+	require.NoError(t, err)
+	l.roundBalances[0] = balances.Balances
+	l.blocks[0] = genBlock
+
+	// calculate the accounts totals.
+	var ot basics.OverflowTracker
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	for _, acctData := range balances.Balances {
+		l.latestTotals.AddAccount(proto, acctData, &ot)
+	}
+
+	require.False(t, genBlock.FeeSink.IsZero())
+	require.False(t, genBlock.RewardsPool.IsZero())
 	return l
 }
 
-func newTestLedgerOnDisk(t testing.TB, balances bookkeeping.GenesisBalances) (*Ledger, string, bookkeeping.Block) {
-	return newTestLedgerImpl(t, balances, false)
+// Validate uses the ledger to validate block blk as a candidate next block.
+// It returns an error if blk is not the expected next block, or if blk is
+// not a valid block (e.g., it has duplicate transactions, overspends some
+// account, etc).
+func (ledger *evalTestLedger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error) {
+	verifiedTxnCache := verify.MakeVerifiedTransactionCache(config.GetDefaultLocal().VerifiedTranscationsCacheSize)
+
+	delta, err := Eval(ctx, ledger, blk, true, verifiedTxnCache, executionPool)
+	if err != nil {
+		return nil, err
+	}
+
+	vb := ledgercore.MakeValidatedBlock(blk, delta)
+	return &vb, nil
 }
 
-func newTestLedgerImpl(t testing.TB, balances bookkeeping.GenesisBalances, inMem bool) (*Ledger, string, bookkeeping.Block) {
-	var genHash crypto.Digest
-	crypto.RandBytes(genHash[:])
-	genBlock, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture,
-		balances, "test", genHash)
-	require.False(t, genBlock.FeeSink.IsZero())
-	require.False(t, genBlock.RewardsPool.IsZero())
-	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, InitState{
-		Block:       genBlock,
-		Accounts:    balances.Balances,
-		GenesisHash: genHash,
-	}, cfg)
-	require.NoError(t, err)
-	return l, dbName, genBlock
+// StartEvaluator creates a BlockEvaluator, given a ledger and a block header
+// of the block that the caller is planning to evaluate. If the length of the
+// payset being evaluated is known in advance, a paysetHint >= 0 can be
+// passed, avoiding unnecessary payset slice growth.
+func (ledger *evalTestLedger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint int) (*BlockEvaluator, error) {
+	proto, ok := config.Consensus[hdr.CurrentProtocol]
+	if !ok {
+		return nil, protocol.Error(hdr.CurrentProtocol)
+	}
+
+	return StartEvaluator(ledger, hdr, proto, paysetHint, true, true)
+}
+
+// GetCreatorForRound takes a CreatableIndex and a CreatableType and tries to
+// look up a creator address, setting ok to false if the query succeeded but no
+// creator was found.
+func (ledger *evalTestLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
+	panic(nil)
+	return
+}
+
+// LatestTotals returns the totals of all accounts for the most recent round, as well as the round number.
+func (ledger *evalTestLedger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
+	return basics.Round(len(ledger.blocks)).SubSaturate(1), ledger.latestTotals, nil
+}
+
+// LookupWithoutRewards is like Lookup but does not apply pending rewards up
+// to the requested round rnd.
+func (ledger *evalTestLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
+	return ledger.roundBalances[rnd][addr], rnd, nil
+}
+
+// GenesisHash returns the genesis hash for this ledger.
+func (ledger *evalTestLedger) GenesisHash() crypto.Digest {
+	return ledger.genesisHash
+}
+
+// Latest returns the latest known block round added to the ledger.
+func (ledger *evalTestLedger) Latest() basics.Round {
+	return basics.Round(len(ledger.blocks)).SubSaturate(1)
+}
+
+// AddValidatedBlock adds a new block to the ledger, after the block has
+// been validated by calling Ledger.Validate().  This saves the cost of
+// having to re-compute the effect of the block on the ledger state, if
+// the block has previously been validated.  Otherwise, AddValidatedBlock
+// behaves like AddBlock.
+func (ledger *evalTestLedger) AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.Certificate) error {
+	blk := vb.Block()
+	ledger.blocks[blk.Round()] = blk
+	newBalances := make(map[basics.Address]basics.AccountData)
+
+	// copy the previous balances.
+	for k, v := range ledger.roundBalances[vb.Block().Round()-1] {
+		newBalances[k] = v
+	}
+	// update
+	deltas := vb.Delta()
+	for _, addr := range deltas.Accts.ModifiedAccounts() {
+		accountData, _ := deltas.Accts.Get(addr)
+		newBalances[addr] = accountData
+	}
+	ledger.roundBalances[vb.Block().Round()] = newBalances
+	ledger.latestTotals = vb.Delta().Totals
+	return nil
+}
+
+// Lookup uses the accounts tracker to return the account state for a
+// given account in a particular round.  The account values reflect
+// the changes of all blocks up to and including rnd.
+func (ledger *evalTestLedger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
+	balances, has := ledger.roundBalances[rnd]
+	if !has {
+		return basics.AccountData{}, errors.New("invalid round specified")
+	}
+
+	return balances[addr], nil
+}
+func (ledger *evalTestLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	block, has := ledger.blocks[rnd]
+	if !has {
+		return bookkeeping.BlockHeader{}, errors.New("invalid round specified")
+	}
+	return block.BlockHeader, nil
+}
+
+func (ledger *evalTestLedger) CompactCertVoters(rnd basics.Round) (*ledgercore.VotersForRound, error) {
+	panic(nil)
+	return nil, nil
+}
+
+// GetCreator is like GetCreatorForRound, but for the latest round and race-free
+// with respect to ledger.Latest()
+func (ledger *evalTestLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+	panic(nil)
+	return basics.Address{}, false, nil
+}
+
+func (ledger *evalTestLedger) CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
+	for _, block := range ledger.blocks {
+		for _, txn := range block.Payset {
+			if lastValid != txn.Txn.LastValid {
+				continue
+			}
+			currentTxid := txn.Txn.ID()
+			if bytes.Equal(txid[:], currentTxid[:]) {
+				return &ledgercore.TransactionInLedgerError{Txid: txid}
+			}
+		}
+	}
+	// todo - support leases.
+	return nil
 }
 
 // nextBlock begins evaluation of a new block, after ledger creation or endBlock()
-func (ledger *Ledger) nextBlock(t testing.TB) *BlockEvaluator {
+func (ledger *evalTestLedger) nextBlock(t testing.TB) *BlockEvaluator {
 	rnd := ledger.Latest()
 	hdr, err := ledger.BlockHdr(rnd)
 	require.NoError(t, err)
@@ -1414,7 +1569,7 @@ func (ledger *Ledger) nextBlock(t testing.TB) *BlockEvaluator {
 }
 
 // endBlock completes the block being created, returns the ValidatedBlock for inspection
-func (ledger *Ledger) endBlock(t testing.TB, eval *BlockEvaluator) *ValidatedBlock {
+func (ledger *evalTestLedger) endBlock(t testing.TB, eval *BlockEvaluator) *ledgercore.ValidatedBlock {
 	validatedBlock, err := eval.GenerateBlock()
 	require.NoError(t, err)
 	err = ledger.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
@@ -1423,7 +1578,7 @@ func (ledger *Ledger) endBlock(t testing.TB, eval *BlockEvaluator) *ValidatedBlo
 }
 
 // lookup gets the current accountdata for an address
-func (ledger *Ledger) lookup(t testing.TB, addr basics.Address) basics.AccountData {
+func (ledger *evalTestLedger) lookup(t testing.TB, addr basics.Address) basics.AccountData {
 	rnd := ledger.Latest()
 	ad, err := ledger.Lookup(rnd, addr)
 	require.NoError(t, err)
@@ -1431,12 +1586,12 @@ func (ledger *Ledger) lookup(t testing.TB, addr basics.Address) basics.AccountDa
 }
 
 // micros gets the current microAlgo balance for an address
-func (ledger *Ledger) micros(t testing.TB, addr basics.Address) uint64 {
+func (ledger *evalTestLedger) micros(t testing.TB, addr basics.Address) uint64 {
 	return ledger.lookup(t, addr).MicroAlgos.Raw
 }
 
 // asa gets the current balance and optin status for some asa for an address
-func (ledger *Ledger) asa(t testing.TB, addr basics.Address, asset basics.AssetIndex) (uint64, bool) {
+func (ledger *evalTestLedger) asa(t testing.TB, addr basics.Address, asset basics.AssetIndex) (uint64, bool) {
 	if holding, ok := ledger.lookup(t, addr).Assets[asset]; ok {
 		return holding.Amount, true
 	}
@@ -1444,7 +1599,7 @@ func (ledger *Ledger) asa(t testing.TB, addr basics.Address, asset basics.AssetI
 }
 
 // asaParams gets the asset params for a given asa index
-func (ledger *Ledger) asaParams(t testing.TB, asset basics.AssetIndex) (basics.AssetParams, error) {
+func (ledger *evalTestLedger) asaParams(t testing.TB, asset basics.AssetIndex) (basics.AssetParams, error) {
 	creator, ok, err := ledger.GetCreator(basics.CreatableIndex(asset), basics.AssetCreatable)
 	if err != nil {
 		return basics.AssetParams{}, err
@@ -1472,7 +1627,7 @@ func (eval *BlockEvaluator) txn(t testing.TB, txn *txntest.Txn, problem ...strin
 	t.Helper()
 	eval.fillDefaults(txn)
 	stxn := txn.SignedTxn()
-	err := eval.testTransaction(stxn, eval.state.child(1))
+	err := eval.TestTransaction(stxn, eval.state.child(1))
 	if err != nil {
 		if len(problem) == 1 {
 			require.Contains(t, err.Error(), problem[0])
@@ -1512,7 +1667,7 @@ func (eval *BlockEvaluator) txgroup(t testing.TB, txns ...*txntest.Txn) error {
 		return err
 	}
 
-	err = eval.transactionGroup(transactions.WrapSignedTxnsWithAD(txgroup))
+	err = eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup))
 	return err
 }
 
@@ -1521,7 +1676,6 @@ func TestRewardsInAD(t *testing.T) {
 
 	genBalances, addrs, _ := newTestGenesis()
 	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	payTxn := txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[1]}
 
@@ -1545,7 +1699,6 @@ func TestMinBalanceChanges(t *testing.T) {
 
 	genBalances, addrs, _ := newTestGenesis()
 	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	createTxn := txntest.Txn{
 		Type:   "acfg",
@@ -1615,7 +1768,6 @@ func TestModifiedAppLocalStates(t *testing.T) {
 
 	genBalances, addrs, _ := newTestGenesis()
 	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	const appid basics.AppIndex = 1
 
@@ -1636,13 +1788,13 @@ func TestModifiedAppLocalStates(t *testing.T) {
 	eval.txns(t, &createTxn, &optInTxn)
 	vb := l.endBlock(t, eval)
 
-	assert.Len(t, vb.delta.ModifiedAppLocalStates, 1)
+	assert.Len(t, vb.Delta().ModifiedAppLocalStates, 1)
 	{
 		aa := ledgercore.AccountApp{
 			Address: addrs[1],
 			App:     appid,
 		}
-		created, ok := vb.delta.ModifiedAppLocalStates[aa]
+		created, ok := vb.Delta().ModifiedAppLocalStates[aa]
 		require.True(t, ok)
 		assert.True(t, created)
 	}
@@ -1665,13 +1817,13 @@ func TestModifiedAppLocalStates(t *testing.T) {
 	eval.txns(t, &optOutTxn, &closeTxn)
 	vb = l.endBlock(t, eval)
 
-	assert.Len(t, vb.delta.ModifiedAppLocalStates, 1)
+	assert.Len(t, vb.Delta().ModifiedAppLocalStates, 1)
 	{
 		aa := ledgercore.AccountApp{
 			Address: addrs[1],
 			App:     appid,
 		}
-		created, ok := vb.delta.ModifiedAppLocalStates[aa]
+		created, ok := vb.Delta().ModifiedAppLocalStates[aa]
 		require.True(t, ok)
 		assert.False(t, created)
 	}
@@ -1684,7 +1836,6 @@ func TestAppInsMinBalance(t *testing.T) {
 
 	genBalances, addrs, _ := newTestGenesis()
 	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	const appid basics.AppIndex = 1
 
@@ -1707,7 +1858,7 @@ func TestAppInsMinBalance(t *testing.T) {
 			Sender:           creator,
 			ApprovalProgram:  "int 1",
 			LocalStateSchema: basics.StateSchema{NumByteSlice: maxLocalSchemaEntries},
-			Note:             randomNote(),
+			Note:             ledgertesting.RandomNote(),
 		}
 		txnsCreate = append(txnsCreate, &createTxn)
 		count := appsCreated[creator]
@@ -1730,7 +1881,7 @@ func TestAppInsMinBalance(t *testing.T) {
 	txns := append(txnsCreate, txnsOptIn...)
 	eval.txns(t, txns...)
 	vb := l.endBlock(t, eval)
-	assert.Len(t, vb.delta.ModifiedAppLocalStates, 50)
+	assert.Len(t, vb.Delta().ModifiedAppLocalStates, 50)
 }
 
 // TestGhostTransactions confirms that accounts that don't even exist
@@ -1779,7 +1930,6 @@ func TestGhostTransactions(t *testing.T) {
 
 	genBalances, addrs, _ := newTestGenesis()
 	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	asaIndex := basics.AssetIndex(1)
 
@@ -1874,7 +2024,7 @@ func (l *testCowBaseLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, err
 	return bookkeeping.BlockHeader{}, errors.New("not implemented")
 }
 
-func (l *testCowBaseLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error {
+func (l *testCowBaseLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
 	return errors.New("not implemented")
 }
 
@@ -1909,7 +2059,7 @@ func TestCowBaseCreatorsCache(t *testing.T) {
 
 	base := roundCowBase{
 		l:        &l,
-		creators: map[creatable]FoundAddress{},
+		creators: map[creatable]ledgercore.FoundAddress{},
 	}
 
 	cindex := []basics.CreatableIndex{9, 10, 9, 10}
