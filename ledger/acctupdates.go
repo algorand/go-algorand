@@ -794,6 +794,13 @@ func (au *accountUpdates) Totals(rnd basics.Round) (totals ledgercore.AccountTot
 	return au.totalsImpl(rnd)
 }
 
+// LatestTotals returns the totals of all accounts for the most recent round, as well as the round number
+func (au *accountUpdates) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+	return au.latestTotalsImpl()
+}
+
 // ReadCloseSizer interface implements the standard io.Reader and io.Closer as well
 // as supporting the Size() function that let the caller know what the size of the stream would be (in bytes).
 type ReadCloseSizer interface {
@@ -909,9 +916,9 @@ func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.
 	return bookkeeping.BlockHeader{}, ledgercore.ErrNoEntry{}
 }
 
-// Totals returns the totals for a given round
-func (aul *accountUpdatesLedgerEvaluator) Totals(rnd basics.Round) (ledgercore.AccountTotals, error) {
-	return aul.au.totalsImpl(rnd)
+// LatestTotals returns the totals of all accounts for the most recent round, as well as the round number
+func (aul *accountUpdatesLedgerEvaluator) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
+	return aul.au.latestTotalsImpl()
 }
 
 // CheckDup test to see if the given transaction id/lease already exists. It's not needed by the accountUpdatesLedgerEvaluator and implemented as a stub.
@@ -939,6 +946,13 @@ func (au *accountUpdates) totalsImpl(rnd basics.Round) (totals ledgercore.Accoun
 
 	totals = au.roundTotals[offset]
 	return
+}
+
+// latestTotalsImpl returns the totals of all accounts for the most recent round, as well as the round number
+func (au *accountUpdates) latestTotalsImpl() (basics.Round, ledgercore.AccountTotals, error) {
+	offset := len(au.deltas)
+	rnd := au.dbRound + basics.Round(len(au.deltas))
+	return rnd, au.roundTotals[offset], nil
 }
 
 // initializeCaches fills up the accountUpdates cache with the most recent ~320 blocks ( on normal execution ).

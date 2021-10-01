@@ -184,7 +184,7 @@ func (l *Ledger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 		}
 	}
 
-	totals, err := l.Totals(r)
+	totals, err := l.OnlineTotals(r) //nolint:typecheck
 	if err != nil {
 		return basics.MicroAlgos{}, err
 	}
@@ -196,12 +196,12 @@ func (l *Ledger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 					circulation.elements[1],
 					{
 						round:       r,
-						onlineMoney: totals.Online.Money},
+						onlineMoney: totals},
 				},
 			})
 	}
 
-	return totals.Online.Money, nil
+	return totals, nil
 }
 
 // Seed gives the VRF seed that was agreed on in a given round,

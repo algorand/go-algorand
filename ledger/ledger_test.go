@@ -186,8 +186,9 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 			}
 		}
 	} else {
-		totals, err := l.Totals(l.Latest())
+		latestRound, totals, err := l.LatestTotals()
 		require.NoError(t, err)
+		require.Equal(t, l.Latest(), latestRound)
 		totalRewardUnits = totals.RewardUnits()
 	}
 	poolBal, err := l.Lookup(l.Latest(), poolAddr)

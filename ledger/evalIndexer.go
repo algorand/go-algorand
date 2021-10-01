@@ -38,7 +38,7 @@ type indexerLedgerForEval interface {
 	LookupWithoutRewards(map[basics.Address]struct{}) (map[basics.Address]*basics.AccountData, error)
 	GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]FoundAddress, error)
 	GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]FoundAddress, error)
-	Totals() (ledgercore.AccountTotals, error)
+	LatestTotals() (ledgercore.AccountTotals, error)
 }
 
 // Converter between indexerLedgerForEval and ledgerForEvaluator interfaces.
@@ -112,14 +112,10 @@ func (l indexerLedgerConnector) GenesisHash() crypto.Digest {
 }
 
 // Totals is part of ledgerForEvaluator interface.
-func (l indexerLedgerConnector) Totals(round basics.Round) (ledgercore.AccountTotals, error) {
-	if round != l.latestRound {
-		return ledgercore.AccountTotals{}, fmt.Errorf(
-			"Totals() evaluator called this function for the wrong round %d, "+
-				"latest round is %d",
-			round, l.latestRound)
-	}
-	return l.il.Totals()
+func (l indexerLedgerConnector) LatestTotals() (rnd basics.Round, totals ledgercore.AccountTotals, err error) {
+	totals, err = l.il.LatestTotals()
+	rnd = l.latestRound
+	return
 }
 
 // CompactCertVoters is part of ledgerForEvaluator interface.
