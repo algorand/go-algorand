@@ -441,6 +441,10 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 		return nil, protocol.Error(prevHeader.CurrentProtocol)
 	}
 
+	// Round that lookups come from is previous block.  We validate
+	// the block at this round below, so underflow will be caught.
+	// If we are not validating, we must have previously checked
+	// an agreement.Certificate attesting that hdr is valid.
 	base := makeRoundCowBase(
 		l, hdr.Round-1, prevHeader.TxnCounter, basics.Round(0), proto)
 
