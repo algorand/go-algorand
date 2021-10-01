@@ -4842,3 +4842,42 @@ func TestLog(t *testing.T) {
 		require.False(t, pass)
 	}
 }
+
+func TestPcDetails(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var tests = []struct {
+		source string
+		pc     int
+		det    string
+	}{
+		{"int 1; int 2; -", 5, "pushint 1\npushint 2\n-\n"},
+		{"int 1; err", 3, "pushint 1\nerr\n"},
+		{"int 1; dup; int 2; -; +", 6, "dup\npushint 2\n-\n"},
+		{"b end; end:", 4, ""},
+	}
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			ops := testProg(t, test.source, LogicVersion)
+			txn := makeSampleTxn()
+			txgroup := makeSampleTxnGroup(txn)
+			txn.Lsig.Logic = ops.Program
+			sb := strings.Builder{}
+			ep := defaultEvalParams(&sb, &txn)
+			ep.TxnGroup = txgroup
+
+			var cx EvalContext
+			cx.EvalParams = ep
+			cx.runModeFlags = runModeSignature
+
+			pass, err := eval(ops.Program, &cx)
+			require.Error(t, err)
+			require.False(t, pass)
+
+			pc, det := cx.PcDetails()
+			require.Equal(t, test.pc, pc)
+			require.Equal(t, test.det, det)
+		})
+	}
+}
