@@ -101,7 +101,7 @@ func LoadLedger(
 	l := &Ledger{
 		log: log,
 	}
-	genesisInitState := ledger.InitState{
+	genesisInitState := ledgercore.InitState{
 		Block:       genBlock,
 		Accounts:    genesisBal.Balances,
 		GenesisHash: genesisHash,
