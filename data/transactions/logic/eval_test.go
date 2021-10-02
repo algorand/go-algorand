@@ -73,6 +73,8 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 		MaxAssetUnitNameBytes: 6,
 		MaxAssetURLBytes:      32,
 		MaxAssetDecimals:      4,
+		SupportRekeying:       true,
+		MaxTxnNoteBytes:       500,
 	}
 }
 
@@ -999,6 +1001,10 @@ byte 0x0706000000000000000000000000000000000000000000000000000000000000
 &&
 `
 
+const globalV6TestProgram = globalV5TestProgram + `
+// No new globals in v6
+`
+
 func TestGlobal(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1026,6 +1032,10 @@ func TestGlobal(t *testing.T) {
 		},
 		5: {
 			GroupID, globalV5TestProgram,
+			EvalStateful, CheckStateful,
+		},
+		6: {
+			GroupID, globalV6TestProgram,
 			EvalStateful, CheckStateful,
 		},
 	}
@@ -1439,6 +1449,12 @@ assert
 int 1
 `
 
+const testTxnProgramTextV6 = testTxnProgramTextV5 + `
+assert
+
+int 1
+`
+
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
@@ -1526,7 +1542,7 @@ func TestTxn(t *testing.T) {
 	t.Parallel()
 	for i, txnField := range TxnFieldNames {
 		fs := txnFieldSpecByField[TxnField(i)]
-		if !fs.effects && !strings.Contains(testTxnProgramTextV5, txnField) {
+		if !fs.effects && !strings.Contains(testTxnProgramTextV6, txnField) {
 			if txnField != FirstValidTime.String() {
 				t.Errorf("TestTxn missing field %v", txnField)
 			}
@@ -1539,6 +1555,7 @@ func TestTxn(t *testing.T) {
 		3: testTxnProgramTextV3,
 		4: testTxnProgramTextV4,
 		5: testTxnProgramTextV5,
+		6: testTxnProgramTextV6,
 	}
 
 	clearOps := testProg(t, "int 1", 1)
@@ -1823,11 +1840,15 @@ gtxn 0 Sender
 &&
 `
 
+	gtxnTextV6 := gtxnTextV5 + `
+`
+
 	tests := map[uint64]string{
 		1: gtxnTextV1,
 		2: gtxnTextV2,
 		4: gtxnTextV4,
 		5: gtxnTextV5,
+		6: gtxnTextV6,
 	}
 
 	for v, source := range tests {

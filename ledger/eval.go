@@ -958,25 +958,9 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		return
 	}
 
-	// rekeying: update balrecord.AuthAddr to tx.RekeyTo if provided
-	if (tx.RekeyTo != basics.Address{}) {
-		var acct basics.AccountData
-		acct, err = balances.Get(tx.Sender, false)
-		if err != nil {
-			return
-		}
-		// Special case: rekeying to the account's actual address just sets acct.AuthAddr to 0
-		// This saves 32 bytes in your balance record if you want to go back to using your original key
-		if tx.RekeyTo == tx.Sender {
-			acct.AuthAddr = basics.Address{}
-		} else {
-			acct.AuthAddr = tx.RekeyTo
-		}
-
-		err = balances.Put(tx.Sender, acct)
-		if err != nil {
-			return
-		}
+	err = apply.Rekey(balances, &tx)
+	if err != nil {
+		return
 	}
 
 	switch tx.Type {

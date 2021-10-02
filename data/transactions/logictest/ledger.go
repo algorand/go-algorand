@@ -549,6 +549,23 @@ func (l *Ledger) move(from basics.Address, to basics.Address, amount uint64) err
 	return nil
 }
 
+func (l *Ledger) rekey(tx *transactions.Transaction) error {
+	// rekeying: update br.auth to tx.RekeyTo if provided
+	if (tx.RekeyTo != basics.Address{}) {
+		br, ok := l.balances[tx.Sender]
+		if !ok {
+			return fmt.Errorf("no account")
+		}
+		if tx.RekeyTo == tx.Sender {
+			br.auth = basics.Address{}
+		} else {
+			br.auth = tx.RekeyTo
+		}
+		l.balances[tx.Sender] = br
+	}
+	return nil
+}
+
 func (l *Ledger) pay(from basics.Address, pay transactions.PaymentTxnFields) error {
 	err := l.move(from, pay.Receiver, pay.Amount.Raw)
 	if err != nil {
@@ -706,6 +723,12 @@ func (l *Ledger) Perform(txn *transactions.Transaction, spec transactions.Specia
 	if err != nil {
 		return ad, err
 	}
+
+	err = l.rekey(txn)
+	if err != nil {
+		return ad, err
+	}
+
 	switch txn.Type {
 	case protocol.PaymentTx:
 		err = l.pay(txn.Sender, txn.PaymentTxnFields)
