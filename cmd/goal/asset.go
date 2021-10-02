@@ -610,11 +610,12 @@ var infoAssetCmd = &cobra.Command{
 		params := asset.Params
 
 		reserveEmpty := false
-		if *params.Reserve == "" {
+		if derefOrEmpty(params.Reserve) == "" {
 			reserveEmpty = true
 			params.Reserve = &params.Creator
 		}
 
+		//Set it above if its nil, should be safe to deref
 		reserve, err := client.AccountInformationV2(*params.Reserve)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)

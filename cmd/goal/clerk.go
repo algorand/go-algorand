@@ -166,7 +166,7 @@ func waitForCommit(client libgoal.Client, txid string, transactionLastValidRound
 			return generatedV2.PendingTransactionResponse{}, fmt.Errorf(errorRequestFail, err)
 		}
 
-		if *txn.ConfirmedRound > 0 {
+		if txn.ConfirmedRound != nil && *txn.ConfirmedRound > 0 {
 			reportInfof(infoTxCommitted, txid, txn.ConfirmedRound)
 			break
 		}
