@@ -125,6 +125,7 @@ func restore(log logging.Logger, crash db.Accessor) (raw []byte, err error) {
 		// the above call was completed sucecssfully, which means that we've just created the table ( which wasn't there ! ).
 		// in that case, the table is guaranteed to be empty, and therefore we can return right here.
 		logging.Base().Infof("restore (agreement): crash state table initialized")
+		noCrashState = true // this is a normal case (we don't have crash state)
 		err = errNoCrashStateAvailable
 		return
 	}

@@ -37,7 +37,6 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 )
@@ -56,12 +55,6 @@ var defaultConfig = config.Local{
 }
 
 func setupStartFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationPool execpool.BacklogPool, customConsensus config.ConsensusProtocols) ([]*AlgorandFullNode, []string, []string) {
-	util.RaiseRlimit(1000)
-	f, _ := os.Create(t.Name() + ".log")
-	logging.Base().SetJSONFormatter()
-	logging.Base().SetOutput(f)
-	logging.Base().SetLevel(logging.Debug)
-
 	consensus := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	numAccounts := 10
@@ -164,15 +157,14 @@ func setupStartFullNodes(t *testing.T, proto protocol.ConsensusVersion, verifica
 		ledgers[i], err = data.LoadLedger(logging.Base().With("name", nodeID), ledgerFilenamePrefix, inMem,
 			g.Proto, bootstrap, g.ID(), crypto.HashObj(g), nil, cfg)
 		require.NoError(t, err)
-		defer ledgers[i].Close()
+		ledgers[i].Close()
 	}
 
 	neighbors := make([]string, 0, numAccounts)
 	for i := range nodes {
 		rootDirectory := rootDirs[i]
-		cfg, err := config.LoadConfigFromDisk(rootDirectory)
-		require.NoError(t, err)
-
+		cfg := config.GetDefaultLocal()
+		cfg.NetAddress = "localhost:"
 		node, err := MakeFull(logging.Base().With("source", t.Name()+strconv.Itoa(i)), rootDirectory, cfg, neighbors, g)
 		require.NoError(t, err)
 		node.Start()
@@ -192,8 +184,9 @@ func TestSyncingFullNode(t *testing.T) {
 
 	nodes, wallets, rootDirs := setupStartFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
 	for i := 0; i < len(nodes); i++ {
-		defer os.Remove(wallets[i])
 		defer os.RemoveAll(rootDirs[i])
+		defer os.Remove(wallets[i])
+		defer nodes[i].Ledger().Close()
 		defer nodes[i].Stop()
 	}
 

@@ -265,8 +265,8 @@ func (n Network) Start(binDir string, redirectOutput bool) error {
 	var relayAddress string
 	var err error
 	for _, relayDir := range n.cfg.RelayDirs {
-		nodeFulllPath := n.getNodeFullPath(relayDir)
-		nc := nodecontrol.MakeNodeController(binDir, nodeFulllPath)
+		nodeFullPath := n.getNodeFullPath(relayDir)
+		nc := nodecontrol.MakeNodeController(binDir, nodeFullPath)
 		args := nodecontrol.AlgodStartArgs{
 			RedirectOutput:    redirectOutput,
 			ExitErrorCallback: n.nodeExitCallback,
@@ -465,8 +465,8 @@ func (n Network) SetConsensus(binDir string, consensus config.ConsensusProtocols
 		}
 	}
 	for _, nodeDir := range n.nodeDirs {
-		nodeFulllPath := n.getNodeFullPath(nodeDir)
-		nc := nodecontrol.MakeNodeController(binDir, nodeFulllPath)
+		nodeFullPath := n.getNodeFullPath(nodeDir)
+		nc := nodecontrol.MakeNodeController(binDir, nodeFullPath)
 		err := nc.SetConsensus(consensus)
 		if err != nil {
 			return err
