@@ -52,6 +52,7 @@ type mockLedgerForTracker struct {
 	filename        string
 	inMemory        bool
 	consensusParams config.ConsensusParams
+	accts           map[basics.Address]basics.AccountData
 }
 
 func accumulateTotals(t testing.TB, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, rewardLevel uint64) (totals ledgercore.AccountTotals) {
@@ -84,7 +85,7 @@ func makeMockLedgerForTracker(t testing.TB, inMemory bool, initialBlocksCount in
 		}
 	}
 	consensusParams := config.Consensus[consensusVersion]
-	return &mockLedgerForTracker{dbs: dbs, log: dblogger, filename: fileName, inMemory: inMemory, blocks: blocks, deltas: deltas, consensusParams: consensusParams}
+	return &mockLedgerForTracker{dbs: dbs, log: dblogger, filename: fileName, inMemory: inMemory, blocks: blocks, deltas: deltas, consensusParams: consensusParams, accts: accts[0]}
 }
 
 // fork creates another database which has the same content as the current one. Works only for non-memory databases.
@@ -195,6 +196,10 @@ func (ml *mockLedgerForTracker) GenesisProto() config.ConsensusParams {
 	return ml.consensusParams
 }
 
+func (ml *mockLedgerForTracker) GenesisAccounts() map[basics.Address]basics.AccountData {
+	return ml.accts
+}
+
 // this function used to be in acctupdates.go, but we were never using it for production purposes. This
 // function has a conceptual flaw in that it attempts to load the entire balances into memory. This might
 // not work if we have large number of balances. On these unit testing, however, it's not the case, and it's
@@ -224,6 +229,14 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 		}
 	}
 	return
+}
+
+func newAcctUpdates(tb testing.TB, l ledgerForTracker, conf config.Local, dbPathPrefix string) *accountUpdates {
+	au := &accountUpdates{}
+	au.initialize(conf, ".")
+	_, err := trackerDBInitialize(l, au.catchpointEnabled(), au.dbDirectory)
+	require.NoError(tb, err)
+	return au
 }
 
 func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, latestRnd basics.Round, accts []map[basics.Address]basics.AccountData, rewards []uint64, proto config.ConsensusParams) {
@@ -350,12 +363,12 @@ func TestAcctUpdates(t *testing.T) {
 	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
 	defer ml.Close()
 
-	au := &accountUpdates{}
-	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
-	defer au.close()
+	conf := config.GetDefaultLocal()
+	au := newAcctUpdates(t, ml, conf, ".")
 
 	err := au.loadFromDisk(ml)
 	require.NoError(t, err)
+	defer au.close()
 
 	// cover 10 genesis blocks
 	rewardLevel := uint64(0)
@@ -437,14 +450,13 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
 	defer ml.Close()
 
-	au := &accountUpdates{}
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
-	au.initialize(conf, ".", proto, accts[0])
-	defer au.close()
+	au := newAcctUpdates(t, ml, conf, ".")
 
 	err := au.loadFromDisk(ml)
 	require.NoError(t, err)
+	defer au.close()
 
 	// cover 10 genesis blocks
 	rewardLevel := uint64(0)
@@ -529,8 +541,8 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	ml := makeMockLedgerForTracker(b, true, int(initialRounds), protocolVersion, accts)
 	defer ml.Close()
 
-	au := &accountUpdates{}
-	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
+	conf := config.GetDefaultLocal()
+	au := newAcctUpdates(b, ml, conf, ".")
 	err := au.loadFromDisk(ml)
 	require.NoError(b, err)
 	defer au.close()
@@ -660,14 +672,13 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, accts)
 	defer ml.Close()
 
-	au := &accountUpdates{}
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	conf.Archival = true
-	au.initialize(conf, ".", protoParams, accts[0])
-	defer au.close()
+	au := newAcctUpdates(t, ml, conf, ".")
 	err := au.loadFromDisk(ml)
 	require.NoError(t, err)
+	defer au.close()
 
 	// cover 10 genesis blocks
 	rewardLevel := uint64(0)
@@ -768,12 +779,12 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 			accts[0][addr] = accountData
 		}
 
-		au := &accountUpdates{}
-		au.initialize(config.GetDefaultLocal(), ".", protoParams, accts[0])
-		defer au.close()
+		conf := config.GetDefaultLocal()
+		au := newAcctUpdates(t, ml, conf, ".")
 
 		err := au.loadFromDisk(ml)
 		require.NoError(t, err)
+		defer au.close()
 
 		// cover 10 genesis blocks
 		rewardLevel := uint64(0)
@@ -896,20 +907,18 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 
 	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
 	defer ml.Close()
 
-	au := &accountUpdates{}
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
-	au.initialize(conf, ".", proto, accts[0])
-	defer au.close()
+	au := newAcctUpdates(t, ml, conf, ".")
 
 	err := au.loadFromDisk(ml)
 	require.NoError(t, err)
+	defer au.close()
 
 	dummyCatchpointFilesToCreate := 42
 
@@ -924,7 +933,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 		err := au.accountsq.storeCatchpoint(context.Background(), basics.Round(i), fmt.Sprintf("./dummy_catchpoint_file-%d", i), "", 0)
 		require.NoError(t, err)
 	}
-	err = au.deleteStoredCatchpoints(context.Background(), au.accountsq)
+	err = deleteStoredCatchpoints(context.Background(), au.accountsq, au.dbDirectory)
 	require.NoError(t, err)
 
 	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
@@ -1074,7 +1083,7 @@ func TestListCreatables(t *testing.T) {
 	require.NoError(t, err)
 
 	au := &accountUpdates{}
-	au.accountsq, err = accountsDbInit(tx, tx)
+	au.accountsq, err = accountsInitDbQueries(tx, tx)
 	require.NoError(t, err)
 
 	// ******* All results are obtained from the cache. Empty database *******
@@ -1133,21 +1142,18 @@ func TestIsWritingCatchpointFile(t *testing.T) {
 func TestGetCatchpointStream(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 
 	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
 	defer ml.Close()
 
-	au := &accountUpdates{}
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
-	au.initialize(conf, ".", proto, accts[0])
-	defer au.close()
+	au := newAcctUpdates(t, ml, conf, ".")
 
 	err := au.loadFromDisk(ml)
 	require.NoError(t, err)
+	defer au.close()
 
 	filesToCreate := 4
 
@@ -1203,7 +1209,7 @@ func TestGetCatchpointStream(t *testing.T) {
 	outData = []byte{3, 4, 5}
 	require.Equal(t, outData, dataRead)
 
-	err = au.deleteStoredCatchpoints(context.Background(), au.accountsq)
+	err = deleteStoredCatchpoints(context.Background(), au.accountsq, au.dbDirectory)
 	require.NoError(t, err)
 }
 
@@ -1261,14 +1267,13 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	ml := makeMockLedgerForTracker(b, true, 10, protocol.ConsensusCurrentVersion, accts)
 	defer ml.Close()
 
-	au := &accountUpdates{}
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	au.initialize(cfg, ".", proto, accts[0])
-	defer au.close()
+	au := newAcctUpdates(b, ml, cfg, ".")
 
 	err := au.loadFromDisk(ml)
 	require.NoError(b, err)
+	defer au.close()
 
 	// at this point, the database was created. We want to fill the accounts data
 	accountsNumber := 6000000 * b.N
@@ -1321,11 +1326,9 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 	ml := makeMockLedgerForTracker(b, true, 10, protocol.ConsensusCurrentVersion, accts)
 	defer ml.Close()
 
-	au := &accountUpdates{}
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	au.initialize(cfg, ".", proto, accts[0])
-	defer au.close()
+	au := newAcctUpdates(b, ml, cfg, ".")
 
 	temporaryDirectroy, err := ioutil.TempDir(os.TempDir(), "catchpoints")
 	require.NoError(b, err)
@@ -1340,6 +1343,7 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 
 	err = au.loadFromDisk(ml)
 	require.NoError(b, err)
+	defer au.close()
 
 	// at this point, the database was created. We want to fill the accounts data
 	accountsNumber := 6000000 * b.N
@@ -1494,15 +1498,14 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	ml := makeMockLedgerForTracker(t, false, 1, testProtocolVersion, accts)
 	defer ml.Close()
 
-	au := &accountUpdates{}
 	cfg := config.GetDefaultLocal()
 	cfg.CatchpointInterval = 50
 	cfg.CatchpointTracking = 1
-	au.initialize(cfg, ".", protoParams, accts[0])
-	defer au.close()
+	au := newAcctUpdates(t, ml, cfg, ".")
 
 	err := au.loadFromDisk(ml)
 	require.NoError(t, err)
+	defer au.close()
 
 	rewardLevel := uint64(0)
 
@@ -1611,8 +1614,9 @@ func TestCachesInitialization(t *testing.T) {
 	ml.log.SetLevel(logging.Warn)
 	defer ml.Close()
 
-	au := &accountUpdates{}
-	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
+	conf := config.GetDefaultLocal()
+	au := newAcctUpdates(t, ml, conf, ".")
+
 	err := au.loadFromDisk(ml)
 	require.NoError(t, err)
 
@@ -1671,8 +1675,8 @@ func TestCachesInitialization(t *testing.T) {
 	ml2.blocks = ml.blocks
 	ml2.deltas = ml.deltas
 
-	au = &accountUpdates{}
-	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
+	conf = config.GetDefaultLocal()
+	au = newAcctUpdates(t, ml2, conf, ".")
 	err = au.loadFromDisk(ml2)
 	require.NoError(t, err)
 	defer au.close()
@@ -1709,8 +1713,8 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 	ml.log.SetLevel(logging.Warn)
 	defer ml.Close()
 
-	au := &accountUpdates{}
-	au.initialize(config.GetDefaultLocal(), ".", initialProtoParams, accts[0])
+	conf := config.GetDefaultLocal()
+	au := newAcctUpdates(t, ml, conf, ".")
 	err := au.loadFromDisk(ml)
 	require.NoError(t, err)
 	defer au.close()
@@ -1825,8 +1829,8 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 	ml.log.SetLevel(logging.Warn)
 	defer ml.Close()
 
-	au := &accountUpdates{}
-	au.initialize(config.GetDefaultLocal(), ".", initialProtoParams, accts[0])
+	conf := config.GetDefaultLocal()
+	au := newAcctUpdates(t, ml, conf, ".")
 	err := au.loadFromDisk(ml)
 	require.NoError(t, err)
 	defer au.close()

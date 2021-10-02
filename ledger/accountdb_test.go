@@ -348,7 +348,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	require.NoError(t, err)
 	require.Equal(t, r, rnd)
 
-	aq, err := accountsDbInit(tx, tx)
+	aq, err := accountsInitDbQueries(tx, tx)
 	require.NoError(t, err)
 	defer aq.close()
 
@@ -804,7 +804,7 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 
 	accounts := benchmarkInitBalances(b, b.N, dbs, proto)
 
-	qs, err := accountsDbInit(dbs.Rdb.Handle, dbs.Wdb.Handle)
+	qs, err := accountsInitDbQueries(dbs.Rdb.Handle, dbs.Wdb.Handle)
 	require.NoError(b, err)
 
 	// read all the balances in the database, shuffled
@@ -1058,7 +1058,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	qs, err := accountsDbInit(dbs.Rdb.Handle, dbs.Wdb.Handle)
+	qs, err := accountsInitDbQueries(dbs.Rdb.Handle, dbs.Wdb.Handle)
 	require.NoError(t, err)
 	require.NotNil(t, qs.listCreatablesStmt)
 	qs.close()
