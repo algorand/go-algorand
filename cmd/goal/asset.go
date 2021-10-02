@@ -19,7 +19,6 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
-	"math"
 
 	"github.com/spf13/cobra"
 
@@ -585,8 +584,10 @@ func assetDecimalsFmt(amount uint64, decimals uint64) string {
 	}
 
 	// Otherwise, ensure there are decimals digits to the right of the decimal point
-	pow := uint64(math.Pow(10, float64(decimals)))
-
+	pow := uint64(1)
+	for i := uint64(0); i < decimals; i++ {
+		pow *= 10
+	}
 	return fmt.Sprintf("%d.%0*d", amount/pow, decimals, amount%pow)
 }
 
@@ -637,7 +638,7 @@ var infoAssetCmd = &cobra.Command{
 		fmt.Printf("Reserve amount:   %s %s\n", assetDecimalsFmt(res.Amount, params.Decimals), derefOrEmpty(params.UnitName))
 		fmt.Printf("Issued:           %s %s\n", assetDecimalsFmt(params.Total-res.Amount, params.Decimals), derefOrEmpty(params.UnitName))
 		fmt.Printf("Decimals:         %d\n", params.Decimals)
-		fmt.Printf("Default frozen:   %v\n", params.DefaultFrozen)
+		fmt.Printf("Default frozen:   %t\n", derefOrFalse(params.DefaultFrozen))
 		fmt.Printf("Manager address:  %s\n", derefOrEmpty(params.Manager))
 
 		if reserveEmpty {
@@ -651,6 +652,13 @@ var infoAssetCmd = &cobra.Command{
 	},
 }
 
+// TODO: Do these exist somewhere?
+func derefOrFalse(b *bool) bool {
+	if b == nil {
+		return false
+	}
+	return *b
+}
 func derefOrEmpty(s *string) string {
 	if s == nil {
 		return ""

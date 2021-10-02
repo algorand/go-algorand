@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -86,7 +87,17 @@ func (nc NodeController) ServerURL() (url.URL, error) {
 	if err != nil {
 		return url.URL{}, err
 	}
-	return url.URL{Scheme: "https", Host: addr}, nil
+
+	// Allow the algod.net setting to be specified with optional protocol
+	// default to "http" , but if set use the one specified (https)
+	chunks := strings.Split(addr, "://")
+	scheme := "http"
+	if len(chunks) == 2 {
+		scheme = chunks[0]
+		addr = chunks[1]
+	}
+
+	return url.URL{Scheme: scheme, Host: addr}, nil
 }
 
 // GetHostAddress retrieves the REST address for the node from its algod.net file.
