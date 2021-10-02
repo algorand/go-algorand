@@ -630,8 +630,8 @@ var appExecuteCmd = &cobra.Command{
 				if err != nil {
 					reportErrorf(err.Error())
 				}
-				if txn.TransactionResults != nil && txn.TransactionResults.CreatedAppIndex != 0 {
-					reportInfof("Created app with app index %d", txn.TransactionResults.CreatedAppIndex)
+				if txn.ApplicationIndex != nil && *txn.ApplicationIndex != 0 {
+					reportInfof("Created app with app index %d", *txn.ApplicationIndex)
 				}
 			}
 		} else {

@@ -140,7 +140,7 @@ func (c *Client) init(config ClientConfig, clientType ClientType) error {
 	}
 	c.dataDir = dataDir
 	c.cacheDir = config.CacheDir
-	c.algodVersionAffinity = algodclient.APIVersionV1
+	c.algodVersionAffinity = algodclient.APIVersionV2
 	c.kmdVersionAffinity = kmdclient.APIVersionV1
 
 	// Get node controller

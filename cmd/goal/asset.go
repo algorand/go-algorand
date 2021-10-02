@@ -19,9 +19,11 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
+	"math"
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
 )
@@ -240,8 +242,8 @@ var createAssetCmd = &cobra.Command{
 				if err != nil {
 					reportErrorf(err.Error())
 				}
-				if txn.TransactionResults != nil && txn.TransactionResults.CreatedAssetIndex != 0 {
-					reportInfof("Created asset with asset index %d", txn.TransactionResults.CreatedAssetIndex)
+				if txn.AssetIndex != nil && *txn.AssetIndex != 0 {
+					reportInfof("Created asset with asset index %d", *txn.AssetIndex)
 				}
 			}
 		} else {
@@ -576,17 +578,15 @@ var freezeAssetCmd = &cobra.Command{
 	},
 }
 
-func assetDecimalsFmt(amount uint64, decimals uint32) string {
+func assetDecimalsFmt(amount uint64, decimals uint64) string {
 	// Just return the raw amount with no decimal if decimals is 0
 	if decimals == 0 {
 		return fmt.Sprintf("%d", amount)
 	}
 
 	// Otherwise, ensure there are decimals digits to the right of the decimal point
-	pow := uint64(1)
-	for i := uint32(0); i < decimals; i++ {
-		pow *= 10
-	}
+	pow := uint64(math.Pow(10, float64(decimals)))
+
 	return fmt.Sprintf("%d.%0*d", amount/pow, decimals, amount%pow)
 }
 
@@ -603,40 +603,56 @@ var infoAssetCmd = &cobra.Command{
 
 		lookupAssetID(cmd, creator, client)
 
-		params, err := client.AssetInformation(assetID)
+		asset, err := client.AssetInformationV2(assetID)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
+		params := asset.Params
 
 		reserveEmpty := false
-		if params.ReserveAddr == "" {
+		if *params.Reserve == "" {
 			reserveEmpty = true
-			params.ReserveAddr = params.Creator
+			params.Reserve = &params.Creator
 		}
 
-		reserve, err := client.AccountInformation(params.ReserveAddr)
+		reserve, err := client.AccountInformationV2(*params.Reserve)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
 
-		res := reserve.Assets[assetID]
+		var res generated.AssetHolding
+		for _, ah := range *reserve.Assets {
+			if ah.AssetId == assetID {
+				res = ah
+				break
+			}
+		}
 
 		fmt.Printf("Asset ID:         %d\n", assetID)
 		fmt.Printf("Creator:          %s\n", params.Creator)
-		reportInfof("Asset name:       %s\n", params.AssetName)
-		reportInfof("Unit name:        %s\n", params.UnitName)
-		fmt.Printf("Maximum issue:    %s %s\n", assetDecimalsFmt(params.Total, params.Decimals), params.UnitName)
-		fmt.Printf("Reserve amount:   %s %s\n", assetDecimalsFmt(res.Amount, params.Decimals), params.UnitName)
-		fmt.Printf("Issued:           %s %s\n", assetDecimalsFmt(params.Total-res.Amount, params.Decimals), params.UnitName)
+		reportInfof("Asset name:       %s\n", derefOrEmpty(params.Name))
+		reportInfof("Unit name:        %s\n", derefOrEmpty(params.UnitName))
+		fmt.Printf("Maximum issue:    %s %s\n", assetDecimalsFmt(params.Total, params.Decimals), derefOrEmpty(params.UnitName))
+		fmt.Printf("Reserve amount:   %s %s\n", assetDecimalsFmt(res.Amount, params.Decimals), derefOrEmpty(params.UnitName))
+		fmt.Printf("Issued:           %s %s\n", assetDecimalsFmt(params.Total-res.Amount, params.Decimals), derefOrEmpty(params.UnitName))
 		fmt.Printf("Decimals:         %d\n", params.Decimals)
 		fmt.Printf("Default frozen:   %v\n", params.DefaultFrozen)
-		fmt.Printf("Manager address:  %s\n", params.ManagerAddr)
+		fmt.Printf("Manager address:  %s\n", derefOrEmpty(params.Manager))
+
 		if reserveEmpty {
-			fmt.Printf("Reserve address:  %s (Empty. Defaulting to creator)\n", params.ReserveAddr)
+			fmt.Printf("Reserve address:  %s (Empty. Defaulting to creator)\n", derefOrEmpty(params.Reserve))
 		} else {
-			fmt.Printf("Reserve address:  %s\n", params.ReserveAddr)
+			fmt.Printf("Reserve address:  %s\n", derefOrEmpty(params.Reserve))
 		}
-		fmt.Printf("Freeze address:   %s\n", params.FreezeAddr)
-		fmt.Printf("Clawback address: %s\n", params.ClawbackAddr)
+
+		fmt.Printf("Freeze address:   %s\n", derefOrEmpty(params.Freeze))
+		fmt.Printf("Clawback address: %s\n", derefOrEmpty(params.Clawback))
 	},
+}
+
+func derefOrEmpty(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }

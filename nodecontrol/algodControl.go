@@ -86,7 +86,7 @@ func (nc NodeController) ServerURL() (url.URL, error) {
 	if err != nil {
 		return url.URL{}, err
 	}
-	return url.URL{Scheme: "http", Host: addr}, nil
+	return url.URL{Scheme: "https", Host: addr}, nil
 }
 
 // GetHostAddress retrieves the REST address for the node from its algod.net file.

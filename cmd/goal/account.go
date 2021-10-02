@@ -588,7 +588,7 @@ func printAccountInfo(client libgoal.Client, address string, account generatedV2
 			_, units = unicodePrintable(*createdAsset.Params.UnitName)
 		}
 
-		total := assetDecimalsFmt(createdAsset.Params.Total, uint32(createdAsset.Params.Decimals))
+		total := assetDecimalsFmt(createdAsset.Params.Total, createdAsset.Params.Decimals)
 
 		url := ""
 		if createdAsset.Params.Url != nil {
@@ -611,7 +611,7 @@ func printAccountInfo(client libgoal.Client, address string, account generatedV2
 			fmt.Fprintf(report, "\tID %d, error\n", assetHolding.AssetId)
 		}
 
-		amount := assetDecimalsFmt(assetHolding.Amount, uint32(assetParams.Params.Decimals))
+		amount := assetDecimalsFmt(assetHolding.Amount, assetParams.Params.Decimals)
 
 		assetName := "<unnamed>"
 		if assetParams.Params.Name != nil {
@@ -704,7 +704,7 @@ var balanceCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		response, err := client.AccountInformation(accountAddress)
+		response, err := client.AccountInformationV2(accountAddress)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
@@ -749,7 +749,7 @@ var rewardsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		response, err := client.AccountInformation(accountAddress)
+		response, err := client.AccountInformationV2(accountAddress)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
@@ -1075,15 +1075,15 @@ var listParticipationKeysCmd = &cobra.Command{
 		fmt.Printf(rowFormat, "Registered", "Filename", "Parent address", "First round", "Last round", "First key")
 		for _, fn := range filenames {
 			onlineInfoStr := "unknown"
-			onlineAccountInfo, err := client.AccountInformation(parts[fn].Address().GetUserAddress())
+			onlineAccountInfo, err := client.AccountInformationV2(parts[fn].Address().GetUserAddress())
 			if err == nil {
 				votingBytes := parts[fn].Voting.OneTimeSignatureVerifier
 				vrfBytes := parts[fn].VRF.PK
 				if onlineAccountInfo.Participation != nil &&
-					(string(onlineAccountInfo.Participation.ParticipationPK) == string(votingBytes[:])) &&
-					(string(onlineAccountInfo.Participation.VRFPK) == string(vrfBytes[:])) &&
-					(onlineAccountInfo.Participation.VoteFirst == uint64(parts[fn].FirstValid)) &&
-					(onlineAccountInfo.Participation.VoteLast == uint64(parts[fn].LastValid)) &&
+					(string(onlineAccountInfo.Participation.SelectionParticipationKey) == string(votingBytes[:])) &&
+					(string(onlineAccountInfo.Participation.VoteParticipationKey) == string(vrfBytes[:])) &&
+					(onlineAccountInfo.Participation.VoteFirstValid == uint64(parts[fn].FirstValid)) &&
+					(onlineAccountInfo.Participation.VoteLastValid == uint64(parts[fn].LastValid)) &&
 					(onlineAccountInfo.Participation.VoteKeyDilution == parts[fn].KeyDilution) {
 					onlineInfoStr = "yes"
 				} else {
