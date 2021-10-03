@@ -16,7 +16,31 @@
 
 package crypto
 
-import "errors"
+// #cgo CFLAGS: -Wall -std=c99
+// #cgo darwin,amd64 CFLAGS: -I${SRCDIR}/libs/darwin/amd64/include
+// #cgo darwin,amd64 LDFLAGS: ${SRCDIR}/libs/darwin/amd64/lib/libsodium.a
+// #cgo darwin,arm64 CFLAGS: -I${SRCDIR}/libs/darwin/arm64/include
+// #cgo darwin,arm64 LDFLAGS: ${SRCDIR}/libs/darwin/arm64/lib/libsodium.a
+// #cgo linux,amd64 CFLAGS: -I${SRCDIR}/libs/linux/amd64/include
+// #cgo linux,amd64 LDFLAGS: ${SRCDIR}/libs/linux/amd64/lib/libsodium.a
+// #cgo linux,arm64 CFLAGS: -I${SRCDIR}/libs/linux/arm64/include
+// #cgo linux,arm64 LDFLAGS: ${SRCDIR}/libs/linux/arm64/lib/libsodium.a
+// #cgo linux,arm CFLAGS: -I${SRCDIR}/libs/linux/arm/include
+// #cgo linux,arm LDFLAGS: ${SRCDIR}/libs/linux/arm/lib/libsodium.a
+// #cgo windows,amd64 CFLAGS: -I${SRCDIR}/libs/windows/amd64/include
+// #cgo windows,amd64 LDFLAGS: ${SRCDIR}/libs/windows/amd64/lib/libsodium.a
+// #include <stdint.h>
+// #include "sodium.h"
+// enum {
+//	sizeofPtr = sizeof(void*),
+//	sizeofULongLong = sizeof(unsigned long long),
+// };
+import "C"
+import (
+	"errors"
+	"fmt"
+	"unsafe"
+)
 
 // BatchVerifier enqueues signatures to be validated in batch.
 type BatchVerifier struct {
@@ -32,6 +56,17 @@ var (
 	ErrBatchVerificationFailed = errors.New("At least one signature didn't pass verification")
 	ErrZeroTranscationsInBatch = errors.New("Could not validate empty signature set")
 )
+
+//export ed25519_randombytes_unsafe
+func ed25519_randombytes_unsafe(p unsafe.Pointer, len C.size_t) {
+	randLen := int(len)
+	rand := make([]byte, randLen)
+	RandBytes(rand)
+	for i := 0; i < randLen; i++ {
+		*(*byte)(unsafe.Pointer(uintptr(p) + uintptr(i*C.sizeof_uchar))) = rand[i]
+	}
+
+}
 
 // MakeBatchVerifierDefaultSize create a BatchVerifier instance. This function pre-allocates
 // amount of free space to enqueue signatures without exapneding
@@ -88,6 +123,18 @@ func (b *BatchVerifier) Verify() error {
 		return ErrZeroTranscationsInBatch
 	}
 
+	//return  b.verifyOneByOne()
+	var messages = make([][]byte, b.GetNumberOfEnqueuedSignatures())
+	for i, m := range b.messages {
+		messages[i] = hashRep(m)
+	}
+	if batchVerificationImpl(messages, b.publicKeys, b.signatures) {
+		return nil
+	}
+	return fmt.Errorf("erro checking batch")
+}
+
+func (b *BatchVerifier) verifyOneByOne() error {
 	for i := range b.messages {
 		verifier := SignatureVerifier(b.publicKeys[i])
 		if !verifier.Verify(b.messages[i], b.signatures[i]) {
@@ -95,4 +142,46 @@ func (b *BatchVerifier) Verify() error {
 		}
 	}
 	return nil
+}
+
+// DonnaBatchVerification calls the batch verification implemention in C. it prepares the arguments
+// to create a call to C code.
+// it returns true if all the signatures were authentically signed by the owners
+func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, signatures []Signature) bool {
+
+	numberOfSignatures := len(messages)
+
+	messagesAllocation := C.malloc(C.size_t(C.sizeofPtr * numberOfSignatures))
+	messagesLenAllocation := C.malloc(C.size_t(C.sizeofULongLong * numberOfSignatures))
+	publicKeysAllocation := C.malloc(C.size_t(C.sizeofPtr * numberOfSignatures))
+	signaturesAllocation := C.malloc(C.size_t(C.sizeofPtr * numberOfSignatures))
+	valid := C.malloc(C.size_t(C.sizeof_int * numberOfSignatures))
+
+	defer func() {
+		// release staging memory
+		C.free(messagesAllocation)
+		C.free(messagesLenAllocation)
+		C.free(publicKeysAllocation)
+		C.free(signaturesAllocation)
+		C.free(valid)
+	}()
+
+	// load all the data pointers into the array pointers.
+	for i := 0; i < numberOfSignatures; i++ {
+		*(*uintptr)(unsafe.Pointer(uintptr(messagesAllocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(&messages[i][0]))
+		*(*C.ulonglong)(unsafe.Pointer(uintptr(messagesLenAllocation) + uintptr(i*C.sizeofULongLong))) = C.ulonglong(len(messages[i]))
+		*(*uintptr)(unsafe.Pointer(uintptr(publicKeysAllocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(&publicKeys[i][0]))
+		*(*uintptr)(unsafe.Pointer(uintptr(signaturesAllocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(&signatures[i][0]))
+	}
+
+	// call the batch verifier
+	allValid := C.crypto_sign_ed25519_open_batch(
+		(**C.uchar)(unsafe.Pointer(messagesAllocation)),
+		(*C.ulonglong)(unsafe.Pointer(messagesLenAllocation)),
+		(**C.uchar)(unsafe.Pointer(publicKeysAllocation)),
+		(**C.uchar)(unsafe.Pointer(signaturesAllocation)),
+		C.size_t(len(messages)),
+		(*C.int)(unsafe.Pointer(valid)))
+
+	return allValid == 0
 }
