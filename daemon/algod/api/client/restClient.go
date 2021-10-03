@@ -537,7 +537,7 @@ func (client RestClient) Block(round uint64) (response v1.Block, err error) {
 }
 
 // Block gets the block info for the given round using the V2 API
-func (client RestClient) BlockV2(round uint64) (response v1.Block, err error) {
+func (client RestClient) BlockV2(round uint64) (response generatedV2.BlockResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d", round), nil)
 	return
 }
