@@ -311,7 +311,14 @@ type pendingTransactionsParams struct {
 // GetPendingTransactions asks algod for a snapshot of current pending txns on the node, bounded by maxTxns.
 // If maxTxns = 0, fetches as many transactions as possible.
 func (client RestClient) GetPendingTransactions(maxTxns uint64) (response v1.PendingTransactions, err error) {
-	err = client.get(&response, fmt.Sprintf("/v1/transactions/pending"), pendingTransactionsParams{maxTxns})
+	err = client.get(&response, "/v1/transactions/pending", pendingTransactionsParams{maxTxns})
+	return
+}
+
+// GetPendingTransactionsV2 asks algod for a snapshot of current pending txns on the node, bounded by maxTxns.
+// If maxTxns = 0, fetches as many transactions as possible.
+func (client RestClient) GetPendingTransactionsV2(maxTxns uint64) (response generatedV2.PendingTransactionsResponse, err error) {
+	err = client.get(&response, "/v2/transactions/pending", pendingTransactionsParams{maxTxns})
 	return
 }
 
@@ -322,9 +329,15 @@ func (client RestClient) Versions() (response common.Version, err error) {
 	return
 }
 
-// LedgerSupply gets the supply details for the specified node's Ledger
+// LedgerSupply gets the supply details for the specified node's Ledger using the V1 api
 func (client RestClient) LedgerSupply() (response v1.Supply, err error) {
 	err = client.get(&response, "/v1/ledger/supply", nil)
+	return
+}
+
+// LedgerSupplyV2 gets the supply details for the specified node's Ledger using the V2 api
+func (client RestClient) LedgerSupplyV2() (response generatedV2.SupplyResponse, err error) {
+	err = client.get(&response, "/v2/ledger/supply", nil)
 	return
 }
 
@@ -358,6 +371,7 @@ type rawFormat struct {
 
 // TransactionsByAddr returns all transactions for a PK [addr] in the [first,
 // last] rounds range.
+// This method does not have a corresponding V2 endpoint
 func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64) (response v1.TransactionList, err error) {
 	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transactions", addr), transactionsByAddrParams{first, last, max})
 	return
@@ -369,21 +383,28 @@ func (client RestClient) PendingTransactionsByAddr(addr string, max uint64) (res
 	return
 }
 
+// PendingTransactionsByAddr returns all the pending transactions for a PK [addr].
+func (client RestClient) PendingTransactionsByAddrV2(addr string, max uint64) (response generatedV2.PendingTransactionsResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/transactions/pending", addr), pendingTransactionsByAddrParams{max})
+	return
+}
+
 // AssetInformation gets the AssetInformationResponse associated with the passed asset index
 func (client RestClient) AssetInformation(index uint64) (response v1.AssetParams, err error) {
 	err = client.get(&response, fmt.Sprintf("/v1/asset/%d", index), nil)
 	return
 }
 
-// Assets gets up to max assets with maximum asset index assetIdx
-func (client RestClient) Assets(assetIdx, max uint64) (response v1.AssetList, err error) {
-	err = client.get(&response, "/v1/assets", assetsParams{assetIdx, max})
-	return
-}
-
 // AssetInformationV2 gets the AssetInformationResponse associated with the passed asset index
 func (client RestClient) AssetInformationV2(index uint64) (response generatedV2.Asset, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/assets/%d", index), nil)
+	return
+}
+
+// Assets gets up to max assets with maximum asset index assetIdx
+// This method does not have a corresponding V2 endpoint
+func (client RestClient) Assets(assetIdx, max uint64) (response v1.AssetList, err error) {
+	err = client.get(&response, "/v1/assets", assetsParams{assetIdx, max})
 	return
 }
 
@@ -423,6 +444,7 @@ func (client RestClient) RawAccountInformationV2(address string) (response []byt
 }
 
 // TransactionInformation gets information about a specific transaction involving a specific account
+// This method has no corresponding V2 endpoint
 func (client RestClient) TransactionInformation(accountAddress, transactionID string) (response v1.Transaction, err error) {
 	transactionID = stripTransaction(transactionID)
 	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transaction/%s", accountAddress, transactionID), nil)
@@ -464,13 +486,25 @@ func (client RestClient) SuggestedParams() (response v1.TransactionParams, err e
 	return
 }
 
+// SuggestedParams gets the suggested transaction parameters
+func (client RestClient) SuggestedParamsV2() (response generatedV2.TransactionParametersResponse, err error) {
+	err = client.get(&response, "/v2/transactions/params", nil)
+	return
+}
+
 // SendRawTransaction gets a SignedTxn and broadcasts it to the network
 func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (response v1.TransactionID, err error) {
 	err = client.post(&response, "/v1/transactions", protocol.Encode(&txn))
 	return
 }
 
-// SendRawTransactionGroup gets a SignedTxn group and broadcasts it to the network
+// SendRawTransaction gets a SignedTxn and broadcasts it to the network
+func (client RestClient) SendRawTransactionV2(txn transactions.SignedTxn) (response generatedV2.TxId, err error) {
+	err = client.post(&response, "/v2/transactions", protocol.Encode(&txn))
+	return
+}
+
+// SendRawTransactionGroup gets a SignedTxn group and broadcasts it to the network using the V1 API
 func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTxn) error {
 	// response is not terribly useful: it's the txid of the first transaction,
 	// which can be computed by the client anyway..
@@ -483,9 +517,28 @@ func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTx
 	return client.post(&response, "/v1/transactions", enc)
 }
 
-// Block gets the block info for the given round
+// SendRawTransactionGroup gets a SignedTxn group and broadcasts it to the network using the V2 API
+func (client RestClient) SendRawTransactionGroupV2(txgroup []transactions.SignedTxn) error {
+	// response is not terribly useful: it's the txid of the first transaction,
+	// which can be computed by the client anyway..
+	var enc []byte
+	for _, tx := range txgroup {
+		enc = append(enc, protocol.Encode(&tx)...)
+	}
+
+	var response generatedV2.TxId
+	return client.post(&response, "/v2/transactions", enc)
+}
+
+// Block gets the block info for the given round using the V1 API
 func (client RestClient) Block(round uint64) (response v1.Block, err error) {
 	err = client.get(&response, fmt.Sprintf("/v1/block/%d", round), nil)
+	return
+}
+
+// Block gets the block info for the given round using the V2 API
+func (client RestClient) BlockV2(round uint64) (response v1.Block, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d", round), nil)
 	return
 }
 
