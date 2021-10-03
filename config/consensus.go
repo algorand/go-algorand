@@ -1042,6 +1042,9 @@ func initConsensusProtocols() {
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
 
+	// Enable TEAL 6 / AVM 1.1
+	vFuture.LogicSigVersion = 6
+
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 

@@ -984,3 +984,202 @@ func TestAsaDuringInit(t *testing.T) {
 	asaIndex := vb.blk.Payset[1].EvalDelta.InnerTxns[0].ConfigAsset
 	require.Equal(t, basics.AssetIndex(3), asaIndex)
 }
+
+func TestRekey(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	app := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  itxn_begin
+   int pay
+   itxn_field TypeEnum
+   int 1
+   itxn_field Amount
+   global CurrentApplicationAddress
+   itxn_field Receiver
+   int 31
+   bzero
+   byte 0x01
+   concat
+   itxn_field RekeyTo
+  itxn_submit
+`),
+	}
+
+	eval := l.nextBlock(t)
+	eval.txns(t, &app)
+	vb := l.endBlock(t, eval)
+	appIndex := vb.blk.Payset[0].ApplicationID
+	require.Equal(t, basics.AppIndex(1), appIndex)
+
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: appIndex.Address(),
+		Amount:   1_000_000,
+	}
+	rekey := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[1],
+		ApplicationID: appIndex,
+	}
+	eval = l.nextBlock(t)
+	eval.txns(t, &fund, &rekey)
+	eval.txn(t, rekey.Noted("2"), "unauthorized")
+	l.endBlock(t, eval)
+
+}
+
+func TestNote(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	app := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  itxn_begin
+   int pay
+   itxn_field TypeEnum
+   int 0
+   itxn_field Amount
+   global CurrentApplicationAddress
+   itxn_field Receiver
+   byte "abcdefghijklmnopqrstuvwxyz01234567890"
+   itxn_field Note
+  itxn_submit
+`),
+	}
+
+	eval := l.nextBlock(t)
+	eval.txns(t, &app)
+	vb := l.endBlock(t, eval)
+	appIndex := vb.blk.Payset[0].ApplicationID
+	require.Equal(t, basics.AppIndex(1), appIndex)
+
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: appIndex.Address(),
+		Amount:   1_000_000,
+	}
+	note := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[1],
+		ApplicationID: appIndex,
+	}
+	eval = l.nextBlock(t)
+	eval.txns(t, &fund, &note)
+	vb = l.endBlock(t, eval)
+	alphabet := vb.blk.Payset[1].EvalDelta.InnerTxns[0].Txn.Note
+	require.Equal(t, "abcdefghijklmnopqrstuvwxyz01234567890", string(alphabet))
+}
+
+func TestKeyreg(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	app := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  txn ApplicationArgs 0
+  byte "pay"
+  ==
+  bz nonpart
+  itxn_begin
+   int pay
+   itxn_field TypeEnum
+   int 1
+   itxn_field Amount
+   txn Sender
+   itxn_field Receiver
+  itxn_submit
+  int 1
+  return
+nonpart:
+  itxn_begin
+   int keyreg
+   itxn_field TypeEnum
+   int 1
+   itxn_field Nonparticipation
+  itxn_submit
+`),
+	}
+
+	// Create the app
+	eval := l.nextBlock(t)
+	eval.txns(t, &app)
+	vb := l.endBlock(t, eval)
+	appIndex := vb.blk.Payset[0].ApplicationID
+	require.Equal(t, basics.AppIndex(1), appIndex)
+
+	// Give the app a lot of money
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: appIndex.Address(),
+		Amount:   1_000_000_000,
+	}
+	eval = l.nextBlock(t)
+	eval.txn(t, &fund)
+	vb = l.endBlock(t, eval)
+
+	require.Equal(t, 1_000_000_000, int(l.micros(t, appIndex.Address())))
+
+	// Build up Residue in RewardsState so it's ready to pay
+	for i := 1; i < 10; i++ {
+		eval := l.nextBlock(t)
+		l.endBlock(t, eval)
+	}
+
+	// pay a little
+	pay := txntest.Txn{
+		Type:            "appl",
+		Sender:          addrs[0],
+		ApplicationID:   appIndex,
+		ApplicationArgs: [][]byte{[]byte("pay")},
+	}
+	eval = l.nextBlock(t)
+	eval.txn(t, &pay)
+	l.endBlock(t, eval)
+	// 2000 was earned in rewards (- 1000 fee, -1 pay)
+	require.Equal(t, 1_000_000_999, int(l.micros(t, appIndex.Address())))
+
+	// Go nonpart
+	nonpart := txntest.Txn{
+		Type:            "appl",
+		Sender:          addrs[0],
+		ApplicationID:   appIndex,
+		ApplicationArgs: [][]byte{[]byte("nonpart")},
+	}
+	eval = l.nextBlock(t)
+	eval.txn(t, &nonpart)
+	l.endBlock(t, eval)
+	require.Equal(t, 999_999_999, int(l.micros(t, appIndex.Address())))
+
+	// Build up Residue in RewardsState so it's ready to pay AGAIN
+	// But expect no rewards
+	for i := 1; i < 100; i++ {
+		eval := l.nextBlock(t)
+		l.endBlock(t, eval)
+	}
+	eval = l.nextBlock(t)
+	eval.txn(t, pay.Noted("again"))
+	eval.txn(t, nonpart.Noted("again"), "cannot change online/offline")
+	l.endBlock(t, eval)
+	// Ppaid fee and 1.  Did not get rewards
+	require.Equal(t, 999_998_998, int(l.micros(t, appIndex.Address())))
+}
