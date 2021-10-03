@@ -383,7 +383,7 @@ func (client RestClient) PendingTransactionsByAddr(addr string, max uint64) (res
 	return
 }
 
-// PendingTransactionsByAddr returns all the pending transactions for a PK [addr].
+// PendingTransactionsByAddrV2 returns all the pending transactions for a PK [addr].
 func (client RestClient) PendingTransactionsByAddrV2(addr string, max uint64) (response generatedV2.PendingTransactionsResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/transactions/pending", addr), pendingTransactionsByAddrParams{max})
 	return
@@ -486,7 +486,7 @@ func (client RestClient) SuggestedParams() (response v1.TransactionParams, err e
 	return
 }
 
-// SuggestedParams gets the suggested transaction parameters
+// SuggestedParamsV2 gets the suggested transaction parameters
 func (client RestClient) SuggestedParamsV2() (response generatedV2.TransactionParametersResponse, err error) {
 	err = client.get(&response, "/v2/transactions/params", nil)
 	return
@@ -498,7 +498,7 @@ func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (respons
 	return
 }
 
-// SendRawTransaction gets a SignedTxn and broadcasts it to the network
+// SendRawTransactionV2 gets a SignedTxn and broadcasts it to the network
 func (client RestClient) SendRawTransactionV2(txn transactions.SignedTxn) (response generatedV2.TxId, err error) {
 	err = client.post(&response, "/v2/transactions", protocol.Encode(&txn))
 	return
@@ -517,7 +517,7 @@ func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTx
 	return client.post(&response, "/v1/transactions", enc)
 }
 
-// SendRawTransactionGroup gets a SignedTxn group and broadcasts it to the network using the V2 API
+// SendRawTransactionGroupV2 gets a SignedTxn group and broadcasts it to the network using the V2 API
 func (client RestClient) SendRawTransactionGroupV2(txgroup []transactions.SignedTxn) error {
 	// response is not terribly useful: it's the txid of the first transaction,
 	// which can be computed by the client anyway..
@@ -536,7 +536,7 @@ func (client RestClient) Block(round uint64) (response v1.Block, err error) {
 	return
 }
 
-// Block gets the block info for the given round using the V2 API
+// BlockV2 gets the block info for the given round using the V2 API
 func (client RestClient) BlockV2(round uint64) (response generatedV2.BlockResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d", round), nil)
 	return
