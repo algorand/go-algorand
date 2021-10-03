@@ -390,9 +390,10 @@ type ConsensusParams struct {
 	// 6. checking that in the case of going online the VoteFirst is less or equal to the next network round.
 	EnableKeyregCoherencyCheck bool
 
+	EnableExtraPagesOnAppUpdate bool
+
 	// EnableBlockProofKeyregCheck enables the check for blockProof key on key registration
 	EnableBlockProofKeyregCheck bool
-	EnableExtraPagesOnAppUpdate bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1004,9 +1005,34 @@ func initConsensusProtocols() {
 	// v28 can be upgraded to v29, with an update delay of 3 days ( see calculation above )
 	v28.ApprovedUpgrades[protocol.ConsensusV29] = 60000
 
+	// v30 introduces AVM 1.0 and TEAL 5, increases the app opt in limit to 50,
+	// and allows costs to be pooled in grouped stateful transactions.
+	v30 := v29
+	v30.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// Enable TEAL 5 / AVM 1.0
+	v30.LogicSigVersion = 5
+
+	// Enable App calls to pool budget in grouped transactions
+	v30.EnableAppCostPooling = true
+
+	// Enable Inner Transactions, and set maximum number. 0 value is
+	// disabled.  Value > 0 also activates storage of creatable IDs in
+	// ApplyData, as that is required to support REST API when inner
+	// transactions are activated.
+	v30.MaxInnerTransactions = 16
+
+	// Allow 50 app opt ins
+	v30.MaxAppsOptedIn = 50
+
+	Consensus[protocol.ConsensusV30] = v30
+
+	// v29 can be upgraded to v30, with an update delay of 7 days ( see calculation above )
+	v29.ApprovedUpgrades[protocol.ConsensusV30] = 140000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v29
+	vFuture := v30
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
@@ -1019,8 +1045,8 @@ func initConsensusProtocols() {
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
 
-	// Enable TEAL 5 / AVM 1.0
-	vFuture.LogicSigVersion = 5
+	// Enable TEAL 6 / AVM 1.1
+	vFuture.LogicSigVersion = 6
 
 	// compact certificate key registration
 	vFuture.EnableBlockProofKeyregCheck = true

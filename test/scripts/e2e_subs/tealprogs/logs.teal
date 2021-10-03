@@ -1,0 +1,19 @@
+#pragma version 5
+byte "A"
+loop:
+int 0
+dup2
+getbyte
+int 1
++
+dup
+int 97 //ascii code of last char
+<=
+bz end
+setbyte
+dup
+log
+b loop
+end:
+int 1
+return

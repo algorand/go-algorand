@@ -197,7 +197,7 @@ func TestCowStorage(t *testing.T) {
 	bh.CurrentProtocol = protocol.ConsensusCurrentVersion
 	proto, ok := config.Consensus[bh.CurrentProtocol]
 	require.True(t, ok)
-	cow := makeRoundCowState(&ml, bh, proto, 0, 0)
+	cow := makeRoundCowState(&ml, bh, proto, 0, ledgercore.AccountTotals{}, 0)
 	allSptrs, allAddrs := randomAddrApps(10)
 
 	st := makeStateTracker()

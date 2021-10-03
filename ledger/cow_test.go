@@ -116,7 +116,7 @@ func TestCowBalance(t *testing.T) {
 
 	c0 := makeRoundCowState(
 		&ml, bookkeeping.BlockHeader{}, config.Consensus[protocol.ConsensusCurrentVersion],
-		0, 0)
+		0, ledgercore.AccountTotals{}, 0)
 	checkCow(t, c0, accts0)
 
 	c1 := c0.child(0)

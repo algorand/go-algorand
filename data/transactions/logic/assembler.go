@@ -1055,6 +1055,69 @@ func assembleGtxnsas(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
+// asmItxn delegates to asmItxnOnly or asmItxna depending on number of operands
+func asmItxn(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) == 1 {
+		return asmItxnOnly(ops, spec, args)
+	}
+	if len(args) == 2 {
+		itxna := OpsByName[ops.Version]["itxna"]
+		return asmItxna(ops, &itxna, args)
+	}
+	return ops.errorf("%s expects one or two arguments", spec.Name)
+}
+
+func asmItxnOnly(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 1 {
+		return ops.errorf("%s expects one argument", spec.Name)
+	}
+	fs, ok := txnFieldSpecByName[args[0]]
+	if !ok {
+		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
+	}
+	_, ok = txnaFieldSpecByField[fs.field]
+	if ok {
+		return ops.errorf("found array field %#v in %s op", args[0], spec.Name)
+	}
+	if fs.version > ops.Version {
+		return ops.errorf("field %#v available in version %d. Missed #pragma version?", args[0], fs.version)
+	}
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(fs.field))
+	ops.returns(fs.ftype)
+	return nil
+}
+
+func asmItxna(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 2 {
+		return ops.errorf("%s expects two immediate arguments", spec.Name)
+	}
+	fs, ok := txnFieldSpecByName[args[0]]
+	if !ok {
+		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
+	}
+	_, ok = txnaFieldSpecByField[fs.field]
+	if !ok {
+		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
+	}
+	if fs.version > ops.Version {
+		return ops.errorf("%s %#v available in version %d. Missed #pragma version?", spec.Name, args[0], fs.version)
+	}
+	arrayFieldIdx, err := strconv.ParseUint(args[1], 0, 64)
+	if err != nil {
+		return ops.error(err)
+	}
+	if arrayFieldIdx > 255 {
+		return ops.errorf("%s array index beyond 255: %d", spec.Name, arrayFieldIdx)
+	}
+
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(fs.field))
+	ops.pending.WriteByte(uint8(arrayFieldIdx))
+	ops.returns(fs.ftype)
+	return nil
+}
+
 func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
@@ -1153,6 +1216,26 @@ func asmTxField(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(fs.field))
+	return nil
+}
+
+func assembleEcdsa(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 1 {
+		return ops.errorf("%s expects one argument", spec.Name)
+	}
+
+	cs, ok := ecdsaCurveSpecByName[args[0]]
+	if !ok {
+		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
+	}
+	if cs.version > ops.Version {
+		//nolint:errcheck // we continue to maintain typestack
+		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], cs.version)
+	}
+
+	val := cs.field
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(val))
 	return nil
 }
 
@@ -2396,7 +2479,7 @@ func checkPushBytes(cx *EvalContext) error {
 	return cx.err
 }
 
-// This is also used to disassemble gtxns, gtxnsas and txnas
+// This is also used to disassemble gtxns, gtxnsas, txnas, itxn
 func disTxn(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + 1
 	if len(dis.program) <= lastIdx {
@@ -2555,6 +2638,20 @@ func disTxField(dis *disassembleState, spec *OpSpec) (string, error) {
 		return "", fmt.Errorf("invalid %s arg index %d at pc=%d", spec.Name, arg, dis.pc)
 	}
 	return fmt.Sprintf("%s %s", spec.Name, TxnFieldNames[arg]), nil
+}
+
+func disEcdsa(dis *disassembleState, spec *OpSpec) (string, error) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+	}
+	dis.nextpc = dis.pc + 2
+	arg := dis.program[dis.pc+1]
+	if int(arg) >= len(EcdsaCurveNames) {
+		return "", fmt.Errorf("invalid curve arg index %d at pc=%d", arg, dis.pc)
+	}
+	return fmt.Sprintf("%s %s", spec.Name, EcdsaCurveNames[arg]), nil
 }
 
 type disInfo struct {
