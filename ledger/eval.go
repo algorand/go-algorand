@@ -54,6 +54,17 @@ const maxPaysetHint = 20000
 // transaction group.
 const asyncAccountLoadingThreadCount = 4
 
+type creatable struct {
+	cindex basics.CreatableIndex
+	ctype  basics.CreatableType
+}
+
+// FoundAddress is a wrapper for an address and a boolean.
+type FoundAddress struct {
+	Address basics.Address
+	Exists  bool
+}
+
 type roundCowBase struct {
 	l ledgerForCowBase
 
@@ -79,10 +90,26 @@ type roundCowBase struct {
 	// are beyond the scope of this cache.
 	// The account data store here is always the account data without the rewards.
 	accounts map[basics.Address]basics.AccountData
+
+	// Similar cache for asset/app creators.
+	creators map[creatable]FoundAddress
 }
 
 func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
-	return x.l.GetCreatorForRound(x.rnd, cidx, ctype)
+	creatable := creatable{cindex: cidx, ctype: ctype}
+
+	if foundAddress, ok := x.creators[creatable]; ok {
+		return foundAddress.Address, foundAddress.Exists, nil
+	}
+
+	address, exists, err := x.l.GetCreatorForRound(x.rnd, cidx, ctype)
+	if err != nil {
+		return basics.Address{}, false, fmt.Errorf(
+			"roundCowBase.getCreator() cidx: %d ctype: %v err: %w", cidx, ctype, err)
+	}
+
+	x.creators[creatable] = FoundAddress{Address: address, Exists: exists}
+	return address, exists, nil
 }
 
 // lookup returns the non-rewarded account data for the provided account address. It uses the internal per-round cache
@@ -361,7 +388,7 @@ type BlockEvaluator struct {
 type ledgerForEvaluator interface {
 	ledgerForCowBase
 	GenesisHash() crypto.Digest
-	Totals(basics.Round) (ledgercore.AccountTotals, error)
+	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
 	CompactCertVoters(basics.Round) (*VotersForRound, error)
 }
 
@@ -412,6 +439,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 		txnCount: prevHeader.TxnCounter,
 		proto:    proto,
 		accounts: make(map[basics.Address]basics.AccountData),
+		creators: make(map[creatable]FoundAddress),
 	}
 
 	eval := &BlockEvaluator{
@@ -451,9 +479,12 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 		base.compactCertNextRnd = votersRound + basics.Round(proto.CompactCertRounds)
 	}
 
-	prevTotals, err := l.Totals(eval.prevHeader.Round)
+	latestRound, prevTotals, err := l.LatestTotals()
 	if err != nil {
 		return nil, err
+	}
+	if latestRound != eval.prevHeader.Round {
+		return nil, ledgercore.ErrNonSequentialBlockEval{EvaluatorRound: hdr.Round, LatestRound: latestRound}
 	}
 
 	poolAddr := eval.prevHeader.RewardsPool
@@ -473,7 +504,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 		eval.block.BlockHeader.RewardsState = eval.prevHeader.NextRewardsState(hdr.Round, proto, incentivePoolData.MicroAlgos, prevTotals.RewardUnits())
 	}
 	// set the eval state with the current header
-	eval.state = makeRoundCowState(base, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp, paysetHint)
+	eval.state = makeRoundCowState(base, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp, prevTotals, paysetHint)
 
 	if validate {
 		err := eval.block.BlockHeader.PreCheck(eval.prevHeader)
@@ -559,8 +590,8 @@ func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.
 	return
 }
 
-// TxnCounter returns the number of transactions that have been added to the block evaluator so far.
-func (eval *BlockEvaluator) TxnCounter() int {
+// PaySetSize returns the number of top-level transactions that have been added to the block evaluator so far.
+func (eval *BlockEvaluator) PaySetSize() int {
 	return len(eval.block.Payset)
 }
 
@@ -904,6 +935,13 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		}
 	}
 
+	// We are not allowing InnerTxns to have InnerTxns yet.  Error if that happens.
+	for _, itx := range applyData.EvalDelta.InnerTxns {
+		if len(itx.ApplyData.EvalDelta.InnerTxns) > 0 {
+			return fmt.Errorf("inner transaction has inner transactions %v", itx)
+		}
+	}
+
 	// Remember this txn
 	cow.addTx(txn.Txn, txid)
 
@@ -920,25 +958,9 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		return
 	}
 
-	// rekeying: update balrecord.AuthAddr to tx.RekeyTo if provided
-	if (tx.RekeyTo != basics.Address{}) {
-		var acct basics.AccountData
-		acct, err = balances.Get(tx.Sender, false)
-		if err != nil {
-			return
-		}
-		// Special case: rekeying to the account's actual address just sets acct.AuthAddr to 0
-		// This saves 32 bytes in your balance record if you want to go back to using your original key
-		if tx.RekeyTo == tx.Sender {
-			acct.AuthAddr = basics.Address{}
-		} else {
-			acct.AuthAddr = tx.RekeyTo
-		}
-
-		err = balances.Put(tx.Sender, acct)
-		if err != nil {
-			return
-		}
+	err = apply.Rekey(balances, &tx)
+	if err != nil {
+		return
 	}
 
 	switch tx.Type {
@@ -1083,7 +1105,7 @@ func (eval *BlockEvaluator) finalValidation() error {
 		}
 	}
 
-	return nil
+	return eval.state.CalculateTotals()
 }
 
 // GenerateBlock produces a complete block from the BlockEvaluator.  This is
@@ -1123,7 +1145,7 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 			"unknown consensus version: %s", eval.block.BlockHeader.CurrentProtocol)
 	}
 	eval.state = makeRoundCowState(
-		eval.state, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp,
+		eval.state, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp, eval.state.mods.Totals,
 		len(eval.block.Payset))
 	return &vb, nil
 }
@@ -1262,7 +1284,7 @@ transactionGroupLoop:
 
 	// If validating, do final block checks that depend on our new state
 	if validate {
-		// wait for the validation to complete.
+		// wait for the signature validation to complete.
 		select {
 		case <-ctx.Done():
 			return ledgercore.StateDelta{}, ctx.Err()
@@ -1274,16 +1296,17 @@ transactionGroupLoop:
 				return ledgercore.StateDelta{}, err
 			}
 		}
-		err = eval.finalValidation()
-		if err != nil {
-			return ledgercore.StateDelta{}, err
-		}
+	}
+
+	err = eval.finalValidation()
+	if err != nil {
+		return ledgercore.StateDelta{}, err
 	}
 
 	return eval.state.deltas(), nil
 }
 
-// loadedTransactionGroup is a helper struct to allow asyncronious loading of the account data needed by the transaction groups
+// loadedTransactionGroup is a helper struct to allow asynchronous loading of the account data needed by the transaction groups
 type loadedTransactionGroup struct {
 	// group is the transaction group
 	group []transactions.SignedTxnWithAD
@@ -1292,6 +1315,21 @@ type loadedTransactionGroup struct {
 	// err indicates whether any of the balances in this structure have failed to load. In case of an error, at least
 	// one of the entries in the balances would be uninitialized.
 	err error
+}
+
+// Return the maximum number of addresses referenced in any given transaction.
+func maxAddressesInTxn(proto *config.ConsensusParams) int {
+	return 7 + proto.MaxAppTxnAccounts
+}
+
+// Write the list of addresses referenced in `txn` to `out`. Addresses might repeat.
+func getTxnAddresses(txn *transactions.Transaction, out *[]basics.Address) {
+	*out = (*out)[:0]
+
+	*out = append(
+		*out, txn.Sender, txn.Receiver, txn.CloseRemainderTo, txn.AssetSender,
+		txn.AssetReceiver, txn.AssetCloseTo, txn.FreezeAccount)
+	*out = append(*out, txn.ApplicationCallTxnFields.Accounts...)
 }
 
 // loadAccounts loads the account data for the provided transaction group list. It also loads the feeSink account and add it to the first returned transaction group.
@@ -1320,8 +1358,7 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 		defer close(outChan)
 
 		accountTasks := make(map[basics.Address]*addrTask)
-		maxAddressesPerTransaction := 7 + consensusParams.MaxAppTxnAccounts
-		addressesCh := make(chan *addrTask, len(groups)*consensusParams.MaxTxGroupSize*maxAddressesPerTransaction)
+		addressesCh := make(chan *addrTask, len(groups)*consensusParams.MaxTxGroupSize*maxAddressesInTxn(&consensusParams))
 		// totalBalances counts the total number of balances over all the transaction groups
 		totalBalances := 0
 
@@ -1362,6 +1399,7 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 			task := &groupTask{}
 			groupsReady[i] = task
 			for _, stxn := range group {
+				// If you add new addresses here, also add them in getTxnAddresses().
 				initAccount(stxn.Txn.Sender, task)
 				initAccount(stxn.Txn.Receiver, task)
 				initAccount(stxn.Txn.CloseRemainderTo, task)
@@ -1501,37 +1539,4 @@ func (vb ValidatedBlock) WithSeed(s committee.Seed) ValidatedBlock {
 		blk:   newblock,
 		delta: vb.delta,
 	}
-}
-
-// Eval evaluates a block without validation using the given `proto`. Return the state
-// delta and transactions with modified apply data according to `proto`.
-// This function is used by Indexer which modifies `proto` to retrieve the asset
-// close amount for each transaction even when the real consensus parameters do not
-// support it.
-func Eval(l ledgerForEvaluator, blk *bookkeeping.Block, proto config.ConsensusParams) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
-	eval, err := startEvaluator(
-		l, blk.BlockHeader, proto, len(blk.Payset), false, false)
-	if err != nil {
-		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{}, err
-	}
-
-	paysetgroups, err := blk.DecodePaysetGroups()
-	if err != nil {
-		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{}, err
-	}
-
-	for _, group := range paysetgroups {
-		err = eval.TransactionGroup(group)
-		if err != nil {
-			return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{}, err
-		}
-	}
-
-	// Finally, process any pending end-of-block state changes.
-	err = eval.endOfBlock()
-	if err != nil {
-		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{}, err
-	}
-
-	return eval.state.deltas(), eval.block.Payset, nil
 }

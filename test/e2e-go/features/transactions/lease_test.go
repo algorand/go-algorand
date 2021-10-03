@@ -29,6 +29,7 @@ import (
 
 func TestLeaseTransactionsSameSender(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
@@ -90,6 +91,7 @@ func TestLeaseTransactionsSameSender(t *testing.T) {
 
 func TestLeaseRegressionFaultyFirstValidCheckOld_2f3880f7(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
@@ -164,6 +166,7 @@ func TestLeaseRegressionFaultyFirstValidCheckOld_2f3880f7(t *testing.T) {
 
 func TestLeaseRegressionFaultyFirstValidCheckNew_2f3880f7(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
@@ -225,6 +228,7 @@ func TestLeaseRegressionFaultyFirstValidCheckNew_2f3880f7(t *testing.T) {
 
 func TestLeaseTransactionsSameSenderDifferentLease(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
@@ -288,6 +292,7 @@ func TestLeaseTransactionsSameSenderDifferentLease(t *testing.T) {
 
 func TestLeaseTransactionsDifferentSender(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
@@ -364,6 +369,7 @@ func TestLeaseTransactionsDifferentSender(t *testing.T) {
 
 func TestOverlappingLeases(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))

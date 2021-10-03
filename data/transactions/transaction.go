@@ -115,6 +115,12 @@ type ApplyData struct {
 	ReceiverRewards basics.MicroAlgos `codec:"rr"`
 	CloseRewards    basics.MicroAlgos `codec:"rc"`
 	EvalDelta       EvalDelta         `codec:"dt"`
+
+	// If asa or app is being created, the id used. Else 0.
+	// Names chosen to match naming the corresponding txn.
+	// These are populated on when MaxInnerTransactions > 0 (TEAL 5)
+	ConfigAsset   basics.AssetIndex `codec:"caid"`
+	ApplicationID basics.AppIndex   `codec:"apid"`
 }
 
 // Equal returns true if two ApplyDatas are equal, ignoring nilness equality on
@@ -133,6 +139,12 @@ func (ad ApplyData) Equal(o ApplyData) bool {
 		return false
 	}
 	if ad.CloseRewards != o.CloseRewards {
+		return false
+	}
+	if ad.ConfigAsset != o.ConfigAsset {
+		return false
+	}
+	if ad.ApplicationID != o.ApplicationID {
 		return false
 	}
 	if !ad.EvalDelta.Equal(o.EvalDelta) {

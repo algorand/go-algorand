@@ -182,6 +182,7 @@ func TestRequestBlockBytesErrors(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
+	defer ledger.Ledger.Close()
 
 	blockServiceConfig := config.GetDefaultLocal()
 	blockServiceConfig.EnableBlockService = true
@@ -191,6 +192,7 @@ func TestRequestBlockBytesErrors(t *testing.T) {
 	up := makeTestUnicastPeer(net, t)
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, ledger, net, "test genesisID")
 	ls.Start()
+	defer ls.Stop()
 
 	fetcher := makeUniversalBlockFetcher(logging.TestingLog(t), net, cfg)
 
@@ -198,7 +200,7 @@ func TestRequestBlockBytesErrors(t *testing.T) {
 	cancel()
 	_, _, _, err = fetcher.fetchBlock(ctx, next, up)
 	var wrfe errWsFetcherRequestFailed
-	require.True(t, errors.As(err, &wrfe))
+	require.True(t, errors.As(err, &wrfe), "unexpected err: %w", wrfe)
 	require.Equal(t, "context canceled", err.(errWsFetcherRequestFailed).cause)
 
 	ctx = context.Background()

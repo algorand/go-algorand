@@ -29,6 +29,7 @@ import (
 
 func TestWalletCreation(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -81,6 +82,7 @@ func TestWalletCreation(t *testing.T) {
 
 func TestBlankWalletCreation(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -116,6 +118,7 @@ func TestBlankWalletCreation(t *testing.T) {
 
 func TestWalletRename(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -196,6 +199,7 @@ func TestWalletRename(t *testing.T) {
 
 func TestWalletSessionRelease(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -238,6 +242,7 @@ func TestWalletSessionRelease(t *testing.T) {
 
 func TestWalletSessionRenew(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -286,6 +291,7 @@ func TestWalletSessionRenew(t *testing.T) {
 
 func TestWalletSessionExpiry(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()

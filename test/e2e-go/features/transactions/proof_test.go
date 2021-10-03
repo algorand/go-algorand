@@ -47,6 +47,7 @@ func (tme *TxnMerkleElemRaw) ToBeHashed() (protocol.HashID, []byte) {
 
 func TestTxnMerkleProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))

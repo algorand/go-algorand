@@ -41,14 +41,15 @@ var lastValid uint64
 var numValidRounds uint64 // also used in account and asset
 
 var (
-	fee             uint64
-	outFilename     string
-	sign            bool
-	noteBase64      string
-	noteText        string
-	lease           string
-	noWaitAfterSend bool
-	dumpForDryrun   bool
+	fee                uint64
+	outFilename        string
+	sign               bool
+	noteBase64         string
+	noteText           string
+	lease              string
+	noWaitAfterSend    bool
+	dumpForDryrun      bool
+	dumpForDryrunAccts []string
 )
 
 var dumpForDryrunFormat cobraStringValue = *makeCobraStringValue("json", []string{"msgp"})
@@ -66,6 +67,7 @@ func addTxnFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	cmd.Flags().BoolVar(&dumpForDryrun, "dryrun-dump", false, "Dump in dryrun format acceptable by dryrun REST api")
 	cmd.Flags().Var(&dumpForDryrunFormat, "dryrun-dump-format", "Dryrun dump format: "+dumpForDryrunFormat.AllowedString())
+	cmd.Flags().StringSliceVar(&dumpForDryrunAccts, "dryrun-accounts", nil, "additional accounts to include into dryrun request obj")
 }
 
 type cobraStringValue struct {

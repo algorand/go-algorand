@@ -45,6 +45,8 @@ type cowForLogicLedger interface {
 	round() basics.Round
 	prevTimestamp() int64
 	allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
+	txnCounter() uint64
+	incTxnCount()
 }
 
 func newLogicLedger(cow cowForLogicLedger, aidx basics.AppIndex) (*logicLedger, error) {
@@ -271,11 +273,37 @@ func (al *logicLedger) Perform(tx *transactions.Transaction, spec transactions.S
 		return ad, err
 	}
 
+	err = apply.Rekey(balances, tx)
+	if err != nil {
+		return ad, err
+	}
+
+	// compared to eval.transaction() it may seem strange that we
+	// increment the transaction count *before* transaction
+	// processing, rather than after. But we need to account for the
+	// fact that our outer transaction has not yet incremented their
+	// count (in addTx()), so we need to increment ahead of use, so we
+	// don't use the same index.  If eval.transaction() incremented
+	// ahead of processing, we'd have to do ours *after* so that we'd
+	// use the next id.  So either way, this would seem backwards at
+	// first glance.
+	al.cow.incTxnCount()
+
 	switch tx.Type {
 	case protocol.PaymentTx:
 		err = apply.Payment(tx.PaymentTxnFields, tx.Header, balances, spec, &ad)
+
+	case protocol.KeyRegistrationTx:
+		err = apply.Keyreg(tx.KeyregTxnFields, tx.Header, balances, spec, &ad, al.Round())
+
+	case protocol.AssetConfigTx:
+		err = apply.AssetConfig(tx.AssetConfigTxnFields, tx.Header, balances, spec, &ad, al.cow.txnCounter())
+
 	case protocol.AssetTransferTx:
 		err = apply.AssetTransfer(tx.AssetTransferTxnFields, tx.Header, balances, spec, &ad)
+	case protocol.AssetFreezeTx:
+		err = apply.AssetFreeze(tx.AssetFreezeTxnFields, tx.Header, balances, spec, &ad)
+
 	default:
 		err = fmt.Errorf("%s tx in AVM", tx.Type)
 	}
