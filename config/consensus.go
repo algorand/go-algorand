@@ -1050,12 +1050,6 @@ func initConsensusProtocols() {
 
 	// compact certificate key registration
 	vFuture.EnableBlockProofKeyregCheck = true
-	// Enable App calls to pool budget in grouped transactions
-	vFuture.EnableAppCostPooling = true
-	vFuture.MaxInnerTransactions = 16
-
-	// Allow 50 app opt ins
-	vFuture.MaxAppsOptedIn = 50
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
