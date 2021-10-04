@@ -92,7 +92,7 @@ func TestEmulatedTrivialTransactionsExchange(t *testing.T) {
 		},
 		testDuration: 20000 * time.Millisecond,
 		initialAlloc: []initialTransactionsAllocation{
-			initialTransactionsAllocation{
+			{
 				node:              1,
 				transactionsCount: 1,
 				transactionSize:   250,
@@ -205,7 +205,7 @@ func TestEmulatedTwoNodesToRelaysTransactionsExchange(t *testing.T) {
 		},
 		testDuration: 1000 * time.Millisecond,
 		initialAlloc: []initialTransactionsAllocation{
-			initialTransactionsAllocation{
+			{
 				node:              2,
 				transactionsCount: 1,
 				transactionSize:   250,
@@ -275,7 +275,7 @@ func TestEmulatedLargeSetTransactionsExchange(t *testing.T) {
 		},
 		testDuration: 1000 * time.Millisecond,
 		initialAlloc: []initialTransactionsAllocation{
-			initialTransactionsAllocation{
+			{
 				node:              1,
 				transactionsCount: 100,
 				transactionSize:   800,
@@ -359,13 +359,13 @@ func TestEmulatedLargeSetTransactionsExchangeIntermixed(t *testing.T) {
 			},
 		},
 		initialAlloc: []initialTransactionsAllocation{
-			initialTransactionsAllocation{
+			{
 				node:              0,
 				transactionsCount: 200,
 				transactionSize:   400,
 				expirationRound:   basics.Round(5),
 			},
-			initialTransactionsAllocation{
+			{
 				node:              1,
 				transactionsCount: 100,
 				transactionSize:   800,
@@ -499,7 +499,7 @@ func TestEmulatedNonRelayToMultipleRelays(t *testing.T) {
 			},
 		},
 		initialAlloc: []initialTransactionsAllocation{
-			initialTransactionsAllocation{
+			{
 				node:              4, // i.e. node-2
 				transactionsCount: 1000,
 				transactionSize:   250,
@@ -648,13 +648,13 @@ func TestEmulatedTwoNodesFourRelays(t *testing.T) {
 			},
 		},
 		initialAlloc: []initialTransactionsAllocation{
-			initialTransactionsAllocation{
+			{
 				node:              4, // i.e. node-1
 				transactionsCount: 3000,
 				transactionSize:   270,
 				expirationRound:   basics.Round(5),
 			},
-			initialTransactionsAllocation{
+			{
 				node:              5, // i.e. node-2
 				transactionsCount: 1500,
 				transactionSize:   320,

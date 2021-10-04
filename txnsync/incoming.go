@@ -38,7 +38,7 @@ type incomingMessage struct {
 	message           transactionBlockMessage
 	sequenceNumber    uint64
 	peer              *Peer
-	encodedSize       int
+	encodedSize       int // the byte length of the incoming network message
 	bloomFilter       *testableBloomFilter
 	transactionGroups []pooldata.SignedTxGroup
 }
@@ -72,6 +72,8 @@ func (imq *incomingMessageQueue) getIncomingMessageChannel() <-chan incomingMess
 // enqueue places the given message on the queue, if and only if it's associated peer doesn't
 // appear on the incoming message queue already. In the case there is no peer, the message
 // would be placed on the queue as is.
+// The method returns false if the incoming message doesn't have it's peer on the queue and
+// the method has failed to place the message on the queue. True is returned otherwise.
 func (imq *incomingMessageQueue) enqueue(m incomingMessage) bool {
 	if m.peer != nil {
 		imq.enqueuedPeersMu.Lock()
@@ -164,7 +166,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 		}
 		return nil
 	}
-	// place the incoming message on the *peer* heap, allowing us to dequeue it in the correct sequence order.
+	// place the incoming message on the *peer* heap, allowing us to dequeue it in the order by which it was received by the network library.
 	err = peer.incomingMessages.enqueue(incomingMessage)
 	if err != nil {
 		// if the incoming message queue for this peer is full, disconnect from this peer.

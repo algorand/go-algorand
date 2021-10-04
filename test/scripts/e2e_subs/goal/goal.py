@@ -56,6 +56,7 @@ class Goal:
         algod_address=None,
         kmd_token=None,
         kmd_address=None,
+        autosend=None,
     ):
         self.algod = None
         self.kmd = None
@@ -83,6 +84,8 @@ class Goal:
         # internal wallets has address->sk mappings, so we can sign
         # txns easily, even without kmd.
         self.internal_wallet = {}
+
+        self.autosend = autosend
 
     def open_algod(self, algodata, algod_address=None):
         if algod_address:
@@ -197,12 +200,12 @@ class Goal:
         """
         print(f"Waiting for block {block}.")
         s = self.algod.status()
-        last_round = s['last-round']
+        last_round = s["last-round"]
         while last_round < block:
             wait_block = min(block, last_round + 3)
             print(f" waiting for {last_round}...")
             s = self.algod.status_after_block(wait_block)
-            last_round = s['last-round']
+            last_round = s["last-round"]
         return s
 
     def new_account(self):
@@ -215,31 +218,53 @@ class Goal:
         assert len(key) == 88, key
         self.internal_wallet[address] = key
 
-    def pay(self, sender, receiver, amt: int, **kwargs):
-        params = self.algod.suggested_params()
-        return txn.PaymentTxn(sender, params, receiver, amt, **kwargs)
+    def finish(self, tx, send):
+        if send is None:
+            send = self.autosend
+        if send:
+            return self.send(tx, confirm=True)
+        return tx
 
-    def acfg(self, sender, **kwargs):
+    def keyreg(self, sender, votekey=None, selkey=None, votefst=None,
+               votelst=None, votekd=None,
+               send=None, **kwargs):
         params = self.algod.suggested_params()
-        return txn.AssetConfigTxn(
+        tx = txn.KeyregTxn(sender, params,
+                           votekey, selkey, votefst, votelst, votekd,
+                           **kwargs)
+        return self.finish(tx, send)
+
+    def pay(self, sender, receiver, amt: int, send=None, **kwargs):
+        params = self.algod.suggested_params()
+        tx = txn.PaymentTxn(sender, params, receiver, amt, **kwargs)
+        return self.finish(tx, send)
+
+    def acfg(self, sender, send=None, **kwargs):
+        params = self.algod.suggested_params()
+        tx = txn.AssetConfigTxn(
             sender, params, **kwargs, strict_empty_address_check=False
         )
+        return self.finish(tx, send)
 
     def asset_create(self, sender, **kwargs):
         assert not kwargs.pop("index", None)
         return self.acfg(sender, **kwargs)
 
-    def axfer(self, sender, receiver, amt: int, index: int, **kwargs):
+    def axfer(self, sender, receiver, amt: int, index: int, send=None, **kwargs):
         params = self.algod.suggested_params()
-        return txn.AssetTransferTxn(sender, params, receiver, amt, index, **kwargs)
+        tx = txn.AssetTransferTxn(
+            sender, params, receiver, amt, index, **kwargs
+        )
+        return self.finish(tx, send)
 
     def asset_optin(self, sender, index: int, **kwargs):
         assert not kwargs.pop("receiver", None)
         return self.axfer(sender, sender, 0, index, **kwargs)
 
-    def afrz(self, sender, index: int, target, frozen, **kwargs):
+    def afrz(self, sender, index: int, target, frozen, send=None, **kwargs):
         params = self.algod.suggested_params()
-        return txn.AssetFreezeTxn(sender, params, index, target, frozen, **kwargs)
+        tx = txn.AssetFreezeTxn(sender, params, index, target, frozen, **kwargs)
+        return self.finish(tx, send)
 
     def coerce_schema(self, values):
         if not values:
@@ -248,11 +273,12 @@ class Goal:
             return values
         return txn.StateSchema(num_uints=values[0], num_byte_slices=values[1])
 
-    def appl(self, sender, index: int, on_complete=txn.OnComplete.NoOpOC, **kwargs):
+    def appl(self, sender, index: int, on_complete=txn.OnComplete.NoOpOC,
+             send=None, **kwargs):
         params = self.algod.suggested_params()
         local_schema = self.coerce_schema(kwargs.pop("local_schema", None))
         global_schema = self.coerce_schema(kwargs.pop("global_schema", None))
-        return txn.ApplicationCallTxn(
+        tx = txn.ApplicationCallTxn(
             sender,
             params,
             index,
@@ -261,6 +287,7 @@ class Goal:
             global_schema=global_schema,
             **kwargs,
         )
+        return self.finish(tx, send)
 
     def app_create(
         self,
@@ -326,7 +353,7 @@ class Goal:
 
     def assemble_with_rest(self, source):
         compile_response = self.algod.compile(source)
-        return base64.b64decode(compile_response['result'])
+        return base64.b64decode(compile_response["result"])
 
     def app_info(self, index: int) -> dict:
         return self.algod.application_info(index)["params"]

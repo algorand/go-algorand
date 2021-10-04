@@ -20,6 +20,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
+//msgp:ignore sentFilterStat
 type sentFilterStat struct {
 	// .Modulator .Offset
 	EncodingParams requestParams
@@ -32,6 +33,7 @@ type sentFilterStat struct {
 
 // sentFilters is the set of filter stats for one peer to another peer.
 // There should be at most one entry per (Modulator,Offset)
+//msgp:ignore sentFilters
 type sentFilters []sentFilterStat
 
 const maxSentFilterSet = 10

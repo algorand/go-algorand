@@ -19,6 +19,7 @@ package node
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -136,7 +137,7 @@ type AlgorandFullNode struct {
 
 	compactCert *compactcert.Worker
 
-	txnSyncConnector transactionSyncNodeConnector
+	txnSyncConnector *transactionSyncNodeConnector
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -230,7 +231,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
 
 	node.txnSyncConnector = makeTransactionSyncNodeConnector(node)
-	node.txnSyncService = txnsync.MakeTransactionSyncService(node.log, &node.txnSyncConnector, cfg.NetAddress != "", node.genesisID, node.genesisHash, node.config, node.lowPriorityCryptoVerificationPool)
+	node.txnSyncService = txnsync.MakeTransactionSyncService(node.log, node.txnSyncConnector, cfg.NetAddress != "", node.genesisID, node.genesisHash, node.config, node.lowPriorityCryptoVerificationPool)
 
 	crashPathname := filepath.Join(genesisDir, config.CrashFilename)
 	crashAccess, err := db.MakeAccessor(crashPathname, false, false)
@@ -300,7 +301,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.compactCert = compactcert.NewWorker(compactCertAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
 
 	blockListeners := []ledger.BlockListener{
-		&node.txnSyncConnector,
+		node.txnSyncConnector,
 		node.transactionPool,
 		node,
 	}
@@ -1117,7 +1118,7 @@ func (vb validatedBlock) Block() bookkeeping.Block {
 func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
 	lvb, err := node.transactionPool.AssembleBlock(round, deadline)
 	if err != nil {
-		if err == pools.ErrStaleBlockAssemblyRequest {
+		if errors.Is(err, pools.ErrStaleBlockAssemblyRequest) {
 			// convert specific error to one that would have special handling in the agreement code.
 			err = agreement.ErrAssembleBlockRoundStale
 

@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-const maxEncodedTransactionGroup = 30000
+const maxEncodedTransactionGroups = 30000
 const maxEncodedTransactionGroupEntries = 30000
 const maxBitmaskSize = (maxEncodedTransactionGroupEntries+7)/8 + 1
 const maxSignatureBytes = maxEncodedTransactionGroupEntries * len(crypto.Signature{})
@@ -41,7 +41,7 @@ type txnGroups pooldata.SignedTxnSlice //nolint:unused
 type txGroupsEncodingStubOld struct { //nolint:unused
 	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
-	TxnGroups []txnGroups `codec:"t,allocbound=maxEncodedTransactionGroup"`
+	TxnGroups []txnGroups `codec:"t,allocbound=maxEncodedTransactionGroups"`
 }
 
 type txGroupsEncodingStub struct {
@@ -49,7 +49,7 @@ type txGroupsEncodingStub struct {
 
 	TotalTransactionsCount uint64 `codec:"ttc"`
 	TransactionGroupCount  uint64 `codec:"tgc"`
-	TransactionGroupSizes  []byte `codec:"tgs,allocbound=maxEncodedTransactionGroup"`
+	TransactionGroupSizes  []byte `codec:"tgs,allocbound=maxEncodedTransactionGroups"`
 
 	encodedSignedTxns
 }
@@ -72,28 +72,28 @@ type encodedSignedTxns struct {
 type encodedMsigs struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
-	Version          []byte  `codec:"msigv,allocbound=maxEncodedTransactionGroup"`
+	Version          []byte  `codec:"msigv,allocbound=maxEncodedTransactionGroups"`
 	BitmaskVersion   bitmask `codec:"msigvbm"`
-	Threshold        []byte  `codec:"msigthr,allocbound=maxEncodedTransactionGroup"`
+	Threshold        []byte  `codec:"msigthr,allocbound=maxEncodedTransactionGroups"`
 	BitmaskThreshold bitmask `codec:"msigthrbm"`
 	// splitting subsigs further make the code much more complicated / does not give gains
-	Subsigs        [][]crypto.MultisigSubsig `codec:"subsig,allocbound=maxEncodedTransactionGroup,allocbound=crypto.MaxMultisig"`
+	Subsigs        [][]crypto.MultisigSubsig `codec:"subsig,allocbound=maxEncodedTransactionGroups,allocbound=crypto.MaxMultisig"`
 	BitmaskSubsigs bitmask                   `codec:"subsigsbm"`
 }
 
 type encodedLsigs struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
-	Logic            [][]byte   `codec:"lsigl,allocbound=maxEncodedTransactionGroup,allocbound=config.MaxLogicSigMaxSize"`
+	Logic            [][]byte   `codec:"lsigl,allocbound=maxEncodedTransactionGroups,allocbound=config.MaxLogicSigMaxSize"`
 	BitmaskLogic     bitmask    `codec:"lsiglbm"`
-	LogicArgs        [][][]byte `codec:"lsigarg,allocbound=maxEncodedTransactionGroup,allocbound=transactions.EvalMaxArgs,allocbound=config.MaxLogicSigMaxSize"`
+	LogicArgs        [][][]byte `codec:"lsigarg,allocbound=maxEncodedTransactionGroups,allocbound=transactions.EvalMaxArgs,allocbound=config.MaxLogicSigMaxSize"`
 	BitmaskLogicArgs bitmask    `codec:"lsigargbm"`
 }
 
 type encodedTxns struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
-	TxType        []byte  `codec:"type,allocbound=maxEncodedTransactionGroup"`
+	TxType        []byte  `codec:"type,allocbound=maxEncodedTransactionGroups"`
 	BitmaskTxType bitmask `codec:"typebm"`
 	TxTypeOffset  byte    `codec:"typeo"`
 
@@ -112,13 +112,13 @@ type encodedTxnHeaders struct {
 
 	Sender            []byte              `codec:"snd,allocbound=maxAddressBytes"`
 	BitmaskSender     bitmask             `codec:"sndbm"`
-	Fee               []basics.MicroAlgos `codec:"fee,allocbound=maxEncodedTransactionGroup"`
+	Fee               []basics.MicroAlgos `codec:"fee,allocbound=maxEncodedTransactionGroups"`
 	BitmaskFee        bitmask             `codec:"feebm"`
-	FirstValid        []basics.Round      `codec:"fv,allocbound=maxEncodedTransactionGroup"`
+	FirstValid        []basics.Round      `codec:"fv,allocbound=maxEncodedTransactionGroups"`
 	BitmaskFirstValid bitmask             `codec:"fvbm"`
-	LastValid         []basics.Round      `codec:"lv,allocbound=maxEncodedTransactionGroup"`
+	LastValid         []basics.Round      `codec:"lv,allocbound=maxEncodedTransactionGroups"`
 	BitmaskLastValid  bitmask             `codec:"lvbm"`
-	Note              [][]byte            `codec:"note,allocbound=maxEncodedTransactionGroup,allocbound=config.MaxTxnNoteBytes"`
+	Note              [][]byte            `codec:"note,allocbound=maxEncodedTransactionGroups,allocbound=config.MaxTxnNoteBytes"`
 	BitmaskNote       bitmask             `codec:"notebm"`
 	BitmaskGenesisID  bitmask             `codec:"genbm"`
 
@@ -136,11 +136,11 @@ type encodedKeyregTxnFields struct {
 
 	VotePK                  []byte         `codec:"votekey,allocbound=maxAddressBytes"`
 	SelectionPK             []byte         `codec:"selkey,allocbound=maxAddressBytes"`
-	VoteFirst               []basics.Round `codec:"votefst,allocbound=maxEncodedTransactionGroup"`
+	VoteFirst               []basics.Round `codec:"votefst,allocbound=maxEncodedTransactionGroups"`
 	BitmaskVoteFirst        bitmask        `codec:"votefstbm"`
-	VoteLast                []basics.Round `codec:"votelst,allocbound=maxEncodedTransactionGroup"`
+	VoteLast                []basics.Round `codec:"votelst,allocbound=maxEncodedTransactionGroups"`
 	BitmaskVoteLast         bitmask        `codec:"votelstbm"`
-	VoteKeyDilution         []uint64       `codec:"votekd,allocbound=maxEncodedTransactionGroup"`
+	VoteKeyDilution         []uint64       `codec:"votekd,allocbound=maxEncodedTransactionGroups"`
 	BitmaskKeys             bitmask        `codec:"votekbm"`
 	BitmaskNonparticipation bitmask        `codec:"nonpartbm"`
 }
@@ -150,7 +150,7 @@ type encodedPaymentTxnFields struct {
 
 	Receiver        []byte              `codec:"rcv,allocbound=maxAddressBytes"`
 	BitmaskReceiver bitmask             `codec:"rcvbm"`
-	Amount          []basics.MicroAlgos `codec:"amt,allocbound=maxEncodedTransactionGroup"`
+	Amount          []basics.MicroAlgos `codec:"amt,allocbound=maxEncodedTransactionGroups"`
 	BitmaskAmount   bitmask             `codec:"amtbm"`
 
 	CloseRemainderTo        []byte  `codec:"close,allocbound=maxAddressBytes"`
@@ -160,7 +160,7 @@ type encodedPaymentTxnFields struct {
 type encodedAssetConfigTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
-	ConfigAsset        []basics.AssetIndex `codec:"caid,allocbound=maxEncodedTransactionGroup"`
+	ConfigAsset        []basics.AssetIndex `codec:"caid,allocbound=maxEncodedTransactionGroups"`
 	BitmaskConfigAsset bitmask             `codec:"caidbm"`
 
 	encodedAssetParams
@@ -169,21 +169,21 @@ type encodedAssetConfigTxnFields struct {
 type encodedAssetParams struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
-	Total        []uint64 `codec:"t,allocbound=maxEncodedTransactionGroup"`
+	Total        []uint64 `codec:"t,allocbound=maxEncodedTransactionGroups"`
 	BitmaskTotal bitmask  `codec:"tbm"`
 
-	Decimals        []uint32 `codec:"dc,allocbound=maxEncodedTransactionGroup"`
+	Decimals        []uint32 `codec:"dc,allocbound=maxEncodedTransactionGroups"`
 	BitmaskDecimals bitmask  `codec:"dcbm"`
 
 	BitmaskDefaultFrozen bitmask `codec:"dfbm"`
 
-	UnitName        []string `codec:"un,allocbound=maxEncodedTransactionGroup"`
+	UnitName        []string `codec:"un,allocbound=maxEncodedTransactionGroups"`
 	BitmaskUnitName bitmask  `codec:"unbm"`
 
-	AssetName        []string `codec:"an,allocbound=maxEncodedTransactionGroup"`
+	AssetName        []string `codec:"an,allocbound=maxEncodedTransactionGroups"`
 	BitmaskAssetName bitmask  `codec:"anbm"`
 
-	URL        []string `codec:"au,allocbound=maxEncodedTransactionGroup"`
+	URL        []string `codec:"au,allocbound=maxEncodedTransactionGroups"`
 	BitmaskURL bitmask  `codec:"aubm"`
 
 	MetadataHash        []byte  `codec:"am,allocbound=maxAddressBytes"`
@@ -205,10 +205,10 @@ type encodedAssetParams struct {
 type encodedAssetTransferTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
-	XferAsset        []basics.AssetIndex `codec:"xaid,allocbound=maxEncodedTransactionGroup"`
+	XferAsset        []basics.AssetIndex `codec:"xaid,allocbound=maxEncodedTransactionGroups"`
 	BitmaskXferAsset bitmask             `codec:"xaidbm"`
 
-	AssetAmount        []uint64 `codec:"aamt,allocbound=maxEncodedTransactionGroup"`
+	AssetAmount        []uint64 `codec:"aamt,allocbound=maxEncodedTransactionGroups"`
 	BitmaskAssetAmount bitmask  `codec:"aamtbm"`
 
 	AssetSender        []byte  `codec:"asnd,allocbound=maxAddressBytes"`
@@ -227,7 +227,7 @@ type encodedAssetFreezeTxnFields struct {
 	FreezeAccount        []byte  `codec:"fadd,allocbound=maxAddressBytes"`
 	BitmaskFreezeAccount bitmask `codec:"faddbm"`
 
-	FreezeAsset        []basics.AssetIndex `codec:"faid,allocbound=maxEncodedTransactionGroup"`
+	FreezeAsset        []basics.AssetIndex `codec:"faid,allocbound=maxEncodedTransactionGroups"`
 	BitmaskFreezeAsset bitmask             `codec:"faidbm"`
 
 	BitmaskAssetFrozen bitmask `codec:"afrzbm"`
@@ -251,51 +251,51 @@ type program []byte
 type encodedApplicationCallTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
-	ApplicationID        []basics.AppIndex `codec:"apid,allocbound=maxEncodedTransactionGroup"`
+	ApplicationID        []basics.AppIndex `codec:"apid,allocbound=maxEncodedTransactionGroups"`
 	BitmaskApplicationID bitmask           `codec:"apidbm"`
 
-	OnCompletion        []byte  `codec:"apan,allocbound=maxEncodedTransactionGroup"`
+	OnCompletion        []byte  `codec:"apan,allocbound=maxEncodedTransactionGroups"`
 	BitmaskOnCompletion bitmask `codec:"apanbm"`
 
-	ApplicationArgs        []applicationArgs `codec:"apaa,allocbound=maxEncodedTransactionGroup"`
+	ApplicationArgs        []applicationArgs `codec:"apaa,allocbound=maxEncodedTransactionGroups"`
 	BitmaskApplicationArgs bitmask           `codec:"apaabm"`
 
-	Accounts        []addresses `codec:"apat,allocbound=maxEncodedTransactionGroup"`
+	Accounts        []addresses `codec:"apat,allocbound=maxEncodedTransactionGroups"`
 	BitmaskAccounts bitmask     `codec:"apatbm"`
 
-	ForeignApps        []appIndices `codec:"apfa,allocbound=maxEncodedTransactionGroup"`
+	ForeignApps        []appIndices `codec:"apfa,allocbound=maxEncodedTransactionGroups"`
 	BitmaskForeignApps bitmask      `codec:"apfabm"`
 
-	ForeignAssets        []assetIndices `codec:"apas,allocbound=maxEncodedTransactionGroup"`
+	ForeignAssets        []assetIndices `codec:"apas,allocbound=maxEncodedTransactionGroups"`
 	BitmaskForeignAssets bitmask        `codec:"apasbm"`
 
-	LocalNumUint             []uint64 `codec:"lnui,allocbound=maxEncodedTransactionGroup"`
+	LocalNumUint             []uint64 `codec:"lnui,allocbound=maxEncodedTransactionGroups"`
 	BitmaskLocalNumUint      bitmask  `codec:"lnuibm"`
-	LocalNumByteSlice        []uint64 `codec:"lnbs,allocbound=maxEncodedTransactionGroup"`
+	LocalNumByteSlice        []uint64 `codec:"lnbs,allocbound=maxEncodedTransactionGroups"`
 	BitmaskLocalNumByteSlice bitmask  `codec:"lnbsbm"`
 
-	GlobalNumUint             []uint64 `codec:"gnui,allocbound=maxEncodedTransactionGroup"`
+	GlobalNumUint             []uint64 `codec:"gnui,allocbound=maxEncodedTransactionGroups"`
 	BitmaskGlobalNumUint      bitmask  `codec:"gnuibm"`
-	GlobalNumByteSlice        []uint64 `codec:"gnbs,allocbound=maxEncodedTransactionGroup"`
+	GlobalNumByteSlice        []uint64 `codec:"gnbs,allocbound=maxEncodedTransactionGroups"`
 	BitmaskGlobalNumByteSlice bitmask  `codec:"gnbsbm"`
 
-	ApprovalProgram        []program `codec:"apap,allocbound=maxEncodedTransactionGroup"`
+	ApprovalProgram        []program `codec:"apap,allocbound=maxEncodedTransactionGroups"`
 	BitmaskApprovalProgram bitmask   `codec:"apapbm"`
 
-	ClearStateProgram        []program `codec:"apsu,allocbound=maxEncodedTransactionGroup"`
+	ClearStateProgram        []program `codec:"apsu,allocbound=maxEncodedTransactionGroups"`
 	BitmaskClearStateProgram bitmask   `codec:"apsubm"`
 
-	ExtraProgramPages        []uint32 `codec:"apep,allocbound=maxEncodedTransactionGroup"`
+	ExtraProgramPages        []uint32 `codec:"apep,allocbound=maxEncodedTransactionGroups"`
 	BitmaskExtraProgramPages bitmask  `codec:"apepbm"`
 }
 
 type encodedCompactCertTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
-	CertRound        []basics.Round `codec:"certrnd,allocbound=maxEncodedTransactionGroup"`
+	CertRound        []basics.Round `codec:"certrnd,allocbound=maxEncodedTransactionGroups"`
 	BitmaskCertRound bitmask        `codec:"certrndbm"`
 
-	CertType        []protocol.CompactCertType `codec:"certtype,allocbound=maxEncodedTransactionGroup"`
+	CertType        []protocol.CompactCertType `codec:"certtype,allocbound=maxEncodedTransactionGroups"`
 	BitmaskCertType bitmask                    `codec:"certtypebm"`
 
 	encodedCert
@@ -317,16 +317,16 @@ type encodedCert struct {
 	SigCommit        []byte  `codec:"certc,allocbound=maxAddressBytes"`
 	BitmaskSigCommit bitmask `codec:"certcbm"`
 
-	SignedWeight        []uint64 `codec:"certw,allocbound=maxEncodedTransactionGroup"`
+	SignedWeight        []uint64 `codec:"certw,allocbound=maxEncodedTransactionGroups"`
 	BitmaskSignedWeight bitmask  `codec:"certwbm"`
 
-	SigProofs        []certProofs `codec:"certS,allocbound=maxEncodedTransactionGroup"`
+	SigProofs        []certProofs `codec:"certS,allocbound=maxEncodedTransactionGroups"`
 	BitmaskSigProofs bitmask      `codec:"certSbm"`
 
-	PartProofs        []certProofs `codec:"certP,allocbound=maxEncodedTransactionGroup"`
+	PartProofs        []certProofs `codec:"certP,allocbound=maxEncodedTransactionGroups"`
 	BitmaskPartProofs bitmask      `codec:"certPbm"`
 
-	Reveals        []revealMap `codec:"certr,allocbound=maxEncodedTransactionGroup"`
+	Reveals        []revealMap `codec:"certr,allocbound=maxEncodedTransactionGroups"`
 	BitmaskReveals bitmask     `codec:"certrbm"`
 }
 

@@ -8,6 +8,7 @@ import glob
 import gzip
 import logging
 import json
+import math
 import os
 import re
 import statistics
@@ -20,6 +21,21 @@ def num(x):
     if '.' in x:
         return float(x)
     return int(x)
+
+def hunum(x):
+    if x >= 10000000000:
+        return '{:.1f}G'.format(x / 1000000000.0)
+    if x >= 1000000000:
+        return '{:.2f}G'.format(x / 1000000000.0)
+    if x >= 10000000:
+        return '{:.1f}M'.format(x / 1000000.0)
+    if x >= 1000000:
+        return '{:.2f}M'.format(x / 1000000.0)
+    if x >= 10000:
+        return '{:.1f}k'.format(x / 1000.0)
+    if x >= 1000:
+        return '{:.2f}k'.format(x / 1000.0)
+    return '{:.2f}x'.format(x)
 
 metric_line_re = re.compile(r'(\S+\{[^}]*\})\s+(.*)')
 
@@ -118,7 +134,8 @@ def meanOrZero(seq):
     return statistics.mean(seq)
 
 class summary:
-    def __init__(self):
+    def __init__(self, label=None):
+        self.label = label or ""
         self.tpsMeanSum = 0
         self.txBpsMeanSum = 0
         self.rxBpsMeanSum = 0
@@ -179,12 +196,23 @@ class summary:
             mins.append(min(txp))
             maxs.append(max(txp))
             means.append(statistics.mean(txp))
-        return 'txnpool({} {} {} {} {})'.format(
+        if not means or not maxs or not mins:
+            return 'txnpool(no stats)'
+        return 'txnpool({:.0f} {:.0f} {:.0f} {:.0f} {:.0f})'.format(
             min(mins), min(means), statistics.mean(means), max(means), max(maxs)
         )
 
     def __str__(self):
-        return '{}\n{}\nsummary: {:0.2f} TPS, {:0.0f} tx B/s, {:0.0f} rx B/s'.format(self.byMsg(), self.txPool(), self.tpsMeanSum/self.sumsCount, self.txBpsMeanSum/self.sumsCount, self.rxBpsMeanSum/self.sumsCount)
+        if not self.sumsCount:
+            tps, txbps, rxbps = math.nan, math.nan, math.nan
+        else:
+            tps = self.tpsMeanSum/self.sumsCount
+            txbps = self.txBpsMeanSum/self.sumsCount
+            rxbps = self.rxBpsMeanSum/self.sumsCount
+        labelspace = ""
+        if self.label:
+            labelspace = self.label + " "
+        return '{byMsg}\n{labelspace}{txPool}\n{labelspace}summary: {TPS:0.2f} TPS, tx {txBps}B/s, rx {rxBps}B/s'.format(labelspace=labelspace, byMsg=self.byMsg(), txPool=self.txPool(), TPS=tps, txBps=hunum(txbps), rxBps=hunum(rxbps))
 
 def anynickre(nick_re, nicks):
     if not nick_re:
@@ -216,7 +244,14 @@ def gather_metrics_files_by_nick(metrics_files, metrics_dirs=None):
             continue
         nick = m.group(1)
         dapp(filesByNick, nick, path)
-    return filesByNick
+    return tf_inventory_path, filesByNick, nonick
+
+def process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args):
+    nretup = (nre,)
+    for rnick, paths in filesByNick.items():
+        nick = nick_to_tfname.get(rnick, rnick)
+        if anynickre(nretup, (rnick,nick)):
+            rsum(process_files(args, nick, paths), nick)
 
 def main():
     test_metric_line_re()
@@ -227,6 +262,7 @@ def main():
     ap.add_argument('--deltas', default=None, help='path to write csv deltas')
     ap.add_argument('--report', default=None, help='path to write csv report')
     ap.add_argument('--nick-re', action='append', default=[], help='regexp to filter node names, may be repeated')
+    ap.add_argument('--nick-lre', action='append', default=[], help='label:regexp to filter node names, may be repeated')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
 
@@ -240,7 +276,7 @@ def main():
     if args.dir:
         metrics_dirs.add(args.dir)
         metrics_files += glob.glob(os.path.join(args.dir, '*.metrics'))
-    filesByNick = gather_metrics_files_by_nick(metrics_files, metrics_dirs)
+    tf_inventory_path, filesByNick, nonick = gather_metrics_files_by_nick(metrics_files, metrics_dirs)
     if not tf_inventory_path:
         for md in metrics_dirs:
             tp = os.path.join(md, 'terraform-inventory.host')
@@ -270,21 +306,26 @@ def main():
             elif len(found) > 1:
                 logger.warning('ip %s (%s) found in nicks: %r', ip, name, found)
             else:
-                logger.warning('ip %s no nick')
+                logger.warning('ip %s (%s) no nick', ip, name)
         #logger.debug('nick_to_tfname %r', nick_to_tfname)
 
     if args.nick_re:
         # use each --nick-re=foo as a group
         for nre in args.nick_re:
             rsum = summary()
-            nretup = (nre,)
-            for rnick, paths in filesByNick.items():
-                nick = nick_to_tfname.get(rnick, rnick)
-                if anynickre(nretup, (rnick,nick)):
-                    rsum(process_files(args, nick, paths), nick)
+            process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args)
             print(rsum)
             print('\n')
         return 0
+    if args.nick_lre:
+        for lnre in args.nick_lre:
+            label, nre = lnre.split(':', maxsplit=1)
+            rsum = summary(label)
+            process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args)
+            print(rsum)
+            print('\n')
+        return 0
+
 
     # no filters, glob it all up
     rsum = summary()

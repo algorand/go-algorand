@@ -213,7 +213,7 @@ func (e *emulator) initNodes() {
 			group.LocallyOriginated = true
 			group.GroupCounter = uint64(len(node.txpoolEntries))
 			group.Transactions = []transactions.SignedTxn{
-				transactions.SignedTxn{
+				{
 					Txn: transactions.Transaction{
 						Type: protocol.PaymentTx,
 						Header: transactions.Header{

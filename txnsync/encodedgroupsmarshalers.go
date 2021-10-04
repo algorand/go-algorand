@@ -278,7 +278,7 @@ func (stub *txGroupsEncodingStub) deconstructTxnHeader(i int, txn *transactions.
 	if txn.Txn.Lease != ([32]byte{}) {
 		if len(stub.BitmaskLease) == 0 {
 			stub.BitmaskLease = make(bitmask, bitmaskLen)
-			stub.Lease = make([]byte, 0, int(stub.TotalTransactionsCount)*crypto.DigestSize)
+			stub.Lease = make([]byte, 0, int(stub.TotalTransactionsCount)*transactions.LeaseByteLength)
 		}
 		stub.BitmaskLease.setBit(i)
 		stub.Lease = append(stub.Lease, txn.Txn.Lease[:]...)
@@ -310,8 +310,8 @@ func (stub *txGroupsEncodingStub) deconstructKeyregTxnFields(i int, txn *transac
 	if !txn.Txn.VotePK.MsgIsZero() || !txn.Txn.SelectionPK.MsgIsZero() || txn.Txn.VoteKeyDilution != 0 {
 		if len(stub.BitmaskKeys) == 0 {
 			stub.BitmaskKeys = make(bitmask, bitmaskLen)
-			stub.VotePK = make([]byte, 0, stub.TotalTransactionsCount*crypto.DigestSize)
-			stub.SelectionPK = make([]byte, 0, stub.TotalTransactionsCount*crypto.DigestSize)
+			stub.VotePK = make([]byte, 0, stub.TotalTransactionsCount*crypto.PublicKeyByteLength)
+			stub.SelectionPK = make([]byte, 0, stub.TotalTransactionsCount*crypto.VrfPubkeyByteLength)
 			stub.VoteKeyDilution = make([]uint64, 0, stub.TotalTransactionsCount)
 		}
 		stub.BitmaskKeys.setBit(i)
