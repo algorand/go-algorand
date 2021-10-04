@@ -31,8 +31,9 @@ import (
 
 func TestKeysWithoutStateProofKeyCannotRegister(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	a := require.New(fixtures.SynchronizedTest(t))
+	defer fixtures.ShutdownSynchronizedTest(t)
 
+	a := require.New(fixtures.SynchronizedTest(t))
 	consensus := getStateProofConcensus()
 
 	var fixture fixtures.RestClientFixture
@@ -132,6 +133,8 @@ func waitForAccountToProposeBlock(a *require.Assertions, fixture *fixtures.RestC
 //  consensus upgrade.
 func TestParticipationWithoutStateProofKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensus := getStateProofConcensus()
