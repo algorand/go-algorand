@@ -27,7 +27,7 @@ import (
 // SignedTxGroup used as the in-memory representation of a signed transaction group.
 // unlike the plain array of signed transactions, this includes transaction origination and counter
 // used by the transaction pool and the transaction sync
-//msgp: ignore SignedTxGroup
+//msgp:ignore SignedTxGroup
 type SignedTxGroup struct {
 	// Transactions contains the signed transactions that are included in this transaction group.
 	Transactions SignedTxnSlice

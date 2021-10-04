@@ -46,8 +46,8 @@ type transactionSyncNodeConnector struct {
 	openStateCh    chan struct{}
 }
 
-func makeTransactionSyncNodeConnector(node *AlgorandFullNode) transactionSyncNodeConnector {
-	return transactionSyncNodeConnector{
+func makeTransactionSyncNodeConnector(node *AlgorandFullNode) *transactionSyncNodeConnector {
+	return &transactionSyncNodeConnector{
 		node:        node,
 		eventsCh:    make(chan txnsync.Event, 1),
 		clock:       timers.MakeMonotonicClock(time.Now()),
@@ -128,9 +128,9 @@ func (tsnc *transactionSyncNodeConnector) GetPeers() (peersInfo []txnsync.PeerIn
 	return peersInfo[:k]
 }
 
-func (tsnc *transactionSyncNodeConnector) UpdatePeers(txsyncPeers []*txnsync.Peer, netPeers []interface{}, averageDataExchangeRate uint64) {
+func (tsnc *transactionSyncNodeConnector) UpdatePeers(txnsyncPeers []*txnsync.Peer, netPeers []interface{}, averageDataExchangeRate uint64) {
 	for i, netPeer := range netPeers {
-		tsnc.node.net.SetPeerData(netPeer, txnsyncPeerDataKey, txsyncPeers[i])
+		tsnc.node.net.SetPeerData(netPeer, txnsyncPeerDataKey, txnsyncPeers[i])
 	}
 	// The average peers data exchange rate has been updated.
 	if averageDataExchangeRate > 0 {

@@ -25,8 +25,8 @@ func (z SignedTxnSlice) MarshalMsg(b []byte) (o []byte) {
 	} else {
 		o = msgp.AppendArrayHeader(o, uint32(len(z)))
 	}
-	for za0002 := range z {
-		o = z[za0002].MarshalMsg(o)
+	for za0001 := range z {
+		o = z[za0001].MarshalMsg(o)
 	}
 	return
 }
@@ -79,8 +79,8 @@ func (_ *SignedTxnSlice) CanUnmarshalMsg(z interface{}) bool {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z SignedTxnSlice) Msgsize() (s int) {
 	s = msgp.ArrayHeaderSize
-	for za0002 := range z {
-		s += z[za0002].Msgsize()
+	for za0001 := range z {
+		s += z[za0001].Msgsize()
 	}
 	return
 }

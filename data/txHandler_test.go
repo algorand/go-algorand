@@ -77,8 +77,6 @@ func makeTestingTransactionPoolAndLedger(tb testing.TB, N int) (*pools.Transacti
 }
 
 func BenchmarkTxHandlerProcessDecoded(b *testing.B) {
-	b.StopTimer()
-	b.ResetTimer()
 	const numUsers = 100
 	tp, l, secrets, addresses := makeTestingTransactionPoolAndLedger(b, b.N)
 	defer l.Close()
@@ -106,19 +104,17 @@ func BenchmarkTxHandlerProcessDecoded(b *testing.B) {
 	}
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	txHandler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
-	b.StartTimer()
+	b.ResetTimer()
 	for _, signedTxn := range signedTransactions {
 		txHandler.processDecoded([]transactions.SignedTxn{signedTxn})
 	}
 }
 
 func BenchmarkTimeAfter(b *testing.B) {
-	b.StopTimer()
-	b.ResetTimer()
 	deadline := time.Now().Add(5 * time.Second)
 	after := 0
 	before := 0
-	b.StartTimer()
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if time.Now().After(deadline) {
 			after++

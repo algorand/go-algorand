@@ -63,6 +63,7 @@ type syncState struct {
 	genesisID   string
 	genesisHash crypto.Digest
 
+	// lastBeta is the last beta value that was calculated for this node
 	lastBeta                   time.Duration
 	round                      basics.Round
 	fetchTransactions          bool

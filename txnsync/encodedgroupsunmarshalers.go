@@ -260,7 +260,7 @@ func (stub *txGroupsEncodingStub) reconstructTxnHeader(signedTxns []transactions
 		signedTxns[i].Txn.GenesisHash = genesisHash
 	}
 	err = stub.BitmaskLease.iterate(int(stub.TotalTransactionsCount), len(stub.Lease)/crypto.DigestSize, func(i int, index int) error {
-		return nextSlice(&stub.Lease, signedTxns[i].Txn.Lease[:], crypto.DigestSize)
+		return nextSlice(&stub.Lease, signedTxns[i].Txn.Lease[:], transactions.LeaseByteLength)
 	})
 	if err != nil {
 		return err

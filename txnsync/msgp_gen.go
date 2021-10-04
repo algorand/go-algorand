@@ -1072,8 +1072,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationID")
 				return
 			}
-			if zb0019 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0019), uint64(maxEncodedTransactionGroup))
+			if zb0019 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0019), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationID")
 				return
 			}
@@ -1122,8 +1122,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				err = msgp.WrapError(err, "struct-from-array", "OnCompletion")
 				return
 			}
-			if zb0023 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0023), uint64(maxEncodedTransactionGroup))
+			if zb0023 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0023), uint64(maxEncodedTransactionGroups))
 				return
 			}
 			(*z).OnCompletion, bts, err = msgp.ReadBytesBytes(bts, (*z).OnCompletion)
@@ -1163,8 +1163,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationArgs")
 				return
 			}
-			if zb0026 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0026), uint64(maxEncodedTransactionGroup))
+			if zb0026 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0026), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationArgs")
 				return
 			}
@@ -1235,8 +1235,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				err = msgp.WrapError(err, "struct-from-array", "Accounts")
 				return
 			}
-			if zb0032 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0032), uint64(maxEncodedTransactionGroup))
+			if zb0032 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0032), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Accounts")
 				return
 			}
@@ -1307,8 +1307,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				err = msgp.WrapError(err, "struct-from-array", "ForeignApps")
 				return
 			}
-			if zb0038 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0038), uint64(maxEncodedTransactionGroup))
+			if zb0038 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0038), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ForeignApps")
 				return
 			}
@@ -1379,8 +1379,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				err = msgp.WrapError(err, "struct-from-array", "ForeignAssets")
 				return
 			}
-			if zb0044 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0044), uint64(maxEncodedTransactionGroup))
+			if zb0044 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0044), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ForeignAssets")
 				return
 			}
@@ -1451,8 +1451,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				err = msgp.WrapError(err, "struct-from-array", "LocalNumUint")
 				return
 			}
-			if zb0050 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0050), uint64(maxEncodedTransactionGroup))
+			if zb0050 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0050), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "LocalNumUint")
 				return
 			}
@@ -1502,8 +1502,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				err = msgp.WrapError(err, "struct-from-array", "LocalNumByteSlice")
 				return
 			}
-			if zb0054 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0054), uint64(maxEncodedTransactionGroup))
+			if zb0054 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0054), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "LocalNumByteSlice")
 				return
 			}
@@ -1553,8 +1553,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				err = msgp.WrapError(err, "struct-from-array", "GlobalNumUint")
 				return
 			}
-			if zb0058 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0058), uint64(maxEncodedTransactionGroup))
+			if zb0058 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0058), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "GlobalNumUint")
 				return
 			}
@@ -1604,8 +1604,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				err = msgp.WrapError(err, "struct-from-array", "GlobalNumByteSlice")
 				return
 			}
-			if zb0062 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0062), uint64(maxEncodedTransactionGroup))
+			if zb0062 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0062), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "GlobalNumByteSlice")
 				return
 			}
@@ -1655,8 +1655,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram")
 				return
 			}
-			if zb0066 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0066), uint64(maxEncodedTransactionGroup))
+			if zb0066 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0066), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram")
 				return
 			}
@@ -1720,8 +1720,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
 				return
 			}
-			if zb0072 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0072), uint64(maxEncodedTransactionGroup))
+			if zb0072 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0072), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
 				return
 			}
@@ -1785,8 +1785,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				err = msgp.WrapError(err, "struct-from-array", "ExtraProgramPages")
 				return
 			}
-			if zb0078 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0078), uint64(maxEncodedTransactionGroup))
+			if zb0078 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0078), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ExtraProgramPages")
 				return
 			}
@@ -1858,8 +1858,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 					err = msgp.WrapError(err, "ApplicationID")
 					return
 				}
-				if zb0082 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0082), uint64(maxEncodedTransactionGroup))
+				if zb0082 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0082), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ApplicationID")
 					return
 				}
@@ -1904,8 +1904,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 					err = msgp.WrapError(err, "OnCompletion")
 					return
 				}
-				if zb0086 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0086), uint64(maxEncodedTransactionGroup))
+				if zb0086 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0086), uint64(maxEncodedTransactionGroups))
 					return
 				}
 				(*z).OnCompletion, bts, err = msgp.ReadBytesBytes(bts, (*z).OnCompletion)
@@ -1941,8 +1941,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 					err = msgp.WrapError(err, "ApplicationArgs")
 					return
 				}
-				if zb0089 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0089), uint64(maxEncodedTransactionGroup))
+				if zb0089 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0089), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ApplicationArgs")
 					return
 				}
@@ -2009,8 +2009,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 					err = msgp.WrapError(err, "Accounts")
 					return
 				}
-				if zb0095 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0095), uint64(maxEncodedTransactionGroup))
+				if zb0095 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0095), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Accounts")
 					return
 				}
@@ -2077,8 +2077,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 					err = msgp.WrapError(err, "ForeignApps")
 					return
 				}
-				if zb0101 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0101), uint64(maxEncodedTransactionGroup))
+				if zb0101 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0101), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ForeignApps")
 					return
 				}
@@ -2145,8 +2145,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 					err = msgp.WrapError(err, "ForeignAssets")
 					return
 				}
-				if zb0107 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0107), uint64(maxEncodedTransactionGroup))
+				if zb0107 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0107), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ForeignAssets")
 					return
 				}
@@ -2213,8 +2213,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 					err = msgp.WrapError(err, "LocalNumUint")
 					return
 				}
-				if zb0113 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0113), uint64(maxEncodedTransactionGroup))
+				if zb0113 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0113), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "LocalNumUint")
 					return
 				}
@@ -2260,8 +2260,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 					err = msgp.WrapError(err, "LocalNumByteSlice")
 					return
 				}
-				if zb0117 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0117), uint64(maxEncodedTransactionGroup))
+				if zb0117 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0117), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "LocalNumByteSlice")
 					return
 				}
@@ -2307,8 +2307,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 					err = msgp.WrapError(err, "GlobalNumUint")
 					return
 				}
-				if zb0121 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0121), uint64(maxEncodedTransactionGroup))
+				if zb0121 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0121), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "GlobalNumUint")
 					return
 				}
@@ -2354,8 +2354,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 					err = msgp.WrapError(err, "GlobalNumByteSlice")
 					return
 				}
-				if zb0125 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0125), uint64(maxEncodedTransactionGroup))
+				if zb0125 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0125), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "GlobalNumByteSlice")
 					return
 				}
@@ -2401,8 +2401,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 					err = msgp.WrapError(err, "ApprovalProgram")
 					return
 				}
-				if zb0129 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0129), uint64(maxEncodedTransactionGroup))
+				if zb0129 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0129), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ApprovalProgram")
 					return
 				}
@@ -2462,8 +2462,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 					err = msgp.WrapError(err, "ClearStateProgram")
 					return
 				}
-				if zb0135 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0135), uint64(maxEncodedTransactionGroup))
+				if zb0135 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0135), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ClearStateProgram")
 					return
 				}
@@ -2523,8 +2523,8 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 					err = msgp.WrapError(err, "ExtraProgramPages")
 					return
 				}
-				if zb0141 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0141), uint64(maxEncodedTransactionGroup))
+				if zb0141 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0141), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ExtraProgramPages")
 					return
 				}
@@ -2920,8 +2920,8 @@ func (z *encodedAssetConfigTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 				err = msgp.WrapError(err, "struct-from-array", "ConfigAsset")
 				return
 			}
-			if zb0009 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0009), uint64(maxEncodedTransactionGroup))
+			if zb0009 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0009), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ConfigAsset")
 				return
 			}
@@ -2971,8 +2971,8 @@ func (z *encodedAssetConfigTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 				err = msgp.WrapError(err, "struct-from-array", "Total")
 				return
 			}
-			if zb0013 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0013), uint64(maxEncodedTransactionGroup))
+			if zb0013 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0013), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Total")
 				return
 			}
@@ -3022,8 +3022,8 @@ func (z *encodedAssetConfigTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 				err = msgp.WrapError(err, "struct-from-array", "Decimals")
 				return
 			}
-			if zb0017 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0017), uint64(maxEncodedTransactionGroup))
+			if zb0017 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0017), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Decimals")
 				return
 			}
@@ -3095,8 +3095,8 @@ func (z *encodedAssetConfigTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 				err = msgp.WrapError(err, "struct-from-array", "UnitName")
 				return
 			}
-			if zb0023 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0023), uint64(maxEncodedTransactionGroup))
+			if zb0023 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0023), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "UnitName")
 				return
 			}
@@ -3146,8 +3146,8 @@ func (z *encodedAssetConfigTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 				err = msgp.WrapError(err, "struct-from-array", "AssetName")
 				return
 			}
-			if zb0027 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0027), uint64(maxEncodedTransactionGroup))
+			if zb0027 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0027), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "AssetName")
 				return
 			}
@@ -3197,8 +3197,8 @@ func (z *encodedAssetConfigTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 				err = msgp.WrapError(err, "struct-from-array", "URL")
 				return
 			}
-			if zb0031 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0031), uint64(maxEncodedTransactionGroup))
+			if zb0031 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0031), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "URL")
 				return
 			}
@@ -3470,8 +3470,8 @@ func (z *encodedAssetConfigTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 					err = msgp.WrapError(err, "ConfigAsset")
 					return
 				}
-				if zb0050 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0050), uint64(maxEncodedTransactionGroup))
+				if zb0050 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0050), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ConfigAsset")
 					return
 				}
@@ -3517,8 +3517,8 @@ func (z *encodedAssetConfigTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 					err = msgp.WrapError(err, "Total")
 					return
 				}
-				if zb0054 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0054), uint64(maxEncodedTransactionGroup))
+				if zb0054 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0054), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Total")
 					return
 				}
@@ -3564,8 +3564,8 @@ func (z *encodedAssetConfigTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 					err = msgp.WrapError(err, "Decimals")
 					return
 				}
-				if zb0058 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0058), uint64(maxEncodedTransactionGroup))
+				if zb0058 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0058), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Decimals")
 					return
 				}
@@ -3631,8 +3631,8 @@ func (z *encodedAssetConfigTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 					err = msgp.WrapError(err, "UnitName")
 					return
 				}
-				if zb0064 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0064), uint64(maxEncodedTransactionGroup))
+				if zb0064 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0064), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "UnitName")
 					return
 				}
@@ -3678,8 +3678,8 @@ func (z *encodedAssetConfigTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 					err = msgp.WrapError(err, "AssetName")
 					return
 				}
-				if zb0068 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0068), uint64(maxEncodedTransactionGroup))
+				if zb0068 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0068), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "AssetName")
 					return
 				}
@@ -3725,8 +3725,8 @@ func (z *encodedAssetConfigTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 					err = msgp.WrapError(err, "URL")
 					return
 				}
-				if zb0072 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0072), uint64(maxEncodedTransactionGroup))
+				if zb0072 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0072), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "URL")
 					return
 				}
@@ -4121,8 +4121,8 @@ func (z *encodedAssetFreezeTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 				err = msgp.WrapError(err, "struct-from-array", "FreezeAsset")
 				return
 			}
-			if zb0007 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0007), uint64(maxEncodedTransactionGroup))
+			if zb0007 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0007), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "FreezeAsset")
 				return
 			}
@@ -4252,8 +4252,8 @@ func (z *encodedAssetFreezeTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 					err = msgp.WrapError(err, "FreezeAsset")
 					return
 				}
-				if zb0016 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0016), uint64(maxEncodedTransactionGroup))
+				if zb0016 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0016), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "FreezeAsset")
 					return
 				}
@@ -4608,8 +4608,8 @@ func (z *encodedAssetParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Total")
 				return
 			}
-			if zb0008 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0008), uint64(maxEncodedTransactionGroup))
+			if zb0008 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0008), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Total")
 				return
 			}
@@ -4659,8 +4659,8 @@ func (z *encodedAssetParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Decimals")
 				return
 			}
-			if zb0012 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0012), uint64(maxEncodedTransactionGroup))
+			if zb0012 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0012), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Decimals")
 				return
 			}
@@ -4732,8 +4732,8 @@ func (z *encodedAssetParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "UnitName")
 				return
 			}
-			if zb0018 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0018), uint64(maxEncodedTransactionGroup))
+			if zb0018 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0018), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "UnitName")
 				return
 			}
@@ -4783,8 +4783,8 @@ func (z *encodedAssetParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "AssetName")
 				return
 			}
-			if zb0022 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0022), uint64(maxEncodedTransactionGroup))
+			if zb0022 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0022), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "AssetName")
 				return
 			}
@@ -4834,8 +4834,8 @@ func (z *encodedAssetParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "URL")
 				return
 			}
-			if zb0026 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0026), uint64(maxEncodedTransactionGroup))
+			if zb0026 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0026), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "URL")
 				return
 			}
@@ -5107,8 +5107,8 @@ func (z *encodedAssetParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Total")
 					return
 				}
-				if zb0045 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0045), uint64(maxEncodedTransactionGroup))
+				if zb0045 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0045), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Total")
 					return
 				}
@@ -5154,8 +5154,8 @@ func (z *encodedAssetParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Decimals")
 					return
 				}
-				if zb0049 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0049), uint64(maxEncodedTransactionGroup))
+				if zb0049 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0049), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Decimals")
 					return
 				}
@@ -5221,8 +5221,8 @@ func (z *encodedAssetParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "UnitName")
 					return
 				}
-				if zb0055 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0055), uint64(maxEncodedTransactionGroup))
+				if zb0055 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0055), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "UnitName")
 					return
 				}
@@ -5268,8 +5268,8 @@ func (z *encodedAssetParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "AssetName")
 					return
 				}
-				if zb0059 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0059), uint64(maxEncodedTransactionGroup))
+				if zb0059 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0059), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "AssetName")
 					return
 				}
@@ -5315,8 +5315,8 @@ func (z *encodedAssetParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "URL")
 					return
 				}
-				if zb0063 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0063), uint64(maxEncodedTransactionGroup))
+				if zb0063 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0063), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "URL")
 					return
 				}
@@ -5719,8 +5719,8 @@ func (z *encodedAssetTransferTxnFields) UnmarshalMsg(bts []byte) (o []byte, err 
 				err = msgp.WrapError(err, "struct-from-array", "XferAsset")
 				return
 			}
-			if zb0005 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0005), uint64(maxEncodedTransactionGroup))
+			if zb0005 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0005), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "XferAsset")
 				return
 			}
@@ -5770,8 +5770,8 @@ func (z *encodedAssetTransferTxnFields) UnmarshalMsg(bts []byte) (o []byte, err 
 				err = msgp.WrapError(err, "struct-from-array", "AssetAmount")
 				return
 			}
-			if zb0009 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0009), uint64(maxEncodedTransactionGroup))
+			if zb0009 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0009), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "AssetAmount")
 				return
 			}
@@ -5963,8 +5963,8 @@ func (z *encodedAssetTransferTxnFields) UnmarshalMsg(bts []byte) (o []byte, err 
 					err = msgp.WrapError(err, "XferAsset")
 					return
 				}
-				if zb0022 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0022), uint64(maxEncodedTransactionGroup))
+				if zb0022 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0022), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "XferAsset")
 					return
 				}
@@ -6010,8 +6010,8 @@ func (z *encodedAssetTransferTxnFields) UnmarshalMsg(bts []byte) (o []byte, err 
 					err = msgp.WrapError(err, "AssetAmount")
 					return
 				}
-				if zb0026 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0026), uint64(maxEncodedTransactionGroup))
+				if zb0026 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0026), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "AssetAmount")
 					return
 				}
@@ -6762,8 +6762,8 @@ func (z *encodedCert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "SignedWeight")
 				return
 			}
-			if zb0014 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0014), uint64(maxEncodedTransactionGroup))
+			if zb0014 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0014), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "SignedWeight")
 				return
 			}
@@ -6813,8 +6813,8 @@ func (z *encodedCert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "SigProofs")
 				return
 			}
-			if zb0018 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0018), uint64(maxEncodedTransactionGroup))
+			if zb0018 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0018), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "SigProofs")
 				return
 			}
@@ -6885,8 +6885,8 @@ func (z *encodedCert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "PartProofs")
 				return
 			}
-			if zb0024 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0024), uint64(maxEncodedTransactionGroup))
+			if zb0024 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0024), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "PartProofs")
 				return
 			}
@@ -6957,8 +6957,8 @@ func (z *encodedCert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Reveals")
 				return
 			}
-			if zb0030 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0030), uint64(maxEncodedTransactionGroup))
+			if zb0030 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0030), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Reveals")
 				return
 			}
@@ -7094,8 +7094,8 @@ func (z *encodedCert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "SignedWeight")
 					return
 				}
-				if zb0039 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0039), uint64(maxEncodedTransactionGroup))
+				if zb0039 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0039), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "SignedWeight")
 					return
 				}
@@ -7141,8 +7141,8 @@ func (z *encodedCert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "SigProofs")
 					return
 				}
-				if zb0043 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0043), uint64(maxEncodedTransactionGroup))
+				if zb0043 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0043), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "SigProofs")
 					return
 				}
@@ -7209,8 +7209,8 @@ func (z *encodedCert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "PartProofs")
 					return
 				}
-				if zb0049 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0049), uint64(maxEncodedTransactionGroup))
+				if zb0049 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0049), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "PartProofs")
 					return
 				}
@@ -7277,8 +7277,8 @@ func (z *encodedCert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Reveals")
 					return
 				}
-				if zb0055 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0055), uint64(maxEncodedTransactionGroup))
+				if zb0055 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0055), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Reveals")
 					return
 				}
@@ -7635,8 +7635,8 @@ func (z *encodedCompactCertTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 				err = msgp.WrapError(err, "struct-from-array", "CertRound")
 				return
 			}
-			if zb0013 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0013), uint64(maxEncodedTransactionGroup))
+			if zb0013 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0013), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "CertRound")
 				return
 			}
@@ -7686,8 +7686,8 @@ func (z *encodedCompactCertTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 				err = msgp.WrapError(err, "struct-from-array", "CertType")
 				return
 			}
-			if zb0017 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0017), uint64(maxEncodedTransactionGroup))
+			if zb0017 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0017), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "CertType")
 				return
 			}
@@ -7777,8 +7777,8 @@ func (z *encodedCompactCertTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 				err = msgp.WrapError(err, "struct-from-array", "SignedWeight")
 				return
 			}
-			if zb0024 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0024), uint64(maxEncodedTransactionGroup))
+			if zb0024 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0024), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "SignedWeight")
 				return
 			}
@@ -7828,8 +7828,8 @@ func (z *encodedCompactCertTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 				err = msgp.WrapError(err, "struct-from-array", "SigProofs")
 				return
 			}
-			if zb0028 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0028), uint64(maxEncodedTransactionGroup))
+			if zb0028 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0028), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "SigProofs")
 				return
 			}
@@ -7900,8 +7900,8 @@ func (z *encodedCompactCertTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 				err = msgp.WrapError(err, "struct-from-array", "PartProofs")
 				return
 			}
-			if zb0034 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0034), uint64(maxEncodedTransactionGroup))
+			if zb0034 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0034), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "PartProofs")
 				return
 			}
@@ -7972,8 +7972,8 @@ func (z *encodedCompactCertTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 				err = msgp.WrapError(err, "struct-from-array", "Reveals")
 				return
 			}
-			if zb0040 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0040), uint64(maxEncodedTransactionGroup))
+			if zb0040 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0040), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Reveals")
 				return
 			}
@@ -8073,8 +8073,8 @@ func (z *encodedCompactCertTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 					err = msgp.WrapError(err, "CertRound")
 					return
 				}
-				if zb0046 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0046), uint64(maxEncodedTransactionGroup))
+				if zb0046 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0046), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "CertRound")
 					return
 				}
@@ -8120,8 +8120,8 @@ func (z *encodedCompactCertTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 					err = msgp.WrapError(err, "CertType")
 					return
 				}
-				if zb0050 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0050), uint64(maxEncodedTransactionGroup))
+				if zb0050 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0050), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "CertType")
 					return
 				}
@@ -8203,8 +8203,8 @@ func (z *encodedCompactCertTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 					err = msgp.WrapError(err, "SignedWeight")
 					return
 				}
-				if zb0057 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0057), uint64(maxEncodedTransactionGroup))
+				if zb0057 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0057), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "SignedWeight")
 					return
 				}
@@ -8250,8 +8250,8 @@ func (z *encodedCompactCertTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 					err = msgp.WrapError(err, "SigProofs")
 					return
 				}
-				if zb0061 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0061), uint64(maxEncodedTransactionGroup))
+				if zb0061 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0061), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "SigProofs")
 					return
 				}
@@ -8318,8 +8318,8 @@ func (z *encodedCompactCertTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 					err = msgp.WrapError(err, "PartProofs")
 					return
 				}
-				if zb0067 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0067), uint64(maxEncodedTransactionGroup))
+				if zb0067 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0067), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "PartProofs")
 					return
 				}
@@ -8386,8 +8386,8 @@ func (z *encodedCompactCertTxnFields) UnmarshalMsg(bts []byte) (o []byte, err er
 					err = msgp.WrapError(err, "Reveals")
 					return
 				}
-				if zb0073 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0073), uint64(maxEncodedTransactionGroup))
+				if zb0073 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0073), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Reveals")
 					return
 				}
@@ -8693,8 +8693,8 @@ func (z *encodedKeyregTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) 
 				err = msgp.WrapError(err, "struct-from-array", "VoteFirst")
 				return
 			}
-			if zb0008 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0008), uint64(maxEncodedTransactionGroup))
+			if zb0008 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0008), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "VoteFirst")
 				return
 			}
@@ -8744,8 +8744,8 @@ func (z *encodedKeyregTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) 
 				err = msgp.WrapError(err, "struct-from-array", "VoteLast")
 				return
 			}
-			if zb0012 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0012), uint64(maxEncodedTransactionGroup))
+			if zb0012 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0012), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "VoteLast")
 				return
 			}
@@ -8795,8 +8795,8 @@ func (z *encodedKeyregTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) 
 				err = msgp.WrapError(err, "struct-from-array", "VoteKeyDilution")
 				return
 			}
-			if zb0016 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0016), uint64(maxEncodedTransactionGroup))
+			if zb0016 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0016), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "VoteKeyDilution")
 				return
 			}
@@ -8922,8 +8922,8 @@ func (z *encodedKeyregTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) 
 					err = msgp.WrapError(err, "VoteFirst")
 					return
 				}
-				if zb0024 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0024), uint64(maxEncodedTransactionGroup))
+				if zb0024 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0024), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "VoteFirst")
 					return
 				}
@@ -8969,8 +8969,8 @@ func (z *encodedKeyregTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) 
 					err = msgp.WrapError(err, "VoteLast")
 					return
 				}
-				if zb0028 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0028), uint64(maxEncodedTransactionGroup))
+				if zb0028 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0028), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "VoteLast")
 					return
 				}
@@ -9016,8 +9016,8 @@ func (z *encodedKeyregTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) 
 					err = msgp.WrapError(err, "VoteKeyDilution")
 					return
 				}
-				if zb0032 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0032), uint64(maxEncodedTransactionGroup))
+				if zb0032 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0032), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "VoteKeyDilution")
 					return
 				}
@@ -9209,8 +9209,8 @@ func (z *encodedLsigs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Logic")
 				return
 			}
-			if zb0006 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0006), uint64(maxEncodedTransactionGroup))
+			if zb0006 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0006), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Logic")
 				return
 			}
@@ -9270,8 +9270,8 @@ func (z *encodedLsigs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "LogicArgs")
 				return
 			}
-			if zb0011 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0011), uint64(maxEncodedTransactionGroup))
+			if zb0011 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0011), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "LogicArgs")
 				return
 			}
@@ -9374,8 +9374,8 @@ func (z *encodedLsigs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Logic")
 					return
 				}
-				if zb0018 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0018), uint64(maxEncodedTransactionGroup))
+				if zb0018 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0018), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Logic")
 					return
 				}
@@ -9431,8 +9431,8 @@ func (z *encodedLsigs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "LogicArgs")
 					return
 				}
-				if zb0023 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0023), uint64(maxEncodedTransactionGroup))
+				if zb0023 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0023), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "LogicArgs")
 					return
 				}
@@ -9648,8 +9648,8 @@ func (z *encodedMsigs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Version")
 				return
 			}
-			if zb0005 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0005), uint64(maxEncodedTransactionGroup))
+			if zb0005 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0005), uint64(maxEncodedTransactionGroups))
 				return
 			}
 			(*z).Version, bts, err = msgp.ReadBytesBytes(bts, (*z).Version)
@@ -9688,8 +9688,8 @@ func (z *encodedMsigs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Threshold")
 				return
 			}
-			if zb0008 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0008), uint64(maxEncodedTransactionGroup))
+			if zb0008 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0008), uint64(maxEncodedTransactionGroups))
 				return
 			}
 			(*z).Threshold, bts, err = msgp.ReadBytesBytes(bts, (*z).Threshold)
@@ -9729,8 +9729,8 @@ func (z *encodedMsigs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Subsigs")
 				return
 			}
-			if zb0011 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0011), uint64(maxEncodedTransactionGroup))
+			if zb0011 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0011), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Subsigs")
 				return
 			}
@@ -9822,8 +9822,8 @@ func (z *encodedMsigs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Version")
 					return
 				}
-				if zb0017 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0017), uint64(maxEncodedTransactionGroup))
+				if zb0017 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0017), uint64(maxEncodedTransactionGroups))
 					return
 				}
 				(*z).Version, bts, err = msgp.ReadBytesBytes(bts, (*z).Version)
@@ -9858,8 +9858,8 @@ func (z *encodedMsigs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Threshold")
 					return
 				}
-				if zb0020 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0020), uint64(maxEncodedTransactionGroup))
+				if zb0020 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0020), uint64(maxEncodedTransactionGroups))
 					return
 				}
 				(*z).Threshold, bts, err = msgp.ReadBytesBytes(bts, (*z).Threshold)
@@ -9895,8 +9895,8 @@ func (z *encodedMsigs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Subsigs")
 					return
 				}
-				if zb0023 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0023), uint64(maxEncodedTransactionGroup))
+				if zb0023 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0023), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Subsigs")
 					return
 				}
@@ -10132,8 +10132,8 @@ func (z *encodedPaymentTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error)
 				err = msgp.WrapError(err, "struct-from-array", "Amount")
 				return
 			}
-			if zb0007 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0007), uint64(maxEncodedTransactionGroup))
+			if zb0007 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0007), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Amount")
 				return
 			}
@@ -10281,8 +10281,8 @@ func (z *encodedPaymentTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error)
 					err = msgp.WrapError(err, "Amount")
 					return
 				}
-				if zb0017 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0017), uint64(maxEncodedTransactionGroup))
+				if zb0017 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0017), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Amount")
 					return
 				}
@@ -11939,8 +11939,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Version")
 				return
 			}
-			if zb0054 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0054), uint64(maxEncodedTransactionGroup))
+			if zb0054 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0054), uint64(maxEncodedTransactionGroups))
 				return
 			}
 			(*z).encodedMsigs.Version, bts, err = msgp.ReadBytesBytes(bts, (*z).encodedMsigs.Version)
@@ -11979,8 +11979,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Threshold")
 				return
 			}
-			if zb0057 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0057), uint64(maxEncodedTransactionGroup))
+			if zb0057 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0057), uint64(maxEncodedTransactionGroups))
 				return
 			}
 			(*z).encodedMsigs.Threshold, bts, err = msgp.ReadBytesBytes(bts, (*z).encodedMsigs.Threshold)
@@ -12020,8 +12020,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Subsigs")
 				return
 			}
-			if zb0060 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0060), uint64(maxEncodedTransactionGroup))
+			if zb0060 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0060), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Subsigs")
 				return
 			}
@@ -12092,8 +12092,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Logic")
 				return
 			}
-			if zb0066 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0066), uint64(maxEncodedTransactionGroup))
+			if zb0066 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0066), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Logic")
 				return
 			}
@@ -12153,8 +12153,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "LogicArgs")
 				return
 			}
-			if zb0071 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0071), uint64(maxEncodedTransactionGroup))
+			if zb0071 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0071), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "LogicArgs")
 				return
 			}
@@ -12274,8 +12274,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "TxType")
 				return
 			}
-			if zb0081 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0081), uint64(maxEncodedTransactionGroup))
+			if zb0081 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0081), uint64(maxEncodedTransactionGroups))
 				return
 			}
 			(*z).encodedTxns.TxType, bts, err = msgp.ReadBytesBytes(bts, (*z).encodedTxns.TxType)
@@ -12363,8 +12363,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Fee")
 				return
 			}
-			if zb0087 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0087), uint64(maxEncodedTransactionGroup))
+			if zb0087 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0087), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Fee")
 				return
 			}
@@ -12414,8 +12414,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
 				return
 			}
-			if zb0091 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0091), uint64(maxEncodedTransactionGroup))
+			if zb0091 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0091), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
 				return
 			}
@@ -12465,8 +12465,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "LastValid")
 				return
 			}
-			if zb0095 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0095), uint64(maxEncodedTransactionGroup))
+			if zb0095 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0095), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "LastValid")
 				return
 			}
@@ -12516,8 +12516,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Note")
 				return
 			}
-			if zb0099 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0099), uint64(maxEncodedTransactionGroup))
+			if zb0099 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0099), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Note")
 				return
 			}
@@ -12737,8 +12737,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "VoteFirst")
 				return
 			}
-			if zb0116 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0116), uint64(maxEncodedTransactionGroup))
+			if zb0116 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0116), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "VoteFirst")
 				return
 			}
@@ -12788,8 +12788,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "VoteLast")
 				return
 			}
-			if zb0120 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0120), uint64(maxEncodedTransactionGroup))
+			if zb0120 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0120), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "VoteLast")
 				return
 			}
@@ -12839,8 +12839,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "VoteKeyDilution")
 				return
 			}
-			if zb0124 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0124), uint64(maxEncodedTransactionGroup))
+			if zb0124 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0124), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "VoteKeyDilution")
 				return
 			}
@@ -12952,8 +12952,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Amount")
 				return
 			}
-			if zb0133 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0133), uint64(maxEncodedTransactionGroup))
+			if zb0133 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0133), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Amount")
 				return
 			}
@@ -13043,8 +13043,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ConfigAsset")
 				return
 			}
-			if zb0140 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0140), uint64(maxEncodedTransactionGroup))
+			if zb0140 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0140), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ConfigAsset")
 				return
 			}
@@ -13094,8 +13094,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Total")
 				return
 			}
-			if zb0144 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0144), uint64(maxEncodedTransactionGroup))
+			if zb0144 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0144), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Total")
 				return
 			}
@@ -13145,8 +13145,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Decimals")
 				return
 			}
-			if zb0148 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0148), uint64(maxEncodedTransactionGroup))
+			if zb0148 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0148), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Decimals")
 				return
 			}
@@ -13218,8 +13218,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "UnitName")
 				return
 			}
-			if zb0154 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0154), uint64(maxEncodedTransactionGroup))
+			if zb0154 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0154), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "UnitName")
 				return
 			}
@@ -13269,8 +13269,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "AssetName")
 				return
 			}
-			if zb0158 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0158), uint64(maxEncodedTransactionGroup))
+			if zb0158 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0158), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "AssetName")
 				return
 			}
@@ -13320,8 +13320,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "URL")
 				return
 			}
-			if zb0162 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0162), uint64(maxEncodedTransactionGroup))
+			if zb0162 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0162), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "URL")
 				return
 			}
@@ -13571,8 +13571,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "XferAsset")
 				return
 			}
-			if zb0181 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0181), uint64(maxEncodedTransactionGroup))
+			if zb0181 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0181), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "XferAsset")
 				return
 			}
@@ -13622,8 +13622,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "AssetAmount")
 				return
 			}
-			if zb0185 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0185), uint64(maxEncodedTransactionGroup))
+			if zb0185 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0185), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "AssetAmount")
 				return
 			}
@@ -13833,8 +13833,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "FreezeAsset")
 				return
 			}
-			if zb0201 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0201), uint64(maxEncodedTransactionGroup))
+			if zb0201 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0201), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "FreezeAsset")
 				return
 			}
@@ -13906,8 +13906,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationID")
 				return
 			}
-			if zb0207 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0207), uint64(maxEncodedTransactionGroup))
+			if zb0207 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0207), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationID")
 				return
 			}
@@ -13956,8 +13956,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "OnCompletion")
 				return
 			}
-			if zb0211 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0211), uint64(maxEncodedTransactionGroup))
+			if zb0211 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0211), uint64(maxEncodedTransactionGroups))
 				return
 			}
 			(*z).encodedTxns.encodedApplicationCallTxnFields.OnCompletion, bts, err = msgp.ReadBytesBytes(bts, (*z).encodedTxns.encodedApplicationCallTxnFields.OnCompletion)
@@ -13997,8 +13997,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationArgs")
 				return
 			}
-			if zb0214 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0214), uint64(maxEncodedTransactionGroup))
+			if zb0214 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0214), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationArgs")
 				return
 			}
@@ -14069,8 +14069,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Accounts")
 				return
 			}
-			if zb0220 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0220), uint64(maxEncodedTransactionGroup))
+			if zb0220 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0220), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Accounts")
 				return
 			}
@@ -14141,8 +14141,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ForeignApps")
 				return
 			}
-			if zb0226 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0226), uint64(maxEncodedTransactionGroup))
+			if zb0226 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0226), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ForeignApps")
 				return
 			}
@@ -14213,8 +14213,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ForeignAssets")
 				return
 			}
-			if zb0232 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0232), uint64(maxEncodedTransactionGroup))
+			if zb0232 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0232), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ForeignAssets")
 				return
 			}
@@ -14285,8 +14285,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "LocalNumUint")
 				return
 			}
-			if zb0238 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0238), uint64(maxEncodedTransactionGroup))
+			if zb0238 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0238), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "LocalNumUint")
 				return
 			}
@@ -14336,8 +14336,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "LocalNumByteSlice")
 				return
 			}
-			if zb0242 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0242), uint64(maxEncodedTransactionGroup))
+			if zb0242 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0242), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "LocalNumByteSlice")
 				return
 			}
@@ -14387,8 +14387,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "GlobalNumUint")
 				return
 			}
-			if zb0246 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0246), uint64(maxEncodedTransactionGroup))
+			if zb0246 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0246), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "GlobalNumUint")
 				return
 			}
@@ -14438,8 +14438,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "GlobalNumByteSlice")
 				return
 			}
-			if zb0250 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0250), uint64(maxEncodedTransactionGroup))
+			if zb0250 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0250), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "GlobalNumByteSlice")
 				return
 			}
@@ -14489,8 +14489,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram")
 				return
 			}
-			if zb0254 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0254), uint64(maxEncodedTransactionGroup))
+			if zb0254 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0254), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram")
 				return
 			}
@@ -14554,8 +14554,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
 				return
 			}
-			if zb0260 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0260), uint64(maxEncodedTransactionGroup))
+			if zb0260 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0260), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
 				return
 			}
@@ -14619,8 +14619,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ExtraProgramPages")
 				return
 			}
-			if zb0266 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0266), uint64(maxEncodedTransactionGroup))
+			if zb0266 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0266), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ExtraProgramPages")
 				return
 			}
@@ -14670,8 +14670,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "CertRound")
 				return
 			}
-			if zb0270 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0270), uint64(maxEncodedTransactionGroup))
+			if zb0270 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0270), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "CertRound")
 				return
 			}
@@ -14721,8 +14721,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "CertType")
 				return
 			}
-			if zb0274 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0274), uint64(maxEncodedTransactionGroup))
+			if zb0274 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0274), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "CertType")
 				return
 			}
@@ -14812,8 +14812,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "SignedWeight")
 				return
 			}
-			if zb0281 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0281), uint64(maxEncodedTransactionGroup))
+			if zb0281 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0281), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "SignedWeight")
 				return
 			}
@@ -14863,8 +14863,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "SigProofs")
 				return
 			}
-			if zb0285 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0285), uint64(maxEncodedTransactionGroup))
+			if zb0285 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0285), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "SigProofs")
 				return
 			}
@@ -14935,8 +14935,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "PartProofs")
 				return
 			}
-			if zb0291 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0291), uint64(maxEncodedTransactionGroup))
+			if zb0291 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0291), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "PartProofs")
 				return
 			}
@@ -15007,8 +15007,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Reveals")
 				return
 			}
-			if zb0297 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0297), uint64(maxEncodedTransactionGroup))
+			if zb0297 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0297), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Reveals")
 				return
 			}
@@ -15143,8 +15143,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Version")
 					return
 				}
-				if zb0306 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0306), uint64(maxEncodedTransactionGroup))
+				if zb0306 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0306), uint64(maxEncodedTransactionGroups))
 					return
 				}
 				(*z).encodedMsigs.Version, bts, err = msgp.ReadBytesBytes(bts, (*z).encodedMsigs.Version)
@@ -15179,8 +15179,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Threshold")
 					return
 				}
-				if zb0309 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0309), uint64(maxEncodedTransactionGroup))
+				if zb0309 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0309), uint64(maxEncodedTransactionGroups))
 					return
 				}
 				(*z).encodedMsigs.Threshold, bts, err = msgp.ReadBytesBytes(bts, (*z).encodedMsigs.Threshold)
@@ -15216,8 +15216,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Subsigs")
 					return
 				}
-				if zb0312 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0312), uint64(maxEncodedTransactionGroup))
+				if zb0312 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0312), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Subsigs")
 					return
 				}
@@ -15284,8 +15284,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Logic")
 					return
 				}
-				if zb0318 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0318), uint64(maxEncodedTransactionGroup))
+				if zb0318 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0318), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Logic")
 					return
 				}
@@ -15341,8 +15341,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "LogicArgs")
 					return
 				}
-				if zb0323 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0323), uint64(maxEncodedTransactionGroup))
+				if zb0323 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0323), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "LogicArgs")
 					return
 				}
@@ -15454,8 +15454,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "TxType")
 					return
 				}
-				if zb0333 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0333), uint64(maxEncodedTransactionGroup))
+				if zb0333 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0333), uint64(maxEncodedTransactionGroups))
 					return
 				}
 				(*z).encodedTxns.TxType, bts, err = msgp.ReadBytesBytes(bts, (*z).encodedTxns.TxType)
@@ -15533,8 +15533,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Fee")
 					return
 				}
-				if zb0339 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0339), uint64(maxEncodedTransactionGroup))
+				if zb0339 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0339), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Fee")
 					return
 				}
@@ -15580,8 +15580,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "FirstValid")
 					return
 				}
-				if zb0343 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0343), uint64(maxEncodedTransactionGroup))
+				if zb0343 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0343), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "FirstValid")
 					return
 				}
@@ -15627,8 +15627,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "LastValid")
 					return
 				}
-				if zb0347 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0347), uint64(maxEncodedTransactionGroup))
+				if zb0347 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0347), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "LastValid")
 					return
 				}
@@ -15674,8 +15674,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Note")
 					return
 				}
-				if zb0351 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0351), uint64(maxEncodedTransactionGroup))
+				if zb0351 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0351), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Note")
 					return
 				}
@@ -15875,8 +15875,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "VoteFirst")
 					return
 				}
-				if zb0368 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0368), uint64(maxEncodedTransactionGroup))
+				if zb0368 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0368), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "VoteFirst")
 					return
 				}
@@ -15922,8 +15922,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "VoteLast")
 					return
 				}
-				if zb0372 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0372), uint64(maxEncodedTransactionGroup))
+				if zb0372 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0372), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "VoteLast")
 					return
 				}
@@ -15969,8 +15969,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "VoteKeyDilution")
 					return
 				}
-				if zb0376 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0376), uint64(maxEncodedTransactionGroup))
+				if zb0376 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0376), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "VoteKeyDilution")
 					return
 				}
@@ -16072,8 +16072,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Amount")
 					return
 				}
-				if zb0385 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0385), uint64(maxEncodedTransactionGroup))
+				if zb0385 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0385), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Amount")
 					return
 				}
@@ -16155,8 +16155,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ConfigAsset")
 					return
 				}
-				if zb0392 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0392), uint64(maxEncodedTransactionGroup))
+				if zb0392 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0392), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ConfigAsset")
 					return
 				}
@@ -16202,8 +16202,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Total")
 					return
 				}
-				if zb0396 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0396), uint64(maxEncodedTransactionGroup))
+				if zb0396 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0396), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Total")
 					return
 				}
@@ -16249,8 +16249,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Decimals")
 					return
 				}
-				if zb0400 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0400), uint64(maxEncodedTransactionGroup))
+				if zb0400 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0400), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Decimals")
 					return
 				}
@@ -16316,8 +16316,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "UnitName")
 					return
 				}
-				if zb0406 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0406), uint64(maxEncodedTransactionGroup))
+				if zb0406 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0406), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "UnitName")
 					return
 				}
@@ -16363,8 +16363,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "AssetName")
 					return
 				}
-				if zb0410 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0410), uint64(maxEncodedTransactionGroup))
+				if zb0410 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0410), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "AssetName")
 					return
 				}
@@ -16410,8 +16410,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "URL")
 					return
 				}
-				if zb0414 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0414), uint64(maxEncodedTransactionGroup))
+				if zb0414 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0414), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "URL")
 					return
 				}
@@ -16637,8 +16637,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "XferAsset")
 					return
 				}
-				if zb0433 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0433), uint64(maxEncodedTransactionGroup))
+				if zb0433 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0433), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "XferAsset")
 					return
 				}
@@ -16684,8 +16684,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "AssetAmount")
 					return
 				}
-				if zb0437 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0437), uint64(maxEncodedTransactionGroup))
+				if zb0437 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0437), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "AssetAmount")
 					return
 				}
@@ -16875,8 +16875,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "FreezeAsset")
 					return
 				}
-				if zb0453 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0453), uint64(maxEncodedTransactionGroup))
+				if zb0453 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0453), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "FreezeAsset")
 					return
 				}
@@ -16942,8 +16942,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ApplicationID")
 					return
 				}
-				if zb0459 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0459), uint64(maxEncodedTransactionGroup))
+				if zb0459 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0459), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ApplicationID")
 					return
 				}
@@ -16988,8 +16988,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "OnCompletion")
 					return
 				}
-				if zb0463 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0463), uint64(maxEncodedTransactionGroup))
+				if zb0463 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0463), uint64(maxEncodedTransactionGroups))
 					return
 				}
 				(*z).encodedTxns.encodedApplicationCallTxnFields.OnCompletion, bts, err = msgp.ReadBytesBytes(bts, (*z).encodedTxns.encodedApplicationCallTxnFields.OnCompletion)
@@ -17025,8 +17025,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ApplicationArgs")
 					return
 				}
-				if zb0466 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0466), uint64(maxEncodedTransactionGroup))
+				if zb0466 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0466), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ApplicationArgs")
 					return
 				}
@@ -17093,8 +17093,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Accounts")
 					return
 				}
-				if zb0472 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0472), uint64(maxEncodedTransactionGroup))
+				if zb0472 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0472), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Accounts")
 					return
 				}
@@ -17161,8 +17161,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ForeignApps")
 					return
 				}
-				if zb0478 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0478), uint64(maxEncodedTransactionGroup))
+				if zb0478 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0478), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ForeignApps")
 					return
 				}
@@ -17229,8 +17229,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ForeignAssets")
 					return
 				}
-				if zb0484 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0484), uint64(maxEncodedTransactionGroup))
+				if zb0484 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0484), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ForeignAssets")
 					return
 				}
@@ -17297,8 +17297,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "LocalNumUint")
 					return
 				}
-				if zb0490 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0490), uint64(maxEncodedTransactionGroup))
+				if zb0490 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0490), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "LocalNumUint")
 					return
 				}
@@ -17344,8 +17344,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "LocalNumByteSlice")
 					return
 				}
-				if zb0494 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0494), uint64(maxEncodedTransactionGroup))
+				if zb0494 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0494), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "LocalNumByteSlice")
 					return
 				}
@@ -17391,8 +17391,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "GlobalNumUint")
 					return
 				}
-				if zb0498 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0498), uint64(maxEncodedTransactionGroup))
+				if zb0498 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0498), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "GlobalNumUint")
 					return
 				}
@@ -17438,8 +17438,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "GlobalNumByteSlice")
 					return
 				}
-				if zb0502 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0502), uint64(maxEncodedTransactionGroup))
+				if zb0502 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0502), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "GlobalNumByteSlice")
 					return
 				}
@@ -17485,8 +17485,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ApprovalProgram")
 					return
 				}
-				if zb0506 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0506), uint64(maxEncodedTransactionGroup))
+				if zb0506 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0506), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ApprovalProgram")
 					return
 				}
@@ -17546,8 +17546,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ClearStateProgram")
 					return
 				}
-				if zb0512 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0512), uint64(maxEncodedTransactionGroup))
+				if zb0512 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0512), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ClearStateProgram")
 					return
 				}
@@ -17607,8 +17607,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ExtraProgramPages")
 					return
 				}
-				if zb0518 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0518), uint64(maxEncodedTransactionGroup))
+				if zb0518 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0518), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ExtraProgramPages")
 					return
 				}
@@ -17654,8 +17654,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "CertRound")
 					return
 				}
-				if zb0522 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0522), uint64(maxEncodedTransactionGroup))
+				if zb0522 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0522), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "CertRound")
 					return
 				}
@@ -17701,8 +17701,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "CertType")
 					return
 				}
-				if zb0526 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0526), uint64(maxEncodedTransactionGroup))
+				if zb0526 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0526), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "CertType")
 					return
 				}
@@ -17784,8 +17784,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "SignedWeight")
 					return
 				}
-				if zb0533 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0533), uint64(maxEncodedTransactionGroup))
+				if zb0533 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0533), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "SignedWeight")
 					return
 				}
@@ -17831,8 +17831,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "SigProofs")
 					return
 				}
-				if zb0537 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0537), uint64(maxEncodedTransactionGroup))
+				if zb0537 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0537), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "SigProofs")
 					return
 				}
@@ -17899,8 +17899,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "PartProofs")
 					return
 				}
-				if zb0543 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0543), uint64(maxEncodedTransactionGroup))
+				if zb0543 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0543), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "PartProofs")
 					return
 				}
@@ -17967,8 +17967,8 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Reveals")
 					return
 				}
-				if zb0549 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0549), uint64(maxEncodedTransactionGroup))
+				if zb0549 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0549), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Reveals")
 					return
 				}
@@ -18458,8 +18458,8 @@ func (z *encodedTxnHeaders) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Fee")
 				return
 			}
-			if zb0010 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0010), uint64(maxEncodedTransactionGroup))
+			if zb0010 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0010), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Fee")
 				return
 			}
@@ -18509,8 +18509,8 @@ func (z *encodedTxnHeaders) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
 				return
 			}
-			if zb0014 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0014), uint64(maxEncodedTransactionGroup))
+			if zb0014 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0014), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
 				return
 			}
@@ -18560,8 +18560,8 @@ func (z *encodedTxnHeaders) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "LastValid")
 				return
 			}
-			if zb0018 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0018), uint64(maxEncodedTransactionGroup))
+			if zb0018 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0018), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "LastValid")
 				return
 			}
@@ -18611,8 +18611,8 @@ func (z *encodedTxnHeaders) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Note")
 				return
 			}
-			if zb0022 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0022), uint64(maxEncodedTransactionGroup))
+			if zb0022 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0022), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Note")
 				return
 			}
@@ -18854,8 +18854,8 @@ func (z *encodedTxnHeaders) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Fee")
 					return
 				}
-				if zb0040 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0040), uint64(maxEncodedTransactionGroup))
+				if zb0040 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0040), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Fee")
 					return
 				}
@@ -18901,8 +18901,8 @@ func (z *encodedTxnHeaders) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "FirstValid")
 					return
 				}
-				if zb0044 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0044), uint64(maxEncodedTransactionGroup))
+				if zb0044 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0044), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "FirstValid")
 					return
 				}
@@ -18948,8 +18948,8 @@ func (z *encodedTxnHeaders) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "LastValid")
 					return
 				}
-				if zb0048 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0048), uint64(maxEncodedTransactionGroup))
+				if zb0048 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0048), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "LastValid")
 					return
 				}
@@ -18995,8 +18995,8 @@ func (z *encodedTxnHeaders) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Note")
 					return
 				}
-				if zb0052 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0052), uint64(maxEncodedTransactionGroup))
+				if zb0052 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0052), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Note")
 					return
 				}
@@ -20550,8 +20550,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "TxType")
 				return
 			}
-			if zb0046 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0046), uint64(maxEncodedTransactionGroup))
+			if zb0046 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0046), uint64(maxEncodedTransactionGroups))
 				return
 			}
 			(*z).TxType, bts, err = msgp.ReadBytesBytes(bts, (*z).TxType)
@@ -20639,8 +20639,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Fee")
 				return
 			}
-			if zb0052 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0052), uint64(maxEncodedTransactionGroup))
+			if zb0052 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0052), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Fee")
 				return
 			}
@@ -20690,8 +20690,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
 				return
 			}
-			if zb0056 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0056), uint64(maxEncodedTransactionGroup))
+			if zb0056 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0056), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
 				return
 			}
@@ -20741,8 +20741,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "LastValid")
 				return
 			}
-			if zb0060 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0060), uint64(maxEncodedTransactionGroup))
+			if zb0060 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0060), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "LastValid")
 				return
 			}
@@ -20792,8 +20792,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Note")
 				return
 			}
-			if zb0064 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0064), uint64(maxEncodedTransactionGroup))
+			if zb0064 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0064), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Note")
 				return
 			}
@@ -21013,8 +21013,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "VoteFirst")
 				return
 			}
-			if zb0081 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0081), uint64(maxEncodedTransactionGroup))
+			if zb0081 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0081), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "VoteFirst")
 				return
 			}
@@ -21064,8 +21064,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "VoteLast")
 				return
 			}
-			if zb0085 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0085), uint64(maxEncodedTransactionGroup))
+			if zb0085 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0085), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "VoteLast")
 				return
 			}
@@ -21115,8 +21115,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "VoteKeyDilution")
 				return
 			}
-			if zb0089 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0089), uint64(maxEncodedTransactionGroup))
+			if zb0089 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0089), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "VoteKeyDilution")
 				return
 			}
@@ -21228,8 +21228,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Amount")
 				return
 			}
-			if zb0098 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0098), uint64(maxEncodedTransactionGroup))
+			if zb0098 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0098), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Amount")
 				return
 			}
@@ -21319,8 +21319,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ConfigAsset")
 				return
 			}
-			if zb0105 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0105), uint64(maxEncodedTransactionGroup))
+			if zb0105 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0105), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ConfigAsset")
 				return
 			}
@@ -21370,8 +21370,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Total")
 				return
 			}
-			if zb0109 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0109), uint64(maxEncodedTransactionGroup))
+			if zb0109 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0109), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Total")
 				return
 			}
@@ -21421,8 +21421,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Decimals")
 				return
 			}
-			if zb0113 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0113), uint64(maxEncodedTransactionGroup))
+			if zb0113 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0113), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Decimals")
 				return
 			}
@@ -21494,8 +21494,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "UnitName")
 				return
 			}
-			if zb0119 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0119), uint64(maxEncodedTransactionGroup))
+			if zb0119 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0119), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "UnitName")
 				return
 			}
@@ -21545,8 +21545,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "AssetName")
 				return
 			}
-			if zb0123 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0123), uint64(maxEncodedTransactionGroup))
+			if zb0123 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0123), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "AssetName")
 				return
 			}
@@ -21596,8 +21596,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "URL")
 				return
 			}
-			if zb0127 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0127), uint64(maxEncodedTransactionGroup))
+			if zb0127 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0127), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "URL")
 				return
 			}
@@ -21847,8 +21847,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "XferAsset")
 				return
 			}
-			if zb0146 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0146), uint64(maxEncodedTransactionGroup))
+			if zb0146 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0146), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "XferAsset")
 				return
 			}
@@ -21898,8 +21898,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "AssetAmount")
 				return
 			}
-			if zb0150 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0150), uint64(maxEncodedTransactionGroup))
+			if zb0150 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0150), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "AssetAmount")
 				return
 			}
@@ -22109,8 +22109,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "FreezeAsset")
 				return
 			}
-			if zb0166 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0166), uint64(maxEncodedTransactionGroup))
+			if zb0166 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0166), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "FreezeAsset")
 				return
 			}
@@ -22182,8 +22182,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationID")
 				return
 			}
-			if zb0172 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0172), uint64(maxEncodedTransactionGroup))
+			if zb0172 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0172), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationID")
 				return
 			}
@@ -22232,8 +22232,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "OnCompletion")
 				return
 			}
-			if zb0176 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0176), uint64(maxEncodedTransactionGroup))
+			if zb0176 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0176), uint64(maxEncodedTransactionGroups))
 				return
 			}
 			(*z).encodedApplicationCallTxnFields.OnCompletion, bts, err = msgp.ReadBytesBytes(bts, (*z).encodedApplicationCallTxnFields.OnCompletion)
@@ -22273,8 +22273,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationArgs")
 				return
 			}
-			if zb0179 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0179), uint64(maxEncodedTransactionGroup))
+			if zb0179 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0179), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationArgs")
 				return
 			}
@@ -22345,8 +22345,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Accounts")
 				return
 			}
-			if zb0185 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0185), uint64(maxEncodedTransactionGroup))
+			if zb0185 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0185), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Accounts")
 				return
 			}
@@ -22417,8 +22417,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ForeignApps")
 				return
 			}
-			if zb0191 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0191), uint64(maxEncodedTransactionGroup))
+			if zb0191 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0191), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ForeignApps")
 				return
 			}
@@ -22489,8 +22489,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ForeignAssets")
 				return
 			}
-			if zb0197 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0197), uint64(maxEncodedTransactionGroup))
+			if zb0197 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0197), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ForeignAssets")
 				return
 			}
@@ -22561,8 +22561,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "LocalNumUint")
 				return
 			}
-			if zb0203 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0203), uint64(maxEncodedTransactionGroup))
+			if zb0203 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0203), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "LocalNumUint")
 				return
 			}
@@ -22612,8 +22612,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "LocalNumByteSlice")
 				return
 			}
-			if zb0207 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0207), uint64(maxEncodedTransactionGroup))
+			if zb0207 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0207), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "LocalNumByteSlice")
 				return
 			}
@@ -22663,8 +22663,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "GlobalNumUint")
 				return
 			}
-			if zb0211 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0211), uint64(maxEncodedTransactionGroup))
+			if zb0211 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0211), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "GlobalNumUint")
 				return
 			}
@@ -22714,8 +22714,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "GlobalNumByteSlice")
 				return
 			}
-			if zb0215 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0215), uint64(maxEncodedTransactionGroup))
+			if zb0215 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0215), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "GlobalNumByteSlice")
 				return
 			}
@@ -22765,8 +22765,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram")
 				return
 			}
-			if zb0219 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0219), uint64(maxEncodedTransactionGroup))
+			if zb0219 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0219), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram")
 				return
 			}
@@ -22830,8 +22830,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
 				return
 			}
-			if zb0225 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0225), uint64(maxEncodedTransactionGroup))
+			if zb0225 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0225), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
 				return
 			}
@@ -22895,8 +22895,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ExtraProgramPages")
 				return
 			}
-			if zb0231 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0231), uint64(maxEncodedTransactionGroup))
+			if zb0231 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0231), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ExtraProgramPages")
 				return
 			}
@@ -22946,8 +22946,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "CertRound")
 				return
 			}
-			if zb0235 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0235), uint64(maxEncodedTransactionGroup))
+			if zb0235 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0235), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "CertRound")
 				return
 			}
@@ -22997,8 +22997,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "CertType")
 				return
 			}
-			if zb0239 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0239), uint64(maxEncodedTransactionGroup))
+			if zb0239 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0239), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "CertType")
 				return
 			}
@@ -23088,8 +23088,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "SignedWeight")
 				return
 			}
-			if zb0246 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0246), uint64(maxEncodedTransactionGroup))
+			if zb0246 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0246), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "SignedWeight")
 				return
 			}
@@ -23139,8 +23139,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "SigProofs")
 				return
 			}
-			if zb0250 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0250), uint64(maxEncodedTransactionGroup))
+			if zb0250 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0250), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "SigProofs")
 				return
 			}
@@ -23211,8 +23211,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "PartProofs")
 				return
 			}
-			if zb0256 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0256), uint64(maxEncodedTransactionGroup))
+			if zb0256 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0256), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "PartProofs")
 				return
 			}
@@ -23283,8 +23283,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Reveals")
 				return
 			}
-			if zb0262 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0262), uint64(maxEncodedTransactionGroup))
+			if zb0262 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0262), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Reveals")
 				return
 			}
@@ -23383,8 +23383,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "TxType")
 					return
 				}
-				if zb0268 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0268), uint64(maxEncodedTransactionGroup))
+				if zb0268 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0268), uint64(maxEncodedTransactionGroups))
 					return
 				}
 				(*z).TxType, bts, err = msgp.ReadBytesBytes(bts, (*z).TxType)
@@ -23462,8 +23462,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Fee")
 					return
 				}
-				if zb0274 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0274), uint64(maxEncodedTransactionGroup))
+				if zb0274 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0274), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Fee")
 					return
 				}
@@ -23509,8 +23509,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "FirstValid")
 					return
 				}
-				if zb0278 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0278), uint64(maxEncodedTransactionGroup))
+				if zb0278 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0278), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "FirstValid")
 					return
 				}
@@ -23556,8 +23556,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "LastValid")
 					return
 				}
-				if zb0282 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0282), uint64(maxEncodedTransactionGroup))
+				if zb0282 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0282), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "LastValid")
 					return
 				}
@@ -23603,8 +23603,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Note")
 					return
 				}
-				if zb0286 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0286), uint64(maxEncodedTransactionGroup))
+				if zb0286 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0286), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Note")
 					return
 				}
@@ -23804,8 +23804,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "VoteFirst")
 					return
 				}
-				if zb0303 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0303), uint64(maxEncodedTransactionGroup))
+				if zb0303 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0303), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "VoteFirst")
 					return
 				}
@@ -23851,8 +23851,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "VoteLast")
 					return
 				}
-				if zb0307 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0307), uint64(maxEncodedTransactionGroup))
+				if zb0307 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0307), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "VoteLast")
 					return
 				}
@@ -23898,8 +23898,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "VoteKeyDilution")
 					return
 				}
-				if zb0311 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0311), uint64(maxEncodedTransactionGroup))
+				if zb0311 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0311), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "VoteKeyDilution")
 					return
 				}
@@ -24001,8 +24001,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Amount")
 					return
 				}
-				if zb0320 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0320), uint64(maxEncodedTransactionGroup))
+				if zb0320 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0320), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Amount")
 					return
 				}
@@ -24084,8 +24084,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ConfigAsset")
 					return
 				}
-				if zb0327 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0327), uint64(maxEncodedTransactionGroup))
+				if zb0327 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0327), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ConfigAsset")
 					return
 				}
@@ -24131,8 +24131,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Total")
 					return
 				}
-				if zb0331 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0331), uint64(maxEncodedTransactionGroup))
+				if zb0331 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0331), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Total")
 					return
 				}
@@ -24178,8 +24178,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Decimals")
 					return
 				}
-				if zb0335 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0335), uint64(maxEncodedTransactionGroup))
+				if zb0335 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0335), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Decimals")
 					return
 				}
@@ -24245,8 +24245,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "UnitName")
 					return
 				}
-				if zb0341 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0341), uint64(maxEncodedTransactionGroup))
+				if zb0341 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0341), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "UnitName")
 					return
 				}
@@ -24292,8 +24292,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "AssetName")
 					return
 				}
-				if zb0345 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0345), uint64(maxEncodedTransactionGroup))
+				if zb0345 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0345), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "AssetName")
 					return
 				}
@@ -24339,8 +24339,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "URL")
 					return
 				}
-				if zb0349 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0349), uint64(maxEncodedTransactionGroup))
+				if zb0349 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0349), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "URL")
 					return
 				}
@@ -24566,8 +24566,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "XferAsset")
 					return
 				}
-				if zb0368 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0368), uint64(maxEncodedTransactionGroup))
+				if zb0368 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0368), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "XferAsset")
 					return
 				}
@@ -24613,8 +24613,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "AssetAmount")
 					return
 				}
-				if zb0372 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0372), uint64(maxEncodedTransactionGroup))
+				if zb0372 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0372), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "AssetAmount")
 					return
 				}
@@ -24804,8 +24804,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "FreezeAsset")
 					return
 				}
-				if zb0388 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0388), uint64(maxEncodedTransactionGroup))
+				if zb0388 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0388), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "FreezeAsset")
 					return
 				}
@@ -24871,8 +24871,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ApplicationID")
 					return
 				}
-				if zb0394 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0394), uint64(maxEncodedTransactionGroup))
+				if zb0394 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0394), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ApplicationID")
 					return
 				}
@@ -24917,8 +24917,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "OnCompletion")
 					return
 				}
-				if zb0398 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0398), uint64(maxEncodedTransactionGroup))
+				if zb0398 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0398), uint64(maxEncodedTransactionGroups))
 					return
 				}
 				(*z).encodedApplicationCallTxnFields.OnCompletion, bts, err = msgp.ReadBytesBytes(bts, (*z).encodedApplicationCallTxnFields.OnCompletion)
@@ -24954,8 +24954,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ApplicationArgs")
 					return
 				}
-				if zb0401 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0401), uint64(maxEncodedTransactionGroup))
+				if zb0401 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0401), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ApplicationArgs")
 					return
 				}
@@ -25022,8 +25022,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Accounts")
 					return
 				}
-				if zb0407 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0407), uint64(maxEncodedTransactionGroup))
+				if zb0407 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0407), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Accounts")
 					return
 				}
@@ -25090,8 +25090,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ForeignApps")
 					return
 				}
-				if zb0413 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0413), uint64(maxEncodedTransactionGroup))
+				if zb0413 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0413), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ForeignApps")
 					return
 				}
@@ -25158,8 +25158,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ForeignAssets")
 					return
 				}
-				if zb0419 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0419), uint64(maxEncodedTransactionGroup))
+				if zb0419 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0419), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ForeignAssets")
 					return
 				}
@@ -25226,8 +25226,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "LocalNumUint")
 					return
 				}
-				if zb0425 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0425), uint64(maxEncodedTransactionGroup))
+				if zb0425 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0425), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "LocalNumUint")
 					return
 				}
@@ -25273,8 +25273,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "LocalNumByteSlice")
 					return
 				}
-				if zb0429 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0429), uint64(maxEncodedTransactionGroup))
+				if zb0429 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0429), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "LocalNumByteSlice")
 					return
 				}
@@ -25320,8 +25320,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "GlobalNumUint")
 					return
 				}
-				if zb0433 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0433), uint64(maxEncodedTransactionGroup))
+				if zb0433 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0433), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "GlobalNumUint")
 					return
 				}
@@ -25367,8 +25367,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "GlobalNumByteSlice")
 					return
 				}
-				if zb0437 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0437), uint64(maxEncodedTransactionGroup))
+				if zb0437 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0437), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "GlobalNumByteSlice")
 					return
 				}
@@ -25414,8 +25414,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ApprovalProgram")
 					return
 				}
-				if zb0441 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0441), uint64(maxEncodedTransactionGroup))
+				if zb0441 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0441), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ApprovalProgram")
 					return
 				}
@@ -25475,8 +25475,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ClearStateProgram")
 					return
 				}
-				if zb0447 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0447), uint64(maxEncodedTransactionGroup))
+				if zb0447 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0447), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ClearStateProgram")
 					return
 				}
@@ -25536,8 +25536,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ExtraProgramPages")
 					return
 				}
-				if zb0453 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0453), uint64(maxEncodedTransactionGroup))
+				if zb0453 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0453), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ExtraProgramPages")
 					return
 				}
@@ -25583,8 +25583,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "CertRound")
 					return
 				}
-				if zb0457 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0457), uint64(maxEncodedTransactionGroup))
+				if zb0457 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0457), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "CertRound")
 					return
 				}
@@ -25630,8 +25630,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "CertType")
 					return
 				}
-				if zb0461 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0461), uint64(maxEncodedTransactionGroup))
+				if zb0461 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0461), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "CertType")
 					return
 				}
@@ -25713,8 +25713,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "SignedWeight")
 					return
 				}
-				if zb0468 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0468), uint64(maxEncodedTransactionGroup))
+				if zb0468 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0468), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "SignedWeight")
 					return
 				}
@@ -25760,8 +25760,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "SigProofs")
 					return
 				}
-				if zb0472 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0472), uint64(maxEncodedTransactionGroup))
+				if zb0472 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0472), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "SigProofs")
 					return
 				}
@@ -25828,8 +25828,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "PartProofs")
 					return
 				}
-				if zb0478 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0478), uint64(maxEncodedTransactionGroup))
+				if zb0478 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0478), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "PartProofs")
 					return
 				}
@@ -25896,8 +25896,8 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Reveals")
 					return
 				}
-				if zb0484 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0484), uint64(maxEncodedTransactionGroup))
+				if zb0484 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0484), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Reveals")
 					return
 				}
@@ -28909,8 +28909,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "TransactionGroupSizes")
 				return
 			}
-			if zb0051 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0051), uint64(maxEncodedTransactionGroup))
+			if zb0051 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0051), uint64(maxEncodedTransactionGroups))
 				return
 			}
 			(*z).TransactionGroupSizes, bts, err = msgp.ReadBytesBytes(bts, (*z).TransactionGroupSizes)
@@ -28967,8 +28967,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Version")
 				return
 			}
-			if zb0055 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0055), uint64(maxEncodedTransactionGroup))
+			if zb0055 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0055), uint64(maxEncodedTransactionGroups))
 				return
 			}
 			(*z).encodedSignedTxns.encodedMsigs.Version, bts, err = msgp.ReadBytesBytes(bts, (*z).encodedSignedTxns.encodedMsigs.Version)
@@ -29007,8 +29007,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Threshold")
 				return
 			}
-			if zb0058 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0058), uint64(maxEncodedTransactionGroup))
+			if zb0058 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0058), uint64(maxEncodedTransactionGroups))
 				return
 			}
 			(*z).encodedSignedTxns.encodedMsigs.Threshold, bts, err = msgp.ReadBytesBytes(bts, (*z).encodedSignedTxns.encodedMsigs.Threshold)
@@ -29048,8 +29048,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Subsigs")
 				return
 			}
-			if zb0061 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0061), uint64(maxEncodedTransactionGroup))
+			if zb0061 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0061), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Subsigs")
 				return
 			}
@@ -29120,8 +29120,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Logic")
 				return
 			}
-			if zb0067 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0067), uint64(maxEncodedTransactionGroup))
+			if zb0067 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0067), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Logic")
 				return
 			}
@@ -29181,8 +29181,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "LogicArgs")
 				return
 			}
-			if zb0072 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0072), uint64(maxEncodedTransactionGroup))
+			if zb0072 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0072), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "LogicArgs")
 				return
 			}
@@ -29302,8 +29302,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "TxType")
 				return
 			}
-			if zb0082 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0082), uint64(maxEncodedTransactionGroup))
+			if zb0082 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0082), uint64(maxEncodedTransactionGroups))
 				return
 			}
 			(*z).encodedSignedTxns.encodedTxns.TxType, bts, err = msgp.ReadBytesBytes(bts, (*z).encodedSignedTxns.encodedTxns.TxType)
@@ -29391,8 +29391,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Fee")
 				return
 			}
-			if zb0088 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0088), uint64(maxEncodedTransactionGroup))
+			if zb0088 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0088), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Fee")
 				return
 			}
@@ -29442,8 +29442,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
 				return
 			}
-			if zb0092 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0092), uint64(maxEncodedTransactionGroup))
+			if zb0092 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0092), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
 				return
 			}
@@ -29493,8 +29493,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "LastValid")
 				return
 			}
-			if zb0096 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0096), uint64(maxEncodedTransactionGroup))
+			if zb0096 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0096), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "LastValid")
 				return
 			}
@@ -29544,8 +29544,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Note")
 				return
 			}
-			if zb0100 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0100), uint64(maxEncodedTransactionGroup))
+			if zb0100 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0100), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Note")
 				return
 			}
@@ -29765,8 +29765,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "VoteFirst")
 				return
 			}
-			if zb0117 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0117), uint64(maxEncodedTransactionGroup))
+			if zb0117 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0117), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "VoteFirst")
 				return
 			}
@@ -29816,8 +29816,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "VoteLast")
 				return
 			}
-			if zb0121 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0121), uint64(maxEncodedTransactionGroup))
+			if zb0121 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0121), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "VoteLast")
 				return
 			}
@@ -29867,8 +29867,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "VoteKeyDilution")
 				return
 			}
-			if zb0125 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0125), uint64(maxEncodedTransactionGroup))
+			if zb0125 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0125), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "VoteKeyDilution")
 				return
 			}
@@ -29980,8 +29980,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Amount")
 				return
 			}
-			if zb0134 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0134), uint64(maxEncodedTransactionGroup))
+			if zb0134 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0134), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Amount")
 				return
 			}
@@ -30071,8 +30071,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ConfigAsset")
 				return
 			}
-			if zb0141 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0141), uint64(maxEncodedTransactionGroup))
+			if zb0141 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0141), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ConfigAsset")
 				return
 			}
@@ -30122,8 +30122,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Total")
 				return
 			}
-			if zb0145 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0145), uint64(maxEncodedTransactionGroup))
+			if zb0145 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0145), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Total")
 				return
 			}
@@ -30173,8 +30173,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Decimals")
 				return
 			}
-			if zb0149 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0149), uint64(maxEncodedTransactionGroup))
+			if zb0149 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0149), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Decimals")
 				return
 			}
@@ -30246,8 +30246,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "UnitName")
 				return
 			}
-			if zb0155 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0155), uint64(maxEncodedTransactionGroup))
+			if zb0155 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0155), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "UnitName")
 				return
 			}
@@ -30297,8 +30297,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "AssetName")
 				return
 			}
-			if zb0159 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0159), uint64(maxEncodedTransactionGroup))
+			if zb0159 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0159), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "AssetName")
 				return
 			}
@@ -30348,8 +30348,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "URL")
 				return
 			}
-			if zb0163 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0163), uint64(maxEncodedTransactionGroup))
+			if zb0163 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0163), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "URL")
 				return
 			}
@@ -30599,8 +30599,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "XferAsset")
 				return
 			}
-			if zb0182 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0182), uint64(maxEncodedTransactionGroup))
+			if zb0182 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0182), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "XferAsset")
 				return
 			}
@@ -30650,8 +30650,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "AssetAmount")
 				return
 			}
-			if zb0186 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0186), uint64(maxEncodedTransactionGroup))
+			if zb0186 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0186), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "AssetAmount")
 				return
 			}
@@ -30861,8 +30861,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "FreezeAsset")
 				return
 			}
-			if zb0202 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0202), uint64(maxEncodedTransactionGroup))
+			if zb0202 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0202), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "FreezeAsset")
 				return
 			}
@@ -30934,8 +30934,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationID")
 				return
 			}
-			if zb0208 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0208), uint64(maxEncodedTransactionGroup))
+			if zb0208 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0208), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationID")
 				return
 			}
@@ -30984,8 +30984,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "OnCompletion")
 				return
 			}
-			if zb0212 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0212), uint64(maxEncodedTransactionGroup))
+			if zb0212 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0212), uint64(maxEncodedTransactionGroups))
 				return
 			}
 			(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.OnCompletion, bts, err = msgp.ReadBytesBytes(bts, (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.OnCompletion)
@@ -31025,8 +31025,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationArgs")
 				return
 			}
-			if zb0215 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0215), uint64(maxEncodedTransactionGroup))
+			if zb0215 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0215), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationArgs")
 				return
 			}
@@ -31097,8 +31097,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Accounts")
 				return
 			}
-			if zb0221 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0221), uint64(maxEncodedTransactionGroup))
+			if zb0221 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0221), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Accounts")
 				return
 			}
@@ -31169,8 +31169,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ForeignApps")
 				return
 			}
-			if zb0227 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0227), uint64(maxEncodedTransactionGroup))
+			if zb0227 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0227), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ForeignApps")
 				return
 			}
@@ -31241,8 +31241,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ForeignAssets")
 				return
 			}
-			if zb0233 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0233), uint64(maxEncodedTransactionGroup))
+			if zb0233 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0233), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ForeignAssets")
 				return
 			}
@@ -31313,8 +31313,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "LocalNumUint")
 				return
 			}
-			if zb0239 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0239), uint64(maxEncodedTransactionGroup))
+			if zb0239 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0239), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "LocalNumUint")
 				return
 			}
@@ -31364,8 +31364,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "LocalNumByteSlice")
 				return
 			}
-			if zb0243 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0243), uint64(maxEncodedTransactionGroup))
+			if zb0243 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0243), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "LocalNumByteSlice")
 				return
 			}
@@ -31415,8 +31415,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "GlobalNumUint")
 				return
 			}
-			if zb0247 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0247), uint64(maxEncodedTransactionGroup))
+			if zb0247 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0247), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "GlobalNumUint")
 				return
 			}
@@ -31466,8 +31466,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "GlobalNumByteSlice")
 				return
 			}
-			if zb0251 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0251), uint64(maxEncodedTransactionGroup))
+			if zb0251 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0251), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "GlobalNumByteSlice")
 				return
 			}
@@ -31517,8 +31517,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram")
 				return
 			}
-			if zb0255 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0255), uint64(maxEncodedTransactionGroup))
+			if zb0255 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0255), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram")
 				return
 			}
@@ -31582,8 +31582,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
 				return
 			}
-			if zb0261 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0261), uint64(maxEncodedTransactionGroup))
+			if zb0261 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0261), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
 				return
 			}
@@ -31647,8 +31647,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ExtraProgramPages")
 				return
 			}
-			if zb0267 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0267), uint64(maxEncodedTransactionGroup))
+			if zb0267 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0267), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "ExtraProgramPages")
 				return
 			}
@@ -31698,8 +31698,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "CertRound")
 				return
 			}
-			if zb0271 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0271), uint64(maxEncodedTransactionGroup))
+			if zb0271 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0271), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "CertRound")
 				return
 			}
@@ -31749,8 +31749,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "CertType")
 				return
 			}
-			if zb0275 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0275), uint64(maxEncodedTransactionGroup))
+			if zb0275 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0275), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "CertType")
 				return
 			}
@@ -31840,8 +31840,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "SignedWeight")
 				return
 			}
-			if zb0282 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0282), uint64(maxEncodedTransactionGroup))
+			if zb0282 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0282), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "SignedWeight")
 				return
 			}
@@ -31891,8 +31891,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "SigProofs")
 				return
 			}
-			if zb0286 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0286), uint64(maxEncodedTransactionGroup))
+			if zb0286 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0286), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "SigProofs")
 				return
 			}
@@ -31963,8 +31963,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "PartProofs")
 				return
 			}
-			if zb0292 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0292), uint64(maxEncodedTransactionGroup))
+			if zb0292 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0292), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "PartProofs")
 				return
 			}
@@ -32035,8 +32035,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Reveals")
 				return
 			}
-			if zb0298 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0298), uint64(maxEncodedTransactionGroup))
+			if zb0298 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0298), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "Reveals")
 				return
 			}
@@ -32147,8 +32147,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "TransactionGroupSizes")
 					return
 				}
-				if zb0304 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0304), uint64(maxEncodedTransactionGroup))
+				if zb0304 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0304), uint64(maxEncodedTransactionGroups))
 					return
 				}
 				(*z).TransactionGroupSizes, bts, err = msgp.ReadBytesBytes(bts, (*z).TransactionGroupSizes)
@@ -32199,8 +32199,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Version")
 					return
 				}
-				if zb0308 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0308), uint64(maxEncodedTransactionGroup))
+				if zb0308 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0308), uint64(maxEncodedTransactionGroups))
 					return
 				}
 				(*z).encodedSignedTxns.encodedMsigs.Version, bts, err = msgp.ReadBytesBytes(bts, (*z).encodedSignedTxns.encodedMsigs.Version)
@@ -32235,8 +32235,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Threshold")
 					return
 				}
-				if zb0311 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0311), uint64(maxEncodedTransactionGroup))
+				if zb0311 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0311), uint64(maxEncodedTransactionGroups))
 					return
 				}
 				(*z).encodedSignedTxns.encodedMsigs.Threshold, bts, err = msgp.ReadBytesBytes(bts, (*z).encodedSignedTxns.encodedMsigs.Threshold)
@@ -32272,8 +32272,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Subsigs")
 					return
 				}
-				if zb0314 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0314), uint64(maxEncodedTransactionGroup))
+				if zb0314 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0314), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Subsigs")
 					return
 				}
@@ -32340,8 +32340,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Logic")
 					return
 				}
-				if zb0320 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0320), uint64(maxEncodedTransactionGroup))
+				if zb0320 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0320), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Logic")
 					return
 				}
@@ -32397,8 +32397,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "LogicArgs")
 					return
 				}
-				if zb0325 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0325), uint64(maxEncodedTransactionGroup))
+				if zb0325 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0325), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "LogicArgs")
 					return
 				}
@@ -32510,8 +32510,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "TxType")
 					return
 				}
-				if zb0335 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0335), uint64(maxEncodedTransactionGroup))
+				if zb0335 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0335), uint64(maxEncodedTransactionGroups))
 					return
 				}
 				(*z).encodedSignedTxns.encodedTxns.TxType, bts, err = msgp.ReadBytesBytes(bts, (*z).encodedSignedTxns.encodedTxns.TxType)
@@ -32589,8 +32589,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Fee")
 					return
 				}
-				if zb0341 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0341), uint64(maxEncodedTransactionGroup))
+				if zb0341 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0341), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Fee")
 					return
 				}
@@ -32636,8 +32636,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "FirstValid")
 					return
 				}
-				if zb0345 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0345), uint64(maxEncodedTransactionGroup))
+				if zb0345 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0345), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "FirstValid")
 					return
 				}
@@ -32683,8 +32683,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "LastValid")
 					return
 				}
-				if zb0349 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0349), uint64(maxEncodedTransactionGroup))
+				if zb0349 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0349), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "LastValid")
 					return
 				}
@@ -32730,8 +32730,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Note")
 					return
 				}
-				if zb0353 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0353), uint64(maxEncodedTransactionGroup))
+				if zb0353 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0353), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Note")
 					return
 				}
@@ -32931,8 +32931,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "VoteFirst")
 					return
 				}
-				if zb0370 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0370), uint64(maxEncodedTransactionGroup))
+				if zb0370 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0370), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "VoteFirst")
 					return
 				}
@@ -32978,8 +32978,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "VoteLast")
 					return
 				}
-				if zb0374 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0374), uint64(maxEncodedTransactionGroup))
+				if zb0374 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0374), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "VoteLast")
 					return
 				}
@@ -33025,8 +33025,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "VoteKeyDilution")
 					return
 				}
-				if zb0378 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0378), uint64(maxEncodedTransactionGroup))
+				if zb0378 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0378), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "VoteKeyDilution")
 					return
 				}
@@ -33128,8 +33128,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Amount")
 					return
 				}
-				if zb0387 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0387), uint64(maxEncodedTransactionGroup))
+				if zb0387 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0387), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Amount")
 					return
 				}
@@ -33211,8 +33211,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ConfigAsset")
 					return
 				}
-				if zb0394 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0394), uint64(maxEncodedTransactionGroup))
+				if zb0394 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0394), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ConfigAsset")
 					return
 				}
@@ -33258,8 +33258,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Total")
 					return
 				}
-				if zb0398 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0398), uint64(maxEncodedTransactionGroup))
+				if zb0398 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0398), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Total")
 					return
 				}
@@ -33305,8 +33305,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Decimals")
 					return
 				}
-				if zb0402 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0402), uint64(maxEncodedTransactionGroup))
+				if zb0402 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0402), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Decimals")
 					return
 				}
@@ -33372,8 +33372,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "UnitName")
 					return
 				}
-				if zb0408 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0408), uint64(maxEncodedTransactionGroup))
+				if zb0408 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0408), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "UnitName")
 					return
 				}
@@ -33419,8 +33419,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "AssetName")
 					return
 				}
-				if zb0412 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0412), uint64(maxEncodedTransactionGroup))
+				if zb0412 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0412), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "AssetName")
 					return
 				}
@@ -33466,8 +33466,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "URL")
 					return
 				}
-				if zb0416 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0416), uint64(maxEncodedTransactionGroup))
+				if zb0416 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0416), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "URL")
 					return
 				}
@@ -33693,8 +33693,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "XferAsset")
 					return
 				}
-				if zb0435 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0435), uint64(maxEncodedTransactionGroup))
+				if zb0435 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0435), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "XferAsset")
 					return
 				}
@@ -33740,8 +33740,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "AssetAmount")
 					return
 				}
-				if zb0439 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0439), uint64(maxEncodedTransactionGroup))
+				if zb0439 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0439), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "AssetAmount")
 					return
 				}
@@ -33931,8 +33931,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "FreezeAsset")
 					return
 				}
-				if zb0455 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0455), uint64(maxEncodedTransactionGroup))
+				if zb0455 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0455), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "FreezeAsset")
 					return
 				}
@@ -33998,8 +33998,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ApplicationID")
 					return
 				}
-				if zb0461 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0461), uint64(maxEncodedTransactionGroup))
+				if zb0461 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0461), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ApplicationID")
 					return
 				}
@@ -34044,8 +34044,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "OnCompletion")
 					return
 				}
-				if zb0465 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0465), uint64(maxEncodedTransactionGroup))
+				if zb0465 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0465), uint64(maxEncodedTransactionGroups))
 					return
 				}
 				(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.OnCompletion, bts, err = msgp.ReadBytesBytes(bts, (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.OnCompletion)
@@ -34081,8 +34081,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ApplicationArgs")
 					return
 				}
-				if zb0468 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0468), uint64(maxEncodedTransactionGroup))
+				if zb0468 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0468), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ApplicationArgs")
 					return
 				}
@@ -34149,8 +34149,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Accounts")
 					return
 				}
-				if zb0474 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0474), uint64(maxEncodedTransactionGroup))
+				if zb0474 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0474), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Accounts")
 					return
 				}
@@ -34217,8 +34217,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ForeignApps")
 					return
 				}
-				if zb0480 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0480), uint64(maxEncodedTransactionGroup))
+				if zb0480 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0480), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ForeignApps")
 					return
 				}
@@ -34285,8 +34285,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ForeignAssets")
 					return
 				}
-				if zb0486 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0486), uint64(maxEncodedTransactionGroup))
+				if zb0486 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0486), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ForeignAssets")
 					return
 				}
@@ -34353,8 +34353,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "LocalNumUint")
 					return
 				}
-				if zb0492 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0492), uint64(maxEncodedTransactionGroup))
+				if zb0492 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0492), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "LocalNumUint")
 					return
 				}
@@ -34400,8 +34400,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "LocalNumByteSlice")
 					return
 				}
-				if zb0496 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0496), uint64(maxEncodedTransactionGroup))
+				if zb0496 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0496), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "LocalNumByteSlice")
 					return
 				}
@@ -34447,8 +34447,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "GlobalNumUint")
 					return
 				}
-				if zb0500 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0500), uint64(maxEncodedTransactionGroup))
+				if zb0500 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0500), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "GlobalNumUint")
 					return
 				}
@@ -34494,8 +34494,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "GlobalNumByteSlice")
 					return
 				}
-				if zb0504 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0504), uint64(maxEncodedTransactionGroup))
+				if zb0504 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0504), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "GlobalNumByteSlice")
 					return
 				}
@@ -34541,8 +34541,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ApprovalProgram")
 					return
 				}
-				if zb0508 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0508), uint64(maxEncodedTransactionGroup))
+				if zb0508 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0508), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ApprovalProgram")
 					return
 				}
@@ -34602,8 +34602,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ClearStateProgram")
 					return
 				}
-				if zb0514 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0514), uint64(maxEncodedTransactionGroup))
+				if zb0514 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0514), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ClearStateProgram")
 					return
 				}
@@ -34663,8 +34663,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ExtraProgramPages")
 					return
 				}
-				if zb0520 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0520), uint64(maxEncodedTransactionGroup))
+				if zb0520 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0520), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "ExtraProgramPages")
 					return
 				}
@@ -34710,8 +34710,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "CertRound")
 					return
 				}
-				if zb0524 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0524), uint64(maxEncodedTransactionGroup))
+				if zb0524 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0524), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "CertRound")
 					return
 				}
@@ -34757,8 +34757,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "CertType")
 					return
 				}
-				if zb0528 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0528), uint64(maxEncodedTransactionGroup))
+				if zb0528 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0528), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "CertType")
 					return
 				}
@@ -34840,8 +34840,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "SignedWeight")
 					return
 				}
-				if zb0535 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0535), uint64(maxEncodedTransactionGroup))
+				if zb0535 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0535), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "SignedWeight")
 					return
 				}
@@ -34887,8 +34887,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "SigProofs")
 					return
 				}
-				if zb0539 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0539), uint64(maxEncodedTransactionGroup))
+				if zb0539 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0539), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "SigProofs")
 					return
 				}
@@ -34955,8 +34955,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "PartProofs")
 					return
 				}
-				if zb0545 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0545), uint64(maxEncodedTransactionGroup))
+				if zb0545 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0545), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "PartProofs")
 					return
 				}
@@ -35023,8 +35023,8 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Reveals")
 					return
 				}
-				if zb0551 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0551), uint64(maxEncodedTransactionGroup))
+				if zb0551 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0551), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "Reveals")
 					return
 				}
@@ -35318,8 +35318,8 @@ func (z *txGroupsEncodingStubOld) UnmarshalMsg(bts []byte) (o []byte, err error)
 				err = msgp.WrapError(err, "struct-from-array", "TxnGroups")
 				return
 			}
-			if zb0004 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(maxEncodedTransactionGroup))
+			if zb0004 > maxEncodedTransactionGroups {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(maxEncodedTransactionGroups))
 				err = msgp.WrapError(err, "struct-from-array", "TxnGroups")
 				return
 			}
@@ -35369,8 +35369,8 @@ func (z *txGroupsEncodingStubOld) UnmarshalMsg(bts []byte) (o []byte, err error)
 					err = msgp.WrapError(err, "TxnGroups")
 					return
 				}
-				if zb0006 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(maxEncodedTransactionGroup))
+				if zb0006 > maxEncodedTransactionGroups {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(maxEncodedTransactionGroups))
 					err = msgp.WrapError(err, "TxnGroups")
 					return
 				}

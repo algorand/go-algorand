@@ -152,11 +152,11 @@ func decodeTransactionGroups(ptg packedTransactionGroups, genesisID string, gene
 		return nil, err
 	}
 
-	if stub.TransactionGroupCount > maxEncodedTransactionGroup {
+	if stub.TransactionGroupCount > maxEncodedTransactionGroups {
 		return nil, errors.New("invalid TransactionGroupCount")
 	}
 
-	if stub.TotalTransactionsCount > uint64(maxEncodedTransactionGroup*config.MaxTxGroupSize) {
+	if stub.TotalTransactionsCount > uint64(maxEncodedTransactionGroups*config.MaxTxGroupSize) {
 		return nil, errors.New("invalid TotalTransactionsCount")
 	}
 
