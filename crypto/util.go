@@ -34,7 +34,7 @@ type Hashable interface {
 	ToBeHashed() (protocol.HashID, []byte)
 }
 
-// HashRep  is a tmp function to export hashRep.
+// HashRep  appends the correct hashid to the before the message to be hashed.
 func HashRep(h Hashable) []byte {
 	hashid, data := h.ToBeHashed()
 	return append([]byte(hashid), data...)
