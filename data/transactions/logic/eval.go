@@ -349,8 +349,9 @@ type EvalContext struct {
 	version uint64
 	scratch scratchSpace
 
-	subtxn *transactions.SignedTxn // place to build for itxn_submit
-	// The transactions Performed() and their effects
+	subtxns  []transactions.SignedTxn // place to build for itx{n,g}_submit
+	subgroup bool                     // is subtxns intended to hold a group?
+	// Previous transactions Performed() and their effects
 	InnerTxns []transactions.SignedTxnWithAD
 
 	cost    int // cost incurred so far
@@ -3677,12 +3678,12 @@ func authorizedSender(cx *EvalContext, addr basics.Address) bool {
 }
 
 func opTxBegin(cx *EvalContext) {
-	if cx.subtxn != nil {
-		cx.err = errors.New("itxn_begin without itxn_submit")
+	if len(cx.subtxns) > 0 || cx.subgroup {
+		cx.err = errors.New("misplaced itxn_begin")
 		return
 	}
 	// Start fresh
-	cx.subtxn = &transactions.SignedTxn{}
+	cx.subtxns = make([]transactions.SignedTxn, 1)
 	// Fill in defaults.
 	addr, err := cx.getApplicationAddress()
 	if err != nil {
@@ -3697,7 +3698,7 @@ func opTxBegin(cx *EvalContext) {
 		// change the fee.  Do it in itxn_submit.
 		fee = basics.SubSaturate(fee, *cx.FeeCredit)
 	}
-	cx.subtxn.Txn.Header = transactions.Header{
+	cx.subtxns[0].Txn.Header = transactions.Header{
 		Sender:     addr, // Default, to simplify usage
 		Fee:        basics.MicroAlgos{Raw: fee},
 		FirstValid: cx.Txn.Txn.FirstValid,
@@ -3884,8 +3885,9 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 }
 
 func opTxField(cx *EvalContext) {
-	if cx.subtxn == nil {
-		cx.err = errors.New("itxn_field without itxn_begin")
+	itx := len(cx.subtxns) - 1
+	if itx < 0 {
+		cx.err = errors.New("misplaced itxn_field")
 		return
 	}
 	last := len(cx.stack) - 1
@@ -3896,7 +3898,7 @@ func opTxField(cx *EvalContext) {
 		return
 	}
 	sv := cx.stack[last]
-	cx.err = cx.stackIntoTxnField(sv, fs, &cx.subtxn.Txn)
+	cx.err = cx.stackIntoTxnField(sv, fs, &cx.subtxns[itx].Txn)
 	cx.stack = cx.stack[:last] // pop
 }
 
@@ -3906,8 +3908,9 @@ func opTxSubmit(cx *EvalContext) {
 		return
 	}
 
-	if cx.subtxn == nil {
-		cx.err = errors.New("itxn_submit without itxn_begin")
+	itx := len(cx.subtxns) - 1
+	if itx < 0 || cx.subgroup {
+		cx.err = errors.New("misplaced itxn_submit")
 		return
 	}
 
@@ -3920,19 +3923,19 @@ func opTxSubmit(cx *EvalContext) {
 	// transaction pool. Namely that any transaction that makes it
 	// to Perform (which is equivalent to eval.applyTransaction)
 	// is authorized, and WellFormed.
-	if !authorizedSender(cx, cx.subtxn.Txn.Sender) {
+	if !authorizedSender(cx, cx.subtxns[itx].Txn.Sender) {
 		cx.err = fmt.Errorf("unauthorized")
 		return
 	}
 
 	// Recall that WellFormed does not care about individual
 	// transaction fees because of fee pooling. So we check below.
-	cx.err = cx.subtxn.Txn.WellFormed(*cx.Specials, *cx.Proto)
+	cx.err = cx.subtxns[itx].Txn.WellFormed(*cx.Specials, *cx.Proto)
 	if cx.err != nil {
 		return
 	}
 
-	paid := cx.subtxn.Txn.Fee.Raw
+	paid := cx.subtxns[itx].Txn.Fee.Raw
 	if paid >= cx.Proto.MinTxnFee {
 		// Over paying - accumulate into FeeCredit
 		overpaid := paid - cx.Proto.MinTxnFee
@@ -3954,16 +3957,35 @@ func opTxSubmit(cx *EvalContext) {
 		}
 	}
 
-	ad, err := cx.Ledger.Perform(&cx.subtxn.Txn, *cx.Specials)
+	ad, err := cx.Ledger.Perform(&cx.subtxns[itx].Txn, *cx.Specials)
 	if err != nil {
 		cx.err = err
 		return
 	}
 	cx.InnerTxns = append(cx.InnerTxns, transactions.SignedTxnWithAD{
-		SignedTxn: *cx.subtxn,
+		SignedTxn: cx.subtxns[itx],
 		ApplyData: ad,
 	})
-	cx.subtxn = nil
+	cx.subtxns = nil
+}
+
+func opTxgBegin(cx *EvalContext) {
+	if cx.subtxns != nil {
+		cx.err = errors.New("itxg_begin without itxn_submit")
+		return
+	}
+}
+func opTxNext(cx *EvalContext) {
+	if cx.subtxns != nil {
+		cx.err = errors.New("itxn_next without itxn_submit")
+		return
+	}
+}
+func opTxgSubmit(cx *EvalContext) {
+	if cx.subtxns != nil {
+		cx.err = errors.New("itxn_submit without itxn_submit")
+		return
+	}
 }
 
 // PcDetails return PC and disassembled instructions at PC up to 2 opcodes back

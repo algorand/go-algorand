@@ -318,6 +318,11 @@ var OpSpecs = []OpSpec{
 	{0xb4, "itxn", opItxn, asmItxn, disTxn, nil, oneAny, 5, runModeApplication, immediates("f")},
 	{0xb5, "itxna", opItxna, asmItxna, disTxna, nil, oneAny, 5, runModeApplication, immediates("f", "i")},
 
+	// Inner Groups
+	{0xb6, "itxg_begin", opTxgBegin, asmDefault, disDefault, nil, nil, 6, runModeApplication, opDefault},
+	{0xb7, "itxn_next", opTxNext, asmDefault, disDefault, nil, nil, 6, runModeApplication, opDefault},
+	{0xb8, "itxg_submit", opTxgSubmit, asmDefault, disDefault, nil, nil, 6, runModeApplication, opDefault},
+
 	// Dynamic indexing
 	{0xc0, "txnas", opTxnas, assembleTxnas, disTxn, oneInt, oneAny, 5, modeAny, immediates("f")},
 	{0xc1, "gtxnas", opGtxnas, assembleGtxnas, disGtxn, oneInt, oneAny, 5, modeAny, immediates("t", "f")},
