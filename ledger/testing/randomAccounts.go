@@ -31,18 +31,21 @@ import (
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c, 0x22, 0x95, 0xfd, 0x32, 0x4f, 0x77, 0xa5, 0x4, 0x8b, 0x42, 0xc2, 0xb7, 0xa8, 0x54, 0x84, 0xb6, 0x80, 0xb1, 0xe1, 0x3d, 0x59, 0x9b, 0xeb, 0x36}
 
+// RandomAddress generates a random address
 func RandomAddress() basics.Address {
 	var addr basics.Address
 	crypto.RandBytes(addr[:])
 	return addr
 }
 
+// RandomNote generates a random notes data
 func RandomNote() []byte {
 	var note [16]byte
 	crypto.RandBytes(note[:])
 	return note[:]
 }
 
+// RandomAccountData generates a random AccountData
 func RandomAccountData(rewardsLevel uint64) basics.AccountData {
 	var data basics.AccountData
 
@@ -64,6 +67,7 @@ func RandomAccountData(rewardsLevel uint64) basics.AccountData {
 	return data
 }
 
+// RandomFullAccountData generates a random AccountData
 func RandomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.AccountData, uint64) {
 	data := RandomAccountData(rewardsLevel)
 
@@ -210,6 +214,7 @@ func RandomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 	return data, lastCreatableID
 }
 
+// RandomAccounts generates a random set of accounts map
 func RandomAccounts(niter int, simpleAccounts bool) map[basics.Address]basics.AccountData {
 	res := make(map[basics.Address]basics.AccountData)
 	if simpleAccounts {
@@ -225,16 +230,19 @@ func RandomAccounts(niter int, simpleAccounts bool) map[basics.Address]basics.Ac
 	return res
 }
 
+// RandomDeltas generates a random set of accounts delta
 func RandomDeltas(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]basics.AccountData, imbalance int64) {
 	updates, totals, imbalance, _ = RandomDeltasImpl(niter, base, rewardsLevel, true, 0)
 	return
 }
 
+// RandomDeltasFull generates a random set of accounts delta
 func RandomDeltasFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]basics.AccountData, imbalance int64, lastCreatableID uint64) {
 	updates, totals, imbalance, lastCreatableID = RandomDeltasImpl(niter, base, rewardsLevel, false, lastCreatableIDIn)
 	return
 }
 
+// RandomDeltasImpl generates a random set of accounts delta
 func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]basics.AccountData, imbalance int64, lastCreatableID uint64) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	totals = make(map[basics.Address]basics.AccountData)
@@ -305,16 +313,19 @@ func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 	return
 }
 
+// RandomDeltasBalanced generates a random set of accounts delta
 func RandomDeltasBalanced(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]basics.AccountData) {
 	updates, totals, _ = RandomDeltasBalancedImpl(niter, base, rewardsLevel, true, 0)
 	return
 }
 
+// RandomDeltasBalancedFull generates a random set of accounts delta
 func RandomDeltasBalancedFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]basics.AccountData, lastCreatableID uint64) {
 	updates, totals, lastCreatableID = RandomDeltasBalancedImpl(niter, base, rewardsLevel, false, lastCreatableIDIn)
 	return
 }
 
+// RandomDeltasBalancedImpl generates a random set of accounts delta
 func RandomDeltasBalancedImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]basics.AccountData, lastCreatableID uint64) {
 	var imbalance int64
 	if simple {
