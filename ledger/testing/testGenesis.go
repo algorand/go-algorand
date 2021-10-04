@@ -74,9 +74,12 @@ func NewTestGenesis() (bookkeeping.GenesisBalances, []basics.Address, []*crypto.
 	return genBalances, addrs, secrets
 }
 
+// Genesis creates a genesis state for naccts accounts using the ConsensusCurrentVersion
 func Genesis(naccts int) (ledgercore.InitState, []basics.Address, []*crypto.SignatureSecrets) {
 	return GenesisWithProto(naccts, protocol.ConsensusCurrentVersion)
 }
+
+// GenesisWithProto creates a genesis state for naccts accounts using the proto consensus protocol
 func GenesisWithProto(naccts int, proto protocol.ConsensusVersion) (ledgercore.InitState, []basics.Address, []*crypto.SignatureSecrets) {
 	blk := bookkeeping.Block{}
 	blk.CurrentProtocol = proto
