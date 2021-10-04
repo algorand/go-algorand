@@ -161,6 +161,8 @@ func testMerkle(t *testing.T, hashtype crypto.HashType, size uint64) {
 }
 
 func TestEmptyProveStructure(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	size := uint64(10)
 	arr := make(TestArray, size)
@@ -189,12 +191,16 @@ func (n nonmarshalable) Marshal(pos uint64) ([]byte, error) {
 }
 
 func TestErrorInMarshal(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := nonmarshalable{1}
 	_, err := Build(&a, crypto.HashFactory{})
 	require.Error(t, err)
 }
 
 func TestVerifyWithNoElements(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	size := uint64(10)
 	arr := make(TestArray, size)
@@ -217,6 +223,8 @@ func TestVerifyWithNoElements(t *testing.T) {
 }
 
 func TestEmptyTree(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	arr := make(TestArray, 0)
