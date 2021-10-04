@@ -5,6 +5,10 @@ import sys
 from goal import Goal
 
 import algosdk.future.transaction as txn
+from datetime import datetime
+
+stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+print(f"{os.path.basename(sys.argv[0])} start {stamp}")
 
 goal = Goal(sys.argv[1])
 
@@ -13,8 +17,8 @@ flo = goal.new_account()
 
 # Pays
 
-pay = goal.pay(goal.account, receiver=joe, amt=10000)
-txid, err = goal.send(pay)
+pay = goal.pay(goal.account, receiver=joe, amt=10000)  # under min balance
+txid, err = goal.send(pay, confirm=False)              # errors early
 assert err
 
 pay = goal.pay(goal.account, receiver=joe, amt=500_000)
@@ -65,7 +69,7 @@ assert goal.holding(joe, gold)[1]
 # App create
 teal = "test/scripts/e2e_subs/tealprogs"
 approval = goal.assemble(os.path.join(teal, "app-escrow.teal"))
-yes = goal.assemble("#pragma version 2\nint 28") # 28 is just to uniquify
+yes = goal.assemble("#pragma version 2\nint 28")  # 28 is just to uniquify
 create = goal.appl(flo, 0,
                    local_schema=(1, 0),
                    global_schema=(0, 4),
@@ -118,3 +122,6 @@ spend = goal.sign_with_program(spend, yes)
 txinfo, err = goal.send(spend)
 assert not err, err
 assert goal.balance(goal.logic_address(yes)) == 107_000, goal.balance(goal.logic_address(yes))
+
+stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+print(f"{os.path.basename(sys.argv[0])} OK {stamp}")
