@@ -27,6 +27,7 @@ import (
 
 var sumhashCompressor sumhash.LookupTable
 
+// TODO: will be removed once the sumhash lib will update.
 func init() {
 	shk := sha3.NewShake256()
 	seed := []byte("Algorand")
