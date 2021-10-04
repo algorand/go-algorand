@@ -191,6 +191,8 @@ func TestRetrieveFromDB(t *testing.T) {
 }
 
 func TestRetrieveFromDBAtVersion1(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	ppart := setupkeyWithNoDBS(t, a)
 	_, rootDB, partDB := createTestDBs(a, t.Name())
@@ -205,6 +207,8 @@ func TestRetrieveFromDBAtVersion1(t *testing.T) {
 }
 
 func TestRetriveFromDBAtVersion2(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	ppart := setupkeyWithNoDBS(t, a)
@@ -220,6 +224,8 @@ func TestRetriveFromDBAtVersion2(t *testing.T) {
 }
 
 func TestKeyRegCreation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	ppart := setupkeyWithNoDBS(t, a)
@@ -245,6 +251,8 @@ func assertionForRestoringFromDBAtLowVersion(a *require.Assertions, retrivedPart
 }
 
 func TestMigrateFromVersion1(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	part := setupkeyWithNoDBS(t, a).Participation
 
@@ -258,6 +266,8 @@ func TestMigrateFromVersion1(t *testing.T) {
 }
 
 func TestMigrationFromVersion2(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	part := setupkeyWithNoDBS(t, a).Participation
 

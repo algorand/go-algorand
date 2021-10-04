@@ -176,6 +176,8 @@ func testBlockProofPKBeingStored(t *testing.T, tx transactions.Transaction, mock
 }
 
 func TestBlockProofPKKeyReg(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	secretSrc := keypair()
 	src := basics.Address(secretSrc.SignatureVerifier)
 	vrfSecrets := crypto.GenerateVRFSecrets()
