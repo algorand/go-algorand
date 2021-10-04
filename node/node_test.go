@@ -203,9 +203,9 @@ func TestSyncingFullNode(t *testing.T) {
 					if counter == 5 {
 						go func() {
 							// after 5 blocks, have this node partitioned
-							nodes[0].net.DisconnectPeers()
-							time.Sleep(20 * time.Second)
-							nodes[0].net.RequestConnectOutgoing(false, nil)
+							//							nodes[0].net.DisconnectPeers()
+							//							time.Sleep(20 * time.Second)
+							//							nodes[0].net.RequestConnectOutgoing(false, nil)
 						}()
 					}
 				}
