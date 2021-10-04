@@ -199,6 +199,9 @@ func (l *Ledger) reloadLedger() error {
 	l.trackers.register(&l.notifier) // send OnNewBlocks to subscribers
 	l.trackers.register(&l.metrics)  // provides metrics reporting support
 
+	// set account updates tracker as a driver to calculate tracker db round and committing offsets
+	l.trackers.setCommitDriver(&l.accts)
+
 	err = l.trackers.loadFromDisk(l)
 	if err != nil {
 		err = fmt.Errorf("reloadLedger.loadFromDisk %v", err)

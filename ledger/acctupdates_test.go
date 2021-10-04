@@ -425,7 +425,7 @@ func TestAcctUpdates(t *testing.T) {
 		// Clear the timer to ensure a flush
 		au.lastFlushTime = time.Time{}
 
-		au.committedUpTo(basics.Round(proto.MaxBalLookback) + i)
+		au.scheduleCommittingTask(basics.Round(proto.MaxBalLookback) + i)
 		au.waitAccountsWriting()
 		checkAcctUpdates(t, au, i, basics.Round(proto.MaxBalLookback+14), accts, rewardsLevels, proto)
 	}
@@ -504,7 +504,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 		wg.Add(1)
 		go func(round basics.Round) {
 			defer wg.Done()
-			au.committedUpTo(round)
+			au.scheduleCommittingTask(round)
 		}(i)
 	}
 	wg.Wait()
@@ -593,7 +593,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	for i := proto.MaxBalLookback; i < proto.MaxBalLookback+initialRounds; i++ {
 		// Clear the timer to ensure a flush
 		au.lastFlushTime = time.Time{}
-		au.committedUpTo(basics.Round(i))
+		au.scheduleCommittingTask(basics.Round(i))
 	}
 	au.waitAccountsWriting()
 	b.ResetTimer()
@@ -601,7 +601,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	for i := proto.MaxBalLookback + initialRounds; i < proto.MaxBalLookback+uint64(b.N); i++ {
 		// Clear the timer to ensure a flush
 		au.lastFlushTime = time.Time{}
-		au.committedUpTo(basics.Round(i))
+		au.scheduleCommittingTask(basics.Round(i))
 	}
 	au.waitAccountsWriting()
 	deltaTime := time.Now().Sub(startTime)
@@ -719,7 +719,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 
-		au.committedUpTo(i)
+		au.scheduleCommittingTask(i)
 		if i%2 == 1 {
 			au.waitAccountsWriting()
 		}
@@ -881,7 +881,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 				delta.Accts.Upsert(addr, ad)
 			}
 			au.newBlock(blk, delta)
-			au.committedUpTo(i)
+			au.scheduleCommittingTask(i)
 		}
 		lastRound := i - 1
 		au.waitAccountsWriting()
@@ -1552,7 +1552,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		delta.Totals = newTotals
 
 		au.newBlock(blk, delta)
-		au.committedUpTo(i)
+		au.scheduleCommittingTask(i)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
@@ -1585,7 +1585,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			blk.CurrentProtocol = testProtocolVersion
 			delta := roundDeltas[i]
 			au.newBlock(blk, delta)
-			au.committedUpTo(i)
+			au.scheduleCommittingTask(i)
 
 			// if this is a catchpoint round, check the label.
 			if uint64(i)%cfg.CatchpointInterval == 0 {
@@ -1665,7 +1665,7 @@ func TestCachesInitialization(t *testing.T) {
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
-		au.committedUpTo(basics.Round(i))
+		au.scheduleCommittingTask(basics.Round(i))
 		au.waitAccountsWriting()
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
@@ -1803,8 +1803,8 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
-	// now, commit and verify that the committedUpTo method broken the range correctly.
-	au.committedUpTo(lastRoundToWrite)
+	// now, commit and verify that the scheduleCommittingTask method broken the range correctly.
+	au.scheduleCommittingTask(lastRoundToWrite)
 	au.waitAccountsWriting()
 	require.Equal(t, basics.Round(initialRounds+extraRounds)-1, au.dbRound)
 
@@ -1918,8 +1918,8 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
-	// now, commit and verify that the committedUpTo method broken the range correctly.
-	au.committedUpTo(endOfFirstNewProtocolSegment)
+	// now, commit and verify that the scheduleCommittingTask method broken the range correctly.
+	au.scheduleCommittingTask(endOfFirstNewProtocolSegment)
 	au.waitAccountsWriting()
 	require.Equal(t, basics.Round(initialRounds+extraRounds)-1, au.dbRound)
 
@@ -1954,7 +1954,7 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
-	au.committedUpTo(endOfFirstNewProtocolSegment + basics.Round(extraRounds))
+	au.scheduleCommittingTask(endOfFirstNewProtocolSegment + basics.Round(extraRounds))
 	au.waitAccountsWriting()
 	require.Equal(t, basics.Round(initialRounds+2*extraRounds), au.dbRound)
 }

@@ -102,6 +102,11 @@ type ledgerForTracker interface {
 
 type trackerRegistry struct {
 	trackers []ledgerTracker
+	driver   *accountUpdates
+}
+
+func (tr *trackerRegistry) setCommitDriver(au *accountUpdates) {
+	tr.driver = au
 }
 
 func (tr *trackerRegistry) register(lt ledgerTracker) {
@@ -139,6 +144,8 @@ func (tr *trackerRegistry) committedUpTo(rnd basics.Round) basics.Round {
 			minBlock = retain
 		}
 	}
+
+	tr.driver.scheduleCommittingTask(rnd)
 
 	return minBlock
 }
