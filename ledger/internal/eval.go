@@ -366,9 +366,10 @@ type BlockEvaluator struct {
 	proto       config.ConsensusParams
 	genesisHash crypto.Digest
 
-	block        bookkeeping.Block
-	blockTxBytes int
-	specials     transactions.SpecialAddresses
+	block               bookkeeping.Block
+	blockTxBytes        int
+	specials            transactions.SpecialAddresses
+	maxTxnBytesPerBlock int
 
 	blockGenerated bool // prevent repeated GenerateBlock calls
 
@@ -383,8 +384,12 @@ type LedgerForEvaluator interface {
 	CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error)
 }
 
-// StartEvaluator start the evaluator for the given ledger.
-func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, proto config.ConsensusParams, paysetHint int, validate bool, generate bool) (*BlockEvaluator, error) {
+func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, proto config.ConsensusParams, paysetHint int, validate bool, generate bool, maxTxnBytesPerBlock int) (*BlockEvaluator, error) {
+	// if the caller did not provide a valid block size limit, default to the consensus params defaults.
+	if maxTxnBytesPerBlock <= 0 || maxTxnBytesPerBlock > proto.MaxTxnBytesPerBlock {
+		maxTxnBytesPerBlock = proto.MaxTxnBytesPerBlock
+	}
+
 	if hdr.Round == 0 {
 		return nil, ErrRoundZero
 	}
@@ -422,9 +427,10 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 			FeeSink:     hdr.FeeSink,
 			RewardsPool: hdr.RewardsPool,
 		},
-		proto:       proto,
-		genesisHash: l.GenesisHash(),
-		l:           l,
+		proto:               proto,
+		genesisHash:         l.GenesisHash(),
+		l:                   l,
+		maxTxnBytesPerBlock: maxTxnBytesPerBlock,
 	}
 
 	// Preallocate space for the payset so that we don't have to
@@ -746,7 +752,7 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 
 		if eval.validate {
 			groupTxBytes += txib.GetEncodedLength()
-			if eval.blockTxBytes+groupTxBytes > eval.proto.MaxTxnBytesPerBlock {
+			if eval.blockTxBytes+groupTxBytes > eval.maxTxnBytesPerBlock {
 				return ledgercore.ErrNoSpace
 			}
 		}
@@ -922,25 +928,9 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		return
 	}
 
-	// rekeying: update balrecord.AuthAddr to tx.RekeyTo if provided
-	if (tx.RekeyTo != basics.Address{}) {
-		var acct basics.AccountData
-		acct, err = balances.Get(tx.Sender, false)
-		if err != nil {
-			return
-		}
-		// Special case: rekeying to the account's actual address just sets acct.AuthAddr to 0
-		// This saves 32 bytes in your balance record if you want to go back to using your original key
-		if tx.RekeyTo == tx.Sender {
-			acct.AuthAddr = basics.Address{}
-		} else {
-			acct.AuthAddr = tx.RekeyTo
-		}
-
-		err = balances.Put(tx.Sender, acct)
-		if err != nil {
-			return
-		}
+	err = apply.Rekey(balances, &tx)
+	if err != nil {
+		return
 	}
 
 	switch tx.Type {
@@ -1228,8 +1218,7 @@ func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, vali
 		return ledgercore.StateDelta{}, protocol.Error(blk.BlockHeader.CurrentProtocol)
 	}
 
-	eval, err := StartEvaluator(
-		l, blk.BlockHeader, proto, len(blk.Payset), validate, false)
+	eval, err := StartEvaluator(l, blk.BlockHeader, proto, len(blk.Payset), validate, false, 0)
 	if err != nil {
 		return ledgercore.StateDelta{}, err
 	}

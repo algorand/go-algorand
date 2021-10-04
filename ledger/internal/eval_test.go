@@ -77,7 +77,7 @@ func TestBlockEvaluator(t *testing.T) {
 
 	genesisBlockHeader, err := l.BlockHdr(basics.Round(0))
 	newBlock := bookkeeping.MakeBlock(genesisBlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.NoError(t, err)
 	require.Equal(t, eval.specials.FeeSink, testSinkAddr)
 
@@ -291,7 +291,7 @@ func TestRekeying(t *testing.T) {
 		genesisHdr, err := l.BlockHdr(basics.Round(0))
 		require.NoError(t, err)
 		newBlock := bookkeeping.MakeBlock(genesisHdr)
-		eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+		eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 		require.NoError(t, err)
 
 		for _, stxn := range stxns {
@@ -471,7 +471,7 @@ func testEvalAppGroup(t *testing.T, schema basics.StateSchema) (*BlockEvaluator,
 	blkHeader, err := l.BlockHdr(basics.Round(0))
 	require.NoError(t, err)
 	newBlock := bookkeeping.MakeBlock(blkHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.NoError(t, err)
 	eval.validate = true
 	eval.generate = false
@@ -586,6 +586,9 @@ func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalPr
 	l := newTestLedger(t, genBalances)
 
 	eval := l.nextBlock(t)
+	eval.validate = true
+	eval.generate = false
+
 	eval.proto = config.Consensus[consensusVersion]
 
 	appcall1 := txntest.Txn{
@@ -944,7 +947,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 	}
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	bev, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	bev, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.NoError(b, err)
 
 	genHash := l.GenesisHash()
@@ -983,7 +986,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 					require.NoError(b, err)
 				}
 				newBlock = bookkeeping.MakeBlock(validatedBlock.Block().BlockHeader)
-				bev, err = l.StartEvaluator(newBlock.BlockHeader, 0)
+				bev, err = l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 				require.NoError(b, err)
 				numBlocks++
 			}
@@ -1006,7 +1009,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 		wg.Wait()*/
 
 		newBlock = bookkeeping.MakeBlock(validatedBlock.Block().BlockHeader)
-		bev, err = l.StartEvaluator(newBlock.BlockHeader, 0)
+		bev, err = l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 		require.NoError(b, err)
 	}
 
@@ -1207,7 +1210,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	defer l.Close()
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.NoError(t, err)
 
 	// won't work before funding bank
@@ -1446,13 +1449,13 @@ func (ledger *evalTestLedger) Validate(ctx context.Context, blk bookkeeping.Bloc
 // of the block that the caller is planning to evaluate. If the length of the
 // payset being evaluated is known in advance, a paysetHint >= 0 can be
 // passed, avoiding unnecessary payset slice growth.
-func (ledger *evalTestLedger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint int) (*BlockEvaluator, error) {
+func (ledger *evalTestLedger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*BlockEvaluator, error) {
 	proto, ok := config.Consensus[hdr.CurrentProtocol]
 	if !ok {
 		return nil, protocol.Error(hdr.CurrentProtocol)
 	}
 
-	return StartEvaluator(ledger, hdr, proto, paysetHint, true, true)
+	return StartEvaluator(ledger, hdr, proto, paysetHint, true, true, maxTxnBytesPerBlock)
 }
 
 // GetCreatorForRound takes a CreatableIndex and a CreatableType and tries to
@@ -1563,7 +1566,7 @@ func (ledger *evalTestLedger) nextBlock(t testing.TB) *BlockEvaluator {
 	require.NoError(t, err)
 
 	nextHdr := bookkeeping.MakeBlock(hdr).BlockHeader
-	eval, err := ledger.StartEvaluator(nextHdr, 0)
+	eval, err := ledger.StartEvaluator(nextHdr, 0, 0)
 	require.NoError(t, err)
 	return eval
 }

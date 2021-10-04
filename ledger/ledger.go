@@ -656,14 +656,17 @@ func (l *Ledger) VerifiedTransactionCache() verify.VerifiedTransactionCache {
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
 // of the block that the caller is planning to evaluate. If the length of the
 // payset being evaluated is known in advance, a paysetHint >= 0 can be
-// passed, avoiding unnecessary payset slice growth.
-func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint int) (*internal.BlockEvaluator, error) {
+// passed, avoiding unnecessary payset slice growth. The optional maxTxnBytesPerBlock parameter
+// provides a cap on the size of a single generated block size, when a non-zero value is passed.
+// If a value of zero or less is passed to maxTxnBytesPerBlock, the consensus MaxTxnBytesPerBlock would
+// be used instead.
+func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*internal.BlockEvaluator, error) {
 	proto, ok := config.Consensus[hdr.CurrentProtocol]
 	if !ok {
 		return nil, protocol.Error(hdr.CurrentProtocol)
 	}
 
-	return internal.StartEvaluator(l, hdr, proto, paysetHint, true, true)
+	return internal.StartEvaluator(l, hdr, proto, paysetHint, true, true, maxTxnBytesPerBlock)
 }
 
 // Validate uses the ledger to validate block blk as a candidate next block.

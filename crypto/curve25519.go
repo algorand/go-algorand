@@ -69,10 +69,19 @@ func init() {
 // A Seed holds the entropy needed to generate cryptographic keys.
 type Seed ed25519Seed
 
+// PublicKeyByteLength is the length, in bytes, of a public key
+const PublicKeyByteLength = 32
+
+// PrivateKeyByteLength is the length, in bytes, of a private key
+const PrivateKeyByteLength = 64
+
+// SignatureByteLength is the length, in bytes, of a signature
+const SignatureByteLength = 64
+
 /* Classical signatures */
-type ed25519Signature [64]byte
-type ed25519PublicKey [32]byte
-type ed25519PrivateKey [64]byte
+type ed25519Signature [SignatureByteLength]byte
+type ed25519PublicKey [PublicKeyByteLength]byte
+type ed25519PrivateKey [PrivateKeyByteLength]byte
 type ed25519Seed [32]byte
 
 // MasterDerivationKey is used to derive ed25519 keys for use in wallets
