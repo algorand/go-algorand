@@ -1124,8 +1124,7 @@ func (ledger *evalTestLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeade
 }
 
 func (ledger *evalTestLedger) CompactCertVoters(rnd basics.Round) (*ledgercore.VotersForRound, error) {
-	panic(nil)
-	return nil, nil
+	return nil, errors.New("untested code path")
 }
 
 // GetCreator is like GetCreatorForRound, but for the latest round and race-free

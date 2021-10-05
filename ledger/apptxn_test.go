@@ -51,11 +51,6 @@ func main(source string) string {
 // newTestLedger creates a in memory Ledger that is as realistic as
 // possible.  It has Rewards and FeeSink properly configured.
 func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *Ledger {
-	l, _, _ := newTestLedgerImpl(t, balances, true)
-	return l
-}
-
-func newTestLedgerImpl(t testing.TB, balances bookkeeping.GenesisBalances, inMem bool) (*Ledger, string, bookkeeping.Block) {
 	var genHash crypto.Digest
 	crypto.RandBytes(genHash[:])
 	genBlock, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture,
@@ -65,13 +60,13 @@ func newTestLedgerImpl(t testing.TB, balances bookkeeping.GenesisBalances, inMem
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, ledgercore.InitState{
+	l, err := OpenLedger(logging.Base(), dbName, true, ledgercore.InitState{
 		Block:       genBlock,
 		Accounts:    balances.Balances,
 		GenesisHash: genHash,
 	}, cfg)
 	require.NoError(t, err)
-	return l, dbName, genBlock
+	return l
 }
 
 // nextBlock begins evaluation of a new block, after ledger creation or endBlock()

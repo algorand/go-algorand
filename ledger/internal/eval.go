@@ -1005,8 +1005,7 @@ func (eval *BlockEvaluator) compactCertVotersAndTotal() (root crypto.Digest, tot
 	return
 }
 
-// TestingTxnCounter - the method returns the current evaluator transaction counter. The method is used for testing purposes
-// only.
+// TestingTxnCounter - the method returns the current evaluator transaction counter. The method is used for testing purposes only.
 func (eval *BlockEvaluator) TestingTxnCounter() uint64 {
 	return eval.state.txnCounter()
 }
@@ -1163,50 +1162,6 @@ func (validator *evalTxValidator) run() {
 	err := verify.PaysetGroups(validator.ctx, unverifiedTxnGroups, validator.block.BlockHeader, validator.verificationPool, validator.txcache)
 	if err != nil {
 		validator.done <- err
-	}
-}
-
-// ProcessBlockForIndexer ..
-func (eval *BlockEvaluator) ProcessBlockForIndexer(block *bookkeeping.Block) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
-	paysetgroups, err := block.DecodePaysetGroups()
-	if err != nil {
-		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
-			fmt.Errorf("ProcessBlockForIndexer() err: %w", err)
-	}
-
-	for _, group := range paysetgroups {
-		err = eval.TransactionGroup(group)
-		if err != nil {
-			return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
-				fmt.Errorf("ProcessBlockForIndexer() err: %w", err)
-		}
-	}
-
-	// Finally, process any pending end-of-block state changes.
-	err = eval.endOfBlock()
-	if err != nil {
-		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
-			fmt.Errorf("ProcessBlockForIndexer() err: %w", err)
-	}
-
-	// here, in the EvalForIndexer, we don't want to call finalValidation(). This would
-	// skip the calculation of the account totals in the state delta, which is a serious
-	// issue if it were to be used by algod, but it's perfectly fine for the indexer since
-	// it doesn't track any totals and therefore cannot calculate the new totals.
-
-	return eval.state.deltas(), eval.block.Payset, nil
-}
-
-// PreloadAccountDataCache initialize the account data cache so that we won't need to make a
-// ledger quety for that account.
-func (eval *BlockEvaluator) PreloadAccountDataCache(accountDataMap map[basics.Address]*basics.AccountData) {
-	base := eval.state.lookupParent.(*roundCowBase)
-	for address, accountData := range accountDataMap {
-		if accountData == nil {
-			base.accounts[address] = basics.AccountData{}
-		} else {
-			base.accounts[address] = *accountData
-		}
 	}
 }
 
