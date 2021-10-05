@@ -42,10 +42,12 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-algorand/util/kvstore"
 )
 
 type mockLedgerForTracker struct {
 	dbs             db.Pair
+	kv              kvstore.KVStore
 	blocks          []blockEntry
 	deltas          []ledgercore.StateDelta
 	log             logging.Logger
@@ -55,7 +57,7 @@ type mockLedgerForTracker struct {
 }
 
 func makeMockLedgerForTracker(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion) *mockLedgerForTracker {
-	dbs, fileName := dbOpenTest(t, inMemory)
+	dbs, kv, fileName := dbOpenTest(t, inMemory)
 	dblogger := logging.TestingLog(t)
 	dblogger.SetLevel(logging.Info)
 	dbs.Rdb.SetLogger(dblogger)
@@ -67,11 +69,12 @@ func makeMockLedgerForTracker(t testing.TB, inMemory bool, initialBlocksCount in
 		deltas[i] = ledgercore.StateDelta{Hdr: &bookkeeping.BlockHeader{}}
 	}
 	consensusParams := config.Consensus[consensusVersion]
-	return &mockLedgerForTracker{dbs: dbs, log: dblogger, filename: fileName, inMemory: inMemory, blocks: blocks, deltas: deltas, consensusParams: consensusParams}
+	return &mockLedgerForTracker{dbs: dbs, kv: kv, log: dblogger, filename: fileName, inMemory: inMemory, blocks: blocks, deltas: deltas, consensusParams: consensusParams}
 }
 
 // fork creates another database which has the same content as the current one. Works only for non-memory databases.
 func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
+	t.Skip("fork not implemented for KV")
 	if ml.inMemory {
 		return nil
 	}
@@ -159,6 +162,10 @@ func (ml *mockLedgerForTracker) trackerDB() db.Pair {
 	return ml.dbs
 }
 
+func (ml *mockLedgerForTracker) kvStore() kvstore.KVStore {
+	return ml.kv
+}
+
 func (ml *mockLedgerForTracker) blockDB() db.Pair {
 	return db.Pair{}
 }
@@ -191,11 +198,7 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 		return
 	}
 
-	err = au.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		var err0 error
-		bals, err0 = accountsAll(tx)
-		return err0
-	})
+	bals, err = accountsAll(au.kv)
 	if err != nil {
 		return
 	}
@@ -1037,7 +1040,7 @@ func TestListCreatables(t *testing.T) {
 	numElementsPerSegement := 25
 
 	// set up the database
-	dbs, _ := dbOpenTest(t, true)
+	dbs, kv, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
 	defer dbs.Close()
 
@@ -1048,13 +1051,14 @@ func TestListCreatables(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	accts := make(map[basics.Address]basics.AccountData)
-	_, err = accountsInit(tx, accts, proto)
+	_, err = accountsInit(tx, kv, kv, accts, proto)
 	require.NoError(t, err)
 
 	err = accountsAddNormalizedBalance(tx, proto)
 	require.NoError(t, err)
 
 	au := &accountUpdates{}
+	au.kv = accountKV{kv}
 	au.accountsq, err = accountsDbInit(tx, tx)
 	require.NoError(t, err)
 
@@ -1073,7 +1077,7 @@ func TestListCreatables(t *testing.T) {
 	// ******* No deletes	                                           *******
 	// sync with the database
 	var updates compactAccountDeltas
-	_, err = accountsNewRound(tx, updates, ctbsWithDeletes, proto, basics.Round(1))
+	_, err = accountsNewRound(kv, updates, ctbsWithDeletes, proto, basics.Round(1))
 	require.NoError(t, err)
 	// nothing left in cache
 	au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
@@ -1089,7 +1093,7 @@ func TestListCreatables(t *testing.T) {
 	// ******* Results are obtained from the database and from the cache *******
 	// ******* Deletes are in the database and in the cache              *******
 	// sync with the database. This has deletes synced to the database.
-	_, err = accountsNewRound(tx, updates, au.creatables, proto, basics.Round(1))
+	_, err = accountsNewRound(kv, updates, au.creatables, proto, basics.Round(1))
 	require.NoError(t, err)
 	// get new creatables in the cache. There will be deletes in the cache from the previous batch.
 	au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
@@ -1187,11 +1191,12 @@ func TestGetCatchpointStream(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
-	rows, err := tx.Query("SELECT address, data FROM accountbase")
-	if err != nil {
-		return
-	}
+func accountsAll(kv kvRead) (bals map[basics.Address]basics.AccountData, err error) {
+	rows := newKVAccountIterator(kv)
+	// rows, err := tx.Query("SELECT address, data FROM accountbase")
+	// if err != nil {
+	// 	return
+	// }
 	defer rows.Close()
 
 	bals = make(map[basics.Address]basics.AccountData)
@@ -1263,14 +1268,14 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 		}
 
 		err := ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			_, err = accountsNewRound(tx, updates, nil, proto, basics.Round(1))
+			_, err = accountsNewRound(au.kv, updates, nil, proto, basics.Round(1))
 			return
 		})
 		require.NoError(b, err)
 	}
 
 	err = ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		return updateAccountsRound(tx, 0, 1)
+		return updateAccountsRound(tx, au.kv, au.kv, 0, 1) // XXX
 	})
 	require.NoError(b, err)
 
@@ -1334,13 +1339,13 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 				i++
 			}
 
-			_, err = accountsNewRound(tx, updates, nil, proto, basics.Round(1))
+			_, err = accountsNewRound(au.kv, updates, nil, proto, basics.Round(1))
 			if err != nil {
 				return
 			}
 		}
 
-		return updateAccountsRound(tx, 0, 1)
+		return updateAccountsRound(tx, au.kv, au.kv, 0, 1) // XXX
 	})
 	require.NoError(b, err)
 

@@ -418,6 +418,8 @@ type Local struct {
 	// features like catchpoint catchup would be rendered completly non-operational, and many of the node inner
 	// working would be completly dis-functional.
 	DisableNetworking bool `version[16]:"false"`
+
+	KVStoreImpl string `version[16]:"rocksdb"`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

@@ -33,9 +33,12 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-algorand/util/kvstore"
 )
 
-func dbOpenTest(t testing.TB, inMemory bool) (db.Pair, string) {
+var defaultKVStoreImpl = "rocksdb"
+
+func dbOpenTest(t testing.TB, inMemory bool) (db.Pair, kvstore.KVStore, string) {
 	dbDir := "."
 	if d := os.Getenv("DBDIR"); d != "" {
 		dbDir = d
@@ -43,7 +46,11 @@ func dbOpenTest(t testing.TB, inMemory bool) (db.Pair, string) {
 	fn := fmt.Sprintf("%s/%s.%d", dbDir, strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
 	dbs, err := db.OpenPair(fn, inMemory)
 	require.NoErrorf(t, err, "Filename : %s\nInMemory: %v", fn, inMemory)
-	return dbs, fn
+
+	kvFn := fn + ".kv"
+	kv, err := kvstore.NewKVStore(defaultKVStoreImpl, kvFn, inMemory)
+	require.NoErrorf(t, err, "KV Filename : %s\nInMemory: %v", fn, inMemory)
+	return dbs, kv, fn
 }
 
 func randomBlock(r basics.Round) blockEntry {
@@ -126,7 +133,7 @@ func setDbLogging(t testing.TB, dbs db.Pair) {
 func TestBlockDBEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := dbOpenTest(t, true)
+	dbs, _, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
 	defer dbs.Close()
 
@@ -142,7 +149,7 @@ func TestBlockDBEmpty(t *testing.T) {
 func TestBlockDBInit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := dbOpenTest(t, true)
+	dbs, _, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
 	defer dbs.Close()
 
@@ -164,7 +171,7 @@ func TestBlockDBInit(t *testing.T) {
 func TestBlockDBAppend(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := dbOpenTest(t, true)
+	dbs, _, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
 	defer dbs.Close()
 

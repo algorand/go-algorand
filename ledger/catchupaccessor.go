@@ -280,7 +280,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 		if err != nil {
 			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupBlockRound, err)
 		}
-		err = accountsPutTotals(tx, fileHeader.Totals, true)
+		err = accountsPutTotals(nil, fileHeader.Totals, true) // XXX panics
 		return
 	})
 	ledgerProcessstagingcontentMicros.AddMicrosecondsSince(start, nil)
@@ -633,7 +633,7 @@ func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 			return fmt.Errorf("unable to get trie root hash: %v", err)
 		}
 
-		totals, err = accountsTotals(tx, true)
+		totals, err = accountsTotals(nil, true) // XXX panics
 		if err != nil {
 			return fmt.Errorf("unable to get accounts totals: %v", err)
 		}
@@ -780,7 +780,7 @@ func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 			return err
 		}
 
-		totals, err = accountsTotals(tx, true)
+		totals, err = accountsTotals(nil, true) // XXX panics
 		if err != nil {
 			return err
 		}
@@ -790,7 +790,7 @@ func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 			return err
 		}
 
-		err = accountsPutTotals(tx, totals, false)
+		err = accountsPutTotals(nil, totals, false) // XXX panics
 		if err != nil {
 			return err
 		}

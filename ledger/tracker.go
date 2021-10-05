@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-algorand/util/kvstore"
 )
 
 // ledgerTracker defines part of the API for any state machine that
@@ -88,6 +89,7 @@ type ledgerTracker interface {
 type ledgerForTracker interface {
 	trackerDB() db.Pair
 	blockDB() db.Pair
+	kvStore() kvstore.KVStore
 	trackerLog() logging.Logger
 	trackerEvalVerified(bookkeeping.Block, ledgerForEvaluator) (ledgercore.StateDelta, error)
 

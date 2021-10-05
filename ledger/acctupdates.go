@@ -152,6 +152,9 @@ type accountUpdates struct {
 	// Connection to the database.
 	dbs db.Pair
 
+	// Connection to the KV Store.
+	kv accountKV
+
 	// Prepared SQL statements for fast accounts DB lookups.
 	accountsq *accountsDbQueries
 
@@ -474,7 +477,7 @@ func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, 
 		// Fetch up to maxResults - len(res) + len(deletedCreatables) from the database,
 		// so we have enough extras in case creatables were deleted
 		numToFetch := maxResults - uint64(len(res)) + uint64(len(deletedCreatables))
-		dbResults, dbRound, err := au.accountsq.listCreatables(maxCreatableIdx, numToFetch, ctype)
+		dbResults, dbRound, err := au.accountsq.listCreatables(au.kv, maxCreatableIdx, numToFetch, ctype)
 		if err != nil {
 			return nil, err
 		}
@@ -566,12 +569,12 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 			var accts map[basics.Address]*onlineAccount
 			start := time.Now()
 			ledgerAccountsonlinetopCount.Inc(nil)
-			err = au.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-				accts, err = accountsOnlineTop(tx, batchOffset, batchSize, proto)
+			err = atomicReads(au.dbs, au.kv, func(ctx context.Context, tx *atomicReadTx) (err error) {
+				accts, err = accountsOnlineTop(tx.kvRead, batchOffset, batchSize, proto)
 				if err != nil {
 					return
 				}
-				dbRound, _, err = accountsRound(tx)
+				dbRound, _, err = accountsRound(tx.sqlTx, tx.kvRead)
 				return
 			})
 			ledgerAccountsonlinetopMicros.AddMicrosecondsSince(start, nil)
@@ -1107,6 +1110,7 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRound, lastestBlockRound basics.Round, err error) {
 	au.dbs = l.trackerDB()
 	au.log = l.trackerLog()
+	au.kv = accountKV{l.kvStore()}
 	au.ledger = l
 
 	if au.initAccounts == nil {
@@ -1117,26 +1121,27 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	lastestBlockRound = l.Latest()
 	start := time.Now()
 	ledgerAccountsinitCount.Inc(nil)
-	err = au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = atomicWrites(au.dbs, au.kv, func(ctx context.Context, tx *atomicWriteTx) error {
 		var err0 error
-		au.dbRound, err0 = au.accountsInitialize(ctx, tx)
+		au.dbRound, err0 = au.accountsInitialize(ctx, tx, au.kv)
 		if err0 != nil {
 			return err0
 		}
 		// Check for blocks DB and tracker DB un-sync
 		if au.dbRound > lastestBlockRound {
 			au.log.Warnf("accountUpdates.initializeFromDisk: resetting accounts DB (on round %v, but blocks DB's latest is %v)", au.dbRound, lastestBlockRound)
-			err0 = accountsReset(tx)
+			err0 = accountsReset(tx.sqlTx) // XXX not dropping all KVStore tables
 			if err0 != nil {
 				return err0
 			}
-			au.dbRound, err0 = au.accountsInitialize(ctx, tx)
+			au.dbRound, err0 = au.accountsInitialize(ctx, tx, au.kv)
 			if err0 != nil {
 				return err0
 			}
 		}
 
-		totals, err0 := accountsTotals(tx, false)
+		tx.writeBarrier() // XXX assuming this is needed for accountsTotals read below
+		totals, err0 := accountsTotals(au.kv, false)
 		if err0 != nil {
 			return err0
 		}
@@ -1206,9 +1211,9 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 // accountsInitialize initializes the accounts DB if needed and return current account round.
 // as part of the initialization, it tests the current database schema version, and perform upgrade
 // procedures to bring it up to the database schema supported by the binary.
-func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (basics.Round, error) {
+func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *atomicWriteTx, kv kvRead) (basics.Round, error) {
 	// check current database version.
-	dbVersion, err := db.GetUserVersion(ctx, tx)
+	dbVersion, err := db.GetUserVersion(ctx, tx.sqlTx)
 	if err != nil {
 		return 0, fmt.Errorf("accountsInitialize unable to read database schema version : %v", err)
 	}
@@ -1229,31 +1234,31 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 			// perform the initialization/upgrade
 			switch dbVersion {
 			case 0:
-				dbVersion, newDatabase, err = au.upgradeDatabaseSchema0(ctx, tx)
+				dbVersion, newDatabase, err = au.upgradeDatabaseSchema0(ctx, tx, kv)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 0 : %v", err)
 					return 0, err
 				}
 			case 1:
-				dbVersion, err = au.upgradeDatabaseSchema1(ctx, tx, newDatabase)
+				dbVersion, err = au.upgradeDatabaseSchema1(ctx, tx.sqlTx, newDatabase)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 1 : %v", err)
 					return 0, err
 				}
 			case 2:
-				dbVersion, err = au.upgradeDatabaseSchema2(ctx, tx, newDatabase)
+				dbVersion, err = au.upgradeDatabaseSchema2(ctx, tx.sqlTx, newDatabase)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 2 : %v", err)
 					return 0, err
 				}
 			case 3:
-				dbVersion, err = au.upgradeDatabaseSchema3(ctx, tx, newDatabase)
+				dbVersion, err = au.upgradeDatabaseSchema3(ctx, tx.sqlTx, newDatabase)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 3 : %v", err)
 					return 0, err
 				}
 			case 4:
-				dbVersion, err = au.upgradeDatabaseSchema4(ctx, tx, newDatabase)
+				dbVersion, err = au.upgradeDatabaseSchema4(ctx, tx.sqlTx, newDatabase)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 4 : %v", err)
 					return 0, err
@@ -1264,9 +1269,11 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 		}
 
 		au.log.Infof("accountsInitialize database schema upgrade complete")
+		// XXX commit KV batch so accountsRound will find initialized round number
+		tx.writeBarrier()
 	}
 
-	rnd, hashRound, err := accountsRound(tx)
+	rnd, hashRound, err := accountsRound(tx.sqlTx, au.kv)
 	if err != nil {
 		return 0, err
 	}
@@ -1274,7 +1281,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 	if hashRound != rnd {
 		// if the hashed round is different then the base round, something was modified, and the accounts aren't in sync
 		// with the hashes.
-		err = resetAccountHashes(tx)
+		err = resetAccountHashes(tx.sqlTx) // XXX leaving accounthashes in SQL
 		if err != nil {
 			return 0, err
 		}
@@ -1285,7 +1292,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 	}
 
 	// create the merkle trie for the balances
-	committer, err := MakeMerkleCommitter(tx, false)
+	committer, err := MakeMerkleCommitter(tx.sqlTx, false) // XXX leaving accounthashes in SQL
 	if err != nil {
 		return 0, fmt.Errorf("accountsInitialize was unable to makeMerkleCommitter: %v", err)
 	}
@@ -1303,8 +1310,11 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 	}
 
 	if rootHash.IsZero() {
+		// XXX commit KV batch so makeOrderedAccountsIter will read from flushed data
+		tx.writeBarrier()
+
 		au.log.Infof("accountsInitialize rebuilding merkle trie for round %d", rnd)
-		accountBuilderIt := makeOrderedAccountsIter(tx, trieRebuildAccountChunkSize)
+		accountBuilderIt := makeOrderedAccountsIter(tx.sqlTx, au.kv, trieRebuildAccountChunkSize)
 		defer accountBuilderIt.Close(ctx)
 		startTrieBuildTime := time.Now()
 		accountsCount := 0
@@ -1367,7 +1377,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 		}
 
 		// we've just updated the merkle trie, update the hashRound to reflect that.
-		err = updateAccountsRound(tx, rnd, rnd)
+		err = updateAccountsRound(tx.sqlTx, au.kv, tx.kvWrite, rnd, rnd) // XXX doesn't read from current KV batch
 		if err != nil {
 			return 0, fmt.Errorf("accountsInitialize was unable to update the account round to %d: %v", rnd, err)
 		}
@@ -1398,13 +1408,13 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 // The accounttotals would get initialized to align with the initialization account added to accountbase
 // The acctrounds would get updated to indicate that the balance matches round 0
 //
-func (au *accountUpdates) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, newDatabase bool, err error) {
+func (au *accountUpdates) upgradeDatabaseSchema0(ctx context.Context, tx *atomicWriteTx, kv kvRead) (updatedDBVersion int32, newDatabase bool, err error) {
 	au.log.Infof("accountsInitialize initializing schema")
-	newDatabase, err = accountsInit(tx, au.initAccounts, au.initProto)
+	newDatabase, err = accountsInit(tx.sqlTx, tx.kvWrite, kv, au.initAccounts, au.initProto)
 	if err != nil {
 		return 0, newDatabase, fmt.Errorf("accountsInitialize unable to initialize schema : %v", err)
 	}
-	_, err = db.SetUserVersion(ctx, tx, 1)
+	_, err = db.SetUserVersion(ctx, tx.sqlTx, 1)
 	if err != nil {
 		return 0, newDatabase, fmt.Errorf("accountsInitialize unable to update database schema version from 0 to 1: %v", err)
 	}
@@ -1704,7 +1714,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 			previousAccountData = baseAccountData.accountData
 		} else {
 			// it's missing from the base accounts, so we'll try to load it from disk.
-			if acctData, err := au.accountsq.lookup(addr); err != nil {
+			if acctData, err := au.accountsq.lookup(au.kv, addr); err != nil {
 				au.log.Panicf("accountUpdates: newBlockImpl failed to lookup account %v when processing round %d : %v", addr, rnd, err)
 			} else {
 				previousAccountData = acctData.accountData
@@ -1824,7 +1834,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 		// present in the on-disk DB.  As an optimization, we avoid creating
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
-		persistedData, err = au.accountsq.lookup(addr)
+		persistedData, err = au.accountsq.lookup(au.kv, addr)
 		if persistedData.round == currentDbRound {
 			au.baseAccounts.writePending(persistedData)
 			return persistedData.accountData, err
@@ -1910,7 +1920,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		// present in the on-disk DB.  As an optimization, we avoid creating
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
-		persistedData, err = au.accountsq.lookup(addr)
+		persistedData, err = au.accountsq.lookup(au.kv, addr)
 		if persistedData.round == currentDbRound {
 			au.baseAccounts.writePending(persistedData)
 			return persistedData.accountData, rnd, err
@@ -1984,7 +1994,7 @@ func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.Creat
 			unlock = false
 		}
 		// Check the database
-		creator, ok, dbRound, err = au.accountsq.lookupCreator(cidx, ctype)
+		creator, ok, dbRound, err = au.accountsq.lookupCreator(au.kv, cidx, ctype)
 
 		if dbRound == currentDbRound {
 			return
@@ -2158,10 +2168,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	if updateStats {
 		stats.DatabaseCommitDuration = time.Duration(time.Now().UnixNano())
 	}
-	err := au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := atomicWrites(au.dbs, au.kv, func(ctx context.Context, tx *atomicWriteTx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
-			mc, err0 := MakeMerkleCommitter(tx, false)
+			mc, err0 := MakeMerkleCommitter(tx.sqlTx, false)
 			if err0 != nil {
 				return err0
 			}
@@ -2178,13 +2188,14 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
 
-		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
+		db.ResetTransactionWarnDeadline(ctx, tx.sqlTx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
 
 		if updateStats {
 			stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano())
 		}
 
-		err = compactDeltas.accountsLoadOld(tx)
+		// XXX this doesn't really belong in the write transaction (?)
+		err = compactDeltas.accountsLoadOld(au.kv)
 		if err != nil {
 			return err
 		}
@@ -2193,7 +2204,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano()) - stats.OldAccountPreloadDuration
 		}
 
-		err = totalsNewRounds(tx, deltas[:offset], compactDeltas, roundTotals[1:offset+1], config.Consensus[consensusVersion])
+		// totalsNewRounds reads totals KV and then overwrites it
+		err = totalsNewRounds(au.kv, tx.kvWrite, deltas[:offset], compactDeltas, roundTotals[1:offset+1], config.Consensus[consensusVersion])
 		if err != nil {
 			return err
 		}
@@ -2215,7 +2227,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 		// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
 		// so that we can update the base account back.
-		updatedPersistedAccounts, err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto, dbRound+basics.Round(offset))
+		updatedPersistedAccounts, err = accountsNewRound(tx.kvWrite, compactDeltas, compactCreatableDeltas, genesisProto, dbRound+basics.Round(offset))
 		if err != nil {
 			return err
 		}
@@ -2224,7 +2236,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			stats.AccountsWritingDuration = time.Duration(time.Now().UnixNano()) - stats.AccountsWritingDuration
 		}
 
-		err = updateAccountsRound(tx, dbRound+basics.Round(offset), treeTargetRound)
+		// XXX passing in KV reader that can't see current batch -- needs barrier?
+		err = updateAccountsRound(tx.sqlTx, au.kv, tx.kvWrite, dbRound+basics.Round(offset), treeTargetRound)
 		if err != nil {
 			return err
 		}
@@ -2428,7 +2441,7 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 	var catchpointWriter *catchpointWriter
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
-	err = au.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = atomicReads(au.dbs, au.kv, func(ctx context.Context, tx *atomicReadTx) (err error) {
 		catchpointWriter = makeCatchpointWriter(au.ctx, absCatchpointFileName, tx, committedRound, committedRoundDigest, label)
 		for more {
 			stepCtx, stepCancelFunction := context.WithTimeout(au.ctx, chunkExecutionDuration)
@@ -2441,7 +2454,7 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 				// we just wrote some data, but there is more to be written.
 				// go to sleep for while.
 				// before going to sleep, extend the transaction timeout so that we won't get warnings:
-				db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(1*time.Second))
+				db.ResetTransactionWarnDeadline(ctx, tx.sqlTx, time.Now().Add(1*time.Second))
 				select {
 				case <-time.After(100 * time.Millisecond):
 					// increase the time slot allocated for writing the catchpoint, but stop when we get to the longChunkExecutionDuration limit.

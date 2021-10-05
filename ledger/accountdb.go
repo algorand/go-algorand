@@ -35,9 +35,9 @@ import (
 // accountsDbQueries is used to cache a prepared SQL statement to look up
 // the state of a single account.
 type accountsDbQueries struct {
-	listCreatablesStmt          *sql.Stmt
-	lookupStmt                  *sql.Stmt
-	lookupCreatorStmt           *sql.Stmt
+	// listCreatablesStmt          *sql.Stmt
+	// lookupStmt                  *sql.Stmt
+	// lookupCreatorStmt           *sql.Stmt
 	deleteStoredCatchpoint      *sql.Stmt
 	insertStoredCatchpoint      *sql.Stmt
 	selectOldestCatchpointFiles *sql.Stmt
@@ -247,15 +247,15 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseAcco
 // accountsLoadOld updates the entries on the deltas.old map that matches the provided addresses.
 // The round number of the persistedAccountData is not updated by this function, and the caller is responsible
 // for populating this field.
-func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
+func (a *compactAccountDeltas) accountsLoadOld(kv kvRead) (err error) {
 	if len(a.misses) == 0 {
 		return nil
 	}
-	selectStmt, err := tx.Prepare("SELECT rowid, data FROM accountbase WHERE address=?")
-	if err != nil {
-		return
-	}
-	defer selectStmt.Close()
+	// selectStmt, err := tx.Prepare("SELECT rowid, data FROM accountbase WHERE address=?")
+	// if err != nil {
+	// 	return
+	// }
+	// defer selectStmt.Close()
 	defer func() {
 		a.misses = nil
 	}()
@@ -263,7 +263,8 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 	var acctDataBuf []byte
 	for _, idx := range a.misses {
 		addr := a.addresses[idx]
-		err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &acctDataBuf)
+		//err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &acctDataBuf)
+		err = kvGetAccountData(kv, addr[:], &rowid, &acctDataBuf)
 		switch err {
 		case nil:
 			if len(acctDataBuf) > 0 {
@@ -521,7 +522,7 @@ func getCatchpoint(tx *sql.Tx, round basics.Round) (fileName string, catchpoint 
 //
 // accountsInit returns nil if either it has initialized the database
 // correctly, or if the database has already been initialized.
-func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
+func accountsInit(tx *sql.Tx, kvW kvWrite, kvR kvRead, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
 	for _, tableCreate := range accountsSchema {
 		_, err = tx.Exec(tableCreate)
 		if err != nil {
@@ -544,16 +545,24 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 		return
 	}
 
-	_, err = tx.Exec("INSERT INTO acctrounds (id, rnd) VALUES ('acctbase', 0)")
+	_, kvErr := kvGetAccountRound(kvR, "acctbase")
+	if kvErr == nil { // get round succeeded, DB already initialized
+		return
+	}
+
+	// for KV this put will always succeed
+	err = kvPutAccountRounds(kvW, "acctbase", basics.Round(0))
+	//_, err = tx.Exec("INSERT INTO acctrounds (id, rnd) VALUES ('acctbase', 0)")
 	if err == nil {
 		var ot basics.OverflowTracker
 		var totals ledgercore.AccountTotals
 
 		for addr, data := range initAccounts {
-			_, err = tx.Exec("INSERT INTO accountbase (address, data) VALUES (?, ?)",
-				addr[:], protocol.Encode(&data))
+			_, err = kvInsertAccount(kvW, addr[:], data.NormalizedOnlineBalance(proto), protocol.Encode(&data))
+			//_, err = tx.Exec("INSERT INTO accountbase (address, data) VALUES (?, ?)",
+			//	addr[:], protocol.Encode(&data))
 			if err != nil {
-				return true, err
+				return true, err // XXX kv Set doesn't check if already INSERTed
 			}
 
 			totals.AddAccount(proto, data, &ot)
@@ -563,7 +572,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 			return true, fmt.Errorf("overflow computing totals")
 		}
 
-		err = accountsPutTotals(tx, totals, false)
+		err = accountsPutTotals(kvW, totals, false)
 		if err != nil {
 			return true, err
 		}
@@ -713,12 +722,14 @@ func accountsReset(tx *sql.Tx) error {
 
 // accountsRound returns the tracker balances round number, and the round of the hash tree
 // if the hash of the tree doesn't exists, it returns zero.
-func accountsRound(tx *sql.Tx) (rnd basics.Round, hashrnd basics.Round, err error) {
-	err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&rnd)
+func accountsRound(tx *sql.Tx, kv kvRead) (rnd basics.Round, hashrnd basics.Round, err error) {
+	rnd, err = kvGetAccountRound(kv, "acctbase")
+	//err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&rnd)
 	if err != nil {
 		return
 	}
 
+	//hashrnd, err = kvGetAccountRound(kv, "hashbase")
 	err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='hashbase'").Scan(&hashrnd)
 	if err == sql.ErrNoRows {
 		hashrnd = basics.Round(0)
@@ -731,20 +742,20 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 	var err error
 	qs := &accountsDbQueries{}
 
-	qs.listCreatablesStmt, err = r.Prepare("SELECT rnd, asset, creator FROM acctrounds LEFT JOIN assetcreators ON assetcreators.asset <= ? AND assetcreators.ctype = ? WHERE acctrounds.id='acctbase' ORDER BY assetcreators.asset desc LIMIT ?")
-	if err != nil {
-		return nil, err
-	}
+	// qs.listCreatablesStmt, err = r.Prepare("SELECT rnd, asset, creator FROM acctrounds LEFT JOIN assetcreators ON assetcreators.asset <= ? AND assetcreators.ctype = ? WHERE acctrounds.id='acctbase' ORDER BY assetcreators.asset desc LIMIT ?")
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	qs.lookupStmt, err = r.Prepare("SELECT accountbase.rowid, rnd, data FROM acctrounds LEFT JOIN accountbase ON address=? WHERE id='acctbase'")
-	if err != nil {
-		return nil, err
-	}
+	// qs.lookupStmt, err = r.Prepare("SELECT accountbase.rowid, rnd, data FROM acctrounds LEFT JOIN accountbase ON address=? WHERE id='acctbase'")
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	qs.lookupCreatorStmt, err = r.Prepare("SELECT rnd, creator FROM acctrounds LEFT JOIN assetcreators ON asset = ? AND ctype = ? WHERE id='acctbase'")
-	if err != nil {
-		return nil, err
-	}
+	// qs.lookupCreatorStmt, err = r.Prepare("SELECT rnd, creator FROM acctrounds LEFT JOIN assetcreators ON asset = ? AND ctype = ? WHERE id='acctbase'")
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	qs.deleteStoredCatchpoint, err = w.Prepare("DELETE FROM storedcatchpoints WHERE round=?")
 	if err != nil {
@@ -789,10 +800,11 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 }
 
 // listCreatables returns an array of CreatableLocator which have CreatableIndex smaller or equal to maxIdx and are of the provided CreatableType.
-func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) (results []basics.CreatableLocator, dbRound basics.Round, err error) {
+func (qs *accountsDbQueries) listCreatables(kv kvSnapshottableRead, maxIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) (results []basics.CreatableLocator, dbRound basics.Round, err error) {
 	err = db.Retry(func() error {
 		// Query for assets in range
-		rows, err := qs.listCreatablesStmt.Query(maxIdx, ctype, maxResults)
+		rows, err := kvListCreatables(kv, maxIdx, maxResults, ctype)
+		//rows, err := qs.listCreatablesStmt.Query(maxIdx, ctype, maxResults)
 		if err != nil {
 			return err
 		}
@@ -821,10 +833,11 @@ func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxRes
 	return
 }
 
-func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, dbRound basics.Round, err error) {
+func (qs *accountsDbQueries) lookupCreator(kv kvMultiGet, cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, dbRound basics.Round, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
-		err := qs.lookupCreatorStmt.QueryRow(cidx, ctype).Scan(&dbRound, &buf)
+		dbRound, buf, err = kvLookupCreator(kv, cidx, ctype)
+		//err := qs.lookupCreatorStmt.QueryRow(cidx, ctype).Scan(&dbRound, &buf)
 
 		// this shouldn't happen unless we can't figure the round number.
 		if err == sql.ErrNoRows {
@@ -848,11 +861,12 @@ func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype bas
 // lookup looks up for a the account data given it's address. It returns the persistedAccountData, which includes the current database round and the matching
 // account data, if such was found. If no matching account data could be found for the given address, an empty account data would
 // be retrieved.
-func (qs *accountsDbQueries) lookup(addr basics.Address) (data persistedAccountData, err error) {
+func (qs *accountsDbQueries) lookup(kv kvMultiGet, addr basics.Address) (data persistedAccountData, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
-		err := qs.lookupStmt.QueryRow(addr[:]).Scan(&rowid, &data.round, &buf)
+		err := kvGetAccountDataRound(kv, addr[:], &rowid, &data.round, &buf)
+		//err := qs.lookupStmt.QueryRow(addr[:]).Scan(&rowid, &data.round, &buf)
 		if err == nil {
 			data.addr = addr
 			if len(buf) > 0 && rowid.Valid {
@@ -980,9 +994,9 @@ func (qs *accountsDbQueries) writeCatchpointStateString(ctx context.Context, sta
 
 func (qs *accountsDbQueries) close() {
 	preparedQueries := []**sql.Stmt{
-		&qs.listCreatablesStmt,
-		&qs.lookupStmt,
-		&qs.lookupCreatorStmt,
+		// &qs.listCreatablesStmt,
+		// &qs.lookupStmt,
+		// &qs.lookupCreatorStmt,
 		&qs.deleteStoredCatchpoint,
 		&qs.insertStoredCatchpoint,
 		&qs.selectOldestCatchpointFiles,
@@ -1009,8 +1023,9 @@ func (qs *accountsDbQueries) close() {
 //
 // Note that this does not check if the accounts have a vote key valid for any
 // particular round (past, present, or future).
-func accountsOnlineTop(tx *sql.Tx, offset, n uint64, proto config.ConsensusParams) (map[basics.Address]*onlineAccount, error) {
-	rows, err := tx.Query("SELECT address, data FROM accountbase WHERE normalizedonlinebalance>0 ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?", n, offset)
+func accountsOnlineTop(kv kvRead, offset, n uint64, proto config.ConsensusParams) (map[basics.Address]*onlineAccount, error) {
+	//rows, err := tx.Query("SELECT address, data FROM accountbase WHERE normalizedonlinebalance>0 ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?", n, offset)
+	rows, err := kvTopAccounts(kv, offset, n)
 	if err != nil {
 		return nil, err
 	}
@@ -1044,57 +1059,57 @@ func accountsOnlineTop(tx *sql.Tx, offset, n uint64, proto config.ConsensusParam
 	return res, rows.Err()
 }
 
-func accountsTotals(tx *sql.Tx, catchpointStaging bool) (totals ledgercore.AccountTotals, err error) {
+func accountsTotals(kv kvRead, catchpointStaging bool) (totals ledgercore.AccountTotals, err error) {
 	id := ""
 	if catchpointStaging {
 		id = "catchpointStaging"
 	}
-	row := tx.QueryRow("SELECT online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel FROM accounttotals WHERE id=?", id)
-	err = row.Scan(&totals.Online.Money.Raw, &totals.Online.RewardUnits,
-		&totals.Offline.Money.Raw, &totals.Offline.RewardUnits,
-		&totals.NotParticipating.Money.Raw, &totals.NotParticipating.RewardUnits,
-		&totals.RewardsLevel)
-
-	return
+	//	row := tx.QueryRow("SELECT online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel FROM accounttotals WHERE id=?", id)
+	//	err = row.Scan(&totals.Online.Money.Raw, &totals.Online.RewardUnits,
+	//		&totals.Offline.Money.Raw, &totals.Offline.RewardUnits,
+	//		&totals.NotParticipating.Money.Raw, &totals.NotParticipating.RewardUnits,
+	//		&totals.RewardsLevel)
+	return kvGetAccountsTotals(kv, id)
 }
 
-func accountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointStaging bool) error {
+func accountsPutTotals(kv kvWrite, totals ledgercore.AccountTotals, catchpointStaging bool) error {
 	id := ""
 	if catchpointStaging {
 		id = "catchpointStaging"
 	}
-	_, err := tx.Exec("REPLACE INTO accounttotals (id, online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		id,
-		totals.Online.Money.Raw, totals.Online.RewardUnits,
-		totals.Offline.Money.Raw, totals.Offline.RewardUnits,
-		totals.NotParticipating.Money.Raw, totals.NotParticipating.RewardUnits,
-		totals.RewardsLevel)
-	return err
+	// _, err := tx.Exec("REPLACE INTO accounttotals (id, online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+	// 	id,
+	// 	totals.Online.Money.Raw, totals.Online.RewardUnits,
+	// 	totals.Offline.Money.Raw, totals.Offline.RewardUnits,
+	// 	totals.NotParticipating.Money.Raw, totals.NotParticipating.RewardUnits,
+	// 	totals.RewardsLevel)
+	return kvPutAccountsTotals(kv, id, totals)
 }
 
 // accountsNewRound updates the accountbase and assetcreators tables by applying the provided deltas to the accounts / creatables.
 // The function returns a persistedAccountData for the modified accounts which can be stored in the base cache.
-func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable, proto config.ConsensusParams, lastUpdateRound basics.Round) (updatedAccounts []persistedAccountData, err error) {
+func accountsNewRound(kv kvWrite, updates compactAccountDeltas, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable, proto config.ConsensusParams, lastUpdateRound basics.Round) (updatedAccounts []persistedAccountData, err error) {
 
-	var insertCreatableIdxStmt, deleteCreatableIdxStmt, deleteByRowIDStmt, insertStmt, updateStmt *sql.Stmt
+	//var insertCreatableIdxStmt, deleteCreatableIdxStmt *sql.Stmt
+	//var insertCreatableIdxStmt, deleteCreatableIdxStmt, deleteByRowIDStmt, insertStmt, updateStmt *sql.Stmt
 
-	deleteByRowIDStmt, err = tx.Prepare("DELETE FROM accountbase WHERE rowid=?")
-	if err != nil {
-		return
-	}
-	defer deleteByRowIDStmt.Close()
+	// deleteByRowIDStmt, err = tx.Prepare("DELETE FROM accountbase WHERE rowid=?")
+	// if err != nil {
+	// 	return
+	// }
+	// defer deleteByRowIDStmt.Close()
 
-	insertStmt, err = tx.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
-	if err != nil {
-		return
-	}
-	defer insertStmt.Close()
+	// insertStmt, err = tx.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
+	// if err != nil {
+	// 	return
+	// }
+	// defer insertStmt.Close()
 
-	updateStmt, err = tx.Prepare("UPDATE accountbase SET normalizedonlinebalance = ?, data = ? WHERE rowid = ?")
-	if err != nil {
-		return
-	}
-	defer updateStmt.Close()
+	// updateStmt, err = tx.Prepare("UPDATE accountbase SET normalizedonlinebalance = ?, data = ? WHERE rowid = ?")
+	// if err != nil {
+	// 	return
+	// }
+	// defer updateStmt.Close()
 	var result sql.Result
 	var rowsAffected int64
 	updatedAccounts = make([]persistedAccountData, updates.len())
@@ -1108,7 +1123,8 @@ func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[b
 			} else {
 				// create a new entry.
 				normBalance := data.new.NormalizedOnlineBalance(proto)
-				result, err = insertStmt.Exec(addr[:], normBalance, protocol.Encode(&data.new))
+				result, err = kvInsertAccount(kv, addr[:], normBalance, protocol.Encode(&data.new))
+				//result, err = insertStmt.Exec(addr[:], normBalance, protocol.Encode(&data.new))
 				if err == nil {
 					updatedAccounts[updatedAccountIdx].rowid, err = result.LastInsertId()
 					updatedAccounts[updatedAccountIdx].accountData = data.new
@@ -1118,7 +1134,8 @@ func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[b
 			// non-zero rowid means we had a previous value.
 			if data.new.IsZero() {
 				// new value is zero, which means we need to delete the current value.
-				result, err = deleteByRowIDStmt.Exec(data.old.rowid)
+				result, err = kvDeleteAccount(kv, addr[:], data.old.accountData.NormalizedOnlineBalance(proto))
+				//result, err = deleteByRowIDStmt.Exec(data.old.rowid)
 				if err == nil {
 					// we deleted the entry successfully.
 					updatedAccounts[updatedAccountIdx].rowid = 0
@@ -1130,7 +1147,9 @@ func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[b
 				}
 			} else {
 				normBalance := data.new.NormalizedOnlineBalance(proto)
-				result, err = updateStmt.Exec(normBalance, protocol.Encode(&data.new), data.old.rowid)
+				oldNormBalance := data.old.accountData.NormalizedOnlineBalance(proto)
+				result, err = kvUpdateAccount(kv, addr[:], normBalance, oldNormBalance, protocol.Encode(&data.new))
+				//result, err = updateStmt.Exec(normBalance, protocol.Encode(&data.new), data.old.rowid)
 				if err == nil {
 					// rowid doesn't change on update.
 					updatedAccounts[updatedAccountIdx].rowid = data.old.rowid
@@ -1154,23 +1173,25 @@ func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[b
 	}
 
 	if len(creatables) > 0 {
-		insertCreatableIdxStmt, err = tx.Prepare("INSERT INTO assetcreators (asset, creator, ctype) VALUES (?, ?, ?)")
-		if err != nil {
-			return
-		}
-		defer insertCreatableIdxStmt.Close()
+		// insertCreatableIdxStmt, err = tx.sqlTx.Prepare("INSERT INTO assetcreators (asset, creator, ctype) VALUES (?, ?, ?)")
+		// if err != nil {
+		// 	return
+		// }
+		// defer insertCreatableIdxStmt.Close()
 
-		deleteCreatableIdxStmt, err = tx.Prepare("DELETE FROM assetcreators WHERE asset=? AND ctype=?")
-		if err != nil {
-			return
-		}
-		defer deleteCreatableIdxStmt.Close()
+		// deleteCreatableIdxStmt, err = tx.sqlTx.Prepare("DELETE FROM assetcreators WHERE asset=? AND ctype=?")
+		// if err != nil {
+		// 	return
+		// }
+		// defer deleteCreatableIdxStmt.Close()
 
 		for cidx, cdelta := range creatables {
 			if cdelta.Created {
-				_, err = insertCreatableIdxStmt.Exec(cidx, cdelta.Creator[:], cdelta.Ctype)
+				err = kvInsertAssetCreators(kv, cidx, cdelta.Ctype, cdelta.Creator[:])
+				//_, err = insertCreatableIdxStmt.Exec(cidx, cdelta.Creator[:], cdelta.Ctype)
 			} else {
-				_, err = deleteCreatableIdxStmt.Exec(cidx, cdelta.Ctype)
+				err = kvDeleteAssetCreators(kv, cidx, cdelta.Ctype)
+				//_, err = deleteCreatableIdxStmt.Exec(cidx, cdelta.Ctype)
 			}
 			if err != nil {
 				return
@@ -1182,9 +1203,9 @@ func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[b
 }
 
 // totalsNewRounds updates the accountsTotals by applying series of round changes
-func totalsNewRounds(tx *sql.Tx, updates []ledgercore.AccountDeltas, compactUpdates compactAccountDeltas, accountTotals []ledgercore.AccountTotals, proto config.ConsensusParams) (err error) {
+func totalsNewRounds(kvR kvRead, kvW kvWrite, updates []ledgercore.AccountDeltas, compactUpdates compactAccountDeltas, accountTotals []ledgercore.AccountTotals, proto config.ConsensusParams) (err error) {
 	var ot basics.OverflowTracker
-	totals, err := accountsTotals(tx, false)
+	totals, err := accountsTotals(kvR, false)
 	if err != nil {
 		return
 	}
@@ -1219,7 +1240,7 @@ func totalsNewRounds(tx *sql.Tx, updates []ledgercore.AccountDeltas, compactUpda
 		return
 	}
 
-	err = accountsPutTotals(tx, totals, false)
+	err = accountsPutTotals(kvW, totals, false)
 	if err != nil {
 		return
 	}
@@ -1228,8 +1249,9 @@ func totalsNewRounds(tx *sql.Tx, updates []ledgercore.AccountDeltas, compactUpda
 }
 
 // updates the round number associated with the current account data.
-func updateAccountsRound(tx *sql.Tx, rnd basics.Round, hashRound basics.Round) (err error) {
-	res, err := tx.Exec("UPDATE acctrounds SET rnd=? WHERE id='acctbase' AND rnd<?", rnd, rnd)
+func updateAccountsRound(tx *sql.Tx, kvR kvRead, kvW kvWrite, rnd basics.Round, hashRound basics.Round) (err error) {
+	res, err := kvUpdateAccountRounds(kvR, kvW, "acctbase", rnd)
+	//res, err = tx.sqlTx.Exec("UPDATE acctrounds SET rnd=? WHERE id='acctbase' AND rnd<?", rnd, rnd)
 	if err != nil {
 		return
 	}
@@ -1242,7 +1264,8 @@ func updateAccountsRound(tx *sql.Tx, rnd basics.Round, hashRound basics.Round) (
 	if aff != 1 {
 		// try to figure out why we couldn't update the round number.
 		var base basics.Round
-		err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&base)
+		base, err = kvGetAccountRound(kvR, "acctbase")
+		//err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&base)
 		if err != nil {
 			return
 		}
@@ -1273,8 +1296,9 @@ func updateAccountsRound(tx *sql.Tx, rnd basics.Round, hashRound basics.Round) (
 }
 
 // totalAccounts returns the total number of accounts
-func totalAccounts(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
-	err = tx.QueryRowContext(ctx, "SELECT count(*) FROM accountbase").Scan(&total)
+func totalAccounts(ctx context.Context, kv kvRead) (total uint64, err error) {
+	total, err = kvCountAccounts(kv)
+	//err = tx.QueryRowContext(ctx, "SELECT count(*) FROM accountbase").Scan(&total)
 	if err == sql.ErrNoRows {
 		total = 0
 		err = nil
@@ -1416,17 +1440,16 @@ func (mc *MerkleCommitter) LoadPage(page uint64) (content []byte, err error) {
 
 // encodedAccountsBatchIter allows us to iterate over the accounts data stored in the accountbase table.
 type encodedAccountsBatchIter struct {
-	rows *sql.Rows
+	rows *kvAccountIterator
+	//rows *sql.Rows
 }
 
 // Next returns an array containing the account data, in the same way it appear in the database
 // returning accountCount accounts data at a time.
-func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, accountCount int) (bals []encodedBalanceRecord, err error) {
+func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, kv kvRead, accountCount int) (bals []encodedBalanceRecord, err error) {
 	if iterator.rows == nil {
-		iterator.rows, err = tx.QueryContext(ctx, "SELECT address, data FROM accountbase ORDER BY address")
-		if err != nil {
-			return
-		}
+		iterator.rows = newKVAccountIterator(kv)
+		//iterator.rows, err = tx.QueryContext(ctx, "SELECT address, data FROM accountbase ORDER BY address")
 	}
 
 	// gather up to accountCount encoded accounts.
@@ -1503,17 +1526,19 @@ const (
 // orderedAccountsIter allows us to iterate over the accounts addresses in the order of the account hashes.
 type orderedAccountsIter struct {
 	step         orderedAccountsIterStep
-	rows         *sql.Rows
-	tx           *sql.Tx
+	rows         accountIterator
+	sqlTx        *sql.Tx
+	kvRead       kvRead
 	accountCount int
 	insertStmt   *sql.Stmt
 }
 
 // makeOrderedAccountsIter creates an ordered account iterator. Note that due to implementation reasons,
 // only a single iterator can be active at a time.
-func makeOrderedAccountsIter(tx *sql.Tx, accountCount int) *orderedAccountsIter {
+func makeOrderedAccountsIter(tx *sql.Tx, kv kvRead, accountCount int) *orderedAccountsIter {
 	return &orderedAccountsIter{
-		tx:           tx,
+		sqlTx:        tx,
+		kvRead:       kv,
 		accountCount: accountCount,
 		step:         oaiStepStartup,
 	}
@@ -1537,7 +1562,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	if iterator.step == oaiStepDeleteOldOrderingTable {
 		// although we're going to delete this table anyway when completing the iterator execution, we'll try to
 		// clean up any intermediate table.
-		_, err = iterator.tx.ExecContext(ctx, "DROP TABLE IF EXISTS accountsiteratorhashes")
+		_, err = iterator.sqlTx.ExecContext(ctx, "DROP TABLE IF EXISTS accountsiteratorhashes")
 		if err != nil {
 			return
 		}
@@ -1546,7 +1571,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 	if iterator.step == oaiStepCreateOrderingTable {
 		// create the temporary table
-		_, err = iterator.tx.ExecContext(ctx, "CREATE TABLE accountsiteratorhashes(address blob, hash blob)")
+		_, err = iterator.sqlTx.ExecContext(ctx, "CREATE TABLE accountsiteratorhashes(address blob, hash blob)")
 		if err != nil {
 			return
 		}
@@ -1555,12 +1580,13 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 	if iterator.step == oaiStepQueryAccounts {
 		// iterate over the existing accounts
-		iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT address, data FROM accountbase")
-		if err != nil {
-			return
-		}
+		iterator.rows = newKVAccountIterator(iterator.kvRead)
+		//iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT address, data FROM accountbase")
+		//if err != nil {
+		//	return
+		//}
 		// prepare the insert statement into the temporary table
-		iterator.insertStmt, err = iterator.tx.PrepareContext(ctx, "INSERT INTO accountsiteratorhashes(address, hash) VALUES(?, ?)")
+		iterator.insertStmt, err = iterator.sqlTx.PrepareContext(ctx, "INSERT INTO accountsiteratorhashes(address, hash) VALUES(?, ?)")
 		if err != nil {
 			return
 		}
@@ -1618,7 +1644,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	if iterator.step == oaiStepCreateOrderingAccountIndex {
 		// create an index. It shown that even when we're making a single select statement in step 5, it would be better to have this index vs. not having it at all.
 		// note that this index is using the rowid of the accountsiteratorhashes table.
-		_, err = iterator.tx.ExecContext(ctx, "CREATE INDEX accountsiteratorhashesidx ON accountsiteratorhashes(hash)")
+		_, err = iterator.sqlTx.ExecContext(ctx, "CREATE INDEX accountsiteratorhashesidx ON accountsiteratorhashes(hash)")
 		if err != nil {
 			iterator.Close(ctx)
 			return
@@ -1628,7 +1654,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 	if iterator.step == oaiStepSelectFromOrderedTable {
 		// select the data from the ordered table
-		iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT address, hash FROM accountsiteratorhashes ORDER BY hash")
+		iterator.rows, err = iterator.sqlTx.QueryContext(ctx, "SELECT address, hash FROM accountsiteratorhashes ORDER BY hash")
 
 		if err != nil {
 			iterator.Close(ctx)
@@ -1690,7 +1716,7 @@ func (iterator *orderedAccountsIter) Close(ctx context.Context) (err error) {
 		iterator.insertStmt.Close()
 		iterator.insertStmt = nil
 	}
-	_, err = iterator.tx.ExecContext(ctx, "DROP TABLE IF EXISTS accountsiteratorhashes")
+	_, err = iterator.sqlTx.ExecContext(ctx, "DROP TABLE IF EXISTS accountsiteratorhashes")
 	return
 }
 

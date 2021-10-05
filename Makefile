@@ -25,7 +25,7 @@ DEFAULTNETWORK   ?= $(shell ./scripts/compute_branch_network.sh $(BUILDBRANCH))
 DEFAULT_DEADLOCK ?= $(shell ./scripts/compute_branch_deadlock_default.sh $(BUILDBRANCH))
 export GOCACHE=$(SRCPATH)/tmp/go-cache
 
-GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
+GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension kv_rocksdb rocksdb_6_16
 
 # e.g. make GOTAGSCUSTOM=msgtrace
 GOTAGSLIST += ${GOTAGSCUSTOM}

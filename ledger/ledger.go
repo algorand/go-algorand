@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-algorand/util/kvstore"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -45,6 +46,7 @@ type Ledger struct {
 	// during catchup.
 	trackerDBs db.Pair
 	blockDBs   db.Pair
+	kv         kvstore.KVStore
 
 	// blockQ is the buffer of added blocks that will be flushed to
 	// persistent storage
@@ -137,6 +139,12 @@ func OpenLedger(
 	l.blockDBs.Wdb.SetLogger(log)
 
 	l.setSynchronousMode(context.Background(), l.synchronousMode)
+
+	l.kv, err = kvstore.NewKVStore(cfg.KVStoreImpl, dbPathPrefix+".kvdb", dbMem)
+	if err != nil {
+		err = fmt.Errorf("OpenLedger KVstore %s %w", cfg.KVStoreImpl, err)
+		return nil, err
+	}
 
 	start := time.Now()
 	ledgerInitblocksdbCount.Inc(nil)
@@ -357,6 +365,7 @@ func (l *Ledger) Close() {
 	// last, we close the underlying database connections.
 	l.blockDBs.Close()
 	l.trackerDBs.Close()
+	l.kv.Close()
 }
 
 // RegisterBlockListeners registers listeners that will be called when a
@@ -614,6 +623,11 @@ func (l *Ledger) GetCatchpointStream(round basics.Round) (ReadCloseSizer, error)
 // ledgerForTracker methods
 func (l *Ledger) trackerDB() db.Pair {
 	return l.trackerDBs
+}
+
+// ledgerForTracker methods
+func (l *Ledger) kvStore() kvstore.KVStore {
+	return l.kv
 }
 
 // ledgerForTracker methods

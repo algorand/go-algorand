@@ -20,7 +20,6 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
-	"database/sql"
 	"fmt"
 	"hash"
 	"io"
@@ -52,7 +51,7 @@ type catchpointWriter struct {
 	ctx               context.Context
 	hasher            hash.Hash
 	innerWriter       io.WriteCloser
-	tx                *sql.Tx
+	tx                *atomicReadTx
 	filePath          string
 	file              *os.File
 	gzip              *gzip.Writer
@@ -96,7 +95,7 @@ type catchpointFileBalancesChunk struct {
 	Balances []encodedBalanceRecord `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
-func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, blocksRound basics.Round, blockHeaderDigest crypto.Digest, label string) *catchpointWriter {
+func makeCatchpointWriter(ctx context.Context, filePath string, tx *atomicReadTx, blocksRound basics.Round, blockHeaderDigest crypto.Digest, label string) *catchpointWriter {
 	return &catchpointWriter{
 		ctx:               ctx,
 		filePath:          filePath,
@@ -284,25 +283,25 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 	}
 }
 
-func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) (err error) {
-	cw.balancesChunk.Balances, err = cw.accountsIterator.Next(ctx, tx, BalancesPerCatchpointFileChunk)
+func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *atomicReadTx) (err error) {
+	cw.balancesChunk.Balances, err = cw.accountsIterator.Next(ctx, tx.kvRead, BalancesPerCatchpointFileChunk)
 	if err == nil {
 		cw.balancesOffset += BalancesPerCatchpointFileChunk
 	}
 	return
 }
 
-func (cw *catchpointWriter) readHeaderFromDatabase(ctx context.Context, tx *sql.Tx) (err error) {
+func (cw *catchpointWriter) readHeaderFromDatabase(ctx context.Context, tx *atomicReadTx) (err error) {
 	var header CatchpointFileHeader
-	header.BalancesRound, _, err = accountsRound(tx)
+	header.BalancesRound, _, err = accountsRound(tx.sqlTx, tx.kvRead)
 	if err != nil {
 		return
 	}
-	header.Totals, err = accountsTotals(tx, false)
+	header.Totals, err = accountsTotals(tx.kvRead, false)
 	if err != nil {
 		return
 	}
-	header.TotalAccounts, err = totalAccounts(context.Background(), tx)
+	header.TotalAccounts, err = totalAccounts(context.Background(), tx.kvRead)
 	if err != nil {
 		return
 	}

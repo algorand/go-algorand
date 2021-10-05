@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"testing"
@@ -548,22 +549,23 @@ return`
 	l.accts.accountsWriting.Wait()
 
 	// dump accounts
-	var rowid int64
+	var rowid sql.NullInt64
 	var dbRound basics.Round
 	var buf []byte
-	err = l.accts.accountsq.lookupStmt.QueryRow(creator[:]).Scan(&rowid, &dbRound, &buf)
+	err = kvGetAccountDataRound(l.kv, creator[:], &rowid, &dbRound, &buf)
+
 	a.NoError(err)
 	a.Equal(expectedCreator, buf)
 
-	err = l.accts.accountsq.lookupStmt.QueryRow(userOptin[:]).Scan(&rowid, &dbRound, &buf)
+	err = kvGetAccountDataRound(l.kv, userOptin[:], &rowid, &dbRound, &buf)
 	a.NoError(err)
 	a.Equal(expectedUserOptIn, buf)
-	pad, err := l.accts.accountsq.lookup(userOptin)
+	pad, err := l.accts.accountsq.lookup(l.kv, userOptin)
 	a.Nil(pad.accountData.AppLocalStates[appIdx].KeyValue)
 	ad, err := l.Lookup(dbRound, userOptin)
 	a.Nil(ad.AppLocalStates[appIdx].KeyValue)
 
-	err = l.accts.accountsq.lookupStmt.QueryRow(userLocal[:]).Scan(&rowid, &dbRound, &buf)
+	err = kvGetAccountDataRound(l.kv, userLocal[:], &rowid, &dbRound, &buf)
 	a.NoError(err)
 	a.Equal(expectedUserLocal, buf)
 
@@ -1050,7 +1052,7 @@ return`
 	a.NoError(err)
 	a.Empty(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas)
 
-	pad, err := l.accts.accountsq.lookup(userLocal)
+	pad, err := l.accts.accountsq.lookup(l.kv, userLocal)
 	a.NoError(err)
 	a.Equal(basics.AccountData{}, pad.accountData)
 	a.Zero(pad.rowid)
@@ -1191,7 +1193,7 @@ return`
 	a.Contains(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta, "gk")
 	a.Equal(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta["gk"].Bytes, "global")
 
-	pad, err := l.accts.accountsq.lookup(creator)
+	pad, err := l.accts.accountsq.lookup(l.kv, creator)
 	a.NoError(err)
 	a.Equal(basics.AccountData{}, pad.accountData)
 	a.Zero(pad.rowid)

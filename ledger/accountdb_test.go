@@ -347,8 +347,8 @@ func randomDeltasBalancedImpl(niter int, base map[basics.Address]basics.AccountD
 	return updates, totals, lastCreatableID
 }
 
-func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.Address]basics.AccountData) {
-	r, _, err := accountsRound(tx)
+func checkAccounts(t *testing.T, tx *sql.Tx, kv kvMultiGet, rnd basics.Round, accts map[basics.Address]basics.AccountData) {
+	r, _, err := accountsRound(tx, kv)
 	require.NoError(t, err)
 	require.Equal(t, r, rnd)
 
@@ -363,7 +363,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	var totalOnline, totalOffline, totalNotPart uint64
 
 	for addr, data := range accts {
-		pad, err := aq.lookup(addr)
+		pad, err := aq.lookup(kv, addr)
 		d := pad.accountData
 		require.NoError(t, err)
 		require.Equal(t, d, data)
@@ -380,11 +380,11 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 		}
 	}
 
-	all, err := accountsAll(tx)
+	all, err := accountsAll(kv)
 	require.NoError(t, err)
 	require.Equal(t, all, accts)
 
-	totals, err := accountsTotals(tx, false)
+	totals, err := accountsTotals(kv, false)
 	require.NoError(t, err)
 	require.Equal(t, totals.Online.Money.Raw, totalOnline)
 	require.Equal(t, totals.Offline.Money.Raw, totalOffline)
@@ -392,7 +392,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
 	require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
 
-	d, err := aq.lookup(randomAddress())
+	d, err := aq.lookup(kv, randomAddress())
 	require.NoError(t, err)
 	require.Equal(t, rnd, d.round)
 	require.Equal(t, d.accountData, basics.AccountData{})
@@ -405,7 +405,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	}
 
 	for i := 0; i < len(onlineAccounts); i++ {
-		dbtop, err := accountsOnlineTop(tx, 0, uint64(i), proto)
+		dbtop, err := accountsOnlineTop(kv, 0, uint64(i), proto)
 		require.NoError(t, err)
 		require.Equal(t, i, len(dbtop))
 
@@ -433,7 +433,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 		}
 	}
 
-	top, err := accountsOnlineTop(tx, 0, uint64(len(onlineAccounts)+1), proto)
+	top, err := accountsOnlineTop(kv, 0, uint64(len(onlineAccounts)+1), proto)
 	require.NoError(t, err)
 	require.Equal(t, len(top), len(onlineAccounts))
 }
@@ -443,24 +443,31 @@ func TestAccountDBInit(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	dbs, _ := dbOpenTest(t, true)
+	dbs, kv, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
+	//tx, err := beginWriteTx(t, dbs, kv)
 	require.NoError(t, err)
 	defer tx.Rollback()
 
 	accts := randomAccounts(20, true)
-	newDB, err := accountsInit(tx, accts, proto)
+	//newDB, err := accountsInit(tx.sqlTx, tx.kvWrite, accts, proto)
+	newDB, err := accountsInit(tx, kv, kv, accts, proto)
 	require.NoError(t, err)
 	require.True(t, newDB)
-	checkAccounts(t, tx, 0, accts)
+	//tx.writeBarrier()
+	//checkAccounts(t, tx.sqlTx, kv, 0, accts)
+	checkAccounts(t, tx, kv, 0, accts)
 
-	newDB, err = accountsInit(tx, accts, proto)
+	//newDB, err = accountsInit(tx.sqlTx, tx.kvWrite, accts, proto)
+	newDB, err = accountsInit(tx, kv, kv, accts, proto)
 	require.NoError(t, err)
 	require.False(t, newDB)
-	checkAccounts(t, tx, 0, accts)
+	//tx.writeBarrier()
+	//checkAccounts(t, tx.sqlTx, kv, 0, accts)
+	checkAccounts(t, tx, kv, 0, accts)
 }
 
 // creatablesFromUpdates calculates creatables from updates
@@ -536,18 +543,19 @@ func TestAccountDBRound(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	dbs, _ := dbOpenTest(t, true)
+	dbs, kv, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
 	defer dbs.Close()
 
-	tx, err := dbs.Wdb.Handle.Begin()
+	tx, err := beginWriteTx(t, dbs, kv)
 	require.NoError(t, err)
 	defer tx.Rollback()
 
 	accts := randomAccounts(20, true)
-	_, err = accountsInit(tx, accts, proto)
+	_, err = accountsInit(tx.sqlTx, tx.kvWrite, kv, accts, proto)
 	require.NoError(t, err)
-	checkAccounts(t, tx, 0, accts)
+	tx.writeBarrier()
+	checkAccounts(t, tx.sqlTx, kv, 0, accts)
 
 	// used to determine how many creatables element will be in the test per iteration
 	numElementsPerSegement := 10
@@ -567,29 +575,36 @@ func TestAccountDBRound(t *testing.T) {
 			expectedDbImage, numElementsPerSegement)
 
 		updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, baseAccounts)
-		err = updatesCnt.accountsLoadOld(tx)
+		err = updatesCnt.accountsLoadOld(kv)
 		require.NoError(t, err)
-		err = totalsNewRounds(tx, []ledgercore.AccountDeltas{updates}, updatesCnt, []ledgercore.AccountTotals{{}}, proto)
+		err = totalsNewRounds(kv, tx.kvWrite, []ledgercore.AccountDeltas{updates}, updatesCnt, []ledgercore.AccountTotals{{}}, proto)
 		require.NoError(t, err)
-		_, err = accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto, basics.Round(i))
+		_, err = accountsNewRound(tx.kvWrite, updatesCnt, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
-		err = updateAccountsRound(tx, basics.Round(i), 0)
+		err = updateAccountsRound(tx.sqlTx, kv, tx.kvWrite, basics.Round(i), 0)
 		require.NoError(t, err)
-		checkAccounts(t, tx, basics.Round(i), accts)
-		checkCreatables(t, tx, i, expectedDbImage)
+
+		tx.Commit()
+		tx, err = beginWriteTx(t, dbs, kv)
+		require.NoError(t, err)
+
+		tx.writeBarrier()
+		checkAccounts(t, tx.sqlTx, kv, basics.Round(i), accts)
+		checkCreatables(t, kv, i, expectedDbImage)
 	}
 }
 
 // checkCreatables compares the expected database image to the actual databse content
 func checkCreatables(t *testing.T,
-	tx *sql.Tx, iteration int,
+	kv kvRead, iteration int,
 	expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
 
-	stmt, err := tx.Prepare("SELECT asset, creator, ctype FROM assetcreators")
-	require.NoError(t, err)
+	// stmt, err := tx.Prepare("SELECT asset, creator, ctype FROM assetcreators")
+	// require.NoError(t, err)
 
-	defer stmt.Close()
-	rows, err := stmt.Query()
+	// defer stmt.Close()
+	// rows, err := stmt.Query()
+	rows, err := kvAllCreatables(kv)
 	if err != sql.ErrNoRows {
 		require.NoError(t, err)
 	}
@@ -746,15 +761,15 @@ func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.A
 	return
 }
 
-func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto config.ConsensusParams) (updates map[basics.Address]basics.AccountData) {
-	tx, err := dbs.Wdb.Handle.Begin()
+func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, kv kvstore.KVStore, proto config.ConsensusParams) (updates map[basics.Address]basics.AccountData) {
+	tx, err := beginWriteTx(b, dbs, kv)
 	require.NoError(b, err)
 
 	updates = generateRandomTestingAccountBalances(numAccounts)
 
-	_, err = accountsInit(tx, updates, proto)
+	_, err = accountsInit(tx.sqlTx, tx.kvWrite, kv, updates, proto)
 	require.NoError(b, err)
-	err = accountsAddNormalizedBalance(tx, proto)
+	err = accountsAddNormalizedBalance(tx.sqlTx, proto)
 	require.NoError(b, err)
 	err = tx.Commit()
 	require.NoError(b, err)
@@ -770,17 +785,17 @@ func cleanupTestDb(dbs db.Pair, dbName string, inMemory bool) {
 
 func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	dbs, fn := dbOpenTest(b, inMemory)
+	dbs, kv, fn := dbOpenTest(b, inMemory)
 	setDbLogging(b, dbs)
 	defer cleanupTestDb(dbs, fn, inMemory)
 
-	benchmarkInitBalances(b, b.N, dbs, proto)
-	tx, err := dbs.Rdb.Handle.Begin()
+	benchmarkInitBalances(b, b.N, dbs, kv, proto)
+	tx, err := beginReadTx(b, dbs, kv)
 	require.NoError(b, err)
 
 	b.ResetTimer()
 	// read all the balances in the database.
-	bal, err2 := accountsAll(tx)
+	bal, err2 := accountsAll(tx.kvRead)
 	require.NoError(b, err2)
 	tx.Commit()
 
@@ -802,11 +817,11 @@ func BenchmarkReadingAllBalancesDisk(b *testing.B) {
 
 func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	dbs, fn := dbOpenTest(b, inMemory)
+	dbs, kv, fn := dbOpenTest(b, inMemory)
 	setDbLogging(b, dbs)
 	defer cleanupTestDb(dbs, fn, inMemory)
 
-	accounts := benchmarkInitBalances(b, b.N, dbs, proto)
+	accounts := benchmarkInitBalances(b, b.N, dbs, kv, proto)
 
 	qs, err := accountsDbInit(dbs.Rdb.Handle, dbs.Wdb.Handle)
 	require.NoError(b, err)
@@ -823,7 +838,7 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 	// only measure the actual fetch time
 	b.ResetTimer()
 	for _, addr := range addrs {
-		_, err = qs.lookup(addr)
+		_, err = qs.lookup(kv, addr)
 		require.NoError(b, err)
 	}
 }
@@ -861,14 +876,14 @@ func newSQLiteBenchmarkDB(b testing.TB, totalStartupAccountsNumber int, batchCou
 	startupAcct := 5
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	dbs, fn := dbOpenTest(b, inMem)
+	dbs, kv, fn := dbOpenTest(b, inMem)
 	setDbLogging(b, dbs)
 	cleanup := func() error {
 		cleanupTestDb(dbs, fn, inMem)
 		return nil
 	}
 
-	benchmarkInitBalances(b, startupAcct, dbs, proto)
+	benchmarkInitBalances(b, startupAcct, dbs, kv, proto)
 	dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeOff, false)
 
 	dupmap := make(map[basics.Address]bool)
@@ -1045,14 +1060,14 @@ func newKVBenchmarkDB(b testing.TB, kvImpl string, total int, batchCount int, in
 	return db
 }
 
-func TestNewKVBenchmarkDB(t *testing.T) {
-	kv := newKVBenchmarkDB(t, "badgerdb", 5000000, 1000, false)
-	err := kv.cleanup()
-	require.NoError(t, err)
-}
+//func TestNewKVBenchmarkDB(t *testing.T) {
+//	kv := newKVBenchmarkDB(t, "badgerdb", 5000000, 1000, false)
+//	err := kv.cleanup()
+//	require.NoError(t, err)
+//}
 
 func (db *kvBenchmarkDB) selectAccounts(b testing.TB, totalStartupAccountsNumber int) (accountsAddress [][]byte, accountsRowID []int) {
-	iter := db.kv.NewIterator(nil, nil)
+	iter := db.kv.NewIterator(nil, nil, false)
 	for ; iter.Valid(); iter.Next() {
 		accountsAddress = append(accountsAddress, iter.Key())
 	}
@@ -1097,7 +1112,7 @@ func (db *kvBenchmarkDB) checkUpdateAddr(b testing.TB, batches [][]updateAcct, a
 			}
 		}
 		start := time.Now()
-		iter := db.kv.NewIterator(nil, nil)
+		iter := db.kv.NewIterator(nil, nil, false)
 		for ; iter.Valid(); iter.Next() {
 			var k [32]byte
 			ik := iter.KeySlice()
@@ -1270,6 +1285,7 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 	})
 }
 func TestAccountsReencoding(t *testing.T) {
+	t.Skip("no kv support")
 	partitiontest.PartitionTest(t)
 
 	oldEncodedAccountsData := [][]byte{
@@ -1278,7 +1294,7 @@ func TestAccountsReencoding(t *testing.T) {
 		{131, 164, 97, 108, 103, 111, 206, 5, 233, 179, 208, 165, 97, 115, 115, 101, 116, 130, 206, 0, 3, 60, 164, 130, 161, 97, 2, 161, 102, 194, 206, 0, 3, 60, 175, 130, 161, 97, 30, 161, 102, 194, 165, 101, 98, 97, 115, 101, 205, 98, 54},
 		{131, 164, 97, 108, 103, 111, 206, 0, 3, 48, 104, 165, 97, 115, 115, 101, 116, 129, 206, 0, 1, 242, 159, 130, 161, 97, 0, 161, 102, 194, 165, 101, 98, 97, 115, 101, 205, 98, 54},
 	}
-	dbs, _ := dbOpenTest(t, true)
+	dbs, _, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
 	defer dbs.Close()
 
@@ -1286,7 +1302,7 @@ func TestAccountsReencoding(t *testing.T) {
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		_, err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
+		_, err = accountsInit(tx, nil, nil, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion]) // XXX
 		if err != nil {
 			return err
 		}
@@ -1361,12 +1377,12 @@ func TestAccountsReencoding(t *testing.T) {
 func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := dbOpenTest(t, true)
+	dbs, kv, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
 	defer dbs.Close()
 
-	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		_, err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
+	err := atomicWrites(dbs, kv, func(ctx context.Context, tx *atomicWriteTx) (err error) {
+		_, err = accountsInit(tx.sqlTx, tx.kvWrite, kv, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
 		if err != nil {
 			return err
 		}
@@ -1375,11 +1391,11 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	require.NoError(t, err)
 	qs, err := accountsDbInit(dbs.Rdb.Handle, dbs.Wdb.Handle)
 	require.NoError(t, err)
-	require.NotNil(t, qs.listCreatablesStmt)
+	// require.NotNil(t, qs.listCreatablesStmt)
 	qs.close()
-	require.Nil(t, qs.listCreatablesStmt)
-	qs.close()
-	require.Nil(t, qs.listCreatablesStmt)
+	// require.Nil(t, qs.listCreatablesStmt)
+	// qs.close()
+	// require.Nil(t, qs.listCreatablesStmt)
 }
 
 func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder bool) {

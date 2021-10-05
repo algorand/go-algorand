@@ -73,6 +73,7 @@ var defaultLocal = Local{
 	IncomingMessageFilterBucketCount:        5,
 	IncomingMessageFilterBucketSize:         512,
 	IsIndexerActive:                         false,
+	KVStoreImpl:                             "rocksdb",
 	LedgerSynchronousMode:                   2,
 	LogArchiveMaxAge:                        "",
 	LogArchiveName:                          "node.archive.log",

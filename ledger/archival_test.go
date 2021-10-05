@@ -45,6 +45,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-algorand/util/kvstore"
 )
 
 type wrappedLedger struct {
@@ -78,6 +79,10 @@ func (wl *wrappedLedger) Latest() basics.Round {
 
 func (wl *wrappedLedger) trackerDB() db.Pair {
 	return wl.l.trackerDB()
+}
+
+func (wl *wrappedLedger) kvStore() kvstore.KVStore {
+	return wl.l.kvStore()
 }
 
 func (wl *wrappedLedger) blockDB() db.Pair {
