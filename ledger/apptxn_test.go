@@ -87,8 +87,8 @@ func (ledger *Ledger) nextBlock(t testing.TB) *internal.BlockEvaluator {
 }
 
 // endBlock completes the block being created, returns the ValidatedBlock for inspection
-func (ledger *Ledger) endBlock(t testing.TB, eval *internal.BlockEvaluator) *ledgercore.ValidatedBlock {
-	validatedBlock, err := eval.GenerateBlock()
+func (ledger *Ledger) endBlock(t testing.TB, eval testingEvaluator) *ledgercore.ValidatedBlock {
+	validatedBlock, err := eval.BlockEvaluator.GenerateBlock()
 	require.NoError(t, err)
 	err = ledger.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
 	require.NoError(t, err)
@@ -144,7 +144,7 @@ func (eval *testingEvaluator) fillDefaults(txn *txntest.Txn) {
 		txn.FirstValid = eval.Round()
 	}
 	//txn.FillDefaults(eval.proto)
-	txn.FillDefaults(config.Consensus[protocol.ConsensusCurrentVersion])
+	txn.FillDefaults(eval.ledger.genesisProto)
 }
 
 func (eval *testingEvaluator) txn(t testing.TB, txn *txntest.Txn, problem ...string) {
@@ -235,7 +235,7 @@ func TestPayAction(t *testing.T) {
 
 	eval := testingEvaluator{l.nextBlock(t), l}
 	eval.txns(t, &create, &fund, &payout1)
-	vb := l.endBlock(t, eval.BlockEvaluator)
+	vb := l.endBlock(t, eval)
 
 	// AD contains expected appIndex
 	require.Equal(t, ai, vb.Block().Payset[0].ApplyData.ApplicationID)
@@ -254,7 +254,7 @@ func TestPayAction(t *testing.T) {
 	// Build up Residue in RewardsState so it's ready to pay
 	for i := 1; i < 10; i++ {
 		eval = testingEvaluator{l.nextBlock(t), l}
-		l.endBlock(t, eval.BlockEvaluator)
+		l.endBlock(t, eval)
 	}
 
 	eval = testingEvaluator{l.nextBlock(t), l}
@@ -267,7 +267,7 @@ func TestPayAction(t *testing.T) {
 	eval.txn(t, &payout2)
 	// confirm that modifiedAccounts can see account in inner txn
 	found := false
-	vb = l.endBlock(t, eval.BlockEvaluator)
+	vb = l.endBlock(t, eval)
 
 	deltas := vb.Delta()
 	for _, addr := range deltas.Accts.ModifiedAccounts() {
@@ -312,17 +312,17 @@ func TestPayAction(t *testing.T) {
 	}
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, &tenkalgos)
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 	beforepay := l.micros(t, ai.Address())
 
 	// Build up Residue in RewardsState so it's ready to pay again
 	for i := 1; i < 10; i++ {
 		eval = testingEvaluator{l.nextBlock(t), l}
-		l.endBlock(t, eval.BlockEvaluator)
+		l.endBlock(t, eval)
 	}
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, payout2.Noted("2"))
-	vb = l.endBlock(t, eval.BlockEvaluator)
+	vb = l.endBlock(t, eval)
 
 	afterpay := l.micros(t, ai.Address())
 
@@ -393,7 +393,7 @@ submit:  itxn_submit
 
 	eval := testingEvaluator{l.nextBlock(t), l}
 	eval.txns(t, &asa, &app)
-	vb := l.endBlock(t, eval.BlockEvaluator)
+	vb := l.endBlock(t, eval)
 
 	asaIndex := basics.AssetIndex(1)
 	require.Equal(t, asaIndex, vb.Block().Payset[0].ApplyData.ConfigAsset)
@@ -410,7 +410,7 @@ submit:  itxn_submit
 
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, &fund)
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 
 	fundgold := txntest.Txn{
 		Type:          "axfer",
@@ -423,7 +423,7 @@ submit:  itxn_submit
 	// Fail, because app account is not opted in.
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, &fundgold, fmt.Sprintf("asset %d missing", asaIndex))
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 
 	amount, in := l.asa(t, appIndex.Address(), asaIndex)
 	require.False(t, in)
@@ -440,7 +440,7 @@ submit:  itxn_submit
 	// Tell the app to opt itself in.
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, &optin)
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 
 	amount, in = l.asa(t, appIndex.Address(), asaIndex)
 	require.True(t, in)
@@ -449,7 +449,7 @@ submit:  itxn_submit
 	// Now, suceed, because opted in.
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, &fundgold)
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 
 	amount, in = l.asa(t, appIndex.Address(), asaIndex)
 	require.True(t, in)
@@ -465,7 +465,7 @@ submit:  itxn_submit
 	}
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, &withdraw)
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 
 	amount, in = l.asa(t, appIndex.Address(), asaIndex)
 	require.True(t, in)
@@ -473,7 +473,7 @@ submit:  itxn_submit
 
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, withdraw.Noted("2"))
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 
 	amount, in = l.asa(t, appIndex.Address(), asaIndex)
 	require.True(t, in) // Zero left, but still opted in
@@ -481,7 +481,7 @@ submit:  itxn_submit
 
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, withdraw.Noted("3"), "underflow on subtracting")
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 
 	amount, in = l.asa(t, appIndex.Address(), asaIndex)
 	require.True(t, in) // Zero left, but still opted in
@@ -498,7 +498,7 @@ submit:  itxn_submit
 
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, &close)
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 
 	amount, in = l.asa(t, appIndex.Address(), asaIndex)
 	require.False(t, in) // Zero left, not opted in
@@ -507,13 +507,13 @@ submit:  itxn_submit
 	// Now, fail again, opted out
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, fundgold.Noted("2"), fmt.Sprintf("asset %d missing", asaIndex))
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 
 	// Do it all again, so we can test closeTo when we have a non-zero balance
 	// Tell the app to opt itself in.
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txns(t, optin.Noted("a"), fundgold.Noted("a"))
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 
 	amount, _ = l.asa(t, appIndex.Address(), asaIndex)
 	require.Equal(t, uint64(20000), amount)
@@ -521,7 +521,7 @@ submit:  itxn_submit
 
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, close.Noted("a"))
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 
 	amount, _ = l.asa(t, appIndex.Address(), asaIndex)
 	require.Equal(t, uint64(0), amount)
@@ -586,7 +586,7 @@ func TestClawbackAction(t *testing.T) {
 	}
 	eval := testingEvaluator{l.nextBlock(t), l}
 	eval.txns(t, &asa, &app, &optin)
-	vb := l.endBlock(t, eval.BlockEvaluator)
+	vb := l.endBlock(t, eval)
 
 	require.Equal(t, asaIndex, vb.Block().Payset[0].ApplyData.ConfigAsset)
 	require.Equal(t, appIndex, vb.Block().Payset[1].ApplyData.ApplicationID)
@@ -607,7 +607,7 @@ func TestClawbackAction(t *testing.T) {
 	}
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txgroup(t, &overpay, &clawmove)
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 
 	amount, _ := l.asa(t, addrs[1], asaIndex)
 	require.Equal(t, amount, uint64(1000))
@@ -655,7 +655,7 @@ skipclose:
 
 	eval := testingEvaluator{l.nextBlock(t), l}
 	eval.txns(t, &ezpayer, &rekey)
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 
 	useacct := txntest.Txn{
 		Type:          "appl",
@@ -665,7 +665,7 @@ skipclose:
 	}
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, &useacct)
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 
 	// App was never funded (didn't spend from it's own acct)
 	require.Equal(t, uint64(0), l.micros(t, basics.AppIndex(1).Address()))
@@ -682,7 +682,7 @@ skipclose:
 	}
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, &baduse, "unauthorized")
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 
 	// Now, we close addrs[0], which wipes its rekey status.  Reopen
 	// it, and make sure the app can't spend.
@@ -695,7 +695,7 @@ skipclose:
 	}
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, &close)
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 
 	require.Equal(t, uint64(0), l.micros(t, addrs[0]))
 
@@ -707,13 +707,13 @@ skipclose:
 	}
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, &payback)
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 
 	require.Equal(t, uint64(10_000_000), l.micros(t, addrs[0]))
 
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, useacct.Noted("2"), "unauthorized")
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 }
 
 // TestRekeyActionCloseAccount ensures closing and reopening a rekeyed account in a single app call
@@ -779,7 +779,7 @@ func TestRekeyActionCloseAccount(t *testing.T) {
 
 	eval := testingEvaluator{l.nextBlock(t), l}
 	eval.txns(t, &create, &rekey, &fund)
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 
 	useacct := txntest.Txn{
 		Type:          "appl",
@@ -789,7 +789,7 @@ func TestRekeyActionCloseAccount(t *testing.T) {
 	}
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, &useacct, "unauthorized")
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 }
 
 // TestDuplicatePayAction shows two pays with same parameters can be done as inner tarnsactions
@@ -840,7 +840,7 @@ func TestDuplicatePayAction(t *testing.T) {
 
 	eval := testingEvaluator{l.nextBlock(t), l}
 	eval.txns(t, &create, &fund, &paytwice, create.Noted("in same block"))
-	vb := l.endBlock(t, eval.BlockEvaluator)
+	vb := l.endBlock(t, eval)
 
 	require.Equal(t, appIndex, vb.Block().Payset[0].ApplyData.ApplicationID)
 	require.Equal(t, 4, len(vb.Block().Payset))
@@ -861,7 +861,7 @@ func TestDuplicatePayAction(t *testing.T) {
 	// Now create another app, and see if it gets the index we expect.
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txns(t, create.Noted("again"))
-	vb = l.endBlock(t, eval.BlockEvaluator)
+	vb = l.endBlock(t, eval)
 
 	// create=1, fund=2, payTwice=3,4,5, insameblock=6
 	require.Equal(t, basics.AppIndex(7), vb.Block().Payset[0].ApplyData.ApplicationID)
@@ -906,12 +906,12 @@ func TestInnerTxnCount(t *testing.T) {
 
 	eval := testingEvaluator{l.nextBlock(t), l}
 	eval.txns(t, &create, &fund)
-	vb := l.endBlock(t, eval.BlockEvaluator)
+	vb := l.endBlock(t, eval)
 	require.Equal(t, 2, int(vb.Block().TxnCounter))
 
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txns(t, &payout1)
-	vb = l.endBlock(t, eval.BlockEvaluator)
+	vb = l.endBlock(t, eval)
 	require.Equal(t, 4, int(vb.Block().TxnCounter))
 }
 
@@ -1031,7 +1031,7 @@ submit:  itxn_submit
 
 	eval := testingEvaluator{l.nextBlock(t), l}
 	eval.txns(t, &app, &fund)
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 
 	createAsa := txntest.Txn{
 		Type:            "appl",
@@ -1045,7 +1045,7 @@ submit:  itxn_submit
 	eval.txn(t, &createAsa, "balance 199000 below min 200000")
 	// fund it some more and try again
 	eval.txns(t, fund.Noted("more!"), &createAsa)
-	vb := l.endBlock(t, eval.BlockEvaluator)
+	vb := l.endBlock(t, eval)
 
 	asaIndex := vb.Block().Payset[1].EvalDelta.InnerTxns[0].ConfigAsset
 	require.Equal(t, basics.AssetIndex(5), asaIndex)
@@ -1072,7 +1072,7 @@ submit:  itxn_submit
 		eval = testingEvaluator{l.nextBlock(t), l}
 		t.Log(a)
 		eval.txn(t, &check)
-		l.endBlock(t, eval.BlockEvaluator)
+		l.endBlock(t, eval)
 	}
 	// Not the manager anymore so this won't work
 	nodice := txntest.Txn{
@@ -1084,7 +1084,7 @@ submit:  itxn_submit
 	}
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, &nodice, "this transaction should be issued by the manager")
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 
 }
 
@@ -1137,7 +1137,7 @@ func TestAsaDuringInit(t *testing.T) {
 
 	eval := testingEvaluator{l.nextBlock(t), l}
 	eval.txns(t, &prefund, &app)
-	vb := l.endBlock(t, eval.BlockEvaluator)
+	vb := l.endBlock(t, eval)
 
 	require.Equal(t, appIndex, vb.Block().Payset[1].ApplicationID)
 
@@ -1174,7 +1174,7 @@ func TestRekey(t *testing.T) {
 
 	eval := testingEvaluator{l.nextBlock(t), l}
 	eval.txns(t, &app)
-	vb := l.endBlock(t, eval.BlockEvaluator)
+	vb := l.endBlock(t, eval)
 	appIndex := vb.Block().Payset[0].ApplicationID
 	require.Equal(t, basics.AppIndex(1), appIndex)
 
@@ -1192,7 +1192,7 @@ func TestRekey(t *testing.T) {
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txns(t, &fund, &rekey)
 	eval.txn(t, rekey.Noted("2"), "unauthorized")
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 
 }
 
@@ -1222,7 +1222,7 @@ func TestNote(t *testing.T) {
 
 	eval := testingEvaluator{l.nextBlock(t), l}
 	eval.txns(t, &app)
-	vb := l.endBlock(t, eval.BlockEvaluator)
+	vb := l.endBlock(t, eval)
 	appIndex := vb.Block().Payset[0].ApplicationID
 	require.Equal(t, basics.AppIndex(1), appIndex)
 
@@ -1239,7 +1239,7 @@ func TestNote(t *testing.T) {
 	}
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txns(t, &fund, &note)
-	vb = l.endBlock(t, eval.BlockEvaluator)
+	vb = l.endBlock(t, eval)
 	alphabet := vb.Block().Payset[1].EvalDelta.InnerTxns[0].Txn.Note
 	require.Equal(t, "abcdefghijklmnopqrstuvwxyz01234567890", string(alphabet))
 }
@@ -1282,7 +1282,7 @@ nonpart:
 	// Create the app
 	eval := testingEvaluator{l.nextBlock(t), l}
 	eval.txns(t, &app)
-	vb := l.endBlock(t, eval.BlockEvaluator)
+	vb := l.endBlock(t, eval)
 	appIndex := vb.Block().Payset[0].ApplicationID
 	require.Equal(t, basics.AppIndex(1), appIndex)
 
@@ -1295,13 +1295,13 @@ nonpart:
 	}
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, &fund)
-	vb = l.endBlock(t, eval.BlockEvaluator)
+	vb = l.endBlock(t, eval)
 
 	require.Equal(t, 1_000_000_000, int(l.micros(t, appIndex.Address())))
 
 	// Build up Residue in RewardsState so it's ready to pay
 	for i := 1; i < 10; i++ {
-		eval := l.nextBlock(t)
+		eval := testingEvaluator{l.nextBlock(t), l}
 		l.endBlock(t, eval)
 	}
 
@@ -1314,7 +1314,7 @@ nonpart:
 	}
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, &pay)
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 	// 2000 was earned in rewards (- 1000 fee, -1 pay)
 	require.Equal(t, 1_000_000_999, int(l.micros(t, appIndex.Address())))
 
@@ -1327,19 +1327,19 @@ nonpart:
 	}
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, &nonpart)
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 	require.Equal(t, 999_999_999, int(l.micros(t, appIndex.Address())))
 
 	// Build up Residue in RewardsState so it's ready to pay AGAIN
 	// But expect no rewards
 	for i := 1; i < 100; i++ {
-		eval := l.nextBlock(t)
+		eval := testingEvaluator{l.nextBlock(t), l}
 		l.endBlock(t, eval)
 	}
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, pay.Noted("again"))
 	eval.txn(t, nonpart.Noted("again"), "cannot change online/offline")
-	l.endBlock(t, eval.BlockEvaluator)
+	l.endBlock(t, eval)
 	// Ppaid fee and 1.  Did not get rewards
 	require.Equal(t, 999_998_998, int(l.micros(t, appIndex.Address())))
 }
