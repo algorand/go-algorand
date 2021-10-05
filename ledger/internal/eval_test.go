@@ -1462,8 +1462,16 @@ func (ledger *evalTestLedger) StartEvaluator(hdr bookkeeping.BlockHeader, payset
 // look up a creator address, setting ok to false if the query succeeded but no
 // creator was found.
 func (ledger *evalTestLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
-	panic(nil)
-	return
+	balances := ledger.roundBalances[rnd]
+	for addr, balance := range balances {
+		if _, has := balance.AssetParams[basics.AssetIndex(cidx)]; has {
+			return addr, true, nil
+		}
+		if _, has := balance.AppParams[basics.AppIndex(cidx)]; has {
+			return addr, true, nil
+		}
+	}
+	return basics.Address{}, false, nil
 }
 
 // LatestTotals returns the totals of all accounts for the most recent round, as well as the round number.
