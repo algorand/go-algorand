@@ -384,6 +384,10 @@ type LedgerForEvaluator interface {
 	CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error)
 }
 
+// StartEvaluator creates a BlockEvaluator, given a ledger and a block header
+// of the block that the caller is planning to evaluate. If the length of the
+// payset being evaluated is known in advance, a paysetHint >= 0 can be
+// passed, avoiding unnecessary payset slice growth.
 func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, proto config.ConsensusParams, paysetHint int, validate bool, generate bool, maxTxnBytesPerBlock int) (*BlockEvaluator, error) {
 	// if the caller did not provide a valid block size limit, default to the consensus params defaults.
 	if maxTxnBytesPerBlock <= 0 || maxTxnBytesPerBlock > proto.MaxTxnBytesPerBlock {
