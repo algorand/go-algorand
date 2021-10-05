@@ -348,7 +348,7 @@ func randomDeltasBalancedImpl(niter int, base map[basics.Address]basics.AccountD
 }
 
 func checkAccounts(t *testing.T, tx *sql.Tx, kv kvMultiGet, rnd basics.Round, accts map[basics.Address]basics.AccountData) {
-	r, _, err := accountsRound(tx, kv)
+	r, _, err := accountsRound(kv)
 	require.NoError(t, err)
 	require.Equal(t, r, rnd)
 
@@ -581,7 +581,7 @@ func TestAccountDBRound(t *testing.T) {
 		require.NoError(t, err)
 		_, err = accountsNewRound(tx.kvWrite, updatesCnt, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
-		err = updateAccountsRound(tx.sqlTx, kv, tx.kvWrite, basics.Round(i), 0)
+		err = updateAccountsRound(kv, tx.kvWrite, basics.Round(i), 0)
 		require.NoError(t, err)
 
 		tx.Commit()
@@ -1381,7 +1381,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	setDbLogging(t, dbs)
 	defer dbs.Close()
 
-	err := atomicWrites(dbs, kv, func(ctx context.Context, tx *atomicWriteTx) (err error) {
+	err := atomicWrites(dbs.Wdb, kv, func(ctx context.Context, tx *atomicWriteTx) (err error) {
 		_, err = accountsInit(tx.sqlTx, tx.kvWrite, kv, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
 		if err != nil {
 			return err

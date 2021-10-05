@@ -704,8 +704,9 @@ func accountDataToOnline(address basics.Address, ad *basics.AccountData, proto c
 	}
 }
 
-func resetAccountHashes(tx *sql.Tx) (err error) {
-	_, err = tx.Exec(`DELETE FROM accounthashes`)
+func resetAccountHashes(kv kvWrite) (err error) {
+	err = kvResetAccountHashes(kv)
+	//_, err = tx.Exec(`DELETE FROM accounthashes`)
 	return
 }
 
@@ -722,15 +723,15 @@ func accountsReset(tx *sql.Tx) error {
 
 // accountsRound returns the tracker balances round number, and the round of the hash tree
 // if the hash of the tree doesn't exists, it returns zero.
-func accountsRound(tx *sql.Tx, kv kvRead) (rnd basics.Round, hashrnd basics.Round, err error) {
+func accountsRound(kv kvRead) (rnd basics.Round, hashrnd basics.Round, err error) {
 	rnd, err = kvGetAccountRound(kv, "acctbase")
 	//err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&rnd)
 	if err != nil {
 		return
 	}
 
-	//hashrnd, err = kvGetAccountRound(kv, "hashbase")
-	err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='hashbase'").Scan(&hashrnd)
+	hashrnd, err = kvGetAccountRound(kv, "hashbase")
+	//err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='hashbase'").Scan(&hashrnd)
 	if err == sql.ErrNoRows {
 		hashrnd = basics.Round(0)
 		err = nil
@@ -1249,7 +1250,7 @@ func totalsNewRounds(kvR kvRead, kvW kvWrite, updates []ledgercore.AccountDeltas
 }
 
 // updates the round number associated with the current account data.
-func updateAccountsRound(tx *sql.Tx, kvR kvRead, kvW kvWrite, rnd basics.Round, hashRound basics.Round) (err error) {
+func updateAccountsRound(kvR kvRead, kvW kvWrite, rnd basics.Round, hashRound basics.Round) (err error) {
 	res, err := kvUpdateAccountRounds(kvR, kvW, "acctbase", rnd)
 	//res, err = tx.sqlTx.Exec("UPDATE acctrounds SET rnd=? WHERE id='acctbase' AND rnd<?", rnd, rnd)
 	if err != nil {
@@ -1278,20 +1279,21 @@ func updateAccountsRound(tx *sql.Tx, kvR kvRead, kvW kvWrite, rnd basics.Round, 
 		}
 	}
 
-	res, err = tx.Exec("INSERT OR REPLACE INTO acctrounds(id,rnd) VALUES('hashbase',?)", hashRound)
+	err = kvPutAccountRounds(kvW, "hashbase", hashRound)
+	//res, err = tx.Exec("INSERT OR REPLACE INTO acctrounds(id,rnd) VALUES('hashbase',?)", hashRound)
 	if err != nil {
 		return
 	}
 
-	aff, err = res.RowsAffected()
-	if err != nil {
-		return
-	}
+	// aff, err = res.RowsAffected()
+	// if err != nil {
+	// 	return
+	// }
 
-	if aff != 1 {
-		err = fmt.Errorf("updateAccountsRound(hashbase,%d): expected to update 1 row but got %d", hashRound, aff)
-		return
-	}
+	// if aff != 1 {
+	// 	err = fmt.Errorf("updateAccountsRound(hashbase,%d): expected to update 1 row but got %d", hashRound, aff)
+	// 	return
+	// }
 	return
 }
 
@@ -1386,48 +1388,35 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 // MerkleCommitter todo
 //msgp:ignore MerkleCommitter
 type MerkleCommitter struct {
-	tx         *sql.Tx
-	deleteStmt *sql.Stmt
-	insertStmt *sql.Stmt
-	selectStmt *sql.Stmt
+	kvWrite kvWrite
+	kvRead  kvRead
+	table   string
 }
 
 // MakeMerkleCommitter creates a MerkleCommitter object that implements the merkletrie.Committer interface allowing storing and loading
 // merkletrie pages from a sqlite database.
-func MakeMerkleCommitter(tx *sql.Tx, staging bool) (mc *MerkleCommitter, err error) {
-	mc = &MerkleCommitter{tx: tx}
+func MakeMerkleCommitter(kvR kvRead, kvW kvWrite, staging bool) (mc *MerkleCommitter, err error) {
 	accountHashesTable := "accounthashes"
 	if staging {
 		accountHashesTable = "catchpointaccounthashes"
 	}
-	mc.deleteStmt, err = tx.Prepare("DELETE FROM " + accountHashesTable + " WHERE id=?")
-	if err != nil {
-		return nil, err
-	}
-	mc.insertStmt, err = tx.Prepare("INSERT OR REPLACE INTO " + accountHashesTable + "(id, data) VALUES(?, ?)")
-	if err != nil {
-		return nil, err
-	}
-	mc.selectStmt, err = tx.Prepare("SELECT data FROM " + accountHashesTable + " WHERE id = ?")
-	if err != nil {
-		return nil, err
-	}
+	mc = &MerkleCommitter{kvWrite: kvW, kvRead: kvR, table: accountHashesTable}
 	return mc, nil
 }
 
 // StorePage is the merkletrie.Committer interface implementation, stores a single page in a sqlite database table.
 func (mc *MerkleCommitter) StorePage(page uint64, content []byte) error {
 	if len(content) == 0 {
-		_, err := mc.deleteStmt.Exec(page)
+		err := kvDeleteAccountHashes(mc.kvWrite, mc.table, page)
 		return err
 	}
-	_, err := mc.insertStmt.Exec(page, content)
+	err := kvPutAccountHashes(mc.kvWrite, mc.table, page, content)
 	return err
 }
 
 // LoadPage is the merkletrie.Committer interface implementation, load a single page from a sqlite database table.
 func (mc *MerkleCommitter) LoadPage(page uint64) (content []byte, err error) {
-	err = mc.selectStmt.QueryRow(page).Scan(&content)
+	content, err = kvGetAccountHashes(mc.kvRead, mc.table, page)
 	if err == sql.ErrNoRows {
 		content = nil
 		err = nil

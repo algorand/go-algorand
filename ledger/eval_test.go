@@ -1389,7 +1389,7 @@ func newTestLedgerImpl(t testing.TB, balances bookkeeping.GenesisBalances, inMem
 		balances, "test", genHash)
 	require.False(t, genBlock.FeeSink.IsZero())
 	require.False(t, genBlock.RewardsPool.IsZero())
-	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	dbName := strings.ReplaceAll(fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64()), "/", ".")
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	l, err := OpenLedger(logging.Base(), dbName, inMem, InitState{

@@ -1275,7 +1275,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	}
 
 	err = ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		return updateAccountsRound(tx, au.kv, au.kv, 0, 1) // XXX
+		return updateAccountsRound(au.kv, au.kv, 0, 1) // XXX
 	})
 	require.NoError(b, err)
 
@@ -1345,7 +1345,7 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 			}
 		}
 
-		return updateAccountsRound(tx, au.kv, au.kv, 0, 1) // XXX
+		return updateAccountsRound(au.kv, au.kv, 0, 1) // XXX
 	})
 	require.NoError(b, err)
 

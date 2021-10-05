@@ -365,7 +365,9 @@ func (l *Ledger) Close() {
 	// last, we close the underlying database connections.
 	l.blockDBs.Close()
 	l.trackerDBs.Close()
-	l.kv.Close()
+	if l.kv != nil {
+		l.kv.Close()
+	}
 }
 
 // RegisterBlockListeners registers listeners that will be called when a

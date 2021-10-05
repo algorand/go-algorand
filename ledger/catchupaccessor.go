@@ -268,10 +268,11 @@ func (c *CatchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 	// later on:
 	// TotalAccounts, TotalAccounts, Catchpoint, BlockHeaderDigest, BalancesRound
 	wdb := c.ledger.trackerDB().Wdb
+	kv := c.ledger.kvStore()
 	start := time.Now()
 	ledgerProcessstagingcontentCount.Inc(nil)
-	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		sq, err := accountsDbInit(tx, tx)
+	err = atomicWrites(wdb, kv, func(ctx context.Context, tx *atomicWriteTx) (err error) {
+		sq, err := accountsDbInit(tx.sqlTx, tx.sqlTx)
 		if err != nil {
 			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to initialize accountsDbInit: %v", err)
 		}
@@ -280,7 +281,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 		if err != nil {
 			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupBlockRound, err)
 		}
-		err = accountsPutTotals(nil, fileHeader.Totals, true) // XXX panics
+		err = accountsPutTotals(tx.kvWrite, fileHeader.Totals, true)
 		return
 	})
 	ledgerProcessstagingcontentMicros.AddMicrosecondsSince(start, nil)
@@ -408,6 +409,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, progressUpdates func(uint64)) (err error) {
 	wdb := c.ledger.trackerDB().Wdb
 	rdb := c.ledger.trackerDB().Rdb
+	kv := c.ledger.kvStore()
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		// creating the index can take a while, so ensure we don't generate false alerts for no good reason.
 		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(120*time.Second))
@@ -471,9 +473,9 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 			progressUpdates(hashesWritten)
 		}
 
-		err := wdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
+		err := atomicWrites(wdb, kv, func(transactionCtx context.Context, tx *atomicWriteTx) (err error) {
 			// create the merkle trie for the balances
-			mc, err = MakeMerkleCommitter(tx, true)
+			mc, err = MakeMerkleCommitter(kv, tx.kvWrite, true)
 			if err != nil {
 				return
 			}
@@ -500,8 +502,8 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 				continue
 			}
 
-			err = rdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
-				mc, err = MakeMerkleCommitter(tx, true)
+			err = atomicReads(rdb, kv, func(transactionCtx context.Context, tx *atomicReadTx) (err error) {
+				mc, err = MakeMerkleCommitter(tx.kvRead, tx.kvWrite, true)
 				if err != nil {
 					return
 				}
@@ -525,10 +527,10 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 			}
 
 			if uncommitedHashesCount >= trieRebuildCommitFrequency {
-				err = wdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
+				err = atomicWrites(wdb, kv, func(transactionCtx context.Context, tx *atomicWriteTx) (err error) {
 					// set a long 30-second window for the evict before warning is generated.
-					db.ResetTransactionWarnDeadline(transactionCtx, tx, time.Now().Add(30*time.Second))
-					mc, err = MakeMerkleCommitter(tx, true)
+					db.ResetTransactionWarnDeadline(transactionCtx, tx.sqlTx, time.Now().Add(30*time.Second))
+					mc, err = MakeMerkleCommitter(kv, tx.kvWrite, true)
 					if err != nil {
 						return
 					}
@@ -554,10 +556,10 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 			return
 		}
 		if uncommitedHashesCount > 0 {
-			err = wdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
+			err = atomicWrites(wdb, kv, func(transactionCtx context.Context, tx *atomicWriteTx) (err error) {
 				// set a long 30-second window for the evict before warning is generated.
-				db.ResetTransactionWarnDeadline(transactionCtx, tx, time.Now().Add(30*time.Second))
-				mc, err = MakeMerkleCommitter(tx, true)
+				db.ResetTransactionWarnDeadline(transactionCtx, tx.sqlTx, time.Now().Add(30*time.Second))
+				mc, err = MakeMerkleCommitter(kv, tx.kvWrite, true)
 				if err != nil {
 					return
 				}
@@ -597,6 +599,7 @@ func (c *CatchpointCatchupAccessorImpl) GetCatchupBlockRound(ctx context.Context
 // VerifyCatchpoint verifies that the catchpoint is valid by reconstructing the label.
 func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, blk *bookkeeping.Block) (err error) {
 	rdb := c.ledger.trackerDB().Rdb
+	kv := c.ledger.kvStore()
 	var balancesHash crypto.Digest
 	var blockRound basics.Round
 	var totals ledgercore.AccountTotals
@@ -616,9 +619,9 @@ func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 
 	start := time.Now()
 	ledgerVerifycatchpointCount.Inc(nil)
-	err = rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = atomicReads(rdb, kv, func(ctx context.Context, tx *atomicReadTx) (err error) {
 		// create the merkle trie for the balances
-		mc, err0 := MakeMerkleCommitter(tx, true)
+		mc, err0 := MakeMerkleCommitter(tx.kvRead, tx.kvWrite, true)
 		if err0 != nil {
 			return fmt.Errorf("unable to make MerkleCommitter: %v", err0)
 		}
@@ -633,7 +636,7 @@ func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 			return fmt.Errorf("unable to get trie root hash: %v", err)
 		}
 
-		totals, err = accountsTotals(nil, true) // XXX panics
+		totals, err = accountsTotals(tx.kvRead, true)
 		if err != nil {
 			return fmt.Errorf("unable to get accounts totals: %v", err)
 		}
@@ -763,13 +766,14 @@ func (c *CatchpointCatchupAccessorImpl) CompleteCatchup(ctx context.Context) (er
 // finishBalances concludes the catchup of the balances(tracker) database.
 func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err error) {
 	wdb := c.ledger.trackerDB().Wdb
+	kv := c.ledger.kvStore()
 	start := time.Now()
 	ledgerCatchpointFinishBalsCount.Inc(nil)
-	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = atomicWrites(wdb, kv, func(ctx context.Context, tx *atomicWriteTx) (err error) {
 		var balancesRound uint64
 		var totals ledgercore.AccountTotals
 
-		sq, err := accountsDbInit(tx, tx)
+		sq, err := accountsDbInit(tx.sqlTx, tx.sqlTx)
 		if err != nil {
 			return fmt.Errorf("unable to initialize accountsDbInit: %v", err)
 		}
@@ -780,22 +784,23 @@ func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 			return err
 		}
 
-		totals, err = accountsTotals(nil, true) // XXX panics
+		// XXX need write barrier here for read?
+		totals, err = accountsTotals(kv, true)
 		if err != nil {
 			return err
 		}
 
-		err = applyCatchpointStagingBalances(ctx, tx, basics.Round(balancesRound))
+		err = applyCatchpointStagingBalances(ctx, tx.sqlTx, basics.Round(balancesRound))
 		if err != nil {
 			return err
 		}
 
-		err = accountsPutTotals(nil, totals, false) // XXX panics
+		err = accountsPutTotals(tx.kvWrite, totals, false)
 		if err != nil {
 			return err
 		}
 
-		err = resetCatchpointStagingBalances(ctx, tx, false)
+		err = resetCatchpointStagingBalances(ctx, tx.sqlTx, false)
 		if err != nil {
 			return err
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -26,7 +27,9 @@ const (
 	kvPrefixAssetCreatorsEndRange = "\x00\x00\x00\x05"
 
 	kvPrefixAccountTotals = "\x00\x00\x00\x05"
-	kvPrefixAccountHashes = "\x00\x00\x00\x06"
+
+	kvPrefixAccountHashes         = "\x00\x00\x00\x06"
+	kvPrefixAccountHashesEndRange = "\x00\x00\x00\x07"
 )
 
 // return the big-endian binary encoding of a uint64
@@ -88,9 +91,19 @@ func accountsTotalsKey(id string) []byte {
 	return append([]byte(kvPrefixAccountTotals), []byte(id)...)
 }
 
-// accountHashesKey: 4-byte prefix + 8-byte big-endian uint64 (page ID)
-func accountHashesKey(id uint64) []byte {
+// accountHashesKey: 4-byte prefix + 1-byte table identifier + 8-byte big-endian uint64 (page ID)
+func accountHashesKey(table string, id uint64) []byte {
+	var tableID byte
+	switch table {
+	case "accounthashes":
+		tableID = 1
+	case "catchpointaccounthashes":
+		tableID = 2
+	default:
+		panic(fmt.Errorf("accountHashesKey got bad table name %s", table))
+	}
 	ret := []byte(kvPrefixAccountHashes)
+	ret = append(ret, tableID)
 	ret = append(ret, bigEndianUint64(id)...)
 	return ret
 }
@@ -117,22 +130,33 @@ type kvMultiGet interface {
 type kvWrite interface {
 	Set(key, value []byte) error
 	Delete(key []byte) error
+	DeleteRange(start, end []byte) error
 }
 
 type atomicWriteTx struct {
 	sqlTx   *sql.Tx
-	kvWrite kvWrite
 	kv      kvstore.KVStore
+	kvWrite kvWrite
+	//kvRead  kvRead // a reader that lets reads through and logs them, to spot when they are happening during a tx
 }
 
 type atomicReadTx struct {
-	sqlTx  *sql.Tx
-	kvRead kvRead
+	sqlTx   *sql.Tx
+	kvRead  kvRead
+	kvWrite kvWrite // a writer that always logs and returns an error
 }
 
+type kvErrWriter struct{}
+
+var errKVReadOnlyTxn = errors.New("attempt to write from read-only txn")
+
+func (kvErrWriter) Set(key, value []byte) error         { return errKVReadOnlyTxn }
+func (kvErrWriter) Delete(key []byte) error             { return errKVReadOnlyTxn }
+func (kvErrWriter) DeleteRange(start, end []byte) error { return errKVReadOnlyTxn }
+
 // experimental helper to allow both sql.Tx and kvstore.BatchWriter to coexist
-func atomicWrites(dbs db.Pair, kv kvstore.KVStore, f func(context.Context, *atomicWriteTx) error) error {
-	return dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+func atomicWrites(db db.Accessor, kv kvstore.KVStore, f func(context.Context, *atomicWriteTx) error) error {
+	return db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		batch := kv.NewBatch()
 		atx := &atomicWriteTx{sqlTx: tx, kvWrite: batch, kv: kv} //, kvRead: au.kv}
 		err := f(ctx, atx)
@@ -149,22 +173,21 @@ func atomicWrites(dbs db.Pair, kv kvstore.KVStore, f func(context.Context, *atom
 // writeBarrier commits and starts a new batch
 func (t *atomicWriteTx) writeBarrier() {
 	batch := (t.kvWrite).(kvstore.BatchWriter)
-	batch.Commit()
-	t.kvWrite = t.kv.NewBatch()
+	batch.WriteBarrier()
 }
 
 // experimental helper to allow both sql.Tx and kvstore.Snapshot to coexist
-func atomicReads(dbs db.Pair, kv kvstore.KVStore, f func(context.Context, *atomicReadTx) error) error {
-	return dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+func atomicReads(db db.Accessor, kv kvstore.KVStore, f func(context.Context, *atomicReadTx) error) error {
+	return db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// using read snapshot to provide consistent reads
 		snap := kv.NewSnapshot()
 		defer snap.Close()
-		atx := &atomicReadTx{sqlTx: tx, kvRead: snap}
+		atx := &atomicReadTx{sqlTx: tx, kvRead: snap, kvWrite: kvErrWriter{}}
 		return f(ctx, atx)
 	})
 }
 
-// XXX use the same row ID for all KV rows, just to have something non-zero
+// use the same row ID for all KV rows, just to have something non-zero
 var kvRowID = sql.NullInt64{Int64: 1, Valid: true}
 
 // kvResult implements sql.Result
@@ -179,8 +202,10 @@ func (r kvResult) RowsAffected() (int64, error) { return r.rows, r.err }
 // simulate SELECT rowid, data FROM accountbase WHERE address=?
 func kvGetAccountData(kv kvRead, address []byte, rowid *sql.NullInt64, acctData *[]byte) error {
 	val, err := kv.Get(accountKey(address))
-	if err != nil { // XXX assume any error is ErrNoRows
-		return sql.ErrNoRows
+	if err != nil {
+		if errors.Is(err, kvstore.ErrKeyNotFound) {
+			return sql.ErrNoRows
+		}
 	}
 	*acctData = val
 	*rowid = kvRowID
@@ -371,11 +396,6 @@ func (i *kvAccountBalanceIterator) Scan(args ...interface{}) error {
 	return nil
 }
 
-type DBImpl interface {
-	CountAccounts(r Reader) (uint64, error)
-	GetAccountRound(r Reader, id string) (basics.Round, error)
-}
-
 func kvCountAccounts(kv kvRead) (uint64, error) {
 	count := uint64(0)
 	iter := kv.NewIterator([]byte(kvPrefixAccount), []byte(kvPrefixAccountEndRange), false)
@@ -392,16 +412,18 @@ func kvCountAccounts(kv kvRead) (uint64, error) {
 func kvGetAccountRound(kv kvRead, id string) (basics.Round, error) {
 	val, err := kv.Get(accountRoundsKey(id))
 	if err != nil {
+		if errors.Is(err, kvstore.ErrKeyNotFound) {
+			return 0, sql.ErrNoRows
+		}
 		return 0, err
 	}
 	if len(val) != 8 {
-		return 0, fmt.Errorf("get acctrounds returned val of len %d", len(val))
+		return 0, fmt.Errorf("get acctrounds %s returned val of len %d", id, len(val))
 	}
 	return basics.Round(binary.BigEndian.Uint64(val)), nil
 }
 
 func kvPutAccountRounds(kv kvWrite, id string, rnd basics.Round) error {
-	fmt.Println("kvPutAccountRounds id", id, "round", rnd)
 	val := make([]byte, 8)
 	binary.BigEndian.PutUint64(val, uint64(rnd))
 	return kv.Set(accountRoundsKey(id), val)
@@ -430,6 +452,9 @@ func kvGetAccountsTotals(kv kvRead, idKey string) (totals ledgercore.AccountTota
 	var encTotals []byte
 	encTotals, err = kv.Get(accountsTotalsKey(idKey))
 	if err != nil {
+		if errors.Is(err, kvstore.ErrKeyNotFound) {
+			err = sql.ErrNoRows
+		}
 		return
 	}
 	err = protocol.Decode(encTotals, &totals)
@@ -543,4 +568,31 @@ func kvLookupCreator(kv kvMultiGet, cidx basics.CreatableIndex, ctype basics.Cre
 		return basics.Round(0), nil, fmt.Errorf("kvLookupCreator vals len %d", len(vals))
 	}
 	return basics.Round(binary.BigEndian.Uint64(vals[0])), vals[1], nil
+}
+
+// DELETE FROM accounthashes
+func kvResetAccountHashes(kv kvWrite) error {
+	return kv.DeleteRange([]byte(kvPrefixAccountHashes), []byte(kvPrefixAccountHashesEndRange))
+}
+
+// "DELETE FROM " + accountHashesTable + " WHERE id=?"
+func kvDeleteAccountHashes(kv kvWrite, table string, page uint64) error {
+	return kv.Delete(accountHashesKey(table, page))
+}
+
+// "INSERT OR REPLACE INTO " + accountHashesTable + "(id, data) VALUES(?, ?)"
+func kvPutAccountHashes(kv kvWrite, table string, page uint64, content []byte) error {
+	return kv.Set(accountHashesKey(table, page), content)
+}
+
+// "SELECT data FROM " + accountHashesTable + " WHERE id = ?"
+func kvGetAccountHashes(kv kvRead, table string, page uint64) ([]byte, error) {
+	ret, err := kv.Get(accountHashesKey(table, page))
+	if err != nil {
+		if errors.Is(err, kvstore.ErrKeyNotFound) {
+			return nil, sql.ErrNoRows
+		}
+		return nil, err
+	}
+	return ret, nil
 }

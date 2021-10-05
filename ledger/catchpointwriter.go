@@ -293,7 +293,7 @@ func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *atomicRead
 
 func (cw *catchpointWriter) readHeaderFromDatabase(ctx context.Context, tx *atomicReadTx) (err error) {
 	var header CatchpointFileHeader
-	header.BalancesRound, _, err = accountsRound(tx.sqlTx, tx.kvRead)
+	header.BalancesRound, _, err = accountsRound(tx.kvRead)
 	if err != nil {
 		return
 	}

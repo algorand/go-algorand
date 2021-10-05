@@ -569,12 +569,12 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 			var accts map[basics.Address]*onlineAccount
 			start := time.Now()
 			ledgerAccountsonlinetopCount.Inc(nil)
-			err = atomicReads(au.dbs, au.kv, func(ctx context.Context, tx *atomicReadTx) (err error) {
+			err = atomicReads(au.dbs.Rdb, au.kv, func(ctx context.Context, tx *atomicReadTx) (err error) {
 				accts, err = accountsOnlineTop(tx.kvRead, batchOffset, batchSize, proto)
 				if err != nil {
 					return
 				}
-				dbRound, _, err = accountsRound(tx.sqlTx, tx.kvRead)
+				dbRound, _, err = accountsRound(tx.kvRead)
 				return
 			})
 			ledgerAccountsonlinetopMicros.AddMicrosecondsSince(start, nil)
@@ -1121,7 +1121,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	lastestBlockRound = l.Latest()
 	start := time.Now()
 	ledgerAccountsinitCount.Inc(nil)
-	err = atomicWrites(au.dbs, au.kv, func(ctx context.Context, tx *atomicWriteTx) error {
+	err = atomicWrites(au.dbs.Wdb, au.kv, func(ctx context.Context, tx *atomicWriteTx) error {
 		var err0 error
 		au.dbRound, err0 = au.accountsInitialize(ctx, tx, au.kv)
 		if err0 != nil {
@@ -1239,26 +1239,30 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *atomicWrit
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 0 : %v", err)
 					return 0, err
 				}
+				//tx.writeBarrier()
 			case 1:
-				dbVersion, err = au.upgradeDatabaseSchema1(ctx, tx.sqlTx, newDatabase)
+				dbVersion, err = au.upgradeDatabaseSchema1(ctx, tx.sqlTx, tx.kvWrite, newDatabase)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 1 : %v", err)
 					return 0, err
 				}
+				//tx.writeBarrier()
 			case 2:
 				dbVersion, err = au.upgradeDatabaseSchema2(ctx, tx.sqlTx, newDatabase)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 2 : %v", err)
 					return 0, err
 				}
+				//tx.writeBarrier()
 			case 3:
 				dbVersion, err = au.upgradeDatabaseSchema3(ctx, tx.sqlTx, newDatabase)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 3 : %v", err)
 					return 0, err
 				}
+				//tx.writeBarrier()
 			case 4:
-				dbVersion, err = au.upgradeDatabaseSchema4(ctx, tx.sqlTx, newDatabase)
+				dbVersion, err = au.upgradeDatabaseSchema4(ctx, tx.sqlTx, kv, tx.kvWrite, newDatabase)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 4 : %v", err)
 					return 0, err
@@ -1273,7 +1277,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *atomicWrit
 		tx.writeBarrier()
 	}
 
-	rnd, hashRound, err := accountsRound(tx.sqlTx, au.kv)
+	rnd, hashRound, err := accountsRound(au.kv)
 	if err != nil {
 		return 0, err
 	}
@@ -1281,10 +1285,12 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *atomicWrit
 	if hashRound != rnd {
 		// if the hashed round is different then the base round, something was modified, and the accounts aren't in sync
 		// with the hashes.
-		err = resetAccountHashes(tx.sqlTx) // XXX leaving accounthashes in SQL
+		err = resetAccountHashes(tx.kvWrite)
 		if err != nil {
 			return 0, err
 		}
+		tx.writeBarrier() // XXX probably needs to flush for MakeMerkleCommitter below
+
 		// if catchpoint is disabled on this node, we could complete the initialization right here.
 		if au.catchpointInterval == 0 {
 			return rnd, nil
@@ -1292,7 +1298,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *atomicWrit
 	}
 
 	// create the merkle trie for the balances
-	committer, err := MakeMerkleCommitter(tx.sqlTx, false) // XXX leaving accounthashes in SQL
+	committer, err := MakeMerkleCommitter(au.kv, tx.kvWrite, false)
 	if err != nil {
 		return 0, fmt.Errorf("accountsInitialize was unable to makeMerkleCommitter: %v", err)
 	}
@@ -1377,7 +1383,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *atomicWrit
 		}
 
 		// we've just updated the merkle trie, update the hashRound to reflect that.
-		err = updateAccountsRound(tx.sqlTx, au.kv, tx.kvWrite, rnd, rnd) // XXX doesn't read from current KV batch
+		err = updateAccountsRound(au.kv, tx.kvWrite, rnd, rnd) // XXX doesn't read from current KV batch
 		if err != nil {
 			return 0, fmt.Errorf("accountsInitialize was unable to update the account round to %d: %v", rnd, err)
 		}
@@ -1437,7 +1443,7 @@ func (au *accountUpdates) upgradeDatabaseSchema0(ctx context.Context, tx *atomic
 // This upgrade doesn't change any of the actual database schema ( i.e. tables, indexes ) but rather just performing
 // a functional update to it's content.
 //
-func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx, newDatabase bool) (updatedDBVersion int32, err error) {
+func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx, kv kvWrite, newDatabase bool) (updatedDBVersion int32, err error) {
 	var modifiedAccounts uint
 	if newDatabase {
 		goto schemaUpdateComplete
@@ -1455,7 +1461,7 @@ func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx
 
 		au.log.Infof("accountsInitialize resetting account hashes")
 		// reset the merkle trie
-		err = resetAccountHashes(tx)
+		err = resetAccountHashes(kv)
 		if err != nil {
 			return 0, fmt.Errorf("accountsInitialize unable to reset account hashes : %v", err)
 		}
@@ -1533,7 +1539,7 @@ func (au *accountUpdates) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx
 
 // upgradeDatabaseSchema4 does not change the schema but migrates data:
 // remove empty AccountData entries from accountbase table
-func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx, newDatabase bool) (updatedDBVersion int32, err error) {
+func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx, kvR kvRead, kvW kvWrite, newDatabase bool) (updatedDBVersion int32, err error) {
 	queryAddresses := au.catchpointInterval != 0
 	var numDeleted int64
 	var addresses []basics.Address
@@ -1548,7 +1554,7 @@ func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx
 	}
 
 	if queryAddresses && len(addresses) > 0 {
-		mc, err := MakeMerkleCommitter(tx, false)
+		mc, err := MakeMerkleCommitter(kvR, kvW, false)
 		if err != nil {
 			// at this point record deleted and DB is pruned for account data
 			// if hash deletion fails just log it and do not abort startup
@@ -2168,10 +2174,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	if updateStats {
 		stats.DatabaseCommitDuration = time.Duration(time.Now().UnixNano())
 	}
-	err := atomicWrites(au.dbs, au.kv, func(ctx context.Context, tx *atomicWriteTx) (err error) {
+	err := atomicWrites(au.dbs.Wdb, au.kv, func(ctx context.Context, tx *atomicWriteTx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
-			mc, err0 := MakeMerkleCommitter(tx.sqlTx, false)
+			mc, err0 := MakeMerkleCommitter(au.kv, tx.kvWrite, false)
 			if err0 != nil {
 				return err0
 			}
@@ -2237,7 +2243,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 
 		// XXX passing in KV reader that can't see current batch -- needs barrier?
-		err = updateAccountsRound(tx.sqlTx, au.kv, tx.kvWrite, dbRound+basics.Round(offset), treeTargetRound)
+		err = updateAccountsRound(au.kv, tx.kvWrite, dbRound+basics.Round(offset), treeTargetRound)
 		if err != nil {
 			return err
 		}
@@ -2441,7 +2447,7 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 	var catchpointWriter *catchpointWriter
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
-	err = atomicReads(au.dbs, au.kv, func(ctx context.Context, tx *atomicReadTx) (err error) {
+	err = atomicReads(au.dbs.Rdb, au.kv, func(ctx context.Context, tx *atomicReadTx) (err error) {
 		catchpointWriter = makeCatchpointWriter(au.ctx, absCatchpointFileName, tx, committedRound, committedRoundDigest, label)
 		for more {
 			stepCtx, stepCancelFunction := context.WithTimeout(au.ctx, chunkExecutionDuration)
