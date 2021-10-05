@@ -90,17 +90,6 @@ type Ledger struct {
 	verifiedTxnCache verify.VerifiedTransactionCache
 }
 
-// BlockEvaluator export the block evaluator interface
-type BlockEvaluator interface {
-	TestTransactionGroup(txgroup []transactions.SignedTxn) error
-	Round() basics.Round
-	PaySetSize() int
-	TransactionGroup(txads []transactions.SignedTxnWithAD) error
-	Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error
-	GenerateBlock() (*ledgercore.ValidatedBlock, error)
-	ResetTxnBytes()
-}
-
 // OpenLedger creates a Ledger object, using SQLite database filenames
 // based on dbPathPrefix (in-memory if dbMem is true). genesisInitState.Blocks and
 // genesisInitState.Accounts specify the initial blocks and accounts to use if the

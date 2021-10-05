@@ -69,7 +69,7 @@ type TransactionPool struct {
 	mu                     deadlock.Mutex
 	cond                   sync.Cond
 	expiredTxCount         map[basics.Round]int
-	pendingBlockEvaluator  ledger.BlockEvaluator
+	pendingBlockEvaluator  BlockEvaluator
 	numPendingWholeBlocks  basics.Round
 	feeThresholdMultiplier uint64
 	statusCache            *statusCache
@@ -106,6 +106,17 @@ type TransactionPool struct {
 	rememberedLatestLocal uint64
 
 	log logging.Logger
+}
+
+// BlockEvaluator defines the block evaluator interface exposed by the ledger pacakge.
+type BlockEvaluator interface {
+	TestTransactionGroup(txgroup []transactions.SignedTxn) error
+	Round() basics.Round
+	PaySetSize() int
+	TransactionGroup(txads []transactions.SignedTxnWithAD) error
+	Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error
+	GenerateBlock() (*ledgercore.ValidatedBlock, error)
+	ResetTxnBytes()
 }
 
 // MakeTransactionPool makes a transaction pool.
