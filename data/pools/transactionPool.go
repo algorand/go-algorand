@@ -108,7 +108,7 @@ type TransactionPool struct {
 	log logging.Logger
 }
 
-// BlockEvaluator defines the block evaluator interface exposed by the ledger pacakge.
+// BlockEvaluator defines the block evaluator interface exposed by the ledger package.
 type BlockEvaluator interface {
 	TestTransactionGroup(txgroup []transactions.SignedTxn) error
 	Round() basics.Round

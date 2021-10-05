@@ -291,7 +291,6 @@ func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 			updates.Upsert(addr, new)
 			imbalance += int64(old.WithUpdatedRewards(proto, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
 			totals[addr] = new
-			break
 		}
 	}
 
