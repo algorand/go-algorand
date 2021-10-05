@@ -40,9 +40,9 @@ type LedgerForCowBase interface {
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 }
 
-//msgp:ignore ParticipantsArray
 // ParticipantsArray implements merklearray.Array and is used to commit
 // to a Merkle tree of online accounts.
+//msgp:ignore ParticipantsArray
 type ParticipantsArray []basics.Participant
 
 // Length returns the ledger of the array.
