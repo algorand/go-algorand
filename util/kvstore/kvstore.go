@@ -1,13 +1,19 @@
 package kvstore
 
-import "fmt"
+import (
+	"errors"
+)
 
 // KVStore is a simple KV API
 type KVStore interface {
 	Get([]byte) ([]byte, error)
 	Set([]byte, []byte) error
+	Delete(key []byte) error
 
-	NewIterator(start, end []byte) Iterator
+	MultiGet(keys [][]byte) ([][]byte, error)
+
+	NewIterator(start, end []byte, reverse bool) Iterator
+	NewSnapshot() Snapshot
 
 	NewBatch() BatchWriter
 	Close() error
@@ -16,6 +22,7 @@ type KVStore interface {
 // BatchWriter is a set of mutations
 type BatchWriter interface {
 	Set(key, value []byte) error
+	Delete(key []byte) error
 
 	Commit() error
 	Cancel()
@@ -29,6 +36,13 @@ type Iterator interface {
 	Value() ([]byte, error)
 	ValueSlice() (Slice, error)
 	Valid() bool
+	Close()
+}
+
+// Snapshot provides a consistent reader that must be closed
+type Snapshot interface {
+	Get([]byte) ([]byte, error)
+	NewIterator(start, end []byte, reverse bool) Iterator
 	Close()
 }
 
@@ -47,11 +61,13 @@ type kvFactory interface {
 
 var kvImpls = make(map[string]kvFactory)
 
+var ErrImplNotFound = errors.New("KVStore implementation not found")
+
 // NewKVStore returns a KVStore implementation matching the provided implementation name
 func NewKVStore(impl string, dbdir string, inMem bool) (KVStore, error) {
 	factory, ok := kvImpls[impl]
 	if !ok {
-		return nil, fmt.Errorf("KVStore impl %s not found", impl)
+		return nil, ErrImplNotFound
 	}
 	return factory.New(dbdir, inMem)
 }

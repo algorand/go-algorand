@@ -1,3 +1,5 @@
+// +build kv_pebbledb
+
 package kvstore
 
 import (
@@ -71,18 +73,37 @@ func (db *PebbleDB) Close() error { return db.Pdb.Close() }
 
 // Get a key
 func (db *PebbleDB) Get(key []byte) ([]byte, error) {
-	key, closer, err := db.Pdb.Get(key)
+	val, closer, err := db.Pdb.Get(key)
 	if err != nil {
 		return nil, err
 	}
-	ret := make([]byte, len(key))
-	copy(ret, key)
+	ret := make([]byte, len(val))
+	copy(ret, val)
 	closer.Close()
 	return ret, nil
 }
 
 // Set a key to value
 func (db *PebbleDB) Set(key, value []byte) error { return db.Pdb.Set(key, value, db.wo) }
+
+func (db *PebbleDB) Delete(key []byte) error { return db.Pdb.Delete(key, db.wo) }
+
+// MultiGet by using snapshots
+func (db *PebbleDB) MultiGet(keys [][]byte) ([][]byte, error) {
+	snap := db.Pdb.NewSnapshot()
+	defer snap.Close()
+	ret := make([][]byte, len(keys))
+	for i := range keys {
+		val, closer, err := snap.Get(keys[i])
+		if err != nil {
+			return nil, err
+		}
+		ret[i] = make([]byte, len(val))
+		copy(ret[i], val)
+		closer.Close()
+	}
+	return ret, nil
+}
 
 // pebbleBatch is a batch of writes using the pebble.WriteBatch API
 type pebbleBatch struct {
@@ -94,24 +115,61 @@ type pebbleBatch struct {
 func (db *PebbleDB) NewBatch() BatchWriter { return &pebbleBatch{wb: db.Pdb.NewBatch(), wo: db.wo} }
 
 func (b *pebbleBatch) Set(key, value []byte) error { return b.wb.Set(key, value, b.wo) }
+func (b *pebbleBatch) Delete(key []byte) error     { return b.wb.Delete(key, b.wo) }
 func (b *pebbleBatch) Commit() error               { return b.wb.Commit(b.wo) }
 func (b *pebbleBatch) Cancel()                     { b.wb.Close() }
 
+type pebbleSnapshot struct {
+	db   *PebbleDB
+	snap *pebble.Snapshot
+}
+
+func (db *PebbleDB) NewSnapshot() Snapshot { return &pebbleSnapshot{snap: db.Pdb.NewSnapshot()} }
+
+func (s *pebbleSnapshot) Get(key []byte) ([]byte, error) {
+	val, closer, err := s.snap.Get(key)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	ret := make([]byte, len(val))
+	copy(ret, key)
+	return ret, nil
+}
+func (s *pebbleSnapshot) Close() { s.snap.Close() }
+
+func (s *pebbleSnapshot) NewIterator(start, end []byte, reverse bool) Iterator {
+	iter := s.snap.NewIter(&pebble.IterOptions{LowerBound: start, UpperBound: end})
+	return s.db.newIterator(iter, reverse)
+}
+
 type pebbleIterator struct {
-	iter *pebble.Iterator
+	iter    *pebble.Iterator
+	reverse bool
 }
 
-// Iterator scans a range: start and end are optional (set to nil/empty otherwise)
-func (db *PebbleDB) NewIterator(start, end []byte) Iterator {
-	iter := db.Pdb.NewIter(&pebble.IterOptions{
-		LowerBound: start,
-		UpperBound: end,
-	})
-	iter.First()
-	return &pebbleIterator{iter: iter}
+// NewIterator scans a range: start and end are optional (set to nil/empty otherwise)
+func (db *PebbleDB) NewIterator(start, end []byte, reverse bool) Iterator {
+	iter := db.Pdb.NewIter(&pebble.IterOptions{LowerBound: start, UpperBound: end})
+	return db.newIterator(iter, reverse)
 }
 
-func (i *pebbleIterator) Next()       { i.iter.Next() }
+func (db *PebbleDB) newIterator(iter *pebble.Iterator, reverse bool) Iterator {
+	if reverse {
+		iter.Last()
+	} else {
+		iter.First()
+	}
+	return &pebbleIterator{iter: iter, reverse: reverse}
+}
+
+func (i *pebbleIterator) Next() {
+	if i.reverse {
+		i.iter.Prev()
+	} else {
+		i.iter.Next()
+	}
+}
 func (i *pebbleIterator) Valid() bool { return i.iter.Valid() }
 func (i *pebbleIterator) Close()      { i.iter.Close() }
 
