@@ -88,6 +88,10 @@ func (db *PebbleDB) Set(key, value []byte) error { return db.Pdb.Set(key, value,
 
 func (db *PebbleDB) Delete(key []byte) error { return db.Pdb.Delete(key, db.wo) }
 
+func (db *PebbleDB) DeleteRange(start, end []byte) error {
+	return db.Pdb.DeleteRange(start, end, db.wo)
+}
+
 // MultiGet by using snapshots
 func (db *PebbleDB) MultiGet(keys [][]byte) ([][]byte, error) {
 	snap := db.Pdb.NewSnapshot()
@@ -109,15 +113,24 @@ func (db *PebbleDB) MultiGet(keys [][]byte) ([][]byte, error) {
 type pebbleBatch struct {
 	wb *pebble.Batch
 	wo *pebble.WriteOptions
+	db *pebble.DB
 }
 
 // NewBatch creates a batch writer
-func (db *PebbleDB) NewBatch() BatchWriter { return &pebbleBatch{wb: db.Pdb.NewBatch(), wo: db.wo} }
+func (db *PebbleDB) NewBatch() BatchWriter {
+	return &pebbleBatch{wb: db.Pdb.NewBatch(), wo: db.wo, db: db.Pdb}
+}
 
-func (b *pebbleBatch) Set(key, value []byte) error { return b.wb.Set(key, value, b.wo) }
-func (b *pebbleBatch) Delete(key []byte) error     { return b.wb.Delete(key, b.wo) }
-func (b *pebbleBatch) Commit() error               { return b.wb.Commit(b.wo) }
-func (b *pebbleBatch) Cancel()                     { b.wb.Close() }
+func (b *pebbleBatch) Set(key, value []byte) error   { return b.wb.Set(key, value, b.wo) }
+func (b *pebbleBatch) Delete(key []byte) error       { return b.wb.Delete(key, b.wo) }
+func (b *pebbleBatch) DeleteRange(s, e []byte) error { return b.wb.DeleteRange(s, e, b.wo) }
+func (b *pebbleBatch) Commit() error                 { return b.wb.Commit(b.wo) }
+func (b *pebbleBatch) Cancel()                       { b.wb.Close() }
+func (b *pebbleBatch) WriteBarrier() error {
+	err := b.wb.Commit(b.wo)
+	b.wb = b.db.NewBatch()
+	return err
+}
 
 type pebbleSnapshot struct {
 	db   *PebbleDB

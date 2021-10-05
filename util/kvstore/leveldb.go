@@ -55,6 +55,7 @@ func (db *LevelDB) Delete(key []byte) error {
 	db.Ldb.Delete(db.wo, key)
 	return nil
 }
+func (db *LevelDB) DeleteRange(start, end []byte) error { return kvDeleteRange(db, start, end) }
 
 func (db *LevelDB) MultiGet(keys [][]byte) ([][]byte, error) {
 	snap := db.Ldb.NewSnapshot()
@@ -89,6 +90,15 @@ func (b *levelBatch) Set(key, val []byte) error {
 func (b *levelBatch) Delete(key []byte) error {
 	b.wb.Delete(key)
 	return nil
+}
+func (b *levelBatch) DeleteRange(start, end []byte) error {
+	return kvBatchDeleteRange(b.db, b, start, end)
+}
+func (b *levelBatch) WriteBarrier() error {
+	err := b.db.Ldb.Write(b.db.wo, b.wb)
+	b.wb.Close()
+	b.wb = levigo.NewWriteBatch()
+	return err
 }
 func (b *levelBatch) Commit() error {
 	defer b.wb.Close()

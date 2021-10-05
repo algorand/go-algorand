@@ -4,6 +4,7 @@ package kvstore
 
 import (
 	"bytes"
+	"fmt"
 	"runtime"
 
 	"github.com/tecbot/gorocksdb"
@@ -48,6 +49,9 @@ func NewRocksDB(dbdir string) (*RocksDB, error) {
 }
 
 func (db *RocksDB) Close() error {
+	if db == nil {
+		return nil
+	}
 	db.ro.Destroy()
 	db.wo.Destroy()
 	db.Rdb.Close()
@@ -73,6 +77,9 @@ func (db *RocksDB) get(opts *gorocksdb.ReadOptions, key []byte) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
+	if val.Data() == nil {
+		return nil, fmt.Errorf("%x: %w", key, ErrKeyNotFound)
+	}
 	return sliceBytes(val), nil
 }
 
@@ -82,6 +89,7 @@ func (db *RocksDB) Delete(key []byte) error {
 	db.Rdb.Delete(db.wo, key)
 	return nil
 }
+func (db *RocksDB) DeleteRange(start, end []byte) error { return kvDeleteRange(db, start, end) }
 
 func (db *RocksDB) MultiGet(keys [][]byte) ([][]byte, error) {
 	val, err := db.Rdb.MultiGet(db.ro, keys...)
@@ -110,6 +118,17 @@ func (b *rocksBatch) Delete(key []byte) error {
 	b.wb.Delete(key)
 	return nil
 }
+func (b *rocksBatch) DeleteRange(start, end []byte) error {
+	b.wb.DeleteRange(start, end)
+	return nil
+}
+func (b *rocksBatch) WriteBarrier() error {
+	err := b.rdb.Rdb.Write(b.rdb.wo, b.wb)
+	b.wb.Destroy()
+	b.wb = gorocksdb.NewWriteBatch()
+	return err
+}
+
 func (b *rocksBatch) Commit() error {
 	defer b.wb.Destroy()
 	return b.rdb.Rdb.Write(b.rdb.wo, b.wb)

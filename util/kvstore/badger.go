@@ -89,6 +89,8 @@ func (b *BadgerDB) Delete(key []byte) error {
 	})
 }
 
+func (b *BadgerDB) DeleteRange(start, end []byte) error { return kvDeleteRange(b, start, end) }
+
 // badgerBatch is a batch of writes using the badger.WriteBatch API
 type badgerBatch struct {
 	wb *badger.WriteBatch
@@ -105,14 +107,15 @@ func (b *badgerBatch) Cancel()                     { b.wb.Cancel() }
 // badgerTxn is a batch of reads/writes using the badger.Txn API
 type badgerTxn struct {
 	txn *badger.Txn
+	db  *badger.DB
 }
 
 func (b *BadgerDB) NewBatch() BatchWriter {
-	return &badgerTxn{txn: b.Bdb.NewTransaction(true)}
+	return &badgerTxn{txn: b.Bdb.NewTransaction(true), db: b.Bdb}
 }
 
 func (b *BadgerDB) NewSnapshot() Snapshot {
-	return &badgerTxn{txn: b.Bdb.NewTransaction(false)}
+	return &badgerTxn{txn: b.Bdb.NewTransaction(false), db: b.Bdb}
 }
 
 func (t *badgerTxn) Get(key []byte) ([]byte, error) {
@@ -133,6 +136,29 @@ func (t *badgerTxn) Commit() error               { return t.txn.Commit() }
 func (t *badgerTxn) Cancel()                     { t.txn.Discard() }
 func (t *badgerTxn) Close()                      { t.txn.Discard() }
 
+func (t *badgerTxn) WriteBarrier() error {
+	err := t.txn.Commit()
+	t.txn.Discard()
+	t.txn = t.db.NewTransaction(true)
+	return err
+}
+
+func (t *badgerTxn) DeleteRange(start, end []byte) error {
+	return t.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchValues = false
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		for it.Rewind(); it.Valid(); it.Next() {
+			err := t.txn.Delete(it.Item().Key()) // XXX could be badger.ErrTxnTooBig
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 type badgerIterator struct {
 	txn        *badger.Txn
 	iter       *badger.Iterator
@@ -142,7 +168,7 @@ type badgerIterator struct {
 
 // Iterator scans a range: start and end are optional (set to nil/empty otherwise)
 func (b *BadgerDB) NewIterator(start, end []byte, reverse bool) Iterator {
-	txn := &badgerTxn{txn: b.Bdb.NewTransaction(false)}
+	txn := &badgerTxn{txn: b.Bdb.NewTransaction(false), db: b.Bdb}
 	return txn.NewIterator(start, end, reverse)
 }
 

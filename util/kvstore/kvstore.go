@@ -9,6 +9,7 @@ type KVStore interface {
 	Get([]byte) ([]byte, error)
 	Set([]byte, []byte) error
 	Delete(key []byte) error
+	DeleteRange(start, end []byte) error
 
 	MultiGet(keys [][]byte) ([][]byte, error)
 
@@ -23,7 +24,9 @@ type KVStore interface {
 type BatchWriter interface {
 	Set(key, value []byte) error
 	Delete(key []byte) error
+	DeleteRange(start, end []byte) error
 
+	WriteBarrier() error
 	Commit() error
 	Cancel()
 }
@@ -61,7 +64,10 @@ type kvFactory interface {
 
 var kvImpls = make(map[string]kvFactory)
 
-var ErrImplNotFound = errors.New("KVStore implementation not found")
+var (
+	ErrImplNotFound = errors.New("KVStore implementation not found")
+	ErrKeyNotFound  = errors.New("KV value for key not found")
+)
 
 // NewKVStore returns a KVStore implementation matching the provided implementation name
 func NewKVStore(impl string, dbdir string, inMem bool) (KVStore, error) {
@@ -70,4 +76,22 @@ func NewKVStore(impl string, dbdir string, inMem bool) (KVStore, error) {
 		return nil, ErrImplNotFound
 	}
 	return factory.New(dbdir, inMem)
+}
+
+// generic delete range helpers
+func kvDeleteRange(kv KVStore, start, end []byte) error {
+	b := kv.NewBatch()
+	b.DeleteRange(start, end)
+	return b.Commit()
+}
+
+// generic delete range, not performant
+func kvBatchDeleteRange(kv KVStore, b BatchWriter, start, end []byte) error {
+	for iter := kv.NewIterator(start, end, false); iter.Valid(); iter.Next() {
+		err := b.Delete(iter.Key())
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
