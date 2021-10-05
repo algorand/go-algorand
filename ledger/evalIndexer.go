@@ -159,7 +159,7 @@ func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto con
 	ilc := makeIndexerLedgerConnector(il, block.GenesisHash(), block.Round()-1)
 
 	eval, err := startEvaluator(
-		ilc, block.BlockHeader, proto, len(block.Payset), false, false)
+		ilc, block.BlockHeader, proto, len(block.Payset), false, false, 0)
 	if err != nil {
 		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
 			fmt.Errorf("EvalForIndexer() err: %w", err)

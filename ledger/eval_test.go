@@ -73,7 +73,7 @@ func TestBlockEvaluator(t *testing.T) {
 	defer l.Close()
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.Equal(t, eval.specials.FeeSink, testSinkAddr)
 	require.NoError(t, err)
 
@@ -286,7 +286,7 @@ func TestRekeying(t *testing.T) {
 		// So the ValidatedBlock that comes out isn't necessarily actually a valid block. We'll call Validate ourselves.
 
 		newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-		eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+		eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 		require.NoError(t, err)
 
 		for _, stxn := range stxns {
@@ -462,7 +462,7 @@ func testEvalAppGroup(t *testing.T, schema basics.StateSchema) (*BlockEvaluator,
 	defer l.Close()
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.NoError(t, err)
 	eval.validate = true
 	eval.generate = false
@@ -578,6 +578,9 @@ func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalPr
 	defer l.Close()
 
 	eval := l.nextBlock(t)
+	eval.validate = true
+	eval.generate = false
+
 	eval.proto = config.Consensus[consensusVersion]
 
 	appcall1 := txntest.Txn{
@@ -927,7 +930,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 	}
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	bev, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	bev, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.NoError(b, err)
 
 	genHash := genesisInitState.Block.BlockHeader.GenesisHash
@@ -966,7 +969,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 					require.NoError(b, err)
 				}
 				newBlock = bookkeeping.MakeBlock(validatedBlock.blk.BlockHeader)
-				bev, err = l.StartEvaluator(newBlock.BlockHeader, 0)
+				bev, err = l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 				require.NoError(b, err)
 				numBlocks++
 			}
@@ -989,7 +992,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 		wg.Wait()
 
 		newBlock = bookkeeping.MakeBlock(validatedBlock.blk.BlockHeader)
-		bev, err = l.StartEvaluator(newBlock.BlockHeader, 0)
+		bev, err = l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 		require.NoError(b, err)
 	}
 
@@ -1190,7 +1193,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	defer l.Close()
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.NoError(t, err)
 
 	// won't work before funding bank
@@ -1408,7 +1411,7 @@ func (ledger *Ledger) nextBlock(t testing.TB) *BlockEvaluator {
 	require.NoError(t, err)
 
 	nextHdr := bookkeeping.MakeBlock(hdr).BlockHeader
-	eval, err := ledger.StartEvaluator(nextHdr, 0)
+	eval, err := ledger.StartEvaluator(nextHdr, 0, 0)
 	require.NoError(t, err)
 	return eval
 }

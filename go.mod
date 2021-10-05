@@ -9,6 +9,7 @@ require (
 	github.com/algorand/msgp v1.1.48
 	github.com/algorand/oapi-codegen v1.3.5-algorand5
 	github.com/algorand/websocket v1.4.2
+	github.com/algorand/xorfilter v0.2.0
 	github.com/aws/aws-sdk-go v1.16.5
 	github.com/chrismcguire/gobberish v0.0.0-20150821175641-1d8adb509a0e
 	github.com/cpuguy83/go-md2man v1.0.8 // indirect
