@@ -349,8 +349,7 @@ type EvalContext struct {
 	version uint64
 	scratch scratchSpace
 
-	subtxns  []transactions.SignedTxn // place to build for itx{n,g}_submit
-	subgroup bool                     // is subtxns intended to hold a group?
+	subtxns []transactions.SignedTxn // place to build for itxn_submit
 	// Previous transactions Performed() and their effects
 	InnerTxns []transactions.SignedTxnWithAD
 
@@ -3678,8 +3677,8 @@ func authorizedSender(cx *EvalContext, addr basics.Address) bool {
 }
 
 func opTxBegin(cx *EvalContext) {
-	if len(cx.subtxns) > 0 || cx.subgroup {
-		cx.err = errors.New("misplaced itxn_begin")
+	if len(cx.subtxns) > 0 {
+		cx.err = errors.New("itxn_begin without itxn_submit")
 		return
 	}
 	// Start fresh
@@ -3887,7 +3886,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 func opTxField(cx *EvalContext) {
 	itx := len(cx.subtxns) - 1
 	if itx < 0 {
-		cx.err = errors.New("misplaced itxn_field")
+		cx.err = errors.New("itxn_field without itxn_begin")
 		return
 	}
 	last := len(cx.stack) - 1
@@ -3909,8 +3908,8 @@ func opTxSubmit(cx *EvalContext) {
 	}
 
 	itx := len(cx.subtxns) - 1
-	if itx < 0 || cx.subgroup {
-		cx.err = errors.New("misplaced itxn_submit")
+	if itx < 0 {
+		cx.err = errors.New("itxn_submit without itxn_begin")
 		return
 	}
 
@@ -3969,23 +3968,12 @@ func opTxSubmit(cx *EvalContext) {
 	cx.subtxns = nil
 }
 
-func opTxgBegin(cx *EvalContext) {
-	if cx.subtxns != nil {
-		cx.err = errors.New("itxg_begin without itxn_submit")
-		return
-	}
-}
 func opTxNext(cx *EvalContext) {
-	if cx.subtxns != nil {
-		cx.err = errors.New("itxn_next without itxn_submit")
+	if len(cx.subtxns) == 0 {
+		cx.err = errors.New("itxn_next without itxn_begin")
 		return
 	}
-}
-func opTxgSubmit(cx *EvalContext) {
-	if cx.subtxns != nil {
-		cx.err = errors.New("itxn_submit without itxn_submit")
-		return
-	}
+	cx.subtxns = append(cx.subtxns, transactions.SignedTxn{})
 }
 
 // PcDetails return PC and disassembled instructions at PC up to 2 opcodes back
