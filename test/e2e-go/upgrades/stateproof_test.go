@@ -30,6 +30,7 @@ import (
 )
 
 func TestKeysWithoutStateProofKeyCannotRegister(t *testing.T) {
+	// test 
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
