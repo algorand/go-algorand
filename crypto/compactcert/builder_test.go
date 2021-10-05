@@ -36,7 +36,7 @@ func (m TestMessage) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 type PartCommit struct {
-	participants []Participant
+	participants []basics.Participant
 }
 
 func (pc PartCommit) Length() uint64 {
@@ -78,10 +78,10 @@ func TestBuildVerify(t *testing.T) {
 	// Share the key; we allow the same vote key to appear in multiple accounts..
 	key := crypto.GenerateOneTimeSignatureSecrets(0, 1)
 
-	var parts []Participant
+	var parts []basics.Participant
 	var sigs []crypto.OneTimeSignature
 	for i := 0; i < npartHi; i++ {
-		part := Participant{
+		part := basics.Participant{
 			PK:          key.OneTimeSignatureVerifier,
 			Weight:      uint64(totalWeight / 2 / npartHi),
 			KeyDilution: 10000,
@@ -91,7 +91,7 @@ func TestBuildVerify(t *testing.T) {
 	}
 
 	for i := 0; i < npartLo; i++ {
-		part := Participant{
+		part := basics.Participant{
 			PK:          key.OneTimeSignatureVerifier,
 			Weight:      uint64(totalWeight / 2 / npartLo),
 			KeyDilution: 10000,
@@ -165,12 +165,12 @@ func BenchmarkBuildVerify(b *testing.B) {
 		SecKQ:        128,
 	}
 
-	var parts []Participant
+	var parts []basics.Participant
 	var partkeys []*crypto.OneTimeSignatureSecrets
 	var sigs []crypto.OneTimeSignature
 	for i := 0; i < npart; i++ {
 		key := crypto.GenerateOneTimeSignatureSecrets(0, 1)
-		part := Participant{
+		part := basics.Participant{
 			PK:          key.OneTimeSignatureVerifier,
 			Weight:      uint64(totalWeight / npart),
 			KeyDilution: 10000,
