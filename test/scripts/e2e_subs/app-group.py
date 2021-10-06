@@ -73,6 +73,5 @@ assert not err, err
 
 txinfo, err = goal.app_call(joe, app_id, accounts=[goal.account])
 assert not err, err
-#assert goal.balance(joe) == joeb+6, goal.balance(joe)
 
 print(f"{os.path.basename(sys.argv[0])} OK {stamp}")

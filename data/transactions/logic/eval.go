@@ -3684,6 +3684,11 @@ func addInnerTxn(cx *EvalContext) error {
 		return err
 	}
 
+	if len(cx.InnerTxns)+len(cx.subtxns) >= cx.Proto.MaxInnerTransactions ||
+		len(cx.subtxns) >= cx.Proto.MaxTxGroupSize {
+		return errors.New("attempt to create too many inner transactions")
+	}
+
 	stxn := transactions.SignedTxn{}
 
 	groupFee := basics.MulSaturate(cx.Proto.MinTxnFee, uint64(len(cx.subtxns)+1))
@@ -3932,7 +3937,9 @@ func opTxSubmit(cx *EvalContext) {
 		return
 	}
 
-	if len(cx.InnerTxns)+len(cx.subtxns) > cx.Proto.MaxInnerTransactions {
+	// Should never trigger, since itxn_next checks these too.
+	if len(cx.InnerTxns)+len(cx.subtxns) > cx.Proto.MaxInnerTransactions ||
+		len(cx.subtxns) > cx.Proto.MaxTxGroupSize {
 		cx.err = errors.New("itxn_submit with too many transactions")
 		return
 	}

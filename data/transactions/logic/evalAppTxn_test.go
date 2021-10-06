@@ -546,7 +546,7 @@ int pay;    itxn_field TypeEnum;
 int 500;    itxn_field Amount;
 txn Sender; itxn_field Receiver;
 `
-	// Force the first fee to 2, but the second will default to 2*fee-3 = 2002-3
+	// Force the first fee to 3, but the second will default to 2*fee-3 = 2002-3
 	testApp(t, "itxn_begin"+
 		pay+
 		"int 3; itxn_field Fee;"+
