@@ -51,7 +51,7 @@ type transactionSyncNodeConnector struct {
 	messageHandler      txnsync.IncomingMessageHandler
 	txHandler           data.SolicitedAsyncTxHandler
 	openStateCh         chan struct{}
-	agreementProposalCh chan agreement.TxnSyncProposal
+	agreementProposalCh chan agreement.ProposalMessage
 	proposalMsgCh       chan incomingProposalRequest
 	proposalFilterCh    chan crypto.Digest
 	proposalFilterCache txnsync.ProposalFilterCache
@@ -90,7 +90,7 @@ func makeTransactionSyncNodeConnector(node *AlgorandFullNode) *transactionSyncNo
 		clock:               timers.MakeMonotonicClock(time.Now()),
 		txHandler:           node.txHandler.SolicitedAsyncTxHandler(),
 		openStateCh:         make(chan struct{}),
-		agreementProposalCh: make(chan agreement.TxnSyncProposal, proposalBufferSize),
+		agreementProposalCh: make(chan agreement.ProposalMessage, proposalBufferSize),
 		proposalMsgCh:       make(chan incomingProposalRequest, 128),
 		proposalFilterCh:    make(chan crypto.Digest, proposalBufferSize),
 		proposalFilterCache: txnsync.MakeProposalFilterCache(proposalBufferSize),
@@ -373,7 +373,7 @@ func (tsnc *transactionSyncNodeConnector) handleProposalLoop() {
 					flattenedTxns = append(flattenedTxns, txgroup.Transactions...)
 				}
 
-				agreementProposal := agreement.TxnSyncProposal{
+				agreementProposal := agreement.ProposalMessage{
 					ProposalBytes: pc.ProposalBytes,
 					Txns:          flattenedTxns,
 				}

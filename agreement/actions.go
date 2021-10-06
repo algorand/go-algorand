@@ -165,7 +165,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 			}
 			data = protocol.Encode(&payload)
 			logging.Base().Info("sending proposal")
-			s.TxnSync.RelayProposal(data, txns)
+			s.Network.RelayProposal(data, txns)
 		case disconnect:
 			s.Network.Disconnect(a.h)
 		case ignore:

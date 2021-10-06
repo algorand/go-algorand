@@ -78,7 +78,6 @@ type demuxParams struct {
 	processingMonitor EventsProcessingMonitor
 	log               logging.Logger
 	monitor           *coserviceMonitor
-	txnSync           TxnSync
 }
 
 // makeDemux initializes the goroutines needed to process external events, setting up the appropriate channels.
@@ -99,7 +98,7 @@ func makeDemux(params demuxParams) (d *demux) {
 	d.rawBundles = d.tokenizeMessages(tokenizerCtx, params.net, protocol.VoteBundleTag, decodeBundle)
 	d.cancelTokenizers = cancelTokenizers
 
-	d.txnsyncProposals = d.reconstructProposals(tokenizerCtx, params.txnSync.ProposalsChannel())
+	d.txnsyncProposals = d.reconstructProposals(tokenizerCtx, params.net.ProposalsChannel())
 
 	return d
 }
@@ -164,7 +163,7 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 	return decoded
 }
 
-func (d *demux) reconstructProposals(ctx context.Context, ch <-chan TxnSyncProposal) <-chan message {
+func (d *demux) reconstructProposals(ctx context.Context, ch <-chan ProposalMessage) <-chan message {
 	decoded := make(chan message)
 	go func() {
 		defer func() {

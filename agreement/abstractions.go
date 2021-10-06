@@ -277,6 +277,9 @@ type Network interface {
 	// otherwise, a nil is returned.
 	Relay(MessageHandle, protocol.Tag, []byte) error
 
+	ProposalsChannel() <-chan ProposalMessage
+	RelayProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice)
+
 	// Disconnect sends the Network a hint to disconnect to the peer
 	// associated with the given MessageHandle.
 	Disconnect(MessageHandle)
@@ -307,17 +310,9 @@ type EventsProcessingMonitor interface {
 	UpdateEventsQueue(queueName string, queueLength int)
 }
 
-// TxnSync is an abstraction over the transaction sync node connector.
-// It allows for the agreement to receive and send proposals from
-// the transaction sync.
-type TxnSync interface {
-	ProposalsChannel() <-chan TxnSyncProposal
-	RelayProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice)
-}
-
-// TxnSyncProposal contains the data sent by the transaction sync
+// ProposalMessage contains the data sent by the transaction sync
 // that is needed to reconstruct a proposal.
-type TxnSyncProposal struct {
+type ProposalMessage struct {
 	ProposalBytes []byte
 	Txns          []transactions.SignedTxn
 }

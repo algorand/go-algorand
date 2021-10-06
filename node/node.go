@@ -253,13 +253,12 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		Accessor:       crashAccess,
 		Clock:          agreementClock,
 		Local:          node.config,
-		Network:        gossip.WrapNetwork(node.net, log),
+		Network:        gossip.WrapNetwork(node.net, node, log),
 		Ledger:         agreementLedger,
 		BlockFactory:   node,
 		BlockValidator: blockValidator,
 		KeyManager:     node,
 		RandomSource:   node,
-		TxnSync:        node,
 		BacklogPool:    node.highPriorityCryptoVerificationPool,
 	}
 	node.agreementService = agreement.MakeService(agreementParameters)
@@ -267,8 +266,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
-	node.txnSyncConnector = makeTransactionSyncNodeConnector(node)
-	node.txnSyncService = txnsync.MakeTransactionSyncService(node.log, node.txnSyncConnector, cfg.NetAddress != "", node.genesisID, node.genesisHash, node.config, node.lowPriorityCryptoVerificationPool)
 
 	err = node.loadParticipationKeys()
 	if err != nil {
@@ -1193,7 +1190,7 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 
 // ProposalsChannel returns the channel that the txnsync uses to pass proposals
 // to the agreement.
-func (node *AlgorandFullNode) ProposalsChannel() <-chan agreement.TxnSyncProposal {
+func (node *AlgorandFullNode) ProposalsChannel() <-chan agreement.ProposalMessage {
 	return node.txnSyncConnector.agreementProposalCh
 }
 

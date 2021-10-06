@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -122,6 +123,17 @@ func (b *blackhole) Address() (string, bool) {
 	return "blackhole", true
 }
 
+type fakeProposalSender struct {
+	gossip.ProposalSender
+}
+
+func (fps *fakeProposalSender) RelayProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice) {
+}
+
+func (fps *fakeProposalSender) ProposalsChannel() <-chan agreement.ProposalMessage {
+	return nil
+}
+
 // CryptoRandomSource is a random source that is based off our crypto library.
 type CryptoRandomSource struct{}
 
@@ -153,7 +165,7 @@ func Simulate(dbname string, n basics.Round, roundDeadline time.Duration, ledger
 		Logger:         log,
 		Accessor:       accessor,
 		Clock:          stopwatch,
-		Network:        gossip.WrapNetwork(new(blackhole), log),
+		Network:        gossip.WrapNetwork(new(blackhole), new(fakeProposalSender), log),
 		Ledger:         ledger,
 		BlockFactory:   proposalFactory,
 		BlockValidator: proposalValidator,

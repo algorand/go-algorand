@@ -68,7 +68,6 @@ type Parameters struct {
 	BlockFactory
 	RandomSource
 	EventsProcessingMonitor
-	TxnSync
 	timers.Clock
 	db.Accessor
 	logging.Logger
@@ -129,7 +128,6 @@ func (s *Service) Start() {
 		processingMonitor: s.EventsProcessingMonitor,
 		log:               s.log,
 		monitor:           s.monitor,
-		txnSync:           s.TxnSync,
 	})
 	s.loopback = makePseudonode(pseudonodeParams{
 		factory:      s.BlockFactory,

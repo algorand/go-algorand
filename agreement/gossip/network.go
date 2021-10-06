@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/network/messagetracer"
@@ -60,13 +61,19 @@ type networkImpl struct {
 	bundleCh   chan agreement.Message
 
 	net network.GossipNode
+	ps  ProposalSender
 	log logging.Logger
 
 	trace messagetracer.MessageTracer
 }
 
+type ProposalSender interface {
+	ProposalsChannel() <-chan agreement.ProposalMessage
+	RelayProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice)
+}
+
 // WrapNetwork adapts a network.GossipNode into an agreement.Network.
-func WrapNetwork(net network.GossipNode, log logging.Logger) agreement.Network {
+func WrapNetwork(net network.GossipNode, proposalSender ProposalSender, log logging.Logger) agreement.Network {
 	i := new(networkImpl)
 
 	i.voteCh = make(chan agreement.Message, voteBufferSize)
@@ -74,6 +81,7 @@ func WrapNetwork(net network.GossipNode, log logging.Logger) agreement.Network {
 	i.bundleCh = make(chan agreement.Message, bundleBufferSize)
 
 	i.net = net
+	i.ps = proposalSender
 	i.log = log
 
 	return i
@@ -190,4 +198,12 @@ func (i *networkImpl) broadcastTimeout(t protocol.Tag, data []byte, timeout time
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	return i.net.Broadcast(ctx, t, data, true, nil)
+}
+
+func (i *networkImpl) RelayProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice) {
+	i.ps.RelayProposal(proposalBytes, txnSlices)
+}
+
+func (i *networkImpl) ProposalsChannel() <-chan agreement.ProposalMessage {
+	return i.ps.ProposalsChannel()
 }
