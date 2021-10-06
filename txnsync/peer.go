@@ -452,7 +452,7 @@ scanLoop:
 		// add the size of the transaction group
 		accumulatedSize += pendingTransactions[grpIdx].EncodedLength
 
-		if accumulatedSize > windowLengthBytes {
+		if accumulatedSize > windowLengthBytes && p.state != peerStateProposal {
 			windowSizedReached = true
 		}
 	}
