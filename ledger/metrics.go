@@ -29,7 +29,7 @@ type metricsTracker struct {
 	ledgerRound             *metrics.Gauge
 }
 
-func (mt *metricsTracker) loadFromDisk(l ledgerForTracker) error {
+func (mt *metricsTracker) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 	mt.ledgerTransactionsTotal = metrics.MakeCounter(metrics.LedgerTransactionsTotal)
 	mt.ledgerRewardClaimsTotal = metrics.MakeCounter(metrics.LedgerRewardClaimsTotal)
 	mt.ledgerRound = metrics.MakeGauge(metrics.LedgerRound)
@@ -49,4 +49,11 @@ func (mt *metricsTracker) newBlock(blk bookkeeping.Block, delta ledgercore.State
 
 func (mt *metricsTracker) committedUpTo(committedRnd basics.Round) basics.Round {
 	return committedRnd
+}
+
+func (mt *metricsTracker) prepareCommit(uint64, basics.Round, basics.Round) (commitRoundFn, postCommitRoundFn) {
+	return nil, nil
+}
+
+func (mt *metricsTracker) handleUnorderedCommit(uint64, basics.Round, basics.Round) {
 }

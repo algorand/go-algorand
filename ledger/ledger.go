@@ -193,14 +193,17 @@ func (l *Ledger) reloadLedger() error {
 		return err
 	}
 
+	// set account updates tracker as a driver to calculate tracker db round and committing offsets
+	err = l.trackers.initialize(&l.accts, l)
+	if err != nil {
+		return err
+	}
+
 	l.trackers.register(&l.accts)    // update the balances
 	l.trackers.register(&l.txTail)   // update the transaction tail, tracking the recent 1000 txn
 	l.trackers.register(&l.bulletin) // provide closed channel signaling support for completed rounds
 	l.trackers.register(&l.notifier) // send OnNewBlocks to subscribers
 	l.trackers.register(&l.metrics)  // provides metrics reporting support
-
-	// set account updates tracker as a driver to calculate tracker db round and committing offsets
-	l.trackers.setCommitDriver(&l.accts)
 
 	err = l.trackers.loadFromDisk(l)
 	if err != nil {

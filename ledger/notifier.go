@@ -85,7 +85,7 @@ func (bn *blockNotifier) close() {
 	bn.closing.Wait()
 }
 
-func (bn *blockNotifier) loadFromDisk(l ledgerForTracker) error {
+func (bn *blockNotifier) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 	bn.cond = sync.NewCond(&bn.mu)
 	bn.running = true
 	bn.pendingBlocks = nil
@@ -110,4 +110,11 @@ func (bn *blockNotifier) newBlock(blk bookkeeping.Block, delta ledgercore.StateD
 
 func (bn *blockNotifier) committedUpTo(rnd basics.Round) basics.Round {
 	return rnd
+}
+
+func (bn *blockNotifier) prepareCommit(uint64, basics.Round, basics.Round) (commitRoundFn, postCommitRoundFn) {
+	return nil, nil
+}
+
+func (bn *blockNotifier) handleUnorderedCommit(uint64, basics.Round, basics.Round) {
 }

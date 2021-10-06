@@ -17,8 +17,12 @@
 package ledger
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"reflect"
+	"sync"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -57,7 +61,7 @@ type ledgerTracker interface {
 	// ledgerForTracker interface abstracts away the details of
 	// ledger internals so that individual trackers can be tested
 	// in isolation.
-	loadFromDisk(ledgerForTracker) error
+	loadFromDisk(ledgerForTracker, basics.Round) error
 
 	// newBlock informs the tracker of a new block from round
 	// rnd and a given ledgercore.StateDelta as produced by BlockEvaluator.
@@ -77,12 +81,19 @@ type ledgerTracker interface {
 	// returning 0 means that no blocks can be deleted.
 	committedUpTo(basics.Round) basics.Round
 
+	prepareCommit(uint64, basics.Round, basics.Round) (commitRoundFn, postCommitRoundFn)
+
+	handleUnorderedCommit(uint64, basics.Round, basics.Round)
+
 	// close terminates the tracker, reclaiming any resources
 	// like open database connections or goroutines.  close may
 	// be called even if loadFromDisk() is not called or does
 	// not succeed.
 	close()
 }
+
+type commitRoundFn func(context.Context, *sql.Tx, uint64, basics.Round) error
+type postCommitRoundFn func(uint64, basics.Round)
 
 // ledgerForTracker defines the part of the ledger that a tracker can
 // access.  This is particularly useful for testing trackers in isolation.
@@ -103,10 +114,49 @@ type ledgerForTracker interface {
 type trackerRegistry struct {
 	trackers []ledgerTracker
 	driver   *accountUpdates
+
+	// ctx is the context for the committing go-routine. It's also used as the "parent" of the catchpoint generation operation.
+	ctx context.Context
+	// ctxCancel is the canceling function for canceling the committing go-routine ( i.e. signaling the committing go-routine that it's time to abort )
+	ctxCancel context.CancelFunc
+	// committedOffset is the offset at which we'd like to persist all the previous account information to disk.
+	committedOffset chan deferredCommit
+	// commitSyncerClosed is the blocking channel for synchronizing closing the commitSyncer goroutine. Once it's closed, the
+	// commitSyncer can be assumed to have aborted.
+	commitSyncerClosed chan struct{}
+
+	// accountsWriting provides synchronization around the background writing of account balances.
+	accountsWriting sync.WaitGroup
+
+	// dbRound is always exactly accountsRound(),
+	// cached to avoid SQL queries.
+	dbRound basics.Round
+
+	dbs db.Pair
+	log logging.Logger
 }
 
-func (tr *trackerRegistry) setCommitDriver(au *accountUpdates) {
+func (tr *trackerRegistry) initialize(au *accountUpdates, l ledgerForTracker) (err error) {
 	tr.driver = au
+
+	tr.dbs = l.trackerDB()
+	tr.log = l.trackerLog()
+
+	tr.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		tr.dbRound, err = accountsRound(tx)
+		return err
+	})
+
+	if err != nil {
+		return err
+	}
+
+	tr.ctx, tr.ctxCancel = context.WithCancel(context.Background())
+	tr.committedOffset = make(chan deferredCommit, 1)
+	tr.commitSyncerClosed = make(chan struct{})
+	go tr.commitSyncer(tr.committedOffset)
+
+	return
 }
 
 func (tr *trackerRegistry) register(lt ledgerTracker) {
@@ -115,7 +165,7 @@ func (tr *trackerRegistry) register(lt ledgerTracker) {
 
 func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 	for _, lt := range tr.trackers {
-		err := lt.loadFromDisk(l)
+		err := lt.loadFromDisk(l, tr.dbRound)
 		if err != nil {
 			// find the tracker name.
 			trackerName := reflect.TypeOf(lt).String()
@@ -145,14 +195,131 @@ func (tr *trackerRegistry) committedUpTo(rnd basics.Round) basics.Round {
 		}
 	}
 
-	tr.driver.scheduleCommittingTask(rnd)
+	dc := tr.driver.scheduleCommittingTask(rnd, tr.dbRound)
+	if dc.offset != 0 {
+		tr.committedOffset <- dc
+		tr.accountsWriting.Add(1)
+	}
 
 	return minBlock
 }
 
+// waitAccountsWriting waits for all the pending ( or current ) account writing to be completed.
+func (tr *trackerRegistry) waitAccountsWriting() {
+	tr.accountsWriting.Wait()
+}
+
 func (tr *trackerRegistry) close() {
+	if tr.ctxCancel != nil {
+		tr.ctxCancel()
+	}
+
+	tr.waitAccountsWriting()
+	// this would block until the commitSyncerClosed channel get closed.
+	<-tr.commitSyncerClosed
+
 	for _, lt := range tr.trackers {
 		lt.close()
 	}
 	tr.trackers = nil
+}
+
+// commitSyncer is the syncer go-routine function which perform the database updates. Internally, it dequeues deferredCommits and
+// send the tasks to commitRound for completing the operation.
+func (tr *trackerRegistry) commitSyncer(deferredCommits chan deferredCommit) {
+	defer close(tr.commitSyncerClosed)
+	for {
+		select {
+		case committedOffset, ok := <-deferredCommits:
+			if !ok {
+				return
+			}
+			tr.commitRound(committedOffset)
+		case <-tr.ctx.Done():
+			// drain the pending commits queue:
+			drained := false
+			for !drained {
+				select {
+				case <-deferredCommits:
+					tr.accountsWriting.Done()
+				default:
+					drained = true
+				}
+			}
+			return
+		}
+	}
+}
+
+func (tr *trackerRegistry) commitRound(dc deferredCommit) {
+	// TODO: locks
+	// !!!!!!!!!!!!!!!
+
+	offset := dc.offset
+	dbRound := dc.dbRound
+	lookback := dc.lookback
+
+	// we can exit right away, as this is the result of mis-ordered call to committedUpTo.
+	if tr.dbRound < dbRound || offset < uint64(tr.dbRound-dbRound) {
+		for _, lt := range tr.trackers {
+			lt.handleUnorderedCommit(offset, dbRound, lookback)
+		}
+		return
+	}
+
+	// adjust the offset according to what happened meanwhile..
+	offset -= uint64(tr.dbRound - dbRound)
+
+	// if this iteration need to flush out zero rounds, just return right away.
+	// this usecase can happen when two subsequent calls to committedUpTo concludes that the same rounds range need to be
+	// flush, without the commitRound have a chance of committing these rounds.
+	if offset == 0 {
+		// TODO
+		// tr.accountsMu.RUnlock()
+		return
+	}
+
+	dbRound = tr.dbRound
+
+	newBase := basics.Round(offset) + dbRound
+
+	var commitOps []commitRoundFn
+	var postcommitOps []postCommitRoundFn
+	for _, lt := range tr.trackers {
+		commitRound, postCommit := lt.prepareCommit(offset, dbRound, lookback)
+		if commitRound != nil {
+			commitOps = append(commitOps, commitRound)
+		}
+		if postCommit != nil {
+			postcommitOps = append(postcommitOps, postCommit)
+		}
+	}
+
+	start := time.Now()
+	ledgerCommitroundCount.Inc(nil)
+	err := tr.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		for _, commitRound := range commitOps {
+			err0 := commitRound(ctx, tx, offset, dbRound)
+			if err0 != nil {
+				return err0
+			}
+		}
+
+		err = updateAccountsRound(tx, dbRound+basics.Round(offset))
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	ledgerCommitroundMicros.AddMicrosecondsSince(start, nil)
+
+	if err != nil {
+		tr.log.Warnf("unable to advance tracker db snapshot (%d-%d): %v", dbRound, dbRound+basics.Round(offset), err)
+		return
+	}
+
+	for _, postCommitRound := range postcommitOps {
+		postCommitRound(offset, newBase)
+	}
 }

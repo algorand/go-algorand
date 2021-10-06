@@ -78,7 +78,7 @@ func (b *bulletin) Wait(round basics.Round) chan struct{} {
 	return signal.signal
 }
 
-func (b *bulletin) loadFromDisk(l ledgerForTracker) error {
+func (b *bulletin) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 	b.pendingNotificationRequests = make(map[basics.Round]notifier)
 	b.latestRound = l.Latest()
 	return nil
@@ -105,4 +105,11 @@ func (b *bulletin) committedUpTo(rnd basics.Round) basics.Round {
 
 	b.latestRound = rnd
 	return rnd
+}
+
+func (b *bulletin) prepareCommit(uint64, basics.Round, basics.Round) (commitRoundFn, postCommitRoundFn) {
+	return nil, nil
+}
+
+func (b *bulletin) handleUnorderedCommit(uint64, basics.Round, basics.Round) {
 }

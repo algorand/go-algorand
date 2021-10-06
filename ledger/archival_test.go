@@ -822,7 +822,7 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 		}
 
 		cleanTracker.close()
-		err := cleanTracker.loadFromDisk(wl)
+		err := cleanTracker.loadFromDisk(wl, 0)
 		require.NoError(t, err)
 
 		cleanTracker.close()

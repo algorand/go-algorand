@@ -371,7 +371,7 @@ func TestAcctUpdates(t *testing.T) {
 	conf := config.GetDefaultLocal()
 	au := newAcctUpdates(t, ml, conf, ".")
 
-	err := au.loadFromDisk(ml)
+	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	defer au.close()
 
@@ -459,7 +459,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	conf.CatchpointInterval = 1
 	au := newAcctUpdates(t, ml, conf, ".")
 
-	err := au.loadFromDisk(ml)
+	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	defer au.close()
 
@@ -787,7 +787,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		conf := config.GetDefaultLocal()
 		au := newAcctUpdates(t, ml, conf, ".")
 
-		err := au.loadFromDisk(ml)
+		err := au.loadFromDisk(ml, 0)
 		require.NoError(t, err)
 		defer au.close()
 
@@ -921,7 +921,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	conf.CatchpointInterval = 1
 	au := newAcctUpdates(t, ml, conf, ".")
 
-	err := au.loadFromDisk(ml)
+	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	defer au.close()
 
@@ -1156,7 +1156,7 @@ func TestGetCatchpointStream(t *testing.T) {
 	conf.CatchpointInterval = 1
 	au := newAcctUpdates(t, ml, conf, ".")
 
-	err := au.loadFromDisk(ml)
+	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	defer au.close()
 
@@ -1276,7 +1276,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	cfg.Archival = true
 	au := newAcctUpdates(b, ml, cfg, ".")
 
-	err := au.loadFromDisk(ml)
+	err := au.loadFromDisk(ml, 0)
 	require.NoError(b, err)
 	defer au.close()
 
@@ -1307,7 +1307,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	au.close()
 
 	b.ResetTimer()
-	err = au.loadFromDisk(ml)
+	err = au.loadFromDisk(ml, 0)
 	require.NoError(b, err)
 	b.StopTimer()
 	b.ReportMetric(float64(accountsNumber), "entries/trie")
@@ -1346,7 +1346,7 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 
 	au.dbDirectory = temporaryDirectroy
 
-	err = au.loadFromDisk(ml)
+	err = au.loadFromDisk(ml, 0)
 	require.NoError(b, err)
 	defer au.close()
 
@@ -1508,7 +1508,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	cfg.CatchpointTracking = 1
 	au := newAcctUpdates(t, ml, cfg, ".")
 
-	err := au.loadFromDisk(ml)
+	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	defer au.close()
 
@@ -1626,7 +1626,7 @@ func TestCachesInitialization(t *testing.T) {
 	conf := config.GetDefaultLocal()
 	au := newAcctUpdates(t, ml, conf, ".")
 
-	err := au.loadFromDisk(ml)
+	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 
 	// cover initialRounds genesis blocks
@@ -1686,13 +1686,13 @@ func TestCachesInitialization(t *testing.T) {
 
 	conf = config.GetDefaultLocal()
 	au = newAcctUpdates(t, ml2, conf, ".")
-	err = au.loadFromDisk(ml2)
+	err = au.loadFromDisk(ml2, 0)
 	require.NoError(t, err)
 	defer au.close()
 
 	// make sure the deltas array end up containing only the most recent 320 rounds.
 	require.Equal(t, int(proto.MaxBalLookback), len(au.deltas))
-	require.Equal(t, recoveredLedgerRound-basics.Round(proto.MaxBalLookback), au.dbRound)
+	require.Equal(t, recoveredLedgerRound-basics.Round(proto.MaxBalLookback), au.cachedDBRound)
 }
 
 // TestSplittingConsensusVersionCommits tests the a sequence of commits that spans over multiple consensus versions works correctly.
@@ -1806,7 +1806,7 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 	// now, commit and verify that the scheduleCommittingTask method broken the range correctly.
 	au.scheduleCommittingTask(lastRoundToWrite)
 	au.waitAccountsWriting()
-	require.Equal(t, basics.Round(initialRounds+extraRounds)-1, au.dbRound)
+	require.Equal(t, basics.Round(initialRounds+extraRounds)-1, au.cachedDBRound)
 
 }
 
@@ -1921,7 +1921,7 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 	// now, commit and verify that the scheduleCommittingTask method broken the range correctly.
 	au.scheduleCommittingTask(endOfFirstNewProtocolSegment)
 	au.waitAccountsWriting()
-	require.Equal(t, basics.Round(initialRounds+extraRounds)-1, au.dbRound)
+	require.Equal(t, basics.Round(initialRounds+extraRounds)-1, au.cachedDBRound)
 
 	// write additional extraRounds elements and verify these can be flushed.
 	for i := endOfFirstNewProtocolSegment + 1; i <= basics.Round(initialRounds+2*extraRounds+initialProtoParams.MaxBalLookback); i++ {
@@ -1956,7 +1956,7 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 	}
 	au.scheduleCommittingTask(endOfFirstNewProtocolSegment + basics.Round(extraRounds))
 	au.waitAccountsWriting()
-	require.Equal(t, basics.Round(initialRounds+2*extraRounds), au.dbRound)
+	require.Equal(t, basics.Round(initialRounds+2*extraRounds), au.cachedDBRound)
 }
 
 // TestConsecutiveVersion tests the consecutiveVersion method correctness.
