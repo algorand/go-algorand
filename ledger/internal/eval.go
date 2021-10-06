@@ -55,8 +55,11 @@ type creatable struct {
 	ctype  basics.CreatableType
 }
 
+// ledgerForCowBase is redeclared internally here.
+type ledgerForCowBase ledgercore.LedgerForCowBase
+
 type roundCowBase struct {
-	l ledgercore.LedgerForCowBase
+	l ledgerForCowBase
 
 	// The round number of the previous block, for looking up prior state.
 	rnd basics.Round
