@@ -115,6 +115,16 @@ func (sv *stackValue) uint() (uint64, error) {
 	return sv.Uint, nil
 }
 
+func (sv *stackValue) uint_maxed(max uint64) (uint64, error) {
+	if sv.Bytes != nil {
+		return 0, errors.New("not a uint64")
+	}
+	if sv.Uint > max {
+		return 0, errors.New("too large")
+	}
+	return sv.Uint, nil
+}
+
 func (sv *stackValue) bool() (bool, error) {
 	u64, err := sv.uint()
 	if err != nil {
@@ -3734,12 +3744,28 @@ func (cx *EvalContext) availableAsset(sv stackValue) (basics.AssetIndex, error) 
 	return basics.AssetIndex(0), fmt.Errorf("invalid Asset reference %d", aid)
 }
 
+// availableApp is used instead of appReference for more recent opcodes that
+// don't need (or want!) to allow low numbers to represent the app at that
+// index in ForeignApps array.
+func (cx *EvalContext) availableApp(sv stackValue) (basics.AppIndex, error) {
+	aid, err := sv.uint()
+	if err != nil {
+		return basics.AppIndex(0), err
+	}
+	// Ensure that aid is in Foreign Apps
+	for _, appID := range cx.Txn.Txn.ForeignApps {
+		if appID == basics.AppIndex(aid) {
+			return basics.AppIndex(aid), nil
+		}
+	}
+	return basics.AppIndex(0), fmt.Errorf("invalid App reference %d", aid)
+}
+
 func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *transactions.Transaction) (err error) {
 	switch fs.field {
 	case Type:
 		if sv.Bytes == nil {
-			err = fmt.Errorf("Type arg not a byte array")
-			return
+			return fmt.Errorf("Type arg not a byte array")
 		}
 		txType := string(sv.Bytes)
 		ver, ok := innerTxnTypes[txType]
@@ -3774,11 +3800,10 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 	// round, and separation by MaxLifetime (check lifetime in submit, not here)
 	case Note:
 		if len(sv.Bytes) > cx.Proto.MaxTxnNoteBytes {
-			err = fmt.Errorf("%s may not exceed %d bytes", fs.field, cx.Proto.MaxTxnNoteBytes)
-		} else {
-			txn.Note = make([]byte, len(sv.Bytes))
-			copy(txn.Note[:], sv.Bytes)
+			return fmt.Errorf("%s may not exceed %d bytes", fs.field, cx.Proto.MaxTxnNoteBytes)
 		}
+		txn.Note = make([]byte, len(sv.Bytes))
+		copy(txn.Note, sv.Bytes)
 	// GenesisID, GenesisHash unsettable: surely makes no sense
 	// Group unsettable: Can't make groups from AVM (yet?)
 	// Lease unsettable: This seems potentially useful.
@@ -3789,16 +3814,14 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 	// KeyReg
 	case VotePK:
 		if len(sv.Bytes) != 32 {
-			err = fmt.Errorf("%s must be 32 bytes", fs.field)
-		} else {
-			copy(txn.VotePK[:], sv.Bytes)
+			return fmt.Errorf("%s must be 32 bytes", fs.field)
 		}
+		copy(txn.VotePK[:], sv.Bytes)
 	case SelectionPK:
 		if len(sv.Bytes) != 32 {
-			err = fmt.Errorf("%s must be 32 bytes", fs.field)
-		} else {
-			copy(txn.SelectionPK[:], sv.Bytes)
+			return fmt.Errorf("%s must be 32 bytes", fs.field)
 		}
+		copy(txn.SelectionPK[:], sv.Bytes)
 	case VoteFirst:
 		var round uint64
 		round, err = sv.uint()
@@ -3855,10 +3878,9 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 		txn.AssetParams.URL, err = sv.string(cx.Proto.MaxAssetURLBytes)
 	case ConfigAssetMetadataHash:
 		if len(sv.Bytes) != 32 {
-			err = fmt.Errorf("%s must be 32 bytes", fs.field)
-		} else {
-			copy(txn.AssetParams.MetadataHash[:], sv.Bytes)
+			return fmt.Errorf("%s must be 32 bytes", fs.field)
 		}
+		copy(txn.AssetParams.MetadataHash[:], sv.Bytes)
 	case ConfigAssetManager:
 		txn.AssetParams.Manager, err = sv.address()
 	case ConfigAssetReserve:
@@ -3875,10 +3897,96 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 	case FreezeAssetFrozen:
 		txn.AssetFrozen, err = sv.bool()
 
-	// appl needs to wait. Can't call AVM from AVM.
-
+	// ApplicationCall
+	case ApplicationID:
+		txn.ApplicationID, err = cx.availableApp(sv)
+	case OnCompletion:
+		var onc uint64
+		onc, err = sv.uint_maxed(uint64(transactions.DeleteApplicationOC))
+		txn.OnCompletion = transactions.OnCompletion(onc)
+	case ApplicationArgs:
+		if sv.Bytes == nil {
+			return fmt.Errorf("ApplicationArg is not a byte array")
+		}
+		total := len(sv.Bytes)
+		for _, arg := range txn.ApplicationArgs {
+			total += len(arg)
+		}
+		if total > cx.Proto.MaxAppTotalArgLen {
+			return errors.New("total application args length too long")
+		}
+		if len(txn.ApplicationArgs) >= cx.Proto.MaxAppArgs {
+			return errors.New("too many application args")
+		}
+		new := make([]byte, len(sv.Bytes))
+		copy(new, sv.Bytes)
+		txn.ApplicationArgs = append(txn.ApplicationArgs, new)
+	case Accounts:
+		var new basics.Address
+		new, err = cx.availableAccount(sv)
+		if err != nil {
+			return
+		}
+		if len(txn.Accounts) >= cx.Proto.MaxAppTxnAccounts {
+			return errors.New("too many foreign accounts")
+		}
+		txn.Accounts = append(txn.Accounts, new)
+	case ApprovalProgram:
+		maxPossible := cx.Proto.MaxAppTotalProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
+		if len(sv.Bytes) > maxPossible {
+			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
+		}
+		txn.ApprovalProgram = make([]byte, len(sv.Bytes))
+		copy(txn.ApprovalProgram, sv.Bytes)
+	case ClearStateProgram:
+		maxPossible := cx.Proto.MaxAppTotalProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
+		if len(sv.Bytes) > maxPossible {
+			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
+		}
+		txn.ClearStateProgram = make([]byte, len(sv.Bytes))
+		copy(txn.ClearStateProgram, sv.Bytes)
+	case Assets:
+		var new basics.AssetIndex
+		new, err = cx.availableAsset(sv)
+		if err != nil {
+			return
+		}
+		if len(txn.ForeignAssets) >= cx.Proto.MaxAppTxnForeignAssets {
+			return errors.New("too many foreign assets")
+		}
+		txn.ForeignAssets = append(txn.ForeignAssets, new)
+	case Applications:
+		var new basics.AppIndex
+		new, err = cx.availableApp(sv)
+		if err != nil {
+			return
+		}
+		if len(txn.ForeignApps) >= cx.Proto.MaxAppTxnForeignApps {
+			return errors.New("too many foreign apps")
+		}
+		txn.ForeignApps = append(txn.ForeignApps, new)
+	case GlobalNumUint:
+		txn.GlobalStateSchema.NumUint, err =
+			sv.uint_maxed(cx.Proto.MaxGlobalSchemaEntries)
+	case GlobalNumByteSlice:
+		txn.GlobalStateSchema.NumByteSlice, err =
+			sv.uint_maxed(cx.Proto.MaxGlobalSchemaEntries)
+	case LocalNumUint:
+		txn.LocalStateSchema.NumUint, err =
+			sv.uint_maxed(cx.Proto.MaxLocalSchemaEntries)
+	case LocalNumByteSlice:
+		txn.LocalStateSchema.NumByteSlice, err =
+			sv.uint_maxed(cx.Proto.MaxLocalSchemaEntries)
+	case ExtraProgramPages:
+		var epp uint64
+		epp, err =
+			sv.uint_maxed(uint64(cx.Proto.MaxExtraAppProgramPages))
+		if err != nil {
+			return
+		}
+		txn.ExtraProgramPages = uint32(epp)
 	default:
-		return fmt.Errorf("invalid itxn_field %s", fs.field)
+		err = fmt.Errorf("invalid itxn_field %s", fs.field)
 	}
 	return
 }

@@ -30,6 +30,9 @@ func TestInnerTypesV5(t *testing.T) {
 	// not alllowed in v5
 	testApp(t, "itxn_begin; byte \"keyreg\"; itxn_field Type; itxn_submit; int 1;", v5, "keyreg is not a valid Type for itxn_field")
 	testApp(t, "itxn_begin; int keyreg; itxn_field TypeEnum; itxn_submit; int 1;", v5, "keyreg is not a valid Type for itxn_field")
+
+	testApp(t, "itxn_begin; byte \"appl\"; itxn_field Type; itxn_submit; int 1;", v5, "appl is not a valid Type for itxn_field")
+	testApp(t, "itxn_begin; int appl; itxn_field TypeEnum; itxn_submit; int 1;", v5, "appl is not a valid Type for itxn_field")
 }
 
 func TestCurrentInnerTypes(t *testing.T) {
@@ -44,10 +47,7 @@ func TestCurrentInnerTypes(t *testing.T) {
 	// or vice versa
 	testApp(t, obfuscate("itxn_begin; byte \"pay\"; itxn_field TypeEnum; itxn_submit; int 1;"), ep, "not a uint64")
 
-	// good types, not allowed yet
-	testApp(t, "itxn_begin; byte \"appl\"; itxn_field Type; itxn_submit; int 1;", ep, "appl is not a valid Type for itxn_field")
-	// same, as enums
-	testApp(t, "itxn_begin; int appl; itxn_field TypeEnum; itxn_submit; int 1;", ep, "appl is not a valid Type for itxn_field")
+	// some bad types
 	testApp(t, "itxn_begin; int 42; itxn_field TypeEnum; itxn_submit; int 1;", ep, "42 is not a valid TypeEnum")
 	testApp(t, "itxn_begin; int 0; itxn_field TypeEnum; itxn_submit; int 1;", ep, "0 is not a valid TypeEnum")
 
@@ -63,9 +63,11 @@ func TestCurrentInnerTypes(t *testing.T) {
 	testApp(t, "itxn_begin; int acfg; itxn_field TypeEnum; itxn_submit; int 1;", ep, "insufficient balance")
 	testApp(t, "itxn_begin; int afrz; itxn_field TypeEnum; itxn_submit; int 1;", ep, "insufficient balance")
 
-	// alllowed since v6
+	// allowed since v6
 	testApp(t, "itxn_begin; byte \"keyreg\"; itxn_field Type; itxn_submit; int 1;", ep, "insufficient balance")
 	testApp(t, "itxn_begin; int keyreg; itxn_field TypeEnum; itxn_submit; int 1;", ep, "insufficient balance")
+	testApp(t, "itxn_begin; byte \"appl\"; itxn_field Type; itxn_submit; int 1;", ep, "insufficient balance")
+	testApp(t, "itxn_begin; int appl; itxn_field TypeEnum; itxn_submit; int 1;", ep, "insufficient balance")
 
 	// Establish 888 as the app id, and fund it.
 	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
