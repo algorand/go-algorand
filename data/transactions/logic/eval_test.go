@@ -75,6 +75,7 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 		MaxAssetDecimals:      4,
 		SupportRekeying:       true,
 		MaxTxnNoteBytes:       500,
+		EnableFeePooling:      true,
 	}
 }
 
