@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -371,17 +372,25 @@ func ensureFullClient(dataDir string) libgoal.Client {
 	return ensureGoalClient(dataDir, libgoal.FullClient)
 }
 
-func ensureGoalClient(dataDir string, clientType libgoal.ClientType) libgoal.Client {
+func getGoalClient(dataDir string, clientType libgoal.ClientType) (client libgoal.Client, err error) {
 	clientConfig := libgoal.ClientConfig{
 		AlgodDataDir: dataDir,
 		KMDDataDir:   resolveKmdDataDir(dataDir),
 		CacheDir:     ensureCacheDir(dataDir),
 	}
-	client, err := libgoal.MakeClientFromConfig(clientConfig, clientType)
+	client, err = libgoal.MakeClientFromConfig(clientConfig, clientType)
+	if err != nil {
+		return
+	}
+	client.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
+	return
+}
+
+func ensureGoalClient(dataDir string, clientType libgoal.ClientType) libgoal.Client {
+	client, err := getGoalClient(dataDir, clientType)
 	if err != nil {
 		reportErrorf(errorNodeStatus, err)
 	}
-	client.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
 	return client
 }
 
@@ -404,7 +413,10 @@ func getWalletHandleMaybePassword(dataDir string, walletName string, getPassword
 	var dup bool
 
 	accountList := makeAccountsList(dataDir)
-	kmd := ensureKmdClient(dataDir)
+	kmd, err := getGoalClient(dataDir, libgoal.KmdClient)
+	if err != nil {
+		return nil, nil, fmt.Errorf("kmd client init error: %w", err)
+	}
 
 	// If the user didn't manually specify a wallet, use the default wallet ID
 	if walletName == "" {
@@ -552,7 +564,22 @@ func writeFile(filename string, data []byte, perm os.FileMode) error {
 	return ioutil.WriteFile(filename, data, perm)
 }
 
-// readFile is a wrapper of ioutil.ReadFile which consniders the
+// writeDryrunReqToFile creates dryrun request object and writes to a file
+func writeDryrunReqToFile(client libgoal.Client, txnOrStxn interface{}, outFilename string) (err error) {
+	proto, _ := getProto(protoVersion)
+	accts, err := unmarshalSlice(dumpForDryrunAccts)
+	if err != nil {
+		reportErrorf(err.Error())
+	}
+	data, err := libgoal.MakeDryrunStateBytes(client, txnOrStxn, []transactions.SignedTxn{}, accts, string(proto), dumpForDryrunFormat.String())
+	if err != nil {
+		reportErrorf(err.Error())
+	}
+	err = writeFile(outFilename, data, 0600)
+	return
+}
+
+// readFile is a wrapper of ioutil.ReadFile which considers the
 // special case of stdin filename
 func readFile(filename string) ([]byte, error) {
 	if filename == stdinFileNameValue {

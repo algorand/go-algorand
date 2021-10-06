@@ -182,10 +182,10 @@ func TestBasicCatchpointWriter(t *testing.T) {
 		delete(config.Consensus, testProtocolVersion)
 		os.RemoveAll(temporaryDirectroy)
 	}()
-
-	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion)
-	defer ml.Close()
 	accts := randomAccounts(300, false)
+
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, []map[basics.Address]basics.AccountData{accts})
+	defer ml.Close()
 
 	au := &accountUpdates{}
 	conf := config.GetDefaultLocal()
@@ -283,9 +283,9 @@ func TestFullCatchpointWriter(t *testing.T) {
 		os.RemoveAll(temporaryDirectroy)
 	}()
 
-	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion)
-	defer ml.Close()
 	accts := randomAccounts(BalancesPerCatchpointFileChunk*3, false)
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, []map[basics.Address]basics.AccountData{accts})
+	defer ml.Close()
 
 	au := &accountUpdates{}
 	conf := config.GetDefaultLocal()

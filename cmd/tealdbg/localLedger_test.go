@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // Current implementation uses LegderForCowBase interface to plug into evaluator.
@@ -34,6 +35,7 @@ import (
 // This test ensures TEAL program sees data provided by LegderForCowBase, and sees all
 // intermediate changes.
 func TestBalanceAdapterStateChanges(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	source := `#pragma version 2

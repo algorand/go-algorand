@@ -27,10 +27,10 @@ import (
 func TestLayerHash(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var p = pair{make([]byte, 32), make([]byte, 32)}
+	var p = pair{make([]byte, crypto.Sha512_256Size), make([]byte, crypto.Sha512_256Size)}
 	crypto.RandBytes(p.l[:])
 	crypto.RandBytes(p.r[:])
 	hsh, _ := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
 
-	require.Equal(t, crypto.HashObj(&p).ToSlice(), crypto.HashBytes(hsh, p.Marshal()))
+	require.Equal(t, crypto.GenereicHashObj(hsh, &p), crypto.HashBytes(hsh, p.Marshal()))
 }

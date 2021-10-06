@@ -105,7 +105,7 @@ daemons, as well as other tools and commands:
     about spending keys, protocols keys, one-time-use signing keys, and how they
     relate to each other.
   - `config` holds configuration parameters.  These include parameters used
-    locally by the node as well as parameters which must be agreed upon by the
+    locally by the node as well as parameters that must be agreed upon by the
     protocol.
   - `data` defines various types used throughout the codebase.
      - `basics` hold basic types such as MicroAlgos, account data, and

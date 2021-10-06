@@ -37,8 +37,7 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-// TODO: add new tables and columns in the future
-var partableColumnNames = [...]string{"parent", "vrf", "voting", "firstValid", "lastValid", "keyDilution"}
+var partableColumnNames = [...]string{"parent", "vrf", "voting", "blockProof", "firstValid", "lastValid", "keyDilution"}
 
 func TestParticipation_NewDB(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -192,6 +191,8 @@ func TestRetrieveFromDB(t *testing.T) {
 }
 
 func TestRetrieveFromDBAtVersion1(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	ppart := setupkeyWithNoDBS(t, a)
 	_, rootDB, partDB := createTestDBs(a, t.Name())
@@ -206,6 +207,8 @@ func TestRetrieveFromDBAtVersion1(t *testing.T) {
 }
 
 func TestRetriveFromDBAtVersion2(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	ppart := setupkeyWithNoDBS(t, a)
@@ -221,6 +224,8 @@ func TestRetriveFromDBAtVersion2(t *testing.T) {
 }
 
 func TestKeyRegCreation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	ppart := setupkeyWithNoDBS(t, a)
@@ -242,10 +247,12 @@ func closeDBS(dbAccessor ...db.Accessor) {
 
 func assertionForRestoringFromDBAtLowVersion(a *require.Assertions, retrivedPart PersistedParticipation) {
 	a.NotNil(retrivedPart)
-	// a.Nil(retrivedPart.BlockProof) // TODO: test blockProof in updated DB
+	a.Nil(retrivedPart.BlockProof)
 }
 
 func TestMigrateFromVersion1(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	part := setupkeyWithNoDBS(t, a).Participation
 
@@ -259,6 +266,8 @@ func TestMigrateFromVersion1(t *testing.T) {
 }
 
 func TestMigrationFromVersion2(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	part := setupkeyWithNoDBS(t, a).Participation
 
@@ -361,9 +370,9 @@ func setupTestDBAtVer1(partDB db.Accessor, part Participation) error {
 type comparablePartition struct {
 	Parent basics.Address
 
-	VRF    crypto.VRFSecrets
-	Voting []byte
-	//blockProof []byte
+	VRF        crypto.VRFSecrets
+	Voting     []byte
+	blockProof []byte
 
 	FirstValid basics.Round
 	LastValid  basics.Round
@@ -373,10 +382,10 @@ type comparablePartition struct {
 
 func intoComparable(part PersistedParticipation) comparablePartition {
 	return comparablePartition{
-		Parent: part.Parent,
-		VRF:    *part.VRF,
-		Voting: part.Voting.MarshalMsg(nil),
-		//blockProof:  protocol.Encode(part.BlockProof),
+		Parent:      part.Parent,
+		VRF:         *part.VRF,
+		Voting:      part.Voting.MarshalMsg(nil),
+		blockProof:  protocol.Encode(part.BlockProof),
 		FirstValid:  part.FirstValid,
 		LastValid:   part.LastValid,
 		KeyDilution: part.KeyDilution,
@@ -389,38 +398,54 @@ func BenchmarkFillDB(b *testing.B) {
 
 	tmp := config.Consensus[protocol.ConsensusCurrentVersion]
 	cpy := config.Consensus[protocol.ConsensusCurrentVersion]
-	cpy.CompactCertRounds = 1000
+	cpy.CompactCertRounds = 128
 	config.Consensus[protocol.ConsensusCurrentVersion] = cpy
 	defer func() { config.Consensus[protocol.ConsensusCurrentVersion] = tmp }()
-	secondsPerRound := 4
-	numSecondsInDay := 60 * 60 * 24
-	numSecondsInMonth := numSecondsInDay * 30
-	numSecondsInHalfYear := 6 * numSecondsInMonth
-	numRoundsInHalfAYear := numSecondsInHalfYear / secondsPerRound
-	var partt *PersistedParticipation
-	for i := 0; i < b.N; i++ {
-		part, err := FillDBWithParticipationKeys(partDB, root.Address(), 1, basics.Round(numRoundsInHalfAYear+1), config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
-		a.NoError(err)
-		a.NotNil(part)
 
+	for i := 0; i < b.N; i++ {
+		_, err := FillDBWithParticipationKeys(partDB, root.Address(), 0, 3000000, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
 		b.StopTimer()
-		err = partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			_, err := tx.Exec("DROP TABLE ParticipationAccount;")
-			if err != nil {
-				return err
-			}
-			_, err = tx.Exec("DROP TABLE schema;")
-			return err
-		})
 		a.NoError(err)
-		partt = &part
+
+		a.NoError(dropTables(partDB))
 		b.StartTimer()
 	}
-	if partt == nil {
-		return
+}
+
+func dropTables(partDB db.Accessor) error {
+	return partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec("DROP TABLE ParticipationAccount;")
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec("DROP TABLE schema;")
+		return err
+	})
+}
+
+func BenchmarkParticipationKeyRestoration(b *testing.B) {
+	a := require.New(b)
+
+	var rootAddr basics.Address
+	crypto.RandBytes(rootAddr[:])
+
+	dbname := b.Name() + "_part"
+	defer os.Remove(dbname)
+
+	partDB, err := db.MakeErasableAccessor(dbname)
+	a.NoError(err)
+
+	part, err := FillDBWithParticipationKeys(partDB, rootAddr, 0, 3000000, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+	a.NoError(err)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		out, err := RestoreParticipation(partDB)
+		a.NoError(err)
+
+		b.StopTimer()
+		a.Equal(intoComparable(part), intoComparable(out))
+		b.StartTimer()
 	}
-	//TODO: test restored blockProof
-	//out := protocol.Encode(partt.BlockProof)
-	//outvoting := protocol.Encode(partt.Voting)
-	//fmt.Println("merkle key store size:", len(out), "bytes.", "voting key size:", len(outvoting), "bytes.")
+	part.Close()
 }

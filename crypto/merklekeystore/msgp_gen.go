@@ -606,7 +606,7 @@ func (z *Verifier) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0002Len := uint32(2)
 	var zb0002Mask uint8 /* 3 bits */
-	if (*z).Root == ([RootSize]byte{}) {
+	if (*z).Root == ([KeyStoreRootSize]byte{}) {
 		zb0002Len--
 		zb0002Mask |= 0x2
 	}
@@ -720,11 +720,11 @@ func (_ *Verifier) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Verifier) Msgsize() (s int) {
-	s = 1 + 2 + msgp.ArrayHeaderSize + (RootSize * (msgp.ByteSize)) + 3 + msgp.BoolSize
+	s = 1 + 2 + msgp.ArrayHeaderSize + (KeyStoreRootSize * (msgp.ByteSize)) + 3 + msgp.BoolSize
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Verifier) MsgIsZero() bool {
-	return ((*z).Root == ([RootSize]byte{})) && ((*z).HasValidRoot == false)
+	return ((*z).Root == ([KeyStoreRootSize]byte{})) && ((*z).HasValidRoot == false)
 }

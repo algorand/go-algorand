@@ -78,7 +78,11 @@ func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 	hdr.Round = s.latest
 	hdr.CurrentProtocol = protocol.ConsensusFuture
 
-	var ccBasic bookkeeping.CompactCertState
+	var ccBasic = bookkeeping.CompactCertState{
+		CompactCertVoters:      make([]byte, compactcert.HashSize),
+		CompactCertVotersTotal: basics.MicroAlgos{},
+		CompactCertNextRound:   0,
+	}
 	ccBasic.CompactCertVotersTotal.Raw = uint64(s.totalWeight)
 
 	if hdr.Round > 0 {
@@ -132,9 +136,9 @@ func (s *testWorkerStubs) CompactCertVoters(r basics.Round) (*ledger.VotersForRo
 	for i, k := range s.keysForVoters {
 		voters.AddrToPos[k.Parent] = uint64(i)
 		voters.Participants = append(voters.Participants, compactcert.Participant{
-			PK:          k.Voting.OneTimeSignatureVerifier,
-			Weight:      1,
-			KeyDilution: config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution,
+			PK:         *k.BlockProof.GetVerifier(),
+			Weight:     1,
+			FirstValid: uint64(k.FirstValid),
 		})
 	}
 
@@ -207,7 +211,7 @@ func newPartKey(t testing.TB, parent basics.Address) account.Participation {
 	partDB, err := db.MakeAccessor(fn, false, true)
 	require.NoError(t, err)
 
-	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, 1024*1024, config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
+	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, 1024, config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
 	require.NoError(t, err)
 	part.Close()
 	return part.Participation
@@ -258,16 +262,17 @@ func TestWorkerAllSigs(t *testing.T) {
 			require.False(t, overflowed)
 
 			ccparams := compactcert.Params{
-				Msg:          signedHdr,
-				ProvenWeight: provenWeight,
-				SigRound:     basics.Round(signedHdr.Round + 1),
-				SecKQ:        proto.CompactCertSecKQ,
+				Msg:               signedHdr,
+				ProvenWeight:      provenWeight,
+				SigRound:          basics.Round(signedHdr.Round),
+				SecKQ:             proto.CompactCertSecKQ,
+				CompactCertRounds: proto.CompactCertRounds,
 			}
 
 			voters, err := s.CompactCertVoters(tx.Txn.CertRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
 			require.NoError(t, err)
 
-			verif := compactcert.MkVerifier(ccparams, voters.Tree.Root().To32Byte())
+			verif := compactcert.MkVerifier(ccparams, voters.Tree.Root())
 			err = verif.Verify(&tx.Txn.Cert)
 			require.NoError(t, err)
 			break
@@ -319,16 +324,17 @@ func TestWorkerPartialSigs(t *testing.T) {
 	require.False(t, overflowed)
 
 	ccparams := compactcert.Params{
-		Msg:          signedHdr,
-		ProvenWeight: provenWeight,
-		SigRound:     basics.Round(signedHdr.Round + 1),
-		SecKQ:        proto.CompactCertSecKQ,
+		Msg:               signedHdr,
+		ProvenWeight:      provenWeight,
+		SigRound:          basics.Round(signedHdr.Round),
+		SecKQ:             proto.CompactCertSecKQ,
+		CompactCertRounds: proto.CompactCertRounds,
 	}
 
 	voters, err := s.CompactCertVoters(tx.Txn.CertRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
 	require.NoError(t, err)
 
-	verif := compactcert.MkVerifier(ccparams, voters.Tree.Root().To32Byte())
+	verif := compactcert.MkVerifier(ccparams, voters.Tree.Root())
 	err = verif.Verify(&tx.Txn.Cert)
 	require.NoError(t, err)
 }
@@ -385,22 +391,36 @@ func TestLatestSigsFromThisNode(t *testing.T) {
 	// Wait for a compact cert to be formed, so we know the signer thread is caught up.
 	_ = <-s.txmsg
 
-	latestSigs, err := w.LatestSigsFromThisNode()
-	require.NoError(t, err)
-	require.Equal(t, len(latestSigs), len(keys))
+	var latestSigs map[basics.Address]basics.Round
+	var err error
+	for x := 0; x < 10; x++ {
+		latestSigs, err = w.LatestSigsFromThisNode()
+		require.NoError(t, err)
+		if len(latestSigs) == len(keys) {
+			break
+		}
+		time.Sleep(256 * time.Millisecond)
+	}
+	require.Equal(t, len(keys), len(latestSigs))
 	for _, k := range keys {
 		require.Equal(t, latestSigs[k.Parent], basics.Round(2*proto.CompactCertRounds))
 	}
 
 	// Add a block that claims the compact cert is formed.
+	s.mu.Lock()
 	s.addBlock(3 * basics.Round(proto.CompactCertRounds))
+	s.mu.Unlock()
 
 	// Wait for the builder to discard the signatures.
-	time.Sleep(time.Second)
-
-	latestSigs, err = w.LatestSigsFromThisNode()
-	require.NoError(t, err)
-	require.Equal(t, len(latestSigs), 0)
+	for x := 0; x < 10; x++ {
+		latestSigs, err = w.LatestSigsFromThisNode()
+		require.NoError(t, err)
+		if len(latestSigs) == 0 {
+			break
+		}
+		time.Sleep(256 * time.Millisecond)
+	}
+	require.Equal(t, 0, len(latestSigs))
 }
 
 func TestWorkerRestart(t *testing.T) {

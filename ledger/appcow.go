@@ -456,12 +456,6 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 	return nil // note: deletion cannot cause us to violate maxCount
 }
 
-// AppendLog adds message in logs. idx is expected to be an index in txn.ForeignApps
-func (cb *roundCowState) AppendLog(idx uint64, value string) error {
-	cb.logs = append(cb.logs, basics.LogItem{ID: idx, Message: value})
-	return nil
-}
-
 // MakeDebugBalances creates a ledger suitable for dryrun and debugger
 func MakeDebugBalances(l ledgerForCowBase, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
 	base := &roundCowBase{
@@ -469,6 +463,7 @@ func MakeDebugBalances(l ledgerForCowBase, round basics.Round, proto protocol.Co
 		rnd:      round - 1,
 		proto:    config.Consensus[proto],
 		accounts: make(map[basics.Address]basics.AccountData),
+		creators: make(map[creatable]FoundAddress),
 	}
 
 	hdr := bookkeeping.BlockHeader{
@@ -476,40 +471,50 @@ func MakeDebugBalances(l ledgerForCowBase, round basics.Round, proto protocol.Co
 		UpgradeState: bookkeeping.UpgradeState{CurrentProtocol: proto},
 	}
 	hint := 2
-	cb := makeRoundCowState(base, hdr, prevTimestamp, hint)
+	// passing an empty AccountTotals here is fine since it's only being used by the top level cow state object.
+	cb := makeRoundCowState(base, hdr, config.Consensus[proto], prevTimestamp, ledgercore.AccountTotals{}, hint)
 	return cb
 }
 
 // StatefulEval runs application.
 // Execution happens in a child cow and all modifications are merged into parent if the program passes
-func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (pass bool, evalDelta basics.EvalDelta, err error) {
+func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (pass bool, evalDelta transactions.EvalDelta, err error) {
 	// Make a child cow to eval our program in
 	calf := cb.child(1)
 	params.Ledger, err = newLogicLedger(calf, aidx)
 	if err != nil {
-		return false, basics.EvalDelta{}, err
+		return false, transactions.EvalDelta{}, err
 	}
 
 	// Eval the program
-	pass, err = logic.EvalStateful(program, params)
+	var cx *logic.EvalContext
+	pass, cx, err = logic.EvalStatefulCx(program, params)
 	if err != nil {
-		return false, basics.EvalDelta{}, ledgercore.LogicEvalError{Err: err}
+		var details string
+		if cx != nil {
+			pc, det := cx.PcDetails()
+			details = fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
+		}
+		return false, transactions.EvalDelta{}, ledgercore.LogicEvalError{Err: err, Details: details}
 	}
 
 	// If program passed, build our eval delta, and commit to state changes
 	if pass {
 		evalDelta, err = calf.BuildEvalDelta(aidx, &params.Txn.Txn)
 		if err != nil {
-			return false, basics.EvalDelta{}, err
+			return false, transactions.EvalDelta{}, err
 		}
 		calf.commitToParent()
+		evalDelta.Logs = cx.Logs
+		evalDelta.InnerTxns = cx.InnerTxns
 	}
 
 	return pass, evalDelta, nil
 }
 
-// BuildEvalDelta converts internal sdeltas and logs into basics.EvalDelta
-func (cb *roundCowState) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error) {
+// BuildEvalDelta creates an EvalDelta by converting internal sdeltas
+// into the (Global|Local)Delta fields.
+func (cb *roundCowState) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (evalDelta transactions.EvalDelta, err error) {
 	// sdeltas
 	foundGlobal := false
 	for addr, smod := range cb.sdeltas {
@@ -517,13 +522,13 @@ func (cb *roundCowState) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.
 			// Check that all of these deltas are for the correct app
 			if aapp.aidx != aidx {
 				err = fmt.Errorf("found storage delta for different app during StatefulEval/BuildDelta: %d != %d", aapp.aidx, aidx)
-				return basics.EvalDelta{}, err
+				return transactions.EvalDelta{}, err
 			}
 			if aapp.global {
 				// Check that there is at most one global delta
 				if foundGlobal {
 					err = fmt.Errorf("found more than one global delta during StatefulEval/BuildDelta: %d", aapp.aidx)
-					return basics.EvalDelta{}, err
+					return transactions.EvalDelta{}, err
 				}
 				evalDelta.GlobalDelta = sdelta.kvCow.serialize()
 				foundGlobal = true
@@ -543,7 +548,7 @@ func (cb *roundCowState) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.
 				} else {
 					addrOffset, err = txn.IndexByAddress(addr, txn.Sender)
 					if err != nil {
-						return basics.EvalDelta{}, err
+						return transactions.EvalDelta{}, err
 					}
 				}
 
@@ -557,9 +562,6 @@ func (cb *roundCowState) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.
 			}
 		}
 	}
-
-	// logs
-	evalDelta.Logs = cb.logs
 
 	return
 }

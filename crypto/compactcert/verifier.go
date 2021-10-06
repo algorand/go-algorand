@@ -21,20 +21,19 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
-	"github.com/algorand/go-algorand/data/basics"
 )
 
 // Verifier is used to verify a compact certificate.
 type Verifier struct {
 	Params
 
-	partcom crypto.Digest
+	partcom crypto.GenericDigest
 }
 
 // MkVerifier constructs a verifier to check the compact certificate
 // on the message specified in p, with partcom specifying the Merkle
 // root of the participants that must sign the message.
-func MkVerifier(p Params, partcom crypto.Digest) *Verifier {
+func MkVerifier(p Params, partcom crypto.GenericDigest) *Verifier {
 	return &Verifier{
 		Params:  p,
 		partcom: partcom,
@@ -48,28 +47,29 @@ func (v *Verifier) Verify(c *Cert) error {
 		return fmt.Errorf("cert signed weight %d <= proven weight %d", c.SignedWeight, v.ProvenWeight)
 	}
 
-	hsh, err := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
-	if err != nil {
-		return err
-	}
-	// Verify all of the reveals
-	sigs := make(map[uint64]crypto.GenericDigest)
-	parts := make(map[uint64]crypto.GenericDigest)
+	sigs := make(map[uint64]crypto.Hashable)
+	parts := make(map[uint64]crypto.Hashable)
 	for pos, r := range c.Reveals {
-		sigs[pos] = crypto.HashSum(hsh, r.SigSlot)
-		parts[pos] = crypto.HashSum(hsh, r.Part)
+		sigs[pos] = r.SigSlot
+		parts[pos] = r.Part
 
-		ephID := basics.OneTimeIDForRound(v.SigRound, r.Part.KeyDilution)
-		if !r.Part.PK.Verify(ephID, v.Msg, r.SigSlot.Sig.OneTimeSignature) {
-			return fmt.Errorf("signature in reveal pos %d does not verify", pos)
+		err := r.Part.PK.Verify(
+			uint64(r.Part.FirstValid),
+			uint64(v.SigRound),
+			v.CompactCertRounds,
+			v.Msg,
+			r.SigSlot.Sig.Signature)
+
+		if err != nil {
+			return fmt.Errorf("signature in reveal pos %d does not verify. error is %s", pos, err)
 		}
 	}
 
-	if err := merklearray.Verify(c.SigCommit.ToSlice(), sigs, &c.SigProofs); err != nil {
+	if err := merklearray.Verify(crypto.GenericDigest(c.SigCommit[:]), sigs, &c.SigProofs); err != nil {
 		return err
 	}
 
-	if err := merklearray.Verify(v.partcom.ToSlice(), parts, &c.PartProofs); err != nil {
+	if err := merklearray.Verify(crypto.GenericDigest(v.partcom[:]), parts, &c.PartProofs); err != nil {
 		return err
 	}
 
@@ -78,8 +78,11 @@ func (v *Verifier) Verify(c *Cert) error {
 	if err != nil {
 		return err
 	}
-
-	msgHash := crypto.HashObj(v.Msg)
+	h, err := c.PartProofs.HashFactory.NewHash()
+	if err != nil {
+		return err
+	}
+	msgHash := crypto.GenereicHashObj(h, v.Msg)
 
 	for j := uint64(0); j < nr; j++ {
 		choice := coinChoice{

@@ -28,6 +28,7 @@ import (
 
 func TestNonAbsSQLiteWalletConfigFails(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -46,6 +47,7 @@ func TestNonAbsSQLiteWalletConfigFails(t *testing.T) {
 
 func TestAbsSQLiteWalletConfigSucceeds(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()

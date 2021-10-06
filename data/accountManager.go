@@ -151,6 +151,7 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 			// We need a key for round r+1 for agreement.
 			nextRound := latestHdr.Round + 1
 
+			// TODO: we might not need this!
 			if latestHdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound > 0 {
 				// We need a key for the next compact cert round.
 				// This would be CompactCertNextRound+1 (+1 because compact

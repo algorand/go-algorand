@@ -34,6 +34,7 @@ import (
 
 func TestParticipationKeyOnlyAccountParticipatesCorrectly(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
@@ -108,6 +109,8 @@ func waitForAccountToProposeBlock(a *require.Assertions, fixture *fixtures.RestC
 // - When the account balance receives enough stake, it should be proposing after lookback rounds
 func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
 	if testing.Short() {
 		t.Skip()
 	}

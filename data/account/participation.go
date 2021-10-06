@@ -193,10 +193,11 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	// Generate a new VRF key, which lives in the participation keys db
 	vrf := crypto.GenerateVRFSecrets()
 
-	compactCertRound := uint64(128)
+	// TODO change this
+	compactCertRound := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
 
 	// Generate a new key which signs the compact certificates
-	blockProof, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), compactCertRound, crypto.DilithiumType)
+	blockProof, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), compactCertRound, crypto.Ed25519Type)
 	if err != nil {
 		return PersistedParticipation{}, err
 	}
@@ -232,17 +233,11 @@ func (part PersistedParticipation) Persist() error {
 			return fmt.Errorf("failed to install database: %w", err)
 		}
 
-		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, firstValid, lastValid, keyDilution) VALUES (?,?,?,?,?,?)",
-			part.Parent[:], rawVRF, rawVoting, part.FirstValid, part.LastValid, part.KeyDilution)
+		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, blockProof, firstValid, lastValid, keyDilution) VALUES (?, ?, ?, ?, ?, ?,?)",
+			part.Parent[:], rawVRF, rawVoting, rawbBlockProof, part.FirstValid, part.LastValid, part.KeyDilution)
 		if err != nil {
 			return fmt.Errorf("failed to insert account: %w", err)
 		}
-
-		_, err = tx.Exec("INSERT INTO BlockProof (blockProof) VALUES (?)", rawbBlockProof)
-		if err != nil {
-			return fmt.Errorf("failed to insert blockProof account: %w", err)
-		}
-
 		return nil
 	})
 

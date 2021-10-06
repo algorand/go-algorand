@@ -395,7 +395,7 @@ func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, pay
 // computeAssetIndexFromTxn returns the created asset index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
-func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx uint64) {
+func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) uint64 {
 	// Must have ledger
 	if l == nil {
 		return 0
@@ -412,6 +412,15 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx uint6
 	if tx.Txn.Txn.AssetConfigTxnFields.ConfigAsset != 0 {
 		return 0
 	}
+
+	aidx := uint64(tx.ApplyData.ConfigAsset)
+	if aidx > 0 {
+		return aidx
+	}
+	// If there is no ConfigAsset in the ApplyData, it must be a
+	// transaction before inner transactions were activated. Therefore
+	// the computeCreatableIndexInPayset function will work properly
+	// to deduce the aid. Proceed.
 
 	// Look up block where transaction was confirmed
 	blk, err := l.Block(tx.ConfirmedRound)
@@ -430,7 +439,7 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx uint6
 // computeAppIndexFromTxn returns the created app index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
-func computeAppIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx uint64) {
+func computeAppIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) uint64 {
 	// Must have ledger
 	if l == nil {
 		return 0
@@ -447,6 +456,15 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx uint64)
 	if tx.Txn.Txn.ApplicationCallTxnFields.ApplicationID != 0 {
 		return 0
 	}
+
+	aidx := uint64(tx.ApplyData.ApplicationID)
+	if aidx > 0 {
+		return aidx
+	}
+	// If there is no ApplicationID in the ApplyData, it must be a
+	// transaction before inner transactions were activated. Therefore
+	// the computeCreatableIndexInPayset function will work properly
+	// to deduce the aidx. Proceed.
 
 	// Look up block where transaction was confirmed
 	blk, err := l.Block(tx.ConfirmedRound)
@@ -490,7 +508,7 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 		CompactCertNextRound:   uint64(b.CompactCert[protocol.CompactCertBasic].CompactCertNextRound),
 	}
 
-	if !b.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsZero() {
+	if !b.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsEmpty() {
 		voters := b.CompactCert[protocol.CompactCertBasic].CompactCertVoters
 		block.CompactCertVoters = voters[:]
 	}
@@ -1619,8 +1637,7 @@ func GetSupply(ctx lib.ReqContext, context echo.Context) {
 
 	w := context.Response().Writer
 
-	latest := ctx.Node.Ledger().Latest()
-	totals, err := ctx.Node.Ledger().Totals(latest)
+	latest, totals, err := ctx.Node.Ledger().LatestTotals()
 	if err != nil {
 		err = fmt.Errorf("GetSupply(): round %d failed: %v", latest, err)
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errInternalFailure, ctx.Log)

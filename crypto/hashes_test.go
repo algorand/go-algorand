@@ -17,6 +17,7 @@
 package crypto
 
 import (
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"math"
 	"testing"
 
@@ -24,19 +25,20 @@ import (
 )
 
 func TestHashFactoryCreatingNewHashes(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	hfactory := HashFactory{HashType: Sha512_256}
 	h, err := hfactory.NewHash()
 	a.NoError(err)
 	a.NotNil(h)
-	a.Equal(32, h.Size())
+	a.Equal(Sha512_256Size, h.Size())
 
 	hfactory = HashFactory{HashType: Sumhash}
 	h, err = hfactory.NewHash()
 	a.NoError(err)
 	a.NotNil(h)
-	a.Equal(112, h.Size())
+	a.Equal(SumhashDigestSize, h.Size())
 
 	hfactory = HashFactory{HashType: HashType(math.MaxUint64)}
 	h, err = hfactory.NewHash()
@@ -45,14 +47,16 @@ func TestHashFactoryCreatingNewHashes(t *testing.T) {
 }
 
 func TestHashSum(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	hfactory := HashFactory{HashType: Sha512_256}
 	h, err := hfactory.NewHash()
 	a.NoError(err)
 	a.NotNil(h)
-	a.Equal(32, h.Size())
+	a.Equal(Sha512_256Size, h.Size())
 
 	dgst := HashObj(TestingHashable{})
-	a.Equal(HashSum(h, TestingHashable{}), dgst[:])
+	a.Equal(GenereicHashObj(h, TestingHashable{}), dgst[:])
+
 }

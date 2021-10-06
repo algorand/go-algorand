@@ -38,7 +38,7 @@ func (cc CompactCertTxnFields) Empty() bool {
 	if cc.CertRound != 0 {
 		return false
 	}
-	if !cc.Cert.SigCommit.IsZero() || cc.Cert.SignedWeight != 0 {
+	if !cc.Cert.SigCommit.IsEmpty() || cc.Cert.SignedWeight != 0 {
 		return false
 	}
 	if len(cc.Cert.SigProofs.Path) != 0 || len(cc.Cert.PartProofs.Path) != 0 {

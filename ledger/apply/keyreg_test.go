@@ -80,8 +80,8 @@ func (balances keyregTestBalances) DeallocateAsset(addr basics.Address, index ba
 	return nil
 }
 
-func (balances keyregTestBalances) StatefulEval(logic.EvalParams, basics.AppIndex, []byte) (bool, basics.EvalDelta, error) {
-	return false, basics.EvalDelta{}, nil
+func (balances keyregTestBalances) StatefulEval(logic.EvalParams, basics.AppIndex, []byte) (bool, transactions.EvalDelta, error) {
+	return false, transactions.EvalDelta{}, nil
 }
 
 func TestKeyregApply(t *testing.T) {
@@ -176,6 +176,8 @@ func testBlockProofPKBeingStored(t *testing.T, tx transactions.Transaction, mock
 }
 
 func TestBlockProofPKKeyReg(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	secretSrc := keypair()
 	src := basics.Address(secretSrc.SignatureVerifier)
 	vrfSecrets := crypto.GenerateVRFSecrets()

@@ -28,7 +28,7 @@ import (
 // instance (because we have no ctors...)
 var DefaultGenesis = GenesisData{
 	FirstPartKeyRound: 0,
-	LastPartKeyRound:  3000000,
+	LastPartKeyRound:  3000,
 }
 
 // WalletData represents a wallet's name, percent stake, and initial online status for a genesis.json file

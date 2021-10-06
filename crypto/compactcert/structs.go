@@ -19,16 +19,18 @@ package compactcert
 import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
 
 // Params defines common parameters for the verifier and builder.
 type Params struct {
-	Msg          crypto.Hashable // Message to be cerified
-	ProvenWeight uint64          // Weight threshold proven by the certificate
-	SigRound     basics.Round    // Ephemeral signature round to expect
-	SecKQ        uint64          // Security parameter (k+q) from analysis document
+	Msg               crypto.Hashable // Message to be cerified
+	ProvenWeight      uint64          // Weight threshold proven by the certificate
+	SigRound          basics.Round    // The round for which the ephemeral key is committed to
+	SecKQ             uint64          // Security parameter (k+q) from analysis document
+	CompactCertRounds uint64          // the frequency in which CC are being formed
 }
 
 // A Participant corresponds to an account whose AccountData.Status
@@ -43,15 +45,14 @@ type Params struct {
 type Participant struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	// PK is AccountData.VoteID.
-	PK crypto.OneTimeSignatureVerifier `codec:"p"`
+	// PK is the identifier used to verify the signature for a specific participant
+	PK merklekeystore.Verifier `codec:"p"`
 
 	// Weight is AccountData.MicroAlgos.
 	Weight uint64 `codec:"w"`
 
-	// KeyDilution is AccountData.KeyDilution() with the protocol for sigRound
-	// as expected by the Builder.
-	KeyDilution uint64 `codec:"d"`
+	// FirstValid reprents the first round where the commitment is valid
+	FirstValid uint64 `codec:"fv"`
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
@@ -62,7 +63,7 @@ func (p Participant) ToBeHashed() (protocol.HashID, []byte) {
 // CompactOneTimeSignature is crypto.OneTimeSignature with omitempty
 type CompactOneTimeSignature struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
-	crypto.OneTimeSignature
+	merklekeystore.Signature
 }
 
 // A sigslotCommit is a single slot in the sigs array that forms the certificate.
@@ -92,18 +93,14 @@ type Reveal struct {
 	Part    Participant   `codec:"p"`
 }
 
-// maxReveals is a bound on allocation and on numReveals to limit log computation
-const maxReveals = 1024
-const maxProofDigests = 20 * maxReveals
-
 // Cert represents a compact certificate.
 type Cert struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	SigCommit    crypto.Digest     `codec:"c"`
-	SignedWeight uint64            `codec:"w"`
-	SigProofs    merklearray.Proof `codec:"S,allocbound=maxProofDigests"`
-	PartProofs   merklearray.Proof `codec:"P,allocbound=maxProofDigests"`
+	SigCommit    crypto.GenericDigest `codec:"c"`
+	SignedWeight uint64               `codec:"w"`
+	SigProofs    merklearray.Proof    `codec:"S,allocbound=maxProofDigests"`
+	PartProofs   merklearray.Proof    `codec:"P,allocbound=maxProofDigests"`
 
 	// Reveals is a sparse map from the position being revealed
 	// to the corresponding elements from the sigs and participants
