@@ -639,7 +639,7 @@ func init() {
 	txnFieldSpecByField = make(map[TxnField]txnFieldSpec, len(TxnFieldNames))
 	for i, s := range txnFieldSpecs {
 		if int(s.field) != i {
-			panic("txnFieldTypePairs disjoint with TxnField enum")
+			panic("txnFieldSpecs disjoint with TxnField enum")
 		}
 		TxnFieldTypes[i] = s.ftype
 		txnFieldSpecByField[s.field] = s
@@ -656,11 +656,11 @@ func init() {
 	GlobalFieldTypes = make([]StackType, len(GlobalFieldNames))
 	globalFieldSpecByField = make(map[GlobalField]globalFieldSpec, len(GlobalFieldNames))
 	for i, s := range globalFieldSpecs {
-		if int(s.gfield) != i {
+		if int(s.field) != i {
 			panic("globalFieldSpecs disjoint with GlobalField enum")
 		}
 		GlobalFieldTypes[i] = s.ftype
-		globalFieldSpecByField[s.gfield] = s
+		globalFieldSpecByField[s.field] = s
 	}
 	globalFieldSpecByName = make(gfNameSpecMap, len(GlobalFieldNames))
 	for i, gfn := range GlobalFieldNames {
