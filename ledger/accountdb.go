@@ -711,14 +711,18 @@ func accountsReset(tx *sql.Tx) error {
 	return err
 }
 
-// accountsRound returns the tracker balances round number, and the round of the hash tree
-// if the hash of the tree doesn't exists, it returns zero.
-func accountsRound(tx *sql.Tx) (rnd basics.Round, hashrnd basics.Round, err error) {
+// accountsRound returns the tracker balances round number
+func accountsRound(tx *sql.Tx) (rnd basics.Round, err error) {
 	err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&rnd)
 	if err != nil {
 		return
 	}
+	return
+}
 
+// accountsHashRound returns the round of the hash tree
+// if the hash of the tree doesn't exists, it returns zero.
+func accountsHashRound(tx *sql.Tx) (hashrnd basics.Round, err error) {
 	err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='hashbase'").Scan(&hashrnd)
 	if err == sql.ErrNoRows {
 		hashrnd = basics.Round(0)

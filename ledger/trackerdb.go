@@ -75,7 +75,7 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 		if err0 != nil {
 			return err0
 		}
-		lastBalancesRound, _, err := accountsRound(tx)
+		lastBalancesRound, err := accountsRound(tx)
 		if err != nil {
 			return err
 		}

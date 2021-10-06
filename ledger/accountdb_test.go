@@ -43,7 +43,7 @@ import (
 )
 
 func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.Address]basics.AccountData) {
-	r, _, err := accountsRound(tx)
+	r, err := accountsRound(tx)
 	require.NoError(t, err)
 	require.Equal(t, r, rnd)
 

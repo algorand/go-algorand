@@ -561,7 +561,7 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 				if err != nil {
 					return
 				}
-				dbRound, _, err = accountsRound(tx)
+				dbRound, err = accountsRound(tx)
 				return
 			})
 			ledgerAccountsonlinetopMicros.AddMicrosecondsSince(start, nil)
@@ -1206,7 +1206,11 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 // accountsInitialize initializes account updates tracker and return current account round.
 // as part of the initialization, it tests if a hash table matches to account base and updates the former.
 func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (basics.Round, error) {
-	rnd, hashRound, err := accountsRound(tx)
+	rnd, err := accountsRound(tx)
+	if err != nil {
+		return 0, err
+	}
+	hashRound, err := accountsHashRound(tx)
 	if err != nil {
 		return 0, err
 	}
