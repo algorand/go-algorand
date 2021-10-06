@@ -1296,7 +1296,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xb1
 - Pops: _None_
 - Pushes: _None_
-- begin preparation of a new inner transaction
+- begin preparation of a new inner transaction in a new transaction group
 - LogicSigVersion >= 5
 - Mode: Application
 
@@ -1318,7 +1318,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xb3
 - Pops: _None_
 - Pushes: _None_
-- execute the current inner transaction. Fail if 16 inner transactions have already been executed, or if the transaction itself fails.
+- execute the current inner transaction group. Fail if executing this group would exceed 16 total inner transactions, or if any transaction in the group fails.
 - LogicSigVersion >= 5
 - Mode: Application
 
@@ -1340,6 +1340,15 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Pushes: any
 - push Ith value of the array field F of the last inner transaction to stack
 - LogicSigVersion >= 5
+- Mode: Application
+
+## itxn_next
+
+- Opcode: 0xb6
+- Pops: _None_
+- Pushes: _None_
+- begin preparation of a new inner transaction in the same transaction group
+- LogicSigVersion >= 6
 - Mode: Application
 
 ## txnas f
