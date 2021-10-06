@@ -17,6 +17,8 @@
 package apply
 
 import (
+	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/util/db"
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto/merklekeystore"
@@ -202,8 +204,14 @@ func TestBlockProofPKKeyReg(t *testing.T) {
 }
 
 func createTestTxn(t *testing.T, src basics.Address, secretParticipation *crypto.SignatureSecrets, vrfSecrets *crypto.VRFSecrets) transactions.Transaction {
-	signer, err := merklekeystore.New(0, 0, 1, crypto.DilithiumType)
+	//signer, err := merklekeystore.New(0, 0, 1, crypto.DilithiumType)
+	store, err := db.MakeAccessor("test-DB", false, true)
 	require.NoError(t, err)
+	defer store.Close()
+	root, err := account.GenerateRoot(store)
+	require.NoError(t, err)
+	p, err := account.FillDBWithParticipationKeys(store, root.Address(), 0, 0, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+	signer := p.Participation.BlockProof
 
 	return transactions.Transaction{
 		Type: protocol.KeyRegistrationTx,

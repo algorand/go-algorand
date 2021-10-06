@@ -39,12 +39,12 @@ func partInstallDatabase(tx *sql.Tx) error {
 		--* participation keys
 		vrf BLOB,         --*  msgpack encoding of ParticipationAccount.vrf
 		voting BLOB,      --*  msgpack encoding of ParticipationAccount.voting
-		blockProof BLOB,  --*  msgpack encoding of ParticipationAccount.BlockProof
 
 		firstValid INTEGER,
 		lastValid INTEGER,
 
-		keyDilution INTEGER NOT NULL DEFAULT 0
+		keyDilution INTEGER NOT NULL DEFAULT 0,
+		blockProof BLOB  --*  msgpack encoding of ParticipationAccount.BlockProof
 	);`)
 	if err != nil {
 		return err
