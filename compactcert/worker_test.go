@@ -206,15 +206,17 @@ func newTestWorker(t testing.TB, s *testWorkerStubs) *Worker {
 	return newTestWorkerDB(t, s, dbs.Wdb)
 }
 
-func newPartKey(t testing.TB, parent basics.Address) account.Participation {
+// You must call defer part.Close() after calling this function,
+// since it creates a DB accessor but the caller must close it (required for PersistentKeystore)
+func newPartKey(t testing.TB, parent basics.Address) account.PersistedParticipation {
 	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
 	partDB, err := db.MakeAccessor(fn, false, true)
 	require.NoError(t, err)
 
 	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, 1024, config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
 	require.NoError(t, err)
-	part.Close()
-	return part.Participation
+
+	return part
 }
 
 func TestWorkerAllSigs(t *testing.T) {
@@ -224,7 +226,9 @@ func TestWorkerAllSigs(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
-		keys = append(keys, newPartKey(t, parent))
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
 	}
 
 	s := newWorkerStubs(t, keys, len(keys))
@@ -287,7 +291,9 @@ func TestWorkerPartialSigs(t *testing.T) {
 	for i := 0; i < 7; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
-		keys = append(keys, newPartKey(t, parent))
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
 	}
 
 	s := newWorkerStubs(t, keys, 10)
@@ -346,7 +352,9 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
-		keys = append(keys, newPartKey(t, parent))
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
 	}
 
 	s := newWorkerStubs(t, keys, 10)
@@ -377,7 +385,9 @@ func TestLatestSigsFromThisNode(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
-		keys = append(keys, newPartKey(t, parent))
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
 	}
 
 	s := newWorkerStubs(t, keys, 10)
@@ -430,7 +440,9 @@ func TestWorkerRestart(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
-		keys = append(keys, newPartKey(t, parent))
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
 	}
 
 	s := newWorkerStubs(t, keys, 10)
@@ -471,7 +483,9 @@ func TestWorkerHandleSig(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
-		keys = append(keys, newPartKey(t, parent))
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
 	}
 
 	s := newWorkerStubs(t, keys, 10)
