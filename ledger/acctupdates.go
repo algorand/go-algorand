@@ -1340,7 +1340,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *atomicWrit
 				accountsCount += len(accts)
 				pendingAccounts += len(accts)
 				for _, acct := range accts {
-					added, err := trie.Add(acct.digest)
+					added, err := trie.Add(acct.digest) // makes GETs for pages
 					if err != nil {
 						return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
 					}
@@ -1352,10 +1352,11 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *atomicWrit
 				if pendingAccounts >= trieRebuildCommitFrequency {
 					// this trie Evict will commit using the current transaction.
 					// if anything goes wrong, it will still get rolled back.
-					_, err = trie.Evict(true)
+					_, err = trie.Evict(true) // makes PUTs and DELETEs
 					if err != nil {
 						return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
 					}
+					tx.writeBarrier()
 					pendingAccounts = 0
 				}
 
