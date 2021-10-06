@@ -1307,9 +1307,13 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 		}
 
 		// we've just updated the merkle trie, update the hashRound to reflect that.
-		err = updateAccountsRound(tx, rnd, rnd)
+		err = updateAccountsRound(tx, rnd)
 		if err != nil {
 			return 0, fmt.Errorf("accountsInitialize was unable to update the account round to %d: %v", rnd, err)
+		}
+		err = updateAccountsHashRound(tx, rnd)
+		if err != nil {
+			return 0, fmt.Errorf("accountsInitialize was unable to update the account hash round to %d: %v", rnd, err)
 		}
 
 		au.log.Infof("accountsInitialize rebuilt the merkle trie with %d entries in %v", accountsCount, time.Now().Sub(startTrieBuildTime))
@@ -1930,7 +1934,11 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			stats.AccountsWritingDuration = time.Duration(time.Now().UnixNano()) - stats.AccountsWritingDuration
 		}
 
-		err = updateAccountsRound(tx, dbRound+basics.Round(offset), treeTargetRound)
+		err = updateAccountsRound(tx, dbRound+basics.Round(offset))
+		if err != nil {
+			return err
+		}
+		err = updateAccountsHashRound(tx, treeTargetRound)
 		if err != nil {
 			return err
 		}

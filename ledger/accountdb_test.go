@@ -268,7 +268,7 @@ func TestAccountDBRound(t *testing.T) {
 		require.NoError(t, err)
 		_, err = accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
-		err = updateAccountsRound(tx, basics.Round(i), 0)
+		err = updateAccountsRound(tx, basics.Round(i))
 		require.NoError(t, err)
 		checkAccounts(t, tx, basics.Round(i), accts)
 		checkCreatables(t, tx, i, expectedDbImage)

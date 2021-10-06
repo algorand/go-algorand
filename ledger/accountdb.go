@@ -1228,7 +1228,7 @@ func totalsNewRounds(tx *sql.Tx, updates []ledgercore.AccountDeltas, compactUpda
 }
 
 // updates the round number associated with the current account data.
-func updateAccountsRound(tx *sql.Tx, rnd basics.Round, hashRound basics.Round) (err error) {
+func updateAccountsRound(tx *sql.Tx, rnd basics.Round) (err error) {
 	res, err := tx.Exec("UPDATE acctrounds SET rnd=? WHERE id='acctbase' AND rnd<?", rnd, rnd)
 	if err != nil {
 		return
@@ -1254,13 +1254,17 @@ func updateAccountsRound(tx *sql.Tx, rnd basics.Round, hashRound basics.Round) (
 			return
 		}
 	}
+	return
+}
 
-	res, err = tx.Exec("INSERT OR REPLACE INTO acctrounds(id,rnd) VALUES('hashbase',?)", hashRound)
+// updates the round number associated with the hash of current account data.
+func updateAccountsHashRound(tx *sql.Tx, hashRound basics.Round) (err error) {
+	res, err := tx.Exec("INSERT OR REPLACE INTO acctrounds(id,rnd) VALUES('hashbase',?)", hashRound)
 	if err != nil {
 		return
 	}
 
-	aff, err = res.RowsAffected()
+	aff, err := res.RowsAffected()
 	if err != nil {
 		return
 	}
