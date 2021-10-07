@@ -3684,7 +3684,7 @@ func addInnerTxn(cx *EvalContext) error {
 		return err
 	}
 
-	// For compatibility with v5, in which failures only occured in the submit,
+	// For compatibility with v5, in which failures only occurred in the submit,
 	// we only fail here if we are OVER the MaxInnerTransactions limit.  Thus
 	// this allows construction of one more Inner than is actually allowed, and
 	// will fail in submit. (But we do want the check here, so this can't become
