@@ -12,7 +12,6 @@ print(f"{os.path.basename(sys.argv[0])} start {stamp}")
 goal = Goal(sys.argv[1], autosend=True)
 
 joe = goal.new_account()
-flo = goal.new_account()
 
 txinfo, err = goal.pay(goal.account, joe, amt=500_000)
 assert not err, err
@@ -22,30 +21,41 @@ txinfo, err = goal.keyreg(joe, nonpart=True)
 assert not err, err
 joeb = goal.balance(joe)
 
-txinfo, err = goal.pay(goal.account, flo, amt=500_000)
-assert not err, err
-
 teal = """
 #pragma version 6
  txn ApplicationID
  bz end
- // Use the rekeyed account to make a payment, and give it back
+ // Pay the sender and Accounts[1]. Force the second fee to default high
  itxn_begin
   int pay
   itxn_field TypeEnum
 
-  txn Accounts 1
-  itxn_field Sender
-
-  txn Accounts 0
+  txn Sender
   itxn_field Receiver
 
   int 5
   itxn_field Amount
 
+  int 0
+  itxn_field Fee                // No fee, so 2nd fee is doubled
+
+ itxn_next
+
+  int pay
+  itxn_field TypeEnum
+
   txn Accounts 1
-  itxn_field RekeyTo
+  itxn_field Receiver
+
+  int 5
+  itxn_field Amount
+
  itxn_submit
+
+ itxn Fee
+ int 2000
+ ==
+ assert
 
 end:
  int 1
@@ -53,29 +63,15 @@ end:
 
 txinfo, err = goal.app_create(joe, goal.assemble(teal))
 assert not err, err
-joeb = joeb-1000
 app_id = txinfo['application-index']
 assert app_id
 
-app_addr = goal.app_address(app_id)
-# flo rekeys her account to the app, app spends from it, then rekeys it back
-txinfo, err = goal.pay(flo, joe, amt=1, rekey_to=app_addr)
+# Fund the app account
+txinfo, err = goal.pay(goal.account, goal.app_address(app_id), amt=400_000)
 assert not err, err
-assert goal.balance(joe) == joeb+1, goal.balance(joe)
 
-# can no longer spend
-txinfo, err = goal.pay(flo, joe, amt=1)
-assert err
-assert goal.balance(joe) == joeb+1, goal.balance(joe)
 
-txinfo, err = goal.app_call(joe, app_id, accounts=[flo])
+txinfo, err = goal.app_call(joe, app_id, accounts=[goal.account])
 assert not err, err
-joeb = joeb-1000
-assert goal.balance(joe) == joeb+6, goal.balance(joe)
-
-# can spend again
-txinfo, err = goal.pay(flo, joe, amt=1)
-assert not err, err
-assert goal.balance(joe) == joeb+7, goal.balance(joe)
 
 print(f"{os.path.basename(sys.argv[0])} OK {stamp}")
