@@ -3684,7 +3684,12 @@ func addInnerTxn(cx *EvalContext) error {
 		return err
 	}
 
-	if len(cx.InnerTxns)+len(cx.subtxns) >= cx.Proto.MaxInnerTransactions ||
+	// For compatibility with v5, in which failures only occured in the submit,
+	// we only fail here if we are OVER the MaxInnerTransactions limit.  Thus
+	// this allows construction of one more Inner than is actually allowed, and
+	// will fail in submit. (But we do want the check here, so this can't become
+	// unbounded.)  The MaxTxGroupSize check can be, and is, precise.
+	if len(cx.InnerTxns)+len(cx.subtxns) > cx.Proto.MaxInnerTransactions ||
 		len(cx.subtxns) >= cx.Proto.MaxTxGroupSize {
 		return errors.New("attempt to create too many inner transactions")
 	}
@@ -3940,7 +3945,7 @@ func opTxSubmit(cx *EvalContext) {
 	// Should never trigger, since itxn_next checks these too.
 	if len(cx.InnerTxns)+len(cx.subtxns) > cx.Proto.MaxInnerTransactions ||
 		len(cx.subtxns) > cx.Proto.MaxTxGroupSize {
-		cx.err = errors.New("itxn_submit with too many transactions")
+		cx.err = errors.New("too many inner transactions")
 		return
 	}
 

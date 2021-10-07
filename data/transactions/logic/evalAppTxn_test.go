@@ -415,7 +415,7 @@ func TestNumInner(t *testing.T) {
 	testApp(t, pay+pay+pay+";int 1", ep)
 	testApp(t, pay+pay+pay+pay+";int 1", ep)
 	// In the sample proto, MaxInnerTransactions = 4
-	testApp(t, pay+pay+pay+pay+pay+";int 1", ep, "itxn_submit with too many transactions")
+	testApp(t, pay+pay+pay+pay+pay+";int 1", ep, "too many inner transactions")
 }
 
 func TestAssetCreate(t *testing.T) {
