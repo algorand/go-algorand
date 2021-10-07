@@ -71,7 +71,7 @@ workflows:
                 - /rel\/.*/
                 - /hotfix\/.*/
                 - /pull\/[0-9]+/
-          context: slack-secrets
+#          context: slack-secrets
 
       - integration:
           name: << matrix.platform >>_integration
@@ -90,7 +90,7 @@ workflows:
             - << matrix.platform >>_build
           filters:
             <<: *filters-nightly
-          context: slack-secrets
+#          context: slack-secrets
 
       - e2e_expect:
           name: << matrix.platform >>_e2e_expect
@@ -109,7 +109,7 @@ workflows:
             - << matrix.platform >>_build
           filters:
             <<: *filters-nightly
-          context: slack-secrets
+#          context: slack-secrets
 
       - e2e_subs:
           name: << matrix.platform >>_e2e_subs
@@ -128,7 +128,7 @@ workflows:
             - << matrix.platform >>_build
           filters:
             <<: *filters-nightly
-          context: slack-secrets
+#          context: slack-secrets
 
       - tests_verification_job:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
@@ -438,9 +438,9 @@ jobs:
           result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
       - upload_coverage
-      - slack/notify: &slack-fail-event
-          event: fail
-          template: basic_fail_1
+#      - slack/notify: &slack-fail-event
+#          event: fail
+#          template: basic_fail_1
 
   integration:
     parameters:
@@ -473,8 +473,8 @@ jobs:
       - generic_integration:
           result_subdir: << parameters.platform >>_integration_nightly
           no_output_timeout: 45m
-      - slack/notify:
-          <<: *slack-fail-event
+#      - slack/notify:
+#          <<: *slack-fail-event
 
   e2e_expect:
     parameters:
@@ -507,8 +507,8 @@ jobs:
       - generic_integration:
           result_subdir: << parameters.platform>>_e2e_expect_nightly
           no_output_timeout: 45m
-      - slack/notify:
-          <<: *slack-fail-event
+#      - slack/notify:
+#          <<: *slack-fail-event
 
   e2e_subs:
     parameters:
@@ -541,8 +541,8 @@ jobs:
       - generic_integration:
           result_subdir: << parameters.platform >>_e2e_subs_nightly
           no_output_timeout: 45m
-      - slack/notify:
-          <<: *slack-fail-event
+#      - slack/notify:
+#          <<: *slack-fail-event
 
   windows_x64_build:
     executor:
