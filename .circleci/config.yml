@@ -70,6 +70,7 @@ workflows:
               only:
                 - /rel\/.*/
                 - /hotfix\/.*/
+                - /egieseke/update-circle-machine-size\/.*/
           context: slack-secrets
 
       - integration:
