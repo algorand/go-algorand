@@ -477,7 +477,7 @@ func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, 
 		// Fetch up to maxResults - len(res) + len(deletedCreatables) from the database,
 		// so we have enough extras in case creatables were deleted
 		numToFetch := maxResults - uint64(len(res)) + uint64(len(deletedCreatables))
-		dbResults, dbRound, err := au.accountsq.listCreatables(au.kv, maxCreatableIdx, numToFetch, ctype)
+		dbResults, dbRound, err := au.accountsq.listCreatables(maxCreatableIdx, numToFetch, ctype)
 		if err != nil {
 			return nil, err
 		}
@@ -824,10 +824,7 @@ func (au *accountUpdates) GetCatchpointStream(round basics.Round) (ReadCloseSize
 	fileSize := int64(0)
 	start := time.Now()
 	ledgerGetcatchpointCount.Inc(nil)
-	err := au.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		dbFileName, _, fileSize, err = getCatchpoint(tx, round)
-		return
-	})
+	dbFileName, _, fileSize, err := kvGetStoredCatchpoint(au.kv, round)
 	ledgerGetcatchpointMicros.AddMicrosecondsSince(start, nil)
 	if err != nil && err != sql.ErrNoRows {
 		// we had some sql error.
@@ -843,7 +840,7 @@ func (au *accountUpdates) GetCatchpointStream(round basics.Round) (ReadCloseSize
 		if os.IsNotExist(err) {
 			// the database told us that we have this file.. but we couldn't find it.
 			// delete it from the database.
-			err := au.saveCatchpointFile(round, "", 0, "")
+			err := au.saveCatchpointFile(au.kv, round, "", 0, "")
 			if err != nil {
 				au.log.Warnf("accountUpdates: getCatchpointStream: unable to delete missing catchpoint entry: %v", err)
 				return nil, err
@@ -867,7 +864,7 @@ func (au *accountUpdates) GetCatchpointStream(round basics.Round) (ReadCloseSize
 			return &readCloseSizer{ReadCloser: file, size: -1}, nil
 		}
 
-		err = au.saveCatchpointFile(round, fileName, fileInfo.Size(), "")
+		err = au.saveCatchpointFile(au.kv, round, fileName, fileInfo.Size(), "")
 		if err != nil {
 			au.log.Warnf("accountUpdates: getCatchpointStream: unable to save missing catchpoint entry: %v", err)
 		}
@@ -1161,7 +1158,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 		return
 	}
 
-	au.accountsq, err = accountsDbInit(au.dbs.Rdb.Handle, au.dbs.Wdb.Handle)
+	au.accountsq, err = accountsDbInit(au.kv, au.kv)
 	au.lastCatchpointLabel, _, err = au.accountsq.readCatchpointStateString(context.Background(), catchpointStateLastCatchpoint)
 	if err != nil {
 		return
@@ -1211,7 +1208,7 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 // accountsInitialize initializes the accounts DB if needed and return current account round.
 // as part of the initialization, it tests the current database schema version, and perform upgrade
 // procedures to bring it up to the database schema supported by the binary.
-func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *atomicWriteTx, kv kvRead) (basics.Round, error) {
+func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *atomicWriteTx, kv kvReadDB) (basics.Round, error) {
 	// check current database version.
 	dbVersion, err := db.GetUserVersion(ctx, tx.sqlTx)
 	if err != nil {
@@ -1241,7 +1238,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *atomicWrit
 				}
 				//tx.writeBarrier()
 			case 1:
-				dbVersion, err = au.upgradeDatabaseSchema1(ctx, tx.sqlTx, tx.kvWrite, newDatabase)
+				dbVersion, err = au.upgradeDatabaseSchema1(ctx, tx.sqlTx, kv, tx.kvWrite, newDatabase)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 1 : %v", err)
 					return 0, err
@@ -1444,7 +1441,7 @@ func (au *accountUpdates) upgradeDatabaseSchema0(ctx context.Context, tx *atomic
 // This upgrade doesn't change any of the actual database schema ( i.e. tables, indexes ) but rather just performing
 // a functional update to it's content.
 //
-func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx, kv kvWrite, newDatabase bool) (updatedDBVersion int32, err error) {
+func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx, kvR kvReadDB, kvW kvWrite, newDatabase bool) (updatedDBVersion int32, err error) {
 	var modifiedAccounts uint
 	if newDatabase {
 		goto schemaUpdateComplete
@@ -1462,14 +1459,14 @@ func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx
 
 		au.log.Infof("accountsInitialize resetting account hashes")
 		// reset the merkle trie
-		err = resetAccountHashes(kv)
+		err = resetAccountHashes(kvW)
 		if err != nil {
 			return 0, fmt.Errorf("accountsInitialize unable to reset account hashes : %v", err)
 		}
 
 		au.log.Infof("accountsInitialize preparing queries")
 		// initialize a new accountsq with the incoming transaction.
-		accountsq, err := accountsDbInit(tx, tx)
+		accountsq, err := accountsDbInit(kvR, kvW)
 		if err != nil {
 			return 0, fmt.Errorf("accountsInitialize unable to prepare queries : %v", err)
 		}
@@ -1721,7 +1718,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 			previousAccountData = baseAccountData.accountData
 		} else {
 			// it's missing from the base accounts, so we'll try to load it from disk.
-			if acctData, err := au.accountsq.lookup(au.kv, addr); err != nil {
+			if acctData, err := au.accountsq.lookup(addr); err != nil {
 				au.log.Panicf("accountUpdates: newBlockImpl failed to lookup account %v when processing round %d : %v", addr, rnd, err)
 			} else {
 				previousAccountData = acctData.accountData
@@ -1841,7 +1838,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 		// present in the on-disk DB.  As an optimization, we avoid creating
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
-		persistedData, err = au.accountsq.lookup(au.kv, addr)
+		persistedData, err = au.accountsq.lookup(addr)
 		if persistedData.round == currentDbRound {
 			au.baseAccounts.writePending(persistedData)
 			return persistedData.accountData, err
@@ -1927,7 +1924,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		// present in the on-disk DB.  As an optimization, we avoid creating
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
-		persistedData, err = au.accountsq.lookup(au.kv, addr)
+		persistedData, err = au.accountsq.lookup(addr)
 		if persistedData.round == currentDbRound {
 			au.baseAccounts.writePending(persistedData)
 			return persistedData.accountData, rnd, err
@@ -2001,7 +1998,7 @@ func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.Creat
 			unlock = false
 		}
 		// Check the database
-		creator, ok, dbRound, err = au.accountsq.lookupCreator(au.kv, cidx, ctype)
+		creator, ok, dbRound, err = au.accountsq.lookupCreator(cidx, ctype)
 
 		if dbRound == currentDbRound {
 			return
@@ -2503,7 +2500,7 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 		return
 	}
 
-	err = au.saveCatchpointFile(committedRound, relCatchpointFileName, catchpointWriter.GetSize(), catchpointWriter.GetCatchpoint())
+	err = au.saveCatchpointFile(au.kv, committedRound, relCatchpointFileName, catchpointWriter.GetSize(), catchpointWriter.GetCatchpoint())
 	if err != nil {
 		au.log.Warnf("accountUpdates: generateCatchpoint: unable to save catchpoint: %v", err)
 		return
@@ -2538,7 +2535,7 @@ func catchpointRoundToPath(rnd basics.Round) string {
 // after a successful insert operation to the database, it would delete up to 2 old entries, as needed.
 // deleting 2 entries while inserting single entry allow us to adjust the size of the backing storage and have the
 // database and storage realign.
-func (au *accountUpdates) saveCatchpointFile(round basics.Round, fileName string, fileSize int64, catchpoint string) (err error) {
+func (au *accountUpdates) saveCatchpointFile(kv kvWrite, round basics.Round, fileName string, fileSize int64, catchpoint string) (err error) {
 	if au.catchpointFileHistoryLength != 0 {
 		err = au.accountsq.storeCatchpoint(context.Background(), round, fileName, catchpoint, fileSize)
 		if err != nil {

@@ -1059,7 +1059,7 @@ func TestListCreatables(t *testing.T) {
 
 	au := &accountUpdates{}
 	au.kv = accountKV{kv}
-	au.accountsq, err = accountsDbInit(tx, tx)
+	au.accountsq, err = accountsDbInit(au.kv, au.kv)
 	require.NoError(t, err)
 
 	// ******* All results are obtained from the cache. Empty database *******

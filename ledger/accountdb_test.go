@@ -347,12 +347,12 @@ func randomDeltasBalancedImpl(niter int, base map[basics.Address]basics.AccountD
 	return updates, totals, lastCreatableID
 }
 
-func checkAccounts(t *testing.T, tx *sql.Tx, kv kvMultiGet, rnd basics.Round, accts map[basics.Address]basics.AccountData) {
+func checkAccounts(t *testing.T, tx *sql.Tx, kv kvReadDB, rnd basics.Round, accts map[basics.Address]basics.AccountData) {
 	r, _, err := accountsRound(kv)
 	require.NoError(t, err)
 	require.Equal(t, r, rnd)
 
-	aq, err := accountsDbInit(tx, tx)
+	aq, err := accountsDbInit(kv, kvErrWriter{})
 	require.NoError(t, err)
 	defer aq.close()
 
@@ -363,7 +363,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, kv kvMultiGet, rnd basics.Round, ac
 	var totalOnline, totalOffline, totalNotPart uint64
 
 	for addr, data := range accts {
-		pad, err := aq.lookup(kv, addr)
+		pad, err := aq.lookup(addr)
 		d := pad.accountData
 		require.NoError(t, err)
 		require.Equal(t, d, data)
@@ -392,7 +392,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, kv kvMultiGet, rnd basics.Round, ac
 	require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
 	require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
 
-	d, err := aq.lookup(kv, randomAddress())
+	d, err := aq.lookup(randomAddress())
 	require.NoError(t, err)
 	require.Equal(t, rnd, d.round)
 	require.Equal(t, d.accountData, basics.AccountData{})
@@ -823,7 +823,7 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 
 	accounts := benchmarkInitBalances(b, b.N, dbs, kv, proto)
 
-	qs, err := accountsDbInit(dbs.Rdb.Handle, dbs.Wdb.Handle)
+	qs, err := accountsDbInit(kv, kv)
 	require.NoError(b, err)
 
 	// read all the balances in the database, shuffled
@@ -838,7 +838,7 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 	// only measure the actual fetch time
 	b.ResetTimer()
 	for _, addr := range addrs {
-		_, err = qs.lookup(kv, addr)
+		_, err = qs.lookup(addr)
 		require.NoError(b, err)
 	}
 }
@@ -1389,7 +1389,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	qs, err := accountsDbInit(dbs.Rdb.Handle, dbs.Wdb.Handle)
+	qs, err := accountsDbInit(kv, kv)
 	require.NoError(t, err)
 	// require.NotNil(t, qs.listCreatablesStmt)
 	qs.close()

@@ -35,17 +35,8 @@ import (
 // accountsDbQueries is used to cache a prepared SQL statement to look up
 // the state of a single account.
 type accountsDbQueries struct {
-	// listCreatablesStmt          *sql.Stmt
-	// lookupStmt                  *sql.Stmt
-	// lookupCreatorStmt           *sql.Stmt
-	deleteStoredCatchpoint      *sql.Stmt
-	insertStoredCatchpoint      *sql.Stmt
-	selectOldestCatchpointFiles *sql.Stmt
-	selectCatchpointStateUint64 *sql.Stmt
-	deleteCatchpointState       *sql.Stmt
-	insertCatchpointStateUint64 *sql.Stmt
-	selectCatchpointStateString *sql.Stmt
-	insertCatchpointStateString *sql.Stmt
+	kvRead  kvReadDB
+	kvWrite kvWrite
 }
 
 var accountsSchema = []string{
@@ -512,11 +503,6 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 	return
 }
 
-func getCatchpoint(tx *sql.Tx, round basics.Round) (fileName string, catchpoint string, fileSize int64, err error) {
-	err = tx.QueryRow("SELECT filename, catchpoint, filesize FROM storedcatchpoints WHERE round=?", int64(round)).Scan(&fileName, &catchpoint, &fileSize)
-	return
-}
-
 // accountsInit fills the database using tx with initAccounts if the
 // database has not been initialized yet.
 //
@@ -739,73 +725,16 @@ func accountsRound(kv kvRead) (rnd basics.Round, hashrnd basics.Round, err error
 	return
 }
 
-func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) {
-	var err error
-	qs := &accountsDbQueries{}
-
-	// qs.listCreatablesStmt, err = r.Prepare("SELECT rnd, asset, creator FROM acctrounds LEFT JOIN assetcreators ON assetcreators.asset <= ? AND assetcreators.ctype = ? WHERE acctrounds.id='acctbase' ORDER BY assetcreators.asset desc LIMIT ?")
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// qs.lookupStmt, err = r.Prepare("SELECT accountbase.rowid, rnd, data FROM acctrounds LEFT JOIN accountbase ON address=? WHERE id='acctbase'")
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// qs.lookupCreatorStmt, err = r.Prepare("SELECT rnd, creator FROM acctrounds LEFT JOIN assetcreators ON asset = ? AND ctype = ? WHERE id='acctbase'")
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	qs.deleteStoredCatchpoint, err = w.Prepare("DELETE FROM storedcatchpoints WHERE round=?")
-	if err != nil {
-		return nil, err
-	}
-
-	qs.insertStoredCatchpoint, err = w.Prepare("INSERT INTO storedcatchpoints(round, filename, catchpoint, filesize, pinned) VALUES(?, ?, ?, ?, 0)")
-	if err != nil {
-		return nil, err
-	}
-
-	qs.selectOldestCatchpointFiles, err = r.Prepare("SELECT round, filename FROM storedcatchpoints WHERE pinned = 0 and round <= COALESCE((SELECT round FROM storedcatchpoints WHERE pinned = 0 ORDER BY round DESC LIMIT ?, 1),0) ORDER BY round ASC LIMIT ?")
-	if err != nil {
-		return nil, err
-	}
-
-	qs.selectCatchpointStateUint64, err = r.Prepare("SELECT intval FROM catchpointstate WHERE id=?")
-	if err != nil {
-		return nil, err
-	}
-
-	qs.deleteCatchpointState, err = r.Prepare("DELETE FROM catchpointstate WHERE id=?")
-	if err != nil {
-		return nil, err
-	}
-
-	qs.insertCatchpointStateUint64, err = r.Prepare("INSERT OR REPLACE INTO catchpointstate(id, intval) VALUES(?, ?)")
-	if err != nil {
-		return nil, err
-	}
-
-	qs.insertCatchpointStateString, err = r.Prepare("INSERT OR REPLACE INTO catchpointstate(id, strval) VALUES(?, ?)")
-	if err != nil {
-		return nil, err
-	}
-
-	qs.selectCatchpointStateString, err = r.Prepare("SELECT strval FROM catchpointstate WHERE id=?")
-	if err != nil {
-		return nil, err
-	}
+func accountsDbInit(kvR kvReadDB, kvW kvWrite) (*accountsDbQueries, error) {
+	qs := &accountsDbQueries{kvRead: kvR, kvWrite: kvW}
 	return qs, nil
 }
 
 // listCreatables returns an array of CreatableLocator which have CreatableIndex smaller or equal to maxIdx and are of the provided CreatableType.
-func (qs *accountsDbQueries) listCreatables(kv kvSnapshottableRead, maxIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) (results []basics.CreatableLocator, dbRound basics.Round, err error) {
+func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) (results []basics.CreatableLocator, dbRound basics.Round, err error) {
 	err = db.Retry(func() error {
 		// Query for assets in range
-		rows, err := kvListCreatables(kv, maxIdx, maxResults, ctype)
-		//rows, err := qs.listCreatablesStmt.Query(maxIdx, ctype, maxResults)
+		rows, err := kvListCreatables(qs.kvRead, maxIdx, maxResults, ctype)
 		if err != nil {
 			return err
 		}
@@ -834,11 +763,10 @@ func (qs *accountsDbQueries) listCreatables(kv kvSnapshottableRead, maxIdx basic
 	return
 }
 
-func (qs *accountsDbQueries) lookupCreator(kv kvMultiGet, cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, dbRound basics.Round, err error) {
+func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, dbRound basics.Round, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
-		dbRound, buf, err = kvLookupCreator(kv, cidx, ctype)
-		//err := qs.lookupCreatorStmt.QueryRow(cidx, ctype).Scan(&dbRound, &buf)
+		dbRound, buf, err = kvLookupCreator(qs.kvRead, cidx, ctype)
 
 		// this shouldn't happen unless we can't figure the round number.
 		if err == sql.ErrNoRows {
@@ -862,12 +790,11 @@ func (qs *accountsDbQueries) lookupCreator(kv kvMultiGet, cidx basics.CreatableI
 // lookup looks up for a the account data given it's address. It returns the persistedAccountData, which includes the current database round and the matching
 // account data, if such was found. If no matching account data could be found for the given address, an empty account data would
 // be retrieved.
-func (qs *accountsDbQueries) lookup(kv kvMultiGet, addr basics.Address) (data persistedAccountData, err error) {
+func (qs *accountsDbQueries) lookup(addr basics.Address) (data persistedAccountData, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
-		err := kvGetAccountDataRound(kv, addr[:], &rowid, &data.round, &buf)
-		//err := qs.lookupStmt.QueryRow(addr[:]).Scan(&rowid, &data.round, &buf)
+		err := kvGetAccountDataRound(qs.kvRead, addr[:], &rowid, &data.round, &buf)
 		if err == nil {
 			data.addr = addr
 			if len(buf) > 0 && rowid.Valid {
@@ -892,24 +819,23 @@ func (qs *accountsDbQueries) lookup(kv kvMultiGet, addr basics.Address) (data pe
 
 func (qs *accountsDbQueries) storeCatchpoint(ctx context.Context, round basics.Round, fileName string, catchpoint string, fileSize int64) (err error) {
 	err = db.Retry(func() (err error) {
-		_, err = qs.deleteStoredCatchpoint.ExecContext(ctx, round)
+		err = kvDeleteStoredCatchpoint(qs.kvWrite, round)
 
 		if err != nil || (fileName == "" && catchpoint == "" && fileSize == 0) {
 			return
 		}
 
-		_, err = qs.insertStoredCatchpoint.ExecContext(ctx, round, fileName, catchpoint, fileSize)
+		err = kvInsertStoredCatchpoint(qs.kvWrite, round, fileName, catchpoint, fileSize)
 		return
 	})
 	return
 }
 
 func (qs *accountsDbQueries) getOldestCatchpointFiles(ctx context.Context, fileCount int, filesToKeep int) (fileNames map[basics.Round]string, err error) {
-	err = db.Retry(func() (err error) {
-		var rows *sql.Rows
-		rows, err = qs.selectOldestCatchpointFiles.QueryContext(ctx, filesToKeep, fileCount)
+	err = db.Retry(func() error {
+		rows, err := kvGetOldestCatchpointFiles(qs.kvRead, filesToKeep, fileCount)
 		if err != nil {
-			return
+			return err
 		}
 		defer rows.Close()
 
@@ -919,13 +845,13 @@ func (qs *accountsDbQueries) getOldestCatchpointFiles(ctx context.Context, fileC
 			var round basics.Round
 			err = rows.Scan(&round, &fileName)
 			if err != nil {
-				return
+				return err
 			}
 			fileNames[round] = fileName
 		}
 
 		err = rows.Err()
-		return
+		return err
 	})
 	return
 }
@@ -933,7 +859,7 @@ func (qs *accountsDbQueries) getOldestCatchpointFiles(ctx context.Context, fileC
 func (qs *accountsDbQueries) readCatchpointStateUint64(ctx context.Context, stateName catchpointState) (rnd uint64, def bool, err error) {
 	var val sql.NullInt64
 	err = db.Retry(func() (err error) {
-		err = qs.selectCatchpointStateUint64.QueryRowContext(ctx, stateName).Scan(&val)
+		val, err = kvGetCatchpointStateUint64(qs.kvRead, string(stateName))
 		if err == sql.ErrNoRows || (err == nil && false == val.Valid) {
 			val.Int64 = 0 // default to zero.
 			err = nil
@@ -948,13 +874,13 @@ func (qs *accountsDbQueries) readCatchpointStateUint64(ctx context.Context, stat
 func (qs *accountsDbQueries) writeCatchpointStateUint64(ctx context.Context, stateName catchpointState, setValue uint64) (cleared bool, err error) {
 	err = db.Retry(func() (err error) {
 		if setValue == 0 {
-			_, err = qs.deleteCatchpointState.ExecContext(ctx, stateName)
+			err = kvDeleteCatchpointState(qs.kvWrite, string(stateName))
 			cleared = true
 			return err
 		}
 
 		// we don't know if there is an entry in the table for this state, so we'll insert/replace it just in case.
-		_, err = qs.insertCatchpointStateUint64.ExecContext(ctx, stateName, setValue)
+		err = kvInsertCatchpointStateUint64(qs.kvWrite, string(stateName), setValue)
 		cleared = false
 		return err
 	})
@@ -965,7 +891,7 @@ func (qs *accountsDbQueries) writeCatchpointStateUint64(ctx context.Context, sta
 func (qs *accountsDbQueries) readCatchpointStateString(ctx context.Context, stateName catchpointState) (str string, def bool, err error) {
 	var val sql.NullString
 	err = db.Retry(func() (err error) {
-		err = qs.selectCatchpointStateString.QueryRowContext(ctx, stateName).Scan(&val)
+		val, err = kvGetCatchpointStateString(qs.kvRead, string(stateName))
 		if err == sql.ErrNoRows || (err == nil && false == val.Valid) {
 			val.String = "" // default to empty string
 			err = nil
@@ -980,40 +906,20 @@ func (qs *accountsDbQueries) readCatchpointStateString(ctx context.Context, stat
 func (qs *accountsDbQueries) writeCatchpointStateString(ctx context.Context, stateName catchpointState, setValue string) (cleared bool, err error) {
 	err = db.Retry(func() (err error) {
 		if setValue == "" {
-			_, err = qs.deleteCatchpointState.ExecContext(ctx, stateName)
+			err = kvDeleteCatchpointState(qs.kvWrite, string(stateName))
 			cleared = true
 			return err
 		}
 
 		// we don't know if there is an entry in the table for this state, so we'll insert/replace it just in case.
-		_, err = qs.insertCatchpointStateString.ExecContext(ctx, stateName, setValue)
+		err = kvInsertCatchpointStateString(qs.kvWrite, string(stateName), setValue)
 		cleared = false
 		return err
 	})
 	return cleared, err
 }
 
-func (qs *accountsDbQueries) close() {
-	preparedQueries := []**sql.Stmt{
-		// &qs.listCreatablesStmt,
-		// &qs.lookupStmt,
-		// &qs.lookupCreatorStmt,
-		&qs.deleteStoredCatchpoint,
-		&qs.insertStoredCatchpoint,
-		&qs.selectOldestCatchpointFiles,
-		&qs.selectCatchpointStateUint64,
-		&qs.deleteCatchpointState,
-		&qs.insertCatchpointStateUint64,
-		&qs.selectCatchpointStateString,
-		&qs.insertCatchpointStateString,
-	}
-	for _, preparedQuery := range preparedQueries {
-		if (*preparedQuery) != nil {
-			(*preparedQuery).Close()
-			*preparedQuery = nil
-		}
-	}
-}
+func (qs *accountsDbQueries) close() {}
 
 // accountsOnlineTop returns the top n online accounts starting at position offset
 // (that is, the top offset'th account through the top offset+n-1'th account).

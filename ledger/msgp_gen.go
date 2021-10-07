@@ -47,6 +47,22 @@ import (
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
 //
+// kvCatchpointStateValue
+//            |-----> (*) MarshalMsg
+//            |-----> (*) CanMarshalMsg
+//            |-----> (*) UnmarshalMsg
+//            |-----> (*) CanUnmarshalMsg
+//            |-----> (*) Msgsize
+//            |-----> (*) MsgIsZero
+//
+// kvStoredCatchpointValue
+//            |-----> (*) MarshalMsg
+//            |-----> (*) CanMarshalMsg
+//            |-----> (*) UnmarshalMsg
+//            |-----> (*) CanUnmarshalMsg
+//            |-----> (*) Msgsize
+//            |-----> (*) MsgIsZero
+//
 // storageAction
 //       |-----> MarshalMsg
 //       |-----> CanMarshalMsg
@@ -850,6 +866,333 @@ func (z *encodedBalanceRecord) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *encodedBalanceRecord) MsgIsZero() bool {
 	return ((*z).Address.MsgIsZero()) && ((*z).AccountData.MsgIsZero())
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *kvCatchpointStateValue) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(4)
+	var zb0001Mask uint8 /* 5 bits */
+	if (*z).IntVal == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).IntValid == false {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if (*z).StrVal == "" {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	if (*z).StrValid == false {
+		zb0001Len--
+		zb0001Mask |= 0x10
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "i"
+			o = append(o, 0xa1, 0x69)
+			o = msgp.AppendInt64(o, (*z).IntVal)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "iv"
+			o = append(o, 0xa2, 0x69, 0x76)
+			o = msgp.AppendBool(o, (*z).IntValid)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "s"
+			o = append(o, 0xa1, 0x73)
+			o = msgp.AppendString(o, (*z).StrVal)
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not empty
+			// string "sv"
+			o = append(o, 0xa2, 0x73, 0x76)
+			o = msgp.AppendBool(o, (*z).StrValid)
+		}
+	}
+	return
+}
+
+func (_ *kvCatchpointStateValue) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*kvCatchpointStateValue)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *kvCatchpointStateValue) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).StrVal, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "StrVal")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).StrValid, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "StrValid")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).IntVal, bts, err = msgp.ReadInt64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "IntVal")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).IntValid, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "IntValid")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = kvCatchpointStateValue{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "s":
+				(*z).StrVal, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "StrVal")
+					return
+				}
+			case "sv":
+				(*z).StrValid, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "StrValid")
+					return
+				}
+			case "i":
+				(*z).IntVal, bts, err = msgp.ReadInt64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "IntVal")
+					return
+				}
+			case "iv":
+				(*z).IntValid, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "IntValid")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *kvCatchpointStateValue) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*kvCatchpointStateValue)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *kvCatchpointStateValue) Msgsize() (s int) {
+	s = 1 + 2 + msgp.StringPrefixSize + len((*z).StrVal) + 3 + msgp.BoolSize + 2 + msgp.Int64Size + 3 + msgp.BoolSize
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *kvCatchpointStateValue) MsgIsZero() bool {
+	return ((*z).StrVal == "") && ((*z).StrValid == false) && ((*z).IntVal == 0) && ((*z).IntValid == false)
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *kvStoredCatchpointValue) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(3)
+	var zb0001Mask uint8 /* 4 bits */
+	if (*z).Catchpoint == "" {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).FileName == "" {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if (*z).FileSize == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "cp"
+			o = append(o, 0xa2, 0x63, 0x70)
+			o = msgp.AppendString(o, (*z).Catchpoint)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "fn"
+			o = append(o, 0xa2, 0x66, 0x6e)
+			o = msgp.AppendString(o, (*z).FileName)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "fs"
+			o = append(o, 0xa2, 0x66, 0x73)
+			o = msgp.AppendInt64(o, (*z).FileSize)
+		}
+	}
+	return
+}
+
+func (_ *kvStoredCatchpointValue) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*kvStoredCatchpointValue)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *kvStoredCatchpointValue) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).FileName, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "FileName")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).Catchpoint, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Catchpoint")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).FileSize, bts, err = msgp.ReadInt64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "FileSize")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = kvStoredCatchpointValue{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "fn":
+				(*z).FileName, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "FileName")
+					return
+				}
+			case "cp":
+				(*z).Catchpoint, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Catchpoint")
+					return
+				}
+			case "fs":
+				(*z).FileSize, bts, err = msgp.ReadInt64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "FileSize")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *kvStoredCatchpointValue) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*kvStoredCatchpointValue)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *kvStoredCatchpointValue) Msgsize() (s int) {
+	s = 1 + 3 + msgp.StringPrefixSize + len((*z).FileName) + 3 + msgp.StringPrefixSize + len((*z).Catchpoint) + 3 + msgp.Int64Size
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *kvStoredCatchpointValue) MsgIsZero() bool {
+	return ((*z).FileName == "") && ((*z).Catchpoint == "") && ((*z).FileSize == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler

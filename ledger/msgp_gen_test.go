@@ -191,3 +191,123 @@ func BenchmarkUnmarshalencodedBalanceRecord(b *testing.B) {
 		}
 	}
 }
+
+func TestMarshalUnmarshalkvCatchpointStateValue(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := kvCatchpointStateValue{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingkvCatchpointStateValue(t *testing.T) {
+	protocol.RunEncodingTest(t, &kvCatchpointStateValue{})
+}
+
+func BenchmarkMarshalMsgkvCatchpointStateValue(b *testing.B) {
+	v := kvCatchpointStateValue{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgkvCatchpointStateValue(b *testing.B) {
+	v := kvCatchpointStateValue{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalkvCatchpointStateValue(b *testing.B) {
+	v := kvCatchpointStateValue{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestMarshalUnmarshalkvStoredCatchpointValue(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := kvStoredCatchpointValue{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingkvStoredCatchpointValue(t *testing.T) {
+	protocol.RunEncodingTest(t, &kvStoredCatchpointValue{})
+}
+
+func BenchmarkMarshalMsgkvStoredCatchpointValue(b *testing.B) {
+	v := kvStoredCatchpointValue{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgkvStoredCatchpointValue(b *testing.B) {
+	v := kvStoredCatchpointValue{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalkvStoredCatchpointValue(b *testing.B) {
+	v := kvStoredCatchpointValue{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}

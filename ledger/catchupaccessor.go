@@ -119,9 +119,8 @@ const (
 
 // MakeCatchpointCatchupAccessor creates a CatchpointCatchupAccessor given a ledger
 func MakeCatchpointCatchupAccessor(ledger *Ledger, log logging.Logger) CatchpointCatchupAccessor {
-	rdb := ledger.trackerDB().Rdb
-	wdb := ledger.trackerDB().Wdb
-	accountsq, err := accountsDbInit(rdb.Handle, wdb.Handle)
+	kv := ledger.kvStore()
+	accountsq, err := accountsDbInit(kv, kv)
 	if err != nil {
 		log.Warnf("unable to initialize account db in MakeCatchpointCatchupAccessor : %v", err)
 		return nil
@@ -182,18 +181,19 @@ func (c *CatchpointCatchupAccessorImpl) SetLabel(ctx context.Context, label stri
 // ResetStagingBalances resets the current staging balances, preparing for a new set of balances to be added
 func (c *CatchpointCatchupAccessorImpl) ResetStagingBalances(ctx context.Context, newCatchup bool) (err error) {
 	wdb := c.ledger.trackerDB().Wdb
+	kv := c.ledger.kvStore()
 	if !newCatchup {
 		c.ledger.setSynchronousMode(ctx, c.ledger.synchronousMode)
 	}
 	start := time.Now()
 	ledgerResetstagingbalancesCount.Inc(nil)
-	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		err = resetCatchpointStagingBalances(ctx, tx, newCatchup)
+	err = atomicWrites(wdb, kv, func(ctx context.Context, tx *atomicWriteTx) (err error) {
+		err = resetCatchpointStagingBalances(ctx, tx.sqlTx, newCatchup)
 		if err != nil {
 			return fmt.Errorf("unable to reset catchpoint catchup balances : %v", err)
 		}
 		if !newCatchup {
-			sq, err := accountsDbInit(tx, tx)
+			sq, err := accountsDbInit(tx.kvRead, tx.kvWrite)
 			if err != nil {
 				return fmt.Errorf("unable to initialize accountsDbInit: %v", err)
 			}
@@ -272,7 +272,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 	start := time.Now()
 	ledgerProcessstagingcontentCount.Inc(nil)
 	err = atomicWrites(wdb, kv, func(ctx context.Context, tx *atomicWriteTx) (err error) {
-		sq, err := accountsDbInit(tx.sqlTx, tx.sqlTx)
+		sq, err := accountsDbInit(tx.kvRead, tx.kvWrite)
 		if err != nil {
 			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to initialize accountsDbInit: %v", err)
 		}
@@ -665,10 +665,11 @@ func (c *CatchpointCatchupAccessorImpl) StoreBalancesRound(ctx context.Context, 
 	// trust the one in the catchpoint file header, so we'll calculate it ourselves.
 	balancesRound := blk.Round() - basics.Round(config.Consensus[blk.CurrentProtocol].MaxBalLookback)
 	wdb := c.ledger.trackerDB().Wdb
+	kv := c.ledger.kvStore()
 	start := time.Now()
 	ledgerStorebalancesroundCount.Inc(nil)
-	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		sq, err := accountsDbInit(tx, tx)
+	err = atomicWrites(wdb, kv, func(ctx context.Context, tx *atomicWriteTx) (err error) {
+		sq, err := accountsDbInit(tx.kvRead, tx.kvWrite)
 		if err != nil {
 			return fmt.Errorf("CatchpointCatchupAccessorImpl::StoreBalancesRound: unable to initialize accountsDbInit: %v", err)
 		}
@@ -773,7 +774,7 @@ func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 		var balancesRound uint64
 		var totals ledgercore.AccountTotals
 
-		sq, err := accountsDbInit(tx.sqlTx, tx.sqlTx)
+		sq, err := accountsDbInit(tx.kvRead, tx.kvWrite)
 		if err != nil {
 			return fmt.Errorf("unable to initialize accountsDbInit: %v", err)
 		}

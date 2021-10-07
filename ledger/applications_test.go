@@ -458,7 +458,7 @@ return`
 	a.NoError(err)
 
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), "TestAppAccountData", true, genesisInitState, cfg)
+	l, err := OpenLedger(logging.Base(), fmt.Sprintf("%s.%d", fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64()), crypto.RandUint64()), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
 	l.accts.ctxCancel() // force commitSyncer to exit
@@ -560,7 +560,7 @@ return`
 	err = kvGetAccountDataRound(l.kv, userOptin[:], &rowid, &dbRound, &buf)
 	a.NoError(err)
 	a.Equal(expectedUserOptIn, buf)
-	pad, err := l.accts.accountsq.lookup(l.kv, userOptin)
+	pad, err := l.accts.accountsq.lookup(userOptin)
 	a.Nil(pad.accountData.AppLocalStates[appIdx].KeyValue)
 	ad, err := l.Lookup(dbRound, userOptin)
 	a.Nil(ad.AppLocalStates[appIdx].KeyValue)
@@ -677,7 +677,7 @@ return`
 	a.Contains(genesisInitState.Accounts, userLocal)
 
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+	l, err := OpenLedger(logging.Base(), fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64()), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
 	l.accts.ctxCancel() // force commitSyncer to exit
@@ -932,7 +932,7 @@ return`
 	a.Contains(genesisInitState.Accounts, userLocal)
 
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+	l, err := OpenLedger(logging.Base(), fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64()), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
 	l.accts.ctxCancel() // force commitSyncer to exit
@@ -1052,7 +1052,7 @@ return`
 	a.NoError(err)
 	a.Empty(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas)
 
-	pad, err := l.accts.accountsq.lookup(l.kv, userLocal)
+	pad, err := l.accts.accountsq.lookup(userLocal)
 	a.NoError(err)
 	a.Equal(basics.AccountData{}, pad.accountData)
 	a.Zero(pad.rowid)
@@ -1091,7 +1091,7 @@ return`
 	a.Contains(genesisInitState.Accounts, userLocal)
 
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+	l, err := OpenLedger(logging.Base(), fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64()), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
 	l.accts.ctxCancel() // force commitSyncer to exit
@@ -1193,7 +1193,7 @@ return`
 	a.Contains(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta, "gk")
 	a.Equal(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta["gk"].Bytes, "global")
 
-	pad, err := l.accts.accountsq.lookup(l.kv, creator)
+	pad, err := l.accts.accountsq.lookup(creator)
 	a.NoError(err)
 	a.Equal(basics.AccountData{}, pad.accountData)
 	a.Zero(pad.rowid)
@@ -1292,7 +1292,7 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	a.Contains(genesisInitState.Accounts, userLocal)
 
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+	l, err := OpenLedger(logging.Base(), fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64()), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
 	l.accts.ctxCancel() // force commitSyncer to exit

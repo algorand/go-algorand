@@ -9,7 +9,6 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/kvstore"
@@ -31,6 +30,14 @@ const (
 
 	kvPrefixAccountHashes         = "\x00\x00\x00\x06"
 	kvPrefixAccountHashesEndRange = "\x00\x00\x00\x07"
+
+	kvPrefixStoredCatchpoints         = "\x00\x00\x00\x07"
+	kvPrefixStoredCatchpointsEndRange = "\x00\x00\x00\x08"
+
+	kvPrefixCatchpointState = "\x00\x00\x00\x08"
+
+	kvPrefixCatchpointPendingHashes         = "\x00\x00\x00\x09"
+	kvPrefixCatchpointPendingHashesEndRange = "\x00\x00\x00\x0a"
 )
 
 // return the big-endian binary encoding of a uint64
@@ -109,6 +116,32 @@ func accountHashesKey(table string, id uint64) []byte {
 	return ret
 }
 
+// storedCatchpointsKey: 4-byte prefix + 8-byte big-endian round number
+func storedCatchpointsKey(round basics.Round) []byte {
+	ret := []byte(kvPrefixStoredCatchpoints)
+	ret = append(ret, bigEndianUint64(uint64(round))...)
+	return ret
+}
+
+func splitStoredCatchpointsKey(key []byte) (round uint64, err error) {
+	if len(key) != 12 {
+		err = fmt.Errorf("storedCatchpointsKey not correct length")
+		return
+	}
+	round = binary.BigEndian.Uint64(key[4:12])
+	return
+}
+
+// catchpointStateKey: 4-byte prefix + string
+func catchpointStateKey(id string) []byte {
+	return append([]byte(kvPrefixCatchpointState), []byte(id)...)
+}
+
+// catchpointPendingHashesKey: 4-byte prefix + 32-byte address
+func catchpointPendingHashesKey(address []byte) []byte {
+	return append([]byte(kvPrefixCatchpointPendingHashes), address...)
+}
+
 type accountKV struct {
 	kvstore.KVStore
 }
@@ -128,6 +161,12 @@ type kvMultiGet interface {
 	MultiGet([][]byte) ([][]byte, error)
 }
 
+type kvReadDB interface {
+	kvRead
+	kvSnapshottableRead
+	kvMultiGet
+}
+
 type kvWrite interface {
 	Set(key, value []byte) error
 	Delete(key []byte) error
@@ -137,7 +176,7 @@ type kvWrite interface {
 type atomicWriteTx struct {
 	sqlTx   *sql.Tx
 	kvWrite kvWrite
-	kvRead  kvRead // kvLogReader
+	kvRead  kvReadDB // kvLogReader
 }
 
 type atomicReadTx struct {
@@ -147,15 +186,24 @@ type atomicReadTx struct {
 }
 
 // a reader for atomicWriteTx that performs and logs reads, to help identify reads that might be assuming SQL transaction behavior
-type kvLogReader struct{ kv kvRead }
+type kvLogReader struct{ kv kvReadDB }
 
 func (r *kvLogReader) Get(key []byte) ([]byte, error) {
 	buf, err := r.kv.Get(key)
-	logging.Base().Warnf("atomicWriteTx.kvRead making GET %v: %v", key, err)
+	//logging.Base().Warnf("atomicWriteTx.kvRead making GET %v: %v", key, err)
 	return buf, err
 }
+func (r *kvLogReader) MultiGet(keys [][]byte) ([][]byte, error) {
+	buf, err := r.kv.MultiGet(keys)
+	//logging.Base().Warnf("atomicWriteTx.kvRead making MultiGet %v: %v", keys, err)
+	return buf, err
+}
+func (r *kvLogReader) NewSnapshot() kvstore.Snapshot {
+	//logging.Base().Warnf("atomicWriteTx.kvRead making NewSnapshot")
+	return r.kv.NewSnapshot()
+}
 func (r *kvLogReader) NewIterator(start, end []byte, reverse bool) kvstore.Iterator {
-	logging.Base().Warnf("atomicWriteTx.kvRead making NewIterator %v %v %v", start, end, reverse)
+	//logging.Base().Warnf("atomicWriteTx.kvRead making NewIterator %v %v %v", start, end, reverse)
 	return r.kv.NewIterator(start, end, reverse)
 }
 
@@ -213,7 +261,7 @@ type kvResult struct {
 func (r kvResult) LastInsertId() (int64, error) { return r.lastID, r.err }
 func (r kvResult) RowsAffected() (int64, error) { return r.rows, r.err }
 
-// simulate SELECT rowid, data FROM accountbase WHERE address=?
+// SELECT rowid, data FROM accountbase WHERE address=?
 func kvGetAccountData(kv kvRead, address []byte, rowid *sql.NullInt64, acctData *[]byte) error {
 	val, err := kv.Get(accountKey(address))
 	if err != nil {
@@ -226,7 +274,7 @@ func kvGetAccountData(kv kvRead, address []byte, rowid *sql.NullInt64, acctData 
 	return nil
 }
 
-// simulate SELECT accountbase.rowid, rnd, data FROM acctrounds LEFT JOIN accountbase ON address=? WHERE id='acctbase'
+// SELECT accountbase.rowid, rnd, data FROM acctrounds LEFT JOIN accountbase ON address=? WHERE id='acctbase'
 func kvGetAccountDataRound(kv kvMultiGet, address []byte, rowid *sql.NullInt64, rnd *basics.Round, acctData *[]byte) error {
 	// atomic multiget of round number and account data
 	vals, err := kv.MultiGet([][]byte{accountRoundsKey("acctbase"), accountKey(address)})
@@ -242,7 +290,7 @@ func kvGetAccountDataRound(kv kvMultiGet, address []byte, rowid *sql.NullInt64, 
 	return nil
 }
 
-// simulate INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)
+// INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)
 func kvInsertAccount(kv kvWrite, address []byte, normBalance uint64, data []byte) (sql.Result, error) {
 	// write account data KV
 	err := kv.Set(accountKey(address), data)
@@ -298,14 +346,13 @@ type accountIterator interface {
 }
 
 type kvAccountIterator struct {
-	first bool
-	it    kvstore.Iterator
+	called bool
+	it     kvstore.Iterator
 }
 
 func newKVAccountIterator(kv kvRead) *kvAccountIterator {
 	return &kvAccountIterator{
-		first: true,
-		it:    kv.NewIterator([]byte(kvPrefixAccount), []byte(kvPrefixAccountEndRange), false),
+		it: kv.NewIterator([]byte(kvPrefixAccount), []byte(kvPrefixAccountEndRange), false),
 	}
 }
 func (i *kvAccountIterator) Err() error { return nil }
@@ -315,8 +362,8 @@ func (i *kvAccountIterator) Close() error {
 }
 
 func (i *kvAccountIterator) Next() bool {
-	if i.first {
-		i.first = false
+	if !i.called {
+		i.called = true
 	} else {
 		i.it.Next()
 	}
@@ -347,7 +394,7 @@ func (i *kvAccountIterator) Scan(args ...interface{}) error {
 	return nil
 }
 
-// simulate tx.Query("SELECT address, data FROM accountbase WHERE normalizedonlinebalance>0 ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?", n, offset)
+// "SELECT address, data FROM accountbase WHERE normalizedonlinebalance>0 ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?", n, offset
 func kvTopAccounts(kv kvRead, offset, maxResults uint64) (accountIterator, error) {
 	// reverse iterate over range starting from prefix for "balance 1" (0x0...01) to end of keyspace
 	iter := kv.NewIterator(
@@ -357,12 +404,12 @@ func kvTopAccounts(kv kvRead, offset, maxResults uint64) (accountIterator, error
 	for i := uint64(0); i < offset && iter.Valid(); i++ { // simulate OFFSET
 		iter.Next()
 	}
-	return &kvAccountBalanceIterator{kv: kv, first: true, it: iter, maxResults: maxResults}, nil
+	return &kvAccountBalanceIterator{kv: kv, it: iter, maxResults: maxResults}, nil
 }
 
 type kvAccountBalanceIterator struct {
 	kv         kvRead
-	first      bool
+	called     bool
 	it         kvstore.Iterator
 	cnt        uint64
 	maxResults uint64
@@ -375,8 +422,8 @@ func (i *kvAccountBalanceIterator) Close() error {
 }
 
 func (i *kvAccountBalanceIterator) Next() bool {
-	if i.first {
-		i.first = false
+	if !i.called {
+		i.called = true
 	} else {
 		i.it.Next()
 	}
@@ -479,18 +526,18 @@ func kvPutAccountsTotals(kv kvWrite, idKey string, totals ledgercore.AccountTota
 	return kv.Set(accountsTotalsKey(idKey), protocol.Encode(&totals))
 }
 
-// simulate "INSERT INTO assetcreators (asset, creator, ctype) VALUES (?, ?, ?)"
+// "INSERT INTO assetcreators (asset, creator, ctype) VALUES (?, ?, ?)"
 func kvInsertAssetCreators(kv kvWrite, cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) error {
 	return kv.Set(assetCreatorsKey(ctype, cidx), creator)
 }
 
-// simulate "DELETE FROM assetcreators WHERE asset=? AND ctype=?"
+// "DELETE FROM assetcreators WHERE asset=? AND ctype=?"
 func kvDeleteAssetCreators(kv kvWrite, cidx basics.CreatableIndex, ctype basics.CreatableType) error {
 	return kv.Delete(assetCreatorsKey(ctype, cidx))
 }
 
 type kvCreatableIterator struct {
-	first      bool
+	called     bool
 	it         kvstore.Iterator
 	snap       kvstore.Snapshot
 	round      basics.Round
@@ -506,8 +553,8 @@ func (i *kvCreatableIterator) Close() error {
 }
 
 func (i *kvCreatableIterator) Next() bool {
-	if i.first {
-		i.first = false
+	if !i.called {
+		i.called = true
 	} else {
 		i.it.Next()
 	}
@@ -549,7 +596,7 @@ func (i *kvCreatableIterator) Scan(args ...interface{}) error {
 	return nil
 }
 
-// simulate "SELECT rnd, asset, creator FROM acctrounds LEFT JOIN assetcreators ON assetcreators.asset <= ? AND assetcreators.ctype = ? WHERE acctrounds.id='acctbase' ORDER BY assetcreators.asset desc LIMIT ?"
+// "SELECT rnd, asset, creator FROM acctrounds LEFT JOIN assetcreators ON assetcreators.asset <= ? AND assetcreators.ctype = ? WHERE acctrounds.id='acctbase' ORDER BY assetcreators.asset desc LIMIT ?"
 func kvListCreatables(kv kvSnapshottableRead, maxIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) (accountIterator, error) {
 	// make read snapshot so that get for round number is consistent with iterator
 	snap := kv.NewSnapshot()
@@ -563,7 +610,6 @@ func kvListCreatables(kv kvSnapshottableRead, maxIdx basics.CreatableIndex, maxR
 		assetCreatorsKey(ctype, basics.CreatableIndex(maxIdx+1)),
 		true)
 	return &kvCreatableIterator{
-		first:      true,
 		it:         iter,
 		maxResults: maxResults,
 		snap:       snap,
@@ -571,7 +617,7 @@ func kvListCreatables(kv kvSnapshottableRead, maxIdx basics.CreatableIndex, maxR
 	}, nil
 }
 
-// simulate "SELECT rnd, creator FROM acctrounds LEFT JOIN assetcreators ON asset = ? AND ctype = ? WHERE id='acctbase'"
+// "SELECT rnd, creator FROM acctrounds LEFT JOIN assetcreators ON asset = ? AND ctype = ? WHERE id='acctbase'"
 func kvLookupCreator(kv kvMultiGet, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Round, []byte, error) {
 	// atomic multiget of round number and creator data
 	vals, err := kv.MultiGet([][]byte{accountRoundsKey("acctbase"), assetCreatorsKey(ctype, cidx)})
@@ -584,7 +630,7 @@ func kvLookupCreator(kv kvMultiGet, cidx basics.CreatableIndex, ctype basics.Cre
 	return basics.Round(binary.BigEndian.Uint64(vals[0])), vals[1], nil
 }
 
-// DELETE FROM accounthashes
+// "DELETE FROM accounthashes"
 func kvResetAccountHashes(kv kvWrite) error {
 	return kv.DeleteRange([]byte(kvPrefixAccountHashes), []byte(kvPrefixAccountHashesEndRange))
 }
@@ -609,4 +655,182 @@ func kvGetAccountHashes(kv kvRead, table string, page uint64) ([]byte, error) {
 		return nil, err
 	}
 	return ret, nil
+}
+
+// "DELETE FROM storedcatchpoints WHERE round=?"
+func kvDeleteStoredCatchpoint(kv kvWrite, round basics.Round) error {
+	return kv.Delete(storedCatchpointsKey(round))
+}
+
+type kvStoredCatchpointValue struct {
+	_struct    struct{} `codec:",omitempty,omitemptyarray"`
+	FileName   string   `codec:"fn"`
+	Catchpoint string   `codec:"cp"`
+	FileSize   int64    `codec:"fs"`
+}
+
+// "INSERT INTO storedcatchpoints(round, filename, catchpoint, filesize, pinned) VALUES(?, ?, ?, ?, 0)"
+func kvInsertStoredCatchpoint(kv kvWrite, round basics.Round, fileName string, catchpoint string, fileSize int64) error {
+	buf := protocol.Encode(&kvStoredCatchpointValue{FileName: fileName, Catchpoint: catchpoint, FileSize: fileSize})
+	return kv.Set(storedCatchpointsKey(round), buf)
+}
+
+// "SELECT filename, catchpoint, filesize FROM storedcatchpoints WHERE round=?"
+func kvGetStoredCatchpoint(kv kvRead, round basics.Round) (fileName string, catchpoint string, fileSize int64, err error) {
+	var enc []byte
+	enc, err = kv.Get(storedCatchpointsKey(round))
+	if err != nil {
+		if errors.Is(err, kvstore.ErrKeyNotFound) {
+			err = sql.ErrNoRows
+			return
+		}
+		return
+	}
+	var sc kvStoredCatchpointValue
+	err = protocol.Decode(enc, &sc)
+	if err != nil {
+		return
+	}
+	return sc.FileName, sc.Catchpoint, sc.FileSize, nil
+}
+
+type oldestCatchpointFilesIterator struct {
+	called     bool
+	it         kvstore.Iterator
+	cnt        uint64
+	maxResults uint64
+}
+
+// "SELECT round, filename FROM storedcatchpoints WHERE pinned = 0 and round <= COALESCE((SELECT round FROM storedcatchpoints WHERE pinned = 0 ORDER BY round DESC LIMIT ?, 1),0) ORDER BY round ASC LIMIT ?"
+func kvGetOldestCatchpointFiles(kv kvRead, filesToKeep int, fileCount int) (accountIterator, error) {
+	// inner query: SELECT round FROM sc ORDER BY round DESC limit 1 OFFSET filesToKeep
+	// reverse iterate over whole keyspace (largest round number first)
+	iter := kv.NewIterator([]byte(kvPrefixStoredCatchpoints), []byte(kvPrefixStoredCatchpointsEndRange), true)
+	i := 0
+	for ; i < filesToKeep && iter.Valid(); i++ {
+		iter.Next()
+	}
+	// round used for "round <= COALESCE(...)"
+	lessThanRound := uint64(0)
+	if iter.Valid() && i == filesToKeep {
+		rnd, err := splitStoredCatchpointsKey(iter.Key())
+		if err != nil {
+			return nil, err
+		}
+		lessThanRound = rnd
+	}
+	iter.Close()
+
+	// outer query: SELECT round, filename FROM storedcatchpoints WHERE round <= lessThanRound ORDER BY round ASC LIMIT fileCount
+	return &oldestCatchpointFilesIterator{
+		it:         kv.NewIterator([]byte(kvPrefixStoredCatchpoints), storedCatchpointsKey(basics.Round(lessThanRound)+1), false),
+		maxResults: uint64(fileCount),
+	}, nil
+}
+
+func (i *oldestCatchpointFilesIterator) Err() error { return nil }
+func (i *oldestCatchpointFilesIterator) Close() error {
+	i.it.Close()
+	return nil
+}
+
+func (i *oldestCatchpointFilesIterator) Next() bool {
+	if !i.called {
+		i.called = true
+	} else {
+		i.it.Next()
+	}
+	// stop being valid after maxResults is met
+	i.cnt++
+	if i.cnt > i.maxResults {
+		return false
+	}
+	return i.it.Valid()
+}
+
+func (i *oldestCatchpointFilesIterator) Scan(args ...interface{}) error {
+	// round *basics.Round, fileName *string
+	if len(args) != 2 {
+		return fmt.Errorf("oldestCatchpointFilesIterator Scan args should be 2, got %d", len(args))
+	}
+	outRound := (args[0]).(*basics.Round)
+	outFilename := (args[1]).(*string)
+
+	rnd, err := splitStoredCatchpointsKey(i.it.Key())
+	if err != nil {
+		return err
+	}
+	enc, err := i.it.Value()
+	if err != nil {
+		return err
+	}
+	var sc kvStoredCatchpointValue
+	err = protocol.Decode(enc, &sc)
+	if err != nil {
+		return err
+	}
+
+	*outRound = basics.Round(rnd)
+	*outFilename = sc.FileName
+	return nil
+}
+
+type kvCatchpointStateValue struct {
+	_struct  struct{} `codec:",omitempty,omitemptyarray"`
+	StrVal   string   `codec:"s"`
+	StrValid bool     `codec:"sv"`
+	IntVal   int64    `codec:"i"`
+	IntValid bool     `codec:"iv"`
+}
+
+// "DELETE FROM catchpointstate WHERE id=?"
+func kvDeleteCatchpointState(kv kvWrite, id string) error {
+	return kv.Delete(catchpointStateKey(id))
+}
+
+// "SELECT intval FROM catchpointstate WHERE id=?"
+func kvGetCatchpointStateUint64(kv kvRead, id string) (ret sql.NullInt64, err error) {
+	cs, err := kvGetCatchpointState(kv, id)
+	if err != nil {
+		return
+	}
+	return sql.NullInt64{Int64: cs.IntVal, Valid: cs.IntValid}, nil
+}
+
+// "SELECT strval FROM catchpointstate WHERE id=?"
+func kvGetCatchpointStateString(kv kvRead, id string) (ret sql.NullString, err error) {
+	cs, err := kvGetCatchpointState(kv, id)
+	if err != nil {
+		return
+	}
+	return sql.NullString{String: cs.StrVal, Valid: cs.StrValid}, nil
+}
+
+func kvGetCatchpointState(kv kvRead, id string) (*kvCatchpointStateValue, error) {
+	enc, err := kv.Get(catchpointStateKey(id))
+	if err != nil {
+		if errors.Is(err, kvstore.ErrKeyNotFound) {
+			err = sql.ErrNoRows
+			return nil, err
+		}
+		return nil, err
+	}
+	var cs kvCatchpointStateValue
+	err = protocol.Decode(enc, &cs)
+	if err != nil {
+		return nil, err
+	}
+	return &cs, nil
+}
+
+// "INSERT OR REPLACE INTO catchpointstate(id, strval) VALUES(?, ?)")
+func kvInsertCatchpointStateString(kv kvWrite, id string, val string) error {
+	cs := kvCatchpointStateValue{StrVal: val, StrValid: true}
+	return kv.Set(catchpointStateKey(id), protocol.Encode(&cs))
+}
+
+// "INSERT OR REPLACE INTO catchpointstate(id, intval) VALUES(?, ?)")
+func kvInsertCatchpointStateUint64(kv kvWrite, id string, val uint64) error {
+	cs := kvCatchpointStateValue{IntVal: int64(val), IntValid: true} // XXX converts uint64 to int64 same as SQLite schema
+	return kv.Set(catchpointStateKey(id), protocol.Encode(&cs))
 }
