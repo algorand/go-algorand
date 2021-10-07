@@ -19,25 +19,15 @@ package ledgercore
 import (
 	"fmt"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/transactions"
 )
 
 // FoundAddress is a wrapper for an address and a boolean.
 type FoundAddress struct {
 	Address basics.Address
 	Exists  bool
-}
-
-// LedgerForCowBase represents subset of Ledger functionality needed for cow business
-type LedgerForCowBase interface {
-	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
-	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, Txlease) error
-	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
-	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 }
 
 // ParticipantsArray implements merklearray.Array and is used to commit

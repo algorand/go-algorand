@@ -37,6 +37,14 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
+// LedgerForCowBase represents subset of Ledger functionality needed for cow business
+type LedgerForCowBase interface {
+	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
+	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
+	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
+	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
+}
+
 // ErrRoundZero is self-explanatory
 var ErrRoundZero = errors.New("cannot start evaluator for round 0")
 
@@ -55,11 +63,8 @@ type creatable struct {
 	ctype  basics.CreatableType
 }
 
-// ledgerForCowBase is redeclared internally here.
-type ledgerForCowBase ledgercore.LedgerForCowBase
-
 type roundCowBase struct {
-	l ledgerForCowBase
+	l LedgerForCowBase
 
 	// The round number of the previous block, for looking up prior state.
 	rnd basics.Round
@@ -381,7 +386,7 @@ type BlockEvaluator struct {
 
 // LedgerForEvaluator defines the ledger interface needed by the evaluator.
 type LedgerForEvaluator interface {
-	ledgercore.LedgerForCowBase
+	LedgerForCowBase
 	GenesisHash() crypto.Digest
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
 	CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error)

@@ -138,7 +138,6 @@ func (eval *testingEvaluator) fillDefaults(txn *txntest.Txn) {
 	if txn.FirstValid == 0 {
 		txn.FirstValid = eval.Round()
 	}
-	//txn.FillDefaults(eval.proto)
 	txn.FillDefaults(eval.ledger.genesisProto)
 }
 

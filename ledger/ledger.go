@@ -690,8 +690,11 @@ func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid b
 	return internal.AcceptableCompactCertWeight(votersHdr, firstValid, logger)
 }
 
+// DebuggerLedger defines the minimal set of method required for creating a debug balances.
+type DebuggerLedger = internal.LedgerForCowBase
+
 // MakeDebugBalances creates a ledger suitable for dryrun and debugger
-func MakeDebugBalances(l ledgercore.LedgerForCowBase, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
+func MakeDebugBalances(l DebuggerLedger, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
 	return internal.MakeDebugBalances(l, round, proto, prevTimestamp)
 }
 
