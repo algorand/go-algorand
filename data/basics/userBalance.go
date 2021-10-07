@@ -397,7 +397,7 @@ func MakeAccountData(status Status, algos MicroAlgos) AccountData {
 	return AccountData{Status: status, MicroAlgos: algos}
 }
 
-// ClearOnlineState sets the appropriate fields to be offline
+// ClearOnlineState resets the account's fields to indicate that the account is an offline account
 func (u *AccountData) ClearOnlineState() {
 	u.Status = Offline
 	u.VoteFirstValid = Round(0)

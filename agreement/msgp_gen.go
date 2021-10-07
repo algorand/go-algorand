@@ -1877,8 +1877,8 @@ func (z *proposal) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
 				return
 			}
-			if zb0008 > config.MaxExpiredAccountsToProcess {
-				err = msgp.ErrOverflow(uint64(zb0008), uint64(config.MaxExpiredAccountsToProcess))
+			if zb0008 > config.MaxProposedExpiredOnlineAccounts {
+				err = msgp.ErrOverflow(uint64(zb0008), uint64(config.MaxProposedExpiredOnlineAccounts))
 				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
 				return
 			}
@@ -2130,8 +2130,8 @@ func (z *proposal) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 					return
 				}
-				if zb0013 > config.MaxExpiredAccountsToProcess {
-					err = msgp.ErrOverflow(uint64(zb0013), uint64(config.MaxExpiredAccountsToProcess))
+				if zb0013 > config.MaxProposedExpiredOnlineAccounts {
+					err = msgp.ErrOverflow(uint64(zb0013), uint64(config.MaxProposedExpiredOnlineAccounts))
 					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 					return
 				}
@@ -3625,8 +3625,8 @@ func (z *transmittedPayload) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
 				return
 			}
-			if zb0008 > config.MaxExpiredAccountsToProcess {
-				err = msgp.ErrOverflow(uint64(zb0008), uint64(config.MaxExpiredAccountsToProcess))
+			if zb0008 > config.MaxProposedExpiredOnlineAccounts {
+				err = msgp.ErrOverflow(uint64(zb0008), uint64(config.MaxProposedExpiredOnlineAccounts))
 				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
 				return
 			}
@@ -3886,8 +3886,8 @@ func (z *transmittedPayload) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 					return
 				}
-				if zb0013 > config.MaxExpiredAccountsToProcess {
-					err = msgp.ErrOverflow(uint64(zb0013), uint64(config.MaxExpiredAccountsToProcess))
+				if zb0013 > config.MaxProposedExpiredOnlineAccounts {
+					err = msgp.ErrOverflow(uint64(zb0013), uint64(config.MaxProposedExpiredOnlineAccounts))
 					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 					return
 				}
@@ -5169,8 +5169,8 @@ func (z *unauthenticatedProposal) UnmarshalMsg(bts []byte) (o []byte, err error)
 				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
 				return
 			}
-			if zb0008 > config.MaxExpiredAccountsToProcess {
-				err = msgp.ErrOverflow(uint64(zb0008), uint64(config.MaxExpiredAccountsToProcess))
+			if zb0008 > config.MaxProposedExpiredOnlineAccounts {
+				err = msgp.ErrOverflow(uint64(zb0008), uint64(config.MaxProposedExpiredOnlineAccounts))
 				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
 				return
 			}
@@ -5422,8 +5422,8 @@ func (z *unauthenticatedProposal) UnmarshalMsg(bts []byte) (o []byte, err error)
 					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 					return
 				}
-				if zb0013 > config.MaxExpiredAccountsToProcess {
-					err = msgp.ErrOverflow(uint64(zb0013), uint64(config.MaxExpiredAccountsToProcess))
+				if zb0013 > config.MaxProposedExpiredOnlineAccounts {
+					err = msgp.ErrOverflow(uint64(zb0013), uint64(config.MaxProposedExpiredOnlineAccounts))
 					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 					return
 				}

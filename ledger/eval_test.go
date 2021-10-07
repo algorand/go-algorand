@@ -2031,7 +2031,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 
 	// Add more than the expected number of accounts
 
-	for i := 0; i < blkEval.proto.MaxExpiredAccountsToProcess+1; i++ {
+	for i := 0; i < blkEval.proto.MaxProposedExpiredOnlineAccounts+1; i++ {
 		badBlock.blk.ExpiredParticipationAccounts = append(badBlock.blk.ExpiredParticipationAccounts, addressToCopy)
 	}
 
@@ -2146,7 +2146,7 @@ func TestExpiredAccountGenerationWithDiskFailure(t *testing.T) {
 	err = eval.endOfBlock()
 	require.Error(t, err)
 
-	err = eval.modifyOfflineAccounts()
+	err = eval.resetExpiredOnlineAccountsParticipationKeys()
 	require.Error(t, err)
 
 }

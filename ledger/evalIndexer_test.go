@@ -231,10 +231,10 @@ func TestEvalForIndexerForExpiredAccounts(t *testing.T) {
 
 	badBlock = block
 
-	// Now we add way too many accounts which will cause modifyOfflineAccounts() to fail
+	// Now we add way too many accounts which will cause resetExpiredOnlineAccountsParticipationKeys() to fail
 	addressToCopy := addrs[0]
 
-	for i := 0; i < proto.MaxExpiredAccountsToProcess+1; i++ {
+	for i := 0; i < proto.MaxProposedExpiredOnlineAccounts+1; i++ {
 		badBlock.ExpiredParticipationAccounts = append(badBlock.ExpiredParticipationAccounts, addressToCopy)
 	}
 

@@ -139,7 +139,7 @@ type (
 		// ExpiredParticipationAccounts contains a list of online accounts
 		// that needs to be converted to offline since their
 		// participation key expired.
-		ExpiredParticipationAccounts []basics.Address `codec:"partupdrmv,allocbound=config.MaxExpiredAccountsToProcess"`
+		ExpiredParticipationAccounts []basics.Address `codec:"partupdrmv,allocbound=config.MaxProposedExpiredOnlineAccounts"`
 	}
 
 	// RewardsState represents the global parameters controlling the rate
