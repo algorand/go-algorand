@@ -400,6 +400,16 @@ func MakeAccountData(status Status, algos MicroAlgos) AccountData {
 	return AccountData{Status: status, MicroAlgos: algos}
 }
 
+// ClearOnlineState resets the account's fields to indicate that the account is an offline account
+func (u *AccountData) ClearOnlineState() {
+	u.Status = Offline
+	u.VoteFirstValid = Round(0)
+	u.VoteLastValid = Round(0)
+	u.VoteKeyDilution = 0
+	u.VoteID = crypto.OneTimeSignatureVerifier{}
+	u.SelectionID = crypto.VRFVerifier{}
+}
+
 // Money returns the amount of MicroAlgos associated with the user's account
 func (u AccountData) Money(proto config.ConsensusParams, rewardsLevel uint64) (money MicroAlgos, rewards MicroAlgos) {
 	e := u.WithUpdatedRewards(proto, rewardsLevel)

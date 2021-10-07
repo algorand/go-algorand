@@ -182,3 +182,70 @@ func TestEvalForIndexerCustomProtocolParams(t *testing.T) {
 	require.Equal(t, 4, len(modifiedTxns))
 	assert.Equal(t, uint64(70), modifiedTxns[3].AssetClosingAmount)
 }
+
+// TestEvalForIndexerForExpiredAccounts tests that the EvalForIndexer function will correctly mark accounts offline
+func TestEvalForIndexerForExpiredAccounts(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genesisBalances, addrs, _ := newTestGenesis()
+
+	var genHash crypto.Digest
+	crypto.RandBytes(genHash[:])
+	block, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture,
+		genesisBalances, "test", genHash)
+
+	dbName := fmt.Sprintf("%s", t.Name())
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(logging.Base(), dbName, true, InitState{
+		Block:       block,
+		Accounts:    genesisBalances.Balances,
+		GenesisHash: genHash,
+	}, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+
+	block = bookkeeping.MakeBlock(block.BlockHeader)
+
+	il := indexerLedgerForEvalImpl{
+		l:           l,
+		latestRound: 0,
+	}
+
+	_, _, err = EvalForIndexer(il, &block, proto)
+	require.NoError(t, err)
+
+	badBlock := block
+	// First validate that bad block is fine if we dont touch it...
+	_, _, err = EvalForIndexer(il, &badBlock, proto)
+	require.NoError(t, err)
+
+	// Introduce an unknown address, but this time the Eval function is called with parameters that
+	// don't necessarily mean that this will cause an error.  Just that an empty address will be added
+	badBlock.ExpiredParticipationAccounts = append(badBlock.ExpiredParticipationAccounts, basics.Address{123})
+
+	_, _, err = EvalForIndexer(il, &badBlock, proto)
+	require.NoError(t, err)
+
+	badBlock = block
+
+	// Now we add way too many accounts which will cause resetExpiredOnlineAccountsParticipationKeys() to fail
+	addressToCopy := addrs[0]
+
+	for i := 0; i < proto.MaxProposedExpiredOnlineAccounts+1; i++ {
+		badBlock.ExpiredParticipationAccounts = append(badBlock.ExpiredParticipationAccounts, addressToCopy)
+	}
+
+	_, _, err = EvalForIndexer(il, &badBlock, proto)
+	require.Error(t, err)
+
+	// Sanity Check
+
+	badBlock = block
+
+	_, _, err = EvalForIndexer(il, &badBlock, proto)
+	require.NoError(t, err)
+
+}
