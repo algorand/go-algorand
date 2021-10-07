@@ -1123,7 +1123,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	ledgerAccountsinitCount.Inc(nil)
 	err = atomicWrites(au.dbs.Wdb, au.kv, func(ctx context.Context, tx *atomicWriteTx) error {
 		var err0 error
-		au.dbRound, err0 = au.accountsInitialize(ctx, tx, au.kv)
+		au.dbRound, err0 = au.accountsInitialize(ctx, tx, tx.kvRead)
 		if err0 != nil {
 			return err0
 		}
@@ -1134,14 +1134,14 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 			if err0 != nil {
 				return err0
 			}
-			au.dbRound, err0 = au.accountsInitialize(ctx, tx, au.kv)
+			au.dbRound, err0 = au.accountsInitialize(ctx, tx, tx.kvRead)
 			if err0 != nil {
 				return err0
 			}
 		}
 
 		tx.writeBarrier() // XXX assuming this is needed for accountsTotals read below
-		totals, err0 := accountsTotals(au.kv, false)
+		totals, err0 := accountsTotals(tx.kvRead, false)
 		if err0 != nil {
 			return err0
 		}
@@ -1277,7 +1277,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *atomicWrit
 		tx.writeBarrier()
 	}
 
-	rnd, hashRound, err := accountsRound(au.kv)
+	rnd, hashRound, err := accountsRound(tx.kvRead)
 	if err != nil {
 		return 0, err
 	}
@@ -1298,7 +1298,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *atomicWrit
 	}
 
 	// create the merkle trie for the balances
-	committer, err := MakeMerkleCommitter(au.kv, tx.kvWrite, false)
+	committer, err := MakeMerkleCommitter(tx.kvRead, tx.kvWrite, false)
 	if err != nil {
 		return 0, fmt.Errorf("accountsInitialize was unable to makeMerkleCommitter: %v", err)
 	}
@@ -1320,7 +1320,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *atomicWrit
 		tx.writeBarrier()
 
 		au.log.Infof("accountsInitialize rebuilding merkle trie for round %d", rnd)
-		accountBuilderIt := makeOrderedAccountsIter(tx.sqlTx, au.kv, trieRebuildAccountChunkSize)
+		accountBuilderIt := makeOrderedAccountsIter(tx.sqlTx, tx.kvRead, trieRebuildAccountChunkSize)
 		defer accountBuilderIt.Close(ctx)
 		startTrieBuildTime := time.Now()
 		accountsCount := 0
@@ -1384,7 +1384,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *atomicWrit
 		}
 
 		// we've just updated the merkle trie, update the hashRound to reflect that.
-		err = updateAccountsRound(au.kv, tx.kvWrite, rnd, rnd) // XXX doesn't read from current KV batch
+		err = updateAccountsRound(tx.kvRead, tx.kvWrite, rnd, rnd) // XXX doesn't read from current KV batch
 		if err != nil {
 			return 0, fmt.Errorf("accountsInitialize was unable to update the account round to %d: %v", rnd, err)
 		}
@@ -2178,7 +2178,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	err := atomicWrites(au.dbs.Wdb, au.kv, func(ctx context.Context, tx *atomicWriteTx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
-			mc, err0 := MakeMerkleCommitter(au.kv, tx.kvWrite, false)
+			mc, err0 := MakeMerkleCommitter(tx.kvRead, tx.kvWrite, false)
 			if err0 != nil {
 				return err0
 			}
@@ -2202,7 +2202,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 
 		// XXX this doesn't really belong in the write transaction (?)
-		err = compactDeltas.accountsLoadOld(au.kv)
+		err = compactDeltas.accountsLoadOld(tx.kvRead)
 		if err != nil {
 			return err
 		}
@@ -2212,7 +2212,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 
 		// totalsNewRounds reads totals KV and then overwrites it
-		err = totalsNewRounds(au.kv, tx.kvWrite, deltas[:offset], compactDeltas, roundTotals[1:offset+1], config.Consensus[consensusVersion])
+		err = totalsNewRounds(tx.kvRead, tx.kvWrite, deltas[:offset], compactDeltas, roundTotals[1:offset+1], config.Consensus[consensusVersion])
 		if err != nil {
 			return err
 		}
@@ -2244,7 +2244,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 
 		// XXX passing in KV reader that can't see current batch -- needs barrier?
-		err = updateAccountsRound(au.kv, tx.kvWrite, dbRound+basics.Round(offset), treeTargetRound)
+		err = updateAccountsRound(tx.kvRead, tx.kvWrite, dbRound+basics.Round(offset), treeTargetRound)
 		if err != nil {
 			return err
 		}

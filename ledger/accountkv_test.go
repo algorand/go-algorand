@@ -25,7 +25,7 @@ func beginWriteTx(t testing.TB, dbs db.Pair, kv kvstore.KVStore) (*atomicWriteTx
 	if err != nil {
 		return nil, err
 	}
-	return &atomicWriteTx{sqlTx: tx, kvWrite: kv.NewBatch(), kv: kv}, nil
+	return &atomicWriteTx{sqlTx: tx, kvWrite: kv.NewBatch(), kvRead: &kvLogReader{kv: kv}}, nil
 }
 
 type readTx struct {

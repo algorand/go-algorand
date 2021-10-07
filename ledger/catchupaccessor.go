@@ -475,7 +475,7 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 
 		err := atomicWrites(wdb, kv, func(transactionCtx context.Context, tx *atomicWriteTx) (err error) {
 			// create the merkle trie for the balances
-			mc, err = MakeMerkleCommitter(kv, tx.kvWrite, true)
+			mc, err = MakeMerkleCommitter(tx.kvRead, tx.kvWrite, true)
 			if err != nil {
 				return
 			}
@@ -530,7 +530,7 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 				err = atomicWrites(wdb, kv, func(transactionCtx context.Context, tx *atomicWriteTx) (err error) {
 					// set a long 30-second window for the evict before warning is generated.
 					db.ResetTransactionWarnDeadline(transactionCtx, tx.sqlTx, time.Now().Add(30*time.Second))
-					mc, err = MakeMerkleCommitter(kv, tx.kvWrite, true)
+					mc, err = MakeMerkleCommitter(tx.kvRead, tx.kvWrite, true)
 					if err != nil {
 						return
 					}
@@ -559,7 +559,7 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 			err = atomicWrites(wdb, kv, func(transactionCtx context.Context, tx *atomicWriteTx) (err error) {
 				// set a long 30-second window for the evict before warning is generated.
 				db.ResetTransactionWarnDeadline(transactionCtx, tx.sqlTx, time.Now().Add(30*time.Second))
-				mc, err = MakeMerkleCommitter(kv, tx.kvWrite, true)
+				mc, err = MakeMerkleCommitter(tx.kvRead, tx.kvWrite, true)
 				if err != nil {
 					return
 				}
@@ -785,7 +785,7 @@ func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 		}
 
 		// XXX need write barrier here for read?
-		totals, err = accountsTotals(kv, true)
+		totals, err = accountsTotals(tx.kvRead, true)
 		if err != nil {
 			return err
 		}

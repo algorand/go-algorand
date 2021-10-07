@@ -9,6 +9,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/kvstore"
@@ -135,17 +136,30 @@ type kvWrite interface {
 
 type atomicWriteTx struct {
 	sqlTx   *sql.Tx
-	kv      kvstore.KVStore
 	kvWrite kvWrite
-	//kvRead  kvRead // a reader that lets reads through and logs them, to spot when they are happening during a tx
+	kvRead  kvRead // kvLogReader
 }
 
 type atomicReadTx struct {
 	sqlTx   *sql.Tx
 	kvRead  kvRead
-	kvWrite kvWrite // a writer that always logs and returns an error
+	kvWrite kvWrite // kvErrWriter
 }
 
+// a reader for atomicWriteTx that performs and logs reads, to help identify reads that might be assuming SQL transaction behavior
+type kvLogReader struct{ kv kvRead }
+
+func (r *kvLogReader) Get(key []byte) ([]byte, error) {
+	buf, err := r.kv.Get(key)
+	logging.Base().Warnf("atomicWriteTx.kvRead making GET %v: %v", key, err)
+	return buf, err
+}
+func (r *kvLogReader) NewIterator(start, end []byte, reverse bool) kvstore.Iterator {
+	logging.Base().Warnf("atomicWriteTx.kvRead making NewIterator %v %v %v", start, end, reverse)
+	return r.kv.NewIterator(start, end, reverse)
+}
+
+// a writer for atomicReadTx that always returns an error
 type kvErrWriter struct{}
 
 var errKVReadOnlyTxn = errors.New("attempt to write from read-only txn")
@@ -158,7 +172,7 @@ func (kvErrWriter) DeleteRange(start, end []byte) error { return errKVReadOnlyTx
 func atomicWrites(db db.Accessor, kv kvstore.KVStore, f func(context.Context, *atomicWriteTx) error) error {
 	return db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		batch := kv.NewBatch()
-		atx := &atomicWriteTx{sqlTx: tx, kvWrite: batch, kv: kv} //, kvRead: au.kv}
+		atx := &atomicWriteTx{sqlTx: tx, kvWrite: batch, kvRead: &kvLogReader{kv: kv}}
 		err := f(ctx, atx)
 		// KV commit before learning if SQL commit succeeded (XXX switch?)
 		if err == nil {
