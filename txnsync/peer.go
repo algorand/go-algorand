@@ -452,13 +452,13 @@ scanLoop:
 		// add the size of the transaction group
 		accumulatedSize += pendingTransactions[grpIdx].EncodedLength
 
-		if accumulatedSize > windowLengthBytes && p.state != peerStateProposal {
+		if accumulatedSize > windowLengthBytes {
 			windowSizedReached = true
 		}
 	}
 
 	if p.state == peerStateProposal {
-		logging.Base().Infof("proposal size: %v bytes", accumulatedSize)
+		logging.Base().Infof("proposal size: %v bytes, txns: %v bytes", currentMessageSize, accumulatedSize)
 	}
 
 	p.lastSelectedTransactionsCount = len(selectedTxnIDs)
