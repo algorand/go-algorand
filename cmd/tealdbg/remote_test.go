@@ -28,9 +28,11 @@ import (
 
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestRemoteAdapterHandlers(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	d := MakeDebugger()
 	a := MakeRemoteHook(d)
 	router := mux.NewRouter()

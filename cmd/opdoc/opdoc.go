@@ -75,12 +75,20 @@ func integerConstantsTableMarkdown(out io.Writer) {
 }
 
 func fieldTableMarkdown(out io.Writer, names []string, types []logic.StackType, extra map[string]string) {
-	fmt.Fprintf(out, "| Index | Name | Type | Notes |\n")
-	fmt.Fprintf(out, "| --- | --- | --- | --- |\n")
+	if types != nil {
+		fmt.Fprintf(out, "| Index | Name | Type | Notes |\n")
+		fmt.Fprintf(out, "| --- | --- | --- | --- |\n")
+	} else {
+		fmt.Fprintf(out, "| Index | Name | Notes |\n")
+		fmt.Fprintf(out, "| --- | --- | --- |\n")
+	}
 	for i, name := range names {
-		gfType := types[i]
-		estr := extra[name]
-		fmt.Fprintf(out, "| %d | %s | %s | %s |\n", i, markdownTableEscape(name), markdownTableEscape(gfType.String()), estr)
+		str := fmt.Sprintf("| %d | %s", i, markdownTableEscape(name))
+		if types != nil {
+			gfType := types[i]
+			str = fmt.Sprintf("%s | %s", str, markdownTableEscape(gfType.String()))
+		}
+		fmt.Fprintf(out, "%s | %s |\n", str, extra[name])
 	}
 	out.Write([]byte("\n"))
 }
@@ -102,12 +110,17 @@ func assetHoldingFieldsMarkdown(out io.Writer) {
 
 func assetParamsFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`asset_params_get` Fields:\n\n")
-	fieldTableMarkdown(out, logic.AssetParamsFieldNames, logic.AssetParamsFieldTypes, logic.AssetParamsFieldDocs)
+	fieldTableMarkdown(out, logic.AssetParamsFieldNames, logic.AssetParamsFieldTypes, logic.AssetParamsFieldDocs())
 }
 
 func appParamsFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`app_params_get` Fields:\n\n")
-	fieldTableMarkdown(out, logic.AppParamsFieldNames, logic.AppParamsFieldTypes, logic.AppParamsFieldDocs)
+	fieldTableMarkdown(out, logic.AppParamsFieldNames, logic.AppParamsFieldTypes, logic.AppParamsFieldDocs())
+}
+
+func ecDsaCurvesMarkdown(out io.Writer) {
+	fmt.Fprintf(out, "\n`ECDSA` Curves:\n\n")
+	fieldTableMarkdown(out, logic.EcdsaCurveNames, nil, logic.EcdsaCurveDocs)
 }
 
 func immediateMarkdown(op *logic.OpSpec) string {
@@ -159,7 +172,11 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 			if cost.From == cost.To {
 				fmt.Fprintf(out, "   - %d (LogicSigVersion = %d)\n", cost.Cost, cost.To)
 			} else {
-				fmt.Fprintf(out, "   - %d (%d <= LogicSigVersion <= %d)\n", cost.Cost, cost.From, cost.To)
+				if cost.To < logic.LogicVersion {
+					fmt.Fprintf(out, "   - %d (%d <= LogicSigVersion <= %d)\n", cost.Cost, cost.From, cost.To)
+				} else {
+					fmt.Fprintf(out, "   - %d (LogicSigVersion >= %d)\n", cost.Cost, cost.From)
+				}
 			}
 		}
 	} else {
@@ -186,6 +203,8 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 		assetParamsFieldsMarkdown(out)
 	} else if op.Name == "app_params_get" {
 		appParamsFieldsMarkdown(out)
+	} else if strings.HasPrefix(op.Name, "ecdsa") {
+		ecDsaCurvesMarkdown(out)
 	}
 	ode := logic.OpDocExtra(op.Name)
 	if ode != "" {
@@ -238,7 +257,7 @@ func argEnum(name string) []string {
 	if name == "global" {
 		return logic.GlobalFieldNames
 	}
-	if name == "txna" || name == "gtxna" || name == "gtxnsa" {
+	if name == "txna" || name == "gtxna" || name == "gtxnsa" || name == "txnas" || name == "gtxnas" || name == "gtxnsas" {
 		return logic.TxnaFieldNames
 	}
 	if name == "asset_holding_get" {
@@ -282,7 +301,7 @@ func argEnumTypes(name string) string {
 	if name == "global" {
 		return typeString(logic.GlobalFieldTypes)
 	}
-	if name == "txna" || name == "gtxna" || name == "gtxnsa" {
+	if name == "txna" || name == "gtxna" || name == "gtxnsa" || name == "txnas" || name == "gtxnas" || name == "gtxnsas" {
 		return typeString(logic.TxnaFieldTypes)
 	}
 	if name == "asset_holding_get" {
@@ -354,11 +373,11 @@ func main() {
 	assetholding.Close()
 
 	assetparams, _ := os.Create("asset_params_fields.md")
-	fieldTableMarkdown(assetparams, logic.AssetParamsFieldNames, logic.AssetParamsFieldTypes, logic.AssetParamsFieldDocs)
+	fieldTableMarkdown(assetparams, logic.AssetParamsFieldNames, logic.AssetParamsFieldTypes, logic.AssetParamsFieldDocs())
 	assetparams.Close()
 
 	appparams, _ := os.Create("app_params_fields.md")
-	fieldTableMarkdown(appparams, logic.AppParamsFieldNames, logic.AppParamsFieldTypes, logic.AppParamsFieldDocs)
+	fieldTableMarkdown(appparams, logic.AppParamsFieldNames, logic.AppParamsFieldTypes, logic.AppParamsFieldDocs())
 	appparams.Close()
 
 	langspecjs, _ := os.Create("langspec.json")

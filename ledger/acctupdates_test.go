@@ -54,7 +54,20 @@ type mockLedgerForTracker struct {
 	consensusParams config.ConsensusParams
 }
 
-func makeMockLedgerForTracker(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion) *mockLedgerForTracker {
+func accumulateTotals(t testing.TB, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, rewardLevel uint64) (totals ledgercore.AccountTotals) {
+	var ot basics.OverflowTracker
+	proto := config.Consensus[consensusVersion]
+	totals.RewardsLevel = rewardLevel
+	for _, ar := range accts {
+		for _, data := range ar {
+			totals.AddAccount(proto, data, &ot)
+		}
+	}
+	require.False(t, ot.Overflowed)
+	return
+}
+
+func makeMockLedgerForTracker(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData) *mockLedgerForTracker {
 	dbs, fileName := dbOpenTest(t, inMemory)
 	dblogger := logging.TestingLog(t)
 	dblogger.SetLevel(logging.Info)
@@ -63,8 +76,12 @@ func makeMockLedgerForTracker(t testing.TB, inMemory bool, initialBlocksCount in
 
 	blocks := randomInitChain(consensusVersion, initialBlocksCount)
 	deltas := make([]ledgercore.StateDelta, initialBlocksCount)
+	totals := accumulateTotals(t, consensusVersion, accts, 0)
 	for i := range deltas {
-		deltas[i] = ledgercore.StateDelta{Hdr: &bookkeeping.BlockHeader{}}
+		deltas[i] = ledgercore.StateDelta{
+			Hdr:    &bookkeeping.BlockHeader{},
+			Totals: totals,
+		}
 	}
 	consensusParams := config.Consensus[consensusVersion]
 	return &mockLedgerForTracker{dbs: dbs, log: dblogger, filename: fileName, inMemory: inMemory, blocks: blocks, deltas: deltas, consensusParams: consensusParams}
@@ -317,9 +334,6 @@ func TestAcctUpdates(t *testing.T) {
 	}
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion)
-	defer ml.Close()
-
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 	rewardsLevels := []uint64{0}
 
@@ -332,6 +346,9 @@ func TestAcctUpdates(t *testing.T) {
 	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
+
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
+	defer ml.Close()
 
 	au := &accountUpdates{}
 	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
@@ -378,6 +395,7 @@ func TestAcctUpdates(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
@@ -403,9 +421,6 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	}
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion)
-	defer ml.Close()
-
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 	rewardsLevels := []uint64{0}
 
@@ -418,6 +433,9 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
+
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
+	defer ml.Close()
 
 	au := &accountUpdates{}
 	conf := config.GetDefaultLocal()
@@ -494,9 +512,6 @@ func BenchmarkBalancesChanges(b *testing.B) {
 
 	initialRounds := uint64(1)
 
-	ml := makeMockLedgerForTracker(b, true, int(initialRounds), protocolVersion)
-	defer ml.Close()
-
 	accountsCount := 5000
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount, true)}
 	rewardsLevels := []uint64{0}
@@ -510,6 +525,9 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
+
+	ml := makeMockLedgerForTracker(b, true, int(initialRounds), protocolVersion, accts)
+	defer ml.Close()
 
 	au := &accountUpdates{}
 	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
@@ -626,8 +644,6 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		os.RemoveAll("./catchpoints")
 	}()
 
-	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion)
-	defer ml.Close()
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(100000, true)}
 	rewardsLevels := []uint64{0}
 
@@ -640,6 +656,9 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
+
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, accts)
+	defer ml.Close()
 
 	au := &accountUpdates{}
 	conf := config.GetDefaultLocal()
@@ -717,9 +736,6 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 	inMemory := true
 
 	testFunction := func(t *testing.T) {
-		ml := makeMockLedgerForTracker(t, inMemory, 10, testProtocolVersion)
-		defer ml.Close()
-
 		accts := []map[basics.Address]basics.AccountData{randomAccounts(9, true)}
 
 		pooldata := basics.AccountData{}
@@ -731,6 +747,9 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
 		sinkdata.Status = basics.NotParticipating
 		accts[0][testSinkAddr] = sinkdata
+
+		ml := makeMockLedgerForTracker(t, inMemory, 10, testProtocolVersion, accts)
+		defer ml.Close()
 
 		var moneyAccounts []basics.Address
 
@@ -878,11 +897,11 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 
-	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion)
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
 	defer ml.Close()
 
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 	au := &accountUpdates{}
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
@@ -1116,10 +1135,11 @@ func TestGetCatchpointStream(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion)
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
+
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
 	defer ml.Close()
 
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 	au := &accountUpdates{}
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
@@ -1226,9 +1246,6 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	ml := makeMockLedgerForTracker(b, true, 10, protocol.ConsensusCurrentVersion)
-	defer ml.Close()
-
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(5, true)}
 
 	pooldata := basics.AccountData{}
@@ -1240,6 +1257,9 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
+
+	ml := makeMockLedgerForTracker(b, true, 10, protocol.ConsensusCurrentVersion, accts)
+	defer ml.Close()
 
 	au := &accountUpdates{}
 	cfg := config.GetDefaultLocal()
@@ -1286,9 +1306,6 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 func BenchmarkLargeCatchpointWriting(b *testing.B) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	ml := makeMockLedgerForTracker(b, true, 10, protocol.ConsensusCurrentVersion)
-	defer ml.Close()
-
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(5, true)}
 
 	pooldata := basics.AccountData{}
@@ -1300,6 +1317,9 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
+
+	ml := makeMockLedgerForTracker(b, true, 10, protocol.ConsensusCurrentVersion, accts)
+	defer ml.Close()
 
 	au := &accountUpdates{}
 	cfg := config.GetDefaultLocal()
@@ -1458,9 +1478,6 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		delete(config.Consensus, testProtocolVersion)
 	}()
 
-	ml := makeMockLedgerForTracker(t, false, 1, testProtocolVersion)
-	defer ml.Close()
-
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 	rewardsLevels := []uint64{0}
 
@@ -1473,6 +1490,9 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
+
+	ml := makeMockLedgerForTracker(t, false, 1, testProtocolVersion, accts)
+	defer ml.Close()
 
 	au := &accountUpdates{}
 	cfg := config.GetDefaultLocal()
@@ -1572,12 +1592,8 @@ func TestCachesInitialization(t *testing.T) {
 	proto := config.Consensus[protocolVersion]
 
 	initialRounds := uint64(1)
-
-	ml := makeMockLedgerForTracker(t, true, int(initialRounds), protocolVersion)
-	ml.log.SetLevel(logging.Warn)
-	defer ml.Close()
-
 	accountsCount := 5
+
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount, true)}
 	rewardsLevels := []uint64{0}
 
@@ -1590,6 +1606,10 @@ func TestCachesInitialization(t *testing.T) {
 	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
+
+	ml := makeMockLedgerForTracker(t, true, int(initialRounds), protocolVersion, accts)
+	ml.log.SetLevel(logging.Warn)
+	defer ml.Close()
 
 	au := &accountUpdates{}
 	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
@@ -1629,6 +1649,7 @@ func TestCachesInitialization(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
 		au.committedUpTo(basics.Round(i))
@@ -1638,8 +1659,11 @@ func TestCachesInitialization(t *testing.T) {
 	}
 	au.close()
 
+	// reset the accounts, since their balances are now changed due to the rewards.
+	accts = []map[basics.Address]basics.AccountData{randomAccounts(accountsCount, true)}
+
 	// create another mocked ledger, but this time with a fresh new tracker database.
-	ml2 := makeMockLedgerForTracker(t, true, int(initialRounds), protocolVersion)
+	ml2 := makeMockLedgerForTracker(t, true, int(initialRounds), protocolVersion, accts)
 	ml2.log.SetLevel(logging.Warn)
 	defer ml2.Close()
 
@@ -1667,10 +1691,6 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 
 	initialRounds := uint64(1)
 
-	ml := makeMockLedgerForTracker(t, true, int(initialRounds), initProtocolVersion)
-	ml.log.SetLevel(logging.Warn)
-	defer ml.Close()
-
 	accountsCount := 5
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount, true)}
 	rewardsLevels := []uint64{0}
@@ -1684,6 +1704,10 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
+
+	ml := makeMockLedgerForTracker(t, true, int(initialRounds), initProtocolVersion, accts)
+	ml.log.SetLevel(logging.Warn)
+	defer ml.Close()
 
 	au := &accountUpdates{}
 	au.initialize(config.GetDefaultLocal(), ".", initialProtoParams, accts[0])
@@ -1725,6 +1749,7 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
@@ -1759,6 +1784,7 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
@@ -1781,10 +1807,6 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 
 	initialRounds := uint64(1)
 
-	ml := makeMockLedgerForTracker(t, true, int(initialRounds), initProtocolVersion)
-	ml.log.SetLevel(logging.Warn)
-	defer ml.Close()
-
 	accountsCount := 5
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount, true)}
 	rewardsLevels := []uint64{0}
@@ -1798,6 +1820,10 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
+
+	ml := makeMockLedgerForTracker(t, true, int(initialRounds), initProtocolVersion, accts)
+	ml.log.SetLevel(logging.Warn)
+	defer ml.Close()
 
 	au := &accountUpdates{}
 	au.initialize(config.GetDefaultLocal(), ".", initialProtoParams, accts[0])
@@ -1839,6 +1865,7 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
@@ -1872,6 +1899,7 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
@@ -1907,6 +1935,7 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)

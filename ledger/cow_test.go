@@ -21,10 +21,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -112,7 +114,9 @@ func TestCowBalance(t *testing.T) {
 	accts0 := randomAccounts(20, true)
 	ml := mockLedger{balanceMap: accts0}
 
-	c0 := makeRoundCowState(&ml, bookkeeping.BlockHeader{}, 0, 0)
+	c0 := makeRoundCowState(
+		&ml, bookkeeping.BlockHeader{}, config.Consensus[protocol.ConsensusCurrentVersion],
+		0, ledgercore.AccountTotals{}, 0)
 	checkCow(t, c0, accts0)
 
 	c1 := c0.child(0)

@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
@@ -57,14 +58,15 @@ type roundCowState struct {
 	proto        config.ConsensusParams
 	mods         ledgercore.StateDelta
 
+	// count of transactions. Formerly, we used len(cb.mods), but that
+	// does not count inner transactions.
+	txnCount uint64
+
 	// storage deltas populated as side effects of AppCall transaction
 	// 1. Opt-in/Close actions (see Allocate/Deallocate)
 	// 2. Stateful TEAL evaluation (see SetKey/DelKey)
 	// must be incorporated into mods.accts before passing deltas forward
 	sdeltas map[basics.Address]map[storagePtr]*storageDelta
-
-	// logs populated in AppCall transaction
-	logs []basics.LogItem
 
 	// either or not maintain compatibility with original app refactoring behavior
 	// this is needed for generating old eval delta in new code
@@ -76,17 +78,21 @@ type roundCowState struct {
 	groupIdx int
 	// track creatables created during each transaction in the round
 	trackedCreatables map[int]basics.CreatableIndex
+
+	// prevTotals contains the accounts totals for the previous round. It's being used to calculate the totals for the new round
+	// so that we could perform the validation test on these to ensure the block evaluator generate a valid changeset.
+	prevTotals ledgercore.AccountTotals
 }
 
-func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64, hint int) *roundCowState {
+func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, proto config.ConsensusParams, prevTimestamp int64, prevTotals ledgercore.AccountTotals, hint int) *roundCowState {
 	cb := roundCowState{
 		lookupParent:      b,
 		commitParent:      nil,
-		proto:             config.Consensus[hdr.CurrentProtocol],
+		proto:             proto,
 		mods:              ledgercore.MakeStateDelta(&hdr, prevTimestamp, hint, 0),
 		sdeltas:           make(map[basics.Address]map[storagePtr]*storageDelta),
 		trackedCreatables: make(map[int]basics.CreatableIndex),
-		logs:              make([]basics.LogItem, 0),
+		prevTotals:        prevTotals,
 	}
 
 	// compatibilityMode retains producing application' eval deltas under the following rule:
@@ -184,7 +190,7 @@ func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid trans
 }
 
 func (cb *roundCowState) txnCounter() uint64 {
-	return cb.lookupParent.txnCounter() + uint64(len(cb.mods.Txids))
+	return cb.lookupParent.txnCounter() + cb.txnCount
 }
 
 func (cb *roundCowState) compactCertNext() basics.Round {
@@ -202,8 +208,13 @@ func (cb *roundCowState) trackCreatable(creatableIndex basics.CreatableIndex) {
 	cb.trackedCreatables[cb.groupIdx] = creatableIndex
 }
 
+func (cb *roundCowState) incTxnCount() {
+	cb.txnCount++
+}
+
 func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.Txid) {
 	cb.mods.Txids[txid] = txn.LastValid
+	cb.incTxnCount()
 	if txn.Lease != [32]byte{} {
 		cb.mods.Txleases[ledgercore.Txlease{Sender: txn.Sender, Lease: txn.Lease}] = txn.LastValid
 	}
@@ -246,6 +257,8 @@ func (cb *roundCowState) commitToParent() {
 	for txid, lv := range cb.mods.Txids {
 		cb.commitParent.mods.Txids[txid] = lv
 	}
+	cb.commitParent.txnCount += cb.txnCount
+
 	for txl, expires := range cb.mods.Txleases {
 		cb.commitParent.mods.Txleases[txl] = expires
 	}
@@ -277,4 +290,40 @@ func (cb *roundCowState) commitToParent() {
 
 func (cb *roundCowState) modifiedAccounts() []basics.Address {
 	return cb.mods.Accts.ModifiedAccounts()
+}
+
+// errUnsupportedChildCowTotalCalculation is returned by CalculateTotals when called by a child roundCowState instance
+var errUnsupportedChildCowTotalCalculation = errors.New("the method CalculateTotals should be called only on a top-level roundCowState")
+
+// CalculateTotals calculates the totals given the changes in the StateDelta.
+// these changes allow the validator to validate that the totals still align with the
+// expected values. ( i.e. total amount of algos in the system should remain consistent )
+func (cb *roundCowState) CalculateTotals() error {
+	// this method applies only for the top level roundCowState
+	if cb.commitParent != nil {
+		return errUnsupportedChildCowTotalCalculation
+	}
+	totals := cb.prevTotals
+	var ot basics.OverflowTracker
+	totals.ApplyRewards(cb.mods.Hdr.RewardsLevel, &ot)
+
+	for i := 0; i < cb.mods.Accts.Len(); i++ {
+		accountAddr, updatedAccountData := cb.mods.Accts.GetByIdx(i)
+		previousAccountData, lookupError := cb.lookupParent.lookup(accountAddr)
+		if lookupError != nil {
+			return fmt.Errorf("roundCowState.CalculateTotals unable to load account data for address %v", accountAddr)
+		}
+		totals.DelAccount(cb.proto, previousAccountData, &ot)
+		totals.AddAccount(cb.proto, updatedAccountData, &ot)
+	}
+
+	if ot.Overflowed {
+		return fmt.Errorf("roundCowState: CalculateTotals %d overflowed totals", cb.mods.Hdr.Round)
+	}
+	if totals.All() != cb.prevTotals.All() {
+		return fmt.Errorf("roundCowState: CalculateTotals sum of money changed from %d to %d", cb.prevTotals.All().Raw, totals.All().Raw)
+	}
+
+	cb.mods.Totals = totals
+	return nil
 }

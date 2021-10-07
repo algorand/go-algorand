@@ -9,6 +9,7 @@ require (
 	github.com/algorand/msgp v1.1.48
 	github.com/algorand/oapi-codegen v1.3.5-algorand5
 	github.com/algorand/websocket v1.4.2
+	github.com/algorand/xorfilter v0.2.0
 	github.com/aws/aws-sdk-go v1.16.5
 	github.com/chrismcguire/gobberish v0.0.0-20150821175641-1d8adb509a0e
 	github.com/cpuguy83/go-md2man v1.0.8 // indirect
@@ -29,7 +30,7 @@ require (
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jmoiron/sqlx v1.2.0
-	github.com/karalabe/hid v0.0.0-20181128192157-d815e0c1a2e2
+	github.com/karalabe/hid v1.0.0
 	github.com/labstack/echo/v4 v4.1.17
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-sqlite3 v1.10.0

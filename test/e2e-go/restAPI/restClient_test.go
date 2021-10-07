@@ -18,7 +18,7 @@ package restapi
 
 import (
 	"context"
-	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"math"
@@ -30,7 +30,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
@@ -191,6 +190,7 @@ func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, tx
 
 func TestClientCanGetStatus(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -207,6 +207,7 @@ func TestClientCanGetStatus(t *testing.T) {
 
 func TestClientCanGetStatusAfterBlock(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -222,6 +223,7 @@ func TestClientCanGetStatusAfterBlock(t *testing.T) {
 
 func TestTransactionsByAddr(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture
@@ -270,6 +272,7 @@ func TestTransactionsByAddr(t *testing.T) {
 
 func TestClientCanGetVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -281,6 +284,7 @@ func TestClientCanGetVersion(t *testing.T) {
 
 func TestClientCanGetSuggestedFee(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -292,6 +296,7 @@ func TestClientCanGetSuggestedFee(t *testing.T) {
 
 func TestClientCanGetMinTxnFee(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -303,6 +308,7 @@ func TestClientCanGetMinTxnFee(t *testing.T) {
 
 func TestClientCanGetBlockInfo(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -315,6 +321,7 @@ func TestClientCanGetBlockInfo(t *testing.T) {
 
 func TestClientRejectsBadFromAddressWhenSending(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -331,6 +338,7 @@ func TestClientRejectsBadFromAddressWhenSending(t *testing.T) {
 
 func TestClientRejectsBadToAddressWhenSending(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -347,6 +355,7 @@ func TestClientRejectsBadToAddressWhenSending(t *testing.T) {
 
 func TestClientRejectsMutatedFromAddressWhenSending(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -370,6 +379,7 @@ func TestClientRejectsMutatedFromAddressWhenSending(t *testing.T) {
 
 func TestClientRejectsMutatedToAddressWhenSending(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -393,6 +403,7 @@ func TestClientRejectsMutatedToAddressWhenSending(t *testing.T) {
 
 func TestClientRejectsSendingMoneyFromAccountForWhichItHasNoKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -409,6 +420,7 @@ func TestClientRejectsSendingMoneyFromAccountForWhichItHasNoKey(t *testing.T) {
 
 func TestClientOversizedNote(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -434,6 +446,7 @@ func TestClientOversizedNote(t *testing.T) {
 
 func TestClientCanSendAndGetNote(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -459,6 +472,7 @@ func TestClientCanSendAndGetNote(t *testing.T) {
 
 func TestClientCanGetTransactionStatus(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -483,6 +497,7 @@ func TestClientCanGetTransactionStatus(t *testing.T) {
 
 func TestAccountBalance(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -512,6 +527,7 @@ func TestAccountBalance(t *testing.T) {
 
 func TestAccountParticipationInfo(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -575,6 +591,7 @@ func TestAccountParticipationInfo(t *testing.T) {
 
 func TestSupply(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -588,6 +605,7 @@ func TestSupply(t *testing.T) {
 
 func TestClientCanGetGoRoutines(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -602,6 +620,7 @@ func TestClientCanGetGoRoutines(t *testing.T) {
 
 func TestSendingTooMuchFails(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -643,6 +662,7 @@ func TestSendingTooMuchFails(t *testing.T) {
 
 func TestSendingFromEmptyAccountFails(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -682,6 +702,7 @@ func TestSendingFromEmptyAccountFails(t *testing.T) {
 
 func TestSendingTooLittleToEmptyAccountFails(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -714,6 +735,7 @@ func TestSendingTooLittleToEmptyAccountFails(t *testing.T) {
 
 func TestSendingLowFeeFails(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
@@ -749,6 +771,7 @@ func TestSendingLowFeeFails(t *testing.T) {
 
 func TestSendingNotClosingAccountFails(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	// use a local fixture because we might really mess with the balances
@@ -795,6 +818,7 @@ func TestSendingNotClosingAccountFails(t *testing.T) {
 
 func TestClientCanGetPendingTransactions(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture
@@ -828,6 +852,7 @@ func TestClientCanGetPendingTransactions(t *testing.T) {
 
 func TestClientTruncatesPendingTransactions(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture
@@ -868,6 +893,7 @@ func TestClientTruncatesPendingTransactions(t *testing.T) {
 
 func TestClientPrioritizesPendingTransactions(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Skip("new FIFO pool does not have prioritization")
 	a := require.New(fixtures.SynchronizedTest(t))
@@ -908,7 +934,7 @@ func TestClientPrioritizesPendingTransactions(t *testing.T) {
 	a.True(statusResponse.TruncatedTxns.Transactions[0].TxID == txHigh.ID().String())
 }
 
-func TestClientCanGetPendingTransactionInfo(t *testing.T) {
+func TestPendingTransactionInfoInnerTxnAssetCreate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
@@ -931,32 +957,26 @@ func TestClientCanGetPendingTransactionInfo(t *testing.T) {
 		t.Error("no addr with funds")
 	}
 	a.NoError(err)
-	addr, err := basics.UnmarshalChecksumAddress(someAddress)
-
-	params, err := testClient.SuggestedParams()
-	a.NoError(err)
-
-	firstRound := basics.Round(params.LastRound + 1)
-	lastRound := basics.Round(params.LastRound + 1000)
-	var gh crypto.Digest
-	copy(gh[:], params.GenesisHash)
 
 	prog := `#pragma version 5
-byte "A"
-loop:
-int 0
-dup2
-getbyte
-int 1
-+
-dup
-int 97 //ascii code of last char
-<=
+txn ApplicationID
 bz end
-setbyte
-dup
-log
-b loop
+itxn_begin
+int acfg
+itxn_field TypeEnum
+int 1000000
+itxn_field ConfigAssetTotal
+int 3
+itxn_field ConfigAssetDecimals
+byte "oz"
+itxn_field ConfigAssetUnitName
+byte "Gold"
+itxn_field ConfigAssetName
+byte "https://gold.rush/"
+itxn_field ConfigAssetURL
+byte 0x67f0cd61653bd34316160bc3f5cd3763c85b114d50d38e1f4e72c3b994411e7b
+itxn_field ConfigAssetMetadataHash
+itxn_submit
 end:
 int 1
 return
@@ -966,71 +986,68 @@ return
 	ops, err = logic.AssembleString("#pragma version 5 \nint 1")
 	clst := ops.Program
 
-	gl := basics.StateSchema{
-		NumByteSlice: 1,
-	}
-	lc := basics.StateSchema{
-		NumByteSlice: 1,
-	}
-	minTxnFee, _, err := localFixture.CurrentMinFeeAndBalance()
+	gl := basics.StateSchema{}
+	lc := basics.StateSchema{}
 
-	tx, err := testClient.MakeUnsignedApplicationCallTx(0, nil, addresses, nil, nil, transactions.NoOpOC, approv, clst, gl, lc, 0)
-	tx.Sender = addr
-	tx.Fee = basics.MicroAlgos{Raw: minTxnFee}
-	tx.FirstValid = firstRound
-	tx.LastValid = lastRound
-	tx.GenesisHash = gh
-
-	txid, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
+	// create app
+	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(0, nil, nil, nil, nil, transactions.NoOpOC, approv, clst, gl, lc, 0)
 	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, someAddress, txid, 60*time.Second)
+	appCreateTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCreateTxn)
 	a.NoError(err)
-	txn, err := testClient.PendingTransactionInformationV2(txid)
+	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
 	a.NoError(err)
-	a.NotNil(txn.Logs)
-	a.Equal(32, len(*txn.Logs))
-	for i, l := range *txn.Logs {
-		a.Equal(*txn.ApplicationIndex, l.Id)
-		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), l.Value)
-	}
-
-	//check non-create app call
-	expectedAppID := *txn.ApplicationIndex
-	wh, err = testClient.GetUnencryptedWalletHandle()
-	a.NoError(err)
-	addresses, err = testClient.ListAddresses(wh)
-	a.NoError(err)
-	_, someAddress = getMaxBalAddr(t, testClient, addresses)
-	if someAddress == "" {
-		t.Error("no addr with funds")
-	}
-	a.NoError(err)
-	addr, err = basics.UnmarshalChecksumAddress(someAddress)
-
-	params, err = testClient.SuggestedParams()
+	_, err = waitForTransaction(t, testClient, someAddress, appCreateTxID, 30*time.Second)
 	a.NoError(err)
 
-	firstRound = basics.Round(params.LastRound + 1)
-	lastRound = basics.Round(params.LastRound + 1000)
-
-	tx, err = testClient.MakeUnsignedAppNoOpTx(*txn.ApplicationIndex, nil, addresses, nil, nil)
-	tx.Sender = addr
-	tx.Fee = basics.MicroAlgos{Raw: minTxnFee}
-	tx.FirstValid = firstRound
-	tx.LastValid = lastRound
-	tx.GenesisHash = gh
-
-	txid, err = testClient.SignAndBroadcastTransaction(wh, nil, tx)
+	// get app ID
+	submittedAppCreateTxn, err := testClient.PendingTransactionInformationV2(appCreateTxID)
 	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, someAddress, txid, 60*time.Second)
-	a.NoError(err)
-	txn, err = testClient.PendingTransactionInformationV2(txid)
-	a.NoError(err)
-	a.NotNil(txn.Logs)
-	a.Equal(32, len(*txn.Logs))
-	for i, l := range *txn.Logs {
-		a.Equal(expectedAppID, l.Id)
-		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(string(rune('B'+i)))), l.Value)
-	}
+	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
+	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
+	a.Greater(uint64(createdAppID), uint64(0))
 
+	// fund app account
+	appFundTxn, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, createdAppID.Address().String(), 0, 1_000_000, nil, "", 0, 0)
+	a.NoError(err)
+	appFundTxID := appFundTxn.ID()
+	_, err = waitForTransaction(t, testClient, someAddress, appFundTxID.String(), 30*time.Second)
+	a.NoError(err)
+
+	// call app, which will issue an ASA create inner txn
+	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(uint64(createdAppID), nil, nil, nil, nil)
+	a.NoError(err)
+	appCallTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
+	a.NoError(err)
+	appCallTxnTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCallTxn)
+	a.NoError(err)
+	_, err = waitForTransaction(t, testClient, someAddress, appCallTxnTxID, 30*time.Second)
+	a.NoError(err)
+
+	// verify pending txn info of outer txn
+	submittedAppCallTxn, err := testClient.PendingTransactionInformationV2(appCallTxnTxID)
+	a.NoError(err)
+	a.Nil(submittedAppCallTxn.ApplicationIndex)
+	a.Nil(submittedAppCallTxn.AssetIndex)
+	a.NotNil(submittedAppCallTxn.InnerTxns)
+	a.Len(*submittedAppCallTxn.InnerTxns, 1)
+
+	// verify pending txn info of inner txn
+	innerTxn := (*submittedAppCallTxn.InnerTxns)[0]
+	a.Nil(innerTxn.ApplicationIndex)
+	a.NotNil(innerTxn.AssetIndex)
+	createdAssetID := *innerTxn.AssetIndex
+	a.Greater(createdAssetID, uint64(0))
+
+	createdAssetInfo, err := testClient.AssetInformationV2(createdAssetID)
+	a.NoError(err)
+	a.Equal(createdAssetID, createdAssetInfo.Index)
+	a.Equal(createdAppID.Address().String(), createdAssetInfo.Params.Creator)
+	a.Equal(uint64(1000000), createdAssetInfo.Params.Total)
+	a.Equal(uint64(3), createdAssetInfo.Params.Decimals)
+	a.Equal("oz", *createdAssetInfo.Params.UnitName)
+	a.Equal("Gold", *createdAssetInfo.Params.Name)
+	a.Equal("https://gold.rush/", *createdAssetInfo.Params.Url)
+	expectedMetadata, err := hex.DecodeString("67f0cd61653bd34316160bc3f5cd3763c85b114d50d38e1f4e72c3b994411e7b")
+	a.NoError(err)
+	a.Equal(expectedMetadata, *createdAssetInfo.Params.MetadataHash)
 }

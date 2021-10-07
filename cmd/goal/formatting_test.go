@@ -19,10 +19,12 @@ package main
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestUnicodePrintable(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	testUnicodePrintableStrings := []struct {
 		testString      string
 		isPrintable     bool
