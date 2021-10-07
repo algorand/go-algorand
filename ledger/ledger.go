@@ -397,7 +397,17 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 		minToSave = 0
 	}
 
+	l.trackers.scheduleCommit(r)
+
 	return minToSave
+}
+
+func (l *Ledger) waitAccountsWriting() {
+	l.trackers.waitAccountsWriting()
+}
+
+func (l *Ledger) scheduleCommit(rnd basics.Round) {
+	l.trackers.scheduleCommit(rnd)
 }
 
 // GetLastCatchpointLabel returns the latest catchpoint label that was written to the

@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-deadlock"
 )
 
 // ledgerTracker defines part of the API for any state machine that
@@ -109,6 +110,10 @@ type ledgerForTracker interface {
 	GenesisHash() crypto.Digest
 	GenesisProto() config.ConsensusParams
 	GenesisAccounts() map[basics.Address]basics.AccountData
+
+	// TODO: temporary?
+	scheduleCommit(basics.Round)
+	waitAccountsWriting()
 }
 
 type trackerRegistry struct {
@@ -134,6 +139,8 @@ type trackerRegistry struct {
 
 	dbs db.Pair
 	log logging.Logger
+
+	mu deadlock.RWMutex
 }
 
 func (tr *trackerRegistry) initialize(au *accountUpdates, l ledgerForTracker) (err error) {
@@ -164,8 +171,12 @@ func (tr *trackerRegistry) register(lt ledgerTracker) {
 }
 
 func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
+	tr.mu.RLock()
+	dbRound := tr.dbRound
+	tr.mu.RUnlock()
+
 	for _, lt := range tr.trackers {
-		err := lt.loadFromDisk(l, tr.dbRound)
+		err := lt.loadFromDisk(l, dbRound)
 		if err != nil {
 			// find the tracker name.
 			trackerName := reflect.TypeOf(lt).String()
@@ -195,13 +206,19 @@ func (tr *trackerRegistry) committedUpTo(rnd basics.Round) basics.Round {
 		}
 	}
 
-	dc := tr.driver.scheduleCommittingTask(rnd, tr.dbRound)
+	return minBlock
+}
+
+func (tr *trackerRegistry) scheduleCommit(blockqRound basics.Round) {
+	tr.mu.RLock()
+	dbRound := tr.dbRound
+	tr.mu.RUnlock()
+
+	dc := tr.driver.scheduleCommittingTask(blockqRound, dbRound)
 	if dc.offset != 0 {
 		tr.committedOffset <- dc
 		tr.accountsWriting.Add(1)
 	}
-
-	return minBlock
 }
 
 // waitAccountsWriting waits for all the pending ( or current ) account writing to be completed.
@@ -214,9 +231,12 @@ func (tr *trackerRegistry) close() {
 		tr.ctxCancel()
 	}
 
-	tr.waitAccountsWriting()
-	// this would block until the commitSyncerClosed channel get closed.
-	<-tr.commitSyncerClosed
+	// if trackerRegistry was initialized then cleanup
+	if tr.commitSyncerClosed != nil {
+		tr.waitAccountsWriting()
+		// this would block until the commitSyncerClosed channel get closed.
+		<-tr.commitSyncerClosed
+	}
 
 	for _, lt := range tr.trackers {
 		lt.close()
@@ -252,8 +272,10 @@ func (tr *trackerRegistry) commitSyncer(deferredCommits chan deferredCommit) {
 }
 
 func (tr *trackerRegistry) commitRound(dc deferredCommit) {
-	// TODO: locks
-	// !!!!!!!!!!!!!!!
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
+
+	defer tr.accountsWriting.Done()
 
 	offset := dc.offset
 	dbRound := dc.dbRound
@@ -274,8 +296,6 @@ func (tr *trackerRegistry) commitRound(dc deferredCommit) {
 	// this usecase can happen when two subsequent calls to committedUpTo concludes that the same rounds range need to be
 	// flush, without the commitRound have a chance of committing these rounds.
 	if offset == 0 {
-		// TODO
-		// tr.accountsMu.RUnlock()
 		return
 	}
 
@@ -319,6 +339,7 @@ func (tr *trackerRegistry) commitRound(dc deferredCommit) {
 		return
 	}
 
+	tr.dbRound = newBase
 	for _, postCommitRound := range postcommitOps {
 		postCommitRound(offset, newBase)
 	}

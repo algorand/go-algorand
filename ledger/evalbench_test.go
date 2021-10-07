@@ -357,7 +357,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 			// wait commitSyncer to exit
 			// the test calls commitRound directly and does not need commitSyncer/committedUpTo
 			select {
-			case <-l.accts.commitSyncerClosed:
+			case <-l.trackers.commitSyncerClosed:
 				break
 			}
 		}
@@ -391,9 +391,9 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 			wg.Add(1)
 			// committing might take a long time, do it parallel
 			go func(l *Ledger) {
-				l.accts.accountsWriting.Add(1)
-				l.accts.commitRound(numBlocks, 0, 0)
-				l.accts.accountsWriting.Wait()
+				l.trackers.accountsWriting.Add(1)
+				l.trackers.commitRound(deferredCommit{numBlocks, 0, 0})
+				l.trackers.accountsWriting.Wait()
 				l.reloadLedger()
 				wg.Done()
 			}(l)

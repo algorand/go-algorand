@@ -213,8 +213,8 @@ type accountUpdates struct {
 	// deltasAccum stores the accumulated deltas for every round starting dbRound-1.
 	deltasAccum []int
 
-	// committedOffset is the offset at which we'd like to persist all the previous account information to disk.
-	committedOffset chan deferredCommit
+	// // committedOffset is the offset at which we'd like to persist all the previous account information to disk.
+	// committedOffset chan deferredCommit
 
 	// accountsMu is the synchronization mutex for accessing the various non-static variables.
 	accountsMu deadlock.RWMutex
@@ -222,12 +222,12 @@ type accountUpdates struct {
 	// accountsReadCond used to synchronize read access to the internal data structures.
 	accountsReadCond *sync.Cond
 
-	// accountsWriting provides synchronization around the background writing of account balances.
-	accountsWriting sync.WaitGroup
+	// // accountsWriting provides synchronization around the background writing of account balances.
+	// accountsWriting sync.WaitGroup
 
-	// commitSyncerClosed is the blocking channel for synchronizing closing the commitSyncer goroutine. Once it's closed, the
-	// commitSyncer can be assumed to have aborted.
-	commitSyncerClosed chan struct{}
+	// // commitSyncerClosed is the blocking channel for synchronizing closing the commitSyncer goroutine. Once it's closed, the
+	// // commitSyncer can be assumed to have aborted.
+	// commitSyncerClosed chan struct{}
 
 	// voters keeps track of Merkle trees of online accounts, used for compact certificates.
 	voters *votersTracker
@@ -315,9 +315,10 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string) {
 	if cfg.CatchpointFileHistoryLength < -1 {
 		au.catchpointFileHistoryLength = -1
 	}
-	// initialize the commitSyncerClosed with a closed channel ( since the commitSyncer go-routine is not active )
-	au.commitSyncerClosed = make(chan struct{})
-	close(au.commitSyncerClosed)
+	// // initialize the commitSyncerClosed with a closed channel ( since the commitSyncer go-routine is not active )
+	// au.commitSyncerClosed = make(chan struct{})
+	// close(au.commitSyncerClosed)
+
 	au.accountsReadCond = sync.NewCond(au.accountsMu.RLocker())
 	au.synchronousMode = db.SynchronousMode(cfg.LedgerSynchronousMode)
 	au.accountsRebuildSynchronousMode = db.SynchronousMode(cfg.AccountsRebuildSynchronousMode)
@@ -1077,10 +1078,10 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 
 			// flush the account data
 			// TODO: figure out how to move it the upper level
-			au.scheduleCommittingTask(blk.Round())
+			au.ledger.scheduleCommit(blk.Round())
 
 			// wait for the writing to complete.
-			au.waitAccountsWriting()
+			au.ledger.waitAccountsWriting()
 
 			// The au.dbRound after writing should be ~320 behind the block round.
 			roundsBehind := blk.Round() - au.cachedDBRound
@@ -1795,8 +1796,8 @@ func (au *accountUpdates) prepareCommit(offset uint64, dbRound basics.Round, loo
 		}
 	}
 
-	// synchronize with committedUpTo that posted a deferredCommit task
-	defer au.accountsWriting.Done()
+	// // synchronize with committedUpTo that posted a deferredCommit task
+	// defer au.accountsWriting.Done()
 
 	au.accountsMu.RLock()
 

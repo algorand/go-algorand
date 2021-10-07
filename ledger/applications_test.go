@@ -32,6 +32,12 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+func commitRound(offset uint64, dbRound basics.Round, l *Ledger) {
+	l.trackers.accountsWriting.Add(1)
+	l.trackers.commitRound(deferredCommit{offset, dbRound, 0})
+	l.trackers.accountsWriting.Wait()
+}
+
 // test ensures that
 // 1) app's GlobalState and local state's KeyValue are stored in the same way
 // before and after application code refactoring
@@ -124,12 +130,12 @@ return`
 	l, err := OpenLedger(logging.Base(), "TestAppAccountData", true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
-	l.accts.ctxCancel() // force commitSyncer to exit
+	l.trackers.ctxCancel() // force commitSyncer to exit
 
 	// wait commitSyncer to exit
 	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
 	select {
-	case <-l.accts.commitSyncerClosed:
+	case <-l.trackers.commitSyncerClosed:
 		break
 	}
 
@@ -186,9 +192,7 @@ return`
 	a.NoError(err)
 
 	// save data into DB and write into local state
-	l.accts.accountsWriting.Add(1)
-	l.accts.commitRound(3, 0, 0)
-	l.accts.accountsWriting.Wait()
+	commitRound(3, 0, l)
 
 	appCallFields = transactions.ApplicationCallTxnFields{
 		OnCompletion:    0,
@@ -207,9 +211,7 @@ return`
 	a.NoError(err)
 
 	// save data into DB
-	l.accts.accountsWriting.Add(1)
-	l.accts.commitRound(1, 3, 0)
-	l.accts.accountsWriting.Wait()
+	commitRound(1, 3, l)
 
 	// dump accounts
 	var rowid int64
@@ -342,12 +344,12 @@ return`
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
-	l.accts.ctxCancel() // force commitSyncer to exit
+	l.trackers.ctxCancel() // force commitSyncer to exit
 
 	// wait commitSyncer to exit
 	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
 	select {
-	case <-l.accts.commitSyncerClosed:
+	case <-l.trackers.commitSyncerClosed:
 		break
 	}
 
@@ -415,9 +417,7 @@ return`
 	a.NoError(err)
 
 	// save data into DB and write into local state
-	l.accts.accountsWriting.Add(1)
-	l.accts.commitRound(3, 0, 0)
-	l.accts.accountsWriting.Wait()
+	commitRound(3, 0, l)
 
 	// check first write
 	blk, err := l.Block(2)
@@ -471,9 +471,7 @@ return`
 	a.NoError(err)
 
 	// save data into DB
-	l.accts.accountsWriting.Add(1)
-	l.accts.commitRound(2, 3, 0)
-	l.accts.accountsWriting.Wait()
+	commitRound(2, 3, l)
 
 	// check first write
 	blk, err = l.Block(4)
@@ -597,12 +595,12 @@ return`
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
-	l.accts.ctxCancel() // force commitSyncer to exit
+	l.trackers.ctxCancel() // force commitSyncer to exit
 
 	// wait commitSyncer to exit
 	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
 	select {
-	case <-l.accts.commitSyncerClosed:
+	case <-l.trackers.commitSyncerClosed:
 		break
 	}
 
@@ -698,9 +696,7 @@ return`
 	l.WaitForCommit(3)
 
 	// save data into DB and write into local state
-	l.accts.accountsWriting.Add(1)
-	l.accts.commitRound(3, 0, 0)
-	l.accts.accountsWriting.Wait()
+	commitRound(3, 0, l)
 
 	// check first write
 	blk, err = l.Block(2)
@@ -756,12 +752,12 @@ return`
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
-	l.accts.ctxCancel() // force commitSyncer to exit
+	l.trackers.ctxCancel() // force commitSyncer to exit
 
 	// wait commitSyncer to exit
 	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
 	select {
-	case <-l.accts.commitSyncerClosed:
+	case <-l.trackers.commitSyncerClosed:
 		break
 	}
 
@@ -838,9 +834,7 @@ return`
 	a.NoError(err)
 
 	// save data into DB and write into local state
-	l.accts.accountsWriting.Add(1)
-	l.accts.commitRound(2, 0, 0)
-	l.accts.accountsWriting.Wait()
+	commitRound(2, 0, l)
 
 	// check first write
 	blk, err = l.Block(1)
@@ -957,12 +951,12 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
-	l.accts.ctxCancel() // force commitSyncer to exit
+	l.trackers.ctxCancel() // force commitSyncer to exit
 
 	// wait commitSyncer to exit
 	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
 	select {
-	case <-l.accts.commitSyncerClosed:
+	case <-l.trackers.commitSyncerClosed:
 		break
 	}
 
@@ -1025,9 +1019,7 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	a.NoError(err)
 
 	// save data into DB and write into local state
-	l.accts.accountsWriting.Add(1)
-	l.accts.commitRound(2, 0, 0)
-	l.accts.accountsWriting.Wait()
+	commitRound(2, 0, l)
 
 	// check first write
 	blk, err := l.Block(2)
