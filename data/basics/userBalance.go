@@ -310,6 +310,9 @@ const (
 
 	// AppCreatable is the CreatableType corresponds to apps
 	AppCreatable CreatableType = 1
+
+	// MetadataHashLength is the number of bytes of the MetadataHash
+	MetadataHashLength int = 32
 )
 
 // CreatableLocator stores both the creator, whose balance record contains
@@ -361,7 +364,7 @@ type AssetParams struct {
 
 	// MetadataHash specifies a commitment to some unspecified asset
 	// metadata. The format of this metadata is up to the application.
-	MetadataHash [32]byte `codec:"am"`
+	MetadataHash [MetadataHashLength]byte `codec:"am"`
 
 	// Manager specifies an account that is allowed to change the
 	// non-zero addresses in this AssetParams.
@@ -395,6 +398,16 @@ func (app AppIndex) Address() Address {
 // MakeAccountData returns a UserToken
 func MakeAccountData(status Status, algos MicroAlgos) AccountData {
 	return AccountData{Status: status, MicroAlgos: algos}
+}
+
+// ClearOnlineState resets the account's fields to indicate that the account is an offline account
+func (u *AccountData) ClearOnlineState() {
+	u.Status = Offline
+	u.VoteFirstValid = Round(0)
+	u.VoteLastValid = Round(0)
+	u.VoteKeyDilution = 0
+	u.VoteID = crypto.OneTimeSignatureVerifier{}
+	u.SelectionID = crypto.VRFVerifier{}
 }
 
 // Money returns the amount of MicroAlgos associated with the user's account

@@ -42,6 +42,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -73,7 +74,7 @@ func TestBlockEvaluator(t *testing.T) {
 	defer l.Close()
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.Equal(t, eval.specials.FeeSink, testSinkAddr)
 	require.NoError(t, err)
 
@@ -286,7 +287,7 @@ func TestRekeying(t *testing.T) {
 		// So the ValidatedBlock that comes out isn't necessarily actually a valid block. We'll call Validate ourselves.
 
 		newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-		eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+		eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 		require.NoError(t, err)
 
 		for _, stxn := range stxns {
@@ -462,7 +463,7 @@ func testEvalAppGroup(t *testing.T, schema basics.StateSchema) (*BlockEvaluator,
 	defer l.Close()
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.NoError(t, err)
 	eval.validate = true
 	eval.generate = false
@@ -578,6 +579,9 @@ func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalPr
 	defer l.Close()
 
 	eval := l.nextBlock(t)
+	eval.validate = true
+	eval.generate = false
+
 	eval.proto = config.Consensus[consensusVersion]
 
 	appcall1 := txntest.Txn{
@@ -927,7 +931,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 	}
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	bev, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	bev, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.NoError(b, err)
 
 	genHash := genesisInitState.Block.BlockHeader.GenesisHash
@@ -966,7 +970,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 					require.NoError(b, err)
 				}
 				newBlock = bookkeeping.MakeBlock(validatedBlock.blk.BlockHeader)
-				bev, err = l.StartEvaluator(newBlock.BlockHeader, 0)
+				bev, err = l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 				require.NoError(b, err)
 				numBlocks++
 			}
@@ -989,7 +993,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 		wg.Wait()
 
 		newBlock = bookkeeping.MakeBlock(validatedBlock.blk.BlockHeader)
-		bev, err = l.StartEvaluator(newBlock.BlockHeader, 0)
+		bev, err = l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 		require.NoError(b, err)
 	}
 
@@ -1190,7 +1194,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	defer l.Close()
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.NoError(t, err)
 
 	// won't work before funding bank
@@ -1408,7 +1412,7 @@ func (ledger *Ledger) nextBlock(t testing.TB) *BlockEvaluator {
 	require.NoError(t, err)
 
 	nextHdr := bookkeeping.MakeBlock(hdr).BlockHeader
-	eval, err := ledger.StartEvaluator(nextHdr, 0)
+	eval, err := ledger.StartEvaluator(nextHdr, 0, 0)
 	require.NoError(t, err)
 	return eval
 }
@@ -1928,4 +1932,318 @@ func TestCowBaseCreatorsCache(t *testing.T) {
 			assert.Equal(t, expected.exists, exists)
 		}
 	}
+}
+
+// TestEvalFunctionForExpiredAccounts tests that the eval function will correctly mark accounts as offline
+func TestEvalFunctionForExpiredAccounts(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genesisInitState, addrs, keys := genesisWithProto(10, protocol.ConsensusFuture)
+
+	sendAddr := addrs[0]
+	recvAddr := addrs[1]
+
+	// the last round that the recvAddr is valid for
+	recvAddrLastValidRound := basics.Round(2)
+
+	// the target round we want to advance the evaluator to
+	targetRound := basics.Round(4)
+
+	// Set all to online except the sending address
+	for _, addr := range addrs {
+		if addr == sendAddr {
+			continue
+		}
+		tmp := genesisInitState.Accounts[addr]
+		tmp.Status = basics.Online
+		genesisInitState.Accounts[addr] = tmp
+	}
+
+	// Choose recvAddr to have a last valid round less than genesis block round
+	{
+		tmp := genesisInitState.Accounts[recvAddr]
+		tmp.VoteLastValid = recvAddrLastValidRound
+		genesisInitState.Accounts[recvAddr] = tmp
+	}
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+
+	blkEval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+
+	// Advance the evaluator a couple rounds...
+	for i := uint64(0); i < uint64(targetRound); i++ {
+		l.endBlock(t, blkEval)
+		blkEval = l.nextBlock(t)
+	}
+
+	require.Greater(t, uint64(blkEval.Round()), uint64(recvAddrLastValidRound))
+
+	genHash := genesisInitState.Block.BlockHeader.GenesisHash
+	txn := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      sendAddr,
+			Fee:         minFee,
+			FirstValid:  newBlock.Round(),
+			LastValid:   blkEval.Round(),
+			GenesisHash: genHash,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: recvAddr,
+			Amount:   basics.MicroAlgos{Raw: 100},
+		},
+	}
+
+	st := txn.Sign(keys[0])
+	err = blkEval.Transaction(st, transactions.ApplyData{})
+	require.NoError(t, err)
+
+	// Make sure we validate our block as well
+	blkEval.validate = true
+
+	validatedBlock, err := blkEval.GenerateBlock()
+	require.NoError(t, err)
+
+	_, err = eval(context.Background(), l, validatedBlock.blk, false, nil, nil)
+	require.NoError(t, err)
+
+	badBlock := *validatedBlock
+
+	// First validate that bad block is fine if we dont touch it...
+	_, err = eval(context.Background(), l, badBlock.blk, true, verify.GetMockedCache(true), nil)
+	require.NoError(t, err)
+
+	badBlock = *validatedBlock
+
+	// Introduce an unknown address to introduce an error
+	badBlock.blk.ExpiredParticipationAccounts = append(badBlock.blk.ExpiredParticipationAccounts, basics.Address{1})
+
+	_, err = eval(context.Background(), l, badBlock.blk, true, verify.GetMockedCache(true), nil)
+	require.Error(t, err)
+
+	badBlock = *validatedBlock
+
+	addressToCopy := badBlock.blk.ExpiredParticipationAccounts[0]
+
+	// Add more than the expected number of accounts
+
+	for i := 0; i < blkEval.proto.MaxProposedExpiredOnlineAccounts+1; i++ {
+		badBlock.blk.ExpiredParticipationAccounts = append(badBlock.blk.ExpiredParticipationAccounts, addressToCopy)
+	}
+
+	_, err = eval(context.Background(), l, badBlock.blk, true, verify.GetMockedCache(true), nil)
+	require.Error(t, err)
+
+	badBlock = *validatedBlock
+
+	// Duplicate an address
+	badBlock.blk.ExpiredParticipationAccounts = append(badBlock.blk.ExpiredParticipationAccounts, badBlock.blk.ExpiredParticipationAccounts[0])
+
+	_, err = eval(context.Background(), l, badBlock.blk, true, verify.GetMockedCache(true), nil)
+	require.Error(t, err)
+
+	badBlock = *validatedBlock
+	// sanity check that bad block is being actually copied and not just the pointer
+	_, err = eval(context.Background(), l, badBlock.blk, true, verify.GetMockedCache(true), nil)
+	require.NoError(t, err)
+
+}
+
+type failRoundCowParent struct {
+	roundCowBase
+}
+
+func (p *failRoundCowParent) lookup(basics.Address) (basics.AccountData, error) {
+	return basics.AccountData{}, fmt.Errorf("disk I/O fail (on purpose)")
+}
+
+// TestExpiredAccountGenerationWithDiskFailure tests edge cases where disk failures can lead to ledger look up failures
+func TestExpiredAccountGenerationWithDiskFailure(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genesisInitState, addrs, keys := genesisWithProto(10, protocol.ConsensusFuture)
+
+	sendAddr := addrs[0]
+	recvAddr := addrs[1]
+
+	// the last round that the recvAddr is valid for
+	recvAddrLastValidRound := basics.Round(10)
+
+	// the target round we want to advance the evaluator to
+	targetRound := basics.Round(4)
+
+	// Set all to online except the sending address
+	for _, addr := range addrs {
+		if addr == sendAddr {
+			continue
+		}
+		tmp := genesisInitState.Accounts[addr]
+		tmp.Status = basics.Online
+		genesisInitState.Accounts[addr] = tmp
+	}
+
+	// Choose recvAddr to have a last valid round less than genesis block round
+	{
+		tmp := genesisInitState.Accounts[recvAddr]
+		tmp.VoteLastValid = recvAddrLastValidRound
+		genesisInitState.Accounts[recvAddr] = tmp
+	}
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+
+	// Advance the evaluator a couple rounds...
+	for i := uint64(0); i < uint64(targetRound); i++ {
+		l.endBlock(t, eval)
+		eval = l.nextBlock(t)
+	}
+
+	genHash := genesisInitState.Block.BlockHeader.GenesisHash
+	txn := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      sendAddr,
+			Fee:         minFee,
+			FirstValid:  newBlock.Round(),
+			LastValid:   eval.Round(),
+			GenesisHash: genHash,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: recvAddr,
+			Amount:   basics.MicroAlgos{Raw: 100},
+		},
+	}
+
+	st := txn.Sign(keys[0])
+	err = eval.Transaction(st, transactions.ApplyData{})
+	require.NoError(t, err)
+
+	eval.validate = true
+	eval.generate = false
+
+	eval.block.ExpiredParticipationAccounts = append(eval.block.ExpiredParticipationAccounts, recvAddr)
+
+	err = eval.endOfBlock()
+	require.Error(t, err)
+
+	eval.block.ExpiredParticipationAccounts = []basics.Address{
+		basics.Address{},
+	}
+	eval.state.mods.Accts = ledgercore.AccountDeltas{}
+	eval.state.lookupParent = &failRoundCowParent{}
+	err = eval.endOfBlock()
+	require.Error(t, err)
+
+	err = eval.resetExpiredOnlineAccountsParticipationKeys()
+	require.Error(t, err)
+
+}
+
+// TestExpiredAccountGeneration test that expired accounts are added to a block header and validated
+func TestExpiredAccountGeneration(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genesisInitState, addrs, keys := genesisWithProto(10, protocol.ConsensusFuture)
+
+	sendAddr := addrs[0]
+	recvAddr := addrs[1]
+
+	// the last round that the recvAddr is valid for
+	recvAddrLastValidRound := basics.Round(2)
+
+	// the target round we want to advance the evaluator to
+	targetRound := basics.Round(4)
+
+	// Set all to online except the sending address
+	for _, addr := range addrs {
+		if addr == sendAddr {
+			continue
+		}
+		tmp := genesisInitState.Accounts[addr]
+		tmp.Status = basics.Online
+		genesisInitState.Accounts[addr] = tmp
+	}
+
+	// Choose recvAddr to have a last valid round less than genesis block round
+	{
+		tmp := genesisInitState.Accounts[recvAddr]
+		tmp.VoteLastValid = recvAddrLastValidRound
+		genesisInitState.Accounts[recvAddr] = tmp
+	}
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+
+	// Advance the evaluator a couple rounds...
+	for i := uint64(0); i < uint64(targetRound); i++ {
+		l.endBlock(t, eval)
+		eval = l.nextBlock(t)
+	}
+
+	require.Greater(t, uint64(eval.Round()), uint64(recvAddrLastValidRound))
+
+	genHash := genesisInitState.Block.BlockHeader.GenesisHash
+	txn := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      sendAddr,
+			Fee:         minFee,
+			FirstValid:  newBlock.Round(),
+			LastValid:   eval.Round(),
+			GenesisHash: genHash,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: recvAddr,
+			Amount:   basics.MicroAlgos{Raw: 100},
+		},
+	}
+
+	st := txn.Sign(keys[0])
+	err = eval.Transaction(st, transactions.ApplyData{})
+	require.NoError(t, err)
+
+	// Make sure we validate our block as well
+	eval.validate = true
+
+	validatedBlock, err := eval.GenerateBlock()
+	require.NoError(t, err)
+
+	listOfExpiredAccounts := validatedBlock.Block().ParticipationUpdates.ExpiredParticipationAccounts
+
+	require.Equal(t, 1, len(listOfExpiredAccounts))
+	expiredAccount := listOfExpiredAccounts[0]
+	require.Equal(t, expiredAccount, recvAddr)
+
+	recvAcct, err := eval.state.lookup(recvAddr)
+	require.NoError(t, err)
+	require.Equal(t, recvAcct.Status, basics.Offline)
+	require.Equal(t, recvAcct.VoteFirstValid, basics.Round(0))
+	require.Equal(t, recvAcct.VoteLastValid, basics.Round(0))
+	require.Equal(t, recvAcct.VoteKeyDilution, uint64(0))
+	require.Equal(t, recvAcct.VoteID, crypto.OneTimeSignatureVerifier{})
+	require.Equal(t, recvAcct.SelectionID, crypto.VRFVerifier{})
+
 }
