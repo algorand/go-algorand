@@ -466,9 +466,10 @@ transaction types, are rejected by `itxn_submit`.
 
 | Op | Description |
 | --- | --- |
-| `itxn_begin` | begin preparation of a new inner transaction |
+| `itxn_begin` | begin preparation of a new inner transaction in a new transaction group |
+| `itxn_next` | begin preparation of a new inner transaction in the same transaction group |
 | `itxn_field f` | set field F of the current inner transaction to X |
-| `itxn_submit` | execute the current inner transaction. Fail if 16 inner transactions have already been executed, or if the transaction itself fails. |
+| `itxn_submit` | execute the current inner transaction group. Fail if executing this group would exceed 16 total inner transactions, or if any transaction in the group fails. |
 | `itxn f` | push field F of the last inner transaction to stack |
 | `itxna f i` | push Ith value of the array field F of the last inner transaction to stack |
 

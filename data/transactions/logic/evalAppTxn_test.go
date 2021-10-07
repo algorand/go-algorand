@@ -415,7 +415,7 @@ func TestNumInner(t *testing.T) {
 	testApp(t, pay+pay+pay+";int 1", ep)
 	testApp(t, pay+pay+pay+pay+";int 1", ep)
 	// In the sample proto, MaxInnerTransactions = 4
-	testApp(t, pay+pay+pay+pay+pay+";int 1", ep, "itxn_submit with MaxInnerTransactions")
+	testApp(t, pay+pay+pay+pay+pay+";int 1", ep, "too many inner transactions")
 }
 
 func TestAssetCreate(t *testing.T) {
@@ -517,4 +517,66 @@ func TestFieldSetting(t *testing.T) {
 	testApp(t, "itxn_begin; int 12; bzero; itxn_field ConfigAssetName; int 1", ep)
 	testApp(t, "itxn_begin; int 13; bzero; itxn_field ConfigAssetName; int 1", ep,
 		"value is too long")
+}
+
+func TestInnerGroup(t *testing.T) {
+	ep, ledger := makeSampleEnv()
+	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
+	// Need both fees and both payments
+	ledger.NewAccount(ledger.ApplicationID().Address(), 999+2*defaultEvalProto().MinTxnFee)
+	pay := `
+int pay;    itxn_field TypeEnum;
+int 500;    itxn_field Amount;
+txn Sender; itxn_field Receiver;
+`
+	testApp(t, "itxn_begin"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep,
+		"insufficient balance")
+
+	// NewAccount overwrites the existing balance
+	ledger.NewAccount(ledger.ApplicationID().Address(), 1000+2*defaultEvalProto().MinTxnFee)
+	testApp(t, "itxn_begin"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep)
+}
+
+func TestInnerFeePooling(t *testing.T) {
+	ep, ledger := makeSampleEnv()
+	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	pay := `
+int pay;    itxn_field TypeEnum;
+int 500;    itxn_field Amount;
+txn Sender; itxn_field Receiver;
+`
+	// Force the first fee to 3, but the second will default to 2*fee-3 = 2002-3
+	testApp(t, "itxn_begin"+
+		pay+
+		"int 3; itxn_field Fee;"+
+		"itxn_next"+
+		pay+
+		"itxn_submit; itxn Fee; int 1999; ==", ep)
+
+	// Same first, but force the second too low
+	testApp(t, "itxn_begin"+
+		pay+
+		"int 3; itxn_field Fee;"+
+		"itxn_next"+
+		pay+
+		"int 1998; itxn_field Fee;"+
+		"itxn_submit; int 1", ep, "fee too small")
+
+	// Overpay in first itxn, the second will default to less
+	testApp(t, "itxn_begin"+
+		pay+
+		"int 2000; itxn_field Fee;"+
+		"itxn_next"+
+		pay+
+		"itxn_submit; itxn Fee; int 2; ==", ep)
+
+	// Same first, but force the second too low
+	testApp(t, "itxn_begin"+
+		pay+
+		"int 2000; itxn_field Fee;"+
+		"itxn_next"+
+		pay+
+		"int 1; itxn_field Fee;"+
+		"itxn_submit; itxn Fee; int 1", ep, "fee too small")
 }
