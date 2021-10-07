@@ -1102,7 +1102,7 @@ static const  char edge_cases_signatures[12][3][500]=
 
 // we desinged the verification to fit the white paper results on the above vectors.
 // the only defernce is that we reject small order R (becuase our previous version done that)
-static const int edge_cases_results[] = {-1,-1,-1,0,0,0,-1,-1,-1,-1,-1,-1};
+static const int edge_cases_results[] = {-1,-1,0,0,0,0,-1,-1,-1,-1,-1,-1};
 
 
 //checking for non canoical R

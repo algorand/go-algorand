@@ -1099,7 +1099,7 @@ static const  char edge_cases_signatures[EDGE_CASES_SIZE][3][500]=
 
 static int test_data_expected_results[SAMPLE_SIZE];
 
-static int edge_cases_expected_results[EDGE_CASES_SIZE] = {0,0,0,1,1,1,0,0,0,0,0,0};
+static int edge_cases_expected_results[EDGE_CASES_SIZE] = {0,0,1,1,1,1,0,0,0,0,0,0};
 
 void check_valid_array(const int* is_valid_array, const int size, const int * expected_result)
 {

@@ -22,8 +22,7 @@ validate_ed25519_pk_and_sig(const unsigned char *sig, const unsigned char *pk)
     if (sc25519_is_canonical_vartime(sig + 32) == 0)  {
         return -1;
     }
-    if (ge25519_is_canonical_vartime(sig) == 0 ||
-        ge25519_has_small_order(sig) != 0) {
+    if (ge25519_is_canonical_vartime(sig) == 0 ) {
         return -1;
     }
 
