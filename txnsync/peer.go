@@ -457,6 +457,10 @@ scanLoop:
 		}
 	}
 
+	if p.state == peerStateProposal {
+		logging.Base().Infof("proposal size: %v bytes", accumulatedSize)
+	}
+
 	p.lastSelectedTransactionsCount = len(selectedTxnIDs)
 
 	// if we've over-allocated, resize the buffer; This becomes important on relays,

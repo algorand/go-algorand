@@ -175,6 +175,7 @@ func (d *demux) reconstructProposals(ctx context.Context, ch <-chan ProposalMess
 				if !ok {
 					return
 				}
+				logging.Base().Info("almost received proposal")
 
 				p, err := decodeProposal(pd.ProposalBytes)
 				if err != nil {

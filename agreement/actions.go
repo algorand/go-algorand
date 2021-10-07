@@ -152,6 +152,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 	case protocol.ProposalPayloadTag:
 		switch a.T {
 		case broadcast, relay:
+			logging.Base().Info("preparing proposal")
 			msg := a.CompoundMessage
 			txns, err := msg.Proposal.Block.DecodePaysetGroupsNoAD()
 			if err != nil {
