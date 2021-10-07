@@ -1210,9 +1210,12 @@ func asmTxField(ops *OpStream, spec *OpSpec, args []string) error {
 	if !ok {
 		return ops.errorf("txn unknown field: %#v", args[0])
 	}
-	_, ok = txnaFieldSpecByField[fs.field]
-	if ok {
-		return ops.errorf("found array field %#v in %s op", args[0], spec.Name)
+	// itxn_field appends to the field if it's an array
+	if spec.Name != "itxn_field" {
+		_, ok = txnaFieldSpecByField[fs.field]
+		if ok {
+			return ops.errorf("found array field %#v in %s op", args[0], spec.Name)
+		}
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(fs.field))

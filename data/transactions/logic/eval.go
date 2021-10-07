@@ -3967,14 +3967,14 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 		}
 		txn.Accounts = append(txn.Accounts, new)
 	case ApprovalProgram:
-		maxPossible := cx.Proto.MaxAppTotalProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
+		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
 		if len(sv.Bytes) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
 		}
 		txn.ApprovalProgram = make([]byte, len(sv.Bytes))
 		copy(txn.ApprovalProgram, sv.Bytes)
 	case ClearStateProgram:
-		maxPossible := cx.Proto.MaxAppTotalProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
+		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
 		if len(sv.Bytes) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
 		}

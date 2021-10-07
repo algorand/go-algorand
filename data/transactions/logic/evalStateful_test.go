@@ -402,7 +402,7 @@ func testApp(t *testing.T, program string, ep EvalParams, problems ...string) tr
 		return delta
 	}
 
-	require.Error(t, err, sb.String())
+	require.Error(t, err, "%s\nExpected: %v", sb.String(), problems)
 	for _, problem := range problems {
 		require.Contains(t, err.Error(), problem)
 	}

@@ -18,6 +18,7 @@ package logic
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -581,4 +582,125 @@ txn Sender; itxn_field Receiver;
 		pay+
 		"int 1; itxn_field Fee;"+
 		"itxn_submit; itxn Fee; int 1", ep, "fee too small")
+}
+
+// TestApplCreation is only determining what appl transactions can be
+// constructed not what can be submitted, so it tests what "bad" fields cause
+// immediate failures.
+func TestApplCreation(t *testing.T) {
+	ep, _ := makeSampleEnv()
+
+	p := "itxn_begin;"
+	s := "; int 1"
+
+	testApp(t, p+"int 31; itxn_field ApplicationID"+s, ep,
+		"invalid App reference")
+	ep.Txn.Txn.ForeignApps = append(ep.Txn.Txn.ForeignApps, 31)
+	testApp(t, p+"int 31; itxn_field ApplicationID"+s, ep)
+
+	testApp(t, p+"int 0; itxn_field OnCompletion"+s, ep)
+	testApp(t, p+"int 1; itxn_field OnCompletion"+s, ep)
+	testApp(t, p+"int 2; itxn_field OnCompletion"+s, ep)
+	testApp(t, p+"int 3; itxn_field OnCompletion"+s, ep)
+	testApp(t, p+"int 4; itxn_field OnCompletion"+s, ep)
+	testApp(t, p+"int 5; itxn_field OnCompletion"+s, ep)
+	testApp(t, p+"int 6; itxn_field OnCompletion"+s, ep, "too large")
+	testApp(t, p+"int NoOp; itxn_field OnCompletion"+s, ep)
+	testApp(t, p+"int OptIn; itxn_field OnCompletion"+s, ep)
+	testApp(t, p+"int CloseOut; itxn_field OnCompletion"+s, ep)
+	testApp(t, p+"int ClearState; itxn_field OnCompletion"+s, ep)
+	testApp(t, p+"int UpdateApplication; itxn_field OnCompletion"+s, ep)
+	testApp(t, p+"int DeleteApplication; itxn_field OnCompletion"+s, ep)
+
+	testApp(t, p+"int 800; bzero; itxn_field ApplicationArgs"+s, ep)
+	testApp(t, p+"int 801; bzero; itxn_field ApplicationArgs", ep,
+		"length too long")
+	testApp(t, p+"int 401; bzero; dup; itxn_field ApplicationArgs; itxn_field ApplicationArgs", ep,
+		"length too long")
+
+	testApp(t, p+strings.Repeat("byte 0x11; itxn_field ApplicationArgs;", 12)+s, ep)
+	testApp(t, p+strings.Repeat("byte 0x11; itxn_field ApplicationArgs;", 13)+s, ep,
+		"too many application args")
+
+	testApp(t, p+strings.Repeat("int 32; bzero; itxn_field Accounts;", 3)+s, ep,
+		"invalid Account reference")
+	ep.Txn.Txn.Accounts = append(ep.Txn.Txn.Accounts, basics.Address{})
+	testApp(t, fmt.Sprintf(p+"%s"+s,
+		strings.Repeat("int 32; bzero; itxn_field Accounts;", 3)), ep)
+	testApp(t, fmt.Sprintf(p+"%s"+s,
+		strings.Repeat("int 32; bzero; itxn_field Accounts;", 4)), ep,
+		"too many foreign accounts")
+
+	testApp(t, p+strings.Repeat("int 621; itxn_field Applications;", 5)+s, ep,
+		"invalid App reference")
+	ep.Txn.Txn.ForeignApps = append(ep.Txn.Txn.ForeignApps, basics.AppIndex(621))
+	testApp(t, p+strings.Repeat("int 621; itxn_field Applications;", 5)+s, ep)
+	testApp(t, p+strings.Repeat("int 621; itxn_field Applications;", 6)+s, ep,
+		"too many foreign apps")
+
+	testApp(t, p+strings.Repeat("int 621; itxn_field Assets;", 6)+s, ep,
+		"invalid Asset reference")
+	ep.Txn.Txn.ForeignAssets = append(ep.Txn.Txn.ForeignAssets, basics.AssetIndex(621))
+	testApp(t, p+strings.Repeat("int 621; itxn_field Assets;", 6)+s, ep)
+	testApp(t, p+strings.Repeat("int 621; itxn_field Assets;", 7)+s, ep,
+		"too many foreign assets")
+
+	testApp(t, p+"int 2700; bzero; itxn_field ApprovalProgram"+s, ep)
+	testApp(t, p+"int 2701; bzero; itxn_field ApprovalProgram"+s, ep,
+		"may not exceed 2700")
+	testApp(t, p+"int 2700; bzero; itxn_field ClearStateProgram"+s, ep)
+	testApp(t, p+"int 2701; bzero; itxn_field ClearStateProgram"+s, ep,
+		"may not exceed 2700")
+
+	testApp(t, p+"int 30; itxn_field GlobalNumUint"+s, ep)
+	testApp(t, p+"int 31; itxn_field GlobalNumUint"+s, ep, "too large")
+	testApp(t, p+"int 30; itxn_field GlobalNumByteSlice"+s, ep)
+	testApp(t, p+"int 31; itxn_field GlobalNumByteSlice"+s, ep, "too large")
+	testApp(t, p+"int 20; itxn_field GlobalNumUint; int 11; itxn_field GlobalNumByteSlice"+s, ep)
+
+	testApp(t, p+"int 13; itxn_field LocalNumUint"+s, ep)
+	testApp(t, p+"int 14; itxn_field LocalNumUint"+s, ep, "too large")
+	testApp(t, p+"int 13; itxn_field LocalNumByteSlice"+s, ep)
+	testApp(t, p+"int 14; itxn_field LocalNumByteSlice"+s, ep, "too large")
+
+	testApp(t, p+"int 2; itxn_field ExtraProgramPages"+s, ep)
+	testApp(t, p+"int 3; itxn_field ExtraProgramPages"+s, ep, "too large")
+}
+
+// TestApplSubmission tests for checking of illegal appl transaction in form
+// only.  Things where interactions between two different fields causes the
+// error.  These are not exhaustive, but certainly demonstrate that WellFormed
+// is getting a crack at the txn.
+func TestApplSubmission(t *testing.T) {
+	ep, ledger := makeSampleEnv()
+	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
+	// Since the fee is moved first, fund the app
+	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+
+	p := "itxn_begin; int appl; itxn_field TypeEnum;"
+	s := ";itxn_submit; int 1"
+	testApp(t, p+""+s, ep)
+
+	testApp(t, p+`int 600; bzero; itxn_field ApprovalProgram;
+                  int 600; bzero; itxn_field ClearStateProgram;`+s, ep)
+	testApp(t, p+`int 601; bzero; itxn_field ApprovalProgram;
+                  int 600; bzero; itxn_field ClearStateProgram;`+s, ep, "too long")
+
+	// WellFormed does the math based on the supplied ExtraProgramPages
+	testApp(t, p+`int 1; itxn_field ExtraProgramPages
+                  int 1200; bzero; itxn_field ApprovalProgram;
+                  int 1200; bzero; itxn_field ClearStateProgram;`+s, ep)
+	testApp(t, p+`int 1; itxn_field ExtraProgramPages
+                  int 1200; bzero; itxn_field ApprovalProgram;
+                  int 1201; bzero; itxn_field ClearStateProgram;`+s, ep, "too long")
+
+	// Can't set epp when app id is given
+	ep.Txn.Txn.ForeignApps = append(ep.Txn.Txn.ForeignApps, basics.AppIndex(7))
+	testApp(t, p+`int 1; itxn_field ExtraProgramPages;
+                  int 7; itxn_field ApplicationID`+s, ep, "immutable")
+
+	testApp(t, p+"int 20; itxn_field GlobalNumUint; int 11; itxn_field GlobalNumByteSlice"+s,
+		ep, "too large")
+	testApp(t, p+"int 7; itxn_field LocalNumUint; int 7; itxn_field LocalNumByteSlice"+s,
+		ep, "too large")
 }

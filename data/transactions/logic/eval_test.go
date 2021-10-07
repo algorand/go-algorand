@@ -82,6 +82,16 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 		MaxAppTxnAccounts:      3,
 		MaxAppTxnForeignApps:   5,
 		MaxAppTxnForeignAssets: 6,
+
+		MaxAppArgs:        12,
+		MaxAppTotalArgLen: 800,
+
+		MaxAppProgramLen:        900,
+		MaxAppTotalProgramLen:   1200, // Weird, but better tests
+		MaxExtraAppProgramPages: 2,
+
+		MaxGlobalSchemaEntries: 30,
+		MaxLocalSchemaEntries:  13,
 	}
 }
 

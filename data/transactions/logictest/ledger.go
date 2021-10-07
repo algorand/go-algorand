@@ -704,6 +704,10 @@ func (l *Ledger) afrz(from basics.Address, frz transactions.AssetFreezeTxnFields
 	return nil
 }
 
+func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnFields) error {
+	return nil
+}
+
 /* It's gross to reimplement this here, rather than have a way to use
    a ledger that's backed by our mock, but uses the "real" code
    (cowRoundState which implements Balances), as a better test. To
@@ -738,6 +742,8 @@ func (l *Ledger) Perform(txn *transactions.Transaction, spec transactions.Specia
 		ad, err = l.acfg(txn.Sender, txn.AssetConfigTxnFields)
 	case protocol.AssetFreezeTx:
 		err = l.afrz(txn.Sender, txn.AssetFreezeTxnFields)
+	case protocol.ApplicationCallTx:
+		err = l.appl(txn.Sender, txn.ApplicationCallTxnFields)
 	default:
 		err = fmt.Errorf("%s txn in AVM", txn.Type)
 	}
