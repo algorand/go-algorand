@@ -738,7 +738,7 @@ func TestPrivateTransactionGroup(t *testing.T) {
 
 // BlockEvaluator.workaroundOverspentRewards() fixed a couple issues on testnet.
 // This is now part of history and has to be re-created when running catchup on testnet. So, test to ensure it keeps happenning.
-/*func TestTestnetFixup(t *testing.T) {
+func TestTestnetFixup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	eval := &BlockEvaluator{}
@@ -779,19 +779,16 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	genesisInitState.Block.BlockHeader.GenesisID = "testnet"
 	genesisInitState.GenesisHash = testnetGenesisHash
 
-	// for addr, adata := range genesisInitState.Accounts {
-	// 	t.Logf("%s: %+v", addr.String(), adata)
-	// }
 	rewardPoolBalance := genesisInitState.Accounts[testPoolAddr]
 	nextPoolBalance := rewardPoolBalance.MicroAlgos.Raw + poolBonus
 
-	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
-	require.NoError(t, err)
-	defer l.Close()
+	l := newTestLedger(t, bookkeeping.GenesisBalances{
+		Balances:    genesisInitState.Accounts,
+		FeeSink:     testSinkAddr,
+		RewardsPool: testPoolAddr,
+	})
+	l.blocks[0] = genesisInitState.Block
+	l.genesisHash = genesisInitState.GenesisHash
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
 	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
@@ -828,7 +825,6 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	require.Equal(t, nextPoolBalance, poolOld.MicroAlgos.Raw)
 	require.NoError(t, err)
 }
-*/
 
 // Test that ModifiedAssetHoldings in StateDelta is set correctly.
 func TestModifiedAssetHoldings(t *testing.T) {
