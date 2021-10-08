@@ -438,10 +438,7 @@ func (t Type) ByteLen() (int, error) {
 		return singleBoolSize, nil
 	case ArrayStatic:
 		if t.childTypes[0].abiTypeID == Bool {
-			byteLen := int(t.staticLength) / 8
-			if t.staticLength%8 != 0 {
-				byteLen++
-			}
+			byteLen := int(t.staticLength+7) / 8
 			return byteLen, nil
 		}
 		elemByteLen, err := t.childTypes[0].ByteLen()
@@ -459,10 +456,7 @@ func (t Type) ByteLen() (int, error) {
 				i += after
 				// get number of bool
 				boolNum := after + 1
-				size += boolNum / 8
-				if boolNum%8 != 0 {
-					size++
-				}
+				size += (boolNum + 7) / 8
 			} else {
 				childByteSize, err := t.childTypes[i].ByteLen()
 				if err != nil {
