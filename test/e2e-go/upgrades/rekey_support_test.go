@@ -59,9 +59,28 @@ func TestRekeyUpgrade(t *testing.T) {
 	addrB, err := basics.UnmarshalChecksumAddress(accountB)
 	a.NoError(err)
 
+	accountC, err := client.GenerateAddress(wh)
+	a.NoError(err)
+
+	accountD, err := client.GenerateAddress(wh)
+	a.NoError(err)
+
+	addrD, err := basics.UnmarshalChecksumAddress(accountD)
+	a.NoError(err)
+
 	fee := uint64(1000)
 	amount := uint64(1000000)
 	lease := [32]byte{}
+
+	// move some money from accountA -> accountC
+	tx, err := client.ConstructPayment(accountA, accountC, fee, amount*10, nil, "", lease, basics.Round(0), basics.Round(0))
+	a.NoError(err)
+
+	fundAccountC, err := client.SignTransactionWithWallet(wh, nil, tx)
+	a.NoError(err)
+
+	_, err = client.BroadcastTransaction(fundAccountC)
+	a.NoError(err)
 
 	curStatus, err := client.Status()
 	a.NoError(err)
@@ -79,11 +98,11 @@ func TestRekeyUpgrade(t *testing.T) {
 	a.Equal(basics.Address{}, ad.AuthAddr)
 
 	// rekey A -> B (RekeyTo check)
-	tx, err := client.ConstructPayment(accountA, accountB, fee, amount, nil, "", lease, basics.Round(round), basics.Round(initialStatus.NextVersionRound).SubSaturate(1))
+	tx, err = client.ConstructPayment(accountA, accountB, fee, amount, nil, "", lease, basics.Round(round), basics.Round(initialStatus.NextVersionRound).SubSaturate(1))
 	a.NoError(err)
 
 	tx.RekeyTo = addrB
-	rekey, err := client.SignTransactionWithWalletAndSigner(wh, nil, "", tx)
+	rekey, err := client.SignTransactionWithWallet(wh, nil, tx)
 	a.NoError(err)
 
 	_, err = client.BroadcastTransaction(rekey)
@@ -137,12 +156,11 @@ func TestRekeyUpgrade(t *testing.T) {
 	}
 
 	// now that the network already upgraded:
-
-	tx, err = client.ConstructPayment(accountA, accountB, fee, amount, nil, "", lease, basics.Round(round), basics.Round(round+1000))
+	tx, err = client.ConstructPayment(accountC, accountD, fee, amount, nil, "", lease, basics.Round(round), basics.Round(round+1000))
 	a.NoError(err)
-	tx.RekeyTo = addrB
+	tx.RekeyTo = addrD
 
-	rekey, err = client.SignTransactionWithWalletAndSigner(wh, nil, "", tx)
+	rekey, err = client.SignTransactionWithWallet(wh, nil, tx)
 	a.NoError(err)
 
 	// now, that we have upgraded to the new protocol which supports rekey, try again.
@@ -155,7 +173,7 @@ func TestRekeyUpgrade(t *testing.T) {
 
 	// use rekeyed key to authorize (AuthAddr check)
 	tx.RekeyTo = basics.Address{}
-	rekeyed, err = client.SignTransactionWithWalletAndSigner(wh, nil, accountB, tx)
+	rekeyed, err = client.SignTransactionWithWalletAndSigner(wh, nil, accountD, tx)
 	a.NoError(err)
 
 	_, err = client.BroadcastTransaction(rekeyed)
