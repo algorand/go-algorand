@@ -42,7 +42,15 @@ type indexerLedgerForEval interface {
 	LatestTotals() (ledgercore.AccountTotals, error)
 }
 
-// Converter between indexerLedgerForEval and LedgerForEvaluator interfaces.
+// EvalForIndexerResources contains resources preloaded from the Indexer database.
+// Indexer is able to do the preloading more efficiently than the evaluator loading
+// resources one by one.
+type EvalForIndexerResources = internal.EvalForIndexerResources
+
+// Creatable represent a single creatable object.
+type Creatable = internal.Creatable
+
+// Converter between indexerLedgerForEval and ledgerForEvaluator interfaces.
 type indexerLedgerConnector struct {
 	il          indexerLedgerForEval
 	genesisHash crypto.Digest
@@ -133,40 +141,12 @@ func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Dige
 	}
 }
 
-// Write the list of addresses referenced in `txn` to `out`. Addresses might repeat.
-func getTxnAddresses(txn *transactions.Transaction, out *[]basics.Address) {
-	*out = (*out)[:0]
-
-	*out = append(
-		*out, txn.Sender, txn.Receiver, txn.CloseRemainderTo, txn.AssetSender,
-		txn.AssetReceiver, txn.AssetCloseTo, txn.FreezeAccount)
-	*out = append(*out, txn.ApplicationCallTxnFields.Accounts...)
-}
-
-// Returns all addresses referenced in `block`.
-func getBlockAddresses(block *bookkeeping.Block) map[basics.Address]struct{} {
-	// Reserve a reasonable memory size for the map.
-	res := make(map[basics.Address]struct{}, len(block.Payset)+2)
-	res[block.FeeSink] = struct{}{}
-	res[block.RewardsPool] = struct{}{}
-
-	var refAddresses []basics.Address
-	for _, stib := range block.Payset {
-		getTxnAddresses(&stib.Txn, &refAddresses)
-		for _, address := range refAddresses {
-			res[address] = struct{}{}
-		}
-	}
-
-	return res
-}
-
 // EvalForIndexer evaluates a block without validation using the given `proto`.
 // Return the state delta and transactions with modified apply data according to `proto`.
 // This function is used by Indexer which modifies `proto` to retrieve the asset
 // close amount for each transaction even when the real consensus parameters do not
 // support it.
-func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto config.ConsensusParams) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
+func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto config.ConsensusParams, resources EvalForIndexerResources) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
 	ilc := makeIndexerLedgerConnector(il, block.GenesisHash(), block.Round()-1)
 
 	eval, err := internal.StartEvaluator(
@@ -176,15 +156,7 @@ func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto con
 			fmt.Errorf("EvalForIndexer() err: %w", err)
 	}
 
-	// Preload most needed accounts.
-	{
-		accountDataMap, err := il.LookupWithoutRewards(getBlockAddresses(block))
-		if err != nil {
-			return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
-				fmt.Errorf("EvalForIndexer() err: %w", err)
-		}
-		eval.PreloadAccountDataCache(accountDataMap)
-	}
+	eval.SaveResourcesInCowBase(resources)
 
 	return eval.ProcessBlockForIndexer(block)
 }

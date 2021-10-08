@@ -68,3 +68,26 @@ func (eval *BlockEvaluator) PreloadAccountDataCache(accountDataMap map[basics.Ad
 		}
 	}
 }
+
+// EvalForIndexerResources contains resources preloaded from the Indexer database.
+// Indexer is able to do the preloading more efficiently than the evaluator loading
+// resources one by one.
+type EvalForIndexerResources struct {
+	// The map value is nil iff the account does not exist. The account data is owned here.
+	Accounts map[basics.Address]*basics.AccountData
+	Creators map[Creatable]ledgercore.FoundAddress
+}
+
+// SaveResourcesInCowBase saves the given resources into the rowCowBase accounts & creators cache.
+func (eval *BlockEvaluator) SaveResourcesInCowBase(resources EvalForIndexerResources) {
+	base := eval.state.lookupParent.(*roundCowBase)
+	for address, accountData := range resources.Accounts {
+		if accountData == nil {
+			base.accounts[address] = basics.AccountData{}
+		} else {
+			base.accounts[address] = *accountData
+		}
+	}
+
+	base.creators = resources.Creators
+}

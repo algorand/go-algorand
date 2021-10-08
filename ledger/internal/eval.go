@@ -58,7 +58,8 @@ const maxPaysetHint = 20000
 // transaction group.
 const asyncAccountLoadingThreadCount = 4
 
-type creatable struct {
+// Creatable represent a single creatable object.
+type Creatable struct {
 	cindex basics.CreatableIndex
 	ctype  basics.CreatableType
 }
@@ -90,11 +91,23 @@ type roundCowBase struct {
 	accounts map[basics.Address]basics.AccountData
 
 	// Similar cache for asset/app creators.
-	creators map[creatable]ledgercore.FoundAddress
+	creators map[Creatable]ledgercore.FoundAddress
+}
+
+func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, compactCertNextRnd basics.Round, proto config.ConsensusParams) *roundCowBase {
+	return &roundCowBase{
+		l:                  l,
+		rnd:                rnd,
+		txnCount:           txnCount,
+		compactCertNextRnd: compactCertNextRnd,
+		proto:              proto,
+		accounts:           make(map[basics.Address]basics.AccountData),
+		creators:           make(map[Creatable]ledgercore.FoundAddress),
+	}
 }
 
 func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
-	creatable := creatable{cindex: cidx, ctype: ctype}
+	creatable := Creatable{cindex: cidx, ctype: ctype}
 
 	if foundAddress, ok := x.creators[creatable]; ok {
 		return foundAddress.Address, foundAddress.Exists, nil
@@ -417,18 +430,12 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 		return nil, protocol.Error(prevHeader.CurrentProtocol)
 	}
 
-	base := &roundCowBase{
-		l: l,
-		// round that lookups come from is previous block.  We validate
-		// the block at this round below, so underflow will be caught.
-		// If we are not validating, we must have previously checked
-		// an agreement.Certificate attesting that hdr is valid.
-		rnd:      hdr.Round - 1,
-		txnCount: prevHeader.TxnCounter,
-		proto:    proto,
-		accounts: make(map[basics.Address]basics.AccountData),
-		creators: make(map[creatable]ledgercore.FoundAddress),
-	}
+	// Round that lookups come from is previous block.  We validate
+	// the block at this round below, so underflow will be caught.
+	// If we are not validating, we must have previously checked
+	// an agreement.Certificate attesting that hdr is valid.
+	base := makeRoundCowBase(
+		l, hdr.Round-1, prevHeader.TxnCounter, basics.Round(0), proto)
 
 	eval := &BlockEvaluator{
 		validate:   validate,
@@ -1033,6 +1040,8 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			eval.block.TxnCounter = 0
 		}
 
+		eval.generateExpiredOnlineAccountsList()
+
 		if eval.proto.CompactCertRounds > 0 {
 			var basicCompactCert bookkeeping.CompactCertState
 			basicCompactCert.CompactCertVoters, basicCompactCert.CompactCertVotersTotal, err = eval.compactCertVotersAndTotal()
@@ -1047,6 +1056,137 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		}
 	}
 
+	err := eval.validateExpiredOnlineAccounts()
+	if err != nil {
+		return err
+	}
+
+	err = eval.resetExpiredOnlineAccountsParticipationKeys()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// generateExpiredOnlineAccountsList creates the list of the expired participation accounts by traversing over the
+// modified accounts in the state deltas and testing if any of them needs to be reset.
+func (eval *BlockEvaluator) generateExpiredOnlineAccountsList() {
+	if !eval.generate {
+		return
+	}
+	// We are going to find the list of modified accounts and the
+	// current round that is being evaluated.
+	// Then we are going to go through each modified account and
+	// see if it meets the criteria for adding it to the expired
+	// participation accounts list.
+	modifiedAccounts := eval.state.mods.Accts.ModifiedAccounts()
+	currentRound := eval.Round()
+
+	expectedMaxNumberOfExpiredAccounts := eval.proto.MaxProposedExpiredOnlineAccounts
+
+	for i := 0; i < len(modifiedAccounts) && len(eval.block.ParticipationUpdates.ExpiredParticipationAccounts) < expectedMaxNumberOfExpiredAccounts; i++ {
+		accountAddr := modifiedAccounts[i]
+		acctDelta, found := eval.state.mods.Accts.Get(accountAddr)
+		if !found {
+			continue
+		}
+
+		// true if the account is online
+		isOnline := acctDelta.Status == basics.Online
+		// true if the accounts last valid round has passed
+		pastCurrentRound := acctDelta.VoteLastValid < currentRound
+
+		if isOnline && pastCurrentRound {
+			eval.block.ParticipationUpdates.ExpiredParticipationAccounts = append(
+				eval.block.ParticipationUpdates.ExpiredParticipationAccounts,
+				accountAddr,
+			)
+		}
+	}
+}
+
+// validateExpiredOnlineAccounts tests the expired online accounts specified in ExpiredParticipationAccounts, and verify
+// that they have all expired and need to be reset.
+func (eval *BlockEvaluator) validateExpiredOnlineAccounts() error {
+	if !eval.validate {
+		return nil
+	}
+	expectedMaxNumberOfExpiredAccounts := eval.proto.MaxProposedExpiredOnlineAccounts
+	lengthOfExpiredParticipationAccounts := len(eval.block.ParticipationUpdates.ExpiredParticipationAccounts)
+
+	// If the length of the array is strictly greater than our max then we have an error.
+	// This works when the expected number of accounts is zero (i.e. it is disabled) as well
+	if lengthOfExpiredParticipationAccounts > expectedMaxNumberOfExpiredAccounts {
+		return fmt.Errorf("length of expired accounts (%d) was greater than expected (%d)",
+			lengthOfExpiredParticipationAccounts, expectedMaxNumberOfExpiredAccounts)
+	}
+
+	// For security reasons, we need to make sure that all addresses in the expired participation accounts
+	// are unique.  We make this map to keep track of previously seen address
+	addressSet := make(map[basics.Address]bool, lengthOfExpiredParticipationAccounts)
+
+	// Validate that all expired accounts meet the current criteria
+	currentRound := eval.Round()
+	for _, accountAddr := range eval.block.ParticipationUpdates.ExpiredParticipationAccounts {
+
+		if _, exists := addressSet[accountAddr]; exists {
+			// We shouldn't have duplicate addresses...
+			return fmt.Errorf("duplicate address found: %v", accountAddr)
+		}
+
+		// Record that we have seen this address
+		addressSet[accountAddr] = true
+
+		acctData, err := eval.state.lookup(accountAddr)
+		if err != nil {
+			return fmt.Errorf("endOfBlock was unable to retrieve account %v : %w", accountAddr, err)
+		}
+
+		// true if the account is online
+		isOnline := acctData.Status == basics.Online
+		// true if the accounts last valid round has passed
+		pastCurrentRound := acctData.VoteLastValid < currentRound
+
+		if !isOnline {
+			return fmt.Errorf("endOfBlock found %v was not online but %v", accountAddr, acctData.Status)
+		}
+
+		if !pastCurrentRound {
+			return fmt.Errorf("endOfBlock found %v round (%d) was not less than current round (%d)", accountAddr, acctData.VoteLastValid, currentRound)
+		}
+	}
+	return nil
+}
+
+// resetExpiredOnlineAccountsParticipationKeys after all transactions and rewards are processed, modify the accounts so that their status is offline
+func (eval *BlockEvaluator) resetExpiredOnlineAccountsParticipationKeys() error {
+
+	expectedMaxNumberOfExpiredAccounts := eval.proto.MaxProposedExpiredOnlineAccounts
+	lengthOfExpiredParticipationAccounts := len(eval.block.ParticipationUpdates.ExpiredParticipationAccounts)
+
+	// If the length of the array is strictly greater than our max then we have an error.
+	// This works when the expected number of accounts is zero (i.e. it is disabled) as well
+	if lengthOfExpiredParticipationAccounts > expectedMaxNumberOfExpiredAccounts {
+		return fmt.Errorf("length of expired accounts (%d) was greater than expected (%d)",
+			lengthOfExpiredParticipationAccounts, expectedMaxNumberOfExpiredAccounts)
+	}
+
+	for _, accountAddr := range eval.block.ParticipationUpdates.ExpiredParticipationAccounts {
+		acctData, err := eval.state.lookup(accountAddr)
+		if err != nil {
+			return fmt.Errorf("resetExpiredOnlineAccountsParticipationKeys was unable to retrieve account %v : %w", accountAddr, err)
+		}
+
+		// Reset the appropriate account data
+		acctData.ClearOnlineState()
+
+		// Update the account information
+		err = eval.state.Put(accountAddr, acctData)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -1089,6 +1229,7 @@ func (eval *BlockEvaluator) finalValidation() error {
 				return fmt.Errorf("CompactCertType %d unexpected", ccType)
 			}
 		}
+
 	}
 
 	return eval.state.CalculateTotals()
