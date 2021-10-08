@@ -201,10 +201,9 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
 	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
 
-	dbs := ml.trackerDB()
 	kv := ml.kvStore()
-	err = atomicReads(dbs.Rdb, kv, func(ctx context.Context, tx *atomicReadTx) (err error) {
-		writer := makeCatchpointWriter(context.Background(), fileName, tx, blocksRound, blockHeaderDigest, catchpointLabel)
+	err = atomicKVReads(kv, true, func(kvRead kvRead, kvWrite kvWrite) (err error) {
+		writer := makeCatchpointWriter(context.Background(), fileName, kvRead, blocksRound, blockHeaderDigest, catchpointLabel)
 		for {
 			more, err := writer.WriteStep(context.Background())
 			require.NoError(t, err)
@@ -301,10 +300,9 @@ func TestFullCatchpointWriter(t *testing.T) {
 	blocksRound := basics.Round(12345)
 	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
 	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
-	dbs := ml.trackerDB()
 	kv := ml.kvStore()
-	err = atomicReads(dbs.Rdb, kv, func(ctx context.Context, tx *atomicReadTx) (err error) {
-		writer := makeCatchpointWriter(context.Background(), fileName, tx, blocksRound, blockHeaderDigest, catchpointLabel)
+	err = atomicKVReads(kv, true, func(kvRead kvRead, kvWrite kvWrite) (err error) {
+		writer := makeCatchpointWriter(context.Background(), fileName, kvRead, blocksRound, blockHeaderDigest, catchpointLabel)
 		for {
 			more, err := writer.WriteStep(context.Background())
 			require.NoError(t, err)

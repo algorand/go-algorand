@@ -569,12 +569,12 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 			var accts map[basics.Address]*onlineAccount
 			start := time.Now()
 			ledgerAccountsonlinetopCount.Inc(nil)
-			err = atomicReads(au.dbs.Rdb, au.kv, func(ctx context.Context, tx *atomicReadTx) (err error) {
-				accts, err = accountsOnlineTop(tx.kvRead, batchOffset, batchSize, proto)
+			err = atomicKVReads(au.kv, true, func(kvRead kvRead, kvWrite kvWrite) (err error) {
+				accts, err = accountsOnlineTop(kvRead, batchOffset, batchSize, proto)
 				if err != nil {
 					return
 				}
-				dbRound, _, err = accountsRound(tx.kvRead)
+				dbRound, _, err = accountsRound(kvRead)
 				return
 			})
 			ledgerAccountsonlinetopMicros.AddMicrosecondsSince(start, nil)
@@ -2172,10 +2172,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	if updateStats {
 		stats.DatabaseCommitDuration = time.Duration(time.Now().UnixNano())
 	}
-	err := atomicWrites(au.dbs.Wdb, au.kv, func(ctx context.Context, tx *atomicWriteTx) (err error) {
+	err := atomicKVWrites(au.kv, func(kvRead kvReadDB, kvWrite kvWrite) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
-			mc, err0 := MakeMerkleCommitter(tx.kvRead, tx.kvWrite, false)
+			mc, err0 := MakeMerkleCommitter(kvRead, kvWrite, false)
 			if err0 != nil {
 				return err0
 			}
@@ -2192,14 +2192,14 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
 
-		db.ResetTransactionWarnDeadline(ctx, tx.sqlTx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
+		//db.ResetTransactionWarnDeadline(ctx, tx.sqlTx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
 
 		if updateStats {
 			stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano())
 		}
 
 		// XXX this doesn't really belong in the write transaction (?)
-		err = compactDeltas.accountsLoadOld(tx.kvRead)
+		err = compactDeltas.accountsLoadOld(kvRead)
 		if err != nil {
 			return err
 		}
@@ -2209,7 +2209,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 
 		// totalsNewRounds reads totals KV and then overwrites it
-		err = totalsNewRounds(tx.kvRead, tx.kvWrite, deltas[:offset], compactDeltas, roundTotals[1:offset+1], config.Consensus[consensusVersion])
+		err = totalsNewRounds(kvRead, kvWrite, deltas[:offset], compactDeltas, roundTotals[1:offset+1], config.Consensus[consensusVersion])
 		if err != nil {
 			return err
 		}
@@ -2231,7 +2231,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 		// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
 		// so that we can update the base account back.
-		updatedPersistedAccounts, err = accountsNewRound(tx.kvWrite, compactDeltas, compactCreatableDeltas, genesisProto, dbRound+basics.Round(offset))
+		updatedPersistedAccounts, err = accountsNewRound(kvWrite, compactDeltas, compactCreatableDeltas, genesisProto, dbRound+basics.Round(offset))
 		if err != nil {
 			return err
 		}
@@ -2241,7 +2241,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 
 		// XXX passing in KV reader that can't see current batch -- needs barrier?
-		err = updateAccountsRound(tx.kvRead, tx.kvWrite, dbRound+basics.Round(offset), treeTargetRound)
+		err = updateAccountsRound(kvRead, kvWrite, dbRound+basics.Round(offset), treeTargetRound)
 		if err != nil {
 			return err
 		}
@@ -2445,8 +2445,8 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 	var catchpointWriter *catchpointWriter
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
-	err = atomicReads(au.dbs.Rdb, au.kv, func(ctx context.Context, tx *atomicReadTx) (err error) {
-		catchpointWriter = makeCatchpointWriter(au.ctx, absCatchpointFileName, tx, committedRound, committedRoundDigest, label)
+	err = atomicKVReads(au.kv, true, func(kvRead kvRead, kvWrite kvWrite) (err error) {
+		catchpointWriter = makeCatchpointWriter(au.ctx, absCatchpointFileName, kvRead, committedRound, committedRoundDigest, label)
 		for more {
 			stepCtx, stepCancelFunction := context.WithTimeout(au.ctx, chunkExecutionDuration)
 			writeStepStartTime := time.Now()
@@ -2458,7 +2458,7 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 				// we just wrote some data, but there is more to be written.
 				// go to sleep for while.
 				// before going to sleep, extend the transaction timeout so that we won't get warnings:
-				db.ResetTransactionWarnDeadline(ctx, tx.sqlTx, time.Now().Add(1*time.Second))
+				//db.ResetTransactionWarnDeadline(ctx, tx.sqlTx, time.Now().Add(1*time.Second))
 				select {
 				case <-time.After(100 * time.Millisecond):
 					// increase the time slot allocated for writing the catchpoint, but stop when we get to the longChunkExecutionDuration limit.

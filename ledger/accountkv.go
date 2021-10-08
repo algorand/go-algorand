@@ -254,6 +254,17 @@ func atomicWrites(db db.Accessor, kv kvstore.KVStore, f func(context.Context, *a
 	})
 }
 
+// atomicKVWrites makes a KV batch with no SQL transaction
+func atomicKVWrites(kv kvstore.KVStore, f func(kvReadDB, kvWrite) error) error {
+	batch := kv.NewBatch()
+	err := f(&kvLogReader{kv: kv}, batch)
+	if err == nil {
+		return batch.Commit()
+	}
+	batch.Cancel()
+	return err
+}
+
 // writeBarrier commits and starts a new batch
 func (t *atomicWriteTx) writeBarrier() {
 	batch := (t.kvWrite).(kvstore.BatchWriter)
@@ -269,6 +280,17 @@ func atomicReads(db db.Accessor, kv kvstore.KVStore, f func(context.Context, *at
 		atx := &atomicReadTx{sqlTx: tx, kvRead: snap, kvWrite: kvErrWriter{}}
 		return f(ctx, atx)
 	})
+}
+
+// atomic KV reads with no SQL transaction. option to make snapshot for consistency
+func atomicKVReads(kv kvstore.KVStore, snapshot bool, f func(kvRead kvRead, kvWrite kvWrite) error) error {
+	// using read snapshot to provide consistent reads
+	if snapshot {
+		snap := kv.NewSnapshot()
+		defer snap.Close()
+		return f(snap, kvErrWriter{})
+	}
+	return f(kv, kvErrWriter{})
 }
 
 // use the same row ID for all KV rows, just to have something non-zero

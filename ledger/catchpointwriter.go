@@ -51,7 +51,7 @@ type catchpointWriter struct {
 	ctx               context.Context
 	hasher            hash.Hash
 	innerWriter       io.WriteCloser
-	tx                *atomicReadTx
+	kvRead            kvRead
 	filePath          string
 	file              *os.File
 	gzip              *gzip.Writer
@@ -95,11 +95,11 @@ type catchpointFileBalancesChunk struct {
 	Balances []encodedBalanceRecord `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
-func makeCatchpointWriter(ctx context.Context, filePath string, tx *atomicReadTx, blocksRound basics.Round, blockHeaderDigest crypto.Digest, label string) *catchpointWriter {
+func makeCatchpointWriter(ctx context.Context, filePath string, kvRead kvRead, blocksRound basics.Round, blockHeaderDigest crypto.Digest, label string) *catchpointWriter {
 	return &catchpointWriter{
 		ctx:               ctx,
 		filePath:          filePath,
-		tx:                tx,
+		kvRead:            kvRead,
 		blocksRound:       blocksRound,
 		blockHeaderDigest: blockHeaderDigest,
 		label:             label,
@@ -141,7 +141,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 	}
 
 	if cw.fileHeader == nil {
-		err = cw.readHeaderFromDatabase(cw.ctx, cw.tx)
+		err = cw.readHeaderFromDatabase(cw.ctx, cw.kvRead)
 		if err != nil {
 			return
 		}
@@ -194,7 +194,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 		}
 
 		if len(cw.balancesChunk.Balances) == 0 {
-			err = cw.readDatabaseStep(cw.ctx, cw.tx)
+			err = cw.readDatabaseStep(cw.ctx, cw.kvRead)
 			if err != nil {
 				return
 			}
@@ -283,25 +283,25 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 	}
 }
 
-func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *atomicReadTx) (err error) {
-	cw.balancesChunk.Balances, err = cw.accountsIterator.Next(ctx, tx.kvRead, BalancesPerCatchpointFileChunk)
+func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, kvRead kvRead) (err error) {
+	cw.balancesChunk.Balances, err = cw.accountsIterator.Next(ctx, kvRead, BalancesPerCatchpointFileChunk)
 	if err == nil {
 		cw.balancesOffset += BalancesPerCatchpointFileChunk
 	}
 	return
 }
 
-func (cw *catchpointWriter) readHeaderFromDatabase(ctx context.Context, tx *atomicReadTx) (err error) {
+func (cw *catchpointWriter) readHeaderFromDatabase(ctx context.Context, kvRead kvRead) (err error) {
 	var header CatchpointFileHeader
-	header.BalancesRound, _, err = accountsRound(tx.kvRead)
+	header.BalancesRound, _, err = accountsRound(kvRead)
 	if err != nil {
 		return
 	}
-	header.Totals, err = accountsTotals(tx.kvRead, false)
+	header.Totals, err = accountsTotals(kvRead, false)
 	if err != nil {
 		return
 	}
-	header.TotalAccounts, err = totalAccounts(context.Background(), tx.kvRead)
+	header.TotalAccounts, err = totalAccounts(context.Background(), kvRead)
 	if err != nil {
 		return
 	}
