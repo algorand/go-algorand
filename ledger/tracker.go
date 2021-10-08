@@ -96,6 +96,7 @@ type ledgerForTracker interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	GenesisHash() crypto.Digest
 	GenesisProto() config.ConsensusParams
+	GenesisAccounts() map[basics.Address]basics.AccountData
 }
 
 type trackerRegistry struct {
