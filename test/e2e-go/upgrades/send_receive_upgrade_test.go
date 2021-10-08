@@ -17,6 +17,7 @@
 package upgrades
 
 import (
+	"fmt"
 	"math/rand"
 	"path/filepath"
 	"testing"
@@ -208,7 +209,12 @@ func runUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClien
 		if time.Now().After(startTime.Add(3 * time.Minute)) {
 			a.Fail("upgrade taking too long")
 		}
+		fmt.Println(curStatus.LastVersion)
+		fmt.Println(initialStatus.LastVersion)
 	}
+	fmt.Println(curStatus.LastVersion)
+	fmt.Println(initialStatus.LastVersion)
+
 
 	initialStatus, err = c.Status()
 	a.NoError(err, "getting status")

@@ -19,6 +19,7 @@ package upgrades
 import (
 	"path/filepath"
 	"testing"
+	//	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -43,12 +44,12 @@ func TestKeysWithoutStateProofKeyCannotRegister(t *testing.T) {
 	defer fixture.Shutdown()
 	lastValid := uint64(1000 * 5)
 
-	a.NoError(registerKey(&fixture, a, lastValid, protocol.ConsensusV29))
+	a.NoError(registerKey(&fixture, a, lastValid, protocol.ConsensusV30))
 	a.Error(registerKey(&fixture, a, lastValid+1, protocol.ConsensusFuture))
 
 	runUntilProtocolUpgrades(a, &fixture)
 
-	a.Error(registerKey(&fixture, a, lastValid+2, protocol.ConsensusV29))
+	a.Error(registerKey(&fixture, a, lastValid+2, protocol.ConsensusV30))
 	a.NoError(registerKey(&fixture, a, lastValid+3, protocol.ConsensusFuture))
 }
 
@@ -98,7 +99,7 @@ func getStateProofConcensus() config.ConsensusProtocols {
 	consensus := generateFastUpgradeConsensus()
 
 	// TODO: when upgrading from v29, need to change this from future to v30.
-	consensus[consensusTestFastUpgrade(protocol.ConsensusV29)].
+	consensus[consensusTestFastUpgrade(protocol.ConsensusV30)].
 		ApprovedUpgrades[consensusTestFastUpgrade(protocol.ConsensusFuture)] = 0
 	return consensus
 }
