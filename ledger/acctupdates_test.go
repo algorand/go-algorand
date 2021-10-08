@@ -1578,6 +1578,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			ledgerHistory[i] = ml.fork(t)
 			ledgerHistory[i].trackers.initialize(ml.trackers.driver, ledgerHistory[i])
 			ledgerHistory[i].trackers.register(au)
+			ledgerHistory[i].trackers.dbRound = ml.trackers.dbRound
 			defer ledgerHistory[i].Close()
 		}
 	}
@@ -1587,7 +1588,8 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	startingRound := basics.Round((testCatchpointLabelsCount - 1) * cfg.CatchpointInterval)
 	for ; startingRound > basics.Round(cfg.CatchpointInterval); startingRound -= basics.Round(cfg.CatchpointInterval) {
 		au.close()
-		err := au.loadFromDisk(ledgerHistory[startingRound], ml.trackers.dbRound)
+		ml2 := ledgerHistory[startingRound]
+		err := au.loadFromDisk(ml2, ml2.trackers.dbRound)
 		require.NoError(t, err)
 
 		for i := startingRound + 1; i <= basics.Round(testCatchpointLabelsCount*cfg.CatchpointInterval); i++ {
@@ -1600,11 +1602,11 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			blk.CurrentProtocol = testProtocolVersion
 			delta := roundDeltas[i]
 			au.newBlock(blk, delta)
-			ml.scheduleCommit(i)
+			ml2.scheduleCommit(i)
 
 			// if this is a catchpoint round, check the label.
 			if uint64(i)%cfg.CatchpointInterval == 0 {
-				ml.waitAccountsWriting()
+				ml2.waitAccountsWriting()
 				require.Equal(t, catchpointLabels[i], au.GetLastCatchpointLabel())
 			}
 		}
@@ -1640,8 +1642,6 @@ func TestCachesInitialization(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	au := newAcctUpdates(t, ml, conf, ".")
-	var trackers trackerRegistry
-	trackers.initialize(au, ml)
 
 	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
@@ -1682,8 +1682,8 @@ func TestCachesInitialization(t *testing.T) {
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
-		trackers.scheduleCommit(basics.Round(i))
-		trackers.waitAccountsWriting()
+		ml.scheduleCommit(basics.Round(i))
+		ml.waitAccountsWriting()
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -1703,9 +1703,9 @@ func TestCachesInitialization(t *testing.T) {
 
 	conf = config.GetDefaultLocal()
 	au = newAcctUpdates(t, ml2, conf, ".")
+	defer au.close()
 	err = au.loadFromDisk(ml2, 0)
 	require.NoError(t, err)
-	defer au.close()
 
 	// make sure the deltas array end up containing only the most recent 320 rounds.
 	require.Equal(t, int(proto.MaxBalLookback), len(au.deltas))
@@ -1821,7 +1821,7 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
-	// now, commit and verify that the scheduleCommittingTask method broken the range correctly.
+	// now, commit and verify that the produceCommittingTask method broken the range correctly.
 	ml.scheduleCommit(lastRoundToWrite)
 	ml.waitAccountsWriting()
 	require.Equal(t, basics.Round(initialRounds+extraRounds)-1, au.cachedDBRound)
@@ -1937,7 +1937,7 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
-	// now, commit and verify that the scheduleCommittingTask method broken the range correctly.
+	// now, commit and verify that the produceCommittingTask method broken the range correctly.
 	ml.scheduleCommit(endOfFirstNewProtocolSegment)
 	ml.waitAccountsWriting()
 	require.Equal(t, basics.Round(initialRounds+extraRounds)-1, au.cachedDBRound)

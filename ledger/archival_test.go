@@ -831,8 +831,7 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 		}
 
 		cleanTracker.close()
-		// minSave of accountUpdates matches to tracker db round, use it as dbRound in loadFromDisk
-		err := cleanTracker.loadFromDisk(wl, minSave)
+		err := cleanTracker.loadFromDisk(wl, wl.l.trackers.dbRound)
 		require.NoError(t, err)
 
 		cleanTracker.close()

@@ -82,8 +82,14 @@ type ledgerTracker interface {
 	// returning 0 means that no blocks can be deleted.
 	committedUpTo(basics.Round) basics.Round
 
+	// prepareCommit is called when it is time to commit tracker's data.
+	// The method must return a callback that persist data, and a callback for post-commit actions.
+	// These callback can nil if a tracker does not want to persist data.
 	prepareCommit(uint64, basics.Round, basics.Round) (commitRoundFn, postCommitRoundFn)
 
+	// handleUnorderedCommit is a special method for handling deferred commits that are out of order.
+	// Tracker might update own state in this case. For example, account updates tracker cancels
+	// scheduled catchpoint writing that deferred commit.
 	handleUnorderedCommit(uint64, basics.Round, basics.Round)
 
 	// close terminates the tracker, reclaiming any resources
@@ -149,7 +155,7 @@ func (tr *trackerRegistry) initialize(au *accountUpdates, l ledgerForTracker) (e
 	tr.dbs = l.trackerDB()
 	tr.log = l.trackerLog()
 
-	tr.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = tr.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		tr.dbRound, err = accountsRound(tx)
 		return err
 	})
@@ -214,10 +220,10 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound basics.Round) {
 	dbRound := tr.dbRound
 	tr.mu.RUnlock()
 
-	dc := tr.driver.scheduleCommittingTask(blockqRound, dbRound)
+	dc := tr.driver.produceCommittingTask(blockqRound, dbRound)
 	if dc.offset != 0 {
-		tr.committedOffset <- dc
 		tr.accountsWriting.Add(1)
+		tr.committedOffset <- dc
 	}
 }
 
@@ -231,7 +237,7 @@ func (tr *trackerRegistry) close() {
 		tr.ctxCancel()
 	}
 
-	// if trackerRegistry was initialized then cleanup
+	// close() is called from reloadLedger() and trackerRegistry is not initialized yet
 	if tr.commitSyncerClosed != nil {
 		tr.waitAccountsWriting()
 		// this would block until the commitSyncerClosed channel get closed.
@@ -272,10 +278,10 @@ func (tr *trackerRegistry) commitSyncer(deferredCommits chan deferredCommit) {
 }
 
 func (tr *trackerRegistry) commitRound(dc deferredCommit) {
+	defer tr.accountsWriting.Done()
+
 	tr.mu.Lock()
 	defer tr.mu.Unlock()
-
-	defer tr.accountsWriting.Done()
 
 	offset := dc.offset
 	dbRound := dc.dbRound
@@ -283,6 +289,7 @@ func (tr *trackerRegistry) commitRound(dc deferredCommit) {
 
 	// we can exit right away, as this is the result of mis-ordered call to committedUpTo.
 	if tr.dbRound < dbRound || offset < uint64(tr.dbRound-dbRound) {
+		tr.log.Warnf("out of order deferred commit: offset %d, dbRound %d but current tracker DB round is %d", offset, dbRound, tr.dbRound)
 		for _, lt := range tr.trackers {
 			lt.handleUnorderedCommit(offset, dbRound, lookback)
 		}

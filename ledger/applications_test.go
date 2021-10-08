@@ -38,6 +38,13 @@ func commitRound(offset uint64, dbRound basics.Round, l *Ledger) {
 	l.trackers.accountsWriting.Wait()
 }
 
+func stopCommitSyncer(l *Ledger) {
+	l.trackers.ctxCancel() // force commitSyncer to exit
+	// wait commitSyncer to exit
+	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
+	<-l.trackers.commitSyncerClosed
+}
+
 // test ensures that
 // 1) app's GlobalState and local state's KeyValue are stored in the same way
 // before and after application code refactoring
@@ -130,14 +137,8 @@ return`
 	l, err := OpenLedger(logging.Base(), "TestAppAccountData", true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
-	l.trackers.ctxCancel() // force commitSyncer to exit
 
-	// wait commitSyncer to exit
-	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
-	select {
-	case <-l.trackers.commitSyncerClosed:
-		break
-	}
+	stopCommitSyncer(l)
 
 	txHeader := transactions.Header{
 		Sender:      creator,
@@ -225,8 +226,10 @@ return`
 	a.NoError(err)
 	a.Equal(expectedUserOptIn, buf)
 	pad, err := l.accts.accountsq.lookup(userOptin)
+	a.NoError(err)
 	a.Nil(pad.accountData.AppLocalStates[appIdx].KeyValue)
 	ad, err := l.Lookup(dbRound, userOptin)
+	a.NoError(err)
 	a.Nil(ad.AppLocalStates[appIdx].KeyValue)
 
 	err = l.accts.accountsq.lookupStmt.QueryRow(userLocal[:]).Scan(&rowid, &dbRound, &buf)
@@ -344,14 +347,8 @@ return`
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
-	l.trackers.ctxCancel() // force commitSyncer to exit
 
-	// wait commitSyncer to exit
-	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
-	select {
-	case <-l.trackers.commitSyncerClosed:
-		break
-	}
+	stopCommitSyncer(l)
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -595,14 +592,8 @@ return`
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
-	l.trackers.ctxCancel() // force commitSyncer to exit
 
-	// wait commitSyncer to exit
-	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
-	select {
-	case <-l.trackers.commitSyncerClosed:
-		break
-	}
+	stopCommitSyncer(l)
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -752,14 +743,8 @@ return`
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
-	l.trackers.ctxCancel() // force commitSyncer to exit
 
-	// wait commitSyncer to exit
-	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
-	select {
-	case <-l.trackers.commitSyncerClosed:
-		break
-	}
+	stopCommitSyncer(l)
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -951,14 +936,8 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
-	l.trackers.ctxCancel() // force commitSyncer to exit
 
-	// wait commitSyncer to exit
-	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
-	select {
-	case <-l.trackers.commitSyncerClosed:
-		break
-	}
+	stopCommitSyncer(l)
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{

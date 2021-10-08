@@ -213,21 +213,11 @@ type accountUpdates struct {
 	// deltasAccum stores the accumulated deltas for every round starting dbRound-1.
 	deltasAccum []int
 
-	// // committedOffset is the offset at which we'd like to persist all the previous account information to disk.
-	// committedOffset chan deferredCommit
-
 	// accountsMu is the synchronization mutex for accessing the various non-static variables.
 	accountsMu deadlock.RWMutex
 
 	// accountsReadCond used to synchronize read access to the internal data structures.
 	accountsReadCond *sync.Cond
-
-	// // accountsWriting provides synchronization around the background writing of account balances.
-	// accountsWriting sync.WaitGroup
-
-	// // commitSyncerClosed is the blocking channel for synchronizing closing the commitSyncer goroutine. Once it's closed, the
-	// // commitSyncer can be assumed to have aborted.
-	// commitSyncerClosed chan struct{}
 
 	// voters keeps track of Merkle trees of online accounts, used for compact certificates.
 	voters *votersTracker
@@ -315,9 +305,6 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string) {
 	if cfg.CatchpointFileHistoryLength < -1 {
 		au.catchpointFileHistoryLength = -1
 	}
-	// // initialize the commitSyncerClosed with a closed channel ( since the commitSyncer go-routine is not active )
-	// au.commitSyncerClosed = make(chan struct{})
-	// close(au.commitSyncerClosed)
 
 	au.accountsReadCond = sync.NewCond(au.accountsMu.RLocker())
 	au.synchronousMode = db.SynchronousMode(cfg.LedgerSynchronousMode)
@@ -337,7 +324,7 @@ func (au *accountUpdates) catchpointEnabled() bool {
 func (au *accountUpdates) loadFromDisk(l ledgerForTracker, lastBalancesRound basics.Round) error {
 	au.accountsMu.Lock()
 	defer au.accountsMu.Unlock()
-	var writingCatchpointRound uint64
+
 	au.cachedDBRound = lastBalancesRound
 	lastestBlockRound := l.Latest()
 	err := au.initializeFromDisk(l, lastBalancesRound)
@@ -345,14 +332,12 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker, lastBalancesRound bas
 		return err
 	}
 
-	var writingCatchpointDigest crypto.Digest
-
-	writingCatchpointRound, _, err = au.accountsq.readCatchpointStateUint64(context.Background(), catchpointStateWritingCatchpoint)
+	writingCatchpointRound, _, err := au.accountsq.readCatchpointStateUint64(context.Background(), catchpointStateWritingCatchpoint)
 	if err != nil {
 		return err
 	}
 
-	writingCatchpointDigest, err = au.initializeCaches(lastBalancesRound, lastestBlockRound, basics.Round(writingCatchpointRound))
+	writingCatchpointDigest, err := au.initializeCaches(lastBalancesRound, lastestBlockRound, basics.Round(writingCatchpointRound))
 	if err != nil {
 		return err
 	}
@@ -370,11 +355,6 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker, lastBalancesRound bas
 	return nil
 }
 
-// // waitAccountsWriting waits for all the pending ( or current ) account writing to be completed.
-// func (au *accountUpdates) waitAccountsWriting() {
-// 	au.accountsWriting.Wait()
-// }
-
 // close closes the accountUpdates, waiting for all the child go-routine to complete
 func (au *accountUpdates) close() {
 	if au.voters != nil {
@@ -384,9 +364,6 @@ func (au *accountUpdates) close() {
 		au.ctxCancel()
 	}
 
-	// au.waitAccountsWriting()
-	// // this would block until the commitSyncerClosed channel get closed.
-	// <-au.commitSyncerClosed
 	au.baseAccounts.prune(0)
 }
 
@@ -657,22 +634,17 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 	return
 }
 
-// scheduleCommittingTask enqueues committing the balances for round committedRound-lookback.
+// produceCommittingTask enqueues committing the balances for round committedRound-lookback.
 // The deferred committing is done so that we could calculate the historical balances lookback rounds back.
 // Since we don't want to hold off the tracker's mutex for too long, we'll defer the database persistence of this
 // operation to a syncer goroutine. The one caveat is that when storing a catchpoint round, we would want to
 // wait until the catchpoint creation is done, so that the persistence of the catchpoint file would have an
 // uninterrupted view of the balances at a given point of time.
-func (au *accountUpdates) scheduleCommittingTask(committedRound basics.Round, dbRound basics.Round) (dc deferredCommit) {
+func (au *accountUpdates) produceCommittingTask(committedRound basics.Round, dbRound basics.Round) (dc deferredCommit) {
 	var isCatchpointRound, hasMultipleIntermediateCatchpoint bool
 	var offset uint64
 	au.accountsMu.RLock()
-	defer func() {
-		au.accountsMu.RUnlock()
-		// if dc.offset != 0 {
-		// 	au.committedOffset <- dc
-		// }
-	}()
+	defer au.accountsMu.RUnlock()
 
 	var pendingDeltas int
 	lookback := basics.Round(config.Consensus[au.versions[len(au.versions)-1]].MaxBalLookback)
@@ -687,7 +659,7 @@ func (au *accountUpdates) scheduleCommittingTask(committedRound basics.Round, db
 	}
 
 	if newBase > dbRound+basics.Round(len(au.deltas)) {
-		au.log.Panicf("committedUpTo: block %d too far in the future, lookback %d, dbRound %d, deltas %d", committedRound, lookback, au.cachedDBRound, len(au.deltas))
+		au.log.Panicf("produceCommittingTask: block %d too far in the future, lookback %d, dbRound %d (cached %d), deltas %d", committedRound, lookback, dbRound, au.cachedDBRound, len(au.deltas))
 	}
 
 	hasIntermediateCatchpoint := false
@@ -764,9 +736,6 @@ func (au *accountUpdates) scheduleCommittingTask(committedRound basics.Round, db
 		dbRound:  dbRound,
 		lookback: lookback,
 	}
-	// if offset != 0 {
-	// 	au.accountsWriting.Add(1)
-	// }
 	return
 }
 
@@ -1067,26 +1036,29 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 				rollbackSynchronousMode = true
 			}
 
-			// The unlocking/relocking here isn't very elegant, but it does get the work done :
-			// this method is called on either startup or when fast catchup is complete. In the former usecase, the
-			// locking here is not really needed since the system is only starting up, and there are no other
-			// consumers for the accounts update. On the latter usecase, the function would always have exactly 320 rounds,
-			// and therefore this wouldn't be an issue.
-			// However, to make sure we're not missing any other future codepath, unlocking here and re-locking later on is a pretty
-			// safe bet.
-			au.accountsMu.Unlock()
+			var roundsBehind basics.Round
+			func() {
+				// The unlocking/relocking here isn't very elegant, but it does get the work done :
+				// this method is called on either startup or when fast catchup is complete. In the former usecase, the
+				// locking here is not really needed since the system is only starting up, and there are no other
+				// consumers for the accounts update. On the latter usecase, the function would always have exactly 320 rounds,
+				// and therefore this wouldn't be an issue.
+				// However, to make sure we're not missing any other future codepath, unlocking here and re-locking later on is a pretty
+				// safe bet.
+				// Wrapping locking/unlocking within a function scope prevents possible loss of the expected accountsMu state in case of panicing inside scheduleCommit.
+				au.accountsMu.Unlock()
+				defer au.accountsMu.Lock()
 
-			// flush the account data
-			// TODO: figure out how to move it the upper level
-			au.ledger.scheduleCommit(blk.Round())
+				// flush the account data
+				// TODO: figure out how to move it the upper level
+				au.ledger.scheduleCommit(blk.Round())
 
-			// wait for the writing to complete.
-			au.ledger.waitAccountsWriting()
+				// wait for the writing to complete.
+				au.ledger.waitAccountsWriting()
 
-			// The au.dbRound after writing should be ~320 behind the block round.
-			roundsBehind := blk.Round() - au.cachedDBRound
-
-			au.accountsMu.Lock()
+				// The au.dbRound after writing should be ~320 behind the block round.
+				roundsBehind = blk.Round() - au.cachedDBRound
+			}()
 
 			// are we too far behind ? ( taking into consideration the catchpoint writing, which can stall the writing for quite a bit )
 			if roundsBehind > initializeCachesRoundFlushInterval+basics.Round(au.catchpointInterval) {
@@ -1135,12 +1107,10 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	start := time.Now()
 	ledgerAccountsinitCount.Inc(nil)
 	err = au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		var err0 error
-		au.cachedDBRound, err0 = au.accountsInitialize(ctx, tx, lastBalancesRound)
+		err0 := au.accountsInitialize(ctx, tx, lastBalancesRound)
 		if err0 != nil {
 			return err0
 		}
-
 		totals, err0 := accountsTotals(tx, false)
 		if err0 != nil {
 			return err0
@@ -1164,7 +1134,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		return
 	}
 
-	hdr, err := l.BlockHdr(au.cachedDBRound)
+	hdr, err := l.BlockHdr(lastBalancesRound)
 	if err != nil {
 		return
 	}
@@ -1182,11 +1152,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	au.catchpointSlowWriting = make(chan struct{}, 1)
 	close(au.catchpointSlowWriting)
 	au.ctx, au.ctxCancel = context.WithCancel(context.Background())
-	// au.committedOffset = make(chan deferredCommit, 1)
-	// au.commitSyncerClosed = make(chan struct{})
-	// go au.commitSyncer(au.committedOffset)
 
-	lastBalancesRound = au.cachedDBRound
 	au.baseAccounts.init(au.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
 	return
 }
@@ -1207,10 +1173,10 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 
 // accountsInitialize initializes account updates tracker and return current account round.
 // as part of the initialization, it tests if a hash table matches to account base and updates the former.
-func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx, rnd basics.Round) (basics.Round, error) {
+func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx, rnd basics.Round) error {
 	hashRound, err := accountsHashRound(tx)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	if hashRound != rnd {
@@ -1218,30 +1184,30 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx, rn
 		// with the hashes.
 		err = resetAccountHashes(tx)
 		if err != nil {
-			return 0, err
+			return err
 		}
 		// if catchpoint is disabled on this node, we could complete the initialization right here.
 		if !au.catchpointEnabled() {
-			return rnd, nil
+			return nil
 		}
 	}
 
 	// create the merkle trie for the balances
 	committer, err := MakeMerkleCommitter(tx, false)
 	if err != nil {
-		return 0, fmt.Errorf("accountsInitialize was unable to makeMerkleCommitter: %v", err)
+		return fmt.Errorf("accountsInitialize was unable to makeMerkleCommitter: %v", err)
 	}
 
 	trie, err := merkletrie.MakeTrie(committer, TrieMemoryConfig)
 	if err != nil {
-		return 0, fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
+		return fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
 	}
 
 	// we might have a database that was previously initialized, and now we're adding the balances trie. In that case, we need to add all the existing balances to this trie.
 	// we can figure this out by examining the hash of the root:
 	rootHash, err := trie.RootHash()
 	if err != nil {
-		return rnd, fmt.Errorf("accountsInitialize was unable to retrieve trie root hash: %v", err)
+		return fmt.Errorf("accountsInitialize was unable to retrieve trie root hash: %v", err)
 	}
 
 	if rootHash.IsZero() {
@@ -1259,7 +1225,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx, rn
 				// the account builder would return sql.ErrNoRows when no more data is available.
 				break
 			} else if err != nil {
-				return rnd, err
+				return err
 			}
 
 			if len(accts) > 0 {
@@ -1268,7 +1234,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx, rn
 				for _, acct := range accts {
 					added, err := trie.Add(acct.digest)
 					if err != nil {
-						return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
+						return fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
 					}
 					if !added {
 						au.log.Warnf("accountsInitialize attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(acct.digest), acct.address)
@@ -1280,7 +1246,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx, rn
 					// if anything goes wrong, it will still get rolled back.
 					_, err = trie.Evict(true)
 					if err != nil {
-						return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
+						return fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
 					}
 					pendingAccounts = 0
 				}
@@ -1305,23 +1271,23 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx, rn
 		// if anything goes wrong, it will still get rolled back.
 		_, err = trie.Evict(true)
 		if err != nil {
-			return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
+			return fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
 		}
 
 		// we've just updated the merkle trie, update the hashRound to reflect that.
 		err = updateAccountsRound(tx, rnd)
 		if err != nil {
-			return 0, fmt.Errorf("accountsInitialize was unable to update the account round to %d: %v", rnd, err)
+			return fmt.Errorf("accountsInitialize was unable to update the account round to %d: %v", rnd, err)
 		}
 		err = updateAccountsHashRound(tx, rnd)
 		if err != nil {
-			return 0, fmt.Errorf("accountsInitialize was unable to update the account hash round to %d: %v", rnd, err)
+			return fmt.Errorf("accountsInitialize was unable to update the account hash round to %d: %v", rnd, err)
 		}
 
 		au.log.Infof("accountsInitialize rebuilt the merkle trie with %d entries in %v", accountsCount, time.Now().Sub(startTrieBuildTime))
 	}
 	au.balancesTrie = trie
-	return rnd, nil
+	return nil
 }
 
 // deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
@@ -1741,33 +1707,6 @@ func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err erro
 	return off, nil
 }
 
-// // commitSyncer is the syncer go-routine function which perform the database updates. Internally, it dequeues deferredCommits and
-// // send the tasks to commitRound for completing the operation.
-// func (au *accountUpdates) commitSyncer(deferredCommits chan deferredCommit) {
-// 	defer close(au.commitSyncerClosed)
-// 	for {
-// 		select {
-// 		case committedOffset, ok := <-deferredCommits:
-// 			if !ok {
-// 				return
-// 			}
-// 			au.commitRound(committedOffset.offset, committedOffset.dbRound, committedOffset.lookback)
-// 		case <-au.ctx.Done():
-// 			// drain the pending commits queue:
-// 			drained := false
-// 			for !drained {
-// 				select {
-// 				case <-deferredCommits:
-// 					au.accountsWriting.Done()
-// 				default:
-// 					drained = true
-// 				}
-// 			}
-// 			return
-// 		}
-// 	}
-// }
-
 func (au *accountUpdates) isCatchpointRound(offset uint64, dbRound basics.Round, lookback basics.Round) bool {
 	return ((offset + uint64(lookback+dbRound)) > 0) && (au.catchpointInterval != 0) && ((uint64((offset + uint64(lookback+dbRound))) % au.catchpointInterval) == 0)
 }
@@ -1796,34 +1735,7 @@ func (au *accountUpdates) prepareCommit(offset uint64, dbRound basics.Round, loo
 		}
 	}
 
-	// // synchronize with committedUpTo that posted a deferredCommit task
-	// defer au.accountsWriting.Done()
-
 	au.accountsMu.RLock()
-
-	// handled as handleUnorderedCommit()
-
-	// // we can exit right away, as this is the result of mis-ordered call to committedUpTo.
-	// if au.cachedDBRound < dbRound || offset < uint64(au.cachedDBRound-dbRound) {
-	// 	au.handleUnorderedCommit(offset, dbRound, lookback)
-	// 	au.accountsMu.RUnlock()
-	// 	return nil, nil
-	// }
-
-	// // adjust the offset according to what happened meanwhile..
-	// offset -= uint64(au.cachedDBRound - dbRound)
-
-	// // if this iteration need to flush out zero rounds, just return right away.
-	// // this usecase can happen when two subsequent calls to committedUpTo concludes that the same rounds range need to be
-	// // flush, without the commitRound have a chance of committing these rounds.
-	// if offset == 0 {
-	// 	au.accountsMu.RUnlock()
-	// 	return
-	// }
-
-	// dbRound = au.cachedDBRound
-
-	// newBase := basics.Round(offset) + dbRound
 
 	flushTime := time.Now()
 	isCatchpointRound := au.isCatchpointRound(offset, dbRound, lookback)
@@ -1870,10 +1782,6 @@ func (au *accountUpdates) prepareCommit(offset uint64, dbRound basics.Round, loo
 	var trieBalancesHash crypto.Digest
 
 	genesisProto := au.ledger.GenesisProto()
-
-	// moved
-	// start := time.Now()
-	// ledgerCommitroundCount.Inc(nil)
 
 	var updatedPersistedAccounts []persistedAccountData
 	if updateStats {
@@ -1961,14 +1869,6 @@ func (au *accountUpdates) prepareCommit(offset uint64, dbRound basics.Round, loo
 		}
 		return nil
 	}
-
-	// ledgerCommitroundMicros.AddMicrosecondsSince(start, nil)
-
-	// if err != nil {
-	// 	au.balancesTrie = nil
-	// 	au.log.Warnf("unable to advance account snapshot (%d-%d): %v", dbRound, dbRound+basics.Round(offset), err)
-	// 	return
-	// }
 
 	postCommit := func(offset uint64, newBase basics.Round) {
 		if updateStats {
