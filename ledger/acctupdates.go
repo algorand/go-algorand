@@ -125,12 +125,6 @@ type modifiedAccount struct {
 type accountUpdates struct {
 	// constant variables ( initialized on initialize, and never changed afterward )
 
-	// initAccounts specifies initial account values for database.
-	initAccounts map[basics.Address]basics.AccountData
-
-	// initProto specifies the initial consensus parameters at the genesis block.
-	initProto config.ConsensusParams
-
 	// dbDirectory is the directory where the ledger and block sql file resides as well as the parent directory for the catchup files to be generated
 	dbDirectory string
 
@@ -143,9 +137,6 @@ type accountUpdates struct {
 	// catchpointFileHistoryLength defines how many catchpoint files we want to store back.
 	// 0 means don't store any, -1 mean unlimited and positive number suggest the number of most recent catchpoint files.
 	catchpointFileHistoryLength int
-
-	// vacuumOnStartup controls whether the accounts database would get vacuumed on startup.
-	vacuumOnStartup bool
 
 	// dynamic variables
 
@@ -300,9 +291,7 @@ func (e *MismatchingDatabaseRoundError) Error() string {
 }
 
 // initialize initializes the accountUpdates structure
-func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, genesisProto config.ConsensusParams, genesisAccounts map[basics.Address]basics.AccountData) {
-	au.initProto = genesisProto
-	au.initAccounts = genesisAccounts
+func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string) {
 	au.dbDirectory = filepath.Dir(dbPathPrefix)
 	au.archivalLedger = cfg.Archival
 	switch cfg.CatchpointTracking {
@@ -326,7 +315,6 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	if cfg.CatchpointFileHistoryLength < -1 {
 		au.catchpointFileHistoryLength = -1
 	}
-	au.vacuumOnStartup = cfg.OptimizeAccountsDatabaseOnStartup
 	// initialize the commitSyncerClosed with a closed channel ( since the commitSyncer go-routine is not active )
 	au.commitSyncerClosed = make(chan struct{})
 	close(au.commitSyncerClosed)
@@ -337,7 +325,10 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	// log metrics
 	au.logAccountUpdatesMetrics = cfg.EnableAccountUpdatesStats
 	au.logAccountUpdatesInterval = cfg.AccountUpdatesStatsInterval
+}
 
+func (au *accountUpdates) catchpointEnabled() bool {
+	return au.catchpointInterval != 0
 }
 
 // loadFromDisk is the 2nd level initialization, and is required before the accountUpdates becomes functional
@@ -347,7 +338,6 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	defer au.accountsMu.Unlock()
 	var writingCatchpointRound uint64
 	lastBalancesRound, lastestBlockRound, err := au.initializeFromDisk(l)
-
 	if err != nil {
 		return err
 	}
@@ -364,7 +354,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 		return err
 	}
 
-	if writingCatchpointRound != 0 && au.catchpointInterval != 0 {
+	if writingCatchpointRound != 0 && au.catchpointEnabled() {
 		au.generateCatchpoint(basics.Round(writingCatchpointRound), au.lastCatchpointLabel, writingCatchpointDigest, time.Duration(0))
 	}
 
@@ -1123,11 +1113,6 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	au.log = l.trackerLog()
 	au.ledger = l
 
-	if au.initAccounts == nil {
-		err = fmt.Errorf("accountUpdates.initializeFromDisk: initAccounts not set")
-		return
-	}
-
 	lastestBlockRound = l.Latest()
 	start := time.Now()
 	ledgerAccountsinitCount.Inc(nil)
@@ -1136,18 +1121,6 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 		au.dbRound, err0 = au.accountsInitialize(ctx, tx)
 		if err0 != nil {
 			return err0
-		}
-		// Check for blocks DB and tracker DB un-sync
-		if au.dbRound > lastestBlockRound {
-			au.log.Warnf("accountUpdates.initializeFromDisk: resetting accounts DB (on round %v, but blocks DB's latest is %v)", au.dbRound, lastestBlockRound)
-			err0 = accountsReset(tx)
-			if err0 != nil {
-				return err0
-			}
-			au.dbRound, err0 = au.accountsInitialize(ctx, tx)
-			if err0 != nil {
-				return err0
-			}
 		}
 
 		totals, err0 := accountsTotals(tx, false)
@@ -1164,13 +1137,10 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 		return
 	}
 
-	// the VacuumDatabase would be a no-op if au.vacuumOnStartup is cleared.
-	au.vacuumDatabase(context.Background())
+	au.accountsq, err = accountsInitDbQueries(au.dbs.Rdb.Handle, au.dbs.Wdb.Handle)
 	if err != nil {
 		return
 	}
-
-	au.accountsq, err = accountsDbInit(au.dbs.Rdb.Handle, au.dbs.Wdb.Handle)
 	au.lastCatchpointLabel, _, err = au.accountsq.readCatchpointStateString(context.Background(), catchpointStateLastCatchpoint)
 	if err != nil {
 		return
@@ -1217,69 +1187,9 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 	return hash[:]
 }
 
-// accountsInitialize initializes the accounts DB if needed and return current account round.
-// as part of the initialization, it tests the current database schema version, and perform upgrade
-// procedures to bring it up to the database schema supported by the binary.
+// accountsInitialize initializes account updates tracker and return current account round.
+// as part of the initialization, it tests if a hash table matches to account base and updates the former.
 func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (basics.Round, error) {
-	// check current database version.
-	dbVersion, err := db.GetUserVersion(ctx, tx)
-	if err != nil {
-		return 0, fmt.Errorf("accountsInitialize unable to read database schema version : %v", err)
-	}
-
-	// if database version is greater than supported by current binary, write a warning. This would keep the existing
-	// fallback behavior where we could use an older binary iff the schema happen to be backward compatible.
-	if dbVersion > accountDBVersion {
-		au.log.Warnf("accountsInitialize database schema version is %d, but algod supports only %d", dbVersion, accountDBVersion)
-	}
-
-	if dbVersion < accountDBVersion {
-		au.log.Infof("accountsInitialize upgrading database schema from version %d to version %d", dbVersion, accountDBVersion)
-		// newDatabase is determined during the tables creations. If we're filling the database with accounts,
-		// then we set this variable to true, allowing some of the upgrades to be skipped.
-		var newDatabase bool
-		for dbVersion < accountDBVersion {
-			au.log.Infof("accountsInitialize performing upgrade from version %d", dbVersion)
-			// perform the initialization/upgrade
-			switch dbVersion {
-			case 0:
-				dbVersion, newDatabase, err = au.upgradeDatabaseSchema0(ctx, tx)
-				if err != nil {
-					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 0 : %v", err)
-					return 0, err
-				}
-			case 1:
-				dbVersion, err = au.upgradeDatabaseSchema1(ctx, tx, newDatabase)
-				if err != nil {
-					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 1 : %v", err)
-					return 0, err
-				}
-			case 2:
-				dbVersion, err = au.upgradeDatabaseSchema2(ctx, tx, newDatabase)
-				if err != nil {
-					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 2 : %v", err)
-					return 0, err
-				}
-			case 3:
-				dbVersion, err = au.upgradeDatabaseSchema3(ctx, tx, newDatabase)
-				if err != nil {
-					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 3 : %v", err)
-					return 0, err
-				}
-			case 4:
-				dbVersion, err = au.upgradeDatabaseSchema4(ctx, tx, newDatabase)
-				if err != nil {
-					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 4 : %v", err)
-					return 0, err
-				}
-			default:
-				return 0, fmt.Errorf("accountsInitialize unable to upgrade database from schema version %d", dbVersion)
-			}
-		}
-
-		au.log.Infof("accountsInitialize database schema upgrade complete")
-	}
-
 	rnd, hashRound, err := accountsRound(tx)
 	if err != nil {
 		return 0, err
@@ -1293,7 +1203,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 			return 0, err
 		}
 		// if catchpoint is disabled on this node, we could complete the initialization right here.
-		if au.catchpointInterval == 0 {
+		if !au.catchpointEnabled() {
 			return rnd, nil
 		}
 	}
@@ -1392,215 +1302,9 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 	return rnd, nil
 }
 
-// upgradeDatabaseSchema0 upgrades the database schema from version 0 to version 1
-//
-// Schema of version 0 is expected to be aligned with the schema used on version 2.0.8 or before.
-// Any database of version 2.0.8 would be of version 0. At this point, the database might
-// have the following tables : ( i.e. a newly created database would not have these )
-// * acctrounds
-// * accounttotals
-// * accountbase
-// * assetcreators
-// * storedcatchpoints
-// * accounthashes
-// * catchpointstate
-//
-// As the first step of the upgrade, the above tables are being created if they do not already exists.
-// Following that, the assetcreators table is being altered by adding a new column to it (ctype).
-// Last, in case the database was just created, it would get initialized with the following:
-// The accountbase would get initialized with the au.initAccounts
-// The accounttotals would get initialized to align with the initialization account added to accountbase
-// The acctrounds would get updated to indicate that the balance matches round 0
-//
-func (au *accountUpdates) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, newDatabase bool, err error) {
-	au.log.Infof("accountsInitialize initializing schema")
-	newDatabase, err = accountsInit(tx, au.initAccounts, au.initProto)
-	if err != nil {
-		return 0, newDatabase, fmt.Errorf("accountsInitialize unable to initialize schema : %v", err)
-	}
-	_, err = db.SetUserVersion(ctx, tx, 1)
-	if err != nil {
-		return 0, newDatabase, fmt.Errorf("accountsInitialize unable to update database schema version from 0 to 1: %v", err)
-	}
-	return 1, newDatabase, nil
-}
-
-// upgradeDatabaseSchema1 upgrades the database schema from version 1 to version 2
-//
-// The schema updated to version 2 intended to ensure that the encoding of all the accounts data is
-// both canonical and identical across the entire network. On release 2.0.5 we released an upgrade to the messagepack.
-// the upgraded messagepack was decoding the account data correctly, but would have different
-// encoding compared to it's predecessor. As a result, some of the account data that was previously stored
-// would have different encoded representation than the one on disk.
-// To address this, this startup procedure would attempt to scan all the accounts data. for each account data, we would
-// see if it's encoding aligns with the current messagepack encoder. If it doesn't we would update it's encoding.
-// then, depending if we found any such account data, we would reset the merkle trie and stored catchpoints.
-// once the upgrade is complete, the accountsInitialize would (if needed) rebuild the merkle trie using the new
-// encoded accounts.
-//
-// This upgrade doesn't change any of the actual database schema ( i.e. tables, indexes ) but rather just performing
-// a functional update to it's content.
-//
-func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx, newDatabase bool) (updatedDBVersion int32, err error) {
-	var modifiedAccounts uint
-	if newDatabase {
-		goto schemaUpdateComplete
-	}
-
-	// update accounts encoding.
-	au.log.Infof("accountsInitialize verifying accounts data encoding")
-	modifiedAccounts, err = reencodeAccounts(ctx, tx)
-	if err != nil {
-		return 0, err
-	}
-
-	if modifiedAccounts > 0 {
-		au.log.Infof("accountsInitialize reencoded %d accounts", modifiedAccounts)
-
-		au.log.Infof("accountsInitialize resetting account hashes")
-		// reset the merkle trie
-		err = resetAccountHashes(tx)
-		if err != nil {
-			return 0, fmt.Errorf("accountsInitialize unable to reset account hashes : %v", err)
-		}
-
-		au.log.Infof("accountsInitialize preparing queries")
-		// initialize a new accountsq with the incoming transaction.
-		accountsq, err := accountsDbInit(tx, tx)
-		if err != nil {
-			return 0, fmt.Errorf("accountsInitialize unable to prepare queries : %v", err)
-		}
-
-		// close the prepared statements when we're done with them.
-		defer accountsq.close()
-
-		au.log.Infof("accountsInitialize resetting prior catchpoints")
-		// delete the last catchpoint label if we have any.
-		_, err = accountsq.writeCatchpointStateString(ctx, catchpointStateLastCatchpoint, "")
-		if err != nil {
-			return 0, fmt.Errorf("accountsInitialize unable to clear prior catchpoint : %v", err)
-		}
-
-		au.log.Infof("accountsInitialize deleting stored catchpoints")
-		// delete catchpoints.
-		err = au.deleteStoredCatchpoints(ctx, accountsq)
-		if err != nil {
-			return 0, fmt.Errorf("accountsInitialize unable to delete stored catchpoints : %v", err)
-		}
-	} else {
-		au.log.Infof("accountsInitialize found that no accounts needed to be reencoded")
-	}
-
-schemaUpdateComplete:
-	// update version
-	_, err = db.SetUserVersion(ctx, tx, 2)
-	if err != nil {
-		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 1 to 2: %v", err)
-	}
-	return 2, nil
-}
-
-// upgradeDatabaseSchema2 upgrades the database schema from version 2 to version 3
-//
-// This upgrade only enables the database vacuuming which will take place once the upgrade process is complete.
-// If the user has already specified the OptimizeAccountsDatabaseOnStartup flag in the configuration file, this
-// step becomes a no-op.
-//
-func (au *accountUpdates) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx, newDatabase bool) (updatedDBVersion int32, err error) {
-	if !newDatabase {
-		au.vacuumOnStartup = true
-	}
-
-	// update version
-	_, err = db.SetUserVersion(ctx, tx, 3)
-	if err != nil {
-		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 2 to 3: %v", err)
-	}
-	return 3, nil
-}
-
-// upgradeDatabaseSchema3 upgrades the database schema from version 3 to version 4,
-// adding the normalizedonlinebalance column to the accountbase table.
-func (au *accountUpdates) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx, newDatabase bool) (updatedDBVersion int32, err error) {
-	err = accountsAddNormalizedBalance(tx, au.ledger.GenesisProto())
-	if err != nil {
-		return 0, err
-	}
-
-	// update version
-	_, err = db.SetUserVersion(ctx, tx, 4)
-	if err != nil {
-		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 3 to 4: %v", err)
-	}
-	return 4, nil
-}
-
-// upgradeDatabaseSchema4 does not change the schema but migrates data:
-// remove empty AccountData entries from accountbase table
-func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx, newDatabase bool) (updatedDBVersion int32, err error) {
-	queryAddresses := au.catchpointInterval != 0
-	var numDeleted int64
-	var addresses []basics.Address
-
-	if newDatabase {
-		goto done
-	}
-
-	numDeleted, addresses, err = removeEmptyAccountData(tx, queryAddresses)
-	if err != nil {
-		return 0, err
-	}
-
-	if queryAddresses && len(addresses) > 0 {
-		mc, err := MakeMerkleCommitter(tx, false)
-		if err != nil {
-			// at this point record deleted and DB is pruned for account data
-			// if hash deletion fails just log it and do not abort startup
-			au.log.Errorf("upgradeDatabaseSchema4: failed to create merkle committer: %v", err)
-			goto done
-		}
-		trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
-		if err != nil {
-			au.log.Errorf("upgradeDatabaseSchema4: failed to create merkle trie: %v", err)
-			goto done
-		}
-
-		var totalHashesDeleted int
-		for _, addr := range addresses {
-			hash := accountHashBuilder(addr, basics.AccountData{}, []byte{0x80})
-			deleted, err := trie.Delete(hash)
-			if err != nil {
-				au.log.Errorf("upgradeDatabaseSchema4: failed to delete hash '%s' from merkle trie for account %v: %v", hex.EncodeToString(hash), addr, err)
-			} else {
-				if !deleted {
-					au.log.Warnf("upgradeDatabaseSchema4: failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(hash), addr)
-				} else {
-					totalHashesDeleted++
-				}
-			}
-		}
-
-		if _, err = trie.Commit(); err != nil {
-			au.log.Errorf("upgradeDatabaseSchema4: failed to commit changes to merkle trie: %v", err)
-		}
-
-		au.log.Infof("upgradeDatabaseSchema4: deleted %d hashes", totalHashesDeleted)
-	}
-
-done:
-	au.log.Infof("upgradeDatabaseSchema4: deleted %d rows", numDeleted)
-
-	// update version
-	_, err = db.SetUserVersion(ctx, tx, 5)
-	if err != nil {
-		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 4 to 5: %v", err)
-	}
-	return 5, nil
-}
-
 // deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
 // once all the files have been deleted, it would go ahead and remove the entries from the table.
-func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries *accountsDbQueries) (err error) {
+func deleteStoredCatchpoints(ctx context.Context, dbQueries *accountsDbQueries, dbDirectory string) (err error) {
 	catchpointsFilesChunkSize := 50
 	for {
 		fileNames, err := dbQueries.getOldestCatchpointFiles(ctx, catchpointsFilesChunkSize, 0)
@@ -1612,7 +1316,7 @@ func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries
 		}
 
 		for round, fileName := range fileNames {
-			absCatchpointFileName := filepath.Join(au.dbDirectory, fileName)
+			absCatchpointFileName := filepath.Join(dbDirectory, fileName)
 			err = os.Remove(absCatchpointFileName)
 			if err == nil || os.IsNotExist(err) {
 				// it's ok if the file doesn't exist. just remove it from the database and we'll be good to go.
@@ -1632,7 +1336,7 @@ func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries
 
 // accountsUpdateBalances applies the given compactAccountDeltas to the merkle trie
 func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDeltas) (err error) {
-	if au.catchpointInterval == 0 {
+	if !au.catchpointEnabled() {
 		return nil
 	}
 	var added, deleted bool
@@ -2142,7 +1846,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	}
 	err := au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
-		if au.catchpointInterval > 0 {
+		if au.catchpointEnabled() {
 			mc, err0 := MakeMerkleCommitter(tx, false)
 			if err0 != nil {
 				return err0
@@ -2542,10 +2246,6 @@ func (au *accountUpdates) saveCatchpointFile(round basics.Round, fileName string
 
 // the vacuumDatabase performs a full vacuum of the accounts database.
 func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
-	if !au.vacuumOnStartup {
-		return
-	}
-
 	// vaccumming the database would modify the some of the tables rowid, so we need to make sure any stored in-memory
 	// rowid are flushed.
 	au.baseAccounts.prune(0)

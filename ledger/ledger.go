@@ -88,6 +88,8 @@ type Ledger struct {
 
 	// verifiedTxnCache holds all the verified transactions state
 	verifiedTxnCache verify.VerifiedTransactionCache
+
+	cfg config.Local
 }
 
 // OpenLedger creates a Ledger object, using SQLite database filenames
@@ -113,6 +115,7 @@ func OpenLedger(
 		synchronousMode:                db.SynchronousMode(cfg.LedgerSynchronousMode),
 		accountsRebuildSynchronousMode: db.SynchronousMode(cfg.AccountsRebuildSynchronousMode),
 		verifiedTxnCache:               verify.MakeVerifiedTransactionCache(verifiedCacheSize),
+		cfg:                            cfg,
 	}
 
 	l.headerCache.maxEntries = 10
@@ -150,7 +153,7 @@ func OpenLedger(
 		l.genesisAccounts = make(map[basics.Address]basics.AccountData)
 	}
 
-	l.accts.initialize(cfg, dbPathPrefix, l.genesisProto, l.genesisAccounts)
+	l.accts.initialize(cfg, dbPathPrefix)
 
 	err = l.reloadLedger()
 	if err != nil {
@@ -176,11 +179,17 @@ func (l *Ledger) reloadLedger() error {
 	// close the trackers.
 	l.trackers.close()
 
-	// reload -
+	// init block queue
 	var err error
 	l.blockQ, err = bqInit(l)
 	if err != nil {
 		err = fmt.Errorf("reloadLedger.bqInit %v", err)
+		return err
+	}
+
+	// init tracker db
+	trackerDBMgr, err := trackerDBInitialize(l, l.accts.catchpointEnabled(), l.accts.dbDirectory)
+	if err != nil {
 		return err
 	}
 
@@ -194,6 +203,14 @@ func (l *Ledger) reloadLedger() error {
 	if err != nil {
 		err = fmt.Errorf("reloadLedger.loadFromDisk %v", err)
 		return err
+	}
+
+	// post-init actions
+	if trackerDBMgr.vacuumOnStartup || l.cfg.OptimizeAccountsDatabaseOnStartup {
+		err = l.accts.vacuumDatabase(context.Background())
+		if err != nil {
+			return err
+		}
 	}
 
 	// Check that the genesis hash, if present, matches.
@@ -589,6 +606,11 @@ func (l *Ledger) GenesisHash() crypto.Digest {
 // GenesisProto returns the initial protocol for this ledger.
 func (l *Ledger) GenesisProto() config.ConsensusParams {
 	return l.genesisProto
+}
+
+// GenesisAccounts returns initial accounts for this ledger.
+func (l *Ledger) GenesisAccounts() map[basics.Address]basics.AccountData {
+	return l.genesisAccounts
 }
 
 // GetCatchpointCatchupState returns the current state of the catchpoint catchup.

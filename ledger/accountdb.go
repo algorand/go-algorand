@@ -727,7 +727,7 @@ func accountsRound(tx *sql.Tx) (rnd basics.Round, hashrnd basics.Round, err erro
 	return
 }
 
-func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) {
+func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) {
 	var err error
 	qs := &accountsDbQueries{}
 
