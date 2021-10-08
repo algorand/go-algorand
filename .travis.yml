@@ -6,17 +6,20 @@ language: minimal
 if: tag IS blank
 
 stages:
+  - name: build_commit
+    if: NOT (branch =~ /^hotfix\//) AND NOT (branch =~ /^rel\//) AND type != pull_request
   - name: build_pr
     if: type = pull_request
   - name: build_release
     if: (branch =~ /^hotfix\// OR branch =~ /^rel\//) AND type != pull_request
   - name: deploy
     if: branch =~ /^rel\// AND type != pull_request
+  - name: post_deploy
+    if: branch =~ /^rel\// AND type != pull_request
 
 jobs:
   allow_failures:
     - name: External ARM64 Deploy
-    - name: External ARM64 Integration Test
     - name: External ARM Build
     - name: External ARM Deploy
     - name: Test Release Builds
@@ -27,24 +30,94 @@ jobs:
         - scripts/travis/build_test.sh
 
     - stage: build_pr
-      os: windows
-      name: Windows x64 Build
-      cache:
-        directories:
-          - $HOME/AppData/Local/Temp/chocolatey
-          - /C/tools/msys64
+      os: linux
+      name: Ubuntu AMD64 Build
       script:
-        - $mingw64 scripts/travis/build_test.sh
+        - scripts/travis/build_test.sh
+    - # same stage, parallel job
+      name: External ARM64 Build
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm64"
+      addons:
+        apt:
+          packages:
+            - awscli
+      script:
+        - scripts/travis/external_build.sh ./scripts/travis/build_test.sh
+    - # same stage, parallel job
+      os: osx
+      osx_image: xcode11
+      name: MacOS AMD64 Build
+      script:
+        - scripts/travis/build_test.sh
+    - # same stage, parallel job
+       os: windows
+       name: Windows x64 Build
+       cache:
+         directories:
+           - $HOME/AppData/Local/Temp/chocolatey
+           - /C/tools/msys64
+       script:
+         - $mingw64 scripts/travis/build_test.sh
 
     - stage: build_release
-      os: windows
-      name: Windows x64 Build
-      cache:
-        directories:
-          - $HOME/AppData/Local/Temp/chocolatey
-          - /C/tools/msys64
+      os: linux
+      name: Ubuntu AMD64 Build
       script:
-        - $mingw64 scripts/travis/build_test.sh
+        - ./scripts/travis/build_test.sh
+    - # same stage, parallel job
+      name: External ARM64 Build
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm64"
+      addons:
+        apt:
+          packages:
+            - awscli
+      script:
+        - scripts/travis/external_build.sh ./scripts/travis/build_test.sh
+    - # same stage, parallel job
+      os: osx
+      osx_image: xcode11
+      name: MacOS AMD64 Build
+      script:
+        - scripts/travis/build_test.sh
+    - # same stage, parallel job
+       os: windows
+       name: Windows x64 Build
+       cache:
+         directories:
+           - $HOME/AppData/Local/Temp/chocolatey
+           - /C/tools/msys64
+       script:
+         - $mingw64 scripts/travis/build_test.sh
+
+    - stage: deploy
+      name: Ubuntu Deploy
+      os: linux
+      script:
+        - scripts/travis/deploy_packages.sh
+        - scripts/travis/test_release.sh
+    - # same stage, parallel job
+      name: MacOS Deploy
+      os: osx
+      osx_image: xcode11
+      script: scripts/travis/deploy_packages.sh
+    - # same stage, parallel job
+      name: External ARM64 Deploy
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm64"
+      addons:
+        apt:
+          packages:
+            - awscli
+      script:
+        - scripts/travis/external_build.sh ./scripts/travis/deploy_packages.sh
 
 # Don't rebuild libsodium every time
 cache:
@@ -55,6 +128,10 @@ cache:
 before_install:
 - |-
    case $TRAVIS_OS_NAME in
+   linux)
+     # Disable sometimes-broken sources.list in Travis base images
+     sudo rm -vf /etc/apt/sources.list.d/*
+     ;;
    windows)
      [[ ! -f C:/tools/msys64/msys2_shell.cmd ]] && rm -rf C:/tools/msys64
      choco uninstall -y mingw
