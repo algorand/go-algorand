@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	kvPrefixAccountRounds = "\x00\x00\x00\x01"
+	kvPrefixAccountRounds         = "\x00\x00\x00\x01"
+	kvPrefixAccountRoundsEndRange = "\x00\x00\x00\x02"
 
 	kvPrefixAccount         = "\x00\x00\x00\x02"
 	kvPrefixAccountEndRange = "\x00\x00\x00\x03"
@@ -26,7 +27,8 @@ const (
 	kvPrefixAssetCreators         = "\x00\x00\x00\x04"
 	kvPrefixAssetCreatorsEndRange = "\x00\x00\x00\x05"
 
-	kvPrefixAccountTotals = "\x00\x00\x00\x05"
+	kvPrefixAccountTotals         = "\x00\x00\x00\x05"
+	kvPrefixAccountTotalsEndRange = "\x00\x00\x00\x06"
 
 	kvPrefixAccountHashes         = "\x00\x00\x00\x06"
 	kvPrefixAccountHashesEndRange = "\x00\x00\x00\x07"
@@ -34,7 +36,8 @@ const (
 	kvPrefixStoredCatchpoints         = "\x00\x00\x00\x07"
 	kvPrefixStoredCatchpointsEndRange = "\x00\x00\x00\x08"
 
-	kvPrefixCatchpointState = "\x00\x00\x00\x08"
+	kvPrefixCatchpointState         = "\x00\x00\x00\x08"
+	kvPrefixCatchpointStateEndRange = "\x00\x00\x00\x09"
 
 	kvPrefixCatchpointPendingHashes         = "\x00\x00\x00\x09"
 	kvPrefixCatchpointPendingHashesEndRange = "\x00\x00\x00\x0a"
@@ -140,6 +143,25 @@ func catchpointStateKey(id string) []byte {
 // catchpointPendingHashesKey: 4-byte prefix + 32-byte address
 func catchpointPendingHashesKey(address []byte) []byte {
 	return append([]byte(kvPrefixCatchpointPendingHashes), address...)
+}
+
+func resetAccountsKV(kv kvWrite) error {
+	for _, keyRange := range []struct{ start, end string }{
+		{kvPrefixAccountRounds, kvPrefixAccountRoundsEndRange},
+		{kvPrefixAccountTotals, kvPrefixAccountTotalsEndRange},
+		{kvPrefixAccount, kvPrefixAccountEndRange},
+		{kvPrefixAccountBalance, kvPrefixAccountBalanceEndRange},
+		{kvPrefixAssetCreators, kvPrefixAssetCreatorsEndRange},
+		{kvPrefixStoredCatchpoints, kvPrefixStoredCatchpointsEndRange},
+		{kvPrefixCatchpointState, kvPrefixCatchpointStateEndRange},
+		{kvPrefixAccountHashes, kvPrefixAccountHashesEndRange},
+	} {
+		err := kv.DeleteRange([]byte(keyRange.start), []byte(keyRange.end))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type accountKV struct {

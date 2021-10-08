@@ -1127,7 +1127,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 		// Check for blocks DB and tracker DB un-sync
 		if au.dbRound > lastestBlockRound {
 			au.log.Warnf("accountUpdates.initializeFromDisk: resetting accounts DB (on round %v, but blocks DB's latest is %v)", au.dbRound, lastestBlockRound)
-			err0 = accountsReset(tx.sqlTx) // XXX not dropping all KVStore tables
+			err0 = accountsReset(tx.kvWrite)
 			if err0 != nil {
 				return err0
 			}

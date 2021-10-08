@@ -696,14 +696,9 @@ func resetAccountHashes(kv kvWrite) (err error) {
 	return
 }
 
-func accountsReset(tx *sql.Tx) error {
-	for _, stmt := range accountsResetExprs {
-		_, err := tx.Exec(stmt)
-		if err != nil {
-			return err
-		}
-	}
-	_, err := db.SetUserVersion(context.Background(), tx, 0)
+func accountsReset(kv kvWrite) error {
+	err := resetAccountsKV(kv)
+	//_, err := db.SetUserVersion(context.Background(), tx, 0)
 	return err
 }
 
