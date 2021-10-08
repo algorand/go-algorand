@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package internal
 
 import (
 	"fmt"
@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -184,7 +185,7 @@ func randomAddrApps(n int) ([]storagePtr, []basics.Address) {
 			aidx:   basics.AppIndex(rand.Intn(100000) + 1),
 			global: rand.Intn(2) == 0,
 		}
-		outa[i] = randomAddress()
+		outa[i] = ledgertesting.RandomAddress()
 	}
 	return out, outa
 }
@@ -363,8 +364,8 @@ func TestCowBuildDelta(t *testing.T) {
 
 	a := require.New(t)
 
-	creator := randomAddress()
-	sender := randomAddress()
+	creator := ledgertesting.RandomAddress()
+	sender := ledgertesting.RandomAddress()
 	aidx := basics.AppIndex(2)
 
 	cow := roundCowState{}
@@ -941,7 +942,7 @@ func TestCowAllocated(t *testing.T) {
 	aidx := basics.AppIndex(1)
 	c := getCow([]modsData{})
 
-	addr1 := getRandomAddress(a)
+	addr1 := ledgertesting.RandomAddress()
 	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr1: {storagePtr{aidx, false}: &storageDelta{action: allocAction}},
 	}
@@ -950,7 +951,7 @@ func TestCowAllocated(t *testing.T) {
 
 	// ensure other requests go down to roundCowParent
 	a.Panics(func() { c.allocated(addr1, aidx+1, false) })
-	a.Panics(func() { c.allocated(getRandomAddress(a), aidx, false) })
+	a.Panics(func() { c.allocated(ledgertesting.RandomAddress(), aidx, false) })
 
 	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr1: {storagePtr{aidx, true}: &storageDelta{action: allocAction}},
@@ -959,7 +960,7 @@ func TestCowAllocated(t *testing.T) {
 
 	// ensure other requests go down to roundCowParent
 	a.Panics(func() { c.allocated(addr1, aidx+1, true) })
-	a.Panics(func() { c.allocated(getRandomAddress(a), aidx, true) })
+	a.Panics(func() { c.allocated(ledgertesting.RandomAddress(), aidx, true) })
 }
 
 func TestCowGetCreator(t *testing.T) {
@@ -967,7 +968,7 @@ func TestCowGetCreator(t *testing.T) {
 
 	a := require.New(t)
 
-	addr := getRandomAddress(a)
+	addr := ledgertesting.RandomAddress()
 	aidx := basics.AppIndex(1)
 	c := getCow([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
 
@@ -990,7 +991,7 @@ func TestCowGetters(t *testing.T) {
 
 	a := require.New(t)
 
-	addr := getRandomAddress(a)
+	addr := ledgertesting.RandomAddress()
 	aidx := basics.AppIndex(1)
 	c := getCow([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
 
@@ -1008,11 +1009,11 @@ func TestCowGet(t *testing.T) {
 
 	a := require.New(t)
 
-	addr := getRandomAddress(a)
+	addr := ledgertesting.RandomAddress()
 	aidx := basics.AppIndex(1)
 	c := getCow([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
 
-	addr1 := getRandomAddress(a)
+	addr1 := ledgertesting.RandomAddress()
 	bre := basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 100}}
 	c.mods.Accts.Upsert(addr1, bre)
 
@@ -1025,7 +1026,7 @@ func TestCowGet(t *testing.T) {
 	a.Equal(bre, bra)
 
 	// ensure other requests go down to roundCowParent
-	a.Panics(func() { c.Get(getRandomAddress(a), true) })
+	a.Panics(func() { c.Get(ledgertesting.RandomAddress(), true) })
 }
 
 func TestCowGetKey(t *testing.T) {
@@ -1033,7 +1034,7 @@ func TestCowGetKey(t *testing.T) {
 
 	a := require.New(t)
 
-	addr := getRandomAddress(a)
+	addr := ledgertesting.RandomAddress()
 	aidx := basics.AppIndex(1)
 	c := getCow([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
 
@@ -1097,7 +1098,7 @@ func TestCowGetKey(t *testing.T) {
 	a.Equal(tv, val)
 
 	// ensure other requests go down to roundCowParent
-	a.Panics(func() { c.GetKey(getRandomAddress(a), aidx, false, "lkey", 0) })
+	a.Panics(func() { c.GetKey(ledgertesting.RandomAddress(), aidx, false, "lkey", 0) })
 	a.Panics(func() { c.GetKey(addr, aidx+1, false, "lkey", 0) })
 }
 
@@ -1106,7 +1107,7 @@ func TestCowSetKey(t *testing.T) {
 
 	a := require.New(t)
 
-	addr := getRandomAddress(a)
+	addr := ledgertesting.RandomAddress()
 	aidx := basics.AppIndex(1)
 	c := getCow([]modsData{
 		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
@@ -1177,7 +1178,7 @@ func TestCowSetKey(t *testing.T) {
 	a.NoError(err)
 
 	// check local
-	addr1 := getRandomAddress(a)
+	addr1 := ledgertesting.RandomAddress()
 	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr1: {
 			storagePtr{aidx, false}: &storageDelta{
@@ -1192,7 +1193,7 @@ func TestCowSetKey(t *testing.T) {
 	a.NoError(err)
 
 	// ensure other requests go down to roundCowParent
-	a.Panics(func() { c.SetKey(getRandomAddress(a), aidx, false, key, tv, 0) })
+	a.Panics(func() { c.SetKey(ledgertesting.RandomAddress(), aidx, false, key, tv, 0) })
 	a.Panics(func() { c.SetKey(addr, aidx+1, false, key, tv, 0) })
 }
 
@@ -1201,7 +1202,7 @@ func TestCowSetKeyVFuture(t *testing.T) {
 
 	a := require.New(t)
 
-	addr := getRandomAddress(a)
+	addr := ledgertesting.RandomAddress()
 	aidx := basics.AppIndex(1)
 	c := getCow([]modsData{
 		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
@@ -1237,7 +1238,7 @@ func TestCowAccountIdx(t *testing.T) {
 	a := require.New(t)
 
 	l := emptyLedger{}
-	addr := getRandomAddress(a)
+	addr := ledgertesting.RandomAddress()
 	aidx := basics.AppIndex(1)
 	c := getCow([]modsData{
 		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
@@ -1284,7 +1285,7 @@ func TestCowDelKey(t *testing.T) {
 
 	a := require.New(t)
 
-	addr := getRandomAddress(a)
+	addr := ledgertesting.RandomAddress()
 	aidx := basics.AppIndex(1)
 	c := getCow([]modsData{
 		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
@@ -1327,6 +1328,6 @@ func TestCowDelKey(t *testing.T) {
 	a.NoError(err)
 
 	// ensure other requests go down to roundCowParent
-	a.Panics(func() { c.DelKey(getRandomAddress(a), aidx, false, key, 0) })
+	a.Panics(func() { c.DelKey(ledgertesting.RandomAddress(), aidx, false, key, 0) })
 	a.Panics(func() { c.DelKey(addr, aidx+1, false, key, 0) })
 }

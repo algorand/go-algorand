@@ -17,11 +17,15 @@
 package ledgercore
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 )
+
+// ErrNoSpace indicates insufficient space for transaction in block
+var ErrNoSpace = errors.New("block does not have space for transaction")
 
 // TransactionInLedgerError is returned when a transaction cannot be added because it has already been done
 type TransactionInLedgerError struct {

@@ -37,12 +37,17 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 )
+
+var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c, 0x22, 0x95, 0xfd, 0x32, 0x4f, 0x77, 0xa5, 0x4, 0x8b, 0x42, 0xc2, 0xb7, 0xa8, 0x54, 0x84, 0xb6, 0x80, 0xb1, 0xe1, 0x3d, 0x59, 0x9b, 0xeb, 0x36}
 
 type mockLedgerForTracker struct {
 	dbs             db.Pair
@@ -146,7 +151,7 @@ func (ml *mockLedgerForTracker) addMockBlock(be blockEntry, delta ledgercore.Sta
 	return nil
 }
 
-func (ml *mockLedgerForTracker) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (ledgercore.StateDelta, error) {
+func (ml *mockLedgerForTracker) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger internal.LedgerForEvaluator) (ledgercore.StateDelta, error) {
 	// support returning the deltas if the client explicitly provided them by calling addMockBlock, otherwise,
 	// just return an empty state delta ( since the client clearly didn't care about these )
 	if len(ml.deltas) > int(blk.Round()) {
@@ -247,7 +252,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 	require.Error(t, err)
 
 	var validThrough basics.Round
-	_, validThrough, err = au.LookupWithoutRewards(latest+1, randomAddress())
+	_, validThrough, err = au.LookupWithoutRewards(latest+1, ledgertesting.RandomAddress())
 	require.Error(t, err)
 	require.Equal(t, basics.Round(0), validThrough)
 
@@ -255,7 +260,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 		_, err := au.Totals(base - 1)
 		require.Error(t, err)
 
-		_, validThrough, err = au.LookupWithoutRewards(base-1, randomAddress())
+		_, validThrough, err = au.LookupWithoutRewards(base-1, ledgertesting.RandomAddress())
 		require.Error(t, err)
 		require.Equal(t, basics.Round(0), validThrough)
 	}
@@ -314,7 +319,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
 			require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
 
-			d, validThrough, err := au.LookupWithoutRewards(rnd, randomAddress())
+			d, validThrough, err := au.LookupWithoutRewards(rnd, ledgertesting.RandomAddress())
 			require.NoError(t, err)
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
 			require.Equal(t, d, basics.AccountData{})
@@ -347,7 +352,7 @@ func TestAcctUpdates(t *testing.T) {
 	}
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
 	rewardsLevels := []uint64{0}
 
 	pooldata := basics.AccountData{}
@@ -388,7 +393,7 @@ func TestAcctUpdates(t *testing.T) {
 		var updates ledgercore.AccountDeltas
 		var totals map[basics.Address]basics.AccountData
 		base := accts[i-1]
-		updates, totals, lastCreatableID = randomDeltasBalancedFull(1, base, rewardLevel, lastCreatableID)
+		updates, totals, lastCreatableID = ledgertesting.RandomDeltasBalancedFull(1, base, rewardLevel, lastCreatableID)
 		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
 
@@ -434,7 +439,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	}
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
 	rewardsLevels := []uint64{0}
 
 	pooldata := basics.AccountData{}
@@ -472,7 +477,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	for i := basics.Round(10); i < basics.Round(proto.MaxBalLookback+15); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
-		updates, totals := randomDeltasBalanced(1, accts[i-1], rewardLevel)
+		updates, totals := ledgertesting.RandomDeltasBalanced(1, accts[i-1], rewardLevel)
 
 		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
@@ -525,7 +530,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	initialRounds := uint64(1)
 
 	accountsCount := 5000
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount, true)}
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(accountsCount, true)}
 	rewardsLevels := []uint64{0}
 
 	pooldata := basics.AccountData{}
@@ -562,7 +567,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 			accountChanges = accountsCount - 2 - int(basics.Round(proto.MaxBalLookback+uint64(b.N))+i)
 		}
 
-		updates, totals := randomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
+		updates, totals := ledgertesting.RandomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
 		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(b, err)
 
@@ -656,7 +661,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		os.RemoveAll("./catchpoints")
 	}()
 
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(100000, true)}
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(100000, true)}
 	rewardsLevels := []uint64{0}
 
 	pooldata := basics.AccountData{}
@@ -690,7 +695,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	for i := basics.Round(10); i < basics.Round(protoParams.MaxBalLookback+5); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
-		updates, totals := randomDeltasBalanced(1, accts[i-1], rewardLevel)
+		updates, totals := ledgertesting.RandomDeltasBalanced(1, accts[i-1], rewardLevel)
 
 		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
@@ -747,7 +752,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 	inMemory := true
 
 	testFunction := func(t *testing.T) {
-		accts := []map[basics.Address]basics.AccountData{randomAccounts(9, true)}
+		accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(9, true)}
 
 		pooldata := basics.AccountData{}
 		pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
@@ -907,7 +912,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
 
 	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
 	defer ml.Close()
@@ -1142,7 +1147,7 @@ func TestIsWritingCatchpointFile(t *testing.T) {
 func TestGetCatchpointStream(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
 
 	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
 	defer ml.Close()
@@ -1252,7 +1257,7 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(5, true)}
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(5, true)}
 
 	pooldata := basics.AccountData{}
 	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
@@ -1280,7 +1285,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
 		var updates compactAccountDeltas
 		for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
-			addr := randomAddress()
+			addr := ledgertesting.RandomAddress()
 			acctData := basics.AccountData{}
 			acctData.MicroAlgos.Raw = 1
 			updates.upsert(addr, accountDelta{new: acctData})
@@ -1311,7 +1316,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 func BenchmarkLargeCatchpointWriting(b *testing.B) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(5, true)}
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(5, true)}
 
 	pooldata := basics.AccountData{}
 	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
@@ -1351,7 +1356,7 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 		for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
 			var updates compactAccountDeltas
 			for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
-				addr := randomAddress()
+				addr := ledgertesting.RandomAddress()
 				acctData := basics.AccountData{}
 				acctData.MicroAlgos.Raw = 1
 				updates.upsert(addr, accountDelta{new: acctData})
@@ -1482,7 +1487,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		delete(config.Consensus, testProtocolVersion)
 	}()
 
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
 	rewardsLevels := []uint64{0}
 
 	pooldata := basics.AccountData{}
@@ -1523,7 +1528,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		var updates ledgercore.AccountDeltas
 		var totals map[basics.Address]basics.AccountData
 		base := accts[i-1]
-		updates, totals, lastCreatableID = randomDeltasBalancedFull(1, base, rewardLevel, lastCreatableID)
+		updates, totals, lastCreatableID = ledgertesting.RandomDeltasBalancedFull(1, base, rewardLevel, lastCreatableID)
 		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
 
@@ -1597,7 +1602,7 @@ func TestCachesInitialization(t *testing.T) {
 	initialRounds := uint64(1)
 	accountsCount := 5
 
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount, true)}
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(accountsCount, true)}
 	rewardsLevels := []uint64{0}
 
 	pooldata := basics.AccountData{}
@@ -1634,7 +1639,7 @@ func TestCachesInitialization(t *testing.T) {
 		rewardLevel += rewardLevelDelta
 		accountChanges := 2
 
-		updates, totals := randomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
+		updates, totals := ledgertesting.RandomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
 		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
 
@@ -1664,7 +1669,7 @@ func TestCachesInitialization(t *testing.T) {
 	au.close()
 
 	// reset the accounts, since their balances are now changed due to the rewards.
-	accts = []map[basics.Address]basics.AccountData{randomAccounts(accountsCount, true)}
+	accts = []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(accountsCount, true)}
 
 	// create another mocked ledger, but this time with a fresh new tracker database.
 	ml2 := makeMockLedgerForTracker(t, true, int(initialRounds), protocolVersion, accts)
@@ -1696,7 +1701,7 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 	initialRounds := uint64(1)
 
 	accountsCount := 5
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount, true)}
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(accountsCount, true)}
 	rewardsLevels := []uint64{0}
 
 	pooldata := basics.AccountData{}
@@ -1734,7 +1739,7 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 		rewardLevel += rewardLevelDelta
 		accountChanges := 2
 
-		updates, totals := randomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
+		updates, totals := ledgertesting.RandomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
 		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
 
@@ -1769,7 +1774,7 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 		rewardLevel += rewardLevelDelta
 		accountChanges := 2
 
-		updates, totals := randomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
+		updates, totals := ledgertesting.RandomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
 		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
 
@@ -1812,7 +1817,7 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 	initialRounds := uint64(1)
 
 	accountsCount := 5
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount, true)}
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(accountsCount, true)}
 	rewardsLevels := []uint64{0}
 
 	pooldata := basics.AccountData{}
@@ -1850,7 +1855,7 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		rewardLevel += rewardLevelDelta
 		accountChanges := 2
 
-		updates, totals := randomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
+		updates, totals := ledgertesting.RandomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
 		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
 
@@ -1884,7 +1889,7 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		rewardLevel += rewardLevelDelta
 		accountChanges := 2
 
-		updates, totals := randomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
+		updates, totals := ledgertesting.RandomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
 		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
 
@@ -1920,7 +1925,7 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		rewardLevel += rewardLevelDelta
 		accountChanges := 2
 
-		updates, totals := randomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
+		updates, totals := ledgertesting.RandomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
 		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
 

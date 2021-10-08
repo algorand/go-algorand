@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package internal
 
 import (
 	"fmt"
@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+//msgp: ignore storageAction
 type storageAction uint64
 
 const (
@@ -457,7 +458,7 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 }
 
 // MakeDebugBalances creates a ledger suitable for dryrun and debugger
-func MakeDebugBalances(l ledgerForCowBase, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
+func MakeDebugBalances(l LedgerForCowBase, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
 	base := makeRoundCowBase(l, round-1, 0, basics.Round(0), config.Consensus[proto])
 
 	hdr := bookkeeping.BlockHeader{

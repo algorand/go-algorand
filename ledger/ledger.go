@@ -28,13 +28,18 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ledger/apply"
+	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -87,19 +92,12 @@ type Ledger struct {
 	cfg config.Local
 }
 
-// InitState structure defines blockchain init params
-type InitState struct {
-	Block       bookkeeping.Block
-	Accounts    map[basics.Address]basics.AccountData
-	GenesisHash crypto.Digest
-}
-
 // OpenLedger creates a Ledger object, using SQLite database filenames
 // based on dbPathPrefix (in-memory if dbMem is true). genesisInitState.Blocks and
 // genesisInitState.Accounts specify the initial blocks and accounts to use if the
 // database wasn't initialized before.
 func OpenLedger(
-	log logging.Logger, dbPathPrefix string, dbMem bool, genesisInitState InitState, cfg config.Local,
+	log logging.Logger, dbPathPrefix string, dbMem bool, genesisInitState ledgercore.InitState, cfg config.Local,
 ) (*Ledger, error) {
 	var err error
 	verifiedCacheSize := cfg.VerifiedTranscationsCacheSize
@@ -424,7 +422,7 @@ func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableTy
 // CompactCertVoters returns the top online accounts at round rnd.
 // The result might be nil, even with err=nil, if there are no voters
 // for that round because compact certs were not enabled.
-func (l *Ledger) CompactCertVoters(rnd basics.Round) (voters *VotersForRound, err error) {
+func (l *Ledger) CompactCertVoters(rnd basics.Round) (*ledgercore.VotersForRound, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.accts.voters.getVoters(rnd)
@@ -497,10 +495,10 @@ func (l *Ledger) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
 }
 
 // CheckDup return whether a transaction is a duplicate one.
-func (l *Ledger) CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl TxLease) error {
+func (l *Ledger) CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.txTail.checkDup(currentProto, current, firstValid, lastValid, txid, txl.Txlease)
+	return l.txTail.checkDup(currentProto, current, firstValid, lastValid, txid, txl)
 }
 
 // Latest returns the latest known block round added to the ledger.
@@ -553,15 +551,11 @@ func (l *Ledger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreem
 func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) error {
 	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
 
-	updates, err := eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil)
+	updates, err := internal.Eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil)
 	if err != nil {
 		return err
 	}
-
-	vb := ValidatedBlock{
-		blk:   blk,
-		delta: updates,
-	}
+	vb := ledgercore.MakeValidatedBlock(blk, updates)
 
 	return l.AddValidatedBlock(vb, cert)
 }
@@ -571,18 +565,19 @@ func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) err
 // having to re-compute the effect of the block on the ledger state, if
 // the block has previously been validated.  Otherwise, AddValidatedBlock
 // behaves like AddBlock.
-func (l *Ledger) AddValidatedBlock(vb ValidatedBlock, cert agreement.Certificate) error {
+func (l *Ledger) AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.Certificate) error {
 	// Grab the tracker lock first, to ensure newBlock() is notified before committedUpTo().
 	l.trackerMu.Lock()
 	defer l.trackerMu.Unlock()
 
-	err := l.blockQ.putBlock(vb.blk, cert)
+	blk := vb.Block()
+	err := l.blockQ.putBlock(blk, cert)
 	if err != nil {
 		return err
 	}
-	l.headerCache.Put(vb.blk.Round(), vb.blk.BlockHeader)
-	l.trackers.newBlock(vb.blk, vb.delta)
-	l.log.Debugf("added blk %d", vb.blk.Round())
+	l.headerCache.Put(blk.Round(), blk.BlockHeader)
+	l.trackers.newBlock(blk, vb.Delta())
+	l.log.Debugf("added blk %d", blk.Round())
 	return nil
 }
 
@@ -651,9 +646,9 @@ func (l *Ledger) trackerLog() logging.Logger {
 // trackerEvalVerified is used by the accountUpdates to reconstruct the ledgercore.StateDelta from a given block during it's loadFromDisk execution.
 // when this function is called, the trackers mutex is expected already to be taken. The provided accUpdatesLedger would allow the
 // evaluator to shortcut the "main" ledger ( i.e. this struct ) and avoid taking the trackers lock a second time.
-func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (ledgercore.StateDelta, error) {
+func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger internal.LedgerForEvaluator) (ledgercore.StateDelta, error) {
 	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
-	return eval(context.Background(), accUpdatesLedger, blk, false, l.verifiedTxnCache, nil)
+	return internal.Eval(context.Background(), accUpdatesLedger, blk, false, l.verifiedTxnCache, nil)
 }
 
 // IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service
@@ -669,9 +664,60 @@ func (l *Ledger) VerifiedTransactionCache() verify.VerifiedTransactionCache {
 	return l.verifiedTxnCache
 }
 
-// TxLease is an exported version of txlease
-type TxLease struct {
-	ledgercore.Txlease
+// StartEvaluator creates a BlockEvaluator, given a ledger and a block header
+// of the block that the caller is planning to evaluate. If the length of the
+// payset being evaluated is known in advance, a paysetHint >= 0 can be
+// passed, avoiding unnecessary payset slice growth. The optional maxTxnBytesPerBlock parameter
+// provides a cap on the size of a single generated block size, when a non-zero value is passed.
+// If a value of zero or less is passed to maxTxnBytesPerBlock, the consensus MaxTxnBytesPerBlock would
+// be used instead.
+func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*internal.BlockEvaluator, error) {
+	proto, ok := config.Consensus[hdr.CurrentProtocol]
+	if !ok {
+		return nil, protocol.Error(hdr.CurrentProtocol)
+	}
+
+	return internal.StartEvaluator(l, hdr, proto, paysetHint, true, true, maxTxnBytesPerBlock)
+}
+
+// Validate uses the ledger to validate block blk as a candidate next block.
+// It returns an error if blk is not the expected next block, or if blk is
+// not a valid block (e.g., it has duplicate transactions, overspends some
+// account, etc).
+func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error) {
+	delta, err := internal.Eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool)
+	if err != nil {
+		return nil, err
+	}
+
+	vb := ledgercore.MakeValidatedBlock(blk, delta)
+	return &vb, nil
+}
+
+// CompactCertParams computes the parameters for building or verifying
+// a compact cert for block hdr, using voters from block votersHdr.
+func CompactCertParams(votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (res compactcert.Params, err error) {
+	return internal.CompactCertParams(votersHdr, hdr)
+}
+
+// AcceptableCompactCertWeight computes the acceptable signed weight
+// of a compact cert if it were to appear in a transaction with a
+// particular firstValid round.  Earlier rounds require a smaller cert.
+// votersHdr specifies the block that contains the Merkle commitment of
+// the voters for this compact cert (and thus the compact cert is for
+// votersHdr.Round() + CompactCertRounds).
+//
+// logger must not be nil; use at least logging.Base()
+func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid basics.Round, logger logging.Logger) uint64 {
+	return internal.AcceptableCompactCertWeight(votersHdr, firstValid, logger)
+}
+
+// DebuggerLedger defines the minimal set of method required for creating a debug balances.
+type DebuggerLedger = internal.LedgerForCowBase
+
+// MakeDebugBalances creates a ledger suitable for dryrun and debugger
+func MakeDebugBalances(l DebuggerLedger, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
+	return internal.MakeDebugBalances(l, round, proto, prevTimestamp)
 }
 
 var ledgerInitblocksdbCount = metrics.NewCounter("ledger_initblocksdb_count", "calls")

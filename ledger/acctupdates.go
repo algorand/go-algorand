@@ -501,7 +501,7 @@ func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, 
 // onlineTop returns the top n online accounts, sorted by their normalized
 // balance and address, whose voting keys are valid in voteRnd.  See the
 // normalization description in AccountData.NormalizedOnlineBalance().
-func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n uint64) ([]*onlineAccount, error) {
+func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n uint64) ([]*ledgercore.OnlineAccount, error) {
 	proto := au.ledger.GenesisProto()
 	au.accountsMu.RLock()
 	for {
@@ -520,7 +520,7 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 		// is not valid in voteRnd.  Otherwise, the *onlineAccount is the
 		// representation of the most recent state of the account, and it
 		// is online and can vote in voteRnd.
-		modifiedAccounts := make(map[basics.Address]*onlineAccount)
+		modifiedAccounts := make(map[basics.Address]*ledgercore.OnlineAccount)
 		for o := uint64(0); o < offset; o++ {
 			for i := 0; i < au.deltas[o].Len(); i++ {
 				addr, d := au.deltas[o].GetByIdx(i)
@@ -548,12 +548,12 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 		//
 		// Keep asking for more accounts until we get the desired number,
 		// or there are no more accounts left.
-		candidates := make(map[basics.Address]*onlineAccount)
+		candidates := make(map[basics.Address]*ledgercore.OnlineAccount)
 		batchOffset := uint64(0)
 		batchSize := uint64(1024)
 		var dbRound basics.Round
 		for uint64(len(candidates)) < n+uint64(len(modifiedAccounts)) {
-			var accts map[basics.Address]*onlineAccount
+			var accts map[basics.Address]*ledgercore.OnlineAccount
 			start := time.Now()
 			ledgerAccountsonlinetopCount.Inc(nil)
 			err = au.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
@@ -617,9 +617,9 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 			heap.Push(topHeap, data)
 		}
 
-		var res []*onlineAccount
+		var res []*ledgercore.OnlineAccount
 		for topHeap.Len() > 0 && uint64(len(res)) < n {
-			acct := heap.Pop(topHeap).(*onlineAccount)
+			acct := heap.Pop(topHeap).(*ledgercore.OnlineAccount)
 			res = append(res, acct)
 		}
 
@@ -893,7 +893,7 @@ func (aul *accountUpdatesLedgerEvaluator) GenesisHash() crypto.Digest {
 }
 
 // CompactCertVoters returns the top online accounts at round rnd.
-func (aul *accountUpdatesLedgerEvaluator) CompactCertVoters(rnd basics.Round) (voters *VotersForRound, err error) {
+func (aul *accountUpdatesLedgerEvaluator) CompactCertVoters(rnd basics.Round) (voters *ledgercore.VotersForRound, err error) {
 	return aul.au.voters.getVoters(rnd)
 }
 
@@ -912,7 +912,7 @@ func (aul *accountUpdatesLedgerEvaluator) LatestTotals() (basics.Round, ledgerco
 }
 
 // CheckDup test to see if the given transaction id/lease already exists. It's not needed by the accountUpdatesLedgerEvaluator and implemented as a stub.
-func (aul *accountUpdatesLedgerEvaluator) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error {
+func (aul *accountUpdatesLedgerEvaluator) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
 	// this is a non-issue since this call will never be made on non-validating evaluation
 	return fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initialization ")
 }
