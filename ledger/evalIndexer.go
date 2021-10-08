@@ -41,6 +41,15 @@ type indexerLedgerForEval interface {
 	LatestTotals() (ledgercore.AccountTotals, error)
 }
 
+// EvalForIndexerResources contains resources preloaded from the Indexer database.
+// Indexer is able to do the preloading more efficiently than the evaluator loading
+// resources one by one.
+type EvalForIndexerResources struct {
+	// The map value is nil iff the account does not exist. The account data is owned here.
+	accounts map[basics.Address]*basics.AccountData
+	creators map[creatable]FoundAddress
+}
+
 // Converter between indexerLedgerForEval and ledgerForEvaluator interfaces.
 type indexerLedgerConnector struct {
 	il          indexerLedgerForEval
@@ -132,22 +141,16 @@ func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Dige
 	}
 }
 
-// Returns all addresses referenced in `block`.
-func getBlockAddresses(block *bookkeeping.Block) map[basics.Address]struct{} {
-	// Reserve a reasonable memory size for the map.
-	res := make(map[basics.Address]struct{}, len(block.Payset)+2)
-	res[block.FeeSink] = struct{}{}
-	res[block.RewardsPool] = struct{}{}
-
-	var refAddresses []basics.Address
-	for _, stib := range block.Payset {
-		getTxnAddresses(&stib.Txn, &refAddresses)
-		for _, address := range refAddresses {
-			res[address] = struct{}{}
+func saveResourcesInCowBase(resources EvalForIndexerResources, base *roundCowBase) {
+	for address, accountData := range resources.accounts {
+		if accountData == nil {
+			base.accounts[address] = basics.AccountData{}
+		} else {
+			base.accounts[address] = *accountData
 		}
 	}
 
-	return res
+	base.creators = resources.creators
 }
 
 // EvalForIndexer evaluates a block without validation using the given `proto`.
@@ -155,7 +158,7 @@ func getBlockAddresses(block *bookkeeping.Block) map[basics.Address]struct{} {
 // This function is used by Indexer which modifies `proto` to retrieve the asset
 // close amount for each transaction even when the real consensus parameters do not
 // support it.
-func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto config.ConsensusParams) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
+func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto config.ConsensusParams, resources EvalForIndexerResources) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
 	ilc := makeIndexerLedgerConnector(il, block.GenesisHash(), block.Round()-1)
 
 	eval, err := startEvaluator(
@@ -165,22 +168,7 @@ func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto con
 			fmt.Errorf("EvalForIndexer() err: %w", err)
 	}
 
-	// Preload most needed accounts.
-	{
-		accountDataMap, err := il.LookupWithoutRewards(getBlockAddresses(block))
-		if err != nil {
-			return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
-				fmt.Errorf("EvalForIndexer() err: %w", err)
-		}
-		base := eval.state.lookupParent.(*roundCowBase)
-		for address, accountData := range accountDataMap {
-			if accountData == nil {
-				base.accounts[address] = basics.AccountData{}
-			} else {
-				base.accounts[address] = *accountData
-			}
-		}
-	}
+	saveResourcesInCowBase(resources, eval.state.lookupParent.(*roundCowBase))
 
 	paysetgroups, err := block.DecodePaysetGroups()
 	if err != nil {

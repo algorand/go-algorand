@@ -96,6 +96,10 @@ func (wl *wrappedLedger) GenesisProto() config.ConsensusParams {
 	return wl.l.GenesisProto()
 }
 
+func (wl *wrappedLedger) GenesisAccounts() map[basics.Address]basics.AccountData {
+	return wl.l.GenesisAccounts()
+}
+
 func getInitState() (genesisInitState InitState) {
 	blk := bookkeeping.Block{}
 	blk.CurrentProtocol = protocol.ConsensusCurrentVersion
@@ -804,7 +808,7 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 			au = cleanTracker.(*accountUpdates)
 			cfg := config.GetDefaultLocal()
 			cfg.Archival = true
-			au.initialize(cfg, "", au.initProto, wl.l.accts.initAccounts)
+			au.initialize(cfg, "")
 		} else {
 			minSave = trk.committedUpTo(rnd)
 			if minSave < minMinSave {

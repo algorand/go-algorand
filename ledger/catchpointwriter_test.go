@@ -187,12 +187,10 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, []map[basics.Address]basics.AccountData{accts})
 	defer ml.Close()
 
-	au := &accountUpdates{}
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	conf.Archival = true
-	au.initialize(conf, ".", protoParams, accts)
-	defer au.close()
+	au := newAcctUpdates(t, ml, conf, ".")
 	err := au.loadFromDisk(ml)
 	require.NoError(t, err)
 	au.close()
@@ -287,12 +285,10 @@ func TestFullCatchpointWriter(t *testing.T) {
 	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, []map[basics.Address]basics.AccountData{accts})
 	defer ml.Close()
 
-	au := &accountUpdates{}
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	conf.Archival = true
-	au.initialize(conf, ".", protoParams, accts)
-	defer au.close()
+	au := newAcctUpdates(t, ml, conf, ".")
 	err := au.loadFromDisk(ml)
 	require.NoError(t, err)
 	au.close()

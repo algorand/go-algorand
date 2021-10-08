@@ -19,6 +19,7 @@ package ledger
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -176,11 +177,56 @@ func TestEvalForIndexerCustomProtocolParams(t *testing.T) {
 		latestRound: 0,
 	}
 	proto.EnableAssetCloseAmount = true
-	_, modifiedTxns, err := EvalForIndexer(il, &block, proto)
+	_, modifiedTxns, err := EvalForIndexer(il, &block, proto, EvalForIndexerResources{})
 	require.NoError(t, err)
 
 	require.Equal(t, 4, len(modifiedTxns))
 	assert.Equal(t, uint64(70), modifiedTxns[3].AssetClosingAmount)
+}
+
+// Test that preloading data in cow base works as expected.
+func TestSaveResourcesInCowBase(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var address basics.Address
+	_, err := rand.Read(address[:])
+	require.NoError(t, err)
+
+	base := makeRoundCowBase(
+		nil, basics.Round(0), 0, basics.Round(0), config.ConsensusParams{})
+
+	resources := EvalForIndexerResources{
+		accounts: map[basics.Address]*basics.AccountData{
+			address: {
+				MicroAlgos: basics.MicroAlgos{Raw: 5},
+			},
+		},
+		creators: map[creatable]FoundAddress{
+			{cindex: basics.CreatableIndex(6), ctype: basics.AssetCreatable}: {Address: address, Exists: true},
+			{cindex: basics.CreatableIndex(6), ctype: basics.AppCreatable}:   {Address: address, Exists: false},
+		},
+	}
+
+	saveResourcesInCowBase(resources, base)
+
+	{
+		accountData, err := base.lookup(address)
+		require.NoError(t, err)
+		assert.Equal(t, basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 5}}, accountData)
+	}
+	{
+		address, found, err :=
+			base.getCreator(basics.CreatableIndex(6), basics.AssetCreatable)
+		require.NoError(t, err)
+		require.True(t, found)
+		assert.Equal(t, address, address)
+	}
+	{
+		_, found, err :=
+			base.getCreator(basics.CreatableIndex(6), basics.AppCreatable)
+		require.NoError(t, err)
+		require.False(t, found)
+	}
 }
 
 // TestEvalForIndexerForExpiredAccounts tests that the EvalForIndexer function will correctly mark accounts offline
@@ -214,19 +260,19 @@ func TestEvalForIndexerForExpiredAccounts(t *testing.T) {
 		latestRound: 0,
 	}
 
-	_, _, err = EvalForIndexer(il, &block, proto)
+	_, _, err = EvalForIndexer(il, &block, proto, EvalForIndexerResources{})
 	require.NoError(t, err)
 
 	badBlock := block
 	// First validate that bad block is fine if we dont touch it...
-	_, _, err = EvalForIndexer(il, &badBlock, proto)
+	_, _, err = EvalForIndexer(il, &badBlock, proto, EvalForIndexerResources{})
 	require.NoError(t, err)
 
 	// Introduce an unknown address, but this time the Eval function is called with parameters that
 	// don't necessarily mean that this will cause an error.  Just that an empty address will be added
 	badBlock.ExpiredParticipationAccounts = append(badBlock.ExpiredParticipationAccounts, basics.Address{123})
 
-	_, _, err = EvalForIndexer(il, &badBlock, proto)
+	_, _, err = EvalForIndexer(il, &badBlock, proto, EvalForIndexerResources{})
 	require.NoError(t, err)
 
 	badBlock = block
@@ -238,14 +284,13 @@ func TestEvalForIndexerForExpiredAccounts(t *testing.T) {
 		badBlock.ExpiredParticipationAccounts = append(badBlock.ExpiredParticipationAccounts, addressToCopy)
 	}
 
-	_, _, err = EvalForIndexer(il, &badBlock, proto)
+	_, _, err = EvalForIndexer(il, &badBlock, proto, EvalForIndexerResources{})
 	require.Error(t, err)
 
 	// Sanity Check
 
 	badBlock = block
 
-	_, _, err = EvalForIndexer(il, &badBlock, proto)
+	_, _, err = EvalForIndexer(il, &badBlock, proto, EvalForIndexerResources{})
 	require.NoError(t, err)
-
 }

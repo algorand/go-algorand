@@ -95,6 +95,18 @@ type roundCowBase struct {
 	creators map[creatable]FoundAddress
 }
 
+func makeRoundCowBase(l ledgerForCowBase, rnd basics.Round, txnCount uint64, compactCertNextRnd basics.Round, proto config.ConsensusParams) *roundCowBase {
+	return &roundCowBase{
+		l:                  l,
+		rnd:                rnd,
+		txnCount:           txnCount,
+		compactCertNextRnd: compactCertNextRnd,
+		proto:              proto,
+		accounts:           make(map[basics.Address]basics.AccountData),
+		creators:           make(map[creatable]FoundAddress),
+	}
+}
+
 func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	creatable := creatable{cindex: cidx, ctype: ctype}
 
@@ -438,18 +450,12 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 		return nil, protocol.Error(prevHeader.CurrentProtocol)
 	}
 
-	base := &roundCowBase{
-		l: l,
-		// round that lookups come from is previous block.  We validate
-		// the block at this round below, so underflow will be caught.
-		// If we are not validating, we must have previously checked
-		// an agreement.Certificate attesting that hdr is valid.
-		rnd:      hdr.Round - 1,
-		txnCount: prevHeader.TxnCounter,
-		proto:    proto,
-		accounts: make(map[basics.Address]basics.AccountData),
-		creators: make(map[creatable]FoundAddress),
-	}
+	// Round that lookups come from is previous block.  We validate
+	// the block at this round below, so underflow will be caught.
+	// If we are not validating, we must have previously checked
+	// an agreement.Certificate attesting that hdr is valid.
+	base := makeRoundCowBase(
+		l, hdr.Round-1, prevHeader.TxnCounter, basics.Round(0), proto)
 
 	eval := &BlockEvaluator{
 		validate:   validate,
@@ -1463,16 +1469,6 @@ type loadedTransactionGroup struct {
 // Return the maximum number of addresses referenced in any given transaction.
 func maxAddressesInTxn(proto *config.ConsensusParams) int {
 	return 7 + proto.MaxAppTxnAccounts
-}
-
-// Write the list of addresses referenced in `txn` to `out`. Addresses might repeat.
-func getTxnAddresses(txn *transactions.Transaction, out *[]basics.Address) {
-	*out = (*out)[:0]
-
-	*out = append(
-		*out, txn.Sender, txn.Receiver, txn.CloseRemainderTo, txn.AssetSender,
-		txn.AssetReceiver, txn.AssetCloseTo, txn.FreezeAccount)
-	*out = append(*out, txn.ApplicationCallTxnFields.Accounts...)
 }
 
 // loadAccounts loads the account data for the provided transaction group list. It also loads the feeSink account and add it to the first returned transaction group.
