@@ -234,7 +234,7 @@ func TestPartitionHalfOffline(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	t.Parallel()
+	// t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	// Overview of this test:
