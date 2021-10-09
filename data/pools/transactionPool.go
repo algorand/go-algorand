@@ -760,6 +760,10 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	}
 	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, pool.calculateMaxTxnBytesPerBlock(next.BlockHeader.CurrentProtocol))
 	if err != nil {
+		// The pendingBlockEvaluator is an interface, and in case of an evaluator error
+		// we want to remove the interface itself rather then keeping an interface
+		// to a nil.
+		pool.pendingBlockEvaluator = nil
 		var nonSeqBlockEval ledgercore.ErrNonSequentialBlockEval
 		if errors.As(err, &nonSeqBlockEval) {
 			if nonSeqBlockEval.EvaluatorRound <= nonSeqBlockEval.LatestRound {
