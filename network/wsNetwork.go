@@ -1119,6 +1119,12 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		wn.requestsLogger.SetStatusCode(response, http.StatusSwitchingProtocols)
 	}
 
+	// create a rough initial estimation for the connection roundtrip time.
+	connectionRoundtripDuration := time.Duration(0)
+	if trackedRequest.connection != nil {
+		connectionRoundtripDuration = time.Now().Sub(trackedRequest.created)
+	}
+
 	peer := &wsPeer{
 		wsPeerCore:        makePeerCore(wn, trackedRequest.otherPublicAddr, wn.GetRoundTripper(), trackedRequest.remoteHost),
 		conn:              conn,
@@ -1128,6 +1134,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		prioChallenge:     challenge,
 		createTime:        trackedRequest.created,
 		version:           matchingVersion,
+		connectionLatency: connectionRoundtripDuration.Nanoseconds(),
 	}
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
@@ -2066,6 +2073,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		NetDial:           wn.dialer.Dial,
 	}
 
+	connectionAttemptedTime := time.Now()
 	conn, response, err := websocketDialer.DialContext(wn.ctx, gossipAddr, requestHeader)
 	if err != nil {
 		if err == websocket.ErrBadHandshake {
@@ -2102,6 +2110,8 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		return
 	}
 
+	initialRoundtripDuration := wn.calculateRoundtripDuration(connectionAttemptedTime, gossipAddr)
+
 	// no need to test the response.StatusCode since we know it's going to be http.StatusSwitchingProtocols, as it's already being tested inside websocketDialer.DialContext.
 	// we need to examine the headers here to extract which protocol version we should be using.
 	responseHeaderOk, matchingVersion := wn.checkServerResponseVariables(response.Header, gossipAddr)
@@ -2126,6 +2136,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		connMonitor:                 wn.connPerfMonitor,
 		throttledOutgoingConnection: throttledConnection,
 		version:                     matchingVersion,
+		connectionLatency:           initialRoundtripDuration.Nanoseconds(),
 	}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
@@ -2157,6 +2168,28 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			}
 		}
 	}
+}
+
+func (wn *WebsocketNetwork) calculateRoundtripDuration(connectionAttemptedTime time.Time, gossipAddr string) time.Duration {
+	// get the host name.
+	parsedURL, err := url.Parse(gossipAddr)
+	if err != nil {
+		// this case is not really possible, since the above gossipAddr was already parsed
+		// successfully within the websocket.DialContext.
+		wn.log.Infof("calculateRoundtripDuration failed to parse the url %s", gossipAddr)
+		return time.Duration(0)
+	}
+	networkConnectionTime, err2 := wn.phonebook.GetRecentConnectionTime(parsedURL.Host)
+	if err2 != nil {
+		// again, this is unlikely, since if we were to fail to connect, we should not
+		// have reached here. But we'll log an info message and keep going.
+		wn.log.Infof("calculateRoundtripDuration failed to get network connection time the host %s", parsedURL.Hostname)
+		return time.Duration(0)
+	}
+	if networkConnectionTime.After(connectionAttemptedTime) {
+		return networkConnectionTime.Sub(connectionAttemptedTime)
+	}
+	return time.Duration(0)
 }
 
 // GetPeerData returns the peer data associated with a particular key.

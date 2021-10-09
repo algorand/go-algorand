@@ -137,7 +137,7 @@ type wsPeer struct {
 	// lastPacketTime contains the UnixNano at the last time a successful communication was made with the peer.
 	// "successful communication" above refers to either reading from or writing to a connection without receiving any
 	// error.
-	// we want this to be a 64-bit aligned for atomics.
+	// we want this to be a 64-bit aligned for atomics support on 32bit platforms.
 	lastPacketTime int64
 
 	// intermittentOutgoingMessageEnqueueTime contains the UnixNano of the message's enqueue time that is currently being written to the
@@ -146,6 +146,11 @@ type wsPeer struct {
 
 	// Nonce used to uniquely identify requests
 	requestNonce uint64
+
+	// connectionLatency is the connection roundtrip latency between the local node and this peer.
+	// (measured in nanoseconds)
+	// we want this to be a 64-bit aligned for atomics support on 32bit platforms.
+	connectionLatency int64
 
 	wsPeerCore
 
@@ -250,6 +255,7 @@ type UnicastPeer interface {
 	Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error)
 	Respond(ctx context.Context, reqMsg IncomingMessage, topics Topics) (e error)
 	IsOutgoing() bool
+	GetConnectionLatency() time.Duration
 }
 
 // Create a wsPeerCore object
@@ -283,6 +289,12 @@ func (wp *wsPeer) Version() string {
 // is an incoming connection.
 func (wp *wsPeer) IsOutgoing() bool {
 	return wp.outgoing
+}
+
+// GetConnectionLatency returns the connection latency between the local node and this peer.
+func (wp *wsPeer) GetConnectionLatency() time.Duration {
+	latency := atomic.LoadInt64(&wp.connectionLatency)
+	return time.Duration(latency)
 }
 
 // 	Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
