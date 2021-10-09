@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -68,7 +69,7 @@ func (wl *wrappedLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, er
 	return wl.l.BlockHdr(rnd)
 }
 
-func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (ledgercore.StateDelta, error) {
+func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger internal.LedgerForEvaluator) (ledgercore.StateDelta, error) {
 	return wl.l.trackerEvalVerified(blk, accUpdatesLedger)
 }
 
@@ -96,7 +97,11 @@ func (wl *wrappedLedger) GenesisProto() config.ConsensusParams {
 	return wl.l.GenesisProto()
 }
 
-func getInitState() (genesisInitState InitState) {
+func (wl *wrappedLedger) GenesisAccounts() map[basics.Address]basics.AccountData {
+	return wl.l.GenesisAccounts()
+}
+
+func getInitState() (genesisInitState ledgercore.InitState) {
 	blk := bookkeeping.Block{}
 	blk.CurrentProtocol = protocol.ConsensusCurrentVersion
 	blk.RewardsPool = testPoolAddr
@@ -804,7 +809,7 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 			au = cleanTracker.(*accountUpdates)
 			cfg := config.GetDefaultLocal()
 			cfg.Archival = true
-			au.initialize(cfg, "", au.initProto, wl.l.accts.initAccounts)
+			au.initialize(cfg, "")
 		} else {
 			minSave = trk.committedUpTo(rnd)
 			if minSave < minMinSave {

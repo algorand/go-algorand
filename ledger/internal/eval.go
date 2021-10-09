@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package internal
 
 import (
 	"context"
@@ -27,7 +27,6 @@ import (
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
@@ -38,8 +37,13 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
-// ErrNoSpace indicates insufficient space for transaction in block
-var ErrNoSpace = errors.New("block does not have space for transaction")
+// LedgerForCowBase represents subset of Ledger functionality needed for cow business
+type LedgerForCowBase interface {
+	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
+	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
+	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
+	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
+}
 
 // ErrRoundZero is self-explanatory
 var ErrRoundZero = errors.New("cannot start evaluator for round 0")
@@ -50,23 +54,18 @@ var ErrRoundZero = errors.New("cannot start evaluator for round 0")
 const maxPaysetHint = 20000
 
 // asyncAccountLoadingThreadCount controls how many go routines would be used
-// to load the account data before the eval() start processing individual
+// to load the account data before the Eval() start processing individual
 // transaction group.
 const asyncAccountLoadingThreadCount = 4
 
-type creatable struct {
+// Creatable represent a single creatable object.
+type Creatable struct {
 	cindex basics.CreatableIndex
 	ctype  basics.CreatableType
 }
 
-// FoundAddress is a wrapper for an address and a boolean.
-type FoundAddress struct {
-	Address basics.Address
-	Exists  bool
-}
-
 type roundCowBase struct {
-	l ledgerForCowBase
+	l LedgerForCowBase
 
 	// The round number of the previous block, for looking up prior state.
 	rnd basics.Round
@@ -92,11 +91,23 @@ type roundCowBase struct {
 	accounts map[basics.Address]basics.AccountData
 
 	// Similar cache for asset/app creators.
-	creators map[creatable]FoundAddress
+	creators map[Creatable]ledgercore.FoundAddress
+}
+
+func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, compactCertNextRnd basics.Round, proto config.ConsensusParams) *roundCowBase {
+	return &roundCowBase{
+		l:                  l,
+		rnd:                rnd,
+		txnCount:           txnCount,
+		compactCertNextRnd: compactCertNextRnd,
+		proto:              proto,
+		accounts:           make(map[basics.Address]basics.AccountData),
+		creators:           make(map[Creatable]ledgercore.FoundAddress),
+	}
 }
 
 func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
-	creatable := creatable{cindex: cidx, ctype: ctype}
+	creatable := Creatable{cindex: cidx, ctype: ctype}
 
 	if foundAddress, ok := x.creators[creatable]; ok {
 		return foundAddress.Address, foundAddress.Exists, nil
@@ -108,7 +119,7 @@ func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.Creat
 			"roundCowBase.getCreator() cidx: %d ctype: %v err: %w", cidx, ctype, err)
 	}
 
-	x.creators[creatable] = FoundAddress{Address: address, Exists: exists}
+	x.creators[creatable] = ledgercore.FoundAddress{Address: address, Exists: exists}
 	return address, exists, nil
 }
 
@@ -128,7 +139,7 @@ func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
 }
 
 func (x *roundCowBase) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
-	return x.l.CheckDup(x.proto, x.rnd+1, firstValid, lastValid, txid, TxLease{txl})
+	return x.l.CheckDup(x.proto, x.rnd+1, firstValid, lastValid, txid, txl)
 }
 
 func (x *roundCowBase) txnCounter() uint64 {
@@ -383,41 +394,22 @@ type BlockEvaluator struct {
 
 	blockGenerated bool // prevent repeated GenerateBlock calls
 
-	l ledgerForEvaluator
+	l LedgerForEvaluator
 }
 
-type ledgerForEvaluator interface {
-	ledgerForCowBase
+// LedgerForEvaluator defines the ledger interface needed by the evaluator.
+type LedgerForEvaluator interface {
+	LedgerForCowBase
 	GenesisHash() crypto.Digest
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
-	CompactCertVoters(basics.Round) (*VotersForRound, error)
-}
-
-// ledgerForCowBase represents subset of Ledger functionality needed for cow business
-type ledgerForCowBase interface {
-	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
-	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error
-	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
-	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
+	CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error)
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
 // of the block that the caller is planning to evaluate. If the length of the
 // payset being evaluated is known in advance, a paysetHint >= 0 can be
-// passed, avoiding unnecessary payset slice growth. The optional maxTxnBytesPerBlock parameter
-// provides a cap on the size of a single generated block size, when a non-zero value is passed.
-// If a value of zero or less is passed to maxTxnBytesPerBlock, the consensus MaxTxnBytesPerBlock would
-// be used instead.
-func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*BlockEvaluator, error) {
-	proto, ok := config.Consensus[hdr.CurrentProtocol]
-	if !ok {
-		return nil, protocol.Error(hdr.CurrentProtocol)
-	}
-
-	return startEvaluator(l, hdr, proto, paysetHint, true, true, maxTxnBytesPerBlock)
-}
-
-func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto config.ConsensusParams, paysetHint int, validate bool, generate bool, maxTxnBytesPerBlock int) (*BlockEvaluator, error) {
+// passed, avoiding unnecessary payset slice growth.
+func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, proto config.ConsensusParams, paysetHint int, validate bool, generate bool, maxTxnBytesPerBlock int) (*BlockEvaluator, error) {
 	// if the caller did not provide a valid block size limit, default to the consensus params defaults.
 	if maxTxnBytesPerBlock <= 0 || maxTxnBytesPerBlock > proto.MaxTxnBytesPerBlock {
 		maxTxnBytesPerBlock = proto.MaxTxnBytesPerBlock
@@ -438,18 +430,12 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 		return nil, protocol.Error(prevHeader.CurrentProtocol)
 	}
 
-	base := &roundCowBase{
-		l: l,
-		// round that lookups come from is previous block.  We validate
-		// the block at this round below, so underflow will be caught.
-		// If we are not validating, we must have previously checked
-		// an agreement.Certificate attesting that hdr is valid.
-		rnd:      hdr.Round - 1,
-		txnCount: prevHeader.TxnCounter,
-		proto:    proto,
-		accounts: make(map[basics.Address]basics.AccountData),
-		creators: make(map[creatable]FoundAddress),
-	}
+	// Round that lookups come from is previous block.  We validate
+	// the block at this round below, so underflow will be caught.
+	// If we are not validating, we must have previously checked
+	// an agreement.Certificate attesting that hdr is valid.
+	base := makeRoundCowBase(
+		l, hdr.Round-1, prevHeader.TxnCounter, basics.Round(0), proto)
 
 	eval := &BlockEvaluator{
 		validate:   validate,
@@ -634,7 +620,7 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 
 	var group transactions.TxGroup
 	for gi, txn := range txgroup {
-		err := eval.testTransaction(txn, cow)
+		err := eval.TestTransaction(txn, cow)
 		if err != nil {
 			return err
 		}
@@ -666,10 +652,10 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 	return nil
 }
 
-// testTransaction performs basic duplicate detection and well-formedness checks
+// TestTransaction performs basic duplicate detection and well-formedness checks
 // on a single transaction, but does not actually add the transaction to the block
 // evaluator, or modify the block evaluator state in any other visible way.
-func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn, cow *roundCowState) error {
+func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn, cow *roundCowState) error {
 	// Transaction valid (not expired)?
 	err := txn.Txn.Alive(eval.block)
 	if err != nil {
@@ -695,19 +681,12 @@ func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn, cow *rou
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
 func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error {
-	return eval.transactionGroup([]transactions.SignedTxnWithAD{
+	return eval.TransactionGroup([]transactions.SignedTxnWithAD{
 		{
 			SignedTxn: txn,
 			ApplyData: ad,
 		},
 	})
-}
-
-// TransactionGroup tentatively adds a new transaction group as part of this block evaluation.
-// If the transaction group cannot be added to the block without violating some constraints,
-// an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithAD) error {
-	return eval.transactionGroup(txads)
 }
 
 // prepareEvalParams creates a logic.EvalParams for each ApplicationCall
@@ -757,10 +736,10 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 	return res
 }
 
-// transactionGroup tentatively executes a group of transactions as part of this block evaluation.
+// TransactionGroup tentatively executes a group of transactions as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWithAD) error {
+func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWithAD) error {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
@@ -793,7 +772,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		if eval.validate {
 			groupTxBytes += txib.GetEncodedLength()
 			if eval.blockTxBytes+groupTxBytes > eval.maxTxnBytesPerBlock {
-				return ErrNoSpace
+				return ledgercore.ErrNoSpace
 			}
 		}
 
@@ -1035,11 +1014,15 @@ func (eval *BlockEvaluator) compactCertVotersAndTotal() (root crypto.Digest, tot
 	}
 
 	if voters != nil {
-		root = voters.Tree.Root()
-		total = voters.TotalWeight
+		root, total = voters.Tree.Root(), voters.TotalWeight
 	}
 
 	return
+}
+
+// TestingTxnCounter - the method returns the current evaluator transaction counter. The method is used for testing purposes only.
+func (eval *BlockEvaluator) TestingTxnCounter() uint64 {
+	return eval.state.txnCounter()
 }
 
 // Call "endOfBlock" after all the block's rewards and transactions are processed.
@@ -1259,7 +1242,7 @@ func (eval *BlockEvaluator) finalValidation() error {
 // After a call to GenerateBlock, the BlockEvaluator can still be used to
 // accept transactions.  However, to guard against reuse, subsequent calls
 // to GenerateBlock on the same BlockEvaluator will fail.
-func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
+func (eval *BlockEvaluator) GenerateBlock() (*ledgercore.ValidatedBlock, error) {
 	if !eval.generate {
 		logging.Base().Panicf("GenerateBlock() called but generate is false")
 	}
@@ -1278,10 +1261,7 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 		return nil, err
 	}
 
-	vb := ValidatedBlock{
-		blk:   eval.block,
-		delta: eval.state.deltas(),
-	}
+	vb := ledgercore.MakeValidatedBlock(eval.block, eval.state.deltas())
 	eval.blockGenerated = true
 	proto, ok := config.Consensus[eval.block.BlockHeader.CurrentProtocol]
 	if !ok {
@@ -1334,18 +1314,19 @@ func (validator *evalTxValidator) run() {
 	}
 }
 
+// Eval is the main evaluator entrypoint.
 // used by Ledger.Validate() Ledger.AddBlock() Ledger.trackerEvalVerified()(accountUpdates.loadFromDisk())
 //
-// Validate: eval(ctx, l, blk, true, txcache, executionPool, true)
-// AddBlock: eval(context.Background(), l, blk, false, txcache, nil, true)
-// tracker:  eval(context.Background(), l, blk, false, txcache, nil, false)
-func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
+// Validate: Eval(ctx, l, blk, true, txcache, executionPool, true)
+// AddBlock: Eval(context.Background(), l, blk, false, txcache, nil, true)
+// tracker:  Eval(context.Background(), l, blk, false, txcache, nil, false)
+func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
 	proto, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]
 	if !ok {
 		return ledgercore.StateDelta{}, protocol.Error(blk.BlockHeader.CurrentProtocol)
 	}
 
-	eval, err := startEvaluator(l, blk.BlockHeader, proto, len(blk.Payset), validate, false, 0)
+	eval, err := StartEvaluator(l, blk.BlockHeader, proto, len(blk.Payset), validate, false, 0)
 	if err != nil {
 		return ledgercore.StateDelta{}, err
 	}
@@ -1465,19 +1446,9 @@ func maxAddressesInTxn(proto *config.ConsensusParams) int {
 	return 7 + proto.MaxAppTxnAccounts
 }
 
-// Write the list of addresses referenced in `txn` to `out`. Addresses might repeat.
-func getTxnAddresses(txn *transactions.Transaction, out *[]basics.Address) {
-	*out = (*out)[:0]
-
-	*out = append(
-		*out, txn.Sender, txn.Receiver, txn.CloseRemainderTo, txn.AssetSender,
-		txn.AssetReceiver, txn.AssetCloseTo, txn.FreezeAccount)
-	*out = append(*out, txn.ApplicationCallTxnFields.Accounts...)
-}
-
 // loadAccounts loads the account data for the provided transaction group list. It also loads the feeSink account and add it to the first returned transaction group.
 // The order of the transaction groups returned by the channel is identical to the one in the input array.
-func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) chan loadedTransactionGroup {
+func loadAccounts(ctx context.Context, l LedgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) chan loadedTransactionGroup {
 	outChan := make(chan loadedTransactionGroup, len(groups))
 	go func() {
 		// groupTask helps to organize the account loading for each transaction group.
@@ -1641,45 +1612,4 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 		}
 	}()
 	return outChan
-}
-
-// Validate uses the ledger to validate block blk as a candidate next block.
-// It returns an error if blk is not the expected next block, or if blk is
-// not a valid block (e.g., it has duplicate transactions, overspends some
-// account, etc).
-func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ValidatedBlock, error) {
-	delta, err := eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool)
-	if err != nil {
-		return nil, err
-	}
-
-	vb := ValidatedBlock{
-		blk:   blk,
-		delta: delta,
-	}
-	return &vb, nil
-}
-
-// ValidatedBlock represents the result of a block validation.  It can
-// be used to efficiently add the block to the ledger, without repeating
-// the work of applying the block's changes to the ledger state.
-type ValidatedBlock struct {
-	blk   bookkeeping.Block
-	delta ledgercore.StateDelta
-}
-
-// Block returns the underlying Block for a ValidatedBlock.
-func (vb ValidatedBlock) Block() bookkeeping.Block {
-	return vb.blk
-}
-
-// WithSeed returns a copy of the ValidatedBlock with a modified seed.
-func (vb ValidatedBlock) WithSeed(s committee.Seed) ValidatedBlock {
-	newblock := vb.blk
-	newblock.BlockHeader.Seed = s
-
-	return ValidatedBlock{
-		blk:   newblock,
-		delta: vb.delta,
-	}
 }
