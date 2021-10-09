@@ -1098,7 +1098,7 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 }
 
 // initializeFromDisk performs the atomic operation of loading the accounts data information from disk
-// and preparing the accountUpdates for operation, including initializing the commitSyncer goroutine.
+// and preparing the accountUpdates for operation.
 func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRound basics.Round) (err error) {
 	au.dbs = l.trackerDB()
 	au.log = l.trackerLog()
@@ -1107,7 +1107,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	start := time.Now()
 	ledgerAccountsinitCount.Inc(nil)
 	err = au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err0 := au.accountsInitialize(ctx, tx, lastBalancesRound)
+		err0 := au.accountsInitializeHashes(ctx, tx, lastBalancesRound)
 		if err0 != nil {
 			return err0
 		}
@@ -1171,9 +1171,9 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 	return hash[:]
 }
 
-// accountsInitialize initializes account updates tracker and return current account round.
+// accountsInitializeHashes initializes account hashes.
 // as part of the initialization, it tests if a hash table matches to account base and updates the former.
-func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx, rnd basics.Round) error {
+func (au *accountUpdates) accountsInitializeHashes(ctx context.Context, tx *sql.Tx, rnd basics.Round) error {
 	hashRound, err := accountsHashRound(tx)
 	if err != nil {
 		return err
@@ -1275,10 +1275,6 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx, rn
 		}
 
 		// we've just updated the merkle trie, update the hashRound to reflect that.
-		err = updateAccountsRound(tx, rnd)
-		if err != nil {
-			return fmt.Errorf("accountsInitialize was unable to update the account round to %d: %v", rnd, err)
-		}
 		err = updateAccountsHashRound(tx, rnd)
 		if err != nil {
 			return fmt.Errorf("accountsInitialize was unable to update the account hash round to %d: %v", rnd, err)
