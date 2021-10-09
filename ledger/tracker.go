@@ -280,8 +280,7 @@ func (tr *trackerRegistry) commitSyncer(deferredCommits chan deferredCommit) {
 func (tr *trackerRegistry) commitRound(dc deferredCommit) {
 	defer tr.accountsWriting.Done()
 
-	tr.mu.Lock()
-	defer tr.mu.Unlock()
+	tr.mu.RLock()
 
 	offset := dc.offset
 	dbRound := dc.dbRound
@@ -293,6 +292,7 @@ func (tr *trackerRegistry) commitRound(dc deferredCommit) {
 		for _, lt := range tr.trackers {
 			lt.handleUnorderedCommit(offset, dbRound, lookback)
 		}
+		tr.mu.RUnlock()
 		return
 	}
 
@@ -303,6 +303,7 @@ func (tr *trackerRegistry) commitRound(dc deferredCommit) {
 	// this usecase can happen when two subsequent calls to committedUpTo concludes that the same rounds range need to be
 	// flush, without the commitRound have a chance of committing these rounds.
 	if offset == 0 {
+		tr.mu.RUnlock()
 		return
 	}
 
@@ -321,6 +322,7 @@ func (tr *trackerRegistry) commitRound(dc deferredCommit) {
 			postcommitOps = append(postcommitOps, postCommit)
 		}
 	}
+	tr.mu.RUnlock()
 
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
@@ -346,8 +348,10 @@ func (tr *trackerRegistry) commitRound(dc deferredCommit) {
 		return
 	}
 
+	tr.mu.Lock()
 	tr.dbRound = newBase
 	for _, postCommitRound := range postcommitOps {
 		postCommitRound(offset, newBase)
 	}
+	tr.mu.Unlock()
 }
