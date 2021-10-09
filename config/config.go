@@ -63,7 +63,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17"`
 
 	// environmental (may be overridden)
 	// When enabled, stores blocks indefinitally, otherwise, only the most recents blocks
@@ -97,7 +97,8 @@ type Local struct {
 
 	// IncomingConnectionsLimit specifies the max number of long-lived incoming
 	// connections.  0 means no connections allowed.  -1 is unbounded.
-	IncomingConnectionsLimit int `version[0]:"-1" version[1]:"10000"`
+	// Estimating 5MB per incoming connection, 5MB*800 = 4GB
+	IncomingConnectionsLimit int `version[0]:"-1" version[1]:"10000" version[17]:"800"`
 
 	// BroadcastConnectionsLimit specifies the number of connections that
 	// will receive broadcast (gossip) messages from this node.  If the
@@ -418,6 +419,26 @@ type Local struct {
 	// features like catchpoint catchup would be rendered completly non-operational, and many of the node inner
 	// working would be completly dis-functional.
 	DisableNetworking bool `version[16]:"false"`
+
+	// ForceFetchTransactions allows to explicitly configure a node to retrieve all the transactions
+	// into it's transaction pool, even if those would not be required as the node doesn't
+	// participate in the consensus or used to relay transactions.
+	ForceFetchTransactions bool `version[17]:"false"`
+
+	// EnableVerbosedTransactionSyncLogging enables the transaction sync to write extensive
+	// message exchange information to the log file. This option is disabled by default,
+	// so that the log files would not grow too rapidly.
+	EnableVerbosedTransactionSyncLogging bool `version[17]:"false"`
+
+	// TransactionSyncDataExchangeRate overrides the auto-calculated data exchange rate between each
+	// two peers. The unit of the data exchange rate is in bytes per second. Setting the value to
+	// zero implies allowing the transaction sync to dynamically calculate the value.
+	TransactionSyncDataExchangeRate uint64 `version[17]:"0"`
+
+	// TransactionSyncSignificantMessageThreshold define the threshold used for a transaction sync
+	// message before it can be used for calculating the data exchange rate. Setting this to zero
+	// would use the default values. The threshold is defined in units of bytes.
+	TransactionSyncSignificantMessageThreshold uint64 `version[17]:"0"`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

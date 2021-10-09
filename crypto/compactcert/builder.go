@@ -45,7 +45,7 @@ type Builder struct {
 	sigs          []sigslot // Indexed by pos in participants
 	sigsHasValidL bool      // The L values in sigs are consistent with weights
 	signedWeight  uint64    // Total weight of signatures so far
-	participants  []Participant
+	participants  []basics.Participant
 	parttree      *merklearray.Tree
 
 	// Cached cert, if Build() was called and no subsequent
@@ -57,7 +57,7 @@ type Builder struct {
 // to be signed, as well as other security parameters, are specified in
 // param.  The participants that will sign the message are in part and
 // parttree.
-func MkBuilder(param Params, part []Participant, parttree *merklearray.Tree) (*Builder, error) {
+func MkBuilder(param Params, part []basics.Participant, parttree *merklearray.Tree) (*Builder, error) {
 	npart := len(part)
 
 	b := &Builder{

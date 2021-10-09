@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -563,7 +564,22 @@ func writeFile(filename string, data []byte, perm os.FileMode) error {
 	return ioutil.WriteFile(filename, data, perm)
 }
 
-// readFile is a wrapper of ioutil.ReadFile which consniders the
+// writeDryrunReqToFile creates dryrun request object and writes to a file
+func writeDryrunReqToFile(client libgoal.Client, txnOrStxn interface{}, outFilename string) (err error) {
+	proto, _ := getProto(protoVersion)
+	accts, err := unmarshalSlice(dumpForDryrunAccts)
+	if err != nil {
+		reportErrorf(err.Error())
+	}
+	data, err := libgoal.MakeDryrunStateBytes(client, txnOrStxn, []transactions.SignedTxn{}, accts, string(proto), dumpForDryrunFormat.String())
+	if err != nil {
+		reportErrorf(err.Error())
+	}
+	err = writeFile(outFilename, data, 0600)
+	return
+}
+
+// readFile is a wrapper of ioutil.ReadFile which considers the
 // special case of stdin filename
 func readFile(filename string) ([]byte, error) {
 	if filename == stdinFileNameValue {

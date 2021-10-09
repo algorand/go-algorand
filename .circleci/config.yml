@@ -5,244 +5,161 @@ orbs:
   go: circleci/go@1.7.0
   slack: circleci/slack@4.4.2
 
+executors:
+  amd64_medium:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: medium
+  amd64_large:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: large
+  arm64_medium:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.medium
+  arm64_large:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.large
+  mac_amd64_medium:
+    macos:
+      xcode: 12.0.1
+    resource_class: medium
+    environment:
+      HOMEBREW_NO_AUTO_UPDATE: "true"
+  mac_amd64_large:
+    macos:
+      xcode: 12.0.1
+    resource_class: large
+    environment:
+      HOMEBREW_NO_AUTO_UPDATE: "true"
+
 workflows:
   version: 2
   build_pr:
     jobs:
       - codegen_verification
-      - amd64_build
-      - amd64_test:
+
+      - build:
+          name: << matrix.platform >>_build
+          matrix: &matrix-default
+            parameters:
+              platform: ["amd64", "arm64", "mac_amd64"]
+
+      - test:
+          name: << matrix.platform >>_test
+          matrix:
+            <<: *matrix-default
           requires:
-            - amd64_build
-          filters:
+            - << matrix.platform >>_build
+          filters: &filters-default
             branches:
               ignore:
                 - /rel\/.*/
                 - /hotfix\/.*/
-      - amd64_test_nightly:
+
+      - test_nightly:
+          name: << matrix.platform >>_test_nightly
+          matrix:
+            <<: *matrix-default
           requires:
-            - amd64_build
-          filters:
+            - << matrix.platform >>_build
+          filters: &filters-nightly
             branches:
               only:
                 - /rel\/.*/
                 - /hotfix\/.*/
           context: slack-secrets
-      - amd64_integration:
+
+      - integration:
+          name: << matrix.platform >>_integration
+          matrix:
+            <<: *matrix-default
           requires:
-            - amd64_build
+            - << matrix.platform >>_build
           filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - amd64_integration_nightly:
+            <<: *filters-default
+
+      - integration_nightly:
+          name: << matrix.platform >>_integration_nightly
+          matrix:
+            <<: *matrix-default
           requires:
-            - amd64_build
+            - << matrix.platform >>_build
           filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
+            <<: *filters-nightly
           context: slack-secrets
-      - amd64_e2e_subs:
+
+      - e2e_expect:
+          name: << matrix.platform >>_e2e_expect
+          matrix:
+            <<: *matrix-default
           requires:
-            - amd64_build
+            - << matrix.platform >>_build
           filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - amd64_e2e_subs_nightly:
+            <<: *filters-default
+
+      - e2e_expect_nightly:
+          name: << matrix.platform >>_e2e_expect_nightly
+          matrix:
+            <<: *matrix-default
           requires:
-            - amd64_build
+            - << matrix.platform >>_build
           filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
+            <<: *filters-nightly
           context: slack-secrets
-      - amd64_e2e_expect:
+
+      - e2e_subs:
+          name: << matrix.platform >>_e2e_subs
+          matrix:
+            <<: *matrix-default
           requires:
-            - amd64_build
+            - << matrix.platform >>_build
           filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - amd64_e2e_expect_nightly:
+            <<: *filters-default
+
+      - e2e_subs_nightly:
+          name: << matrix.platform >>_e2e_subs_nightly
+          matrix:
+            <<: *matrix-default
           requires:
-            - amd64_build
+            - << matrix.platform >>_build
           filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
+            <<: *filters-nightly
           context: slack-secrets
-      - arm64_build
-      - arm64_test:
-          requires:
-            - arm64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - arm64_test_nightly:
-          requires:
-            - arm64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
-      - arm64_integration:
-          requires:
-            - arm64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - arm64_integration_nightly:
-          requires:
-            - arm64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
-      - arm64_e2e_subs:
-          requires:
-            - arm64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - arm64_e2e_subs_nightly:
-          requires:
-            - arm64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
-      - arm64_e2e_expect:
-          requires:
-            - arm64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - arm64_e2e_expect_nightly:
-          requires:
-            - arm64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
-      - mac_amd64_build
-      - mac_amd64_test:
-          requires:
-            - mac_amd64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - mac_amd64_test_nightly:
-          requires:
-            - mac_amd64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
-      - mac_amd64_integration:
-          requires:
-            - mac_amd64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - mac_amd64_integration_nightly:
-          requires:
-            - mac_amd64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
-      - mac_amd64_e2e_subs:
-          requires:
-            - mac_amd64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - mac_amd64_e2e_subs_nightly:
-          requires:
-            - mac_amd64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
-      - mac_amd64_e2e_expect:
-          requires:
-            - mac_amd64_build
-          filters:
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
-      - mac_amd64_e2e_expect_nightly:
-          requires:
-            - mac_amd64_build
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
-          context: slack-secrets
+
       - tests_verification_job:
-          name: << matrix.job_type >>_<< matrix.job_version >>_verification
+          name: << matrix.platform >>_<< matrix.job_type >>_verification
           matrix:
             parameters:
-              job_type: ["amd64", "arm64", "mac_amd64"]
-              job_version: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
+              platform: ["amd64", "arm64", "mac_amd64"]
+              job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
           requires:
-            - << matrix.job_type >>_<< matrix.job_version >>
+            - << matrix.platform >>_<< matrix.job_type >>
+
       #- windows_x64_build
 
 commands:
   prepare_go:
     description: Clean out existing Go so we can use our preferred version
-    parameters:
-      circleci_home:
-        type: string
-        default: "/home/circleci"
     steps:
       - run: |
-          sudo rm -rf << parameters.circleci_home >>/.go_workspace /usr/local/go
+          sudo rm -rf ${HOME}/.go_workspace /usr/local/go
+  prepare_build_dir:
+    description: Set up build directory
+    parameters:
+      build_dir:
+        type: string
+        default: "/opt/cibuild"
+    steps:
+      - run:
+          working_directory: /tmp
+          command: |
+            sudo mkdir -p << parameters.build_dir >>
+            sudo chown -R $USER:$GROUP << parameters.build_dir >>
   prepare_windows:
     description: Prepare windows image
-    parameters:
-      circleci_home:
-        type: string
-        default: "/home/circleci"
     steps:
       - run:
           name: install deps
@@ -261,35 +178,38 @@ commands:
   generic_build:
     description: Run basic build and store in workspace for re-use by different architectures
     parameters:
-      circleci_home:
+      build_dir:
         type: string
-        default: "/home/circleci"
+        default: "/opt/cibuild"
     steps:
       - restore_libsodium
       - restore_cache:
           keys:
-            - 'go-mod-1-14-7-v1-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
+            - 'go-mod-1-14-7-v2-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
       - restore_cache:
           keys:
-            - 'go-cache-{{ .Environment.CIRCLE_STAGE }}-'
+            - 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-'
       - run:
           name: scripts/travis/build.sh --make_debug
           command: |
-            export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-            export GOPATH="<< parameters.circleci_home >>/go"
+            export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
+            export GOPATH="<< parameters.build_dir >>/go"
             export ALGORAND_DEADLOCK=enable
+            export GIMME_INSTALL_DIR=<< parameters.build_dir >>
+            export GIMME_ENV_PREFIX=<< parameters.build_dir >>/.gimme/envs
+            export GIMME_VERSION_PREFIX=<< parameters.build_dir >>/.gimme/versions
             scripts/travis/build.sh --make_debug
       - cache_libsodium
       - save_cache:
-          key: 'go-mod-1-14-7-v1-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
+          key: 'go-mod-1-14-7-v2-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
           paths:
-            - << parameters.circleci_home >>/go/pkg/mod
+            - << parameters.build_dir >>/go/pkg/mod
       - save_cache:
-          key: 'go-cache-{{ .Environment.CIRCLE_STAGE }}-{{ .Environment.CIRCLE_BUILD_NUM }}'
+          key: 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-{{ .Environment.CIRCLE_BUILD_NUM }}'
           paths:
             - tmp/go-cache
       - persist_to_workspace:
-          root: << parameters.circleci_home >>
+          root: << parameters.build_dir >>
           paths:
             - project
             - go
@@ -305,7 +225,7 @@ commands:
             mkdir -p tmp
             find crypto/libsodium-fork -type f -exec openssl md5 "{}" + > tmp/libsodium.md5
       - save_cache:
-          key: 'libsodium-fork-{{ .Environment.CIRCLE_STAGE }}-{{ checksum "tmp/libsodium.md5" }}'
+          key: 'libsodium-fork-v2-{{ .Environment.CIRCLE_STAGE }}-{{ checksum "tmp/libsodium.md5" }}'
           paths:
             - crypto/libs
 
@@ -319,14 +239,14 @@ commands:
             find crypto/libsodium-fork -type f -exec openssl md5 "{}" + > tmp/libsodium.md5
       - restore_cache:
           keys:
-            - 'libsodium-fork-{{ .Environment.CIRCLE_STAGE }}-{{ checksum "tmp/libsodium.md5" }}'
+            - 'libsodium-fork-v2-{{ .Environment.CIRCLE_STAGE }}-{{ checksum "tmp/libsodium.md5" }}'
 
-  generic_buildtest:
+  generic_test:
     description: Run build tests from build workspace, for re-use by diferent architectures
     parameters:
-      circleci_home:
+      build_dir:
         type: string
-        default: "/home/circleci"
+        default: "/opt/cibuild"
       result_subdir:
         type: string
       no_output_timeout:
@@ -340,24 +260,26 @@ commands:
         default: "/tmp/results"
     steps:
       - attach_workspace:
-          at: << parameters.circleci_home >>
+          at: << parameters.build_dir >>
       - run: mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/$CIRCLE_NODE_INDEX
       - restore_cache:
           keys:
-            - 'go-cache-{{ .Environment.CIRCLE_STAGE }}-'
+            - 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-'
       - run:
           name: Run build tests
           no_output_timeout: << parameters.no_output_timeout >>
           command: |
             set -e
             set -x
-            export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
             export KMD_NOUSB=True
-            export GOPATH="<< parameters.circleci_home >>/go"
+            export GOPATH="<< parameters.build_dir >>/go"
             export PATH="${PATH}:${GOPATH}/bin"
             export ALGORAND_DEADLOCK=enable
+            export GIMME_ENV_PREFIX=<< parameters.build_dir >>/.gimme/envs
+            export GIMME_VERSION_PREFIX=<< parameters.build_dir >>/.gimme/versions
             GOLANG_VERSION=$(./scripts/get_golang_version.sh)
-            eval "$(~/gimme "${GOLANG_VERSION}")"
+            eval "$(<< parameters.build_dir >>/gimme "${GOLANG_VERSION}")"
             scripts/configure_dev.sh
             scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
             PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
@@ -376,7 +298,7 @@ commands:
           paths:
             - << parameters.result_subdir >>
       - save_cache:
-          key: 'go-cache-{{ .Environment.CIRCLE_STAGE }}-{{ .Environment.CIRCLE_BUILD_NUM }}'
+          key: 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-{{ .Environment.CIRCLE_BUILD_NUM }}'
           paths:
             - tmp/go-cache
 
@@ -392,9 +314,9 @@ commands:
   generic_integration:
     description: Run integration tests from build workspace, for re-use by diferent architectures
     parameters:
-      circleci_home:
+      build_dir:
         type: string
-        default: "/home/circleci"
+        default: "/opt/cibuild"
       result_subdir:
         type: string
       no_output_timeout:
@@ -408,21 +330,23 @@ commands:
         default: "/tmp/results"
     steps:
       - attach_workspace:
-          at: << parameters.circleci_home >>
+          at: << parameters.build_dir >>
       - run: mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/$CIRCLE_NODE_INDEX
       - run:
           name: Run integration tests
           no_output_timeout: << parameters.no_output_timeout >>
           command: |
             set -x
-            export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
             export KMD_NOUSB=True
-            export GOPATH="<< parameters.circleci_home >>/go"
+            export GOPATH="<< parameters.build_dir >>/go"
             export PATH="${PATH}:${GOPATH}/bin"
             export ALGORAND_DEADLOCK=enable
             export BUILD_TYPE=integration
+            export GIMME_ENV_PREFIX=<< parameters.build_dir >>/.gimme/envs
+            export GIMME_VERSION_PREFIX=<< parameters.build_dir >>/.gimme/versions
             GOLANG_VERSION=$(./scripts/get_golang_version.sh)
-            eval "$(~/gimme "${GOLANG_VERSION}")"
+            eval "$(<< parameters.build_dir >>/gimme "${GOLANG_VERSION}")"
             scripts/configure_dev.sh
             scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
             export ALGOTEST=1
@@ -463,9 +387,7 @@ commands:
 
 jobs:
   codegen_verification:
-    machine:
-      image: ubuntu-2004:202104-01
-    resource_class: medium
+    executor: amd64_medium
     steps:
       - checkout
       - prepare_go
@@ -474,406 +396,152 @@ jobs:
           export GOPATH="/home/circleci/go"
           scripts/travis/codegen_verification.sh
 
-  amd64_build:
-    machine:
-      image: ubuntu-2004:202104-01
-    resource_class: medium
+  build:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_medium
+    working_directory: /opt/cibuild/project
     steps:
+      - prepare_build_dir
       - checkout
       - prepare_go
       - generic_build
 
-  amd64_test:
-    machine:
-      image: ubuntu-2004:202104-01
-    resource_class: medium
+  test:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: /opt/cibuild/project
     parallelism: 4
     steps:
+      - prepare_build_dir
       - prepare_go
-      - generic_buildtest:
-          result_subdir: amd64_test
+      - generic_test:
+          result_subdir: << parameters.platform >>_test
           short_test_flag: "-short"
       - upload_coverage
 
-  amd64_test_nightly:
-    machine:
-      image: ubuntu-2004:202104-01
-    resource_class: medium
+  test_nightly:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: /opt/cibuild/project
     parallelism: 4
     steps:
+      - prepare_build_dir
       - prepare_go
-      - generic_buildtest:
-          result_subdir: amd64_test_nightly
+      - generic_test:
+          result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
       - upload_coverage
-      - slack/notify:
+      - slack/notify: &slack-fail-event
           event: fail
           template: basic_fail_1
 
-  amd64_integration:
-    machine:
-      image: ubuntu-2004:202104-01
-    resource_class: medium
+  integration:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: /opt/cibuild/project
     parallelism: 4
     environment:
       E2E_TEST_FILTER: "GO"
     steps:
+      - prepare_build_dir
       - prepare_go
       - generic_integration:
-          result_subdir: amd64_integration
+          result_subdir: << parameters.platform >>_integration
           short_test_flag: "-short"
 
-  amd64_integration_nightly:
-    machine:
-      image: ubuntu-2004:202104-01
-    resource_class: medium
+  integration_nightly:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: /opt/cibuild/project
     parallelism: 4
     environment:
       E2E_TEST_FILTER: "GO"
     steps:
+      - prepare_build_dir
       - prepare_go
       - generic_integration:
-          result_subdir: amd64_integration_nightly
+          result_subdir: << parameters.platform >>_integration_nightly
           no_output_timeout: 45m
       - slack/notify:
-          event: fail
-          template: basic_fail_1
+          <<: *slack-fail-event
 
-  amd64_e2e_subs:
-    machine:
-      image: ubuntu-2004:202104-01
-    resource_class: large
-    environment:
-      E2E_TEST_FILTER: "SCRIPTS"
-    steps:
-      - prepare_go
-      - generic_integration:
-          result_subdir: amd64_e2e_subs
-          short_test_flag: "-short"
-
-  amd64_e2e_subs_nightly:
-    machine:
-      image: ubuntu-2004:202104-01
-    resource_class: large
-    environment:
-      E2E_TEST_FILTER: "SCRIPTS"
-    steps:
-      - prepare_go
-      - generic_integration:
-          result_subdir: amd64_e2e_subs_nightly
-          no_output_timeout: 45m
-      - slack/notify:
-          event: fail
-          template: basic_fail_1
-
-  amd64_e2e_expect:
-    machine:
-      image: ubuntu-2004:202104-01
-    resource_class: medium
-    parallelism: 2
+  e2e_expect:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: /opt/cibuild/project
+    parallelism: 4
     environment:
       E2E_TEST_FILTER: "EXPECT"
     steps:
+      - prepare_build_dir
       - prepare_go
       - generic_integration:
-          result_subdir: amd64_e2e_expect
+          result_subdir: << parameters.platform >>_e2e_expect
           short_test_flag: "-short"
 
-  amd64_e2e_expect_nightly:
-    machine:
-      image: ubuntu-2004:202104-01
-    resource_class: medium
-    parallelism: 2
+  e2e_expect_nightly:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: /opt/cibuild/project
+    parallelism: 4
     environment:
       E2E_TEST_FILTER: "EXPECT"
     steps:
+      - prepare_build_dir
       - prepare_go
       - generic_integration:
-          result_subdir: amd64_e2e_expect_nightly
+          result_subdir: << parameters.platform>>_e2e_expect_nightly
           no_output_timeout: 45m
       - slack/notify:
-          event: fail
-          template: basic_fail_1
+          <<: *slack-fail-event
 
-  arm64_build:
-    machine:
-      image: ubuntu-2004:202101-01
-    resource_class: arm.medium
-    steps:
-      - checkout
-      - prepare_go
-      - generic_build
-
-  arm64_test:
-    machine:
-      image: ubuntu-2004:202101-01
-    resource_class: arm.medium
+  e2e_subs:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: /opt/cibuild/project
     parallelism: 4
-    steps:
-      - checkout
-      - prepare_go
-      - generic_buildtest:
-          result_subdir: arm64_test
-          short_test_flag: "-short"
-      - upload_coverage
-
-  arm64_test_nightly:
-    machine:
-      image: ubuntu-2004:202101-01
-    resource_class: arm.medium
-    parallelism: 4
-    steps:
-      - checkout
-      - prepare_go
-      - generic_buildtest:
-          result_subdir: arm64_test_nightly
-          no_output_timeout: 45m
-      - upload_coverage
-      - slack/notify:
-          event: fail
-          template: basic_fail_1
-
-  arm64_integration:
-    machine:
-      image: ubuntu-2004:202101-01
-    resource_class: arm.medium
-    parallelism: 4
-    environment:
-      E2E_TEST_FILTER: "GO"
-    steps:
-      - checkout
-      - prepare_go
-      - generic_integration:
-          result_subdir: arm64_integration
-          short_test_flag: "-short"
-
-  arm64_integration_nightly:
-    machine:
-      image: ubuntu-2004:202101-01
-    resource_class: arm.medium
-    parallelism: 4
-    environment:
-      E2E_TEST_FILTER: "GO"
-    steps:
-      - checkout
-      - prepare_go
-      - generic_integration:
-          result_subdir: arm64_integration_nightly
-          no_output_timeout: 45m
-      - slack/notify:
-          event: fail
-          template: basic_fail_1
-
-  arm64_e2e_subs:
-    machine:
-      image: ubuntu-2004:202101-01
-    resource_class: arm.large
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
     steps:
-      - checkout
+      - prepare_build_dir
       - prepare_go
       - generic_integration:
-          result_subdir: arm64_e2e_subs
+          result_subdir: << parameters.platform >>_e2e_subs
           short_test_flag: "-short"
 
-  arm64_e2e_subs_nightly:
-    machine:
-      image: ubuntu-2004:202101-01
-    resource_class: arm.large
+  e2e_subs_nightly:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: /opt/cibuild/project
+    parallelism: 4
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
     steps:
-      - checkout
+      - prepare_build_dir
       - prepare_go
       - generic_integration:
-          result_subdir: arm64_e2e_subs_nightly
+          result_subdir: << parameters.platform >>_e2e_subs_nightly
           no_output_timeout: 45m
       - slack/notify:
-          event: fail
-          template: basic_fail_1
-
-  arm64_e2e_expect:
-    machine:
-      image: ubuntu-2004:202101-01
-    resource_class: arm.medium
-    parallelism: 2
-    environment:
-      E2E_TEST_FILTER: "EXPECT"
-    steps:
-      - checkout
-      - prepare_go
-      - generic_integration:
-          result_subdir: arm64_e2e_expect
-          short_test_flag: "-short"
-
-  arm64_e2e_expect_nightly:
-    machine:
-      image: ubuntu-2004:202101-01
-    resource_class: arm.medium
-    parallelism: 2
-    environment:
-      E2E_TEST_FILTER: "EXPECT"
-    steps:
-      - checkout
-      - prepare_go
-      - generic_integration:
-          result_subdir: arm64_e2e_expect_nightly
-          no_output_timeout: 45m
-      - slack/notify:
-          event: fail
-          template: basic_fail_1
-
-  mac_amd64_build:
-    macos:
-      xcode: 12.0.1
-    resource_class: medium
-    environment:
-      HOMEBREW_NO_AUTO_UPDATE: "true"
-    steps:
-      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
-      - checkout
-      - prepare_go
-      - generic_build:
-          circleci_home: /Users/distiller
-
-  mac_amd64_test:
-    macos:
-      xcode: 12.0.1
-    resource_class: medium
-    environment:
-      HOMEBREW_NO_AUTO_UPDATE: "true"
-    parallelism: 4
-    steps:
-      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
-      - prepare_go
-      - generic_buildtest:
-          result_subdir: mac_amd64_test
-          circleci_home: /Users/distiller
-          short_test_flag: "-short"
-      - upload_coverage
-
-  mac_amd64_test_nightly:
-    macos:
-      xcode: 12.0.1
-    resource_class: medium
-    environment:
-      HOMEBREW_NO_AUTO_UPDATE: "true"
-    parallelism: 4
-    steps:
-      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
-      - prepare_go
-      - generic_buildtest:
-          result_subdir: mac_amd64_test_nightly
-          circleci_home: /Users/distiller
-          no_output_timeout: 45m
-      - upload_coverage
-      - slack/notify:
-          event: fail
-          template: basic_fail_1
-
-  mac_amd64_integration:
-    macos:
-      xcode: 12.0.1
-    resource_class: medium
-    parallelism: 4
-    environment:
-      E2E_TEST_FILTER: "GO"
-      HOMEBREW_NO_AUTO_UPDATE: "true"
-    steps:
-      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
-      - prepare_go
-      - generic_integration:
-          result_subdir: mac_amd64_integration
-          circleci_home: /Users/distiller
-          short_test_flag: "-short"
-
-  mac_amd64_integration_nightly:
-    macos:
-      xcode: 12.0.1
-    resource_class: medium
-    parallelism: 4
-    environment:
-      E2E_TEST_FILTER: "GO"
-      HOMEBREW_NO_AUTO_UPDATE: "true"
-    steps:
-      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
-      - prepare_go
-      - generic_integration:
-          result_subdir: mac_amd64_integration_nightly
-          circleci_home: /Users/distiller
-          no_output_timeout: 45m
-      - slack/notify:
-          event: fail
-          template: basic_fail_1
-
-  mac_amd64_e2e_subs:
-    macos:
-      xcode: 12.0.1
-    resource_class: large
-    environment:
-      E2E_TEST_FILTER: "SCRIPTS"
-      HOMEBREW_NO_AUTO_UPDATE: "true"
-    steps:
-      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
-      - prepare_go
-      - generic_integration:
-          result_subdir: mac_amd64_e2e_subs
-          circleci_home: /Users/distiller
-          short_test_flag: "-short"
-
-  mac_amd64_e2e_subs_nightly:
-    macos:
-      xcode: 12.0.1
-    resource_class: large
-    environment:
-      E2E_TEST_FILTER: "SCRIPTS"
-      HOMEBREW_NO_AUTO_UPDATE: "true"
-    steps:
-      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
-      - prepare_go
-      - generic_integration:
-          result_subdir: mac_amd64_e2e_subs_nightly
-          circleci_home: /Users/distiller
-          no_output_timeout: 45m
-      - slack/notify:
-          event: fail
-          template: basic_fail_1
-
-  mac_amd64_e2e_expect:
-    macos:
-      xcode: 12.0.1
-    resource_class: medium
-    parallelism: 2
-    environment:
-      E2E_TEST_FILTER: "EXPECT"
-      HOMEBREW_NO_AUTO_UPDATE: "true"
-    steps:
-      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
-      - prepare_go
-      - generic_integration:
-          result_subdir: mac_amd64_e2e_expect
-          circleci_home: /Users/distiller
-          short_test_flag: "-short"
-
-  mac_amd64_e2e_expect_nightly:
-    macos:
-      xcode: 12.0.1
-    resource_class: medium
-    parallelism: 2
-    environment:
-      E2E_TEST_FILTER: "EXPECT"
-      HOMEBREW_NO_AUTO_UPDATE: "true"
-    steps:
-      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
-      - prepare_go
-      - generic_integration:
-          result_subdir: mac_amd64_e2e_expect_nightly
-          circleci_home: /Users/distiller
-          no_output_timeout: 45m
-      - slack/notify:
-          event: fail
-          template: basic_fail_1
+          <<: *slack-fail-event
 
   windows_x64_build:
     executor:
@@ -893,16 +561,17 @@ jobs:
             export MAKE=mingw32-make
             $msys2 scripts/travis/build_test.sh
           shell: bash.exe
+
   tests_verification_job:
     docker:
       - image: python:3.9.6-alpine
     resource_class: small
     parameters:
-      job_type: # job_type: ["amd64", "arm64", "mac_amd64"]
+      platform: # platform: ["amd64", "arm64", "mac_amd64"]
         type: string
-      job_version: # job_version: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
+      job_type: # job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
         type: string
     steps:
       - checkout
       - tests_verification_command:
-          result_subdir: << parameters.job_type >>_<< parameters.job_version >>
+          result_subdir: << parameters.platform >>_<< parameters.job_type >>
