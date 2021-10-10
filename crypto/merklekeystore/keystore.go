@@ -165,7 +165,7 @@ func (s *Signer) Persist() error {
 		return err
 	}
 
-	// Let the garbage collector remove these from memory.Should we delete more explicitly?
+	// Let the garbage collector remove these from memory
 	s.signatureAlgorithms = nil
 	return nil
 }
@@ -206,7 +206,6 @@ func (s *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 }
 
 // expects valid rounds, i.e round that are bigger than FirstValid.
-// TODO: get index from the DB instead (id column)
 func (s *Signer) getMerkleTreeIndex(round uint64) uint64 {
 	return roundToIndex(s.FirstValid, round, s.Interval)
 }
