@@ -94,15 +94,33 @@ type roundCowBase struct {
 	creators map[Creatable]ledgercore.FoundAddress
 }
 
-func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, compactCertNextRnd basics.Round, proto config.ConsensusParams) *roundCowBase {
-	return &roundCowBase{
+func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, compactCertNextRnd basics.Round, proto config.ConsensusParams, preloadedAccounts map[basics.Address]*basics.AccountData, preloadedCreators map[Creatable]ledgercore.FoundAddress) *roundCowBase {
+
+	if preloadedCreators == nil {
+		preloadedCreators = make(map[Creatable]ledgercore.FoundAddress)
+	}
+	rcb := &roundCowBase{
 		l:                  l,
 		rnd:                rnd,
 		txnCount:           txnCount,
 		compactCertNextRnd: compactCertNextRnd,
 		proto:              proto,
 		accounts:           make(map[basics.Address]basics.AccountData),
-		creators:           make(map[Creatable]ledgercore.FoundAddress),
+		creators:           preloadedCreators,
+	}
+	if preloadedAccounts != nil {
+		rcb.initializeAccountsCache(preloadedAccounts)
+	}
+	return rcb
+}
+
+func (x *roundCowBase) initializeAccountsCache(accts map[basics.Address]*basics.AccountData) {
+	for address, accountData := range accts {
+		if accountData == nil {
+			x.accounts[address] = basics.AccountData{}
+		} else {
+			x.accounts[address] = *accountData
+		}
 	}
 }
 
@@ -405,14 +423,36 @@ type LedgerForEvaluator interface {
 	CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error)
 }
 
+// EvaluatorOptions defines the evaluator creation options
+type EvaluatorOptions struct {
+	PaysetHint          int
+	Validate            bool
+	Generate            bool
+	MaxTxnBytesPerBlock int
+	ProtoParams         *config.ConsensusParams
+	PreloadedAccounts   map[basics.Address]*basics.AccountData
+	PreloadedCreators   map[Creatable]ledgercore.FoundAddress
+}
+
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
 // of the block that the caller is planning to evaluate. If the length of the
 // payset being evaluated is known in advance, a paysetHint >= 0 can be
 // passed, avoiding unnecessary payset slice growth.
-func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, proto config.ConsensusParams, paysetHint int, validate bool, generate bool, maxTxnBytesPerBlock int) (*BlockEvaluator, error) {
+func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts EvaluatorOptions) (*BlockEvaluator, error) {
+	var proto config.ConsensusParams
+	if evalOpts.ProtoParams == nil {
+		var ok bool
+		proto, ok = config.Consensus[hdr.CurrentProtocol]
+		if !ok {
+			return nil, protocol.Error(hdr.CurrentProtocol)
+		}
+	} else {
+		proto = *evalOpts.ProtoParams
+	}
+
 	// if the caller did not provide a valid block size limit, default to the consensus params defaults.
-	if maxTxnBytesPerBlock <= 0 || maxTxnBytesPerBlock > proto.MaxTxnBytesPerBlock {
-		maxTxnBytesPerBlock = proto.MaxTxnBytesPerBlock
+	if evalOpts.MaxTxnBytesPerBlock <= 0 || evalOpts.MaxTxnBytesPerBlock > proto.MaxTxnBytesPerBlock {
+		evalOpts.MaxTxnBytesPerBlock = proto.MaxTxnBytesPerBlock
 	}
 
 	if hdr.Round == 0 {
@@ -435,11 +475,11 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 	// If we are not validating, we must have previously checked
 	// an agreement.Certificate attesting that hdr is valid.
 	base := makeRoundCowBase(
-		l, hdr.Round-1, prevHeader.TxnCounter, basics.Round(0), proto)
+		l, hdr.Round-1, prevHeader.TxnCounter, basics.Round(0), proto, evalOpts.PreloadedAccounts, evalOpts.PreloadedCreators)
 
 	eval := &BlockEvaluator{
-		validate:   validate,
-		generate:   generate,
+		validate:   evalOpts.Validate,
+		generate:   evalOpts.Generate,
 		prevHeader: prevHeader,
 		block:      bookkeeping.Block{BlockHeader: hdr},
 		specials: transactions.SpecialAddresses{
@@ -449,16 +489,16 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 		proto:               proto,
 		genesisHash:         l.GenesisHash(),
 		l:                   l,
-		maxTxnBytesPerBlock: maxTxnBytesPerBlock,
+		maxTxnBytesPerBlock: evalOpts.MaxTxnBytesPerBlock,
 	}
 
 	// Preallocate space for the payset so that we don't have to
 	// dynamically grow a slice (if evaluating a whole block).
-	if paysetHint > 0 {
-		if paysetHint > maxPaysetHint {
-			paysetHint = maxPaysetHint
+	if evalOpts.PaysetHint > 0 {
+		if evalOpts.PaysetHint > maxPaysetHint {
+			evalOpts.PaysetHint = maxPaysetHint
 		}
-		eval.block.Payset = make([]transactions.SignedTxnInBlock, 0, paysetHint)
+		eval.block.Payset = make([]transactions.SignedTxnInBlock, 0, evalOpts.PaysetHint)
 	}
 
 	base.compactCertNextRnd = eval.prevHeader.CompactCert[protocol.CompactCertBasic].CompactCertNextRound
@@ -493,16 +533,16 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 	// this is expected to be a no-op, but update the rewards on the rewards pool if it was configured to receive rewards ( unlike mainnet ).
 	incentivePoolData = incentivePoolData.WithUpdatedRewards(prevProto, eval.prevHeader.RewardsLevel)
 
-	if generate {
+	if evalOpts.Generate {
 		if eval.proto.SupportGenesisHash {
 			eval.block.BlockHeader.GenesisHash = eval.genesisHash
 		}
 		eval.block.BlockHeader.RewardsState = eval.prevHeader.NextRewardsState(hdr.Round, proto, incentivePoolData.MicroAlgos, prevTotals.RewardUnits())
 	}
 	// set the eval state with the current header
-	eval.state = makeRoundCowState(base, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp, prevTotals, paysetHint)
+	eval.state = makeRoundCowState(base, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp, prevTotals, evalOpts.PaysetHint)
 
-	if validate {
+	if evalOpts.Validate {
 		err := eval.block.BlockHeader.PreCheck(eval.prevHeader)
 		if err != nil {
 			return nil, err
@@ -1321,12 +1361,11 @@ func (validator *evalTxValidator) run() {
 // AddBlock: Eval(context.Background(), l, blk, false, txcache, nil, true)
 // tracker:  Eval(context.Background(), l, blk, false, txcache, nil, false)
 func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
-	proto, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]
-	if !ok {
-		return ledgercore.StateDelta{}, protocol.Error(blk.BlockHeader.CurrentProtocol)
-	}
-
-	eval, err := StartEvaluator(l, blk.BlockHeader, proto, len(blk.Payset), validate, false, 0)
+	eval, err := StartEvaluator(l, blk.BlockHeader,
+		EvaluatorOptions{
+			PaysetHint: len(blk.Payset),
+			Validate:   validate,
+		})
 	if err != nil {
 		return ledgercore.StateDelta{}, err
 	}

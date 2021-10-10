@@ -45,7 +45,11 @@ type indexerLedgerForEval interface {
 // EvalForIndexerResources contains resources preloaded from the Indexer database.
 // Indexer is able to do the preloading more efficiently than the evaluator loading
 // resources one by one.
-type EvalForIndexerResources = internal.EvalForIndexerResources
+type EvalForIndexerResources struct {
+	// The map value is nil iff the account does not exist. The account data is owned here.
+	Accounts map[basics.Address]*basics.AccountData
+	Creators map[Creatable]ledgercore.FoundAddress
+}
 
 // Creatable represent a single creatable object.
 type Creatable = internal.Creatable
@@ -150,13 +154,17 @@ func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto con
 	ilc := makeIndexerLedgerConnector(il, block.GenesisHash(), block.Round()-1)
 
 	eval, err := internal.StartEvaluator(
-		ilc, block.BlockHeader, proto, len(block.Payset), false, false, 0)
+		ilc, block.BlockHeader,
+		internal.EvaluatorOptions{
+			PaysetHint:        len(block.Payset),
+			ProtoParams:       &proto,
+			PreloadedAccounts: resources.Accounts,
+			PreloadedCreators: resources.Creators,
+		})
 	if err != nil {
 		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
 			fmt.Errorf("EvalForIndexer() err: %w", err)
 	}
-
-	eval.SaveResourcesInCowBase(resources)
 
 	return eval.ProcessBlockForIndexer(block)
 }
