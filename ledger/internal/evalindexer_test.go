@@ -23,7 +23,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -52,25 +51,24 @@ func TestSaveResourcesInCowBase(t *testing.T) {
 
 	newBlock := bookkeeping.MakeBlock(l.blocks[0].BlockHeader)
 
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
-
-	eval.state.lookupParent = makeRoundCowBase(l,
-		newBlock.BlockHeader.Round.SubSaturate(1), 0, basics.Round(0),
-		config.Consensus[newBlock.BlockHeader.CurrentProtocol],
-		map[basics.Address]*basics.AccountData{
-			address: {
-				MicroAlgos: basics.MicroAlgos{Raw: 5},
+	eval, err := StartEvaluator(l, newBlock.BlockHeader,
+		EvaluatorOptions{
+			Validate: true,
+			Generate: true,
+			PreloadedAccounts: map[basics.Address]*basics.AccountData{
+				address: {
+					MicroAlgos: basics.MicroAlgos{Raw: 5},
+				},
 			},
-		},
-		map[Creatable]ledgercore.FoundAddress{
-			{cindex: basics.CreatableIndex(6), ctype: basics.AssetCreatable}: {Address: address, Exists: true},
-			{cindex: basics.CreatableIndex(6), ctype: basics.AppCreatable}:   {Address: address, Exists: false},
-		},
-	)
+			PreloadedCreators: map[Creatable]ledgercore.FoundAddress{
+				{cindex: basics.CreatableIndex(6), ctype: basics.AssetCreatable}: {Address: address, Exists: true},
+				{cindex: basics.CreatableIndex(6), ctype: basics.AppCreatable}:   {Address: address, Exists: false},
+			},
+		})
 
 	require.NoError(t, err)
 
-	//eval.SaveResourcesInCowBase(resources)
+	// get direct access to the underlying object
 	base := eval.state.lookupParent.(*roundCowBase)
 	{
 		accountData, err := base.lookup(address)

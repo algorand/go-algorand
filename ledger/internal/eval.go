@@ -95,7 +95,6 @@ type roundCowBase struct {
 }
 
 func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, compactCertNextRnd basics.Round, proto config.ConsensusParams, preloadedAccounts map[basics.Address]*basics.AccountData, preloadedCreators map[Creatable]ledgercore.FoundAddress) *roundCowBase {
-
 	if preloadedCreators == nil {
 		preloadedCreators = make(map[Creatable]ledgercore.FoundAddress)
 	}
