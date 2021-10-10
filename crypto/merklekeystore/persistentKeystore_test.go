@@ -71,7 +71,6 @@ func TestPersistRestore(t *testing.T) {
 	a.Equal(countKeysInRange(25, 1023, 23), length(s2, a))
 }
 
-// Should I move this to posdivs.go?
 func countKeysInRange(firstValid uint64, lastValid uint64, interval uint64) int {
 	keysSkipped := firstValid / interval
 	keysUpTo := lastValid / interval

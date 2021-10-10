@@ -204,7 +204,6 @@ func TestBlockProofPKKeyReg(t *testing.T) {
 }
 
 func createTestTxn(t *testing.T, src basics.Address, secretParticipation *crypto.SignatureSecrets, vrfSecrets *crypto.VRFSecrets) transactions.Transaction {
-	//signer, err := merklekeystore.New(0, 0, 1, crypto.DilithiumType)
 	store, err := db.MakeAccessor("test-DB", false, true)
 	require.NoError(t, err)
 	defer store.Close()

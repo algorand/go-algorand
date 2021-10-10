@@ -392,6 +392,9 @@ func TestSignerTrim(t *testing.T) {
 	_, err = signer.Trim(60)
 	a.NoError(err)
 	a.Equal(0, length(signer, a))
+	_, err = signer.Trim(61) // should not return error for rounds bigger than lastValid
+	a.NoError(err)
+	a.Equal(0, length(signer, a))
 
 	signer = generateTestSigner(1, 60, 11, a)
 	defer signer.keyStore.store.Close()
