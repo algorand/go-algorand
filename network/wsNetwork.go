@@ -1121,6 +1121,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		createTime:        trackedRequest.created,
 		version:           matchingVersion,
 	}
+	logging.Base().Infof("incoming measured connection latency: %v", peer.connectionLatency)
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
 	peer.init(wn.config, wn.outgoingMessagesBufferSize, time.Duration(0))
 	wn.addPeer(peer)
@@ -2048,6 +2049,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		throttledOutgoingConnection: throttledConnection,
 		version:                     matchingVersion,
 	}
+	logging.Base().Infof("outgoing measured connection latency: %v", peer.connectionLatency)
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 	peer.init(wn.config, wn.outgoingMessagesBufferSize, initialRoundtripDuration)
 	wn.addPeer(peer)
