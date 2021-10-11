@@ -17,6 +17,7 @@
 package merklekeystore
 
 import (
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
@@ -24,7 +25,7 @@ import (
 func TestStoringKeys(t *testing.T) {
 	a := require.New(t)
 
-	s := generateTestSigner(0, 4096, 345, a)
+	s := generateTestSigner(crypto.DilithiumType, 0, 4096, 345, a)
 	k := s.keyStore
 	defer k.store.Close()
 
@@ -38,7 +39,7 @@ func TestStoringKeys(t *testing.T) {
 func TestDroppingKeys(t *testing.T) {
 	a := require.New(t)
 
-	s := generateTestSigner(25, 1023, 23, a)
+	s := generateTestSigner(crypto.DilithiumType, 25, 1023, 23, a)
 	k := s.keyStore
 	defer k.store.Close()
 
@@ -62,7 +63,7 @@ func TestDroppingKeys(t *testing.T) {
 func TestPersistRestore(t *testing.T) {
 	a := require.New(t)
 
-	s := generateTestSigner(25, 1023, 23, a)
+	s := generateTestSigner(crypto.DilithiumType, 25, 1023, 23, a)
 	k := s.keyStore
 	defer k.store.Close()
 
