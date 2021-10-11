@@ -35,6 +35,10 @@ import (
 //msgp:ignore ParticipationID
 type ParticipationID crypto.Digest
 
+func (pid ParticipationID) IsZero() bool {
+	return (crypto.Digest(pid)).IsZero()
+}
+
 // ParticipationRecord contains all metadata relating to a set of participation keys.
 type ParticipationRecord struct {
 	ParticipationID ParticipationID
@@ -171,9 +175,11 @@ func makeParticipationRegistry(accessor db.Pair, log logging.Logger) (*participa
 	}
 
 	registry := &participationDB{
-		log:   log,
-		store: accessor,
+		log:        log,
+		store:      accessor,
+		writeQueue: make(chan partDBWriteRecord, 10),
 	}
+	go registry.writeThread()
 
 	err = registry.initializeCache()
 	if err != nil {
@@ -214,16 +220,16 @@ var (
 	// SELECT pk FROM Keysets WHERE participationID = ?
 	selectPK      = `SELECT pk FROM Keysets WHERE participationID = ? LIMIT 1`
 	selectLastPK  = `SELECT pk FROM Keysets ORDER BY pk DESC LIMIT 1`
-	selectRecords = `SELECT 
+	selectRecords = `SELECT
 			participationID, account, firstValidRound, lastValidRound, keyDilution,
 			lastVoteRound, lastBlockProposalRound, lastCompactCertificateRound,
 			effectiveFirstRound, effectiveLastRound
 		FROM Keysets
 		INNER JOIN Rolling
 		ON Keysets.pk = Rolling.pk`
-	deleteKeysets       = `DELETE FROM Keysets WHERE pk=?`
-	deleteRolling       = `DELETE FROM Rolling WHERE pk=?`
-	updateRollingFields = `UPDATE Rolling
+	deleteKeysets          = `DELETE FROM Keysets WHERE pk=?`
+	deleteRolling          = `DELETE FROM Rolling WHERE pk=?`
+	updateRollingFieldsSQL = `UPDATE Rolling
 		 SET lastVoteRound=?,
 		     lastBlockProposalRound=?,
 		     lastCompactCertificateRound=?,
@@ -257,6 +263,17 @@ type participationDB struct {
 	log   logging.Logger
 	store db.Pair
 	mutex deadlock.RWMutex
+
+	writeQueue chan partDBWriteRecord
+	asyncErr   error
+}
+
+type partDBWriteRecord struct {
+	insertID ParticipationID
+	insert   Participation
+
+	register   ParticipationID
+	registerOn basics.Round
 }
 
 func (db *participationDB) initializeCache() error {
@@ -282,15 +299,16 @@ func (db *participationDB) initializeCache() error {
 	return nil
 }
 
-func (db *participationDB) Insert(record Participation) (id ParticipationID, err error) {
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
-
-	id = record.ID()
-	if _, ok := db.cache[id]; ok {
-		return id, ErrAlreadyInserted
+func (db *participationDB) writeThread() {
+	for wr := range db.writeQueue {
+		if !wr.register.IsZero() {
+			db.asyncErr = db.registerInner(wr.register, wr.registerOn)
+		} else if !wr.insertID.IsZero() {
+			db.asyncErr = db.insertInner(wr.insert, wr.insertID)
+		}
 	}
-
+}
+func (db *participationDB) insertInner(record Participation, id ParticipationID) (err error) {
 	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		result, err := tx.Exec(
 			insertKeysetQuery,
@@ -329,22 +347,106 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 
 		return nil
 	})
+	return err
+}
+
+func (db *participationDB) registerInner(id ParticipationID, on basics.Round) error {
+	recordToRegister := db.Get(id)
+	if recordToRegister.IsZero() {
+		return nil
+	}
+	var toUpdate []ParticipationRecord
+	db.mutex.Lock()
+	for _, record := range db.cache {
+		if record.Account == recordToRegister.Account && record.ParticipationID != id && recordActive(record, on) {
+			toUpdate = append(toUpdate, record)
+		}
+	}
+	db.mutex.Unlock()
+
+	updated := make(map[ParticipationID]ParticipationRecord)
+	var cacheDeletes []ParticipationID
+	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		// Disable active key if there is one
+		//for _, record := range db.cache {
+		//if record.Account == recordToRegister.Account && record.ParticipationID != id && recordActive(record, on) {
+		for _, record := range toUpdate {
+			// TODO: this should probably be "on - 1"
+			record.EffectiveLast = on
+			err := updateRollingFields(ctx, tx, record)
+			// Repair the case when no keys were updated
+			if err == ErrNoKeyForID {
+				db.log.Warn("participationDB unable to update key in cache. Removing from cache.")
+				cacheDeletes = append(cacheDeletes, id)
+				//delete(db.cache, id)
+			}
+			if err != nil {
+				return fmt.Errorf("unable to disable old key when registering %s", id)
+			}
+
+			updated[record.ParticipationID] = record.Duplicate()
+		}
+
+		// Mark registered.
+		recordToRegister.EffectiveFirst = on
+		recordToRegister.EffectiveLast = recordToRegister.LastValid
+
+		err := updateRollingFields(ctx, tx, recordToRegister)
+		if err == ErrNoKeyForID {
+			db.log.Warn("participationDB unable to update key in cache. Removing from cache.")
+			cacheDeletes = append(cacheDeletes, id)
+			//delete(db.cache, id)
+		}
+		if err != nil {
+			return fmt.Errorf("unable to registering key with id (%s): %w", id, err)
+		}
+		updated[recordToRegister.ParticipationID] = recordToRegister
+
+		return nil
+	})
+
+	// Update cache
+	if err == nil {
+		db.mutex.Lock()
+		defer db.mutex.Unlock()
+		for _, id := range cacheDeletes {
+			delete(db.cache, id)
+		}
+		for id, record := range updated {
+			delete(db.dirty, id)
+			db.cache[id] = record
+		}
+	}
+	return err
+}
+
+func (db *participationDB) Insert(record Participation) (id ParticipationID, err error) {
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
+
+	id = record.ID()
+	if _, ok := db.cache[id]; ok {
+		return id, ErrAlreadyInserted
+	}
+
+	db.writeQueue <- partDBWriteRecord{
+		insertID: id,
+		insert:   record,
+	}
 
 	// update cache.
 	// TODO: simplify to re-initializing with initializeCache()?
-	if err == nil {
-		db.cache[id] = ParticipationRecord{
-			ParticipationID:        id,
-			Account:                record.Address(),
-			FirstValid:             record.FirstValid,
-			LastValid:              record.LastValid,
-			KeyDilution:            record.KeyDilution,
-			LastVote:               0,
-			LastBlockProposal:      0,
-			LastCompactCertificate: 0,
-			EffectiveFirst:         0,
-			EffectiveLast:          0,
-		}
+	db.cache[id] = ParticipationRecord{
+		ParticipationID:        id,
+		Account:                record.Address(),
+		FirstValid:             record.FirstValid,
+		LastValid:              record.LastValid,
+		KeyDilution:            record.KeyDilution,
+		LastVote:               0,
+		LastBlockProposal:      0,
+		LastCompactCertificate: 0,
+		EffectiveFirst:         0,
+		EffectiveLast:          0,
 	}
 
 	return
@@ -359,6 +461,7 @@ func (db *participationDB) Delete(id ParticipationID) error {
 		return nil
 	}
 
+	// TODO: async io?
 	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// Fetch primary key
 		var pk int
@@ -477,8 +580,8 @@ func (db *participationDB) GetAll() []ParticipationRecord {
 }
 
 // updateRollingFields sets all of the rolling fields according to the record object.
-func (db *participationDB) updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRecord) error {
-	result, err := tx.ExecContext(ctx, updateRollingFields,
+func updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRecord) error {
+	result, err := tx.ExecContext(ctx, updateRollingFieldsSQL,
 		record.LastVote,
 		record.LastBlockProposal,
 		record.LastCompactCertificate,
@@ -526,6 +629,11 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 		return ErrInvalidRegisterRange
 	}
 
+	db.writeQueue <- partDBWriteRecord{
+		register:   id,
+		registerOn: on,
+	}
+
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 	updated := make(map[ParticipationID]ParticipationRecord)
@@ -535,7 +643,7 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 			if record.Account == recordToRegister.Account && record.ParticipationID != id && recordActive(record, on) {
 				// TODO: this should probably be "on - 1"
 				record.EffectiveLast = on
-				err := db.updateRollingFields(ctx, tx, record)
+				err := updateRollingFields(ctx, tx, record)
 				// Repair the case when no keys were updated
 				if err == ErrNoKeyForID {
 					db.log.Warn("participationDB unable to update key in cache. Removing from cache.")
@@ -553,7 +661,7 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 		recordToRegister.EffectiveFirst = on
 		recordToRegister.EffectiveLast = recordToRegister.LastValid
 
-		err := db.updateRollingFields(ctx, tx, recordToRegister)
+		err := updateRollingFields(ctx, tx, recordToRegister)
 		if err == ErrNoKeyForID {
 			db.log.Warn("participationDB unable to update key in cache. Removing from cache.")
 			delete(db.cache, id)
@@ -636,7 +744,7 @@ func (db *participationDB) Flush() error {
 	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var errorStr strings.Builder
 		for id := range db.dirty {
-			err := db.updateRollingFields(ctx, tx, db.cache[id])
+			err := updateRollingFields(ctx, tx, db.cache[id])
 			// This should only be updating key usage so ignoring missing keys is not a problem.
 			if err != nil && err != ErrNoKeyForID {
 				if errorStr.Len() > 0 {
@@ -665,4 +773,5 @@ func (db *participationDB) Close() {
 	}
 
 	db.store.Close()
+	close(db.writeQueue)
 }

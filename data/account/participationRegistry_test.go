@@ -501,7 +501,7 @@ func TestParticipation_NoKeyToUpdate(t *testing.T) {
 			EffectiveFirst:  4,
 			EffectiveLast:   5,
 		}
-		err := registry.updateRollingFields(ctx, tx, record)
+		err := updateRollingFields(ctx, tx, record)
 		a.EqualError(err, ErrNoKeyForID.Error())
 		return nil
 	})
