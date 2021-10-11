@@ -112,16 +112,6 @@ func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, com
 	}
 }
 
-func (x *roundCowBase) initializeAccountsCache(accts map[basics.Address]*basics.AccountData) {
-	for address, accountData := range accts {
-		if accountData == nil {
-			x.accounts[address] = basics.AccountData{}
-		} else {
-			x.accounts[address] = *accountData
-		}
-	}
-}
-
 func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	creatable := creatable{cindex: cidx, ctype: ctype}
 
