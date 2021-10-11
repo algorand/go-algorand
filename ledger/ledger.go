@@ -672,12 +672,13 @@ func (l *Ledger) VerifiedTransactionCache() verify.VerifiedTransactionCache {
 // If a value of zero or less is passed to maxTxnBytesPerBlock, the consensus MaxTxnBytesPerBlock would
 // be used instead.
 func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*internal.BlockEvaluator, error) {
-	proto, ok := config.Consensus[hdr.CurrentProtocol]
-	if !ok {
-		return nil, protocol.Error(hdr.CurrentProtocol)
-	}
-
-	return internal.StartEvaluator(l, hdr, proto, paysetHint, true, true, maxTxnBytesPerBlock)
+	return internal.StartEvaluator(l, hdr,
+		internal.EvaluatorOptions{
+			PaysetHint:          paysetHint,
+			Generate:            true,
+			Validate:            true,
+			MaxTxnBytesPerBlock: maxTxnBytesPerBlock,
+		})
 }
 
 // Validate uses the ledger to validate block blk as a candidate next block.
