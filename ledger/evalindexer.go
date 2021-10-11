@@ -160,6 +160,8 @@ func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto con
 			ProtoParams:       &proto,
 			PreloadedAccounts: resources.Accounts,
 			PreloadedCreators: resources.Creators,
+			Generate:          false,
+			Validate:          false,
 		})
 	if err != nil {
 		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},

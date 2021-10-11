@@ -1364,6 +1364,7 @@ func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, vali
 		EvaluatorOptions{
 			PaysetHint: len(blk.Payset),
 			Validate:   validate,
+			Generate:   false,
 		})
 	if err != nil {
 		return ledgercore.StateDelta{}, err
