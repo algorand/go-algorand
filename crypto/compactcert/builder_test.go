@@ -125,7 +125,7 @@ func TestBuildVerify(t *testing.T) {
 	key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(param.CompactCertRounds)+1, param.CompactCertRounds, a)
 	defer dbAccessor.Close()
 	require.NotNil(t, dbAccessor, "failed to create signer")
-	var parts []Participant
+	var parts []basics.Participant
 	var sigs []merklekeystore.Signature
 	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartHi, key)...)
 	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartLo, key)...)
@@ -203,7 +203,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 		key, dbAccessor := generateTestSigner(b.Name()+"_"+strconv.Itoa(i)+"_crash.db", 0, uint64(param.CompactCertRounds)+1, param.CompactCertRounds, a)
 		defer dbAccessor.Close()
 		require.NotNil(b, dbAccessor, "failed to create signer")
-		part := Participant{
+		part := basics.Participant{
 			PK:         *key.GetVerifier(),
 			Weight:     uint64(totalWeight / npart),
 			FirstValid: 0,
