@@ -24,12 +24,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 )
 
-// FoundAddress is a wrapper for an address and a boolean.
-type FoundAddress struct {
-	Address basics.Address
-	Exists  bool
-}
-
 // ParticipantsArray implements merklearray.Array and is used to commit
 // to a Merkle tree of online accounts.
 //msgp:ignore ParticipantsArray
