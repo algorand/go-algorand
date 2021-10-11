@@ -19,7 +19,6 @@ package internal
 import (
 	"fmt"
 
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -54,40 +53,4 @@ func (eval *BlockEvaluator) ProcessBlockForIndexer(block *bookkeeping.Block) (le
 	// it doesn't track any totals and therefore cannot calculate the new totals.
 
 	return eval.state.deltas(), eval.block.Payset, nil
-}
-
-// PreloadAccountDataCache initialize the account data cache so that we won't need to make a
-// ledger query for that account.
-func (eval *BlockEvaluator) PreloadAccountDataCache(accountDataMap map[basics.Address]*basics.AccountData) {
-	base := eval.state.lookupParent.(*roundCowBase)
-	for address, accountData := range accountDataMap {
-		if accountData == nil {
-			base.accounts[address] = basics.AccountData{}
-		} else {
-			base.accounts[address] = *accountData
-		}
-	}
-}
-
-// EvalForIndexerResources contains resources preloaded from the Indexer database.
-// Indexer is able to do the preloading more efficiently than the evaluator loading
-// resources one by one.
-type EvalForIndexerResources struct {
-	// The map value is nil iff the account does not exist. The account data is owned here.
-	Accounts map[basics.Address]*basics.AccountData
-	Creators map[Creatable]ledgercore.FoundAddress
-}
-
-// SaveResourcesInCowBase saves the given resources into the rowCowBase accounts & creators cache.
-func (eval *BlockEvaluator) SaveResourcesInCowBase(resources EvalForIndexerResources) {
-	base := eval.state.lookupParent.(*roundCowBase)
-	for address, accountData := range resources.Accounts {
-		if accountData == nil {
-			base.accounts[address] = basics.AccountData{}
-		} else {
-			base.accounts[address] = *accountData
-		}
-	}
-
-	base.creators = resources.Creators
 }
