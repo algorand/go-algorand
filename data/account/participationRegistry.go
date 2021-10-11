@@ -498,6 +498,15 @@ func (db *participationDB) flushInner() error {
 		return nil
 	})
 
+	if err != nil {
+		// put back what we didn't finish with
+		db.mutex.Lock()
+		for id, v := range dirty {
+			db.dirty[id] = v
+		}
+		db.mutex.Unlock()
+	}
+
 	return err
 }
 
