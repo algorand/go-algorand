@@ -1120,10 +1120,9 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	}
 
 	// create a rough initial estimation for the connection roundtrip time.
-	connectionRoundtripDuration := time.Duration(0)
-	if trackedRequest.connection != nil {
-		connectionRoundtripDuration = time.Now().Sub(trackedRequest.created)
-	}
+	// TODO : use a pingpong to measure this correctly.
+	// !! THIS IS A STUB FOR TESTING PURPOSES ONLY !!
+	connectionRoundtripDuration := 100 * time.Millisecond
 
 	peer := &wsPeer{
 		wsPeerCore:        makePeerCore(wn, trackedRequest.otherPublicAddr, wn.GetRoundTripper(), trackedRequest.remoteHost),
