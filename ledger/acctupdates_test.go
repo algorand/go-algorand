@@ -135,6 +135,8 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 }
 
 func (ml *mockLedgerForTracker) Close() {
+	ml.trackers.close()
+
 	ml.dbs.Close()
 	// delete the database files of non-memory instances.
 	if !ml.inMemory {
