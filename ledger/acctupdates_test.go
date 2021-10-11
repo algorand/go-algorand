@@ -1547,6 +1547,8 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
+		delta.Totals.RewardsLevel = rewardLevel
+
 		au.newBlock(blk, delta)
 		au.committedUpTo(i)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
