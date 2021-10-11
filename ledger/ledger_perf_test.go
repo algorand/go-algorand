@@ -37,6 +37,8 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -261,8 +263,8 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 			}
 
 			// check if block is full
-			if err == ErrNoSpace {
-				txPerBlock = len(eval.block.Payset)
+			if err == ledgercore.ErrNoSpace {
+				txPerBlock = eval.PaySetSize()
 				break
 			} else {
 				require.NoError(b, err)
@@ -271,7 +273,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 			// First block just creates app + opts in accts if asa test
 			if i == 1 {
 				onCompletion = transactions.NoOpOC
-				createdAppIdx = eval.state.txnCounter()
+				createdAppIdx = eval.TestingTxnCounter()
 
 				// On first block, opt in all accts to asa (accts is empty if not asa test)
 				k := 0
@@ -298,19 +300,19 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 
 		// If this is the app creation block, add to both ledgers
 		if i == 1 {
-			err = l0.AddBlock(lvb.blk, cert)
+			err = l0.AddBlock(lvb.Block(), cert)
 			require.NoError(b, err)
-			err = l1.AddBlock(lvb.blk, cert)
+			err = l1.AddBlock(lvb.Block(), cert)
 			require.NoError(b, err)
 			continue
 		}
 
 		// For all other blocks, add just to the first ledger, and stash
 		// away to be replayed in the second ledger while running timer
-		err = l0.AddBlock(lvb.blk, cert)
+		err = l0.AddBlock(lvb.Block(), cert)
 		require.NoError(b, err)
 
-		blocks = append(blocks, lvb.blk)
+		blocks = append(blocks, lvb.Block())
 	}
 
 	b.Logf("built %d blocks, each with %d txns", numBlocks, txPerBlock)
@@ -319,7 +321,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 	vc := verify.GetMockedCache(true)
 	b.ResetTimer()
 	for _, blk := range blocks {
-		_, err = eval(context.Background(), l1, blk, true, vc, nil)
+		_, err = internal.Eval(context.Background(), l1, blk, true, vc, nil)
 		require.NoError(b, err)
 		err = l1.AddBlock(blk, cert)
 		require.NoError(b, err)

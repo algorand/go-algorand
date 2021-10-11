@@ -28,7 +28,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -58,8 +57,8 @@ type Ledger interface {
 	LastRound() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)
 	IsWritingCatchpointFile() bool
-	Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledger.ValidatedBlock, error)
-	AddValidatedBlock(vb ledger.ValidatedBlock, cert agreement.Certificate) error
+	Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error)
+	AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.Certificate) error
 }
 
 // Service represents the catchup service. Once started and until it is stopped, it ensures that the ledger is up to date with network.
@@ -307,7 +306,7 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 				}
 
 				if s.cfg.CatchupVerifyTransactionSignatures() || s.cfg.CatchupVerifyApplyData() {
-					var vb *ledger.ValidatedBlock
+					var vb *ledgercore.ValidatedBlock
 					vb, err = s.ledger.Validate(s.ctx, *block, s.blockValidationPool)
 					if err != nil {
 						if s.ctx.Err() != nil {

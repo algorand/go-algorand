@@ -72,7 +72,8 @@ func TestAsyncMessageSent(t *testing.T) {
 			},
 			peer: &Peer{},
 		},
-		roundClock: timers.MakeMonotonicClock(time.Now()),
+		roundClock:     timers.MakeMonotonicClock(time.Now()),
+		sentMessagesCh: s.outgoingMessagesCallbackCh,
 	}
 
 	oldTimestamp := asyncEncoder.messageData.sentTimestamp
@@ -83,11 +84,11 @@ func TestAsyncMessageSent(t *testing.T) {
 	a.Equal(asyncEncoder.messageData.sequenceNumber, uint64(1337))
 
 	// Make this buffered for now so we catch the select statement
-	asyncEncoder.state.outgoingMessagesCallbackCh = make(chan sentMessageMetadata, 1)
+	asyncEncoder.sentMessagesCh = make(chan sentMessageMetadata, 1)
 
 	err = asyncEncoder.asyncMessageSent(true, 1337)
 	a.Nil(err)
-	a.Equal(1, len(asyncEncoder.state.outgoingMessagesCallbackCh))
+	a.Equal(1, len(asyncEncoder.sentMessagesCh))
 }
 
 type mockAsyncNodeConnector struct {

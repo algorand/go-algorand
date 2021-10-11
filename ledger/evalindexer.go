@@ -25,11 +25,12 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 // A ledger interface that Indexer implements. This is a simplified version of the
-// ledgerForEvaluator interface. Certain functions that the evaluator doesn't use
+// LedgerForEvaluator interface. Certain functions that the evaluator doesn't use
 // in the trusting mode are excluded, and the present functions only request data
 // at the latest round.
 type indexerLedgerForEval interface {
@@ -41,23 +42,36 @@ type indexerLedgerForEval interface {
 	LatestTotals() (ledgercore.AccountTotals, error)
 }
 
+// FoundAddress is a wrapper for an address and a boolean.
+type FoundAddress struct {
+	Address basics.Address
+	Exists  bool
+}
+
 // EvalForIndexerResources contains resources preloaded from the Indexer database.
 // Indexer is able to do the preloading more efficiently than the evaluator loading
 // resources one by one.
 type EvalForIndexerResources struct {
 	// The map value is nil iff the account does not exist. The account data is owned here.
-	accounts map[basics.Address]*basics.AccountData
-	creators map[creatable]FoundAddress
+	Accounts map[basics.Address]*basics.AccountData
+	Creators map[Creatable]FoundAddress
+}
+
+// Creatable represent a single creatable object.
+type Creatable struct {
+	cindex basics.CreatableIndex
+	ctype  basics.CreatableType
 }
 
 // Converter between indexerLedgerForEval and ledgerForEvaluator interfaces.
 type indexerLedgerConnector struct {
-	il          indexerLedgerForEval
-	genesisHash crypto.Digest
-	latestRound basics.Round
+	il             indexerLedgerForEval
+	genesisHash    crypto.Digest
+	latestRound    basics.Round
+	roundResources EvalForIndexerResources
 }
 
-// BlockHdr is part of ledgerForEvaluator interface.
+// BlockHdr is part of LedgerForEvaluator interface.
 func (l indexerLedgerConnector) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
 	if round != l.latestRound {
 		return bookkeeping.BlockHeader{}, fmt.Errorf(
@@ -68,14 +82,22 @@ func (l indexerLedgerConnector) BlockHdr(round basics.Round) (bookkeeping.BlockH
 	return l.il.LatestBlockHdr()
 }
 
-// CheckDup is part of ledgerForEvaluator interface.
-func (l indexerLedgerConnector) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error {
+// CheckDup is part of LedgerForEvaluator interface.
+func (l indexerLedgerConnector) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
 	// This function is not used by evaluator.
 	return errors.New("CheckDup() not implemented")
 }
 
-// LookupWithoutRewards is part of ledgerForEvaluator interface.
+// LookupWithoutRewards is part of LedgerForEvaluator interface.
 func (l indexerLedgerConnector) LookupWithoutRewards(round basics.Round, address basics.Address) (basics.AccountData, basics.Round, error) {
+	// check to see if the account data in the cache.
+	if pad, has := l.roundResources.Accounts[address]; has {
+		if pad == nil {
+			return basics.AccountData{}, round, nil
+		}
+		return *pad, round, nil
+	}
+
 	accountDataMap, err :=
 		l.il.LookupWithoutRewards(map[basics.Address]struct{}{address: {}})
 	if err != nil {
@@ -89,9 +111,14 @@ func (l indexerLedgerConnector) LookupWithoutRewards(round basics.Round, address
 	return *accountData, round, nil
 }
 
-// GetCreatorForRound is part of ledgerForEvaluator interface.
+// GetCreatorForRound is part of LedgerForEvaluator interface.
 func (l indexerLedgerConnector) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	var foundAddress FoundAddress
+	var has bool
+	// check to see if the account data in the cache.
+	if foundAddress, has = l.roundResources.Creators[Creatable{cindex: cindex, ctype: ctype}]; has {
+		return foundAddress.Address, foundAddress.Exists, nil
+	}
 
 	switch ctype {
 	case basics.AssetCreatable:
@@ -115,42 +142,31 @@ func (l indexerLedgerConnector) GetCreatorForRound(_ basics.Round, cindex basics
 	return foundAddress.Address, foundAddress.Exists, nil
 }
 
-// GenesisHash is part of ledgerForEvaluator interface.
+// GenesisHash is part of LedgerForEvaluator interface.
 func (l indexerLedgerConnector) GenesisHash() crypto.Digest {
 	return l.genesisHash
 }
 
-// Totals is part of ledgerForEvaluator interface.
+// Totals is part of LedgerForEvaluator interface.
 func (l indexerLedgerConnector) LatestTotals() (rnd basics.Round, totals ledgercore.AccountTotals, err error) {
 	totals, err = l.il.LatestTotals()
 	rnd = l.latestRound
 	return
 }
 
-// CompactCertVoters is part of ledgerForEvaluator interface.
-func (l indexerLedgerConnector) CompactCertVoters(_ basics.Round) (*VotersForRound, error) {
+// CompactCertVoters is part of LedgerForEvaluator interface.
+func (l indexerLedgerConnector) CompactCertVoters(_ basics.Round) (*ledgercore.VotersForRound, error) {
 	// This function is not used by evaluator.
 	return nil, errors.New("CompactCertVoters() not implemented")
 }
 
-func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Digest, latestRound basics.Round) indexerLedgerConnector {
+func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Digest, latestRound basics.Round, roundResources EvalForIndexerResources) indexerLedgerConnector {
 	return indexerLedgerConnector{
-		il:          il,
-		genesisHash: genesisHash,
-		latestRound: latestRound,
+		il:             il,
+		genesisHash:    genesisHash,
+		latestRound:    latestRound,
+		roundResources: roundResources,
 	}
-}
-
-func saveResourcesInCowBase(resources EvalForIndexerResources, base *roundCowBase) {
-	for address, accountData := range resources.accounts {
-		if accountData == nil {
-			base.accounts[address] = basics.AccountData{}
-		} else {
-			base.accounts[address] = *accountData
-		}
-	}
-
-	base.creators = resources.creators
 }
 
 // EvalForIndexer evaluates a block without validation using the given `proto`.
@@ -159,42 +175,20 @@ func saveResourcesInCowBase(resources EvalForIndexerResources, base *roundCowBas
 // close amount for each transaction even when the real consensus parameters do not
 // support it.
 func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto config.ConsensusParams, resources EvalForIndexerResources) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
-	ilc := makeIndexerLedgerConnector(il, block.GenesisHash(), block.Round()-1)
+	ilc := makeIndexerLedgerConnector(il, block.GenesisHash(), block.Round()-1, resources)
 
-	eval, err := startEvaluator(
-		ilc, block.BlockHeader, proto, len(block.Payset), false, false, 0)
+	eval, err := internal.StartEvaluator(
+		ilc, block.BlockHeader,
+		internal.EvaluatorOptions{
+			PaysetHint:  len(block.Payset),
+			ProtoParams: &proto,
+			Generate:    false,
+			Validate:    false,
+		})
 	if err != nil {
 		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
 			fmt.Errorf("EvalForIndexer() err: %w", err)
 	}
 
-	saveResourcesInCowBase(resources, eval.state.lookupParent.(*roundCowBase))
-
-	paysetgroups, err := block.DecodePaysetGroups()
-	if err != nil {
-		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
-			fmt.Errorf("EvalForIndexer() err: %w", err)
-	}
-
-	for _, group := range paysetgroups {
-		err = eval.TransactionGroup(group)
-		if err != nil {
-			return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
-				fmt.Errorf("EvalForIndexer() err: %w", err)
-		}
-	}
-
-	// Finally, process any pending end-of-block state changes.
-	err = eval.endOfBlock()
-	if err != nil {
-		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
-			fmt.Errorf("EvalForIndexer() err: %w", err)
-	}
-
-	// here, in the EvalForIndexer, we don't want to call finalValidation(). This would
-	// skip the calculation of the account totals in the state delta, which is a serious
-	// issue if it were to be used by algod, but it's perfectly fine for the indexer since
-	// it doesn't track any totals and therefore cannot calculate the new totals.
-
-	return eval.state.deltas(), eval.block.Payset, nil
+	return eval.ProcessBlockForIndexer(block)
 }

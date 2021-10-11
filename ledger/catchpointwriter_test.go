@@ -34,6 +34,8 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -182,7 +184,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 		delete(config.Consensus, testProtocolVersion)
 		os.RemoveAll(temporaryDirectroy)
 	}()
-	accts := randomAccounts(300, false)
+	accts := ledgertesting.RandomAccounts(300, false)
 
 	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, []map[basics.Address]basics.AccountData{accts})
 	defer ml.Close()
@@ -281,7 +283,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 		os.RemoveAll(temporaryDirectroy)
 	}()
 
-	accts := randomAccounts(BalancesPerCatchpointFileChunk*3, false)
+	accts := ledgertesting.RandomAccounts(BalancesPerCatchpointFileChunk*3, false)
 	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, []map[basics.Address]basics.AccountData{accts})
 	defer ml.Close()
 
@@ -311,7 +313,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	// create a ledger.
-	var initState InitState
+	var initState ledgercore.InitState
 	initState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
 	l, err := OpenLedger(ml.log, "TestFullCatchpointWriter", true, initState, conf)
 	require.NoError(t, err)

@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -87,7 +88,7 @@ func (il indexerLedgerForEvalImpl) LatestTotals() (totals ledgercore.AccountTota
 func TestEvalForIndexerCustomProtocolParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genesisBalances, addrs, _ := newTestGenesis()
+	genesisBalances, addrs, _ := ledgertesting.NewTestGenesis()
 
 	var genHash crypto.Digest
 	crypto.RandBytes(genHash[:])
@@ -97,7 +98,7 @@ func TestEvalForIndexerCustomProtocolParams(t *testing.T) {
 	dbName := fmt.Sprintf("%s", t.Name())
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, true, InitState{
+	l, err := OpenLedger(logging.Base(), dbName, true, ledgercore.InitState{
 		Block:       block,
 		Accounts:    genesisBalances.Balances,
 		GenesisHash: genHash,
@@ -184,56 +185,11 @@ func TestEvalForIndexerCustomProtocolParams(t *testing.T) {
 	assert.Equal(t, uint64(70), modifiedTxns[3].AssetClosingAmount)
 }
 
-// Test that preloading data in cow base works as expected.
-func TestSaveResourcesInCowBase(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	var address basics.Address
-	_, err := rand.Read(address[:])
-	require.NoError(t, err)
-
-	base := makeRoundCowBase(
-		nil, basics.Round(0), 0, basics.Round(0), config.ConsensusParams{})
-
-	resources := EvalForIndexerResources{
-		accounts: map[basics.Address]*basics.AccountData{
-			address: {
-				MicroAlgos: basics.MicroAlgos{Raw: 5},
-			},
-		},
-		creators: map[creatable]FoundAddress{
-			{cindex: basics.CreatableIndex(6), ctype: basics.AssetCreatable}: {Address: address, Exists: true},
-			{cindex: basics.CreatableIndex(6), ctype: basics.AppCreatable}:   {Address: address, Exists: false},
-		},
-	}
-
-	saveResourcesInCowBase(resources, base)
-
-	{
-		accountData, err := base.lookup(address)
-		require.NoError(t, err)
-		assert.Equal(t, basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 5}}, accountData)
-	}
-	{
-		address, found, err :=
-			base.getCreator(basics.CreatableIndex(6), basics.AssetCreatable)
-		require.NoError(t, err)
-		require.True(t, found)
-		assert.Equal(t, address, address)
-	}
-	{
-		_, found, err :=
-			base.getCreator(basics.CreatableIndex(6), basics.AppCreatable)
-		require.NoError(t, err)
-		require.False(t, found)
-	}
-}
-
 // TestEvalForIndexerForExpiredAccounts tests that the EvalForIndexer function will correctly mark accounts offline
 func TestEvalForIndexerForExpiredAccounts(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genesisBalances, addrs, _ := newTestGenesis()
+	genesisBalances, addrs, _ := ledgertesting.NewTestGenesis()
 
 	var genHash crypto.Digest
 	crypto.RandBytes(genHash[:])
@@ -243,7 +199,7 @@ func TestEvalForIndexerForExpiredAccounts(t *testing.T) {
 	dbName := fmt.Sprintf("%s", t.Name())
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, true, InitState{
+	l, err := OpenLedger(logging.Base(), dbName, true, ledgercore.InitState{
 		Block:       block,
 		Accounts:    genesisBalances.Balances,
 		GenesisHash: genHash,
@@ -293,4 +249,59 @@ func TestEvalForIndexerForExpiredAccounts(t *testing.T) {
 
 	_, _, err = EvalForIndexer(il, &badBlock, proto, EvalForIndexerResources{})
 	require.NoError(t, err)
+}
+
+// Test that preloading data in cow base works as expected.
+func TestResourceCaching(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var address basics.Address
+	_, err := rand.Read(address[:])
+	require.NoError(t, err)
+
+	genesisInitState, _, _ := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
+
+	genesisBalances := bookkeeping.GenesisBalances{
+		Balances:    genesisInitState.Accounts,
+		FeeSink:     testSinkAddr,
+		RewardsPool: testPoolAddr,
+		Timestamp:   0,
+	}
+	l := newTestLedger(t, genesisBalances)
+
+	genesisBlockHeader, err := l.BlockHdr(basics.Round(0))
+	require.NoError(t, err)
+	block := bookkeeping.MakeBlock(genesisBlockHeader)
+
+	resources := EvalForIndexerResources{
+		Accounts: map[basics.Address]*basics.AccountData{
+			address: {
+				MicroAlgos: basics.MicroAlgos{Raw: 5},
+			},
+		},
+		Creators: map[Creatable]FoundAddress{
+			{cindex: basics.CreatableIndex(6), ctype: basics.AssetCreatable}: {Address: address, Exists: true},
+			{cindex: basics.CreatableIndex(6), ctype: basics.AppCreatable}:   {Address: address, Exists: false},
+		},
+	}
+
+	ilc := makeIndexerLedgerConnector(indexerLedgerForEvalImpl{l: l, latestRound: basics.Round(0)}, block.GenesisHash(), block.Round()-1, resources)
+
+	{
+		accountData, rnd, err := ilc.LookupWithoutRewards(basics.Round(0), address)
+		require.NoError(t, err)
+		assert.Equal(t, basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 5}}, accountData)
+		assert.Equal(t, basics.Round(0), rnd)
+	}
+	{
+		address, found, err := ilc.GetCreatorForRound(basics.Round(0), basics.CreatableIndex(6), basics.AssetCreatable)
+		require.NoError(t, err)
+		require.True(t, found)
+		assert.Equal(t, address, address)
+	}
+	{
+		_, found, err := ilc.GetCreatorForRound(basics.Round(0), basics.CreatableIndex(6), basics.AppCreatable)
+		require.NoError(t, err)
+		require.False(t, found)
+	}
 }
