@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/algorand/go-deadlock"
 
@@ -179,6 +180,7 @@ func makeParticipationRegistry(accessor db.Pair, log logging.Logger) (*participa
 		store:      accessor,
 		writeQueue: make(chan partDBWriteRecord, 10),
 	}
+	registry.flushDone = sync.NewCond(&registry.mutex)
 	go registry.writeThread()
 
 	err = registry.initializeCache()
@@ -258,6 +260,8 @@ func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 // participationDB is a private implementation of ParticipationRegistry.
 type participationDB struct {
 	cache map[ParticipationID]ParticipationRecord
+
+	// dirty marked on Record(), cleared on Register(), Delete(), Flush()
 	dirty map[ParticipationID]struct{}
 
 	log   logging.Logger
@@ -266,16 +270,19 @@ type participationDB struct {
 
 	writeQueue chan partDBWriteRecord
 	asyncErr   error
+
+	flushDone *sync.Cond
 }
 
 type partDBWriteRecord struct {
 	insertID ParticipationID
 	insert   Participation
 
-	register   ParticipationID
-	registerOn basics.Round
+	registerUpdated map[ParticipationID]ParticipationRecord
 
 	delete ParticipationID
+
+	flush bool
 }
 
 func (db *participationDB) initializeCache() error {
@@ -302,13 +309,50 @@ func (db *participationDB) initializeCache() error {
 }
 
 func (db *participationDB) writeThread() {
-	for wr := range db.writeQueue {
-		if !wr.register.IsZero() {
-			db.asyncErr = db.registerInner(wr.register, wr.registerOn)
+	needsFlush := false
+	var err error
+	var lastErr error
+	for {
+		var wr partDBWriteRecord
+		var chanOk bool
+		if needsFlush {
+			select {
+			case wr, chanOk = <-db.writeQueue:
+				if !chanOk {
+					return // chan closed
+				}
+			default:
+				// noting available, flush completed
+				db.mutex.Lock()
+				needsFlush = false
+				db.asyncErr = lastErr
+				lastErr = nil
+				db.flushDone.Broadcast()
+				db.mutex.Unlock()
+			}
+		} else {
+			// blocking read until next activity or close
+			wr, chanOk = <-db.writeQueue
+			if !chanOk {
+				return // chan closed
+			}
+		}
+		if len(wr.registerUpdated) != 0 {
+			err = db.registerInner(wr.registerUpdated)
+			//db.log.Infof("register %v", err)
 		} else if !wr.insertID.IsZero() {
-			db.asyncErr = db.insertInner(wr.insert, wr.insertID)
+			err = db.insertInner(wr.insert, wr.insertID)
+			//db.log.Infof("insert %v", err)
 		} else if !wr.delete.IsZero() {
-			db.asyncErr = db.deleteInner(wr.delete)
+			err = db.deleteInner(wr.delete)
+			//db.log.Infof("delete %v", err)
+		} else if wr.flush {
+			err = db.flushInner()
+			//db.log.Infof("flush %v", err)
+			needsFlush = true
+		}
+		if err != nil {
+			lastErr = err
 		}
 	}
 }
@@ -354,71 +398,31 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 	return err
 }
 
-func (db *participationDB) registerInner(id ParticipationID, on basics.Round) error {
-	recordToRegister := db.Get(id)
-	if recordToRegister.IsZero() {
-		return nil
-	}
-	var toUpdate []ParticipationRecord
-	db.mutex.Lock()
-	for _, record := range db.cache {
-		if record.Account == recordToRegister.Account && record.ParticipationID != id && recordActive(record, on) {
-			toUpdate = append(toUpdate, record)
-		}
-	}
-	db.mutex.Unlock()
-
-	updated := make(map[ParticipationID]ParticipationRecord)
+func (db *participationDB) registerInner(updated map[ParticipationID]ParticipationRecord) error {
 	var cacheDeletes []ParticipationID
 	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// Disable active key if there is one
-		//for _, record := range db.cache {
-		//if record.Account == recordToRegister.Account && record.ParticipationID != id && recordActive(record, on) {
-		for _, record := range toUpdate {
-			// TODO: this should probably be "on - 1"
-			record.EffectiveLast = on
+		for id, record := range updated {
 			err := updateRollingFields(ctx, tx, record)
 			// Repair the case when no keys were updated
 			if err == ErrNoKeyForID {
 				db.log.Warn("participationDB unable to update key in cache. Removing from cache.")
 				cacheDeletes = append(cacheDeletes, id)
-				//delete(db.cache, id)
 			}
 			if err != nil {
-				return fmt.Errorf("unable to disable old key when registering %s", id)
+				return fmt.Errorf("unable to disable old key when registering %s: %w", id, err)
 			}
-
-			updated[record.ParticipationID] = record.Duplicate()
 		}
-
-		// Mark registered.
-		recordToRegister.EffectiveFirst = on
-		recordToRegister.EffectiveLast = recordToRegister.LastValid
-
-		err := updateRollingFields(ctx, tx, recordToRegister)
-		if err == ErrNoKeyForID {
-			db.log.Warn("participationDB unable to update key in cache. Removing from cache.")
-			cacheDeletes = append(cacheDeletes, id)
-			//delete(db.cache, id)
-		}
-		if err != nil {
-			return fmt.Errorf("unable to registering key with id (%s): %w", id, err)
-		}
-		updated[recordToRegister.ParticipationID] = recordToRegister
-
 		return nil
 	})
 
 	// Update cache
-	if err == nil {
+	if err == nil && len(cacheDeletes) != 0 {
 		db.mutex.Lock()
 		defer db.mutex.Unlock()
 		for _, id := range cacheDeletes {
 			delete(db.cache, id)
-		}
-		for id, record := range updated {
 			delete(db.dirty, id)
-			db.cache[id] = record
 		}
 	}
 	return err
@@ -447,13 +451,52 @@ func (db *participationDB) deleteInner(id ParticipationID) error {
 
 		return nil
 	})
+	return err
+}
 
-	if err == nil {
-		db.mutex.Lock()
-		defer db.mutex.Unlock()
-		delete(db.dirty, id)
-		delete(db.cache, id)
+func (db *participationDB) flushInner() error {
+	var dirty map[ParticipationID]struct{}
+	db.mutex.Lock()
+	if len(db.dirty) != 0 {
+		dirty = db.dirty
+		db.dirty = make(map[ParticipationID]struct{})
+	} else {
+		dirty = nil
 	}
+
+	var needsUpdate []ParticipationRecord
+	// Verify that the dirty flag has not desynchronized from the cache.
+	for id := range dirty {
+		if rec, ok := db.cache[id]; !ok {
+			db.log.Warnf("participationDB fixing dirty flag de-synchronization for %s", id)
+			delete(db.cache, id)
+		} else {
+			needsUpdate = append(needsUpdate, rec)
+		}
+	}
+	db.mutex.Unlock()
+
+	if dirty == nil {
+		return nil
+	}
+
+	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var errorStr strings.Builder
+		for _, record := range needsUpdate {
+			err := updateRollingFields(ctx, tx, record)
+			// This should only be updating key usage so ignoring missing keys is not a problem.
+			if err != nil && err != ErrNoKeyForID {
+				if errorStr.Len() > 0 {
+					errorStr.WriteString(", ")
+				}
+				errorStr.WriteString(err.Error())
+			}
+		}
+		if errorStr.Len() > 0 {
+			return errors.New(errorStr.String())
+		}
+		return nil
+	})
 
 	return err
 }
@@ -498,6 +541,9 @@ func (db *participationDB) Delete(id ParticipationID) error {
 	if _, ok := db.cache[id]; !ok {
 		return nil
 	}
+	delete(db.dirty, id)
+	delete(db.cache, id)
+	// do the db part async
 	db.writeQueue <- partDBWriteRecord{
 		delete: id,
 	}
@@ -640,10 +686,40 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 		return ErrInvalidRegisterRange
 	}
 
-	db.writeQueue <- partDBWriteRecord{
-		register:   id,
-		registerOn: on,
+	var toUpdate []ParticipationRecord
+	db.mutex.Lock()
+	for _, record := range db.cache {
+		if record.Account == recordToRegister.Account && record.ParticipationID != id && recordActive(record, on) {
+			toUpdate = append(toUpdate, record)
+		}
 	}
+	db.mutex.Unlock()
+
+	updated := make(map[ParticipationID]ParticipationRecord)
+
+	// Disable active key if there is one
+	for _, record := range toUpdate {
+		// TODO: this should probably be "on - 1"
+		record.EffectiveLast = on
+		updated[record.ParticipationID] = record.Duplicate()
+	}
+	// Mark registered.
+	recordToRegister.EffectiveFirst = on
+	recordToRegister.EffectiveLast = recordToRegister.LastValid
+	updated[recordToRegister.ParticipationID] = recordToRegister
+
+	if len(updated) != 0 {
+		db.writeQueue <- partDBWriteRecord{
+			registerUpdated: updated,
+		}
+		db.mutex.Lock()
+		for id, record := range updated {
+			delete(db.dirty, id)
+			db.cache[id] = record
+		}
+		db.mutex.Unlock()
+	}
+
 	return nil
 }
 
@@ -691,42 +767,14 @@ func (db *participationDB) Flush() error {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
-	// Verify that the dirty flag has not desynchronized from the cache.
-	for id := range db.dirty {
-		if _, ok := db.cache[id]; !ok {
-			db.log.Warnf("participationDB fixing dirty flag de-synchronization for %s", id)
-			delete(db.cache, id)
-		}
+	db.writeQueue <- partDBWriteRecord{
+		flush: true,
 	}
 
-	if len(db.dirty) == 0 {
-		return nil
-	}
-
-	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		var errorStr strings.Builder
-		for id := range db.dirty {
-			err := updateRollingFields(ctx, tx, db.cache[id])
-			// This should only be updating key usage so ignoring missing keys is not a problem.
-			if err != nil && err != ErrNoKeyForID {
-				if errorStr.Len() > 0 {
-					errorStr.WriteString(", ")
-				}
-				errorStr.WriteString(err.Error())
-			}
-		}
-		if errorStr.Len() > 0 {
-			return errors.New(errorStr.String())
-		}
-		return nil
-	})
-
-	if err != nil {
-		return err
-	}
-
-	db.dirty = make(map[ParticipationID]struct{})
-	return nil
+	db.flushDone.Wait()
+	err := db.asyncErr
+	db.asyncErr = nil
+	return err
 }
 
 func (db *participationDB) Close() {

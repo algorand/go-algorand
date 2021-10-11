@@ -89,9 +89,24 @@ func TestParticipation_InsertGet(t *testing.T) {
 	insertAndVerify(p)
 	insertAndVerify(p2)
 
-	// Data should be persisted immediately, re-initialize cache and verify GetAll.
-	registry.initializeCache()
+	// Data should be available immediately
 	results := registry.GetAll()
+	a.Len(results, 2)
+	for _, record := range results {
+		if record.Account == p.Parent {
+			assertParticipation(t, p, record)
+		} else if record.Account == p2.Parent {
+			assertParticipation(t, p2, record)
+		} else {
+			a.Fail("unexpected account")
+		}
+	}
+
+	// Check that Flush works, re-initialize cache and verify GetAll.
+	err := registry.Flush()
+	a.NoError(err)
+	registry.initializeCache()
+	results = registry.GetAll()
 	a.Len(results, 2)
 	for _, record := range results {
 		if record.Account == p.Parent {
@@ -125,9 +140,15 @@ func TestParticipation_Delete(t *testing.T) {
 	err = registry.Delete(p.ID())
 	a.NoError(err)
 
-	// Delete should be persisted immediately. Verify p removed in GetAll.
-	registry.initializeCache()
 	results := registry.GetAll()
+	a.Len(results, 1)
+	assertParticipation(t, p2, results[0])
+
+	// Check that result was persisted.
+	err = registry.Flush()
+	a.NoError(err)
+	registry.initializeCache()
+	results = registry.GetAll()
 	a.Len(results, 1)
 	assertParticipation(t, p2, results[0])
 }
@@ -150,7 +171,9 @@ func TestParticipation_DeleteExpired(t *testing.T) {
 
 	a.Len(registry.GetAll(), 5, "The first 5 should be deleted.")
 
-	// Delete should be persisted immediately. Verify by re-initializing the cache.
+	// Check persisting. Verify by re-initializing the cache.
+	err = registry.Flush()
+	a.NoError(err)
 	err = registry.initializeCache()
 	a.NoError(err)
 	a.Len(registry.GetAll(), 5, "The first 5 should be deleted.")
@@ -464,15 +487,17 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 	registry.cache[id] = record
 
 	err = registry.Register(id, 1)
+	a.NoError(err)
+	err = registry.Flush()
 	a.Error(err)
-	a.Contains(err.Error(), "unable to registering key with id")
+	a.Contains(err.Error(), "unable to disable old key")
 	a.EqualError(errors.Unwrap(err), ErrMultipleKeysForID.Error())
 
 	// Flushing changes detects that multiple records are updated
 	registry.dirty[id] = struct{}{}
 	err = registry.Flush()
-	a.Len(registry.dirty, 1)
 	a.EqualError(err, ErrMultipleKeysForID.Error())
+	a.Len(registry.dirty, 1)
 
 	err = registry.Flush()
 	a.EqualError(err, ErrMultipleKeysForID.Error())
