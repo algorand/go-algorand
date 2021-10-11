@@ -128,7 +128,7 @@ func TestMultiThreaded(t *testing.T) {
 
 	a := require.New(t)
 
-	loopCount := 1000
+	loopTime := 5 * time.Second
 	numThreads := 100
 	itemsPerThread := 10
 
@@ -218,7 +218,8 @@ func TestMultiThreaded(t *testing.T) {
 
 	}
 
-	for i := 0; i < loopCount; i++ {
+	startTime := time.Now()
+	for time.Since(startTime) < loopTime {
 
 		var enqueuedList []int
 		var enqueuedMtx deadlock.Mutex
