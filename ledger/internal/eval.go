@@ -59,9 +59,15 @@ const maxPaysetHint = 20000
 const asyncAccountLoadingThreadCount = 4
 
 // Creatable represent a single creatable object.
-type Creatable struct {
+type creatable struct {
 	cindex basics.CreatableIndex
 	ctype  basics.CreatableType
+}
+
+// foundAddress is a wrapper for an address and a boolean.
+type foundAddress struct {
+	address basics.Address
+	exists  bool
 }
 
 type roundCowBase struct {
@@ -91,26 +97,19 @@ type roundCowBase struct {
 	accounts map[basics.Address]basics.AccountData
 
 	// Similar cache for asset/app creators.
-	creators map[Creatable]ledgercore.FoundAddress
+	creators map[creatable]foundAddress
 }
 
-func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, compactCertNextRnd basics.Round, proto config.ConsensusParams, preloadedAccounts map[basics.Address]*basics.AccountData, preloadedCreators map[Creatable]ledgercore.FoundAddress) *roundCowBase {
-	if preloadedCreators == nil {
-		preloadedCreators = make(map[Creatable]ledgercore.FoundAddress)
-	}
-	rcb := &roundCowBase{
+func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, compactCertNextRnd basics.Round, proto config.ConsensusParams) *roundCowBase {
+	return &roundCowBase{
 		l:                  l,
 		rnd:                rnd,
 		txnCount:           txnCount,
 		compactCertNextRnd: compactCertNextRnd,
 		proto:              proto,
 		accounts:           make(map[basics.Address]basics.AccountData),
-		creators:           preloadedCreators,
+		creators:           make(map[creatable]foundAddress),
 	}
-	if preloadedAccounts != nil {
-		rcb.initializeAccountsCache(preloadedAccounts)
-	}
-	return rcb
 }
 
 func (x *roundCowBase) initializeAccountsCache(accts map[basics.Address]*basics.AccountData) {
@@ -124,10 +123,10 @@ func (x *roundCowBase) initializeAccountsCache(accts map[basics.Address]*basics.
 }
 
 func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
-	creatable := Creatable{cindex: cidx, ctype: ctype}
+	creatable := creatable{cindex: cidx, ctype: ctype}
 
 	if foundAddress, ok := x.creators[creatable]; ok {
-		return foundAddress.Address, foundAddress.Exists, nil
+		return foundAddress.address, foundAddress.exists, nil
 	}
 
 	address, exists, err := x.l.GetCreatorForRound(x.rnd, cidx, ctype)
@@ -136,7 +135,7 @@ func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.Creat
 			"roundCowBase.getCreator() cidx: %d ctype: %v err: %w", cidx, ctype, err)
 	}
 
-	x.creators[creatable] = ledgercore.FoundAddress{Address: address, Exists: exists}
+	x.creators[creatable] = foundAddress{address: address, exists: exists}
 	return address, exists, nil
 }
 
@@ -429,8 +428,6 @@ type EvaluatorOptions struct {
 	Generate            bool
 	MaxTxnBytesPerBlock int
 	ProtoParams         *config.ConsensusParams
-	PreloadedAccounts   map[basics.Address]*basics.AccountData
-	PreloadedCreators   map[Creatable]ledgercore.FoundAddress
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
@@ -474,7 +471,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 	// If we are not validating, we must have previously checked
 	// an agreement.Certificate attesting that hdr is valid.
 	base := makeRoundCowBase(
-		l, hdr.Round-1, prevHeader.TxnCounter, basics.Round(0), proto, evalOpts.PreloadedAccounts, evalOpts.PreloadedCreators)
+		l, hdr.Round-1, prevHeader.TxnCounter, basics.Round(0), proto)
 
 	eval := &BlockEvaluator{
 		validate:   evalOpts.Validate,

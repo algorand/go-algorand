@@ -1650,7 +1650,7 @@ func TestCowBaseCreatorsCache(t *testing.T) {
 
 	base := roundCowBase{
 		l:        &l,
-		creators: map[Creatable]ledgercore.FoundAddress{},
+		creators: map[creatable]foundAddress{},
 	}
 
 	cindex := []basics.CreatableIndex{9, 10, 9, 10}
