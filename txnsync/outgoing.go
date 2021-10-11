@@ -58,7 +58,7 @@ type messageAsyncEncoder struct {
 	// sentMessagesCh is a copy of the outgoingMessagesCallbackCh in the syncState object. We want to create a copy of
 	// the channel so that in case of a txnsync restart ( i.e. fast catchup ), we can still generate a new channel
 	// without triggering a data race. The alternative is to block the txnsync.Shutdown() until we receive the feedback
-	// from the network library, but that could be suspetible to undesired network disconnections.
+	// from the network library, but that could be susceptible to undesired network disconnections.
 	sentMessagesCh chan sentMessageMetadata
 }
 
