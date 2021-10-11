@@ -219,7 +219,7 @@ func TestMultiThreaded(t *testing.T) {
 	}
 
 	startTime := time.Now()
-	for time.Now().Sub(startTime) < loopTime {
+	for time.Since(startTime) < loopTime {
 
 		var enqueuedList []int
 		var enqueuedMtx deadlock.Mutex
