@@ -274,6 +274,8 @@ type partDBWriteRecord struct {
 
 	register   ParticipationID
 	registerOn basics.Round
+
+	delete ParticipationID
 }
 
 func (db *participationDB) initializeCache() error {
@@ -305,6 +307,8 @@ func (db *participationDB) writeThread() {
 			db.asyncErr = db.registerInner(wr.register, wr.registerOn)
 		} else if !wr.insertID.IsZero() {
 			db.asyncErr = db.insertInner(wr.insert, wr.insertID)
+		} else if !wr.delete.IsZero() {
+			db.asyncErr = db.deleteInner(wr.delete)
 		}
 	}
 }
@@ -420,6 +424,40 @@ func (db *participationDB) registerInner(id ParticipationID, on basics.Round) er
 	return err
 }
 
+func (db *participationDB) deleteInner(id ParticipationID) error {
+	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		// Fetch primary key
+		var pk int
+		row := tx.QueryRow(selectPK, id[:])
+		err := row.Scan(&pk)
+		if err != nil {
+			return fmt.Errorf("unable to scan pk: %w", err)
+		}
+
+		// Delete rows
+		_, err = tx.Exec(deleteKeysets, pk)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.Exec(deleteRolling, pk)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err == nil {
+		db.mutex.Lock()
+		defer db.mutex.Unlock()
+		delete(db.dirty, id)
+		delete(db.cache, id)
+	}
+
+	return err
+}
+
 func (db *participationDB) Insert(record Participation) (id ParticipationID, err error) {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
@@ -460,37 +498,10 @@ func (db *participationDB) Delete(id ParticipationID) error {
 	if _, ok := db.cache[id]; !ok {
 		return nil
 	}
-
-	// TODO: async io?
-	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		// Fetch primary key
-		var pk int
-		row := tx.QueryRow(selectPK, id[:])
-		err := row.Scan(&pk)
-		if err != nil {
-			return fmt.Errorf("unable to scan pk: %w", err)
-		}
-
-		// Delete rows
-		_, err = tx.Exec(deleteKeysets, pk)
-		if err != nil {
-			return err
-		}
-
-		_, err = tx.Exec(deleteRolling, pk)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
-
-	if err == nil {
-		delete(db.dirty, id)
-		delete(db.cache, id)
+	db.writeQueue <- partDBWriteRecord{
+		delete: id,
 	}
-
-	return err
+	return nil
 }
 
 func (db *participationDB) DeleteExpired(round basics.Round) error {
@@ -633,56 +644,7 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 		register:   id,
 		registerOn: on,
 	}
-
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
-	updated := make(map[ParticipationID]ParticipationRecord)
-	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		// Disable active key if there is one
-		for _, record := range db.cache {
-			if record.Account == recordToRegister.Account && record.ParticipationID != id && recordActive(record, on) {
-				// TODO: this should probably be "on - 1"
-				record.EffectiveLast = on
-				err := updateRollingFields(ctx, tx, record)
-				// Repair the case when no keys were updated
-				if err == ErrNoKeyForID {
-					db.log.Warn("participationDB unable to update key in cache. Removing from cache.")
-					delete(db.cache, id)
-				}
-				if err != nil {
-					return fmt.Errorf("unable to disable old key when registering %s", id)
-				}
-
-				updated[record.ParticipationID] = record.Duplicate()
-			}
-		}
-
-		// Mark registered.
-		recordToRegister.EffectiveFirst = on
-		recordToRegister.EffectiveLast = recordToRegister.LastValid
-
-		err := updateRollingFields(ctx, tx, recordToRegister)
-		if err == ErrNoKeyForID {
-			db.log.Warn("participationDB unable to update key in cache. Removing from cache.")
-			delete(db.cache, id)
-		}
-		if err != nil {
-			return fmt.Errorf("unable to registering key with id (%s): %w", id, err)
-		}
-		updated[recordToRegister.ParticipationID] = recordToRegister
-
-		return nil
-	})
-
-	// Update cache
-	if err == nil {
-		for id, record := range updated {
-			delete(db.dirty, id)
-			db.cache[id] = record
-		}
-	}
-
-	return err
+	return nil
 }
 
 func (db *participationDB) Record(account basics.Address, round basics.Round, participationAction ParticipationAction) error {
