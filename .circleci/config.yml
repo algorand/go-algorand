@@ -187,7 +187,8 @@ commands:
       - run:
           working_directory: /tmp
           command: |
-            mkdir -p << parameters.build_dir >>
+            sudo mkdir -p << parameters.build_dir >>
+            sudo chown -R $USER:$GROUP << parameters.build_dir >>
 
   prepare_windows:
     description: Prepare windows image
@@ -293,7 +294,8 @@ commands:
       - attach_workspace:
           at: << parameters.build_dir >>
       - run: |
-          mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
+          sudo mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
+          sudo chown -R ${USER}:${GROUP} << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
       - restore_cache:
           keys:
             - 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-'
