@@ -20,6 +20,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/util/timers"
+	"time"
 )
 
 //msgp:ignore eventType
@@ -79,6 +80,7 @@ type NodeConnector interface {
 	// across all the connected peers.
 	UpdatePeers(txsyncPeers []*Peer, netPeers []interface{}, peersAverageDataExchangeRate uint64)
 	SendPeerMessage(netPeer interface{}, msg []byte, callback SendMessageCallback)
+	GetPeerLatency(netPeer interface{}) time.Duration
 	// GetPendingTransactionGroups is called by the transaction sync when it needs to look into the transaction
 	// pool and get the updated set of pending transactions. The second returned argument is the latest locally originated
 	// group counter within the given transaction groups list. If there is no group that is locally originated, the expected

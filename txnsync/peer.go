@@ -583,7 +583,7 @@ func (p *Peer) updateIncomingTransactionGroups(txnGroups []pooldata.SignedTxGrou
 	}
 }
 
-func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound basics.Round, currentTime time.Duration, incomingMessageSize int) {
+func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound basics.Round, currentTime time.Duration, peerLatency time.Duration, incomingMessageSize int) {
 	p.lastConfirmedMessageSeqReceived = timings.RefTxnBlockMsgSeq
 	// if we received a message that references our previous message, see if they occurred on the same round
 	if p.lastConfirmedMessageSeqReceived == p.lastSentMessageSequenceNumber && p.lastSentMessageRound == currentRound && p.lastSentMessageTimestamp > 0 {
@@ -591,7 +591,7 @@ func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound ba
 		timeSinceLastMessageWasSent := currentTime - p.lastSentMessageTimestamp
 		networkMessageSize := uint64(p.lastSentMessageSize + incomingMessageSize)
 		if timings.ResponseElapsedTime != 0 && timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime) && networkMessageSize >= p.significantMessageThreshold {
-			networkTrasmitTime := timeSinceLastMessageWasSent - time.Duration(timings.ResponseElapsedTime)
+			networkTrasmitTime := timeSinceLastMessageWasSent - time.Duration(timings.ResponseElapsedTime) - peerLatency
 			dataExchangeRate := uint64(time.Second) * networkMessageSize / uint64(networkTrasmitTime)
 
 			// clamp data exchange rate to realistic metrics
