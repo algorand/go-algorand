@@ -296,8 +296,8 @@ commands:
       - run: |
           sudo mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
           sudo chown -R ${USER}:${GROUP} << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
-          pwd
-          ls -la << parameters.result_path >>/<< parameters.result_subdir >>
+          touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml
+          touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json
       - restore_cache:
           keys:
             - 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-'
@@ -372,9 +372,8 @@ commands:
           at: << parameters.build_dir >>
       - run: |
           mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
-          sudo chown -R ${USER}:${GROUP} << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
-          pwd
-          ls -la << parameters.result_path >>/<< parameters.result_subdir >>
+          touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml
+          touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json
       - run:
           name: Run integration tests
           no_output_timeout: << parameters.no_output_timeout >>
