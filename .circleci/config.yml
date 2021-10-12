@@ -56,7 +56,7 @@ workflows:
           name: << matrix.platform >>_build
           matrix: &matrix-default
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64"]
+              platform: ["amd64"] #, "arm64", "mac_amd64"] # UNCOMMENT BEFORE MERGING
 
       - test:
           name: << matrix.platform >>_test
@@ -296,6 +296,8 @@ commands:
       - run: |
           sudo mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
           sudo chown -R ${USER}:${GROUP} << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
+          pwd
+          ls -la << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
       - restore_cache:
           keys:
             - 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-'
@@ -371,6 +373,8 @@ commands:
       - run: |
           mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
           sudo chown -R ${USER}:${GROUP} << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
+          pwd
+          ls -la << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
       - run:
           name: Run integration tests
           no_output_timeout: << parameters.no_output_timeout >>
