@@ -366,7 +366,7 @@ commands:
           at: << parameters.build_dir >>
       - run: |
           mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
-          sudo chown -R ${USER}:${GROUP} parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
+          sudo chown -R ${USER}:${GROUP} << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
       - run:
           name: Run integration tests
           no_output_timeout: << parameters.no_output_timeout >>
