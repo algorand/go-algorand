@@ -14,7 +14,7 @@ parameters:
     default: "/opt/cibuild"
   results_dir:
     type: string
-    default: "build_test_results"
+    default: "/opt/cibuild/project/build_test_results"
 
 executors:
   amd64_medium:
@@ -296,8 +296,6 @@ commands:
       - run: |
           sudo mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
           sudo chown -R ${USER}:${GROUP} << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
-          touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml
-          touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json
       - restore_cache:
           keys:
             - 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-'
