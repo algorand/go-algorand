@@ -358,6 +358,7 @@ func (s *syncState) broadcastProposalFilter(proposalHash crypto.Digest, peers []
 			state:                s,
 			roundClock:           s.clock,
 			peerDataExchangeRate: peer.dataExchangeRate,
+			sentMessagesCh:       s.outgoingMessagesCallbackCh,
 		}
 
 		msgEncoder.messageData = sentMessageMetadata{
@@ -406,6 +407,7 @@ func (s *syncState) broadcastProposal(p ProposalBroadcastRequest, peers []*Peer)
 			state:                s,
 			roundClock:           s.clock,
 			peerDataExchangeRate: peer.dataExchangeRate,
+			sentMessagesCh:       s.outgoingMessagesCallbackCh,
 		}
 		msgEncoder.messageData, _ = s.assemblePeerMessage(peer, &pendingTransactions)
 		isPartialMessage := msgEncoder.messageData.partialMessage
