@@ -12,6 +12,9 @@ parameters:
   build_dir:
     type: string
     default: "/opt/cibuild"
+  results_dir:
+    type: string
+    default: "build_test_results"
 
 executors:
   amd64_medium:
@@ -154,10 +157,11 @@ workflows:
             - << matrix.platform >>_test_nightly_verification
             - << matrix.platform >>_integration_nightly_verification
             - << matrix.platform >>_e2e_expect_nightly_verification
-          filters:
-            branches:
-              only:
-                - /rel\/nightly/
+          # FOR TESTING, ENABLE BEFORE MERGING
+          # filters:
+          #   branches:
+          #     only:
+          #       - /rel\/nightly/
           context: slack-secrets
 
       #- windows_x64_build
@@ -281,11 +285,13 @@ commands:
         default: ""
       result_path:
         type: string
-        default: "build_test_results"
+        default: << pipeline.parameters.results_dir >>
     steps:
       - attach_workspace:
           at: << parameters.build_dir >>
-      - run: mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/$CIRCLE_NODE_INDEX
+      - run: |
+          sudo mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/$CIRCLE_NODE_INDEX
+          sudo chown -R $USER:$GROUP << parameters.result_path >>
       - restore_cache:
           keys:
             - 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-'
@@ -354,11 +360,13 @@ commands:
         default: ""
       result_path:
         type: string
-        default: "build_test_results"
+        default: << pipeline.parameters.results_dir >>
     steps:
       - attach_workspace:
           at: << parameters.build_dir >>
-      - run: mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/$CIRCLE_NODE_INDEX
+      - run: |
+          mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/$CIRCLE_NODE_INDEX
+          sudo chown -R $USER:$GROUP << parameters.result_path >>
       - run:
           name: Run integration tests
           no_output_timeout: << parameters.no_output_timeout >>
@@ -403,7 +411,7 @@ commands:
         default: << pipeline.parameters.build_dir >>
       result_path:
         type: string
-        default: "build_test_results"
+        default: << pipeline.parameters.results_dir >>
       result_subdir:
         type: string
     steps:
