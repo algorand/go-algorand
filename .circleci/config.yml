@@ -679,7 +679,6 @@ jobs:
       job_type: # job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
         type: string
     steps:
-      - prepare_build_dir
       - checkout
       - tests_verification_command:
           result_subdir: << parameters.platform >>_<< parameters.job_type >>
