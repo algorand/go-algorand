@@ -50,13 +50,11 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 
 	transactionFee := minTxnFee
 	amountToSendInitial := 5 * minAcctBalance
+
 	fixture.SendMoneyAndWait(initialRound, amountToSendInitial, transactionFee, richAccount, sAccount, "")
-	amt, err := sClient.GetBalance(sAccount)
-	a.NoError(err)
 	sNodeStatus, err := sClient.Status()
 	a.NoError(err)
 	seededRound := sNodeStatus.LastRound
-	a.Equal(amountToSendInitial, amt)
 
 	newAccountStatus, err := pClient.AccountInformation(sAccount)
 	a.NoError(err)
@@ -101,9 +99,6 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	// Now we want to send a transaction to the account and test that
 	// it was taken offline after we sent it something
 
-	amt, err = sClient.GetBalance(sAccount)
-	a.NoError(err)
-
 	_, initialRound = fixture.GetBalanceAndRound(richAccount)
 
 	blk, err := sClient.Block(initialRound)
@@ -111,11 +106,6 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	a.Equal(blk.CurrentProtocol, protocolCheck)
 
 	fixture.SendMoneyAndWait(initialRound, amountToSendInitial, transactionFee, richAccount, sAccount, "")
-
-	newAmt, err := sClient.GetBalance(sAccount)
-	a.NoError(err)
-
-	a.Greater(newAmt, amt)
 
 	err = fixture.WaitForRoundWithTimeout(uint64(initialRound) + 3)
 
