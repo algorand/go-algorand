@@ -83,14 +83,14 @@ workflows:
                 - /hotfix\/.*/
           context: slack-secrets
 
-      - integration:
-          name: << matrix.platform >>_integration
-          matrix:
-            <<: *matrix-default
-          requires:
-            - << matrix.platform >>_build
-          filters:
-            <<: *filters-default
+      # - integration:
+      #     name: << matrix.platform >>_integration
+      #     matrix:
+      #       <<: *matrix-default
+      #     requires:
+      #       - << matrix.platform >>_build
+      #     filters:
+      #       <<: *filters-default
 
       - integration_nightly:
           name: << matrix.platform >>_integration_nightly
@@ -121,14 +121,14 @@ workflows:
             <<: *filters-nightly
           context: slack-secrets
 
-      - e2e_subs:
-          name: << matrix.platform >>_e2e_subs
-          matrix:
-            <<: *matrix-default
-          requires:
-            - << matrix.platform >>_build
-          filters:
-            <<: *filters-default
+      # - e2e_subs:
+      #     name: << matrix.platform >>_e2e_subs
+      #     matrix:
+      #       <<: *matrix-default
+      #     requires:
+      #       - << matrix.platform >>_build
+      #     filters:
+      #       <<: *filters-default
 
       - e2e_subs_nightly:
           name: << matrix.platform >>_e2e_subs_nightly
@@ -297,7 +297,7 @@ commands:
           sudo mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
           sudo chown -R ${USER}:${GROUP} << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
           pwd
-          ls -la << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
+          ls -la << parameters.result_path >>/<< parameters.result_subdir >>
       - restore_cache:
           keys:
             - 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-'
@@ -374,7 +374,7 @@ commands:
           mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
           sudo chown -R ${USER}:${GROUP} << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
           pwd
-          ls -la << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
+          ls -la << parameters.result_path >>/<< parameters.result_subdir >>
       - run:
           name: Run integration tests
           no_output_timeout: << parameters.no_output_timeout >>
