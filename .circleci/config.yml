@@ -5,22 +5,30 @@ orbs:
   go: circleci/go@1.7.0
   slack: circleci/slack@4.4.2
 
+parameters:
+  ubuntu_image:
+    type: string
+    default: "ubuntu-2004:202104-01"
+  build_dir:
+    type: string
+    default: "/opt/cibuild"
+
 executors:
   amd64_medium:
     machine:
-      image: ubuntu-2004:202104-01
+      image: << pipeline.parameters.ubuntu_image >>
     resource_class: medium
   amd64_large:
     machine:
-      image: ubuntu-2004:202104-01
+      image: << pipeline.parameters.ubuntu_image >>
     resource_class: large
   arm64_medium:
     machine:
-      image: ubuntu-2004:202101-01
+      image: << pipeline.parameters.ubuntu_image >>
     resource_class: arm.medium
   arm64_large:
     machine:
-      image: ubuntu-2004:202101-01
+      image: << pipeline.parameters.ubuntu_image >>
     resource_class: arm.large
   mac_amd64_medium:
     macos:
@@ -138,6 +146,20 @@ workflows:
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
 
+      - deploy_devnet:
+          name: << matrix.platform >>_deploy
+          matrix:
+            <<: *matrix-default
+          requires:
+            - << matrix.platform >>_test_nightly_verification
+            - << matrix.platform >>_integration_nightly_verification
+            - << matrix.platform >>_e2e_expect_nightly_verification
+          filters: &filters-deploy-devnet
+            branches:
+              only:
+                - /rel\/nightly/
+          context: slack-secrets
+
       #- windows_x64_build
 
 commands:
@@ -146,18 +168,20 @@ commands:
     steps:
       - run: |
           sudo rm -rf ${HOME}/.go_workspace /usr/local/go
+
   prepare_build_dir:
     description: Set up build directory
     parameters:
       build_dir:
         type: string
-        default: "/opt/cibuild"
+        default: << pipeline.parameters.build_dir >>
     steps:
       - run:
           working_directory: /tmp
           command: |
             sudo mkdir -p << parameters.build_dir >>
             sudo chown -R $USER:$GROUP << parameters.build_dir >>
+
   prepare_windows:
     description: Prepare windows image
     steps:
@@ -180,7 +204,7 @@ commands:
     parameters:
       build_dir:
         type: string
-        default: "/opt/cibuild"
+        default: << pipeline.parameters.build_dir >>
     steps:
       - restore_libsodium
       - restore_cache:
@@ -246,7 +270,7 @@ commands:
     parameters:
       build_dir:
         type: string
-        default: "/opt/cibuild"
+        default: << pipeline.parameters.build_dir >>
       result_subdir:
         type: string
       no_output_timeout:
@@ -257,7 +281,7 @@ commands:
         default: ""
       result_path:
         type: string
-        default: "/tmp/results"
+        default: "build_test_results"
     steps:
       - attach_workspace:
           at: << parameters.build_dir >>
@@ -294,9 +318,12 @@ commands:
       - store_test_results:
           path: << parameters.result_path >>
       - persist_to_workspace:
-          root: << parameters.result_path >>
+          root: << parameters.build_dir >>
           paths:
-            - << parameters.result_subdir >>
+            - project
+            - go
+            - gimme
+            - .gimme
       - save_cache:
           key: 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-{{ .Environment.CIRCLE_BUILD_NUM }}'
           paths:
@@ -316,7 +343,7 @@ commands:
     parameters:
       build_dir:
         type: string
-        default: "/opt/cibuild"
+        default: << pipeline.parameters.build_dir >>
       result_subdir:
         type: string
       no_output_timeout:
@@ -327,7 +354,7 @@ commands:
         default: ""
       result_path:
         type: string
-        default: "/tmp/results"
+        default: "build_test_results"
     steps:
       - attach_workspace:
           at: << parameters.build_dir >>
@@ -361,21 +388,27 @@ commands:
       - store_test_results:
           path: << parameters.result_path >>
       - persist_to_workspace:
-          root: << parameters.result_path >>
+          root: << parameters.build_dir >>
           paths:
-            - << parameters.result_subdir >>
+            - project
+            - go
+            - gimme
+            - .gimme
 
   tests_verification_command:
     description: Check if all tests were run at least once and only once across all parallel runs
     parameters:
+      build_dir:
+        type: string
+        default: << pipeline.parameters.build_dir >>
       result_path:
         type: string
-        default: "/tmp/results"
+        default: "build_test_results"
       result_subdir:
         type: string
     steps:
       - attach_workspace:
-          at: << parameters.result_path >>
+          at: << parameters.build_dir >>
       - run:
           name: Check if all tests were run
           command: |
@@ -384,6 +417,26 @@ commands:
       - store_artifacts:
           path: << parameters.result_path >>/<< parameters.result_subdir >>
           destination: << parameters.result_subdir >>/combined-test-results
+
+  deploy_command:
+    description: Deploy to devnet
+    parameters:
+      platform:
+        type: string
+      build_dir:
+        type: string
+        default: << pipeline.parameters.build_dir >>
+    steps:
+      - attach_workspace:
+          at: << parameters.build_dir >>
+      - run:
+          name: scripts/travis/deploy_packages.sh
+          command: |
+            pwd
+            ls
+            ls scripts/travis/deploy_packages.sh
+            echo "testing deploy command... TODO: put actual command here"
+
 
 jobs:
   codegen_verification:
@@ -401,7 +454,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
-    working_directory: /opt/cibuild/project
+    working_directory: << pipeline.parameters.build_dir >>/project
     steps:
       - prepare_build_dir
       - checkout
@@ -413,7 +466,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_large
-    working_directory: /opt/cibuild/project
+    working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
     steps:
       - prepare_build_dir
@@ -428,7 +481,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_large
-    working_directory: /opt/cibuild/project
+    working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
     steps:
       - prepare_build_dir
@@ -446,7 +499,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_large
-    working_directory: /opt/cibuild/project
+    working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
     environment:
       E2E_TEST_FILTER: "GO"
@@ -462,7 +515,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_large
-    working_directory: /opt/cibuild/project
+    working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
     environment:
       E2E_TEST_FILTER: "GO"
@@ -480,7 +533,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_large
-    working_directory: /opt/cibuild/project
+    working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
     environment:
       E2E_TEST_FILTER: "EXPECT"
@@ -496,7 +549,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_large
-    working_directory: /opt/cibuild/project
+    working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
     environment:
       E2E_TEST_FILTER: "EXPECT"
@@ -514,7 +567,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_large
-    working_directory: /opt/cibuild/project
+    working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
@@ -530,7 +583,7 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_large
-    working_directory: /opt/cibuild/project
+    working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
@@ -566,12 +619,30 @@ jobs:
     docker:
       - image: python:3.9.6-alpine
     resource_class: small
+    working_directory: << pipeline.parameters.build_dir >>/project
     parameters:
       platform: # platform: ["amd64", "arm64", "mac_amd64"]
         type: string
       job_type: # job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
         type: string
     steps:
+      - prepare_build_dir
       - checkout
       - tests_verification_command:
           result_subdir: << parameters.platform >>_<< parameters.job_type >>
+
+  deploy_devnet:
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_medium
+    steps:
+      - prepare_build_dir
+      - checkout
+      - prepare_go
+      - deploy_command:
+          platform: << parameters.platform >>
+      - slack/notify: &slack-fail-event
+          event: fail
+          template: basic_fail_1
