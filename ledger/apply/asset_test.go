@@ -50,7 +50,9 @@ func TestAssetTransfer(t *testing.T) {
 	// prepare data
 	var addrs = map[basics.Address]basics.AccountData{
 		src: {
-			MicroAlgos: basics.MicroAlgos{Raw: 10000000},
+			AgreementAccountData: basics.AgreementAccountData{
+				MicroAlgos: basics.MicroAlgos{Raw: 10000000},
+			},
 			AssetParams: map[basics.AssetIndex]basics.AssetParams{
 				1: {Total: total},
 			},
@@ -59,13 +61,17 @@ func TestAssetTransfer(t *testing.T) {
 			},
 		},
 		dst: {
-			MicroAlgos: basics.MicroAlgos{Raw: 10000000},
+			AgreementAccountData: basics.AgreementAccountData{
+				MicroAlgos: basics.MicroAlgos{Raw: 10000000},
+			},
 			Assets: map[basics.AssetIndex]basics.AssetHolding{
 				1: {Amount: dstAmount},
 			},
 		},
 		cls: {
-			MicroAlgos: basics.MicroAlgos{Raw: 10000000},
+			AgreementAccountData: basics.AgreementAccountData{
+				MicroAlgos: basics.MicroAlgos{Raw: 10000000},
+			},
 			Assets: map[basics.AssetIndex]basics.AssetHolding{
 				1: {Amount: 0},
 			},

@@ -108,10 +108,12 @@ func generateEnvironment(numAccounts int) (map[basics.Address]basics.AccountData
 
 		startamt := uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))
 		genesis[addr] = basics.AccountData{
-			Status:      basics.Online,
-			MicroAlgos:  basics.MicroAlgos{Raw: startamt},
-			SelectionID: vrfSec.PK,
-			VoteID:      otSec.OneTimeSignatureVerifier,
+			AgreementAccountData: basics.AgreementAccountData{
+				Status:      basics.Online,
+				MicroAlgos:  basics.MicroAlgos{Raw: startamt},
+				SelectionID: vrfSec.PK,
+				VoteID:      otSec.OneTimeSignatureVerifier,
+			},
 		}
 		total.Raw += startamt
 	}
@@ -320,7 +322,7 @@ func (l *testLedger) LookupDigest(r basics.Round) (crypto.Digest, error) {
 	return l.entries[r].Digest(), nil
 }
 
-func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.AccountData, error) {
+func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.AgreementAccountData, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -330,10 +332,10 @@ func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.A
 	}
 
 	if l.maxNumBlocks != 0 && r+round(l.maxNumBlocks) < l.nextRound {
-		return basics.AccountData{}, &LedgerDroppedRoundError{}
+		return basics.AgreementAccountData{}, &LedgerDroppedRoundError{}
 	}
 
-	return l.state[a], nil
+	return l.state[a].AgreementAccountData, nil
 }
 
 func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {

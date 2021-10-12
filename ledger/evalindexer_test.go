@@ -276,7 +276,9 @@ func TestResourceCaching(t *testing.T) {
 	resources := EvalForIndexerResources{
 		Accounts: map[basics.Address]*basics.AccountData{
 			address: {
-				MicroAlgos: basics.MicroAlgos{Raw: 5},
+				AgreementAccountData: basics.AgreementAccountData{
+					MicroAlgos: basics.MicroAlgos{Raw: 5},
+				},
 			},
 		},
 		Creators: map[Creatable]FoundAddress{
@@ -290,7 +292,7 @@ func TestResourceCaching(t *testing.T) {
 	{
 		accountData, rnd, err := ilc.LookupWithoutRewards(basics.Round(0), address)
 		require.NoError(t, err)
-		assert.Equal(t, basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 5}}, accountData)
+		assert.Equal(t, basics.AccountData{AgreementAccountData: basics.AgreementAccountData{MicroAlgos: basics.MicroAlgos{Raw: 5}}}, accountData)
 		assert.Equal(t, basics.Round(0), rnd)
 	}
 	{

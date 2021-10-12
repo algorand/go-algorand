@@ -98,6 +98,8 @@ func UnmarshalStatus(value string) (s Status, err error) {
 
 // AgreementAccountData contains just the account data used by agreement.
 type AgreementAccountData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	Status     Status     `codec:"onl"`
 	MicroAlgos MicroAlgos `codec:"algo"`
 
@@ -114,9 +116,9 @@ type AgreementAccountData struct {
 // This includes the account balance, cryptographic public keys,
 // consensus delegation status, asset data, and application data.
 type AccountData struct {
-	AgreementAccountData
-
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	AgreementAccountData
 
 	// RewardsBase is used to implement rewards.
 	// This is not meaningful for accounts with Status=NotParticipating.

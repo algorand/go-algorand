@@ -52,7 +52,7 @@ func TestAccountDeltas(t *testing.T) {
 
 	a.Equal([]basics.Address{}, ad.ModifiedAccounts())
 
-	sample1 := basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 123}}
+	sample1 := basics.AccountData{AgreementAccountData: basics.AgreementAccountData{MicroAlgos: basics.MicroAlgos{Raw: 123}}}
 	ad.Upsert(addr, sample1)
 	data, ok = ad.Get(addr)
 	a.True(ok)
@@ -63,7 +63,7 @@ func TestAccountDeltas(t *testing.T) {
 	a.Equal(addr, address)
 	a.Equal(sample1, data)
 
-	sample2 := basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 456}}
+	sample2 := basics.AccountData{AgreementAccountData: basics.AgreementAccountData{MicroAlgos: basics.MicroAlgos{Raw: 456}}}
 	ad.Upsert(addr, sample2)
 	data, ok = ad.Get(addr)
 	a.True(ok)

@@ -1420,7 +1420,7 @@ func TestCompactDeltas(t *testing.T) {
 	accountDeltas := make([]ledgercore.AccountDeltas, 1, 1)
 	creatableDeltas := make([]map[basics.CreatableIndex]ledgercore.ModifiedCreatable, 1, 1)
 	creatableDeltas[0] = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
-	accountDeltas[0].Upsert(addrs[0], basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}})
+	accountDeltas[0].Upsert(addrs[0], basics.AccountData{AgreementAccountData: basics.AgreementAccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}}})
 	creatableDeltas[0][100] = ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true}
 	var baseAccounts lruAccounts
 	baseAccounts.init(nil, 100, 80)
@@ -1433,19 +1433,19 @@ func TestCompactDeltas(t *testing.T) {
 
 	delta, _ := outAccountDeltas.get(addrs[0])
 	require.Equal(t, persistedAccountData{}, delta.old)
-	require.Equal(t, basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}}, delta.new)
+	require.Equal(t, basics.AccountData{AgreementAccountData: basics.AgreementAccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}}}, delta.new)
 	require.Equal(t, ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true, Ndeltas: 1}, outCreatableDeltas[100])
 
 	// add another round
 	accountDeltas = append(accountDeltas, ledgercore.AccountDeltas{})
 	creatableDeltas = append(creatableDeltas, make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable))
-	accountDeltas[1].Upsert(addrs[0], basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 3}})
-	accountDeltas[1].Upsert(addrs[3], basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 8}})
+	accountDeltas[1].Upsert(addrs[0], basics.AccountData{AgreementAccountData: basics.AgreementAccountData{MicroAlgos: basics.MicroAlgos{Raw: 3}}})
+	accountDeltas[1].Upsert(addrs[3], basics.AccountData{AgreementAccountData: basics.AgreementAccountData{MicroAlgos: basics.MicroAlgos{Raw: 8}}})
 
 	creatableDeltas[1][100] = ledgercore.ModifiedCreatable{Creator: addrs[2], Created: false}
 	creatableDeltas[1][101] = ledgercore.ModifiedCreatable{Creator: addrs[4], Created: true}
 
-	baseAccounts.write(persistedAccountData{addr: addrs[0], accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}})
+	baseAccounts.write(persistedAccountData{addr: addrs[0], accountData: basics.AccountData{AgreementAccountData: basics.AgreementAccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}}})
 	outAccountDeltas = makeCompactAccountDeltas(accountDeltas, baseAccounts)
 	outCreatableDeltas = compactCreatableDeltas(creatableDeltas)
 

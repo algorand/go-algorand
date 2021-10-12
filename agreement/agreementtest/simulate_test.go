@@ -203,7 +203,7 @@ func (l *testLedger) LookupDigest(r basics.Round) (crypto.Digest, error) {
 	return l.entries[r].Digest(), nil
 }
 
-func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.AccountData, error) {
+func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.AgreementAccountData, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -211,7 +211,7 @@ func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.A
 		err := fmt.Errorf("Lookup called on future round: %v > %v! (this is probably a bug)", r, l.nextRound)
 		panic(err)
 	}
-	return l.state[a], nil
+	return l.state[a].AgreementAccountData, nil
 }
 
 func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
@@ -319,10 +319,12 @@ func TestSimulate(t *testing.T) {
 	for _, account := range accs {
 		amount := basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))}
 		genesis[account.Address()] = basics.AccountData{
-			Status:      basics.Online,
-			MicroAlgos:  amount,
-			SelectionID: account.VRFSecrets().PK,
-			VoteID:      account.VotingSecrets().OneTimeSignatureVerifier,
+			AgreementAccountData: basics.AgreementAccountData{
+				Status:      basics.Online,
+				MicroAlgos:  amount,
+				SelectionID: account.VRFSecrets().PK,
+				VoteID:      account.VotingSecrets().OneTimeSignatureVerifier,
+			},
 		}
 	}
 

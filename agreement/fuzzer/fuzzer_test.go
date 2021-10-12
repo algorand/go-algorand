@@ -214,10 +214,12 @@ func (n *Fuzzer) initAccountsAndBalances(rootSeed []byte, onlineNodes []bool) er
 		}
 
 		acctData := basics.AccountData{
-			Status:      basics.Online,
-			MicroAlgos:  stake,
-			VoteID:      n.accounts[i].VotingSecrets().OneTimeSignatureVerifier,
-			SelectionID: n.accounts[i].VRFSecrets().PK,
+			AgreementAccountData: basics.AgreementAccountData{
+				Status:      basics.Online,
+				MicroAlgos:  stake,
+				VoteID:      n.accounts[i].VotingSecrets().OneTimeSignatureVerifier,
+				SelectionID: n.accounts[i].VRFSecrets().PK,
+			},
 		}
 		if len(onlineNodes) > i {
 			if onlineNodes[i] == false {

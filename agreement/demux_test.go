@@ -484,9 +484,9 @@ func (t *demuxTester) LookupDigest(basics.Round) (crypto.Digest, error) {
 }
 
 // implement Ledger
-func (t *demuxTester) LookupAgreement(basics.Round, basics.Address) (basics.AccountData, error) {
+func (t *demuxTester) LookupAgreement(basics.Round, basics.Address) (basics.AgreementAccountData, error) {
 	// we don't care about this function in this test.
-	return basics.AccountData{}, nil
+	return basics.AgreementAccountData{}, nil
 }
 
 // implement Ledger
