@@ -290,8 +290,8 @@ commands:
       - attach_workspace:
           at: << parameters.build_dir >>
       - run: |
-          sudo mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/$CIRCLE_NODE_INDEX
-          sudo chown -R $USER:$GROUP << parameters.result_path >>
+          sudo mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
+          sudo chown -R ${USER}:${GROUP} << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
       - restore_cache:
           keys:
             - 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-'
@@ -314,8 +314,8 @@ commands:
             scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
             PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
             export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
-            export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
-            export PARTITION_ID=$CIRCLE_NODE_INDEX
+            export PARTITION_TOTAL=${CIRCLE_NODE_TOTAL}
+            export PARTITION_ID=${CIRCLE_NODE_INDEX}
             export PARALLEL_FLAG="-p 1"
             gotestsum --format testname --junitfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml --jsonfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" << parameters.short_test_flag >> -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
       - store_artifacts:
@@ -365,8 +365,8 @@ commands:
       - attach_workspace:
           at: << parameters.build_dir >>
       - run: |
-          mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/$CIRCLE_NODE_INDEX
-          sudo chown -R $USER:$GROUP << parameters.result_path >>
+          mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
+          sudo chown -R ${USER}:${GROUP} parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
       - run:
           name: Run integration tests
           no_output_timeout: << parameters.no_output_timeout >>
@@ -386,9 +386,9 @@ commands:
             scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
             export ALGOTEST=1
             export SHORTTEST=<< parameters.short_test_flag >>
-            export TEST_RESULTS=<< parameters.result_path >>/<< parameters.result_subdir >>/$CIRCLE_NODE_INDEX
-            export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
-            export PARTITION_ID=$CIRCLE_NODE_INDEX
+            export TEST_RESULTS=<< parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
+            export PARTITION_TOTAL=${CIRCLE_NODE_TOTAL}
+            export PARTITION_ID=${CIRCLE_NODE_INDEX}
             test/scripts/run_integration_tests.sh
       - store_artifacts:
           path: << parameters.result_path >>
@@ -444,7 +444,7 @@ commands:
             - run:
                 name: Deploy AMD64
                 environment:
-                  TRAVIS_BRANCH: $CIRCLE_BRANCH
+                  TRAVIS_BRANCH: ${CIRCLE_BRANCH}
                 command: |
                   pwd
                   ls
@@ -459,7 +459,7 @@ commands:
             - run:
                 name: Deploy ARM64
                 environment:
-                  TRAVIS_BRANCH: $CIRCLE_BRANCH
+                  TRAVIS_BRANCH: ${CIRCLE_BRANCH}
                   BUILD_TYPE: "external_build"
                   TARGET_PLATFORM: "linux-arm64"
                 command: |
@@ -478,7 +478,7 @@ commands:
             - run:
                 name: Deploy MAC AMD64
                 environment:
-                  TRAVIS_BRANCH: $CIRCLE_BRANCH
+                  TRAVIS_BRANCH: ${CIRCLE_BRANCH}
                 command: |
                   pwd
                   ls
