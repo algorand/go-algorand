@@ -85,7 +85,7 @@ func (bn *blockNotifier) close() {
 	bn.closing.Wait()
 }
 
-func (bn *blockNotifier) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
+func (bn *blockNotifier) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 	bn.cond = sync.NewCond(&bn.mu)
 	bn.running = true
 	bn.pendingBlocks = nil

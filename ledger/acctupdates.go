@@ -1888,7 +1888,7 @@ func (au *accountUpdates) prepareCommit(offset uint64, dbRound basics.Round, loo
 		if isCatchpointRound && catchpointLabel != "" {
 			au.lastCatchpointLabel = catchpointLabel
 		}
-		updatingBalancesDuration := time.Now().Sub(beforeUpdatingBalancesTime)
+		updatingBalancesDuration := time.Since(beforeUpdatingBalancesTime)
 
 		if updateStats {
 			stats.MemoryUpdatesDuration = time.Duration(time.Now().UnixNano())

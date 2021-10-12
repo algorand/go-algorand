@@ -78,7 +78,7 @@ func (b *bulletin) Wait(round basics.Round) chan struct{} {
 	return signal.signal
 }
 
-func (b *bulletin) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
+func (b *bulletin) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 	b.pendingNotificationRequests = make(map[basics.Round]notifier)
 	b.latestRound = l.Latest()
 	return nil

@@ -255,8 +255,7 @@ func newAcctUpdates(tb testing.TB, l *mockLedgerForTracker, conf config.Local, d
 	_, err := trackerDBInitialize(l, au.catchpointEnabled(), au.dbDirectory)
 	require.NoError(tb, err)
 
-	l.trackers.initialize(au, l)
-	l.trackers.register(au)
+	l.trackers.initialize(au, l, []ledgerTracker{au})
 
 	return au
 }
@@ -1578,8 +1577,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			ml.waitAccountsWriting()
 			catchpointLabels[i] = au.GetLastCatchpointLabel()
 			ledgerHistory[i] = ml.fork(t)
-			ledgerHistory[i].trackers.initialize(ml.trackers.driver, ledgerHistory[i])
-			ledgerHistory[i].trackers.register(au)
+			ledgerHistory[i].trackers.initialize(ml.trackers.driver, ledgerHistory[i], []ledgerTracker{au})
 			ledgerHistory[i].trackers.dbRound = ml.trackers.dbRound
 			defer ledgerHistory[i].Close()
 		}

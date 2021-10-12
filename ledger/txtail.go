@@ -43,7 +43,7 @@ type txTail struct {
 	lowWaterMark basics.Round // the last round known to be committed to disk
 }
 
-func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
+func (t *txTail) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 	latest := l.Latest()
 	hdr, err := l.BlockHdr(latest)
 	if err != nil {

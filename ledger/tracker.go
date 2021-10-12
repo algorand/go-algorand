@@ -126,7 +126,7 @@ type trackerRegistry struct {
 	trackers []ledgerTracker
 	driver   *accountUpdates
 
-	// ctx is the context for the committing go-routine. It's also used as the "parent" of the catchpoint generation operation.
+	// ctx is the context for the committing go-routine.
 	ctx context.Context
 	// ctxCancel is the canceling function for canceling the committing go-routine ( i.e. signaling the committing go-routine that it's time to abort )
 	ctxCancel context.CancelFunc
@@ -149,7 +149,7 @@ type trackerRegistry struct {
 	mu deadlock.RWMutex
 }
 
-func (tr *trackerRegistry) initialize(au *accountUpdates, l ledgerForTracker) (err error) {
+func (tr *trackerRegistry) initialize(au *accountUpdates, l ledgerForTracker, trackers []ledgerTracker) (err error) {
 	tr.driver = au
 
 	tr.dbs = l.trackerDB()
@@ -169,11 +169,8 @@ func (tr *trackerRegistry) initialize(au *accountUpdates, l ledgerForTracker) (e
 	tr.commitSyncerClosed = make(chan struct{})
 	go tr.commitSyncer(tr.committedOffset)
 
+	tr.trackers = append(tr.trackers, trackers...)
 	return
-}
-
-func (tr *trackerRegistry) register(lt ledgerTracker) {
-	tr.trackers = append(tr.trackers, lt)
 }
 
 func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
@@ -196,9 +193,6 @@ func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 func (tr *trackerRegistry) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	for _, lt := range tr.trackers {
 		lt.newBlock(blk, delta)
-	}
-	if len(tr.trackers) == 0 {
-		fmt.Printf("trackerRegistry::newBlock - no trackers (%d)\n", blk.Round())
 	}
 }
 
@@ -237,7 +231,7 @@ func (tr *trackerRegistry) close() {
 		tr.ctxCancel()
 	}
 
-	// close() is called from reloadLedger() and trackerRegistry is not initialized yet
+	// close() is called from reloadLedger() when and trackerRegistry is not initialized yet
 	if tr.commitSyncerClosed != nil {
 		tr.waitAccountsWriting()
 		// this would block until the commitSyncerClosed channel get closed.
@@ -248,6 +242,7 @@ func (tr *trackerRegistry) close() {
 		lt.close()
 	}
 	tr.trackers = nil
+	tr.driver = nil
 }
 
 // commitSyncer is the syncer go-routine function which perform the database updates. Internally, it dequeues deferredCommits and

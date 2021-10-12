@@ -29,7 +29,7 @@ type metricsTracker struct {
 	ledgerRound             *metrics.Gauge
 }
 
-func (mt *metricsTracker) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
+func (mt *metricsTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 	mt.ledgerTransactionsTotal = metrics.MakeCounter(metrics.LedgerTransactionsTotal)
 	mt.ledgerRewardClaimsTotal = metrics.MakeCounter(metrics.LedgerRewardClaimsTotal)
 	mt.ledgerRound = metrics.MakeGauge(metrics.LedgerRound)

@@ -188,22 +188,24 @@ func (l *Ledger) reloadLedger() error {
 	}
 
 	// init tracker db
-	trackerDBMgr, err := trackerDBInitialize(l, l.accts.catchpointEnabled(), l.accts.dbDirectory)
+	trackerDBInitParams, err := trackerDBInitialize(l, l.accts.catchpointEnabled(), l.accts.dbDirectory)
 	if err != nil {
 		return err
 	}
 
 	// set account updates tracker as a driver to calculate tracker db round and committing offsets
-	err = l.trackers.initialize(&l.accts, l)
+	trackers := []ledgerTracker{
+		&l.accts,    // update the balances
+		&l.txTail,   // update the transaction tail, tracking the recent 1000 txn
+		&l.bulletin, // provide closed channel signaling support for completed rounds
+		&l.notifier, // send OnNewBlocks to subscribers
+		&l.metrics,  // provides metrics reporting support
+	}
+
+	err = l.trackers.initialize(&l.accts, l, trackers)
 	if err != nil {
 		return err
 	}
-
-	l.trackers.register(&l.accts)    // update the balances
-	l.trackers.register(&l.txTail)   // update the transaction tail, tracking the recent 1000 txn
-	l.trackers.register(&l.bulletin) // provide closed channel signaling support for completed rounds
-	l.trackers.register(&l.notifier) // send OnNewBlocks to subscribers
-	l.trackers.register(&l.metrics)  // provides metrics reporting support
 
 	err = l.trackers.loadFromDisk(l)
 	if err != nil {
@@ -212,7 +214,7 @@ func (l *Ledger) reloadLedger() error {
 	}
 
 	// post-init actions
-	if trackerDBMgr.vacuumOnStartup || l.cfg.OptimizeAccountsDatabaseOnStartup {
+	if trackerDBInitParams.vacuumOnStartup || l.cfg.OptimizeAccountsDatabaseOnStartup {
 		err = l.accts.vacuumDatabase(context.Background())
 		if err != nil {
 			return err
