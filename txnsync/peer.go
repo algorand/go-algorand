@@ -590,7 +590,7 @@ func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound ba
 		// if so, we might be able to calculate the bandwidth.
 		timeSinceLastMessageWasSent := currentTime - p.lastSentMessageTimestamp
 		networkMessageSize := uint64(p.lastSentMessageSize + incomingMessageSize)
-		if timings.ResponseElapsedTime != 0 && timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime) && networkMessageSize >= p.significantMessageThreshold {
+		if timings.ResponseElapsedTime != 0 && timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime) + peerLatency && networkMessageSize >= p.significantMessageThreshold {
 			networkTrasmitTime := timeSinceLastMessageWasSent - time.Duration(timings.ResponseElapsedTime) - peerLatency
 			dataExchangeRate := uint64(time.Second) * networkMessageSize / uint64(networkTrasmitTime)
 
@@ -601,6 +601,7 @@ func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound ba
 				dataExchangeRate = maxDataExchangeRateThreshold
 			}
 			// fmt.Printf("incoming message : updating data exchange to %d; network msg size = %d+%d, transmit time = %v\n", dataExchangeRate, p.lastSentMessageSize, incomingMessageSize, networkTrasmitTime)
+			logging.Base().Infof("%v %v %v", timeSinceLastMessageWasSent, time.Duration(timings.ResponseElapsedTime), peerLatency)
 			logging.Base().Infof("incoming message : updating data exchange from %d to %d; network msg size = %d+%d, transmit time = %v", p.dataExchangeRate, dataExchangeRate, p.lastSentMessageSize, incomingMessageSize, networkTrasmitTime)
 			p.dataExchangeRate = dataExchangeRate
 		}
