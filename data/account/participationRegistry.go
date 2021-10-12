@@ -36,6 +36,7 @@ import (
 //msgp:ignore ParticipationID
 type ParticipationID crypto.Digest
 
+// IsZero returns true if the ParticipationID is all zero bytes.
 func (pid ParticipationID) IsZero() bool {
 	return (crypto.Digest(pid)).IsZero()
 }
