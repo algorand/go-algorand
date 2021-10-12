@@ -144,8 +144,8 @@ workflows:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
           matrix:
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64"]
-              job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
+              platform: ["amd64"] #, "arm64", "mac_amd64"]
+              job_type: ['e2e_expect'] #["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
 
