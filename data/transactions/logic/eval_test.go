@@ -64,6 +64,7 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 		SchemaBytesMinBalance:    1005,
 
 		MaxInnerTransactions: 4,
+		MaxTxGroupSize:       8,
 
 		// With the addition of itxn_field, itxn_submit, which rely on
 		// machinery outside logic package for validity checking, we
@@ -75,6 +76,12 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 		MaxAssetDecimals:      4,
 		SupportRekeying:       true,
 		MaxTxnNoteBytes:       500,
+		EnableFeePooling:      true,
+
+		// Chosen to be different from one another and from normal proto
+		MaxAppTxnAccounts:      3,
+		MaxAppTxnForeignApps:   5,
+		MaxAppTxnForeignAssets: 6,
 	}
 }
 

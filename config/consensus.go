@@ -392,6 +392,10 @@ type ConsensusParams struct {
 
 	EnableExtraPagesOnAppUpdate bool
 
+	// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts, which need
+	// to be taken offline, that would be proposed to be taken offline.
+	MaxProposedExpiredOnlineAccounts int
+
 	// EvalSkipCheckApplyData specifies whether we should check that the provided apply data
 	// matches the computed one.
 	EvalSkipCheckApplyData bool
@@ -469,6 +473,10 @@ var MaxExtraAppProgramLen int
 //supported supported by any of the consensus protocols. used for decoding purposes.
 var MaxAvailableAppProgramLen int
 
+// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts, which need
+// to be taken offline, that would be proposed to be taken offline.
+var MaxProposedExpiredOnlineAccounts int
+
 func checkSetMax(value int, curMax *int) {
 	if value > *curMax {
 		*curMax = value
@@ -505,6 +513,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	// Its value is much larger than any possible reasonable MaxLogCalls value in future
 	checkSetMax(p.MaxAppProgramLen, &MaxLogCalls)
 	checkSetMax(p.MaxInnerTransactions, &MaxInnerTransactions)
+	checkSetMax(p.MaxProposedExpiredOnlineAccounts, &MaxProposedExpiredOnlineAccounts)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
@@ -1048,6 +1057,8 @@ func initConsensusProtocols() {
 
 	// Enable TEAL 6 / AVM 1.1
 	vFuture.LogicSigVersion = 6
+
+	vFuture.MaxProposedExpiredOnlineAccounts = 32
 
 	vFuture.EvalSkipCheckApplyData = true
 

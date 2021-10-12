@@ -21,7 +21,6 @@ assert not err, err
 txinfo, err = goal.keyreg(joe, nonpart=True)
 assert not err, err
 joeb = goal.balance(joe)
-print(joeb)
 
 txinfo, err = goal.pay(goal.account, flo, amt=500_000)
 assert not err, err

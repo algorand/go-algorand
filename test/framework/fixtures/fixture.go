@@ -109,7 +109,6 @@ func (st *synchTest) Error(args ...interface{}) {
 	st.Lock()
 	defer st.Unlock()
 	if !st.dontReportFailures {
-		st.dontReportFailures = true
 		st.t.Error(args...)
 	}
 }
@@ -117,7 +116,6 @@ func (st *synchTest) Errorf(format string, args ...interface{}) {
 	st.Lock()
 	defer st.Unlock()
 	if !st.dontReportFailures {
-		st.dontReportFailures = true
 		st.t.Errorf(format, args...)
 	}
 }
@@ -125,7 +123,6 @@ func (st *synchTest) Fail() {
 	st.Lock()
 	defer st.Unlock()
 	if !st.dontReportFailures {
-		st.dontReportFailures = true
 		st.t.Fail()
 	}
 }

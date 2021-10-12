@@ -412,7 +412,7 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_medium
+    executor: << parameters.platform >>_large
     working_directory: /opt/cibuild/project
     parallelism: 4
     steps:
@@ -427,7 +427,7 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_medium
+    executor: << parameters.platform >>_large
     working_directory: /opt/cibuild/project
     parallelism: 4
     steps:
@@ -445,9 +445,9 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_medium
+    executor: << parameters.platform >>_large
     working_directory: /opt/cibuild/project
-    parallelism: 2
+    parallelism: 4
     environment:
       E2E_TEST_FILTER: "GO"
     steps:
@@ -461,9 +461,9 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_medium
+    executor: << parameters.platform >>_large
     working_directory: /opt/cibuild/project
-    parallelism: 2
+    parallelism: 4
     environment:
       E2E_TEST_FILTER: "GO"
     steps:
@@ -479,9 +479,9 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_medium
+    executor: << parameters.platform >>_large
     working_directory: /opt/cibuild/project
-    parallelism: 2
+    parallelism: 4
     environment:
       E2E_TEST_FILTER: "EXPECT"
     steps:
@@ -495,9 +495,9 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_medium
+    executor: << parameters.platform >>_large
     working_directory: /opt/cibuild/project
-    parallelism: 2
+    parallelism: 4
     environment:
       E2E_TEST_FILTER: "EXPECT"
     steps:
@@ -515,6 +515,7 @@ jobs:
         type: string
     executor: << parameters.platform >>_large
     working_directory: /opt/cibuild/project
+    parallelism: 4
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
     steps:
@@ -530,6 +531,7 @@ jobs:
         type: string
     executor: << parameters.platform >>_large
     working_directory: /opt/cibuild/project
+    parallelism: 4
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
     steps:

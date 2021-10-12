@@ -19,29 +19,12 @@ package ledger
 import (
 	"bytes"
 
-	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
-
-// An onlineAccount corresponds to an account whose AccountData.Status
-// is Online.  This is used for a Merkle tree commitment of online
-// accounts, which is subsequently used to validate participants for
-// a compact certificate.
-type onlineAccount struct {
-	// These are a subset of the fields from the corresponding AccountData.
-	Address                 basics.Address
-	MicroAlgos              basics.MicroAlgos
-	RewardsBase             uint64
-	NormalizedOnlineBalance uint64
-	VoteID                  crypto.OneTimeSignatureVerifier
-	VoteFirstValid          basics.Round
-	VoteLastValid           basics.Round
-	VoteKeyDilution         uint64
-}
 
 // onlineTopHeap implements heap.Interface for tracking top N online accounts.
 type onlineTopHeap struct {
-	accts []*onlineAccount
+	accts []*ledgercore.OnlineAccount
 }
 
 // Len implements sort.Interface
@@ -78,7 +61,7 @@ func (h *onlineTopHeap) Swap(i, j int) {
 
 // Push implements heap.Interface
 func (h *onlineTopHeap) Push(x interface{}) {
-	h.accts = append(h.accts, x.(*onlineAccount))
+	h.accts = append(h.accts, x.(*ledgercore.OnlineAccount))
 }
 
 // Pop implements heap.Interface
