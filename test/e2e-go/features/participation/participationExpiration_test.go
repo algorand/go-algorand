@@ -51,7 +51,16 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	transactionFee := minTxnFee
 	amountToSendInitial := 5 * minAcctBalance
 
+	initialAmt, err := sClient.GetBalance(sAccount)
+	a.NoError(err)
+
 	fixture.SendMoneyAndWait(initialRound, amountToSendInitial, transactionFee, richAccount, sAccount, "")
+
+	newAmt, err := sClient.GetBalance(sAccount)
+	a.NoError(err)
+
+	a.GreaterOrEqual(newAmt, initialAmt)
+
 	sNodeStatus, err := sClient.Status()
 	a.NoError(err)
 	seededRound := sNodeStatus.LastRound
