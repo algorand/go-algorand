@@ -108,12 +108,10 @@ func generateEnvironment(numAccounts int) (map[basics.Address]basics.AccountData
 
 		startamt := uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))
 		genesis[addr] = basics.AccountData{
-			AgreementAccountData: basics.AgreementAccountData{
-				Status:      basics.Online,
-				MicroAlgos:  basics.MicroAlgos{Raw: startamt},
-				SelectionID: vrfSec.PK,
-				VoteID:      otSec.OneTimeSignatureVerifier,
-			},
+			Status:      basics.Online,
+			MicroAlgos:  basics.MicroAlgos{Raw: startamt},
+			SelectionID: vrfSec.PK,
+			VoteID:      otSec.OneTimeSignatureVerifier,
 		}
 		total.Raw += startamt
 	}
@@ -322,7 +320,7 @@ func (l *testLedger) LookupDigest(r basics.Round) (crypto.Digest, error) {
 	return l.entries[r].Digest(), nil
 }
 
-func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.AgreementAccountData, error) {
+func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.OnlineAccountData, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -332,10 +330,10 @@ func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.A
 	}
 
 	if l.maxNumBlocks != 0 && r+round(l.maxNumBlocks) < l.nextRound {
-		return basics.AgreementAccountData{}, &LedgerDroppedRoundError{}
+		return basics.OnlineAccountData{}, &LedgerDroppedRoundError{}
 	}
 
-	return l.state[a].AgreementAccountData, nil
+	return l.state[a].OnlineAccountData(), nil
 }
 
 func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
@@ -350,7 +348,7 @@ func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 	var sum basics.MicroAlgos
 	var overflowed bool
 	for _, rec := range l.state {
-		sum, overflowed = basics.OAddA(sum, rec.VotingStake())
+		sum, overflowed = basics.OAddA(sum, rec.OnlineAccountData().VotingStake())
 		if overflowed {
 			panic("circulation computation overflowed")
 		}

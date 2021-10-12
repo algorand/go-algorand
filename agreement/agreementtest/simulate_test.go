@@ -203,7 +203,7 @@ func (l *testLedger) LookupDigest(r basics.Round) (crypto.Digest, error) {
 	return l.entries[r].Digest(), nil
 }
 
-func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.AgreementAccountData, error) {
+func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.OnlineAccountData, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -211,7 +211,7 @@ func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.A
 		err := fmt.Errorf("Lookup called on future round: %v > %v! (this is probably a bug)", r, l.nextRound)
 		panic(err)
 	}
-	return l.state[a].AgreementAccountData, nil
+	return l.state[a].OnlineAccountData(), nil
 }
 
 func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
@@ -226,7 +226,7 @@ func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 	var sum basics.MicroAlgos
 	var overflowed bool
 	for _, rec := range l.state {
-		sum, overflowed = basics.OAddA(sum, rec.VotingStake())
+		sum, overflowed = basics.OAddA(sum, rec.OnlineAccountData().VotingStake())
 		if overflowed {
 			panic("circulation computation overflowed")
 		}
@@ -319,12 +319,10 @@ func TestSimulate(t *testing.T) {
 	for _, account := range accs {
 		amount := basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))}
 		genesis[account.Address()] = basics.AccountData{
-			AgreementAccountData: basics.AgreementAccountData{
-				Status:      basics.Online,
-				MicroAlgos:  amount,
-				SelectionID: account.VRFSecrets().PK,
-				VoteID:      account.VotingSecrets().OneTimeSignatureVerifier,
-			},
+			Status:      basics.Online,
+			MicroAlgos:  amount,
+			SelectionID: account.VRFSecrets().PK,
+			VoteID:      account.VotingSecrets().OneTimeSignatureVerifier,
 		}
 	}
 

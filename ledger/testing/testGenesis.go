@@ -55,24 +55,18 @@ func NewTestGenesis() (bookkeeping.GenesisBalances, []basics.Address, []*crypto.
 		addrs[i] = basics.Address(secrets[i].SignatureVerifier)
 
 		adata := basics.AccountData{
-			AgreementAccountData: basics.AgreementAccountData{
-				MicroAlgos: basics.MicroAlgos{Raw: amount},
-			},
+			MicroAlgos: basics.MicroAlgos{Raw: amount},
 		}
 		accts[addrs[i]] = adata
 	}
 
 	accts[sink] = basics.AccountData{
-		AgreementAccountData: basics.AgreementAccountData{
-			MicroAlgos: basics.MicroAlgos{Raw: amount},
-			Status:     basics.NotParticipating,
-		},
+		MicroAlgos: basics.MicroAlgos{Raw: amount},
+		Status:     basics.NotParticipating,
 	}
 
 	accts[rewards] = basics.AccountData{
-		AgreementAccountData: basics.AgreementAccountData{
-			MicroAlgos: basics.MicroAlgos{Raw: amount},
-		},
+		MicroAlgos: basics.MicroAlgos{Raw: amount},
 	}
 
 	genBalances := bookkeeping.MakeGenesisBalances(accts, sink, rewards)

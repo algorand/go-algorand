@@ -43,10 +43,8 @@ func TestRewards(t *testing.T) {
 	accountAlgos := []MicroAlgos{{Raw: 0}, {Raw: 8000}, {Raw: 13000}, {Raw: 83000}}
 	for _, accountAlgo := range accountAlgos {
 		ad := AccountData{
-			AgreementAccountData: AgreementAccountData{
-				Status:     Online,
-				MicroAlgos: accountAlgo,
-			},
+			Status:             Online,
+			MicroAlgos:         accountAlgo,
 			RewardsBase:        100,
 			RewardedMicroAlgos: MicroAlgos{Raw: 25},
 		}
@@ -77,10 +75,8 @@ func TestWithUpdatedRewardsPanics(t *testing.T) {
 				}
 			}()
 			a := AccountData{
-				AgreementAccountData: AgreementAccountData{
-					Status:     Online,
-					MicroAlgos: MicroAlgos{Raw: ^uint64(0)},
-				},
+				Status:             Online,
+				MicroAlgos:         MicroAlgos{Raw: ^uint64(0)},
 				RewardedMicroAlgos: MicroAlgos{Raw: 0},
 				RewardsBase:        0,
 			}
@@ -91,10 +87,8 @@ func TestWithUpdatedRewardsPanics(t *testing.T) {
 
 	t.Run("RewardsOverflow", func(t *testing.T) {
 		a := AccountData{
-			AgreementAccountData: AgreementAccountData{
-				Status:     Online,
-				MicroAlgos: MicroAlgos{Raw: 80000000},
-			},
+			Status:             Online,
+			MicroAlgos:         MicroAlgos{Raw: 80000000},
 			RewardedMicroAlgos: MicroAlgos{Raw: ^uint64(0)},
 			RewardsBase:        0,
 		}
@@ -111,34 +105,37 @@ func makeString(len int) string {
 	return s
 }
 
-func TestEncodedAccountDataSize(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
+func getSampleAccountData() AccountData {
 	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
 	vrfSecrets := crypto.GenerateVRFSecrets()
-	maxStateSchema := StateSchema{
-		NumUint:      0x1234123412341234,
-		NumByteSlice: 0x1234123412341234,
-	}
-	ad := AccountData{
-		AgreementAccountData: AgreementAccountData{
-			Status:          NotParticipating,
-			MicroAlgos:      MicroAlgos{},
-			VoteID:          oneTimeSecrets.OneTimeSignatureVerifier,
-			SelectionID:     vrfSecrets.PK,
-			VoteFirstValid:  Round(0x1234123412341234),
-			VoteLastValid:   Round(0x1234123412341234),
-			VoteKeyDilution: 0x1234123412341234,
-		},
+
+	return AccountData{
+		Status:             NotParticipating,
+		MicroAlgos:         MicroAlgos{},
 		RewardsBase:        0x1234123412341234,
 		RewardedMicroAlgos: MicroAlgos{},
+		VoteID:             oneTimeSecrets.OneTimeSignatureVerifier,
+		SelectionID:        vrfSecrets.PK,
+		VoteFirstValid:     Round(0x1234123412341234),
+		VoteLastValid:      Round(0x1234123412341234),
+		VoteKeyDilution:    0x1234123412341234,
 		AssetParams:        make(map[AssetIndex]AssetParams),
 		Assets:             make(map[AssetIndex]AssetHolding),
 		AppLocalStates:     make(map[AppIndex]AppLocalState),
 		AppParams:          make(map[AppIndex]AppParams),
-		TotalAppSchema:     maxStateSchema,
 		AuthAddr:           Address(crypto.Hash([]byte{1, 2, 3, 4})),
 	}
+}
+
+func TestEncodedAccountDataSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	maxStateSchema := StateSchema{
+		NumUint:      0x1234123412341234,
+		NumByteSlice: 0x1234123412341234,
+	}
+	ad := getSampleAccountData()
+	ad.TotalAppSchema = maxStateSchema
 
 	// TODO after applications enabled: change back to protocol.ConsensusCurrentVersion
 	currentConsensusParams := config.Consensus[protocol.ConsensusFuture]
@@ -260,4 +257,23 @@ func TestAppIndexHashing(t *testing.T) {
 	// python -c "import algosdk.encoding as e; print(e.encode_address(e.checksum(b'appID'+($APPID).to_bytes(8, 'big'))))"
 	i = AppIndex(77)
 	require.Equal(t, "PCYUFPA2ZTOYWTP43MX2MOX2OWAIAXUDNC2WFCXAGMRUZ3DYD6BWFDL5YM", i.Address().String())
+}
+
+func TestOnlineAccountData(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ad := getSampleAccountData()
+	ad.MicroAlgos.Raw = 1000000
+	ad.Status = Offline
+
+	oad := ad.OnlineAccountData()
+	require.Empty(t, oad.MicroAlgosWithRewards)
+	require.Equal(t, ad.VoteID, oad.VoteID)
+	require.Equal(t, ad.SelectionID, oad.SelectionID)
+
+	ad.Status = Online
+	oad = ad.OnlineAccountData()
+	require.Equal(t, ad.MicroAlgos, oad.MicroAlgosWithRewards)
+	require.Equal(t, ad.VoteID, oad.VoteID)
+	require.Equal(t, ad.SelectionID, oad.SelectionID)
 }

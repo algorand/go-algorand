@@ -42,7 +42,7 @@ func TestBasicLRUAccounts(t *testing.T) {
 			addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 			round:       basics.Round(i),
 			rowid:       int64(i),
-			accountData: basics.AccountData{AgreementAccountData: basics.AgreementAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}}},
+			accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 		}
 		baseAcct.write(acct)
 	}
@@ -101,7 +101,7 @@ func TestLRUAccountsPendingWrites(t *testing.T) {
 				addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 				round:       basics.Round(i),
 				rowid:       int64(i),
-				accountData: basics.AccountData{AgreementAccountData: basics.AgreementAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}}},
+				accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 			}
 			baseAcct.writePending(acct)
 		}(i)
@@ -153,7 +153,7 @@ func TestLRUAccountsPendingWritesWarning(t *testing.T) {
 				addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 				round:       basics.Round(i),
 				rowid:       int64(i),
-				accountData: basics.AccountData{AgreementAccountData: basics.AgreementAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}}},
+				accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 			}
 			baseAcct.writePending(acct)
 		}
@@ -179,7 +179,7 @@ func TestLRUAccountsOmittedPendingWrites(t *testing.T) {
 			addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 			round:       basics.Round(i),
 			rowid:       int64(i),
-			accountData: basics.AccountData{AgreementAccountData: basics.AgreementAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}}},
+			accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 		}
 		baseAcct.writePending(acct)
 	}
@@ -250,7 +250,7 @@ func generatePersistedAccountData(startRound, endRound int) []persistedAccountDa
 			addr:        basics.Address(digest),
 			round:       basics.Round(i + startRound),
 			rowid:       int64(i),
-			accountData: basics.AccountData{AgreementAccountData: basics.AgreementAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}}},
+			accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 		}
 	}
 	return accounts

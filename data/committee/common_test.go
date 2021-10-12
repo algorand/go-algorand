@@ -80,12 +80,10 @@ func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward
 		startamt := uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))
 		short := addr
 		genesis[short] = basics.AccountData{
-			AgreementAccountData: basics.AgreementAccountData{
-				Status:      basics.Online,
-				MicroAlgos:  basics.MicroAlgos{Raw: startamt},
-				SelectionID: vrfSec.Pubkey(),
-				VoteID:      otSec.OneTimeSignatureVerifier,
-			},
+			Status:      basics.Online,
+			MicroAlgos:  basics.MicroAlgos{Raw: startamt},
+			SelectionID: vrfSec.Pubkey(),
+			VoteID:      otSec.OneTimeSignatureVerifier,
 		}
 		total.Raw += startamt
 	}
@@ -126,7 +124,7 @@ func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward
 		if !ok {
 			return false, BalanceRecord{}, Seed{}, basics.MicroAlgos{Raw: 0}
 		}
-		return true, BalanceRecord{Addr: addr, AgreementAccountData: data.AgreementAccountData}, seed, total
+		return true, BalanceRecord{Addr: addr, OnlineAccountData: data.OnlineAccountData()}, seed, total
 	}
 
 	selParamsList := func(addrs []basics.Address) (ok bool, records []BalanceRecord, seed Seed, total basics.MicroAlgos) {

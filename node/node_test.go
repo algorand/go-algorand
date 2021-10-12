@@ -135,12 +135,10 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		}
 
 		data := basics.AccountData{
-			AgreementAccountData: basics.AgreementAccountData{
-				Status:      basics.Online,
-				MicroAlgos:  basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))},
-				SelectionID: part.VRFSecrets().PK,
-				VoteID:      part.VotingSecrets().OneTimeSignatureVerifier,
-			},
+			Status:      basics.Online,
+			MicroAlgos:  basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))},
+			SelectionID: part.VRFSecrets().PK,
+			VoteID:      part.VotingSecrets().OneTimeSignatureVerifier,
 		}
 		short := root.Address()
 		genesis[short] = data

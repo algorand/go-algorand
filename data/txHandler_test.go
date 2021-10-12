@@ -51,18 +51,14 @@ func makeTestingTransactionPoolAndLedger(tb testing.TB, N int) (*pools.Transacti
 		secrets[i] = secret
 		addresses[i] = addr
 		genesis[addr] = basics.AccountData{
-			AgreementAccountData: basics.AgreementAccountData{
-				Status:     basics.Online,
-				MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
-			},
+			Status:     basics.Online,
+			MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
 		}
 	}
 
 	genesis[poolAddr] = basics.AccountData{
-		AgreementAccountData: basics.AgreementAccountData{
-			Status:     basics.NotParticipating,
-			MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
-		},
+		Status:     basics.NotParticipating,
+		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
 	}
 
 	require.Equal(tb, len(genesis), numUsers+1)

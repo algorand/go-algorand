@@ -41,7 +41,7 @@ type Selector interface {
 // This struct is used to decouple LedgerReader.AccountData from basics.BalanceRecord.
 //msgp:ignore BalanceRecord
 type BalanceRecord struct {
-	basics.AgreementAccountData
+	basics.OnlineAccountData
 	Addr basics.Address
 }
 

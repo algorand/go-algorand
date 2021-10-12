@@ -107,9 +107,9 @@ func (i ledgerImpl) Lookup(r basics.Round, addr basics.Address) (basics.AccountD
 }
 
 // Lookup implements Ledger.LookupAgreement.
-func (i ledgerImpl) LookupAgreement(r basics.Round, addr basics.Address) (basics.AgreementAccountData, error) {
+func (i ledgerImpl) LookupAgreement(r basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
 	a, err := i.l.Lookup(r, addr)
-	return a.AgreementAccountData, err
+	return a.OnlineAccountData(), err
 }
 
 // Circulation implements Ledger.Circulation.

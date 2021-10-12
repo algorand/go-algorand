@@ -722,8 +722,8 @@ func (m *mockedLedger) LookupDigest(basics.Round) (crypto.Digest, error) {
 	return crypto.Digest{}, errors.New("not needed for mockedLedger")
 }
 
-func (m *mockedLedger) LookupAgreement(basics.Round, basics.Address) (basics.AgreementAccountData, error) {
-	return basics.AgreementAccountData{}, errors.New("not needed for mockedLedger")
+func (m *mockedLedger) LookupAgreement(basics.Round, basics.Address) (basics.OnlineAccountData, error) {
+	return basics.OnlineAccountData{}, errors.New("not needed for mockedLedger")
 }
 
 func (m *mockedLedger) IsWritingCatchpointFile() bool {

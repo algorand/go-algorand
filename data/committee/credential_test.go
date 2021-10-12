@@ -100,7 +100,7 @@ func TestRichAccountSelected(t *testing.T) {
 	}
 
 	TotalMoney := basics.MicroAlgos{Raw: 1 << 50}
-	record.MicroAlgos.Raw = TotalMoney.Raw / 2
+	record.MicroAlgosWithRewards.Raw = TotalMoney.Raw / 2
 	sel := AgreementSelector{
 		Seed:   selectionSeed,
 		Round:  round,
@@ -163,7 +163,7 @@ func TestPoorAccountSelectedLeaders(t *testing.T) {
 				Step:   Propose,
 			}
 
-			record.MicroAlgos.Raw = uint64(1000 / len(addresses))
+			record.MicroAlgosWithRewards.Raw = uint64(1000 / len(addresses))
 			m := Membership{
 				Record:     record,
 				Selector:   sel,
@@ -209,7 +209,7 @@ func TestPoorAccountSelectedCommittee(t *testing.T) {
 				Step:   step,
 			}
 
-			record.MicroAlgos.Raw = uint64(2000 / len(addresses))
+			record.MicroAlgosWithRewards.Raw = uint64(2000 / len(addresses))
 			m := Membership{
 				Record:     record,
 				Selector:   sel,
@@ -247,7 +247,7 @@ func TestNoMoneyAccountNotSelected(t *testing.T) {
 			Step:   Propose,
 		}
 
-		record.MicroAlgos.Raw = 0
+		record.MicroAlgosWithRewards.Raw = 0
 		m := Membership{
 			Record:     record,
 			Selector:   sel,
@@ -272,7 +272,7 @@ func TestLeadersSelected(t *testing.T) {
 		t.Errorf("can't read selection params")
 	}
 
-	record.MicroAlgos.Raw = 50000
+	record.MicroAlgosWithRewards.Raw = 50000
 	totalMoney := basics.MicroAlgos{Raw: 100000}
 
 	sel := AgreementSelector{
@@ -304,7 +304,7 @@ func TestCommitteeSelected(t *testing.T) {
 		t.Errorf("can't read selection params")
 	}
 
-	record.MicroAlgos.Raw = 50000
+	record.MicroAlgosWithRewards.Raw = 50000
 	totalMoney := basics.MicroAlgos{Raw: 100000}
 
 	sel := AgreementSelector{
@@ -341,7 +341,7 @@ func TestAccountNotSelected(t *testing.T) {
 			Period: period,
 			Step:   Propose,
 		}
-		record.MicroAlgos.Raw = 0
+		record.MicroAlgosWithRewards.Raw = 0
 		m := Membership{
 			Record:     record,
 			Selector:   sel,
@@ -384,7 +384,7 @@ func BenchmarkSortition(b *testing.B) {
 			Step:   step,
 		}
 
-		record.MicroAlgos.Raw = uint64(money[i])
+		record.MicroAlgosWithRewards.Raw = uint64(money[i])
 		m := Membership{
 			Record:     record,
 			Selector:   sel,

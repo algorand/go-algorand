@@ -82,7 +82,7 @@ func membership(l LedgerReader, addr basics.Address, r basics.Round, p period, s
 		return
 	}
 
-	m.Record = committee.BalanceRecord{AgreementAccountData: record, Addr: addr}
+	m.Record = committee.BalanceRecord{OnlineAccountData: record, Addr: addr}
 	m.Selector = selector{Seed: seed, Round: r, Period: p, Step: s}
 	m.TotalMoney = total
 	return m, nil

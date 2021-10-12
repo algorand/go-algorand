@@ -463,17 +463,17 @@ func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountDa
 }
 
 // LookupAgreement returns account data used by agreement.
-func (l *Ledger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.AgreementAccountData, error) {
+func (l *Ledger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
 	// Intentionally apply (pending) rewards up to rnd.
 	data, err := l.accts.LookupWithRewards(rnd, addr)
 	if err != nil {
-		return basics.AgreementAccountData{}, err
+		return basics.OnlineAccountData{}, err
 	}
 
-	return data.AgreementAccountData, nil
+	return data.OnlineAccountData(), nil
 }
 
 // LookupWithoutRewards is like Lookup but does not apply pending rewards up

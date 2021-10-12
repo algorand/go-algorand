@@ -96,19 +96,16 @@ func UnmarshalStatus(value string) (s Status, err error) {
 	return
 }
 
-// AgreementAccountData contains just the account data used by agreement.
-type AgreementAccountData struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+// OnlineAccountData contains just the account data used by agreement.
+type OnlineAccountData struct {
+	MicroAlgosWithRewards MicroAlgos
 
-	Status     Status     `codec:"onl"`
-	MicroAlgos MicroAlgos `codec:"algo"`
+	VoteID      crypto.OneTimeSignatureVerifier
+	SelectionID crypto.VRFVerifier
 
-	VoteID      crypto.OneTimeSignatureVerifier `codec:"vote"`
-	SelectionID crypto.VRFVerifier              `codec:"sel"`
-
-	VoteFirstValid  Round  `codec:"voteFst"`
-	VoteLastValid   Round  `codec:"voteLst"`
-	VoteKeyDilution uint64 `codec:"voteKD"`
+	VoteFirstValid  Round
+	VoteLastValid   Round
+	VoteKeyDilution uint64
 }
 
 // AccountData contains the data associated with a given address.
@@ -118,7 +115,8 @@ type AgreementAccountData struct {
 type AccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	AgreementAccountData
+	Status     Status     `codec:"onl"`
+	MicroAlgos MicroAlgos `codec:"algo"`
 
 	// RewardsBase is used to implement rewards.
 	// This is not meaningful for accounts with Status=NotParticipating.
@@ -160,6 +158,13 @@ type AccountData struct {
 	// it won't answer the question "how many algos did I make in
 	// the past week".
 	RewardedMicroAlgos MicroAlgos `codec:"ern"`
+
+	VoteID      crypto.OneTimeSignatureVerifier `codec:"vote"`
+	SelectionID crypto.VRFVerifier              `codec:"sel"`
+
+	VoteFirstValid  Round  `codec:"voteFst"`
+	VoteLastValid   Round  `codec:"voteLst"`
+	VoteKeyDilution uint64 `codec:"voteKD"`
 
 	// If this account created an asset, AssetParams stores
 	// the parameters defining that asset.  The params are indexed
@@ -404,9 +409,7 @@ func (app AppIndex) Address() Address {
 
 // MakeAccountData returns a UserToken
 func MakeAccountData(status Status, algos MicroAlgos) AccountData {
-	return AccountData{
-		AgreementAccountData: AgreementAccountData{
-			Status: status, MicroAlgos: algos}}
+	return AccountData{Status: status, MicroAlgos: algos}
 }
 
 // ClearOnlineState resets the account's fields to indicate that the account is an offline account
@@ -488,20 +491,36 @@ func (u AccountData) MinBalance(proto *config.ConsensusParams) (res MicroAlgos) 
 	return res
 }
 
+// OnlineAccountData returns subset of AccountData as OnlineAccountData data structure.
+// Account is expected to be Online otherwise its stake is cleared out
+func (u AccountData) OnlineAccountData() OnlineAccountData {
+	result := OnlineAccountData{
+		MicroAlgosWithRewards: u.MicroAlgos,
+
+		VoteID:          u.VoteID,
+		SelectionID:     u.SelectionID,
+		VoteFirstValid:  u.VoteFirstValid,
+		VoteLastValid:   u.VoteLastValid,
+		VoteKeyDilution: u.VoteKeyDilution,
+	}
+
+	// if the account is not Online and agreement requests it for some reason, set its voting stake to zero
+	if u.Status != Online {
+		result.MicroAlgosWithRewards = MicroAlgos{}
+	}
+	return result
+}
+
 // VotingStake returns the amount of MicroAlgos associated with the user's account
 // for the purpose of participating in the Algorand protocol.  It assumes the
 // caller has already updated rewards appropriately using WithUpdatedRewards().
-func (u AgreementAccountData) VotingStake() MicroAlgos {
-	if u.Status != Online {
-		return MicroAlgos{Raw: 0}
-	}
-
-	return u.MicroAlgos
+func (u OnlineAccountData) VotingStake() MicroAlgos {
+	return u.MicroAlgosWithRewards
 }
 
 // KeyDilution returns the key dilution for this account,
 // returning the default key dilution if not explicitly specified.
-func (u AgreementAccountData) KeyDilution(proto config.ConsensusParams) uint64 {
+func (u OnlineAccountData) KeyDilution(proto config.ConsensusParams) uint64 {
 	if u.VoteKeyDilution != 0 {
 		return u.VoteKeyDilution
 	}
