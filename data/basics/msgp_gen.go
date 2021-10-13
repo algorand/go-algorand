@@ -4177,7 +4177,7 @@ func (z *Participant) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)
 	var zb0001Mask uint8 /* 4 bits */
-	if (*z).KeyDilution == 0 {
+	if (*z).FirstValid == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
@@ -4193,9 +4193,9 @@ func (z *Participant) MarshalMsg(b []byte) (o []byte) {
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
-			// string "d"
-			o = append(o, 0xa1, 0x64)
-			o = msgp.AppendUint64(o, (*z).KeyDilution)
+			// string "fv"
+			o = append(o, 0xa2, 0x66, 0x76)
+			o = msgp.AppendUint64(o, (*z).FirstValid)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "p"
@@ -4247,9 +4247,9 @@ func (z *Participant) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			(*z).KeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).FirstValid, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "KeyDilution")
+				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
 				return
 			}
 		}
@@ -4288,10 +4288,10 @@ func (z *Participant) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Weight")
 					return
 				}
-			case "d":
-				(*z).KeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
+			case "fv":
+				(*z).FirstValid, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "KeyDilution")
+					err = msgp.WrapError(err, "FirstValid")
 					return
 				}
 			default:
@@ -4314,13 +4314,13 @@ func (_ *Participant) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Participant) Msgsize() (s int) {
-	s = 1 + 2 + (*z).PK.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size
+	s = 1 + 2 + (*z).PK.Msgsize() + 2 + msgp.Uint64Size + 3 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Participant) MsgIsZero() bool {
-	return ((*z).PK.MsgIsZero()) && ((*z).Weight == 0) && ((*z).KeyDilution == 0)
+	return ((*z).PK.MsgIsZero()) && ((*z).Weight == 0) && ((*z).FirstValid == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
