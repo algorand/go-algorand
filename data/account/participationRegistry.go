@@ -244,7 +244,7 @@ var (
 			r.effectiveFirstRound, r.effectiveLastRound, r.voting
 		FROM Keysets k
 		INNER JOIN Rolling r
-		ON Keysets.pk = Rolling.pk`
+		ON k.pk = r.pk`
 	deleteKeysets          = `DELETE FROM Keysets WHERE pk=?`
 	deleteRolling          = `DELETE FROM Rolling WHERE pk=?`
 	updateRollingFieldsSQL = `UPDATE Rolling
