@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"net"
 	"net/http"
 	"net/textproto"
@@ -31,7 +30,6 @@ import (
 	"path"
 	"regexp"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -789,9 +787,6 @@ func (wn *WebsocketNetwork) Start() {
 		wn.scheme = "http"
 	}
 	wn.meshUpdateRequests <- meshRequest{false, nil}
-	if wn.config.EnablePingHandler {
-		wn.RegisterHandlers(pingHandlers)
-	}
 	if wn.prioScheme != nil {
 		wn.RegisterHandlers(prioHandlers)
 	}
@@ -801,10 +796,7 @@ func (wn *WebsocketNetwork) Start() {
 	}
 	wn.wg.Add(1)
 	go wn.meshThread()
-	if wn.config.PeerPingPeriodSeconds > 0 {
-		wn.wg.Add(1)
-		go wn.pingThread()
-	}
+
 	// we shouldn't have any ticker here.. but in case we do - just stop it.
 	if wn.peersConnectivityCheckTicker != nil {
 		wn.peersConnectivityCheckTicker.Stop()
@@ -1769,81 +1761,6 @@ func (wn *WebsocketNetwork) prioWeightRefresh() {
 			}
 		}
 	}
-}
-
-// Wake up the thread to do work this often.
-const pingThreadPeriod = 30 * time.Second
-
-// If ping stats are older than this, don't include in metrics.
-const maxPingAge = 30 * time.Minute
-
-// pingThread wakes up periodically to refresh the ping times on peers and update the metrics gauges.
-func (wn *WebsocketNetwork) pingThread() {
-	defer wn.wg.Done()
-	ticker := time.NewTicker(pingThreadPeriod)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-		case <-wn.ctx.Done():
-			return
-		}
-		sendList := wn.peersToPing()
-		wn.log.Debugf("ping %d peers...", len(sendList))
-		for _, peer := range sendList {
-			if !peer.sendPing() {
-				// if we failed to send a ping, see how long it was since last successful ping.
-				lastPingSent, _ := peer.pingTimes()
-				wn.log.Infof("failed to ping to %v for the past %f seconds", peer, time.Now().Sub(lastPingSent).Seconds())
-			}
-		}
-	}
-}
-
-// Walks list of peers, gathers list of peers to ping, also calculates statistics.
-func (wn *WebsocketNetwork) peersToPing() []*wsPeer {
-	wn.peersLock.RLock()
-	defer wn.peersLock.RUnlock()
-	// Never flood outbound traffic by trying to ping all the peers at once.
-	// Send to at most one fifth of the peers.
-	maxSend := 1 + (len(wn.peers) / 5)
-	out := make([]*wsPeer, 0, maxSend)
-	now := time.Now()
-	// a list to sort to find median
-	times := make([]float64, 0, len(wn.peers))
-	var min = math.MaxFloat64
-	var max float64
-	var sum float64
-	pingPeriod := time.Duration(wn.config.PeerPingPeriodSeconds) * time.Second
-	for _, peer := range wn.peers {
-		lastPingSent, lastPingRoundTripTime := peer.pingTimes()
-		sendToNow := now.Sub(lastPingSent)
-		if (sendToNow > pingPeriod) && (len(out) < maxSend) {
-			out = append(out, peer)
-		}
-		if (lastPingRoundTripTime > 0) && (sendToNow < maxPingAge) {
-			ftime := lastPingRoundTripTime.Seconds()
-			sum += ftime
-			times = append(times, ftime)
-			if ftime < min {
-				min = ftime
-			}
-			if ftime > max {
-				max = ftime
-			}
-		}
-	}
-	if len(times) != 0 {
-		sort.Float64s(times)
-		median := times[len(times)/2]
-		medianPing.Set(median, nil)
-		mean := sum / float64(len(times))
-		meanPing.Set(mean, nil)
-		minPing.Set(min, nil)
-		maxPing.Set(max, nil)
-		wn.log.Infof("ping times min=%f mean=%f median=%f max=%f", min, mean, median, max)
-	}
-	return out
 }
 
 func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) (relaysAddresses []string, archiverAddresses []string) {

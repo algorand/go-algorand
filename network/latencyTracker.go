@@ -53,7 +53,7 @@ type latencyTracker struct {
 
 func (lt *latencyTracker) init(conn wsPeerWebsocketConn, cfg config.Local, initialConnectionLatency time.Duration) {
 	lt.conn = conn
-	lt.enabled = true
+	lt.enabled = cfg.PeerPingPeriodSeconds > 0 && cfg.EnablePingHandler
 	lt.latency = int64(initialConnectionLatency)
 	lt.pingInterval = time.Duration(cfg.PeerPingPeriodSeconds) * time.Second
 	conn.SetPingHandler(lt.pingHandler)
