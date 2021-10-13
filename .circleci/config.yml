@@ -443,12 +443,12 @@ commands:
             environment:
               TRAVIS_BRANCH: ${CIRCLE_BRANCH}
             command: |
-              pwd
-              ls
-              ls scripts/travis/deploy_packages.sh
-              ls scripts/travis/test_release.sh
               scripts/travis/deploy_packages.sh
-              scripts/travis/test_release.sh
+        - when:
+            condition:
+              equal: [ "amd64", << parameters.platform >> ]
+            steps:
+              - run: scripts/travis/test_release.sh
       # - when:
       #     condition:
       #       equal: [ "amd64", << parameters.platform >> ]
