@@ -71,7 +71,6 @@ func BenchmarkAssembleBlock(b *testing.B) {
 			Status:     basics.Online,
 			MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
 		}
-		//b.Log(addr)
 	}
 
 	genesis[poolAddr] = basics.AccountData{
