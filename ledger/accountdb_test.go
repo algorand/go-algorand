@@ -277,7 +277,7 @@ func TestAccountDBRound(t *testing.T) {
 		checkCreatables(t, tx, i, expectedDbImage)
 	}
 
-	// test the rewards.
+	// test the accounts totals
 	var updates ledgercore.AccountDeltas
 	for addr, acctData := range newaccts {
 		updates.Upsert(addr, acctData)
