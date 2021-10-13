@@ -267,9 +267,7 @@ func TestOnlineAccountData(t *testing.T) {
 	ad.Status = Offline
 
 	oad := ad.OnlineAccountData()
-	require.Empty(t, oad.MicroAlgosWithRewards)
-	require.Equal(t, ad.VoteID, oad.VoteID)
-	require.Equal(t, ad.SelectionID, oad.SelectionID)
+	require.Empty(t, oad)
 
 	ad.Status = Online
 	oad = ad.OnlineAccountData()

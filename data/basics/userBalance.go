@@ -96,7 +96,8 @@ func UnmarshalStatus(value string) (s Status, err error) {
 	return
 }
 
-// OnlineAccountData contains just the account data used by agreement.
+// OnlineAccountData contains the voting information for a single account.
+//msgp:ignore OnlineAccountData
 type OnlineAccountData struct {
 	MicroAlgosWithRewards MicroAlgos
 
@@ -492,9 +493,14 @@ func (u AccountData) MinBalance(proto *config.ConsensusParams) (res MicroAlgos) 
 }
 
 // OnlineAccountData returns subset of AccountData as OnlineAccountData data structure.
-// Account is expected to be Online otherwise its stake is cleared out
+// Account is expected to be Online otherwise its is cleared out
 func (u AccountData) OnlineAccountData() OnlineAccountData {
-	result := OnlineAccountData{
+	if u.Status != Online {
+		// if the account is not Online and agreement requests it for some reason, clear it out
+		return OnlineAccountData{}
+	}
+
+	return OnlineAccountData{
 		MicroAlgosWithRewards: u.MicroAlgos,
 
 		VoteID:          u.VoteID,
@@ -503,12 +509,6 @@ func (u AccountData) OnlineAccountData() OnlineAccountData {
 		VoteLastValid:   u.VoteLastValid,
 		VoteKeyDilution: u.VoteKeyDilution,
 	}
-
-	// if the account is not Online and agreement requests it for some reason, set its voting stake to zero
-	if u.Status != Online {
-		result.MicroAlgosWithRewards = MicroAlgos{}
-	}
-	return result
 }
 
 // VotingStake returns the amount of MicroAlgos associated with the user's account
