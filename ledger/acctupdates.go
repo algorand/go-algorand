@@ -1796,13 +1796,16 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		treeTargetRound = dbRound + basics.Round(offset)
 	}
 
-	db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
+	_, err := db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
+	if err != nil {
+		return err
+	}
 
 	if dcc.updateStats {
 		dcc.stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano())
 	}
 
-	err := dcc.compactAccountDeltas.accountsLoadOld(tx)
+	err = dcc.compactAccountDeltas.accountsLoadOld(tx)
 	if err != nil {
 		return err
 	}

@@ -118,11 +118,11 @@ func (bn *blockNotifier) prepareCommit(dcc *deferredCommitContext) error {
 	return nil
 }
 
-func (t *blockNotifier) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+func (bn *blockNotifier) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
 	return nil
 }
 
-func (t *blockNotifier) postCommit(deferredCommitContext) {
+func (bn *blockNotifier) postCommit(deferredCommitContext) {
 }
 
 func (bn *blockNotifier) handleUnorderedCommit(uint64, basics.Round, basics.Round) {

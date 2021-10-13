@@ -58,11 +58,11 @@ func (mt *metricsTracker) prepareCommit(dcc *deferredCommitContext) error {
 	return nil
 }
 
-func (t *metricsTracker) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+func (mt *metricsTracker) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
 	return nil
 }
 
-func (t *metricsTracker) postCommit(deferredCommitContext) {
+func (mt *metricsTracker) postCommit(deferredCommitContext) {
 }
 
 func (mt *metricsTracker) handleUnorderedCommit(uint64, basics.Round, basics.Round) {

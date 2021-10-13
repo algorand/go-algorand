@@ -113,11 +113,11 @@ func (b *bulletin) prepareCommit(dcc *deferredCommitContext) error {
 	return nil
 }
 
-func (t *bulletin) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+func (b *bulletin) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
 	return nil
 }
 
-func (t *bulletin) postCommit(deferredCommitContext) {
+func (b *bulletin) postCommit(deferredCommitContext) {
 }
 
 func (b *bulletin) handleUnorderedCommit(uint64, basics.Round, basics.Round) {
