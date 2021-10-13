@@ -296,8 +296,9 @@ commands:
       - attach_workspace:
           at: << parameters.build_dir >>
       - run: |
-          sudo mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
-          sudo chown -R ${USER}:${GROUP} << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
+          mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
+          touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml
+          touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json
       - restore_cache:
           keys:
             - 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-'
@@ -330,12 +331,9 @@ commands:
       - store_test_results:
           path: << parameters.result_path >>
       - persist_to_workspace:
-          root: << parameters.build_dir >>
+          root: << parameters.result_path >>
           paths:
-            - project
-            - go
-            - gimme
-            - .gimme
+            - << parameters.result_subdir >>
       - save_cache:
           key: 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-{{ .Environment.CIRCLE_BUILD_NUM }}'
           paths:
