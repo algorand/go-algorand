@@ -442,7 +442,7 @@ commands:
             name: Deploy << parameters.platform >>
             environment:
               TRAVIS_BRANCH: ${CIRCLE_BRANCH}
-              S3_RELEASE_BUCKET: ${S3_RELEASE_BUCKET}
+              # S3_RELEASE_BUCKET: ${S3_RELEASE_BUCKET}
             command: |
               pwd
               ls
