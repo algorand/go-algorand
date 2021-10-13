@@ -149,9 +149,6 @@ type wsPeer struct {
 	// Nonce used to uniquely identify requests
 	requestNonce uint64
 
-	// receivedPacketCounter is a global reception packet counter.
-	receivedPacketCounter uint64
-
 	wsPeerCore
 
 	// conn will be *websocket.Conn (except in testing)
@@ -392,6 +389,9 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int, initialConnect
 	}
 	if wp.version == "3.1" {
 		wp.latencyTracker.init(wp.conn, config, initialConnectionLatency)
+		// send a ping right away.
+		now := time.Now()
+		wp.latencyTracker.checkPingSending(&now)
 
 	}
 
@@ -673,7 +673,7 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 
 	// is it time to send a ping message ?
 	if err := wp.latencyTracker.checkPingSending(&now); err != nil {
-		// todo - error
+		wp.net.log.Infof("failed to send ping message to peer : %v", err)
 	}
 
 	atomic.StoreInt64(&wp.intermittentOutgoingMessageEnqueueTime, msg.enqueued.UnixNano())

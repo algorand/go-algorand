@@ -17,6 +17,7 @@
 package network
 
 import (
+	"errors"
 	"net"
 	"strconv"
 	"sync/atomic"
@@ -24,20 +25,30 @@ import (
 
 	"github.com/algorand/websocket"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config"
 )
 
 const pongMessageWriteDuration = time.Second
+const pingMessageWriteDuration = time.Second
+
+var errInvalidPongMessageContent = errors.New("invalid pong message content")
+var errInvalidPingMessageContent = errors.New("invalid ping message content")
 
 type latencyTracker struct {
-	receivedPacketCounter   uint64
+	receivedPacketCounter uint64
+	lastPingSentTime      int64
+
+	lastPingMu              deadlock.Mutex
 	lastPingID              uint64
-	lastPingSentTime        int64
 	lastPingReceivedCounter uint64
+	lastPingSentTimeSynced  int64
 	latency                 int64
-	conn                    wsPeerWebsocketConn // static
-	enabled                 bool                // static
-	pingInterval            time.Duration       // static
+
+	conn         wsPeerWebsocketConn // static
+	enabled      bool                // static
+	pingInterval time.Duration       // static
 }
 
 func (lt *latencyTracker) init(conn wsPeerWebsocketConn, cfg config.Local, initialConnectionLatency time.Duration) {
@@ -50,6 +61,9 @@ func (lt *latencyTracker) init(conn wsPeerWebsocketConn, cfg config.Local, initi
 }
 
 func (lt *latencyTracker) pingHandler(message string) error {
+	if _, err := strconv.Atoi(message); err != nil {
+		return errInvalidPingMessageContent
+	}
 	err := lt.conn.WriteControl(websocket.PongMessage, []byte(message), time.Now().Add(pongMessageWriteDuration))
 	if err == websocket.ErrCloseSent {
 		return nil
@@ -59,23 +73,25 @@ func (lt *latencyTracker) pingHandler(message string) error {
 	return err
 }
 
-func (lt *latencyTracker) pongHandler(appData string) error {
-	pongID, err := strconv.Atoi(appData)
+func (lt *latencyTracker) pongHandler(message string) error {
+	pongID, err := strconv.Atoi(message)
 	if err != nil {
-		// todo - log the issue here.
-		return nil
+		return errInvalidPongMessageContent
 	}
 
-	if uint64(pongID) != atomic.LoadUint64(&lt.lastPingID) {
+	lt.lastPingMu.Lock()
+	defer lt.lastPingMu.Unlock()
+
+	if uint64(pongID) != lt.lastPingID {
 		// we've sent more than one ping since; ignore this message.
 		return nil
 	}
-	if atomic.LoadUint64(&lt.receivedPacketCounter) != lt.lastPingReceivedCounter {
+	if lt.receivedPacketCounter != lt.lastPingReceivedCounter {
 		// we've received other messages since the one that we sent. The timing
 		// here would not be accurate.
 		return nil
 	}
-	lastPingSentTime := time.Unix(0, atomic.LoadInt64(&lt.lastPingSentTime))
+	lastPingSentTime := time.Unix(0, lt.lastPingSentTime)
 	roundtripDuration := time.Since(lastPingSentTime)
 	atomic.StoreInt64(&lt.latency, roundtripDuration.Nanoseconds())
 	return nil
@@ -86,14 +102,19 @@ func (lt *latencyTracker) getConnectionLatency() time.Duration {
 }
 
 func (lt *latencyTracker) checkPingSending(now *time.Time) error {
-	if lt.enabled == false {
+	if !lt.enabled {
 		return nil
 	}
-	if now.Sub(time.Unix(0, atomic.LoadInt64(&lt.lastPingSentTime))) < lt.pingInterval {
+	if now.Sub(time.Unix(0, lt.lastPingSentTime)) < lt.pingInterval {
 		return nil
 	}
-	lastPingID := atomic.AddUint64(&lt.lastPingID, 1)
-	err := lt.conn.WriteControl(websocket.PingMessage, []byte(strconv.Itoa(int(lastPingID))), time.Now().Add(pongMessageWriteDuration))
+
+	// it looks like it's time to send a ping :
+	lt.lastPingMu.Lock()
+	defer lt.lastPingMu.Unlock()
+
+	lt.lastPingID++
+	err := lt.conn.WriteControl(websocket.PingMessage, []byte(strconv.Itoa(int(lt.lastPingID))), now.Add(pingMessageWriteDuration))
 	if err == websocket.ErrCloseSent {
 		return nil
 	} else if e, ok := err.(net.Error); ok && e.Temporary() {
@@ -102,8 +123,9 @@ func (lt *latencyTracker) checkPingSending(now *time.Time) error {
 	if err != nil {
 		return err
 	}
-	atomic.StoreInt64(&lt.lastPingSentTime, now.UnixNano())
-	atomic.StoreUint64(&lt.lastPingReceivedCounter, atomic.LoadUint64(&lt.receivedPacketCounter))
+	lt.lastPingSentTimeSynced = now.UnixNano()
+	lt.lastPingReceivedCounter = atomic.LoadUint64(&lt.receivedPacketCounter)
+	lt.lastPingSentTime = lt.lastPingSentTimeSynced
 	return nil
 }
 
