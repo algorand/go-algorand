@@ -166,6 +166,13 @@ func encodeInt(intValue interface{}, bitSize uint16) ([]byte, error) {
 		bigInt = *new(big.Int).SetUint64(uint64(intValue.(int64)))
 	case uint64:
 		bigInt = *new(big.Int).SetUint64(intValue.(uint64))
+	case uint:
+		bigInt = *new(big.Int).SetUint64(uint64(intValue.(uint)))
+	case int:
+		if intValue.(int) < 0 {
+			return nil, fmt.Errorf("passed in int value should be non negative")
+		}
+		bigInt = *new(big.Int).SetUint64(uint64(intValue.(int)))
 	case *big.Int:
 		bigInt = *new(big.Int).Set(intValue.(*big.Int))
 	default:
