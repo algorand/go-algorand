@@ -57,12 +57,18 @@ func MakeAccountManager(log logging.Logger, registry account.ParticipationRegist
 
 // Keys returns a list of Participation accounts.
 func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participation) {
-	manager.mu.Lock()
-	defer manager.mu.Unlock()
+	for _, record := range manager.registry.GetAll() {
+		part := account.Participation{
+			Parent:      record.Account,
+			VRF:         nil,
+			Voting:      nil,
+			FirstValid:  record.FirstValid,
+			LastValid:   record.LastValid,
+			KeyDilution: record.KeyDilution,
+		}
 
-	for _, part := range manager.partKeys {
 		if part.OverlapsInterval(rnd, rnd) {
-			out = append(out, part.Participation)
+			out = append(out, part)
 
 			// This is usually a no-op, but the first time it will update the DB.
 			err := manager.registry.Register(part.ID(), rnd)

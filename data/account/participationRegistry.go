@@ -57,8 +57,8 @@ type ParticipationRecord struct {
 	EffectiveFirst         basics.Round
 	EffectiveLast          basics.Round
 
-	// VRFSecrets
-	// OneTimeSignatureSecrets
+	VRF    *crypto.VRFSecrets
+	Voting *crypto.OneTimeSignatureSecrets
 }
 
 var zeroParticipationRecord = ParticipationRecord{}
@@ -81,6 +81,9 @@ func (r ParticipationRecord) Duplicate() ParticipationRecord {
 		LastCompactCertificate: r.LastCompactCertificate,
 		EffectiveFirst:         r.EffectiveFirst,
 		EffectiveLast:          r.EffectiveLast,
+		// TODO: Deep Copy.
+		VRF:                    r.VRF,
+		Voting:                 r.Voting,
 	}
 }
 
@@ -235,11 +238,12 @@ var (
 	selectPK      = `SELECT pk FROM Keysets WHERE participationID = ? LIMIT 1`
 	selectLastPK  = `SELECT pk FROM Keysets ORDER BY pk DESC LIMIT 1`
 	selectRecords = `SELECT
-			participationID, account, firstValidRound, lastValidRound, keyDilution,
-			lastVoteRound, lastBlockProposalRound, lastCompactCertificateRound,
-			effectiveFirstRound, effectiveLastRound
-		FROM Keysets
-		INNER JOIN Rolling
+			k.participationID, k.account, k.firstValidRound,
+       		k.lastValidRound, k.keyDilution, k.vrf,
+			r.lastVoteRound, r.lastBlockProposalRound, r.lastCompactCertificateRound,
+			r.effectiveFirstRound, r.effectiveLastRound, r.voting
+		FROM Keysets k
+		INNER JOIN Rolling r
 		ON Keysets.pk = Rolling.pk`
 	deleteKeysets          = `DELETE FROM Keysets WHERE pk=?`
 	deleteRolling          = `DELETE FROM Rolling WHERE pk=?`
@@ -595,26 +599,42 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 	results := make([]ParticipationRecord, 0)
 	for rows.Next() {
 		var record ParticipationRecord
-		var participationBlob []byte
-		var accountBlob []byte
+		var rawParticipation []byte
+		var rawAccount []byte
+		var rawVRF []byte
+		var rawVoting []byte
 		err := rows.Scan(
-			&participationBlob,
-			&accountBlob,
+			&rawParticipation,
+			&rawAccount,
 			&record.FirstValid,
 			&record.LastValid,
 			&record.KeyDilution,
+			&rawVRF,
 			&record.LastVote,
 			&record.LastBlockProposal,
 			&record.LastCompactCertificate,
 			&record.EffectiveFirst,
 			&record.EffectiveLast,
+			&rawVoting,
 		)
 		if err != nil {
 			return nil, err
 		}
 
-		copy(record.ParticipationID[:], participationBlob)
-		copy(record.Account[:], accountBlob)
+		copy(record.ParticipationID[:], rawParticipation)
+		copy(record.Account[:], rawAccount)
+
+		record.VRF = &crypto.VRFSecrets{}
+		err = protocol.Decode(rawVRF, record.VRF)
+		if err != nil {
+			return nil, fmt.Errorf("unable to decode VRF: %w", err)
+		}
+
+		record.Voting = &crypto.OneTimeSignatureSecrets{}
+		err = protocol.Decode(rawVoting, record.Voting)
+		if err != nil {
+			return nil, fmt.Errorf("unable to decode Voting: %w", err)
+		}
 
 		results = append(results, record)
 	}
