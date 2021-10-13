@@ -105,16 +105,11 @@ func makeString(len int) string {
 	return s
 }
 
-func TestEncodedAccountDataSize(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
+func getSampleAccountData() AccountData {
 	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
 	vrfSecrets := crypto.GenerateVRFSecrets()
-	maxStateSchema := StateSchema{
-		NumUint:      0x1234123412341234,
-		NumByteSlice: 0x1234123412341234,
-	}
-	ad := AccountData{
+
+	return AccountData{
 		Status:             NotParticipating,
 		MicroAlgos:         MicroAlgos{},
 		RewardsBase:        0x1234123412341234,
@@ -128,9 +123,19 @@ func TestEncodedAccountDataSize(t *testing.T) {
 		Assets:             make(map[AssetIndex]AssetHolding),
 		AppLocalStates:     make(map[AppIndex]AppLocalState),
 		AppParams:          make(map[AppIndex]AppParams),
-		TotalAppSchema:     maxStateSchema,
 		AuthAddr:           Address(crypto.Hash([]byte{1, 2, 3, 4})),
 	}
+}
+
+func TestEncodedAccountDataSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	maxStateSchema := StateSchema{
+		NumUint:      0x1234123412341234,
+		NumByteSlice: 0x1234123412341234,
+	}
+	ad := getSampleAccountData()
+	ad.TotalAppSchema = maxStateSchema
 
 	// TODO after applications enabled: change back to protocol.ConsensusCurrentVersion
 	currentConsensusParams := config.Consensus[protocol.ConsensusFuture]
@@ -252,4 +257,21 @@ func TestAppIndexHashing(t *testing.T) {
 	// python -c "import algosdk.encoding as e; print(e.encode_address(e.checksum(b'appID'+($APPID).to_bytes(8, 'big'))))"
 	i = AppIndex(77)
 	require.Equal(t, "PCYUFPA2ZTOYWTP43MX2MOX2OWAIAXUDNC2WFCXAGMRUZ3DYD6BWFDL5YM", i.Address().String())
+}
+
+func TestOnlineAccountData(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ad := getSampleAccountData()
+	ad.MicroAlgos.Raw = 1000000
+	ad.Status = Offline
+
+	oad := ad.OnlineAccountData()
+	require.Empty(t, oad)
+
+	ad.Status = Online
+	oad = ad.OnlineAccountData()
+	require.Equal(t, ad.MicroAlgos, oad.MicroAlgosWithRewards)
+	require.Equal(t, ad.VoteID, oad.VoteID)
+	require.Equal(t, ad.SelectionID, oad.SelectionID)
 }
