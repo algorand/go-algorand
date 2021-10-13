@@ -81,7 +81,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 
 	totals, err := accountsTotals(tx, false)
 	require.NoError(t, err)
-	require.Equal(t, totals.Online.Money.Raw, totalOnline)
+	require.Equal(t, totals.Online.Money.Raw, totalOnline, "mismatching total online money")
 	require.Equal(t, totals.Offline.Money.Raw, totalOffline)
 	require.Equal(t, totals.NotParticipating.Money.Raw, totalNotPart)
 	require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
@@ -243,6 +243,8 @@ func TestAccountDBRound(t *testing.T) {
 	_, err = accountsInit(tx, accts, proto)
 	require.NoError(t, err)
 	checkAccounts(t, tx, 0, accts)
+	totals, err := accountsTotals(tx, false)
+	require.NoError(t, err)
 
 	// used to determine how many creatables element will be in the test per iteration
 	numElementsPerSegement := 10
@@ -257,6 +259,7 @@ func TestAccountDBRound(t *testing.T) {
 		var updates ledgercore.AccountDeltas
 		var newaccts map[basics.Address]basics.AccountData
 		updates, newaccts, _, lastCreatableID = ledgertesting.RandomDeltasFull(20, accts, 0, lastCreatableID)
+		totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, accts, totals)
 		accts = newaccts
 		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
 			expectedDbImage, numElementsPerSegement)
@@ -264,7 +267,7 @@ func TestAccountDBRound(t *testing.T) {
 		updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, baseAccounts)
 		err = updatesCnt.accountsLoadOld(tx)
 		require.NoError(t, err)
-		err = totalsNewRounds(tx, []ledgercore.AccountDeltas{updates}, updatesCnt, []ledgercore.AccountTotals{{}}, proto)
+		err = accountsPutTotals(tx, totals, false)
 		require.NoError(t, err)
 		_, err = accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)

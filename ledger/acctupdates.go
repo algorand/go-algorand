@@ -1797,10 +1797,9 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
 	deltas := make([]ledgercore.AccountDeltas, offset, offset)
 	creatableDeltas := make([]map[basics.CreatableIndex]ledgercore.ModifiedCreatable, offset, offset)
-	roundTotals := make([]ledgercore.AccountTotals, offset+1, offset+1)
+	roundTotals := au.roundTotals[offset]
 	copy(deltas, au.deltas[:offset])
 	copy(creatableDeltas, au.creatableDeltas[:offset])
-	copy(roundTotals, au.roundTotals[:offset+1])
 
 	// verify version correctness : all the entries in the au.versions[1:offset+1] should have the *same* version, and the committedUpTo should be enforcing that.
 	if au.versions[1] != au.versions[offset] {
@@ -1808,7 +1807,6 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		au.log.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
 		return
 	}
-	consensusVersion := au.versions[1]
 
 	var committedRoundDigest crypto.Digest
 
@@ -1879,7 +1877,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano()) - stats.OldAccountPreloadDuration
 		}
 
-		err = totalsNewRounds(tx, deltas[:offset], compactDeltas, roundTotals[1:offset+1], config.Consensus[consensusVersion])
+		err = accountsPutTotals(tx, roundTotals, false)
 		if err != nil {
 			return err
 		}
@@ -1935,7 +1933,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	}
 
 	if isCatchpointRound {
-		catchpointLabel, err = au.accountsCreateCatchpointLabel(dbRound+basics.Round(offset)+lookback, roundTotals[offset], committedRoundDigest, trieBalancesHash)
+		catchpointLabel, err = au.accountsCreateCatchpointLabel(dbRound+basics.Round(offset)+lookback, roundTotals, committedRoundDigest, trieBalancesHash)
 		if err != nil {
 			au.log.Warnf("commitRound : unable to create a catchpoint label: %v", err)
 		}
