@@ -450,6 +450,8 @@ func TestDecodeValid(t *testing.T) {
 			big.NewInt(5), big.NewInt(6),
 			big.NewInt(7), big.NewInt(8),
 		}
+		//expected := []interface{}{1, 2, 3, 4, 5, 6, 7, 8}
+		//arrayEncoded, err := staticUintArrT.Encode(expected)
 		arrayEncoded, err := staticUintArrT.Encode(inputUint)
 		require.NoError(t, err, "uint64 static array encode should not return error")
 		actual, err := staticUintArrT.Decode(arrayEncoded)
@@ -944,7 +946,6 @@ func addTupleRandomValues(t *testing.T, slotRange BaseType, pool *map[BaseType][
 			tupleElem := (*pool)[tupleTypeIndex][tupleElemRangeIndex]
 			testUnits[index] = tupleElem
 		}
-		// TODO
 		elemValues := make([]interface{}, tupleLen)
 		elemTypes := make([]Type, tupleLen)
 		for index := 0; index < int(tupleLen); index++ {

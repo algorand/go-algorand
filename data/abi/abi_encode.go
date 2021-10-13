@@ -139,44 +139,33 @@ func encodeInt(intValue interface{}, bitSize uint16) ([]byte, error) {
 
 	switch intValue := intValue.(type) {
 	case int8:
-		if intValue < 0 {
-			return nil, fmt.Errorf("passed in int value should be non negative")
-		}
 		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case uint8:
 		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case int16:
-		if intValue < 0 {
-			return nil, fmt.Errorf("passed in int value should be non negative")
-		}
 		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case uint16:
 		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case int32:
-		if intValue < 0 {
-			return nil, fmt.Errorf("passed in int value should be non negative")
-		}
 		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case uint32:
 		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case int64:
-		if intValue < 0 {
-			return nil, fmt.Errorf("passed in int value should be non negative")
-		}
 		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case uint64:
 		bigInt = *new(big.Int).SetUint64(intValue)
 	case uint:
 		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case int:
-		if intValue < 0 {
-			return nil, fmt.Errorf("passed in int value should be non negative")
-		}
 		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case *big.Int:
 		bigInt = *new(big.Int).Set(intValue)
 	default:
 		return nil, fmt.Errorf("cannot infer go type for uint encode")
+	}
+
+	if bigInt.Cmp(big.NewInt(0)) < 0 {
+		return nil, fmt.Errorf("passed in numeric value should be non negative")
 	}
 
 	bytes := bigInt.Bytes()
@@ -322,10 +311,33 @@ func compressBools(boolSlice []interface{}) (uint8, error) {
 	return res, nil
 }
 
+/*
+// decodeUint decodes byte slice into golang int/big.Int
+func decodeUint(encoded []byte, bitSize uint16) (interface{}, error) {
+	if len(encoded) != int(bitSize)/8 {
+		return nil,
+			fmt.Errorf("uint/ufixed decode: expected byte length %d, but got byte length %d", bitSize/8, len(encoded))
+	}
+	switch len(encoded) {
+	case 1:
+		return encoded[0], nil
+	case 2:
+		return binary.BigEndian.Uint16(encoded), nil
+	case 3, 4:
+		return binary.BigEndian.Uint32(encoded), nil
+	case 5, 6, 7, 8:
+		return binary.BigEndian.Uint64(encoded), nil
+	default:
+		return new(big.Int).SetBytes(encoded), nil
+	}
+}
+*/
+
 // Decode is an ABI type method to decode bytes to go values from ABI encoding rules
 func (t Type) Decode(encoded []byte) (interface{}, error) {
 	switch t.abiTypeID {
 	case Uint, Ufixed:
+		// return decodeUint(encoded, t.bitSize)
 		if len(encoded) != int(t.bitSize)/8 {
 			return nil,
 				fmt.Errorf("uint/ufixed decode: expected byte length %d, but got byte length %d", t.bitSize/8, len(encoded))
