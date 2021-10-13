@@ -139,25 +139,25 @@ func encodeInt(intValue interface{}, bitSize uint16) ([]byte, error) {
 
 	switch intValue := intValue.(type) {
 	case int8:
-		bigInt = *new(big.Int).SetUint64(uint64(intValue))
+		bigInt = *new(big.Int).SetInt64(int64(intValue))
 	case uint8:
 		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case int16:
-		bigInt = *new(big.Int).SetUint64(uint64(intValue))
+		bigInt = *new(big.Int).SetInt64(int64(intValue))
 	case uint16:
 		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case int32:
-		bigInt = *new(big.Int).SetUint64(uint64(intValue))
+		bigInt = *new(big.Int).SetInt64(int64(intValue))
 	case uint32:
 		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case int64:
-		bigInt = *new(big.Int).SetUint64(uint64(intValue))
+		bigInt = *new(big.Int).SetInt64(intValue)
 	case uint64:
 		bigInt = *new(big.Int).SetUint64(intValue)
 	case uint:
 		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case int:
-		bigInt = *new(big.Int).SetUint64(uint64(intValue))
+		bigInt = *new(big.Int).SetInt64(int64(intValue))
 	case *big.Int:
 		bigInt = *new(big.Int).Set(intValue)
 	default:
