@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"reflect"
 )
 
 // typeCastToTuple cast an array-like ABI type into an ABI tuple type.
@@ -29,7 +30,7 @@ func (t Type) typeCastToTuple(tupLen ...int) (Type, error) {
 	switch t.abiTypeID {
 	case String:
 		if len(tupLen) != 1 {
-			return Type{}, fmt.Errorf("String type conversion to tuple need 1 length argument")
+			return Type{}, fmt.Errorf("string type conversion to tuple need 1 length argument")
 		}
 		childT = make([]Type, tupLen[0])
 		for i := 0; i < tupLen[0]; i++ {
@@ -47,7 +48,7 @@ func (t Type) typeCastToTuple(tupLen ...int) (Type, error) {
 		}
 	case ArrayDynamic:
 		if len(tupLen) != 1 {
-			return Type{}, fmt.Errorf("Dynamic Array type conversion to tuple need 1 length argument")
+			return Type{}, fmt.Errorf("dynamic array type conversion to tuple need 1 length argument")
 		}
 		childT = make([]Type, tupLen[0])
 		for i := 0; i < tupLen[0]; i++ {
@@ -72,7 +73,7 @@ func (t Type) Encode(value interface{}) ([]byte, error) {
 	case Bool:
 		boolValue, ok := value.(bool)
 		if !ok {
-			return []byte{}, fmt.Errorf("cannot cast value to bool in bool encoding")
+			return nil, fmt.Errorf("cannot cast value to bool in bool encoding")
 		}
 		if boolValue {
 			return []byte{0x80}, nil
@@ -81,35 +82,54 @@ func (t Type) Encode(value interface{}) ([]byte, error) {
 	case Byte:
 		byteValue, ok := value.(byte)
 		if !ok {
-			return []byte{}, fmt.Errorf("cannot cast value to byte in byte encoding")
+			return nil, fmt.Errorf("cannot cast value to byte in byte encoding")
 		}
 		return []byte{byteValue}, nil
 	case ArrayStatic, Address:
 		castedType, err := t.typeCastToTuple()
 		if err != nil {
-			return []byte{}, err
+			return nil, err
 		}
 		return castedType.Encode(value)
-	case ArrayDynamic, String:
-		var length int
-		stringValue, okString := value.(string)
-		dynamicArrayValue, okArray := value.([]interface{})
-		if okString {
-			length = len([]byte(stringValue))
-		} else if okArray {
-			length = len(dynamicArrayValue)
-		} else {
-			return []byte{}, fmt.Errorf("cannot cast value to string or array dynamic in encoding")
-		}
-		castedType, err := t.typeCastToTuple(length)
+	case ArrayDynamic:
+		dynamicArray, err := inferToSlice(value)
 		if err != nil {
-			return []byte{}, err
+			return nil, err
 		}
-		return castedType.Encode(value)
+		castedType, err := t.typeCastToTuple(len(dynamicArray))
+		if err != nil {
+			return nil, err
+		}
+		lengthEncode := make([]byte, lengthEncodeByteSize)
+		binary.BigEndian.PutUint16(lengthEncode, uint16(len(dynamicArray)))
+		encoded, err := castedType.Encode(value)
+		if err != nil {
+			return nil, err
+		}
+		encoded = append(lengthEncode, encoded...)
+		return encoded, nil
+	case String:
+		stringValue, okString := value.(string)
+		if !okString {
+			return nil, fmt.Errorf("cannot cast value to string or array dynamic in encoding")
+		}
+		byteValue := []byte(stringValue)
+		castedType, err := t.typeCastToTuple(len(byteValue))
+		if err != nil {
+			return nil, err
+		}
+		lengthEncode := make([]byte, lengthEncodeByteSize)
+		binary.BigEndian.PutUint16(lengthEncode, uint16(len(byteValue)))
+		encoded, err := castedType.Encode(byteValue)
+		if err != nil {
+			return nil, err
+		}
+		encoded = append(lengthEncode, encoded...)
+		return encoded, nil
 	case Tuple:
 		return encodeTuple(value, t.childTypes)
 	default:
-		return []byte{}, fmt.Errorf("cannot infer type for encoding")
+		return nil, fmt.Errorf("cannot infer type for encoding")
 	}
 }
 
@@ -120,28 +140,28 @@ func encodeInt(intValue interface{}, bitSize uint16) ([]byte, error) {
 	switch intValue.(type) {
 	case int8:
 		if intValue.(int8) < 0 {
-			return []byte{}, fmt.Errorf("passed in int value should be non negative")
+			return nil, fmt.Errorf("passed in int value should be non negative")
 		}
 		bigInt = *new(big.Int).SetUint64(uint64(intValue.(int8)))
 	case uint8:
 		bigInt = *new(big.Int).SetUint64(uint64(intValue.(uint8)))
 	case int16:
 		if intValue.(int16) < 0 {
-			return []byte{}, fmt.Errorf("passed in int value should be non negative")
+			return nil, fmt.Errorf("passed in int value should be non negative")
 		}
 		bigInt = *new(big.Int).SetUint64(uint64(intValue.(int16)))
 	case uint16:
 		bigInt = *new(big.Int).SetUint64(uint64(intValue.(uint16)))
 	case int32:
 		if intValue.(int16) < 0 {
-			return []byte{}, fmt.Errorf("passed in int value should be non negative")
+			return nil, fmt.Errorf("passed in int value should be non negative")
 		}
 		bigInt = *new(big.Int).SetUint64(uint64(intValue.(int32)))
 	case uint32:
 		bigInt = *new(big.Int).SetUint64(uint64(intValue.(uint32)))
 	case int64:
 		if intValue.(int16) < 0 {
-			return []byte{}, fmt.Errorf("passed in int value should be non negative")
+			return nil, fmt.Errorf("passed in int value should be non negative")
 		}
 		bigInt = *new(big.Int).SetUint64(uint64(intValue.(int64)))
 	case uint64:
@@ -149,12 +169,12 @@ func encodeInt(intValue interface{}, bitSize uint16) ([]byte, error) {
 	case *big.Int:
 		bigInt = *new(big.Int).Set(intValue.(*big.Int))
 	default:
-		return []byte{}, fmt.Errorf("cannot infer go type for uint encode")
+		return nil, fmt.Errorf("cannot infer go type for uint encode")
 	}
 
 	bytes := bigInt.Bytes()
 	if len(bytes) > int(bitSize/8) {
-		return []byte{}, fmt.Errorf("input value bit size %d > abi type bit size %d", len(bytes)*8, bitSize)
+		return nil, fmt.Errorf("input value bit size %d > abi type bit size %d", len(bytes)*8, bitSize)
 	}
 
 	zeroPadding := make([]byte, bitSize/8-uint16(len(bytes)))
@@ -162,17 +182,33 @@ func encodeInt(intValue interface{}, bitSize uint16) ([]byte, error) {
 	return buffer, nil
 }
 
+// inferToSlice infers an interface element to a slice of interface{}, returns error if it cannot infer successfully
+func inferToSlice(value interface{}) ([]interface{}, error) {
+	reflectVal := reflect.ValueOf(value)
+	if reflectVal.Kind() != reflect.Slice {
+		return nil, fmt.Errorf("cannot infer an interface value as a slice of interface element")
+	}
+	if reflectVal.IsNil() {
+		return nil, nil
+	}
+	values := make([]interface{}, reflectVal.Len())
+	for i := 0; i < reflectVal.Len(); i++ {
+		values[i] = reflectVal.Index(i).Interface()
+	}
+	return values, nil
+}
+
 // encodeTuple encodes slice-of-interface of golang values to bytes, following ABI encoding rules
 func encodeTuple(value interface{}, childT []Type) ([]byte, error) {
 	if len(childT) >= (1 << 16) {
-		return []byte{}, fmt.Errorf("abi child type number exceeds uint16 maximum")
+		return nil, fmt.Errorf("abi child type number exceeds uint16 maximum")
 	}
-	values, ok := value.([]interface{})
-	if !ok {
-		return []byte{}, fmt.Errorf("cannot cast value to slice for tuple encoding")
+	values, err := inferToSlice(value)
+	if err != nil {
+		return nil, err
 	}
 	if len(values) != len(childT) {
-		return []byte{}, fmt.Errorf("cannot encode abi tuple: value slice length != child type number")
+		return nil, fmt.Errorf("cannot encode abi tuple: value slice length != child type number")
 	}
 
 	// for each tuple element value, it has a head/tail component
@@ -191,7 +227,7 @@ func encodeTuple(value interface{}, childT []Type) ([]byte, error) {
 			isDynamicIndex[i] = true
 			tailEncoding, err := childT[i].Encode(values[i])
 			if err != nil {
-				return []byte{}, err
+				return nil, err
 			}
 			tails[i] = tailEncoding
 			isDynamicIndex[i] = true
@@ -202,14 +238,14 @@ func encodeTuple(value interface{}, childT []Type) ([]byte, error) {
 			after := findBoolLR(childT, i, 1)
 			// append to heads and tails
 			if before%8 != 0 {
-				return []byte{}, fmt.Errorf("cannot encode abi tuple: expected before has number of bool mod 8 == 0")
+				return nil, fmt.Errorf("cannot encode abi tuple: expected before has number of bool mod 8 == 0")
 			}
 			if after > 7 {
 				after = 7
 			}
 			compressed, err := compressBools(values[i : i+after+1])
 			if err != nil {
-				return []byte{}, err
+				return nil, err
 			}
 			heads[i] = []byte{compressed}
 			i += after
@@ -217,7 +253,7 @@ func encodeTuple(value interface{}, childT []Type) ([]byte, error) {
 		} else {
 			encodeTi, err := childT[i].Encode(values[i])
 			if err != nil {
-				return []byte{}, err
+				return nil, err
 			}
 			heads[i] = encodeTi
 			isDynamicIndex[i] = false
@@ -241,7 +277,7 @@ func encodeTuple(value interface{}, childT []Type) ([]byte, error) {
 			// calculate where the index of dynamic value encoding byte start
 			headValue := headLength + tailCurrLength
 			if headValue >= (1 << 16) {
-				return []byte{}, fmt.Errorf("cannot encode abi tuple: encode length exceeds uint16 maximum")
+				return nil, fmt.Errorf("cannot encode abi tuple: encode length exceeds uint16 maximum")
 			}
 			binary.BigEndian.PutUint16(heads[i], uint16(headValue))
 		}
@@ -290,17 +326,17 @@ func (t Type) Decode(encoded []byte) (interface{}, error) {
 		return new(big.Int).SetBytes(encoded), nil
 	case Bool:
 		if len(encoded) != 1 {
-			return Value{}, fmt.Errorf("boolean byte should be length 1 byte")
+			return nil, fmt.Errorf("boolean byte should be length 1 byte")
 		}
 		if encoded[0] == 0x00 {
 			return false, nil
 		} else if encoded[0] == 0x80 {
 			return true, nil
 		}
-		return Value{}, fmt.Errorf("sinble boolean encoded byte should be of form 0x80 or 0x00")
+		return nil, fmt.Errorf("sinble boolean encoded byte should be of form 0x80 or 0x00")
 	case Byte:
 		if len(encoded) != 1 {
-			return Value{}, fmt.Errorf("byte should be length 1")
+			return nil, fmt.Errorf("byte should be length 1")
 		}
 		return encoded[0], nil
 	case ArrayStatic:
@@ -313,12 +349,10 @@ func (t Type) Decode(encoded []byte) (interface{}, error) {
 		if len(encoded) != addressByteSize {
 			return nil, fmt.Errorf("address should be length 32")
 		}
-		var byteAssign [addressByteSize]byte
-		copy(byteAssign[:], encoded)
-		return byteAssign, nil
+		return encoded, nil
 	case ArrayDynamic:
 		if len(encoded) < lengthEncodeByteSize {
-			return Value{}, fmt.Errorf("dynamic array format corrupted")
+			return nil, fmt.Errorf("dynamic array format corrupted")
 		}
 		dynamicLen := binary.BigEndian.Uint16(encoded[:lengthEncodeByteSize])
 		castedType, err := t.typeCastToTuple(int(dynamicLen))
@@ -328,7 +362,7 @@ func (t Type) Decode(encoded []byte) (interface{}, error) {
 		return castedType.Decode(encoded[lengthEncodeByteSize:])
 	case String:
 		if len(encoded) < lengthEncodeByteSize {
-			return Value{}, fmt.Errorf("string format corrupted")
+			return nil, fmt.Errorf("string format corrupted")
 		}
 		stringLenBytes := encoded[:lengthEncodeByteSize]
 		byteLen := binary.BigEndian.Uint16(stringLenBytes)
@@ -339,7 +373,7 @@ func (t Type) Decode(encoded []byte) (interface{}, error) {
 	case Tuple:
 		return decodeTuple(encoded, t.childTypes)
 	default:
-		return []byte{}, fmt.Errorf("cannot infer type for decoding")
+		return nil, fmt.Errorf("cannot infer type for decoding")
 	}
 }
 
@@ -391,6 +425,9 @@ func decodeTuple(encoded []byte, childT []Type) ([]interface{}, error) {
 			valuePartition = append(valuePartition, encoded[iterIndex:iterIndex+currLen])
 			iterIndex += currLen
 		}
+		if i != len(childT)-1 && iterIndex >= len(encoded) {
+			return nil, fmt.Errorf("input byte not enough to decode")
+		}
 	}
 
 	if len(dynamicSegments) > 0 {
@@ -400,7 +437,7 @@ func decodeTuple(encoded []byte, childT []Type) ([]interface{}, error) {
 	if iterIndex < len(encoded) {
 		return nil, fmt.Errorf("input byte not fully consumed")
 	}
-	for i := 0; i < len(childT)-1; i++ {
+	for i := 0; i < len(dynamicSegments)-1; i++ {
 		if dynamicSegments[i] > dynamicSegments[i+1] {
 			return nil, fmt.Errorf("dynamic segment should display a [l, r] space with l <= r")
 		}
@@ -548,7 +585,7 @@ func (v Value) Encode() ([]byte, error) {
 	case Tuple:
 		return tupleEncoding(v)
 	default:
-		return []byte{}, fmt.Errorf("Encoding: unknown type error (bruh why you are here)")
+		return []byte{}, fmt.Errorf("encoding: unknown type error (bruh why you are here)")
 	}
 }
 
