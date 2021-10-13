@@ -110,8 +110,8 @@ func (t Type) String() string {
 	}
 }
 
-var staticArrayRegexp *regexp.Regexp = regexp.MustCompile(`^([a-z\d\[\](),]+)\[([1-9][\d]*)]$`)
-var ufixedRegexp *regexp.Regexp = regexp.MustCompile(`^ufixed([1-9][\d]*)x([1-9][\d]*)$`)
+var staticArrayRegexp = regexp.MustCompile(`^([a-z\d\[\](),]+)\[([1-9][\d]*)]$`)
+var ufixedRegexp = regexp.MustCompile(`^ufixed([1-9][\d]*)x([1-9][\d]*)$`)
 
 // TypeFromString de-serialize ABI type from a string following ABI encoding.
 func TypeFromString(str string) (Type, error) {

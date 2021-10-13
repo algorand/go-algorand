@@ -802,191 +802,172 @@ func TestDecodeInvalid(t *testing.T) {
 	})
 }
 
-func generateStaticArray(t *testing.T, testValuePool *[][]Value) {
-	// int
-	for intIndex := 0; intIndex < len((*testValuePool)[Uint]); intIndex += 200 {
-		staticArrayList := make([]Value, 20)
-		for i := 0; i < 20; i++ {
-			staticArrayList[i] = (*testValuePool)[Uint][intIndex+i]
-		}
-		staticArray, err := MakeStaticArray(staticArrayList)
-		require.NoError(t, err, "make static array for uint should not return error")
-		(*testValuePool)[ArrayStatic] = append((*testValuePool)[ArrayStatic], staticArray)
-	}
-	// byte
-	byteArrayList := make([]Value, 20)
-	for byteIndex := 0; byteIndex < 20; byteIndex++ {
-		byteArrayList[byteIndex] = (*testValuePool)[Byte][byteIndex]
-	}
-	byteStaticArray, err := MakeStaticArray(byteArrayList)
-	require.NoError(t, err, "make static array for byte should not return error")
-	(*testValuePool)[ArrayStatic] = append((*testValuePool)[ArrayStatic], byteStaticArray)
-	// address
-	addressArrayList := make([]Value, 20)
-	for addrIndex := 0; addrIndex < 20; addrIndex++ {
-		addressArrayList[addrIndex] = (*testValuePool)[Address][addrIndex]
-	}
-	addressStaticArray, err := MakeStaticArray(addressArrayList)
-	require.NoError(t, err, "make static array for address should not return error")
-	(*testValuePool)[ArrayStatic] = append((*testValuePool)[ArrayStatic], addressStaticArray)
-	// string
-	stringArrayList := make([]Value, 20)
-	for strIndex := 0; strIndex < 20; strIndex++ {
-		stringArrayList[strIndex] = (*testValuePool)[String][strIndex]
-	}
-	stringStaticArray, err := MakeStaticArray(stringArrayList)
-	require.NoError(t, err, "make static array for string should not return error")
-	(*testValuePool)[ArrayStatic] = append((*testValuePool)[ArrayStatic], stringStaticArray)
-	// bool
-	boolArrayList := make([]Value, 20)
-	for boolIndex := 0; boolIndex < 20; boolIndex++ {
-		valBig, err := rand.Int(rand.Reader, big.NewInt(2))
-		require.NoError(t, err, "generate random bool index should not return error")
-		valIndex := valBig.Int64()
-		boolArrayList[boolIndex] = (*testValuePool)[Bool][valIndex]
-	}
-	boolStaticArray, err := MakeStaticArray(boolArrayList)
-	require.NoError(t, err, "make static array for bool should not return error")
-	(*testValuePool)[ArrayStatic] = append((*testValuePool)[ArrayStatic], boolStaticArray)
+type testUnit struct {
+	serializedType string
+	value          interface{}
 }
 
-func generateDynamicArray(t *testing.T, testValuePool *[][]Value) {
-	// int
-	for intIndex := 0; intIndex < len((*testValuePool)[Uint]); intIndex += 200 {
-		dynamicArrayList := make([]Value, 20)
-		for i := 0; i < 20; i++ {
-			dynamicArrayList[i] = (*testValuePool)[Uint][intIndex+i]
-		}
-		dynamicArray, err := MakeDynamicArray(dynamicArrayList, dynamicArrayList[0].ABIType)
-		require.NoError(t, err, "make static array for uint should not return error")
-		(*testValuePool)[ArrayDynamic] = append((*testValuePool)[ArrayDynamic], dynamicArray)
+func categorySelfRoundTripTest(t *testing.T, category []testUnit) {
+	for _, testObj := range category {
+		abiType, err := TypeFromString(testObj.serializedType)
+		require.NoError(t, err, "failure to deserialize type")
+		encodedValue, err := abiType.Encode(testObj.value)
+		require.NoError(t, err, "failure to encode value")
+		actual, err := abiType.Decode(encodedValue)
+		require.NoError(t, err, "failure to decode value")
+		require.Equal(t, testObj.value, actual, "decoded value not equal to expected")
 	}
-	// byte
-	byteArrayList := make([]Value, 20)
-	for byteIndex := 0; byteIndex < 20; byteIndex++ {
-		byteArrayList[byteIndex] = (*testValuePool)[Byte][byteIndex]
-	}
-	byteDynamicArray, err := MakeDynamicArray(byteArrayList, byteArrayList[0].ABIType)
-	require.NoError(t, err, "make dynamic array for byte should not return error")
-	(*testValuePool)[ArrayDynamic] = append((*testValuePool)[ArrayDynamic], byteDynamicArray)
-	// address
-	addressArrayList := make([]Value, 20)
-	for addrIndex := 0; addrIndex < 20; addrIndex++ {
-		addressArrayList[addrIndex] = (*testValuePool)[Address][addrIndex]
-	}
-	addressDynamicArray, err := MakeDynamicArray(addressArrayList, MakeAddressType())
-	require.NoError(t, err, "make dynamic array for address should not return error")
-	(*testValuePool)[ArrayDynamic] = append((*testValuePool)[ArrayDynamic], addressDynamicArray)
-	// string
-	stringArrayList := make([]Value, 20)
-	for strIndex := 0; strIndex < 20; strIndex++ {
-		stringArrayList[strIndex] = (*testValuePool)[String][strIndex]
-	}
-	stringDynamicArray, err := MakeDynamicArray(stringArrayList, MakeStringType())
-	require.NoError(t, err, "make dynamic array for string should not return error")
-	(*testValuePool)[ArrayDynamic] = append((*testValuePool)[ArrayDynamic], stringDynamicArray)
-	// bool
-	boolArrayList := make([]Value, 20)
-	for boolIndex := 0; boolIndex < 20; boolIndex++ {
-		valBig, err := rand.Int(rand.Reader, big.NewInt(2))
-		require.NoError(t, err, "generate random bool index should not return error")
-		valIndex := valBig.Int64()
-		boolArrayList[boolIndex] = (*testValuePool)[Bool][valIndex]
-	}
-	boolDynamicArray, err := MakeDynamicArray(boolArrayList, MakeBoolType())
-	require.NoError(t, err, "make dynamic array for bool should not return error")
-	(*testValuePool)[ArrayDynamic] = append((*testValuePool)[ArrayDynamic], boolDynamicArray)
 }
 
-func generateTuples(t *testing.T, testValuePool *[][]Value, slotRange int) {
+func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
+	(*pool)[Uint] = make([]testUnit, 200*64)
+	(*pool)[Ufixed] = make([]testUnit, 160*64)
+
+	uintIndex := 0
+	ufixedIndex := 0
+
+	for bitSize := 8; bitSize <= 512; bitSize += 8 {
+		max := new(big.Int).Lsh(big.NewInt(1), uint(bitSize))
+
+		uintT, err := MakeUintType(uint16(bitSize))
+		require.NoError(t, err, "make uint type failure")
+		uintTstr := uintT.String()
+
+		for j := 0; j < 200; j++ {
+			randVal, err := rand.Int(rand.Reader, max)
+			require.NoError(t, err, "generate random uint, should be no error")
+			(*pool)[Uint][uintIndex] = testUnit{serializedType: uintTstr, value: randVal}
+			uintIndex++
+		}
+
+		for precision := 1; precision <= 160; precision++ {
+			randVal, err := rand.Int(rand.Reader, max)
+			require.NoError(t, err, "generate random ufixed, should be no error")
+			ufixedT, err := MakeUfixedType(uint16(bitSize), uint16(precision))
+			require.NoError(t, err, "make ufixed type failure")
+			ufixedTstr := ufixedT.String()
+			(*pool)[Ufixed][ufixedIndex] = testUnit{serializedType: ufixedTstr, value: randVal}
+			ufixedIndex++
+		}
+	}
+	categorySelfRoundTripTest(t, (*pool)[Uint])
+	categorySelfRoundTripTest(t, (*pool)[Ufixed])
+
+	(*pool)[Byte] = make([]testUnit, 1<<8)
+	for i := 0; i < (1 << 8); i++ {
+		(*pool)[Byte][i] = testUnit{serializedType: MakeByteType().String(), value: byte(i)}
+	}
+	categorySelfRoundTripTest(t, (*pool)[Byte])
+
+	(*pool)[Bool] = make([]testUnit, 2)
+	(*pool)[Bool][0] = testUnit{serializedType: MakeBoolType().String(), value: false}
+	(*pool)[Bool][1] = testUnit{serializedType: MakeBoolType().String(), value: true}
+	categorySelfRoundTripTest(t, (*pool)[Bool])
+
+	maxAddress := new(big.Int).Lsh(big.NewInt(1), 256)
+	(*pool)[Address] = make([]testUnit, 300)
+	for i := 0; i < 300; i++ {
+		randAddrVal, err := rand.Int(rand.Reader, maxAddress)
+		require.NoError(t, err, "generate random value for address, should be no error")
+		addrBytes := randAddrVal.Bytes()
+		remainBytes := make([]byte, 32-len(addrBytes))
+		addrBytes = append(remainBytes, addrBytes...)
+		(*pool)[Address][i] = testUnit{serializedType: MakeAddressType().String(), value: addrBytes}
+	}
+	categorySelfRoundTripTest(t, (*pool)[Address])
+
+	(*pool)[String] = make([]testUnit, 400)
+	stringIndex := 0
+	for length := 1; length <= 100; length++ {
+		for i := 0; i < 4; i++ {
+			(*pool)[String][stringIndex] = testUnit{
+				serializedType: MakeStringType().String(),
+				value:          gobberish.GenerateString(length),
+			}
+			stringIndex++
+		}
+	}
+	categorySelfRoundTripTest(t, (*pool)[String])
+}
+
+func takeSomeFromCategoryAndGenerateArray(
+	t *testing.T, abiT BaseType, srtIndex int, takeNum uint16, pool *map[BaseType][]testUnit) {
+
+	tempArray := make([]interface{}, takeNum)
+	for i := 0; i < int(takeNum); i++ {
+		index := srtIndex + i
+		if index >= len((*pool)[abiT]) {
+			index = srtIndex
+		}
+		tempArray[i] = (*pool)[abiT][index].value
+	}
+	tempT, err := TypeFromString((*pool)[abiT][srtIndex].serializedType)
+	require.NoError(t, err, "type in test uint cannot be deserialized")
+	(*pool)[ArrayStatic] = append((*pool)[ArrayStatic], testUnit{
+		serializedType: MakeStaticArrayType(tempT, takeNum).String(),
+		value:          tempArray,
+	})
+	(*pool)[ArrayDynamic] = append((*pool)[ArrayDynamic], testUnit{
+		serializedType: MakeDynamicArrayType(tempT).String(),
+		value:          tempArray,
+	})
+}
+
+func addArrayRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
+	for intIndex := 0; intIndex < len((*pool)[Uint]); intIndex += 200 {
+		takeSomeFromCategoryAndGenerateArray(t, Uint, intIndex, 20, pool)
+	}
+	takeSomeFromCategoryAndGenerateArray(t, Byte, 0, 20, pool)
+	takeSomeFromCategoryAndGenerateArray(t, Address, 0, 20, pool)
+	takeSomeFromCategoryAndGenerateArray(t, String, 0, 20, pool)
+	takeSomeFromCategoryAndGenerateArray(t, Bool, 0, 20, pool)
+
+	categorySelfRoundTripTest(t, (*pool)[ArrayStatic])
+	categorySelfRoundTripTest(t, (*pool)[ArrayDynamic])
+}
+
+func addTupleRandomValues(t *testing.T, slotRange BaseType, pool *map[BaseType][]testUnit) {
 	for i := 0; i < 100; i++ {
-		tupleLenBig, err := rand.Int(rand.Reader, big.NewInt(2))
+		tupleLenBig, err := rand.Int(rand.Reader, big.NewInt(20))
 		require.NoError(t, err, "generate random tuple length should not return error")
-		tupleLen := 1 + tupleLenBig.Int64()
-		tupleValList := make([]Value, tupleLen)
-		for tupleElemIndex := 0; tupleElemIndex < int(tupleLen); tupleElemIndex++ {
-			tupleTypeIndexBig, err := rand.Int(rand.Reader, big.NewInt(int64(slotRange)))
+		tupleLen := tupleLenBig.Int64() + 1
+		testUnits := make([]testUnit, tupleLen)
+		for index := 0; index < int(tupleLen); index++ {
+			tupleTypeIndexBig, err := rand.Int(rand.Reader, big.NewInt(int64(slotRange)+1))
 			require.NoError(t, err, "generate random tuple element type index should not return error")
-			tupleTypeIndex := tupleTypeIndexBig.Int64()
-			tupleElemChoiceRange := len((*testValuePool)[tupleTypeIndex])
+			tupleTypeIndex := BaseType(tupleTypeIndexBig.Int64())
+			tupleElemChoiceRange := len((*pool)[tupleTypeIndex])
 
 			tupleElemRangeIndexBig, err := rand.Int(rand.Reader, big.NewInt(int64(tupleElemChoiceRange)))
 			require.NoError(t, err, "generate random tuple element index in test pool should not return error")
 			tupleElemRangeIndex := tupleElemRangeIndexBig.Int64()
-			tupleElem := (*testValuePool)[tupleTypeIndex][tupleElemRangeIndex]
-			tupleValList[tupleElemIndex] = tupleElem
+			tupleElem := (*pool)[tupleTypeIndex][tupleElemRangeIndex]
+			testUnits[index] = tupleElem
 		}
-		tupleVal, err := MakeTuple(tupleValList)
-		require.NoError(t, err, "make tuple should not return error")
-		(*testValuePool)[Tuple] = append((*testValuePool)[Tuple], tupleVal)
+		// TODO
+		elemValues := make([]interface{}, tupleLen)
+		elemTypes := make([]Type, tupleLen)
+		for index := 0; index < int(tupleLen); index++ {
+			elemValues[index] = testUnits[index].value
+			abiT, err := TypeFromString(testUnits[index].serializedType)
+			require.NoError(t, err, "deserialize type failure for tuple elements")
+			elemTypes[index] = abiT
+		}
+		tupleT, err := MakeTupleType(elemTypes)
+		require.NoError(t, err, "make tuple type failure")
+		(*pool)[Tuple] = append((*pool)[Tuple], testUnit{
+			serializedType: tupleT.String(),
+			value:          elemValues,
+		})
 	}
 }
 
-// round-trip test for random tuple elements
-// first we generate base type elements to each slot of testValuePool
-// then we generate static/dynamic array based on the pre-generated random values
-// we generate base tuples based on base-type elements/static arrays/dynamic arrays
-// we also generate cascaded tuples (tuples with tuple elements)
-func TestEncodeDecodeRandomTuple(t *testing.T) {
+func TestRandomABIEncodeDecodeRoundTrip(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	// test pool for 9 distinct types
-	testValuePool := make([][]Value, 9)
-	for i := 8; i <= 512; i += 8 {
-		max := big.NewInt(1).Lsh(big.NewInt(1), uint(i))
-		for j := 0; j < 200; j++ {
-			randVal, err := rand.Int(rand.Reader, max)
-			require.NoError(t, err, "generate largest number bound, should be no error")
-			uintTemp, err := MakeUint(randVal, uint16(i))
-			require.NoError(t, err, "generate random ABI uint should not return error")
-			testValuePool[Uint] = append(testValuePool[Uint], uintTemp)
-		}
-		for j := 1; j < 160; j++ {
-			randVal, err := rand.Int(rand.Reader, max)
-			require.NoError(t, err, "generate largest number bound, should be no error")
-			ufixedTemp, err := MakeUfixed(randVal, uint16(i), uint16(j))
-			require.NoError(t, err, "generate random ABI ufixed should not return error")
-			testValuePool[Ufixed] = append(testValuePool[Ufixed], ufixedTemp)
-		}
-	}
-	for i := 0; i < (1 << 8); i++ {
-		testValuePool[Byte] = append(testValuePool[Byte], MakeByte(byte(i)))
-	}
-	for i := 0; i < 2; i++ {
-		testValuePool[Bool] = append(testValuePool[Bool], MakeBool(i == 1))
-	}
-	for i := 0; i < 500; i++ {
-		max := big.NewInt(1).Lsh(big.NewInt(1), 256)
-		randVal, err := rand.Int(rand.Reader, max)
-		require.NoError(t, err, "generate largest number bound, should be no error")
-		addrBytes := randVal.Bytes()
-		remainBytes := make([]byte, 32-len(addrBytes))
-		addrBytes = append(remainBytes, addrBytes...)
-		var addrBytesToMake [32]byte
-		copy(addrBytesToMake[:], addrBytes)
-		testValuePool[Address] = append(testValuePool[Address], MakeAddress(addrBytesToMake))
-	}
-	for i := 1; i <= 100; i++ {
-		for j := 0; j < 4; j++ {
-			abiString := MakeString(gobberish.GenerateString(i))
-			testValuePool[String] = append(testValuePool[String], abiString)
-		}
-	}
-	// Array static
-	generateStaticArray(t, &testValuePool)
-	// Array dynamic
-	generateDynamicArray(t, &testValuePool)
-	// tuple generation
-	generateTuples(t, &testValuePool, 8)
-	// generate cascaded tuples
-	generateTuples(t, &testValuePool, 9)
-	// test tuple encode-decode round-trip
-	for _, tuple := range testValuePool[Tuple] {
-		t.Run("random tuple encode-decode test", func(t *testing.T) {
-			encoded, err := tuple.Encode()
-			require.NoError(t, err, "encode tuple should not have error")
-			decoded, err := Decode(encoded, tuple.ABIType)
-			require.NoError(t, err, "decode tuple should not have error")
-			require.Equal(t, tuple, decoded, "encoded-decoded tuple should match with expected")
-		})
-	}
+	testValuePool := make(map[BaseType][]testUnit)
+	addPrimitiveRandomValues(t, &testValuePool)
+	addArrayRandomValues(t, &testValuePool)
+	addTupleRandomValues(t, String, &testValuePool)
+	addTupleRandomValues(t, Tuple, &testValuePool)
+	categorySelfRoundTripTest(t, testValuePool[Tuple])
 }
