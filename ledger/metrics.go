@@ -17,6 +17,9 @@
 package ledger
 
 import (
+	"context"
+	"database/sql"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -51,8 +54,15 @@ func (mt *metricsTracker) committedUpTo(committedRnd basics.Round) basics.Round 
 	return committedRnd
 }
 
-func (mt *metricsTracker) prepareCommit(uint64, basics.Round, basics.Round) (commitRoundFn, postCommitRoundFn) {
-	return nil, nil
+func (mt *metricsTracker) prepareCommit(dcc *deferredCommitContext) error {
+	return nil
+}
+
+func (t *metricsTracker) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+	return nil
+}
+
+func (t *metricsTracker) postCommit(deferredCommitContext) {
 }
 
 func (mt *metricsTracker) handleUnorderedCommit(uint64, basics.Round, basics.Round) {

@@ -31,6 +31,8 @@ import (
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-deadlock"
 )
@@ -82,10 +84,11 @@ type ledgerTracker interface {
 	// returning 0 means that no blocks can be deleted.
 	committedUpTo(basics.Round) basics.Round
 
-	// prepareCommit is called when it is time to commit tracker's data.
-	// The method must return a callback that persist data, and a callback for post-commit actions.
-	// These callback can nil if a tracker does not want to persist data.
-	prepareCommit(uint64, basics.Round, basics.Round) (commitRoundFn, postCommitRoundFn)
+	// prepareCommit, commitRound and postCommit are called when it is time to commit tracker's data.
+	// If an error returned the process is aborted.
+	prepareCommit(*deferredCommitContext) error
+	commitRound(context.Context, *sql.Tx, *deferredCommitContext) error
+	postCommit(deferredCommitContext)
 
 	// handleUnorderedCommit is a special method for handling deferred commits that are out of order.
 	// Tracker might update own state in this case. For example, account updates tracker cancels
@@ -98,9 +101,6 @@ type ledgerTracker interface {
 	// not succeed.
 	close()
 }
-
-type commitRoundFn func(context.Context, *sql.Tx, uint64, basics.Round) error
-type postCommitRoundFn func(uint64, basics.Round)
 
 // ledgerForTracker defines the part of the ledger that a tracker can
 // access.  This is particularly useful for testing trackers in isolation.
@@ -147,6 +147,31 @@ type trackerRegistry struct {
 	log logging.Logger
 
 	mu deadlock.RWMutex
+}
+
+type deferredCommitContext struct {
+	offset    uint64
+	oldBase   basics.Round
+	newBase   basics.Round
+	lookback  basics.Round
+	flushTime time.Time
+
+	genesisProto          config.ConsensusParams
+	roundConsensusVersion protocol.ConsensusVersion
+
+	deltas                 []ledgercore.AccountDeltas
+	roundTotals            []ledgercore.AccountTotals
+	compactAccountDeltas   compactAccountDeltas
+	compactCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable
+
+	updatedPersistedAccounts []persistedAccountData
+
+	isCatchpointRound    bool
+	committedRoundDigest crypto.Digest
+	trieBalancesHash     crypto.Digest
+
+	stats       telemetryspec.AccountsUpdateMetrics
+	updateStats bool
 }
 
 func (tr *trackerRegistry) initialize(au *accountUpdates, l ledgerForTracker, trackers []ledgerTracker) (err error) {
@@ -303,18 +328,22 @@ func (tr *trackerRegistry) commitRound(dc deferredCommit) {
 	}
 
 	dbRound = tr.dbRound
-
 	newBase := basics.Round(offset) + dbRound
 
-	var commitOps []commitRoundFn
-	var postcommitOps []postCommitRoundFn
+	dcc := deferredCommitContext{
+		offset:    offset,
+		oldBase:   dbRound,
+		newBase:   newBase,
+		lookback:  lookback,
+		flushTime: time.Now(),
+	}
+
 	for _, lt := range tr.trackers {
-		commitRound, postCommit := lt.prepareCommit(offset, dbRound, lookback)
-		if commitRound != nil {
-			commitOps = append(commitOps, commitRound)
-		}
-		if postCommit != nil {
-			postcommitOps = append(postcommitOps, postCommit)
+		err := lt.prepareCommit(&dcc)
+		if err != nil {
+			tr.log.Errorf(err.Error())
+			tr.mu.RUnlock()
+			return
 		}
 	}
 	tr.mu.RUnlock()
@@ -322,8 +351,8 @@ func (tr *trackerRegistry) commitRound(dc deferredCommit) {
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
 	err := tr.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		for _, commitRound := range commitOps {
-			err0 := commitRound(ctx, tx, offset, dbRound)
+		for _, lt := range tr.trackers {
+			err0 := lt.commitRound(ctx, tx, &dcc)
 			if err0 != nil {
 				return err0
 			}
@@ -345,8 +374,8 @@ func (tr *trackerRegistry) commitRound(dc deferredCommit) {
 
 	tr.mu.Lock()
 	tr.dbRound = newBase
-	for _, postCommitRound := range postcommitOps {
-		postCommitRound(offset, newBase)
+	for _, lt := range tr.trackers {
+		lt.postCommit(dcc)
 	}
 	tr.mu.Unlock()
 }

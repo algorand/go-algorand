@@ -17,6 +17,8 @@
 package ledger
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
@@ -155,8 +157,15 @@ func (t *txTail) committedUpTo(rnd basics.Round) basics.Round {
 	return (rnd + 1).SubSaturate(maxlife)
 }
 
-func (t *txTail) prepareCommit(uint64, basics.Round, basics.Round) (commitRoundFn, postCommitRoundFn) {
-	return nil, nil
+func (t *txTail) prepareCommit(*deferredCommitContext) error {
+	return nil
+}
+
+func (t *txTail) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+	return nil
+}
+
+func (t *txTail) postCommit(deferredCommitContext) {
 }
 
 func (t *txTail) handleUnorderedCommit(uint64, basics.Round, basics.Round) {

@@ -1719,260 +1719,260 @@ func (au *accountUpdates) handleUnorderedCommit(offset uint64, dbRound basics.Ro
 }
 
 // prepareCommit prepares data to write to the database a "chunk" of rounds, and update the cached dbRound accordingly.
-func (au *accountUpdates) prepareCommit(offset uint64, dbRound basics.Round, lookback basics.Round) (commitRoundFn, postCommitRoundFn) {
-	var stats telemetryspec.AccountsUpdateMetrics
-	var updateStats bool
-
+func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 	if au.logAccountUpdatesMetrics {
 		now := time.Now()
 		if now.Sub(au.lastMetricsLogTime) >= au.logAccountUpdatesInterval {
-			updateStats = true
+			dcc.updateStats = true
 			au.lastMetricsLogTime = now
 		}
 	}
 
+	offset := dcc.offset
+	dbRound := dcc.oldBase
+	lookback := dcc.lookback
+
 	au.accountsMu.RLock()
 
-	flushTime := time.Now()
-	isCatchpointRound := au.isCatchpointRound(offset, dbRound, lookback)
+	dcc.isCatchpointRound = au.isCatchpointRound(offset, dbRound, lookback)
 
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
-	deltas := make([]ledgercore.AccountDeltas, offset)
+	dcc.deltas = make([]ledgercore.AccountDeltas, offset)
 	creatableDeltas := make([]map[basics.CreatableIndex]ledgercore.ModifiedCreatable, offset)
-	roundTotals := make([]ledgercore.AccountTotals, offset+1)
-	copy(deltas, au.deltas[:offset])
+	dcc.roundTotals = make([]ledgercore.AccountTotals, offset+1)
+	copy(dcc.deltas, au.deltas[:offset])
 	copy(creatableDeltas, au.creatableDeltas[:offset])
-	copy(roundTotals, au.roundTotals[:offset+1])
+	copy(dcc.roundTotals, au.roundTotals[:offset+1])
 
 	// verify version correctness : all the entries in the au.versions[1:offset+1] should have the *same* version, and the committedUpTo should be enforcing that.
 	if au.versions[1] != au.versions[offset] {
 		au.accountsMu.RUnlock()
-		au.log.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
-		return nil, nil
+		return fmt.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
 	}
-	consensusVersion := au.versions[1]
+	dcc.roundConsensusVersion = au.versions[1]
 
-	var committedRoundDigest crypto.Digest
-	if isCatchpointRound {
-		committedRoundDigest = au.roundDigest[offset+uint64(lookback)-1]
+	if dcc.isCatchpointRound {
+		dcc.committedRoundDigest = au.roundDigest[offset+uint64(lookback)-1]
 	}
 
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
-	compactDeltas := makeCompactAccountDeltas(deltas, au.baseAccounts)
-	compactCreatableDeltas := compactCreatableDeltas(creatableDeltas)
+	dcc.compactAccountDeltas = makeCompactAccountDeltas(dcc.deltas, au.baseAccounts)
+	dcc.compactCreatableDeltas = compactCreatableDeltas(creatableDeltas)
 
 	au.accountsMu.RUnlock()
 
-	// in committedUpTo, we expect that this function to update the catchpointWriting when
-	// it's on a catchpoint round and it's an archival ledger. Doing this in a deferred function
-	// here would prevent us from "forgetting" to update this variable later on.
-	defer func() {
-		if isCatchpointRound && au.archivalLedger {
-			atomic.StoreInt32(&au.catchpointWriting, 0)
-		}
-	}()
+	dcc.genesisProto = au.ledger.GenesisProto()
 
-	var catchpointLabel string
-	beforeUpdatingBalancesTime := time.Now()
-	var trieBalancesHash crypto.Digest
-
-	genesisProto := au.ledger.GenesisProto()
-
-	var updatedPersistedAccounts []persistedAccountData
-	if updateStats {
-		stats.DatabaseCommitDuration = time.Duration(time.Now().UnixNano())
+	if dcc.updateStats {
+		dcc.stats.DatabaseCommitDuration = time.Duration(time.Now().UnixNano())
 	}
 
-	// commitRound closure is called within the same transaction for all trackers
-	// it receives current offset and dbRound
-	commitRound := func(ctx context.Context, tx *sql.Tx, offset uint64, dbRound basics.Round) error {
-		treeTargetRound := basics.Round(0)
-		if au.catchpointEnabled() {
-			mc, err0 := MakeMerkleCommitter(tx, false)
-			if err0 != nil {
-				return err0
-			}
-			if au.balancesTrie == nil {
-				trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
-				if err != nil {
-					au.log.Warnf("unable to create merkle trie during committedUpTo: %v", err)
-					return err
-				}
-				au.balancesTrie = trie
-			} else {
-				au.balancesTrie.SetCommitter(mc)
-			}
-			treeTargetRound = dbRound + basics.Round(offset)
+	return nil
+}
+
+// commitRound closure is called within the same transaction for all trackers
+// it receives current offset and dbRound
+func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) error {
+	treeTargetRound := basics.Round(0)
+	offset := dcc.offset
+	dbRound := dcc.oldBase
+
+	if au.catchpointEnabled() {
+		mc, err0 := MakeMerkleCommitter(tx, false)
+		if err0 != nil {
+			return err0
 		}
-
-		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
-
-		if updateStats {
-			stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano())
-		}
-
-		err := compactDeltas.accountsLoadOld(tx)
-		if err != nil {
-			return err
-		}
-
-		if updateStats {
-			stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano()) - stats.OldAccountPreloadDuration
-		}
-
-		err = totalsNewRounds(tx, deltas[:offset], compactDeltas, roundTotals[1:offset+1], config.Consensus[consensusVersion])
-		if err != nil {
-			return err
-		}
-
-		if updateStats {
-			stats.MerkleTrieUpdateDuration = time.Duration(time.Now().UnixNano())
-		}
-
-		err = au.accountsUpdateBalances(compactDeltas)
-		if err != nil {
-			return err
-		}
-
-		if updateStats {
-			now := time.Duration(time.Now().UnixNano())
-			stats.MerkleTrieUpdateDuration = now - stats.MerkleTrieUpdateDuration
-			stats.AccountsWritingDuration = now
-		}
-
-		// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
-		// so that we can update the base account back.
-		updatedPersistedAccounts, err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto, dbRound+basics.Round(offset))
-		if err != nil {
-			return err
-		}
-
-		if updateStats {
-			stats.AccountsWritingDuration = time.Duration(time.Now().UnixNano()) - stats.AccountsWritingDuration
-		}
-
-		err = updateAccountsHashRound(tx, treeTargetRound)
-		if err != nil {
-			return err
-		}
-
-		if isCatchpointRound {
-			trieBalancesHash, err = au.balancesTrie.RootHash()
+		if au.balancesTrie == nil {
+			trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
 			if err != nil {
+				au.log.Warnf("unable to create merkle trie during committedUpTo: %v", err)
 				return err
 			}
+			au.balancesTrie = trie
+		} else {
+			au.balancesTrie.SetCommitter(mc)
 		}
-		return nil
+		treeTargetRound = dbRound + basics.Round(offset)
 	}
 
-	postCommit := func(offset uint64, newBase basics.Round) {
-		if updateStats {
-			stats.DatabaseCommitDuration = time.Duration(time.Now().UnixNano()) - stats.DatabaseCommitDuration - stats.AccountsWritingDuration - stats.MerkleTrieUpdateDuration - stats.OldAccountPreloadDuration
+	db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
+
+	if dcc.updateStats {
+		dcc.stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano())
+	}
+
+	err := dcc.compactAccountDeltas.accountsLoadOld(tx)
+	if err != nil {
+		return err
+	}
+
+	if dcc.updateStats {
+		dcc.stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano()) - dcc.stats.OldAccountPreloadDuration
+	}
+
+	err = totalsNewRounds(tx, dcc.deltas[:offset], dcc.compactAccountDeltas, dcc.roundTotals[1:offset+1], config.Consensus[dcc.roundConsensusVersion])
+	if err != nil {
+		return err
+	}
+
+	if dcc.updateStats {
+		dcc.stats.MerkleTrieUpdateDuration = time.Duration(time.Now().UnixNano())
+	}
+
+	err = au.accountsUpdateBalances(dcc.compactAccountDeltas)
+	if err != nil {
+		return err
+	}
+
+	if dcc.updateStats {
+		now := time.Duration(time.Now().UnixNano())
+		dcc.stats.MerkleTrieUpdateDuration = now - dcc.stats.MerkleTrieUpdateDuration
+		dcc.stats.AccountsWritingDuration = now
+	}
+
+	// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
+	// so that we can update the base account back.
+	dcc.updatedPersistedAccounts, err = accountsNewRound(tx, dcc.compactAccountDeltas, dcc.compactCreatableDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
+	if err != nil {
+		return err
+	}
+
+	if dcc.updateStats {
+		dcc.stats.AccountsWritingDuration = time.Duration(time.Now().UnixNano()) - dcc.stats.AccountsWritingDuration
+	}
+
+	err = updateAccountsHashRound(tx, treeTargetRound)
+	if err != nil {
+		return err
+	}
+
+	if dcc.isCatchpointRound {
+		dcc.trieBalancesHash, err = au.balancesTrie.RootHash()
+		if err != nil {
+			return err
 		}
+	}
+	return nil
+}
 
-		var err error
-		if isCatchpointRound {
-			catchpointLabel, err = au.accountsCreateCatchpointLabel(dbRound+basics.Round(offset)+lookback, roundTotals[offset], committedRoundDigest, trieBalancesHash)
-			if err != nil {
-				au.log.Warnf("commitRound : unable to create a catchpoint label: %v", err)
-			}
+func (au *accountUpdates) postCommit(dcc deferredCommitContext) {
+	if dcc.updateStats {
+		spentDuration := dcc.stats.DatabaseCommitDuration + dcc.stats.AccountsWritingDuration + dcc.stats.MerkleTrieUpdateDuration + dcc.stats.OldAccountPreloadDuration
+		dcc.stats.DatabaseCommitDuration = time.Duration(time.Now().UnixNano()) - spentDuration
+	}
+
+	offset := dcc.offset
+	dbRound := dcc.oldBase
+	lookback := dcc.lookback
+	newBase := dcc.newBase
+
+	var catchpointLabel string
+	var err error
+	if dcc.isCatchpointRound {
+		catchpointLabel, err = au.accountsCreateCatchpointLabel(dbRound+basics.Round(offset)+lookback, dcc.roundTotals[offset], dcc.committedRoundDigest, dcc.trieBalancesHash)
+		if err != nil {
+			au.log.Warnf("commitRound : unable to create a catchpoint label: %v", err)
 		}
-		if au.balancesTrie != nil {
-			_, err = au.balancesTrie.Evict(false)
-			if err != nil {
-				au.log.Warnf("merkle trie failed to evict: %v", err)
-			}
-		}
-
-		if isCatchpointRound && catchpointLabel != "" {
-			au.lastCatchpointLabel = catchpointLabel
-		}
-		updatingBalancesDuration := time.Since(beforeUpdatingBalancesTime)
-
-		if updateStats {
-			stats.MemoryUpdatesDuration = time.Duration(time.Now().UnixNano())
-		}
-
-		au.accountsMu.Lock()
-		// Drop reference counts to modified accounts, and evict them
-		// from in-memory cache when no references remain.
-		for i := 0; i < compactDeltas.len(); i++ {
-			addr, acctUpdate := compactDeltas.getByIdx(i)
-			cnt := acctUpdate.ndeltas
-			macct, ok := au.accounts[addr]
-			if !ok {
-				au.log.Panicf("inconsistency: flushed %d changes to %s, but not in au.accounts", cnt, addr)
-			}
-
-			if cnt > macct.ndeltas {
-				au.log.Panicf("inconsistency: flushed %d changes to %s, but au.accounts had %d", cnt, addr, macct.ndeltas)
-			} else if cnt == macct.ndeltas {
-				delete(au.accounts, addr)
-			} else {
-				macct.ndeltas -= cnt
-				au.accounts[addr] = macct
-			}
-		}
-
-		for _, persistedAcct := range updatedPersistedAccounts {
-			au.baseAccounts.write(persistedAcct)
-		}
-
-		for cidx, modCrt := range compactCreatableDeltas {
-			cnt := modCrt.Ndeltas
-			mcreat, ok := au.creatables[cidx]
-			if !ok {
-				au.log.Panicf("inconsistency: flushed %d changes to creatable %d, but not in au.creatables", cnt, cidx)
-			}
-
-			if cnt > mcreat.Ndeltas {
-				au.log.Panicf("inconsistency: flushed %d changes to creatable %d, but au.creatables had %d", cnt, cidx, mcreat.Ndeltas)
-			} else if cnt == mcreat.Ndeltas {
-				delete(au.creatables, cidx)
-			} else {
-				mcreat.Ndeltas -= cnt
-				au.creatables[cidx] = mcreat
-			}
-		}
-
-		au.deltas = au.deltas[offset:]
-		au.deltasAccum = au.deltasAccum[offset:]
-		au.roundDigest = au.roundDigest[offset:]
-		au.versions = au.versions[offset:]
-		au.roundTotals = au.roundTotals[offset:]
-		au.creatableDeltas = au.creatableDeltas[offset:]
-		au.cachedDBRound = newBase
-		au.lastFlushTime = flushTime
-
-		au.accountsMu.Unlock()
-
-		if updateStats {
-			stats.MemoryUpdatesDuration = time.Duration(time.Now().UnixNano()) - stats.MemoryUpdatesDuration
-		}
-
-		au.accountsReadCond.Broadcast()
-
-		if isCatchpointRound && au.archivalLedger && catchpointLabel != "" {
-			// generate the catchpoint file. This need to be done inline so that it will block any new accounts that from being written.
-			// the generateCatchpoint expects that the accounts data would not be modified in the background during it's execution.
-			au.generateCatchpoint(basics.Round(offset)+dbRound+lookback, catchpointLabel, committedRoundDigest, updatingBalancesDuration)
-		}
-
-		// log telemetry event
-		if updateStats {
-			stats.StartRound = uint64(dbRound)
-			stats.RoundsCount = offset
-			stats.UpdatedAccountsCount = uint64(len(updatedPersistedAccounts))
-			stats.UpdatedCreatablesCount = uint64(len(compactCreatableDeltas))
-
-			var details struct {
-			}
-			au.log.Metrics(telemetryspec.Accounts, stats, details)
+	}
+	if au.balancesTrie != nil {
+		_, err = au.balancesTrie.Evict(false)
+		if err != nil {
+			au.log.Warnf("merkle trie failed to evict: %v", err)
 		}
 	}
 
-	return commitRound, postCommit
+	if dcc.isCatchpointRound && catchpointLabel != "" {
+		au.lastCatchpointLabel = catchpointLabel
+	}
+	updatingBalancesDuration := time.Since(dcc.flushTime)
+
+	if dcc.updateStats {
+		dcc.stats.MemoryUpdatesDuration = time.Duration(time.Now().UnixNano())
+	}
+
+	au.accountsMu.Lock()
+	// Drop reference counts to modified accounts, and evict them
+	// from in-memory cache when no references remain.
+	for i := 0; i < dcc.compactAccountDeltas.len(); i++ {
+		addr, acctUpdate := dcc.compactAccountDeltas.getByIdx(i)
+		cnt := acctUpdate.ndeltas
+		macct, ok := au.accounts[addr]
+		if !ok {
+			au.log.Panicf("inconsistency: flushed %d changes to %s, but not in au.accounts", cnt, addr)
+		}
+
+		if cnt > macct.ndeltas {
+			au.log.Panicf("inconsistency: flushed %d changes to %s, but au.accounts had %d", cnt, addr, macct.ndeltas)
+		} else if cnt == macct.ndeltas {
+			delete(au.accounts, addr)
+		} else {
+			macct.ndeltas -= cnt
+			au.accounts[addr] = macct
+		}
+	}
+
+	for _, persistedAcct := range dcc.updatedPersistedAccounts {
+		au.baseAccounts.write(persistedAcct)
+	}
+
+	for cidx, modCrt := range dcc.compactCreatableDeltas {
+		cnt := modCrt.Ndeltas
+		mcreat, ok := au.creatables[cidx]
+		if !ok {
+			au.log.Panicf("inconsistency: flushed %d changes to creatable %d, but not in au.creatables", cnt, cidx)
+		}
+
+		if cnt > mcreat.Ndeltas {
+			au.log.Panicf("inconsistency: flushed %d changes to creatable %d, but au.creatables had %d", cnt, cidx, mcreat.Ndeltas)
+		} else if cnt == mcreat.Ndeltas {
+			delete(au.creatables, cidx)
+		} else {
+			mcreat.Ndeltas -= cnt
+			au.creatables[cidx] = mcreat
+		}
+	}
+
+	au.deltas = au.deltas[offset:]
+	au.deltasAccum = au.deltasAccum[offset:]
+	au.roundDigest = au.roundDigest[offset:]
+	au.versions = au.versions[offset:]
+	au.roundTotals = au.roundTotals[offset:]
+	au.creatableDeltas = au.creatableDeltas[offset:]
+	au.cachedDBRound = newBase
+	au.lastFlushTime = dcc.flushTime
+
+	au.accountsMu.Unlock()
+
+	if dcc.updateStats {
+		dcc.stats.MemoryUpdatesDuration = time.Duration(time.Now().UnixNano()) - dcc.stats.MemoryUpdatesDuration
+	}
+
+	au.accountsReadCond.Broadcast()
+
+	if dcc.isCatchpointRound && au.archivalLedger && catchpointLabel != "" {
+		// generate the catchpoint file. This need to be done inline so that it will block any new accounts that from being written.
+		// the generateCatchpoint expects that the accounts data would not be modified in the background during it's execution.
+		au.generateCatchpoint(basics.Round(offset)+dbRound+lookback, catchpointLabel, dcc.committedRoundDigest, updatingBalancesDuration)
+	}
+
+	// log telemetry event
+	if dcc.updateStats {
+		dcc.stats.StartRound = uint64(dbRound)
+		dcc.stats.RoundsCount = offset
+		dcc.stats.UpdatedAccountsCount = uint64(len(dcc.updatedPersistedAccounts))
+		dcc.stats.UpdatedCreatablesCount = uint64(len(dcc.compactCreatableDeltas))
+
+		var details struct{}
+		au.log.Metrics(telemetryspec.Accounts, dcc.stats, details)
+	}
+
+	// in scheduleCommit, we expect that this function to update the catchpointWriting when
+	// it's on a catchpoint round and it's an archival ledger. Doing this in a deferred function
+	// here would prevent us from "forgetting" to update this variable later on.
+	if dcc.isCatchpointRound && au.archivalLedger {
+		atomic.StoreInt32(&au.catchpointWriting, 0)
+	}
 }
 
 // compactCreatableDeltas takes an array of creatables map deltas ( one array entry per round ), and compact the array into a single

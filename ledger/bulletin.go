@@ -17,6 +17,8 @@
 package ledger
 
 import (
+	"context"
+	"database/sql"
 	"sync/atomic"
 
 	"github.com/algorand/go-deadlock"
@@ -107,8 +109,15 @@ func (b *bulletin) committedUpTo(rnd basics.Round) basics.Round {
 	return rnd
 }
 
-func (b *bulletin) prepareCommit(uint64, basics.Round, basics.Round) (commitRoundFn, postCommitRoundFn) {
-	return nil, nil
+func (b *bulletin) prepareCommit(dcc *deferredCommitContext) error {
+	return nil
+}
+
+func (t *bulletin) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+	return nil
+}
+
+func (t *bulletin) postCommit(deferredCommitContext) {
 }
 
 func (b *bulletin) handleUnorderedCommit(uint64, basics.Round, basics.Round) {
