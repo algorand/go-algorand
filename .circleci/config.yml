@@ -326,7 +326,7 @@ commands:
       path:
         type: string
     steps:
-      - run: sed -i"" 's/classname="/classname="<< parameters.platform >>' << parameters.path >>/*/*.xml
+      - run: sed -i"" 's/classname="/classname="<< parameters.platform >>/' << parameters.path >>/*/*.xml
       - buildpulse/upload:
           path: << parameters.path >>
           account-id: 23182699
