@@ -82,8 +82,8 @@ func (r ParticipationRecord) Duplicate() ParticipationRecord {
 		EffectiveFirst:         r.EffectiveFirst,
 		EffectiveLast:          r.EffectiveLast,
 		// TODO: Deep Copy.
-		VRF:                    r.VRF,
-		Voting:                 r.Voting,
+		VRF:    r.VRF,
+		Voting: r.Voting,
 	}
 }
 
@@ -225,12 +225,12 @@ var (
 		)`
 
 	/*
-	createBlockProof = `CREATE TABLE BlockProofKeys (
-	    	id	  INTEGER PRIMARY KEY,
-	    	round INTEGER,	--*  committed round for this key
-			key   BLOB      --*  msgpack encoding of ParticipationAccount.BlockProof.SignatureAlgorithm
-		)`
-	 */
+		createBlockProof = `CREATE TABLE BlockProofKeys (
+		    	id	  INTEGER PRIMARY KEY,
+		    	round INTEGER,	--*  committed round for this key
+				key   BLOB      --*  msgpack encoding of ParticipationAccount.BlockProof.SignatureAlgorithm
+			)`
+	*/
 	insertKeysetQuery  = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution, vrf) VALUES (?, ?, ?, ?, ?, ?)`
 	insertRollingQuery = `INSERT INTO Rolling (pk, voting) VALUES (?, ?)`
 
