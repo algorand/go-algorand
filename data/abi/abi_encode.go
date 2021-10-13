@@ -137,44 +137,44 @@ func (t Type) Encode(value interface{}) ([]byte, error) {
 func encodeInt(intValue interface{}, bitSize uint16) ([]byte, error) {
 	var bigInt big.Int
 
-	switch intValue.(type) {
+	switch intValue := intValue.(type) {
 	case int8:
-		if intValue.(int8) < 0 {
+		if intValue < 0 {
 			return nil, fmt.Errorf("passed in int value should be non negative")
 		}
-		bigInt = *new(big.Int).SetUint64(uint64(intValue.(int8)))
+		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case uint8:
-		bigInt = *new(big.Int).SetUint64(uint64(intValue.(uint8)))
+		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case int16:
-		if intValue.(int16) < 0 {
+		if intValue < 0 {
 			return nil, fmt.Errorf("passed in int value should be non negative")
 		}
-		bigInt = *new(big.Int).SetUint64(uint64(intValue.(int16)))
+		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case uint16:
-		bigInt = *new(big.Int).SetUint64(uint64(intValue.(uint16)))
+		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case int32:
-		if intValue.(int16) < 0 {
+		if intValue < 0 {
 			return nil, fmt.Errorf("passed in int value should be non negative")
 		}
-		bigInt = *new(big.Int).SetUint64(uint64(intValue.(int32)))
+		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case uint32:
-		bigInt = *new(big.Int).SetUint64(uint64(intValue.(uint32)))
+		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case int64:
-		if intValue.(int16) < 0 {
+		if intValue < 0 {
 			return nil, fmt.Errorf("passed in int value should be non negative")
 		}
-		bigInt = *new(big.Int).SetUint64(uint64(intValue.(int64)))
+		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case uint64:
-		bigInt = *new(big.Int).SetUint64(intValue.(uint64))
+		bigInt = *new(big.Int).SetUint64(intValue)
 	case uint:
-		bigInt = *new(big.Int).SetUint64(uint64(intValue.(uint)))
+		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case int:
-		if intValue.(int) < 0 {
+		if intValue < 0 {
 			return nil, fmt.Errorf("passed in int value should be non negative")
 		}
-		bigInt = *new(big.Int).SetUint64(uint64(intValue.(int)))
+		bigInt = *new(big.Int).SetUint64(uint64(intValue))
 	case *big.Int:
-		bigInt = *new(big.Int).Set(intValue.(*big.Int))
+		bigInt = *new(big.Int).Set(intValue)
 	default:
 		return nil, fmt.Errorf("cannot infer go type for uint encode")
 	}
