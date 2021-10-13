@@ -168,7 +168,9 @@ workflows:
           #   branches:
           #     only:
           #       - /rel\/nightly/
-          context: slack-secrets
+          context:
+            - slack-secrets
+            - aws-secrets
 
       #- windows_x64_build
 
