@@ -625,15 +625,19 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 		copy(record.Account[:], rawAccount)
 
 		record.VRF = &crypto.VRFSecrets{}
-		err = protocol.Decode(rawVRF, record.VRF)
-		if err != nil {
-			return nil, fmt.Errorf("unable to decode VRF: %w", err)
+		if len(rawVRF) > 0 {
+			err = protocol.Decode(rawVRF, record.VRF)
+			if err != nil {
+				return nil, fmt.Errorf("unable to decode VRF: %w", err)
+			}
 		}
 
-		record.Voting = &crypto.OneTimeSignatureSecrets{}
-		err = protocol.Decode(rawVoting, record.Voting)
-		if err != nil {
-			return nil, fmt.Errorf("unable to decode Voting: %w", err)
+		if len(rawVoting) > 0 {
+			record.Voting = &crypto.OneTimeSignatureSecrets{}
+			err = protocol.Decode(rawVoting, record.Voting)
+			if err != nil {
+				return nil, fmt.Errorf("unable to decode Voting: %w", err)
+			}
 		}
 
 		results = append(results, record)
