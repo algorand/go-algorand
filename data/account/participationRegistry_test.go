@@ -429,7 +429,8 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 				record.Parent[:],
 				record.FirstValid,
 				record.LastValid,
-				record.KeyDilution)
+				record.KeyDilution,
+				[]byte{})
 			if err != nil {
 				return fmt.Errorf("unable to insert keyset: %w", err)
 			}

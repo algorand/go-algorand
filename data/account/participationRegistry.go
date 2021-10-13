@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -202,9 +203,9 @@ var (
 
 			firstValidRound INTEGER NOT NULL DEFAULT 0,
 			lastValidRound  INTEGER NOT NULL DEFAULT 0,
-			keyDilution     INTEGER NOT NULL DEFAULT 0
+			keyDilution     INTEGER NOT NULL DEFAULT 0,
 
-			-- vrf BLOB,    --*  msgpack encoding of ParticipationAccount.vrf
+			vrf BLOB    --*  msgpack encoding of ParticipationAccount.vrf
 		)`
 	createRolling = `CREATE TABLE Rolling (
 			pk INTEGER PRIMARY KEY NOT NULL,
@@ -213,12 +214,22 @@ var (
 			lastBlockProposalRound      INTEGER NOT NULL DEFAULT 0,
 			lastCompactCertificateRound INTEGER NOT NULL DEFAULT 0,
 			effectiveFirstRound        INTEGER NOT NULL DEFAULT 0,
-			effectiveLastRound         INTEGER NOT NULL DEFAULT 0
+			effectiveLastRound         INTEGER NOT NULL DEFAULT 0,
 
-			-- voting BLOB, --*  msgpack encoding of ParticipationAccount.voting
+			voting BLOB --*  msgpack encoding of ParticipationAccount.voting
+
+			-- blockProof BLOB  --*  msgpack encoding of ParticipationAccount.BlockProof
 		)`
-	insertKeysetQuery  = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution) VALUES (?, ?, ?, ?, ?)`
-	insertRollingQuery = `INSERT INTO Rolling (pk) VALUES (?)`
+
+	/*
+	createBlockProof = `CREATE TABLE BlockProofKeys (
+	    	id	  INTEGER PRIMARY KEY,
+	    	round INTEGER,	--*  committed round for this key
+			key   BLOB      --*  msgpack encoding of ParticipationAccount.BlockProof.SignatureAlgorithm
+		)`
+	 */
+	insertKeysetQuery  = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution, vrf) VALUES (?, ?, ?, ?, ?, ?)`
+	insertRollingQuery = `INSERT INTO Rolling (pk, voting) VALUES (?, ?)`
 
 	// SELECT pk FROM Keysets WHERE participationID = ?
 	selectPK      = `SELECT pk FROM Keysets WHERE participationID = ? LIMIT 1`
@@ -356,7 +367,13 @@ func (db *participationDB) writeThread() {
 		}
 	}
 }
+
 func (db *participationDB) insertInner(record Participation, id ParticipationID) (err error) {
+
+	rawVRF := protocol.Encode(record.VRF)
+	voting := record.Voting.Snapshot()
+	rawVoting := protocol.Encode(&voting)
+
 	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		result, err := tx.Exec(
 			insertKeysetQuery,
@@ -364,7 +381,8 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 			record.Parent[:],
 			record.FirstValid,
 			record.LastValid,
-			record.KeyDilution)
+			record.KeyDilution,
+			rawVRF)
 		if err != nil {
 			return fmt.Errorf("unable to insert keyset: %w", err)
 		}
@@ -381,7 +399,7 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 		}
 
 		// Create Rolling entry
-		result, err = tx.Exec(insertRollingQuery, pk)
+		result, err = tx.Exec(insertRollingQuery, pk, rawVoting)
 		if err != nil {
 			return fmt.Errorf("unable insert rolling: %w", err)
 		}

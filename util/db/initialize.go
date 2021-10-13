@@ -59,7 +59,7 @@ func InitializeWithContext(ctx context.Context, tx *sql.Tx, migrations []Migrati
 		for i := dbVersion; i < version; i++ {
 			err = migrations[i](ctx, tx, newDatabase)
 			if err != nil && err != ErrNoOpMigration {
-				return MakeErrUpgradeFailure(dbVersion, i)
+				return MakeErrUpgradeFailure(dbVersion, i, err)
 			}
 
 			// Something like this is used by the account DB to conditionally skip things.
@@ -70,7 +70,7 @@ func InitializeWithContext(ctx context.Context, tx *sql.Tx, migrations []Migrati
 			// update version
 			_, err = SetUserVersion(ctx, tx, i+1)
 			if err != nil {
-				return MakeErrUpgradeFailure(dbVersion, i)
+				return MakeErrUpgradeFailure(dbVersion, i, err)
 			}
 		}
 	}
@@ -105,18 +105,20 @@ func MakeErrUnknownVersion(currentVersion, supportedVersion int32) *ErrUnknownVe
 
 // ErrUpgradeFailure is returned when a migration returns an error.
 type ErrUpgradeFailure struct {
+	Err               error
 	SchemaVersionFrom int32
 	SchemaVersionTo   int32
 }
 
 // Error implements the error interface.
 func (err *ErrUpgradeFailure) Error() string {
-	return fmt.Sprintf("failed to upgrade database from schema %d to %d", err.SchemaVersionFrom, err.SchemaVersionTo)
+	return fmt.Sprintf("failed to upgrade database from schema %d to %d: %s", err.SchemaVersionFrom, err.SchemaVersionTo, err.Err.Error())
 }
 
 // MakeErrUpgradeFailure makes an ErrUpgradeFailure.
-func MakeErrUpgradeFailure(from, to int32) *ErrUpgradeFailure {
+func MakeErrUpgradeFailure(from, to int32, err error) *ErrUpgradeFailure {
 	return &ErrUpgradeFailure{
+		Err:               err,
 		SchemaVersionFrom: from,
 		SchemaVersionTo:   to,
 	}
