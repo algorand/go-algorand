@@ -90,6 +90,8 @@ type wsPeerWebsocketConn interface {
 	WriteControl(int, []byte, time.Time) error
 	SetReadLimit(int64)
 	CloseWithoutFlush() error
+	SetPingHandler(h func(appData string) error)
+	SetPongHandler(h func(appData string) error)
 }
 
 type sendMessage struct {
@@ -147,10 +149,8 @@ type wsPeer struct {
 	// Nonce used to uniquely identify requests
 	requestNonce uint64
 
-	// connectionLatency is the connection roundtrip latency between the local node and this peer.
-	// (measured in nanoseconds)
-	// we want this to be a 64-bit aligned for atomics support on 32bit platforms.
-	connectionLatency int64
+	// receivedPacketCounter is a global reception packet counter.
+	receivedPacketCounter uint64
 
 	wsPeerCore
 
@@ -183,6 +183,8 @@ type wsPeer struct {
 	pingData              []byte
 	pingInFlight          bool
 	lastPingRoundTripTime time.Duration
+
+	latencyTracker latencyTracker
 
 	// Hint about position in wn.peers.  Definitely valid if the peer
 	// is present in wn.peers.
@@ -293,8 +295,7 @@ func (wp *wsPeer) IsOutgoing() bool {
 
 // GetConnectionLatency returns the connection latency between the local node and this peer.
 func (wp *wsPeer) GetConnectionLatency() time.Duration {
-	latency := atomic.LoadInt64(&wp.connectionLatency)
-	return time.Duration(latency)
+	return wp.latencyTracker.getConnectionLatency()
 }
 
 // 	Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
@@ -355,7 +356,7 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseT
 }
 
 // setup values not trivially assigned
-func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
+func (wp *wsPeer) init(config config.Local, sendBufferLength int, initialConnectionLatency time.Duration) {
 	wp.net.log.Debugf("wsPeer init outgoing=%v %#v", wp.outgoing, wp.rootURL)
 	wp.closing = make(chan struct{})
 	wp.sendBufferHighPrio = make(chan sendMessages, sendBufferLength)
@@ -381,13 +382,17 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 
 	// if we're on an older version, then add the old style transaction message to the send messages tag.
 	// once we deprecate old style transaction sending, this part can go away.
-	if wp.version != "3.0" {
+	if wp.version == "2.1" {
 		txSendMsgTags := make(map[protocol.Tag]bool)
 		for tag := range wp.sendMessageTag {
 			txSendMsgTags[tag] = true
 		}
 		txSendMsgTags[protocol.TxnTag] = true
 		wp.sendMessageTag = txSendMsgTags
+	}
+	if wp.version == "3.1" {
+		wp.latencyTracker.init(wp.conn, config, initialConnectionLatency)
+
 	}
 
 	wp.wg.Add(2)
@@ -458,6 +463,7 @@ func (wp *wsPeer) readLoop() {
 			wp.reportReadErr(err)
 			return
 		}
+		wp.latencyTracker.increaseReceivedCounter()
 		msg.processing = wp.processed
 		msg.Received = time.Now().UnixNano()
 		msg.Data = slurper.Bytes()
@@ -651,7 +657,8 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 	}
 
 	// check if this message was waiting in the queue for too long. If this is the case, return "true" to indicate that we want to close the connection.
-	msgWaitDuration := time.Now().Sub(msg.enqueued)
+	now := time.Now()
+	msgWaitDuration := now.Sub(msg.enqueued)
 	if msgWaitDuration > maxMessageQueueDuration {
 		wp.net.log.Warnf("peer stale enqueued message %dms", msgWaitDuration.Nanoseconds()/1000000)
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "stale message"})
@@ -663,6 +670,12 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 		}
 		return disconnectStaleWrite
 	}
+
+	// is it time to send a ping message ?
+	if err := wp.latencyTracker.checkPingSending(&now); err != nil {
+		// todo - error
+	}
+
 	atomic.StoreInt64(&wp.intermittentOutgoingMessageEnqueueTime, msg.enqueued.UnixNano())
 	defer atomic.StoreInt64(&wp.intermittentOutgoingMessageEnqueueTime, 0)
 	err := wp.conn.WriteMessage(websocket.BinaryMessage, msg.data)

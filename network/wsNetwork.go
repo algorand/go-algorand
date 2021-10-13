@@ -1119,11 +1119,6 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		wn.requestsLogger.SetStatusCode(response, http.StatusSwitchingProtocols)
 	}
 
-	// create a rough initial estimation for the connection roundtrip time.
-	// TODO : use a pingpong to measure this correctly.
-	// !! THIS IS A STUB FOR TESTING PURPOSES ONLY !!
-	connectionRoundtripDuration := 100 * time.Millisecond
-
 	peer := &wsPeer{
 		wsPeerCore:        makePeerCore(wn, trackedRequest.otherPublicAddr, wn.GetRoundTripper(), trackedRequest.remoteHost),
 		conn:              conn,
@@ -1133,10 +1128,9 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		prioChallenge:     challenge,
 		createTime:        trackedRequest.created,
 		version:           matchingVersion,
-		connectionLatency: connectionRoundtripDuration.Nanoseconds(),
 	}
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
-	peer.init(wn.config, wn.outgoingMessagesBufferSize)
+	peer.init(wn.config, wn.outgoingMessagesBufferSize, time.Duration(0))
 	wn.addPeer(peer)
 	localAddr, _ := wn.Address()
 	wn.log.With("event", "ConnectedIn").With("remote", trackedRequest.otherPublicAddr).With("local", localAddr).Infof("Accepted incoming connection from peer %s", trackedRequest.otherPublicAddr)
@@ -1882,15 +1876,16 @@ const ProtocolVersionHeader = "X-Algorand-Version"
 const ProtocolAcceptVersionHeader = "X-Algorand-Accept-Version"
 
 // SupportedProtocolVersions contains the list of supported protocol versions by this node ( in order of preference ).
-var SupportedProtocolVersions = []string{"3.0", "2.1"}
+var SupportedProtocolVersions = []string{"3.1", "3.0", "2.1"}
 
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
 /* Version history:
  *  1   Catchup service over websocket connections with unicast messages between peers
  *  2.1 Introduced topic key/data pairs and enabled services over the gossip connections
  *  3.0 Introduced new transaction gossiping protocol
+ *  3.1 Introduced websocket based pingpong protocol
  */
-const ProtocolVersion = "3.0"
+const ProtocolVersion = "3.1"
 
 // TelemetryIDHeader HTTP header for telemetry-id for logging
 const TelemetryIDHeader = "X-Algorand-TelId"
@@ -2135,10 +2130,9 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		connMonitor:                 wn.connPerfMonitor,
 		throttledOutgoingConnection: throttledConnection,
 		version:                     matchingVersion,
-		connectionLatency:           initialRoundtripDuration.Nanoseconds(),
 	}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
-	peer.init(wn.config, wn.outgoingMessagesBufferSize)
+	peer.init(wn.config, wn.outgoingMessagesBufferSize, initialRoundtripDuration)
 	wn.addPeer(peer)
 	localAddr, _ := wn.Address()
 	wn.log.With("event", "ConnectedOut").With("remote", addr).With("local", localAddr).Infof("Made outgoing connection to peer %v", addr)
