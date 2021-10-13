@@ -445,6 +445,7 @@ jobs:
       - prepare_build_dir
       - prepare_go
       - generic_test:
+          platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test
           short_test_flag: "-short"
       - upload_coverage
@@ -460,6 +461,7 @@ jobs:
       - prepare_build_dir
       - prepare_go
       - generic_test:
+          platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
       - upload_coverage
