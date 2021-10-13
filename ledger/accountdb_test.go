@@ -288,7 +288,7 @@ func TestAccountStorageWithBlockProofID(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback()
 
-	accts := randomAccounts(20, false)
+	accts := ledgertesting.RandomAccounts(20, false)
 	_, err = accountsInit(tx, accts, proto)
 	require.NoError(t, err)
 	checkAccounts(t, tx, 0, accts)
@@ -299,7 +299,7 @@ func TestAccountStorageWithBlockProofID(t *testing.T) {
 
 	var updates ledgercore.AccountDeltas
 	var newaccts map[basics.Address]basics.AccountData
-	updates, newaccts, _, _ = randomDeltasFull(20, accts, 0, 0)
+	updates, newaccts, _, _ = ledgertesting.RandomDeltasFull(20, accts, 0, 0)
 	accts = newaccts
 
 	updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, baseAccounts)
@@ -533,7 +533,7 @@ func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
 	prevHash := crypto.Digest{}
 	for _, accountBalance := range bal {
 		encodedAccountBalance := protocol.Encode(&accountBalance)
-		prevHash = crypto.Hash(append(encodedAccountBalance, ([]byte(prevHash[:]))...))
+		prevHash = crypto.Hash(append(encodedAccountBalance, []byte(prevHash[:])...))
 	}
 	require.Equal(b, b.N, len(bal))
 }

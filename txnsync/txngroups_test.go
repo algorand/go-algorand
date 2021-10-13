@@ -94,7 +94,7 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 	genesisID := "gID"
 
 	inTxnGroups := []pooldata.SignedTxGroup{
-		pooldata.SignedTxGroup{
+		{
 			Transactions: []transactions.SignedTxn{
 				{
 					Txn: transactions.Transaction{
@@ -113,7 +113,7 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 				},
 			},
 		},
-		pooldata.SignedTxGroup{
+		{
 			Transactions: []transactions.SignedTxn{
 				{
 					Txn: transactions.Transaction{
@@ -144,7 +144,7 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 				},
 			},
 		},
-		pooldata.SignedTxGroup{
+		{
 			Transactions: []transactions.SignedTxn{
 				{
 					Txn: transactions.Transaction{
@@ -455,11 +455,11 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 				txn.Txn.ApplicationCallTxnFields = *ApplicationCallTxnFields
 				txn.Txn.ApplicationCallTxnFields.OnCompletion = 1
 			case protocol.CompactCertTx:
-				v0, err := protocol.RandomizeObject(&txn.Txn.CompactCertTxnFields)
-				require.NoError(t, err)
-				CompactCertTxnFields, ok := v0.(*transactions.CompactCertTxnFields)
-				require.True(t, ok)
-				txn.Txn.CompactCertTxnFields = *CompactCertTxnFields
+				//v0, err := protocol.RandomizeObject(&txn.Txn.CompactCertTxnFields)
+				//require.NoError(t, err)
+				//CompactCertTxnFields, ok := v0.(*transactions.CompactCertTxnFields)
+				//require.True(t, ok)
+				//txn.Txn.CompactCertTxnFields = *CompactCertTxnFields
 			default:
 				require.Fail(t, "unsupported txntype for txnsync msg encoding")
 			}
@@ -467,7 +467,7 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 			txns = append(txns, txn)
 		}
 		txnGroups := []pooldata.SignedTxGroup{
-			pooldata.SignedTxGroup{
+			{
 				Transactions: txns,
 			},
 		}

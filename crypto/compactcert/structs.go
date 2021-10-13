@@ -66,20 +66,14 @@ type Reveal struct {
 	Part    basics.Participant `codec:"p"`
 }
 
-// MaxReveals is a bound on allocation and on numReveals to limit log computation
-const MaxReveals = 1024
-
-// MaxProofDigests is a bound on allocation on number of proofs
-const MaxProofDigests = 20 * MaxReveals
-
 // Cert represents a compact certificate.
 type Cert struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	SigCommit    crypto.Digest   `codec:"c"`
-	SignedWeight uint64          `codec:"w"`
-	SigProofs    []crypto.Digest `codec:"S,allocbound=MaxProofDigests"`
-	PartProofs   []crypto.Digest `codec:"P,allocbound=MaxProofDigests"`
+	SigCommit    crypto.GenericDigest `codec:"c"`
+	SignedWeight uint64               `codec:"w"`
+	SigProofs    merklearray.Proof    `codec:"S,allocbound=MaxProofDigests"`
+	PartProofs   merklearray.Proof    `codec:"P,allocbound=MaxProofDigests"`
 
 	// Reveals is a sparse map from the position being revealed
 	// to the corresponding elements from the sigs and participants

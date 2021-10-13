@@ -52,11 +52,11 @@ func (pc PartCommit) Marshal(pos uint64) ([]byte, error) {
 	return crypto.HashRep(pc.participants[pos]), nil
 }
 
-func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key *merklekeystore.Signer) []Participant {
-	parts := make([]Participant, 0, numberOfParticipant)
+func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key *merklekeystore.Signer) []basics.Participant {
+	parts := make([]basics.Participant, 0, numberOfParticipant)
 
 	for i := 0; i < numberOfParticipant; i++ {
-		part := Participant{
+		part := basics.Participant{
 			PK:         *key.GetVerifier(),
 			Weight:     uint64(totalWeight / 2 / numberOfParticipant),
 			FirstValid: 0,
@@ -99,26 +99,9 @@ func TestBuildVerify(t *testing.T) {
 	require.NoError(t, err, "failed to create keys")
 
 	var parts []basics.Participant
-	var sigs []crypto.OneTimeSignature
-	for i := 0; i < npartHi; i++ {
-		part := basics.Participant{
-			PK:          key.OneTimeSignatureVerifier,
-			Weight:      uint64(totalWeight / 2 / npartHi),
-			KeyDilution: 10000,
-		}
-
-		parts = append(parts, part)
-	}
-
-	for i := 0; i < npartLo; i++ {
-		part := basics.Participant{
-			PK:          key.OneTimeSignatureVerifier,
-			Weight:      uint64(totalWeight / 2 / npartLo),
-			KeyDilution: 10000,
-		}
-
-		parts = append(parts, part)
-	}
+	var sigs []merklekeystore.Signature
+	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartHi, key)...)
+	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartLo, key)...)
 
 	sig, err := key.Sign(param.Msg, uint64(currentRound))
 	require.NoError(t, err, "failed to create keys")
@@ -186,14 +169,15 @@ func BenchmarkBuildVerify(b *testing.B) {
 	}
 
 	var parts []basics.Participant
-	var partkeys []*crypto.OneTimeSignatureSecrets
-	var sigs []crypto.OneTimeSignature
+	var partkeys []*merklekeystore.Signer
+	var sigs []merklekeystore.Signature
 	for i := 0; i < npart; i++ {
-		key := crypto.GenerateOneTimeSignatureSecrets(0, 1)
+		key, err := merklekeystore.New(0, uint64(param.CompactCertRounds)+1, param.CompactCertRounds, crypto.Ed25519Type)
+		require.NoError(b, err, "failed to generate keys")
 		part := basics.Participant{
-			PK:          key.OneTimeSignatureVerifier,
-			Weight:      uint64(totalWeight / npart),
-			KeyDilution: 10000,
+			PK:         *key.GetVerifier(),
+			Weight:     uint64(totalWeight / npart),
+			FirstValid: 0,
 		}
 
 		sig, err := key.Sign(param.Msg, uint64(currentRound))
