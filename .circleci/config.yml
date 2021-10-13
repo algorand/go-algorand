@@ -12,9 +12,9 @@ parameters:
   build_dir:
     type: string
     default: "/opt/cibuild"
-  results_dir:
+  result_path:
     type: string
-    default: "/opt/cibuild/project/build_test_results"
+    default: "/tmp/build_test_results"
 
 executors:
   amd64_medium:
@@ -289,7 +289,7 @@ commands:
         default: ""
       result_path:
         type: string
-        default: << pipeline.parameters.results_dir >>
+        default: << pipeline.parameters.result_path >>
     steps:
       - attach_workspace:
           at: << parameters.build_dir >>
@@ -364,7 +364,7 @@ commands:
         default: ""
       result_path:
         type: string
-        default: << pipeline.parameters.results_dir >>
+        default: << pipeline.parameters.result_path >>
     steps:
       - attach_workspace:
           at: << parameters.build_dir >>
@@ -401,27 +401,21 @@ commands:
       - store_test_results:
           path: << parameters.result_path >>
       - persist_to_workspace:
-          root: << parameters.build_dir >>
+          root: << parameters.result_path >>
           paths:
-            - project
-            - go
-            - gimme
-            - .gimme
+            - << parameters.result_subdir >>
 
   tests_verification_command:
     description: Check if all tests were run at least once and only once across all parallel runs
     parameters:
-      build_dir:
-        type: string
-        default: << pipeline.parameters.build_dir >>
       result_path:
         type: string
-        default: << pipeline.parameters.results_dir >>
+        default: << pipeline.parameters.result_path >>
       result_subdir:
         type: string
     steps:
       - attach_workspace:
-          at: << parameters.build_dir >>
+          at: << parameters.result_path >>
       - run:
           name: Check if all tests were run
           command: |
@@ -440,8 +434,6 @@ commands:
         type: string
         default: << pipeline.parameters.build_dir >>
     steps:
-      - attach_workspace:
-          at: << parameters.build_dir >>
       - when:
           condition:
             equal: [ "amd64", << parameters.platform >> ]
