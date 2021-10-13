@@ -254,10 +254,10 @@ func TestAccountDBRound(t *testing.T) {
 	ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
 	expectedDbImage := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	var baseAccounts lruAccounts
+	var newaccts map[basics.Address]basics.AccountData
 	baseAccounts.init(nil, 100, 80)
 	for i := 1; i < 10; i++ {
 		var updates ledgercore.AccountDeltas
-		var newaccts map[basics.Address]basics.AccountData
 		updates, newaccts, _, lastCreatableID = ledgertesting.RandomDeltasFull(20, accts, 0, lastCreatableID)
 		totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, accts, totals)
 		accts = newaccts
@@ -276,6 +276,17 @@ func TestAccountDBRound(t *testing.T) {
 		checkAccounts(t, tx, basics.Round(i), accts)
 		checkCreatables(t, tx, i, expectedDbImage)
 	}
+
+	// test the rewards.
+	var updates ledgercore.AccountDeltas
+	for addr, acctData := range newaccts {
+		updates.Upsert(addr, acctData)
+	}
+
+	expectedTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, nil, ledgercore.AccountTotals{})
+	actualTotals, err := accountsTotals(tx, false)
+	require.NoError(t, err)
+	require.Equal(t, expectedTotals, actualTotals)
 }
 
 // checkCreatables compares the expected database image to the actual databse content
