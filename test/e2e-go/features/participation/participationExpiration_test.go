@@ -63,8 +63,6 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 
 	a.GreaterOrEqual(newAmt, initialAmt)
 
-
-
 	newAccountStatus, err := pClient.AccountInformation(sAccount)
 	a.NoError(err)
 	a.Equal(basics.Offline.String(), newAccountStatus.Status)
@@ -72,9 +70,8 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	var onlineTxID string
 	var partKeyLastValid uint64
 
-
 	startTime := time.Now()
-	for time.Since(startTime) < 2 *time.Minute {
+	for time.Since(startTime) < 2*time.Minute {
 		_, currentRound := fixture.GetBalanceAndRound(richAccount)
 		// account adds part key
 		partKeyFirstValid := uint64(0)
