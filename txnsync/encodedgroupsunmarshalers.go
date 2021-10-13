@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -276,16 +277,24 @@ func (stub *txGroupsEncodingStub) reconstructTxnHeader(signedTxns []transactions
 
 func (stub *txGroupsEncodingStub) reconstructKeyregTxnFields(signedTxns []transactions.SignedTxn) (err error) {
 	// should all have same number of elements
-	if len(stub.VotePK)/len(crypto.OneTimeSignatureVerifier{}) != len(stub.VoteKeyDilution) || len(stub.SelectionPK)/len(crypto.VRFVerifier{}) != len(stub.VoteKeyDilution) {
+	if len(stub.VotePK)/len(crypto.OneTimeSignatureVerifier{}) != len(stub.VoteKeyDilution) ||
+		len(stub.SelectionPK)/len(crypto.VRFVerifier{}) != len(stub.VoteKeyDilution) ||
+		len(stub.CommitmentRoot)/merklekeystore.KeyStoreRootSize != len(stub.VoteKeyDilution) {
 		return errDataMissing
 	}
 	err = stub.BitmaskKeys.iterate(int(stub.TotalTransactionsCount), len(stub.VoteKeyDilution), func(i int, index int) error {
 		signedTxns[i].Txn.VoteKeyDilution = stub.VoteKeyDilution[index]
+		signedTxns[i].Txn.BlockProofPK.HasValidRoot = stub.HasValidRoot[index]
+
 		err := nextSlice(&stub.VotePK, signedTxns[i].Txn.VotePK[:], len(crypto.OneTimeSignatureVerifier{}))
 		if err != nil {
 			return err
 		}
-		return nextSlice(&stub.SelectionPK, signedTxns[i].Txn.SelectionPK[:], len(crypto.VRFVerifier{}))
+		err = nextSlice(&stub.SelectionPK, signedTxns[i].Txn.SelectionPK[:], len(crypto.VRFVerifier{}))
+		if err != nil {
+			return err
+		}
+		return nextSlice(&stub.CommitmentRoot, signedTxns[i].Txn.BlockProofPK.Root[:], merklekeystore.KeyStoreRootSize)
 	})
 	if err != nil {
 		return err
@@ -318,6 +327,7 @@ func (stub *txGroupsEncodingStub) reconstructKeyregTxnFields(signedTxns []transa
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -610,8 +620,9 @@ func (stub *txGroupsEncodingStub) reconstructCompactCertTxnFields(signedTxns []t
 }
 
 func (stub *txGroupsEncodingStub) reconstructCert(signedTxns []transactions.SignedTxn) (err error) {
-	err = stub.BitmaskSigCommit.iterate(int(stub.TotalTransactionsCount), len(stub.SigCommit)/crypto.DigestSize, func(i int, index int) error {
-		return nextSlice(&stub.SigCommit, signedTxns[i].Txn.Cert.SigCommit[:], crypto.DigestSize)
+	err = stub.BitmaskSigCommit.iterate(int(stub.TotalTransactionsCount), len(stub.SigCommit), func(i int, index int) error {
+		signedTxns[i].Txn.Cert.SigCommit = stub.SigCommit[index]
+		return nil
 	})
 	if err != nil {
 		return err
@@ -620,20 +631,31 @@ func (stub *txGroupsEncodingStub) reconstructCert(signedTxns []transactions.Sign
 		signedTxns[i].Txn.Cert.SignedWeight = stub.SignedWeight[index]
 		return nil
 	})
+
 	if err != nil {
 		return err
 	}
 	err = stub.BitmaskSigProofs.iterate(int(stub.TotalTransactionsCount), len(stub.SigProofs), func(i int, index int) error {
-		signedTxns[i].Txn.Cert.SigProofs = stub.SigProofs[index]
+		signedTxns[i].Txn.Cert.SigProofs.Path = stub.SigProofs[index]
 		return nil
 	})
+	err = stub.BitmaskSigsHash.iterate(int(stub.TotalTransactionsCount), len(stub.SigProofHashTypes), func(i int, index int) error {
+		signedTxns[i].Txn.Cert.SigProofs.HashFactory.HashType = crypto.HashType(stub.SigProofHashTypes[index])
+		return nil
+	})
+
 	if err != nil {
 		return err
 	}
 	err = stub.BitmaskPartProofs.iterate(int(stub.TotalTransactionsCount), len(stub.PartProofs), func(i int, index int) error {
-		signedTxns[i].Txn.Cert.PartProofs = stub.PartProofs[index]
+		signedTxns[i].Txn.Cert.PartProofs.Path = stub.PartProofs[index]
 		return nil
 	})
+	err = stub.BitmaskPartHash.iterate(int(stub.TotalTransactionsCount), len(stub.PartProofHashTypes), func(i int, index int) error {
+		signedTxns[i].Txn.Cert.PartProofs.HashFactory.HashType = crypto.HashType(stub.PartProofHashTypes[index])
+		return nil
+	})
+
 	if err != nil {
 		return err
 	}

@@ -73,6 +73,7 @@ func RandomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 
 	crypto.RandBytes(data.VoteID[:])
 	crypto.RandBytes(data.SelectionID[:])
+	crypto.RandBytes(data.BlockProofID.Root[:])
 	data.VoteFirstValid = basics.Round(crypto.RandUint64())
 	data.VoteLastValid = basics.Round(crypto.RandUint64())
 	data.VoteKeyDilution = crypto.RandUint64()
@@ -84,7 +85,7 @@ func RandomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 			ap := basics.AssetParams{
 				Total:         crypto.RandUint64(),
 				Decimals:      uint32(crypto.RandUint64() % 20),
-				DefaultFrozen: (crypto.RandUint64()%2 == 0),
+				DefaultFrozen: crypto.RandUint64()%2 == 0,
 				UnitName:      fmt.Sprintf("un%x", uint32(crypto.RandUint64()%0x7fffffff)),
 				AssetName:     fmt.Sprintf("an%x", uint32(crypto.RandUint64()%0x7fffffff)),
 				URL:           fmt.Sprintf("url%x", uint32(crypto.RandUint64()%0x7fffffff)),
@@ -105,7 +106,7 @@ func RandomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 		for i := uint64(0); i < ownedAssetsCount; i++ {
 			ah := basics.AssetHolding{
 				Amount: crypto.RandUint64(),
-				Frozen: (crypto.RandUint64()%2 == 0),
+				Frozen: crypto.RandUint64()%2 == 0,
 			}
 			data.Assets[basics.AssetIndex(crypto.RandUint64()%lastCreatableID)] = ah
 		}

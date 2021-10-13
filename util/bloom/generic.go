@@ -14,24 +14,14 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledgercore
+package bloom
 
-import (
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
-	"github.com/algorand/go-algorand/data/basics"
-)
-
-// An OnlineAccount corresponds to an account whose AccountData.Status
-// is Online.  This is used for a Merkle tree commitment of online
-// accounts, which is subsequently used to validate participants for
-// a compact certificate.
-type OnlineAccount struct {
-	// These are a subset of the fields from the corresponding AccountData.
-	Address                 basics.Address
-	MicroAlgos              basics.MicroAlgos
-	RewardsBase             uint64
-	NormalizedOnlineBalance uint64
-	VoteFirstValid          basics.Round
-	VoteLastValid           basics.Round
-	BlockProofID            merklekeystore.Verifier
+// GenericFilter is the interface for either bloom.Filter or bloom.XorFilter
+type GenericFilter interface {
+	// The input x is expected to be a slice with a length of 8 bytes or more.
+	Set(x []byte)
+	// The input x is expected to be a slice with a length of 8 bytes or more.
+	Test(x []byte) bool
+	MarshalBinary() ([]byte, error)
+	UnmarshalBinary(data []byte) error
 }

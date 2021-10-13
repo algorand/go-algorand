@@ -17,7 +17,7 @@
 package basics
 
 import (
-	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -33,15 +33,14 @@ import (
 type Participant struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	// PK is AccountData.VoteID.
-	PK crypto.OneTimeSignatureVerifier `codec:"p"`
+	// PK is the identifier used to verify the signature for a specific participant
+	PK merklekeystore.Verifier `codec:"p"`
 
 	// Weight is AccountData.MicroAlgos.
 	Weight uint64 `codec:"w"`
 
-	// KeyDilution is AccountData.KeyDilution() with the protocol for sigRound
-	// as expected by the Builder.
-	KeyDilution uint64 `codec:"d"`
+	// FirstValid reprents the first round where the commitment is valid
+	FirstValid uint64 `codec:"fv"`
 }
 
 // ToBeHashed implements the crypto.Hashable interface.

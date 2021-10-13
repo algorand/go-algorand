@@ -18,12 +18,12 @@ package txnsync
 
 import (
 	"errors"
+	"github.com/algorand/go-algorand/crypto/compactcert"
+	"github.com/algorand/go-algorand/protocol"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/pooldata"
-	"github.com/algorand/go-algorand/protocol"
 )
 
 const maxEncodedTransactionGroups = 30000
@@ -143,6 +143,8 @@ type encodedKeyregTxnFields struct {
 	VoteKeyDilution         []uint64       `codec:"votekd,allocbound=maxEncodedTransactionGroups"`
 	BitmaskKeys             bitmask        `codec:"votekbm"`
 	BitmaskNonparticipation bitmask        `codec:"nonpartbm"`
+	HasValidRoot            []bool         `codec:"vldrt,allocbound=maxEncodedTransactionGroups"`
+	CommitmentRoot          []byte         `codec:"comt,allocbound=maxEncodedTransactionGroups"`
 }
 
 type encodedPaymentTxnFields struct {
@@ -302,7 +304,7 @@ type encodedCompactCertTxnFields struct {
 }
 
 //msgp:allocbound certProofs compactcert.MaxProofDigests
-type certProofs []crypto.Digest
+type certProofs []crypto.GenericDigest
 
 //msgp:allocbound revealMap compactcert.MaxReveals
 type revealMap map[uint64]compactcert.Reveal
@@ -314,8 +316,8 @@ type SortUint64 = compactcert.SortUint64
 type encodedCert struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
-	SigCommit        []byte  `codec:"certc,allocbound=maxAddressBytes"`
-	BitmaskSigCommit bitmask `codec:"certcbm"`
+	SigCommit        []crypto.GenericDigest `codec:"certc,allocbound=maxAddressBytes"`
+	BitmaskSigCommit bitmask                `codec:"certcbm"`
 
 	SignedWeight        []uint64 `codec:"certw,allocbound=maxEncodedTransactionGroups"`
 	BitmaskSignedWeight bitmask  `codec:"certwbm"`
@@ -323,8 +325,14 @@ type encodedCert struct {
 	SigProofs        []certProofs `codec:"certS,allocbound=maxEncodedTransactionGroups"`
 	BitmaskSigProofs bitmask      `codec:"certSbm"`
 
+	SigProofHashTypes []uint64 `codec:"certSH,allocbound=maxEncodedTransactionGroups"`
+	BitmaskSigsHash   bitmask  `codec:"certSHbm"`
+
 	PartProofs        []certProofs `codec:"certP,allocbound=maxEncodedTransactionGroups"`
 	BitmaskPartProofs bitmask      `codec:"certPbm"`
+
+	PartProofHashTypes []uint64 `codec:"certPH,allocbound=maxEncodedTransactionGroups"`
+	BitmaskPartHash    bitmask  `codec:"certPHbm"`
 
 	Reveals        []revealMap `codec:"certr,allocbound=maxEncodedTransactionGroups"`
 	BitmaskReveals bitmask     `codec:"certrbm"`

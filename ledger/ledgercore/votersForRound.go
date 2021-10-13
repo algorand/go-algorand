@@ -23,6 +23,8 @@ import (
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -112,20 +114,15 @@ func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.
 			return fmt.Errorf("votersTracker.LoadTree: overflow computing totalWeight %d + %d", totalWeight.ToUint64(), money.ToUint64())
 		}
 
-		keyDilution := acct.VoteKeyDilution
-		if keyDilution == 0 {
-			keyDilution = tr.Proto.DefaultKeyDilution
-		}
-
 		participants[i] = basics.Participant{
-			PK:          acct.VoteID,
-			Weight:      money.ToUint64(),
-			KeyDilution: keyDilution,
+			PK:         acct.BlockProofID,
+			Weight:     money.ToUint64(),
+			FirstValid: uint64(acct.VoteFirstValid),
 		}
 		addrToPos[acct.Address] = uint64(i)
 	}
 
-	tree, err := merklearray.Build(participants)
+	tree, err := merklearray.Build(participants, crypto.HashFactory{HashType: compactcert.HashType})
 	if err != nil {
 		return err
 	}

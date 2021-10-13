@@ -18,8 +18,8 @@ package txnsync
 
 import (
 	"fmt"
-
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
@@ -313,11 +313,15 @@ func (stub *txGroupsEncodingStub) deconstructKeyregTxnFields(i int, txn *transac
 			stub.VotePK = make([]byte, 0, stub.TotalTransactionsCount*crypto.PublicKeyByteLength)
 			stub.SelectionPK = make([]byte, 0, stub.TotalTransactionsCount*crypto.VrfPubkeyByteLength)
 			stub.VoteKeyDilution = make([]uint64, 0, stub.TotalTransactionsCount)
+			stub.HasValidRoot = make([]bool, 0, stub.TotalTransactionsCount)
+			stub.CommitmentRoot = make([]byte, 0, stub.TotalTransactionsCount*merklekeystore.KeyStoreRootSize)
 		}
 		stub.BitmaskKeys.setBit(i)
 		stub.VotePK = append(stub.VotePK, txn.Txn.VotePK[:]...)
 		stub.SelectionPK = append(stub.SelectionPK, txn.Txn.SelectionPK[:]...)
 		stub.VoteKeyDilution = append(stub.VoteKeyDilution, txn.Txn.VoteKeyDilution)
+		stub.HasValidRoot = append(stub.HasValidRoot, txn.Txn.BlockProofPK.HasValidRoot)
+		stub.CommitmentRoot = append(stub.CommitmentRoot, txn.Txn.BlockProofPK.Root[:]...)
 	}
 	if !txn.Txn.VoteFirst.MsgIsZero() {
 		if len(stub.BitmaskVoteFirst) == 0 {
@@ -744,14 +748,15 @@ func (stub *txGroupsEncodingStub) finishDeconstructCompactCertTxnFields() {
 
 func (stub *txGroupsEncodingStub) deconstructCert(i int, txn *transactions.SignedTxn) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
-	if !txn.Txn.Cert.SigCommit.MsgIsZero() {
+	if txn.Txn.Cert.SigCommit != nil {
 		if len(stub.BitmaskSigCommit) == 0 {
 			stub.BitmaskSigCommit = make(bitmask, bitmaskLen)
-			stub.SigCommit = make([]byte, 0, stub.TotalTransactionsCount*crypto.DigestSize)
+			stub.SigCommit = make([]crypto.GenericDigest, 0, stub.TotalTransactionsCount)
 		}
 		stub.BitmaskSigCommit.setBit(i)
-		stub.SigCommit = append(stub.SigCommit, txn.Txn.Cert.SigCommit[:]...)
+		stub.SigCommit = append(stub.SigCommit, txn.Txn.Cert.SigCommit)
 	}
+
 	if txn.Txn.Cert.SignedWeight != 0 {
 		if len(stub.BitmaskSignedWeight) == 0 {
 			stub.BitmaskSignedWeight = make(bitmask, bitmaskLen)
@@ -760,22 +765,43 @@ func (stub *txGroupsEncodingStub) deconstructCert(i int, txn *transactions.Signe
 		stub.BitmaskSignedWeight.setBit(i)
 		stub.SignedWeight = append(stub.SignedWeight, txn.Txn.Cert.SignedWeight)
 	}
-	if txn.Txn.Cert.SigProofs != nil {
+	if txn.Txn.Cert.SigProofs.Path != nil {
 		if len(stub.BitmaskSigProofs) == 0 {
 			stub.BitmaskSigProofs = make(bitmask, bitmaskLen)
 			stub.SigProofs = make([]certProofs, 0, stub.TotalTransactionsCount)
 		}
 		stub.BitmaskSigProofs.setBit(i)
-		stub.SigProofs = append(stub.SigProofs, txn.Txn.Cert.SigProofs)
+		stub.SigProofs = append(stub.SigProofs, txn.Txn.Cert.SigProofs.Path)
 	}
-	if txn.Txn.Cert.PartProofs != nil {
+
+	if txn.Txn.Cert.SigProofs.HashFactory.HashType != 0 {
+		if len(stub.BitmaskSigsHash) == 0 {
+			stub.BitmaskSigsHash = make(bitmask, bitmaskLen)
+			stub.SigProofHashTypes = make([]uint64, 0, stub.TotalTransactionsCount)
+		}
+		stub.BitmaskSigsHash.setBit(i)
+		stub.SigProofHashTypes = append(stub.SigProofHashTypes, uint64(txn.Txn.Cert.SigProofs.HashFactory.HashType))
+	}
+
+	if txn.Txn.Cert.PartProofs.Path != nil {
 		if len(stub.BitmaskPartProofs) == 0 {
 			stub.BitmaskPartProofs = make(bitmask, bitmaskLen)
 			stub.PartProofs = make([]certProofs, 0, stub.TotalTransactionsCount)
+
 		}
 		stub.BitmaskPartProofs.setBit(i)
-		stub.PartProofs = append(stub.PartProofs, txn.Txn.Cert.PartProofs)
+		stub.PartProofs = append(stub.PartProofs, txn.Txn.Cert.PartProofs.Path)
 	}
+
+	if txn.Txn.Cert.PartProofs.HashFactory.HashType != 0 {
+		if len(stub.BitmaskPartHash) == 0 {
+			stub.BitmaskPartHash = make(bitmask, bitmaskLen)
+			stub.PartProofHashTypes = make([]uint64, 0, stub.TotalTransactionsCount)
+		}
+		stub.BitmaskPartHash.setBit(i)
+		stub.PartProofHashTypes = append(stub.PartProofHashTypes, uint64(txn.Txn.Cert.PartProofs.HashFactory.HashType))
+	}
+
 	if txn.Txn.Cert.Reveals != nil {
 		if len(stub.BitmaskReveals) == 0 {
 			stub.BitmaskReveals = make(bitmask, bitmaskLen)

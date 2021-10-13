@@ -14,24 +14,23 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledgercore
+package linttest
 
 import (
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
-	"github.com/algorand/go-algorand/data/basics"
+	"fmt"
 )
 
-// An OnlineAccount corresponds to an account whose AccountData.Status
-// is Online.  This is used for a Merkle tree commitment of online
-// accounts, which is subsequently used to validate participants for
-// a compact certificate.
-type OnlineAccount struct {
-	// These are a subset of the fields from the corresponding AccountData.
-	Address                 basics.Address
-	MicroAlgos              basics.MicroAlgos
-	RewardsBase             uint64
-	NormalizedOnlineBalance uint64
-	VoteFirstValid          basics.Round
-	VoteLastValid           basics.Round
-	BlockProofID            merklekeystore.Verifier
+type myStruct struct {
+	a int32
+	b float64
+	c bool
+}
+
+func (m *myStruct) couldError() error {
+	return fmt.Errorf("an error occurred")
+}
+
+func doSomething() {
+	m := myStruct{a: 2, b: 2.0}
+	m.couldError()
 }
