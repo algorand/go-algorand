@@ -385,7 +385,9 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int, initialConnect
 		wp.latencyTracker.init(wp.conn, config, initialConnectionLatency)
 		// send a ping right away.
 		now := time.Now()
-		wp.latencyTracker.checkPingSending(&now)
+		if err := wp.latencyTracker.checkPingSending(&now); err != nil {
+			wp.net.log.Infof("failed to send ping message to peer : %v", err)
+		}
 
 	}
 
