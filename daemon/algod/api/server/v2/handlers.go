@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
 	"github.com/algorand/go-algorand/data"
+	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -67,33 +68,117 @@ type NodeInterface interface {
 	StartCatchup(catchpoint string) error
 	AbortCatchup(catchpoint string) error
 	Config() config.Local
+	InstallParticipationKey(partKeyBinary *[]byte) (account.ParticipationID, error)
+	ListParticipationKeys() ([]account.ParticipationRecord, error)
+	GetParticipationKey(account.ParticipationID) (account.ParticipationRecord, error)
+	RemoveParticipationKey(account.ParticipationID) error
 }
 
 // GetParticipationKeys Return a list of participation keys
 // (GET /v2/participation)
 func (v2 *Handlers) GetParticipationKeys(ctx echo.Context) error {
-	return ctx.String(http.StatusNotImplemented, "Endpoint not implemented.")
+	partKeys, err := v2.Node.ListParticipationKeys()
+
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	response := []generated.ParticipationKey{}
+
+	for _, participationRecord := range partKeys {
+		info := generated.ParticipationKey{
+			"ID":         participationRecord.ParticipationID.String(),
+			"Address":    participationRecord.Account.String(),
+			"FirstValid": participationRecord.FirstValid,
+			"LastValid":  participationRecord.LastValid,
+			// TODO add this
+			"VoteID": crypto.OneTimeSignatureVerifier{},
+			// TODO add this
+			"SelectionID":     crypto.VRFVerifier{},
+			"VoteKeyDilution": participationRecord.KeyDilution,
+		}
+
+		response = append(response, info)
+	}
+
+	return ctx.JSON(http.StatusOK, response)
+
 }
 
 // AddParticipationKey Add a participation key to the node
 // (POST /v2/participation)
 func (v2 *Handlers) AddParticipationKey(ctx echo.Context) error {
 
-	return ctx.String(http.StatusNotImplemented, "Endpoint not implemented.")
+	buf := new(bytes.Buffer)
+	_, err := buf.ReadFrom(ctx.Request().Body)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	partKeyBinary := buf.Bytes()
+
+	if len(partKeyBinary) == 0 {
+		err := fmt.Errorf("binary was of length zero")
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	partID, err := v2.Node.InstallParticipationKey(&partKeyBinary)
+
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	response := generated.PostParticipationResponse{PartId: partID.String()}
+	return ctx.JSON(http.StatusOK, response)
+
 }
 
 // DeleteParticipationKeyByID Delete a given participation key by id
 // (DELETE /v2/participation/{participation-id})
 func (v2 *Handlers) DeleteParticipationKeyByID(ctx echo.Context, participationID string) error {
 
-	return ctx.String(http.StatusNotImplemented, "Endpoint not implemented.")
+	decodedParticipationID, err := account.ParticipationIDFromString(participationID)
+
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	err = v2.Node.RemoveParticipationKey(decodedParticipationID)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	return ctx.NoContent(http.StatusOK)
 }
 
 // GetParticipationKeyByID Get participation key info by id
 // (GET /v2/participation/{participation-id})
 func (v2 *Handlers) GetParticipationKeyByID(ctx echo.Context, participationID string) error {
 
-	return ctx.String(http.StatusNotImplemented, "Endpoint not implemented.")
+	decodedParticipationID, err := account.ParticipationIDFromString(participationID)
+
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	participationRecord, err := v2.Node.GetParticipationKey(decodedParticipationID)
+
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	response := generated.ParticipationKey{
+		"ID":         participationRecord.ParticipationID.String(),
+		"Address":    participationRecord.Account.String(),
+		"FirstValid": participationRecord.FirstValid,
+		"LastValid":  participationRecord.LastValid,
+		// TODO add this
+		"VoteID": crypto.OneTimeSignatureVerifier{},
+		// TODO add this
+		"SelectionID":     crypto.VRFVerifier{},
+		"VoteKeyDilution": participationRecord.KeyDilution,
+	}
+
+	return ctx.JSON(http.StatusOK, response)
 }
 
 // RegisterParticipationKeys registers participation keys.

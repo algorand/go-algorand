@@ -798,6 +798,114 @@ func (node *AlgorandFullNode) checkForParticipationKeys() {
 	}
 }
 
+// ListParticipationKeys returns all participation keys currently installed on the node
+func (node *AlgorandFullNode) ListParticipationKeys() (partKeys []account.ParticipationRecord, err error) {
+	return node.accountManager.Registry().GetAll(), nil
+}
+
+// GetParticipationKey retries the information of a participation id from the node
+func (node *AlgorandFullNode) GetParticipationKey(partKey account.ParticipationID) (account.ParticipationRecord, error) {
+	return node.accountManager.Registry().Get(partKey), nil
+}
+
+// RemoveParticipationKey given a participation id, remove the records from the node
+func (node *AlgorandFullNode) RemoveParticipationKey(partKey account.ParticipationID) error {
+
+	// Need to remove the file and then remove the entry in the registry
+	// Let's first get the recorded information from the registry so we can lookup the file
+
+	partRecord := node.accountManager.Registry().Get(partKey)
+
+	if partRecord.IsZero() {
+		return fmt.Errorf("could not find participation record in registry")
+	}
+
+	genID := node.GenesisID()
+
+	outDir := filepath.Join(node.rootDir, genID)
+
+	filename := config.PartKeyFilename(partRecord.ParticipationID.String(), uint64(partRecord.FirstValid), uint64(partRecord.LastValid))
+	fullyQualifiedFilename := filepath.Join(outDir, filepath.Base(filename))
+
+	_ = os.Remove(fullyQualifiedFilename)
+	_ = node.accountManager.Registry().Delete(partKey)
+
+	return nil
+}
+
+func createTemporaryParticipationKey(outDir string, partKeyBinary *[]byte) (string, error) {
+	tempFile := filepath.Join(outDir, filepath.Base("tempPartKeyBinary.bin"))
+
+	file, err := os.Create(tempFile)
+
+	if err != nil {
+		return "", err
+	}
+
+	_, err = file.Write(*partKeyBinary)
+
+	file.Close()
+
+	if err != nil {
+		os.Remove(tempFile)
+		return "", err
+	}
+
+	return tempFile, nil
+}
+
+// InstallParticipationKey Given a participation key binary stream install the participation key
+func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary *[]byte) (account.ParticipationID, error) {
+	genID := node.GenesisID()
+
+	outDir := filepath.Join(node.rootDir, genID)
+
+	fullyQualifiedTempFile, err := createTemporaryParticipationKey(outDir, partKeyBinary)
+	// We need to make sure no tempfile is created/remains if there is an error
+	// However, we will eventually rename this file but if we fail in-between
+	// this point and the rename we want to ensure that we remove the temporary file
+	// After we rename, this will fail anyway since the file will not exist
+
+	// Explicitly ignore the error with a closure
+	defer func(name string) {
+		_ = os.Remove(name)
+	}(fullyQualifiedTempFile)
+
+	if err != nil {
+		return account.ParticipationID{}, err
+	}
+
+	inputdb, err := db.MakeErasableAccessor(fullyQualifiedTempFile)
+	defer inputdb.Close()
+	if err != nil {
+		return account.ParticipationID{}, err
+	}
+
+	partkey, err := account.RestoreParticipation(inputdb)
+	defer partkey.Close()
+	if err != nil {
+		return account.ParticipationID{}, err
+	}
+
+	if partkey.Parent == (basics.Address{}) {
+		return account.ParticipationID{}, fmt.Errorf("cannot install partkey with missing (zero) parent address")
+	}
+
+	// Tell the AccountManager about the Participation (dupes don't matter) so we ignore the return value
+	_ = node.accountManager.AddParticipation(partkey)
+
+	newFilename := config.PartKeyFilename(partkey.ID().String(), uint64(partkey.FirstValid), uint64(partkey.LastValid))
+	newFullyQualifiedFilename := filepath.Join(outDir, filepath.Base(newFilename))
+
+	err = os.Rename(fullyQualifiedTempFile, newFullyQualifiedFilename)
+
+	if err != nil {
+		return account.ParticipationID{}, nil
+	}
+
+	return partkey.ID(), nil
+}
+
 func (node *AlgorandFullNode) loadParticipationKeys() error {
 	// Generate a list of all potential participation key files
 	genesisDir := filepath.Join(node.rootDir, node.genesisID)
