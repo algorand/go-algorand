@@ -19,6 +19,7 @@ package account
 import (
 	"context"
 	"database/sql"
+	"encoding/base32"
 	"errors"
 	"fmt"
 	"strings"
@@ -40,6 +41,11 @@ type ParticipationID crypto.Digest
 // IsZero returns true if the ParticipationID is all zero bytes.
 func (pid ParticipationID) IsZero() bool {
 	return (crypto.Digest(pid)).IsZero()
+}
+
+// String prints a b32 version of this ID.
+func (pid ParticipationID) String() string {
+	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(pid[:])
 }
 
 // ParticipationRecord contains all metadata relating to a set of participation keys.
