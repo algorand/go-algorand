@@ -325,12 +325,13 @@ commands:
       path:
         type: string
     steps:
-      - run: sed -i"" 's/classname="/classname="<< parameters.platform >>/' << parameters.path >>/*/*.xml
       - run:
           name: Send test results to BuildPulse
           when: always
           command: |
             set -e
+            if ! ls << parameters.path >>/*/*.xml &> /dev/null; then exit 0; fi
+            sed -i"" 's/classname="/classname="<< parameters.platform >>/' << parameters.path >>/*/*.xml
             case "<< parameters.platform >>" in
               arm64)
                 URL=https://github.com/buildpulse/test-reporter/releases/download/v0.21.0-pre/test-reporter-linux-arm64
@@ -401,13 +402,13 @@ commands:
           destination: test-results
       - store_test_results:
           path: << parameters.result_path >>
-      - upload_to_buildpulse:
-          platform: << parameters.platform >>
-          path: << parameters.result_path >>/<< parameters.result_subdir>>
       - persist_to_workspace:
           root: << parameters.result_path >>
           paths:
             - << parameters.result_subdir >>
+      - upload_to_buildpulse:
+          platform: << parameters.platform >>
+          path: << parameters.result_path >>/<< parameters.result_subdir>>
 
   tests_verification_command:
     description: Check if all tests were run at least once and only once across all parallel runs
