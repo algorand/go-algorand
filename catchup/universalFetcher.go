@@ -64,6 +64,9 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 			config: &uf.config,
 		}
 		fetchedBuf, err = fetcherClient.getBlockBytes(ctx, round)
+		if err != nil {
+			return nil, nil, time.Duration(0), err
+		}
 		address = fetcherClient.address()
 	} else if httpPeer, validHTTPPeer := peer.(network.HTTPPeer); validHTTPPeer {
 		fetcherClient := &HTTPFetcher{
@@ -74,14 +77,14 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 			log:     uf.log,
 			config:  &uf.config}
 		fetchedBuf, err = fetcherClient.getBlockBytes(ctx, round)
+		if err != nil {
+			return nil, nil, time.Duration(0), err
+		}
 		address = fetcherClient.address()
 	} else {
 		return nil, nil, time.Duration(0), fmt.Errorf("fetchBlock: UniversalFetcher only supports HTTPPeer and UnicastPeer")
 	}
 	downloadDuration = time.Now().Sub(blockDownloadStartTime)
-	if err != nil {
-		return nil, nil, time.Duration(0), err
-	}
 	block, cert, err := processBlockBytes(fetchedBuf, round, address)
 	if err != nil {
 		return nil, nil, time.Duration(0), err

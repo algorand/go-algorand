@@ -74,7 +74,6 @@ type Ledger struct {
 	txTail   txTail
 	bulletin bulletin
 	notifier blockNotifier
-	time     timeTracker
 	metrics  metricsTracker
 
 	trackers  trackerRegistry
@@ -188,7 +187,6 @@ func (l *Ledger) reloadLedger() error {
 	}
 
 	l.trackers.register(&l.accts)    // update the balances
-	l.trackers.register(&l.time)     // tracks the block timestamps
 	l.trackers.register(&l.txTail)   // update the transaction tail, tracking the recent 1000 txn
 	l.trackers.register(&l.bulletin) // provide closed channel signaling support for completed rounds
 	l.trackers.register(&l.notifier) // send OnNewBlocks to subscribers
@@ -463,11 +461,22 @@ func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ba
 	return data, validThrough, nil
 }
 
-// Totals returns the totals of all accounts at the end of round rnd.
-func (l *Ledger) Totals(rnd basics.Round) (ledgercore.AccountTotals, error) {
+// LatestTotals returns the totals of all accounts for the most recent round, as well as the round number.
+func (l *Ledger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.Totals(rnd)
+	return l.accts.LatestTotals()
+}
+
+// OnlineTotals returns the online totals of all accounts at the end of round rnd.
+func (l *Ledger) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	totals, err := l.accts.Totals(rnd)
+	if err != nil {
+		return basics.MicroAlgos{}, err
+	}
+	return totals.Online.Money, nil
 }
 
 // CheckDup return whether a transaction is a duplicate one.
@@ -575,14 +584,6 @@ func (l *Ledger) Wait(r basics.Round) chan struct{} {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.bulletin.Wait(r)
-}
-
-// Timestamp uses the timestamp tracker to return the timestamp
-// from block r.
-func (l *Ledger) Timestamp(r basics.Round) (int64, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	return l.time.timestamp(r)
 }
 
 // GenesisHash returns the genesis hash for this ledger.

@@ -122,7 +122,7 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     "${TEMPDIR}/ve/bin/pip3" install --upgrade py-algorand-sdk cryptography
     duration "e2e client setup"
 
-    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.sh
+    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
     duration "parallel client runner"
 
     for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do

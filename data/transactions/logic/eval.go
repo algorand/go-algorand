@@ -3741,11 +3741,12 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 			err = fmt.Errorf("Type arg not a byte array")
 			return
 		}
-		txType, ok := innerTxnTypes[string(sv.Bytes)]
-		if ok {
-			txn.Type = txType
+		txType := string(sv.Bytes)
+		ver, ok := innerTxnTypes[txType]
+		if ok && ver <= cx.version {
+			txn.Type = protocol.TxType(txType)
 		} else {
-			err = fmt.Errorf("%s is not a valid Type for itxn_field", sv.Bytes)
+			err = fmt.Errorf("%s is not a valid Type for itxn_field", txType)
 		}
 	case TypeEnum:
 		var i uint64
@@ -3755,9 +3756,9 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 		}
 		// i != 0 is so that the error reports 0 instead of Unknown
 		if i != 0 && i < uint64(len(TxnTypeNames)) {
-			txType, ok := innerTxnTypes[TxnTypeNames[i]]
-			if ok {
-				txn.Type = txType
+			ver, ok := innerTxnTypes[TxnTypeNames[i]]
+			if ok && ver <= cx.version {
+				txn.Type = protocol.TxType(TxnTypeNames[i])
 			} else {
 				err = fmt.Errorf("%s is not a valid Type for itxn_field", TxnTypeNames[i])
 			}
@@ -3768,14 +3769,48 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 		txn.Sender, err = cx.availableAccount(sv)
 	case Fee:
 		txn.Fee.Raw, err = sv.uint()
-	// FirstValid, LastValid unsettable: no motivation
-	// Note unsettable: would be strange, as this "Note" would not end up "chain-visible"
+	// FirstValid, LastValid unsettable: little motivation (maybe a app call
+	// wants to inspect?)  If we set, make sure they are legal, both for current
+	// round, and separation by MaxLifetime (check lifetime in submit, not here)
+	case Note:
+		if len(sv.Bytes) > cx.Proto.MaxTxnNoteBytes {
+			err = fmt.Errorf("%s may not exceed %d bytes", fs.field, cx.Proto.MaxTxnNoteBytes)
+		} else {
+			txn.Note = make([]byte, len(sv.Bytes))
+			copy(txn.Note[:], sv.Bytes)
+		}
 	// GenesisID, GenesisHash unsettable: surely makes no sense
 	// Group unsettable: Can't make groups from AVM (yet?)
 	// Lease unsettable: This seems potentially useful.
-	// RekeyTo unsettable: Feels dangerous for first release.
 
-	// KeyReg not allowed yet, so no fields settable
+	case RekeyTo:
+		txn.RekeyTo, err = sv.address()
+
+	// KeyReg
+	case VotePK:
+		if len(sv.Bytes) != 32 {
+			err = fmt.Errorf("%s must be 32 bytes", fs.field)
+		} else {
+			copy(txn.VotePK[:], sv.Bytes)
+		}
+	case SelectionPK:
+		if len(sv.Bytes) != 32 {
+			err = fmt.Errorf("%s must be 32 bytes", fs.field)
+		} else {
+			copy(txn.SelectionPK[:], sv.Bytes)
+		}
+	case VoteFirst:
+		var round uint64
+		round, err = sv.uint()
+		txn.VoteFirst = basics.Round(round)
+	case VoteLast:
+		var round uint64
+		round, err = sv.uint()
+		txn.VoteLast = basics.Round(round)
+	case VoteKeyDilution:
+		txn.VoteKeyDilution, err = sv.uint()
+	case Nonparticipation:
+		txn.Nonparticipation, err = sv.bool()
 
 	// Payment
 	case Receiver:
@@ -3820,7 +3855,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 		txn.AssetParams.URL, err = sv.string(cx.Proto.MaxAssetURLBytes)
 	case ConfigAssetMetadataHash:
 		if len(sv.Bytes) != 32 {
-			err = fmt.Errorf("ConfigAssetMetadataHash must be 32 bytes")
+			err = fmt.Errorf("%s must be 32 bytes", fs.field)
 		} else {
 			copy(txn.AssetParams.MetadataHash[:], sv.Bytes)
 		}
@@ -3857,7 +3892,8 @@ func opTxField(cx *EvalContext) {
 	field := TxnField(cx.program[cx.pc+1])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.itxVersion == 0 || fs.itxVersion > cx.version {
-		cx.err = fmt.Errorf("invalid itxn_field field %d", field)
+		cx.err = fmt.Errorf("invalid itxn_field %s", field)
+		return
 	}
 	sv := cx.stack[last]
 	cx.err = cx.stackIntoTxnField(sv, fs, &cx.subtxn.Txn)
@@ -3877,15 +3913,6 @@ func opTxSubmit(cx *EvalContext) {
 
 	if len(cx.InnerTxns) >= cx.Proto.MaxInnerTransactions {
 		cx.err = errors.New("itxn_submit with MaxInnerTransactions")
-		return
-	}
-
-	// Error out on anything unusual.  Allow pay, axfer.
-	switch cx.subtxn.Txn.Type {
-	case protocol.PaymentTx, protocol.AssetTransferTx, protocol.AssetConfigTx, protocol.AssetFreezeTx:
-		// only pay, axfer, acfg, afrz for now
-	default:
-		cx.err = fmt.Errorf("Invalid inner transaction type %#v", cx.subtxn.Txn.Type)
 		return
 	}
 
@@ -3937,4 +3964,32 @@ func opTxSubmit(cx *EvalContext) {
 		ApplyData: ad,
 	})
 	cx.subtxn = nil
+}
+
+// PcDetails return PC and disassembled instructions at PC up to 2 opcodes back
+func (cx *EvalContext) PcDetails() (pc int, dis string) {
+	const maxNumAdditionalOpcodes = 2
+	text, ds, err := disassembleInstrumented(cx.program, nil)
+	if err != nil {
+		return cx.pc, dis
+	}
+
+	for i := 0; i < len(ds.pcOffset); i++ {
+		if ds.pcOffset[i].PC == cx.pc {
+			start := 0
+			if i >= maxNumAdditionalOpcodes {
+				start = i - maxNumAdditionalOpcodes
+			}
+
+			startTextPos := ds.pcOffset[start].Offset
+			endTextPos := len(text)
+			if i+1 < len(ds.pcOffset) {
+				endTextPos = ds.pcOffset[i+1].Offset
+			}
+
+			dis = text[startTextPos:endTextPos]
+			break
+		}
+	}
+	return cx.pc, dis
 }
