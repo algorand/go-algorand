@@ -149,14 +149,22 @@ workflows:
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
 
+      - deploy_approval:
+          name: << matrix.platform >>_deploy_approval
+          matrix:
+            <<: *matrix-default
+          type: approval
+          requires:
+            - << matrix.platform >>_test_nightly_verification
+            - << matrix.platform >>_integration_nightly_verification
+            - << matrix.platform >>_e2e_expect_nightly_verification
+
       - deploy_devnet:
           name: << matrix.platform >>_deploy
           matrix:
             <<: *matrix-default
           requires:
-            - << matrix.platform >>_test_nightly_verification
-            - << matrix.platform >>_integration_nightly_verification
-            - << matrix.platform >>_e2e_expect_nightly_verification
+            - deploy_approval
           filters:
             branches:
               only:
