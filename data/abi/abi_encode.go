@@ -320,7 +320,7 @@ func decodeUint(encoded []byte, bitSize uint16) (interface{}, error) {
 		return nil,
 			fmt.Errorf("uint/ufixed decode: expected byte length %d, but got byte length %d", bitSize/8, len(encoded))
 	}
-	switch bitSize/8 {
+	switch bitSize / 8 {
 	case 1:
 		return encoded[0], nil
 	case 2:

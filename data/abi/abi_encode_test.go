@@ -313,7 +313,7 @@ func castBigIntToInterface(val *big.Int, bitSize uint16) (interface{}, error) {
 	if val.Cmp(upperLimit) >= 0 {
 		return nil, fmt.Errorf("big integer %s >= upperlimit %s, error", val.String(), upperLimit.String())
 	}
-	switch bitSize/8 {
+	switch bitSize / 8 {
 	case 1:
 		return uint8(val.Uint64()), nil
 	case 2:
