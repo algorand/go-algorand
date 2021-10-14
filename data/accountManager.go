@@ -60,8 +60,8 @@ func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participati
 	for _, record := range manager.registry.GetAll() {
 		part := account.Participation{
 			Parent:      record.Account,
-			VRF:         nil,
-			Voting:      nil,
+			VRF:         record.VRF,
+			Voting:      record.Voting,
 			FirstValid:  record.FirstValid,
 			LastValid:   record.LastValid,
 			KeyDilution: record.KeyDilution,
@@ -71,9 +71,10 @@ func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participati
 			out = append(out, part)
 
 			// This is usually a no-op, but the first time it will update the DB.
-			err := manager.registry.Register(part.ID(), rnd)
+			//err := manager.registry.Register(part.ID(), rnd)
+			err := manager.registry.Register(record.ParticipationID, rnd)
 			if err != nil {
-				manager.log.Warn("Failed to register participation key (%s) with participation registry.", part.ID())
+				manager.log.Warnf("Failed to register participation key (%s) with participation registry: %s\n", part.ID(), err.Error())
 			}
 		}
 	}
@@ -100,10 +101,11 @@ func (manager *AccountManager) HasLiveKeys(from, to basics.Round) bool {
 func (manager *AccountManager) AddParticipation(participation account.PersistedParticipation) bool {
 	// Tell the ParticipationRegistry about the Participation. Duplicate entries
 	// are ignored.
-	_, err := manager.registry.Insert(participation.Participation)
+	pid, err := manager.registry.Insert(participation.Participation)
 	if err != nil && err != account.ErrAlreadyInserted {
 		manager.log.Warnf("Failed to insert participation key.")
 	}
+	manager.log.Warnf("Inserted key: %s", pid)
 
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
