@@ -431,15 +431,18 @@ commands:
     steps:
         - run:
             name: Upload binaries << parameters.platform >>
-            environment:
-              TRAVIS_BRANCH: ${CIRCLE_BRANCH}
             command: |
+              export TRAVIS_BRANCH=${CIRCLE_BRANCH}
               scripts/travis/deploy_packages.sh
         - when:
             condition:
               equal: [ "amd64", << parameters.platform >> ]
             steps:
-              - run: scripts/travis/test_release.sh
+              - run:
+                  name: test_release.sh
+                  command: |
+                    export TRAVIS_BRANCH=${CIRCLE_BRANCH}
+                    scripts/travis/test_release.sh
 
 jobs:
   codegen_verification:
