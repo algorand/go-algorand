@@ -324,8 +324,6 @@ commands:
         type: string
       path:
         type: string
-    environment:
-      PLATFORM: << platforms.platform >>
     steps:
       - run: sed -i"" 's/classname="/classname="<< parameters.platform >>/' << parameters.path >>/*/*.xml
       - run:
@@ -333,7 +331,7 @@ commands:
           when: always
           command: |
             set -e
-            case "$PLATFORM" in
+            case "<< platforms.platform >>" in
               arm64)
                 URL=https://github.com/buildpulse/test-reporter/releases/download/v0.21.0-pre/test-reporter-linux-arm64
                 SUM=53f94c29ad162c2b9ebb1f4a2f967f5262c0459ee4a0c34332977d8c89aafc18
