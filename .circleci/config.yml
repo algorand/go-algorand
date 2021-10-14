@@ -170,6 +170,22 @@ workflows:
           #       - /rel\/nightly/
           context: slack-secrets
 
+      - upload_binaries:
+          name: << matrix.platform >>_upload_binaries
+          matrix:
+            <<: *matrix-default
+          requires:
+            - << matrix.platform >>_test_nightly_verification
+            - << matrix.platform >>_integration_nightly_verification
+            - << matrix.platform >>_e2e_expect_nightly_verification
+          filters:
+            branches:
+              only:
+                - /rel\/.*/
+          context:
+            - slack-secrets
+            - aws-secrets
+
       #- windows_x64_build
 
 commands:
@@ -296,8 +312,9 @@ commands:
       - attach_workspace:
           at: << parameters.build_dir >>
       - run: |
-          sudo mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
-          sudo chown -R ${USER}:${GROUP} << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
+          mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
+          touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml
+          touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json
       - restore_cache:
           keys:
             - 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-'
@@ -427,8 +444,8 @@ commands:
           path: << parameters.result_path >>/<< parameters.result_subdir >>
           destination: << parameters.result_subdir >>/combined-test-results
 
-  deploy_command:
-    description: Deploy to devnet
+  upload_binaries_command:
+    description: save build artifacts for potential deployments
     parameters:
       platform:
         type: string
@@ -437,65 +454,16 @@ commands:
         default: << pipeline.parameters.build_dir >>
     steps:
         - run:
-            name: Deploy << parameters.platform >>
+            name: Upload binaries << parameters.platform >>
             environment:
               TRAVIS_BRANCH: ${CIRCLE_BRANCH}
-              S3_RELEASE_BUCKET: ${S3_RELEASE_BUCKET}
             command: |
-              pwd
-              ls
-              ls scripts/travis/deploy_packages.sh
-              ls scripts/travis/test_release.sh
               scripts/travis/deploy_packages.sh
-              scripts/travis/test_release.sh
-      # - when:
-      #     condition:
-      #       equal: [ "amd64", << parameters.platform >> ]
-      #     steps:
-      #       - run:
-      #           name: Deploy AMD64
-      #           environment:
-      #             TRAVIS_BRANCH: ${CIRCLE_BRANCH}
-      #           command: |
-      #             pwd
-      #             ls
-      #             ls scripts/travis/deploy_packages.sh
-      #             ls scripts/travis/test_release.sh
-      #             scripts/travis/deploy_packages.sh
-      #             scripts/travis/test_release.sh
-      # - when:
-      #     condition:
-      #       equal: [ "arm64", << parameters.platform >> ]
-      #     steps:
-      #       - run:
-      #           name: Deploy ARM64
-      #           environment:
-      #             TRAVIS_BRANCH: ${CIRCLE_BRANCH}
-      #             BUILD_TYPE: "external_build"
-      #             # TARGET_PLATFORM: "linux-arm64"
-      #           command: |
-      #             pwd
-      #             ls
-      #             ls scripts/travis/deploy_packages.sh
-      #             ls scripts/travis/external_build.sh
-      #             sudo apt update
-      #             sudo apt install awscli
-      #             aws --version
-      #             scripts/travis/external_build.sh ./scripts/travis/deploy_packages.sh
-      # - when:
-      #     condition:
-      #       equal: [ "mac_amd64", << parameters.platform >> ]
-      #     steps:
-      #       - run:
-      #           name: Deploy MAC AMD64
-      #           environment:
-      #             TRAVIS_BRANCH: ${CIRCLE_BRANCH}
-      #           command: |
-      #             pwd
-      #             ls
-      #             ls scripts/travis/deploy_packages.sh
-      #             scripts/travis/deploy_packages.sh
-
+        - when:
+            condition:
+              equal: [ "amd64", << parameters.platform >> ]
+            steps:
+              - run: scripts/travis/test_release.sh
 
 jobs:
   codegen_verification:
@@ -689,7 +657,7 @@ jobs:
       - tests_verification_command:
           result_subdir: << parameters.platform >>_<< parameters.job_type >>
 
-  deploy_devnet:
+  upload_binaries:
     working_directory: << pipeline.parameters.build_dir >>/project
     parameters:
       platform:
@@ -699,7 +667,7 @@ jobs:
       - prepare_build_dir
       - checkout
       - prepare_go
-      - deploy_command:
+      - upload_binaries_command:
           platform: << parameters.platform >>
       - slack/notify: &slack-fail-event
           event: fail

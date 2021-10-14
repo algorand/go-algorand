@@ -124,7 +124,7 @@ func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward
 		if !ok {
 			return false, BalanceRecord{}, Seed{}, basics.MicroAlgos{Raw: 0}
 		}
-		return true, BalanceRecord{Addr: addr, AccountData: data}, seed, total
+		return true, BalanceRecord{Addr: addr, OnlineAccountData: data.OnlineAccountData()}, seed, total
 	}
 
 	selParamsList := func(addrs []basics.Address) (ok bool, records []BalanceRecord, seed Seed, total basics.MicroAlgos) {
