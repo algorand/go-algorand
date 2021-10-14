@@ -1290,8 +1290,8 @@ func typeDig(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	idx := len(ops.typeStack) - depth
 	if idx >= 0 {
 		returns[len(returns)-1] = ops.typeStack[idx]
-		for i := idx + 1; i < len(ops.typeStack); i++ {
-			returns[i-idx-1] = ops.typeStack[i]
+		for i := idx; i < len(ops.typeStack); i++ {
+			returns[i-idx] = ops.typeStack[i]
 		}
 	}
 	return anys, returns
