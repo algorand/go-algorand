@@ -154,18 +154,14 @@ workflows:
           matrix:
             <<: *matrix-default
           requires:
-            # REMOVE
-            - << matrix.platform >>_test_verification
-            - << matrix.platform >>_integration_verification
-            - << matrix.platform >>_e2e_expect_verification
-          # FOR TESTING, ENABLE BEFORE MERGING
-            # - << matrix.platform >>_test_nightly_verification
-            # - << matrix.platform >>_integration_nightly_verification
-            # - << matrix.platform >>_e2e_expect_nightly_verification
-          # filters:
-          #   branches:
-          #     only:
-          #       - /rel\/nightly/
+            - << matrix.platform >>_test_nightly_verification
+            - << matrix.platform >>_integration_nightly_verification
+            - << matrix.platform >>_e2e_expect_nightly_verification
+          filters:
+            branches:
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
           context:
             - slack-secrets
             - aws-secrets
