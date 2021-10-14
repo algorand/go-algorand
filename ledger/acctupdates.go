@@ -1756,7 +1756,6 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 		}
 		return fmt.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
 	}
-	dcc.roundConsensusVersion = au.versions[1]
 
 	if dcc.isCatchpointRound {
 		dcc.committedRoundDigest = au.roundDigest[offset+uint64(lookback)-1]
