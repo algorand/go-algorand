@@ -94,6 +94,10 @@ func (encoder *messageAsyncEncoder) asyncEncodeAndSend(interface{}) interface{} 
 		encoder.messageData.transactionGroups = nil // clear out to allow GC to reclaim
 	}
 
+	if encoder.messageData.message.MsgSync.ResponseElapsedTime != 0 {
+		encoder.messageData.message.MsgSync.ResponseElapsedTime = uint64(encoder.roundClock.Since()) - encoder.messageData.message.MsgSync.ResponseElapsedTime
+	}
+
 	encodedMessage := encoder.messageData.message.MarshalMsg(getMessageBuffer())
 	encoder.messageData.encodedMessageSize = len(encodedMessage)
 	// now that the message is ready, we can discard the encoded transaction group slice to allow the GC to collect it.
@@ -284,7 +288,7 @@ notxns:
 	if peer.lastReceivedMessageTimestamp != 0 && peer.lastReceivedMessageLocalRound == s.round {
 		// adding a nanosecond to the elapsed time is meaningless for the data rate calculation, but would ensure that
 		// the ResponseElapsedTime field has a clear distinction between "being set" vs. "not being set"
-		metaMessage.message.MsgSync.ResponseElapsedTime = uint64((s.clock.Since() - peer.lastReceivedMessageTimestamp).Nanoseconds()) + 1
+		metaMessage.message.MsgSync.ResponseElapsedTime = uint64(peer.lastReceivedMessageTimestamp.Nanoseconds()) - 1
 		// reset the lastReceivedMessageTimestamp so that we won't be using that again on a subsequent outgoing message.
 		peer.lastReceivedMessageTimestamp = 0
 	}
