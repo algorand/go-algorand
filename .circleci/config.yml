@@ -158,6 +158,7 @@ workflows:
             - << matrix.platform >>_integration_nightly_verification
             - << matrix.platform >>_e2e_expect_nightly_verification
             - << matrix.platform >>_e2e_subs_nightly
+            - codegen_verification
           filters:
             branches:
               only:
