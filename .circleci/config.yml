@@ -296,9 +296,6 @@ commands:
           destination: test-results
       - store_test_results:
           path: << parameters.result_path >>
-      - upload_to_buildpulse:
-          platform: << parameters.platform >>
-          path: << parameters.result_path >>/<< parameters.result_subdir>>
       - persist_to_workspace:
           root: << parameters.result_path >>
           paths:
@@ -307,6 +304,9 @@ commands:
           key: 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-{{ .Environment.CIRCLE_BUILD_NUM }}'
           paths:
             - tmp/go-cache
+      - upload_to_buildpulse:
+          platform: << parameters.platform >>
+          path: << parameters.result_path >>/<< parameters.result_subdir>>
 
   upload_coverage:
     description: Collect coverage reports and upload them
