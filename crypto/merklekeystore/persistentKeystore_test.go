@@ -18,11 +18,13 @@ package merklekeystore
 
 import (
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
 
 func TestStoringKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	s := generateTestSigner(crypto.DilithiumType, 0, 4096, 345, a)
@@ -37,6 +39,7 @@ func TestStoringKeys(t *testing.T) {
 }
 
 func TestDroppingKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	s := generateTestSigner(crypto.DilithiumType, 25, 1023, 23, a)
@@ -61,6 +64,7 @@ func TestDroppingKeys(t *testing.T) {
 }
 
 func TestPersistRestore(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	s := generateTestSigner(crypto.DilithiumType, 25, 1023, 23, a)
@@ -74,6 +78,7 @@ func TestPersistRestore(t *testing.T) {
 
 func BenchmarkFetchKeys(b *testing.B) {
 	a := require.New(b)
+
 	start := uint64(1)
 	end := uint64(3000000)
 	interval := uint64(128)

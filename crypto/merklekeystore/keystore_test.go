@@ -110,9 +110,8 @@ func TestEmptySigner(t *testing.T) {
 	_, err = signer.Sign(h, 9)
 	a.Error(err)
 
-	// should Trim return error when trying to trim above its last valid? or just drop what relevant keys he finds as it is currently?
-	//_, err = signer.Trim(10)
-	//a.Error(err)
+	_, err = signer.Trim(10)
+	a.NoError(err)
 }
 
 func TestDisposableKeysGeneration(t *testing.T) {
@@ -501,7 +500,7 @@ func generateTestSigner(t crypto.AlgorithmType, firstValid uint64, lastValid uin
 func length(s *Signer, a *require.Assertions) int {
 	p := s.keyStore
 	var count int
-	err := p.store.Atomic(func(ctx context.Context, tx *sql.Tx) error { // does it take too long?
+	err := p.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		row := tx.QueryRow("SELECT COUNT(*) FROM BlockProofKeys")
 		err := row.Scan(&count)
 		if err != nil {

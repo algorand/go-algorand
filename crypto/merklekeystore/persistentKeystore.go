@@ -39,7 +39,7 @@ func (p *PersistentKeystore) Persist(keys []crypto.SignatureAlgorithm, firstVali
 		return fmt.Errorf("no keys provided (nil)")
 	}
 
-	err := p.store.Atomic(func(ctx context.Context, tx *sql.Tx) error { // does it take too long?
+	err := p.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err := keystoreInstallDatabase(tx) // assumes schema table already exists (created by partInstallDatabase)
 		if err != nil {
 			return err
@@ -66,8 +66,7 @@ func (p *PersistentKeystore) Persist(keys []crypto.SignatureAlgorithm, firstVali
 // GetKey receives a round number and returns the corresponding (previously committed on) key.
 func (p *PersistentKeystore) GetKey(round uint64) (*crypto.SignatureAlgorithm, error) {
 	var keyB []byte
-	err := p.store.Atomic(func(ctx context.Context, tx *sql.Tx) error { // does it take too long?
-		// Should we count the number of rows affected?
+	err := p.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		row := tx.QueryRow("SELECT key FROM BlockProofKeys WHERE round = ?", round)
 		err := row.Scan(&keyB)
 		if err != nil {
