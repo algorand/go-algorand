@@ -72,6 +72,44 @@ func TestPersistRestore(t *testing.T) {
 	a.Equal(countKeysInRange(25, 1023, 23), length(s2, a))
 }
 
+func BenchmarkFetchKeys(b *testing.B) {
+	a := require.New(b)
+	start := uint64(1)
+	end := uint64(3000000)
+	interval := uint64(128)
+	s := generateTestSigner(crypto.DilithiumType, start, end, interval, a)
+	defer s.keyStore.store.Close()
+	b.ResetTimer()
+
+	j := interval
+	for i := 0; i < b.N; i++ {
+		_, _ = s.keyStore.GetKey(j)
+		j += interval
+		if j > end {
+			j = interval
+		}
+	}
+}
+
+func BenchmarkTrimKeys(b *testing.B) {
+	a := require.New(b)
+	start := uint64(1)
+	end := uint64(3000000)
+	interval := uint64(128)
+	s := generateTestSigner(crypto.DilithiumType, start, end, interval, a)
+	defer s.keyStore.store.Close()
+	b.ResetTimer()
+
+	j := interval
+	for i := 0; i < b.N; i++ {
+		_, _ = s.Trim(j)
+		j += interval
+		if j > end {
+			j = interval
+		}
+	}
+}
+
 func countKeysInRange(firstValid uint64, lastValid uint64, interval uint64) int {
 	keysSkipped := firstValid / interval
 	keysUpTo := lastValid / interval

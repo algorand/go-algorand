@@ -110,8 +110,11 @@ func keystoreInstallDatabase(tx *sql.Tx) error {
 	if err != nil {
 		return err
 	}
-	// TODO: CREATE INDEX for round field in order to improve performance. Benchmark with and without
 
+	_, err = tx.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS roundIdx ON BlockProofKeys (round);`)
+	if err != nil {
+		return err
+	}
 	_, err = tx.Exec("INSERT INTO schema (tablename, version) VALUES (?, ?)", keystoreTableSchemaName, keystoreSchemaVersion)
 
 	return err
