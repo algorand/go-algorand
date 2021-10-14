@@ -28,9 +28,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -531,6 +533,44 @@ func TestParticipation_NoKeyToUpdate(t *testing.T) {
 		a.EqualError(err, ErrNoKeyForID.Error())
 		return nil
 	})
+}
+
+func TestParticipion_Blobs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+	registry := getRegistry(t)
+	defer registry.Close()
+
+	//filename := filepath.Join(genesisDir, wname)
+	access, err := db.MakeAccessor("writetest_root", false, true)
+	if err != nil {
+		panic(err)
+	}
+	root, err := GenerateRoot(access)
+	access.Close()
+	a.NoError(err)
+
+	//filename = filepath.Join(genesisDir, pname)
+	access, err = db.MakeAccessor("writetest", false, true)
+	if err != nil {
+		panic(err)
+	}
+	part, err := FillDBWithParticipationKeys(access, root.Address(), 0, 101, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+	access.Close()
+	a.NoError(err)
+
+	id, err := registry.Insert(part.Participation)
+	a.NoError(err)
+	a.NoError(registry.Flush())
+	a.Equal(id, part.ID())
+
+	registry.initializeCache()
+
+	record := registry.Get(id)
+	a.NotEqual(ParticipationRecord{}, record)
+	a.Equal(id, record.ParticipationID)
+	a.Equal(part.VRF, record.VRF)
+	a.Equal(part.Voting.Snapshot(), record.Voting.Snapshot())
 }
 
 func benchmarkKeyRegistration(numKeys int, b *testing.B) {
