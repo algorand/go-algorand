@@ -158,6 +158,11 @@ workflows:
             - << matrix.platform >>_test_nightly_verification
             - << matrix.platform >>_integration_nightly_verification
             - << matrix.platform >>_e2e_expect_nightly_verification
+          filters:
+            branches:
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
 
       - deploy_devnet:
           name: << matrix.platform >>_deploy
