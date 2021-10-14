@@ -17,6 +17,8 @@
 package ledger
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
@@ -43,7 +45,7 @@ type txTail struct {
 	lowWaterMark basics.Round // the last round known to be committed to disk
 }
 
-func (t *txTail) loadFromDisk(l ledgerForTracker) error {
+func (t *txTail) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 	latest := l.Latest()
 	hdr, err := l.BlockHdr(latest)
 	if err != nil {
@@ -153,6 +155,20 @@ func (t *txTail) committedUpTo(rnd basics.Round) basics.Round {
 	}
 
 	return (rnd + 1).SubSaturate(maxlife)
+}
+
+func (t *txTail) prepareCommit(*deferredCommitContext) error {
+	return nil
+}
+
+func (t *txTail) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+	return nil
+}
+
+func (t *txTail) postCommit(deferredCommitContext) {
+}
+
+func (t *txTail) handleUnorderedCommit(uint64, basics.Round, basics.Round) {
 }
 
 // txtailMissingRound is returned by checkDup when requested for a round number below the low watermark

@@ -711,14 +711,18 @@ func accountsReset(tx *sql.Tx) error {
 	return err
 }
 
-// accountsRound returns the tracker balances round number, and the round of the hash tree
-// if the hash of the tree doesn't exists, it returns zero.
-func accountsRound(tx *sql.Tx) (rnd basics.Round, hashrnd basics.Round, err error) {
+// accountsRound returns the tracker balances round number
+func accountsRound(tx *sql.Tx) (rnd basics.Round, err error) {
 	err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&rnd)
 	if err != nil {
 		return
 	}
+	return
+}
 
+// accountsHashRound returns the round of the hash tree
+// if the hash of the tree doesn't exists, it returns zero.
+func accountsHashRound(tx *sql.Tx) (hashrnd basics.Round, err error) {
 	err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='hashbase'").Scan(&hashrnd)
 	if err == sql.ErrNoRows {
 		hashrnd = basics.Round(0)
@@ -1228,7 +1232,7 @@ func totalsNewRounds(tx *sql.Tx, updates []ledgercore.AccountDeltas, compactUpda
 }
 
 // updates the round number associated with the current account data.
-func updateAccountsRound(tx *sql.Tx, rnd basics.Round, hashRound basics.Round) (err error) {
+func updateAccountsRound(tx *sql.Tx, rnd basics.Round) (err error) {
 	res, err := tx.Exec("UPDATE acctrounds SET rnd=? WHERE id='acctbase' AND rnd<?", rnd, rnd)
 	if err != nil {
 		return
@@ -1254,13 +1258,17 @@ func updateAccountsRound(tx *sql.Tx, rnd basics.Round, hashRound basics.Round) (
 			return
 		}
 	}
+	return
+}
 
-	res, err = tx.Exec("INSERT OR REPLACE INTO acctrounds(id,rnd) VALUES('hashbase',?)", hashRound)
+// updates the round number associated with the hash of current account data.
+func updateAccountsHashRound(tx *sql.Tx, hashRound basics.Round) (err error) {
+	res, err := tx.Exec("INSERT OR REPLACE INTO acctrounds(id,rnd) VALUES('hashbase',?)", hashRound)
 	if err != nil {
 		return
 	}
 
-	aff, err = res.RowsAffected()
+	aff, err := res.RowsAffected()
 	if err != nil {
 		return
 	}
