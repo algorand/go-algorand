@@ -181,11 +181,14 @@ func encodeInt(intValue interface{}, bitSize uint16) ([]byte, error) {
 // inferToSlice infers an interface element to a slice of interface{}, returns error if it cannot infer successfully
 func inferToSlice(value interface{}) ([]interface{}, error) {
 	reflectVal := reflect.ValueOf(value)
-	if reflectVal.Kind() != reflect.Slice {
+	if reflectVal.Kind() != reflect.Slice && reflectVal.Kind() != reflect.Array {
 		return nil, fmt.Errorf("cannot infer an interface value as a slice of interface element")
 	}
 	if reflectVal.IsNil() {
-		return nil, nil
+		if reflectVal.Kind() == reflect.Slice {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("cannot infer nil value for array kind interface")
 	}
 	values := make([]interface{}, reflectVal.Len())
 	for i := 0; i < reflectVal.Len(); i++ {
@@ -311,38 +314,31 @@ func compressBools(boolSlice []interface{}) (uint8, error) {
 	return res, nil
 }
 
-/*
 // decodeUint decodes byte slice into golang int/big.Int
 func decodeUint(encoded []byte, bitSize uint16) (interface{}, error) {
 	if len(encoded) != int(bitSize)/8 {
 		return nil,
 			fmt.Errorf("uint/ufixed decode: expected byte length %d, but got byte length %d", bitSize/8, len(encoded))
 	}
-	switch len(encoded) {
+	switch bitSize/8 {
 	case 1:
 		return encoded[0], nil
 	case 2:
-		return binary.BigEndian.Uint16(encoded), nil
+		return uint16(new(big.Int).SetBytes(encoded).Uint64()), nil
 	case 3, 4:
-		return binary.BigEndian.Uint32(encoded), nil
+		return uint32(new(big.Int).SetBytes(encoded).Uint64()), nil
 	case 5, 6, 7, 8:
-		return binary.BigEndian.Uint64(encoded), nil
+		return new(big.Int).SetBytes(encoded).Uint64(), nil
 	default:
 		return new(big.Int).SetBytes(encoded), nil
 	}
 }
-*/
 
 // Decode is an ABI type method to decode bytes to go values from ABI encoding rules
 func (t Type) Decode(encoded []byte) (interface{}, error) {
 	switch t.abiTypeID {
 	case Uint, Ufixed:
-		// return decodeUint(encoded, t.bitSize)
-		if len(encoded) != int(t.bitSize)/8 {
-			return nil,
-				fmt.Errorf("uint/ufixed decode: expected byte length %d, but got byte length %d", t.bitSize/8, len(encoded))
-		}
-		return new(big.Int).SetBytes(encoded), nil
+		return decodeUint(encoded, t.bitSize)
 	case Bool:
 		if len(encoded) != 1 {
 			return nil, fmt.Errorf("boolean byte should be length 1 byte")

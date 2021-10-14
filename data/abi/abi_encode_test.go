@@ -19,6 +19,7 @@ package abi
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -307,6 +308,25 @@ func TestEncodeValid(t *testing.T) {
 	})
 }
 
+func castBigIntToInterface(val *big.Int, bitSize uint16) (interface{}, error) {
+	upperLimit := new(big.Int).Lsh(big.NewInt(1), uint(bitSize))
+	if val.Cmp(upperLimit) >= 0 {
+		return nil, fmt.Errorf("big integer %s >= upperlimit %s, error", val.String(), upperLimit.String())
+	}
+	switch bitSize/8 {
+	case 1:
+		return uint8(val.Uint64()), nil
+	case 2:
+		return uint16(val.Uint64()), nil
+	case 3, 4:
+		return uint32(val.Uint64()), nil
+	case 5, 6, 7, 8:
+		return val.Uint64(), nil
+	default:
+		return val, nil
+	}
+}
+
 func TestDecodeValid(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	// decoding test for uint, iterating through all valid uint bitSize
@@ -317,11 +337,13 @@ func TestDecodeValid(t *testing.T) {
 		uintType, err := MakeUintType(uint16(intSize))
 		require.NoError(t, err, "make uint type failure")
 		for i := 0; i < 1000; i++ {
-			expected, err := rand.Int(rand.Reader, upperLimit)
+			expectedBig, err := rand.Int(rand.Reader, upperLimit)
 			require.NoError(t, err, "cryptographic random int init fail")
 
-			encodedUint, err := uintType.Encode(expected)
+			encodedUint, err := uintType.Encode(expectedBig)
 			require.NoError(t, err, "uint encode fail")
+			expected, err := castBigIntToInterface(expectedBig, uint16(intSize))
+			require.NoError(t, err, "cast big integer to expected value should not return error")
 
 			actual, err := uintType.Decode(encodedUint)
 			require.NoError(t, err, "decoding uint should not return error")
@@ -338,11 +360,13 @@ func TestDecodeValid(t *testing.T) {
 			ufixedType, err := MakeUfixedType(uint16(size), uint16(precision))
 			require.NoError(t, err, "make ufixed type failure")
 			for i := 0; i < 10; i++ {
-				expected, err := rand.Int(rand.Reader, upperLimit)
+				expectedBig, err := rand.Int(rand.Reader, upperLimit)
 				require.NoError(t, err, "cryptographic random int init fail")
 
-				encodedUfixed, err := ufixedType.Encode(expected)
+				encodedUfixed, err := ufixedType.Encode(expectedBig)
 				require.NoError(t, err, "ufixed encode fail")
+				expected, err := castBigIntToInterface(expectedBig, uint16(size))
+				require.NoError(t, err, "cast big integer to expected value should not return error")
 
 				actual, err := ufixedType.Decode(encodedUfixed)
 				require.NoError(t, err, "decoding ufixed should not return error")
@@ -445,10 +469,10 @@ func TestDecodeValid(t *testing.T) {
 		require.NoError(t, err, "make static uint array type failure")
 		inputUint := []interface{}{1, 2, 3, 4, 5, 6, 7, 8}
 		expected := []interface{}{
-			big.NewInt(1), big.NewInt(2),
-			big.NewInt(3), big.NewInt(4),
-			big.NewInt(5), big.NewInt(6),
-			big.NewInt(7), big.NewInt(8),
+			uint64(1), uint64(2),
+			uint64(3), uint64(4),
+			uint64(5), uint64(6),
+			uint64(7), uint64(8),
 		}
 		//expected := []interface{}{1, 2, 3, 4, 5, 6, 7, 8}
 		//arrayEncoded, err := staticUintArrT.Encode(expected)
@@ -838,17 +862,22 @@ func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
 		for j := 0; j < 200; j++ {
 			randVal, err := rand.Int(rand.Reader, max)
 			require.NoError(t, err, "generate random uint, should be no error")
-			(*pool)[Uint][uintIndex] = testUnit{serializedType: uintTstr, value: randVal}
+			optionalPrimitive, err := castBigIntToInterface(randVal, uint16(bitSize))
+			require.NoError(t, err, "random uint type cast should not have error")
+			(*pool)[Uint][uintIndex] = testUnit{serializedType: uintTstr, value: optionalPrimitive}
 			uintIndex++
 		}
 
 		for precision := 1; precision <= 160; precision++ {
 			randVal, err := rand.Int(rand.Reader, max)
 			require.NoError(t, err, "generate random ufixed, should be no error")
+			optionalPrimitive, err := castBigIntToInterface(randVal, uint16(bitSize))
+			require.NoError(t, err, "random uint type cast should not have error")
+
 			ufixedT, err := MakeUfixedType(uint16(bitSize), uint16(precision))
 			require.NoError(t, err, "make ufixed type failure")
 			ufixedTstr := ufixedT.String()
-			(*pool)[Ufixed][ufixedIndex] = testUnit{serializedType: ufixedTstr, value: randVal}
+			(*pool)[Ufixed][ufixedIndex] = testUnit{serializedType: ufixedTstr, value: optionalPrimitive}
 			ufixedIndex++
 		}
 	}
