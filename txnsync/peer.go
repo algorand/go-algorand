@@ -594,15 +594,15 @@ func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound ba
 			networkTrasmitTime := timeSinceLastMessageWasSent - time.Duration(timings.ResponseElapsedTime)
 			dataExchangeRate := uint64(time.Second) * networkMessageSize / uint64(networkTrasmitTime)
 
+			// clamp data exchange rate to realistic metrics
 			if dataExchangeRate < minDataExchangeRateThreshold {
 				dataExchangeRate = minDataExchangeRateThreshold
 			} else if dataExchangeRate > maxDataExchangeRateThreshold {
 				dataExchangeRate = maxDataExchangeRateThreshold
 			}
-			// clamp data exchange rate to realistic metrics
-			p.dataExchangeRate = dataExchangeRate
 			// fmt.Printf("incoming message : updating data exchange to %d; network msg size = %d+%d, transmit time = %v\n", dataExchangeRate, p.lastSentMessageSize, incomingMessageSize, networkTrasmitTime)
-			logging.Base().Infof("incoming message : updating data exchange to %d; network msg size = %d+%d, transmit time = %v\n", dataExchangeRate, p.lastSentMessageSize, incomingMessageSize, networkTrasmitTime)
+			logging.Base().Infof("incoming message : updating data exchange from %d to %d; network msg size = %d+%d, transmit time = %v", p.dataExchangeRate, dataExchangeRate, p.lastSentMessageSize, incomingMessageSize, networkTrasmitTime)
+			p.dataExchangeRate = dataExchangeRate
 		}
 
 		// given that we've (maybe) updated the data exchange rate, we need to clear out the lastSendMessage information
