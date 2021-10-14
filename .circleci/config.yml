@@ -162,7 +162,6 @@ workflows:
             branches:
               only:
                 - /rel\/.*/
-                - /hotfix\/.*/
 
       - deploy_devnet:
           name: << matrix.platform >>_deploy
@@ -174,7 +173,6 @@ workflows:
             branches:
               only:
                 - /rel\/.*/
-                - /hotfix\/.*/
           context:
             - slack-secrets
             - aws-secrets
