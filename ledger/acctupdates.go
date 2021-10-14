@@ -1739,10 +1739,9 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
 	dcc.deltas = make([]ledgercore.AccountDeltas, offset)
 	creatableDeltas := make([]map[basics.CreatableIndex]ledgercore.ModifiedCreatable, offset)
-	dcc.roundTotals = make([]ledgercore.AccountTotals, offset+1)
+	dcc.roundTotals = au.roundTotals[offset]
 	copy(dcc.deltas, au.deltas[:offset])
 	copy(creatableDeltas, au.creatableDeltas[:offset])
-	copy(dcc.roundTotals, au.roundTotals[:offset+1])
 
 	// verify version correctness : all the entries in the au.versions[1:offset+1] should have the *same* version, and the committedUpTo should be enforcing that.
 	if au.versions[1] != au.versions[offset] {
@@ -1757,7 +1756,6 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 		}
 		return fmt.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
 	}
-	dcc.roundConsensusVersion = au.versions[1]
 
 	if dcc.isCatchpointRound {
 		dcc.committedRoundDigest = au.roundDigest[offset+uint64(lookback)-1]
@@ -1833,7 +1831,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		dcc.stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano()) - dcc.stats.OldAccountPreloadDuration
 	}
 
-	err = totalsNewRounds(tx, dcc.deltas[:offset], dcc.compactAccountDeltas, dcc.roundTotals[1:offset+1], config.Consensus[dcc.roundConsensusVersion])
+	err = accountsPutTotals(tx, dcc.roundTotals, false)
 	if err != nil {
 		return err
 	}
@@ -1893,7 +1891,7 @@ func (au *accountUpdates) postCommit(dcc deferredCommitContext) {
 	var catchpointLabel string
 	var err error
 	if dcc.isCatchpointRound {
-		catchpointLabel, err = au.accountsCreateCatchpointLabel(dbRound+basics.Round(offset)+lookback, dcc.roundTotals[offset], dcc.committedRoundDigest, dcc.trieBalancesHash)
+		catchpointLabel, err = au.accountsCreateCatchpointLabel(dbRound+basics.Round(offset)+lookback, dcc.roundTotals, dcc.committedRoundDigest, dcc.trieBalancesHash)
 		if err != nil {
 			au.log.Warnf("commitRound : unable to create a catchpoint label: %v", err)
 		}
