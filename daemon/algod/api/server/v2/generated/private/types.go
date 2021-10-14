@@ -406,7 +406,7 @@ type TealValue struct {
 	// \[tb\] bytes value.
 	Bytes string `json:"bytes"`
 
-	// \[tt\] value type.
+	// \[tt\] value type. Value `1` refers to **bytes**, value `2` refers to **uint**
 	Type uint64 `json:"type"`
 
 	// \[ui\] uint value.
