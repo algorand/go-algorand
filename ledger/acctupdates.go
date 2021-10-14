@@ -1747,6 +1747,14 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 	// verify version correctness : all the entries in the au.versions[1:offset+1] should have the *same* version, and the committedUpTo should be enforcing that.
 	if au.versions[1] != au.versions[offset] {
 		au.accountsMu.RUnlock()
+
+		// in scheduleCommit, we expect that this function to update the catchpointWriting when
+		// it's on a catchpoint round and it's an archival ledger. Doing this in a deferred function
+		// here would prevent us from "forgetting" to update this variable later on.
+		// The same is repeated in commitRound on errors.
+		if dcc.isCatchpointRound && au.archivalLedger {
+			atomic.StoreInt32(&au.catchpointWriting, 0)
+		}
 		return fmt.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
 	}
 	dcc.roundConsensusVersion = au.versions[1]
@@ -1773,18 +1781,29 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 
 // commitRound closure is called within the same transaction for all trackers
 // it receives current offset and dbRound
-func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) error {
+func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) (err error) {
 	treeTargetRound := basics.Round(0)
 	offset := dcc.offset
 	dbRound := dcc.oldBase
 
-	if au.catchpointEnabled() {
-		mc, err0 := MakeMerkleCommitter(tx, false)
-		if err0 != nil {
-			return err0
+	defer func() {
+		if err != nil {
+			if dcc.isCatchpointRound && au.archivalLedger {
+				atomic.StoreInt32(&au.catchpointWriting, 0)
+			}
 		}
+	}()
+
+	if au.catchpointEnabled() {
+		var mc *MerkleCommitter
+		mc, err = MakeMerkleCommitter(tx, false)
+		if err != nil {
+			return
+		}
+
+		var trie *merkletrie.Trie
 		if au.balancesTrie == nil {
-			trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
+			trie, err = merkletrie.MakeTrie(mc, TrieMemoryConfig)
 			if err != nil {
 				au.log.Warnf("unable to create merkle trie during committedUpTo: %v", err)
 				return err
@@ -1796,7 +1815,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		treeTargetRound = dbRound + basics.Round(offset)
 	}
 
-	_, err := db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
+	_, err = db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
 	if err != nil {
 		return err
 	}
@@ -1856,7 +1875,8 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 			return err
 		}
 	}
-	return nil
+
+	return
 }
 
 func (au *accountUpdates) postCommit(dcc deferredCommitContext) {
