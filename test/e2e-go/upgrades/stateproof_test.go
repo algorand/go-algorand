@@ -23,6 +23,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -42,22 +43,19 @@ func TestKeysWithoutStateProofKeyCannotRegister(t *testing.T) {
 	defer fixture.Shutdown()
 	lastValid := uint64(1000 * 5)
 
-	a.NoError(registerKey(&fixture, a, lastValid, protocol.ConsensusV29))
-	a.Error(registerKey(&fixture, a, lastValid+1, protocol.ConsensusFuture))
+	nodeClient := fixture.GetLibGoalClientForNamedNode("Node")
+
+	a.NoError(registerKeyInto(&nodeClient, a, lastValid, protocol.ConsensusV30))
+	a.Error(registerKeyInto(&nodeClient, a, lastValid+1, protocol.ConsensusFuture))
 
 	runUntilProtocolUpgrades(a, &fixture)
 
-	a.Error(registerKey(&fixture, a, lastValid+2, protocol.ConsensusV29))
-	a.NoError(registerKey(&fixture, a, lastValid+3, protocol.ConsensusFuture))
+	a.Error(registerKeyInto(&nodeClient, a, lastValid+2, protocol.ConsensusV30))
+	a.NoError(registerKeyInto(&nodeClient, a, lastValid+3, protocol.ConsensusFuture))
 }
 
-func registerKey(fixture *fixtures.RestClientFixture, a *require.Assertions, lastValid uint64, ver protocol.ConsensusVersion) error {
-	_, err := registerKeyInto("Node", fixture, a, lastValid, ver)
-	return err
-}
+func registerKeyInto(client *libgoal.Client, a *require.Assertions, lastValid uint64, ver protocol.ConsensusVersion) error {
 
-func registerKeyInto(nodeName string, fixture *fixtures.RestClientFixture, a *require.Assertions, lastValid uint64, ver protocol.ConsensusVersion) (string, error) {
-	client := fixture.GetLibGoalClientForNamedNode(nodeName)
 	wh, err := client.GetUnencryptedWalletHandle()
 	a.NoError(err)
 	actList, err := client.ListAddresses(wh)
@@ -90,14 +88,15 @@ func registerKeyInto(nodeName string, fixture *fixtures.RestClientFixture, a *re
 		tx.GenesisHash = genHash
 	}
 
-	return client.SignAndBroadcastTransaction(wh, nil, tx)
+	_, err = client.SignAndBroadcastTransaction(wh, nil, tx)
+	return err
 }
 
 func getStateProofConcensus() config.ConsensusProtocols {
 	consensus := generateFastUpgradeConsensus()
 
 	// TODO: when upgrading from v29, need to change this from future to v30.
-	consensus[consensusTestFastUpgrade(protocol.ConsensusV29)].
+	consensus[consensusTestFastUpgrade(protocol.ConsensusV30)].
 		ApprovedUpgrades[consensusTestFastUpgrade(protocol.ConsensusFuture)] = 0
 	return consensus
 }
