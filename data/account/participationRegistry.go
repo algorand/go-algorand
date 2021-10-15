@@ -76,6 +76,16 @@ func (r ParticipationRecord) IsZero() bool {
 
 // Duplicate creates a copy of the current object. This is required once secrets are stored.
 func (r ParticipationRecord) Duplicate() ParticipationRecord {
+	var vrf crypto.VRFSecrets
+	if r.VRF != nil {
+		copy(vrf.SK[:], r.VRF.SK[:])
+		copy(vrf.PK[:], r.VRF.PK[:])
+	}
+
+	var voting crypto.OneTimeSignatureSecrets
+	if r.Voting != nil {
+		voting = r.Voting.Snapshot()
+	}
 	return ParticipationRecord{
 		ParticipationID:        r.ParticipationID,
 		Account:                r.Account,
@@ -87,9 +97,8 @@ func (r ParticipationRecord) Duplicate() ParticipationRecord {
 		LastCompactCertificate: r.LastCompactCertificate,
 		EffectiveFirst:         r.EffectiveFirst,
 		EffectiveLast:          r.EffectiveLast,
-		// TODO: Deep Copy.
-		VRF:    r.VRF,
-		Voting: r.Voting,
+		VRF:                    &vrf,
+		Voting:                 &voting,
 	}
 }
 
@@ -777,7 +786,7 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 		db.mutex.Unlock()
 	}
 
-	db.log.Warnf("Successfully Registered: %s\n", id)
+	db.log.Infof("Successfully Registered: %s\n", id)
 	return nil
 }
 

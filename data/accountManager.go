@@ -120,7 +120,7 @@ func (manager *AccountManager) AddParticipation(participation account.PersistedP
 	if err != nil && err != account.ErrAlreadyInserted {
 		manager.log.Warnf("Failed to insert participation key.")
 	}
-	manager.log.Warnf("Inserted key: %s", pid)
+	manager.log.Infof("Inserted key: %s", pid)
 
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
