@@ -322,8 +322,12 @@ func TestAccountStorageWithBlockProofID(t *testing.T) {
 
 	totals, err := accountsTotals(tx, false)
 	require.NoError(t, err)
-
-	totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, accts, totals)
+	cAccounts := make(map[basics.Address]basics.AccountData, updatesCnt.len())
+	for i := 0; i < updatesCnt.len(); i++ {
+		addr, acctData := updatesCnt.getByIdx(i)
+		cAccounts[addr] = acctData.old.accountData
+	}
+	totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, cAccounts, totals)
 	err = accountsPutTotals(tx, totals, false)
 	require.NoError(t, err)
 	_, err = accountsNewRound(tx, updatesCnt, nil, proto, basics.Round(0))
