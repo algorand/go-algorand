@@ -57,6 +57,16 @@ func MakeAccountManager(log logging.Logger, registry account.ParticipationRegist
 
 // Keys returns a list of Participation accounts.
 func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participation) {
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+
+	for _, part := range manager.partKeys {
+		if part.OverlapsInterval(rnd, rnd) {
+			out = append(out, part.Participation)
+		}
+	}
+	return
+	/*
 	for _, record := range manager.registry.GetAll() {
 		part := account.Participation{
 			Parent:      record.Account,
@@ -70,15 +80,20 @@ func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participati
 		if part.OverlapsInterval(rnd, rnd) {
 			out = append(out, part)
 
+			id := part.ID()
+			if !bytes.Equal(id[:], record.ParticipationID[:]) {
+				manager.log.Warnf("Participation IDs do not equal while fetching keys... %s != %s\n", id, record.ParticipationID)
+			}
 			// This is usually a no-op, but the first time it will update the DB.
 			//err := manager.registry.Register(part.ID(), rnd)
-			err := manager.registry.Register(record.ParticipationID, rnd)
-			if err != nil {
-				manager.log.Warnf("Failed to register participation key (%s) with participation registry: %s\n", part.ID(), err.Error())
-			}
+			//err := manager.registry.Register(record.ParticipationID, rnd)
+			//if err != nil {
+			//	manager.log.Warnf("Failed to register participation key (%s) with participation registry: %s\n", part.ID(), err.Error())
+			//}
 		}
 	}
 	return out
+	 */
 }
 
 // HasLiveKeys returns true if we have any Participation

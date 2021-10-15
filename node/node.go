@@ -1189,6 +1189,12 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 		}
 		participations = append(participations, part)
 		matchingAccountsKeys[part.Address()] = true
+
+		// Make sure the key is registered.
+		err := node.accountManager.Registry().Register(part.ID(), keysRound)
+		if err != nil {
+			node.log.Warnf("Failed to register participation key (%s) with participation registry: %s\n", part.ID(), err.Error())
+		}
 	}
 	// write the warnings per account only if we couldn't find a single valid key for that account.
 	for mismatchingAddr, warningFlags := range mismatchingAccountsKeys {

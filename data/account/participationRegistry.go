@@ -777,6 +777,7 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 		db.mutex.Unlock()
 	}
 
+	db.log.Warnf("Successfully Registered: %s\n", id)
 	return nil
 }
 
