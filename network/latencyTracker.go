@@ -42,6 +42,7 @@ type latencyTracker struct {
 	// receivedPacketCounter is a counter for all incoming messages
 	// placed here to be aligned with 64bit address.
 	receivedPacketCounter uint64
+
 	// latency is the effective latency of the connection.
 	// placed here to be aligned with 64bit address.
 	latency int64
@@ -53,31 +54,37 @@ type latencyTracker struct {
 	// and therefore require syncronization.
 	lastPingSentTime int64
 
-	// lastPingMu synchronize the protected variables that might be modified across
-	// the checkPingSending and the pongHandler.
-	lastPingMu deadlock.Mutex
-	// lastPingID is the last ping ID, a monotonic growing number used to ensure
-	// that the pong message we've receive corresponds to the latest ping message
-	// that we've sent.
-	lastPingID uint64
-	// lastPingReceivedCounter stores message counter at the time we sent the ping.
-	// In order to ensure the timing accuracy, we want to have no other messages
-	// being exchanged. This, of course, would only delay the ping-pong until a
-	// better measurement could be taken.
-	lastPingReceivedCounter uint64
-	// lastPingSentTimeSynced, as stated above, is the syncronized version of lastPingSentTime.
-	// it is used only in the case where we end up sending the ping message.
-	lastPingSentTimeSynced int64
-
 	// static variables
 	// ( doesn't get changed after init, hence, no syncronization needed )
 
 	// conn is the underlying connection object.
 	conn wsPeerWebsocketConn
+
 	// enabled indicates whether the pingpong is currently enabled or not.
 	enabled bool
+
 	// pingInterval is the max interval at which the client would send ping messages.
 	pingInterval time.Duration
+
+	// lastPingMu synchronize the protected variables that might be modified across
+	// the checkPingSending and the pongHandler. All the variable below this point
+	// need to be syncronized with the mutex.
+	lastPingMu deadlock.Mutex
+
+	// lastPingID is the last ping ID, a monotonic growing number used to ensure
+	// that the pong message we've receive corresponds to the latest ping message
+	// that we've sent.
+	lastPingID uint64
+
+	// lastPingReceivedCounter stores message counter at the time we sent the ping.
+	// In order to ensure the timing accuracy, we want to have no other messages
+	// being exchanged. This, of course, would only delay the ping-pong until a
+	// better measurement could be taken.
+	lastPingReceivedCounter uint64
+
+	// lastPingSentTimeSynced, as stated above, is the syncronized version of lastPingSentTime.
+	// it is used only in the case where we end up sending the ping message.
+	lastPingSentTimeSynced int64
 }
 
 func (lt *latencyTracker) init(conn wsPeerWebsocketConn, cfg config.Local, initialConnectionLatency time.Duration) {
