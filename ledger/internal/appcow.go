@@ -17,6 +17,7 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
@@ -489,6 +490,11 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 		if cx != nil {
 			pc, det := cx.PcDetails()
 			details = fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
+		}
+		var nonSeqBlockEval ledgercore.ErrNonSequentialBlockEval
+		if errors.As(err, &nonSeqBlockEval) {
+			// in the case that the ledger have already moved beyond that round, just let the caller know that
+			return false, transactions.EvalDelta{}, err
 		}
 		return false, transactions.EvalDelta{}, ledgercore.LogicEvalError{Err: err, Details: details}
 	}

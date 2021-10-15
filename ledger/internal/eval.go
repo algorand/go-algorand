@@ -161,9 +161,12 @@ func (x *roundCowBase) blockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 }
 
 func (x *roundCowBase) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
-	acct, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	acct, latestRound, err := x.l.LookupLatestWithoutRewards(addr)
 	if err != nil {
 		return false, err
+	}
+	if latestRound != x.rnd {
+		return false, ledgercore.ErrNonSequentialBlockEval{EvaluatorRound: x.rnd + 1, LatestRound: latestRound}
 	}
 
 	// For global, check if app params exist
@@ -180,9 +183,12 @@ func (x *roundCowBase) allocated(addr basics.Address, aidx basics.AppIndex, glob
 // getKey gets the value for a particular key in some storage
 // associated with an application globally or locally
 func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error) {
-	ad, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	ad, latestRound, err := x.l.LookupLatestWithoutRewards(addr)
 	if err != nil {
 		return basics.TealValue{}, false, err
+	}
+	if latestRound != x.rnd {
+		return basics.TealValue{}, false, ledgercore.ErrNonSequentialBlockEval{EvaluatorRound: x.rnd + 1, LatestRound: latestRound}
 	}
 
 	exist := false
@@ -210,9 +216,12 @@ func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global 
 // getStorageCounts counts the storage types used by some account
 // associated with an application globally or locally
 func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
-	ad, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	ad, latestRound, err := x.l.LookupLatestWithoutRewards(addr)
 	if err != nil {
 		return basics.StateSchema{}, err
+	}
+	if latestRound != x.rnd {
+		return basics.StateSchema{}, ledgercore.ErrNonSequentialBlockEval{EvaluatorRound: x.rnd + 1, LatestRound: latestRound}
 	}
 
 	count := basics.StateSchema{}
@@ -918,6 +927,11 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	// Apply the transaction, updating the cow balances
 	applyData, err := eval.applyTransaction(txn.Txn, cow, evalParams, cow.txnCounter())
 	if err != nil {
+		var nonSeqBlockEval ledgercore.ErrNonSequentialBlockEval
+		if errors.As(err, &nonSeqBlockEval) {
+			// in the case that the ledger have already moved beyond that round, just let the caller know that
+			return err
+		}
 		return fmt.Errorf("transaction %v: %v", txid, err)
 	}
 
