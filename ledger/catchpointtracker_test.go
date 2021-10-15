@@ -23,7 +23,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	//"runtime"
+	"runtime"
 	"testing"
 	"time"
 
@@ -32,7 +32,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	//"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
@@ -249,7 +249,6 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 	b.ReportMetric(float64(accountsNumber), "accounts")
 }
 
-/*
 func TestReproducibleCatchpointLabels(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -286,11 +285,9 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.CatchpointInterval = 50
 	cfg.CatchpointTracking = 1
-	au := newAcctUpdates(t, ml, cfg, ".")
-
-	err := au.loadFromDisk(ml, 0)
-	require.NoError(t, err)
-	defer au.close()
+	ct := newCatchpointTracker(t, ml, cfg, ".")
+	au := ml.trackers.driver
+	defer ct.close()
 
 	rewardLevel := uint64(0)
 
@@ -331,7 +328,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 		delta.Totals = newTotals
 
-		au.newBlock(blk, delta)
+		ml.trackers.newBlock(blk, delta)
 		ml.trackers.committedUpTo(i)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		accts = append(accts, totals)
@@ -355,8 +352,12 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	for ; startingRound > basics.Round(cfg.CatchpointInterval); startingRound -= basics.Round(cfg.CatchpointInterval) {
 		au.close()
 		ml2 := ledgerHistory[startingRound]
-		err := au.loadFromDisk(ml2, ml2.trackers.dbRound)
-		require.NoError(t, err)
+
+		//ct := newCatchpointTracker(t, ml2, cfg, ".")
+		//au := ml2.trackers.driver
+		ml2.trackers.loadFromDisk(ml2)
+		//err := au.loadFromDisk(ml2, ml2.trackers.dbRound)
+		//require.NoError(t, err)
 
 		for i := startingRound + 1; i <= basics.Round(testCatchpointLabelsCount*cfg.CatchpointInterval); i++ {
 			blk := bookkeeping.Block{
@@ -367,15 +368,14 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			blk.RewardsLevel = rewardsLevels[i]
 			blk.CurrentProtocol = testProtocolVersion
 			delta := roundDeltas[i]
-			au.newBlock(blk, delta)
+			ml2.trackers.newBlock(blk, delta)
 			ml2.trackers.committedUpTo(i)
 
 			// if this is a catchpoint round, check the label.
 			if uint64(i)%cfg.CatchpointInterval == 0 {
 				ml2.trackers.waitAccountsWriting()
-				require.Equal(t, catchpointLabels[i], au.GetLastCatchpointLabel())
+				require.Equal(t, catchpointLabels[i], ct.GetLastCatchpointLabel())
 			}
 		}
 	}
 }
-*/
