@@ -20,7 +20,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/algorand/go-algorand/util/db"
 	"strconv"
 	"testing"
 
@@ -29,8 +28,8 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
-
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util/db"
 	"github.com/stretchr/testify/require"
 )
 
