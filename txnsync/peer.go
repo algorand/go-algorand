@@ -81,7 +81,7 @@ const (
 
 	// defaultSignificantMessageThreshold is the minimal transmitted message size which would be used for recalculating the
 	// data exchange rate.
-	defaultSignificantMessageThreshold = 5000
+	defaultSignificantMessageThreshold = 50000
 )
 
 // incomingBloomFilter stores an incoming bloom filter, along with the associated round number.
@@ -590,7 +590,7 @@ func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound ba
 		// if so, we might be able to calculate the bandwidth.
 		timeSinceLastMessageWasSent := currentTime - p.lastSentMessageTimestamp
 		networkMessageSize := uint64(p.lastSentMessageSize + incomingMessageSize)
-		if timings.ResponseElapsedTime != 0 && timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime) + peerLatency && networkMessageSize >= p.significantMessageThreshold {
+		if timings.ResponseElapsedTime != 0 && peerLatency > 0 && timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime) + peerLatency && networkMessageSize >= p.significantMessageThreshold {
 			networkTrasmitTime := timeSinceLastMessageWasSent - time.Duration(timings.ResponseElapsedTime) - peerLatency
 			dataExchangeRate := uint64(time.Second) * networkMessageSize / uint64(networkTrasmitTime)
 
