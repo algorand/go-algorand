@@ -261,7 +261,7 @@ func (dl *dryrunLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Ro
 	return nil
 }
 
-func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
+func (dl *dryrunLedger) LookupLatestWithoutRewards(addr basics.Address) (basics.AccountData, basics.Round, error) {
 	// check accounts from debug records uploaded
 	any := false
 	out := basics.AccountData{}
@@ -302,7 +302,7 @@ func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Addre
 	if !any {
 		return basics.AccountData{}, 0, fmt.Errorf("no account for addr %s", addr.String())
 	}
-	return out, rnd, nil
+	return out, basics.Round(dl.dr.Round - 1), nil
 }
 
 func (dl *dryrunLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -453,6 +453,11 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 					}
 					dl.dr.Accounts[idx] = acct
 				}
+			}
+
+			// cannot evaluate for round 0 at least one "genesis" block is expected in blockchain
+			if dl.dr.Round == 0 {
+				dl.dr.Round = 1
 			}
 
 			ba, err := makeBalancesAdapter(&dl, &stxn.Txn, appIdx)

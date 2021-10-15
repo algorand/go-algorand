@@ -336,6 +336,11 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 		dp.Round = ddr.Round
 	}
 
+	// cannot evaluate for round 0 at least one "genesis" block is expected in blockchain
+	if dp.Round == 0 {
+		dp.Round = 1
+	}
+
 	if dp.LatestTimestamp == 0 && ddr.LatestTimestamp != 0 {
 		dp.LatestTimestamp = int64(ddr.LatestTimestamp)
 	}

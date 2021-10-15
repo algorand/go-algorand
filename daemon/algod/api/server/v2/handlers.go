@@ -111,7 +111,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		return ctx.Blob(http.StatusOK, contentType, data)
 	}
 
-	recordWithoutPendingRewards, _, err := myLedger.LookupWithoutRewards(lastRound, addr)
+	recordWithoutPendingRewards, _, err := myLedger.LookupLatestWithoutRewards(addr)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
@@ -686,8 +686,7 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 		return notFound(ctx, errors.New(errAppDoesNotExist), errAppDoesNotExist, v2.Log)
 	}
 
-	lastRound := ledger.Latest()
-	record, _, err := ledger.LookupWithoutRewards(lastRound, creator)
+	record, _, err := ledger.LookupLatestWithoutRewards(creator)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
@@ -714,8 +713,7 @@ func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetID uint64) error {
 		return notFound(ctx, errors.New(errAssetDoesNotExist), errAssetDoesNotExist, v2.Log)
 	}
 
-	lastRound := ledger.Latest()
-	record, _, err := ledger.LookupWithoutRewards(lastRound, creator)
+	record, _, err := ledger.LookupLatestWithoutRewards(creator)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
