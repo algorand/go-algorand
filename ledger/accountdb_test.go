@@ -322,7 +322,7 @@ func TestAccountStorageWithBlockProofID(t *testing.T) {
 
 	totals, err := accountsTotals(tx, false)
 	require.NoError(t, err)
-	
+
 	totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, accts, totals)
 	err = accountsPutTotals(tx, totals, false)
 	require.NoError(t, err)

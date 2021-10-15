@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	uuid "github.com/satori/go.uuid"
 	"math"
 	"testing"
@@ -33,6 +34,7 @@ import (
 
 // Is this test even needed? What is the purpose?
 func TestSignerCreation(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	var err error
 
@@ -89,6 +91,7 @@ func TestSignerCreation(t *testing.T) {
 	a.Error(err)
 }
 func TestEmptyVerifier(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	signer := generateTestSigner(crypto.DilithiumType, 8, 9, 5, a)
@@ -96,6 +99,7 @@ func TestEmptyVerifier(t *testing.T) {
 	a.NotEqual(*signer.GetVerifier(), Verifier{})
 }
 func TestEmptySigner(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	var err error
 
@@ -115,6 +119,7 @@ func TestEmptySigner(t *testing.T) {
 }
 
 func TestDisposableKeysGeneration(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	var err error
 
@@ -151,6 +156,7 @@ func TestDisposableKeysGeneration(t *testing.T) {
 }
 
 func TestNonEmptyDisposableKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	signer := generateTestSigner(crypto.DilithiumType, 0, 100, 1, a)
@@ -175,6 +181,7 @@ func TestNonEmptyDisposableKeys(t *testing.T) {
 }
 
 func TestSignatureStructure(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	signer := generateTestSigner(crypto.DilithiumType, 50, 100, 1, a)
@@ -203,6 +210,7 @@ func genHashableForTest() crypto.Hashable {
 }
 
 func TestSigning(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	start, end := uint64(50), uint64(100)
@@ -258,6 +266,7 @@ func TestSigning(t *testing.T) {
 }
 
 func TestBadRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	start, _, signer := generateTestSignerAux(a)
@@ -273,6 +282,7 @@ func TestBadRound(t *testing.T) {
 }
 
 func TestBadMerkleProofInSignature(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	start, _, signer := generateTestSignerAux(a)
@@ -314,6 +324,7 @@ func copyProof(proof Proof) Proof {
 }
 
 func TestIncorrectByteSignature(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	start, _, signer := generateTestSignerAux(a)
@@ -329,6 +340,7 @@ func TestIncorrectByteSignature(t *testing.T) {
 }
 
 func TestAttemptToUseDifferentKey(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	var err error
 
@@ -348,6 +360,7 @@ func TestAttemptToUseDifferentKey(t *testing.T) {
 }
 
 func TestMarshal(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	signer := generateTestSigner(crypto.DilithiumType, 0, 10, 1, a)
@@ -368,6 +381,7 @@ func TestMarshal(t *testing.T) {
 }
 
 func TestSignerTrim(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	var err error
 
@@ -423,6 +437,7 @@ func TestSignerTrim(t *testing.T) {
 }
 
 func TestKeyDeletion(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	var err error
 
