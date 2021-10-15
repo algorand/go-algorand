@@ -36,7 +36,7 @@ const pingMessageWriteDuration = time.Second
 var errInvalidPongMessageContent = errors.New("invalid pong message content")
 var errInvalidPingMessageContent = errors.New("invalid ping message content")
 
-// latencyTracker works in conjuction with the wspeer in measuring the
+// latencyTracker works in conjunction with the wspeer in measuring the
 // communication latency over the websocket connection.
 type latencyTracker struct {
 	// receivedPacketCounter is a counter for all incoming messages
@@ -51,11 +51,11 @@ type latencyTracker struct {
 	// this variable is only touched by checkPingSending, and therefore doesn't
 	// need to be syncronized. The "clone" of this variable lastPingSentTimeSynced,
 	// is being used by both the checkPingSending as well as by the pongHandler
-	// and therefore require syncronization.
+	// and therefore require synchronization.
 	lastPingSentTime int64
 
 	// static variables
-	// ( doesn't get changed after init, hence, no syncronization needed )
+	// ( doesn't get changed after init, hence, no synchronization needed )
 
 	// conn is the underlying connection object.
 	conn wsPeerWebsocketConn
