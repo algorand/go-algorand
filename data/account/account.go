@@ -155,9 +155,9 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 			logging.Base().Infof("RestoreParticipation: state not found (n = %v)", nrows)
 		}
 
-		row = tx.QueryRow("select parent, vrf, voting, blockProof, firstValid, lastValid, keyDilution from ParticipationAccount")
+		row = tx.QueryRow("select parent, vrf, voting, firstValid, lastValid, keyDilution, blockProof from ParticipationAccount")
 
-		err = row.Scan(&rawParent, &rawVRF, &rawVoting, &rawBlockProof, &acc.FirstValid, &acc.LastValid, &acc.KeyDilution)
+		err = row.Scan(&rawParent, &rawVRF, &rawVoting, &acc.FirstValid, &acc.LastValid, &acc.KeyDilution, &rawBlockProof)
 		if err != nil {
 			return fmt.Errorf("RestoreParticipation: could not read account raw data: %v", err)
 		}
@@ -190,5 +190,10 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 	if err = protocol.Decode(rawBlockProof, acc.BlockProof); err != nil {
 		return PersistedParticipation{}, err
 	}
+	err = acc.BlockProof.Restore(store)
+	if err != nil {
+		return PersistedParticipation{}, err
+	}
+
 	return acc, nil
 }

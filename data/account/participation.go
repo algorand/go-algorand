@@ -197,7 +197,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	compactCertRound := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
 
 	// Generate a new key which signs the compact certificates
-	blockProof, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), compactCertRound, crypto.Ed25519Type)
+	blockProof, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), compactCertRound, crypto.DilithiumType, store)
 	if err != nil {
 		return PersistedParticipation{}, err
 	}
@@ -217,6 +217,12 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	}
 	// Persist the Participation into the database
 	err = part.Persist()
+	if err != nil {
+		return PersistedParticipation{}, err
+	}
+
+	err = blockProof.Persist() // must be called after part.Persist() !
+
 	return part, err
 }
 

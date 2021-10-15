@@ -17,7 +17,10 @@
 package compactcert
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -25,8 +28,8 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
-
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util/db"
 	"github.com/stretchr/testify/require"
 )
 
@@ -67,9 +70,33 @@ func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key 
 	return parts
 }
 
+func generateTestSigner(name string, firstValid uint64, lastValid uint64, interval uint64, a *require.Assertions) (*merklekeystore.Signer, db.Accessor) {
+	store, err := db.MakeAccessor(name, false, true)
+	a.NoError(err)
+	a.NotNil(store)
+
+	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err = tx.Exec(`CREATE TABLE schema (
+         tablename TEXT PRIMARY KEY,
+         version INTEGER
+      );`)
+		return err
+	})
+	a.NoError(err)
+
+	signer, err := merklekeystore.New(firstValid, lastValid, interval, crypto.DilithiumType, store)
+	a.NoError(err)
+
+	err = signer.Persist()
+	a.NoError(err)
+
+	return signer, store
+}
+
 func TestBuildVerify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	a := require.New(t)
 	currentRound := basics.Round(128)
 	// Doing a full test of 1M accounts takes too much CPU time in CI.
 	doLargeTest := false
@@ -94,10 +121,9 @@ func TestBuildVerify(t *testing.T) {
 	}
 
 	// Share the key; we allow the same vote key to appear in multiple accounts..
-	key, err := merklekeystore.New(0, uint64(param.CompactCertRounds)+1, param.CompactCertRounds, crypto.Ed25519Type)
-
-	require.NoError(t, err, "failed to create keys")
-
+	key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(param.CompactCertRounds)+1, param.CompactCertRounds, a)
+	defer dbAccessor.Close()
+	require.NotNil(t, dbAccessor, "failed to create signer")
 	var parts []basics.Participant
 	var sigs []merklekeystore.Signature
 	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartHi, key)...)
@@ -159,6 +185,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 	totalWeight := 1000000
 	npart := 10000
 	currentRound := basics.Round(128)
+	a := require.New(b)
 
 	param := Params{
 		Msg:               TestMessage("hello world"),
@@ -172,8 +199,9 @@ func BenchmarkBuildVerify(b *testing.B) {
 	var partkeys []*merklekeystore.Signer
 	var sigs []merklekeystore.Signature
 	for i := 0; i < npart; i++ {
-		key, err := merklekeystore.New(0, uint64(param.CompactCertRounds)+1, param.CompactCertRounds, crypto.Ed25519Type)
-		require.NoError(b, err, "failed to generate keys")
+		key, dbAccessor := generateTestSigner(b.Name()+"_"+strconv.Itoa(i)+"_crash.db", 0, uint64(param.CompactCertRounds)+1, param.CompactCertRounds, a)
+		defer dbAccessor.Close()
+		require.NotNil(b, dbAccessor, "failed to create signer")
 		part := basics.Participant{
 			PK:         *key.GetVerifier(),
 			Weight:     uint64(totalWeight / npart),
