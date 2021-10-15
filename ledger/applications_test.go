@@ -34,7 +34,8 @@ import (
 
 func commitRound(offset uint64, dbRound basics.Round, l *Ledger) {
 	l.trackers.accountsWriting.Add(1)
-	l.trackers.commitRound(deferredCommit{offset, dbRound, 0})
+	//l.trackers.commitRound(deferredCommit{offset, dbRound, 0})
+	l.trackers.scheduleCommit(dbRound+basics.Round(offset), 0)
 	l.trackers.accountsWriting.Wait()
 }
 
