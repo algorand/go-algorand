@@ -1122,7 +1122,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		version:           matchingVersion,
 	}
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
-	peer.init(wn.config, wn.outgoingMessagesBufferSize, time.Duration(0))
+	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
 	localAddr, _ := wn.Address()
 	wn.log.With("event", "ConnectedIn").With("remote", trackedRequest.otherPublicAddr).With("local", localAddr).Infof("Accepted incoming connection from peer %s", trackedRequest.otherPublicAddr)
@@ -1793,7 +1793,7 @@ const ProtocolVersionHeader = "X-Algorand-Version"
 const ProtocolAcceptVersionHeader = "X-Algorand-Accept-Version"
 
 // SupportedProtocolVersions contains the list of supported protocol versions by this node ( in order of preference ).
-var SupportedProtocolVersions = []string{"3.1", "3.0", "2.1"}
+var SupportedProtocolVersions = []string{"3.0", "2.1"}
 
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
 /* Version history:
@@ -1802,7 +1802,7 @@ var SupportedProtocolVersions = []string{"3.1", "3.0", "2.1"}
  *  3.0 Introduced new transaction gossiping protocol
  *  3.1 Introduced websocket based pingpong protocol
  */
-const ProtocolVersion = "3.1"
+const ProtocolVersion = "3.0"
 
 // TelemetryIDHeader HTTP header for telemetry-id for logging
 const TelemetryIDHeader = "X-Algorand-TelId"
@@ -1984,7 +1984,6 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		NetDial:           wn.dialer.Dial,
 	}
 
-	connectionAttemptedTime := time.Now()
 	conn, response, err := websocketDialer.DialContext(wn.ctx, gossipAddr, requestHeader)
 	if err != nil {
 		if err == websocket.ErrBadHandshake {
@@ -2021,8 +2020,6 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		return
 	}
 
-	initialRoundtripDuration := wn.calculateRoundtripDuration(connectionAttemptedTime, gossipAddr)
-
 	// no need to test the response.StatusCode since we know it's going to be http.StatusSwitchingProtocols, as it's already being tested inside websocketDialer.DialContext.
 	// we need to examine the headers here to extract which protocol version we should be using.
 	responseHeaderOk, matchingVersion := wn.checkServerResponseVariables(response.Header, gossipAddr)
@@ -2049,7 +2046,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		version:                     matchingVersion,
 	}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
-	peer.init(wn.config, wn.outgoingMessagesBufferSize, initialRoundtripDuration)
+	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
 	localAddr, _ := wn.Address()
 	wn.log.With("event", "ConnectedOut").With("remote", addr).With("local", localAddr).Infof("Made outgoing connection to peer %v", addr)
@@ -2078,28 +2075,6 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			}
 		}
 	}
-}
-
-func (wn *WebsocketNetwork) calculateRoundtripDuration(connectionAttemptedTime time.Time, gossipAddr string) time.Duration {
-	// get the host name.
-	parsedURL, err := url.Parse(gossipAddr)
-	if err != nil {
-		// this case is not really possible, since the above gossipAddr was already parsed
-		// successfully within the websocket.DialContext.
-		wn.log.Infof("calculateRoundtripDuration failed to parse the url %s", gossipAddr)
-		return time.Duration(0)
-	}
-	networkConnectionTime, err2 := wn.phonebook.GetRecentConnectionTime(parsedURL.Host)
-	if err2 != nil {
-		// again, this is unlikely, since if we were to fail to connect, we should not
-		// have reached here. But we'll log an info message and keep going.
-		wn.log.Infof("calculateRoundtripDuration failed to get network connection time the host %s", parsedURL.Hostname)
-		return time.Duration(0)
-	}
-	if networkConnectionTime.After(connectionAttemptedTime) {
-		return networkConnectionTime.Sub(connectionAttemptedTime)
-	}
-	return time.Duration(0)
 }
 
 // GetPeerData returns the peer data associated with a particular key.

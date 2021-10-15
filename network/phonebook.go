@@ -17,7 +17,6 @@
 package network
 
 import (
-	"errors"
 	"math"
 	"math/rand"
 	"time"
@@ -39,9 +38,6 @@ const PhoneBookEntryRelayRole = 1
 
 // PhoneBookEntryArchiverRole used for all the archivers that are provided via the archive SRV record.
 const PhoneBookEntryArchiverRole = 2
-
-var errMissingPhonebookAddressEntry = errors.New("phonebook is missing the given address")
-var errMissingPhonebookTimeForEntry = errors.New("the phonebook entry for the given address contains no timestamps")
 
 // Phonebook stores or looks up addresses of nodes we might contact
 type Phonebook interface {
@@ -71,9 +67,6 @@ type Phonebook interface {
 
 	// ExtendPeerList adds unique addresses to this set of addresses
 	ExtendPeerList(more []string, networkName string, role PhoneBookEntryRoles)
-
-	// GetRecentConnectionTime
-	GetRecentConnectionTime(addr string) (time.Time, error)
 }
 
 // addressData: holds the information associated with each phonebook address.
@@ -121,22 +114,6 @@ func MakePhonebook(connectionsRateLimitingCount uint,
 		connectionsRateLimitingWindow: connectionsRateLimitingWindow,
 		data:                          make(map[string]addressData, 0),
 	}
-}
-
-// GetRecentConnectionTime return the most recent connection time
-// for the given address.
-func (e *phonebookImpl) GetRecentConnectionTime(addr string) (time.Time, error) {
-	e.lock.RLock()
-	defer e.lock.RUnlock()
-	data, have := e.data[addr]
-	if !have {
-		// no such entry.
-		return time.Time{}, errMissingPhonebookAddressEntry
-	}
-	if len(data.recentConnectionTimes) == 0 {
-		return time.Time{}, errMissingPhonebookTimeForEntry
-	}
-	return data.recentConnectionTimes[len(data.recentConnectionTimes)-1], nil
 }
 
 func (e *phonebookImpl) deletePhonebookEntry(entryName, networkName string) {
