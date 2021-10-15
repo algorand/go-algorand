@@ -197,7 +197,7 @@ func getForeignApps() []uint64 {
 
 func parseAppArg(arg appCallArg) (rawValue []byte, parseErr error) {
 	switch arg.Encoding {
-	case "str", "string":
+	case "str", "string", "abi":
 		rawValue = []byte(arg.Value)
 	case "int", "integer":
 		num, err := strconv.ParseUint(arg.Value, 10, 64)
