@@ -476,3 +476,9 @@ func decodeTuple(encoded []byte, childT []Type) ([]interface{}, error) {
 	}
 	return values, nil
 }
+
+func (t Type) UnmarshalFromJSON(jsonEncoded []byte) ([]byte, error) {
+
+	// TODO ...
+	return nil, nil
+}

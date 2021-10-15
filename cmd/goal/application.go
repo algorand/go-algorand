@@ -28,6 +28,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/abi"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -235,7 +236,12 @@ func parseAppArg(arg appCallArg) (rawValue []byte, parseErr error) {
 			parseErr = fmt.Errorf("Could not decode abi string (%s): should split abi-type and abi-value with colon", arg.Value)
 			return
 		}
-		rawValue = []byte(arg.Value)
+		abiType, err := abi.TypeFromString(typeAndValue[0])
+		if err != nil {
+			parseErr = fmt.Errorf("Could not decode abi type string (%s): %v", typeAndValue[0], err)
+			return
+		}
+		return abiType.UnmarshalFromJSON([]byte(typeAndValue[1]))
 	default:
 		parseErr = fmt.Errorf("Unknown encoding: %s", arg.Encoding)
 	}
