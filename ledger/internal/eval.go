@@ -137,8 +137,11 @@ func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
 		return accountData, nil
 	}
 
-	accountData, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	accountData, latestRound, err := x.l.LookupLatestWithoutRewards(addr)
 	if err == nil {
+		if latestRound != x.rnd {
+			return basics.AccountData{}, ledgercore.ErrNonSequentialBlockEval{EvaluatorRound: x.rnd + 1, LatestRound: latestRound}
+		}
 		x.accounts[addr] = accountData
 	}
 	return accountData, err
@@ -1183,6 +1186,11 @@ func (eval *BlockEvaluator) validateExpiredOnlineAccounts() error {
 
 		acctData, err := eval.state.lookup(accountAddr)
 		if err != nil {
+			var nonSeqBlockEval ledgercore.ErrNonSequentialBlockEval
+			if errors.As(err, &nonSeqBlockEval) {
+				// in the case that the ledger have already moved beyond that round, just let the caller know that
+				return err
+			}
 			return fmt.Errorf("endOfBlock was unable to retrieve account %v : %w", accountAddr, err)
 		}
 
@@ -1218,6 +1226,11 @@ func (eval *BlockEvaluator) resetExpiredOnlineAccountsParticipationKeys() error 
 	for _, accountAddr := range eval.block.ParticipationUpdates.ExpiredParticipationAccounts {
 		acctData, err := eval.state.lookup(accountAddr)
 		if err != nil {
+			var nonSeqBlockEval ledgercore.ErrNonSequentialBlockEval
+			if errors.As(err, &nonSeqBlockEval) {
+				// in the case that the ledger have already moved beyond that round, just let the caller know that
+				return err
+			}
 			return fmt.Errorf("resetExpiredOnlineAccountsParticipationKeys was unable to retrieve account %v : %w", accountAddr, err)
 		}
 

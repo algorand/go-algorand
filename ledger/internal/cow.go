@@ -311,6 +311,11 @@ func (cb *roundCowState) CalculateTotals() error {
 		accountAddr, updatedAccountData := cb.mods.Accts.GetByIdx(i)
 		previousAccountData, lookupError := cb.lookupParent.lookup(accountAddr)
 		if lookupError != nil {
+			var nonSeqBlockEval ledgercore.ErrNonSequentialBlockEval
+			if errors.As(lookupError, &nonSeqBlockEval) {
+				// in the case that the ledger have already moved beyond that round, just let the caller know that
+				return lookupError
+			}
 			return fmt.Errorf("roundCowState.CalculateTotals unable to load account data for address %v", accountAddr)
 		}
 		totals.DelAccount(cb.proto, previousAccountData, &ot)
