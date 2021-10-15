@@ -193,7 +193,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	conf.CatchpointInterval = 1
 	conf.Archival = true
 	au := newAcctUpdates(t, ml, conf, ".")
-	err := au.loadFromDisk(ml)
+	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	au.close()
 	fileName := filepath.Join(temporaryDirectroy, "15.catchpoint")
@@ -291,7 +291,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	conf.CatchpointInterval = 1
 	conf.Archival = true
 	au := newAcctUpdates(t, ml, conf, ".")
-	err := au.loadFromDisk(ml)
+	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	au.close()
 	fileName := filepath.Join(temporaryDirectroy, "15.catchpoint")

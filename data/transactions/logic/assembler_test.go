@@ -2207,7 +2207,8 @@ func TestDigAsm(t *testing.T) {
 
 	// Confirm that digging something out does not ruin our knowledge about the types in the middle
 	testProg(t, "int 1; byte 0x1234; byte 0x1234; dig 2; dig 3; +; pop; +", AssemblerMaxVersion,
-		expect{6, "+ arg 1..."})
+		expect{8, "+ arg 1..."})
+	testProg(t, "int 3; pushbytes \"123456\"; int 1; dig 2; substring3", AssemblerMaxVersion)
 
 }
 

@@ -89,6 +89,14 @@ func (wl *wrappedLedger) trackerLog() logging.Logger {
 	return wl.l.trackerLog()
 }
 
+func (wl *wrappedLedger) scheduleCommit(basics.Round) {
+	return
+}
+
+func (wl *wrappedLedger) waitAccountsWriting() {
+	return
+}
+
 func (wl *wrappedLedger) GenesisHash() crypto.Digest {
 	return wl.l.GenesisHash()
 }
@@ -795,9 +803,10 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 	defer wl.l.trackerMu.RUnlock()
 	for _, trk := range wl.l.trackers.trackers {
 		if au, ok := trk.(*accountUpdates); ok {
-			au.waitAccountsWriting()
+			wl.l.trackers.waitAccountsWriting()
 			minSave = trk.committedUpTo(rnd)
-			au.waitAccountsWriting()
+			wl.l.trackers.scheduleCommit(rnd)
+			wl.l.trackers.waitAccountsWriting()
 			if minSave < minMinSave {
 				minMinSave = minSave
 			}
@@ -822,7 +831,7 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 		}
 
 		cleanTracker.close()
-		err := cleanTracker.loadFromDisk(wl)
+		err := cleanTracker.loadFromDisk(wl, wl.l.trackers.dbRound)
 		require.NoError(t, err)
 
 		cleanTracker.close()
