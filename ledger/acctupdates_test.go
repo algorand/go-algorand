@@ -268,7 +268,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 	require.Error(t, err)
 
 	var validThrough basics.Round
-	_, validThrough, err = au.LookupWithoutRewards(latest+1, ledgertesting.RandomAddress())
+	_, validThrough, err = au.lookupWithoutRewards(latest+1, ledgertesting.RandomAddress(), true)
 	require.Error(t, err)
 	require.Equal(t, basics.Round(0), validThrough)
 
@@ -276,7 +276,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 		_, err := au.Totals(base - 1)
 		require.Error(t, err)
 
-		_, validThrough, err = au.LookupWithoutRewards(base-1, ledgertesting.RandomAddress())
+		_, validThrough, err = au.lookupWithoutRewards(base-1, ledgertesting.RandomAddress(), true)
 		require.Error(t, err)
 		require.Equal(t, basics.Round(0), validThrough)
 	}
@@ -303,7 +303,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			var totalOnline, totalOffline, totalNotPart uint64
 
 			for addr, data := range accts[rnd] {
-				d, validThrough, err := au.LookupWithoutRewards(rnd, addr)
+				d, validThrough, err := au.lookupWithoutRewards(rnd, addr, true)
 				require.NoError(t, err)
 				require.Equal(t, d, data)
 				require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
@@ -335,7 +335,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
 			require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
 
-			d, validThrough, err := au.LookupWithoutRewards(rnd, ledgertesting.RandomAddress())
+			d, validThrough, err := au.lookupWithoutRewards(rnd, ledgertesting.RandomAddress(), true)
 			require.NoError(t, err)
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
 			require.Equal(t, d, basics.AccountData{})
@@ -824,7 +824,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 			updates := make(map[basics.Address]basics.AccountData)
 			moneyAccountsExpectedAmounts = append(moneyAccountsExpectedAmounts, make([]uint64, len(moneyAccounts)))
 			toAccount := moneyAccounts[0]
-			toAccountDataOld, validThrough, err := au.LookupWithoutRewards(i-1, toAccount)
+			toAccountDataOld, validThrough, err := au.lookupWithoutRewards(i-1, toAccount, true)
 			require.NoError(t, err)
 			require.Equal(t, i-1, validThrough)
 			toAccountDataNew := toAccountDataOld
@@ -832,7 +832,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 			for j := 1; j < len(moneyAccounts); j++ {
 				fromAccount := moneyAccounts[j]
 
-				fromAccountDataOld, validThrough, err := au.LookupWithoutRewards(i-1, fromAccount)
+				fromAccountDataOld, validThrough, err := au.lookupWithoutRewards(i-1, fromAccount, true)
 				require.NoError(t, err)
 				require.Equal(t, i-1, validThrough)
 				require.Equalf(t, moneyAccountsExpectedAmounts[i-1][j], fromAccountDataOld.MicroAlgos.Raw, "Account index : %d\nRound number : %d", j, i)
@@ -859,7 +859,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 					if checkRound < uint64(testback) {
 						continue
 					}
-					acct, validThrough, err := au.LookupWithoutRewards(basics.Round(checkRound-uint64(testback)), moneyAccounts[j])
+					acct, validThrough, err := au.lookupWithoutRewards(basics.Round(checkRound-uint64(testback)), moneyAccounts[j], true)
 					// we might get an error like "round 2 before dbRound 5", which is the success case, so we'll ignore it.
 					roundOffsetError := &RoundOffsetError{}
 					if errors.As(err, &roundOffsetError) {
@@ -901,7 +901,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		ml.waitAccountsWriting()
 
 		for idx, addr := range moneyAccounts {
-			balance, validThrough, err := au.LookupWithoutRewards(lastRound, addr)
+			balance, validThrough, err := au.lookupWithoutRewards(lastRound, addr, true)
 			require.NoErrorf(t, err, "unable to retrieve balance for account idx %d %v", idx, addr)
 			require.Equal(t, lastRound, validThrough)
 			if idx != 0 {

@@ -794,8 +794,7 @@ int 1
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, appcreate, ad))
 	var appIdx basics.AppIndex = 1
 
-	rnd := l.Latest()
-	acct, _, err := l.LookupWithoutRewards(l.Latest(), creator)
+	acct, _, err := l.LookupLatestWithoutRewards(creator)
 	a.NoError(err)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acct.AppParams[appIdx].GlobalState["counter"])
 
@@ -825,8 +824,7 @@ int 1
 	}}
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, appcall, ad))
 
-	rnd = l.Latest()
-	acctwor, _, err := l.LookupWithoutRewards(rnd, creator)
+	acctwor, rnd, err := l.LookupLatestWithoutRewards(creator)
 	a.NoError(err)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctwor.AppParams[appIdx].GlobalState["counter"])
 
@@ -836,11 +834,11 @@ int 1
 
 	addEmptyValidatedBlock(t, l, initAccounts)
 
-	acctwor, _, err = l.LookupWithoutRewards(l.Latest()-1, creator)
+	acctwor, err = l.Lookup(l.Latest()-1, creator)
 	a.NoError(err)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctwor.AppParams[appIdx].GlobalState["counter"])
 
-	acct, _, err = l.LookupWithoutRewards(rnd, user)
+	acct, _, err = l.LookupLatestWithoutRewards(user)
 	a.NoError(err)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acct.AppLocalStates[appIdx].KeyValue["counter"])
 }
@@ -922,8 +920,7 @@ int 1                   // [1]
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, appcreate, ad))
 	var appIdx basics.AppIndex = 1
 
-	rnd := l.Latest()
-	acct, _, err := l.LookupWithoutRewards(l.Latest(), creator)
+	acct, _, err := l.LookupLatestWithoutRewards(creator)
 	a.NoError(err)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: uint64(value)}, acct.AppParams[appIdx].GlobalState["key"])
 
@@ -999,8 +996,7 @@ int 1                   // [1]
 			a.NoError(err)
 
 			expected := uint64(base + value1 + value2)
-			rnd = l.Latest()
-			acctwor, _, err := l.LookupWithoutRewards(rnd, creator)
+			acctwor, rnd, err := l.LookupLatestWithoutRewards(creator)
 			a.NoError(err)
 			a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: expected}, acctwor.AppParams[appIdx].GlobalState["key"])
 

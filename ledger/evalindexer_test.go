@@ -48,13 +48,16 @@ func (il indexerLedgerForEvalImpl) LatestBlockHdr() (bookkeeping.BlockHeader, er
 }
 
 // The value of the returned map is nil iff the account was not found.
-func (il indexerLedgerForEvalImpl) LookupWithoutRewards(addresses map[basics.Address]struct{}) (map[basics.Address]*basics.AccountData, error) {
+func (il indexerLedgerForEvalImpl) LookupLatestWithoutRewards(addresses map[basics.Address]struct{}) (map[basics.Address]*basics.AccountData, basics.Round, error) {
 	res := make(map[basics.Address]*basics.AccountData)
 
+	var rnd basics.Round
+	var err error
+	var accountData basics.AccountData
 	for address := range addresses {
-		accountData, _, err := il.l.LookupWithoutRewards(il.latestRound, address)
+		accountData, rnd, err = il.l.LookupLatestWithoutRewards(address)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		if accountData.IsZero() {
@@ -66,7 +69,7 @@ func (il indexerLedgerForEvalImpl) LookupWithoutRewards(addresses map[basics.Add
 		}
 	}
 
-	return res, nil
+	return res, rnd, nil
 }
 
 func (il indexerLedgerForEvalImpl) GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]FoundAddress, error) {
@@ -288,7 +291,7 @@ func TestResourceCaching(t *testing.T) {
 	ilc := makeIndexerLedgerConnector(indexerLedgerForEvalImpl{l: l, latestRound: basics.Round(0)}, block.GenesisHash(), block.Round()-1, resources)
 
 	{
-		accountData, rnd, err := ilc.LookupWithoutRewards(basics.Round(0), address)
+		accountData, rnd, err := ilc.LookupLatestWithoutRewards(address)
 		require.NoError(t, err)
 		assert.Equal(t, basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 5}}, accountData)
 		assert.Equal(t, basics.Round(0), rnd)

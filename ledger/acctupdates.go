@@ -380,8 +380,11 @@ func (au *accountUpdates) LookupWithRewards(rnd basics.Round, addr basics.Addres
 	return au.lookupWithRewards(rnd, addr)
 }
 
-// LookupWithoutRewards returns the account data for a given address at a given round.
-func (au *accountUpdates) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (data basics.AccountData, validThrough basics.Round, err error) {
+// LookupLatestWithoutRewards returns the account data for a given address at a given round.
+func (au *accountUpdates) LookupLatestWithoutRewards(addr basics.Address) (data basics.AccountData, validThrough basics.Round, err error) {
+	au.accountsMu.RLock()
+	rnd := au.latest()
+	au.accountsMu.RUnlock()
 	return au.lookupWithoutRewards(rnd, addr, true /* take lock*/)
 }
 
@@ -904,9 +907,9 @@ func (aul *accountUpdatesLedgerEvaluator) CheckDup(config.ConsensusParams, basic
 	return fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initialization ")
 }
 
-// lookupWithoutRewards returns the account balance for a given address at a given round, without the reward
-func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
-	return aul.au.lookupWithoutRewards(rnd, addr, false /*don't sync*/)
+// LookupLatestWithoutRewards returns the account balance for a given address at a given round, without the reward
+func (aul *accountUpdatesLedgerEvaluator) LookupLatestWithoutRewards(addr basics.Address) (basics.AccountData, basics.Round, error) {
+	return aul.au.lookupWithoutRewards(aul.au.latest(), addr, false /*don't sync*/)
 }
 
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
@@ -1555,12 +1558,6 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 					return d, rnd, nil
 				}
 			}
-		} else {
-			// we know that the account in not in the deltas - so there is no point in scanning it.
-			// we've going to fall back to search in the database, but before doing so, we should
-			// update the rnd so that it would point to the end of the known delta range.
-			// ( that would give us the best validity range )
-			rnd = currentDbRound + basics.Round(currentDeltaLen)
 		}
 
 		// check the baseAccounts -
@@ -1587,7 +1584,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		}
 		if synchronized {
 			if persistedData.round < currentDbRound {
-				au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
+				au.log.Errorf("accountUpdates.lookupLatestWithoutRewards: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
 				return basics.AccountData{}, basics.Round(0), &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 			}
 			au.accountsMu.RLock()
@@ -1597,7 +1594,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			}
 		} else {
 			// in non-sync mode, we don't wait since we already assume that we're synchronized.
-			au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d mismatching in-memory round %d", persistedData.round, currentDbRound)
+			au.log.Errorf("accountUpdates.lookupLatestWithoutRewards: database round %d mismatching in-memory round %d", persistedData.round, currentDbRound)
 			return basics.AccountData{}, basics.Round(0), &MismatchingDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 		}
 	}

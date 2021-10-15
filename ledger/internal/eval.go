@@ -41,7 +41,7 @@ import (
 type LedgerForCowBase interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
-	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
+	LookupLatestWithoutRewards(basics.Address) (basics.AccountData, basics.Round, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 }
 
@@ -511,9 +511,12 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 
 	poolAddr := eval.prevHeader.RewardsPool
 	// get the reward pool account data without any rewards
-	incentivePoolData, _, err := l.LookupWithoutRewards(eval.prevHeader.Round, poolAddr)
+	incentivePoolData, _, err := l.LookupLatestWithoutRewards(poolAddr)
 	if err != nil {
 		return nil, err
+	}
+	if latestRound != eval.prevHeader.Round {
+		return nil, ledgercore.ErrNonSequentialBlockEval{EvaluatorRound: hdr.Round, LatestRound: latestRound}
 	}
 
 	// this is expected to be a no-op, but update the rewards on the rewards pool if it was configured to receive rewards ( unlike mainnet ).
@@ -1559,7 +1562,7 @@ func loadAccounts(ctx context.Context, l LedgerForEvaluator, rnd basics.Round, g
 		}
 		close(addressesCh)
 
-		// updata all the groups task :
+		// update all the groups task :
 		// allocate the correct number of balances, as well as
 		// enough space on the "done" channel.
 		allBalances := make([]basics.BalanceRecord, totalBalances)
@@ -1582,13 +1585,19 @@ func loadAccounts(ctx context.Context, l LedgerForEvaluator, rnd basics.Round, g
 							return
 						}
 						// lookup the account data directly from the ledger.
-						acctData, _, err := l.LookupWithoutRewards(rnd, task.address)
+						acctData, latestRound, err := l.LookupLatestWithoutRewards(task.address)
 						br := basics.BalanceRecord{
 							Addr:        task.address,
 							AccountData: acctData,
 						}
 						// if there is no error..
 						if err == nil {
+							if latestRound != rnd {
+								for _, wg := range task.groups {
+									// notify the channel of the error.
+									wg.done <- ledgercore.ErrNonSequentialBlockEval{EvaluatorRound: rnd + 1, LatestRound: latestRound}
+								}
+							}
 							// update all the group tasks with the new acquired balance.
 							for i, wg := range task.groups {
 								wg.balances[task.groupIndices[i]] = br

@@ -36,7 +36,7 @@ import (
 type indexerLedgerForEval interface {
 	LatestBlockHdr() (bookkeeping.BlockHeader, error)
 	// The value of the returned map is nil iff the account was not found.
-	LookupWithoutRewards(map[basics.Address]struct{}) (map[basics.Address]*basics.AccountData, error)
+	LookupLatestWithoutRewards(map[basics.Address]struct{}) (map[basics.Address]*basics.AccountData, basics.Round, error)
 	GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]FoundAddress, error)
 	GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]FoundAddress, error)
 	LatestTotals() (ledgercore.AccountTotals, error)
@@ -88,18 +88,18 @@ func (l indexerLedgerConnector) CheckDup(config.ConsensusParams, basics.Round, b
 	return errors.New("CheckDup() not implemented")
 }
 
-// LookupWithoutRewards is part of LedgerForEvaluator interface.
-func (l indexerLedgerConnector) LookupWithoutRewards(round basics.Round, address basics.Address) (basics.AccountData, basics.Round, error) {
+// LookupLatestWithoutRewards is part of LedgerForEvaluator interface.
+func (l indexerLedgerConnector) LookupLatestWithoutRewards(address basics.Address) (basics.AccountData, basics.Round, error) {
 	// check to see if the account data in the cache.
 	if pad, has := l.roundResources.Accounts[address]; has {
 		if pad == nil {
-			return basics.AccountData{}, round, nil
+			return basics.AccountData{}, l.latestRound, nil
 		}
-		return *pad, round, nil
+		return *pad, l.latestRound, nil
 	}
 
-	accountDataMap, err :=
-		l.il.LookupWithoutRewards(map[basics.Address]struct{}{address: {}})
+	accountDataMap, round, err :=
+		l.il.LookupLatestWithoutRewards(map[basics.Address]struct{}{address: {}})
 	if err != nil {
 		return basics.AccountData{}, basics.Round(0), err
 	}

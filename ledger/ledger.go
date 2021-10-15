@@ -494,13 +494,13 @@ func (l *Ledger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.
 	return data.OnlineAccountData(), nil
 }
 
-// LookupWithoutRewards is like Lookup but does not apply pending rewards up
-// to the requested round rnd.
-func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
+// LookupLatestWithoutRewards is like Lookup but does not apply pending rewards up
+// to the requested round rnd. It returns data at the latest round.
+func (l *Ledger) LookupLatestWithoutRewards(addr basics.Address) (basics.AccountData, basics.Round, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
-	data, validThrough, err := l.accts.LookupWithoutRewards(rnd, addr)
+	data, validThrough, err := l.accts.LookupLatestWithoutRewards(addr)
 	if err != nil {
 		return basics.AccountData{}, basics.Round(0), err
 	}
