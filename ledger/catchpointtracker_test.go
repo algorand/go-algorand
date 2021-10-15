@@ -353,9 +353,9 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		au.close()
 		ml2 := ledgerHistory[startingRound]
 
-		//ct := newCatchpointTracker(t, ml2, cfg, ".")
+		ct := newCatchpointTracker(t, ml2, cfg, ".")
 		//au := ml2.trackers.driver
-		ml2.trackers.loadFromDisk(ml2)
+		//ml2.trackers.loadFromDisk(ml2)
 		//err := au.loadFromDisk(ml2, ml2.trackers.dbRound)
 		//require.NoError(t, err)
 

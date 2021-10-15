@@ -110,7 +110,11 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 		log:      dblogger,
 		blocks:   make([]blockEntry, len(ml.blocks)),
 		deltas:   make([]ledgercore.StateDelta, len(ml.deltas)),
+		accts:    make(map[basics.Address]basics.AccountData),
 		filename: fn,
+	}
+	for k, v := range ml.accts {
+		newLedgerTracker.accts[k] = v
 	}
 	copy(newLedgerTracker.blocks, ml.blocks)
 	copy(newLedgerTracker.deltas, ml.deltas)
