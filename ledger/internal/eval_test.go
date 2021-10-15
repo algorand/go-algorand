@@ -1062,7 +1062,8 @@ func (ledger *evalTestLedger) LatestTotals() (basics.Round, ledgercore.AccountTo
 
 // LookupWithoutRewards is like Lookup but does not apply pending rewards up
 // to the requested round rnd.
-func (ledger *evalTestLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
+func (ledger *evalTestLedger) LookupLatestWithoutRewards(addr basics.Address) (basics.AccountData, basics.Round, error) {
+	rnd := ledger.Latest()
 	return ledger.roundBalances[rnd][addr], rnd, nil
 }
 
@@ -1619,7 +1620,7 @@ func (l *testCowBaseLedger) CheckDup(config.ConsensusParams, basics.Round, basic
 	return errors.New("not implemented")
 }
 
-func (l *testCowBaseLedger) LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error) {
+func (l *testCowBaseLedger) LookupLatestWithoutRewards(basics.Address) (basics.AccountData, basics.Round, error) {
 	return basics.AccountData{}, basics.Round(0), errors.New("not implemented")
 }
 
