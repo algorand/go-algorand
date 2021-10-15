@@ -534,6 +534,10 @@ func (au *accountUpdates) produceCommittingTask(committedRound basics.Round, dbR
 
 	var pendingDeltas int
 
+	if committedRound < dcc.lookback {
+		return nil
+	}
+
 	newBase := committedRound - dcc.lookback
 	if newBase <= dbRound {
 		// Already forgotten

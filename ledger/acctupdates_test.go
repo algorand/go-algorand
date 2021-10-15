@@ -247,6 +247,8 @@ func newAcctUpdates(tb testing.TB, l *mockLedgerForTracker, conf config.Local, d
 	require.NoError(tb, err)
 
 	l.trackers.initialize(au, l, []ledgerTracker{au}, conf)
+	err = l.trackers.loadFromDisk(l)
+	require.NoError(tb, err)
 
 	return au
 }
@@ -377,8 +379,6 @@ func TestAcctUpdates(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	au := newAcctUpdates(t, ml, conf, ".")
-	err := au.loadFromDisk(ml, 0)
-	require.NoError(t, err)
 	defer au.close()
 
 	// cover 10 genesis blocks
@@ -439,7 +439,7 @@ func TestAcctUpdates(t *testing.T) {
 
 	// check the account totals.
 	var dbRound basics.Round
-	err = ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		dbRound, err = accountsRound(tx)
 		return
 	})
@@ -459,7 +459,6 @@ func TestAcctUpdates(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, expectedTotals, actualTotals)
 }
-
 func TestAcctUpdatesFastUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -487,8 +486,6 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	au := newAcctUpdates(t, ml, conf, ".")
-	err := au.loadFromDisk(ml, 0)
-	require.NoError(t, err)
 	defer au.close()
 
 	// cover 10 genesis blocks
@@ -576,8 +573,6 @@ func BenchmarkBalancesChanges(b *testing.B) {
 
 	conf := config.GetDefaultLocal()
 	au := newAcctUpdates(b, ml, conf, ".")
-	err := au.loadFromDisk(ml, 0)
-	require.NoError(b, err)
 	defer au.close()
 
 	// cover initialRounds genesis blocks
@@ -709,8 +704,6 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	conf.CatchpointInterval = 1
 	conf.Archival = true
 	au := newAcctUpdates(t, ml, conf, ".")
-	err := au.loadFromDisk(ml, 0)
-	require.NoError(t, err)
 	defer au.close()
 
 	// cover 10 genesis blocks
@@ -814,9 +807,6 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 
 		conf := config.GetDefaultLocal()
 		au := newAcctUpdates(t, ml, conf, ".")
-
-		err := au.loadFromDisk(ml, 0)
-		require.NoError(t, err)
 		defer au.close()
 
 		// cover 10 genesis blocks
@@ -1168,9 +1158,6 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	au := newAcctUpdates(b, ml, cfg, ".")
-
-	err := au.loadFromDisk(ml, 0)
-	require.NoError(b, err)
 	defer au.close()
 
 	// at this point, the database was created. We want to fill the accounts data
@@ -1192,7 +1179,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 		require.NoError(b, err)
 	}
 
-	err = ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		return updateAccountsHashRound(tx, 1)
 	})
 	require.NoError(b, err)
@@ -1327,9 +1314,6 @@ func TestCachesInitialization(t *testing.T) {
 	conf := config.GetDefaultLocal()
 	au := newAcctUpdates(t, ml, conf, ".")
 
-	err := au.loadFromDisk(ml, 0)
-	require.NoError(t, err)
-
 	// cover initialRounds genesis blocks
 	rewardLevel := uint64(0)
 	for i := 1; i < int(initialRounds); i++ {
@@ -1388,8 +1372,6 @@ func TestCachesInitialization(t *testing.T) {
 	conf = config.GetDefaultLocal()
 	au = newAcctUpdates(t, ml2, conf, ".")
 	defer au.close()
-	err = au.loadFromDisk(ml2, 0)
-	require.NoError(t, err)
 
 	// make sure the deltas array end up containing only the most recent 320 rounds.
 	require.Equal(t, int(proto.MaxBalLookback), len(au.deltas))

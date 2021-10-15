@@ -33,17 +33,17 @@ import (
 )
 
 func commitRound(offset uint64, dbRound basics.Round, l *Ledger) {
-	l.trackers.accountsWriting.Add(1)
+	//l.trackers.accountsWriting.Add(1)
 	//l.trackers.commitRound(deferredCommit{offset, dbRound, 0})
-	l.trackers.scheduleCommit(dbRound+basics.Round(offset), 0)
+	l.trackers.scheduleCommit(l.Latest(), l.Latest()-(dbRound+basics.Round(offset)))
 	l.trackers.accountsWriting.Wait()
 }
 
 func stopCommitSyncer(l *Ledger) {
-	l.trackers.ctxCancel() // force commitSyncer to exit
+	//l.trackers.ctxCancel() // force commitSyncer to exit
 	// wait commitSyncer to exit
 	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
-	<-l.trackers.commitSyncerClosed
+	//<-l.trackers.commitSyncerClosed
 }
 
 // test ensures that
@@ -221,10 +221,12 @@ return`
 	var buf []byte
 	err = l.accts.accountsq.lookupStmt.QueryRow(creator[:]).Scan(&rowid, &dbRound, &buf)
 	a.NoError(err)
+	a.Equal(basics.Round(4), dbRound)
 	a.Equal(expectedCreator, buf)
 
 	err = l.accts.accountsq.lookupStmt.QueryRow(userOptin[:]).Scan(&rowid, &dbRound, &buf)
 	a.NoError(err)
+	a.Equal(basics.Round(4), dbRound)
 	a.Equal(expectedUserOptIn, buf)
 	pad, err := l.accts.accountsq.lookup(userOptin)
 	a.NoError(err)
@@ -235,6 +237,7 @@ return`
 
 	err = l.accts.accountsq.lookupStmt.QueryRow(userLocal[:]).Scan(&rowid, &dbRound, &buf)
 	a.NoError(err)
+	a.Equal(basics.Round(4), dbRound)
 	a.Equal(expectedUserLocal, buf)
 
 	ad, err = l.Lookup(dbRound, userLocal)
