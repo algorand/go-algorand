@@ -197,7 +197,7 @@ func getForeignApps() []uint64 {
 
 func parseAppArg(arg appCallArg) (rawValue []byte, parseErr error) {
 	switch arg.Encoding {
-	case "str", "string", "abi":
+	case "str", "string":
 		rawValue = []byte(arg.Value)
 	case "int", "integer":
 		num, err := strconv.ParseUint(arg.Value, 10, 64)
@@ -229,6 +229,13 @@ func parseAppArg(arg appCallArg) (rawValue []byte, parseErr error) {
 			return
 		}
 		rawValue = data
+	case "abi":
+		typeAndValue := strings.SplitN(arg.Value, ":", -1)
+		if len(typeAndValue) != 2 {
+			parseErr = fmt.Errorf("Could not decode abi string (%s): should split abi-type and abi-value with colon", arg.Value)
+			return
+		}
+		rawValue = []byte(arg.Value)
 	default:
 		parseErr = fmt.Errorf("Unknown encoding: %s", arg.Encoding)
 	}
