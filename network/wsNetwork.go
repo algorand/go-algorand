@@ -1800,7 +1800,6 @@ var SupportedProtocolVersions = []string{"3.0", "2.1"}
  *  1   Catchup service over websocket connections with unicast messages between peers
  *  2.1 Introduced topic key/data pairs and enabled services over the gossip connections
  *  3.0 Introduced new transaction gossiping protocol
- *  3.1 Introduced websocket based pingpong protocol
  */
 const ProtocolVersion = "3.0"
 
