@@ -228,6 +228,7 @@ func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 		return err
 	}
 	// the votes have a special dependency on the account updates, so we need to initialize these separetly.
+	tr.driver.voters = &votersTracker{}
 	err = tr.driver.voters.loadFromDisk(l, tr.driver)
 	return err
 }

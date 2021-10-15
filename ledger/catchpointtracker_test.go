@@ -53,6 +53,20 @@ func TestIsWritingCatchpointFile(t *testing.T) {
 	require.False(t, ans)
 }
 
+func newCatchpointTracker(tb testing.TB, l *mockLedgerForTracker, conf config.Local, dbPathPrefix string) *catchpointTracker {
+	au := &accountUpdates{}
+	ct := &catchpointTracker{}
+	au.initialize(conf)
+	ct.initialize(conf, dbPathPrefix)
+	_, err := trackerDBInitialize(l, au.catchpointEnabled(), dbPathPrefix)
+	require.NoError(tb, err)
+
+	l.trackers.initialize(au, l, []ledgerTracker{au, ct}, conf)
+	err = l.trackers.loadFromDisk(l)
+	require.NoError(tb, err)
+	return ct
+}
+
 func TestGetCatchpointStream(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -63,11 +77,7 @@ func TestGetCatchpointStream(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
-	ct := catchpointTracker{}
-	ct.initialize(conf, ".")
-
-	err := ct.loadFromDisk(ml, 0)
-	require.NoError(t, err)
+	ct := newCatchpointTracker(t, ml, conf, ".")
 	defer ct.close()
 
 	filesToCreate := 4
@@ -143,11 +153,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
-	ct := catchpointTracker{}
-	ct.initialize(conf, ".")
-
-	err := ct.loadFromDisk(ml, 0)
-	require.NoError(t, err)
+	ct := newCatchpointTracker(t, ml, conf, ".")
 	defer ct.close()
 
 	dummyCatchpointFilesToCreate := 42
@@ -163,7 +169,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 		err := ct.accountsq.storeCatchpoint(context.Background(), basics.Round(i), fmt.Sprintf("./dummy_catchpoint_file-%d", i), "", 0)
 		require.NoError(t, err)
 	}
-	err = deleteStoredCatchpoints(context.Background(), ct.accountsq, ct.dbDirectory)
+	err := deleteStoredCatchpoints(context.Background(), ct.accountsq, ct.dbDirectory)
 	require.NoError(t, err)
 
 	for i := 0; i < dummyCatchpointFilesToCreate; i++ {

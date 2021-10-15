@@ -19,6 +19,7 @@ package ledger
 import (
 	"encoding/hex"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -33,17 +34,9 @@ import (
 )
 
 func commitRound(offset uint64, dbRound basics.Round, l *Ledger) {
-	//l.trackers.accountsWriting.Add(1)
-	//l.trackers.commitRound(deferredCommit{offset, dbRound, 0})
+	l.accts.lastFlushTime = time.Time{}
 	l.trackers.scheduleCommit(l.Latest(), l.Latest()-(dbRound+basics.Round(offset)))
-	l.trackers.accountsWriting.Wait()
-}
-
-func stopCommitSyncer(l *Ledger) {
-	//l.trackers.ctxCancel() // force commitSyncer to exit
-	// wait commitSyncer to exit
-	// the test calls commitRound directly and does not need commitSyncer/committedUpTo
-	//<-l.trackers.commitSyncerClosed
+	l.trackers.waitAccountsWriting()
 }
 
 // test ensures that
@@ -138,8 +131,6 @@ return`
 	l, err := OpenLedger(logging.Base(), "TestAppAccountData", true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
-
-	stopCommitSyncer(l)
 
 	txHeader := transactions.Header{
 		Sender:      creator,
@@ -351,8 +342,6 @@ return`
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
-
-	stopCommitSyncer(l)
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -597,8 +586,6 @@ return`
 	a.NoError(err)
 	defer l.Close()
 
-	stopCommitSyncer(l)
-
 	genesisID := t.Name()
 	txHeader := transactions.Header{
 		Sender:      creator,
@@ -747,8 +734,6 @@ return`
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
-
-	stopCommitSyncer(l)
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -940,8 +925,6 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
-
-	stopCommitSyncer(l)
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
