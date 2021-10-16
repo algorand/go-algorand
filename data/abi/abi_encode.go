@@ -18,6 +18,7 @@ package abi
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -477,8 +478,72 @@ func decodeTuple(encoded []byte, childT []Type) ([]interface{}, error) {
 	return values, nil
 }
 
-func (t Type) UnmarshalFromJSON(jsonEncoded []byte) ([]byte, error) {
-
-	// TODO ...
-	return nil, nil
+func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
+	switch t.abiTypeID {
+	case Uint:
+		num := new(big.Int)
+		err := num.UnmarshalJSON(jsonEncoded)
+		if err != nil {
+			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to uint: %v", string(jsonEncoded), err)
+		}
+		return num, nil
+	case Ufixed:
+		// TODO
+		fallthrough
+	case Bool:
+		var elem bool
+		err := json.Unmarshal(jsonEncoded, &elem)
+		if err != nil {
+			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to bool: %v", string(jsonEncoded), err)
+		}
+		return elem, nil
+	case Byte:
+		var elem byte
+		err := json.Unmarshal(jsonEncoded, &elem)
+		if err != nil {
+			return nil, fmt.Errorf("cannot cast JSON encoded to byte: %v", err)
+		}
+		return elem, nil
+	case ArrayStatic, ArrayDynamic:
+		var elems []json.RawMessage
+		err := json.Unmarshal(jsonEncoded, &elems)
+		if err != nil {
+			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to array: %v", string(jsonEncoded), err)
+		}
+		if t.abiTypeID == ArrayStatic && len(elems) != int(t.staticLength) {
+			return nil, fmt.Errorf("JSON array element number != ABI array elem number")
+		}
+		values := make([]interface{}, len(elems))
+		for i := 0; i < len(elems); i++ {
+			tempValue, err := t.childTypes[0].UnmarshalFromJSON(elems[i])
+			if err != nil {
+				return nil, err
+			}
+			values[i] = tempValue
+		}
+		return values, nil
+	case String:
+		// TODO
+		fallthrough
+	case Tuple:
+		var elems []json.RawMessage
+		err := json.Unmarshal(jsonEncoded, &elems)
+		if err != nil {
+			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to array for tuple: %v", string(jsonEncoded), err)
+		}
+		if len(elems) != int(t.staticLength) {
+			return nil, fmt.Errorf("JSON array element number != ABI tuple elem number")
+		}
+		values := make([]interface{}, len(elems))
+		for i := 0; i < len(elems); i++ {
+			tempValue, err := t.childTypes[i].UnmarshalFromJSON(elems[i])
+			if err != nil {
+				return nil, err
+			}
+			values[i] = tempValue
+		}
+		return values, nil
+	default:
+		return nil, fmt.Errorf("cannot cast JSON encoded %s to ABI encoding stuff", string(jsonEncoded))
+	}
 }

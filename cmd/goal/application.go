@@ -241,7 +241,12 @@ func parseAppArg(arg appCallArg) (rawValue []byte, parseErr error) {
 			parseErr = fmt.Errorf("Could not decode abi type string (%s): %v", typeAndValue[0], err)
 			return
 		}
-		return abiType.UnmarshalFromJSON([]byte(typeAndValue[1]))
+		value, err := abiType.UnmarshalFromJSON([]byte(typeAndValue[1]))
+		if err != nil {
+			parseErr = fmt.Errorf("Could not decode abi value string (%s):%v ", typeAndValue[1], err)
+			return
+		}
+		return abiType.Encode(value)
 	default:
 		parseErr = fmt.Errorf("Unknown encoding: %s", arg.Encoding)
 	}
