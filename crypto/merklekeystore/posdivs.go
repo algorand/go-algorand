@@ -17,9 +17,11 @@
 package merklekeystore
 
 func roundToIndex(firstValid, currentRound, interval uint64) uint64 {
-	return currentRound/interval - ((firstValid - 1) / interval) - 1
+	return (currentRound - firstValid) / interval
 }
 
 func indexToRound(firstValid, interval, pos uint64) uint64 {
-	return (((firstValid - 1) / interval) + 1 + pos) * interval
+	return pos * interval + firstValid
 }
+
+

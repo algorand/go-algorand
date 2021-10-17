@@ -78,7 +78,7 @@ func TestIndexToRoundToIndex(t *testing.T) {
 		round := indexToRound(firstValid, interval, uint64(pos))
 		index := roundToIndex(firstValid, round, interval)
 		fmt.Printf("firstValid %d interval %d pos: %d round: %d  index: %d \n", firstValid, interval, pos, round, index)
-		require.Equal(t, pos, index)
+		require.Equal(t, uint64(pos), index)
 	}
 	fmt.Println()
 
@@ -90,7 +90,7 @@ func TestIndexToRoundToIndex(t *testing.T) {
 		round := indexToRound(firstValid, interval, uint64(pos))
 		index := roundToIndex(firstValid, round, interval)
 		fmt.Printf("firstValid %d interval %d pos: %d round: %d  index: %d \n", firstValid, interval, pos, round, index)
-		require.Equal(t, pos, index)
+		require.Equal(t, uint64(pos), index)
 	}
 	fmt.Println()
 
@@ -102,7 +102,7 @@ func TestIndexToRoundToIndex(t *testing.T) {
 		round := indexToRound(firstValid, interval, uint64(pos))
 		index := roundToIndex(firstValid, round, interval)
 		fmt.Printf("firstValid %d interval %d pos: %d round: %d  index: %d \n", firstValid, interval, pos, round, index)
-		require.Equal(t, pos, index)
+		require.Equal(t, uint64(pos), index)
 	}
 
 }
