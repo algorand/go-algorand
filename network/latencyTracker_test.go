@@ -24,7 +24,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	//"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -64,7 +63,6 @@ func TestLatencyTracker(t *testing.T) {
 	var connLatencyInitialA time.Duration
 	// wait for up to 20 seconds for the network latency to be established.
 	startTime := time.Now()
-	var firstLatencyTime time.Time
 	for {
 		if time.Since(lastMsgTime) > 100*time.Millisecond {
 			netA.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil)
@@ -79,10 +77,10 @@ func TestLatencyTracker(t *testing.T) {
 		}
 		require.LessOrEqual(t, connLatencyA.Nanoseconds(), (20 * time.Second).Nanoseconds())
 		connLatencyInitialA = connLatencyA
-		firstLatencyTime = time.Now()
 		break
 	}
 
+	// wait for up to 20 seconds for the network latency to be established.
 	startTime = time.Now()
 	lastMsgTime = time.Time{}
 	for {
@@ -116,7 +114,6 @@ func TestLatencyTracker(t *testing.T) {
 			require.NotEqual(t, connLatencyA.Nanoseconds(), int64(0))
 			waitTime := time.Since(lastMsgTime)
 			require.Less(t, waitTime.Seconds(), float64(netA.config.PeerPingPeriodSeconds*2))
-			require.Less(t, time.Since(firstLatencyTime).Seconds(), float64(netA.config.PeerPingPeriodSeconds*2))
 			break
 		}
 		time.Sleep(time.Millisecond)
