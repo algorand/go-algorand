@@ -61,7 +61,8 @@ func newCatchpointTracker(tb testing.TB, l *mockLedgerForTracker, conf config.Lo
 	_, err := trackerDBInitialize(l, au.catchpointEnabled(), dbPathPrefix)
 	require.NoError(tb, err)
 
-	l.trackers.initialize(au, l, []ledgerTracker{au, ct}, conf)
+	err = l.trackers.initialize(au, l, []ledgerTracker{au, ct}, conf)
+	require.NoError(tb, err)
 	err = l.trackers.loadFromDisk(l)
 	require.NoError(tb, err)
 	return ct
@@ -340,8 +341,6 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			ml.trackers.waitAccountsWriting()
 			catchpointLabels[i] = ct.GetLastCatchpointLabel()
 			ledgerHistory[i] = ml.fork(t)
-			ledgerHistory[i].trackers.initialize(ml.trackers.driver, ledgerHistory[i], []ledgerTracker{au}, cfg)
-			ledgerHistory[i].trackers.dbRound = ml.trackers.dbRound
 			defer ledgerHistory[i].Close()
 		}
 	}
@@ -354,11 +353,6 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		ml2 := ledgerHistory[startingRound]
 
 		ct := newCatchpointTracker(t, ml2, cfg, ".")
-		//au := ml2.trackers.driver
-		//ml2.trackers.loadFromDisk(ml2)
-		//err := au.loadFromDisk(ml2, ml2.trackers.dbRound)
-		//require.NoError(t, err)
-
 		for i := startingRound + 1; i <= basics.Round(testCatchpointLabelsCount*cfg.CatchpointInterval); i++ {
 			blk := bookkeeping.Block{
 				BlockHeader: bookkeeping.BlockHeader{
