@@ -146,9 +146,9 @@ func TypeFromString(str string) (Type, error) {
 		if err != nil {
 			return Type{}, fmt.Errorf("ill formed uint type: %s", str)
 		}
-		return MakeUintType(uint16(typeSize))
+		return MakeUintType(int(typeSize))
 	case str == "byte":
-		return MakeByteType(), nil
+		return ByteType, nil
 	case strings.HasPrefix(str, "ufixed"):
 		stringMatches := ufixedRegexp.FindStringSubmatch(str)
 		// match string itself, then type-bitSize, and type-precision
@@ -164,13 +164,13 @@ func TypeFromString(str string) (Type, error) {
 		if err != nil {
 			return Type{}, err
 		}
-		return MakeUfixedType(uint16(ufixedSize), uint16(ufixedPrecision))
+		return MakeUfixedType(int(ufixedSize), int(ufixedPrecision))
 	case str == "bool":
-		return MakeBoolType(), nil
+		return BoolType, nil
 	case str == "address":
-		return MakeAddressType(), nil
+		return AddressType, nil
 	case str == "string":
-		return MakeStringType(), nil
+		return StringType, nil
 	case len(str) >= 2 && str[0] == '(' && str[len(str)-1] == ')':
 		tupleContent, err := parseTupleContent(str[1 : len(str)-1])
 		if err != nil {
@@ -273,27 +273,22 @@ func parseTupleContent(str string) ([]string, error) {
 
 // MakeUintType makes `Uint` ABI type by taking a type bitSize argument.
 // The range of type bitSize is [8, 512] and type bitSize % 8 == 0.
-func MakeUintType(typeSize uint16) (Type, error) {
+func MakeUintType(typeSize int) (Type, error) {
 	if typeSize%8 != 0 || typeSize < 8 || typeSize > 512 {
 		return Type{}, fmt.Errorf("unsupported uint type bitSize: %d", typeSize)
 	}
 	return Type{
 		abiTypeID: Uint,
-		bitSize:   typeSize,
+		bitSize:   uint16(typeSize),
 	}, nil
 }
 
-// MakeByteType makes `Byte` ABI type.
-func MakeByteType() Type {
-	return Type{
-		abiTypeID: Byte,
-	}
-}
+var ByteType = Type{abiTypeID: Byte}
 
 // MakeUfixedType makes `UFixed` ABI type by taking type bitSize and type precision as arguments.
 // The range of type bitSize is [8, 512] and type bitSize % 8 == 0.
 // The range of type precision is [1, 160].
-func MakeUfixedType(typeSize uint16, typePrecision uint16) (Type, error) {
+func MakeUfixedType(typeSize int, typePrecision int) (Type, error) {
 	if typeSize%8 != 0 || typeSize < 8 || typeSize > 512 {
 		return Type{}, fmt.Errorf("unsupported ufixed type bitSize: %d", typeSize)
 	}
@@ -302,17 +297,12 @@ func MakeUfixedType(typeSize uint16, typePrecision uint16) (Type, error) {
 	}
 	return Type{
 		abiTypeID: Ufixed,
-		bitSize:   typeSize,
-		precision: typePrecision,
+		bitSize:   uint16(typeSize),
+		precision: uint16(typePrecision),
 	}, nil
 }
 
-// MakeBoolType makes `Bool` ABI type.
-func MakeBoolType() Type {
-	return Type{
-		abiTypeID: Bool,
-	}
-}
+var BoolType = Type{abiTypeID: Bool}
 
 // MakeStaticArrayType makes static length array ABI type by taking
 // array element type and array length as arguments.
@@ -324,12 +314,7 @@ func MakeStaticArrayType(argumentType Type, arrayLength uint16) Type {
 	}
 }
 
-// MakeAddressType makes `Address` ABI type.
-func MakeAddressType() Type {
-	return Type{
-		abiTypeID: Address,
-	}
-}
+var AddressType = Type{abiTypeID: Address}
 
 // MakeDynamicArrayType makes dynamic length array by taking array element type as argument.
 func MakeDynamicArrayType(argumentType Type) Type {
@@ -339,12 +324,7 @@ func MakeDynamicArrayType(argumentType Type) Type {
 	}
 }
 
-// MakeStringType makes `String` ABI type.
-func MakeStringType() Type {
-	return Type{
-		abiTypeID: String,
-	}
-}
+var StringType = Type{abiTypeID: String}
 
 // MakeTupleType makes tuple ABI type by taking an array of tuple element types as argument.
 func MakeTupleType(argumentTypes []Type) (Type, error) {

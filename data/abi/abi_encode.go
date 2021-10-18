@@ -34,12 +34,12 @@ func (t Type) typeCastToTuple(tupLen ...int) (Type, error) {
 		}
 		childT = make([]Type, tupLen[0])
 		for i := 0; i < tupLen[0]; i++ {
-			childT[i] = MakeByteType()
+			childT[i] = ByteType
 		}
 	case Address:
 		childT = make([]Type, addressByteSize)
 		for i := 0; i < addressByteSize; i++ {
-			childT[i] = MakeByteType()
+			childT[i] = ByteType
 		}
 	case ArrayStatic:
 		childT = make([]Type, t.staticLength)
