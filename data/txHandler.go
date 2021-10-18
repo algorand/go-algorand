@@ -502,6 +502,7 @@ func (handler *solicitedAsyncTxHandler) HandleTransactionGroups(networkPeer inte
 
 func (handler *solicitedAsyncTxHandler) Start() {
 	if handler.stopCtxFunc == nil {
+		handler.txHandler.Start()
 		var ctx context.Context
 		ctx, handler.stopCtxFunc = context.WithCancel(context.Background())
 		handler.stopped.Add(1)
@@ -514,6 +515,7 @@ func (handler *solicitedAsyncTxHandler) Stop() {
 		handler.stopCtxFunc()
 		handler.stopped.Wait()
 		handler.stopCtxFunc = nil
+		handler.txHandler.Stop()
 	}
 }
 
