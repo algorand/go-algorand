@@ -235,6 +235,9 @@ commands:
             export GIMME_ENV_PREFIX=<< parameters.build_dir >>/.gimme/envs
             export GIMME_VERSION_PREFIX=<< parameters.build_dir >>/.gimme/versions
             scripts/travis/build.sh --make_debug
+            ls -la
+            ls -la ../
+            ls -la bin/ 2>/dev/null
       - cache_libsodium
       - save_cache:
           key: 'go-mod-1-14-7-v2-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
@@ -371,6 +374,9 @@ commands:
       - attach_workspace:
           at: << parameters.build_dir >>
       - run: |
+          ls -la
+          ls -la ../
+          ls -la bin/ 2>/dev/null
           mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
           touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml
           touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json
@@ -441,6 +447,9 @@ commands:
         - run:
             name: Upload binaries << parameters.platform >>
             command: |
+              ls -la
+              ls -la ../
+              ls -la bin/
               # export TRAVIS_BRANCH=${CIRCLE_BRANCH}
               # scripts/travis/deploy_packages.sh
               export RELEASE_GENESIS_PROCESS=true
