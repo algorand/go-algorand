@@ -86,13 +86,7 @@ func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.
 	// using the balances from round r.
 	certRound := r + basics.Round(tr.Proto.CompactCertVotersLookback+tr.Proto.CompactCertRounds)
 
-	// sigKeyRound is the ephemeral key ID that we expect to be used for signing
-	// the block from certRound.  It is one higher because the keys for certRound
-	// might be deleted by the time consensus is reached on the block and we try
-	// to sign the compact cert for block certRound.
-	sigKeyRound := certRound + 1
-
-	top, err := onlineTop(r, sigKeyRound, tr.Proto.CompactCertTopVoters)
+	top, err := onlineTop(r, certRound, tr.Proto.CompactCertTopVoters)
 	if err != nil {
 		return err
 	}
