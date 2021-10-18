@@ -382,7 +382,7 @@ commands:
             curl -fsSL --retry 3 --retry-connrefused $URL > ./buildpulse-test-reporter
             echo "$SUM *buildpulse-test-reporter" | shasum -a 256 -c --status
             chmod +x ./buildpulse-test-reporter
-            ./buildpulse-test-reporter submit << parameters.path >> --account-id 23182699 --repository-id 191266671
+            ./buildpulse-test-reporter submit << parameters.path >> --account-id 23182699 --repository-id 191266671 || true
 
   generic_integration:
     description: Run integration tests from build workspace, for re-use by diferent architectures
