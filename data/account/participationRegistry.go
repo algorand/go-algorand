@@ -67,22 +67,6 @@ func (r ParticipationRecord) IsZero() bool {
 	return r == zeroParticipationRecord
 }
 
-// Duplicate creates a copy of the current object. This is required once secrets are stored.
-func (r ParticipationRecord) Duplicate() ParticipationRecord {
-	return ParticipationRecord{
-		ParticipationID:        r.ParticipationID,
-		Account:                r.Account,
-		FirstValid:             r.FirstValid,
-		LastValid:              r.LastValid,
-		KeyDilution:            r.KeyDilution,
-		LastVote:               r.LastVote,
-		LastBlockProposal:      r.LastBlockProposal,
-		LastCompactCertificate: r.LastCompactCertificate,
-		EffectiveFirst:         r.EffectiveFirst,
-		EffectiveLast:          r.EffectiveLast,
-	}
-}
-
 // ParticipationAction is used when recording participation actions.
 //msgp:ignore ParticipationAction
 type ParticipationAction int
@@ -640,7 +624,7 @@ func (db *participationDB) Get(id ParticipationID) ParticipationRecord {
 	if !ok {
 		return ParticipationRecord{}
 	}
-	return record.Duplicate()
+	return record
 }
 
 func (db *participationDB) GetAll() []ParticipationRecord {
@@ -649,7 +633,7 @@ func (db *participationDB) GetAll() []ParticipationRecord {
 
 	results := make([]ParticipationRecord, 0, len(db.cache))
 	for _, record := range db.cache {
-		results = append(results, record.Duplicate())
+		results = append(results, record)
 	}
 	return results
 }
@@ -720,7 +704,7 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 		// TODO: this should probably be "on - 1"
 		record.EffectiveLast = on
 		updated[record.ParticipationID] = updatingParticipationRecord{
-			record.Duplicate(),
+			record,
 			false,
 		}
 	}
