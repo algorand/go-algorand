@@ -276,11 +276,17 @@ type participationDB struct {
 	flushesPending int
 }
 
+type updatingParticipationRecord struct {
+	ParticipationRecord
+
+	required bool
+}
+
 type partDBWriteRecord struct {
 	insertID ParticipationID
 	insert   Participation
 
-	registerUpdated map[ParticipationID]ParticipationRecord
+	registerUpdated map[ParticipationID]updatingParticipationRecord
 
 	delete ParticipationID
 
@@ -398,16 +404,19 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 	return err
 }
 
-func (db *participationDB) registerInner(updated map[ParticipationID]ParticipationRecord) error {
+func (db *participationDB) registerInner(updated map[ParticipationID]updatingParticipationRecord) error {
 	var cacheDeletes []ParticipationID
 	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// Disable active key if there is one
 		for id, record := range updated {
-			err := updateRollingFields(ctx, tx, record)
+			err := updateRollingFields(ctx, tx, record.ParticipationRecord)
 			// Repair the case when no keys were updated
 			if err == ErrNoKeyForID {
 				db.log.Warn("participationDB unable to update key in cache. Removing from cache.")
 				cacheDeletes = append(cacheDeletes, id)
+				if !record.required {
+					err = nil
+				}
 			}
 			if err != nil {
 				return fmt.Errorf("unable to disable old key when registering %s: %w", id, err)
@@ -704,18 +713,24 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 	}
 	db.mutex.Unlock()
 
-	updated := make(map[ParticipationID]ParticipationRecord)
+	updated := make(map[ParticipationID]updatingParticipationRecord)
 
 	// Disable active key if there is one
 	for _, record := range toUpdate {
 		// TODO: this should probably be "on - 1"
 		record.EffectiveLast = on
-		updated[record.ParticipationID] = record.Duplicate()
+		updated[record.ParticipationID] = updatingParticipationRecord{
+			record.Duplicate(),
+			false,
+		}
 	}
 	// Mark registered.
 	recordToRegister.EffectiveFirst = on
 	recordToRegister.EffectiveLast = recordToRegister.LastValid
-	updated[recordToRegister.ParticipationID] = recordToRegister
+	updated[recordToRegister.ParticipationID] = updatingParticipationRecord{
+		recordToRegister,
+		true,
+	}
 
 	if len(updated) != 0 {
 		db.writeQueue <- partDBWriteRecord{
@@ -724,7 +739,7 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 		db.mutex.Lock()
 		for id, record := range updated {
 			delete(db.dirty, id)
-			db.cache[id] = record
+			db.cache[id] = record.ParticipationRecord
 		}
 		db.mutex.Unlock()
 	}
