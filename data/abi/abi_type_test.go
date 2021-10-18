@@ -32,16 +32,16 @@ func TestMakeTypeValid(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	// uint
 	for i := 8; i <= 512; i += 8 {
-		uintType, err := MakeUintType(i)
+		uintType, err := makeUintType(i)
 		require.NoError(t, err, "make uint type in valid space should not return error")
 		expected := "uint" + strconv.Itoa(i)
 		actual := uintType.String()
-		require.Equal(t, expected, actual, "MakeUintType: expected %s, actual %s", expected, actual)
+		require.Equal(t, expected, actual, "makeUintType: expected %s, actual %s", expected, actual)
 	}
 	// ufixed
 	for i := 8; i <= 512; i += 8 {
 		for j := 1; j <= 160; j++ {
-			ufixedType, err := MakeUfixedType(i, j)
+			ufixedType, err := makeUfixedType(i, j)
 			require.NoError(t, err, "make ufixed type in valid space should not return error")
 			expected := "ufixed" + strconv.Itoa(i) + "x" + strconv.Itoa(j)
 			actual := ufixedType.String()
@@ -55,13 +55,13 @@ func TestMakeTypeValid(t *testing.T) {
 		testType string
 		expected string
 	}{
-		{input: BoolType, testType: "bool", expected: "bool"},
-		{input: StringType, testType: "string", expected: "string"},
-		{input: AddressType, testType: "address", expected: "address"},
-		{input: ByteType, testType: "byte", expected: "byte"},
+		{input: boolType, testType: "bool", expected: "bool"},
+		{input: stringType, testType: "string", expected: "string"},
+		{input: addressType, testType: "address", expected: "address"},
+		{input: byteType, testType: "byte", expected: "byte"},
 		// dynamic array
 		{
-			input: MakeDynamicArrayType(
+			input: makeDynamicArrayType(
 				Type{
 					abiTypeID: Uint,
 					bitSize:   uint16(32),
@@ -71,16 +71,16 @@ func TestMakeTypeValid(t *testing.T) {
 			expected: "uint32[]",
 		},
 		{
-			input: MakeDynamicArrayType(
-				MakeDynamicArrayType(
-					ByteType,
+			input: makeDynamicArrayType(
+				makeDynamicArrayType(
+					byteType,
 				),
 			),
 			testType: "dynamic array",
 			expected: "byte[][]",
 		},
 		{
-			input: MakeStaticArrayType(
+			input: makeStaticArrayType(
 				Type{
 					abiTypeID: Ufixed,
 					bitSize:   uint16(128),
@@ -92,9 +92,9 @@ func TestMakeTypeValid(t *testing.T) {
 			expected: "ufixed128x10[100]",
 		},
 		{
-			input: MakeStaticArrayType(
-				MakeStaticArrayType(
-					BoolType,
+			input: makeStaticArrayType(
+				makeStaticArrayType(
+					boolType,
 					uint16(128),
 				),
 				uint16(256),
@@ -114,10 +114,10 @@ func TestMakeTypeValid(t *testing.T) {
 					{
 						abiTypeID: Tuple,
 						childTypes: []Type{
-							AddressType,
-							ByteType,
-							MakeStaticArrayType(BoolType, uint16(10)),
-							MakeDynamicArrayType(
+							addressType,
+							byteType,
+							makeStaticArrayType(boolType, uint16(10)),
+							makeDynamicArrayType(
 								Type{
 									abiTypeID: Ufixed,
 									bitSize:   uint16(256),
@@ -127,7 +127,7 @@ func TestMakeTypeValid(t *testing.T) {
 						},
 						staticLength: 4,
 					},
-					MakeDynamicArrayType(ByteType),
+					makeDynamicArrayType(byteType),
 				},
 				staticLength: 3,
 			},
@@ -153,8 +153,8 @@ func TestMakeTypeInvalid(t *testing.T) {
 			randInput = rand.Uint32() % (1 << 16)
 		}
 		// note: if a var mod 8 = 0 (or not) in uint32, then it should mod 8 = 0 (or not) in uint16.
-		_, err := MakeUintType(int(randInput))
-		require.Error(t, err, "MakeUintType: should throw error on bitSize input %d", uint16(randInput))
+		_, err := makeUintType(int(randInput))
+		require.Error(t, err, "makeUintType: should throw error on bitSize input %d", uint16(randInput))
 	}
 	// ufixed
 	for i := 0; i <= 10000; i++ {
@@ -166,8 +166,8 @@ func TestMakeTypeInvalid(t *testing.T) {
 		for randPrecision >= 1 && randPrecision <= 160 {
 			randPrecision = rand.Uint32()
 		}
-		_, err := MakeUfixedType(int(randSize), int(randPrecision))
-		require.Error(t, err, "MakeUfixedType: should throw error on bitSize %d, precision %d", randSize, randPrecision)
+		_, err := makeUfixedType(int(randSize), int(randPrecision))
+		require.Error(t, err, "makeUfixedType: should throw error on bitSize %d, precision %d", randSize, randPrecision)
 	}
 }
 
@@ -175,7 +175,7 @@ func TestTypeFromStringValid(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	// uint
 	for i := 8; i <= 512; i += 8 {
-		expected, err := MakeUintType(i)
+		expected, err := makeUintType(i)
 		require.NoError(t, err, "make uint type in valid space should not return error")
 		actual, err := TypeOf(expected.String())
 		require.NoError(t, err, "TypeOf: uint parsing error: %s", expected.String())
@@ -185,7 +185,7 @@ func TestTypeFromStringValid(t *testing.T) {
 	// ufixed
 	for i := 8; i <= 512; i += 8 {
 		for j := 1; j <= 160; j++ {
-			expected, err := MakeUfixedType(i, j)
+			expected, err := makeUfixedType(i, j)
 			require.NoError(t, err, "make ufixed type in valid space should not return error")
 			actual, err := TypeOf("ufixed" + strconv.Itoa(i) + "x" + strconv.Itoa(j))
 			require.NoError(t, err, "TypeOf ufixed parsing error: %s", expected.String())
@@ -198,19 +198,19 @@ func TestTypeFromStringValid(t *testing.T) {
 		testType string
 		expected Type
 	}{
-		{input: BoolType.String(), testType: "bool", expected: BoolType},
-		{input: StringType.String(), testType: "string", expected: StringType},
-		{input: AddressType.String(), testType: "address", expected: AddressType},
-		{input: ByteType.String(), testType: "byte", expected: ByteType},
+		{input: boolType.String(), testType: "bool", expected: boolType},
+		{input: stringType.String(), testType: "string", expected: stringType},
+		{input: addressType.String(), testType: "address", expected: addressType},
+		{input: byteType.String(), testType: "byte", expected: byteType},
 		{
 			input:    "uint256[]",
 			testType: "dynamic array",
-			expected: MakeDynamicArrayType(Type{abiTypeID: Uint, bitSize: 256}),
+			expected: makeDynamicArrayType(Type{abiTypeID: Uint, bitSize: 256}),
 		},
 		{
 			input:    "ufixed256x64[]",
 			testType: "dynamic array",
-			expected: MakeDynamicArrayType(
+			expected: makeDynamicArrayType(
 				Type{
 					abiTypeID: Ufixed,
 					bitSize:   256,
@@ -221,11 +221,11 @@ func TestTypeFromStringValid(t *testing.T) {
 		{
 			input:    "byte[][][][]",
 			testType: "dynamic array",
-			expected: MakeDynamicArrayType(
-				MakeDynamicArrayType(
-					MakeDynamicArrayType(
-						MakeDynamicArrayType(
-							ByteType,
+			expected: makeDynamicArrayType(
+				makeDynamicArrayType(
+					makeDynamicArrayType(
+						makeDynamicArrayType(
+							byteType,
 						),
 					),
 				),
@@ -235,16 +235,16 @@ func TestTypeFromStringValid(t *testing.T) {
 		{
 			input:    "address[100]",
 			testType: "static array",
-			expected: MakeStaticArrayType(
-				AddressType,
+			expected: makeStaticArrayType(
+				addressType,
 				uint16(100),
 			),
 		},
 		{
 			input:    "uint64[][200]",
 			testType: "static array",
-			expected: MakeStaticArrayType(
-				MakeDynamicArrayType(
+			expected: makeStaticArrayType(
+				makeDynamicArrayType(
 					Type{abiTypeID: Uint, bitSize: uint16(64)},
 				),
 				uint16(200),
@@ -273,10 +273,10 @@ func TestTypeFromStringValid(t *testing.T) {
 					{
 						abiTypeID: Tuple,
 						childTypes: []Type{
-							AddressType,
-							ByteType,
-							MakeStaticArrayType(BoolType, uint16(10)),
-							MakeDynamicArrayType(
+							addressType,
+							byteType,
+							makeStaticArrayType(boolType, uint16(10)),
+							makeDynamicArrayType(
 								Type{
 									abiTypeID: Ufixed,
 									bitSize:   uint16(256),
@@ -286,7 +286,7 @@ func TestTypeFromStringValid(t *testing.T) {
 						},
 						staticLength: 4,
 					},
-					MakeDynamicArrayType(ByteType),
+					makeDynamicArrayType(byteType),
 				},
 				staticLength: 3,
 			},
@@ -304,13 +304,13 @@ func TestTypeFromStringValid(t *testing.T) {
 					{
 						abiTypeID: Tuple,
 						childTypes: []Type{
-							AddressType,
-							ByteType,
-							MakeStaticArrayType(BoolType, uint16(10)),
+							addressType,
+							byteType,
+							makeStaticArrayType(boolType, uint16(10)),
 							{
 								abiTypeID: Tuple,
 								childTypes: []Type{
-									MakeDynamicArrayType(
+									makeDynamicArrayType(
 										Type{
 											abiTypeID: Ufixed,
 											bitSize:   uint16(256),
@@ -346,13 +346,13 @@ func TestTypeFromStringValid(t *testing.T) {
 					{
 						abiTypeID: Tuple,
 						childTypes: []Type{
-							AddressType,
+							addressType,
 							{
 								abiTypeID: Tuple,
 								childTypes: []Type{
-									ByteType,
-									MakeStaticArrayType(BoolType, uint16(10)),
-									MakeDynamicArrayType(
+									byteType,
+									makeStaticArrayType(boolType, uint16(10)),
+									makeDynamicArrayType(
 										Type{
 											abiTypeID: Ufixed,
 											bitSize:   uint16(256),
@@ -389,7 +389,7 @@ func TestTypeFromStringInvalid(t *testing.T) {
 		}
 		errorInput := "uint" + strconv.FormatUint(randSize, 10)
 		_, err := TypeOf(errorInput)
-		require.Error(t, err, "MakeUintType: should throw error on bitSize input %d", randSize)
+		require.Error(t, err, "makeUintType: should throw error on bitSize input %d", randSize)
 	}
 	for i := 0; i <= 10000; i++ {
 		randSize := rand.Uint64()
@@ -402,7 +402,7 @@ func TestTypeFromStringInvalid(t *testing.T) {
 		}
 		errorInput := "ufixed" + strconv.FormatUint(randSize, 10) + "x" + strconv.FormatUint(randPrecision, 10)
 		_, err := TypeOf(errorInput)
-		require.Error(t, err, "MakeUintType: should throw error on bitSize input %d", randSize)
+		require.Error(t, err, "makeUintType: should throw error on bitSize input %d", randSize)
 	}
 	var testcases = []string{
 		// uint
@@ -474,27 +474,27 @@ func TestTypeMISC(t *testing.T) {
 	rand.Seed(time.Now().Unix())
 
 	var testpool = []Type{
-		BoolType,
-		AddressType,
-		StringType,
-		ByteType,
+		boolType,
+		addressType,
+		stringType,
+		byteType,
 	}
 	for i := 8; i <= 512; i += 8 {
-		uintT, err := MakeUintType(i)
+		uintT, err := makeUintType(i)
 		require.NoError(t, err, "make uint type error")
 		testpool = append(testpool, uintT)
 	}
 	for i := 8; i <= 512; i += 8 {
 		for j := 1; j <= 160; j++ {
-			ufixedT, err := MakeUfixedType(i, j)
+			ufixedT, err := makeUfixedType(i, j)
 			require.NoError(t, err, "make ufixed type error: bitSize %d, precision %d", i, j)
 			testpool = append(testpool, ufixedT)
 		}
 	}
 	for _, testcase := range testpool {
-		testpool = append(testpool, MakeDynamicArrayType(testcase))
-		testpool = append(testpool, MakeStaticArrayType(testcase, 10))
-		testpool = append(testpool, MakeStaticArrayType(testcase, 20))
+		testpool = append(testpool, makeDynamicArrayType(testcase))
+		testpool = append(testpool, makeStaticArrayType(testcase, 10))
+		testpool = append(testpool, makeStaticArrayType(testcase, 20))
 	}
 
 	for _, testcase := range testpool {
@@ -545,13 +545,13 @@ func TestTypeMISC(t *testing.T) {
 		isDynamicCount++
 	}
 
-	addressByteLen, err := AddressType.ByteLen()
+	addressByteLen, err := addressType.ByteLen()
 	require.NoError(t, err, "address type bytelen should not return error")
 	require.Equal(t, 32, addressByteLen, "address type bytelen should be 32")
-	byteByteLen, err := ByteType.ByteLen()
+	byteByteLen, err := byteType.ByteLen()
 	require.NoError(t, err, "byte type bytelen should not return error")
 	require.Equal(t, 1, byteByteLen, "byte type bytelen should be 1")
-	boolByteLen, err := BoolType.ByteLen()
+	boolByteLen, err := boolType.ByteLen()
 	require.NoError(t, err, "bool type bytelen should be 1")
 	require.Equal(t, 1, boolByteLen, "bool type bytelen should be 1")
 

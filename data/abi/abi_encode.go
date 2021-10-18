@@ -34,12 +34,12 @@ func (t Type) typeCastToTuple(tupLen ...int) (Type, error) {
 		}
 		childT = make([]Type, tupLen[0])
 		for i := 0; i < tupLen[0]; i++ {
-			childT[i] = ByteType
+			childT[i] = byteType
 		}
 	case Address:
 		childT = make([]Type, addressByteSize)
 		for i := 0; i < addressByteSize; i++ {
-			childT[i] = ByteType
+			childT[i] = byteType
 		}
 	case ArrayStatic:
 		childT = make([]Type, t.staticLength)
@@ -58,7 +58,7 @@ func (t Type) typeCastToTuple(tupLen ...int) (Type, error) {
 		return Type{}, fmt.Errorf("type cannot support conversion to tuple")
 	}
 
-	tuple, err := MakeTupleType(childT)
+	tuple, err := makeTupleType(childT)
 	if err != nil {
 		return Type{}, err
 	}

@@ -34,7 +34,7 @@ func TestEncodeValid(t *testing.T) {
 	// randomly pick 1000 valid uint values and check if encoded value match with expected
 	for intSize := 8; intSize <= 512; intSize += 8 {
 		upperLimit := big.NewInt(0).Lsh(big.NewInt(1), uint(intSize))
-		uintType, err := MakeUintType(intSize)
+		uintType, err := makeUintType(intSize)
 		require.NoError(t, err, "make uint type fail")
 
 		for i := 0; i < 1000; i++ {
@@ -71,7 +71,7 @@ func TestEncodeValid(t *testing.T) {
 			big.NewInt(1).Neg(big.NewInt(1)),
 		)
 		for precision := 1; precision <= 160; precision++ {
-			typeUfixed, err := MakeUfixedType(size, precision)
+			typeUfixed, err := makeUfixedType(size, precision)
 			require.NoError(t, err, "make ufixed type fail")
 
 			for i := 0; i < 10; i++ {
@@ -105,14 +105,14 @@ func TestEncodeValid(t *testing.T) {
 		addrBytesExpected := make([]byte, 32-len(rand256Bytes))
 		addrBytesExpected = append(addrBytesExpected, rand256Bytes...)
 
-		addrBytesActual, err := AddressType.Encode(addrBytesExpected)
+		addrBytesActual, err := addressType.Encode(addrBytesExpected)
 		require.NoError(t, err, "address encode fail")
 		require.Equal(t, addrBytesExpected, addrBytesActual, "encode addr not match with expected")
 	}
 
 	// encoding test for bool values
 	for i := 0; i < 2; i++ {
-		boolEncode, err := BoolType.Encode(i == 1)
+		boolEncode, err := boolType.Encode(i == 1)
 		require.NoError(t, err, "bool encode fail")
 		expected := []byte{0x00}
 		if i == 1 {
@@ -123,7 +123,7 @@ func TestEncodeValid(t *testing.T) {
 
 	// encoding test for byte values
 	for i := 0; i < (1 << 8); i++ {
-		byteEncode, err := ByteType.Encode(byte(i))
+		byteEncode, err := byteType.Encode(byte(i))
 		require.NoError(t, err, "byte encode fail")
 		expected := []byte{byte(i)}
 		require.Equal(t, expected, byteEncode, "encode byte not match with expected")
@@ -143,7 +143,7 @@ func TestEncodeValid(t *testing.T) {
 			binary.BigEndian.PutUint16(lengthBytes, uint16(utf8ByteLen))
 			expected := append(lengthBytes, []byte(utf8Str)...)
 
-			strEncode, err := StringType.Encode(utf8Str)
+			strEncode, err := stringType.Encode(utf8Str)
 			require.NoError(t, err, "string encode fail")
 			require.Equal(t, expected, strEncode, "encode string not match with expected")
 		}
@@ -152,7 +152,7 @@ func TestEncodeValid(t *testing.T) {
 	// encoding test for static bool array, the expected behavior of encoding is to
 	// compress multiple bool into a single byte.
 	// input: {T, F, F, T, T}, encode expected: {0b10011000}
-	staticBoolArrType := MakeStaticArrayType(BoolType, 5)
+	staticBoolArrType := makeStaticArrayType(boolType, 5)
 	t.Run("static bool array encoding", func(t *testing.T) {
 		inputBase := []bool{true, false, false, true, true}
 		expected := []byte{
@@ -165,7 +165,7 @@ func TestEncodeValid(t *testing.T) {
 
 	// encoding test for static bool array
 	// input: {F, F, F, T, T, F, T, F, T, F, T}, encode expected: {0b00011010, 0b10100000}
-	staticBoolArrType = MakeStaticArrayType(BoolType, 11)
+	staticBoolArrType = makeStaticArrayType(boolType, 11)
 	t.Run("static bool array encoding", func(t *testing.T) {
 		inputBase := []bool{false, false, false, true, true, false, true, false, true, false, true}
 		expected := []byte{
@@ -178,7 +178,7 @@ func TestEncodeValid(t *testing.T) {
 
 	// encoding test for dynamic bool array
 	// input: {F, T, F, T, F, T, F, T, F, T}, encode expected: {0b01010101, 0b01000000}
-	dynamicBoolArrayType := MakeDynamicArrayType(BoolType)
+	dynamicBoolArrayType := makeDynamicArrayType(boolType)
 	t.Run("dynamic bool array encoding", func(t *testing.T) {
 		inputBase := []bool{false, true, false, true, false, true, false, true, false, true}
 		expected := []byte{
@@ -310,7 +310,7 @@ func TestDecodeValid(t *testing.T) {
 	// generate bytes from random uint values and decode bytes with additional type information
 	for intSize := 8; intSize <= 512; intSize += 8 {
 		upperLimit := big.NewInt(0).Lsh(big.NewInt(1), uint(intSize))
-		uintType, err := MakeUintType(intSize)
+		uintType, err := makeUintType(intSize)
 		require.NoError(t, err, "make uint type failure")
 		for i := 0; i < 1000; i++ {
 			randBig, err := rand.Int(rand.Reader, upperLimit)
@@ -346,7 +346,7 @@ func TestDecodeValid(t *testing.T) {
 	for size := 8; size <= 512; size += 8 {
 		upperLimit := big.NewInt(0).Lsh(big.NewInt(1), uint(size))
 		for precision := 1; precision <= 160; precision++ {
-			ufixedType, err := MakeUfixedType(size, precision)
+			ufixedType, err := makeUfixedType(size, precision)
 			require.NoError(t, err, "make ufixed type failure")
 			for i := 0; i < 10; i++ {
 				randBig, err := rand.Int(rand.Reader, upperLimit)
@@ -388,25 +388,25 @@ func TestDecodeValid(t *testing.T) {
 		expected := make([]byte, 32-len(addressBytes))
 		expected = append(expected, addressBytes...)
 
-		actual, err := AddressType.Decode(expected)
+		actual, err := addressType.Decode(expected)
 		require.NoError(t, err, "decoding address should not return error")
 		require.Equal(t, expected, actual, "decode addr not match with expected")
 	}
 
 	// bool value decoding test
 	for i := 0; i < 2; i++ {
-		boolEncode, err := BoolType.Encode(i == 1)
+		boolEncode, err := boolType.Encode(i == 1)
 		require.NoError(t, err, "bool encode fail")
-		actual, err := BoolType.Decode(boolEncode)
+		actual, err := boolType.Decode(boolEncode)
 		require.NoError(t, err, "decoding bool should not return error")
 		require.Equal(t, i == 1, actual, "decode bool not match with expected")
 	}
 
 	// byte value decoding test, iterating through 256 valid byte value
 	for i := 0; i < (1 << 8); i++ {
-		byteEncode, err := ByteType.Encode(byte(i))
+		byteEncode, err := byteType.Encode(byte(i))
 		require.NoError(t, err, "byte encode fail")
-		actual, err := ByteType.Decode(byteEncode)
+		actual, err := byteType.Decode(byteEncode)
 		require.NoError(t, err, "decoding byte should not return error")
 		require.Equal(t, byte(i), actual, "decode byte not match with expected")
 	}
@@ -417,9 +417,9 @@ func TestDecodeValid(t *testing.T) {
 	for length := 1; length <= 100; length++ {
 		for i := 0; i < 10; i++ {
 			expected := gobberish.GenerateString(length)
-			strEncode, err := StringType.Encode(expected)
+			strEncode, err := stringType.Encode(expected)
 			require.NoError(t, err, "string encode fail")
-			actual, err := StringType.Decode(strEncode)
+			actual, err := stringType.Decode(strEncode)
 			require.NoError(t, err, "decoding string should not return error")
 			require.Equal(t, expected, actual, "encode string not match with expected")
 		}
@@ -623,7 +623,7 @@ func TestDecodeInvalid(t *testing.T) {
 	// should throw error
 	t.Run("corrupted static bool array decode", func(t *testing.T) {
 		inputBase := []byte{0b11111111}
-		arrayType := MakeStaticArrayType(BoolType, 9)
+		arrayType := makeStaticArrayType(boolType, 9)
 		_, err := arrayType.Decode(inputBase)
 		require.Error(t, err, "decoding corrupted static bool array should return error")
 	})
@@ -634,7 +634,7 @@ func TestDecodeInvalid(t *testing.T) {
 	// should throw error
 	t.Run("corrupted static bool array decode", func(t *testing.T) {
 		inputBase := []byte{0b01001011, 0b00000000}
-		arrayType := MakeStaticArrayType(BoolType, 8)
+		arrayType := makeStaticArrayType(boolType, 8)
 		_, err := arrayType.Decode(inputBase)
 		require.Error(t, err, "decoding corrupted static bool array should return error")
 	})
@@ -688,7 +688,7 @@ func TestDecodeInvalid(t *testing.T) {
 		inputBase := []byte{
 			0x00, 0x0A, 0b10101010,
 		}
-		dynamicT := MakeDynamicArrayType(BoolType)
+		dynamicT := makeDynamicArrayType(boolType)
 		_, err := dynamicT.Decode(inputBase)
 		require.Error(t, err, "decode corrupted dynamic array should return error")
 	})
@@ -701,7 +701,7 @@ func TestDecodeInvalid(t *testing.T) {
 		inputBase := []byte{
 			0x00, 0x07, 0b10101010, 0b00000000,
 		}
-		dynamicT := MakeDynamicArrayType(BoolType)
+		dynamicT := makeDynamicArrayType(boolType)
 		_, err := dynamicT.Decode(inputBase)
 		require.Error(t, err, "decode corrupted dynamic array should return error")
 	})
@@ -852,7 +852,7 @@ func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
 	for bitSize := 8; bitSize <= 512; bitSize += 8 {
 		max := new(big.Int).Lsh(big.NewInt(1), uint(bitSize))
 
-		uintT, err := MakeUintType(bitSize)
+		uintT, err := makeUintType(bitSize)
 		require.NoError(t, err, "make uint type failure")
 		uintTstr := uintT.String()
 
@@ -894,7 +894,7 @@ func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
 				narrowest = randVal
 			}
 
-			ufixedT, err := MakeUfixedType(bitSize, precision)
+			ufixedT, err := makeUfixedType(bitSize, precision)
 			require.NoError(t, err, "make ufixed type failure")
 			ufixedTstr := ufixedT.String()
 			(*pool)[Ufixed][ufixedIndex] = testUnit{serializedType: ufixedTstr, value: narrowest}
@@ -906,13 +906,13 @@ func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
 
 	(*pool)[Byte] = make([]testUnit, 1<<8)
 	for i := 0; i < (1 << 8); i++ {
-		(*pool)[Byte][i] = testUnit{serializedType: ByteType.String(), value: byte(i)}
+		(*pool)[Byte][i] = testUnit{serializedType: byteType.String(), value: byte(i)}
 	}
 	categorySelfRoundTripTest(t, (*pool)[Byte])
 
 	(*pool)[Bool] = make([]testUnit, 2)
-	(*pool)[Bool][0] = testUnit{serializedType: BoolType.String(), value: false}
-	(*pool)[Bool][1] = testUnit{serializedType: BoolType.String(), value: true}
+	(*pool)[Bool][0] = testUnit{serializedType: boolType.String(), value: false}
+	(*pool)[Bool][1] = testUnit{serializedType: boolType.String(), value: true}
 	categorySelfRoundTripTest(t, (*pool)[Bool])
 
 	maxAddress := new(big.Int).Lsh(big.NewInt(1), 256)
@@ -923,7 +923,7 @@ func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
 		addrBytes := randAddrVal.Bytes()
 		remainBytes := make([]byte, 32-len(addrBytes))
 		addrBytes = append(remainBytes, addrBytes...)
-		(*pool)[Address][i] = testUnit{serializedType: AddressType.String(), value: addrBytes}
+		(*pool)[Address][i] = testUnit{serializedType: addressType.String(), value: addrBytes}
 	}
 	categorySelfRoundTripTest(t, (*pool)[Address])
 
@@ -932,7 +932,7 @@ func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
 	for length := 1; length <= 100; length++ {
 		for i := 0; i < 4; i++ {
 			(*pool)[String][stringIndex] = testUnit{
-				serializedType: StringType.String(),
+				serializedType: stringType.String(),
 				value:          gobberish.GenerateString(length),
 			}
 			stringIndex++
@@ -955,11 +955,11 @@ func takeSomeFromCategoryAndGenerateArray(
 	tempT, err := TypeOf((*pool)[abiT][srtIndex].serializedType)
 	require.NoError(t, err, "type in test uint cannot be deserialized")
 	(*pool)[ArrayStatic] = append((*pool)[ArrayStatic], testUnit{
-		serializedType: MakeStaticArrayType(tempT, takeNum).String(),
+		serializedType: makeStaticArrayType(tempT, takeNum).String(),
 		value:          tempArray,
 	})
 	(*pool)[ArrayDynamic] = append((*pool)[ArrayDynamic], testUnit{
-		serializedType: MakeDynamicArrayType(tempT).String(),
+		serializedType: makeDynamicArrayType(tempT).String(),
 		value:          tempArray,
 	})
 }
@@ -1003,7 +1003,7 @@ func addTupleRandomValues(t *testing.T, slotRange BaseType, pool *map[BaseType][
 			require.NoError(t, err, "deserialize type failure for tuple elements")
 			elemTypes[index] = abiT
 		}
-		tupleT, err := MakeTupleType(elemTypes)
+		tupleT, err := makeTupleType(elemTypes)
 		require.NoError(t, err, "make tuple type failure")
 		(*pool)[Tuple] = append((*pool)[Tuple], testUnit{
 			serializedType: tupleT.String(),
