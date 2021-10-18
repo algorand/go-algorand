@@ -1537,6 +1537,8 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
 
+		newTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardLevel, protoParams, base, prevTotals)
+
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
 				Round: basics.Round(i),
@@ -1547,6 +1549,8 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
+		delta.Totals = newTotals
+
 		au.newBlock(blk, delta)
 		au.committedUpTo(i)
 		ml.addMockBlock(blockEntry{block: blk}, delta)

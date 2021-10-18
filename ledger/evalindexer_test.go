@@ -19,6 +19,7 @@ package ledger
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -68,12 +69,12 @@ func (il indexerLedgerForEvalImpl) LookupWithoutRewards(addresses map[basics.Add
 	return res, nil
 }
 
-func (il indexerLedgerForEvalImpl) GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]ledgercore.FoundAddress, error) {
+func (il indexerLedgerForEvalImpl) GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]FoundAddress, error) {
 	// This function is unused.
 	return nil, errors.New("GetAssetCreator() not implemented")
 }
 
-func (il indexerLedgerForEvalImpl) GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]ledgercore.FoundAddress, error) {
+func (il indexerLedgerForEvalImpl) GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]FoundAddress, error) {
 	// This function is unused.
 	return nil, errors.New("GetAppCreator() not implemented")
 }
@@ -248,4 +249,59 @@ func TestEvalForIndexerForExpiredAccounts(t *testing.T) {
 
 	_, _, err = EvalForIndexer(il, &badBlock, proto, EvalForIndexerResources{})
 	require.NoError(t, err)
+}
+
+// Test that preloading data in cow base works as expected.
+func TestResourceCaching(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var address basics.Address
+	_, err := rand.Read(address[:])
+	require.NoError(t, err)
+
+	genesisInitState, _, _ := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
+
+	genesisBalances := bookkeeping.GenesisBalances{
+		Balances:    genesisInitState.Accounts,
+		FeeSink:     testSinkAddr,
+		RewardsPool: testPoolAddr,
+		Timestamp:   0,
+	}
+	l := newTestLedger(t, genesisBalances)
+
+	genesisBlockHeader, err := l.BlockHdr(basics.Round(0))
+	require.NoError(t, err)
+	block := bookkeeping.MakeBlock(genesisBlockHeader)
+
+	resources := EvalForIndexerResources{
+		Accounts: map[basics.Address]*basics.AccountData{
+			address: {
+				MicroAlgos: basics.MicroAlgos{Raw: 5},
+			},
+		},
+		Creators: map[Creatable]FoundAddress{
+			{cindex: basics.CreatableIndex(6), ctype: basics.AssetCreatable}: {Address: address, Exists: true},
+			{cindex: basics.CreatableIndex(6), ctype: basics.AppCreatable}:   {Address: address, Exists: false},
+		},
+	}
+
+	ilc := makeIndexerLedgerConnector(indexerLedgerForEvalImpl{l: l, latestRound: basics.Round(0)}, block.GenesisHash(), block.Round()-1, resources)
+
+	{
+		accountData, rnd, err := ilc.LookupWithoutRewards(basics.Round(0), address)
+		require.NoError(t, err)
+		assert.Equal(t, basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 5}}, accountData)
+		assert.Equal(t, basics.Round(0), rnd)
+	}
+	{
+		address, found, err := ilc.GetCreatorForRound(basics.Round(0), basics.CreatableIndex(6), basics.AssetCreatable)
+		require.NoError(t, err)
+		require.True(t, found)
+		assert.Equal(t, address, address)
+	}
+	{
+		_, found, err := ilc.GetCreatorForRound(basics.Round(0), basics.CreatableIndex(6), basics.AppCreatable)
+		require.NoError(t, err)
+		require.False(t, found)
+	}
 }

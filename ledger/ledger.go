@@ -462,6 +462,20 @@ func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountDa
 	return data, nil
 }
 
+// LookupAgreement returns account data used by agreement.
+func (l *Ledger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+
+	// Intentionally apply (pending) rewards up to rnd.
+	data, err := l.accts.LookupWithRewards(rnd, addr)
+	if err != nil {
+		return basics.OnlineAccountData{}, err
+	}
+
+	return data.OnlineAccountData(), nil
+}
+
 // LookupWithoutRewards is like Lookup but does not apply pending rewards up
 // to the requested round rnd.
 func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
@@ -672,12 +686,13 @@ func (l *Ledger) VerifiedTransactionCache() verify.VerifiedTransactionCache {
 // If a value of zero or less is passed to maxTxnBytesPerBlock, the consensus MaxTxnBytesPerBlock would
 // be used instead.
 func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*internal.BlockEvaluator, error) {
-	proto, ok := config.Consensus[hdr.CurrentProtocol]
-	if !ok {
-		return nil, protocol.Error(hdr.CurrentProtocol)
-	}
-
-	return internal.StartEvaluator(l, hdr, proto, paysetHint, true, true, maxTxnBytesPerBlock)
+	return internal.StartEvaluator(l, hdr,
+		internal.EvaluatorOptions{
+			PaysetHint:          paysetHint,
+			Generate:            true,
+			Validate:            true,
+			MaxTxnBytesPerBlock: maxTxnBytesPerBlock,
+		})
 }
 
 // Validate uses the ledger to validate block blk as a candidate next block.

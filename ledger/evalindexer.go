@@ -37,24 +37,38 @@ type indexerLedgerForEval interface {
 	LatestBlockHdr() (bookkeeping.BlockHeader, error)
 	// The value of the returned map is nil iff the account was not found.
 	LookupWithoutRewards(map[basics.Address]struct{}) (map[basics.Address]*basics.AccountData, error)
-	GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]ledgercore.FoundAddress, error)
-	GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]ledgercore.FoundAddress, error)
+	GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]FoundAddress, error)
+	GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]FoundAddress, error)
 	LatestTotals() (ledgercore.AccountTotals, error)
+}
+
+// FoundAddress is a wrapper for an address and a boolean.
+type FoundAddress struct {
+	Address basics.Address
+	Exists  bool
 }
 
 // EvalForIndexerResources contains resources preloaded from the Indexer database.
 // Indexer is able to do the preloading more efficiently than the evaluator loading
 // resources one by one.
-type EvalForIndexerResources = internal.EvalForIndexerResources
+type EvalForIndexerResources struct {
+	// The map value is nil iff the account does not exist. The account data is owned here.
+	Accounts map[basics.Address]*basics.AccountData
+	Creators map[Creatable]FoundAddress
+}
 
 // Creatable represent a single creatable object.
-type Creatable = internal.Creatable
+type Creatable struct {
+	cindex basics.CreatableIndex
+	ctype  basics.CreatableType
+}
 
 // Converter between indexerLedgerForEval and ledgerForEvaluator interfaces.
 type indexerLedgerConnector struct {
-	il          indexerLedgerForEval
-	genesisHash crypto.Digest
-	latestRound basics.Round
+	il             indexerLedgerForEval
+	genesisHash    crypto.Digest
+	latestRound    basics.Round
+	roundResources EvalForIndexerResources
 }
 
 // BlockHdr is part of LedgerForEvaluator interface.
@@ -76,6 +90,14 @@ func (l indexerLedgerConnector) CheckDup(config.ConsensusParams, basics.Round, b
 
 // LookupWithoutRewards is part of LedgerForEvaluator interface.
 func (l indexerLedgerConnector) LookupWithoutRewards(round basics.Round, address basics.Address) (basics.AccountData, basics.Round, error) {
+	// check to see if the account data in the cache.
+	if pad, has := l.roundResources.Accounts[address]; has {
+		if pad == nil {
+			return basics.AccountData{}, round, nil
+		}
+		return *pad, round, nil
+	}
+
 	accountDataMap, err :=
 		l.il.LookupWithoutRewards(map[basics.Address]struct{}{address: {}})
 	if err != nil {
@@ -91,7 +113,12 @@ func (l indexerLedgerConnector) LookupWithoutRewards(round basics.Round, address
 
 // GetCreatorForRound is part of LedgerForEvaluator interface.
 func (l indexerLedgerConnector) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
-	var foundAddress ledgercore.FoundAddress
+	var foundAddress FoundAddress
+	var has bool
+	// check to see if the account data in the cache.
+	if foundAddress, has = l.roundResources.Creators[Creatable{cindex: cindex, ctype: ctype}]; has {
+		return foundAddress.Address, foundAddress.Exists, nil
+	}
 
 	switch ctype {
 	case basics.AssetCreatable:
@@ -133,11 +160,12 @@ func (l indexerLedgerConnector) CompactCertVoters(_ basics.Round) (*ledgercore.V
 	return nil, errors.New("CompactCertVoters() not implemented")
 }
 
-func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Digest, latestRound basics.Round) indexerLedgerConnector {
+func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Digest, latestRound basics.Round, roundResources EvalForIndexerResources) indexerLedgerConnector {
 	return indexerLedgerConnector{
-		il:          il,
-		genesisHash: genesisHash,
-		latestRound: latestRound,
+		il:             il,
+		genesisHash:    genesisHash,
+		latestRound:    latestRound,
+		roundResources: roundResources,
 	}
 }
 
@@ -147,16 +175,20 @@ func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Dige
 // close amount for each transaction even when the real consensus parameters do not
 // support it.
 func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto config.ConsensusParams, resources EvalForIndexerResources) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
-	ilc := makeIndexerLedgerConnector(il, block.GenesisHash(), block.Round()-1)
+	ilc := makeIndexerLedgerConnector(il, block.GenesisHash(), block.Round()-1, resources)
 
 	eval, err := internal.StartEvaluator(
-		ilc, block.BlockHeader, proto, len(block.Payset), false, false, 0)
+		ilc, block.BlockHeader,
+		internal.EvaluatorOptions{
+			PaysetHint:  len(block.Payset),
+			ProtoParams: &proto,
+			Generate:    false,
+			Validate:    false,
+		})
 	if err != nil {
 		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
 			fmt.Errorf("EvalForIndexer() err: %w", err)
 	}
-
-	eval.SaveResourcesInCowBase(resources)
 
 	return eval.ProcessBlockForIndexer(block)
 }

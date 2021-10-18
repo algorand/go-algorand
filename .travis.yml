@@ -20,7 +20,6 @@ stages:
 jobs:
   allow_failures:
     - name: External ARM64 Deploy
-    - name: External ARM64 Integration Test
     - name: External ARM Build
     - name: External ARM Deploy
     - name: Test Release Builds
@@ -36,11 +35,6 @@ jobs:
       script:
         - scripts/travis/build_test.sh
     - # same stage, parallel job
-      os: linux
-      name: Ubuntu AMD64 Integration Test
-      script:
-        - ./scripts/travis/integration_test.sh
-    - # same stage, parallel job
       name: External ARM64 Build
       os: linux
       env:
@@ -53,29 +47,11 @@ jobs:
       script:
         - scripts/travis/external_build.sh ./scripts/travis/build_test.sh
     - # same stage, parallel job
-      name: External ARM64 Integration Test
-      os: linux
-      env:
-        - BUILD_TYPE: "external_build"
-        - TARGET_PLATFORM: "linux-arm64"
-      addons:
-        apt:
-          packages:
-            - awscli
-      script:
-        - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
-    - # same stage, parallel job
       os: osx
       osx_image: xcode11
       name: MacOS AMD64 Build
       script:
         - scripts/travis/build_test.sh
-    - # same stage, parallel job
-      os: osx
-      osx_image: xcode11
-      name: MacOS AMD64 Integration Test
-      script:
-        - ./scripts/travis/integration_test.sh
     - # same stage, parallel job
        os: windows
        name: Windows x64 Build
@@ -92,11 +68,6 @@ jobs:
       script:
         - ./scripts/travis/build_test.sh
     - # same stage, parallel job
-      os: linux
-      name: Ubuntu AMD64 Integration Test
-      script:
-        - ./scripts/travis/integration_test.sh
-    - # same stage, parallel job
       name: External ARM64 Build
       os: linux
       env:
@@ -109,29 +80,11 @@ jobs:
       script:
         - scripts/travis/external_build.sh ./scripts/travis/build_test.sh
     - # same stage, parallel job
-      name: External ARM64 Integration Test
-      os: linux
-      env:
-        - BUILD_TYPE: "external_build"
-        - TARGET_PLATFORM: "linux-arm64"
-      addons:
-        apt:
-          packages:
-            - awscli
-      script:
-        - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
-    - # same stage, parallel job
       os: osx
       osx_image: xcode11
       name: MacOS AMD64 Build
       script:
         - scripts/travis/build_test.sh
-    - # same stage, parallel job
-      os: osx
-      osx_image: xcode11
-      name: MacOS AMD64 Integration Test
-      script:
-        - ./scripts/travis/integration_test.sh
     - # same stage, parallel job
        os: windows
        name: Windows x64 Build
