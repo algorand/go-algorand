@@ -58,17 +58,17 @@ workflows:
             parameters:
               platform: ["amd64"] #, "arm64", "mac_amd64"]
 
-      - test:
-          name: << matrix.platform >>_test
-          matrix:
-            <<: *matrix-default
-          requires:
-            - << matrix.platform >>_build
-          filters: &filters-default
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
+      # - test:
+      #     name: << matrix.platform >>_test
+      #     matrix:
+      #       <<: *matrix-default
+      #     requires:
+      #       - << matrix.platform >>_build
+      #     filters: &filters-default
+      #       branches:
+      #         ignore:
+      #           - /rel\/.*/
+      #           - /hotfix\/.*/
 
       - test_nightly:
           name: << matrix.platform >>_test_nightly
@@ -102,14 +102,14 @@ workflows:
             <<: *filters-nightly
           context: slack-secrets
 
-      - e2e_expect:
-          name: << matrix.platform >>_e2e_expect
-          matrix:
-            <<: *matrix-default
-          requires:
-            - << matrix.platform >>_build
-          filters:
-            <<: *filters-default
+      # - e2e_expect:
+      #     name: << matrix.platform >>_e2e_expect
+      #     matrix:
+      #       <<: *matrix-default
+      #     requires:
+      #       - << matrix.platform >>_build
+      #     filters:
+      #       <<: *filters-default
 
       - e2e_expect_nightly:
           name: << matrix.platform >>_e2e_expect_nightly
@@ -121,14 +121,14 @@ workflows:
             <<: *filters-nightly
           context: slack-secrets
 
-      - e2e_subs:
-          name: << matrix.platform >>_e2e_subs
-          matrix:
-            <<: *matrix-default
-          requires:
-            - << matrix.platform >>_build
-          filters:
-            <<: *filters-default
+      # - e2e_subs:
+      #     name: << matrix.platform >>_e2e_subs
+      #     matrix:
+      #       <<: *matrix-default
+      #     requires:
+      #       - << matrix.platform >>_build
+      #     filters:
+      #       <<: *filters-default
 
       - e2e_subs_nightly:
           name: << matrix.platform >>_e2e_subs_nightly
@@ -484,7 +484,7 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_large
+    executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
     steps:
@@ -499,7 +499,7 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_large
+    executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
     steps:
@@ -517,9 +517,9 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_large
+    executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 4
+    parallelism: 2
     environment:
       E2E_TEST_FILTER: "GO"
     steps:
@@ -551,9 +551,9 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_large
+    executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 4
+    parallelism: 2
     environment:
       E2E_TEST_FILTER: "EXPECT"
     steps:
@@ -567,9 +567,9 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_large
+    executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 4
+    parallelism: 2
     environment:
       E2E_TEST_FILTER: "EXPECT"
     steps:
@@ -587,7 +587,6 @@ jobs:
         type: string
     executor: << parameters.platform >>_large
     working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 4
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
     steps:
@@ -603,7 +602,6 @@ jobs:
         type: string
     executor: << parameters.platform >>_large
     working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 4
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
     steps:
