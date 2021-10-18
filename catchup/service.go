@@ -181,7 +181,17 @@ func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeepin
 			cf()
 		}
 	}()
-	return fetcher.fetchBlock(ctx, r, peer)
+	blk, cert, ddur, err = fetcher.fetchBlock(ctx, r, peer)
+	// check to see if we aborted due to ledger.
+	if err != nil {
+		select {
+		case <-ledgerWaitCh:
+			// yes, we aborted since the ledger received this round.
+			err = errLedgerAlreadyHasBlock
+		default:
+		}
+	}
+	return
 }
 
 // fetchAndWrite fetches a block, checks the cert, and writes it to the ledger. Cert checking and ledger writing both wait for the ledger to advance if necessary.
