@@ -89,8 +89,8 @@ workflows:
             <<: *matrix-default
           requires:
             - << matrix.platform >>_build
-          filters:
-            <<: *filters-default
+          # filters:
+            # <<: *filters-default
 
       - integration_nightly:
           name: << matrix.platform >>_integration_nightly
