@@ -306,7 +306,12 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 	defer func() {
 		if rollbackSynchronousMode {
 			// restore default synchronous mode
-			tr.dbs.Wdb.SetSynchronousMode(context.Background(), tr.synchronousMode, tr.synchronousMode >= db.SynchronousModeFull)
+			err0 := tr.dbs.Wdb.SetSynchronousMode(context.Background(), tr.synchronousMode, tr.synchronousMode >= db.SynchronousModeFull)
+			// override the returned error only in case there is no error - since this
+			// operation has a lower criticality.
+			if err == nil {
+				err = err0
+			}
 		}
 	}()
 
@@ -329,10 +334,13 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 
 			if !rollbackSynchronousMode {
 				// switch to rebuild synchronous mode to improve performance
-				tr.dbs.Wdb.SetSynchronousMode(context.Background(), tr.accountsRebuildSynchronousMode, tr.accountsRebuildSynchronousMode >= db.SynchronousModeFull)
-
-				// flip the switch to rollback the synchronous mode once we're done.
-				rollbackSynchronousMode = true
+				err0 := tr.dbs.Wdb.SetSynchronousMode(context.Background(), tr.accountsRebuildSynchronousMode, tr.accountsRebuildSynchronousMode >= db.SynchronousModeFull)
+				if err0 != nil {
+					tr.log.Warnf("initializeTrackerCaches was unable to switch to rbuild synchronous mode : %v", err0)
+				} else {
+					// flip the switch to rollback the synchronous mode once we're done.
+					rollbackSynchronousMode = true
+				}
 			}
 
 			var roundsBehind basics.Round
@@ -365,7 +373,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 		}
 
 		// if enough time have passed since the last time we wrote a message to the log file then give the user an update about the progess.
-		if time.Now().Sub(lastProgressMessage) > accountsCacheLoadingMessageInterval {
+		if time.Since(lastProgressMessage) > accountsCacheLoadingMessageInterval {
 			// drop the initial message if we're got to this point since a message saying "still initializing" that comes after "is initializing" doesn't seems to be right.
 			select {
 			case skipAccountCacheMessage <- struct{}{}:

@@ -225,7 +225,7 @@ func (ct *catchpointTracker) accountsInitializeHashes(ctx context.Context, tx *s
 					pendingAccounts = 0
 				}
 
-				if time.Now().Sub(lastRebuildTime) > 5*time.Second {
+				if time.Since(lastRebuildTime) > 5*time.Second {
 					// let the user know that the trie is still being rebuilt.
 					ct.log.Infof("accountsInitialize still building the trie, and processed so far %d accounts", accountsCount)
 					lastRebuildTime = time.Now()
@@ -233,7 +233,7 @@ func (ct *catchpointTracker) accountsInitializeHashes(ctx context.Context, tx *s
 			} else if processedRows > 0 {
 				totalOrderedAccounts += processedRows
 				// if it's not ordered, we can ignore it for now; we'll just increase the counters and emit logs periodically.
-				if time.Now().Sub(lastRebuildTime) > 5*time.Second {
+				if time.Since(lastRebuildTime) > 5*time.Second {
 					// let the user know that the trie is still being rebuilt.
 					ct.log.Infof("accountsInitialize still building the trie, and hashed so far %d accounts", totalOrderedAccounts)
 					lastRebuildTime = time.Now()
@@ -254,7 +254,7 @@ func (ct *catchpointTracker) accountsInitializeHashes(ctx context.Context, tx *s
 			return fmt.Errorf("accountsInitialize was unable to update the account hash round to %d: %v", rnd, err)
 		}
 
-		ct.log.Infof("accountsInitialize rebuilt the merkle trie with %d entries in %v", accountsCount, time.Now().Sub(startTrieBuildTime))
+		ct.log.Infof("accountsInitialize rebuilt the merkle trie with %d entries in %v", accountsCount, time.Since(startTrieBuildTime))
 	}
 	ct.balancesTrie = trie
 	return nil
@@ -284,6 +284,10 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, lastBalancesRound 
 		}
 		return nil
 	})
+
+	if err != nil {
+		return err
+	}
 
 	ct.accountsq, err = accountsInitDbQueries(ct.dbs.Rdb.Handle, ct.dbs.Wdb.Handle)
 	if err != nil {
@@ -337,7 +341,6 @@ func (ct *catchpointTracker) newBlock(blk bookkeeping.Block, delta ledgercore.St
 	ct.accountsMu.Lock()
 	defer ct.accountsMu.Unlock()
 	ct.roundDigest = append(ct.roundDigest, blk.Digest())
-	return
 }
 
 // committedUpTo informs the tracker that the database has
@@ -527,7 +530,6 @@ func (ct *catchpointTracker) postCommit(ctx context.Context, dcc *deferredCommit
 	if dcc.isCatchpointRound && ct.archivalLedger {
 		atomic.StoreInt32(dcc.catchpointWriting, 0)
 	}
-	return
 }
 
 // handleUnorderedCommit is a special method for handling deferred commits that are out of order.
@@ -672,13 +674,16 @@ func (ct *catchpointTracker) generateCatchpoint(ctx context.Context, committedRo
 			writeStepStartTime := time.Now()
 			more, err = catchpointWriter.WriteStep(stepCtx)
 			// accumulate the actual time we've spent writing in this step.
-			catchpointGenerationStats.CPUTime += uint64(time.Now().Sub(writeStepStartTime).Nanoseconds())
+			catchpointGenerationStats.CPUTime += uint64(time.Since(writeStepStartTime).Nanoseconds())
 			stepCancelFunction()
 			if more && err == nil {
 				// we just wrote some data, but there is more to be written.
 				// go to sleep for while.
 				// before going to sleep, extend the transaction timeout so that we won't get warnings:
-				db.ResetTransactionWarnDeadline(dbCtx, tx, time.Now().Add(1*time.Second))
+				_, err0 := db.ResetTransactionWarnDeadline(dbCtx, tx, time.Now().Add(1*time.Second))
+				if err0 != nil {
+					ct.log.Warnf("catchpointTracker: generateCatchpoint: failed to reset transaction warn deadline : %v", err0)
+				}
 				select {
 				case <-time.After(100 * time.Millisecond):
 					// increase the time slot allocated for writing the catchpoint, but stop when we get to the longChunkExecutionDuration limit.
@@ -726,7 +731,7 @@ func (ct *catchpointTracker) generateCatchpoint(ctx context.Context, committedRo
 		return
 	}
 	catchpointGenerationStats.FileSize = uint64(catchpointWriter.GetSize())
-	catchpointGenerationStats.WritingDuration = uint64(time.Now().Sub(beforeGeneratingCatchpointTime).Nanoseconds())
+	catchpointGenerationStats.WritingDuration = uint64(time.Since(beforeGeneratingCatchpointTime).Nanoseconds())
 	catchpointGenerationStats.AccountsCount = catchpointWriter.GetTotalAccounts()
 	catchpointGenerationStats.CatchpointLabel = catchpointWriter.GetCatchpoint()
 	ct.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.CatchpointGenerationEvent, catchpointGenerationStats)
