@@ -58,6 +58,9 @@ type mockLedgerForTracker struct {
 	inMemory        bool
 	consensusParams config.ConsensusParams
 	accts           map[basics.Address]basics.AccountData
+
+	// trackerRegistry manages persistence into DB so we have to have it here even for a single tracker test
+	trackers trackerRegistry
 }
 
 func accumulateTotals(t testing.TB, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, rewardLevel uint64) (totals ledgercore.AccountTotals) {
@@ -132,6 +135,8 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 }
 
 func (ml *mockLedgerForTracker) Close() {
+	ml.trackers.close()
+
 	ml.dbs.Close()
 	// delete the database files of non-memory instances.
 	if !ml.inMemory {
@@ -190,6 +195,14 @@ func (ml *mockLedgerForTracker) trackerLog() logging.Logger {
 	return ml.log
 }
 
+func (ml *mockLedgerForTracker) waitAccountsWriting() {
+	ml.trackers.waitAccountsWriting()
+}
+
+func (ml *mockLedgerForTracker) scheduleCommit(rnd basics.Round) {
+	ml.trackers.scheduleCommit(rnd)
+}
+
 func (ml *mockLedgerForTracker) GenesisHash() crypto.Digest {
 	if len(ml.blocks) > 0 {
 		return ml.blocks[0].block.GenesisHash()
@@ -236,11 +249,14 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 	return
 }
 
-func newAcctUpdates(tb testing.TB, l ledgerForTracker, conf config.Local, dbPathPrefix string) *accountUpdates {
+func newAcctUpdates(tb testing.TB, l *mockLedgerForTracker, conf config.Local, dbPathPrefix string) *accountUpdates {
 	au := &accountUpdates{}
 	au.initialize(conf, ".")
 	_, err := trackerDBInitialize(l, au.catchpointEnabled(), au.dbDirectory)
 	require.NoError(tb, err)
+
+	l.trackers.initialize(au, l, []ledgerTracker{au})
+
 	return au
 }
 
@@ -370,8 +386,7 @@ func TestAcctUpdates(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	au := newAcctUpdates(t, ml, conf, ".")
-
-	err := au.loadFromDisk(ml)
+	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	defer au.close()
 
@@ -387,6 +402,7 @@ func TestAcctUpdates(t *testing.T) {
 	// lastCreatableID stores asset or app max used index to get rid of conflicts
 	lastCreatableID := crypto.RandUint64() % 512
 	knownCreatables := make(map[basics.CreatableIndex]bool)
+
 	for i := basics.Round(10); i < basics.Round(proto.MaxBalLookback+15); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
@@ -425,10 +441,32 @@ func TestAcctUpdates(t *testing.T) {
 		// Clear the timer to ensure a flush
 		au.lastFlushTime = time.Time{}
 
-		au.committedUpTo(basics.Round(proto.MaxBalLookback) + i)
-		au.waitAccountsWriting()
+		ml.scheduleCommit(basics.Round(proto.MaxBalLookback) + i)
+		ml.waitAccountsWriting()
 		checkAcctUpdates(t, au, i, basics.Round(proto.MaxBalLookback+14), accts, rewardsLevels, proto)
 	}
+
+	// check the account totals.
+	var dbRound basics.Round
+	err = ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		dbRound, err = accountsRound(tx)
+		return
+	})
+	require.NoError(t, err)
+
+	var updates ledgercore.AccountDeltas
+	for addr, acctData := range accts[dbRound] {
+		updates.Upsert(addr, acctData)
+	}
+
+	expectedTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardsLevels[dbRound], proto, nil, ledgercore.AccountTotals{})
+	var actualTotals ledgercore.AccountTotals
+	err = ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		actualTotals, err = accountsTotals(tx, false)
+		return
+	})
+	require.NoError(t, err)
+	require.Equal(t, expectedTotals, actualTotals)
 }
 
 func TestAcctUpdatesFastUpdates(t *testing.T) {
@@ -458,8 +496,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	au := newAcctUpdates(t, ml, conf, ".")
-
-	err := au.loadFromDisk(ml)
+	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	defer au.close()
 
@@ -504,7 +541,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 		wg.Add(1)
 		go func(round basics.Round) {
 			defer wg.Done()
-			au.committedUpTo(round)
+			ml.scheduleCommit(round)
 		}(i)
 	}
 	wg.Wait()
@@ -548,7 +585,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 
 	conf := config.GetDefaultLocal()
 	au := newAcctUpdates(b, ml, conf, ".")
-	err := au.loadFromDisk(ml)
+	err := au.loadFromDisk(ml, 0)
 	require.NoError(b, err)
 	defer au.close()
 
@@ -593,17 +630,17 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	for i := proto.MaxBalLookback; i < proto.MaxBalLookback+initialRounds; i++ {
 		// Clear the timer to ensure a flush
 		au.lastFlushTime = time.Time{}
-		au.committedUpTo(basics.Round(i))
+		ml.scheduleCommit(basics.Round(i))
 	}
-	au.waitAccountsWriting()
+	ml.waitAccountsWriting()
 	b.ResetTimer()
 	startTime := time.Now()
 	for i := proto.MaxBalLookback + initialRounds; i < proto.MaxBalLookback+uint64(b.N); i++ {
 		// Clear the timer to ensure a flush
 		au.lastFlushTime = time.Time{}
-		au.committedUpTo(basics.Round(i))
+		ml.scheduleCommit(basics.Round(i))
 	}
-	au.waitAccountsWriting()
+	ml.waitAccountsWriting()
 	deltaTime := time.Now().Sub(startTime)
 	if deltaTime > time.Second {
 		return
@@ -681,7 +718,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	conf.CatchpointInterval = 1
 	conf.Archival = true
 	au := newAcctUpdates(t, ml, conf, ".")
-	err := au.loadFromDisk(ml)
+	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	defer au.close()
 
@@ -719,9 +756,9 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 
-		au.committedUpTo(i)
+		ml.scheduleCommit(i)
 		if i%2 == 1 {
-			au.waitAccountsWriting()
+			ml.waitAccountsWriting()
 		}
 	}
 }
@@ -787,7 +824,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		conf := config.GetDefaultLocal()
 		au := newAcctUpdates(t, ml, conf, ".")
 
-		err := au.loadFromDisk(ml)
+		err := au.loadFromDisk(ml, 0)
 		require.NoError(t, err)
 		defer au.close()
 
@@ -881,10 +918,10 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 				delta.Accts.Upsert(addr, ad)
 			}
 			au.newBlock(blk, delta)
-			au.committedUpTo(i)
+			ml.scheduleCommit(i)
 		}
 		lastRound := i - 1
-		au.waitAccountsWriting()
+		ml.waitAccountsWriting()
 
 		for idx, addr := range moneyAccounts {
 			balance, validThrough, err := au.LookupWithoutRewards(lastRound, addr)
@@ -921,7 +958,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	conf.CatchpointInterval = 1
 	au := newAcctUpdates(t, ml, conf, ".")
 
-	err := au.loadFromDisk(ml)
+	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	defer au.close()
 
@@ -1156,7 +1193,7 @@ func TestGetCatchpointStream(t *testing.T) {
 	conf.CatchpointInterval = 1
 	au := newAcctUpdates(t, ml, conf, ".")
 
-	err := au.loadFromDisk(ml)
+	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	defer au.close()
 
@@ -1276,7 +1313,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	cfg.Archival = true
 	au := newAcctUpdates(b, ml, cfg, ".")
 
-	err := au.loadFromDisk(ml)
+	err := au.loadFromDisk(ml, 0)
 	require.NoError(b, err)
 	defer au.close()
 
@@ -1300,14 +1337,14 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	}
 
 	err = ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		return updateAccountsRound(tx, 0, 1)
+		return updateAccountsHashRound(tx, 1)
 	})
 	require.NoError(b, err)
 
 	au.close()
 
 	b.ResetTimer()
-	err = au.loadFromDisk(ml)
+	err = au.loadFromDisk(ml, 0)
 	require.NoError(b, err)
 	b.StopTimer()
 	b.ReportMetric(float64(accountsNumber), "entries/trie")
@@ -1346,7 +1383,7 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 
 	au.dbDirectory = temporaryDirectroy
 
-	err = au.loadFromDisk(ml)
+	err = au.loadFromDisk(ml, 0)
 	require.NoError(b, err)
 	defer au.close()
 
@@ -1369,7 +1406,7 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 			}
 		}
 
-		return updateAccountsRound(tx, 0, 1)
+		return updateAccountsHashRound(tx, 1)
 	})
 	require.NoError(b, err)
 
@@ -1508,7 +1545,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	cfg.CatchpointTracking = 1
 	au := newAcctUpdates(t, ml, cfg, ".")
 
-	err := au.loadFromDisk(ml)
+	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	defer au.close()
 
@@ -1552,7 +1589,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		delta.Totals = newTotals
 
 		au.newBlock(blk, delta)
-		au.committedUpTo(i)
+		ml.scheduleCommit(i)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
@@ -1560,9 +1597,11 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 
 		// if this is a catchpoint round, save the label.
 		if uint64(i)%cfg.CatchpointInterval == 0 {
-			au.waitAccountsWriting()
+			ml.waitAccountsWriting()
 			catchpointLabels[i] = au.GetLastCatchpointLabel()
 			ledgerHistory[i] = ml.fork(t)
+			ledgerHistory[i].trackers.initialize(ml.trackers.driver, ledgerHistory[i], []ledgerTracker{au})
+			ledgerHistory[i].trackers.dbRound = ml.trackers.dbRound
 			defer ledgerHistory[i].Close()
 		}
 	}
@@ -1572,7 +1611,8 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	startingRound := basics.Round((testCatchpointLabelsCount - 1) * cfg.CatchpointInterval)
 	for ; startingRound > basics.Round(cfg.CatchpointInterval); startingRound -= basics.Round(cfg.CatchpointInterval) {
 		au.close()
-		err := au.loadFromDisk(ledgerHistory[startingRound])
+		ml2 := ledgerHistory[startingRound]
+		err := au.loadFromDisk(ml2, ml2.trackers.dbRound)
 		require.NoError(t, err)
 
 		for i := startingRound + 1; i <= basics.Round(testCatchpointLabelsCount*cfg.CatchpointInterval); i++ {
@@ -1585,11 +1625,11 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			blk.CurrentProtocol = testProtocolVersion
 			delta := roundDeltas[i]
 			au.newBlock(blk, delta)
-			au.committedUpTo(i)
+			ml2.scheduleCommit(i)
 
 			// if this is a catchpoint round, check the label.
 			if uint64(i)%cfg.CatchpointInterval == 0 {
-				au.waitAccountsWriting()
+				ml2.waitAccountsWriting()
 				require.Equal(t, catchpointLabels[i], au.GetLastCatchpointLabel())
 			}
 		}
@@ -1626,7 +1666,7 @@ func TestCachesInitialization(t *testing.T) {
 	conf := config.GetDefaultLocal()
 	au := newAcctUpdates(t, ml, conf, ".")
 
-	err := au.loadFromDisk(ml)
+	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 
 	// cover initialRounds genesis blocks
@@ -1665,8 +1705,8 @@ func TestCachesInitialization(t *testing.T) {
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
-		au.committedUpTo(basics.Round(i))
-		au.waitAccountsWriting()
+		ml.scheduleCommit(basics.Round(i))
+		ml.waitAccountsWriting()
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -1686,13 +1726,13 @@ func TestCachesInitialization(t *testing.T) {
 
 	conf = config.GetDefaultLocal()
 	au = newAcctUpdates(t, ml2, conf, ".")
-	err = au.loadFromDisk(ml2)
-	require.NoError(t, err)
 	defer au.close()
+	err = au.loadFromDisk(ml2, 0)
+	require.NoError(t, err)
 
 	// make sure the deltas array end up containing only the most recent 320 rounds.
 	require.Equal(t, int(proto.MaxBalLookback), len(au.deltas))
-	require.Equal(t, recoveredLedgerRound-basics.Round(proto.MaxBalLookback), au.dbRound)
+	require.Equal(t, recoveredLedgerRound-basics.Round(proto.MaxBalLookback), au.cachedDBRound)
 }
 
 // TestSplittingConsensusVersionCommits tests the a sequence of commits that spans over multiple consensus versions works correctly.
@@ -1724,7 +1764,8 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	au := newAcctUpdates(t, ml, conf, ".")
-	err := au.loadFromDisk(ml)
+
+	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	defer au.close()
 
@@ -1803,10 +1844,10 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
-	// now, commit and verify that the committedUpTo method broken the range correctly.
-	au.committedUpTo(lastRoundToWrite)
-	au.waitAccountsWriting()
-	require.Equal(t, basics.Round(initialRounds+extraRounds)-1, au.dbRound)
+	// now, commit and verify that the produceCommittingTask method broken the range correctly.
+	ml.scheduleCommit(lastRoundToWrite)
+	ml.waitAccountsWriting()
+	require.Equal(t, basics.Round(initialRounds+extraRounds)-1, au.cachedDBRound)
 
 }
 
@@ -1840,7 +1881,8 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	au := newAcctUpdates(t, ml, conf, ".")
-	err := au.loadFromDisk(ml)
+
+	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	defer au.close()
 
@@ -1918,10 +1960,10 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
-	// now, commit and verify that the committedUpTo method broken the range correctly.
-	au.committedUpTo(endOfFirstNewProtocolSegment)
-	au.waitAccountsWriting()
-	require.Equal(t, basics.Round(initialRounds+extraRounds)-1, au.dbRound)
+	// now, commit and verify that the produceCommittingTask method broken the range correctly.
+	ml.scheduleCommit(endOfFirstNewProtocolSegment)
+	ml.waitAccountsWriting()
+	require.Equal(t, basics.Round(initialRounds+extraRounds)-1, au.cachedDBRound)
 
 	// write additional extraRounds elements and verify these can be flushed.
 	for i := endOfFirstNewProtocolSegment + 1; i <= basics.Round(initialRounds+2*extraRounds+initialProtoParams.MaxBalLookback); i++ {
@@ -1954,9 +1996,9 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
-	au.committedUpTo(endOfFirstNewProtocolSegment + basics.Round(extraRounds))
-	au.waitAccountsWriting()
-	require.Equal(t, basics.Round(initialRounds+2*extraRounds), au.dbRound)
+	ml.scheduleCommit(endOfFirstNewProtocolSegment + basics.Round(extraRounds))
+	ml.waitAccountsWriting()
+	require.Equal(t, basics.Round(initialRounds+2*extraRounds), au.cachedDBRound)
 }
 
 // TestConsecutiveVersion tests the consecutiveVersion method correctness.

@@ -17,6 +17,8 @@
 package ledger
 
 import (
+	"context"
+	"database/sql"
 	"sync/atomic"
 
 	"github.com/algorand/go-deadlock"
@@ -78,7 +80,7 @@ func (b *bulletin) Wait(round basics.Round) chan struct{} {
 	return signal.signal
 }
 
-func (b *bulletin) loadFromDisk(l ledgerForTracker) error {
+func (b *bulletin) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 	b.pendingNotificationRequests = make(map[basics.Round]notifier)
 	b.latestRound = l.Latest()
 	return nil
@@ -105,4 +107,18 @@ func (b *bulletin) committedUpTo(rnd basics.Round) basics.Round {
 
 	b.latestRound = rnd
 	return rnd
+}
+
+func (b *bulletin) prepareCommit(dcc *deferredCommitContext) error {
+	return nil
+}
+
+func (b *bulletin) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+	return nil
+}
+
+func (b *bulletin) postCommit(deferredCommitContext) {
+}
+
+func (b *bulletin) handleUnorderedCommit(uint64, basics.Round, basics.Round) {
 }

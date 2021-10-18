@@ -36,7 +36,7 @@ type trackerDBParams struct {
 	dbPathPrefix      string
 }
 
-type trackerDbSchemaInitializer struct {
+type trackerDBSchemaInitializer struct {
 	trackerDBParams
 
 	// schemaVersion contains current db version
@@ -49,7 +49,7 @@ type trackerDbSchemaInitializer struct {
 	log logging.Logger
 }
 
-type trackerDBMgr struct {
+type trackerDBInitParams struct {
 	schemaVersion   int32
 	vacuumOnStartup bool
 }
@@ -57,7 +57,7 @@ type trackerDBMgr struct {
 // trackerDBInitialize initializes the accounts DB if needed and return current account round.
 // as part of the initialization, it tests the current database schema version, and perform upgrade
 // procedures to bring it up to the database schema supported by the binary.
-func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefix string) (mgr trackerDBMgr, err error) {
+func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefix string) (mgr trackerDBInitParams, err error) {
 	dbs := l.trackerDB()
 	log := l.trackerLog()
 
@@ -75,7 +75,7 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 		if err0 != nil {
 			return err0
 		}
-		lastBalancesRound, _, err := accountsRound(tx)
+		lastBalancesRound, err := accountsRound(tx)
 		if err != nil {
 			return err
 		}
@@ -100,14 +100,14 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 // trackerDBInitializeImpl initializes the accounts DB if needed and return current account round.
 // as part of the initialization, it tests the current database schema version, and perform upgrade
 // procedures to bring it up to the database schema supported by the binary.
-func trackerDBInitializeImpl(ctx context.Context, tx *sql.Tx, params trackerDBParams, log logging.Logger) (mgr trackerDBMgr, err error) {
+func trackerDBInitializeImpl(ctx context.Context, tx *sql.Tx, params trackerDBParams, log logging.Logger) (mgr trackerDBInitParams, err error) {
 	// check current database version.
 	dbVersion, err := db.GetUserVersion(ctx, tx)
 	if err != nil {
-		return trackerDBMgr{}, fmt.Errorf("trackerDBInitialize unable to read database schema version : %v", err)
+		return trackerDBInitParams{}, fmt.Errorf("trackerDBInitialize unable to read database schema version : %v", err)
 	}
 
-	tu := trackerDbSchemaInitializer{
+	tu := trackerDBSchemaInitializer{
 		trackerDBParams: params,
 		schemaVersion:   dbVersion,
 		log:             log,
@@ -158,16 +158,16 @@ func trackerDBInitializeImpl(ctx context.Context, tx *sql.Tx, params trackerDBPa
 					return
 				}
 			default:
-				return trackerDBMgr{}, fmt.Errorf("trackerDBInitialize unable to upgrade database from schema version %d", tu.schemaVersion)
+				return trackerDBInitParams{}, fmt.Errorf("trackerDBInitialize unable to upgrade database from schema version %d", tu.schemaVersion)
 			}
 		}
 		tu.log.Infof("trackerDBInitialize database schema upgrade complete")
 	}
 
-	return trackerDBMgr{tu.schemaVersion, tu.vacuumOnStartup}, nil
+	return trackerDBInitParams{tu.schemaVersion, tu.vacuumOnStartup}, nil
 }
 
-func (tu *trackerDbSchemaInitializer) setVersion(ctx context.Context, tx *sql.Tx, version int32) (err error) {
+func (tu *trackerDBSchemaInitializer) setVersion(ctx context.Context, tx *sql.Tx, version int32) (err error) {
 	oldVersion := tu.schemaVersion
 	tu.schemaVersion = version
 	_, err = db.SetUserVersion(ctx, tx, tu.schemaVersion)
@@ -177,7 +177,7 @@ func (tu *trackerDbSchemaInitializer) setVersion(ctx context.Context, tx *sql.Tx
 	return nil
 }
 
-func (tu trackerDbSchemaInitializer) version() int32 {
+func (tu trackerDBSchemaInitializer) version() int32 {
 	return tu.schemaVersion
 }
 
@@ -201,7 +201,7 @@ func (tu trackerDbSchemaInitializer) version() int32 {
 // The accounttotals would get initialized to align with the initialization account added to accountbase
 // The acctrounds would get updated to indicate that the balance matches round 0
 //
-func (tu *trackerDbSchemaInitializer) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx) (err error) {
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx) (err error) {
 	tu.log.Infof("upgradeDatabaseSchema0 initializing schema")
 	tu.newDatabase, err = accountsInit(tx, tu.initAccounts, tu.initProto)
 	if err != nil {
@@ -226,7 +226,7 @@ func (tu *trackerDbSchemaInitializer) upgradeDatabaseSchema0(ctx context.Context
 // This upgrade doesn't change any of the actual database schema ( i.e. tables, indexes ) but rather just performing
 // a functional update to it's content.
 //
-func (tu *trackerDbSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx) (err error) {
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx) (err error) {
 	var modifiedAccounts uint
 	if tu.newDatabase {
 		goto schemaUpdateComplete
@@ -286,7 +286,7 @@ schemaUpdateComplete:
 // If the user has already specified the OptimizeAccountsDatabaseOnStartup flag in the configuration file, this
 // step becomes a no-op.
 //
-func (tu *trackerDbSchemaInitializer) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx) (err error) {
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx) (err error) {
 	if !tu.newDatabase {
 		tu.vacuumOnStartup = true
 	}
@@ -297,7 +297,7 @@ func (tu *trackerDbSchemaInitializer) upgradeDatabaseSchema2(ctx context.Context
 
 // upgradeDatabaseSchema3 upgrades the database schema from version 3 to version 4,
 // adding the normalizedonlinebalance column to the accountbase table.
-func (tu *trackerDbSchemaInitializer) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx) (err error) {
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx) (err error) {
 	err = accountsAddNormalizedBalance(tx, tu.initProto)
 	if err != nil {
 		return err
@@ -309,7 +309,7 @@ func (tu *trackerDbSchemaInitializer) upgradeDatabaseSchema3(ctx context.Context
 
 // upgradeDatabaseSchema4 does not change the schema but migrates data:
 // remove empty AccountData entries from accountbase table
-func (tu *trackerDbSchemaInitializer) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx) (err error) {
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx) (err error) {
 	var numDeleted int64
 	var addresses []basics.Address
 
