@@ -56,7 +56,7 @@ workflows:
           name: << matrix.platform >>_build
           matrix: &matrix-default
             parameters:
-              platform: ["amd64"] #, "arm64", "mac_amd64"]
+              platform: ["amd64", "arm64", "mac_amd64"]
 
       # - test:
       #     name: << matrix.platform >>_test
@@ -76,21 +76,21 @@ workflows:
             <<: *matrix-default
           requires:
             - << matrix.platform >>_build
-          filters: &filters-nightly
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
+          # filters: &filters-nightly
+          #   branches:
+          #     only:
+          #       - /rel\/.*/
+          #       - /hotfix\/.*/
           context: slack-secrets
 
-      - integration:
-          name: << matrix.platform >>_integration
-          matrix:
-            <<: *matrix-default
-          requires:
-            - << matrix.platform >>_build
-          # filters:
-            # <<: *filters-default
+      # - integration:
+      #     name: << matrix.platform >>_integration
+      #     matrix:
+      #       <<: *matrix-default
+      #     requires:
+      #       - << matrix.platform >>_build
+      #     filters:
+      #       <<: *filters-default
 
       - integration_nightly:
           name: << matrix.platform >>_integration_nightly
@@ -98,8 +98,8 @@ workflows:
             <<: *matrix-default
           requires:
             - << matrix.platform >>_build
-          filters:
-            <<: *filters-nightly
+          # filters:
+          #   <<: *filters-nightly
           context: slack-secrets
 
       # - e2e_expect:
@@ -117,8 +117,8 @@ workflows:
             <<: *matrix-default
           requires:
             - << matrix.platform >>_build
-          filters:
-            <<: *filters-nightly
+          # filters:
+          #   <<: *filters-nightly
           context: slack-secrets
 
       # - e2e_subs:
@@ -136,24 +136,24 @@ workflows:
             <<: *matrix-default
           requires:
             - << matrix.platform >>_build
-          filters:
-            <<: *filters-nightly
+          # filters:
+          #   <<: *filters-nightly
           context: slack-secrets
 
-      - tests_verification_job:
-          name: << matrix.platform >>_<< matrix.job_type >>_verification
-          matrix:
-            parameters:
-              platform: ["amd64"] #, "arm64", "mac_amd64"]
-              job_type: ["integration"] #["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
-          requires:
-            - << matrix.platform >>_<< matrix.job_type >>
+      # - tests_verification_job:
+      #     name: << matrix.platform >>_<< matrix.job_type >>_verification
+      #     matrix:
+      #       parameters:
+      #         platform: ["amd64", "arm64", "mac_amd64"]
+      #         job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
+      #     requires:
+      #       - << matrix.platform >>_<< matrix.job_type >>
 
-      - upload_binaries:
-          name: << matrix.platform >>_upload_binaries
-          matrix:
-            <<: *matrix-default
-          requires:
+      # - upload_binaries:
+      #     name: << matrix.platform >>_upload_binaries
+      #     matrix:
+      #       <<: *matrix-default
+          # requires:
             # - << matrix.platform >>_test_nightly_verification
             # - << matrix.platform >>_integration_nightly_verification
             # - << matrix.platform >>_e2e_expect_nightly_verification
@@ -161,16 +161,16 @@ workflows:
             # - codegen_verification
             # REMOVE BELOW
             # - << matrix.platform >>_test_verification
-            - << matrix.platform >>_integration_verification
+            # - << matrix.platform >>_integration_verification
             # - << matrix.platform >>_e2e_expect_verification
             # - << matrix.platform >>_e2e_subs
           # filters:
             # branches:
               # only:
                 # - /rel\/.*/
-          context:
-            - slack-secrets
-            - aws-secrets
+          # context:
+          #   - slack-secrets
+          #   - aws-secrets
 
       #- windows_x64_build
 
@@ -235,11 +235,6 @@ commands:
             export GIMME_ENV_PREFIX=<< parameters.build_dir >>/.gimme/envs
             export GIMME_VERSION_PREFIX=<< parameters.build_dir >>/.gimme/versions
             scripts/travis/build.sh --make_debug
-            ls -la
-            ls -la ../
-            ls -la ../go/
-            ls -la ../go/bin/
-            exit 1
       - cache_libsodium
       - save_cache:
           key: 'go-mod-1-14-7-v2-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
@@ -376,9 +371,6 @@ commands:
       - attach_workspace:
           at: << parameters.build_dir >>
       - run: |
-          ls -la
-          ls -la ../
-          ls -la bin/ 2>/dev/null
           mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
           touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml
           touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json
@@ -659,11 +651,12 @@ jobs:
           result_subdir: << parameters.platform >>_<< parameters.job_type >>
 
   upload_binaries:
+    docker:
+      - image: ubuntu:20.04
     working_directory: << pipeline.parameters.build_dir >>/project
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_medium
     steps:
       - prepare_build_dir
       # - checkout
