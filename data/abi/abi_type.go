@@ -283,7 +283,20 @@ func MakeUintType(typeSize int) (Type, error) {
 	}, nil
 }
 
-var ByteType = Type{abiTypeID: Byte}
+
+var (
+	// ByteType is ABI type constant for byte
+	ByteType = Type{abiTypeID: Byte}
+
+	// BoolType is ABI type constant for bool
+	BoolType = Type{abiTypeID: Bool}
+
+	// AddressType is ABI type constant for address
+	AddressType = Type{abiTypeID: Address}
+
+	// StringType is ABI type constant for string
+	StringType = Type{abiTypeID: String}
+)
 
 // MakeUfixedType makes `UFixed` ABI type by taking type bitSize and type precision as arguments.
 // The range of type bitSize is [8, 512] and type bitSize % 8 == 0.
@@ -302,8 +315,6 @@ func MakeUfixedType(typeSize int, typePrecision int) (Type, error) {
 	}, nil
 }
 
-var BoolType = Type{abiTypeID: Bool}
-
 // MakeStaticArrayType makes static length array ABI type by taking
 // array element type and array length as arguments.
 func MakeStaticArrayType(argumentType Type, arrayLength uint16) Type {
@@ -314,8 +325,6 @@ func MakeStaticArrayType(argumentType Type, arrayLength uint16) Type {
 	}
 }
 
-var AddressType = Type{abiTypeID: Address}
-
 // MakeDynamicArrayType makes dynamic length array by taking array element type as argument.
 func MakeDynamicArrayType(argumentType Type) Type {
 	return Type{
@@ -323,8 +332,6 @@ func MakeDynamicArrayType(argumentType Type) Type {
 		childTypes: []Type{argumentType},
 	}
 }
-
-var StringType = Type{abiTypeID: String}
 
 // MakeTupleType makes tuple ABI type by taking an array of tuple element types as argument.
 func MakeTupleType(argumentTypes []Type) (Type, error) {
