@@ -61,7 +61,7 @@ func newCatchpointTracker(tb testing.TB, l *mockLedgerForTracker, conf config.Lo
 	_, err := trackerDBInitialize(l, au.catchpointEnabled(), dbPathPrefix)
 	require.NoError(tb, err)
 
-	err = l.trackers.initialize(au, l, []ledgerTracker{au, ct}, conf)
+	err = l.trackers.initialize(l, []ledgerTracker{au, ct}, conf)
 	require.NoError(tb, err)
 	err = l.trackers.loadFromDisk(l)
 	require.NoError(tb, err)
@@ -287,7 +287,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	cfg.CatchpointInterval = 50
 	cfg.CatchpointTracking = 1
 	ct := newCatchpointTracker(t, ml, cfg, ".")
-	au := ml.trackers.driver
+	au := ml.trackers.accts
 	defer ct.close()
 
 	rewardLevel := uint64(0)

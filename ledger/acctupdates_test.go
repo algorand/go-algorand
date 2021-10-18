@@ -250,7 +250,7 @@ func newAcctUpdates(tb testing.TB, l *mockLedgerForTracker, conf config.Local, d
 	_, err := trackerDBInitialize(l, au.catchpointEnabled(), ".")
 	require.NoError(tb, err)
 
-	l.trackers.initialize(au, l, []ledgerTracker{au}, conf)
+	l.trackers.initialize(l, []ledgerTracker{au}, conf)
 	err = l.trackers.loadFromDisk(l)
 	require.NoError(tb, err)
 

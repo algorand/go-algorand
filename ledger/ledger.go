@@ -205,7 +205,7 @@ func (l *Ledger) reloadLedger() error {
 		&l.metrics,    // provides metrics reporting support
 	}
 
-	err = l.trackers.initialize(&l.accts, l, trackers, l.cfg)
+	err = l.trackers.initialize(l, trackers, l.cfg)
 	if err != nil {
 		return err
 	}

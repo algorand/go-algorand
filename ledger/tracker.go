@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -136,7 +137,8 @@ type ledgerForTracker interface {
 
 type trackerRegistry struct {
 	trackers []ledgerTracker
-	driver   *accountUpdates
+	// the accts has some exceptional usages in the tracker registry.
+	accts *accountUpdates
 
 	// ctx is the context for the committing go-routine.
 	ctx context.Context
@@ -200,9 +202,9 @@ type deferredCommitContext struct {
 	catchpointWriting *int32
 }
 
-func (tr *trackerRegistry) initialize(au *accountUpdates, l ledgerForTracker, trackers []ledgerTracker, cfg config.Local) (err error) {
-	tr.driver = au
+var errMissingAccountUpdateTracker = errors.New("initializeTrackerCaches : called without a valid accounts update tracker")
 
+func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTracker, cfg config.Local) (err error) {
 	tr.dbs = l.trackerDB()
 	tr.log = l.trackerLog()
 
@@ -222,7 +224,14 @@ func (tr *trackerRegistry) initialize(au *accountUpdates, l ledgerForTracker, tr
 	tr.accountsRebuildSynchronousMode = db.SynchronousMode(cfg.AccountsRebuildSynchronousMode)
 	go tr.commitSyncer(tr.deferredCommits)
 
-	tr.trackers = append(tr.trackers, trackers...)
+	tr.trackers = append([]ledgerTracker{}, trackers...)
+
+	for _, tracker := range tr.trackers {
+		if accts, ok := tracker.(*accountUpdates); ok {
+			tr.accts = accts
+			break
+		}
+	}
 	return
 }
 
@@ -245,8 +254,8 @@ func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 		return err
 	}
 	// the votes have a special dependency on the account updates, so we need to initialize these separetly.
-	tr.driver.voters = &votersTracker{}
-	err = tr.driver.voters.loadFromDisk(l, tr.driver)
+	tr.accts.voters = &votersTracker{}
+	err = tr.accts.voters.loadFromDisk(l, tr.accts)
 	return err
 }
 
@@ -315,7 +324,7 @@ func (tr *trackerRegistry) close() {
 		lt.close()
 	}
 	tr.trackers = nil
-	tr.driver = nil
+	tr.accts = nil
 }
 
 // commitSyncer is the syncer go-routine function which perform the database updates. Internally, it dequeues deferredCommits and
@@ -435,9 +444,14 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 	var blk bookkeeping.Block
 	var delta ledgercore.StateDelta
 
-	accLedgerEval := accountUpdatesLedgerEvaluator{
-		au: tr.driver,
+	if tr.accts == nil {
+		return errMissingAccountUpdateTracker
 	}
+
+	accLedgerEval := accountUpdatesLedgerEvaluator{
+		au: tr.accts,
+	}
+
 	if lastBalancesRound < lastestBlockRound {
 		accLedgerEval.prevHeader, err = l.BlockHdr(lastBalancesRound)
 		if err != nil {
@@ -522,7 +536,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 		loadCompleted := (lastestBlockRound == blk.Round() && lastBalancesRound+basics.Round(blk.ConsensusProtocol().MaxBalLookback) < lastestBlockRound)
 		if flushIntervalExceed || loadCompleted {
 			// adjust the last flush time, so that we would not hold off the flushing due to "working too fast"
-			tr.driver.lastFlushTime = time.Now().Add(-balancesFlushInterval)
+			tr.accts.lastFlushTime = time.Now().Add(-balancesFlushInterval)
 
 			if !rollbackSynchronousMode {
 				// switch to rebuild synchronous mode to improve performance
@@ -551,7 +565,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 			}()
 
 			// are we too far behind ? ( taking into consideration the catchpoint writing, which can stall the writing for quite a bit )
-			if roundsBehind > initializeCachesRoundFlushInterval+basics.Round(tr.driver.catchpointInterval) {
+			if roundsBehind > initializeCachesRoundFlushInterval+basics.Round(tr.accts.catchpointInterval) {
 				// we're unable to persist changes. This is unexpected, but there is no point in keep trying batching additional changes since any further changes
 				// would just accumulate in memory.
 				close(blockEvalFailed)
