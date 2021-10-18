@@ -46,7 +46,7 @@ func TestMakeTypeValid(t *testing.T) {
 			expected := "ufixed" + strconv.Itoa(i) + "x" + strconv.Itoa(j)
 			actual := ufixedType.String()
 			require.Equal(t, expected, actual,
-				"TypeFromString ufixed error: expected %s, actual %s", expected, actual)
+				"TypeOf ufixed error: expected %s, actual %s", expected, actual)
 		}
 	}
 	// bool/strings/address/byte + dynamic/static array + tuple
@@ -177,20 +177,20 @@ func TestTypeFromStringValid(t *testing.T) {
 	for i := 8; i <= 512; i += 8 {
 		expected, err := MakeUintType(i)
 		require.NoError(t, err, "make uint type in valid space should not return error")
-		actual, err := TypeFromString(expected.String())
-		require.NoError(t, err, "TypeFromString: uint parsing error: %s", expected.String())
+		actual, err := TypeOf(expected.String())
+		require.NoError(t, err, "TypeOf: uint parsing error: %s", expected.String())
 		require.Equal(t, expected, actual,
-			"TypeFromString: expected %s, actual %s", expected.String(), actual.String())
+			"TypeOf: expected %s, actual %s", expected.String(), actual.String())
 	}
 	// ufixed
 	for i := 8; i <= 512; i += 8 {
 		for j := 1; j <= 160; j++ {
 			expected, err := MakeUfixedType(i, j)
 			require.NoError(t, err, "make ufixed type in valid space should not return error")
-			actual, err := TypeFromString("ufixed" + strconv.Itoa(i) + "x" + strconv.Itoa(j))
-			require.NoError(t, err, "TypeFromString ufixed parsing error: %s", expected.String())
+			actual, err := TypeOf("ufixed" + strconv.Itoa(i) + "x" + strconv.Itoa(j))
+			require.NoError(t, err, "TypeOf ufixed parsing error: %s", expected.String())
 			require.Equal(t, expected, actual,
-				"TypeFromString ufixed: expected %s, actual %s", expected.String(), actual.String())
+				"TypeOf ufixed: expected %s, actual %s", expected.String(), actual.String())
 		}
 	}
 	var testcases = []struct {
@@ -371,9 +371,9 @@ func TestTypeFromStringValid(t *testing.T) {
 		},
 	}
 	for _, testcase := range testcases {
-		t.Run(fmt.Sprintf("TypeFromString test %s", testcase.testType), func(t *testing.T) {
-			actual, err := TypeFromString(testcase.input)
-			require.NoError(t, err, "TypeFromString %s parsing error", testcase.testType)
+		t.Run(fmt.Sprintf("TypeOf test %s", testcase.testType), func(t *testing.T) {
+			actual, err := TypeOf(testcase.input)
+			require.NoError(t, err, "TypeOf %s parsing error", testcase.testType)
 			require.Equal(t, testcase.expected, actual, "TestFromString %s: expected %s, actual %s",
 				testcase.testType, testcase.expected.String(), actual.String())
 		})
@@ -388,7 +388,7 @@ func TestTypeFromStringInvalid(t *testing.T) {
 			randSize = rand.Uint64()
 		}
 		errorInput := "uint" + strconv.FormatUint(randSize, 10)
-		_, err := TypeFromString(errorInput)
+		_, err := TypeOf(errorInput)
 		require.Error(t, err, "MakeUintType: should throw error on bitSize input %d", randSize)
 	}
 	for i := 0; i <= 10000; i++ {
@@ -401,7 +401,7 @@ func TestTypeFromStringInvalid(t *testing.T) {
 			randPrecision = rand.Uint64()
 		}
 		errorInput := "ufixed" + strconv.FormatUint(randSize, 10) + "x" + strconv.FormatUint(randPrecision, 10)
-		_, err := TypeFromString(errorInput)
+		_, err := TypeOf(errorInput)
 		require.Error(t, err, "MakeUintType: should throw error on bitSize input %d", randSize)
 	}
 	var testcases = []string{
@@ -442,8 +442,8 @@ func TestTypeFromStringInvalid(t *testing.T) {
 		"((byte),,(byte))",
 	}
 	for _, testcase := range testcases {
-		t.Run(fmt.Sprintf("TypeFromString dynamic array test %s", testcase), func(t *testing.T) {
-			_, err := TypeFromString(testcase)
+		t.Run(fmt.Sprintf("TypeOf dynamic array test %s", testcase), func(t *testing.T) {
+			_, err := TypeOf(testcase)
 			require.Error(t, err, "%s should throw error", testcase)
 		})
 	}

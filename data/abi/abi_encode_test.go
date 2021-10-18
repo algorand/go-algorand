@@ -203,7 +203,7 @@ func TestEncodeValid(t *testing.T) {
 	   0x00, 0x03                        (second string byte length 3)
 	   byte('D'), byte('E'), byte('F')   (second string encoded bytes)
 	*/
-	tupleType, err := TypeFromString("(string,bool,bool,bool,bool,string)")
+	tupleType, err := TypeOf("(string,bool,bool,bool,bool,string)")
 	require.NoError(t, err, "type from string for dynamic tuple type should not return error")
 	t.Run("dynamic tuple encoding", func(t *testing.T) {
 		inputBase := []interface{}{
@@ -227,7 +227,7 @@ func TestEncodeValid(t *testing.T) {
 	   0b11000000      (first static bool array)
 	   0b11000000      (second static bool array)
 	*/
-	tupleType, err = TypeFromString("(bool[2],bool[2])")
+	tupleType, err = TypeOf("(bool[2],bool[2])")
 	require.NoError(t, err, "type from string for tuple type should not return error")
 	t.Run("static bool array tuple encoding", func(t *testing.T) {
 		expected := []byte{
@@ -252,7 +252,7 @@ func TestEncodeValid(t *testing.T) {
 	   0x00, 0x02      (dynamic bool array length 2)
 	   0b11000000      (second static bool array)
 	*/
-	tupleType, err = TypeFromString("(bool[2],bool[])")
+	tupleType, err = TypeOf("(bool[2],bool[])")
 	require.NoError(t, err, "type from string for tuple type should not return error")
 	t.Run("static/dynamic bool array tuple encoding", func(t *testing.T) {
 		expected := []byte{
@@ -278,7 +278,7 @@ func TestEncodeValid(t *testing.T) {
 	   0x00, 0x00      (first dynamic bool array length 0)
 	   0x00, 0x00      (second dynamic bool array length 0)
 	*/
-	tupleType, err = TypeFromString("(bool[],bool[])")
+	tupleType, err = TypeOf("(bool[],bool[])")
 	require.NoError(t, err, "type from string for tuple type should not return error")
 	t.Run("empty dynamic array tuple encoding", func(t *testing.T) {
 		expected := []byte{
@@ -294,7 +294,7 @@ func TestEncodeValid(t *testing.T) {
 
 	// encoding test for empty tuple
 	// input: (), expected encoding: ""
-	tupleType, err = TypeFromString("()")
+	tupleType, err = TypeOf("()")
 	require.NoError(t, err, "type from string for tuple type should not return error")
 	t.Run("empty tuple encoding", func(t *testing.T) {
 		expected := make([]byte, 0)
@@ -304,7 +304,7 @@ func TestEncodeValid(t *testing.T) {
 	})
 }
 
-func castBigIntToInterface(val *big.Int, bitSize uint16) (interface{}, error) {
+func castBigIntToNarrowestPrimitive(val *big.Int, bitSize int) (interface{}, error) {
 	upperLimit := new(big.Int).Lsh(big.NewInt(1), uint(bitSize))
 	if val.Cmp(upperLimit) >= 0 {
 		return nil, fmt.Errorf("big integer %s >= upperlimit %s, error", val.String(), upperLimit.String())
@@ -338,7 +338,7 @@ func TestDecodeValid(t *testing.T) {
 
 			encodedUint, err := uintType.Encode(expectedBig)
 			require.NoError(t, err, "uint encode fail")
-			expected, err := castBigIntToInterface(expectedBig, uint16(intSize))
+			expected, err := castBigIntToNarrowestPrimitive(expectedBig, intSize)
 			require.NoError(t, err, "cast big integer to expected value should not return error")
 
 			actual, err := uintType.Decode(encodedUint)
@@ -361,7 +361,7 @@ func TestDecodeValid(t *testing.T) {
 
 				encodedUfixed, err := ufixedType.Encode(expectedBig)
 				require.NoError(t, err, "ufixed encode fail")
-				expected, err := castBigIntToInterface(expectedBig, uint16(size))
+				expected, err := castBigIntToNarrowestPrimitive(expectedBig, size)
 				require.NoError(t, err, "cast big integer to expected value should not return error")
 
 				actual, err := ufixedType.Decode(encodedUfixed)
@@ -424,7 +424,7 @@ func TestDecodeValid(t *testing.T) {
 	// expected value: bool[5]: {T, F, F, T, T}
 	// input: 0b10011000
 	t.Run("static bool array decode", func(t *testing.T) {
-		staticBoolArrT, err := TypeFromString("bool[5]")
+		staticBoolArrT, err := TypeOf("bool[5]")
 		require.NoError(t, err, "make static bool array type failure")
 		expected := []interface{}{true, false, false, true, true}
 		actual, err := staticBoolArrT.Decode([]byte{0b10011000})
@@ -436,7 +436,7 @@ func TestDecodeValid(t *testing.T) {
 	// expected value: bool[11]: F, F, F, T, T, F, T, F, T, F, T
 	// input: 0b00011010, 0b10100000
 	t.Run("static bool array decode", func(t *testing.T) {
-		staticBoolArrT, err := TypeFromString("bool[11]")
+		staticBoolArrT, err := TypeOf("bool[11]")
 		require.NoError(t, err, "make static bool array type failure")
 		expected := []interface{}{false, false, false, true, true, false, true, false, true, false, true}
 		actual, err := staticBoolArrT.Decode([]byte{0b00011010, 0b10100000})
@@ -457,7 +457,7 @@ func TestDecodeValid(t *testing.T) {
 		       0, 0, 0, 0, 0, 0, 0, 8      (encoding for uint64 8)
 	*/
 	t.Run("static uint array decode", func(t *testing.T) {
-		staticUintArrT, err := TypeFromString("uint64[8]")
+		staticUintArrT, err := TypeOf("uint64[8]")
 		require.NoError(t, err, "make static uint array type failure")
 		inputUint := []interface{}{1, 2, 3, 4, 5, 6, 7, 8}
 		expected := []interface{}{
@@ -482,7 +482,7 @@ func TestDecodeValid(t *testing.T) {
 	                0b01010101, 0b01000000    (dynamic bool array encoding)
 	*/
 	t.Run("dynamic bool array decode", func(t *testing.T) {
-		dynamicBoolArrT, err := TypeFromString("bool[]")
+		dynamicBoolArrT, err := TypeOf("bool[]")
 		require.NoError(t, err, "make dynamic bool array type failure")
 		expected := []interface{}{false, true, false, true, false, true, false, true, false, true}
 		inputEncoded := []byte{
@@ -507,7 +507,7 @@ func TestDecodeValid(t *testing.T) {
 	   byte('D'), byte('E'), byte('F')   (second string encoded bytes)
 	*/
 	t.Run("dynamic tuple decoding", func(t *testing.T) {
-		tupleT, err := TypeFromString("(string,bool,bool,bool,bool,string)")
+		tupleT, err := TypeOf("(string,bool,bool,bool,bool,string)")
 		require.NoError(t, err, "make tuple type failure")
 		inputEncode := []byte{
 			0x00, 0x05, 0b10100000, 0x00, 0x0A,
@@ -531,7 +531,7 @@ func TestDecodeValid(t *testing.T) {
 	   0b11000000      (second static bool array)
 	*/
 	t.Run("static bool array tuple decoding", func(t *testing.T) {
-		tupleT, err := TypeFromString("(bool[2],bool[2])")
+		tupleT, err := TypeOf("(bool[2],bool[2])")
 		require.NoError(t, err, "make tuple type failure")
 		expected := []interface{}{
 			[]interface{}{true, true},
@@ -557,7 +557,7 @@ func TestDecodeValid(t *testing.T) {
 	   0b11000000      (second static bool array)
 	*/
 	t.Run("static/dynamic bool array tuple decoding", func(t *testing.T) {
-		tupleT, err := TypeFromString("(bool[2],bool[])")
+		tupleT, err := TypeOf("(bool[2],bool[])")
 		require.NoError(t, err, "make tuple type failure")
 		expected := []interface{}{
 			[]interface{}{true, true},
@@ -584,7 +584,7 @@ func TestDecodeValid(t *testing.T) {
 	   0x00, 0x00      (second dynamic bool array length 0)
 	*/
 	t.Run("empty dynamic array tuple decoding", func(t *testing.T) {
-		tupleT, err := TypeFromString("(bool[],bool[])")
+		tupleT, err := TypeOf("(bool[],bool[])")
 		require.NoError(t, err, "make tuple type failure")
 		expected := []interface{}{
 			[]interface{}{}, []interface{}{},
@@ -602,7 +602,7 @@ func TestDecodeValid(t *testing.T) {
 	// expected value: ()
 	// byte input: ""
 	t.Run("empty tuple decoding", func(t *testing.T) {
-		tupleT, err := TypeFromString("()")
+		tupleT, err := TypeOf("()")
 		require.NoError(t, err, "make empty tuple type should not return error")
 		actual, err := tupleT.Decode([]byte{})
 		require.NoError(t, err, "decode empty tuple should not return error")
@@ -648,7 +648,7 @@ func TestDecodeInvalid(t *testing.T) {
 			0, 0, 0, 0, 0, 0, 0, 5,
 			0, 0, 0, 0, 0, 0, 0, 6,
 		}
-		uintTArray, err := TypeFromString("uint64[8]")
+		uintTArray, err := TypeOf("uint64[8]")
 		require.NoError(t, err, "make uint64 static array type should not return error")
 		_, err = uintTArray.Decode(inputBase)
 		require.Error(t, err, "corrupted uint64 static array decode should return error")
@@ -669,7 +669,7 @@ func TestDecodeInvalid(t *testing.T) {
 			0, 0, 0, 0, 0, 0, 0, 6,
 			0, 0, 0, 0, 0, 0, 0, 7,
 		}
-		uintTArray, err := TypeFromString("uint64[7]")
+		uintTArray, err := TypeOf("uint64[7]")
 		require.NoError(t, err, "make uint64 static array type should not return error")
 		_, err = uintTArray.Decode(inputBase)
 		require.Error(t, err, "corrupted uint64 static array decode should return error")
@@ -723,7 +723,7 @@ func TestDecodeInvalid(t *testing.T) {
 			0x00, 0x03, byte('A'), byte('B'), byte('C'),
 			0x00, 0x03, byte('D'), byte('E'), byte('F'),
 		}
-		tupleT, err := TypeFromString("(string,bool,bool,bool,bool,string)")
+		tupleT, err := TypeOf("(string,bool,bool,bool,bool,string)")
 		require.NoError(t, err, "make tuple type failure")
 		_, err = tupleT.Decode(inputEncode)
 		require.Error(t, err, "corrupted decoding dynamic tuple should return error")
@@ -743,7 +743,7 @@ func TestDecodeInvalid(t *testing.T) {
 		                <- corrupted byte, 1 byte missing
 	*/
 	t.Run("corrupted static bool array tuple decoding", func(t *testing.T) {
-		expectedType, err := TypeFromString("(bool[2],bool[2])")
+		expectedType, err := TypeOf("(bool[2],bool[2])")
 		require.NoError(t, err, "make tuple type failure")
 		encodedInput0 := []byte{
 			0b11000000,
@@ -776,7 +776,7 @@ func TestDecodeInvalid(t *testing.T) {
 			0x03,
 			0x00, 0x02, 0b11000000,
 		}
-		tupleT, err := TypeFromString("(bool[2],bool[])")
+		tupleT, err := TypeOf("(bool[2],bool[])")
 		require.NoError(t, err, "make tuple type failure")
 		_, err = tupleT.Decode(encodedInput)
 		require.Error(t, err, "decode corrupted tuple for static/dynamic bool array should return error")
@@ -801,7 +801,7 @@ func TestDecodeInvalid(t *testing.T) {
 			0x00, 0x04, 0x00, 0x07,
 			0x00, 0x00, 0x00, 0x00,
 		}
-		tupleT, err := TypeFromString("(bool[],bool[])")
+		tupleT, err := TypeOf("(bool[],bool[])")
 		require.NoError(t, err, "make tuple type failure")
 		_, err = tupleT.Decode(encodedInput)
 		require.Error(t, err, "decode corrupted tuple for empty dynamic array should return error")
@@ -813,7 +813,7 @@ func TestDecodeInvalid(t *testing.T) {
 	// should return error
 	t.Run("corrupted empty tuple decoding", func(t *testing.T) {
 		encodedInput := []byte{0xFF}
-		tupleT, err := TypeFromString("()")
+		tupleT, err := TypeOf("()")
 		require.NoError(t, err, "make tuple type failure")
 		_, err = tupleT.Decode(encodedInput)
 		require.Error(t, err, "decode corrupted empty tuple should return error")
@@ -827,7 +827,7 @@ type testUnit struct {
 
 func categorySelfRoundTripTest(t *testing.T, category []testUnit) {
 	for _, testObj := range category {
-		abiType, err := TypeFromString(testObj.serializedType)
+		abiType, err := TypeOf(testObj.serializedType)
 		require.NoError(t, err, "failure to deserialize type")
 		encodedValue, err := abiType.Encode(testObj.value)
 		require.NoError(t, err, "failure to encode value")
@@ -854,7 +854,7 @@ func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
 		for j := 0; j < 200; j++ {
 			randVal, err := rand.Int(rand.Reader, max)
 			require.NoError(t, err, "generate random uint, should be no error")
-			optionalPrimitive, err := castBigIntToInterface(randVal, uint16(bitSize))
+			optionalPrimitive, err := castBigIntToNarrowestPrimitive(randVal, bitSize)
 			require.NoError(t, err, "random uint type cast should not have error")
 			(*pool)[Uint][uintIndex] = testUnit{serializedType: uintTstr, value: optionalPrimitive}
 			uintIndex++
@@ -863,7 +863,7 @@ func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
 		for precision := 1; precision <= 160; precision++ {
 			randVal, err := rand.Int(rand.Reader, max)
 			require.NoError(t, err, "generate random ufixed, should be no error")
-			optionalPrimitive, err := castBigIntToInterface(randVal, uint16(bitSize))
+			optionalPrimitive, err := castBigIntToNarrowestPrimitive(randVal, bitSize)
 			require.NoError(t, err, "random uint type cast should not have error")
 
 			ufixedT, err := MakeUfixedType(bitSize, precision)
@@ -924,7 +924,7 @@ func takeSomeFromCategoryAndGenerateArray(
 		}
 		tempArray[i] = (*pool)[abiT][index].value
 	}
-	tempT, err := TypeFromString((*pool)[abiT][srtIndex].serializedType)
+	tempT, err := TypeOf((*pool)[abiT][srtIndex].serializedType)
 	require.NoError(t, err, "type in test uint cannot be deserialized")
 	(*pool)[ArrayStatic] = append((*pool)[ArrayStatic], testUnit{
 		serializedType: MakeStaticArrayType(tempT, takeNum).String(),
@@ -971,7 +971,7 @@ func addTupleRandomValues(t *testing.T, slotRange BaseType, pool *map[BaseType][
 		elemTypes := make([]Type, tupleLen)
 		for index := 0; index < int(tupleLen); index++ {
 			elemValues[index] = testUnits[index].value
-			abiT, err := TypeFromString(testUnits[index].serializedType)
+			abiT, err := TypeOf(testUnits[index].serializedType)
 			require.NoError(t, err, "deserialize type failure for tuple elements")
 			elemTypes[index] = abiT
 		}

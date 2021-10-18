@@ -113,11 +113,11 @@ func (t Type) String() string {
 var staticArrayRegexp = regexp.MustCompile(`^([a-z\d\[\](),]+)\[([1-9][\d]*)]$`)
 var ufixedRegexp = regexp.MustCompile(`^ufixed([1-9][\d]*)x([1-9][\d]*)$`)
 
-// TypeFromString de-serialize ABI type from a string following ABI encoding.
-func TypeFromString(str string) (Type, error) {
+// TypeOf de-serialize ABI type from a string following ABI encoding.
+func TypeOf(str string) (Type, error) {
 	switch {
 	case strings.HasSuffix(str, "[]"):
-		arrayArgType, err := TypeFromString(str[:len(str)-2])
+		arrayArgType, err := TypeOf(str[:len(str)-2])
 		if err != nil {
 			return Type{}, err
 		}
@@ -136,7 +136,7 @@ func TypeFromString(str string) (Type, error) {
 			return Type{}, err
 		}
 		// parse the array element type
-		arrayType, err := TypeFromString(stringMatches[1])
+		arrayType, err := TypeOf(stringMatches[1])
 		if err != nil {
 			return Type{}, err
 		}
@@ -178,7 +178,7 @@ func TypeFromString(str string) (Type, error) {
 		}
 		tupleTypes := make([]Type, len(tupleContent))
 		for i := 0; i < len(tupleContent); i++ {
-			ti, err := TypeFromString(tupleContent[i])
+			ti, err := TypeOf(tupleContent[i])
 			if err != nil {
 				return Type{}, err
 			}
@@ -282,7 +282,6 @@ func MakeUintType(typeSize int) (Type, error) {
 		bitSize:   uint16(typeSize),
 	}, nil
 }
-
 
 var (
 	// ByteType is ABI type constant for byte
