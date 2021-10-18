@@ -78,10 +78,10 @@ Transaction(s) are used for:
 $ tealdbg debug --txn samples/txn_group.json
 ```
 
-If an array of transaction supplied then it is treated as a transaction group. To specify the current transaction for execution use `--group-index` option:
+If an array of transaction supplied then it is treated as a transaction group. To specify the current transaction for execution, pass the program source and use `--group-index` option:
 
 ```
-$ tealdbg debug --txn samples/txn_group.json --group-index=1
+$ tealdbg debug program.teal --txn samples/txn_group.json --group-index=1
 ```
 
 Transaction(s) are JSON or MessagePack (`goal clerk` compatible) serialized instances of `transactions`. See [samples dir](https://github.com/algorand/go-algorand/tree/master/cmd/tealdbg/samples) for more examples.
