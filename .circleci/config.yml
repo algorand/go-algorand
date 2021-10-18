@@ -237,7 +237,9 @@ commands:
             scripts/travis/build.sh --make_debug
             ls -la
             ls -la ../
-            ls -la bin/ 2>/dev/null
+            ls -la ../go/
+            ls -la ../go/bin/
+            exit 1
       - cache_libsodium
       - save_cache:
           key: 'go-mod-1-14-7-v2-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
