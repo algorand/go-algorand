@@ -62,31 +62,48 @@ type ledgerTracker interface {
 	// blocks from the database, or access its own state.  The
 	// ledgerForTracker interface abstracts away the details of
 	// ledger internals so that individual trackers can be tested
-	// in isolation.
+	// in isolation. The provided round number represents the
+	// current accounts storage round number.
 	loadFromDisk(ledgerForTracker, basics.Round) error
 
-	// newBlock informs the tracker of a new block from round
-	// rnd and a given ledgercore.StateDelta as produced by BlockEvaluator.
+	// newBlock informs the tracker of a new block along with
+	// a given ledgercore.StateDelta as produced by BlockEvaluator.
 	newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta)
 
-	// committedUpTo informs the tracker that the database has
+	// committedUpTo informs the tracker that the block database has
 	// committed all blocks up to and including rnd to persistent
 	// storage (the SQL database).  This can allow the tracker
 	// to garbage-collect state that will not be needed.
 	//
 	// committedUpTo() returns the round number of the earliest
-	// block that this tracker needs to be stored in the ledger
-	// for subsequent calls to loadFromDisk().  All blocks with
-	// round numbers before that may be deleted to save space,
-	// and the tracker is expected to still function after a
-	// restart and a call to loadFromDisk().  For example,
-	// returning 0 means that no blocks can be deleted.
+	// block that this tracker needs to be stored in the block
+	// database for subsequent calls to loadFromDisk().
+	// All blocks with round numbers before that may be deleted to
+	// save space, and the tracker is expected to still function
+	// after a restart and a call to loadFromDisk().
+	// For example, returning 0 means that no blocks can be deleted.
 	committedUpTo(basics.Round) (minRound, lookback basics.Round)
+
+	// produceCommittingTask prepares a deferredCommitContext; Preparing a deferredCommitContext is a joint
+	// effort, and all the trackers contribute to that effort. All the trackers are being handed a
+	// pointer to the deferredCommitContext, and have the ability to either modify it, or return an
+	// error. If an error is returned, the commit would be skipped.
+	produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcc *deferredCommitContext) *deferredCommitContext
 
 	// prepareCommit, commitRound and postCommit are called when it is time to commit tracker's data.
 	// If an error returned the process is aborted.
+
+	// prepareCommit aligns the data structures stored in the deferredCommitContext with the current
+	// state of the tracker. It allows the tracker to decide what data is going to be persisted
+	// on the coming commitRound.
 	prepareCommit(*deferredCommitContext) error
+	// commitRound is called for each of the trackers after a deferredCommitContext was agreed upon
+	// by all the prepareCommit calls. The commitRound is being executed within a single transactional
+	// context, and so, if any of the tracker's commitRound calls fails, the transaction is rolled back.
 	commitRound(context.Context, *sql.Tx, *deferredCommitContext) error
+	// postCommit is called only on a successfull commitRound. In that case, each of the trackers have
+	// the chance to update it's internal data structures, knowing that the given deferredCommitContext
+	// has completed. An optional context is provided for long-running operations.
 	postCommit(context.Context, *deferredCommitContext)
 
 	// handleUnorderedCommit is a special method for handling deferred commits that are out of order.
@@ -99,9 +116,6 @@ type ledgerTracker interface {
 	// be called even if loadFromDisk() is not called or does
 	// not succeed.
 	close()
-
-	// todo - document me
-	produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcc *deferredCommitContext) *deferredCommitContext
 }
 
 // ledgerForTracker defines the part of the ledger that a tracker can
@@ -180,7 +194,10 @@ type deferredCommitContext struct {
 	stats       telemetryspec.AccountsUpdateMetrics
 	updateStats bool
 
-	catchpointWriting *int32 // todo : doc.
+	// catchpointWriting is a pointer to a varible with the same name in the catchpointTracker.
+	// it's used in order to reset the catchpointWriting flag from the acctupdates's
+	// prepareCommit/commitRound ( which is called before the corresponding catchpoint tracker method )
+	catchpointWriting *int32
 }
 
 func (tr *trackerRegistry) initialize(au *accountUpdates, l ledgerForTracker, trackers []ledgerTracker, cfg config.Local) (err error) {
@@ -231,169 +248,6 @@ func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 	tr.driver.voters = &votersTracker{}
 	err = tr.driver.voters.loadFromDisk(l, tr.driver)
 	return err
-}
-
-// initializeCaches fills up the accountUpdates cache with the most recent ~320 blocks ( on normal execution ).
-// the method also support balances recovery in cases where the difference between the lastBalancesRound and the lastestBlockRound
-// is far greater than 320; in these cases, it would flush to disk periodically in order to avoid high memory consumption.
-func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err error) {
-	lastestBlockRound := l.Latest()
-	lastBalancesRound := tr.dbRound
-
-	var blk bookkeeping.Block
-	var delta ledgercore.StateDelta
-
-	accLedgerEval := accountUpdatesLedgerEvaluator{
-		au: tr.driver,
-	}
-	if lastBalancesRound < lastestBlockRound {
-		accLedgerEval.prevHeader, err = l.BlockHdr(lastBalancesRound)
-		if err != nil {
-			return err
-		}
-	}
-
-	skipAccountCacheMessage := make(chan struct{})
-	writeAccountCacheMessageCompleted := make(chan struct{})
-	defer func() {
-		close(skipAccountCacheMessage)
-		select {
-		case <-writeAccountCacheMessageCompleted:
-			if err == nil {
-				tr.log.Infof("initializeCaches completed initializing account data caches")
-			}
-		default:
-		}
-	}()
-
-	// this goroutine logs a message once if the parent function have not completed in initializingAccountCachesMessageTimeout seconds.
-	// the message is important, since we're blocking on the ledger block database here, and we want to make sure that we log a message
-	// within the above timeout.
-	go func() {
-		select {
-		case <-time.After(initializingAccountCachesMessageTimeout):
-			tr.log.Infof("initializeCaches is initializing account data caches")
-			close(writeAccountCacheMessageCompleted)
-		case <-skipAccountCacheMessage:
-		}
-	}()
-
-	blocksStream := make(chan bookkeeping.Block, initializeCachesReadaheadBlocksStream)
-	blockEvalFailed := make(chan struct{}, 1)
-	var blockRetrievalError error
-	go func() {
-		defer close(blocksStream)
-		for roundNumber := lastBalancesRound + 1; roundNumber <= lastestBlockRound; roundNumber++ {
-			blk, blockRetrievalError = l.Block(roundNumber)
-			if blockRetrievalError != nil {
-				return
-			}
-			select {
-			case blocksStream <- blk:
-			case <-blockEvalFailed:
-				return
-			}
-		}
-	}()
-
-	lastFlushedRound := lastBalancesRound
-	const accountsCacheLoadingMessageInterval = 5 * time.Second
-	lastProgressMessage := time.Now().Add(-accountsCacheLoadingMessageInterval / 2)
-
-	// rollbackSynchronousMode ensures that we switch to "fast writing mode" when we start flushing out rounds to disk, and that
-	// we exit this mode when we're done.
-	rollbackSynchronousMode := false
-	defer func() {
-		if rollbackSynchronousMode {
-			// restore default synchronous mode
-			err0 := tr.dbs.Wdb.SetSynchronousMode(context.Background(), tr.synchronousMode, tr.synchronousMode >= db.SynchronousModeFull)
-			// override the returned error only in case there is no error - since this
-			// operation has a lower criticality.
-			if err == nil {
-				err = err0
-			}
-		}
-	}()
-
-	for blk := range blocksStream {
-		delta, err = l.trackerEvalVerified(blk, &accLedgerEval)
-		if err != nil {
-			close(blockEvalFailed)
-			return
-		}
-		tr.newBlock(blk, delta)
-
-		// flush to disk if any of the following applies:
-		// 1. if we have loaded up more than initializeCachesRoundFlushInterval rounds since the last time we flushed the data to disk
-		// 2. if we completed the loading and we loaded up more than 320 rounds.
-		flushIntervalExceed := blk.Round()-lastFlushedRound > initializeCachesRoundFlushInterval
-		loadCompleted := (lastestBlockRound == blk.Round() && lastBalancesRound+basics.Round(blk.ConsensusProtocol().MaxBalLookback) < lastestBlockRound)
-		if flushIntervalExceed || loadCompleted {
-			// adjust the last flush time, so that we would not hold off the flushing due to "working too fast"
-			tr.driver.lastFlushTime = time.Now().Add(-balancesFlushInterval)
-
-			if !rollbackSynchronousMode {
-				// switch to rebuild synchronous mode to improve performance
-				err0 := tr.dbs.Wdb.SetSynchronousMode(context.Background(), tr.accountsRebuildSynchronousMode, tr.accountsRebuildSynchronousMode >= db.SynchronousModeFull)
-				if err0 != nil {
-					tr.log.Warnf("initializeTrackerCaches was unable to switch to rbuild synchronous mode : %v", err0)
-				} else {
-					// flip the switch to rollback the synchronous mode once we're done.
-					rollbackSynchronousMode = true
-				}
-			}
-
-			var roundsBehind basics.Round
-
-			// flush the account data
-			tr.scheduleCommit(blk.Round(), basics.Round(config.Consensus[blk.BlockHeader.CurrentProtocol].MaxBalLookback))
-			// wait for the writing to complete.
-			tr.waitAccountsWriting()
-
-			func() {
-				tr.mu.RLock()
-				defer tr.mu.RUnlock()
-
-				// The au.dbRound after writing should be ~320 behind the block round.
-				roundsBehind = blk.Round() - tr.dbRound
-			}()
-
-			// are we too far behind ? ( taking into consideration the catchpoint writing, which can stall the writing for quite a bit )
-			if roundsBehind > initializeCachesRoundFlushInterval+basics.Round(tr.driver.catchpointInterval) {
-				// we're unable to persist changes. This is unexpected, but there is no point in keep trying batching additional changes since any further changes
-				// would just accumulate in memory.
-				close(blockEvalFailed)
-				tr.log.Errorf("initializeCaches was unable to fill up the account caches accounts round = %d, block round = %d. See above error for more details.", blk.Round()-roundsBehind, blk.Round())
-				err = fmt.Errorf("initializeCaches failed to initialize the account data caches")
-				return
-			}
-
-			// and once we flushed it to disk, update the lastFlushedRound
-			lastFlushedRound = blk.Round()
-		}
-
-		// if enough time have passed since the last time we wrote a message to the log file then give the user an update about the progess.
-		if time.Since(lastProgressMessage) > accountsCacheLoadingMessageInterval {
-			// drop the initial message if we're got to this point since a message saying "still initializing" that comes after "is initializing" doesn't seems to be right.
-			select {
-			case skipAccountCacheMessage <- struct{}{}:
-				// if we got to this point, we should be able to close the writeAccountCacheMessageCompleted channel to have the "completed initializing" message written.
-				close(writeAccountCacheMessageCompleted)
-			default:
-			}
-			tr.log.Infof("initializeCaches is still initializing account data caches, %d rounds loaded out of %d rounds", blk.Round()-lastBalancesRound, lastestBlockRound-lastBalancesRound)
-			lastProgressMessage = time.Now()
-		}
-
-		// prepare for the next iteration.
-		accLedgerEval.prevHeader = *delta.Hdr
-	}
-
-	if blockRetrievalError != nil {
-		err = blockRetrievalError
-	}
-	return
-
 }
 
 func (tr *trackerRegistry) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
@@ -491,6 +345,7 @@ func (tr *trackerRegistry) commitSyncer(deferredCommits chan *deferredCommitCont
 	}
 }
 
+// commitRound commits the given deferredCommitContext via the trackers.
 func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) {
 	defer tr.accountsWriting.Done()
 	tr.mu.RLock()
@@ -568,4 +423,167 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) {
 		lt.postCommit(tr.ctx, dcc)
 	}
 	tr.mu.Unlock()
+}
+
+// initializeTrackerCaches fills up the accountUpdates cache with the most recent ~320 blocks ( on normal execution ).
+// the method also support balances recovery in cases where the difference between the lastBalancesRound and the lastestBlockRound
+// is far greater than 320; in these cases, it would flush to disk periodically in order to avoid high memory consumption.
+func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err error) {
+	lastestBlockRound := l.Latest()
+	lastBalancesRound := tr.dbRound
+
+	var blk bookkeeping.Block
+	var delta ledgercore.StateDelta
+
+	accLedgerEval := accountUpdatesLedgerEvaluator{
+		au: tr.driver,
+	}
+	if lastBalancesRound < lastestBlockRound {
+		accLedgerEval.prevHeader, err = l.BlockHdr(lastBalancesRound)
+		if err != nil {
+			return err
+		}
+	}
+
+	skipAccountCacheMessage := make(chan struct{})
+	writeAccountCacheMessageCompleted := make(chan struct{})
+	defer func() {
+		close(skipAccountCacheMessage)
+		select {
+		case <-writeAccountCacheMessageCompleted:
+			if err == nil {
+				tr.log.Infof("initializeTrackerCaches completed initializing account data caches")
+			}
+		default:
+		}
+	}()
+
+	// this goroutine logs a message once if the parent function have not completed in initializingAccountCachesMessageTimeout seconds.
+	// the message is important, since we're blocking on the ledger block database here, and we want to make sure that we log a message
+	// within the above timeout.
+	go func() {
+		select {
+		case <-time.After(initializingAccountCachesMessageTimeout):
+			tr.log.Infof("initializeTrackerCaches is initializing account data caches")
+			close(writeAccountCacheMessageCompleted)
+		case <-skipAccountCacheMessage:
+		}
+	}()
+
+	blocksStream := make(chan bookkeeping.Block, initializeCachesReadaheadBlocksStream)
+	blockEvalFailed := make(chan struct{}, 1)
+	var blockRetrievalError error
+	go func() {
+		defer close(blocksStream)
+		for roundNumber := lastBalancesRound + 1; roundNumber <= lastestBlockRound; roundNumber++ {
+			blk, blockRetrievalError = l.Block(roundNumber)
+			if blockRetrievalError != nil {
+				return
+			}
+			select {
+			case blocksStream <- blk:
+			case <-blockEvalFailed:
+				return
+			}
+		}
+	}()
+
+	lastFlushedRound := lastBalancesRound
+	const accountsCacheLoadingMessageInterval = 5 * time.Second
+	lastProgressMessage := time.Now().Add(-accountsCacheLoadingMessageInterval / 2)
+
+	// rollbackSynchronousMode ensures that we switch to "fast writing mode" when we start flushing out rounds to disk, and that
+	// we exit this mode when we're done.
+	rollbackSynchronousMode := false
+	defer func() {
+		if rollbackSynchronousMode {
+			// restore default synchronous mode
+			err0 := tr.dbs.Wdb.SetSynchronousMode(context.Background(), tr.synchronousMode, tr.synchronousMode >= db.SynchronousModeFull)
+			// override the returned error only in case there is no error - since this
+			// operation has a lower criticality.
+			if err == nil {
+				err = err0
+			}
+		}
+	}()
+
+	for blk := range blocksStream {
+		delta, err = l.trackerEvalVerified(blk, &accLedgerEval)
+		if err != nil {
+			close(blockEvalFailed)
+			return
+		}
+		tr.newBlock(blk, delta)
+
+		// flush to disk if any of the following applies:
+		// 1. if we have loaded up more than initializeCachesRoundFlushInterval rounds since the last time we flushed the data to disk
+		// 2. if we completed the loading and we loaded up more than 320 rounds.
+		flushIntervalExceed := blk.Round()-lastFlushedRound > initializeCachesRoundFlushInterval
+		loadCompleted := (lastestBlockRound == blk.Round() && lastBalancesRound+basics.Round(blk.ConsensusProtocol().MaxBalLookback) < lastestBlockRound)
+		if flushIntervalExceed || loadCompleted {
+			// adjust the last flush time, so that we would not hold off the flushing due to "working too fast"
+			tr.driver.lastFlushTime = time.Now().Add(-balancesFlushInterval)
+
+			if !rollbackSynchronousMode {
+				// switch to rebuild synchronous mode to improve performance
+				err0 := tr.dbs.Wdb.SetSynchronousMode(context.Background(), tr.accountsRebuildSynchronousMode, tr.accountsRebuildSynchronousMode >= db.SynchronousModeFull)
+				if err0 != nil {
+					tr.log.Warnf("initializeTrackerCaches was unable to switch to rbuild synchronous mode : %v", err0)
+				} else {
+					// flip the switch to rollback the synchronous mode once we're done.
+					rollbackSynchronousMode = true
+				}
+			}
+
+			var roundsBehind basics.Round
+
+			// flush the account data
+			tr.scheduleCommit(blk.Round(), basics.Round(config.Consensus[blk.BlockHeader.CurrentProtocol].MaxBalLookback))
+			// wait for the writing to complete.
+			tr.waitAccountsWriting()
+
+			func() {
+				tr.mu.RLock()
+				defer tr.mu.RUnlock()
+
+				// The au.dbRound after writing should be ~320 behind the block round.
+				roundsBehind = blk.Round() - tr.dbRound
+			}()
+
+			// are we too far behind ? ( taking into consideration the catchpoint writing, which can stall the writing for quite a bit )
+			if roundsBehind > initializeCachesRoundFlushInterval+basics.Round(tr.driver.catchpointInterval) {
+				// we're unable to persist changes. This is unexpected, but there is no point in keep trying batching additional changes since any further changes
+				// would just accumulate in memory.
+				close(blockEvalFailed)
+				tr.log.Errorf("initializeTrackerCaches was unable to fill up the account caches accounts round = %d, block round = %d. See above error for more details.", blk.Round()-roundsBehind, blk.Round())
+				err = fmt.Errorf("initializeTrackerCaches failed to initialize the account data caches")
+				return
+			}
+
+			// and once we flushed it to disk, update the lastFlushedRound
+			lastFlushedRound = blk.Round()
+		}
+
+		// if enough time have passed since the last time we wrote a message to the log file then give the user an update about the progess.
+		if time.Since(lastProgressMessage) > accountsCacheLoadingMessageInterval {
+			// drop the initial message if we're got to this point since a message saying "still initializing" that comes after "is initializing" doesn't seems to be right.
+			select {
+			case skipAccountCacheMessage <- struct{}{}:
+				// if we got to this point, we should be able to close the writeAccountCacheMessageCompleted channel to have the "completed initializing" message written.
+				close(writeAccountCacheMessageCompleted)
+			default:
+			}
+			tr.log.Infof("initializeTrackerCaches is still initializing account data caches, %d rounds loaded out of %d rounds", blk.Round()-lastBalancesRound, lastestBlockRound-lastBalancesRound)
+			lastProgressMessage = time.Now()
+		}
+
+		// prepare for the next iteration.
+		accLedgerEval.prevHeader = *delta.Hdr
+	}
+
+	if blockRetrievalError != nil {
+		err = blockRetrievalError
+	}
+	return
+
 }

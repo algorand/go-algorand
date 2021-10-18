@@ -75,6 +75,10 @@ type catchpointTracker struct {
 	// catchpointInterval is the configured interval at which the accountUpdates would generate catchpoint labels and catchpoint files.
 	catchpointInterval uint64
 
+	// catchpointFileHistoryLength defines how many catchpoint files we want to store back.
+	// 0 means don't store any, -1 mean unlimited and positive number suggest the number of most recent catchpoint files.
+	catchpointFileHistoryLength int
+
 	// archivalLedger determines whether the associated ledger was configured as archival ledger or not.
 	archivalLedger bool
 
@@ -86,10 +90,6 @@ type catchpointTracker struct {
 
 	// Connection to the database.
 	dbs db.Pair
-
-	// catchpointFileHistoryLength defines how many catchpoint files we want to store back.
-	// 0 means don't store any, -1 mean unlimited and positive number suggest the number of most recent catchpoint files.
-	catchpointFileHistoryLength int
 
 	// The last catchpoint label that was written to the database. Should always align with what's in the database.
 	// note that this is the last catchpoint *label* and not the catchpoint file.
@@ -140,124 +140,6 @@ func (ct *catchpointTracker) initialize(cfg config.Local, dbPathPrefix string) {
 	if cfg.CatchpointFileHistoryLength < -1 {
 		ct.catchpointFileHistoryLength = -1
 	}
-}
-func (ct *catchpointTracker) catchpointEnabled() bool {
-	return ct.catchpointInterval != 0
-}
-
-// accountsInitializeHashes initializes account hashes.
-// as part of the initialization, it tests if a hash table matches to account base and updates the former.
-func (ct *catchpointTracker) accountsInitializeHashes(ctx context.Context, tx *sql.Tx, rnd basics.Round) error {
-	hashRound, err := accountsHashRound(tx)
-	if err != nil {
-		return err
-	}
-
-	if hashRound != rnd {
-		// if the hashed round is different then the base round, something was modified, and the accounts aren't in sync
-		// with the hashes.
-		err = resetAccountHashes(tx)
-		if err != nil {
-			return err
-		}
-		// if catchpoint is disabled on this node, we could complete the initialization right here.
-		if !ct.catchpointEnabled() {
-			return nil
-		}
-	}
-
-	// create the merkle trie for the balances
-	committer, err := MakeMerkleCommitter(tx, false)
-	if err != nil {
-		return fmt.Errorf("accountsInitialize was unable to makeMerkleCommitter: %v", err)
-	}
-
-	trie, err := merkletrie.MakeTrie(committer, TrieMemoryConfig)
-	if err != nil {
-		return fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
-	}
-
-	// we might have a database that was previously initialized, and now we're adding the balances trie. In that case, we need to add all the existing balances to this trie.
-	// we can figure this out by examining the hash of the root:
-	rootHash, err := trie.RootHash()
-	if err != nil {
-		return fmt.Errorf("accountsInitialize was unable to retrieve trie root hash: %v", err)
-	}
-
-	if rootHash.IsZero() {
-		ct.log.Infof("accountsInitialize rebuilding merkle trie for round %d", rnd)
-		accountBuilderIt := makeOrderedAccountsIter(tx, trieRebuildAccountChunkSize)
-		defer accountBuilderIt.Close(ctx)
-		startTrieBuildTime := time.Now()
-		accountsCount := 0
-		lastRebuildTime := startTrieBuildTime
-		pendingAccounts := 0
-		totalOrderedAccounts := 0
-		for {
-			accts, processedRows, err := accountBuilderIt.Next(ctx)
-			if err == sql.ErrNoRows {
-				// the account builder would return sql.ErrNoRows when no more data is available.
-				break
-			} else if err != nil {
-				return err
-			}
-
-			if len(accts) > 0 {
-				accountsCount += len(accts)
-				pendingAccounts += len(accts)
-				for _, acct := range accts {
-					added, err := trie.Add(acct.digest)
-					if err != nil {
-						return fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
-					}
-					if !added {
-						ct.log.Warnf("accountsInitialize attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(acct.digest), acct.address)
-					}
-				}
-
-				if pendingAccounts >= trieRebuildCommitFrequency {
-					// this trie Evict will commit using the current transaction.
-					// if anything goes wrong, it will still get rolled back.
-					_, err = trie.Evict(true)
-					if err != nil {
-						return fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
-					}
-					pendingAccounts = 0
-				}
-
-				if time.Since(lastRebuildTime) > 5*time.Second {
-					// let the user know that the trie is still being rebuilt.
-					ct.log.Infof("accountsInitialize still building the trie, and processed so far %d accounts", accountsCount)
-					lastRebuildTime = time.Now()
-				}
-			} else if processedRows > 0 {
-				totalOrderedAccounts += processedRows
-				// if it's not ordered, we can ignore it for now; we'll just increase the counters and emit logs periodically.
-				if time.Since(lastRebuildTime) > 5*time.Second {
-					// let the user know that the trie is still being rebuilt.
-					ct.log.Infof("accountsInitialize still building the trie, and hashed so far %d accounts", totalOrderedAccounts)
-					lastRebuildTime = time.Now()
-				}
-			}
-		}
-
-		// this trie Evict will commit using the current transaction.
-		// if anything goes wrong, it will still get rolled back.
-		_, err = trie.Evict(true)
-		if err != nil {
-			return fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
-		}
-
-		// we've just updated the merkle trie, update the hashRound to reflect that.
-		err = updateAccountsHashRound(tx, rnd)
-		if err != nil {
-			return fmt.Errorf("accountsInitialize was unable to update the account hash round to %d: %v", rnd, err)
-		}
-
-		ct.log.Infof("accountsInitialize rebuilt the merkle trie with %d entries in %v", accountsCount, time.Since(startTrieBuildTime))
-	}
-	ct.balancesTrie = trie
-	return nil
 }
 
 // GetLastCatchpointLabel retrieves the last catchpoint label that was stored to the database.
@@ -359,6 +241,63 @@ func (ct *catchpointTracker) committedUpTo(rnd basics.Round) (retRound, lookback
 	return rnd, basics.Round(0)
 }
 
+func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcc *deferredCommitContext) *deferredCommitContext {
+	var isCatchpointRound, hasMultipleIntermediateCatchpoint, hasIntermediateCatchpoint bool
+
+	newBase := dcc.oldBase + basics.Round(dcc.offset)
+
+	// check if there was a catchpoint between dcc.oldBase+lookback and dcc.oldBase+offset+lookback
+	if ct.catchpointInterval > 0 {
+		nextCatchpointRound := ((uint64(dcc.oldBase+dcc.lookback) + ct.catchpointInterval) / ct.catchpointInterval) * ct.catchpointInterval
+
+		if nextCatchpointRound < uint64(dcc.oldBase+dcc.lookback)+dcc.offset {
+			mostRecentCatchpointRound := (uint64(committedRound) / ct.catchpointInterval) * ct.catchpointInterval
+			newBase = basics.Round(nextCatchpointRound) - dcc.lookback
+			if mostRecentCatchpointRound > nextCatchpointRound {
+				hasMultipleIntermediateCatchpoint = true
+				// skip if there is more than one catchpoint in queue
+				newBase = basics.Round(mostRecentCatchpointRound) - dcc.lookback
+			}
+			hasIntermediateCatchpoint = true
+		}
+	}
+
+	// if we're still writing the previous balances, we can't move forward yet.
+	if ct.IsWritingCatchpointFile() {
+		// if we hit this path, it means that we're still writing a catchpoint.
+		// see if the new delta range contains another catchpoint.
+		if hasIntermediateCatchpoint {
+			// check if we're already attempting to perform fast-writing.
+			select {
+			case <-ct.catchpointSlowWriting:
+				// yes, we're already doing fast-writing.
+			default:
+				// no, we're not yet doing fast writing, make it so.
+				close(ct.catchpointSlowWriting)
+			}
+		}
+		return nil
+	}
+
+	dcc.offset = uint64(newBase - dcc.oldBase)
+
+	// check to see if this is a catchpoint round
+	isCatchpointRound = ct.isCatchpointRound(dcc.offset, dcc.oldBase, dcc.lookback)
+
+	if isCatchpointRound && ct.archivalLedger {
+		// store non-zero ( all ones ) into the catchpointWriting atomic variable to indicate that a catchpoint is being written ( or, queued to be written )
+		atomic.StoreInt32(&ct.catchpointWriting, int32(-1))
+		ct.catchpointSlowWriting = make(chan struct{}, 1)
+		if hasMultipleIntermediateCatchpoint {
+			close(ct.catchpointSlowWriting)
+		}
+	}
+
+	dcc.catchpointWriting = &ct.catchpointWriting
+
+	return dcc
+}
+
 // prepareCommit, commitRound and postCommit are called when it is time to commit tracker's data.
 // If an error returned the process is aborted.
 func (ct *catchpointTracker) prepareCommit(dcc *deferredCommitContext) error {
@@ -430,63 +369,6 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *d
 		}
 	}
 	return nil
-}
-
-func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcc *deferredCommitContext) *deferredCommitContext {
-	var isCatchpointRound, hasMultipleIntermediateCatchpoint, hasIntermediateCatchpoint bool
-
-	newBase := dcc.oldBase + basics.Round(dcc.offset)
-
-	// check if there was a catchpoint between dcc.oldBase+lookback and dcc.oldBase+offset+lookback
-	if ct.catchpointInterval > 0 {
-		nextCatchpointRound := ((uint64(dcc.oldBase+dcc.lookback) + ct.catchpointInterval) / ct.catchpointInterval) * ct.catchpointInterval
-
-		if nextCatchpointRound < uint64(dcc.oldBase+dcc.lookback)+dcc.offset {
-			mostRecentCatchpointRound := (uint64(committedRound) / ct.catchpointInterval) * ct.catchpointInterval
-			newBase = basics.Round(nextCatchpointRound) - dcc.lookback
-			if mostRecentCatchpointRound > nextCatchpointRound {
-				hasMultipleIntermediateCatchpoint = true
-				// skip if there is more than one catchpoint in queue
-				newBase = basics.Round(mostRecentCatchpointRound) - dcc.lookback
-			}
-			hasIntermediateCatchpoint = true
-		}
-	}
-
-	// if we're still writing the previous balances, we can't move forward yet.
-	if ct.IsWritingCatchpointFile() {
-		// if we hit this path, it means that we're still writing a catchpoint.
-		// see if the new delta range contains another catchpoint.
-		if hasIntermediateCatchpoint {
-			// check if we're already attempting to perform fast-writing.
-			select {
-			case <-ct.catchpointSlowWriting:
-				// yes, we're already doing fast-writing.
-			default:
-				// no, we're not yet doing fast writing, make it so.
-				close(ct.catchpointSlowWriting)
-			}
-		}
-		return nil
-	}
-
-	dcc.offset = uint64(newBase - dcc.oldBase)
-
-	// check to see if this is a catchpoint round
-	isCatchpointRound = ct.isCatchpointRound(dcc.offset, dcc.oldBase, dcc.lookback)
-
-	if isCatchpointRound && ct.archivalLedger {
-		// store non-zero ( all ones ) into the catchpointWriting atomic variable to indicate that a catchpoint is being written ( or, queued to be written )
-		atomic.StoreInt32(&ct.catchpointWriting, int32(-1))
-		ct.catchpointSlowWriting = make(chan struct{}, 1)
-		if hasMultipleIntermediateCatchpoint {
-			close(ct.catchpointSlowWriting)
-		}
-	}
-
-	dcc.catchpointWriting = &ct.catchpointWriting
-
-	return dcc
 }
 
 func (ct *catchpointTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
@@ -611,6 +493,8 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 func (ct *catchpointTracker) IsWritingCatchpointFile() bool {
 	return atomic.LoadInt32(&ct.catchpointWriting) != 0
 }
+
+// isCatchpointRound returns true if the round at the given offset, dbRound with the provided lookback should be a catchpoint round.
 func (ct *catchpointTracker) isCatchpointRound(offset uint64, dbRound basics.Round, lookback basics.Round) bool {
 	return ((offset + uint64(lookback+dbRound)) > 0) && (ct.catchpointInterval != 0) && ((uint64((offset + uint64(lookback+dbRound))) % ct.catchpointInterval) == 0)
 }
@@ -902,4 +786,123 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 	entryHash := crypto.Hash(append(addr[:], encodedAccountData[:]...))
 	copy(hash[4:], entryHash[:])
 	return hash[:]
+}
+
+func (ct *catchpointTracker) catchpointEnabled() bool {
+	return ct.catchpointInterval != 0
+}
+
+// accountsInitializeHashes initializes account hashes.
+// as part of the initialization, it tests if a hash table matches to account base and updates the former.
+func (ct *catchpointTracker) accountsInitializeHashes(ctx context.Context, tx *sql.Tx, rnd basics.Round) error {
+	hashRound, err := accountsHashRound(tx)
+	if err != nil {
+		return err
+	}
+
+	if hashRound != rnd {
+		// if the hashed round is different then the base round, something was modified, and the accounts aren't in sync
+		// with the hashes.
+		err = resetAccountHashes(tx)
+		if err != nil {
+			return err
+		}
+		// if catchpoint is disabled on this node, we could complete the initialization right here.
+		if !ct.catchpointEnabled() {
+			return nil
+		}
+	}
+
+	// create the merkle trie for the balances
+	committer, err := MakeMerkleCommitter(tx, false)
+	if err != nil {
+		return fmt.Errorf("accountsInitialize was unable to makeMerkleCommitter: %v", err)
+	}
+
+	trie, err := merkletrie.MakeTrie(committer, TrieMemoryConfig)
+	if err != nil {
+		return fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
+	}
+
+	// we might have a database that was previously initialized, and now we're adding the balances trie. In that case, we need to add all the existing balances to this trie.
+	// we can figure this out by examining the hash of the root:
+	rootHash, err := trie.RootHash()
+	if err != nil {
+		return fmt.Errorf("accountsInitialize was unable to retrieve trie root hash: %v", err)
+	}
+
+	if rootHash.IsZero() {
+		ct.log.Infof("accountsInitialize rebuilding merkle trie for round %d", rnd)
+		accountBuilderIt := makeOrderedAccountsIter(tx, trieRebuildAccountChunkSize)
+		defer accountBuilderIt.Close(ctx)
+		startTrieBuildTime := time.Now()
+		accountsCount := 0
+		lastRebuildTime := startTrieBuildTime
+		pendingAccounts := 0
+		totalOrderedAccounts := 0
+		for {
+			accts, processedRows, err := accountBuilderIt.Next(ctx)
+			if err == sql.ErrNoRows {
+				// the account builder would return sql.ErrNoRows when no more data is available.
+				break
+			} else if err != nil {
+				return err
+			}
+
+			if len(accts) > 0 {
+				accountsCount += len(accts)
+				pendingAccounts += len(accts)
+				for _, acct := range accts {
+					added, err := trie.Add(acct.digest)
+					if err != nil {
+						return fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
+					}
+					if !added {
+						ct.log.Warnf("accountsInitialize attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(acct.digest), acct.address)
+					}
+				}
+
+				if pendingAccounts >= trieRebuildCommitFrequency {
+					// this trie Evict will commit using the current transaction.
+					// if anything goes wrong, it will still get rolled back.
+					_, err = trie.Evict(true)
+					if err != nil {
+						return fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
+					}
+					pendingAccounts = 0
+				}
+
+				if time.Since(lastRebuildTime) > 5*time.Second {
+					// let the user know that the trie is still being rebuilt.
+					ct.log.Infof("accountsInitialize still building the trie, and processed so far %d accounts", accountsCount)
+					lastRebuildTime = time.Now()
+				}
+			} else if processedRows > 0 {
+				totalOrderedAccounts += processedRows
+				// if it's not ordered, we can ignore it for now; we'll just increase the counters and emit logs periodically.
+				if time.Since(lastRebuildTime) > 5*time.Second {
+					// let the user know that the trie is still being rebuilt.
+					ct.log.Infof("accountsInitialize still building the trie, and hashed so far %d accounts", totalOrderedAccounts)
+					lastRebuildTime = time.Now()
+				}
+			}
+		}
+
+		// this trie Evict will commit using the current transaction.
+		// if anything goes wrong, it will still get rolled back.
+		_, err = trie.Evict(true)
+		if err != nil {
+			return fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
+		}
+
+		// we've just updated the merkle trie, update the hashRound to reflect that.
+		err = updateAccountsHashRound(tx, rnd)
+		if err != nil {
+			return fmt.Errorf("accountsInitialize was unable to update the account hash round to %d: %v", rnd, err)
+		}
+
+		ct.log.Infof("accountsInitialize rebuilt the merkle trie with %d entries in %v", accountsCount, time.Since(startTrieBuildTime))
+	}
+	ct.balancesTrie = trie
+	return nil
 }
