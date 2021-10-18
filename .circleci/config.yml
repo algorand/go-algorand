@@ -48,7 +48,7 @@ executors:
 
 workflows:
   version: 2
-  build_pr:
+  "circleci_build_and_test":
     jobs:
       - codegen_verification
 
