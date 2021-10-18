@@ -478,6 +478,7 @@ func decodeTuple(encoded []byte, childT []Type) ([]interface{}, error) {
 	return values, nil
 }
 
+// UnmarshalFromJSON convert bytes to golang value following ABI type and encoding rules
 func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 	switch t.abiTypeID {
 	case Uint:
@@ -488,8 +489,22 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 		}
 		return num, nil
 	case Ufixed:
-		// TODO
-		fallthrough
+		numTemp := new(big.Float)
+		err := numTemp.UnmarshalText(jsonEncoded)
+		if err != nil {
+			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to ufixed: %v", string(jsonEncoded), err)
+		}
+		numRat, accuracy := numTemp.Rat(nil)
+		if numRat == nil || accuracy != big.Exact {
+			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to big Rat", string(jsonEncoded))
+		}
+		denom := new(big.Int).Lsh(big.NewInt(1), uint(t.precision))
+		denomRat := new(big.Rat).SetInt(denom)
+		numeratorRat := new(big.Rat).Mul(denomRat, numRat)
+		if !numeratorRat.IsInt() {
+			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to ufixed: precision out of range", string(jsonEncoded))
+		}
+		return numeratorRat.Num(), nil
 	case Bool:
 		var elem bool
 		err := json.Unmarshal(jsonEncoded, &elem)
@@ -504,7 +519,11 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 			return nil, fmt.Errorf("cannot cast JSON encoded to byte: %v", err)
 		}
 		return elem, nil
+	case Address:
+		// TODO need to check B32 algorand address with checksum
+		fallthrough
 	case ArrayStatic, ArrayDynamic:
+		// TODO need to additionally support B64 encoding
 		var elems []json.RawMessage
 		err := json.Unmarshal(jsonEncoded, &elems)
 		if err != nil {
