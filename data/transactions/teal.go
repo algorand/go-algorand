@@ -37,9 +37,6 @@ type EvalDelta struct {
 
 	Logs []string `codec:"lg,allocbound=config.MaxLogCalls"`
 
-	// Intentionally, temporarily wrong - need to decide how to
-	// allocbound properly when structure is recursive.  Even a bound
-	// of 2 would allow arbitrarily large object if deep.
 	InnerTxns []SignedTxnWithAD `codec:"itx,allocbound=config.MaxInnerTransactions"`
 }
 

@@ -472,12 +472,15 @@ func asmPushInt(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 func asmPushBytes(ops *OpStream, spec *OpSpec, args []string) error {
-	if len(args) != 1 {
-		return ops.errorf("%s needs one argument", spec.Name)
+	if len(args) == 0 {
+		return ops.errorf("%s operation needs byte literal argument", spec.Name)
 	}
-	val, _, err := parseBinaryArgs(args)
+	val, consumed, err := parseBinaryArgs(args)
 	if err != nil {
 		return ops.error(err)
+	}
+	if len(args) != consumed {
+		return ops.errorf("%s operation with extraneous argument", spec.Name)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	var scratch [binary.MaxVarintLen64]byte
@@ -636,11 +639,14 @@ func parseStringLiteral(input string) (result []byte, err error) {
 // byte "this is a string\n"
 func assembleByte(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 0 {
-		return ops.error("byte operation needs byte literal argument")
+		return ops.errorf("%s operation needs byte literal argument", spec.Name)
 	}
-	val, _, err := parseBinaryArgs(args)
+	val, consumed, err := parseBinaryArgs(args)
 	if err != nil {
 		return ops.error(err)
+	}
+	if len(args) != consumed {
+		return ops.errorf("%s operation with extraneous argument", spec.Name)
 	}
 	ops.ByteLiteral(val)
 	return nil
