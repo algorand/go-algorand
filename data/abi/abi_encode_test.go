@@ -19,7 +19,6 @@ package abi
 import (
 	"crypto/rand"
 	"encoding/binary"
-	"fmt"
 	"math/big"
 	"testing"
 
@@ -304,25 +303,6 @@ func TestEncodeValid(t *testing.T) {
 	})
 }
 
-func castBigIntToNarrowestPrimitive(val *big.Int, bitSize int) (interface{}, error) {
-	upperLimit := new(big.Int).Lsh(big.NewInt(1), uint(bitSize))
-	if val.Cmp(upperLimit) >= 0 {
-		return nil, fmt.Errorf("big integer %s >= upperlimit %s, error", val.String(), upperLimit.String())
-	}
-	switch bitSize / 8 {
-	case 1:
-		return uint8(val.Uint64()), nil
-	case 2:
-		return uint16(val.Uint64()), nil
-	case 3, 4:
-		return uint32(val.Uint64()), nil
-	case 5, 6, 7, 8:
-		return val.Uint64(), nil
-	default:
-		return val, nil
-	}
-}
-
 func TestDecodeValid(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	// decoding test for uint, iterating through all valid uint bitSize
@@ -333,12 +313,25 @@ func TestDecodeValid(t *testing.T) {
 		uintType, err := MakeUintType(intSize)
 		require.NoError(t, err, "make uint type failure")
 		for i := 0; i < 1000; i++ {
-			expectedBig, err := rand.Int(rand.Reader, upperLimit)
+			randBig, err := rand.Int(rand.Reader, upperLimit)
 			require.NoError(t, err, "cryptographic random int init fail")
 
-			encodedUint, err := uintType.Encode(expectedBig)
+			var expected interface{}
+			if intSize <= 64 && intSize > 32 {
+				expected = randBig.Uint64()
+			} else if intSize <= 32 && intSize > 16 {
+				expected = uint32(randBig.Uint64())
+			} else if intSize == 16 {
+				expected = uint16(randBig.Uint64())
+			} else if intSize == 8 {
+				expected = uint8(randBig.Uint64())
+			} else {
+				expected = randBig
+			}
+
+			encodedUint, err := uintType.Encode(expected)
 			require.NoError(t, err, "uint encode fail")
-			expected, err := castBigIntToNarrowestPrimitive(expectedBig, intSize)
+			//expected, err := castBigIntToNarrowestPrimitive(expected, intSize)
 			require.NoError(t, err, "cast big integer to expected value should not return error")
 
 			actual, err := uintType.Decode(encodedUint)
@@ -356,12 +349,24 @@ func TestDecodeValid(t *testing.T) {
 			ufixedType, err := MakeUfixedType(size, precision)
 			require.NoError(t, err, "make ufixed type failure")
 			for i := 0; i < 10; i++ {
-				expectedBig, err := rand.Int(rand.Reader, upperLimit)
+				randBig, err := rand.Int(rand.Reader, upperLimit)
 				require.NoError(t, err, "cryptographic random int init fail")
 
-				encodedUfixed, err := ufixedType.Encode(expectedBig)
+				var expected interface{}
+				if size <= 64 && size > 32 {
+					expected = randBig.Uint64()
+				} else if size <= 32 && size > 16 {
+					expected = uint32(randBig.Uint64())
+				} else if size == 16 {
+					expected = uint16(randBig.Uint64())
+				} else if size == 8 {
+					expected = uint8(randBig.Uint64())
+				} else {
+					expected = randBig
+				}
+
+				encodedUfixed, err := ufixedType.Encode(expected)
 				require.NoError(t, err, "ufixed encode fail")
-				expected, err := castBigIntToNarrowestPrimitive(expectedBig, size)
 				require.NoError(t, err, "cast big integer to expected value should not return error")
 
 				actual, err := ufixedType.Decode(encodedUfixed)
@@ -854,22 +859,45 @@ func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
 		for j := 0; j < 200; j++ {
 			randVal, err := rand.Int(rand.Reader, max)
 			require.NoError(t, err, "generate random uint, should be no error")
-			optionalPrimitive, err := castBigIntToNarrowestPrimitive(randVal, bitSize)
-			require.NoError(t, err, "random uint type cast should not have error")
-			(*pool)[Uint][uintIndex] = testUnit{serializedType: uintTstr, value: optionalPrimitive}
+
+			var narrowest interface{}
+			if bitSize <= 64 && bitSize > 32 {
+				narrowest = randVal.Uint64()
+			} else if bitSize <= 32 && bitSize > 16 {
+				narrowest = uint32(randVal.Uint64())
+			} else if bitSize == 16 {
+				narrowest = uint16(randVal.Uint64())
+			} else if bitSize == 8 {
+				narrowest = uint8(randVal.Uint64())
+			} else {
+				narrowest = randVal
+			}
+
+			(*pool)[Uint][uintIndex] = testUnit{serializedType: uintTstr, value: narrowest}
 			uintIndex++
 		}
 
 		for precision := 1; precision <= 160; precision++ {
 			randVal, err := rand.Int(rand.Reader, max)
 			require.NoError(t, err, "generate random ufixed, should be no error")
-			optionalPrimitive, err := castBigIntToNarrowestPrimitive(randVal, bitSize)
-			require.NoError(t, err, "random uint type cast should not have error")
+
+			var narrowest interface{}
+			if bitSize <= 64 && bitSize > 32 {
+				narrowest = randVal.Uint64()
+			} else if bitSize <= 32 && bitSize > 16 {
+				narrowest = uint32(randVal.Uint64())
+			} else if bitSize == 16 {
+				narrowest = uint16(randVal.Uint64())
+			} else if bitSize == 8 {
+				narrowest = uint8(randVal.Uint64())
+			} else {
+				narrowest = randVal
+			}
 
 			ufixedT, err := MakeUfixedType(bitSize, precision)
 			require.NoError(t, err, "make ufixed type failure")
 			ufixedTstr := ufixedT.String()
-			(*pool)[Ufixed][ufixedIndex] = testUnit{serializedType: ufixedTstr, value: optionalPrimitive}
+			(*pool)[Ufixed][ufixedIndex] = testUnit{serializedType: ufixedTstr, value: narrowest}
 			ufixedIndex++
 		}
 	}
