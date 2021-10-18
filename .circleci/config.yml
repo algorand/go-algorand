@@ -188,7 +188,6 @@ commands:
           command: |
             sudo mkdir -p << parameters.build_dir >>
             sudo chown -R $USER:$GROUP << parameters.build_dir >>
-            sudo chmod 777 << parameters.build_dir >>
 
   prepare_windows:
     description: Prepare windows image
