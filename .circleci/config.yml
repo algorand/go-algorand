@@ -656,6 +656,7 @@ jobs:
       platform:
         type: string
     steps:
+      - prepare_go
       - upload_binaries_command:
           platform: << parameters.platform >>
       - slack/notify: &slack-fail-event
