@@ -135,36 +135,36 @@ func (t Type) Encode(value interface{}) ([]byte, error) {
 
 // encodeInt encodes int-alike golang values to bytes, following ABI encoding rules
 func encodeInt(intValue interface{}, bitSize uint16) ([]byte, error) {
-	var bigInt big.Int
+	var bigInt *big.Int
 
 	switch intValue := intValue.(type) {
 	case int8:
-		bigInt = *new(big.Int).SetInt64(int64(intValue))
+		bigInt = big.NewInt(int64(intValue))
 	case uint8:
-		bigInt = *new(big.Int).SetUint64(uint64(intValue))
+		bigInt = new(big.Int).SetUint64(uint64(intValue))
 	case int16:
-		bigInt = *new(big.Int).SetInt64(int64(intValue))
+		bigInt = big.NewInt(int64(intValue))
 	case uint16:
-		bigInt = *new(big.Int).SetUint64(uint64(intValue))
+		bigInt = new(big.Int).SetUint64(uint64(intValue))
 	case int32:
-		bigInt = *new(big.Int).SetInt64(int64(intValue))
+		bigInt = big.NewInt(int64(intValue))
 	case uint32:
-		bigInt = *new(big.Int).SetUint64(uint64(intValue))
+		bigInt = new(big.Int).SetUint64(uint64(intValue))
 	case int64:
-		bigInt = *new(big.Int).SetInt64(intValue)
+		bigInt = big.NewInt(intValue)
 	case uint64:
-		bigInt = *new(big.Int).SetUint64(intValue)
+		bigInt = new(big.Int).SetUint64(intValue)
 	case uint:
-		bigInt = *new(big.Int).SetUint64(uint64(intValue))
+		bigInt = new(big.Int).SetUint64(uint64(intValue))
 	case int:
-		bigInt = *new(big.Int).SetInt64(int64(intValue))
+		bigInt = big.NewInt(int64(intValue))
 	case *big.Int:
-		bigInt = *new(big.Int).Set(intValue)
+		bigInt = intValue
 	default:
 		return nil, fmt.Errorf("cannot infer go type for uint encode")
 	}
 
-	if bigInt.Cmp(big.NewInt(0)) < 0 {
+	if bigInt.Sign() < 0 {
 		return nil, fmt.Errorf("passed in numeric value should be non negative")
 	}
 
@@ -348,7 +348,7 @@ func (t Type) Decode(encoded []byte) (interface{}, error) {
 		} else if encoded[0] == 0x80 {
 			return true, nil
 		}
-		return nil, fmt.Errorf("sinble boolean encoded byte should be of form 0x80 or 0x00")
+		return nil, fmt.Errorf("single boolean encoded byte should be of form 0x80 or 0x00")
 	case Byte:
 		if len(encoded) != 1 {
 			return nil, fmt.Errorf("byte should be length 1")

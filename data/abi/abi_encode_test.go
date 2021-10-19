@@ -469,8 +469,6 @@ func TestDecodeValid(t *testing.T) {
 			uint64(5), uint64(6),
 			uint64(7), uint64(8),
 		}
-		//expected := []interface{}{1, 2, 3, 4, 5, 6, 7, 8}
-		//arrayEncoded, err := staticUintArrT.Encode(expected)
 		arrayEncoded, err := staticUintArrT.Encode(inputUint)
 		require.NoError(t, err, "uint64 static array encode should not return error")
 		actual, err := staticUintArrT.Decode(arrayEncoded)
