@@ -56,7 +56,7 @@ workflows:
           name: << matrix.platform >>_build
           matrix: &matrix-default
             parameters:
-              platform: ["amd64"] #, "arm64", "mac_amd64"]
+              platform: ["amd64", "arm64", "mac_amd64"]
 
       # - test:
       #     name: << matrix.platform >>_test
