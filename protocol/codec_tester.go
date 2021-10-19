@@ -382,6 +382,8 @@ func RunEncodingTest(t *testing.T, template msgpMarshalUnmarshal) {
 			continue
 		}
 
+		// some objects might appen to the original error additional info.
+		// we ensure that invalidObject error is not failing the test.
 		if strings.Contains(err.Error(), ErrorInvalidObject.Error()) {
 			continue
 		}
