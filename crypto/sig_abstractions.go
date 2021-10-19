@@ -32,11 +32,9 @@ type (
 	AlgorithmType uint64
 )
 
-var errInvalidAlgorithmType = errors.New("invalid algorithm type")
-
 func (z AlgorithmType) isvalid() error {
 	if z >= maxAlgorithmType {
-		return errInvalidAlgorithmType
+		return protocol.ErrorInvalidObject
 	}
 	return nil
 }
