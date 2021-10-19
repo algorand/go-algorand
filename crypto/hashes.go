@@ -22,6 +22,7 @@ import (
 	"hash"
 
 	"github.com/algonathan/sumhash"
+	"github.com/algorand/go-algorand/protocol"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -45,10 +46,19 @@ func init() {
 // HashType enum type for signing algorithms
 type HashType uint64
 
+func (z HashType) isvalid() error {
+	if z > maxHashType {
+		return protocol.ErrorInvalidObject
+	}
+	return nil
+}
+
 // types of hashes
 const (
 	Sha512_256 HashType = iota
 	Sumhash
+
+	maxHashType
 )
 
 //size of each hash
@@ -58,22 +68,27 @@ const (
 )
 
 // HashFactory is responsible for generating new hashes accordingly to the type it stores.
+//msgp:postunmarshalcheck HashFactory isvalid
 type HashFactory struct {
 	_struct  struct{} `codec:",omitempty,omitemptyarray"`
 	HashType HashType `codec:"t"`
 }
 
+func (z *HashFactory) isvalid() error {
+	return z.HashType.isvalid()
+}
+
 var errUnknownHash = errors.New("unknown hash type")
 
 // NewHash generates a new hash.Hash to use.
-func (h HashFactory) NewHash() (hash.Hash, error) {
-	switch h.HashType {
+func (z HashFactory) NewHash() hash.Hash {
+	switch z.HashType {
 	case Sha512_256:
-		return sha512.New512_256(), nil
+		return sha512.New512_256()
 	case Sumhash:
-		return sumhash.New(sumhashCompressor), nil
+		return sumhash.New(sumhashCompressor)
 	default:
-		return nil, errUnknownHash
+		panic(errUnknownHash)
 	}
 }
 
