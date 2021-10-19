@@ -40,7 +40,8 @@ const (
 	maxAlgorithmType
 )
 
-func (z AlgorithmType) isvalid() error {
+// IsValid verifies that the type of the algorithm is known
+func (z AlgorithmType) IsValid() error {
 	if z >= maxAlgorithmType {
 		return protocol.ErrorInvalidObject
 	}
@@ -76,7 +77,7 @@ type SignatureAlgorithm struct {
 
 // IsValid states whether the SignatureAlgorithm is valid, and is safe to use.
 func (z *SignatureAlgorithm) IsValid() error {
-	return z.Type.isvalid()
+	return z.Type.IsValid()
 }
 
 // VerifyingKey is an abstraction of a key store of verifying keys.
@@ -95,7 +96,7 @@ type VerifyingKey struct {
 
 // IsValid states whether the VerifyingKey is valid, and is safe to use.
 func (z *VerifyingKey) IsValid() error {
-	return z.Type.isvalid()
+	return z.Type.IsValid()
 }
 
 // ToBeHashed makes it easier to hash the VeryfyingKey struct.

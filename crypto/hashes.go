@@ -46,7 +46,8 @@ func init() {
 // HashType enum type for signing algorithms
 type HashType uint64
 
-func (z HashType) isvalid() error {
+// IsValid verifies that the hash type is in a valid range.
+func (z HashType) IsValid() error {
 	if z > maxHashType {
 		return protocol.ErrorInvalidObject
 	}
@@ -76,7 +77,7 @@ type HashFactory struct {
 
 // IsValid states whether the HashFactory is valid, and is safe to use.
 func (z *HashFactory) IsValid() error {
-	return z.HashType.isvalid()
+	return z.HashType.IsValid()
 }
 
 var errUnknownHash = errors.New("unknown hash type")
@@ -88,6 +89,8 @@ func (z HashFactory) NewHash() hash.Hash {
 		return sha512.New512_256()
 	case Sumhash:
 		return sumhash.New(sumhashCompressor)
+	// This shouldn't be reached, when creating a new hash, one would know the type of hash they wanted,
+	// in addition to that, unmarshalling of the hashFactory verifies the HashType of the factory.
 	default:
 		panic(errUnknownHash)
 	}
