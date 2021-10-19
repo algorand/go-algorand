@@ -378,7 +378,11 @@ func RunEncodingTest(t *testing.T, template msgpMarshalUnmarshal) {
 			t.Skip()
 			return
 		}
-		if err == ErrorInvalidObject {
+		if err == nil {
+			continue
+		}
+
+		if strings.Contains(err.Error(), ErrorInvalidObject.Error()) {
 			continue
 		}
 		require.NoError(t, err)

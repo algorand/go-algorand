@@ -84,11 +84,16 @@ func (z *SignatureAlgorithm) isvalid() error {
 //
 // NOTE: The VerifyingKey key might not be a valid key if a malicious client sent it over the network
 // make certain it is valid.
+//msgp:postunmarshalcheck VerifyingKey isvalid
 type VerifyingKey struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Type AlgorithmType      `codec:"type"`
 	Pack PackedVerifyingKey `codec:"pks"`
+}
+
+func (z *VerifyingKey) isvalid() error {
+	return z.Type.isvalid()
 }
 
 // ToBeHashed makes it easier to hash the VeryfyingKey struct.
@@ -102,7 +107,7 @@ func (z *SignatureAlgorithm) GetSigner() Signer {
 }
 
 // GetVerifier fetches the Verifier type that is stored inside this VerifyingKey.
-func (z *VerifyingKey) GetVerifier() (Verifier, error) {
+func (z *VerifyingKey) GetVerifier() Verifier {
 	return z.Pack.getVerifier(z.Type)
 }
 
@@ -116,14 +121,14 @@ type PackedVerifyingKey struct {
 
 var errUnknownVerifier = errors.New("could not find stored Verifier")
 
-func (p *PackedVerifyingKey) getVerifier(t AlgorithmType) (Verifier, error) {
+func (p *PackedVerifyingKey) getVerifier(t AlgorithmType) Verifier {
 	switch t {
 	case DilithiumType:
-		return &p.DilithiumPublicKey, nil
+		return &p.DilithiumPublicKey
 	case Ed25519Type:
-		return &p.Ed25519PublicKey, nil
+		return &p.Ed25519PublicKey
 	default:
-		return nil, errUnknownVerifier
+		panic(errUnknownVerifier)
 	}
 }
 

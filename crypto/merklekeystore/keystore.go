@@ -250,9 +250,5 @@ func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashabl
 		return isInTree
 	}
 
-	ver, err := sig.VerifyingKey.GetVerifier()
-	if err != nil {
-		return err
-	}
-	return ver.Verify(obj, sig.ByteSignature)
+	return sig.VerifyingKey.GetVerifier().Verify(obj, sig.ByteSignature)
 }
