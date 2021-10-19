@@ -208,6 +208,8 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 		}
 	}
 
+	// TODO: This needs to update the partkeys also, see the 'DeleteOldKeys' function above, it's part
+	//       is part of PersistedParticipation, but just calls 'part.Voting.DeleteBeforeFineGrained'
 	// Delete expired records from participation registry.
 	if err := manager.registry.DeleteExpired(latestHdr.Round); err != nil {
 		manager.log.Warnf("error while deleting expired records from participation registry: %w", err)
