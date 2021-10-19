@@ -444,9 +444,20 @@ commands:
         - run:
             name: Upload binaries << parameters.platform >>
             command: |
+              set -e
+              set -x
+              export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
               export GOPATH="<< parameters.build_dir >>/go"
+              export PATH="${PATH}:${GOPATH}/bin"
+              export ALGORAND_DEADLOCK=enable
+              GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+              export GIMME_INSTALL_DIR=<< parameters.build_dir >>
+              export GIMME_ENV_PREFIX=<< parameters.build_dir >>/.gimme/envs
+              export GIMME_VERSION_PREFIX=<< parameters.build_dir >>/.gimme/versions
               export RELEASE_GENESIS_PROCESS=true
               export NO_BUILD=true
+              eval "$(<< parameters.build_dir >>/gimme "${GOLANG_VERSION}")"
+              scripts/configure_dev.sh
               export SkipCleanCheck=1
               scripts/deploy_version.sh "${CIRCLE_BRANCH}" "$(./scripts/osarchtype.sh)"
         - when:
@@ -651,7 +662,7 @@ jobs:
 
   upload_binaries:
     docker:
-      - image: golang:1.14.7
+      - image: python:3.9.6
     working_directory: << pipeline.parameters.build_dir >>/project
     parameters:
       platform:
