@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"strings"
 
 	"github.com/algorand/go-algorand/data/basics"
 )
@@ -486,15 +487,13 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 	switch t.abiTypeID {
 	case Uint:
 		num := new(big.Int)
-		err := num.UnmarshalJSON(jsonEncoded)
-		if err != nil {
+		if err := num.UnmarshalJSON(jsonEncoded); err != nil {
 			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to uint: %v", string(jsonEncoded), err)
 		}
 		return num, nil
 	case Ufixed:
 		numTemp := new(big.Float)
-		err := numTemp.UnmarshalText(jsonEncoded)
-		if err != nil {
+		if err := numTemp.UnmarshalText(jsonEncoded); err != nil {
 			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to ufixed: %v", string(jsonEncoded), err)
 		}
 		numRat, accuracy := numTemp.Rat(nil)
@@ -510,15 +509,13 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 		return numeratorRat.Num(), nil
 	case Bool:
 		var elem bool
-		err := json.Unmarshal(jsonEncoded, &elem)
-		if err != nil {
+		if err := json.Unmarshal(jsonEncoded, &elem); err != nil {
 			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to bool: %v", string(jsonEncoded), err)
 		}
 		return elem, nil
 	case Byte:
 		var elem byte
-		err := json.Unmarshal(jsonEncoded, &elem)
-		if err != nil {
+		if err := json.Unmarshal(jsonEncoded, &elem); err != nil {
 			return nil, fmt.Errorf("cannot cast JSON encoded to byte: %v", err)
 		}
 		return elem, nil
@@ -530,7 +527,7 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 		return addr, nil
 	case ArrayStatic, ArrayDynamic:
 		stringEncoded := string(jsonEncoded)
-		if t.childTypes[0].abiTypeID == Byte && stringEncoded[0] == '"' {
+		if t.childTypes[0].abiTypeID == Byte && strings.HasPrefix(stringEncoded, "\"") {
 			// decode base64 and return array of byte
 			var stringB64 string
 			err := json.Unmarshal(jsonEncoded, &stringB64)
@@ -544,8 +541,7 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 			return out, nil
 		}
 		var elems []json.RawMessage
-		err := json.Unmarshal(jsonEncoded, &elems)
-		if err != nil {
+		if err := json.Unmarshal(jsonEncoded, &elems); err != nil {
 			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to array: %v", stringEncoded, err)
 		}
 		if t.abiTypeID == ArrayStatic && len(elems) != int(t.staticLength) {
@@ -564,15 +560,13 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 		stringEncoded := string(jsonEncoded)
 		if stringEncoded[0] == '"' {
 			var stringVar string
-			err := json.Unmarshal(jsonEncoded, &stringVar)
-			if err != nil {
+			if err := json.Unmarshal(jsonEncoded, &stringVar); err != nil {
 				return nil, fmt.Errorf("cannot cast JSON encoded (%s) to string: %v", stringEncoded, err)
 			}
 			return stringVar, nil
 		} else if stringEncoded[0] == '[' {
 			var elems []json.RawMessage
-			err := json.Unmarshal(jsonEncoded, &elems)
-			if err != nil {
+			if err := json.Unmarshal(jsonEncoded, &elems); err != nil {
 				return nil, fmt.Errorf("cannot cast JSON encoded (%s) to string: %v", stringEncoded, err)
 			}
 			elemsBytes := make([]byte, len(elems))
@@ -589,8 +583,7 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 		}
 	case Tuple:
 		var elems []json.RawMessage
-		err := json.Unmarshal(jsonEncoded, &elems)
-		if err != nil {
+		if err := json.Unmarshal(jsonEncoded, &elems); err != nil {
 			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to array for tuple: %v", string(jsonEncoded), err)
 		}
 		if len(elems) != int(t.staticLength) {
