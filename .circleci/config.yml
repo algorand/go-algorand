@@ -437,7 +437,8 @@ commands:
         type: string
         default: << pipeline.parameters.build_dir >>
     steps:
-        - run: mkdir -p << parameters.build_dir >>
+        - run: |
+            mkdir -p << parameters.build_dir >>
         - attach_workspace:
             at: << parameters.build_dir >>
         - run:
@@ -650,13 +651,12 @@ jobs:
 
   upload_binaries:
     docker:
-      - image: ubuntu:20.04
+      - image: golang:1.14.7
     working_directory: << pipeline.parameters.build_dir >>/project
     parameters:
       platform:
         type: string
     steps:
-      - prepare_go
       - upload_binaries_command:
           platform: << parameters.platform >>
       - slack/notify: &slack-fail-event
