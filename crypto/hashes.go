@@ -68,13 +68,14 @@ const (
 )
 
 // HashFactory is responsible for generating new hashes accordingly to the type it stores.
-//msgp:postunmarshalcheck HashFactory isvalid
+//msgp:postunmarshalcheck HashFactory IsValid
 type HashFactory struct {
 	_struct  struct{} `codec:",omitempty,omitemptyarray"`
 	HashType HashType `codec:"t"`
 }
 
-func (z *HashFactory) isvalid() error {
+// IsValid states whether the HashFactory is valid, and is safe to use.
+func (z *HashFactory) IsValid() error {
 	return z.HashType.isvalid()
 }
 

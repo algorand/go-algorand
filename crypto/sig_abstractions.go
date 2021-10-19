@@ -66,7 +66,7 @@ type Verifier interface {
 
 // SignatureAlgorithm holds a Signer, and the type of algorithm the Signer conforms with.
 // to add a key - verify that PackedSignatureAlgorithm's function (getSigner) returns your key.
-//msgp:postunmarshalcheck SignatureAlgorithm isvalid
+//msgp:postunmarshalcheck SignatureAlgorithm IsValid
 type SignatureAlgorithm struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -74,7 +74,8 @@ type SignatureAlgorithm struct {
 	Pack PackedSignatureAlgorithm `codec:"keys"`
 }
 
-func (z *SignatureAlgorithm) isvalid() error {
+// IsValid states whether the SignatureAlgorithm is valid, and is safe to use.
+func (z *SignatureAlgorithm) IsValid() error {
 	return z.Type.isvalid()
 }
 
@@ -84,7 +85,7 @@ func (z *SignatureAlgorithm) isvalid() error {
 //
 // NOTE: The VerifyingKey key might not be a valid key if a malicious client sent it over the network
 // make certain it is valid.
-//msgp:postunmarshalcheck VerifyingKey isvalid
+//msgp:postunmarshalcheck VerifyingKey IsValid
 type VerifyingKey struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -92,7 +93,8 @@ type VerifyingKey struct {
 	Pack PackedVerifyingKey `codec:"pks"`
 }
 
-func (z *VerifyingKey) isvalid() error {
+// IsValid states whether the VerifyingKey is valid, and is safe to use.
+func (z *VerifyingKey) IsValid() error {
 	return z.Type.isvalid()
 }
 
