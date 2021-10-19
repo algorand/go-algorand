@@ -17,10 +17,11 @@
 package txnsync
 
 import (
+	"time"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/util/timers"
-	"time"
 )
 
 //msgp:ignore eventType

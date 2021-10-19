@@ -113,7 +113,7 @@ func (tsnc *transactionSyncNodeConnector) GetPeers() (peersInfo []txnsync.PeerIn
 			continue
 		}
 		// check version.
-		if unicastPeer.Version() == "2.1" {
+		if unicastPeer.Version() == "3.0" {
 			continue
 		}
 		peersInfo[k].IsOutgoing = unicastPeer.IsOutgoing()
@@ -208,7 +208,7 @@ func (tsnc *transactionSyncNodeConnector) Handle(raw network.IncomingMessage) ne
 	unicastPeer := raw.Sender.(network.UnicastPeer)
 	if unicastPeer != nil {
 		// check version.
-		if unicastPeer.Version() == "2.1" {
+		if unicastPeer.Version() == "3.0" {
 			return network.OutgoingMessage{
 				Action: network.Ignore,
 			}

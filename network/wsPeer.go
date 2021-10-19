@@ -348,7 +348,7 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseT
 }
 
 // setup values not trivially assigned
-func (wp *wsPeer) init(config config.Local, sendBufferLength int, initialConnectionLatency time.Duration) {
+func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	wp.net.log.Debugf("wsPeer init outgoing=%v %#v", wp.outgoing, wp.rootURL)
 	wp.closing = make(chan struct{})
 	wp.sendBufferHighPrio = make(chan sendMessages, sendBufferLength)
@@ -374,22 +374,13 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int, initialConnect
 
 	// if we're on an older version, then add the old style transaction message to the send messages tag.
 	// once we deprecate old style transaction sending, this part can go away.
-	if wp.version == "2.1" {
+	if wp.version != "3.0" {
 		txSendMsgTags := make(map[protocol.Tag]bool)
 		for tag := range wp.sendMessageTag {
 			txSendMsgTags[tag] = true
 		}
 		txSendMsgTags[protocol.TxnTag] = true
 		wp.sendMessageTag = txSendMsgTags
-	}
-	if wp.version == "3.1" {
-		wp.latencyTracker.init(wp.conn, config, initialConnectionLatency)
-		// send a ping right away.
-		now := time.Now()
-		if err := wp.latencyTracker.checkPingSending(&now); err != nil {
-			wp.net.log.Infof("failed to send ping message to peer : %v", err)
-		}
-
 	}
 
 	wp.latencyTracker.init(wp.conn, config, time.Duration(0))
