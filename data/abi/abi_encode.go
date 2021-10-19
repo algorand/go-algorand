@@ -492,17 +492,17 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 		}
 		return num, nil
 	case Ufixed:
-		numTemp := new(big.Float)
-		if err := numTemp.UnmarshalText(jsonEncoded); err != nil {
+		floatTemp := new(big.Float)
+		if err := floatTemp.UnmarshalText(jsonEncoded); err != nil {
 			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to ufixed: %v", string(jsonEncoded), err)
 		}
-		numRat, accuracy := numTemp.Rat(nil)
-		if numRat == nil || accuracy != big.Exact {
+		ratTemp, accuracy := floatTemp.Rat(nil)
+		if ratTemp == nil || accuracy != big.Exact {
 			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to big Rat", string(jsonEncoded))
 		}
-		denom := new(big.Int).Lsh(big.NewInt(1), uint(t.precision))
+		denom := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(t.precision)), nil)
 		denomRat := new(big.Rat).SetInt(denom)
-		numeratorRat := new(big.Rat).Mul(denomRat, numRat)
+		numeratorRat := new(big.Rat).Mul(denomRat, ratTemp)
 		if !numeratorRat.IsInt() {
 			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to ufixed: precision out of range", string(jsonEncoded))
 		}
@@ -558,13 +558,13 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 		return values, nil
 	case String:
 		stringEncoded := string(jsonEncoded)
-		if stringEncoded[0] == '"' {
+		if strings.HasPrefix(stringEncoded, "\"") {
 			var stringVar string
 			if err := json.Unmarshal(jsonEncoded, &stringVar); err != nil {
 				return nil, fmt.Errorf("cannot cast JSON encoded (%s) to string: %v", stringEncoded, err)
 			}
 			return stringVar, nil
-		} else if stringEncoded[0] == '[' {
+		} else if strings.HasPrefix(stringEncoded, "[") {
 			var elems []json.RawMessage
 			if err := json.Unmarshal(jsonEncoded, &elems); err != nil {
 				return nil, fmt.Errorf("cannot cast JSON encoded (%s) to string: %v", stringEncoded, err)
