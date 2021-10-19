@@ -102,7 +102,7 @@ type ledgerTracker interface {
 	// by all the prepareCommit calls. The commitRound is being executed within a single transactional
 	// context, and so, if any of the tracker's commitRound calls fails, the transaction is rolled back.
 	commitRound(context.Context, *sql.Tx, *deferredCommitContext) error
-	// postCommit is called only on a successfull commitRound. In that case, each of the trackers have
+	// postCommit is called only on a successful commitRound. In that case, each of the trackers have
 	// the chance to update it's internal data structures, knowing that the given deferredCommitContext
 	// has completed. An optional context is provided for long-running operations.
 	postCommit(context.Context, *deferredCommitContext)
