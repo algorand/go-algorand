@@ -32,13 +32,6 @@ type (
 	AlgorithmType uint64
 )
 
-func (z AlgorithmType) isvalid() error {
-	if z >= maxAlgorithmType {
-		return protocol.ErrorInvalidObject
-	}
-	return nil
-}
-
 // all AlgorithmType enums
 const (
 	DilithiumType AlgorithmType = iota
@@ -46,6 +39,13 @@ const (
 
 	maxAlgorithmType
 )
+
+func (z AlgorithmType) isvalid() error {
+	if z >= maxAlgorithmType {
+		return protocol.ErrorInvalidObject
+	}
+	return nil
+}
 
 // Signer interface represents the possible operations that can be done with a signing key.
 type Signer interface {
