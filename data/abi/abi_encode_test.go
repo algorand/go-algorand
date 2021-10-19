@@ -331,8 +331,6 @@ func TestDecodeValid(t *testing.T) {
 
 			encodedUint, err := uintType.Encode(expected)
 			require.NoError(t, err, "uint encode fail")
-			//expected, err := castBigIntToNarrowestPrimitive(expected, intSize)
-			require.NoError(t, err, "cast big integer to expected value should not return error")
 
 			actual, err := uintType.Decode(encodedUint)
 			require.NoError(t, err, "decoding uint should not return error")

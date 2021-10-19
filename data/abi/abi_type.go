@@ -113,7 +113,8 @@ func (t Type) String() string {
 var staticArrayRegexp = regexp.MustCompile(`^([a-z\d\[\](),]+)\[([1-9][\d]*)]$`)
 var ufixedRegexp = regexp.MustCompile(`^ufixed([1-9][\d]*)x([1-9][\d]*)$`)
 
-// TypeOf de-serialize ABI type from a string following ABI encoding.
+// TypeOf parses an ABI type string.
+// For example: `TypeOf("(uint64,byte[])")`
 func TypeOf(str string) (Type, error) {
 	switch {
 	case strings.HasSuffix(str, "[]"):
