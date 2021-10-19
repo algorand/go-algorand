@@ -535,13 +535,13 @@ func TestParticipation_NoKeyToUpdate(t *testing.T) {
 	})
 }
 
+// TestParticipion_Blobs adds some secrets to the registry and makes sure the same ones are returned.
 func TestParticipion_Blobs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := assert.New(t)
 	registry := getRegistry(t)
 	defer registry.Close()
 
-	//filename := filepath.Join(genesisDir, wname)
 	access, err := db.MakeAccessor("writetest_root", false, true)
 	if err != nil {
 		panic(err)
@@ -550,7 +550,6 @@ func TestParticipion_Blobs(t *testing.T) {
 	access.Close()
 	a.NoError(err)
 
-	//filename = filepath.Join(genesisDir, pname)
 	access, err = db.MakeAccessor("writetest", false, true)
 	if err != nil {
 		panic(err)
@@ -559,18 +558,25 @@ func TestParticipion_Blobs(t *testing.T) {
 	access.Close()
 	a.NoError(err)
 
+	check := func(id ParticipationID) {
+		record := registry.Get(id)
+		a.NotEqual(ParticipationRecord{}, record)
+		a.Equal(id, record.ParticipationID)
+		a.Equal(part.VRF, record.VRF)
+		a.Equal(part.Voting.Snapshot(), record.Voting.Snapshot())
+	}
+
 	id, err := registry.Insert(part.Participation)
 	a.NoError(err)
 	a.NoError(registry.Flush())
 	a.Equal(id, part.ID())
+	// check the initial caching
+	check(id)
 
+	// check the re-initialized object
 	registry.initializeCache()
+	check(id)
 
-	record := registry.Get(id)
-	a.NotEqual(ParticipationRecord{}, record)
-	a.Equal(id, record.ParticipationID)
-	a.Equal(part.VRF, record.VRF)
-	a.Equal(part.Voting.Snapshot(), record.Voting.Snapshot())
 }
 
 func benchmarkKeyRegistration(numKeys int, b *testing.B) {

@@ -561,8 +561,19 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		insert:   record,
 	}
 
+	// Make some copies.
+	var vrf crypto.VRFSecrets
+	if record.VRF != nil {
+		copy(vrf.SK[:], record.VRF.SK[:])
+		copy(vrf.PK[:], record.VRF.PK[:])
+	}
+
+	var voting crypto.OneTimeSignatureSecrets
+	if record.Voting != nil {
+		voting = record.Voting.Snapshot()
+	}
+
 	// update cache.
-	// TODO: simplify to re-initializing with initializeCache()?
 	db.cache[id] = ParticipationRecord{
 		ParticipationID:        id,
 		Account:                record.Address(),
@@ -574,6 +585,8 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		LastCompactCertificate: 0,
 		EffectiveFirst:         0,
 		EffectiveLast:          0,
+		Voting:                 &voting,
+		VRF:                    &vrf,
 	}
 
 	return
@@ -786,7 +799,7 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 		db.mutex.Unlock()
 	}
 
-	db.log.Infof("Successfully Registered: %s\n", id)
+	db.log.Infof("Registered key: %s\n", id)
 	return nil
 }
 

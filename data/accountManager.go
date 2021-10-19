@@ -67,8 +67,8 @@ func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participati
 	}
 	return out
 
-	// The below code returns the correct objects, but the voting keys are wrong:
-	// not participating on round 1: on chain voting key differ from participation voting key for round 0
+	// TODO: source keys from the registry.
+	// This kinda works, but voting keys are not updated.
 	/*
 		for _, record := range manager.registry.GetAll() {
 			part := account.Participation{
