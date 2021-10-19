@@ -32,11 +32,18 @@ type (
 	AlgorithmType uint64
 )
 
+var errInvalidAlgorithmType = errors.New("invalid algorithm type")
+
+func (z AlgorithmType) isvalid() error {
+	if z >= maxAlgorithmType {
+		return errInvalidAlgorithmType
+	}
+	return nil
+}
+
 // all AlgorithmType enums
 const (
-	minAlgorithmType AlgorithmType = iota
-
-	DilithiumType
+	DilithiumType AlgorithmType = iota
 	Ed25519Type
 
 	maxAlgorithmType
@@ -61,11 +68,16 @@ type Verifier interface {
 
 // SignatureAlgorithm holds a Signer, and the type of algorithm the Signer conforms with.
 // to add a key - verify that PackedSignatureAlgorithm's function (getSigner) returns your key.
+//msgp:postunmarshalcheck SignatureAlgorithm isvalid
 type SignatureAlgorithm struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Type AlgorithmType            `codec:"sigType"`
 	Pack PackedSignatureAlgorithm `codec:"keys"`
+}
+
+func (z *SignatureAlgorithm) isvalid() error {
+	return z.Type.isvalid()
 }
 
 // VerifyingKey is an abstraction of a key store of verifying keys.
@@ -87,7 +99,7 @@ func (z *VerifyingKey) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 // GetSigner fetches the Signer type that is stored inside this SignatureAlgorithm.
-func (z *SignatureAlgorithm) GetSigner() (Signer, error) {
+func (z *SignatureAlgorithm) GetSigner() Signer {
 	return z.Pack.getSigner(z.Type)
 }
 
@@ -125,16 +137,14 @@ type PackedSignatureAlgorithm struct {
 	Ed25519Singer   Ed25519Key      `codec:"edds"`
 }
 
-var errUnknownSigner = errors.New("could not find stored signer")
-
-func (p *PackedSignatureAlgorithm) getSigner(t AlgorithmType) (Signer, error) {
+func (p *PackedSignatureAlgorithm) getSigner(t AlgorithmType) Signer {
 	switch t {
 	case DilithiumType:
-		return &p.DilithiumSigner, nil
+		return &p.DilithiumSigner
 	case Ed25519Type:
-		return &p.Ed25519Singer, nil
+		return &p.Ed25519Singer
 	default:
-		return nil, errUnknownSigner
+		panic("unknown signer")
 	}
 }
 

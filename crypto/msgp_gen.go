@@ -3887,6 +3887,9 @@ func (z *SignatureAlgorithm) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 	}
 	o = bts
+	if err = z.isvalid(); err != nil {
+		return
+	}
 	return
 }
 

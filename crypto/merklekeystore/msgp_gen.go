@@ -363,18 +363,18 @@ func (z *Signer) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0002Len := uint32(3)
-	var zb0002Mask uint8 /* 7 bits */
+	var zb0002Mask uint8 /* 6 bits */
 	if (*z).Interval == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x2
 	}
 	if (*z).FirstValid == 0 {
 		zb0002Len--
-		zb0002Mask |= 0x10
+		zb0002Mask |= 0x8
 	}
 	if (*z).Tree.MsgIsZero() {
 		zb0002Len--
-		zb0002Mask |= 0x40
+		zb0002Mask |= 0x20
 	}
 	// variable map header, size zb0002Len
 	o = append(o, 0x80|uint8(zb0002Len))
@@ -384,12 +384,12 @@ func (z *Signer) MarshalMsg(b []byte) (o []byte) {
 			o = append(o, 0xa2, 0x69, 0x76)
 			o = msgp.AppendUint64(o, (*z).Interval)
 		}
-		if (zb0002Mask & 0x10) == 0 { // if not empty
+		if (zb0002Mask & 0x8) == 0 { // if not empty
 			// string "rnd"
 			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
 			o = msgp.AppendUint64(o, (*z).FirstValid)
 		}
-		if (zb0002Mask & 0x40) == 0 { // if not empty
+		if (zb0002Mask & 0x20) == 0 { // if not empty
 			// string "tree"
 			o = append(o, 0xa4, 0x74, 0x72, 0x65, 0x65)
 			o = (*z).Tree.MarshalMsg(o)
