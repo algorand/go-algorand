@@ -437,6 +437,7 @@ commands:
         type: string
         default: << pipeline.parameters.build_dir >>
     steps:
+        - run: mkdir -p << parameters.build_dir >>
         - attach_workspace:
             at: << parameters.build_dir >>
         - run:
@@ -660,9 +661,6 @@ jobs:
       platform:
         type: string
     steps:
-      - prepare_build_dir
-      # - checkout
-      - prepare_go
       - upload_binaries_command:
           platform: << parameters.platform >>
       - slack/notify: &slack-fail-event
