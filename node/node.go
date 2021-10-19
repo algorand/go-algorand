@@ -876,16 +876,16 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary *[]byte) (ac
 	}
 
 	inputdb, err := db.MakeErasableAccessor(fullyQualifiedTempFile)
-	defer inputdb.Close()
 	if err != nil {
 		return account.ParticipationID{}, err
 	}
+	defer inputdb.Close()
 
 	partkey, err := account.RestoreParticipation(inputdb)
-	defer partkey.Close()
 	if err != nil {
 		return account.ParticipationID{}, err
 	}
+	defer partkey.Close()
 
 	if partkey.Parent == (basics.Address{}) {
 		return account.ParticipationID{}, fmt.Errorf("cannot install partkey with missing (zero) parent address")
