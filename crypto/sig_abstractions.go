@@ -140,6 +140,8 @@ type PackedSignatureAlgorithm struct {
 	Ed25519Singer   Ed25519Key      `codec:"edds"`
 }
 
+var errUnknownSigner = errors.New("could not find stored signer")
+
 func (p *PackedSignatureAlgorithm) getSigner(t AlgorithmType) Signer {
 	switch t {
 	case DilithiumType:
@@ -147,7 +149,7 @@ func (p *PackedSignatureAlgorithm) getSigner(t AlgorithmType) Signer {
 	case Ed25519Type:
 		return &p.Ed25519Singer
 	default:
-		panic("unknown signer")
+		panic(errUnknownSigner)
 	}
 }
 
