@@ -92,15 +92,15 @@ workflows:
       #     filters:
       #       <<: *filters-default
 
-      - integration_nightly:
-          name: << matrix.platform >>_integration_nightly
-          matrix:
-            <<: *matrix-default
-          requires:
-            - << matrix.platform >>_build
-          # filters:
-          #   <<: *filters-nightly
-          context: slack-secrets
+      # - integration_nightly:
+      #     name: << matrix.platform >>_integration_nightly
+      #     matrix:
+      #       <<: *matrix-default
+      #     requires:
+      #       - << matrix.platform >>_build
+      #     filters:
+      #       <<: *filters-nightly
+      #     context: slack-secrets
 
       # - e2e_expect:
       #     name: << matrix.platform >>_e2e_expect
@@ -140,14 +140,14 @@ workflows:
       #       <<: *filters-nightly
       #     context: slack-secrets
 
-      - tests_verification_job:
-          name: << matrix.platform >>_<< matrix.job_type >>_verification
-          matrix:
-            parameters:
-              platform: ["amd64"] #, "arm64", "mac_amd64"]
-              job_type: ["integration_nightly"] #["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
-          requires:
-            - << matrix.platform >>_<< matrix.job_type >>
+      # - tests_verification_job:
+      #     name: << matrix.platform >>_<< matrix.job_type >>_verification
+      #     matrix:
+      #       parameters:
+      #         platform: ["amd64"] #, "arm64", "mac_amd64"]
+      #         job_type: ["integration_nightly"] #["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
+      #     requires:
+      #       - << matrix.platform >>_<< matrix.job_type >>
 
       - upload_binaries:
           name: << matrix.platform >>_upload_binaries
@@ -155,7 +155,7 @@ workflows:
             <<: *matrix-default
           requires:
             # - << matrix.platform >>_test_nightly_verification
-            - << matrix.platform >>_integration_nightly_verification
+            # - << matrix.platform >>_integration_nightly_verification
             # - << matrix.platform >>_e2e_expect_nightly_verification
             # - << matrix.platform >>_e2e_subs_nightly
             # - codegen_verification
@@ -164,6 +164,7 @@ workflows:
             # - << matrix.platform >>_integration_verification
             # - << matrix.platform >>_e2e_expect_verification
             # - << matrix.platform >>_e2e_subs
+            - << matrix.platform >>_build
           # filters:
             # branches:
               # only:
