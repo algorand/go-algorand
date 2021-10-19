@@ -81,7 +81,7 @@ const (
 
 	// defaultSignificantMessageThreshold is the minimal transmitted message size which would be used for recalculating the
 	// data exchange rate.
-	defaultSignificantMessageThreshold = 5000
+	defaultSignificantMessageThreshold = 10000
 )
 
 // incomingBloomFilter stores an incoming bloom filter, along with the associated round number.

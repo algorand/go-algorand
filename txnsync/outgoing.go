@@ -19,6 +19,7 @@ package txnsync
 import (
 	"context"
 	"errors"
+	"github.com/algorand/go-algorand/logging"
 	"sort"
 	"time"
 
@@ -94,6 +95,8 @@ func (encoder *messageAsyncEncoder) asyncEncodeAndSend(interface{}) interface{} 
 		encoder.messageData.transactionGroups = nil // clear out to allow GC to reclaim
 	}
 
+	timeBeforeEncoding := encoder.roundClock.Since()
+
 	if encoder.messageData.message.MsgSync.ResponseElapsedTime != 0 {
 		encoder.messageData.message.MsgSync.ResponseElapsedTime = uint64(encoder.roundClock.Since()) - encoder.messageData.message.MsgSync.ResponseElapsedTime
 	}
@@ -106,6 +109,10 @@ func (encoder *messageAsyncEncoder) asyncEncodeAndSend(interface{}) interface{} 
 	// the time we spend on the network package might include the network processing time, which
 	// we want to make sure we avoid.
 	encoder.messageData.sentTimestamp = encoder.roundClock.Since()
+
+	if encoder.roundClock.Since() - timeBeforeEncoding > time.Millisecond {
+		logging.Base().Infof("lost %v on encoding", encoder.roundClock.Since() - timeBeforeEncoding)
+	}
 
 	encoder.state.node.SendPeerMessage(encoder.messageData.peer.networkPeer, encodedMessage, encoder.asyncMessageSent)
 	releaseMessageBuffer(encodedMessage)

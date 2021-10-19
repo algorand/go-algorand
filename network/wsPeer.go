@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/algorand/go-algorand/logging"
 	"io"
 	"net"
 	"net/http"
@@ -670,6 +671,10 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 	// is it time to send a ping message ?
 	if err := wp.latencyTracker.checkPingSending(&now); err != nil {
 		wp.net.log.Infof("failed to send ping message to peer : %v", err)
+	}
+
+	if msg.msgTags[protocol.Txn2Tag] && msgWaitDuration > time.Millisecond {
+		logging.Base().Infof("spent %v waiting in network queue", msgWaitDuration)
 	}
 
 	atomic.StoreInt64(&wp.intermittentOutgoingMessageEnqueueTime, msg.enqueued.UnixNano())
