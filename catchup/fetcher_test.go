@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/require"
@@ -289,6 +290,11 @@ func (p *testUnicastPeer) Version() string {
 
 func (p *testUnicastPeer) IsOutgoing() bool {
 	return false
+}
+
+// GetConnectionLatency returns the connection latency between the local node and this peer.
+func (p *testUnicastPeer) GetConnectionLatency() time.Duration {
+	return time.Duration(0)
 }
 
 func (p *testUnicastPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag, callback network.UnicastWebsocketMessageStateCallback) error {
