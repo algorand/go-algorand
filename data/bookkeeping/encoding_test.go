@@ -131,16 +131,17 @@ func checkReferencedTypes(seen map[reflect.Type]bool, path typePath, typeStack [
 		return
 	}
 
-	ok := check(path, typeStack)
-	if ok {
-		// if the type is ok, add it to the seen set
-		seen[currentType] = true
-	} else {
-		// if the type is not ok, don't add it to the seen set so we can report more errors if we
-		// see the type again, but we should bail out to avoid checking its children and potentially
-		// getting stuck in an infinite loop
+	if !check(path, typeStack) {
+		// if currentType is not ok, don't visit its children
 		return
 	}
+
+	// add currentType to seen set, to avoid infinite recursion if currentType references itself
+	seen[currentType] = true
+
+	// after currentType's children are visited, "forget" the type, so we can examine it again if needed
+	// if this didn't happen, only 1 error per invalid type would get reported
+	defer delete(seen, currentType)
 
 	switch currentType.Kind() {
 	case reflect.Map:
@@ -178,6 +179,10 @@ func TestBlockFields(t *testing.T) {
 		typePath{}.addField("Payset").addValue().addField("SignedTxnWithAD").addField("SignedTxn").addField("Txn").addField("AssetConfigTxnFields").addField("AssetParams").addField("UnitName"),
 		typePath{}.addField("Payset").addValue().addField("SignedTxnWithAD").addField("SignedTxn").addField("Txn").addField("AssetConfigTxnFields").addField("AssetParams").addField("AssetName"),
 		typePath{}.addField("Payset").addValue().addField("SignedTxnWithAD").addField("SignedTxn").addField("Txn").addField("AssetConfigTxnFields").addField("AssetParams").addField("URL"),
+		typePath{}.addField("Payset").addValue().addField("SignedTxnWithAD").addField("ApplyData").addField("EvalDelta").addField("GlobalDelta").addMapKey(),
+		typePath{}.addField("Payset").addValue().addField("SignedTxnWithAD").addField("ApplyData").addField("EvalDelta").addField("GlobalDelta").addValue().addField("Bytes"),
+		typePath{}.addField("Payset").addValue().addField("SignedTxnWithAD").addField("ApplyData").addField("EvalDelta").addField("LocalDeltas").addValue().addMapKey(),
+		typePath{}.addField("Payset").addValue().addField("SignedTxnWithAD").addField("ApplyData").addField("EvalDelta").addField("LocalDeltas").addValue().addValue().addField("Bytes"),
 		typePath{}.addField("Payset").addValue().addField("SignedTxnWithAD").addField("ApplyData").addField("EvalDelta").addField("Logs").addValue(),
 	}
 
