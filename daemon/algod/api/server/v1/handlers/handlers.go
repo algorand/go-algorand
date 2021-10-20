@@ -789,17 +789,22 @@ func AccountInformation(ctx lib.ReqContext, context echo.Context) {
 	}
 
 	ledger := ctx.Node.Ledger()
-	lastRound := ledger.Latest()
-	record, err := ledger.Lookup(lastRound, basics.Address(addr))
+	recordWithoutPendingRewards, lastRound, err := ledger.LookupLatestWithoutRewards(basics.Address(addr))
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
 	}
-	recordWithoutPendingRewards, _, err := ledger.LookupLatestWithoutRewards(basics.Address(addr))
+	latestBlockHdr, err := ledger.BlockHdr(lastRound)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
 	}
+	cparams, err := ledger.ConsensusParams(lastRound)
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
+		return
+	}
+	record := recordWithoutPendingRewards.WithUpdatedRewards(cparams, latestBlockHdr.RewardsLevel)
 
 	amount := record.MicroAlgos
 	amountWithoutPendingRewards := recordWithoutPendingRewards.MicroAlgos

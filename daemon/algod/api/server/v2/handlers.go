@@ -97,11 +97,19 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 	}
 
 	myLedger := v2.Node.Ledger()
-	lastRound := myLedger.Latest()
-	record, err := myLedger.Lookup(lastRound, addr)
+	recordWithoutPendingRewards, lastRound, err := myLedger.LookupLatestWithoutRewards(addr)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
+	latestBlockHdr, err := myLedger.BlockHdr(lastRound)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+	cparams, err := myLedger.ConsensusParams(lastRound)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+	record := recordWithoutPendingRewards.WithUpdatedRewards(cparams, latestBlockHdr.RewardsLevel)
 
 	if handle == protocol.CodecHandle {
 		data, err := encode(handle, record)
@@ -111,10 +119,6 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		return ctx.Blob(http.StatusOK, contentType, data)
 	}
 
-	recordWithoutPendingRewards, _, err := myLedger.LookupLatestWithoutRewards(addr)
-	if err != nil {
-		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
-	}
 	amountWithoutPendingRewards := recordWithoutPendingRewards.MicroAlgos
 
 	assetsCreators := make(map[basics.AssetIndex]string, len(record.Assets))
