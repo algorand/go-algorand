@@ -161,6 +161,12 @@ const (
 	// CreatedApplicationID Transaction.ApplyData.EvalDelta.ApplicationID
 	CreatedApplicationID
 
+	// BlockProofPKRoot Transaction.BlockProofPK.Root
+	BlockProofPKRoot
+
+	// BlockProofPKPresent Transaction.BlockProofPK.HasValidRoot
+	BlockProofPKPresent
+
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
 
@@ -255,6 +261,9 @@ var txnFieldSpecs = []txnFieldSpec{
 	{NumLogs, StackUint64, 5, 5, true},
 	{CreatedAssetID, StackUint64, 5, 5, true},
 	{CreatedApplicationID, StackUint64, 5, 5, true},
+
+	{BlockProofPKRoot, StackBytes, 6, 6, false},
+	{BlockProofPKPresent, StackUint64, 6, 6, false},
 }
 
 // TxnaFieldNames are arguments to the 'txna' opcode

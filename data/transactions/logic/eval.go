@@ -1960,6 +1960,10 @@ func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, fs txnFiel
 		sv.Bytes = txn.VotePK[:]
 	case SelectionPK:
 		sv.Bytes = txn.SelectionPK[:]
+	case BlockProofPKRoot:
+		sv.Bytes = txn.BlockProofPK.Root[:]
+	case BlockProofPKPresent:
+		sv.Uint = boolToUint(txn.BlockProofPK.HasValidRoot)
 	case VoteFirst:
 		sv.Uint = uint64(txn.VoteFirst)
 	case VoteLast:
@@ -3834,6 +3838,15 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 		} else {
 			copy(txn.SelectionPK[:], sv.Bytes)
 		}
+	case BlockProofPKRoot:
+		if len(sv.Bytes) != 64 {
+			err = fmt.Errorf("%s must be 64 bytes", fs.field)
+		} else {
+			copy(txn.BlockProofPK.Root[:], sv.Bytes)
+			txn.BlockProofPK.HasValidRoot = true
+		}
+	case BlockProofPKPresent:
+		txn.BlockProofPK.HasValidRoot, err = sv.bool()
 	case VoteFirst:
 		var round uint64
 		round, err = sv.uint()

@@ -506,6 +506,20 @@ func TestFieldSetting(t *testing.T) {
 	testApp(t, "itxn_begin; int 33; bzero; itxn_field SelectionPK; int 1", ep,
 		"SelectionPK must be 32")
 
+	testApp(t, "itxn_begin; int 64; bzero; itxn_field BlockProofPKRoot; int 1", ep)
+	testApp(t, "itxn_begin; int 65; bzero; itxn_field BlockProofPKRoot; int 1", ep,
+		"BlockProofPKRoot must be 64")
+
+	testApp(t, "itxn_begin; int 0; itxn_field BlockProofPKPresent; int 1", ep)
+	testApp(t, "itxn_begin; int 1; itxn_field BlockProofPKPresent; int 1", ep)
+	testApp(t, "itxn_begin; int 2; itxn_field BlockProofPKPresent; int 1", ep,
+		"boolean is neither 1 nor 0")
+
+	testApp(t, "itxn_begin; int 0; itxn_field Nonparticipation; int 1", ep)
+	testApp(t, "itxn_begin; int 1; itxn_field Nonparticipation; int 1", ep)
+	testApp(t, "itxn_begin; int 2; itxn_field Nonparticipation; int 1", ep,
+		"boolean is neither 1 nor 0")
+
 	testApp(t, "itxn_begin; int 32; bzero; itxn_field RekeyTo; int 1", ep)
 	testApp(t, "itxn_begin; int 31; bzero; itxn_field RekeyTo; int 1", ep,
 		"not an address")

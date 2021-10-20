@@ -1458,6 +1458,11 @@ int 1
 
 const testTxnProgramTextV6 = testTxnProgramTextV5 + `
 assert
+txn BlockProofPKRoot
+len
+pop
+txn BlockProofPKPresent
+assert
 
 int 1
 `
@@ -1469,6 +1474,8 @@ func makeSampleTxn() transactions.SignedTxn {
 	copy(txn.Txn.CloseRemainderTo[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
 	copy(txn.Txn.VotePK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui03"))
 	copy(txn.Txn.SelectionPK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui04"))
+	copy(txn.Txn.BlockProofPK.Root[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeuiaoeuiaoeuiaoeuiaoeuiaoeuiaoeuiao05"))
+	txn.Txn.BlockProofPK.HasValidRoot = true
 	txn.Txn.XferAsset = 10
 	// This is not a valid transaction to have all these fields set this way
 	txn.Txn.Note = []byte("fnord")
