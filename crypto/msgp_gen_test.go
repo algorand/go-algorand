@@ -492,6 +492,126 @@ func BenchmarkUnmarshalHashFactory(b *testing.B) {
 	}
 }
 
+func TestMarshalUnmarshalInvalidSinger(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := InvalidSinger{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingInvalidSinger(t *testing.T) {
+	protocol.RunEncodingTest(t, &InvalidSinger{})
+}
+
+func BenchmarkMarshalMsgInvalidSinger(b *testing.B) {
+	v := InvalidSinger{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgInvalidSinger(b *testing.B) {
+	v := InvalidSinger{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalInvalidSinger(b *testing.B) {
+	v := InvalidSinger{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestMarshalUnmarshalInvalidVerifier(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := InvalidVerifier{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingInvalidVerifier(t *testing.T) {
+	protocol.RunEncodingTest(t, &InvalidVerifier{})
+}
+
+func BenchmarkMarshalMsgInvalidVerifier(b *testing.B) {
+	v := InvalidVerifier{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgInvalidVerifier(b *testing.B) {
+	v := InvalidVerifier{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalInvalidVerifier(b *testing.B) {
+	v := InvalidVerifier{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestMarshalUnmarshalMasterDerivationKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	v := MasterDerivationKey{}

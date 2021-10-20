@@ -21,8 +21,6 @@ github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 h1:d+Bc7a5rLufV
 github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578/go.mod h1:uGdkoq3SwY9Y+13GIhn11/XLaGBb4BfwItxLd5jeuXE=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf/go.mod h1:ybxpYRFXyAe+OPACYpWeL0wqObRcbAqCMya13uyzqw0=
-github.com/algorand/msgp v1.1.48 h1:5P+gVmTnk0m37r+rA3ZsFZW219ZqmCLulW5f8Z+3nx8=
-github.com/algorand/msgp v1.1.48/go.mod h1:LtOntbYiCHj/Sl/Sqxtf8CZOrDt2a8Dv3tLaS6mcnUE=
 github.com/algorand/msgp v1.1.49 h1:YBFRcYZNsD2WgzXONvzFrjv1/887pWzJSx874VL4P6g=
 github.com/algorand/msgp v1.1.49/go.mod h1:oyDY2SIeM1bytVYJTL88nt9kVeEBC00Avyqcnyrq/ec=
 github.com/algorand/oapi-codegen v1.3.5-algorand5 h1:y576Ca2/guQddQrQA7dtL5KcOx5xQgPeIupiuFMGyCI=

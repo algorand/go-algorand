@@ -120,6 +120,7 @@ type PackedVerifyingKey struct {
 
 	DilithiumPublicKey DilithiumVerifier `codec:"dpk"`
 	Ed25519PublicKey   Ed25519PublicKey  `codec:"edpk"`
+	InvalidVerifier    InvalidVerifier	`codec:"inv"`
 }
 
 var errUnknownVerifier = errors.New("could not find stored Verifier")
@@ -131,7 +132,7 @@ func (p *PackedVerifyingKey) getVerifier(t AlgorithmType) Verifier {
 	case Ed25519Type:
 		return &p.Ed25519PublicKey
 	default:
-		panic(errUnknownVerifier)
+		return &p.InvalidVerifier
 	}
 }
 
@@ -141,6 +142,7 @@ type PackedSignatureAlgorithm struct {
 
 	DilithiumSigner DilithiumSigner `codec:"ds"`
 	Ed25519Singer   Ed25519Key      `codec:"edds"`
+	InvalidSinger   InvalidSinger	`codec:"inv"`
 }
 
 var errUnknownSigner = errors.New("could not find stored signer")
@@ -152,7 +154,7 @@ func (p *PackedSignatureAlgorithm) getSigner(t AlgorithmType) Signer {
 	case Ed25519Type:
 		return &p.Ed25519Singer
 	default:
-		panic(errUnknownSigner)
+		return &p.InvalidSinger
 	}
 }
 
