@@ -468,7 +468,7 @@ commands:
               export GIMME_ENV_PREFIX=<< parameters.build_dir >>/.gimme/envs
               export GIMME_VERSION_PREFIX=<< parameters.build_dir >>/.gimme/versions
               export SKIPBUILDFORUPLOAD=1
-              scripts/travis/build.sh
+              ./scripts/travis/deploy_packages.sh
         - when:
             condition:
               equal: [ "amd64", << parameters.platform >> ]
