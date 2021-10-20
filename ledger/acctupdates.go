@@ -96,9 +96,6 @@ type modifiedAccount struct {
 type accountUpdates struct {
 	// constant variables ( initialized on initialize, and never changed afterward )
 
-	// catchpointInterval is the configured interval at which the accountUpdates would generate catchpoint labels and catchpoint files.
-	catchpointInterval uint64
-
 	// archivalLedger determines whether the associated ledger was configured as archival ledger or not.
 	archivalLedger bool
 
@@ -138,10 +135,6 @@ type accountUpdates struct {
 
 	// log copied from ledger
 	log logging.Logger
-
-	// lastFlushTime is the time we last flushed updates to
-	// the accounts DB (bumping dbRound).
-	lastFlushTime time.Time
 
 	// ledger is the source ledger, which is used to synchronize
 	// the rounds at which we need to flush the balances to disk
@@ -215,32 +208,12 @@ func (e *MismatchingDatabaseRoundError) Error() string {
 // initialize initializes the accountUpdates structure
 func (au *accountUpdates) initialize(cfg config.Local) {
 	au.archivalLedger = cfg.Archival
-	switch cfg.CatchpointTracking {
-	case -1:
-		au.catchpointInterval = 0
-	default:
-		// give a warning, then fall thought
-		logging.Base().Warnf("accountUpdates: the CatchpointTracking field in the config.json file contains an invalid value (%d). The default value of 0 would be used instead.", cfg.CatchpointTracking)
-		fallthrough
-	case 0:
-		if au.archivalLedger {
-			au.catchpointInterval = cfg.CatchpointInterval
-		} else {
-			au.catchpointInterval = 0
-		}
-	case 1:
-		au.catchpointInterval = cfg.CatchpointInterval
-	}
 
 	au.accountsReadCond = sync.NewCond(au.accountsMu.RLocker())
 
 	// log metrics
 	au.logAccountUpdatesMetrics = cfg.EnableAccountUpdatesStats
 	au.logAccountUpdatesInterval = cfg.AccountUpdatesStatsInterval
-}
-
-func (au *accountUpdates) catchpointEnabled() bool {
-	return au.catchpointInterval != 0
 }
 
 // loadFromDisk is the 2nd level initialization, and is required before the accountUpdates becomes functional
@@ -527,12 +500,9 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound, 
 // wait until the catchpoint creation is done, so that the persistence of the catchpoint file would have an
 // uninterrupted view of the balances at a given point of time.
 func (au *accountUpdates) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcc *deferredCommitContext) *deferredCommitContext {
-	var isCatchpointRound bool
 	var offset uint64
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
-
-	var pendingDeltas int
 
 	if committedRound < dcc.lookback {
 		return nil
@@ -548,20 +518,6 @@ func (au *accountUpdates) produceCommittingTask(committedRound basics.Round, dbR
 		au.log.Panicf("produceCommittingTask: block %d too far in the future, lookback %d, dbRound %d (cached %d), deltas %d", committedRound, dcc.lookback, dbRound, au.cachedDBRound, len(au.deltas))
 	}
 
-	// check if there was a catchpoint between au.dbRound+lookback and newBase+lookback
-	if au.catchpointInterval > 0 {
-		nextCatchpointRound := ((uint64(dbRound+dcc.lookback) + au.catchpointInterval) / au.catchpointInterval) * au.catchpointInterval
-
-		if nextCatchpointRound < uint64(newBase+dcc.lookback) {
-			mostRecentCatchpointRound := (uint64(committedRound) / au.catchpointInterval) * au.catchpointInterval
-			newBase = basics.Round(nextCatchpointRound) - dcc.lookback
-			if mostRecentCatchpointRound > nextCatchpointRound {
-				// skip if there is more than one catchpoint in queue
-				newBase = basics.Round(mostRecentCatchpointRound) - dcc.lookback
-			}
-		}
-	}
-
 	if au.voters != nil {
 		newBase = au.voters.lowestRound(newBase)
 	}
@@ -570,19 +526,8 @@ func (au *accountUpdates) produceCommittingTask(committedRound basics.Round, dbR
 
 	offset = au.consecutiveVersion(offset)
 
-	// check to see if this is a catchpoint round
-	isCatchpointRound = au.isCatchpointRound(offset, dbRound, dcc.lookback)
-
 	// calculate the number of pending deltas
-	pendingDeltas = au.deltasAccum[offset] - au.deltasAccum[0]
-
-	// If we recently flushed, wait to aggregate some more blocks.
-	// ( unless we're creating a catchpoint, in which case we want to flush it right away
-	//   so that all the instances of the catchpoint would contain exactly the same data )
-	flushTime := time.Now()
-	if !flushTime.After(au.lastFlushTime.Add(balancesFlushInterval)) && !isCatchpointRound && pendingDeltas < pendingDeltasFlushThreshold {
-		return nil
-	}
+	dcc.pendingDeltas = au.deltasAccum[offset] - au.deltasAccum[0]
 
 	// submit committing task only if offset is non-zero in addition to
 	// 1) no pending catchpoint writes
@@ -1096,10 +1041,6 @@ func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err erro
 	return off, nil
 }
 
-func (au *accountUpdates) isCatchpointRound(offset uint64, dbRound basics.Round, lookback basics.Round) bool {
-	return ((offset + uint64(lookback+dbRound)) > 0) && (au.catchpointInterval != 0) && ((uint64((offset + uint64(lookback+dbRound))) % au.catchpointInterval) == 0)
-}
-
 func (au *accountUpdates) handleUnorderedCommit(offset uint64, dbRound basics.Round, lookback basics.Round) {
 
 }
@@ -1115,12 +1056,8 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 	}
 
 	offset := dcc.offset
-	dbRound := dcc.oldBase
-	lookback := dcc.lookback
 
 	au.accountsMu.RLock()
-
-	dcc.isCatchpointRound = au.isCatchpointRound(offset, dbRound, lookback)
 
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
 	dcc.deltas = make([]ledgercore.AccountDeltas, offset)
@@ -1278,7 +1215,6 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 	au.roundTotals = au.roundTotals[offset:]
 	au.creatableDeltas = au.creatableDeltas[offset:]
 	au.cachedDBRound = newBase
-	au.lastFlushTime = dcc.flushTime
 
 	au.accountsMu.Unlock()
 

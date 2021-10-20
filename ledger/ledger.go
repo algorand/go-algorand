@@ -190,7 +190,7 @@ func (l *Ledger) reloadLedger() error {
 	}
 
 	// init tracker db
-	trackerDBInitParams, err := trackerDBInitialize(l, l.accts.catchpointEnabled(), l.catchpoint.dbDirectory)
+	trackerDBInitParams, err := trackerDBInitialize(l, l.catchpoint.catchpointEnabled(), l.catchpoint.dbDirectory)
 	if err != nil {
 		return err
 	}

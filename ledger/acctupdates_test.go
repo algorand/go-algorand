@@ -247,7 +247,7 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 func newAcctUpdates(tb testing.TB, l *mockLedgerForTracker, conf config.Local, dbPathPrefix string) *accountUpdates {
 	au := &accountUpdates{}
 	au.initialize(conf)
-	_, err := trackerDBInitialize(l, au.catchpointEnabled(), ".")
+	_, err := trackerDBInitialize(l, false, ".")
 	require.NoError(tb, err)
 
 	l.trackers.initialize(l, []ledgerTracker{au}, conf)
@@ -434,7 +434,7 @@ func TestAcctUpdates(t *testing.T) {
 
 	for i := basics.Round(0); i < 15; i++ {
 		// Clear the timer to ensure a flush
-		au.lastFlushTime = time.Time{}
+		ml.trackers.lastFlushTime = time.Time{}
 
 		ml.trackers.committedUpTo(basics.Round(proto.MaxBalLookback) + i)
 		ml.trackers.waitAccountsWriting()
@@ -619,7 +619,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	}
 	for i := proto.MaxBalLookback; i < proto.MaxBalLookback+initialRounds; i++ {
 		// Clear the timer to ensure a flush
-		au.lastFlushTime = time.Time{}
+		ml.trackers.lastFlushTime = time.Time{}
 		ml.trackers.committedUpTo(basics.Round(i))
 	}
 	ml.trackers.waitAccountsWriting()
@@ -627,7 +627,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	startTime := time.Now()
 	for i := proto.MaxBalLookback + initialRounds; i < proto.MaxBalLookback+uint64(b.N); i++ {
 		// Clear the timer to ensure a flush
-		au.lastFlushTime = time.Time{}
+		ml.trackers.lastFlushTime = time.Time{}
 		ml.trackers.committedUpTo(basics.Round(i))
 	}
 	ml.trackers.waitAccountsWriting()

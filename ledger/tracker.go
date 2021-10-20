@@ -169,6 +169,10 @@ type trackerRegistry struct {
 	accountsRebuildSynchronousMode db.SynchronousMode
 
 	mu deadlock.RWMutex
+
+	// lastFlushTime is the time we last flushed updates to
+	// the accounts DB (bumping dbRound).
+	lastFlushTime time.Time
 }
 
 type deferredCommitContext struct {
@@ -200,6 +204,10 @@ type deferredCommitContext struct {
 	// it's used in order to reset the catchpointWriting flag from the acctupdates's
 	// prepareCommit/commitRound ( which is called before the corresponding catchpoint tracker method )
 	catchpointWriting *int32
+
+	// pendingDeltas is the number of accounts that were modified within this commit context.
+	// note that in this number we might have the same account being modified several times.
+	pendingDeltas int
 }
 
 var errMissingAccountUpdateTracker = errors.New("initializeTrackerCaches : called without a valid accounts update tracker")
@@ -297,6 +305,17 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 			break
 		}
 	}
+
+	tr.mu.RLock()
+	// If we recently flushed, wait to aggregate some more blocks.
+	// ( unless we're creating a catchpoint, in which case we want to flush it right away
+	//   so that all the instances of the catchpoint would contain exactly the same data )
+	flushTime := time.Now()
+	if dcc != nil && !flushTime.After(tr.lastFlushTime.Add(balancesFlushInterval)) && !dcc.isCatchpointRound && dcc.pendingDeltas < pendingDeltasFlushThreshold {
+		dcc = nil
+	}
+	tr.mu.RUnlock()
+
 	if dcc != nil {
 		tr.accountsWriting.Add(1)
 		tr.deferredCommits <- dcc
@@ -431,7 +450,9 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) {
 	for _, lt := range tr.trackers {
 		lt.postCommit(tr.ctx, dcc)
 	}
+	tr.lastFlushTime = dcc.flushTime
 	tr.mu.Unlock()
+
 }
 
 // initializeTrackerCaches fills up the accountUpdates cache with the most recent ~320 blocks ( on normal execution ).
@@ -471,6 +492,14 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 		default:
 		}
 	}()
+
+	catchpointInterval := uint64(0)
+	for _, tracker := range tr.trackers {
+		if catchpointTracker, ok := tracker.(*catchpointTracker); ok {
+			catchpointInterval = catchpointTracker.catchpointInterval
+			break
+		}
+	}
 
 	// this goroutine logs a message once if the parent function have not completed in initializingAccountCachesMessageTimeout seconds.
 	// the message is important, since we're blocking on the ledger block database here, and we want to make sure that we log a message
@@ -536,7 +565,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 		loadCompleted := (lastestBlockRound == blk.Round() && lastBalancesRound+basics.Round(blk.ConsensusProtocol().MaxBalLookback) < lastestBlockRound)
 		if flushIntervalExceed || loadCompleted {
 			// adjust the last flush time, so that we would not hold off the flushing due to "working too fast"
-			tr.accts.lastFlushTime = time.Now().Add(-balancesFlushInterval)
+			tr.lastFlushTime = time.Now().Add(-balancesFlushInterval)
 
 			if !rollbackSynchronousMode {
 				// switch to rebuild synchronous mode to improve performance
@@ -565,7 +594,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 			}()
 
 			// are we too far behind ? ( taking into consideration the catchpoint writing, which can stall the writing for quite a bit )
-			if roundsBehind > initializeCachesRoundFlushInterval+basics.Round(tr.accts.catchpointInterval) {
+			if roundsBehind > initializeCachesRoundFlushInterval+basics.Round(catchpointInterval) {
 				// we're unable to persist changes. This is unexpected, but there is no point in keep trying batching additional changes since any further changes
 				// would just accumulate in memory.
 				close(blockEvalFailed)

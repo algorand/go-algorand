@@ -101,15 +101,15 @@ type catchpointTracker struct {
 	catchpointSlowWriting chan struct{}
 
 	// catchpointWriting help to synchronize the catchpoint file writing. When this atomic variable is 0, no writing is going on.
-	// Any non-zero value indicates a catchpoint being written.
+	// Any non-zero value indicates a catchpoint being written, or scheduled to be written.
 	catchpointWriting int32
 
 	// The Trie tracking the current account balances. Always matches the balances that were
 	// written to the database.
 	balancesTrie *merkletrie.Trie
 
-	// accountsMu is the synchronization mutex for accessing the various non-static variables.
-	accountsMu deadlock.RWMutex
+	// catchpointsMu is the synchronization mutex for accessing the various non-static variables.
+	catchpointsMu deadlock.RWMutex
 
 	// roundDigest stores the digest of the block for every round starting with dbRound and every round after it.
 	roundDigest []crypto.Digest
@@ -144,8 +144,8 @@ func (ct *catchpointTracker) initialize(cfg config.Local, dbPathPrefix string) {
 
 // GetLastCatchpointLabel retrieves the last catchpoint label that was stored to the database.
 func (ct *catchpointTracker) GetLastCatchpointLabel() string {
-	ct.accountsMu.RLock()
-	defer ct.accountsMu.RUnlock()
+	ct.catchpointsMu.RLock()
+	defer ct.catchpointsMu.RUnlock()
 	return ct.lastCatchpointLabel
 }
 
@@ -220,8 +220,8 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, lastBalancesRound 
 // newBlock informs the tracker of a new block from round
 // rnd and a given ledgercore.StateDelta as produced by BlockEvaluator.
 func (ct *catchpointTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
-	ct.accountsMu.Lock()
-	defer ct.accountsMu.Unlock()
+	ct.catchpointsMu.Lock()
+	defer ct.catchpointsMu.Unlock()
 	ct.roundDigest = append(ct.roundDigest, blk.Digest())
 }
 
@@ -242,7 +242,7 @@ func (ct *catchpointTracker) committedUpTo(rnd basics.Round) (retRound, lookback
 }
 
 func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcc *deferredCommitContext) *deferredCommitContext {
-	var isCatchpointRound, hasMultipleIntermediateCatchpoint, hasIntermediateCatchpoint bool
+	var hasMultipleIntermediateCatchpoint, hasIntermediateCatchpoint bool
 
 	newBase := dcc.oldBase + basics.Round(dcc.offset)
 
@@ -282,9 +282,9 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 	dcc.offset = uint64(newBase - dcc.oldBase)
 
 	// check to see if this is a catchpoint round
-	isCatchpointRound = ct.isCatchpointRound(dcc.offset, dcc.oldBase, dcc.lookback)
+	dcc.isCatchpointRound = ct.isCatchpointRound(dcc.offset, dcc.oldBase, dcc.lookback)
 
-	if isCatchpointRound && ct.archivalLedger {
+	if dcc.isCatchpointRound && ct.archivalLedger {
 		// store non-zero ( all ones ) into the catchpointWriting atomic variable to indicate that a catchpoint is being written ( or, queued to be written )
 		atomic.StoreInt32(&ct.catchpointWriting, int32(-1))
 		ct.catchpointSlowWriting = make(chan struct{}, 1)
@@ -301,8 +301,8 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 // prepareCommit, commitRound and postCommit are called when it is time to commit tracker's data.
 // If an error returned the process is aborted.
 func (ct *catchpointTracker) prepareCommit(dcc *deferredCommitContext) error {
-	ct.accountsMu.RLock()
-	defer ct.accountsMu.RUnlock()
+	ct.catchpointsMu.RLock()
+	defer ct.catchpointsMu.RUnlock()
 	if dcc.isCatchpointRound {
 		dcc.committedRoundDigest = ct.roundDigest[dcc.offset+uint64(dcc.lookback)-1]
 	}
@@ -395,11 +395,11 @@ func (ct *catchpointTracker) postCommit(ctx context.Context, dcc *deferredCommit
 		dcc.stats.MemoryUpdatesDuration = time.Duration(time.Now().UnixNano())
 	}
 
-	ct.accountsMu.Lock()
+	ct.catchpointsMu.Lock()
 
 	ct.roundDigest = ct.roundDigest[dcc.offset:]
 
-	ct.accountsMu.Unlock()
+	ct.catchpointsMu.Unlock()
 
 	if dcc.isCatchpointRound && ct.archivalLedger && dcc.catchpointLabel != "" {
 		// generate the catchpoint file. This need to be done inline so that it will block any new accounts that from being written.

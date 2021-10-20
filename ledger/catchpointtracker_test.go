@@ -58,7 +58,7 @@ func newCatchpointTracker(tb testing.TB, l *mockLedgerForTracker, conf config.Lo
 	ct := &catchpointTracker{}
 	au.initialize(conf)
 	ct.initialize(conf, dbPathPrefix)
-	_, err := trackerDBInitialize(l, au.catchpointEnabled(), dbPathPrefix)
+	_, err := trackerDBInitialize(l, ct.catchpointEnabled(), dbPathPrefix)
 	require.NoError(tb, err)
 
 	err = l.trackers.initialize(l, []ledgerTracker{au, ct}, conf)
