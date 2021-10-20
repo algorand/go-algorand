@@ -642,11 +642,11 @@ jobs:
           result_subdir: << parameters.platform >>_<< parameters.job_type >>
 
   upload_binaries:
-    executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
     parameters:
       platform:
         type: string
+    executor: << parameters.platform >>_medium
     steps:
       - prepare_build_dir
       - prepare_go
