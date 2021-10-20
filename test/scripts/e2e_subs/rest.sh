@@ -113,11 +113,6 @@ function curl_post_test {
   local FILENAME_TO_UPLOAD="$1"
   shift
 
-
-  local SUBSTRING
-
-  local START=$SECONDS
-
   set +e
   local CODE
   if [[ "$USE_ADMIN" = true ]]; then
@@ -125,41 +120,15 @@ function curl_post_test {
   else
     CODE=$(call_post "$QUERY" "${TEMPDIR}/curl_out.txt" "$FILENAME_TO_UPLOAD")
   fi
-  if [[ $? != 0 ]]; then
-    cat $CURL_TEMPFILE
-    fail_and_exit "$DESCRIPTION" "$QUERY" "curl had a non-zero exit code."
-  fi
-  set -e
 
-  RES=$(cat "${TEMPDIR}/curl_out.txt")
-  if [[ "$CODE" != "$EXPECTED_CODE" ]]; then
-    fail_and_exit "$DESCRIPTION" "$QUERY" "unexpected HTTP status code expected $EXPECTED_CODE (actual $CODE): $RES"
-  fi
+  verify $? "$CODE" "$DESCRIPTION" "$QUERY" "$EXPECTED_CODE" "$MATCH_RESULT" "$@"
 
-  #local ELAPSED=$(($SECONDS - $START))
-  #if [[ $ELAPSED -gt $MAX_TIME ]]; then
-  #  fail_and_exit "$DESCRIPTION" "$QUERY" "query duration too long, $ELAPSED > $MAX_TIME"
-  #fi
-
-  # Check result substrings
-  for SUBSTRING in "$@"; do
-    echo "CHECKING '$SUBSTRING'"
-    if [[ $MATCH_RESULT = true ]]; then
-      if [[ "$RES" != *"$SUBSTRING"* ]]; then
-        fail_and_exit "$DESCRIPTION" "$QUERY" "unexpected response. should contain '$SUBSTRING', actual: $RES"
-      fi
-    else
-      if [[ "$RES" == *"$SUBSTRING"* ]]; then
-        fail_and_exit "$DESCRIPTION" "$QUERY" "unexpected response. should NOT contain '$SUBSTRING', actual: $RES"
-      fi
-    fi
-  done
 }
 
+# CURL Test - query and verify results
 # $1 - test description.
 # $2 - query
 # $3 - expected status code
-# $4... - substring that should be in the response
 function call_delete_and_verify {
   local DESCRIPTION="$1"
   shift
@@ -167,23 +136,6 @@ function call_delete_and_verify {
   shift
   local EXPECTED_CODE="$1"
   shift
-
-  curl_delete_test "$DESCRIPTION" "$QUERY" "$EXPECTED_CODE"
-}
-
-# CURL Test - query and verify results
-# $1 - test description.
-# $2 - query
-# $3 - expected status code
-function curl_delete_test {
-  local DESCRIPTION="$1"
-  shift
-  local QUERY="$1"
-  shift
-  local EXPECTED_CODE="$1"
-  shift
-
-  local START=$SECONDS
 
   set +e
 
@@ -194,21 +146,8 @@ function curl_delete_test {
     CODE=$(call_delete "$QUERY" "${TEMPDIR}/curl_out.txt" )
   fi
 
-  if [[ $? != 0 ]]; then
-    cat $CURL_TEMPFILE
-    fail_and_exit "$DESCRIPTION" "$QUERY" "curl had a non-zero exit code."
-  fi
-  set -e
+  verify $? "$CODE" "$DESCRIPTION" "$QUERY" "$EXPECTED_CODE" "false"
 
-  RES=$(cat "${TEMPDIR}/curl_out.txt")
-  if [[ "$CODE" != "$EXPECTED_CODE" ]]; then
-    fail_and_exit "$DESCRIPTION" "$QUERY" "unexpected HTTP status code expected $EXPECTED_CODE (actual $CODE): $RES"
-  fi
-
-  #local ELAPSED=$(($SECONDS - $START))
-  #if [[ $ELAPSED -gt $MAX_TIME ]]; then
-  #  fail_and_exit "$DESCRIPTION" "$QUERY" "query duration too long, $ELAPSED > $MAX_TIME"
-  #fi
 }
 
 
@@ -227,9 +166,6 @@ function curl_test {
   shift
   local MATCH_RESULT="$1"
   shift
-  local SUBSTRING
-
-  local START=$SECONDS
 
   set +e
 
@@ -240,35 +176,8 @@ function curl_test {
     CODE=$(call "$QUERY" "${TEMPDIR}/curl_out.txt" )
   fi
 
-  if [[ $? != 0 ]]; then
-    cat $CURL_TEMPFILE
-    fail_and_exit "$DESCRIPTION" "$QUERY" "curl had a non-zero exit code."
-  fi
-  set -e
+  verify $? "$CODE" "$DESCRIPTION" "$QUERY" "$EXPECTED_CODE" "$MATCH_RESULT" "$@"
 
-  RES=$(cat "${TEMPDIR}/curl_out.txt")
-  if [[ "$CODE" != "$EXPECTED_CODE" ]]; then
-    fail_and_exit "$DESCRIPTION" "$QUERY" "unexpected HTTP status code expected $EXPECTED_CODE (actual $CODE): $RES"
-  fi
-
-  #local ELAPSED=$(($SECONDS - $START))
-  #if [[ $ELAPSED -gt $MAX_TIME ]]; then
-  #  fail_and_exit "$DESCRIPTION" "$QUERY" "query duration too long, $ELAPSED > $MAX_TIME"
-  #fi
-
-  # Check result substrings
-  for SUBSTRING in "$@"; do
-    echo "CHECKING '$SUBSTRING'"
-    if [[ $MATCH_RESULT = true ]]; then
-      if [[ "$RES" != *"$SUBSTRING"* ]]; then
-        fail_and_exit "$DESCRIPTION" "$QUERY" "unexpected response. should contain '$SUBSTRING', actual: $RES"
-      fi
-    else
-      if [[ "$RES" == *"$SUBSTRING"* ]]; then
-        fail_and_exit "$DESCRIPTION" "$QUERY" "unexpected response. should NOT contain '$SUBSTRING', actual: $RES"
-      fi
-    fi
-  done
 }
 
 
@@ -303,9 +212,6 @@ function curl_test {
   shift
   local MATCH_RESULT="$1"
   shift
-  local SUBSTRING
-
-  local START=$SECONDS
 
   set +e
 
@@ -320,6 +226,38 @@ function curl_test {
     cat $CURL_TEMPFILE
     fail_and_exit "$DESCRIPTION" "$QUERY" "curl had a non-zero exit code."
   fi
+
+  verify $? "$CODE" "$DESCRIPTION" "$QUERY" "$EXPECTED_CODE" "$MATCH_RESULT" "$@"
+
+}
+
+# verify - Common verification code
+# $1 - return code of CURL sub-shell command
+# $2 - HTTP status code
+# $3 - description of test
+# $4 - query to execute
+# $5 - expected HTTP status code to check
+# $6 - match result
+# $7... - substring(s) that should be in the response
+function verify {
+  local SUCCESS=$1
+  shift
+  local CODE=$1
+  shift
+  local DESCRIPTION="$1"
+  shift
+  local QUERY="$1"
+  shift
+  local EXPECTED_CODE="$1"
+  shift
+  local MATCH_RESULT="$1"
+  shift
+
+  if [[ $SUCCESS != 0 ]]; then
+    cat $CURL_TEMPFILE
+    fail_and_exit "$DESCRIPTION" "$QUERY" "curl had a non-zero exit code."
+  fi
+
   set -e
 
   RES=$(cat "${TEMPDIR}/curl_out.txt")
@@ -331,6 +269,9 @@ function curl_test {
   #if [[ $ELAPSED -gt $MAX_TIME ]]; then
   #  fail_and_exit "$DESCRIPTION" "$QUERY" "query duration too long, $ELAPSED > $MAX_TIME"
   #fi
+
+
+  local SUBSTRING
 
   # Check result substrings
   for SUBSTRING in "$@"; do
@@ -345,4 +286,6 @@ function curl_test {
       fi
     fi
   done
+
+
 }

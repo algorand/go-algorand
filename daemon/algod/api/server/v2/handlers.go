@@ -91,9 +91,9 @@ func (v2 *Handlers) GetParticipationKeys(ctx echo.Context) error {
 			"Address":    participationRecord.Account.String(),
 			"FirstValid": participationRecord.FirstValid,
 			"LastValid":  participationRecord.LastValid,
-			// TODO add this
+			// TODO Coming soon (tm)
 			"VoteID": crypto.OneTimeSignatureVerifier{},
-			// TODO add this
+			// TODO Coming soon (tm)
 			"SelectionID":     crypto.VRFVerifier{},
 			"VoteKeyDilution": participationRecord.KeyDilution,
 		}
@@ -117,7 +117,7 @@ func (v2 *Handlers) AddParticipationKey(ctx echo.Context) error {
 	partKeyBinary := buf.Bytes()
 
 	if len(partKeyBinary) == 0 {
-		err := fmt.Errorf("binary was of length zero")
+		err := fmt.Errorf(errRESTPayloadZeroLength)
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 

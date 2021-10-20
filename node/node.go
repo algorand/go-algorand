@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -56,6 +57,7 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/timers"
 	"github.com/algorand/go-deadlock"
+	uuid "github.com/satori/go.uuid"
 )
 
 // StatusReport represents the current basic status of the node
@@ -805,6 +807,12 @@ func (node *AlgorandFullNode) ListParticipationKeys() (partKeys []account.Partic
 
 // GetParticipationKey retries the information of a participation id from the node
 func (node *AlgorandFullNode) GetParticipationKey(partKey account.ParticipationID) (account.ParticipationRecord, error) {
+	rval := node.accountManager.Registry().Get(partKey)
+
+	if rval.IsZero() {
+		return account.ParticipationRecord{}, account.ErrParticipationIDNotFound
+	}
+
 	return node.accountManager.Registry().Get(partKey), nil
 }
 
@@ -817,7 +825,7 @@ func (node *AlgorandFullNode) RemoveParticipationKey(partKey account.Participati
 	partRecord := node.accountManager.Registry().Get(partKey)
 
 	if partRecord.IsZero() {
-		return fmt.Errorf("could not find participation record in registry")
+		return nil
 	}
 
 	genID := node.GenesisID()
@@ -827,14 +835,32 @@ func (node *AlgorandFullNode) RemoveParticipationKey(partKey account.Participati
 	filename := config.PartKeyFilename(partRecord.ParticipationID.String(), uint64(partRecord.FirstValid), uint64(partRecord.LastValid))
 	fullyQualifiedFilename := filepath.Join(outDir, filepath.Base(filename))
 
+	err := node.accountManager.Registry().Delete(partKey)
+	if err != nil {
+		return err
+	}
+
+	err = node.accountManager.Registry().Flush()
+	if err != nil {
+		return err
+	}
+
+	// Only after deleting and flushing do we want to remove the file
 	_ = os.Remove(fullyQualifiedFilename)
-	_ = node.accountManager.Registry().Delete(partKey)
 
 	return nil
 }
 
 func createTemporaryParticipationKey(outDir string, partKeyBinary *[]byte) (string, error) {
-	tempFile := filepath.Join(outDir, filepath.Base("tempPartKeyBinary.bin"))
+	var sb strings.Builder
+
+	// Create a temporary filename with a UUID so that we can call this function twice
+	// in a row without worrying about collisions
+	sb.WriteString("tempPartKeyBinary.")
+	sb.WriteString(uuid.NewV4().String())
+	sb.WriteString(".bin")
+
+	tempFile := filepath.Join(outDir, filepath.Base(sb.String()))
 
 	file, err := os.Create(tempFile)
 
@@ -893,6 +919,11 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary *[]byte) (ac
 
 	// Tell the AccountManager about the Participation (dupes don't matter) so we ignore the return value
 	_ = node.accountManager.AddParticipation(partkey)
+
+	err = node.accountManager.Registry().Flush()
+	if err != nil {
+		return account.ParticipationID{}, err
+	}
 
 	newFilename := config.PartKeyFilename(partkey.ID().String(), uint64(partkey.FirstValid), uint64(partkey.LastValid))
 	newFullyQualifiedFilename := filepath.Join(outDir, filepath.Base(newFilename))

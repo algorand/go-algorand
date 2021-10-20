@@ -2,7 +2,6 @@
 # TIMEOUT=300
 
 my_dir="$(dirname "$0")"
-#"$my_dir/rest.sh" "$@"
 source "$my_dir/rest.sh" "$@"
 
 date "+$0 start %Y%m%d_%H%M%S"
@@ -36,8 +35,8 @@ call_and_verify "Get a specific ID" "/v2/participation/${SAMPLE_ID}" 200 "${SAMP
 
 call_delete_and_verify "Delete the specific ID" "/v2/participation/${SAMPLE_ID}" 200
 
-# Verify that it got called previously and will return an error now since it isn't there
-call_delete_and_verify "Delete the specific ID" "/v2/participation/${SAMPLE_ID}" 400
+# Verify that it got called previously and will NOT return an error now even though it isn't there
+call_delete_and_verify "Delete the specific ID" "/v2/participation/${SAMPLE_ID}" 200
 
 NEW_NUMBER_OF_IDS=$(curl -q -s -H "Authorization: Bearer $ADMIN_TOKEN" "$NET/v2/participation" | python3 -c 'import json,sys;obj=json.load(sys.stdin);print(len(obj))')
 
