@@ -591,7 +591,7 @@ func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound ba
 		timeSinceLastMessageWasSent := currentTime - p.lastSentMessageTimestamp
 		networkMessageSize := uint64(p.lastSentMessageSize + incomingMessageSize)
 		logging.Base().Infof("data exchange timing: %v %v %v %v", timeSinceLastMessageWasSent, time.Duration(timings.ResponseElapsedTime), peerLatency, networkMessageSize)
-		if timings.ResponseElapsedTime != 0 && peerLatency > 0 && timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime) + peerLatency && networkMessageSize >= p.significantMessageThreshold {
+		if timings.ResponseElapsedTime != 0 && peerLatency > 0 && timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime)+peerLatency && networkMessageSize >= p.significantMessageThreshold {
 			networkTrasmitTime := timeSinceLastMessageWasSent - time.Duration(timings.ResponseElapsedTime) - peerLatency
 			dataExchangeRate := uint64(time.Second) * networkMessageSize / uint64(networkTrasmitTime)
 

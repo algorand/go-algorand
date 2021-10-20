@@ -110,8 +110,8 @@ func (encoder *messageAsyncEncoder) asyncEncodeAndSend(interface{}) interface{} 
 	// we want to make sure we avoid.
 	encoder.messageData.sentTimestamp = encoder.roundClock.Since()
 
-	if encoder.roundClock.Since() - timeBeforeEncoding > time.Millisecond {
-		logging.Base().Infof("lost %v on encoding", encoder.roundClock.Since() - timeBeforeEncoding)
+	if encoder.roundClock.Since()-timeBeforeEncoding > time.Millisecond {
+		logging.Base().Infof("lost %v on encoding", encoder.roundClock.Since()-timeBeforeEncoding)
 	}
 
 	encoder.state.node.SendPeerMessage(encoder.messageData.peer.networkPeer, encodedMessage, encoder.asyncMessageSent)

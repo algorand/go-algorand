@@ -565,7 +565,7 @@ func TestUpdateIncomingMessageTiming(t *testing.T) {
 
 	p.lastConfirmedMessageSeqReceived = p.lastSentMessageSequenceNumber + 1
 
-	p.updateIncomingMessageTiming(timing, currentRound, currentTime, currentMessageSize)
+	p.updateIncomingMessageTiming(timing, currentRound, currentTime, time.Millisecond, currentMessageSize)
 
 	a.Equal(p.lastReceivedMessageLocalRound, currentRound)
 	a.Equal(p.lastReceivedMessageTimestamp, currentTime)
@@ -579,7 +579,7 @@ func TestUpdateIncomingMessageTiming(t *testing.T) {
 	timing.ResponseElapsedTime = 1
 	p.lastSentMessageTimestamp = 1 * time.Millisecond
 	currentMessageSize = maxDataExchangeRateThreshold + 1
-	p.updateIncomingMessageTiming(timing, currentRound, currentTime, currentMessageSize)
+	p.updateIncomingMessageTiming(timing, currentRound, currentTime, time.Millisecond, currentMessageSize)
 
 	a.Equal(uint64(maxDataExchangeRateThreshold), p.dataExchangeRate)
 
@@ -590,9 +590,20 @@ func TestUpdateIncomingMessageTiming(t *testing.T) {
 	p.lastSentMessageSize = 0
 	currentMessageSize = int(p.significantMessageThreshold)
 	currentTime = time.Millisecond * 1000
-	p.updateIncomingMessageTiming(timing, currentRound, currentTime, currentMessageSize)
+	p.updateIncomingMessageTiming(timing, currentRound, currentTime, time.Millisecond, currentMessageSize)
 
 	a.Equal(uint64(minDataExchangeRateThreshold), p.dataExchangeRate)
+
+	p.lastConfirmedMessageSeqReceived = p.lastSentMessageSequenceNumber
+	p.lastSentMessageRound = currentRound
+	timing.ResponseElapsedTime = uint64(time.Millisecond)
+	p.lastSentMessageTimestamp = 1 * time.Millisecond
+	p.lastSentMessageSize = 0
+	currentMessageSize = 100000
+	currentTime = time.Millisecond * 122
+	p.updateIncomingMessageTiming(timing, currentRound, currentTime, time.Millisecond * 100, currentMessageSize)
+
+	a.Equal(uint64(5000000), p.dataExchangeRate)
 }
 
 // TestUpdateIncomingTransactionGroups tests updating the incoming transaction groups
