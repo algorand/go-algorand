@@ -32,7 +32,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-deadlock"
 )
@@ -156,11 +155,10 @@ type deferredCommitContext struct {
 	lookback  basics.Round
 	flushTime time.Time
 
-	genesisProto          config.ConsensusParams
-	roundConsensusVersion protocol.ConsensusVersion
+	genesisProto config.ConsensusParams
 
 	deltas                 []ledgercore.AccountDeltas
-	roundTotals            []ledgercore.AccountTotals
+	roundTotals            ledgercore.AccountTotals
 	compactAccountDeltas   compactAccountDeltas
 	compactCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable
 

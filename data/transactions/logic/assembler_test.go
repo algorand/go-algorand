@@ -475,6 +475,9 @@ func testProg(t testing.TB, source string, ver uint64, expected ...expect) *OpSt
 		require.NoError(t, err)
 		require.Equal(t, ops.Program, ops2.Program)
 	} else {
+		if err == nil {
+			t.Log(program)
+		}
 		require.Error(t, err)
 		errors := ops.Errors
 		for _, exp := range expected {
@@ -507,6 +510,7 @@ func testProg(t testing.TB, source string, ver uint64, expected ...expect) *OpSt
 }
 
 func testLine(t *testing.T, line string, ver uint64, expected string) {
+	t.Helper()
 	// By embedding the source line between two other lines, the
 	// test for the correct line number in the error is more
 	// meaningful.
@@ -517,6 +521,7 @@ func testLine(t *testing.T, line string, ver uint64, expected string) {
 	}
 	testProg(t, source, ver, expect{2, expected})
 }
+
 func TestAssembleTxna(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -661,6 +666,7 @@ func TestAssembleBytes(t *testing.T) {
 	variations := []string{
 		"byte b32 MFRGGZDFMY",
 		"byte base32 MFRGGZDFMY",
+		"byte base32  MFRGGZDFMY",
 		"byte base32(MFRGGZDFMY)",
 		"byte b32(MFRGGZDFMY)",
 		"byte b32 MFRGGZDFMY======",
@@ -679,6 +685,11 @@ func TestAssembleBytes(t *testing.T) {
 	expectedDefaultConsts := "0126010661626364656628"
 	expectedOptimizedConsts := "018006616263646566"
 
+	bad := [][]string{
+		{"byte", "...operation needs byte literal argument"},
+		{`byte "john" "doe"`, "...operation with extraneous argument"},
+	}
+
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			expected := expectedDefaultConsts
@@ -690,8 +701,19 @@ func TestAssembleBytes(t *testing.T) {
 				ops := testProg(t, vi, v)
 				s := hex.EncodeToString(ops.Program)
 				require.Equal(t, mutateProgVersion(v, expected), s)
+				// pushbytes should take the same input
+				if v >= 3 {
+					testProg(t, strings.Replace(vi, "byte", "pushbytes", 1), v)
+				}
 			}
 
+			for _, b := range bad {
+				testProg(t, b[0], v, expect{1, b[1]})
+				// pushbytes should produce the same errors
+				if v >= 3 {
+					testProg(t, strings.Replace(b[0], "byte", "pushbytes", 1), v, expect{1, b[1]})
+				}
+			}
 		})
 	}
 }
@@ -1448,7 +1470,7 @@ func TestConstantArgs(t *testing.T) {
 	}
 	for v := uint64(3); v <= AssemblerMaxVersion; v++ {
 		testProg(t, "pushint", v, expect{1, "pushint needs one argument"})
-		testProg(t, "pushbytes", v, expect{1, "pushbytes needs one argument"})
+		testProg(t, "pushbytes", v, expect{1, "pushbytes operation needs byte literal argument"})
 	}
 
 }

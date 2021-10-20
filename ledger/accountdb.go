@@ -1185,52 +1185,6 @@ func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[b
 	return
 }
 
-// totalsNewRounds updates the accountsTotals by applying series of round changes
-func totalsNewRounds(tx *sql.Tx, updates []ledgercore.AccountDeltas, compactUpdates compactAccountDeltas, accountTotals []ledgercore.AccountTotals, proto config.ConsensusParams) (err error) {
-	var ot basics.OverflowTracker
-	totals, err := accountsTotals(tx, false)
-	if err != nil {
-		return
-	}
-
-	// copy the updates base account map, since we don't want to modify the input map.
-	accounts := make(map[basics.Address]basics.AccountData, compactUpdates.len())
-	for i := 0; i < compactUpdates.len(); i++ {
-		addr, acctData := compactUpdates.getByIdx(i)
-		accounts[addr] = acctData.old.accountData
-	}
-
-	for i := 0; i < len(updates); i++ {
-		totals.ApplyRewards(accountTotals[i].RewardsLevel, &ot)
-
-		for j := 0; j < updates[i].Len(); j++ {
-			addr, data := updates[i].GetByIdx(j)
-
-			if oldAccountData, has := accounts[addr]; has {
-				totals.DelAccount(proto, oldAccountData, &ot)
-			} else {
-				err = fmt.Errorf("missing old account data")
-				return
-			}
-
-			totals.AddAccount(proto, data, &ot)
-			accounts[addr] = data
-		}
-	}
-
-	if ot.Overflowed {
-		err = fmt.Errorf("overflow computing totals")
-		return
-	}
-
-	err = accountsPutTotals(tx, totals, false)
-	if err != nil {
-		return
-	}
-
-	return
-}
-
 // updates the round number associated with the current account data.
 func updateAccountsRound(tx *sql.Tx, rnd basics.Round) (err error) {
 	res, err := tx.Exec("UPDATE acctrounds SET rnd=? WHERE id='acctbase' AND rnd<?", rnd, rnd)

@@ -402,6 +402,7 @@ func TestAcctUpdates(t *testing.T) {
 	// lastCreatableID stores asset or app max used index to get rid of conflicts
 	lastCreatableID := crypto.RandUint64() % 512
 	knownCreatables := make(map[basics.CreatableIndex]bool)
+
 	for i := basics.Round(10); i < basics.Round(proto.MaxBalLookback+15); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
@@ -444,6 +445,28 @@ func TestAcctUpdates(t *testing.T) {
 		ml.waitAccountsWriting()
 		checkAcctUpdates(t, au, i, basics.Round(proto.MaxBalLookback+14), accts, rewardsLevels, proto)
 	}
+
+	// check the account totals.
+	var dbRound basics.Round
+	err = ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		dbRound, err = accountsRound(tx)
+		return
+	})
+	require.NoError(t, err)
+
+	var updates ledgercore.AccountDeltas
+	for addr, acctData := range accts[dbRound] {
+		updates.Upsert(addr, acctData)
+	}
+
+	expectedTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardsLevels[dbRound], proto, nil, ledgercore.AccountTotals{})
+	var actualTotals ledgercore.AccountTotals
+	err = ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		actualTotals, err = accountsTotals(tx, false)
+		return
+	})
+	require.NoError(t, err)
+	require.Equal(t, expectedTotals, actualTotals)
 }
 
 func TestAcctUpdatesFastUpdates(t *testing.T) {
