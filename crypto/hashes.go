@@ -92,7 +92,7 @@ func (z HashFactory) NewHash() hash.Hash {
 	// This shouldn't be reached, when creating a new hash, one would know the type of hash they wanted,
 	// in addition to that, unmarshalling of the hashFactory verifies the HashType of the factory.
 	default:
-		panic(errUnknownHash)
+		return InvalidHash{}
 	}
 }
 
@@ -108,4 +108,33 @@ func HashBytes(hash hash.Hash, m []byte) []byte {
 	hash.Write(m)
 	outhash := hash.Sum(nil)
 	return outhash
+}
+
+// InvalidHash is used to identify errors on the factory.
+// this function will return nil slice
+type InvalidHash struct {
+}
+
+// Write writes bytes into the hash function. this function will return an error
+func (h InvalidHash) Write(p []byte) (n int, err error) {
+	return 0, errUnknownHash
+}
+
+// Sum returns an empty slice since this is an empty hash function
+func (h InvalidHash) Sum(b []byte) []byte {
+	return nil
+}
+
+// Reset this function has no state so it is empty
+func (h InvalidHash) Reset() {
+}
+
+// Size the current size of the function is always 0
+func (h InvalidHash) Size() int {
+	return 0
+}
+
+// BlockSize returns zero since this is an empty hash function
+func (h InvalidHash) BlockSize() int {
+	return 0
 }

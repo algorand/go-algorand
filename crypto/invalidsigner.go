@@ -23,16 +23,15 @@ import (
 // InvalidSinger is used for cases with the signer is invalid.
 // this will return an error while using.
 type InvalidSinger struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-	EmptyData bool `codec:"e"`
-
+	_struct   struct{} `codec:",omitempty,omitemptyarray"`
+	EmptyData bool     `codec:"e"`
 }
 
 // InvalidVerifier is used for cases with the verifier is invalid.
 // this will return an error while using.
 type InvalidVerifier struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-	EmptyData bool `codec:"e"`
+	_struct   struct{} `codec:",omitempty,omitemptyarray"`
+	EmptyData bool     `codec:"e"`
 }
 
 // NewInvalidSinger Generates invalid Signer.
@@ -51,10 +50,9 @@ func (d *InvalidSinger) SignBytes(data []byte) ByteSignature {
 }
 
 // GetVerifyingKey Outputs an invalid verifying key.
-func (p *InvalidSinger) GetVerifyingKey() *VerifyingKey {
+func (d *InvalidSinger) GetVerifyingKey() *VerifyingKey {
 	return &VerifyingKey{
 		Type: maxAlgorithmType,
-
 	}
 }
 

@@ -37,8 +37,6 @@ func TestHashFactoryCreatingNewHashes(t *testing.T) {
 	a.NotNil(h)
 	a.Equal(SumhashDigestSize, h.Size())
 
-	a.Panics(func() { HashFactory{HashType: maxHashType}.NewHash() })
-	a.Panics(func() { HashFactory{HashType: maxHashType + 1}.NewHash() })
 }
 
 func TestHashSum(t *testing.T) {
@@ -53,4 +51,24 @@ func TestHashSum(t *testing.T) {
 	dgst := HashObj(TestingHashable{})
 	a.Equal(GenereicHashObj(h, TestingHashable{}), dgst[:])
 
+}
+
+func TestEmptyHash(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	h := HashFactory{HashType: Sha512_256}
+	h.HashType = maxHashType
+	hash := h.NewHash()
+	a.Equal(0, hash.Size())
+	a.Equal(0, hash.BlockSize())
+
+	var msg [4]byte
+	len, err := hash.Write(msg[:])
+	a.Equal(0, len)
+	a.Error(err)
+
+	a.Equal(0, hash.BlockSize())
+	var emptySlice []byte
+	a.Equal(emptySlice, hash.Sum(nil))
 }
