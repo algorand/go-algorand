@@ -24,7 +24,7 @@ then
     exit 1
 fi
 
-if [ "${SKIPBUILDFORUPLOAD}" != "1" ]; then
+if [ "${NO_BUILD}" = "true" ]; then
     scripts/travis/build.sh
 fi
 

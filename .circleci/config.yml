@@ -50,7 +50,7 @@ workflows:
   version: 2
   "circleci_build_and_test":
     jobs:
-      # - codegen_verification
+      - codegen_verification
 
       - build:
           name: << matrix.platform >>_build
@@ -154,21 +154,15 @@ workflows:
           matrix:
             <<: *matrix-default
           requires:
-            # - << matrix.platform >>_test_nightly_verification
-            # - << matrix.platform >>_integration_nightly_verification
-            # - << matrix.platform >>_e2e_expect_nightly_verification
-            # - << matrix.platform >>_e2e_subs_nightly
-            # - codegen_verification
-            # REMOVE BELOW
-            - << matrix.platform >>_test_verification
-            - << matrix.platform >>_integration_verification
-            - << matrix.platform >>_e2e_expect_verification
-            - << matrix.platform >>_e2e_subs
-            # - << matrix.platform >>_build
-          # filters:
-          #   branches:
-          #     only:
-          #       - /rel\/.*/
+            - << matrix.platform >>_test_nightly_verification
+            - << matrix.platform >>_integration_nightly_verification
+            - << matrix.platform >>_e2e_expect_nightly_verification
+            - << matrix.platform >>_e2e_subs_nightly
+            - codegen_verification
+          filters:
+            branches:
+              only:
+                - /rel\/.*/
           context:
             - slack-secrets
             - aws-secrets
@@ -444,11 +438,7 @@ commands:
             command: |
               export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
               export GOPATH="<< parameters.build_dir >>/go"
-              # export ALGORAND_DEADLOCK=enable
-              export GIMME_INSTALL_DIR=<< parameters.build_dir >>
-              export GIMME_ENV_PREFIX=<< parameters.build_dir >>/.gimme/envs
-              export GIMME_VERSION_PREFIX=<< parameters.build_dir >>/.gimme/versions
-              export SKIPBUILDFORUPLOAD=1
+              export NO_BUILD=true
               ./scripts/travis/deploy_packages.sh
         - when:
             condition:
