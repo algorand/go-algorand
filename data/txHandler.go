@@ -534,6 +534,10 @@ func (handler *solicitedAsyncTxHandler) loop(ctx context.Context) {
 			handler.txHandler.net.RequestConnectOutgoing(false, make(chan struct{}))
 			transactionMessagesDroppedFromPool.Inc(nil)
 		} else if allTransactionsIncluded {
+			for _, txnGroup := range groups.txGroups {
+				// We reencode here instead of using rawmsg.Data to avoid broadcasting non-canonical encodings
+				handler.txHandler.net.Relay(ctx, protocol.TxnTag, reencode(txnGroup.Transactions), false, groups.networkPeer)
+			}
 			select {
 			case groups.ackCh <- groups.messageSeq:
 				// all good, write was successful.
