@@ -588,7 +588,7 @@ func (r *LocalRunner) Run() (bool, error) {
 		}
 		ep := logic.EvalParams{
 			Proto:                   &r.proto,
-			Txn:                     &r.txnGroup[groupIndex],
+			Txn:                     &r.txnGroup[run.groupIndex],
 			TxnGroup:                r.txnGroup,
 			GroupIndex:              run.groupIndex,
 			PastSideEffects:         run.pastSideEffects,
