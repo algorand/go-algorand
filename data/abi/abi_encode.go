@@ -571,7 +571,7 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 			}
 			elemsBytes := make([]byte, len(elems))
 			for i := 0; i < len(elems); i++ {
-				tempByte, err := MakeByteType().UnmarshalFromJSON(elems[i])
+				tempByte, err := byteType.UnmarshalFromJSON(elems[i])
 				if err != nil {
 					return nil, err
 				}

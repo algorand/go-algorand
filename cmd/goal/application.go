@@ -236,7 +236,7 @@ func parseAppArg(arg appCallArg) (rawValue []byte, parseErr error) {
 			parseErr = fmt.Errorf("Could not decode abi string (%s): should split abi-type and abi-value with colon", arg.Value)
 			return
 		}
-		abiType, err := abi.TypeFromString(typeAndValue[0])
+		abiType, err := abi.TypeOf(typeAndValue[0])
 		if err != nil {
 			parseErr = fmt.Errorf("Could not decode abi type string (%s): %v", typeAndValue[0], err)
 			return
