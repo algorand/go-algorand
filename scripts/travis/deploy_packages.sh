@@ -24,7 +24,9 @@ then
     exit 1
 fi
 
-scripts/travis/build.sh
+if [ "${SKIPBUILDFORUPLOAD}" != "1" ]; then
+    scripts/travis/build.sh
+fi
 
 export RELEASE_GENESIS_PROCESS=true
 export NO_BUILD=true
