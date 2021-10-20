@@ -158,6 +158,7 @@ type Peer struct {
 
 	// dataExchangeRate is the combined upload/download rate in bytes/second
 	dataExchangeRate uint64
+	cachedLatency    time.Duration
 
 	// these two fields describe "what does the local peer want the remote peer to send back"
 	localTransactionsModulator  byte
@@ -266,12 +267,13 @@ func (t *transactionGroupCounterTracker) index(offset, modulator byte) int {
 	return -1
 }
 
-func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool, cfg *config.Local, log Logger) *Peer {
+func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool, cfg *config.Local, log Logger, latency time.Duration) *Peer {
 	p := &Peer{
 		networkPeer:                 networkPeer,
 		isOutgoing:                  isOutgoing,
 		recentSentTransactions:      makeTransactionCache(shortTermRecentTransactionsSentBufferLength, longTermRecentTransactionsSentBufferLength, pendingUnconfirmedRemoteMessages),
 		dataExchangeRate:            defaultDataExchangeRate,
+		cachedLatency:               latency,
 		transactionPoolAckCh:        make(chan uint64, maxAcceptedMsgSeq),
 		transactionPoolAckMessages:  make([]uint64, 0, maxAcceptedMsgSeq),
 		significantMessageThreshold: defaultSignificantMessageThreshold,

@@ -195,7 +195,7 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 		}
 		if peerInfo.TxnSyncPeer == nil {
 			// we couldn't really do much about this message previously, since we didn't have the peer.
-			peer = makePeer(message.networkPeer, peerInfo.IsOutgoing, s.isRelay, &s.config, s.log)
+			peer = makePeer(message.networkPeer, peerInfo.IsOutgoing, s.isRelay, &s.config, s.log, s.node.GetPeerLatency(message.networkPeer))
 			// let the network peer object know about our peer
 			s.node.UpdatePeers([]*Peer{peer}, []interface{}{message.networkPeer}, 0)
 		} else {
@@ -250,7 +250,7 @@ incomingMessageLoop:
 		}
 
 		peer.updateRequestParams(incomingMsg.message.UpdatedRequestParams.Modulator, incomingMsg.message.UpdatedRequestParams.Offset)
-		peer.updateIncomingMessageTiming(incomingMsg.message.MsgSync, s.round, incomingMsg.timeReceived, s.node.GetPeerLatency(peer.networkPeer), incomingMsg.encodedSize)
+		peer.updateIncomingMessageTiming(incomingMsg.message.MsgSync, s.round, incomingMsg.timeReceived, peer.cachedLatency, incomingMsg.encodedSize)
 
 		// if the peer's round is more than a single round behind the local node, then we don't want to
 		// try and load the transactions. The other peer should first catch up before getting transactions.
