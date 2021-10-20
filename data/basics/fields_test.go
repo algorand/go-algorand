@@ -138,7 +138,7 @@ func makeTypeCheckFunction(t *testing.T, exceptions []typePath, startType reflec
 func TestBlockFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	blockType := reflect.TypeOf(bookkeeping.Block{})
+	typeToCheck := reflect.TypeOf(bookkeeping.Block{})
 
 	// These exceptions are for pre-existing usages of string. Only add to this list if you really need to use string.
 	exceptions := []typePath{
@@ -160,13 +160,13 @@ func TestBlockFields(t *testing.T) {
 
 	seen := make(map[reflect.Type]bool)
 
-	checkReferencedTypes(seen, nil, []reflect.Type{blockType}, makeTypeCheckFunction(t, exceptions, blockType))
+	checkReferencedTypes(seen, nil, []reflect.Type{typeToCheck}, makeTypeCheckFunction(t, exceptions, typeToCheck))
 }
 
 func TestAccountDataFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	blockType := reflect.TypeOf(basics.AccountData{})
+	typeToCheck := reflect.TypeOf(basics.AccountData{})
 
 	// These exceptions are for pre-existing usages of string. Only add to this list if you really need to use string.
 	exceptions := []typePath{
@@ -181,5 +181,5 @@ func TestAccountDataFields(t *testing.T) {
 
 	seen := make(map[reflect.Type]bool)
 
-	checkReferencedTypes(seen, nil, []reflect.Type{blockType}, makeTypeCheckFunction(t, exceptions, blockType))
+	checkReferencedTypes(seen, nil, []reflect.Type{typeToCheck}, makeTypeCheckFunction(t, exceptions, typeToCheck))
 }
