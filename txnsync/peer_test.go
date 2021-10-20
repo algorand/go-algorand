@@ -601,7 +601,7 @@ func TestUpdateIncomingMessageTiming(t *testing.T) {
 	p.lastSentMessageSize = 0
 	currentMessageSize = 100000
 	currentTime = time.Millisecond * 122
-	p.updateIncomingMessageTiming(timing, currentRound, currentTime, time.Millisecond * 100, currentMessageSize)
+	p.updateIncomingMessageTiming(timing, currentRound, currentTime, time.Millisecond*100, currentMessageSize)
 
 	a.Equal(uint64(5000000), p.dataExchangeRate)
 }

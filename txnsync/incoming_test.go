@@ -58,8 +58,9 @@ func TestAsyncIncomingMessageHandlerAndErrors(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	mNodeConnector := &mockNodeConnector{transactionPoolSize: 3}
 	s := syncState{
-		log:  wrapLogger(&incLogger, &cfg),
-		node: mNodeConnector,
+		log:   wrapLogger(&incLogger, &cfg),
+		node:  mNodeConnector,
+		clock: mNodeConnector.Clock(),
 	}
 
 	// expect UnmarshalMsg error
