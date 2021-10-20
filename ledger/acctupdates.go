@@ -381,7 +381,7 @@ func (au *accountUpdates) LookupWithRewards(rnd basics.Round, addr basics.Addres
 }
 
 // LookupLatestWithoutRewards returns the account data for a given address at a given round.
-func (au *accountUpdates) LookupLatestWithoutRewards(addr basics.Address) (data basics.AccountData, validThrough basics.Round, err error) {
+func (au *accountUpdates) LookupLatestWithoutRewards(addr basics.Address) (data basics.AccountData, latestRound basics.Round, err error) {
 	au.accountsMu.RLock()
 	rnd := au.latest()
 	au.accountsMu.RUnlock()

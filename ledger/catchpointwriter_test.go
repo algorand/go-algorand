@@ -368,9 +368,9 @@ func TestFullCatchpointWriter(t *testing.T) {
 
 	// verify that the account data aligns with what we originally stored :
 	for addr, acct := range accts {
-		acctData, validThrough, err := l.LookupLatestWithoutRewards(addr)
+		acctData, latestRound, err := l.LookupLatestWithoutRewards(addr)
 		require.NoError(t, err)
 		require.Equal(t, acct, acctData)
-		require.Equal(t, basics.Round(0), validThrough)
+		require.Equal(t, basics.Round(0), latestRound)
 	}
 }
