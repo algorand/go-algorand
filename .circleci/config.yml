@@ -439,7 +439,8 @@ commands:
               export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
               export GOPATH="<< parameters.build_dir >>/go"
               export NO_BUILD=true
-              ./scripts/travis/deploy_packages.sh
+              export TRAVIS_BRANCH=${CIRCLE_BRANCH}
+              scripts/travis/deploy_packages.sh
         - when:
             condition:
               equal: [ "amd64", << parameters.platform >> ]
