@@ -385,7 +385,7 @@ func (au *accountUpdates) LookupLatestWithoutRewards(addr basics.Address) (data 
 	au.accountsMu.RLock()
 	rnd := au.latest()
 	au.accountsMu.RUnlock()
-	return au.lookupWithoutRewards(rnd, addr, true /* take lock*/)
+	return au.lookupLatestWithoutRewards(rnd, addr, true /* take lock*/)
 }
 
 // ListAssets lists the assets by their asset index, limiting to the first maxResults
@@ -909,7 +909,7 @@ func (aul *accountUpdatesLedgerEvaluator) CheckDup(config.ConsensusParams, basic
 
 // LookupLatestWithoutRewards returns the account balance for a given address at a given round, without the reward
 func (aul *accountUpdatesLedgerEvaluator) LookupLatestWithoutRewards(addr basics.Address) (basics.AccountData, basics.Round, error) {
-	return aul.au.lookupWithoutRewards(aul.au.latest(), addr, false /*don't sync*/)
+	return aul.au.lookupLatestWithoutRewards(aul.au.latest(), addr, false /*don't sync*/)
 }
 
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
@@ -1515,8 +1515,8 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 	}
 }
 
-// lookupWithoutRewards returns the account data for a given address at a given round.
-func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Address, synchronized bool) (data basics.AccountData, validThrough basics.Round, err error) {
+// lookupLatestWithoutRewards returns the account data for a given address at a given round.
+func (au *accountUpdates) lookupLatestWithoutRewards(rnd basics.Round, addr basics.Address, synchronized bool) (data basics.AccountData, validThrough basics.Round, err error) {
 	needUnlock := false
 	if synchronized {
 		au.accountsMu.RLock()
