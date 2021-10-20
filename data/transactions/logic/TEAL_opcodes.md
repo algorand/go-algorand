@@ -484,6 +484,8 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 59 | NumLogs | uint64 | Number of Logs (itxn only). LogicSigVersion >= 5. |
 | 60 | CreatedAssetID | uint64 | Asset ID allocated by the creation of an ASA (itxn only). LogicSigVersion >= 5. |
 | 61 | CreatedApplicationID | uint64 | ApplicationID allocated by the creation of an application (itxn only). LogicSigVersion >= 5. |
+| 62 | BlockProofPKRoot | []byte | 64 byte block proof public key commitment. LogicSigVersion >= 6. |
+| 63 | BlockProofPKPresent | uint64 | Boolean value indicating whether BlockProofPKRoot is present. LogicSigVersion >= 6. |
 
 
 TypeEnum mapping:
