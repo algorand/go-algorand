@@ -500,12 +500,12 @@ func (l *Ledger) LookupLatestWithoutRewards(addr basics.Address) (basics.Account
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
-	data, validThrough, err := l.accts.LookupLatestWithoutRewards(addr)
+	data, lastestRound, err := l.accts.LookupLatestWithoutRewards(addr)
 	if err != nil {
 		return basics.AccountData{}, basics.Round(0), err
 	}
 
-	return data, validThrough, nil
+	return data, lastestRound, nil
 }
 
 // LatestTotals returns the totals of all accounts for the most recent round, as well as the round number.
