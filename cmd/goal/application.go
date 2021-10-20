@@ -42,6 +42,9 @@ var (
 	approvalProgFile string
 	clearProgFile    string
 
+	method     string
+	methodArgs []string
+
 	approvalProgRawFile string
 	clearProgRawFile    string
 
@@ -80,6 +83,7 @@ func init() {
 	appCmd.AddCommand(clearAppCmd)
 	appCmd.AddCommand(readStateAppCmd)
 	appCmd.AddCommand(infoAppCmd)
+	appCmd.AddCommand(methodAppCmd)
 
 	appCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
 	appCmd.PersistentFlags().StringSliceVar(&appArgs, "app-arg", nil, "Args to encode for application transactions (all will be encoded to a byte slice). For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.")
@@ -109,6 +113,9 @@ func init() {
 	deleteAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to send delete transaction from")
 	readStateAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to fetch state from")
 	updateAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to send update transaction from")
+
+	methodAppCmd.Flags().StringVarP(&method, "method", "m", "", "Method to be called")
+	methodAppCmd.Flags().StringArrayVar(&methodArgs, "arg", nil, "Args to pass in for calling a method")
 
 	// Can't use PersistentFlags on the root because for some reason marking
 	// a root command as required with MarkPersistentFlagRequired isn't
@@ -162,6 +169,8 @@ func init() {
 	readStateAppCmd.MarkFlagRequired("app-id")
 
 	infoAppCmd.MarkFlagRequired("app-id")
+
+	methodAppCmd.MarkFlagRequired("method")
 }
 
 type appCallArg struct {
@@ -1011,5 +1020,15 @@ var infoAppCmd = &cobra.Command{
 			fmt.Printf("Max local byteslices:  %d\n", lsch.NumByteSlice)
 			fmt.Printf("Max local integers:    %d\n", lsch.NumUint)
 		}
+	},
+}
+
+var methodAppCmd = &cobra.Command{
+	Use:   "method",
+	Short: "",
+	Long:  ``,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		// TODO
 	},
 }
