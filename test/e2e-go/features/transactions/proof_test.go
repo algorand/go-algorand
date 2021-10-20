@@ -102,8 +102,11 @@ func TestTxnMerkleProof(t *testing.T) {
 	proofresp, err := client.TxnProof(txid.String(), confirmedTx.ConfirmedRound)
 	a.NoError(err)
 
+	hashtype, err := crypto.InitHashType(proofresp.Hashtype)
+	a.NoError(err)
+
 	var proof merklearray.Proof
-	proof.HashFactory = crypto.HashFactory{HashType: crypto.Sha512_256}
+	proof.HashFactory = crypto.HashFactory{HashType: hashtype}
 	proofconcat := []byte(proofresp.Proof)
 	for len(proofconcat) > 0 {
 		var d crypto.Digest

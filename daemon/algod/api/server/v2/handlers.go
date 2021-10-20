@@ -231,6 +231,7 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 				Proof:    proofconcat,
 				Stibhash: stibhash[:],
 				Idx:      uint64(idx),
+				Hashtype: proof.HashFactory.HashType.String(),
 			}
 
 			return ctx.JSON(http.StatusOK, response)
