@@ -114,7 +114,7 @@ func init() {
 	readStateAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to fetch state from")
 	updateAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to send update transaction from")
 
-	methodAppCmd.Flags().StringVarP(&method, "method", "m", "", "Method to be called")
+	methodAppCmd.Flags().StringVar(&method, "method", "", "Method to be called")
 	methodAppCmd.Flags().StringArrayVar(&methodArgs, "arg", nil, "Args to pass in for calling a method")
 
 	// Can't use PersistentFlags on the root because for some reason marking
