@@ -24,16 +24,19 @@ import (
 // this will return an error while using.
 type InvalidSinger struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	EmptyData bool `codec:"e"`
+
 }
 
 // InvalidVerifier is used for cases with the verifier is invalid.
 // this will return an error while using.
 type InvalidVerifier struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	EmptyData bool `codec:"e"`
 }
 
 // NewInvalidSinger Generates invalid Signer.
-func NewInvalidSinger() *InvalidSinger {
+func NewInvalidSinger() Signer {
 	return &InvalidSinger{}
 }
 
@@ -51,6 +54,7 @@ func (d *InvalidSinger) SignBytes(data []byte) ByteSignature {
 func (p *InvalidSinger) GetVerifyingKey() *VerifyingKey {
 	return &VerifyingKey{
 		Type: maxAlgorithmType,
+
 	}
 }
 
