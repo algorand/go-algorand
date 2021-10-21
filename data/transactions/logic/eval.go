@@ -115,7 +115,7 @@ func (sv *stackValue) uint() (uint64, error) {
 	return sv.Uint, nil
 }
 
-func (sv *stackValue) uint_maxed(max uint64) (uint64, error) {
+func (sv *stackValue) uintMaxed(max uint64) (uint64, error) {
 	if sv.Bytes != nil {
 		return 0, errors.New("not a uint64")
 	}
@@ -4004,7 +4004,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 		txn.ApplicationID, err = cx.availableApp(sv)
 	case OnCompletion:
 		var onc uint64
-		onc, err = sv.uint_maxed(uint64(transactions.DeleteApplicationOC))
+		onc, err = sv.uintMaxed(uint64(transactions.DeleteApplicationOC))
 		txn.OnCompletion = transactions.OnCompletion(onc)
 	case ApplicationArgs:
 		if sv.Bytes == nil {
@@ -4069,20 +4069,20 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 		txn.ForeignApps = append(txn.ForeignApps, new)
 	case GlobalNumUint:
 		txn.GlobalStateSchema.NumUint, err =
-			sv.uint_maxed(cx.Proto.MaxGlobalSchemaEntries)
+			sv.uintMaxed(cx.Proto.MaxGlobalSchemaEntries)
 	case GlobalNumByteSlice:
 		txn.GlobalStateSchema.NumByteSlice, err =
-			sv.uint_maxed(cx.Proto.MaxGlobalSchemaEntries)
+			sv.uintMaxed(cx.Proto.MaxGlobalSchemaEntries)
 	case LocalNumUint:
 		txn.LocalStateSchema.NumUint, err =
-			sv.uint_maxed(cx.Proto.MaxLocalSchemaEntries)
+			sv.uintMaxed(cx.Proto.MaxLocalSchemaEntries)
 	case LocalNumByteSlice:
 		txn.LocalStateSchema.NumByteSlice, err =
-			sv.uint_maxed(cx.Proto.MaxLocalSchemaEntries)
+			sv.uintMaxed(cx.Proto.MaxLocalSchemaEntries)
 	case ExtraProgramPages:
 		var epp uint64
 		epp, err =
-			sv.uint_maxed(uint64(cx.Proto.MaxExtraAppProgramPages))
+			sv.uintMaxed(uint64(cx.Proto.MaxExtraAppProgramPages))
 		if err != nil {
 			return
 		}
