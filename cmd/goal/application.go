@@ -171,7 +171,7 @@ func init() {
 	infoAppCmd.MarkFlagRequired("app-id")
 
 	// TODO why this line always cause trouble in golangci-lint
-	//methodAppCmd.MarkFlagRequired("method")
+	methodAppCmd.MarkFlagRequired("method")
 }
 
 type appCallArg struct {
