@@ -26,7 +26,6 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logictest"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -44,20 +43,20 @@ func makeApp(li uint64, lb uint64, gi uint64, gb uint64) basics.AppParams {
 	}
 }
 
-func makeSampleEnv() (EvalParams, *logictest.Ledger) {
+func makeSampleEnv() (EvalParams, *Ledger) {
 	return makeSampleEnvWithVersion(LogicVersion)
 }
 
-func makeSampleEnvWithVersion(version uint64) (EvalParams, *logictest.Ledger) {
+func makeSampleEnvWithVersion(version uint64) (EvalParams, *Ledger) {
 	txn := makeSampleTxn()
 	ep := defaultEvalParamsWithVersion(nil, &txn, version)
 	ep.TxnGroup = makeSampleTxnGroup(txn)
-	ledger := logictest.MakeLedger(map[basics.Address]uint64{})
+	ledger := MakeLedger(map[basics.Address]uint64{})
 	ep.Ledger = ledger
 	return ep, ledger
 }
 
-func makeOldAndNewEnv(version uint64) (EvalParams, EvalParams, *logictest.Ledger) {
+func makeOldAndNewEnv(version uint64) (EvalParams, EvalParams, *Ledger) {
 	new, sharedLedger := makeSampleEnv()
 	old, _ := makeSampleEnvWithVersion(version)
 	old.Ledger = sharedLedger
@@ -231,12 +230,13 @@ log
 		Clawback:      txn.Txn.Receiver,
 	}
 	algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-	ledger := logictest.MakeLedger(
+	ledger := MakeLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Sender: 1,
 		},
 	)
 	ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
+	ledger.NewLocals(txn.Txn.Sender, 100)
 	ledger.NewLocal(txn.Txn.Sender, 100, "ALGO", algoValue)
 	ledger.NewAsset(txn.Txn.Sender, 5, params)
 
@@ -433,8 +433,9 @@ func TestMinBalance(t *testing.T) {
 	testApp(t, "int 0; min_balance; int 2002; ==", ep)
 	schemas := makeApp(1, 2, 3, 4)
 	ledger.NewApp(ep.Txn.Txn.Sender, 77, schemas)
+	ledger.NewLocals(ep.Txn.Txn.Sender, 77)
 	// create + optin + 10 schema base + 4 ints + 6 bytes (local
-	// and global count b/c NewApp opts the creator in)
+	// and global count b/c NewLocals opts the creator in)
 	minb := 2*1002 + 10*1003 + 4*1004 + 6*1005
 	testApp(t, fmt.Sprintf("int 0; min_balance; int %d; ==", 2002+minb), ep)
 	// request extra program pages, min balance increase
@@ -472,7 +473,7 @@ func TestAppCheckOptedIn(t *testing.T) {
 	pre.TxnGroup = txgroup
 	testApp(t, "int 2; int 100; app_opted_in; int 1; ==", now, "ledger not available")
 
-	ledger := logictest.MakeLedger(
+	ledger := MakeLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Receiver: 1,
 			txn.Txn.Sender:   1,
@@ -491,7 +492,7 @@ func TestAppCheckOptedIn(t *testing.T) {
 	testApp(t, "int 0; int 100; app_opted_in; int 0; ==", now)
 
 	// Receiver opted in
-	ledger.NewApp(txn.Txn.Receiver, 100, basics.AppParams{})
+	ledger.NewLocals(txn.Txn.Receiver, 100)
 	testApp(t, "int 1; int 100; app_opted_in; int 1; ==", now)
 	testApp(t, "int 1; int 2; app_opted_in; int 1; ==", now)
 	testApp(t, "int 1; int 2; app_opted_in; int 0; ==", pre) // in pre, int 2 is an actual app id
@@ -500,7 +501,7 @@ func TestAppCheckOptedIn(t *testing.T) {
 		expect{3, "app_opted_in arg 0 wanted type uint64..."})
 
 	// Sender opted in
-	ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
+	ledger.NewLocals(txn.Txn.Sender, 100)
 	testApp(t, "int 0; int 100; app_opted_in; int 1; ==", now)
 }
 
@@ -548,6 +549,7 @@ int 1`
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
 	ledger.NewApp(now.Txn.Txn.Receiver, 100, basics.AppParams{})
+	ledger.NewLocals(now.Txn.Txn.Receiver, 100)
 	testApp(t, text, now)
 
 	text = `int 1  // account idx
@@ -578,6 +580,7 @@ byte 0x414c474f
 
 	// check special case account idx == 0 => sender
 	ledger.NewApp(now.Txn.Txn.Sender, 100, basics.AppParams{})
+	ledger.NewLocals(now.Txn.Txn.Sender, 100)
 	text = `int 0  // account idx
 int 100 // app id
 txn ApplicationArgs 0
@@ -607,6 +610,7 @@ exist:
 byte 0x414c474f
 ==`
 
+	ledger.NewLocals(now.Txn.Txn.Sender, 56)
 	ledger.NewLocal(now.Txn.Txn.Sender, 56, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
 	testApp(t, text, now)
 
@@ -692,6 +696,7 @@ byte 0x414c474f
 	// check app_global_get default value
 	text = "byte 0x414c474f55; app_global_get; int 0; =="
 
+	ledger.NewLocals(now.Txn.Txn.Sender, 100)
 	ledger.NewLocal(now.Txn.Txn.Sender, 100, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
 	testApp(t, text, now)
 
@@ -864,7 +869,7 @@ func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64)
 	pre := defaultEvalParamsWithVersion(nil, &txn, directRefEnabledVersion-1)
 	require.GreaterOrEqual(t, version, uint64(directRefEnabledVersion))
 	now := defaultEvalParamsWithVersion(nil, &txn, version)
-	ledger := logictest.MakeLedger(
+	ledger := MakeLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Sender: 1,
 		},
@@ -1125,7 +1130,7 @@ intc_1
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "ledger not available")
 
-			ledger := logictest.MakeLedger(
+			ledger := MakeLedger(
 				map[basics.Address]uint64{
 					txn.Txn.Sender: 1,
 				},
@@ -1145,6 +1150,7 @@ intc_1
 			require.Contains(t, err.Error(), "no app for account")
 
 			ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
+			ledger.NewLocals(txn.Txn.Sender, 100)
 
 			if name == "read" {
 				_, err = EvalStateful(ops.Program, ep)
@@ -1180,13 +1186,14 @@ func TestAppLocalStateReadWrite(t *testing.T) {
 	txn := makeSampleTxn()
 	txn.Txn.ApplicationID = 100
 	ep.Txn = &txn
-	ledger := logictest.MakeLedger(
+	ledger := MakeLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Sender: 1,
 		},
 	)
 	ep.Ledger = ledger
 	ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
+	ledger.NewLocals(txn.Txn.Sender, 100)
 
 	// write int and bytes values
 	source := `int 0 // account
@@ -1489,7 +1496,7 @@ int 1
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "ledger not available")
 
-			ledger := logictest.MakeLedger(
+			ledger := MakeLedger(
 				map[basics.Address]uint64{
 					txn.Txn.Sender: 1,
 				},
@@ -1592,7 +1599,7 @@ int 0x77
 	txn.Txn.ApplicationID = 100
 	txn.Txn.ForeignApps = []basics.AppIndex{txn.Txn.ApplicationID}
 	ep.Txn = &txn
-	ledger := logictest.MakeLedger(
+	ledger := MakeLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Sender: 1,
 		},
@@ -1764,7 +1771,7 @@ byte "myval"
 	txn.Txn.ApplicationID = 100
 	txn.Txn.ForeignApps = []basics.AppIndex{txn.Txn.ApplicationID, 101}
 	ep.Txn = &txn
-	ledger := logictest.MakeLedger(
+	ledger := MakeLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Sender: 1,
 		},
@@ -1810,7 +1817,7 @@ int 7
 	txn := makeSampleTxn()
 	txn.Txn.ApplicationID = 100
 	ep.Txn = &txn
-	ledger := logictest.MakeLedger(
+	ledger := MakeLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Sender: 1,
 		},
@@ -1857,7 +1864,7 @@ int 1
 	txn := makeSampleTxn()
 	txn.Txn.ApplicationID = 100
 	ep.Txn = &txn
-	ledger := logictest.MakeLedger(
+	ledger := MakeLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Sender: 1,
 		},
@@ -2024,13 +2031,14 @@ int 1
 	txn := makeSampleTxn()
 	txn.Txn.ApplicationID = 100
 	ep.Txn = &txn
-	ledger := logictest.MakeLedger(
+	ledger := MakeLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Sender: 1,
 		},
 	)
 	ep.Ledger = ledger
 	ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
+	ledger.NewLocals(txn.Txn.Sender, 100)
 	ledger.NewAccount(txn.Txn.Receiver, 1)
 	ledger.NewLocals(txn.Txn.Receiver, 100)
 
@@ -2236,7 +2244,7 @@ func TestEnumFieldErrors(t *testing.T) {
 	require.Contains(t, err.Error(), "MinTxnFee expected field type is []byte but got uint64")
 
 	txn := makeSampleTxn()
-	ledger := logictest.MakeLedger(
+	ledger := MakeLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Sender: 1,
 		},
@@ -2321,7 +2329,7 @@ func TestReturnTypes(t *testing.T) {
 		[]byte("aoeu2"),
 		[]byte("aoeu3"),
 	}
-	ledger := logictest.MakeLedger(
+	ledger := MakeLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Sender: 1,
 		},

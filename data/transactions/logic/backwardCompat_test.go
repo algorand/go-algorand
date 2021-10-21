@@ -25,7 +25,6 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/transactions/logictest"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
@@ -388,7 +387,7 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 	}
 	require.Greater(t, len(fields), 1)
 
-	ledger := logictest.MakeLedger(nil)
+	ledger := MakeLedger(nil)
 	for _, field := range fields {
 		text := fmt.Sprintf("global %s", field.field.String())
 		// check assembler fails if version before introduction
@@ -451,7 +450,7 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 		"gtxn 0 %s",
 	}
 
-	ledger := logictest.MakeLedger(nil)
+	ledger := MakeLedger(nil)
 	txn := makeSampleTxn()
 	// We'll reject too early if we have a nonzero RekeyTo, because that
 	// field must be zero for every txn in the group if this is an old

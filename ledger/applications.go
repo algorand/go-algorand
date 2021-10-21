@@ -22,6 +22,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -259,23 +260,21 @@ func (al *logicLedger) balances() (apply.Balances, error) {
 	return balances, nil
 }
 
-func (al *logicLedger) Perform(tx *transactions.Transaction, spec transactions.SpecialAddresses) (transactions.ApplyData, error) {
-	var ad transactions.ApplyData
-
+func (al *logicLedger) Perform(tx *transactions.SignedTxnWithAD, ep *logic.EvalParams) error {
 	balances, err := al.balances()
 	if err != nil {
-		return ad, err
+		return err
 	}
 
 	// move fee to pool
-	err = balances.Move(tx.Sender, spec.FeeSink, tx.Fee, &ad.SenderRewards, nil)
+	err = balances.Move(tx.Txn.Sender, ep.Specials.FeeSink, tx.Txn.Fee, &tx.ApplyData.SenderRewards, nil)
 	if err != nil {
-		return ad, err
+		return err
 	}
 
-	err = apply.Rekey(balances, tx)
+	err = apply.Rekey(balances, &tx.Txn)
 	if err != nil {
-		return ad, err
+		return err
 	}
 
 	// compared to eval.transaction() it may seem strange that we
@@ -289,26 +288,33 @@ func (al *logicLedger) Perform(tx *transactions.Transaction, spec transactions.S
 	// first glance.
 	al.cow.incTxnCount()
 
-	switch tx.Type {
+	switch tx.Txn.Type {
 	case protocol.PaymentTx:
-		err = apply.Payment(tx.PaymentTxnFields, tx.Header, balances, spec, &ad)
+		err = apply.Payment(tx.Txn.PaymentTxnFields, tx.Txn.Header, balances, *ep.Specials, &tx.ApplyData)
 
 	case protocol.KeyRegistrationTx:
-		err = apply.Keyreg(tx.KeyregTxnFields, tx.Header, balances, spec, &ad, al.Round())
+		err = apply.Keyreg(tx.Txn.KeyregTxnFields, tx.Txn.Header, balances, *ep.Specials, &tx.ApplyData,
+			al.Round())
 
 	case protocol.AssetConfigTx:
-		err = apply.AssetConfig(tx.AssetConfigTxnFields, tx.Header, balances, spec, &ad, al.cow.txnCounter())
+		err = apply.AssetConfig(tx.Txn.AssetConfigTxnFields, tx.Txn.Header, balances, *ep.Specials, &tx.ApplyData,
+			al.cow.txnCounter())
 
 	case protocol.AssetTransferTx:
-		err = apply.AssetTransfer(tx.AssetTransferTxnFields, tx.Header, balances, spec, &ad)
+		err = apply.AssetTransfer(tx.Txn.AssetTransferTxnFields, tx.Txn.Header, balances, *ep.Specials, &tx.ApplyData)
+
 	case protocol.AssetFreezeTx:
-		err = apply.AssetFreeze(tx.AssetFreezeTxnFields, tx.Header, balances, spec, &ad)
+		err = apply.AssetFreeze(tx.Txn.AssetFreezeTxnFields, tx.Txn.Header, balances, *ep.Specials, &tx.ApplyData)
+
+	case protocol.ApplicationCallTx:
+		err = apply.ApplicationCall(tx.Txn.ApplicationCallTxnFields, tx.Txn.Header, balances, &tx.ApplyData,
+			ep, al.cow.txnCounter())
 
 	default:
-		err = fmt.Errorf("%s tx in AVM", tx.Type)
+		err = fmt.Errorf("%s tx in AVM", tx.Txn.Type)
 	}
 	if err != nil {
-		return ad, err
+		return err
 	}
 
 	// We don't check min balances during in app txns.
@@ -317,6 +323,6 @@ func (al *logicLedger) Perform(tx *transactions.Transaction, spec transactions.S
 	// it when the top-level txn concludes, as because cow will return
 	// all changed accounts in modifiedAccounts().
 
-	return ad, nil
+	return nil
 
 }

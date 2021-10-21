@@ -14,9 +14,10 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package logictest
+package logic
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 
@@ -109,21 +110,19 @@ func (l *Ledger) NewAccount(addr basics.Address, balance uint64) {
 // the id and schema, it inserts no code, since testing will want to
 // try many different code sequences.
 func (l *Ledger) NewApp(creator basics.Address, appID basics.AppIndex, params basics.AppParams) {
-	l.appID = appID
+	l.SetApp(appID)
 	params = params.Clone()
 	if params.GlobalState == nil {
 		params.GlobalState = make(basics.TealKeyValue)
 	}
 	l.applications[appID] = appParams{
 		Creator:   creator,
-		AppParams: params.Clone(),
+		AppParams: params,
 	}
-	br, ok := l.balances[creator]
-	if !ok {
-		br = makeBalanceRecord(creator, 0)
-	}
-	br.locals[appID] = make(map[string]basics.TealValue)
-	l.balances[creator] = br
+}
+
+func (l *Ledger) SetApp(appID basics.AppIndex) {
+	l.appID = appID
 }
 
 // NewAsset adds an asset with the given id and params to the ledger.
@@ -166,6 +165,9 @@ func (l *Ledger) NewHolding(addr basics.Address, assetID uint64, amount uint64, 
 
 // NewLocals essentially "opts in" an address to an app id.
 func (l *Ledger) NewLocals(addr basics.Address, appID uint64) {
+	if _, ok := l.balances[addr]; !ok {
+		l.balances[addr] = makeBalanceRecord(addr, 0)
+	}
 	l.balances[addr].locals[basics.AppIndex(appID)] = basics.TealKeyValue{}
 }
 
@@ -666,11 +668,12 @@ func (l *Ledger) axfer(from basics.Address, xfer transactions.AssetTransferTxnFi
 	return nil
 }
 
-func (l *Ledger) acfg(from basics.Address, cfg transactions.AssetConfigTxnFields) (transactions.ApplyData, error) {
+func (l *Ledger) acfg(from basics.Address, cfg transactions.AssetConfigTxnFields, ad *transactions.ApplyData) error {
 	if cfg.ConfigAsset == 0 {
 		aid := basics.AssetIndex(l.freshID())
 		l.NewAsset(from, aid, cfg.AssetParams)
-		return transactions.ApplyData{ConfigAsset: aid}, nil
+		ad.ConfigAsset = aid
+		return nil
 	}
 	// This is just a mock.  We don't check all the rules about
 	// not setting fields that have been zeroed. Nor do we keep
@@ -679,7 +682,7 @@ func (l *Ledger) acfg(from basics.Address, cfg transactions.AssetConfigTxnFields
 		Creator:     from,
 		AssetParams: cfg.AssetParams,
 	}
-	return transactions.ApplyData{}, nil
+	return nil
 }
 
 func (l *Ledger) afrz(from basics.Address, frz transactions.AssetFreezeTxnFields) error {
@@ -693,61 +696,126 @@ func (l *Ledger) afrz(from basics.Address, frz transactions.AssetFreezeTxnFields
 	}
 	br, ok := l.balances[frz.FreezeAccount]
 	if !ok {
-		return fmt.Errorf("%s does not hold anything", from)
+		return fmt.Errorf("%s does not hold Asset (%d)", frz.FreezeAccount, aid)
 	}
 	holding, ok := br.holdings[aid]
 	if !ok {
-		return fmt.Errorf("%s does not hold Asset (%d)", from, aid)
+		return fmt.Errorf("%s does not hold Asset (%d)", frz.FreezeAccount, aid)
 	}
 	holding.Frozen = frz.AssetFrozen
 	br.holdings[aid] = holding
 	return nil
 }
 
-func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnFields) error {
+func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnFields, ad *transactions.ApplyData, ep *EvalParams) error {
+	// This is just a mock.  We don't run it yet, but we always do the implied
+	// operation (create, update, delete).
+	aid := appl.ApplicationID
+	if aid == 0 {
+		aid = basics.AppIndex(l.freshID())
+		params := basics.AppParams{
+			ApprovalProgram:   appl.ApprovalProgram,
+			ClearStateProgram: appl.ClearStateProgram,
+			GlobalState:       map[string]basics.TealValue{},
+			StateSchemas: basics.StateSchemas{
+				LocalStateSchema: basics.StateSchema{
+					NumUint:      appl.LocalStateSchema.NumUint,
+					NumByteSlice: appl.LocalStateSchema.NumByteSlice,
+				},
+				GlobalStateSchema: basics.StateSchema{
+					NumUint:      appl.GlobalStateSchema.NumUint,
+					NumByteSlice: appl.GlobalStateSchema.NumByteSlice,
+				},
+			},
+			ExtraProgramPages: appl.ExtraProgramPages,
+		}
+		was := l.appID
+		l.NewApp(from, aid, params)
+		l.SetApp(was)
+		ad.ApplicationID = aid
+	}
+
+	if appl.OnCompletion == transactions.OptInOC {
+		br, ok := l.balances[from]
+		if !ok {
+			return errors.New("no account")
+		}
+		br.locals[aid] = make(map[string]basics.TealValue)
+	}
+
+	// Execute the Approval program
+	params, ok := l.applications[aid]
+	if !ok {
+		return errors.New("No application")
+	}
+	approved, _, err := EvalStatefulCx(params.ApprovalProgram, *ep)
+	if err != nil {
+		return err
+	}
+	if !approved {
+		return errors.New("Approval program failed")
+	}
+
+	switch appl.OnCompletion {
+	case transactions.NoOpOC:
+	case transactions.OptInOC:
+		// done earlier so locals could be changed
+	case transactions.CloseOutOC:
+		// get the local state, error if not exists, delete it
+		br, ok := l.balances[from]
+		if !ok {
+			return errors.New("no account")
+		}
+		_, ok = br.locals[aid]
+		if !ok {
+			return errors.New("not opted in")
+		}
+		delete(br.locals, aid)
+	case transactions.DeleteApplicationOC:
+		// get the global object, delete it
+		_, ok := l.applications[aid]
+		if !ok {
+			return errors.New("no app")
+		}
+		delete(l.applications, aid)
+	case transactions.UpdateApplicationOC:
+		app, ok := l.applications[aid]
+		if !ok {
+			return errors.New("no app")
+		}
+		app.ApprovalProgram = appl.ApprovalProgram
+		app.ClearStateProgram = appl.ClearStateProgram
+		l.applications[aid] = app
+	}
 	return nil
 }
 
-/* It's gross to reimplement this here, rather than have a way to use
-   a ledger that's backed by our mock, but uses the "real" code
-   (cowRoundState which implements Balances), as a better test. To
-   allow that, we need to move our mocks into separate packages so
-   they can be combined in yet *another* package, and avoid circular
-   imports.
-
-   This is currently unable to fill the ApplyData objects.  That would
-   require a whole new level of code duplication.
-*/
-
-// Perform causes txn to "occur" against the ledger. The returned ad is empty.
-func (l *Ledger) Perform(txn *transactions.Transaction, spec transactions.SpecialAddresses) (transactions.ApplyData, error) {
-	var ad transactions.ApplyData
-
-	err := l.move(txn.Sender, spec.FeeSink, txn.Fee.Raw)
+// Perform causes txn to "occur" against the ledger.
+func (l *Ledger) Perform(txn *transactions.SignedTxnWithAD, ep *EvalParams) error {
+	err := l.move(txn.Txn.Sender, ep.Specials.FeeSink, txn.Txn.Fee.Raw)
 	if err != nil {
-		return ad, err
+		return err
 	}
 
-	err = l.rekey(txn)
+	err = l.rekey(&txn.Txn)
 	if err != nil {
-		return ad, err
+		return err
 	}
 
-	switch txn.Type {
+	switch txn.Txn.Type {
 	case protocol.PaymentTx:
-		err = l.pay(txn.Sender, txn.PaymentTxnFields)
+		return l.pay(txn.Txn.Sender, txn.Txn.PaymentTxnFields)
 	case protocol.AssetTransferTx:
-		err = l.axfer(txn.Sender, txn.AssetTransferTxnFields)
+		return l.axfer(txn.Txn.Sender, txn.Txn.AssetTransferTxnFields)
 	case protocol.AssetConfigTx:
-		ad, err = l.acfg(txn.Sender, txn.AssetConfigTxnFields)
+		return l.acfg(txn.Txn.Sender, txn.Txn.AssetConfigTxnFields, &txn.ApplyData)
 	case protocol.AssetFreezeTx:
-		err = l.afrz(txn.Sender, txn.AssetFreezeTxnFields)
+		return l.afrz(txn.Txn.Sender, txn.Txn.AssetFreezeTxnFields)
 	case protocol.ApplicationCallTx:
-		err = l.appl(txn.Sender, txn.ApplicationCallTxnFields)
+		return l.appl(txn.Txn.Sender, txn.Txn.ApplicationCallTxnFields, &txn.ApplyData, ep)
 	default:
-		err = fmt.Errorf("%s txn in AVM", txn.Type)
+		return fmt.Errorf("%s txn in AVM", txn.Txn.Type)
 	}
-	return ad, err
 }
 
 // Get() through allocated() implement cowForLogicLedger, so we should

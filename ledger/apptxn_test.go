@@ -1180,6 +1180,164 @@ nonpart:
 	eval.txn(t, pay.Noted("again"))
 	eval.txn(t, nonpart.Noted("again"), "cannot change online/offline")
 	l.endBlock(t, eval)
-	// Ppaid fee and 1.  Did not get rewards
+	// Paid fee + 1.  Did not get rewards
 	require.Equal(t, 999_998_998, int(l.micros(t, appIndex.Address())))
+}
+
+func TestInnerAppCall(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	app0 := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  itxn_begin
+   int pay
+   itxn_field TypeEnum
+   int 1
+   itxn_field Amount
+   txn Sender
+   itxn_field Receiver
+  itxn_submit
+`),
+	}
+	eval := l.nextBlock(t)
+	eval.txn(t, &app0)
+	vb := l.endBlock(t, eval)
+	index0 := vb.blk.Payset[0].ApplicationID
+
+	app1 := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[1],
+		ApprovalProgram: main(`
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+  itxn_submit
+`),
+	}
+
+	eval = l.nextBlock(t)
+	eval.txns(t, &app1)
+	vb = l.endBlock(t, eval)
+	index1 := vb.blk.Payset[0].ApplicationID
+
+	fund0 := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: index0.Address(),
+		Amount:   1_000_000_000,
+	}
+	fund1 := fund0
+	fund1.Receiver = index1.Address()
+
+	call1 := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[2],
+		ApplicationID: index1,
+		ForeignApps:   []basics.AppIndex{index0},
+	}
+	eval = l.nextBlock(t)
+	eval.txns(t, &fund0, &fund1, &call1)
+	l.endBlock(t, eval)
+
+}
+
+// TestInnerAppManipulate ensures that apps called from inner transactions make
+// the changes expected when invoked.
+func TestInnerAppManipulate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := newTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	calleeIndex := basics.AppIndex(1)
+	callee := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		// This app set a global key arg[1] to arg[2] or get arg[1] and log it
+		ApprovalProgram: main(`
+ txn ApplicationArgs 0
+ byte "set"
+ ==
+ bz next1
+ txn ApplicationArgs 1
+ txn ApplicationArgs 2
+ app_global_put
+ b end
+next1:
+ txn ApplicationArgs 0
+ byte "get"
+ ==
+ bz next2
+ txn ApplicationArgs 1
+ app_global_get
+ log							// Fails if key didn't exist, b/c TOS = 0
+ b end
+next2:
+ err
+`),
+		GlobalStateSchema: basics.StateSchema{
+			NumByteSlice: 1,
+		},
+	}
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: calleeIndex.Address(),
+		Amount:   1_000_000,
+	}
+	eval := l.nextBlock(t)
+	eval.txns(t, &callee, &fund)
+	vb := l.endBlock(t, eval)
+	require.Equal(t, calleeIndex, vb.blk.Payset[0].ApplicationID)
+
+	callerIndex := basics.AppIndex(3)
+	caller := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+ itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+   byte "set"
+   itxn_field ApplicationArgs
+   byte "X"
+   itxn_field ApplicationArgs
+   byte "A"
+   itxn_field ApplicationArgs
+  itxn_submit
+  itxn NumLogs
+  int 0
+  ==
+  assert
+  b end
+`),
+	}
+	fund.Receiver = callerIndex.Address()
+
+	eval = l.nextBlock(t)
+	eval.txns(t, &caller, &fund)
+	vb = l.endBlock(t, eval)
+	require.Equal(t, callerIndex, vb.blk.Payset[0].ApplicationID)
+
+	call := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[0],
+		ApplicationID: callerIndex,
+		ForeignApps:   []basics.AppIndex{calleeIndex},
+	}
+	eval = l.nextBlock(t)
+	eval.txns(t, &call)
+	vb = l.endBlock(t, eval)
+
 }

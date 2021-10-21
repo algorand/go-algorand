@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"testing"
@@ -677,19 +678,27 @@ func TestApplSubmission(t *testing.T) {
 	// Since the fee is moved first, fund the app
 	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
 
+	ops := testProg(t, "int 1", AssemblerMaxVersion)
+	approve := hex.EncodeToString(ops.Program)
+	a := fmt.Sprintf("byte 0x%s; itxn_field ApprovalProgram;", approve)
+
 	p := "itxn_begin; int appl; itxn_field TypeEnum;"
 	s := ";itxn_submit; int 1"
-	testApp(t, p+""+s, ep)
+	testApp(t, p+a+s, ep)
 
-	testApp(t, p+`int 600; bzero; itxn_field ApprovalProgram;
-                  int 600; bzero; itxn_field ClearStateProgram;`+s, ep)
+	// All zeros is v0, so we get a complaint, but that means lengths were ok.
+	testApp(t, p+a+`int 600; bzero; itxn_field ApprovalProgram;
+                  int 600; bzero; itxn_field ClearStateProgram;`+s, ep,
+		"program version must be")
+
 	testApp(t, p+`int 601; bzero; itxn_field ApprovalProgram;
                   int 600; bzero; itxn_field ClearStateProgram;`+s, ep, "too long")
 
 	// WellFormed does the math based on the supplied ExtraProgramPages
-	testApp(t, p+`int 1; itxn_field ExtraProgramPages
+	testApp(t, p+a+`int 1; itxn_field ExtraProgramPages
                   int 1200; bzero; itxn_field ApprovalProgram;
-                  int 1200; bzero; itxn_field ClearStateProgram;`+s, ep)
+                  int 1200; bzero; itxn_field ClearStateProgram;`+s, ep,
+		"program version must be")
 	testApp(t, p+`int 1; itxn_field ExtraProgramPages
                   int 1200; bzero; itxn_field ApprovalProgram;
                   int 1201; bzero; itxn_field ClearStateProgram;`+s, ep, "too long")
@@ -703,4 +712,71 @@ func TestApplSubmission(t *testing.T) {
 		ep, "too large")
 	testApp(t, p+"int 7; itxn_field LocalNumUint; int 7; itxn_field LocalNumByteSlice"+s,
 		ep, "too large")
+}
+
+func TestInnerApplCreate(t *testing.T) {
+	ep, ledger := makeSampleEnv()
+	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+
+	ops := testProg(t, "int 1", AssemblerMaxVersion)
+	approve := "byte 0x" + hex.EncodeToString(ops.Program)
+
+	testApp(t, `
+itxn_begin
+int appl;    itxn_field TypeEnum
+`+approve+`; itxn_field ApprovalProgram
+`+approve+`; itxn_field ClearStateProgram
+int 1;       itxn_field GlobalNumUint
+int 2;       itxn_field LocalNumByteSlice
+int 3;       itxn_field LocalNumUint
+itxn_submit
+int 1
+`, ep)
+	// In testing, creating an app sets the "current app". So reset it.
+	ledger.SetApp(888)
+
+	testApp(t, `
+int 889; app_params_get AppGlobalNumByteSlice; assert; int 0; ==; assert
+`, ep, "invalid App reference")
+
+	call := `
+itxn_begin
+int appl;              itxn_field TypeEnum
+int 889;               itxn_field ApplicationID
+itxn_submit
+int 1
+`
+	// Can't call it either
+	testApp(t, call, ep, "invalid App reference")
+
+	ep.Txn.Txn.ForeignApps = []basics.AppIndex{basics.AppIndex(889)}
+	testApp(t, `
+int 889; app_params_get AppGlobalNumByteSlice; assert; int 0; ==; assert
+int 889; app_params_get AppGlobalNumUint;      assert; int 1; ==; assert
+int 889; app_params_get AppLocalNumByteSlice;  assert; int 2; ==; assert
+int 889; app_params_get AppLocalNumUint;       assert; int 3; ==; assert
+int 1
+`, ep)
+
+	// Call it (default OnComplete is NoOp)
+	testApp(t, call, ep)
+
+	testApp(t, `
+itxn_begin
+int appl;              itxn_field TypeEnum
+int DeleteApplication; itxn_field OnCompletion
+txn Applications 1;    itxn_field ApplicationID
+itxn_submit
+int 1
+`, ep)
+
+	// App is gone
+	testApp(t, `
+int 889; app_params_get AppGlobalNumByteSlice; !; assert; !; assert; int 1
+`, ep)
+
+	// Can't call it either
+	testApp(t, call, ep, "No application")
+
 }

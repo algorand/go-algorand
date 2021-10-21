@@ -32,7 +32,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logictest"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -1059,7 +1058,7 @@ func TestGlobal(t *testing.T) {
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
 
-	ledger := logictest.MakeLedger(nil)
+	ledger := MakeLedger(nil)
 	addr, err := basics.UnmarshalChecksumAddress(testAddr)
 	require.NoError(t, err)
 	ledger.NewApp(addr, basics.AppIndex(42), basics.AppParams{})
@@ -1609,7 +1608,7 @@ func TestTxn(t *testing.T) {
 			}
 			sb := strings.Builder{}
 			ep := defaultEvalParams(&sb, &txn)
-			ep.Ledger = logictest.MakeLedger(nil)
+			ep.Ledger = MakeLedger(nil)
 			ep.GroupIndex = 3
 			pass, err := Eval(ops.Program, ep)
 			if !pass {
@@ -1712,7 +1711,7 @@ int 100
 	targetTxn.Txn.Type = protocol.AssetConfigTx
 	txgroup[0] = targetTxn
 	sb := strings.Builder{}
-	ledger := logictest.MakeLedger(nil)
+	ledger := MakeLedger(nil)
 	ledger.SetTrackedCreatable(0, basics.CreatableLocator{Index: 100})
 	ep := defaultEvalParams(&sb, &txn)
 	ep.Ledger = ledger
@@ -4365,6 +4364,8 @@ func TestBytes(t *testing.T) {
 	// it fails to copy).
 	testAccepts(t, `byte "john"; dup; int 2; int 105; setbyte; pop; byte "john"; ==`, 3)
 	testAccepts(t, `byte "jo"; byte "hn"; concat; dup; int 2; int 105; setbyte; pop; byte "john"; ==`, 3)
+
+	testAccepts(t, `byte "john"; byte "john"; ==`, 1)
 }
 
 func TestMethod(t *testing.T) {
@@ -4767,7 +4768,7 @@ func TestLog(t *testing.T) {
 			Type: protocol.ApplicationCallTx,
 		},
 	}
-	ledger := logictest.MakeLedger(nil)
+	ledger := MakeLedger(nil)
 	ledger.NewApp(txn.Txn.Receiver, 0, basics.AppParams{})
 	sb := strings.Builder{}
 	ep := defaultEvalParams(&sb, &txn)
@@ -4799,7 +4800,7 @@ func TestLog(t *testing.T) {
 		},
 	}
 
-	//track expected number of logs in cx.Logs
+	//track expected number of logs in cx.EvalDelta.Logs
 	for i, s := range testCases {
 		ops := testProg(t, s.source, AssemblerMaxVersion)
 
@@ -4809,11 +4810,11 @@ func TestLog(t *testing.T) {
 		pass, cx, err := EvalStatefulCx(ops.Program, ep)
 		require.NoError(t, err)
 		require.True(t, pass)
-		require.Len(t, cx.Logs, s.loglen)
+		require.Len(t, cx.EvalDelta.Logs, s.loglen)
 		if i == len(testCases)-1 {
-			require.Equal(t, strings.Repeat("a", MaxLogSize), cx.Logs[0])
+			require.Equal(t, strings.Repeat("a", MaxLogSize), cx.EvalDelta.Logs[0])
 		} else {
-			for _, l := range cx.Logs {
+			for _, l := range cx.EvalDelta.Logs {
 				require.Equal(t, "a logging message", l)
 			}
 		}

@@ -710,53 +710,6 @@ func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithA
 	return eval.transactionGroup(txads)
 }
 
-// prepareEvalParams creates a logic.EvalParams for each ApplicationCall
-// transaction in the group
-func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWithAD) []*logic.EvalParams {
-	var groupNoAD []transactions.SignedTxn
-	var pastSideEffects []logic.EvalSideEffects
-	var minTealVersion uint64
-	pooledApplicationBudget := uint64(0)
-	var credit uint64
-	res := make([]*logic.EvalParams, len(txgroup))
-	for i, txn := range txgroup {
-		// Ignore any non-ApplicationCall transactions
-		if txn.SignedTxn.Txn.Type != protocol.ApplicationCallTx {
-			continue
-		}
-		if eval.proto.EnableAppCostPooling {
-			pooledApplicationBudget += uint64(eval.proto.MaxAppProgramCost)
-		} else {
-			pooledApplicationBudget = uint64(eval.proto.MaxAppProgramCost)
-		}
-
-		// Initialize side effects and group without ApplyData lazily
-		if groupNoAD == nil {
-			groupNoAD = make([]transactions.SignedTxn, len(txgroup))
-			for j := range txgroup {
-				groupNoAD[j] = txgroup[j].SignedTxn
-			}
-			pastSideEffects = logic.MakePastSideEffects(len(txgroup))
-			minTealVersion = logic.ComputeMinTealVersion(groupNoAD)
-			credit, _ = transactions.FeeCredit(groupNoAD, eval.proto.MinTxnFee)
-			// intentionally ignoring error here, fees had to have been enough to get here
-		}
-
-		res[i] = &logic.EvalParams{
-			Txn:                     &groupNoAD[i],
-			Proto:                   &eval.proto,
-			TxnGroup:                groupNoAD,
-			GroupIndex:              uint64(i),
-			PastSideEffects:         pastSideEffects,
-			MinTealVersion:          &minTealVersion,
-			PooledApplicationBudget: &pooledApplicationBudget,
-			FeeCredit:               &credit,
-			Specials:                &eval.specials,
-		}
-	}
-	return res
-}
-
 // transactionGroup tentatively executes a group of transactions as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
@@ -775,7 +728,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	var groupTxBytes int
 
 	cow := eval.state.child(len(txgroup))
-	evalParams := eval.prepareEvalParams(txgroup)
+	evalParams := logic.PrepareEvalParams(txgroup, &eval.proto, &eval.specials)
 
 	// Evaluate each transaction in the group
 	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
@@ -945,12 +898,14 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		}
 	}
 
-	// We are not allowing InnerTxns to have InnerTxns yet.  Error if that happens.
-	for _, itx := range applyData.EvalDelta.InnerTxns {
-		if len(itx.ApplyData.EvalDelta.InnerTxns) > 0 {
-			return fmt.Errorf("inner transaction has inner transactions %v", itx)
+	/*
+		// We are not allowing InnerTxns to have InnerTxns yet.  Error if that happens.
+		for _, itx := range applyData.EvalDelta.InnerTxns {
+			if len(itx.ApplyData.EvalDelta.InnerTxns) > 0 {
+				return fmt.Errorf("inner transaction has inner transactions %v", itx)
+			}
 		}
-	}
+	*/
 
 	// Remember this txn
 	cow.addTx(txn.Txn, txid)

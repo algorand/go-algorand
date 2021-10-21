@@ -487,8 +487,7 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 	}
 
 	// Eval the program
-	var cx *logic.EvalContext
-	pass, cx, err = logic.EvalStatefulCx(program, params)
+	pass, cx, err := logic.EvalStatefulCx(program, params)
 	if err != nil {
 		var details string
 		if cx != nil {
@@ -500,13 +499,23 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 
 	// If program passed, build our eval delta, and commit to state changes
 	if pass {
-		evalDelta, err = calf.BuildEvalDelta(aidx, &params.Txn.Txn)
-		if err != nil {
-			return false, transactions.EvalDelta{}, err
+		// Before Contract to Contract calls, use BuildEvalDelta because it has
+		// hairy code to maintain compatibility over some buggy old versions
+		// that created EvalDeltas differently.  But after introducing c2c, it's
+		// "too late" to build the EvalDelta here, since the ledger includes
+		// changes from this app and any inner called apps. Instead, we now keep
+		// the EvalDelta built as we go, in app evaluation.  So just use it.
+		if cb.proto.LogicSigVersion < 6 {
+			evalDelta, err = calf.BuildEvalDelta(aidx, &params.Txn.Txn)
+			if err != nil {
+				return false, transactions.EvalDelta{}, err
+			}
+			evalDelta.Logs = cx.EvalDelta.Logs
+			evalDelta.InnerTxns = cx.EvalDelta.InnerTxns
+		} else {
+			evalDelta = cx.EvalDelta
 		}
 		calf.commitToParent()
-		evalDelta.Logs = cx.Logs
-		evalDelta.InnerTxns = cx.InnerTxns
 	}
 
 	return pass, evalDelta, nil

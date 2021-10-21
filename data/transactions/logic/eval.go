@@ -217,7 +217,7 @@ type LedgerForLogic interface {
 
 	GetDelta(txn *transactions.Transaction) (evalDelta transactions.EvalDelta, err error)
 
-	Perform(txn *transactions.Transaction, spec transactions.SpecialAddresses) (transactions.ApplyData, error)
+	Perform(txn *transactions.SignedTxnWithAD, ep *EvalParams) error
 }
 
 // EvalSideEffects contains data returned from evaluation
@@ -273,10 +273,9 @@ type EvalParams struct {
 	// MinTealVersion is nil, we will compute it ourselves
 	MinTealVersion *uint64
 
-	// Amount "overpaid" by the top-level transactions of the
-	// group.  Often 0.  When positive, it is spent by application
-	// actions.  Shared value across a group's txns, so that it
-	// can be updated. nil is interpretted as 0.
+	// Amount "overpaid" by the top-level transactions of the group.  Often 0.
+	// When positive, it can be spent by inner transactions.  Shared across a
+	// group's txns, so that it can be updated. nil is interpreted as 0.
 	FeeCredit *uint64
 
 	Specials *transactions.SpecialAddresses
@@ -286,6 +285,53 @@ type EvalParams struct {
 
 	// Total pool of app call budget in a group transaction
 	PooledApplicationBudget *uint64
+}
+
+// PrepareEvalParams creates an EvalParams for each ApplicationCall transaction
+// in the group
+func PrepareEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses) []*EvalParams {
+	var groupNoAD []transactions.SignedTxn
+	var pastSideEffects []EvalSideEffects
+	var minTealVersion uint64
+	pooledApplicationBudget := uint64(0)
+	var credit uint64
+	res := make([]*EvalParams, len(txgroup))
+	for i, txn := range txgroup {
+		// Ignore any non-ApplicationCall transactions
+		if txn.SignedTxn.Txn.Type != protocol.ApplicationCallTx {
+			continue
+		}
+		if proto.EnableAppCostPooling {
+			pooledApplicationBudget += uint64(proto.MaxAppProgramCost)
+		} else {
+			pooledApplicationBudget = uint64(proto.MaxAppProgramCost)
+		}
+
+		// Initialize side effects and group without ApplyData lazily
+		if groupNoAD == nil {
+			groupNoAD = make([]transactions.SignedTxn, len(txgroup))
+			for j := range txgroup {
+				groupNoAD[j] = txgroup[j].SignedTxn
+			}
+			pastSideEffects = MakePastSideEffects(len(txgroup))
+			minTealVersion = ComputeMinTealVersion(groupNoAD)
+			credit, _ = transactions.FeeCredit(groupNoAD, proto.MinTxnFee)
+			// intentionally ignoring error here, fees had to have been enough to get here
+		}
+
+		res[i] = &EvalParams{
+			Txn:                     &groupNoAD[i],
+			Proto:                   proto,
+			TxnGroup:                groupNoAD,
+			GroupIndex:              uint64(i),
+			PastSideEffects:         pastSideEffects,
+			MinTealVersion:          &minTealVersion,
+			PooledApplicationBudget: &pooledApplicationBudget,
+			FeeCredit:               &credit,
+			Specials:                specials,
+		}
+	}
+	return res
 }
 
 type opEvalFunc func(cx *EvalContext)
@@ -360,12 +406,17 @@ type EvalContext struct {
 	scratch scratchSpace
 
 	subtxns []transactions.SignedTxn // place to build for itxn_submit
-	// Previous transactions Performed() and their effects
-	InnerTxns []transactions.SignedTxnWithAD
+	cost    int                      // cost incurred so far
+	logSize int                      // total log size so far
 
-	cost    int // cost incurred so far
-	Logs    []string
-	logSize int // total log size so far
+	// Summary of changes.  We used to compute this from the ledger after a full
+	// eval.  But now apps can call apps.  When they do, all of the changes
+	// accumulate into the parent's ledger, but EvalDelta should only have the
+	// changes from *this* call. (The changes caused by children are deeper
+	// inside - in the EvalDeltas of the InnerTxns inside this EvalDelta) Nice
+	// bonus - by keep the running changes, the debugger can be changed to
+	// display them as the app runs.
+	EvalDelta transactions.EvalDelta
 
 	// Set of PC values that branches we've seen so far might
 	// go. So, if checkStep() skips one, that branch is trying to
@@ -542,6 +593,8 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	cx.pc = vlen
 	cx.stack = make([]stackValue, 0, 10)
 	cx.program = program
+	cx.EvalDelta.GlobalDelta = basics.StateDelta{}
+	cx.EvalDelta.LocalDeltas = make(map[uint64]basics.StateDelta)
 
 	if cx.Debugger != nil {
 		cx.debugState = makeDebugState(cx)
@@ -2369,12 +2422,12 @@ func opItxn(cx *EvalContext) {
 		return
 	}
 
-	if len(cx.InnerTxns) == 0 {
+	if len(cx.EvalDelta.InnerTxns) == 0 {
 		cx.err = fmt.Errorf("no inner transaction available %d", field)
 		return
 	}
 
-	itxn := &cx.InnerTxns[len(cx.InnerTxns)-1]
+	itxn := &cx.EvalDelta.InnerTxns[len(cx.EvalDelta.InnerTxns)-1]
 	sv, err := cx.itxnFieldToStack(itxn, fs, 0)
 	if err != nil {
 		cx.err = err
@@ -2397,12 +2450,12 @@ func opItxna(cx *EvalContext) {
 	}
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
 
-	if len(cx.InnerTxns) == 0 {
+	if len(cx.EvalDelta.InnerTxns) == 0 {
 		cx.err = fmt.Errorf("no inner transaction available %d", field)
 		return
 	}
 
-	itxn := &cx.InnerTxns[len(cx.InnerTxns)-1]
+	itxn := &cx.EvalDelta.InnerTxns[len(cx.EvalDelta.InnerTxns)-1]
 	sv, err := cx.itxnFieldToStack(itxn, fs, arrayFieldIdx)
 	if err != nil {
 		cx.err = err
@@ -3383,7 +3436,12 @@ func opAppLocalPut(cx *EvalContext) {
 
 	addr, accountIdx, err := cx.accountReference(cx.stack[pprev])
 	if err == nil {
-		err = cx.Ledger.SetLocal(addr, key, sv.toTealValue(), accountIdx)
+		tv := sv.toTealValue()
+		if _, ok := cx.EvalDelta.LocalDeltas[accountIdx]; !ok {
+			cx.EvalDelta.LocalDeltas[accountIdx] = basics.StateDelta{}
+		}
+		cx.EvalDelta.LocalDeltas[accountIdx][key] = tv.ToValueDelta()
+		err = cx.Ledger.SetLocal(addr, key, tv, accountIdx)
 	}
 
 	if err != nil {
@@ -3406,7 +3464,10 @@ func opAppGlobalPut(cx *EvalContext) {
 		return
 	}
 
-	err := cx.Ledger.SetGlobal(key, sv.toTealValue())
+	tv := sv.toTealValue()
+	cx.EvalDelta.GlobalDelta[key] = tv.ToValueDelta()
+
+	err := cx.Ledger.SetGlobal(key, tv)
 	if err != nil {
 		cx.err = err
 		return
@@ -3428,6 +3489,12 @@ func opAppLocalDel(cx *EvalContext) {
 
 	addr, accountIdx, err := cx.accountReference(cx.stack[prev])
 	if err == nil {
+		if _, ok := cx.EvalDelta.LocalDeltas[accountIdx]; !ok {
+			cx.EvalDelta.LocalDeltas[accountIdx] = basics.StateDelta{}
+		}
+		cx.EvalDelta.LocalDeltas[accountIdx][key] = basics.ValueDelta{
+			Action: basics.DeleteAction,
+		}
 		err = cx.Ledger.DelLocal(addr, key, accountIdx)
 	}
 	if err != nil {
@@ -3660,7 +3727,7 @@ func opAppParamsGet(cx *EvalContext) {
 func opLog(cx *EvalContext) {
 	last := len(cx.stack) - 1
 
-	if len(cx.Logs) == MaxLogCalls {
+	if len(cx.EvalDelta.Logs) == MaxLogCalls {
 		cx.err = fmt.Errorf("too many log calls in program. up to %d is allowed", MaxLogCalls)
 		return
 	}
@@ -3670,7 +3737,7 @@ func opLog(cx *EvalContext) {
 		cx.err = fmt.Errorf("program logs too large. %d bytes >  %d bytes limit", cx.logSize, MaxLogSize)
 		return
 	}
-	cx.Logs = append(cx.Logs, string(log.Bytes))
+	cx.EvalDelta.Logs = append(cx.EvalDelta.Logs, string(log.Bytes))
 	cx.stack = cx.stack[:last]
 }
 
@@ -3699,7 +3766,7 @@ func addInnerTxn(cx *EvalContext) error {
 	// this allows construction of one more Inner than is actually allowed, and
 	// will fail in submit. (But we do want the check here, so this can't become
 	// unbounded.)  The MaxTxGroupSize check can be, and is, precise.
-	if len(cx.InnerTxns)+len(cx.subtxns) > cx.Proto.MaxInnerTransactions ||
+	if len(cx.EvalDelta.InnerTxns)+len(cx.subtxns) > cx.Proto.MaxInnerTransactions ||
 		len(cx.subtxns) >= cx.Proto.MaxTxGroupSize {
 		return errors.New("attempt to create too many inner transactions")
 	}
@@ -4051,7 +4118,7 @@ func opTxSubmit(cx *EvalContext) {
 	}
 
 	// Should never trigger, since itxn_next checks these too.
-	if len(cx.InnerTxns)+len(cx.subtxns) > cx.Proto.MaxInnerTransactions ||
+	if len(cx.EvalDelta.InnerTxns)+len(cx.subtxns) > cx.Proto.MaxInnerTransactions ||
 		len(cx.subtxns) > cx.Proto.MaxTxGroupSize {
 		cx.err = errors.New("too many inner transactions")
 		return
@@ -4095,23 +4162,30 @@ func opTxSubmit(cx *EvalContext) {
 		}
 
 		// Recall that WellFormed does not care about individual
-		// transaction fees because of fee pooling. So we check below.
+		// transaction fees because of fee pooling. Checked above.
 		cx.err = cx.subtxns[itx].Txn.WellFormed(*cx.Specials, *cx.Proto)
 		if cx.err != nil {
 			return
 		}
+	}
 
-		ad, err := cx.Ledger.Perform(&cx.subtxns[itx].Txn, *cx.Specials)
+	withAD := transactions.WrapSignedTxnsWithAD(cx.subtxns)
+	eps := PrepareEvalParams(withAD, cx.Proto, cx.Specials)
+	// Perform uses a narrower interface than the apply code, EvalParams is
+	// never nil. It carries the specials, even for non-app call txns.
+	for i := range eps {
+		if eps[i] == nil {
+			eps[i] = &EvalParams{Specials: cx.Specials}
+		}
+	}
+	for i := range withAD {
+		err := cx.Ledger.Perform(&withAD[i], eps[i])
 		if err != nil {
 			cx.err = err
 			return
 		}
-
-		cx.InnerTxns = append(cx.InnerTxns, transactions.SignedTxnWithAD{
-			SignedTxn: cx.subtxns[itx],
-			ApplyData: ad,
-		})
 	}
+	cx.EvalDelta.InnerTxns = append(cx.EvalDelta.InnerTxns, withAD...)
 	cx.subtxns = nil
 }
 
