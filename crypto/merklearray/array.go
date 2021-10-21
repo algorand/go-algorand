@@ -17,8 +17,8 @@
 package merklearray
 
 // An Array represents a dense array of leaf elements that are
-// combined into a Merkle tree.  The Marshal method returns a byte slice that represents the object
-// and the Tree will use to hash the leaves.
+// combined into a Merkle tree. The Marshal method returns a byte slice that represents the object
+// that the Tree will use to hash the leaves.
 type Array interface {
 	Length() uint64
 	Marshal(pos uint64) ([]byte, error)

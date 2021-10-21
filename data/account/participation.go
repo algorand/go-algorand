@@ -115,7 +115,7 @@ func (part Participation) StateProofSigner() *merklekeystore.Signer {
 }
 
 // GenerateRegistrationTransaction returns a transaction object for registering a Participation with its parent.
-func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte, cparams config.ConsensusParams) transactions.Transaction {
+func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte, protoParams config.ConsensusParams) transactions.Transaction {
 	t := transactions.Transaction{
 		Type: protocol.KeyRegistrationTx,
 		Header: transactions.Header{
@@ -131,7 +131,7 @@ func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos,
 		},
 	}
 	if cert := part.StateProofSigner(); cert != nil {
-		if cparams.EnableStateProofKeyregCheck {
+		if protoParams.EnableStateProofKeyregCheck {
 			t.KeyregTxnFields.StateProofPK = *(cert.GetVerifier())
 		}
 	}

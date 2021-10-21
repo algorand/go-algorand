@@ -245,13 +245,13 @@ func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashabl
 	}
 
 	pos := roundToIndex(firstValid, round, interval)
-	isInTree := merklearray.Verify(
+	err := merklearray.Verify(
 		(crypto.GenericDigest)(v.Root[:]),
 		map[uint64]crypto.Hashable{pos: &ephkey},
 		(*merklearray.Proof)(&sig.Proof),
 	)
-	if isInTree != nil {
-		return isInTree
+	if err != nil {
+		return err
 	}
 
 	return sig.VerifyingKey.GetVerifier().Verify(obj, sig.ByteSignature)
