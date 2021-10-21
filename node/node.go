@@ -1193,7 +1193,7 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 		// Make sure the key is registered.
 		err := node.accountManager.Registry().Register(part.ID(), keysRound)
 		if err != nil {
-			node.log.Warnf("Failed to register participation key (%s) with participation registry: %s\n", part.ID(), err.Error())
+			node.log.Warnf("Failed to register participation key (%s) with participation registry: %v\n", part.ID(), err)
 		}
 	}
 	// write the warnings per account only if we couldn't find a single valid key for that account.

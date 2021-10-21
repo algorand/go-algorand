@@ -652,8 +652,8 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 		copy(record.ParticipationID[:], rawParticipation)
 		copy(record.Account[:], rawAccount)
 
-		record.VRF = &crypto.VRFSecrets{}
 		if len(rawVRF) > 0 {
+			record.VRF = &crypto.VRFSecrets{}
 			err = protocol.Decode(rawVRF, record.VRF)
 			if err != nil {
 				return nil, fmt.Errorf("unable to decode VRF: %w", err)
