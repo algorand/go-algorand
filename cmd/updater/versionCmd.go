@@ -33,17 +33,20 @@ var (
 	semanticOutput  bool
 )
 
+// DefaultPackageName is the package we'll use by default.
+const DefaultPackageName = "node"
+
 func init() {
 	versionCmd.AddCommand(checkCmd)
 	versionCmd.AddCommand(getCmd)
 
 	checkCmd.Flags().BoolVarP(&semanticOutput, "semantic", "s", false, "Human readable semantic version output.")
-	checkCmd.Flags().StringVarP(&packageName, "package", "p", "node", "Get version of specific package.")
+	checkCmd.Flags().StringVarP(&packageName, "package", "p", DefaultPackageName, "Get version of specific package.")
 	checkCmd.Flags().StringVarP(&versionBucket, "bucket", "b", "", "S3 bucket containing updates.")
 
 	getCmd.Flags().StringVarP(&destFile, "outputFile", "o", "", "Path for downloaded file (required).")
 	getCmd.Flags().Uint64VarP(&specificVersion, "version", "v", 0, "Specific version to download.")
-	getCmd.Flags().StringVarP(&packageName, "package", "p", "node", "Get version of specific package.")
+	getCmd.Flags().StringVarP(&packageName, "package", "p", DefaultPackageName, "Get version of specific package.")
 	getCmd.Flags().StringVarP(&versionBucket, "bucket", "b", "", "S3 bucket containing updates.")
 	getCmd.MarkFlagRequired("outputFile")
 }
