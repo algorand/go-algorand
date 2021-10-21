@@ -67,6 +67,7 @@ type Creatable struct {
 type indexerLedgerConnector struct {
 	il             indexerLedgerForEval
 	genesisHash    crypto.Digest
+	genesisProto   config.ConsensusParams
 	latestRound    basics.Round
 	roundResources EvalForIndexerResources
 }
@@ -147,6 +148,11 @@ func (l indexerLedgerConnector) GenesisHash() crypto.Digest {
 	return l.genesisHash
 }
 
+// GenesisProto is part of LedgerForEvaluator interface.
+func (l indexerLedgerConnector) GenesisProto() config.ConsensusParams {
+	return l.genesisProto
+}
+
 // Totals is part of LedgerForEvaluator interface.
 func (l indexerLedgerConnector) LatestTotals() (rnd basics.Round, totals ledgercore.AccountTotals, err error) {
 	totals, err = l.il.LatestTotals()
@@ -160,10 +166,11 @@ func (l indexerLedgerConnector) CompactCertVoters(_ basics.Round) (*ledgercore.V
 	return nil, errors.New("CompactCertVoters() not implemented")
 }
 
-func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Digest, latestRound basics.Round, roundResources EvalForIndexerResources) indexerLedgerConnector {
+func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Digest, genesisProto config.ConsensusParams, latestRound basics.Round, roundResources EvalForIndexerResources) indexerLedgerConnector {
 	return indexerLedgerConnector{
 		il:             il,
 		genesisHash:    genesisHash,
+		genesisProto:   genesisProto,
 		latestRound:    latestRound,
 		roundResources: roundResources,
 	}
@@ -175,7 +182,7 @@ func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Dige
 // close amount for each transaction even when the real consensus parameters do not
 // support it.
 func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto config.ConsensusParams, resources EvalForIndexerResources) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
-	ilc := makeIndexerLedgerConnector(il, block.GenesisHash(), block.Round()-1, resources)
+	ilc := makeIndexerLedgerConnector(il, block.GenesisHash(), proto, block.Round()-1, resources)
 
 	eval, err := internal.StartEvaluator(
 		ilc, block.BlockHeader,
