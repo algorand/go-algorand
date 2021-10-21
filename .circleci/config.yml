@@ -441,9 +441,6 @@ commands:
               export GOPATH="<< parameters.build_dir >>/go"
               export NO_BUILD=true
               export TRAVIS_BRANCH=${CIRCLE_BRANCH}
-              export GIMME_INSTALL_DIR=<< parameters.build_dir >>
-              export GIMME_ENV_PREFIX=<< parameters.build_dir >>/.gimme/envs
-              export GIMME_VERSION_PREFIX=<< parameters.build_dir >>/.gimme/versions
               scripts/travis/deploy_packages.sh
         - when:
             condition:
