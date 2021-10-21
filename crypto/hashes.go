@@ -49,7 +49,7 @@ type HashType uint64
 // IsValid verifies that the hash type is in a valid range.
 func (z HashType) IsValid() error {
 	if z > maxHashType {
-		return protocol.ErrorInvalidObject
+		return protocol.ErrInvalidObject
 	}
 	return nil
 }
@@ -85,6 +85,7 @@ var errUnknownHash = errors.New("unknown hash type")
 // NewHash generates a new hash.Hash to use.
 func (z HashFactory) NewHash() hash.Hash {
 	switch z.HashType {
+
 	case Sha512_256:
 		return sha512.New512_256()
 	case Sumhash:
@@ -92,7 +93,7 @@ func (z HashFactory) NewHash() hash.Hash {
 	// This shouldn't be reached, when creating a new hash, one would know the type of hash they wanted,
 	// in addition to that, unmarshalling of the hashFactory verifies the HashType of the factory.
 	default:
-		return InvalidHash{}
+		return invalidHash{}
 	}
 }
 
@@ -112,29 +113,29 @@ func HashBytes(hash hash.Hash, m []byte) []byte {
 
 // InvalidHash is used to identify errors on the factory.
 // this function will return nil slice
-type InvalidHash struct {
+type invalidHash struct {
 }
 
 // Write writes bytes into the hash function. this function will return an error
-func (h InvalidHash) Write(p []byte) (n int, err error) {
+func (h invalidHash) Write(p []byte) (n int, err error) {
 	return 0, errUnknownHash
 }
 
 // Sum returns an empty slice since this is an empty hash function
-func (h InvalidHash) Sum(b []byte) []byte {
+func (h invalidHash) Sum(b []byte) []byte {
 	return nil
 }
 
 // Reset this function has no state so it is empty
-func (h InvalidHash) Reset() {
+func (h invalidHash) Reset() {
 }
 
 // Size the current size of the function is always 0
-func (h InvalidHash) Size() int {
+func (h invalidHash) Size() int {
 	return 0
 }
 
 // BlockSize returns zero since this is an empty hash function
-func (h InvalidHash) BlockSize() int {
+func (h invalidHash) BlockSize() int {
 	return 0
 }

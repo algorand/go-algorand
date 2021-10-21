@@ -17,6 +17,7 @@
 package protocol
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -26,8 +27,8 @@ import (
 	"github.com/algorand/msgp/msgp"
 )
 
-// ErrorInvalidObject is used to state that an object decoding has failed because it's invalid.
-var ErrorInvalidObject = fmt.Errorf("unmarshalled object is invalid")
+// ErrInvalidObject is used to state that an object decoding has failed because it's invalid.
+var ErrInvalidObject = errors.New("unmarshalled object is invalid")
 
 // CodecHandle is used to instantiate msgpack encoders and decoders
 // with our settings (canonical, paranoid about decoding errors)

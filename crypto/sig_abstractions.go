@@ -43,7 +43,7 @@ const (
 // IsValid verifies that the type of the algorithm is known
 func (z AlgorithmType) IsValid() error {
 	if z >= maxAlgorithmType {
-		return protocol.ErrorInvalidObject
+		return protocol.ErrInvalidObject
 	}
 	return nil
 }
@@ -120,7 +120,7 @@ type PackedVerifyingKey struct {
 
 	DilithiumPublicKey DilithiumVerifier `codec:"dpk"`
 	Ed25519PublicKey   Ed25519PublicKey  `codec:"edpk"`
-	InvalidVerifier    InvalidVerifier   `codec:"InvV"`
+	invalidVerifier    invalidVerifier
 }
 
 var errUnknownVerifier = errors.New("could not find stored Verifier")
@@ -132,7 +132,7 @@ func (p *PackedVerifyingKey) getVerifier(t AlgorithmType) Verifier {
 	case Ed25519Type:
 		return &p.Ed25519PublicKey
 	default:
-		return &p.InvalidVerifier
+		return &p.invalidVerifier
 	}
 }
 
@@ -142,7 +142,7 @@ type PackedSignatureAlgorithm struct {
 
 	DilithiumSigner DilithiumSigner `codec:"ds"`
 	Ed25519Singer   Ed25519Key      `codec:"edds"`
-	InvalidSinger   InvalidSinger   `codec:"InvS"`
+	invalidSinger   invalidSinger
 }
 
 var errUnknownSigner = errors.New("could not find stored signer")
@@ -154,7 +154,7 @@ func (p *PackedSignatureAlgorithm) getSigner(t AlgorithmType) Signer {
 	case Ed25519Type:
 		return &p.Ed25519Singer
 	default:
-		return &p.InvalidSinger
+		return &p.invalidSinger
 	}
 }
 

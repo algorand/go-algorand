@@ -20,37 +20,33 @@ import (
 	"errors"
 )
 
-// InvalidSinger is used for cases with the signer is invalid.
+// invalidSinger is used for cases with the signer is invalid.
 // this will return an error while using.
-type InvalidSinger struct {
-	_struct   struct{} `codec:",omitempty,omitemptyarray"`
-	EmptyData bool     `codec:"e"`
+type invalidSinger struct {
 }
 
-// InvalidVerifier is used for cases with the verifier is invalid.
+// invalidVerifier is used for cases with the verifier is invalid.
 // this will return an error while using.
-type InvalidVerifier struct {
-	_struct   struct{} `codec:",omitempty,omitemptyarray"`
-	EmptyData bool     `codec:"e"`
+type invalidVerifier struct {
 }
 
 // NewInvalidSinger Generates invalid Signer.
 func NewInvalidSinger() Signer {
-	return &InvalidSinger{}
+	return &invalidSinger{}
 }
 
 // Sign returns an empty signature
-func (d *InvalidSinger) Sign(message Hashable) ByteSignature {
+func (d *invalidSinger) Sign(message Hashable) ByteSignature {
 	return make([]byte, 0)
 }
 
 // SignBytes returns an empty signature
-func (d *InvalidSinger) SignBytes(data []byte) ByteSignature {
+func (d *invalidSinger) SignBytes(data []byte) ByteSignature {
 	return make([]byte, 0)
 }
 
 // GetVerifyingKey Outputs an invalid verifying key.
-func (d *InvalidSinger) GetVerifyingKey() *VerifyingKey {
+func (d *invalidSinger) GetVerifyingKey() *VerifyingKey {
 	return &VerifyingKey{
 		Type: maxAlgorithmType,
 	}
@@ -59,11 +55,11 @@ func (d *InvalidSinger) GetVerifyingKey() *VerifyingKey {
 var errInvalidVerifier = errors.New("could not verify signature. verifier is invalid")
 
 // Verify returns an error to signal that the verifier is invalid
-func (d *InvalidVerifier) Verify(message Hashable, sig ByteSignature) error {
+func (d *invalidVerifier) Verify(message Hashable, sig ByteSignature) error {
 	return errInvalidVerifier
 }
 
 // VerifyBytes returns an error to signal that the verifier is invalid
-func (d *InvalidVerifier) VerifyBytes(data []byte, sig ByteSignature) error {
+func (d *invalidVerifier) VerifyBytes(data []byte, sig ByteSignature) error {
 	return errInvalidVerifier
 }
