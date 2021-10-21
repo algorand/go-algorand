@@ -208,3 +208,62 @@ func TestAccountsCanSendMoneyAcrossTxSync(t *testing.T) {
 		}
 	}
 }
+
+// this test checks that a relay would relay a transaction
+// received via the txnsync onto a node that doesn't support
+// transaction sync.
+func TestTransactionSyncRelayBridge(t *testing.T) {
+
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	var fixture fixtures.RestClientFixture
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "ThreeNodesOneOnline.json"))
+	defer fixture.Shutdown()
+
+	onlineNodeController, err := fixture.GetNodeController("OnlineNode")
+	a.NoError(err)
+
+	cfg, err := config.LoadConfigFromDisk(onlineNodeController.GetDataDir())
+	a.NoError(err)
+	cfg.NetworkProtocolVersion = "2.1"
+	cfg.SaveToDisk(onlineNodeController.GetDataDir())
+
+	offlineNodeController, err := fixture.GetNodeController("OfflineNode")
+	a.NoError(err)
+
+	cfg, err = config.LoadConfigFromDisk(offlineNodeController.GetDataDir())
+	a.NoError(err)
+	cfg.NetworkProtocolVersion = "3.0"
+	cfg.SaveToDisk(offlineNodeController.GetDataDir())
+
+	fixture.Start()
+
+	client := fixture.GetLibGoalClientFromNodeController(offlineNodeController)
+	accounts, err := fixture.GetNodeWalletsSortedByBalance(client.DataDir())
+	a.NoError(err)
+
+	a.Equal(1, len(accounts))
+
+	sendingAccount := accounts[0].Address
+
+	_, err = client.SendPaymentFromUnencryptedWallet(sendingAccount, sendingAccount, 1024*1024, 1024, nil)
+	a.NoError(err)
+
+	startRoundStatus, err := client.Status()
+	a.NoError(err)
+	for {
+		pendingTxns, err := client.GetPendingTransactions(2)
+		a.NoError(err)
+		if pendingTxns.TotalTxns == 0 {
+			break
+		}
+		status, err := client.Status()
+		a.NoError(err)
+		_, err = client.WaitForRound(status.LastRound)
+		a.NoError(err)
+		a.Less(uint64(status.LastRound), uint64(startRoundStatus.LastRound+5), "transaction is still pending after 5 rounds, whereas it should have been confirmed within 2 rounds.")
+	}
+}
