@@ -129,12 +129,16 @@ function curl_post_test {
 # $1 - test description.
 # $2 - query
 # $3 - expected status code
+# $4 - match result
 function call_delete_and_verify {
   local DESCRIPTION="$1"
   shift
   local QUERY="$1"
   shift
   local EXPECTED_CODE="$1"
+  shift
+
+  local MATCH_RESULT="$1"
   shift
 
   set +e
@@ -146,7 +150,7 @@ function call_delete_and_verify {
     CODE=$(call_delete "$QUERY" "${TEMPDIR}/curl_out.txt" )
   fi
 
-  verify $? "$CODE" "$DESCRIPTION" "$QUERY" "$EXPECTED_CODE" "false"
+  verify $? "$CODE" "$DESCRIPTION" "$QUERY" "$EXPECTED_CODE" "$MATCH_RESULT" "$@"
 
 }
 
@@ -265,12 +269,6 @@ function verify {
     fail_and_exit "$DESCRIPTION" "$QUERY" "unexpected HTTP status code expected $EXPECTED_CODE (actual $CODE): $RES"
   fi
 
-  #local ELAPSED=$(($SECONDS - $START))
-  #if [[ $ELAPSED -gt $MAX_TIME ]]; then
-  #  fail_and_exit "$DESCRIPTION" "$QUERY" "query duration too long, $ELAPSED > $MAX_TIME"
-  #fi
-
-
   local SUBSTRING
 
   # Check result substrings
@@ -286,6 +284,4 @@ function verify {
       fi
     fi
   done
-
-
 }

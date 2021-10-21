@@ -825,7 +825,7 @@ func (node *AlgorandFullNode) RemoveParticipationKey(partKey account.Participati
 	partRecord := node.accountManager.Registry().Get(partKey)
 
 	if partRecord.IsZero() {
-		return nil
+		return account.ErrParticipationIDNotFound
 	}
 
 	genID := node.GenesisID()

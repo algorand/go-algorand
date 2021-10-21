@@ -143,7 +143,13 @@ func (v2 *Handlers) DeleteParticipationKeyByID(ctx echo.Context, participationID
 	}
 
 	err = v2.Node.RemoveParticipationKey(decodedParticipationID)
+
 	if err != nil {
+
+		if errors.Is(err, account.ErrParticipationIDNotFound) {
+			return ctx.JSON(http.StatusOK, generated.ErrorResponse{Message: "participation id not found"})
+		}
+
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 

@@ -23,25 +23,39 @@ popd || exit
 
 call_and_verify "Get List of Keys" "/v2/participation" 200 'Address'
 
+# Find out how many keys there are installed so far
+NUM_IDS_1=$(echo "$RES" | python3 -c 'import json,sys;o=json.load(sys.stdin);print(len(o))')
+
 call_post_and_verify "Install a basic participation key" "/v2/participation" 200 ${NAME_OF_TEMP_PARTKEY} 'partId'
 
-call_and_verify "Get List of Keys" "/v2/participation" 200 'Address'
+# Get the returned participation id from the RESULT (aka $RES) variable
+INSTALLED_ID=$(echo "$RES" | python3 -c 'import json,sys;o=json.load(sys.stdin);print(o["partId"])')
 
-# Let's get a key from the previous response manually and request it specifically
-SAMPLE_ID=$(curl -q -s -H "Authorization: Bearer $ADMIN_TOKEN" "$NET/v2/participation" | python3 -c 'import json,sys;obj=json.load(sys.stdin);print(obj[0]["ID"])')
-NUMBER_OF_IDS=$(curl -q -s -H "Authorization: Bearer $ADMIN_TOKEN" "$NET/v2/participation" | python3 -c 'import json,sys;obj=json.load(sys.stdin);print(len(obj))')
+# Should contain the installed id
+call_and_verify "Get List of Keys" "/v2/participation" 200 'Address' "${INSTALLED_ID}"
 
-call_and_verify "Get a specific ID" "/v2/participation/${SAMPLE_ID}" 200 "${SAMPLE_ID}"
+# Get list of keys
+NUM_IDS_2=$(echo "$RES" | python3 -c 'import json,sys;o=json.load(sys.stdin);print(len(o))')
 
-call_delete_and_verify "Delete the specific ID" "/v2/participation/${SAMPLE_ID}" 200
+if [[ $((NUM_IDS_1 + 1)) -ne $NUM_IDS_2 ]]; then
+  printf "\n\nFailed test.  New number of IDs (%s) is not one more than old ID count(%s)\n\n" "${NUM_IDS_2}" "${NUM_IDS_1}"
+  exit 1
+fi
 
-# Verify that it got called previously and will NOT return an error now even though it isn't there
-call_delete_and_verify "Delete the specific ID" "/v2/participation/${SAMPLE_ID}" 200
+call_and_verify "Get a specific ID" "/v2/participation/${INSTALLED_ID}" 200 "${INSTALLED_ID}"
 
-NEW_NUMBER_OF_IDS=$(curl -q -s -H "Authorization: Bearer $ADMIN_TOKEN" "$NET/v2/participation" | python3 -c 'import json,sys;obj=json.load(sys.stdin);print(len(obj))')
+# Should return 200 but not return that error message
+call_delete_and_verify "Delete the specific ID" "/v2/participation/${INSTALLED_ID}" 200 false 'participation id not found'
 
-if [[ "$NEW_NUMBER_OF_IDS" -ge "$NUMBER_OF_IDS" ]]; then
-  printf "\n\nFailed test.  New number of IDs (%s) is greater than or equal to original IDs (%s)\n\n" "${NEW_NUMBER_OF_IDS}" "${NUMBER_OF_IDS}"
+# Verify that it got called previously and will NOT return an error now even though it isn't there.
+# But it will contain a message saying that no key was found
+call_delete_and_verify "Delete the specific ID" "/v2/participation/${INSTALLED_ID}" 200 true 'participation id not found'
+
+# Get list of keys
+NUM_IDS_3=$(echo "$RES" | python3 -c 'import json,sys;o=json.load(sys.stdin);print(len(o))')
+
+if [[ "$NUM_IDS_3" -ne "$NUM_IDS_1" ]]; then
+  printf "\n\nFailed test.  New number of IDs (%s) is not equal to original ID count (%s)\n\n" "${NUM_IDS_3}" "${NUM_IDS_1}"
   exit 1
 fi
 
