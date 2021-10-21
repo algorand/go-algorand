@@ -33,7 +33,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
@@ -122,8 +121,8 @@ func (s *testWorkerStubs) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, err
 	return hdr, nil
 }
 
-func (s *testWorkerStubs) CompactCertVoters(r basics.Round) (*ledger.VotersForRound, error) {
-	voters := &ledger.VotersForRound{
+func (s *testWorkerStubs) CompactCertVoters(r basics.Round) (*ledgercore.VotersForRound, error) {
+	voters := &ledgercore.VotersForRound{
 		Proto:       config.Consensus[protocol.ConsensusFuture],
 		AddrToPos:   make(map[basics.Address]uint64),
 		TotalWeight: basics.MicroAlgos{Raw: uint64(s.totalWeight)},
@@ -131,7 +130,7 @@ func (s *testWorkerStubs) CompactCertVoters(r basics.Round) (*ledger.VotersForRo
 
 	for i, k := range s.keysForVoters {
 		voters.AddrToPos[k.Parent] = uint64(i)
-		voters.Participants = append(voters.Participants, compactcert.Participant{
+		voters.Participants = append(voters.Participants, basics.Participant{
 			PK:          k.Voting.OneTimeSignatureVerifier,
 			Weight:      1,
 			KeyDilution: config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution,

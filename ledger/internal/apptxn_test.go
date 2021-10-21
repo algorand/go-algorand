@@ -14,16 +14,19 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package internal
 
 import (
 	"fmt"
 	"testing"
 
-	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/txntest"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/txntest"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // main wraps up some TEAL source in a header and footer so that it is
@@ -37,13 +40,75 @@ func main(source string) string {
        end: int 1`, source)
 }
 
+type testingEvaluator struct {
+	*BlockEvaluator
+	ledger LedgerForEvaluator
+}
+
+func (eval *testingEvaluator) fillDefaults(txn *txntest.Txn) {
+	if txn.GenesisHash.IsZero() {
+		txn.GenesisHash = eval.ledger.GenesisHash()
+	}
+	if txn.FirstValid == 0 {
+		txn.FirstValid = eval.Round()
+	}
+	txn.FillDefaults(eval.ledger.GenesisProto())
+}
+
+func (eval *testingEvaluator) txn(t testing.TB, txn *txntest.Txn, problem ...string) {
+	t.Helper()
+	eval.fillDefaults(txn)
+	stxn := txn.SignedTxn()
+	err := eval.TestTransactionGroup([]transactions.SignedTxn{stxn})
+	if err != nil {
+		if len(problem) == 1 {
+			require.Contains(t, err.Error(), problem[0])
+		} else {
+			require.NoError(t, err) // Will obviously fail
+		}
+		return
+	}
+	err = eval.Transaction(stxn, transactions.ApplyData{})
+	if err != nil {
+		if len(problem) == 1 {
+			require.Contains(t, err.Error(), problem[0])
+		} else {
+			require.NoError(t, err) // Will obviously fail
+		}
+		return
+	}
+	require.Len(t, problem, 0)
+}
+
+func (eval *testingEvaluator) txns(t testing.TB, txns ...*txntest.Txn) {
+	t.Helper()
+	for _, txn := range txns {
+		eval.txn(t, txn)
+	}
+}
+
+func (eval *testingEvaluator) txgroup(t testing.TB, txns ...*txntest.Txn) error {
+	t.Helper()
+	for _, txn := range txns {
+		eval.fillDefaults(txn)
+	}
+	txgroup := txntest.SignedTxns(txns...)
+
+	err := eval.TestTransactionGroup(txgroup)
+	if err != nil {
+		return err
+	}
+
+	err = eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup))
+	return err
+}
+
 // TestPayAction ensures a pay in teal affects balances
 func TestPayAction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genBalances, addrs, _ := newTestGenesis()
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	create := txntest.Txn{
 		Type:   "appl",
@@ -80,7 +145,7 @@ func TestPayAction(t *testing.T) {
 	vb := l.endBlock(t, eval)
 
 	// AD contains expected appIndex
-	require.Equal(t, ai, vb.blk.Payset[0].ApplyData.ApplicationID)
+	require.Equal(t, ai, vb.Block().Payset[0].ApplyData.ApplicationID)
 
 	ad0 := l.micros(t, addrs[0])
 	ad1 := l.micros(t, addrs[1])
@@ -109,15 +174,17 @@ func TestPayAction(t *testing.T) {
 	eval.txn(t, &payout2)
 	// confirm that modifiedAccounts can see account in inner txn
 	found := false
-	for _, addr := range eval.state.modifiedAccounts() {
+	vb = l.endBlock(t, eval)
+
+	deltas := vb.Delta()
+	for _, addr := range deltas.Accts.ModifiedAccounts() {
 		if addr == addrs[2] {
 			found = true
 		}
 	}
 	require.True(t, found)
-	l.endBlock(t, eval)
 
-	payInBlock := eval.block.Payset[0]
+	payInBlock := vb.Block().Payset[0]
 	rewards := payInBlock.ApplyData.SenderRewards.Raw
 	require.Greater(t, rewards, uint64(2000)) // some biggish number
 	inners := payInBlock.ApplyData.EvalDelta.InnerTxns
@@ -162,11 +229,11 @@ func TestPayAction(t *testing.T) {
 	}
 	eval = l.nextBlock(t)
 	eval.txn(t, payout2.Noted("2"))
-	l.endBlock(t, eval)
+	vb = l.endBlock(t, eval)
 
 	afterpay := l.micros(t, ai.Address())
 
-	payInBlock = eval.block.Payset[0]
+	payInBlock = vb.Block().Payset[0]
 	inners = payInBlock.ApplyData.EvalDelta.InnerTxns
 	require.Len(t, inners, 1)
 
@@ -180,9 +247,8 @@ func TestPayAction(t *testing.T) {
 func TestAxferAction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genBalances, addrs, _ := newTestGenesis()
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	asa := txntest.Txn{
 		Type:   "acfg",
@@ -236,9 +302,9 @@ submit:  itxn_submit
 	vb := l.endBlock(t, eval)
 
 	asaIndex := basics.AssetIndex(1)
-	require.Equal(t, asaIndex, vb.blk.Payset[0].ApplyData.ConfigAsset)
+	require.Equal(t, asaIndex, vb.Block().Payset[0].ApplyData.ConfigAsset)
 	appIndex := basics.AppIndex(2)
-	require.Equal(t, appIndex, vb.blk.Payset[1].ApplyData.ApplicationID)
+	require.Equal(t, appIndex, vb.Block().Payset[1].ApplyData.ApplicationID)
 
 	fund := txntest.Txn{
 		Type:     "pay",
@@ -373,9 +439,8 @@ submit:  itxn_submit
 func TestClawbackAction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genBalances, addrs, _ := newTestGenesis()
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	asaIndex := basics.AssetIndex(1)
 	appIndex := basics.AppIndex(2)
@@ -428,8 +493,8 @@ func TestClawbackAction(t *testing.T) {
 	eval.txns(t, &asa, &app, &optin)
 	vb := l.endBlock(t, eval)
 
-	require.Equal(t, asaIndex, vb.blk.Payset[0].ApplyData.ConfigAsset)
-	require.Equal(t, appIndex, vb.blk.Payset[1].ApplyData.ApplicationID)
+	require.Equal(t, asaIndex, vb.Block().Payset[0].ApplyData.ConfigAsset)
+	require.Equal(t, appIndex, vb.Block().Payset[1].ApplyData.ApplicationID)
 
 	bystander := addrs[2] // Has no authority of its own
 	overpay := txntest.Txn{
@@ -457,9 +522,8 @@ func TestClawbackAction(t *testing.T) {
 func TestRekeyAction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genBalances, addrs, _ := newTestGenesis()
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	appIndex := basics.AppIndex(1)
 	ezpayer := txntest.Txn{
@@ -561,9 +625,8 @@ skipclose:
 func TestRekeyActionCloseAccount(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genBalances, addrs, _ := newTestGenesis()
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	appIndex := basics.AppIndex(1)
 	create := txntest.Txn{
@@ -636,9 +699,8 @@ func TestRekeyActionCloseAccount(t *testing.T) {
 func TestDuplicatePayAction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genBalances, addrs, _ := newTestGenesis()
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	appIndex := basics.AppIndex(1)
 	create := txntest.Txn{
@@ -682,10 +744,10 @@ func TestDuplicatePayAction(t *testing.T) {
 	eval.txns(t, &create, &fund, &paytwice, create.Noted("in same block"))
 	vb := l.endBlock(t, eval)
 
-	require.Equal(t, appIndex, vb.blk.Payset[0].ApplyData.ApplicationID)
-	require.Equal(t, 4, len(vb.blk.Payset))
+	require.Equal(t, appIndex, vb.Block().Payset[0].ApplyData.ApplicationID)
+	require.Equal(t, 4, len(vb.Block().Payset))
 	// create=1, fund=2, payTwice=3,4,5
-	require.Equal(t, basics.AppIndex(6), vb.blk.Payset[3].ApplyData.ApplicationID)
+	require.Equal(t, basics.AppIndex(6), vb.Block().Payset[3].ApplyData.ApplicationID)
 
 	ad0 := l.micros(t, addrs[0])
 	ad1 := l.micros(t, addrs[1])
@@ -704,16 +766,15 @@ func TestDuplicatePayAction(t *testing.T) {
 	vb = l.endBlock(t, eval)
 
 	// create=1, fund=2, payTwice=3,4,5, insameblock=6
-	require.Equal(t, basics.AppIndex(7), vb.blk.Payset[0].ApplyData.ApplicationID)
+	require.Equal(t, basics.AppIndex(7), vb.Block().Payset[0].ApplyData.ApplicationID)
 }
 
 // TestInnerTxCount ensures that inner transactions increment the TxnCounter
 func TestInnerTxnCount(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genBalances, addrs, _ := newTestGenesis()
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	create := txntest.Txn{
 		Type:   "appl",
@@ -747,21 +808,20 @@ func TestInnerTxnCount(t *testing.T) {
 	eval := l.nextBlock(t)
 	eval.txns(t, &create, &fund)
 	vb := l.endBlock(t, eval)
-	require.Equal(t, 2, int(vb.blk.TxnCounter))
+	require.Equal(t, 2, int(vb.Block().TxnCounter))
 
 	eval = l.nextBlock(t)
 	eval.txns(t, &payout1)
 	vb = l.endBlock(t, eval)
-	require.Equal(t, 4, int(vb.blk.TxnCounter))
+	require.Equal(t, 4, int(vb.Block().TxnCounter))
 }
 
 // TestAcfgAction ensures assets can be created and configured in teal
 func TestAcfgAction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genBalances, addrs, _ := newTestGenesis()
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	appIndex := basics.AppIndex(1)
 	app := txntest.Txn{
@@ -887,7 +947,7 @@ submit:  itxn_submit
 	eval.txns(t, fund.Noted("more!"), &createAsa)
 	vb := l.endBlock(t, eval)
 
-	asaIndex := vb.blk.Payset[1].EvalDelta.InnerTxns[0].ConfigAsset
+	asaIndex := vb.Block().Payset[1].EvalDelta.InnerTxns[0].ConfigAsset
 	require.Equal(t, basics.AssetIndex(5), asaIndex)
 
 	asaParams, err := l.asaParams(t, basics.AssetIndex(5))
@@ -935,9 +995,8 @@ submit:  itxn_submit
 func TestAsaDuringInit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genBalances, addrs, _ := newTestGenesis()
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	appIndex := basics.AppIndex(2)
 	prefund := txntest.Txn{
@@ -979,18 +1038,17 @@ func TestAsaDuringInit(t *testing.T) {
 	eval.txns(t, &prefund, &app)
 	vb := l.endBlock(t, eval)
 
-	require.Equal(t, appIndex, vb.blk.Payset[1].ApplicationID)
+	require.Equal(t, appIndex, vb.Block().Payset[1].ApplicationID)
 
-	asaIndex := vb.blk.Payset[1].EvalDelta.InnerTxns[0].ConfigAsset
+	asaIndex := vb.Block().Payset[1].EvalDelta.InnerTxns[0].ConfigAsset
 	require.Equal(t, basics.AssetIndex(3), asaIndex)
 }
 
 func TestRekey(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genBalances, addrs, _ := newTestGenesis()
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	app := txntest.Txn{
 		Type:   "appl",
@@ -1015,7 +1073,7 @@ func TestRekey(t *testing.T) {
 	eval := l.nextBlock(t)
 	eval.txns(t, &app)
 	vb := l.endBlock(t, eval)
-	appIndex := vb.blk.Payset[0].ApplicationID
+	appIndex := vb.Block().Payset[0].ApplicationID
 	require.Equal(t, basics.AppIndex(1), appIndex)
 
 	fund := txntest.Txn{
@@ -1039,9 +1097,8 @@ func TestRekey(t *testing.T) {
 func TestNote(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genBalances, addrs, _ := newTestGenesis()
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	app := txntest.Txn{
 		Type:   "appl",
@@ -1063,7 +1120,7 @@ func TestNote(t *testing.T) {
 	eval := l.nextBlock(t)
 	eval.txns(t, &app)
 	vb := l.endBlock(t, eval)
-	appIndex := vb.blk.Payset[0].ApplicationID
+	appIndex := vb.Block().Payset[0].ApplicationID
 	require.Equal(t, basics.AppIndex(1), appIndex)
 
 	fund := txntest.Txn{
@@ -1080,16 +1137,15 @@ func TestNote(t *testing.T) {
 	eval = l.nextBlock(t)
 	eval.txns(t, &fund, &note)
 	vb = l.endBlock(t, eval)
-	alphabet := vb.blk.Payset[1].EvalDelta.InnerTxns[0].Txn.Note
+	alphabet := vb.Block().Payset[1].EvalDelta.InnerTxns[0].Txn.Note
 	require.Equal(t, "abcdefghijklmnopqrstuvwxyz01234567890", string(alphabet))
 }
 
 func TestKeyreg(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genBalances, addrs, _ := newTestGenesis()
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	app := txntest.Txn{
 		Type:   "appl",
@@ -1123,7 +1179,7 @@ nonpart:
 	eval := l.nextBlock(t)
 	eval.txns(t, &app)
 	vb := l.endBlock(t, eval)
-	appIndex := vb.blk.Payset[0].ApplicationID
+	appIndex := vb.Block().Payset[0].ApplicationID
 	require.Equal(t, basics.AppIndex(1), appIndex)
 
 	// Give the app a lot of money
@@ -1135,7 +1191,7 @@ nonpart:
 	}
 	eval = l.nextBlock(t)
 	eval.txn(t, &fund)
-	vb = l.endBlock(t, eval)
+	l.endBlock(t, eval)
 
 	require.Equal(t, 1_000_000_000, int(l.micros(t, appIndex.Address())))
 
@@ -1189,7 +1245,6 @@ func TestInnerAppCall(t *testing.T) {
 
 	genBalances, addrs, _ := newTestGenesis()
 	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	app0 := txntest.Txn{
 		Type:   "appl",
@@ -1208,7 +1263,7 @@ func TestInnerAppCall(t *testing.T) {
 	eval := l.nextBlock(t)
 	eval.txn(t, &app0)
 	vb := l.endBlock(t, eval)
-	index0 := vb.blk.Payset[0].ApplicationID
+	index0 := vb.Block().Payset[0].ApplicationID
 
 	app1 := txntest.Txn{
 		Type:   "appl",
@@ -1226,7 +1281,7 @@ func TestInnerAppCall(t *testing.T) {
 	eval = l.nextBlock(t)
 	eval.txns(t, &app1)
 	vb = l.endBlock(t, eval)
-	index1 := vb.blk.Payset[0].ApplicationID
+	index1 := vb.Block().Payset[0].ApplicationID
 
 	fund0 := txntest.Txn{
 		Type:     "pay",
@@ -1256,7 +1311,6 @@ func TestInnerAppManipulate(t *testing.T) {
 
 	genBalances, addrs, _ := newTestGenesis()
 	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	calleeIndex := basics.AppIndex(1)
 	callee := txntest.Txn{
@@ -1297,7 +1351,7 @@ next2:
 	eval := l.nextBlock(t)
 	eval.txns(t, &callee, &fund)
 	vb := l.endBlock(t, eval)
-	require.Equal(t, calleeIndex, vb.blk.Payset[0].ApplicationID)
+	require.Equal(t, calleeIndex, vb.Block().Payset[0].ApplicationID)
 
 	callerIndex := basics.AppIndex(3)
 	caller := txntest.Txn{
@@ -1328,7 +1382,7 @@ next2:
 	eval = l.nextBlock(t)
 	eval.txns(t, &caller, &fund)
 	vb = l.endBlock(t, eval)
-	require.Equal(t, callerIndex, vb.blk.Payset[0].ApplicationID)
+	require.Equal(t, callerIndex, vb.Block().Payset[0].ApplicationID)
 
 	call := txntest.Txn{
 		Type:          "appl",

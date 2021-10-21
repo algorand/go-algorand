@@ -20,14 +20,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/algorand/go-deadlock"
-
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/compactcert"
-	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -63,7 +59,7 @@ type votersTracker struct {
 	// the Merkle commitment to online accounts from the previous such block.
 	// Thus, we maintain X in the round map until we form a compact certificate
 	// for round X+CompactCertVotersLookback+CompactCertRounds.
-	round map[basics.Round]*VotersForRound
+	round map[basics.Round]*ledgercore.VotersForRound
 
 	l  ledgerForTracker
 	au *accountUpdates
@@ -71,44 +67,6 @@ type votersTracker struct {
 	// loadWaitGroup syncronizing the completion of the loadTree call so that we can
 	// shutdown the tracker without leaving any running go-routines.
 	loadWaitGroup sync.WaitGroup
-}
-
-// VotersForRound tracks the top online voting accounts as of a particular
-// round, along with a Merkle tree commitment to those voting accounts.
-type VotersForRound struct {
-	// Because it can take some time to compute the top participants and the
-	// corresponding Merkle tree, the votersForRound is constructed in
-	// the background.  This means that fields (participants, adddToPos,
-	// tree, and totalWeight) could be nil/zero while a background thread
-	// is computing them.  Once the fields are set, however, they are
-	// immutable, and it is no longer necessary to acquire the lock.
-	//
-	// If an error occurs while computing the tree in the background,
-	// loadTreeError might be set to non-nil instead.  That also finalizes
-	// the state of this VotersForRound.
-	mu            deadlock.Mutex
-	cond          *sync.Cond
-	loadTreeError error
-
-	// Proto is the ConsensusParams for the round whose balances are reflected
-	// in participants.
-	Proto config.ConsensusParams
-
-	// Participants is the array of top #CompactCertVoters online accounts
-	// in this round, sorted by normalized balance (to make sure heavyweight
-	// accounts are biased to the front).
-	Participants participantsArray
-
-	// AddrToPos specifies the position of a given account address (if present)
-	// in the Participants array.  This allows adding a vote from a given account
-	// to the certificate builder.
-	AddrToPos map[basics.Address]uint64
-
-	// Tree is a constructed Merkle tree of the Participants array.
-	Tree *merklearray.Tree
-
-	// TotalWeight is the sum of the weights from the Participants array.
-	TotalWeight basics.MicroAlgos
 }
 
 // votersRoundForCertRound computes the round number whose voting participants
@@ -124,7 +82,7 @@ func votersRoundForCertRound(certRnd basics.Round, proto config.ConsensusParams)
 func (vt *votersTracker) loadFromDisk(l ledgerForTracker, au *accountUpdates) error {
 	vt.l = l
 	vt.au = au
-	vt.round = make(map[basics.Round]*VotersForRound)
+	vt.round = make(map[basics.Round]*ledgercore.VotersForRound)
 
 	latest := l.Latest()
 	hdr, err := l.BlockHdr(latest)
@@ -173,23 +131,20 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 		return
 	}
 
-	tr := &VotersForRound{
-		Proto: proto,
-	}
-	tr.cond = sync.NewCond(&tr.mu)
+	tr := ledgercore.MakeVotersForRound()
+	tr.Proto = proto
+
 	vt.round[r] = tr
 
 	vt.loadWaitGroup.Add(1)
 	go func() {
 		defer vt.loadWaitGroup.Done()
-		err := tr.loadTree(vt.l, vt.au, hdr)
+		onlineAccounts := ledgercore.TopOnlineAccounts(vt.au.onlineTop)
+		err := tr.LoadTree(onlineAccounts, hdr)
 		if err != nil {
 			vt.au.log.Warnf("votersTracker.loadTree(%d): %v", hdr.Round, err)
 
-			tr.mu.Lock()
-			tr.loadTreeError = err
-			tr.cond.Broadcast()
-			tr.mu.Unlock()
+			tr.BroadcastError(err)
 		}
 	}()
 	return
@@ -199,70 +154,6 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 // shutdown.
 func (vt *votersTracker) close() {
 	vt.loadWaitGroup.Wait()
-}
-
-func (tr *VotersForRound) loadTree(l ledgerForTracker, au *accountUpdates, hdr bookkeeping.BlockHeader) error {
-	r := hdr.Round
-
-	// certRound is the block that we expect to form a compact certificate for,
-	// using the balances from round r.
-	certRound := r + basics.Round(tr.Proto.CompactCertVotersLookback+tr.Proto.CompactCertRounds)
-
-	// sigKeyRound is the ephemeral key ID that we expect to be used for signing
-	// the block from certRound.  It is one higher because the keys for certRound
-	// might be deleted by the time consensus is reached on the block and we try
-	// to sign the compact cert for block certRound.
-	sigKeyRound := certRound + 1
-
-	top, err := au.onlineTop(r, sigKeyRound, tr.Proto.CompactCertTopVoters)
-	if err != nil {
-		return err
-	}
-
-	participants := make(participantsArray, len(top))
-	addrToPos := make(map[basics.Address]uint64)
-	var totalWeight basics.MicroAlgos
-
-	for i, acct := range top {
-		var ot basics.OverflowTracker
-		rewards := basics.PendingRewards(&ot, tr.Proto, acct.MicroAlgos, acct.RewardsBase, hdr.RewardsLevel)
-		money := ot.AddA(acct.MicroAlgos, rewards)
-		if ot.Overflowed {
-			return fmt.Errorf("votersTracker.loadTree: overflow adding rewards %d + %d", acct.MicroAlgos, rewards)
-		}
-
-		totalWeight = ot.AddA(totalWeight, money)
-		if ot.Overflowed {
-			return fmt.Errorf("votersTracker.loadTree: overflow computing totalWeight %d + %d", totalWeight.ToUint64(), money.ToUint64())
-		}
-
-		keyDilution := acct.VoteKeyDilution
-		if keyDilution == 0 {
-			keyDilution = tr.Proto.DefaultKeyDilution
-		}
-
-		participants[i] = compactcert.Participant{
-			PK:          acct.VoteID,
-			Weight:      money.ToUint64(),
-			KeyDilution: keyDilution,
-		}
-		addrToPos[acct.Address] = uint64(i)
-	}
-
-	tree, err := merklearray.Build(participants)
-	if err != nil {
-		return err
-	}
-
-	tr.mu.Lock()
-	tr.AddrToPos = addrToPos
-	tr.Participants = participants
-	tr.TotalWeight = totalWeight
-	tr.Tree = tree
-	tr.cond.Broadcast()
-	tr.mu.Unlock()
-
-	return nil
 }
 
 func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
@@ -311,7 +202,7 @@ func (vt *votersTracker) lowestRound(base basics.Round) basics.Round {
 }
 
 // getVoters() returns the top online participants from round r.
-func (vt *votersTracker) getVoters(r basics.Round) (*VotersForRound, error) {
+func (vt *votersTracker) getVoters(r basics.Round) (*ledgercore.VotersForRound, error) {
 	tr, ok := vt.round[r]
 	if !ok {
 		// Not tracked: compact certs not enabled.
@@ -319,32 +210,10 @@ func (vt *votersTracker) getVoters(r basics.Round) (*VotersForRound, error) {
 	}
 
 	// Wait for the Merkle tree to be constructed.
-	tr.mu.Lock()
-	defer tr.mu.Unlock()
-	for tr.Tree == nil {
-		if tr.loadTreeError != nil {
-			return nil, tr.loadTreeError
-		}
-
-		tr.cond.Wait()
+	err := tr.Wait()
+	if err != nil {
+		return nil, err
 	}
 
 	return tr, nil
-}
-
-//msgp:ignore participantsArray
-// participantsArray implements merklearray.Array and is used to commit
-// to a Merkle tree of online accounts.
-type participantsArray []compactcert.Participant
-
-func (a participantsArray) Length() uint64 {
-	return uint64(len(a))
-}
-
-func (a participantsArray) GetHash(pos uint64) (crypto.Digest, error) {
-	if pos >= uint64(len(a)) {
-		return crypto.Digest{}, fmt.Errorf("participantsArray.Get(%d) out of bounds %d", pos, len(a))
-	}
-
-	return crypto.HashObj(a[pos]), nil
 }

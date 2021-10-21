@@ -125,6 +125,21 @@ type (
 		// for multiple types of certs.
 		//msgp:sort protocol.CompactCertType protocol.SortCompactCertType
 		CompactCert map[protocol.CompactCertType]CompactCertState `codec:"cc,allocbound=protocol.NumCompactCertTypes"`
+
+		// ParticipationUpdates contains the information needed to mark
+		// certain accounts offline because their participation keys expired
+		ParticipationUpdates
+	}
+
+	// ParticipationUpdates represents participation account data that
+	// needs to be checked/acted on by the network
+	ParticipationUpdates struct {
+		_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+		// ExpiredParticipationAccounts contains a list of online accounts
+		// that needs to be converted to offline since their
+		// participation key expired.
+		ExpiredParticipationAccounts []basics.Address `codec:"partupdrmv,allocbound=config.MaxProposedExpiredOnlineAccounts"`
 	}
 
 	// RewardsState represents the global parameters controlling the rate

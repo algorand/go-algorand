@@ -17,6 +17,9 @@
 package ledger
 
 import (
+	"context"
+	"database/sql"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -29,7 +32,7 @@ type metricsTracker struct {
 	ledgerRound             *metrics.Gauge
 }
 
-func (mt *metricsTracker) loadFromDisk(l ledgerForTracker) error {
+func (mt *metricsTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 	mt.ledgerTransactionsTotal = metrics.MakeCounter(metrics.LedgerTransactionsTotal)
 	mt.ledgerRewardClaimsTotal = metrics.MakeCounter(metrics.LedgerRewardClaimsTotal)
 	mt.ledgerRound = metrics.MakeGauge(metrics.LedgerRound)
@@ -49,4 +52,18 @@ func (mt *metricsTracker) newBlock(blk bookkeeping.Block, delta ledgercore.State
 
 func (mt *metricsTracker) committedUpTo(committedRnd basics.Round) basics.Round {
 	return committedRnd
+}
+
+func (mt *metricsTracker) prepareCommit(dcc *deferredCommitContext) error {
+	return nil
+}
+
+func (mt *metricsTracker) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+	return nil
+}
+
+func (mt *metricsTracker) postCommit(deferredCommitContext) {
+}
+
+func (mt *metricsTracker) handleUnorderedCommit(uint64, basics.Round, basics.Round) {
 }

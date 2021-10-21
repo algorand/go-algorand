@@ -30,34 +30,6 @@ type Params struct {
 	SecKQ        uint64          // Security parameter (k+q) from analysis document
 }
 
-// A Participant corresponds to an account whose AccountData.Status
-// is Online, and for which the expected sigRound satisfies
-// AccountData.VoteFirstValid <= sigRound <= AccountData.VoteLastValid.
-//
-// In the Algorand ledger, it is possible for multiple accounts to have
-// the same PK.  Thus, the PK is not necessarily unique among Participants.
-// However, each account will produce a unique Participant struct, to avoid
-// potential DoS attacks where one account claims to have the same VoteID PK
-// as another account.
-type Participant struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	// PK is AccountData.VoteID.
-	PK crypto.OneTimeSignatureVerifier `codec:"p"`
-
-	// Weight is AccountData.MicroAlgos.
-	Weight uint64 `codec:"w"`
-
-	// KeyDilution is AccountData.KeyDilution() with the protocol for sigRound
-	// as expected by the Builder.
-	KeyDilution uint64 `codec:"d"`
-}
-
-// ToBeHashed implements the crypto.Hashable interface.
-func (p Participant) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.CompactCertPart, protocol.Encode(&p)
-}
-
 // CompactOneTimeSignature is crypto.OneTimeSignature with omitempty
 type CompactOneTimeSignature struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -87,8 +59,8 @@ func (ssc sigslotCommit) ToBeHashed() (protocol.HashID, []byte) {
 type Reveal struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	SigSlot sigslotCommit `codec:"s"`
-	Part    Participant   `codec:"p"`
+	SigSlot sigslotCommit      `codec:"s"`
+	Part    basics.Participant `codec:"p"`
 }
 
 // MaxReveals is a bound on allocation and on numReveals to limit log computation
