@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -56,6 +57,7 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/timers"
 	"github.com/algorand/go-deadlock"
+	uuid "github.com/satori/go.uuid"
 )
 
 // StatusReport represents the current basic status of the node
@@ -796,6 +798,143 @@ func (node *AlgorandFullNode) checkForParticipationKeys() {
 			return
 		}
 	}
+}
+
+// ListParticipationKeys returns all participation keys currently installed on the node
+func (node *AlgorandFullNode) ListParticipationKeys() (partKeys []account.ParticipationRecord, err error) {
+	return node.accountManager.Registry().GetAll(), nil
+}
+
+// GetParticipationKey retries the information of a participation id from the node
+func (node *AlgorandFullNode) GetParticipationKey(partKey account.ParticipationID) (account.ParticipationRecord, error) {
+	rval := node.accountManager.Registry().Get(partKey)
+
+	if rval.IsZero() {
+		return account.ParticipationRecord{}, account.ErrParticipationIDNotFound
+	}
+
+	return node.accountManager.Registry().Get(partKey), nil
+}
+
+// RemoveParticipationKey given a participation id, remove the records from the node
+func (node *AlgorandFullNode) RemoveParticipationKey(partKey account.ParticipationID) error {
+
+	// Need to remove the file and then remove the entry in the registry
+	// Let's first get the recorded information from the registry so we can lookup the file
+
+	partRecord := node.accountManager.Registry().Get(partKey)
+
+	if partRecord.IsZero() {
+		return account.ErrParticipationIDNotFound
+	}
+
+	genID := node.GenesisID()
+
+	outDir := filepath.Join(node.rootDir, genID)
+
+	filename := config.PartKeyFilename(partRecord.ParticipationID.String(), uint64(partRecord.FirstValid), uint64(partRecord.LastValid))
+	fullyQualifiedFilename := filepath.Join(outDir, filepath.Base(filename))
+
+	err := node.accountManager.Registry().Delete(partKey)
+	if err != nil {
+		return err
+	}
+
+	err = node.accountManager.Registry().Flush()
+	if err != nil {
+		return err
+	}
+
+	// Only after deleting and flushing do we want to remove the file
+	_ = os.Remove(fullyQualifiedFilename)
+
+	return nil
+}
+
+func createTemporaryParticipationKey(outDir string, partKeyBinary *[]byte) (string, error) {
+	var sb strings.Builder
+
+	// Create a temporary filename with a UUID so that we can call this function twice
+	// in a row without worrying about collisions
+	sb.WriteString("tempPartKeyBinary.")
+	sb.WriteString(uuid.NewV4().String())
+	sb.WriteString(".bin")
+
+	tempFile := filepath.Join(outDir, filepath.Base(sb.String()))
+
+	file, err := os.Create(tempFile)
+
+	if err != nil {
+		return "", err
+	}
+
+	_, err = file.Write(*partKeyBinary)
+
+	file.Close()
+
+	if err != nil {
+		os.Remove(tempFile)
+		return "", err
+	}
+
+	return tempFile, nil
+}
+
+// InstallParticipationKey Given a participation key binary stream install the participation key
+func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary *[]byte) (account.ParticipationID, error) {
+	genID := node.GenesisID()
+
+	outDir := filepath.Join(node.rootDir, genID)
+
+	fullyQualifiedTempFile, err := createTemporaryParticipationKey(outDir, partKeyBinary)
+	// We need to make sure no tempfile is created/remains if there is an error
+	// However, we will eventually rename this file but if we fail in-between
+	// this point and the rename we want to ensure that we remove the temporary file
+	// After we rename, this will fail anyway since the file will not exist
+
+	// Explicitly ignore the error with a closure
+	defer func(name string) {
+		_ = os.Remove(name)
+	}(fullyQualifiedTempFile)
+
+	if err != nil {
+		return account.ParticipationID{}, err
+	}
+
+	inputdb, err := db.MakeErasableAccessor(fullyQualifiedTempFile)
+	if err != nil {
+		return account.ParticipationID{}, err
+	}
+	defer inputdb.Close()
+
+	partkey, err := account.RestoreParticipation(inputdb)
+	if err != nil {
+		return account.ParticipationID{}, err
+	}
+	defer partkey.Close()
+
+	if partkey.Parent == (basics.Address{}) {
+		return account.ParticipationID{}, fmt.Errorf("cannot install partkey with missing (zero) parent address")
+	}
+
+	// Tell the AccountManager about the Participation (dupes don't matter) so we ignore the return value
+	_ = node.accountManager.AddParticipation(partkey)
+
+	err = node.accountManager.Registry().Flush()
+	if err != nil {
+		return account.ParticipationID{}, err
+	}
+
+	newFilename := config.PartKeyFilename(partkey.ID().String(), uint64(partkey.FirstValid), uint64(partkey.LastValid))
+	newFullyQualifiedFilename := filepath.Join(outDir, filepath.Base(newFilename))
+
+	err = os.Rename(fullyQualifiedTempFile, newFullyQualifiedFilename)
+
+	if err != nil {
+		return account.ParticipationID{}, nil
+	}
+
+	return partkey.ID(), nil
 }
 
 func (node *AlgorandFullNode) loadParticipationKeys() error {

@@ -19,6 +19,7 @@ package account
 import (
 	"context"
 	"database/sql"
+	"encoding/base32"
 	"errors"
 	"fmt"
 	"strings"
@@ -39,6 +40,24 @@ type ParticipationID crypto.Digest
 // IsZero returns true if the ParticipationID is all zero bytes.
 func (pid ParticipationID) IsZero() bool {
 	return (crypto.Digest(pid)).IsZero()
+}
+
+func (pid ParticipationID) String() string {
+	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(pid[:])
+}
+
+// ParticipationIDFromString takes a string and returns a ParticipationID object
+func ParticipationIDFromString(str string) (d ParticipationID, err error) {
+	decoded, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(str)
+	if err != nil {
+		return d, err
+	}
+	if len(decoded) != len(d) {
+		msg := fmt.Sprintf(`Attempted to decode a string which was not a participation id: "%v"`, str)
+		return d, errors.New(msg)
+	}
+	copy(d[:], decoded[:])
+	return d, err
 }
 
 // ParticipationRecord contains all metadata relating to a set of participation keys.

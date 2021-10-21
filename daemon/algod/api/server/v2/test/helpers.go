@@ -87,6 +87,22 @@ type mockNode struct {
 	err       error
 }
 
+func (m mockNode) InstallParticipationKey(partKeyBinary *[]byte) (account.ParticipationID, error) {
+	panic("implement me")
+}
+
+func (m mockNode) ListParticipationKeys() ([]account.ParticipationRecord, error) {
+	panic("implement me")
+}
+
+func (m mockNode) GetParticipationKey(id account.ParticipationID) (account.ParticipationRecord, error) {
+	panic("implement me")
+}
+
+func (m mockNode) RemoveParticipationKey(id account.ParticipationID) error {
+	panic("implement me")
+}
+
 func makeMockNode(ledger *data.Ledger, genesisID string, nodeError error) mockNode {
 	return mockNode{
 		ledger:    ledger,
