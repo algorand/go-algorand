@@ -170,7 +170,8 @@ func init() {
 
 	infoAppCmd.MarkFlagRequired("app-id")
 
-	methodAppCmd.MarkFlagRequired("method")
+	// TODO why this line always cause trouble in golangci-lint
+	//methodAppCmd.MarkFlagRequired("method")
 }
 
 type appCallArg struct {
@@ -1024,11 +1025,12 @@ var infoAppCmd = &cobra.Command{
 }
 
 var methodAppCmd = &cobra.Command{
+	// TODO need more description
 	Use:   "method",
 	Short: "",
 	Long:  ``,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		// TODO
+		//cmd.HelpFunc()(cmd, args)
 	},
 }
