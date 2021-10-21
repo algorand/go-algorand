@@ -48,7 +48,7 @@ executors:
 
 workflows:
   version: 2
-  build_pr:
+  "circleci_build_and_test":
     jobs:
       - codegen_verification
 
@@ -517,7 +517,7 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_large
+    executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
     steps:
@@ -533,7 +533,7 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_large
+    executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
     steps:
@@ -552,9 +552,9 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_large
+    executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 4
+    parallelism: 2
     environment:
       E2E_TEST_FILTER: "GO"
     steps:
@@ -588,9 +588,9 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_large
+    executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 4
+    parallelism: 2
     environment:
       E2E_TEST_FILTER: "EXPECT"
     steps:
@@ -605,9 +605,9 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_large
+    executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 4
+    parallelism: 2
     environment:
       E2E_TEST_FILTER: "EXPECT"
     steps:
@@ -626,7 +626,6 @@ jobs:
         type: string
     executor: << parameters.platform >>_large
     working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 4
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
     steps:
@@ -643,7 +642,6 @@ jobs:
         type: string
     executor: << parameters.platform >>_large
     working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 4
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
     steps:
