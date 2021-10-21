@@ -372,9 +372,9 @@ func BenchmarkUnmarshalBalanceRecord(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalEvalDelta(t *testing.T) {
+func TestMarshalUnmarshalParticipant(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := EvalDelta{}
+	v := Participant{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -393,12 +393,12 @@ func TestMarshalUnmarshalEvalDelta(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingEvalDelta(t *testing.T) {
-	protocol.RunEncodingTest(t, &EvalDelta{})
+func TestRandomizedEncodingParticipant(t *testing.T) {
+	protocol.RunEncodingTest(t, &Participant{})
 }
 
-func BenchmarkMarshalMsgEvalDelta(b *testing.B) {
-	v := EvalDelta{}
+func BenchmarkMarshalMsgParticipant(b *testing.B) {
+	v := Participant{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -406,8 +406,8 @@ func BenchmarkMarshalMsgEvalDelta(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgEvalDelta(b *testing.B) {
-	v := EvalDelta{}
+func BenchmarkAppendMsgParticipant(b *testing.B) {
+	v := Participant{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -418,68 +418,8 @@ func BenchmarkAppendMsgEvalDelta(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalEvalDelta(b *testing.B) {
-	v := EvalDelta{}
-	bts := v.MarshalMsg(nil)
-	b.ReportAllocs()
-	b.SetBytes(int64(len(bts)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func TestMarshalUnmarshalLogItem(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	v := LogItem{}
-	bts := v.MarshalMsg(nil)
-	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
-	}
-
-	left, err = msgp.Skip(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
-	}
-}
-
-func TestRandomizedEncodingLogItem(t *testing.T) {
-	protocol.RunEncodingTest(t, &LogItem{})
-}
-
-func BenchmarkMarshalMsgLogItem(b *testing.B) {
-	v := LogItem{}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v.MarshalMsg(nil)
-	}
-}
-
-func BenchmarkAppendMsgLogItem(b *testing.B) {
-	v := LogItem{}
-	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
-	b.SetBytes(int64(len(bts)))
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
-	}
-}
-
-func BenchmarkUnmarshalLogItem(b *testing.B) {
-	v := LogItem{}
+func BenchmarkUnmarshalParticipant(b *testing.B) {
+	v := Participant{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

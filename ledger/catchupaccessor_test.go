@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -69,7 +70,7 @@ func createTestingEncodedChunks(accountsCount uint64) (encodedAccountChunks [][]
 }
 
 func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
-	genesisInitState, _ := testGenerateInitState(b, protocol.ConsensusCurrentVersion, 100)
+	genesisInitState, _ := ledgertesting.GenerateInitState(b, protocol.ConsensusCurrentVersion, 100)
 	const inMem = false
 	log := logging.TestingLog(b)
 	cfg := config.GetDefaultLocal()
@@ -145,7 +146,7 @@ func TestCatchupAcessorFoo(t *testing.T) {
 	log := logging.TestingLog(t)
 	dbBaseFileName := t.Name()
 	const inMem = true
-	genesisInitState, _ /* initKeys */ := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	genesisInitState, _ /* initKeys */ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	cfg := config.GetDefaultLocal()
 	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
@@ -201,7 +202,7 @@ func TestBuildMerkleTrie(t *testing.T) {
 	log := logging.TestingLog(t)
 	dbBaseFileName := t.Name()
 	const inMem = true
-	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	cfg := config.GetDefaultLocal()
 	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
@@ -300,7 +301,7 @@ func TestCatchupAccessorBlockdb(t *testing.T) {
 	log := logging.TestingLog(t)
 	dbBaseFileName := t.Name()
 	const inMem = true
-	genesisInitState, _ /*initKeys*/ := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	genesisInitState, _ /*initKeys*/ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	cfg := config.GetDefaultLocal()
 	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
@@ -326,7 +327,7 @@ func TestVerifyCatchpoint(t *testing.T) {
 	log := logging.TestingLog(t)
 	dbBaseFileName := t.Name()
 	const inMem = true
-	genesisInitState, _ /*initKeys*/ := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	genesisInitState, _ /*initKeys*/ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	cfg := config.GetDefaultLocal()
 	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")

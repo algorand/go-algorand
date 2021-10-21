@@ -41,14 +41,14 @@ var logicErrTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_l
 // When doing so, it attempts to break these into smaller "worksets" where each workset takes about 2ms of execution time in order
 // to avoid context switching overhead while providing good validation cancelation responsiveness. Each one of these worksets is
 // "populated" with roughly txnPerWorksetThreshold transactions. ( note that the real evaluation time is unknown, but benchmarks
-// showen that these are realistic numbers )
+// show that these are realistic numbers )
 const txnPerWorksetThreshold = 32
 
 // When the PaysetGroups is generating worksets, it enqueues up to concurrentWorksets entries to the execution pool. This serves several
 // purposes :
 // - if the verification task need to be aborted, there are only concurrentWorksets entries that are currently redundant on the execution pool queue.
 // - that number of concurrent tasks would not get beyond the capacity of the execution pool back buffer.
-// - if we were to "redundently" execute all these during context cancelation, we would spent at most 2ms * 16 = 32ms time.
+// - if we were to "redundantly" execute all these during context cancelation, we would spent at most 2ms * 16 = 32ms time.
 // - it allows us to linearly scan the input, and process elements only once we're going to queue them into the pool.
 const concurrentWorksets = 16
 
@@ -177,7 +177,7 @@ func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 		return
 	}
 	// feesPaid may have saturated. That's ok. Since we know
-	// feeNeeded did not overlfow, simple comparison tells us
+	// feeNeeded did not overflow, simple comparison tells us
 	// feesPaid was enough.
 	if feesPaid < feeNeeded {
 		err = fmt.Errorf("txgroup had %d in fees, which is less than the minimum %d * %d",
@@ -286,11 +286,14 @@ func LogicSigSanityCheckBatchVerify(txn *transactions.SignedTxn, groupIndex int,
 		return errors.New("LogicSig.Logic too long")
 	}
 
+	if groupIndex < 0 {
+		return errors.New("Negative groupIndex")
+	}
 	ep := logic.EvalParams{
 		Txn:            txn,
 		Proto:          &groupCtx.consensusParams,
 		TxnGroup:       groupCtx.signedGroupTxns,
-		GroupIndex:     groupIndex,
+		GroupIndex:     uint64(groupIndex),
 		MinTealVersion: &groupCtx.minTealVersion,
 	}
 	err := logic.Check(lsig.Logic, ep)
@@ -340,11 +343,14 @@ func logicSigBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 		return err
 	}
 
+	if groupIndex < 0 {
+		return errors.New("Negative groupIndex")
+	}
 	ep := logic.EvalParams{
 		Txn:            txn,
 		Proto:          &groupCtx.consensusParams,
 		TxnGroup:       groupCtx.signedGroupTxns,
-		GroupIndex:     groupIndex,
+		GroupIndex:     uint64(groupIndex),
 		MinTealVersion: &groupCtx.minTealVersion,
 	}
 	pass, err := logic.Eval(txn.Lsig.Logic, ep)

@@ -21,10 +21,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestCyclicWrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	liveFileName := "live.test"
 	archiveFileName := "archive.test"
 	defer os.Remove(liveFileName)

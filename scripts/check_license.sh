@@ -11,6 +11,8 @@ EXCLUDE=(
     "Go Authors"
     "Google Inc"
     "Prometheus Authors"
+    "Jeffrey Wilcke"
+    "dummy.go"
 )
 FILTER=$(IFS="|" ; echo "${EXCLUDE[*]}")
 INPLACE=false

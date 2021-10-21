@@ -23,6 +23,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/gorilla/mux"
 
@@ -72,6 +73,7 @@ type BlockService struct {
 	fallbackEndpoints       fallbackEndpoints
 	enableArchiverFallback  bool
 	log                     logging.Logger
+	closeWaitGroup          sync.WaitGroup
 }
 
 // EncodedBlockCert defines how GetBlockBytes encodes a block and its certificate
@@ -125,12 +127,14 @@ func (bs *BlockService) Start() {
 		bs.net.RegisterHandlers(handlers)
 	}
 	bs.stop = make(chan struct{})
+	bs.closeWaitGroup.Add(1)
 	go bs.listenForCatchupReq(bs.catchupReqs, bs.stop)
 }
 
 // Stop servicing catchup requests over ws
 func (bs *BlockService) Stop() {
 	close(bs.stop)
+	bs.closeWaitGroup.Wait()
 }
 
 // ServerHTTP returns blocks
@@ -237,6 +241,7 @@ func (bs *BlockService) processIncomingMessage(msg network.IncomingMessage) (n n
 
 // listenForCatchupReq handles catchup getblock request
 func (bs *BlockService) listenForCatchupReq(reqs <-chan network.IncomingMessage, stop chan struct{}) {
+	defer bs.closeWaitGroup.Done()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for {
@@ -252,7 +257,7 @@ func (bs *BlockService) listenForCatchupReq(reqs <-chan network.IncomingMessage,
 const noRoundNumberErrMsg = "can't find the round number"
 const noDataTypeErrMsg = "can't find the data-type"
 const roundNumberParseErrMsg = "unable to parse round number"
-const blockNotAvailabeErrMsg = "requested block is not available"
+const blockNotAvailableErrMsg = "requested block is not available"
 const datatypeUnsupportedErrMsg = "requested data type is unsupported"
 
 // a blocking function for handling a catchup request
@@ -360,7 +365,7 @@ func topicBlockBytes(log logging.Logger, dataLedger *data.Ledger, round basics.R
 			log.Infof("BlockService topicBlockBytes: %s", err)
 		}
 		return network.Topics{
-			network.MakeTopic(network.ErrorKey, []byte(blockNotAvailabeErrMsg))}
+			network.MakeTopic(network.ErrorKey, []byte(blockNotAvailableErrMsg))}
 	}
 	switch requestType {
 	case BlockAndCertValue:

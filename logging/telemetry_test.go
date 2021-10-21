@@ -29,6 +29,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type mockTelemetryHook struct {
@@ -133,6 +134,7 @@ func (h *mockTelemetryHook) entries() []string {
 }
 
 func TestCreateHookError(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	cfg := createTelemetryConfig()
@@ -147,6 +149,7 @@ func TestCreateHookError(t *testing.T) {
 }
 
 func TestTelemetryHook(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	f := makeTelemetryTestFixture(logrus.InfoLevel)
 
@@ -169,6 +172,7 @@ func TestTelemetryHook(t *testing.T) {
 }
 
 func TestNilMetrics(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	f := makeTelemetryTestFixture(logrus.InfoLevel)
 
@@ -178,6 +182,7 @@ func TestNilMetrics(t *testing.T) {
 }
 
 func TestMultipleOperationStop(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	f := makeTelemetryTestFixture(logrus.InfoLevel)
 
@@ -194,6 +199,7 @@ func TestMultipleOperationStop(t *testing.T) {
 }
 
 func TestDetails(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	f := makeTelemetryTestFixture(logrus.InfoLevel)
 
@@ -216,6 +222,7 @@ func (m testMetrics) Identifier() telemetryspec.Metric {
 }
 
 func TestMetrics(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	f := makeTelemetryTestFixture(logrus.InfoLevel)
 
@@ -231,6 +238,7 @@ func TestMetrics(t *testing.T) {
 }
 
 func TestLogHook(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	f := makeTelemetryTestFixture(logrus.InfoLevel)
 
@@ -248,6 +256,7 @@ func TestLogHook(t *testing.T) {
 }
 
 func TestLogLevels(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	runLogLevelsTest(t, logrus.DebugLevel, 7)
 	runLogLevelsTest(t, logrus.InfoLevel, 6)
 	runLogLevelsTest(t, logrus.WarnLevel, 5)
@@ -281,6 +290,7 @@ func runLogLevelsTest(t *testing.T, minLevel logrus.Level, expected int) {
 }
 
 func TestLogHistoryLevels(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	cfg := createTelemetryConfig()
 	cfg.MinLogLevel = logrus.DebugLevel
@@ -320,6 +330,7 @@ func TestLogHistoryLevels(t *testing.T) {
 }
 
 func TestReadTelemetryConfigOrDefaultNoDataDir(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	tempDir := os.TempDir()
 	originalGlobalConfigFileRoot, _ := config.GetGlobalConfigFileRoot()

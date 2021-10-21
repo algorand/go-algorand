@@ -18,6 +18,8 @@ package crypto
 
 import (
 	"testing"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func randID() OneTimeSignatureIdentifier {
@@ -30,6 +32,7 @@ func randID() OneTimeSignatureIdentifier {
 }
 
 func TestOneTimeSignVerifyNewStyle(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	c := GenerateOneTimeSignatureSecrets(0, 1000)
 	c2 := GenerateOneTimeSignatureSecrets(0, 1000)
 	testOneTimeSignVerifyNewStyle(t, c, c2)

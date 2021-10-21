@@ -18,6 +18,7 @@ package transactions
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -87,7 +88,7 @@ func (s SignedTxnInBlock) GetEncodedLength() int {
 // This is just s.AuthAddr or, if s.AuthAddr is zero, s.Txn.Sender.
 // It's provided as a convenience method.
 func (s SignedTxn) Authorizer() basics.Address {
-	if (s.AuthAddr == basics.Address{}) {
+	if s.AuthAddr.IsZero() {
 		return s.Txn.Sender
 	}
 	return s.AuthAddr
@@ -128,4 +129,33 @@ func WrapSignedTxnsWithAD(txgroup []SignedTxn) []SignedTxnWithAD {
 		txgroupad[i].SignedTxn = tx
 	}
 	return txgroupad
+}
+
+// FeeCredit computes the amount of fee credit that can be spent on
+// inner txns because it was more than required.
+func FeeCredit(txgroup []SignedTxn, minFee uint64) (uint64, error) {
+	minFeeCount := uint64(0)
+	feesPaid := uint64(0)
+	for _, stxn := range txgroup {
+		if stxn.Txn.Type != protocol.CompactCertTx {
+			minFeeCount++
+		}
+		feesPaid = basics.AddSaturate(feesPaid, stxn.Txn.Fee.Raw)
+	}
+	feeNeeded, overflow := basics.OMul(minFee, minFeeCount)
+	if overflow {
+		return 0, fmt.Errorf("txgroup fee requirement overflow")
+	}
+	// feesPaid may have saturated. That's ok. Since we know
+	// feeNeeded did not overflow, simple comparison tells us
+	// feesPaid was enough.
+	if feesPaid < feeNeeded {
+		return 0, fmt.Errorf("txgroup had %d in fees, which is less than the minimum %d * %d",
+			feesPaid, minFeeCount, minFee)
+	}
+	// Now, if feesPaid *did* saturate, you will not get "credit" for
+	// all those fees while executing AVM code that might create
+	// transactions.  But you'll get the max uint64 - good luck
+	// spending it.
+	return feesPaid - feeNeeded, nil
 }

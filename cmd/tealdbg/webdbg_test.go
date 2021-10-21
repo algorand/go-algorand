@@ -23,11 +23,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/require"
 )
 
 func TestWebPageFrontendHandlers(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	params := WebPageFrontendParams{
 		router:     mux.NewRouter(),
 		apiAddress: "127.0.0.1:12345",

@@ -20,10 +20,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestEnsureDataDirReturnsWhenDataDirIsProvided(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	expectedDir := "~/.algorand"
 	os.Setenv("ALGORAND_DATA", expectedDir)
 	actualDir := ensureFirstDataDir()

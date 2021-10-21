@@ -22,6 +22,7 @@ import (
 
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -42,6 +43,7 @@ func (mes *MockEventSender) EventWithDetails(category telemetryspec.Category, id
 }
 
 func TestConsecutiveBlocks(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	sender := MockEventSender{}
 	bs := blockstats{log: &sender}
 
@@ -57,6 +59,7 @@ func TestConsecutiveBlocks(t *testing.T) {
 }
 
 func TestAgreementTime(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	sleepTime := 50 * time.Millisecond
 	testAttempts := 0
 	const maxTestAttempts = 10

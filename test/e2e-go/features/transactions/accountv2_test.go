@@ -77,6 +77,7 @@ func checkEvalDelta(t *testing.T, client *libgoal.Client, startRnd, endRnd uint6
 
 func TestAccountInformationV2(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
@@ -88,7 +89,7 @@ func TestAccountInformationV2(t *testing.T) {
 	proto.AgreementFilterTimeout = 400 * time.Millisecond
 	fixture.SetConsensus(config.ConsensusProtocols{protocol.ConsensusFuture: proto})
 
-	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachV26.json"))
 	defer fixture.Shutdown()
 
 	client := fixture.LibGoalClient
@@ -104,13 +105,15 @@ func TestAccountInformationV2(t *testing.T) {
 
 	fee := uint64(1000)
 
-	round, err := client.CurrentRound()
-	a.NoError(err)
+	var txn transactions.Transaction
 
 	// Fund the manager, so it can issue transactions later on
-	_, err = client.SendPaymentFromUnencryptedWallet(creator, user, fee, 10000000000, nil)
+	txn, err = client.SendPaymentFromUnencryptedWallet(creator, user, fee, 10000000000, nil)
 	a.NoError(err)
-	client.WaitForRound(round + 4)
+
+	round, err := client.CurrentRound()
+	a.NoError(err)
+	fixture.WaitForConfirmedTxn(round+4, creator, txn.ID().String())
 
 	// There should be no apps to start with
 	ad, err := client.AccountData(creator)
@@ -164,9 +167,9 @@ int 1
 	a.NoError(err)
 	signedTxn, err := client.SignTransactionWithWallet(wh, nil, tx)
 	a.NoError(err)
-	round, err = client.CurrentRound()
-	a.NoError(err)
 	txid, err := client.BroadcastTransaction(signedTxn)
+	a.NoError(err)
+	round, err = client.CurrentRound()
 	a.NoError(err)
 	// ensure transaction is accepted into a block within 5 rounds.
 	confirmed := fixture.WaitForAllTxnsToConfirm(round+5, map[string]string{txid: signedTxn.Txn.Sender.String()})
@@ -213,9 +216,9 @@ int 1
 	a.NoError(err)
 	signedTxn, err = client.SignTransactionWithWallet(wh, nil, tx)
 	a.NoError(err)
-	round, err = client.CurrentRound()
-	a.NoError(err)
 	txid, err = client.BroadcastTransaction(signedTxn)
+	a.NoError(err)
+	round, err = client.CurrentRound()
 	a.NoError(err)
 	_, err = client.WaitForRound(round + 3)
 	a.NoError(err)
@@ -284,16 +287,23 @@ int 1
 	a.NoError(err)
 	signedTxn, err = client.SignTransactionWithWallet(wh, nil, tx)
 	a.NoError(err)
-	round, err = client.CurrentRound()
+	txid, err = client.BroadcastTransaction(signedTxn)
 	a.NoError(err)
-	_, err = client.BroadcastTransaction(signedTxn)
-	a.NoError(err)
-	_, err = client.WaitForRound(round + 2)
-	a.NoError(err)
-	// Ensure the txn committed
-	resp, err = client.GetPendingTransactions(2)
-	a.NoError(err)
-	a.Equal(uint64(0), resp.TotalTxns)
+	for {
+		round, err = client.CurrentRound()
+		a.NoError(err)
+		_, err = client.WaitForRound(round + 1)
+		a.NoError(err)
+		// Ensure the txn committed
+		resp, err = client.GetPendingTransactions(2)
+		a.NoError(err)
+		if resp.TotalTxns == 1 {
+			a.Equal(resp.TruncatedTxns.Transactions[0].TxID, txid)
+			continue
+		}
+		a.Equal(uint64(0), resp.TotalTxns)
+		break
+	}
 
 	ad, err = client.AccountData(creator)
 	a.NoError(err)
