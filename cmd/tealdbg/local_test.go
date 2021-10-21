@@ -1372,13 +1372,6 @@ func TestGroupTxnIdx(t *testing.T) {
 				}
 			  }
 			],
-			"participation": {
-			  "selection-participation-key": "q6qJ/b1hRF6gQUisXaR2UNGtp8OjF+3ArAkR7Ve/uig=",
-			  "vote-first-valid": 0,
-			  "vote-key-dilution": 10000,
-			  "vote-last-valid": 3000000,
-			  "vote-participation-key": "Ea8nazVHpD1+0nOFRWGNxiMuxXCHgM+7OYKPkwM8f+M="
-			},
 			"pending-rewards": 0,
 			"rewards": 0,
 			"round": 2,
@@ -1453,11 +1446,7 @@ func TestGroupTxnIdx(t *testing.T) {
 	err := local.Setup(&ds)
 	a.NoError(err)
 
-	t.Logf("LOGGY %+v", local)
-	t.Logf("LOGGY %+v", ds)
-
 	pass, err := local.Run()
-	t.Logf("Loggeronie: %+v %+v", pass, err)
 	a.NoError(err)
 	a.True(pass)
 }
