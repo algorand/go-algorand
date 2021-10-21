@@ -220,7 +220,7 @@ func (tsnc *transactionSyncNodeConnector) Handle(raw network.IncomingMessage) ne
 		peer = peerData.(*txnsync.Peer)
 	}
 
-	err := tsnc.messageHandler(raw.Sender, peer, raw.Data, raw.Sequence)
+	err := tsnc.messageHandler(raw.Sender, peer, raw.Data, raw.Sequence, raw.Received)
 	if err != nil {
 		return network.OutgoingMessage{
 			Action: network.Disconnect,

@@ -360,7 +360,7 @@ func (n *emulatedNode) step() {
 
 			peer.mu.Unlock()
 
-			msgHandler(peer, peer.peer, msgBytes, msgInSeq)
+			msgHandler(peer, peer.peer, msgBytes, msgInSeq, 0)
 			n.unblock()
 			n.waitBlocked()
 			peer.mu.Lock()

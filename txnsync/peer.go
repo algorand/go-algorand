@@ -585,12 +585,12 @@ func (p *Peer) updateIncomingTransactionGroups(txnGroups []pooldata.SignedTxGrou
 	}
 }
 
-func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound basics.Round, currentTime time.Duration, peerLatency time.Duration, incomingMessageSize int) {
+func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound basics.Round, currentTime time.Duration, timeInQueue time.Duration, peerLatency time.Duration, incomingMessageSize int) {
 	p.lastConfirmedMessageSeqReceived = timings.RefTxnBlockMsgSeq
 	// if we received a message that references our previous message, see if they occurred on the same round
 	if p.lastConfirmedMessageSeqReceived == p.lastSentMessageSequenceNumber && p.lastSentMessageRound == currentRound && p.lastSentMessageTimestamp > 0 {
 		// if so, we might be able to calculate the bandwidth.
-		timeSinceLastMessageWasSent := currentTime - p.lastSentMessageTimestamp
+		timeSinceLastMessageWasSent := currentTime - timeInQueue - p.lastSentMessageTimestamp
 		networkMessageSize := uint64(p.lastSentMessageSize + incomingMessageSize)
 		logging.Base().Infof("data exchange timing: %v %v %v %v", timeSinceLastMessageWasSent, time.Duration(timings.ResponseElapsedTime), peerLatency, networkMessageSize)
 		if timings.ResponseElapsedTime != 0 && peerLatency > 0 && timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime)+peerLatency && networkMessageSize >= p.significantMessageThreshold {
@@ -616,7 +616,7 @@ func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound ba
 		p.lastSentMessageSize = 0
 	}
 	p.lastReceivedMessageLocalRound = currentRound
-	p.lastReceivedMessageTimestamp = currentTime
+	p.lastReceivedMessageTimestamp = currentTime - timeInQueue
 	p.lastReceivedMessageSize = incomingMessageSize
 	p.lastReceivedMessageNextMsgMinDelay = time.Duration(timings.NextMsgMinDelay) * time.Nanosecond
 	p.recentSentTransactions.acknowledge(timings.AcceptedMsgSeq)
