@@ -102,7 +102,7 @@ func TestTxnMerkleProof(t *testing.T) {
 	proofresp, err := client.TxnProof(txid.String(), confirmedTx.ConfirmedRound)
 	a.NoError(err)
 
-	hashtype, err := crypto.InitHashType(proofresp.Hashtype)
+	hashtype, err := crypto.UnmarshalHashType(proofresp.Hashtype)
 	a.NoError(err)
 
 	var proof merklearray.Proof

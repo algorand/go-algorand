@@ -77,8 +77,8 @@ func (h HashType) String() string {
 	}
 }
 
-// InitHashType decodes a string into the HashType enum
-func InitHashType(s string) (HashType, error) {
+// UnmarshalHashType decodes a string into the HashType enum
+func UnmarshalHashType(s string) (HashType, error) {
 	switch s {
 	case "sha512_256":
 		return Sha512_256, nil

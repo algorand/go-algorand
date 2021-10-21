@@ -2231,7 +2231,7 @@
               "sha512_256"
             ],
             "type": "string",
-            "description": "The type of hash function used to the proof"
+            "description": "The type of hash function used to create the proof"
           }
         }
       }
