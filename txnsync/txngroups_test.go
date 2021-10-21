@@ -426,9 +426,15 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 			case protocol.KeyRegistrationTx:
 				v0, err := protocol.RandomizeObject(&txn.Txn.KeyregTxnFields)
 				require.NoError(t, err)
-				KeyregTxnFields, ok := v0.(*transactions.KeyregTxnFields)
+				keyregTxnFields, ok := v0.(*transactions.KeyregTxnFields)
 				require.True(t, ok)
-				txn.Txn.KeyregTxnFields = *KeyregTxnFields
+				if keyregTxnFields.BlockProofPK.Root != [64]uint8{} {
+					// To copy BlockProofPK.Root, the condition in deconstructKeyregTxnFields requires:
+					// !txn.Txn.VotePK.MsgIsZero() || !txn.Txn.SelectionPK.MsgIsZero()
+					// || txn.Txn.VoteKeyDilution != 0
+					keyregTxnFields.VoteKeyDilution = 5
+				}
+				txn.Txn.KeyregTxnFields = *keyregTxnFields
 			case protocol.AssetConfigTx:
 				v0, err := protocol.RandomizeObject(&txn.Txn.AssetConfigTxnFields)
 				require.NoError(t, err)
