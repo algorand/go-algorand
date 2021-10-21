@@ -623,6 +623,64 @@ func TestParticipion_EmptyBlobs(t *testing.T) {
 	check(id)
 }
 
+func TestRegisterUpdatedEvent(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+	registry := getRegistry(t)
+	defer registry.Close()
+
+	p := makeTestParticipation(1, 1, 2, 3)
+	p2 := makeTestParticipation(2, 4, 5, 6)
+
+	id1, err := registry.Insert(p)
+	a.NoError(err)
+	a.Equal(p.ID(), id1)
+
+	id2, err := registry.Insert(p2)
+	a.NoError(err)
+	a.Equal(p2.ID(), id2)
+
+	record1 := registry.Get(id1)
+	a.False(record1.IsZero())
+	record2 := registry.Get(id2)
+	a.False(record2.IsZero())
+
+	// Delete the second one to make sure it can't be updated.
+	a.NoError(registry.Delete(id2))
+	a.NoError(registry.Flush())
+
+	// Ignore optional error
+	updates := make(map[ParticipationID]updatingParticipationRecord)
+	updates[id1] = updatingParticipationRecord{
+		ParticipationRecord: record1,
+		required:            true,
+	}
+	updates[id2] = updatingParticipationRecord{
+		ParticipationRecord: record2,
+		required:            false,
+	}
+
+	registry.writeQueue <- partDBWriteRecord{
+		registerUpdated: updates,
+	}
+
+	a.NoError(registry.Flush())
+
+	// This time, make it required and we should have an error
+	updates[id2] = updatingParticipationRecord{
+		ParticipationRecord: record2,
+		required:            true,
+	}
+
+	registry.writeQueue <- partDBWriteRecord{
+		registerUpdated: updates,
+	}
+
+	err = registry.Flush()
+	a.Contains(err.Error(), "unable to disable old key when registering")
+	a.Contains(err.Error(), ErrNoKeyForID.Error())
+}
+
 func benchmarkKeyRegistration(numKeys int, b *testing.B) {
 	// setup
 	rootDB, err := db.OpenPair(b.Name(), true)
