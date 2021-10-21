@@ -389,9 +389,16 @@ func (db *participationDB) writeThread() {
 
 func (db *participationDB) insertInner(record Participation, id ParticipationID) (err error) {
 
-	rawVRF := protocol.Encode(record.VRF)
-	voting := record.Voting.Snapshot()
-	rawVoting := protocol.Encode(&voting)
+	var rawVRF []byte
+	var rawVoting []byte
+
+	if record.VRF != nil {
+		rawVRF = protocol.Encode(record.VRF)
+	}
+	if record.Voting != nil {
+		voting := record.Voting.Snapshot()
+		rawVoting = protocol.Encode(&voting)
+	}
 
 	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		result, err := tx.Exec(
@@ -562,15 +569,17 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 	}
 
 	// Make some copies.
-	var vrf crypto.VRFSecrets
+	var vrf *crypto.VRFSecrets
 	if record.VRF != nil {
+		vrf = new(crypto.VRFSecrets)
 		copy(vrf.SK[:], record.VRF.SK[:])
 		copy(vrf.PK[:], record.VRF.PK[:])
 	}
 
-	var voting crypto.OneTimeSignatureSecrets
+	var voting *crypto.OneTimeSignatureSecrets
 	if record.Voting != nil {
-		voting = record.Voting.Snapshot()
+		voting = new(crypto.OneTimeSignatureSecrets)
+		*voting = record.Voting.Snapshot()
 	}
 
 	// update cache.
@@ -585,8 +594,8 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		LastCompactCertificate: 0,
 		EffectiveFirst:         0,
 		EffectiveLast:          0,
-		Voting:                 &voting,
-		VRF:                    &vrf,
+		Voting:                 voting,
+		VRF:                    vrf,
 	}
 
 	return
