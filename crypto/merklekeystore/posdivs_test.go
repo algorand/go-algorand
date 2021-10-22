@@ -29,27 +29,25 @@ func TestRoundToIndex(t *testing.T) {
 	firstValid := uint64(100)
 	interval := uint64(101)
 
-	// round == firstValid (< 101) will fail
-	for round := uint64(101); round < 5*interval; round += interval {
+	for round := uint64(101); round < uint64(5)*interval; round += interval {
 		index := roundToIndex(firstValid, uint64(round), interval)
 		round2 := indexToRound(firstValid, interval, uint64(index))
 		require.Equal(t, round, round2)
-		index2 := roundToIndex(firstValid, uint64(round+interval-1), interval)
+		index2 := roundToIndex(firstValid, round2, interval)
 		require.Equal(t, index, index2)
-		if round == uint64(101) {
-			round = firstValid
-		}
 	}
 
 	// firstValid <= interval
 	firstValid = uint64(100)
 	interval = uint64(99)
 
-	for round := firstValid; round < 5*interval; round += interval {
+	for round := uint64(101); round < uint64(5)*interval; round += interval {
 		index := roundToIndex(firstValid, uint64(round), interval)
 		round2 := indexToRound(firstValid, interval, uint64(index))
-		require.Equal(t, round, round2)
-		index2 := roundToIndex(firstValid, uint64(round+interval-1), interval)
+		require.Equal(t, uint64(0), round2%interval)
+		require.True(t, round <= round2)
+		require.True(t, round+interval >= round2)
+		index2 := roundToIndex(firstValid, round2, interval)
 		require.Equal(t, index, index2)
 	}
 
@@ -57,11 +55,13 @@ func TestRoundToIndex(t *testing.T) {
 	firstValid = uint64(100)
 	interval = uint64(20)
 
-	for round := firstValid; round < 5*interval; round += interval {
+	for round := uint64(101); round < uint64(5)*interval; round += interval {
 		index := roundToIndex(firstValid, uint64(round), interval)
 		round2 := indexToRound(firstValid, interval, uint64(index))
-		require.Equal(t, round, round2)
-		index2 := roundToIndex(firstValid, uint64(round+interval-1), interval)
+		require.Equal(t, uint64(0), round2%interval)
+		require.True(t, round <= round2)
+		require.True(t, round+interval >= round2)
+		index2 := roundToIndex(firstValid, round2, interval)
 		require.Equal(t, index, index2)
 	}
 }

@@ -17,11 +17,23 @@
 package merklekeystore
 
 func roundToIndex(firstValid, currentRound, interval uint64) uint64 {
-	return (currentRound - firstValid) / interval
+	if currentRound < firstValid || interval == 0 {
+		return 0
+	}
+	rofi := roundOfFirstIndex(firstValid, interval)
+	if currentRound < rofi {
+		return 0
+	}
+	return ((currentRound - rofi) + interval - 1) / interval
 }
 
 func indexToRound(firstValid, interval, pos uint64) uint64 {
-	return pos * interval + firstValid
+	if interval == 0 {
+		return 0
+	}
+	return roundOfFirstIndex(firstValid, interval) + pos*interval
 }
 
-
+func roundOfFirstIndex(firstValid, interval uint64) uint64 {
+	return ((firstValid+interval-1)/interval)*interval
+}
