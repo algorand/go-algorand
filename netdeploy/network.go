@@ -82,7 +82,8 @@ func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, impor
 	}
 	template.Consensus = consensus
 
-	if isTest {
+	isTestFlag := isTest || (os.Getenv("ALGOTEST") != "")
+	if isTestFlag {
 		// Generate participation keys for a shorter period
 		template.Genesis.LastPartKeyRound = 3000
 	}
