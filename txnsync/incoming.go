@@ -20,8 +20,6 @@ import (
 	"errors"
 	"time"
 
-	//"github.com/algorand/go-deadlock"
-
 	"github.com/algorand/go-algorand/data/pooldata"
 )
 

@@ -17,12 +17,9 @@
 package txnsync
 
 import (
-	//"errors"
-	//"time"
 	"sync"
 
 	"github.com/algorand/go-deadlock"
-	//"github.com/algorand/go-algorand/data/pooldata"
 )
 
 // incomingMessageQueue manages the global incoming message queue across all the incoming peers.
