@@ -16,14 +16,10 @@
 
 package merklearray
 
-import (
-	"github.com/algorand/go-algorand/crypto"
-)
-
 // An Array represents a dense array of leaf elements that are
-// combined into a Merkle tree.  The GetHash method returns the
-// hash of a particular element in the array.
+// combined into a Merkle tree.  The Marshal method returns a byte slice that represents the object
+// and the Tree will use to hash the leaves.
 type Array interface {
 	Length() uint64
-	GetHash(pos uint64) (crypto.Digest, error)
+	Marshal(pos uint64) ([]byte, error)
 }

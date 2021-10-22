@@ -38,6 +38,7 @@ const (
 	BlockHeader       HashID = "BH"
 	BalanceRecord     HashID = "BR"
 	Credential        HashID = "CR"
+	EphemeralPK       HashID = "EP"
 	Genesis           HashID = "GE"
 	MerkleArrayNode   HashID = "MA"
 	Message           HashID = "MX"
@@ -57,5 +58,6 @@ const (
 	TxGroup           HashID = "TG"
 	TxnMerkleLeaf     HashID = "TL"
 	Transaction       HashID = "TX"
+	VerifyingKey      HashID = "VK"
 	Vote              HashID = "VO"
 )

@@ -19,9 +19,11 @@ package compactcert
 import (
 	"fmt"
 
+	"github.com/algorand/go-algorand/data/basics"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
-	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 )
 
 //msgp:ignore sigslot
@@ -81,7 +83,7 @@ func (b *Builder) Present(pos uint64) bool {
 // Add a signature to the set of signatures available for building a certificate.
 // verifySig should be set to true in production; setting it to false is useful
 // for benchmarking to avoid the cost of signature checks.
-func (b *Builder) Add(pos uint64, sig crypto.OneTimeSignature, verifySig bool) error {
+func (b *Builder) Add(pos uint64, sig merklekeystore.Signature, verifySig bool) error {
 	if b.Present(pos) {
 		return fmt.Errorf("position %d already added", pos)
 	}
@@ -98,14 +100,16 @@ func (b *Builder) Add(pos uint64, sig crypto.OneTimeSignature, verifySig bool) e
 	}
 
 	// Check signature
-	ephID := basics.OneTimeIDForRound(b.SigRound, p.KeyDilution)
-	if verifySig && !p.PK.Verify(ephID, b.Msg, sig) {
-		return fmt.Errorf("signature does not verify under ID %v", ephID)
+
+	if verifySig {
+		if err := p.PK.Verify(p.FirstValid, uint64(b.SigRound), b.CompactCertRounds, b.Msg, sig); err != nil {
+			return err
+		}
 	}
 
 	// Remember the signature
 	b.sigs[pos].Weight = p.Weight
-	b.sigs[pos].Sig.OneTimeSignature = sig
+	b.sigs[pos].Sig.Signature = sig
 	b.signedWeight += p.Weight
 	b.cert = nil
 	b.sigsHasValidL = false
@@ -129,12 +133,12 @@ func (sc sigsToCommit) Length() uint64 {
 	return uint64(len(sc))
 }
 
-func (sc sigsToCommit) GetHash(pos uint64) (crypto.Digest, error) {
+func (sc sigsToCommit) Marshal(pos uint64) ([]byte, error) {
 	if pos >= uint64(len(sc)) {
-		return crypto.Digest{}, fmt.Errorf("pos %d past end %d", pos, len(sc))
+		return nil, fmt.Errorf("pos %d past end %d", pos, len(sc))
 	}
 
-	return crypto.HashObj(&sc[pos].sigslotCommit), nil
+	return crypto.HashRep(&sc[pos].sigslotCommit), nil
 }
 
 // coinIndex returns the position pos in the sigs array such that the sum
@@ -187,7 +191,8 @@ func (b *Builder) Build() (*Cert, error) {
 	}
 	b.sigsHasValidL = true
 
-	sigtree, err := merklearray.Build(sigsToCommit(b.sigs))
+	hfactory := crypto.HashFactory{HashType: HashType}
+	sigtree, err := merklearray.Build(sigsToCommit(b.sigs), hfactory)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +210,7 @@ func (b *Builder) Build() (*Cert, error) {
 	}
 
 	var proofPositions []uint64
-	msgHash := crypto.HashObj(b.Msg)
+	msgHash := crypto.GenereicHashObj(hfactory.NewHash(), b.Msg)
 
 	for j := uint64(0); j < nr; j++ {
 		choice := coinChoice{
@@ -242,15 +247,18 @@ func (b *Builder) Build() (*Cert, error) {
 		proofPositions = append(proofPositions, pos)
 	}
 
-	c.SigProofs, err = sigtree.Prove(proofPositions)
+	sigProofs, err := sigtree.Prove(proofPositions)
 	if err != nil {
 		return nil, err
 	}
 
-	c.PartProofs, err = b.parttree.Prove(proofPositions)
+	partProofs, err := b.parttree.Prove(proofPositions)
 	if err != nil {
 		return nil, err
 	}
+
+	c.SigProofs = *sigProofs
+	c.PartProofs = *partProofs
 
 	return c, nil
 }

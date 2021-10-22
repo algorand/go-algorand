@@ -214,7 +214,7 @@ type (
 		// are a multiple of ConsensusParams.CompactCertRounds.  For blocks
 		// that are not a multiple of ConsensusParams.CompactCertRounds,
 		// this value is zero.
-		CompactCertVoters crypto.Digest `codec:"v"`
+		CompactCertVoters crypto.GenericDigest `codec:"v"`
 
 		// CompactCertVotersTotal is the total number of microalgos held by
 		// the accounts in CompactCertVoters (or zero, if the merkle root is
@@ -519,7 +519,7 @@ func (block Block) paysetCommit(t config.PaysetCommitType) (crypto.Digest, error
 		if err != nil {
 			return crypto.Digest{}, err
 		}
-		return tree.Root(), nil
+		return tree.Root().To32Byte(), nil
 	default:
 		return crypto.Digest{}, fmt.Errorf("unsupported payset commit type %d", t)
 	}

@@ -21,15 +21,16 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLayerHash(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var p pair
+	var p = pair{make([]byte, crypto.Sha512_256Size), make([]byte, crypto.Sha512_256Size)}
 	crypto.RandBytes(p.l[:])
 	crypto.RandBytes(p.r[:])
-	if crypto.HashObj(&p) != p.Hash() {
-		t.Error("hash mismatch")
-	}
+	hsh := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
+
+	require.Equal(t, crypto.GenereicHashObj(hsh, &p), crypto.HashBytes(hsh, p.Marshal()))
 }

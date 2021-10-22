@@ -19,11 +19,15 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/util/db"
 	"io/ioutil"
 	"math/rand"
 	"os"
 	"runtime/pprof"
 	"testing"
+
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 
 	"github.com/stretchr/testify/require"
 
@@ -1078,6 +1082,24 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 		VoteKeyDilution: proto.DefaultKeyDilution,
 		VoteFirst:       0,
 		VoteLast:        10000,
+	}
+
+	// depends on what the concensus is need to generate correct KeyregTxnFields.
+	if proto.EnableBlockProofKeyregCheck {
+		frst, lst := uint64(correctKeyregFields.VoteFirst), uint64(correctKeyregFields.VoteLast)
+		store, err := db.MakeAccessor("test-DB", false, true)
+		a.NoError(err)
+		defer store.Close()
+		root, err := account.GenerateRoot(store)
+		a.NoError(err)
+		p, err := account.FillDBWithParticipationKeys(store, root.Address(), basics.Round(frst), basics.Round(lst), config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+		signer := p.Participation.BlockProof
+		//signer, err := merklekeystore.New(frst, lst, 1, crypto.Ed25519Type)
+		require.NoError(t, err)
+
+		correctKeyregFields.BlockProofPK = *(signer.GetVerifier())
+	} else {
+		correctKeyregFields.BlockProofPK = merklekeystore.Verifier{}
 	}
 
 	correctKeyreg := transactions.Transaction{

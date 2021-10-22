@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
@@ -47,6 +48,8 @@ type Participation struct {
 
 	VRF    *crypto.VRFSecrets
 	Voting *crypto.OneTimeSignatureSecrets
+	// BlockProof is used to sign compact certificates. might be nil
+	BlockProof *merklekeystore.Signer
 
 	// The first and last rounds for which this account is valid, respectively.
 	//
@@ -147,8 +150,14 @@ func (part Participation) VotingSigner() crypto.OneTimeSigner {
 	}
 }
 
+// BlockProofSigner returns the key used to sign on Compact Certificates.
+// might return nil!
+func (part Participation) BlockProofSigner() *merklekeystore.Signer {
+	return part.BlockProof
+}
+
 // GenerateRegistrationTransaction returns a transaction object for registering a Participation with its parent.
-func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte) transactions.Transaction {
+func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte, cparams config.ConsensusParams) transactions.Transaction {
 	t := transactions.Transaction{
 		Type: protocol.KeyRegistrationTx,
 		Header: transactions.Header{
@@ -162,6 +171,11 @@ func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos,
 			VotePK:      part.Voting.OneTimeSignatureVerifier,
 			SelectionPK: part.VRF.PK,
 		},
+	}
+	if cert := part.BlockProofSigner(); cert != nil {
+		if cparams.EnableBlockProofKeyregCheck {
+			t.KeyregTxnFields.BlockProofPK = *(cert.GetVerifier())
+		}
 	}
 	t.KeyregTxnFields.VoteFirst = part.FirstValid
 	t.KeyregTxnFields.VoteLast = part.LastValid
@@ -218,8 +232,17 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	// Generate them
 	v := crypto.GenerateOneTimeSignatureSecrets(firstID.Batch, numBatches)
 
-	// Also generate a new VRF key, which lives in the participation keys db
+	// Generate a new VRF key, which lives in the participation keys db
 	vrf := crypto.GenerateVRFSecrets()
+
+	// TODO change this
+	compactCertRound := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
+
+	// Generate a new key which signs the compact certificates
+	blockProof, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), compactCertRound, crypto.DilithiumType, store)
+	if err != nil {
+		return PersistedParticipation{}, err
+	}
 
 	// Construct the Participation containing these keys to be persisted
 	part = PersistedParticipation{
@@ -227,6 +250,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 			Parent:      address,
 			VRF:         vrf,
 			Voting:      v,
+			BlockProof:  blockProof,
 			FirstValid:  firstValid,
 			LastValid:   lastValid,
 			KeyDilution: keyDilution,
@@ -235,6 +259,12 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	}
 	// Persist the Participation into the database
 	err = part.Persist()
+	if err != nil {
+		return PersistedParticipation{}, err
+	}
+
+	err = blockProof.Persist() // must be called after part.Persist() !
+
 	return part, err
 }
 
@@ -243,6 +273,7 @@ func (part PersistedParticipation) Persist() error {
 	rawVRF := protocol.Encode(part.VRF)
 	voting := part.Voting.Snapshot()
 	rawVoting := protocol.Encode(&voting)
+	rawbBlockProof := protocol.Encode(part.BlockProof)
 
 	err := part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err := partInstallDatabase(tx)
@@ -250,8 +281,8 @@ func (part PersistedParticipation) Persist() error {
 			return fmt.Errorf("failed to install database: %w", err)
 		}
 
-		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, firstValid, lastValid, keyDilution) VALUES (?, ?, ?, ?, ?, ?)",
-			part.Parent[:], rawVRF, rawVoting, part.FirstValid, part.LastValid, part.KeyDilution)
+		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, blockProof, firstValid, lastValid, keyDilution) VALUES (?, ?, ?, ?, ?, ?,?)",
+			part.Parent[:], rawVRF, rawVoting, rawbBlockProof, part.FirstValid, part.LastValid, part.KeyDilution)
 		if err != nil {
 			return fmt.Errorf("failed to insert account: %w", err)
 		}

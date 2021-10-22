@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -43,7 +45,7 @@ import (
 )
 
 func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.Address]basics.AccountData) {
-	r, _, err := accountsRound(tx)
+	r, err := accountsRound(tx)
 	require.NoError(t, err)
 	require.Equal(t, r, rnd)
 
@@ -81,11 +83,11 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 
 	totals, err := accountsTotals(tx, false)
 	require.NoError(t, err)
-	require.Equal(t, totals.Online.Money.Raw, totalOnline)
-	require.Equal(t, totals.Offline.Money.Raw, totalOffline)
-	require.Equal(t, totals.NotParticipating.Money.Raw, totalNotPart)
-	require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
-	require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
+	require.Equal(t, totalOnline, totals.Online.Money.Raw, "mismatching total online money")
+	require.Equal(t, totalOffline, totals.Offline.Money.Raw)
+	require.Equal(t, totalNotPart, totals.NotParticipating.Money.Raw)
+	require.Equal(t, totalOnline+totalOffline, totals.Participating().Raw)
+	require.Equal(t, totalOnline+totalOffline+totalNotPart, totals.All().Raw)
 
 	d, err := aq.lookup(ledgertesting.RandomAddress())
 	require.NoError(t, err)
@@ -243,6 +245,8 @@ func TestAccountDBRound(t *testing.T) {
 	_, err = accountsInit(tx, accts, proto)
 	require.NoError(t, err)
 	checkAccounts(t, tx, 0, accts)
+	totals, err := accountsTotals(tx, false)
+	require.NoError(t, err)
 
 	// used to determine how many creatables element will be in the test per iteration
 	numElementsPerSegement := 10
@@ -252,11 +256,12 @@ func TestAccountDBRound(t *testing.T) {
 	ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
 	expectedDbImage := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	var baseAccounts lruAccounts
+	var newaccts map[basics.Address]basics.AccountData
 	baseAccounts.init(nil, 100, 80)
 	for i := 1; i < 10; i++ {
 		var updates ledgercore.AccountDeltas
-		var newaccts map[basics.Address]basics.AccountData
 		updates, newaccts, _, lastCreatableID = ledgertesting.RandomDeltasFull(20, accts, 0, lastCreatableID)
+		totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, accts, totals)
 		accts = newaccts
 		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
 			expectedDbImage, numElementsPerSegement)
@@ -264,15 +269,84 @@ func TestAccountDBRound(t *testing.T) {
 		updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, baseAccounts)
 		err = updatesCnt.accountsLoadOld(tx)
 		require.NoError(t, err)
-		err = totalsNewRounds(tx, []ledgercore.AccountDeltas{updates}, updatesCnt, []ledgercore.AccountTotals{{}}, proto)
+		err = accountsPutTotals(tx, totals, false)
 		require.NoError(t, err)
 		_, err = accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
-		err = updateAccountsRound(tx, basics.Round(i), 0)
+		err = updateAccountsRound(tx, basics.Round(i))
 		require.NoError(t, err)
 		checkAccounts(t, tx, basics.Round(i), accts)
 		checkCreatables(t, tx, i, expectedDbImage)
 	}
+
+	// test the accounts totals
+	var updates ledgercore.AccountDeltas
+	for addr, acctData := range newaccts {
+		updates.Upsert(addr, acctData)
+	}
+
+	expectedTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, nil, ledgercore.AccountTotals{})
+	actualTotals, err := accountsTotals(tx, false)
+	require.NoError(t, err)
+	require.Equal(t, expectedTotals, actualTotals)
+}
+
+func TestAccountStorageWithBlockProofID(t *testing.T) {
+	proto := config.Consensus[protocol.ConsensusFuture]
+
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.Close()
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	accts := ledgertesting.RandomAccounts(20, false)
+	_, err = accountsInit(tx, accts, proto)
+	require.NoError(t, err)
+	checkAccounts(t, tx, 0, accts)
+	require.True(t, allAccountsHaveBlockProofPKs(accts))
+
+	var baseAccounts lruAccounts
+	baseAccounts.init(nil, 100, 80)
+
+	var updates ledgercore.AccountDeltas
+	var newaccts map[basics.Address]basics.AccountData
+	updates, newaccts, _, _ = ledgertesting.RandomDeltasFull(20, accts, 0, 0)
+	accts = newaccts
+
+	updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, baseAccounts)
+	err = updatesCnt.accountsLoadOld(tx)
+	require.NoError(t, err)
+
+	totals, err := accountsTotals(tx, false)
+	require.NoError(t, err)
+	cAccounts := make(map[basics.Address]basics.AccountData, updatesCnt.len())
+	for i := 0; i < updatesCnt.len(); i++ {
+		addr, acctData := updatesCnt.getByIdx(i)
+		cAccounts[addr] = acctData.old.accountData
+	}
+	totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, cAccounts, totals)
+	err = accountsPutTotals(tx, totals, false)
+	require.NoError(t, err)
+	_, err = accountsNewRound(tx, updatesCnt, nil, proto, basics.Round(0))
+	require.NoError(t, err)
+	err = updateAccountsRound(tx, basics.Round(1))
+	require.NoError(t, err)
+	checkAccounts(t, tx, basics.Round(1), accts)
+	accounts, err := accountsAll(tx)
+	require.True(t, allAccountsHaveBlockProofPKs(accounts))
+	require.Equal(t, accts, accounts)
+}
+
+func allAccountsHaveBlockProofPKs(accts map[basics.Address]basics.AccountData) bool {
+	for _, data := range accts {
+		if data.BlockProofID == (merklekeystore.Verifier{}) {
+			return false
+		}
+	}
+	return true
 }
 
 // checkCreatables compares the expected database image to the actual databse content
@@ -482,7 +556,7 @@ func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
 	prevHash := crypto.Digest{}
 	for _, accountBalance := range bal {
 		encodedAccountBalance := protocol.Encode(&accountBalance)
-		prevHash = crypto.Hash(append(encodedAccountBalance, ([]byte(prevHash[:]))...))
+		prevHash = crypto.Hash(append(encodedAccountBalance, []byte(prevHash[:])...))
 	}
 	require.Equal(b, b.N, len(bal))
 }

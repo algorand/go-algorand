@@ -19,6 +19,7 @@ package basics
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"reflect"
 
 	"github.com/algorand/go-algorand/config"
@@ -160,8 +161,9 @@ type AccountData struct {
 	// the past week".
 	RewardedMicroAlgos MicroAlgos `codec:"ern"`
 
-	VoteID      crypto.OneTimeSignatureVerifier `codec:"vote"`
-	SelectionID crypto.VRFVerifier              `codec:"sel"`
+	VoteID       crypto.OneTimeSignatureVerifier `codec:"vote"`
+	SelectionID  crypto.VRFVerifier              `codec:"sel"`
+	BlockProofID merklekeystore.Verifier         `codec:"blkprf"`
 
 	VoteFirstValid  Round  `codec:"voteFst"`
 	VoteLastValid   Round  `codec:"voteLst"`

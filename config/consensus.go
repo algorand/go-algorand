@@ -395,6 +395,9 @@ type ConsensusParams struct {
 	// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts, which need
 	// to be taken offline, that would be proposed to be taken offline.
 	MaxProposedExpiredOnlineAccounts int
+
+	// EnableBlockProofKeyregCheck enables the check for blockProof key on key registration
+	EnableBlockProofKeyregCheck bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1055,6 +1058,9 @@ func initConsensusProtocols() {
 	vFuture.LogicSigVersion = 6
 
 	vFuture.MaxProposedExpiredOnlineAccounts = 32
+
+	// compact certificate key registration
+	vFuture.EnableBlockProofKeyregCheck = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

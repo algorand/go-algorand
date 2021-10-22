@@ -122,14 +122,26 @@ func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
 	fixture.SetConsensus(consensus)
 	fixture.Setup(t, templatePath)
 	defer fixture.Shutdown()
-	c := fixture.LibGoalClient
 
+	verifyAccountsCanSendMoneyAcrossUpgrade(a, &fixture)
+}
+
+func verifyAccountsCanSendMoneyAcrossUpgrade(a *require.Assertions, fixture *fixtures.RestClientFixture) {
+	pingBalance, pongBalance, expectedPingBalance, expectedPongBalance := runUntilProtocolUpgrades(a, fixture)
+
+	a.True(expectedPingBalance <= pingBalance, "ping balance is different than expected")
+	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected")
+}
+
+func runUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClientFixture) (uint64, uint64, uint64, uint64) {
+	c := fixture.LibGoalClient
 	initialStatus, err := c.Status()
 	a.NoError(err, "getting status")
 
 	pingClient := fixture.LibGoalClient
 	pingAccountList, err := fixture.GetWalletsSortedByBalance()
 	a.NoError(err, "fixture should be able to get wallets sorted by balance")
+	a.NotEmpty(pingAccountList)
 	pingAccount := pingAccountList[0].Address
 
 	pongClient := fixture.GetLibGoalClientForNamedNode("Node")
@@ -256,7 +268,5 @@ func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
 	a.NoError(err)
 	pongBalance, err = c.GetBalance(pongAccount)
 	a.NoError(err)
-
-	a.True(expectedPingBalance <= pingBalance, "ping balance is different than expected")
-	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected")
+	return pingBalance, pongBalance, expectedPingBalance, expectedPongBalance
 }

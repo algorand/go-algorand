@@ -53,8 +53,8 @@ func main(source string) string {
 func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *Ledger {
 	var genHash crypto.Digest
 	crypto.RandBytes(genHash[:])
-	genBlock, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture,
-		balances, "test", genHash)
+	genBlock, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture, balances, "test", genHash)
+	require.NoError(t, err)
 	require.False(t, genBlock.FeeSink.IsZero())
 	require.False(t, genBlock.RewardsPool.IsZero())
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
@@ -1289,7 +1289,7 @@ nonpart:
 	}
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, &fund)
-	vb = l.endBlock(t, eval)
+	l.endBlock(t, eval)
 
 	require.Equal(t, 1_000_000_000, int(l.micros(t, appIndex.Address())))
 
