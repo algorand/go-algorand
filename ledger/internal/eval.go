@@ -1053,6 +1053,8 @@ func (eval *BlockEvaluator) TestingTxnCounter() uint64 {
 
 // Call "endOfBlock" after all the block's rewards and transactions are processed.
 func (eval *BlockEvaluator) endOfBlock() error {
+	eval.state.mods.OptimizeAllocatedMemory(eval.proto)
+
 	if eval.generate {
 		var err error
 		eval.block.TxnRoot, err = eval.block.PaysetCommit()
@@ -1088,6 +1090,49 @@ func (eval *BlockEvaluator) endOfBlock() error {
 	}
 
 	err = eval.resetExpiredOnlineAccountsParticipationKeys()
+	if err != nil {
+		return err
+	}
+
+	if eval.validate {
+		// check commitments
+		txnRoot, err := eval.block.PaysetCommit()
+		if err != nil {
+			return err
+		}
+		if txnRoot != eval.block.TxnRoot {
+			return fmt.Errorf("txn root wrong: %v != %v", txnRoot, eval.block.TxnRoot)
+		}
+
+		var expectedTxnCount uint64
+		if eval.proto.TxnCounter {
+			expectedTxnCount = eval.state.txnCounter()
+		}
+		if eval.block.TxnCounter != expectedTxnCount {
+			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, expectedTxnCount)
+		}
+
+		expectedVoters, expectedVotersWeight, err := eval.compactCertVotersAndTotal()
+		if err != nil {
+			return err
+		}
+		if eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVoters != expectedVoters {
+			return fmt.Errorf("CompactCertVoters wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVoters, expectedVoters)
+		}
+		if eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal != expectedVotersWeight {
+			return fmt.Errorf("CompactCertVotersTotal wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal, expectedVotersWeight)
+		}
+		if eval.block.CompactCert[protocol.CompactCertBasic].CompactCertNextRound != eval.state.compactCertNext() {
+			return fmt.Errorf("CompactCertNextRound wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, eval.state.compactCertNext())
+		}
+		for ccType := range eval.block.CompactCert {
+			if ccType != protocol.CompactCertBasic {
+				return fmt.Errorf("CompactCertType %d unexpected", ccType)
+			}
+		}
+	}
+
+	err = eval.state.CalculateTotals()
 	if err != nil {
 		return err
 	}
@@ -1187,7 +1232,6 @@ func (eval *BlockEvaluator) validateExpiredOnlineAccounts() error {
 
 // resetExpiredOnlineAccountsParticipationKeys after all transactions and rewards are processed, modify the accounts so that their status is offline
 func (eval *BlockEvaluator) resetExpiredOnlineAccountsParticipationKeys() error {
-
 	expectedMaxNumberOfExpiredAccounts := eval.proto.MaxProposedExpiredOnlineAccounts
 	lengthOfExpiredParticipationAccounts := len(eval.block.ParticipationUpdates.ExpiredParticipationAccounts)
 
@@ -1216,51 +1260,6 @@ func (eval *BlockEvaluator) resetExpiredOnlineAccountsParticipationKeys() error 
 	return nil
 }
 
-// FinalValidation does the validation that must happen after the block is built and all state updates are computed
-func (eval *BlockEvaluator) finalValidation() error {
-	eval.state.mods.OptimizeAllocatedMemory(eval.proto)
-	if eval.validate {
-		// check commitments
-		txnRoot, err := eval.block.PaysetCommit()
-		if err != nil {
-			return err
-		}
-		if txnRoot != eval.block.TxnRoot {
-			return fmt.Errorf("txn root wrong: %v != %v", txnRoot, eval.block.TxnRoot)
-		}
-
-		var expectedTxnCount uint64
-		if eval.proto.TxnCounter {
-			expectedTxnCount = eval.state.txnCounter()
-		}
-		if eval.block.TxnCounter != expectedTxnCount {
-			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, expectedTxnCount)
-		}
-
-		expectedVoters, expectedVotersWeight, err := eval.compactCertVotersAndTotal()
-		if err != nil {
-			return err
-		}
-		if eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVoters != expectedVoters {
-			return fmt.Errorf("CompactCertVoters wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVoters, expectedVoters)
-		}
-		if eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal != expectedVotersWeight {
-			return fmt.Errorf("CompactCertVotersTotal wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal, expectedVotersWeight)
-		}
-		if eval.block.CompactCert[protocol.CompactCertBasic].CompactCertNextRound != eval.state.compactCertNext() {
-			return fmt.Errorf("CompactCertNextRound wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, eval.state.compactCertNext())
-		}
-		for ccType := range eval.block.CompactCert {
-			if ccType != protocol.CompactCertBasic {
-				return fmt.Errorf("CompactCertType %d unexpected", ccType)
-			}
-		}
-
-	}
-
-	return eval.state.CalculateTotals()
-}
-
 // GenerateBlock produces a complete block from the BlockEvaluator.  This is
 // used during proposal to get an actual block that will be proposed, after
 // feeding in tentative transactions into this block evaluator.
@@ -1278,11 +1277,6 @@ func (eval *BlockEvaluator) GenerateBlock() (*ledgercore.ValidatedBlock, error) 
 	}
 
 	err := eval.endOfBlock()
-	if err != nil {
-		return nil, err
-	}
-
-	err = eval.finalValidation()
 	if err != nil {
 		return nil, err
 	}
@@ -1446,11 +1440,6 @@ transactionGroupLoop:
 				return ledgercore.StateDelta{}, err
 			}
 		}
-	}
-
-	err = eval.finalValidation()
-	if err != nil {
-		return ledgercore.StateDelta{}, err
 	}
 
 	return eval.state.deltas(), nil
