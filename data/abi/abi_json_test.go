@@ -21,7 +21,7 @@ import (
 	"testing"
 )
 
-func TestJSONtoInterface(t *testing.T) {
+func TestJSONtoInterfaceValid(t *testing.T) {
 	var testCases = []struct {
 		input    string
 		typeStr  string
@@ -59,8 +59,8 @@ func TestJSONtoInterface(t *testing.T) {
 			},
 		},
 		{
-			input:   `[]`,
-			typeStr: `(uint64,bool[2],string)[]`,
+			input:    `[]`,
+			typeStr:  `(uint64,bool[2],string)[]`,
 			expected: []interface{}{},
 		},
 		{
