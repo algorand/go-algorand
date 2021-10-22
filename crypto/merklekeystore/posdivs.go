@@ -35,5 +35,5 @@ func indexToRound(firstValid, interval, pos uint64) uint64 {
 }
 
 func roundOfFirstIndex(firstValid, interval uint64) uint64 {
-	return ((firstValid+interval-1)/interval)*interval
+	return ((firstValid + interval - 1) / interval) * interval
 }
