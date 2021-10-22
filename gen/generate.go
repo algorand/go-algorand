@@ -252,7 +252,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 						return
 					}
 					if verbose {
-						verbosedOutput <- fmt.Sprintf("Created new partkey: %s", pfilename)
+						verbosedOutput <- fmt.Sprintf("Created new partkey: %s firstValid: %d lastValid %d", pfilename, basics.Round(firstWalletValid), basics.Round(lastWalletValid))
 					}
 					atomic.AddInt64(&partKeyCreated, 1)
 				}
