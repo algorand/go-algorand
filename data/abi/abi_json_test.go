@@ -17,11 +17,13 @@
 package abi
 
 import (
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
 
 func TestJSONtoInterfaceValid(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var testCases = []struct {
 		input    string
 		typeStr  string
