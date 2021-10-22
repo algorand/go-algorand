@@ -25,6 +25,25 @@ import (
 	"strings"
 )
 
+func castBigIntToNearestPrimitive(num *big.Int, bitSize uint16) (interface{}, error) {
+	if num.Cmp(new(big.Int).Lsh(big.NewInt(1), uint(bitSize))) >= 0 {
+		return nil, fmt.Errorf("cast big int to nearest primitive failure: %v >= 2^%d", num, bitSize)
+	}
+
+	switch bitSize / 8 {
+	case 1:
+		return uint8(num.Uint64()), nil
+	case 2:
+		return uint16(num.Uint64()), nil
+	case 3, 4:
+		return uint32(num.Uint64()), nil
+	case 5, 6, 7, 8:
+		return num.Uint64(), nil
+	default:
+		return num, nil
+	}
+}
+
 // UnmarshalFromJSON convert bytes to golang value following ABI type and encoding rules
 func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 	switch t.abiTypeID {
@@ -33,7 +52,7 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 		if err := num.UnmarshalJSON(jsonEncoded); err != nil {
 			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to uint: %v", string(jsonEncoded), err)
 		}
-		return num, nil
+		return castBigIntToNearestPrimitive(num, t.bitSize)
 	case Ufixed:
 		floatTemp := new(big.Float)
 		if err := floatTemp.UnmarshalText(jsonEncoded); err != nil {
@@ -49,7 +68,7 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 		if !numeratorRat.IsInt() {
 			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to ufixed: precision out of range", string(jsonEncoded))
 		}
-		return numeratorRat.Num(), nil
+		return castBigIntToNearestPrimitive(numeratorRat.Num(), t.bitSize)
 	case Bool:
 		var elem bool
 		if err := json.Unmarshal(jsonEncoded, &elem); err != nil {
@@ -70,7 +89,7 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 		return addr, nil
 	case ArrayStatic, ArrayDynamic:
 		stringEncoded := string(jsonEncoded)
-		if t.childTypes[0].abiTypeID == Byte && strings.HasPrefix(stringEncoded, "\"") {
+		if t.childTypes[0].abiTypeID == Byte && strings.HasPrefix(stringEncoded, `"`) {
 			// decode base64 and return array of byte
 			var stringB64 string
 			err := json.Unmarshal(jsonEncoded, &stringB64)
@@ -81,7 +100,11 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 			if err != nil {
 				return nil, fmt.Errorf("cannot cast JSON encoded (%s) to bytes: %v", stringEncoded, err)
 			}
-			return out, nil
+			outInterface := make([]interface{}, len(out))
+			for i := 0; i < len(out); i++ {
+				outInterface[i] = out[i]
+			}
+			return outInterface, nil
 		}
 		var elems []json.RawMessage
 		if err := json.Unmarshal(jsonEncoded, &elems); err != nil {

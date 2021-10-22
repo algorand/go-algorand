@@ -15,3 +15,53 @@
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
 package abi
+
+import (
+	"github.com/stretchr/testify/require"
+	"testing"
+)
+
+func TestJSONtoInterface(t *testing.T) {
+	var testCases = []struct {
+		input    string
+		typeStr  string
+		expected interface{}
+	}{
+		{
+			input:   "[true, [0, 1, 2], 17]",
+			typeStr: "(bool,byte[],uint64)",
+			expected: []interface{}{
+				true,
+				[]interface{}{byte(0), byte(1), byte(2)},
+				uint64(17),
+			},
+		},
+		{
+			input:   `[true, "AAEC", 17]`,
+			typeStr: "(bool,byte[],uint64)",
+			expected: []interface{}{
+				true,
+				[]interface{}{byte(0), byte(1), byte(2)},
+				uint64(17),
+			},
+		},
+		{
+			input:    "[]",
+			typeStr:  "()",
+			expected: []interface{}{},
+		},
+	}
+
+	for _, testCase := range testCases {
+		abiT, err := TypeOf(testCase.typeStr)
+		require.NoError(t, err, "fail to construct ABI type (%s): %v", testCase.typeStr, err)
+		res, err := abiT.UnmarshalFromJSON([]byte(testCase.input))
+		require.NoError(t, err, "fail to unmarshal JSON to interface: (%s): %v", testCase.input, err)
+		require.Equal(t, testCase.expected, res, "%v not matching with expected value %v", res, testCase.expected)
+		resEncoded, err := abiT.Encode(res)
+		require.NoError(t, err, "fail to encode %v to ABI bytes: %v", res, err)
+		resDecoded, err := abiT.Decode(resEncoded)
+		require.NoError(t, err, "fail to decode ABI bytes of %v: %v", res, err)
+		require.Equal(t, res, resDecoded, "ABI encode-decode round trip: %v not match with expected %v", resDecoded, res)
+	}
+}
