@@ -20,7 +20,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/algorand/go-deadlock"
+	//"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/data/pooldata"
 )
@@ -40,70 +40,6 @@ type incomingMessage struct {
 	encodedSize       int // the byte length of the incoming network message
 	bloomFilter       *testableBloomFilter
 	transactionGroups []pooldata.SignedTxGroup
-}
-
-// incomingMessageQueue manages the global incoming message queue across all the incoming peers.
-type incomingMessageQueue struct {
-	incomingMessages chan incomingMessage
-	enqueuedPeers    map[*Peer]struct{}
-	enqueuedPeersMu  deadlock.Mutex
-}
-
-// maxPeersCount defines the maximum number of supported peers that can have their messages waiting
-// in the incoming message queue at the same time. This number can be lower then the actual number of
-// connected peers, as it's used only for pending messages.
-const maxPeersCount = 1024
-
-// makeIncomingMessageQueue creates an incomingMessageQueue object and initializes all the internal variables.
-func makeIncomingMessageQueue() incomingMessageQueue {
-	return incomingMessageQueue{
-		incomingMessages: make(chan incomingMessage, maxPeersCount),
-		enqueuedPeers:    make(map[*Peer]struct{}, maxPeersCount),
-	}
-}
-
-// getIncomingMessageChannel returns the incoming messages channel, which would contain entries once
-// we have one ( or more ) pending incoming messages.
-func (imq *incomingMessageQueue) getIncomingMessageChannel() <-chan incomingMessage {
-	return imq.incomingMessages
-}
-
-// enqueue places the given message on the queue, if and only if it's associated peer doesn't
-// appear on the incoming message queue already. In the case there is no peer, the message
-// would be placed on the queue as is.
-// The method returns false if the incoming message doesn't have it's peer on the queue and
-// the method has failed to place the message on the queue. True is returned otherwise.
-func (imq *incomingMessageQueue) enqueue(m incomingMessage) bool {
-	if m.peer != nil {
-		imq.enqueuedPeersMu.Lock()
-		defer imq.enqueuedPeersMu.Unlock()
-		if _, has := imq.enqueuedPeers[m.peer]; has {
-			return true
-		}
-	}
-	select {
-	case imq.incomingMessages <- m:
-		// if we successfully enqueued the message, set the enqueuedPeers so that we won't enqueue the same peer twice.
-		if m.peer != nil {
-			// at this time, the enqueuedPeersMu is still under lock ( due to the above defer ), so we can access
-			// the enqueuedPeers here.
-			imq.enqueuedPeers[m.peer] = struct{}{}
-		}
-		return true
-	default:
-		return false
-	}
-}
-
-// clear removes the peer that is associated with the message ( if any ) from
-// the enqueuedPeers map, allowing future messages from this peer to be placed on the
-// incoming message queue.
-func (imq *incomingMessageQueue) clear(m incomingMessage) {
-	if m.peer != nil {
-		imq.enqueuedPeersMu.Lock()
-		defer imq.enqueuedPeersMu.Unlock()
-		delete(imq.enqueuedPeers, m.peer)
-	}
 }
 
 // incomingMessageHandler
@@ -207,9 +143,7 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 			return
 		}
 	}
-	// clear the peer that is associated with this incoming message from the message queue, allowing future
-	// messages from the peer to be placed on the message queue.
-	s.incomingMessagesQ.clear(message)
+
 	messageProcessed := false
 	transactionPoolSize := 0
 	totalAccumulatedTransactionsCount := 0 // the number of transactions that were added during the execution of this method
