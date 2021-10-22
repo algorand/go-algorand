@@ -98,9 +98,8 @@ func TestAsyncIncomingMessageHandlerAndErrors(t *testing.T) {
 	message.TransactionGroups = packedTransactionGroups{}
 	messageBytes = message.MarshalMsg(nil)
 	s.incomingMessagesQ = makeIncomingMessageQueue()
-	s.incomingMessagesQ.enqueuedPeersMu.Lock()
-	s.incomingMessagesQ.firstMessage++
-	s.incomingMessagesQ.enqueuedPeersMu.Unlock()
+	s.incomingMessagesQ.fillMessageQueue(incomingMessage{peer: nil, networkPeer: &s.incomingMessagesQ})
+	mNodeConnector.peers = append(mNodeConnector.peers, PeerInfo{NetworkPeer: &s.incomingMessagesQ})
 	err = s.asyncIncomingMessageHandler(nil, nil, messageBytes, sequenceNumber)
 	require.Equal(t, errTransactionSyncIncomingMessageQueueFull, err)
 
@@ -112,13 +111,13 @@ func TestAsyncIncomingMessageHandlerAndErrors(t *testing.T) {
 	require.NoError(t, err)
 	s.incomingMessagesQ.shutdown()
 
-	peer := Peer{}
+	peer := Peer{networkPeer: &s}
 
 	// error when placing the peer message on the main queue (incomingMessages cannot accept messages)
 	s.incomingMessagesQ = makeIncomingMessageQueue()
-	s.incomingMessagesQ.enqueuedPeersMu.Lock()
-	s.incomingMessagesQ.firstMessage++
-	s.incomingMessagesQ.enqueuedPeersMu.Unlock()
+	s.incomingMessagesQ.fillMessageQueue(incomingMessage{peer: nil, networkPeer: &s})
+	mNodeConnector.peers = append(mNodeConnector.peers, PeerInfo{NetworkPeer: &s})
+
 	err = s.asyncIncomingMessageHandler(nil, &peer, messageBytes, sequenceNumber)
 	require.Equal(t, errTransactionSyncIncomingMessageQueueFull, err)
 	s.incomingMessagesQ.shutdown()

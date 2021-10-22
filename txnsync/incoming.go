@@ -100,7 +100,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 			// peers from the queue before re-attempting.
 			peers := s.node.GetPeers()
 			if s.incomingMessagesQ.prunePeers(peers) {
-				// if we were successfull in removing at least a single peer, then try to add the entry again.
+				// if we were successful in removing at least a single peer, then try to add the entry again.
 				enqueued = s.incomingMessagesQ.enqueue(incomingMessage)
 			}
 			if !enqueued {
@@ -130,7 +130,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 		// peers from the queue before re-attempting.
 		peers := s.node.GetPeers()
 		if s.incomingMessagesQ.prunePeers(peers) {
-			// if we were successfull in removing at least a single peer, then try to add the entry again.
+			// if we were successful in removing at least a single peer, then try to add the entry again.
 			enqueued = s.incomingMessagesQ.enqueue(incomingMessage)
 		}
 		if !enqueued {

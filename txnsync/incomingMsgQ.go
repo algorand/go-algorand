@@ -142,17 +142,6 @@ func (imq *incomingMessageQueue) enqueue(m incomingMessage) bool {
 	return true
 }
 
-// clear removes the peer that is associated with the message ( if any ) from
-// the enqueuedPeers map, allowing future messages from this peer to be placed on the
-// incoming message queue.
-func (imq *incomingMessageQueue) clear(m incomingMessage) {
-	if m.peer != nil {
-		imq.enqueuedPeersMu.Lock()
-		defer imq.enqueuedPeersMu.Unlock()
-		delete(imq.enqueuedPeersMap, m.peer)
-	}
-}
-
 // erase removes all the entries associated with the given network peer.
 // this method isn't very efficient, and should be used only in cases where
 // we disconnect from a peer and want to cleanup all the pending tasks associated
@@ -188,7 +177,18 @@ func (imq *incomingMessageQueue) erase(peer *Peer, networkPeer interface{}) {
 		return
 	}
 
-	// rewrite the array by eliminating the network peer.
+	imq.removeMessageByNetworkPeer(networkPeer)
+	imq.enqueuedPeersMu.Unlock()
+	select {
+	case imq.deletePeersCh <- networkPeer:
+	default:
+	}
+}
+
+// removeMessageByNetworkPeer removes the messages associated with the given network peer from the
+// queue.
+// note : the method expect that the enqueuedPeersMu lock would be taken.
+func (imq *incomingMessageQueue) removeMessageByNetworkPeer(networkPeer interface{}) {
 	adjustedIdx := imq.firstMessage
 	for idx := imq.firstMessage; idx != imq.lastMessage; idx = (idx + 1) % len(imq.enqueuedMessages) {
 		if imq.enqueuedMessages[idx].networkPeer == networkPeer {
@@ -198,13 +198,10 @@ func (imq *incomingMessageQueue) erase(peer *Peer, networkPeer interface{}) {
 		adjustedIdx = (adjustedIdx + 1) % len(imq.enqueuedMessages)
 	}
 	imq.lastMessage = adjustedIdx
-	imq.enqueuedPeersMu.Unlock()
-	select {
-	case imq.deletePeersCh <- networkPeer:
-	default:
-	}
 }
 
+// removeMessageByIndex removes the given message, by it's index from the enqueuedMessages queue.
+// note : the method expect that the enqueuedPeersMu lock would be taken.
 func (imq *incomingMessageQueue) removeMessageByIndex(removeIdx int) {
 	adjustedIdx := imq.firstMessage
 	for idx := imq.firstMessage; idx != imq.lastMessage; idx = (idx + 1) % len(imq.enqueuedMessages) {
@@ -217,7 +214,9 @@ func (imq *incomingMessageQueue) removeMessageByIndex(removeIdx int) {
 	imq.lastMessage = adjustedIdx
 }
 
-func (imq *incomingMessageQueue) prunePeers(activePeers []PeerInfo) bool {
+// prunePeers removes from the enqueuedMessages queue all the entries that are not provided in the
+// given activePeers slice.
+func (imq *incomingMessageQueue) prunePeers(activePeers []PeerInfo) (peerRemoved bool) {
 	activePeersMap := make(map[*Peer]bool)
 	activeNetworkPeersMap := make(map[interface{}]bool)
 	for _, activePeer := range activePeers {
@@ -238,14 +237,14 @@ func (imq *incomingMessageQueue) prunePeers(activePeers []PeerInfo) bool {
 				continue
 			}
 		}
-		if imq.enqueuedMessages[idx].networkPeer != nil {
-			if !activeNetworkPeersMap[imq.enqueuedMessages[idx].networkPeer] {
-				continue
-			}
+		if !activeNetworkPeersMap[imq.enqueuedMessages[idx].networkPeer] {
+			continue
 		}
+
 		imq.enqueuedMessages[adjustedIdx] = imq.enqueuedMessages[idx]
 		adjustedIdx = (adjustedIdx + 1) % len(imq.enqueuedMessages)
 	}
+	peerRemoved = imq.lastMessage != adjustedIdx
 	imq.lastMessage = adjustedIdx
-	return true
+	return
 }
