@@ -16,6 +16,10 @@
 
 package txnsync
 
+import (
+	"time"
+)
+
 func (imq *incomingMessageQueue) fillMessageQueue(msg incomingMessage) {
 	imq.enqueuedPeersMu.Lock()
 	for i := 0; i < maxPeersCount; i++ {
@@ -28,10 +32,9 @@ func (imq *incomingMessageQueue) fillMessageQueue(msg incomingMessage) {
 
 	// reading this channel would fill up the staging "msg" in messagePump
 	<-imq.getIncomingMessageChannel()
+	imq.enqueue(msg)
+	for !imq.enqueue(msg) {
+		time.Sleep(time.Millisecond)
+	}
 
-	// take the lock again, and update the indices.
-	imq.enqueuedPeersMu.Lock()
-	imq.firstMessage = 1
-	imq.lastMessage = 0
-	imq.enqueuedPeersMu.Unlock()
 }
