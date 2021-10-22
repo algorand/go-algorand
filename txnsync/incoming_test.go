@@ -58,8 +58,9 @@ func TestAsyncIncomingMessageHandlerAndErrors(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	mNodeConnector := &mockNodeConnector{transactionPoolSize: 3}
 	s := syncState{
-		log:  wrapLogger(&incLogger, &cfg),
-		node: mNodeConnector,
+		log:               wrapLogger(&incLogger, &cfg),
+		node:              mNodeConnector,
+		incomingMessagesQ: makeIncomingMessageQueue(),
 	}
 
 	// expect UnmarshalMsg error
@@ -91,17 +92,22 @@ func TestAsyncIncomingMessageHandlerAndErrors(t *testing.T) {
 	messageBytes = message.MarshalMsg(nil)
 	err = s.asyncIncomingMessageHandler(nil, nil, messageBytes, sequenceNumber)
 	require.Equal(t, errDecodingReceivedTransactionGroupsFailed, err)
+	s.incomingMessagesQ.shutdown()
 
 	// error queue full
 	message.TransactionGroups = packedTransactionGroups{}
 	messageBytes = message.MarshalMsg(nil)
 	s.incomingMessagesQ = makeIncomingMessageQueue()
+	s.incomingMessagesQ.enqueuedPeersMu.Lock()
 	s.incomingMessagesQ.firstMessage++
+	s.incomingMessagesQ.enqueuedPeersMu.Unlock()
 	err = s.asyncIncomingMessageHandler(nil, nil, messageBytes, sequenceNumber)
 	require.Equal(t, errTransactionSyncIncomingMessageQueueFull, err)
 
 	// Success where peer == nil
+	s.incomingMessagesQ.enqueuedPeersMu.Lock()
 	s.incomingMessagesQ.firstMessage = 0
+	s.incomingMessagesQ.enqueuedPeersMu.Unlock()
 	err = s.asyncIncomingMessageHandler(nil, nil, messageBytes, sequenceNumber)
 	require.NoError(t, err)
 	s.incomingMessagesQ.shutdown()
@@ -110,7 +116,9 @@ func TestAsyncIncomingMessageHandlerAndErrors(t *testing.T) {
 
 	// error when placing the peer message on the main queue (incomingMessages cannot accept messages)
 	s.incomingMessagesQ = makeIncomingMessageQueue()
+	s.incomingMessagesQ.enqueuedPeersMu.Lock()
 	s.incomingMessagesQ.firstMessage++
+	s.incomingMessagesQ.enqueuedPeersMu.Unlock()
 	err = s.asyncIncomingMessageHandler(nil, &peer, messageBytes, sequenceNumber)
 	require.Equal(t, errTransactionSyncIncomingMessageQueueFull, err)
 	s.incomingMessagesQ.shutdown()
@@ -126,7 +134,7 @@ func TestAsyncIncomingMessageHandlerAndErrors(t *testing.T) {
 	s.incomingMessagesQ.shutdown()
 }
 
-/*func TestEvaluateIncomingMessagePart1(t *testing.T) {
+func TestEvaluateIncomingMessagePart1(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	message := incomingMessage{}
@@ -156,29 +164,33 @@ func TestAsyncIncomingMessageHandlerAndErrors(t *testing.T) {
 	mNodeConnector.updatingPeers = false
 
 	s.incomingMessagesQ = makeIncomingMessageQueue()
-	// Add a peer here, and make sure it is cleared
-	s.incomingMessagesQ.enqueuedPeers[peer] = struct{}{}
+	defer s.incomingMessagesQ.shutdown()
+	message.peer = peer
+	require.True(t, s.incomingMessagesQ.enqueue(message))
 	mNodeConnector.peerInfo.TxnSyncPeer = peer
 	peer.incomingMessages = messageOrderingHeap{}
 	// TxnSyncPeer in peerInfo
 	s.evaluateIncomingMessage(message)
 	require.False(t, mNodeConnector.updatingPeers)
-	_, found := s.incomingMessagesQ.enqueuedPeers[peer]
+	<-s.incomingMessagesQ.getIncomingMessageChannel()
+	_, found := s.incomingMessagesQ.enqueuedPeersMap[peer]
 	require.False(t, found)
-
-	// fill the hip with messageOrderingHeapLimit elements so that the incomingMessages enqueue fails
-	for x := 0; x < messageOrderingHeapLimit; x++ {
-		err := peer.incomingMessages.enqueue(message)
-		require.NoError(t, err)
-	}
-	// Add a peer here, and make sure it is not cleared after the error
-	s.incomingMessagesQ.enqueuedPeers[peer] = struct{}{}
-	// TxnSyncPeer in peerInfo
-	s.evaluateIncomingMessage(message)
-	require.False(t, mNodeConnector.updatingPeers)
-	_, found = s.incomingMessagesQ.enqueuedPeers[peer]
-	require.True(t, found)
-}*/
+	/*
+		// fill the heap with messageOrderingHeapLimit elements so that the incomingMessages enqueue fails
+		for x := 0; x < messageOrderingHeapLimit; x++ {
+			err := peer.incomingMessages.enqueue(message)
+			require.NoError(t, err)
+		}
+		// Add a peer here, and make sure it is not cleared after the error
+		s.incomingMessagesQ.enqueue(message)
+		// TxnSyncPeer in peerInfo
+		s.evaluateIncomingMessage(message)
+		require.False(t, mNodeConnector.updatingPeers)
+		<-s.incomingMessagesQ.getIncomingMessageChannel()
+		_, found = s.incomingMessagesQ.enqueuedPeersMap[peer]
+		require.True(t, found)
+	*/
+}
 
 func TestEvaluateIncomingMessagePart2(t *testing.T) {
 	partitiontest.PartitionTest(t)
