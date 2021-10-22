@@ -17,92 +17,92 @@
 package merklekeystore
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestRoundToIndex(t *testing.T) {
+	count := uint64(200)
 
 	// firstValid <= interval
 	firstValid := uint64(100)
 	interval := uint64(101)
-
-	for round := uint64(101); round < uint64(5)*interval; round += interval {
-		index := roundToIndex(firstValid, uint64(round), interval)
-		round2 := indexToRound(firstValid, interval, uint64(index))
-		require.Equal(t, round, round2)
-		index2 := roundToIndex(firstValid, round2, interval)
-		require.Equal(t, index, index2)
-	}
+	ic := uint64(1)
+	checkRoundToIndex(count, ic, firstValid, interval, t)
 
 	// firstValid <= interval
 	firstValid = uint64(100)
 	interval = uint64(99)
-
-	for round := uint64(101); round < uint64(5)*interval; round += interval {
-		index := roundToIndex(firstValid, uint64(round), interval)
-		round2 := indexToRound(firstValid, interval, uint64(index))
-		require.Equal(t, uint64(0), round2%interval)
-		require.True(t, round <= round2)
-		require.True(t, round+interval >= round2)
-		index2 := roundToIndex(firstValid, round2, interval)
-		require.Equal(t, index, index2)
-	}
+	ic = uint64(2)
+	checkRoundToIndex(count, ic, firstValid, interval, t)
 
 	// firstValid <= interval
 	firstValid = uint64(100)
 	interval = uint64(20)
-
-	for round := uint64(101); round < uint64(5)*interval; round += interval {
-		index := roundToIndex(firstValid, uint64(round), interval)
-		round2 := indexToRound(firstValid, interval, uint64(index))
-		require.Equal(t, uint64(0), round2%interval)
-		require.True(t, round <= round2)
-		require.True(t, round+interval >= round2)
-		index2 := roundToIndex(firstValid, round2, interval)
-		require.Equal(t, index, index2)
-	}
+	ic = uint64(5)
+	checkRoundToIndex(count, ic, firstValid, interval, t)
 }
 
 func TestIndexToRoundToIndex(t *testing.T) {
 
-	count := 2
+	count := uint64(200)
+	firstValid := uint64(100)
+	interval := uint64(101)
+	checkIndexToRoundToIndex(count, firstValid, interval, t)
 
-	// firstValid <= interval
-	for pos := 0; pos < count; pos++ {
-		firstValid := uint64(100)
-		interval := uint64(101)
+	firstValid = uint64(100)
+	interval = uint64(99)
+	checkIndexToRoundToIndex(count, firstValid, interval, t)
 
+	firstValid = uint64(100)
+	interval = uint64(20)
+	checkIndexToRoundToIndex(count, firstValid, interval, t)
+}
+
+func TestErrors(t *testing.T) {
+
+	firstValid := uint64(100)
+	interval := uint64(101)
+	round := uint64(0)
+	require.Equal(t, errRoundMultipleOfInterval, check(firstValid, round, interval))
+
+	round = interval - 1
+	require.Equal(t, errRoundMultipleOfInterval, check(firstValid, round, interval))
+
+	round = interval + 1
+	require.Equal(t, errRoundMultipleOfInterval, check(firstValid, round, interval))
+
+	round = firstValid - 1
+	require.Equal(t, errRoundFirstValid, check(firstValid, round, interval))
+
+	interval = 0
+	require.Equal(t, errIntervalZero, check(firstValid, round, interval))
+
+	interval = 107
+	round = 107
+	firstValid = 107
+	require.NoError(t, check(firstValid, round, interval))
+}
+
+func checkIndexToRoundToIndex(count, firstValid, interval uint64, t *testing.T) {
+	for pos := uint64(0); pos < count; pos++ {
 		round := indexToRound(firstValid, interval, uint64(pos))
 		index := roundToIndex(firstValid, round, interval)
-		fmt.Printf("firstValid %d interval %d pos: %d round: %d  index: %d \n", firstValid, interval, pos, round, index)
 		require.Equal(t, uint64(pos), index)
 	}
-	fmt.Println()
 
-	//firstValid > interval
-	for pos := 0; pos < count; pos++ {
-		firstValid := uint64(100)
-		interval := uint64(99)
+}
 
-		round := indexToRound(firstValid, interval, uint64(pos))
+func checkRoundToIndex(count, initC, firstValid, interval uint64, t *testing.T) {
+	expIndex := uint64(0)
+	for c := initC; c < count; c++ {
+		round := interval * c
 		index := roundToIndex(firstValid, round, interval)
-		fmt.Printf("firstValid %d interval %d pos: %d round: %d  index: %d \n", firstValid, interval, pos, round, index)
-		require.Equal(t, uint64(pos), index)
-	}
-	fmt.Println()
-
-	//firstValid >>> interval
-	for pos := 0; pos < count; pos++ {
-		firstValid := uint64(100)
-		interval := uint64(20)
-
-		round := indexToRound(firstValid, interval, uint64(pos))
-		index := roundToIndex(firstValid, round, interval)
-		fmt.Printf("firstValid %d interval %d pos: %d round: %d  index: %d \n", firstValid, interval, pos, round, index)
-		require.Equal(t, uint64(pos), index)
+		require.Equal(t, expIndex, index)
+		expIndex++
+		round2 := indexToRound(firstValid, interval, index)
+		require.Equal(t, round, round2)
 	}
 
 }

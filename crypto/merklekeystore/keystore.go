@@ -192,6 +192,10 @@ func (s *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 		return Signature{}, err
 	}
 
+	if err = check(s.FirstValid, round, s.Interval); err != nil {
+		return Signature{}, err
+	}
+	
 	index := s.getMerkleTreeIndex(round)
 	proof, err := s.Tree.Prove([]uint64{index})
 	if err != nil {
@@ -239,6 +243,9 @@ func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashabl
 	}
 	if round < firstValid {
 		return errReceivedRoundIsBeforeFirst
+	}
+	if err := check(firstValid, round, interval); err != nil {
+		return err
 	}
 
 	ephkey := CommittablePublicKey{
