@@ -157,6 +157,7 @@ type Peer struct {
 
 	// dataExchangeRate is the combined upload/download rate in bytes/second
 	dataExchangeRate uint64
+	// cachedLatency is the measured network latency of a peer, updated every round
 	cachedLatency    time.Duration
 
 	// these two fields describe "what does the local peer want the remote peer to send back"
