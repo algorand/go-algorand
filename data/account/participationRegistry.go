@@ -837,7 +837,8 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 		db.mutex.Unlock()
 	}
 
-	db.log.Infof("Registered key: %s\n", id)
+	db.log.Infof("Registered key (%s) for account (%s) first valid (%d) last valid (%d)\n",
+		id, recordToRegister.Account, recordToRegister.FirstValid, recordToRegister.LastValid)
 	return nil
 }
 
