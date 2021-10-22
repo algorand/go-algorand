@@ -472,13 +472,6 @@ func TestKeyDeletion(t *testing.T) {
 	}
 }
 
-func TestVeifierVerify(t *testing.T) {
-	a := require.New(t)	
-	signer := generateTestSigner(crypto.DilithiumType, 2, 2, 10, a)
-	index := signer.getMerkleTreeIndex(2)
-	a.GreaterOrEqual(index, 0)
-}
-
 //#region Helper Functions
 func makeSig(signer *Signer, sigRound uint64, a *require.Assertions) (crypto.Hashable, Signature) {
 	hashable := crypto.Hashable(&crypto.VerifyingKey{Type: math.MaxUint64}) // just want some crypto.Hashable..
