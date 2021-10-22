@@ -63,15 +63,34 @@ func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participati
 	for _, part := range manager.partKeys {
 		if part.OverlapsInterval(rnd, rnd) {
 			out = append(out, part.Participation)
-
-			// This is usually a no-op, but the first time it will update the DB.
-			err := manager.registry.Register(part.ID(), rnd)
-			if err != nil {
-				manager.log.Warn("Failed to register participation key (%s) with participation registry.", part.ID())
-			}
 		}
 	}
 	return out
+
+	// TODO: source keys from the registry.
+	// This kinda works, but voting keys are not updated.
+	/*
+		for _, record := range manager.registry.GetAll() {
+			part := account.Participation{
+				Parent:      record.Account,
+				VRF:         record.VRF,
+				Voting:      record.Voting,
+				FirstValid:  record.FirstValid,
+				LastValid:   record.LastValid,
+				KeyDilution: record.KeyDilution,
+			}
+
+			if part.OverlapsInterval(rnd, rnd) {
+				out = append(out, part)
+
+				id := part.ID()
+				if !bytes.Equal(id[:], record.ParticipationID[:]) {
+					manager.log.Warnf("Participation IDs do not equal while fetching keys... %s != %s\n", id, record.ParticipationID)
+				}
+			}
+		}
+		return out
+	*/
 }
 
 // HasLiveKeys returns true if we have any Participation
@@ -94,10 +113,12 @@ func (manager *AccountManager) HasLiveKeys(from, to basics.Round) bool {
 func (manager *AccountManager) AddParticipation(participation account.PersistedParticipation) bool {
 	// Tell the ParticipationRegistry about the Participation. Duplicate entries
 	// are ignored.
-	_, err := manager.registry.Insert(participation.Participation)
+	pid, err := manager.registry.Insert(participation.Participation)
 	if err != nil && err != account.ErrAlreadyInserted {
 		manager.log.Warnf("Failed to insert participation key.")
 	}
+	manager.log.Infof("Inserted key (%s) for account (%s) first valid (%d) last valid (%d)\n",
+		pid, participation.Parent, participation.FirstValid, participation.LastValid)
 
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
@@ -188,6 +209,8 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 		}
 	}
 
+	// TODO: This needs to update the partkeys also, see the 'DeleteOldKeys' function above, it's part
+	//       is part of PersistedParticipation, but just calls 'part.Voting.DeleteBeforeFineGrained'
 	// Delete expired records from participation registry.
 	if err := manager.registry.DeleteExpired(latestHdr.Round); err != nil {
 		manager.log.Warnf("error while deleting expired records from participation registry: %w", err)

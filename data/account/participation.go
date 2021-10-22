@@ -94,7 +94,7 @@ func (part Participation) ID() ParticipationID {
 		copy(idData.VoteID[:], part.Voting.OneTimeSignatureVerifier[:])
 	}
 
-	return ParticipationID(crypto.HashObj(&idData))
+	return idData.ID()
 }
 
 // PersistedParticipation encapsulates the static state of the participation

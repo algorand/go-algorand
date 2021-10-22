@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -42,6 +43,7 @@ func (pid ParticipationID) IsZero() bool {
 	return (crypto.Digest(pid)).IsZero()
 }
 
+// String prints a b32 version of this ID.
 func (pid ParticipationID) String() string {
 	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(pid[:])
 }
@@ -75,8 +77,8 @@ type ParticipationRecord struct {
 	EffectiveFirst         basics.Round
 	EffectiveLast          basics.Round
 
-	// VRFSecrets
-	// OneTimeSignatureSecrets
+	VRF    *crypto.VRFSecrets
+	Voting *crypto.OneTimeSignatureSecrets
 }
 
 var zeroParticipationRecord = ParticipationRecord{}
@@ -88,6 +90,16 @@ func (r ParticipationRecord) IsZero() bool {
 
 // Duplicate creates a copy of the current object. This is required once secrets are stored.
 func (r ParticipationRecord) Duplicate() ParticipationRecord {
+	var vrf crypto.VRFSecrets
+	if r.VRF != nil {
+		copy(vrf.SK[:], r.VRF.SK[:])
+		copy(vrf.PK[:], r.VRF.PK[:])
+	}
+
+	var voting crypto.OneTimeSignatureSecrets
+	if r.Voting != nil {
+		voting = r.Voting.Snapshot()
+	}
 	return ParticipationRecord{
 		ParticipationID:        r.ParticipationID,
 		Account:                r.Account,
@@ -99,6 +111,8 @@ func (r ParticipationRecord) Duplicate() ParticipationRecord {
 		LastCompactCertificate: r.LastCompactCertificate,
 		EffectiveFirst:         r.EffectiveFirst,
 		EffectiveLast:          r.EffectiveLast,
+		VRF:                    &vrf,
+		Voting:                 &voting,
 	}
 }
 
@@ -221,9 +235,9 @@ var (
 
 			firstValidRound INTEGER NOT NULL DEFAULT 0,
 			lastValidRound  INTEGER NOT NULL DEFAULT 0,
-			keyDilution     INTEGER NOT NULL DEFAULT 0
+			keyDilution     INTEGER NOT NULL DEFAULT 0,
 
-			-- vrf BLOB,    --*  msgpack encoding of ParticipationAccount.vrf
+			vrf BLOB    --*  msgpack encoding of ParticipationAccount.vrf
 		)`
 	createRolling = `CREATE TABLE Rolling (
 			pk INTEGER PRIMARY KEY NOT NULL,
@@ -232,23 +246,34 @@ var (
 			lastBlockProposalRound      INTEGER NOT NULL DEFAULT 0,
 			lastCompactCertificateRound INTEGER NOT NULL DEFAULT 0,
 			effectiveFirstRound        INTEGER NOT NULL DEFAULT 0,
-			effectiveLastRound         INTEGER NOT NULL DEFAULT 0
+			effectiveLastRound         INTEGER NOT NULL DEFAULT 0,
 
-			-- voting BLOB, --*  msgpack encoding of ParticipationAccount.voting
+			voting BLOB --*  msgpack encoding of ParticipationAccount.voting
+
+			-- blockProof BLOB  --*  msgpack encoding of ParticipationAccount.BlockProof
 		)`
-	insertKeysetQuery  = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution) VALUES (?, ?, ?, ?, ?)`
-	insertRollingQuery = `INSERT INTO Rolling (pk) VALUES (?)`
+
+	/*
+		createBlockProof = `CREATE TABLE BlockProofKeys (
+		    	id	  INTEGER PRIMARY KEY,
+		    	round INTEGER,	--*  committed round for this key
+				key   BLOB      --*  msgpack encoding of ParticipationAccount.BlockProof.SignatureAlgorithm
+			)`
+	*/
+	insertKeysetQuery  = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution, vrf) VALUES (?, ?, ?, ?, ?, ?)`
+	insertRollingQuery = `INSERT INTO Rolling (pk, voting) VALUES (?, ?)`
 
 	// SELECT pk FROM Keysets WHERE participationID = ?
 	selectPK      = `SELECT pk FROM Keysets WHERE participationID = ? LIMIT 1`
 	selectLastPK  = `SELECT pk FROM Keysets ORDER BY pk DESC LIMIT 1`
 	selectRecords = `SELECT
-			participationID, account, firstValidRound, lastValidRound, keyDilution,
-			lastVoteRound, lastBlockProposalRound, lastCompactCertificateRound,
-			effectiveFirstRound, effectiveLastRound
-		FROM Keysets
-		INNER JOIN Rolling
-		ON Keysets.pk = Rolling.pk`
+			k.participationID, k.account, k.firstValidRound,
+       		k.lastValidRound, k.keyDilution, k.vrf,
+			r.lastVoteRound, r.lastBlockProposalRound, r.lastCompactCertificateRound,
+			r.effectiveFirstRound, r.effectiveLastRound, r.voting
+		FROM Keysets k
+		INNER JOIN Rolling r
+		ON k.pk = r.pk`
 	deleteKeysets          = `DELETE FROM Keysets WHERE pk=?`
 	deleteRolling          = `DELETE FROM Rolling WHERE pk=?`
 	updateRollingFieldsSQL = `UPDATE Rolling
@@ -381,7 +406,20 @@ func (db *participationDB) writeThread() {
 		}
 	}
 }
+
 func (db *participationDB) insertInner(record Participation, id ParticipationID) (err error) {
+
+	var rawVRF []byte
+	var rawVoting []byte
+
+	if record.VRF != nil {
+		rawVRF = protocol.Encode(record.VRF)
+	}
+	if record.Voting != nil {
+		voting := record.Voting.Snapshot()
+		rawVoting = protocol.Encode(&voting)
+	}
+
 	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		result, err := tx.Exec(
 			insertKeysetQuery,
@@ -389,7 +427,8 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 			record.Parent[:],
 			record.FirstValid,
 			record.LastValid,
-			record.KeyDilution)
+			record.KeyDilution,
+			rawVRF)
 		if err != nil {
 			return fmt.Errorf("unable to insert keyset: %w", err)
 		}
@@ -406,7 +445,7 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 		}
 
 		// Create Rolling entry
-		result, err = tx.Exec(insertRollingQuery, pk)
+		result, err = tx.Exec(insertRollingQuery, pk, rawVoting)
 		if err != nil {
 			return fmt.Errorf("unable insert rolling: %w", err)
 		}
@@ -552,8 +591,21 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		insert:   record,
 	}
 
+	// Make some copies.
+	var vrf *crypto.VRFSecrets
+	if record.VRF != nil {
+		vrf = new(crypto.VRFSecrets)
+		copy(vrf.SK[:], record.VRF.SK[:])
+		copy(vrf.PK[:], record.VRF.PK[:])
+	}
+
+	var voting *crypto.OneTimeSignatureSecrets
+	if record.Voting != nil {
+		voting = new(crypto.OneTimeSignatureSecrets)
+		*voting = record.Voting.Snapshot()
+	}
+
 	// update cache.
-	// TODO: simplify to re-initializing with initializeCache()?
 	db.cache[id] = ParticipationRecord{
 		ParticipationID:        id,
 		Account:                record.Address(),
@@ -565,6 +617,8 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		LastCompactCertificate: 0,
 		EffectiveFirst:         0,
 		EffectiveLast:          0,
+		Voting:                 voting,
+		VRF:                    vrf,
 	}
 
 	return
@@ -605,26 +659,46 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 	results := make([]ParticipationRecord, 0)
 	for rows.Next() {
 		var record ParticipationRecord
-		var participationBlob []byte
-		var accountBlob []byte
+		var rawParticipation []byte
+		var rawAccount []byte
+		var rawVRF []byte
+		var rawVoting []byte
 		err := rows.Scan(
-			&participationBlob,
-			&accountBlob,
+			&rawParticipation,
+			&rawAccount,
 			&record.FirstValid,
 			&record.LastValid,
 			&record.KeyDilution,
+			&rawVRF,
 			&record.LastVote,
 			&record.LastBlockProposal,
 			&record.LastCompactCertificate,
 			&record.EffectiveFirst,
 			&record.EffectiveLast,
+			&rawVoting,
 		)
 		if err != nil {
 			return nil, err
 		}
 
-		copy(record.ParticipationID[:], participationBlob)
-		copy(record.Account[:], accountBlob)
+		copy(record.ParticipationID[:], rawParticipation)
+		copy(record.Account[:], rawAccount)
+
+		if len(rawVRF) > 0 {
+			record.VRF = &crypto.VRFSecrets{}
+			err = protocol.Decode(rawVRF, record.VRF)
+			if err != nil {
+				return nil, fmt.Errorf("unable to decode VRF: %w", err)
+			}
+		}
+
+		if len(rawVoting) > 0 {
+			record.Voting = &crypto.OneTimeSignatureSecrets{}
+			err = protocol.Decode(rawVoting, record.Voting)
+			if err != nil {
+				return nil, fmt.Errorf("unable to decode Voting: %w", err)
+			}
+		}
 
 		results = append(results, record)
 	}
@@ -763,6 +837,8 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 		db.mutex.Unlock()
 	}
 
+	db.log.Infof("Registered key (%s) for account (%s) first valid (%d) last valid (%d)\n",
+		id, recordToRegister.Account, recordToRegister.FirstValid, recordToRegister.LastValid)
 	return nil
 }
 

@@ -28,9 +28,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -429,7 +431,8 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 				record.Parent[:],
 				record.FirstValid,
 				record.LastValid,
-				record.KeyDilution)
+				record.KeyDilution,
+				nil)
 			if err != nil {
 				return fmt.Errorf("unable to insert keyset: %w", err)
 			}
@@ -530,6 +533,94 @@ func TestParticipation_NoKeyToUpdate(t *testing.T) {
 		a.EqualError(err, ErrNoKeyForID.Error())
 		return nil
 	})
+}
+
+// TestParticipion_Blobs adds some secrets to the registry and makes sure the same ones are returned.
+func TestParticipion_Blobs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+	registry := getRegistry(t)
+	defer registry.Close()
+
+	access, err := db.MakeAccessor("writetest_root", false, true)
+	if err != nil {
+		panic(err)
+	}
+	root, err := GenerateRoot(access)
+	access.Close()
+	a.NoError(err)
+
+	access, err = db.MakeAccessor("writetest", false, true)
+	if err != nil {
+		panic(err)
+	}
+	part, err := FillDBWithParticipationKeys(access, root.Address(), 0, 101, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+	access.Close()
+	a.NoError(err)
+
+	check := func(id ParticipationID) {
+		record := registry.Get(id)
+		a.NotEqual(ParticipationRecord{}, record)
+		a.Equal(id, record.ParticipationID)
+		a.Equal(part.VRF, record.VRF)
+		a.Equal(part.Voting.Snapshot(), record.Voting.Snapshot())
+	}
+
+	id, err := registry.Insert(part.Participation)
+	a.NoError(err)
+	a.NoError(registry.Flush())
+	a.Equal(id, part.ID())
+	// check the initial caching
+	check(id)
+
+	// check the re-initialized object
+	registry.initializeCache()
+	check(id)
+}
+
+// TestParticipion_EmptyBlobs makes sure empty blobs are set to nil
+func TestParticipion_EmptyBlobs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+	registry := getRegistry(t)
+	defer registry.Close()
+
+	access, err := db.MakeAccessor("writetest_root", false, true)
+	if err != nil {
+		panic(err)
+	}
+	root, err := GenerateRoot(access)
+	access.Close()
+	a.NoError(err)
+
+	access, err = db.MakeAccessor("writetest", false, true)
+	if err != nil {
+		panic(err)
+	}
+	part, err := FillDBWithParticipationKeys(access, root.Address(), 0, 101, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+	access.Close()
+	a.NoError(err)
+	part.VRF = nil
+	part.Voting = nil
+
+	check := func(id ParticipationID) {
+		record := registry.Get(id)
+		a.NotEqual(ParticipationRecord{}, record)
+		a.Equal(id, record.ParticipationID)
+		a.True(record.VRF.MsgIsZero())
+		a.True(record.Voting.MsgIsZero())
+	}
+
+	id, err := registry.Insert(part.Participation)
+	a.NoError(err)
+	a.NoError(registry.Flush())
+	a.Equal(id, part.ID())
+	// check the initial caching
+	check(id)
+
+	// check the re-initialized object
+	registry.initializeCache()
+	check(id)
 }
 
 func TestRegisterUpdatedEvent(t *testing.T) {
