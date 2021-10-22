@@ -275,6 +275,8 @@ commands:
   generic_test:
     description: Run build tests from build workspace, for re-use by diferent architectures
     parameters:
+      platform:
+        type: string
       build_dir:
         type: string
         default: << pipeline.parameters.build_dir >>
@@ -335,6 +337,9 @@ commands:
           key: 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-{{ .Environment.CIRCLE_BUILD_NUM }}'
           paths:
             - tmp/go-cache
+      - upload_to_buildpulse:
+          platform: << parameters.platform >>
+          path: << parameters.result_path >>/<< parameters.result_subdir>>
 
   upload_coverage:
     description: Collect coverage reports and upload them
@@ -345,9 +350,45 @@ commands:
           command: |
             scripts/travis/upload_coverage.sh || true
 
+  upload_to_buildpulse:
+    description: Collect build reports and upload them
+    parameters:
+      platform:
+        type: string
+      path:
+        type: string
+    steps:
+      - run:
+          name: Send test results to BuildPulse
+          when: always
+          command: |
+            set -e
+            if ! ls << parameters.path >>/*/*.xml &> /dev/null; then exit 0; fi
+            sed -i"" -e 's/classname="/classname="<< parameters.platform >>-/' << parameters.path >>/*/*.xml
+            case "<< parameters.platform >>" in
+              arm64)
+                URL=https://github.com/buildpulse/test-reporter/releases/download/v0.21.0-pre/test-reporter-linux-arm64
+                SUM=53f94c29ad162c2b9ebb1f4a2f967f5262c0459ee4a0c34332977d8c89aafc18
+                ;;
+              amd64)
+                URL=https://github.com/buildpulse/test-reporter/releases/download/v0.21.0-pre/test-reporter-linux-amd64
+                SUM=4655e54d756580c0de0112cab488e6e08d0af75e9fc8caea2d63f9e13be8beb5
+                ;;
+              mac_amd64)
+                URL=https://github.com/buildpulse/test-reporter/releases/download/v0.21.0-pre/test-reporter-darwin-amd64
+                SUM=2f9e20a6f683c80f35d04e36bc57ecfe605bb48fee5a1b8d8f7c45094028eea3
+                ;;
+            esac
+            curl -fsSL --retry 3 --retry-connrefused $URL > ./buildpulse-test-reporter
+            echo "$SUM *buildpulse-test-reporter" | shasum -a 256 -c --status
+            chmod +x ./buildpulse-test-reporter
+            ./buildpulse-test-reporter submit << parameters.path >> --account-id 23182699 --repository-id 191266671 || true
+
   generic_integration:
     description: Run integration tests from build workspace, for re-use by diferent architectures
     parameters:
+      platform:
+        type: string
       build_dir:
         type: string
         default: << pipeline.parameters.build_dir >>
@@ -401,6 +442,9 @@ commands:
           root: << parameters.result_path >>
           paths:
             - << parameters.result_subdir >>
+      - upload_to_buildpulse:
+          platform: << parameters.platform >>
+          path: << parameters.result_path >>/<< parameters.result_subdir>>
 
   tests_verification_command:
     description: Check if all tests were run at least once and only once across all parallel runs
@@ -480,6 +524,7 @@ jobs:
       - prepare_build_dir
       - prepare_go
       - generic_test:
+          platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test
           short_test_flag: "-short"
       - upload_coverage
@@ -495,6 +540,7 @@ jobs:
       - prepare_build_dir
       - prepare_go
       - generic_test:
+          platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
       - upload_coverage
@@ -515,6 +561,7 @@ jobs:
       - prepare_build_dir
       - prepare_go
       - generic_integration:
+          platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_integration
           short_test_flag: "-short"
 
@@ -531,6 +578,7 @@ jobs:
       - prepare_build_dir
       - prepare_go
       - generic_integration:
+          platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_integration_nightly
           no_output_timeout: 45m
       - slack/notify:
@@ -549,6 +597,7 @@ jobs:
       - prepare_build_dir
       - prepare_go
       - generic_integration:
+          platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_e2e_expect
           short_test_flag: "-short"
 
@@ -565,6 +614,7 @@ jobs:
       - prepare_build_dir
       - prepare_go
       - generic_integration:
+          platform: << parameters.platform >>
           result_subdir: << parameters.platform>>_e2e_expect_nightly
           no_output_timeout: 45m
       - slack/notify:
@@ -582,6 +632,7 @@ jobs:
       - prepare_build_dir
       - prepare_go
       - generic_integration:
+          platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_e2e_subs
           short_test_flag: "-short"
 
@@ -597,6 +648,7 @@ jobs:
       - prepare_build_dir
       - prepare_go
       - generic_integration:
+          platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_e2e_subs_nightly
           no_output_timeout: 45m
       - slack/notify:
