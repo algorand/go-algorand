@@ -34,9 +34,8 @@ func TestDilithiumSignAndVerify(t *testing.T) {
 		sig := dsigner.SignBytes(bs[:])
 		//sig := dil2Sign(sk, bs[:])
 		dvf := dsigner.GetVerifyingKey()
-		dverifier, err := dvf.GetVerifier()
-		a.NoError(err)
-		a.NoError(dverifier.VerifyBytes(bs[:], sig))
+
+		a.NoError(dvf.GetVerifier().VerifyBytes(bs[:], sig))
 	}
 }
 
@@ -47,8 +46,7 @@ func TestDilithiumSignerImplemantation(t *testing.T) {
 	sig := dsigner.Sign(TestingHashable{})
 
 	dvf := dsigner.GetVerifyingKey()
-	dverifier, err := dvf.GetVerifier()
-	a.NoError(err)
+	dverifier := dvf.GetVerifier()
 	a.NoError(dverifier.Verify(TestingHashable{}, sig))
 	a.Error(dverifier.Verify(TestingHashable{
 		data: []byte{1, 2, 3},

@@ -18,6 +18,7 @@ package compactcert
 
 import (
 	"fmt"
+
 	"github.com/algorand/go-algorand/data/basics"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -209,11 +210,7 @@ func (b *Builder) Build() (*Cert, error) {
 	}
 
 	var proofPositions []uint64
-	hash, err := hfactory.NewHash()
-	if err != nil {
-		return nil, err
-	}
-	msgHash := crypto.GenereicHashObj(hash, b.Msg)
+	msgHash := crypto.GenereicHashObj(hfactory.NewHash(), b.Msg)
 
 	for j := uint64(0); j < nr; j++ {
 		choice := coinChoice{

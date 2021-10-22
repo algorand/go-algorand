@@ -61,11 +61,8 @@ func buildWorker(ws *workerState, array Array, leaves Layer, h crypto.HashFactor
 
 	ws.started()
 	batchSize := uint64(1)
-	hash, err := h.NewHash()
-	if err != nil {
-		errs.nonBlockingSend(err)
-		return
-	}
+	hash := h.NewHash()
+
 	for {
 		off := ws.next(batchSize)
 		if off >= ws.maxidx {
@@ -170,10 +167,8 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 	s := &siblings{
 		tree: tree,
 	}
-	hs, err := tree.Hash.NewHash()
-	if err != nil {
-		return nil, err
-	}
+	hs := tree.Hash.NewHash()
+
 	for l := uint64(0); l < uint64(len(tree.Levels)-1); l++ {
 		var err error
 		pl, err = pl.up(s, l, validateProof, hs)
@@ -208,8 +203,7 @@ func (tree *Tree) buildNextLayer() {
 	for ws.nextWorker() {
 		// no need to inspect error here -
 		// the factory should've been used to generate hash func in the first layer build
-		h, _ := tree.Hash.NewHash()
-		go upWorker(ws, l, newLayer, h)
+		go upWorker(ws, l, newLayer, tree.Hash.NewHash())
 	}
 	ws.wait()
 	tree.Levels = append(tree.Levels, newLayer)
@@ -241,12 +235,7 @@ func Verify(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *
 		return nil
 	}
 
-	hash, err := proof.HashFactory.NewHash()
-	if err != nil {
-		return err
-	}
-
-	hashedLeafs, err := hashLeafs(elems, hash)
+	hashedLeafs, err := hashLeafs(elems, proof.HashFactory.NewHash())
 	if err != nil {
 		return err
 	}
@@ -257,15 +246,13 @@ func Verify(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *
 
 func verifyPath(root crypto.GenericDigest, proof *Proof, pl partialLayer) error {
 	hints := proof.Path
-	hsh, err := proof.HashFactory.NewHash()
-	if err != nil {
-		return err
-	}
 
 	s := &siblings{
 		hints: hints,
 	}
 
+	hsh := proof.HashFactory.NewHash()
+	var err error
 	for l := uint64(0); len(s.hints) > 0 || len(pl) > 1; l++ {
 		if pl, err = pl.up(s, l, true, hsh); err != nil {
 			return err

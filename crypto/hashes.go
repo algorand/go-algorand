@@ -22,6 +22,7 @@ import (
 	"hash"
 
 	"github.com/algonathan/sumhash"
+	"github.com/algorand/go-algorand/protocol"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -45,10 +46,20 @@ func init() {
 // HashType enum type for signing algorithms
 type HashType uint64
 
+// IsValid verifies that the hash type is in a valid range.
+func (z HashType) IsValid() error {
+	if z > maxHashType {
+		return protocol.ErrInvalidObject
+	}
+	return nil
+}
+
 // types of hashes
 const (
 	Sha512_256 HashType = iota
 	Sumhash
+
+	maxHashType
 )
 
 //size of each hash
@@ -58,22 +69,31 @@ const (
 )
 
 // HashFactory is responsible for generating new hashes accordingly to the type it stores.
+//msgp:postunmarshalcheck HashFactory IsValid
 type HashFactory struct {
 	_struct  struct{} `codec:",omitempty,omitemptyarray"`
 	HashType HashType `codec:"t"`
 }
 
+// IsValid states whether the HashFactory is valid, and is safe to use.
+func (z *HashFactory) IsValid() error {
+	return z.HashType.IsValid()
+}
+
 var errUnknownHash = errors.New("unknown hash type")
 
 // NewHash generates a new hash.Hash to use.
-func (h HashFactory) NewHash() (hash.Hash, error) {
-	switch h.HashType {
+func (z HashFactory) NewHash() hash.Hash {
+	switch z.HashType {
+
 	case Sha512_256:
-		return sha512.New512_256(), nil
+		return sha512.New512_256()
 	case Sumhash:
-		return sumhash.New(sumhashCompressor), nil
+		return sumhash.New(sumhashCompressor)
+	// This shouldn't be reached, when creating a new hash, one would know the type of hash they wanted,
+	// in addition to that, unmarshalling of the hashFactory verifies the HashType of the factory.
 	default:
-		return nil, errUnknownHash
+		return invalidHash{}
 	}
 }
 
@@ -89,4 +109,33 @@ func HashBytes(hash hash.Hash, m []byte) []byte {
 	hash.Write(m)
 	outhash := hash.Sum(nil)
 	return outhash
+}
+
+// InvalidHash is used to identify errors on the factory.
+// this function will return nil slice
+type invalidHash struct {
+}
+
+// Write writes bytes into the hash function. this function will return an error
+func (h invalidHash) Write(p []byte) (n int, err error) {
+	return 0, errUnknownHash
+}
+
+// Sum returns an empty slice since this is an empty hash function
+func (h invalidHash) Sum(b []byte) []byte {
+	return nil
+}
+
+// Reset this function has no state so it is empty
+func (h invalidHash) Reset() {
+}
+
+// Size the current size of the function is always 0
+func (h invalidHash) Size() int {
+	return 0
+}
+
+// BlockSize returns zero since this is an empty hash function
+func (h invalidHash) BlockSize() int {
+	return 0
 }

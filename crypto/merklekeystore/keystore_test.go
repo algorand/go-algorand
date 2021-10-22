@@ -21,13 +21,14 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
-	"github.com/algorand/go-algorand/test/partitiontest"
-	uuid "github.com/satori/go.uuid"
 	"math"
 	"testing"
 
+	uuid "github.com/satori/go.uuid"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/stretchr/testify/require"
 )
@@ -193,9 +194,8 @@ func TestSignatureStructure(t *testing.T) {
 
 	key, err := signer.keyStore.GetKey(51)
 	a.NoError(err)
-	signingkey, err := key.GetSigner()
-	a.NoError(err)
-	a.Equal(sig.VerifyingKey, *signingkey.GetVerifyingKey())
+
+	a.Equal(sig.VerifyingKey, *key.GetSigner().GetVerifyingKey())
 
 	proof, err := signer.Tree.Prove([]uint64{1})
 	a.NoError(err)
@@ -353,9 +353,8 @@ func TestAttemptToUseDifferentKey(t *testing.T) {
 	sig2 := sig
 	key, err := signer.keyStore.GetKey(start)
 	a.NoError(err)
-	signingKey, err := key.GetSigner()
-	a.NoError(err)
-	sig2.VerifyingKey = *signingKey.GetVerifyingKey()
+
+	sig2.VerifyingKey = *(key.GetSigner().GetVerifyingKey())
 	a.Error(signer.GetVerifier().Verify(start, start+1, 1, hashable, sig2))
 }
 

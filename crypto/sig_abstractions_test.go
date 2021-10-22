@@ -14,23 +14,27 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package merklearray
+package crypto
 
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestLayerHash(t *testing.T) {
+func TestInvalidSinger(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	a := require.New(t)
 
-	var p = pair{make([]byte, crypto.Sha512_256Size), make([]byte, crypto.Sha512_256Size)}
-	crypto.RandBytes(p.l[:])
-	crypto.RandBytes(p.r[:])
-	hsh := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
+	sigAlgo, err := NewSigner(Ed25519Type)
+	a.NoError(err)
+	sigAlgo.Type = maxAlgorithmType
 
-	require.Equal(t, crypto.GenereicHashObj(hsh, &p), crypto.HashBytes(hsh, p.Marshal()))
+	dummyMsg := make([]byte, 6)
+	a.Equal(ByteSignature{}, sigAlgo.GetSigner().SignBytes(dummyMsg))
+
+	dummySig := make([]byte, 6)
+	a.Error(sigAlgo.GetSigner().GetVerifyingKey().GetVerifier().VerifyBytes(dummySig, dummyMsg))
 }

@@ -106,10 +106,7 @@ func (k *keysArray) Length() uint64 {
 // Marshal Gets []byte to represent a VerifyingKey tied to the signatureAlgorithm in a pos.
 // used to implement the merklearray.Array interface needed to build a tree.
 func (k *keysArray) Marshal(pos uint64) ([]byte, error) {
-	signer, err := k.keys[pos].GetSigner()
-	if err != nil {
-		return nil, err
-	}
+	signer := k.keys[pos].GetSigner()
 	ephPK := CommittablePublicKey{
 		VerifyingKey: *signer.GetVerifyingKey(),
 		Round:        indexToRound(k.firstValid, k.interval, pos),
@@ -187,10 +184,7 @@ func (s *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 	if err != nil {
 		return Signature{}, err
 	}
-	signingKey, err := key.GetSigner()
-	if err != nil {
-		return Signature{}, err
-	}
+	signingKey := key.GetSigner()
 
 	index := s.getMerkleTreeIndex(round)
 	proof, err := s.Tree.Prove([]uint64{index})
@@ -256,9 +250,5 @@ func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashabl
 		return isInTree
 	}
 
-	ver, err := sig.VerifyingKey.GetVerifier()
-	if err != nil {
-		return err
-	}
-	return ver.Verify(obj, sig.ByteSignature)
+	return sig.VerifyingKey.GetVerifier().Verify(obj, sig.ByteSignature)
 }
