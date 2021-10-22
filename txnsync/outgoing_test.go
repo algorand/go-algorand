@@ -62,6 +62,8 @@ func TestAsyncMessageSent(t *testing.T) {
 	var s syncState
 	s.clock = timers.MakeMonotonicClock(time.Now())
 	s.log = mockAsyncLogger{}
+	s.incomingMessagesQ = makeIncomingMessageQueue()
+	defer s.incomingMessagesQ.shutdown()
 
 	asyncEncoder := messageAsyncEncoder{
 		state: &s,

@@ -66,7 +66,7 @@ type messageAsyncEncoder struct {
 func (encoder *messageAsyncEncoder) asyncMessageSent(enqueued bool, sequenceNumber uint64) error {
 	if !enqueued {
 		encoder.state.log.Infof("unable to send message to peer. disconnecting from peer.")
-		encoder.state.incomingMessagesQ.erase(encoder.messageData.peer.networkPeer)
+		encoder.state.incomingMessagesQ.erase(encoder.messageData.peer, encoder.messageData.peer.networkPeer)
 		return errTransactionSyncOutgoingMessageSendFailed
 	}
 	// record the sequence number here, so that we can store that later on.
@@ -78,7 +78,7 @@ func (encoder *messageAsyncEncoder) asyncMessageSent(enqueued bool, sequenceNumb
 	default:
 		// if we can't place it on the channel, return an error so that the node could disconnect from this peer.
 		encoder.state.log.Infof("unable to enqueue outgoing message confirmation; outgoingMessagesCallbackCh is full. disconnecting from peer.")
-		encoder.state.incomingMessagesQ.erase(encoder.messageData.peer.networkPeer)
+		encoder.state.incomingMessagesQ.erase(encoder.messageData.peer, encoder.messageData.peer.networkPeer)
 		return errTransactionSyncOutgoingMessageQueueFull
 	}
 }

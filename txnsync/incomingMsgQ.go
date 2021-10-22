@@ -86,6 +86,7 @@ func (imq *incomingMessageQueue) messagePump() {
 			}
 
 			imq.enqueuedPeersMu.Unlock()
+		writeOutboundMessage:
 			select {
 			case imq.outboundPeerCh <- msg:
 				imq.enqueuedPeersMu.Lock()
@@ -96,13 +97,14 @@ func (imq *incomingMessageQueue) messagePump() {
 			// see if this msg need to be delivered or not.
 			case droppedPeer := <-imq.deletePeersCh:
 				if msg.networkPeer == droppedPeer {
+					// we want to skip this message.
 					imq.enqueuedPeersMu.Lock()
 					continue
 				}
+				goto writeOutboundMessage
 			}
 		}
 		imq.enqueuedPeersCond.Wait()
-
 	}
 }
 
@@ -155,23 +157,34 @@ func (imq *incomingMessageQueue) clear(m incomingMessage) {
 // this method isn't very efficient, and should be used only in cases where
 // we disconnect from a peer and want to cleanup all the pending tasks associated
 // with that peer.
-func (imq *incomingMessageQueue) erase(networkPeer interface{}) {
+func (imq *incomingMessageQueue) erase(peer *Peer, networkPeer interface{}) {
 	imq.enqueuedPeersMu.Lock()
-	defer imq.enqueuedPeersMu.Unlock()
 
-	// lookup for a Peer object.
-	var peer *Peer
 	var idxPeer int
-	for peer, idxPeer = range imq.enqueuedPeersMap {
-		if peer.networkPeer != networkPeer {
-			continue
+	if peer == nil {
+		// lookup for a Peer object.
+		for peer, idxPeer = range imq.enqueuedPeersMap {
+			if peer.networkPeer != networkPeer {
+				continue
+			}
+			break
 		}
-		break
+	} else {
+		var has bool
+		if idxPeer, has = imq.enqueuedPeersMap[peer]; !has {
+			// the peer object is not in the map.
+			peer = nil
+		}
 	}
+
 	if peer != nil {
 		delete(imq.enqueuedPeersMap, peer)
 		imq.removeMessageByIndex(idxPeer)
-		imq.deletePeersCh <- networkPeer
+		imq.enqueuedPeersMu.Unlock()
+		select {
+		case imq.deletePeersCh <- networkPeer:
+		default:
+		}
 		return
 	}
 
@@ -185,6 +198,11 @@ func (imq *incomingMessageQueue) erase(networkPeer interface{}) {
 		adjustedIdx = (adjustedIdx + 1) % len(imq.enqueuedMessages)
 	}
 	imq.lastMessage = adjustedIdx
+	imq.enqueuedPeersMu.Unlock()
+	select {
+	case imq.deletePeersCh <- networkPeer:
+	default:
+	}
 }
 
 func (imq *incomingMessageQueue) removeMessageByIndex(removeIdx int) {
@@ -197,4 +215,37 @@ func (imq *incomingMessageQueue) removeMessageByIndex(removeIdx int) {
 		adjustedIdx = (adjustedIdx + 1) % len(imq.enqueuedMessages)
 	}
 	imq.lastMessage = adjustedIdx
+}
+
+func (imq *incomingMessageQueue) prunePeers(activePeers []PeerInfo) bool {
+	activePeersMap := make(map[*Peer]bool)
+	activeNetworkPeersMap := make(map[interface{}]bool)
+	for _, activePeer := range activePeers {
+		if activePeer.TxnSyncPeer != nil {
+			activePeersMap[activePeer.TxnSyncPeer] = true
+		}
+		if activePeer.NetworkPeer != nil {
+			activeNetworkPeersMap[activePeer.NetworkPeer] = true
+		}
+	}
+	imq.enqueuedPeersMu.Lock()
+	defer imq.enqueuedPeersMu.Unlock()
+
+	adjustedIdx := imq.firstMessage
+	for idx := imq.firstMessage; idx != imq.lastMessage; idx = (idx + 1) % len(imq.enqueuedMessages) {
+		if imq.enqueuedMessages[idx].peer != nil {
+			if !activePeersMap[imq.enqueuedMessages[idx].peer] {
+				continue
+			}
+		}
+		if imq.enqueuedMessages[idx].networkPeer != nil {
+			if !activeNetworkPeersMap[imq.enqueuedMessages[idx].networkPeer] {
+				continue
+			}
+		}
+		imq.enqueuedMessages[adjustedIdx] = imq.enqueuedMessages[idx]
+		adjustedIdx = (adjustedIdx + 1) % len(imq.enqueuedMessages)
+	}
+	imq.lastMessage = adjustedIdx
+	return true
 }
