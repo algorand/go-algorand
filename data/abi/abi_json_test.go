@@ -17,9 +17,10 @@
 package abi
 
 import (
+	"testing"
+
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestJSONtoInterfaceValid(t *testing.T) {

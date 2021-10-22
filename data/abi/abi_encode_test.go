@@ -462,14 +462,13 @@ func TestDecodeValid(t *testing.T) {
 	t.Run("static uint array decode", func(t *testing.T) {
 		staticUintArrT, err := TypeOf("uint64[8]")
 		require.NoError(t, err, "make static uint array type failure")
-		inputUint := []interface{}{1, 2, 3, 4, 5, 6, 7, 8}
 		expected := []interface{}{
 			uint64(1), uint64(2),
 			uint64(3), uint64(4),
 			uint64(5), uint64(6),
 			uint64(7), uint64(8),
 		}
-		arrayEncoded, err := staticUintArrT.Encode(inputUint)
+		arrayEncoded, err := staticUintArrT.Encode(expected)
 		require.NoError(t, err, "uint64 static array encode should not return error")
 		actual, err := staticUintArrT.Decode(arrayEncoded)
 		require.NoError(t, err, "uint64 static array decode should not return error")

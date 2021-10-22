@@ -20,9 +20,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/algorand/go-algorand/data/basics"
 	"math/big"
 	"strings"
+
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 func castBigIntToNearestPrimitive(num *big.Int, bitSize uint16) (interface{}, error) {
