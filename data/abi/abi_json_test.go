@@ -28,8 +28,8 @@ func TestJSONtoInterface(t *testing.T) {
 		expected interface{}
 	}{
 		{
-			input:   "[true, [0, 1, 2], 17]",
-			typeStr: "(bool,byte[],uint64)",
+			input:   `[true, [0, 1, 2], 17]`,
+			typeStr: `(bool,byte[],uint64)`,
 			expected: []interface{}{
 				true,
 				[]interface{}{byte(0), byte(1), byte(2)},
@@ -38,12 +38,30 @@ func TestJSONtoInterface(t *testing.T) {
 		},
 		{
 			input:   `[true, "AAEC", 17]`,
-			typeStr: "(bool,byte[],uint64)",
+			typeStr: `(bool,byte[],uint64)`,
 			expected: []interface{}{
 				true,
 				[]interface{}{byte(0), byte(1), byte(2)},
 				uint64(17),
 			},
+		},
+		{
+			input:    `"AQEEBQEE"`,
+			typeStr:  `byte[6]`,
+			expected: []interface{}{byte(1), byte(1), byte(4), byte(5), byte(1), byte(4)},
+		},
+		{
+			input:   `[[0, [true, false], "utf-8"], [18446744073709551615, [false, true], "pistachio"]]`,
+			typeStr: `(uint64,bool[2],string)[]`,
+			expected: []interface{}{
+				[]interface{}{uint64(0), []interface{}{true, false}, "utf-8"},
+				[]interface{}{^uint64(0), []interface{}{false, true}, "pistachio"},
+			},
+		},
+		{
+			input:   `[]`,
+			typeStr: `(uint64,bool[2],string)[]`,
+			expected: []interface{}{},
 		},
 		{
 			input:    "[]",
