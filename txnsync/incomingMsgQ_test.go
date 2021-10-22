@@ -16,24 +16,6 @@
 
 package txnsync
 
-import (
-/*	"errors"
-	"fmt"
-	"testing"
-	"time"
-
-	"github.com/stretchr/testify/require"
-
-	"github.com/algorand/msgp/msgp"
-
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/data/pooldata"
-	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/test/partitiontest"*/
-)
-
 func (imq *incomingMessageQueue) fillMessageQueue(msg incomingMessage) {
 	imq.enqueuedPeersMu.Lock()
 	for i := 0; i < maxPeersCount; i++ {

@@ -174,21 +174,18 @@ func TestEvaluateIncomingMessagePart1(t *testing.T) {
 	<-s.incomingMessagesQ.getIncomingMessageChannel()
 	_, found := s.incomingMessagesQ.enqueuedPeersMap[peer]
 	require.False(t, found)
-	/*
-		// fill the heap with messageOrderingHeapLimit elements so that the incomingMessages enqueue fails
-		for x := 0; x < messageOrderingHeapLimit; x++ {
-			err := peer.incomingMessages.enqueue(message)
-			require.NoError(t, err)
-		}
-		// Add a peer here, and make sure it is not cleared after the error
-		s.incomingMessagesQ.enqueue(message)
-		// TxnSyncPeer in peerInfo
-		s.evaluateIncomingMessage(message)
-		require.False(t, mNodeConnector.updatingPeers)
-		<-s.incomingMessagesQ.getIncomingMessageChannel()
-		_, found = s.incomingMessagesQ.enqueuedPeersMap[peer]
-		require.True(t, found)
-	*/
+
+	// fill the heap with messageOrderingHeapLimit elements so that the incomingMessages enqueue fails
+	message.networkPeer = &s
+	message.peer = nil
+	for x := 0; x < messageOrderingHeapLimit; x++ {
+		err := peer.incomingMessages.enqueue(message)
+		require.NoError(t, err)
+	}
+	mNodeConnector.peers = []PeerInfo{{TxnSyncPeer: peer, NetworkPeer: &s}}
+	// TxnSyncPeer in peerInfo
+	s.evaluateIncomingMessage(message)
+	require.False(t, mNodeConnector.updatingPeers)
 }
 
 func TestEvaluateIncomingMessagePart2(t *testing.T) {
