@@ -252,7 +252,7 @@ incomingMessageLoop:
 		peer.updateRequestParams(incomingMsg.message.UpdatedRequestParams.Modulator, incomingMsg.message.UpdatedRequestParams.Offset)
 		timeInQueue := time.Duration(0)
 		if incomingMsg.timeReceived > 0 {
-			timeInQueue = time.Now().Sub(time.Unix(0, incomingMsg.timeReceived))
+			timeInQueue = time.Since(time.Unix(0, incomingMsg.timeReceived))
 		}
 		peer.updateIncomingMessageTiming(incomingMsg.message.MsgSync, s.round, s.clock.Since(), timeInQueue, peer.cachedLatency, incomingMsg.encodedSize)
 
