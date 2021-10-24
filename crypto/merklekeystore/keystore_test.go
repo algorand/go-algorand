@@ -515,10 +515,10 @@ func length(s *Signer, a *require.Assertions) int {
 	p := s.keyStore
 	var count int
 	err := p.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		row := tx.QueryRow("SELECT COUNT(*) FROM BlockProofKeys")
+		row := tx.QueryRow("SELECT COUNT(*) FROM StateProofKeys")
 		err := row.Scan(&count)
 		if err != nil {
-			return fmt.Errorf("failed to count rows in table BlockProofKeys : %w", err)
+			return fmt.Errorf("failed to count rows in table StateProofKeys : %w", err)
 		}
 		return nil
 	})

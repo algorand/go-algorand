@@ -47,9 +47,9 @@ func (p *PersistentKeystore) Persist(keys []crypto.SignatureAlgorithm, firstVali
 
 		round := indexToRound(firstValid, interval, 0)
 		for i, key := range keys {
-			_, err := tx.Exec("INSERT INTO BlockProofKeys (id, round, key) VALUES (?,?,?)", i, round, protocol.Encode(&key))
+			_, err := tx.Exec("INSERT INTO StateProofKeys (id, round, key) VALUES (?,?,?)", i, round, protocol.Encode(&key))
 			if err != nil {
-				return fmt.Errorf("failed to insert blockProof key number %v round %d. SQL Error: %w", i, round, err)
+				return fmt.Errorf("failed to insert StateProof key number %v round %d. SQL Error: %w", i, round, err)
 			}
 			round += interval
 		}
@@ -67,10 +67,10 @@ func (p *PersistentKeystore) Persist(keys []crypto.SignatureAlgorithm, firstVali
 func (p *PersistentKeystore) GetKey(round uint64) (*crypto.SignatureAlgorithm, error) {
 	var keyB []byte
 	err := p.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		row := tx.QueryRow("SELECT key FROM BlockProofKeys WHERE round = ?", round)
+		row := tx.QueryRow("SELECT key FROM StateProofKeys WHERE round = ?", round)
 		err := row.Scan(&keyB)
 		if err != nil {
-			return fmt.Errorf("failed to select blockProof key for round %d : %w", round, err)
+			return fmt.Errorf("failed to select stateProof key for round %d : %w", round, err)
 		}
 
 		return nil
@@ -91,7 +91,7 @@ func (p *PersistentKeystore) GetKey(round uint64) (*crypto.SignatureAlgorithm, e
 // DropKeys deletes the keys up to the specified round (including)
 func (p *PersistentKeystore) DropKeys(round uint64) (count int64, err error) {
 	err = p.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		res, err := tx.Exec("DELETE FROM BlockProofKeys WHERE round <= ?", round)
+		res, err := tx.Exec("DELETE FROM StateProofKeys WHERE round <= ?", round)
 		if err == nil {
 			count, err = res.RowsAffected()
 		}
@@ -101,16 +101,16 @@ func (p *PersistentKeystore) DropKeys(round uint64) (count int64, err error) {
 }
 
 func keystoreInstallDatabase(tx *sql.Tx) error {
-	_, err := tx.Exec(`CREATE TABLE BlockProofKeys (
+	_, err := tx.Exec(`CREATE TABLE StateProofKeys (
     	id	  INTEGER PRIMARY KEY, 
     	round INTEGER,	    --*  committed round for this key
-		key   BLOB  --*  msgpack encoding of ParticipationAccount.BlockProof.SignatureAlgorithm
+		key   BLOB  --*  msgpack encoding of ParticipationAccount.StateProof.SignatureAlgorithm
 		);`)
 	if err != nil {
 		return err
 	}
 
-	_, err = tx.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS roundIdx ON BlockProofKeys (round);`)
+	_, err = tx.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS roundIdx ON StateProofKeys (round);`)
 	if err != nil {
 		return err
 	}
@@ -140,7 +140,7 @@ func MigrateDB(tx *sql.Tx) error {
 		if err == sql.ErrNoRows {
 			return nil
 		}
-		// In the future this should not return quietly, as blockproof keys will be required
+		// In the future this should not return quietly, as stateproof keys will be required
 		return err
 	}
 

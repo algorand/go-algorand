@@ -33,5 +33,5 @@ type OnlineAccount struct {
 	NormalizedOnlineBalance uint64
 	VoteFirstValid          basics.Round
 	VoteLastValid           basics.Round
-	BlockProofID            merklekeystore.Verifier
+	StateProofID            merklekeystore.Verifier
 }

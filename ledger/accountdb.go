@@ -690,7 +690,7 @@ func accountDataToOnline(address basics.Address, ad *basics.AccountData, proto c
 		NormalizedOnlineBalance: ad.NormalizedOnlineBalance(proto),
 		VoteFirstValid:          ad.VoteFirstValid,
 		VoteLastValid:           ad.VoteLastValid,
-		BlockProofID:            ad.BlockProofID,
+		StateProofID:            ad.StateProofID,
 	}
 }
 

@@ -284,7 +284,7 @@ func (stub *txGroupsEncodingStub) reconstructKeyregTxnFields(signedTxns []transa
 	}
 	err = stub.BitmaskKeys.iterate(int(stub.TotalTransactionsCount), len(stub.VoteKeyDilution), func(i int, index int) error {
 		signedTxns[i].Txn.VoteKeyDilution = stub.VoteKeyDilution[index]
-		signedTxns[i].Txn.BlockProofPK.HasValidRoot = stub.HasValidRoot[index]
+		signedTxns[i].Txn.StateProofPK.HasValidRoot = stub.HasValidRoot[index]
 
 		err := nextSlice(&stub.VotePK, signedTxns[i].Txn.VotePK[:], len(crypto.OneTimeSignatureVerifier{}))
 		if err != nil {
@@ -294,7 +294,7 @@ func (stub *txGroupsEncodingStub) reconstructKeyregTxnFields(signedTxns []transa
 		if err != nil {
 			return err
 		}
-		return nextSlice(&stub.CommitmentRoot, signedTxns[i].Txn.BlockProofPK.Root[:], merklekeystore.KeyStoreRootSize)
+		return nextSlice(&stub.CommitmentRoot, signedTxns[i].Txn.StateProofPK.Root[:], merklekeystore.KeyStoreRootSize)
 	})
 	if err != nil {
 		return err

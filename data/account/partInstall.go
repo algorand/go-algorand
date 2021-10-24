@@ -44,7 +44,7 @@ func partInstallDatabase(tx *sql.Tx) error {
 		lastValid INTEGER,
 
 		keyDilution INTEGER NOT NULL DEFAULT 0,
-		blockProof BLOB  --*  msgpack encoding of ParticipationAccount.BlockProof
+		stateProof BLOB  --*  msgpack encoding of ParticipationAccount.StateProof
 	);`)
 	if err != nil {
 		return err
@@ -122,7 +122,7 @@ func updateDB(tx *sql.Tx, partVersion int) (int, error) {
 	}
 
 	if partVersion == 2 {
-		_, err := tx.Exec("ALTER TABLE ParticipationAccount ADD blockProof BLOB")
+		_, err := tx.Exec("ALTER TABLE ParticipationAccount ADD stateProof BLOB")
 		if err != nil {
 			return 0, err
 		}

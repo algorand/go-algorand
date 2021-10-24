@@ -47,8 +47,8 @@ type Participation struct {
 
 	VRF    *crypto.VRFSecrets
 	Voting *crypto.OneTimeSignatureSecrets
-	// BlockProof is used to sign compact certificates. might be nil
-	BlockProof *merklekeystore.Signer
+	// StateProofSecrets is used to sign compact certificates. might be nil
+	StateProofSecrets *merklekeystore.Signer
 
 	// The first and last rounds for which this account is valid, respectively.
 	//
@@ -108,10 +108,10 @@ func (part Participation) VotingSigner() crypto.OneTimeSigner {
 	}
 }
 
-// BlockProofSigner returns the key used to sign on Compact Certificates.
+// StateProofSigner returns the key used to sign on Compact Certificates.
 // might return nil!
-func (part Participation) BlockProofSigner() *merklekeystore.Signer {
-	return part.BlockProof
+func (part Participation) StateProofSigner() *merklekeystore.Signer {
+	return part.StateProofSecrets
 }
 
 // GenerateRegistrationTransaction returns a transaction object for registering a Participation with its parent.
@@ -130,9 +130,9 @@ func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos,
 			SelectionPK: part.VRF.PK,
 		},
 	}
-	if cert := part.BlockProofSigner(); cert != nil {
-		if cparams.EnableBlockProofKeyregCheck {
-			t.KeyregTxnFields.BlockProofPK = *(cert.GetVerifier())
+	if cert := part.StateProofSigner(); cert != nil {
+		if cparams.EnableStateProofKeyregCheck {
+			t.KeyregTxnFields.StateProofPK = *(cert.GetVerifier())
 		}
 	}
 	t.KeyregTxnFields.VoteFirst = part.FirstValid
@@ -197,7 +197,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	compactCertRound := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
 
 	// Generate a new key which signs the compact certificates
-	blockProof, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), compactCertRound, crypto.DilithiumType, store)
+	stateProofSecrets, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), compactCertRound, crypto.DilithiumType, store)
 	if err != nil {
 		return PersistedParticipation{}, err
 	}
@@ -205,13 +205,13 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	// Construct the Participation containing these keys to be persisted
 	part = PersistedParticipation{
 		Participation: Participation{
-			Parent:      address,
-			VRF:         vrf,
-			Voting:      v,
-			BlockProof:  blockProof,
-			FirstValid:  firstValid,
-			LastValid:   lastValid,
-			KeyDilution: keyDilution,
+			Parent:            address,
+			VRF:               vrf,
+			Voting:            v,
+			StateProofSecrets: stateProofSecrets,
+			FirstValid:        firstValid,
+			LastValid:         lastValid,
+			KeyDilution:       keyDilution,
 		},
 		Store: store,
 	}
@@ -221,7 +221,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 		return PersistedParticipation{}, err
 	}
 
-	err = blockProof.Persist() // must be called after part.Persist() !
+	err = stateProofSecrets.Persist() // must be called after part.Persist() !
 
 	return part, err
 }
@@ -231,7 +231,7 @@ func (part PersistedParticipation) Persist() error {
 	rawVRF := protocol.Encode(part.VRF)
 	voting := part.Voting.Snapshot()
 	rawVoting := protocol.Encode(&voting)
-	rawbBlockProof := protocol.Encode(part.BlockProof)
+	rawStateProof := protocol.Encode(part.StateProofSecrets)
 
 	err := part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err := partInstallDatabase(tx)
@@ -239,8 +239,8 @@ func (part PersistedParticipation) Persist() error {
 			return fmt.Errorf("failed to install database: %w", err)
 		}
 
-		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, blockProof, firstValid, lastValid, keyDilution) VALUES (?, ?, ?, ?, ?, ?,?)",
-			part.Parent[:], rawVRF, rawVoting, rawbBlockProof, part.FirstValid, part.LastValid, part.KeyDilution)
+		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, stateProof, firstValid, lastValid, keyDilution) VALUES (?, ?, ?, ?, ?, ?,?)",
+			part.Parent[:], rawVRF, rawVoting, rawStateProof, part.FirstValid, part.LastValid, part.KeyDilution)
 		if err != nil {
 			return fmt.Errorf("failed to insert account: %w", err)
 		}
