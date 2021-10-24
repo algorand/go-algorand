@@ -164,20 +164,20 @@ func TestKeyregApply(t *testing.T) {
 		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1100))
 		require.NoError(t, err)
 
-		testBlockProofPKBeingStored(t, tx, mockBal)
+		testStateProofPKBeingStored(t, tx, mockBal)
 	}
 }
 
-func testBlockProofPKBeingStored(t *testing.T, tx transactions.Transaction, mockBal keyregTestBalances) {
+func testStateProofPKBeingStored(t *testing.T, tx transactions.Transaction, mockBal keyregTestBalances) {
 	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1100))
 	require.NoError(t, err) // expects no error with empty keyRegistration attempt
 
 	rec, err := mockBal.Get(tx.Header.Sender, false)
 	require.NoError(t, err) // expects no error with empty keyRegistration attempt
-	require.Equal(t, tx.KeyregTxnFields.BlockProofPK, rec.BlockProofID)
+	require.Equal(t, tx.KeyregTxnFields.StateProofPK, rec.StateProofID)
 }
 
-func TestBlockProofPKKeyReg(t *testing.T) {
+func TestStateProofPKKeyReg(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	secretSrc := keypair()
@@ -192,7 +192,7 @@ func TestBlockProofPKKeyReg(t *testing.T) {
 
 	acct, err := mockBal.Get(tx.Src(), false)
 	require.NoError(t, err)
-	require.Equal(t, merklekeystore.Verifier{}, acct.BlockProofID)
+	require.Equal(t, merklekeystore.Verifier{}, acct.StateProofID)
 
 	mockBal = makeMockBalances(protocol.ConsensusFuture)
 	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
@@ -200,7 +200,7 @@ func TestBlockProofPKKeyReg(t *testing.T) {
 
 	acct, err = mockBal.Get(tx.Src(), false)
 	require.NoError(t, err)
-	require.NotEqual(t, merklekeystore.Verifier{}, acct.BlockProofID)
+	require.NotEqual(t, merklekeystore.Verifier{}, acct.StateProofID)
 }
 
 func createTestTxn(t *testing.T, src basics.Address, secretParticipation *crypto.SignatureSecrets, vrfSecrets *crypto.VRFSecrets) transactions.Transaction {
@@ -210,7 +210,7 @@ func createTestTxn(t *testing.T, src basics.Address, secretParticipation *crypto
 	root, err := account.GenerateRoot(store)
 	require.NoError(t, err)
 	p, err := account.FillDBWithParticipationKeys(store, root.Address(), 0, 0, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
-	signer := p.Participation.BlockProof
+	signer := p.Participation.StateProofSecrets
 
 	return transactions.Transaction{
 		Type: protocol.KeyRegistrationTx,
@@ -223,7 +223,7 @@ func createTestTxn(t *testing.T, src basics.Address, secretParticipation *crypto
 		KeyregTxnFields: transactions.KeyregTxnFields{
 			VotePK:       crypto.OneTimeSignatureVerifier(secretParticipation.SignatureVerifier),
 			SelectionPK:  vrfSecrets.PK,
-			BlockProofPK: *signer.GetVerifier(),
+			StateProofPK: *signer.GetVerifier(),
 			VoteFirst:    0,
 			VoteLast:     100,
 		},

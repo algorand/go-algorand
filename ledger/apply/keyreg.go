@@ -76,8 +76,8 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		record.VoteFirstValid = keyreg.VoteFirst
 		record.VoteLastValid = keyreg.VoteLast
 		record.VoteKeyDilution = keyreg.VoteKeyDilution
-		if balances.ConsensusParams().EnableBlockProofKeyregCheck {
-			record.BlockProofID = keyreg.BlockProofPK
+		if balances.ConsensusParams().EnableStateProofKeyregCheck {
+			record.StateProofID = keyreg.StateProofPK
 		}
 	}
 

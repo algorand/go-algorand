@@ -267,10 +267,10 @@ var errKeyregTxnUnsupportedSwitchToNonParticipating = errors.New("transaction tr
 var errKeyregTxnGoingOnlineWithNonParticipating = errors.New("transaction tries to register keys to go online, but nonparticipatory flag is set")
 var errKeyregTxnGoingOnlineWithZeroVoteLast = errors.New("transaction tries to register keys to go online, but vote last is set to zero")
 var errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid = errors.New("transaction tries to register keys to go online, but first voting round is beyond the round after last valid round")
-var errKeyRegEmptyBlockProofPK = errors.New("online keyreg transaction cannot have empty field BlockProofPK")
-var errKeyregTxnNotEmptyBLockProofPK = errors.New("transaction field BlockProofPK should be empty in this consensus version")
-var errKeyregTxnNonParticipantShouldBeEmptyBlockProofPK = errors.New("non participation keyreg transactions should contain empty blockProofPK")
-var errKeyregTxnOfflineShouldBeEmptyBlockProofPK = errors.New("offline keyreg transactions should contain empty blockProofPK")
+var errKeyRegEmptyStateProofPK = errors.New("online keyreg transaction cannot have empty field StateProofPK")
+var errKeyregTxnNotEmptyStateProofPK = errors.New("transaction field StateProofPK should be empty in this consensus version")
+var errKeyregTxnNonParticipantShouldBeEmptyStateProofPK = errors.New("non participation keyreg transactions should contain empty stateProofPK")
+var errKeyregTxnOfflineShouldBeEmptyStateProofPK = errors.New("offline keyreg transactions should contain empty stateProofPK")
 
 // WellFormed checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger). It does not check signatures.
 func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusParams) error {
@@ -327,7 +327,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 		}
 
-		if err := tx.blockProofPKWellFormed(proto); err != nil {
+		if err := tx.stateProofPKWellFormed(proto); err != nil {
 			return err
 		}
 
@@ -560,35 +560,35 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	return nil
 }
 
-func (tx Transaction) blockProofPKWellFormed(proto config.ConsensusParams) error {
-	isEmptyBlock := tx.KeyregTxnFields.BlockProofPK == merklekeystore.Verifier{}
-	if !proto.EnableBlockProofKeyregCheck {
+func (tx Transaction) stateProofPKWellFormed(proto config.ConsensusParams) error {
+	isEmptyBlock := tx.KeyregTxnFields.StateProofPK == merklekeystore.Verifier{}
+	if !proto.EnableStateProofKeyregCheck {
 		// make certain empty key is stored.
 		if !isEmptyBlock {
-			return errKeyregTxnNotEmptyBLockProofPK
+			return errKeyregTxnNotEmptyStateProofPK
 		}
 		return nil
 	}
 
 	if tx.Nonparticipation {
-		// make certain that set offline request clears the blockProofPK.
+		// make certain that set offline request clears the stateProofPK.
 		if !isEmptyBlock {
-			return errKeyregTxnNonParticipantShouldBeEmptyBlockProofPK
+			return errKeyregTxnNonParticipantShouldBeEmptyStateProofPK
 		}
 		return nil
 	}
 
 	if tx.VotePK == (crypto.OneTimeSignatureVerifier{}) || tx.SelectionPK == (crypto.VRFVerifier{}) {
 		if !isEmptyBlock {
-			return errKeyregTxnOfflineShouldBeEmptyBlockProofPK
+			return errKeyregTxnOfflineShouldBeEmptyStateProofPK
 		}
 		return nil
 	}
 
 	// online transactions:
-	// setting online cannot set an empty blockProofPK
+	// setting online cannot set an empty stateProofPK
 	if isEmptyBlock {
-		return errKeyRegEmptyBlockProofPK
+		return errKeyRegEmptyStateProofPK
 	}
 
 	return nil
