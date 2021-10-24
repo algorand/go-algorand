@@ -834,6 +834,11 @@ func categorySelfRoundTripTest(t *testing.T, category []testUnit) {
 		actual, err := abiType.Decode(encodedValue)
 		require.NoError(t, err, "failure to decode value")
 		require.Equal(t, testObj.value, actual, "decoded value not equal to expected")
+		jsonEncodedValue, err := abiType.MarshalToJSON(testObj.value)
+		require.NoError(t, err, "failure to encode value to JSON type")
+		jsonActual, err := abiType.UnmarshalFromJSON(jsonEncodedValue)
+		require.NoError(t, err, "failure to decode JSON value back")
+		require.Equal(t, testObj.value, jsonActual, "decode JSON value not equal to expected")
 	}
 }
 
@@ -855,18 +860,8 @@ func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
 			randVal, err := rand.Int(rand.Reader, max)
 			require.NoError(t, err, "generate random uint, should be no error")
 
-			var narrowest interface{}
-			if bitSize <= 64 && bitSize > 32 {
-				narrowest = randVal.Uint64()
-			} else if bitSize <= 32 && bitSize > 16 {
-				narrowest = uint32(randVal.Uint64())
-			} else if bitSize == 16 {
-				narrowest = uint16(randVal.Uint64())
-			} else if bitSize == 8 {
-				narrowest = uint8(randVal.Uint64())
-			} else {
-				narrowest = randVal
-			}
+			narrowest, err := castBigIntToNearestPrimitive(randVal, uint16(bitSize))
+			require.NoError(t, err, "cast random uint to nearest primitive failure")
 
 			(*pool)[Uint][uintIndex] = testUnit{serializedType: uintTstr, value: narrowest}
 			uintIndex++
@@ -876,18 +871,8 @@ func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
 			randVal, err := rand.Int(rand.Reader, max)
 			require.NoError(t, err, "generate random ufixed, should be no error")
 
-			var narrowest interface{}
-			if bitSize <= 64 && bitSize > 32 {
-				narrowest = randVal.Uint64()
-			} else if bitSize <= 32 && bitSize > 16 {
-				narrowest = uint32(randVal.Uint64())
-			} else if bitSize == 16 {
-				narrowest = uint16(randVal.Uint64())
-			} else if bitSize == 8 {
-				narrowest = uint8(randVal.Uint64())
-			} else {
-				narrowest = randVal
-			}
+			narrowest, err := castBigIntToNearestPrimitive(randVal, uint16(bitSize))
+			require.NoError(t, err, "cast random uint to nearest primitive failure")
 
 			ufixedT, err := makeUfixedType(bitSize, precision)
 			require.NoError(t, err, "make ufixed type failure")

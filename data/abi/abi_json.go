@@ -47,6 +47,85 @@ func castBigIntToNearestPrimitive(num *big.Int, bitSize uint16) (interface{}, er
 	}
 }
 
+// MarshalToJSON convert golang value to JSON format from ABI type
+func (t Type) MarshalToJSON(value interface{}) ([]byte, error) {
+	switch t.abiTypeID {
+	case Uint:
+		bytesUint, err := encodeInt(value, t.bitSize)
+		if err != nil {
+			return nil, err
+		}
+		return new(big.Int).SetBytes(bytesUint).MarshalJSON()
+	case Ufixed:
+		denom := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(t.precision)), nil)
+		encodedUint, err := encodeInt(value, t.bitSize)
+		if err != nil {
+			return nil, err
+		}
+		return []byte(new(big.Rat).SetFrac(new(big.Int).SetBytes(encodedUint), denom).FloatString(int(t.precision))), nil
+	case Bool:
+		boolValue, ok := value.(bool)
+		if !ok {
+			return nil, fmt.Errorf("cannot infer to bool for marshal to JSON")
+		}
+		return json.Marshal(boolValue)
+	case Byte:
+		byteValue, ok := value.(byte)
+		if !ok {
+			return nil, fmt.Errorf("cannot infer to byte for marshal to JSON")
+		}
+		return json.Marshal(byteValue)
+	case Address:
+		switch valueCasted := value.(type) {
+		case []byte:
+			var valueCasted32 [32]byte
+			copy(valueCasted32[:], valueCasted[:])
+			return json.Marshal(basics.Address(valueCasted32).String())
+		case [32]byte:
+			return json.Marshal(basics.Address(valueCasted).String())
+		default:
+			return nil, fmt.Errorf("cannot infer to byte slice/array for marshal to JSON")
+		}
+	case ArrayStatic, ArrayDynamic:
+		values, err := inferToSlice(value)
+		if err != nil {
+			return nil, err
+		}
+		rawMsgSlice := make([]json.RawMessage, len(values))
+		for i := 0; i < len(values); i++ {
+			rawMsgSlice[i], err = t.childTypes[0].MarshalToJSON(values[i])
+			if err != nil {
+				return nil, err
+			}
+		}
+		return json.Marshal(rawMsgSlice)
+	case String:
+		stringVal, ok := value.(string)
+		if !ok {
+			return nil, fmt.Errorf("cannot infer to string for marshal to JSON")
+		}
+		return json.Marshal(stringVal)
+	case Tuple:
+		values, err := inferToSlice(value)
+		if err != nil {
+			return nil, err
+		}
+		if len(values) != int(t.staticLength) {
+			return nil, fmt.Errorf("tuple element number != value slice length")
+		}
+		rawMsgSlice := make([]json.RawMessage, len(values))
+		for i := 0; i < len(values); i++ {
+			rawMsgSlice[i], err = t.childTypes[i].MarshalToJSON(values[i])
+			if err != nil {
+				return nil, err
+			}
+		}
+		return json.Marshal(rawMsgSlice)
+	default:
+		return nil, fmt.Errorf("cannot infer ABI type for marshalling value to JSON")
+	}
+}
+
 // UnmarshalFromJSON convert bytes to golang value following ABI type and encoding rules
 func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 	switch t.abiTypeID {
@@ -57,17 +136,13 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 		}
 		return castBigIntToNearestPrimitive(num, t.bitSize)
 	case Ufixed:
-		floatTemp := new(big.Float)
+		floatTemp := new(big.Rat)
 		if err := floatTemp.UnmarshalText(jsonEncoded); err != nil {
 			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to ufixed: %v", string(jsonEncoded), err)
 		}
-		ratTemp, accuracy := floatTemp.Rat(nil)
-		if ratTemp == nil || accuracy != big.Exact {
-			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to big Rat", string(jsonEncoded))
-		}
 		denom := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(t.precision)), nil)
 		denomRat := new(big.Rat).SetInt(denom)
-		numeratorRat := new(big.Rat).Mul(denomRat, ratTemp)
+		numeratorRat := new(big.Rat).Mul(denomRat, floatTemp)
 		if !numeratorRat.IsInt() {
 			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to ufixed: precision out of range", string(jsonEncoded))
 		}
@@ -85,11 +160,15 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 		}
 		return elem, nil
 	case Address:
-		addr, err := basics.UnmarshalChecksumAddress(string(jsonEncoded))
+		var addrStr string
+		if err := json.Unmarshal(jsonEncoded, &addrStr); err != nil {
+			return nil, fmt.Errorf("cannot cast JSON encoded to bytes: %v", err)
+		}
+		addr, err := basics.UnmarshalChecksumAddress(addrStr)
 		if err != nil {
 			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to address: %v", string(jsonEncoded), err)
 		}
-		return addr, nil
+		return addr[:], nil
 	case ArrayStatic, ArrayDynamic:
 		stringEncoded := string(jsonEncoded)
 		if t.childTypes[0].abiTypeID == Byte && strings.HasPrefix(stringEncoded, `"`) {
