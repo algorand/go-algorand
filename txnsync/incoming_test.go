@@ -102,11 +102,10 @@ func TestAsyncIncomingMessageHandlerAndErrors(t *testing.T) {
 	mNodeConnector.peers = append(mNodeConnector.peers, PeerInfo{NetworkPeer: &s.incomingMessagesQ})
 	err = s.asyncIncomingMessageHandler(nil, nil, messageBytes, sequenceNumber)
 	require.Equal(t, errTransactionSyncIncomingMessageQueueFull, err)
+	s.incomingMessagesQ.shutdown()
 
 	// Success where peer == nil
-	s.incomingMessagesQ.enqueuedPeersMu.Lock()
-	s.incomingMessagesQ.firstMessage = 0
-	s.incomingMessagesQ.enqueuedPeersMu.Unlock()
+	s.incomingMessagesQ = makeIncomingMessageQueue()
 	err = s.asyncIncomingMessageHandler(nil, nil, messageBytes, sequenceNumber)
 	require.NoError(t, err)
 	s.incomingMessagesQ.shutdown()

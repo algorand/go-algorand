@@ -23,10 +23,10 @@ import (
 func (imq *incomingMessageQueue) fillMessageQueue(msg incomingMessage) {
 	imq.enqueuedPeersMu.Lock()
 	for i := 0; i < maxPeersCount; i++ {
-		imq.enqueuedMessages[i] = msg
+		msgEntry := imq.freelist.dequeueHead()
+		msgEntry.msg = msg
+		imq.messages.enqueueTail(msgEntry)
 	}
-	imq.firstMessage = 1
-	imq.lastMessage = 0
 	imq.enqueuedPeersCond.Signal()
 	imq.enqueuedPeersMu.Unlock()
 
