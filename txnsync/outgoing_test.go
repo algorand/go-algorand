@@ -289,14 +289,14 @@ func TestAssemblePeerMessage_messageConstBloomFilter(t *testing.T) {
 	peer.isOutgoing = true
 	peer.state = peerStateLateBloom
 
-	metaMessage, _ := s.assemblePeerMessage(&peer, &pendingTransactions)
+	metaMessage, _, responseTime := s.assemblePeerMessage(&peer, &pendingTransactions)
 
 	a.Equal(metaMessage.message.UpdatedRequestParams.Modulator, byte(222))
 	a.Equal(metaMessage.message.UpdatedRequestParams.Offset, byte(111))
 	a.Equal(metaMessage.peer, &peer)
 	a.Equal(metaMessage.message.Version, int32(txnBlockMessageVersion))
 	a.Equal(metaMessage.message.Round, s.round)
-	a.True(metaMessage.message.MsgSync.ResponseElapsedTime != 0)
+	a.True(responseTime >= 0)
 	a.Equal(s.lastBloomFilter, expectedFilter)
 }
 
@@ -332,14 +332,14 @@ func TestAssemblePeerMessage_messageConstBloomFilterNonRelay(t *testing.T) {
 	peer.isOutgoing = true
 	peer.state = peerStateLateBloom
 
-	metaMessage, _ := s.assemblePeerMessage(&peer, &pendingTransactions)
+	metaMessage, _, responseTime := s.assemblePeerMessage(&peer, &pendingTransactions)
 
 	a.Equal(metaMessage.message.UpdatedRequestParams.Modulator, byte(222))
 	a.Equal(metaMessage.message.UpdatedRequestParams.Offset, byte(111))
 	a.Equal(metaMessage.peer, &peer)
 	a.Equal(metaMessage.message.Version, int32(txnBlockMessageVersion))
 	a.Equal(metaMessage.message.Round, s.round)
-	a.True(metaMessage.message.MsgSync.ResponseElapsedTime != 0)
+	a.True(responseTime >= 0)
 	a.NotEqual(s.lastBloomFilter, expectedFilter)
 }
 
@@ -364,14 +364,14 @@ func TestAssemblePeerMessage_messageConstNextMinDelay_messageConstUpdateRequestP
 	s.isRelay = true
 	s.lastBeta = 123 * time.Nanosecond
 
-	metaMessage, _ := s.assemblePeerMessage(&peer, &pendingTransactions)
+	metaMessage, _, responseTime := s.assemblePeerMessage(&peer, &pendingTransactions)
 
 	a.Equal(metaMessage.message.UpdatedRequestParams.Modulator, byte(222))
 	a.Equal(metaMessage.message.UpdatedRequestParams.Offset, byte(111))
 	a.Equal(metaMessage.peer, &peer)
 	a.Equal(metaMessage.message.Version, int32(txnBlockMessageVersion))
 	a.Equal(metaMessage.message.Round, s.round)
-	a.True(metaMessage.message.MsgSync.ResponseElapsedTime != 0)
+	a.True(responseTime >= 0)
 	a.Equal(metaMessage.message.MsgSync.NextMsgMinDelay, uint64(s.lastBeta.Nanoseconds())*2)
 
 }
@@ -408,7 +408,7 @@ func TestAssemblePeerMessage_messageConstTransactions(t *testing.T) {
 	peer.isOutgoing = true
 	peer.state = peerStateHoldsoff
 
-	metaMessage, _ := s.assemblePeerMessage(&peer, &pendingTransactions)
+	metaMessage, _, _ := s.assemblePeerMessage(&peer, &pendingTransactions)
 
 	a.Equal(len(metaMessage.transactionGroups), 1)
 	a.True(reflect.DeepEqual(metaMessage.transactionGroups[0], pendingTransactions.pendingTransactionsGroups[0]))

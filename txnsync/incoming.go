@@ -38,11 +38,12 @@ type incomingMessage struct {
 	encodedSize       int // the byte length of the incoming network message
 	bloomFilter       *testableBloomFilter
 	transactionGroups []pooldata.SignedTxGroup
+	timeReceived      int64
 }
 
 // incomingMessageHandler
 // note - this message is called by the network go-routine dispatch pool, and is not synchronized with the rest of the transaction synchronizer
-func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *Peer, message []byte, sequenceNumber uint64) (err error) {
+func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *Peer, message []byte, sequenceNumber uint64, receivedTimestamp int64) (err error) {
 	// increase number of incoming messages metric.
 	txsyncIncomingMessagesTotal.Inc(nil)
 
@@ -54,7 +55,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 		}
 	}()
 
-	incomingMessage := incomingMessage{networkPeer: networkPeer, sequenceNumber: sequenceNumber, encodedSize: len(message), peer: peer}
+	incomingMessage := incomingMessage{networkPeer: networkPeer, sequenceNumber: sequenceNumber, encodedSize: len(message), peer: peer, timeReceived: receivedTimestamp}
 	_, err = incomingMessage.message.UnmarshalMsg(message)
 	if err != nil {
 		// if we received a message that we cannot parse, disconnect.
@@ -154,7 +155,7 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 		}
 		if peerInfo.TxnSyncPeer == nil {
 			// we couldn't really do much about this message previously, since we didn't have the peer.
-			peer = makePeer(message.networkPeer, peerInfo.IsOutgoing, s.isRelay, &s.config, s.log)
+			peer = makePeer(message.networkPeer, peerInfo.IsOutgoing, s.isRelay, &s.config, s.log, s.node.GetPeerLatency(message.networkPeer))
 			// let the network peer object know about our peer
 			s.node.UpdatePeers([]*Peer{peer}, []interface{}{message.networkPeer}, 0)
 		} else {
@@ -207,7 +208,11 @@ incomingMessageLoop:
 		}
 
 		peer.updateRequestParams(incomingMsg.message.UpdatedRequestParams.Modulator, incomingMsg.message.UpdatedRequestParams.Offset)
-		peer.updateIncomingMessageTiming(incomingMsg.message.MsgSync, s.round, s.clock.Since(), incomingMsg.encodedSize)
+		timeInQueue := time.Duration(0)
+		if incomingMsg.timeReceived > 0 {
+			timeInQueue = time.Since(time.Unix(0, incomingMsg.timeReceived))
+		}
+		peer.updateIncomingMessageTiming(incomingMsg.message.MsgSync, s.round, s.clock.Since(), timeInQueue, peer.cachedLatency, incomingMsg.encodedSize)
 
 		// if the peer's round is more than a single round behind the local node, then we don't want to
 		// try and load the transactions. The other peer should first catch up before getting transactions.
