@@ -91,6 +91,17 @@ func (t Type) MarshalToJSON(value interface{}) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+		if t.childTypes[0].abiTypeID == Byte {
+			bytes := make([]byte, len(values))
+			for i := 0; i < len(values); i++ {
+				tempByte, ok := values[i].(byte)
+				if !ok {
+					return nil, fmt.Errorf("cannot infer byte element from slice")
+				}
+				bytes[i] = tempByte
+			}
+			return json.Marshal(bytes)
+		}
 		rawMsgSlice := make([]json.RawMessage, len(values))
 		for i := 0; i < len(values); i++ {
 			rawMsgSlice[i], err = t.childTypes[0].MarshalToJSON(values[i])
