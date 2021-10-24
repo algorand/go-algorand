@@ -45,12 +45,17 @@ type incomingMessageQueue struct {
 	shutdownRequest   chan struct{}
 	shutdownConfirmed chan struct{}
 	deletePeersCh     chan interface{}
+	peerlessCount     int
 }
 
 // maxPeersCount defines the maximum number of supported peers that can have their messages waiting
 // in the incoming message queue at the same time. This number can be lower then the actual number of
 // connected peers, as it's used only for pending messages.
-const maxPeersCount = 1024
+const maxPeersCount = 2048
+
+// maxPeerlessCount is the number of messages that we've received that doesn't have a Peer object allocated
+// for them ( yet )
+const maxPeerlessCount = 512
 
 // makeIncomingMessageQueue creates an incomingMessageQueue object and initializes all the internal variables.
 func makeIncomingMessageQueue() *incomingMessageQueue {
@@ -67,13 +72,14 @@ func makeIncomingMessageQueue() *incomingMessageQueue {
 	return imq
 }
 
+// dequeueHead removes the first head message from the linked list.
 func (ml *queuedMsgList) dequeueHead() (out *queuedMsgEntry) {
 	if ml.head == nil {
 		return nil
 	}
 	entry := ml.head
 	out = entry
-	if entry.next == entry.next {
+	if entry.next == entry {
 		ml.head = nil
 		return
 	}
@@ -85,36 +91,47 @@ func (ml *queuedMsgList) dequeueHead() (out *queuedMsgEntry) {
 	return
 }
 
+// dequeueHead initialize a list to have msgCount entries.
 func (ml *queuedMsgList) initialize(msgCount int) {
 	msgs := make([]queuedMsgEntry, msgCount)
 	for i := 0; i < msgCount; i++ {
-		msgs[i].next = &msgs[(i+1)%maxPeersCount]
-		msgs[i].prev = &msgs[(i+maxPeersCount-1)%maxPeersCount]
+		msgs[i].next = &msgs[(i+1)%msgCount]
+		msgs[i].prev = &msgs[(i+msgCount-1)%msgCount]
 	}
 	ml.head = &msgs[0]
 }
 
+// empty methods tests to see if the linked list is empty
 func (ml *queuedMsgList) empty() bool {
 	return ml.head == nil
 }
 
+// remove removes the given msg from the linked list. The method
+// is written with the assumption that the given msg is known to be
+// part of the linked list.
 func (ml *queuedMsgList) remove(msg *queuedMsgEntry) {
-	if msg.next == msg.next {
+	if msg.next == msg {
 		ml.head = nil
 		return
 	}
 	msg.prev.next = msg.next
 	msg.next.prev = msg.prev
+	if ml.head == msg {
+		ml.head = msg.next
+	}
 	msg.prev = msg
 	msg.next = msg
 	return
 }
 
+// filterRemove removes zero or more messages from the linked list, for which the given
+// removeFunc returns true. The removed linked list entries are returned as a linked list.
 func (ml *queuedMsgList) filterRemove(removeFunc func(*queuedMsgEntry) bool) *queuedMsgEntry {
 	if ml.empty() {
 		return nil
 	}
-	if ml.head.next == ml.head.prev {
+	// do we have a single item ?
+	if ml.head.next == ml.head {
 		if removeFunc(ml.head) {
 			out := ml.head
 			ml.head = nil
@@ -123,17 +140,15 @@ func (ml *queuedMsgList) filterRemove(removeFunc func(*queuedMsgEntry) bool) *qu
 		return nil
 	}
 	current := ml.head
+	last := ml.head.prev
 	var letGo queuedMsgList
-	for current != nil {
+	for {
 		next := current.next
-		if next == current {
-			next = nil
-		}
 		if removeFunc(current) {
 			ml.remove(current)
 			letGo.enqueueTail(current)
 		}
-		if next == ml.head {
+		if current == last {
 			break
 		}
 		current = next
@@ -141,6 +156,7 @@ func (ml *queuedMsgList) filterRemove(removeFunc func(*queuedMsgEntry) bool) *qu
 	return letGo.head
 }
 
+// enqueueTail adds to the current linked list another linked list whose head is msg.
 func (ml *queuedMsgList) enqueueTail(msg *queuedMsgEntry) {
 	if ml.head == nil {
 		ml.head = msg
@@ -156,6 +172,8 @@ func (ml *queuedMsgList) enqueueTail(msg *queuedMsgEntry) {
 	lastEntryNew.next = ml.head
 }
 
+// shutdown signals to the message pump to shut down and waits until the message pump goroutine
+// aborts.
 func (imq *incomingMessageQueue) shutdown() {
 	imq.enqueuedPeersMu.Lock()
 	close(imq.shutdownRequest)
@@ -164,6 +182,8 @@ func (imq *incomingMessageQueue) shutdown() {
 	<-imq.shutdownConfirmed
 }
 
+// messagePump is the incoming message queue message pump. It takes messages from the messages list
+// and attempt to write these to the outboundPeerCh.
 func (imq *incomingMessageQueue) messagePump() {
 	defer close(imq.shutdownConfirmed)
 	imq.enqueuedPeersMu.Lock()
@@ -184,8 +204,9 @@ func (imq *incomingMessageQueue) messagePump() {
 			imq.freelist.enqueueTail(msgEntry)
 			if msg.peer != nil {
 				delete(imq.enqueuedPeersMap, msg.peer)
+			} else {
+				imq.peerlessCount--
 			}
-
 			imq.enqueuedPeersMu.Unlock()
 		writeOutboundMessage:
 			select {
@@ -227,6 +248,11 @@ func (imq *incomingMessageQueue) enqueue(m incomingMessage) bool {
 		if _, has := imq.enqueuedPeersMap[m.peer]; has {
 			return true
 		}
+	} else {
+		// do we have enough "room" for peerless messages ?
+		if imq.peerlessCount >= maxPeerlessCount {
+			return false
+		}
 	}
 	// do we have enough room in the message queue for the new message ?
 	if imq.freelist.empty() {
@@ -239,6 +265,8 @@ func (imq *incomingMessageQueue) enqueue(m incomingMessage) bool {
 	// if we successfully enqueued the message, set the enqueuedPeersMap so that we won't enqueue the same peer twice.
 	if m.peer != nil {
 		imq.enqueuedPeersMap[m.peer] = freeMsgEntry
+	} else {
+		imq.peerlessCount++
 	}
 	imq.enqueuedPeersCond.Signal()
 	return true
@@ -292,11 +320,19 @@ func (imq *incomingMessageQueue) erase(peer *Peer, networkPeer interface{}) {
 // queue.
 // note : the method expect that the enqueuedPeersMu lock would be taken.
 func (imq *incomingMessageQueue) removeMessageByNetworkPeer(networkPeer interface{}) {
+	peerlessCount := 0
 	removeByNetworkPeer := func(msg *queuedMsgEntry) bool {
-		return msg.msg.networkPeer == networkPeer
+		if msg.msg.networkPeer == networkPeer {
+			if msg.msg.peer == nil {
+				peerlessCount++
+			}
+			return true
+		}
+		return false
 	}
 	removeList := imq.messages.filterRemove(removeByNetworkPeer)
 	imq.freelist.enqueueTail(removeList)
+	imq.peerlessCount -= peerlessCount
 }
 
 // prunePeers removes from the enqueuedMessages queue all the entries that are not provided in the
@@ -314,7 +350,7 @@ func (imq *incomingMessageQueue) prunePeers(activePeers []PeerInfo) (peerRemoved
 	}
 	imq.enqueuedPeersMu.Lock()
 	defer imq.enqueuedPeersMu.Unlock()
-
+	peerlessCount := 0
 	isPeerMissing := func(msg *queuedMsgEntry) bool {
 		if msg.msg.peer != nil {
 			if !activePeersMap[msg.msg.peer] {
@@ -322,6 +358,9 @@ func (imq *incomingMessageQueue) prunePeers(activePeers []PeerInfo) (peerRemoved
 			}
 		}
 		if !activeNetworkPeersMap[msg.msg.networkPeer] {
+			if msg.msg.peer == nil {
+				peerlessCount++
+			}
 			return true
 		}
 		return false
@@ -329,5 +368,6 @@ func (imq *incomingMessageQueue) prunePeers(activePeers []PeerInfo) (peerRemoved
 	removeList := imq.messages.filterRemove(isPeerMissing)
 	peerRemoved = removeList != nil
 	imq.freelist.enqueueTail(removeList)
+	imq.peerlessCount -= peerlessCount
 	return
 }
