@@ -6,7 +6,7 @@ import (
 	_ "runtime/cgo"
 	_ "unsafe"
 
-	cdilithium "github.com/algorand/dilithium/ref"
+	cparalithium "github.com/algoidan/paralithium/ref"
 	"github.com/algorand/msgp/msgp"
 )
 
@@ -27,22 +27,6 @@ import (
 //       |-----> Msgsize
 //       |-----> MsgIsZero
 //
-// DPublicKey
-//      |-----> (*) MarshalMsg
-//      |-----> (*) CanMarshalMsg
-//      |-----> (*) UnmarshalMsg
-//      |-----> (*) CanUnmarshalMsg
-//      |-----> (*) Msgsize
-//      |-----> (*) MsgIsZero
-//
-// DSecretKey
-//      |-----> (*) MarshalMsg
-//      |-----> (*) CanMarshalMsg
-//      |-----> (*) UnmarshalMsg
-//      |-----> (*) CanUnmarshalMsg
-//      |-----> (*) Msgsize
-//      |-----> (*) MsgIsZero
-//
 // Digest
 //    |-----> (*) MarshalMsg
 //    |-----> (*) CanMarshalMsg
@@ -50,46 +34,6 @@ import (
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
-//
-// DilithiumPrivateKey
-//          |-----> MarshalMsg
-//          |-----> CanMarshalMsg
-//          |-----> (*) UnmarshalMsg
-//          |-----> (*) CanUnmarshalMsg
-//          |-----> Msgsize
-//          |-----> MsgIsZero
-//
-// DilithiumPublicKey
-//          |-----> MarshalMsg
-//          |-----> CanMarshalMsg
-//          |-----> (*) UnmarshalMsg
-//          |-----> (*) CanUnmarshalMsg
-//          |-----> Msgsize
-//          |-----> MsgIsZero
-//
-// DilithiumSignature
-//          |-----> MarshalMsg
-//          |-----> CanMarshalMsg
-//          |-----> (*) UnmarshalMsg
-//          |-----> (*) CanUnmarshalMsg
-//          |-----> Msgsize
-//          |-----> MsgIsZero
-//
-// DilithiumSigner
-//        |-----> (*) MarshalMsg
-//        |-----> (*) CanMarshalMsg
-//        |-----> (*) UnmarshalMsg
-//        |-----> (*) CanUnmarshalMsg
-//        |-----> (*) Msgsize
-//        |-----> (*) MsgIsZero
-//
-// DilithiumVerifier
-//         |-----> (*) MarshalMsg
-//         |-----> (*) CanMarshalMsg
-//         |-----> (*) UnmarshalMsg
-//         |-----> (*) CanUnmarshalMsg
-//         |-----> (*) Msgsize
-//         |-----> (*) MsgIsZero
 //
 // Ed25519Key
 //      |-----> (*) MarshalMsg
@@ -203,6 +147,22 @@ import (
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
 //
+// PPublicKey
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
+//
+// PSecretKey
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
+//
 // PackedSignatureAlgorithm
 //             |-----> (*) MarshalMsg
 //             |-----> (*) CanMarshalMsg
@@ -212,6 +172,46 @@ import (
 //             |-----> (*) MsgIsZero
 //
 // PackedVerifyingKey
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
+//
+// ParalithiumPrivateKey
+//           |-----> MarshalMsg
+//           |-----> CanMarshalMsg
+//           |-----> (*) UnmarshalMsg
+//           |-----> (*) CanUnmarshalMsg
+//           |-----> Msgsize
+//           |-----> MsgIsZero
+//
+// ParalithiumPublicKey
+//           |-----> MarshalMsg
+//           |-----> CanMarshalMsg
+//           |-----> (*) UnmarshalMsg
+//           |-----> (*) CanUnmarshalMsg
+//           |-----> Msgsize
+//           |-----> MsgIsZero
+//
+// ParalithiumSignature
+//           |-----> MarshalMsg
+//           |-----> CanMarshalMsg
+//           |-----> (*) UnmarshalMsg
+//           |-----> (*) CanUnmarshalMsg
+//           |-----> Msgsize
+//           |-----> MsgIsZero
+//
+// ParalithiumSigner
+//         |-----> (*) MarshalMsg
+//         |-----> (*) CanMarshalMsg
+//         |-----> (*) UnmarshalMsg
+//         |-----> (*) CanUnmarshalMsg
+//         |-----> (*) Msgsize
+//         |-----> (*) MsgIsZero
+//
+// ParalithiumVerifier
 //          |-----> (*) MarshalMsg
 //          |-----> (*) CanMarshalMsg
 //          |-----> (*) UnmarshalMsg
@@ -449,84 +449,6 @@ func (z ByteSignature) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *DPublicKey) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (*z)[:])
-	return
-}
-
-func (_ *DPublicKey) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*DPublicKey)
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *DPublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	o = bts
-	return
-}
-
-func (_ *DPublicKey) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*DPublicKey)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *DPublicKey) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (cdilithium.PublicKeySize * (msgp.ByteSize))
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *DPublicKey) MsgIsZero() bool {
-	return (*z) == (DPublicKey{})
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *DSecretKey) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (*z)[:])
-	return
-}
-
-func (_ *DSecretKey) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*DSecretKey)
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *DSecretKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	o = bts
-	return
-}
-
-func (_ *DSecretKey) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*DSecretKey)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *DSecretKey) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (cdilithium.PrivateKeySize * (msgp.ByteSize))
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *DSecretKey) MsgIsZero() bool {
-	return (*z) == (DSecretKey{})
-}
-
-// MarshalMsg implements msgp.Marshaler
 func (z *Digest) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
@@ -563,379 +485,6 @@ func (z *Digest) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Digest) MsgIsZero() bool {
 	return (*z) == (Digest{})
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z DilithiumPrivateKey) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, []byte(z))
-	return
-}
-
-func (_ DilithiumPrivateKey) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(DilithiumPrivateKey)
-	if !ok {
-		_, ok = (z).(*DilithiumPrivateKey)
-	}
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *DilithiumPrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 []byte
-		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = DilithiumPrivateKey(zb0001)
-	}
-	o = bts
-	return
-}
-
-func (_ *DilithiumPrivateKey) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*DilithiumPrivateKey)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z DilithiumPrivateKey) Msgsize() (s int) {
-	s = msgp.BytesPrefixSize + len([]byte(z))
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z DilithiumPrivateKey) MsgIsZero() bool {
-	return len(z) == 0
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z DilithiumPublicKey) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, []byte(z))
-	return
-}
-
-func (_ DilithiumPublicKey) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(DilithiumPublicKey)
-	if !ok {
-		_, ok = (z).(*DilithiumPublicKey)
-	}
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *DilithiumPublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 []byte
-		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = DilithiumPublicKey(zb0001)
-	}
-	o = bts
-	return
-}
-
-func (_ *DilithiumPublicKey) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*DilithiumPublicKey)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z DilithiumPublicKey) Msgsize() (s int) {
-	s = msgp.BytesPrefixSize + len([]byte(z))
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z DilithiumPublicKey) MsgIsZero() bool {
-	return len(z) == 0
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z DilithiumSignature) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, []byte(z))
-	return
-}
-
-func (_ DilithiumSignature) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(DilithiumSignature)
-	if !ok {
-		_, ok = (z).(*DilithiumSignature)
-	}
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *DilithiumSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 []byte
-		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = DilithiumSignature(zb0001)
-	}
-	o = bts
-	return
-}
-
-func (_ *DilithiumSignature) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*DilithiumSignature)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z DilithiumSignature) Msgsize() (s int) {
-	s = msgp.BytesPrefixSize + len([]byte(z))
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z DilithiumSignature) MsgIsZero() bool {
-	return len(z) == 0
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *DilithiumSigner) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	// omitempty: check for empty values
-	zb0003Len := uint32(2)
-	var zb0003Mask uint8 /* 3 bits */
-	if (*z).PublicKey == (DPublicKey{}) {
-		zb0003Len--
-		zb0003Mask |= 0x2
-	}
-	if (*z).SecretKey == (DSecretKey{}) {
-		zb0003Len--
-		zb0003Mask |= 0x4
-	}
-	// variable map header, size zb0003Len
-	o = append(o, 0x80|uint8(zb0003Len))
-	if zb0003Len != 0 {
-		if (zb0003Mask & 0x2) == 0 { // if not empty
-			// string "pk"
-			o = append(o, 0xa2, 0x70, 0x6b)
-			o = msgp.AppendBytes(o, ((*z).PublicKey)[:])
-		}
-		if (zb0003Mask & 0x4) == 0 { // if not empty
-			// string "sk"
-			o = append(o, 0xa2, 0x73, 0x6b)
-			o = msgp.AppendBytes(o, ((*z).SecretKey)[:])
-		}
-	}
-	return
-}
-
-func (_ *DilithiumSigner) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*DilithiumSigner)
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *DilithiumSigner) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0003 int
-	var zb0004 bool
-	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0003 > 0 {
-			zb0003--
-			bts, err = msgp.ReadExactBytes(bts, ((*z).PublicKey)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PublicKey")
-				return
-			}
-		}
-		if zb0003 > 0 {
-			zb0003--
-			bts, err = msgp.ReadExactBytes(bts, ((*z).SecretKey)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SecretKey")
-				return
-			}
-		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0004 {
-			(*z) = DilithiumSigner{}
-		}
-		for zb0003 > 0 {
-			zb0003--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-			switch string(field) {
-			case "pk":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).PublicKey)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "PublicKey")
-					return
-				}
-			case "sk":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).SecretKey)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "SecretKey")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-func (_ *DilithiumSigner) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*DilithiumSigner)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *DilithiumSigner) Msgsize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + (cdilithium.PublicKeySize * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (cdilithium.PrivateKeySize * (msgp.ByteSize))
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *DilithiumSigner) MsgIsZero() bool {
-	return ((*z).PublicKey == (DPublicKey{})) && ((*z).SecretKey == (DSecretKey{}))
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *DilithiumVerifier) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	// omitempty: check for empty values
-	zb0002Len := uint32(1)
-	var zb0002Mask uint8 /* 2 bits */
-	if (*z).PublicKey == (DPublicKey{}) {
-		zb0002Len--
-		zb0002Mask |= 0x2
-	}
-	// variable map header, size zb0002Len
-	o = append(o, 0x80|uint8(zb0002Len))
-	if zb0002Len != 0 {
-		if (zb0002Mask & 0x2) == 0 { // if not empty
-			// string "k"
-			o = append(o, 0xa1, 0x6b)
-			o = msgp.AppendBytes(o, ((*z).PublicKey)[:])
-		}
-	}
-	return
-}
-
-func (_ *DilithiumVerifier) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*DilithiumVerifier)
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *DilithiumVerifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0002 int
-	var zb0003 bool
-	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 > 0 {
-			zb0002--
-			bts, err = msgp.ReadExactBytes(bts, ((*z).PublicKey)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PublicKey")
-				return
-			}
-		}
-		if zb0002 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0002)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0003 {
-			(*z) = DilithiumVerifier{}
-		}
-		for zb0002 > 0 {
-			zb0002--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-			switch string(field) {
-			case "k":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).PublicKey)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "PublicKey")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-func (_ *DilithiumVerifier) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*DilithiumVerifier)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *DilithiumVerifier) Msgsize() (s int) {
-	s = 1 + 2 + msgp.ArrayHeaderSize + (cdilithium.PublicKeySize * (msgp.ByteSize))
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *DilithiumVerifier) MsgIsZero() bool {
-	return ((*z).PublicKey == (DPublicKey{}))
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2983,31 +2532,109 @@ func (z *OneTimeSignatureVerifier) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
+func (z *PPublicKey) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, (*z)[:])
+	return
+}
+
+func (_ *PPublicKey) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*PPublicKey)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *PPublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	o = bts
+	return
+}
+
+func (_ *PPublicKey) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*PPublicKey)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *PPublicKey) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (cparalithium.PublicKeySize * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *PPublicKey) MsgIsZero() bool {
+	return (*z) == (PPublicKey{})
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *PSecretKey) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, (*z)[:])
+	return
+}
+
+func (_ *PSecretKey) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*PSecretKey)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *PSecretKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	o = bts
+	return
+}
+
+func (_ *PSecretKey) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*PSecretKey)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *PSecretKey) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (cparalithium.PrivateKeySize * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *PSecretKey) MsgIsZero() bool {
+	return (*z) == (PSecretKey{})
+}
+
+// MarshalMsg implements msgp.Marshaler
 func (z *PackedSignatureAlgorithm) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
 	var zb0001Mask uint8 /* 4 bits */
-	if (*z).DilithiumSigner.MsgIsZero() {
+	if (*z).Ed25519Singer.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (*z).Ed25519Singer.MsgIsZero() {
+	if (*z).ParalithiumSigner.MsgIsZero() {
 		zb0001Len--
-		zb0001Mask |= 0x4
+		zb0001Mask |= 0x8
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
-			// string "ds"
-			o = append(o, 0xa2, 0x64, 0x73)
-			o = (*z).DilithiumSigner.MarshalMsg(o)
-		}
-		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "edds"
 			o = append(o, 0xa4, 0x65, 0x64, 0x64, 0x73)
 			o = (*z).Ed25519Singer.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "ps"
+			o = append(o, 0xa2, 0x70, 0x73)
+			o = (*z).ParalithiumSigner.MarshalMsg(o)
 		}
 	}
 	return
@@ -3033,9 +2660,9 @@ func (z *PackedSignatureAlgorithm) UnmarshalMsg(bts []byte) (o []byte, err error
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).DilithiumSigner.UnmarshalMsg(bts)
+			bts, err = (*z).ParalithiumSigner.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "DilithiumSigner")
+				err = msgp.WrapError(err, "struct-from-array", "ParalithiumSigner")
 				return
 			}
 		}
@@ -3070,10 +2697,10 @@ func (z *PackedSignatureAlgorithm) UnmarshalMsg(bts []byte) (o []byte, err error
 				return
 			}
 			switch string(field) {
-			case "ds":
-				bts, err = (*z).DilithiumSigner.UnmarshalMsg(bts)
+			case "ps":
+				bts, err = (*z).ParalithiumSigner.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "DilithiumSigner")
+					err = msgp.WrapError(err, "ParalithiumSigner")
 					return
 				}
 			case "edds":
@@ -3102,13 +2729,13 @@ func (_ *PackedSignatureAlgorithm) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *PackedSignatureAlgorithm) Msgsize() (s int) {
-	s = 1 + 3 + (*z).DilithiumSigner.Msgsize() + 5 + (*z).Ed25519Singer.Msgsize()
+	s = 1 + 3 + (*z).ParalithiumSigner.Msgsize() + 5 + (*z).Ed25519Singer.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *PackedSignatureAlgorithm) MsgIsZero() bool {
-	return ((*z).DilithiumSigner.MsgIsZero()) && ((*z).Ed25519Singer.MsgIsZero())
+	return ((*z).ParalithiumSigner.MsgIsZero()) && ((*z).Ed25519Singer.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -3117,51 +2744,51 @@ func (z *PackedVerifyingKey) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0002Len := uint32(2)
 	var zb0002Mask uint8 /* 4 bits */
-	if (*z).DilithiumPublicKey.PublicKey == (DPublicKey{}) {
+	if (*z).Ed25519PublicKey.SignatureVerifier.MsgIsZero() {
 		zb0002Len--
 		zb0002Mask |= 0x2
 	}
-	if (*z).Ed25519PublicKey.SignatureVerifier.MsgIsZero() {
+	if (*z).ParalithiumPublicKey.PublicKey == (PPublicKey{}) {
 		zb0002Len--
-		zb0002Mask |= 0x4
+		zb0002Mask |= 0x8
 	}
 	// variable map header, size zb0002Len
 	o = append(o, 0x80|uint8(zb0002Len))
 	if zb0002Len != 0 {
 		if (zb0002Mask & 0x2) == 0 { // if not empty
-			// string "dpk"
-			o = append(o, 0xa3, 0x64, 0x70, 0x6b)
+			// string "edpk"
+			o = append(o, 0xa4, 0x65, 0x64, 0x70, 0x6b)
 			// omitempty: check for empty values
 			zb0003Len := uint32(1)
 			var zb0003Mask uint8 /* 2 bits */
-			if (*z).DilithiumPublicKey.PublicKey == (DPublicKey{}) {
+			if (*z).Ed25519PublicKey.SignatureVerifier.MsgIsZero() {
 				zb0003Len--
 				zb0003Mask |= 0x2
 			}
 			// variable map header, size zb0003Len
 			o = append(o, 0x80|uint8(zb0003Len))
 			if (zb0003Mask & 0x2) == 0 { // if not empty
-				// string "k"
-				o = append(o, 0xa1, 0x6b)
-				o = msgp.AppendBytes(o, ((*z).DilithiumPublicKey.PublicKey)[:])
+				// string "sigVerifier"
+				o = append(o, 0xab, 0x73, 0x69, 0x67, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
+				o = (*z).Ed25519PublicKey.SignatureVerifier.MarshalMsg(o)
 			}
 		}
-		if (zb0002Mask & 0x4) == 0 { // if not empty
-			// string "edpk"
-			o = append(o, 0xa4, 0x65, 0x64, 0x70, 0x6b)
+		if (zb0002Mask & 0x8) == 0 { // if not empty
+			// string "ppk"
+			o = append(o, 0xa3, 0x70, 0x70, 0x6b)
 			// omitempty: check for empty values
 			zb0004Len := uint32(1)
 			var zb0004Mask uint8 /* 2 bits */
-			if (*z).Ed25519PublicKey.SignatureVerifier.MsgIsZero() {
+			if (*z).ParalithiumPublicKey.PublicKey == (PPublicKey{}) {
 				zb0004Len--
 				zb0004Mask |= 0x2
 			}
 			// variable map header, size zb0004Len
 			o = append(o, 0x80|uint8(zb0004Len))
 			if (zb0004Mask & 0x2) == 0 { // if not empty
-				// string "sigVerifier"
-				o = append(o, 0xab, 0x73, 0x69, 0x67, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
-				o = (*z).Ed25519PublicKey.SignatureVerifier.MarshalMsg(o)
+				// string "k"
+				o = append(o, 0xa1, 0x6b)
+				o = msgp.AppendBytes(o, ((*z).ParalithiumPublicKey.PublicKey)[:])
 			}
 		}
 	}
@@ -3194,50 +2821,50 @@ func (z *PackedVerifyingKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			if _, ok := err.(msgp.TypeError); ok {
 				zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "DilithiumPublicKey")
+					err = msgp.WrapError(err, "struct-from-array", "ParalithiumPublicKey")
 					return
 				}
 				if zb0004 > 0 {
 					zb0004--
-					bts, err = msgp.ReadExactBytes(bts, ((*z).DilithiumPublicKey.PublicKey)[:])
+					bts, err = msgp.ReadExactBytes(bts, ((*z).ParalithiumPublicKey.PublicKey)[:])
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "DilithiumPublicKey", "struct-from-array", "PublicKey")
+						err = msgp.WrapError(err, "struct-from-array", "ParalithiumPublicKey", "struct-from-array", "PublicKey")
 						return
 					}
 				}
 				if zb0004 > 0 {
 					err = msgp.ErrTooManyArrayFields(zb0004)
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "DilithiumPublicKey", "struct-from-array")
+						err = msgp.WrapError(err, "struct-from-array", "ParalithiumPublicKey", "struct-from-array")
 						return
 					}
 				}
 			} else {
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "DilithiumPublicKey")
+					err = msgp.WrapError(err, "struct-from-array", "ParalithiumPublicKey")
 					return
 				}
 				if zb0005 {
-					(*z).DilithiumPublicKey = DilithiumVerifier{}
+					(*z).ParalithiumPublicKey = ParalithiumVerifier{}
 				}
 				for zb0004 > 0 {
 					zb0004--
 					field, bts, err = msgp.ReadMapKeyZC(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "DilithiumPublicKey")
+						err = msgp.WrapError(err, "struct-from-array", "ParalithiumPublicKey")
 						return
 					}
 					switch string(field) {
 					case "k":
-						bts, err = msgp.ReadExactBytes(bts, ((*z).DilithiumPublicKey.PublicKey)[:])
+						bts, err = msgp.ReadExactBytes(bts, ((*z).ParalithiumPublicKey.PublicKey)[:])
 						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "DilithiumPublicKey", "PublicKey")
+							err = msgp.WrapError(err, "struct-from-array", "ParalithiumPublicKey", "PublicKey")
 							return
 						}
 					default:
 						err = msgp.ErrNoField(string(field))
 						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "DilithiumPublicKey")
+							err = msgp.WrapError(err, "struct-from-array", "ParalithiumPublicKey")
 							return
 						}
 					}
@@ -3325,57 +2952,57 @@ func (z *PackedVerifyingKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "dpk":
+			case "ppk":
 				var zb0008 int
 				var zb0009 bool
 				zb0008, zb0009, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if _, ok := err.(msgp.TypeError); ok {
 					zb0008, zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "DilithiumPublicKey")
+						err = msgp.WrapError(err, "ParalithiumPublicKey")
 						return
 					}
 					if zb0008 > 0 {
 						zb0008--
-						bts, err = msgp.ReadExactBytes(bts, ((*z).DilithiumPublicKey.PublicKey)[:])
+						bts, err = msgp.ReadExactBytes(bts, ((*z).ParalithiumPublicKey.PublicKey)[:])
 						if err != nil {
-							err = msgp.WrapError(err, "DilithiumPublicKey", "struct-from-array", "PublicKey")
+							err = msgp.WrapError(err, "ParalithiumPublicKey", "struct-from-array", "PublicKey")
 							return
 						}
 					}
 					if zb0008 > 0 {
 						err = msgp.ErrTooManyArrayFields(zb0008)
 						if err != nil {
-							err = msgp.WrapError(err, "DilithiumPublicKey", "struct-from-array")
+							err = msgp.WrapError(err, "ParalithiumPublicKey", "struct-from-array")
 							return
 						}
 					}
 				} else {
 					if err != nil {
-						err = msgp.WrapError(err, "DilithiumPublicKey")
+						err = msgp.WrapError(err, "ParalithiumPublicKey")
 						return
 					}
 					if zb0009 {
-						(*z).DilithiumPublicKey = DilithiumVerifier{}
+						(*z).ParalithiumPublicKey = ParalithiumVerifier{}
 					}
 					for zb0008 > 0 {
 						zb0008--
 						field, bts, err = msgp.ReadMapKeyZC(bts)
 						if err != nil {
-							err = msgp.WrapError(err, "DilithiumPublicKey")
+							err = msgp.WrapError(err, "ParalithiumPublicKey")
 							return
 						}
 						switch string(field) {
 						case "k":
-							bts, err = msgp.ReadExactBytes(bts, ((*z).DilithiumPublicKey.PublicKey)[:])
+							bts, err = msgp.ReadExactBytes(bts, ((*z).ParalithiumPublicKey.PublicKey)[:])
 							if err != nil {
-								err = msgp.WrapError(err, "DilithiumPublicKey", "PublicKey")
+								err = msgp.WrapError(err, "ParalithiumPublicKey", "PublicKey")
 								return
 							}
 						default:
 							err = msgp.ErrNoField(string(field))
 							if err != nil {
-								err = msgp.WrapError(err, "DilithiumPublicKey")
+								err = msgp.WrapError(err, "ParalithiumPublicKey")
 								return
 							}
 						}
@@ -3457,13 +3084,386 @@ func (_ *PackedVerifyingKey) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *PackedVerifyingKey) Msgsize() (s int) {
-	s = 1 + 4 + 1 + 2 + msgp.ArrayHeaderSize + (cdilithium.PublicKeySize * (msgp.ByteSize)) + 5 + 1 + 12 + (*z).Ed25519PublicKey.SignatureVerifier.Msgsize()
+	s = 1 + 4 + 1 + 2 + msgp.ArrayHeaderSize + (cparalithium.PublicKeySize * (msgp.ByteSize)) + 5 + 1 + 12 + (*z).Ed25519PublicKey.SignatureVerifier.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *PackedVerifyingKey) MsgIsZero() bool {
-	return ((*z).DilithiumPublicKey.PublicKey == (DPublicKey{})) && ((*z).Ed25519PublicKey.SignatureVerifier.MsgIsZero())
+	return ((*z).ParalithiumPublicKey.PublicKey == (PPublicKey{})) && ((*z).Ed25519PublicKey.SignatureVerifier.MsgIsZero())
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z ParalithiumPrivateKey) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, []byte(z))
+	return
+}
+
+func (_ ParalithiumPrivateKey) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(ParalithiumPrivateKey)
+	if !ok {
+		_, ok = (z).(*ParalithiumPrivateKey)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *ParalithiumPrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 []byte
+		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = ParalithiumPrivateKey(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (_ *ParalithiumPrivateKey) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*ParalithiumPrivateKey)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z ParalithiumPrivateKey) Msgsize() (s int) {
+	s = msgp.BytesPrefixSize + len([]byte(z))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z ParalithiumPrivateKey) MsgIsZero() bool {
+	return len(z) == 0
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z ParalithiumPublicKey) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, []byte(z))
+	return
+}
+
+func (_ ParalithiumPublicKey) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(ParalithiumPublicKey)
+	if !ok {
+		_, ok = (z).(*ParalithiumPublicKey)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *ParalithiumPublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 []byte
+		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = ParalithiumPublicKey(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (_ *ParalithiumPublicKey) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*ParalithiumPublicKey)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z ParalithiumPublicKey) Msgsize() (s int) {
+	s = msgp.BytesPrefixSize + len([]byte(z))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z ParalithiumPublicKey) MsgIsZero() bool {
+	return len(z) == 0
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z ParalithiumSignature) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, []byte(z))
+	return
+}
+
+func (_ ParalithiumSignature) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(ParalithiumSignature)
+	if !ok {
+		_, ok = (z).(*ParalithiumSignature)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *ParalithiumSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 []byte
+		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = ParalithiumSignature(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (_ *ParalithiumSignature) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*ParalithiumSignature)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z ParalithiumSignature) Msgsize() (s int) {
+	s = msgp.BytesPrefixSize + len([]byte(z))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z ParalithiumSignature) MsgIsZero() bool {
+	return len(z) == 0
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *ParalithiumSigner) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0003Len := uint32(2)
+	var zb0003Mask uint8 /* 3 bits */
+	if (*z).PublicKey == (PPublicKey{}) {
+		zb0003Len--
+		zb0003Mask |= 0x2
+	}
+	if (*z).SecretKey == (PSecretKey{}) {
+		zb0003Len--
+		zb0003Mask |= 0x4
+	}
+	// variable map header, size zb0003Len
+	o = append(o, 0x80|uint8(zb0003Len))
+	if zb0003Len != 0 {
+		if (zb0003Mask & 0x2) == 0 { // if not empty
+			// string "pk"
+			o = append(o, 0xa2, 0x70, 0x6b)
+			o = msgp.AppendBytes(o, ((*z).PublicKey)[:])
+		}
+		if (zb0003Mask & 0x4) == 0 { // if not empty
+			// string "sk"
+			o = append(o, 0xa2, 0x73, 0x6b)
+			o = msgp.AppendBytes(o, ((*z).SecretKey)[:])
+		}
+	}
+	return
+}
+
+func (_ *ParalithiumSigner) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*ParalithiumSigner)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *ParalithiumSigner) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0003 int
+	var zb0004 bool
+	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0003 > 0 {
+			zb0003--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PublicKey)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "PublicKey")
+				return
+			}
+		}
+		if zb0003 > 0 {
+			zb0003--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).SecretKey)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "SecretKey")
+				return
+			}
+		}
+		if zb0003 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0003)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0004 {
+			(*z) = ParalithiumSigner{}
+		}
+		for zb0003 > 0 {
+			zb0003--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "pk":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).PublicKey)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "PublicKey")
+					return
+				}
+			case "sk":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).SecretKey)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "SecretKey")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *ParalithiumSigner) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*ParalithiumSigner)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *ParalithiumSigner) Msgsize() (s int) {
+	s = 1 + 3 + msgp.ArrayHeaderSize + (cparalithium.PublicKeySize * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (cparalithium.PrivateKeySize * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *ParalithiumSigner) MsgIsZero() bool {
+	return ((*z).PublicKey == (PPublicKey{})) && ((*z).SecretKey == (PSecretKey{}))
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *ParalithiumVerifier) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0002Len := uint32(1)
+	var zb0002Mask uint8 /* 2 bits */
+	if (*z).PublicKey == (PPublicKey{}) {
+		zb0002Len--
+		zb0002Mask |= 0x2
+	}
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if zb0002Len != 0 {
+		if (zb0002Mask & 0x2) == 0 { // if not empty
+			// string "k"
+			o = append(o, 0xa1, 0x6b)
+			o = msgp.AppendBytes(o, ((*z).PublicKey)[:])
+		}
+	}
+	return
+}
+
+func (_ *ParalithiumVerifier) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*ParalithiumVerifier)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *ParalithiumVerifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > 0 {
+			zb0002--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PublicKey)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "PublicKey")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0002)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0003 {
+			(*z) = ParalithiumVerifier{}
+		}
+		for zb0002 > 0 {
+			zb0002--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "k":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).PublicKey)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "PublicKey")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *ParalithiumVerifier) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*ParalithiumVerifier)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *ParalithiumVerifier) Msgsize() (s int) {
+	s = 1 + 2 + msgp.ArrayHeaderSize + (cparalithium.PublicKeySize * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *ParalithiumVerifier) MsgIsZero() bool {
+	return ((*z).PublicKey == (PPublicKey{}))
 }
 
 // MarshalMsg implements msgp.Marshaler

@@ -34,7 +34,7 @@ type (
 
 // all AlgorithmType enums
 const (
-	DilithiumType AlgorithmType = iota
+	ParalithiumType AlgorithmType = iota
 	Ed25519Type
 
 	maxAlgorithmType
@@ -118,17 +118,17 @@ func (z *VerifyingKey) GetVerifier() Verifier {
 type PackedVerifyingKey struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	DilithiumPublicKey DilithiumVerifier `codec:"dpk"`
-	Ed25519PublicKey   Ed25519PublicKey  `codec:"edpk"`
-	invalidVerifier    invalidVerifier
+	ParalithiumPublicKey ParalithiumVerifier `codec:"ppk"`
+	Ed25519PublicKey     Ed25519PublicKey    `codec:"edpk"`
+	invalidVerifier      invalidVerifier
 }
 
 var errUnknownVerifier = errors.New("could not find stored Verifier")
 
 func (p *PackedVerifyingKey) getVerifier(t AlgorithmType) Verifier {
 	switch t {
-	case DilithiumType:
-		return &p.DilithiumPublicKey
+	case ParalithiumType:
+		return &p.ParalithiumPublicKey
 	case Ed25519Type:
 		return &p.Ed25519PublicKey
 	default:
@@ -140,17 +140,17 @@ func (p *PackedVerifyingKey) getVerifier(t AlgorithmType) Verifier {
 type PackedSignatureAlgorithm struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	DilithiumSigner DilithiumSigner `codec:"ds"`
-	Ed25519Singer   Ed25519Key      `codec:"edds"`
-	invalidSinger   invalidSinger
+	ParalithiumSigner ParalithiumSigner `codec:"ps"`
+	Ed25519Singer     Ed25519Key        `codec:"edds"`
+	invalidSinger     invalidSinger
 }
 
 var errUnknownSigner = errors.New("could not find stored signer")
 
 func (p *PackedSignatureAlgorithm) getSigner(t AlgorithmType) Signer {
 	switch t {
-	case DilithiumType:
-		return &p.DilithiumSigner
+	case ParalithiumType:
+		return &p.ParalithiumSigner
 	case Ed25519Type:
 		return &p.Ed25519Singer
 	default:
@@ -164,10 +164,10 @@ var errNonExistingSignatureAlgorithmType = errors.New("signing algorithm type do
 func NewSigner(t AlgorithmType) (*SignatureAlgorithm, error) {
 	var p PackedSignatureAlgorithm
 	switch t {
-	case DilithiumType:
-		signer := NewDilithiumSigner().(*DilithiumSigner)
+	case ParalithiumType:
+		signer := GenerateParalithiumSigner().(*ParalithiumSigner)
 		p = PackedSignatureAlgorithm{
-			DilithiumSigner: *signer,
+			ParalithiumSigner: *signer,
 		}
 	case Ed25519Type:
 		var seed Seed

@@ -41,7 +41,7 @@ func TestSignerCreation(t *testing.T) {
 
 	h := genHashableForTest()
 	for i := uint64(1); i < 20; i++ {
-		signer := generateTestSigner(crypto.DilithiumType, i, i+1, 1, a)
+		signer := generateTestSigner(crypto.ParalithiumType, i, i+1, 1, a)
 		defer signer.keyStore.store.Close()
 		_, err = signer.Sign(h, i)
 		a.NoError(err)
@@ -53,14 +53,14 @@ func TestSignerCreation(t *testing.T) {
 		signer.keyStore.store.Close()
 	}
 
-	testSignerNumKeysLimits(crypto.DilithiumType, 0, 0, 1, 0)
-	testSignerNumKeysLimits(crypto.DilithiumType, 0, 1, 1, 1)
-	testSignerNumKeysLimits(crypto.DilithiumType, 2, 2, 2, 1)
-	testSignerNumKeysLimits(crypto.DilithiumType, 8, 21, 10, 2)
-	testSignerNumKeysLimits(crypto.DilithiumType, 8, 20, 10, 2)
-	testSignerNumKeysLimits(crypto.DilithiumType, 10, 21, 10, 2)
-	testSignerNumKeysLimits(crypto.DilithiumType, 10, 20, 10, 2)
-	testSignerNumKeysLimits(crypto.DilithiumType, 11, 20, 10, 1)
+	testSignerNumKeysLimits(crypto.ParalithiumType, 0, 0, 1, 0)
+	testSignerNumKeysLimits(crypto.ParalithiumType, 0, 1, 1, 1)
+	testSignerNumKeysLimits(crypto.ParalithiumType, 2, 2, 2, 1)
+	testSignerNumKeysLimits(crypto.ParalithiumType, 8, 21, 10, 2)
+	testSignerNumKeysLimits(crypto.ParalithiumType, 8, 20, 10, 2)
+	testSignerNumKeysLimits(crypto.ParalithiumType, 10, 21, 10, 2)
+	testSignerNumKeysLimits(crypto.ParalithiumType, 10, 20, 10, 2)
+	testSignerNumKeysLimits(crypto.ParalithiumType, 11, 20, 10, 1)
 
 	testSignerNumKeysLimits(crypto.Ed25519Type, 0, 0, 1, 0)
 	testSignerNumKeysLimits(crypto.Ed25519Type, 0, 1, 1, 1)
@@ -71,7 +71,7 @@ func TestSignerCreation(t *testing.T) {
 	testSignerNumKeysLimits(crypto.Ed25519Type, 10, 20, 10, 2)
 	testSignerNumKeysLimits(crypto.Ed25519Type, 11, 20, 10, 1)
 
-	signer := generateTestSigner(crypto.DilithiumType, 2, 2, 2, a)
+	signer := generateTestSigner(crypto.ParalithiumType, 2, 2, 2, a)
 	defer signer.keyStore.store.Close()
 	a.Equal(1, length(signer, a))
 
@@ -79,13 +79,13 @@ func TestSignerCreation(t *testing.T) {
 	a.NoError(err)
 	a.NoError(signer.GetVerifier().Verify(2, 2, 2, genHashableForTest(), sig))
 
-	signer = generateTestSigner(crypto.DilithiumType, 2, 2, 3, a)
+	signer = generateTestSigner(crypto.ParalithiumType, 2, 2, 3, a)
 	defer signer.keyStore.store.Close()
 	a.Equal(0, length(signer, a))
 	_, err = signer.Sign(genHashableForTest(), 2)
 	a.Error(err)
 
-	signer = generateTestSigner(crypto.DilithiumType, 11, 19, 10, a)
+	signer = generateTestSigner(crypto.ParalithiumType, 11, 19, 10, a)
 	defer signer.keyStore.store.Close()
 	a.Equal(0, length(signer, a))
 	_, err = signer.Sign(genHashableForTest(), 2)
@@ -95,7 +95,7 @@ func TestEmptyVerifier(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	signer := generateTestSigner(crypto.DilithiumType, 8, 9, 5, a)
+	signer := generateTestSigner(crypto.ParalithiumType, 8, 9, 5, a)
 	defer signer.keyStore.store.Close()
 	a.NotEqual(*signer.GetVerifier(), Verifier{})
 }
@@ -105,7 +105,7 @@ func TestEmptySigner(t *testing.T) {
 	var err error
 
 	h := genHashableForTest()
-	signer := generateTestSigner(crypto.DilithiumType, 8, 9, 5, a)
+	signer := generateTestSigner(crypto.ParalithiumType, 8, 9, 5, a)
 	a.NoError(err)
 	a.Equal(0, length(signer, a))
 
@@ -124,7 +124,7 @@ func TestDisposableKeysGeneration(t *testing.T) {
 	a := require.New(t)
 	var err error
 
-	signer := generateTestSigner(crypto.DilithiumType, 0, 100, 1, a)
+	signer := generateTestSigner(crypto.ParalithiumType, 0, 100, 1, a)
 	defer signer.keyStore.store.Close()
 	for i := uint64(1); i < 100; i++ {
 		_, err = signer.keyStore.GetKey(i)
@@ -134,7 +134,7 @@ func TestDisposableKeysGeneration(t *testing.T) {
 	_, err = signer.keyStore.GetKey(101)
 	a.Error(err)
 
-	signer = generateTestSigner(crypto.DilithiumType, 1000, 1100, 1, a)
+	signer = generateTestSigner(crypto.ParalithiumType, 1000, 1100, 1, a)
 	defer signer.keyStore.store.Close()
 	for i := uint64(1000); i < 1100; i++ {
 		_, err = signer.keyStore.GetKey(i)
@@ -144,7 +144,7 @@ func TestDisposableKeysGeneration(t *testing.T) {
 	_, err = signer.keyStore.GetKey(999)
 	a.Error(err)
 
-	signer = generateTestSigner(crypto.DilithiumType, 1000, 1100, 101, a)
+	signer = generateTestSigner(crypto.ParalithiumType, 1000, 1100, 101, a)
 	intervalRounds := make([]uint64, 0)
 	for i := uint64(1000); i <= 1100; i++ {
 		if i%101 == 0 {
@@ -160,7 +160,7 @@ func TestNonEmptyDisposableKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	signer := generateTestSigner(crypto.DilithiumType, 0, 100, 1, a)
+	signer := generateTestSigner(crypto.ParalithiumType, 0, 100, 1, a)
 	defer signer.keyStore.store.Close()
 
 	s := crypto.SignatureAlgorithm{}
@@ -185,7 +185,7 @@ func TestSignatureStructure(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	signer := generateTestSigner(crypto.DilithiumType, 50, 100, 1, a)
+	signer := generateTestSigner(crypto.ParalithiumType, 50, 100, 1, a)
 	defer signer.keyStore.store.Close()
 
 	hashable := genHashableForTest()
@@ -214,7 +214,7 @@ func TestSigning(t *testing.T) {
 	a := require.New(t)
 
 	start, end := uint64(50), uint64(100)
-	signer := generateTestSigner(crypto.DilithiumType, start, end, 1, a)
+	signer := generateTestSigner(crypto.ParalithiumType, start, end, 1, a)
 	defer signer.keyStore.store.Close()
 
 	hashable := crypto.Hashable(&crypto.VerifyingKey{Type: math.MaxUint64}) // just want some crypto.Hashable..
@@ -229,7 +229,7 @@ func TestSigning(t *testing.T) {
 	_, err = signer.Sign(hashable, end+1)
 	a.Error(err)
 
-	signer = generateTestSigner(crypto.DilithiumType, start, end, 10, a)
+	signer = generateTestSigner(crypto.ParalithiumType, start, end, 10, a)
 	defer signer.keyStore.store.Close()
 
 	sig, err = signer.Sign(hashable, start)
@@ -240,7 +240,7 @@ func TestSigning(t *testing.T) {
 	a.Error(err)
 	a.Error(signer.GetVerifier().Verify(start, start+5, 1, hashable, sig))
 
-	signer = generateTestSigner(crypto.DilithiumType, 50, 100, 12, a)
+	signer = generateTestSigner(crypto.ParalithiumType, 50, 100, 12, a)
 	defer signer.keyStore.store.Close()
 	a.Equal(length(signer, a), 4)
 
@@ -255,7 +255,7 @@ func TestSigning(t *testing.T) {
 		}
 	}
 
-	signer = generateTestSigner(crypto.DilithiumType, 234, 4634, 128, a)
+	signer = generateTestSigner(crypto.ParalithiumType, 234, 4634, 128, a)
 	defer signer.keyStore.store.Close()
 	_, err = signer.keyStore.GetKey(256)
 	a.NoError(err)
@@ -362,7 +362,7 @@ func TestMarshal(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	signer := generateTestSigner(crypto.DilithiumType, 0, 10, 1, a)
+	signer := generateTestSigner(crypto.ParalithiumType, 0, 10, 1, a)
 	store := signer.keyStore.store
 	defer store.Close()
 
@@ -384,7 +384,7 @@ func TestSignerTrim(t *testing.T) {
 	a := require.New(t)
 	var err error
 
-	signer := generateTestSigner(crypto.DilithiumType, 1, 100, 1, a)
+	signer := generateTestSigner(crypto.ParalithiumType, 1, 100, 1, a)
 	defer signer.keyStore.store.Close()
 
 	_, err = signer.Trim(1)
@@ -399,7 +399,7 @@ func TestSignerTrim(t *testing.T) {
 	signer.Trim(20)
 	a.Equal(length(signer, a), 80)
 
-	signer = generateTestSigner(crypto.DilithiumType, 1, 100, 11, a)
+	signer = generateTestSigner(crypto.ParalithiumType, 1, 100, 11, a)
 	defer signer.keyStore.store.Close()
 	a.Equal(9, length(signer, a))
 
@@ -418,7 +418,7 @@ func TestSignerTrim(t *testing.T) {
 	a.Equal(length(signer, a), 0)
 
 	// create signer and delete all keys.
-	signer = generateTestSigner(crypto.DilithiumType, 1, 60, 1, a)
+	signer = generateTestSigner(crypto.ParalithiumType, 1, 60, 1, a)
 	defer signer.keyStore.store.Close()
 	_, err = signer.Trim(60)
 	a.NoError(err)
@@ -427,7 +427,7 @@ func TestSignerTrim(t *testing.T) {
 	a.NoError(err)
 	a.Equal(0, length(signer, a))
 
-	signer = generateTestSigner(crypto.DilithiumType, 1, 60, 11, a)
+	signer = generateTestSigner(crypto.ParalithiumType, 1, 60, 11, a)
 	defer signer.keyStore.store.Close()
 	_, err = signer.Trim(55)
 	a.NoError(err)
@@ -440,7 +440,7 @@ func TestKeyDeletion(t *testing.T) {
 	a := require.New(t)
 	var err error
 
-	signer := generateTestSigner(crypto.DilithiumType, 1, 60, 1, a)
+	signer := generateTestSigner(crypto.ParalithiumType, 1, 60, 1, a)
 	defer signer.keyStore.store.Close()
 
 	signer.Trim(50)
@@ -454,7 +454,7 @@ func TestKeyDeletion(t *testing.T) {
 		a.NoError(signer.GetVerifier().Verify(1, i, 1, genHashableForTest(), sig))
 	}
 
-	signer = generateTestSigner(crypto.DilithiumType, 1, 60, 11, a)
+	signer = generateTestSigner(crypto.ParalithiumType, 1, 60, 11, a)
 	defer signer.keyStore.store.Close()
 
 	signer.Trim(50)
@@ -483,7 +483,7 @@ func makeSig(signer *Signer, sigRound uint64, a *require.Assertions) (crypto.Has
 
 func generateTestSignerAux(a *require.Assertions) (uint64, uint64, *Signer) {
 	start, end := uint64(50), uint64(100)
-	signer := generateTestSigner(crypto.DilithiumType, start, end, 1, a)
+	signer := generateTestSigner(crypto.ParalithiumType, start, end, 1, a)
 	return start, end, signer
 }
 

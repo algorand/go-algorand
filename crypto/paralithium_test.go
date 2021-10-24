@@ -19,33 +19,36 @@ package crypto
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestDilithiumSignAndVerify(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	for i := 0; i < 100; i++ {
-		dsigner := NewDilithiumSigner()
+		psigner := GenerateParalithiumSigner()
 		b := make([]byte, 8)
 		binary.BigEndian.PutUint64(b, uint64(i))
 		bs := sha256.Sum256(b)
-		sig := dsigner.SignBytes(bs[:])
+		sig := psigner.SignBytes(bs[:])
 		//sig := dil2Sign(sk, bs[:])
-		dvf := dsigner.GetVerifyingKey()
+		dvf := psigner.GetVerifyingKey()
 
 		a.NoError(dvf.GetVerifier().VerifyBytes(bs[:], sig))
 	}
 }
 
 func TestDilithiumSignerImplemantation(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	dsigner := NewDilithiumSigner()
+	psigner := GenerateParalithiumSigner()
 
-	sig := dsigner.Sign(TestingHashable{})
+	sig := psigner.Sign(TestingHashable{})
 
-	dvf := dsigner.GetVerifyingKey()
+	dvf := psigner.GetVerifyingKey()
 	dverifier := dvf.GetVerifier()
 	a.NoError(dverifier.Verify(TestingHashable{}, sig))
 	a.Error(dverifier.Verify(TestingHashable{
@@ -55,7 +58,7 @@ func TestDilithiumSignerImplemantation(t *testing.T) {
 	a.Error(dverifier.Verify(TestingHashable{}, sig))
 
 	bs := sha256.Sum256(make([]byte, 8))
-	sig2 := dsigner.SignBytes(bs[:])
+	sig2 := psigner.SignBytes(bs[:])
 	a.NoError(dverifier.VerifyBytes(bs[:], sig2))
 
 	bs2 := bs
@@ -68,10 +71,10 @@ func TestDilithiumSignerImplemantation(t *testing.T) {
 	hashableWithData := TestingHashable{
 		data: []byte{1, 2, 3},
 	}
-	sig = dsigner.Sign(hashableWithData)
+	sig = psigner.Sign(hashableWithData)
 	a.NoError(dverifier.Verify(hashableWithData, sig))
 
-	sig = dsigner.Sign(hashableWithData)
+	sig = psigner.Sign(hashableWithData)
 	hashableWithData.data[0]++
 	a.Error(dverifier.Verify(hashableWithData, sig))
 	hashableWithData.data[0]--
