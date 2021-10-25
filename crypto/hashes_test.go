@@ -58,7 +58,7 @@ func TestEmptyHash(t *testing.T) {
 	a := require.New(t)
 
 	h := HashFactory{HashType: Sha512_256}
-	h.HashType = maxHashType
+	h.HashType = MaxHashType
 	hash := h.NewHash()
 	a.Equal(0, hash.Size())
 	a.Equal(0, hash.BlockSize())

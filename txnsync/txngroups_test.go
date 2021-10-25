@@ -19,9 +19,12 @@ package txnsync
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"flag"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -380,12 +383,21 @@ func BenchmarkTxnGroupDecodingOld(b *testing.B) {
 	}
 }
 
+func generateRandTypeInsideRange(maxType uint64) uint64 {
+	rand := rand.Uint32()
+	if uint64(rand) < maxType {
+		return uint64(rand)
+	}
+	return uint64(rand) % maxType
+}
+
 // TestTxnGroupEncodingReflection generates random
 // txns of each type using reflection
 func TestTxnGroupEncodingReflection(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	for i := 0; i < 10; i++ {
+
 		v0, err := protocol.RandomizeObject(&transactions.SignedTxn{})
 		require.NoError(t, err)
 		stx, ok := v0.(*transactions.SignedTxn)
@@ -428,12 +440,6 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 				require.NoError(t, err)
 				keyregTxnFields, ok := v0.(*transactions.KeyregTxnFields)
 				require.True(t, ok)
-				if keyregTxnFields.StateProofPK.Root != [64]uint8{} {
-					// To copy StateProofPK.Root, the condition in deconstructKeyregTxnFields requires:
-					// !txn.Txn.VotePK.MsgIsZero() || !txn.Txn.SelectionPK.MsgIsZero()
-					// || txn.Txn.VoteKeyDilution != 0
-					keyregTxnFields.VoteKeyDilution = 5
-				}
 				txn.Txn.KeyregTxnFields = *keyregTxnFields
 			case protocol.AssetConfigTx:
 				v0, err := protocol.RandomizeObject(&txn.Txn.AssetConfigTxnFields)
@@ -461,30 +467,140 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 				txn.Txn.ApplicationCallTxnFields = *ApplicationCallTxnFields
 				txn.Txn.ApplicationCallTxnFields.OnCompletion = 1
 			case protocol.CompactCertTx:
-				//v0, err := protocol.RandomizeObject(&txn.Txn.CompactCertTxnFields)
-				//require.NoError(t, err)
-				//CompactCertTxnFields, ok := v0.(*transactions.CompactCertTxnFields)
-				//require.True(t, ok)
-				//txn.Txn.CompactCertTxnFields = *CompactCertTxnFields
+				v0, err := protocol.RandomizeObject(&txn.Txn.CompactCertTxnFields)
+				require.NoError(t, err)
+				CompactCertTxnFields, ok := v0.(*transactions.CompactCertTxnFields)
+				require.True(t, ok)
+
+				fixCertFields(CompactCertTxnFields)
+
+				txn.Txn.CompactCertTxnFields = *CompactCertTxnFields
 			default:
 				require.Fail(t, "unsupported txntype for txnsync msg encoding")
 			}
 			txn.Txn.Group = crypto.Digest{}
 			txns = append(txns, txn)
 		}
+
 		txnGroups := []pooldata.SignedTxGroup{
 			{
 				Transactions: txns,
 			},
 		}
+
 		err = addGroupHashes(txnGroups, len(txns), []byte{1})
 		require.NoError(t, err)
 		var s syncState
+
 		ptg, err := s.encodeTransactionGroups(txnGroups, 0)
 		require.NoError(t, err)
+
 		out, err := decodeTransactionGroups(ptg, stx.Txn.GenesisID, stx.Txn.GenesisHash)
 		require.NoError(t, err)
 		require.ElementsMatch(t, txnGroups, out)
+	}
+}
+
+func fixCertFields(CompactCertTxnFields *transactions.CompactCertTxnFields) {
+	newTypes := make(map[uint64]compactcert.Reveal)
+	// fix for the key for correct value
+	for i, r := range CompactCertTxnFields.Cert.Reveals {
+		data := r
+		data.SigSlot.Sig.VerifyingKey.Type = crypto.AlgorithmType(generateRandTypeInsideRange(uint64(crypto.MaxAlgorithmType)))
+		data.SigSlot.Sig.Proof.HashFactory.HashType = crypto.HashType(generateRandTypeInsideRange(uint64(crypto.MaxHashType)))
+
+		newTypes[i] = data
+
+	}
+	CompactCertTxnFields.Cert.Reveals = newTypes
+
+	CompactCertTxnFields.Cert.PartProofs.HashFactory.HashType = crypto.HashType(generateRandTypeInsideRange(uint64(crypto.MaxHashType)))
+	CompactCertTxnFields.Cert.SigProofs.HashFactory.HashType = crypto.HashType(generateRandTypeInsideRange(uint64(crypto.MaxHashType)))
+}
+
+func getRandomSignedTxn(t *testing.T) transactions.SignedTxn {
+
+	v0, err := protocol.RandomizeObject(&transactions.SignedTxn{})
+	require.NoError(t, err)
+	stx, ok := v0.(*transactions.SignedTxn)
+	require.True(t, ok)
+
+	txn := *stx
+	//txn.Txn.PaymentTxnFields = transactions.PaymentTxnFields{}
+	txn.Txn.KeyregTxnFields = transactions.KeyregTxnFields{}
+	txn.Txn.AssetConfigTxnFields = transactions.AssetConfigTxnFields{}
+	txn.Txn.AssetTransferTxnFields = transactions.AssetTransferTxnFields{}
+	txn.Txn.AssetFreezeTxnFields = transactions.AssetFreezeTxnFields{}
+	txn.Txn.ApplicationCallTxnFields = transactions.ApplicationCallTxnFields{}
+	txn.Txn.CompactCertTxnFields = transactions.CompactCertTxnFields{}
+	txn.Txn.Type = protocol.CompactCertTx
+	txn.Lsig.Logic = []byte("logic")
+
+	txn.Msig = crypto.MultisigSig{}
+	txn.Lsig = transactions.LogicSig{}
+	return txn
+}
+
+func TestTxnGroupInvalidEncodingReflectionOnKeyType(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	txn := getRandomSignedTxn(t)
+	v0, err := protocol.RandomizeObject(&txn.Txn.CompactCertTxnFields)
+	require.NoError(t, err)
+	CompactCertTxnFields, ok := v0.(*transactions.CompactCertTxnFields)
+	require.True(t, ok)
+
+	r := compactcert.Reveal{}
+	r.SigSlot.Sig.VerifyingKey.Type = crypto.MaxAlgorithmType
+	newTypes := make(map[uint64]compactcert.Reveal)
+	newTypes[1] = r
+	CompactCertTxnFields.Cert.Reveals = newTypes
+
+	txn.Txn.CompactCertTxnFields = *CompactCertTxnFields
+
+	checkCertDecodeFails(t, txn, err)
+}
+
+func TestTxnGroupInvalidEncodingReflectionOnHashType(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	txn := getRandomSignedTxn(t)
+	v0, err := protocol.RandomizeObject(&txn.Txn.CompactCertTxnFields)
+	require.NoError(t, err)
+	CompactCertTxnFields, ok := v0.(*transactions.CompactCertTxnFields)
+	require.True(t, ok)
+
+	r := compactcert.Reveal{}
+	r.SigSlot.Sig.Proof.HashFactory.HashType = crypto.MaxHashType
+	newTypes := make(map[uint64]compactcert.Reveal)
+	newTypes[1] = r
+	CompactCertTxnFields.Cert.Reveals = newTypes
+
+	txn.Txn.CompactCertTxnFields = *CompactCertTxnFields
+
+	checkCertDecodeFails(t, txn, err)
+}
+
+func checkCertDecodeFails(t *testing.T, txn transactions.SignedTxn, err error) {
+	txn.Txn.Group = crypto.Digest{}
+
+	var txns []transactions.SignedTxn
+	txns = append(txns, txn)
+
+	txnGroups := []pooldata.SignedTxGroup{
+		{
+			Transactions: txns,
+		},
+	}
+	err = addGroupHashes(txnGroups, len(txns), []byte{1})
+	require.NoError(t, err)
+	var s syncState
+	ptg, err := s.encodeTransactionGroups(txnGroups, 0)
+	require.NoError(t, err)
+	_, err = decodeTransactionGroups(ptg, txn.Txn.GenesisID, txn.Txn.GenesisHash)
+
+	if !errors.As(err, &protocol.ErrInvalidObject) {
+		t.Fail()
 	}
 }
 

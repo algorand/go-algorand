@@ -37,12 +37,12 @@ const (
 	DilithiumType AlgorithmType = iota
 	Ed25519Type
 
-	maxAlgorithmType
+	MaxAlgorithmType
 )
 
 // IsValid verifies that the type of the algorithm is known
 func (z AlgorithmType) IsValid() error {
-	if z >= maxAlgorithmType {
+	if z >= MaxAlgorithmType {
 		return protocol.ErrInvalidObject
 	}
 	return nil

@@ -49,7 +49,7 @@ type HashType uint64
 
 // IsValid verifies that the hash type is in a valid range.
 func (z HashType) IsValid() error {
-	if z > maxHashType {
+	if z >= MaxHashType {
 		return protocol.ErrInvalidObject
 	}
 	return nil
@@ -60,8 +60,12 @@ const (
 	Sha512_256 HashType = iota
 	Sumhash
 
-	maxHashType
+	MaxHashType
 )
+
+// MaxHashDigestSize is used to bound the max digest size. it is important to change it if a hash with
+// a longer output is introduced.
+const MaxHashDigestSize = SumhashDigestSize
 
 //size of each hash
 const (

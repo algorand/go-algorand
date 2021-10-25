@@ -19,7 +19,7 @@ package crypto
 import "bytes"
 
 // GenericDigest is a digest that implements CustumSizeDigest, and can be used as hash output.
-//msgp:allocbound GenericDigest
+//msgp:allocbound GenericDigest MaxHashDigestSize
 type GenericDigest []byte
 
 // To32Byte is used to change the data into crypto.Digest.

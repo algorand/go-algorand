@@ -250,8 +250,11 @@ func randomizeValue(v reflect.Value, datapath string, tag string) error {
 			}
 		}
 	case reflect.Slice:
+		// we don't want to allocate a slice with size of 0. This is because decoding and encoding this slice
+		// will result in nil and not slice of size 0
+		l := rand.Int()%31 + 1
+
 		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
-		l := rand.Int() % 32
 		if hasAllocBound {
 			l = 1
 		}
