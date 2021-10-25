@@ -29,7 +29,7 @@ type (
 	ByteSignature []byte
 
 	// AlgorithmType enum type for signing algorithms
-	AlgorithmType uint64
+	AlgorithmType uint16
 )
 
 // all AlgorithmType enums

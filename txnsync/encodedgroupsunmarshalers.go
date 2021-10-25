@@ -331,7 +331,7 @@ func (stub *txGroupsEncodingStub) reconstructKeyregTxnFields(signedTxns []transa
 		return nil
 	})
 
-	return nil
+	return err
 }
 
 func (stub *txGroupsEncodingStub) reconstructPaymentTxnFields(signedTxns []transactions.SignedTxn) (err error) {

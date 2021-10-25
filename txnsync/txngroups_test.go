@@ -21,16 +21,16 @@ import (
 	"database/sql"
 	"errors"
 	"flag"
-	"github.com/algorand/go-algorand/crypto/compactcert"
 	"io"
 	"io/ioutil"
-	"math/rand"
+	"math"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/pooldata"
@@ -383,12 +383,12 @@ func BenchmarkTxnGroupDecodingOld(b *testing.B) {
 	}
 }
 
-func generateRandTypeInsideRange(maxType uint64) uint64 {
-	rand := rand.Uint32()
-	if uint64(rand) < maxType {
-		return uint64(rand)
+func generateRandTypeInsideRange(maxType uint16) uint16 {
+	rand := uint16(math.MaxUint16)
+	if rand < maxType {
+		return uint16(rand)
 	}
-	return uint64(rand) % maxType
+	return rand % maxType
 }
 
 // TestTxnGroupEncodingReflection generates random
@@ -506,16 +506,16 @@ func fixCertFields(CompactCertTxnFields *transactions.CompactCertTxnFields) {
 	// fix for the key for correct value
 	for i, r := range CompactCertTxnFields.Cert.Reveals {
 		data := r
-		data.SigSlot.Sig.VerifyingKey.Type = crypto.AlgorithmType(generateRandTypeInsideRange(uint64(crypto.MaxAlgorithmType)))
-		data.SigSlot.Sig.Proof.HashFactory.HashType = crypto.HashType(generateRandTypeInsideRange(uint64(crypto.MaxHashType)))
+		data.SigSlot.Sig.VerifyingKey.Type = crypto.AlgorithmType(generateRandTypeInsideRange(uint16(crypto.MaxAlgorithmType)))
+		data.SigSlot.Sig.Proof.HashFactory.HashType = crypto.HashType(generateRandTypeInsideRange(uint16(crypto.MaxHashType)))
 
 		newTypes[i] = data
 
 	}
 	CompactCertTxnFields.Cert.Reveals = newTypes
 
-	CompactCertTxnFields.Cert.PartProofs.HashFactory.HashType = crypto.HashType(generateRandTypeInsideRange(uint64(crypto.MaxHashType)))
-	CompactCertTxnFields.Cert.SigProofs.HashFactory.HashType = crypto.HashType(generateRandTypeInsideRange(uint64(crypto.MaxHashType)))
+	CompactCertTxnFields.Cert.PartProofs.HashFactory.HashType = crypto.HashType(generateRandTypeInsideRange(uint16(crypto.MaxHashType)))
+	CompactCertTxnFields.Cert.SigProofs.HashFactory.HashType = crypto.HashType(generateRandTypeInsideRange(uint16(crypto.MaxHashType)))
 }
 
 func getRandomSignedTxn(t *testing.T) transactions.SignedTxn {

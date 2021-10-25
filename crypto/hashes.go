@@ -45,11 +45,11 @@ func init() {
 }
 
 // HashType enum type for signing algorithms
-type HashType uint64
+type HashType uint16
 
 // IsValid verifies that the hash type is in a valid range.
-func (z HashType) IsValid() error {
-	if z >= MaxHashType {
+func (h HashType) IsValid() error {
+	if h >= MaxHashType {
 		return protocol.ErrInvalidObject
 	}
 	return nil
@@ -78,11 +78,6 @@ const (
 type HashFactory struct {
 	_struct  struct{} `codec:",omitempty,omitemptyarray"`
 	HashType HashType `codec:"t"`
-}
-
-// IsValid states whether the HashFactory is valid, and is safe to use.
-func (z *HashFactory) IsValid() error {
-	return z.HashType.IsValid()
 }
 
 var errUnknownHash = errors.New("unknown hash type")
@@ -123,6 +118,11 @@ func (z HashFactory) NewHash() hash.Hash {
 	default:
 		return invalidHash{}
 	}
+}
+
+// IsValid states whether the HashFactory is valid, and is safe to use.
+func (z *HashFactory) IsValid() error {
+	return z.HashType.IsValid()
 }
 
 // GenereicHashObj Makes it easier to sum using hash interface and Hashable interface
