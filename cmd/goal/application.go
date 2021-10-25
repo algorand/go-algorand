@@ -169,8 +169,6 @@ func init() {
 	readStateAppCmd.MarkFlagRequired("app-id")
 
 	infoAppCmd.MarkFlagRequired("app-id")
-
-	// TODO why this line always cause trouble in golangci-lint
 	methodAppCmd.MarkFlagRequired("method")
 }
 
@@ -1026,10 +1024,11 @@ var infoAppCmd = &cobra.Command{
 
 var methodAppCmd = &cobra.Command{
 	// TODO need more description
-	Use:   "method",
-	Short: "",
-	Long:  ``,
-	Args:  validateNoPosArgsFn,
+	Use:     "method",
+	Short:   "",
+	Long:    ``,
+	Args:    validateNoPosArgsFn,
+	PreRunE: validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		//cmd.HelpFunc()(cmd, args)
 	},
