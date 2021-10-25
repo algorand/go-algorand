@@ -71,6 +71,11 @@ func TestJSONtoInterfaceValid(t *testing.T) {
 			typeStr:  "()",
 			expected: []interface{}{},
 		},
+		{
+			input:    "[65, 66, 67]",
+			typeStr:  "string",
+			expected: "ABC",
+		},
 	}
 
 	for _, testCase := range testCases {

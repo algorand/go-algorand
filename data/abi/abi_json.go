@@ -17,7 +17,7 @@
 package abi
 
 import (
-	"encoding/base64"
+	//"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -90,6 +90,9 @@ func (t Type) MarshalToJSON(value interface{}) ([]byte, error) {
 		values, err := inferToSlice(value)
 		if err != nil {
 			return nil, err
+		}
+		if t.abiTypeID == ArrayStatic && int(t.staticLength) != len(values) {
+			return nil, fmt.Errorf("length of slice %d != type specific length %d", len(values), t.staticLength)
 		}
 		if t.childTypes[0].abiTypeID == Byte {
 			bytes := make([]byte, len(values))
@@ -181,27 +184,24 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 		}
 		return addr[:], nil
 	case ArrayStatic, ArrayDynamic:
-		stringEncoded := string(jsonEncoded)
-		if t.childTypes[0].abiTypeID == Byte && strings.HasPrefix(stringEncoded, `"`) {
-			// decode base64 and return array of byte
-			var stringB64 string
-			err := json.Unmarshal(jsonEncoded, &stringB64)
+		if t.childTypes[0].abiTypeID == Byte && strings.HasPrefix(string(jsonEncoded), `"`) {
+			var byteArr []byte
+			err := json.Unmarshal(jsonEncoded, &byteArr)
 			if err != nil {
-				return nil, fmt.Errorf("cannot cast JSON encoded (%s) to b64 string: %v", stringEncoded, err)
+				return nil, fmt.Errorf("cannot cast JSON encoded (%s) to bytes: %v", string(jsonEncoded), err)
 			}
-			out, err := base64.StdEncoding.DecodeString(stringB64)
-			if err != nil {
-				return nil, fmt.Errorf("cannot cast JSON encoded (%s) to bytes: %v", stringEncoded, err)
+			if t.abiTypeID == ArrayStatic && len(byteArr) != int(t.staticLength) {
+				return nil, fmt.Errorf("length of slice %d != type specific length %d", len(byteArr), t.staticLength)
 			}
-			outInterface := make([]interface{}, len(out))
-			for i := 0; i < len(out); i++ {
-				outInterface[i] = out[i]
+			outInterface := make([]interface{}, len(byteArr))
+			for i := 0; i < len(byteArr); i++ {
+				outInterface[i] = byteArr[i]
 			}
 			return outInterface, nil
 		}
 		var elems []json.RawMessage
 		if err := json.Unmarshal(jsonEncoded, &elems); err != nil {
-			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to array: %v", stringEncoded, err)
+			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to array: %v", string(jsonEncoded), err)
 		}
 		if t.abiTypeID == ArrayStatic && len(elems) != int(t.staticLength) {
 			return nil, fmt.Errorf("JSON array element number != ABI array elem number")
@@ -224,19 +224,11 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 			}
 			return stringVar, nil
 		} else if strings.HasPrefix(stringEncoded, "[") {
-			var elems []json.RawMessage
+			var elems []byte
 			if err := json.Unmarshal(jsonEncoded, &elems); err != nil {
 				return nil, fmt.Errorf("cannot cast JSON encoded (%s) to string: %v", stringEncoded, err)
 			}
-			elemsBytes := make([]byte, len(elems))
-			for i := 0; i < len(elems); i++ {
-				tempByte, err := byteType.UnmarshalFromJSON(elems[i])
-				if err != nil {
-					return nil, err
-				}
-				elemsBytes[i] = tempByte.(byte)
-			}
-			return string(elemsBytes), nil
+			return string(elems), nil
 		} else {
 			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to string", stringEncoded)
 		}
