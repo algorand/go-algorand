@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -357,6 +358,11 @@ func (fn *justRandomFakeNode) UpdatePeers(txsyncPeers []*Peer, netPeers []interf
 }
 func (fn *justRandomFakeNode) SendPeerMessage(netPeer interface{}, msg []byte, callback SendMessageCallback) {
 }
+
+func (fn *justRandomFakeNode) GetPeerLatency(netPeer interface{}) time.Duration {
+	return 0
+}
+
 func (fn *justRandomFakeNode) GetPendingTransactionGroups() (txGroups []pooldata.SignedTxGroup, latestLocallyOriginatedGroupCounter uint64) {
 	return
 }
