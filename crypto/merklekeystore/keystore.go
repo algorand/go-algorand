@@ -194,7 +194,7 @@ func (s *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 	if err = checkKeystoreParams(s.FirstValid, round, s.Interval); err != nil {
 		return Signature{}, err
 	}
-	
+
 	index := s.getMerkleTreeIndex(round)
 	proof, err := s.Tree.Prove([]uint64{index})
 	if err != nil {

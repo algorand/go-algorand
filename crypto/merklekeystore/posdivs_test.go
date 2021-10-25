@@ -65,7 +65,7 @@ func TestErrors(t *testing.T) {
 	firstValid := uint64(100)
 	interval := uint64(101)
 	round := uint64(0)
-	require.Equal(t, errRoundMultipleOfInterval, checkKeystoreParams(firstValid, round, interval))
+	require.Equal(t, errRoundNotZero, checkKeystoreParams(firstValid, round, interval))
 
 	round = interval - 1
 	require.Equal(t, errRoundMultipleOfInterval, checkKeystoreParams(firstValid, round, interval))
@@ -73,7 +73,9 @@ func TestErrors(t *testing.T) {
 	round = interval + 1
 	require.Equal(t, errRoundMultipleOfInterval, checkKeystoreParams(firstValid, round, interval))
 
+	firstValid = uint64(101)
 	round = firstValid - 1
+	interval = round / 2
 	require.Equal(t, errRoundFirstValid, checkKeystoreParams(firstValid, round, interval))
 
 	interval = 0
