@@ -31,13 +31,13 @@ func TestRoundToIndex(t *testing.T) {
 	ic := uint64(1)
 	checkRoundToIndex(count, ic, firstValid, interval, t)
 
-	// firstValid <= interval
+	// firstValid > interval
 	firstValid = uint64(100)
 	interval = uint64(99)
 	ic = uint64(2)
 	checkRoundToIndex(count, ic, firstValid, interval, t)
 
-	// firstValid <= interval
+	// firstValid >> interval
 	firstValid = uint64(100)
 	interval = uint64(20)
 	ic = uint64(5)
@@ -65,24 +65,24 @@ func TestErrors(t *testing.T) {
 	firstValid := uint64(100)
 	interval := uint64(101)
 	round := uint64(0)
-	require.Equal(t, errRoundMultipleOfInterval, check(firstValid, round, interval))
+	require.Equal(t, errRoundMultipleOfInterval, checkKeystoreParams(firstValid, round, interval))
 
 	round = interval - 1
-	require.Equal(t, errRoundMultipleOfInterval, check(firstValid, round, interval))
+	require.Equal(t, errRoundMultipleOfInterval, checkKeystoreParams(firstValid, round, interval))
 
 	round = interval + 1
-	require.Equal(t, errRoundMultipleOfInterval, check(firstValid, round, interval))
+	require.Equal(t, errRoundMultipleOfInterval, checkKeystoreParams(firstValid, round, interval))
 
 	round = firstValid - 1
-	require.Equal(t, errRoundFirstValid, check(firstValid, round, interval))
+	require.Equal(t, errRoundFirstValid, checkKeystoreParams(firstValid, round, interval))
 
 	interval = 0
-	require.Equal(t, errIntervalZero, check(firstValid, round, interval))
+	require.Equal(t, errIntervalZero, checkKeystoreParams(firstValid, round, interval))
 
 	interval = 107
 	round = 107
 	firstValid = 107
-	require.NoError(t, check(firstValid, round, interval))
+	require.NoError(t, checkKeystoreParams(firstValid, round, interval))
 }
 
 func checkIndexToRoundToIndex(count, firstValid, interval uint64, t *testing.T) {

@@ -20,15 +20,19 @@ import (
 	"errors"
 )
 
-var errRoundMultipleOfInterval = errors.New("round should be a multiple of the interval")
-var errRoundFirstValid = errors.New("round should be a multiple of the interval")
-var errIntervalZero = errors.New("interval should not be zero")
+var errRoundMultipleOfInterval = errors.New("the round should be a multiple of the interval")
+var errRoundFirstValid = errors.New("the round cannot be less than firstValid")
+var errIntervalZero = errors.New("the interval should not be zero")
+var errRoundNotZero = errors.New("the round should not be zero")
 
-func check(firstValid, round, interval uint64) error {
+func checkKeystoreParams(firstValid, round, interval uint64) error {
 	if interval == 0 {
 		return errIntervalZero
 	}
-	if round%interval != 0 || round < interval {
+	if round == 0 {
+		return errRoundNotZero
+	}
+	if round%interval != 0 {
 		return errRoundMultipleOfInterval
 	}
 	if round < firstValid {
@@ -39,7 +43,7 @@ func check(firstValid, round, interval uint64) error {
 
 func roundToIndex(firstValid, currentRound, interval uint64) uint64 {
 	rofi := roundOfFirstIndex(firstValid, interval)
-	return ((currentRound - rofi) + interval - 1) / interval
+	return (currentRound - rofi) / interval
 }
 
 func indexToRound(firstValid, interval, pos uint64) uint64 {
