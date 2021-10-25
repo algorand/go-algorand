@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // fillMessageQueue fills the message queue with the given message.
@@ -97,6 +99,8 @@ func (ml *queuedMsgList) validateLinking(t *testing.T) {
 
 // TestMsgQCounts tests the message queue add/remove manipulations
 func TestMsgQCounts(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	var list queuedMsgList
 	list.initialize(7)
 	list.validateLinking(t)
@@ -114,6 +118,8 @@ func TestMsgQCounts(t *testing.T) {
 
 // TestMsgQFiltering tests the message queue filtering
 func TestMsgQFiltering(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	item1 := &queuedMsgEntry{}
 	item2 := &queuedMsgEntry{}
 	item3 := &queuedMsgEntry{}

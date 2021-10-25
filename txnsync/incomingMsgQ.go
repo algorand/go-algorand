@@ -121,7 +121,6 @@ func (ml *queuedMsgList) remove(msg *queuedMsgEntry) {
 	}
 	msg.prev = msg
 	msg.next = msg
-	return
 }
 
 // filterRemove removes zero or more messages from the linked list, for which the given
