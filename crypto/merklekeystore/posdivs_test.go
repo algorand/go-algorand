@@ -20,9 +20,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestRoundToIndex(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	count := uint64(200)
 
 	// firstValid <= interval
@@ -45,6 +49,7 @@ func TestRoundToIndex(t *testing.T) {
 }
 
 func TestIndexToRoundToIndex(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	count := uint64(200)
 	firstValid := uint64(100)
@@ -61,6 +66,7 @@ func TestIndexToRoundToIndex(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	firstValid := uint64(100)
 	interval := uint64(101)
