@@ -365,6 +365,10 @@ func (pool *TransactionPool) computeFeePerByte() uint64 {
 		feePerByte *= pool.expFeeFactor
 	}
 
+	//	if pool.feePerByte != feePerByte {
+	//		fmt.Println("updating feePerByte old", pool.feePerByte, "new", feePerByte, "threshMult", pool.feeThresholdMultiplier, "numPendingWB", pool.numPendingWholeBlocks)
+	//	}
+
 	// Update the counter for fast reads
 	atomic.StoreUint64(&pool.feePerByte, feePerByte)
 
@@ -386,7 +390,7 @@ func (pool *TransactionPool) checkSufficientFee(txgroup pooldata.SignedTxGroup) 
 
 	// get the current fee per byte
 	feePerByte := pool.computeFeePerByte()
-
+	//fmt.Println("got feePerByte", feePerByte)
 	for _, t := range txgroup.Transactions {
 		feeThreshold := feePerByte * uint64(t.GetEncodedLength())
 		if t.Txn.Fee.Raw < feeThreshold {

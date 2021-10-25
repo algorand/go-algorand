@@ -19,8 +19,11 @@ package pools
 import (
 	"fmt"
 	"math/rand"
+	"os"
+	"runtime/pprof"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -1106,6 +1109,94 @@ func BenchmarkTransactionPoolPending(b *testing.B) {
 			sub(b, bps)
 		})
 	}
+}
+
+func TestTransactionPoolRecompute(t *testing.T) {
+	poolSize := 100000
+	numOfAccounts := 10
+	numTransactions := 75000
+	blockSize := 25000
+
+	// make new protocol supporting bigger blocks
+	myVersion := protocol.ConsensusVersion("test-large-blocks")
+	myProto := config.Consensus[protocol.ConsensusCurrentVersion]
+	myProto.MaxTxnBytesPerBlock = 5000000
+	config.Consensus[myVersion] = myProto
+
+	// Generate accounts
+	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
+	addresses := make([]basics.Address, numOfAccounts)
+
+	for i := 0; i < numOfAccounts; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		secrets[i] = secret
+		addresses[i] = addr
+	}
+
+	l := mockLedger(t, initAccFixed(addresses, 1<<32), myVersion)
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = poolSize
+	cfg.EnableProcessBlockStats = false
+	transactionPool := MakeTransactionPool(l, cfg, logging.Base())
+
+	// make some transactions
+	var signedTransactions []transactions.SignedTxn
+	for i := 0; i < numTransactions; i++ {
+		var receiver basics.Address
+		crypto.RandBytes(receiver[:])
+		tx := transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      addresses[i%numOfAccounts],
+				Fee:         basics.MicroAlgos{Raw: 20000 + proto.MinTxnFee},
+				FirstValid:  0,
+				LastValid:   basics.Round(proto.MaxTxnLife),
+				GenesisHash: l.GenesisHash(),
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: receiver,
+				Amount:   basics.MicroAlgos{Raw: proto.MinBalance},
+			},
+		}
+		//tx.Note = make([]byte, 8, 8)
+		//crypto.RandBytes(tx.Note)
+
+		signedTx, err := transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
+		require.NoError(t, err)
+		signedTransactions = append(signedTransactions, signedTx)
+	}
+
+	// add all txns to pool
+	for _, txn := range signedTransactions {
+		err := transactionPool.RememberOne(txn)
+		//stats := telemetryspec.AssembleBlockMetrics{}
+		//err := transactionPool.add(pooldata.SignedTxGroup{Transactions: []transactions.SignedTxn{txn}}, &stats)
+		require.NoError(t, err)
+	}
+
+	// make args for recomputeBlockEvaluator() like OnNewBlock() would
+	var knownCommitted uint
+	committedTxIds := make(map[transactions.Txid]basics.Round)
+	for i := 0; i < blockSize; i++ {
+		knownCommitted++
+		committedTxIds[signedTransactions[i].ID()] = basics.Round(1)
+	}
+
+	time.Sleep(time.Second)
+
+	// CPU profiler
+	f, err := os.Create(fmt.Sprintf("lastrun-%d.prof", crypto.RandUint64()))
+	require.NoError(t, err)
+
+	// call recomputeBlockEvaluator
+	t.Logf("calling recomputeBlockEvaluator on %d txn IDs", len(committedTxIds))
+	pprof.StartCPUProfile(f)
+	start := time.Now()
+	transactionPool.recomputeBlockEvaluator(committedTxIds, knownCommitted)
+	end := time.Since(start)
+	pprof.StopCPUProfile()
+	t.Logf("recomputeBlockEvaluator took %v", end)
 }
 
 func BenchmarkTransactionPoolSteadyState(b *testing.B) {

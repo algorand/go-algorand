@@ -798,6 +798,7 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 		if eval.validate {
 			groupTxBytes += txib.GetEncodedLength()
 			if eval.blockTxBytes+groupTxBytes > eval.maxTxnBytesPerBlock {
+				//fmt.Printf("size %v + %v > %v\n", eval.blockTxBytes, groupTxBytes, eval.maxTxnBytesPerBlock)
 				return ledgercore.ErrNoSpace
 			}
 		}
