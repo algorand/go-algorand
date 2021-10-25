@@ -169,7 +169,7 @@ func init() {
 	readStateAppCmd.MarkFlagRequired("app-id")
 
 	infoAppCmd.MarkFlagRequired("app-id")
-	methodAppCmd.MarkFlagRequired("method")
+	methodAppCmd.MarkFlagRequired("method") // nolint:errcheck
 }
 
 type appCallArg struct {
