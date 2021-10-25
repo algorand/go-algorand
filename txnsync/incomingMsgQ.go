@@ -91,7 +91,7 @@ func (ml *queuedMsgList) dequeueHead() (out *queuedMsgEntry) {
 	return
 }
 
-// dequeueHead initialize a list to have msgCount entries.
+// initialize initializes a list to have msgCount entries.
 func (ml *queuedMsgList) initialize(msgCount int) {
 	msgs := make([]queuedMsgEntry, msgCount)
 	for i := 0; i < msgCount; i++ {
