@@ -327,12 +327,12 @@ commands:
       - store_artifacts:
           path: << parameters.result_path >>
           destination: test-results
-      - store_test_results:
-          path: << parameters.result_path >>
       - persist_to_workspace:
           root: << parameters.result_path >>
           paths:
             - << parameters.result_subdir >>
+      - store_circleci_test_results:
+          path: << parameters.result_path >>
       - save_cache:
           key: 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-{{ .Environment.CIRCLE_BUILD_NUM }}'
           paths:
@@ -349,6 +349,20 @@ commands:
           no_output_timeout: 10m
           command: |
             scripts/travis/upload_coverage.sh || true
+
+  store_circleci_test_results:
+    description: Report XML build reports to CircleCI
+    parameters:
+      path:
+        type: string
+    steps:
+      - run:
+          name: Preprocess test results
+          when: always
+          command: |
+            perl -0777 -i -pe 's|<testcase classname="github.com/algorand/go-algorand/test/e2e-go/cli/(goal\|algoh)/expect" name="Test(Algoh\|Goal)WithExpect".*?</testcase>||gs' << parameters.path >>/*/*.xml
+      - store_test_results:
+          path: << parameters.path >>
 
   upload_to_buildpulse:
     description: Collect build reports and upload them
@@ -436,12 +450,12 @@ commands:
       - store_artifacts:
           path: << parameters.result_path >>
           destination: test-results
-      - store_test_results:
-          path: << parameters.result_path >>
       - persist_to_workspace:
           root: << parameters.result_path >>
           paths:
             - << parameters.result_subdir >>
+      - store_circleci_test_results:
+          path: << parameters.result_path >>
       - upload_to_buildpulse:
           platform: << parameters.platform >>
           path: << parameters.result_path >>/<< parameters.result_subdir>>
