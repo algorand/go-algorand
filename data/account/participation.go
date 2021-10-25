@@ -239,8 +239,8 @@ func (part PersistedParticipation) Persist() error {
 			return fmt.Errorf("failed to install database: %w", err)
 		}
 
-		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, stateProof, firstValid, lastValid, keyDilution) VALUES (?, ?, ?, ?, ?, ?,?)",
-			part.Parent[:], rawVRF, rawVoting, rawStateProof, part.FirstValid, part.LastValid, part.KeyDilution)
+		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, firstValid, lastValid, keyDilution, stateProof) VALUES (?, ?, ?, ?, ?, ?,?)",
+			part.Parent[:], rawVRF, rawVoting, part.FirstValid, part.LastValid, part.KeyDilution, rawStateProof)
 		if err != nil {
 			return fmt.Errorf("failed to insert account: %w", err)
 		}
