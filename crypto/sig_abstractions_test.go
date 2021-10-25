@@ -14,24 +14,27 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledgercore
+package crypto
 
 import (
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
-	"github.com/algorand/go-algorand/data/basics"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// An OnlineAccount corresponds to an account whose AccountData.Status
-// is Online.  This is used for a Merkle tree commitment of online
-// accounts, which is subsequently used to validate participants for
-// a compact certificate.
-type OnlineAccount struct {
-	// These are a subset of the fields from the corresponding AccountData.
-	Address                 basics.Address
-	MicroAlgos              basics.MicroAlgos
-	RewardsBase             uint64
-	NormalizedOnlineBalance uint64
-	VoteFirstValid          basics.Round
-	VoteLastValid           basics.Round
-	StateProofID            merklekeystore.Verifier
+func TestInvalidSinger(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	sigAlgo, err := NewSigner(Ed25519Type)
+	a.NoError(err)
+	sigAlgo.Type = maxAlgorithmType
+
+	dummyMsg := make([]byte, 6)
+	a.Equal(ByteSignature{}, sigAlgo.GetSigner().SignBytes(dummyMsg))
+
+	dummySig := make([]byte, 6)
+	a.Error(sigAlgo.GetSigner().GetVerifyingKey().GetVerifier().VerifyBytes(dummySig, dummyMsg))
 }

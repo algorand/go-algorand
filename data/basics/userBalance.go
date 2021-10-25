@@ -163,7 +163,7 @@ type AccountData struct {
 
 	VoteID       crypto.OneTimeSignatureVerifier `codec:"vote"`
 	SelectionID  crypto.VRFVerifier              `codec:"sel"`
-	BlockProofID merklekeystore.Verifier         `codec:"blkprf"`
+	StateProofID merklekeystore.Verifier         `codec:"stprf"`
 
 	VoteFirstValid  Round  `codec:"voteFst"`
 	VoteLastValid   Round  `codec:"voteLst"`
@@ -454,7 +454,7 @@ func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLev
 		u.RewardsBase = rewardsLevel
 		// The total reward over the lifetime of the account could exceed a 64-bit value. As a result
 		// this rewardAlgos counter could potentially roll over.
-		u.RewardedMicroAlgos = MicroAlgos{Raw: (u.RewardedMicroAlgos.Raw + rewards.Raw)}
+		u.RewardedMicroAlgos = MicroAlgos{Raw: u.RewardedMicroAlgos.Raw + rewards.Raw}
 	}
 
 	return u

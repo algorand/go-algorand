@@ -320,8 +320,8 @@ func (stub *txGroupsEncodingStub) deconstructKeyregTxnFields(i int, txn *transac
 		stub.VotePK = append(stub.VotePK, txn.Txn.VotePK[:]...)
 		stub.SelectionPK = append(stub.SelectionPK, txn.Txn.SelectionPK[:]...)
 		stub.VoteKeyDilution = append(stub.VoteKeyDilution, txn.Txn.VoteKeyDilution)
-		stub.HasValidRoot = append(stub.HasValidRoot, txn.Txn.BlockProofPK.HasValidRoot)
-		stub.CommitmentRoot = append(stub.CommitmentRoot, txn.Txn.BlockProofPK.Root[:]...)
+		stub.HasValidRoot = append(stub.HasValidRoot, txn.Txn.StateProofPK.HasValidRoot)
+		stub.CommitmentRoot = append(stub.CommitmentRoot, txn.Txn.StateProofPK.Root[:]...)
 	}
 	if !txn.Txn.VoteFirst.MsgIsZero() {
 		if len(stub.BitmaskVoteFirst) == 0 {

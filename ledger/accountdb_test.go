@@ -291,7 +291,7 @@ func TestAccountDBRound(t *testing.T) {
 	require.Equal(t, expectedTotals, actualTotals)
 }
 
-func TestAccountStorageWithBlockProofID(t *testing.T) {
+func TestAccountStorageWithStateProofID(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusFuture]
 
 	dbs, _ := dbOpenTest(t, true)
@@ -306,7 +306,7 @@ func TestAccountStorageWithBlockProofID(t *testing.T) {
 	_, err = accountsInit(tx, accts, proto)
 	require.NoError(t, err)
 	checkAccounts(t, tx, 0, accts)
-	require.True(t, allAccountsHaveBlockProofPKs(accts))
+	require.True(t, allAccountsHaveStateProofPKs(accts))
 
 	var baseAccounts lruAccounts
 	baseAccounts.init(nil, 100, 80)
@@ -336,13 +336,13 @@ func TestAccountStorageWithBlockProofID(t *testing.T) {
 	require.NoError(t, err)
 	checkAccounts(t, tx, basics.Round(1), accts)
 	accounts, err := accountsAll(tx)
-	require.True(t, allAccountsHaveBlockProofPKs(accounts))
+	require.True(t, allAccountsHaveStateProofPKs(accounts))
 	require.Equal(t, accts, accounts)
 }
 
-func allAccountsHaveBlockProofPKs(accts map[basics.Address]basics.AccountData) bool {
+func allAccountsHaveStateProofPKs(accts map[basics.Address]basics.AccountData) bool {
 	for _, data := range accts {
-		if data.BlockProofID == (merklekeystore.Verifier{}) {
+		if data.StateProofID == (merklekeystore.Verifier{}) {
 			return false
 		}
 	}

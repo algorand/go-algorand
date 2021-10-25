@@ -1425,6 +1425,9 @@ func (z *HashFactory) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 	}
 	o = bts
+	if err = z.IsValid(); err != nil {
+		return
+	}
 	return
 }
 
@@ -2984,7 +2987,7 @@ func (z *PackedSignatureAlgorithm) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
-	var zb0001Mask uint8 /* 3 bits */
+	var zb0001Mask uint8 /* 4 bits */
 	if (*z).DilithiumSigner.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -3113,7 +3116,7 @@ func (z *PackedVerifyingKey) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0002Len := uint32(2)
-	var zb0002Mask uint8 /* 3 bits */
+	var zb0002Mask uint8 /* 4 bits */
 	if (*z).DilithiumPublicKey.PublicKey == (DPublicKey{}) {
 		zb0002Len--
 		zb0002Mask |= 0x2
@@ -3625,7 +3628,7 @@ func (z *SignatureAlgorithm) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
 	var zb0001Mask uint8 /* 3 bits */
-	if ((*z).Pack.DilithiumSigner.MsgIsZero()) && ((*z).Pack.Ed25519Singer.MsgIsZero()) {
+	if (*z).Pack.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
@@ -3639,29 +3642,7 @@ func (z *SignatureAlgorithm) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "keys"
 			o = append(o, 0xa4, 0x6b, 0x65, 0x79, 0x73)
-			// omitempty: check for empty values
-			zb0002Len := uint32(2)
-			var zb0002Mask uint8 /* 3 bits */
-			if (*z).Pack.DilithiumSigner.MsgIsZero() {
-				zb0002Len--
-				zb0002Mask |= 0x2
-			}
-			if (*z).Pack.Ed25519Singer.MsgIsZero() {
-				zb0002Len--
-				zb0002Mask |= 0x4
-			}
-			// variable map header, size zb0002Len
-			o = append(o, 0x80|uint8(zb0002Len))
-			if (zb0002Mask & 0x2) == 0 { // if not empty
-				// string "ds"
-				o = append(o, 0xa2, 0x64, 0x73)
-				o = (*z).Pack.DilithiumSigner.MarshalMsg(o)
-			}
-			if (zb0002Mask & 0x4) == 0 { // if not empty
-				// string "edds"
-				o = append(o, 0xa4, 0x65, 0x64, 0x64, 0x73)
-				o = (*z).Pack.Ed25519Singer.MarshalMsg(o)
-			}
+			o = (*z).Pack.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "sigType"
@@ -3704,74 +3685,10 @@ func (z *SignatureAlgorithm) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			var zb0004 int
-			var zb0005 bool
-			zb0004, zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
-			if _, ok := err.(msgp.TypeError); ok {
-				zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Pack")
-					return
-				}
-				if zb0004 > 0 {
-					zb0004--
-					bts, err = (*z).Pack.DilithiumSigner.UnmarshalMsg(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Pack", "struct-from-array", "DilithiumSigner")
-						return
-					}
-				}
-				if zb0004 > 0 {
-					zb0004--
-					bts, err = (*z).Pack.Ed25519Singer.UnmarshalMsg(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Pack", "struct-from-array", "Ed25519Singer")
-						return
-					}
-				}
-				if zb0004 > 0 {
-					err = msgp.ErrTooManyArrayFields(zb0004)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Pack", "struct-from-array")
-						return
-					}
-				}
-			} else {
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Pack")
-					return
-				}
-				if zb0005 {
-					(*z).Pack = PackedSignatureAlgorithm{}
-				}
-				for zb0004 > 0 {
-					zb0004--
-					field, bts, err = msgp.ReadMapKeyZC(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Pack")
-						return
-					}
-					switch string(field) {
-					case "ds":
-						bts, err = (*z).Pack.DilithiumSigner.UnmarshalMsg(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "Pack", "DilithiumSigner")
-							return
-						}
-					case "edds":
-						bts, err = (*z).Pack.Ed25519Singer.UnmarshalMsg(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "Pack", "Ed25519Singer")
-							return
-						}
-					default:
-						err = msgp.ErrNoField(string(field))
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "Pack")
-							return
-						}
-					}
-				}
+			bts, err = (*z).Pack.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Pack")
+				return
 			}
 		}
 		if zb0001 > 0 {
@@ -3799,83 +3716,19 @@ func (z *SignatureAlgorithm) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			switch string(field) {
 			case "sigType":
 				{
-					var zb0006 uint64
-					zb0006, bts, err = msgp.ReadUint64Bytes(bts)
+					var zb0004 uint64
+					zb0004, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "Type")
 						return
 					}
-					(*z).Type = AlgorithmType(zb0006)
+					(*z).Type = AlgorithmType(zb0004)
 				}
 			case "keys":
-				var zb0007 int
-				var zb0008 bool
-				zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if _, ok := err.(msgp.TypeError); ok {
-					zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Pack")
-						return
-					}
-					if zb0007 > 0 {
-						zb0007--
-						bts, err = (*z).Pack.DilithiumSigner.UnmarshalMsg(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "Pack", "struct-from-array", "DilithiumSigner")
-							return
-						}
-					}
-					if zb0007 > 0 {
-						zb0007--
-						bts, err = (*z).Pack.Ed25519Singer.UnmarshalMsg(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "Pack", "struct-from-array", "Ed25519Singer")
-							return
-						}
-					}
-					if zb0007 > 0 {
-						err = msgp.ErrTooManyArrayFields(zb0007)
-						if err != nil {
-							err = msgp.WrapError(err, "Pack", "struct-from-array")
-							return
-						}
-					}
-				} else {
-					if err != nil {
-						err = msgp.WrapError(err, "Pack")
-						return
-					}
-					if zb0008 {
-						(*z).Pack = PackedSignatureAlgorithm{}
-					}
-					for zb0007 > 0 {
-						zb0007--
-						field, bts, err = msgp.ReadMapKeyZC(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "Pack")
-							return
-						}
-						switch string(field) {
-						case "ds":
-							bts, err = (*z).Pack.DilithiumSigner.UnmarshalMsg(bts)
-							if err != nil {
-								err = msgp.WrapError(err, "Pack", "DilithiumSigner")
-								return
-							}
-						case "edds":
-							bts, err = (*z).Pack.Ed25519Singer.UnmarshalMsg(bts)
-							if err != nil {
-								err = msgp.WrapError(err, "Pack", "Ed25519Singer")
-								return
-							}
-						default:
-							err = msgp.ErrNoField(string(field))
-							if err != nil {
-								err = msgp.WrapError(err, "Pack")
-								return
-							}
-						}
-					}
+				bts, err = (*z).Pack.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Pack")
+					return
 				}
 			default:
 				err = msgp.ErrNoField(string(field))
@@ -3887,6 +3740,9 @@ func (z *SignatureAlgorithm) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 	}
 	o = bts
+	if err = z.IsValid(); err != nil {
+		return
+	}
 	return
 }
 
@@ -3897,13 +3753,13 @@ func (_ *SignatureAlgorithm) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignatureAlgorithm) Msgsize() (s int) {
-	s = 1 + 8 + msgp.Uint64Size + 5 + 1 + 3 + (*z).Pack.DilithiumSigner.Msgsize() + 5 + (*z).Pack.Ed25519Singer.Msgsize()
+	s = 1 + 8 + msgp.Uint64Size + 5 + (*z).Pack.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *SignatureAlgorithm) MsgIsZero() bool {
-	return ((*z).Type == 0) && (((*z).Pack.DilithiumSigner.MsgIsZero()) && ((*z).Pack.Ed25519Singer.MsgIsZero()))
+	return ((*z).Type == 0) && ((*z).Pack.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -4246,6 +4102,9 @@ func (z *VerifyingKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 	}
 	o = bts
+	if err = z.IsValid(); err != nil {
+		return
+	}
 	return
 }
 

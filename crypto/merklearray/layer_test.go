@@ -30,7 +30,7 @@ func TestLayerHash(t *testing.T) {
 	var p = pair{make([]byte, crypto.Sha512_256Size), make([]byte, crypto.Sha512_256Size)}
 	crypto.RandBytes(p.l[:])
 	crypto.RandBytes(p.r[:])
-	hsh, _ := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
+	hsh := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
 
 	require.Equal(t, crypto.GenereicHashObj(hsh, &p), crypto.HashBytes(hsh, p.Marshal()))
 }

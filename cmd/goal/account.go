@@ -1284,7 +1284,7 @@ type partkeyInfo struct {
 	LastValid       basics.Round                    `codec:"last"`
 	VoteID          crypto.OneTimeSignatureVerifier `codec:"vote"`
 	SelectionID     crypto.VRFVerifier              `codec:"sel"`
-	BlockProofID    merklekeystore.Verifier         `codec:"blkprf"`
+	StateProofID    merklekeystore.Verifier         `codec:"stprf"`
 	VoteKeyDilution uint64                          `codec:"voteKD"`
 }
 
@@ -1316,8 +1316,8 @@ var partkeyInfoCmd = &cobra.Command{
 					SelectionID:     part.VRFSecrets().PK,
 					VoteKeyDilution: part.KeyDilution,
 				}
-				if certSigner := part.BlockProofSigner(); certSigner != nil {
-					info.BlockProofID = *certSigner.GetVerifier()
+				if certSigner := part.StateProofSigner(); certSigner != nil {
+					info.StateProofID = *certSigner.GetVerifier()
 				}
 				infoString := protocol.EncodeJSON(&info)
 				fmt.Printf("File: %s\n%s\n", filename, string(infoString))

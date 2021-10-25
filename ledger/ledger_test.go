@@ -1085,7 +1085,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 	}
 
 	// depends on what the concensus is need to generate correct KeyregTxnFields.
-	if proto.EnableBlockProofKeyregCheck {
+	if proto.EnableStateProofKeyregCheck {
 		frst, lst := uint64(correctKeyregFields.VoteFirst), uint64(correctKeyregFields.VoteLast)
 		store, err := db.MakeAccessor("test-DB", false, true)
 		a.NoError(err)
@@ -1093,13 +1093,13 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 		root, err := account.GenerateRoot(store)
 		a.NoError(err)
 		p, err := account.FillDBWithParticipationKeys(store, root.Address(), basics.Round(frst), basics.Round(lst), config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
-		signer := p.Participation.BlockProof
+		signer := p.Participation.StateProofSecrets
 		//signer, err := merklekeystore.New(frst, lst, 1, crypto.Ed25519Type)
 		require.NoError(t, err)
 
-		correctKeyregFields.BlockProofPK = *(signer.GetVerifier())
+		correctKeyregFields.StateProofPK = *(signer.GetVerifier())
 	} else {
-		correctKeyregFields.BlockProofPK = merklekeystore.Verifier{}
+		correctKeyregFields.StateProofPK = merklekeystore.Verifier{}
 	}
 
 	correctKeyreg := transactions.Transaction{

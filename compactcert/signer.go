@@ -121,9 +121,9 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 			continue
 		}
 
-		sig, err := key.BlockProof.Sign(hdr, uint64(hdr.Round))
+		sig, err := key.StateProofSecrets.Sign(hdr, uint64(hdr.Round))
 		if err != nil {
-			ccw.log.Warnf("ccw.signBlock(%d): BlockProof.Sign: %v", hdr.Round, err)
+			ccw.log.Warnf("ccw.signBlock(%d): StateProof.Sign: %v", hdr.Round, err)
 			continue
 		}
 

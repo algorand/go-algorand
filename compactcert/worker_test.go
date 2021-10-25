@@ -135,13 +135,13 @@ func (s *testWorkerStubs) CompactCertVoters(r basics.Round) (*ledgercore.VotersF
 	for i, k := range s.keysForVoters {
 		voters.AddrToPos[k.Parent] = uint64(i)
 		voters.Participants = append(voters.Participants, basics.Participant{
-			PK:         *k.BlockProof.GetVerifier(),
+			PK:         *k.StateProofSecrets.GetVerifier(),
 			Weight:     1,
 			FirstValid: uint64(k.FirstValid),
 		})
 	}
 
-	tree, err := merklearray.Build(voters.Participants, crypto.HashFactory{HashType: crypto.Sha512_256})
+	tree, err := merklearray.Build(voters.Participants, crypto.HashFactory{HashType: compactcert.HashType})
 	if err != nil {
 		return nil, err
 	}

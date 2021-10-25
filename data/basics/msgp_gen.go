@@ -222,27 +222,27 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte) {
 		zb0009Len--
 		zb0009Mask |= 0x20
 	}
-	if (*z).BlockProofID.MsgIsZero() {
+	if (*z).RewardsBase == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x40
 	}
-	if (*z).RewardsBase == 0 {
+	if (*z).RewardedMicroAlgos.MsgIsZero() {
 		zb0009Len--
 		zb0009Mask |= 0x80
 	}
-	if (*z).RewardedMicroAlgos.MsgIsZero() {
+	if (*z).Status == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x100
 	}
-	if (*z).Status == 0 {
+	if (*z).SelectionID.MsgIsZero() {
 		zb0009Len--
 		zb0009Mask |= 0x200
 	}
-	if (*z).SelectionID.MsgIsZero() {
+	if (*z).AuthAddr.MsgIsZero() {
 		zb0009Len--
 		zb0009Mask |= 0x400
 	}
-	if (*z).AuthAddr.MsgIsZero() {
+	if (*z).StateProofID.MsgIsZero() {
 		zb0009Len--
 		zb0009Mask |= 0x800
 	}
@@ -383,34 +383,34 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte) {
 			}
 		}
 		if (zb0009Mask & 0x40) == 0 { // if not empty
-			// string "blkprf"
-			o = append(o, 0xa6, 0x62, 0x6c, 0x6b, 0x70, 0x72, 0x66)
-			o = (*z).BlockProofID.MarshalMsg(o)
-		}
-		if (zb0009Mask & 0x80) == 0 { // if not empty
 			// string "ebase"
 			o = append(o, 0xa5, 0x65, 0x62, 0x61, 0x73, 0x65)
 			o = msgp.AppendUint64(o, (*z).RewardsBase)
 		}
-		if (zb0009Mask & 0x100) == 0 { // if not empty
+		if (zb0009Mask & 0x80) == 0 { // if not empty
 			// string "ern"
 			o = append(o, 0xa3, 0x65, 0x72, 0x6e)
 			o = (*z).RewardedMicroAlgos.MarshalMsg(o)
 		}
-		if (zb0009Mask & 0x200) == 0 { // if not empty
+		if (zb0009Mask & 0x100) == 0 { // if not empty
 			// string "onl"
 			o = append(o, 0xa3, 0x6f, 0x6e, 0x6c)
 			o = msgp.AppendByte(o, byte((*z).Status))
 		}
-		if (zb0009Mask & 0x400) == 0 { // if not empty
+		if (zb0009Mask & 0x200) == 0 { // if not empty
 			// string "sel"
 			o = append(o, 0xa3, 0x73, 0x65, 0x6c)
 			o = (*z).SelectionID.MarshalMsg(o)
 		}
-		if (zb0009Mask & 0x800) == 0 { // if not empty
+		if (zb0009Mask & 0x400) == 0 { // if not empty
 			// string "spend"
 			o = append(o, 0xa5, 0x73, 0x70, 0x65, 0x6e, 0x64)
 			o = (*z).AuthAddr.MarshalMsg(o)
+		}
+		if (zb0009Mask & 0x800) == 0 { // if not empty
+			// string "stprf"
+			o = append(o, 0xa5, 0x73, 0x74, 0x70, 0x72, 0x66)
+			o = (*z).StateProofID.MarshalMsg(o)
 		}
 		if (zb0009Mask & 0x1000) == 0 { // if not empty
 			// string "teap"
@@ -540,9 +540,9 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0009 > 0 {
 			zb0009--
-			bts, err = (*z).BlockProofID.UnmarshalMsg(bts)
+			bts, err = (*z).StateProofID.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "BlockProofID")
+				err = msgp.WrapError(err, "struct-from-array", "StateProofID")
 				return
 			}
 		}
@@ -937,10 +937,10 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "SelectionID")
 					return
 				}
-			case "blkprf":
-				bts, err = (*z).BlockProofID.UnmarshalMsg(bts)
+			case "stprf":
+				bts, err = (*z).StateProofID.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "BlockProofID")
+					err = msgp.WrapError(err, "StateProofID")
 					return
 				}
 			case "voteFst":
@@ -1271,7 +1271,7 @@ func (_ *AccountData) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *AccountData) Msgsize() (s int) {
-	s = 3 + 4 + msgp.ByteSize + 5 + (*z).MicroAlgos.Msgsize() + 6 + msgp.Uint64Size + 4 + (*z).RewardedMicroAlgos.Msgsize() + 5 + (*z).VoteID.Msgsize() + 4 + (*z).SelectionID.Msgsize() + 7 + (*z).BlockProofID.Msgsize() + 8 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 5 + msgp.MapHeaderSize
+	s = 3 + 4 + msgp.ByteSize + 5 + (*z).MicroAlgos.Msgsize() + 6 + msgp.Uint64Size + 4 + (*z).RewardedMicroAlgos.Msgsize() + 5 + (*z).VoteID.Msgsize() + 4 + (*z).SelectionID.Msgsize() + 6 + (*z).StateProofID.Msgsize() + 8 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 5 + msgp.MapHeaderSize
 	if (*z).AssetParams != nil {
 		for zb0001, zb0002 := range (*z).AssetParams {
 			_ = zb0001
@@ -1309,7 +1309,7 @@ func (z *AccountData) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *AccountData) MsgIsZero() bool {
-	return ((*z).Status == 0) && ((*z).MicroAlgos.MsgIsZero()) && ((*z).RewardsBase == 0) && ((*z).RewardedMicroAlgos.MsgIsZero()) && ((*z).VoteID.MsgIsZero()) && ((*z).SelectionID.MsgIsZero()) && ((*z).BlockProofID.MsgIsZero()) && ((*z).VoteFirstValid == 0) && ((*z).VoteLastValid == 0) && ((*z).VoteKeyDilution == 0) && (len((*z).AssetParams) == 0) && (len((*z).Assets) == 0) && ((*z).AuthAddr.MsgIsZero()) && (len((*z).AppLocalStates) == 0) && (len((*z).AppParams) == 0) && (((*z).TotalAppSchema.NumUint == 0) && ((*z).TotalAppSchema.NumByteSlice == 0)) && ((*z).TotalExtraAppPages == 0)
+	return ((*z).Status == 0) && ((*z).MicroAlgos.MsgIsZero()) && ((*z).RewardsBase == 0) && ((*z).RewardedMicroAlgos.MsgIsZero()) && ((*z).VoteID.MsgIsZero()) && ((*z).SelectionID.MsgIsZero()) && ((*z).StateProofID.MsgIsZero()) && ((*z).VoteFirstValid == 0) && ((*z).VoteLastValid == 0) && ((*z).VoteKeyDilution == 0) && (len((*z).AssetParams) == 0) && (len((*z).Assets) == 0) && ((*z).AuthAddr.MsgIsZero()) && (len((*z).AppLocalStates) == 0) && (len((*z).AppParams) == 0) && (((*z).TotalAppSchema.NumUint == 0) && ((*z).TotalAppSchema.NumByteSlice == 0)) && ((*z).TotalExtraAppPages == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2924,27 +2924,27 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte) {
 		zb0009Len--
 		zb0009Mask |= 0x80
 	}
-	if (*z).AccountData.BlockProofID.MsgIsZero() {
+	if (*z).AccountData.RewardsBase == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x100
 	}
-	if (*z).AccountData.RewardsBase == 0 {
+	if (*z).AccountData.RewardedMicroAlgos.MsgIsZero() {
 		zb0009Len--
 		zb0009Mask |= 0x200
 	}
-	if (*z).AccountData.RewardedMicroAlgos.MsgIsZero() {
+	if (*z).AccountData.Status == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x400
 	}
-	if (*z).AccountData.Status == 0 {
+	if (*z).AccountData.SelectionID.MsgIsZero() {
 		zb0009Len--
 		zb0009Mask |= 0x800
 	}
-	if (*z).AccountData.SelectionID.MsgIsZero() {
+	if (*z).AccountData.AuthAddr.MsgIsZero() {
 		zb0009Len--
 		zb0009Mask |= 0x1000
 	}
-	if (*z).AccountData.AuthAddr.MsgIsZero() {
+	if (*z).AccountData.StateProofID.MsgIsZero() {
 		zb0009Len--
 		zb0009Mask |= 0x2000
 	}
@@ -3090,34 +3090,34 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte) {
 			}
 		}
 		if (zb0009Mask & 0x100) == 0 { // if not empty
-			// string "blkprf"
-			o = append(o, 0xa6, 0x62, 0x6c, 0x6b, 0x70, 0x72, 0x66)
-			o = (*z).AccountData.BlockProofID.MarshalMsg(o)
-		}
-		if (zb0009Mask & 0x200) == 0 { // if not empty
 			// string "ebase"
 			o = append(o, 0xa5, 0x65, 0x62, 0x61, 0x73, 0x65)
 			o = msgp.AppendUint64(o, (*z).AccountData.RewardsBase)
 		}
-		if (zb0009Mask & 0x400) == 0 { // if not empty
+		if (zb0009Mask & 0x200) == 0 { // if not empty
 			// string "ern"
 			o = append(o, 0xa3, 0x65, 0x72, 0x6e)
 			o = (*z).AccountData.RewardedMicroAlgos.MarshalMsg(o)
 		}
-		if (zb0009Mask & 0x800) == 0 { // if not empty
+		if (zb0009Mask & 0x400) == 0 { // if not empty
 			// string "onl"
 			o = append(o, 0xa3, 0x6f, 0x6e, 0x6c)
 			o = msgp.AppendByte(o, byte((*z).AccountData.Status))
 		}
-		if (zb0009Mask & 0x1000) == 0 { // if not empty
+		if (zb0009Mask & 0x800) == 0 { // if not empty
 			// string "sel"
 			o = append(o, 0xa3, 0x73, 0x65, 0x6c)
 			o = (*z).AccountData.SelectionID.MarshalMsg(o)
 		}
-		if (zb0009Mask & 0x2000) == 0 { // if not empty
+		if (zb0009Mask & 0x1000) == 0 { // if not empty
 			// string "spend"
 			o = append(o, 0xa5, 0x73, 0x70, 0x65, 0x6e, 0x64)
 			o = (*z).AccountData.AuthAddr.MarshalMsg(o)
+		}
+		if (zb0009Mask & 0x2000) == 0 { // if not empty
+			// string "stprf"
+			o = append(o, 0xa5, 0x73, 0x74, 0x70, 0x72, 0x66)
+			o = (*z).AccountData.StateProofID.MarshalMsg(o)
 		}
 		if (zb0009Mask & 0x4000) == 0 { // if not empty
 			// string "teap"
@@ -3255,9 +3255,9 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0009 > 0 {
 			zb0009--
-			bts, err = (*z).AccountData.BlockProofID.UnmarshalMsg(bts)
+			bts, err = (*z).AccountData.StateProofID.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "BlockProofID")
+				err = msgp.WrapError(err, "struct-from-array", "StateProofID")
 				return
 			}
 		}
@@ -3658,10 +3658,10 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "SelectionID")
 					return
 				}
-			case "blkprf":
-				bts, err = (*z).AccountData.BlockProofID.UnmarshalMsg(bts)
+			case "stprf":
+				bts, err = (*z).AccountData.StateProofID.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "BlockProofID")
+					err = msgp.WrapError(err, "StateProofID")
 					return
 				}
 			case "voteFst":
@@ -3992,7 +3992,7 @@ func (_ *BalanceRecord) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BalanceRecord) Msgsize() (s int) {
-	s = 3 + 5 + (*z).Addr.Msgsize() + 4 + msgp.ByteSize + 5 + (*z).AccountData.MicroAlgos.Msgsize() + 6 + msgp.Uint64Size + 4 + (*z).AccountData.RewardedMicroAlgos.Msgsize() + 5 + (*z).AccountData.VoteID.Msgsize() + 4 + (*z).AccountData.SelectionID.Msgsize() + 7 + (*z).AccountData.BlockProofID.Msgsize() + 8 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 5 + msgp.MapHeaderSize
+	s = 3 + 5 + (*z).Addr.Msgsize() + 4 + msgp.ByteSize + 5 + (*z).AccountData.MicroAlgos.Msgsize() + 6 + msgp.Uint64Size + 4 + (*z).AccountData.RewardedMicroAlgos.Msgsize() + 5 + (*z).AccountData.VoteID.Msgsize() + 4 + (*z).AccountData.SelectionID.Msgsize() + 6 + (*z).AccountData.StateProofID.Msgsize() + 8 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 5 + msgp.MapHeaderSize
 	if (*z).AccountData.AssetParams != nil {
 		for zb0001, zb0002 := range (*z).AccountData.AssetParams {
 			_ = zb0001
@@ -4030,7 +4030,7 @@ func (z *BalanceRecord) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *BalanceRecord) MsgIsZero() bool {
-	return ((*z).Addr.MsgIsZero()) && ((*z).AccountData.Status == 0) && ((*z).AccountData.MicroAlgos.MsgIsZero()) && ((*z).AccountData.RewardsBase == 0) && ((*z).AccountData.RewardedMicroAlgos.MsgIsZero()) && ((*z).AccountData.VoteID.MsgIsZero()) && ((*z).AccountData.SelectionID.MsgIsZero()) && ((*z).AccountData.BlockProofID.MsgIsZero()) && ((*z).AccountData.VoteFirstValid == 0) && ((*z).AccountData.VoteLastValid == 0) && ((*z).AccountData.VoteKeyDilution == 0) && (len((*z).AccountData.AssetParams) == 0) && (len((*z).AccountData.Assets) == 0) && ((*z).AccountData.AuthAddr.MsgIsZero()) && (len((*z).AccountData.AppLocalStates) == 0) && (len((*z).AccountData.AppParams) == 0) && (((*z).AccountData.TotalAppSchema.NumUint == 0) && ((*z).AccountData.TotalAppSchema.NumByteSlice == 0)) && ((*z).AccountData.TotalExtraAppPages == 0)
+	return ((*z).Addr.MsgIsZero()) && ((*z).AccountData.Status == 0) && ((*z).AccountData.MicroAlgos.MsgIsZero()) && ((*z).AccountData.RewardsBase == 0) && ((*z).AccountData.RewardedMicroAlgos.MsgIsZero()) && ((*z).AccountData.VoteID.MsgIsZero()) && ((*z).AccountData.SelectionID.MsgIsZero()) && ((*z).AccountData.StateProofID.MsgIsZero()) && ((*z).AccountData.VoteFirstValid == 0) && ((*z).AccountData.VoteLastValid == 0) && ((*z).AccountData.VoteKeyDilution == 0) && (len((*z).AccountData.AssetParams) == 0) && (len((*z).AccountData.Assets) == 0) && ((*z).AccountData.AuthAddr.MsgIsZero()) && (len((*z).AccountData.AppLocalStates) == 0) && (len((*z).AccountData.AppParams) == 0) && (((*z).AccountData.TotalAppSchema.NumUint == 0) && ((*z).AccountData.TotalAppSchema.NumByteSlice == 0)) && ((*z).AccountData.TotalExtraAppPages == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler

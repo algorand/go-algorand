@@ -137,7 +137,7 @@ func (root Root) Address() basics.Address {
 // RestoreParticipation restores a Participation from a database
 // handle.
 func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err error) {
-	var rawParent, rawVRF, rawVoting, rawBlockProof []byte
+	var rawParent, rawVRF, rawVoting, rawStateProof []byte
 
 	err = Migrate(store)
 	if err != nil {
@@ -155,9 +155,9 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 			logging.Base().Infof("RestoreParticipation: state not found (n = %v)", nrows)
 		}
 
-		row = tx.QueryRow("select parent, vrf, voting, firstValid, lastValid, keyDilution, blockProof from ParticipationAccount")
+		row = tx.QueryRow("select parent, vrf, voting, firstValid, lastValid, keyDilution, stateProof from ParticipationAccount")
 
-		err = row.Scan(&rawParent, &rawVRF, &rawVoting, &acc.FirstValid, &acc.LastValid, &acc.KeyDilution, &rawBlockProof)
+		err = row.Scan(&rawParent, &rawVRF, &rawVoting, &acc.FirstValid, &acc.LastValid, &acc.KeyDilution, &rawStateProof)
 		if err != nil {
 			return fmt.Errorf("RestoreParticipation: could not read account raw data: %v", err)
 		}
@@ -183,14 +183,14 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 		return PersistedParticipation{}, err
 	}
 
-	if len(rawBlockProof) == 0 {
+	if len(rawStateProof) == 0 {
 		return acc, nil
 	}
-	acc.BlockProof = &merklekeystore.Signer{}
-	if err = protocol.Decode(rawBlockProof, acc.BlockProof); err != nil {
+	acc.StateProofSecrets = &merklekeystore.Signer{}
+	if err = protocol.Decode(rawStateProof, acc.StateProofSecrets); err != nil {
 		return PersistedParticipation{}, err
 	}
-	err = acc.BlockProof.Restore(store)
+	err = acc.StateProofSecrets.Restore(store)
 	if err != nil {
 		return PersistedParticipation{}, err
 	}

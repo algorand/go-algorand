@@ -37,7 +37,7 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-var partableColumnNames = [...]string{"parent", "vrf", "voting", "blockProof", "firstValid", "lastValid", "keyDilution"}
+var partableColumnNames = [...]string{"parent", "vrf", "voting", "stateProof", "firstValid", "lastValid", "keyDilution"}
 
 func TestParticipation_NewDB(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -232,11 +232,11 @@ func TestKeyRegCreation(t *testing.T) {
 
 	cur := config.Consensus[protocol.ConsensusCurrentVersion]
 	txn := ppart.Participation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, 0, 100, [32]byte{}, cur)
-	a.Equal(merklekeystore.Verifier{}, txn.BlockProofPK)
+	a.Equal(merklekeystore.Verifier{}, txn.StateProofPK)
 
 	future := config.Consensus[protocol.ConsensusFuture]
 	txn = ppart.Participation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, 0, 100, [32]byte{}, future)
-	a.NotEqual(merklekeystore.Verifier{}, txn.BlockProofPK)
+	a.NotEqual(merklekeystore.Verifier{}, txn.StateProofPK)
 }
 
 func closeDBS(dbAccessor ...db.Accessor) {
@@ -247,7 +247,7 @@ func closeDBS(dbAccessor ...db.Accessor) {
 
 func assertionForRestoringFromDBAtLowVersion(a *require.Assertions, retrivedPart PersistedParticipation) {
 	a.NotNil(retrivedPart)
-	a.Nil(retrivedPart.BlockProof)
+	a.Nil(retrivedPart.StateProofSecrets)
 }
 
 func TestMigrateFromVersion1(t *testing.T) {
@@ -370,9 +370,9 @@ func setupTestDBAtVer1(partDB db.Accessor, part Participation) error {
 type comparablePartition struct {
 	Parent basics.Address
 
-	VRF        crypto.VRFSecrets
-	Voting     []byte
-	blockProof []byte
+	VRF              crypto.VRFSecrets
+	Voting           []byte
+	statProofSecrets []byte
 
 	FirstValid basics.Round
 	LastValid  basics.Round
@@ -382,13 +382,13 @@ type comparablePartition struct {
 
 func intoComparable(part PersistedParticipation) comparablePartition {
 	return comparablePartition{
-		Parent:      part.Parent,
-		VRF:         *part.VRF,
-		Voting:      part.Voting.MarshalMsg(nil),
-		blockProof:  protocol.Encode(part.BlockProof),
-		FirstValid:  part.FirstValid,
-		LastValid:   part.LastValid,
-		KeyDilution: part.KeyDilution,
+		Parent:           part.Parent,
+		VRF:              *part.VRF,
+		Voting:           part.Voting.MarshalMsg(nil),
+		statProofSecrets: protocol.Encode(part.StateProofSecrets),
+		FirstValid:       part.FirstValid,
+		LastValid:        part.LastValid,
+		KeyDilution:      part.KeyDilution,
 	}
 }
 
