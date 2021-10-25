@@ -2207,7 +2207,8 @@
         "required": [
           "proof",
           "stibhash",
-          "idx"
+          "idx",
+          "hashtype"
         ],
         "properties": {
           "proof": {
@@ -2223,6 +2224,14 @@
           "idx": {
             "description": "Index of the transaction in the block's payset.",
             "type": "integer"
+          },
+          "hashtype": {
+            "enum": [
+              "sumhash",
+              "sha512_256"
+            ],
+            "type": "string",
+            "description": "The type of hash function used to create the proof"
           }
         }
       }

@@ -19,6 +19,7 @@ package crypto
 import (
 	"crypto/sha512"
 	"errors"
+	"fmt"
 	"hash"
 
 	"github.com/algonathan/sumhash"
@@ -81,6 +82,29 @@ func (z *HashFactory) IsValid() error {
 }
 
 var errUnknownHash = errors.New("unknown hash type")
+
+func (h HashType) String() string {
+	switch h {
+	case Sha512_256:
+		return "sha512_256"
+	case Sumhash:
+		return "sumhash"
+	default:
+		return ""
+	}
+}
+
+// UnmarshalHashType decodes a string into the HashType enum
+func UnmarshalHashType(s string) (HashType, error) {
+	switch s {
+	case "sha512_256":
+		return Sha512_256, nil
+	case "sumhash":
+		return Sumhash, nil
+	default:
+		return 0, fmt.Errorf("HashType not supported: %s", s)
+	}
+}
 
 // NewHash generates a new hash.Hash to use.
 func (z HashFactory) NewHash() hash.Hash {

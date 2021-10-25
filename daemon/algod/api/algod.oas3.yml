@@ -507,6 +507,14 @@
           "application/json": {
             "schema": {
               "properties": {
+                "hashtype": {
+                  "description": "The type of hash function used to create the proof",
+                  "enum": [
+                    "sumhash",
+                    "sha512_256"
+                  ],
+                  "type": "string"
+                },
                 "idx": {
                   "description": "Index of the transaction in the block's payset.",
                   "type": "integer"
@@ -525,6 +533,7 @@
                 }
               },
               "required": [
+                "hashtype",
                 "idx",
                 "proof",
                 "stibhash"
@@ -2135,6 +2144,14 @@
               "application/json": {
                 "schema": {
                   "properties": {
+                    "hashtype": {
+                      "description": "The type of hash function used to create the proof",
+                      "enum": [
+                        "sumhash",
+                        "sha512_256"
+                      ],
+                      "type": "string"
+                    },
                     "idx": {
                       "description": "Index of the transaction in the block's payset.",
                       "type": "integer"
@@ -2153,6 +2170,7 @@
                     }
                   },
                   "required": [
+                    "hashtype",
                     "idx",
                     "proof",
                     "stibhash"
