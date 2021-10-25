@@ -24,7 +24,7 @@ then
     exit 1
 fi
 
-if [ -z "${NO_BUILD}" ]; then
+if [ -z "${NO_BUILD}" ] || [ "${NO_BUILD}" != "true" ]; then
     scripts/travis/build.sh
 fi
 
