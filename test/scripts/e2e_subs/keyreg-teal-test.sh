@@ -27,7 +27,7 @@ DELKEY=$(algokey generate -f ${TEMPDIR}/delegate.keyregkey | grep "Public key" |
 algotmpl -d tools/teal/templates/ delegate-key-registration --fee ${FEE} --dur ${DUR} --period ${PERIOD} --expire ${EXPIRE} --auth ${DELKEY} --lease ${LEASE} > ${TEMPDIR}/delegate.teal
 ${gcmd} clerk compile -a ${ACCOUNTA} -s -o ${TEMPDIR}/kr.lsig ${TEMPDIR}/delegate.teal
 
-RES=$(${gcmd} account addpartkey -a ${ACCOUNTA} --roundFirstValid 0 --roundLastValid 1000)
+RES=$(${gcmd} account addpartkey -a ${ACCOUNTA} --roundFirstValid 0 --roundLastValid 256)
 if [[ $RES != 'Participation key generation successful' ]]; then
     date '+keyreg-teal-test FAIL did not see confirmation that partkey gen was successful %Y%m%d_%H%M%S'
     false
@@ -118,7 +118,7 @@ DELKEY=$(algokey generate -f ${TEMPDIR}/delegate.keyregkey | grep "Public key" |
 algotmpl -d tools/teal/templates/ delegate-key-registration --fee ${FEE} --dur ${DUR} --period ${PERIOD} --expire ${EXPIRE} --auth ${DELKEY} --lease ${LEASE} > ${TEMPDIR}/delegate.teal
 ${gcmd} clerk compile -a ${ACCOUNTB} -s -o ${TEMPDIR}/kr.lsig ${TEMPDIR}/delegate.teal
 
-RES=$(${gcmd} account addpartkey -a ${ACCOUNTB} --roundFirstValid 0 --roundLastValid 1000)
+RES=$(${gcmd} account addpartkey -a ${ACCOUNTB} --roundFirstValid 0 --roundLastValid 256)
 if [[ $RES != 'Participation key generation successful' ]]; then
     date '+keyreg-teal-test FAIL did not see confirmation that partkey gen was successful %Y%m%d_%H%M%S'
     false

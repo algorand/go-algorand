@@ -344,11 +344,11 @@ func (stub *txGroupsEncodingStub) deconstructKeyregTxnFields(i int, txn *transac
 		stub.BitmaskNonparticipation.setBit(i)
 	}
 
-	if txn.Txn.StateProofPK.HasValidRoot {
-		if len(stub.BitmaskHasValidRoot) == 0 {
-			stub.BitmaskHasValidRoot = make(bitmask, bitmaskLen)
+	if txn.Txn.StateProofPK.ContainsKeys {
+		if len(stub.BitmaskContainsKeys) == 0 {
+			stub.BitmaskContainsKeys = make(bitmask, bitmaskLen)
 		}
-		stub.BitmaskHasValidRoot.setBit(i)
+		stub.BitmaskContainsKeys.setBit(i)
 	}
 }
 

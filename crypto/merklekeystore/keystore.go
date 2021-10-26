@@ -76,7 +76,8 @@ type (
 
 		// indicates that this verifier corresponds to a specific array of ephemeral keys.
 		// this is used to distinguish between an empty structure, and nothing to commit to.
-		HasValidRoot bool `codec:"vr"`
+		// this might happen when register online for a short period (i.e less than CompactCretRounds)
+		ContainsKeys bool `codec:"ck"`
 	}
 
 	// keysArray is only used for building the merkle-tree and nothing else.
@@ -173,7 +174,7 @@ func (s *Signer) GetVerifier() *Verifier {
 	copy(root[:], ss)
 	return &Verifier{
 		Root:         root,
-		HasValidRoot: true,
+		ContainsKeys: true,
 	}
 }
 
@@ -228,7 +229,7 @@ func (s *Signer) Restore(store db.Accessor) (err error) {
 
 // Verify receives a signature over a specific crypto.Hashable object, and makes certain the signature is correct.
 func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashable, sig Signature) error {
-	if !v.HasValidRoot {
+	if !v.ContainsKeys {
 		return errCannotVerify
 	}
 	if firstValid == 0 {

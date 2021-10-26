@@ -516,11 +516,11 @@ func (z *Verifier) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0002Len := uint32(2)
 	var zb0002Mask uint8 /* 3 bits */
-	if (*z).Root == ([KeyStoreRootSize]byte{}) {
+	if (*z).ContainsKeys == false {
 		zb0002Len--
 		zb0002Mask |= 0x2
 	}
-	if (*z).HasValidRoot == false {
+	if (*z).Root == ([KeyStoreRootSize]byte{}) {
 		zb0002Len--
 		zb0002Mask |= 0x4
 	}
@@ -528,14 +528,14 @@ func (z *Verifier) MarshalMsg(b []byte) (o []byte) {
 	o = append(o, 0x80|uint8(zb0002Len))
 	if zb0002Len != 0 {
 		if (zb0002Mask & 0x2) == 0 { // if not empty
+			// string "ck"
+			o = append(o, 0xa2, 0x63, 0x6b)
+			o = msgp.AppendBool(o, (*z).ContainsKeys)
+		}
+		if (zb0002Mask & 0x4) == 0 { // if not empty
 			// string "r"
 			o = append(o, 0xa1, 0x72)
 			o = msgp.AppendBytes(o, ((*z).Root)[:])
-		}
-		if (zb0002Mask & 0x4) == 0 { // if not empty
-			// string "vr"
-			o = append(o, 0xa2, 0x76, 0x72)
-			o = msgp.AppendBool(o, (*z).HasValidRoot)
 		}
 	}
 	return
@@ -569,9 +569,9 @@ func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			(*z).HasValidRoot, bts, err = msgp.ReadBoolBytes(bts)
+			(*z).ContainsKeys, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "HasValidRoot")
+				err = msgp.WrapError(err, "struct-from-array", "ContainsKeys")
 				return
 			}
 		}
@@ -604,10 +604,10 @@ func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Root")
 					return
 				}
-			case "vr":
-				(*z).HasValidRoot, bts, err = msgp.ReadBoolBytes(bts)
+			case "ck":
+				(*z).ContainsKeys, bts, err = msgp.ReadBoolBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "HasValidRoot")
+					err = msgp.WrapError(err, "ContainsKeys")
 					return
 				}
 			default:
@@ -636,5 +636,5 @@ func (z *Verifier) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *Verifier) MsgIsZero() bool {
-	return ((*z).Root == ([KeyStoreRootSize]byte{})) && ((*z).HasValidRoot == false)
+	return ((*z).Root == ([KeyStoreRootSize]byte{})) && ((*z).ContainsKeys == false)
 }

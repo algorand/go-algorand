@@ -225,7 +225,7 @@ func TestKeyRegWithEmptyStateProof(t *testing.T) {
 	acct, err := mockBal.Get(tx.Src(), false)
 	require.NoError(t, err)
 	require.Equal(t, [merklekeystore.KeyStoreRootSize]byte{}, acct.StateProofID.Root)
-	require.Equal(t, true, acct.StateProofID.HasValidRoot)
+	require.Equal(t, true, acct.StateProofID.ContainsKeys)
 }
 
 func createTestTxn(t *testing.T, src basics.Address, secretParticipation *crypto.SignatureSecrets, vrfSecrets *crypto.VRFSecrets) transactions.Transaction {
