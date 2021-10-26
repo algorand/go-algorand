@@ -1038,7 +1038,7 @@ var methodAppCmd = &cobra.Command{
 		applicationArgs = append(applicationArgs, hash[0:4])
 
 		// parse down the ABI type from method signature
-		argTupleTypeStr, err := parseMethodSignature(method)
+		argTupleTypeStr, retTypeStr, err := parseMethodSignature(method)
 		if err != nil {
 			reportErrorf("cannot parse method signature: %v", err)
 		}
@@ -1109,42 +1109,33 @@ var methodAppCmd = &cobra.Command{
 			tx.Fee = basics.MicroAlgos{Raw: fee}
 		}
 
-		// Broadcast or write transaction to file
-		if outFilename == "" {
-			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
-			}
-
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
-			}
-
-			// Report tx details to user
-			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
-
-			if !noWaitAfterSend {
-				_, err = waitForCommit(client, txid, lv)
-				if err != nil {
-					reportErrorf(err.Error())
-				}
-			}
-		} else {
-			if dumpForDryrun {
-				err = writeDryrunReqToFile(client, tx, outFilename)
-			} else {
-				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
-			}
-			if err != nil {
-				reportErrorf(err.Error())
-			}
+		// Broadcast
+		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
+		signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+		if err != nil {
+			reportErrorf(errorSigningTX, err)
 		}
+
+		txid, err := client.BroadcastTransaction(signedTxn)
+		if err != nil {
+			reportErrorf(errorBroadcastingTX, err)
+		}
+
+		// Report tx details to user
+		reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
+
+		txnCommit, err := waitForCommit(client, txid, lv)
+		if err != nil {
+			reportErrorf(err.Error())
+		}
+
+		fmt.Println(txnCommit)
+		fmt.Println(retTypeStr)
+		// TODO how to find return value from apply data... we probably need return type to parse out result...
 	},
 }
 
-func parseMethodSignature(methodSig string) (string, error) {
+func parseMethodSignature(methodSig string) (string, string, error) {
 	var stack []int
 
 	for index, chr := range methodSig {
@@ -1160,12 +1151,12 @@ func parseMethodSignature(methodSig string) (string, error) {
 				returnType := methodSig[index+1:]
 				if _, err := abi.TypeOf(returnType); err != nil {
 					if returnType != "void" {
-						return "", fmt.Errorf("cannot infer return type: %s", returnType)
+						return "", "", fmt.Errorf("cannot infer return type: %s", returnType)
 					}
 				}
-				return methodSig[leftParenIndex : index+1], nil
+				return methodSig[leftParenIndex : index+1], methodSig[index+1:], nil
 			}
 		}
 	}
-	return "", fmt.Errorf("unpaired parentheses: %s", methodSig)
+	return "", "", fmt.Errorf("unpaired parentheses: %s", methodSig)
 }
