@@ -490,7 +490,7 @@ func txn(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, txn
 	t.Helper()
 	fillDefaults(t, ledger, eval, txn)
 	stxn := txn.SignedTxn()
-	/*err := eval.TestTransaction(stxn, eval.state.child(1))
+	err := eval.TestTransactionGroup([]transactions.SignedTxn{stxn})
 	if err != nil {
 		if len(problem) == 1 {
 			require.Contains(t, err.Error(), problem[0])
@@ -498,8 +498,8 @@ func txn(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, txn
 			require.NoError(t, err) // Will obviously fail
 		}
 		return
-	}*/
-	err := eval.Transaction(stxn, transactions.ApplyData{})
+	}
+	err = eval.Transaction(stxn, transactions.ApplyData{})
 	if err != nil {
 		if len(problem) == 1 {
 			require.Contains(t, err.Error(), problem[0])

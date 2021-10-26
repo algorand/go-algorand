@@ -637,65 +637,6 @@ func (ledger *evalTestLedger) asaParams(t testing.TB, asset basics.AssetIndex) (
 	return basics.AssetParams{}, fmt.Errorf("bad lookup (%d)", asset)
 }
 
-func (eval *BlockEvaluator) fillDefaults(txn *txntest.Txn) {
-
-	if txn.GenesisHash.IsZero() {
-		txn.GenesisHash = eval.genesisHash
-	}
-	if txn.FirstValid == 0 {
-		txn.FirstValid = eval.Round()
-	}
-	txn.FillDefaults(eval.proto)
-}
-
-func (eval *BlockEvaluator) txn(t testing.TB, txn *txntest.Txn, problem ...string) {
-	t.Helper()
-	eval.fillDefaults(txn)
-	stxn := txn.SignedTxn()
-	err := eval.TestTransaction(stxn, eval.state.child(1))
-	if err != nil {
-		if len(problem) == 1 {
-			require.Contains(t, err.Error(), problem[0])
-		} else {
-			require.NoError(t, err) // Will obviously fail
-		}
-		return
-	}
-	err = eval.Transaction(stxn, transactions.ApplyData{})
-	if err != nil {
-		if len(problem) == 1 {
-			require.Contains(t, err.Error(), problem[0])
-		} else {
-			require.NoError(t, err) // Will obviously fail
-		}
-		return
-	}
-	require.Len(t, problem, 0)
-}
-
-func (eval *BlockEvaluator) txns(t testing.TB, txns ...*txntest.Txn) {
-	t.Helper()
-	for _, txn := range txns {
-		eval.txn(t, txn)
-	}
-}
-
-func (eval *BlockEvaluator) txgroup(t testing.TB, txns ...*txntest.Txn) error {
-	t.Helper()
-	for _, txn := range txns {
-		eval.fillDefaults(txn)
-	}
-	txgroup := txntest.SignedTxns(txns...)
-
-	err := eval.TestTransactionGroup(txgroup)
-	if err != nil {
-		return err
-	}
-
-	err = eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup))
-	return err
-}
-
 type getCreatorForRoundResult struct {
 	address basics.Address
 	exists  bool
