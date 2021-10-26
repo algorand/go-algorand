@@ -138,6 +138,7 @@ func init() {
 	addTxnFlags(optInAppCmd)
 	addTxnFlags(closeOutAppCmd)
 	addTxnFlags(clearAppCmd)
+	addTxnFlags(methodAppCmd)
 
 	readStateAppCmd.Flags().BoolVar(&fetchLocal, "local", false, "Fetch account-specific state for this application. `--from` address is required when using this flag")
 	readStateAppCmd.Flags().BoolVar(&fetchGlobal, "global", false, "Fetch global state for this application.")
