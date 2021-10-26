@@ -73,11 +73,6 @@ type (
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 		Root [KeyStoreRootSize]byte `codec:"r"`
-
-		// indicates that this verifier corresponds to a specific array of ephemeral keys.
-		// this is used to distinguish between an empty structure, and nothing to commit to.
-		// this might happen when register online for a short period (i.e less than CompactCretRounds)
-		ContainsKeys bool `codec:"ck"`
 	}
 
 	// keysArray is only used for building the merkle-tree and nothing else.
@@ -92,7 +87,6 @@ var errStartBiggerThanEndRound = errors.New("cannot create merkleKeyStore becaus
 var errOutOfBounds = errors.New("round translated to be after last key position")
 var errNonExistantKey = errors.New("key doesn't exist")
 var errDivisorIsZero = errors.New("received zero Interval")
-var errCannotVerify = errors.New("verifier isn't valid")
 
 // ToBeHashed implementation means CommittablePublicKey is crypto.Hashable, required by merklekeystore.Verifier.Verify()
 func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
@@ -173,8 +167,7 @@ func (s *Signer) GetVerifier() *Verifier {
 	ss := s.Tree.Root().ToSlice()
 	copy(root[:], ss)
 	return &Verifier{
-		Root:         root,
-		ContainsKeys: true,
+		Root: root,
 	}
 }
 
@@ -227,11 +220,13 @@ func (s *Signer) Restore(store db.Accessor) (err error) {
 	return
 }
 
+// IsEmpty returns true if the verifier contains an empty key
+func (v *Verifier) IsEmpty() bool {
+	return v.Root == [KeyStoreRootSize]byte{}
+}
+
 // Verify receives a signature over a specific crypto.Hashable object, and makes certain the signature is correct.
 func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashable, sig Signature) error {
-	if !v.ContainsKeys {
-		return errCannotVerify
-	}
 	if firstValid == 0 {
 		firstValid = 1
 	}

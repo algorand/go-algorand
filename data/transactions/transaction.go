@@ -559,13 +559,10 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 }
 
 func (tx Transaction) stateProofPKWellFormed(proto config.ConsensusParams) error {
-	// since stateproof keys are not generated for each round,
-	// there might be a case in which the StateProofPK.Root is zero and
-	// StateProofPK.ContainsKeys is true. in that case we treat the transaction as valid
-	containsKeys := tx.KeyregTxnFields.StateProofPK.ContainsKeys
+	isEmpty := tx.KeyregTxnFields.StateProofPK.IsEmpty()
 	if !proto.EnableStateProofKeyregCheck {
 		// make certain empty key is stored.
-		if containsKeys {
+		if !isEmpty {
 			return errKeyregTxnNotEmptyStateProofPK
 		}
 		return nil
@@ -573,14 +570,14 @@ func (tx Transaction) stateProofPKWellFormed(proto config.ConsensusParams) error
 
 	if tx.Nonparticipation {
 		// make certain that set offline request clears the stateProofPK.
-		if containsKeys {
+		if !isEmpty {
 			return errKeyregTxnNonParticipantShouldBeEmptyStateProofPK
 		}
 		return nil
 	}
 
 	if tx.VotePK == (crypto.OneTimeSignatureVerifier{}) || tx.SelectionPK == (crypto.VRFVerifier{}) {
-		if containsKeys {
+		if !isEmpty {
 			return errKeyregTxnOfflineShouldBeEmptyStateProofPK
 		}
 		return nil
@@ -588,7 +585,7 @@ func (tx Transaction) stateProofPKWellFormed(proto config.ConsensusParams) error
 
 	// online transactions:
 	// setting online cannot set an empty stateProofPK
-	if !containsKeys {
+	if isEmpty {
 		return errKeyRegEmptyStateProofPK
 	}
 

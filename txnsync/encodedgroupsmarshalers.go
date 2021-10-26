@@ -344,12 +344,6 @@ func (stub *txGroupsEncodingStub) deconstructKeyregTxnFields(i int, txn *transac
 		stub.BitmaskNonparticipation.setBit(i)
 	}
 
-	if txn.Txn.StateProofPK.ContainsKeys {
-		if len(stub.BitmaskContainsKeys) == 0 {
-			stub.BitmaskContainsKeys = make(bitmask, bitmaskLen)
-		}
-		stub.BitmaskContainsKeys.setBit(i)
-	}
 }
 
 func (stub *txGroupsEncodingStub) finishDeconstructKeyregTxnFields() {

@@ -104,7 +104,7 @@ func TestEmptyVerifier(t *testing.T) {
 
 	signer := generateTestSigner(crypto.DilithiumType, 8, 9, 5, a)
 	defer signer.keyStore.store.Close()
-	a.NotEqual(*signer.GetVerifier(), Verifier{})
+	a.Equal(signer.GetVerifier().IsEmpty(), true)
 }
 func TestEmptySigner(t *testing.T) {
 	partitiontest.PartitionTest(t)

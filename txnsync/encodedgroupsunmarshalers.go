@@ -326,10 +326,6 @@ func (stub *txGroupsEncodingStub) reconstructKeyregTxnFields(signedTxns []transa
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskContainsKeys.iterate(int(stub.TotalTransactionsCount), int(stub.TotalTransactionsCount), func(i int, index int) error {
-		signedTxns[i].Txn.StateProofPK.ContainsKeys = true
-		return nil
-	})
 
 	return err
 }

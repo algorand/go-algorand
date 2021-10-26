@@ -76,7 +76,7 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 		_, currentRound := fixture.GetBalanceAndRound(richAccount)
 		// account adds part key
 		partKeyFirstValid := uint64(0)
-		partKeyValidityPeriod := uint64(10)
+		partKeyValidityPeriod := uint64(150)
 		partKeyLastValid = currentRound + partKeyValidityPeriod
 		partkeyResponse, _, err := sClient.GenParticipationKeys(sAccount, partKeyFirstValid, partKeyLastValid, 0)
 		a.NoError(err)
