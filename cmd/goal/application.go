@@ -1024,10 +1024,9 @@ var infoAppCmd = &cobra.Command{
 }
 
 var methodAppCmd = &cobra.Command{
-	// TODO need more description
 	Use:     "method",
-	Short:   "",
-	Long:    ``,
+	Short:   "Invoke a method",
+	Long:    `Invoke a method in an Algorand App (stateful contract) with an application call transaction`,
 	Args:    validateNoPosArgsFn,
 	PreRunE: validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -1106,6 +1105,12 @@ func parseMethodSignature(methodSig string) (string, error) {
 			leftParenIndex := stack[len(stack)-1]
 			stack = stack[:len(stack)-1]
 			if len(stack) == 0 {
+				returnType := methodSig[index+1:]
+				if _, err := abi.TypeOf(returnType); err != nil {
+					if returnType != "void" {
+						return "", fmt.Errorf("cannot infer return type: %s", returnType)
+					}
+				}
 				return methodSig[leftParenIndex : index+1], nil
 			}
 		}
