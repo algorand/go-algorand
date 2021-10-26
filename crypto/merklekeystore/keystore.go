@@ -94,7 +94,7 @@ var errNonExistantKey = errors.New("key doesn't exist")
 var errDivisorIsZero = errors.New("received zero Interval")
 var errCannotVerify = errors.New("verifier isn't valid")
 
-// ToBeHashed implementation means CommittablePublicKey is crypto.Hashable.
+// ToBeHashed implementation means CommittablePublicKey is crypto.Hashable, required by merklekeystore.Verifier.Verify()
 func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.EphemeralPK, protocol.Encode(e)
 }
