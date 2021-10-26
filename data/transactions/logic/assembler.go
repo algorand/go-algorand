@@ -1594,6 +1594,7 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 	for scanner.Scan() {
 		ops.sourceLine++
 		line := scanner.Text()
+		line = strings.TrimSpace(line)
 		if len(line) == 0 {
 			ops.trace("%d: 0 line\n", ops.sourceLine)
 			continue
