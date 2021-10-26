@@ -76,6 +76,11 @@ func TestJSONtoInterfaceValid(t *testing.T) {
 			typeStr:  "string",
 			expected: "ABC",
 		},
+		{
+			input:    "123.456",
+			typeStr:  "ufixed64x3",
+			expected: uint64(123456),
+		},
 	}
 
 	for _, testCase := range testCases {

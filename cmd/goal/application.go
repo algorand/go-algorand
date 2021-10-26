@@ -17,6 +17,7 @@
 package main
 
 import (
+	"crypto/sha512"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/binary"
@@ -169,7 +170,7 @@ func init() {
 	readStateAppCmd.MarkFlagRequired("app-id")
 
 	infoAppCmd.MarkFlagRequired("app-id")
-	methodAppCmd.MarkFlagRequired("method") // nolint:errcheck
+	methodAppCmd.MarkFlagRequired("method") // nolint:errcheck // follow previous required flag format
 }
 
 type appCallArg struct {
@@ -239,7 +240,7 @@ func parseAppArg(arg appCallArg) (rawValue []byte, parseErr error) {
 		}
 		rawValue = data
 	case "abi":
-		typeAndValue := strings.SplitN(arg.Value, ":", -1)
+		typeAndValue := strings.SplitN(arg.Value, ":", 2)
 		if len(typeAndValue) != 2 {
 			parseErr = fmt.Errorf("Could not decode abi string (%s): should split abi-type and abi-value with colon", arg.Value)
 			return
@@ -1030,6 +1031,84 @@ var methodAppCmd = &cobra.Command{
 	Args:    validateNoPosArgsFn,
 	PreRunE: validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		//cmd.HelpFunc()(cmd, args)
+		var applicationArgs [][]byte
+
+		// insert the method selector hash
+		hash := sha512.Sum512_256([]byte(method))
+		applicationArgs = append(applicationArgs, hash[0:4])
+
+		// parse down the ABI type from method signature
+		argTupleTypeStr, err := parseMethodSignature(method)
+		if err != nil {
+			reportErrorf("cannot parse method signature: %v", err)
+		}
+		abiTupleT, err := abi.TypeOf(argTupleTypeStr)
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+		argABITypes := abiTupleT.GetChildTypes()
+		if len(argABITypes) != len(methodArgs) {
+			reportErrorf("input argument number %d != method argument number %d", len(methodArgs), len(argABITypes))
+		}
+
+		jsonArgBytes := make([][]byte, len(methodArgs))
+		for i := 0; i < len(methodArgs); i++ {
+			jsonArgBytes[i] = []byte(methodArgs[i])
+		}
+
+		// change the input args to be 1 - 14 + 15 (compacting everything together)
+		if len(argABITypes) > 14 {
+			remaining := argABITypes[14:]
+			remainingStrs := make([]string, len(remaining))
+			for i := 0; i < len(remaining); i++ {
+				remainingStrs[i] = remaining[i].String()
+			}
+			compactedStr := "(" + strings.Join(remainingStrs, ",") + ")"
+			lastType, err := abi.TypeOf(compactedStr)
+			if err != nil {
+				reportErrorf("cannot generate method final (compacted) argument ABI type (%s): %v", compactedStr, err)
+			}
+			argABITypes = argABITypes[:14]
+			argABITypes = append(argABITypes, lastType)
+
+			remainingJSON := []byte("[" + strings.Join(methodArgs[14:], ",") + "]")
+			jsonArgBytes = jsonArgBytes[:14]
+			jsonArgBytes = append(jsonArgBytes, remainingJSON)
+		}
+
+		// parse JSON value to ABI encoded bytes
+		for i := 0; i < len(argABITypes); i++ {
+			valueInterface, err := argABITypes[i].UnmarshalFromJSON(jsonArgBytes[i])
+			if err != nil {
+				reportErrorf("cannot cast JSON string (%s) to interface value: %v", string(jsonArgBytes[i]), err)
+			}
+			abiEncoded, err := argABITypes[i].Encode(valueInterface)
+			if err != nil {
+				reportErrorf("cannot cast interface value (%v) to ABI encoding: %v", valueInterface, err)
+			}
+			applicationArgs = append(applicationArgs, abiEncoded)
+		}
+
+		// TODO i dunno how to pass application args to somewhere i dunno
 	},
+}
+
+func parseMethodSignature(methodSig string) (string, error) {
+	var stack []int
+
+	for index, chr := range methodSig {
+		if chr == '(' {
+			stack = append(stack, index)
+		} else if chr == ')' {
+			if len(stack) == 0 {
+				break
+			}
+			leftParenIndex := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			if len(stack) == 0 {
+				return methodSig[leftParenIndex : index+1], nil
+			}
+		}
+	}
+	return "", fmt.Errorf("unpaired parentheses: %s", methodSig)
 }
