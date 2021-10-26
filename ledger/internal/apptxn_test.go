@@ -1393,5 +1393,17 @@ next2:
 	eval = l.nextBlock(t)
 	eval.txns(t, &call)
 	vb = l.endBlock(t, eval)
+	tib := vb.Block().Payset[0]
+	// No changes in the top-level EvalDelta
+	require.Empty(t, tib.EvalDelta.GlobalDelta)
+	require.Empty(t, tib.EvalDelta.LocalDeltas)
 
+	inner := tib.EvalDelta.InnerTxns[0]
+	require.Empty(t, inner.EvalDelta.LocalDeltas)
+
+	require.Len(t, inner.EvalDelta.GlobalDelta, 1)
+	require.Equal(t, basics.ValueDelta{
+		Action: basics.SetBytesAction,
+		Bytes:  "A",
+	}, inner.EvalDelta.GlobalDelta["X"])
 }
