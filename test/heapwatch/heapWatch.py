@@ -192,7 +192,7 @@ class watcher:
                 role_name = 'role_' + role
                 for net in cp[role_name].keys():
                     logger.debug('addnet role %s %s', role, net)
-                    self._addnet(net)
+                    self._addnet(net, self.args.port)
             for nre in args.tf_name_re:
                 namere = re.compile(nre)
                 for k,v in cp.items():
@@ -200,7 +200,7 @@ class watcher:
                         continue
                     for net in v.keys():
                         logger.debug('addnet re %s %s', nre, net)
-                        self._addnet(net)
+                        self._addnet(net, self.args.port)
         for path in args.data_dirs:
             if not os.path.isdir(path):
                 continue
@@ -214,11 +214,11 @@ class watcher:
                 logger.debug('not a datadir: %r', path)
         logger.debug('data dirs: %r', self.they)
 
-    def _addnet(self, net):
+    def _addnet(self, net, port):
         if net in self.netseen:
             return
         self.netseen.add(net)
-        net = net + ':8580'
+        net = net + ':' + port
         try:
             ad = algodDir(net, net=net, token=self.args.token, admin_token=self.args.admin_token)
             self.they.append(ad)
@@ -279,6 +279,7 @@ def main():
     ap.add_argument('--tf-roles', default='relay', help='comma separated list of terraform roles to follow')
     ap.add_argument('--tf-name-re', action='append', default=[], help='regexp to match terraform node names, may be repeated')
     ap.add_argument('--no-svg', dest='svg', default=True, action='store_false', help='do not automatically run `go tool pprof` to generate svg from collected data')
+    ap.add_argument('-p', '--port', default='8580', help='algod port on each host in terraform-inventory')
     ap.add_argument('-o', '--out', default=None, help='directory to write to')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
