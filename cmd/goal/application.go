@@ -1026,7 +1026,7 @@ var infoAppCmd = &cobra.Command{
 var methodAppCmd = &cobra.Command{
 	Use:     "method",
 	Short:   "Invoke a method",
-	Long:    `Invoke a method in an Algorand App (stateful contract) with an application call transaction`,
+	Long:    `Invoke a method in an App (stateful contract) with an application call transaction`,
 	Args:    validateNoPosArgsFn,
 	PreRunE: validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -1086,6 +1086,10 @@ var methodAppCmd = &cobra.Command{
 				reportErrorf("cannot cast interface value (%v) to ABI encoding: %v", valueInterface, err)
 			}
 			applicationArgs = append(applicationArgs, abiEncoded)
+		}
+
+		for i := 0; i < len(applicationArgs); i++ {
+			fmt.Printf("%x\n", applicationArgs[i])
 		}
 
 		// TODO i dunno how to pass application args to somewhere i dunno
