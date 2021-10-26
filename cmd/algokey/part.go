@@ -146,6 +146,9 @@ func printPartkey(partkey account.Participation) {
 	fmt.Printf("Parent address:    %s\n", partkey.Parent.String())
 	fmt.Printf("VRF public key:    %s\n", base64.StdEncoding.EncodeToString(partkey.VRF.PK[:]))
 	fmt.Printf("Voting public key: %s\n", base64.StdEncoding.EncodeToString(partkey.Voting.OneTimeSignatureVerifier[:]))
+	if partkey.StateProofSecrets != nil && partkey.StateProofSecrets.GetVerifier().HasValidRoot {
+		fmt.Printf("State proof key:     %s\n", base64.StdEncoding.EncodeToString(partkey.StateProofSecrets.GetVerifier().Root[:]))
+	}
 	fmt.Printf("First round:       %d\n", partkey.FirstValid)
 	fmt.Printf("Last round:        %d\n", partkey.LastValid)
 	fmt.Printf("Key dilution:      %d\n", partkey.KeyDilution)
