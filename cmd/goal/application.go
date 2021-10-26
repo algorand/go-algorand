@@ -1051,46 +1051,31 @@ var methodAppCmd = &cobra.Command{
 			reportErrorf("input argument number %d != method argument number %d", len(methodArgs), len(argABITypes))
 		}
 
-		jsonArgBytes := make([][]byte, len(methodArgs))
-		for i := 0; i < len(methodArgs); i++ {
-			jsonArgBytes[i] = []byte(methodArgs[i])
+		argABITypeStrs := make([]string, len(methodArgs))
+		jsonArgs := methodArgs
+
+		for i := 0; i < len(argABITypes); i++ {
+			argABITypeStrs[i] = argABITypes[i].String()
 		}
 
 		// change the input args to be 1 - 14 + 15 (compacting everything together)
-		if len(argABITypes) > 14 {
-			remaining := argABITypes[14:]
-			remainingStrs := make([]string, len(remaining))
-			for i := 0; i < len(remaining); i++ {
-				remainingStrs[i] = remaining[i].String()
-			}
-			compactedStr := "(" + strings.Join(remainingStrs, ",") + ")"
-			lastType, err := abi.TypeOf(compactedStr)
-			if err != nil {
-				reportErrorf("cannot generate method final (compacted) argument ABI type (%s): %v", compactedStr, err)
-			}
-			argABITypes = argABITypes[:14]
-			argABITypes = append(argABITypes, lastType)
+		if len(methodArgs) > 14 {
+			compactedStr := "(" + strings.Join(argABITypeStrs[14:], ",") + ")"
+			argABITypeStrs = argABITypeStrs[:14]
+			argABITypeStrs = append(argABITypeStrs, compactedStr)
 
-			remainingJSON := []byte("[" + strings.Join(methodArgs[14:], ",") + "]")
-			jsonArgBytes = jsonArgBytes[:14]
-			jsonArgBytes = append(jsonArgBytes, remainingJSON)
+			remainingJSON := "[" + strings.Join(methodArgs[14:], ",") + "]"
+			jsonArgs = jsonArgs[:14]
+			jsonArgs = append(jsonArgs, remainingJSON)
 		}
 
 		// parse JSON value to ABI encoded bytes
-		for i := 0; i < len(argABITypes); i++ {
-			valueInterface, err := argABITypes[i].UnmarshalFromJSON(jsonArgBytes[i])
+		for i := 0; i < len(jsonArgs); i++ {
+			parsed, err := parseAppArg(appCallArg{Encoding: "abi", Value: argABITypeStrs[i] + ":" + jsonArgs[i]})
 			if err != nil {
-				reportErrorf("cannot cast JSON string (%s) to interface value: %v", string(jsonArgBytes[i]), err)
+				reportErrorf("cannot parse abi command line argument: %v", err)
 			}
-			abiEncoded, err := argABITypes[i].Encode(valueInterface)
-			if err != nil {
-				reportErrorf("cannot cast interface value (%v) to ABI encoding: %v", valueInterface, err)
-			}
-			applicationArgs = append(applicationArgs, abiEncoded)
-		}
-
-		for i := 0; i < len(applicationArgs); i++ {
-			fmt.Printf("%x\n", applicationArgs[i])
+			applicationArgs = append(applicationArgs, parsed)
 		}
 
 		// copy-paste code from callAppCmd
