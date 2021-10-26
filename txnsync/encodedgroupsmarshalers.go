@@ -307,20 +307,18 @@ func (stub *txGroupsEncodingStub) finishDeconstructTxnHeader() {
 
 func (stub *txGroupsEncodingStub) deconstructKeyregTxnFields(i int, txn *transactions.SignedTxn) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
-	if !txn.Txn.VotePK.MsgIsZero() || !txn.Txn.SelectionPK.MsgIsZero() || txn.Txn.VoteKeyDilution != 0 {
+	if !txn.Txn.VotePK.MsgIsZero() || !txn.Txn.SelectionPK.MsgIsZero() || ((txn.Txn.StateProofPK.Root) != [merklekeystore.KeyStoreRootSize]byte{}) || txn.Txn.VoteKeyDilution != 0 {
 		if len(stub.BitmaskKeys) == 0 {
 			stub.BitmaskKeys = make(bitmask, bitmaskLen)
 			stub.VotePK = make([]byte, 0, stub.TotalTransactionsCount*crypto.PublicKeyByteLength)
 			stub.SelectionPK = make([]byte, 0, stub.TotalTransactionsCount*crypto.VrfPubkeyByteLength)
 			stub.VoteKeyDilution = make([]uint64, 0, stub.TotalTransactionsCount)
-			stub.HasValidRoot = make([]bool, 0, stub.TotalTransactionsCount)
 			stub.CommitmentRoot = make([]byte, 0, stub.TotalTransactionsCount*merklekeystore.KeyStoreRootSize)
 		}
 		stub.BitmaskKeys.setBit(i)
 		stub.VotePK = append(stub.VotePK, txn.Txn.VotePK[:]...)
 		stub.SelectionPK = append(stub.SelectionPK, txn.Txn.SelectionPK[:]...)
 		stub.VoteKeyDilution = append(stub.VoteKeyDilution, txn.Txn.VoteKeyDilution)
-		stub.HasValidRoot = append(stub.HasValidRoot, txn.Txn.StateProofPK.HasValidRoot)
 		stub.CommitmentRoot = append(stub.CommitmentRoot, txn.Txn.StateProofPK.Root[:]...)
 	}
 	if !txn.Txn.VoteFirst.MsgIsZero() {
@@ -344,6 +342,13 @@ func (stub *txGroupsEncodingStub) deconstructKeyregTxnFields(i int, txn *transac
 			stub.BitmaskNonparticipation = make(bitmask, bitmaskLen)
 		}
 		stub.BitmaskNonparticipation.setBit(i)
+	}
+
+	if txn.Txn.StateProofPK.ContainsKeys {
+		if len(stub.BitmaskContainsKeys) == 0 {
+			stub.BitmaskContainsKeys = make(bitmask, bitmaskLen)
+		}
+		stub.BitmaskContainsKeys.setBit(i)
 	}
 }
 

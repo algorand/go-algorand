@@ -20,8 +20,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -561,10 +559,13 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 }
 
 func (tx Transaction) stateProofPKWellFormed(proto config.ConsensusParams) error {
-	isEmptyBlock := tx.KeyregTxnFields.StateProofPK == merklekeystore.Verifier{}
+	// since stateproof keys are not generated for each round,
+	// there might be a case in which the StateProofPK.Root is zero and
+	// StateProofPK.ContainsKeys is true. in that case we treat the transaction as valid
+	containsKeys := tx.KeyregTxnFields.StateProofPK.ContainsKeys
 	if !proto.EnableStateProofKeyregCheck {
 		// make certain empty key is stored.
-		if !isEmptyBlock {
+		if containsKeys {
 			return errKeyregTxnNotEmptyStateProofPK
 		}
 		return nil
@@ -572,14 +573,14 @@ func (tx Transaction) stateProofPKWellFormed(proto config.ConsensusParams) error
 
 	if tx.Nonparticipation {
 		// make certain that set offline request clears the stateProofPK.
-		if !isEmptyBlock {
+		if containsKeys {
 			return errKeyregTxnNonParticipantShouldBeEmptyStateProofPK
 		}
 		return nil
 	}
 
 	if tx.VotePK == (crypto.OneTimeSignatureVerifier{}) || tx.SelectionPK == (crypto.VRFVerifier{}) {
-		if !isEmptyBlock {
+		if containsKeys {
 			return errKeyregTxnOfflineShouldBeEmptyStateProofPK
 		}
 		return nil
@@ -587,7 +588,7 @@ func (tx Transaction) stateProofPKWellFormed(proto config.ConsensusParams) error
 
 	// online transactions:
 	// setting online cannot set an empty stateProofPK
-	if isEmptyBlock {
+	if !containsKeys {
 		return errKeyRegEmptyStateProofPK
 	}
 

@@ -359,7 +359,7 @@ import (
 // MarshalMsg implements msgp.Marshaler
 func (z AlgorithmType) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendUint64(o, uint64(z))
+	o = msgp.AppendUint16(o, uint16(z))
 	return
 }
 
@@ -374,8 +374,8 @@ func (_ AlgorithmType) CanMarshalMsg(z interface{}) bool {
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *AlgorithmType) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	{
-		var zb0001 uint64
-		zb0001, bts, err = msgp.ReadUint64Bytes(bts)
+		var zb0001 uint16
+		zb0001, bts, err = msgp.ReadUint16Bytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -393,7 +393,7 @@ func (_ *AlgorithmType) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z AlgorithmType) Msgsize() (s int) {
-	s = msgp.Uint64Size
+	s = msgp.Uint16Size
 	return
 }
 
@@ -1303,6 +1303,16 @@ func (_ GenericDigest) CanMarshalMsg(z interface{}) bool {
 func (z *GenericDigest) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	{
 		var zb0001 []byte
+		var zb0002 int
+		zb0002, err = msgp.ReadBytesBytesHeader(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > MaxHashDigestSize {
+			err = msgp.ErrOverflow(uint64(zb0002), uint64(MaxHashDigestSize))
+			return
+		}
 		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -1346,7 +1356,7 @@ func (z *HashFactory) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "t"
 			o = append(o, 0xa1, 0x74)
-			o = msgp.AppendUint64(o, uint64((*z).HashType))
+			o = msgp.AppendUint16(o, uint16((*z).HashType))
 		}
 	}
 	return
@@ -1373,8 +1383,8 @@ func (z *HashFactory) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if zb0001 > 0 {
 			zb0001--
 			{
-				var zb0003 uint64
-				zb0003, bts, err = msgp.ReadUint64Bytes(bts)
+				var zb0003 uint16
+				zb0003, bts, err = msgp.ReadUint16Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "HashType")
 					return
@@ -1407,8 +1417,8 @@ func (z *HashFactory) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			switch string(field) {
 			case "t":
 				{
-					var zb0004 uint64
-					zb0004, bts, err = msgp.ReadUint64Bytes(bts)
+					var zb0004 uint16
+					zb0004, bts, err = msgp.ReadUint16Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "HashType")
 						return
@@ -1438,7 +1448,7 @@ func (_ *HashFactory) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *HashFactory) Msgsize() (s int) {
-	s = 1 + 2 + msgp.Uint64Size
+	s = 1 + 2 + msgp.Uint16Size
 	return
 }
 
@@ -1450,7 +1460,7 @@ func (z *HashFactory) MsgIsZero() bool {
 // MarshalMsg implements msgp.Marshaler
 func (z HashType) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendUint64(o, uint64(z))
+	o = msgp.AppendUint16(o, uint16(z))
 	return
 }
 
@@ -1465,8 +1475,8 @@ func (_ HashType) CanMarshalMsg(z interface{}) bool {
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *HashType) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	{
-		var zb0001 uint64
-		zb0001, bts, err = msgp.ReadUint64Bytes(bts)
+		var zb0001 uint16
+		zb0001, bts, err = msgp.ReadUint16Bytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -1484,7 +1494,7 @@ func (_ *HashType) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z HashType) Msgsize() (s int) {
-	s = msgp.Uint64Size
+	s = msgp.Uint16Size
 	return
 }
 
@@ -3647,7 +3657,7 @@ func (z *SignatureAlgorithm) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "sigType"
 			o = append(o, 0xa7, 0x73, 0x69, 0x67, 0x54, 0x79, 0x70, 0x65)
-			o = msgp.AppendUint64(o, uint64((*z).Type))
+			o = msgp.AppendUint16(o, uint16((*z).Type))
 		}
 	}
 	return
@@ -3674,8 +3684,8 @@ func (z *SignatureAlgorithm) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if zb0001 > 0 {
 			zb0001--
 			{
-				var zb0003 uint64
-				zb0003, bts, err = msgp.ReadUint64Bytes(bts)
+				var zb0003 uint16
+				zb0003, bts, err = msgp.ReadUint16Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Type")
 					return
@@ -3716,8 +3726,8 @@ func (z *SignatureAlgorithm) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			switch string(field) {
 			case "sigType":
 				{
-					var zb0004 uint64
-					zb0004, bts, err = msgp.ReadUint64Bytes(bts)
+					var zb0004 uint16
+					zb0004, bts, err = msgp.ReadUint16Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "Type")
 						return
@@ -3753,7 +3763,7 @@ func (_ *SignatureAlgorithm) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignatureAlgorithm) Msgsize() (s int) {
-	s = 1 + 8 + msgp.Uint64Size + 5 + (*z).Pack.Msgsize()
+	s = 1 + 8 + msgp.Uint16Size + 5 + (*z).Pack.Msgsize()
 	return
 }
 
@@ -4009,7 +4019,7 @@ func (z *VerifyingKey) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "type"
 			o = append(o, 0xa4, 0x74, 0x79, 0x70, 0x65)
-			o = msgp.AppendUint64(o, uint64((*z).Type))
+			o = msgp.AppendUint16(o, uint16((*z).Type))
 		}
 	}
 	return
@@ -4036,8 +4046,8 @@ func (z *VerifyingKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if zb0001 > 0 {
 			zb0001--
 			{
-				var zb0003 uint64
-				zb0003, bts, err = msgp.ReadUint64Bytes(bts)
+				var zb0003 uint16
+				zb0003, bts, err = msgp.ReadUint16Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Type")
 					return
@@ -4078,8 +4088,8 @@ func (z *VerifyingKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			switch string(field) {
 			case "type":
 				{
-					var zb0004 uint64
-					zb0004, bts, err = msgp.ReadUint64Bytes(bts)
+					var zb0004 uint16
+					zb0004, bts, err = msgp.ReadUint16Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "Type")
 						return
@@ -4115,7 +4125,7 @@ func (_ *VerifyingKey) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *VerifyingKey) Msgsize() (s int) {
-	s = 1 + 5 + msgp.Uint64Size + 4 + (*z).Pack.Msgsize()
+	s = 1 + 5 + msgp.Uint16Size + 4 + (*z).Pack.Msgsize()
 	return
 }
 

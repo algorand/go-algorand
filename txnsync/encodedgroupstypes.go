@@ -143,7 +143,8 @@ type encodedKeyregTxnFields struct {
 	VoteKeyDilution         []uint64       `codec:"votekd,allocbound=maxEncodedTransactionGroups"`
 	BitmaskKeys             bitmask        `codec:"votekbm"`
 	BitmaskNonparticipation bitmask        `codec:"nonpartbm"`
-	HasValidRoot            []bool         `codec:"vldrt,allocbound=maxEncodedTransactionGroups"`
+	BitmaskContainsKeys     bitmask        `codec:"ckrbm"`
+	ContainsKeys            []bool         `codec:"ckt,allocbound=maxEncodedTransactionGroups"`
 	CommitmentRoot          []byte         `codec:"comt,allocbound=maxEncodedTransactionGroups"`
 }
 

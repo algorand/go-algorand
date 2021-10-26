@@ -29,7 +29,7 @@ type (
 	ByteSignature []byte
 
 	// AlgorithmType enum type for signing algorithms
-	AlgorithmType uint64
+	AlgorithmType uint16
 )
 
 // all AlgorithmType enums
@@ -37,12 +37,12 @@ const (
 	DilithiumType AlgorithmType = iota
 	Ed25519Type
 
-	maxAlgorithmType
+	MaxAlgorithmType
 )
 
 // IsValid verifies that the type of the algorithm is known
 func (z AlgorithmType) IsValid() error {
-	if z >= maxAlgorithmType {
+	if z >= MaxAlgorithmType {
 		return protocol.ErrInvalidObject
 	}
 	return nil

@@ -35,6 +35,9 @@ import (
 
 var feeSink = basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
 
+const DefaultParticipationFirstRound = 0
+const DefaultParticipationLastRound = 3000
+
 // mock balances that support looking up particular balance records
 type keyregTestBalances struct {
 	addrs   map[basics.Address]basics.AccountData
@@ -203,13 +206,39 @@ func TestStateProofPKKeyReg(t *testing.T) {
 	require.NotEqual(t, merklekeystore.Verifier{}, acct.StateProofID)
 }
 
+func TestKeyRegWithEmptyStateProof(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	secretSrc := keypair()
+	src := basics.Address(secretSrc.SignatureVerifier)
+	vrfSecrets := crypto.GenerateVRFSecrets()
+	secretParticipation := keypair()
+
+	// here we create a keyreg transaction for a participation period that is not large enough
+	// to generate state proof. the transaction should be valid even though the stateproofroot is zero
+	tx := createTestTxnWithPeriod(t, src, secretParticipation, vrfSecrets, 0, basics.Round(config.Consensus[protocol.ConsensusFuture].CompactCertRounds-1))
+
+	mockBal := makeMockBalances(protocol.ConsensusFuture)
+	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+	require.NoError(t, err)
+
+	acct, err := mockBal.Get(tx.Src(), false)
+	require.NoError(t, err)
+	require.Equal(t, [merklekeystore.KeyStoreRootSize]byte{}, acct.StateProofID.Root)
+	require.Equal(t, true, acct.StateProofID.ContainsKeys)
+}
+
 func createTestTxn(t *testing.T, src basics.Address, secretParticipation *crypto.SignatureSecrets, vrfSecrets *crypto.VRFSecrets) transactions.Transaction {
+	return createTestTxnWithPeriod(t, src, secretParticipation, vrfSecrets, DefaultParticipationFirstRound, DefaultParticipationLastRound)
+}
+
+func createTestTxnWithPeriod(t *testing.T, src basics.Address, secretParticipation *crypto.SignatureSecrets, vrfSecrets *crypto.VRFSecrets, firstRound basics.Round, lastRound basics.Round) transactions.Transaction {
 	store, err := db.MakeAccessor("test-DB", false, true)
 	require.NoError(t, err)
 	defer store.Close()
 	root, err := account.GenerateRoot(store)
 	require.NoError(t, err)
-	p, err := account.FillDBWithParticipationKeys(store, root.Address(), 0, 0, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+	p, err := account.FillDBWithParticipationKeys(store, root.Address(), firstRound, lastRound, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
 	signer := p.Participation.StateProofSecrets
 
 	return transactions.Transaction{
@@ -217,8 +246,8 @@ func createTestTxn(t *testing.T, src basics.Address, secretParticipation *crypto
 		Header: transactions.Header{
 			Sender:     src,
 			Fee:        basics.MicroAlgos{Raw: 1},
-			FirstValid: basics.Round(100),
-			LastValid:  basics.Round(1000),
+			FirstValid: basics.Round(DefaultParticipationFirstRound),
+			LastValid:  basics.Round(DefaultParticipationLastRound),
 		},
 		KeyregTxnFields: transactions.KeyregTxnFields{
 			VotePK:       crypto.OneTimeSignatureVerifier(secretParticipation.SignatureVerifier),
