@@ -349,6 +349,9 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 
 				if err != nil {
 					switch err.(type) {
+					case ledgercore.ErrNonSequentialBlockEval:
+						s.log.Infof("fetchAndWrite(%d): no need to re-evaluate historical block", r)
+						return true
 					case ledgercore.BlockInLedgerError:
 						s.log.Infof("fetchAndWrite(%d): block already in ledger", r)
 						return true
