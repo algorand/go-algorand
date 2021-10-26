@@ -280,8 +280,8 @@ func TestResourceCaching(t *testing.T) {
 			},
 		},
 		Creators: map[Creatable]FoundAddress{
-			{cindex: basics.CreatableIndex(6), ctype: basics.AssetCreatable}: {Address: address, Exists: true},
-			{cindex: basics.CreatableIndex(6), ctype: basics.AppCreatable}:   {Address: address, Exists: false},
+			{Index: basics.CreatableIndex(6), Type: basics.AssetCreatable}: {Address: address, Exists: true},
+			{Index: basics.CreatableIndex(6), Type: basics.AppCreatable}:   {Address: address, Exists: false},
 		},
 	}
 

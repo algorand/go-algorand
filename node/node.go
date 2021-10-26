@@ -1301,7 +1301,7 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 	keys := node.accountManager.Keys(votingRound)
 
 	participations := make([]account.Participation, 0, len(keys))
-	accountsData := make(map[basics.Address]basics.AccountData, len(keys))
+	accountsData := make(map[basics.Address]basics.OnlineAccountData, len(keys))
 	matchingAccountsKeys := make(map[basics.Address]bool)
 	mismatchingAccountsKeys := make(map[basics.Address]int)
 	const bitMismatchingVotingKey = 1
@@ -1310,7 +1310,7 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 		acctData, hasAccountData := accountsData[part.Parent]
 		if !hasAccountData {
 			var err error
-			acctData, _, err = node.ledger.LookupWithoutRewards(keysRound, part.Parent)
+			acctData, err = node.ledger.LookupAgreement(keysRound, part.Parent)
 			if err != nil {
 				node.log.Warnf("node.VotingKeys: Account %v not participating: cannot locate account for round %d : %v", part.Address(), keysRound, err)
 				continue
