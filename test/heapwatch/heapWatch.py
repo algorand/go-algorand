@@ -192,7 +192,7 @@ class watcher:
                 role_name = 'role_' + role
                 for net in cp[role_name].keys():
                     logger.debug('addnet role %s %s', role, net)
-                    self._addnet(net, self.args.port)
+                    self._addnet(net)
             for nre in args.tf_name_re:
                 namere = re.compile(nre)
                 for k,v in cp.items():
@@ -200,7 +200,7 @@ class watcher:
                         continue
                     for net in v.keys():
                         logger.debug('addnet re %s %s', nre, net)
-                        self._addnet(net, self.args.port)
+                        self._addnet(net)
         for path in args.data_dirs:
             if not os.path.isdir(path):
                 continue
@@ -214,11 +214,11 @@ class watcher:
                 logger.debug('not a datadir: %r', path)
         logger.debug('data dirs: %r', self.they)
 
-    def _addnet(self, net, port):
+    def _addnet(self, net):
         if net in self.netseen:
             return
         self.netseen.add(net)
-        net = net + ':' + port
+        net = net + ':' + self.args.port
         try:
             ad = algodDir(net, net=net, token=self.args.token, admin_token=self.args.admin_token)
             self.they.append(ad)
