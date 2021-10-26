@@ -1138,51 +1138,63 @@ func TestTransactionPoolRecompute(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = poolSize
 	cfg.EnableProcessBlockStats = false
-	transactionPool := MakeTransactionPool(l, cfg, logging.Base())
 
-	// make some transactions
-	var signedTransactions []transactions.SignedTxn
-	for i := 0; i < numTransactions; i++ {
-		var receiver basics.Address
-		crypto.RandBytes(receiver[:])
-		tx := transactions.Transaction{
-			Type: protocol.PaymentTx,
-			Header: transactions.Header{
-				Sender:      addresses[i%numOfAccounts],
-				Fee:         basics.MicroAlgos{Raw: 20000 + proto.MinTxnFee},
-				FirstValid:  0,
-				LastValid:   basics.Round(proto.MaxTxnLife),
-				GenesisHash: l.GenesisHash(),
-			},
-			PaymentTxnFields: transactions.PaymentTxnFields{
-				Receiver: receiver,
-				Amount:   basics.MicroAlgos{Raw: proto.MinBalance},
-			},
+	setupPool := func() (*TransactionPool, map[transactions.Txid]basics.Round, uint) {
+		transactionPool := MakeTransactionPool(l, cfg, logging.Base())
+
+		// make some transactions
+		var signedTransactions []transactions.SignedTxn
+		for i := 0; i < numTransactions; i++ {
+			var receiver basics.Address
+			crypto.RandBytes(receiver[:])
+			tx := transactions.Transaction{
+				Type: protocol.PaymentTx,
+				Header: transactions.Header{
+					Sender:      addresses[i%numOfAccounts],
+					Fee:         basics.MicroAlgos{Raw: 20000 + proto.MinTxnFee},
+					FirstValid:  0,
+					LastValid:   basics.Round(proto.MaxTxnLife),
+					GenesisHash: l.GenesisHash(),
+				},
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: receiver,
+					Amount:   basics.MicroAlgos{Raw: proto.MinBalance},
+				},
+			}
+			//tx.Note = make([]byte, 8, 8)
+			//crypto.RandBytes(tx.Note)
+
+			signedTx, err := transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
+			require.NoError(t, err)
+			signedTransactions = append(signedTransactions, signedTx)
 		}
-		//tx.Note = make([]byte, 8, 8)
-		//crypto.RandBytes(tx.Note)
 
-		signedTx, err := transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
-		require.NoError(t, err)
-		signedTransactions = append(signedTransactions, signedTx)
+		// add all txns to pool
+		for _, txn := range signedTransactions {
+			err := transactionPool.RememberOne(txn)
+			//stats := telemetryspec.AssembleBlockMetrics{}
+			//err := transactionPool.add(pooldata.SignedTxGroup{Transactions: []transactions.SignedTxn{txn}}, &stats)
+			require.NoError(t, err)
+		}
+
+		// make args for recomputeBlockEvaluator() like OnNewBlock() would
+		var knownCommitted uint
+		committedTxIds := make(map[transactions.Txid]basics.Round)
+		for i := 0; i < blockSize; i++ {
+			knownCommitted++
+			committedTxIds[signedTransactions[i].ID()] = basics.Round(1)
+		}
+		return transactionPool, committedTxIds, knownCommitted
 	}
 
-	// add all txns to pool
-	for _, txn := range signedTransactions {
-		err := transactionPool.RememberOne(txn)
-		//stats := telemetryspec.AssembleBlockMetrics{}
-		//err := transactionPool.add(pooldata.SignedTxGroup{Transactions: []transactions.SignedTxn{txn}}, &stats)
-		require.NoError(t, err)
-	}
-
-	// make args for recomputeBlockEvaluator() like OnNewBlock() would
-	var knownCommitted uint
-	committedTxIds := make(map[transactions.Txid]basics.Round)
-	for i := 0; i < blockSize; i++ {
-		knownCommitted++
-		committedTxIds[signedTransactions[i].ID()] = basics.Round(1)
-	}
-
+	// N := 1
+	// transactionPool := make([]*TransactionPool, N)
+	// committedTxIds := make([]map[transactions.Txid]basics.Round, N)
+	// knownCommitted := make([]uint, N)
+	// for i := 0; i < N; i++ {
+	// 	transactionPool[i], committedTxIds[i], knownCommitted[i] = setupPool()
+	// }
+	transactionPool, committedTxIds, knownCommitted := setupPool()
 	time.Sleep(time.Second)
 
 	// CPU profiler
@@ -1193,10 +1205,15 @@ func TestTransactionPoolRecompute(t *testing.T) {
 	t.Logf("calling recomputeBlockEvaluator on %d txn IDs", len(committedTxIds))
 	pprof.StartCPUProfile(f)
 	start := time.Now()
+	// for i := 0; i < N; i++ {
+	// 	transactionPool[i].recomputeBlockEvaluator(committedTxIds[i], knownCommitted[i])
+	// }
 	transactionPool.recomputeBlockEvaluator(committedTxIds, knownCommitted)
 	end := time.Since(start)
 	pprof.StopCPUProfile()
 	t.Logf("recomputeBlockEvaluator took %v", end)
+	//t.Log("pool.assemblyResults.blk payset len", len(transactionPool.assemblyResults.blk.Block().Payset))
+	//t.Log("pool.pendingBlockEvaluation.block.Payset len", transactionPool.pendingBlockEvaluator.PaySetSize())
 }
 
 func BenchmarkTransactionPoolSteadyState(b *testing.B) {

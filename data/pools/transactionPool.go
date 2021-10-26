@@ -691,6 +691,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup pooldata.Sig
 				if gerr != nil {
 					pool.assemblyResults.err = fmt.Errorf("could not generate block for %d: %v", pool.assemblyResults.roundStartedEvaluating, gerr)
 				} else {
+					fmt.Println("generated a block payset len", len(lvb.Block().Payset))
 					pool.assemblyResults.blk = lvb
 				}
 				stats.BlockGenerationDuration = uint64(time.Now().Sub(blockGenerationStarts))
@@ -709,6 +710,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup pooldata.SignedT
 	err := pool.addToPendingBlockEvaluatorOnce(txgroup, recomputing, stats)
 	if err == ledgercore.ErrNoSpace {
 		pool.numPendingWholeBlocks++
+		fmt.Println("hit ErrNoSpace numPendingWholeBlocks", pool.numPendingWholeBlocks)
 		pool.pendingBlockEvaluator.ResetTxnBytes()
 		err = pool.addToPendingBlockEvaluatorOnce(txgroup, recomputing, stats)
 	}
@@ -759,10 +761,13 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	next := bookkeeping.MakeBlock(prev)
 	pool.numPendingWholeBlocks = 0
 	hint := pendingCount - int(knownCommitted)
+	fmt.Println("hint", hint, "pendingCount", pendingCount, "knownCommitted", knownCommitted)
 	if hint < 0 || int(knownCommitted) < 0 {
 		hint = 0
 	}
-	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, pool.calculateMaxTxnBytesPerBlock(next.BlockHeader.CurrentProtocol))
+	maxTxnBytes := pool.calculateMaxTxnBytesPerBlock(next.BlockHeader.CurrentProtocol)
+	fmt.Println("calculateMaxTxnBytesPerBlock", maxTxnBytes)
+	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, maxTxnBytes)
 	if err != nil {
 		// The pendingBlockEvaluator is an interface, and in case of an evaluator error
 		// we want to remove the interface itself rather then keeping an interface
@@ -840,6 +845,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			pool.assemblyResults.err = fmt.Errorf("could not generate block for %d (end): %v", pool.assemblyResults.roundStartedEvaluating, err)
 		} else {
 			pool.assemblyResults.blk = lvb
+			pool.pendingBlockEvaluator.Stop()
 		}
 		asmStats.BlockGenerationDuration = uint64(time.Now().Sub(blockGenerationStarts))
 		pool.assemblyResults.stats = asmStats
