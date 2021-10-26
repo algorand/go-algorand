@@ -74,6 +74,40 @@ type NodeInterface interface {
 	RemoveParticipationKey(account.ParticipationID) error
 }
 
+func convertParticipationRecord(record account.ParticipationRecord) generated.ParticipationKey {
+	generated := generated.ParticipationKey{
+		Id:              record.ParticipationID.String(),
+		Address:         record.Account.String(),
+		FirstValid:      uint64(record.FirstValid),
+		LastValid:       uint64(record.LastValid),
+		VoteKeyDilution: record.KeyDilution,
+		LastVote: nil,
+		LastBlockProposal: nil,
+		LastStateProof: nil,
+	}
+	if record.Voting != nil {
+		generated.VoteKey = record.Voting.OneTimeSignatureVerifier[:]
+	}
+	if record.VRF != nil {
+		generated.VrfKey = record.VRF.PK[:]
+	}
+
+	// Optional key usage values.
+	if record.LastVote != 0 {
+		lastVote := uint64(record.LastVote)
+		generated.LastVote = &lastVote
+	}
+	if record.LastBlockProposal != 0 {
+		lastBlockProposal := uint64(record.LastBlockProposal)
+		generated.LastBlockProposal = &lastBlockProposal
+	}
+	if record.LastCompactCertificate != 0 {
+		lastStateProof := uint64(record.LastCompactCertificate)
+		generated.LastStateProof = &lastStateProof
+	}
+	return generated
+}
+
 // GetParticipationKeys Return a list of participation keys
 // (GET /v2/participation)
 func (v2 *Handlers) GetParticipationKeys(ctx echo.Context) error {
@@ -83,26 +117,13 @@ func (v2 *Handlers) GetParticipationKeys(ctx echo.Context) error {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
-	response := []generated.ParticipationKey{}
+	var response []generated.ParticipationKey
 
 	for _, participationRecord := range partKeys {
-		info := generated.ParticipationKey{
-			"ID":         participationRecord.ParticipationID.String(),
-			"Address":    participationRecord.Account.String(),
-			"FirstValid": participationRecord.FirstValid,
-			"LastValid":  participationRecord.LastValid,
-			// TODO Coming soon (tm)
-			"VoteID": crypto.OneTimeSignatureVerifier{},
-			// TODO Coming soon (tm)
-			"SelectionID":     crypto.VRFVerifier{},
-			"VoteKeyDilution": participationRecord.KeyDilution,
-		}
-
-		response = append(response, info)
+		response = append(response, convertParticipationRecord(participationRecord))
 	}
 
 	return ctx.JSON(http.StatusOK, response)
-
 }
 
 // AddParticipationKey Add a participation key to the node
@@ -172,17 +193,7 @@ func (v2 *Handlers) GetParticipationKeyByID(ctx echo.Context, participationID st
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
-	response := generated.ParticipationKey{
-		"ID":         participationRecord.ParticipationID.String(),
-		"Address":    participationRecord.Account.String(),
-		"FirstValid": participationRecord.FirstValid,
-		"LastValid":  participationRecord.LastValid,
-		// TODO add this
-		"VoteID": crypto.OneTimeSignatureVerifier{},
-		// TODO add this
-		"SelectionID":     crypto.VRFVerifier{},
-		"VoteKeyDilution": participationRecord.KeyDilution,
-	}
+	response := convertParticipationRecord(participationRecord)
 
 	return ctx.JSON(http.StatusOK, response)
 }
@@ -246,7 +257,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 			} else {
 				// Asset may have been deleted, so we can no
 				// longer fetch the creator
-				creator = ""
+					creator = ""
 			}
 			assetsCreators[curid] = creator
 		}

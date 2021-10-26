@@ -1721,7 +1721,63 @@
     },
     "ParticipationKey": {
       "description": "Represents a participation key used by the node.",
-      "type": "object"
+      "type": "object",
+      "required": [
+        "id",
+        "address",
+        "first-valid",
+        "last-valid",
+        "vote-key",
+        "vrf-key",
+        "vote-key-dilution"
+      ],
+      "properties": {
+        "id": {
+          "description": "The key's ParticipationID.",
+          "type": "string"
+        },
+        "address": {
+          "description": "Address the key was generated for.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "first-valid": {
+          "description": "FirstValid round for the keys.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "last-valid": {
+          "description": "LastValid round for the keys.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "vote-key": {
+          "description": "Public voting key.",
+          "type": "string",
+          "format": "byte"
+        },
+        "vrf-key": {
+          "description": "Public VRF selection key.",
+          "type": "string",
+          "format": "byte"
+        },
+        "vote-key-dilution": {
+          "description": "Voting key dilution.",
+          "type": "integer"
+        },
+        "last-vote": {
+          "description": "Round when this key was last used to vote.",
+          "type": "integer"
+        },
+        "last-block-proposal": {
+          "description": "Round when this key was last used to propose a block.",
+          "type": "integer"
+        },
+        "last-state-proof": {
+          "description": "Round when this key was last used to generate a state proof.",
+          "type": "integer"
+        }
+      }
     },
     "TealKeyValueStore": {
       "description": "Represents a key-value store for use in an application.",

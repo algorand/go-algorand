@@ -604,3 +604,15 @@ func (client RestClient) Proof(txid string, round uint64) (response generatedV2.
 	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/transactions/%s/proof", round, txid), nil)
 	return
 }
+
+// GetParticipationKeys gets all of the participation keys
+func (client RestClient) GetParticipationKeys() (response generatedV2.ParticipationKeysResponse, err error) {
+	err = client.get(&response, "/v2/participation", nil)
+	return
+}
+
+// GetParticipationKeyByID gets a single participation key
+func (client RestClient) GetParticipationKeyByID(participationID string) (response generatedV2.ParticipationKeyResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/participation/%s", participationID), nil)
+	return
+}

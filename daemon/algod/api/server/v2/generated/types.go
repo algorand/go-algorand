@@ -341,7 +341,38 @@ type EvalDeltaKeyValue struct {
 }
 
 // ParticipationKey defines model for ParticipationKey.
-type ParticipationKey map[string]interface{}
+type ParticipationKey struct {
+
+	// Address the key was generated for.
+	Address string `json:"address"`
+
+	// FirstValid round for the keys.
+	FirstValid uint64 `json:"first-valid"`
+
+	// The key's ParticipationID.
+	Id string `json:"id"`
+
+	// Round when this key was last used to propose a block.
+	LastBlockProposal *uint64 `json:"last-block-proposal,omitempty"`
+
+	// Round when this key was last used to generate a state proof.
+	LastStateProof *uint64 `json:"last-state-proof,omitempty"`
+
+	// LastValid round for the keys.
+	LastValid uint64 `json:"last-valid"`
+
+	// Round when this key was last used to vote.
+	LastVote *uint64 `json:"last-vote,omitempty"`
+
+	// Public voting key.
+	VoteKey []byte `json:"vote-key"`
+
+	// Voting key dilution.
+	VoteKeyDilution uint64 `json:"vote-key-dilution"`
+
+	// Public VRF selection key.
+	VrfKey []byte `json:"vrf-key"`
+}
 
 // PendingTransactionResponse defines model for PendingTransactionResponse.
 type PendingTransactionResponse struct {
