@@ -17,6 +17,8 @@
 package ledger
 
 import (
+	"context"
+	"database/sql"
 	"sync"
 
 	"github.com/algorand/go-deadlock"
@@ -85,7 +87,7 @@ func (bn *blockNotifier) close() {
 	bn.closing.Wait()
 }
 
-func (bn *blockNotifier) loadFromDisk(l ledgerForTracker) error {
+func (bn *blockNotifier) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 	bn.cond = sync.NewCond(&bn.mu)
 	bn.running = true
 	bn.pendingBlocks = nil
@@ -110,4 +112,18 @@ func (bn *blockNotifier) newBlock(blk bookkeeping.Block, delta ledgercore.StateD
 
 func (bn *blockNotifier) committedUpTo(rnd basics.Round) basics.Round {
 	return rnd
+}
+
+func (bn *blockNotifier) prepareCommit(dcc *deferredCommitContext) error {
+	return nil
+}
+
+func (bn *blockNotifier) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+	return nil
+}
+
+func (bn *blockNotifier) postCommit(deferredCommitContext) {
+}
+
+func (bn *blockNotifier) handleUnorderedCommit(uint64, basics.Round, basics.Round) {
 }

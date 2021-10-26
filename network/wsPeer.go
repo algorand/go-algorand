@@ -90,6 +90,8 @@ type wsPeerWebsocketConn interface {
 	WriteControl(int, []byte, time.Time) error
 	SetReadLimit(int64)
 	CloseWithoutFlush() error
+	SetPingHandler(h func(appData string) error)
+	SetPongHandler(h func(appData string) error)
 }
 
 type sendMessage struct {
@@ -137,7 +139,7 @@ type wsPeer struct {
 	// lastPacketTime contains the UnixNano at the last time a successful communication was made with the peer.
 	// "successful communication" above refers to either reading from or writing to a connection without receiving any
 	// error.
-	// we want this to be a 64-bit aligned for atomics.
+	// we want this to be a 64-bit aligned for atomics support on 32bit platforms.
 	lastPacketTime int64
 
 	// intermittentOutgoingMessageEnqueueTime contains the UnixNano of the message's enqueue time that is currently being written to the
@@ -173,11 +175,7 @@ type wsPeer struct {
 
 	processed chan struct{}
 
-	pingLock              deadlock.Mutex
-	pingSent              time.Time
-	pingData              []byte
-	pingInFlight          bool
-	lastPingRoundTripTime time.Duration
+	latencyTracker latencyTracker
 
 	// Hint about position in wn.peers.  Definitely valid if the peer
 	// is present in wn.peers.
@@ -250,6 +248,7 @@ type UnicastPeer interface {
 	Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error)
 	Respond(ctx context.Context, reqMsg IncomingMessage, topics Topics) (e error)
 	IsOutgoing() bool
+	GetConnectionLatency() time.Duration
 }
 
 // Create a wsPeerCore object
@@ -283,6 +282,11 @@ func (wp *wsPeer) Version() string {
 // is an incoming connection.
 func (wp *wsPeer) IsOutgoing() bool {
 	return wp.outgoing
+}
+
+// GetConnectionLatency returns the connection latency between the local node and this peer.
+func (wp *wsPeer) GetConnectionLatency() time.Duration {
+	return wp.latencyTracker.getConnectionLatency()
 }
 
 // 	Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
@@ -379,6 +383,13 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 		wp.sendMessageTag = txSendMsgTags
 	}
 
+	wp.latencyTracker.init(wp.conn, config, time.Duration(0))
+	// send a ping right away.
+	now := time.Now()
+	if err := wp.latencyTracker.checkPingSending(&now); err != nil {
+		wp.net.log.Infof("failed to send ping message to peer : %v", err)
+	}
+
 	wp.wg.Add(2)
 	go wp.readLoop()
 	go wp.writeLoop()
@@ -447,6 +458,7 @@ func (wp *wsPeer) readLoop() {
 			wp.reportReadErr(err)
 			return
 		}
+		wp.latencyTracker.increaseReceivedCounter()
 		msg.processing = wp.processed
 		msg.Received = time.Now().UnixNano()
 		msg.Data = slurper.Bytes()
@@ -640,7 +652,8 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 	}
 
 	// check if this message was waiting in the queue for too long. If this is the case, return "true" to indicate that we want to close the connection.
-	msgWaitDuration := time.Now().Sub(msg.enqueued)
+	now := time.Now()
+	msgWaitDuration := now.Sub(msg.enqueued)
 	if msgWaitDuration > maxMessageQueueDuration {
 		wp.net.log.Warnf("peer stale enqueued message %dms", msgWaitDuration.Nanoseconds()/1000000)
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "stale message"})
@@ -652,6 +665,12 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 		}
 		return disconnectStaleWrite
 	}
+
+	// is it time to send a ping message ?
+	if err := wp.latencyTracker.checkPingSending(&now); err != nil {
+		wp.net.log.Infof("failed to send ping message to peer : %v", err)
+	}
+
 	atomic.StoreInt64(&wp.intermittentOutgoingMessageEnqueueTime, msg.enqueued.UnixNano())
 	defer atomic.StoreInt64(&wp.intermittentOutgoingMessageEnqueueTime, 0)
 	err := wp.conn.WriteMessage(websocket.BinaryMessage, msg.data)
@@ -771,42 +790,6 @@ func (wp *wsPeer) writeNonBlockMsgs(ctx context.Context, data [][]byte, highPrio
 	default:
 	}
 	return false
-}
-
-const pingLength = 8
-const maxPingWait = 60 * time.Second
-
-// sendPing sends a ping block to the peer.
-// return true if either a ping request was enqueued or there is already ping request in flight in the past maxPingWait time.
-func (wp *wsPeer) sendPing() bool {
-	wp.pingLock.Lock()
-	defer wp.pingLock.Unlock()
-	now := time.Now()
-	if wp.pingInFlight && (now.Sub(wp.pingSent) < maxPingWait) {
-		return true
-	}
-
-	tagBytes := []byte(protocol.PingTag)
-	mbytes := make([]byte, len(tagBytes)+pingLength)
-	copy(mbytes, tagBytes)
-	crypto.RandBytes(mbytes[len(tagBytes):])
-	wp.pingData = mbytes[len(tagBytes):]
-	sent := wp.writeNonBlock(context.Background(), mbytes, false, crypto.Digest{}, time.Now(), nil) // todo : we might want to use the callback function to figure a more precise sending time.
-
-	if sent {
-		wp.pingInFlight = true
-		wp.pingSent = now
-	}
-	return sent
-}
-
-// get some times out of the peer while observing the ping data lock
-func (wp *wsPeer) pingTimes() (lastPingSent time.Time, lastPingRoundTripTime time.Duration) {
-	wp.pingLock.Lock()
-	defer wp.pingLock.Unlock()
-	lastPingSent = wp.pingSent
-	lastPingRoundTripTime = wp.lastPingRoundTripTime
-	return
 }
 
 // called when the connection had an error or closed remotely

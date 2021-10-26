@@ -293,6 +293,10 @@ func (n *emulatedNode) SendPeerMessage(netPeer interface{}, msg []byte, callback
 	peer.outSeq++
 }
 
+func (n *emulatedNode) GetPeerLatency(netPeer interface{}) time.Duration {
+	return 0
+}
+
 func (n *emulatedNode) GetPendingTransactionGroups() ([]pooldata.SignedTxGroup, uint64) {
 	return n.txpoolEntries, n.latestLocallyOriginatedGroupCounter
 }
@@ -372,7 +376,7 @@ func (n *emulatedNode) step() {
 
 			peer.mu.Unlock()
 
-			msgHandler(peer, peer.peer, msgBytes, msgInSeq)
+			msgHandler(peer, peer.peer, msgBytes, msgInSeq, 0)
 			n.unblock()
 			n.waitBlocked()
 			peer.mu.Lock()

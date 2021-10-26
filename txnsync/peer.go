@@ -162,6 +162,8 @@ type Peer struct {
 
 	// dataExchangeRate is the combined upload/download rate in bytes/second
 	dataExchangeRate uint64
+	// cachedLatency is the measured network latency of a peer, updated every round
+	cachedLatency time.Duration
 
 	// these two fields describe "what does the local peer want the remote peer to send back"
 	localTransactionsModulator  byte
@@ -287,12 +289,13 @@ func (t *transactionGroupCounterTracker) index(offset, modulator byte) int {
 	return -1
 }
 
-func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool, cfg *config.Local, log Logger) *Peer {
+func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool, cfg *config.Local, log Logger, latency time.Duration) *Peer {
 	p := &Peer{
 		networkPeer:                 networkPeer,
 		isOutgoing:                  isOutgoing,
 		recentSentTransactions:      makeTransactionCache(shortTermRecentTransactionsSentBufferLength, longTermRecentTransactionsSentBufferLength, pendingUnconfirmedRemoteMessages),
 		dataExchangeRate:            defaultDataExchangeRate,
+		cachedLatency:               latency,
 		transactionPoolAckCh:        make(chan uint64, maxAcceptedMsgSeq),
 		transactionPoolAckMessages:  make([]uint64, 0, maxAcceptedMsgSeq),
 		significantMessageThreshold: defaultSignificantMessageThreshold,
@@ -619,27 +622,25 @@ func (p *Peer) updateIncomingTransactionGroups(txnGroups []pooldata.SignedTxGrou
 	}
 }
 
-func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound basics.Round, currentTime time.Duration, incomingMessageSize int) {
+func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound basics.Round, currentTime time.Duration, timeInQueue time.Duration, peerLatency time.Duration, incomingMessageSize int) {
 	p.lastConfirmedMessageSeqReceived = timings.RefTxnBlockMsgSeq
 	// if we received a message that references our previous message, see if they occurred on the same round
 	if p.lastConfirmedMessageSeqReceived == p.lastSentMessageSequenceNumber && p.lastSentMessageRound == currentRound && p.lastSentMessageTimestamp > 0 {
 		// if so, we might be able to calculate the bandwidth.
-		timeSinceLastMessageWasSent := currentTime - p.lastSentMessageTimestamp
+		timeSinceLastMessageWasSent := currentTime - timeInQueue - p.lastSentMessageTimestamp
 		networkMessageSize := uint64(p.lastSentMessageSize + incomingMessageSize)
-		if timings.ResponseElapsedTime != 0 && timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime) && networkMessageSize >= p.significantMessageThreshold {
-			networkTrasmitTime := timeSinceLastMessageWasSent - time.Duration(timings.ResponseElapsedTime)
+		if timings.ResponseElapsedTime != 0 && peerLatency > 0 && timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime)+peerLatency && networkMessageSize >= p.significantMessageThreshold {
+			networkTrasmitTime := timeSinceLastMessageWasSent - time.Duration(timings.ResponseElapsedTime) - peerLatency
 			dataExchangeRate := uint64(time.Second) * networkMessageSize / uint64(networkTrasmitTime)
 
+			// clamp data exchange rate to realistic metrics
 			if dataExchangeRate < minDataExchangeRateThreshold {
 				dataExchangeRate = minDataExchangeRateThreshold
 			} else if dataExchangeRate > maxDataExchangeRateThreshold {
 				dataExchangeRate = maxDataExchangeRateThreshold
 			}
-			// clamp data exchange rate to realistic metrics
-			p.dataExchangeRate = dataExchangeRate
 			// fmt.Printf("incoming message : updating data exchange to %d; network msg size = %d+%d, transmit time = %v\n", dataExchangeRate, p.lastSentMessageSize, incomingMessageSize, networkTrasmitTime)
-			logging.Base().Info("%v %v", timeSinceLastMessageWasSent, time.Duration(timings.ResponseElapsedTime))
-			logging.Base().Infof("incoming message : updating data exchange to %d; network msg size = %d+%d, transmit time = %v", dataExchangeRate, p.lastSentMessageSize, incomingMessageSize, networkTrasmitTime)
+			p.dataExchangeRate = dataExchangeRate
 		}
 
 		// given that we've (maybe) updated the data exchange rate, we need to clear out the lastSendMessage information
@@ -650,7 +651,7 @@ func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound ba
 		p.lastSentMessageSize = 0
 	}
 	p.lastReceivedMessageLocalRound = currentRound
-	p.lastReceivedMessageTimestamp = currentTime
+	p.lastReceivedMessageTimestamp = currentTime - timeInQueue
 	p.lastReceivedMessageSize = incomingMessageSize
 	p.lastReceivedMessageNextMsgMinDelay = time.Duration(timings.NextMsgMinDelay) * time.Nanosecond
 	p.recentSentTransactions.acknowledge(timings.AcceptedMsgSeq)

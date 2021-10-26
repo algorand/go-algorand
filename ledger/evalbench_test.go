@@ -352,14 +352,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 	if len(initSignedTxns) > 0 {
 		// all init transactions need to be written to ledger before reopening and benchmarking
 		for _, l := range []*Ledger{l, l2} {
-			l.accts.ctxCancel() // force commitSyncer to exit
-
-			// wait commitSyncer to exit
-			// the test calls commitRound directly and does not need commitSyncer/committedUpTo
-			select {
-			case <-l.accts.commitSyncerClosed:
-				break
-			}
+			stopCommitSyncer(l)
 		}
 
 		var numBlocks uint64 = 0
@@ -391,9 +384,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 			wg.Add(1)
 			// committing might take a long time, do it parallel
 			go func(l *Ledger) {
-				l.accts.accountsWriting.Add(1)
-				l.accts.commitRound(numBlocks, 0, 0)
-				l.accts.accountsWriting.Wait()
+				commitRound(numBlocks, 0, l)
 				l.reloadLedger()
 				wg.Done()
 			}(l)

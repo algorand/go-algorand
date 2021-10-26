@@ -502,6 +502,7 @@ func (handler *solicitedAsyncTxHandler) HandleTransactionGroups(networkPeer inte
 
 func (handler *solicitedAsyncTxHandler) Start() {
 	if handler.stopCtxFunc == nil {
+		handler.txHandler.Start()
 		var ctx context.Context
 		ctx, handler.stopCtxFunc = context.WithCancel(context.Background())
 		handler.stopped.Add(1)
@@ -514,6 +515,7 @@ func (handler *solicitedAsyncTxHandler) Stop() {
 		handler.stopCtxFunc()
 		handler.stopped.Wait()
 		handler.stopCtxFunc = nil
+		handler.txHandler.Stop()
 	}
 }
 
@@ -532,6 +534,14 @@ func (handler *solicitedAsyncTxHandler) loop(ctx context.Context) {
 			handler.txHandler.net.RequestConnectOutgoing(false, make(chan struct{}))
 			transactionMessagesDroppedFromPool.Inc(nil)
 		} else if allTransactionsIncluded {
+			for _, txnGroup := range groups.txGroups {
+				// We reencode here instead of using rawmsg.Data to avoid broadcasting non-canonical encodings
+				err := handler.txHandler.net.Relay(ctx, protocol.TxnTag, reencode(txnGroup.Transactions), false, groups.networkPeer)
+				if err != nil {
+					logging.Base().Infof("solicitedAsyncTxHandler was unable to relay transaction message : %v", err)
+					break
+				}
+			}
 			select {
 			case groups.ackCh <- groups.messageSeq:
 				// all good, write was successful.

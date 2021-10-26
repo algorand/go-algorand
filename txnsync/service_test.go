@@ -84,6 +84,11 @@ func (fn *mockNodeConnector) UpdatePeers(txsyncPeers []*Peer, netPeers []interfa
 }
 func (fn *mockNodeConnector) SendPeerMessage(netPeer interface{}, msg []byte, callback SendMessageCallback) {
 }
+
+func (fn *mockNodeConnector) GetPeerLatency(netPeer interface{}) time.Duration {
+	return 0
+}
+
 func (fn *mockNodeConnector) GetPendingTransactionGroups() (txGroups []pooldata.SignedTxGroup, latestLocallyOriginatedGroupCounter uint64) {
 	return
 }

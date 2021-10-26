@@ -271,7 +271,7 @@ func TestGetNextScheduleOffset(t *testing.T) {
 
 	for i, test := range tests {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			p := makePeer(nil, true, true, &config, log)
+			p := makePeer(nil, true, true, &config, log, 0)
 			if test.fxn != nil {
 				test.fxn(p)
 			}
@@ -402,7 +402,7 @@ func TestGetMessageConstructionOps(t *testing.T) {
 	log := wrapLogger(tlog, &config)
 	for i, test := range tests {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			p := makePeer(nil, true, true, &config, log)
+			p := makePeer(nil, true, true, &config, log, 0)
 			if test.fxn != nil {
 				test.fxn(p)
 			}
@@ -531,7 +531,7 @@ func TestAdvancePeerState(t *testing.T) {
 	log := wrapLogger(tlog, &config)
 	for i, test := range tests {
 		t.Run(string(rune(i)), func(t *testing.T) {
-			p := makePeer(nil, true, true, &config, log)
+			p := makePeer(nil, true, true, &config, log, 0)
 			if test.fxn != nil {
 				test.fxn(p)
 			}
@@ -558,7 +558,7 @@ func TestUpdateIncomingMessageTiming(t *testing.T) {
 	config := config.GetDefaultLocal()
 	tlog := logging.TestingLog(t)
 	log := wrapLogger(tlog, &config)
-	p := makePeer(nil, true, true, &config, log)
+	p := makePeer(nil, true, true, &config, log, 0)
 
 	currentRound := basics.Round(1)
 	currentTime := time.Millisecond * 123
@@ -569,7 +569,7 @@ func TestUpdateIncomingMessageTiming(t *testing.T) {
 
 	p.lastConfirmedMessageSeqReceived = p.lastSentMessageSequenceNumber + 1
 
-	p.updateIncomingMessageTiming(timing, currentRound, currentTime, currentMessageSize)
+	p.updateIncomingMessageTiming(timing, currentRound, currentTime, 0, time.Millisecond, currentMessageSize)
 
 	a.Equal(p.lastReceivedMessageLocalRound, currentRound)
 	a.Equal(p.lastReceivedMessageTimestamp, currentTime)
@@ -583,7 +583,7 @@ func TestUpdateIncomingMessageTiming(t *testing.T) {
 	timing.ResponseElapsedTime = 1
 	p.lastSentMessageTimestamp = 1 * time.Millisecond
 	currentMessageSize = maxDataExchangeRateThreshold + 1
-	p.updateIncomingMessageTiming(timing, currentRound, currentTime, currentMessageSize)
+	p.updateIncomingMessageTiming(timing, currentRound, currentTime, 0, time.Millisecond, currentMessageSize)
 
 	a.Equal(uint64(maxDataExchangeRateThreshold), p.dataExchangeRate)
 
@@ -594,9 +594,20 @@ func TestUpdateIncomingMessageTiming(t *testing.T) {
 	p.lastSentMessageSize = 0
 	currentMessageSize = int(p.significantMessageThreshold)
 	currentTime = time.Millisecond * 1000
-	p.updateIncomingMessageTiming(timing, currentRound, currentTime, currentMessageSize)
+	p.updateIncomingMessageTiming(timing, currentRound, currentTime, 0, time.Millisecond, currentMessageSize)
 
 	a.Equal(uint64(minDataExchangeRateThreshold), p.dataExchangeRate)
+
+	p.lastConfirmedMessageSeqReceived = p.lastSentMessageSequenceNumber
+	p.lastSentMessageRound = currentRound
+	timing.ResponseElapsedTime = uint64(time.Millisecond)
+	p.lastSentMessageTimestamp = 1 * time.Millisecond
+	p.lastSentMessageSize = 0
+	currentMessageSize = 100000
+	currentTime = time.Millisecond * 123
+	p.updateIncomingMessageTiming(timing, currentRound, currentTime, time.Millisecond, time.Millisecond*100, currentMessageSize)
+
+	a.Equal(uint64(5000000), p.dataExchangeRate)
 }
 
 // TestUpdateIncomingTransactionGroups tests updating the incoming transaction groups
@@ -628,7 +639,7 @@ func TestUpdateIncomingTransactionGroups(t *testing.T) {
 	config := config.GetDefaultLocal()
 	tlog := logging.TestingLog(t)
 	log := wrapLogger(tlog, &config)
-	p := makePeer(nil, true, true, &config, log)
+	p := makePeer(nil, true, true, &config, log, 0)
 
 	p.recentSentTransactions.reset()
 
@@ -647,7 +658,7 @@ func TestUpdateRequestParams(t *testing.T) {
 	config := config.GetDefaultLocal()
 	tlog := logging.TestingLog(t)
 	log := wrapLogger(tlog, &config)
-	p := makePeer(nil, true, true, &config, log)
+	p := makePeer(nil, true, true, &config, log, 0)
 	oldModulator := p.requestedTransactionsModulator
 	oldOffset := p.requestedTransactionsOffset
 
@@ -683,7 +694,7 @@ func TestAddIncomingBloomFilter(t *testing.T) {
 	config := config.GetDefaultLocal()
 	tlog := logging.TestingLog(t)
 	log := wrapLogger(tlog, &config)
-	p := makePeer(nil, true, true, &config, log)
+	p := makePeer(nil, true, true, &config, log, 0)
 
 	for i := 0; i < 2*maxIncomingBloomFilterHistory; i++ {
 		bf := &testableBloomFilter{
@@ -747,7 +758,7 @@ func TestSelectPendingTransactions(t *testing.T) {
 	log := wrapLogger(tlog, &config)
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			p := makePeer(nil, true, true, &config, log)
+			p := makePeer(nil, true, true, &config, log, 0)
 			if test.fxn != nil {
 				test.fxn(p)
 			}
@@ -814,7 +825,7 @@ func TestGetAcceptedMessages(t *testing.T) {
 	config := config.GetDefaultLocal()
 	tlog := logging.TestingLog(t)
 	log := wrapLogger(tlog, &config)
-	p := makePeer(nil, true, true, &config, log)
+	p := makePeer(nil, true, true, &config, log, 0)
 
 	var testList []uint64
 	chPtr := &p.transactionPoolAckCh
@@ -839,7 +850,7 @@ func TestDequeuePendingTransactionPoolAckMessages(t *testing.T) {
 	config := config.GetDefaultLocal()
 	tlog := logging.TestingLog(t)
 	log := wrapLogger(tlog, &config)
-	p := makePeer(nil, true, true, &config, log)
+	p := makePeer(nil, true, true, &config, log, 0)
 
 	ch := p.transactionPoolAckCh
 	var testList []uint64
@@ -884,7 +895,7 @@ func TestUpdateMessageSent(t *testing.T) {
 	config := config.GetDefaultLocal()
 	tlog := logging.TestingLog(t)
 	log := wrapLogger(tlog, &config)
-	p := makePeer(nil, true, true, &config, log)
+	p := makePeer(nil, true, true, &config, log, 0)
 
 	txMsg := &transactionBlockMessage{
 		Version: txnBlockMessageVersion,
@@ -921,10 +932,10 @@ func TestIncomingPeersOnly(t *testing.T) {
 	config := config.GetDefaultLocal()
 	tlog := logging.TestingLog(t)
 	log := wrapLogger(tlog, &config)
-	p1 := makePeer(nil, true, true, &config, log)
-	p2 := makePeer(nil, true, false, &config, log)
-	p3 := makePeer(nil, false, true, &config, log)
-	p4 := makePeer(nil, false, false, &config, log)
+	p1 := makePeer(nil, true, true, &config, log, 0)
+	p2 := makePeer(nil, true, false, &config, log, 0)
+	p3 := makePeer(nil, false, true, &config, log, 0)
+	p4 := makePeer(nil, false, false, &config, log, 0)
 
 	peers := []*Peer{p1, p2, p3, p4}
 
@@ -943,7 +954,7 @@ func TestLocalRequestParams(t *testing.T) {
 	config := config.GetDefaultLocal()
 	tlog := logging.TestingLog(t)
 	log := wrapLogger(tlog, &config)
-	p := makePeer(nil, true, true, &config, log)
+	p := makePeer(nil, true, true, &config, log, 0)
 
 	p.setLocalRequestParams(256, 256)
 	offset, modulator := p.getLocalRequestParams()
@@ -966,7 +977,7 @@ func TestSimpleGetters(t *testing.T) {
 	config := config.GetDefaultLocal()
 	tlog := logging.TestingLog(t)
 	log := wrapLogger(tlog, &config)
-	p := makePeer(sentinelInterface, true, true, &config, log)
+	p := makePeer(sentinelInterface, true, true, &config, log, 0)
 
 	a.Equal(p.GetNetworkPeer(), sentinelInterface)
 	a.Equal(p.GetTransactionPoolAckChannel(), p.transactionPoolAckCh)
@@ -982,7 +993,7 @@ func TestMakePeer(t *testing.T) {
 	config := config.GetDefaultLocal()
 	tlog := logging.TestingLog(t)
 	log := wrapLogger(tlog, &config)
-	p1 := makePeer(sentinelInterface, true, true, &config, log)
+	p1 := makePeer(sentinelInterface, true, true, &config, log, 0)
 
 	a.NotNil(p1)
 	a.Equal(p1.networkPeer, sentinelInterface)
@@ -992,7 +1003,7 @@ func TestMakePeer(t *testing.T) {
 	a.Equal(p1.dataExchangeRate, uint64(defaultRelayToRelayDataExchangeRate))
 
 	// Check that we have different values if the local node relay is false
-	p2 := makePeer(sentinelInterface, true, false, &config, log)
+	p2 := makePeer(sentinelInterface, true, false, &config, log, 0)
 
 	a.NotNil(p2)
 	a.Equal(p1.networkPeer, sentinelInterface)

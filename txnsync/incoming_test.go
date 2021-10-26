@@ -58,27 +58,28 @@ func TestAsyncIncomingMessageHandlerAndErrors(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	mNodeConnector := &mockNodeConnector{transactionPoolSize: 3}
 	s := syncState{
-		log:  wrapLogger(&incLogger, &cfg),
-		node: mNodeConnector,
+		log:   wrapLogger(&incLogger, &cfg),
+		node:  mNodeConnector,
+		clock: mNodeConnector.Clock(),
 	}
 
 	// expect UnmarshalMsg error
 	messageBytes[0] = 0
-	err := s.asyncIncomingMessageHandler(nil, nil, messageBytes, sequenceNumber)
+	err := s.asyncIncomingMessageHandler(nil, nil, messageBytes, sequenceNumber, 0)
 	msgpe := msgp.TypeError{}
 	require.True(t, errors.As(err, &msgpe))
 
 	// expect wrong version error
 	message = transactionBlockMessage{Version: -3}
 	messageBytes = message.MarshalMsg(nil)
-	err = s.asyncIncomingMessageHandler(nil, nil, messageBytes, sequenceNumber)
+	err = s.asyncIncomingMessageHandler(nil, nil, messageBytes, sequenceNumber, 0)
 	require.Equal(t, errUnsupportedTransactionSyncMessageVersion, err)
 
 	// expect error decoding bloomFilter
 	message.Version = 1
 	message.TxnBloomFilter.BloomFilterType = byte(multiHashBloomFilter)
 	messageBytes = message.MarshalMsg(nil)
-	err = s.asyncIncomingMessageHandler(nil, nil, messageBytes, sequenceNumber)
+	err = s.asyncIncomingMessageHandler(nil, nil, messageBytes, sequenceNumber, 0)
 	require.Equal(t, errInvalidBloomFilter, err)
 
 	// error decoding transaction groups
@@ -89,25 +90,25 @@ func TestAsyncIncomingMessageHandlerAndErrors(t *testing.T) {
 	require.NoError(t, err)
 	message.TransactionGroups = packedTransactionGroups{Bytes: []byte{1}}
 	messageBytes = message.MarshalMsg(nil)
-	err = s.asyncIncomingMessageHandler(nil, nil, messageBytes, sequenceNumber)
+	err = s.asyncIncomingMessageHandler(nil, nil, messageBytes, sequenceNumber, 0)
 	require.Equal(t, errDecodingReceivedTransactionGroupsFailed, err)
 
 	// error queue full
 	message.TransactionGroups = packedTransactionGroups{}
 	messageBytes = message.MarshalMsg(nil)
-	err = s.asyncIncomingMessageHandler(nil, nil, messageBytes, sequenceNumber)
+	err = s.asyncIncomingMessageHandler(nil, nil, messageBytes, sequenceNumber, 0)
 	require.Equal(t, errTransactionSyncIncomingMessageQueueFull, err)
 
 	// Success where peer == nil
 	s.incomingMessagesQ = makeIncomingMessageQueue()
-	err = s.asyncIncomingMessageHandler(nil, nil, messageBytes, sequenceNumber)
+	err = s.asyncIncomingMessageHandler(nil, nil, messageBytes, sequenceNumber, 0)
 	require.NoError(t, err)
 
 	peer := Peer{}
 
 	// error when placing the peer message on the main queue (incomingMessages cannot accept messages)
 	s.incomingMessagesQ = incomingMessageQueue{}
-	err = s.asyncIncomingMessageHandler(nil, &peer, messageBytes, sequenceNumber)
+	err = s.asyncIncomingMessageHandler(nil, &peer, messageBytes, sequenceNumber, 0)
 	require.Equal(t, errTransactionSyncIncomingMessageQueueFull, err)
 
 	s.incomingMessagesQ = makeIncomingMessageQueue()
@@ -115,7 +116,7 @@ func TestAsyncIncomingMessageHandlerAndErrors(t *testing.T) {
 	// fill up the incoming message queue (one was already added)
 	for x := 1; x <= messageOrderingHeapLimit; x++ {
 		require.NoError(t, err)
-		err = s.asyncIncomingMessageHandler(nil, &peer, messageBytes, sequenceNumber)
+		err = s.asyncIncomingMessageHandler(nil, &peer, messageBytes, sequenceNumber, 0)
 	}
 	require.Equal(t, errHeapReachedCapacity, err)
 }
