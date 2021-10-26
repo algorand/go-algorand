@@ -19,13 +19,14 @@ package crypto
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	cparalithium "github.com/algoidan/paralithium/ref"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestDilithiumSignAndVerify(t *testing.T) {
+func TestParalithiumSignAndVerify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	for i := 0; i < 100; i++ {
@@ -41,7 +42,7 @@ func TestDilithiumSignAndVerify(t *testing.T) {
 	}
 }
 
-func TestDilithiumSignerImplemantation(t *testing.T) {
+func TestParalithiumSignerImplemantation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	psigner := GenerateParalithiumSigner()
@@ -81,4 +82,29 @@ func TestDilithiumSignerImplemantation(t *testing.T) {
 
 	sig[0]++
 	a.Error(dverifier.Verify(hashableWithData, sig))
+}
+
+func TestParalithiumWrongSeed(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var alterSeed = [cparalithium.SeedSize]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00}
+
+	sk, pk := cparalithium.NewKeysWithRho(cparalithium.ParalithiumSeed(alterSeed))
+	singer := &ParalithiumSigner{
+		PublicKey: PPublicKey(pk),
+		SecretKey: PSecretKey(sk),
+	}
+
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, uint64(0))
+	bs := sha256.Sum256(b)
+	sig := singer.SignBytes(bs[:])
+
+	dvf := singer.GetVerifyingKey()
+
+	a.Error(dvf.GetVerifier().VerifyBytes(bs[:], sig))
+
 }

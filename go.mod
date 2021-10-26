@@ -3,7 +3,7 @@ module github.com/algorand/go-algorand
 go 1.14
 
 require (
-	github.com/algoidan/paralithium v0.0.0-20211024171030-a21b03ae2de6
+	github.com/algoidan/paralithium v0.0.0-20211026120802-d543c2a902ce
 	github.com/algonathan/sumhash v0.0.0-20210902064122-c2f95258d5f3
 	github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d
 	github.com/algorand/go-deadlock v0.2.1
@@ -44,7 +44,7 @@ require (
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.6.1
 	golang.org/x/crypto v0.0.0-20210813211128-0a44fdfbc16e
 	golang.org/x/net v0.0.0-20210226172049-e18ecbb05110
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208 // indirect

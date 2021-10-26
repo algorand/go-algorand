@@ -30,7 +30,7 @@ type (
 	//msgp:allocbound ParalithiumPrivateKey
 	ParalithiumPrivateKey []byte
 	//ParalithiumSignature is the exported signature
-	//msgp:allocbound ParalithiumSignature 
+	//msgp:allocbound ParalithiumSignature
 	ParalithiumSignature ByteSignature
 
 	// PPublicKey is a wrapper for cparalithium.ParalithiumPublicKey (used for packing)
@@ -39,7 +39,10 @@ type (
 	PSecretKey [cparalithium.PrivateKeySize]byte
 )
 
-var AlgorandParalithiumSeed = [cparalithium.SeedSize]byte{'A', 'l', 'g', 'o', 'r', 'a', 'n', 'd', 'v', '1'}
+// AlgorandParalithiumSeed - this value is used to generate the public/secret keys.
+// it can be found on the first 32 bytes of the publickey. This value will be a constant
+// in the SNARK prover.
+var AlgorandParalithiumSeed = [cparalithium.SeedSize]byte{'A', 'l', 'g', 'o', 'r', 'a', 'n', 'd', ' ', 'P', 'a', 'r', 'a', 'l', 'i', 't', 'h', 'i', 'u', 'm', ' ', 'v', '0', '1', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 
 // ParalithiumSigner is the implementation of Signer for the Paralithium signature scheme.
 type ParalithiumSigner struct {

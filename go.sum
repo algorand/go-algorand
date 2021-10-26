@@ -1,5 +1,5 @@
-github.com/algoidan/paralithium v0.0.0-20211024171030-a21b03ae2de6 h1:84mXN142wEGMhfaJdTMtvN3LGqr5TbGzHCcASrf7YfQ=
-github.com/algoidan/paralithium v0.0.0-20211024171030-a21b03ae2de6/go.mod h1:cX2v+vG7tQrYZ5WvQigC6ooX2dZwM95MfN/AjnU4ndM=
+github.com/algoidan/paralithium v0.0.0-20211026120802-d543c2a902ce h1:4gK20RAaYiIxc9tEPgxRJFEa3b6z2OdSiw0D3uxJSSY=
+github.com/algoidan/paralithium v0.0.0-20211026120802-d543c2a902ce/go.mod h1:V1DAGAmrF+IJBLSTLkdzRt8W1BxMMynTh0fp9nHCVMA=
 github.com/algonathan/sumhash v0.0.0-20210902064122-c2f95258d5f3 h1:k3NpR7zWChaXtbLedjCE8g+N+HWZrp0bsTYOI0DgZEg=
 github.com/algonathan/sumhash v0.0.0-20210902064122-c2f95258d5f3/go.mod h1:o3SSyNw1Njyqx5pFdH4e8wZ7QK8xAwGXl6QKPzHrAFo=
 github.com/algorand/go-codec v1.1.2 h1:QWS9YC3EEWBpJq5AqFPELcCJ2QPpTIg9aqR2K/sRDq4=
@@ -136,8 +136,6 @@ github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81P
 github.com/stretchr/testify v1.5.1/go.mod h1:5W2xD1RspED5o8YsWQXVCued0rvSQ+mT+I5cxcmMvtA=
 github.com/stretchr/testify v1.6.1 h1:hDPOHmpOpP40lSULcqw7IrRb/u7w6RpDC9399XyoNd0=
 github.com/stretchr/testify v1.6.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
-github.com/stretchr/testify v1.7.0 h1:nwc3DEeHmmLAfoZucVR881uASk0Mfjw8xYJ99tb5CcY=
-github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/ttacon/chalk v0.0.0-20160626202418-22c06c80ed31/go.mod h1:onvgF043R+lC5RZ8IT9rBXDaEDnpnw/Cl+HFiw+v/7Q=
 github.com/valyala/bytebufferpool v1.0.0 h1:GqA5TC/0021Y/b9FG4Oi9Mr3q7XYx6KllzawFIhcdPw=
 github.com/valyala/bytebufferpool v1.0.0/go.mod h1:6bBcMArwyJ5K/AmCkWv1jt77kVWyCJ6HpOuEn7z0Csc=
