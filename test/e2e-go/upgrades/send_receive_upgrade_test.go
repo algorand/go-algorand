@@ -205,7 +205,7 @@ func runUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClien
 			time.Sleep(500*time.Millisecond - iterationDuration)
 		}
 
-		if time.Now().After(startTime.Add(3 * time.Minute)) {
+		if time.Now().After(startTime.Add(5 * time.Minute)) {
 			a.Fail("upgrade taking too long")
 		}
 	}
