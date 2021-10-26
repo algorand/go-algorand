@@ -469,12 +469,12 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 			case protocol.CompactCertTx:
 				v0, err := protocol.RandomizeObject(&txn.Txn.CompactCertTxnFields)
 				require.NoError(t, err)
-				CompactCertTxnFields, ok := v0.(*transactions.CompactCertTxnFields)
+				compactCertTxnFields, ok := v0.(*transactions.CompactCertTxnFields)
 				require.True(t, ok)
 
-				fixCertFields(CompactCertTxnFields)
+				fixCertFields(compactCertTxnFields)
 
-				txn.Txn.CompactCertTxnFields = *CompactCertTxnFields
+				txn.Txn.CompactCertTxnFields = *compactCertTxnFields
 			default:
 				require.Fail(t, "unsupported txntype for txnsync msg encoding")
 			}
@@ -501,10 +501,10 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 	}
 }
 
-func fixCertFields(CompactCertTxnFields *transactions.CompactCertTxnFields) {
+func fixCertFields(compactCertTxnFields *transactions.CompactCertTxnFields) {
 	newTypes := make(map[uint64]compactcert.Reveal)
 	// fix for the key for correct value
-	for i, r := range CompactCertTxnFields.Cert.Reveals {
+	for i, r := range compactCertTxnFields.Cert.Reveals {
 		data := r
 		data.SigSlot.Sig.VerifyingKey.Type = crypto.AlgorithmType(generateRandTypeInsideRange(uint16(crypto.MaxAlgorithmType)))
 		data.SigSlot.Sig.Proof.HashFactory.HashType = crypto.HashType(generateRandTypeInsideRange(uint16(crypto.MaxHashType)))
@@ -512,10 +512,10 @@ func fixCertFields(CompactCertTxnFields *transactions.CompactCertTxnFields) {
 		newTypes[i] = data
 
 	}
-	CompactCertTxnFields.Cert.Reveals = newTypes
+	compactCertTxnFields.Cert.Reveals = newTypes
 
-	CompactCertTxnFields.Cert.PartProofs.HashFactory.HashType = crypto.HashType(generateRandTypeInsideRange(uint16(crypto.MaxHashType)))
-	CompactCertTxnFields.Cert.SigProofs.HashFactory.HashType = crypto.HashType(generateRandTypeInsideRange(uint16(crypto.MaxHashType)))
+	compactCertTxnFields.Cert.PartProofs.HashFactory.HashType = crypto.HashType(generateRandTypeInsideRange(uint16(crypto.MaxHashType)))
+	compactCertTxnFields.Cert.SigProofs.HashFactory.HashType = crypto.HashType(generateRandTypeInsideRange(uint16(crypto.MaxHashType)))
 }
 
 func getRandomSignedTxn(t *testing.T) transactions.SignedTxn {
@@ -547,18 +547,28 @@ func TestTxnGroupInvalidEncodingReflectionOnKeyType(t *testing.T) {
 	txn := getRandomSignedTxn(t)
 	v0, err := protocol.RandomizeObject(&txn.Txn.CompactCertTxnFields)
 	require.NoError(t, err)
-	CompactCertTxnFields, ok := v0.(*transactions.CompactCertTxnFields)
+	compactCertTxnFields, ok := v0.(*transactions.CompactCertTxnFields)
 	require.True(t, ok)
+
+	fixCertFields(compactCertTxnFields)
+	txn.Txn.CompactCertTxnFields = *compactCertTxnFields
+
+	err = decodeCert(t, txn)
+	require.NoError(t, err)
 
 	r := compactcert.Reveal{}
 	r.SigSlot.Sig.VerifyingKey.Type = crypto.MaxAlgorithmType
 	newTypes := make(map[uint64]compactcert.Reveal)
 	newTypes[1] = r
-	CompactCertTxnFields.Cert.Reveals = newTypes
+	compactCertTxnFields.Cert.Reveals = newTypes
+	txn.Txn.CompactCertTxnFields = *compactCertTxnFields
 
-	txn.Txn.CompactCertTxnFields = *CompactCertTxnFields
+	txn.Txn.CompactCertTxnFields = *compactCertTxnFields
 
-	checkCertDecodeFails(t, txn, err)
+	err = decodeCert(t, txn)
+	if !errors.As(err, &protocol.ErrInvalidObject) {
+		t.Fail()
+	}
 }
 
 func TestTxnGroupInvalidEncodingReflectionOnHashType(t *testing.T) {
@@ -567,21 +577,30 @@ func TestTxnGroupInvalidEncodingReflectionOnHashType(t *testing.T) {
 	txn := getRandomSignedTxn(t)
 	v0, err := protocol.RandomizeObject(&txn.Txn.CompactCertTxnFields)
 	require.NoError(t, err)
-	CompactCertTxnFields, ok := v0.(*transactions.CompactCertTxnFields)
+	compactCertTxnFields, ok := v0.(*transactions.CompactCertTxnFields)
 	require.True(t, ok)
+
+	fixCertFields(compactCertTxnFields)
+	txn.Txn.CompactCertTxnFields = *compactCertTxnFields
+
+	err = decodeCert(t, txn)
+	require.NoError(t, err)
 
 	r := compactcert.Reveal{}
 	r.SigSlot.Sig.Proof.HashFactory.HashType = crypto.MaxHashType
 	newTypes := make(map[uint64]compactcert.Reveal)
 	newTypes[1] = r
-	CompactCertTxnFields.Cert.Reveals = newTypes
+	compactCertTxnFields.Cert.Reveals = newTypes
 
-	txn.Txn.CompactCertTxnFields = *CompactCertTxnFields
+	txn.Txn.CompactCertTxnFields = *compactCertTxnFields
 
-	checkCertDecodeFails(t, txn, err)
+	err = decodeCert(t, txn)
+	if !errors.As(err, &protocol.ErrInvalidObject) {
+		t.Fail()
+	}
 }
 
-func checkCertDecodeFails(t *testing.T, txn transactions.SignedTxn, err error) {
+func decodeCert(t *testing.T, txn transactions.SignedTxn) error {
 	txn.Txn.Group = crypto.Digest{}
 
 	var txns []transactions.SignedTxn
@@ -592,16 +611,14 @@ func checkCertDecodeFails(t *testing.T, txn transactions.SignedTxn, err error) {
 			Transactions: txns,
 		},
 	}
-	err = addGroupHashes(txnGroups, len(txns), []byte{1})
+	err := addGroupHashes(txnGroups, len(txns), []byte{1})
 	require.NoError(t, err)
 	var s syncState
 	ptg, err := s.encodeTransactionGroups(txnGroups, 0)
 	require.NoError(t, err)
 	_, err = decodeTransactionGroups(ptg, txn.Txn.GenesisID, txn.Txn.GenesisHash)
 
-	if !errors.As(err, &protocol.ErrInvalidObject) {
-		t.Fail()
-	}
+	return err
 }
 
 // pass in flag -db to specify db, start round, end round
