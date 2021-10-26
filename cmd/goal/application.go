@@ -1092,7 +1092,7 @@ var methodAppCmd = &cobra.Command{
 			fmt.Printf("%x\n", applicationArgs[i])
 		}
 
-		// TODO i dunno how to pass application args to somewhere i dunno
+		// copy-paste code from callAppCmd
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
 
