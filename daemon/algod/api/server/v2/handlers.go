@@ -76,14 +76,14 @@ type NodeInterface interface {
 
 func convertParticipationRecord(record account.ParticipationRecord) generated.ParticipationKey {
 	generated := generated.ParticipationKey{
-		Id:              record.ParticipationID.String(),
-		Address:         record.Account.String(),
-		FirstValid:      uint64(record.FirstValid),
-		LastValid:       uint64(record.LastValid),
-		VoteKeyDilution: record.KeyDilution,
-		LastVote: nil,
+		Id:                record.ParticipationID.String(),
+		Address:           record.Account.String(),
+		FirstValid:        uint64(record.FirstValid),
+		LastValid:         uint64(record.LastValid),
+		VoteKeyDilution:   record.KeyDilution,
+		LastVote:          nil,
 		LastBlockProposal: nil,
-		LastStateProof: nil,
+		LastStateProof:    nil,
 	}
 	if record.Voting != nil {
 		generated.VoteKey = record.Voting.OneTimeSignatureVerifier[:]
@@ -257,7 +257,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 			} else {
 				// Asset may have been deleted, so we can no
 				// longer fetch the creator
-					creator = ""
+				creator = ""
 			}
 			assetsCreators[curid] = creator
 		}
