@@ -240,6 +240,11 @@ func TestEmptyTree(t *testing.T) {
 }
 
 func BenchmarkMerkleCommit(b *testing.B) {
+	b.Run("sha512_256", func(b *testing.B) { merkleCommitBench(b, crypto.Sha512_256) })
+	b.Run("sumhash", func(b *testing.B) { merkleCommitBench(b, crypto.Sumhash) })
+}
+
+func merkleCommitBench(b *testing.B, hashType crypto.HashType) {
 	for sz := 10; sz <= 100000; sz *= 100 {
 		msg := make(TestBuf, sz)
 		crypto.RandBytes(msg[:])
@@ -251,7 +256,7 @@ func BenchmarkMerkleCommit(b *testing.B) {
 
 			b.Run(fmt.Sprintf("Item%d/Count%d", sz, cnt), func(b *testing.B) {
 				for i := 0; i < b.N; i++ {
-					tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha512_256})
+					tree, err := Build(a, crypto.HashFactory{HashType: hashType})
 					if err != nil {
 						b.Error(err)
 					}
@@ -263,13 +268,18 @@ func BenchmarkMerkleCommit(b *testing.B) {
 }
 
 func BenchmarkMerkleProve1M(b *testing.B) {
+	b.Run("sha512_256", func(b *testing.B) { benchmarkMerkleProve1M(b, crypto.Sha512_256) })
+	b.Run("sumhash", func(b *testing.B) { benchmarkMerkleProve1M(b, crypto.Sumhash) })
+}
+
+func benchmarkMerkleProve1M(b *testing.B, hashType crypto.HashType) {
 	msg := TestMessage("Hello world")
 
 	var a TestRepeatingArray
 	a.item = msg
 	a.count = 1024 * 1024
 
-	tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha512_256})
+	tree, err := Build(a, crypto.HashFactory{HashType: hashType})
 	if err != nil {
 		b.Error(err)
 	}
@@ -285,13 +295,18 @@ func BenchmarkMerkleProve1M(b *testing.B) {
 }
 
 func BenchmarkMerkleVerify1M(b *testing.B) {
+	b.Run("sha512_256", func(b *testing.B) { benchmarkMerkleVerify1M(b, crypto.Sha512_256) })
+	b.Run("sumhash", func(b *testing.B) { benchmarkMerkleVerify1M(b, crypto.Sumhash) })
+}
+
+func benchmarkMerkleVerify1M(b *testing.B, hashType crypto.HashType) {
 	msg := TestMessage("Hello world")
 
 	var a TestRepeatingArray
 	a.item = msg
 	a.count = 1024 * 1024
 
-	tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha512_256})
+	tree, err := Build(a, crypto.HashFactory{HashType: hashType})
 	if err != nil {
 		b.Error(err)
 	}
