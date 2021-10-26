@@ -17,6 +17,7 @@
 package testing
 
 import (
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -86,6 +87,7 @@ func GenesisWithProto(naccts int, proto protocol.ConsensusVersion) (ledgercore.I
 	blk.BlockHeader.GenesisID = "test"
 	blk.FeeSink = testSinkAddr
 	blk.RewardsPool = testPoolAddr
+
 	crypto.RandBytes(blk.BlockHeader.GenesisHash[:])
 
 	addrs := []basics.Address{}
@@ -120,6 +122,16 @@ func GenesisWithProto(naccts int, proto protocol.ConsensusVersion) (ledgercore.I
 	accts[testSinkAddr] = sinkdata
 
 	genesisHash := blk.BlockHeader.GenesisHash
+
+	incentivePoolBalanceAtGenesis := pooldata.MicroAlgos
+	var initialRewardsPerRound uint64
+	params := config.Consensus[proto]
+	if params.InitialRewardsRateCalculation {
+		initialRewardsPerRound = basics.SubSaturate(incentivePoolBalanceAtGenesis.Raw, params.MinBalance) / uint64(params.RewardsRateRefreshInterval)
+	} else {
+		initialRewardsPerRound = incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
+	}
+	blk.RewardsRate = initialRewardsPerRound
 
 	return ledgercore.InitState{Block: blk, Accounts: accts, GenesisHash: genesisHash}, addrs, keys
 }
