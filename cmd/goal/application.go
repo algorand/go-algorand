@@ -1093,6 +1093,68 @@ var methodAppCmd = &cobra.Command{
 		}
 
 		// TODO i dunno how to pass application args to somewhere i dunno
+		dataDir := ensureSingleDataDir()
+		client := ensureFullClient(dataDir)
+
+		// Parse transaction parameters
+		_, appAccounts, foreignApps, foreignAssets := getAppInputs()
+
+		tx, err := client.MakeUnsignedAppNoOpTx(appIdx, applicationArgs, appAccounts, foreignApps, foreignAssets)
+		if err != nil {
+			reportErrorf("Cannot create application txn: %v", err)
+		}
+
+		// Fill in note and lease
+		tx.Note = parseNoteField(cmd)
+		tx.Lease = parseLease(cmd)
+
+		// Fill in rounds, fee, etc.
+		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		if err != nil {
+			reportErrorf("Cannot determine last valid round: %s", err)
+		}
+
+		tx, err = client.FillUnsignedTxTemplate(account, fv, lv, fee, tx)
+		if err != nil {
+			reportErrorf("Cannot construct transaction: %s", err)
+		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
+		}
+
+		// Broadcast or write transaction to file
+		if outFilename == "" {
+			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
+			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			if err != nil {
+				reportErrorf(errorSigningTX, err)
+			}
+
+			txid, err := client.BroadcastTransaction(signedTxn)
+			if err != nil {
+				reportErrorf(errorBroadcastingTX, err)
+			}
+
+			// Report tx details to user
+			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
+
+			if !noWaitAfterSend {
+				_, err = waitForCommit(client, txid, lv)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+			}
+		} else {
+			if dumpForDryrun {
+				err = writeDryrunReqToFile(client, tx, outFilename)
+			} else {
+				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
+			}
+			if err != nil {
+				reportErrorf(err.Error())
+			}
+		}
 	},
 }
 
