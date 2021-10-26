@@ -62,6 +62,8 @@ func TestAsyncMessageSent(t *testing.T) {
 	var s syncState
 	s.clock = timers.MakeMonotonicClock(time.Now())
 	s.log = mockAsyncLogger{}
+	s.incomingMessagesQ = makeIncomingMessageQueue()
+	defer s.incomingMessagesQ.shutdown()
 
 	asyncEncoder := messageAsyncEncoder{
 		state: &s,
@@ -72,7 +74,8 @@ func TestAsyncMessageSent(t *testing.T) {
 			},
 			peer: &Peer{},
 		},
-		roundClock: timers.MakeMonotonicClock(time.Now()),
+		roundClock:     timers.MakeMonotonicClock(time.Now()),
+		sentMessagesCh: s.outgoingMessagesCallbackCh,
 	}
 
 	oldTimestamp := asyncEncoder.messageData.sentTimestamp
@@ -83,11 +86,11 @@ func TestAsyncMessageSent(t *testing.T) {
 	a.Equal(asyncEncoder.messageData.sequenceNumber, uint64(1337))
 
 	// Make this buffered for now so we catch the select statement
-	asyncEncoder.state.outgoingMessagesCallbackCh = make(chan sentMessageMetadata, 1)
+	asyncEncoder.sentMessagesCh = make(chan sentMessageMetadata, 1)
 
 	err = asyncEncoder.asyncMessageSent(true, 1337)
 	a.Nil(err)
-	a.Equal(1, len(asyncEncoder.state.outgoingMessagesCallbackCh))
+	a.Equal(1, len(asyncEncoder.sentMessagesCh))
 }
 
 type mockAsyncNodeConnector struct {
@@ -286,14 +289,14 @@ func TestAssemblePeerMessage_messageConstBloomFilter(t *testing.T) {
 	peer.isOutgoing = true
 	peer.state = peerStateLateBloom
 
-	metaMessage, _ := s.assemblePeerMessage(&peer, &pendingTransactions)
+	metaMessage, _, responseTime := s.assemblePeerMessage(&peer, &pendingTransactions)
 
 	a.Equal(metaMessage.message.UpdatedRequestParams.Modulator, byte(222))
 	a.Equal(metaMessage.message.UpdatedRequestParams.Offset, byte(111))
 	a.Equal(metaMessage.peer, &peer)
 	a.Equal(metaMessage.message.Version, int32(txnBlockMessageVersion))
 	a.Equal(metaMessage.message.Round, s.round)
-	a.True(metaMessage.message.MsgSync.ResponseElapsedTime != 0)
+	a.True(responseTime >= 0)
 	a.Equal(s.lastBloomFilter, expectedFilter)
 }
 
@@ -329,14 +332,14 @@ func TestAssemblePeerMessage_messageConstBloomFilterNonRelay(t *testing.T) {
 	peer.isOutgoing = true
 	peer.state = peerStateLateBloom
 
-	metaMessage, _ := s.assemblePeerMessage(&peer, &pendingTransactions)
+	metaMessage, _, responseTime := s.assemblePeerMessage(&peer, &pendingTransactions)
 
 	a.Equal(metaMessage.message.UpdatedRequestParams.Modulator, byte(222))
 	a.Equal(metaMessage.message.UpdatedRequestParams.Offset, byte(111))
 	a.Equal(metaMessage.peer, &peer)
 	a.Equal(metaMessage.message.Version, int32(txnBlockMessageVersion))
 	a.Equal(metaMessage.message.Round, s.round)
-	a.True(metaMessage.message.MsgSync.ResponseElapsedTime != 0)
+	a.True(responseTime >= 0)
 	a.NotEqual(s.lastBloomFilter, expectedFilter)
 }
 
@@ -361,14 +364,14 @@ func TestAssemblePeerMessage_messageConstNextMinDelay_messageConstUpdateRequestP
 	s.isRelay = true
 	s.lastBeta = 123 * time.Nanosecond
 
-	metaMessage, _ := s.assemblePeerMessage(&peer, &pendingTransactions)
+	metaMessage, _, responseTime := s.assemblePeerMessage(&peer, &pendingTransactions)
 
 	a.Equal(metaMessage.message.UpdatedRequestParams.Modulator, byte(222))
 	a.Equal(metaMessage.message.UpdatedRequestParams.Offset, byte(111))
 	a.Equal(metaMessage.peer, &peer)
 	a.Equal(metaMessage.message.Version, int32(txnBlockMessageVersion))
 	a.Equal(metaMessage.message.Round, s.round)
-	a.True(metaMessage.message.MsgSync.ResponseElapsedTime != 0)
+	a.True(responseTime >= 0)
 	a.Equal(metaMessage.message.MsgSync.NextMsgMinDelay, uint64(s.lastBeta.Nanoseconds())*2)
 
 }
@@ -405,7 +408,7 @@ func TestAssemblePeerMessage_messageConstTransactions(t *testing.T) {
 	peer.isOutgoing = true
 	peer.state = peerStateHoldsoff
 
-	metaMessage, _ := s.assemblePeerMessage(&peer, &pendingTransactions)
+	metaMessage, _, _ := s.assemblePeerMessage(&peer, &pendingTransactions)
 
 	a.Equal(len(metaMessage.transactionGroups), 1)
 	a.True(reflect.DeepEqual(metaMessage.transactionGroups[0], pendingTransactions.pendingTransactionsGroups[0]))
