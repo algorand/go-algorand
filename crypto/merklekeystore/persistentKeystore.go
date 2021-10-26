@@ -45,6 +45,9 @@ func (p *PersistentKeystore) Persist(keys []crypto.SignatureAlgorithm, firstVali
 			return err
 		}
 
+		if interval == 0 {
+			return errIntervalZero
+		}
 		round := indexToRound(firstValid, interval, 0)
 		for i, key := range keys {
 			_, err := tx.Exec("INSERT INTO StateProofKeys (id, round, key) VALUES (?,?,?)", i, round, protocol.Encode(&key))

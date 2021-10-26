@@ -16,10 +16,40 @@
 
 package merklekeystore
 
+import (
+	"errors"
+)
+
+var errRoundMultipleOfInterval = errors.New("the round should be a multiple of the interval")
+var errRoundFirstValid = errors.New("the round cannot be less than firstValid")
+var errIntervalZero = errors.New("the interval should not be zero")
+var errRoundNotZero = errors.New("the round should not be zero")
+
+func checkKeystoreParams(firstValid, round, interval uint64) error {
+	if interval == 0 {
+		return errIntervalZero
+	}
+	if round == 0 {
+		return errRoundNotZero
+	}
+	if round%interval != 0 {
+		return errRoundMultipleOfInterval
+	}
+	if round < firstValid {
+		return errRoundFirstValid
+	}
+	return nil
+}
+
 func roundToIndex(firstValid, currentRound, interval uint64) uint64 {
-	return currentRound/interval - ((firstValid - 1) / interval) - 1
+	rofi := roundOfFirstIndex(firstValid, interval)
+	return (currentRound - rofi) / interval
 }
 
 func indexToRound(firstValid, interval, pos uint64) uint64 {
-	return (((firstValid - 1) / interval) + 1 + pos) * interval
+	return roundOfFirstIndex(firstValid, interval) + pos*interval
+}
+
+func roundOfFirstIndex(firstValid, interval uint64) uint64 {
+	return ((firstValid + interval - 1) / interval) * interval
 }

@@ -88,7 +88,6 @@ type (
 )
 
 var errStartBiggerThanEndRound = errors.New("cannot create merkleKeyStore because end round is smaller then start round")
-var errReceivedRoundIsBeforeFirst = errors.New("round translated to be prior to first key position")
 var errOutOfBounds = errors.New("round translated to be after last key position")
 var errNonExistantKey = errors.New("key doesn't exist")
 var errDivisorIsZero = errors.New("received zero Interval")
@@ -186,6 +185,10 @@ func (s *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 	}
 	signingKey := key.GetSigner()
 
+	if err = checkKeystoreParams(s.FirstValid, round, s.Interval); err != nil {
+		return Signature{}, err
+	}
+
 	index := s.getMerkleTreeIndex(round)
 	proof, err := s.Tree.Prove([]uint64{index})
 	if err != nil {
@@ -231,8 +234,8 @@ func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashabl
 	if firstValid == 0 {
 		firstValid = 1
 	}
-	if round < firstValid {
-		return errReceivedRoundIsBeforeFirst
+	if err := checkKeystoreParams(firstValid, round, interval); err != nil {
+		return err
 	}
 
 	ephkey := CommittablePublicKey{
