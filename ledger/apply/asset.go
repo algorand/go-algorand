@@ -17,6 +17,7 @@
 package apply
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -52,14 +53,9 @@ func getParams(balances Balances, aidx basics.AssetIndex) (params basics.AssetPa
 		return
 	}
 
-	creatorRecord, err := balances.Get(creator, false)
+	params, err = balances.GetAssetParams(creator, aidx)
 	if err != nil {
-		return
-	}
-
-	params, ok := creatorRecord.AssetParams[aidx]
-	if !ok {
-		err = fmt.Errorf("asset index %d not found in account %s", aidx, creator.String())
+		err = fmt.Errorf("asset index %d not found in account %s: %w", aidx, creator.String(), err)
 		return
 	}
 
@@ -70,32 +66,37 @@ func getParams(balances Balances, aidx basics.AssetIndex) (params basics.AssetPa
 func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Header, balances Balances, spec transactions.SpecialAddresses, ad *transactions.ApplyData, txnCounter uint64) error {
 	if cc.ConfigAsset == 0 {
 		// Allocating an asset.
-		record, err := balances.Get(header.Sender, false)
+		totalAssets, err := balances.TotalAssetHolding(header.Sender)
 		if err != nil {
 			return err
 		}
-		record.Assets = cloneAssetHoldings(record.Assets)
-		record.AssetParams = cloneAssetParams(record.AssetParams)
 
 		// Ensure index is never zero
 		newidx := basics.AssetIndex(txnCounter + 1)
 
 		// Sanity check that there isn't an asset with this counter value.
-		_, present := record.AssetParams[newidx]
+		present, err := balances.CheckAssetParams(header.Sender, newidx)
+		if err != nil {
+			return err
+		}
 		if present {
 			return fmt.Errorf("already found asset with index %d", newidx)
 		}
 
-		record.AssetParams[newidx] = cc.AssetParams
-		record.Assets[newidx] = basics.AssetHolding{
+		assetParams := cc.AssetParams
+		assetHolding := basics.AssetHolding{
 			Amount: cc.AssetParams.Total,
 		}
 
-		if len(record.Assets) > balances.ConsensusParams().MaxAssetsPerAccount {
-			return fmt.Errorf("too many assets in account: %d > %d", len(record.Assets), balances.ConsensusParams().MaxAssetsPerAccount)
+		if totalAssets >= balances.ConsensusParams().MaxAssetsPerAccount {
+			return fmt.Errorf("too many assets in account: %d >= %d", totalAssets, balances.ConsensusParams().MaxAssetsPerAccount)
 		}
 
-		err = balances.Put(header.Sender, record)
+		err = balances.PutAssetParams(header.Sender, newidx, assetParams)
+		if err != nil {
+			return err
+		}
+		err = balances.PutAssetHolding(header.Sender, newidx, assetHolding)
 		if err != nil {
 			return err
 		}
@@ -125,19 +126,16 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 		return fmt.Errorf("this transaction should be issued by the manager. It is issued by %v, manager key %v", header.Sender, params.Manager)
 	}
 
-	record, err := balances.Get(creator, false)
-	if err != nil {
-		return err
-	}
-
-	record.Assets = cloneAssetHoldings(record.Assets)
-	record.AssetParams = cloneAssetParams(record.AssetParams)
-
 	if cc.AssetParams == (basics.AssetParams{}) {
+		assetHolding, err := balances.GetAssetHolding(creator, cc.ConfigAsset)
+		if err != nil {
+			return err
+		}
+
 		// Destroying an asset.  The creator account must hold
 		// the entire outstanding asset amount.
-		if record.Assets[cc.ConfigAsset].Amount != params.Total {
-			return fmt.Errorf("cannot destroy asset: creator is holding only %d/%d", record.Assets[cc.ConfigAsset].Amount, params.Total)
+		if assetHolding.Amount != params.Total {
+			return fmt.Errorf("cannot destroy asset: creator is holding only %d/%d", assetHolding.Amount, params.Total)
 		}
 
 		// Tell the cow what asset we deleted
@@ -150,8 +148,14 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 			return err
 		}
 
-		delete(record.Assets, cc.ConfigAsset)
-		delete(record.AssetParams, cc.ConfigAsset)
+		err = balances.DeleteAssetHolding(creator, cc.ConfigAsset)
+		if err != nil {
+			return err
+		}
+		err = balances.DeleteAssetParams(creator, cc.ConfigAsset)
+		if err != nil {
+			return err
+		}
 	} else {
 		// Changing keys in an asset.
 		if !params.Manager.IsZero() {
@@ -167,10 +171,13 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 			params.Clawback = cc.AssetParams.Clawback
 		}
 
-		record.AssetParams[cc.ConfigAsset] = params
+		err = balances.PutAssetParams(creator, cc.ConfigAsset, params)
+		if err != nil {
+			return err
+		}
 	}
 
-	return balances.Put(creator, record)
+	return nil
 }
 
 func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, amount uint64, bypassFreeze bool) error {
@@ -178,15 +185,9 @@ func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, am
 		return nil
 	}
 
-	snd, err := balances.Get(addr, false)
+	sndHolding, err := balances.GetAssetHolding(addr, asset)
 	if err != nil {
-		return err
-	}
-
-	snd.Assets = cloneAssetHoldings(snd.Assets)
-	sndHolding, ok := snd.Assets[asset]
-	if !ok {
-		return fmt.Errorf("asset %v missing from %v", asset, addr)
+		return fmt.Errorf("error getting asset %v for %v: %w", asset, addr, err)
 	}
 
 	if sndHolding.Frozen && !bypassFreeze {
@@ -199,8 +200,7 @@ func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, am
 	}
 	sndHolding.Amount = newAmount
 
-	snd.Assets[asset] = sndHolding
-	return balances.Put(addr, snd)
+	return balances.PutAssetHolding(addr, asset, sndHolding)
 }
 
 func putIn(balances Balances, addr basics.Address, asset basics.AssetIndex, amount uint64, bypassFreeze bool) error {
@@ -208,15 +208,9 @@ func putIn(balances Balances, addr basics.Address, asset basics.AssetIndex, amou
 		return nil
 	}
 
-	rcv, err := balances.Get(addr, false)
+	rcvHolding, err := balances.GetAssetHolding(addr, asset)
 	if err != nil {
-		return err
-	}
-
-	rcv.Assets = cloneAssetHoldings(rcv.Assets)
-	rcvHolding, ok := rcv.Assets[asset]
-	if !ok {
-		return fmt.Errorf("asset %v missing from %v", asset, addr)
+		return fmt.Errorf("error getting asset %v for %v: %w", asset, addr, err)
 	}
 
 	if rcvHolding.Frozen && !bypassFreeze {
@@ -229,8 +223,7 @@ func putIn(balances Balances, addr basics.Address, asset basics.AssetIndex, amou
 		return fmt.Errorf("overflow on adding %d to receiver amount %d", amount, rcvHolding.Amount)
 	}
 
-	rcv.Assets[asset] = rcvHolding
-	return balances.Put(addr, rcv)
+	return balances.PutAssetHolding(addr, asset, rcvHolding)
 }
 
 // AssetTransfer applies an AssetTransfer transaction using the Balances interface.
@@ -259,13 +252,16 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 
 	// Allocate a slot for asset (self-transfer of zero amount).
 	if ct.AssetAmount == 0 && ct.AssetReceiver == source && !clawback {
-		snd, err := balances.Get(source, false)
-		if err != nil {
+		sndHolding, err := balances.GetAssetHolding(source, ct.XferAsset)
+		var ok bool
+		if errors.Is(err, ErrAssetNotFound) {
+			ok = false
+		} else if err != nil {
 			return err
+		} else {
+			ok = true
 		}
 
-		snd.Assets = cloneAssetHoldings(snd.Assets)
-		sndHolding, ok := snd.Assets[ct.XferAsset]
 		if !ok {
 			// Initialize holding with default Frozen value.
 			params, _, err := getParams(balances, ct.XferAsset)
@@ -274,13 +270,16 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 			}
 
 			sndHolding.Frozen = params.DefaultFrozen
-			snd.Assets[ct.XferAsset] = sndHolding
 
-			if len(snd.Assets) > balances.ConsensusParams().MaxAssetsPerAccount {
-				return fmt.Errorf("too many assets in account: %d > %d", len(snd.Assets), balances.ConsensusParams().MaxAssetsPerAccount)
+			totalSndAssets, err := balances.TotalAssetHolding(source)
+			if err != nil {
+				return err
+			}
+			if totalSndAssets >= balances.ConsensusParams().MaxAssetsPerAccount {
+				return fmt.Errorf("too many assets in account: %d >= %d", totalSndAssets, balances.ConsensusParams().MaxAssetsPerAccount)
 			}
 
-			err = balances.Put(source, snd)
+			err = balances.PutAssetHolding(source, ct.XferAsset, sndHolding)
 			if err != nil {
 				return err
 			}
@@ -313,31 +312,25 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 			return fmt.Errorf("cannot close asset by clawback")
 		}
 
-		// Fetch the sender balance record. We will use this to ensure
-		// that the sender is not the creator of the asset, and to
+		// Fetch the sender asset holding. We will use this to
 		// figure out how much of the asset to move.
-		snd, err := balances.Get(source, false)
+		sndHolding, err := balances.GetAssetHolding(source, ct.XferAsset)
 		if err != nil {
-			return err
+			return fmt.Errorf("asset %v not present in account %v: %w", ct.XferAsset, source, err)
 		}
 
 		// The creator of the asset cannot close their holding of the
 		// asset. Check if we are the creator by seeing if there is an
 		// AssetParams entry for the asset index.
-		if _, ok := snd.AssetParams[ct.XferAsset]; ok {
+		if srcParamsExist, err := balances.CheckAssetParams(source, ct.XferAsset); srcParamsExist && err == nil {
 			return fmt.Errorf("cannot close asset ID in allocating account")
+		} else if err != nil {
+			return err
 		}
 
-		// Fetch our asset holding, which should exist since we're
-		// closing it out
-		sndHolding, ok := snd.Assets[ct.XferAsset]
-		if !ok {
-			return fmt.Errorf("asset %v not present in account %v", ct.XferAsset, source)
-		}
-
-		// Fetch the destination balance record to check if we are
+		// Attempt to fetch the destination asset params to check if we are
 		// closing out to the creator
-		dst, err := balances.Get(ct.AssetCloseTo, false)
+		dstParamsExist, err := balances.CheckAssetParams(ct.AssetCloseTo, ct.XferAsset)
 		if err != nil {
 			return err
 		}
@@ -345,7 +338,7 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 		// Allow closing out to the asset creator even when frozen.
 		// If we are closing out 0 units of the asset, then takeOut
 		// and putIn will short circuit (so bypassFreeze doesn't matter)
-		_, bypassFreeze := dst.AssetParams[ct.XferAsset]
+		bypassFreeze := dstParamsExist
 
 		// AssetCloseAmount was a late addition, checking that the current protocol version supports it.
 		if balances.ConsensusParams().EnableAssetCloseAmount {
@@ -367,19 +360,16 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 		}
 
 		// Delete the slot from the account.
-		snd, err = balances.Get(source, false)
+		sndHolding, err = balances.GetAssetHolding(source, ct.XferAsset)
 		if err != nil {
 			return err
 		}
 
-		snd.Assets = cloneAssetHoldings(snd.Assets)
-		sndHolding = snd.Assets[ct.XferAsset]
 		if sndHolding.Amount != 0 {
 			return fmt.Errorf("asset %v not zero (%d) after closing", ct.XferAsset, sndHolding.Amount)
 		}
 
-		delete(snd.Assets, ct.XferAsset)
-		err = balances.Put(source, snd)
+		err = balances.DeleteAssetHolding(source, ct.XferAsset)
 		if err != nil {
 			return err
 		}
@@ -406,18 +396,10 @@ func AssetFreeze(cf transactions.AssetFreezeTxnFields, header transactions.Heade
 	}
 
 	// Get the account to be frozen/unfrozen.
-	record, err := balances.Get(cf.FreezeAccount, false)
+	holding, err := balances.GetAssetHolding(cf.FreezeAccount, cf.FreezeAsset)
 	if err != nil {
-		return err
-	}
-	record.Assets = cloneAssetHoldings(record.Assets)
-
-	holding, ok := record.Assets[cf.FreezeAsset]
-	if !ok {
-		return fmt.Errorf("asset not found in account")
+		return fmt.Errorf("asset %v not found in account %v: %v", cf.FreezeAsset, cf.FreezeAccount, err)
 	}
 
-	holding.Frozen = cf.AssetFrozen
-	record.Assets[cf.FreezeAsset] = holding
-	return balances.Put(cf.FreezeAccount, record)
+	return balances.PutAssetHolding(cf.FreezeAccount, cf.FreezeAsset, holding)
 }

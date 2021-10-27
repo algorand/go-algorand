@@ -80,25 +80,41 @@ func Payment(payment transactions.PaymentTxnFields, header transactions.Header, 
 		}
 
 		// Confirm that there is no asset-related state in the account
-		if len(rec.Assets) > 0 {
-			return fmt.Errorf("cannot close: %d outstanding assets", len(rec.Assets))
+		totalAssets, err := balances.TotalAssetHolding(header.Sender)
+		if err != nil {
+			return err
+		}
+		if totalAssets > 0 {
+			return fmt.Errorf("cannot close: %d outstanding assets", totalAssets)
 		}
 
-		if len(rec.AssetParams) > 0 {
+		totalAssetParams, err := balances.TotalAssetParams(header.Sender)
+		if err != nil {
+			return err
+		}
+		if totalAssetParams > 0 {
 			// This should be impossible because every asset created
 			// by an account (in AssetParams) must also appear in Assets,
 			// which we checked above.
-			return fmt.Errorf("cannot close: %d outstanding created assets", len(rec.AssetParams))
+			return fmt.Errorf("cannot close: %d outstanding created assets", totalAssetParams)
 		}
 
 		// Confirm that there is no application-related state remaining
-		if len(rec.AppLocalStates) > 0 {
-			return fmt.Errorf("cannot close: %d outstanding applications opted in. Please opt out or clear them", len(rec.AppLocalStates))
+		totalAppLocalStates, err := balances.TotalAppLocalState(header.Sender)
+		if err != nil {
+			return err
+		}
+		if totalAppLocalStates > 0 {
+			return fmt.Errorf("cannot close: %d outstanding applications opted in. Please opt out or clear them", totalAppLocalStates)
 		}
 
 		// Can't have created apps remaining either
-		if len(rec.AppParams) > 0 {
-			return fmt.Errorf("cannot close: %d outstanding created applications", len(rec.AppParams))
+		totalAppParams, err := balances.TotalAppParams(header.Sender)
+		if err != nil {
+			return err
+		}
+		if totalAppParams > 0 {
+			return fmt.Errorf("cannot close: %d outstanding created applications", totalAppParams)
 		}
 
 		// Clear out entire account record, to allow the DB to GC it
