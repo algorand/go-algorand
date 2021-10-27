@@ -204,37 +204,6 @@ func TestStateProofPKKeyReg(t *testing.T) {
 	require.Equal(t, acct.StateProofID.IsEmpty(), false)
 }
 
-func TestKeyRegForShortParticipationPeriod(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	// if user chose to participate for short period (a period in which he won't have a key to sign stateproofs)
-	// we need to reject the keyreg because we don't want to allow empty key commitment
-	secretSrc := keypair()
-	src := basics.Address(secretSrc.SignatureVerifier)
-	vrfSecrets := crypto.GenerateVRFSecrets()
-	secretParticipation := keypair()
-
-	tx := createTestTxnWithPeriod(t, src, secretParticipation, vrfSecrets, 1, basics.Round(config.Consensus[protocol.ConsensusFuture].CompactCertRounds+1))
-
-	mockBal := makeMockBalances(protocol.ConsensusFuture)
-	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
-	require.NoError(t, err)
-
-	acct, err := mockBal.Get(tx.Src(), false)
-	require.NoError(t, err)
-	require.Equal(t, acct.StateProofID.IsEmpty(), false)
-
-	tx = createTestTxnWithPeriod(t, src, secretParticipation, vrfSecrets, 1, basics.Round(config.Consensus[protocol.ConsensusFuture].CompactCertRounds-1))
-
-	mockBal = makeMockBalances(protocol.ConsensusFuture)
-	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
-	require.NoError(t, err)
-
-	acct, err = mockBal.Get(tx.Src(), false)
-	require.NoError(t, err)
-	require.Equal(t, acct.StateProofID.IsEmpty(), true)
-}
-
 func createTestTxn(t *testing.T, src basics.Address, secretParticipation *crypto.SignatureSecrets, vrfSecrets *crypto.VRFSecrets) transactions.Transaction {
 	return createTestTxnWithPeriod(t, src, secretParticipation, vrfSecrets, DefaultParticipationFirstRound, DefaultParticipationLastRound)
 }
