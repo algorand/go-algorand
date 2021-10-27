@@ -415,6 +415,8 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []pooldata.SignedTx
 		effectiveBloomFilters = append(effectiveBloomFilters, filterIdx)
 	}
 
+	logging.Base().Infof("num bloom filters: %v", len(effectiveBloomFilters))
+
 	// removedTxn := 0
 	grpIdx := startIndex
 	if p.state == peerStateProposal && p.proposalFilterCache.Exists(p.currentProposalHash) {
