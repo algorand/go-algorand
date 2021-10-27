@@ -40,7 +40,7 @@ func TestTxTailCheckdup(t *testing.T) {
 	ledger := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{accts})
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	tail := txTail{}
-	require.NoError(t, tail.loadFromDisk(ledger))
+	require.NoError(t, tail.loadFromDisk(ledger, 0))
 
 	lastRound := basics.Round(proto.MaxTxnLife)
 	lookback := basics.Round(100)
@@ -153,7 +153,7 @@ func TestTxTailLoadFromDisk(t *testing.T) {
 	var ledger txTailTestLedger
 	txtail := txTail{}
 
-	err := txtail.loadFromDisk(&ledger)
+	err := txtail.loadFromDisk(&ledger, 0)
 	require.NoError(t, err)
 	require.Equal(t, int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife), len(txtail.recent))
 	require.Equal(t, testTxTailValidityRange, len(txtail.lastValid))
