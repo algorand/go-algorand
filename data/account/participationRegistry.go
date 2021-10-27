@@ -237,29 +237,28 @@ var (
 			lastValidRound  INTEGER NOT NULL DEFAULT 0,
 			keyDilution     INTEGER NOT NULL DEFAULT 0,
 
-			vrf BLOB    --*  msgpack encoding of ParticipationAccount.vrf
+			vrf BLOB,       --*  msgpack encoding of ParticipationAccount.vrf
+			stateProof BLOB --*  msgpack encoding of ParticipationAccount.BlockProof
 		)`
+
 	createRolling = `CREATE TABLE Rolling (
 			pk INTEGER PRIMARY KEY NOT NULL,
 
 			lastVoteRound               INTEGER NOT NULL DEFAULT 0,
 			lastBlockProposalRound      INTEGER NOT NULL DEFAULT 0,
 			lastCompactCertificateRound INTEGER NOT NULL DEFAULT 0,
-			effectiveFirstRound        INTEGER NOT NULL DEFAULT 0,
-			effectiveLastRound         INTEGER NOT NULL DEFAULT 0,
+			effectiveFirstRound         INTEGER NOT NULL DEFAULT 0,
+			effectiveLastRound          INTEGER NOT NULL DEFAULT 0,
 
 			voting BLOB --*  msgpack encoding of ParticipationAccount.voting
-
-			-- blockProof BLOB  --*  msgpack encoding of ParticipationAccount.BlockProof
 		)`
 
-	/*
-		createBlockProof = `CREATE TABLE BlockProofKeys (
-		    	id	  INTEGER PRIMARY KEY,
-		    	round INTEGER,	--*  committed round for this key
-				key   BLOB      --*  msgpack encoding of ParticipationAccount.BlockProof.SignatureAlgorithm
-			)`
-	*/
+	createStateProof = `CREATE TABLE StateProofKeys (
+			pk	  INTEGER NOT NULL, --* join with keyset to find key for a particular participation id
+			round INTEGER,	        --*  committed round for this key
+			key   BLOB,             --*  msgpack encoding of ParticipationAccount.BlockProof.SignatureAlgorithm
+			PRIMARY KEY (pk, round)
+		)`
 	insertKeysetQuery  = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution, vrf) VALUES (?, ?, ?, ?, ?, ?)`
 	insertRollingQuery = `INSERT INTO Rolling (pk, voting) VALUES (?, ?)`
 
@@ -295,6 +294,12 @@ func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 
 	// Rolling may change over time.
 	_, err = tx.Exec(createRolling)
+	if err != nil {
+		return err
+	}
+
+	// For performance reasons, state proofs are in a separate table.
+	_, err = tx.Exec(createStateProof)
 	if err != nil {
 		return err
 	}
