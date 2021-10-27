@@ -99,16 +99,6 @@ type GenericVerifyingKey struct {
 	invalidVerifier    invalidVerifier
 }
 
-// IsValid states whether the GenericVerifyingKey is valid, and is safe to use.
-func (z *GenericVerifyingKey) IsValid() error {
-	return z.Type.IsValid()
-}
-
-// ToBeHashed makes it easier to hash the VeryfyingKey struct.
-func (z *GenericVerifyingKey) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.VerifyingKey, protocol.Encode(z)
-}
-
 // GetSigner fetches the Signer type that is stored inside this GenericSigningKey.
 func (z *GenericSigningKey) GetSigner() Signer {
 	switch z.Type {

@@ -96,7 +96,7 @@ var errCannotVerify = errors.New("verifier isn't valid")
 
 // ToBeHashed implementation means CommittablePublicKey is crypto.Hashable, required by merklekeystore.Verifier.Verify()
 func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.EphemeralPK, protocol.Encode(e)
+	return protocol.KeystorePK, protocol.Encode(e)
 }
 
 func (k *keysArray) Length() uint64 {

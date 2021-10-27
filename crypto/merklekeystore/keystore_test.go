@@ -21,7 +21,6 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
-	"math"
 	"testing"
 
 	uuid "github.com/satori/go.uuid"
@@ -32,6 +31,14 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/stretchr/testify/require"
 )
+
+type TestingHashable struct {
+	data []byte
+}
+
+func (s TestingHashable) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.TestHashable, s.data
+}
 
 // Is this test even needed? What is the purpose?
 func TestSignerCreation(t *testing.T) {
@@ -205,7 +212,8 @@ func TestSignatureStructure(t *testing.T) {
 }
 
 func genHashableForTest() crypto.Hashable {
-	hashable := crypto.Hashable(&crypto.GenericVerifyingKey{Type: math.MaxUint16}) // just want some crypto.Hashable..
+	hashable := TestingHashable{[]byte("test msg")}
+
 	return hashable
 }
 
@@ -217,7 +225,7 @@ func TestSigning(t *testing.T) {
 	signer := generateTestSigner(crypto.DilithiumType, start, end, 1, a)
 	defer signer.keyStore.store.Close()
 
-	hashable := crypto.Hashable(&crypto.GenericVerifyingKey{Type: math.MaxUint16}) // just want some crypto.Hashable..
+	hashable := genHashableForTest()
 
 	sig, err := signer.Sign(hashable, start)
 	a.NoError(err)
@@ -473,7 +481,7 @@ func TestKeyDeletion(t *testing.T) {
 
 //#region Helper Functions
 func makeSig(signer *Signer, sigRound uint64, a *require.Assertions) (crypto.Hashable, Signature) {
-	hashable := crypto.Hashable(&crypto.GenericVerifyingKey{Type: math.MaxUint16}) // just want some crypto.Hashable..
+	hashable := genHashableForTest()
 
 	sig, err := signer.Sign(hashable, sigRound)
 	a.NoError(err)
