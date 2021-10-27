@@ -46,8 +46,8 @@ func (d *invalidSinger) SignBytes(data []byte) ByteSignature {
 }
 
 // GetVerifyingKey Outputs an invalid verifying key.
-func (d *invalidSinger) GetVerifyingKey() *VerifyingKey {
-	return &VerifyingKey{
+func (d *invalidSinger) GetVerifyingKey() *GenericVerifyingKey {
+	return &GenericVerifyingKey{
 		Type: MaxAlgorithmType,
 	}
 }

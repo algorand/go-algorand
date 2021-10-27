@@ -40,7 +40,7 @@ func TestInvalidSinger(t *testing.T) {
 
 	sigAlgo, err = NewSigner(DilithiumType)
 	a.NoError(err)
-	sigAlgo.Type = maxAlgorithmType
+	sigAlgo.Type = MaxAlgorithmType
 
 	dummyMsg = make([]byte, 6)
 	a.Equal(ByteSignature{}, sigAlgo.GetSigner().SignBytes(dummyMsg))
