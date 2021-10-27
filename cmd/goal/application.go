@@ -1124,14 +1124,17 @@ var methodAppCmd = &cobra.Command{
 		// Report tx details to user
 		reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
-		txnCommit, err := waitForCommit(client, txid, lv)
-		if err != nil {
-			reportErrorf(err.Error())
-		}
+		if !noWaitAfterSend {
+			txnCommit, err := waitForCommit(client, txid, lv)
+			if err != nil {
+				reportErrorf(err.Error())
+			}
 
-		fmt.Println(txnCommit)
-		fmt.Println(retTypeStr)
-		// TODO how to find return value from apply data... we probably need return type to parse out result...
+			fmt.Println(txnCommit)
+			//txnCommit.ApplicationCall.
+			fmt.Println(retTypeStr)
+			// TODO how to find return value from apply data... we probably need return type to parse out result...
+		}
 	},
 }
 
