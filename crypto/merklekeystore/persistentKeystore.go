@@ -136,7 +136,7 @@ func RestoreKeystore(store db.Accessor) (PersistentKeystore, error) {
 	return PersistentKeystore{store}, nil
 }
 
-// MigrateDB updates the database if necessary, according the the schema version
+// MigrateDB updates the database if necessary, according the schema version
 func MigrateDB(tx *sql.Tx) error {
 	var version int
 	schemaQuery := `SELECT version FROM schema WHERE tablename = ?`

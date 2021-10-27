@@ -128,10 +128,6 @@ func (z *GenericVerifyingKey) GetVerifier() Verifier {
 	}
 }
 
-var errUnknownVerifier = errors.New("could not find stored Verifier")
-
-var errUnknownSigner = errors.New("could not find stored signer")
-
 var errNonExistingSignatureAlgorithmType = errors.New("signing algorithm type does not exist")
 
 // NewSigner receives a type of signing algorithm and generates keys.
