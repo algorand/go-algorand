@@ -1051,6 +1051,17 @@ func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, lease
 	return nil
 }
 
+func maxRound(current uint64, next *uint64) uint64 {
+	if next != nil && *next > current {
+		return *next
+	}
+	return current
+}
+
+func uintToStr(number uint64) string {
+	return fmt.Sprintf("%d", number)
+}
+
 var listParticipationKeysCmd = &cobra.Command{
 	Use:   "listpartkeys",
 	Short: "List participation keys",
@@ -1065,8 +1076,9 @@ var listParticipationKeysCmd = &cobra.Command{
 			reportErrorf(errorRequestFail, err)
 		}
 
-		rowFormat := "%-10s\t%-60s\t%12s\t%12s\n"
-		fmt.Printf(rowFormat, "Registered", "Parent address", "First round", "Last round")
+		// Squeezed this into 77 characters.
+		rowFormat := "%-10s  %-11s  %-15s  %10s  %11s  %10s\n"
+		fmt.Printf(rowFormat, "Registered", "Account", "ParticipationID", "Last Used", "First round", "Last round")
 		for _, part := range parts {
 			onlineInfoStr := "unknown"
 			onlineAccountInfo, err := client.AccountInformation(part.Address)
@@ -1083,12 +1095,35 @@ var listParticipationKeysCmd = &cobra.Command{
 				} else {
 					onlineInfoStr = "no"
 				}
+
+				/*
+					// TODO: We could avoid querying the account with something like this.
+					//       One problem is that it doesn't account for multiple keys on the same
+					//       account, so we'd still need to query the round.
+					if part.EffectiveFirstValid != nil && part.EffectiveLastValid < currentRound {
+						onlineInfoStr = "yes"
+					} else {
+						onlineInfoStr = "no"
+					}
+				*/
+
 				// it's okay to proceed without algod info
 				first := part.FirstValid
 				last := part.LastValid
-				fmt.Printf(rowFormat, onlineInfoStr, part.Address,
-					fmt.Sprintf("%d", first),
-					fmt.Sprintf("%d", last))
+				lastUsed := maxRound(0, part.LastStateProof)
+				lastUsed = maxRound(lastUsed, part.LastBlockProposal)
+				lastUsed = maxRound(lastUsed, part.LastStateProof)
+				lastUsedString := "N/A"
+				if lastUsed != 0 {
+					lastUsedString = uintToStr(lastUsed)
+				}
+				fmt.Printf(rowFormat,
+					onlineInfoStr,
+					fmt.Sprintf("%s...%s", part.Address[:4], part.Address[len(part.Address)-4:]),
+					fmt.Sprintf("%s...", part.Id[:8]),
+					lastUsedString,
+					uintToStr(first),
+					uintToStr(last))
 			}
 		}
 	},
@@ -1270,17 +1305,11 @@ var importRootKeysCmd = &cobra.Command{
 	},
 }
 
-type partkeyInfo struct {
-	_struct           struct{}     `codec:",omitempty,omitemptyarray"`
-	Address           string       `codec:"acct"`
-	FirstValid        basics.Round `codec:"first"`
-	LastValid         basics.Round `codec:"last"`
-	VoteID            []byte       `codec:"vote"`
-	SelectionID       []byte       `codec:"sel"`
-	VoteKeyDilution   uint64       `codec:"voteKD"`
-	LastVote          uint64       `codec:"last-vote"`
-	LastBlockProposal uint64       `codec:"last-block-proposal"`
-	LastStateProof    uint64       `codec:"last-state-proof"`
+func strOrNA(value *uint64) string {
+	if value == nil {
+		return "N/A"
+	}
+	return uintToStr(*value)
 }
 
 var partkeyInfoCmd = &cobra.Command{
@@ -1301,31 +1330,20 @@ var partkeyInfoCmd = &cobra.Command{
 			}
 
 			for _, part := range parts {
-				fmt.Println("------------------------------------------------------------------")
-				info := partkeyInfo{
-					Address:         part.Address,
-					FirstValid:      basics.Round(part.FirstValid),
-					LastValid:       basics.Round(part.LastValid),
-					VoteKeyDilution: part.VoteKeyDilution,
-				}
-				if len(part.VoteKey) != 0 {
-					info.VoteID = part.VoteKey
-				}
-				if len(part.VrfKey) != 0 {
-					info.SelectionID = part.VrfKey[:]
-				}
-				if part.LastVote != nil {
-					info.LastVote = *part.LastVote
-				}
-				if part.LastBlockProposal != nil {
-					info.LastBlockProposal = *part.LastBlockProposal
-				}
-				if part.LastStateProof != nil {
-					info.LastStateProof = *part.LastStateProof
-				}
-
-				infoString := protocol.EncodeJSON(&info)
-				fmt.Printf("%s\n", string(infoString))
+				fmt.Println()
+				fmt.Printf("Participation ID:          %s\n", part.Id)
+				fmt.Printf("Parent address:            %s\n", part.Address)
+				fmt.Printf("Last vote round:           %s\n", strOrNA(part.LastVote))
+				fmt.Printf("Last block proposal round: %s\n", strOrNA(part.LastBlockProposal))
+				//fmt.Printf("Last state proof round:    %s\n", strOrNA(part.LastStateProof))
+				fmt.Printf("Effective first round:     %s\n", strOrNA(part.EffectiveFirstValid))
+				fmt.Printf("Effective last round:      %s\n", strOrNA(part.EffectiveLastValid))
+				fmt.Printf("First round:               %d\n", part.FirstValid)
+				fmt.Printf("Last round:                %d\n", part.LastValid)
+				fmt.Printf("Key dilution:              %d\n", part.VoteKeyDilution)
+				fmt.Printf("Selection key:             %s\n", base64.StdEncoding.EncodeToString(part.VrfKey))
+				fmt.Printf("Voting key:                %s\n", base64.StdEncoding.EncodeToString(part.VoteKey))
+				//fmt.Printf("State proof key:           %s\n", base64.StdEncoding.EncodeToString(part.StateProofKey))
 			}
 		})
 	},

@@ -1765,6 +1765,16 @@
           "description": "Voting key dilution.",
           "type": "integer"
         },
+        "effective-first-valid": {
+          "description": "When registered, this is the first round it may be used.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "effective-last-valid": {
+          "description": "When registered, this is the last round it may be used.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
         "last-vote": {
           "description": "Round when this key was last used to vote.",
           "type": "integer"

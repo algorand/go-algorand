@@ -346,6 +346,12 @@ type ParticipationKey struct {
 	// Address the key was generated for.
 	Address string `json:"address"`
 
+	// When registered, this is the first round it may be used.
+	EffectiveFirstValid *uint64 `json:"effective-first-valid,omitempty"`
+
+	// When registered, this is the last round it may be used.
+	EffectiveLastValid *uint64 `json:"effective-last-valid,omitempty"`
+
 	// FirstValid round for the keys.
 	FirstValid uint64 `json:"first-valid"`
 

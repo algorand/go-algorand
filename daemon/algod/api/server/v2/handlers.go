@@ -74,38 +74,51 @@ type NodeInterface interface {
 	RemoveParticipationKey(account.ParticipationID) error
 }
 
+func roundToPtrOrNil(value basics.Round) *uint64 {
+	if value == 0 {
+		return nil
+	}
+	result := uint64(value)
+	return &result
+}
+
 func convertParticipationRecord(record account.ParticipationRecord) generated.ParticipationKey {
-	generated := generated.ParticipationKey{
-		Id:                record.ParticipationID.String(),
-		Address:           record.Account.String(),
-		FirstValid:        uint64(record.FirstValid),
-		LastValid:         uint64(record.LastValid),
-		VoteKeyDilution:   record.KeyDilution,
-		LastVote:          nil,
-		LastBlockProposal: nil,
-		LastStateProof:    nil,
-	}
-	if record.Voting != nil {
-		generated.VoteKey = record.Voting.OneTimeSignatureVerifier[:]
-	}
-	if record.VRF != nil {
-		generated.VrfKey = record.VRF.PK[:]
+	participationKey := generated.ParticipationKey{
+		Id:                  record.ParticipationID.String(),
+		Address:             record.Account.String(),
+		FirstValid:          uint64(record.FirstValid),
+		LastValid:           uint64(record.LastValid),
+		VoteKeyDilution:     record.KeyDilution,
+		EffectiveFirstValid: nil,
+		EffectiveLastValid:  nil,
+		LastVote:            nil,
+		LastBlockProposal:   nil,
+		LastStateProof:      nil,
 	}
 
-	// Optional key usage values.
-	if record.LastVote != 0 {
-		lastVote := uint64(record.LastVote)
-		generated.LastVote = &lastVote
+	// These are pointers but should always be present.
+	if record.Voting != nil {
+		participationKey.VoteKey = record.Voting.OneTimeSignatureVerifier[:]
 	}
-	if record.LastBlockProposal != 0 {
-		lastBlockProposal := uint64(record.LastBlockProposal)
-		generated.LastBlockProposal = &lastBlockProposal
+	if record.VRF != nil {
+		participationKey.VrfKey = record.VRF.PK[:]
 	}
-	if record.LastCompactCertificate != 0 {
-		lastStateProof := uint64(record.LastCompactCertificate)
-		generated.LastStateProof = &lastStateProof
+
+	// Optional fields.
+	participationKey.EffectiveFirstValid = roundToPtrOrNil(record.EffectiveFirst)
+	participationKey.EffectiveLastValid = roundToPtrOrNil(record.EffectiveLast)
+	participationKey.LastVote = roundToPtrOrNil(record.LastVote)
+	participationKey.LastBlockProposal = roundToPtrOrNil(record.LastBlockProposal)
+	participationKey.LastVote = roundToPtrOrNil(record.LastVote)
+	participationKey.LastStateProof = roundToPtrOrNil(record.LastCompactCertificate)
+
+	// Special case for first valid on round 0
+	if record.EffectiveLast != 0 && record.EffectiveFirst == 0 {
+		zero := uint64(0)
+		participationKey.EffectiveFirstValid = &zero
 	}
-	return generated
+
+	return participationKey
 }
 
 // GetParticipationKeys Return a list of participation keys
