@@ -199,11 +199,6 @@ func makeS3Session(credentials *credentials.Credentials, bucket string) (helper 
 	return
 }
 
-// GetLatestUpdateVersion returns the latest version details for the 'node' package
-func (helper *Helper) GetLatestUpdateVersion(channel string) (maxVersion uint64, maxVersionName string, err error) {
-	return helper.GetUpdateVersion(channel, 0)
-}
-
 // GetLatestPackageVersion returns the latest version details for a given package name (eg node, install, tools)
 func (helper *Helper) GetLatestPackageVersion(channel string, packageName string) (maxVersion uint64, maxVersionName string, err error) {
 	return helper.GetPackageVersion(channel, packageName, 0)
@@ -212,12 +207,6 @@ func (helper *Helper) GetLatestPackageVersion(channel string, packageName string
 // GetLatestPackageFilesVersion returns the latest version details for a given standard filename prefix
 func (helper *Helper) GetLatestPackageFilesVersion(channel string, packagePrefix string) (maxVersion uint64, maxVersionName string, err error) {
 	return helper.GetPackageFilesVersion(channel, packagePrefix, 0)
-}
-
-// GetUpdateVersion ensures the specified version is present and returns the name of the file, if found
-// Or if specificVersion == 0, returns the name of the file with the max version
-func (helper *Helper) GetUpdateVersion(channel string, specificVersion uint64) (maxVersion uint64, maxVersionName string, err error) {
-	return helper.GetPackageVersion(channel, "node", specificVersion)
 }
 
 // DownloadFile downloads the specified file to the provided Writer
