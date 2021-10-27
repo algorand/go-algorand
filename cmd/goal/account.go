@@ -1271,13 +1271,16 @@ var importRootKeysCmd = &cobra.Command{
 }
 
 type partkeyInfo struct {
-	_struct         struct{}     `codec:",omitempty,omitemptyarray"`
-	Address         string       `codec:"acct"`
-	FirstValid      basics.Round `codec:"first"`
-	LastValid       basics.Round `codec:"last"`
-	VoteID          []byte       `codec:"vote"`
-	SelectionID     []byte       `codec:"sel"`
-	VoteKeyDilution uint64       `codec:"voteKD"`
+	_struct           struct{}     `codec:",omitempty,omitemptyarray"`
+	Address           string       `codec:"acct"`
+	FirstValid        basics.Round `codec:"first"`
+	LastValid         basics.Round `codec:"last"`
+	VoteID            []byte       `codec:"vote"`
+	SelectionID       []byte       `codec:"sel"`
+	VoteKeyDilution   uint64       `codec:"voteKD"`
+	LastVote          uint64       `codec:"last-vote"`
+	LastBlockProposal uint64       `codec:"last-block-proposal"`
+	LastStateProof    uint64       `codec:"last-state-proof"`
 }
 
 var partkeyInfoCmd = &cobra.Command{
@@ -1310,6 +1313,15 @@ var partkeyInfoCmd = &cobra.Command{
 				}
 				if len(part.VrfKey) != 0 {
 					info.SelectionID = part.VrfKey[:]
+				}
+				if part.LastVote != nil {
+					info.LastVote = *part.LastVote
+				}
+				if part.LastBlockProposal != nil {
+					info.LastBlockProposal = *part.LastBlockProposal
+				}
+				if part.LastStateProof != nil {
+					info.LastStateProof = *part.LastStateProof
 				}
 
 				infoString := protocol.EncodeJSON(&info)
