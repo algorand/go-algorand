@@ -19,29 +19,11 @@ package crypto
 import (
 	"crypto/sha512"
 	"errors"
+	cparalithium "github.com/algoidan/paralithium/ref"
 	"hash"
 
-	"github.com/algonathan/sumhash"
 	"github.com/algorand/go-algorand/protocol"
-	"golang.org/x/crypto/sha3"
 )
-
-var sumhashCompressor sumhash.LookupTable
-
-// TODO: will be removed once the sumhash lib will update.
-func init() {
-	shk := sha3.NewShake256()
-	seed := []byte("Algorand")
-	_, err := shk.Write(seed)
-	if err != nil {
-		panic(err)
-	}
-	mat, err := sumhash.RandomMatrix(shk, 8, 1024)
-	if err != nil {
-		panic(err)
-	}
-	sumhashCompressor = mat.LookupTable()
-}
 
 // HashType enum type for signing algorithms
 type HashType uint64
@@ -65,7 +47,7 @@ const (
 //size of each hash
 const (
 	Sha512_256Size    = sha512.Size256
-	SumhashDigestSize = 64
+	SumhashDigestSize = cparalithium.Sumhash512DigestSize
 )
 
 // HashFactory is responsible for generating new hashes accordingly to the type it stores.
@@ -89,7 +71,7 @@ func (z HashFactory) NewHash() hash.Hash {
 	case Sha512_256:
 		return sha512.New512_256()
 	case Sumhash:
-		return sumhash.New(sumhashCompressor)
+		return cparalithium.New512()
 	// This shouldn't be reached, when creating a new hash, one would know the type of hash they wanted,
 	// in addition to that, unmarshalling of the hashFactory verifies the HashType of the factory.
 	default:
