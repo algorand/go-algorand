@@ -1064,8 +1064,8 @@ func uintToStr(number uint64) string {
 
 var listParticipationKeysCmd = &cobra.Command{
 	Use:   "listpartkeys",
-	Short: "List participation keys",
-	Long:  `List all participation keys tracked by algod, with additional information such as key validity period.`,
+	Short: "List participation keys summary",
+	Long:  `List all participation keys tracked by algod along with summary of additional information. For detailed key information use 'partkeyinfo'.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
