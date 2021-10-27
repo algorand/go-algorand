@@ -99,6 +99,11 @@ type GenericVerifyingKey struct {
 	invalidVerifier    invalidVerifier
 }
 
+// IsValid states whether the VerifyingKey is valid, and is safe to use.
+func (z *GenericVerifyingKey) IsValid() error {
+	return z.Type.IsValid()
+}
+
 // GetSigner fetches the Signer type that is stored inside this GenericSigningKey.
 func (z *GenericSigningKey) GetSigner() Signer {
 	switch z.Type {
