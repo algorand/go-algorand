@@ -1,5 +1,5 @@
-github.com/algoidan/paralithium v0.0.0-20211026120802-d543c2a902ce h1:4gK20RAaYiIxc9tEPgxRJFEa3b6z2OdSiw0D3uxJSSY=
-github.com/algoidan/paralithium v0.0.0-20211026120802-d543c2a902ce/go.mod h1:V1DAGAmrF+IJBLSTLkdzRt8W1BxMMynTh0fp9nHCVMA=
+github.com/algoidan/paralithium v0.0.0-20211027131605-1b904692ade4 h1:BbW94nKWgnx+kyO+HUrVwyxy5GUatryy7Muw0Wt9D2k=
+github.com/algoidan/paralithium v0.0.0-20211027131605-1b904692ade4/go.mod h1:2gyGbx9Je9Z+YwkKkZIspULSSaP5rR1pF2P6FjCrYl0=
 github.com/algonathan/sumhash v0.0.0-20210902064122-c2f95258d5f3 h1:k3NpR7zWChaXtbLedjCE8g+N+HWZrp0bsTYOI0DgZEg=
 github.com/algonathan/sumhash v0.0.0-20210902064122-c2f95258d5f3/go.mod h1:o3SSyNw1Njyqx5pFdH4e8wZ7QK8xAwGXl6QKPzHrAFo=
 github.com/algorand/go-codec v1.1.2 h1:QWS9YC3EEWBpJq5AqFPELcCJ2QPpTIg9aqR2K/sRDq4=

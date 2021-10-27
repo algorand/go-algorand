@@ -3,7 +3,7 @@ module github.com/algorand/go-algorand
 go 1.14
 
 require (
-	github.com/algoidan/paralithium v0.0.0-20211026120802-d543c2a902ce
+	github.com/algoidan/paralithium v0.0.0-20211027131605-1b904692ade4
 	github.com/algonathan/sumhash v0.0.0-20210902064122-c2f95258d5f3
 	github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d
 	github.com/algorand/go-deadlock v0.2.1

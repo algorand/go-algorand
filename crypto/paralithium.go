@@ -39,10 +39,10 @@ type (
 	PSecretKey [cparalithium.PrivateKeySize]byte
 )
 
-// AlgorandParalithiumSeed - this value is used to generate the public/secret keys.
+// AlgorandParalithiumRho - this value is used to generate the public/secret keys.
 // it can be found on the first 32 bytes of the publickey. This value will be a constant
 // in the SNARK prover.
-var AlgorandParalithiumSeed = [cparalithium.SeedSize]byte{'A', 'l', 'g', 'o', 'r', 'a', 'n', 'd', ' ', 'P', 'a', 'r', 'a', 'l', 'i', 't', 'h', 'i', 'u', 'm', ' ', 'v', '0', '1', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+var AlgorandParalithiumRho = [cparalithium.RhoSize]byte{'A', 'l', 'g', 'o', 'r', 'a', 'n', 'd', ' ', 'P', 'a', 'r', 'a', 'l', 'i', 't', 'h', 'i', 'u', 'm', ' ', 'v', '0', '1', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 
 // ParalithiumSigner is the implementation of Signer for the Paralithium signature scheme.
 type ParalithiumSigner struct {
@@ -56,7 +56,7 @@ type ParalithiumSigner struct {
 
 // GenerateParalithiumSigner Generates a dilithium Signer.
 func GenerateParalithiumSigner() Signer {
-	sk, pk := cparalithium.NewKeysWithRho(cparalithium.ParalithiumSeed(AlgorandParalithiumSeed))
+	sk, pk := cparalithium.NewKeysWithRho(cparalithium.ParalithiumRho(AlgorandParalithiumRho))
 	return &ParalithiumSigner{
 		PublicKey: PPublicKey(pk),
 		SecretKey: PSecretKey(sk),
@@ -103,7 +103,7 @@ func (d *ParalithiumVerifier) Verify(message Hashable, sig ByteSignature) error 
 
 // VerifyBytes follows paralithium algorithm to verify a signature.
 func (d *ParalithiumVerifier) VerifyBytes(data []byte, sig ByteSignature) error {
-	if err := (*cparalithium.ParalithiumPublicKey)(&d.PublicKey).VerifyRho(AlgorandParalithiumSeed); err != nil {
+	if err := (*cparalithium.ParalithiumPublicKey)(&d.PublicKey).VerifyRho(AlgorandParalithiumRho); err != nil {
 		return err
 	}
 	return (*cparalithium.ParalithiumPublicKey)(&d.PublicKey).VerifyBytes(data, sig)
