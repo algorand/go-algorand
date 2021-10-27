@@ -742,7 +742,9 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 	if !ok {
 		return errors.New("No application")
 	}
-	approved, _, err := EvalStatefulCx(params.ApprovalProgram, *ep)
+	epl := *ep
+	epl.Ledger = l
+	approved, _, err := EvalStatefulCx(params.ApprovalProgram, epl)
 	if err != nil {
 		return err
 	}

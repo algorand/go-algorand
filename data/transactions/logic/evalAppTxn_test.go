@@ -802,7 +802,7 @@ int 1
 `, ep, "program version must be >=")
 }
 
-func TestReentrancy(t *testing.T) {
+func TestSelfReentrancy(t *testing.T) {
 	ep, ledger := makeSampleEnv()
 	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
@@ -814,4 +814,55 @@ int 888;     itxn_field ApplicationID
 itxn_submit
 int 1
 `, ep, "attempt to re-enter 888")
+}
+
+func TestIndirectReentrancy(t *testing.T) {
+	ep, ledger := makeSampleEnv()
+	call888 := testProg(t, `itxn_begin
+int appl;    itxn_field TypeEnum
+int 888;     itxn_field ApplicationID
+itxn_submit
+int 1
+`, AssemblerMaxVersion)
+	ledger.NewApp(ep.Txn.Txn.Receiver, 222, basics.AppParams{
+		ApprovalProgram: call888.Program,
+	})
+
+	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	ep.Txn.Txn.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
+	testApp(t, `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_submit
+int 1
+`, ep, "attempt to re-enter 888")
+}
+
+// TestInnerBudgetIncrement ensures that an app can make a (nearly) empty inner
+// app call in order to get 700 extra opcode budget.  Unfortunately, it costs a
+// bit to create the call, and the app itself consumes a little, so it's more
+// like 690 or so.
+func TestInnerBudgetIncrement(t *testing.T) {
+	ep, ledger := makeSampleEnv()
+	gasup := testProg(t, "pushint 1", AssemblerMaxVersion)
+	ledger.NewApp(ep.Txn.Txn.Receiver, 222, basics.AppParams{
+		ApprovalProgram: gasup.Program,
+	})
+
+	waste := `global CurrentApplicationAddress; keccak256; pop;`
+	buy := `itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_submit;
+`
+
+	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	ep.Txn.Txn.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
+	testApp(t, strings.Repeat(waste, 5)+"int 1", ep)
+	testApp(t, strings.Repeat(waste, 6)+"int 1", ep, "dynamic cost budget exceeded")
+	testApp(t, strings.Repeat(waste, 6)+buy+"int 1", ep, "dynamic cost budget exceeded")
+	testApp(t, buy+strings.Repeat(waste, 6)+"int 1", ep)
 }

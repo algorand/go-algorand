@@ -91,6 +91,8 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 
 		MaxGlobalSchemaEntries: 30,
 		MaxLocalSchemaEntries:  13,
+
+		EnableAppCostPooling: true,
 	}
 }
 
@@ -123,6 +125,11 @@ func defaultEvalParamsWithVersion(sb *strings.Builder, txn *transactions.SignedT
 	ep.Txn = pt
 	ep.PastSideEffects = MakePastSideEffects(5)
 	ep.Specials = &transactions.SpecialAddresses{}
+	/* start app with 700 budget */
+	if proto.EnableAppCostPooling {
+		budget := uint64(proto.MaxAppProgramCost)
+		ep.PooledApplicationBudget = &budget
+	}
 	if sb != nil { // have to do this since go's nil semantics: https://golang.org/doc/faq#nil_error
 		ep.Trace = sb
 	}

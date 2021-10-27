@@ -393,6 +393,16 @@ func testApp(t *testing.T, program string, ep EvalParams, problems ...string) tr
 
 	sb := &strings.Builder{}
 	ep.Trace = sb
+	/* Hackish: Reset budget, since ep often gets reused in tests. But don't
+	   reset it if it's currently set to a positive multiple of the
+	   MaxAppProgramCost. That allows a test that's trying to simulate a group
+	   of app calls being pooled. */
+	if ep.PooledApplicationBudget != nil {
+		current := *ep.PooledApplicationBudget
+		if current == 0 || (current%uint64(ep.Proto.MaxAppProgramCost) != 0) {
+			*ep.PooledApplicationBudget = uint64(ep.Proto.MaxAppProgramCost)
+		}
+	}
 	pass, err = EvalStateful(ops.Program, ep)
 	if len(problems) == 0 {
 		require.NoError(t, err, sb.String())
@@ -2512,8 +2522,6 @@ func TestPooledAppCallsVerifyOp(t *testing.T) {
 	int 1`
 
 	ep, _ := makeSampleEnv()
-	ep.Proto.EnableAppCostPooling = true
-	ep.PooledApplicationBudget = new(uint64)
 	// Simulate test with 2 grouped txn
 	*ep.PooledApplicationBudget = uint64(ep.Proto.MaxAppProgramCost * 2)
 	testApp(t, source, ep, "pc=107 dynamic cost budget exceeded, executing ed25519verify: remaining budget is 1400 but program cost was 1905")

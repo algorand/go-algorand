@@ -22,10 +22,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -398,17 +396,10 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 
 		ops := testProg(t, text, AssemblerMaxVersion)
 
-		proto := config.Consensus[protocol.ConsensusV23]
-		require.False(t, proto.Application)
-		ep := defaultEvalParams(nil, nil)
-		ep.Proto = &proto
+		ep := defaultEvalParamsWithVersion(nil, nil, 1)
 		ep.Ledger = ledger
 
-		// check failure with version check
 		_, err := Eval(ops.Program, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "greater than protocol supported version")
-		_, err = Eval(ops.Program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "greater than protocol supported version")
 
@@ -417,15 +408,9 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		_, err = Eval(ops.Program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global field")
-		_, err = Eval(ops.Program, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid global field")
 
 		// check opcodes failures
 		ops.Program[0] = 0 // set version to 0
-		_, err = Eval(ops.Program, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid global field")
 		_, err = Eval(ops.Program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global field")
@@ -482,17 +467,11 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			proto := config.Consensus[protocol.ConsensusV23]
-			require.False(t, proto.Application)
-			ep := defaultEvalParams(nil, nil)
-			ep.Proto = &proto
+			ep := defaultEvalParamsWithVersion(nil, nil, 1)
 			ep.Ledger = ledger
 			ep.TxnGroup = txgroup
 
 			// check failure with version check
-			_, err = Eval(ops.Program, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "greater than protocol supported version")
 			_, err = Eval(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "greater than protocol supported version")
@@ -502,15 +481,9 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			_, err = Eval(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")
-			_, err = Eval(ops.Program, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid txn field")
 
 			// check opcodes failures
 			ops.Program[0] = 0 // set version to 0
-			_, err = Eval(ops.Program, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid txn field")
 			_, err = Eval(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")

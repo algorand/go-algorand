@@ -111,7 +111,7 @@ func TestNewEvalParams(t *testing.T) {
 						require.Equal(t, res[k].MinTealVersion, res[testCase.firstAppCallIndex].MinTealVersion)
 						require.Equal(t, res[k].PooledApplicationBudget, res[testCase.firstAppCallIndex].PooledApplicationBudget)
 						if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusV29]) {
-							require.Equal(t, *res[k].PooledApplicationBudget, uint64(param.MaxAppProgramCost))
+							require.Nil(t, res[k].PooledApplicationBudget)
 						} else if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusFuture]) {
 							require.Equal(t, *res[k].PooledApplicationBudget, uint64(param.MaxAppProgramCost*testCase.numAppCalls))
 						}

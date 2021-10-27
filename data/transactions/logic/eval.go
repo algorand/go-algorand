@@ -297,13 +297,24 @@ type EvalParams struct {
 
 // NewEvalParams creates an EvalParams for each ApplicationCall transaction in
 // the group
-func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses, stack []basics.AppIndex) []*EvalParams {
+func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses, caller *EvalParams) []*EvalParams {
 	var groupNoAD []transactions.SignedTxn
 	var pastSideEffects []EvalSideEffects
 	var minTealVersion uint64
-	pooledApplicationBudget := uint64(0)
+	var budget uint64
+	pooledApplicationBudget := &budget
 	var credit uint64
-	inner := len(stack) > 0
+
+	inner := false
+	var stack []basics.AppIndex
+	if caller != nil {
+		inner = true
+		// note the stack, to prevent re-entrancy
+		stack = caller.AppStack
+		// share pool in the inner calls
+		pooledApplicationBudget = caller.PooledApplicationBudget
+	}
+
 	res := make([]*EvalParams, len(txgroup))
 	for i, txn := range txgroup {
 		// Mostly ignore any non-ApplicationCall transactions
@@ -316,9 +327,9 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 			continue
 		}
 		if proto.EnableAppCostPooling {
-			pooledApplicationBudget += uint64(proto.MaxAppProgramCost)
+			*pooledApplicationBudget += uint64(proto.MaxAppProgramCost)
 		} else {
-			pooledApplicationBudget = uint64(proto.MaxAppProgramCost)
+			pooledApplicationBudget = nil
 		}
 
 		// Initialize side effects and group without ApplyData lazily
@@ -340,7 +351,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 			GroupIndex:              uint64(i),
 			PastSideEffects:         pastSideEffects,
 			MinTealVersion:          &minTealVersion,
-			PooledApplicationBudget: &pooledApplicationBudget,
+			PooledApplicationBudget: pooledApplicationBudget,
 			FeeCredit:               &credit,
 			Specials:                specials,
 			AppStack:                stack,
@@ -4193,7 +4204,7 @@ func opTxSubmit(cx *EvalContext) {
 	}
 
 	withAD := transactions.WrapSignedTxnsWithAD(cx.subtxns)
-	eps := NewEvalParams(withAD, cx.Proto, cx.Specials, cx.EvalParams.AppStack)
+	eps := NewEvalParams(withAD, cx.Proto, cx.Specials, &cx.EvalParams)
 	for i := range withAD {
 		err := cx.Ledger.Perform(&withAD[i], eps[i])
 		if err != nil {
