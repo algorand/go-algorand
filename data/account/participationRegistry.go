@@ -254,8 +254,8 @@ var (
 		)`
 
 	createStateProof = `CREATE TABLE StateProofKeys (
-			pk	  INTEGER NOT NULL, --* join with keyset to find key for a particular participation id
-			round INTEGER,	        --*  committed round for this key
+			pk    INTEGER NOT NULL, --* join with keyset to find key for a particular participation id
+			round INTEGER,          --*  committed round for this key
 			key   BLOB,             --*  msgpack encoding of ParticipationAccount.BlockProof.SignatureAlgorithm
 			PRIMARY KEY (pk, round)
 		)`
