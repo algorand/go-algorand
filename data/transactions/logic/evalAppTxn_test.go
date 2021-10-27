@@ -780,3 +780,38 @@ int 889; app_params_get AppGlobalNumByteSlice; !; assert; !; assert; int 1
 	testApp(t, call, ep, "No application")
 
 }
+
+func TestCreateOldAppFails(t *testing.T) {
+	ep, ledger := makeSampleEnv()
+	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+
+	ops := testProg(t, "int 1", innerAppsEnabledVersion-1)
+	approve := "byte 0x" + hex.EncodeToString(ops.Program)
+
+	testApp(t, `
+itxn_begin
+int appl;    itxn_field TypeEnum
+`+approve+`; itxn_field ApprovalProgram
+`+approve+`; itxn_field ClearStateProgram
+int 1;       itxn_field GlobalNumUint
+int 2;       itxn_field LocalNumByteSlice
+int 3;       itxn_field LocalNumUint
+itxn_submit
+int 1
+`, ep, "program version must be >=")
+}
+
+func TestReentrancy(t *testing.T) {
+	ep, ledger := makeSampleEnv()
+	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+
+	testApp(t, `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 888;     itxn_field ApplicationID
+itxn_submit
+int 1
+`, ep, "attempt to re-enter 888")
+}

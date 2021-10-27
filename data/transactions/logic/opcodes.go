@@ -42,6 +42,10 @@ const backBranchEnabledVersion = 4
 // using an index into arrays.
 const directRefEnabledVersion = 4
 
+// innerAppsEnabledVersion is first version that allowed inner app calls. No old
+// apps should be called as inner apps.
+const innerAppsEnabledVersion = 6
+
 // opDetails records details such as non-standard costs, immediate
 // arguments, or dynamic layout controlled by a check function.
 type opDetails struct {

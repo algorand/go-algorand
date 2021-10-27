@@ -3938,10 +3938,9 @@ func TestApplicationsDisallowOldTeal(t *testing.T) {
 		require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", appsEnabledVersion))
 	}
 
-	ops, err := AssembleStringWithVersion(source, appsEnabledVersion)
-	require.NoError(t, err)
+	ops := testProg(t, source, appsEnabledVersion)
 
-	err = CheckStateful(ops.Program, ep)
+	err := CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 
 	_, err = EvalStateful(ops.Program, ep)
@@ -3989,12 +3988,11 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 
 	for ci, cse := range cases {
 		t.Run(fmt.Sprintf("ci=%d", ci), func(t *testing.T) {
-			ep := defaultEvalParams(nil, nil)
+			ep := defaultEvalParams(nil, &cse.group[0])
 			ep.TxnGroup = cse.group
-			ep.Txn = &cse.group[0]
 
 			// Computed MinTealVersion should be == validFromVersion
-			calc := ComputeMinTealVersion(cse.group)
+			calc := ComputeMinTealVersion(cse.group, false)
 			require.Equal(t, calc, cse.validFromVersion)
 
 			// Should fail for all versions < validFromVersion
@@ -4239,14 +4237,14 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 			for lv := v; lv <= AssemblerMaxVersion; lv++ {
 				t.Run(fmt.Sprintf("lv=%d", lv), func(t *testing.T) {
 					sb := strings.Builder{}
-					err := Check(ops.Program, defaultEvalParamsWithVersion(&sb, nil, lv))
+					var txn transactions.SignedTxn
+					txn.Lsig.Logic = ops.Program
+					err := Check(ops.Program, defaultEvalParamsWithVersion(&sb, &txn, lv))
 					if err != nil {
 						t.Log(hex.EncodeToString(ops.Program))
 						t.Log(sb.String())
 					}
 					require.NoError(t, err)
-					var txn transactions.SignedTxn
-					txn.Lsig.Logic = ops.Program
 					sb = strings.Builder{}
 					pass, err := Eval(ops.Program, defaultEvalParamsWithVersion(&sb, &txn, lv))
 					ok := tester(pass, err)

@@ -131,7 +131,7 @@ func (v *verifiedTransactionCache) GetUnverifiedTranscationGroups(txnGroups [][]
 	for txnGroupIndex := 0; txnGroupIndex < len(txnGroups); txnGroupIndex++ {
 		signedTxnGroup := txnGroups[txnGroupIndex]
 		verifiedTxn := 0
-		groupCtx.minTealVersion = logic.ComputeMinTealVersion(signedTxnGroup)
+		groupCtx.minTealVersion = logic.ComputeMinTealVersion(signedTxnGroup, false)
 
 		baseBucket := v.base
 		for txnIdx := 0; txnIdx < len(signedTxnGroup); txnIdx++ {

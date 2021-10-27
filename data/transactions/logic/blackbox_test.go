@@ -32,7 +32,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestPrepareEvalParams(t *testing.T) {
+func TestNewEvalParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	params := []config.ConsensusParams{
@@ -88,7 +88,7 @@ func TestPrepareEvalParams(t *testing.T) {
 	for i, param := range params {
 		for j, testCase := range cases {
 			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
-				res := logic.PrepareEvalParams(testCase.group, &param, nil)
+				res := logic.NewEvalParams(testCase.group, &param, nil, nil)
 				require.Equal(t, len(res), len(testCase.group))
 
 				// Compute the expected transaction group without ApplyData for

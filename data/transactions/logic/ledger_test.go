@@ -59,14 +59,7 @@ type asaParams struct {
 	Creator basics.Address
 }
 
-// Ledger is a convenient mock ledger that is used by
-// data/transactions/logic It is in its own package so that it can be
-// used by people developing teal code that need a fast testing setup,
-// rather than running against a real network.  It also might be
-// expanded to support the Balances interface so that we have fewer
-// mocks doing similar things.  By putting it here, it is publicly
-// exported, but will not be imported by non-test code, so won't bloat
-// binary.
+// Ledger is a fake ledger that is "good enough" to reasonably test AVM programs.
 type Ledger struct {
 	balances          map[basics.Address]balanceRecord
 	applications      map[basics.AppIndex]appParams
@@ -88,6 +81,7 @@ func MakeLedger(balances map[basics.Address]uint64) *Ledger {
 	l.assets = make(map[basics.AssetIndex]asaParams)
 	l.trackedCreatables = make(map[int]basics.CreatableIndex)
 	l.mods = make(map[basics.AppIndex]map[string]basics.ValueDelta)
+	l.SetApp(1234) // Arbitrary initial app id for testApp()
 	return l
 }
 
@@ -106,9 +100,9 @@ func (l *Ledger) NewAccount(addr basics.Address, balance uint64) {
 }
 
 // NewApp add a new AVM app to the Ledger, and arranges so that future
-// executions will act as though they are that app.  It only sets up
-// the id and schema, it inserts no code, since testing will want to
-// try many different code sequences.
+// executions will act as though they are that app.  In most uses, it only sets
+// up the id and schema but no code, as testing will want to try many different
+// code sequences.
 func (l *Ledger) NewApp(creator basics.Address, appID basics.AppIndex, params basics.AppParams) {
 	l.SetApp(appID)
 	params = params.Clone()

@@ -168,7 +168,7 @@ func stackValueFromTealValue(tv *basics.TealValue) (sv stackValue, err error) {
 // versions of TEAL. If one of the transactions in a group will execute a TEAL
 // program whose version predates a given field, that field must not be set
 // anywhere in the transaction group, or the group will be rejected.
-func ComputeMinTealVersion(group []transactions.SignedTxn) uint64 {
+func ComputeMinTealVersion(group []transactions.SignedTxn, inner bool) uint64 {
 	var minVersion uint64
 	for _, txn := range group {
 		if !txn.Txn.RekeyTo.IsZero() {
@@ -179,6 +179,11 @@ func ComputeMinTealVersion(group []transactions.SignedTxn) uint64 {
 		if txn.Txn.Type == protocol.ApplicationCallTx {
 			if minVersion < appsEnabledVersion {
 				minVersion = appsEnabledVersion
+			}
+		}
+		if inner {
+			if minVersion < innerAppsEnabledVersion {
+				minVersion = innerAppsEnabledVersion
 			}
 		}
 	}
@@ -285,20 +290,29 @@ type EvalParams struct {
 
 	// Total pool of app call budget in a group transaction
 	PooledApplicationBudget *uint64
+
+	// The "call stack" of apps calling this app.
+	AppStack []basics.AppIndex
 }
 
-// PrepareEvalParams creates an EvalParams for each ApplicationCall transaction
-// in the group
-func PrepareEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses) []*EvalParams {
+// NewEvalParams creates an EvalParams for each ApplicationCall transaction in
+// the group
+func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses, stack []basics.AppIndex) []*EvalParams {
 	var groupNoAD []transactions.SignedTxn
 	var pastSideEffects []EvalSideEffects
 	var minTealVersion uint64
 	pooledApplicationBudget := uint64(0)
 	var credit uint64
+	inner := len(stack) > 0
 	res := make([]*EvalParams, len(txgroup))
 	for i, txn := range txgroup {
-		// Ignore any non-ApplicationCall transactions
+		// Mostly ignore any non-ApplicationCall transactions
 		if txn.SignedTxn.Txn.Type != protocol.ApplicationCallTx {
+			if inner {
+				// The Perform() interface needs the specials here, even for
+				// non-app calls.
+				res[i] = &EvalParams{Specials: specials}
+			}
 			continue
 		}
 		if proto.EnableAppCostPooling {
@@ -314,7 +328,7 @@ func PrepareEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Con
 				groupNoAD[j] = txgroup[j].SignedTxn
 			}
 			pastSideEffects = MakePastSideEffects(len(txgroup))
-			minTealVersion = ComputeMinTealVersion(groupNoAD)
+			minTealVersion = ComputeMinTealVersion(groupNoAD, inner)
 			credit, _ = transactions.FeeCredit(groupNoAD, proto.MinTxnFee)
 			// intentionally ignoring error here, fees had to have been enough to get here
 		}
@@ -329,6 +343,7 @@ func PrepareEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Con
 			PooledApplicationBudget: &pooledApplicationBudget,
 			FeeCredit:               &credit,
 			Specials:                specials,
+			AppStack:                stack,
 		}
 	}
 	return res
@@ -564,29 +579,10 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 		cx.err = errors.New("invalid program (empty)")
 		return false, cx.err
 	}
-	version, vlen := binary.Uvarint(program)
-	if vlen <= 0 {
-		cx.err = errors.New("invalid version")
-		return false, cx.err
-	}
-	if version > EvalMaxVersion {
-		cx.err = fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
-		return false, cx.err
-	}
-	if version > cx.EvalParams.Proto.LogicSigVersion {
-		cx.err = fmt.Errorf("program version %d greater than protocol supported version %d", version, cx.EvalParams.Proto.LogicSigVersion)
-		return false, cx.err
-	}
-
-	var minVersion uint64
-	if cx.EvalParams.MinTealVersion == nil {
-		minVersion = ComputeMinTealVersion(cx.EvalParams.TxnGroup)
-	} else {
-		minVersion = *cx.EvalParams.MinTealVersion
-	}
-	if version < minVersion {
-		cx.err = fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", minVersion, version)
-		return false, cx.err
+	version, vlen, err := versionCheck(program, cx.EvalParams)
+	if err != nil {
+		cx.err = err
+		return false, err
 	}
 
 	cx.version = version
@@ -671,25 +667,10 @@ func check(program []byte, params EvalParams) (err error) {
 	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
 		return errLogicSigNotSupported
 	}
-	version, vlen := binary.Uvarint(program)
-	if vlen <= 0 {
-		return errors.New("invalid version")
-	}
-	if version > EvalMaxVersion {
-		return fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
-	}
-	if version > params.Proto.LogicSigVersion {
-		return fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
-	}
 
-	var minVersion uint64
-	if params.MinTealVersion == nil {
-		minVersion = ComputeMinTealVersion(params.TxnGroup)
-	} else {
-		minVersion = *params.MinTealVersion
-	}
-	if version < minVersion {
-		return fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", minVersion, version)
+	version, vlen, err := versionCheck(program, params)
+	if err != nil {
+		return err
 	}
 
 	var cx EvalContext
@@ -724,6 +705,30 @@ func check(program []byte, params EvalParams) (err error) {
 		}
 	}
 	return nil
+}
+
+func versionCheck(program []byte, params EvalParams) (uint64, int, error) {
+	version, vlen := binary.Uvarint(program)
+	if vlen <= 0 {
+		return 0, 0, errors.New("invalid version")
+	}
+	if version > EvalMaxVersion {
+		return 0, 0, fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
+	}
+	if version > params.Proto.LogicSigVersion {
+		return 0, 0, fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
+	}
+
+	var minVersion uint64
+	if params.MinTealVersion == nil {
+		minVersion = ComputeMinTealVersion(params.TxnGroup, len(params.AppStack) > 0)
+	} else {
+		minVersion = *params.MinTealVersion
+	}
+	if version < minVersion {
+		return 0, 0, fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", minVersion, version)
+	}
+	return version, vlen, nil
 }
 
 func opCompat(expected, got StackType) bool {
@@ -3846,21 +3851,27 @@ func (cx *EvalContext) availableAsset(sv stackValue) (basics.AssetIndex, error) 
 	return basics.AssetIndex(0), fmt.Errorf("invalid Asset reference %d", aid)
 }
 
-// availableApp is used instead of appReference for more recent opcodes that
-// don't need (or want!) to allow low numbers to represent the app at that
-// index in ForeignApps array.
+// availableApp is used instead of appReference for more recent (stateful)
+// opcodes that don't need (or want!) to allow low numbers to represent the app
+// at that index in ForeignApps array.
 func (cx *EvalContext) availableApp(sv stackValue) (basics.AppIndex, error) {
-	aid, err := sv.uint()
+	uint, err := sv.uint()
 	if err != nil {
 		return basics.AppIndex(0), err
 	}
+	aid := basics.AppIndex(uint)
 	// Ensure that aid is in Foreign Apps
 	for _, appID := range cx.Txn.Txn.ForeignApps {
-		if appID == basics.AppIndex(aid) {
-			return basics.AppIndex(aid), nil
+		if appID == aid {
+			return aid, nil
 		}
 	}
-	return basics.AppIndex(0), fmt.Errorf("invalid App reference %d", aid)
+	// Or, it can be the current app
+	if cx.Ledger.ApplicationID() == aid {
+		return aid, nil
+	}
+
+	return 0, fmt.Errorf("invalid App reference %d", aid)
 }
 
 func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *transactions.Transaction) (err error) {
@@ -4151,6 +4162,8 @@ func opTxSubmit(cx *EvalContext) {
 		*cx.FeeCredit = basics.AddSaturate(*cx.FeeCredit, overpay)
 	}
 
+	cx.AppStack = append(cx.AppStack, cx.Ledger.ApplicationID()) // push app
+
 	for itx := range cx.subtxns {
 		// The goal is to follow the same invariants used by the
 		// transaction pool. Namely that any transaction that makes it
@@ -4167,17 +4180,20 @@ func opTxSubmit(cx *EvalContext) {
 		if cx.err != nil {
 			return
 		}
+
+		// Disallow re-entrancy
+		if cx.subtxns[itx].Txn.Type == protocol.ApplicationCallTx {
+			for _, aid := range cx.AppStack {
+				if aid == cx.subtxns[itx].Txn.ApplicationID {
+					cx.err = fmt.Errorf("attempt to re-enter %d", aid)
+					return
+				}
+			}
+		}
 	}
 
 	withAD := transactions.WrapSignedTxnsWithAD(cx.subtxns)
-	eps := PrepareEvalParams(withAD, cx.Proto, cx.Specials)
-	// Perform uses a narrower interface than the apply code, EvalParams is
-	// never nil. It carries the specials, even for non-app call txns.
-	for i := range eps {
-		if eps[i] == nil {
-			eps[i] = &EvalParams{Specials: cx.Specials}
-		}
-	}
+	eps := NewEvalParams(withAD, cx.Proto, cx.Specials, cx.EvalParams.AppStack)
 	for i := range withAD {
 		err := cx.Ledger.Perform(&withAD[i], eps[i])
 		if err != nil {
@@ -4185,6 +4201,7 @@ func opTxSubmit(cx *EvalContext) {
 			return
 		}
 	}
+	cx.AppStack = cx.AppStack[:len(cx.AppStack)-1] // pop app
 	cx.EvalDelta.InnerTxns = append(cx.EvalDelta.InnerTxns, withAD...)
 	cx.subtxns = nil
 }
