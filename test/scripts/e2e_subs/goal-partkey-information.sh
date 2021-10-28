@@ -34,7 +34,7 @@ if ! echo "$OUTPUT" | grep -q 'First round:[[:space:]]* 0';                     
 if ! echo "$OUTPUT" | grep -q 'Last round:[[:space:]]* 3000000';                then echo "Last round should have been 3000000.";           exit 1; fi
 if ! echo "$OUTPUT" | grep -q 'Effective last round:[[:space:]]* 3000000';      then echo "Effective last round should have been 3000000."; exit 1; fi
 # 100 or 10000 due to arm64 bug
-if ! echo "$OUTPUT" | grep -q 'Key dilution:[[:space:]]* 100(00)\?';            then echo "Key dilution should have been 10000.";           exit 1; fi
+if ! echo "$OUTPUT" | grep -q 'Key dilution:[[:space:]]* 100\(00\)\?';            then echo "Key dilution should have been 10000.";           exit 1; fi
 if ! echo "$OUTPUT" | grep -q 'Participation ID:[[:space:]]*[[:alnum:]]\{52\}'; then echo "There should be a participation ID.";            exit 1; fi
 
 # Test multiple data directory supported
