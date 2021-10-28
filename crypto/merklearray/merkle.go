@@ -129,6 +129,7 @@ func (tree *Tree) Root() crypto.GenericDigest {
 	return tree.topLayer()[0]
 }
 
+// TODO: change into something global and more configurable
 const validateProof = false
 
 // Prove constructs a proof for some set of positions in the array that was
@@ -209,14 +210,14 @@ func (tree *Tree) buildNextLayer() {
 	tree.Levels = append(tree.Levels, newLayer)
 }
 
-func hashLeafs(elems map[uint64]crypto.Hashable, hash hash.Hash) (map[uint64]crypto.GenericDigest, error) {
+func hashLeaves(elems map[uint64]crypto.Hashable, hash hash.Hash) (map[uint64]crypto.GenericDigest, error) {
 
-	hashedLeafs := make(map[uint64]crypto.GenericDigest)
+	hashedLeaves := make(map[uint64]crypto.GenericDigest, len(elems))
 	for i, element := range elems {
-		hashedLeafs[i] = crypto.GenereicHashObj(hash, element)
+		hashedLeaves[i] = crypto.GenereicHashObj(hash, element)
 	}
 
-	return hashedLeafs, nil
+	return hashedLeaves, nil
 }
 
 // Verify ensures that the positions in elems correspond to the respective hashes
@@ -235,12 +236,12 @@ func Verify(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *
 		return nil
 	}
 
-	hashedLeafs, err := hashLeafs(elems, proof.HashFactory.NewHash())
+	hashedLeaves, err := hashLeaves(elems, proof.HashFactory.NewHash())
 	if err != nil {
 		return err
 	}
 
-	pl := buildPartialLayer(hashedLeafs)
+	pl := buildPartialLayer(hashedLeaves)
 	return verifyPath(root, proof, pl)
 }
 

@@ -52,10 +52,10 @@ func (p *Ed25519Key) SignBytes(message []byte) ByteSignature {
 }
 
 // GetVerifyingKey outputs a representation of a public key. that implements Verifier
-func (p *Ed25519Key) GetVerifyingKey() *VerifyingKey {
-	return &VerifyingKey{
-		Type: Ed25519Type,
-		Pack: PackedVerifyingKey{Ed25519PublicKey: Ed25519PublicKey{SignatureVerifier: p.Sec.SignatureVerifier}},
+func (p *Ed25519Key) GetVerifyingKey() *GenericVerifyingKey {
+	return &GenericVerifyingKey{
+		Type:             Ed25519Type,
+		Ed25519PublicKey: Ed25519PublicKey{SignatureVerifier: p.Sec.SignatureVerifier},
 	}
 }
 

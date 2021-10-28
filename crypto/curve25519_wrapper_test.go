@@ -14,12 +14,23 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package merklearray
+package crypto
 
-// An Array represents a dense array of leaf elements that are
-// combined into a Merkle tree. The Marshal method returns a byte slice that represents the object
-// that the Tree will use to hash the leaves.
-type Array interface {
-	Length() uint64
-	Marshal(pos uint64) ([]byte, error)
+import (
+	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/require"
+	"testing"
+)
+
+func TestSignAndVerify(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	var seed Seed
+	SystemRNG.RandBytes(seed[:])
+	key := GenerateEd25519Key(seed)
+	msg := []byte("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet")
+	byteSig := key.SignBytes(msg)
+	verifier := key.GetVerifyingKey()
+	err := verifier.GetVerifier().VerifyBytes(msg, byteSig)
+	a.NoError(err)
 }

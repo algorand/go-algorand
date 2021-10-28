@@ -67,14 +67,10 @@ func (d *DilithiumSigner) SignBytes(data []byte) ByteSignature {
 }
 
 // GetVerifyingKey Outputs a verifying key object which is serializable.
-func (d *DilithiumSigner) GetVerifyingKey() *VerifyingKey {
-	return &VerifyingKey{
-		Type: DilithiumType,
-		Pack: PackedVerifyingKey{
-			DilithiumPublicKey: DilithiumVerifier{
-				PublicKey: d.PublicKey,
-			},
-		},
+func (d *DilithiumSigner) GetVerifyingKey() *GenericVerifyingKey {
+	return &GenericVerifyingKey{
+		Type:               DilithiumType,
+		DilithiumPublicKey: DilithiumVerifier{PublicKey: d.PublicKey},
 	}
 }
 

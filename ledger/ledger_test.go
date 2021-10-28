@@ -27,8 +27,6 @@ import (
 	"runtime/pprof"
 	"testing"
 
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -1098,8 +1096,6 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 		require.NoError(t, err)
 
 		correctKeyregFields.StateProofPK = *(signer.GetVerifier())
-	} else {
-		correctKeyregFields.StateProofPK = merklekeystore.Verifier{}
 	}
 
 	correctKeyreg := transactions.Transaction{

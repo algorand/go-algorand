@@ -34,7 +34,7 @@ type Hashable interface {
 	ToBeHashed() (protocol.HashID, []byte)
 }
 
-// HashRep  appends the correct hashid to the before the message to be hashed.
+// HashRep appends the correct hashid before the message to be hashed.
 func HashRep(h Hashable) []byte {
 	hashid, data := h.ToBeHashed()
 	return append([]byte(hashid), data...)
@@ -46,12 +46,12 @@ const DigestSize = sha512.Size256
 // Digest represents a 32-byte value holding the 256-bit Hash digest.
 type Digest [DigestSize]byte
 
-// To32Byte implements merklearray.TreeDigest
+// To32Byte converts Digest to 32 byte slice, is used by bookkeeping.PaysetCommit
 func (d Digest) To32Byte() [32]byte {
 	return d
 }
 
-// ToSlice implements merklearray.TreeDigest
+// ToSlice converts Digest to slice, is used by bookkeeping.PaysetCommit
 func (d Digest) ToSlice() []byte {
 	return d[:]
 }

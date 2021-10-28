@@ -52,7 +52,7 @@ func (z AlgorithmType) IsValid() error {
 type Signer interface {
 	Sign(message Hashable) ByteSignature
 	SignBytes(message []byte) ByteSignature
-	GetVerifyingKey() *VerifyingKey
+	GetVerifyingKey() *GenericVerifyingKey
 }
 
 // ErrBadSignature represents a bad signature
@@ -65,122 +65,89 @@ type Verifier interface {
 	VerifyBytes(message []byte, sig ByteSignature) error
 }
 
-// SignatureAlgorithm holds a Signer, and the type of algorithm the Signer conforms with.
-// to add a key - verify that PackedSignatureAlgorithm's function (getSigner) returns your key.
-//msgp:postunmarshalcheck SignatureAlgorithm IsValid
-type SignatureAlgorithm struct {
+// GenericSigningKey holds a Signer, and the type of algorithm the Signer conforms with.
+//msgp:postunmarshalcheck GenericSigningKey IsValid
+type GenericSigningKey struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Type AlgorithmType            `codec:"sigType"`
-	Pack PackedSignatureAlgorithm `codec:"keys"`
-}
-
-// IsValid states whether the SignatureAlgorithm is valid, and is safe to use.
-func (z *SignatureAlgorithm) IsValid() error {
-	return z.Type.IsValid()
-}
-
-// VerifyingKey is an abstraction of a key store of verifying keys.
-// it can return the correct key according to the underlying algorithm.
-// Implements Hashable too.
-//
-// NOTE: The VerifyingKey key might not be a valid key if a malicious client sent it over the network
-// make certain it is valid.
-//msgp:postunmarshalcheck VerifyingKey IsValid
-type VerifyingKey struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	Type AlgorithmType      `codec:"type"`
-	Pack PackedVerifyingKey `codec:"pks"`
-}
-
-// IsValid states whether the VerifyingKey is valid, and is safe to use.
-func (z *VerifyingKey) IsValid() error {
-	return z.Type.IsValid()
-}
-
-// ToBeHashed makes it easier to hash the VeryfyingKey struct.
-func (z *VerifyingKey) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.VerifyingKey, protocol.Encode(z)
-}
-
-// GetSigner fetches the Signer type that is stored inside this SignatureAlgorithm.
-func (z *SignatureAlgorithm) GetSigner() Signer {
-	return z.Pack.getSigner(z.Type)
-}
-
-// GetVerifier fetches the Verifier type that is stored inside this VerifyingKey.
-func (z *VerifyingKey) GetVerifier() Verifier {
-	return z.Pack.getVerifier(z.Type)
-}
-
-// PackedVerifyingKey is a key store. Allows for easy marshal/unmarshal.
-type PackedVerifyingKey struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	DilithiumPublicKey DilithiumVerifier `codec:"dpk"`
-	Ed25519PublicKey   Ed25519PublicKey  `codec:"edpk"`
-	invalidVerifier    invalidVerifier
-}
-
-var errUnknownVerifier = errors.New("could not find stored Verifier")
-
-func (p *PackedVerifyingKey) getVerifier(t AlgorithmType) Verifier {
-	switch t {
-	case DilithiumType:
-		return &p.DilithiumPublicKey
-	case Ed25519Type:
-		return &p.Ed25519PublicKey
-	default:
-		return &p.invalidVerifier
-	}
-}
-
-// PackedSignatureAlgorithm helps  marshal SignatureAlgorithm
-type PackedSignatureAlgorithm struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	Type AlgorithmType `codec:"sigType"`
 
 	DilithiumSigner DilithiumSigner `codec:"ds"`
 	Ed25519Singer   Ed25519Key      `codec:"edds"`
 	invalidSinger   invalidSinger
 }
 
-var errUnknownSigner = errors.New("could not find stored signer")
+// IsValid states whether the GenericSigningKey is valid, and is safe to use.
+func (z *GenericSigningKey) IsValid() error {
+	return z.Type.IsValid()
+}
 
-func (p *PackedSignatureAlgorithm) getSigner(t AlgorithmType) Signer {
-	switch t {
+// GenericVerifyingKey is an abstraction of a key store of verifying keys.
+// it can return the correct key according to the underlying algorithm.
+// Implements Hashable too.
+//
+// NOTE: The GenericVerifyingKey key might not be a valid key if a malicious client sent it over the network
+// make certain it is valid.
+//msgp:postunmarshalcheck GenericVerifyingKey IsValid
+type GenericVerifyingKey struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Type AlgorithmType `codec:"type"`
+
+	DilithiumPublicKey DilithiumVerifier `codec:"dpk"`
+	Ed25519PublicKey   Ed25519PublicKey  `codec:"edpk"`
+	invalidVerifier    invalidVerifier
+}
+
+// IsValid states whether the VerifyingKey is valid, and is safe to use.
+func (z *GenericVerifyingKey) IsValid() error {
+	return z.Type.IsValid()
+}
+
+// GetSigner fetches the Signer type that is stored inside this GenericSigningKey.
+func (z *GenericSigningKey) GetSigner() Signer {
+	switch z.Type {
 	case DilithiumType:
-		return &p.DilithiumSigner
+		return &z.DilithiumSigner
 	case Ed25519Type:
-		return &p.Ed25519Singer
+		return &z.Ed25519Singer
 	default:
-		return &p.invalidSinger
+		return &z.invalidSinger
+	}
+}
+
+// GetVerifier fetches the Verifier type that is stored inside this GenericVerifyingKey.
+func (z *GenericVerifyingKey) GetVerifier() Verifier {
+	switch z.Type {
+	case DilithiumType:
+		return &z.DilithiumPublicKey
+	case Ed25519Type:
+		return &z.Ed25519PublicKey
+	default:
+		return &z.invalidVerifier
 	}
 }
 
 var errNonExistingSignatureAlgorithmType = errors.New("signing algorithm type does not exist")
 
 // NewSigner receives a type of signing algorithm and generates keys.
-func NewSigner(t AlgorithmType) (*SignatureAlgorithm, error) {
-	var p PackedSignatureAlgorithm
+func NewSigner(t AlgorithmType) (*GenericSigningKey, error) {
 	switch t {
 	case DilithiumType:
 		signer := NewDilithiumSigner().(*DilithiumSigner)
-		p = PackedSignatureAlgorithm{
+		return &GenericSigningKey{
+			Type:            t,
 			DilithiumSigner: *signer,
-		}
+		}, nil
 	case Ed25519Type:
 		var seed Seed
 		SystemRNG.RandBytes(seed[:])
 		key := GenerateEd25519Key(seed)
-		p = PackedSignatureAlgorithm{
+		return &GenericSigningKey{
+			Type:          t,
 			Ed25519Singer: *key,
-		}
+		}, nil
 	default:
 		return nil, errNonExistingSignatureAlgorithmType
 	}
-	return &SignatureAlgorithm{
-		Type: t,
-		Pack: p,
-	}, nil
 }

@@ -30,21 +30,21 @@ type (
 	CommittablePublicKey struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-		VerifyingKey crypto.VerifyingKey `codec:"pk"`
-		Round        uint64              `codec:"rnd"`
+		VerifyingKey crypto.GenericVerifyingKey `codec:"pk"`
+		Round        uint64                     `codec:"rnd"`
 	}
 
 	//Proof represent the merkle proof in each signature.
 	Proof merklearray.Proof
 
 	// Signature is a byte signature on a crypto.Hashable object,
-	// crypto.VerifyingKey and includes a merkle proof for the key.
+	// crypto.GenericVerifyingKey and includes a merkle proof for the key.
 	Signature struct {
 		_struct              struct{} `codec:",omitempty,omitemptyarray"`
 		crypto.ByteSignature `codec:"bsig"`
 
-		Proof        Proof               `codec:"prf"`
-		VerifyingKey crypto.VerifyingKey `codec:"vkey"`
+		Proof        Proof                      `codec:"prf"`
+		VerifyingKey crypto.GenericVerifyingKey `codec:"vkey"`
 	}
 
 	// Signer is a merkleKeyStore, contain multiple keys which can be used per round.
@@ -56,7 +56,7 @@ type (
 		// these keys should be temporarily stored in memory until Persist is called,
 		// in which they will be dumped into database and disposed of.
 		// non-exported fields to prevent msgpack marshalling
-		signatureAlgorithms []crypto.SignatureAlgorithm
+		signatureAlgorithms []crypto.GenericSigningKey
 		keyStore            PersistentKeystore
 
 		// the first round is used to set up the intervals.
@@ -68,7 +68,7 @@ type (
 	}
 
 	// Verifier is used to verify a merklekeystore.Signature produced by merklekeystore.Signer.
-	// it validate a merklekeystore.Signature by validate the commitment on the VerifyingKey and validate the signature with that key
+	// It validates a merklekeystore.Signature by validating the commitment on the GenericVerifyingKey and validating the signature with that key
 	Verifier struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -82,7 +82,7 @@ type (
 
 	// keysArray is only used for building the merkle-tree and nothing else.
 	keysArray struct {
-		keys       []crypto.SignatureAlgorithm
+		keys       []crypto.GenericSigningKey
 		firstValid uint64
 		interval   uint64
 	}
@@ -94,16 +94,16 @@ var errNonExistantKey = errors.New("key doesn't exist")
 var errDivisorIsZero = errors.New("received zero Interval")
 var errCannotVerify = errors.New("verifier isn't valid")
 
-// ToBeHashed implementation means CommittablePublicKey is crypto.Hashable.
+// ToBeHashed implementation means CommittablePublicKey is crypto.Hashable, required by merklekeystore.Verifier.Verify()
 func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.EphemeralPK, protocol.Encode(e)
+	return protocol.KeystorePK, protocol.Encode(e)
 }
 
 func (k *keysArray) Length() uint64 {
 	return uint64(len(k.keys))
 }
 
-// Marshal Gets []byte to represent a VerifyingKey tied to the signatureAlgorithm in a pos.
+// Marshal Gets []byte to represent a GenericVerifyingKey tied to the signatureAlgorithm in a pos.
 // used to implement the merklearray.Array interface needed to build a tree.
 func (k *keysArray) Marshal(pos uint64) ([]byte, error) {
 	signer := k.keys[pos].GetSigner()
@@ -132,7 +132,7 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 	// calculates the number of indices from first valid round and up to lastValid.
 	// writing this explicit calculation to avoid overflow.
 	numberOfKeys := lastValid/interval - ((firstValid - 1) / interval)
-	keys := make([]crypto.SignatureAlgorithm, numberOfKeys)
+	keys := make([]crypto.GenericSigningKey, numberOfKeys)
 	for i := range keys {
 		sigAlgo, err := crypto.NewSigner(sigAlgoType)
 		if err != nil {
@@ -245,13 +245,13 @@ func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashabl
 	}
 
 	pos := roundToIndex(firstValid, round, interval)
-	isInTree := merklearray.Verify(
+	err := merklearray.Verify(
 		(crypto.GenericDigest)(v.Root[:]),
 		map[uint64]crypto.Hashable{pos: &ephkey},
 		(*merklearray.Proof)(&sig.Proof),
 	)
-	if isInTree != nil {
-		return isInTree
+	if err != nil {
+		return err
 	}
 
 	return sig.VerifyingKey.GetVerifier().Verify(obj, sig.ByteSignature)

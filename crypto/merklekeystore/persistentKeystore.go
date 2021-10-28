@@ -34,7 +34,7 @@ type PersistentKeystore struct {
 }
 
 // Persist dumps the keys into the database as separate row for each key
-func (p *PersistentKeystore) Persist(keys []crypto.SignatureAlgorithm, firstValid uint64, interval uint64) error {
+func (p *PersistentKeystore) Persist(keys []crypto.GenericSigningKey, firstValid uint64, interval uint64) error {
 	if keys == nil {
 		return fmt.Errorf("no keys provided (nil)")
 	}
@@ -50,7 +50,9 @@ func (p *PersistentKeystore) Persist(keys []crypto.SignatureAlgorithm, firstVali
 		}
 		round := indexToRound(firstValid, interval, 0)
 		for i, key := range keys {
-			_, err := tx.Exec("INSERT INTO StateProofKeys (id, round, key) VALUES (?,?,?)", i, round, protocol.Encode(&key))
+			encodedKey := key.MarshalMsg(protocol.GetEncodingBuf())
+			_, err := tx.Exec("INSERT INTO StateProofKeys (id, round, key) VALUES (?,?,?)", i, round, encodedKey)
+			protocol.PutEncodingBuf(encodedKey)
 			if err != nil {
 				return fmt.Errorf("failed to insert StateProof key number %v round %d. SQL Error: %w", i, round, err)
 			}
@@ -67,7 +69,7 @@ func (p *PersistentKeystore) Persist(keys []crypto.SignatureAlgorithm, firstVali
 }
 
 // GetKey receives a round number and returns the corresponding (previously committed on) key.
-func (p *PersistentKeystore) GetKey(round uint64) (*crypto.SignatureAlgorithm, error) {
+func (p *PersistentKeystore) GetKey(round uint64) (*crypto.GenericSigningKey, error) {
 	var keyB []byte
 	err := p.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		row := tx.QueryRow("SELECT key FROM StateProofKeys WHERE round = ?", round)
@@ -82,7 +84,7 @@ func (p *PersistentKeystore) GetKey(round uint64) (*crypto.SignatureAlgorithm, e
 		return nil, fmt.Errorf("PersistentKeystore.GetKey: %w", err)
 	}
 
-	key := &crypto.SignatureAlgorithm{}
+	key := &crypto.GenericSigningKey{}
 	err = protocol.Decode(keyB, key)
 	if err != nil {
 		return nil, fmt.Errorf("PersistentKeystore.GetKey: %w", err)
@@ -107,7 +109,7 @@ func keystoreInstallDatabase(tx *sql.Tx) error {
 	_, err := tx.Exec(`CREATE TABLE StateProofKeys (
     	id	  INTEGER PRIMARY KEY, 
     	round INTEGER,	    --*  committed round for this key
-		key   BLOB  --*  msgpack encoding of ParticipationAccount.StateProof.SignatureAlgorithm
+		key   BLOB  --*  msgpack encoding of ParticipationAccount.StateProof.GenericSigningKey
 		);`)
 	if err != nil {
 		return err
@@ -134,7 +136,7 @@ func RestoreKeystore(store db.Accessor) (PersistentKeystore, error) {
 	return PersistentKeystore{store}, nil
 }
 
-// MigrateDB updates the database if necessary, according the the schema version
+// MigrateDB updates the database if necessary, according the schema version
 func MigrateDB(tx *sql.Tx) error {
 	var version int
 	schemaQuery := `SELECT version FROM schema WHERE tablename = ?`

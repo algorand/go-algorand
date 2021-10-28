@@ -38,8 +38,8 @@ const (
 	BlockHeader       HashID = "BH"
 	BalanceRecord     HashID = "BR"
 	Credential        HashID = "CR"
-	EphemeralPK       HashID = "EP"
 	Genesis           HashID = "GE"
+	KeystorePK        HashID = "KP"
 	MerkleArrayNode   HashID = "MA"
 	Message           HashID = "MX"
 	NetPrioResponse   HashID = "NPR"
@@ -57,6 +57,5 @@ const (
 	TxGroup           HashID = "TG"
 	TxnMerkleLeaf     HashID = "TL"
 	Transaction       HashID = "TX"
-	VerifyingKey      HashID = "VK"
 	Vote              HashID = "VO"
 )
