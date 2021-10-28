@@ -1,3 +1,4 @@
+name: "Travis Windows build"
 os: linux
 dist: bionic
 language: minimal
