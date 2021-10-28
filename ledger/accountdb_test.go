@@ -307,37 +307,6 @@ func TestAccountStorageWithStateProofID(t *testing.T) {
 	require.NoError(t, err)
 	checkAccounts(t, tx, 0, accts)
 	require.True(t, allAccountsHaveStateProofPKs(accts))
-
-	var baseAccounts lruAccounts
-	baseAccounts.init(nil, 100, 80)
-
-	var updates ledgercore.AccountDeltas
-	var newaccts map[basics.Address]basics.AccountData
-	updates, newaccts, _, _ = ledgertesting.RandomDeltasFull(20, accts, 0, 0)
-	accts = newaccts
-
-	updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, baseAccounts)
-	err = updatesCnt.accountsLoadOld(tx)
-	require.NoError(t, err)
-
-	totals, err := accountsTotals(tx, false)
-	require.NoError(t, err)
-	cAccounts := make(map[basics.Address]basics.AccountData, updatesCnt.len())
-	for i := 0; i < updatesCnt.len(); i++ {
-		addr, acctData := updatesCnt.getByIdx(i)
-		cAccounts[addr] = acctData.old.accountData
-	}
-	totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, cAccounts, totals)
-	err = accountsPutTotals(tx, totals, false)
-	require.NoError(t, err)
-	_, err = accountsNewRound(tx, updatesCnt, nil, proto, basics.Round(0))
-	require.NoError(t, err)
-	err = updateAccountsRound(tx, basics.Round(1))
-	require.NoError(t, err)
-	checkAccounts(t, tx, basics.Round(1), accts)
-	accounts, err := accountsAll(tx)
-	require.True(t, allAccountsHaveStateProofPKs(accounts))
-	require.Equal(t, accts, accounts)
 }
 
 func allAccountsHaveStateProofPKs(accts map[basics.Address]basics.AccountData) bool {

@@ -17,11 +17,13 @@
 package crypto
 
 import (
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
 
 func TestSignAndVerify(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	var seed Seed
 	SystemRNG.RandBytes(seed[:])

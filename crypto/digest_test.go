@@ -17,11 +17,13 @@
 package crypto
 
 import (
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
 
 func TestDigestTo32Bytes(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	g := GenericDigest("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse aliquet urna fermentum nisi semper, eu iaculis purus auctor.")
