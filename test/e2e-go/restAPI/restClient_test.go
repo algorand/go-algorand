@@ -30,6 +30,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/stretchr/testify/require"
 
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
@@ -1050,4 +1051,83 @@ return
 	expectedMetadata, err := hex.DecodeString("67f0cd61653bd34316160bc3f5cd3763c85b114d50d38e1f4e72c3b994411e7b")
 	a.NoError(err)
 	a.Equal(expectedMetadata, *createdAssetInfo.Params.MetadataHash)
+}
+
+func TestStateProofInParticipationInfo(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+
+	tmp := config.Consensus[protocol.ConsensusCurrentVersion]
+	tmp.EnableStateProofKeyregCheck = true
+	config.Consensus[protocol.ConsensusCurrentVersion] = tmp
+
+	localFixture.SetConsensus(config.Consensus)
+
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+	waitForRoundOne(t, testClient)
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, someAddress := getMaxBalAddr(t, testClient, addresses)
+	a.NotEmpty(someAddress, "no addr with funds")
+
+	addr, err := basics.UnmarshalChecksumAddress(someAddress)
+	a.NoError(err)
+
+	params, err := testClient.SuggestedParams()
+	a.NoError(err)
+
+	firstRound := basics.Round(params.LastRound + 1)
+	lastRound := basics.Round(params.LastRound + 1000)
+	dilution := uint64(100)
+	randomVotePKStr := randomString(32)
+	var votePK crypto.OneTimeSignatureVerifier
+	copy(votePK[:], []byte(randomVotePKStr))
+	randomSelPKStr := randomString(32)
+	var selPK crypto.VRFVerifier
+	copy(selPK[:], []byte(randomSelPKStr))
+	var gh crypto.Digest
+	copy(gh[:], params.GenesisHash)
+
+	tx := transactions.Transaction{
+		Type: protocol.KeyRegistrationTx,
+		Header: transactions.Header{
+			Sender:      addr,
+			Fee:         basics.MicroAlgos{Raw: 10000},
+			FirstValid:  firstRound,
+			LastValid:   lastRound,
+			GenesisHash: gh,
+		},
+		KeyregTxnFields: transactions.KeyregTxnFields{
+			VotePK:      votePK,
+			SelectionPK: selPK,
+			VoteFirst:   firstRound,
+			StateProofPK: merklekeystore.Verifier{
+				Root:         [merklekeystore.KeyStoreRootSize]byte{1, 2, 3, 4},
+				HasValidRoot: false,
+			},
+			VoteLast:         lastRound,
+			VoteKeyDilution:  dilution,
+			Nonparticipation: false,
+		},
+	}
+	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
+	a.NoError(err)
+	_, err = waitForTransaction(t, testClient, someAddress, txID, 15*time.Second)
+	a.NoError(err)
+
+	account, err := testClient.AccountInformationV2(someAddress)
+	a.NoError(err)
+	a.NotNil(account.Participation.StateProofKey)
+
+	actual := [merklekeystore.KeyStoreRootSize]byte{}
+	copy(actual[:], *account.Participation.StateProofKey)
+	a.Equal(tx.StateProofPK.Root[:], actual[:])
 }
