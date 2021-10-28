@@ -23,6 +23,7 @@ import (
 	"sort"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 )
@@ -64,14 +65,14 @@ func AccountDataToAccount(
 	if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
 		apiParticipation = &generated.AccountParticipation{
 			SelectionParticipationKey: record.SelectionID[:],
-			StateProofKey: generated.StateProofKey{
-				ContainsKeys: record.StateProofID.HasValidRoot,
-				Root:         record.StateProofID.Root[:],
-			},
-			VoteFirstValid:       uint64(record.VoteFirstValid),
-			VoteKeyDilution:      uint64(record.VoteKeyDilution),
-			VoteLastValid:        uint64(record.VoteLastValid),
-			VoteParticipationKey: record.VoteID[:],
+			VoteFirstValid:            uint64(record.VoteFirstValid),
+			VoteKeyDilution:           uint64(record.VoteKeyDilution),
+			VoteLastValid:             uint64(record.VoteLastValid),
+			VoteParticipationKey:      record.VoteID[:],
+		}
+		if record.StateProofID != (merklekeystore.Verifier{}) {
+			tmp := record.StateProofID.Root[:]
+			apiParticipation.StateProofKey = &tmp
 		}
 	}
 

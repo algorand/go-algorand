@@ -83,8 +83,8 @@ type AccountParticipation struct {
 	// \[sel\] Selection public key (if any) currently registered for this round.
 	SelectionParticipationKey []byte `json:"selection-participation-key"`
 
-	// \[state\] root of the state proof key.
-	StateProofKey StateProofKey `json:"state-proof-key"`
+	// \[state\] root of the state proof key (if any)
+	StateProofKey *[]byte `json:"state-proof-key,omitempty"`
 
 	// \[voteFst\] First round for which this participation is valid.
 	VoteFirstValid uint64 `json:"vote-first-valid"`
@@ -391,16 +391,6 @@ type PendingTransactionResponse struct {
 
 // StateDelta defines model for StateDelta.
 type StateDelta []EvalDeltaKeyValue
-
-// StateProofKey defines model for StateProofKey.
-type StateProofKey struct {
-
-	// states whether the key can be used to sign on compact certs.
-	ContainsKeys bool `json:"ContainsKeys"`
-
-	// the merkle commitment on the key.
-	Root []byte `json:"Root"`
-}
 
 // TealKeyValue defines model for TealKeyValue.
 type TealKeyValue struct {

@@ -743,7 +743,10 @@
             "type": "string"
           },
           "state-proof-key": {
-            "$ref": "#/components/schemas/StateProofKey"
+            "description": "\\[state\\] root of the state proof key (if any)",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
           },
           "vote-first-valid": {
             "description": "\\[voteFst\\] First round for which this participation is valid.",
@@ -766,7 +769,6 @@
         },
         "required": [
           "selection-participation-key",
-          "state-proof-key",
           "vote-first-valid",
           "vote-key-dilution",
           "vote-last-valid",
@@ -1367,26 +1369,6 @@
           "$ref": "#/components/schemas/EvalDeltaKeyValue"
         },
         "type": "array"
-      },
-      "StateProofKey": {
-        "description": "\\[state\\] root of the state proof key.",
-        "properties": {
-          "ContainsKeys": {
-            "description": "states whether the key can be used to sign on compact certs.",
-            "type": "boolean"
-          },
-          "Root": {
-            "description": "the merkle commitment on the key.",
-            "format": "byte",
-            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "ContainsKeys",
-          "Root"
-        ],
-        "type": "object"
       },
       "TealKeyValue": {
         "description": "Represents a key-value pair in an application store.",

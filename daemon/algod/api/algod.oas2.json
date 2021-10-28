@@ -1296,25 +1296,6 @@
         }
       }
     },
-    "StateProofKey": {
-      "description": "\\[state\\] root of the state proof key.",
-      "type": "object",
-      "required": [
-        "Root",
-        "ContainsKeys"
-      ],
-      "properties": {
-        "Root": {
-          "description": "the merkle commitment on the key.",
-          "type": "string",
-          "format": "byte"
-        },
-        "ContainsKeys": {
-          "description": "states whether the key can be used to sign on compact certs.",
-          "type": "boolean"
-        }
-      }
-    },
     "AccountParticipation": {
       "description": "AccountParticipation describes the parameters used by this account in consensus protocol.",
       "type": "object",
@@ -1323,8 +1304,7 @@
         "selection-participation-key",
         "vote-first-valid",
         "vote-last-valid",
-        "vote-key-dilution",
-        "state-proof-key"
+        "vote-key-dilution"
       ],
       "properties": {
         "selection-participation-key": {
@@ -1351,7 +1331,8 @@
         },
         "state-proof-key": {
           "description": "\\[state\\] root of the state proof key (if any)",
-          "$ref": "#/definitions/StateProofKey"
+          "type": "string",
+          "format": "byte"
         }
       }
     },
