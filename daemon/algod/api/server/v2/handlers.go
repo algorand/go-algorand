@@ -86,18 +86,18 @@ func convertParticipationRecord(record account.ParticipationRecord) generated.Pa
 	participationKey := generated.ParticipationKey{
 		Id:                  record.ParticipationID.String(),
 		Address:             record.Account.String(),
-		Key: generated.AccountParticipation{
-			SelectionParticipationKey: nil,
-			VoteParticipationKey:      nil,
-			VoteFirstValid:          uint64(record.FirstValid),
-			VoteLastValid:           uint64(record.LastValid),
-			VoteKeyDilution:     record.KeyDilution,
-		},
 		EffectiveFirstValid: nil,
 		EffectiveLastValid:  nil,
 		LastVote:            nil,
 		LastBlockProposal:   nil,
 		LastStateProof:      nil,
+		Key: generated.AccountParticipation{
+			SelectionParticipationKey: nil,
+			VoteParticipationKey:      nil,
+			VoteFirstValid:            uint64(record.FirstValid),
+			VoteLastValid:             uint64(record.LastValid),
+			VoteKeyDilution:           record.KeyDilution,
+		},
 	}
 
 	// These are pointers but should always be present.
