@@ -82,8 +82,8 @@ type HashFactory struct {
 
 var errUnknownHash = errors.New("unknown hash type")
 
-func (z HashType) String() string {
-	switch z {
+func (h HashType) String() string {
+	switch h {
 	case Sha512_256:
 		return "sha512_256"
 	case Sumhash:

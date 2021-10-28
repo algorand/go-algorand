@@ -1465,9 +1465,6 @@ func (z *GenericSigningKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 	}
 	o = bts
-	if err = z.IsValid(); err != nil {
-		return
-	}
 	return
 }
 
@@ -1854,9 +1851,6 @@ func (z *GenericVerifyingKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 	}
 	o = bts
-	if err = z.IsValid(); err != nil {
-		return
-	}
 	return
 }
 
@@ -1971,9 +1965,6 @@ func (z *HashFactory) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 	}
 	o = bts
-	if err = z.IsValid(); err != nil {
-		return
-	}
 	return
 }
 
