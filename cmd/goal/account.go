@@ -1083,14 +1083,14 @@ var listParticipationKeysCmd = &cobra.Command{
 			onlineInfoStr := "unknown"
 			onlineAccountInfo, err := client.AccountInformation(part.Address)
 			if err == nil {
-				votingBytes := part.VoteKey
-				vrfBytes := part.VrfKey
+				votingBytes := part.Key.VoteParticipationKey
+				vrfBytes := part.Key.SelectionParticipationKey
 				if onlineAccountInfo.Participation != nil &&
 					(string(onlineAccountInfo.Participation.ParticipationPK) == string(votingBytes[:])) &&
 					(string(onlineAccountInfo.Participation.VRFPK) == string(vrfBytes[:])) &&
-					(onlineAccountInfo.Participation.VoteFirst == part.FirstValid) &&
-					(onlineAccountInfo.Participation.VoteLast == part.LastValid) &&
-					(onlineAccountInfo.Participation.VoteKeyDilution == part.VoteKeyDilution) {
+					(onlineAccountInfo.Participation.VoteFirst == part.Key.VoteFirstValid) &&
+					(onlineAccountInfo.Participation.VoteLast == part.Key.VoteLastValid) &&
+					(onlineAccountInfo.Participation.VoteKeyDilution == part.Key.VoteKeyDilution) {
 					onlineInfoStr = "yes"
 				} else {
 					onlineInfoStr = "no"
@@ -1108,8 +1108,6 @@ var listParticipationKeysCmd = &cobra.Command{
 				*/
 
 				// it's okay to proceed without algod info
-				first := part.FirstValid
-				last := part.LastValid
 				lastUsed := maxRound(0, part.LastStateProof)
 				lastUsed = maxRound(lastUsed, part.LastBlockProposal)
 				lastUsed = maxRound(lastUsed, part.LastStateProof)
@@ -1122,8 +1120,8 @@ var listParticipationKeysCmd = &cobra.Command{
 					fmt.Sprintf("%s...%s", part.Address[:4], part.Address[len(part.Address)-4:]),
 					fmt.Sprintf("%s...", part.Id[:8]),
 					lastUsedString,
-					uintToStr(first),
-					uintToStr(last))
+					uintToStr(part.Key.VoteFirstValid),
+					uintToStr(part.Key.VoteLastValid))
 			}
 		}
 	},
@@ -1338,11 +1336,11 @@ var partkeyInfoCmd = &cobra.Command{
 				//fmt.Printf("Last state proof round:    %s\n", strOrNA(part.LastStateProof))
 				fmt.Printf("Effective first round:     %s\n", strOrNA(part.EffectiveFirstValid))
 				fmt.Printf("Effective last round:      %s\n", strOrNA(part.EffectiveLastValid))
-				fmt.Printf("First round:               %d\n", part.FirstValid)
-				fmt.Printf("Last round:                %d\n", part.LastValid)
-				fmt.Printf("Key dilution:              %d\n", part.VoteKeyDilution)
-				fmt.Printf("Selection key:             %s\n", base64.StdEncoding.EncodeToString(part.VrfKey))
-				fmt.Printf("Voting key:                %s\n", base64.StdEncoding.EncodeToString(part.VoteKey))
+				fmt.Printf("First round:               %d\n", part.Key.VoteFirstValid)
+				fmt.Printf("Last round:                %d\n", part.Key.VoteLastValid)
+				fmt.Printf("Key dilution:              %d\n", part.Key.VoteKeyDilution)
+				fmt.Printf("Selection key:             %s\n", base64.StdEncoding.EncodeToString(part.Key.SelectionParticipationKey))
+				fmt.Printf("Voting key:                %s\n", base64.StdEncoding.EncodeToString(part.Key.VoteParticipationKey))
 				//fmt.Printf("State proof key:           %s\n", base64.StdEncoding.EncodeToString(part.StateProofKey))
 			}
 		})

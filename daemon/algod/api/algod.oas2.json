@@ -1724,12 +1724,8 @@
       "type": "object",
       "required": [
         "id",
-        "address",
-        "first-valid",
-        "last-valid",
-        "vote-key",
-        "vrf-key",
-        "vote-key-dilution"
+        "key",
+        "address"
       ],
       "properties": {
         "id": {
@@ -1740,30 +1736,6 @@
           "description": "Address the key was generated for.",
           "type": "string",
           "x-algorand-format": "Address"
-        },
-        "first-valid": {
-          "description": "FirstValid round for the keys.",
-          "type": "integer",
-          "x-algorand-format": "uint64"
-        },
-        "last-valid": {
-          "description": "LastValid round for the keys.",
-          "type": "integer",
-          "x-algorand-format": "uint64"
-        },
-        "vote-key": {
-          "description": "Public voting key.",
-          "type": "string",
-          "format": "byte"
-        },
-        "vrf-key": {
-          "description": "Public VRF selection key.",
-          "type": "string",
-          "format": "byte"
-        },
-        "vote-key-dilution": {
-          "description": "Voting key dilution.",
-          "type": "integer"
         },
         "effective-first-valid": {
           "description": "When registered, this is the first round it may be used.",
@@ -1786,6 +1758,10 @@
         "last-state-proof": {
           "description": "Round when this key was last used to generate a state proof.",
           "type": "integer"
+        },
+        "key": {
+          "description": "Key information stored on the account.",
+          "$ref": "#/definitions/AccountParticipation"
         }
       }
     },

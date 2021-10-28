@@ -352,11 +352,11 @@ type ParticipationKey struct {
 	// When registered, this is the last round it may be used.
 	EffectiveLastValid *uint64 `json:"effective-last-valid,omitempty"`
 
-	// FirstValid round for the keys.
-	FirstValid uint64 `json:"first-valid"`
-
 	// The key's ParticipationID.
 	Id string `json:"id"`
+
+	// AccountParticipation describes the parameters used by this account in consensus protocol.
+	Key AccountParticipation `json:"key"`
 
 	// Round when this key was last used to propose a block.
 	LastBlockProposal *uint64 `json:"last-block-proposal,omitempty"`
@@ -364,20 +364,8 @@ type ParticipationKey struct {
 	// Round when this key was last used to generate a state proof.
 	LastStateProof *uint64 `json:"last-state-proof,omitempty"`
 
-	// LastValid round for the keys.
-	LastValid uint64 `json:"last-valid"`
-
 	// Round when this key was last used to vote.
 	LastVote *uint64 `json:"last-vote,omitempty"`
-
-	// Public voting key.
-	VoteKey []byte `json:"vote-key"`
-
-	// Voting key dilution.
-	VoteKeyDilution uint64 `json:"vote-key-dilution"`
-
-	// Public VRF selection key.
-	VrfKey []byte `json:"vrf-key"`
 }
 
 // PendingTransactionResponse defines model for PendingTransactionResponse.

@@ -86,9 +86,13 @@ func convertParticipationRecord(record account.ParticipationRecord) generated.Pa
 	participationKey := generated.ParticipationKey{
 		Id:                  record.ParticipationID.String(),
 		Address:             record.Account.String(),
-		FirstValid:          uint64(record.FirstValid),
-		LastValid:           uint64(record.LastValid),
-		VoteKeyDilution:     record.KeyDilution,
+		Key: generated.AccountParticipation{
+			SelectionParticipationKey: nil,
+			VoteParticipationKey:      nil,
+			VoteFirstValid:          uint64(record.FirstValid),
+			VoteLastValid:           uint64(record.LastValid),
+			VoteKeyDilution:     record.KeyDilution,
+		},
 		EffectiveFirstValid: nil,
 		EffectiveLastValid:  nil,
 		LastVote:            nil,
@@ -98,10 +102,10 @@ func convertParticipationRecord(record account.ParticipationRecord) generated.Pa
 
 	// These are pointers but should always be present.
 	if record.Voting != nil {
-		participationKey.VoteKey = record.Voting.OneTimeSignatureVerifier[:]
+		participationKey.Key.VoteParticipationKey = record.Voting.OneTimeSignatureVerifier[:]
 	}
 	if record.VRF != nil {
-		participationKey.VrfKey = record.VRF.PK[:]
+		participationKey.Key.SelectionParticipationKey = record.VRF.PK[:]
 	}
 
 	// Optional fields.
