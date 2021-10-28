@@ -668,6 +668,13 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 		var rawAccount []byte
 		var rawVRF []byte
 		var rawVoting []byte
+
+		var lastVote sql.NullInt64
+		var lastBlockProposal sql.NullInt64
+		var lastCompactCertificate sql.NullInt64
+		var effectiveFirst sql.NullInt64
+		var effectiveLast sql.NullInt64
+
 		err := rows.Scan(
 			&rawParticipation,
 			&rawAccount,
@@ -675,11 +682,11 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 			&record.LastValid,
 			&record.KeyDilution,
 			&rawVRF,
-			&record.LastVote,
-			&record.LastBlockProposal,
-			&record.LastCompactCertificate,
-			&record.EffectiveFirst,
-			&record.EffectiveLast,
+			&lastVote,
+			&lastBlockProposal,
+			&lastCompactCertificate,
+			&effectiveFirst,
+			&effectiveLast,
 			&rawVoting,
 		)
 		if err != nil {
@@ -703,6 +710,27 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 			if err != nil {
 				return nil, fmt.Errorf("unable to decode Voting: %w", err)
 			}
+		}
+
+		// Check optional values.
+		if lastVote.Valid {
+			record.LastVote = basics.Round(lastVote.Int64)
+		}
+
+		if lastBlockProposal.Valid {
+			record.LastBlockProposal = basics.Round(lastBlockProposal.Int64)
+		}
+
+		if lastCompactCertificate.Valid {
+			record.LastCompactCertificate = basics.Round(lastCompactCertificate.Int64)
+		}
+
+		if effectiveFirst.Valid {
+			record.EffectiveFirst = basics.Round(effectiveFirst.Int64)
+		}
+
+		if effectiveLast.Valid {
+			record.EffectiveLast = basics.Round(effectiveLast.Int64)
 		}
 
 		results = append(results, record)
