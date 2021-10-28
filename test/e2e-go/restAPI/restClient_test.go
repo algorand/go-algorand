@@ -21,6 +21,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"flag"
+	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
+	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"math"
 	"math/rand"
 	"os"
@@ -32,10 +35,6 @@ import (
 
 	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/stretchr/testify/require"
-
-	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
-	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -1060,11 +1059,9 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture
 
-	tmp := config.Consensus[protocol.ConsensusCurrentVersion]
-	tmp.EnableStateProofKeyregCheck = true
-	config.Consensus[protocol.ConsensusCurrentVersion] = tmp
-
-	localFixture.SetConsensus(config.Consensus)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	proto.EnableStateProofKeyregCheck = true
+	localFixture.SetConsensus(config.ConsensusProtocols{protocol.ConsensusCurrentVersion: proto})
 
 	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 	defer localFixture.Shutdown()
@@ -1093,6 +1090,9 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 	randomSelPKStr := randomString(32)
 	var selPK crypto.VRFVerifier
 	copy(selPK[:], []byte(randomSelPKStr))
+	var keystoreRoot [merklekeystore.KeyStoreRootSize]byte
+	randomRootStr := randomString(merklekeystore.KeyStoreRootSize)
+	copy(keystoreRoot[:], randomRootStr)
 	var gh crypto.Digest
 	copy(gh[:], params.GenesisHash)
 
@@ -1110,8 +1110,7 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 			SelectionPK: selPK,
 			VoteFirst:   firstRound,
 			StateProofPK: merklekeystore.Verifier{
-				Root:         [merklekeystore.KeyStoreRootSize]byte{1, 2, 3, 4},
-				HasValidRoot: false,
+				Root: keystoreRoot,
 			},
 			VoteLast:         lastRound,
 			VoteKeyDilution:  dilution,
@@ -1139,13 +1138,21 @@ func TestNilStateProofInParticipationInfo(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture
 
-	// making certain stateproof keys aren't written to the genesis.json file.
+	// currently, the genesis creator uses the EnableStateProofKeyregCheck flag on the future
+	// version to write a statproof to the genesis file.
+	// we want to create a gensis file without state proof.
+	// + need to revert this change if other tests use that
 	tmp := config.Consensus[protocol.ConsensusFuture]
 	tmp.EnableStateProofKeyregCheck = false
 	config.Consensus[protocol.ConsensusFuture] = tmp
 
-	localFixture.SetConsensus(config.Consensus)
+	defer func() {
+		tmp := config.Consensus[protocol.ConsensusFuture]
+		tmp.EnableStateProofKeyregCheck = true
+		config.Consensus[protocol.ConsensusFuture] = tmp
+	}()
 
+	localFixture.SetConsensus(config.Consensus)
 	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 	defer localFixture.Shutdown()
 
