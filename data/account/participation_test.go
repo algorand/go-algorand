@@ -25,8 +25,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -52,7 +50,7 @@ func TestParticipation_NewDB(t *testing.T) {
 func setupParticipationKey(t *testing.T, a *require.Assertions) (PersistedParticipation, db.Accessor, db.Accessor, error) {
 	root, rootDB, partDB := createTestDBs(a, t.Name())
 
-	part, err := FillDBWithParticipationKeys(partDB, root.Address(), 0, 0, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+	part, err := FillDBWithParticipationKeys(partDB, root.Address(), 0, 3000, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
 	a.NoError(err)
 	a.NotNil(part)
 
@@ -232,11 +230,11 @@ func TestKeyRegCreation(t *testing.T) {
 
 	cur := config.Consensus[protocol.ConsensusCurrentVersion]
 	txn := ppart.Participation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, 0, 100, [32]byte{}, cur)
-	a.Equal(merklekeystore.Verifier{}, txn.StateProofPK)
+	a.Equal(txn.StateProofPK.IsEmpty(), true)
 
 	future := config.Consensus[protocol.ConsensusFuture]
 	txn = ppart.Participation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, 0, 100, [32]byte{}, future)
-	a.NotEqual(merklekeystore.Verifier{}, txn.StateProofPK)
+	a.Equal(txn.StateProofPK.IsEmpty(), false)
 }
 
 func closeDBS(dbAccessor ...db.Accessor) {

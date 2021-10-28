@@ -514,25 +514,16 @@ func (z *Signer) MsgIsZero() bool {
 func (z *Verifier) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0002Len := uint32(2)
-	var zb0002Mask uint8 /* 3 bits */
-	if (*z).ContainsKeys == false {
-		zb0002Len--
-		zb0002Mask |= 0x2
-	}
+	zb0002Len := uint32(1)
+	var zb0002Mask uint8 /* 2 bits */
 	if (*z).Root == ([KeyStoreRootSize]byte{}) {
 		zb0002Len--
-		zb0002Mask |= 0x4
+		zb0002Mask |= 0x2
 	}
 	// variable map header, size zb0002Len
 	o = append(o, 0x80|uint8(zb0002Len))
 	if zb0002Len != 0 {
 		if (zb0002Mask & 0x2) == 0 { // if not empty
-			// string "ck"
-			o = append(o, 0xa2, 0x63, 0x6b)
-			o = msgp.AppendBool(o, (*z).ContainsKeys)
-		}
-		if (zb0002Mask & 0x4) == 0 { // if not empty
 			// string "r"
 			o = append(o, 0xa1, 0x72)
 			o = msgp.AppendBytes(o, ((*z).Root)[:])
@@ -568,14 +559,6 @@ func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0002 > 0 {
-			zb0002--
-			(*z).ContainsKeys, bts, err = msgp.ReadBoolBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ContainsKeys")
-				return
-			}
-		}
-		if zb0002 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0002)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -604,12 +587,6 @@ func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Root")
 					return
 				}
-			case "ck":
-				(*z).ContainsKeys, bts, err = msgp.ReadBoolBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "ContainsKeys")
-					return
-				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -630,11 +607,11 @@ func (_ *Verifier) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Verifier) Msgsize() (s int) {
-	s = 1 + 2 + msgp.ArrayHeaderSize + (KeyStoreRootSize * (msgp.ByteSize)) + 3 + msgp.BoolSize
+	s = 1 + 2 + msgp.ArrayHeaderSize + (KeyStoreRootSize * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Verifier) MsgIsZero() bool {
-	return ((*z).Root == ([KeyStoreRootSize]byte{})) && ((*z).ContainsKeys == false)
+	return ((*z).Root == ([KeyStoreRootSize]byte{}))
 }

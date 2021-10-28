@@ -21,8 +21,6 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 	"testing"
 
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -195,7 +193,7 @@ func TestStateProofPKKeyReg(t *testing.T) {
 
 	acct, err := mockBal.Get(tx.Src(), false)
 	require.NoError(t, err)
-	require.Equal(t, merklekeystore.Verifier{}, acct.StateProofID)
+	require.Equal(t, acct.StateProofID.IsEmpty(), true)
 
 	mockBal = makeMockBalances(protocol.ConsensusFuture)
 	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
@@ -203,29 +201,7 @@ func TestStateProofPKKeyReg(t *testing.T) {
 
 	acct, err = mockBal.Get(tx.Src(), false)
 	require.NoError(t, err)
-	require.NotEqual(t, merklekeystore.Verifier{}, acct.StateProofID)
-}
-
-func TestKeyRegWithEmptyStateProof(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	secretSrc := keypair()
-	src := basics.Address(secretSrc.SignatureVerifier)
-	vrfSecrets := crypto.GenerateVRFSecrets()
-	secretParticipation := keypair()
-
-	// here we create a keyreg transaction for a participation period that is not large enough
-	// to generate state proof. the transaction should be valid even though the stateproofroot is zero
-	tx := createTestTxnWithPeriod(t, src, secretParticipation, vrfSecrets, 0, basics.Round(config.Consensus[protocol.ConsensusFuture].CompactCertRounds-1))
-
-	mockBal := makeMockBalances(protocol.ConsensusFuture)
-	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
-	require.NoError(t, err)
-
-	acct, err := mockBal.Get(tx.Src(), false)
-	require.NoError(t, err)
-	require.Equal(t, [merklekeystore.KeyStoreRootSize]byte{}, acct.StateProofID.Root)
-	require.Equal(t, true, acct.StateProofID.ContainsKeys)
+	require.Equal(t, acct.StateProofID.IsEmpty(), false)
 }
 
 func createTestTxn(t *testing.T, src basics.Address, secretParticipation *crypto.SignatureSecrets, vrfSecrets *crypto.VRFSecrets) transactions.Transaction {
