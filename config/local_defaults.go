@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    17,
+	Version:                                    18,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AnnounceParticipationKey:                   true,
@@ -92,7 +92,7 @@ var defaultLocal = Local{
 	OutgoingMessageFilterBucketSize:            128,
 	ParticipationKeysRefreshInterval:           60000000000,
 	PeerConnectionsUpdateInterval:              3600,
-	PeerPingPeriodSeconds:                      0,
+	PeerPingPeriodSeconds:                      10,
 	PriorityPeers:                              map[string]bool{},
 	PublicAddress:                              "",
 	ReconnectTime:                              60000000000,

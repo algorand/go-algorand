@@ -59,8 +59,8 @@ type EvalForIndexerResources struct {
 
 // Creatable represent a single creatable object.
 type Creatable struct {
-	cindex basics.CreatableIndex
-	ctype  basics.CreatableType
+	Index basics.CreatableIndex
+	Type  basics.CreatableType
 }
 
 // Converter between indexerLedgerForEval and ledgerForEvaluator interfaces.
@@ -116,7 +116,7 @@ func (l indexerLedgerConnector) GetCreatorForRound(_ basics.Round, cindex basics
 	var foundAddress FoundAddress
 	var has bool
 	// check to see if the account data in the cache.
-	if foundAddress, has = l.roundResources.Creators[Creatable{cindex: cindex, ctype: ctype}]; has {
+	if foundAddress, has = l.roundResources.Creators[Creatable{Index: cindex, Type: ctype}]; has {
 		return foundAddress.Address, foundAddress.Exists, nil
 	}
 
