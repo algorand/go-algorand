@@ -84,8 +84,6 @@ type (
 )
 
 var errStartBiggerThanEndRound = errors.New("cannot create merkleKeyStore because end round is smaller then start round")
-var errOutOfBounds = errors.New("round translated to be after last key position")
-var errNonExistantKey = errors.New("key doesn't exist")
 var errDivisorIsZero = errors.New("received zero Interval")
 
 // ToBeHashed implementation means CommittablePublicKey is crypto.Hashable, required by merklekeystore.Verifier.Verify()

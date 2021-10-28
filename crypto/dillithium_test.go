@@ -19,12 +19,14 @@ package crypto
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestDilithiumSignAndVerify(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	for i := 0; i < 100; i++ {
 		dsigner := NewDilithiumSigner()
@@ -40,6 +42,7 @@ func TestDilithiumSignAndVerify(t *testing.T) {
 }
 
 func TestDilithiumSignerImplemantation(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	dsigner := NewDilithiumSigner()
 

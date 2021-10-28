@@ -174,6 +174,7 @@ func BenchmarkOldKeysDeletion(b *testing.B) {
 }
 
 func TestRetrieveFromDB(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	part, rootDB, partDB, err := setupParticipationKey(t, a)
 	a.NoError(err)
