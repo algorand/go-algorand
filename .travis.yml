@@ -6,14 +6,14 @@ language: minimal
 if: tag IS blank
 
 stages:
-  - name: build_pr
+  - name: build_windows_pr
     if: type = pull_request
-  - name: build_release
+  - name: build_windows_release
     if: (branch =~ /^hotfix\// OR branch =~ /^rel\//) AND type != pull_request
 
 jobs:
   include:
-    - stage: build_pr
+    - stage: build_windows_pr
       os: windows
       name: Windows x64 PR Build
       cache:
@@ -23,7 +23,7 @@ jobs:
       script:
         - $mingw64 scripts/travis/build_test.sh
 
-    - stage: build_release
+    - stage: build_windows_release
       os: windows
       name: Windows x64 Release Build
       cache:
