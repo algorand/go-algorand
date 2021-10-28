@@ -865,4 +865,96 @@ itxn_submit;
 	testApp(t, strings.Repeat(waste, 6)+"int 1", ep, "dynamic cost budget exceeded")
 	testApp(t, strings.Repeat(waste, 6)+buy+"int 1", ep, "dynamic cost budget exceeded")
 	testApp(t, buy+strings.Repeat(waste, 6)+"int 1", ep)
+	testApp(t, buy+strings.Repeat(waste, 10)+"int 1", ep)
+	testApp(t, buy+strings.Repeat(waste, 12)+"int 1", ep, "dynamic cost budget exceeded")
+	testApp(t, buy+strings.Repeat(waste, 12)+"int 1", ep, "dynamic cost budget exceeded")
+	testApp(t, buy+buy+strings.Repeat(waste, 12)+"int 1", ep)
+}
+
+// TestInnerTxIDs confirms that TxIDs are available and different
+func TestInnerTxIDs(t *testing.T) {
+	ep, ledger := makeSampleEnv()
+	txid := testProg(t, "txn TxID; log; int 1", AssemblerMaxVersion)
+	ledger.NewApp(ep.Txn.Txn.Receiver, 222, basics.AppParams{
+		ApprovalProgram: txid.Program,
+	})
+	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	ep.Txn.Txn.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
+	testApp(t, `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_submit;
+itxn Logs 0
+
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_submit;
+itxn Logs 0
+
+!=
+`, ep)
+}
+
+// TestInnerGroupIDs confirms that GroupIDs are unset on size one inner groups,
+// but set and unique on non-singletons
+func TestInnerGroupIDs(t *testing.T) {
+	ep, ledger := makeSampleEnv()
+	gid := testProg(t, "global GroupID; log; int 1", AssemblerMaxVersion)
+	ledger.NewApp(ep.Txn.Txn.Receiver, 222, basics.AppParams{
+		ApprovalProgram: gid.Program,
+	})
+	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	ep.Txn.Txn.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
+
+	// A single txn gets 0 group id
+	testApp(t, `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_submit;
+itxn Logs 0
+global ZeroAddress
+==
+`, ep)
+
+	// A double calls gets something else
+	testApp(t, `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_next
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_submit;
+itxn Logs 0
+global ZeroAddress
+!=
+`, ep)
+
+	// The something "something else" is unique, despite two identical groups
+	testApp(t, `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_next
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_submit;
+itxn Logs 0
+
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_next
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_submit;
+itxn Logs 0
+
+!=
+`, ep)
 }

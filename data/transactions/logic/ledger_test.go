@@ -744,13 +744,14 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 	}
 	epl := *ep
 	epl.Ledger = l
-	approved, _, err := EvalStatefulCx(params.ApprovalProgram, epl)
+	pass, cx, err := EvalStatefulCx(params.ApprovalProgram, epl)
 	if err != nil {
 		return err
 	}
-	if !approved {
+	if !pass {
 		return errors.New("Approval program failed")
 	}
+	ad.EvalDelta = cx.EvalDelta
 
 	switch appl.OnCompletion {
 	case transactions.NoOpOC:

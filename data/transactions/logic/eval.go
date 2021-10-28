@@ -288,16 +288,17 @@ type EvalParams struct {
 	// determines eval mode: runModeSignature or runModeApplication
 	runModeFlags runMode
 
-	// Total pool of app call budget in a group transaction
+	// Total pool of app call budget in a group transaction (nil before pooling enabled)
 	PooledApplicationBudget *uint64
 
 	// The "call stack" of apps calling this app.
-	AppStack []basics.AppIndex
+	appStack []basics.AppIndex
+	caller   *EvalContext
 }
 
 // NewEvalParams creates an EvalParams for each ApplicationCall transaction in
 // the group
-func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses, caller *EvalParams) []*EvalParams {
+func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses, caller *EvalContext) []*EvalParams {
 	var groupNoAD []transactions.SignedTxn
 	var pastSideEffects []EvalSideEffects
 	var minTealVersion uint64
@@ -306,11 +307,11 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 	var credit uint64
 
 	inner := false
-	var stack []basics.AppIndex
+	var appStack []basics.AppIndex
 	if caller != nil {
 		inner = true
 		// note the stack, to prevent re-entrancy
-		stack = caller.AppStack
+		appStack = caller.appStack
 		// share pool in the inner calls
 		pooledApplicationBudget = caller.PooledApplicationBudget
 	}
@@ -354,7 +355,8 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 			PooledApplicationBudget: pooledApplicationBudget,
 			FeeCredit:               &credit,
 			Specials:                specials,
-			AppStack:                stack,
+			appStack:                appStack,
+			caller:                  caller,
 		}
 	}
 	return res
@@ -522,9 +524,8 @@ func EvalStatefulCx(program []byte, params EvalParams) (bool, *EvalContext, erro
 	// GroupEvalContext, as we are currently tucking things into the
 	// EvalParams so that they are available to later calls.
 
-	// update pooled budget
-	if cx.Proto.EnableAppCostPooling && cx.PooledApplicationBudget != nil {
-		// if eval passes, then budget is always greater than cost, so should not have underflow
+	// update pooled budget (shouldn't overflow, but being careful anyway)
+	if cx.PooledApplicationBudget != nil {
 		*cx.PooledApplicationBudget = basics.SubSaturate(*cx.PooledApplicationBudget, uint64(cx.cost))
 	}
 	// update side effects
@@ -732,7 +733,7 @@ func versionCheck(program []byte, params EvalParams) (uint64, int, error) {
 
 	var minVersion uint64
 	if params.MinTealVersion == nil {
-		minVersion = ComputeMinTealVersion(params.TxnGroup, len(params.AppStack) > 0)
+		minVersion = ComputeMinTealVersion(params.TxnGroup, params.caller != nil)
 	} else {
 		minVersion = *params.MinTealVersion
 	}
@@ -1977,7 +1978,12 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex uint64)
 	// Hashes are expensive, so we cache computed TxIDs
 	txid, ok := cx.txidCache[groupIndex]
 	if !ok {
-		txid = txn.ID()
+		if cx.caller != nil {
+			innerOffset := uint64(len(cx.caller.EvalDelta.InnerTxns))
+			txid = txn.InnerID(cx.caller.Txn.ID(), innerOffset+groupIndex)
+		} else {
+			txid = txn.ID()
+		}
 		cx.txidCache[groupIndex] = txid
 	}
 
@@ -4173,8 +4179,15 @@ func opTxSubmit(cx *EvalContext) {
 		*cx.FeeCredit = basics.AddSaturate(*cx.FeeCredit, overpay)
 	}
 
-	cx.AppStack = append(cx.AppStack, cx.Ledger.ApplicationID()) // push app
+	cx.appStack = append(cx.appStack, cx.Ledger.ApplicationID()) // push app
 
+	// All subtxns must have zero'd GroupID now, since it can't be set
+	var group transactions.TxGroup
+	var parent transactions.Txid
+	isGroup := len(cx.subtxns) > 1
+	if isGroup {
+		parent = cx.Txn.ID()
+	}
 	for itx := range cx.subtxns {
 		// The goal is to follow the same invariants used by the
 		// transaction pool. Namely that any transaction that makes it
@@ -4194,17 +4207,30 @@ func opTxSubmit(cx *EvalContext) {
 
 		// Disallow re-entrancy
 		if cx.subtxns[itx].Txn.Type == protocol.ApplicationCallTx {
-			for _, aid := range cx.AppStack {
+			for _, aid := range cx.appStack {
 				if aid == cx.subtxns[itx].Txn.ApplicationID {
 					cx.err = fmt.Errorf("attempt to re-enter %d", aid)
 					return
 				}
 			}
 		}
+
+		if isGroup {
+			innerOffset := uint64(len(cx.EvalDelta.InnerTxns))
+			group.TxGroupHashes = append(group.TxGroupHashes,
+				crypto.Digest(cx.subtxns[itx].Txn.InnerID(parent, innerOffset)))
+		}
+	}
+
+	if isGroup {
+		groupID := crypto.HashObj(group)
+		for itx := range cx.subtxns {
+			cx.subtxns[itx].Txn.Group = groupID
+		}
 	}
 
 	withAD := transactions.WrapSignedTxnsWithAD(cx.subtxns)
-	eps := NewEvalParams(withAD, cx.Proto, cx.Specials, &cx.EvalParams)
+	eps := NewEvalParams(withAD, cx.Proto, cx.Specials, cx)
 	for i := range withAD {
 		err := cx.Ledger.Perform(&withAD[i], eps[i])
 		if err != nil {
@@ -4212,7 +4238,7 @@ func opTxSubmit(cx *EvalContext) {
 			return
 		}
 	}
-	cx.AppStack = cx.AppStack[:len(cx.AppStack)-1] // pop app
+	cx.appStack = cx.appStack[:len(cx.appStack)-1] // pop app
 	cx.EvalDelta.InnerTxns = append(cx.EvalDelta.InnerTxns, withAD...)
 	cx.subtxns = nil
 }
