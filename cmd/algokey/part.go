@@ -72,12 +72,14 @@ var partGenerateCmd = &cobra.Command{
 		partdb, err := db.MakeErasableAccessor(partKeyfile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot open partkey database %s: %v\n", partKeyfile, err)
+			os.Remove(partKeyfile)
 			os.Exit(1)
 		}
 
 		partkey, err := account.FillDBWithParticipationKeys(partdb, parent, basics.Round(partFirstRound), basics.Round(partLastRound), partKeyDilution)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot generate partkey database %s: %v\n", partKeyfile, err)
+			os.Remove(partKeyfile)
 			os.Exit(1)
 		}
 
