@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # TIMEOUT=300
 
+# errors are handled manually, so no -e
 set -x
-#set -ex
-#set -o pipefail
-#export SHELLOPTS
 
 date "+$0 start %Y%m%d_%H%M%S"
 
