@@ -83,6 +83,9 @@ type (
 		Proposals [2]proposalValue           `codec:"props"`
 		Sigs      [2]crypto.OneTimeSignature `codec:"sigs"`
 	}
+
+	// Exported for dumping textual versions of messages
+	UnauthenticatedVote = unauthenticatedVote
 )
 
 // verify verifies that a vote that was received from the network is valid.
