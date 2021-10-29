@@ -22,10 +22,13 @@ import (
 )
 
 const txnBlockMessageVersion = 1
-const maxBloomFilterSize = 100000
 const maxAcceptedMsgSeq = 64
-const maxEncodedTransactionGroupBytes = 10000000
-const maxProposalSize = 3500000 // 10K * 32 + sizeof(block header)-
+
+// set in init() in service.go
+var maxBloomFilterSize int
+var maxEncodedTransactionGroupBytes int
+
+const maxProposalSize = 3500000 // 10K * 32 + sizeof(block header)
 
 type transactionBlockMessage struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
