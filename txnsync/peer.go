@@ -183,6 +183,9 @@ type Peer struct {
 	// "snapshot" from the transaction pool, and send that "snapshot" to completion before attempting to re-iterate.
 	messageSeriesPendingTransactions []pooldata.SignedTxGroup
 
+	// pendingProposals contains a list of proposals that are enqueued to be sent
+	pendingProposals []pendingTransactionGroupsSnapshot
+
 	// transactionPoolAckCh is passed to the transaction handler when incoming transaction arrives. The channel is passed upstream, so that once
 	// a transaction is added to the transaction pool, we can get some feedback for that.
 	transactionPoolAckCh chan uint64
@@ -822,6 +825,9 @@ func (p *Peer) getNextScheduleOffset(isRelay bool, beta time.Duration, partialMe
 	if partialMessage {
 		// schedule the next proposal message
 		if p.state == peerStateProposal {
+			if p.messageSeriesPendingTransactions == nil {
+				panic("sjouldnt happen")
+			}
 			return messageTimeWindow, peerOpsReschedule
 		}
 		if isRelay {
@@ -869,8 +875,12 @@ func (p *Peer) getNextScheduleOffset(isRelay bool, beta time.Duration, partialMe
 	} else {
 		// since we are done sending the proposal transactions, update the state
 		if p.state == peerStateProposal {
-			p.state = peerStateHoldsoff // TODO think about what state to transition to
-			return time.Duration(node.Random(uint64(randomRange))), peerOpsReschedule
+			if len(p.pendingProposals) == 0 {
+				p.state = peerStateHoldsoff // TODO think about what state to transition to
+				return time.Duration(node.Random(uint64(randomRange))), peerOpsReschedule
+			} else {
+				return messageTimeWindow, peerOpsReschedule
+			}
 		}
 		if isRelay {
 			if p.isOutgoing {

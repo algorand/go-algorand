@@ -289,7 +289,7 @@ func TestAssemblePeerMessage_messageConstBloomFilter(t *testing.T) {
 	peer.isOutgoing = true
 	peer.state = peerStateLateBloom
 
-	metaMessage, _, responseTime := s.assemblePeerMessage(&peer, &pendingTransactions)
+	metaMessage, _, responseTime := s.assemblePeerMessage(&peer, pendingTransactions)
 
 	a.Equal(metaMessage.message.UpdatedRequestParams.Modulator, byte(222))
 	a.Equal(metaMessage.message.UpdatedRequestParams.Offset, byte(111))
@@ -332,7 +332,7 @@ func TestAssemblePeerMessage_messageConstBloomFilterNonRelay(t *testing.T) {
 	peer.isOutgoing = true
 	peer.state = peerStateLateBloom
 
-	metaMessage, _, responseTime := s.assemblePeerMessage(&peer, &pendingTransactions)
+	metaMessage, _, responseTime := s.assemblePeerMessage(&peer, pendingTransactions)
 
 	a.Equal(metaMessage.message.UpdatedRequestParams.Modulator, byte(222))
 	a.Equal(metaMessage.message.UpdatedRequestParams.Offset, byte(111))
@@ -364,7 +364,7 @@ func TestAssemblePeerMessage_messageConstNextMinDelay_messageConstUpdateRequestP
 	s.isRelay = true
 	s.lastBeta = 123 * time.Nanosecond
 
-	metaMessage, _, responseTime := s.assemblePeerMessage(&peer, &pendingTransactions)
+	metaMessage, _, responseTime := s.assemblePeerMessage(&peer, pendingTransactions)
 
 	a.Equal(metaMessage.message.UpdatedRequestParams.Modulator, byte(222))
 	a.Equal(metaMessage.message.UpdatedRequestParams.Offset, byte(111))
@@ -408,7 +408,7 @@ func TestAssemblePeerMessage_messageConstTransactions(t *testing.T) {
 	peer.isOutgoing = true
 	peer.state = peerStateHoldsoff
 
-	metaMessage, _, _ := s.assemblePeerMessage(&peer, &pendingTransactions)
+	metaMessage, _, _ := s.assemblePeerMessage(&peer, pendingTransactions)
 
 	a.Equal(len(metaMessage.transactionGroups), 1)
 	a.True(reflect.DeepEqual(metaMessage.transactionGroups[0], pendingTransactions.pendingTransactionsGroups[0]))
@@ -422,7 +422,7 @@ func TestLocallyGeneratedTransactions(t *testing.T) {
 
 	a := require.New(t)
 
-	pendingTransactions := &pendingTransactionGroupsSnapshot{}
+	pendingTransactions := pendingTransactionGroupsSnapshot{}
 
 	s := syncState{}
 

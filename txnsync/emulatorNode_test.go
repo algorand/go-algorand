@@ -30,7 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/txnsync/testing"
+	txnsynctesting "github.com/algorand/go-algorand/txnsync/testing"
 	"github.com/algorand/go-algorand/util/timers"
 )
 
@@ -80,7 +80,7 @@ type emulatedNode struct {
 
 // cache used by the peer to keep track of which proposals not to send
 type proposalCache struct {
-	testing.ProposalData
+	txnsynctesting.ProposalData
 
 	txGroupIDIndex      map[transactions.Txid]int
 	txGroups            []pooldata.SignedTxGroup
@@ -413,7 +413,7 @@ func (p *networkPeer) GetAddress() string {
 }
 
 func (n *emulatedNode) RelayProposal(proposalBytes []byte, txGroups []pooldata.SignedTxGroup) {
-	data := testing.ProposalData{
+	data := txnsynctesting.ProposalData{
 		ProposalBytes: proposalBytes,
 		TxGroupIds:    make([]transactions.Txid, len(txGroups)),
 	}
@@ -428,7 +428,7 @@ func (n *emulatedNode) RelayProposal(proposalBytes []byte, txGroups []pooldata.S
 }
 
 func (n *emulatedNode) HandleProposalMessage(proposalDataBytes []byte, txGroups []pooldata.SignedTxGroup, peer *Peer) {
-	var data testing.ProposalData
+	var data txnsynctesting.ProposalData
 	var pc *proposalCache
 	protocol.Decode(proposalDataBytes, &data)
 

@@ -166,7 +166,7 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 			sentMessagesCh:       s.outgoingMessagesCallbackCh,
 		}
 		profAssembleMessage.start()
-		msgEncoder.messageData, assembledBloomFilter, msgEncoder.lastReceivedMessageTimestamp = s.assemblePeerMessage(peer, &pendingTransactions)
+		msgEncoder.messageData, assembledBloomFilter, msgEncoder.lastReceivedMessageTimestamp = s.assemblePeerMessage(peer, pendingTransactions)
 		profAssembleMessage.end()
 		isPartialMessage := msgEncoder.messageData.partialMessage
 		// The message that we've just encoded is expected to be sent out with the next sequence number.
@@ -206,7 +206,7 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 	}
 }
 
-func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pendingTransactionGroupsSnapshot) (metaMessage sentMessageMetadata, assembledBloomFilter bloomFilter, lastReceivedMessageTimestamp time.Duration) {
+func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions pendingTransactionGroupsSnapshot) (metaMessage sentMessageMetadata, assembledBloomFilter bloomFilter, lastReceivedMessageTimestamp time.Duration) {
 	metaMessage = sentMessageMetadata{
 		peer: peer,
 		message: &transactionBlockMessage{
@@ -218,7 +218,7 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 		},
 	}
 
-	currentMessageSize := len(pendingTransactions.proposalRawBytes)
+	currentMessageSize := 0
 
 	msgOps := peer.getMessageConstructionOps(s.isRelay, s.fetchTransactions)
 
@@ -287,6 +287,20 @@ notxns:
 
 	if msgOps&messageConstTransactions == messageConstTransactions {
 		transactionGroups := pendingTransactions.pendingTransactionsGroups
+
+		if peer.state == peerStateProposal {
+			if pendingTransactions.proposalRawBytes != nil {
+				peer.pendingProposals = append(peer.pendingProposals, pendingTransactions)
+			}
+			if peer.messageSeriesPendingTransactions == nil {
+				pendingTransactions = peer.pendingProposals[0]
+				copy(peer.pendingProposals, peer.pendingProposals[1:])
+				peer.pendingProposals = peer.pendingProposals[:len(peer.pendingProposals)-1]
+				metaMessage.message.RelayedProposal.RawBytes = pendingTransactions.proposalRawBytes
+			}
+		}
+		currentMessageSize += len(metaMessage.message.RelayedProposal.RawBytes)
+
 		if !s.isRelay && peer.state != peerStateProposal {
 			// on non-relay, we need to filter out the non-locally originated messages since we don't want
 			// non-relays to send transaction that they received via the transaction sync back.
@@ -344,7 +358,7 @@ func (s *syncState) evaluateOutgoingMessage(msgData sentMessageMetadata) {
 }
 
 // locallyGeneratedTransactions return a subset of the given transactionGroups array by filtering out transactions that are not locally generated.
-func (s *syncState) locallyGeneratedTransactions(pendingTransactions *pendingTransactionGroupsSnapshot) (result []pooldata.SignedTxGroup) {
+func (s *syncState) locallyGeneratedTransactions(pendingTransactions pendingTransactionGroupsSnapshot) (result []pooldata.SignedTxGroup) {
 	if pendingTransactions.latestLocallyOriginatedGroupCounter == pooldata.InvalidSignedTxGroupCounter || len(pendingTransactions.pendingTransactionsGroups) == 0 {
 		return []pooldata.SignedTxGroup{}
 	}
@@ -425,7 +439,7 @@ func (s *syncState) broadcastProposal(p ProposalBroadcastRequest, peers []*Peer)
 			peerDataExchangeRate: peer.dataExchangeRate,
 			sentMessagesCh:       s.outgoingMessagesCallbackCh,
 		}
-		msgEncoder.messageData, _, msgEncoder.lastReceivedMessageTimestamp = s.assemblePeerMessage(peer, &pendingTransactions)
+		msgEncoder.messageData, _, msgEncoder.lastReceivedMessageTimestamp = s.assemblePeerMessage(peer, pendingTransactions)
 		isPartialMessage := msgEncoder.messageData.partialMessage
 		msgEncoder.messageData.projectedSequenceNumber = peer.lastSentMessageSequenceNumber + 1
 
