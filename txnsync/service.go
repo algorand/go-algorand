@@ -51,17 +51,22 @@ func MakeTransactionSyncService(log logging.Logger, conn NodeConnector, isRelay 
 	}
 	s.state.service = s
 	s.state.xorBuilder.MaxIterations = 10
-	if cfg.TxPoolSize > maxEncodedTransactionGroups {
-		maxEncodedTransactionGroups = cfg.TxPoolSize
-		maxEncodedTransactionGroupEntries = cfg.TxPoolSize
-		maxBitmaskSize = (maxEncodedTransactionGroupEntries+7)/8 + 1
-		maxSignatureBytes = maxEncodedTransactionGroupEntries * len(crypto.Signature{})
-		maxAddressBytes = maxEncodedTransactionGroupEntries * crypto.DigestSize
 
-		maxBloomFilterSize = cfg.TxPoolSize * 5
-		maxEncodedTransactionGroupBytes = cfg.TxPoolSize * 200
+	if cfg.TxPoolSize > maxEncodedTransactionGroups {
+		setTransactionSyncVariables(cfg)
 	}
 	return s
+}
+
+func setTransactionSyncVariables(cfg config.Local) {
+	maxEncodedTransactionGroups = cfg.TxPoolSize
+	maxEncodedTransactionGroupEntries = cfg.TxPoolSize
+	maxBitmaskSize = (maxEncodedTransactionGroupEntries+7)/8 + 1
+	maxSignatureBytes = maxEncodedTransactionGroupEntries * len(crypto.Signature{})
+	maxAddressBytes = maxEncodedTransactionGroupEntries * crypto.DigestSize
+
+	maxBloomFilterSize = cfg.TxPoolSize * 5
+	maxEncodedTransactionGroupBytes = cfg.TxPoolSize * 200
 }
 
 // Start starts the transaction sync
