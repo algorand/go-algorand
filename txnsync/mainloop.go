@@ -70,7 +70,7 @@ type syncState struct {
 	scheduler                  peerScheduler
 	interruptablePeers         []*Peer
 	interruptablePeersMap      map[*Peer]int // map a peer into the index of interruptablePeers
-	incomingMessagesQ          incomingMessageQueue
+	incomingMessagesQ          *incomingMessageQueue
 	outgoingMessagesCallbackCh chan sentMessageMetadata
 	nextOffsetRollingCh        <-chan time.Time
 	requestsOffset             uint64
@@ -105,6 +105,7 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 
 	s.clock = s.node.Clock()
 	s.incomingMessagesQ = makeIncomingMessageQueue()
+	defer s.incomingMessagesQ.shutdown()
 	s.outgoingMessagesCallbackCh = make(chan sentMessageMetadata, 1024)
 	s.interruptablePeersMap = make(map[*Peer]int)
 	s.scheduler.node = s.node
@@ -308,6 +309,7 @@ func (s *syncState) onNewRoundEvent(ent Event) {
 	if !s.isRelay {
 		s.nextOffsetRollingCh = s.clock.TimeoutAt(kickoffTime + 2*s.lastBeta)
 	}
+	s.updatePeersLatency(peers)
 	s.updatePeersRequestParams(peers)
 }
 
@@ -395,7 +397,7 @@ func (s *syncState) getPeers() (result []*Peer) {
 	// some of the network peers might not have a sync peer, so we need to create one for these.
 	for _, peerInfo := range peersInfo {
 		if peerInfo.TxnSyncPeer == nil {
-			syncPeer := makePeer(peerInfo.NetworkPeer, peerInfo.IsOutgoing, s.isRelay, &s.config, s.log)
+			syncPeer := makePeer(peerInfo.NetworkPeer, peerInfo.IsOutgoing, s.isRelay, &s.config, s.log, s.node.GetPeerLatency(peerInfo.NetworkPeer))
 			peerInfo.TxnSyncPeer = syncPeer
 			updatedNetworkPeers = append(updatedNetworkPeers, peerInfo.NetworkPeer)
 			updatedNetworkPeersSync = append(updatedNetworkPeersSync, syncPeer)
@@ -433,5 +435,11 @@ func (s *syncState) updatePeersRequestParams(peers []*Peer) {
 				peer.setLocalRequestParams(uint64(i)+s.requestsOffset, uint64(len(peers)))
 			}
 		}
+	}
+}
+
+func (s *syncState) updatePeersLatency(peers []*Peer) {
+	for _, peer := range peers {
+		peer.cachedLatency = s.node.GetPeerLatency(peer.networkPeer)
 	}
 }
