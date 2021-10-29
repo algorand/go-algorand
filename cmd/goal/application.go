@@ -1038,44 +1038,13 @@ var methodAppCmd = &cobra.Command{
 		applicationArgs = append(applicationArgs, hash[0:4])
 
 		// parse down the ABI type from method signature
-		argTupleTypeStr, retTypeStr, err := parseMethodSignature(method)
+		argTupleTypeStr, retTypeStr, err := abi.ParseMethodSignature(method)
 		if err != nil {
 			reportErrorf("cannot parse method signature: %v", err)
 		}
-		abiTupleT, err := abi.TypeOf(argTupleTypeStr)
+		err = abi.ParseArgJSONtoByteSlice(argTupleTypeStr, methodArgs, &applicationArgs)
 		if err != nil {
-			reportErrorf(errorRequestFail, err)
-		}
-		argABITypes := abiTupleT.GetChildTypes()
-		if len(argABITypes) != len(methodArgs) {
-			reportErrorf("input argument number %d != method argument number %d", len(methodArgs), len(argABITypes))
-		}
-
-		argABITypeStrs := make([]string, len(methodArgs))
-		jsonArgs := methodArgs
-
-		for i := 0; i < len(argABITypes); i++ {
-			argABITypeStrs[i] = argABITypes[i].String()
-		}
-
-		// change the input args to be 1 - 14 + 15 (compacting everything together)
-		if len(methodArgs) > 14 {
-			compactedStr := "(" + strings.Join(argABITypeStrs[14:], ",") + ")"
-			argABITypeStrs = argABITypeStrs[:14]
-			argABITypeStrs = append(argABITypeStrs, compactedStr)
-
-			remainingJSON := "[" + strings.Join(methodArgs[14:], ",") + "]"
-			jsonArgs = jsonArgs[:14]
-			jsonArgs = append(jsonArgs, remainingJSON)
-		}
-
-		// parse JSON value to ABI encoded bytes
-		for i := 0; i < len(jsonArgs); i++ {
-			parsed, err := parseAppArg(appCallArg{Encoding: "abi", Value: argABITypeStrs[i] + ":" + jsonArgs[i]})
-			if err != nil {
-				reportErrorf("cannot parse abi command line argument: %v", err)
-			}
-			applicationArgs = append(applicationArgs, parsed)
+			reportErrorf("cannot parse arguments to ABI encoding: %v", err)
 		}
 
 		// copy-paste code from callAppCmd
@@ -1136,30 +1105,4 @@ var methodAppCmd = &cobra.Command{
 			// TODO how to find return value from apply data... we probably need return type to parse out result...
 		}
 	},
-}
-
-func parseMethodSignature(methodSig string) (string, string, error) {
-	var stack []int
-
-	for index, chr := range methodSig {
-		if chr == '(' {
-			stack = append(stack, index)
-		} else if chr == ')' {
-			if len(stack) == 0 {
-				break
-			}
-			leftParenIndex := stack[len(stack)-1]
-			stack = stack[:len(stack)-1]
-			if len(stack) == 0 {
-				returnType := methodSig[index+1:]
-				if _, err := abi.TypeOf(returnType); err != nil {
-					if returnType != "void" {
-						return "", "", fmt.Errorf("cannot infer return type: %s", returnType)
-					}
-				}
-				return methodSig[leftParenIndex : index+1], methodSig[index+1:], nil
-			}
-		}
-	}
-	return "", "", fmt.Errorf("unpaired parentheses: %s", methodSig)
 }
