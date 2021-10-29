@@ -1053,8 +1053,6 @@ func (eval *BlockEvaluator) TestingTxnCounter() uint64 {
 
 // Call "endOfBlock" after all the block's rewards and transactions are processed.
 func (eval *BlockEvaluator) endOfBlock() error {
-	eval.state.mods.OptimizeAllocatedMemory(eval.proto)
-
 	if eval.generate {
 		var err error
 		eval.block.TxnRoot, err = eval.block.PaysetCommit()
@@ -1093,6 +1091,8 @@ func (eval *BlockEvaluator) endOfBlock() error {
 	if err != nil {
 		return err
 	}
+
+	eval.state.mods.OptimizeAllocatedMemory(eval.proto)
 
 	if eval.validate {
 		// check commitments
