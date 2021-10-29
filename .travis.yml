@@ -1,3 +1,4 @@
+name: "Travis Windows build"
 os: linux
 dist: bionic
 language: minimal
@@ -6,88 +7,32 @@ language: minimal
 if: tag IS blank
 
 stages:
-  - name: build_commit
-    if: NOT (branch =~ /^hotfix\//) AND NOT (branch =~ /^rel\//) AND type != pull_request
-  - name: build_pr
+  - name: build_windows_pr
     if: type = pull_request
-  - name: build_release
+  - name: build_windows_release
     if: (branch =~ /^hotfix\// OR branch =~ /^rel\//) AND type != pull_request
 
 jobs:
-  allow_failures:
-    - name: External ARM Build
-    - name: Test Release Builds
   include:
-    - stage: build_commit
-      os: linux
+    - stage: build_windows_pr
+      os: windows
+      name: Windows x64 PR Build
+      cache:
+        directories:
+          - $HOME/AppData/Local/Temp/chocolatey
+          - /C/tools/msys64
       script:
-        - scripts/travis/build_test.sh
+        - $mingw64 scripts/travis/build_test.sh
 
-    - stage: build_pr
-      os: linux
-      name: Ubuntu AMD64 Build
+    - stage: build_windows_release
+      os: windows
+      name: Windows x64 Release Build
+      cache:
+        directories:
+          - $HOME/AppData/Local/Temp/chocolatey
+          - /C/tools/msys64
       script:
-        - scripts/travis/build_test.sh
-    - # same stage, parallel job
-      name: External ARM64 Build
-      os: linux
-      env:
-        - BUILD_TYPE: "external_build"
-        - TARGET_PLATFORM: "linux-arm64"
-      addons:
-        apt:
-          packages:
-            - awscli
-      script:
-        - scripts/travis/external_build.sh ./scripts/travis/build_test.sh
-    - # same stage, parallel job
-      os: osx
-      osx_image: xcode11
-      name: MacOS AMD64 Build
-      script:
-        - scripts/travis/build_test.sh
-    - # same stage, parallel job
-       os: windows
-       name: Windows x64 Build
-       cache:
-         directories:
-           - $HOME/AppData/Local/Temp/chocolatey
-           - /C/tools/msys64
-       script:
-         - $mingw64 scripts/travis/build_test.sh
-
-    - stage: build_release
-      os: linux
-      name: Ubuntu AMD64 Build
-      script:
-        - ./scripts/travis/build_test.sh
-    - # same stage, parallel job
-      name: External ARM64 Build
-      os: linux
-      env:
-        - BUILD_TYPE: "external_build"
-        - TARGET_PLATFORM: "linux-arm64"
-      addons:
-        apt:
-          packages:
-            - awscli
-      script:
-        - scripts/travis/external_build.sh ./scripts/travis/build_test.sh
-    - # same stage, parallel job
-      os: osx
-      osx_image: xcode11
-      name: MacOS AMD64 Build
-      script:
-        - scripts/travis/build_test.sh
-    - # same stage, parallel job
-       os: windows
-       name: Windows x64 Build
-       cache:
-         directories:
-           - $HOME/AppData/Local/Temp/chocolatey
-           - /C/tools/msys64
-       script:
-         - $mingw64 scripts/travis/build_test.sh
+        - $mingw64 scripts/travis/build_test.sh
 
 # Don't rebuild libsodium every time
 cache:
@@ -97,38 +42,26 @@ cache:
 
 before_install:
 - |-
-   case $TRAVIS_OS_NAME in
-   linux)
-     # Disable sometimes-broken sources.list in Travis base images
-     sudo rm -vf /etc/apt/sources.list.d/*
-     ;;
-   windows)
-     [[ ! -f C:/tools/msys64/msys2_shell.cmd ]] && rm -rf C:/tools/msys64
-     choco uninstall -y mingw
-     choco upgrade --no-progress -y msys2
-     export msys2='cmd //C RefreshEnv.cmd '
-     export msys2+='& set MSYS=winsymlinks:nativestrict '
-     export msys2+='& C:\\tools\\msys64\\msys2_shell.cmd -defterm -no-start'
-     export mingw64="$msys2 -mingw64 -full-path -here -c "\"\$@"\" --"
-     export msys2+=" -msys2 -c "\"\$@"\" --"
-     $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain unzip
-     ## Install more MSYS2 packages from https://packages.msys2.org/base here
-     taskkill //IM gpg-agent.exe //F  # https://travis-ci.community/t/4967
-     export PATH=/C/tools/msys64/mingw64/bin:$PATH
-     export MAKE=mingw32-make  # so that Autotools can find it
-     ;;
-   esac
-   docker load -i $HOME/docker_cache/images.tar || true
+    [[ ! -f C:/tools/msys64/msys2_shell.cmd ]] && rm -rf C:/tools/msys64
+    choco uninstall -y mingw
+    choco upgrade --no-progress -y msys2
+    export msys2='cmd //C RefreshEnv.cmd '
+    export msys2+='& set MSYS=winsymlinks:nativestrict '
+    export msys2+='& C:\\tools\\msys64\\msys2_shell.cmd -defterm -no-start'
+    export mingw64="$msys2 -mingw64 -full-path -here -c "\"\$@"\" --"
+    export msys2+=" -msys2 -c "\"\$@"\" --"
+    $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain unzip
+    ## Install more MSYS2 packages from https://packages.msys2.org/base here
+    taskkill //IM gpg-agent.exe //F  # https://travis-ci.community/t/4967
+    export PATH=/C/tools/msys64/mingw64/bin:$PATH
+    export MAKE=mingw32-make  # so that Autotools can find it
+    docker load -i $HOME/docker_cache/images.tar || true
 
 before_cache:
 - |-
-   case $TRAVIS_OS_NAME in
-   windows)
-     # https://unix.stackexchange.com/a/137322/107554
-     $msys2 pacman --sync --clean --noconfirm
-     ;;
-   esac
-   docker save -o $HOME/docker_cache/images.tar $(docker images -a -q)
+    # https://unix.stackexchange.com/a/137322/107554
+    $msys2 pacman --sync --clean --noconfirm
+    docker save -o $HOME/docker_cache/images.tar $(docker images -a -q)
 
 addons:
   apt:
