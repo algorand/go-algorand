@@ -478,6 +478,9 @@ func decodeTuple(encoded []byte, childT []Type) ([]interface{}, error) {
 	return values, nil
 }
 
+// ParseArgJSONtoByteSlice convert input method arguments to ABI encoded bytes
+// it converts funcArgTypes into a tuple type and apply changes over input argument string (in JSON format)
+// if there are greater or equal to 15 inputs, then we compact the tailing inputs into one tuple
 func ParseArgJSONtoByteSlice(funcArgTypes string, jsonArgs []string, applicationArgs *[][]byte) error {
 	abiTupleT, err := TypeOf(funcArgTypes)
 	if err != nil {
@@ -517,6 +520,8 @@ func ParseArgJSONtoByteSlice(funcArgTypes string, jsonArgs []string, application
 	return nil
 }
 
+// ParseMethodSignature parses a method of format `method(...argTypes...)retType`
+// into `(...argTypes)` and `retType`
 func ParseMethodSignature(methodSig string) (string, string, error) {
 	var stack []int
 
