@@ -48,10 +48,11 @@ type LedgerForCowBase interface {
 // ErrRoundZero is self-explanatory
 var ErrRoundZero = errors.New("cannot start evaluator for round 0")
 
-// maxPaysetHint makes sure that we don't allocate too much memory up front
-// in the block evaluator, since there cannot reasonably be more than this
-// many transactions in a block.
-const maxPaysetHint = 20000
+// averageEncodedTxnSizeHint is an estimation for the encoded transaction size
+// which is used for preallocating memory upfront in the payset. Preallocating
+// helps to avoid re-allocating storage during the evaluation/validation which
+// is considerably slower.
+const averageEncodedTxnSizeHint = 150
 
 // asyncAccountLoadingThreadCount controls how many go routines would be used
 // to load the account data before the Eval() start processing individual
@@ -481,6 +482,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 	// Preallocate space for the payset so that we don't have to
 	// dynamically grow a slice (if evaluating a whole block).
 	if evalOpts.PaysetHint > 0 {
+		maxPaysetHint := evalOpts.MaxTxnBytesPerBlock / averageEncodedTxnSizeHint
 		if evalOpts.PaysetHint > maxPaysetHint {
 			evalOpts.PaysetHint = maxPaysetHint
 		}
