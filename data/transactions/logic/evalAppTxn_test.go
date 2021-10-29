@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/test/partitiontest"
 
 	"github.com/stretchr/testify/require"
 )
@@ -491,6 +492,8 @@ func TestAssetFreeze(t *testing.T) {
 }
 
 func TestKeyReg(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	keyreg := `
   store 6 // StateProofPK
   store 5 // SelectionPK
@@ -577,7 +580,7 @@ func TestKeyReg(t *testing.T) {
 		testApp(t, params+keyreg, ep)
 	})
 
-	t.Run("online", func(t *testing.T) {
+	t.Run("online without StateProofPK", func(t *testing.T) {
 		params := `
   int 100 // VoteFirst
   int 200 // VoteLast
@@ -588,6 +591,7 @@ func TestKeyReg(t *testing.T) {
   int 64; bzero // StateProofPK
 `
 		ep, ledger := makeSampleEnv()
+		ep.Proto.EnableStateProofKeyregCheck = false
 		ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
 		ledger.NewAccount(ledger.ApplicationID().Address(), defaultEvalProto().MinTxnFee)
 		testApp(t, params+keyreg, ep)
