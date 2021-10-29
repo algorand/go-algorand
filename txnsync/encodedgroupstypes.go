@@ -26,11 +26,11 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-const maxEncodedTransactionGroups = 30000
-const maxEncodedTransactionGroupEntries = 30000
-const maxBitmaskSize = (maxEncodedTransactionGroupEntries+7)/8 + 1
-const maxSignatureBytes = maxEncodedTransactionGroupEntries * len(crypto.Signature{})
-const maxAddressBytes = maxEncodedTransactionGroupEntries * crypto.DigestSize
+var maxEncodedTransactionGroups = 30000
+var maxEncodedTransactionGroupEntries = 30000
+var maxBitmaskSize = (maxEncodedTransactionGroupEntries+7)/8 + 1
+var maxSignatureBytes = maxEncodedTransactionGroupEntries * len(crypto.Signature{})
+var maxAddressBytes = maxEncodedTransactionGroupEntries * crypto.DigestSize
 
 var errInvalidTxType = errors.New("invalid txtype")
 
