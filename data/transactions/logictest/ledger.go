@@ -738,6 +738,8 @@ func (l *Ledger) Perform(txn *transactions.Transaction, spec transactions.Specia
 		ad, err = l.acfg(txn.Sender, txn.AssetConfigTxnFields)
 	case protocol.AssetFreezeTx:
 		err = l.afrz(txn.Sender, txn.AssetFreezeTxnFields)
+	case protocol.KeyRegistrationTx:
+		// don't do anything for keyreg txns
 	default:
 		err = fmt.Errorf("%s txn in AVM", txn.Type)
 	}

@@ -82,6 +82,8 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 		MaxAppTxnAccounts:      3,
 		MaxAppTxnForeignApps:   5,
 		MaxAppTxnForeignAssets: 6,
+
+		SupportBecomeNonParticipatingTransactions: true,
 	}
 }
 
