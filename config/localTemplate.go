@@ -41,7 +41,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19"`
 
 	// environmental (may be overridden)
 	// When enabled, stores blocks indefinitally, otherwise, only the most recents blocks
@@ -417,6 +417,9 @@ type Local struct {
 	// message before it can be used for calculating the data exchange rate. Setting this to zero
 	// would use the default values. The threshold is defined in units of bytes.
 	TransactionSyncSignificantMessageThreshold uint64 `version[17]:"0"`
+
+	// ProposalAssemblyTime is the max amount of time to spend on generating a proposal block.
+	ProposalAssemblyTime time.Duration `version[19]:"250000000"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
