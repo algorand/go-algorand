@@ -47,11 +47,5 @@ func (eval *BlockEvaluator) ProcessBlockForIndexer(block *bookkeeping.Block) (le
 			fmt.Errorf("ProcessBlockForIndexer() err: %w", err)
 	}
 
-	err = eval.finalValidation()
-	if err != nil {
-		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
-			fmt.Errorf("ProcessBlockForIndexer() err: %w", err)
-	}
-
 	return eval.state.deltas(), eval.block.Payset, nil
 }
