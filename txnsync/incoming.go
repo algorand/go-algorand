@@ -59,7 +59,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 	_, err = incomingMessage.message.UnmarshalMsg(message)
 	if err != nil {
 		// if we received a message that we cannot parse, disconnect.
-		s.log.Infof("received unparsable transaction sync message from peer. disconnecting from peer: %v, bytes: %v", err, len(message))
+		s.log.Infof("received unparsable transaction sync message from peer. disconnecting from peer: %v, bytes: %d", err, len(message))
 		s.incomingMessagesQ.erase(peer, networkPeer)
 		return err
 	}

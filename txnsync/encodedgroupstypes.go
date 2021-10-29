@@ -19,6 +19,7 @@ package txnsync
 import (
 	"errors"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
@@ -26,8 +27,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-var maxEncodedTransactionGroups = 30000
-var maxEncodedTransactionGroupEntries = 30000
+var maxEncodedTransactionGroups = config.GetDefaultLocal().TxPoolSize
+var maxEncodedTransactionGroupEntries = config.GetDefaultLocal().TxPoolSize
 var maxBitmaskSize = (maxEncodedTransactionGroupEntries+7)/8 + 1
 var maxSignatureBytes = maxEncodedTransactionGroupEntries * len(crypto.Signature{})
 var maxAddressBytes = maxEncodedTransactionGroupEntries * crypto.DigestSize

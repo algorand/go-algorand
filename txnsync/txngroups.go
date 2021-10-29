@@ -191,7 +191,7 @@ func decodeTransactionGroups(ptg packedTransactionGroups, genesisID string, gene
 
 func decompressTransactionGroupsBytes(data []byte, lenDecompressedBytes uint64) (decoded []byte, err error) {
 	compressionRatio := lenDecompressedBytes / uint64(len(data)) // data should have been compressed between 0 and 95%
-	if lenDecompressedBytes > maxEncodedTransactionGroupBytes || compressionRatio <= 0 || compressionRatio >= maxCompressionRatio {
+	if lenDecompressedBytes > uint64(maxEncodedTransactionGroupBytes) || compressionRatio <= 0 || compressionRatio >= maxCompressionRatio {
 		return nil, fmt.Errorf("invalid lenDecompressedBytes: %d, len(data): %d", lenDecompressedBytes, len(data))
 	}
 

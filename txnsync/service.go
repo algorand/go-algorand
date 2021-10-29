@@ -57,6 +57,9 @@ func MakeTransactionSyncService(log logging.Logger, conn NodeConnector, isRelay 
 		maxBitmaskSize = (maxEncodedTransactionGroupEntries+7)/8 + 1
 		maxSignatureBytes = maxEncodedTransactionGroupEntries * len(crypto.Signature{})
 		maxAddressBytes = maxEncodedTransactionGroupEntries * crypto.DigestSize
+
+		maxBloomFilterSize = cfg.TxPoolSize * 5
+		maxEncodedTransactionGroupBytes = cfg.TxPoolSize * 200
 	}
 	return s
 }
