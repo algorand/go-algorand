@@ -17,7 +17,6 @@
 package txnsync
 
 import (
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 )
@@ -25,9 +24,10 @@ import (
 const txnBlockMessageVersion = 1
 const maxAcceptedMsgSeq = 64
 
-// Roughly 5 bytes per txn needed for a bloom filter
-var maxBloomFilterSize = config.GetDefaultLocal().TxPoolSize * 5
-var maxEncodedTransactionGroupBytes = config.GetDefaultLocal().TxPoolSize * 200
+// set in init() in service.go
+var maxBloomFilterSize int
+var maxEncodedTransactionGroupBytes int
+
 var maxProposalSize = 350000
 
 type transactionBlockMessage struct {

@@ -52,21 +52,22 @@ func MakeTransactionSyncService(log logging.Logger, conn NodeConnector, isRelay 
 	s.state.service = s
 	s.state.xorBuilder.MaxIterations = 10
 
-	if cfg.TxPoolSize > maxEncodedTransactionGroups {
-		setTransactionSyncVariables(cfg)
-	}
+	setTransactionSyncVariables(cfg)
 	return s
 }
 
 func setTransactionSyncVariables(cfg config.Local) {
+	if cfg.TxPoolSize < maxEncodedTransactionGroups {
+		return
+	}
 	maxEncodedTransactionGroups = cfg.TxPoolSize
 	maxEncodedTransactionGroupEntries = cfg.TxPoolSize
 	maxBitmaskSize = (maxEncodedTransactionGroupEntries+7)/8 + 1
 	maxSignatureBytes = maxEncodedTransactionGroupEntries * len(crypto.Signature{})
 	maxAddressBytes = maxEncodedTransactionGroupEntries * crypto.DigestSize
 
-	maxBloomFilterSize = cfg.TxPoolSize * 5
-	maxEncodedTransactionGroupBytes = cfg.TxPoolSize * 200
+	maxBloomFilterSize = cfg.TxPoolSize * 5                  // 32 bit xor uses slightly more than 4 bytes/element.
+	maxEncodedTransactionGroupBytes = cfg.TxPoolSize * 10000 // assume each transaction takes 10KB, as a worst-case-scenario for bounding purposes only.
 }
 
 // Start starts the transaction sync
@@ -90,4 +91,8 @@ func (s *Service) Stop() {
 // GetIncomingMessageHandler returns the message handler.
 func (s *Service) GetIncomingMessageHandler() IncomingMessageHandler {
 	return s.state.asyncIncomingMessageHandler
+}
+
+func init() {
+	setTransactionSyncVariables(config.GetDefaultLocal())
 }
