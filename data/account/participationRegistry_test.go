@@ -105,9 +105,8 @@ func TestParticipation_InsertGet(t *testing.T) {
 	}
 
 	// Check that Flush works, re-initialize cache and verify GetAll.
-	err := registry.Flush()
-	a.NoError(err)
-	registry.initializeCache()
+	a.NoError(registry.Flush())
+	a.NoError(registry.initializeCache())
 	results = registry.GetAll()
 	a.Len(results, 2)
 	for _, record := range results {
@@ -147,9 +146,8 @@ func TestParticipation_Delete(t *testing.T) {
 	assertParticipation(t, p2, results[0])
 
 	// Check that result was persisted.
-	err = registry.Flush()
-	a.NoError(err)
-	registry.initializeCache()
+	a.NoError(registry.Flush())
+	a.NoError(registry.initializeCache())
 	results = registry.GetAll()
 	a.Len(results, 1)
 	assertParticipation(t, p2, results[0])
@@ -174,10 +172,8 @@ func TestParticipation_DeleteExpired(t *testing.T) {
 	a.Len(registry.GetAll(), 5, "The first 5 should be deleted.")
 
 	// Check persisting. Verify by re-initializing the cache.
-	err = registry.Flush()
-	a.NoError(err)
-	err = registry.initializeCache()
-	a.NoError(err)
+	a.NoError(registry.Flush())
+	a.NoError(registry.initializeCache())
 	a.Len(registry.GetAll(), 5, "The first 5 should be deleted.")
 }
 
@@ -272,15 +268,11 @@ func TestParticipation_Record(t *testing.T) {
 		a.NoError(err)
 	}
 
-	all := registry.GetAll()
-	a.NotNil(all)
+	a.NotNil(registry.GetAll())
 
-	err := registry.Record(p.Parent, 1000, Vote)
-	a.NoError(err)
-	err = registry.Record(p.Parent, 2000, BlockProposal)
-	a.NoError(err)
-	err = registry.Record(p.Parent, 3000, CompactCertificate)
-	a.NoError(err)
+	a.NoError(registry.Record(p.Parent, 1000, Vote))
+	a.NoError(registry.Record(p.Parent, 2000, BlockProposal))
+	a.NoError(registry.Record(p.Parent, 3000, CompactCertificate))
 
 	// Verify that one and only one key was updated.
 	test := func(registry ParticipationRegistry) {
@@ -300,11 +292,11 @@ func TestParticipation_Record(t *testing.T) {
 	}
 
 	test(registry)
-	registry.Flush()
+	a.NoError(registry.Flush())
 	a.Len(registry.dirty, 0)
 
 	// Re-initialize
-	registry.initializeCache()
+	a.NoError(registry.initializeCache())
 	test(registry)
 }
 
@@ -368,9 +360,9 @@ func TestParticipation_RecordMultipleUpdates(t *testing.T) {
 	recordCopy.EffectiveLast = p2.LastValid
 	registry.cache[p2.ID()] = recordCopy
 	registry.dirty[p2.ID()] = struct{}{}
-	registry.Flush()
+	a.NoError(registry.Flush())
 	a.Len(registry.dirty, 0)
-	registry.initializeCache()
+	a.NoError(registry.initializeCache())
 
 	// Verify bad state - both records are valid until round 3 million
 	a.NotEqual(p.ID(), p2.ID())
@@ -538,7 +530,7 @@ func TestParticipation_NoKeyToUpdate(t *testing.T) {
 // TestParticipion_Blobs adds some secrets to the registry and makes sure the same ones are returned.
 func TestParticipion_Blobs(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	a := assert.New(t)
+	a := require.New(t)
 	registry := getRegistry(t)
 	defer registry.Close()
 
@@ -574,7 +566,7 @@ func TestParticipion_Blobs(t *testing.T) {
 	check(id)
 
 	// check the re-initialized object
-	registry.initializeCache()
+	a.NoError(registry.initializeCache())
 	check(id)
 }
 
@@ -619,7 +611,7 @@ func TestParticipion_EmptyBlobs(t *testing.T) {
 	check(id)
 
 	// check the re-initialized object
-	registry.initializeCache()
+	a.NoError(registry.initializeCache())
 	check(id)
 }
 

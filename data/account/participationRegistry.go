@@ -230,36 +230,35 @@ var (
 	createKeysets = `CREATE TABLE Keysets (
 			pk INTEGER PRIMARY KEY NOT NULL,
 
-			participationID BLOB,
-			account BLOB,
+			participationID BLOB NOT NULL,
+			account         BLOB NOT NULL,
 
-			firstValidRound INTEGER NOT NULL DEFAULT 0,
-			lastValidRound  INTEGER NOT NULL DEFAULT 0,
-			keyDilution     INTEGER NOT NULL DEFAULT 0,
+			firstValidRound INTEGER NOT NULL,
+			lastValidRound  INTEGER NOT NULL,
+			keyDilution     INTEGER NOT NULL,
 
-			vrf BLOB    --*  msgpack encoding of ParticipationAccount.vrf
+			vrf BLOB,       --*  msgpack encoding of ParticipationAccount.vrf
+			stateProof BLOB --*  msgpack encoding of ParticipationAccount.BlockProof
 		)`
+
 	createRolling = `CREATE TABLE Rolling (
 			pk INTEGER PRIMARY KEY NOT NULL,
 
-			lastVoteRound               INTEGER NOT NULL DEFAULT 0,
-			lastBlockProposalRound      INTEGER NOT NULL DEFAULT 0,
-			lastCompactCertificateRound INTEGER NOT NULL DEFAULT 0,
-			effectiveFirstRound        INTEGER NOT NULL DEFAULT 0,
-			effectiveLastRound         INTEGER NOT NULL DEFAULT 0,
+			lastVoteRound               INTEGER,
+			lastBlockProposalRound      INTEGER,
+			lastCompactCertificateRound INTEGER,
+			effectiveFirstRound         INTEGER,
+			effectiveLastRound          INTEGER,
 
 			voting BLOB --*  msgpack encoding of ParticipationAccount.voting
-
-			-- blockProof BLOB  --*  msgpack encoding of ParticipationAccount.BlockProof
 		)`
 
-	/*
-		createBlockProof = `CREATE TABLE BlockProofKeys (
-		    	id	  INTEGER PRIMARY KEY,
-		    	round INTEGER,	--*  committed round for this key
-				key   BLOB      --*  msgpack encoding of ParticipationAccount.BlockProof.SignatureAlgorithm
-			)`
-	*/
+	createStateProof = `CREATE TABLE StateProofKeys (
+			pk    INTEGER NOT NULL, --* join with keyset to find key for a particular participation id
+			round INTEGER NOT NULL, --*  committed round for this key
+			key   BLOB    NOT NULL, --*  msgpack encoding of ParticipationAccount.BlockProof.SignatureAlgorithm
+			PRIMARY KEY (pk, round)
+		)`
 	insertKeysetQuery  = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution, vrf) VALUES (?, ?, ?, ?, ?, ?)`
 	insertRollingQuery = `INSERT INTO Rolling (pk, voting) VALUES (?, ?)`
 
@@ -295,6 +294,12 @@ func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 
 	// Rolling may change over time.
 	_, err = tx.Exec(createRolling)
+	if err != nil {
+		return err
+	}
+
+	// For performance reasons, state proofs are in a separate table.
+	_, err = tx.Exec(createStateProof)
 	if err != nil {
 		return err
 	}
@@ -663,6 +668,13 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 		var rawAccount []byte
 		var rawVRF []byte
 		var rawVoting []byte
+
+		var lastVote sql.NullInt64
+		var lastBlockProposal sql.NullInt64
+		var lastCompactCertificate sql.NullInt64
+		var effectiveFirst sql.NullInt64
+		var effectiveLast sql.NullInt64
+
 		err := rows.Scan(
 			&rawParticipation,
 			&rawAccount,
@@ -670,11 +682,11 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 			&record.LastValid,
 			&record.KeyDilution,
 			&rawVRF,
-			&record.LastVote,
-			&record.LastBlockProposal,
-			&record.LastCompactCertificate,
-			&record.EffectiveFirst,
-			&record.EffectiveLast,
+			&lastVote,
+			&lastBlockProposal,
+			&lastCompactCertificate,
+			&effectiveFirst,
+			&effectiveLast,
 			&rawVoting,
 		)
 		if err != nil {
@@ -698,6 +710,27 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 			if err != nil {
 				return nil, fmt.Errorf("unable to decode Voting: %w", err)
 			}
+		}
+
+		// Check optional values.
+		if lastVote.Valid {
+			record.LastVote = basics.Round(lastVote.Int64)
+		}
+
+		if lastBlockProposal.Valid {
+			record.LastBlockProposal = basics.Round(lastBlockProposal.Int64)
+		}
+
+		if lastCompactCertificate.Valid {
+			record.LastCompactCertificate = basics.Round(lastCompactCertificate.Int64)
+		}
+
+		if effectiveFirst.Valid {
+			record.EffectiveFirst = basics.Round(effectiveFirst.Int64)
+		}
+
+		if effectiveLast.Valid {
+			record.EffectiveLast = basics.Round(effectiveLast.Int64)
 		}
 
 		results = append(results, record)
