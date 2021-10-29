@@ -67,7 +67,7 @@ func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participati
 	}
 	return out
 
-	// TODO: source keys from the registry.
+	// PKI TODO: source keys from the registry.
 	// This kinda works, but voting keys are not updated.
 	/*
 		for _, record := range manager.registry.GetAll() {
@@ -209,7 +209,7 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 		}
 	}
 
-	// TODO: This needs to update the partkeys also, see the 'DeleteOldKeys' function above, it's part
+	// PKI TODO: This needs to update the partkeys also, see the 'DeleteOldKeys' function above, it's part
 	//       is part of PersistedParticipation, but just calls 'part.Voting.DeleteBeforeFineGrained'
 	// Delete expired records from participation registry.
 	if err := manager.registry.DeleteExpired(latestHdr.Round); err != nil {
