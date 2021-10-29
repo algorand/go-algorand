@@ -457,9 +457,3 @@ func (t Type) ByteLen() (int, error) {
 		return -1, fmt.Errorf("%s is a dynamic type", t.String())
 	}
 }
-
-// GetChildTypes method gets the child type slice from the ABI type object
-// we want to only expose readability of ABI type
-func (t Type) GetChildTypes() []Type {
-	return t.childTypes
-}

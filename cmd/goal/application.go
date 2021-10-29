@@ -1094,15 +1094,29 @@ var methodAppCmd = &cobra.Command{
 		reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 		if !noWaitAfterSend {
-			txnCommit, err := waitForCommit(client, txid, lv)
+			_, err := waitForCommit(client, txid, lv)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
 
-			fmt.Println(txnCommit)
-			//txnCommit.ApplicationCall.
-			fmt.Println(retTypeStr)
-			// TODO how to find return value from apply data... we probably need return type to parse out result...
+			resp, err := client.PendingTransactionInformationV2(txid)
+			if err != nil {
+				reportErrorf(err.Error())
+			}
+
+			if retTypeStr == "void" {
+				return
+			}
+			retLog := (*resp.Logs)[len(*resp.Logs)-1]
+			retType, err := abi.TypeOf(retTypeStr)
+			if err != nil {
+				reportErrorf("cannot cast %s to abi type: %v", retTypeStr, err)
+			}
+			decoded, err := retType.Decode(retLog)
+			if err != nil {
+				reportErrorf("cannot decode return value: %v", err)
+			}
+			fmt.Println(decoded)
 		}
 	},
 }
