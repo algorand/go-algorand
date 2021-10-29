@@ -1097,7 +1097,7 @@ var listParticipationKeysCmd = &cobra.Command{
 				}
 
 				/*
-					// TODO: We could avoid querying the account with something like this.
+					// PKI TODO: We could avoid querying the account with something like this.
 					//       One problem is that it doesn't account for multiple keys on the same
 					//       account, so we'd still need to query the round.
 					if part.EffectiveFirstValid != nil && part.EffectiveLastValid < currentRound {
