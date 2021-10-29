@@ -1113,7 +1113,8 @@ func (vb validatedBlock) Block() bookkeeping.Block {
 }
 
 // AssembleBlock implements Ledger.AssembleBlock.
-func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
+func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.ValidatedBlock, error) {
+	deadline := time.Now().Add(config.ProposalAssemblyTime)
 	lvb, err := node.transactionPool.AssembleBlock(round, deadline)
 	if err != nil {
 		if errors.Is(err, pools.ErrStaleBlockAssemblyRequest) {
