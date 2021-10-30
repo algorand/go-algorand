@@ -30,7 +30,7 @@ import (
 func TestBadBitmask(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	txnGroups, genesisID, genesisHash, err := txnGroupsData(96)
+	txnGroups, genesisID, genesisHash, err := txnGroupsData(50)
 	require.NoError(t, err)
 
 	var s syncState
@@ -41,7 +41,7 @@ func TestBadBitmask(t *testing.T) {
 	require.Equal(t, errIndexNotFound, err)
 }
 
-// corrupted bitmask may bcause panic during decoding. This test is to make sure it is an error and not a panic
+// corrupted bitmask may cause panic during decoding. This test is to make sure it is an error and not a panic
 func badEncodeTransactionGroups(t *testing.T, s *syncState, inTxnGroups []pooldata.SignedTxGroup, dataExchangeRate uint64) (packedTransactionGroups, error) {
 	txnCount := 0
 	for _, txGroup := range inTxnGroups {
