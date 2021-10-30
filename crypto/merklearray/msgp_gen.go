@@ -166,6 +166,11 @@ func (z *Proof) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Path")
 				return
 			}
+			if zb0004 > 9999 {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(9999))
+				err = msgp.WrapError(err, "struct-from-array", "Path")
+				return
+			}
 			if zb0005 {
 				(*z).Path = nil
 			} else if (*z).Path != nil && cap((*z).Path) >= zb0004 {
@@ -217,6 +222,11 @@ func (z *Proof) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0007 bool
 				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
+					err = msgp.WrapError(err, "Path")
+					return
+				}
+				if zb0006 > 9999 {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(9999))
 					err = msgp.WrapError(err, "Path")
 					return
 				}
@@ -345,6 +355,11 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Levels")
 				return
 			}
+			if zb0005 > 9999 {
+				err = msgp.ErrOverflow(uint64(zb0005), uint64(9999))
+				err = msgp.WrapError(err, "struct-from-array", "Levels")
+				return
+			}
 			if zb0006 {
 				(*z).Levels = nil
 			} else if (*z).Levels != nil && cap((*z).Levels) >= zb0005 {
@@ -412,6 +427,11 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0010 bool
 				zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
+					err = msgp.WrapError(err, "Levels")
+					return
+				}
+				if zb0009 > 9999 {
+					err = msgp.ErrOverflow(uint64(zb0009), uint64(9999))
 					err = msgp.WrapError(err, "Levels")
 					return
 				}

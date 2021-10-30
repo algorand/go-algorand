@@ -41,7 +41,7 @@ type (
 	// crypto.GenericVerifyingKey and includes a merkle proof for the key.
 	Signature struct {
 		_struct              struct{} `codec:",omitempty,omitemptyarray"`
-		crypto.ByteSignature `codec:"bsig"`
+		crypto.ByteSignature `codec:"bsig,allocbound=99999"`
 
 		Proof        Proof                      `codec:"prf"`
 		VerifyingKey crypto.GenericVerifyingKey `codec:"vkey"`

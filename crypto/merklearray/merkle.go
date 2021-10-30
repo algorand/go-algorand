@@ -31,7 +31,7 @@ type Tree struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// Level 0 is the leaves.
-	Levels []Layer            `codec:"lvls,allocbound=-"`
+	Levels []Layer            `codec:"lvls,allocbound=9999"`
 	Hash   crypto.HashFactory `codec:"hsh"`
 }
 
@@ -39,7 +39,7 @@ type Tree struct {
 type Proof struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Path        []crypto.GenericDigest `codec:"pth,allocbound=-"`
+	Path        []crypto.GenericDigest `codec:"pth,allocbound=9999"` 
 	HashFactory crypto.HashFactory     `codec:"hsh"`
 }
 

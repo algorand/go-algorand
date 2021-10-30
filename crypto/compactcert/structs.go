@@ -70,7 +70,7 @@ type Reveal struct {
 type Cert struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	SigCommit    crypto.GenericDigest `codec:"c"`
+	SigCommit    crypto.GenericDigest `codec:"c,allocbound=99999"`
 	SignedWeight uint64               `codec:"w"`
 	SigProofs    merklearray.Proof    `codec:"S,allocbound=MaxProofDigests"`
 	PartProofs   merklearray.Proof    `codec:"P,allocbound=MaxProofDigests"`
