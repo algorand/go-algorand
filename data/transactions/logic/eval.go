@@ -1990,7 +1990,7 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex uint64)
 	return txid
 }
 
-func (cx *EvalContext) itxnFieldToStack(itxn *transactions.SignedTxnWithAD, fs txnFieldSpec, arrayFieldIdx uint64) (sv stackValue, err error) {
+func (cx *EvalContext) itxnFieldToStack(itxn *transactions.SignedTxnWithAD, fs txnFieldSpec, arrayFieldIdx uint64, groupIndex uint64) (sv stackValue, err error) {
 	if fs.effects {
 		switch fs.field {
 		case Logs:
@@ -2185,18 +2185,29 @@ func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, fs txnFiel
 	return
 }
 
-func opTxn(cx *EvalContext) {
-	field := TxnField(cx.program[cx.pc+1])
+func (cx *EvalContext) fetchField(field TxnField, expectArray bool) (txnFieldSpec, error) {
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return txnFieldSpec{}, fmt.Errorf("invalid txn field %d", field)
+	}
+	_, isArray := txnaFieldSpecByField[field]
+	if expectArray != isArray {
+		if expectArray {
+			return txnFieldSpec{}, fmt.Errorf("unsupported array field %d", field)
+		} else {
+			return txnFieldSpec{}, fmt.Errorf("invalid txn field %d", field)
+		}
+	}
+	return fs, nil
+}
+
+func opTxn(cx *EvalContext) {
+	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+1]), false)
+	if err != nil {
+		cx.err = err
 		return
 	}
-	_, ok = txnaFieldSpecByField[field]
-	if ok {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
-		return
-	}
+
 	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, fs, 0, cx.GroupIndex)
 	if err != nil {
 		cx.err = err
@@ -2206,17 +2217,12 @@ func opTxn(cx *EvalContext) {
 }
 
 func opTxna(cx *EvalContext) {
-	field := TxnField(cx.program[cx.pc+1])
-	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
+	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+1]), true)
+	if err != nil {
+		cx.err = err
 		return
 	}
-	_, ok = txnaFieldSpecByField[field]
-	if !ok {
-		cx.err = fmt.Errorf("txna unsupported field %d", field)
-		return
-	}
+
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
 	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, fs, arrayFieldIdx, cx.GroupIndex)
 	if err != nil {
@@ -2229,15 +2235,9 @@ func opTxna(cx *EvalContext) {
 func opTxnas(cx *EvalContext) {
 	last := len(cx.stack) - 1
 
-	field := TxnField(cx.program[cx.pc+1])
-	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
-		return
-	}
-	_, ok = txnaFieldSpecByField[field]
-	if !ok {
-		cx.err = fmt.Errorf("txnas unsupported field %d", field)
+	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+1]), true)
+	if err != nil {
+		cx.err = err
 		return
 	}
 	arrayFieldIdx := cx.stack[last].Uint
@@ -2256,20 +2256,13 @@ func opGtxn(cx *EvalContext) {
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(cx.program[cx.pc+2])
-	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
-		return
-	}
-	_, ok = txnaFieldSpecByField[field]
-	if ok {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
+	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+2]), false)
+	if err != nil {
+		cx.err = err
 		return
 	}
 	var sv stackValue
-	var err error
-	if field == GroupIndex {
+	if fs.field == GroupIndex {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = uint64(gtxid)
 	} else {
@@ -2289,15 +2282,9 @@ func opGtxna(cx *EvalContext) {
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(cx.program[cx.pc+2])
-	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
-		return
-	}
-	_, ok = txnaFieldSpecByField[field]
-	if !ok {
-		cx.err = fmt.Errorf("gtxna unsupported field %d", field)
+	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+2]), true)
+	if err != nil {
+		cx.err = err
 		return
 	}
 	arrayFieldIdx := uint64(cx.program[cx.pc+3])
@@ -2318,15 +2305,9 @@ func opGtxnas(cx *EvalContext) {
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(cx.program[cx.pc+2])
-	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
-		return
-	}
-	_, ok = txnaFieldSpecByField[field]
-	if !ok {
-		cx.err = fmt.Errorf("gtxnas unsupported field %d", field)
+	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+2]), true)
+	if err != nil {
+		cx.err = err
 		return
 	}
 	arrayFieldIdx := cx.stack[last].Uint
@@ -2346,20 +2327,13 @@ func opGtxns(cx *EvalContext) {
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(cx.program[cx.pc+1])
-	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
-		return
-	}
-	_, ok = txnaFieldSpecByField[field]
-	if ok {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
+	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+1]), false)
+	if err != nil {
+		cx.err = err
 		return
 	}
 	var sv stackValue
-	var err error
-	if field == GroupIndex {
+	if fs.field == GroupIndex {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = gtxid
 	} else {
@@ -2380,15 +2354,9 @@ func opGtxnsa(cx *EvalContext) {
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(cx.program[cx.pc+1])
-	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
-		return
-	}
-	_, ok = txnaFieldSpecByField[field]
-	if !ok {
-		cx.err = fmt.Errorf("gtxnsa unsupported field %d", field)
+	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+1]), true)
+	if err != nil {
+		cx.err = err
 		return
 	}
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
@@ -2410,15 +2378,9 @@ func opGtxnsas(cx *EvalContext) {
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(cx.program[cx.pc+1])
-	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
-		return
-	}
-	_, ok = txnaFieldSpecByField[field]
-	if !ok {
-		cx.err = fmt.Errorf("gtxnsas unsupported field %d", field)
+	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+1]), true)
+	if err != nil {
+		cx.err = err
 		return
 	}
 	arrayFieldIdx := cx.stack[last].Uint
@@ -2432,25 +2394,19 @@ func opGtxnsas(cx *EvalContext) {
 }
 
 func opItxn(cx *EvalContext) {
-	field := TxnField(cx.program[cx.pc+1])
-	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid itxn field %d", field)
-		return
-	}
-	_, ok = txnaFieldSpecByField[field]
-	if ok {
-		cx.err = fmt.Errorf("invalid itxn field %d", field)
+	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+1]), false)
+	if err != nil {
+		cx.err = err
 		return
 	}
 
 	if len(cx.EvalDelta.InnerTxns) == 0 {
-		cx.err = fmt.Errorf("no inner transaction available %d", field)
+		cx.err = fmt.Errorf("no inner transaction available %d", fs.field)
 		return
 	}
 
 	itxn := &cx.EvalDelta.InnerTxns[len(cx.EvalDelta.InnerTxns)-1]
-	sv, err := cx.itxnFieldToStack(itxn, fs, 0)
+	sv, err := cx.itxnFieldToStack(itxn, fs, 0, 0)
 	if err != nil {
 		cx.err = err
 		return
@@ -2459,26 +2415,87 @@ func opItxn(cx *EvalContext) {
 }
 
 func opItxna(cx *EvalContext) {
-	field := TxnField(cx.program[cx.pc+1])
-	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid itxn field %d", field)
-		return
-	}
-	_, ok = txnaFieldSpecByField[field]
-	if !ok {
-		cx.err = fmt.Errorf("itxna unsupported field %d", field)
+	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+1]), true)
+	if err != nil {
+		cx.err = err
 		return
 	}
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
 
 	if len(cx.EvalDelta.InnerTxns) == 0 {
-		cx.err = fmt.Errorf("no inner transaction available %d", field)
+		cx.err = fmt.Errorf("no inner transaction available %d", fs.field)
 		return
 	}
 
 	itxn := &cx.EvalDelta.InnerTxns[len(cx.EvalDelta.InnerTxns)-1]
-	sv, err := cx.itxnFieldToStack(itxn, fs, arrayFieldIdx)
+	sv, err := cx.itxnFieldToStack(itxn, fs, arrayFieldIdx, 0)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack = append(cx.stack, sv)
+}
+
+func (cx *EvalContext) getLastInnerGroup() []transactions.SignedTxnWithAD {
+	inners := cx.EvalDelta.InnerTxns
+	// If there are no inners yet, return empty slice, which will result in error
+	if len(inners) == 0 {
+		return inners
+	}
+	gid := inners[len(inners)-1].Txn.Group
+	// If last inner was a singleton, return it as a slice.
+	if gid.IsZero() {
+		return inners[len(inners)-1:]
+	}
+	// Look back for the first non-matching inner (by group) to find beginning
+	for i := len(inners) - 2; i >= 0; i-- {
+		if inners[i].Txn.Group != gid {
+			return inners[i+1:]
+		}
+	}
+	// All have the same (non-zero) group. Return all
+	return inners
+}
+
+func opGitxn(cx *EvalContext) {
+	lastInnerGroup := cx.getLastInnerGroup()
+	gtxid := cx.program[cx.pc+1]
+	if int(gtxid) >= len(lastInnerGroup) {
+		cx.err = fmt.Errorf("gitxn %d ... but last group has %d", gtxid, len(lastInnerGroup))
+		return
+	}
+	itxn := &lastInnerGroup[gtxid]
+
+	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+2]), false)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	sv, err := cx.itxnFieldToStack(itxn, fs, 0, uint64(gtxid))
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack = append(cx.stack, sv)
+}
+
+func opGitxna(cx *EvalContext) {
+	lastInnerGroup := cx.getLastInnerGroup()
+	gtxid := int(uint(cx.program[cx.pc+1]))
+	if gtxid >= len(cx.TxnGroup) {
+		cx.err = fmt.Errorf("gitxna %d ... but last group has %d", gtxid, len(lastInnerGroup))
+		return
+	}
+	itxn := &lastInnerGroup[gtxid]
+
+	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+2]), true)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	arrayFieldIdx := uint64(cx.program[cx.pc+3])
+	sv, err := cx.itxnFieldToStack(itxn, fs, arrayFieldIdx, uint64(gtxid))
 	if err != nil {
 		cx.err = err
 		return

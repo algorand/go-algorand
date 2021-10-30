@@ -958,3 +958,81 @@ itxn Logs 0
 !=
 `, ep)
 }
+
+// TestGtixn confirms access to itxn groups
+func TestGtixn(t *testing.T) {
+	ep, ledger := makeSampleEnv()
+	two := testProg(t, "byte 0x22; log; int 1", AssemblerMaxVersion)
+	ledger.NewApp(ep.Txn.Txn.Receiver, 222, basics.AppParams{
+		ApprovalProgram: two.Program,
+	})
+	three := testProg(t, "byte 0x33; log; int 1", AssemblerMaxVersion)
+	ledger.NewApp(ep.Txn.Txn.Receiver, 333, basics.AppParams{
+		ApprovalProgram: three.Program,
+	})
+	four := testProg(t, "byte 0x44; log; int 1", AssemblerMaxVersion)
+	ledger.NewApp(ep.Txn.Txn.Receiver, 444, basics.AppParams{
+		ApprovalProgram: four.Program,
+	})
+
+	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	ep.Txn.Txn.ForeignApps = []basics.AppIndex{basics.AppIndex(222), basics.AppIndex(333), basics.AppIndex(444)}
+
+	testApp(t, `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_next
+int appl;    itxn_field TypeEnum
+int 333;     itxn_field ApplicationID
+itxn_submit;
+gitxn 0 Logs 0
+byte 0x22
+==
+assert
+
+gitxna 1 Logs 0
+byte 0x33
+==
+assert
+
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 444;     itxn_field ApplicationID
+itxn_next
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_submit;
+
+gitxn 0 Logs 0
+byte 0x44
+==
+assert
+
+gitxn 1 Logs 0
+byte 0x22
+==
+assert
+
+int 1
+`, ep)
+
+	// Confirm that two singletons don't get treated as a group
+	testApp(t, `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_submit
+
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 333;     itxn_field ApplicationID
+itxn_submit
+gitxn 0 Logs 0
+byte 0x33
+==
+assert
+int 1
+`, ep)
+}

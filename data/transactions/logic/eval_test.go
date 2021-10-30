@@ -1955,7 +1955,7 @@ txna ApplicationArgs 0
 	ops.Program[2] = 0x01
 	_, err = Eval(ops.Program, ep)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "txna unsupported field")
+	require.Contains(t, err.Error(), "unsupported array field")
 
 	// modify txn field to unknown one
 	ops.Program[2] = 99
@@ -2016,7 +2016,7 @@ txna ApplicationArgs 0
 	ops.Program[3] = 0x01
 	_, err = Eval(ops.Program, ep)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "gtxna unsupported field")
+	require.Contains(t, err.Error(), "unsupported array field")
 
 	// modify gtxn field to unknown one
 	ops.Program[3] = 99

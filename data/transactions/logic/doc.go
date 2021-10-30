@@ -95,8 +95,10 @@ var opDocByName = map[string]string{
 	"txnas":   "push Xth value of the array field F of the current transaction",
 	"gtxnas":  "push Xth value of the array field F from the Tth transaction in the current group",
 	"gtxnsas": "pop an index A and an index B. push Bth value of the array field F from the Ath transaction in the current group",
-	"itxn":    "push field F of the last inner transaction to stack",
-	"itxna":   "push Ith value of the array field F of the last inner transaction to stack",
+	"itxn":    "push field F of the last inner transaction",
+	"itxna":   "push Ith value of the array field F of the last inner transaction",
+	"gitxn":   "push field F of the Tth transaction in the last inner group",
+	"gitxna":  "push Ith value of the array field F from the Tth transaction in the last inner group",
 
 	"global": "push value from globals to stack",
 	"load":   "copy a value from scratch space to the stack. All scratch spaces are 0 at program start.",
@@ -225,6 +227,8 @@ var opcodeImmediateNotes = map[string]string{
 	"itxn_field": "{uint8 transaction field index}",
 	"itxn":       "{uint8 transaction field index}",
 	"itxna":      "{uint8 transaction field index} {uint8 transaction field array index}",
+	"gitxn":      "{uint8 transaction group index} {uint8 transaction field index}",
+	"gitxna":     "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
 
 	"ecdsa_verify":        "{uint8 curve index}",
 	"ecdsa_pk_decompress": "{uint8 curve index}",
@@ -301,7 +305,7 @@ var OpGroups = map[string][]string{
 	"Loading Values":        {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gaid", "gaids"},
 	"Flow Control":          {"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "cover", "uncover", "swap", "select", "assert", "callsub", "retsub"},
 	"State Access":          {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "log"},
-	"Inner Transactions":    {"itxn_begin", "itxn_next", "itxn_field", "itxn_submit", "itxn", "itxna"},
+	"Inner Transactions":    {"itxn_begin", "itxn_next", "itxn_field", "itxn_submit", "itxn", "itxna", "gitxn", "gitxna"},
 }
 
 // OpCost indicates the cost of an operation over the range of

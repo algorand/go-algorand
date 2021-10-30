@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -2315,7 +2316,7 @@ pop
 func TestReturnTypes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// Ensure all opcodes return values they supposed to according to the OpSpecs table
+	// Ensure all opcodes return values they are supposed to according to the OpSpecs table
 	t.Parallel()
 	typeToArg := map[StackType]string{
 		StackUint64: "int 1\n",
@@ -2408,8 +2409,14 @@ func TestReturnTypes(t *testing.T) {
 		"gtxnsas":           "pop; pop; int 0; int 0; gtxnsas ApplicationArgs",
 		"args":              "args",
 		"itxn":              "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxn CreatedAssetID",
-		// This next one is a cop out.  Can't use itxna Logs until we have inner appl
-		"itxna": "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxn NumLogs",
+		"itxna":             "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxna Accounts 0",
+		"gitxn":             "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; gitxn 0 Sender",
+		"gitxna":            "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; gitxna 0 Accounts 0",
+	}
+
+	/* Make sure the specialCmd tests the opcode in question */
+	for opcode, cmd := range specialCmd {
+		assert.Contains(t, cmd, opcode)
 	}
 
 	// these require special input data and tested separately
