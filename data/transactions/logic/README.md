@@ -319,6 +319,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 59 | NumLogs | uint64 | Number of Logs (itxn only). LogicSigVersion >= 5. |
 | 60 | CreatedAssetID | uint64 | Asset ID allocated by the creation of an ASA (itxn only). LogicSigVersion >= 5. |
 | 61 | CreatedApplicationID | uint64 | ApplicationID allocated by the creation of an application (itxn only). LogicSigVersion >= 5. |
+| 62 | StateProofPK | []byte | 64 byte state proof public key commitment. LogicSigVersion >= 6. |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.

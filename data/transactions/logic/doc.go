@@ -389,6 +389,7 @@ var txnFieldDocs = map[string]string{
 
 	"VotePK":           "32 byte address",
 	"SelectionPK":      "32 byte address",
+	"StateProofPK":     "64 byte state proof public key commitment",
 	"VoteFirst":        "The first round that the participation key is valid.",
 	"VoteLast":         "The last round that the participation key is valid.",
 	"VoteKeyDilution":  "Dilution for the 2-level participation key",

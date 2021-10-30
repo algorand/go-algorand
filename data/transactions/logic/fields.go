@@ -161,6 +161,9 @@ const (
 	// CreatedApplicationID Transaction.ApplyData.EvalDelta.ApplicationID
 	CreatedApplicationID
 
+	// StateProofPK Transaction.StateProofPK
+	StateProofPK
+
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
 
@@ -255,6 +258,8 @@ var txnFieldSpecs = []txnFieldSpec{
 	{NumLogs, StackUint64, 5, 5, true},
 	{CreatedAssetID, StackUint64, 5, 5, true},
 	{CreatedApplicationID, StackUint64, 5, 5, true},
+
+	{StateProofPK, StackBytes, 6, 6, false},
 }
 
 // TxnaFieldNames are arguments to the 'txna' opcode
