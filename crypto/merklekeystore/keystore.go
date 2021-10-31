@@ -182,8 +182,13 @@ func (s *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 		return Signature{}, err
 	}
 
+	sig, err := signingKey.Sign(hashable)
+	if err != nil {
+		return Signature{}, err
+	}
+	
 	return Signature{
-		ByteSignature: signingKey.Sign(hashable),
+		ByteSignature: sig,
 		Proof:         Proof(*proof),
 		VerifyingKey:  *signingKey.GetVerifyingKey(),
 	}, nil

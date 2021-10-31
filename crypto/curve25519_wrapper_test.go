@@ -29,8 +29,9 @@ func TestSignAndVerify(t *testing.T) {
 	SystemRNG.RandBytes(seed[:])
 	key := GenerateEd25519Key(seed)
 	msg := []byte("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet")
-	byteSig := key.SignBytes(msg)
+	byteSig, err := key.SignBytes(msg)
+	a.NoError(err)
 	verifier := key.GetVerifyingKey()
-	err := verifier.GetVerifier().VerifyBytes(msg, byteSig)
+	err = verifier.GetVerifier().VerifyBytes(msg, byteSig)
 	a.NoError(err)
 }

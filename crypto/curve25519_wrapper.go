@@ -40,15 +40,15 @@ type Ed25519PublicKey struct {
 }
 
 // Sign - Signs a Hashable message
-func (p *Ed25519Key) Sign(message Hashable) ByteSignature {
+func (p *Ed25519Key) Sign(message Hashable) (ByteSignature, error) {
 	sig := p.Sec.Sign(message)
-	return sig[:]
+	return sig[:], nil
 }
 
 // SignBytes - Signs a a slice of bytes
-func (p *Ed25519Key) SignBytes(message []byte) ByteSignature {
+func (p *Ed25519Key) SignBytes(message []byte) (ByteSignature, error) {
 	sig := p.Sec.SignBytes(message)
-	return sig[:]
+	return sig[:], nil
 }
 
 // GetVerifyingKey outputs a representation of a public key. that implements Verifier
