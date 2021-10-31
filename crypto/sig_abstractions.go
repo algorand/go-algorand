@@ -112,7 +112,7 @@ func (z *GenericSigningKey) GetSigner() Signer {
 	case Ed25519Type:
 		return &z.Ed25519Singer
 	default:
-		return &invalidSinger{}
+		return NewInvalidSinger()
 	}
 }
 

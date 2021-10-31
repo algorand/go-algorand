@@ -121,15 +121,11 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 	// calculates the number of indices from first valid round and up to lastValid.
 	// writing this explicit calculation to avoid overflow.
 	numberOfKeys := lastValid/interval - ((firstValid - 1) / interval)
-	keys := make([]crypto.GenericSigningKey, numberOfKeys)
-	for i := range keys {
-		sigAlgo, err := crypto.NewSigner(sigAlgoType)
-		if err != nil {
-			return nil, err
-		}
-		keys[i] = *sigAlgo
-	}
 
+	keys, err := KeyStoreBuilder(numberOfKeys, sigAlgoType)
+	if err != nil {
+		return nil, err
+	}
 	s := &Signer{
 		keyStore:            PersistentKeystore{store},
 		signatureAlgorithms: keys,
@@ -186,7 +182,7 @@ func (s *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 	if err != nil {
 		return Signature{}, err
 	}
-	
+
 	return Signature{
 		ByteSignature: sig,
 		Proof:         Proof(*proof),

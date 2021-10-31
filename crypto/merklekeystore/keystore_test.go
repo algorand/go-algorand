@@ -106,6 +106,7 @@ func TestEmptyVerifier(t *testing.T) {
 	defer signer.keyStore.store.Close()
 	a.Equal(signer.GetVerifier().IsEmpty(), true)
 }
+
 func TestEmptySigner(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -209,6 +210,21 @@ func TestSignatureStructure(t *testing.T) {
 	a.Equal(Proof(*proof), sig.Proof)
 
 	a.NotEqual(nil, sig.ByteSignature)
+}
+
+func BenchmarkMerkleKeyStoreGen(b *testing.B) {
+	a := require.New(b)
+
+	tmpname := uuid.NewV4().String() // could this just be a constant string instead? does it even matter?
+
+	store, err := db.MakeAccessor(tmpname, false, true)
+	a.NoError(err)
+	a.NotNil(store)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		New(0, 3000000, 128, crypto.FalconType, store)
+	}
 }
 
 func genHashableForTest() crypto.Hashable {
