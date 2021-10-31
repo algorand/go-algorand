@@ -1328,6 +1328,11 @@
           "description": "\\[vote\\] root participation public key (if any) currently registered for this round.",
           "type": "string",
           "format": "byte"
+        },
+        "state-proof-key": {
+          "description": "\\[state\\] root of the state proof key (if any)",
+          "type": "string",
+          "format": "byte"
         }
       }
     },
