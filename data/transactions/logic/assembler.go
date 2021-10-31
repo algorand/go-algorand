@@ -796,9 +796,8 @@ func fetchField(name string, expectArray bool, version uint64) (txnFieldSpec, er
 	if expectArray != isArray {
 		if expectArray {
 			return txnFieldSpec{}, fmt.Errorf("found scalar field %#v while expecting array", name)
-		} else {
-			return txnFieldSpec{}, fmt.Errorf("found array field %#v while expecting scalar", name)
 		}
+		return txnFieldSpec{}, fmt.Errorf("found array field %#v while expecting scalar", name)
 	}
 	if fs.version > version {
 		return txnFieldSpec{},

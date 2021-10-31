@@ -863,7 +863,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: Before v4, Txn.Accounts offset. Since v4, Txn.Accounts offset or an account address that appears in Txn.Accounts or is Txn.Sender). Return: value.
+params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), application id (or, since v4, a Txn.ForeignApps offset). Return: value.
 
 ## app_opted_in
 
@@ -1049,7 +1049,7 @@ params: Txn.ForeignApps offset or an app id that appears in Txn.ForeignApps. Ret
 - LogicSigVersion >= 3
 - Mode: Application
 
-params: Before v4, Txn.Accounts offset. Since v4, Txn.Accounts offset or an account address that appears in Txn.Accounts or is Txn.Sender). Return: value.
+params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), application id (or, since v4, a Txn.ForeignApps offset). Return: value.
 
 ## pushbytes bytes
 
@@ -1329,7 +1329,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xb4 {uint8 transaction field index}
 - Pops: _None_
 - Pushes: any
-- push field F of the last inner transaction to stack
+- push field F of the last inner transaction
 - LogicSigVersion >= 5
 - Mode: Application
 
@@ -1338,7 +1338,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xb5 {uint8 transaction field index} {uint8 transaction field array index}
 - Pops: _None_
 - Pushes: any
-- push Ith value of the array field F of the last inner transaction to stack
+- push Ith value of the array field F of the last inner transaction
 - LogicSigVersion >= 5
 - Mode: Application
 
@@ -1348,6 +1348,24 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Pops: _None_
 - Pushes: _None_
 - begin preparation of a new inner transaction in the same transaction group
+- LogicSigVersion >= 6
+- Mode: Application
+
+## gitxn t f
+
+- Opcode: 0xb7 {uint8 transaction group index} {uint8 transaction field index}
+- Pops: _None_
+- Pushes: any
+- push field F of the Tth transaction in the last inner group
+- LogicSigVersion >= 6
+- Mode: Application
+
+## gitxna t f i
+
+- Opcode: 0xb8 {uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}
+- Pops: _None_
+- Pushes: any
+- push Ith value of the array field F from the Tth transaction in the last inner group
 - LogicSigVersion >= 6
 - Mode: Application
 
