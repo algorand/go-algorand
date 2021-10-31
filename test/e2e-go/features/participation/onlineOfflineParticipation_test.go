@@ -302,7 +302,7 @@ func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 
 	// we try to register again with a stateproof
 	partKeyFirstValid = uint64(1)
-	partKeyLastValid = config.Consensus[protocol.ConsensusFuture].CompactCertRounds + 1
+	partKeyLastValid = config.Consensus[protocol.ConsensusFuture].CompactCertRounds
 	partkeyResponse, _, err = client.GenParticipationKeys(newAccount, partKeyFirstValid, partKeyLastValid, 0)
 	a.NoError(err, "rest client should be able to add participation key to new account")
 	a.Equal(newAccount, partkeyResponse.Parent.String(), "partkey response should echo queried account")

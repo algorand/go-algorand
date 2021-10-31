@@ -17,9 +17,6 @@
 package upgrades
 
 import (
-	"path/filepath"
-	"testing"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -28,7 +25,32 @@ import (
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+	"path/filepath"
+	"strings"
+	"testing"
 )
+
+func waitUntilProtoclFuture(a *require.Assertions, nodeClient libgoal.Client) {
+
+	curRound, err := nodeClient.CurrentRound()
+	a.NoError(err)
+
+	blk, err := nodeClient.Block(curRound)
+	a.NoError(err)
+	curProtocl := blk.CurrentProtocol
+
+	for strings.Compare(curProtocl, string(consensusTestFastUpgrade(protocol.ConsensusFuture))) != 0 {
+		curRound = curRound + 1
+		nodeClient.WaitForRound(curRound + 1)
+
+		blk, err := nodeClient.Block(curRound)
+		a.NoError(err)
+
+		curProtocl = blk.CurrentProtocol
+		
+	}
+
+}
 
 func TestKeysWithoutStateProofKeyCannotRegister(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -45,13 +67,34 @@ func TestKeysWithoutStateProofKeyCannotRegister(t *testing.T) {
 
 	nodeClient := fixture.GetLibGoalClientForNamedNode("Node")
 
-	a.NoError(registerKeyInto(&nodeClient, a, lastValid, protocol.ConsensusV30))
-	a.Error(registerKeyInto(&nodeClient, a, lastValid+1, protocol.ConsensusFuture))
-
-	runUntilProtocolUpgrades(a, &fixture)
+	waitUntilProtoclFuture(a, nodeClient)
 
 	a.Error(registerKeyInto(&nodeClient, a, lastValid+2, protocol.ConsensusV30))
 	a.NoError(registerKeyInto(&nodeClient, a, lastValid+3, protocol.ConsensusFuture))
+}
+
+func TestKeysWithoutStateProofKeyCanRegister(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	consensus := make(config.ConsensusProtocols)
+	currentCon := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	consensus[consensusTestFastUpgrade(protocol.ConsensusCurrentVersion)] = currentCon
+
+	var fixture fixtures.RestClientFixture
+	fixture.SetConsensus(consensus)
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodesWithoutStateProofPartkeys.json"))
+	defer fixture.Shutdown()
+	lastValid := uint64(1000 * 5)
+
+	nodeClient := fixture.GetLibGoalClientForNamedNode("Node")
+
+	a.NoError(registerKeyInto(&nodeClient, a, lastValid, protocol.ConsensusV30))
+	a.Error(registerKeyInto(&nodeClient, a, lastValid+1, protocol.ConsensusFuture))
+	waitUntilProtoclFuture(a, nodeClient)
+
 }
 
 func registerKeyInto(client *libgoal.Client, a *require.Assertions, lastValid uint64, ver protocol.ConsensusVersion) error {
@@ -149,7 +192,8 @@ func TestParticipationWithoutStateProofKeys(t *testing.T) {
 
 	var address = act.Address
 
-	runUntilProtocolUpgrades(a, &fixture)
+	nodeClient := fixture.GetLibGoalClientForNamedNode("Node")
+	waitUntilProtoclFuture(a, nodeClient)
 
 	a.NotEmpty(address)
 
