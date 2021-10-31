@@ -69,11 +69,7 @@ type (
 
 	// Verifier is used to verify a merklekeystore.Signature produced by merklekeystore.Signer.
 	// It validates a merklekeystore.Signature by validating the commitment on the GenericVerifyingKey and validating the signature with that key
-	Verifier struct {
-		_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-		Root [KeyStoreRootSize]byte `codec:"r"`
-	}
+	Verifier [KeyStoreRootSize]byte
 
 	// keysArray is only used for building the merkle-tree and nothing else.
 	keysArray struct {
@@ -161,12 +157,10 @@ func (s *Signer) Persist() error {
 
 // GetVerifier can be used to store the commitment and verifier for this signer.
 func (s *Signer) GetVerifier() *Verifier {
-	root := [KeyStoreRootSize]byte{}
+	ver := [KeyStoreRootSize]byte{}
 	ss := s.Tree.Root().ToSlice()
-	copy(root[:], ss)
-	return &Verifier{
-		Root: root,
-	}
+	copy(ver[:], ss)
+	return (*Verifier)(&ver)
 }
 
 // Sign outputs a signature + proof for the signing key.
@@ -220,7 +214,7 @@ func (s *Signer) Restore(store db.Accessor) (err error) {
 
 // IsEmpty returns true if the verifier contains an empty key
 func (v *Verifier) IsEmpty() bool {
-	return v.Root == [KeyStoreRootSize]byte{}
+	return *v == [KeyStoreRootSize]byte{}
 }
 
 // Verify receives a signature over a specific crypto.Hashable object, and makes certain the signature is correct.
@@ -239,7 +233,7 @@ func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashabl
 
 	pos := roundToIndex(firstValid, round, interval)
 	err := merklearray.Verify(
-		(crypto.GenericDigest)(v.Root[:]),
+		(crypto.GenericDigest)(v[:]),
 		map[uint64]crypto.Hashable{pos: &ephkey},
 		(*merklearray.Proof)(&sig.Proof),
 	)

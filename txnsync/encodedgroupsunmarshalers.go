@@ -293,7 +293,7 @@ func (stub *txGroupsEncodingStub) reconstructKeyregTxnFields(signedTxns []transa
 		if err != nil {
 			return err
 		}
-		return nextSlice(&stub.CommitmentRoot, signedTxns[i].Txn.StateProofPK.Root[:], merklekeystore.KeyStoreRootSize)
+		return nextSlice(&stub.CommitmentRoot, signedTxns[i].Txn.StateProofPK[:], merklekeystore.KeyStoreRootSize)
 	})
 	if err != nil {
 		return err
@@ -323,10 +323,6 @@ func (stub *txGroupsEncodingStub) reconstructKeyregTxnFields(signedTxns []transa
 		signedTxns[i].Txn.Nonparticipation = true
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-
 	return err
 }
 

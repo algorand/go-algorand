@@ -73,7 +73,7 @@ func RandomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 
 	crypto.RandBytes(data.VoteID[:])
 	crypto.RandBytes(data.SelectionID[:])
-	crypto.RandBytes(data.StateProofID.Root[:])
+	crypto.RandBytes(data.StateProofID[:])
 	data.VoteFirstValid = basics.Round(crypto.RandUint64())
 	data.VoteLastValid = basics.Round(crypto.RandUint64())
 	data.VoteKeyDilution = crypto.RandUint64()

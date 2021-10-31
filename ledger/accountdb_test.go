@@ -29,8 +29,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -311,7 +309,7 @@ func TestAccountStorageWithStateProofID(t *testing.T) {
 
 func allAccountsHaveStateProofPKs(accts map[basics.Address]basics.AccountData) bool {
 	for _, data := range accts {
-		if data.StateProofID == (merklekeystore.Verifier{}) {
+		if data.StateProofID.IsEmpty() {
 			return false
 		}
 	}

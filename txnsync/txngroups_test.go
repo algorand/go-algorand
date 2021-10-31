@@ -23,7 +23,7 @@ import (
 	"flag"
 	"io"
 	"io/ioutil"
-	"math"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -384,10 +384,7 @@ func BenchmarkTxnGroupDecodingOld(b *testing.B) {
 }
 
 func generateRandTypeInsideRange(maxType uint16) uint16 {
-	rand := uint16(math.MaxUint16)
-	if rand < maxType {
-		return uint16(rand)
-	}
+	rand := uint16(rand.Uint32())
 	return rand % maxType
 }
 
@@ -526,7 +523,7 @@ func getRandomSignedTxn(t *testing.T) transactions.SignedTxn {
 	require.True(t, ok)
 
 	txn := *stx
-	//txn.Txn.PaymentTxnFields = transactions.PaymentTxnFields{}
+
 	txn.Txn.KeyregTxnFields = transactions.KeyregTxnFields{}
 	txn.Txn.AssetConfigTxnFields = transactions.AssetConfigTxnFields{}
 	txn.Txn.AssetTransferTxnFields = transactions.AssetTransferTxnFields{}

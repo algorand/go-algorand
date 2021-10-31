@@ -307,7 +307,7 @@ func (stub *txGroupsEncodingStub) finishDeconstructTxnHeader() {
 
 func (stub *txGroupsEncodingStub) deconstructKeyregTxnFields(i int, txn *transactions.SignedTxn) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
-	if !txn.Txn.VotePK.MsgIsZero() || !txn.Txn.SelectionPK.MsgIsZero() || ((txn.Txn.StateProofPK.Root) != [merklekeystore.KeyStoreRootSize]byte{}) || txn.Txn.VoteKeyDilution != 0 {
+	if !txn.Txn.VotePK.MsgIsZero() || !txn.Txn.SelectionPK.MsgIsZero() || !((txn.Txn.StateProofPK).IsEmpty()) || txn.Txn.VoteKeyDilution != 0 {
 		if len(stub.BitmaskKeys) == 0 {
 			stub.BitmaskKeys = make(bitmask, bitmaskLen)
 			stub.VotePK = make([]byte, 0, stub.TotalTransactionsCount*crypto.PublicKeyByteLength)
@@ -319,7 +319,7 @@ func (stub *txGroupsEncodingStub) deconstructKeyregTxnFields(i int, txn *transac
 		stub.VotePK = append(stub.VotePK, txn.Txn.VotePK[:]...)
 		stub.SelectionPK = append(stub.SelectionPK, txn.Txn.SelectionPK[:]...)
 		stub.VoteKeyDilution = append(stub.VoteKeyDilution, txn.Txn.VoteKeyDilution)
-		stub.CommitmentRoot = append(stub.CommitmentRoot, txn.Txn.StateProofPK.Root[:]...)
+		stub.CommitmentRoot = append(stub.CommitmentRoot, txn.Txn.StateProofPK[:]...)
 	}
 	if !txn.Txn.VoteFirst.MsgIsZero() {
 		if len(stub.BitmaskVoteFirst) == 0 {

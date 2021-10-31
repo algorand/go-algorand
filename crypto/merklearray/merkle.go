@@ -202,8 +202,6 @@ func (tree *Tree) buildNextLayer() {
 
 	ws := newWorkerState(uint64(n))
 	for ws.nextWorker() {
-		// no need to inspect error here -
-		// the factory should've been used to generate hash func in the first layer build
 		go upWorker(ws, l, newLayer, tree.Hash.NewHash())
 	}
 	ws.wait()

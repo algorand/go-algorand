@@ -74,7 +74,6 @@ type GenericSigningKey struct {
 
 	DilithiumSigner DilithiumSigner `codec:"ds"`
 	Ed25519Singer   Ed25519Key      `codec:"edds"`
-	invalidSinger   invalidSinger
 }
 
 // IsValid states whether the GenericSigningKey is valid, and is safe to use.
@@ -96,7 +95,6 @@ type GenericVerifyingKey struct {
 
 	DilithiumPublicKey DilithiumVerifier `codec:"dpk"`
 	Ed25519PublicKey   Ed25519PublicKey  `codec:"edpk"`
-	invalidVerifier    invalidVerifier
 }
 
 // IsValid states whether the VerifyingKey is valid, and is safe to use.
@@ -112,7 +110,7 @@ func (z *GenericSigningKey) GetSigner() Signer {
 	case Ed25519Type:
 		return &z.Ed25519Singer
 	default:
-		return &z.invalidSinger
+		return &invalidSinger{}
 	}
 }
 
@@ -124,7 +122,7 @@ func (z *GenericVerifyingKey) GetVerifier() Verifier {
 	case Ed25519Type:
 		return &z.Ed25519PublicKey
 	default:
-		return &z.invalidVerifier
+		return &invalidVerifier{}
 	}
 }
 
