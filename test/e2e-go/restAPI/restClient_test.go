@@ -1106,12 +1106,10 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 			GenesisHash: gh,
 		},
 		KeyregTxnFields: transactions.KeyregTxnFields{
-			VotePK:      votePK,
-			SelectionPK: selPK,
-			VoteFirst:   firstRound,
-			StateProofPK: merklekeystore.Verifier{
-				Root: keystoreRoot,
-			},
+			VotePK:           votePK,
+			SelectionPK:      selPK,
+			VoteFirst:        firstRound,
+			StateProofPK:     keystoreRoot,
 			VoteLast:         lastRound,
 			VoteKeyDilution:  dilution,
 			Nonparticipation: false,
@@ -1128,7 +1126,7 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 
 	actual := [merklekeystore.KeyStoreRootSize]byte{}
 	copy(actual[:], *account.Participation.StateProofKey)
-	a.Equal(tx.StateProofPK.Root[:], actual[:])
+	a.Equal(keystoreRoot, actual)
 }
 
 func TestNilStateProofInParticipationInfo(t *testing.T) {
