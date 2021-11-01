@@ -39,7 +39,7 @@ type Tree struct {
 type Proof struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Path        []crypto.GenericDigest `codec:"pth,allocbound=9999"` 
+	Path        []crypto.GenericDigest `codec:"pth,allocbound=9999"`
 	HashFactory crypto.HashFactory     `codec:"hsh"`
 }
 

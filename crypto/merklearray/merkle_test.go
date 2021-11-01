@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/require"	
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
@@ -346,11 +346,11 @@ func TestGenericDigest(t *testing.T) {
 func testWithSize(t *testing.T, size int) error {
 	gd := make(crypto.GenericDigest, size)
 	gd[8] = 88
-	
+
 	var wgd Proof
 	wgd.Path = make([]crypto.GenericDigest, 1000)
 	wgd.Path[0] = gd
-	
+
 	bytes := protocol.Encode(&wgd)
 
 	var out Proof
