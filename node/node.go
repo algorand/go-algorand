@@ -786,7 +786,7 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 	genesisDir := filepath.Join(node.rootDir, node.genesisID)
 	files, err := ioutil.ReadDir(genesisDir)
 	if err != nil {
-		return fmt.Errorf("AlgorandFullNode.loadPartitipationKeys: could not read genesis directory: %v", err)
+		return fmt.Errorf("AlgorandFullNode.loadPartitipationKeys: could not read genesis directory")
 	}
 
 	// For each of these files
