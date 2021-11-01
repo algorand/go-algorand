@@ -28,9 +28,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
-func waitUntilProtoclFuture(a *require.Assertions, nodeClient libgoal.Client) {
+func waitUntilProtocolFuture(a *require.Assertions, fixture fixtures.RestClientFixture, nodeClient libgoal.Client) {
 
 	curRound, err := nodeClient.CurrentRound()
 	a.NoError(err)
@@ -39,15 +40,19 @@ func waitUntilProtoclFuture(a *require.Assertions, nodeClient libgoal.Client) {
 	a.NoError(err)
 	curProtocl := blk.CurrentProtocol
 
+	startTime := time.Now()
+
 	for strings.Compare(curProtocl, string(consensusTestFastUpgrade(protocol.ConsensusFuture))) != 0 {
 		curRound = curRound + 1
-		nodeClient.WaitForRound(curRound + 1)
+		fixture.WaitForRoundWithTimeout(curRound + 1)
 
 		blk, err := nodeClient.Block(curRound)
 		a.NoError(err)
 
 		curProtocl = blk.CurrentProtocol
-
+		if time.Now().After(startTime.Add(5 * time.Minute)) {
+			a.Fail("upgrade taking too long")
+		}
 	}
 
 }
@@ -67,7 +72,7 @@ func TestKeysWithoutStateProofKeyCannotRegister(t *testing.T) {
 
 	nodeClient := fixture.GetLibGoalClientForNamedNode("Node")
 
-	waitUntilProtoclFuture(a, nodeClient)
+	waitUntilProtocolFuture(a, fixture, nodeClient)
 
 	a.Error(registerKeyInto(&nodeClient, a, lastValid+2, protocol.ConsensusV30))
 	a.NoError(registerKeyInto(&nodeClient, a, lastValid+3, protocol.ConsensusFuture))
@@ -79,9 +84,9 @@ func TestKeysWithoutStateProofKeyCanRegister(t *testing.T) {
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	consensus := make(config.ConsensusProtocols)
-	currentCon := config.Consensus[protocol.ConsensusCurrentVersion]
+	currentCon := config.Consensus[protocol.ConsensusV30]
 
-	consensus[consensusTestFastUpgrade(protocol.ConsensusCurrentVersion)] = currentCon
+	consensus[consensusTestFastUpgrade(protocol.ConsensusV30)] = currentCon
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(consensus)
@@ -93,7 +98,6 @@ func TestKeysWithoutStateProofKeyCanRegister(t *testing.T) {
 
 	a.NoError(registerKeyInto(&nodeClient, a, lastValid, protocol.ConsensusV30))
 	a.Error(registerKeyInto(&nodeClient, a, lastValid+1, protocol.ConsensusFuture))
-	waitUntilProtoclFuture(a, nodeClient)
 
 }
 
@@ -193,7 +197,7 @@ func TestParticipationWithoutStateProofKeys(t *testing.T) {
 	var address = act.Address
 
 	nodeClient := fixture.GetLibGoalClientForNamedNode("Node")
-	waitUntilProtoclFuture(a, nodeClient)
+	waitUntilProtocolFuture(a, fixture, nodeClient)
 
 	a.NotEmpty(address)
 

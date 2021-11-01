@@ -17,8 +17,10 @@
 package participation
 
 import (
+	"errors"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -294,7 +296,11 @@ func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 	a.NoError(err, "should be able to make go online tx")
 	a.Equal(newAccount, goOnlineTx.Src().String(), "go online response should echo queried account")
 	_, err = client.SignAndBroadcastTransaction(wh, nil, goOnlineTx)
-	a.Error(err, "online keyreg transaction cannot have empty StateProofPK field")
+
+	expectedError := errors.New("online keyreg transaction cannot have empty field StateProofPK")
+	if !strings.Contains(err.Error(), expectedError.Error()) {
+		a.Fail("online keyreg transaction cannot have empty StateProofPK field")
+	}
 
 	newAccountStatus, err := client.AccountInformation(newAccount)
 	a.NoError(err, "client should be able to get information about new account")
