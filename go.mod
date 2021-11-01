@@ -48,7 +48,7 @@ require (
 	golang.org/x/crypto v0.0.0-20210813211128-0a44fdfbc16e
 	golang.org/x/net v0.0.0-20210226172049-e18ecbb05110
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208 // indirect
-	golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1
+	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c
 	google.golang.org/appengine v1.6.7 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009
