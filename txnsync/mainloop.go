@@ -70,7 +70,7 @@ type syncState struct {
 	scheduler                  peerScheduler
 	interruptablePeers         []*Peer
 	interruptablePeersMap      map[*Peer]int // map a peer into the index of interruptablePeers
-	incomingMessagesQ          *incomingMessageQueue
+	incomingMessagesQ          incomingMessageQueue
 	outgoingMessagesCallbackCh chan sentMessageMetadata
 	nextOffsetRollingCh        <-chan time.Time
 	requestsOffset             uint64
@@ -105,7 +105,6 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 
 	s.clock = s.node.Clock()
 	s.incomingMessagesQ = makeIncomingMessageQueue()
-	defer s.incomingMessagesQ.shutdown()
 	s.outgoingMessagesCallbackCh = make(chan sentMessageMetadata, 1024)
 	s.interruptablePeersMap = make(map[*Peer]int)
 	s.scheduler.node = s.node
