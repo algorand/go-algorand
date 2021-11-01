@@ -144,7 +144,7 @@ func NewSigner(t AlgorithmType) (*GenericSigningKey, error) {
 
 func newEd25519Signer(t AlgorithmType) (*GenericSigningKey, error) {
 	var seed Seed
-	SystemRNG.RandBytes(seed[:])
+	RandBytes(seed[:])
 	key := GenerateEd25519Key(seed)
 	return &GenericSigningKey{
 		Type:          t,
@@ -154,7 +154,7 @@ func newEd25519Signer(t AlgorithmType) (*GenericSigningKey, error) {
 
 func newFalconSinger(t AlgorithmType) (*GenericSigningKey, error) {
 	var seed FalconSeed
-	SystemRNG.RandBytes(seed[:])
+	RandBytes(seed[:])
 	signer, err := GenerateFalconSigner(seed)
 	if err != nil {
 		return &GenericSigningKey{}, err
