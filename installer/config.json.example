@@ -1,5 +1,5 @@
 {
-    "Version": 19,
+    "Version": 18,
     "AccountUpdatesStatsInterval": 5000000000,
     "AccountsRebuildSynchronousMode": 1,
     "AnnounceParticipationKey": true,
@@ -73,7 +73,6 @@
     "PeerConnectionsUpdateInterval": 3600,
     "PeerPingPeriodSeconds": 10,
     "PriorityPeers": {},
-    "ProposalAssemblyTime": 250000000,
     "PublicAddress": "",
     "ReconnectTime": 60000000000,
     "ReservedFDs": 256,
