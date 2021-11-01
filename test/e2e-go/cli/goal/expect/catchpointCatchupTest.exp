@@ -109,7 +109,7 @@ if { [catch {
     ::AlgorandGoal::StartNode $TEST_ROOT_DIR/Node False $WEBPROXY_LISTEN_ADDRESS
 
     # once the node is started we can clear the ::GLOBAL_TEST_ALGO_DIR, so that shutdown would be done as a network.
-    set ::GLOBAL_TEST_ALGO_DIR ""
+    unset ::GLOBAL_TEST_ALGO_DIR
 
     ::AlgorandGoal::WaitForRound 1 $TEST_ROOT_DIR/Node
 
@@ -117,9 +117,16 @@ if { [catch {
 
     puts "Catchpoint is $CATCHPOINT"
 
+    regexp -nocase {([0-9]*)#[A-Z2-7]*} $CATCHPOINT CATCHPOINT_ROUND CATCHPOINT_ROUND
+
+    puts "Catchpoint round is $CATCHPOINT_ROUND"
+
+    # wait for the primary to reach $CATCHPOINT_ROUND + 5, so that the catchpoint file would be saved
+    ::AlgorandGoal::WaitForRound [expr {int($CATCHPOINT_ROUND + 5)}] $TEST_ROOT_DIR/Primary
+
     ::AlgorandGoal::StartCatchup $TEST_ROOT_DIR/Node $CATCHPOINT
 
-    ::AlgorandGoal::WaitForRound 37 $TEST_ROOT_DIR/Node
+    ::AlgorandGoal::WaitForRound $CATCHPOINT_ROUND $TEST_ROOT_DIR/Node
 
     ::AlgorandGoal::StopNode $TEST_ROOT_DIR/Node
 
