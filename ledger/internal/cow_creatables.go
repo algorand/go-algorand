@@ -51,13 +51,13 @@ func (cs *roundCowState) TotalAssetParams(addr basics.Address) (int, error) {
 }
 
 func (cs *roundCowState) GetAppParams(creator basics.Address, aidx basics.AppIndex) (params basics.AppParams, err error) {
-	record, err := cs.lookup(creator)
+	acct, err := cs.lookup(creator)
 	if err != nil {
 		return
 	}
-	params, ok := record.AppParams[aidx]
+	params, ok := acct.AppParams[aidx]
 	if !ok {
-		err = apply.ErrAppNotFound
+		err = apply.ErrCreatableNotFound
 		return
 	}
 	return
@@ -69,7 +69,7 @@ func (cs *roundCowState) GetAppLocalState(addr basics.Address, aidx basics.AppIn
 	}
 	state, ok := acct.AppLocalStates[aidx]
 	if !ok {
-		err = apply.ErrAppNotFound
+		err = apply.ErrCreatableNotFound
 		return
 	}
 	return
@@ -81,7 +81,7 @@ func (cs *roundCowState) GetAssetHolding(addr basics.Address, aidx basics.AssetI
 	}
 	holding, ok := acct.Assets[aidx]
 	if !ok {
-		err = apply.ErrAssetNotFound
+		err = apply.ErrCreatableNotFound
 		return
 	}
 	return
@@ -93,7 +93,7 @@ func (cs *roundCowState) GetAssetParams(addr basics.Address, aidx basics.AssetIn
 	}
 	params, ok := acct.AssetParams[aidx]
 	if !ok {
-		err = apply.ErrAssetNotFound
+		err = apply.ErrCreatableNotFound
 		return
 	}
 	return
