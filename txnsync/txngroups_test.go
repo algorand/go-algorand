@@ -232,7 +232,7 @@ func txnGroupsData(numBlocks int) (txnGroups []pooldata.SignedTxGroup, genesisID
 func TestTxnGroupEncodingLarge(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	txnGroups, genesisID, genesisHash, err := txnGroupsData(969)
+	txnGroups, genesisID, genesisHash, err := txnGroupsData(500)
 	require.NoError(t, err)
 
 	var s syncState
@@ -268,10 +268,10 @@ func TestTxnGroupEncodingLarge(t *testing.T) {
 		}
 	}
 	require.Equal(t, 2, len(count))
-	require.Equal(t, 18351, count["axfer"])
-	require.Equal(t, 1663, count["pay"])
-	require.Equal(t, 20005, sigs)
-	require.Equal(t, 9, msigs)
+	require.Equal(t, 9834, count["axfer"])
+	require.Equal(t, 850, count["pay"])
+	require.Equal(t, 10678, sigs)
+	require.Equal(t, 6, msigs)
 	require.Equal(t, 0, lsigs)
 }
 
