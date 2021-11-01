@@ -26,12 +26,11 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// set in init() in service.go
-var maxEncodedTransactionGroups int
-var maxEncodedTransactionGroupEntries int
-var maxBitmaskSize int
-var maxSignatureBytes int
-var maxAddressBytes int
+const maxEncodedTransactionGroups = 30000
+const maxEncodedTransactionGroupEntries = 30000
+const maxBitmaskSize = (maxEncodedTransactionGroupEntries+7)/8 + 1
+const maxSignatureBytes = maxEncodedTransactionGroupEntries * len(crypto.Signature{})
+const maxAddressBytes = maxEncodedTransactionGroupEntries * crypto.DigestSize
 
 var errInvalidTxType = errors.New("invalid txtype")
 
