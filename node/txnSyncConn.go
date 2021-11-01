@@ -156,11 +156,6 @@ func (tsnc *transactionSyncNodeConnector) SendPeerMessage(netPeer interface{}, m
 	}
 }
 
-func (tsnc *transactionSyncNodeConnector) GetPeerLatency(netPeer interface{}) time.Duration {
-	unicastPeer := netPeer.(network.UnicastPeer)
-	return unicastPeer.GetConnectionLatency()
-}
-
 // GetPendingTransactionGroups is called by the transaction sync when it needs to look into the transaction
 // pool and get the updated set of pending transactions. The second returned argument is the latest locally originated
 // group counter within the given transaction groups list. If there is no group that is locally originated, the expected
@@ -220,7 +215,7 @@ func (tsnc *transactionSyncNodeConnector) Handle(raw network.IncomingMessage) ne
 		peer = peerData.(*txnsync.Peer)
 	}
 
-	err := tsnc.messageHandler(raw.Sender, peer, raw.Data, raw.Sequence, raw.Received)
+	err := tsnc.messageHandler(raw.Sender, peer, raw.Data, raw.Sequence)
 	if err != nil {
 		return network.OutgoingMessage{
 			Action: network.Disconnect,

@@ -17,8 +17,6 @@
 package txnsync
 
 import (
-	"time"
-
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/util/timers"
@@ -48,7 +46,7 @@ type Event struct {
 }
 
 // IncomingMessageHandler is the signature of the incoming message handler used by the transaction sync to receive network messages
-type IncomingMessageHandler func(networkPeer interface{}, peer *Peer, message []byte, sequenceNumber uint64, receivedTimestamp int64) error
+type IncomingMessageHandler func(networkPeer interface{}, peer *Peer, message []byte, sequenceNumber uint64) error
 
 // SendMessageCallback define a message sent feedback for performing message tracking
 type SendMessageCallback func(enqueued bool, sequenceNumber uint64) error
@@ -81,7 +79,6 @@ type NodeConnector interface {
 	// across all the connected peers.
 	UpdatePeers(txsyncPeers []*Peer, netPeers []interface{}, peersAverageDataExchangeRate uint64)
 	SendPeerMessage(netPeer interface{}, msg []byte, callback SendMessageCallback)
-	GetPeerLatency(netPeer interface{}) time.Duration
 	// GetPendingTransactionGroups is called by the transaction sync when it needs to look into the transaction
 	// pool and get the updated set of pending transactions. The second returned argument is the latest locally originated
 	// group counter within the given transaction groups list. If there is no group that is locally originated, the expected
