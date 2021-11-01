@@ -20,10 +20,11 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"	
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 type TestMessage string
@@ -328,4 +329,35 @@ func benchmarkMerkleVerify1M(b *testing.B, hashType crypto.HashType) {
 			b.Error(err)
 		}
 	}
+}
+
+// TestGenericDigest makes sure GenericDigest will not decoded sizes
+// greater than the max allowd.
+func TestGenericDigest(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	err := testWithSize(t, crypto.MaxHashDigestSize)
+	require.NoError(t, err)
+
+	err = testWithSize(t, crypto.MaxHashDigestSize+1)
+	require.Error(t, err)
+}
+
+func testWithSize(t *testing.T, size int) error {
+	gd := make(crypto.GenericDigest, size)
+	gd[8] = 88
+	
+	var wgd Proof
+	wgd.Path = make([]crypto.GenericDigest, 1000)
+	wgd.Path[0] = gd
+	
+	bytes := protocol.Encode(&wgd)
+
+	var out Proof
+	err := protocol.Decode(bytes, &out)
+
+	if err == nil {
+		require.Equal(t, wgd, out)
+	}
+	return err
 }
