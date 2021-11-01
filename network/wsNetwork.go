@@ -1807,7 +1807,7 @@ const ProtocolVersionHeader = "X-Algorand-Version"
 const ProtocolAcceptVersionHeader = "X-Algorand-Accept-Version"
 
 // SupportedProtocolVersions contains the list of supported protocol versions by this node ( in order of preference ).
-var SupportedProtocolVersions = []string{"3.0", "2.1"}
+var SupportedProtocolVersions = []string{"2.1", "3.0"}
 
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
 /* Version history:

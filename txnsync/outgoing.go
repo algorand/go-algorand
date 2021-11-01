@@ -51,10 +51,11 @@ type sentMessageMetadata struct {
 // could be a lengthy operation which does't need to be blocking the main loop. Moving the actual encoding into an
 // execution pool thread frees up the main loop, allowing smoother operation.
 type messageAsyncEncoder struct {
-	state                *syncState
-	messageData          sentMessageMetadata
-	roundClock           timers.WallClock
-	peerDataExchangeRate uint64
+	state                        *syncState
+	messageData                  sentMessageMetadata
+	roundClock                   timers.WallClock
+	lastReceivedMessageTimestamp time.Duration
+	peerDataExchangeRate         uint64
 	// sentMessagesCh is a copy of the outgoingMessagesCallbackCh in the syncState object. We want to create a copy of
 	// the channel so that in case of a txnsync restart ( i.e. fast catchup ), we can still generate a new channel
 	// without triggering a data race. The alternative is to block the txnsync.Shutdown() until we receive the feedback
@@ -66,6 +67,7 @@ type messageAsyncEncoder struct {
 func (encoder *messageAsyncEncoder) asyncMessageSent(enqueued bool, sequenceNumber uint64) error {
 	if !enqueued {
 		encoder.state.log.Infof("unable to send message to peer. disconnecting from peer.")
+		encoder.state.incomingMessagesQ.erase(encoder.messageData.peer, encoder.messageData.peer.networkPeer)
 		return errTransactionSyncOutgoingMessageSendFailed
 	}
 	// record the sequence number here, so that we can store that later on.
@@ -77,6 +79,7 @@ func (encoder *messageAsyncEncoder) asyncMessageSent(enqueued bool, sequenceNumb
 	default:
 		// if we can't place it on the channel, return an error so that the node could disconnect from this peer.
 		encoder.state.log.Infof("unable to enqueue outgoing message confirmation; outgoingMessagesCallbackCh is full. disconnecting from peer.")
+		encoder.state.incomingMessagesQ.erase(encoder.messageData.peer, encoder.messageData.peer.networkPeer)
 		return errTransactionSyncOutgoingMessageQueueFull
 	}
 }
@@ -92,6 +95,12 @@ func (encoder *messageAsyncEncoder) asyncEncodeAndSend(interface{}) interface{} 
 			encoder.state.log.Warnf("unable to encode transaction groups : %v", err)
 		}
 		encoder.messageData.transactionGroups = nil // clear out to allow GC to reclaim
+	}
+
+	if encoder.lastReceivedMessageTimestamp >= 0 {
+		// adding a nanosecond to the elapsed time is meaningless for the data rate calculation, but would ensure that
+		// the ResponseElapsedTime field has a clear distinction between "being set" vs. "not being set"
+		encoder.messageData.message.MsgSync.ResponseElapsedTime = uint64((encoder.roundClock.Since() - encoder.lastReceivedMessageTimestamp).Nanoseconds())
 	}
 
 	encodedMessage := encoder.messageData.message.MarshalMsg(getMessageBuffer())
@@ -143,7 +152,7 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 	for _, peer := range peers {
 		msgEncoder := &messageAsyncEncoder{state: s, roundClock: s.clock, peerDataExchangeRate: peer.dataExchangeRate, sentMessagesCh: s.outgoingMessagesCallbackCh}
 		profAssembleMessage.start()
-		msgEncoder.messageData, assembledBloomFilter = s.assemblePeerMessage(peer, &pendingTransactions)
+		msgEncoder.messageData, assembledBloomFilter, msgEncoder.lastReceivedMessageTimestamp = s.assemblePeerMessage(peer, &pendingTransactions)
 		profAssembleMessage.end()
 		isPartialMessage := msgEncoder.messageData.partialMessage
 		// The message that we've just encoded is expected to be sent out with the next sequence number.
@@ -183,7 +192,7 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 	}
 }
 
-func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pendingTransactionGroupsSnapshot) (metaMessage sentMessageMetadata, assembledBloomFilter bloomFilter) {
+func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pendingTransactionGroupsSnapshot) (metaMessage sentMessageMetadata, assembledBloomFilter bloomFilter, lastReceivedMessageTimestamp time.Duration) {
 	metaMessage = sentMessageMetadata{
 		peer: peer,
 		message: &transactionBlockMessage{
@@ -281,10 +290,10 @@ notxns:
 	}
 
 	metaMessage.message.MsgSync.RefTxnBlockMsgSeq = peer.nextReceivedMessageSeq - 1
+	// signify that timestamp is not set
+	lastReceivedMessageTimestamp = time.Duration(-1)
 	if peer.lastReceivedMessageTimestamp != 0 && peer.lastReceivedMessageLocalRound == s.round {
-		// adding a nanosecond to the elapsed time is meaningless for the data rate calculation, but would ensure that
-		// the ResponseElapsedTime field has a clear distinction between "being set" vs. "not being set"
-		metaMessage.message.MsgSync.ResponseElapsedTime = uint64((s.clock.Since() - peer.lastReceivedMessageTimestamp).Nanoseconds()) + 1
+		lastReceivedMessageTimestamp = peer.lastReceivedMessageTimestamp
 		// reset the lastReceivedMessageTimestamp so that we won't be using that again on a subsequent outgoing message.
 		peer.lastReceivedMessageTimestamp = 0
 	}

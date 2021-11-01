@@ -43,6 +43,7 @@ type mockNodeConnector struct {
 	peerInfo            PeerInfo
 	updatingPeers       bool
 	transactionPoolSize int
+	peers               []PeerInfo
 }
 
 func makeMockNodeConnector(calledEvents *bool) mockNodeConnector {
@@ -69,7 +70,7 @@ func (fn *mockNodeConnector) Random(rng uint64) uint64 {
 	return rv % rng
 }
 
-func (fn *mockNodeConnector) GetPeers() []PeerInfo { return nil }
+func (fn *mockNodeConnector) GetPeers() []PeerInfo { return fn.peers }
 
 func (fn *mockNodeConnector) GetPeer(interface{}) (out PeerInfo) {
 	return fn.peerInfo
@@ -80,6 +81,11 @@ func (fn *mockNodeConnector) UpdatePeers(txsyncPeers []*Peer, netPeers []interfa
 }
 func (fn *mockNodeConnector) SendPeerMessage(netPeer interface{}, msg []byte, callback SendMessageCallback) {
 }
+
+func (fn *mockNodeConnector) GetPeerLatency(netPeer interface{}) time.Duration {
+	return 0
+}
+
 func (fn *mockNodeConnector) GetPendingTransactionGroups() (txGroups []pooldata.SignedTxGroup, latestLocallyOriginatedGroupCounter uint64) {
 	return
 }

@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"time"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -109,7 +108,7 @@ type testBlockFactory struct {
 	Owner int
 }
 
-func (f testBlockFactory) AssembleBlock(r basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
+func (f testBlockFactory) AssembleBlock(r basics.Round) (agreement.ValidatedBlock, error) {
 	return testValidatedBlock{Inside: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: r}}}, nil
 }
 
