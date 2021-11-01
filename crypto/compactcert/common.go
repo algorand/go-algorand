@@ -32,9 +32,9 @@ type coinChoice struct {
 	J            uint64               `codec:"j"`
 	SignedWeight uint64               `codec:"sigweight"`
 	ProvenWeight uint64               `codec:"provenweight"`
-	Sigcom       crypto.GenericDigest `codec:"sigcom,allocbound=99999"`
-	Partcom      crypto.GenericDigest `codec:"partcom,allocbound=99999"`
-	MsgHash      crypto.GenericDigest `codec:"msghash,allocbound=99999"`
+	Sigcom       crypto.GenericDigest `codec:"sigcom"`
+	Partcom      crypto.GenericDigest `codec:"partcom"`
+	MsgHash      crypto.GenericDigest `codec:"msghash"`
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
