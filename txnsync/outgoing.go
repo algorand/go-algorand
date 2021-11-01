@@ -55,11 +55,6 @@ type messageAsyncEncoder struct {
 	messageData          sentMessageMetadata
 	roundClock           timers.WallClock
 	peerDataExchangeRate uint64
-	// sentMessagesCh is a copy of the outgoingMessagesCallbackCh in the syncState object. We want to create a copy of
-	// the channel so that in case of a txnsync restart ( i.e. fast catchup ), we can still generate a new channel
-	// without triggering a data race. The alternative is to block the txnsync.Shutdown() until we receive the feedback
-	// from the network library, but that could be susceptible to undesired network disconnections.
-	sentMessagesCh chan sentMessageMetadata
 }
 
 // asyncMessageSent called via the network package to inform the txsync that a message was enqueued, and the associated sequence number.
@@ -72,7 +67,7 @@ func (encoder *messageAsyncEncoder) asyncMessageSent(enqueued bool, sequenceNumb
 	encoder.messageData.sequenceNumber = sequenceNumber
 
 	select {
-	case encoder.sentMessagesCh <- encoder.messageData:
+	case encoder.state.outgoingMessagesCallbackCh <- encoder.messageData:
 		return nil
 	default:
 		// if we can't place it on the channel, return an error so that the node could disconnect from this peer.
@@ -141,7 +136,7 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 	pendingTransactions.pendingTransactionsGroups, pendingTransactions.latestLocallyOriginatedGroupCounter = s.node.GetPendingTransactionGroups()
 	profGetTxnsGroups.end()
 	for _, peer := range peers {
-		msgEncoder := &messageAsyncEncoder{state: s, roundClock: s.clock, peerDataExchangeRate: peer.dataExchangeRate, sentMessagesCh: s.outgoingMessagesCallbackCh}
+		msgEncoder := &messageAsyncEncoder{state: s, roundClock: s.clock, peerDataExchangeRate: peer.dataExchangeRate}
 		profAssembleMessage.start()
 		msgEncoder.messageData, assembledBloomFilter = s.assemblePeerMessage(peer, &pendingTransactions)
 		profAssembleMessage.end()
