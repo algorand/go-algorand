@@ -254,7 +254,7 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 	if ct.AssetAmount == 0 && ct.AssetReceiver == source && !clawback {
 		sndHolding, err := balances.GetAssetHolding(source, ct.XferAsset)
 		var ok bool
-		if errors.Is(err, ErrAssetNotFound) {
+		if errors.Is(err, ErrCreatableNotFound) {
 			ok = false
 		} else if err != nil {
 			return err

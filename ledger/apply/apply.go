@@ -25,8 +25,8 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
-var ErrAppNotFound = errors.New("no AppParams/AppLocalState found")
-var ErrAssetNotFound = errors.New("no AssetData found")
+// ErrCreatableNotFound is returned by calls to Balances if AppParams, AppLocalState, AssetData, or AssetHolding can't be found
+var ErrCreatableNotFound = errors.New("no app or asset data found")
 
 // Balances allow to move MicroAlgos from one address to another and to update balance records, or to access and modify individual balance records
 // After a call to Put (or Move), future calls to Get or Move will reflect the updated balance record(s)
