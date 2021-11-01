@@ -26,7 +26,7 @@ type (
 	// FSecretKey is a wrapper for cfalcon.PrivateKeySize (used for packing)
 	FSecretKey [cfalcon.PrivateKeySize]byte
 	// FalconSeed represents the seed which is being used to generate Falcon keys
-	FalconSeed [32]byte
+	FalconSeed [48]byte
 )
 
 // FalconSigner is the implementation of Signer for the Falcon signature scheme.

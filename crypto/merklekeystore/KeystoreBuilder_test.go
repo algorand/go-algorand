@@ -57,6 +57,15 @@ func TestBuilderOneKey(t *testing.T) {
 	a.Equal(uint64(len(keys)), numOfKeys)
 }
 
+func TestBuilderZeroKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	numOfKeys := uint64(0)
+	keys, err := KeyStoreBuilder(numOfKeys, crypto.FalconType)
+	a.NoError(err)
+	a.Equal(uint64(len(keys)), numOfKeys)
+}
+
 func BenchmarkMerkleKeyStoreGen(b *testing.B) {
 	a := require.New(b)
 
