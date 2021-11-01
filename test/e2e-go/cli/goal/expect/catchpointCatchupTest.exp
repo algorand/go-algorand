@@ -108,6 +108,9 @@ if { [catch {
 
     ::AlgorandGoal::StartNode $TEST_ROOT_DIR/Node False $WEBPROXY_LISTEN_ADDRESS
 
+    # once the node is started we can clear the ::GLOBAL_TEST_ALGO_DIR, so that shutdown would be done as a network.
+    set ::GLOBAL_TEST_ALGO_DIR ""
+
     ::AlgorandGoal::WaitForRound 1 $TEST_ROOT_DIR/Node
 
     set CATCHPOINT [::AlgorandGoal::GetNodeLastCatchpoint $TEST_ROOT_DIR/Primary]
@@ -163,6 +166,9 @@ if { [catch {
     set WEBPROXY_LISTEN_ADDRESS [spawnCatchpointCatchupWebProxy $PRIMARY_LISTEN_ADDRESS 30 20]
 
     ::AlgorandGoal::StartNode $TEST_ROOT_DIR/Node False $WEBPROXY_LISTEN_ADDRESS
+
+    # once the node is started we can clear the ::GLOBAL_TEST_ALGO_DIR, so that shutdown would be done as a network.
+    set ::GLOBAL_TEST_ALGO_DIR ""
 
     ::AlgorandGoal::WaitForRound 38 $TEST_ROOT_DIR/Node
 
