@@ -1136,21 +1136,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 
 	// We are careful to encode this prior to starting the server to avoid needing 'messagesOfInterestMu' here.
 	if wn.messagesOfInterestEnc != nil {
-		msg := wn.messagesOfInterestEnc
-		// for older peers, we want to include also the "TX" message, for backward compatibility.
-		// this statement could be safely removed once we've fully migrated.
-		if peer.version == "2.1" {
-			wn.messagesOfInterestMu.Lock()
-			txSendMsgTags := make(map[protocol.Tag]bool)
-			for tag := range wn.messagesOfInterest {
-				txSendMsgTags[tag] = true
-			}
-			wn.messagesOfInterestMu.Unlock()
-			txSendMsgTags[protocol.TxnTag] = true
-			msg = MarshallMessageOfInterestMap(txSendMsgTags)
-		}
-		err = peer.Unicast(wn.ctx, msg, protocol.MsgOfInterestTag, nil)
-
+		err = peer.Unicast(wn.ctx, wn.messagesOfInterestEnc, protocol.MsgOfInterestTag, nil)
 		if err != nil {
 			wn.log.Infof("ws send msgOfInterest: %v", err)
 		}
