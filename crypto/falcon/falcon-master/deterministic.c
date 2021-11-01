@@ -14,8 +14,10 @@
 
 int falcon_det1024_keygen_with_seed(void *privkey, void *pubkey, const void * seed, size_t seed_size) {
 	shake256_context rng;
-	memset(&rng, 0, sizeof(shake256_context));
-	shake256_init_prng_from_seed(&rng, seed, seed_size);
+	
+	shake256_init(&rng);
+	shake256_inject(&rng, seed, seed_size);
+	shake256_flip(&rng);
 
 	return falcon_det1024_keygen(&rng, privkey, pubkey);
 }
