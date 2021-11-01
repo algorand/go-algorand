@@ -27,17 +27,28 @@ import (
 func KeyStoreBuilder(numberOfKeys uint64, sigAlgoType crypto.AlgorithmType) ([]crypto.GenericSigningKey, error) {
 	keys := make([]crypto.GenericSigningKey, numberOfKeys)
 
-	keysPerWorker := numberOfKeys / uint64(runtime.NumCPU()*2)
+	var numberOfWorkers uint64
+	numOfCores := uint64(runtime.NumCPU() * 2)
+
+	if numberOfKeys > numOfCores {
+		numberOfWorkers = numberOfKeys / numOfCores
+	} else {
+		numberOfWorkers = numberOfKeys
+	}
 
 	var wg sync.WaitGroup
-	for i, j := uint64(0), keysPerWorker; i < numberOfKeys; i, j = j, j+keysPerWorker {
-		if j > numberOfKeys {
-			j = numberOfKeys
+	var endIdx uint64
+	for i := uint64(0); i < numberOfKeys; i = endIdx {
+		endIdx = i + numberOfWorkers
+		// in case the next iteration will pass the number of keys.
+		// we add this section to the last worker.
+		if endIdx+numberOfWorkers > numberOfKeys {
+			endIdx = numberOfKeys
 		}
-		// These goroutines share memory, but only for reading.
+
 		wg.Add(1)
-		go func(i, j uint64) {
-			for k := i; k < j; k++ {
+		go func(starIdx, endIdx uint64) {
+			for k := starIdx; k < endIdx; k++ {
 				sigAlgo, err := crypto.NewSigner(sigAlgoType)
 				if err != nil {
 
@@ -45,21 +56,8 @@ func KeyStoreBuilder(numberOfKeys uint64, sigAlgoType crypto.AlgorithmType) ([]c
 				keys[k] = *sigAlgo
 			}
 			wg.Done()
-		}(i, j)
+		}(i, endIdx)
 	}
 	wg.Wait()
-
-	return keys, nil
-}
-
-func LinerKeyStore(numberOfKeys uint64, sigAlgoType crypto.AlgorithmType) ([]crypto.GenericSigningKey, error) {
-	keys := make([]crypto.GenericSigningKey, numberOfKeys)
-	for i := range keys {
-		sigAlgo, err := crypto.NewSigner(sigAlgoType)
-		if err != nil {
-			return nil, err
-		}
-		keys[i] = *sigAlgo
-	}
 	return keys, nil
 }
