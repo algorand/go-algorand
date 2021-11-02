@@ -258,7 +258,7 @@ func argEnum(name string) []string {
 		return logic.GlobalFieldNames
 	}
 	if name == "txna" || name == "gtxna" || name == "gtxnsa" || name == "txnas" || name == "gtxnas" || name == "gtxnsas" {
-		return logic.TxnaFieldNames
+		return logic.TxnaFieldNames()
 	}
 	if name == "asset_holding_get" {
 		return logic.AssetHoldingFieldNames
@@ -295,14 +295,14 @@ func typeString(types []logic.StackType) string {
 }
 
 func argEnumTypes(name string) string {
-	if name == "txn" || name == "gtxn" || name == "gtxns" {
+	if name == "txn" || name == "gtxn" || name == "gtxns" || name == "itxn" || name == "gitxn" || name == "itxn_field" {
 		return typeString(logic.TxnFieldTypes)
 	}
 	if name == "global" {
 		return typeString(logic.GlobalFieldTypes)
 	}
-	if name == "txna" || name == "gtxna" || name == "gtxnsa" || name == "txnas" || name == "gtxnas" || name == "gtxnsas" {
-		return typeString(logic.TxnaFieldTypes)
+	if name == "txna" || name == "gtxna" || name == "gtxnsa" || name == "txnas" || name == "gtxnas" || name == "gtxnsas" || name == "itxna" || name == "gitxna" {
+		return typeString(logic.TxnaFieldTypes())
 	}
 	if name == "asset_holding_get" {
 		return typeString(logic.AssetHoldingFieldTypes)

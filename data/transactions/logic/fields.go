@@ -186,97 +186,99 @@ func (s tfNameSpecMap) getExtraFor(name string) (extra string) {
 type txnFieldSpec struct {
 	field      TxnField
 	ftype      StackType
+	array      bool   // Is this an array field?
 	version    uint64 // When this field become available to txn/gtxn. 0=always
 	itxVersion uint64 // When this field become available to itxn_field. 0=never
 	effects    bool   // Is this a field on the "effects"? That is, something in ApplyData
 }
 
 var txnFieldSpecs = []txnFieldSpec{
-	{Sender, StackBytes, 0, 5, false},
-	{Fee, StackUint64, 0, 5, false},
-	{FirstValid, StackUint64, 0, 0, false},
-	{FirstValidTime, StackUint64, 0, 0, false},
-	{LastValid, StackUint64, 0, 0, false},
-	{Note, StackBytes, 0, 6, false},
-	{Lease, StackBytes, 0, 0, false},
-	{Receiver, StackBytes, 0, 5, false},
-	{Amount, StackUint64, 0, 5, false},
-	{CloseRemainderTo, StackBytes, 0, 5, false},
-	{VotePK, StackBytes, 0, 6, false},
-	{SelectionPK, StackBytes, 0, 6, false},
-	{VoteFirst, StackUint64, 0, 6, false},
-	{VoteLast, StackUint64, 0, 6, false},
-	{VoteKeyDilution, StackUint64, 0, 6, false},
-	{Type, StackBytes, 0, 5, false},
-	{TypeEnum, StackUint64, 0, 5, false},
-	{XferAsset, StackUint64, 0, 5, false},
-	{AssetAmount, StackUint64, 0, 5, false},
-	{AssetSender, StackBytes, 0, 5, false},
-	{AssetReceiver, StackBytes, 0, 5, false},
-	{AssetCloseTo, StackBytes, 0, 5, false},
-	{GroupIndex, StackUint64, 0, 0, false},
-	{TxID, StackBytes, 0, 0, false},
-	{ApplicationID, StackUint64, 2, 6, false},
-	{OnCompletion, StackUint64, 2, 6, false},
-	{ApplicationArgs, StackBytes, 2, 6, false},
-	{NumAppArgs, StackUint64, 2, 0, false},
-	{Accounts, StackBytes, 2, 6, false},
-	{NumAccounts, StackUint64, 2, 0, false},
-	{ApprovalProgram, StackBytes, 2, 6, false},
-	{ClearStateProgram, StackBytes, 2, 6, false},
-	{RekeyTo, StackBytes, 2, 6, false},
-	{ConfigAsset, StackUint64, 2, 5, false},
-	{ConfigAssetTotal, StackUint64, 2, 5, false},
-	{ConfigAssetDecimals, StackUint64, 2, 5, false},
-	{ConfigAssetDefaultFrozen, StackUint64, 2, 5, false},
-	{ConfigAssetUnitName, StackBytes, 2, 5, false},
-	{ConfigAssetName, StackBytes, 2, 5, false},
-	{ConfigAssetURL, StackBytes, 2, 5, false},
-	{ConfigAssetMetadataHash, StackBytes, 2, 5, false},
-	{ConfigAssetManager, StackBytes, 2, 5, false},
-	{ConfigAssetReserve, StackBytes, 2, 5, false},
-	{ConfigAssetFreeze, StackBytes, 2, 5, false},
-	{ConfigAssetClawback, StackBytes, 2, 5, false},
-	{FreezeAsset, StackUint64, 2, 5, false},
-	{FreezeAssetAccount, StackBytes, 2, 5, false},
-	{FreezeAssetFrozen, StackUint64, 2, 5, false},
-	{Assets, StackUint64, 3, 6, false},
-	{NumAssets, StackUint64, 3, 0, false},
-	{Applications, StackUint64, 3, 6, false},
-	{NumApplications, StackUint64, 3, 0, false},
-	{GlobalNumUint, StackUint64, 3, 6, false},
-	{GlobalNumByteSlice, StackUint64, 3, 6, false},
-	{LocalNumUint, StackUint64, 3, 6, false},
-	{LocalNumByteSlice, StackUint64, 3, 6, false},
-	{ExtraProgramPages, StackUint64, 4, 6, false},
-	{Nonparticipation, StackUint64, 5, 6, false},
+	{Sender, StackBytes, false, 0, 5, false},
+	{Fee, StackUint64, false, 0, 5, false},
+	{FirstValid, StackUint64, false, 0, 0, false},
+	{FirstValidTime, StackUint64, false, 0, 0, false},
+	{LastValid, StackUint64, false, 0, 0, false},
+	{Note, StackBytes, false, 0, 6, false},
+	{Lease, StackBytes, false, 0, 0, false},
+	{Receiver, StackBytes, false, 0, 5, false},
+	{Amount, StackUint64, false, 0, 5, false},
+	{CloseRemainderTo, StackBytes, false, 0, 5, false},
+	{VotePK, StackBytes, false, 0, 6, false},
+	{SelectionPK, StackBytes, false, 0, 6, false},
+	{VoteFirst, StackUint64, false, 0, 6, false},
+	{VoteLast, StackUint64, false, 0, 6, false},
+	{VoteKeyDilution, StackUint64, false, 0, 6, false},
+	{Type, StackBytes, false, 0, 5, false},
+	{TypeEnum, StackUint64, false, 0, 5, false},
+	{XferAsset, StackUint64, false, 0, 5, false},
+	{AssetAmount, StackUint64, false, 0, 5, false},
+	{AssetSender, StackBytes, false, 0, 5, false},
+	{AssetReceiver, StackBytes, false, 0, 5, false},
+	{AssetCloseTo, StackBytes, false, 0, 5, false},
+	{GroupIndex, StackUint64, false, 0, 0, false},
+	{TxID, StackBytes, false, 0, 0, false},
+	{ApplicationID, StackUint64, false, 2, 6, false},
+	{OnCompletion, StackUint64, false, 2, 6, false},
+	{ApplicationArgs, StackBytes, true, 2, 6, false},
+	{NumAppArgs, StackUint64, false, 2, 0, false},
+	{Accounts, StackBytes, true, 2, 6, false},
+	{NumAccounts, StackUint64, false, 2, 0, false},
+	{ApprovalProgram, StackBytes, false, 2, 6, false},
+	{ClearStateProgram, StackBytes, false, 2, 6, false},
+	{RekeyTo, StackBytes, false, 2, 6, false},
+	{ConfigAsset, StackUint64, false, 2, 5, false},
+	{ConfigAssetTotal, StackUint64, false, 2, 5, false},
+	{ConfigAssetDecimals, StackUint64, false, 2, 5, false},
+	{ConfigAssetDefaultFrozen, StackUint64, false, 2, 5, false},
+	{ConfigAssetUnitName, StackBytes, false, 2, 5, false},
+	{ConfigAssetName, StackBytes, false, 2, 5, false},
+	{ConfigAssetURL, StackBytes, false, 2, 5, false},
+	{ConfigAssetMetadataHash, StackBytes, false, 2, 5, false},
+	{ConfigAssetManager, StackBytes, false, 2, 5, false},
+	{ConfigAssetReserve, StackBytes, false, 2, 5, false},
+	{ConfigAssetFreeze, StackBytes, false, 2, 5, false},
+	{ConfigAssetClawback, StackBytes, false, 2, 5, false},
+	{FreezeAsset, StackUint64, false, 2, 5, false},
+	{FreezeAssetAccount, StackBytes, false, 2, 5, false},
+	{FreezeAssetFrozen, StackUint64, false, 2, 5, false},
+	{Assets, StackUint64, true, 3, 6, false},
+	{NumAssets, StackUint64, false, 3, 0, false},
+	{Applications, StackUint64, true, 3, 6, false},
+	{NumApplications, StackUint64, false, 3, 0, false},
+	{GlobalNumUint, StackUint64, false, 3, 6, false},
+	{GlobalNumByteSlice, StackUint64, false, 3, 6, false},
+	{LocalNumUint, StackUint64, false, 3, 6, false},
+	{LocalNumByteSlice, StackUint64, false, 3, 6, false},
+	{ExtraProgramPages, StackUint64, false, 4, 6, false},
+	{Nonparticipation, StackUint64, false, 5, 6, false},
 
-	{Logs, StackBytes, 5, 5, true},
-	{NumLogs, StackUint64, 5, 5, true},
-	{CreatedAssetID, StackUint64, 5, 5, true},
-	{CreatedApplicationID, StackUint64, 5, 5, true},
+	{Logs, StackBytes, true, 5, 5, true},
+	{NumLogs, StackUint64, false, 5, 5, true},
+	{CreatedAssetID, StackUint64, false, 5, 5, true},
+	{CreatedApplicationID, StackUint64, false, 5, 5, true},
 }
 
 // TxnaFieldNames are arguments to the 'txna' opcode
-// It is a subset of txn transaction fields so initialized here in-place
-var TxnaFieldNames = []string{ApplicationArgs.String(), Accounts.String(), Assets.String(), Applications.String(), Logs.String()}
-
-// TxnaFieldTypes is StackBytes or StackUint64 parallel to TxnaFieldNames
-var TxnaFieldTypes = []StackType{
-	txnaFieldSpecByField[ApplicationArgs].ftype,
-	txnaFieldSpecByField[Accounts].ftype,
-	txnaFieldSpecByField[Assets].ftype,
-	txnaFieldSpecByField[Applications].ftype,
-	txnaFieldSpecByField[Logs].ftype,
+// It need not be fast, as it's only used for doc generation.
+func TxnaFieldNames() []string {
+	var names []string
+	for _, fs := range txnFieldSpecs {
+		if fs.array {
+			names = append(names, fs.field.String())
+		}
+	}
+	return names
 }
 
-var txnaFieldSpecByField = map[TxnField]txnFieldSpec{
-	ApplicationArgs: {ApplicationArgs, StackBytes, 2, 0, false},
-	Accounts:        {Accounts, StackBytes, 2, 0, false},
-	Assets:          {Assets, StackUint64, 3, 0, false},
-	Applications:    {Applications, StackUint64, 3, 0, false},
-
-	Logs: {Logs, StackBytes, 5, 5, true},
+// TxnaFieldTypes is StackBytes or StackUint64 parallel to TxnaFieldNames
+func TxnaFieldTypes() []StackType {
+	var types []StackType
+	for _, fs := range txnFieldSpecs {
+		if fs.array {
+			types = append(types, fs.ftype)
+		}
+	}
+	return types
 }
 
 var innerTxnTypes = map[string]uint64{

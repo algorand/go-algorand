@@ -447,7 +447,7 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 		for _, command := range tests {
 			text := fmt.Sprintf(command, field)
 			asmError := "...available in version ..."
-			if _, ok := txnaFieldSpecByField[fs.field]; ok {
+			if fs.array {
 				parts := strings.Split(text, " ")
 				op := parts[0]
 				asmError = fmt.Sprintf("%s found array field %#v while expecting scalar", op, field)
@@ -459,7 +459,7 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			}
 
 			ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
-			if _, ok := txnaFieldSpecByField[fs.field]; ok {
+			if fs.array {
 				// "txn Accounts" is invalid, so skip evaluation
 				require.Error(t, err, asmError)
 				continue

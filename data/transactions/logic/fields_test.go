@@ -28,8 +28,7 @@ import (
 
 func TestArrayFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	require.Equal(t, len(TxnaFieldNames), len(TxnaFieldTypes))
-	require.Equal(t, len(txnaFieldSpecByField), len(TxnaFieldTypes))
+	require.Equal(t, len(TxnaFieldNames()), len(TxnaFieldTypes()))
 }
 
 // ensure v2+ fields fail in TEAL assembler and evaluator on a version before they introduced
@@ -124,7 +123,7 @@ func TestTxnFieldVersions(t *testing.T) {
 			text := fmt.Sprintf(command, field)
 			asmError := asmDefaultError
 			txnaMode := false
-			if _, ok := txnaFieldSpecByField[fs.field]; ok {
+			if fs.array {
 				text = fmt.Sprintf(subs[command], field)
 				asmError = "...txna opcode was introduced in ..."
 				txnaMode = true

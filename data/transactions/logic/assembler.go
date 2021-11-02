@@ -792,8 +792,7 @@ func fetchField(name string, expectArray bool, version uint64) (txnFieldSpec, er
 	if !ok {
 		return fs, fmt.Errorf("unknown field: %#v", name)
 	}
-	_, isArray := txnaFieldSpecByField[fs.field]
-	if expectArray != isArray {
+	if expectArray != fs.array {
 		if expectArray {
 			return txnFieldSpec{}, fmt.Errorf("found scalar field %#v while expecting array", name)
 		}
@@ -1223,14 +1222,7 @@ func asmTxField(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("txn unknown field: %#v", args[0])
-	}
-	// itxn_field appends to the field if it's an array
-	if spec.Name != "itxn_field" {
-		_, ok = txnaFieldSpecByField[fs.field]
-		if ok {
-			return ops.errorf("found array field %#v in %s op", args[0], spec.Name)
-		}
+		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(fs.field))

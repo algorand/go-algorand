@@ -2190,8 +2190,7 @@ func (cx *EvalContext) fetchField(field TxnField, expectArray bool) (txnFieldSpe
 	if !ok || fs.version > cx.version {
 		return txnFieldSpec{}, fmt.Errorf("invalid txn field %d", field)
 	}
-	_, isArray := txnaFieldSpecByField[field]
-	if expectArray != isArray {
+	if expectArray != fs.array {
 		if expectArray {
 			return txnFieldSpec{}, fmt.Errorf("unsupported array field %d", field)
 		}
