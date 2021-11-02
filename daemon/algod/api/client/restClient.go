@@ -59,9 +59,10 @@ const (
 
 // rawRequestPaths is a set of paths where the body should not be urlencoded
 var rawRequestPaths = map[string]bool{
-	"/v1/transactions": true,
-	"/v2/teal/dryrun":  true,
-	"/v2/teal/compile": true,
+	"/v1/transactions":  true,
+	"/v2/teal/dryrun":   true,
+	"/v2/teal/compile":  true,
+	"/v2/participation": true,
 }
 
 // unauthorizedRequestError is generated when we receive 401 error from the server. This error includes the inner error
@@ -602,6 +603,12 @@ func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 func (client RestClient) Proof(txid string, round uint64) (response generatedV2.ProofResponse, err error) {
 	txid = stripTransaction(txid)
 	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/transactions/%s/proof", round, txid), nil)
+	return
+}
+
+// PostParticipationKey sends a key file to the node.
+func (client RestClient) PostParticipationKey(file []byte) (response generatedV2.PostParticipationResponse, err error) {
+	err = client.post(&response, "/v2/participation", file)
 	return
 }
 
