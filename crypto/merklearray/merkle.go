@@ -25,13 +25,21 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 )
 
+const (
+	// MaxTreeDepth is the maximum tree depth with the root being 1
+	MaxTreeDepth = 17
+	
+	// MaxNumLeaves is the maximum number of leaves allowed in the tree
+	MaxNumLeaves = 65536 // 2^(MaxTreeDepth-1)
+)
+
 // Tree is a Merkle tree, represented by layers of nodes (hashes) in the tree
 // at each height.
 type Tree struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// Level 0 is the leaves.
-	Levels []Layer            `codec:"lvls,allocbound=9999"`
+	Levels []Layer            `codec:"lvls,allocbound=MaxTreeDepth"`
 	Hash   crypto.HashFactory `codec:"hsh"`
 }
 

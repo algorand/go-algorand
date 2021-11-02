@@ -157,12 +157,12 @@ type OneTimeSignatureSecretsPersistent struct {
 	// The odd `codec:` name is for backwards compatibility with previous
 	// stored keys where we failed to give any explicit `codec:` name.
 	FirstBatch uint64            `codec:"First"`
-	Batches    []ephemeralSubkey `codec:"Sub,allocbound=9999"`
+	Batches    []ephemeralSubkey `codec:"Sub,allocbound=8888"`
 
 	// FirstOffset denotes the first offset whose subkey appears in Offsets.
 	// These subkeys correspond to batch FirstBatch-1.
 	FirstOffset uint64            `codec:"firstoff"`
-	Offsets     []ephemeralSubkey `codec:"offkeys,allocbound=9999"`
+	Offsets     []ephemeralSubkey `codec:"offkeys,allocbound=8888"`
 
 	// When Offsets is non-empty, OffsetsPK2 is the intermediate-level public
 	// key that can be used to verify signatures on the subkeys in Offsets, and

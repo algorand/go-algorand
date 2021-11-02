@@ -21,13 +21,13 @@ import cdilithium "github.com/algorand/dilithium/ref"
 // Exporting signature, publicKey, secretKey.
 type (
 	//DilithiumPublicKey is the public key
-	//msgp:allocbound DilithiumPublicKey 9999
+	//msgp:allocbound DilithiumPublicKey
 	DilithiumPublicKey []byte
 	//DilithiumPrivateKey is the private key
-	//msgp:allocbound DilithiumPrivateKey 9999
+	//msgp:allocbound DilithiumPrivateKey
 	DilithiumPrivateKey []byte
 	//DilithiumSignature is the exported signature
-	//msgp:allocbound DilithiumSignature 9999
+	//msgp:allocbound DilithiumSignature
 	DilithiumSignature ByteSignature
 
 	// DPublicKey is a wrapper for cdilithium.DilPublicKey (used for packing)
