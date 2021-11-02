@@ -1224,6 +1224,9 @@ func asmTxField(ops *OpStream, spec *OpSpec, args []string) error {
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
+	if fs.itxVersion == 0 {
+		return ops.errorf("itxn_field %#v is not allowed.", args[0])
+	}
 	if fs.itxVersion > ops.Version {
 		return ops.errorf("itxn_field %#v available in version %d. Missed #pragma version?", args[0], fs.itxVersion)
 	}

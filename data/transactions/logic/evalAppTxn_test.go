@@ -389,16 +389,17 @@ func TestBadField(t *testing.T) {
   int pay
   itxn_field TypeEnum
   txn Receiver
-  itxn_field RekeyTo				// ALLOWED, since v6
+  itxn_field RekeyTo			// ALLOWED, since v6
   int 10
-  itxn_field FirstValid				// NOT ALLOWED
+  itxn_field Amount				// Will be changed to FirstValid
   itxn_submit
 `
 
 	ep, ledger := makeSampleEnv()
 	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
-	testApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+pay, ep,
-		"invalid itxn_field FirstValid")
+	ops := testProg(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+pay, AssemblerMaxVersion)
+	ops.Program[len(ops.Program)-2] = byte(FirstValid)
+	testAppBytes(t, ops.Program, ep, "invalid itxn_field FirstValid")
 }
 
 func TestNumInner(t *testing.T) {
