@@ -805,6 +805,17 @@ func fetchField(name string, expectArray bool, version uint64) (txnFieldSpec, er
 	return fs, nil
 }
 
+func fetchArrayIdx(s string) (uint64, error) {
+	arrayFieldIdx, err := strconv.ParseUint(s, 0, 64)
+	if err != nil {
+		return 0, fmt.Errorf("unable to parse %#v as integer", s)
+	}
+	if arrayFieldIdx > 255 {
+		return 0, fmt.Errorf("array index beyond 255: %d", arrayFieldIdx)
+	}
+	return arrayFieldIdx, err
+}
+
 func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("txn expects one argument")
@@ -839,12 +850,9 @@ func assembleTxna(ops *OpStream, spec *OpSpec, args []string) error {
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
-	arrayFieldIdx, err := strconv.ParseUint(args[1], 0, 64)
+	arrayFieldIdx, err := fetchArrayIdx(args[1])
 	if err != nil {
-		return ops.error(err)
-	}
-	if arrayFieldIdx > 255 {
-		return ops.errorf("txna array index beyond 255: %d", arrayFieldIdx)
+		return ops.errorf("%s %w", spec.Name, err)
 	}
 
 	ops.pending.WriteByte(spec.Opcode)
@@ -920,12 +928,9 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
 
-	arrayFieldIdx, err := strconv.ParseUint(args[2], 0, 64)
+	arrayFieldIdx, err := fetchArrayIdx(args[2])
 	if err != nil {
-		return ops.error(err)
-	}
-	if arrayFieldIdx > 255 {
-		return ops.errorf("%s array index beyond 255: %d", spec.Name, arrayFieldIdx)
+		return ops.errorf("%s %w", spec.Name, err)
 	}
 
 	ops.pending.WriteByte(spec.Opcode)
@@ -988,12 +993,9 @@ func assembleGtxnsa(ops *OpStream, spec *OpSpec, args []string) error {
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
-	arrayFieldIdx, err := strconv.ParseUint(args[1], 0, 64)
+	arrayFieldIdx, err := fetchArrayIdx(args[1])
 	if err != nil {
-		return ops.error(err)
-	}
-	if arrayFieldIdx > 255 {
-		return ops.errorf("%s array index beyond 255: %d", spec.Name, arrayFieldIdx)
+		return ops.errorf("%s %w", spec.Name, err)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(fs.field))
@@ -1050,12 +1052,9 @@ func asmItxna(ops *OpStream, spec *OpSpec, args []string) error {
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
-	arrayFieldIdx, err := strconv.ParseUint(args[1], 0, 64)
+	arrayFieldIdx, err := fetchArrayIdx(args[1])
 	if err != nil {
-		return ops.error(err)
-	}
-	if arrayFieldIdx > 255 {
-		return ops.errorf("%s array index beyond 255: %d", spec.Name, arrayFieldIdx)
+		return ops.errorf("%s %w", spec.Name, err)
 	}
 
 	ops.pending.WriteByte(spec.Opcode)
