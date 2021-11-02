@@ -147,6 +147,7 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 }
 
 func TestCloseOnError(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
