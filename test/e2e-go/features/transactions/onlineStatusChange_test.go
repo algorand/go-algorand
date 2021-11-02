@@ -176,6 +176,6 @@ func TestCloseOnError(t *testing.T) {
 	a.Equal("PersistedParticipation.Persist: failed to install database: table ParticipationAccount already exists", err.Error())
 	// check lastValid < firstValid does not crash
 	_, _, err = client.GenParticipationKeys(initiallyOffline, curRound+1001, curRound+1000, 0)
-	expected:= fmt.Sprintf("FillDBWithParticipationKeys: firstValid %d is after lastValid %d", int(curRound+1001), int(curRound+1000))
+	expected := fmt.Sprintf("FillDBWithParticipationKeys: firstValid %d is after lastValid %d", int(curRound+1001), int(curRound+1000))
 	a.Equal(expected, err.Error())
 }
