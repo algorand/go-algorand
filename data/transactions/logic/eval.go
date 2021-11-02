@@ -120,7 +120,7 @@ func (sv *stackValue) uintMaxed(max uint64) (uint64, error) {
 		return 0, fmt.Errorf("%#v is not a uint64", sv.Bytes)
 	}
 	if sv.Uint > max {
-		return 0, fmt.Errorf("%d is larger that max=%d", sv.Uint, max)
+		return 0, fmt.Errorf("%d is larger than max=%d", sv.Uint, max)
 	}
 	return sv.Uint, nil
 }

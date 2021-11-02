@@ -367,14 +367,16 @@ func TestBadFieldV5(t *testing.T) {
   int pay
   itxn_field TypeEnum
   txn Receiver
-  itxn_field RekeyTo				// NOT ALLOWED
+  itxn_field Sender				// Will be changed to RekeyTo
   itxn_submit
 `
 
 	ep, ledger := makeSampleEnvWithVersion(5)
 	ledger.NewApp(ep.Txn.Txn.Receiver, 888, basics.AppParams{})
-	testApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+pay, ep,
-		"invalid itxn_field RekeyTo")
+	// Assemble a good program, then change the field to a bad one
+	ops := testProg(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+pay, 5)
+	ops.Program[len(ops.Program)-2] = byte(RekeyTo)
+	testAppBytes(t, ops.Program, ep, "invalid itxn_field RekeyTo")
 }
 
 func TestBadField(t *testing.T) {
@@ -605,7 +607,7 @@ func TestApplCreation(t *testing.T) {
 	testApp(t, p+"int 3; itxn_field OnCompletion"+s, ep)
 	testApp(t, p+"int 4; itxn_field OnCompletion"+s, ep)
 	testApp(t, p+"int 5; itxn_field OnCompletion"+s, ep)
-	testApp(t, p+"int 6; itxn_field OnCompletion"+s, ep, "too large")
+	testApp(t, p+"int 6; itxn_field OnCompletion"+s, ep, "6 is larger than max=5")
 	testApp(t, p+"int NoOp; itxn_field OnCompletion"+s, ep)
 	testApp(t, p+"int OptIn; itxn_field OnCompletion"+s, ep)
 	testApp(t, p+"int CloseOut; itxn_field OnCompletion"+s, ep)
@@ -654,18 +656,18 @@ func TestApplCreation(t *testing.T) {
 		"may not exceed 2700")
 
 	testApp(t, p+"int 30; itxn_field GlobalNumUint"+s, ep)
-	testApp(t, p+"int 31; itxn_field GlobalNumUint"+s, ep, "too large")
+	testApp(t, p+"int 31; itxn_field GlobalNumUint"+s, ep, "31 is larger than max=30")
 	testApp(t, p+"int 30; itxn_field GlobalNumByteSlice"+s, ep)
-	testApp(t, p+"int 31; itxn_field GlobalNumByteSlice"+s, ep, "too large")
+	testApp(t, p+"int 31; itxn_field GlobalNumByteSlice"+s, ep, "31 is larger than max=30")
 	testApp(t, p+"int 20; itxn_field GlobalNumUint; int 11; itxn_field GlobalNumByteSlice"+s, ep)
 
 	testApp(t, p+"int 13; itxn_field LocalNumUint"+s, ep)
-	testApp(t, p+"int 14; itxn_field LocalNumUint"+s, ep, "too large")
+	testApp(t, p+"int 14; itxn_field LocalNumUint"+s, ep, "14 is larger than max=13")
 	testApp(t, p+"int 13; itxn_field LocalNumByteSlice"+s, ep)
-	testApp(t, p+"int 14; itxn_field LocalNumByteSlice"+s, ep, "too large")
+	testApp(t, p+"int 14; itxn_field LocalNumByteSlice"+s, ep, "14 is larger than max=13")
 
 	testApp(t, p+"int 2; itxn_field ExtraProgramPages"+s, ep)
-	testApp(t, p+"int 3; itxn_field ExtraProgramPages"+s, ep, "too large")
+	testApp(t, p+"int 3; itxn_field ExtraProgramPages"+s, ep, "3 is larger than max=2")
 }
 
 // TestApplSubmission tests for checking of illegal appl transaction in form

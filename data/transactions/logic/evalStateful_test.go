@@ -381,13 +381,18 @@ func TestBalance(t *testing.T) {
 func testApp(t *testing.T, program string, ep EvalParams, problems ...string) transactions.EvalDelta {
 	t.Helper()
 	ops := testProg(t, program, ep.Proto.LogicSigVersion)
-	err := CheckStateful(ops.Program, ep)
+	return testAppBytes(t, ops.Program, ep, problems...)
+}
+
+func testAppBytes(t *testing.T, program []byte, ep EvalParams, problems ...string) transactions.EvalDelta {
+	t.Helper()
+	err := CheckStateful(program, ep)
 	require.NoError(t, err)
 
 	// we only use this to test stateful apps.  While, I suppose
 	// it's *legal* to have an app with no stateful ops, this
 	// convenience routine can assume it, and check it.
-	pass, err := Eval(ops.Program, ep)
+	pass, err := Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "not allowed in current mode")
 	require.False(t, pass)
@@ -404,7 +409,7 @@ func testApp(t *testing.T, program string, ep EvalParams, problems ...string) tr
 			*ep.PooledApplicationBudget = uint64(ep.Proto.MaxAppProgramCost)
 		}
 	}
-	pass, err = EvalStateful(ops.Program, ep)
+	pass, err = EvalStateful(program, ep)
 	if len(problems) == 0 {
 		require.NoError(t, err, sb.String())
 		require.True(t, pass, sb.String())

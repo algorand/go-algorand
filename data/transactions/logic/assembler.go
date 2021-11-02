@@ -1224,6 +1224,9 @@ func asmTxField(ops *OpStream, spec *OpSpec, args []string) error {
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
+	if fs.itxVersion > ops.Version {
+		return ops.errorf("itxn_field %#v available in version %d. Missed #pragma version?", args[0], fs.itxVersion)
+	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(fs.field))
 	return nil
