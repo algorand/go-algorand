@@ -31,7 +31,7 @@ import (
 	"time"
 )
 
-func waitUntilProtocolFuture(a *require.Assertions, fixture fixtures.RestClientFixture, nodeClient libgoal.Client) {
+func waitUntilProtocolFuture(a *require.Assertions, fixture *fixtures.RestClientFixture, nodeClient libgoal.Client) {
 
 	curRound, err := nodeClient.CurrentRound()
 	a.NoError(err)
@@ -72,7 +72,7 @@ func TestKeysWithoutStateProofKeyCannotRegister(t *testing.T) {
 
 	nodeClient := fixture.GetLibGoalClientForNamedNode("Node")
 
-	waitUntilProtocolFuture(a, fixture, nodeClient)
+	waitUntilProtocolFuture(a, &fixture, nodeClient)
 
 	a.Error(registerKeyInto(&nodeClient, a, lastValid+2, protocol.ConsensusV30))
 	a.NoError(registerKeyInto(&nodeClient, a, lastValid+3, protocol.ConsensusFuture))
@@ -197,7 +197,7 @@ func TestParticipationWithoutStateProofKeys(t *testing.T) {
 	var address = act.Address
 
 	nodeClient := fixture.GetLibGoalClientForNamedNode("Node")
-	waitUntilProtocolFuture(a, fixture, nodeClient)
+	waitUntilProtocolFuture(a, &fixture, nodeClient)
 
 	a.NotEmpty(address)
 
