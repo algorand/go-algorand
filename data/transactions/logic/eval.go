@@ -117,10 +117,10 @@ func (sv *stackValue) uint() (uint64, error) {
 
 func (sv *stackValue) uintMaxed(max uint64) (uint64, error) {
 	if sv.Bytes != nil {
-		return 0, errors.New("not a uint64")
+		return 0, fmt.Errorf("%#v is not a uint64", sv.Bytes)
 	}
 	if sv.Uint > max {
-		return 0, errors.New("too large")
+		return 0, fmt.Errorf("%d is larger that max=%d", sv.Uint, max)
 	}
 	return sv.Uint, nil
 }
@@ -167,7 +167,9 @@ func stackValueFromTealValue(tv *basics.TealValue) (sv stackValue, err error) {
 // newly-introduced transaction fields from breaking assumptions made by older
 // versions of TEAL. If one of the transactions in a group will execute a TEAL
 // program whose version predates a given field, that field must not be set
-// anywhere in the transaction group, or the group will be rejected.
+// anywhere in the transaction group, or the group will be rejected. In
+// addition, inner app calls must not call teal from before inner app calls were
+// introduced.
 func ComputeMinTealVersion(group []transactions.SignedTxn, inner bool) uint64 {
 	var minVersion uint64
 	for _, txn := range group {

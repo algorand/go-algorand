@@ -913,15 +913,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		}
 	}
 
-	/*
-		// We are not allowing InnerTxns to have InnerTxns yet.  Error if that happens.
-		for _, itx := range applyData.EvalDelta.InnerTxns {
-			if len(itx.ApplyData.EvalDelta.InnerTxns) > 0 {
-				return fmt.Errorf("inner transaction has inner transactions %v", itx)
-			}
-		}
-	*/
-
 	// Remember this txn
 	cow.addTx(txn.Txn, txid)
 
