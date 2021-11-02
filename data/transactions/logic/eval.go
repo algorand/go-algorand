@@ -2232,13 +2232,13 @@ func opTxna(cx *EvalContext) {
 }
 
 func opTxnas(cx *EvalContext) {
-	last := len(cx.stack) - 1
-
 	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+1]), true)
 	if err != nil {
 		cx.err = err
 		return
 	}
+
+	last := len(cx.stack) - 1
 	arrayFieldIdx := cx.stack[last].Uint
 	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, fs, arrayFieldIdx, cx.GroupIndex)
 	if err != nil {
@@ -2260,16 +2260,11 @@ func opGtxn(cx *EvalContext) {
 		cx.err = err
 		return
 	}
-	var sv stackValue
-	if fs.field == GroupIndex {
-		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
-		sv.Uint = uint64(gtxid)
-	} else {
-		sv, err = cx.txnFieldToStack(tx, fs, 0, uint64(gtxid))
-		if err != nil {
-			cx.err = err
-			return
-		}
+
+	sv, err := cx.txnFieldToStack(tx, fs, 0, uint64(gtxid))
+	if err != nil {
+		cx.err = err
+		return
 	}
 	cx.stack = append(cx.stack, sv)
 }
@@ -2331,16 +2326,10 @@ func opGtxns(cx *EvalContext) {
 		cx.err = err
 		return
 	}
-	var sv stackValue
-	if fs.field == GroupIndex {
-		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
-		sv.Uint = gtxid
-	} else {
-		sv, err = cx.txnFieldToStack(tx, fs, 0, gtxid)
-		if err != nil {
-			cx.err = err
-			return
-		}
+	sv, err := cx.txnFieldToStack(tx, fs, 0, gtxid)
+	if err != nil {
+		cx.err = err
+		return
 	}
 	cx.stack[last] = sv
 }
@@ -2624,10 +2613,6 @@ func (cx *EvalContext) getCreatorAddress() ([]byte, error) {
 	return creator[:], nil
 }
 
-func (cx *EvalContext) getGroupID() []byte {
-	return cx.Txn.Txn.Group[:]
-}
-
 var zeroAddress basics.Address
 
 func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, err error) {
@@ -2657,7 +2642,7 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 	case CreatorAddress:
 		sv.Bytes, err = cx.getCreatorAddress()
 	case GroupID:
-		sv.Bytes = cx.getGroupID()
+		sv.Bytes = cx.Txn.Txn.Group[:]
 	default:
 		err = fmt.Errorf("invalid global field %d", fs.field)
 	}
