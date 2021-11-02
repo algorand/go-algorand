@@ -23,7 +23,6 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"time"
 
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/codecs"
@@ -233,9 +232,6 @@ const (
 	dnssecRelayAddr
 	dnssecTelemetryAddr
 )
-
-// ProposalAssemblyTime is the max amount of time to spend on generating a proposal block. This should eventually have it's own configurable value.
-const ProposalAssemblyTime time.Duration = 250 * time.Millisecond
 
 const (
 	catchupValidationModeCertificate                 = 1

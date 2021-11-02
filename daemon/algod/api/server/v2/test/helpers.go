@@ -21,7 +21,6 @@ import (
 	"math/rand"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -171,7 +170,7 @@ func (m mockNode) GetTransactionByID(txid transactions.Txid, rnd basics.Round) (
 	return node.TxnWithStatus{}, fmt.Errorf("get transaction by id not implemented")
 }
 
-func (m mockNode) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
+func (m mockNode) AssembleBlock(round basics.Round) (agreement.ValidatedBlock, error) {
 	return nil, fmt.Errorf("assemble block not implemented")
 }
 
