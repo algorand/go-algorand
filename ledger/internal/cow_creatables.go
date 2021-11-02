@@ -18,7 +18,6 @@ package internal
 
 import (
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/ledger/apply"
 )
 
 func (cs *roundCowState) TotalAppParams(creator basics.Address) (int, error) {
@@ -50,52 +49,36 @@ func (cs *roundCowState) TotalAssetParams(addr basics.Address) (int, error) {
 	return len(acct.AssetParams), nil
 }
 
-func (cs *roundCowState) GetAppParams(creator basics.Address, aidx basics.AppIndex) (params basics.AppParams, err error) {
+func (cs *roundCowState) GetAppParams(creator basics.Address, aidx basics.AppIndex) (ret basics.AppParams, ok bool, err error) {
 	acct, err := cs.lookup(creator)
 	if err != nil {
 		return
 	}
-	params, ok := acct.AppParams[aidx]
-	if !ok {
-		err = apply.ErrCreatableNotFound
-		return
-	}
+	ret, ok = acct.AppParams[aidx]
 	return
 }
-func (cs *roundCowState) GetAppLocalState(addr basics.Address, aidx basics.AppIndex) (state basics.AppLocalState, err error) {
+func (cs *roundCowState) GetAppLocalState(addr basics.Address, aidx basics.AppIndex) (ret basics.AppLocalState, ok bool, err error) {
 	acct, err := cs.lookup(addr)
 	if err != nil {
 		return
 	}
-	state, ok := acct.AppLocalStates[aidx]
-	if !ok {
-		err = apply.ErrCreatableNotFound
-		return
-	}
+	ret, ok = acct.AppLocalStates[aidx]
 	return
 }
-func (cs *roundCowState) GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (holding basics.AssetHolding, err error) {
+func (cs *roundCowState) GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (ret basics.AssetHolding, ok bool, err error) {
 	acct, err := cs.lookup(addr)
 	if err != nil {
 		return
 	}
-	holding, ok := acct.Assets[aidx]
-	if !ok {
-		err = apply.ErrCreatableNotFound
-		return
-	}
+	ret, ok = acct.Assets[aidx]
 	return
 }
-func (cs *roundCowState) GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (params basics.AssetParams, err error) {
+func (cs *roundCowState) GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (ret basics.AssetParams, ok bool, err error) {
 	acct, err := cs.lookup(addr)
 	if err != nil {
 		return
 	}
-	params, ok := acct.AssetParams[aidx]
-	if !ok {
-		err = apply.ErrCreatableNotFound
-		return
-	}
+	ret, ok = acct.AssetParams[aidx]
 	return
 }
 

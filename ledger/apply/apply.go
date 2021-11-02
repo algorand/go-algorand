@@ -17,16 +17,11 @@
 package apply
 
 import (
-	"errors"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
-
-// ErrCreatableNotFound is returned by calls to Balances if AppParams, AppLocalState, AssetData, or AssetHolding can't be found
-var ErrCreatableNotFound = errors.New("no app or asset data found")
 
 // Balances allow to move MicroAlgos from one address to another and to update balance records, or to access and modify individual balance records
 // After a call to Put (or Move), future calls to Get or Move will reflect the updated balance record(s)
@@ -40,23 +35,23 @@ type Balances interface {
 	Put(basics.Address, basics.AccountData) error
 
 	TotalAppParams(addr basics.Address) (int, error)
-	GetAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, error)
+	GetAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, bool, error)
 	PutAppParams(addr basics.Address, aidx basics.AppIndex, params basics.AppParams) error
 	DeleteAppParams(addr basics.Address, aidx basics.AppIndex) error
 
 	TotalAppLocalState(addr basics.Address) (int, error)
-	GetAppLocalState(addr basics.Address, aidx basics.AppIndex) (basics.AppLocalState, error)
+	GetAppLocalState(addr basics.Address, aidx basics.AppIndex) (basics.AppLocalState, bool, error)
 	CheckAppLocalState(addr basics.Address, aidx basics.AppIndex) (bool, error)
 	PutAppLocalState(addr basics.Address, aidx basics.AppIndex, state basics.AppLocalState) error
 	DeleteAppLocalState(addr basics.Address, aidx basics.AppIndex) error
 
 	TotalAssetHolding(addr basics.Address) (int, error)
-	GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (basics.AssetHolding, error)
+	GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (basics.AssetHolding, bool, error)
 	PutAssetHolding(addr basics.Address, aidx basics.AssetIndex, data basics.AssetHolding) error
 	DeleteAssetHolding(addr basics.Address, aidx basics.AssetIndex) error
 
 	TotalAssetParams(addr basics.Address) (int, error)
-	GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (basics.AssetParams, error)
+	GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (basics.AssetParams, bool, error)
 	CheckAssetParams(addr basics.Address, aidx basics.AssetIndex) (bool, error)
 	PutAssetParams(addr basics.Address, aidx basics.AssetIndex, data basics.AssetParams) error
 	DeleteAssetParams(addr basics.Address, aidx basics.AssetIndex) error

@@ -61,11 +61,15 @@ func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppPar
 		return
 	}
 
-	params, err = balances.GetAppParams(creator, aidx)
+	params, ok, err := balances.GetAppParams(creator, aidx)
 	if err != nil {
+		return
+	}
+
+	if !ok {
 		// This should never happen. If app exists then we should have
 		// found the creator successfully.
-		err = fmt.Errorf("app %d not found in account %s: %w", aidx, creator.String(), err)
+		err = fmt.Errorf("app %d not found in account %s", aidx, creator.String())
 		return
 	}
 
@@ -147,7 +151,7 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 		return err
 	}
 
-	params, err := balances.GetAppParams(creator, appIdx)
+	params, _, err := balances.GetAppParams(creator, appIdx)
 	if err != nil {
 		return err
 	}
@@ -192,7 +196,7 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 
 func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balances, creator basics.Address, appIdx basics.AppIndex) error {
 	// Updating the application. Fetch the creator's balance record
-	params, err := balances.GetAppParams(creator, appIdx)
+	params, _, err := balances.GetAppParams(creator, appIdx)
 	if err != nil {
 		return err
 	}
@@ -232,7 +236,7 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 	if err != nil {
 		return err
 	}
-	if !ok {
+	if ok {
 		return fmt.Errorf("account %s has already opted in to app %d", sender.String(), appIdx)
 	}
 
@@ -287,9 +291,12 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 	}
 
 	// If they haven't opted in, that's an error
-	localState, err := balances.GetAppLocalState(sender, appIdx)
+	localState, ok, err := balances.GetAppLocalState(sender, appIdx)
 	if err != nil {
-		return fmt.Errorf("account %s is not opted in to app %d: %w", sender, appIdx, err)
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("account %s is not opted in to app %d", sender, appIdx)
 	}
 
 	// Update the TotalAppSchema used for MinBalance calculation,
