@@ -223,6 +223,7 @@ func txnGroupsData(numBlocks int) (txnGroups []pooldata.SignedTxGroup, genesisID
 			for _, txn := range txns {
 				txnGroup.Transactions = append(txnGroup.Transactions, txn.SignedTxn)
 			}
+			txnGroup.GroupTransactionID = txnGroup.Transactions.ID()
 			txnGroups = append(txnGroups, txnGroup)
 		}
 	}

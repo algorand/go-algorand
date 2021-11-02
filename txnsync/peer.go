@@ -85,7 +85,7 @@ const (
 
 	// defaultSignificantMessageThreshold is the minimal transmitted message size which would be used for recalculating the
 	// data exchange rate.
-	defaultSignificantMessageThreshold = 50000
+	defaultSignificantMessageThreshold = 20000
 )
 
 // incomingBloomFilter stores an incoming bloom filter, along with the associated round number.
@@ -419,6 +419,12 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []pooldata.SignedTx
 	}
 
 	logging.Base().Infof("num bloom filters: %v", len(effectiveBloomFilters))
+	if len(effectiveBloomFilters) > 150 {
+		for _, id := range effectiveBloomFilters {
+			filter := p.recentIncomingBloomFilters[id].filter
+			logging.Base().Infof("offset: %v mod: %v round %v", filter.encodingParams.Offset, filter.encodingParams.Modulator, p.recentIncomingBloomFilters[id].round)
+		}
+	}
 
 	// removedTxn := 0
 	grpIdx := startIndex

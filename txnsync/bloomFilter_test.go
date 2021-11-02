@@ -334,6 +334,53 @@ func TestBloomFilterTest(t *testing.T) {
 
 }
 
+func BenchmarkTestBloomFilter(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+
+		var s syncState
+		s.node = &justRandomFakeNode{}
+		var err error
+		txnGroups, _, _, _ := txnGroupsData(300)
+
+		testableBfs := make([]*testableBloomFilter, 0)
+
+		for j := 0; j < 150; j++ {
+			filter, filterType := filterFactoryXor32(len(txnGroups), &s)
+			for _, txnGroup := range txnGroups {
+				filter.Set(txnGroup.GroupTransactionID[:])
+			}
+			var enc encodedBloomFilter
+			enc.BloomFilterType = byte(filterType)
+			enc.BloomFilter, err = filter.MarshalBinary()
+			require.NoError(b, err)
+
+			testableBf, err := decodeBloomFilter(enc)
+			require.NoError(b, err)
+
+			testableBfs = append(testableBfs, testableBf)
+		}
+
+		b.StartTimer()
+
+		for _, tx := range txnGroups {
+			for _, testableBf := range testableBfs {
+					testableBf.test(tx.GroupTransactionID)
+					//ans := testableBf.test(tx.GroupTransactionID)
+					//expected := true
+					//if testableBf.encodingParams.Modulator > 1 {
+					//	if txidToUint64(tx.GroupTransactionID)%uint64(testableBf.encodingParams.Modulator) != uint64(testableBf.encodingParams.Offset) {
+					//		expected = false
+					//	}
+					//}
+					//if ans != expected {
+					//	fmt.Println("???")
+					//}
+				}
+		}
+	}
+}
+
 type justRandomFakeNode struct {
 }
 
