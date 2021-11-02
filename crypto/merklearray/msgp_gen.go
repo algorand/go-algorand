@@ -64,8 +64,8 @@ func (z *Layer) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0002 > 9999 {
-		err = msgp.ErrOverflow(uint64(zb0002), uint64(9999))
+	if zb0002 > MaxNumLeaves {
+		err = msgp.ErrOverflow(uint64(zb0002), uint64(MaxNumLeaves))
 		err = msgp.WrapError(err)
 		return
 	}
@@ -360,8 +360,8 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Levels")
 				return
 			}
-			if zb0005 > 9999 {
-				err = msgp.ErrOverflow(uint64(zb0005), uint64(9999))
+			if zb0005 > MaxTreeDepth {
+				err = msgp.ErrOverflow(uint64(zb0005), uint64(MaxTreeDepth))
 				err = msgp.WrapError(err, "struct-from-array", "Levels")
 				return
 			}
@@ -380,8 +380,8 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "struct-from-array", "Levels", zb0001)
 					return
 				}
-				if zb0007 > 9999 {
-					err = msgp.ErrOverflow(uint64(zb0007), uint64(9999))
+				if zb0007 > MaxNumLeaves {
+					err = msgp.ErrOverflow(uint64(zb0007), uint64(MaxNumLeaves))
 					err = msgp.WrapError(err, "struct-from-array", "Levels", zb0001)
 					return
 				}
@@ -440,8 +440,8 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Levels")
 					return
 				}
-				if zb0009 > 9999 {
-					err = msgp.ErrOverflow(uint64(zb0009), uint64(9999))
+				if zb0009 > MaxTreeDepth {
+					err = msgp.ErrOverflow(uint64(zb0009), uint64(MaxTreeDepth))
 					err = msgp.WrapError(err, "Levels")
 					return
 				}
@@ -460,8 +460,8 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "Levels", zb0001)
 						return
 					}
-					if zb0011 > 9999 {
-						err = msgp.ErrOverflow(uint64(zb0011), uint64(9999))
+					if zb0011 > MaxNumLeaves {
+						err = msgp.ErrOverflow(uint64(zb0011), uint64(MaxNumLeaves))
 						err = msgp.WrapError(err, "Levels", zb0001)
 						return
 					}

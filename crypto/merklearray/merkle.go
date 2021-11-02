@@ -28,7 +28,7 @@ import (
 const (
 	// MaxTreeDepth is the maximum tree depth with the root being 1
 	MaxTreeDepth = 17
-	
+
 	// MaxNumLeaves is the maximum number of leaves allowed in the tree
 	MaxNumLeaves = 65536 // 2^(MaxTreeDepth-1)
 )
