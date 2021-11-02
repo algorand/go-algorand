@@ -1,3 +1,19 @@
+// Copyright (C) 2019-2021 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 // Check that devmode is functioning as designed.
 package devmode
 
@@ -37,10 +53,10 @@ func TestDevMode(t *testing.T) {
 
 	// 2 transactions should be sent within one normal confirmation time.
 	for i := uint64(0); i < 2; i++ {
-		txn = fixture.SendMoneyAndWait(firstRound + i, 100000, 1000, sender.Address, receiver.String(), "")
-		require.Equal(t, firstRound + i, txn.FirstRound)
+		txn = fixture.SendMoneyAndWait(firstRound+i, 100000, 1000, sender.Address, receiver.String(), "")
+		require.Equal(t, firstRound+i, txn.FirstRound)
 	}
-	require.True(t, time.Since(start) < 2 * time.Second, "Transactions should be quickly confirmed.")
+	require.True(t, time.Since(start) < 2*time.Second, "Transactions should be quickly confirmed.")
 
 	// Without transactions there should be no rounds even after a normal confirmation time.
 	time.Sleep(10 * time.Second)

@@ -98,7 +98,7 @@ func TestKeyRegistration(t *testing.T) {
 	params, err := fixture.CurrentConsensusParams()
 	require.NoError(t, err)
 	for i := uint64(0); i < params.MaxBalLookback; i++ {
-		fixture.SendMoneyAndWait(2 + i, 0, minTxnFee, sAccount, sAccount, "")
+		fixture.SendMoneyAndWait(2+i, 0, minTxnFee, sAccount, sAccount, "")
 	}
 
 	keys, err = fixture.LibGoalClient.GetParticipationKeys()

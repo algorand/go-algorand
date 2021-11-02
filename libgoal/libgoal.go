@@ -893,6 +893,8 @@ func (c *Client) GetPendingTransactionsByAddress(addr string, maxTxns uint64) (r
 	return
 }
 
+// AddParticipationKey takes a participation key file and sends it to the node.
+// The key will be loaded into the system when the function returns successfully.
 func (c *Client) AddParticipationKey(keyfile string) (resp generated.PostParticipationResponse, err error) {
 	data, err := ioutil.ReadFile(keyfile)
 	if err != nil {
@@ -906,7 +908,6 @@ func (c *Client) AddParticipationKey(keyfile string) (resp generated.PostPartici
 
 	return algod.PostParticipationKey(data)
 }
-
 
 // GetParticipationKeys gets the currently installed participation keys.
 func (c *Client) GetParticipationKeys() (resp generated.ParticipationKeysResponse, err error) {
