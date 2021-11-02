@@ -52,11 +52,7 @@ import (
 )
 
 const incomingThreads = 20
-
-// messageFilterSize is the threshold beyond we send a request to the other peer to avoid sending us a message with that particular hash.
-// typically, this is beneficial for proposal messages, which tends to be large and uniform across the network. Non-uniform messages, such
-// as the transaction sync messages should not included in this filter.
-const messageFilterSize = 200000
+const messageFilterSize = 5000 // messages greater than that size may be blocked by incoming/outgoing filter
 
 // httpServerReadHeaderTimeout is the amount of time allowed to read
 // request headers. The connection's read deadline is reset
@@ -221,9 +217,6 @@ type IncomingMessage struct {
 	Data   []byte
 	Err    error
 	Net    GossipNode
-
-	// Sequence is the sequence number of the message for the specific tag and peer
-	Sequence uint64
 
 	// Received is time.Time.UnixNano()
 	Received int64
@@ -430,9 +423,6 @@ func (wn *WebsocketNetwork) Address() (string, bool) {
 	parsedURL := url.URL{Scheme: wn.scheme}
 	var connected bool
 	if wn.listener == nil {
-		if wn.config.NetAddress == "" {
-			parsedURL.Scheme = ""
-		}
 		parsedURL.Host = wn.config.NetAddress
 		connected = false
 	} else {
@@ -1136,7 +1126,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 
 	// We are careful to encode this prior to starting the server to avoid needing 'messagesOfInterestMu' here.
 	if wn.messagesOfInterestEnc != nil {
-		err = peer.Unicast(wn.ctx, wn.messagesOfInterestEnc, protocol.MsgOfInterestTag, nil)
+		err = peer.Unicast(wn.ctx, wn.messagesOfInterestEnc, protocol.MsgOfInterestTag)
 		if err != nil {
 			wn.log.Infof("ws send msgOfInterest: %v", err)
 		}
@@ -1418,7 +1408,7 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 		if peer == request.except {
 			continue
 		}
-		ok := peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime, nil)
+		ok := peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime)
 		if ok {
 			sentMessageCount++
 			continue
@@ -1793,15 +1783,14 @@ const ProtocolVersionHeader = "X-Algorand-Version"
 const ProtocolAcceptVersionHeader = "X-Algorand-Accept-Version"
 
 // SupportedProtocolVersions contains the list of supported protocol versions by this node ( in order of preference ).
-var SupportedProtocolVersions = []string{"3.0", "2.1"}
+var SupportedProtocolVersions = []string{"2.1"}
 
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
 /* Version history:
  *  1   Catchup service over websocket connections with unicast messages between peers
  *  2.1 Introduced topic key/data pairs and enabled services over the gossip connections
- *  3.0 Introduced new transaction gossiping protocol
  */
-const ProtocolVersion = "3.0"
+const ProtocolVersion = "2.1"
 
 // TelemetryIDHeader HTTP header for telemetry-id for logging
 const TelemetryIDHeader = "X-Algorand-TelId"
@@ -2067,7 +2056,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			resp := wn.prioScheme.MakePrioResponse(challenge)
 			if resp != nil {
 				mbytes := append([]byte(protocol.NetPrioResponseTag), resp...)
-				sent := peer.writeNonBlock(context.Background(), mbytes, true, crypto.Digest{}, time.Now(), nil)
+				sent := peer.writeNonBlock(context.Background(), mbytes, true, crypto.Digest{}, time.Now())
 				if !sent {
 					wn.log.With("remote", addr).With("local", localAddr).Warnf("could not send priority response to %v", addr)
 				}

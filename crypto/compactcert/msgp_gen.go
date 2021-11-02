@@ -181,8 +181,8 @@ func (z *Cert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "SigProofs")
 				return
 			}
-			if zb0007 > MaxProofDigests {
-				err = msgp.ErrOverflow(uint64(zb0007), uint64(MaxProofDigests))
+			if zb0007 > maxProofDigests {
+				err = msgp.ErrOverflow(uint64(zb0007), uint64(maxProofDigests))
 				err = msgp.WrapError(err, "struct-from-array", "SigProofs")
 				return
 			}
@@ -210,8 +210,8 @@ func (z *Cert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "PartProofs")
 				return
 			}
-			if zb0009 > MaxProofDigests {
-				err = msgp.ErrOverflow(uint64(zb0009), uint64(MaxProofDigests))
+			if zb0009 > maxProofDigests {
+				err = msgp.ErrOverflow(uint64(zb0009), uint64(maxProofDigests))
 				err = msgp.WrapError(err, "struct-from-array", "PartProofs")
 				return
 			}
@@ -239,8 +239,8 @@ func (z *Cert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Reveals")
 				return
 			}
-			if zb0011 > MaxReveals {
-				err = msgp.ErrOverflow(uint64(zb0011), uint64(MaxReveals))
+			if zb0011 > maxReveals {
+				err = msgp.ErrOverflow(uint64(zb0011), uint64(maxReveals))
 				err = msgp.WrapError(err, "struct-from-array", "Reveals")
 				return
 			}
@@ -309,8 +309,8 @@ func (z *Cert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "SigProofs")
 					return
 				}
-				if zb0013 > MaxProofDigests {
-					err = msgp.ErrOverflow(uint64(zb0013), uint64(MaxProofDigests))
+				if zb0013 > maxProofDigests {
+					err = msgp.ErrOverflow(uint64(zb0013), uint64(maxProofDigests))
 					err = msgp.WrapError(err, "SigProofs")
 					return
 				}
@@ -336,8 +336,8 @@ func (z *Cert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "PartProofs")
 					return
 				}
-				if zb0015 > MaxProofDigests {
-					err = msgp.ErrOverflow(uint64(zb0015), uint64(MaxProofDigests))
+				if zb0015 > maxProofDigests {
+					err = msgp.ErrOverflow(uint64(zb0015), uint64(maxProofDigests))
 					err = msgp.WrapError(err, "PartProofs")
 					return
 				}
@@ -363,8 +363,8 @@ func (z *Cert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Reveals")
 					return
 				}
-				if zb0017 > MaxReveals {
-					err = msgp.ErrOverflow(uint64(zb0017), uint64(MaxReveals))
+				if zb0017 > maxReveals {
+					err = msgp.ErrOverflow(uint64(zb0017), uint64(maxReveals))
 					err = msgp.WrapError(err, "Reveals")
 					return
 				}

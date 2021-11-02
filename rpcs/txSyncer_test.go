@@ -32,7 +32,6 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
@@ -76,16 +75,8 @@ func (mock mockPendingTxAggregate) PendingTxIDs() []transactions.Txid {
 	}
 	return ids
 }
-func makeSignedTxGroup(source [][]transactions.SignedTxn) (result []pooldata.SignedTxGroup) {
-	result = make([]pooldata.SignedTxGroup, len(source))
-	for i := range source {
-		result[i].Transactions = source[i]
-	}
-	return
-}
-
-func (mock mockPendingTxAggregate) PendingTxGroups() ([]pooldata.SignedTxGroup, uint64) {
-	return makeSignedTxGroup(bookkeeping.SignedTxnsToGroups(mock.txns)), pooldata.InvalidSignedTxGroupCounter
+func (mock mockPendingTxAggregate) PendingTxGroups() [][]transactions.SignedTxn {
+	return bookkeeping.SignedTxnsToGroups(mock.txns)
 }
 
 type mockHandler struct {
@@ -106,7 +97,7 @@ type mockRunner struct {
 	done          chan *rpc.Call
 	failWithNil   bool
 	failWithError bool
-	txgroups      []pooldata.SignedTxGroup
+	txgroups      [][]transactions.SignedTxn
 }
 
 type mockRPCClient struct {
@@ -137,11 +128,7 @@ func (client *mockRPCClient) Sync(ctx context.Context, bloom *bloom.Filter) (txg
 	if client.client.failWithError {
 		return nil, errors.New("failing call")
 	}
-	txgroups = make([][]transactions.SignedTxn, len(client.client.txgroups))
-	for i := range txgroups {
-		txgroups[i] = client.client.txgroups[i].Transactions
-	}
-	return txgroups, nil
+	return client.client.txgroups, nil
 }
 
 // network.HTTPPeer interface
@@ -181,8 +168,7 @@ func TestSyncFromClient(t *testing.T) {
 
 	clientPool := makeMockPendingTxAggregate(2)
 	serverPool := makeMockPendingTxAggregate(1)
-	serverTxGroups, _ := serverPool.PendingTxGroups()
-	runner := mockRunner{failWithNil: false, failWithError: false, txgroups: serverTxGroups[len(serverTxGroups)-1:], done: make(chan *rpc.Call)}
+	runner := mockRunner{failWithNil: false, failWithError: false, txgroups: serverPool.PendingTxGroups()[len(serverPool.PendingTxGroups())-1:], done: make(chan *rpc.Call)}
 	client := mockRPCClient{client: &runner, log: logging.TestingLog(t)}
 	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
 	handler := mockHandler{}
@@ -197,8 +183,7 @@ func TestSyncFromUnsupportedClient(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	pool := makeMockPendingTxAggregate(3)
-	poolTxGroups, _ := pool.PendingTxGroups()
-	runner := mockRunner{failWithNil: true, failWithError: false, txgroups: poolTxGroups[len(poolTxGroups)-1:], done: make(chan *rpc.Call)}
+	runner := mockRunner{failWithNil: true, failWithError: false, txgroups: pool.PendingTxGroups()[len(pool.PendingTxGroups())-1:], done: make(chan *rpc.Call)}
 	client := mockRPCClient{client: &runner, log: logging.TestingLog(t)}
 	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
 	handler := mockHandler{}
@@ -213,8 +198,7 @@ func TestSyncFromClientAndQuit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	pool := makeMockPendingTxAggregate(3)
-	poolTxGroups, _ := pool.PendingTxGroups()
-	runner := mockRunner{failWithNil: false, failWithError: false, txgroups: poolTxGroups[len(poolTxGroups)-1:], done: make(chan *rpc.Call)}
+	runner := mockRunner{failWithNil: false, failWithError: false, txgroups: pool.PendingTxGroups()[len(pool.PendingTxGroups())-1:], done: make(chan *rpc.Call)}
 	client := mockRPCClient{client: &runner, log: logging.TestingLog(t)}
 	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
 	handler := mockHandler{}
@@ -229,8 +213,7 @@ func TestSyncFromClientAndError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	pool := makeMockPendingTxAggregate(3)
-	poolTxGroups, _ := pool.PendingTxGroups()
-	runner := mockRunner{failWithNil: false, failWithError: true, txgroups: poolTxGroups[len(poolTxGroups)-1:], done: make(chan *rpc.Call)}
+	runner := mockRunner{failWithNil: false, failWithError: true, txgroups: pool.PendingTxGroups()[len(pool.PendingTxGroups())-1:], done: make(chan *rpc.Call)}
 	client := mockRPCClient{client: &runner, log: logging.TestingLog(t)}
 	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
 	handler := mockHandler{}
@@ -244,8 +227,7 @@ func TestSyncFromClientAndTimeout(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	pool := makeMockPendingTxAggregate(3)
-	poolTxGroups, _ := pool.PendingTxGroups()
-	runner := mockRunner{failWithNil: false, failWithError: false, txgroups: poolTxGroups[len(poolTxGroups)-1:], done: make(chan *rpc.Call)}
+	runner := mockRunner{failWithNil: false, failWithError: false, txgroups: pool.PendingTxGroups()[len(pool.PendingTxGroups())-1:], done: make(chan *rpc.Call)}
 	client := mockRPCClient{client: &runner, log: logging.TestingLog(t)}
 	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
 	handler := mockHandler{}
@@ -266,8 +248,7 @@ func TestSync(t *testing.T) {
 	nodeA.start()
 	nodeAURL := nodeA.rootURL()
 
-	poolTxGroups, _ := pool.PendingTxGroups()
-	runner := mockRunner{failWithNil: false, failWithError: false, txgroups: poolTxGroups[len(poolTxGroups)-1:], done: make(chan *rpc.Call)}
+	runner := mockRunner{failWithNil: false, failWithError: false, txgroups: pool.PendingTxGroups()[len(pool.PendingTxGroups())-1:], done: make(chan *rpc.Call)}
 	client := mockRPCClient{client: &runner, rootURL: nodeAURL, log: logging.TestingLog(t)}
 	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
 	handler := mockHandler{}
@@ -302,8 +283,7 @@ func TestStartAndStop(t *testing.T) {
 	nodeA.start()
 	nodeAURL := nodeA.rootURL()
 
-	poolTxGroups, _ := pool.PendingTxGroups()
-	runner := mockRunner{failWithNil: false, failWithError: false, txgroups: poolTxGroups[len(poolTxGroups)-1:], done: make(chan *rpc.Call)}
+	runner := mockRunner{failWithNil: false, failWithError: false, txgroups: pool.PendingTxGroups()[len(pool.PendingTxGroups())-1:], done: make(chan *rpc.Call)}
 	client := mockRPCClient{client: &runner, rootURL: nodeAURL, log: logging.TestingLog(t)}
 	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
 	handler := mockHandler{}
@@ -340,8 +320,7 @@ func TestStartAndQuit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	pool := makeMockPendingTxAggregate(3)
-	poolTxGroups, _ := pool.PendingTxGroups()
-	runner := mockRunner{failWithNil: false, failWithError: false, txgroups: poolTxGroups[len(poolTxGroups)-1:], done: make(chan *rpc.Call)}
+	runner := mockRunner{failWithNil: false, failWithError: false, txgroups: pool.PendingTxGroups()[len(pool.PendingTxGroups())-1:], done: make(chan *rpc.Call)}
 	client := mockRPCClient{client: &runner, log: logging.TestingLog(t)}
 	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
 	handler := mockHandler{}

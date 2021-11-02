@@ -103,16 +103,16 @@ func TestEncodedAppTxnAllocationBounds(t *testing.T) {
 	// ensure that all the supported protocols have value limits less or
 	// equal to their corresponding codec allocbounds
 	for protoVer, proto := range config.Consensus {
-		if proto.MaxAppArgs > EncodedMaxApplicationArgs {
+		if proto.MaxAppArgs > encodedMaxApplicationArgs {
 			require.Failf(t, "proto.MaxAppArgs > encodedMaxApplicationArgs", "protocol version = %s", protoVer)
 		}
-		if proto.MaxAppTxnAccounts > EncodedMaxAccounts {
+		if proto.MaxAppTxnAccounts > encodedMaxAccounts {
 			require.Failf(t, "proto.MaxAppTxnAccounts > encodedMaxAccounts", "protocol version = %s", protoVer)
 		}
-		if proto.MaxAppTxnForeignApps > EncodedMaxForeignApps {
+		if proto.MaxAppTxnForeignApps > encodedMaxForeignApps {
 			require.Failf(t, "proto.MaxAppTxnForeignApps > encodedMaxForeignApps", "protocol version = %s", protoVer)
 		}
-		if proto.MaxAppTxnForeignAssets > EncodedMaxForeignAssets {
+		if proto.MaxAppTxnForeignAssets > encodedMaxForeignAssets {
 			require.Failf(t, "proto.MaxAppTxnForeignAssets > encodedMaxForeignAssets", "protocol version = %s", protoVer)
 		}
 	}
