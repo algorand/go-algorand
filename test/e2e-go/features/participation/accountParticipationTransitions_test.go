@@ -51,6 +51,23 @@ func installParticipationKey(t *testing.T, client libgoal.Client, addr string, f
 	return
 }
 
+func registerParticipationAndWait(t *testing.T, client libgoal.Client, part account.Participation) generated.NodeStatusResponse {
+	txParams, err := client.SuggestedParams()
+	require.NoError(t, err)
+	sAccount := part.Address().String()
+	sWH, err := client.GetUnencryptedWalletHandle()
+	require.NoError(t, err)
+	goOnlineTx, err := client.MakeUnsignedGoOnlineTx(sAccount, &part, txParams.LastRound + 1, txParams.LastRound + 1, txParams.Fee, [32]byte{})
+	require.NoError(t, err)
+	require.Equal(t, sAccount, goOnlineTx.Src().String())
+	onlineTxID, err := client.SignAndBroadcastTransaction(sWH, nil, goOnlineTx)
+	require.NoError(t, err)
+	require.NotEmpty(t, onlineTxID)
+	status, err := client.WaitForRound(txParams.LastRound)
+	require.NoError(t, err)
+	return status
+}
+
 func TestKeyRegistration(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -71,41 +88,39 @@ func TestKeyRegistration(t *testing.T) {
 	require.NoError(t, err)
 	sAccount := accountResponse.Address
 
-	// Add an overlapping participation key for the account
-	response, part, err := installParticipationKey(t, sClient, sAccount, 0, 6000000)
-	require.NoError(t, err)
-	require.NotNil(t, response)
+	// Add an overlapping participation keys for the account on round 1 and 2
+	last := uint64(6_000_000)
+	numNew := 2
+	for i := 0; i < numNew; i++ {
+		response, part, err := installParticipationKey(t, sClient, sAccount, 0, last)
+		require.NoError(t, err)
+		require.NotNil(t, response)
+		registerParticipationAndWait(t, sClient, part)
+	}
 
-	// Make sure the second set of keys has been installed.
+	// Make sure the new keys are installed.
 	keys, err := fixture.LibGoalClient.GetParticipationKeys()
 	require.NoError(t, err)
-	require.Len(t, keys, 2)
+	require.Len(t, keys, numNew + 1)
 
-	// Register the new key on round 1
-	sWH, err := sClient.GetUnencryptedWalletHandle()
-	require.NoError(t, err)
-	goOnlineTx, err := sClient.MakeUnsignedGoOnlineTx(sAccount, &part, 1, 1, minTxnFee, [32]byte{})
-	require.NoError(t, err)
-	require.Equal(t, sAccount, goOnlineTx.Src().String())
-	onlineTxID, err := sClient.SignAndBroadcastTransaction(sWH, nil, goOnlineTx)
-	require.NoError(t, err)
-	require.NotEmpty(t, onlineTxID)
-	txn, err := fixture.WaitForConfirmedTxn(2, sAccount, onlineTxID)
-	require.NoError(t, err)
-	require.NotNil(t, txn)
-
-	// Zip ahead MaxBalLookback for the next key to become valid.
+	// Zip ahead MaxBalLookback.
 	params, err := fixture.CurrentConsensusParams()
 	require.NoError(t, err)
-	for i := uint64(0); i < params.MaxBalLookback; i++ {
+	lookback := params.MaxBalLookback
+	for i := uint64(1); i < lookback; i++ {
 		fixture.SendMoneyAndWait(2+i, 0, minTxnFee, sAccount, sAccount, "")
 	}
 
 	keys, err = fixture.LibGoalClient.GetParticipationKeys()
-	require.Equal(t, keys[0].EffectiveFirstValid, 1)
-	require.Equal(t, keys[0].EffectiveLastValid, 320)
-	require.Equal(t, keys[0].LastBlockProposal, 320)
-	require.Equal(t, keys[1].EffectiveFirstValid, 321)
-	require.Equal(t, keys[1].EffectiveLastValid, 6000000)
-	require.Equal(t, keys[1].LastBlockProposal, 321)
+	require.Equal(t, *(keys[0].EffectiveFirstValid), uint64(1))
+	require.Equal(t, *(keys[0].EffectiveLastValid), lookback)
+	require.Equal(t, *(keys[0].LastBlockProposal), lookback)
+
+	require.Equal(t, *(keys[1].EffectiveFirstValid), lookback + 1)
+	require.Equal(t, *(keys[1].EffectiveLastValid), lookback + 1)
+	require.Equal(t, *(keys[1].LastBlockProposal), lookback + 1)
+
+	require.Equal(t, *(keys[2].EffectiveFirstValid), lookback + 2)
+	require.Equal(t, *(keys[2].EffectiveLastValid), last)
+	require.Equal(t, *(keys[2].LastBlockProposal), lookback + 2)
 }
