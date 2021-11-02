@@ -25,7 +25,7 @@ import (
 
 type (
 	//ByteSignature using unspecified bound.
-	//msgp:allocbound ByteSignature
+	//msgp:allocbound ByteSignature 9999
 	ByteSignature []byte
 
 	// AlgorithmType enum type for signing algorithms

@@ -405,6 +405,16 @@ func (_ ByteSignature) CanMarshalMsg(z interface{}) bool {
 func (z *ByteSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	{
 		var zb0001 []byte
+		var zb0002 int
+		zb0002, err = msgp.ReadBytesBytesHeader(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > 9999 {
+			err = msgp.ErrOverflow(uint64(zb0002), uint64(9999))
+			return
+		}
 		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -568,6 +578,16 @@ func (_ DilithiumPrivateKey) CanMarshalMsg(z interface{}) bool {
 func (z *DilithiumPrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	{
 		var zb0001 []byte
+		var zb0002 int
+		zb0002, err = msgp.ReadBytesBytesHeader(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > 9999 {
+			err = msgp.ErrOverflow(uint64(zb0002), uint64(9999))
+			return
+		}
 		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -614,6 +634,16 @@ func (_ DilithiumPublicKey) CanMarshalMsg(z interface{}) bool {
 func (z *DilithiumPublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	{
 		var zb0001 []byte
+		var zb0002 int
+		zb0002, err = msgp.ReadBytesBytesHeader(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > 9999 {
+			err = msgp.ErrOverflow(uint64(zb0002), uint64(9999))
+			return
+		}
 		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -660,6 +690,16 @@ func (_ DilithiumSignature) CanMarshalMsg(z interface{}) bool {
 func (z *DilithiumSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	{
 		var zb0001 []byte
+		var zb0002 int
+		zb0002, err = msgp.ReadBytesBytesHeader(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > 9999 {
+			err = msgp.ErrOverflow(uint64(zb0002), uint64(9999))
+			return
+		}
 		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
 		if err != nil {
 			err = msgp.WrapError(err)
