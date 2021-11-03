@@ -57,7 +57,7 @@ func registerParticipationAndWait(t *testing.T, client libgoal.Client, part acco
 	sAccount := part.Address().String()
 	sWH, err := client.GetUnencryptedWalletHandle()
 	require.NoError(t, err)
-	goOnlineTx, err := client.MakeUnsignedGoOnlineTx(sAccount, &part, txParams.LastRound + 1, txParams.LastRound + 1, txParams.Fee, [32]byte{})
+	goOnlineTx, err := client.MakeUnsignedGoOnlineTx(sAccount, &part, txParams.LastRound+1, txParams.LastRound+1, txParams.Fee, [32]byte{})
 	require.NoError(t, err)
 	require.Equal(t, sAccount, goOnlineTx.Src().String())
 	onlineTxID, err := client.SignAndBroadcastTransaction(sWH, nil, goOnlineTx)
@@ -101,7 +101,7 @@ func TestKeyRegistration(t *testing.T) {
 	// Make sure the new keys are installed.
 	keys, err := fixture.LibGoalClient.GetParticipationKeys()
 	require.NoError(t, err)
-	require.Len(t, keys, numNew + 1)
+	require.Len(t, keys, numNew+1)
 
 	// Zip ahead MaxBalLookback.
 	params, err := fixture.CurrentConsensusParams()
@@ -116,11 +116,11 @@ func TestKeyRegistration(t *testing.T) {
 	require.Equal(t, *(keys[0].EffectiveLastValid), lookback)
 	require.Equal(t, *(keys[0].LastBlockProposal), lookback)
 
-	require.Equal(t, *(keys[1].EffectiveFirstValid), lookback + 1)
-	require.Equal(t, *(keys[1].EffectiveLastValid), lookback + 1)
-	require.Equal(t, *(keys[1].LastBlockProposal), lookback + 1)
+	require.Equal(t, *(keys[1].EffectiveFirstValid), lookback+1)
+	require.Equal(t, *(keys[1].EffectiveLastValid), lookback+1)
+	require.Equal(t, *(keys[1].LastBlockProposal), lookback+1)
 
-	require.Equal(t, *(keys[2].EffectiveFirstValid), lookback + 2)
+	require.Equal(t, *(keys[2].EffectiveFirstValid), lookback+2)
 	require.Equal(t, *(keys[2].EffectiveLastValid), last)
-	require.Equal(t, *(keys[2].LastBlockProposal), lookback + 2)
+	require.Equal(t, *(keys[2].LastBlockProposal), lookback+2)
 }
