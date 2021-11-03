@@ -21,7 +21,6 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
-	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
@@ -68,8 +67,6 @@ type VerifiedTransactionCache interface {
 	UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) error
 	// Pin function would mark the given transaction group as pinned.
 	Pin(txgroup []transactions.SignedTxn) error
-	// PinGroups function would mark the given transaction groups as pinned.
-	PinGroups(txgroups []pooldata.SignedTxGroup) error
 }
 
 // verifiedTransactionCache provides an implementation of the VerifiedTransactionCache interface
@@ -209,25 +206,6 @@ func (v *verifiedTransactionCache) UpdatePinned(pinnedTxns map[transactions.Txid
 func (v *verifiedTransactionCache) Pin(txgroup []transactions.SignedTxn) (err error) {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
-	return v.pin(txgroup)
-}
-
-// PinGroups function would mark the given transaction groups as pinned.
-func (v *verifiedTransactionCache) PinGroups(txgroups []pooldata.SignedTxGroup) error {
-	v.bucketsLock.Lock()
-	defer v.bucketsLock.Unlock()
-	var outError error
-	for _, txgroup := range txgroups {
-		err := v.pin(txgroup.Transactions)
-		if err != nil {
-			outError = err
-		}
-	}
-	return outError
-}
-
-// Pin sets a given transaction group as pinned items, after they have already been verified.
-func (v *verifiedTransactionCache) pin(txgroup []transactions.SignedTxn) (err error) {
 	transactionMissing := false
 	if len(v.pinned)+len(txgroup) > maxPinnedEntries {
 		// reaching this number likely means that we have an issue not removing entries from the pinned map.
@@ -302,10 +280,6 @@ func (v *mockedCache) GetUnverifiedTranscationGroups(txnGroups [][]transactions.
 }
 
 func (v *mockedCache) UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) (err error) {
-	return nil
-}
-
-func (v *mockedCache) PinGroups(txgroups []pooldata.SignedTxGroup) error {
 	return nil
 }
 
