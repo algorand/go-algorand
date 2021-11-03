@@ -321,7 +321,9 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 			break
 		}
 	}
-	dcc.deferredCommitRange = *cdr
+	if cdr != nil {
+		dcc.deferredCommitRange = *cdr
+	}
 
 	tr.mu.RLock()
 	// If we recently flushed, wait to aggregate some more blocks.
