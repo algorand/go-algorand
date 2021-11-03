@@ -274,15 +274,30 @@ func (x *roundCowBase) getStorageLimits(addr basics.Address, aidx basics.AppInde
 }
 
 // wrappers for roundCowState to satisfy the (current) apply.Balances interface
-func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
+func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (apply.AccountData, error) {
 	acct, err := cs.lookup(addr)
 	if err != nil {
-		return basics.AccountData{}, err
+		return apply.AccountData{}, err
 	}
 	if withPendingRewards {
 		acct = acct.WithUpdatedRewards(cs.proto, cs.rewardsLevel())
 	}
-	return acct, nil
+	return apply.AccountData{
+		Status:             acct.Status,
+		MicroAlgos:         acct.MicroAlgos,
+		RewardsBase:        acct.RewardsBase,
+		RewardedMicroAlgos: acct.RewardedMicroAlgos,
+
+		VoteID:          acct.VoteID,
+		SelectionID:     acct.SelectionID,
+		VoteFirstValid:  acct.VoteFirstValid,
+		VoteLastValid:   acct.VoteLastValid,
+		VoteKeyDilution: acct.VoteKeyDilution,
+
+		AuthAddr:           acct.AuthAddr,
+		TotalAppSchema:     acct.TotalAppSchema,
+		TotalExtraAppPages: acct.TotalExtraAppPages,
+	}, nil
 }
 
 func (cs *roundCowState) GetCreatableID(groupIdx int) basics.CreatableIndex {
@@ -293,7 +308,30 @@ func (cs *roundCowState) GetCreator(cidx basics.CreatableIndex, ctype basics.Cre
 	return cs.getCreator(cidx, ctype)
 }
 
-func (cs *roundCowState) Put(addr basics.Address, acct basics.AccountData) error {
+func (cs *roundCowState) Put(addr basics.Address, acct apply.AccountData) error {
+	a, err := cs.lookup(addr)
+	if err != nil {
+		return err
+	}
+	a.Status = acct.Status
+	a.MicroAlgos = acct.MicroAlgos
+	a.RewardsBase = acct.RewardsBase
+	a.RewardedMicroAlgos = acct.RewardedMicroAlgos
+
+	a.VoteID = acct.VoteID
+	a.SelectionID = acct.SelectionID
+	a.VoteFirstValid = acct.VoteFirstValid
+	a.VoteLastValid = acct.VoteLastValid
+	a.VoteKeyDilution = acct.VoteKeyDilution
+
+	a.AuthAddr = acct.AuthAddr
+	a.TotalAppSchema = acct.TotalAppSchema
+	a.TotalExtraAppPages = acct.TotalExtraAppPages
+
+	return cs.putAccount(addr, a)
+}
+
+func (cs *roundCowState) putAccount(addr basics.Address, acct basics.AccountData) error {
 	cs.mods.Accts.Upsert(addr, acct)
 	return nil
 }
@@ -321,7 +359,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	if overflowed {
 		return fmt.Errorf("overspend (account %v, data %+v, tried to spend %v)", from, fromBal, amt)
 	}
-	cs.Put(from, fromBalNew)
+	cs.putAccount(from, fromBalNew)
 
 	toBal, err := cs.lookup(to)
 	if err != nil {
@@ -342,7 +380,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	if overflowed {
 		return fmt.Errorf("balance overflow (account %v, data %+v, was going to receive %v)", to, toBal, amt)
 	}
-	cs.Put(to, toBalNew)
+	cs.putAccount(to, toBalNew)
 
 	return nil
 }
@@ -588,7 +626,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 
 // hotfix for testnet stall 08/26/2019; move some algos from testnet bank to rewards pool to give it enough time until protocol upgrade occur.
 // hotfix for testnet stall 11/07/2019; do the same thing
-func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.AccountData, headerRound basics.Round) (poolOld basics.AccountData, err error) {
+func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance apply.AccountData, headerRound basics.Round) (poolOld apply.AccountData, err error) {
 	// verify that we patch the correct round.
 	if headerRound != 1499995 && headerRound != 2926564 {
 		return rewardPoolBalance, nil
@@ -1208,7 +1246,7 @@ func (eval *BlockEvaluator) resetExpiredOnlineAccountsParticipationKeys() error 
 		acctData.ClearOnlineState()
 
 		// Update the account information
-		err = eval.state.Put(accountAddr, acctData)
+		err = eval.state.putAccount(accountAddr, acctData)
 		if err != nil {
 			return err
 		}

@@ -17,8 +17,17 @@
 package internal
 
 import (
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 )
+
+func (cs *roundCowState) MinBalance(addr basics.Address, proto *config.ConsensusParams) (res basics.MicroAlgos, err error) {
+	acct, err := cs.lookup(addr) // pending rewards unneeded
+	if err != nil {
+		return
+	}
+	return acct.MinBalance(proto), nil
+}
 
 func (cs *roundCowState) TotalAppParams(creator basics.Address) (int, error) {
 	acct, err := cs.lookup(creator)
@@ -93,7 +102,7 @@ func (cs *roundCowState) PutAppParams(addr basics.Address, aidx basics.AppIndex,
 	}
 	m[aidx] = params
 	acct.AppParams = m
-	return cs.Put(addr, acct)
+	return cs.putAccount(addr, acct)
 }
 func (cs *roundCowState) PutAppLocalState(addr basics.Address, aidx basics.AppIndex, state basics.AppLocalState) error {
 	acct, err := cs.lookup(addr)
@@ -106,7 +115,7 @@ func (cs *roundCowState) PutAppLocalState(addr basics.Address, aidx basics.AppIn
 	}
 	m[aidx] = state
 	acct.AppLocalStates = m
-	return cs.Put(addr, acct)
+	return cs.putAccount(addr, acct)
 }
 func (cs *roundCowState) PutAssetHolding(addr basics.Address, aidx basics.AssetIndex, data basics.AssetHolding) error {
 	acct, err := cs.lookup(addr)
@@ -119,7 +128,7 @@ func (cs *roundCowState) PutAssetHolding(addr basics.Address, aidx basics.AssetI
 	}
 	m[aidx] = data
 	acct.Assets = m
-	return cs.Put(addr, acct)
+	return cs.putAccount(addr, acct)
 }
 func (cs *roundCowState) PutAssetParams(addr basics.Address, aidx basics.AssetIndex, data basics.AssetParams) error {
 	acct, err := cs.lookup(addr)
@@ -132,7 +141,7 @@ func (cs *roundCowState) PutAssetParams(addr basics.Address, aidx basics.AssetIn
 	}
 	m[aidx] = data
 	acct.AssetParams = m
-	return cs.Put(addr, acct)
+	return cs.putAccount(addr, acct)
 }
 
 func (cs *roundCowState) DeleteAppParams(addr basics.Address, aidx basics.AppIndex) error {
@@ -146,7 +155,7 @@ func (cs *roundCowState) DeleteAppParams(addr basics.Address, aidx basics.AppInd
 	}
 	delete(m, aidx)
 	acct.AppParams = m
-	return cs.Put(addr, acct)
+	return cs.putAccount(addr, acct)
 }
 func (cs *roundCowState) DeleteAppLocalState(addr basics.Address, aidx basics.AppIndex) error {
 	acct, err := cs.lookup(addr)
@@ -159,7 +168,7 @@ func (cs *roundCowState) DeleteAppLocalState(addr basics.Address, aidx basics.Ap
 	}
 	delete(m, aidx)
 	acct.AppLocalStates = m
-	return cs.Put(addr, acct)
+	return cs.putAccount(addr, acct)
 }
 func (cs *roundCowState) DeleteAssetHolding(addr basics.Address, aidx basics.AssetIndex) error {
 	acct, err := cs.lookup(addr)
@@ -172,7 +181,7 @@ func (cs *roundCowState) DeleteAssetHolding(addr basics.Address, aidx basics.Ass
 	}
 	delete(m, aidx)
 	acct.Assets = m
-	return cs.Put(addr, acct)
+	return cs.putAccount(addr, acct)
 }
 func (cs *roundCowState) DeleteAssetParams(addr basics.Address, aidx basics.AssetIndex) error {
 	acct, err := cs.lookup(addr)
@@ -185,7 +194,7 @@ func (cs *roundCowState) DeleteAssetParams(addr basics.Address, aidx basics.Asse
 	}
 	delete(m, aidx)
 	acct.AssetParams = m
-	return cs.Put(addr, acct)
+	return cs.putAccount(addr, acct)
 }
 
 func (cs *roundCowState) CheckAppLocalState(addr basics.Address, aidx basics.AppIndex) (ok bool, err error) {

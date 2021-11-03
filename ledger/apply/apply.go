@@ -18,10 +18,30 @@ package apply
 
 import (
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
+
+// AccountData is like basics.AccountData, but without any maps
+// containing AppParams, AppLocalState, AssetHolding, or AssetParams.
+type AccountData struct {
+	Status             basics.Status
+	MicroAlgos         basics.MicroAlgos
+	RewardsBase        uint64
+	RewardedMicroAlgos basics.MicroAlgos
+
+	VoteID          crypto.OneTimeSignatureVerifier
+	SelectionID     crypto.VRFVerifier
+	VoteFirstValid  basics.Round
+	VoteLastValid   basics.Round
+	VoteKeyDilution uint64
+
+	AuthAddr           basics.Address
+	TotalAppSchema     basics.StateSchema
+	TotalExtraAppPages uint32
+}
 
 // Balances allow to move MicroAlgos from one address to another and to update balance records, or to access and modify individual balance records
 // After a call to Put (or Move), future calls to Get or Move will reflect the updated balance record(s)
@@ -30,9 +50,9 @@ type Balances interface {
 	// If the account is known to be empty, then err should be nil and the returned balance record should have the given address and empty AccountData
 	// withPendingRewards specifies whether pending rewards should be applied.
 	// A non-nil error means the lookup is impossible (e.g., if the database doesn't have necessary state anymore)
-	Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error)
+	Get(addr basics.Address, withPendingRewards bool) (AccountData, error)
 
-	Put(basics.Address, basics.AccountData) error
+	Put(basics.Address, AccountData) error
 
 	TotalAppParams(addr basics.Address) (int, error)
 	GetAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, bool, error)

@@ -33,12 +33,13 @@ type logicLedger struct {
 }
 
 type cowForLogicLedger interface {
-	Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error)
+	Get(addr basics.Address, withPendingRewards bool) (apply.AccountData, error)
 	GetAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, bool, error)
 	GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (basics.AssetParams, bool, error)
 	GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (basics.AssetHolding, bool, error)
 	GetCreatableID(groupIdx int) basics.CreatableIndex
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
+	MinBalance(addr basics.Address, proto *config.ConsensusParams) (res basics.MicroAlgos, err error)
 	GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error)
 	BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (transactions.EvalDelta, error)
 
@@ -84,12 +85,7 @@ func (al *logicLedger) Balance(addr basics.Address) (res basics.MicroAlgos, err 
 }
 
 func (al *logicLedger) MinBalance(addr basics.Address, proto *config.ConsensusParams) (res basics.MicroAlgos, err error) {
-	record, err := al.cow.Get(addr, false) // pending rewards unneeded
-	if err != nil {
-		return
-	}
-
-	return record.MinBalance(proto), nil
+	return al.cow.MinBalance(addr, proto)
 }
 
 func (al *logicLedger) Authorizer(addr basics.Address) (basics.Address, error) {

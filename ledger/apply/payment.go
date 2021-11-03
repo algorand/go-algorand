@@ -118,7 +118,7 @@ func Payment(payment transactions.PaymentTxnFields, header transactions.Header, 
 		}
 
 		// Clear out entire account record, to allow the DB to GC it
-		rec = basics.AccountData{}
+		rec = AccountData{}
 		err = balances.Put(header.Sender, rec)
 		if err != nil {
 			return err
