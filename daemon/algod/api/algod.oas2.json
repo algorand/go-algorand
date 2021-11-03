@@ -462,64 +462,6 @@
         }
       }
     },
-    "/v2/register-participation-keys/{address}": {
-      "post": {
-        "description": "Generate (or renew) and register participation keys on the node for a given account address.",
-        "tags": [
-          "private"
-        ],
-        "operationId": "RegisterParticipationKeys",
-        "parameters": [
-          {
-            "type": "string",
-            "description": "The `account-id` to update, or `all` to update all accounts.",
-            "name": "address",
-            "in": "path",
-            "required": true
-          },
-          {
-            "type": "integer",
-            "default": 1000,
-            "description": "The fee to use when submitting key registration transactions. Defaults to the suggested fee.",
-            "name": "fee",
-            "in": "query"
-          },
-          {
-            "type": "integer",
-            "description": "value to use for two-level participation key.",
-            "name": "key-dilution",
-            "in": "query"
-          },
-          {
-            "type": "integer",
-            "description": "The last round for which the generated participation keys will be valid.",
-            "name": "round-last-valid",
-            "in": "query"
-          },
-          {
-            "type": "boolean",
-            "description": "Don't wait for transaction to commit before returning response.",
-            "name": "no-wait",
-            "in": "query"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "$ref": "#/responses/PostTransactionsResponse"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "type": "string",
-          "description": "Account address where keys will be registered.",
-          "name": "address",
-          "in": "path",
-          "required": true
-        }
-      ]
-    },
     "/v2/shutdown": {
       "post": {
         "description": "Special management endpoint to shutdown the node. Optionally provide a timeout parameter to indicate that the node should begin shutting down after a number of seconds.",
