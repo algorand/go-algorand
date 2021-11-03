@@ -787,7 +787,7 @@ func assembleSubstring(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func txnFieldImm(name string, expectArray bool, version uint64) (txnFieldSpec, error) {
+func txnFieldImm(name string, expectArray bool, ops *OpStream) (txnFieldSpec, error) {
 	fs, ok := txnFieldSpecByName[name]
 	if !ok {
 		return fs, fmt.Errorf("unknown field: %#v", name)
@@ -798,7 +798,7 @@ func txnFieldImm(name string, expectArray bool, version uint64) (txnFieldSpec, e
 		}
 		return txnFieldSpec{}, fmt.Errorf("found array field %#v while expecting scalar", name)
 	}
-	if fs.version > version {
+	if fs.version > ops.Version {
 		return txnFieldSpec{},
 			fmt.Errorf("field %#v available in version %d. Missed #pragma version?", name, fs.version)
 	}
@@ -820,7 +820,7 @@ func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("txn expects one argument")
 	}
-	fs, err := txnFieldImm(args[0], false, ops.Version)
+	fs, err := txnFieldImm(args[0], false, ops)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -846,7 +846,7 @@ func assembleTxna(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 2 {
 		return ops.error("txna expects two immediate arguments")
 	}
-	fs, err := txnFieldImm(args[0], true, ops.Version)
+	fs, err := txnFieldImm(args[0], true, ops)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -866,7 +866,7 @@ func assembleTxnas(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("txnas expects one immediate argument")
 	}
-	fs, err := txnFieldImm(args[0], true, ops.Version)
+	fs, err := txnFieldImm(args[0], true, ops)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -885,7 +885,7 @@ func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
-	fs, err := txnFieldImm(args[1], false, ops.Version)
+	fs, err := txnFieldImm(args[1], false, ops)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -916,7 +916,7 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
-	fs, err := txnFieldImm(args[1], true, ops.Version)
+	fs, err := txnFieldImm(args[1], true, ops)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -941,7 +941,7 @@ func assembleGtxnas(ops *OpStream, spec *OpSpec, args []string) error {
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
-	fs, err := txnFieldImm(args[1], true, ops.Version)
+	fs, err := txnFieldImm(args[1], true, ops)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -961,7 +961,7 @@ func assembleGtxns(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one or two immediate arguments", spec.Name)
 	}
-	fs, err := txnFieldImm(args[0], false, ops.Version)
+	fs, err := txnFieldImm(args[0], false, ops)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -976,7 +976,7 @@ func assembleGtxnsa(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 2 {
 		return ops.errorf("%s expects two immediate arguments", spec.Name)
 	}
-	fs, err := txnFieldImm(args[0], true, ops.Version)
+	fs, err := txnFieldImm(args[0], true, ops)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -995,7 +995,7 @@ func assembleGtxnsas(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one immediate argument", spec.Name)
 	}
-	fs, err := txnFieldImm(args[0], true, ops.Version)
+	fs, err := txnFieldImm(args[0], true, ops)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -1021,7 +1021,7 @@ func asmItxnOnly(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	fs, err := txnFieldImm(args[0], false, ops.Version)
+	fs, err := txnFieldImm(args[0], false, ops)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -1036,7 +1036,7 @@ func asmItxna(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 2 {
 		return ops.errorf("%s expects two immediate arguments", spec.Name)
 	}
-	fs, err := txnFieldImm(args[0], true, ops.Version)
+	fs, err := txnFieldImm(args[0], true, ops)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -1072,7 +1072,7 @@ func asmGitxnOnly(ops *OpStream, spec *OpSpec, args []string) error {
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
-	fs, err := txnFieldImm(args[1], false, ops.Version)
+	fs, err := txnFieldImm(args[1], false, ops)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -1093,7 +1093,7 @@ func asmGitxna(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
 
-	fs, err := txnFieldImm(args[1], true, ops.Version)
+	fs, err := txnFieldImm(args[1], true, ops)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}

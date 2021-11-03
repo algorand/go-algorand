@@ -46,6 +46,10 @@ const directRefEnabledVersion = 4
 // apps should be called as inner apps.
 const innerAppsEnabledVersion = 6
 
+// txnEffectsVersion is first version that allowed txn opcode to access
+// "effects" (ApplyData info)
+const txnEffectsVersion = 6
+
 // opDetails records details such as non-standard costs, immediate
 // arguments, or dynamic layout controlled by a check function.
 type opDetails struct {

@@ -416,10 +416,9 @@ func (ep EvalParams) log() logging.Logger {
 
 type scratchSpace = [256]stackValue
 
-// EvalContext is the execution context of AVM bytecode.  It contains
-// the full state of the running program, and tracks some of the
-// things that the program has been done, like log message and inner
-// transactions.
+// EvalContext is the execution context of AVM bytecode.  It contains the full
+// state of the running program, and tracks some of the things that the program
+// has done, like log messages and inner transactions.
 type EvalContext struct {
 	EvalParams
 

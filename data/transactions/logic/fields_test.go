@@ -138,8 +138,7 @@ func TestTxnFieldVersions(t *testing.T) {
 			}
 			testLine(t, text, fs.version, "")
 
-			ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
-			require.NoError(t, err)
+			ops := testProg(t, text, AssemblerMaxVersion)
 
 			preLogicVersion := fs.version - 1
 			proto := defaultEvalProtoWithVersion(preLogicVersion)
@@ -152,7 +151,7 @@ func TestTxnFieldVersions(t *testing.T) {
 			ep.TxnGroup = txgroup
 
 			// check failure with version check
-			_, err = Eval(ops.Program, ep)
+			_, err := Eval(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "greater than protocol supported version")
 
@@ -174,6 +173,37 @@ func TestTxnFieldVersions(t *testing.T) {
 				require.Contains(t, err.Error(), "illegal opcode")
 			} else {
 				require.Contains(t, err.Error(), "invalid txn field")
+			}
+		}
+	}
+}
+
+// TestTxnEffects ensures that LogicSigs can not use "effects" fields
+// (ever). And apps can only use effects fields with `txn` after
+// txnEffectsVersion. (itxn could use them earlier)
+func TestTxnEffects(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	for _, fs := range txnFieldSpecByField {
+		if !fs.effects {
+			continue
+		}
+		source := fmt.Sprintf("txn %s", fs.field.String())
+		if fs.array {
+			source = fmt.Sprintf("txna %s 0", fs.field.String())
+		}
+		for v := fs.version; v <= AssemblerMaxVersion; v++ {
+			ops := testProg(t, source, v)
+			ep := defaultEvalParams(nil, nil)
+			_, err := Eval(ops.Program, ep)
+			require.Error(t, err)
+			_, err = EvalStateful(ops.Program, ep)
+			if v < txnEffectsVersion {
+				require.Error(t, err)
+			} else {
+				// This should be done as part of teal 6.
+				// require.NoError(t, err)
 			}
 		}
 	}

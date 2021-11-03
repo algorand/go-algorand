@@ -1615,7 +1615,6 @@ func TestTxn(t *testing.T) {
 			}
 			sb := strings.Builder{}
 			ep := defaultEvalParams(&sb, &txn)
-			ep.Ledger = MakeLedger(nil)
 			ep.GroupIndex = 3
 			pass, err := Eval(ops.Program, ep)
 			if !pass {
