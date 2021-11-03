@@ -1721,7 +1721,49 @@
     },
     "ParticipationKey": {
       "description": "Represents a participation key used by the node.",
-      "type": "object"
+      "type": "object",
+      "required": [
+        "id",
+        "key",
+        "address"
+      ],
+      "properties": {
+        "id": {
+          "description": "The key's ParticipationID.",
+          "type": "string"
+        },
+        "address": {
+          "description": "Address the key was generated for.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "effective-first-valid": {
+          "description": "When registered, this is the first round it may be used.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "effective-last-valid": {
+          "description": "When registered, this is the last round it may be used.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "last-vote": {
+          "description": "Round when this key was last used to vote.",
+          "type": "integer"
+        },
+        "last-block-proposal": {
+          "description": "Round when this key was last used to propose a block.",
+          "type": "integer"
+        },
+        "last-state-proof": {
+          "description": "Round when this key was last used to generate a state proof.",
+          "type": "integer"
+        },
+        "key": {
+          "description": "Key information stored on the account.",
+          "$ref": "#/definitions/AccountParticipation"
+        }
+      }
     },
     "TealKeyValueStore": {
       "description": "Represents a key-value store for use in an application.",

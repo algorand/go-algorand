@@ -74,6 +74,50 @@ type NodeInterface interface {
 	RemoveParticipationKey(account.ParticipationID) error
 }
 
+func roundToPtrOrNil(value basics.Round) *uint64 {
+	if value == 0 {
+		return nil
+	}
+	result := uint64(value)
+	return &result
+}
+
+func convertParticipationRecord(record account.ParticipationRecord) generated.ParticipationKey {
+	participationKey := generated.ParticipationKey{
+		Id:      record.ParticipationID.String(),
+		Address: record.Account.String(),
+		Key: generated.AccountParticipation{
+			VoteFirstValid:  uint64(record.FirstValid),
+			VoteLastValid:   uint64(record.LastValid),
+			VoteKeyDilution: record.KeyDilution,
+		},
+	}
+
+	// These are pointers but should always be present.
+	if record.Voting != nil {
+		participationKey.Key.VoteParticipationKey = record.Voting.OneTimeSignatureVerifier[:]
+	}
+	if record.VRF != nil {
+		participationKey.Key.SelectionParticipationKey = record.VRF.PK[:]
+	}
+
+	// Optional fields.
+	participationKey.EffectiveFirstValid = roundToPtrOrNil(record.EffectiveFirst)
+	participationKey.EffectiveLastValid = roundToPtrOrNil(record.EffectiveLast)
+	participationKey.LastVote = roundToPtrOrNil(record.LastVote)
+	participationKey.LastBlockProposal = roundToPtrOrNil(record.LastBlockProposal)
+	participationKey.LastVote = roundToPtrOrNil(record.LastVote)
+	participationKey.LastStateProof = roundToPtrOrNil(record.LastCompactCertificate)
+
+	// Special case for first valid on round 0
+	if record.EffectiveLast != 0 && record.EffectiveFirst == 0 {
+		zero := uint64(0)
+		participationKey.EffectiveFirstValid = &zero
+	}
+
+	return participationKey
+}
+
 // GetParticipationKeys Return a list of participation keys
 // (GET /v2/participation)
 func (v2 *Handlers) GetParticipationKeys(ctx echo.Context) error {
@@ -83,26 +127,13 @@ func (v2 *Handlers) GetParticipationKeys(ctx echo.Context) error {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
-	response := []generated.ParticipationKey{}
+	var response []generated.ParticipationKey
 
 	for _, participationRecord := range partKeys {
-		info := generated.ParticipationKey{
-			"ID":         participationRecord.ParticipationID.String(),
-			"Address":    participationRecord.Account.String(),
-			"FirstValid": participationRecord.FirstValid,
-			"LastValid":  participationRecord.LastValid,
-			// TODO Coming soon (tm)
-			"VoteID": crypto.OneTimeSignatureVerifier{},
-			// TODO Coming soon (tm)
-			"SelectionID":     crypto.VRFVerifier{},
-			"VoteKeyDilution": participationRecord.KeyDilution,
-		}
-
-		response = append(response, info)
+		response = append(response, convertParticipationRecord(participationRecord))
 	}
 
 	return ctx.JSON(http.StatusOK, response)
-
 }
 
 // AddParticipationKey Add a participation key to the node
@@ -172,17 +203,7 @@ func (v2 *Handlers) GetParticipationKeyByID(ctx echo.Context, participationID st
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
-	response := generated.ParticipationKey{
-		"ID":         participationRecord.ParticipationID.String(),
-		"Address":    participationRecord.Account.String(),
-		"FirstValid": participationRecord.FirstValid,
-		"LastValid":  participationRecord.LastValid,
-		// TODO add this
-		"VoteID": crypto.OneTimeSignatureVerifier{},
-		// TODO add this
-		"SelectionID":     crypto.VRFVerifier{},
-		"VoteKeyDilution": participationRecord.KeyDilution,
-	}
+	response := convertParticipationRecord(participationRecord)
 
 	return ctx.JSON(http.StatusOK, response)
 }

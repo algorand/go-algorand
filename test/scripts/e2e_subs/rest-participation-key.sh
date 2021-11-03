@@ -21,7 +21,7 @@ algokey part generate --first ${FIRST_ROUND} --last ${LAST_ROUND} --keyfile ${NA
 
 popd || exit
 
-call_and_verify "Get List of Keys" "/v2/participation" 200 'Address'
+call_and_verify "Get List of Keys" "/v2/participation" 200 'address'
 
 # Find out how many keys there are installed so far
 NUM_IDS_1=$(echo "$RES" | python3 -c 'import json,sys;o=json.load(sys.stdin);print(len(o))')
@@ -32,7 +32,7 @@ call_post_and_verify "Install a basic participation key" "/v2/participation" 200
 INSTALLED_ID=$(echo "$RES" | python3 -c 'import json,sys;o=json.load(sys.stdin);print(o["partId"])')
 
 # Should contain the installed id
-call_and_verify "Get List of Keys" "/v2/participation" 200 'Address' "${INSTALLED_ID}"
+call_and_verify "Get List of Keys" "/v2/participation" 200 'address' "${INSTALLED_ID}"
 
 # Get list of keys
 NUM_IDS_2=$(echo "$RES" | python3 -c 'import json,sys;o=json.load(sys.stdin);print(len(o))')

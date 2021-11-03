@@ -1327,6 +1327,47 @@
       },
       "ParticipationKey": {
         "description": "Represents a participation key used by the node.",
+        "properties": {
+          "address": {
+            "description": "Address the key was generated for.",
+            "type": "string",
+            "x-algorand-format": "Address"
+          },
+          "effective-first-valid": {
+            "description": "When registered, this is the first round it may be used.",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          },
+          "effective-last-valid": {
+            "description": "When registered, this is the last round it may be used.",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          },
+          "id": {
+            "description": "The key's ParticipationID.",
+            "type": "string"
+          },
+          "key": {
+            "$ref": "#/components/schemas/AccountParticipation"
+          },
+          "last-block-proposal": {
+            "description": "Round when this key was last used to propose a block.",
+            "type": "integer"
+          },
+          "last-state-proof": {
+            "description": "Round when this key was last used to generate a state proof.",
+            "type": "integer"
+          },
+          "last-vote": {
+            "description": "Round when this key was last used to vote.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "address",
+          "id",
+          "key"
+        ],
         "type": "object"
       },
       "PendingTransactionResponse": {
