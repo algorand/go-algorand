@@ -813,6 +813,11 @@ func recordActive(record ParticipationRecord, on basics.Round) bool {
 	return record.EffectiveLast != 0 && record.EffectiveFirst <= on && on <= record.EffectiveLast
 }
 
+// PKI TODO: Register needs a bit more work to make sure EffectiveFirst and
+//           EffectiveLast are set at the right time. Specifically, the node
+//           doesn't call Register until the key becomes active and is about
+//           to be used, so effective first/last is updated just-in-time. It
+//           would be better to update them when the KeyRegistration occurs.
 func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 	// Lookup recordToRegister for first/last valid and account.
 	recordToRegister := db.Get(id)
@@ -843,8 +848,7 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 
 	// Disable active key if there is one
 	for _, record := range toUpdate {
-		// TODO: this should probably be "on - 1"
-		record.EffectiveLast = on
+		record.EffectiveLast = on - 1
 		updated[record.ParticipationID] = updatingParticipationRecord{
 			record.Duplicate(),
 			false,

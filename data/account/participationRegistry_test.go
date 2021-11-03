@@ -211,7 +211,7 @@ func TestParticipation_Register(t *testing.T) {
 	// Register second key.
 	err = registry.Register(p2.ID(), 2500000)
 	a.NoError(err)
-	verifyEffectiveRound(p.ID(), 500000, 2500000)
+	verifyEffectiveRound(p.ID(), 500000, 2499999)
 	verifyEffectiveRound(p2.ID(), 2500000, int(p2.LastValid))
 }
 
