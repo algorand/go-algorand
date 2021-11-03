@@ -72,9 +72,9 @@ type ParticipationRecord struct {
 	KeyDilution uint64
 
 	LastVote               basics.Round
-	LastBlockProposal      basics.Round
-	LastCompactCertificate basics.Round
-	EffectiveFirst         basics.Round
+	LastBlockProposal basics.Round
+	LastStateProof    basics.Round
+	EffectiveFirst    basics.Round
 	EffectiveLast          basics.Round
 
 	VRF    *crypto.VRFSecrets
@@ -101,18 +101,18 @@ func (r ParticipationRecord) Duplicate() ParticipationRecord {
 		voting = r.Voting.Snapshot()
 	}
 	return ParticipationRecord{
-		ParticipationID:        r.ParticipationID,
-		Account:                r.Account,
-		FirstValid:             r.FirstValid,
-		LastValid:              r.LastValid,
-		KeyDilution:            r.KeyDilution,
-		LastVote:               r.LastVote,
-		LastBlockProposal:      r.LastBlockProposal,
-		LastCompactCertificate: r.LastCompactCertificate,
-		EffectiveFirst:         r.EffectiveFirst,
-		EffectiveLast:          r.EffectiveLast,
-		VRF:                    &vrf,
-		Voting:                 &voting,
+		ParticipationID:   r.ParticipationID,
+		Account:           r.Account,
+		FirstValid:        r.FirstValid,
+		LastValid:         r.LastValid,
+		KeyDilution:       r.KeyDilution,
+		LastVote:          r.LastVote,
+		LastBlockProposal: r.LastBlockProposal,
+		LastStateProof:    r.LastStateProof,
+		EffectiveFirst:    r.EffectiveFirst,
+		EffectiveLast:     r.EffectiveLast,
+		VRF:               &vrf,
+		Voting:            &voting,
 	}
 }
 
@@ -124,13 +124,13 @@ type ParticipationAction int
 const (
 	Vote ParticipationAction = iota
 	BlockProposal
-	CompactCertificate
+	StateProof
 )
 
 var participationActionFields = map[ParticipationAction]string{
-	Vote:               "lastVoteRound",
-	BlockProposal:      "lastBlockProposalRound",
-	CompactCertificate: "lastCompactCertificateRound",
+	Vote:          "lastVoteRound",
+	BlockProposal: "lastBlockProposalRound",
+	StateProof:    "lastStateProofRound",
 }
 
 // ErrParticipationIDNotFound is used when attempting to update a set of keys which do not exist.
@@ -246,7 +246,7 @@ var (
 
 			lastVoteRound               INTEGER,
 			lastBlockProposalRound      INTEGER,
-			lastCompactCertificateRound INTEGER,
+			lastStateProofRound         INTEGER,
 			effectiveFirstRound         INTEGER,
 			effectiveLastRound          INTEGER,
 
@@ -268,7 +268,7 @@ var (
 	selectRecords = `SELECT
 			k.participationID, k.account, k.firstValidRound,
        		k.lastValidRound, k.keyDilution, k.vrf,
-			r.lastVoteRound, r.lastBlockProposalRound, r.lastCompactCertificateRound,
+			r.lastVoteRound, r.lastBlockProposalRound, r.lastStateProofRound,
 			r.effectiveFirstRound, r.effectiveLastRound, r.voting
 		FROM Keysets k
 		INNER JOIN Rolling r
@@ -278,7 +278,7 @@ var (
 	updateRollingFieldsSQL = `UPDATE Rolling
 		 SET lastVoteRound=?,
 		     lastBlockProposalRound=?,
-		     lastCompactCertificateRound=?,
+		     lastStateProofRound=?,
 		     effectiveFirstRound=?,
 		     effectiveLastRound=?
 		 WHERE pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
@@ -612,18 +612,18 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 
 	// update cache.
 	db.cache[id] = ParticipationRecord{
-		ParticipationID:        id,
-		Account:                record.Address(),
-		FirstValid:             record.FirstValid,
-		LastValid:              record.LastValid,
-		KeyDilution:            record.KeyDilution,
-		LastVote:               0,
-		LastBlockProposal:      0,
-		LastCompactCertificate: 0,
-		EffectiveFirst:         0,
-		EffectiveLast:          0,
-		Voting:                 voting,
-		VRF:                    vrf,
+		ParticipationID:   id,
+		Account:           record.Address(),
+		FirstValid:        record.FirstValid,
+		LastValid:         record.LastValid,
+		KeyDilution:       record.KeyDilution,
+		LastVote:          0,
+		LastBlockProposal: 0,
+		LastStateProof:    0,
+		EffectiveFirst:    0,
+		EffectiveLast:     0,
+		Voting:            voting,
+		VRF:               vrf,
 	}
 
 	return
@@ -722,7 +722,7 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 		}
 
 		if lastCompactCertificate.Valid {
-			record.LastCompactCertificate = basics.Round(lastCompactCertificate.Int64)
+			record.LastStateProof = basics.Round(lastCompactCertificate.Int64)
 		}
 
 		if effectiveFirst.Valid {
@@ -785,7 +785,7 @@ func updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRe
 	result, err := tx.ExecContext(ctx, updateRollingFieldsSQL,
 		record.LastVote,
 		record.LastBlockProposal,
-		record.LastCompactCertificate,
+		record.LastStateProof,
 		record.EffectiveFirst,
 		record.EffectiveLast,
 		record.ParticipationID[:])
@@ -904,8 +904,8 @@ func (db *participationDB) Record(account basics.Address, round basics.Round, pa
 		record.LastVote = round
 	case BlockProposal:
 		record.LastBlockProposal = round
-	case CompactCertificate:
-		record.LastCompactCertificate = round
+	case StateProof:
+		record.LastStateProof = round
 	default:
 		return ErrUnknownParticipationAction
 	}

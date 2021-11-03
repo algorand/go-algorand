@@ -272,7 +272,7 @@ func TestParticipation_Record(t *testing.T) {
 
 	a.NoError(registry.Record(p.Parent, 1000, Vote))
 	a.NoError(registry.Record(p.Parent, 2000, BlockProposal))
-	a.NoError(registry.Record(p.Parent, 3000, CompactCertificate))
+	a.NoError(registry.Record(p.Parent, 3000, StateProof))
 
 	// Verify that one and only one key was updated.
 	test := func(registry ParticipationRegistry) {
@@ -282,11 +282,11 @@ func TestParticipation_Record(t *testing.T) {
 			if record.ParticipationID == p.ID() {
 				require.Equal(t, 1000, int(record.LastVote))
 				require.Equal(t, 2000, int(record.LastBlockProposal))
-				require.Equal(t, 3000, int(record.LastCompactCertificate))
+				require.Equal(t, 3000, int(record.LastStateProof))
 			} else {
 				require.Equal(t, 0, int(record.LastVote))
 				require.Equal(t, 0, int(record.LastBlockProposal))
-				require.Equal(t, 0, int(record.LastCompactCertificate))
+				require.Equal(t, 0, int(record.LastStateProof))
 			}
 		}
 	}
