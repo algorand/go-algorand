@@ -438,7 +438,7 @@ func assembleIntC(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("intc operation needs one argument")
 	}
-	constIndex, err := strconv.ParseUint(args[0], 0, 64)
+	constIndex, err := simpleImm(args[0], "constant")
 	if err != nil {
 		return ops.error(err)
 	}
@@ -449,7 +449,7 @@ func assembleByteC(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("bytec operation needs one argument")
 	}
-	constIndex, err := strconv.ParseUint(args[0], 0, 64)
+	constIndex, err := simpleImm(args[0], "constant")
 	if err != nil {
 		return ops.error(err)
 	}
@@ -739,7 +739,7 @@ func assembleArg(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("arg operation needs one argument")
 	}
-	val, err := strconv.ParseUint(args[0], 0, 64)
+	val, err := simpleImm(args[0], "argument")
 	if err != nil {
 		return ops.error(err)
 	}
@@ -787,7 +787,7 @@ func assembleSubstring(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func fetchField(name string, expectArray bool, version uint64) (txnFieldSpec, error) {
+func txnFieldImm(name string, expectArray bool, version uint64) (txnFieldSpec, error) {
 	fs, ok := txnFieldSpecByName[name]
 	if !ok {
 		return fs, fmt.Errorf("unknown field: %#v", name)
@@ -805,22 +805,22 @@ func fetchField(name string, expectArray bool, version uint64) (txnFieldSpec, er
 	return fs, nil
 }
 
-func fetchArrayIdx(s string) (uint64, error) {
-	arrayFieldIdx, err := strconv.ParseUint(s, 0, 64)
+func simpleImm(value string, label string) (uint64, error) {
+	res, err := strconv.ParseUint(value, 0, 64)
 	if err != nil {
-		return 0, fmt.Errorf("unable to parse %#v as integer", s)
+		return 0, fmt.Errorf("unable to parse %s %#v as integer", label, value)
 	}
-	if arrayFieldIdx > 255 {
-		return 0, fmt.Errorf("array index beyond 255: %d", arrayFieldIdx)
+	if res > 255 {
+		return 0, fmt.Errorf("%s beyond 255: %d", label, res)
 	}
-	return arrayFieldIdx, err
+	return res, err
 }
 
 func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("txn expects one argument")
 	}
-	fs, err := fetchField(args[0], false, ops.Version)
+	fs, err := txnFieldImm(args[0], false, ops.Version)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -846,11 +846,11 @@ func assembleTxna(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 2 {
 		return ops.error("txna expects two immediate arguments")
 	}
-	fs, err := fetchField(args[0], true, ops.Version)
+	fs, err := txnFieldImm(args[0], true, ops.Version)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
-	arrayFieldIdx, err := fetchArrayIdx(args[1])
+	arrayFieldIdx, err := simpleImm(args[1], "array index")
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -866,7 +866,7 @@ func assembleTxnas(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("txnas expects one immediate argument")
 	}
-	fs, err := fetchField(args[0], true, ops.Version)
+	fs, err := txnFieldImm(args[0], true, ops.Version)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -881,14 +881,11 @@ func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 2 {
 		return ops.error("gtxn expects two arguments")
 	}
-	slot, err := strconv.ParseUint(args[0], 0, 64)
+	slot, err := simpleImm(args[0], "transaction index")
 	if err != nil {
-		return ops.error(err)
+		return ops.errorf("%s %w", spec.Name, err)
 	}
-	if slot > 255 {
-		return ops.errorf("%s transaction index beyond 255: %d", spec.Name, slot)
-	}
-	fs, err := fetchField(args[1], false, ops.Version)
+	fs, err := txnFieldImm(args[1], false, ops.Version)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -915,20 +912,15 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 3 {
 		return ops.errorf("%s expects three arguments", spec.Name)
 	}
-	slot, err := strconv.ParseUint(args[0], 0, 64)
-	if err != nil {
-		return ops.error(err)
-	}
-	if slot > 255 {
-		return ops.errorf("%s group index beyond 255: %d", spec.Name, slot)
-	}
-
-	fs, err := fetchField(args[1], true, ops.Version)
+	slot, err := simpleImm(args[0], "transaction index")
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
-
-	arrayFieldIdx, err := fetchArrayIdx(args[2])
+	fs, err := txnFieldImm(args[1], true, ops.Version)
+	if err != nil {
+		return ops.errorf("%s %w", spec.Name, err)
+	}
+	arrayFieldIdx, err := simpleImm(args[2], "array index")
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -945,16 +937,11 @@ func assembleGtxnas(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 2 {
 		return ops.errorf("%s expects two immediate arguments", spec.Name)
 	}
-
-	slot, err := strconv.ParseUint(args[0], 0, 64)
+	slot, err := simpleImm(args[0], "transaction index")
 	if err != nil {
-		return ops.error(err)
+		return ops.errorf("%s %w", spec.Name, err)
 	}
-	if slot > 255 {
-		return ops.errorf("%s group index beyond 255: %d", spec.Name, slot)
-	}
-
-	fs, err := fetchField(args[1], true, ops.Version)
+	fs, err := txnFieldImm(args[1], true, ops.Version)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -974,7 +961,7 @@ func assembleGtxns(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one or two immediate arguments", spec.Name)
 	}
-	fs, err := fetchField(args[0], false, ops.Version)
+	fs, err := txnFieldImm(args[0], false, ops.Version)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -989,11 +976,11 @@ func assembleGtxnsa(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 2 {
 		return ops.errorf("%s expects two immediate arguments", spec.Name)
 	}
-	fs, err := fetchField(args[0], true, ops.Version)
+	fs, err := txnFieldImm(args[0], true, ops.Version)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
-	arrayFieldIdx, err := fetchArrayIdx(args[1])
+	arrayFieldIdx, err := simpleImm(args[1], "array index")
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -1008,7 +995,7 @@ func assembleGtxnsas(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one immediate argument", spec.Name)
 	}
-	fs, err := fetchField(args[0], true, ops.Version)
+	fs, err := txnFieldImm(args[0], true, ops.Version)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -1034,10 +1021,11 @@ func asmItxnOnly(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	fs, err := fetchField(args[0], false, ops.Version)
+	fs, err := txnFieldImm(args[0], false, ops.Version)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
+
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(fs.field))
 	ops.returns(fs.ftype)
@@ -1048,11 +1036,11 @@ func asmItxna(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 2 {
 		return ops.errorf("%s expects two immediate arguments", spec.Name)
 	}
-	fs, err := fetchField(args[0], true, ops.Version)
+	fs, err := txnFieldImm(args[0], true, ops.Version)
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
-	arrayFieldIdx, err := fetchArrayIdx(args[1])
+	arrayFieldIdx, err := simpleImm(args[1], "array index")
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
@@ -1080,18 +1068,15 @@ func asmGitxnOnly(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 2 {
 		return ops.errorf("%s expects two arguments", spec.Name)
 	}
-	slot, err := strconv.ParseUint(args[0], 0, 64)
-	if err != nil {
-		return ops.error(err)
-	}
-	if slot > 255 {
-		return ops.errorf("%s transaction index beyond 255: %d", spec.Name, slot)
-	}
-
-	fs, err := fetchField(args[1], false, ops.Version)
+	slot, err := simpleImm(args[0], "transaction index")
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
+	fs, err := txnFieldImm(args[1], false, ops.Version)
+	if err != nil {
+		return ops.errorf("%s %w", spec.Name, err)
+	}
+
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(slot))
 	ops.pending.WriteByte(uint8(fs.field))
@@ -1103,24 +1088,18 @@ func asmGitxna(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 3 {
 		return ops.errorf("%s expects three immediate arguments", spec.Name)
 	}
-	slot, err := strconv.ParseUint(args[0], 0, 64)
-	if err != nil {
-		return ops.error(err)
-	}
-	if slot > 255 {
-		return ops.errorf("%s transaction index beyond 255: %d", spec.Name, slot)
-	}
-
-	fs, err := fetchField(args[1], true, ops.Version)
+	slot, err := simpleImm(args[0], "transaction index")
 	if err != nil {
 		return ops.errorf("%s %w", spec.Name, err)
 	}
-	arrayFieldIdx, err := strconv.ParseUint(args[2], 0, 64)
+
+	fs, err := txnFieldImm(args[1], true, ops.Version)
 	if err != nil {
-		return ops.error(err)
+		return ops.errorf("%s %w", spec.Name, err)
 	}
-	if arrayFieldIdx > 255 {
-		return ops.errorf("%s array index beyond 255: %d", spec.Name, arrayFieldIdx)
+	arrayFieldIdx, err := simpleImm(args[2], "array index")
+	if err != nil {
+		return ops.errorf("%s %w", spec.Name, err)
 	}
 
 	ops.pending.WriteByte(spec.Opcode)
@@ -1224,10 +1203,10 @@ func asmTxField(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
 	if fs.itxVersion == 0 {
-		return ops.errorf("itxn_field %#v is not allowed.", args[0])
+		return ops.errorf("%s %#v is not allowed.", spec.Name, args[0])
 	}
 	if fs.itxVersion > ops.Version {
-		return ops.errorf("itxn_field %#v available in version %d. Missed #pragma version?", args[0], fs.itxVersion)
+		return ops.errorf("%s %#v available in version %d. Missed #pragma version?", spec.Name, args[0], fs.itxVersion)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(fs.field))
@@ -1263,12 +1242,9 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	for i := 0; i < spec.Details.Size-1; i++ {
-		val, err := strconv.ParseUint(args[i], 0, 64)
+		val, err := simpleImm(args[i], "argument")
 		if err != nil {
-			return ops.error(err)
-		}
-		if val > 255 {
-			return ops.errorf("%s outside 0..255: %d", spec.Name, val)
+			return ops.errorf("%s %w", spec.Name, err)
 		}
 		ops.pending.WriteByte(byte(val))
 	}
