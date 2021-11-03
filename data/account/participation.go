@@ -164,7 +164,7 @@ func (part PersistedParticipation) PersistNewParent() error {
 // FillDBWithParticipationKeys initializes the passed database with participation keys
 func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firstValid, lastValid basics.Round, keyDilution uint64) (part PersistedParticipation, err error) {
 	if lastValid < firstValid {
-		err = fmt.Errorf("FillDBWithParticipationKeys: lastValid %d is after firstValid %d", lastValid, firstValid)
+		err = fmt.Errorf("FillDBWithParticipationKeys: firstValid %d is after lastValid %d", firstValid, lastValid)
 		return
 	}
 
