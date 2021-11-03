@@ -202,6 +202,8 @@ type Peer struct {
 	proposalFilterCache ProposalFilterCache
 
 	currentProposalHash crypto.Digest
+
+	lastBloomFilterReceivedTimestamp time.Time
 }
 
 // requestParamsGroupCounterState stores the latest group counters for a given set of request params.
@@ -473,6 +475,7 @@ scanLoop:
 	if p.state == peerStateProposal {
 		logging.Base().Infof("proposal size: %v bytes, txns: %v bytes", currentMessageSize, accumulatedSize)
 		if time.Now().Sub(start) > 20 * time.Millisecond {
+			logging.Base().Infof("filter received: %v", p.lastBloomFilterReceivedTimestamp)
 			for _, id := range effectiveBloomFilters {
 				filter := p.recentIncomingBloomFilters[id].filter
 				logging.Base().Infof("offset: %v mod: %v round %v cp %v", filter.encodingParams.Offset, filter.encodingParams.Modulator, p.recentIncomingBloomFilters[id].round, filter.clearPrevious)
@@ -611,11 +614,13 @@ func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter *testab
 	// Simple case: append
 	if last+1 < maxIncomingBloomFilterHistory {
 		p.recentIncomingBloomFilters = append(p.recentIncomingBloomFilters, bf)
+		p.lastBloomFilterReceivedTimestamp = time.Now()
 		return
 	}
 	// Too much traffic case: replace the first thing we find of the oldest round
 	if firstOfOldest >= 0 {
 		p.recentIncomingBloomFilters[firstOfOldest] = bf
+		p.lastBloomFilterReceivedTimestamp = time.Now()
 		return
 	}
 	// This line should be unreachable, but putting in an error log to test that assumption.
@@ -790,17 +795,18 @@ func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (
 				ops |= messageConstTransactions
 			}
 		} else {
-			if p.requestedTransactionsModulator != 0 {
-				ops |= messageConstTransactions
-				if p.nextStateTimestamp == 0 && p.localTransactionsModulator != 0 {
-					ops |= messageConstBloomFilter
-				}
-			}
-			if p.nextStateTimestamp == 0 {
-				ops |= messageConstNextMinDelay
-			}
 			if p.state == peerStateProposal {
 				ops |= messageConstTransactions
+			} else {
+				if p.requestedTransactionsModulator != 0 {
+					ops |= messageConstTransactions
+					if p.nextStateTimestamp == 0 && p.localTransactionsModulator != 0 {
+						ops |= messageConstBloomFilter
+					}
+				}
+				if p.nextStateTimestamp == 0 {
+					ops |= messageConstNextMinDelay
+				}
 			}
 		}
 		ops |= messageConstUpdateRequestParams
