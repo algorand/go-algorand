@@ -414,6 +414,10 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []pooldata.SignedTx
 			if p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Modulator != p.requestedTransactionsModulator || p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Offset != p.requestedTransactionsOffset {
 				continue
 			}
+		} else {
+			if p.recentIncomingBloomFilters[filterIdx].round < round.SubSaturate(1) {
+				continue
+			}
 		}
 		effectiveBloomFilters = append(effectiveBloomFilters, filterIdx)
 	}
@@ -468,7 +472,7 @@ scanLoop:
 
 	if p.state == peerStateProposal {
 		logging.Base().Infof("proposal size: %v bytes, txns: %v bytes", currentMessageSize, accumulatedSize)
-		if time.Now().Sub(start) > 50 * time.Millisecond {
+		if time.Now().Sub(start) > 20 * time.Millisecond {
 			for _, id := range effectiveBloomFilters {
 				filter := p.recentIncomingBloomFilters[id].filter
 				logging.Base().Infof("offset: %v mod: %v round %v cp %v", filter.encodingParams.Offset, filter.encodingParams.Modulator, p.recentIncomingBloomFilters[id].round, filter.clearPrevious)
