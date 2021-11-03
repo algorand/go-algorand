@@ -107,7 +107,7 @@ func convertParticipationRecord(record account.ParticipationRecord) generated.Pa
 	participationKey.LastVote = roundToPtrOrNil(record.LastVote)
 	participationKey.LastBlockProposal = roundToPtrOrNil(record.LastBlockProposal)
 	participationKey.LastVote = roundToPtrOrNil(record.LastVote)
-	participationKey.LastStateProof = roundToPtrOrNil(record.LastCompactCertificate)
+	participationKey.LastStateProof = roundToPtrOrNil(record.LastStateProof)
 
 	// Special case for first valid on round 0
 	if record.EffectiveLast != 0 && record.EffectiveFirst == 0 {
