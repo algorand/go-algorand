@@ -84,12 +84,12 @@ func roundToPtrOrNil(value basics.Round) *uint64 {
 
 func convertParticipationRecord(record account.ParticipationRecord) generated.ParticipationKey {
 	participationKey := generated.ParticipationKey{
-		Id:                  record.ParticipationID.String(),
-		Address:             record.Account.String(),
+		Id:      record.ParticipationID.String(),
+		Address: record.Account.String(),
 		Key: generated.AccountParticipation{
-			VoteFirstValid:            uint64(record.FirstValid),
-			VoteLastValid:             uint64(record.LastValid),
-			VoteKeyDilution:           record.KeyDilution,
+			VoteFirstValid:  uint64(record.FirstValid),
+			VoteLastValid:   uint64(record.LastValid),
+			VoteKeyDilution: record.KeyDilution,
 		},
 	}
 
