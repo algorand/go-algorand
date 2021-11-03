@@ -199,7 +199,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	// Generate a new key which signs the compact certificates
 	stateProofSecrets, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), compactCertRound, crypto.DilithiumType, store)
 	if err != nil {
-		return PersistedParticipation{}, err
+		return
 	}
 
 	// Construct the Participation containing these keys to be persisted
@@ -217,12 +217,9 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	}
 	// Persist the Participation into the database
 	err = part.Persist()
-	if err != nil {
-		return PersistedParticipation{}, err
+	if err == nil {
+		err = stateProofSecrets.Persist() // must be called after part.Persist()
 	}
-
-	err = stateProofSecrets.Persist() // must be called after part.Persist() !
-
 	return part, err
 }
 
