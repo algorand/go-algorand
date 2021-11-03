@@ -2541,7 +2541,7 @@ func (z *AssetParams) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0002Len := uint32(11)
 	var zb0002Mask uint16 /* 12 bits */
-	if (*z).MetadataHash == ([MetadataHashLength]byte{}) {
+	if (*z).MetadataHash == ([32]byte{}) {
 		zb0002Len--
 		zb0002Mask |= 0x2
 	}
@@ -2862,13 +2862,13 @@ func (_ *AssetParams) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *AssetParams) Msgsize() (s int) {
-	s = 1 + 2 + msgp.Uint64Size + 3 + msgp.Uint32Size + 3 + msgp.BoolSize + 3 + msgp.StringPrefixSize + len((*z).UnitName) + 3 + msgp.StringPrefixSize + len((*z).AssetName) + 3 + msgp.StringPrefixSize + len((*z).URL) + 3 + msgp.ArrayHeaderSize + (MetadataHashLength * (msgp.ByteSize)) + 2 + (*z).Manager.Msgsize() + 2 + (*z).Reserve.Msgsize() + 2 + (*z).Freeze.Msgsize() + 2 + (*z).Clawback.Msgsize()
+	s = 1 + 2 + msgp.Uint64Size + 3 + msgp.Uint32Size + 3 + msgp.BoolSize + 3 + msgp.StringPrefixSize + len((*z).UnitName) + 3 + msgp.StringPrefixSize + len((*z).AssetName) + 3 + msgp.StringPrefixSize + len((*z).URL) + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 2 + (*z).Manager.Msgsize() + 2 + (*z).Reserve.Msgsize() + 2 + (*z).Freeze.Msgsize() + 2 + (*z).Clawback.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *AssetParams) MsgIsZero() bool {
-	return ((*z).Total == 0) && ((*z).Decimals == 0) && ((*z).DefaultFrozen == false) && ((*z).UnitName == "") && ((*z).AssetName == "") && ((*z).URL == "") && ((*z).MetadataHash == ([MetadataHashLength]byte{})) && ((*z).Manager.MsgIsZero()) && ((*z).Reserve.MsgIsZero()) && ((*z).Freeze.MsgIsZero()) && ((*z).Clawback.MsgIsZero())
+	return ((*z).Total == 0) && ((*z).Decimals == 0) && ((*z).DefaultFrozen == false) && ((*z).UnitName == "") && ((*z).AssetName == "") && ((*z).URL == "") && ((*z).MetadataHash == ([32]byte{})) && ((*z).Manager.MsgIsZero()) && ((*z).Reserve.MsgIsZero()) && ((*z).Freeze.MsgIsZero()) && ((*z).Clawback.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
