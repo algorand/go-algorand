@@ -71,11 +71,11 @@ type ParticipationRecord struct {
 	LastValid   basics.Round
 	KeyDilution uint64
 
-	LastVote               basics.Round
+	LastVote          basics.Round
 	LastBlockProposal basics.Round
 	LastStateProof    basics.Round
 	EffectiveFirst    basics.Round
-	EffectiveLast          basics.Round
+	EffectiveLast     basics.Round
 
 	VRF    *crypto.VRFSecrets
 	Voting *crypto.OneTimeSignatureSecrets
