@@ -1330,7 +1330,7 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 		matchingAccountsKeys[part.Address()] = true
 
 		// Make sure the key is registered.
-		err := node.accountManager.Registry().Register(part.ID(), keysRound)
+		err := node.accountManager.Registry().Register(part.ID(), votingRound)
 		if err != nil {
 			node.log.Warnf("Failed to register participation key (%s) with participation registry: %v\n", part.ID(), err)
 		}
