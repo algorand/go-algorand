@@ -1333,6 +1333,7 @@ var partkeyInfoCmd = &cobra.Command{
 				fmt.Printf("Parent address:            %s\n", part.Address)
 				fmt.Printf("Last vote round:           %s\n", strOrNA(part.LastVote))
 				fmt.Printf("Last block proposal round: %s\n", strOrNA(part.LastBlockProposal))
+				// PKI TODO: enable with state proof support.
 				//fmt.Printf("Last state proof round:    %s\n", strOrNA(part.LastStateProof))
 				fmt.Printf("Effective first round:     %s\n", strOrNA(part.EffectiveFirstValid))
 				fmt.Printf("Effective last round:      %s\n", strOrNA(part.EffectiveLastValid))
@@ -1341,6 +1342,7 @@ var partkeyInfoCmd = &cobra.Command{
 				fmt.Printf("Key dilution:              %d\n", part.Key.VoteKeyDilution)
 				fmt.Printf("Selection key:             %s\n", base64.StdEncoding.EncodeToString(part.Key.SelectionParticipationKey))
 				fmt.Printf("Voting key:                %s\n", base64.StdEncoding.EncodeToString(part.Key.VoteParticipationKey))
+				// PKI TODO: enable with state proof support.
 				//fmt.Printf("State proof key:           %s\n", base64.StdEncoding.EncodeToString(part.StateProofKey))
 			}
 		})

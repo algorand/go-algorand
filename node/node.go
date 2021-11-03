@@ -415,7 +415,7 @@ func (node *AlgorandFullNode) Start() {
 func (node *AlgorandFullNode) startMonitoringRoutines() {
 	node.monitoringRoutinesWaitGroup.Add(3)
 
-	// TODO: Remove this with #2596
+	// PKI TODO: Remove this with #2596
 	// Periodically check for new participation keys
 	go node.checkForParticipationKeys()
 

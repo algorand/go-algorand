@@ -20,8 +20,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"testing"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
