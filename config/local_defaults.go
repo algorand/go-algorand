@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    18,
+	Version:                                    19,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AnnounceParticipationKey:                   true,
@@ -94,6 +94,7 @@ var defaultLocal = Local{
 	PeerConnectionsUpdateInterval:              3600,
 	PeerPingPeriodSeconds:                      0,
 	PriorityPeers:                              map[string]bool{},
+	ProposalAssemblyTime:                       250000000,
 	PublicAddress:                              "",
 	ReconnectTime:                              60000000000,
 	ReservedFDs:                                256,

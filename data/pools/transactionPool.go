@@ -120,7 +120,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 		logAssembleStats:     cfg.EnableAssembleStats,
 		expFeeFactor:         cfg.TxPoolExponentialIncreaseFactor,
 		txPoolMaxSize:        cfg.TxPoolSize,
-		proposalAssemblyTime: config.ProposalAssemblyTime,
+		proposalAssemblyTime: cfg.ProposalAssemblyTime,
 		log:                  log,
 	}
 	pool.cond.L = &pool.mu
