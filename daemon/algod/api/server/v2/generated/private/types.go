@@ -661,22 +661,6 @@ type TransactionParametersResponse struct {
 // VersionsResponse defines model for VersionsResponse.
 type VersionsResponse Version
 
-// RegisterParticipationKeysParams defines parameters for RegisterParticipationKeys.
-type RegisterParticipationKeysParams struct {
-
-	// The fee to use when submitting key registration transactions. Defaults to the suggested fee.
-	Fee *uint64 `json:"fee,omitempty"`
-
-	// value to use for two-level participation key.
-	KeyDilution *uint64 `json:"key-dilution,omitempty"`
-
-	// The last round for which the generated participation keys will be valid.
-	RoundLastValid *uint64 `json:"round-last-valid,omitempty"`
-
-	// Don't wait for transaction to commit before returning response.
-	NoWait *bool `json:"no-wait,omitempty"`
-}
-
 // ShutdownNodeParams defines parameters for ShutdownNode.
 type ShutdownNodeParams struct {
 	Timeout *uint64 `json:"timeout,omitempty"`

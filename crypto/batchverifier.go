@@ -29,7 +29,7 @@ const minBatchVerifierAlloc = 16
 
 // Batch verifications errors
 var (
-	ErrBatchVerificationFailed = errors.New("At least on signature didn't pass verification")
+	ErrBatchVerificationFailed = errors.New("At least one signature didn't pass verification")
 	ErrZeroTranscationsInBatch = errors.New("Could not validate empty signature set")
 )
 
