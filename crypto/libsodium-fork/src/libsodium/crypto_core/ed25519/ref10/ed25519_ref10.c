@@ -322,6 +322,54 @@ ge25519_frombytes_negate_vartime(ge25519_p3 *h, const unsigned char *s)
 
     return 0;
 }
+ 
+// ge25519_frombytes_vartime tries to decode a given a 32-octet string.
+// to a point on the curve. it is identical to ge25519_frombytes_negate_vartime except
+// that this function does not negate the returned value.
+int
+ge25519_frombytes_vartime(ge25519_p3 *h, const unsigned char *s)
+{
+    fe25519 u;
+    fe25519 v;
+    fe25519 v3;
+    fe25519 vxx;
+    fe25519 m_root_check, p_root_check;
+
+    fe25519_frombytes(h->Y, s);
+    fe25519_1(h->Z);
+    fe25519_sq(u, h->Y);
+    fe25519_mul(v, u, d);
+    fe25519_sub(u, u, h->Z); /* u = y^2-1 */
+    fe25519_add(v, v, h->Z); /* v = dy^2+1 */
+
+    fe25519_sq(v3, v);
+    fe25519_mul(v3, v3, v); /* v3 = v^3 */
+    fe25519_sq(h->X, v3);
+    fe25519_mul(h->X, h->X, v);
+    fe25519_mul(h->X, h->X, u); /* x = uv^7 */
+
+    fe25519_pow22523(h->X, h->X); /* x = (uv^7)^((q-5)/8) */
+    fe25519_mul(h->X, h->X, v3);
+    fe25519_mul(h->X, h->X, u); /* x = uv^3(uv^7)^((q-5)/8) */
+
+    fe25519_sq(vxx, h->X);
+    fe25519_mul(vxx, vxx, v);
+    fe25519_sub(m_root_check, vxx, u); /* vx^2-u */
+    if (fe25519_iszero(m_root_check) == 0) {
+        fe25519_add(p_root_check, vxx, u); /* vx^2+u */
+        if (fe25519_iszero(p_root_check) == 0) {
+            return -1;
+        }
+        fe25519_mul(h->X, h->X, sqrtm1);
+    }
+
+    if (fe25519_isnegative(h->X) ^ (s[31] >> 7)) {
+        fe25519_neg(h->X, h->X);
+    }
+    fe25519_mul(h->T, h->X, h->Y);
+
+    return 0;
+}
 
 /*
  r = p + q
@@ -650,50 +698,6 @@ ge25519_tobytes(unsigned char *s, const ge25519_p2 *h)
 
 
 
-int
-ge25519_frombytes_vartime(ge25519_p3 *h, const unsigned char *s)
-{
-    fe25519 u;
-    fe25519 v;
-    fe25519 v3;
-    fe25519 vxx;
-    fe25519 m_root_check, p_root_check;
-
-    fe25519_frombytes(h->Y, s);
-    fe25519_1(h->Z);
-    fe25519_sq(u, h->Y);
-    fe25519_mul(v, u, d);
-    fe25519_sub(u, u, h->Z); /* u = y^2-1 */
-    fe25519_add(v, v, h->Z); /* v = dy^2+1 */
-
-    fe25519_sq(v3, v);
-    fe25519_mul(v3, v3, v); /* v3 = v^3 */
-    fe25519_sq(h->X, v3);
-    fe25519_mul(h->X, h->X, v);
-    fe25519_mul(h->X, h->X, u); /* x = uv^7 */
-
-    fe25519_pow22523(h->X, h->X); /* x = (uv^7)^((q-5)/8) */
-    fe25519_mul(h->X, h->X, v3);
-    fe25519_mul(h->X, h->X, u); /* x = uv^3(uv^7)^((q-5)/8) */
-
-    fe25519_sq(vxx, h->X);
-    fe25519_mul(vxx, vxx, v);
-    fe25519_sub(m_root_check, vxx, u); /* vx^2-u */
-    if (fe25519_iszero(m_root_check) == 0) {
-        fe25519_add(p_root_check, vxx, u); /* vx^2+u */
-        if (fe25519_iszero(p_root_check) == 0) {
-            return -1;
-        }
-        fe25519_mul(h->X, h->X, sqrtm1);
-    }
-
-    if (fe25519_isnegative(h->X) ^ (s[31] >> 7)) {
-        fe25519_neg(h->X, h->X);
-    }
-    fe25519_mul(h->T, h->X, h->Y);
-
-    return 0;
-}
 
 /*
  r = a * A + b * B
