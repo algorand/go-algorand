@@ -419,12 +419,7 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []pooldata.SignedTx
 	}
 
 	logging.Base().Infof("num bloom filters: %v", len(effectiveBloomFilters))
-	if len(effectiveBloomFilters) > 150 {
-		for _, id := range effectiveBloomFilters {
-			filter := p.recentIncomingBloomFilters[id].filter
-			logging.Base().Infof("offset: %v mod: %v round %v", filter.encodingParams.Offset, filter.encodingParams.Modulator, p.recentIncomingBloomFilters[id].round)
-		}
-	}
+	start := time.Now()
 
 	// removedTxn := 0
 	grpIdx := startIndex
@@ -473,6 +468,12 @@ scanLoop:
 
 	if p.state == peerStateProposal {
 		logging.Base().Infof("proposal size: %v bytes, txns: %v bytes", currentMessageSize, accumulatedSize)
+		if time.Now().Sub(start) > 50 * time.Millisecond {
+			for _, id := range effectiveBloomFilters {
+				filter := p.recentIncomingBloomFilters[id].filter
+				logging.Base().Infof("offset: %v mod: %v round %v cp %v", filter.encodingParams.Offset, filter.encodingParams.Modulator, p.recentIncomingBloomFilters[id].round, filter.clearPrevious)
+			}
+		}
 	}
 
 	p.lastSelectedTransactionsCount = len(selectedTxnIDs)

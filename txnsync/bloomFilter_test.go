@@ -342,6 +342,9 @@ func BenchmarkTestBloomFilter(b *testing.B) {
 		s.node = &justRandomFakeNode{}
 		var err error
 		txnGroups, _, _, _ := txnGroupsData(300)
+		for j := range txnGroups {
+			txnGroups[j].GroupTransactionID = txnGroups[j].Transactions.ID()
+		}
 
 		testableBfs := make([]*testableBloomFilter, 0)
 
