@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -144,4 +145,37 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 		a.NoError(err)
 		a.Equal(unmarkedAccountStatus.Status, basics.NotParticipating.String())
 	}
+}
+
+func TestCloseOnError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	var fixture fixtures.RestClientFixture
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodesPartlyOfflineVFuture.json"))
+	defer fixture.Shutdown()
+	client := fixture.LibGoalClient
+
+	// Capture the account we're tracking
+	accountList, err := fixture.GetWalletsSortedByBalance()
+	a.NoError(err)
+
+	initiallyOnline := accountList[0].Address  // 35% stake
+	initiallyOffline := accountList[1].Address // 20% stake
+
+	// get the current round for partkey creation
+	_, curRound := fixture.GetBalanceAndRound(initiallyOnline)
+
+	// make a participation key for initiallyOffline
+	_, _, err = client.GenParticipationKeys(initiallyOffline, 0, curRound+1000, 0)
+	a.NoError(err)
+	// check duplicate keys does not crash
+	_, _, err = client.GenParticipationKeys(initiallyOffline, 0, curRound+1000, 0)
+	a.Equal("PersistedParticipation.Persist: failed to install database: table ParticipationAccount already exists", err.Error())
+	// check lastValid < firstValid does not crash
+	_, _, err = client.GenParticipationKeys(initiallyOffline, curRound+1001, curRound+1000, 0)
+	expected := fmt.Sprintf("FillDBWithParticipationKeys: firstValid %d is after lastValid %d", int(curRound+1001), int(curRound+1000))
+	a.Equal(expected, err.Error())
 }
