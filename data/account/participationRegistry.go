@@ -127,12 +127,6 @@ const (
 	StateProof
 )
 
-var participationActionFields = map[ParticipationAction]string{
-	Vote:          "lastVoteRound",
-	BlockProposal: "lastBlockProposalRound",
-	StateProof:    "lastStateProofRound",
-}
-
 // ErrParticipationIDNotFound is used when attempting to update a set of keys which do not exist.
 var ErrParticipationIDNotFound = errors.New("the participation ID was not found")
 
