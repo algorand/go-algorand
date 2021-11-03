@@ -35,6 +35,16 @@ var feeSink = basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1
 type keyregTestBalances struct {
 	addrs   map[basics.Address]basics.AccountData
 	version protocol.ConsensusVersion
+	mockCreatableBalances
+}
+
+func newKeyregTestBalances() *keyregTestBalances {
+	b := &keyregTestBalances{
+		addrs:   make(map[basics.Address]basics.AccountData),
+		version: protocol.ConsensusCurrentVersion,
+	}
+	b.mockCreatableBalances = mockCreatableBalances{access: b}
+	return b
 }
 
 func (balances keyregTestBalances) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
@@ -46,6 +56,10 @@ func (balances keyregTestBalances) GetCreator(cidx basics.CreatableIndex, ctype 
 }
 
 func (balances keyregTestBalances) Put(addr basics.Address, ad basics.AccountData) error {
+	return balances.putAccount(addr, ad)
+}
+
+func (balances keyregTestBalances) putAccount(addr basics.Address, ad basics.AccountData) error {
 	balances.addrs[addr] = ad
 	return nil
 }
@@ -114,7 +128,7 @@ func TestKeyregApply(t *testing.T) {
 
 	tx.Sender = src
 
-	mockBal := keyregTestBalances{make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion}
+	mockBal := newKeyregTestBalances()
 
 	// Going from offline to online should be okay
 	mockBal.addrs[src] = basics.AccountData{Status: basics.Offline}

@@ -55,6 +55,31 @@ func (c *mockCowForLogicLedger) Get(addr basics.Address, withPendingRewards bool
 	return br, nil
 }
 
+func (c *mockCowForLogicLedger) GetAppParams(addr basics.Address, aidx basics.AppIndex) (ret basics.AppParams, ok bool, err error) {
+	acct, err := c.Get(addr, false)
+	if err != nil {
+		return
+	}
+	ret, ok = acct.AppParams[aidx]
+	return
+}
+func (c *mockCowForLogicLedger) GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (ret basics.AssetParams, ok bool, err error) {
+	acct, err := c.Get(addr, false)
+	if err != nil {
+		return
+	}
+	ret, ok = acct.AssetParams[aidx]
+	return
+}
+func (c *mockCowForLogicLedger) GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (ret basics.AssetHolding, ok bool, err error) {
+	acct, err := c.Get(addr, false)
+	if err != nil {
+		return
+	}
+	ret, ok = acct.Assets[aidx]
+	return
+}
+
 func (c *mockCowForLogicLedger) GetCreatableID(groupIdx int) basics.CreatableIndex {
 	return c.tcs[groupIdx]
 }
