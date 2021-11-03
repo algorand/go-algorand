@@ -18,6 +18,8 @@ package merklekeystore
 
 import (
 	"errors"
+	"fmt"
+	"github.com/algorand/go-algorand/config"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
@@ -80,6 +82,9 @@ type (
 	}
 )
 
+var MaxValidPeriod = (1 << 16) * config.Consensus[protocol.ConsensusFuture].CompactCertRounds
+
+var errValidityPeriodTooLong = fmt.Errorf("the validity period for merkleKeyStore is too large: the limit is %v", MaxValidPeriod)
 var errStartBiggerThanEndRound = errors.New("cannot create merkleKeyStore because end round is smaller then start round")
 var errDivisorIsZero = errors.New("received zero Interval")
 
@@ -110,6 +115,9 @@ func (k *keysArray) Marshal(pos uint64) ([]byte, error) {
 func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmType, store db.Accessor) (*Signer, error) {
 	if firstValid > lastValid {
 		return nil, errStartBiggerThanEndRound
+	}
+	if (lastValid - firstValid) > MaxValidPeriod {
+		return nil, errValidityPeriodTooLong
 	}
 	if interval == 0 {
 		return nil, errDivisorIsZero

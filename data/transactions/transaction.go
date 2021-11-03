@@ -22,6 +22,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -266,6 +267,7 @@ var errKeyRegEmptyStateProofPK = errors.New("online keyreg transaction cannot ha
 var errKeyregTxnNotEmptyStateProofPK = errors.New("transaction field StateProofPK should be empty in this consensus version")
 var errKeyregTxnNonParticipantShouldBeEmptyStateProofPK = errors.New("non participation keyreg transactions should contain empty stateProofPK")
 var errKeyregTxnOfflineShouldBeEmptyStateProofPK = errors.New("offline keyreg transactions should contain empty stateProofPK")
+var errKeyRegTxnValidityPeriodTooLong = errors.New("validity period for keyreg transaction is too long")
 
 // WellFormed checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger). It does not check signatures.
 func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusParams) error {
@@ -563,6 +565,10 @@ func (tx Transaction) stateProofPKWellFormed(proto config.ConsensusParams) error
 			return errKeyregTxnNotEmptyStateProofPK
 		}
 		return nil
+	}
+
+	if uint64(tx.LastValid-tx.FirstValid) > merklekeystore.MaxValidPeriod {
+		return errKeyRegTxnValidityPeriodTooLong
 	}
 
 	if tx.Nonparticipation {
