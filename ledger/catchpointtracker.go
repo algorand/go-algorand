@@ -115,7 +115,7 @@ type catchpointTracker struct {
 	roundDigest []crypto.Digest
 }
 
-// initialize initializes the accountUpdates structure
+// initialize initializes the catchpointTracker structure
 func (ct *catchpointTracker) initialize(cfg config.Local, dbPathPrefix string) {
 	ct.dbDirectory = filepath.Dir(dbPathPrefix)
 	ct.archivalLedger = cfg.Archival
@@ -124,7 +124,7 @@ func (ct *catchpointTracker) initialize(cfg config.Local, dbPathPrefix string) {
 		ct.catchpointInterval = 0
 	default:
 		// give a warning, then fall thought
-		logging.Base().Warnf("accountUpdates: the CatchpointTracking field in the config.json file contains an invalid value (%d). The default value of 0 would be used instead.", cfg.CatchpointTracking)
+		logging.Base().Warnf("catchpointTracker: the CatchpointTracking field in the config.json file contains an invalid value (%d). The default value of 0 would be used instead.", cfg.CatchpointTracking)
 		fallthrough
 	case 0:
 		if ct.archivalLedger {
@@ -225,38 +225,31 @@ func (ct *catchpointTracker) newBlock(blk bookkeeping.Block, delta ledgercore.St
 	ct.roundDigest = append(ct.roundDigest, blk.Digest())
 }
 
-// committedUpTo informs the tracker that the database has
-// committed all blocks up to and including rnd to persistent
-// storage (the SQL database).  This can allow the tracker
-// to garbage-collect state that will not be needed.
-//
-// committedUpTo() returns the round number of the earliest
-// block that this tracker needs to be stored in the ledger
-// for subsequent calls to loadFromDisk().  All blocks with
-// round numbers before that may be deleted to save space,
-// and the tracker is expected to still function after a
-// restart and a call to loadFromDisk().  For example,
-// returning 0 means that no blocks can be deleted.
+// committedUpTo implements the ledgerTracker interface for catchpointTracker.
+// The method informs the tracker that committedRound and all it's previous rounds have
+// been committed to the block database. The method returns what is the oldest round
+// number that can be removed from the blocks database as well as the lookback that this
+// tracker maintains.
 func (ct *catchpointTracker) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
 	return rnd, basics.Round(0)
 }
 
-func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcc *deferredCommitContext) *deferredCommitContext {
+func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
 	var hasMultipleIntermediateCatchpoint, hasIntermediateCatchpoint bool
 
-	newBase := dcc.oldBase + basics.Round(dcc.offset)
+	newBase := dcr.oldBase + basics.Round(dcr.offset)
 
 	// check if there was a catchpoint between dcc.oldBase+lookback and dcc.oldBase+offset+lookback
 	if ct.catchpointInterval > 0 {
-		nextCatchpointRound := ((uint64(dcc.oldBase+dcc.lookback) + ct.catchpointInterval) / ct.catchpointInterval) * ct.catchpointInterval
+		nextCatchpointRound := ((uint64(dcr.oldBase+dcr.lookback) + ct.catchpointInterval) / ct.catchpointInterval) * ct.catchpointInterval
 
-		if nextCatchpointRound < uint64(dcc.oldBase+dcc.lookback)+dcc.offset {
+		if nextCatchpointRound < uint64(dcr.oldBase+dcr.lookback)+dcr.offset {
 			mostRecentCatchpointRound := (uint64(committedRound) / ct.catchpointInterval) * ct.catchpointInterval
-			newBase = basics.Round(nextCatchpointRound) - dcc.lookback
+			newBase = basics.Round(nextCatchpointRound) - dcr.lookback
 			if mostRecentCatchpointRound > nextCatchpointRound {
 				hasMultipleIntermediateCatchpoint = true
 				// skip if there is more than one catchpoint in queue
-				newBase = basics.Round(mostRecentCatchpointRound) - dcc.lookback
+				newBase = basics.Round(mostRecentCatchpointRound) - dcr.lookback
 			}
 			hasIntermediateCatchpoint = true
 		}
@@ -279,12 +272,12 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 		return nil
 	}
 
-	dcc.offset = uint64(newBase - dcc.oldBase)
+	dcr.offset = uint64(newBase - dcr.oldBase)
 
 	// check to see if this is a catchpoint round
-	dcc.isCatchpointRound = ct.isCatchpointRound(dcc.offset, dcc.oldBase, dcc.lookback)
+	dcr.isCatchpointRound = ct.isCatchpointRound(dcr.offset, dcr.oldBase, dcr.lookback)
 
-	if dcc.isCatchpointRound && ct.archivalLedger {
+	if dcr.isCatchpointRound && ct.archivalLedger {
 		// store non-zero ( all ones ) into the catchpointWriting atomic variable to indicate that a catchpoint is being written ( or, queued to be written )
 		atomic.StoreInt32(&ct.catchpointWriting, int32(-1))
 		ct.catchpointSlowWriting = make(chan struct{}, 1)
@@ -293,9 +286,9 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 		}
 	}
 
-	dcc.catchpointWriting = &ct.catchpointWriting
+	dcr.catchpointWriting = &ct.catchpointWriting
 
-	return dcc
+	return dcr
 }
 
 // prepareCommit, commitRound and postCommit are called when it is time to commit tracker's data.

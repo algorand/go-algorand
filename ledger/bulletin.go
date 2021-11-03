@@ -122,6 +122,6 @@ func (b *bulletin) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 
 func (b *bulletin) handleUnorderedCommit(uint64, basics.Round, basics.Round) {
 }
-func (b *bulletin) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcc *deferredCommitContext) *deferredCommitContext {
-	return dcc
+func (b *bulletin) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
+	return dcr
 }

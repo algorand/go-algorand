@@ -73,7 +73,7 @@ type ledgerTracker interface {
 
 	// committedUpTo informs the tracker that the block database has
 	// committed all blocks up to and including rnd to persistent
-	// storage (the SQL database).  This can allow the tracker
+	// storage.  This can allow the tracker
 	// to garbage-collect state that will not be needed.
 	//
 	// committedUpTo() returns the round number of the earliest
@@ -83,13 +83,15 @@ type ledgerTracker interface {
 	// save space, and the tracker is expected to still function
 	// after a restart and a call to loadFromDisk().
 	// For example, returning 0 means that no blocks can be deleted.
+	// Separetly, the method returns the lookback that is being
+	// maintained by the tracker.
 	committedUpTo(basics.Round) (minRound, lookback basics.Round)
 
-	// produceCommittingTask prepares a deferredCommitContext; Preparing a deferredCommitContext is a joint
+	// produceCommittingTask prepares a deferredCommitRange; Preparing a deferredCommitRange is a joint
 	// effort, and all the trackers contribute to that effort. All the trackers are being handed a
-	// pointer to the deferredCommitContext, and have the ability to either modify it, or return an
-	// error. If an error is returned, the commit would be skipped.
-	produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcc *deferredCommitContext) *deferredCommitContext
+	// pointer to the deferredCommitRange, and have the ability to either modify it, or return a
+	// nil. If nil is returned, the commit would be skipped.
+	produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange
 
 	// prepareCommit, commitRound and postCommit are called when it is time to commit tracker's data.
 	// If an error returned the process is aborted.
@@ -175,11 +177,32 @@ type trackerRegistry struct {
 	lastFlushTime time.Time
 }
 
+// deferredCommitRange is used during the calls to produceCommittingTask, and used as a data structure
+// to syncronize the various trackers and create a uniformity around which rounds need to be persisted
+// next.
+type deferredCommitRange struct {
+	offset   uint64
+	oldBase  basics.Round
+	lookback basics.Round
+
+	// pendingDeltas is the number of accounts that were modified within this commit context.
+	// note that in this number we might have the same account being modified several times.
+	pendingDeltas int
+
+	isCatchpointRound bool
+
+	// catchpointWriting is a pointer to a varible with the same name in the catchpointTracker.
+	// it's used in order to reset the catchpointWriting flag from the acctupdates's
+	// prepareCommit/commitRound ( which is called before the corresponding catchpoint tracker method )
+	catchpointWriting *int32
+}
+
+// deferredCommitContext is used in order to syncornize the persistence of a given deferredCommitRange.
+// prepareCommit, commitRound and postCommit are all using it to exchange data.
 type deferredCommitContext struct {
-	offset    uint64
-	oldBase   basics.Round
+	deferredCommitRange
+
 	newBase   basics.Round
-	lookback  basics.Round
 	flushTime time.Time
 
 	genesisProto config.ConsensusParams
@@ -191,7 +214,6 @@ type deferredCommitContext struct {
 
 	updatedPersistedAccounts []persistedAccountData
 
-	isCatchpointRound        bool
 	committedRoundDigest     crypto.Digest
 	trieBalancesHash         crypto.Digest
 	updatingBalancesDuration time.Duration
@@ -199,15 +221,6 @@ type deferredCommitContext struct {
 
 	stats       telemetryspec.AccountsUpdateMetrics
 	updateStats bool
-
-	// catchpointWriting is a pointer to a varible with the same name in the catchpointTracker.
-	// it's used in order to reset the catchpointWriting flag from the acctupdates's
-	// prepareCommit/commitRound ( which is called before the corresponding catchpoint tracker method )
-	catchpointWriting *int32
-
-	// pendingDeltas is the number of accounts that were modified within this commit context.
-	// note that in this number we might have the same account being modified several times.
-	pendingDeltas int
 }
 
 var errMissingAccountUpdateTracker = errors.New("initializeTrackerCaches : called without a valid accounts update tracker")
@@ -297,14 +310,18 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 	tr.mu.RUnlock()
 
 	dcc := &deferredCommitContext{
-		lookback: maxLookback,
+		deferredCommitRange: deferredCommitRange{
+			lookback: maxLookback,
+		},
 	}
+	cdr := &dcc.deferredCommitRange
 	for _, lt := range tr.trackers {
-		dcc = lt.produceCommittingTask(blockqRound, dbRound, dcc)
-		if dcc == nil {
+		cdr = lt.produceCommittingTask(blockqRound, dbRound, cdr)
+		if cdr == nil {
 			break
 		}
 	}
+	dcc.deferredCommitRange = *cdr
 
 	tr.mu.RLock()
 	// If we recently flushed, wait to aggregate some more blocks.

@@ -479,6 +479,11 @@ func (au *accountUpdates) GetCreatorForRound(rnd basics.Round, cidx basics.Creat
 	return au.getCreatorForRound(rnd, cidx, ctype, true /* take the lock */)
 }
 
+// committedUpTo implements the ledgerTracker interface for accountUpdates.
+// The method informs the tracker that committedRound and all it's previous rounds have
+// been committed to the block database. The method returns what is the oldest round
+// number that can be removed from the blocks database as well as the lookback that this
+// tracker maintains.
 func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound, lookback basics.Round) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
@@ -499,23 +504,23 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound, 
 // operation to a syncer goroutine. The one caveat is that when storing a catchpoint round, we would want to
 // wait until the catchpoint creation is done, so that the persistence of the catchpoint file would have an
 // uninterrupted view of the balances at a given point of time.
-func (au *accountUpdates) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcc *deferredCommitContext) *deferredCommitContext {
+func (au *accountUpdates) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
 	var offset uint64
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
 
-	if committedRound < dcc.lookback {
+	if committedRound < dcr.lookback {
 		return nil
 	}
 
-	newBase := committedRound - dcc.lookback
+	newBase := committedRound - dcr.lookback
 	if newBase <= dbRound {
 		// Already forgotten
 		return nil
 	}
 
 	if newBase > dbRound+basics.Round(len(au.deltas)) {
-		au.log.Panicf("produceCommittingTask: block %d too far in the future, lookback %d, dbRound %d (cached %d), deltas %d", committedRound, dcc.lookback, dbRound, au.cachedDBRound, len(au.deltas))
+		au.log.Panicf("produceCommittingTask: block %d too far in the future, lookback %d, dbRound %d (cached %d), deltas %d", committedRound, dcr.lookback, dbRound, au.cachedDBRound, len(au.deltas))
 	}
 
 	if au.voters != nil {
@@ -527,14 +532,14 @@ func (au *accountUpdates) produceCommittingTask(committedRound basics.Round, dbR
 	offset = au.consecutiveVersion(offset)
 
 	// calculate the number of pending deltas
-	dcc.pendingDeltas = au.deltasAccum[offset] - au.deltasAccum[0]
+	dcr.pendingDeltas = au.deltasAccum[offset] - au.deltasAccum[0]
 
 	// submit committing task only if offset is non-zero in addition to
 	// 1) no pending catchpoint writes
 	// 2) batching requirements meet or catchpoint round
-	dcc.oldBase = dbRound
-	dcc.offset = offset
-	return dcc
+	dcr.oldBase = dbRound
+	dcr.offset = offset
+	return dcr
 }
 
 func (au *accountUpdates) consecutiveVersion(offset uint64) uint64 {

@@ -170,8 +170,9 @@ func (t *txTail) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 
 func (t *txTail) handleUnorderedCommit(uint64, basics.Round, basics.Round) {
 }
-func (t *txTail) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcc *deferredCommitContext) *deferredCommitContext {
-	return dcc
+
+func (t *txTail) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
+	return dcr
 }
 
 // txtailMissingRound is returned by checkDup when requested for a round number below the low watermark
