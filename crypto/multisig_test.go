@@ -297,7 +297,7 @@ func TestMoreThanMaxSigsInMultisig(t *testing.T) {
 	var s Seed
 	var secrets []*SecretKey
 	var pks []PublicKey
-	multiSigLen := MaxMultisig + 1
+	multiSigLen := maxMultisig + 1
 	txid := TestingHashable{[]byte("test: txid 1000")}
 	version := uint8(1)
 	threshold := uint8(1)

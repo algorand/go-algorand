@@ -1,5 +1,5 @@
 {
-    "Version": 18,
+    "Version": 19,
     "AccountUpdatesStatsInterval": 5000000000,
     "AccountsRebuildSynchronousMode": 1,
     "AnnounceParticipationKey": true,
@@ -71,8 +71,9 @@
     "OutgoingMessageFilterBucketSize": 128,
     "ParticipationKeysRefreshInterval": 60000000000,
     "PeerConnectionsUpdateInterval": 3600,
-    "PeerPingPeriodSeconds": 10,
+    "PeerPingPeriodSeconds": 0,
     "PriorityPeers": {},
+    "ProposalAssemblyTime": 250000000,
     "PublicAddress": "",
     "ReconnectTime": 60000000000,
     "ReservedFDs": 256,

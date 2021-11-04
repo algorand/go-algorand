@@ -2082,6 +2082,9 @@ func TestPragmas(t *testing.T) {
 
 	testProg(t, "#pragma version", assemblerNoVersion,
 		expect{1, "no version value"})
+
+	ops = testProg(t, "    #pragma version 5     ", assemblerNoVersion)
+	require.Equal(t, uint64(5), ops.Version)
 }
 
 func TestAssemblePragmaVersion(t *testing.T) {
