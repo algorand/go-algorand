@@ -567,7 +567,7 @@ func (tx Transaction) stateProofPKWellFormed(proto config.ConsensusParams) error
 		return nil
 	}
 
-	if uint64(tx.LastValid-tx.FirstValid) > merklekeystore.MaxValidPeriod {
+	if uint64(tx.VoteLast-tx.VoteFirst) > merklekeystore.MaxValidPeriod {
 		return errKeyRegTxnValidityPeriodTooLong
 	}
 
