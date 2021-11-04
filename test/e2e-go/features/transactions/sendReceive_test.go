@@ -17,14 +17,12 @@
 package transactions
 
 import (
-	"fmt"
 	"math/rand"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/config"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -68,16 +66,11 @@ func TestDevModeAccountsCanSendMoney(t *testing.T) {
 
 func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends int) {
 	t.Parallel()
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, templatePath)
 	defer fixture.Shutdown()
-	testAccountsCanSendMoneyFixture(t, &fixture, numberOfSends)
-}
-
-func testAccountsCanSendMoneyFixture(t *testing.T, fixture *fixtures.RestClientFixture, numberOfSends int) {
-	a := require.New(fixtures.SynchronizedTest(t))
-
 	c := fixture.LibGoalClient
 
 	pingClient := fixture.LibGoalClient
@@ -165,105 +158,4 @@ func testAccountsCanSendMoneyFixture(t *testing.T, fixture *fixtures.RestClientF
 	pongBalance, _ = fixture.GetBalanceAndRound(pongAccount)
 	a.True(expectedPingBalance <= pingBalance, "ping balance is different than expected.")
 	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected.")
-}
-
-// this test checks that two accounts' balances stay up to date
-// as they send each other money many times
-func TestAccountsCanSendMoneyAcrossTxSync(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
-	numberOfSends := 3
-	a := require.New(fixtures.SynchronizedTest(t))
-
-	networkProtocolVersions := []string{"3.0", "2.1"}
-
-	testMoneySending := func(t *testing.T, primaryNodeVersionIdx, nodeVersionIdx int) {
-		t.Run(fmt.Sprintf("%s->%s", networkProtocolVersions[primaryNodeVersionIdx], networkProtocolVersions[nodeVersionIdx]),
-			func(t *testing.T) {
-				t.Parallel()
-				var fixture fixtures.RestClientFixture
-				fixture.SetupNoStart(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
-				defer fixture.Shutdown()
-
-				cfg, err := config.LoadConfigFromDisk(fixture.PrimaryDataDir())
-				a.NoError(err)
-				cfg.NetworkProtocolVersion = networkProtocolVersions[primaryNodeVersionIdx]
-				cfg.SaveToDisk(fixture.PrimaryDataDir())
-
-				cfg, err = config.LoadConfigFromDisk(fixture.NodeDataDirs()[0])
-				a.NoError(err)
-				cfg.NetworkProtocolVersion = networkProtocolVersions[primaryNodeVersionIdx]
-				cfg.SaveToDisk(fixture.NodeDataDirs()[0])
-
-				fixture.Start()
-				testAccountsCanSendMoneyFixture(t, &fixture, numberOfSends)
-			})
-	}
-
-	// test to see that we can communicate correctly regardless of the network protocol version.
-	for primaryNodeVersionIdx := 0; primaryNodeVersionIdx < 2; primaryNodeVersionIdx++ {
-		for nodeVersionIdx := 0; nodeVersionIdx < 2; nodeVersionIdx++ {
-			testMoneySending(t, primaryNodeVersionIdx, nodeVersionIdx)
-		}
-	}
-}
-
-// this test checks that a relay would relay a transaction
-// received via the txnsync onto a node that doesn't support
-// transaction sync.
-func TestTransactionSyncRelayBridge(t *testing.T) {
-
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
-	a := require.New(fixtures.SynchronizedTest(t))
-
-	var fixture fixtures.RestClientFixture
-	fixture.SetupNoStart(t, filepath.Join("nettemplates", "ThreeNodesOneOnline.json"))
-	defer fixture.Shutdown()
-
-	onlineNodeController, err := fixture.GetNodeController("OnlineNode")
-	a.NoError(err)
-
-	cfg, err := config.LoadConfigFromDisk(onlineNodeController.GetDataDir())
-	a.NoError(err)
-	cfg.NetworkProtocolVersion = "2.1"
-	cfg.SaveToDisk(onlineNodeController.GetDataDir())
-
-	offlineNodeController, err := fixture.GetNodeController("OfflineNode")
-	a.NoError(err)
-
-	cfg, err = config.LoadConfigFromDisk(offlineNodeController.GetDataDir())
-	a.NoError(err)
-	cfg.NetworkProtocolVersion = "3.0"
-	cfg.SaveToDisk(offlineNodeController.GetDataDir())
-
-	fixture.Start()
-
-	client := fixture.GetLibGoalClientFromNodeController(offlineNodeController)
-	accounts, err := fixture.GetNodeWalletsSortedByBalance(client.DataDir())
-	a.NoError(err)
-
-	a.Equal(1, len(accounts))
-
-	sendingAccount := accounts[0].Address
-
-	_, err = client.SendPaymentFromUnencryptedWallet(sendingAccount, sendingAccount, 1024*1024, 1024, nil)
-	a.NoError(err)
-
-	startRoundStatus, err := client.Status()
-	a.NoError(err)
-	for {
-		pendingTxns, err := client.GetPendingTransactions(2)
-		a.NoError(err)
-		if pendingTxns.TotalTxns == 0 {
-			break
-		}
-		status, err := client.Status()
-		a.NoError(err)
-		_, err = client.WaitForRound(status.LastRound)
-		a.NoError(err)
-		a.Less(uint64(status.LastRound), uint64(startRoundStatus.LastRound+5), "transaction is still pending after 5 rounds, whereas it should have been confirmed within 2 rounds.")
-	}
 }
