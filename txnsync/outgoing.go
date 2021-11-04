@@ -272,7 +272,7 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions pendingT
 		// we check here to see if the bloom filter we need happen to be the same as the one that was previously sent to the peer.
 		// ( note that we check here againt the peer, whereas the hint to makeBloomFilter could be the cached one for the relay )
 		if !assembledBloomFilter.sameParams(peer.lastSentBloomFilter) && assembledBloomFilter.encodedLength > 0 {
-			if lastGroupRound != s.round {
+			if lastGroupRound != s.round || s.isRelay {
 				assembledBloomFilter.encoded.ClearPrevious = 1
 			}
 			metaMessage.message.TxnBloomFilter = assembledBloomFilter.encoded

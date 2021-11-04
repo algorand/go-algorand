@@ -333,6 +333,7 @@ func (s *syncState) onNewRoundEvent(ent Event) {
 	}
 	s.scheduler.scheduleNewRound(newRoundPeers)
 	s.round = ent.roundSettings.Round
+	logging.Base().Infof("txnsync new round %v", s.round)
 	s.fetchTransactions = ent.roundSettings.FetchTransactions
 	if !s.isRelay {
 		s.nextOffsetRollingCh = s.clock.TimeoutAt(kickoffTime + 2*s.lastBeta)
