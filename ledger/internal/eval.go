@@ -282,22 +282,7 @@ func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (appl
 	if withPendingRewards {
 		acct = acct.WithUpdatedRewards(cs.proto, cs.rewardsLevel())
 	}
-	return apply.AccountData{
-		Status:             acct.Status,
-		MicroAlgos:         acct.MicroAlgos,
-		RewardsBase:        acct.RewardsBase,
-		RewardedMicroAlgos: acct.RewardedMicroAlgos,
-
-		VoteID:          acct.VoteID,
-		SelectionID:     acct.SelectionID,
-		VoteFirstValid:  acct.VoteFirstValid,
-		VoteLastValid:   acct.VoteLastValid,
-		VoteKeyDilution: acct.VoteKeyDilution,
-
-		AuthAddr:           acct.AuthAddr,
-		TotalAppSchema:     acct.TotalAppSchema,
-		TotalExtraAppPages: acct.TotalExtraAppPages,
-	}, nil
+	return apply.ToApplyAccountData(acct), nil
 }
 
 func (cs *roundCowState) GetCreatableID(groupIdx int) basics.CreatableIndex {
@@ -313,22 +298,12 @@ func (cs *roundCowState) Put(addr basics.Address, acct apply.AccountData) error 
 	if err != nil {
 		return err
 	}
-	a.Status = acct.Status
-	a.MicroAlgos = acct.MicroAlgos
-	a.RewardsBase = acct.RewardsBase
-	a.RewardedMicroAlgos = acct.RewardedMicroAlgos
-
-	a.VoteID = acct.VoteID
-	a.SelectionID = acct.SelectionID
-	a.VoteFirstValid = acct.VoteFirstValid
-	a.VoteLastValid = acct.VoteLastValid
-	a.VoteKeyDilution = acct.VoteKeyDilution
-
-	a.AuthAddr = acct.AuthAddr
-	a.TotalAppSchema = acct.TotalAppSchema
-	a.TotalExtraAppPages = acct.TotalExtraAppPages
-
+	apply.AssignAccountData(&a, acct)
 	return cs.putAccount(addr, a)
+}
+
+func (cs *roundCowState) CloseAccount(addr basics.Address) error {
+	return cs.putAccount(addr, basics.AccountData{})
 }
 
 func (cs *roundCowState) putAccount(addr basics.Address, acct basics.AccountData) error {

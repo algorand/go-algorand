@@ -47,7 +47,12 @@ func newKeyregTestBalances() *keyregTestBalances {
 	return b
 }
 
-func (balances keyregTestBalances) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
+func (balances keyregTestBalances) Get(addr basics.Address, withPendingRewards bool) (AccountData, error) {
+	acct, err := balances.getAccount(addr, withPendingRewards)
+	return ToApplyAccountData(acct), err
+}
+
+func (balances keyregTestBalances) getAccount(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
 	return balances.addrs[addr], nil
 }
 
@@ -55,13 +60,19 @@ func (balances keyregTestBalances) GetCreator(cidx basics.CreatableIndex, ctype 
 	return basics.Address{}, true, nil
 }
 
-func (balances keyregTestBalances) Put(addr basics.Address, ad basics.AccountData) error {
-	return balances.putAccount(addr, ad)
+func (balances keyregTestBalances) Put(addr basics.Address, ad AccountData) error {
+	a, _ := balances.getAccount(addr, false) // ignoring not found error
+	AssignAccountData(&a, ad)
+	return balances.putAccount(addr, a)
 }
 
 func (balances keyregTestBalances) putAccount(addr basics.Address, ad basics.AccountData) error {
 	balances.addrs[addr] = ad
 	return nil
+}
+
+func (balances keyregTestBalances) CloseAccount(addr basics.Address) error {
+	return balances.putAccount(addr, basics.AccountData{})
 }
 
 func (balances keyregTestBalances) Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards, dstRewards *basics.MicroAlgos) error {

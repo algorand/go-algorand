@@ -43,6 +43,44 @@ type AccountData struct {
 	TotalExtraAppPages uint32
 }
 
+// ToApplyAccountData returns apply.AccountData from basics.AccountData
+func ToApplyAccountData(acct basics.AccountData) AccountData {
+	return AccountData{
+		Status:             acct.Status,
+		MicroAlgos:         acct.MicroAlgos,
+		RewardsBase:        acct.RewardsBase,
+		RewardedMicroAlgos: acct.RewardedMicroAlgos,
+
+		VoteID:          acct.VoteID,
+		SelectionID:     acct.SelectionID,
+		VoteFirstValid:  acct.VoteFirstValid,
+		VoteLastValid:   acct.VoteLastValid,
+		VoteKeyDilution: acct.VoteKeyDilution,
+
+		AuthAddr:           acct.AuthAddr,
+		TotalAppSchema:     acct.TotalAppSchema,
+		TotalExtraAppPages: acct.TotalExtraAppPages,
+	}
+}
+
+// AssignAccountData assigns the contents of apply.AccountData to the fields in basics.AccountData
+func AssignAccountData(a *basics.AccountData, acct AccountData) {
+	a.Status = acct.Status
+	a.MicroAlgos = acct.MicroAlgos
+	a.RewardsBase = acct.RewardsBase
+	a.RewardedMicroAlgos = acct.RewardedMicroAlgos
+
+	a.VoteID = acct.VoteID
+	a.SelectionID = acct.SelectionID
+	a.VoteFirstValid = acct.VoteFirstValid
+	a.VoteLastValid = acct.VoteLastValid
+	a.VoteKeyDilution = acct.VoteKeyDilution
+
+	a.AuthAddr = acct.AuthAddr
+	a.TotalAppSchema = acct.TotalAppSchema
+	a.TotalExtraAppPages = acct.TotalExtraAppPages
+}
+
 // Balances allow to move MicroAlgos from one address to another and to update balance records, or to access and modify individual balance records
 // After a call to Put (or Move), future calls to Get or Move will reflect the updated balance record(s)
 type Balances interface {
@@ -53,6 +91,7 @@ type Balances interface {
 	Get(addr basics.Address, withPendingRewards bool) (AccountData, error)
 
 	Put(basics.Address, AccountData) error
+	CloseAccount(basics.Address) error
 
 	TotalAppParams(addr basics.Address) (int, error)
 	GetAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, bool, error)

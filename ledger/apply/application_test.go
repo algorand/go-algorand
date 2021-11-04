@@ -138,7 +138,12 @@ func newTestBalancesPass() *testBalancesPass {
 const appIdxError basics.AppIndex = 0x11223344
 const appIdxOk basics.AppIndex = 1
 
-func (b *testBalances) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
+func (b *testBalances) Get(addr basics.Address, withPendingRewards bool) (AccountData, error) {
+	acct, err := b.getAccount(addr, withPendingRewards)
+	return ToApplyAccountData(acct), err
+}
+
+func (b *testBalances) getAccount(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
 	if b.putBalances != nil {
 		ad, ok := b.putBalances[addr]
 		if ok {
@@ -152,9 +157,11 @@ func (b *testBalances) Get(addr basics.Address, withPendingRewards bool) (basics
 	return ad, nil
 }
 
-func (b *testBalances) Put(addr basics.Address, ad basics.AccountData) error {
+func (b *testBalances) Put(addr basics.Address, ad AccountData) error {
 	b.put++
-	return b.putAccount(addr, ad)
+	a, _ := b.getAccount(addr, false) // ignoring not found error
+	AssignAccountData(&a, ad)
+	return b.putAccount(addr, a)
 }
 
 func (b *testBalances) putAccount(addr basics.Address, ad basics.AccountData) error {
@@ -163,6 +170,10 @@ func (b *testBalances) putAccount(addr basics.Address, ad basics.AccountData) er
 	}
 	b.putBalances[addr] = ad
 	return nil
+}
+
+func (b *testBalances) CloseAccount(addr basics.Address) error {
+	return b.putAccount(addr, basics.AccountData{})
 }
 
 func (b *testBalances) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -246,7 +257,12 @@ func (b *testBalances) StatefulEval(params logic.EvalParams, aidx basics.AppInde
 	return b.pass, b.delta, b.err
 }
 
-func (b *testBalancesPass) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
+func (b *testBalancesPass) Get(addr basics.Address, withPendingRewards bool) (AccountData, error) {
+	acct, err := b.getAccount(addr, withPendingRewards)
+	return ToApplyAccountData(acct), err
+}
+
+func (b *testBalancesPass) getAccount(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
 	ad, ok := b.balances[addr]
 	if !ok {
 		return basics.AccountData{}, fmt.Errorf("mock balance not found")
@@ -254,8 +270,14 @@ func (b *testBalancesPass) Get(addr basics.Address, withPendingRewards bool) (ba
 	return ad, nil
 }
 
-func (b *testBalancesPass) Put(addr basics.Address, ad basics.AccountData) error {
-	return b.putAccount(addr, ad)
+func (b *testBalancesPass) Put(addr basics.Address, ad AccountData) error {
+	a, _ := b.getAccount(addr, false) // ignoring not found error
+	AssignAccountData(&a, ad)
+	return b.putAccount(addr, a)
+}
+
+func (b *testBalancesPass) CloseAccount(addr basics.Address) error {
+	return b.putAccount(addr, basics.AccountData{})
 }
 
 func (b *testBalancesPass) putAccount(addr basics.Address, ad basics.AccountData) error {

@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
@@ -1019,11 +1020,11 @@ func TestCowGet(t *testing.T) {
 
 	bra, err := c.Get(addr1, true)
 	a.NoError(err)
-	a.Equal(bre, bra)
+	a.Equal(apply.ToApplyAccountData(bre), bra)
 
 	bra, err = c.Get(addr1, false)
 	a.NoError(err)
-	a.Equal(bre, bra)
+	a.Equal(apply.ToApplyAccountData(bre), bra)
 
 	// ensure other requests go down to roundCowParent
 	a.Panics(func() { c.Get(ledgertesting.RandomAddress(), true) })

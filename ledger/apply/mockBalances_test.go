@@ -75,7 +75,12 @@ func (balances mockBalances) StatefulEval(logic.EvalParams, basics.AppIndex, []b
 	return false, transactions.EvalDelta{}, nil
 }
 
-func (balances mockBalances) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
+func (balances mockBalances) Get(addr basics.Address, withPendingRewards bool) (AccountData, error) {
+	acct, err := balances.getAccount(addr, withPendingRewards)
+	return ToApplyAccountData(acct), err
+}
+
+func (balances mockBalances) getAccount(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
 	return balances.b[addr], nil
 }
 
@@ -83,13 +88,19 @@ func (balances mockBalances) GetCreator(idx basics.CreatableIndex, ctype basics.
 	return basics.Address{}, true, nil
 }
 
-func (balances mockBalances) Put(addr basics.Address, ad basics.AccountData) error {
-	return balances.putAccount(addr, ad)
+func (balances mockBalances) Put(addr basics.Address, acct AccountData) error {
+	a := balances.b[addr]
+	AssignAccountData(&a, acct)
+	return balances.putAccount(addr, a)
 }
 
 func (balances mockBalances) putAccount(addr basics.Address, ad basics.AccountData) error {
 	balances.b[addr] = ad
 	return nil
+}
+
+func (balances mockBalances) CloseAccount(addr basics.Address) error {
+	return balances.putAccount(addr, basics.AccountData{})
 }
 
 func (balances mockBalances) Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards, dstRewards *basics.MicroAlgos) error {
@@ -113,32 +124,32 @@ type mockCreatableBalances struct {
 
 type accountDataAccessor interface {
 	putAccount(addr basics.Address, ad basics.AccountData) error
-	Get(addr basics.Address, withRewards bool) (basics.AccountData, error)
+	getAccount(addr basics.Address, withRewards bool) (basics.AccountData, error)
 }
 
 func (b *mockCreatableBalances) TotalAppParams(addr basics.Address) (int, error) {
-	acct, err := b.access.Get(addr, false)
+	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return 0, err
 	}
 	return len(acct.AppParams), nil
 }
 func (b *mockCreatableBalances) TotalAppLocalState(addr basics.Address) (int, error) {
-	acct, err := b.access.Get(addr, false)
+	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return 0, err
 	}
 	return len(acct.AppLocalStates), nil
 }
 func (b *mockCreatableBalances) TotalAssetHolding(addr basics.Address) (int, error) {
-	acct, err := b.access.Get(addr, false)
+	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return 0, err
 	}
 	return len(acct.Assets), nil
 }
 func (b *mockCreatableBalances) TotalAssetParams(addr basics.Address) (int, error) {
-	acct, err := b.access.Get(addr, false)
+	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return 0, err
 	}
@@ -146,7 +157,7 @@ func (b *mockCreatableBalances) TotalAssetParams(addr basics.Address) (int, erro
 }
 
 func (b *mockCreatableBalances) GetAppParams(addr basics.Address, aidx basics.AppIndex) (ret basics.AppParams, ok bool, err error) {
-	acct, err := b.access.Get(addr, false)
+	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return
 	}
@@ -154,7 +165,7 @@ func (b *mockCreatableBalances) GetAppParams(addr basics.Address, aidx basics.Ap
 	return
 }
 func (b *mockCreatableBalances) GetAppLocalState(addr basics.Address, aidx basics.AppIndex) (ret basics.AppLocalState, ok bool, err error) {
-	acct, err := b.access.Get(addr, false)
+	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return
 	}
@@ -162,7 +173,7 @@ func (b *mockCreatableBalances) GetAppLocalState(addr basics.Address, aidx basic
 	return
 }
 func (b *mockCreatableBalances) GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (ret basics.AssetHolding, ok bool, err error) {
-	acct, err := b.access.Get(addr, false)
+	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return
 	}
@@ -170,7 +181,7 @@ func (b *mockCreatableBalances) GetAssetHolding(addr basics.Address, aidx basics
 	return
 }
 func (b *mockCreatableBalances) GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (ret basics.AssetParams, ok bool, err error) {
-	acct, err := b.access.Get(addr, false)
+	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return
 	}
@@ -180,7 +191,7 @@ func (b *mockCreatableBalances) GetAssetParams(addr basics.Address, aidx basics.
 
 func (b *mockCreatableBalances) PutAppParams(addr basics.Address, aidx basics.AppIndex, params basics.AppParams) error {
 	b.putAppParams++
-	acct, err := b.access.Get(addr, false)
+	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return err
 	}
@@ -194,7 +205,7 @@ func (b *mockCreatableBalances) PutAppParams(addr basics.Address, aidx basics.Ap
 }
 func (b *mockCreatableBalances) PutAppLocalState(addr basics.Address, aidx basics.AppIndex, state basics.AppLocalState) error {
 	b.putAppLocalState++
-	acct, err := b.access.Get(addr, false)
+	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return err
 	}
@@ -208,7 +219,7 @@ func (b *mockCreatableBalances) PutAppLocalState(addr basics.Address, aidx basic
 }
 func (b *mockCreatableBalances) PutAssetHolding(addr basics.Address, aidx basics.AssetIndex, data basics.AssetHolding) error {
 	b.putAssetHolding++
-	acct, err := b.access.Get(addr, false)
+	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return err
 	}
@@ -222,7 +233,7 @@ func (b *mockCreatableBalances) PutAssetHolding(addr basics.Address, aidx basics
 }
 func (b *mockCreatableBalances) PutAssetParams(addr basics.Address, aidx basics.AssetIndex, data basics.AssetParams) error {
 	b.putAssetParams++
-	acct, err := b.access.Get(addr, false)
+	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return err
 	}
@@ -237,7 +248,7 @@ func (b *mockCreatableBalances) PutAssetParams(addr basics.Address, aidx basics.
 
 func (b *mockCreatableBalances) DeleteAppParams(addr basics.Address, aidx basics.AppIndex) error {
 	b.deleteAppParams++
-	acct, err := b.access.Get(addr, false)
+	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return err
 	}
@@ -251,7 +262,7 @@ func (b *mockCreatableBalances) DeleteAppParams(addr basics.Address, aidx basics
 }
 func (b *mockCreatableBalances) DeleteAppLocalState(addr basics.Address, aidx basics.AppIndex) error {
 	b.deleteAppLocalState++
-	acct, err := b.access.Get(addr, false)
+	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return err
 	}
@@ -265,7 +276,7 @@ func (b *mockCreatableBalances) DeleteAppLocalState(addr basics.Address, aidx ba
 }
 func (b *mockCreatableBalances) DeleteAssetHolding(addr basics.Address, aidx basics.AssetIndex) error {
 	b.deleteAssetHolding++
-	acct, err := b.access.Get(addr, false)
+	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return err
 	}
@@ -279,7 +290,7 @@ func (b *mockCreatableBalances) DeleteAssetHolding(addr basics.Address, aidx bas
 }
 func (b *mockCreatableBalances) DeleteAssetParams(addr basics.Address, aidx basics.AssetIndex) error {
 	b.deleteAssetParams++
-	acct, err := b.access.Get(addr, false)
+	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return err
 	}
@@ -293,7 +304,7 @@ func (b *mockCreatableBalances) DeleteAssetParams(addr basics.Address, aidx basi
 }
 
 func (b *mockCreatableBalances) CheckAppLocalState(addr basics.Address, aidx basics.AppIndex) (ok bool, err error) {
-	acct, err := b.access.Get(addr, false)
+	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return
 	}
@@ -302,7 +313,7 @@ func (b *mockCreatableBalances) CheckAppLocalState(addr basics.Address, aidx bas
 }
 
 func (b *mockCreatableBalances) CheckAssetParams(addr basics.Address, aidx basics.AssetIndex) (ok bool, err error) {
-	acct, err := b.access.Get(addr, false)
+	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return
 	}
