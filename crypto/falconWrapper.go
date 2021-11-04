@@ -17,7 +17,12 @@
 package crypto
 
 import (
-	cfalcon "github.com/algorand/go-algorand/crypto/falcon/falcon-master"
+	cfalcon "github.com/algoidan/falcon"
+)
+
+const (
+	// FalconSeedSize Represents the size in bytes of the random bytes used to generate Falcon keys
+	FalconSeedSize = 48
 )
 
 type (
@@ -26,7 +31,7 @@ type (
 	// FSecretKey is a wrapper for cfalcon.PrivateKeySize (used for packing)
 	FSecretKey [cfalcon.PrivateKeySize]byte
 	// FalconSeed represents the seed which is being used to generate Falcon keys
-	FalconSeed [48]byte
+	FalconSeed [FalconSeedSize]byte
 )
 
 // FalconSigner is the implementation of Signer for the Falcon signature scheme.

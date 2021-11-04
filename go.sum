@@ -1,5 +1,5 @@
-github.com/algorand/dilithium v0.0.0-20210817101633-19163919fb9b h1:s94VUUk5TRctBaCbEDnX9n8zq0SgUHOS2/SS9y6aPsQ=
-github.com/algorand/dilithium v0.0.0-20210817101633-19163919fb9b/go.mod h1:AYrADDoWNnSN5sviUV6iFQDfV+Kqrf8xVqBMuWbgeuM=
+github.com/algoidan/falcon v0.0.0-20211104090258-9f5b016a3f69 h1:oxbY3/aOmPLHa59frKFg0diegk9SW8WUruUFmxlP1KA=
+github.com/algoidan/falcon v0.0.0-20211104090258-9f5b016a3f69/go.mod h1:nAcQYDlVcHqV3xVLZ+bMhiW9DH1qs/U8EaRCJQviuOw=
 github.com/algorand/go-codec v1.1.2 h1:QWS9YC3EEWBpJq5AqFPELcCJ2QPpTIg9aqR2K/sRDq4=
 github.com/algorand/go-codec v1.1.2/go.mod h1:A3YI4V24jUUnU1eNekNmx2fLi60FvlNssqOiUsyfNM8=
 github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d h1:W9MgGUodEl4Y4+CxeEr+T3fZ26kOcWA4yfqhjbFxxmI=

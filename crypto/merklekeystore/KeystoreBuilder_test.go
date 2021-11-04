@@ -66,10 +66,17 @@ func TestBuilderZeroKeys(t *testing.T) {
 	a.Equal(uint64(len(keys)), numOfKeys)
 }
 
-func BenchmarkMerkleKeyStoreGen(b *testing.B) {
+func BenchmarkMerkleKeyStoreGenFalcon(b *testing.B) {
+	bencKeyGen(b, crypto.FalconType)
+}
+func BenchmarkMerkleKeyStoreGenEd25519(b *testing.B) {
+	bencKeyGen(b, crypto.Ed25519Type)
+}
+
+func bencKeyGen(b *testing.B, algoType crypto.AlgorithmType) {
 	a := require.New(b)
 
-	tmpname := uuid.NewV4().String() // could this just be a constant string instead? does it even matter?
+	tmpname := uuid.NewV4().String()
 
 	store, err := db.MakeAccessor(tmpname, false, true)
 	a.NoError(err)
@@ -77,6 +84,6 @@ func BenchmarkMerkleKeyStoreGen(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		New(0, 3000000, 128, crypto.FalconType, store)
+		New(0, 3000000, 128, algoType, store)
 	}
 }
