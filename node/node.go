@@ -19,6 +19,7 @@ package node
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -473,7 +474,7 @@ func (node *AlgorandFullNode) Ledger() *data.Ledger {
 
 // writeDevmodeBlock generates a new block for a devmode, and write it to the ledger.
 func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
-	var vb *ledger.ValidatedBlock
+	var vb *ledgercore.ValidatedBlock
 	vb, err = node.transactionPool.AssembleDevModeBlock()
 	if err != nil || vb == nil {
 		return
@@ -1067,7 +1068,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 
 // validatedBlock satisfies agreement.ValidatedBlock
 type validatedBlock struct {
-	vb *ledger.ValidatedBlock
+	vb *ledgercore.ValidatedBlock
 }
 
 // WithSeed satisfies the agreement.ValidatedBlock interface.
@@ -1083,10 +1084,11 @@ func (vb validatedBlock) Block() bookkeeping.Block {
 }
 
 // AssembleBlock implements Ledger.AssembleBlock.
-func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
+func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.ValidatedBlock, error) {
+	deadline := time.Now().Add(node.config.ProposalAssemblyTime)
 	lvb, err := node.transactionPool.AssembleBlock(round, deadline)
 	if err != nil {
-		if err == pools.ErrStaleBlockAssemblyRequest {
+		if errors.Is(err, pools.ErrStaleBlockAssemblyRequest) {
 			// convert specific error to one that would have special handling in the agreement code.
 			err = agreement.ErrAssembleBlockRoundStale
 
@@ -1112,7 +1114,7 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 	keys := node.accountManager.Keys(votingRound)
 
 	participations := make([]account.Participation, 0, len(keys))
-	accountsData := make(map[basics.Address]basics.AccountData, len(keys))
+	accountsData := make(map[basics.Address]basics.OnlineAccountData, len(keys))
 	matchingAccountsKeys := make(map[basics.Address]bool)
 	mismatchingAccountsKeys := make(map[basics.Address]int)
 	const bitMismatchingVotingKey = 1
@@ -1121,7 +1123,7 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 		acctData, hasAccountData := accountsData[part.Parent]
 		if !hasAccountData {
 			var err error
-			acctData, _, err = node.ledger.LookupWithoutRewards(keysRound, part.Parent)
+			acctData, err = node.ledger.LookupAgreement(keysRound, part.Parent)
 			if err != nil {
 				node.log.Warnf("node.VotingKeys: Account %v not participating: cannot locate account for round %d : %v", part.Address(), keysRound, err)
 				continue

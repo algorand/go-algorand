@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"time"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -109,7 +108,7 @@ type testBlockFactory struct {
 	Owner int
 }
 
-func (f testBlockFactory) AssembleBlock(r basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
+func (f testBlockFactory) AssembleBlock(r basics.Round) (agreement.ValidatedBlock, error) {
 	return testValidatedBlock{Inside: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: r}}}, nil
 }
 
@@ -226,7 +225,7 @@ func (l *testLedger) LookupDigest(r basics.Round) (crypto.Digest, error) {
 	return l.entries[r].Digest(), nil
 }
 
-func (l *testLedger) Lookup(r basics.Round, a basics.Address) (basics.AccountData, error) {
+func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.OnlineAccountData, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -234,7 +233,7 @@ func (l *testLedger) Lookup(r basics.Round, a basics.Address) (basics.AccountDat
 		err := fmt.Errorf("Lookup called on future round: %d >= %d! (this is probably a bug)", r, l.nextRound)
 		panic(err)
 	}
-	return l.state[a], nil
+	return l.state[a].OnlineAccountData(), nil
 }
 
 func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
@@ -249,7 +248,7 @@ func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 	var sum basics.MicroAlgos
 	var overflowed bool
 	for _, rec := range l.state {
-		sum, overflowed = basics.OAddA(sum, rec.VotingStake())
+		sum, overflowed = basics.OAddA(sum, rec.OnlineAccountData().VotingStake())
 		if overflowed {
 			panic("circulation computation overflowed")
 		}

@@ -24,7 +24,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -41,7 +41,7 @@ type Ledger interface {
 	Wait(basics.Round) chan struct{}
 	GenesisHash() crypto.Digest
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
-	CompactCertVoters(basics.Round) (*ledger.VotersForRound, error)
+	CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error)
 }
 
 // Network captures the aspects of the gossip network protocol that are

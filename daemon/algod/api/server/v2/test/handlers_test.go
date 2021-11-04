@@ -163,8 +163,9 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	totals, err := l.Totals(l.Latest())
+	totalsRound, totals, err := l.LatestTotals()
 	require.NoError(t, err)
+	require.Equal(t, l.Latest(), totalsRound)
 	totalRewardUnits := totals.RewardUnits()
 	poolBal, err := l.Lookup(l.Latest(), poolAddr)
 	require.NoError(t, err)

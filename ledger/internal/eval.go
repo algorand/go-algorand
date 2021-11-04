@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package internal
 
 import (
 	"context"
@@ -27,7 +27,6 @@ import (
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
@@ -38,24 +37,42 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
-// ErrNoSpace indicates insufficient space for transaction in block
-var ErrNoSpace = errors.New("block does not have space for transaction")
+// LedgerForCowBase represents subset of Ledger functionality needed for cow business
+type LedgerForCowBase interface {
+	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
+	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
+	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
+	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
+}
 
 // ErrRoundZero is self-explanatory
 var ErrRoundZero = errors.New("cannot start evaluator for round 0")
 
-// maxPaysetHint makes sure that we don't allocate too much memory up front
-// in the block evaluator, since there cannot reasonably be more than this
-// many transactions in a block.
-const maxPaysetHint = 20000
+// averageEncodedTxnSizeHint is an estimation for the encoded transaction size
+// which is used for preallocating memory upfront in the payset. Preallocating
+// helps to avoid re-allocating storage during the evaluation/validation which
+// is considerably slower.
+const averageEncodedTxnSizeHint = 150
 
 // asyncAccountLoadingThreadCount controls how many go routines would be used
-// to load the account data before the eval() start processing individual
+// to load the account data before the Eval() start processing individual
 // transaction group.
 const asyncAccountLoadingThreadCount = 4
 
+// Creatable represent a single creatable object.
+type creatable struct {
+	cindex basics.CreatableIndex
+	ctype  basics.CreatableType
+}
+
+// foundAddress is a wrapper for an address and a boolean.
+type foundAddress struct {
+	address basics.Address
+	exists  bool
+}
+
 type roundCowBase struct {
-	l ledgerForCowBase
+	l LedgerForCowBase
 
 	// The round number of the previous block, for looking up prior state.
 	rnd basics.Round
@@ -79,10 +96,38 @@ type roundCowBase struct {
 	// are beyond the scope of this cache.
 	// The account data store here is always the account data without the rewards.
 	accounts map[basics.Address]basics.AccountData
+
+	// Similar cache for asset/app creators.
+	creators map[creatable]foundAddress
+}
+
+func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, compactCertNextRnd basics.Round, proto config.ConsensusParams) *roundCowBase {
+	return &roundCowBase{
+		l:                  l,
+		rnd:                rnd,
+		txnCount:           txnCount,
+		compactCertNextRnd: compactCertNextRnd,
+		proto:              proto,
+		accounts:           make(map[basics.Address]basics.AccountData),
+		creators:           make(map[creatable]foundAddress),
+	}
 }
 
 func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
-	return x.l.GetCreatorForRound(x.rnd, cidx, ctype)
+	creatable := creatable{cindex: cidx, ctype: ctype}
+
+	if foundAddress, ok := x.creators[creatable]; ok {
+		return foundAddress.address, foundAddress.exists, nil
+	}
+
+	address, exists, err := x.l.GetCreatorForRound(x.rnd, cidx, ctype)
+	if err != nil {
+		return basics.Address{}, false, fmt.Errorf(
+			"roundCowBase.getCreator() cidx: %d ctype: %v err: %w", cidx, ctype, err)
+	}
+
+	x.creators[creatable] = foundAddress{address: address, exists: exists}
+	return address, exists, nil
 }
 
 // lookup returns the non-rewarded account data for the provided account address. It uses the internal per-round cache
@@ -101,7 +146,7 @@ func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
 }
 
 func (x *roundCowBase) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
-	return x.l.CheckDup(x.proto, x.rnd+1, firstValid, lastValid, txid, TxLease{txl})
+	return x.l.CheckDup(x.proto, x.rnd+1, firstValid, lastValid, txid, txl)
 }
 
 func (x *roundCowBase) txnCounter() uint64 {
@@ -117,7 +162,7 @@ func (x *roundCowBase) blockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 }
 
 func (x *roundCowBase) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
-	acct, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	acct, err := x.lookup(addr)
 	if err != nil {
 		return false, err
 	}
@@ -136,7 +181,7 @@ func (x *roundCowBase) allocated(addr basics.Address, aidx basics.AppIndex, glob
 // getKey gets the value for a particular key in some storage
 // associated with an application globally or locally
 func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error) {
-	ad, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	ad, err := x.lookup(addr)
 	if err != nil {
 		return basics.TealValue{}, false, err
 	}
@@ -166,7 +211,7 @@ func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global 
 // getStorageCounts counts the storage types used by some account
 // associated with an application globally or locally
 func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
-	ad, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	ad, err := x.lookup(addr)
 	if err != nil {
 		return basics.StateSchema{}, err
 	}
@@ -355,38 +400,49 @@ type BlockEvaluator struct {
 
 	blockGenerated bool // prevent repeated GenerateBlock calls
 
-	l ledgerForEvaluator
+	l LedgerForEvaluator
+
+	maxTxnBytesPerBlock int
 }
 
-type ledgerForEvaluator interface {
-	ledgerForCowBase
+// LedgerForEvaluator defines the ledger interface needed by the evaluator.
+type LedgerForEvaluator interface {
+	LedgerForCowBase
 	GenesisHash() crypto.Digest
-	Totals(basics.Round) (ledgercore.AccountTotals, error)
-	CompactCertVoters(basics.Round) (*VotersForRound, error)
+	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
+	CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error)
 }
 
-// ledgerForCowBase represents subset of Ledger functionality needed for cow business
-type ledgerForCowBase interface {
-	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
-	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error
-	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
-	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
+// EvaluatorOptions defines the evaluator creation options
+type EvaluatorOptions struct {
+	PaysetHint          int
+	Validate            bool
+	Generate            bool
+	MaxTxnBytesPerBlock int
+	ProtoParams         *config.ConsensusParams
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
 // of the block that the caller is planning to evaluate. If the length of the
 // payset being evaluated is known in advance, a paysetHint >= 0 can be
 // passed, avoiding unnecessary payset slice growth.
-func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint int) (*BlockEvaluator, error) {
-	proto, ok := config.Consensus[hdr.CurrentProtocol]
-	if !ok {
-		return nil, protocol.Error(hdr.CurrentProtocol)
+func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts EvaluatorOptions) (*BlockEvaluator, error) {
+	var proto config.ConsensusParams
+	if evalOpts.ProtoParams == nil {
+		var ok bool
+		proto, ok = config.Consensus[hdr.CurrentProtocol]
+		if !ok {
+			return nil, protocol.Error(hdr.CurrentProtocol)
+		}
+	} else {
+		proto = *evalOpts.ProtoParams
 	}
 
-	return startEvaluator(l, hdr, proto, paysetHint, true, true)
-}
+	// if the caller did not provide a valid block size limit, default to the consensus params defaults.
+	if evalOpts.MaxTxnBytesPerBlock <= 0 || evalOpts.MaxTxnBytesPerBlock > proto.MaxTxnBytesPerBlock {
+		evalOpts.MaxTxnBytesPerBlock = proto.MaxTxnBytesPerBlock
+	}
 
-func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto config.ConsensusParams, paysetHint int, validate bool, generate bool) (*BlockEvaluator, error) {
 	if hdr.Round == 0 {
 		return nil, ErrRoundZero
 	}
@@ -402,39 +458,36 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 		return nil, protocol.Error(prevHeader.CurrentProtocol)
 	}
 
-	base := &roundCowBase{
-		l: l,
-		// round that lookups come from is previous block.  We validate
-		// the block at this round below, so underflow will be caught.
-		// If we are not validating, we must have previously checked
-		// an agreement.Certificate attesting that hdr is valid.
-		rnd:      hdr.Round - 1,
-		txnCount: prevHeader.TxnCounter,
-		proto:    proto,
-		accounts: make(map[basics.Address]basics.AccountData),
-	}
+	// Round that lookups come from is previous block.  We validate
+	// the block at this round below, so underflow will be caught.
+	// If we are not validating, we must have previously checked
+	// an agreement.Certificate attesting that hdr is valid.
+	base := makeRoundCowBase(
+		l, hdr.Round-1, prevHeader.TxnCounter, basics.Round(0), proto)
 
 	eval := &BlockEvaluator{
-		validate:   validate,
-		generate:   generate,
+		validate:   evalOpts.Validate,
+		generate:   evalOpts.Generate,
 		prevHeader: prevHeader,
 		block:      bookkeeping.Block{BlockHeader: hdr},
 		specials: transactions.SpecialAddresses{
 			FeeSink:     hdr.FeeSink,
 			RewardsPool: hdr.RewardsPool,
 		},
-		proto:       proto,
-		genesisHash: l.GenesisHash(),
-		l:           l,
+		proto:               proto,
+		genesisHash:         l.GenesisHash(),
+		l:                   l,
+		maxTxnBytesPerBlock: evalOpts.MaxTxnBytesPerBlock,
 	}
 
 	// Preallocate space for the payset so that we don't have to
 	// dynamically grow a slice (if evaluating a whole block).
-	if paysetHint > 0 {
-		if paysetHint > maxPaysetHint {
-			paysetHint = maxPaysetHint
+	if evalOpts.PaysetHint > 0 {
+		maxPaysetHint := evalOpts.MaxTxnBytesPerBlock / averageEncodedTxnSizeHint
+		if evalOpts.PaysetHint > maxPaysetHint {
+			evalOpts.PaysetHint = maxPaysetHint
 		}
-		eval.block.Payset = make([]transactions.SignedTxnInBlock, 0, paysetHint)
+		eval.block.Payset = make([]transactions.SignedTxnInBlock, 0, evalOpts.PaysetHint)
 	}
 
 	base.compactCertNextRnd = eval.prevHeader.CompactCert[protocol.CompactCertBasic].CompactCertNextRound
@@ -451,9 +504,12 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 		base.compactCertNextRnd = votersRound + basics.Round(proto.CompactCertRounds)
 	}
 
-	prevTotals, err := l.Totals(eval.prevHeader.Round)
+	latestRound, prevTotals, err := l.LatestTotals()
 	if err != nil {
 		return nil, err
+	}
+	if latestRound != eval.prevHeader.Round {
+		return nil, ledgercore.ErrNonSequentialBlockEval{EvaluatorRound: hdr.Round, LatestRound: latestRound}
 	}
 
 	poolAddr := eval.prevHeader.RewardsPool
@@ -466,16 +522,16 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, proto con
 	// this is expected to be a no-op, but update the rewards on the rewards pool if it was configured to receive rewards ( unlike mainnet ).
 	incentivePoolData = incentivePoolData.WithUpdatedRewards(prevProto, eval.prevHeader.RewardsLevel)
 
-	if generate {
+	if evalOpts.Generate {
 		if eval.proto.SupportGenesisHash {
 			eval.block.BlockHeader.GenesisHash = eval.genesisHash
 		}
 		eval.block.BlockHeader.RewardsState = eval.prevHeader.NextRewardsState(hdr.Round, proto, incentivePoolData.MicroAlgos, prevTotals.RewardUnits())
 	}
 	// set the eval state with the current header
-	eval.state = makeRoundCowState(base, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp, paysetHint)
+	eval.state = makeRoundCowState(base, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp, prevTotals, evalOpts.PaysetHint)
 
-	if validate {
+	if evalOpts.Validate {
 		err := eval.block.BlockHeader.PreCheck(eval.prevHeader)
 		if err != nil {
 			return nil, err
@@ -559,8 +615,8 @@ func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.
 	return
 }
 
-// TxnCounter returns the number of transactions that have been added to the block evaluator so far.
-func (eval *BlockEvaluator) TxnCounter() int {
+// PaySetSize returns the number of top-level transactions that have been added to the block evaluator so far.
+func (eval *BlockEvaluator) PaySetSize() int {
 	return len(eval.block.Payset)
 }
 
@@ -593,7 +649,7 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 
 	var group transactions.TxGroup
 	for gi, txn := range txgroup {
-		err := eval.testTransaction(txn, cow)
+		err := eval.TestTransaction(txn, cow)
 		if err != nil {
 			return err
 		}
@@ -625,10 +681,10 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 	return nil
 }
 
-// testTransaction performs basic duplicate detection and well-formedness checks
+// TestTransaction performs basic duplicate detection and well-formedness checks
 // on a single transaction, but does not actually add the transaction to the block
 // evaluator, or modify the block evaluator state in any other visible way.
-func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn, cow *roundCowState) error {
+func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn, cow *roundCowState) error {
 	// Transaction valid (not expired)?
 	err := txn.Txn.Alive(eval.block)
 	if err != nil {
@@ -654,19 +710,12 @@ func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn, cow *rou
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
 func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error {
-	return eval.transactionGroup([]transactions.SignedTxnWithAD{
+	return eval.TransactionGroup([]transactions.SignedTxnWithAD{
 		{
 			SignedTxn: txn,
 			ApplyData: ad,
 		},
 	})
-}
-
-// TransactionGroup tentatively adds a new transaction group as part of this block evaluation.
-// If the transaction group cannot be added to the block without violating some constraints,
-// an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithAD) error {
-	return eval.transactionGroup(txads)
 }
 
 // prepareEvalParams creates a logic.EvalParams for each ApplicationCall
@@ -716,10 +765,10 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 	return res
 }
 
-// transactionGroup tentatively executes a group of transactions as part of this block evaluation.
+// TransactionGroup tentatively executes a group of transactions as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWithAD) error {
+func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWithAD) error {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
@@ -751,8 +800,8 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 		if eval.validate {
 			groupTxBytes += txib.GetEncodedLength()
-			if eval.blockTxBytes+groupTxBytes > eval.proto.MaxTxnBytesPerBlock {
-				return ErrNoSpace
+			if eval.blockTxBytes+groupTxBytes > eval.maxTxnBytesPerBlock {
+				return ledgercore.ErrNoSpace
 			}
 		}
 
@@ -904,6 +953,13 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		}
 	}
 
+	// We are not allowing InnerTxns to have InnerTxns yet.  Error if that happens.
+	for _, itx := range applyData.EvalDelta.InnerTxns {
+		if len(itx.ApplyData.EvalDelta.InnerTxns) > 0 {
+			return fmt.Errorf("inner transaction has inner transactions %v", itx)
+		}
+	}
+
 	// Remember this txn
 	cow.addTx(txn.Txn, txid)
 
@@ -920,25 +976,9 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		return
 	}
 
-	// rekeying: update balrecord.AuthAddr to tx.RekeyTo if provided
-	if (tx.RekeyTo != basics.Address{}) {
-		var acct basics.AccountData
-		acct, err = balances.Get(tx.Sender, false)
-		if err != nil {
-			return
-		}
-		// Special case: rekeying to the account's actual address just sets acct.AuthAddr to 0
-		// This saves 32 bytes in your balance record if you want to go back to using your original key
-		if tx.RekeyTo == tx.Sender {
-			acct.AuthAddr = basics.Address{}
-		} else {
-			acct.AuthAddr = tx.RekeyTo
-		}
-
-		err = balances.Put(tx.Sender, acct)
-		if err != nil {
-			return
-		}
+	err = apply.Rekey(balances, &tx)
+	if err != nil {
+		return
 	}
 
 	switch tx.Type {
@@ -1003,11 +1043,15 @@ func (eval *BlockEvaluator) compactCertVotersAndTotal() (root crypto.Digest, tot
 	}
 
 	if voters != nil {
-		root = voters.Tree.Root()
-		total = voters.TotalWeight
+		root, total = voters.Tree.Root(), voters.TotalWeight
 	}
 
 	return
+}
+
+// TestingTxnCounter - the method returns the current evaluator transaction counter. The method is used for testing purposes only.
+func (eval *BlockEvaluator) TestingTxnCounter() uint64 {
+	return eval.state.txnCounter()
 }
 
 // Call "endOfBlock" after all the block's rewards and transactions are processed.
@@ -1025,6 +1069,8 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			eval.block.TxnCounter = 0
 		}
 
+		eval.generateExpiredOnlineAccountsList()
+
 		if eval.proto.CompactCertRounds > 0 {
 			var basicCompactCert bookkeeping.CompactCertState
 			basicCompactCert.CompactCertVoters, basicCompactCert.CompactCertVotersTotal, err = eval.compactCertVotersAndTotal()
@@ -1039,12 +1085,18 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		}
 	}
 
-	return nil
-}
+	err := eval.validateExpiredOnlineAccounts()
+	if err != nil {
+		return err
+	}
 
-// FinalValidation does the validation that must happen after the block is built and all state updates are computed
-func (eval *BlockEvaluator) finalValidation() error {
+	err = eval.resetExpiredOnlineAccountsParticipationKeys()
+	if err != nil {
+		return err
+	}
+
 	eval.state.mods.OptimizeAllocatedMemory(eval.proto)
+
 	if eval.validate {
 		// check commitments
 		txnRoot, err := eval.block.PaysetCommit()
@@ -1083,6 +1135,131 @@ func (eval *BlockEvaluator) finalValidation() error {
 		}
 	}
 
+	err = eval.state.CalculateTotals()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// generateExpiredOnlineAccountsList creates the list of the expired participation accounts by traversing over the
+// modified accounts in the state deltas and testing if any of them needs to be reset.
+func (eval *BlockEvaluator) generateExpiredOnlineAccountsList() {
+	if !eval.generate {
+		return
+	}
+	// We are going to find the list of modified accounts and the
+	// current round that is being evaluated.
+	// Then we are going to go through each modified account and
+	// see if it meets the criteria for adding it to the expired
+	// participation accounts list.
+	modifiedAccounts := eval.state.mods.Accts.ModifiedAccounts()
+	currentRound := eval.Round()
+
+	expectedMaxNumberOfExpiredAccounts := eval.proto.MaxProposedExpiredOnlineAccounts
+
+	for i := 0; i < len(modifiedAccounts) && len(eval.block.ParticipationUpdates.ExpiredParticipationAccounts) < expectedMaxNumberOfExpiredAccounts; i++ {
+		accountAddr := modifiedAccounts[i]
+		acctDelta, found := eval.state.mods.Accts.Get(accountAddr)
+		if !found {
+			continue
+		}
+
+		// true if the account is online
+		isOnline := acctDelta.Status == basics.Online
+		// true if the accounts last valid round has passed
+		pastCurrentRound := acctDelta.VoteLastValid < currentRound
+
+		if isOnline && pastCurrentRound {
+			eval.block.ParticipationUpdates.ExpiredParticipationAccounts = append(
+				eval.block.ParticipationUpdates.ExpiredParticipationAccounts,
+				accountAddr,
+			)
+		}
+	}
+}
+
+// validateExpiredOnlineAccounts tests the expired online accounts specified in ExpiredParticipationAccounts, and verify
+// that they have all expired and need to be reset.
+func (eval *BlockEvaluator) validateExpiredOnlineAccounts() error {
+	if !eval.validate {
+		return nil
+	}
+	expectedMaxNumberOfExpiredAccounts := eval.proto.MaxProposedExpiredOnlineAccounts
+	lengthOfExpiredParticipationAccounts := len(eval.block.ParticipationUpdates.ExpiredParticipationAccounts)
+
+	// If the length of the array is strictly greater than our max then we have an error.
+	// This works when the expected number of accounts is zero (i.e. it is disabled) as well
+	if lengthOfExpiredParticipationAccounts > expectedMaxNumberOfExpiredAccounts {
+		return fmt.Errorf("length of expired accounts (%d) was greater than expected (%d)",
+			lengthOfExpiredParticipationAccounts, expectedMaxNumberOfExpiredAccounts)
+	}
+
+	// For security reasons, we need to make sure that all addresses in the expired participation accounts
+	// are unique.  We make this map to keep track of previously seen address
+	addressSet := make(map[basics.Address]bool, lengthOfExpiredParticipationAccounts)
+
+	// Validate that all expired accounts meet the current criteria
+	currentRound := eval.Round()
+	for _, accountAddr := range eval.block.ParticipationUpdates.ExpiredParticipationAccounts {
+
+		if _, exists := addressSet[accountAddr]; exists {
+			// We shouldn't have duplicate addresses...
+			return fmt.Errorf("duplicate address found: %v", accountAddr)
+		}
+
+		// Record that we have seen this address
+		addressSet[accountAddr] = true
+
+		acctData, err := eval.state.lookup(accountAddr)
+		if err != nil {
+			return fmt.Errorf("endOfBlock was unable to retrieve account %v : %w", accountAddr, err)
+		}
+
+		// true if the account is online
+		isOnline := acctData.Status == basics.Online
+		// true if the accounts last valid round has passed
+		pastCurrentRound := acctData.VoteLastValid < currentRound
+
+		if !isOnline {
+			return fmt.Errorf("endOfBlock found %v was not online but %v", accountAddr, acctData.Status)
+		}
+
+		if !pastCurrentRound {
+			return fmt.Errorf("endOfBlock found %v round (%d) was not less than current round (%d)", accountAddr, acctData.VoteLastValid, currentRound)
+		}
+	}
+	return nil
+}
+
+// resetExpiredOnlineAccountsParticipationKeys after all transactions and rewards are processed, modify the accounts so that their status is offline
+func (eval *BlockEvaluator) resetExpiredOnlineAccountsParticipationKeys() error {
+	expectedMaxNumberOfExpiredAccounts := eval.proto.MaxProposedExpiredOnlineAccounts
+	lengthOfExpiredParticipationAccounts := len(eval.block.ParticipationUpdates.ExpiredParticipationAccounts)
+
+	// If the length of the array is strictly greater than our max then we have an error.
+	// This works when the expected number of accounts is zero (i.e. it is disabled) as well
+	if lengthOfExpiredParticipationAccounts > expectedMaxNumberOfExpiredAccounts {
+		return fmt.Errorf("length of expired accounts (%d) was greater than expected (%d)",
+			lengthOfExpiredParticipationAccounts, expectedMaxNumberOfExpiredAccounts)
+	}
+
+	for _, accountAddr := range eval.block.ParticipationUpdates.ExpiredParticipationAccounts {
+		acctData, err := eval.state.lookup(accountAddr)
+		if err != nil {
+			return fmt.Errorf("resetExpiredOnlineAccountsParticipationKeys was unable to retrieve account %v : %w", accountAddr, err)
+		}
+
+		// Reset the appropriate account data
+		acctData.ClearOnlineState()
+
+		// Update the account information
+		err = eval.state.Put(accountAddr, acctData)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -1093,7 +1270,7 @@ func (eval *BlockEvaluator) finalValidation() error {
 // After a call to GenerateBlock, the BlockEvaluator can still be used to
 // accept transactions.  However, to guard against reuse, subsequent calls
 // to GenerateBlock on the same BlockEvaluator will fail.
-func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
+func (eval *BlockEvaluator) GenerateBlock() (*ledgercore.ValidatedBlock, error) {
 	if !eval.generate {
 		logging.Base().Panicf("GenerateBlock() called but generate is false")
 	}
@@ -1107,15 +1284,7 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 		return nil, err
 	}
 
-	err = eval.finalValidation()
-	if err != nil {
-		return nil, err
-	}
-
-	vb := ValidatedBlock{
-		blk:   eval.block,
-		delta: eval.state.deltas(),
-	}
+	vb := ledgercore.MakeValidatedBlock(eval.block, eval.state.deltas())
 	eval.blockGenerated = true
 	proto, ok := config.Consensus[eval.block.BlockHeader.CurrentProtocol]
 	if !ok {
@@ -1123,7 +1292,7 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 			"unknown consensus version: %s", eval.block.BlockHeader.CurrentProtocol)
 	}
 	eval.state = makeRoundCowState(
-		eval.state, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp,
+		eval.state, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp, eval.state.mods.Totals,
 		len(eval.block.Payset))
 	return &vb, nil
 }
@@ -1168,19 +1337,19 @@ func (validator *evalTxValidator) run() {
 	}
 }
 
+// Eval is the main evaluator entrypoint.
 // used by Ledger.Validate() Ledger.AddBlock() Ledger.trackerEvalVerified()(accountUpdates.loadFromDisk())
 //
-// Validate: eval(ctx, l, blk, true, txcache, executionPool, true)
-// AddBlock: eval(context.Background(), l, blk, false, txcache, nil, true)
-// tracker:  eval(context.Background(), l, blk, false, txcache, nil, false)
-func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
-	proto, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]
-	if !ok {
-		return ledgercore.StateDelta{}, protocol.Error(blk.BlockHeader.CurrentProtocol)
-	}
-
-	eval, err := startEvaluator(
-		l, blk.BlockHeader, proto, len(blk.Payset), validate, false)
+// Validate: Eval(ctx, l, blk, true, txcache, executionPool, true)
+// AddBlock: Eval(context.Background(), l, blk, false, txcache, nil, true)
+// tracker:  Eval(context.Background(), l, blk, false, txcache, nil, false)
+func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
+	eval, err := StartEvaluator(l, blk.BlockHeader,
+		EvaluatorOptions{
+			PaysetHint: len(blk.Payset),
+			Validate:   validate,
+			Generate:   false,
+		})
 	if err != nil {
 		return ledgercore.StateDelta{}, err
 	}
@@ -1262,7 +1431,7 @@ transactionGroupLoop:
 
 	// If validating, do final block checks that depend on our new state
 	if validate {
-		// wait for the validation to complete.
+		// wait for the signature validation to complete.
 		select {
 		case <-ctx.Done():
 			return ledgercore.StateDelta{}, ctx.Err()
@@ -1274,16 +1443,12 @@ transactionGroupLoop:
 				return ledgercore.StateDelta{}, err
 			}
 		}
-		err = eval.finalValidation()
-		if err != nil {
-			return ledgercore.StateDelta{}, err
-		}
 	}
 
 	return eval.state.deltas(), nil
 }
 
-// loadedTransactionGroup is a helper struct to allow asyncronious loading of the account data needed by the transaction groups
+// loadedTransactionGroup is a helper struct to allow asynchronous loading of the account data needed by the transaction groups
 type loadedTransactionGroup struct {
 	// group is the transaction group
 	group []transactions.SignedTxnWithAD
@@ -1294,9 +1459,14 @@ type loadedTransactionGroup struct {
 	err error
 }
 
+// Return the maximum number of addresses referenced in any given transaction.
+func maxAddressesInTxn(proto *config.ConsensusParams) int {
+	return 7 + proto.MaxAppTxnAccounts
+}
+
 // loadAccounts loads the account data for the provided transaction group list. It also loads the feeSink account and add it to the first returned transaction group.
 // The order of the transaction groups returned by the channel is identical to the one in the input array.
-func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) chan loadedTransactionGroup {
+func loadAccounts(ctx context.Context, l LedgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) chan loadedTransactionGroup {
 	outChan := make(chan loadedTransactionGroup, len(groups))
 	go func() {
 		// groupTask helps to organize the account loading for each transaction group.
@@ -1320,8 +1490,7 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 		defer close(outChan)
 
 		accountTasks := make(map[basics.Address]*addrTask)
-		maxAddressesPerTransaction := 7 + consensusParams.MaxAppTxnAccounts
-		addressesCh := make(chan *addrTask, len(groups)*consensusParams.MaxTxGroupSize*maxAddressesPerTransaction)
+		addressesCh := make(chan *addrTask, len(groups)*consensusParams.MaxTxGroupSize*maxAddressesInTxn(&consensusParams))
 		// totalBalances counts the total number of balances over all the transaction groups
 		totalBalances := 0
 
@@ -1362,6 +1531,7 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 			task := &groupTask{}
 			groupsReady[i] = task
 			for _, stxn := range group {
+				// If you add new addresses here, also add them in getTxnAddresses().
 				initAccount(stxn.Txn.Sender, task)
 				initAccount(stxn.Txn.Receiver, task)
 				initAccount(stxn.Txn.CloseRemainderTo, task)
@@ -1460,78 +1630,4 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 		}
 	}()
 	return outChan
-}
-
-// Validate uses the ledger to validate block blk as a candidate next block.
-// It returns an error if blk is not the expected next block, or if blk is
-// not a valid block (e.g., it has duplicate transactions, overspends some
-// account, etc).
-func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ValidatedBlock, error) {
-	delta, err := eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool)
-	if err != nil {
-		return nil, err
-	}
-
-	vb := ValidatedBlock{
-		blk:   blk,
-		delta: delta,
-	}
-	return &vb, nil
-}
-
-// ValidatedBlock represents the result of a block validation.  It can
-// be used to efficiently add the block to the ledger, without repeating
-// the work of applying the block's changes to the ledger state.
-type ValidatedBlock struct {
-	blk   bookkeeping.Block
-	delta ledgercore.StateDelta
-}
-
-// Block returns the underlying Block for a ValidatedBlock.
-func (vb ValidatedBlock) Block() bookkeeping.Block {
-	return vb.blk
-}
-
-// WithSeed returns a copy of the ValidatedBlock with a modified seed.
-func (vb ValidatedBlock) WithSeed(s committee.Seed) ValidatedBlock {
-	newblock := vb.blk
-	newblock.BlockHeader.Seed = s
-
-	return ValidatedBlock{
-		blk:   newblock,
-		delta: vb.delta,
-	}
-}
-
-// Eval evaluates a block without validation using the given `proto`. Return the state
-// delta and transactions with modified apply data according to `proto`.
-// This function is used by Indexer which modifies `proto` to retrieve the asset
-// close amount for each transaction even when the real consensus parameters do not
-// support it.
-func Eval(l ledgerForEvaluator, blk *bookkeeping.Block, proto config.ConsensusParams) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
-	eval, err := startEvaluator(
-		l, blk.BlockHeader, proto, len(blk.Payset), false, false)
-	if err != nil {
-		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{}, err
-	}
-
-	paysetgroups, err := blk.DecodePaysetGroups()
-	if err != nil {
-		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{}, err
-	}
-
-	for _, group := range paysetgroups {
-		err = eval.TransactionGroup(group)
-		if err != nil {
-			return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{}, err
-		}
-	}
-
-	// Finally, process any pending end-of-block state changes.
-	err = eval.endOfBlock()
-	if err != nil {
-		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{}, err
-	}
-
-	return eval.state.deltas(), eval.block.Payset, nil
 }

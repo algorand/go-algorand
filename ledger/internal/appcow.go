@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package internal
 
 import (
 	"fmt"
@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+//msgp: ignore storageAction
 type storageAction uint64
 
 const (
@@ -457,20 +458,16 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 }
 
 // MakeDebugBalances creates a ledger suitable for dryrun and debugger
-func MakeDebugBalances(l ledgerForCowBase, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
-	base := &roundCowBase{
-		l:        l,
-		rnd:      round - 1,
-		proto:    config.Consensus[proto],
-		accounts: make(map[basics.Address]basics.AccountData),
-	}
+func MakeDebugBalances(l LedgerForCowBase, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
+	base := makeRoundCowBase(l, round-1, 0, basics.Round(0), config.Consensus[proto])
 
 	hdr := bookkeeping.BlockHeader{
 		Round:        round,
 		UpgradeState: bookkeeping.UpgradeState{CurrentProtocol: proto},
 	}
 	hint := 2
-	cb := makeRoundCowState(base, hdr, config.Consensus[proto], prevTimestamp, hint)
+	// passing an empty AccountTotals here is fine since it's only being used by the top level cow state object.
+	cb := makeRoundCowState(base, hdr, config.Consensus[proto], prevTimestamp, ledgercore.AccountTotals{}, hint)
 	return cb
 }
 
@@ -488,7 +485,12 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 	var cx *logic.EvalContext
 	pass, cx, err = logic.EvalStatefulCx(program, params)
 	if err != nil {
-		return false, transactions.EvalDelta{}, ledgercore.LogicEvalError{Err: err}
+		var details string
+		if cx != nil {
+			pc, det := cx.PcDetails()
+			details = fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
+		}
+		return false, transactions.EvalDelta{}, ledgercore.LogicEvalError{Err: err, Details: details}
 	}
 
 	// If program passed, build our eval delta, and commit to state changes

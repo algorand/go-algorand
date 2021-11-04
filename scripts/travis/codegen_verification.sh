@@ -50,6 +50,8 @@ function runGoLint() {
     echo >&2 "golint must be clean.  Please run the following to list issues(${warningCount}):"
     echo >&2 " make lint"
 
+    # run the linter again to output the actual issues
+    "$GOPATH"/bin/golint $(go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/) >&2
     return 1
 }
 

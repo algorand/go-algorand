@@ -110,12 +110,12 @@ func assetHoldingFieldsMarkdown(out io.Writer) {
 
 func assetParamsFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`asset_params_get` Fields:\n\n")
-	fieldTableMarkdown(out, logic.AssetParamsFieldNames, logic.AssetParamsFieldTypes, logic.AssetParamsFieldDocs)
+	fieldTableMarkdown(out, logic.AssetParamsFieldNames, logic.AssetParamsFieldTypes, logic.AssetParamsFieldDocs())
 }
 
 func appParamsFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`app_params_get` Fields:\n\n")
-	fieldTableMarkdown(out, logic.AppParamsFieldNames, logic.AppParamsFieldTypes, logic.AppParamsFieldDocs)
+	fieldTableMarkdown(out, logic.AppParamsFieldNames, logic.AppParamsFieldTypes, logic.AppParamsFieldDocs())
 }
 
 func ecDsaCurvesMarkdown(out io.Writer) {
@@ -373,11 +373,11 @@ func main() {
 	assetholding.Close()
 
 	assetparams, _ := os.Create("asset_params_fields.md")
-	fieldTableMarkdown(assetparams, logic.AssetParamsFieldNames, logic.AssetParamsFieldTypes, logic.AssetParamsFieldDocs)
+	fieldTableMarkdown(assetparams, logic.AssetParamsFieldNames, logic.AssetParamsFieldTypes, logic.AssetParamsFieldDocs())
 	assetparams.Close()
 
 	appparams, _ := os.Create("app_params_fields.md")
-	fieldTableMarkdown(appparams, logic.AppParamsFieldNames, logic.AppParamsFieldTypes, logic.AppParamsFieldDocs)
+	fieldTableMarkdown(appparams, logic.AppParamsFieldNames, logic.AppParamsFieldTypes, logic.AppParamsFieldDocs())
 	appparams.Close()
 
 	langspecjs, _ := os.Create("langspec.json")

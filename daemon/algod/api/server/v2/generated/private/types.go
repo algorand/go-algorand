@@ -406,7 +406,7 @@ type TealValue struct {
 	// \[tb\] bytes value.
 	Bytes string `json:"bytes"`
 
-	// \[tt\] value type.
+	// \[tt\] value type. Value `1` refers to **bytes**, value `2` refers to **uint**
 	Type uint64 `json:"type"`
 
 	// \[ui\] uint value.
@@ -660,22 +660,6 @@ type TransactionParametersResponse struct {
 
 // VersionsResponse defines model for VersionsResponse.
 type VersionsResponse Version
-
-// RegisterParticipationKeysParams defines parameters for RegisterParticipationKeys.
-type RegisterParticipationKeysParams struct {
-
-	// The fee to use when submitting key registration transactions. Defaults to the suggested fee.
-	Fee *uint64 `json:"fee,omitempty"`
-
-	// value to use for two-level participation key.
-	KeyDilution *uint64 `json:"key-dilution,omitempty"`
-
-	// The last round for which the generated participation keys will be valid.
-	RoundLastValid *uint64 `json:"round-last-valid,omitempty"`
-
-	// Don't wait for transaction to commit before returning response.
-	NoWait *bool `json:"no-wait,omitempty"`
-}
 
 // ShutdownNodeParams defines parameters for ShutdownNode.
 type ShutdownNodeParams struct {

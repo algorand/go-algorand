@@ -69,13 +69,6 @@ type NodeInterface interface {
 	Config() config.Local
 }
 
-// RegisterParticipationKeys registers participation keys.
-// (POST /v2/register-participation-keys/{address})
-func (v2 *Handlers) RegisterParticipationKeys(ctx echo.Context, address string, params private.RegisterParticipationKeysParams) error {
-	// TODO: register participation keys endpoint
-	return ctx.String(http.StatusNotImplemented, "Endpoint not implemented.")
-}
-
 // ShutdownNode shuts down the node.
 // (POST /v2/shutdown)
 func (v2 *Handlers) ShutdownNode(ctx echo.Context, params private.ShutdownNodeParams) error {
@@ -244,8 +237,7 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 // GetSupply gets the current supply reported by the ledger.
 // (GET /v2/ledger/supply)
 func (v2 *Handlers) GetSupply(ctx echo.Context) error {
-	latest := v2.Node.Ledger().Latest()
-	totals, err := v2.Node.Ledger().Totals(latest)
+	latest, totals, err := v2.Node.Ledger().LatestTotals()
 	if err != nil {
 		err = fmt.Errorf("GetSupply(): round %d, failed: %v", latest, err)
 		return internalError(ctx, err, errInternalFailure, v2.Log)
@@ -716,7 +708,7 @@ func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetID uint64) error {
 	}
 
 	lastRound := ledger.Latest()
-	record, err := ledger.Lookup(lastRound, creator)
+	record, _, err := ledger.LookupWithoutRewards(lastRound, creator)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}

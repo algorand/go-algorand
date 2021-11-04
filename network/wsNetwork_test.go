@@ -614,6 +614,12 @@ func (nc *nopConn) SetReadLimit(limit int64) {
 func (nc *nopConn) CloseWithoutFlush() error {
 	return nil
 }
+func (nc *nopConn) SetPingHandler(h func(appData string) error) {
+
+}
+func (nc *nopConn) SetPongHandler(h func(appData string) error) {
+
+}
 
 var nopConnSingleton = nopConn{}
 
