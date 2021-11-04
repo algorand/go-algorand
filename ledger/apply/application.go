@@ -174,13 +174,13 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 		record.TotalExtraAppPages = totalExtraPages
 	}
 
-	err = balances.Put(creator, record)
+	// Delete the AppParams
+	err = balances.DeleteAppParams(creator, appIdx)
 	if err != nil {
 		return err
 	}
 
-	// Delete the AppParams
-	err = balances.DeleteAppParams(creator, appIdx)
+	err = balances.Put(creator, record)
 	if err != nil {
 		return err
 	}
@@ -305,14 +305,14 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 	totalSchema = totalSchema.SubSchema(localState.Schema)
 	record.TotalAppSchema = totalSchema
 
-	// Write closed-out user back to cow
-	err = balances.Put(sender, record)
+	// Delete the local state
+	err = balances.DeleteAppLocalState(sender, appIdx)
 	if err != nil {
 		return err
 	}
 
-	// Delete the local state
-	err = balances.DeleteAppLocalState(sender, appIdx)
+	// Write closed-out user back to cow
+	err = balances.Put(sender, record)
 	if err != nil {
 		return err
 	}
