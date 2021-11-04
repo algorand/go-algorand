@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -854,6 +855,32 @@ func changeAccountOnlineStatus(acct string, part *algodAcct.Participation, goOnl
 	return err
 }
 
+func genParticipationKeysAsync(asyncFunc func()) {
+	errChan := make(chan struct{}, 1)
+	go func() {
+		asyncFunc()
+		errChan <- struct{}{}
+	}()
+
+	progressStrings := [...]string{"/", "-", "\\", "|"}
+
+	finished := false
+	i := 0
+
+	for !finished {
+		timer := time.NewTimer(time.Duration(100000000))
+		select {
+		case <-errChan:
+			finished = true
+			break
+		case <-timer.C:
+			fmt.Print(progressStrings[i])
+			fmt.Print("\b")
+			i = (i + 1) % len(progressStrings)
+		}
+	}
+}
+
 var addParticipationKeyCmd = &cobra.Command{
 	Use:   "addpartkey",
 	Short: "Generate a participation key for the specified account",
@@ -869,11 +896,16 @@ var addParticipationKeyCmd = &cobra.Command{
 		// Generate a participation keys database and install it
 		client := ensureFullClient(dataDir)
 
-		_, _, err := client.GenParticipationKeysTo(accountAddress, roundFirstValid, roundLastValid, keyDilution, partKeyOutDir)
-		if err != nil {
-			reportErrorf(errorRequestFail, err)
+		participationGen := func() {
+			_, _, err := client.GenParticipationKeysTo(accountAddress, roundFirstValid, roundLastValid, keyDilution, partKeyOutDir)
+			if err != nil {
+				reportErrorf(errorRequestFail, err)
+			}
+			fmt.Println("Participation key generation successful")
 		}
-		fmt.Println("Participation key generation successful")
+
+		fmt.Print("Please standby while generating keys...")
+		genParticipationKeysAsync(participationGen)
 	},
 }
 
@@ -955,11 +987,21 @@ var renewParticipationKeyCmd = &cobra.Command{
 
 func generateAndRegisterPartKey(address string, currentRound, lastValidRound uint64, fee uint64, leaseBytes [32]byte, dilution uint64, wallet string, dataDir string, client libgoal.Client) error {
 	// Generate a participation keys database and install it
-	part, keyPath, err := client.GenParticipationKeysTo(address, currentRound, lastValidRound, dilution, "")
-	if err != nil {
-		return fmt.Errorf(errorRequestFail, err)
+	var part algodAcct.Participation
+	var keyPath string
+	var err error
+	genFunc := func() {
+		part, keyPath, err = client.GenParticipationKeysTo(address, currentRound, lastValidRound, dilution, "")
+		if err != nil {
+			err = fmt.Errorf(errorRequestFail, err)
+		}
+		fmt.Printf("  Generated participation key for %s (Valid %d - %d)\n", address, currentRound, lastValidRound)
 	}
-	fmt.Printf("  Generated participation key for %s (Valid %d - %d)\n", address, currentRound, lastValidRound)
+	fmt.Printf("Generated participation key please standby...")
+	genParticipationKeysAsync(genFunc)
+	if err != nil {
+		return err
+	}
 
 	// Now register it as our new online participation key
 	goOnline := true
