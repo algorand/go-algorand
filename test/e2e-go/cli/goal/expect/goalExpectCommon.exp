@@ -938,10 +938,10 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER NODE_DATA_DIR } {
                     catch wait result;
                     if { [lindex $result 3] != 0 } {
                         log_user 1
-                        puts "$NODE_DATA_DIR/algod-err.log :"
-                        exec cat "$NODE_DATA_DIR/algod-err.log"
-                        puts "$NODE_DATA_DIR/node.log :"
-                        exec -- tail -n 30 "$NODE_DATA_DIR/node.log"
+                        set errLog [exec cat $NODE_DATA_DIR/algod-err.log]
+                        puts "$NODE_DATA_DIR/algod-err.log :\r\n$errLog"
+                        set nodeLog [exec -- tail -n 30 $NODE_DATA_DIR/node.log]
+                        puts "$NODE_DATA_DIR/node.log :\r\n$nodeLog"
                         ::AlgorandGoal::Abort "failed to wait for round : error code [lindex $result 3]"
                     }
                 }
