@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
+	"github.com/algorand/go-algorand/config"
 	"testing"
 
 	uuid "github.com/satori/go.uuid"
@@ -441,7 +442,6 @@ func TestSignerTrim(t *testing.T) {
 	_, err = signer.Trim(55)
 	a.NoError(err)
 	a.Equal(0, length(signer, a))
-
 }
 
 func TestKeyDeletion(t *testing.T) {
@@ -480,6 +480,65 @@ func TestKeyDeletion(t *testing.T) {
 	}
 }
 
+func TestValidityPeriod(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	store := initTestDB(a)
+	firstValid := uint64(0)
+	lastValid := MaxValidPeriod
+	_, err := New(firstValid, lastValid, 128, crypto.DilithiumType, store)
+	a.NoError(err)
+
+	store = initTestDB(a)
+	firstValid = uint64(0)
+	lastValid = MaxValidPeriod + 1
+	_, err = New(firstValid, lastValid, 128, crypto.DilithiumType, store)
+	a.Error(err)
+
+	store = initTestDB(a)
+	firstValid = uint64(0)
+	lastValid = MaxValidPeriod - 1
+	_, err = New(firstValid, lastValid, 128, crypto.DilithiumType, store)
+	a.NoError(err)
+}
+
+func TestNumberOfGeneratedKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	interval := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
+
+	store := initTestDB(a)
+	firstValid := uint64(1000)
+	lastValid := MaxValidPeriod + 1000
+	s, err := New(firstValid, lastValid, interval, crypto.Ed25519Type, store)
+	a.NoError(err)
+	err = s.Persist()
+	a.NoError(err)
+	a.Equal(1<<16, length(s, a))
+	store.Close()
+
+	store = initTestDB(a)
+	firstValid = uint64(0)
+	lastValid = MaxValidPeriod
+	s, err = New(firstValid, lastValid, interval, crypto.Ed25519Type, store)
+	a.NoError(err)
+	err = s.Persist()
+	a.NoError(err)
+	a.Equal((1<<16)-1, length(s, a))
+	store.Close()
+
+	store = initTestDB(a)
+	firstValid = uint64(1000)
+	lastValid = MaxValidPeriod + 1000 - (interval * 50)
+	s, err = New(firstValid, lastValid, interval, crypto.Ed25519Type, store)
+	a.NoError(err)
+	err = s.Persist()
+	a.NoError(err)
+	a.Equal((1<<16)-50, length(s, a))
+	store.Close()
+}
+
 //#region Helper Functions
 func makeSig(signer *Signer, sigRound uint64, a *require.Assertions) (crypto.Hashable, Signature) {
 	hashable := genHashableForTest()
@@ -497,6 +556,17 @@ func generateTestSignerAux(a *require.Assertions) (uint64, uint64, *Signer) {
 }
 
 func generateTestSigner(t crypto.AlgorithmType, firstValid uint64, lastValid uint64, interval uint64, a *require.Assertions) *Signer {
+	store := initTestDB(a)
+	signer, err := New(firstValid, lastValid, interval, t, store)
+	a.NoError(err)
+
+	err = signer.Persist()
+	a.NoError(err)
+
+	return signer
+}
+
+func initTestDB(a *require.Assertions) db.Accessor {
 	tmpname := uuid.NewV4().String() // could this just be a constant string instead? does it even matter?
 	store, err := db.MakeAccessor(tmpname, false, true)
 	a.NoError(err)
@@ -511,13 +581,7 @@ func generateTestSigner(t crypto.AlgorithmType, firstValid uint64, lastValid uin
 	})
 	a.NoError(err)
 
-	signer, err := New(firstValid, lastValid, interval, t, store)
-	a.NoError(err)
-
-	err = signer.Persist()
-	a.NoError(err)
-
-	return signer
+	return store
 }
 
 func length(s *Signer, a *require.Assertions) int {

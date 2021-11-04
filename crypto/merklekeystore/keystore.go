@@ -84,7 +84,7 @@ type (
 
 // MaxValidPeriod defines the longest validity period allowed for key registration,
 // to prevent the merklekeystore tree depth being larger than 16
-var MaxValidPeriod = (1 << 16) * config.Consensus[protocol.ConsensusFuture].CompactCertRounds
+var MaxValidPeriod = (1<<16)*config.Consensus[protocol.ConsensusFuture].CompactCertRounds - 1
 
 var errValidityPeriodTooLong = fmt.Errorf("the validity period for merkleKeyStore is too large: the limit is %v", MaxValidPeriod)
 var errStartBiggerThanEndRound = errors.New("cannot create merkleKeyStore because end round is smaller then start round")
