@@ -1108,7 +1108,7 @@ var listParticipationKeysCmd = &cobra.Command{
 				*/
 
 				// it's okay to proceed without algod info
-				lastUsed := maxRound(0, part.LastStateProof)
+				lastUsed := maxRound(0, part.LastVote)
 				lastUsed = maxRound(lastUsed, part.LastBlockProposal)
 				lastUsed = maxRound(lastUsed, part.LastStateProof)
 				lastUsedString := "N/A"
