@@ -40,7 +40,7 @@ func TestMetricStringGauge(t *testing.T) {
 	DefaultRegistry().AddMetrics(results)
 
 	// values are populated
-	require.Equal(t, 2, len(results))
+	require.Equal(t, 2, len(results), "Wrong number of results: %+v", results)
 	require.True(t, hasKey(results, "number-key"))
 	require.Equal(t, "1", results["number-key"])
 	require.True(t, hasKey(results, "string-key"))

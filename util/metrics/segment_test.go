@@ -87,7 +87,7 @@ func testMetricSegmentHelper(t *testing.T, functionTime time.Duration) bool {
 	// test the metrics values. see if we received all the 4 metrics back correctly.
 	// we expect the get 4 metrics : test_segment_name1_sec, test_segment_name1_sec_total, test_segment_name1_total and test_segment_name1_concurrent
 	// ( we don't know in which order they would appear, but the total count should be 4 )
-	require.Equal(t, 4, len(test.metrics), "Missing metric counts were reported.")
+	require.Equal(t, 4, len(test.metrics), "Missing metric counts were reported: %+v", test.metrics)
 
 	for k, v := range test.metrics {
 		if strings.Contains(k, "test_segment_name1_sec{") {
