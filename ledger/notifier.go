@@ -110,8 +110,8 @@ func (bn *blockNotifier) newBlock(blk bookkeeping.Block, delta ledgercore.StateD
 	bn.cond.Broadcast()
 }
 
-func (bn *blockNotifier) committedUpTo(rnd basics.Round) basics.Round {
-	return rnd
+func (bn *blockNotifier) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
+	return rnd, basics.Round(0)
 }
 
 func (bn *blockNotifier) prepareCommit(dcc *deferredCommitContext) error {
@@ -122,8 +122,12 @@ func (bn *blockNotifier) commitRound(context.Context, *sql.Tx, *deferredCommitCo
 	return nil
 }
 
-func (bn *blockNotifier) postCommit(deferredCommitContext) {
+func (bn *blockNotifier) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 }
 
 func (bn *blockNotifier) handleUnorderedCommit(uint64, basics.Round, basics.Round) {
+}
+
+func (bn *blockNotifier) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
+	return dcr
 }
