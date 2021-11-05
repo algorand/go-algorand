@@ -93,25 +93,25 @@ type Balances interface {
 	Put(basics.Address, AccountData) error
 	CloseAccount(basics.Address) error
 
-	TotalAppParams(addr basics.Address) (int, error)
+	CountAppParams(addr basics.Address) (int, error)
 	GetAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, bool, error)
 	PutAppParams(addr basics.Address, aidx basics.AppIndex, params basics.AppParams) error
 	DeleteAppParams(addr basics.Address, aidx basics.AppIndex) error
 
-	TotalAppLocalState(addr basics.Address) (int, error)
+	CountAppLocalState(addr basics.Address) (int, error)
 	GetAppLocalState(addr basics.Address, aidx basics.AppIndex) (basics.AppLocalState, bool, error)
-	CheckAppLocalState(addr basics.Address, aidx basics.AppIndex) (bool, error)
+	HasAppLocalState(addr basics.Address, aidx basics.AppIndex) (bool, error)
 	PutAppLocalState(addr basics.Address, aidx basics.AppIndex, state basics.AppLocalState) error
 	DeleteAppLocalState(addr basics.Address, aidx basics.AppIndex) error
 
-	TotalAssetHolding(addr basics.Address) (int, error)
+	CountAssetHolding(addr basics.Address) (int, error)
 	GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (basics.AssetHolding, bool, error)
 	PutAssetHolding(addr basics.Address, aidx basics.AssetIndex, data basics.AssetHolding) error
 	DeleteAssetHolding(addr basics.Address, aidx basics.AssetIndex) error
 
-	TotalAssetParams(addr basics.Address) (int, error)
+	CountAssetParams(addr basics.Address) (int, error)
 	GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (basics.AssetParams, bool, error)
-	CheckAssetParams(addr basics.Address, aidx basics.AssetIndex) (bool, error)
+	HasAssetParams(addr basics.Address, aidx basics.AssetIndex) (bool, error)
 	PutAssetParams(addr basics.Address, aidx basics.AssetIndex, data basics.AssetParams) error
 	DeleteAssetParams(addr basics.Address, aidx basics.AssetIndex) error
 

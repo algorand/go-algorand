@@ -86,7 +86,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	}
 
 	// look up how many apps they have
-	totalAppParams, err := balances.TotalAppParams(creator)
+	totalAppParams, err := balances.CountAppParams(creator)
 	if err != nil {
 		return
 	}
@@ -232,7 +232,7 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 	}
 
 	// If the user has already opted in, fail
-	ok, err := balances.CheckAppLocalState(sender, appIdx)
+	ok, err := balances.HasAppLocalState(sender, appIdx)
 	if err != nil {
 		return err
 	}
@@ -240,7 +240,7 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 		return fmt.Errorf("account %s has already opted in to app %d", sender.String(), appIdx)
 	}
 
-	totalAppLocalState, err := balances.TotalAppLocalState(sender)
+	totalAppLocalState, err := balances.CountAppLocalState(sender)
 	if err != nil {
 		return err
 	}
@@ -404,7 +404,7 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 	// execute the ClearStateProgram, whose failures are ignored.
 	if ac.OnCompletion == transactions.ClearStateOC {
 		// Ensure that the user is already opted in
-		ok, err := balances.CheckAppLocalState(header.Sender, appIdx)
+		ok, err := balances.HasAppLocalState(header.Sender, appIdx)
 		if err != nil {
 			return err
 		}

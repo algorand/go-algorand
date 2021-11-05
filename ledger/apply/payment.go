@@ -80,7 +80,7 @@ func Payment(payment transactions.PaymentTxnFields, header transactions.Header, 
 		}
 
 		// Confirm that there is no asset-related state in the account
-		totalAssets, err := balances.TotalAssetHolding(header.Sender)
+		totalAssets, err := balances.CountAssetHolding(header.Sender)
 		if err != nil {
 			return err
 		}
@@ -88,7 +88,7 @@ func Payment(payment transactions.PaymentTxnFields, header transactions.Header, 
 			return fmt.Errorf("cannot close: %d outstanding assets", totalAssets)
 		}
 
-		totalAssetParams, err := balances.TotalAssetParams(header.Sender)
+		totalAssetParams, err := balances.CountAssetParams(header.Sender)
 		if err != nil {
 			return err
 		}
@@ -100,7 +100,7 @@ func Payment(payment transactions.PaymentTxnFields, header transactions.Header, 
 		}
 
 		// Confirm that there is no application-related state remaining
-		totalAppLocalStates, err := balances.TotalAppLocalState(header.Sender)
+		totalAppLocalStates, err := balances.CountAppLocalState(header.Sender)
 		if err != nil {
 			return err
 		}
@@ -109,7 +109,7 @@ func Payment(payment transactions.PaymentTxnFields, header transactions.Header, 
 		}
 
 		// Can't have created apps remaining either
-		totalAppParams, err := balances.TotalAppParams(header.Sender)
+		totalAppParams, err := balances.CountAppParams(header.Sender)
 		if err != nil {
 			return err
 		}

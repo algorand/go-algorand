@@ -69,7 +69,7 @@ func getParams(balances Balances, aidx basics.AssetIndex) (params basics.AssetPa
 func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Header, balances Balances, spec transactions.SpecialAddresses, ad *transactions.ApplyData, txnCounter uint64) error {
 	if cc.ConfigAsset == 0 {
 		// Allocating an asset.
-		totalAssets, err := balances.TotalAssetHolding(header.Sender)
+		totalAssets, err := balances.CountAssetHolding(header.Sender)
 		if err != nil {
 			return err
 		}
@@ -78,7 +78,7 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 		newidx := basics.AssetIndex(txnCounter + 1)
 
 		// Sanity check that there isn't an asset with this counter value.
-		present, err := balances.CheckAssetParams(header.Sender, newidx)
+		present, err := balances.HasAssetParams(header.Sender, newidx)
 		if err != nil {
 			return err
 		}
@@ -276,7 +276,7 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 
 			sndHolding.Frozen = params.DefaultFrozen
 
-			totalSndAssets, err := balances.TotalAssetHolding(source)
+			totalSndAssets, err := balances.CountAssetHolding(source)
 			if err != nil {
 				return err
 			}
@@ -324,7 +324,7 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 		// The creator of the asset cannot close their holding of the
 		// asset. Check if we are the creator by seeing if there is an
 		// AssetParams entry for the asset index.
-		ok, err := balances.CheckAssetParams(source, ct.XferAsset)
+		ok, err := balances.HasAssetParams(source, ct.XferAsset)
 		if err != nil {
 			return err
 		}
@@ -344,7 +344,7 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 
 		// Fetch the destination asset params to check if we are
 		// closing out to the creator
-		dstAssetParamsExist, err := balances.CheckAssetParams(ct.AssetCloseTo, ct.XferAsset)
+		dstAssetParamsExist, err := balances.HasAssetParams(ct.AssetCloseTo, ct.XferAsset)
 		if err != nil {
 			return err
 		}

@@ -127,28 +127,28 @@ type accountDataAccessor interface {
 	getAccount(addr basics.Address, withRewards bool) (basics.AccountData, error)
 }
 
-func (b *mockCreatableBalances) TotalAppParams(addr basics.Address) (int, error) {
+func (b *mockCreatableBalances) CountAppParams(addr basics.Address) (int, error) {
 	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return 0, err
 	}
 	return len(acct.AppParams), nil
 }
-func (b *mockCreatableBalances) TotalAppLocalState(addr basics.Address) (int, error) {
+func (b *mockCreatableBalances) CountAppLocalState(addr basics.Address) (int, error) {
 	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return 0, err
 	}
 	return len(acct.AppLocalStates), nil
 }
-func (b *mockCreatableBalances) TotalAssetHolding(addr basics.Address) (int, error) {
+func (b *mockCreatableBalances) CountAssetHolding(addr basics.Address) (int, error) {
 	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return 0, err
 	}
 	return len(acct.Assets), nil
 }
-func (b *mockCreatableBalances) TotalAssetParams(addr basics.Address) (int, error) {
+func (b *mockCreatableBalances) CountAssetParams(addr basics.Address) (int, error) {
 	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return 0, err
@@ -303,7 +303,7 @@ func (b *mockCreatableBalances) DeleteAssetParams(addr basics.Address, aidx basi
 	return b.access.putAccount(addr, acct)
 }
 
-func (b *mockCreatableBalances) CheckAppLocalState(addr basics.Address, aidx basics.AppIndex) (ok bool, err error) {
+func (b *mockCreatableBalances) HasAppLocalState(addr basics.Address, aidx basics.AppIndex) (ok bool, err error) {
 	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return
@@ -312,7 +312,7 @@ func (b *mockCreatableBalances) CheckAppLocalState(addr basics.Address, aidx bas
 	return
 }
 
-func (b *mockCreatableBalances) CheckAssetParams(addr basics.Address, aidx basics.AssetIndex) (ok bool, err error) {
+func (b *mockCreatableBalances) HasAssetParams(addr basics.Address, aidx basics.AssetIndex) (ok bool, err error) {
 	acct, err := b.access.getAccount(addr, false)
 	if err != nil {
 		return

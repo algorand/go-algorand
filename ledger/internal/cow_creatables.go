@@ -29,28 +29,28 @@ func (cs *roundCowState) MinBalance(addr basics.Address, proto *config.Consensus
 	return acct.MinBalance(proto), nil
 }
 
-func (cs *roundCowState) TotalAppParams(creator basics.Address) (int, error) {
+func (cs *roundCowState) CountAppParams(creator basics.Address) (int, error) {
 	acct, err := cs.lookup(creator)
 	if err != nil {
 		return 0, err
 	}
 	return len(acct.AppParams), nil
 }
-func (cs *roundCowState) TotalAppLocalState(addr basics.Address) (int, error) {
+func (cs *roundCowState) CountAppLocalState(addr basics.Address) (int, error) {
 	acct, err := cs.lookup(addr)
 	if err != nil {
 		return 0, err
 	}
 	return len(acct.AppLocalStates), nil
 }
-func (cs *roundCowState) TotalAssetHolding(addr basics.Address) (int, error) {
+func (cs *roundCowState) CountAssetHolding(addr basics.Address) (int, error) {
 	acct, err := cs.lookup(addr)
 	if err != nil {
 		return 0, err
 	}
 	return len(acct.Assets), nil
 }
-func (cs *roundCowState) TotalAssetParams(addr basics.Address) (int, error) {
+func (cs *roundCowState) CountAssetParams(addr basics.Address) (int, error) {
 	acct, err := cs.lookup(addr)
 	if err != nil {
 		return 0, err
@@ -197,7 +197,7 @@ func (cs *roundCowState) DeleteAssetParams(addr basics.Address, aidx basics.Asse
 	return cs.putAccount(addr, acct)
 }
 
-func (cs *roundCowState) CheckAppLocalState(addr basics.Address, aidx basics.AppIndex) (ok bool, err error) {
+func (cs *roundCowState) HasAppLocalState(addr basics.Address, aidx basics.AppIndex) (ok bool, err error) {
 	acct, err := cs.lookup(addr)
 	if err != nil {
 		return
@@ -206,7 +206,7 @@ func (cs *roundCowState) CheckAppLocalState(addr basics.Address, aidx basics.App
 	return
 }
 
-func (cs *roundCowState) CheckAssetParams(addr basics.Address, aidx basics.AssetIndex) (ok bool, err error) {
+func (cs *roundCowState) HasAssetParams(addr basics.Address, aidx basics.AssetIndex) (ok bool, err error) {
 	acct, err := cs.lookup(addr)
 	if err != nil {
 		return
