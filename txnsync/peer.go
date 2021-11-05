@@ -805,11 +805,14 @@ func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (
 			} else {
 				if p.requestedTransactionsModulator != 0 {
 					ops |= messageConstTransactions
-					if p.nextStateTimestamp == 0 && p.localTransactionsModulator != 0 {
-						ops |= messageConstBloomFilter
-					}
+					//if p.nextStateTimestamp == 0 && p.localTransactionsModulator != 0 {
+					//	ops |= messageConstBloomFilter
+					//}
 				}
 				if p.nextStateTimestamp == 0 {
+					if p.localTransactionsModulator != 0 {
+						ops |= messageConstBloomFilter
+					}
 					ops |= messageConstNextMinDelay
 				}
 			}

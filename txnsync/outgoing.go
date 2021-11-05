@@ -311,6 +311,7 @@ notxns:
 
 		profTxnsSelection := s.profiler.getElement(profElementTxnsSelection)
 		profTxnsSelection.start()
+		logging.Base().Info(s.transactionPoolFull)
 		metaMessage.transactionGroups, metaMessage.sentTransactionsIDs, metaMessage.partialMessage = peer.selectPendingTransactions(transactionGroups, messageTimeWindow, s.round, currentMessageSize)
 		profTxnsSelection.end()
 
