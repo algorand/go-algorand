@@ -340,22 +340,22 @@ func (db *participationDB) initializeCache() error {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
-	db.cache = make(map[ParticipationID]ParticipationRecord)
-	db.dirty = make(map[ParticipationID]struct{})
-
 	records, err := db.getAllFromDB()
 	if err != nil {
 		return err
 	}
 
+	cache := make(map[ParticipationID]ParticipationRecord)
 	for _, record := range records {
 		// Check if it already exists
-		if _, ok := db.cache[record.ParticipationID]; ok {
+		if _, ok := cache[record.ParticipationID]; ok {
 			return ErrMultipleKeysForID
 		}
-		db.cache[record.ParticipationID] = record
+		cache[record.ParticipationID] = record
 	}
 
+	db.cache = cache
+	db.dirty = make(map[ParticipationID]struct{})
 	return nil
 }
 
