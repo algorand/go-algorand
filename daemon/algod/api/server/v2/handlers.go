@@ -68,7 +68,7 @@ type NodeInterface interface {
 	StartCatchup(catchpoint string) error
 	AbortCatchup(catchpoint string) error
 	Config() config.Local
-	InstallParticipationKey(partKeyBinary *[]byte) (account.ParticipationID, error)
+	InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error)
 	ListParticipationKeys() ([]account.ParticipationRecord, error)
 	GetParticipationKey(account.ParticipationID) (account.ParticipationRecord, error)
 	RemoveParticipationKey(account.ParticipationID) error
@@ -102,18 +102,18 @@ func convertParticipationRecord(record account.ParticipationRecord) generated.Pa
 	}
 
 	// Optional fields.
-	participationKey.EffectiveFirstValid = roundToPtrOrNil(record.EffectiveFirst)
+	if record.EffectiveLast != 0 && record.EffectiveFirst == 0 {
+		// Special case for first valid on round 0
+		zero := uint64(0)
+		participationKey.EffectiveFirstValid = &zero
+	} else {
+		participationKey.EffectiveFirstValid = roundToPtrOrNil(record.EffectiveFirst)
+	}
 	participationKey.EffectiveLastValid = roundToPtrOrNil(record.EffectiveLast)
 	participationKey.LastVote = roundToPtrOrNil(record.LastVote)
 	participationKey.LastBlockProposal = roundToPtrOrNil(record.LastBlockProposal)
 	participationKey.LastVote = roundToPtrOrNil(record.LastVote)
 	participationKey.LastStateProof = roundToPtrOrNil(record.LastStateProof)
-
-	// Special case for first valid on round 0
-	if record.EffectiveLast != 0 && record.EffectiveFirst == 0 {
-		zero := uint64(0)
-		participationKey.EffectiveFirstValid = &zero
-	}
 
 	return participationKey
 }
@@ -152,7 +152,7 @@ func (v2 *Handlers) AddParticipationKey(ctx echo.Context) error {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
-	partID, err := v2.Node.InstallParticipationKey(&partKeyBinary)
+	partID, err := v2.Node.InstallParticipationKey(partKeyBinary)
 
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
@@ -167,7 +167,7 @@ func (v2 *Handlers) AddParticipationKey(ctx echo.Context) error {
 // (DELETE /v2/participation/{participation-id})
 func (v2 *Handlers) DeleteParticipationKeyByID(ctx echo.Context, participationID string) error {
 
-	decodedParticipationID, err := account.ParticipationIDFromString(participationID)
+	decodedParticipationID, err := account.ParseParticipationID(participationID)
 
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
@@ -181,7 +181,7 @@ func (v2 *Handlers) DeleteParticipationKeyByID(ctx echo.Context, participationID
 			return ctx.JSON(http.StatusOK, generated.ErrorResponse{Message: "participation id not found"})
 		}
 
-		return badRequest(ctx, err, err.Error(), v2.Log)
+		return internalError(ctx, err, err.Error(), v2.Log)
 	}
 
 	return ctx.NoContent(http.StatusOK)
@@ -191,7 +191,7 @@ func (v2 *Handlers) DeleteParticipationKeyByID(ctx echo.Context, participationID
 // (GET /v2/participation/{participation-id})
 func (v2 *Handlers) GetParticipationKeyByID(ctx echo.Context, participationID string) error {
 
-	decodedParticipationID, err := account.ParticipationIDFromString(participationID)
+	decodedParticipationID, err := account.ParseParticipationID(participationID)
 
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
@@ -200,7 +200,11 @@ func (v2 *Handlers) GetParticipationKeyByID(ctx echo.Context, participationID st
 	participationRecord, err := v2.Node.GetParticipationKey(decodedParticipationID)
 
 	if err != nil {
-		return badRequest(ctx, err, err.Error(), v2.Log)
+		return internalError(ctx, err, err.Error(), v2.Log)
+	}
+
+	if participationRecord.IsZero() {
+		return notFound(ctx, account.ErrParticipationIDNotFound, account.ErrParticipationIDNotFound.Error(), v2.Log)
 	}
 
 	response := convertParticipationRecord(participationRecord)

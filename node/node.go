@@ -831,7 +831,7 @@ func (node *AlgorandFullNode) RemoveParticipationKey(partKey account.Participati
 	return nil
 }
 
-func createTemporaryParticipationKey(outDir string, partKeyBinary *[]byte) (string, error) {
+func createTemporaryParticipationKey(outDir string, partKeyBinary []byte) (string, error) {
 	var sb strings.Builder
 
 	// Create a temporary filename with a UUID so that we can call this function twice
@@ -848,7 +848,7 @@ func createTemporaryParticipationKey(outDir string, partKeyBinary *[]byte) (stri
 		return "", err
 	}
 
-	_, err = file.Write(*partKeyBinary)
+	_, err = file.Write(partKeyBinary)
 
 	file.Close()
 
@@ -861,7 +861,7 @@ func createTemporaryParticipationKey(outDir string, partKeyBinary *[]byte) (stri
 }
 
 // InstallParticipationKey Given a participation key binary stream install the participation key
-func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary *[]byte) (account.ParticipationID, error) {
+func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
 	genID := node.GenesisID()
 
 	outDir := filepath.Join(node.rootDir, genID)

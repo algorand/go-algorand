@@ -48,15 +48,14 @@ func (pid ParticipationID) String() string {
 	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(pid[:])
 }
 
-// ParticipationIDFromString takes a string and returns a ParticipationID object
-func ParticipationIDFromString(str string) (d ParticipationID, err error) {
+// ParseParticipationID takes a string and returns a ParticipationID object
+func ParseParticipationID(str string) (d ParticipationID, err error) {
 	decoded, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(str)
 	if err != nil {
 		return d, err
 	}
 	if len(decoded) != len(d) {
-		msg := fmt.Sprintf(`Attempted to decode a string which was not a participation id: "%v"`, str)
-		return d, errors.New(msg)
+		return d, fmt.Errorf(`attempted to decode a string which was not a participation id: "%s"`, str)
 	}
 	copy(d[:], decoded[:])
 	return d, err
@@ -190,7 +189,7 @@ func MakeParticipationRegistry(accessor db.Pair, log logging.Logger) (Participat
 // makeParticipationRegistry creates a db.Accessor backed ParticipationRegistry.
 func makeParticipationRegistry(accessor db.Pair, log logging.Logger) (*participationDB, error) {
 	if log == nil {
-		return nil, fmt.Errorf("invalid logger provided")
+		return nil, errors.New("invalid logger provided")
 	}
 
 	migrations := []db.Migration{
@@ -213,6 +212,7 @@ func makeParticipationRegistry(accessor db.Pair, log logging.Logger) (*participa
 
 	err = registry.initializeCache()
 	if err != nil {
+		registry.Close()
 		return nil, fmt.Errorf("unable to initialize participation registry cache: %w", err)
 	}
 
@@ -220,7 +220,7 @@ func makeParticipationRegistry(accessor db.Pair, log logging.Logger) (*participa
 }
 
 // Queries
-var (
+const (
 	createKeysets = `CREATE TABLE Keysets (
 			pk INTEGER PRIMARY KEY NOT NULL,
 
@@ -301,7 +301,7 @@ func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 	return nil
 }
 
-// participationDB is a private implementation of ParticipationRegistry.
+// participationDB provides a concrete implementation of the ParticipationRegistry interface.
 type participationDB struct {
 	cache map[ParticipationID]ParticipationRecord
 
@@ -406,6 +406,21 @@ func (db *participationDB) writeThread() {
 	}
 }
 
+// verifyExecWithOneRowEffected checks for a successful Exec and also verifies exactly 1 row was affected
+func verifyExecWithOneRowEffected(err error, result sql.Result, operationName string) error {
+	if err != nil {
+		return fmt.Errorf("unable to execute %s: %w", operationName, err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("unable to get %s rows affected: %w", operationName, err)
+	}
+	if rows != 1 {
+		return fmt.Errorf("unexpected number of %s rows affected, expected 1 found %d", operationName, rows)
+	}
+	return nil
+}
+
 func (db *participationDB) insertInner(record Participation, id ParticipationID) (err error) {
 
 	var rawVRF []byte
@@ -428,32 +443,18 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 			record.LastValid,
 			record.KeyDilution,
 			rawVRF)
-		if err != nil {
-			return fmt.Errorf("unable to insert keyset: %w", err)
-		}
-		rows, err := result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("unable to insert keyset: %w", err)
-		}
-		if rows != 1 {
-			return fmt.Errorf("unexpected number of rows")
+		if err := verifyExecWithOneRowEffected(err, result, "insert keyset"); err != nil {
+			return err
 		}
 		pk, err := result.LastInsertId()
 		if err != nil {
-			return fmt.Errorf("unable to insert keyset: %w", err)
+			return fmt.Errorf("unable to get pk from keyset: %w", err)
 		}
 
 		// Create Rolling entry
 		result, err = tx.Exec(insertRollingQuery, pk, rawVoting)
-		if err != nil {
-			return fmt.Errorf("unable insert rolling: %w", err)
-		}
-		rows, err = result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("unable to insert keyset: %w", err)
-		}
-		if rows != 1 {
-			return fmt.Errorf("unexpected number of rows")
+		if err := verifyExecWithOneRowEffected(err, result, "insert rolling"); err != nil {
+			return err
 		}
 
 		return nil
@@ -500,18 +501,22 @@ func (db *participationDB) deleteInner(id ParticipationID) error {
 		var pk int
 		row := tx.QueryRow(selectPK, id[:])
 		err := row.Scan(&pk)
+		if err == sql.ErrNoRows {
+			// nothing to do.
+			return nil
+		}
 		if err != nil {
 			return fmt.Errorf("unable to scan pk: %w", err)
 		}
 
 		// Delete rows
-		_, err = tx.Exec(deleteKeysets, pk)
-		if err != nil {
+		result, err := tx.Exec(deleteKeysets, pk)
+		if err := verifyExecWithOneRowEffected(err, result, "delete keyset"); err != nil {
 			return err
 		}
 
-		_, err = tx.Exec(deleteRolling, pk)
-		if err != nil {
+		result, err = tx.Exec(deleteRolling, pk)
+		if err := verifyExecWithOneRowEffected(err, result, "delete rolling"); err != nil {
 			return err
 		}
 
