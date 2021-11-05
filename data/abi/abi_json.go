@@ -17,12 +17,11 @@
 package abi
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"math/big"
-	"strings"
-
 	"github.com/algorand/go-algorand/data/basics"
+	"math/big"
 )
 
 func castBigIntToNearestPrimitive(num *big.Int, bitSize uint16) (interface{}, error) {
@@ -94,15 +93,15 @@ func (t Type) MarshalToJSON(value interface{}) ([]byte, error) {
 			return nil, fmt.Errorf("length of slice %d != type specific length %d", len(values), t.staticLength)
 		}
 		if t.childTypes[0].abiTypeID == Byte {
-			bytes := make([]byte, len(values))
+			byteArr := make([]byte, len(values))
 			for i := 0; i < len(values); i++ {
 				tempByte, ok := values[i].(byte)
 				if !ok {
 					return nil, fmt.Errorf("cannot infer byte element from slice")
 				}
-				bytes[i] = tempByte
+				byteArr[i] = tempByte
 			}
-			return json.Marshal(bytes)
+			return json.Marshal(byteArr)
 		}
 		rawMsgSlice := make([]json.RawMessage, len(values))
 		for i := 0; i < len(values); i++ {
@@ -175,7 +174,7 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 	case Address:
 		var addrStr string
 		if err := json.Unmarshal(jsonEncoded, &addrStr); err != nil {
-			return nil, fmt.Errorf("cannot cast JSON encoded to bytes: %v", err)
+			return nil, fmt.Errorf("cannot cast JSON encoded to string: %v", err)
 		}
 		addr, err := basics.UnmarshalChecksumAddress(addrStr)
 		if err != nil {
@@ -183,7 +182,7 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 		}
 		return addr[:], nil
 	case ArrayStatic, ArrayDynamic:
-		if t.childTypes[0].abiTypeID == Byte && strings.HasPrefix(string(jsonEncoded), `"`) {
+		if t.childTypes[0].abiTypeID == Byte && bytes.HasPrefix(jsonEncoded, []byte{'"'}) {
 			var byteArr []byte
 			err := json.Unmarshal(jsonEncoded, &byteArr)
 			if err != nil {
@@ -216,13 +215,13 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 		return values, nil
 	case String:
 		stringEncoded := string(jsonEncoded)
-		if strings.HasPrefix(stringEncoded, "\"") {
+		if bytes.HasPrefix(jsonEncoded, []byte{'"'}) {
 			var stringVar string
 			if err := json.Unmarshal(jsonEncoded, &stringVar); err != nil {
 				return nil, fmt.Errorf("cannot cast JSON encoded (%s) to string: %v", stringEncoded, err)
 			}
 			return stringVar, nil
-		} else if strings.HasPrefix(stringEncoded, "[") {
+		} else if bytes.HasPrefix(jsonEncoded, []byte{'['}) {
 			var elems []byte
 			if err := json.Unmarshal(jsonEncoded, &elems); err != nil {
 				return nil, fmt.Errorf("cannot cast JSON encoded (%s) to string: %v", stringEncoded, err)
