@@ -319,7 +319,7 @@ commands:
             scripts/configure_dev.sh
             scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
             PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
-            COVERPACKAGES="$(go list ./... | egrep -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' )"
+            COVERPACKAGES="$(go list ./... | egrep -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | egrep -v '(test|testing)$' )"
             export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
             export COVERPACKAGE_NAMES=$(echo $COVERPACKAGES | tr ' ' ',')
             export PARTITION_TOTAL=${CIRCLE_NODE_TOTAL}
