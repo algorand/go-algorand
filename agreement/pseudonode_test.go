@@ -223,11 +223,8 @@ func TestPseudonode(t *testing.T) {
 		messageEvent, typeOk := ev.(messageEvent)
 		assert.True(t, true, typeOk)
 		// Verify votes are recorded - everyone is voting and proposing blocks.
-		keyManager.mutex.Lock()
-		assert.Equal(t, startRound, keyManager.recording[messageEvent.Input.Vote.R.Sender][account.Vote])
-		assert.Equal(t, startRound, keyManager.recording[messageEvent.Input.Vote.R.Sender][account.BlockProposal])
+		keyManager.ValidateVoteRound(t, messageEvent.Input.Vote.R.Sender, startRound)
 		events[messageEvent.t()] = append(events[messageEvent.t()], messageEvent)
-		keyManager.mutex.Unlock()
 	}
 	assert.Subset(t, []int{5, 6, 7, 8, 9, 10}, []int{len(events[voteVerified])})
 	assert.Equal(t, 0, len(events[payloadVerified]))

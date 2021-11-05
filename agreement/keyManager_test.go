@@ -17,7 +17,10 @@
 package agreement
 
 import (
+	"testing"
+
 	"github.com/algorand/go-deadlock"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -60,4 +63,11 @@ func (m *recordingKeyManager) Record(acct basics.Address, round basics.Round, ac
 		m.recording[acct] = make(map[account.ParticipationAction]basics.Round)
 	}
 	m.recording[acct][action] = round
+}
+
+func (m *recordingKeyManager) ValidateVoteRound(t *testing.T, address basics.Address, round basics.Round) {
+	m.mutex.Lock()
+	assert.Equal(t, round, m.recording[address][account.Vote])
+	assert.Equal(t, round, m.recording[address][account.BlockProposal])
+	m.mutex.Unlock()
 }
