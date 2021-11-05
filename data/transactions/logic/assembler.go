@@ -2128,7 +2128,6 @@ func (ops *OpStream) ReportProblems(fname string) {
 // ReportProblemsString issues accumulated warnings and outputs an error string.
 func (ops *OpStream) ReportProblemsString() string {
 	sb := strings.Builder{}
-	fmt.Fprintf(&sb, "%d errors\n", len(ops.Errors))
 	for i, e := range ops.Errors {
 		if i > 9 {
 			break
@@ -2141,6 +2140,7 @@ func (ops *OpStream) ReportProblemsString() string {
 		}
 		fmt.Fprintf(&sb, "%s\n", w)
 	}
+	fmt.Fprintf(&sb, "%d errors", len(ops.Errors))
 	return sb.String()
 }
 
