@@ -820,7 +820,10 @@ func (node *AlgorandFullNode) RemoveParticipationKey(partKey account.Participati
 		return err
 	}
 
-	err = node.accountManager.Registry().Flush()
+	// PKI TODO: pick a better timeout, this is just something short. This could also be removed if we change
+	// POST /v2/participation and DELETE /v2/participation to return "202 OK Accepted" instead of waiting and getting
+	// the error message.
+	err = node.accountManager.Registry().Flush(500 * time.Millisecond)
 	if err != nil {
 		return err
 	}
@@ -860,7 +863,7 @@ func createTemporaryParticipationKey(outDir string, partKeyBinary []byte) (strin
 	return tempFile, nil
 }
 
-// InstallParticipationKey Given a participation key binary stream install the participation key
+// InstallParticipationKey Given a participation key binary stream install the participation key.
 func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
 	genID := node.GenesisID()
 
@@ -900,7 +903,10 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 	// Tell the AccountManager about the Participation (dupes don't matter) so we ignore the return value
 	_ = node.accountManager.AddParticipation(partkey)
 
-	err = node.accountManager.Registry().Flush()
+	// PKI TODO: pick a better timeout, this is just something short. This could also be removed if we change
+	// POST /v2/participation and DELETE /v2/participation to return "202 OK Accepted" instead of waiting and getting
+	// the error message.
+	err = node.accountManager.Registry().Flush(500 * time.Millisecond)
 	if err != nil {
 		return account.ParticipationID{}, err
 	}
@@ -1071,8 +1077,9 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 		node.accountManager.DeleteOldKeys(latestHdr, ccSigs, agreementProto)
 		node.mu.Unlock()
 
+		// PKI TODO: Maybe we don't even need to flush the registry.
 		// Persist participation registry metrics.
-		node.accountManager.FlushRegistry()
+		node.accountManager.FlushRegistry(2 * time.Second)
 	}
 }
 
