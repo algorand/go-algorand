@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 
@@ -203,9 +204,10 @@ func makeParticipationRegistry(accessor db.Pair, log logging.Logger) (*participa
 	}
 
 	registry := &participationDB{
-		log:        log,
-		store:      accessor,
-		writeQueue: make(chan partDBWriteRecord, 10),
+		log:            log,
+		store:          accessor,
+		writeQueue:     make(chan partDBWriteRecord, 10),
+		writeQueueDone: make(chan struct{}),
 	}
 	registry.flushDone = sync.NewCond(&registry.mutex)
 	go registry.writeThread()
@@ -312,8 +314,9 @@ type participationDB struct {
 	store db.Pair
 	mutex deadlock.RWMutex
 
-	writeQueue chan partDBWriteRecord
-	asyncErr   error
+	writeQueue     chan partDBWriteRecord
+	asyncErr       error
+	writeQueueDone chan struct{}
 
 	flushDone      *sync.Cond
 	flushesPending int
@@ -371,6 +374,7 @@ func (db *participationDB) writeThread() {
 			select {
 			case wr, chanOk = <-db.writeQueue:
 				if !chanOk {
+					close(db.writeQueueDone)
 					return // chan closed
 				}
 			default:
@@ -387,6 +391,7 @@ func (db *participationDB) writeThread() {
 			// blocking read until next activity or close
 			wr, chanOk = <-db.writeQueue
 			if !chanOk {
+				close(db.writeQueueDone)
 				return // chan closed
 			}
 		}
@@ -948,5 +953,13 @@ func (db *participationDB) Close() {
 	}
 
 	db.store.Close()
+
 	close(db.writeQueue)
+	// Wait for write queue to notice the channel closed.
+	select {
+	case <-db.writeQueueDone:
+		return
+	case <-time.After(5 * time.Second):
+		db.log.Warnf("Close(): timout waiting for WriteQueue to finish.")
+	}
 }

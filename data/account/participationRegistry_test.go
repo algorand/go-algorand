@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -67,12 +68,19 @@ func makeTestParticipation(addrID int, first, last basics.Round, dilution uint64
 	return p
 }
 
+func registryCloseTest(t *testing.T, registry *participationDB) {
+	start := time.Now()
+	registry.Close()
+	duration := time.Since(start)
+	assert.Less(t, uint64(duration), uint64(1 * time.Second))
+}
+
 // Insert participation records and make sure they can be fetched.
 func TestParticipation_InsertGet(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	registry := getRegistry(t)
-	defer registry.Close()
+	defer registryCloseTest(t, registry)
 
 	p := makeTestParticipation(1, 1, 2, 3)
 	p2 := makeTestParticipation(2, 4, 5, 6)
@@ -125,7 +133,7 @@ func TestParticipation_Delete(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	registry := getRegistry(t)
-	defer registry.Close()
+	defer registryCloseTest(t, registry)
 
 	p := makeTestParticipation(1, 1, 2, 3)
 	p2 := makeTestParticipation(2, 4, 5, 6)
@@ -157,7 +165,7 @@ func TestParticipation_DeleteExpired(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	registry := getRegistry(t)
-	defer registry.Close()
+	defer registryCloseTest(t, registry)
 
 	for i := 10; i < 20; i++ {
 		p := makeTestParticipation(i, 1, basics.Round(i), 1)
@@ -182,7 +190,7 @@ func TestParticipation_Register(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	registry := getRegistry(t)
-	defer registry.Close()
+	defer registryCloseTest(t, registry)
 
 	// Overlapping keys.
 	p := makeTestParticipation(1, 250000, 3000000, 1)
@@ -220,7 +228,7 @@ func TestParticipation_RegisterInvalidID(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	registry := getRegistry(t)
-	defer registry.Close()
+	defer registryCloseTest(t, registry)
 
 	p := makeTestParticipation(0, 250000, 3000000, 1)
 
@@ -233,7 +241,7 @@ func TestParticipation_RegisterInvalidRange(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	registry := getRegistry(t)
-	defer registry.Close()
+	defer registryCloseTest(t, registry)
 
 	p := makeTestParticipation(0, 250000, 3000000, 1)
 
@@ -251,7 +259,7 @@ func TestParticipation_Record(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	registry := getRegistry(t)
-	defer registry.Close()
+	defer registryCloseTest(t, registry)
 
 	// Setup p
 	p := makeTestParticipation(1, 0, 3000000, 1)
@@ -305,7 +313,7 @@ func TestParticipation_RecordInvalidActionAndOutOfRange(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	registry := getRegistry(t)
-	defer registry.Close()
+	defer registryCloseTest(t, registry)
 
 	p := makeTestParticipation(1, 0, 3000000, 1)
 	id, err := registry.Insert(p)
@@ -327,7 +335,7 @@ func TestParticipation_RecordNoKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	registry := getRegistry(t)
-	defer registry.Close()
+	defer registryCloseTest(t, registry)
 
 	err := registry.Record(basics.Address{}, 0, Vote)
 	a.EqualError(err, ErrActiveKeyNotFound.Error())
@@ -339,7 +347,7 @@ func TestParticipation_RecordMultipleUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	registry := getRegistry(t)
-	defer registry.Close()
+	defer registryCloseTest(t, registry)
 
 	// We'll test that recording at this round fails because both keys are active
 	testRound := basics.Round(5000)
@@ -389,7 +397,7 @@ func TestParticipation_MultipleInsertError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	registry := getRegistry(t)
-	defer registry.Close()
+	defer registryCloseTest(t, registry)
 
 	p := makeTestParticipation(1, 1, 2, 3)
 
@@ -509,7 +517,7 @@ func TestParticipation_NoKeyToUpdate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := assert.New(t)
 	registry := getRegistry(t)
-	defer registry.Close()
+	defer registryCloseTest(t, registry)
 
 	registry.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		record := ParticipationRecord{
@@ -532,7 +540,7 @@ func TestParticipion_Blobs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	registry := getRegistry(t)
-	defer registry.Close()
+	defer registryCloseTest(t, registry)
 
 	access, err := db.MakeAccessor("writetest_root", false, true)
 	if err != nil {
@@ -575,7 +583,7 @@ func TestParticipion_EmptyBlobs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := assert.New(t)
 	registry := getRegistry(t)
-	defer registry.Close()
+	defer registryCloseTest(t, registry)
 
 	access, err := db.MakeAccessor("writetest_root", false, true)
 	if err != nil {
@@ -619,7 +627,7 @@ func TestRegisterUpdatedEvent(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := assert.New(t)
 	registry := getRegistry(t)
-	defer registry.Close()
+	defer registryCloseTest(t, registry)
 
 	p := makeTestParticipation(1, 1, 2, 3)
 	p2 := makeTestParticipation(2, 4, 5, 6)
