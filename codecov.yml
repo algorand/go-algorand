@@ -1,0 +1,4 @@
+ignore:
+  - "**/msgp_gen.go" # ignore msgp-generated code
+  - "**/_string.go"  # ignore stringer-generated code
+  - "**/*_test.go"   # don't track coverage inside test files
