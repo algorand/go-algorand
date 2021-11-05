@@ -27,7 +27,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -2109,39 +2108,31 @@ func (ops *OpStream) warnf(format string, a ...interface{}) error {
 	return ops.warn(fmt.Errorf(format, a...))
 }
 
-// ReportProblems issues accumulated warnings and errors to stderr.
-func (ops *OpStream) ReportProblems(fname string) {
+// ReportProblems issues accumulated warnings and outputs errors to an io.Writer.
+func (ops *OpStream) ReportProblems(fname string, writer io.Writer) {
 	for i, e := range ops.Errors {
 		if i > 9 {
 			break
 		}
-		fmt.Fprintf(os.Stderr, "%s: %s\n", fname, e)
+		if fname == "" {
+			fmt.Fprintf(writer, "%s\n", e)
+		} else {
+			fmt.Fprintf(writer, "%s: %s\n", fname, e)
+		}
 	}
 	for i, w := range ops.Warnings {
 		if i > 9 {
 			break
 		}
-		fmt.Fprintf(os.Stderr, "%s: %s\n", fname, w)
-	}
-}
-
-// ReportProblemsString issues accumulated warnings and outputs an error string.
-func (ops *OpStream) ReportProblemsString() string {
-	sb := strings.Builder{}
-	for i, e := range ops.Errors {
-		if i > 9 {
-			break
+		if fname == "" {
+			fmt.Fprintf(writer, "%s\n", w)
+		} else {
+			fmt.Fprintf(writer, "%s: %s\n", fname, w)
 		}
-		fmt.Fprintf(&sb, "%s\n", e)
 	}
-	for i, w := range ops.Warnings {
-		if i > 9 {
-			break
-		}
-		fmt.Fprintf(&sb, "%s\n", w)
+	if fname == "" {
+		fmt.Fprintf(writer, "%d errors", len(ops.Errors))
 	}
-	fmt.Fprintf(&sb, "%d errors", len(ops.Errors))
-	return sb.String()
 }
 
 // AssembleString takes an entire program in a string and assembles it to bytecode using AssemblerDefaultVersion
