@@ -479,6 +479,7 @@ scanLoop:
 	if p.state == peerStateProposal {
 		logging.Base().Infof("proposal size: %v bytes, txns: %v bytes", currentMessageSize, accumulatedSize)
 		if time.Now().Sub(start) > 20 * time.Millisecond {
+			logging.Base().Info(p.requestedTransactionsModulator, p.requestedTransactionsOffset)
 			logging.Base().Infof("filter received: %v %v %v %v", time.Now().Sub(p.lastBloomFilterReceivedTimestamp), time.Now().Sub(p.lastMsgReceivedTimestamp), time.Now().Sub(p.lastMsgEnqueuedWithFilterTimestamp), time.Now().Sub(p.lastMsgEnqueuedTimestamp))
 			for _, id := range effectiveBloomFilters {
 				filter := p.recentIncomingBloomFilters[id].filter
