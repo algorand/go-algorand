@@ -47,9 +47,8 @@ call_and_verify "Get a specific ID" "/v2/participation/${INSTALLED_ID}" 200 "${I
 # Should return 200 but not return that error message
 call_delete_and_verify "Delete the specific ID" "/v2/participation/${INSTALLED_ID}" 200 false 'participation id not found'
 
-# Verify that it got called previously and will NOT return an error now even though it isn't there.
-# But it will contain a message saying that no key was found
-call_delete_and_verify "Delete the specific ID" "/v2/participation/${INSTALLED_ID}" 200 true 'participation id not found'
+# Verify that it got called previously and now returns an error message saying that no key was found
+call_delete_and_verify "Delete the specific ID" "/v2/participation/${INSTALLED_ID}" 404 true 'participation id not found'
 
 # Get list of keys
 NUM_IDS_3=$(echo "$RES" | python3 -c 'import json,sys;o=json.load(sys.stdin);print(len(o))')

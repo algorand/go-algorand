@@ -176,9 +176,8 @@ func (v2 *Handlers) DeleteParticipationKeyByID(ctx echo.Context, participationID
 	err = v2.Node.RemoveParticipationKey(decodedParticipationID)
 
 	if err != nil {
-
 		if errors.Is(err, account.ErrParticipationIDNotFound) {
-			return ctx.JSON(http.StatusOK, generated.ErrorResponse{Message: "participation id not found"})
+			return notFound(ctx, account.ErrParticipationIDNotFound, "participation id not found", v2.Log)
 		}
 
 		return internalError(ctx, err, err.Error(), v2.Log)
