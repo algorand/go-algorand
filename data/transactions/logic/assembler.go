@@ -2130,9 +2130,6 @@ func (ops *OpStream) ReportProblems(fname string, writer io.Writer) {
 			fmt.Fprintf(writer, "%s: %s\n", fname, w)
 		}
 	}
-	if fname == "" {
-		fmt.Fprintf(writer, "%d errors", len(ops.Errors))
-	}
 }
 
 // AssembleString takes an entire program in a string and assembles it to bytecode using AssemblerDefaultVersion
