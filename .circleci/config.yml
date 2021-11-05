@@ -353,6 +353,7 @@ commands:
       args:
         description: additional codecov arguments
         type: string
+        default: ""
     steps:
       - run:
           name: Upload Coverage Reports
