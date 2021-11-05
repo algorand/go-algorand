@@ -1051,10 +1051,34 @@ var methodAppCmd = &cobra.Command{
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
 
+
+		// Construct schemas from args
+		localSchema := basics.StateSchema{
+			NumUint:      localSchemaUints,
+			NumByteSlice: localSchemaByteSlices,
+		}
+
+		globalSchema := basics.StateSchema{
+			NumUint:      globalSchemaUints,
+			NumByteSlice: globalSchemaByteSlices,
+		}
+
+		approvalProg, clearProg := mustParseProgArgs()
+
+		onCompletion := mustParseOnCompletion(createOnCompletion)
+
+		switch onCompletion {
+		case transactions.CloseOutOC, transactions.ClearStateOC:
+			reportWarnf("'--on-completion %s' may be ill-formed for 'goal app create'", createOnCompletion)
+		}
+
 		// Parse transaction parameters
 		_, appAccounts, foreignApps, foreignAssets := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppNoOpTx(appIdx, applicationArgs, appAccounts, foreignApps, foreignAssets)
+		tx, err := client.MakeUnsignedApplicationCallTx(
+			appIdx, applicationArgs, appAccounts, foreignApps, foreignAssets,
+			onCompletion, approvalProg, clearProg, globalSchema, localSchema, 0)
+
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
