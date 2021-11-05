@@ -1331,7 +1331,7 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 	return participations
 }
 
-// RecordAsync forwards participation record calls to the participation registry.
-func (node *AlgorandFullNode) RecordAsync(account basics.Address, round basics.Round, participationType account.ParticipationAction) {
-	node.accountManager.RecordAsync(account, round, participationType)
+// Record forwards participation record calls to the participation registry.
+func (node *AlgorandFullNode) Record(account basics.Address, round basics.Round, participationType account.ParticipationAction) {
+	node.accountManager.Record(account, round, participationType)
 }

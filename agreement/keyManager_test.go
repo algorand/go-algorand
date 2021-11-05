@@ -53,7 +53,7 @@ func (m *recordingKeyManager) DeleteOldKeys(r basics.Round) {
 }
 
 // Record implements KeyManager.Record.
-func (m *recordingKeyManager) RecordAsync(acct basics.Address, round basics.Round, action account.ParticipationAction) {
+func (m *recordingKeyManager) Record(acct basics.Address, round basics.Round, action account.ParticipationAction) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	if _, ok := m.recording[acct]; !ok {

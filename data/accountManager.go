@@ -228,11 +228,11 @@ func (manager *AccountManager) FlushRegistry(timeout time.Duration) {
 	manager.registry.Flush(timeout)
 }
 
-// RecordAsync asynchronously records a participation key usage event.
-func (manager *AccountManager) RecordAsync(account basics.Address, round basics.Round, participationType account.ParticipationAction) {
+// Record asynchronously records a participation key usage event.
+func (manager *AccountManager) Record(account basics.Address, round basics.Round, participationType account.ParticipationAction) {
 	// This function updates a cache in the ParticipationRegistry, we must call Flush to persist the changes.
 	err := manager.registry.Record(account, round, participationType)
 	if err != nil {
-		manager.log.Warnf("node.RecordAsync: Account %v not able to record participation (%d) on round %d: %w", account, participationType, round, err)
+		manager.log.Warnf("node.Record: Account %v not able to record participation (%d) on round %d: %w", account, participationType, round, err)
 	}
 }
