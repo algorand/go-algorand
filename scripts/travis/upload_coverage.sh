@@ -12,4 +12,4 @@ if [[ "${UPSTREAM_VERSION}" != "${LOCAL_VERSION}" ]]; then
   echo "WARN: version ${UPSTREAM_VERSION} of the codecov upload script is available."
 fi
 
-/usr/bin/env bash scripts/travis/codecov
+/usr/bin/env bash scripts/travis/codecov "$@"

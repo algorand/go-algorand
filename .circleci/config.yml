@@ -291,6 +291,10 @@ commands:
       result_path:
         type: string
         default: << pipeline.parameters.result_path >>
+      use_coverpkg:
+        description: whether to provide a -coverpkg flag to go test
+        type: boolean
+        default: false
     steps:
       - attach_workspace:
           at: << parameters.build_dir >>
@@ -325,7 +329,7 @@ commands:
             export PARTITION_TOTAL=${CIRCLE_NODE_TOTAL}
             export PARTITION_ID=${CIRCLE_NODE_INDEX}
             export PARALLEL_FLAG="-p 1"
-            gotestsum --format testname --junitfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml --jsonfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" << parameters.short_test_flag >> -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES -coverpkg=$COVERPACKAGE_NAMES
+            gotestsum --format testname --junitfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml --jsonfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" << parameters.short_test_flag >> -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES <<# parameters.use_coverpkg >> -coverpkg=$COVERPACKAGE_NAMES <</ parameters.use_coverpkg >>
       - store_artifacts:
           path: << parameters.result_path >>
           destination: test-results
@@ -345,12 +349,16 @@ commands:
 
   upload_coverage:
     description: Collect coverage reports and upload them
+    parameters:
+      args:
+        description: additional codecov arguments
+        type: string
     steps:
       - run:
           name: Upload Coverage Reports
           no_output_timeout: 10m
           command: |
-            scripts/travis/upload_coverage.sh || true
+            scripts/travis/upload_coverage.sh << parameters.args >> || true
 
   upload_to_buildpulse:
     description: Collect build reports and upload them
@@ -550,7 +558,9 @@ jobs:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
-      - upload_coverage
+          use_coverpkg: true
+      - upload_coverage:
+          args: "-F nightly"
       - slack/notify: &slack-fail-event
           event: fail
           template: basic_fail_1
