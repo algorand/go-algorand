@@ -17,20 +17,14 @@
 package internal
 
 import (
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-func (cs *roundCowState) MinBalance(addr basics.Address, proto *config.ConsensusParams) (res basics.MicroAlgos, err error) {
-	acct, err := cs.lookup(addr) // pending rewards unneeded
-	if err != nil {
-		return
-	}
-	return acct.MinBalance(proto), nil
-}
+// These functions ensure roundCowState satisfies the methods for
+// accessing asset and app data in the apply.Balances interface.
 
-func (cs *roundCowState) CountAppParams(creator basics.Address) (int, error) {
-	acct, err := cs.lookup(creator)
+func (cs *roundCowState) CountAppParams(addr basics.Address) (int, error) {
+	acct, err := cs.lookup(addr)
 	if err != nil {
 		return 0, err
 	}
@@ -58,8 +52,8 @@ func (cs *roundCowState) CountAssetParams(addr basics.Address) (int, error) {
 	return len(acct.AssetParams), nil
 }
 
-func (cs *roundCowState) GetAppParams(creator basics.Address, aidx basics.AppIndex) (ret basics.AppParams, ok bool, err error) {
-	acct, err := cs.lookup(creator)
+func (cs *roundCowState) GetAppParams(addr basics.Address, aidx basics.AppIndex) (ret basics.AppParams, ok bool, err error) {
+	acct, err := cs.lookup(addr)
 	if err != nil {
 		return
 	}

@@ -24,8 +24,10 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
-// AccountData is like basics.AccountData, but without any maps
-// containing AppParams, AppLocalState, AssetHolding, or AssetParams.
+// AccountData provides users of the Balances interface per-account data (like basics.AccountData)
+// but without any maps containing AppParams, AppLocalState, AssetHolding, or AssetParams. This
+// ensures that transaction evaluation must retrieve and mutate account, asset, and application data
+// separately, to better support on-disk and in-memory schemas that do not store them together.
 type AccountData struct {
 	Status             basics.Status
 	MicroAlgos         basics.MicroAlgos
@@ -63,7 +65,8 @@ func ToApplyAccountData(acct basics.AccountData) AccountData {
 	}
 }
 
-// AssignAccountData assigns the contents of apply.AccountData to the fields in basics.AccountData
+// AssignAccountData assigns the contents of apply.AccountData to the fields in basics.AccountData,
+// but does not touch the AppParams, AppLocalState, AssetHolding, or AssetParams data.
 func AssignAccountData(a *basics.AccountData, acct AccountData) {
 	a.Status = acct.Status
 	a.MicroAlgos = acct.MicroAlgos
@@ -84,14 +87,23 @@ func AssignAccountData(a *basics.AccountData, acct AccountData) {
 // Balances allow to move MicroAlgos from one address to another and to update balance records, or to access and modify individual balance records
 // After a call to Put (or Move), future calls to Get or Move will reflect the updated balance record(s)
 type Balances interface {
-	// Get looks up the account data for an address, ignoring application state
+	// Get looks up the account data for an address, ignoring application and asset data
 	// If the account is known to be empty, then err should be nil and the returned balance record should have the given address and empty AccountData
 	// withPendingRewards specifies whether pending rewards should be applied.
 	// A non-nil error means the lookup is impossible (e.g., if the database doesn't have necessary state anymore)
 	Get(addr basics.Address, withPendingRewards bool) (AccountData, error)
 
 	Put(basics.Address, AccountData) error
+
+	// CloseAccount is used by payment.go to delete an account, after ensuring no balance, asset or app state remains.
 	CloseAccount(basics.Address) error
+
+	// Methods for accessing app and asset data:
+	// CountX returns the number of AppParams, AppLocalState, AssetHolding, or AssetParams associated with an account.
+	// GetX returns the app or asset data associated with a given address and app/asset index.
+	// HasX checks when an account has data associated with a given address and app/asset index.
+	// PutX updates or creates app or asset data for an address and app/asset index.
+	// DeleteX deletes the app or asset data associated with an address and app/asset index.
 
 	CountAppParams(addr basics.Address) (int, error)
 	GetAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, bool, error)

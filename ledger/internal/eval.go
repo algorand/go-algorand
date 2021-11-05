@@ -312,6 +312,14 @@ func (cs *roundCowState) putAccount(addr basics.Address, acct basics.AccountData
 	return nil
 }
 
+func (cs *roundCowState) MinBalance(addr basics.Address, proto *config.ConsensusParams) (res basics.MicroAlgos, err error) {
+	acct, err := cs.lookup(addr) // pending rewards unneeded
+	if err != nil {
+		return
+	}
+	return acct.MinBalance(proto), nil
+}
+
 func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics.MicroAlgos, fromRewards *basics.MicroAlgos, toRewards *basics.MicroAlgos) error {
 	rewardlvl := cs.rewardsLevel()
 
