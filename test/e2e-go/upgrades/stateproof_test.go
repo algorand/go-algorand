@@ -18,9 +18,7 @@ package upgrades
 
 import (
 	"path/filepath"
-	"fmt"
 	"testing"
-	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -47,15 +45,7 @@ func TestKeysWithoutStateProofKeyCannotRegister(t *testing.T) {
 
 	nodeClient := fixture.GetLibGoalClientForNamedNode("Node")
 
-	for {
-		curStatus, err := nodeClient.Status()
-		a.NoError(err)
-		curRound := curStatus.LastRound
-		fmt.Printf("round: %d\n", uint(curRound))
-		
-		a.NoError(registerKeyInto(&nodeClient, a, lastValid, protocol.ConsensusV30))
-		time.Sleep(10*time.Millisecond)
-	}
+	a.NoError(registerKeyInto(&nodeClient, a, lastValid, protocol.ConsensusV30))
 	a.Error(registerKeyInto(&nodeClient, a, lastValid+1, protocol.ConsensusFuture))
 
 	runUntilProtocolUpgrades(a, &fixture)
