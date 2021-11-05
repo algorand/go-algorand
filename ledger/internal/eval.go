@@ -335,7 +335,10 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	if overflowed {
 		return fmt.Errorf("overspend (account %v, data %+v, tried to spend %v)", from, fromBal, amt)
 	}
-	cs.putAccount(from, fromBalNew)
+	err = cs.putAccount(from, fromBalNew)
+	if err != nil {
+		return err
+	}
 
 	toBal, err := cs.lookup(to)
 	if err != nil {
@@ -356,7 +359,10 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	if overflowed {
 		return fmt.Errorf("balance overflow (account %v, data %+v, was going to receive %v)", to, toBal, amt)
 	}
-	cs.putAccount(to, toBalNew)
+	err = cs.putAccount(to, toBalNew)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
