@@ -35,6 +35,7 @@ import "C"
 
 import (
 	"fmt"
+	"runtime/debug"
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -197,6 +198,7 @@ func SecretKeyToSeed(secret PrivateKey) (Seed, error) {
 func GenerateSignatureSecrets(seed Seed) *SignatureSecrets {
 	pk0, sk := ed25519GenerateKeySeed(ed25519Seed(seed))
 	pk := SignatureVerifier(pk0)
+	debug.PrintStack()
 	cryptoGenSigSecretsTotal.Inc(map[string]string{})
 	return &SignatureSecrets{SignatureVerifier: pk, SK: sk}
 }
