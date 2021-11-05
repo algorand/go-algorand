@@ -298,6 +298,7 @@ notxns:
 				copy(peer.pendingProposals, peer.pendingProposals[1:])
 				peer.pendingProposals = peer.pendingProposals[:len(peer.pendingProposals)-1]
 				metaMessage.message.RelayedProposal.RawBytes = pendingTransactions.proposalRawBytes
+				peer.currentProposalHash = crypto.Hash(pendingTransactions.proposalRawBytes)
 			}
 		}
 		currentMessageSize += len(metaMessage.message.RelayedProposal.RawBytes)
@@ -427,7 +428,6 @@ func (s *syncState) broadcastProposal(p ProposalBroadcastRequest, peers []*Peer)
 		peer.state = peerStateProposal
 		peer.lastTransactionSelectionTracker.resetProposalTracker()
 		peer.messageSeriesPendingTransactions = nil
-		peer.currentProposalHash = proposalHash
 
 		pendingTransactions := pendingTransactionGroupsSnapshot{
 			proposalRawBytes:          p.proposalBytes,

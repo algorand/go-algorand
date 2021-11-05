@@ -116,6 +116,10 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 		}
 		return nil
 	}
+	peer.lastMsgEnqueuedTimestamp = time.Now()
+	if incomingMessage.bloomFilter != nil {
+		peer.lastMsgEnqueuedWithFilterTimestamp = time.Now()
+	}
 	// place the incoming message on the *peer* heap, allowing us to dequeue it in the order by which it was received by the network library.
 	err = peer.incomingMessages.enqueue(incomingMessage)
 	if err != nil {

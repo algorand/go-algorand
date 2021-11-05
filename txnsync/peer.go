@@ -205,6 +205,8 @@ type Peer struct {
 
 	lastBloomFilterReceivedTimestamp time.Time
 	lastMsgReceivedTimestamp time.Time
+	lastMsgEnqueuedTimestamp time.Time
+	lastMsgEnqueuedWithFilterTimestamp time.Time
 }
 
 // requestParamsGroupCounterState stores the latest group counters for a given set of request params.
@@ -432,6 +434,7 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []pooldata.SignedTx
 	grpIdx := startIndex
 	if p.state == peerStateProposal && p.proposalFilterCache.Exists(p.currentProposalHash) {
 		grpIdx = len(pendingTransactions)
+		logging.Base().Info("successfully skipped")
 	}
 scanLoop:
 	for ; grpIdx < len(pendingTransactions); grpIdx++ {
@@ -476,7 +479,7 @@ scanLoop:
 	if p.state == peerStateProposal {
 		logging.Base().Infof("proposal size: %v bytes, txns: %v bytes", currentMessageSize, accumulatedSize)
 		if time.Now().Sub(start) > 20 * time.Millisecond {
-			logging.Base().Infof("filter received: %v %v", p.lastBloomFilterReceivedTimestamp, p.lastMsgReceivedTimestamp)
+			logging.Base().Infof("filter received: %v %v %v %v", time.Now().Sub(p.lastBloomFilterReceivedTimestamp), time.Now().Sub(p.lastMsgReceivedTimestamp), time.Now().Sub(p.lastMsgEnqueuedWithFilterTimestamp), time.Now().Sub(p.lastMsgEnqueuedTimestamp))
 			for _, id := range effectiveBloomFilters {
 				filter := p.recentIncomingBloomFilters[id].filter
 				logging.Base().Infof("offset: %v mod: %v round %v cp %v", filter.encodingParams.Offset, filter.encodingParams.Modulator, p.recentIncomingBloomFilters[id].round, filter.clearPrevious)
