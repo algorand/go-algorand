@@ -282,7 +282,7 @@ func buildPartialLayer(elems map[uint64]crypto.GenericDigest) partialLayer {
 		})
 	}
 
-	sort.Slice(pl, func(i, j int) bool { return pl[i].pos < pl[j].pos }) // isn't this already sorted ???
+	sort.Slice(pl, func(i, j int) bool { return pl[i].pos < pl[j].pos })
 	return pl
 }
 
