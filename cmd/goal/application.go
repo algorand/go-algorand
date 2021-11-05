@@ -1051,7 +1051,6 @@ var methodAppCmd = &cobra.Command{
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
 
-
 		// Construct schemas from args
 		localSchema := basics.StateSchema{
 			NumUint:      localSchemaUints,
