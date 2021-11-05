@@ -190,6 +190,8 @@ incomingMessageLoop:
 		// increase the message sequence number, since we're processing this message.
 		peer.nextReceivedMessageSeq++
 
+		peer.lastMsgReceivedTimestamp = time.Now()
+
 		// handle proposal txnsync messages
 		if !incomingMsg.message.RelayedProposal.MsgIsZero() {
 			if !incomingMsg.message.RelayedProposal.ExcludeProposal.MsgIsZero() {

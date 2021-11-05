@@ -204,6 +204,7 @@ type Peer struct {
 	currentProposalHash crypto.Digest
 
 	lastBloomFilterReceivedTimestamp time.Time
+	lastMsgReceivedTimestamp time.Time
 }
 
 // requestParamsGroupCounterState stores the latest group counters for a given set of request params.
@@ -475,7 +476,7 @@ scanLoop:
 	if p.state == peerStateProposal {
 		logging.Base().Infof("proposal size: %v bytes, txns: %v bytes", currentMessageSize, accumulatedSize)
 		if time.Now().Sub(start) > 20 * time.Millisecond {
-			logging.Base().Infof("filter received: %v", p.lastBloomFilterReceivedTimestamp)
+			logging.Base().Infof("filter received: %v %v", p.lastBloomFilterReceivedTimestamp, p.lastMsgReceivedTimestamp)
 			for _, id := range effectiveBloomFilters {
 				filter := p.recentIncomingBloomFilters[id].filter
 				logging.Base().Infof("offset: %v mod: %v round %v cp %v", filter.encodingParams.Offset, filter.encodingParams.Modulator, p.recentIncomingBloomFilters[id].round, filter.clearPrevious)

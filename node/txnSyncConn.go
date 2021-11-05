@@ -235,6 +235,7 @@ func (tsnc *transactionSyncNodeConnector) OnNewBlock(block bookkeeping.Block, de
 
 	select {
 	case tsnc.eventsCh <- txnsync.MakeNewRoundEvent(blkRound, fetchTransactions):
+	default:
 	}
 
 }
