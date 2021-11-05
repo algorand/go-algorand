@@ -2125,6 +2125,25 @@ func (ops *OpStream) ReportProblems(fname string) {
 	}
 }
 
+// ReportProblemsString issues accumulated warnings and outputs an error string.
+func (ops *OpStream) ReportProblemsString() string {
+	sb := strings.Builder{}
+	fmt.Fprintf(&sb, "%d errors\n", len(ops.Errors))
+	for i, e := range ops.Errors {
+		if i > 9 {
+			break
+		}
+		fmt.Fprintf(&sb, "%s\n", e)
+	}
+	for i, w := range ops.Warnings {
+		if i > 9 {
+			break
+		}
+		fmt.Fprintf(&sb, "%s\n", w)
+	}
+	return sb.String()
+}
+
 // AssembleString takes an entire program in a string and assembles it to bytecode using AssemblerDefaultVersion
 func AssembleString(text string) (*OpStream, error) {
 	return AssembleStringWithVersion(text, assemblerNoVersion)
