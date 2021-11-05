@@ -26,11 +26,11 @@ import (
 )
 
 const (
-	// MaxTreeDepth is the maximum tree depth with the root being 1
-	MaxTreeDepth = 17
+	// MaxTreeDepth is the maximum tree depth (root only depth 0)
+	MaxTreeDepth = 16
 
 	// MaxNumLeaves is the maximum number of leaves allowed in the tree
-	MaxNumLeaves = 65536 // 2^(MaxTreeDepth-1)
+	MaxNumLeaves = 65536 // 2^MaxTreeDepth
 )
 
 // Tree is a Merkle tree, represented by layers of nodes (hashes) in the tree
@@ -39,7 +39,7 @@ type Tree struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// Level 0 is the leaves.
-	Levels []Layer            `codec:"lvls,allocbound=MaxTreeDepth"`
+	Levels []Layer            `codec:"lvls,allocbound=MaxTreeDepth+1"`
 	Hash   crypto.HashFactory `codec:"hsh"`
 }
 
@@ -47,7 +47,7 @@ type Tree struct {
 type Proof struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Path        []crypto.GenericDigest `codec:"pth,allocbound=9999"`
+	Path        []crypto.GenericDigest `codec:"pth,allocbound=MaxNumLeaves"`
 	HashFactory crypto.HashFactory     `codec:"hsh"`
 }
 
@@ -186,7 +186,7 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 		}
 	}
 
-	// Confirm that we got the same root hash
+	// Confirm that we got the same root hash // this comment in not correct ???
 	if len(pl) != 1 {
 		return nil, fmt.Errorf("internal error: partial Layer produced %d hashes", len(pl))
 	}
@@ -282,7 +282,7 @@ func buildPartialLayer(elems map[uint64]crypto.GenericDigest) partialLayer {
 		})
 	}
 
-	sort.Slice(pl, func(i, j int) bool { return pl[i].pos < pl[j].pos })
+	sort.Slice(pl, func(i, j int) bool { return pl[i].pos < pl[j].pos }) // isn't this already sorted ???
 	return pl
 }
 

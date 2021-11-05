@@ -361,3 +361,125 @@ func testWithSize(t *testing.T, size int) error {
 	}
 	return err
 }
+
+func TestMerkelSizeLimits(t *testing.T) {
+
+	for depth := uint64(0); depth <= uint64(18); depth++ {
+		size := uint64(1) << depth
+
+		// eltCoefficient is the coefficent to determine how many elements are in the proof.
+		// There will be 1/eltCoefficient elements of all possible element (2^treeDepth)
+		// numElts = 2^(depth-eltCoefficient)
+
+		// When the positions are regularly positioned then, the number of paths will be maximum, bounded by:
+		// 2^(depth-eltCoefficient)*eltCoefficient
+
+		// regular spaced elets
+		for eltCoefficient := uint64(1); eltCoefficient <= depth; eltCoefficient = eltCoefficient << 1 {
+			numElts := uint64(1) << (depth - eltCoefficient)
+			positions := getRegularPositions(numElts, uint64(1)<<depth)
+
+			tree, proof := testMerkelSizeLimits(t, crypto.Sumhash, size, positions)
+			require.Equal(t, (uint64(1)<<(depth-eltCoefficient))*eltCoefficient, uint64(len(proof.Path)))
+
+			// encode/decode
+			bytes := protocol.Encode(proof)
+			var outProof Proof
+			err := protocol.Decode(bytes, &outProof)
+			if depth == 18 && (eltCoefficient == 1 || eltCoefficient == 2) {
+				errmsg := fmt.Sprintf("%d > %d at Path", len(proof.Path), MaxNumLeaves)
+				require.Contains(t, err.Error(), errmsg)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, *proof, outProof)
+			}
+
+			bytes = protocol.Encode(tree)
+			var outTree Tree
+			err = protocol.Decode(bytes, &outTree)
+			if depth > MaxTreeDepth {
+				require.Contains(t, err.Error(), "> 17 at Levels")
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, *tree, outTree)
+			}
+		}
+
+		// randomly positioned elts
+		for eltCoefficient := uint64(1); eltCoefficient <= depth; eltCoefficient = eltCoefficient << 1 {
+			numElts := uint64(1) << (depth - eltCoefficient)
+			positions := getRandomPositions(numElts, numElts)
+
+			_, proof := testMerkelSizeLimits(t, crypto.Sumhash, size, positions)
+			require.GreaterOrEqual(t, (uint64(1)<<(depth-eltCoefficient))*eltCoefficient, uint64(len(proof.Path)))
+
+			if len(proof.Path) > MaxNumLeaves {
+				// encode/decode
+				bytes := protocol.Encode(proof)
+				var outProof Proof
+				err := protocol.Decode(bytes, &outProof)
+				errmsg := fmt.Sprintf("%d > %d at Path", len(proof.Path), MaxNumLeaves)
+				require.Contains(t, err.Error(), errmsg)
+			}
+		}
+	}
+
+	// case of a tree with leaves 2^16 + 1
+	size := (uint64(1) << MaxTreeDepth) + 1
+	tree, _ := testMerkelSizeLimits(t, crypto.Sumhash, size, []uint64{})
+	bytes := protocol.Encode(tree)
+	var outTree Tree
+	err := protocol.Decode(bytes, &outTree)
+	require.Contains(t, err.Error(), "> 17 at Levels")
+}
+
+func getRegularPositions(numElets, max uint64) (res []uint64) {
+	skip := max / numElets
+	pos := uint64(0)
+	for i := uint64(0); i < numElets; i++ {
+		res = append(res, pos)
+		pos += skip
+	}
+	return
+}
+
+func getRandomPositions(numElets, max uint64) (res []uint64) {
+	used := make([]bool, max)
+	for i := uint64(0); i < numElets; i++ {
+
+		pos := crypto.RandUint64() % max
+		for used[pos] {
+			pos = (pos + 1) % max
+		}
+		used[pos] = true
+		res = append(res, pos)
+	}
+	return
+}
+
+func testMerkelSizeLimits(t *testing.T, hashtype crypto.HashType, size uint64, positions []uint64) (*Tree, *Proof) {
+
+	a := make(TestArray, size)
+	for i := uint64(0); i < size; i++ {
+		crypto.RandBytes(a[i][:])
+	}
+
+	tree, err := Build(a, crypto.HashFactory{HashType: hashtype})
+	require.NoError(t, err)
+
+	root := tree.Root()
+
+	posMap := make(map[uint64]crypto.Hashable)
+	for _, j := range positions {
+		posMap[j] = a[j]
+	}
+
+	proof, err := tree.Prove(positions)
+	require.NoError(t, err)
+
+	err = Verify(root, posMap, proof)
+	require.NoError(t, err)
+
+	return tree, proof
+}
+
