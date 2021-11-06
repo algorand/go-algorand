@@ -38,7 +38,7 @@ type MultisigSig struct {
 
 	Version   uint8            `codec:"v"`
 	Threshold uint8            `codec:"thr"`
-	Subsigs   []MultisigSubsig `codec:"subsig,allocbound=MaxMultisig"`
+	Subsigs   []MultisigSubsig `codec:"subsig,allocbound=maxMultisig"`
 }
 
 // MultisigPreimageFromPKs makes an empty MultisigSig for a given preimage. It should be renamed.
@@ -76,9 +76,7 @@ func (msig MultisigSig) Preimage() (version, threshold uint8, pks []PublicKey) {
 }
 
 const multiSigString = "MultisigAddr"
-
-// MaxMultisig is a bound on allocation and on the number of subsigs
-const MaxMultisig = 255
+const maxMultisig = 255
 
 // MultisigAddrGen identifes the exact group, version,
 // and devices (Public keys) that it requires to sign
@@ -258,9 +256,8 @@ func MultisigBatchVerify(msg Hashable, addr Digest, sig MultisigSig, batchVerifi
 	}
 
 	// check that we don't have too many multisig subsigs
-	if len(sig.Subsigs) > MaxMultisig {
+	if len(sig.Subsigs) > maxMultisig {
 		err = errInvalidNumberOfSignature
-
 		return
 	}
 
