@@ -233,23 +233,8 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions pendingT
 	}
 
 	if (msgOps&messageConstBloomFilter == messageConstBloomFilter) && len(pendingTransactions.pendingTransactionsGroups) > 0 {
-		var lastBloomFilter *bloomFilter
-		var excludeTransactions *transactionCache
-		// for relays, where we send a full bloom filter to everyone, we want to coordinate that with a single
-		// copy of the bloom filter, to prevent re-creation.
-		if s.isRelay {
-			lastBloomFilter = &s.lastBloomFilter
-		} else {
-			// for peers, we want to make sure we don't regenerate the same bloom filter as before.
-			lastBloomFilter = &peer.lastSentBloomFilter
-
-			// for non-relays, we want to be more picky and send bloom filter that excludes the transactions that were send from that relay
-			// ( since the relay already knows that it sent us these transactions ). we cannot do the same for relay->relay since it would
-			// conflict with the bloom filters being calculated only once.
-			excludeTransactions = peer.recentSentTransactions
-		}
 		filterTxns := pendingTransactions.pendingTransactionsGroups
-		minGroupCounter, lastGroupRound := peer.sentFilterParams.nextFilterGroup(metaMessage.message.UpdatedRequestParams)
+		minGroupCounter, lastGroupRound, shouldSendFreshFilter := peer.sentFilterParams.nextFilterGroup(metaMessage.message.UpdatedRequestParams)
 		if lastGroupRound != s.round {
 			minGroupCounter = 0
 		}
@@ -265,6 +250,23 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions pendingT
 			}
 			filterTxns = filterTxns[mgi:]
 		}
+		var lastBloomFilter *bloomFilter
+		var excludeTransactions *transactionCache
+		// for relays, where we send a full bloom filter to everyone, we want to coordinate that with a single
+		// copy of the bloom filter, to prevent re-creation.
+		if s.isRelay {
+			lastBloomFilter = &s.lastBloomFilter
+		} else {
+			// for peers, we want to make sure we don't regenerate the same bloom filter as before.
+			lastBloomFilter = &peer.lastSentBloomFilter
+
+			// for non-relays, we want to be more picky and send bloom filter that excludes the transactions that were send from that relay
+			// ( since the relay already knows that it sent us these transactions ). we cannot do the same for relay->relay since it would
+			// conflict with the bloom filters being calculated only once.
+			if !shouldSendFreshFilter {
+				excludeTransactions = peer.recentSentTransactions
+			}
+		}
 		profMakeBloomFilter := s.profiler.getElement(profElementMakeBloomFilter)
 		profMakeBloomFilter.start()
 		// generate a bloom filter that matches the requests params.
@@ -273,7 +275,7 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions pendingT
 		// ( note that we check here againt the peer, whereas the hint to makeBloomFilter could be the cached one for the relay )
 		if !assembledBloomFilter.sameParams(peer.lastSentBloomFilter) && assembledBloomFilter.encodedLength > 0 {
 			// Fresh bloom filter sent for new rounds or from relays
-			if lastGroupRound != s.round || s.isRelay {
+			if lastGroupRound != s.round || s.isRelay || shouldSendFreshFilter {
 				assembledBloomFilter.encoded.ClearPrevious = 1
 			}
 			metaMessage.message.TxnBloomFilter = assembledBloomFilter.encoded

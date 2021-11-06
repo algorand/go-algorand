@@ -29,6 +29,9 @@ type sentFilterStat struct {
 	lastCounter uint64
 
 	round basics.Round
+
+	// incrementalFilterCount records how many incremental filters have been sent to determine whether to send a fresh filter.
+	incrementalFilterCount int
 }
 
 // sentFilters is the set of filter stats for one peer to another peer.
@@ -37,6 +40,7 @@ type sentFilterStat struct {
 type sentFilters []sentFilterStat
 
 const maxSentFilterSet = 10
+const maxIncrementalFilters = 10
 
 func (sf *sentFilters) setSentFilter(filter bloomFilter, round basics.Round) {
 	encodingParams := filter.encoded.EncodingParams
@@ -44,6 +48,11 @@ func (sf *sentFilters) setSentFilter(filter bloomFilter, round basics.Round) {
 		if sfs.EncodingParams == encodingParams {
 			(*sf)[i].lastCounter = filter.containedTxnsRange.lastCounter
 			(*sf)[i].round = round
+			if filter.encoded.ClearPrevious == 1 {
+				(*sf)[i].incrementalFilterCount = 0
+			} else {
+				(*sf)[i].incrementalFilterCount++
+			}
 			return
 		}
 	}
@@ -51,6 +60,9 @@ func (sf *sentFilters) setSentFilter(filter bloomFilter, round basics.Round) {
 		EncodingParams: encodingParams,
 		lastCounter:    filter.containedTxnsRange.lastCounter,
 		round:          round,
+	}
+	if filter.encoded.ClearPrevious == 0 {
+		nsf.incrementalFilterCount = 1
 	}
 	*sf = append(*sf, nsf)
 	// trim oldest content if we're too long
@@ -72,11 +84,11 @@ func (sf *sentFilters) setSentFilter(filter bloomFilter, round basics.Round) {
 	}
 }
 
-func (sf *sentFilters) nextFilterGroup(encodingParams requestParams) (lastCounter uint64, round basics.Round) {
+func (sf *sentFilters) nextFilterGroup(encodingParams requestParams) (lastCounter uint64, round basics.Round, shouldSendFreshFilter bool) {
 	for _, sfs := range *sf {
 		if sfs.EncodingParams == encodingParams {
-			return sfs.lastCounter + 1, sfs.round
+			return sfs.lastCounter + 1, sfs.round, sfs.incrementalFilterCount > maxIncrementalFilters
 		}
 	}
-	return 0, 0 // include everything since the start
+	return 0, 0, false // include everything since the start
 }
