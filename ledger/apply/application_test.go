@@ -33,6 +33,28 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+// Allocate the map of basics.AppParams if it is nil, and return a copy. We do *not*
+// call clone on each basics.AppParams -- callers must do that for any values where
+// they intend to modify a contained reference type.
+func cloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]basics.AppParams {
+	res := make(map[basics.AppIndex]basics.AppParams, len(m))
+	for k, v := range m {
+		res[k] = v
+	}
+	return res
+}
+
+// Allocate the map of LocalStates if it is nil, and return a copy. We do *not*
+// call clone on each AppLocalState -- callers must do that for any values
+// where they intend to modify a contained reference type.
+func cloneAppLocalStates(m map[basics.AppIndex]basics.AppLocalState) map[basics.AppIndex]basics.AppLocalState {
+	res := make(map[basics.AppIndex]basics.AppLocalState, len(m))
+	for k, v := range m {
+		res[k] = v
+	}
+	return res
+}
+
 func TestApplicationCallFieldsEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
