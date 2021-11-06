@@ -403,7 +403,7 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []pooldata.SignedTx
 	selectedTxnIDs = make([]transactions.Txid, 0, selectedIDsSliceLength)
 	selectedTxns = make([]pooldata.SignedTxGroup, 0, selectedIDsSliceLength)
 
-	windowSizedReached := false
+	windowSizedReached := accumulatedSize > windowLengthBytes
 	hasMorePendingTransactions := false
 
 	// create a list of all the bloom filters that might need to be tested. This list excludes bloom filters
@@ -438,6 +438,11 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []pooldata.SignedTx
 	}
 scanLoop:
 	for ; grpIdx < len(pendingTransactions); grpIdx++ {
+		if windowSizedReached {
+			hasMorePendingTransactions = true
+			break
+		}
+
 		txID := pendingTransactions[grpIdx].GroupTransactionID
 
 		// check if the peer would be interested in these messages -
@@ -459,11 +464,6 @@ scanLoop:
 				// removedTxn++
 				continue scanLoop
 			}
-		}
-
-		if windowSizedReached {
-			hasMorePendingTransactions = true
-			break
 		}
 		selectedTxns = append(selectedTxns, pendingTransactions[grpIdx])
 		selectedTxnIDs = append(selectedTxnIDs, txID)
