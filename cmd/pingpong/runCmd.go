@@ -242,7 +242,7 @@ var runCmd = &cobra.Command{
 			}
 			ops, err := logic.AssembleString(programStr)
 			if err != nil {
-				ops.ReportProblems(teal)
+				ops.ReportProblems(teal, os.Stderr)
 				reportErrorf("Internal error, cannot assemble %v \n", programStr)
 			}
 			cfg.Program = ops.Program
