@@ -515,7 +515,7 @@ func ParseArgJSONtoByteSlice(funcArgTypes string, jsonArgs []string, application
 		if err != nil {
 			return err
 		}
-		*applicationArgs = append((*applicationArgs), abiEncoded)
+		*applicationArgs = append(*applicationArgs, abiEncoded)
 	}
 	return nil
 }

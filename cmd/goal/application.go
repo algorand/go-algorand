@@ -175,9 +175,15 @@ func init() {
 
 	infoAppCmd.MarkFlagRequired("app-id")
 
-	methodAppCmd.MarkFlagRequired("method") // nolint:errcheck // follow previous required flag format
-	methodAppCmd.MarkFlagRequired("app-id") // nolint:errcheck
-	methodAppCmd.MarkFlagRequired("from")   // nolint:errcheck
+	methodAppCmd.MarkFlagRequired("method")          // nolint:errcheck // follow previous required flag format
+	methodAppCmd.MarkFlagRequired("app-id")          // nolint:errcheck
+	methodAppCmd.MarkFlagRequired("from")            // nolint:errcheck
+	methodAppCmd.Flags().MarkHidden("app-arg")       // nolint:errcheck
+	methodAppCmd.Flags().MarkHidden("foreign-app")   // nolint:errcheck
+	methodAppCmd.Flags().MarkHidden("foreign-asset") // nolint:errcheck
+	methodAppCmd.Flags().MarkHidden("app-account")   // nolint:errcheck
+	methodAppCmd.Flags().MarkHidden("app-input")     // nolint:errcheck
+	methodAppCmd.Flags().MarkHidden("i")             // nolint:errcheck
 }
 
 type appCallArg struct {
@@ -304,11 +310,7 @@ func splitAppArgsByComma() {
 	var newAppArgs []string
 
 	for i := 0; i < len(appArgs); i++ {
-		if !strings.Contains(appArgs[i], "abi:") && len(appArgs[i]) > 0 {
-			splitByComma := strings.Split(appArgs[i], ",")
-			newAppArgs = append(newAppArgs, splitByComma...)
-		} else if strings.Contains(appArgs[i], "abi:") {
-			// TODO consider case when abi packed value comma with other packed value
+		if len(appArgs[i]) > 0 {
 			newAppArgs = append(newAppArgs, appArgs[i])
 		}
 	}
@@ -1073,34 +1075,38 @@ var methodAppCmd = &cobra.Command{
 		}
 
 		// Parse transaction parameters
-		_, appAccounts, foreignApps, foreignAssets := getAppInputs()
-		// TODO if we ignore the applicationArg from --app-arg, will that be okay?
+		appArgsParsed, appAccounts, foreignApps, foreignAssets := getAppInputs()
+		if len(appArgsParsed) > 0 {
+			reportErrorf("in goal app method: --arg and --app-arg are mutually exclusive, do not use --app-arg")
+		}
+		if len(appAccounts) > 0 {
+			reportErrorf("in goal app method: --app-account is not supported")
+		}
+		if len(foreignApps) > 0 {
+			reportErrorf("in goal app method: --foreign-app is not supported")
+		}
+		if len(foreignAssets) > 0 {
+			reportErrorf("in goal app method: --foreign-asset is not supported")
+		}
 
 		// copy-paste code from callAppCmd
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
 
-		// Construct schemas from args
-		localSchema := basics.StateSchema{
-			NumUint:      localSchemaUints,
-			NumByteSlice: localSchemaByteSlices,
-		}
-
-		globalSchema := basics.StateSchema{
-			NumUint:      globalSchemaUints,
-			NumByteSlice: globalSchemaByteSlices,
-		}
-
 		onCompletion := mustParseOnCompletion(createOnCompletion)
 
-		switch onCompletion {
-		case transactions.CloseOutOC, transactions.ClearStateOC:
-			reportWarnf("'--on-completion %s' may be ill-formed for 'goal app create'", createOnCompletion)
+		if appIdx == 0 {
+			reportErrorf("app id == 0, goal app create not supported in goal app method")
+		}
+
+		var approvalProg, clearProg []byte
+		if onCompletion == transactions.UpdateApplicationOC {
+			approvalProg, clearProg = mustParseProgArgs()
 		}
 
 		tx, err := client.MakeUnsignedApplicationCallTx(
 			appIdx, applicationArgs, appAccounts, foreignApps, foreignAssets,
-			onCompletion, nil, nil, globalSchema, localSchema, 0)
+			onCompletion, approvalProg, clearProg, basics.StateSchema{}, basics.StateSchema{}, 0)
 
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
@@ -1160,15 +1166,19 @@ var methodAppCmd = &cobra.Command{
 			hashRetPrefix := hashRet[:4]
 
 			var abiEncodedRet []byte
-			for i := len(*resp.Logs) - 1; i >= 0; i-- {
-				retLog := (*resp.Logs)[i]
-				if bytes.HasPrefix(retLog, hashRetPrefix) {
-					abiEncodedRet = retLog[4:]
-					break
+			foundRet := false
+			if resp.Logs != nil {
+				for i := len(*resp.Logs) - 1; i >= 0; i-- {
+					retLog := (*resp.Logs)[i]
+					if bytes.HasPrefix(retLog, hashRetPrefix) {
+						abiEncodedRet = retLog[4:]
+						foundRet = true
+						break
+					}
 				}
 			}
 
-			if len(abiEncodedRet) == 0 {
+			if !foundRet {
 				reportErrorf("cannot find return log for abi type %s", retTypeStr)
 			}
 
@@ -1180,7 +1190,12 @@ var methodAppCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf("cannot decode return value %v: %v", abiEncodedRet, err)
 			}
-			fmt.Println(decoded)
+
+			decodedJSON, err := retType.MarshalToJSON(decoded)
+			if err != nil {
+				reportErrorf("cannot marshal returned bytes %v to JSON: %v", decoded, err)
+			}
+			fmt.Printf("method %s output: %s", method, string(decodedJSON))
 		}
 	},
 }

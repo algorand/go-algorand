@@ -81,6 +81,26 @@ func TestJSONtoInterfaceValid(t *testing.T) {
 			typeStr:  "ufixed64x3",
 			expected: uint64(123456),
 		},
+		{
+			input:    `"optin"`,
+			typeStr:  "string",
+			expected: "optin",
+		},
+		{
+			input:    `"AAEC"`,
+			typeStr:  "byte[3]",
+			expected: []interface{}{byte(0), byte(1), byte(2)},
+		},
+		{
+			input:    `["uwu",["AAEC",12.34]]`,
+			typeStr:  "(string,(byte[3],ufixed64x3))",
+			expected: []interface{}{"uwu", []interface{}{[]interface{}{byte(0), byte(1), byte(2)}, uint64(12340)}},
+		},
+		{
+			input:    `[399,"should pass",[true,false,false,true]]`,
+			typeStr:  "(uint64,string,bool[])",
+			expected: []interface{}{uint64(399), "should pass", []interface{}{true, false, false, true}},
+		},
 	}
 
 	for _, testCase := range testCases {
