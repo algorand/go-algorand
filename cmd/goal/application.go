@@ -115,6 +115,7 @@ func init() {
 	deleteAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to send delete transaction from")
 	readStateAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to fetch state from")
 	updateAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to send update transaction from")
+	methodAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to call method from")
 
 	methodAppCmd.Flags().StringVar(&method, "method", "", "Method to be called")
 	methodAppCmd.Flags().StringArrayVar(&methodArgs, "arg", nil, "Args to pass in for calling a method")
@@ -173,7 +174,10 @@ func init() {
 	readStateAppCmd.MarkFlagRequired("app-id")
 
 	infoAppCmd.MarkFlagRequired("app-id")
+
 	methodAppCmd.MarkFlagRequired("method") // nolint:errcheck // follow previous required flag format
+	methodAppCmd.MarkFlagRequired("app-id") // nolint:errcheck
+	methodAppCmd.MarkFlagRequired("from") // nolint:errcheck
 }
 
 type appCallArg struct {
