@@ -87,7 +87,7 @@ func init() {
 	appCmd.AddCommand(methodAppCmd)
 
 	appCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
-	appCmd.PersistentFlags().StringSliceVar(&appArgs, "app-arg", nil, "Args to encode for application transactions (all will be encoded to a byte slice). For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.")
+	appCmd.PersistentFlags().StringArrayVar(&appArgs, "app-arg", nil, "Args to encode for application transactions (all will be encoded to a byte slice). For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.")
 	appCmd.PersistentFlags().StringSliceVar(&foreignApps, "foreign-app", nil, "Indexes of other apps whose global state is read in this transaction")
 	appCmd.PersistentFlags().StringSliceVar(&foreignAssets, "foreign-asset", nil, "Indexes of assets whose parameters are read in this transaction")
 	appCmd.PersistentFlags().StringSliceVar(&appStrAccounts, "app-account", nil, "Accounts that may be accessed from application logic")
@@ -294,6 +294,22 @@ func processAppInputFile() (args [][]byte, accounts []string, foreignApps []uint
 	return parseAppInputs(inputs)
 }
 
+func splitAppArgsByComma() {
+	var newAppArgs []string
+
+	for i := 0; i < len(appArgs); i++ {
+		if !strings.Contains(appArgs[i], "abi:") {
+			splitByComma := strings.Split(appArgs[i], ",")
+			newAppArgs = append(newAppArgs, splitByComma...)
+		} else {
+			// TODO if the following are not in head prefix, append, until one happen
+			newAppArgs = append(newAppArgs, appArgs[i])
+		}
+	}
+
+	appArgs = newAppArgs
+}
+
 func getAppInputs() (args [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) {
 	if (appArgs != nil || appStrAccounts != nil || foreignApps != nil) && appInputFilename != "" {
 		reportErrorf("Cannot specify both command-line arguments/accounts and JSON input filename")
@@ -303,6 +319,9 @@ func getAppInputs() (args [][]byte, accounts []string, foreignApps []uint64, for
 	}
 
 	var encodedArgs []appCallArg
+
+	splitAppArgsByComma()
+
 	for _, arg := range appArgs {
 		encodingValue := strings.SplitN(arg, ":", 2)
 		if len(encodingValue) != 2 {
@@ -1047,6 +1066,13 @@ var methodAppCmd = &cobra.Command{
 			reportErrorf("cannot parse arguments to ABI encoding: %v", err)
 		}
 
+		// Parse transaction parameters
+		_, appAccounts, foreignApps, foreignAssets := getAppInputs()
+
+		for _, arg := range appArgs {
+			fmt.Println(arg)
+		}
+
 		// copy-paste code from callAppCmd
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
@@ -1070,9 +1096,6 @@ var methodAppCmd = &cobra.Command{
 		case transactions.CloseOutOC, transactions.ClearStateOC:
 			reportWarnf("'--on-completion %s' may be ill-formed for 'goal app create'", createOnCompletion)
 		}
-
-		// Parse transaction parameters
-		_, appAccounts, foreignApps, foreignAssets := getAppInputs()
 
 		tx, err := client.MakeUnsignedApplicationCallTx(
 			appIdx, applicationArgs, appAccounts, foreignApps, foreignAssets,
