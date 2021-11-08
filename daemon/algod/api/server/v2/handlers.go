@@ -69,13 +69,6 @@ type NodeInterface interface {
 	Config() config.Local
 }
 
-// RegisterParticipationKeys registers participation keys.
-// (POST /v2/register-participation-keys/{address})
-func (v2 *Handlers) RegisterParticipationKeys(ctx echo.Context, address string, params private.RegisterParticipationKeysParams) error {
-	// TODO: register participation keys endpoint
-	return ctx.String(http.StatusNotImplemented, "Endpoint not implemented.")
-}
-
 // ShutdownNode shuts down the node.
 // (POST /v2/shutdown)
 func (v2 *Handlers) ShutdownNode(ctx echo.Context, params private.ShutdownNodeParams) error {

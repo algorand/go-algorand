@@ -19,7 +19,6 @@ package agreement
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -74,10 +73,7 @@ var ErrAssembleBlockRoundStale = errors.New("requested round for AssembleBlock i
 // Round.
 type BlockFactory interface {
 	// AssembleBlock produces a new ValidatedBlock which is suitable for proposal
-	// at a given Round.  The time argument specifies a target deadline by
-	// which the block should be produced.  Specifically, the deadline can
-	// cause the factory to add fewer transactions to the block in question
-	// than might otherwise be possible.
+	// at a given Round.
 	//
 	// AssembleBlock should produce a ValidatedBlock for which the corresponding
 	// BlockValidator validates (i.e. for which BlockValidator.Validate
@@ -88,7 +84,7 @@ type BlockFactory interface {
 	// produce a ValidatedBlock for the given round. If an insufficient number of
 	// nodes on the network can assemble entries, the agreement protocol may
 	// lose liveness.
-	AssembleBlock(basics.Round, time.Time) (ValidatedBlock, error)
+	AssembleBlock(basics.Round) (ValidatedBlock, error)
 }
 
 // A Ledger represents the sequence of Entries agreed upon by the protocol.

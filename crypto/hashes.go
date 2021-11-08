@@ -22,29 +22,11 @@ import (
 	"fmt"
 	"hash"
 
-	"github.com/algonathan/sumhash"
 	"github.com/algorand/go-algorand/protocol"
-	"golang.org/x/crypto/sha3"
+	"github.com/algorand/go-sumhash"
 )
 
-var sumhashCompressor sumhash.LookupTable
-
-// TODO: will be removed once the sumhash lib will update.
-func init() {
-	shk := sha3.NewShake256()
-	seed := []byte("Algorand")
-	_, err := shk.Write(seed)
-	if err != nil {
-		panic(err)
-	}
-	mat, err := sumhash.RandomMatrix(shk, 8, 1024)
-	if err != nil {
-		panic(err)
-	}
-	sumhashCompressor = mat.LookupTable()
-}
-
-// HashType enum type for signing algorithms
+// HashType represents different hash functions
 type HashType uint16
 
 // IsValid verifies that the hash type is in a valid range.
@@ -70,7 +52,7 @@ const MaxHashDigestSize = SumhashDigestSize
 //size of each hash
 const (
 	Sha512_256Size    = sha512.Size256
-	SumhashDigestSize = 64
+	SumhashDigestSize = sumhash.Sumhash512DigestSize
 )
 
 // HashFactory is responsible for generating new hashes accordingly to the type it stores.
@@ -112,7 +94,7 @@ func (z HashFactory) NewHash() hash.Hash {
 	case Sha512_256:
 		return sha512.New512_256()
 	case Sumhash:
-		return sumhash.New(sumhashCompressor)
+		return sumhash.New512(nil)
 	// This shouldn't be reached, when creating a new hash, one would know the type of hash they wanted,
 	// in addition to that, unmarshalling of the hashFactory verifies the HashType of the factory.
 	default:

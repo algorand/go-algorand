@@ -45,9 +45,6 @@ type VRFVerifier = VrfPubkey
 // VRFProof is a deprecated name for VrfProof
 type VRFProof = VrfProof
 
-// VrfPubkeyByteLength is the size, in bytes, of a VRF public key.
-const VrfPubkeyByteLength = 32
-
 // VRFSecrets is a wrapper for a VRF keypair. Use *VrfPrivkey instead
 type VRFSecrets struct {
 	_struct struct{} `codec:""`
@@ -71,7 +68,7 @@ type (
 	// Specifically, we use a 64-byte ed25519 private key (the latter 32-bytes are the precomputed public key)
 	VrfPrivkey [64]byte
 	// A VrfPubkey is a public key that can be used to verify VRF proofs.
-	VrfPubkey [VrfPubkeyByteLength]byte
+	VrfPubkey [32]byte
 	// A VrfProof for a message can be generated with a secret key and verified against a public key, like a signature.
 	// Proofs are malleable, however, for a given message and public key, the VRF output that can be computed from a proof is unique.
 	VrfProof [80]byte

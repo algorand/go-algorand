@@ -48,10 +48,11 @@ type LedgerForCowBase interface {
 // ErrRoundZero is self-explanatory
 var ErrRoundZero = errors.New("cannot start evaluator for round 0")
 
-// maxPaysetHint makes sure that we don't allocate too much memory up front
-// in the block evaluator, since there cannot reasonably be more than this
-// many transactions in a block.
-const maxPaysetHint = 20000
+// averageEncodedTxnSizeHint is an estimation for the encoded transaction size
+// which is used for preallocating memory upfront in the payset. Preallocating
+// helps to avoid re-allocating storage during the evaluation/validation which
+// is considerably slower.
+const averageEncodedTxnSizeHint = 150
 
 // asyncAccountLoadingThreadCount controls how many go routines would be used
 // to load the account data before the Eval() start processing individual
@@ -161,7 +162,7 @@ func (x *roundCowBase) blockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 }
 
 func (x *roundCowBase) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
-	acct, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	acct, err := x.lookup(addr)
 	if err != nil {
 		return false, err
 	}
@@ -180,7 +181,7 @@ func (x *roundCowBase) allocated(addr basics.Address, aidx basics.AppIndex, glob
 // getKey gets the value for a particular key in some storage
 // associated with an application globally or locally
 func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error) {
-	ad, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	ad, err := x.lookup(addr)
 	if err != nil {
 		return basics.TealValue{}, false, err
 	}
@@ -210,7 +211,7 @@ func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global 
 // getStorageCounts counts the storage types used by some account
 // associated with an application globally or locally
 func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
-	ad, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	ad, err := x.lookup(addr)
 	if err != nil {
 		return basics.StateSchema{}, err
 	}
@@ -393,14 +394,15 @@ type BlockEvaluator struct {
 	proto       config.ConsensusParams
 	genesisHash crypto.Digest
 
-	block               bookkeeping.Block
-	blockTxBytes        int
-	specials            transactions.SpecialAddresses
-	maxTxnBytesPerBlock int
+	block        bookkeeping.Block
+	blockTxBytes int
+	specials     transactions.SpecialAddresses
 
 	blockGenerated bool // prevent repeated GenerateBlock calls
 
 	l LedgerForEvaluator
+
+	maxTxnBytesPerBlock int
 }
 
 // LedgerForEvaluator defines the ledger interface needed by the evaluator.
@@ -481,6 +483,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 	// Preallocate space for the payset so that we don't have to
 	// dynamically grow a slice (if evaluating a whole block).
 	if evalOpts.PaysetHint > 0 {
+		maxPaysetHint := evalOpts.MaxTxnBytesPerBlock / averageEncodedTxnSizeHint
 		if evalOpts.PaysetHint > maxPaysetHint {
 			evalOpts.PaysetHint = maxPaysetHint
 		}
@@ -1092,6 +1095,51 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		return err
 	}
 
+	eval.state.mods.OptimizeAllocatedMemory(eval.proto)
+
+	if eval.validate {
+		// check commitments
+		txnRoot, err := eval.block.PaysetCommit()
+		if err != nil {
+			return err
+		}
+		if txnRoot != eval.block.TxnRoot {
+			return fmt.Errorf("txn root wrong: %v != %v", txnRoot, eval.block.TxnRoot)
+		}
+
+		var expectedTxnCount uint64
+		if eval.proto.TxnCounter {
+			expectedTxnCount = eval.state.txnCounter()
+		}
+		if eval.block.TxnCounter != expectedTxnCount {
+			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, expectedTxnCount)
+		}
+
+		expectedVoters, expectedVotersWeight, err := eval.compactCertVotersAndTotal()
+		if err != nil {
+			return err
+		}
+		if !eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsEqual(expectedVoters) {
+			return fmt.Errorf("CompactCertVoters wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVoters, expectedVoters)
+		}
+		if eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal != expectedVotersWeight {
+			return fmt.Errorf("CompactCertVotersTotal wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal, expectedVotersWeight)
+		}
+		if eval.block.CompactCert[protocol.CompactCertBasic].CompactCertNextRound != eval.state.compactCertNext() {
+			return fmt.Errorf("CompactCertNextRound wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, eval.state.compactCertNext())
+		}
+		for ccType := range eval.block.CompactCert {
+			if ccType != protocol.CompactCertBasic {
+				return fmt.Errorf("CompactCertType %d unexpected", ccType)
+			}
+		}
+	}
+
+	err = eval.state.CalculateTotals()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -1187,7 +1235,6 @@ func (eval *BlockEvaluator) validateExpiredOnlineAccounts() error {
 
 // resetExpiredOnlineAccountsParticipationKeys after all transactions and rewards are processed, modify the accounts so that their status is offline
 func (eval *BlockEvaluator) resetExpiredOnlineAccountsParticipationKeys() error {
-
 	expectedMaxNumberOfExpiredAccounts := eval.proto.MaxProposedExpiredOnlineAccounts
 	lengthOfExpiredParticipationAccounts := len(eval.block.ParticipationUpdates.ExpiredParticipationAccounts)
 
@@ -1216,51 +1263,6 @@ func (eval *BlockEvaluator) resetExpiredOnlineAccountsParticipationKeys() error 
 	return nil
 }
 
-// FinalValidation does the validation that must happen after the block is built and all state updates are computed
-func (eval *BlockEvaluator) finalValidation() error {
-	eval.state.mods.OptimizeAllocatedMemory(eval.proto)
-	if eval.validate {
-		// check commitments
-		txnRoot, err := eval.block.PaysetCommit()
-		if err != nil {
-			return err
-		}
-		if txnRoot != eval.block.TxnRoot {
-			return fmt.Errorf("txn root wrong: %v != %v", txnRoot, eval.block.TxnRoot)
-		}
-
-		var expectedTxnCount uint64
-		if eval.proto.TxnCounter {
-			expectedTxnCount = eval.state.txnCounter()
-		}
-		if eval.block.TxnCounter != expectedTxnCount {
-			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, expectedTxnCount)
-		}
-
-		expectedVoters, expectedVotersWeight, err := eval.compactCertVotersAndTotal()
-		if err != nil {
-			return err
-		}
-		if !eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsEqual(expectedVoters) {
-			return fmt.Errorf("CompactCertVoters wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVoters, expectedVoters)
-		}
-		if eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal != expectedVotersWeight {
-			return fmt.Errorf("CompactCertVotersTotal wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal, expectedVotersWeight)
-		}
-		if eval.block.CompactCert[protocol.CompactCertBasic].CompactCertNextRound != eval.state.compactCertNext() {
-			return fmt.Errorf("CompactCertNextRound wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, eval.state.compactCertNext())
-		}
-		for ccType := range eval.block.CompactCert {
-			if ccType != protocol.CompactCertBasic {
-				return fmt.Errorf("CompactCertType %d unexpected", ccType)
-			}
-		}
-
-	}
-
-	return eval.state.CalculateTotals()
-}
-
 // GenerateBlock produces a complete block from the BlockEvaluator.  This is
 // used during proposal to get an actual block that will be proposed, after
 // feeding in tentative transactions into this block evaluator.
@@ -1278,11 +1280,6 @@ func (eval *BlockEvaluator) GenerateBlock() (*ledgercore.ValidatedBlock, error) 
 	}
 
 	err := eval.endOfBlock()
-	if err != nil {
-		return nil, err
-	}
-
-	err = eval.finalValidation()
 	if err != nil {
 		return nil, err
 	}
@@ -1446,11 +1443,6 @@ transactionGroupLoop:
 				return ledgercore.StateDelta{}, err
 			}
 		}
-	}
-
-	err = eval.finalValidation()
-	if err != nil {
-		return ledgercore.StateDelta{}, err
 	}
 
 	return eval.state.deltas(), nil
