@@ -230,7 +230,7 @@ func (ct *catchpointTracker) newBlock(blk bookkeeping.Block, delta ledgercore.St
 	ct.roundDigest = append(ct.roundDigest, blk.Digest())
 
 	if config.Consensus[blk.CurrentProtocol].ExtendApplicationStorage && ct.extendApplicationStorageRound == 0 {
-		ct.extendApplicationStorageRound = blk.BlockHeader.Round
+		ct.extendApplicationStorageRound = blk.BlockHeader.Round + basics.Round(config.Consensus[blk.CurrentProtocol].MaxBalLookback)
 	}
 
 }
