@@ -113,7 +113,7 @@ func TestParticipation_InsertGet(t *testing.T) {
 	}
 
 	// Check that Flush works, re-initialize cache and verify GetAll.
-	a.NoError(registry.Flush())
+	a.NoError(registry.Flush(defaultTimeout))
 	a.NoError(registry.initializeCache())
 	results = registry.GetAll()
 	a.Len(results, 2)
@@ -154,7 +154,7 @@ func TestParticipation_Delete(t *testing.T) {
 	assertParticipation(t, p2, results[0])
 
 	// Check that result was persisted.
-	a.NoError(registry.Flush())
+	a.NoError(registry.Flush(defaultTimeout))
 	a.NoError(registry.initializeCache())
 	results = registry.GetAll()
 	a.Len(results, 1)
@@ -180,7 +180,7 @@ func TestParticipation_DeleteExpired(t *testing.T) {
 	a.Len(registry.GetAll(), 5, "The first 5 should be deleted.")
 
 	// Check persisting. Verify by re-initializing the cache.
-	a.NoError(registry.Flush())
+	a.NoError(registry.Flush(defaultTimeout))
 	a.NoError(registry.initializeCache())
 	a.Len(registry.GetAll(), 5, "The first 5 should be deleted.")
 }
@@ -300,7 +300,7 @@ func TestParticipation_Record(t *testing.T) {
 	}
 
 	test(registry)
-	a.NoError(registry.Flush())
+	a.NoError(registry.Flush(defaultTimeout))
 	a.Len(registry.dirty, 0)
 
 	// Re-initialize
@@ -368,7 +368,7 @@ func TestParticipation_RecordMultipleUpdates(t *testing.T) {
 	recordCopy.EffectiveLast = p2.LastValid
 	registry.cache[p2.ID()] = recordCopy
 	registry.dirty[p2.ID()] = struct{}{}
-	a.NoError(registry.Flush())
+	a.NoError(registry.Flush(defaultTimeout))
 	a.Len(registry.dirty, 0)
 	a.NoError(registry.initializeCache())
 
@@ -491,18 +491,18 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 
 	err = registry.Register(id, 1)
 	a.NoError(err)
-	err = registry.Flush()
+	err = registry.Flush(defaultTimeout)
 	a.Error(err)
 	a.Contains(err.Error(), "unable to disable old key")
 	a.EqualError(errors.Unwrap(err), ErrMultipleKeysForID.Error())
 
 	// Flushing changes detects that multiple records are updated
 	registry.dirty[id] = struct{}{}
-	err = registry.Flush()
+	err = registry.Flush(defaultTimeout)
 	a.EqualError(err, ErrMultipleKeysForID.Error())
 	a.Len(registry.dirty, 1)
 
-	err = registry.Flush()
+	err = registry.Flush(defaultTimeout)
 	a.EqualError(err, ErrMultipleKeysForID.Error())
 
 	// Make sure the error message is logged when closing the registry.
@@ -568,7 +568,7 @@ func TestParticipion_Blobs(t *testing.T) {
 
 	id, err := registry.Insert(part.Participation)
 	a.NoError(err)
-	a.NoError(registry.Flush())
+	a.NoError(registry.Flush(defaultTimeout))
 	a.Equal(id, part.ID())
 	// check the initial caching
 	check(id)
@@ -613,7 +613,7 @@ func TestParticipion_EmptyBlobs(t *testing.T) {
 
 	id, err := registry.Insert(part.Participation)
 	a.NoError(err)
-	a.NoError(registry.Flush())
+	a.NoError(registry.Flush(defaultTimeout))
 	a.Equal(id, part.ID())
 	// check the initial caching
 	check(id)
@@ -647,7 +647,7 @@ func TestRegisterUpdatedEvent(t *testing.T) {
 
 	// Delete the second one to make sure it can't be updated.
 	a.NoError(registry.Delete(id2))
-	a.NoError(registry.Flush())
+	a.NoError(registry.Flush(defaultTimeout))
 
 	// Ignore optional error
 	updates := make(map[ParticipationID]updatingParticipationRecord)
@@ -664,7 +664,7 @@ func TestRegisterUpdatedEvent(t *testing.T) {
 		registerUpdated: updates,
 	}
 
-	a.NoError(registry.Flush())
+	a.NoError(registry.Flush(defaultTimeout))
 
 	// This time, make it required and we should have an error
 	updates[id2] = updatingParticipationRecord{
@@ -676,7 +676,7 @@ func TestRegisterUpdatedEvent(t *testing.T) {
 		registerUpdated: updates,
 	}
 
-	err = registry.Flush()
+	err = registry.Flush(defaultTimeout)
 	a.Contains(err.Error(), "unable to disable old key when registering")
 	a.Contains(err.Error(), ErrNoKeyForID.Error())
 }

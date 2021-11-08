@@ -210,7 +210,7 @@ func makeParticipationRegistry(accessor db.Pair, log logging.Logger) (*participa
 		store:          accessor,
 		writeQueue:     make(chan partDBWriteRecord, 10),
 		writeQueueDone: make(chan struct{}),
-		Timeout:        defaultTimeout,
+		flushTimeout:   defaultTimeout,
 	}
 	registry.flushDone = sync.NewCond(&registry.mutex)
 	go registry.writeThread()
@@ -324,7 +324,7 @@ type participationDB struct {
 	flushDone      *sync.Cond
 	flushesPending int
 
-	Timeout time.Duration
+	flushTimeout time.Duration
 }
 
 type updatingParticipationRecord struct {
@@ -368,6 +368,7 @@ func (db *participationDB) initializeCache() error {
 }
 
 func (db *participationDB) writeThread() {
+	defer close(db.writeQueueDone)
 	needsFlush := false
 	var err error
 	var lastErr error
@@ -379,7 +380,6 @@ func (db *participationDB) writeThread() {
 			select {
 			case wr, chanOk = <-db.writeQueue:
 				if !chanOk {
-					close(db.writeQueueDone)
 					return // chan closed
 				}
 			default:
@@ -396,7 +396,6 @@ func (db *participationDB) writeThread() {
 			// blocking read until next activity or close
 			wr, chanOk = <-db.writeQueue
 			if !chanOk {
-				close(db.writeQueueDone)
 				return // chan closed
 			}
 		}
@@ -964,9 +963,9 @@ func (db *participationDB) Flush(timeout time.Duration) error {
 	}
 }
 
-// Close attempts to flush with db.Timeout, then waits for the write queue for another db.Timeout.
+// Close attempts to flush with db.flushTimeout, then waits for the write queue for another db.flushTimeout.
 func (db *participationDB) Close() {
-	if err := db.Flush(db.Timeout); err != nil {
+	if err := db.Flush(db.flushTimeout); err != nil {
 		db.log.Warnf("participationDB unhandled error during Close/Flush: %w", err)
 	}
 
@@ -977,7 +976,7 @@ func (db *participationDB) Close() {
 	select {
 	case <-db.writeQueueDone:
 		return
-	case <-time.After(db.Timeout):
+	case <-time.After(db.flushTimeout):
 		db.log.Warnf("Close(): timout waiting for WriteQueue to finish.")
 	}
 }
