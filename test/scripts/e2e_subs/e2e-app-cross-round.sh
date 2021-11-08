@@ -33,3 +33,6 @@ ${gcmd} app delete --app-id $APPID --from $ACCOUNT --app-arg "str:any"
 
 # Clear should still succeed with arbitrary args
 ${gcmd} app clear --app-id $APPID --from $ACCOUNT --app-arg "str:any"
+
+# Method should still succeed with arbitrary abi args
+${gcmd} app clear --app-id $APPID --from $ACCOUNT --app-arg 'abi:(string,string,(uint64,byte[],ufixed64x3)):["hello we are trolling","uwu",[399,"AAEC",114.514]]'
