@@ -177,7 +177,7 @@ func init() {
 
 	methodAppCmd.MarkFlagRequired("method") // nolint:errcheck // follow previous required flag format
 	methodAppCmd.MarkFlagRequired("app-id") // nolint:errcheck
-	methodAppCmd.MarkFlagRequired("from") // nolint:errcheck
+	methodAppCmd.MarkFlagRequired("from")   // nolint:errcheck
 }
 
 type appCallArg struct {
