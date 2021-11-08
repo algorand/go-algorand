@@ -482,4 +482,3 @@ func testMerkelSizeLimits(t *testing.T, hashtype crypto.HashType, size uint64, p
 
 	return tree, proof
 }
-
