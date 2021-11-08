@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-deadlock"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -67,7 +67,7 @@ func (m *recordingKeyManager) Record(acct basics.Address, round basics.Round, ac
 
 func (m *recordingKeyManager) ValidateVoteRound(t *testing.T, address basics.Address, round basics.Round) {
 	m.mutex.Lock()
-	assert.Equal(t, round, m.recording[address][account.Vote])
-	assert.Equal(t, round, m.recording[address][account.BlockProposal])
+	require.Equal(t, round, m.recording[address][account.Vote])
+	require.Equal(t, round, m.recording[address][account.BlockProposal])
 	m.mutex.Unlock()
 }
