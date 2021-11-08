@@ -1091,8 +1091,6 @@ var methodAppCmd = &cobra.Command{
 			NumByteSlice: globalSchemaByteSlices,
 		}
 
-		approvalProg, clearProg := mustParseProgArgs()
-
 		onCompletion := mustParseOnCompletion(createOnCompletion)
 
 		switch onCompletion {
@@ -1102,7 +1100,7 @@ var methodAppCmd = &cobra.Command{
 
 		tx, err := client.MakeUnsignedApplicationCallTx(
 			appIdx, applicationArgs, appAccounts, foreignApps, foreignAssets,
-			onCompletion, approvalProg, clearProg, globalSchema, localSchema, 0)
+			onCompletion, nil, nil, globalSchema, localSchema, 0)
 
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
