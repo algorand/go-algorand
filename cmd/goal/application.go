@@ -17,6 +17,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha512"
 	"encoding/base32"
 	"encoding/base64"
@@ -1068,10 +1069,7 @@ var methodAppCmd = &cobra.Command{
 
 		// Parse transaction parameters
 		_, appAccounts, foreignApps, foreignAssets := getAppInputs()
-
-		for _, arg := range appArgs {
-			fmt.Println(arg)
-		}
+		// TODO if we ignore the applicationArg from --app-arg, will that be okay?
 
 		// copy-paste code from callAppCmd
 		dataDir := ensureSingleDataDir()
@@ -1153,14 +1151,31 @@ var methodAppCmd = &cobra.Command{
 			if retTypeStr == "void" {
 				return
 			}
-			retLog := (*resp.Logs)[len(*resp.Logs)-1]
+
+			// specify the return hash prefix
+			hashRet := sha512.Sum512_256([]byte("return"))
+			hashRetPrefix := hashRet[:4]
+
+			var abiEncodedRet []byte
+			for i := len(*resp.Logs) - 1; i >= 0; i-- {
+				retLog := (*resp.Logs)[i]
+				if bytes.HasPrefix(retLog, hashRetPrefix) {
+					abiEncodedRet = retLog[4:]
+					break
+				}
+			}
+
+			if abiEncodedRet == nil || len(abiEncodedRet) == 0 {
+				reportErrorf("cannot find return log for abi type %s", retTypeStr)
+			}
+
 			retType, err := abi.TypeOf(retTypeStr)
 			if err != nil {
 				reportErrorf("cannot cast %s to abi type: %v", retTypeStr, err)
 			}
-			decoded, err := retType.Decode(retLog)
+			decoded, err := retType.Decode(abiEncodedRet)
 			if err != nil {
-				reportErrorf("cannot decode return value: %v", err)
+				reportErrorf("cannot decode return value %v: %v", abiEncodedRet, err)
 			}
 			fmt.Println(decoded)
 		}
