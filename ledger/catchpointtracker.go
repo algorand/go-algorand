@@ -114,9 +114,12 @@ type catchpointTracker struct {
 	// roundDigest stores the digest of the block for every round starting with dbRound and every round after it.
 	roundDigest []crypto.Digest
 
-	// extendApplicationStorageRound is the first round where the ExtendApplicationStorage feature was enabled via the consensus.
+	// extendApplicationStorageRound is a round where the ExtendApplicationStorage feature was enabled via the consensus.
 	// we avoid generating catchpoints before that round in order to ensure the network remain consistent in the catchpoint
-	// label being produced.
+	// label being produced. This variable could be "wrong" in two cases -
+	// 1. It's zero, meaning that the ExtendApplicationStorage has yet to be seen.
+	// 2. It's non-zero meaning that it the given round is after the ExtendApplicationStorage was enabled ( it might be exact round
+	//    but that's only if newBlock was called with that round ), plus the lookback.
 	extendApplicationStorageRound basics.Round
 }
 
