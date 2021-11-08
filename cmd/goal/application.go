@@ -298,11 +298,11 @@ func splitAppArgsByComma() {
 	var newAppArgs []string
 
 	for i := 0; i < len(appArgs); i++ {
-		if !strings.Contains(appArgs[i], "abi:") {
+		if !strings.Contains(appArgs[i], "abi:") && len(appArgs[i]) > 0 {
 			splitByComma := strings.Split(appArgs[i], ",")
 			newAppArgs = append(newAppArgs, splitByComma...)
-		} else {
-			// TODO if the following are not in head prefix, append, until one happen
+		} else if strings.Contains(appArgs[i], "abi:") {
+			// TODO consider case when abi packed value comma with other packed value
 			newAppArgs = append(newAppArgs, appArgs[i])
 		}
 	}
