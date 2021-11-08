@@ -125,7 +125,7 @@ func (bn *blockNotifier) commitRound(context.Context, *sql.Tx, *deferredCommitCo
 func (bn *blockNotifier) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 }
 
-func (bn *blockNotifier) handleUnorderedCommit(uint64, basics.Round, basics.Round) {
+func (bn *blockNotifier) handleUnorderedCommit(*deferredCommitContext) {
 }
 
 func (bn *blockNotifier) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
