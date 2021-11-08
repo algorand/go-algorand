@@ -130,6 +130,7 @@ func init() {
 	readStateAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
 	updateAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
 	infoAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
+	methodAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
 
 	// Add common transaction flags to all txn-generating app commands
 	addTxnFlags(createAppCmd)
