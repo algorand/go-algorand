@@ -319,6 +319,7 @@ type participationDB struct {
 
 	writeQueue     chan partDBWriteRecord
 	asyncErr       error
+	errMutex       deadlock.RWMutex
 	writeQueueDone chan struct{}
 
 	flushDone      *sync.Cond
@@ -384,13 +385,13 @@ func (db *participationDB) writeThread() {
 				}
 			default:
 				// nothing available, flush completed
-				db.mutex.Lock()
 				needsFlush = false
+				db.errMutex.Lock()
 				db.asyncErr = lastErr
+				db.errMutex.Unlock()
 				lastErr = nil
 				// see Flush() for the Wait() half of this.
 				db.flushDone.Broadcast()
-				db.mutex.Unlock()
 			}
 		} else {
 			// blocking read until next activity or close
@@ -946,6 +947,8 @@ func (db *participationDB) Flush(timeout time.Duration) error {
 		// See writeThread() for the Broadcast() we're Wait()ing on.
 		db.flushDone.Wait()
 		// set return value.
+		db.errMutex.Lock()
+		defer db.errMutex.Unlock()
 		err = db.asyncErr
 		db.flushesPending--
 		// this allows all waiting Flush()es to see the error that happened

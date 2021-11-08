@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -679,6 +680,36 @@ func TestRegisterUpdatedEvent(t *testing.T) {
 	err = registry.Flush(defaultTimeout)
 	a.Contains(err.Error(), "unable to disable old key when registering")
 	a.Contains(err.Error(), ErrNoKeyForID.Error())
+}
+
+// TestFlushDeadlock reproduced a deadlock when calling Flush repeatedly. This test reproduced the deadlock and
+// verifies the fix.
+func TestFlushDeadlock(t *testing.T) {
+	var wg sync.WaitGroup
+
+	partitiontest.PartitionTest(t)
+	registry := getRegistry(t)
+	defer registryCloseTest(t, registry)
+
+	spam := func() {
+		defer wg.Done()
+		for timeout := time.After(time.Second); ; {
+			select {
+			case <-timeout:
+				return
+			default:
+				// If there is a deadlock, this timeout will expire.
+				assert.NoError(t, registry.Flush(2 * time.Second))
+			}
+		}
+	}
+
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go spam()
+	}
+
+	wg.Wait()
 }
 
 func benchmarkKeyRegistration(numKeys int, b *testing.B) {
