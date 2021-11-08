@@ -1165,7 +1165,7 @@ var methodAppCmd = &cobra.Command{
 				}
 			}
 
-			if abiEncodedRet == nil || len(abiEncodedRet) == 0 {
+			if len(abiEncodedRet) == 0 {
 				reportErrorf("cannot find return log for abi type %s", retTypeStr)
 			}
 
