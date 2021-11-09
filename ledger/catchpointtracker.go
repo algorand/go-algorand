@@ -114,13 +114,13 @@ type catchpointTracker struct {
 	// roundDigest stores the digest of the block for every round starting with dbRound and every round after it.
 	roundDigest []crypto.Digest
 
-	// extendApplicationStorageRound is a round where the ExtendApplicationStorage feature was enabled via the consensus.
+	// explicitAccountResourceTrackingRound is a round where the EnableExplicitAccountResourceTracking feature was enabled via the consensus.
 	// we avoid generating catchpoints before that round in order to ensure the network remain consistent in the catchpoint
 	// label being produced. This variable could be "wrong" in two cases -
-	// 1. It's zero, meaning that the ExtendApplicationStorage has yet to be seen.
-	// 2. It's non-zero meaning that it the given round is after the ExtendApplicationStorage was enabled ( it might be exact round
+	// 1. It's zero, meaning that the EnableExplicitAccountResourceTracking has yet to be seen.
+	// 2. It's non-zero meaning that it the given round is after the EnableExplicitAccountResourceTracking was enabled ( it might be exact round
 	//    but that's only if newBlock was called with that round ), plus the lookback.
-	extendApplicationStorageRound basics.Round
+	explicitAccountResourceTrackingRound basics.Round
 }
 
 // initialize initializes the catchpointTracker structure
@@ -232,8 +232,8 @@ func (ct *catchpointTracker) newBlock(blk bookkeeping.Block, delta ledgercore.St
 	defer ct.catchpointsMu.Unlock()
 	ct.roundDigest = append(ct.roundDigest, blk.Digest())
 
-	if config.Consensus[blk.CurrentProtocol].ExtendApplicationStorage && ct.extendApplicationStorageRound == 0 {
-		ct.extendApplicationStorageRound = blk.BlockHeader.Round + basics.Round(config.Consensus[blk.CurrentProtocol].MaxBalLookback)
+	if config.Consensus[blk.CurrentProtocol].EnableExplicitAccountResourceTracking && ct.explicitAccountResourceTrackingRound == 0 {
+		ct.explicitAccountResourceTrackingRound = blk.BlockHeader.Round + basics.Round(config.Consensus[blk.CurrentProtocol].MaxBalLookback)
 	}
 
 }
@@ -502,11 +502,11 @@ func (ct *catchpointTracker) IsWritingCatchpointFile() bool {
 
 // isCatchpointRound returns true if the round at the given offset, dbRound with the provided lookback should be a catchpoint round.
 func (ct *catchpointTracker) isCatchpointRound(offset uint64, dbRound basics.Round, lookback basics.Round) bool {
-	if ct.extendApplicationStorageRound == basics.Round(0) {
+	if ct.explicitAccountResourceTrackingRound == basics.Round(0) {
 		return false
 	}
 
-	if ct.extendApplicationStorageRound > (basics.Round(offset) + dbRound + lookback) {
+	if ct.explicitAccountResourceTrackingRound > (basics.Round(offset) + dbRound + lookback) {
 		return false
 	}
 	return ((offset + uint64(lookback+dbRound)) > 0) && (ct.catchpointInterval != 0) && ((uint64((offset + uint64(lookback+dbRound))) % ct.catchpointInterval) == 0)
