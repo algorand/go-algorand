@@ -284,7 +284,7 @@ commands:
         type: string
       no_output_timeout:
         type: string
-        default: 30m
+        default: 60m
       short_test_flag:
         type: string
         default: ""
@@ -396,7 +396,7 @@ commands:
         type: string
       no_output_timeout:
         type: string
-        default: 30m
+        default: 60m
       short_test_flag:
         type: string
         default: ""
