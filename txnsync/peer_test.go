@@ -320,7 +320,7 @@ func TestGetMessageConstructionOps(t *testing.T) {
 		{
 			fxn:    func(p *Peer) { p.localTransactionsModulator = 0 },
 			arg:    args{false, true},
-			result: messageConstUpdateRequestParams | messageConstTransactions,
+			result: messageConstUpdateRequestParams | messageConstTransactions | messageConstBloomFilter,
 			state:  nil,
 		},
 		{
@@ -346,7 +346,7 @@ func TestGetMessageConstructionOps(t *testing.T) {
 		{
 			fxn:    func(p *Peer) { p.isOutgoing = false; p.requestedTransactionsModulator = 0; p.nextStateTimestamp = 0 },
 			arg:    args{true, true},
-			result: messageConstUpdateRequestParams | messageConstNextMinDelay,
+			result: messageConstUpdateRequestParams | messageConstNextMinDelay | messageConstBloomFilter,
 			state:  nil,
 		},
 		{
@@ -379,7 +379,7 @@ func TestGetMessageConstructionOps(t *testing.T) {
 		{
 			fxn:    func(p *Peer) { p.isOutgoing = true; p.state = peerStateLateBloom; p.localTransactionsModulator = 0 },
 			arg:    args{true, true},
-			result: messageConstUpdateRequestParams,
+			result: messageConstUpdateRequestParams | messageConstBloomFilter,
 			state:  &peerStateLateBloomState,
 		},
 

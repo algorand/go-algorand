@@ -222,7 +222,7 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions pendingT
 
 	msgOps := peer.getMessageConstructionOps(s.isRelay, s.fetchTransactions)
 
-	if msgOps&messageConstUpdateRequestParams == messageConstUpdateRequestParams {
+	if (msgOps&messageConstUpdateRequestParams == messageConstUpdateRequestParams) && !peer.localTransactionPoolFull {
 		// update the UpdatedRequestParams
 		offset, modulator := peer.getLocalRequestParams()
 		metaMessage.message.UpdatedRequestParams.Modulator = modulator
@@ -270,7 +270,8 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions pendingT
 		profMakeBloomFilter := s.profiler.getElement(profElementMakeBloomFilter)
 		profMakeBloomFilter.start()
 		// generate a bloom filter that matches the requests params.
-		assembledBloomFilter = s.makeBloomFilter(metaMessage.message.UpdatedRequestParams, filterTxns, excludeTransactions, lastBloomFilter)
+		offset, modulator := peer.getLocalRequestParams()
+		assembledBloomFilter = s.makeBloomFilter(requestParams{Offset: offset, Modulator: modulator}, filterTxns, excludeTransactions, lastBloomFilter)
 		// we check here to see if the bloom filter we need happen to be the same as the one that was previously sent to the peer.
 		// ( note that we check here againt the peer, whereas the hint to makeBloomFilter could be the cached one for the relay )
 		if !assembledBloomFilter.sameParams(peer.lastSentBloomFilter) && assembledBloomFilter.encodedLength > 0 {

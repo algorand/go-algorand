@@ -168,6 +168,7 @@ type Peer struct {
 	// these two fields describe "what does the local peer want the remote peer to send back"
 	localTransactionsModulator  byte
 	localTransactionsBaseOffset byte
+	localTransactionPoolFull    bool
 
 	// lastTransactionSelectionTracker tracks the last transaction group counter that we've evaluated on the selectPendingTransactions method.
 	// it used to ensure that on subsequent calls, we won't need to scan the entire pending transactions array from the beginning.
@@ -477,7 +478,7 @@ scanLoop:
 	}
 
 	if p.state == peerStateProposal {
-		logging.Base().Infof("proposal size: %v bytes, txns: %v bytes", currentMessageSize, accumulatedSize)
+		logging.Base().Infof("proposal size: %v bytes, txns: %v bytes, numtxns: %v", currentMessageSize, accumulatedSize, grpIdx - startIndex)
 		if time.Now().Sub(start) > 20 * time.Millisecond {
 			logging.Base().Info(p.requestedTransactionsModulator, p.requestedTransactionsOffset)
 			logging.Base().Infof("filter received: %v %v %v %v", time.Now().Sub(p.lastBloomFilterReceivedTimestamp), time.Now().Sub(p.lastMsgReceivedTimestamp), time.Now().Sub(p.lastMsgEnqueuedWithFilterTimestamp), time.Now().Sub(p.lastMsgEnqueuedTimestamp))
@@ -791,9 +792,7 @@ func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (
 		if p.isOutgoing {
 			switch p.state {
 			case peerStateLateBloom:
-				if p.localTransactionsModulator != 0 {
-					ops |= messageConstBloomFilter
-				}
+				ops |= messageConstBloomFilter
 			case peerStateHoldsoff:
 				ops |= messageConstTransactions
 			case peerStateProposal:
@@ -805,14 +804,9 @@ func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (
 			} else {
 				if p.requestedTransactionsModulator != 0 {
 					ops |= messageConstTransactions
-					//if p.nextStateTimestamp == 0 && p.localTransactionsModulator != 0 {
-					//	ops |= messageConstBloomFilter
-					//}
 				}
 				if p.nextStateTimestamp == 0 {
-					if p.localTransactionsModulator != 0 {
-						ops |= messageConstBloomFilter
-					}
+					ops |= messageConstBloomFilter
 					ops |= messageConstNextMinDelay
 				}
 			}
@@ -823,8 +817,6 @@ func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (
 		if fetchTransactions {
 			if p.state != peerStateProposal {
 				switch p.localTransactionsModulator {
-				case 0:
-					// don't send bloom filter.
 				case 1:
 					// special optimization if we have just one relay that we're connected to:
 					// generate the bloom filter only once per 2*beta message.

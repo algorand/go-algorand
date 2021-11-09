@@ -447,11 +447,8 @@ func (s *syncState) getPeers() (result []*Peer) {
 }
 
 func (s *syncState) updatePeersRequestParams(peers []*Peer) {
-	if s.transactionPoolFull {
-		for _, peer := range peers {
-			peer.setLocalRequestParams(0, 0)
-		}
-		return
+	for _, peer := range peers {
+		peer.localTransactionPoolFull = s.transactionPoolFull
 	}
 	if s.isRelay {
 		for _, peer := range peers {
