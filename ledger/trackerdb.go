@@ -21,6 +21,9 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
@@ -274,7 +277,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context
 
 		tu.log.Infof("upgradeDatabaseSchema1 deleting stored catchpoints")
 		// delete catchpoints.
-		err = deleteStoredCatchpoints(ctx, accountsq, tu.dbPathPrefix)
+		err = deleteStoredCatchpoints(ctx, accountsq, filepath.Dir(tu.trackerDBParams.dbPathPrefix))
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema1 unable to delete stored catchpoints : %v", err)
 		}
@@ -378,10 +381,77 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 		return err
 	}
 
-	// TODO : idan's PR
+	err = tu.removeEmptyDirsOnSchemaUpgrade()
+	if err != nil {
+		return err
+	}
 
 	// TODO : migrate all data..
 
 	// update version
 	return tu.setVersion(ctx, tx, 6)
+}
+
+// isDirEmpty returns if a given directory is empty or not.
+func isDirEmpty(path string) (bool, error) {
+	dir, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer dir.Close()
+	_, err = dir.Readdirnames(1)
+	if err != io.EOF {
+		return false, err
+	}
+	return true, nil
+}
+
+// getEmptyDirs returns a slice of paths for empty directories which are located in PathToScan arg
+func getEmptyDirs(PathToScan string) ([]string, error) {
+	var emptyDir []string
+	err := filepath.Walk(PathToScan, func(path string, f os.FileInfo, errIn error) error {
+		if errIn != nil {
+			return errIn
+		}
+		if !f.IsDir() {
+			return nil
+		}
+		isEmpty, err := isDirEmpty(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return filepath.SkipDir
+			}
+			return err
+		}
+		if isEmpty {
+			emptyDir = append(emptyDir, path)
+		}
+		return nil
+	})
+	return emptyDir, err
+}
+
+func (tu *trackerDBSchemaInitializer) removeEmptyDirsOnSchemaUpgrade() (err error) {
+	catchpointRootDir := filepath.Join(filepath.Dir(tu.trackerDBParams.dbPathPrefix), CatchpointDirName)
+	if _, err := os.Stat(catchpointRootDir); os.IsNotExist(err) {
+		return nil
+	}
+	for {
+		emptyDirs, err := getEmptyDirs(catchpointRootDir)
+		if err != nil {
+			return err
+		}
+		// There are no empty dirs
+		if len(emptyDirs) == 0 {
+			break
+		}
+		// only left with the root dir
+		if len(emptyDirs) == 1 && emptyDirs[0] == catchpointRootDir {
+			break
+		}
+		for _, emptyDirPath := range emptyDirs {
+			os.Remove(emptyDirPath)
+		}
+	}
+	return nil
 }

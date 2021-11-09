@@ -685,7 +685,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
-		os.RemoveAll("./catchpoints")
+		os.RemoveAll(CatchpointDirName)
 	}()
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(100000, true)}

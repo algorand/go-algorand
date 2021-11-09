@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -58,6 +59,8 @@ const (
 	// trieAccumulatedChangesFlush defines the number of pending changes that would be applied to the merkle trie before
 	// we attempt to commit them to disk while writing a batch of rounds balances to disk.
 	trieAccumulatedChangesFlush = 256
+	// CatchpointDirName represents the directory name in which all the catchpoints files are stored
+	CatchpointDirName = "catchpoints"
 )
 
 // TrieMemoryConfig is the memory configuration setup used for the merkle trie.
@@ -547,7 +550,7 @@ func (ct *catchpointTracker) generateCatchpoint(ctx context.Context, committedRo
 		return
 	}
 
-	relCatchpointFileName := filepath.Join("catchpoints", catchpointRoundToPath(committedRound))
+	relCatchpointFileName := filepath.Join(CatchpointDirName, catchpointRoundToPath(committedRound))
 	absCatchpointFileName := filepath.Join(ct.dbDirectory, relCatchpointFileName)
 
 	more := true
@@ -735,7 +738,7 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 	}
 
 	// if the database doesn't know about that round, see if we have that file anyway:
-	fileName := filepath.Join("catchpoints", catchpointRoundToPath(round))
+	fileName := filepath.Join(CatchpointDirName, catchpointRoundToPath(round))
 	catchpointPath := filepath.Join(ct.dbDirectory, fileName)
 	file, err := os.OpenFile(catchpointPath, os.O_RDONLY, 0666)
 	if err == nil && file != nil {
@@ -769,13 +772,9 @@ func deleteStoredCatchpoints(ctx context.Context, dbQueries *accountsDbQueries, 
 		}
 
 		for round, fileName := range fileNames {
-			absCatchpointFileName := filepath.Join(dbDirectory, fileName)
-			err = os.Remove(absCatchpointFileName)
-			if err == nil || os.IsNotExist(err) {
-				// it's ok if the file doesn't exist. just remove it from the database and we'll be good to go.
-			} else {
-				// we can't delete the file, abort -
-				return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
+			err = removeSingleCatchpointFileFromDisk(dbDirectory, fileName)
+			if err != nil {
+				return err
 			}
 			// clear the entry from the database
 			err = dbQueries.storeCatchpoint(ctx, round, "", "", 0)
@@ -784,6 +783,53 @@ func deleteStoredCatchpoints(ctx context.Context, dbQueries *accountsDbQueries, 
 			}
 		}
 	}
+	return nil
+}
+
+// This function remove a single catchpoint file from the disk. this function does not leave empty directories
+func removeSingleCatchpointFileFromDisk(dbDirectory, fileToDelete string) (err error) {
+	absCatchpointFileName := filepath.Join(dbDirectory, fileToDelete)
+	err = os.Remove(absCatchpointFileName)
+	if err == nil || os.IsNotExist(err) {
+		// it's ok if the file doesn't exist.
+		err = nil
+	} else {
+		// we can't delete the file, abort -
+		return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
+	}
+	splitedDirName := strings.Split(fileToDelete, string(os.PathSeparator))
+
+	var subDirectoriesToScan []string
+	//build a list of all the subdirs
+	currentSubDir := ""
+	for _, element := range splitedDirName {
+		currentSubDir = filepath.Join(currentSubDir, element)
+		subDirectoriesToScan = append(subDirectoriesToScan, currentSubDir)
+	}
+
+	// iterating over the list of directories. starting from the sub dirs and moving up.
+	// skipping the file itself.
+	for i := len(subDirectoriesToScan) - 2; i >= 0; i-- {
+		absSubdir := filepath.Join(dbDirectory, subDirectoriesToScan[i])
+		if _, err := os.Stat(absSubdir); os.IsNotExist(err) {
+			continue
+		}
+
+		isEmpty, err := isDirEmpty(absSubdir)
+		if err != nil {
+			return fmt.Errorf("unable to read old catchpoint directory '%s' : %v", subDirectoriesToScan[i], err)
+		}
+		if isEmpty {
+			err = os.Remove(absSubdir)
+			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				return fmt.Errorf("unable to delete old catchpoint directory '%s' : %v", subDirectoriesToScan[i], err)
+			}
+		}
+	}
+
 	return nil
 }
 
