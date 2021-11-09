@@ -186,7 +186,7 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 		}
 	}
 
-	// Confirm that we got the same root hash // this comment in not correct ???
+	// Confirm that we got the same root hash
 	if len(pl) != 1 {
 		return nil, fmt.Errorf("internal error: partial Layer produced %d hashes", len(pl))
 	}
