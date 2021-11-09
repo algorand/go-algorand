@@ -363,6 +363,7 @@ func testWithSize(t *testing.T, size int) error {
 }
 
 func TestMerkelSizeLimits(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	for depth := uint64(0); depth <= uint64(18); depth++ {
 		size := uint64(1) << depth
