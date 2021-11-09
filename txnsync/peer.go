@@ -411,17 +411,13 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []pooldata.SignedTx
 	// which has the same modulator and a different offset.
 	var effectiveBloomFilters []int
 	effectiveBloomFilters = make([]int, 0, len(p.recentIncomingBloomFilters))
-	for filterIdx := len(p.recentIncomingBloomFilters) - 1; filterIdx >= 0; filterIdx-- {
+	for filterIdx := range p.recentIncomingBloomFilters {
 		if p.recentIncomingBloomFilters[filterIdx].filter == nil {
 			continue
 		}
 		// TODO: should this use all bloom filters for proposal sending?
 		if p.state != peerStateProposal {
 			if p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Modulator != p.requestedTransactionsModulator || p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Offset != p.requestedTransactionsOffset {
-				continue
-			}
-		} else {
-			if p.recentIncomingBloomFilters[filterIdx].round < round.SubSaturate(1) {
 				continue
 			}
 		}
@@ -479,7 +475,7 @@ scanLoop:
 
 	if p.state == peerStateProposal {
 		logging.Base().Infof("proposal size: %v bytes, txns: %v bytes, numtxns: %v", currentMessageSize, accumulatedSize, grpIdx - startIndex)
-		if time.Now().Sub(start) > 20 * time.Millisecond {
+		if time.Now().Sub(start) > 13 * time.Millisecond {
 			logging.Base().Info(p.requestedTransactionsModulator, p.requestedTransactionsOffset)
 			logging.Base().Infof("filter received: %v %v %v %v", time.Now().Sub(p.lastBloomFilterReceivedTimestamp), time.Now().Sub(p.lastMsgReceivedTimestamp), time.Now().Sub(p.lastMsgEnqueuedWithFilterTimestamp), time.Now().Sub(p.lastMsgEnqueuedTimestamp))
 			for _, id := range effectiveBloomFilters {
