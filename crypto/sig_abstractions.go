@@ -23,9 +23,13 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+const (
+	MaxSignatureSize = 9999
+)
+
 type (
 	//ByteSignature using unspecified bound.
-	//msgp:allocbound ByteSignature
+	//msgp:allocbound ByteSignature MaxSignatureSize
 	ByteSignature []byte
 
 	// AlgorithmType enum type for signing algorithms
