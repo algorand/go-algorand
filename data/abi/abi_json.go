@@ -74,13 +74,14 @@ func (t Type) MarshalToJSON(value interface{}) ([]byte, error) {
 		}
 		return json.Marshal(byteValue)
 	case Address:
+		var addressInternal basics.Address
 		switch valueCasted := value.(type) {
 		case []byte:
-			var valueCasted32 [addressByteSize]byte
-			copy(valueCasted32[:], valueCasted[:])
-			return json.Marshal(basics.Address(valueCasted32).String())
+			copy(addressInternal[:], valueCasted[:])
+			return json.Marshal(addressInternal.String())
 		case [addressByteSize]byte:
-			return json.Marshal(basics.Address(valueCasted).String())
+			addressInternal = valueCasted
+			return json.Marshal(addressInternal.String())
 		default:
 			return nil, fmt.Errorf("cannot infer to byte slice/array for marshal to JSON")
 		}

@@ -306,16 +306,18 @@ func processAppInputFile() (args [][]byte, accounts []string, foreignApps []uint
 	return parseAppInputs(inputs)
 }
 
-func splitAppArgsByComma() {
-	var newAppArgs []string
+// filterEmptyStrings filters out empty string parsed in by StringArrayVar
+// this function is added to support abi argument parsing
+// since parsing of `appArg` diverted from `StringSliceVar` to `StringArrayVar`
+func filterEmptyStrings(strSlice []string) []string {
+	var newStrSlice []string
 
-	for i := 0; i < len(appArgs); i++ {
-		if len(appArgs[i]) > 0 {
-			newAppArgs = append(newAppArgs, appArgs[i])
+	for i := 0; i < len(strSlice); i++ {
+		if len(strSlice[i]) > 0 {
+			newStrSlice = append(newStrSlice, strSlice[i])
 		}
 	}
-
-	appArgs = newAppArgs
+	return newStrSlice
 }
 
 func getAppInputs() (args [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) {
@@ -328,9 +330,10 @@ func getAppInputs() (args [][]byte, accounts []string, foreignApps []uint64, for
 
 	var encodedArgs []appCallArg
 
-	splitAppArgsByComma()
+	// we need to filter out empty strings from appArgs first, caused by change to `StringArrayVar`
+	newAppArgs := filterEmptyStrings(appArgs)
 
-	for _, arg := range appArgs {
+	for _, arg := range newAppArgs {
 		encodingValue := strings.SplitN(arg, ":", 2)
 		if len(encodingValue) != 2 {
 			reportErrorf("all arguments should be of the form 'encoding:value'")
