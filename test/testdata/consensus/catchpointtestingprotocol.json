@@ -25,7 +25,7 @@
     "EnableExtraPagesOnAppUpdate": true,
     "EnableFeePooling": true,
     "EnableKeyregCoherencyCheck": true,
-    "EnableExplicitAccountResourceTracking": true,
+    "EnableAccountDataResourceSeparation": true,
     "FastPartitionRecovery": true,
     "FastRecoveryLambda": 300000000000,
     "FixTransactionLeases": true,

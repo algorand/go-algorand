@@ -396,9 +396,9 @@ type ConsensusParams struct {
 	// to be taken offline, that would be proposed to be taken offline.
 	MaxProposedExpiredOnlineAccounts int
 
-	// EnableExplicitAccountResourceTracking enables the support for extended application and asset storage
+	// EnableAccountDataResourceSeparation enables the support for extended application and asset storage
 	// in a separate table.
-	EnableExplicitAccountResourceTracking bool
+	EnableAccountDataResourceSeparation bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1064,7 +1064,7 @@ func initConsensusProtocols() {
 	// flag would already be restructuring their internal storage for extended
 	// application storage, and therefore would not produce catchpoints and/or
 	// catchpoint labels prior to this feature being enabled.
-	vFuture.EnableExplicitAccountResourceTracking = true
+	vFuture.EnableAccountDataResourceSeparation = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
