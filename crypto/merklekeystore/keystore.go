@@ -50,6 +50,7 @@ type (
 	// Signer is a merkleKeyStore, contain multiple keys which can be used per round.
 	// Signer will generate all keys in the range [A,Z] that are divisible by some divisor d.
 	// in case A equals zero then signer will generate all keys from (0,Z], i.e will not generate key for round zero.
+	// i.e. the generated keys are {all values x such that x >= firstValid, x <= lastValid, and x%interval == 0}
 	Signer struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
