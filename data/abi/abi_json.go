@@ -76,7 +76,7 @@ func (t Type) MarshalToJSON(value interface{}) ([]byte, error) {
 	case Address:
 		switch valueCasted := value.(type) {
 		case []byte:
-			var valueCasted32 [32]byte
+			var valueCasted32 [addressByteSize]byte
 			copy(valueCasted32[:], valueCasted[:])
 			return json.Marshal(basics.Address(valueCasted32).String())
 		case [addressByteSize]byte:
