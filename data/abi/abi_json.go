@@ -25,7 +25,7 @@ import (
 )
 
 func castBigIntToNearestPrimitive(num *big.Int, bitSize uint16) (interface{}, error) {
-	if num.Cmp(new(big.Int).Lsh(big.NewInt(1), uint(bitSize))) >= 0 {
+	if num.BitLen() > int(bitSize) {
 		return nil, fmt.Errorf("cast big int to nearest primitive failure: %v >= 2^%d", num, bitSize)
 	} else if num.Sign() < 0 {
 		return nil, fmt.Errorf("cannot cast big int to near primitive: %v < 0", num)
