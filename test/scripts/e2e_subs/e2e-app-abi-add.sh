@@ -21,10 +21,10 @@ printf '#pragma version 2\nint 1' > "${TEMPDIR}/simple.teal"
 PROGRAM=($(${gcmd} clerk compile "${TEMPDIR}/simple.teal"))
 APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${DIR}/tealprogs/app-abi-add-example.teal --clear-prog ${TEMPDIR}/simple.teal --global-byteslices 0 --global-ints ${GLOBAL_INTS} --local-byteslices 0 --local-ints 0 | grep Created | awk '{ print $6 }')
 
-# Should succeed to opt in with first arg hello
+# Should succeed to opt in
 ${gcmd} app optin --app-id $APPID --from $ACCOUNT
 
-# Write should now succeed
+# Call should now succeed
 RES=$(${gcmd} app method --method "add(uint64,uint64)uint64" --arg 1 --arg 2 --app-id $APPID --from $ACCOUNT 2>&1 || true)
 EXPECTED="method add(uint64,uint64)uint64 output: 3"
 if [[ $RES != *"${EXPECTED}"* ]]; then
@@ -35,5 +35,5 @@ fi
 # Delete application should still succeed
 ${gcmd} app delete --app-id $APPID --from $ACCOUNT
 
-# Clear should still succeed with arbitrary args
+# Clear should still succeed
 ${gcmd} app clear --app-id $APPID --from $ACCOUNT
