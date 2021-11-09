@@ -693,7 +693,8 @@ func TestFlushDeadlock(t *testing.T) {
 
 	spam := func() {
 		defer wg.Done()
-		for timeout := time.After(time.Second); ; {
+		timeout := time.After(time.Second)
+		for {
 			select {
 			case <-timeout:
 				return
@@ -704,7 +705,8 @@ func TestFlushDeadlock(t *testing.T) {
 		}
 	}
 
-	for i := 0; i < 10; i++ {
+	// Start spammers.
+	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go spam()
 	}
