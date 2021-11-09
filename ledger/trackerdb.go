@@ -157,6 +157,12 @@ func trackerDBInitializeImpl(ctx context.Context, tx *sql.Tx, params trackerDBPa
 					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 4 : %v", err)
 					return
 				}
+			case 5:
+				err = tu.upgradeDatabaseSchema5(ctx, tx)
+				if err != nil {
+					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 5 : %v", err)
+					return
+				}
 			default:
 				return trackerDBInitParams{}, fmt.Errorf("trackerDBInitialize unable to upgrade database from schema version %d", tu.schemaVersion)
 			}
@@ -362,4 +368,20 @@ done:
 	tu.log.Infof("upgradeDatabaseSchema4: deleted %d rows", numDeleted)
 
 	return tu.setVersion(ctx, tx, 5)
+}
+
+// upgradeDatabaseSchema5 upgrades the database schema from version 5 to version 6,
+// adding the resources table and clearing empty catchpoint directories.
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context, tx *sql.Tx) (err error) {
+	err = accountsCreateResourceTable(tx)
+	if err != nil {
+		return err
+	}
+
+	// TODO : idan's PR
+
+	// TODO : migrate all data..
+
+	// update version
+	return tu.setVersion(ctx, tx, 6)
 }

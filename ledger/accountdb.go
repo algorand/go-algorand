@@ -101,6 +101,15 @@ var createOnlineAccountIndex = []string{
 	createNormalizedOnlineBalanceIndex("onlineaccountbals", "accountbase"),
 }
 
+var createResourcesTable = []string{
+	`CREATE TABLE IF NOT EXISTS resources (
+		addrid INTEGER NOT NULL,
+		aidx INTEGER NOT NULL,
+		rtype INTEGER NOT NULL,
+		data BLOB NOT NULL,
+		PRIMARY KEY (addrid, aidx, rtype) ) WITHOUT ROWID`,
+}
+
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -114,7 +123,7 @@ var accountsResetExprs = []string{
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
 // details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
 // and their descriptions.
-var accountDBVersion = int32(5)
+var accountDBVersion = int32(6)
 
 // persistedAccountData is used for representing a single account stored on the disk. In addition to the
 // basics.AccountData, it also stores complete referencing information used to maintain the base accounts
@@ -631,6 +640,26 @@ func accountsAddNormalizedBalance(tx *sql.Tx, proto config.ConsensusParams) erro
 	}
 
 	return rows.Err()
+}
+
+// accountsCreateResourceTable creates the resource table in the database.
+func accountsCreateResourceTable(tx *sql.Tx) error {
+	var exists bool
+	err := tx.QueryRow("SELECT 1 FROM pragma_table_info('resources') WHERE name='addrid'").Scan(&exists)
+	if err == nil {
+		// Already exists.
+		return nil
+	}
+	if err != sql.ErrNoRows {
+		return err
+	}
+	for _, stmt := range createResourcesTable {
+		_, err = tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // removeEmptyAccountData removes empty AccountData msgp-encoded entries from accountbase table
