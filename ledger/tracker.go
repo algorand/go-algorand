@@ -112,7 +112,7 @@ type ledgerTracker interface {
 	// handleUnorderedCommit is a special method for handling deferred commits that are out of order.
 	// Tracker might update own state in this case. For example, account updates tracker cancels
 	// scheduled catchpoint writing that deferred commit.
-	handleUnorderedCommit(uint64, basics.Round, basics.Round)
+	handleUnorderedCommit(*deferredCommitContext)
 
 	// close terminates the tracker, reclaiming any resources
 	// like open database connections or goroutines.  close may
@@ -399,13 +399,12 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) {
 
 	offset := dcc.offset
 	dbRound := dcc.oldBase
-	lookback := dcc.lookback
 
 	// we can exit right away, as this is the result of mis-ordered call to committedUpTo.
 	if tr.dbRound < dbRound || offset < uint64(tr.dbRound-dbRound) {
 		tr.log.Warnf("out of order deferred commit: offset %d, dbRound %d but current tracker DB round is %d", offset, dbRound, tr.dbRound)
 		for _, lt := range tr.trackers {
-			lt.handleUnorderedCommit(offset, dbRound, lookback)
+			lt.handleUnorderedCommit(dcc)
 		}
 		tr.mu.RUnlock()
 		return

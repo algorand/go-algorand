@@ -113,6 +113,14 @@ type catchpointTracker struct {
 
 	// roundDigest stores the digest of the block for every round starting with dbRound and every round after it.
 	roundDigest []crypto.Digest
+
+	// accountDataResourceSeparationRound is a round where the EnableAccountDataResourceSeparation feature was enabled via the consensus.
+	// we avoid generating catchpoints before that round in order to ensure the network remain consistent in the catchpoint
+	// label being produced. This variable could be "wrong" in two cases -
+	// 1. It's zero, meaning that the EnableAccountDataResourceSeparation has yet to be seen.
+	// 2. It's non-zero meaning that it the given round is after the EnableAccountDataResourceSeparation was enabled ( it might be exact round
+	//    but that's only if newBlock was called with that round ), plus the lookback.
+	accountDataResourceSeparationRound basics.Round
 }
 
 // initialize initializes the catchpointTracker structure
@@ -223,6 +231,11 @@ func (ct *catchpointTracker) newBlock(blk bookkeeping.Block, delta ledgercore.St
 	ct.catchpointsMu.Lock()
 	defer ct.catchpointsMu.Unlock()
 	ct.roundDigest = append(ct.roundDigest, blk.Digest())
+
+	if config.Consensus[blk.CurrentProtocol].EnableAccountDataResourceSeparation && ct.accountDataResourceSeparationRound == 0 {
+		ct.accountDataResourceSeparationRound = blk.BlockHeader.Round + basics.Round(config.Consensus[blk.CurrentProtocol].MaxBalLookback)
+	}
+
 }
 
 // committedUpTo implements the ledgerTracker interface for catchpointTracker.
@@ -410,11 +423,11 @@ func (ct *catchpointTracker) postCommit(ctx context.Context, dcc *deferredCommit
 // handleUnorderedCommit is a special method for handling deferred commits that are out of order.
 // Tracker might update own state in this case. For example, account updates tracker cancels
 // scheduled catchpoint writing that deferred commit.
-func (ct *catchpointTracker) handleUnorderedCommit(offset uint64, dbRound basics.Round, lookback basics.Round) {
+func (ct *catchpointTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
 	// if this is an archival ledger, we might need to update the catchpointWriting variable.
 	if ct.archivalLedger {
 		// determine if this was a catchpoint round
-		if ct.isCatchpointRound(offset, dbRound, lookback) {
+		if dcc.isCatchpointRound {
 			// it was a catchpoint round, so update the catchpointWriting to indicate that we're done.
 			atomic.StoreInt32(&ct.catchpointWriting, 0)
 		}
@@ -489,6 +502,13 @@ func (ct *catchpointTracker) IsWritingCatchpointFile() bool {
 
 // isCatchpointRound returns true if the round at the given offset, dbRound with the provided lookback should be a catchpoint round.
 func (ct *catchpointTracker) isCatchpointRound(offset uint64, dbRound basics.Round, lookback basics.Round) bool {
+	if ct.accountDataResourceSeparationRound == basics.Round(0) {
+		return false
+	}
+
+	if ct.accountDataResourceSeparationRound > (basics.Round(offset) + dbRound + lookback) {
+		return false
+	}
 	return ((offset + uint64(lookback+dbRound)) > 0) && (ct.catchpointInterval != 0) && ((uint64((offset + uint64(lookback+dbRound))) % ct.catchpointInterval) == 0)
 }
 
