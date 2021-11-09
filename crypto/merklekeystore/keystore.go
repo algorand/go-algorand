@@ -103,15 +103,15 @@ func (k *keysArray) Marshal(pos uint64) ([]byte, error) {
 	return crypto.HashRep(&ephPK), nil
 }
 
+// New Generates a merklekeystore.Signer
+// The function allow creation of empty signers, i.e signers without any key to sign with.
+// keys can be created between [A,Z], if A == 0, keys created will be in the range (0,Z]
 func New(firstValid uint64, lastValid uint64, sigAlgoType crypto.AlgorithmType, store db.Accessor) (*Signer, error) {
 	// TODO change this
 	compactCertRound := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
 	return new(firstValid, lastValid, compactCertRound, sigAlgoType, store)
 }
 
-// New Generates a merklekeystore.Signer
-// The function allow creation of empty signers, i.e signers without any key to sign with.
-// keys can be created between [A,Z], if A == 0, keys created will be in the range (0,Z]
 func new(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmType, store db.Accessor) (*Signer, error) {
 	if firstValid > lastValid {
 		return nil, errors.New("cannot create merkleKeyStore because end round is smaller then start round")
