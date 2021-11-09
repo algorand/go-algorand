@@ -59,7 +59,7 @@ func (t Type) typeCastToTuple(tupLen ...int) (Type, error) {
 		return Type{}, fmt.Errorf("type cannot support conversion to tuple")
 	}
 
-	tuple, err := makeTupleType(childT)
+	tuple, err := MakeTupleType(childT)
 	if err != nil {
 		return Type{}, err
 	}
@@ -492,7 +492,7 @@ func ParseArgJSONtoByteSlice(funcArgTypes string, jsonArgs []string, application
 
 	// change the input args to be 1 - 14 + 15 (compacting everything together)
 	if len(jsonArgs) > 14 {
-		compactedType, err := makeTupleType(abiTupleT.childTypes[14:])
+		compactedType, err := MakeTupleType(abiTupleT.childTypes[14:])
 		if err != nil {
 			return err
 		}

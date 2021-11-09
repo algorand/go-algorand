@@ -983,7 +983,7 @@ func addTupleRandomValues(t *testing.T, slotRange BaseType, pool *map[BaseType][
 			require.NoError(t, err, "deserialize type failure for tuple elements")
 			elemTypes[index] = abiT
 		}
-		tupleT, err := makeTupleType(elemTypes)
+		tupleT, err := MakeTupleType(elemTypes)
 		require.NoError(t, err, "make tuple type failure")
 		(*pool)[Tuple] = append((*pool)[Tuple], testUnit{
 			serializedType: tupleT.String(),
