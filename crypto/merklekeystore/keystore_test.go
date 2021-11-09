@@ -21,12 +21,12 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
-	"github.com/algorand/go-algorand/config"
 	"testing"
 
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -484,58 +484,62 @@ func TestValidityPeriod(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
+	// TODO: change to config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod when we reach that version
+	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
+
 	store := initTestDB(a)
 	firstValid := uint64(0)
-	lastValid := MaxValidPeriod
-	_, err := New(firstValid, lastValid, 128, crypto.DilithiumType, store)
+	lastValid := maxValidPeriod
+	_, err := New(firstValid, lastValid, crypto.DilithiumType, store)
 	a.NoError(err)
 
 	store = initTestDB(a)
 	firstValid = uint64(0)
-	lastValid = MaxValidPeriod + 1
-	_, err = New(firstValid, lastValid, 128, crypto.DilithiumType, store)
+	lastValid = maxValidPeriod + 1
+	_, err = New(firstValid, lastValid, crypto.DilithiumType, store)
 	a.Error(err)
 
 	store = initTestDB(a)
 	firstValid = uint64(0)
-	lastValid = MaxValidPeriod - 1
-	_, err = New(firstValid, lastValid, 128, crypto.DilithiumType, store)
+	lastValid = maxValidPeriod - 1
+	_, err = New(firstValid, lastValid, crypto.DilithiumType, store)
 	a.NoError(err)
 }
 
 func TestNumberOfGeneratedKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	interval := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
+	interval := uint64(128)
+	validPeriod := uint64((1<<8)*interval - 1)
 
 	store := initTestDB(a)
 	firstValid := uint64(1000)
-	lastValid := MaxValidPeriod + 1000
-	s, err := New(firstValid, lastValid, interval, crypto.Ed25519Type, store)
+	lastValid := validPeriod + 1000
+	s, err := new(firstValid, lastValid, interval, crypto.Ed25519Type, store)
 	a.NoError(err)
 	err = s.Persist()
 	a.NoError(err)
-	a.Equal(1<<16, length(s, a))
+	a.Equal(1<<8, length(s, a))
 	store.Close()
 
 	store = initTestDB(a)
 	firstValid = uint64(0)
-	lastValid = MaxValidPeriod
-	s, err = New(firstValid, lastValid, interval, crypto.Ed25519Type, store)
+	lastValid = validPeriod
+	s, err = new(firstValid, lastValid, interval, crypto.Ed25519Type, store)
 	a.NoError(err)
 	err = s.Persist()
 	a.NoError(err)
-	a.Equal((1<<16)-1, length(s, a))
+	a.Equal((1<<8)-1, length(s, a))
 	store.Close()
 
 	store = initTestDB(a)
 	firstValid = uint64(1000)
-	lastValid = MaxValidPeriod + 1000 - (interval * 50)
-	s, err = New(firstValid, lastValid, interval, crypto.Ed25519Type, store)
+	lastValid = validPeriod + 1000 - (interval * 50)
+	s, err = new(firstValid, lastValid, interval, crypto.Ed25519Type, store)
 	a.NoError(err)
 	err = s.Persist()
 	a.NoError(err)
-	a.Equal((1<<16)-50, length(s, a))
+	a.Equal((1<<8)-50, length(s, a))
 	store.Close()
 }
 
@@ -557,7 +561,7 @@ func generateTestSignerAux(a *require.Assertions) (uint64, uint64, *Signer) {
 
 func generateTestSigner(t crypto.AlgorithmType, firstValid uint64, lastValid uint64, interval uint64, a *require.Assertions) *Signer {
 	store := initTestDB(a)
-	signer, err := New(firstValid, lastValid, interval, t, store)
+	signer, err := new(firstValid, lastValid, interval, t, store)
 	a.NoError(err)
 
 	err = signer.Persist()

@@ -235,11 +235,8 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	// Generate a new VRF key, which lives in the participation keys db
 	vrf := crypto.GenerateVRFSecrets()
 
-	// TODO change this
-	compactCertRound := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
-
 	// Generate a new key which signs the compact certificates
-	stateProofSecrets, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), compactCertRound, crypto.FalconType, store)
+	stateProofSecrets, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), crypto.FalconType, store)
 	if err != nil {
 		return
 	}

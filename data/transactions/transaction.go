@@ -22,7 +22,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -567,7 +566,7 @@ func (tx Transaction) stateProofPKWellFormed(proto config.ConsensusParams) error
 		return nil
 	}
 
-	if uint64(tx.VoteLast-tx.VoteFirst) > merklekeystore.MaxValidPeriod {
+	if uint64(tx.VoteLast-tx.VoteFirst) > proto.MaxKeyregValidPeriod {
 		return errKeyRegTxnValidityPeriodTooLong
 	}
 
