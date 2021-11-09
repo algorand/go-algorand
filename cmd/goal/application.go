@@ -180,9 +180,6 @@ func init() {
 	methodAppCmd.MarkFlagRequired("app-id")          // nolint:errcheck
 	methodAppCmd.MarkFlagRequired("from")            // nolint:errcheck
 	methodAppCmd.Flags().MarkHidden("app-arg")       // nolint:errcheck
-	methodAppCmd.Flags().MarkHidden("foreign-app")   // nolint:errcheck
-	methodAppCmd.Flags().MarkHidden("foreign-asset") // nolint:errcheck
-	methodAppCmd.Flags().MarkHidden("app-account")   // nolint:errcheck
 	methodAppCmd.Flags().MarkHidden("app-input")     // nolint:errcheck
 	methodAppCmd.Flags().MarkHidden("i")             // nolint:errcheck
 }
@@ -422,9 +419,7 @@ var createAppCmd = &cobra.Command{
 	Long:  `Issue a transaction that creates an application`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-
-		dataDir := ensureSingleDataDir()
-		client := ensureFullClient(dataDir)
+		dataDir, client := getDataDirAndClient()
 
 		// Construct schemas from args
 		localSchema := basics.StateSchema{
@@ -516,8 +511,7 @@ var updateAppCmd = &cobra.Command{
 	Long:  `Issue a transaction that updates an application's ApprovalProgram and ClearStateProgram`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		dataDir := ensureSingleDataDir()
-		client := ensureFullClient(dataDir)
+		dataDir, client := getDataDirAndClient()
 
 		// Parse transaction parameters
 		approvalProg, clearProg := mustParseProgArgs()
@@ -588,8 +582,7 @@ var optInAppCmd = &cobra.Command{
 	Long:  `Opt an account in to an application, allocating local state in your account`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		dataDir := ensureSingleDataDir()
-		client := ensureFullClient(dataDir)
+		dataDir, client := getDataDirAndClient()
 
 		// Parse transaction parameters
 		appArgs, appAccounts, foreignApps, foreignAssets := getAppInputs()
@@ -659,8 +652,7 @@ var closeOutAppCmd = &cobra.Command{
 	Long:  `Close an account out of an application, removing local state from your account. The application must still exist. If it doesn't, use 'goal app clear'.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		dataDir := ensureSingleDataDir()
-		client := ensureFullClient(dataDir)
+		dataDir, client := getDataDirAndClient()
 
 		// Parse transaction parameters
 		appArgs, appAccounts, foreignApps, foreignAssets := getAppInputs()
@@ -730,8 +722,7 @@ var clearAppCmd = &cobra.Command{
 	Long:  `Remove any local state from your account associated with an application. The application does not need to exist anymore.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		dataDir := ensureSingleDataDir()
-		client := ensureFullClient(dataDir)
+		dataDir, client := getDataDirAndClient()
 
 		// Parse transaction parameters
 		appArgs, appAccounts, foreignApps, foreignAssets := getAppInputs()
@@ -871,8 +862,7 @@ var deleteAppCmd = &cobra.Command{
 	Long:  `Delete an application, removing the global state and other application parameters from the creator's account`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		dataDir := ensureSingleDataDir()
-		client := ensureFullClient(dataDir)
+		dataDir, client := getDataDirAndClient()
 
 		// Parse transaction parameters
 		appArgs, appAccounts, foreignApps, foreignAssets := getAppInputs()
@@ -943,8 +933,7 @@ var readStateAppCmd = &cobra.Command{
 	Long:  `Read global or local (account-specific) state for an application`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		dataDir := ensureSingleDataDir()
-		client := ensureFullClient(dataDir)
+		_, client := getDataDirAndClient()
 
 		// Ensure exactly one of --local or --global is specified
 		if fetchLocal == fetchGlobal {
@@ -1025,8 +1014,7 @@ var infoAppCmd = &cobra.Command{
 	Long:  `Look up application information stored on the network, such as program hash.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		dataDir := ensureSingleDataDir()
-		client := ensureFullClient(dataDir)
+		_, client := getDataDirAndClient()
 
 		meta, err := client.ApplicationInformation(appIdx)
 		if err != nil {
@@ -1072,15 +1060,6 @@ var methodAppCmd = &cobra.Command{
 		appArgsParsed, appAccounts, foreignApps, foreignAssets := getAppInputs()
 		if len(appArgsParsed) > 0 {
 			reportErrorf("in goal app method: --arg and --app-arg are mutually exclusive, do not use --app-arg")
-		}
-		if len(appAccounts) > 0 {
-			reportErrorf("in goal app method: --app-account is not supported")
-		}
-		if len(foreignApps) > 0 {
-			reportErrorf("in goal app method: --foreign-app is not supported")
-		}
-		if len(foreignAssets) > 0 {
-			reportErrorf("in goal app method: --foreign-asset is not supported")
 		}
 
 		onCompletion := mustParseOnCompletion(createOnCompletion)
