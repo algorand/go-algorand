@@ -1,6 +1,6 @@
 #!/bin/bash
 
-date '+app-abi-arg-add-test start %Y%m%d_%H%M%S'
+date '+app-abi-add-test start %Y%m%d_%H%M%S'
 
 set -e
 set -x
@@ -25,7 +25,12 @@ APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${DIR}/tealprogs
 ${gcmd} app optin --app-id $APPID --from $ACCOUNT
 
 # Write should now succeed
-${gcmd} app method --method "add(uint64,uint64)uint64" --arg 1 --arg 2 --app-id $APPID --from $ACCOUNT
+RES=$(${gcmd} app method --method "add(uint64,uint64)uint64" --arg 1 --arg 2 --app-id $APPID --from $ACCOUNT 2>&1 || true)
+EXPECTED="method add(uint64,uint64)uint64 output: 3"
+if [[ $RES != *"${EXPECTED}"* ]]; then
+    date '+app-abi-add-test FAIL the application creation should not fail %Y%m%d_%H%M%S'
+    false
+fi
 
 # Delete application should still succeed
 ${gcmd} app delete --app-id $APPID --from $ACCOUNT
