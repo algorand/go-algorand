@@ -558,6 +558,7 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 	selectionPKValue := crypto.VRFVerifier{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
 
 	stateProofPK := merklekeystore.Verifier([merklekeystore.KeyStoreRootSize]byte{1})
+	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod // TODO: change to curProto.MaxKeyregValidPeriod
 
 	runTestCase := func(testCase keyRegTestCase) error {
 
@@ -573,6 +574,7 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 		curProto.SupportBecomeNonParticipatingTransactions = testCase.supportBecomeNonParticipatingTransactions
 		curProto.EnableKeyregCoherencyCheck = testCase.enableKeyregCoherencyCheck
 		curProto.EnableStateProofKeyregCheck = testCase.enableStateProofKeyregCheck
+		curProto.MaxKeyregValidPeriod = maxValidPeriod // TODO: remove this when MaxKeyregValidPeriod is in CurrentVersion
 		return tx.WellFormed(spec, curProto)
 	}
 
@@ -1175,9 +1177,9 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 		/* 518 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: stateProofPK, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: errKeyregTxnOfflineShouldBeEmptyStateProofPK},
 		/* 519 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklekeystore.Verifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
 		/* 520 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklekeystore.Verifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
-		/* 521 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklekeystore.Verifier{}, voteFirst: basics.Round(10), voteLast: basics.Round(10 + merklekeystore.MaxValidPeriod), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
-		/* 522 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklekeystore.Verifier{}, voteFirst: basics.Round(10), voteLast: basics.Round(10000 + merklekeystore.MaxValidPeriod), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: errKeyRegTxnValidityPeriodTooLong},
-		/* 523 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklekeystore.Verifier{}, voteFirst: basics.Round(10), voteLast: basics.Round(10000 + merklekeystore.MaxValidPeriod), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: false, err: nil},
+		/* 521 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklekeystore.Verifier{}, voteFirst: basics.Round(10), voteLast: basics.Round(10 + maxValidPeriod), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
+		/* 522 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklekeystore.Verifier{}, voteFirst: basics.Round(10), voteLast: basics.Round(10000 + maxValidPeriod), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: errKeyRegTxnValidityPeriodTooLong},
+		/* 523 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklekeystore.Verifier{}, voteFirst: basics.Round(10), voteLast: basics.Round(10000 + maxValidPeriod), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: false, err: nil},
 	}
 	for testcaseIdx, testCase := range keyRegTestCases {
 		err := runTestCase(testCase)
