@@ -310,9 +310,9 @@ func processAppInputFile() (args [][]byte, accounts []string, foreignApps []uint
 func filterEmptyStrings(strSlice []string) []string {
 	var newStrSlice []string
 
-	for i := 0; i < len(strSlice); i++ {
-		if len(strSlice[i]) > 0 {
-			newStrSlice = append(newStrSlice, strSlice[i])
+	for _, str := range strSlice {
+		if len(str) > 0 {
+			newStrSlice = append(newStrSlice, str)
 		}
 	}
 	return newStrSlice
