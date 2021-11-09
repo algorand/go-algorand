@@ -225,7 +225,10 @@ func (manager *AccountManager) Registry() account.ParticipationRegistry {
 
 // FlushRegistry tells the underlying participation registry to flush it's change cache to the DB.
 func (manager *AccountManager) FlushRegistry(timeout time.Duration) {
-	manager.registry.Flush(timeout)
+	err := manager.registry.Flush(timeout)
+	if err != nil {
+		manager.log.Warnf("error while flushing the registry: %w", err)
+	}
 }
 
 // Record asynchronously records a participation key usage event.
