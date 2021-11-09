@@ -405,16 +405,6 @@ func (_ ByteSignature) CanMarshalMsg(z interface{}) bool {
 func (z *ByteSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	{
 		var zb0001 []byte
-		var zb0002 int
-		zb0002, err = msgp.ReadBytesBytesHeader(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 > 9999 {
-			err = msgp.ErrOverflow(uint64(zb0002), uint64(9999))
-			return
-		}
 		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -2733,11 +2723,6 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 				err = msgp.WrapError(err, "struct-from-array", "Batches")
 				return
 			}
-			if zb0008 > 8888 {
-				err = msgp.ErrOverflow(uint64(zb0008), uint64(8888))
-				err = msgp.WrapError(err, "struct-from-array", "Batches")
-				return
-			}
 			if zb0009 {
 				(*z).OneTimeSignatureSecretsPersistent.Batches = nil
 			} else if (*z).OneTimeSignatureSecretsPersistent.Batches != nil && cap((*z).OneTimeSignatureSecretsPersistent.Batches) >= zb0008 {
@@ -2767,11 +2752,6 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 			var zb0011 bool
 			zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Offsets")
-				return
-			}
-			if zb0010 > 8888 {
-				err = msgp.ErrOverflow(uint64(zb0010), uint64(8888))
 				err = msgp.WrapError(err, "struct-from-array", "Offsets")
 				return
 			}
@@ -2849,11 +2829,6 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 					err = msgp.WrapError(err, "Batches")
 					return
 				}
-				if zb0012 > 8888 {
-					err = msgp.ErrOverflow(uint64(zb0012), uint64(8888))
-					err = msgp.WrapError(err, "Batches")
-					return
-				}
 				if zb0013 {
 					(*z).OneTimeSignatureSecretsPersistent.Batches = nil
 				} else if (*z).OneTimeSignatureSecretsPersistent.Batches != nil && cap((*z).OneTimeSignatureSecretsPersistent.Batches) >= zb0012 {
@@ -2879,11 +2854,6 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 				var zb0015 bool
 				zb0014, zb0015, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Offsets")
-					return
-				}
-				if zb0014 > 8888 {
-					err = msgp.ErrOverflow(uint64(zb0014), uint64(8888))
 					err = msgp.WrapError(err, "Offsets")
 					return
 				}
@@ -3083,11 +3053,6 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 				err = msgp.WrapError(err, "struct-from-array", "Batches")
 				return
 			}
-			if zb0008 > 8888 {
-				err = msgp.ErrOverflow(uint64(zb0008), uint64(8888))
-				err = msgp.WrapError(err, "struct-from-array", "Batches")
-				return
-			}
 			if zb0009 {
 				(*z).Batches = nil
 			} else if (*z).Batches != nil && cap((*z).Batches) >= zb0008 {
@@ -3117,11 +3082,6 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 			var zb0011 bool
 			zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Offsets")
-				return
-			}
-			if zb0010 > 8888 {
-				err = msgp.ErrOverflow(uint64(zb0010), uint64(8888))
 				err = msgp.WrapError(err, "struct-from-array", "Offsets")
 				return
 			}
@@ -3199,11 +3159,6 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 					err = msgp.WrapError(err, "Batches")
 					return
 				}
-				if zb0012 > 8888 {
-					err = msgp.ErrOverflow(uint64(zb0012), uint64(8888))
-					err = msgp.WrapError(err, "Batches")
-					return
-				}
 				if zb0013 {
 					(*z).Batches = nil
 				} else if (*z).Batches != nil && cap((*z).Batches) >= zb0012 {
@@ -3229,11 +3184,6 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 				var zb0015 bool
 				zb0014, zb0015, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Offsets")
-					return
-				}
-				if zb0014 > 8888 {
-					err = msgp.ErrOverflow(uint64(zb0014), uint64(8888))
 					err = msgp.WrapError(err, "Offsets")
 					return
 				}
