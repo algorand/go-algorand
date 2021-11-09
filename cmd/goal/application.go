@@ -23,6 +23,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
+	"github.com/algorand/go-algorand/libgoal"
 	"os"
 	"strconv"
 	"strings"
@@ -383,6 +384,12 @@ func mustParseOnCompletion(ocString string) (oc transactions.OnCompletion) {
 		reportErrorf("unknown value for --on-completion: %s (possible values: {NoOp, OptIn, CloseOut, ClearState, UpdateApplication, DeleteApplication})", ocString)
 		return
 	}
+}
+
+func getDataDirAndClient() (dataDir string, client libgoal.Client) {
+	dataDir = ensureSingleDataDir()
+	client = ensureFullClient(dataDir)
+	return
 }
 
 func mustParseProgArgs() (approval []byte, clear []byte) {
@@ -794,8 +801,7 @@ var callAppCmd = &cobra.Command{
 	Long:  `Call an application, invoking application-specific functionality`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		dataDir := ensureSingleDataDir()
-		client := ensureFullClient(dataDir)
+		dataDir, client := getDataDirAndClient()
 
 		// Parse transaction parameters
 		appArgs, appAccounts, foreignApps, foreignAssets := getAppInputs()
@@ -1055,27 +1061,12 @@ var infoAppCmd = &cobra.Command{
 }
 
 var methodAppCmd = &cobra.Command{
-	Use:     "method",
-	Short:   "Invoke a method",
-	Long:    `Invoke a method in an App (stateful contract) with an application call transaction`,
-	Args:    validateNoPosArgsFn,
-	PreRunE: validateNoPosArgsFn,
+	Use:   "method",
+	Short: "Invoke a method",
+	Long:  `Invoke a method in an App (stateful contract) with an application call transaction`,
+	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		var applicationArgs [][]byte
-
-		// insert the method selector hash
-		hash := sha512.Sum512_256([]byte(method))
-		applicationArgs = append(applicationArgs, hash[0:4])
-
-		// parse down the ABI type from method signature
-		argTupleTypeStr, retTypeStr, err := abi.ParseMethodSignature(method)
-		if err != nil {
-			reportErrorf("cannot parse method signature: %v", err)
-		}
-		err = abi.ParseArgJSONtoByteSlice(argTupleTypeStr, methodArgs, &applicationArgs)
-		if err != nil {
-			reportErrorf("cannot parse arguments to ABI encoding: %v", err)
-		}
+		dataDir, client := getDataDirAndClient()
 
 		// Parse transaction parameters
 		appArgsParsed, appAccounts, foreignApps, foreignAssets := getAppInputs()
@@ -1092,10 +1083,6 @@ var methodAppCmd = &cobra.Command{
 			reportErrorf("in goal app method: --foreign-asset is not supported")
 		}
 
-		// copy-paste code from callAppCmd
-		dataDir := ensureSingleDataDir()
-		client := ensureFullClient(dataDir)
-
 		onCompletion := mustParseOnCompletion(createOnCompletion)
 
 		if appIdx == 0 {
@@ -1105,6 +1092,22 @@ var methodAppCmd = &cobra.Command{
 		var approvalProg, clearProg []byte
 		if onCompletion == transactions.UpdateApplicationOC {
 			approvalProg, clearProg = mustParseProgArgs()
+		}
+
+		var applicationArgs [][]byte
+
+		// insert the method selector hash
+		hash := sha512.Sum512_256([]byte(method))
+		applicationArgs = append(applicationArgs, hash[0:4])
+
+		// parse down the ABI type from method signature
+		argTupleTypeStr, retTypeStr, err := abi.ParseMethodSignature(method)
+		if err != nil {
+			reportErrorf("cannot parse method signature: %v", err)
+		}
+		err = abi.ParseArgJSONtoByteSlice(argTupleTypeStr, methodArgs, &applicationArgs)
+		if err != nil {
+			reportErrorf("cannot parse arguments to ABI encoding: %v", err)
 		}
 
 		tx, err := client.MakeUnsignedApplicationCallTx(
