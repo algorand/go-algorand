@@ -665,21 +665,28 @@ func accountsCreateResourceTable(ctx context.Context, tx *sql.Tx) error {
 	return nil
 }
 
+type baseOnlineAccountData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	VoteID          crypto.OneTimeSignatureVerifier `codec:"h"`
+	SelectionID     crypto.VRFVerifier              `codec:"i"`
+	VoteFirstValid  basics.Round                    `codec:"j"`
+	VoteLastValid   basics.Round                    `codec:"k"`
+	VoteKeyDilution uint64                          `codec:"l"`
+}
+
 type baseAccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Status             basics.Status                   `codec:"a"`
-	MicroAlgos         basics.MicroAlgos               `codec:"b"`
-	RewardsBase        uint64                          `codec:"c"`
-	RewardedMicroAlgos basics.MicroAlgos               `codec:"d"`
-	VoteID             crypto.OneTimeSignatureVerifier `codec:"e"`
-	SelectionID        crypto.VRFVerifier              `codec:"f"`
-	VoteFirstValid     basics.Round                    `codec:"g"`
-	VoteLastValid      basics.Round                    `codec:"h"`
-	VoteKeyDilution    uint64                          `codec:"i"`
-	AuthAddr           basics.Address                  `codec:"j"`
-	TotalAppSchema     basics.StateSchema              `codec:"k"`
-	TotalExtraAppPages uint32                          `codec:"l"`
+	Status             basics.Status      `codec:"a"`
+	MicroAlgos         basics.MicroAlgos  `codec:"b"`
+	RewardsBase        uint64             `codec:"c"`
+	RewardedMicroAlgos basics.MicroAlgos  `codec:"d"`
+	AuthAddr           basics.Address     `codec:"e"`
+	TotalAppSchema     basics.StateSchema `codec:"f"`
+	TotalExtraAppPages uint32             `codec:"g"`
+
+	baseOnlineAccountData
 }
 
 func (ba *baseAccountData) SetAccountData(ad *basics.AccountData) {
