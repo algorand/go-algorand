@@ -65,6 +65,7 @@ func (m *recordingKeyManager) Record(acct basics.Address, round basics.Round, ac
 	m.recording[acct][action] = round
 }
 
+// ValidateVoteRound requires that the given address voted on a particular round.
 func (m *recordingKeyManager) ValidateVoteRound(t *testing.T, address basics.Address, round basics.Round) {
 	m.mutex.Lock()
 	require.Equal(t, round, m.recording[address][account.Vote])

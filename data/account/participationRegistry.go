@@ -177,7 +177,7 @@ type ParticipationRegistry interface {
 	Record(account basics.Address, round basics.Round, participationType ParticipationAction) error
 
 	// Flush ensures that all changes have been written to the underlying data store.
-	Flush(duration time.Duration) error
+	Flush(timeout time.Duration) error
 
 	// Close any resources used to implement the interface.
 	Close()
@@ -317,7 +317,6 @@ type participationDB struct {
 
 	writeQueue     chan partDBWriteRecord
 	writeQueueDone chan struct{}
-	asyncErr       error
 	flushesPending int
 
 	flushTimeout time.Duration
@@ -329,6 +328,8 @@ type updatingParticipationRecord struct {
 	required bool
 }
 
+// partDBWriteRecord event object sent to the writeThread to facilitate async
+// database writes. Only one set of event fields should be set at a time.
 type partDBWriteRecord struct {
 	insertID ParticipationID
 	insert   Participation
@@ -943,7 +944,7 @@ func (db *participationDB) Close() {
 	db.store.Close()
 	close(db.writeQueue)
 
-	// Wait for write queue to notice the channel closed.
+	// Wait for write queue to close.
 	select {
 	case <-db.writeQueueDone:
 		return
