@@ -73,7 +73,7 @@ func registryCloseTest(t *testing.T, registry *participationDB) {
 	start := time.Now()
 	registry.Close()
 	duration := time.Since(start)
-	assert.Less(t, uint64(duration), defaultTimeout)
+	assert.Less(t, uint64(duration), uint64(defaultTimeout))
 }
 
 // Insert participation records and make sure they can be fetched.
