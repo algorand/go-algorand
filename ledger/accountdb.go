@@ -20,12 +20,14 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
@@ -123,7 +125,8 @@ var accountsResetExprs = []string{
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
 // details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
 // and their descriptions.
-var accountDBVersion = int32(6)
+// TODO - this should be bumped to 6 if we want to enable the new database schema upgrade.
+var accountDBVersion = int32(5)
 
 // persistedAccountData is used for representing a single account stored on the disk. In addition to the
 // basics.AccountData, it also stores complete referencing information used to maintain the base accounts
@@ -643,9 +646,9 @@ func accountsAddNormalizedBalance(tx *sql.Tx, proto config.ConsensusParams) erro
 }
 
 // accountsCreateResourceTable creates the resource table in the database.
-func accountsCreateResourceTable(tx *sql.Tx) error {
+func accountsCreateResourceTable(ctx context.Context, tx *sql.Tx) error {
 	var exists bool
-	err := tx.QueryRow("SELECT 1 FROM pragma_table_info('resources') WHERE name='addrid'").Scan(&exists)
+	err := tx.QueryRowContext(ctx, "SELECT 1 FROM pragma_table_info('resources') WHERE name='addrid'").Scan(&exists)
 	if err == nil {
 		// Already exists.
 		return nil
@@ -654,6 +657,327 @@ func accountsCreateResourceTable(tx *sql.Tx) error {
 		return err
 	}
 	for _, stmt := range createResourcesTable {
+		_, err = tx.ExecContext(ctx, stmt)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type baseAccountData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Status             basics.Status                   `codec:"a"`
+	MicroAlgos         basics.MicroAlgos               `codec:"b"`
+	RewardsBase        uint64                          `codec:"c"`
+	RewardedMicroAlgos basics.MicroAlgos               `codec:"d"`
+	VoteID             crypto.OneTimeSignatureVerifier `codec:"e"`
+	SelectionID        crypto.VRFVerifier              `codec:"f"`
+	VoteFirstValid     basics.Round                    `codec:"g"`
+	VoteLastValid      basics.Round                    `codec:"h"`
+	VoteKeyDilution    uint64                          `codec:"i"`
+	AuthAddr           basics.Address                  `codec:"j"`
+	TotalAppSchema     basics.StateSchema              `codec:"k"`
+	TotalExtraAppPages uint32                          `codec:"l"`
+}
+
+func (ba *baseAccountData) SetAccountData(ad *basics.AccountData) {
+	ba.Status = ad.Status
+	ba.MicroAlgos = ad.MicroAlgos
+	ba.RewardsBase = ad.RewardsBase
+	ba.RewardedMicroAlgos = ad.RewardedMicroAlgos
+	ba.VoteID = ad.VoteID
+	ba.SelectionID = ad.SelectionID
+	ba.VoteFirstValid = ad.VoteFirstValid
+	ba.VoteLastValid = ad.VoteLastValid
+	ba.VoteKeyDilution = ad.VoteKeyDilution
+	ba.AuthAddr = ad.AuthAddr
+	ba.TotalAppSchema = ad.TotalAppSchema
+	ba.TotalExtraAppPages = ad.TotalExtraAppPages
+}
+
+func (ba *baseAccountData) GetAccountData() basics.AccountData {
+	return basics.AccountData{
+		Status:             ba.Status,
+		MicroAlgos:         ba.MicroAlgos,
+		RewardsBase:        ba.RewardsBase,
+		RewardedMicroAlgos: ba.RewardedMicroAlgos,
+		VoteID:             ba.VoteID,
+		SelectionID:        ba.SelectionID,
+		VoteFirstValid:     ba.VoteFirstValid,
+		VoteLastValid:      ba.VoteLastValid,
+		VoteKeyDilution:    ba.VoteKeyDilution,
+		AuthAddr:           ba.AuthAddr,
+		TotalAppSchema:     ba.TotalAppSchema,
+		TotalExtraAppPages: ba.TotalExtraAppPages,
+	}
+}
+
+type resourcesData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	// asset parameters ( basics.AssetParams )
+	Total         uint64         `codec:"a"`
+	Decimals      uint32         `codec:"b"`
+	DefaultFrozen bool           `codec:"c"`
+	UnitName      string         `codec:"d"`
+	AssetName     string         `codec:"e"`
+	URL           string         `codec:"f"`
+	MetadataHash  [32]byte       `codec:"g"`
+	Manager       basics.Address `codec:"h"`
+	Reserve       basics.Address `codec:"i"`
+	Freeze        basics.Address `codec:"j"`
+	Clawback      basics.Address `codec:"k"`
+
+	// asset holding ( basics.AssetHolding )
+	Amount uint64 `codec:"l"`
+	Frozen bool   `codec:"m"`
+
+	// application local state ( basics.AppLocalState )
+	Schema   basics.StateSchema  `codec:"n"`
+	KeyValue basics.TealKeyValue `codec:"o"`
+
+	// application global params ( basics.AppParams )
+	ApprovalProgram   []byte              `codec:"p,allocbound=config.MaxAvailableAppProgramLen"`
+	ClearStateProgram []byte              `codec:"q,allocbound=config.MaxAvailableAppProgramLen"`
+	GlobalState       basics.TealKeyValue `codec:"r"`
+	LocalStateSchema  basics.StateSchema  `codec:"s"`
+	GlobalStateSchema basics.StateSchema  `codec:"t"`
+	ExtraProgramPages uint32              `codec:"u"`
+
+	UpdateRound uint64 `codec:"z"`
+}
+
+func (rd *resourcesData) SetAssetParams(ap basics.AssetParams) {
+	rd.Total = ap.Total
+	rd.Decimals = ap.Decimals
+	rd.DefaultFrozen = ap.DefaultFrozen
+	rd.UnitName = ap.UnitName
+	rd.AssetName = ap.AssetName
+	rd.URL = ap.URL
+	copy(rd.MetadataHash[:], ap.MetadataHash[:])
+	rd.Manager = ap.Manager
+	rd.Reserve = ap.Reserve
+	rd.Freeze = ap.Freeze
+	rd.Clawback = ap.Clawback
+}
+
+func (rd *resourcesData) GetAssetParams() basics.AssetParams {
+	ap := basics.AssetParams{
+		Total:         rd.Total,
+		Decimals:      rd.Decimals,
+		DefaultFrozen: rd.DefaultFrozen,
+		UnitName:      rd.UnitName,
+		AssetName:     rd.AssetName,
+		URL:           rd.URL,
+		Manager:       rd.Manager,
+		Reserve:       rd.Reserve,
+		Freeze:        rd.Freeze,
+		Clawback:      rd.Clawback,
+	}
+	copy(ap.MetadataHash[:], rd.MetadataHash[:])
+	return ap
+}
+
+func (rd *resourcesData) SetAssetHolding(ah basics.AssetHolding) {
+	rd.Amount = ah.Amount
+	rd.Frozen = ah.Frozen
+}
+
+func (rd *resourcesData) GetAssetHolding() basics.AssetHolding {
+	return basics.AssetHolding{
+		Amount: rd.Amount,
+		Frozen: rd.Frozen,
+	}
+}
+
+func (rd *resourcesData) SetAppLocalState(als basics.AppLocalState) {
+	rd.Schema = als.Schema
+	rd.KeyValue = als.KeyValue
+}
+
+func (rd *resourcesData) GetAppLocalState() basics.AppLocalState {
+	return basics.AppLocalState{
+		Schema:   rd.Schema,
+		KeyValue: rd.KeyValue,
+	}
+}
+
+func (rd *resourcesData) SetAppParams(ap basics.AppParams) {
+	rd.ApprovalProgram = ap.ApprovalProgram
+	rd.ClearStateProgram = ap.ClearStateProgram
+	rd.GlobalState = ap.GlobalState
+	rd.LocalStateSchema = ap.LocalStateSchema
+	rd.GlobalStateSchema = ap.GlobalStateSchema
+	rd.ExtraProgramPages = ap.ExtraProgramPages
+
+}
+
+func (rd *resourcesData) GetAppParams() basics.AppParams {
+	return basics.AppParams{
+		ApprovalProgram:   rd.ApprovalProgram,
+		ClearStateProgram: rd.ClearStateProgram,
+		GlobalState:       rd.GlobalState,
+		StateSchemas: basics.StateSchemas{
+			LocalStateSchema:  rd.LocalStateSchema,
+			GlobalStateSchema: rd.GlobalStateSchema,
+		},
+		ExtraProgramPages: rd.ExtraProgramPages,
+	}
+}
+
+// performResourceTableMigration migrate the database to use the resources table.
+func performResourceTableMigration(ctx context.Context, tx *sql.Tx) (err error) {
+	idxnameBalances := fmt.Sprintf("onlineaccountbals_idx_%d", time.Now().UnixNano())
+
+	createNewAcctBase := []string{
+		`CREATE TABLE IF NOT EXISTS accountbase_resources_migration (
+		addrid INTEGER PRIMARY KEY NOT NULL,
+		address blob NOT NULL,
+		data blob,
+		normalizedonlinebalance INTEGER )`,
+		createNormalizedOnlineBalanceIndex(idxnameBalances, "accountbase_resources_migration"),
+	}
+	createNewAcctBase = append(createNewAcctBase,
+		fmt.Sprintf(`CREATE UNIQUE INDEX accountbase_resources_migration_address_idx_%d ON accountbase_resources_migration(address)`, time.Now().UnixNano()),
+	)
+
+	applyNewAcctBase := []string{
+		`ALTER TABLE accountbase RENAME TO accountbase_old`,
+		`ALTER TABLE accountbase_resources_migration RENAME TO accountbase`,
+		`DROP TABLE IF EXISTS accountbase_old`,
+	}
+
+	for _, stmt := range createNewAcctBase {
+		_, err = tx.ExecContext(ctx, stmt)
+		if err != nil {
+			return err
+		}
+	}
+	var insertNewAcctBase *sql.Stmt
+	var insertResources *sql.Stmt
+	var insertNewAcctBaseNormBal *sql.Stmt
+	insertNewAcctBase, err = tx.PrepareContext(ctx, "INSERT INTO accountbase_resources_migration(address, data) VALUES(?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insertNewAcctBase.Close()
+
+	insertNewAcctBaseNormBal, err = tx.PrepareContext(ctx, "INSERT INTO accountbase_resources_migration(address, data, normalizedonlinebalance) VALUES(?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insertNewAcctBaseNormBal.Close()
+
+	insertResources, err = tx.PrepareContext(ctx, "INSERT INTO resources(addrid, aidx, rtype, data) VALUES(?, ?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insertResources.Close()
+
+	var rows *sql.Rows
+	rows, err = tx.QueryContext(ctx, "SELECT address, data, normalizedonlinebalance FROM accountbase ORDER BY address")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	var insertRes sql.Result
+	var rowID int64
+	var rowsAffected int64
+	for rows.Next() {
+		var addrbuf []byte
+		var encodedAcctData []byte
+		var normBal sql.NullInt64
+		err = rows.Scan(&addrbuf, &encodedAcctData, &normBal)
+		if err != nil {
+			return err
+		}
+
+		var accountData basics.AccountData
+		err = protocol.Decode(encodedAcctData, &accountData)
+		if err != nil {
+			return err
+		}
+
+		var newAccountData baseAccountData
+		newAccountData.SetAccountData(&accountData)
+		encodedAcctData = protocol.Encode(&newAccountData)
+
+		if normBal.Valid {
+			insertRes, err = insertNewAcctBaseNormBal.ExecContext(ctx, addrbuf, encodedAcctData, normBal.Int64)
+		} else {
+			insertRes, err = insertNewAcctBase.ExecContext(ctx, addrbuf, encodedAcctData)
+		}
+
+		if err != nil {
+			return err
+		}
+		rowsAffected, err = insertRes.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rowsAffected != 1 {
+			return errors.New("insert operation failed")
+		}
+		rowID, err = insertRes.LastInsertId()
+		if err != nil {
+			return err
+		}
+		// does this account have any assets ?
+		if len(accountData.Assets) > 0 || len(accountData.AssetParams) > 0 {
+			for aidx, holding := range accountData.Assets {
+				var rd resourcesData
+				rd.SetAssetHolding(holding)
+				if ap, has := accountData.AssetParams[aidx]; has {
+					rd.SetAssetParams(ap)
+					delete(accountData.AssetParams, aidx)
+				}
+				insertRes, err = insertResources.ExecContext(ctx, rowID, aidx, basics.AssetCreatable, protocol.Encode(&rd))
+				if err != nil {
+					return err
+				}
+			}
+			for aidx, aparams := range accountData.AssetParams {
+				var rd resourcesData
+				rd.SetAssetParams(aparams)
+				insertRes, err = insertResources.ExecContext(ctx, rowID, aidx, basics.AssetCreatable, protocol.Encode(&rd))
+				if err != nil {
+					return err
+				}
+			}
+		}
+		// does this account have any applications ?
+		if len(accountData.AppLocalStates) > 0 || len(accountData.AppParams) > 0 {
+			for aidx, localState := range accountData.AppLocalStates {
+				var rd resourcesData
+				rd.SetAppLocalState(localState)
+				if ap, has := accountData.AppParams[aidx]; has {
+					rd.SetAppParams(ap)
+					delete(accountData.AppParams, aidx)
+				}
+				insertRes, err = insertResources.ExecContext(ctx, rowID, aidx, basics.AppCreatable, protocol.Encode(&rd))
+				if err != nil {
+					return err
+				}
+			}
+			for aidx, aparams := range accountData.AppParams {
+				var rd resourcesData
+				rd.SetAppParams(aparams)
+				insertRes, err = insertResources.ExecContext(ctx, rowID, aidx, basics.AppCreatable, protocol.Encode(&rd))
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	// if the above loop was abrupted by an error, test it now.
+	if err = rows.Err(); err != nil {
+		return err
+	}
+
+	for _, stmt := range applyNewAcctBase {
 		_, err = tx.Exec(stmt)
 		if err != nil {
 			return err

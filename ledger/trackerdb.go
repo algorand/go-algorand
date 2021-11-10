@@ -376,7 +376,7 @@ done:
 // upgradeDatabaseSchema5 upgrades the database schema from version 5 to version 6,
 // adding the resources table and clearing empty catchpoint directories.
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context, tx *sql.Tx) (err error) {
-	err = accountsCreateResourceTable(tx)
+	err = accountsCreateResourceTable(ctx, tx)
 	if err != nil {
 		return err
 	}
@@ -386,7 +386,10 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 		return err
 	}
 
-	// TODO : migrate all data..
+	err = performResourceTableMigration(ctx, tx)
+	if err != nil {
+		return err
+	}
 
 	// update version
 	return tu.setVersion(ctx, tx, 6)

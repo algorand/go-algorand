@@ -203,6 +203,10 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 // it is done be creating empty directories in the catchpoint root directory.
 // When algod boots up it should remove those directories
 func TestSchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
+	// we don't want to run this test before the binary is compiled against the latest database upgrade schema.
+	if accountDBVersion < 6 {
+		return
+	}
 	temporaryDirectroy, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
 	require.NoError(t, err)
 	defer func() {
