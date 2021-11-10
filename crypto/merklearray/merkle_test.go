@@ -376,7 +376,7 @@ func TestMerkelSizeLimits(t *testing.T) {
 		// 2^(depth-eltCoefficient)*eltCoefficient
 
 		// regular spaced elets
-		for eltCoefficient := uint64(1); eltCoefficient <= depth; eltCoefficient = eltCoefficient << 1 {
+		for eltCoefficient := uint64(0); eltCoefficient <= depth;  {
 			numElts := uint64(1) << (depth - eltCoefficient)
 			positions := getRegularPositions(numElts, uint64(1)<<depth)
 
@@ -403,6 +403,12 @@ func TestMerkelSizeLimits(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, *tree, outTree)
+			}
+
+			if eltCoefficient == 0 {
+				eltCoefficient = 1
+			} else {
+				eltCoefficient = eltCoefficient << 1
 			}
 		}
 
