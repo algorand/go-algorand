@@ -704,6 +704,5 @@ jobs:
       - prepare_go
       - upload_binaries_command:
           platform: << parameters.platform >>
-      - slack/notify: &slack-fail-event
-          event: fail
-          template: basic_fail_1
+      - slack/notify:
+          <<: *slack-fail-event
