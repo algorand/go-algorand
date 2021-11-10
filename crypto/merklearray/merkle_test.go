@@ -83,7 +83,14 @@ func (a TestRepeatingArray) Marshal(pos uint64) ([]byte, error) {
 func TestMerkle(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for i := uint64(0); i < 1024; i++ {
+	increment := uint64(1)
+	// with -race this will take a very long time
+	// run a shorter version for Short testing
+	if testing.Short() {
+		increment = uint64(16)
+	}
+
+	for i := uint64(0); i < 1024; i = i + increment {
 		testMerkle(t, crypto.Sha512_256, i)
 	}
 
@@ -362,10 +369,16 @@ func testWithSize(t *testing.T, size int) error {
 	return err
 }
 
-func TestMerkelSizeLimits(t *testing.T) {
+func TestSizeLimitsMerkle(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for depth := uint64(0); depth < uint64(18); depth++ {
+	increment := uint64(1)
+	// with -race this will take a very long time
+	// run a shorter version for Short testing
+	if testing.Short() {
+		increment = 8
+	}
+	for depth := uint64(0); depth < uint64(18); depth = depth + increment {
 		size := uint64(1) << depth
 
 		// eltCoefficient is the coefficent to determine how many elements are in the proof.
@@ -376,7 +389,7 @@ func TestMerkelSizeLimits(t *testing.T) {
 		// 2^(depth-eltCoefficient)*eltCoefficient
 
 		// regular spaced elets
-		for eltCoefficient := uint64(0); eltCoefficient <= depth;  {
+		for eltCoefficient := uint64(0); eltCoefficient <= depth; {
 			numElts := uint64(1) << (depth - eltCoefficient)
 			positions := getRegularPositions(numElts, uint64(1)<<depth)
 
@@ -408,12 +421,12 @@ func TestMerkelSizeLimits(t *testing.T) {
 			if eltCoefficient == 0 {
 				eltCoefficient = 1
 			} else {
-				eltCoefficient = eltCoefficient << 1
+				eltCoefficient = eltCoefficient << increment
 			}
 		}
 
 		// randomly positioned elts
-		for eltCoefficient := uint64(1); eltCoefficient <= depth; eltCoefficient = eltCoefficient << 1 {
+		for eltCoefficient := uint64(1); eltCoefficient <= depth; eltCoefficient = eltCoefficient << increment {
 			numElts := uint64(1) << (depth - eltCoefficient)
 			positions := getRandomPositions(numElts, numElts)
 
