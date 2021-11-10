@@ -1123,6 +1123,21 @@ var methodAppCmd = &cobra.Command{
 			reportErrorf(errorSigningTX, err)
 		}
 
+		if outFilename != "" {
+			if dumpForDryrun {
+				err = writeDryrunReqToFile(client, tx, outFilename)
+			} else {
+				// Write transaction to file
+				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
+			}
+
+			if err != nil {
+				reportErrorf(err.Error())
+			}
+
+			return
+		}
+
 		txid, err := client.BroadcastTransaction(signedTxn)
 		if err != nil {
 			reportErrorf(errorBroadcastingTX, err)
@@ -1180,7 +1195,7 @@ var methodAppCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf("cannot marshal returned bytes %v to JSON: %v", decoded, err)
 			}
-			fmt.Printf("method %s output: %s", method, string(decodedJSON))
+			fmt.Printf("method %s output: %s\n", method, string(decodedJSON))
 		}
 	},
 }
