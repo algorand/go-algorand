@@ -932,7 +932,6 @@ func (db *participationDB) Flush(timeout time.Duration) error {
 	case <-timeoutCh:
 		return fmt.Errorf("timeout while flushing changes, check results manually")
 	}
-	return nil
 }
 
 // Close attempts to flush with db.flushTimeout, then waits for the write queue for another db.flushTimeout.

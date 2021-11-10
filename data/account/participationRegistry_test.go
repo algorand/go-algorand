@@ -73,7 +73,7 @@ func registryCloseTest(t *testing.T, registry *participationDB) {
 	start := time.Now()
 	registry.Close()
 	duration := time.Since(start)
-	assert.Less(t, uint64(duration), uint64(1 * time.Second))
+	assert.Less(t, uint64(duration), uint64(1*time.Second))
 }
 
 // Insert participation records and make sure they can be fetched.
@@ -700,7 +700,7 @@ func TestFlushDeadlock(t *testing.T) {
 				return
 			default:
 				// If there is a deadlock, this timeout will expire.
-				assert.NoError(t, registry.Flush(2 * time.Second))
+				assert.NoError(t, registry.Flush(2*time.Second))
 			}
 		}
 	}
