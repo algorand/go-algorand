@@ -171,8 +171,8 @@ func (z *Proof) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Path")
 				return
 			}
-			if zb0004 > MaxNumLeaves {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(MaxNumLeaves))
+			if zb0004 > MaxNumLeaves/2 {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(MaxNumLeaves/2))
 				err = msgp.WrapError(err, "struct-from-array", "Path")
 				return
 			}
@@ -230,8 +230,8 @@ func (z *Proof) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Path")
 					return
 				}
-				if zb0006 > MaxNumLeaves {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(MaxNumLeaves))
+				if zb0006 > MaxNumLeaves/2 {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(MaxNumLeaves/2))
 					err = msgp.WrapError(err, "Path")
 					return
 				}

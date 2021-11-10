@@ -365,7 +365,7 @@ func testWithSize(t *testing.T, size int) error {
 func TestMerkelSizeLimits(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for depth := uint64(0); depth <= uint64(18); depth++ {
+	for depth := uint64(0); depth < uint64(18); depth++ {
 		size := uint64(1) << depth
 
 		// eltCoefficient is the coefficent to determine how many elements are in the proof.
@@ -387,8 +387,8 @@ func TestMerkelSizeLimits(t *testing.T) {
 			bytes := protocol.Encode(proof)
 			var outProof Proof
 			err := protocol.Decode(bytes, &outProof)
-			if depth == 18 && (eltCoefficient == 1 || eltCoefficient == 2) {
-				errmsg := fmt.Sprintf("%d > %d at Path", len(proof.Path), MaxNumLeaves)
+			if depth > MaxTreeDepth && (eltCoefficient == 1 || eltCoefficient == 2) {
+				errmsg := fmt.Sprintf("%d > %d at Path", len(proof.Path), MaxNumLeaves/2)
 				require.Contains(t, err.Error(), errmsg)
 			} else {
 				require.NoError(t, err)
