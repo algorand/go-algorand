@@ -27,7 +27,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -1594,6 +1593,7 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 	for scanner.Scan() {
 		ops.sourceLine++
 		line := scanner.Text()
+		line = strings.TrimSpace(line)
 		if len(line) == 0 {
 			ops.trace("%d: 0 line\n", ops.sourceLine)
 			continue
@@ -2108,19 +2108,27 @@ func (ops *OpStream) warnf(format string, a ...interface{}) error {
 	return ops.warn(fmt.Errorf(format, a...))
 }
 
-// ReportProblems issues accumulated warnings and errors to stderr.
-func (ops *OpStream) ReportProblems(fname string) {
+// ReportProblems issues accumulated warnings and outputs errors to an io.Writer.
+func (ops *OpStream) ReportProblems(fname string, writer io.Writer) {
 	for i, e := range ops.Errors {
 		if i > 9 {
 			break
 		}
-		fmt.Fprintf(os.Stderr, "%s: %s\n", fname, e)
+		if fname == "" {
+			fmt.Fprintf(writer, "%s\n", e)
+		} else {
+			fmt.Fprintf(writer, "%s: %s\n", fname, e)
+		}
 	}
 	for i, w := range ops.Warnings {
 		if i > 9 {
 			break
 		}
-		fmt.Fprintf(os.Stderr, "%s: %s\n", fname, w)
+		if fname == "" {
+			fmt.Fprintf(writer, "%s\n", w)
+		} else {
+			fmt.Fprintf(writer, "%s: %s\n", fname, w)
+		}
 	}
 }
 

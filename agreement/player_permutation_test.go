@@ -19,7 +19,6 @@ package agreement
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -32,7 +31,7 @@ import (
 
 func makeRandomProposalPayload(r round) *proposal {
 	f := testBlockFactory{Owner: 1}
-	ve, _ := f.AssembleBlock(r, time.Time{})
+	ve, _ := f.AssembleBlock(r)
 
 	var payload unauthenticatedProposal
 	payload.Block = ve.Block()

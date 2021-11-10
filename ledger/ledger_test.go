@@ -1426,7 +1426,7 @@ func TestGetLastCatchpointLabel(t *testing.T) {
 
 	// set some value
 	lastCatchpointLabel := "someCatchpointLabel"
-	ledger.accts.lastCatchpointLabel = lastCatchpointLabel
+	ledger.catchpoint.lastCatchpointLabel = lastCatchpointLabel
 
 	// verify the value is returned
 	require.Equal(t, lastCatchpointLabel, ledger.GetLastCatchpointLabel())

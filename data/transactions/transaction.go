@@ -29,9 +29,6 @@ import (
 // Txid is a hash used to uniquely identify individual transactions
 type Txid crypto.Digest
 
-// LeaseByteLength is the byte length of a lease
-const LeaseByteLength = int(32)
-
 // String converts txid to a pretty-printable string
 func (txid Txid) String() string {
 	return fmt.Sprintf("%v", crypto.Digest(txid))
@@ -72,7 +69,7 @@ type Header struct {
 	// lease identified by the (Sender, Lease) pair of the transaction until
 	// the LastValid round passes.  While this transaction possesses the
 	// lease, no other transaction specifying this lease can be confirmed.
-	Lease [LeaseByteLength]byte `codec:"lx"`
+	Lease [32]byte `codec:"lx"`
 
 	// RekeyTo, if nonzero, sets the sender's AuthAddr to the given address
 	// If the RekeyTo address is the sender's actual address, the AuthAddr is set to zero

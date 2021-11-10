@@ -24,6 +24,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -67,13 +68,6 @@ type NodeInterface interface {
 	StartCatchup(catchpoint string) error
 	AbortCatchup(catchpoint string) error
 	Config() config.Local
-}
-
-// RegisterParticipationKeys registers participation keys.
-// (POST /v2/register-participation-keys/{address})
-func (v2 *Handlers) RegisterParticipationKeys(ctx echo.Context, address string, params private.RegisterParticipationKeysParams) error {
-	// TODO: register participation keys endpoint
-	return ctx.String(http.StatusNotImplemented, "Endpoint not implemented.")
 }
 
 // ShutdownNode shuts down the node.
@@ -761,7 +755,9 @@ func (v2 *Handlers) TealCompile(ctx echo.Context) error {
 	source := buf.String()
 	ops, err := logic.AssembleString(source)
 	if err != nil {
-		return badRequest(ctx, err, err.Error(), v2.Log)
+		sb := strings.Builder{}
+		ops.ReportProblems("", &sb)
+		return badRequest(ctx, err, sb.String(), v2.Log)
 	}
 	pd := logic.HashProgram(ops.Program)
 	addr := basics.Address(pd)

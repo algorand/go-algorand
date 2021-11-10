@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -111,7 +110,11 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 		log:      dblogger,
 		blocks:   make([]blockEntry, len(ml.blocks)),
 		deltas:   make([]ledgercore.StateDelta, len(ml.deltas)),
+		accts:    make(map[basics.Address]basics.AccountData),
 		filename: fn,
+	}
+	for k, v := range ml.accts {
+		newLedgerTracker.accts[k] = v
 	}
 	copy(newLedgerTracker.blocks, ml.blocks)
 	copy(newLedgerTracker.deltas, ml.deltas)
@@ -195,14 +198,6 @@ func (ml *mockLedgerForTracker) trackerLog() logging.Logger {
 	return ml.log
 }
 
-func (ml *mockLedgerForTracker) waitAccountsWriting() {
-	ml.trackers.waitAccountsWriting()
-}
-
-func (ml *mockLedgerForTracker) scheduleCommit(rnd basics.Round) {
-	ml.trackers.scheduleCommit(rnd)
-}
-
 func (ml *mockLedgerForTracker) GenesisHash() crypto.Digest {
 	if len(ml.blocks) > 0 {
 		return ml.blocks[0].block.GenesisHash()
@@ -251,18 +246,20 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 
 func newAcctUpdates(tb testing.TB, l *mockLedgerForTracker, conf config.Local, dbPathPrefix string) *accountUpdates {
 	au := &accountUpdates{}
-	au.initialize(conf, ".")
-	_, err := trackerDBInitialize(l, au.catchpointEnabled(), au.dbDirectory)
+	au.initialize(conf)
+	_, err := trackerDBInitialize(l, false, ".")
 	require.NoError(tb, err)
 
-	l.trackers.initialize(au, l, []ledgerTracker{au})
+	l.trackers.initialize(l, []ledgerTracker{au}, conf)
+	err = l.trackers.loadFromDisk(l)
+	require.NoError(tb, err)
 
 	return au
 }
 
 func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, latestRnd basics.Round, accts []map[basics.Address]basics.AccountData, rewards []uint64, proto config.ConsensusParams) {
 	latest := au.latest()
-	require.Equal(t, latest, latestRnd)
+	require.Equal(t, latestRnd, latest)
 
 	_, err := au.Totals(latest + 1)
 	require.Error(t, err)
@@ -386,8 +383,6 @@ func TestAcctUpdates(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	au := newAcctUpdates(t, ml, conf, ".")
-	err := au.loadFromDisk(ml, 0)
-	require.NoError(t, err)
 	defer au.close()
 
 	// cover 10 genesis blocks
@@ -439,16 +434,16 @@ func TestAcctUpdates(t *testing.T) {
 
 	for i := basics.Round(0); i < 15; i++ {
 		// Clear the timer to ensure a flush
-		au.lastFlushTime = time.Time{}
+		ml.trackers.lastFlushTime = time.Time{}
 
-		ml.scheduleCommit(basics.Round(proto.MaxBalLookback) + i)
-		ml.waitAccountsWriting()
+		ml.trackers.committedUpTo(basics.Round(proto.MaxBalLookback) + i)
+		ml.trackers.waitAccountsWriting()
 		checkAcctUpdates(t, au, i, basics.Round(proto.MaxBalLookback+14), accts, rewardsLevels, proto)
 	}
 
 	// check the account totals.
 	var dbRound basics.Round
-	err = ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		dbRound, err = accountsRound(tx)
 		return
 	})
@@ -468,7 +463,6 @@ func TestAcctUpdates(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, expectedTotals, actualTotals)
 }
-
 func TestAcctUpdatesFastUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -496,8 +490,6 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	au := newAcctUpdates(t, ml, conf, ".")
-	err := au.loadFromDisk(ml, 0)
-	require.NoError(t, err)
 	defer au.close()
 
 	// cover 10 genesis blocks
@@ -541,7 +533,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 		wg.Add(1)
 		go func(round basics.Round) {
 			defer wg.Done()
-			ml.scheduleCommit(round)
+			ml.trackers.committedUpTo(round)
 		}(i)
 	}
 	wg.Wait()
@@ -585,8 +577,6 @@ func BenchmarkBalancesChanges(b *testing.B) {
 
 	conf := config.GetDefaultLocal()
 	au := newAcctUpdates(b, ml, conf, ".")
-	err := au.loadFromDisk(ml, 0)
-	require.NoError(b, err)
 	defer au.close()
 
 	// cover initialRounds genesis blocks
@@ -629,18 +619,18 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	}
 	for i := proto.MaxBalLookback; i < proto.MaxBalLookback+initialRounds; i++ {
 		// Clear the timer to ensure a flush
-		au.lastFlushTime = time.Time{}
-		ml.scheduleCommit(basics.Round(i))
+		ml.trackers.lastFlushTime = time.Time{}
+		ml.trackers.committedUpTo(basics.Round(i))
 	}
-	ml.waitAccountsWriting()
+	ml.trackers.waitAccountsWriting()
 	b.ResetTimer()
 	startTime := time.Now()
 	for i := proto.MaxBalLookback + initialRounds; i < proto.MaxBalLookback+uint64(b.N); i++ {
 		// Clear the timer to ensure a flush
-		au.lastFlushTime = time.Time{}
-		ml.scheduleCommit(basics.Round(i))
+		ml.trackers.lastFlushTime = time.Time{}
+		ml.trackers.committedUpTo(basics.Round(i))
 	}
-	ml.waitAccountsWriting()
+	ml.trackers.waitAccountsWriting()
 	deltaTime := time.Now().Sub(startTime)
 	if deltaTime > time.Second {
 		return
@@ -718,8 +708,6 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	conf.CatchpointInterval = 1
 	conf.Archival = true
 	au := newAcctUpdates(t, ml, conf, ".")
-	err := au.loadFromDisk(ml, 0)
-	require.NoError(t, err)
 	defer au.close()
 
 	// cover 10 genesis blocks
@@ -756,9 +744,9 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 
-		ml.scheduleCommit(i)
+		ml.trackers.committedUpTo(i)
 		if i%2 == 1 {
-			ml.waitAccountsWriting()
+			ml.trackers.waitAccountsWriting()
 		}
 	}
 }
@@ -823,9 +811,6 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 
 		conf := config.GetDefaultLocal()
 		au := newAcctUpdates(t, ml, conf, ".")
-
-		err := au.loadFromDisk(ml, 0)
-		require.NoError(t, err)
 		defer au.close()
 
 		// cover 10 genesis blocks
@@ -918,10 +903,10 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 				delta.Accts.Upsert(addr, ad)
 			}
 			au.newBlock(blk, delta)
-			ml.scheduleCommit(i)
+			ml.trackers.committedUpTo(i)
 		}
 		lastRound := i - 1
-		ml.waitAccountsWriting()
+		ml.trackers.waitAccountsWriting()
 
 		for idx, addr := range moneyAccounts {
 			balance, validThrough, err := au.LookupWithoutRewards(lastRound, addr)
@@ -939,53 +924,6 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 	t.Run("InMemoryDB", testFunction)
 	inMemory = false
 	t.Run("DiskDB", testFunction)
-}
-
-// TestAcctUpdatesDeleteStoredCatchpoints - The goal of this test is to verify that the deleteStoredCatchpoints function works correctly.
-// it doing so by filling up the storedcatchpoints with dummy catchpoint file entries, as well as creating these dummy files on disk.
-// ( the term dummy is only because these aren't real catchpoint files, but rather a zero-length file ). Then, the test call the function
-// and ensures that it did not errored, the catchpoint files were correctly deleted, and that deleteStoredCatchpoints contains no more
-// entries.
-func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
-
-	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
-	defer ml.Close()
-
-	conf := config.GetDefaultLocal()
-	conf.CatchpointInterval = 1
-	au := newAcctUpdates(t, ml, conf, ".")
-
-	err := au.loadFromDisk(ml, 0)
-	require.NoError(t, err)
-	defer au.close()
-
-	dummyCatchpointFilesToCreate := 42
-
-	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
-		f, err := os.Create(fmt.Sprintf("./dummy_catchpoint_file-%d", i))
-		require.NoError(t, err)
-		err = f.Close()
-		require.NoError(t, err)
-	}
-
-	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
-		err := au.accountsq.storeCatchpoint(context.Background(), basics.Round(i), fmt.Sprintf("./dummy_catchpoint_file-%d", i), "", 0)
-		require.NoError(t, err)
-	}
-	err = deleteStoredCatchpoints(context.Background(), au.accountsq, au.dbDirectory)
-	require.NoError(t, err)
-
-	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
-		// ensure that all the files were deleted.
-		_, err := os.Open(fmt.Sprintf("./dummy_catchpoint_file-%d", i))
-		require.True(t, os.IsNotExist(err))
-	}
-	fileNames, err := au.accountsq.getOldestCatchpointFiles(context.Background(), dummyCatchpointFilesToCreate, 0)
-	require.NoError(t, err)
-	require.Equal(t, 0, len(fileNames))
 }
 
 // listAndCompareComb lists the assets/applications and then compares against the expected
@@ -1167,94 +1105,6 @@ func TestListCreatables(t *testing.T) {
 	listAndCompareComb(t, au, expectedDbImage)
 }
 
-func TestIsWritingCatchpointFile(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	au := &accountUpdates{}
-
-	au.catchpointWriting = -1
-	ans := au.IsWritingCatchpointFile()
-	require.True(t, ans)
-
-	au.catchpointWriting = 0
-	ans = au.IsWritingCatchpointFile()
-	require.False(t, ans)
-}
-
-func TestGetCatchpointStream(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
-
-	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
-	defer ml.Close()
-
-	conf := config.GetDefaultLocal()
-	conf.CatchpointInterval = 1
-	au := newAcctUpdates(t, ml, conf, ".")
-
-	err := au.loadFromDisk(ml, 0)
-	require.NoError(t, err)
-	defer au.close()
-
-	filesToCreate := 4
-
-	temporaryDirectroy, err := ioutil.TempDir(os.TempDir(), "catchpoints")
-	require.NoError(t, err)
-	defer func() {
-		os.RemoveAll(temporaryDirectroy)
-	}()
-	catchpointsDirectory := filepath.Join(temporaryDirectroy, "catchpoints")
-	err = os.Mkdir(catchpointsDirectory, 0777)
-	require.NoError(t, err)
-
-	au.dbDirectory = temporaryDirectroy
-
-	// Create the catchpoint files with dummy data
-	for i := 0; i < filesToCreate; i++ {
-		fileName := filepath.Join("catchpoints", fmt.Sprintf("%d.catchpoint", i))
-		data := []byte{byte(i), byte(i + 1), byte(i + 2)}
-		err = ioutil.WriteFile(filepath.Join(temporaryDirectroy, fileName), data, 0666)
-		require.NoError(t, err)
-
-		// Store the catchpoint into the database
-		err := au.accountsq.storeCatchpoint(context.Background(), basics.Round(i), fileName, "", int64(len(data)))
-		require.NoError(t, err)
-	}
-
-	dataRead := make([]byte, 3)
-	var n int
-
-	// File on disk, and database has the record
-	reader, err := au.GetCatchpointStream(basics.Round(1))
-	n, err = reader.Read(dataRead)
-	require.NoError(t, err)
-	require.Equal(t, 3, n)
-	outData := []byte{1, 2, 3}
-	require.Equal(t, outData, dataRead)
-	len, err := reader.Size()
-	require.NoError(t, err)
-	require.Equal(t, int64(3), len)
-
-	// File deleted, but record in the database
-	err = os.Remove(filepath.Join(temporaryDirectroy, "catchpoints", "2.catchpoint"))
-	reader, err = au.GetCatchpointStream(basics.Round(2))
-	require.Equal(t, ledgercore.ErrNoEntry{}, err)
-	require.Nil(t, reader)
-
-	// File on disk, but database lost the record
-	err = au.accountsq.storeCatchpoint(context.Background(), basics.Round(3), "", "", 0)
-	reader, err = au.GetCatchpointStream(basics.Round(3))
-	n, err = reader.Read(dataRead)
-	require.NoError(t, err)
-	require.Equal(t, 3, n)
-	outData = []byte{3, 4, 5}
-	require.Equal(t, outData, dataRead)
-
-	err = deleteStoredCatchpoints(context.Background(), au.accountsq, au.dbDirectory)
-	require.NoError(t, err)
-}
-
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
 	rows, err := tx.Query("SELECT address, data FROM accountbase")
 	if err != nil {
@@ -1312,9 +1162,6 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	au := newAcctUpdates(b, ml, cfg, ".")
-
-	err := au.loadFromDisk(ml, 0)
-	require.NoError(b, err)
 	defer au.close()
 
 	// at this point, the database was created. We want to fill the accounts data
@@ -1336,7 +1183,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 		require.NoError(b, err)
 	}
 
-	err = ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		return updateAccountsHashRound(tx, 1)
 	})
 	require.NoError(b, err)
@@ -1348,72 +1195,6 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	require.NoError(b, err)
 	b.StopTimer()
 	b.ReportMetric(float64(accountsNumber), "entries/trie")
-}
-
-func BenchmarkLargeCatchpointWriting(b *testing.B) {
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-
-	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(5, true)}
-
-	pooldata := basics.AccountData{}
-	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	pooldata.Status = basics.NotParticipating
-	accts[0][testPoolAddr] = pooldata
-
-	sinkdata := basics.AccountData{}
-	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	sinkdata.Status = basics.NotParticipating
-	accts[0][testSinkAddr] = sinkdata
-
-	ml := makeMockLedgerForTracker(b, true, 10, protocol.ConsensusCurrentVersion, accts)
-	defer ml.Close()
-
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	au := newAcctUpdates(b, ml, cfg, ".")
-
-	temporaryDirectroy, err := ioutil.TempDir(os.TempDir(), "catchpoints")
-	require.NoError(b, err)
-	defer func() {
-		os.RemoveAll(temporaryDirectroy)
-	}()
-	catchpointsDirectory := filepath.Join(temporaryDirectroy, "catchpoints")
-	err = os.Mkdir(catchpointsDirectory, 0777)
-	require.NoError(b, err)
-
-	au.dbDirectory = temporaryDirectroy
-
-	err = au.loadFromDisk(ml, 0)
-	require.NoError(b, err)
-	defer au.close()
-
-	// at this point, the database was created. We want to fill the accounts data
-	accountsNumber := 6000000 * b.N
-	err = ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
-			var updates compactAccountDeltas
-			for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
-				addr := ledgertesting.RandomAddress()
-				acctData := basics.AccountData{}
-				acctData.MicroAlgos.Raw = 1
-				updates.upsert(addr, accountDelta{new: acctData})
-				i++
-			}
-
-			_, err = accountsNewRound(tx, updates, nil, proto, basics.Round(1))
-			if err != nil {
-				return
-			}
-		}
-
-		return updateAccountsHashRound(tx, 1)
-	})
-	require.NoError(b, err)
-
-	b.ResetTimer()
-	au.generateCatchpoint(basics.Round(0), "0#ABCD", crypto.Digest{}, time.Second)
-	b.StopTimer()
-	b.ReportMetric(float64(accountsNumber), "accounts")
 }
 
 func BenchmarkCompactDeltas(b *testing.B) {
@@ -1507,135 +1288,6 @@ func TestCompactDeltas(t *testing.T) {
 
 }
 
-func TestReproducibleCatchpointLabels(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes travis builds to time out")
-	}
-	// create new protocol version, which has lower lookback
-	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestReproducibleCatchpointLabels")
-	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	protoParams.MaxBalLookback = 32
-	protoParams.SeedLookback = 2
-	protoParams.SeedRefreshInterval = 8
-	config.Consensus[testProtocolVersion] = protoParams
-	defer func() {
-		delete(config.Consensus, testProtocolVersion)
-	}()
-
-	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
-	rewardsLevels := []uint64{0}
-
-	pooldata := basics.AccountData{}
-	pooldata.MicroAlgos.Raw = 100 * 1000 * 1000 * 1000 * 1000
-	pooldata.Status = basics.NotParticipating
-	accts[0][testPoolAddr] = pooldata
-
-	sinkdata := basics.AccountData{}
-	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	sinkdata.Status = basics.NotParticipating
-	accts[0][testSinkAddr] = sinkdata
-
-	ml := makeMockLedgerForTracker(t, false, 1, testProtocolVersion, accts)
-	defer ml.Close()
-
-	cfg := config.GetDefaultLocal()
-	cfg.CatchpointInterval = 50
-	cfg.CatchpointTracking = 1
-	au := newAcctUpdates(t, ml, cfg, ".")
-
-	err := au.loadFromDisk(ml, 0)
-	require.NoError(t, err)
-	defer au.close()
-
-	rewardLevel := uint64(0)
-
-	const testCatchpointLabelsCount = 5
-
-	// lastCreatableID stores asset or app max used index to get rid of conflicts
-	lastCreatableID := crypto.RandUint64() % 512
-	knownCreatables := make(map[basics.CreatableIndex]bool)
-	catchpointLabels := make(map[basics.Round]string)
-	ledgerHistory := make(map[basics.Round]*mockLedgerForTracker)
-	roundDeltas := make(map[basics.Round]ledgercore.StateDelta)
-	for i := basics.Round(1); i <= basics.Round(testCatchpointLabelsCount*cfg.CatchpointInterval); i++ {
-		rewardLevelDelta := crypto.RandUint64() % 5
-		rewardLevel += rewardLevelDelta
-		var updates ledgercore.AccountDeltas
-		var totals map[basics.Address]basics.AccountData
-		base := accts[i-1]
-		updates, totals, lastCreatableID = ledgertesting.RandomDeltasBalancedFull(1, base, rewardLevel, lastCreatableID)
-		prevTotals, err := au.Totals(basics.Round(i - 1))
-		require.NoError(t, err)
-
-		newPool := totals[testPoolAddr]
-		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
-		updates.Upsert(testPoolAddr, newPool)
-		totals[testPoolAddr] = newPool
-
-		newTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardLevel, protoParams, base, prevTotals)
-
-		blk := bookkeeping.Block{
-			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
-			},
-		}
-		blk.RewardsLevel = rewardLevel
-		blk.CurrentProtocol = testProtocolVersion
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.Accts.MergeAccounts(updates)
-		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
-		delta.Totals = newTotals
-
-		au.newBlock(blk, delta)
-		ml.scheduleCommit(i)
-		ml.addMockBlock(blockEntry{block: blk}, delta)
-		accts = append(accts, totals)
-		rewardsLevels = append(rewardsLevels, rewardLevel)
-		roundDeltas[i] = delta
-
-		// if this is a catchpoint round, save the label.
-		if uint64(i)%cfg.CatchpointInterval == 0 {
-			ml.waitAccountsWriting()
-			catchpointLabels[i] = au.GetLastCatchpointLabel()
-			ledgerHistory[i] = ml.fork(t)
-			ledgerHistory[i].trackers.initialize(ml.trackers.driver, ledgerHistory[i], []ledgerTracker{au})
-			ledgerHistory[i].trackers.dbRound = ml.trackers.dbRound
-			defer ledgerHistory[i].Close()
-		}
-	}
-
-	// test in revese what happens when we try to repeat the exact same blocks.
-	// start off with the catchpoint before the last one
-	startingRound := basics.Round((testCatchpointLabelsCount - 1) * cfg.CatchpointInterval)
-	for ; startingRound > basics.Round(cfg.CatchpointInterval); startingRound -= basics.Round(cfg.CatchpointInterval) {
-		au.close()
-		ml2 := ledgerHistory[startingRound]
-		err := au.loadFromDisk(ml2, ml2.trackers.dbRound)
-		require.NoError(t, err)
-
-		for i := startingRound + 1; i <= basics.Round(testCatchpointLabelsCount*cfg.CatchpointInterval); i++ {
-			blk := bookkeeping.Block{
-				BlockHeader: bookkeeping.BlockHeader{
-					Round: basics.Round(i),
-				},
-			}
-			blk.RewardsLevel = rewardsLevels[i]
-			blk.CurrentProtocol = testProtocolVersion
-			delta := roundDeltas[i]
-			au.newBlock(blk, delta)
-			ml2.scheduleCommit(i)
-
-			// if this is a catchpoint round, check the label.
-			if uint64(i)%cfg.CatchpointInterval == 0 {
-				ml2.waitAccountsWriting()
-				require.Equal(t, catchpointLabels[i], au.GetLastCatchpointLabel())
-			}
-		}
-	}
-}
-
 // TestCachesInitialization test the functionality of the initializeCaches cache.
 func TestCachesInitialization(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -1665,9 +1317,6 @@ func TestCachesInitialization(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	au := newAcctUpdates(t, ml, conf, ".")
-
-	err := au.loadFromDisk(ml, 0)
-	require.NoError(t, err)
 
 	// cover initialRounds genesis blocks
 	rewardLevel := uint64(0)
@@ -1705,8 +1354,8 @@ func TestCachesInitialization(t *testing.T) {
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
-		ml.scheduleCommit(basics.Round(i))
-		ml.waitAccountsWriting()
+		ml.trackers.committedUpTo(basics.Round(i))
+		ml.trackers.waitAccountsWriting()
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -1727,8 +1376,6 @@ func TestCachesInitialization(t *testing.T) {
 	conf = config.GetDefaultLocal()
 	au = newAcctUpdates(t, ml2, conf, ".")
 	defer au.close()
-	err = au.loadFromDisk(ml2, 0)
-	require.NoError(t, err)
 
 	// make sure the deltas array end up containing only the most recent 320 rounds.
 	require.Equal(t, int(proto.MaxBalLookback), len(au.deltas))
@@ -1845,8 +1492,8 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 	// now, commit and verify that the produceCommittingTask method broken the range correctly.
-	ml.scheduleCommit(lastRoundToWrite)
-	ml.waitAccountsWriting()
+	ml.trackers.committedUpTo(lastRoundToWrite)
+	ml.trackers.waitAccountsWriting()
 	require.Equal(t, basics.Round(initialRounds+extraRounds)-1, au.cachedDBRound)
 
 }
@@ -1961,8 +1608,8 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 	// now, commit and verify that the produceCommittingTask method broken the range correctly.
-	ml.scheduleCommit(endOfFirstNewProtocolSegment)
-	ml.waitAccountsWriting()
+	ml.trackers.committedUpTo(endOfFirstNewProtocolSegment)
+	ml.trackers.waitAccountsWriting()
 	require.Equal(t, basics.Round(initialRounds+extraRounds)-1, au.cachedDBRound)
 
 	// write additional extraRounds elements and verify these can be flushed.
@@ -1996,8 +1643,8 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
-	ml.scheduleCommit(endOfFirstNewProtocolSegment + basics.Round(extraRounds))
-	ml.waitAccountsWriting()
+	ml.trackers.committedUpTo(endOfFirstNewProtocolSegment + basics.Round(extraRounds))
+	ml.trackers.waitAccountsWriting()
 	require.Equal(t, basics.Round(initialRounds+2*extraRounds), au.cachedDBRound)
 }
 
