@@ -277,7 +277,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context
 
 		tu.log.Infof("upgradeDatabaseSchema1 deleting stored catchpoints")
 		// delete catchpoints.
-		err = deleteStoredCatchpoints(ctx, accountsq, filepath.Dir(tu.trackerDBParams.dbPathPrefix))
+		err = deleteStoredCatchpoints(ctx, accountsq, tu.trackerDBParams.dbPathPrefix)
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema1 unable to delete stored catchpoints : %v", err)
 		}
@@ -381,7 +381,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 		return err
 	}
 
-	err = tu.removeEmptyDirsOnSchemaUpgrade()
+	err = removeEmptyDirsOnSchemaUpgrade(tu.trackerDBParams.dbPathPrefix)
 	if err != nil {
 		return err
 	}
@@ -431,8 +431,8 @@ func getEmptyDirs(PathToScan string) ([]string, error) {
 	return emptyDir, err
 }
 
-func (tu *trackerDBSchemaInitializer) removeEmptyDirsOnSchemaUpgrade() (err error) {
-	catchpointRootDir := filepath.Join(filepath.Dir(tu.trackerDBParams.dbPathPrefix), CatchpointDirName)
+func removeEmptyDirsOnSchemaUpgrade(dbDirectory string) (err error) {
+	catchpointRootDir := filepath.Join(dbDirectory, CatchpointDirName)
 	if _, err := os.Stat(catchpointRootDir); os.IsNotExist(err) {
 		return nil
 	}

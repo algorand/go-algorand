@@ -683,14 +683,9 @@ func (ct *catchpointTracker) saveCatchpointFile(round basics.Round, fileName str
 		return fmt.Errorf("unable to delete catchpoint file, getOldestCatchpointFiles failed : %v", err)
 	}
 	for round, fileToDelete := range filesToDelete {
-		absCatchpointFileName := filepath.Join(ct.dbDirectory, fileToDelete)
-		err = os.Remove(absCatchpointFileName)
-		if err == nil || os.IsNotExist(err) {
-			// it's ok if the file doesn't exist. just remove it from the database and we'll be good to go.
-			err = nil
-		} else {
-			// we can't delete the file, abort -
-			return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
+		err = removeSingleCatchpointFileFromDisk(ct.dbDirectory, fileToDelete)
+		if err != nil {
+			return err
 		}
 		err = ct.accountsq.storeCatchpoint(context.Background(), round, "", "", 0)
 		if err != nil {
