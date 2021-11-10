@@ -36,6 +36,10 @@ func TestBuilderSanity(t *testing.T) {
 	a.NoError(err)
 	a.Equal(uint64(len(keys)), numOfKeys)
 
+	s, err := keys[0].GetSigner().SignBytes([]byte{0})
+	v := keys[0].GetSigner().GetVerifyingKey().GetVerifier()
+	err = v.VerifyBytes([]byte{0}, s)
+	a.NoError(err)
 }
 
 func TestBuilderFitsToCPUs(t *testing.T) {

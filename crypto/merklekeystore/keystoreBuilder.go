@@ -27,37 +27,44 @@ import (
 func KeyStoreBuilder(numberOfKeys uint64, sigAlgoType crypto.AlgorithmType) ([]crypto.GenericSigningKey, error) {
 	keys := make([]crypto.GenericSigningKey, numberOfKeys)
 
-	var numberOfWorkers uint64
+	var numOfKeysPerWorker uint64
 	numOfCores := uint64(runtime.NumCPU() * 2)
 
 	if numberOfKeys > numOfCores {
-		numberOfWorkers = numberOfKeys / numOfCores
+		numOfKeysPerWorker = numberOfKeys / numOfCores
 	} else {
-		numberOfWorkers = numberOfKeys
+		numOfKeysPerWorker = 1
 	}
 
+	errors := make(chan error, numOfCores)
 	var wg sync.WaitGroup
 	var endIdx uint64
 	for i := uint64(0); i < numberOfKeys; i = endIdx {
-		endIdx = i + numberOfWorkers
-		// in case the next iteration will pass the number of keys.
-		// we add this section to the last worker.
-		if endIdx+numberOfWorkers > numberOfKeys {
+		endIdx = i + numOfKeysPerWorker
+		// in case the number of workers is not equally divides the number of keys
+		// we want the last worker take care of them.
+		if endIdx+numOfKeysPerWorker > numberOfKeys {
 			endIdx = numberOfKeys
 		}
 
 		wg.Add(1)
-		go func(starIdx, endIdx uint64) {
-			for k := starIdx; k < endIdx; k++ {
+		go func(startIdx, endIdx uint64, errChan chan error) {
+			defer wg.Done()
+			for k := startIdx; k < endIdx; k++ {
 				sigAlgo, err := crypto.NewSigner(sigAlgoType)
 				if err != nil {
-
+					errChan <- err
+					return
 				}
 				keys[k] = *sigAlgo
 			}
-			wg.Done()
-		}(i, endIdx)
+		}(i, endIdx, errors)
 	}
 	wg.Wait()
+	select {
+	case err := <-errors:
+		return []crypto.GenericSigningKey{}, err
+	default:
+	}
 	return keys, nil
 }

@@ -77,13 +77,13 @@ type FalconVerifier struct {
 	PublicKey FPublicKey `codec:"k"`
 }
 
-// Verify follows dilithium algorithm to verify a signature.
+// Verify follows falcon algorithm to verify a signature.
 func (d *FalconVerifier) Verify(message Hashable, sig ByteSignature) error {
 	hs := Hash(HashRep(message))
 	return d.VerifyBytes(hs[:], sig)
 }
 
-// VerifyBytes follows dilithium algorithm to verify a signature.
+// VerifyBytes follows falcon algorithm to verify a signature.
 func (d *FalconVerifier) VerifyBytes(data []byte, sig ByteSignature) error {
 	return (*cfalcon.FalconPublicKey)(&d.PublicKey).VerifyBytes(data, sig)
 }
