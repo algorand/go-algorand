@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"time"
 
@@ -963,7 +962,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 			return err
 		}
 		if rowsAffected != 1 {
-			return errors.New("insert operation failed")
+			return fmt.Errorf("number of affected rows is not 1 - %d", rowsAffected)
 		}
 		rowID, err = insertRes.LastInsertId()
 		if err != nil {
@@ -978,7 +977,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 					rd.SetAssetParams(ap)
 					delete(accountData.AssetParams, aidx)
 				}
-				insertRes, err = insertResources.ExecContext(ctx, rowID, aidx, basics.AssetCreatable, protocol.Encode(&rd))
+				_, err = insertResources.ExecContext(ctx, rowID, aidx, basics.AssetCreatable, protocol.Encode(&rd))
 				if err != nil {
 					return err
 				}
@@ -986,7 +985,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 			for aidx, aparams := range accountData.AssetParams {
 				var rd resourcesData
 				rd.SetAssetParams(aparams)
-				insertRes, err = insertResources.ExecContext(ctx, rowID, aidx, basics.AssetCreatable, protocol.Encode(&rd))
+				_, err = insertResources.ExecContext(ctx, rowID, aidx, basics.AssetCreatable, protocol.Encode(&rd))
 				if err != nil {
 					return err
 				}
@@ -1001,7 +1000,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 					rd.SetAppParams(ap)
 					delete(accountData.AppParams, aidx)
 				}
-				insertRes, err = insertResources.ExecContext(ctx, rowID, aidx, basics.AppCreatable, protocol.Encode(&rd))
+				_, err = insertResources.ExecContext(ctx, rowID, aidx, basics.AppCreatable, protocol.Encode(&rd))
 				if err != nil {
 					return err
 				}
@@ -1009,7 +1008,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 			for aidx, aparams := range accountData.AppParams {
 				var rd resourcesData
 				rd.SetAppParams(aparams)
-				insertRes, err = insertResources.ExecContext(ctx, rowID, aidx, basics.AppCreatable, protocol.Encode(&rd))
+				_, err = insertResources.ExecContext(ctx, rowID, aidx, basics.AppCreatable, protocol.Encode(&rd))
 				if err != nil {
 					return err
 				}
