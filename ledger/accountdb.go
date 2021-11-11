@@ -730,8 +730,9 @@ func (ba *baseAccountData) GetAccountData() basics.AccountData {
 type resourceFlags uint8
 
 const (
-	resourceFlagsHolding   = 1
-	resourceFlagsOwnership = 2
+	resourceFlagsHolding    = 0
+	resourceFlagsNotHolding = 1
+	resourceFlagsOwnership  = 2
 )
 
 type resourcesData struct {
@@ -769,11 +770,15 @@ type resourcesData struct {
 	GlobalStateSchemaNumByteSlice uint64              `codec:"w"`
 	ExtraProgramPages             uint32              `codec:"x"`
 
+	// ResourceFlags helps to identify which portions of this structure should be used; in particular, it
+	// helps to provide a marker - i.e. whether the account was, for instance, opted-in for the asset compared
+	// to just being the owner of the asset. A comparison against the emptry structure doesn't work here -
+	// since both the holdings and the parameters are allowed to be all at their default values.
 	ResourceFlags resourceFlags `codec:"y"`
 	UpdateRound   uint64        `codec:"z"`
 }
 
-func (rd *resourcesData) SetAssetParams(ap basics.AssetParams) {
+func (rd *resourcesData) SetAssetParams(ap basics.AssetParams, haveHoldings bool) {
 	rd.Total = ap.Total
 	rd.Decimals = ap.Decimals
 	rd.DefaultFrozen = ap.DefaultFrozen
@@ -786,6 +791,9 @@ func (rd *resourcesData) SetAssetParams(ap basics.AssetParams) {
 	rd.Freeze = ap.Freeze
 	rd.Clawback = ap.Clawback
 	rd.ResourceFlags |= resourceFlagsOwnership
+	if !haveHoldings {
+		rd.ResourceFlags |= resourceFlagsNotHolding
+	}
 }
 
 func (rd *resourcesData) GetAssetParams() basics.AssetParams {
@@ -808,7 +816,7 @@ func (rd *resourcesData) GetAssetParams() basics.AssetParams {
 func (rd *resourcesData) SetAssetHolding(ah basics.AssetHolding) {
 	rd.Amount = ah.Amount
 	rd.Frozen = ah.Frozen
-	rd.ResourceFlags |= resourceFlagsHolding
+	rd.ResourceFlags -= rd.ResourceFlags & resourceFlagsNotHolding
 }
 
 func (rd *resourcesData) GetAssetHolding() basics.AssetHolding {
@@ -819,9 +827,10 @@ func (rd *resourcesData) GetAssetHolding() basics.AssetHolding {
 }
 
 func (rd *resourcesData) SetAppLocalState(als basics.AppLocalState) {
-	rd.SchemaNumUint, rd.SchemaNumByteSlice = als.Schema.NumUint, als.Schema.NumByteSlice
+	rd.SchemaNumUint = als.Schema.NumUint
+	rd.SchemaNumByteSlice = als.Schema.NumByteSlice
 	rd.KeyValue = als.KeyValue
-	rd.ResourceFlags |= resourceFlagsHolding
+	rd.ResourceFlags -= rd.ResourceFlags & resourceFlagsNotHolding
 }
 
 func (rd *resourcesData) GetAppLocalState() basics.AppLocalState {
@@ -834,7 +843,7 @@ func (rd *resourcesData) GetAppLocalState() basics.AppLocalState {
 	}
 }
 
-func (rd *resourcesData) SetAppParams(ap basics.AppParams) {
+func (rd *resourcesData) SetAppParams(ap basics.AppParams, haveHoldings bool) {
 	rd.ApprovalProgram = ap.ApprovalProgram
 	rd.ClearStateProgram = ap.ClearStateProgram
 	rd.GlobalState = ap.GlobalState
@@ -844,6 +853,9 @@ func (rd *resourcesData) SetAppParams(ap basics.AppParams) {
 	rd.GlobalStateSchemaNumByteSlice = ap.GlobalStateSchema.NumByteSlice
 	rd.ExtraProgramPages = ap.ExtraProgramPages
 	rd.ResourceFlags |= resourceFlagsOwnership
+	if !haveHoldings {
+		rd.ResourceFlags |= resourceFlagsNotHolding
+	}
 }
 
 func (rd *resourcesData) GetAppParams() basics.AppParams {
@@ -974,7 +986,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 				var rd resourcesData
 				rd.SetAssetHolding(holding)
 				if ap, has := accountData.AssetParams[aidx]; has {
-					rd.SetAssetParams(ap)
+					rd.SetAssetParams(ap, true)
 					delete(accountData.AssetParams, aidx)
 				}
 				_, err = insertResources.ExecContext(ctx, rowID, aidx, basics.AssetCreatable, protocol.Encode(&rd))
@@ -984,7 +996,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 			}
 			for aidx, aparams := range accountData.AssetParams {
 				var rd resourcesData
-				rd.SetAssetParams(aparams)
+				rd.SetAssetParams(aparams, false)
 				_, err = insertResources.ExecContext(ctx, rowID, aidx, basics.AssetCreatable, protocol.Encode(&rd))
 				if err != nil {
 					return err
@@ -997,7 +1009,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 				var rd resourcesData
 				rd.SetAppLocalState(localState)
 				if ap, has := accountData.AppParams[aidx]; has {
-					rd.SetAppParams(ap)
+					rd.SetAppParams(ap, true)
 					delete(accountData.AppParams, aidx)
 				}
 				_, err = insertResources.ExecContext(ctx, rowID, aidx, basics.AppCreatable, protocol.Encode(&rd))
@@ -1007,7 +1019,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 			}
 			for aidx, aparams := range accountData.AppParams {
 				var rd resourcesData
-				rd.SetAppParams(aparams)
+				rd.SetAppParams(aparams, false)
 				_, err = insertResources.ExecContext(ctx, rowID, aidx, basics.AppCreatable, protocol.Encode(&rd))
 				if err != nil {
 					return err
