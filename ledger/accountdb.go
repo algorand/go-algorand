@@ -744,16 +744,19 @@ type resourcesData struct {
 	Frozen bool   `codec:"m"`
 
 	// application local state ( basics.AppLocalState )
-	Schema   basics.StateSchema  `codec:"n"`
-	KeyValue basics.TealKeyValue `codec:"o"`
+	SchemaNumUint      uint64              `codec:"n"`
+	SchemaNumByteSlice uint64              `codec:"o"`
+	KeyValue           basics.TealKeyValue `codec:"p"`
 
 	// application global params ( basics.AppParams )
-	ApprovalProgram   []byte              `codec:"p,allocbound=config.MaxAvailableAppProgramLen"`
-	ClearStateProgram []byte              `codec:"q,allocbound=config.MaxAvailableAppProgramLen"`
-	GlobalState       basics.TealKeyValue `codec:"r"`
-	LocalStateSchema  basics.StateSchema  `codec:"s"`
-	GlobalStateSchema basics.StateSchema  `codec:"t"`
-	ExtraProgramPages uint32              `codec:"u"`
+	ApprovalProgram               []byte              `codec:"q,allocbound=config.MaxAvailableAppProgramLen"`
+	ClearStateProgram             []byte              `codec:"r,allocbound=config.MaxAvailableAppProgramLen"`
+	GlobalState                   basics.TealKeyValue `codec:"s"`
+	LocalStateSchemaNumUint       uint64              `codec:"t"`
+	LocalStateSchemaNumByteSlice  uint64              `codec:"u"`
+	GlobalStateSchemaNumUint      uint64              `codec:"v"`
+	GlobalStateSchemaNumByteSlice uint64              `codec:"w"`
+	ExtraProgramPages             uint32              `codec:"x"`
 
 	UpdateRound uint64 `codec:"z"`
 }
@@ -802,13 +805,16 @@ func (rd *resourcesData) GetAssetHolding() basics.AssetHolding {
 }
 
 func (rd *resourcesData) SetAppLocalState(als basics.AppLocalState) {
-	rd.Schema = als.Schema
+	rd.SchemaNumUint, rd.SchemaNumByteSlice = als.Schema.NumUint, als.Schema.NumByteSlice
 	rd.KeyValue = als.KeyValue
 }
 
 func (rd *resourcesData) GetAppLocalState() basics.AppLocalState {
 	return basics.AppLocalState{
-		Schema:   rd.Schema,
+		Schema: basics.StateSchema{
+			NumUint:      rd.SchemaNumUint,
+			NumByteSlice: rd.SchemaNumByteSlice,
+		},
 		KeyValue: rd.KeyValue,
 	}
 }
@@ -817,8 +823,10 @@ func (rd *resourcesData) SetAppParams(ap basics.AppParams) {
 	rd.ApprovalProgram = ap.ApprovalProgram
 	rd.ClearStateProgram = ap.ClearStateProgram
 	rd.GlobalState = ap.GlobalState
-	rd.LocalStateSchema = ap.LocalStateSchema
-	rd.GlobalStateSchema = ap.GlobalStateSchema
+	rd.LocalStateSchemaNumUint = ap.LocalStateSchema.NumUint
+	rd.LocalStateSchemaNumByteSlice = ap.LocalStateSchema.NumByteSlice
+	rd.GlobalStateSchemaNumUint = ap.GlobalStateSchema.NumUint
+	rd.GlobalStateSchemaNumByteSlice = ap.GlobalStateSchema.NumByteSlice
 	rd.ExtraProgramPages = ap.ExtraProgramPages
 
 }
@@ -829,8 +837,14 @@ func (rd *resourcesData) GetAppParams() basics.AppParams {
 		ClearStateProgram: rd.ClearStateProgram,
 		GlobalState:       rd.GlobalState,
 		StateSchemas: basics.StateSchemas{
-			LocalStateSchema:  rd.LocalStateSchema,
-			GlobalStateSchema: rd.GlobalStateSchema,
+			LocalStateSchema: basics.StateSchema{
+				NumUint:      rd.LocalStateSchemaNumUint,
+				NumByteSlice: rd.LocalStateSchemaNumByteSlice,
+			},
+			GlobalStateSchema: basics.StateSchema{
+				NumUint:      rd.GlobalStateSchemaNumUint,
+				NumByteSlice: rd.GlobalStateSchemaNumByteSlice,
+			},
 		},
 		ExtraProgramPages: rd.ExtraProgramPages,
 	}

@@ -1453,8 +1453,8 @@ func (z *encodedBalanceRecord) MsgIsZero() bool {
 func (z *resourcesData) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0002Len := uint32(22)
-	var zb0002Mask uint32 /* 23 bits */
+	zb0002Len := uint32(25)
+	var zb0002Mask uint32 /* 26 bits */
 	if (*z).Total == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x2
@@ -1507,41 +1507,53 @@ func (z *resourcesData) MarshalMsg(b []byte) (o []byte) {
 		zb0002Len--
 		zb0002Mask |= 0x2000
 	}
-	if (*z).Schema.MsgIsZero() {
+	if (*z).SchemaNumUint == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x4000
 	}
-	if (*z).KeyValue.MsgIsZero() {
+	if (*z).SchemaNumByteSlice == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x8000
 	}
-	if len((*z).ApprovalProgram) == 0 {
+	if (*z).KeyValue.MsgIsZero() {
 		zb0002Len--
 		zb0002Mask |= 0x10000
 	}
-	if len((*z).ClearStateProgram) == 0 {
+	if len((*z).ApprovalProgram) == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x20000
 	}
-	if (*z).GlobalState.MsgIsZero() {
+	if len((*z).ClearStateProgram) == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x40000
 	}
-	if (*z).LocalStateSchema.MsgIsZero() {
+	if (*z).GlobalState.MsgIsZero() {
 		zb0002Len--
 		zb0002Mask |= 0x80000
 	}
-	if (*z).GlobalStateSchema.MsgIsZero() {
+	if (*z).LocalStateSchemaNumUint == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x100000
 	}
-	if (*z).ExtraProgramPages == 0 {
+	if (*z).LocalStateSchemaNumByteSlice == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x200000
 	}
-	if (*z).UpdateRound == 0 {
+	if (*z).GlobalStateSchemaNumUint == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x400000
+	}
+	if (*z).GlobalStateSchemaNumByteSlice == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x800000
+	}
+	if (*z).ExtraProgramPages == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x1000000
+	}
+	if (*z).UpdateRound == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x2000000
 	}
 	// variable map header, size zb0002Len
 	o = msgp.AppendMapHeader(o, zb0002Len)
@@ -1614,44 +1626,59 @@ func (z *resourcesData) MarshalMsg(b []byte) (o []byte) {
 		if (zb0002Mask & 0x4000) == 0 { // if not empty
 			// string "n"
 			o = append(o, 0xa1, 0x6e)
-			o = (*z).Schema.MarshalMsg(o)
+			o = msgp.AppendUint64(o, (*z).SchemaNumUint)
 		}
 		if (zb0002Mask & 0x8000) == 0 { // if not empty
 			// string "o"
 			o = append(o, 0xa1, 0x6f)
-			o = (*z).KeyValue.MarshalMsg(o)
+			o = msgp.AppendUint64(o, (*z).SchemaNumByteSlice)
 		}
 		if (zb0002Mask & 0x10000) == 0 { // if not empty
 			// string "p"
 			o = append(o, 0xa1, 0x70)
-			o = msgp.AppendBytes(o, (*z).ApprovalProgram)
+			o = (*z).KeyValue.MarshalMsg(o)
 		}
 		if (zb0002Mask & 0x20000) == 0 { // if not empty
 			// string "q"
 			o = append(o, 0xa1, 0x71)
-			o = msgp.AppendBytes(o, (*z).ClearStateProgram)
+			o = msgp.AppendBytes(o, (*z).ApprovalProgram)
 		}
 		if (zb0002Mask & 0x40000) == 0 { // if not empty
 			// string "r"
 			o = append(o, 0xa1, 0x72)
-			o = (*z).GlobalState.MarshalMsg(o)
+			o = msgp.AppendBytes(o, (*z).ClearStateProgram)
 		}
 		if (zb0002Mask & 0x80000) == 0 { // if not empty
 			// string "s"
 			o = append(o, 0xa1, 0x73)
-			o = (*z).LocalStateSchema.MarshalMsg(o)
+			o = (*z).GlobalState.MarshalMsg(o)
 		}
 		if (zb0002Mask & 0x100000) == 0 { // if not empty
 			// string "t"
 			o = append(o, 0xa1, 0x74)
-			o = (*z).GlobalStateSchema.MarshalMsg(o)
+			o = msgp.AppendUint64(o, (*z).LocalStateSchemaNumUint)
 		}
 		if (zb0002Mask & 0x200000) == 0 { // if not empty
 			// string "u"
 			o = append(o, 0xa1, 0x75)
-			o = msgp.AppendUint32(o, (*z).ExtraProgramPages)
+			o = msgp.AppendUint64(o, (*z).LocalStateSchemaNumByteSlice)
 		}
 		if (zb0002Mask & 0x400000) == 0 { // if not empty
+			// string "v"
+			o = append(o, 0xa1, 0x76)
+			o = msgp.AppendUint64(o, (*z).GlobalStateSchemaNumUint)
+		}
+		if (zb0002Mask & 0x800000) == 0 { // if not empty
+			// string "w"
+			o = append(o, 0xa1, 0x77)
+			o = msgp.AppendUint64(o, (*z).GlobalStateSchemaNumByteSlice)
+		}
+		if (zb0002Mask & 0x1000000) == 0 { // if not empty
+			// string "x"
+			o = append(o, 0xa1, 0x78)
+			o = msgp.AppendUint32(o, (*z).ExtraProgramPages)
+		}
+		if (zb0002Mask & 0x2000000) == 0 { // if not empty
 			// string "z"
 			o = append(o, 0xa1, 0x7a)
 			o = msgp.AppendUint64(o, (*z).UpdateRound)
@@ -1784,9 +1811,17 @@ func (z *resourcesData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			bts, err = (*z).Schema.UnmarshalMsg(bts)
+			(*z).SchemaNumUint, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Schema")
+				err = msgp.WrapError(err, "struct-from-array", "SchemaNumUint")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			zb0002--
+			(*z).SchemaNumByteSlice, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "SchemaNumByteSlice")
 				return
 			}
 		}
@@ -1844,17 +1879,33 @@ func (z *resourcesData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			bts, err = (*z).LocalStateSchema.UnmarshalMsg(bts)
+			(*z).LocalStateSchemaNumUint, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "LocalStateSchema")
+				err = msgp.WrapError(err, "struct-from-array", "LocalStateSchemaNumUint")
 				return
 			}
 		}
 		if zb0002 > 0 {
 			zb0002--
-			bts, err = (*z).GlobalStateSchema.UnmarshalMsg(bts)
+			(*z).LocalStateSchemaNumByteSlice, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "GlobalStateSchema")
+				err = msgp.WrapError(err, "struct-from-array", "LocalStateSchemaNumByteSlice")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			zb0002--
+			(*z).GlobalStateSchemaNumUint, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "GlobalStateSchemaNumUint")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			zb0002--
+			(*z).GlobalStateSchemaNumByteSlice, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "GlobalStateSchemaNumByteSlice")
 				return
 			}
 		}
@@ -1976,18 +2027,24 @@ func (z *resourcesData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "n":
-				bts, err = (*z).Schema.UnmarshalMsg(bts)
+				(*z).SchemaNumUint, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Schema")
+					err = msgp.WrapError(err, "SchemaNumUint")
 					return
 				}
 			case "o":
+				(*z).SchemaNumByteSlice, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "SchemaNumByteSlice")
+					return
+				}
+			case "p":
 				bts, err = (*z).KeyValue.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "KeyValue")
 					return
 				}
-			case "p":
+			case "q":
 				var zb0006 int
 				zb0006, err = msgp.ReadBytesBytesHeader(bts)
 				if err != nil {
@@ -2003,7 +2060,7 @@ func (z *resourcesData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ApprovalProgram")
 					return
 				}
-			case "q":
+			case "r":
 				var zb0007 int
 				zb0007, err = msgp.ReadBytesBytesHeader(bts)
 				if err != nil {
@@ -2019,25 +2076,37 @@ func (z *resourcesData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ClearStateProgram")
 					return
 				}
-			case "r":
+			case "s":
 				bts, err = (*z).GlobalState.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "GlobalState")
 					return
 				}
-			case "s":
-				bts, err = (*z).LocalStateSchema.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "LocalStateSchema")
-					return
-				}
 			case "t":
-				bts, err = (*z).GlobalStateSchema.UnmarshalMsg(bts)
+				(*z).LocalStateSchemaNumUint, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "GlobalStateSchema")
+					err = msgp.WrapError(err, "LocalStateSchemaNumUint")
 					return
 				}
 			case "u":
+				(*z).LocalStateSchemaNumByteSlice, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "LocalStateSchemaNumByteSlice")
+					return
+				}
+			case "v":
+				(*z).GlobalStateSchemaNumUint, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "GlobalStateSchemaNumUint")
+					return
+				}
+			case "w":
+				(*z).GlobalStateSchemaNumByteSlice, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "GlobalStateSchemaNumByteSlice")
+					return
+				}
+			case "x":
 				(*z).ExtraProgramPages, bts, err = msgp.ReadUint32Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ExtraProgramPages")
@@ -2069,11 +2138,11 @@ func (_ *resourcesData) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *resourcesData) Msgsize() (s int) {
-	s = 3 + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.BoolSize + 2 + msgp.StringPrefixSize + len((*z).UnitName) + 2 + msgp.StringPrefixSize + len((*z).AssetName) + 2 + msgp.StringPrefixSize + len((*z).URL) + 2 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 2 + (*z).Manager.Msgsize() + 2 + (*z).Reserve.Msgsize() + 2 + (*z).Freeze.Msgsize() + 2 + (*z).Clawback.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.BoolSize + 2 + (*z).Schema.Msgsize() + 2 + (*z).KeyValue.Msgsize() + 2 + msgp.BytesPrefixSize + len((*z).ApprovalProgram) + 2 + msgp.BytesPrefixSize + len((*z).ClearStateProgram) + 2 + (*z).GlobalState.Msgsize() + 2 + (*z).LocalStateSchema.Msgsize() + 2 + (*z).GlobalStateSchema.Msgsize() + 2 + msgp.Uint32Size + 2 + msgp.Uint64Size
+	s = 3 + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.BoolSize + 2 + msgp.StringPrefixSize + len((*z).UnitName) + 2 + msgp.StringPrefixSize + len((*z).AssetName) + 2 + msgp.StringPrefixSize + len((*z).URL) + 2 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 2 + (*z).Manager.Msgsize() + 2 + (*z).Reserve.Msgsize() + 2 + (*z).Freeze.Msgsize() + 2 + (*z).Clawback.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.BoolSize + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + (*z).KeyValue.Msgsize() + 2 + msgp.BytesPrefixSize + len((*z).ApprovalProgram) + 2 + msgp.BytesPrefixSize + len((*z).ClearStateProgram) + 2 + (*z).GlobalState.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *resourcesData) MsgIsZero() bool {
-	return ((*z).Total == 0) && ((*z).Decimals == 0) && ((*z).DefaultFrozen == false) && ((*z).UnitName == "") && ((*z).AssetName == "") && ((*z).URL == "") && ((*z).MetadataHash == ([32]byte{})) && ((*z).Manager.MsgIsZero()) && ((*z).Reserve.MsgIsZero()) && ((*z).Freeze.MsgIsZero()) && ((*z).Clawback.MsgIsZero()) && ((*z).Amount == 0) && ((*z).Frozen == false) && ((*z).Schema.MsgIsZero()) && ((*z).KeyValue.MsgIsZero()) && (len((*z).ApprovalProgram) == 0) && (len((*z).ClearStateProgram) == 0) && ((*z).GlobalState.MsgIsZero()) && ((*z).LocalStateSchema.MsgIsZero()) && ((*z).GlobalStateSchema.MsgIsZero()) && ((*z).ExtraProgramPages == 0) && ((*z).UpdateRound == 0)
+	return ((*z).Total == 0) && ((*z).Decimals == 0) && ((*z).DefaultFrozen == false) && ((*z).UnitName == "") && ((*z).AssetName == "") && ((*z).URL == "") && ((*z).MetadataHash == ([32]byte{})) && ((*z).Manager.MsgIsZero()) && ((*z).Reserve.MsgIsZero()) && ((*z).Freeze.MsgIsZero()) && ((*z).Clawback.MsgIsZero()) && ((*z).Amount == 0) && ((*z).Frozen == false) && ((*z).SchemaNumUint == 0) && ((*z).SchemaNumByteSlice == 0) && ((*z).KeyValue.MsgIsZero()) && (len((*z).ApprovalProgram) == 0) && (len((*z).ClearStateProgram) == 0) && ((*z).GlobalState.MsgIsZero()) && ((*z).LocalStateSchemaNumUint == 0) && ((*z).LocalStateSchemaNumByteSlice == 0) && ((*z).GlobalStateSchemaNumUint == 0) && ((*z).GlobalStateSchemaNumByteSlice == 0) && ((*z).ExtraProgramPages == 0) && ((*z).UpdateRound == 0)
 }
