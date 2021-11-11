@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
@@ -378,17 +379,33 @@ done:
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context, tx *sql.Tx) (err error) {
 	err = accountsCreateResourceTable(ctx, tx)
 	if err != nil {
-		return err
+		return fmt.Errorf("upgradeDatabaseSchema5 unable to create resources table : %v", err)
 	}
 
 	err = removeEmptyDirsOnSchemaUpgrade(tu.trackerDBParams.dbPathPrefix)
 	if err != nil {
-		return err
+		return fmt.Errorf("upgradeDatabaseSchema5 unable to clear empty catchpoint directories : %v", err)
 	}
 
-	err = performResourceTableMigration(ctx, tx)
+	var lastProgressInfoMsg time.Time
+	const progressLoggingInterval = 5 * time.Second
+	migrationProcessLog := func(processed, total uint64) {
+		if time.Since(lastProgressInfoMsg) < progressLoggingInterval {
+			return
+		}
+		lastProgressInfoMsg = time.Now()
+		tu.log.Infof("upgradeDatabaseSchema5 upgraded %d out of %d accounts [ %3.1f%% ]", processed, total, float64(processed)*100.0/float64(total))
+	}
+
+	err = performResourceTableMigration(ctx, tx, migrationProcessLog)
 	if err != nil {
-		return err
+		return fmt.Errorf("upgradeDatabaseSchema5 unable to complete data migration : %v", err)
+	}
+
+	// reset the merkle trie
+	err = resetAccountHashes(tx)
+	if err != nil {
+		return fmt.Errorf("upgradeDatabaseSchema5 unable to reset account hashes : %v", err)
 	}
 
 	// update version

@@ -837,7 +837,7 @@ func (rd *resourcesData) GetAppParams() basics.AppParams {
 }
 
 // performResourceTableMigration migrate the database to use the resources table.
-func performResourceTableMigration(ctx context.Context, tx *sql.Tx) (err error) {
+func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(processed, total uint64)) (err error) {
 	idxnameBalances := fmt.Sprintf("onlineaccountbals_idx_%d", time.Now().UnixNano())
 
 	createNewAcctBase := []string{
@@ -891,9 +891,17 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx) (err error) 
 		return err
 	}
 	defer rows.Close()
+
 	var insertRes sql.Result
 	var rowID int64
 	var rowsAffected int64
+	var processedAccounts uint64
+	var totalBaseAccounts uint64
+
+	totalBaseAccounts, err = totalAccounts(ctx, tx)
+	if err != nil {
+		return err
+	}
 	for rows.Next() {
 		var addrbuf []byte
 		var encodedAcctData []byte
@@ -979,6 +987,8 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx) (err error) 
 				}
 			}
 		}
+		processedAccounts++
+		log(processedAccounts, totalBaseAccounts)
 	}
 
 	// if the above loop was abrupted by an error, test it now.
