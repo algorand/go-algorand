@@ -64,6 +64,14 @@ import (
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
 //
+// resourceFlags
+//       |-----> MarshalMsg
+//       |-----> CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> Msgsize
+//       |-----> MsgIsZero
+//
 // resourcesData
 //       |-----> (*) MarshalMsg
 //       |-----> (*) CanMarshalMsg
@@ -390,124 +398,133 @@ func (z *CatchpointFileHeader) MsgIsZero() bool {
 func (z *baseAccountData) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(13)
-	var zb0001Mask uint16 /* 15 bits */
-	if (*z).Status.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x4
-	}
-	if (*z).MicroAlgos.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x8
-	}
-	if (*z).RewardsBase == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x10
-	}
-	if (*z).RewardedMicroAlgos.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x20
-	}
-	if (*z).AuthAddr.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x40
-	}
-	if (*z).TotalAppSchema.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x80
-	}
-	if (*z).TotalExtraAppPages == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x100
-	}
+	zb0001Len := uint32(14)
+	var zb0001Mask uint16 /* 16 bits */
 	if (*z).baseOnlineAccountData.VoteID.MsgIsZero() {
 		zb0001Len--
-		zb0001Mask |= 0x200
+		zb0001Mask |= 0x1
 	}
 	if (*z).baseOnlineAccountData.SelectionID.MsgIsZero() {
 		zb0001Len--
-		zb0001Mask |= 0x400
+		zb0001Mask |= 0x2
 	}
 	if (*z).baseOnlineAccountData.VoteFirstValid.MsgIsZero() {
 		zb0001Len--
-		zb0001Mask |= 0x800
+		zb0001Mask |= 0x4
 	}
 	if (*z).baseOnlineAccountData.VoteLastValid.MsgIsZero() {
 		zb0001Len--
-		zb0001Mask |= 0x1000
+		zb0001Mask |= 0x8
 	}
 	if (*z).baseOnlineAccountData.VoteKeyDilution == 0 {
 		zb0001Len--
+		zb0001Mask |= 0x10
+	}
+	if (*z).Status.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x80
+	}
+	if (*z).MicroAlgos.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x100
+	}
+	if (*z).RewardsBase == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x200
+	}
+	if (*z).RewardedMicroAlgos.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x400
+	}
+	if (*z).AuthAddr.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x800
+	}
+	if (*z).TotalAppSchemaNumUint == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x1000
+	}
+	if (*z).TotalAppSchemaNumByteSlice == 0 {
+		zb0001Len--
 		zb0001Mask |= 0x2000
+	}
+	if (*z).TotalExtraAppPages == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x4000
 	}
 	if (*z).UpdateRound == 0 {
 		zb0001Len--
-		zb0001Mask |= 0x4000
+		zb0001Mask |= 0x8000
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
+		if (zb0001Mask & 0x1) == 0 { // if not empty
+			// string "A"
+			o = append(o, 0xa1, 0x41)
+			o = (*z).baseOnlineAccountData.VoteID.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "B"
+			o = append(o, 0xa1, 0x42)
+			o = (*z).baseOnlineAccountData.SelectionID.MarshalMsg(o)
+		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "C"
+			o = append(o, 0xa1, 0x43)
+			o = (*z).baseOnlineAccountData.VoteFirstValid.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "D"
+			o = append(o, 0xa1, 0x44)
+			o = (*z).baseOnlineAccountData.VoteLastValid.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not empty
+			// string "E"
+			o = append(o, 0xa1, 0x45)
+			o = msgp.AppendUint64(o, (*z).baseOnlineAccountData.VoteKeyDilution)
+		}
+		if (zb0001Mask & 0x80) == 0 { // if not empty
 			// string "a"
 			o = append(o, 0xa1, 0x61)
 			o = (*z).Status.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x8) == 0 { // if not empty
+		if (zb0001Mask & 0x100) == 0 { // if not empty
 			// string "b"
 			o = append(o, 0xa1, 0x62)
 			o = (*z).MicroAlgos.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x10) == 0 { // if not empty
+		if (zb0001Mask & 0x200) == 0 { // if not empty
 			// string "c"
 			o = append(o, 0xa1, 0x63)
 			o = msgp.AppendUint64(o, (*z).RewardsBase)
 		}
-		if (zb0001Mask & 0x20) == 0 { // if not empty
+		if (zb0001Mask & 0x400) == 0 { // if not empty
 			// string "d"
 			o = append(o, 0xa1, 0x64)
 			o = (*z).RewardedMicroAlgos.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x40) == 0 { // if not empty
+		if (zb0001Mask & 0x800) == 0 { // if not empty
 			// string "e"
 			o = append(o, 0xa1, 0x65)
 			o = (*z).AuthAddr.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x80) == 0 { // if not empty
+		if (zb0001Mask & 0x1000) == 0 { // if not empty
 			// string "f"
 			o = append(o, 0xa1, 0x66)
-			o = (*z).TotalAppSchema.MarshalMsg(o)
-		}
-		if (zb0001Mask & 0x100) == 0 { // if not empty
-			// string "g"
-			o = append(o, 0xa1, 0x67)
-			o = msgp.AppendUint32(o, (*z).TotalExtraAppPages)
-		}
-		if (zb0001Mask & 0x200) == 0 { // if not empty
-			// string "h"
-			o = append(o, 0xa1, 0x68)
-			o = (*z).baseOnlineAccountData.VoteID.MarshalMsg(o)
-		}
-		if (zb0001Mask & 0x400) == 0 { // if not empty
-			// string "i"
-			o = append(o, 0xa1, 0x69)
-			o = (*z).baseOnlineAccountData.SelectionID.MarshalMsg(o)
-		}
-		if (zb0001Mask & 0x800) == 0 { // if not empty
-			// string "j"
-			o = append(o, 0xa1, 0x6a)
-			o = (*z).baseOnlineAccountData.VoteFirstValid.MarshalMsg(o)
-		}
-		if (zb0001Mask & 0x1000) == 0 { // if not empty
-			// string "k"
-			o = append(o, 0xa1, 0x6b)
-			o = (*z).baseOnlineAccountData.VoteLastValid.MarshalMsg(o)
+			o = msgp.AppendUint64(o, (*z).TotalAppSchemaNumUint)
 		}
 		if (zb0001Mask & 0x2000) == 0 { // if not empty
-			// string "l"
-			o = append(o, 0xa1, 0x6c)
-			o = msgp.AppendUint64(o, (*z).baseOnlineAccountData.VoteKeyDilution)
+			// string "g"
+			o = append(o, 0xa1, 0x67)
+			o = msgp.AppendUint64(o, (*z).TotalAppSchemaNumByteSlice)
 		}
 		if (zb0001Mask & 0x4000) == 0 { // if not empty
+			// string "h"
+			o = append(o, 0xa1, 0x68)
+			o = msgp.AppendUint32(o, (*z).TotalExtraAppPages)
+		}
+		if (zb0001Mask & 0x8000) == 0 { // if not empty
 			// string "z"
 			o = append(o, 0xa1, 0x7a)
 			o = msgp.AppendUint64(o, (*z).UpdateRound)
@@ -576,9 +593,17 @@ func (z *baseAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).TotalAppSchema.UnmarshalMsg(bts)
+			(*z).TotalAppSchemaNumUint, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "TotalAppSchema")
+				err = msgp.WrapError(err, "struct-from-array", "TotalAppSchemaNumUint")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).TotalAppSchemaNumByteSlice, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "TotalAppSchemaNumByteSlice")
 				return
 			}
 		}
@@ -692,42 +717,48 @@ func (z *baseAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "f":
-				bts, err = (*z).TotalAppSchema.UnmarshalMsg(bts)
+				(*z).TotalAppSchemaNumUint, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "TotalAppSchema")
+					err = msgp.WrapError(err, "TotalAppSchemaNumUint")
 					return
 				}
 			case "g":
+				(*z).TotalAppSchemaNumByteSlice, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TotalAppSchemaNumByteSlice")
+					return
+				}
+			case "h":
 				(*z).TotalExtraAppPages, bts, err = msgp.ReadUint32Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "TotalExtraAppPages")
 					return
 				}
-			case "h":
+			case "A":
 				bts, err = (*z).baseOnlineAccountData.VoteID.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "VoteID")
 					return
 				}
-			case "i":
+			case "B":
 				bts, err = (*z).baseOnlineAccountData.SelectionID.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "SelectionID")
 					return
 				}
-			case "j":
+			case "C":
 				bts, err = (*z).baseOnlineAccountData.VoteFirstValid.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "VoteFirstValid")
 					return
 				}
-			case "k":
+			case "D":
 				bts, err = (*z).baseOnlineAccountData.VoteLastValid.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "VoteLastValid")
 					return
 				}
-			case "l":
+			case "E":
 				(*z).baseOnlineAccountData.VoteKeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "VoteKeyDilution")
@@ -759,13 +790,13 @@ func (_ *baseAccountData) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *baseAccountData) Msgsize() (s int) {
-	s = 1 + 2 + (*z).Status.Msgsize() + 2 + (*z).MicroAlgos.Msgsize() + 2 + msgp.Uint64Size + 2 + (*z).RewardedMicroAlgos.Msgsize() + 2 + (*z).AuthAddr.Msgsize() + 2 + (*z).TotalAppSchema.Msgsize() + 2 + msgp.Uint32Size + 2 + (*z).baseOnlineAccountData.VoteID.Msgsize() + 2 + (*z).baseOnlineAccountData.SelectionID.Msgsize() + 2 + (*z).baseOnlineAccountData.VoteFirstValid.Msgsize() + 2 + (*z).baseOnlineAccountData.VoteLastValid.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size
+	s = 1 + 2 + (*z).Status.Msgsize() + 2 + (*z).MicroAlgos.Msgsize() + 2 + msgp.Uint64Size + 2 + (*z).RewardedMicroAlgos.Msgsize() + 2 + (*z).AuthAddr.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + (*z).baseOnlineAccountData.VoteID.Msgsize() + 2 + (*z).baseOnlineAccountData.SelectionID.Msgsize() + 2 + (*z).baseOnlineAccountData.VoteFirstValid.Msgsize() + 2 + (*z).baseOnlineAccountData.VoteLastValid.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *baseAccountData) MsgIsZero() bool {
-	return ((*z).Status.MsgIsZero()) && ((*z).MicroAlgos.MsgIsZero()) && ((*z).RewardsBase == 0) && ((*z).RewardedMicroAlgos.MsgIsZero()) && ((*z).AuthAddr.MsgIsZero()) && ((*z).TotalAppSchema.MsgIsZero()) && ((*z).TotalExtraAppPages == 0) && ((*z).baseOnlineAccountData.VoteID.MsgIsZero()) && ((*z).baseOnlineAccountData.SelectionID.MsgIsZero()) && ((*z).baseOnlineAccountData.VoteFirstValid.MsgIsZero()) && ((*z).baseOnlineAccountData.VoteLastValid.MsgIsZero()) && ((*z).baseOnlineAccountData.VoteKeyDilution == 0) && ((*z).UpdateRound == 0)
+	return ((*z).Status.MsgIsZero()) && ((*z).MicroAlgos.MsgIsZero()) && ((*z).RewardsBase == 0) && ((*z).RewardedMicroAlgos.MsgIsZero()) && ((*z).AuthAddr.MsgIsZero()) && ((*z).TotalAppSchemaNumUint == 0) && ((*z).TotalAppSchemaNumByteSlice == 0) && ((*z).TotalExtraAppPages == 0) && ((*z).baseOnlineAccountData.VoteID.MsgIsZero()) && ((*z).baseOnlineAccountData.SelectionID.MsgIsZero()) && ((*z).baseOnlineAccountData.VoteFirstValid.MsgIsZero()) && ((*z).baseOnlineAccountData.VoteLastValid.MsgIsZero()) && ((*z).baseOnlineAccountData.VoteKeyDilution == 0) && ((*z).UpdateRound == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -776,50 +807,50 @@ func (z *baseOnlineAccountData) MarshalMsg(b []byte) (o []byte) {
 	var zb0001Mask uint8 /* 6 bits */
 	if (*z).VoteID.MsgIsZero() {
 		zb0001Len--
-		zb0001Mask |= 0x2
+		zb0001Mask |= 0x1
 	}
 	if (*z).SelectionID.MsgIsZero() {
 		zb0001Len--
-		zb0001Mask |= 0x4
+		zb0001Mask |= 0x2
 	}
 	if (*z).VoteFirstValid.MsgIsZero() {
 		zb0001Len--
-		zb0001Mask |= 0x8
+		zb0001Mask |= 0x4
 	}
 	if (*z).VoteLastValid.MsgIsZero() {
 		zb0001Len--
-		zb0001Mask |= 0x10
+		zb0001Mask |= 0x8
 	}
 	if (*z).VoteKeyDilution == 0 {
 		zb0001Len--
-		zb0001Mask |= 0x20
+		zb0001Mask |= 0x10
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
-		if (zb0001Mask & 0x2) == 0 { // if not empty
-			// string "h"
-			o = append(o, 0xa1, 0x68)
+		if (zb0001Mask & 0x1) == 0 { // if not empty
+			// string "A"
+			o = append(o, 0xa1, 0x41)
 			o = (*z).VoteID.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x4) == 0 { // if not empty
-			// string "i"
-			o = append(o, 0xa1, 0x69)
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "B"
+			o = append(o, 0xa1, 0x42)
 			o = (*z).SelectionID.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x8) == 0 { // if not empty
-			// string "j"
-			o = append(o, 0xa1, 0x6a)
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "C"
+			o = append(o, 0xa1, 0x43)
 			o = (*z).VoteFirstValid.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x10) == 0 { // if not empty
-			// string "k"
-			o = append(o, 0xa1, 0x6b)
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "D"
+			o = append(o, 0xa1, 0x44)
 			o = (*z).VoteLastValid.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x20) == 0 { // if not empty
-			// string "l"
-			o = append(o, 0xa1, 0x6c)
+		if (zb0001Mask & 0x10) == 0 { // if not empty
+			// string "E"
+			o = append(o, 0xa1, 0x45)
 			o = msgp.AppendUint64(o, (*z).VoteKeyDilution)
 		}
 	}
@@ -907,31 +938,31 @@ func (z *baseOnlineAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "h":
+			case "A":
 				bts, err = (*z).VoteID.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "VoteID")
 					return
 				}
-			case "i":
+			case "B":
 				bts, err = (*z).SelectionID.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "SelectionID")
 					return
 				}
-			case "j":
+			case "C":
 				bts, err = (*z).VoteFirstValid.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "VoteFirstValid")
 					return
 				}
-			case "k":
+			case "D":
 				bts, err = (*z).VoteLastValid.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "VoteLastValid")
 					return
 				}
-			case "l":
+			case "E":
 				(*z).VoteKeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "VoteKeyDilution")
@@ -1450,11 +1481,57 @@ func (z *encodedBalanceRecord) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
+func (z resourceFlags) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendUint8(o, uint8(z))
+	return
+}
+
+func (_ resourceFlags) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(resourceFlags)
+	if !ok {
+		_, ok = (z).(*resourceFlags)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *resourceFlags) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 uint8
+		zb0001, bts, err = msgp.ReadUint8Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = resourceFlags(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (_ *resourceFlags) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*resourceFlags)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z resourceFlags) Msgsize() (s int) {
+	s = msgp.Uint8Size
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z resourceFlags) MsgIsZero() bool {
+	return z == 0
+}
+
+// MarshalMsg implements msgp.Marshaler
 func (z *resourcesData) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0002Len := uint32(25)
-	var zb0002Mask uint32 /* 26 bits */
+	zb0002Len := uint32(26)
+	var zb0002Mask uint32 /* 27 bits */
 	if (*z).Total == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x2
@@ -1551,9 +1628,13 @@ func (z *resourcesData) MarshalMsg(b []byte) (o []byte) {
 		zb0002Len--
 		zb0002Mask |= 0x1000000
 	}
-	if (*z).UpdateRound == 0 {
+	if (*z).ResourceFlags == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x2000000
+	}
+	if (*z).UpdateRound == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x4000000
 	}
 	// variable map header, size zb0002Len
 	o = msgp.AppendMapHeader(o, zb0002Len)
@@ -1679,6 +1760,11 @@ func (z *resourcesData) MarshalMsg(b []byte) (o []byte) {
 			o = msgp.AppendUint32(o, (*z).ExtraProgramPages)
 		}
 		if (zb0002Mask & 0x2000000) == 0 { // if not empty
+			// string "y"
+			o = append(o, 0xa1, 0x79)
+			o = msgp.AppendUint8(o, uint8((*z).ResourceFlags))
+		}
+		if (zb0002Mask & 0x4000000) == 0 { // if not empty
 			// string "z"
 			o = append(o, 0xa1, 0x7a)
 			o = msgp.AppendUint64(o, (*z).UpdateRound)
@@ -1919,6 +2005,18 @@ func (z *resourcesData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
+			{
+				var zb0006 uint8
+				zb0006, bts, err = msgp.ReadUint8Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "ResourceFlags")
+					return
+				}
+				(*z).ResourceFlags = resourceFlags(zb0006)
+			}
+		}
+		if zb0002 > 0 {
+			zb0002--
 			(*z).UpdateRound, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "UpdateRound")
@@ -2045,14 +2143,14 @@ func (z *resourcesData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "q":
-				var zb0006 int
-				zb0006, err = msgp.ReadBytesBytesHeader(bts)
+				var zb0007 int
+				zb0007, err = msgp.ReadBytesBytesHeader(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ApprovalProgram")
 					return
 				}
-				if zb0006 > config.MaxAvailableAppProgramLen {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(config.MaxAvailableAppProgramLen))
+				if zb0007 > config.MaxAvailableAppProgramLen {
+					err = msgp.ErrOverflow(uint64(zb0007), uint64(config.MaxAvailableAppProgramLen))
 					return
 				}
 				(*z).ApprovalProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApprovalProgram)
@@ -2061,14 +2159,14 @@ func (z *resourcesData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "r":
-				var zb0007 int
-				zb0007, err = msgp.ReadBytesBytesHeader(bts)
+				var zb0008 int
+				zb0008, err = msgp.ReadBytesBytesHeader(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ClearStateProgram")
 					return
 				}
-				if zb0007 > config.MaxAvailableAppProgramLen {
-					err = msgp.ErrOverflow(uint64(zb0007), uint64(config.MaxAvailableAppProgramLen))
+				if zb0008 > config.MaxAvailableAppProgramLen {
+					err = msgp.ErrOverflow(uint64(zb0008), uint64(config.MaxAvailableAppProgramLen))
 					return
 				}
 				(*z).ClearStateProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ClearStateProgram)
@@ -2112,6 +2210,16 @@ func (z *resourcesData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ExtraProgramPages")
 					return
 				}
+			case "y":
+				{
+					var zb0009 uint8
+					zb0009, bts, err = msgp.ReadUint8Bytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "ResourceFlags")
+						return
+					}
+					(*z).ResourceFlags = resourceFlags(zb0009)
+				}
 			case "z":
 				(*z).UpdateRound, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
@@ -2138,11 +2246,11 @@ func (_ *resourcesData) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *resourcesData) Msgsize() (s int) {
-	s = 3 + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.BoolSize + 2 + msgp.StringPrefixSize + len((*z).UnitName) + 2 + msgp.StringPrefixSize + len((*z).AssetName) + 2 + msgp.StringPrefixSize + len((*z).URL) + 2 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 2 + (*z).Manager.Msgsize() + 2 + (*z).Reserve.Msgsize() + 2 + (*z).Freeze.Msgsize() + 2 + (*z).Clawback.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.BoolSize + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + (*z).KeyValue.Msgsize() + 2 + msgp.BytesPrefixSize + len((*z).ApprovalProgram) + 2 + msgp.BytesPrefixSize + len((*z).ClearStateProgram) + 2 + (*z).GlobalState.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.Uint64Size
+	s = 3 + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.BoolSize + 2 + msgp.StringPrefixSize + len((*z).UnitName) + 2 + msgp.StringPrefixSize + len((*z).AssetName) + 2 + msgp.StringPrefixSize + len((*z).URL) + 2 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 2 + (*z).Manager.Msgsize() + 2 + (*z).Reserve.Msgsize() + 2 + (*z).Freeze.Msgsize() + 2 + (*z).Clawback.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.BoolSize + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + (*z).KeyValue.Msgsize() + 2 + msgp.BytesPrefixSize + len((*z).ApprovalProgram) + 2 + msgp.BytesPrefixSize + len((*z).ClearStateProgram) + 2 + (*z).GlobalState.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.Uint8Size + 2 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *resourcesData) MsgIsZero() bool {
-	return ((*z).Total == 0) && ((*z).Decimals == 0) && ((*z).DefaultFrozen == false) && ((*z).UnitName == "") && ((*z).AssetName == "") && ((*z).URL == "") && ((*z).MetadataHash == ([32]byte{})) && ((*z).Manager.MsgIsZero()) && ((*z).Reserve.MsgIsZero()) && ((*z).Freeze.MsgIsZero()) && ((*z).Clawback.MsgIsZero()) && ((*z).Amount == 0) && ((*z).Frozen == false) && ((*z).SchemaNumUint == 0) && ((*z).SchemaNumByteSlice == 0) && ((*z).KeyValue.MsgIsZero()) && (len((*z).ApprovalProgram) == 0) && (len((*z).ClearStateProgram) == 0) && ((*z).GlobalState.MsgIsZero()) && ((*z).LocalStateSchemaNumUint == 0) && ((*z).LocalStateSchemaNumByteSlice == 0) && ((*z).GlobalStateSchemaNumUint == 0) && ((*z).GlobalStateSchemaNumByteSlice == 0) && ((*z).ExtraProgramPages == 0) && ((*z).UpdateRound == 0)
+	return ((*z).Total == 0) && ((*z).Decimals == 0) && ((*z).DefaultFrozen == false) && ((*z).UnitName == "") && ((*z).AssetName == "") && ((*z).URL == "") && ((*z).MetadataHash == ([32]byte{})) && ((*z).Manager.MsgIsZero()) && ((*z).Reserve.MsgIsZero()) && ((*z).Freeze.MsgIsZero()) && ((*z).Clawback.MsgIsZero()) && ((*z).Amount == 0) && ((*z).Frozen == false) && ((*z).SchemaNumUint == 0) && ((*z).SchemaNumByteSlice == 0) && ((*z).KeyValue.MsgIsZero()) && (len((*z).ApprovalProgram) == 0) && (len((*z).ClearStateProgram) == 0) && ((*z).GlobalState.MsgIsZero()) && ((*z).LocalStateSchemaNumUint == 0) && ((*z).LocalStateSchemaNumByteSlice == 0) && ((*z).GlobalStateSchemaNumUint == 0) && ((*z).GlobalStateSchemaNumByteSlice == 0) && ((*z).ExtraProgramPages == 0) && ((*z).ResourceFlags == 0) && ((*z).UpdateRound == 0)
 }

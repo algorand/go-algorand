@@ -668,23 +668,24 @@ func accountsCreateResourceTable(ctx context.Context, tx *sql.Tx) error {
 type baseOnlineAccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	VoteID          crypto.OneTimeSignatureVerifier `codec:"h"`
-	SelectionID     crypto.VRFVerifier              `codec:"i"`
-	VoteFirstValid  basics.Round                    `codec:"j"`
-	VoteLastValid   basics.Round                    `codec:"k"`
-	VoteKeyDilution uint64                          `codec:"l"`
+	VoteID          crypto.OneTimeSignatureVerifier `codec:"A"`
+	SelectionID     crypto.VRFVerifier              `codec:"B"`
+	VoteFirstValid  basics.Round                    `codec:"C"`
+	VoteLastValid   basics.Round                    `codec:"D"`
+	VoteKeyDilution uint64                          `codec:"E"`
 }
 
 type baseAccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Status             basics.Status      `codec:"a"`
-	MicroAlgos         basics.MicroAlgos  `codec:"b"`
-	RewardsBase        uint64             `codec:"c"`
-	RewardedMicroAlgos basics.MicroAlgos  `codec:"d"`
-	AuthAddr           basics.Address     `codec:"e"`
-	TotalAppSchema     basics.StateSchema `codec:"f"`
-	TotalExtraAppPages uint32             `codec:"g"`
+	Status                     basics.Status     `codec:"a"`
+	MicroAlgos                 basics.MicroAlgos `codec:"b"`
+	RewardsBase                uint64            `codec:"c"`
+	RewardedMicroAlgos         basics.MicroAlgos `codec:"d"`
+	AuthAddr                   basics.Address    `codec:"e"`
+	TotalAppSchemaNumUint      uint64            `codec:"f"`
+	TotalAppSchemaNumByteSlice uint64            `codec:"g"`
+	TotalExtraAppPages         uint32            `codec:"h"`
 
 	baseOnlineAccountData
 
@@ -702,7 +703,8 @@ func (ba *baseAccountData) SetAccountData(ad *basics.AccountData) {
 	ba.VoteLastValid = ad.VoteLastValid
 	ba.VoteKeyDilution = ad.VoteKeyDilution
 	ba.AuthAddr = ad.AuthAddr
-	ba.TotalAppSchema = ad.TotalAppSchema
+	ba.TotalAppSchemaNumUint = ad.TotalAppSchema.NumUint
+	ba.TotalAppSchemaNumByteSlice = ad.TotalAppSchema.NumByteSlice
 	ba.TotalExtraAppPages = ad.TotalExtraAppPages
 }
 
@@ -718,10 +720,20 @@ func (ba *baseAccountData) GetAccountData() basics.AccountData {
 		VoteLastValid:      ba.VoteLastValid,
 		VoteKeyDilution:    ba.VoteKeyDilution,
 		AuthAddr:           ba.AuthAddr,
-		TotalAppSchema:     ba.TotalAppSchema,
+		TotalAppSchema: basics.StateSchema{
+			NumUint:      ba.TotalAppSchemaNumUint,
+			NumByteSlice: ba.TotalAppSchemaNumByteSlice,
+		},
 		TotalExtraAppPages: ba.TotalExtraAppPages,
 	}
 }
+
+type resourceFlags uint8
+
+const (
+	resourceFlagsHolding   = 1
+	resourceFlagsOwnership = 2
+)
 
 type resourcesData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -758,7 +770,8 @@ type resourcesData struct {
 	GlobalStateSchemaNumByteSlice uint64              `codec:"w"`
 	ExtraProgramPages             uint32              `codec:"x"`
 
-	UpdateRound uint64 `codec:"z"`
+	ResourceFlags resourceFlags `codec:"y"`
+	UpdateRound   uint64        `codec:"z"`
 }
 
 func (rd *resourcesData) SetAssetParams(ap basics.AssetParams) {
@@ -773,6 +786,7 @@ func (rd *resourcesData) SetAssetParams(ap basics.AssetParams) {
 	rd.Reserve = ap.Reserve
 	rd.Freeze = ap.Freeze
 	rd.Clawback = ap.Clawback
+	rd.ResourceFlags |= resourceFlagsOwnership
 }
 
 func (rd *resourcesData) GetAssetParams() basics.AssetParams {
@@ -795,6 +809,7 @@ func (rd *resourcesData) GetAssetParams() basics.AssetParams {
 func (rd *resourcesData) SetAssetHolding(ah basics.AssetHolding) {
 	rd.Amount = ah.Amount
 	rd.Frozen = ah.Frozen
+	rd.ResourceFlags |= resourceFlagsHolding
 }
 
 func (rd *resourcesData) GetAssetHolding() basics.AssetHolding {
@@ -807,6 +822,7 @@ func (rd *resourcesData) GetAssetHolding() basics.AssetHolding {
 func (rd *resourcesData) SetAppLocalState(als basics.AppLocalState) {
 	rd.SchemaNumUint, rd.SchemaNumByteSlice = als.Schema.NumUint, als.Schema.NumByteSlice
 	rd.KeyValue = als.KeyValue
+	rd.ResourceFlags |= resourceFlagsHolding
 }
 
 func (rd *resourcesData) GetAppLocalState() basics.AppLocalState {
@@ -828,7 +844,7 @@ func (rd *resourcesData) SetAppParams(ap basics.AppParams) {
 	rd.GlobalStateSchemaNumUint = ap.GlobalStateSchema.NumUint
 	rd.GlobalStateSchemaNumByteSlice = ap.GlobalStateSchema.NumByteSlice
 	rd.ExtraProgramPages = ap.ExtraProgramPages
-
+	rd.ResourceFlags |= resourceFlagsOwnership
 }
 
 func (rd *resourcesData) GetAppParams() basics.AppParams {
