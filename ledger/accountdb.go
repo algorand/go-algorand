@@ -687,6 +687,8 @@ type baseAccountData struct {
 	TotalExtraAppPages uint32             `codec:"g"`
 
 	baseOnlineAccountData
+
+	UpdateRound uint64 `codec:"z"`
 }
 
 func (ba *baseAccountData) SetAccountData(ad *basics.AccountData) {

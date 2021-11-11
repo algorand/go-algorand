@@ -390,8 +390,8 @@ func (z *CatchpointFileHeader) MsgIsZero() bool {
 func (z *baseAccountData) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(12)
-	var zb0001Mask uint16 /* 14 bits */
+	zb0001Len := uint32(13)
+	var zb0001Mask uint16 /* 15 bits */
 	if (*z).Status.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
@@ -439,6 +439,10 @@ func (z *baseAccountData) MarshalMsg(b []byte) (o []byte) {
 	if (*z).baseOnlineAccountData.VoteKeyDilution == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x2000
+	}
+	if (*z).UpdateRound == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x4000
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -502,6 +506,11 @@ func (z *baseAccountData) MarshalMsg(b []byte) (o []byte) {
 			// string "l"
 			o = append(o, 0xa1, 0x6c)
 			o = msgp.AppendUint64(o, (*z).baseOnlineAccountData.VoteKeyDilution)
+		}
+		if (zb0001Mask & 0x4000) == 0 { // if not empty
+			// string "z"
+			o = append(o, 0xa1, 0x7a)
+			o = msgp.AppendUint64(o, (*z).UpdateRound)
 		}
 	}
 	return
@@ -622,6 +631,14 @@ func (z *baseAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0001 > 0 {
+			zb0001--
+			(*z).UpdateRound, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "UpdateRound")
+				return
+			}
+		}
+		if zb0001 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0001)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -716,6 +733,12 @@ func (z *baseAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "VoteKeyDilution")
 					return
 				}
+			case "z":
+				(*z).UpdateRound, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "UpdateRound")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -736,13 +759,13 @@ func (_ *baseAccountData) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *baseAccountData) Msgsize() (s int) {
-	s = 1 + 2 + (*z).Status.Msgsize() + 2 + (*z).MicroAlgos.Msgsize() + 2 + msgp.Uint64Size + 2 + (*z).RewardedMicroAlgos.Msgsize() + 2 + (*z).AuthAddr.Msgsize() + 2 + (*z).TotalAppSchema.Msgsize() + 2 + msgp.Uint32Size + 2 + (*z).baseOnlineAccountData.VoteID.Msgsize() + 2 + (*z).baseOnlineAccountData.SelectionID.Msgsize() + 2 + (*z).baseOnlineAccountData.VoteFirstValid.Msgsize() + 2 + (*z).baseOnlineAccountData.VoteLastValid.Msgsize() + 2 + msgp.Uint64Size
+	s = 1 + 2 + (*z).Status.Msgsize() + 2 + (*z).MicroAlgos.Msgsize() + 2 + msgp.Uint64Size + 2 + (*z).RewardedMicroAlgos.Msgsize() + 2 + (*z).AuthAddr.Msgsize() + 2 + (*z).TotalAppSchema.Msgsize() + 2 + msgp.Uint32Size + 2 + (*z).baseOnlineAccountData.VoteID.Msgsize() + 2 + (*z).baseOnlineAccountData.SelectionID.Msgsize() + 2 + (*z).baseOnlineAccountData.VoteFirstValid.Msgsize() + 2 + (*z).baseOnlineAccountData.VoteLastValid.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *baseAccountData) MsgIsZero() bool {
-	return ((*z).Status.MsgIsZero()) && ((*z).MicroAlgos.MsgIsZero()) && ((*z).RewardsBase == 0) && ((*z).RewardedMicroAlgos.MsgIsZero()) && ((*z).AuthAddr.MsgIsZero()) && ((*z).TotalAppSchema.MsgIsZero()) && ((*z).TotalExtraAppPages == 0) && ((*z).baseOnlineAccountData.VoteID.MsgIsZero()) && ((*z).baseOnlineAccountData.SelectionID.MsgIsZero()) && ((*z).baseOnlineAccountData.VoteFirstValid.MsgIsZero()) && ((*z).baseOnlineAccountData.VoteLastValid.MsgIsZero()) && ((*z).baseOnlineAccountData.VoteKeyDilution == 0)
+	return ((*z).Status.MsgIsZero()) && ((*z).MicroAlgos.MsgIsZero()) && ((*z).RewardsBase == 0) && ((*z).RewardedMicroAlgos.MsgIsZero()) && ((*z).AuthAddr.MsgIsZero()) && ((*z).TotalAppSchema.MsgIsZero()) && ((*z).TotalExtraAppPages == 0) && ((*z).baseOnlineAccountData.VoteID.MsgIsZero()) && ((*z).baseOnlineAccountData.SelectionID.MsgIsZero()) && ((*z).baseOnlineAccountData.VoteFirstValid.MsgIsZero()) && ((*z).baseOnlineAccountData.VoteLastValid.MsgIsZero()) && ((*z).baseOnlineAccountData.VoteKeyDilution == 0) && ((*z).UpdateRound == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
