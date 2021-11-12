@@ -685,6 +685,10 @@ type baseAccountData struct {
 	TotalAppSchemaNumUint      uint64            `codec:"f"`
 	TotalAppSchemaNumByteSlice uint64            `codec:"g"`
 	TotalExtraAppPages         uint32            `codec:"h"`
+	TotalAssetParams           uint32            `codec:"i"`
+	TotalAssets                uint32            `codec:"j"`
+	TotalAppParams             uint32            `codec:"k"`
+	TotalAppLocalStates        uint32            `codec:"l"`
 
 	baseOnlineAccountData
 
@@ -705,6 +709,10 @@ func (ba *baseAccountData) SetAccountData(ad *basics.AccountData) {
 	ba.TotalAppSchemaNumUint = ad.TotalAppSchema.NumUint
 	ba.TotalAppSchemaNumByteSlice = ad.TotalAppSchema.NumByteSlice
 	ba.TotalExtraAppPages = ad.TotalExtraAppPages
+	ba.TotalAssetParams = uint32(len(ad.AssetParams))
+	ba.TotalAssets = uint32(len(ad.Assets))
+	ba.TotalAppParams = uint32(len(ad.AppParams))
+	ba.TotalAppLocalStates = uint32(len(ad.AppLocalStates))
 }
 
 func (ba *baseAccountData) GetAccountData() basics.AccountData {
@@ -772,7 +780,7 @@ type resourcesData struct {
 
 	// ResourceFlags helps to identify which portions of this structure should be used; in particular, it
 	// helps to provide a marker - i.e. whether the account was, for instance, opted-in for the asset compared
-	// to just being the owner of the asset. A comparison against the emptry structure doesn't work here -
+	// to just being the owner of the asset. A comparison against the empty structure doesn't work here -
 	// since both the holdings and the parameters are allowed to be all at their default values.
 	ResourceFlags resourceFlags `codec:"y"`
 	UpdateRound   uint64        `codec:"z"`
