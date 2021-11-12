@@ -20,10 +20,11 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 type TestMessage string
@@ -82,7 +83,14 @@ func (a TestRepeatingArray) Marshal(pos uint64) ([]byte, error) {
 func TestMerkle(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for i := uint64(0); i < 1024; i++ {
+	increment := uint64(1)
+	// with -race this will take a very long time
+	// run a shorter version for Short testing
+	if testing.Short() {
+		increment = uint64(16)
+	}
+
+	for i := uint64(0); i < 1024; i = i + increment {
 		testMerkle(t, crypto.Sha512_256, i)
 	}
 
@@ -328,4 +336,169 @@ func benchmarkMerkleVerify1M(b *testing.B, hashType crypto.HashType) {
 			b.Error(err)
 		}
 	}
+}
+
+// TestGenericDigest makes sure GenericDigest will not decoded sizes
+// greater than the max allowd.
+func TestGenericDigest(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	err := testWithSize(t, crypto.MaxHashDigestSize)
+	require.NoError(t, err)
+
+	err = testWithSize(t, crypto.MaxHashDigestSize+1)
+	require.Error(t, err)
+}
+
+func testWithSize(t *testing.T, size int) error {
+	gd := make(crypto.GenericDigest, size)
+	gd[8] = 88
+
+	var wgd Proof
+	wgd.Path = make([]crypto.GenericDigest, 1000)
+	wgd.Path[0] = gd
+
+	bytes := protocol.Encode(&wgd)
+
+	var out Proof
+	err := protocol.Decode(bytes, &out)
+
+	if err == nil {
+		require.Equal(t, wgd, out)
+	}
+	return err
+}
+
+func TestSizeLimitsMerkle(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	increment := uint64(1)
+	// with -race this will take a very long time
+	// run a shorter version for Short testing
+	if testing.Short() {
+		increment = 8
+	}
+	for depth := uint64(0); depth < uint64(18); depth = depth + increment {
+		size := uint64(1) << depth
+
+		// eltCoefficient is the coefficent to determine how many elements are in the proof.
+		// There will be 1/eltCoefficient elements of all possible element (2^treeDepth)
+		// numElts = 2^(depth-eltCoefficient)
+
+		// When the positions are regularly positioned then, the number of paths will be maximum, bounded by:
+		// 2^(depth-eltCoefficient)*eltCoefficient
+
+		// regular spaced elets
+		for eltCoefficient := uint64(0); eltCoefficient <= depth; {
+			numElts := uint64(1) << (depth - eltCoefficient)
+			positions := getRegularPositions(numElts, uint64(1)<<depth)
+
+			tree, proof := testMerkelSizeLimits(t, crypto.Sumhash, size, positions)
+			require.Equal(t, (uint64(1)<<(depth-eltCoefficient))*eltCoefficient, uint64(len(proof.Path)))
+
+			// encode/decode
+			bytes := protocol.Encode(proof)
+			var outProof Proof
+			err := protocol.Decode(bytes, &outProof)
+			if depth > MaxTreeDepth && (eltCoefficient == 1 || eltCoefficient == 2) {
+				errmsg := fmt.Sprintf("%d > %d at Path", len(proof.Path), MaxNumLeaves/2)
+				require.Contains(t, err.Error(), errmsg)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, *proof, outProof)
+			}
+
+			bytes = protocol.Encode(tree)
+			var outTree Tree
+			err = protocol.Decode(bytes, &outTree)
+			if depth > MaxTreeDepth {
+				require.Contains(t, err.Error(), "> 17 at Levels")
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, *tree, outTree)
+			}
+
+			if eltCoefficient == 0 {
+				eltCoefficient = 1
+			} else {
+				eltCoefficient = eltCoefficient << increment
+			}
+		}
+
+		// randomly positioned elts
+		for eltCoefficient := uint64(1); eltCoefficient <= depth; eltCoefficient = eltCoefficient << increment {
+			numElts := uint64(1) << (depth - eltCoefficient)
+			positions := getRandomPositions(numElts, numElts)
+
+			_, proof := testMerkelSizeLimits(t, crypto.Sumhash, size, positions)
+			require.GreaterOrEqual(t, (uint64(1)<<(depth-eltCoefficient))*eltCoefficient, uint64(len(proof.Path)))
+
+			if len(proof.Path) > MaxNumLeaves {
+				// encode/decode
+				bytes := protocol.Encode(proof)
+				var outProof Proof
+				err := protocol.Decode(bytes, &outProof)
+				errmsg := fmt.Sprintf("%d > %d at Path", len(proof.Path), MaxNumLeaves)
+				require.Contains(t, err.Error(), errmsg)
+			}
+		}
+	}
+
+	// case of a tree with leaves 2^16 + 1
+	size := (uint64(1) << MaxTreeDepth) + 1
+	tree, _ := testMerkelSizeLimits(t, crypto.Sumhash, size, []uint64{})
+	bytes := protocol.Encode(tree)
+	var outTree Tree
+	err := protocol.Decode(bytes, &outTree)
+	require.Contains(t, err.Error(), "> 17 at Levels")
+}
+
+func getRegularPositions(numElets, max uint64) (res []uint64) {
+	skip := max / numElets
+	pos := uint64(0)
+	for i := uint64(0); i < numElets; i++ {
+		res = append(res, pos)
+		pos += skip
+	}
+	return
+}
+
+func getRandomPositions(numElets, max uint64) (res []uint64) {
+	used := make([]bool, max)
+	for i := uint64(0); i < numElets; i++ {
+
+		pos := crypto.RandUint64() % max
+		for used[pos] {
+			pos = (pos + 1) % max
+		}
+		used[pos] = true
+		res = append(res, pos)
+	}
+	return
+}
+
+func testMerkelSizeLimits(t *testing.T, hashtype crypto.HashType, size uint64, positions []uint64) (*Tree, *Proof) {
+
+	a := make(TestArray, size)
+	for i := uint64(0); i < size; i++ {
+		crypto.RandBytes(a[i][:])
+	}
+
+	tree, err := Build(a, crypto.HashFactory{HashType: hashtype})
+	require.NoError(t, err)
+
+	root := tree.Root()
+
+	posMap := make(map[uint64]crypto.Hashable)
+	for _, j := range positions {
+		posMap[j] = a[j]
+	}
+
+	proof, err := tree.Prove(positions)
+	require.NoError(t, err)
+
+	err = Verify(root, posMap, proof)
+	require.NoError(t, err)
+
+	return tree, proof
 }

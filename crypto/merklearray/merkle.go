@@ -25,13 +25,21 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 )
 
+const (
+	// MaxTreeDepth is the maximum tree depth (root only depth 0)
+	MaxTreeDepth = 16
+
+	// MaxNumLeaves is the maximum number of leaves allowed in the tree
+	MaxNumLeaves = 65536 // 2^MaxTreeDepth
+)
+
 // Tree is a Merkle tree, represented by layers of nodes (hashes) in the tree
 // at each height.
 type Tree struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// Level 0 is the leaves.
-	Levels []Layer            `codec:"lvls,allocbound=-"`
+	Levels []Layer            `codec:"lvls,allocbound=MaxTreeDepth+1"`
 	Hash   crypto.HashFactory `codec:"hsh"`
 }
 
@@ -39,7 +47,10 @@ type Tree struct {
 type Proof struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Path        []crypto.GenericDigest `codec:"pth,allocbound=-"`
+	// Path is bounded by MaxNumLeaves since there could be multiple reveals, and
+	// given the distribution of the elt positions and the depth of the tree,
+	// the path length can increase up to 2^MaxTreeDepth / 2
+	Path        []crypto.GenericDigest `codec:"pth,allocbound=MaxNumLeaves/2"`
 	HashFactory crypto.HashFactory     `codec:"hsh"`
 }
 

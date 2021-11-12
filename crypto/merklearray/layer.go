@@ -26,7 +26,7 @@ import (
 // A Layer of the Merkle tree consists of a dense array of hashes at that
 // level of the tree.  Hashes beyond the end of the array (e.g., if the
 // number of leaves is not an exact power of 2) are implicitly zero.
-//msgp:allocbound Layer -
+//msgp:allocbound Layer MaxNumLeaves
 type Layer []crypto.GenericDigest
 
 // A pair represents an internal node in the Merkle tree.
