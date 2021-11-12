@@ -75,11 +75,12 @@ type Ledger struct {
 	genesisProto config.ConsensusParams
 
 	// State-machine trackers
-	accts    accountUpdates
-	txTail   txTail
-	bulletin bulletin
-	notifier blockNotifier
-	metrics  metricsTracker
+	accts      accountUpdates
+	catchpoint catchpointTracker
+	txTail     txTail
+	bulletin   bulletin
+	notifier   blockNotifier
+	metrics    metricsTracker
 
 	trackers  trackerRegistry
 	trackerMu deadlock.RWMutex
@@ -153,7 +154,8 @@ func OpenLedger(
 		l.genesisAccounts = make(map[basics.Address]basics.AccountData)
 	}
 
-	l.accts.initialize(cfg, dbPathPrefix)
+	l.accts.initialize(cfg)
+	l.catchpoint.initialize(cfg, dbPathPrefix)
 
 	err = l.reloadLedger()
 	if err != nil {
@@ -188,21 +190,22 @@ func (l *Ledger) reloadLedger() error {
 	}
 
 	// init tracker db
-	trackerDBInitParams, err := trackerDBInitialize(l, l.accts.catchpointEnabled(), l.accts.dbDirectory)
+	trackerDBInitParams, err := trackerDBInitialize(l, l.catchpoint.catchpointEnabled(), l.catchpoint.dbDirectory)
 	if err != nil {
 		return err
 	}
 
 	// set account updates tracker as a driver to calculate tracker db round and committing offsets
 	trackers := []ledgerTracker{
-		&l.accts,    // update the balances
-		&l.txTail,   // update the transaction tail, tracking the recent 1000 txn
-		&l.bulletin, // provide closed channel signaling support for completed rounds
-		&l.notifier, // send OnNewBlocks to subscribers
-		&l.metrics,  // provides metrics reporting support
+		&l.accts,      // update the balances
+		&l.catchpoint, // catchpoints tracker : update catchpoint labels, create catchpoint files
+		&l.txTail,     // update the transaction tail, tracking the recent 1000 txn
+		&l.bulletin,   // provide closed channel signaling support for completed rounds
+		&l.notifier,   // send OnNewBlocks to subscribers
+		&l.metrics,    // provides metrics reporting support
 	}
 
-	err = l.trackers.initialize(&l.accts, l, trackers)
+	err = l.trackers.initialize(l, trackers, l.cfg)
 	if err != nil {
 		return err
 	}
@@ -399,17 +402,7 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 		minToSave = 0
 	}
 
-	l.trackers.scheduleCommit(r)
-
 	return minToSave
-}
-
-func (l *Ledger) waitAccountsWriting() {
-	l.trackers.waitAccountsWriting()
-}
-
-func (l *Ledger) scheduleCommit(rnd basics.Round) {
-	l.trackers.scheduleCommit(rnd)
 }
 
 // GetLastCatchpointLabel returns the latest catchpoint label that was written to the
@@ -417,7 +410,7 @@ func (l *Ledger) scheduleCommit(rnd basics.Round) {
 func (l *Ledger) GetLastCatchpointLabel() string {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.GetLastCatchpointLabel()
+	return l.catchpoint.GetLastCatchpointLabel()
 }
 
 // GetCreatorForRound takes a CreatableIndex and a CreatableType and tries to
@@ -658,7 +651,7 @@ func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state Catchpoin
 func (l *Ledger) GetCatchpointStream(round basics.Round) (ReadCloseSizer, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.GetCatchpointStream(round)
+	return l.catchpoint.GetCatchpointStream(round)
 }
 
 // ledgerForTracker methods
@@ -688,7 +681,7 @@ func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger int
 func (l *Ledger) IsWritingCatchpointFile() bool {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.IsWritingCatchpointFile()
+	return l.catchpoint.IsWritingCatchpointFile()
 }
 
 // VerifiedTransactionCache returns the verify.VerifiedTransactionCache

@@ -170,6 +170,9 @@ var ErrStaleBlockAssemblyRequest = fmt.Errorf("AssembleBlock: requested block as
 
 // Reset resets the content of the transaction pool
 func (pool *TransactionPool) Reset() {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+	defer pool.cond.Broadcast()
 	pool.pendingTxids = make(map[transactions.Txid]transactions.SignedTxn)
 	pool.pendingTxGroups = nil
 	pool.rememberedTxids = make(map[transactions.Txid]transactions.SignedTxn)
