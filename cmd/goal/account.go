@@ -59,6 +59,7 @@ var (
 	partKeyOutDir      string
 	partKeyFile        string
 	partKeyDeleteInput bool
+	listpartkeyCompat  bool
 	importDefault      bool
 	mnemonic           string
 	dumpOutFile        string
@@ -164,6 +165,9 @@ func init() {
 	installParticipationKeyCmd.Flags().StringVar(&partKeyFile, "partkey", "", "Participation key file to install")
 	installParticipationKeyCmd.MarkFlagRequired("partkey")
 	installParticipationKeyCmd.Flags().BoolVar(&partKeyDeleteInput, "delete-input", false, "Acknowledge that installpartkey will delete the input key file")
+
+	// listpartkey flags
+	listParticipationKeysCmd.Flags().BoolVarP(&listpartkeyCompat, "compatibility", "c", false, "Print output in compatibility mode. This option will be removed in a future release, please use REST API for tooling.")
 
 	// import flags
 	importCmd.Flags().BoolVarP(&importDefault, "default", "f", false, "Set this account as the default one")
@@ -1062,12 +1066,62 @@ func uintToStr(number uint64) string {
 	return fmt.Sprintf("%d", number)
 }
 
+// legacyListParticipationKeysCommand prints key information in the same
+// format as earlier versions of goal. Some users are using this information
+// in scripts and need some extra time to migrate to the REST API.
+func legacyListParticipationKeysCommand() {
+	dataDir := ensureSingleDataDir()
+
+	client := ensureGoalClient(dataDir, libgoal.DynamicClient)
+	parts, err := client.ListParticipationKeyFiles()
+	if err != nil {
+		reportErrorf(errorRequestFail, err)
+	}
+
+	var filenames []string
+	for fn := range parts {
+		filenames = append(filenames, fn)
+	}
+	sort.Strings(filenames)
+
+	rowFormat := "%-10s\t%-80s\t%-60s\t%12s\t%12s\t%12s\n"
+	fmt.Printf(rowFormat, "Registered", "Filename", "Parent address", "First round", "Last round", "First key")
+	for _, fn := range filenames {
+		onlineInfoStr := "unknown"
+		onlineAccountInfo, err := client.AccountInformation(parts[fn].Address().GetUserAddress())
+		if err == nil {
+			votingBytes := parts[fn].Voting.OneTimeSignatureVerifier
+			vrfBytes := parts[fn].VRF.PK
+			if onlineAccountInfo.Participation != nil &&
+				(string(onlineAccountInfo.Participation.ParticipationPK) == string(votingBytes[:])) &&
+				(string(onlineAccountInfo.Participation.VRFPK) == string(vrfBytes[:])) &&
+				(onlineAccountInfo.Participation.VoteFirst == uint64(parts[fn].FirstValid)) &&
+				(onlineAccountInfo.Participation.VoteLast == uint64(parts[fn].LastValid)) &&
+				(onlineAccountInfo.Participation.VoteKeyDilution == parts[fn].KeyDilution) {
+				onlineInfoStr = "yes"
+			} else {
+				onlineInfoStr = "no"
+			}
+		}
+		// it's okay to proceed without algod info
+		first, last := parts[fn].ValidInterval()
+		fmt.Printf(rowFormat, onlineInfoStr, fn, parts[fn].Address().GetUserAddress(),
+			fmt.Sprintf("%d", first),
+			fmt.Sprintf("%d", last),
+			fmt.Sprintf("%d.%d", parts[fn].Voting.FirstBatch, parts[fn].Voting.FirstOffset))
+	}
+}
+
 var listParticipationKeysCmd = &cobra.Command{
 	Use:   "listpartkeys",
 	Short: "List participation keys summary",
 	Long:  `List all participation keys tracked by algod along with summary of additional information. For detailed key information use 'partkeyinfo'.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
+		if listpartkeyCompat {
+			legacyListParticipationKeysCommand()
+			return
+		}
 		dataDir := ensureSingleDataDir()
 
 		client := ensureGoalClient(dataDir, libgoal.DynamicClient)
