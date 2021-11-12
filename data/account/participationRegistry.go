@@ -317,7 +317,6 @@ type participationDB struct {
 
 	writeQueue     chan partDBWriteRecord
 	writeQueueDone chan struct{}
-	flushesPending int
 
 	flushTimeout time.Duration
 }
