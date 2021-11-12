@@ -89,14 +89,6 @@ func (wl *wrappedLedger) trackerLog() logging.Logger {
 	return wl.l.trackerLog()
 }
 
-func (wl *wrappedLedger) scheduleCommit(basics.Round) {
-	return
-}
-
-func (wl *wrappedLedger) waitAccountsWriting() {
-	return
-}
-
 func (wl *wrappedLedger) GenesisHash() crypto.Digest {
 	return wl.l.GenesisHash()
 }
@@ -804,8 +796,8 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 	for _, trk := range wl.l.trackers.trackers {
 		if au, ok := trk.(*accountUpdates); ok {
 			wl.l.trackers.waitAccountsWriting()
-			minSave = trk.committedUpTo(rnd)
-			wl.l.trackers.scheduleCommit(rnd)
+			minSave, _ = trk.committedUpTo(rnd)
+			wl.l.trackers.committedUpTo(rnd)
 			wl.l.trackers.waitAccountsWriting()
 			if minSave < minMinSave {
 				minMinSave = minSave
@@ -818,9 +810,9 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 			au = cleanTracker.(*accountUpdates)
 			cfg := config.GetDefaultLocal()
 			cfg.Archival = true
-			au.initialize(cfg, "")
+			au.initialize(cfg)
 		} else {
-			minSave = trk.committedUpTo(rnd)
+			minSave, _ = trk.committedUpTo(rnd)
 			if minSave < minMinSave {
 				minMinSave = minSave
 			}
