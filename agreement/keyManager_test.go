@@ -17,7 +17,10 @@
 package agreement
 
 import (
+	"testing"
+
 	"github.com/algorand/go-deadlock"
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -53,11 +56,19 @@ func (m *recordingKeyManager) DeleteOldKeys(r basics.Round) {
 }
 
 // Record implements KeyManager.Record.
-func (m *recordingKeyManager) RecordAsync(acct basics.Address, round basics.Round, action account.ParticipationAction) {
+func (m *recordingKeyManager) Record(acct basics.Address, round basics.Round, action account.ParticipationAction) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	if _, ok := m.recording[acct]; !ok {
 		m.recording[acct] = make(map[account.ParticipationAction]basics.Round)
 	}
 	m.recording[acct][action] = round
+}
+
+// ValidateVoteRound requires that the given address voted on a particular round.
+func (m *recordingKeyManager) ValidateVoteRound(t *testing.T, address basics.Address, round basics.Round) {
+	m.mutex.Lock()
+	require.Equal(t, round, m.recording[address][account.Vote])
+	require.Equal(t, round, m.recording[address][account.BlockProposal])
+	m.mutex.Unlock()
 }

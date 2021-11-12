@@ -23,7 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 
@@ -33,6 +33,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
+
+const defaultTimeout = 5 * time.Second
 
 // ParticipationID identifies a particular set of participation keys.
 //msgp:ignore ParticipationID
@@ -48,15 +50,14 @@ func (pid ParticipationID) String() string {
 	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(pid[:])
 }
 
-// ParticipationIDFromString takes a string and returns a ParticipationID object
-func ParticipationIDFromString(str string) (d ParticipationID, err error) {
+// ParseParticipationID takes a string and returns a ParticipationID object
+func ParseParticipationID(str string) (d ParticipationID, err error) {
 	decoded, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(str)
 	if err != nil {
 		return d, err
 	}
 	if len(decoded) != len(d) {
-		msg := fmt.Sprintf(`Attempted to decode a string which was not a participation id: "%v"`, str)
-		return d, errors.New(msg)
+		return d, fmt.Errorf(`attempted to decode a string which was not a participation id: "%s"`, str)
 	}
 	copy(d[:], decoded[:])
 	return d, err
@@ -176,7 +177,7 @@ type ParticipationRegistry interface {
 	Record(account basics.Address, round basics.Round, participationType ParticipationAction) error
 
 	// Flush ensures that all changes have been written to the underlying data store.
-	Flush() error
+	Flush(timeout time.Duration) error
 
 	// Close any resources used to implement the interface.
 	Close()
@@ -190,7 +191,7 @@ func MakeParticipationRegistry(accessor db.Pair, log logging.Logger) (Participat
 // makeParticipationRegistry creates a db.Accessor backed ParticipationRegistry.
 func makeParticipationRegistry(accessor db.Pair, log logging.Logger) (*participationDB, error) {
 	if log == nil {
-		return nil, fmt.Errorf("invalid logger provided")
+		return nil, errors.New("invalid logger provided")
 	}
 
 	migrations := []db.Migration{
@@ -204,15 +205,17 @@ func makeParticipationRegistry(accessor db.Pair, log logging.Logger) (*participa
 	}
 
 	registry := &participationDB{
-		log:        log,
-		store:      accessor,
-		writeQueue: make(chan partDBWriteRecord, 10),
+		log:            log,
+		store:          accessor,
+		writeQueue:     make(chan partDBWriteRecord, 10),
+		writeQueueDone: make(chan struct{}),
+		flushTimeout:   defaultTimeout,
 	}
-	registry.flushDone = sync.NewCond(&registry.mutex)
 	go registry.writeThread()
 
 	err = registry.initializeCache()
 	if err != nil {
+		registry.Close()
 		return nil, fmt.Errorf("unable to initialize participation registry cache: %w", err)
 	}
 
@@ -220,7 +223,7 @@ func makeParticipationRegistry(accessor db.Pair, log logging.Logger) (*participa
 }
 
 // Queries
-var (
+const (
 	createKeysets = `CREATE TABLE Keysets (
 			pk INTEGER PRIMARY KEY NOT NULL,
 
@@ -301,7 +304,7 @@ func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 	return nil
 }
 
-// participationDB is a private implementation of ParticipationRegistry.
+// participationDB provides a concrete implementation of the ParticipationRegistry interface.
 type participationDB struct {
 	cache map[ParticipationID]ParticipationRecord
 
@@ -312,11 +315,11 @@ type participationDB struct {
 	store db.Pair
 	mutex deadlock.RWMutex
 
-	writeQueue chan partDBWriteRecord
-	asyncErr   error
-
-	flushDone      *sync.Cond
+	writeQueue     chan partDBWriteRecord
+	writeQueueDone chan struct{}
 	flushesPending int
+
+	flushTimeout time.Duration
 }
 
 type updatingParticipationRecord struct {
@@ -325,6 +328,8 @@ type updatingParticipationRecord struct {
 	required bool
 }
 
+// partDBWriteRecord event object sent to the writeThread to facilitate async
+// database writes. Only one set of event fields should be set at a time.
 type partDBWriteRecord struct {
 	insertID ParticipationID
 	insert   Participation
@@ -333,77 +338,79 @@ type partDBWriteRecord struct {
 
 	delete ParticipationID
 
-	flush bool
+	flushResultChannel chan error
 }
 
 func (db *participationDB) initializeCache() error {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
-	db.cache = make(map[ParticipationID]ParticipationRecord)
-	db.dirty = make(map[ParticipationID]struct{})
-
 	records, err := db.getAllFromDB()
 	if err != nil {
 		return err
 	}
 
+	cache := make(map[ParticipationID]ParticipationRecord)
 	for _, record := range records {
 		// Check if it already exists
-		if _, ok := db.cache[record.ParticipationID]; ok {
+		if _, ok := cache[record.ParticipationID]; ok {
 			return ErrMultipleKeysForID
 		}
-		db.cache[record.ParticipationID] = record
+		cache[record.ParticipationID] = record
 	}
 
+	db.cache = cache
+	db.dirty = make(map[ParticipationID]struct{})
 	return nil
 }
 
 func (db *participationDB) writeThread() {
-	needsFlush := false
+	defer close(db.writeQueueDone)
 	var err error
 	var lastErr error
 	for {
 		var wr partDBWriteRecord
 		var chanOk bool
-		// A call to .Flush() waits until the flash command passes the command queue, and also that the command queue is empty.
-		if needsFlush {
-			select {
-			case wr, chanOk = <-db.writeQueue:
-				if !chanOk {
-					return // chan closed
-				}
-			default:
-				// nothing available, flush completed
-				db.mutex.Lock()
-				needsFlush = false
-				db.asyncErr = lastErr
-				lastErr = nil
-				// see Flush() for the Wait() half of this.
-				db.flushDone.Broadcast()
-				db.mutex.Unlock()
-			}
-		} else {
-			// blocking read until next activity or close
-			wr, chanOk = <-db.writeQueue
-			if !chanOk {
-				return // chan closed
-			}
+
+		// blocking read until next activity or close
+		wr, chanOk = <-db.writeQueue
+		if !chanOk {
+			return // chan closed
 		}
+
 		if len(wr.registerUpdated) != 0 {
 			err = db.registerInner(wr.registerUpdated)
 		} else if !wr.insertID.IsZero() {
 			err = db.insertInner(wr.insert, wr.insertID)
 		} else if !wr.delete.IsZero() {
 			err = db.deleteInner(wr.delete)
-		} else if wr.flush {
+		} else if wr.flushResultChannel != nil {
 			err = db.flushInner()
-			needsFlush = true
 		}
 		if err != nil {
 			lastErr = err
 		}
+
+		if wr.flushResultChannel != nil {
+			wr.flushResultChannel <- lastErr
+			lastErr = nil
+		}
 	}
+}
+
+// verifyExecWithOneRowEffected checks for a successful Exec and also verifies exactly 1 row was affected
+func verifyExecWithOneRowEffected(err error, result sql.Result, operationName string) error {
+	if err != nil {
+		return fmt.Errorf("unable to execute %s: %w", operationName, err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("unable to get %s rows affected: %w", operationName, err)
+	}
+	if rows != 1 {
+		return fmt.Errorf("unexpected number of %s rows affected, expected 1 found %d", operationName, rows)
+	}
+	return nil
 }
 
 func (db *participationDB) insertInner(record Participation, id ParticipationID) (err error) {
@@ -428,32 +435,18 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 			record.LastValid,
 			record.KeyDilution,
 			rawVRF)
-		if err != nil {
-			return fmt.Errorf("unable to insert keyset: %w", err)
-		}
-		rows, err := result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("unable to insert keyset: %w", err)
-		}
-		if rows != 1 {
-			return fmt.Errorf("unexpected number of rows")
+		if err := verifyExecWithOneRowEffected(err, result, "insert keyset"); err != nil {
+			return err
 		}
 		pk, err := result.LastInsertId()
 		if err != nil {
-			return fmt.Errorf("unable to insert keyset: %w", err)
+			return fmt.Errorf("unable to get pk from keyset: %w", err)
 		}
 
 		// Create Rolling entry
 		result, err = tx.Exec(insertRollingQuery, pk, rawVoting)
-		if err != nil {
-			return fmt.Errorf("unable insert rolling: %w", err)
-		}
-		rows, err = result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("unable to insert keyset: %w", err)
-		}
-		if rows != 1 {
-			return fmt.Errorf("unexpected number of rows")
+		if err := verifyExecWithOneRowEffected(err, result, "insert rolling"); err != nil {
+			return err
 		}
 
 		return nil
@@ -500,18 +493,22 @@ func (db *participationDB) deleteInner(id ParticipationID) error {
 		var pk int
 		row := tx.QueryRow(selectPK, id[:])
 		err := row.Scan(&pk)
+		if err == sql.ErrNoRows {
+			// nothing to do.
+			return nil
+		}
 		if err != nil {
 			return fmt.Errorf("unable to scan pk: %w", err)
 		}
 
 		// Delete rows
-		_, err = tx.Exec(deleteKeysets, pk)
-		if err != nil {
+		result, err := tx.Exec(deleteKeysets, pk)
+		if err := verifyExecWithOneRowEffected(err, result, "delete keyset"); err != nil {
 			return err
 		}
 
-		_, err = tx.Exec(deleteRolling, pk)
-		if err != nil {
+		result, err = tx.Exec(deleteRolling, pk)
+		if err := verifyExecWithOneRowEffected(err, result, "delete rolling"); err != nil {
 			return err
 		}
 
@@ -917,31 +914,41 @@ func (db *participationDB) Record(account basics.Address, round basics.Round, pa
 // Waiting for all asynchronous IO to complete includes actions from other threads.
 // Flush waits for the participation registry to be idle.
 // Flush returns the latest error generated by async IO, if any.
-func (db *participationDB) Flush() error {
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
-
-	db.flushesPending++
-	db.writeQueue <- partDBWriteRecord{
-		flush: true,
+func (db *participationDB) Flush(timeout time.Duration) error {
+	resultCh := make(chan error, 1)
+	timeoutCh := time.After(timeout)
+	writeRecord := partDBWriteRecord{
+		flushResultChannel: resultCh,
 	}
 
-	// See writeThread() for the Broadcast() we're Wait()ing on.
-	db.flushDone.Wait()
-	err := db.asyncErr
-	db.flushesPending--
-	// this allows all waiting Flush()es to see the error that happened
-	if db.flushesPending == 0 {
-		db.asyncErr = nil
+	select {
+	case db.writeQueue <- writeRecord:
+	case <-timeoutCh:
+		return fmt.Errorf("timeout while requesting flush, check results manually")
 	}
-	return err
+
+	select {
+	case err := <-resultCh:
+		return err
+	case <-timeoutCh:
+		return fmt.Errorf("timeout while flushing changes, check results manually")
+	}
 }
 
+// Close attempts to flush with db.flushTimeout, then waits for the write queue for another db.flushTimeout.
 func (db *participationDB) Close() {
-	if err := db.Flush(); err != nil {
+	if err := db.Flush(db.flushTimeout); err != nil {
 		db.log.Warnf("participationDB unhandled error during Close/Flush: %w", err)
 	}
 
 	db.store.Close()
 	close(db.writeQueue)
+
+	// Wait for write queue to close.
+	select {
+	case <-db.writeQueueDone:
+		return
+	case <-time.After(db.flushTimeout):
+		db.log.Warnf("Close(): timeout while waiting for WriteQueue to finish.")
+	}
 }

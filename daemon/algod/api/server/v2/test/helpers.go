@@ -86,7 +86,7 @@ type mockNode struct {
 	err       error
 }
 
-func (m mockNode) InstallParticipationKey(partKeyBinary *[]byte) (account.ParticipationID, error) {
+func (m mockNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
 	panic("implement me")
 }
 

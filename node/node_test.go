@@ -544,8 +544,8 @@ func TestAsyncRecord(t *testing.T) {
 	err = node.accountManager.Registry().Register(id, 0)
 	require.NoError(t, err)
 
-	node.RecordAsync(addr, 10000, account.Vote)
-	node.RecordAsync(addr, 20000, account.BlockProposal)
+	node.Record(addr, 10000, account.Vote)
+	node.Record(addr, 20000, account.BlockProposal)
 
 	time.Sleep(5000 * time.Millisecond)
 	records := node.accountManager.Registry().GetAll()

@@ -18,6 +18,7 @@ package data
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 
@@ -223,15 +224,18 @@ func (manager *AccountManager) Registry() account.ParticipationRegistry {
 }
 
 // FlushRegistry tells the underlying participation registry to flush it's change cache to the DB.
-func (manager *AccountManager) FlushRegistry() {
-	manager.registry.Flush()
+func (manager *AccountManager) FlushRegistry(timeout time.Duration) {
+	err := manager.registry.Flush(timeout)
+	if err != nil {
+		manager.log.Warnf("error while flushing the registry: %w", err)
+	}
 }
 
-// RecordAsync asynchronously records a participation key usage event.
-func (manager *AccountManager) RecordAsync(account basics.Address, round basics.Round, participationType account.ParticipationAction) {
+// Record asynchronously records a participation key usage event.
+func (manager *AccountManager) Record(account basics.Address, round basics.Round, participationType account.ParticipationAction) {
 	// This function updates a cache in the ParticipationRegistry, we must call Flush to persist the changes.
 	err := manager.registry.Record(account, round, participationType)
 	if err != nil {
-		manager.log.Warnf("node.RecordAsync: Account %v not able to record participation (%d) on round %d: %w", account, participationType, round, err)
+		manager.log.Warnf("node.Record: Account %v not able to record participation (%d) on round %d: %w", account, participationType, round, err)
 	}
 }

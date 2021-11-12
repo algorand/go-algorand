@@ -820,7 +820,10 @@ func (node *AlgorandFullNode) RemoveParticipationKey(partKey account.Participati
 		return err
 	}
 
-	err = node.accountManager.Registry().Flush()
+	// PKI TODO: pick a better timeout, this is just something short. This could also be removed if we change
+	// POST /v2/participation and DELETE /v2/participation to return "202 OK Accepted" instead of waiting and getting
+	// the error message.
+	err = node.accountManager.Registry().Flush(500 * time.Millisecond)
 	if err != nil {
 		return err
 	}
@@ -831,7 +834,7 @@ func (node *AlgorandFullNode) RemoveParticipationKey(partKey account.Participati
 	return nil
 }
 
-func createTemporaryParticipationKey(outDir string, partKeyBinary *[]byte) (string, error) {
+func createTemporaryParticipationKey(outDir string, partKeyBinary []byte) (string, error) {
 	var sb strings.Builder
 
 	// Create a temporary filename with a UUID so that we can call this function twice
@@ -848,7 +851,7 @@ func createTemporaryParticipationKey(outDir string, partKeyBinary *[]byte) (stri
 		return "", err
 	}
 
-	_, err = file.Write(*partKeyBinary)
+	_, err = file.Write(partKeyBinary)
 
 	file.Close()
 
@@ -860,8 +863,8 @@ func createTemporaryParticipationKey(outDir string, partKeyBinary *[]byte) (stri
 	return tempFile, nil
 }
 
-// InstallParticipationKey Given a participation key binary stream install the participation key
-func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary *[]byte) (account.ParticipationID, error) {
+// InstallParticipationKey Given a participation key binary stream install the participation key.
+func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
 	genID := node.GenesisID()
 
 	outDir := filepath.Join(node.rootDir, genID)
@@ -900,7 +903,10 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary *[]byte) (ac
 	// Tell the AccountManager about the Participation (dupes don't matter) so we ignore the return value
 	_ = node.accountManager.AddParticipation(partkey)
 
-	err = node.accountManager.Registry().Flush()
+	// PKI TODO: pick a better timeout, this is just something short. This could also be removed if we change
+	// POST /v2/participation and DELETE /v2/participation to return "202 OK Accepted" instead of waiting and getting
+	// the error message.
+	err = node.accountManager.Registry().Flush(500 * time.Millisecond)
 	if err != nil {
 		return account.ParticipationID{}, err
 	}
@@ -1071,8 +1077,9 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 		node.accountManager.DeleteOldKeys(latestHdr, ccSigs, agreementProto)
 		node.mu.Unlock()
 
+		// PKI TODO: Maybe we don't even need to flush the registry.
 		// Persist participation registry metrics.
-		node.accountManager.FlushRegistry()
+		node.accountManager.FlushRegistry(2 * time.Second)
 	}
 }
 
@@ -1324,7 +1331,7 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 	return participations
 }
 
-// RecordAsync forwards participation record calls to the participation registry.
-func (node *AlgorandFullNode) RecordAsync(account basics.Address, round basics.Round, participationType account.ParticipationAction) {
-	node.accountManager.RecordAsync(account, round, participationType)
+// Record forwards participation record calls to the participation registry.
+func (node *AlgorandFullNode) Record(account basics.Address, round basics.Round, participationType account.ParticipationAction) {
+	node.accountManager.Record(account, round, participationType)
 }
