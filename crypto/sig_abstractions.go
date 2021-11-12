@@ -74,7 +74,6 @@ type GenericSigningKey struct {
 
 	FalconSigner  FalconSigner `codec:"fs"`
 	Ed25519Singer Ed25519Key   `codec:"edds"`
-	invalidSinger invalidSinger
 }
 
 // IsValid states whether the GenericSigningKey is valid, and is safe to use.
@@ -96,7 +95,6 @@ type GenericVerifyingKey struct {
 
 	FalconPublicKey  FalconVerifier   `codec:"fpk"`
 	Ed25519PublicKey Ed25519PublicKey `codec:"edpk"`
-	invalidVerifier  invalidVerifier
 }
 
 // IsValid states whether the VerifyingKey is valid, and is safe to use.

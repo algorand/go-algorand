@@ -17,7 +17,7 @@
 package crypto
 
 import (
-	cfalcon "github.com/algoidan/falcon"
+	cfalcon "github.com/algorand/falcon"
 )
 
 const (
