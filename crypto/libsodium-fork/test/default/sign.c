@@ -1214,58 +1214,58 @@ static const  char non_canoical_public_key[][3][500]=
 static const  char non_canoical_public_key_greater_than_field_element[][3][500]= 
 {
 {"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
- "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^252-19+1
+ "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+1
 "a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
 {"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
- "efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^252-19+2
+ "efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+2
 "a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
 {"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
- "f0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^252-19+3
+ "f0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+3
 "a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
 {"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
- "f1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^252-19+4
+ "f1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+4
 "a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
 {"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
- "f2ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^252-19+5
+ "f2ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+5
 "a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
 {"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
- "f3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^252-19+6
+ "f3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+6
 "a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
 {"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
- "f4ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^252-19+7
+ "f4ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+7
 "a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
 {"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
- "f5ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^252-19+8
+ "f5ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+8
 "a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
 {"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
- "f6ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^252-19+9
+ "f6ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+9
 "a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
 {"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
- "f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^252-19+10
+ "f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+10
 "a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
 {"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
- "f8ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^252-19+11
+ "f8ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+11
 "a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
 {"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
- "f9ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^252-19+12
+ "f9ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+12
 "a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
 {"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
- "faffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^252-19+13
+ "faffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+13
 "a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
 {"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
- "fbffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^252-19+14
+ "fbffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+14
 "a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
 {"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
- "fcffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^252-19+15
+ "fcffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+15
 "a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
 {"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
- "fdffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^252-19+16
+ "fdffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+16
 "a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
 {"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
- "feffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^252-19+17
+ "feffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+17
 "a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
 {"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
- "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^252-19+18
+ "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+18
 "a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
 };
 

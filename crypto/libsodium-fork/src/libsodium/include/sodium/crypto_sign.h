@@ -74,9 +74,9 @@ int crypto_sign_open(unsigned char *m, unsigned long long *mlen_p,
             __attribute__ ((warn_unused_result)) __attribute__ ((nonnull(3, 5)));
 
 SODIUM_EXPORT
-int crypto_sign_ed25519_open_batch(const unsigned char **m, unsigned long long *mlen, 
+int crypto_sign_ed25519_open_batch(const unsigned char **m, const unsigned long long *mlen, 
                                 const unsigned char **pk, const unsigned char **RS, 
-                                size_t num, int *valid)
+                                size_t num, int *valid_p)
             __attribute__ ((warn_unused_result)) __attribute__ ((nonnull(1,2,3,4,6)));
 
 SODIUM_EXPORT

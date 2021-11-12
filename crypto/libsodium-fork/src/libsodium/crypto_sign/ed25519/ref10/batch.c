@@ -225,7 +225,7 @@ ge25519_multi_scalarmult_vartime(ge25519_p3 *r, batch_heap *heap, size_t count) 
 * 1 - for signature i passed verification
 * 0 - for siganture i failed verification
 */
-int crypto_sign_ed25519_open_batch(const unsigned char **m, unsigned long long *mlen, const unsigned char **pk, const unsigned char **RS, size_t num, int *valid)
+int crypto_sign_ed25519_open_batch(const unsigned char **m, const unsigned long long *mlen, const unsigned char **pk, const unsigned char **RS, size_t num, int *valid_p)
 {
     batch_heap batch;
     ge25519_p3  p;
@@ -237,9 +237,9 @@ int crypto_sign_ed25519_open_batch(const unsigned char **m, unsigned long long *
     int ret = 0;
 
     for (i = 0; i < num; i++)
-        valid[i] = 1;
+        valid_p[i] = 1;
 
-    while (num > 3) {
+    while (num > 1) {
         batchsize = (num > MAX_BATCH_SIZE) ? MAX_BATCH_SIZE : num;
 
         /* valida the public key and siganture */
@@ -294,8 +294,8 @@ int crypto_sign_ed25519_open_batch(const unsigned char **m, unsigned long long *
 
             fallback:
             for (i = 0; i < batchsize; i++) {
-                valid[i] = crypto_sign_ed25519_verify_detached(RS[i], m[i], mlen[i], pk[i]) ? 0 : 1;
-                ret |= (valid[i] ^ 1);
+                valid_p[i] = crypto_sign_ed25519_verify_detached(RS[i], m[i], mlen[i], pk[i]) ? 0 : 1;
+                ret |= (valid_p[i] ^ 1);
             }
         }
         m += batchsize;
@@ -303,14 +303,14 @@ int crypto_sign_ed25519_open_batch(const unsigned char **m, unsigned long long *
         pk += batchsize;
         RS += batchsize;
         num -= batchsize;
-        valid += batchsize;
+        valid_p += batchsize;
 
     }
 
 
     for (i = 0; i < num; i++) {        
-        valid[i] = crypto_sign_ed25519_verify_detached(RS[i], m[i], mlen[i], pk[i]) ? 0 : 1;
-        ret |= (valid[i] ^ 1);
+        valid_p[i] = crypto_sign_ed25519_verify_detached(RS[i], m[i], mlen[i], pk[i]) ? 0 : 1;
+        ret |= (valid_p[i] ^ 1);
     }
 
     return ret;

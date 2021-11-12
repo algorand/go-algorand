@@ -4,7 +4,6 @@
 
 
 typedef unsigned __int128 uint128_t;
-#define HAVE_UINT128
 #define mul64x64_128(out,a,b) out = (uint128_t)a * b;
 #define shr128_pair(out,hi,lo,shift) out = (uint64_t)((((uint128_t)hi << 64) | lo) >> (shift));
 #define shl128_pair(out,hi,lo,shift) out = (uint64_t)(((((uint128_t)hi << 64) | lo) << (shift)) >> 64);
