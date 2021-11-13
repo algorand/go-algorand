@@ -37,6 +37,7 @@ func KeyStoreBuilder(numberOfKeys uint64, sigAlgoType crypto.AlgorithmType) ([]c
 	}
 
 	errors := make(chan error, numOfCores)
+	terminate := make(chan struct{})
 	var wg sync.WaitGroup
 	var endIdx uint64
 	for i := uint64(0); i < numberOfKeys; i = endIdx {
@@ -48,17 +49,23 @@ func KeyStoreBuilder(numberOfKeys uint64, sigAlgoType crypto.AlgorithmType) ([]c
 		}
 
 		wg.Add(1)
-		go func(startIdx, endIdx uint64, errChan chan error) {
+		go func(startIdx, endIdx uint64, errChan chan error, terminate chan struct{}) {
 			defer wg.Done()
 			for k := startIdx; k < endIdx; k++ {
+				select {
+				case <-terminate:
+					return
+				default:
+				}
 				sigAlgo, err := crypto.NewSigner(sigAlgoType)
 				if err != nil {
 					errChan <- err
+					close(terminate)
 					return
 				}
 				keys[k] = *sigAlgo
 			}
-		}(i, endIdx, errors)
+		}(i, endIdx, errors, terminate)
 	}
 	wg.Wait()
 	select {
