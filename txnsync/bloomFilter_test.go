@@ -348,7 +348,7 @@ func BenchmarkTestBloomFilter(b *testing.B) {
 
 		testableBfs := make([]*testableBloomFilter, 0)
 
-		for j := 0; j < 150; j++ {
+		for j := 0; j < 10; j++ {
 			filter, filterType := filterFactoryXor32(len(txnGroups), &s)
 			for _, txnGroup := range txnGroups {
 				filter.Set(txnGroup.GroupTransactionID[:])
@@ -364,22 +364,17 @@ func BenchmarkTestBloomFilter(b *testing.B) {
 			testableBfs = append(testableBfs, testableBf)
 		}
 
+		selectedTxnIDs := make([]transactions.Txid, 0)
+		selectedTxns := make([]pooldata.SignedTxGroup, 0)
+
 		b.StartTimer()
 
 		for _, tx := range txnGroups {
 			for _, testableBf := range testableBfs {
-					testableBf.test(tx.GroupTransactionID)
-					//ans := testableBf.test(tx.GroupTransactionID)
-					//expected := true
-					//if testableBf.encodingParams.Modulator > 1 {
-					//	if txidToUint64(tx.GroupTransactionID)%uint64(testableBf.encodingParams.Modulator) != uint64(testableBf.encodingParams.Offset) {
-					//		expected = false
-					//	}
-					//}
-					//if ans != expected {
-					//	fmt.Println("???")
-					//}
-				}
+				testableBf.test(tx.GroupTransactionID)
+			}
+			selectedTxns = append(selectedTxns, tx)
+			selectedTxnIDs = append(selectedTxnIDs, tx.GroupTransactionID)
 		}
 	}
 }
