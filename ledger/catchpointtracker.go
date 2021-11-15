@@ -198,7 +198,6 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, lastBalancesRound 
 	if err != nil {
 		return err
 	}
-
 	if dbRound != basics.Round(writingCatchpointRound) {
 		return nil
 	}
