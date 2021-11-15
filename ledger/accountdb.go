@@ -1936,7 +1936,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 	if iterator.step == oaiStepQueryAccounts {
 		// iterate over the existing accounts
-		iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT address, data FROM accountbase")
+		iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase")
 		if err != nil {
 			return
 		}
@@ -1954,7 +1954,8 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		for iterator.rows.Next() {
 			var addrbuf []byte
 			var buf []byte
-			err = iterator.rows.Scan(&addrbuf, &buf)
+			var rowid int64
+			err = iterator.rows.Scan(&rowid, &addrbuf, &buf)
 			if err != nil {
 				iterator.Close(ctx)
 				return
@@ -1968,13 +1969,13 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 
 			copy(addr[:], addrbuf)
 
-			var accountData basics.AccountData
+			var accountData baseAccountData
 			err = protocol.Decode(buf, &accountData)
 			if err != nil {
 				iterator.Close(ctx)
 				return
 			}
-			hash := accountHashBuilder(addr, accountData, buf)
+			hash := accountHashBuilderV6(rowid, addr, &accountData, buf)
 			_, err = iterator.insertStmt.ExecContext(ctx, addrbuf, hash)
 			if err != nil {
 				iterator.Close(ctx)
