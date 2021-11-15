@@ -17,9 +17,10 @@
 package merklekeystore
 
 import (
-	"github.com/algorand/go-algorand/crypto"
 	"runtime"
 	"sync"
+
+	"github.com/algorand/go-algorand/crypto"
 )
 
 // KeyStoreBuilder Responsible for generate slice of keys in a specific AlgorithmType.
@@ -28,14 +29,17 @@ func KeyStoreBuilder(numberOfKeys uint64, sigAlgoType crypto.AlgorithmType) ([]c
 	numOfKeysPerRoutine, numOfRoutines := calculateRanges(numberOfKeys)
 
 	terminate := make(chan struct{})
-	defer closeChannelIfNotClosed(terminate)
+	defer func() {
+		if !isChannelClosed(terminate) {
+			close(terminate)
+		}
+	}()
 
 	errors := make(chan error, numOfRoutines)
 	defer close(errors)
 
 	var wg sync.WaitGroup
 	var endIdx uint64
-
 	keys := make([]crypto.GenericSigningKey, numberOfKeys)
 
 	for i := uint64(0); i < numberOfKeys; i = endIdx {
@@ -47,8 +51,10 @@ func KeyStoreBuilder(numberOfKeys uint64, sigAlgoType crypto.AlgorithmType) ([]c
 		}
 
 		wg.Add(1)
-		go generateKeysForRange(i, endIdx, errors, terminate, wg, sigAlgoType, keys)
-
+		go func(startIdx, endIdx uint64, errChan chan error, terminate chan struct{}, sigAlgoType crypto.AlgorithmType, keys []crypto.GenericSigningKey) {
+			defer wg.Done()
+			generateKeysForRange(startIdx, endIdx, errChan, terminate, sigAlgoType, keys)
+		}(i, endIdx, errors, terminate, sigAlgoType, keys)
 	}
 	wg.Wait()
 
@@ -71,10 +77,9 @@ func calculateRanges(numberOfKeys uint64) (numOfKeysPerRoutine uint64, numOfRout
 	return
 }
 
-func generateKeysForRange(startIdx uint64, endIdx uint64, errChan chan error, terminate chan struct{}, wg sync.WaitGroup, sigAlgoType crypto.AlgorithmType, keys []crypto.GenericSigningKey) {
-	defer wg.Done()
+func generateKeysForRange(startIdx uint64, endIdx uint64, errChan chan error, terminate chan struct{}, sigAlgoType crypto.AlgorithmType, keys []crypto.GenericSigningKey) {
 	for k := startIdx; k < endIdx; k++ {
-		if shouldQuit(terminate) {
+		if isChannelClosed(terminate) {
 			return
 		}
 		sigAlgo, err := crypto.NewSigner(sigAlgoType)
@@ -87,16 +92,7 @@ func generateKeysForRange(startIdx uint64, endIdx uint64, errChan chan error, te
 	}
 }
 
-func closeChannelIfNotClosed(terminate chan struct{}) {
-	select {
-	case <-terminate:
-		break
-	default:
-		close(terminate)
-	}
-}
-
-func shouldQuit(terminate chan struct{}) bool {
+func isChannelClosed(terminate chan struct{}) bool {
 	select {
 	case <-terminate:
 		return true

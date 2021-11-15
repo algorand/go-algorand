@@ -868,7 +868,7 @@ func genParticipationKeysAsync(asyncFunc func()) {
 	i := 0
 
 	for !finished {
-		timer := time.NewTimer(time.Duration(100000000))
+		timer := time.NewTimer(time.Duration(100 * time.Millisecond))
 		select {
 		case <-errChan:
 			finished = true
@@ -901,10 +901,10 @@ var addParticipationKeyCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
 			}
-			fmt.Println("Participation key generation successful")
+			reportInfof("Participation key generation successful")
 		}
 
-		fmt.Print("Please standby while generating keys...")
+		reportInfof("Please standby while generating keys. This might take few minutes...")
 		genParticipationKeysAsync(participationGen)
 	},
 }

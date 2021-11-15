@@ -17,14 +17,15 @@
 package merklekeystore
 
 import (
-	"github.com/algorand/go-algorand/util/db"
 	"runtime"
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	uuid "github.com/satori/go.uuid"
+	"github.com/algorand/go-algorand/util/db"
 	"github.com/stretchr/testify/require"
+
+	uuid "github.com/satori/go.uuid"
 )
 
 func TestBuilderSanity(t *testing.T) {
