@@ -372,6 +372,18 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			}
 		}
 	}
+
+	// test to see that after loadFromDisk, all the tracker content is lost ( as expected )
+	require.NotZero(t, len(ct.roundDigest))
+	require.NoError(t, ct.loadFromDisk(ml, ml.Latest()))
+	require.Zero(t, len(ct.roundDigest))
+	require.Zero(t, ct.catchpointWriting)
+	select {
+	case _, closed := <-ct.catchpointSlowWriting:
+		require.False(t, closed)
+	default:
+		require.FailNow(t, "The catchpointSlowWriting should have been a closed channel; it seems to be a nil ?!")
+	}
 }
 
 func TestCatchpointTrackerPrepareCommit(t *testing.T) {

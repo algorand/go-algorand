@@ -159,6 +159,12 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, lastBalancesRound 
 	ct.log = l.trackerLog()
 	ct.dbs = l.trackerDB()
 
+	ct.roundDigest = nil
+	ct.catchpointWriting = 0
+	// keep these channel closed if we're not generating catchpoint
+	ct.catchpointSlowWriting = make(chan struct{}, 1)
+	close(ct.catchpointSlowWriting)
+
 	err = ct.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err0 := ct.accountsInitializeHashes(ctx, tx, lastBalancesRound)
 		if err0 != nil {
@@ -181,7 +187,6 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, lastBalancesRound 
 		return
 	}
 
-	ct.roundDigest = nil
 	writingCatchpointRound, _, err := ct.accountsq.readCatchpointStateUint64(context.Background(), catchpointStateWritingCatchpoint)
 	if err != nil {
 		return err
@@ -207,11 +212,6 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, lastBalancesRound 
 		return err
 	}
 	blockHeaderDigest := blk.Digest()
-
-	ct.catchpointWriting = 0
-	// keep these channel closed if we're not generating catchpoint
-	ct.catchpointSlowWriting = make(chan struct{}, 1)
-	close(ct.catchpointSlowWriting)
 
 	ct.generateCatchpoint(context.Background(), basics.Round(writingCatchpointRound), ct.lastCatchpointLabel, blockHeaderDigest, time.Duration(0))
 	return nil
