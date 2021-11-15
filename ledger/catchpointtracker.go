@@ -181,6 +181,7 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, lastBalancesRound 
 		return
 	}
 
+	ct.roundDigest = nil
 	writingCatchpointRound, _, err := ct.accountsq.readCatchpointStateUint64(context.Background(), catchpointStateWritingCatchpoint)
 	if err != nil {
 		return err
@@ -197,6 +198,7 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, lastBalancesRound 
 	if err != nil {
 		return err
 	}
+
 	if dbRound != basics.Round(writingCatchpointRound) {
 		return nil
 	}
@@ -211,7 +213,6 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, lastBalancesRound 
 	// keep these channel closed if we're not generating catchpoint
 	ct.catchpointSlowWriting = make(chan struct{}, 1)
 	close(ct.catchpointSlowWriting)
-	ct.roundDigest = nil
 
 	ct.generateCatchpoint(context.Background(), basics.Round(writingCatchpointRound), ct.lastCatchpointLabel, blockHeaderDigest, time.Duration(0))
 	return nil
@@ -297,7 +298,7 @@ func (ct *catchpointTracker) prepareCommit(dcc *deferredCommitContext) error {
 	ct.catchpointsMu.RLock()
 	defer ct.catchpointsMu.RUnlock()
 	if dcc.isCatchpointRound {
-		dcc.committedRoundDigest = ct.roundDigest[dcc.offset+uint64(dcc.lookback)]
+		dcc.committedRoundDigest = ct.roundDigest[dcc.offset+uint64(dcc.lookback)-1]
 	}
 	return nil
 }

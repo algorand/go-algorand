@@ -380,12 +380,12 @@ func TestCatchpointTrackerPrepareCommit(t *testing.T) {
 	ct := &catchpointTracker{}
 	const maxOffset = 40
 	const maxLookback = 320
-	ct.roundDigest = make([]crypto.Digest, maxOffset+maxLookback+1)
+	ct.roundDigest = make([]crypto.Digest, maxOffset+maxLookback)
 	for i := 0; i < len(ct.roundDigest); i++ {
 		ct.roundDigest[i] = crypto.Hash([]byte{byte(i), byte(i / 256)})
 	}
 	dcc := &deferredCommitContext{}
-	for offset := uint64(0); offset < maxOffset; offset++ {
+	for offset := uint64(1); offset < maxOffset; offset++ {
 		dcc.offset = offset
 		for lookback := basics.Round(0); lookback < maxLookback; lookback += 20 {
 			dcc.lookback = lookback
@@ -393,7 +393,8 @@ func TestCatchpointTrackerPrepareCommit(t *testing.T) {
 				dcc.isCatchpointRound = isCatchpointRound
 				require.NoError(t, ct.prepareCommit(dcc))
 				if isCatchpointRound {
-					expectedHash := crypto.Hash([]byte{byte(offset + uint64(lookback)), byte((offset + uint64(lookback)) / 256)})
+					expectedRound := offset + uint64(lookback) - 1
+					expectedHash := crypto.Hash([]byte{byte(expectedRound), byte(expectedRound / 256)})
 					require.Equal(t, expectedHash[:], dcc.committedRoundDigest[:])
 				}
 			}
