@@ -119,7 +119,7 @@ func new(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 
 	// TODO: change to ConsensusCurrentVersion
 	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
-	if (lastValid - firstValid) > maxValidPeriod {
+	if maxValidPeriod != 0 && (lastValid-firstValid) > maxValidPeriod {
 		return nil, fmt.Errorf("the validity period for merkleKeyStore is too large: the limit is %d", maxValidPeriod)
 	}
 	if interval == 0 {

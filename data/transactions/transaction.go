@@ -566,7 +566,7 @@ func (tx Transaction) stateProofPKWellFormed(proto config.ConsensusParams) error
 		return nil
 	}
 
-	if uint64(tx.VoteLast-tx.VoteFirst) > proto.MaxKeyregValidPeriod {
+	if proto.MaxKeyregValidPeriod != 0 && uint64(tx.VoteLast-tx.VoteFirst) > proto.MaxKeyregValidPeriod {
 		return errKeyRegTxnValidityPeriodTooLong
 	}
 
