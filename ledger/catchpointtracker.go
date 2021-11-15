@@ -297,7 +297,7 @@ func (ct *catchpointTracker) prepareCommit(dcc *deferredCommitContext) error {
 	ct.catchpointsMu.RLock()
 	defer ct.catchpointsMu.RUnlock()
 	if dcc.isCatchpointRound {
-		dcc.committedRoundDigest = ct.roundDigest[dcc.offset+uint64(dcc.lookback)-1]
+		dcc.committedRoundDigest = ct.roundDigest[dcc.offset+uint64(dcc.lookback)]
 	}
 	return nil
 }
