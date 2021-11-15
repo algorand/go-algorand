@@ -109,9 +109,8 @@ func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.
 		}
 
 		participants[i] = basics.Participant{
-			PK:         acct.StateProofID,
-			Weight:     money.ToUint64(),
-			FirstValid: uint64(acct.VoteFirstValid),
+			PK:     acct.StateProofID,
+			Weight: money.ToUint64(),
 		}
 		addrToPos[acct.Address] = uint64(i)
 	}

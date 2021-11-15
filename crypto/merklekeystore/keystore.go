@@ -42,8 +42,9 @@ type (
 		_struct              struct{} `codec:",omitempty,omitemptyarray"`
 		crypto.ByteSignature `codec:"bsig"`
 
-		Proof        Proof                      `codec:"prf"`
-		VerifyingKey crypto.GenericVerifyingKey `codec:"vkey"`
+		MerkleArrayIndex uint64                     `codec:"idx"`
+		Proof            Proof                      `codec:"prf"`
+		VerifyingKey     crypto.GenericVerifyingKey `codec:"vkey"`
 	}
 
 	// Signer is a merkleKeyStore, contain multiple keys which can be used per round.
@@ -184,9 +185,10 @@ func (s *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 	}
 
 	return Signature{
-		ByteSignature: sig,
-		Proof:         Proof(*proof),
-		VerifyingKey:  *signingKey.GetVerifyingKey(),
+		ByteSignature:    sig,
+		Proof:            Proof(*proof),
+		VerifyingKey:     *signingKey.GetVerifyingKey(),
+		MerkleArrayIndex: index,
 	}, nil
 }
 
@@ -220,23 +222,16 @@ func (v *Verifier) IsEmpty() bool {
 }
 
 // Verify receives a signature over a specific crypto.Hashable object, and makes certain the signature is correct.
-func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashable, sig Signature) error {
-	if firstValid == 0 {
-		firstValid = 1
-	}
-	if err := checkKeystoreParams(firstValid, round, interval); err != nil {
-		return err
-	}
+func (v *Verifier) Verify(round, interval uint64, obj crypto.Hashable, sig Signature) error {
 
 	ephkey := CommittablePublicKey{
 		VerifyingKey: sig.VerifyingKey,
 		Round:        round,
 	}
 
-	pos := roundToIndex(firstValid, round, interval)
 	err := merklearray.Verify(
 		(crypto.GenericDigest)(v[:]),
-		map[uint64]crypto.Hashable{pos: &ephkey},
+		map[uint64]crypto.Hashable{sig.MerkleArrayIndex: &ephkey},
 		(*merklearray.Proof)(&sig.Proof),
 	)
 	if err != nil {

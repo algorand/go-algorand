@@ -4175,34 +4175,25 @@ func (z DeltaAction) MsgIsZero() bool {
 func (z *Participant) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(3)
-	var zb0001Mask uint8 /* 4 bits */
-	if (*z).FirstValid == 0 {
+	zb0001Len := uint32(2)
+	var zb0001Mask uint8 /* 3 bits */
+	if (*z).PK.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (*z).PK.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x4
-	}
 	if (*z).Weight == 0 {
 		zb0001Len--
-		zb0001Mask |= 0x8
+		zb0001Mask |= 0x4
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
-			// string "fv"
-			o = append(o, 0xa2, 0x66, 0x76)
-			o = msgp.AppendUint64(o, (*z).FirstValid)
-		}
-		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "p"
 			o = append(o, 0xa1, 0x70)
 			o = (*z).PK.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x8) == 0 { // if not empty
+		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "w"
 			o = append(o, 0xa1, 0x77)
 			o = msgp.AppendUint64(o, (*z).Weight)
@@ -4246,14 +4237,6 @@ func (z *Participant) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0001 > 0 {
-			zb0001--
-			(*z).FirstValid, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
-				return
-			}
-		}
-		if zb0001 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0001)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -4288,12 +4271,6 @@ func (z *Participant) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Weight")
 					return
 				}
-			case "fv":
-				(*z).FirstValid, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "FirstValid")
-					return
-				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -4314,13 +4291,13 @@ func (_ *Participant) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Participant) Msgsize() (s int) {
-	s = 1 + 2 + (*z).PK.Msgsize() + 2 + msgp.Uint64Size + 3 + msgp.Uint64Size
+	s = 1 + 2 + (*z).PK.Msgsize() + 2 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Participant) MsgIsZero() bool {
-	return ((*z).PK.MsgIsZero()) && ((*z).Weight == 0) && ((*z).FirstValid == 0)
+	return ((*z).PK.MsgIsZero()) && ((*z).Weight == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler

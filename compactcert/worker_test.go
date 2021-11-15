@@ -135,9 +135,8 @@ func (s *testWorkerStubs) CompactCertVoters(r basics.Round) (*ledgercore.VotersF
 	for i, k := range s.keysForVoters {
 		voters.AddrToPos[k.Parent] = uint64(i)
 		voters.Participants = append(voters.Participants, basics.Participant{
-			PK:         *k.StateProofSecrets.GetVerifier(),
-			Weight:     1,
-			FirstValid: uint64(k.FirstValid),
+			PK:     *k.StateProofSecrets.GetVerifier(),
+			Weight: 1,
 		})
 	}
 

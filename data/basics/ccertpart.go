@@ -38,9 +38,6 @@ type Participant struct {
 
 	// Weight is AccountData.MicroAlgos.
 	Weight uint64 `codec:"w"`
-
-	// FirstValid reprents the first round where the commitment is valid
-	FirstValid uint64 `codec:"fv"`
 }
 
 // ToBeHashed implements the crypto.Hashable interface.

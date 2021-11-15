@@ -102,7 +102,7 @@ func (b *Builder) Add(pos uint64, sig merklekeystore.Signature, verifySig bool) 
 	// Check signature
 
 	if verifySig {
-		if err := p.PK.Verify(p.FirstValid, uint64(b.SigRound), b.CompactCertRounds, b.Msg, sig); err != nil {
+		if err := p.PK.Verify(uint64(b.SigRound), b.CompactCertRounds, b.Msg, sig); err != nil {
 			return err
 		}
 	}

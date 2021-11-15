@@ -210,19 +210,23 @@ func (z *Proof) MsgIsZero() bool {
 func (z *Signature) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(3)
-	var zb0001Mask uint8 /* 4 bits */
+	zb0001Len := uint32(4)
+	var zb0001Mask uint8 /* 5 bits */
 	if (*z).ByteSignature.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (*z).Proof.MsgIsZero() {
+	if (*z).MerkleArrayIndex == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (*z).VerifyingKey.MsgIsZero() {
+	if (*z).Proof.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8
+	}
+	if (*z).VerifyingKey.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x10
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -233,11 +237,16 @@ func (z *Signature) MarshalMsg(b []byte) (o []byte) {
 			o = (*z).ByteSignature.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "idx"
+			o = append(o, 0xa3, 0x69, 0x64, 0x78)
+			o = msgp.AppendUint64(o, (*z).MerkleArrayIndex)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "prf"
 			o = append(o, 0xa3, 0x70, 0x72, 0x66)
 			o = (*z).Proof.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x8) == 0 { // if not empty
+		if (zb0001Mask & 0x10) == 0 { // if not empty
 			// string "vkey"
 			o = append(o, 0xa4, 0x76, 0x6b, 0x65, 0x79)
 			o = (*z).VerifyingKey.MarshalMsg(o)
@@ -269,6 +278,14 @@ func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			bts, err = (*z).ByteSignature.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ByteSignature")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).MerkleArrayIndex, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "MerkleArrayIndex")
 				return
 			}
 		}
@@ -317,6 +334,12 @@ func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ByteSignature")
 					return
 				}
+			case "idx":
+				(*z).MerkleArrayIndex, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "MerkleArrayIndex")
+					return
+				}
 			case "prf":
 				bts, err = (*z).Proof.UnmarshalMsg(bts)
 				if err != nil {
@@ -349,13 +372,13 @@ func (_ *Signature) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Signature) Msgsize() (s int) {
-	s = 1 + 5 + (*z).ByteSignature.Msgsize() + 4 + (*z).Proof.Msgsize() + 5 + (*z).VerifyingKey.Msgsize()
+	s = 1 + 5 + (*z).ByteSignature.Msgsize() + 4 + msgp.Uint64Size + 4 + (*z).Proof.Msgsize() + 5 + (*z).VerifyingKey.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Signature) MsgIsZero() bool {
-	return ((*z).ByteSignature.MsgIsZero()) && ((*z).Proof.MsgIsZero()) && ((*z).VerifyingKey.MsgIsZero())
+	return ((*z).ByteSignature.MsgIsZero()) && ((*z).MerkleArrayIndex == 0) && ((*z).Proof.MsgIsZero()) && ((*z).VerifyingKey.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler

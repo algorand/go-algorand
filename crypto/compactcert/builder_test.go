@@ -64,9 +64,8 @@ func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key 
 
 	for i := 0; i < numberOfParticipant; i++ {
 		part := basics.Participant{
-			PK:         *key.GetVerifier(),
-			Weight:     uint64(totalWeight / 2 / numberOfParticipant),
-			FirstValid: 0,
+			PK:     *key.GetVerifier(),
+			Weight: uint64(totalWeight / 2 / numberOfParticipant),
 		}
 
 		parts = append(parts, part)
@@ -207,9 +206,8 @@ func BenchmarkBuildVerify(b *testing.B) {
 		defer dbAccessor.Close()
 		require.NotNil(b, dbAccessor, "failed to create signer")
 		part := basics.Participant{
-			PK:         *key.GetVerifier(),
-			Weight:     uint64(totalWeight / npart),
-			FirstValid: 0,
+			PK:     *key.GetVerifier(),
+			Weight: uint64(totalWeight / npart),
 		}
 
 		sig, err := key.Sign(param.Msg, uint64(currentRound))

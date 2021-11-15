@@ -54,7 +54,6 @@ func (v *Verifier) Verify(c *Cert) error {
 		parts[pos] = r.Part
 
 		err := r.Part.PK.Verify(
-			uint64(r.Part.FirstValid),
 			uint64(v.SigRound),
 			v.CompactCertRounds,
 			v.Msg,

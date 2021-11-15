@@ -330,19 +330,23 @@ func (z *Cert) MsgIsZero() bool {
 func (z *CompactOneTimeSignature) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(3)
-	var zb0001Mask uint8 /* 5 bits */
+	zb0001Len := uint32(4)
+	var zb0001Mask uint8 /* 6 bits */
 	if (*z).Signature.ByteSignature.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (*z).Signature.Proof.MsgIsZero() {
+	if (*z).Signature.MerkleArrayIndex == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if (*z).Signature.VerifyingKey.MsgIsZero() {
+	if (*z).Signature.Proof.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x10
+	}
+	if (*z).Signature.VerifyingKey.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x20
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -353,11 +357,16 @@ func (z *CompactOneTimeSignature) MarshalMsg(b []byte) (o []byte) {
 			o = (*z).Signature.ByteSignature.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "idx"
+			o = append(o, 0xa3, 0x69, 0x64, 0x78)
+			o = msgp.AppendUint64(o, (*z).Signature.MerkleArrayIndex)
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not empty
 			// string "prf"
 			o = append(o, 0xa3, 0x70, 0x72, 0x66)
 			o = (*z).Signature.Proof.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x10) == 0 { // if not empty
+		if (zb0001Mask & 0x20) == 0 { // if not empty
 			// string "vkey"
 			o = append(o, 0xa4, 0x76, 0x6b, 0x65, 0x79)
 			o = (*z).Signature.VerifyingKey.MarshalMsg(o)
@@ -389,6 +398,14 @@ func (z *CompactOneTimeSignature) UnmarshalMsg(bts []byte) (o []byte, err error)
 			bts, err = (*z).Signature.ByteSignature.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ByteSignature")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).Signature.MerkleArrayIndex, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "MerkleArrayIndex")
 				return
 			}
 		}
@@ -437,6 +454,12 @@ func (z *CompactOneTimeSignature) UnmarshalMsg(bts []byte) (o []byte, err error)
 					err = msgp.WrapError(err, "ByteSignature")
 					return
 				}
+			case "idx":
+				(*z).Signature.MerkleArrayIndex, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "MerkleArrayIndex")
+					return
+				}
 			case "prf":
 				bts, err = (*z).Signature.Proof.UnmarshalMsg(bts)
 				if err != nil {
@@ -469,13 +492,13 @@ func (_ *CompactOneTimeSignature) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *CompactOneTimeSignature) Msgsize() (s int) {
-	s = 1 + 5 + (*z).Signature.ByteSignature.Msgsize() + 4 + (*z).Signature.Proof.Msgsize() + 5 + (*z).Signature.VerifyingKey.Msgsize()
+	s = 1 + 5 + (*z).Signature.ByteSignature.Msgsize() + 4 + msgp.Uint64Size + 4 + (*z).Signature.Proof.Msgsize() + 5 + (*z).Signature.VerifyingKey.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *CompactOneTimeSignature) MsgIsZero() bool {
-	return ((*z).Signature.ByteSignature.MsgIsZero()) && ((*z).Signature.Proof.MsgIsZero()) && ((*z).Signature.VerifyingKey.MsgIsZero())
+	return ((*z).Signature.ByteSignature.MsgIsZero()) && ((*z).Signature.MerkleArrayIndex == 0) && ((*z).Signature.Proof.MsgIsZero()) && ((*z).Signature.VerifyingKey.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
