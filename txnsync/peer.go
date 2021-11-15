@@ -398,9 +398,16 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []pooldata.SignedTx
 	})
 
 	selectedIDsSliceLength := len(pendingTransactions) - startIndex
-	if selectedIDsSliceLength > p.lastSelectedTransactionsCount*2 {
-		selectedIDsSliceLength = p.lastSelectedTransactionsCount * 2
+	if p.state == peerStateProposal {
+		if selectedIDsSliceLength > windowLengthBytes / 200 {
+			selectedIDsSliceLength = windowLengthBytes / 200
+		}
+	} else {
+		if selectedIDsSliceLength > p.lastSelectedTransactionsCount*2 {
+			selectedIDsSliceLength = p.lastSelectedTransactionsCount * 2
+		}
 	}
+
 	selectedTxnIDs = make([]transactions.Txid, 0, selectedIDsSliceLength)
 	selectedTxns = make([]pooldata.SignedTxGroup, 0, selectedIDsSliceLength)
 
@@ -486,7 +493,9 @@ scanLoop:
 		}
 	}
 
-	p.lastSelectedTransactionsCount = len(selectedTxnIDs)
+	if p.state != peerStateProposal {
+		p.lastSelectedTransactionsCount = len(selectedTxnIDs)
+	}
 
 	// if we've over-allocated, resize the buffer; This becomes important on relays,
 	// as storing these arrays can consume considerable amount of memory.
