@@ -65,6 +65,10 @@ const CrashFilename = "crash.sqlite"
 // It is used to track in-progress compact certificates.
 const CompactCertFilename = "compactcert.sqlite"
 
+// ParticipationRegistryFilename is the name of the participation registry database file.
+// It is used for tracking participation key metadata.
+const ParticipationRegistryFilename = "partregistry.sqlite"
+
 // ConfigurableConsensusProtocolsFilename defines a set of consensus prototocols that
 // are to be loaded from the data directory ( if present ), to override the
 // built-in supported consensus protocols.
