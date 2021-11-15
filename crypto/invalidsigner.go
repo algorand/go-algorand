@@ -63,3 +63,8 @@ func (d *invalidVerifier) Verify(message Hashable, sig ByteSignature) error {
 func (d *invalidVerifier) VerifyBytes(data []byte, sig ByteSignature) error {
 	return errInvalidVerifier
 }
+
+// GetRawVerificationBytes returns an empty slice to signal that the verifier is invalid.
+func (d *invalidVerifier) GetRawVerificationBytes() []byte {
+	return []byte{}
+}

@@ -90,3 +90,8 @@ func (d *FalconVerifier) Verify(message Hashable, sig ByteSignature) error {
 func (d *FalconVerifier) VerifyBytes(data []byte, sig ByteSignature) error {
 	return (*cfalcon.FalconPublicKey)(&d.PublicKey).VerifyBytes(data, sig)
 }
+
+// GetRawVerificationBytes is used to fetch a plain serialized version of the public data (without the use of the mspg pack).
+func (d *FalconVerifier) GetRawVerificationBytes() []byte {
+	return d.PublicKey[:]
+}

@@ -20,18 +20,10 @@ import (
 	"errors"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
 
 type (
-	// CommittablePublicKey is a key tied to a specific round and is committed by the merklekeystore.Signer.
-	CommittablePublicKey struct {
-		_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-		VerifyingKey crypto.GenericVerifyingKey `codec:"pk"`
-		Round        uint64                     `codec:"rnd"`
-	}
 
 	//Proof represent the merkle proof in each signature.
 	Proof merklearray.Proof
@@ -71,38 +63,10 @@ type (
 	// Verifier is used to verify a merklekeystore.Signature produced by merklekeystore.Signer.
 	// It validates a merklekeystore.Signature by validating the commitment on the GenericVerifyingKey and validating the signature with that key
 	Verifier [KeyStoreRootSize]byte
-
-	// keysArray is only used for building the merkle-tree and nothing else.
-	keysArray struct {
-		keys       []crypto.GenericSigningKey
-		firstValid uint64
-		interval   uint64
-	}
 )
 
 var errStartBiggerThanEndRound = errors.New("cannot create merkleKeyStore because end round is smaller then start round")
 var errDivisorIsZero = errors.New("received zero Interval")
-
-// ToBeHashed implementation means CommittablePublicKey is crypto.Hashable, required by merklekeystore.Verifier.Verify()
-func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.KeystorePK, protocol.Encode(e)
-}
-
-func (k *keysArray) Length() uint64 {
-	return uint64(len(k.keys))
-}
-
-// Marshal Gets []byte to represent a GenericVerifyingKey tied to the signatureAlgorithm in a pos.
-// used to implement the merklearray.Array interface needed to build a tree.
-func (k *keysArray) Marshal(pos uint64) ([]byte, error) {
-	signer := k.keys[pos].GetSigner()
-	ephPK := CommittablePublicKey{
-		VerifyingKey: *signer.GetVerifyingKey(),
-		Round:        indexToRound(k.firstValid, k.interval, pos),
-	}
-
-	return crypto.HashRep(&ephPK), nil
-}
 
 // New Generates a merklekeystore.Signer
 // The function allow creation of empty signers, i.e signers without any key to sign with.
@@ -133,7 +97,7 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 		FirstValid:          firstValid,
 		Interval:            interval,
 	}
-	tree, err := merklearray.Build(&keysArray{keys, firstValid, interval}, crypto.HashFactory{HashType: KeyStoreHashFunction})
+	tree, err := merklearray.Build(&CommittablePublicKeyArray{keys, firstValid, interval}, crypto.HashFactory{HashType: KeyStoreHashFunction})
 	if err != nil {
 		return nil, err
 	}

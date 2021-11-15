@@ -80,3 +80,8 @@ func byteSigToSignatureType(sig ByteSignature) Signature {
 	copy(scopy[:], sig)
 	return scopy
 }
+
+// GetRawVerificationBytes is used to fetch a plain serialized version of the public data (without the use of the mspg pack).
+func (p *Ed25519PublicKey) GetRawVerificationBytes() []byte {
+	return p.SignatureVerifier[:]
+}
