@@ -154,6 +154,12 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 	if err != nil {
 		return
 	}
+	_, err = os.Stat(partKeyPath)
+	if !os.IsNotExist(err) {
+		err = fmt.Errorf("ParticipationKeys exist for the range %d to %d", firstRound, lastRound)
+		return
+	}
+
 	partdb, err := db.MakeErasableAccessor(partKeyPath)
 	if err != nil {
 		return
