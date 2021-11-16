@@ -738,7 +738,7 @@ func (ba *baseAccountData) GetAccountData() basics.AccountData {
 type resourceFlags uint8
 
 const (
-	resourceFlagsHolding    = 0 //nolint:deadcode
+	resourceFlagsHolding    = 0 //nolint:deadcode,varcheck
 	resourceFlagsNotHolding = 1
 	resourceFlagsOwnership  = 2
 )
