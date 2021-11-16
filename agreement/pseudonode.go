@@ -446,28 +446,11 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 	}
 	t.node.monitor.dec(pseudonodeCoserviceType)
 
-	// push results into channel.
-	var outputTimeout <-chan time.Time
-	var timedOut bool
+	outputTimeout := time.After(maxPseudonodeOutputWaitDuration)
 
+	// push results into channel.
 verifiedVotesLoop:
 	for _, r := range verifiedResults {
-		select {
-		case t.out <- messageEvent{T: voteVerified, Input: r.message, Err: makeSerErr(r.err)}:
-			t.node.keys.Record(r.v.R.Sender, r.v.R.Round, account.Vote)
-			continue verifiedVotesLoop
-		case <-quit:
-			return
-		case <-t.context.Done():
-			// we done care about the output anymore; just exit.
-			return
-		default:
-		}
-
-		if outputTimeout == nil && !timedOut {
-			outputTimeout = time.After(maxPseudonodeOutputWaitDuration)
-		}
-
 		for {
 			select {
 			case t.out <- messageEvent{T: voteVerified, Input: r.message, Err: makeSerErr(r.err)}:
@@ -481,7 +464,7 @@ verifiedVotesLoop:
 			case <-outputTimeout:
 				// we've been waiting for too long for this vote to be written to the output.
 				t.node.log.Warnf("pseudonode.makeVotes: unable to write vote to output channel for round %d, period %d", t.round, t.period)
-				timedOut = true
+				outputTimeout = nil
 			}
 		}
 	}
@@ -568,28 +551,10 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 	}
 	t.node.monitor.dec(pseudonodeCoserviceType)
 
-	var outputTimeout <-chan time.Time
-	var timedOut bool
+	outputTimeout := time.After(maxPseudonodeOutputWaitDuration)
 	// push results into channel.
 verifiedVotesLoop:
 	for _, r := range verifiedVotes {
-		select {
-		case t.out <- messageEvent{T: voteVerified, Input: r.message, Err: makeSerErr(r.err)}:
-			t.node.keys.Record(r.v.R.Sender, r.v.R.Round, account.BlockProposal)
-			continue verifiedVotesLoop
-		case <-quit:
-			return
-		case <-t.context.Done():
-			// we done care about the output anymore; just exit.
-			return
-		default:
-		}
-
-		if outputTimeout == nil && !timedOut {
-			outputTimeout = time.After(maxPseudonodeOutputWaitDuration)
-		}
-
-		// the out channel was full. Wait for a while before writing a warning message.
 		for {
 			select {
 			case t.out <- messageEvent{T: voteVerified, Input: r.message, Err: makeSerErr(r.err)}:
@@ -603,7 +568,7 @@ verifiedVotesLoop:
 			case <-outputTimeout:
 				// we've been waiting for too long for this vote to be written to the output.
 				t.node.log.Warnf("pseudonode.makeProposals: unable to write proposal vote to output channel for round %d, period %d", t.round, t.period)
-				timedOut = true
+				outputTimeout = nil
 			}
 		}
 	}
@@ -611,22 +576,6 @@ verifiedVotesLoop:
 verifiedPayloadsLoop:
 	for _, payload := range verifiedPayloads {
 		msg := message{Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: payload.u(), Proposal: payload}
-		select {
-		case t.out <- messageEvent{T: payloadVerified, Input: msg}:
-			continue verifiedPayloadsLoop
-		case <-quit:
-			return
-		case <-t.context.Done():
-			// we done care about the output anymore; just exit.
-			return
-		default:
-		}
-
-		if outputTimeout == nil && !timedOut {
-			outputTimeout = time.After(maxPseudonodeOutputWaitDuration)
-		}
-
-		// the out channel was full. Place a limit on the time we want to wait for this channel.
 		for {
 			select {
 			case t.out <- messageEvent{T: payloadVerified, Input: msg}:
@@ -639,7 +588,7 @@ verifiedPayloadsLoop:
 			case <-outputTimeout:
 				// we've been waiting for too long for this vote to be written to the output.
 				t.node.log.Warnf("pseudonode.makeProposals: unable to write proposal payload to output channel for round %d, period %d", t.round, t.period)
-				timedOut = true
+				outputTimeout = nil
 			}
 		}
 	}
