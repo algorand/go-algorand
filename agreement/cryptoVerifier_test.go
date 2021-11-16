@@ -407,4 +407,5 @@ func TestCryptoVerifierVerificationFailures(t *testing.T) {
 	votesout := cryptoVerifier.VerifiedVotes()
 	voteResponse := <-votesout
 	require.Equal(t, context.Canceled, voteResponse.err)
+	require.True(t, voteResponse.cancelled)
 }

@@ -208,7 +208,7 @@ func (c *poolCryptoVerifier) voteFillWorker(toBundleWait chan<- bundleFuture) {
 			err := c.voteVerifier.verifyVote(votereq.ctx, c.ledger, uv, votereq.TaskIndex, votereq.message, c.votes.out)
 			if err != nil && c.votes.out != nil {
 				select {
-				case c.votes.out <- asyncVerifyVoteResponse{index: votereq.TaskIndex, err: err}:
+				case c.votes.out <- asyncVerifyVoteResponse{index: votereq.TaskIndex, err: err, cancelled: true}:
 				default:
 					c.log.Infof("poolCryptoVerifier.voteFillWorker unable to write failed enqueue response to output channel")
 				}
