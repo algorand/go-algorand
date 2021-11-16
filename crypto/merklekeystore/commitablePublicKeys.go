@@ -37,7 +37,7 @@ func (k *CommittablePublicKeyArray) Marshal(pos uint64) ([]byte, error) {
 	return crypto.HashRep(&ephPK), nil
 }
 
-// ToBeHashed returns the sequence of bytes that would be used as an input for the hash function.
+// ToBeHashed returns the sequence of bytes that would be used as an input for the hash function when creating a merkle tree.
 // In order to create a more SNARK-friendly commitment we must avoid using the msgpack infrastructure.
 // msgpack creates a compressed representation of the struct which might be varied in length, which will
 // be bad for creating SNARK

@@ -17,6 +17,7 @@
 package basics
 
 import (
+	"encoding/binary"
 	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -41,6 +42,19 @@ type Participant struct {
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
+// In order to create a more SNARK-friendly commitments on the signature we must avoid using the msgpack infrastructure.
+// msgpack creates a compressed representation of the struct which might be varied in length, which will
+// be bad for creating SNARK
 func (p Participant) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.CompactCertPart, protocol.Encode(&p)
+
+	binaryWeight := make([]byte, 8)
+	binary.LittleEndian.PutUint64(binaryWeight, p.Weight)
+
+	publicKeyBytes := p.PK
+
+	pkCommitment := make([]byte, 0, len(binaryWeight)+len(publicKeyBytes))
+	pkCommitment = append(pkCommitment, binaryWeight...)
+	pkCommitment = append(pkCommitment, publicKeyBytes[:]...)
+
+	return protocol.CompactCertPart, pkCommitment
 }
