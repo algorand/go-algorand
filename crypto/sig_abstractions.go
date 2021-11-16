@@ -24,7 +24,8 @@ import (
 )
 
 const (
-	MaxSignatureSize = 9999
+	// MaxSignatureSize is the size of the largest signature
+	MaxSignatureSize = 64
 )
 
 type (

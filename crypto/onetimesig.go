@@ -146,11 +146,6 @@ type OneTimeSignatureSecrets struct {
 	mu deadlock.RWMutex
 }
 
-const (
-	MaxNumOfBatches = 9999
-	NumberOfOffsets = 9999 // config.ConsensusParams.DefaultKeyDilution
-)
-
 // OneTimeSignatureSecretsPersistent denotes the fields of a OneTimeSignatureSecrets
 // that get stored to persistent storage (through reflection on exported fields).
 type OneTimeSignatureSecretsPersistent struct {
@@ -162,12 +157,12 @@ type OneTimeSignatureSecretsPersistent struct {
 	// The odd `codec:` name is for backwards compatibility with previous
 	// stored keys where we failed to give any explicit `codec:` name.
 	FirstBatch uint64            `codec:"First"`
-	Batches    []ephemeralSubkey `codec:"Sub,allocbound=MaxNumOfBatches"`
+	Batches    []ephemeralSubkey `codec:"Sub,allocbound=-"` // the bound is keyDilution
 
 	// FirstOffset denotes the first offset whose subkey appears in Offsets.
 	// These subkeys correspond to batch FirstBatch-1.
 	FirstOffset uint64            `codec:"firstoff"`
-	Offsets     []ephemeralSubkey `codec:"offkeys,allocbound=NumberOfOffsets"`
+	Offsets     []ephemeralSubkey `codec:"offkeys,allocbound=-"` // the bound is keyDilution
 
 	// When Offsets is non-empty, OffsetsPK2 is the intermediate-level public
 	// key that can be used to verify signatures on the subkeys in Offsets, and
