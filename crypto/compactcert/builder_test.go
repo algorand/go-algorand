@@ -84,7 +84,7 @@ func generateTestSigner(name string, firstValid uint64, lastValid uint64, interv
 	})
 	a.NoError(err)
 
-	signer, err := merklekeystore.New(firstValid, lastValid, interval, crypto.DilithiumType, store)
+	signer, err := merklekeystore.New(firstValid, lastValid, interval, crypto.FalconType, store)
 	a.NoError(err)
 
 	err = signer.Persist()

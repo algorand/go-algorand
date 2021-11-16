@@ -27,7 +27,7 @@ func TestStoringKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	s := generateTestSigner(crypto.DilithiumType, 0, 4096, 345, a)
+	s := generateTestSigner(crypto.FalconType, 0, 4096, 345, a)
 	k := s.keyStore
 	defer k.store.Close()
 
@@ -42,7 +42,7 @@ func TestDroppingKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	s := generateTestSigner(crypto.DilithiumType, 25, 1023, 23, a)
+	s := generateTestSigner(crypto.FalconType, 25, 1023, 23, a)
 	k := s.keyStore
 	defer k.store.Close()
 
@@ -67,7 +67,7 @@ func TestPersistRestore(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	s := generateTestSigner(crypto.DilithiumType, 25, 1023, 23, a)
+	s := generateTestSigner(crypto.FalconType, 25, 1023, 23, a)
 	k := s.keyStore
 	defer k.store.Close()
 
@@ -82,7 +82,7 @@ func BenchmarkFetchKeys(b *testing.B) {
 	start := uint64(1)
 	end := uint64(3000000)
 	interval := uint64(128)
-	s := generateTestSigner(crypto.DilithiumType, start, end, interval, a)
+	s := generateTestSigner(crypto.FalconType, start, end, interval, a)
 	defer s.keyStore.store.Close()
 	b.ResetTimer()
 
@@ -101,7 +101,7 @@ func BenchmarkTrimKeys(b *testing.B) {
 	start := uint64(1)
 	end := uint64(3000000)
 	interval := uint64(128)
-	s := generateTestSigner(crypto.DilithiumType, start, end, interval, a)
+	s := generateTestSigner(crypto.FalconType, start, end, interval, a)
 	defer s.keyStore.store.Close()
 	b.ResetTimer()
 
