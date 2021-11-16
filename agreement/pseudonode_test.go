@@ -147,7 +147,7 @@ func TestPseudonode(t *testing.T) {
 	sLogger := serviceLogger{logging.NewLogger()}
 	sLogger.SetLevel(logging.Warn)
 
-	keyManager := simpleKeyManager(accounts)
+	keyManager := makeRecordingKeyManager(accounts)
 	pb := makePseudonode(pseudonodeParams{
 		factory:      testBlockFactory{Owner: 0},
 		validator:    testBlockValidator{},
@@ -224,6 +224,8 @@ func TestPseudonode(t *testing.T) {
 		}
 		messageEvent, typeOk := ev.(messageEvent)
 		assert.True(t, true, typeOk)
+		// Verify votes are recorded - everyone is voting and proposing blocks.
+		keyManager.ValidateVoteRound(t, messageEvent.Input.Vote.R.Sender, startRound)
 		events[messageEvent.t()] = append(events[messageEvent.t()], messageEvent)
 	}
 	assert.Subset(t, []int{5, 6, 7, 8, 9, 10}, []int{len(events[voteVerified])})
@@ -392,6 +394,9 @@ func (k *KeyManagerProxy) VotingKeys(votingRound, balanceRound basics.Round) []a
 	return k.target(votingRound, balanceRound)
 }
 
+func (k *KeyManagerProxy) Record(account basics.Address, round basics.Round, action account.ParticipationAction) {
+}
+
 func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -405,7 +410,7 @@ func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
 	sLogger := serviceLogger{logging.NewLogger()}
 	sLogger.SetLevel(logging.Warn)
 
-	keyManager := simpleKeyManager(accounts)
+	keyManager := makeRecordingKeyManager(accounts)
 	pb := makePseudonode(pseudonodeParams{
 		factory:      testBlockFactory{Owner: 0},
 		validator:    testBlockValidator{},
@@ -487,7 +492,7 @@ func TestPseudonodeFailedEnqueuedTasks(t *testing.T) {
 	}
 	sLogger.SetLevel(logging.Warn)
 
-	keyManager := simpleKeyManager(accounts)
+	keyManager := makeRecordingKeyManager(accounts)
 
 	mainPool := execpool.MakePool(t)
 	defer mainPool.Shutdown()

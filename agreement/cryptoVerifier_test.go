@@ -316,7 +316,7 @@ func BenchmarkCryptoVerifierProposalVertification(b *testing.B) {
 	pn := &asyncPseudonode{
 		factory:   testBlockFactory{Owner: 0},
 		validator: testBlockValidator{},
-		keys:      simpleKeyManager(participations),
+		keys:      makeRecordingKeyManager(participations),
 		ledger:    ledger,
 		log:       serviceLogger{logging.Base()},
 	}

@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/agreement/agreementtest"
 	"github.com/algorand/go-algorand/agreement/gossip"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -132,7 +133,7 @@ func (n *Fuzzer) initAgreementNode(nodeID int, filters ...NetworkFilterFactory) 
 		Logger:                  logger,
 		Ledger:                  n.ledgers[nodeID],
 		Network:                 gossip.WrapNetwork(n.facades[nodeID], logger),
-		KeyManager:              simpleKeyManager(n.accounts[nodeID : nodeID+1]),
+		KeyManager:              agreementtest.SimpleKeyManager(n.accounts[nodeID : nodeID+1]),
 		BlockValidator:          n.blockValidator,
 		BlockFactory:            testBlockFactory{Owner: nodeID},
 		Clock:                   n.clocks[nodeID],
