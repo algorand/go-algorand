@@ -39,7 +39,7 @@ type (
 
 // all AlgorithmType enums
 const (
-	DilithiumType AlgorithmType = iota
+	FalconType AlgorithmType = iota
 	Ed25519Type
 
 	MaxAlgorithmType
@@ -55,8 +55,8 @@ func (z AlgorithmType) IsValid() error {
 
 // Signer interface represents the possible operations that can be done with a signing key.
 type Signer interface {
-	Sign(message Hashable) ByteSignature
-	SignBytes(message []byte) ByteSignature
+	Sign(message Hashable) (ByteSignature, error)
+	SignBytes(message []byte) (ByteSignature, error)
 	GetVerifyingKey() *GenericVerifyingKey
 }
 
@@ -77,8 +77,8 @@ type GenericSigningKey struct {
 
 	Type AlgorithmType `codec:"sigType"`
 
-	DilithiumSigner DilithiumSigner `codec:"ds"`
-	Ed25519Singer   Ed25519Key      `codec:"edds"`
+	FalconSigner  FalconSigner `codec:"fs"`
+	Ed25519Singer Ed25519Key   `codec:"edds"`
 }
 
 // IsValid states whether the GenericSigningKey is valid, and is safe to use.
@@ -98,8 +98,8 @@ type GenericVerifyingKey struct {
 
 	Type AlgorithmType `codec:"type"`
 
-	DilithiumPublicKey DilithiumVerifier `codec:"dpk"`
-	Ed25519PublicKey   Ed25519PublicKey  `codec:"edpk"`
+	FalconPublicKey  FalconVerifier   `codec:"fpk"`
+	Ed25519PublicKey Ed25519PublicKey `codec:"edpk"`
 }
 
 // IsValid states whether the VerifyingKey is valid, and is safe to use.
@@ -110,20 +110,20 @@ func (z *GenericVerifyingKey) IsValid() error {
 // GetSigner fetches the Signer type that is stored inside this GenericSigningKey.
 func (z *GenericSigningKey) GetSigner() Signer {
 	switch z.Type {
-	case DilithiumType:
-		return &z.DilithiumSigner
+	case FalconType:
+		return &z.FalconSigner
 	case Ed25519Type:
 		return &z.Ed25519Singer
 	default:
-		return &invalidSinger{}
+		return NewInvalidSinger()
 	}
 }
 
 // GetVerifier fetches the Verifier type that is stored inside this GenericVerifyingKey.
 func (z *GenericVerifyingKey) GetVerifier() Verifier {
 	switch z.Type {
-	case DilithiumType:
-		return &z.DilithiumPublicKey
+	case FalconType:
+		return &z.FalconPublicKey
 	case Ed25519Type:
 		return &z.Ed25519PublicKey
 	default:
@@ -136,21 +136,34 @@ var errNonExistingSignatureAlgorithmType = errors.New("signing algorithm type do
 // NewSigner receives a type of signing algorithm and generates keys.
 func NewSigner(t AlgorithmType) (*GenericSigningKey, error) {
 	switch t {
-	case DilithiumType:
-		signer := NewDilithiumSigner().(*DilithiumSigner)
-		return &GenericSigningKey{
-			Type:            t,
-			DilithiumSigner: *signer,
-		}, nil
+	case FalconType:
+		return newFalconSinger(t)
 	case Ed25519Type:
-		var seed Seed
-		SystemRNG.RandBytes(seed[:])
-		key := GenerateEd25519Key(seed)
-		return &GenericSigningKey{
-			Type:          t,
-			Ed25519Singer: *key,
-		}, nil
+		return newEd25519Signer(t)
 	default:
 		return nil, errNonExistingSignatureAlgorithmType
 	}
+}
+
+func newEd25519Signer(t AlgorithmType) (*GenericSigningKey, error) {
+	var seed Seed
+	RandBytes(seed[:])
+	key := GenerateEd25519Key(seed)
+	return &GenericSigningKey{
+		Type:          t,
+		Ed25519Singer: *key,
+	}, nil
+}
+
+func newFalconSinger(t AlgorithmType) (*GenericSigningKey, error) {
+	var seed FalconSeed
+	RandBytes(seed[:])
+	signer, err := GenerateFalconSigner(seed)
+	if err != nil {
+		return &GenericSigningKey{}, err
+	}
+	return &GenericSigningKey{
+		Type:         t,
+		FalconSigner: signer,
+	}, nil
 }

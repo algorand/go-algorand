@@ -1,5 +1,5 @@
-github.com/algorand/dilithium v0.0.0-20210817101633-19163919fb9b h1:s94VUUk5TRctBaCbEDnX9n8zq0SgUHOS2/SS9y6aPsQ=
-github.com/algorand/dilithium v0.0.0-20210817101633-19163919fb9b/go.mod h1:AYrADDoWNnSN5sviUV6iFQDfV+Kqrf8xVqBMuWbgeuM=
+github.com/algorand/falcon v0.0.0-20211112144253-903eac7921a6 h1:H4s81Suxl9gRc1aXMgTnzMQHxUiOtLJLC0HiXY1oNO4=
+github.com/algorand/falcon v0.0.0-20211112144253-903eac7921a6/go.mod h1:Ae0SrUZM1tdU8diovFaMMpqz0m5DoOUrUlrUny0N6eA=
 github.com/algorand/go-codec v1.1.2 h1:QWS9YC3EEWBpJq5AqFPELcCJ2QPpTIg9aqR2K/sRDq4=
 github.com/algorand/go-codec v1.1.2/go.mod h1:A3YI4V24jUUnU1eNekNmx2fLi60FvlNssqOiUsyfNM8=
 github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d h1:W9MgGUodEl4Y4+CxeEr+T3fZ26kOcWA4yfqhjbFxxmI=
@@ -16,8 +16,6 @@ github.com/algorand/oapi-codegen v1.3.5-algorand5 h1:y576Ca2/guQddQrQA7dtL5KcOx5
 github.com/algorand/oapi-codegen v1.3.5-algorand5/go.mod h1:/k0Ywn0lnt92uBMyE+yiRf/Wo3/chxHHsAfenD09EbY=
 github.com/algorand/websocket v1.4.3 h1:8YiA+ZtwqAyg0K30lQyl7gUdKUArYXvBtd/cTFwA4uQ=
 github.com/algorand/websocket v1.4.3/go.mod h1:0nFSn+xppw/GZS9hgWPS3b8/4FcA3Pj7XQxm+wqHGx8=
-github.com/algorand/xorfilter v0.2.0 h1:YC31ANxdZ2jmtbwqv1+USskVSqjkeiRZcQGc6//ro9Q=
-github.com/algorand/xorfilter v0.2.0/go.mod h1:f5cJsYrFbJhXkbjnV4odJB44np05/PvwvdBnABnQoUs=
 github.com/aws/aws-sdk-go v1.16.5 h1:NVxzZXIuwX828VcJrpNxxWjur1tlOBISdMdDdHIKHcc=
 github.com/aws/aws-sdk-go v1.16.5/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
 github.com/chrismcguire/gobberish v0.0.0-20150821175641-1d8adb509a0e h1:CHPYEbz71w8DqJ7DRIq+MXyCQsdibK08vdcQTY4ufas=
@@ -68,8 +66,6 @@ github.com/gorilla/context v1.1.1 h1:AWwleXJkX/nhcU9bZSnZoi3h/qGYqQAGhq6zZe/aQW8
 github.com/gorilla/context v1.1.1/go.mod h1:kBGZzfjB9CEq2AlWe17Uuf7NDRt0dE0s8S51q0aT7Yg=
 github.com/gorilla/mux v1.6.2 h1:Pgr17XVTNXAk3q/r4CpKzC5xBM/qW1uVLV+IhRZpIIk=
 github.com/gorilla/mux v1.6.2/go.mod h1:1lud6UwP+6orDFRuTfBEV8e9/aOM/c4fVVCaMa2zaAs=
-github.com/gorilla/schema v1.0.2 h1:sAgNfOcNYvdDSrzGHVy9nzCQahG+qmsg+nE8dK85QRA=
-github.com/gorilla/schema v1.0.2/go.mod h1:kgLaKoK1FELgZqMAVxx/5cbj0kT+57qxUrAlIO2eleU=
 github.com/gorilla/websocket v1.4.2 h1:+/TMaTYc4QFitKJxsQ7Yye35DkWvkdLcvGKqM+x0Ufc=
 github.com/gorilla/websocket v1.4.2/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/inconshreveable/mousetrap v1.0.0 h1:Z8tu5sraLXCXIcARxBp/8cbvlwVa7Z1NHg9XEKhtSvM=

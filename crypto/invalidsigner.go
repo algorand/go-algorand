@@ -36,13 +36,13 @@ func NewInvalidSinger() Signer {
 }
 
 // Sign returns an empty signature
-func (d *invalidSinger) Sign(message Hashable) ByteSignature {
-	return ByteSignature{}
+func (d *invalidSinger) Sign(message Hashable) (ByteSignature, error) {
+	return ByteSignature{}, errInvalidVerifier
 }
 
 // SignBytes returns an empty signature
-func (d *invalidSinger) SignBytes(data []byte) ByteSignature {
-	return ByteSignature{}
+func (d *invalidSinger) SignBytes(data []byte) (ByteSignature, error) {
+	return ByteSignature{}, errInvalidVerifier
 }
 
 // GetVerifyingKey Outputs an invalid verifying key.

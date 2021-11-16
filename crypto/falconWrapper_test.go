@@ -22,15 +22,19 @@ import (
 	"testing"
 )
 
-func TestSignAndVerify(t *testing.T) {
+func TestSignAndVerifyFalcon(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	var seed Seed
+
+	var seed FalconSeed
 	SystemRNG.RandBytes(seed[:])
-	key := GenerateEd25519Key(seed)
+	key, err := GenerateFalconSigner(seed)
+	a.NoError(err)
+
 	msg := []byte("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet")
 	byteSig, err := key.SignBytes(msg)
 	a.NoError(err)
+
 	verifier := key.GetVerifyingKey()
 	err = verifier.GetVerifier().VerifyBytes(msg, byteSig)
 	a.NoError(err)
