@@ -100,7 +100,7 @@ func (avv *AsyncVoteVerifier) executeVoteVerification(task interface{}) interfac
 	select {
 	case <-req.ctx.Done():
 		// request cancelled, return an error response on the channel
-		return &asyncVerifyVoteResponse{err: req.ctx.Err(), cancelled: true, req: &req}
+		return &asyncVerifyVoteResponse{err: req.ctx.Err(), cancelled: true, req: &req, index: req.index}
 	default:
 		// request was not cancelled, so we verify it here and return the result on the channel
 		v, err := req.uv.verify(req.l)
@@ -119,7 +119,7 @@ func (avv *AsyncVoteVerifier) executeEqVoteVerification(task interface{}) interf
 	select {
 	case <-req.ctx.Done():
 		// request cancelled, return an error response on the channel
-		return &asyncVerifyVoteResponse{err: req.ctx.Err(), cancelled: true, req: &req}
+		return &asyncVerifyVoteResponse{err: req.ctx.Err(), cancelled: true, req: &req, index: req.index}
 	default:
 		// request was not cancelled, so we verify it here and return the result on the channel
 		ev, err := req.uev.verify(req.l)
