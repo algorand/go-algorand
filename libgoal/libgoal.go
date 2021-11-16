@@ -19,6 +19,7 @@ package libgoal
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -30,6 +31,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
@@ -891,6 +893,40 @@ func (c *Client) GetPendingTransactionsByAddress(addr string, maxTxns uint64) (r
 	return
 }
 
+// AddParticipationKey takes a participation key file and sends it to the node.
+// The key will be loaded into the system when the function returns successfully.
+func (c *Client) AddParticipationKey(keyfile string) (resp generated.PostParticipationResponse, err error) {
+	data, err := ioutil.ReadFile(keyfile)
+	if err != nil {
+		return
+	}
+
+	algod, err := c.ensureAlgodClient()
+	if err != nil {
+		return
+	}
+
+	return algod.PostParticipationKey(data)
+}
+
+// GetParticipationKeys gets the currently installed participation keys.
+func (c *Client) GetParticipationKeys() (resp generated.ParticipationKeysResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.GetParticipationKeys()
+	}
+	return
+}
+
+// GetParticipationKeyByID looks up a specific participation key by its participationID.
+func (c *Client) GetParticipationKeyByID(id string) (resp generated.ParticipationKeyResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.GetParticipationKeyByID(id)
+	}
+	return
+}
+
 // ExportKey exports the private key of the passed account, assuming it's available
 func (c *Client) ExportKey(walletHandle []byte, password, account string) (resp kmdapi.APIV1POSTKeyExportResponse, err error) {
 	kmd, err := c.ensureKmdClient()
@@ -970,18 +1006,18 @@ func (c *Client) Catchup(catchpointLabel string) error {
 const defaultAppIdx = 1380011588
 
 // MakeDryrunStateBytes function creates DryrunRequest data structure in serialized form according to the format
-func MakeDryrunStateBytes(client Client, txnOrStxn interface{}, other []transactions.SignedTxn, proto string, format string) (result []byte, err error) {
+func MakeDryrunStateBytes(client Client, txnOrStxn interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string, format string) (result []byte, err error) {
 	switch format {
 	case "json":
 		var gdr generatedV2.DryrunRequest
-		gdr, err = MakeDryrunStateGenerated(client, txnOrStxn, other, proto)
+		gdr, err = MakeDryrunStateGenerated(client, txnOrStxn, otherTxns, otherAccts, proto)
 		if err == nil {
 			result = protocol.EncodeJSON(&gdr)
 		}
 		return
 	case "msgp":
 		var dr v2.DryrunRequest
-		dr, err = MakeDryrunState(client, txnOrStxn, other, proto)
+		dr, err = MakeDryrunState(client, txnOrStxn, otherTxns, otherAccts, proto)
 		if err == nil {
 			result = protocol.EncodeReflect(&dr)
 		}
@@ -992,8 +1028,8 @@ func MakeDryrunStateBytes(client Client, txnOrStxn interface{}, other []transact
 }
 
 // MakeDryrunState function creates v2.DryrunRequest data structure
-func MakeDryrunState(client Client, txnOrStxn interface{}, other []transactions.SignedTxn, proto string) (dr v2.DryrunRequest, err error) {
-	gdr, err := MakeDryrunStateGenerated(client, txnOrStxn, other, proto)
+func MakeDryrunState(client Client, txnOrStxn interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string) (dr v2.DryrunRequest, err error) {
+	gdr, err := MakeDryrunStateGenerated(client, txnOrStxn, otherTxns, otherAccts, proto)
 	if err != nil {
 		return
 	}
@@ -1001,7 +1037,7 @@ func MakeDryrunState(client Client, txnOrStxn interface{}, other []transactions.
 }
 
 // MakeDryrunStateGenerated function creates generatedV2.DryrunRequest data structure
-func MakeDryrunStateGenerated(client Client, txnOrStxn interface{}, other []transactions.SignedTxn, proto string) (dr generatedV2.DryrunRequest, err error) {
+func MakeDryrunStateGenerated(client Client, txnOrStxn interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string) (dr generatedV2.DryrunRequest, err error) {
 	var txns []transactions.SignedTxn
 	if txnOrStxn == nil {
 		// empty input do nothing
@@ -1014,7 +1050,7 @@ func MakeDryrunStateGenerated(client Client, txnOrStxn interface{}, other []tran
 		return
 	}
 
-	txns = append(txns, other...)
+	txns = append(txns, otherTxns...)
 	for i := range txns {
 		enc := protocol.EncodeJSON(&txns[i])
 		dr.Txns = append(dr.Txns, enc)
@@ -1023,6 +1059,9 @@ func MakeDryrunStateGenerated(client Client, txnOrStxn interface{}, other []tran
 	for _, txn := range txns {
 		tx := txn.Txn
 		if tx.Type == protocol.ApplicationCallTx {
+			accounts := append(tx.Accounts, tx.Sender)
+			accounts = append(accounts, otherAccts...)
+
 			apps := []basics.AppIndex{tx.ApplicationID}
 			apps = append(apps, tx.ForeignApps...)
 			for _, appIdx := range apps {
@@ -1049,6 +1088,7 @@ func MakeDryrunStateGenerated(client Client, txnOrStxn interface{}, other []tran
 						return
 					}
 					appParams = app.Params
+					accounts = append(accounts, appIdx.Address())
 				}
 				dr.Apps = append(dr.Apps, generatedV2.Application{
 					Id:     uint64(appIdx),
@@ -1056,11 +1096,11 @@ func MakeDryrunStateGenerated(client Client, txnOrStxn interface{}, other []tran
 				})
 			}
 
-			accounts := append(tx.Accounts, tx.Sender)
 			for _, acc := range accounts {
 				var info generatedV2.Account
 				if info, err = client.AccountInformationV2(acc.String()); err != nil {
-					return
+					// ignore error - accounts might have app addresses that were not funded
+					continue
 				}
 				dr.Accounts = append(dr.Accounts, info)
 			}

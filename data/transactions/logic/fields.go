@@ -197,16 +197,16 @@ var txnFieldSpecs = []txnFieldSpec{
 	{FirstValid, StackUint64, 0, 0, false},
 	{FirstValidTime, StackUint64, 0, 0, false},
 	{LastValid, StackUint64, 0, 0, false},
-	{Note, StackBytes, 0, 0, false},
+	{Note, StackBytes, 0, 6, false},
 	{Lease, StackBytes, 0, 0, false},
 	{Receiver, StackBytes, 0, 5, false},
 	{Amount, StackUint64, 0, 5, false},
 	{CloseRemainderTo, StackBytes, 0, 5, false},
-	{VotePK, StackBytes, 0, 0, false},
-	{SelectionPK, StackBytes, 0, 0, false},
-	{VoteFirst, StackUint64, 0, 0, false},
-	{VoteLast, StackUint64, 0, 0, false},
-	{VoteKeyDilution, StackUint64, 0, 0, false},
+	{VotePK, StackBytes, 0, 6, false},
+	{SelectionPK, StackBytes, 0, 6, false},
+	{VoteFirst, StackUint64, 0, 6, false},
+	{VoteLast, StackUint64, 0, 6, false},
+	{VoteKeyDilution, StackUint64, 0, 6, false},
 	{Type, StackBytes, 0, 5, false},
 	{TypeEnum, StackUint64, 0, 5, false},
 	{XferAsset, StackUint64, 0, 5, false},
@@ -224,7 +224,7 @@ var txnFieldSpecs = []txnFieldSpec{
 	{NumAccounts, StackUint64, 2, 0, false},
 	{ApprovalProgram, StackBytes, 2, 0, false},
 	{ClearStateProgram, StackBytes, 2, 0, false},
-	{RekeyTo, StackBytes, 2, 0, false},
+	{RekeyTo, StackBytes, 2, 6, false},
 	{ConfigAsset, StackUint64, 2, 5, false},
 	{ConfigAssetTotal, StackUint64, 2, 5, false},
 	{ConfigAssetDecimals, StackUint64, 2, 5, false},
@@ -249,7 +249,7 @@ var txnFieldSpecs = []txnFieldSpec{
 	{LocalNumUint, StackUint64, 3, 0, false},
 	{LocalNumByteSlice, StackUint64, 3, 0, false},
 	{ExtraProgramPages, StackUint64, 4, 0, false},
-	{Nonparticipation, StackUint64, 5, 0, false},
+	{Nonparticipation, StackUint64, 5, 6, false},
 
 	{Logs, StackBytes, 5, 5, true},
 	{NumLogs, StackUint64, 5, 5, true},
@@ -279,11 +279,12 @@ var txnaFieldSpecByField = map[TxnField]txnFieldSpec{
 	Logs: {Logs, StackBytes, 5, 5, true},
 }
 
-var innerTxnTypes = map[string]protocol.TxType{
-	string(protocol.PaymentTx):       protocol.PaymentTx,
-	string(protocol.AssetTransferTx): protocol.AssetTransferTx,
-	string(protocol.AssetConfigTx):   protocol.AssetConfigTx,
-	string(protocol.AssetFreezeTx):   protocol.AssetFreezeTx,
+var innerTxnTypes = map[string]uint64{
+	string(protocol.PaymentTx):         5,
+	string(protocol.KeyRegistrationTx): 6,
+	string(protocol.AssetTransferTx):   5,
+	string(protocol.AssetConfigTx):     5,
+	string(protocol.AssetFreezeTx):     5,
 }
 
 // TxnTypeNames is the values of Txn.Type in enum order
@@ -638,7 +639,7 @@ func init() {
 	txnFieldSpecByField = make(map[TxnField]txnFieldSpec, len(TxnFieldNames))
 	for i, s := range txnFieldSpecs {
 		if int(s.field) != i {
-			panic("txnFieldTypePairs disjoint with TxnField enum")
+			panic("txnFieldSpecs disjoint with TxnField enum")
 		}
 		TxnFieldTypes[i] = s.ftype
 		txnFieldSpecByField[s.field] = s
@@ -654,8 +655,11 @@ func init() {
 	}
 	GlobalFieldTypes = make([]StackType, len(GlobalFieldNames))
 	globalFieldSpecByField = make(map[GlobalField]globalFieldSpec, len(GlobalFieldNames))
-	for _, s := range globalFieldSpecs {
-		GlobalFieldTypes[int(s.field)] = s.ftype
+	for i, s := range globalFieldSpecs {
+		if int(s.field) != i {
+			panic("globalFieldSpecs disjoint with GlobalField enum")
+		}
+		GlobalFieldTypes[i] = s.ftype
 		globalFieldSpecByField[s.field] = s
 	}
 	globalFieldSpecByName = make(gfNameSpecMap, len(GlobalFieldNames))

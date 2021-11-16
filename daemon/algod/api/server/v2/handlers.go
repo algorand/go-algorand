@@ -24,6 +24,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -33,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
 	"github.com/algorand/go-algorand/data"
+	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -67,13 +69,147 @@ type NodeInterface interface {
 	StartCatchup(catchpoint string) error
 	AbortCatchup(catchpoint string) error
 	Config() config.Local
+	InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error)
+	ListParticipationKeys() ([]account.ParticipationRecord, error)
+	GetParticipationKey(account.ParticipationID) (account.ParticipationRecord, error)
+	RemoveParticipationKey(account.ParticipationID) error
 }
 
-// RegisterParticipationKeys registers participation keys.
-// (POST /v2/register-participation-keys/{address})
-func (v2 *Handlers) RegisterParticipationKeys(ctx echo.Context, address string, params private.RegisterParticipationKeysParams) error {
-	// TODO: register participation keys endpoint
-	return ctx.String(http.StatusNotImplemented, "Endpoint not implemented.")
+func roundToPtrOrNil(value basics.Round) *uint64 {
+	if value == 0 {
+		return nil
+	}
+	result := uint64(value)
+	return &result
+}
+
+func convertParticipationRecord(record account.ParticipationRecord) generated.ParticipationKey {
+	participationKey := generated.ParticipationKey{
+		Id:      record.ParticipationID.String(),
+		Address: record.Account.String(),
+		Key: generated.AccountParticipation{
+			VoteFirstValid:  uint64(record.FirstValid),
+			VoteLastValid:   uint64(record.LastValid),
+			VoteKeyDilution: record.KeyDilution,
+		},
+	}
+
+	// These are pointers but should always be present.
+	if record.Voting != nil {
+		participationKey.Key.VoteParticipationKey = record.Voting.OneTimeSignatureVerifier[:]
+	}
+	if record.VRF != nil {
+		participationKey.Key.SelectionParticipationKey = record.VRF.PK[:]
+	}
+
+	// Optional fields.
+	if record.EffectiveLast != 0 && record.EffectiveFirst == 0 {
+		// Special case for first valid on round 0
+		zero := uint64(0)
+		participationKey.EffectiveFirstValid = &zero
+	} else {
+		participationKey.EffectiveFirstValid = roundToPtrOrNil(record.EffectiveFirst)
+	}
+	participationKey.EffectiveLastValid = roundToPtrOrNil(record.EffectiveLast)
+	participationKey.LastVote = roundToPtrOrNil(record.LastVote)
+	participationKey.LastBlockProposal = roundToPtrOrNil(record.LastBlockProposal)
+	participationKey.LastVote = roundToPtrOrNil(record.LastVote)
+	participationKey.LastStateProof = roundToPtrOrNil(record.LastStateProof)
+
+	return participationKey
+}
+
+// GetParticipationKeys Return a list of participation keys
+// (GET /v2/participation)
+func (v2 *Handlers) GetParticipationKeys(ctx echo.Context) error {
+	partKeys, err := v2.Node.ListParticipationKeys()
+
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	var response []generated.ParticipationKey
+
+	for _, participationRecord := range partKeys {
+		response = append(response, convertParticipationRecord(participationRecord))
+	}
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// AddParticipationKey Add a participation key to the node
+// (POST /v2/participation)
+func (v2 *Handlers) AddParticipationKey(ctx echo.Context) error {
+
+	buf := new(bytes.Buffer)
+	_, err := buf.ReadFrom(ctx.Request().Body)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	partKeyBinary := buf.Bytes()
+
+	if len(partKeyBinary) == 0 {
+		err := fmt.Errorf(errRESTPayloadZeroLength)
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	partID, err := v2.Node.InstallParticipationKey(partKeyBinary)
+
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	response := generated.PostParticipationResponse{PartId: partID.String()}
+	return ctx.JSON(http.StatusOK, response)
+
+}
+
+// DeleteParticipationKeyByID Delete a given participation key by id
+// (DELETE /v2/participation/{participation-id})
+func (v2 *Handlers) DeleteParticipationKeyByID(ctx echo.Context, participationID string) error {
+
+	decodedParticipationID, err := account.ParseParticipationID(participationID)
+
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	err = v2.Node.RemoveParticipationKey(decodedParticipationID)
+
+	if err != nil {
+		if errors.Is(err, account.ErrParticipationIDNotFound) {
+			return notFound(ctx, account.ErrParticipationIDNotFound, "participation id not found", v2.Log)
+		}
+
+		return internalError(ctx, err, err.Error(), v2.Log)
+	}
+
+	return ctx.NoContent(http.StatusOK)
+}
+
+// GetParticipationKeyByID Get participation key info by id
+// (GET /v2/participation/{participation-id})
+func (v2 *Handlers) GetParticipationKeyByID(ctx echo.Context, participationID string) error {
+
+	decodedParticipationID, err := account.ParseParticipationID(participationID)
+
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	participationRecord, err := v2.Node.GetParticipationKey(decodedParticipationID)
+
+	if err != nil {
+		return internalError(ctx, err, err.Error(), v2.Log)
+	}
+
+	if participationRecord.IsZero() {
+		return notFound(ctx, account.ErrParticipationIDNotFound, account.ErrParticipationIDNotFound.Error(), v2.Log)
+	}
+
+	response := convertParticipationRecord(participationRecord)
+
+	return ctx.JSON(http.StatusOK, response)
 }
 
 // ShutdownNode shuts down the node.
@@ -244,8 +380,7 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 // GetSupply gets the current supply reported by the ledger.
 // (GET /v2/ledger/supply)
 func (v2 *Handlers) GetSupply(ctx echo.Context) error {
-	latest := v2.Node.Ledger().Latest()
-	totals, err := v2.Node.Ledger().Totals(latest)
+	latest, totals, err := v2.Node.Ledger().LatestTotals()
 	if err != nil {
 		err = fmt.Errorf("GetSupply(): round %d, failed: %v", latest, err)
 		return internalError(ctx, err, errInternalFailure, v2.Log)
@@ -716,7 +851,7 @@ func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetID uint64) error {
 	}
 
 	lastRound := ledger.Latest()
-	record, err := ledger.Lookup(lastRound, creator)
+	record, _, err := ledger.LookupWithoutRewards(lastRound, creator)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
@@ -762,7 +897,9 @@ func (v2 *Handlers) TealCompile(ctx echo.Context) error {
 	source := buf.String()
 	ops, err := logic.AssembleString(source)
 	if err != nil {
-		return badRequest(ctx, err, err.Error(), v2.Log)
+		sb := strings.Builder{}
+		ops.ReportProblems("", &sb)
+		return badRequest(ctx, err, sb.String(), v2.Log)
 	}
 	pd := logic.HashProgram(ops.Program)
 	addr := basics.Address(pd)

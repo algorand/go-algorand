@@ -20,9 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
@@ -267,8 +265,7 @@ func (n asyncPseudonode) makePseudonodeVerifier(voteVerifier *AsyncVoteVerifier)
 
 // makeProposals creates a slice of block proposals for the given round and period.
 func (n asyncPseudonode) makeProposals(round basics.Round, period period, accounts []account.Participation) ([]proposal, []unauthenticatedVote) {
-	deadline := time.Now().Add(config.ProposalAssemblyTime)
-	ve, err := n.factory.AssembleBlock(round, deadline)
+	ve, err := n.factory.AssembleBlock(round)
 	if err != nil {
 		if err != ErrAssembleBlockRoundStale {
 			n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %d: %v", round, err)
@@ -444,6 +441,7 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 	for _, r := range verifiedResults {
 		select {
 		case t.out <- messageEvent{T: voteVerified, Input: r.message, Err: makeSerErr(r.err)}:
+			t.node.keys.Record(r.v.R.Sender, r.v.R.Round, account.Vote)
 		case <-quit:
 			return
 		case <-t.context.Done():
@@ -531,6 +529,7 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 	for _, r := range verifiedVotes {
 		select {
 		case t.out <- messageEvent{T: voteVerified, Input: r.message, Err: makeSerErr(r.err)}:
+			t.node.keys.Record(r.v.R.Sender, r.v.R.Round, account.BlockProposal)
 		case <-quit:
 			return
 		case <-t.context.Done():

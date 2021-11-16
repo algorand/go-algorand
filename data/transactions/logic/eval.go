@@ -349,8 +349,8 @@ type EvalContext struct {
 	version uint64
 	scratch scratchSpace
 
-	subtxn *transactions.SignedTxn // place to build for itxn_submit
-	// The transactions Performed() and their effects
+	subtxns []transactions.SignedTxn // place to build for itxn_submit
+	// Previous transactions Performed() and their effects
 	InnerTxns []transactions.SignedTxnWithAD
 
 	cost    int // cost incurred so far
@@ -3676,33 +3676,68 @@ func authorizedSender(cx *EvalContext, addr basics.Address) bool {
 	return appAddr == authorizer
 }
 
-func opTxBegin(cx *EvalContext) {
-	if cx.subtxn != nil {
-		cx.err = errors.New("itxn_begin without itxn_submit")
-		return
-	}
-	// Start fresh
-	cx.subtxn = &transactions.SignedTxn{}
-	// Fill in defaults.
+// addInnerTxn appends a fresh SignedTxn to subtxns, populated with reasonable
+// defaults.
+func addInnerTxn(cx *EvalContext) error {
 	addr, err := cx.getApplicationAddress()
 	if err != nil {
-		cx.err = err
-		return
+		return err
 	}
 
-	fee := cx.Proto.MinTxnFee
-	if cx.FeeCredit != nil {
-		// Use credit to shrink the fee, but don't change FeeCredit
-		// here, because they might never itxn_submit, or they might
-		// change the fee.  Do it in itxn_submit.
-		fee = basics.SubSaturate(fee, *cx.FeeCredit)
+	// For compatibility with v5, in which failures only occurred in the submit,
+	// we only fail here if we are OVER the MaxInnerTransactions limit.  Thus
+	// this allows construction of one more Inner than is actually allowed, and
+	// will fail in submit. (But we do want the check here, so this can't become
+	// unbounded.)  The MaxTxGroupSize check can be, and is, precise.
+	if len(cx.InnerTxns)+len(cx.subtxns) > cx.Proto.MaxInnerTransactions ||
+		len(cx.subtxns) >= cx.Proto.MaxTxGroupSize {
+		return errors.New("attempt to create too many inner transactions")
 	}
-	cx.subtxn.Txn.Header = transactions.Header{
-		Sender:     addr, // Default, to simplify usage
+
+	stxn := transactions.SignedTxn{}
+
+	groupFee := basics.MulSaturate(cx.Proto.MinTxnFee, uint64(len(cx.subtxns)+1))
+	groupPaid := uint64(0)
+	for _, ptxn := range cx.subtxns {
+		groupPaid = basics.AddSaturate(groupPaid, ptxn.Txn.Fee.Raw)
+	}
+
+	fee := uint64(0)
+	if groupPaid < groupFee {
+		fee = groupFee - groupPaid
+
+		if cx.FeeCredit != nil {
+			// Use credit to shrink the default populated fee, but don't change
+			// FeeCredit here, because they might never itxn_submit, or they
+			// might change the fee.  Do it in itxn_submit.
+			fee = basics.SubSaturate(fee, *cx.FeeCredit)
+		}
+	}
+
+	stxn.Txn.Header = transactions.Header{
+		Sender:     addr,
 		Fee:        basics.MicroAlgos{Raw: fee},
 		FirstValid: cx.Txn.Txn.FirstValid,
 		LastValid:  cx.Txn.Txn.LastValid,
 	}
+	cx.subtxns = append(cx.subtxns, stxn)
+	return nil
+}
+
+func opTxBegin(cx *EvalContext) {
+	if len(cx.subtxns) > 0 {
+		cx.err = errors.New("itxn_begin without itxn_submit")
+		return
+	}
+	cx.err = addInnerTxn(cx)
+}
+
+func opTxNext(cx *EvalContext) {
+	if len(cx.subtxns) == 0 {
+		cx.err = errors.New("itxn_next without itxn_begin")
+		return
+	}
+	cx.err = addInnerTxn(cx)
 }
 
 // availableAccount is used instead of accountReference for more recent opcodes
@@ -3741,11 +3776,12 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 			err = fmt.Errorf("Type arg not a byte array")
 			return
 		}
-		txType, ok := innerTxnTypes[string(sv.Bytes)]
-		if ok {
-			txn.Type = txType
+		txType := string(sv.Bytes)
+		ver, ok := innerTxnTypes[txType]
+		if ok && ver <= cx.version {
+			txn.Type = protocol.TxType(txType)
 		} else {
-			err = fmt.Errorf("%s is not a valid Type for itxn_field", sv.Bytes)
+			err = fmt.Errorf("%s is not a valid Type for itxn_field", txType)
 		}
 	case TypeEnum:
 		var i uint64
@@ -3755,9 +3791,9 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 		}
 		// i != 0 is so that the error reports 0 instead of Unknown
 		if i != 0 && i < uint64(len(TxnTypeNames)) {
-			txType, ok := innerTxnTypes[TxnTypeNames[i]]
-			if ok {
-				txn.Type = txType
+			ver, ok := innerTxnTypes[TxnTypeNames[i]]
+			if ok && ver <= cx.version {
+				txn.Type = protocol.TxType(TxnTypeNames[i])
 			} else {
 				err = fmt.Errorf("%s is not a valid Type for itxn_field", TxnTypeNames[i])
 			}
@@ -3768,14 +3804,48 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 		txn.Sender, err = cx.availableAccount(sv)
 	case Fee:
 		txn.Fee.Raw, err = sv.uint()
-	// FirstValid, LastValid unsettable: no motivation
-	// Note unsettable: would be strange, as this "Note" would not end up "chain-visible"
+	// FirstValid, LastValid unsettable: little motivation (maybe a app call
+	// wants to inspect?)  If we set, make sure they are legal, both for current
+	// round, and separation by MaxLifetime (check lifetime in submit, not here)
+	case Note:
+		if len(sv.Bytes) > cx.Proto.MaxTxnNoteBytes {
+			err = fmt.Errorf("%s may not exceed %d bytes", fs.field, cx.Proto.MaxTxnNoteBytes)
+		} else {
+			txn.Note = make([]byte, len(sv.Bytes))
+			copy(txn.Note[:], sv.Bytes)
+		}
 	// GenesisID, GenesisHash unsettable: surely makes no sense
 	// Group unsettable: Can't make groups from AVM (yet?)
 	// Lease unsettable: This seems potentially useful.
-	// RekeyTo unsettable: Feels dangerous for first release.
 
-	// KeyReg not allowed yet, so no fields settable
+	case RekeyTo:
+		txn.RekeyTo, err = sv.address()
+
+	// KeyReg
+	case VotePK:
+		if len(sv.Bytes) != 32 {
+			err = fmt.Errorf("%s must be 32 bytes", fs.field)
+		} else {
+			copy(txn.VotePK[:], sv.Bytes)
+		}
+	case SelectionPK:
+		if len(sv.Bytes) != 32 {
+			err = fmt.Errorf("%s must be 32 bytes", fs.field)
+		} else {
+			copy(txn.SelectionPK[:], sv.Bytes)
+		}
+	case VoteFirst:
+		var round uint64
+		round, err = sv.uint()
+		txn.VoteFirst = basics.Round(round)
+	case VoteLast:
+		var round uint64
+		round, err = sv.uint()
+		txn.VoteLast = basics.Round(round)
+	case VoteKeyDilution:
+		txn.VoteKeyDilution, err = sv.uint()
+	case Nonparticipation:
+		txn.Nonparticipation, err = sv.bool()
 
 	// Payment
 	case Receiver:
@@ -3820,7 +3890,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 		txn.AssetParams.URL, err = sv.string(cx.Proto.MaxAssetURLBytes)
 	case ConfigAssetMetadataHash:
 		if len(sv.Bytes) != 32 {
-			err = fmt.Errorf("ConfigAssetMetadataHash must be 32 bytes")
+			err = fmt.Errorf("%s must be 32 bytes", fs.field)
 		} else {
 			copy(txn.AssetParams.MetadataHash[:], sv.Bytes)
 		}
@@ -3849,7 +3919,8 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 }
 
 func opTxField(cx *EvalContext) {
-	if cx.subtxn == nil {
+	itx := len(cx.subtxns) - 1
+	if itx < 0 {
 		cx.err = errors.New("itxn_field without itxn_begin")
 		return
 	}
@@ -3857,10 +3928,11 @@ func opTxField(cx *EvalContext) {
 	field := TxnField(cx.program[cx.pc+1])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.itxVersion == 0 || fs.itxVersion > cx.version {
-		cx.err = fmt.Errorf("invalid itxn_field field %d", field)
+		cx.err = fmt.Errorf("invalid itxn_field %s", field)
+		return
 	}
 	sv := cx.stack[last]
-	cx.err = cx.stackIntoTxnField(sv, fs, &cx.subtxn.Txn)
+	cx.err = cx.stackIntoTxnField(sv, fs, &cx.subtxns[itx].Txn)
 	cx.stack = cx.stack[:last] // pop
 }
 
@@ -3870,71 +3942,95 @@ func opTxSubmit(cx *EvalContext) {
 		return
 	}
 
-	if cx.subtxn == nil {
+	// Should never trigger, since itxn_next checks these too.
+	if len(cx.InnerTxns)+len(cx.subtxns) > cx.Proto.MaxInnerTransactions ||
+		len(cx.subtxns) > cx.Proto.MaxTxGroupSize {
+		cx.err = errors.New("too many inner transactions")
+		return
+	}
+
+	if len(cx.subtxns) == 0 {
 		cx.err = errors.New("itxn_submit without itxn_begin")
 		return
 	}
 
-	if len(cx.InnerTxns) >= cx.Proto.MaxInnerTransactions {
-		cx.err = errors.New("itxn_submit with MaxInnerTransactions")
-		return
+	// Check fees across the group first. Allows fee pooling in inner groups.
+	groupFee := basics.MulSaturate(cx.Proto.MinTxnFee, uint64(len(cx.subtxns)))
+	groupPaid := uint64(0)
+	for _, ptxn := range cx.subtxns {
+		groupPaid = basics.AddSaturate(groupPaid, ptxn.Txn.Fee.Raw)
 	}
-
-	// Error out on anything unusual.  Allow pay, axfer.
-	switch cx.subtxn.Txn.Type {
-	case protocol.PaymentTx, protocol.AssetTransferTx, protocol.AssetConfigTx, protocol.AssetFreezeTx:
-		// only pay, axfer, acfg, afrz for now
-	default:
-		cx.err = fmt.Errorf("Invalid inner transaction type %#v", cx.subtxn.Txn.Type)
-		return
-	}
-
-	// The goal is to follow the same invariants used by the
-	// transaction pool. Namely that any transaction that makes it
-	// to Perform (which is equivalent to eval.applyTransaction)
-	// is authorized, and WellFormed.
-	if !authorizedSender(cx, cx.subtxn.Txn.Sender) {
-		cx.err = fmt.Errorf("unauthorized")
-		return
-	}
-
-	// Recall that WellFormed does not care about individual
-	// transaction fees because of fee pooling. So we check below.
-	cx.err = cx.subtxn.Txn.WellFormed(*cx.Specials, *cx.Proto)
-	if cx.err != nil {
-		return
-	}
-
-	paid := cx.subtxn.Txn.Fee.Raw
-	if paid >= cx.Proto.MinTxnFee {
-		// Over paying - accumulate into FeeCredit
-		overpaid := paid - cx.Proto.MinTxnFee
+	if groupPaid < groupFee {
+		// See if the FeeCredit is enough to cover the shortfall
+		shortfall := groupFee - groupPaid
+		if cx.FeeCredit == nil || *cx.FeeCredit < shortfall {
+			cx.err = fmt.Errorf("fee too small %#v", cx.subtxns)
+			return
+		}
+		*cx.FeeCredit -= shortfall
+	} else {
+		overpay := groupPaid - groupFee
 		if cx.FeeCredit == nil {
 			cx.FeeCredit = new(uint64)
 		}
-		*cx.FeeCredit = basics.AddSaturate(*cx.FeeCredit, overpaid)
-	} else {
-		underpaid := cx.Proto.MinTxnFee - paid
-		// Try to pay with FeeCredit, else fail.
-		if cx.FeeCredit != nil && *cx.FeeCredit >= underpaid {
-			*cx.FeeCredit -= underpaid
-		} else {
-			// We allow changing the fee. One pattern might be for an
-			// app to unilaterally set its Fee to 0. The idea would be
-			// that other transactions were supposed to overpay.
-			cx.err = fmt.Errorf("fee too small")
-			return
-		}
+		*cx.FeeCredit = basics.AddSaturate(*cx.FeeCredit, overpay)
 	}
 
-	ad, err := cx.Ledger.Perform(&cx.subtxn.Txn, *cx.Specials)
-	if err != nil {
-		cx.err = err
-		return
+	for itx := range cx.subtxns {
+		// The goal is to follow the same invariants used by the
+		// transaction pool. Namely that any transaction that makes it
+		// to Perform (which is equivalent to eval.applyTransaction)
+		// is authorized, and WellFormed.
+		if !authorizedSender(cx, cx.subtxns[itx].Txn.Sender) {
+			cx.err = fmt.Errorf("unauthorized")
+			return
+		}
+
+		// Recall that WellFormed does not care about individual
+		// transaction fees because of fee pooling. So we check below.
+		cx.err = cx.subtxns[itx].Txn.WellFormed(*cx.Specials, *cx.Proto)
+		if cx.err != nil {
+			return
+		}
+
+		ad, err := cx.Ledger.Perform(&cx.subtxns[itx].Txn, *cx.Specials)
+		if err != nil {
+			cx.err = err
+			return
+		}
+
+		cx.InnerTxns = append(cx.InnerTxns, transactions.SignedTxnWithAD{
+			SignedTxn: cx.subtxns[itx],
+			ApplyData: ad,
+		})
 	}
-	cx.InnerTxns = append(cx.InnerTxns, transactions.SignedTxnWithAD{
-		SignedTxn: *cx.subtxn,
-		ApplyData: ad,
-	})
-	cx.subtxn = nil
+	cx.subtxns = nil
+}
+
+// PcDetails return PC and disassembled instructions at PC up to 2 opcodes back
+func (cx *EvalContext) PcDetails() (pc int, dis string) {
+	const maxNumAdditionalOpcodes = 2
+	text, ds, err := disassembleInstrumented(cx.program, nil)
+	if err != nil {
+		return cx.pc, dis
+	}
+
+	for i := 0; i < len(ds.pcOffset); i++ {
+		if ds.pcOffset[i].PC == cx.pc {
+			start := 0
+			if i >= maxNumAdditionalOpcodes {
+				start = i - maxNumAdditionalOpcodes
+			}
+
+			startTextPos := ds.pcOffset[start].Offset
+			endTextPos := len(text)
+			if i+1 < len(ds.pcOffset) {
+				endTextPos = ds.pcOffset[i+1].Offset
+			}
+
+			dis = text[startTextPos:endTextPos]
+			break
+		}
+	}
+	return cx.pc, dis
 }

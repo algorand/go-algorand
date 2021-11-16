@@ -19,7 +19,6 @@ package datatest
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -54,7 +53,7 @@ type entryFactoryImpl struct {
 }
 
 // AssembleBlock implements Ledger.AssembleBlock.
-func (i entryFactoryImpl) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
+func (i entryFactoryImpl) AssembleBlock(round basics.Round) (agreement.ValidatedBlock, error) {
 	prev, err := i.l.BlockHdr(round - 1)
 	if err != nil {
 		return nil, fmt.Errorf("could not make proposals: could not read block from ledger at round %v: %v", round, err)
@@ -101,9 +100,10 @@ func (i ledgerImpl) LookupDigest(r basics.Round) (crypto.Digest, error) {
 	return crypto.Digest(blockhdr.Hash()), nil
 }
 
-// Lookup implements Ledger.Lookup.
-func (i ledgerImpl) Lookup(r basics.Round, addr basics.Address) (basics.AccountData, error) {
-	return i.l.Lookup(r, addr)
+// Lookup implements Ledger.LookupAgreement.
+func (i ledgerImpl) LookupAgreement(r basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
+	a, err := i.l.LookupAgreement(r, addr)
+	return a, err
 }
 
 // Circulation implements Ledger.Circulation.

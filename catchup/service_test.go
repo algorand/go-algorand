@@ -35,7 +35,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
-	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -658,11 +658,11 @@ func (m *mockedLedger) AddBlock(blk bookkeeping.Block, cert agreement.Certificat
 	return nil
 }
 
-func (m *mockedLedger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledger.ValidatedBlock, error) {
+func (m *mockedLedger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error) {
 	return nil, nil
 }
 
-func (m *mockedLedger) AddValidatedBlock(vb ledger.ValidatedBlock, cert agreement.Certificate) error {
+func (m *mockedLedger) AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.Certificate) error {
 	return nil
 }
 
@@ -720,6 +720,10 @@ func (m *mockedLedger) Seed(basics.Round) (committee.Seed, error) {
 
 func (m *mockedLedger) LookupDigest(basics.Round) (crypto.Digest, error) {
 	return crypto.Digest{}, errors.New("not needed for mockedLedger")
+}
+
+func (m *mockedLedger) LookupAgreement(basics.Round, basics.Address) (basics.OnlineAccountData, error) {
+	return basics.OnlineAccountData{}, errors.New("not needed for mockedLedger")
 }
 
 func (m *mockedLedger) IsWritingCatchpointFile() bool {

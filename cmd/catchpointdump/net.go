@@ -30,6 +30,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	tools "github.com/algorand/go-algorand/tools/network"
@@ -268,7 +269,7 @@ func saveCatchpointTarFile(addr string, catchpointFileBytes []byte) (err error) 
 }
 
 func makeFileDump(addr string, catchpointFileBytes []byte) error {
-	genesisInitState := ledger.InitState{}
+	genesisInitState := ledgercore.InitState{}
 	deleteLedgerFiles := func() {
 		os.Remove("./ledger.block.sqlite")
 		os.Remove("./ledger.block.sqlite-shm")
