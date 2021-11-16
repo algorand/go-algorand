@@ -490,19 +490,19 @@ func TestValidityPeriod(t *testing.T) {
 	store := initTestDB(a)
 	firstValid := uint64(0)
 	lastValid := maxValidPeriod
-	_, err := New(firstValid, lastValid, crypto.DilithiumType, store)
+	_, err := New(firstValid, lastValid, crypto.FalconType, store)
 	a.NoError(err)
 
 	store = initTestDB(a)
 	firstValid = uint64(0)
 	lastValid = maxValidPeriod + 1
-	_, err = New(firstValid, lastValid, crypto.DilithiumType, store)
+	_, err = New(firstValid, lastValid, crypto.FalconType, store)
 	a.Error(err)
 
 	store = initTestDB(a)
 	firstValid = uint64(0)
 	lastValid = maxValidPeriod - 1
-	_, err = New(firstValid, lastValid, crypto.DilithiumType, store)
+	_, err = New(firstValid, lastValid, crypto.FalconType, store)
 	a.NoError(err)
 }
 
