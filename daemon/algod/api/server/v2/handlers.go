@@ -24,6 +24,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -755,7 +756,9 @@ func (v2 *Handlers) TealCompile(ctx echo.Context) error {
 	source := buf.String()
 	ops, err := logic.AssembleString(source)
 	if err != nil {
-		return badRequest(ctx, err, err.Error(), v2.Log)
+		sb := strings.Builder{}
+		ops.ReportProblems("", &sb)
+		return badRequest(ctx, err, sb.String(), v2.Log)
 	}
 	pd := logic.HashProgram(ops.Program)
 	addr := basics.Address(pd)

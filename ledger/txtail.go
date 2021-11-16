@@ -143,7 +143,7 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	}
 }
 
-func (t *txTail) committedUpTo(rnd basics.Round) basics.Round {
+func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
 	maxlife := basics.Round(t.recent[rnd].proto.MaxTxnLife)
 	for r := range t.recent {
 		if r+maxlife < rnd {
@@ -154,7 +154,7 @@ func (t *txTail) committedUpTo(rnd basics.Round) basics.Round {
 		delete(t.lastValid, t.lowWaterMark)
 	}
 
-	return (rnd + 1).SubSaturate(maxlife)
+	return (rnd + 1).SubSaturate(maxlife), basics.Round(0)
 }
 
 func (t *txTail) prepareCommit(*deferredCommitContext) error {
@@ -165,10 +165,14 @@ func (t *txTail) commitRound(context.Context, *sql.Tx, *deferredCommitContext) e
 	return nil
 }
 
-func (t *txTail) postCommit(deferredCommitContext) {
+func (t *txTail) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 }
 
 func (t *txTail) handleUnorderedCommit(uint64, basics.Round, basics.Round) {
+}
+
+func (t *txTail) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
+	return dcr
 }
 
 // txtailMissingRound is returned by checkDup when requested for a round number below the low watermark
