@@ -482,7 +482,7 @@ scanLoop:
 
 	if p.state == peerStateProposal {
 		logging.Base().Infof("proposal size: %v bytes, txns: %v bytes, numtxns: %v", currentMessageSize, accumulatedSize, grpIdx - startIndex)
-		if time.Now().Sub(start) > 13 * time.Millisecond {
+		if time.Now().Sub(start) > 7 * time.Millisecond {
 			logging.Base().Info(p.requestedTransactionsModulator, p.requestedTransactionsOffset)
 			logging.Base().Info(p.lastSelectedTransactionsCount, len(selectedTxnIDs))
 			logging.Base().Infof("filter received: %v %v %v %v", time.Now().Sub(p.lastBloomFilterReceivedTimestamp), time.Now().Sub(p.lastMsgReceivedTimestamp), time.Now().Sub(p.lastMsgEnqueuedWithFilterTimestamp), time.Now().Sub(p.lastMsgEnqueuedTimestamp))
