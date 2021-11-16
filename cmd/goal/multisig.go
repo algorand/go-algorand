@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -163,7 +164,7 @@ var signProgramCmd = &cobra.Command{
 			}
 			ops, err := logic.AssembleString(string(text))
 			if err != nil {
-				ops.ReportProblems(programSource)
+				ops.ReportProblems(programSource, os.Stderr)
 				reportErrorf("%s: %s", programSource, err)
 			}
 			if outname == "" {

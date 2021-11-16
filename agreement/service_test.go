@@ -105,22 +105,6 @@ func (c *testingClock) fire(d time.Duration) {
 	close(c.TA[d])
 }
 
-type simpleKeyManager []account.Participation
-
-func (m simpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Participation {
-	var km []account.Participation
-	for _, acc := range m {
-		if acc.OverlapsInterval(votingRound, votingRound) {
-			km = append(km, acc)
-		}
-	}
-	return km
-}
-
-func (m simpleKeyManager) DeleteOldKeys(basics.Round) {
-	// noop
-}
-
 type testingNetwork struct {
 	validator BlockValidator
 
@@ -743,7 +727,7 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 		m.coserviceListener = am.coserviceListener(nodeID(i))
 		clocks[i] = makeTestingClock(m)
 		ledgers[i] = ledgerFactory(balances)
-		keys := simpleKeyManager(accounts[i : i+1])
+		keys := makeRecordingKeyManager(accounts[i : i+1])
 		endpoint := baseNetwork.testingNetworkEndpoint(nodeID(i))
 		ilog := log.WithFields(logging.Fields{"Source": "service-" + strconv.Itoa(i)})
 
