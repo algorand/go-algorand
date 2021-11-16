@@ -24,7 +24,6 @@ import (
 )
 
 // KeyStoreBuilder Responsible for generate slice of keys in a specific AlgorithmType.
-// this function trys to optimize this process by using Goroutines.
 func KeyStoreBuilder(numberOfKeys uint64, sigAlgoType crypto.AlgorithmType) ([]crypto.GenericSigningKey, error) {
 	numOfKeysPerRoutine, numOfRoutines := calculateRanges(numberOfKeys)
 
