@@ -290,7 +290,7 @@ gen/%/genesis.dump: gen/%/genesis.json
 	./scripts/dump_genesis.sh $< > $@
 
 gen/%/genesis.json: gen/%.json gen/generate.go buildsrc
-	$(GOPATH1)/bin/genesis -q -n $(shell basename $(shell dirname $@))  -f 0 -l 1500 -c $< -d $(subst .json,,$<)
+	$(GOPATH1)/bin/genesis -q -n $(shell basename $(shell dirname $@)) -c $< -d $(subst .json,,$<)
 
 gen: $(addsuffix gen, $(NETWORKS)) mainnetgen
 
