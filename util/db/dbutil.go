@@ -177,7 +177,7 @@ func Retry(fn func() error) (err error) {
 	return LoggedRetry(fn, logging.Base())
 }
 
-// getDecoratedLogger retruns a decorated logger that includes the readonly true/false, caller and extra fields.
+// getDecoratedLogger returns a decorated logger that includes the readonly true/false, caller and extra fields.
 func (db *Accessor) getDecoratedLogger(fn idemFn, extras ...interface{}) logging.Logger {
 	log := db.logger().With("readonly", db.readOnly)
 	_, file, line, ok := runtime.Caller(3)

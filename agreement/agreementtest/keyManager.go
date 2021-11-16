@@ -21,7 +21,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-// SimpleKeyManager provides a simple implementation of a KeyManager.
+// SimpleKeyManager provides a simple implementation of a KeyManager for unit tests.
 type SimpleKeyManager []account.Participation
 
 // VotingKeys implements KeyManager.VotingKeys.
@@ -37,7 +37,8 @@ func (m SimpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Part
 
 // DeleteOldKeys implements KeyManager.DeleteOldKeys.
 func (m SimpleKeyManager) DeleteOldKeys(r basics.Round) {
-	// for _, acc := range m {
-	// acc.DeleteOldKeys(r)
-	// }
+}
+
+// Record implements KeyManager.Record.
+func (m SimpleKeyManager) Record(account basics.Address, round basics.Round, action account.ParticipationAction) {
 }
