@@ -56,7 +56,7 @@ workflows:
           name: << matrix.platform >>_build
           matrix: &matrix-default
             parameters:
-              platform: [ "amd64", "arm64", "mac_amd64" ]
+              platform: ["amd64", "arm64", "mac_amd64"]
 
       - test:
           name: << matrix.platform >>_test
@@ -144,8 +144,8 @@ workflows:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
           matrix:
             parameters:
-              platform: [ "amd64", "arm64", "mac_amd64" ]
-              job_type: [ "test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly" ]
+              platform: ["amd64", "arm64", "mac_amd64"]
+              job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
 
@@ -475,25 +475,25 @@ commands:
         type: string
         default: << pipeline.parameters.build_dir >>
     steps:
-      - attach_workspace:
-          at: << parameters.build_dir >>
-      - run:
-          name: Upload binaries << parameters.platform >>
-          command: |
-            export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
-            export GOPATH="<< parameters.build_dir >>/go"
-            export NO_BUILD=true
-            export TRAVIS_BRANCH=${CIRCLE_BRANCH}
-            scripts/travis/deploy_packages.sh
-      - when:
-          condition:
-            equal: [ "amd64", << parameters.platform >> ]
-          steps:
-            - run:
-                name: test_release.sh
-                command: |
-                  export TRAVIS_BRANCH=${CIRCLE_BRANCH}
-                  scripts/travis/test_release.sh
+        - attach_workspace:
+            at: << parameters.build_dir >>
+        - run:
+            name: Upload binaries << parameters.platform >>
+            command: |
+              export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
+              export GOPATH="<< parameters.build_dir >>/go"
+              export NO_BUILD=true
+              export TRAVIS_BRANCH=${CIRCLE_BRANCH}
+              scripts/travis/deploy_packages.sh
+        - when:
+            condition:
+              equal: [ "amd64", << parameters.platform >> ]
+            steps:
+              - run:
+                  name: test_release.sh
+                  command: |
+                    export TRAVIS_BRANCH=${CIRCLE_BRANCH}
+                    scripts/travis/test_release.sh
 
 jobs:
   codegen_verification:
