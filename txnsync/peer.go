@@ -397,12 +397,15 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []pooldata.SignedTx
 		return pendingTransactions[i].GroupCounter >= lastTransactionSelectionGroupCounter
 	})
 
+	txnIdxToInclude := make([]bool, len(pendingTransactions))
+	numTxnsToInclude := 0
+
 	selectedIDsSliceLength := len(pendingTransactions) - startIndex
 	if selectedIDsSliceLength > p.lastSelectedTransactionsCount*2 {
 		selectedIDsSliceLength = p.lastSelectedTransactionsCount * 2
 	}
-	selectedTxnIDs = make([]transactions.Txid, 0, selectedIDsSliceLength)
-	selectedTxns = make([]pooldata.SignedTxGroup, 0, selectedIDsSliceLength)
+	//selectedTxnIDs = make([]transactions.Txid, 0, selectedIDsSliceLength)
+	//selectedTxns = make([]pooldata.SignedTxGroup, 0, selectedIDsSliceLength)
 
 	windowSizedReached := accumulatedSize > windowLengthBytes
 	hasMorePendingTransactions := false
@@ -462,14 +465,28 @@ scanLoop:
 				continue scanLoop
 			}
 		}
-		selectedTxns = append(selectedTxns, pendingTransactions[grpIdx])
-		selectedTxnIDs = append(selectedTxnIDs, txID)
+		//selectedTxns = append(selectedTxns, pendingTransactions[grpIdx])
+		//selectedTxnIDs = append(selectedTxnIDs, txID)
+		txnIdxToInclude[grpIdx] = true
+		numTxnsToInclude++
 
 		// add the size of the transaction group
 		accumulatedSize += pendingTransactions[grpIdx].EncodedLength
 
 		if accumulatedSize > windowLengthBytes {
 			windowSizedReached = true
+		}
+	}
+
+	logging.Base().Info("hello")
+
+	selectedTxnIDs = make([]transactions.Txid, 0, numTxnsToInclude)
+	selectedTxns = make([]pooldata.SignedTxGroup, 0, numTxnsToInclude)
+
+	for id, include := range txnIdxToInclude {
+		if include {
+			selectedTxns = append(selectedTxns, pendingTransactions[id])
+			selectedTxnIDs = append(selectedTxnIDs, pendingTransactions[id].GroupTransactionID)
 		}
 	}
 
