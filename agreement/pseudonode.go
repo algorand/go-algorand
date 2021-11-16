@@ -18,6 +18,7 @@ package agreement
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -36,10 +37,11 @@ const (
 	maxPseudonodeOutputWaitDuration = 2 * time.Second
 )
 
-var errPseudonodeBacklogFull = fmt.Errorf("pseudonode input channel is full")
-var errPseudonodeVerifierClosedChannel = fmt.Errorf("crypto verifier closed the output channel prematurely")
-var errPseudonodeNoVotes = fmt.Errorf("no valid participation keys to generate votes for given round")
-var errPseudonodeNoProposals = fmt.Errorf("no valid participation keys to generate proposals for given round")
+var errPseudonodeBacklogFullVote = "pseudonode input channel is full; unable to make vote for (%d, %d, %d)"
+var errPseudonodeBacklogFullProposal = "pseudonode input channel is full; unable to make a proposal for (%d, %d)"
+var errPseudonodeVerifierClosedChannel = errors.New("crypto verifier closed the output channel prematurely")
+var errPseudonodeNoVotes = errors.New("no valid participation keys to generate votes for given round")
+var errPseudonodeNoProposals = errors.New("no valid participation keys to generate proposals for given round")
 
 // A pseudonode creates proposals and votes with a KeyManager which holds participation keys.
 //
@@ -174,7 +176,7 @@ func (n asyncPseudonode) MakeProposals(ctx context.Context, r round, p period) (
 		return proposalTask.outputChannel(), nil
 	default:
 		proposalTask.close()
-		return nil, errPseudonodeBacklogFull
+		return nil, fmt.Errorf(errPseudonodeBacklogFullProposal, r, p)
 	}
 }
 
@@ -191,7 +193,7 @@ func (n asyncPseudonode) MakeVotes(ctx context.Context, r round, p period, s ste
 		return proposalTask.outputChannel(), nil
 	default:
 		proposalTask.close()
-		return nil, errPseudonodeBacklogFull
+		return nil, fmt.Errorf(errPseudonodeBacklogFullVote, r, p, s)
 	}
 }
 
