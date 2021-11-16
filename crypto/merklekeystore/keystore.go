@@ -19,8 +19,8 @@ package merklekeystore
 import (
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/config"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/protocol"
