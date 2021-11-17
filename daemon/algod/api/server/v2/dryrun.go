@@ -383,13 +383,12 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 	}
 
 	response.Txns = make([]generated.DryrunTxnResult, len(dr.Txns))
+	txgroup := transactions.WrapSignedTxnsWithAD(dr.Txns)
+	pse := logic.MakePastSideEffects(len(dr.Txns))
 	for ti, stxn := range dr.Txns {
-		pse := logic.MakePastSideEffects(len(dr.Txns))
-		ep := logic.EvalParams{
-			Txn:                     &stxn,
+		ep := &logic.EvalParams{
 			Proto:                   &proto,
-			TxnGroup:                dr.Txns,
-			GroupIndex:              uint64(ti),
+			TxnGroup:                txgroup,
 			PastSideEffects:         pse,
 			PooledApplicationBudget: &pooledAppBudget,
 			Specials:                &transactions.SpecialAddresses{},
@@ -398,7 +397,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 		if len(stxn.Lsig.Logic) > 0 {
 			var debug dryrunDebugReceiver
 			ep.Debugger = &debug
-			pass, err := logic.Eval(stxn.Lsig.Logic, ep)
+			pass, err := logic.EvalSignature(ti, ep)
 			var messages []string
 			result.Disassembly = debug.lines
 			result.LogicSigTrace = &debug.history
@@ -489,7 +488,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 					program = app.ApprovalProgram
 					messages[0] = "ApprovalProgram"
 				}
-				pass, delta, err := ba.StatefulEval(ep, appIdx, program)
+				pass, delta, err := ba.StatefulEval(ti, ep, appIdx, program)
 				result.Disassembly = debug.lines
 				result.AppCallTrace = &debug.history
 				result.GlobalDelta = StateDeltaToStateDelta(delta.GlobalDelta)

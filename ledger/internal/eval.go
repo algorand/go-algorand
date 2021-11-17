@@ -743,7 +743,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	var groupTxBytes int
 
 	cow := eval.state.child(len(txgroup))
-	evalParams := logic.NewEvalParams(txgroup, &eval.proto, &eval.specials, nil)
+	evalParams := logic.NewAppEvalParams(txgroup, &eval.proto, &eval.specials, nil)
 
 	// Evaluate each transaction in the group
 	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
@@ -751,7 +751,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		var txib transactions.SignedTxnInBlock
 
 		cow.setGroupIdx(gi)
-		err := eval.transaction(txad.SignedTxn, evalParams[gi], txad.ApplyData, cow, &txib)
+		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, &txib)
 		if err != nil {
 			return err
 		}
@@ -842,7 +842,7 @@ func (eval *BlockEvaluator) checkMinBalance(cow *roundCowState) error {
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *logic.EvalParams, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *logic.EvalParams, gi int, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
 
 	// Only compute the TxID once
@@ -876,7 +876,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	}
 
 	// Apply the transaction, updating the cow balances
-	applyData, err := eval.applyTransaction(txn.Txn, cow, evalParams, cow.txnCounter())
+	applyData, err := eval.applyTransaction(txn.Txn, cow, evalParams, gi, cow.txnCounter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txid, err)
 	}
@@ -920,7 +920,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 }
 
 // applyTransaction changes the balances according to this transaction.
-func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balances *roundCowState, evalParams *logic.EvalParams, ctr uint64) (ad transactions.ApplyData, err error) {
+func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balances *roundCowState, evalParams *logic.EvalParams, gi int, ctr uint64) (ad transactions.ApplyData, err error) {
 	params := balances.ConsensusParams()
 
 	// move fee to pool
@@ -951,7 +951,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		err = apply.AssetFreeze(tx.AssetFreezeTxnFields, tx.Header, balances, eval.specials, &ad)
 
 	case protocol.ApplicationCallTx:
-		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, balances, &ad, evalParams, ctr)
+		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, balances, &ad, gi, evalParams, ctr)
 
 	case protocol.CompactCertTx:
 		// in case of a CompactCertTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's CompactCertNext depending of

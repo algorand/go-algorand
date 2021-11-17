@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -63,26 +64,22 @@ func TestGlobalFieldsVersions(t *testing.T) {
 		if preLogicVersion < appsEnabledVersion {
 			require.False(t, proto.Application)
 		}
-		ep := defaultEvalParams(nil, nil)
+		ep := defaultEvalParams(nil)
 		ep.Proto = &proto
 		ep.Ledger = ledger
 
 		// check failure with version check
-		_, err := Eval(ops.Program, ep)
+		_, err := EvalApp(ops.Program, 0, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "greater than protocol supported version")
 
 		// check opcodes failures
 		ops.Program[0] = byte(preLogicVersion) // set version
-		_, err = Eval(ops.Program, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid global field")
+		testLogicBytes(t, ops.Program, ep, "invalid global field")
 
 		// check opcodes failures on 0 version
 		ops.Program[0] = 0 // set version to 0
-		_, err = Eval(ops.Program, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid global field")
+		testLogicBytes(t, ops.Program, ep, "invalid global field")
 	}
 }
 
@@ -145,43 +142,42 @@ func TestTxnFieldVersions(t *testing.T) {
 			if preLogicVersion < appsEnabledVersion {
 				require.False(t, proto.Application)
 			}
-			ep := defaultEvalParams(nil, nil)
+			ep := defaultEvalParams(nil)
 			ep.Proto = &proto
 			ep.Ledger = ledger
-			ep.TxnGroup = txgroup
+			ep.TxnGroup = transactions.WrapSignedTxnsWithAD(txgroup)
 
 			// check failure with version check
-			_, err := Eval(ops.Program, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "greater than protocol supported version")
+			testLogicBytes(t, ops.Program, ep,
+				"greater than protocol supported version", "greater than protocol supported version")
 
 			// check opcodes failures
 			ops.Program[0] = byte(preLogicVersion) // set version
-			_, err = Eval(ops.Program, ep)
-			require.Error(t, err)
+			checkErr := ""
+			evalErr := "invalid txn field"
 			if txnaMode && preLogicVersion < txnaVersion {
-				require.Contains(t, err.Error(), "illegal opcode")
-			} else {
-				require.Contains(t, err.Error(), "invalid txn field")
+				checkErr = "illegal opcode"
+				evalErr = "illegal opcode"
 			}
+			testLogicBytes(t, ops.Program, ep, checkErr, evalErr)
 
 			// check opcodes failures on 0 version
 			ops.Program[0] = 0 // set version to 0
-			_, err = Eval(ops.Program, ep)
-			require.Error(t, err)
+			checkErr = ""
+			evalErr = "invalid txn field"
 			if txnaMode {
-				require.Contains(t, err.Error(), "illegal opcode")
-			} else {
-				require.Contains(t, err.Error(), "invalid txn field")
+				checkErr = "illegal opcode"
+				evalErr = "illegal opcode"
 			}
+			testLogicBytes(t, ops.Program, ep, checkErr, evalErr)
 		}
 	}
 }
 
-// TestTxnEffects ensures that LogicSigs can not use "effects" fields
+// TestTxnEffectsAvailable ensures that LogicSigs can not use "effects" fields
 // (ever). And apps can only use effects fields with `txn` after
 // txnEffectsVersion. (itxn could use them earlier)
-func TestTxnEffects(t *testing.T) {
+func TestTxnEffectsAvailable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
@@ -195,15 +191,19 @@ func TestTxnEffects(t *testing.T) {
 		}
 		for v := fs.version; v <= AssemblerMaxVersion; v++ {
 			ops := testProg(t, source, v)
-			ep := defaultEvalParams(nil, nil)
-			_, err := Eval(ops.Program, ep)
+			ep := defaultEvalParams(nil)
+			ep.TxnGroup[0].Lsig.Logic = ops.Program
+			_, err := EvalSignature(0, ep)
 			require.Error(t, err)
-			_, err = EvalStateful(ops.Program, ep)
+			ep.Ledger = MakeLedger(nil)
+			_, err = EvalApp(ops.Program, 0, ep)
 			if v < txnEffectsVersion {
 				require.Error(t, err)
 			} else {
-				// This should be done as part of teal 6.
-				// require.NoError(t, err)
+				if fs.array {
+					continue // Array (Logs) will be 0 length, so will fail anyway
+				}
+				require.NoError(t, err)
 			}
 		}
 	}
@@ -227,19 +227,13 @@ func TestAssetParamsFieldsVersions(t *testing.T) {
 		text := fmt.Sprintf("intcblock 0 1; intc_0; asset_params_get %s; pop; pop; intc_1", field.field.String())
 		// check assembler fails if version before introduction
 		for v := uint64(2); v <= AssemblerMaxVersion; v++ {
-			ep, _ := makeSampleEnv()
+			ep, _, _ := makeSampleEnv()
 			ep.Proto.LogicSigVersion = v
 			if field.version > v {
 				testProg(t, text, v, expect{3, "...available in version..."})
 				ops := testProg(t, text, field.version) // assemble in the future
-				scratch := ops.Program
-				scratch[0] = byte(v) // but we'll tweak the version byte back to v
-				err := CheckStateful(scratch, ep)
-				require.NoError(t, err)
-				pass, err := EvalStateful(scratch, ep) // so eval fails on future field
-				require.False(t, pass)
-				require.Error(t, err)
-				require.Contains(t, err.Error(), "invalid asset_params_get field")
+				ops.Program[0] = byte(v)
+				testAppBytes(t, ops.Program, ep, "invalid asset_params_get field")
 			} else {
 				testProg(t, text, v)
 				testApp(t, text, ep)

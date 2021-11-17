@@ -186,11 +186,11 @@ func (tx Transaction) ID() Txid {
 
 // InnerID returns something akin to Txid, but folds in the parent Txid and the
 // index of the inner call.
-func (tx Transaction) InnerID(parent Txid, index uint64) Txid {
+func (tx Transaction) InnerID(parent Txid, index int) Txid {
 	input := append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...)
 	input = append(input, parent[:]...)
 	buf := make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, index)
+	binary.BigEndian.PutUint64(buf, uint64(index))
 	input = append(input, buf...)
 	enc := tx.MarshalMsg(input)
 	defer protocol.PutEncodingBuf(enc)

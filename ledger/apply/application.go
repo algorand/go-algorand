@@ -297,13 +297,13 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 	return nil
 }
 
-func checkPrograms(ac *transactions.ApplicationCallTxnFields, evalParams *logic.EvalParams) error {
-	err := logic.CheckStateful(ac.ApprovalProgram, *evalParams)
+func checkPrograms(ac *transactions.ApplicationCallTxnFields, gi int, evalParams *logic.EvalParams) error {
+	err := logic.CheckContract(ac.ApprovalProgram, gi, evalParams)
 	if err != nil {
 		return fmt.Errorf("check failed on ApprovalProgram: %v", err)
 	}
 
-	err = logic.CheckStateful(ac.ClearStateProgram, *evalParams)
+	err = logic.CheckContract(ac.ClearStateProgram, gi, evalParams)
 	if err != nil {
 		return fmt.Errorf("check failed on ClearStateProgram: %v", err)
 	}
@@ -312,7 +312,7 @@ func checkPrograms(ac *transactions.ApplicationCallTxnFields, evalParams *logic.
 }
 
 // ApplicationCall evaluates ApplicationCall transaction
-func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactions.Header, balances Balances, ad *transactions.ApplyData, evalParams *logic.EvalParams, txnCounter uint64) (err error) {
+func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactions.Header, balances Balances, ad *transactions.ApplyData, gi int, evalParams *logic.EvalParams, txnCounter uint64) (err error) {
 	defer func() {
 		// If we are returning a non-nil error, then don't return a
 		// non-empty EvalDelta. Not required for correctness.
@@ -364,7 +364,7 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 	// If this txn is going to set new programs (either for creation or
 	// update), check that the programs are valid and not too expensive
 	if ac.ApplicationID == 0 || ac.OnCompletion == transactions.UpdateApplicationOC {
-		err = checkPrograms(&ac, evalParams)
+		err = checkPrograms(&ac, gi, evalParams)
 		if err != nil {
 			return err
 		}
@@ -386,7 +386,7 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 
 		// If the app still exists, run the ClearStateProgram
 		if exists {
-			pass, evalDelta, err := balances.StatefulEval(*evalParams, appIdx, params.ClearStateProgram)
+			pass, evalDelta, err := balances.StatefulEval(gi, evalParams, appIdx, params.ClearStateProgram)
 			if err != nil {
 				// Fail on non-logic eval errors and ignore LogicEvalError errors
 				if _, ok := err.(ledgercore.LogicEvalError); !ok {
@@ -418,7 +418,7 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 	}
 
 	// Execute the Approval program
-	approved, evalDelta, err := balances.StatefulEval(*evalParams, appIdx, params.ApprovalProgram)
+	approved, evalDelta, err := balances.StatefulEval(gi, evalParams, appIdx, params.ApprovalProgram)
 	if err != nil {
 		return err
 	}

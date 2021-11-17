@@ -479,7 +479,7 @@ func TestCdtSessionGetObjects(t *testing.T) {
 	state := cdtState{
 		disassembly: "version 2\nint 1",
 		proto:       &proto,
-		txnGroup: []transactions.SignedTxn{
+		txnGroup: transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{
 			{
 				Txn: transactions.Transaction{
 					Type: protocol.PaymentTx,
@@ -496,7 +496,7 @@ func TestCdtSessionGetObjects(t *testing.T) {
 					},
 				},
 			},
-		},
+		}),
 		groupIndex: 0,
 		globals:    globals,
 		stack:      []basics.TealValue{{Type: basics.TealBytesType, Bytes: "test"}},

@@ -248,14 +248,6 @@ type OpStream struct {
 	HasStatefulOps bool
 }
 
-// GetVersion returns the LogicSigVersion we're building to
-func (ops *OpStream) GetVersion() uint64 {
-	if ops.Version == 0 {
-		ops.Version = AssemblerDefaultVersion
-	}
-	return ops.Version
-}
-
 // createLabel inserts a label reference to point to the next
 // instruction, reporting an error for a duplicate.
 func (ops *OpStream) createLabel(label string) {
@@ -1699,7 +1691,7 @@ func (ops *OpStream) pragma(line string) error {
 		if err != nil {
 			return ops.errorf("bad #pragma version: %#v", value)
 		}
-		if ver < 1 || ver > AssemblerMaxVersion {
+		if ver > AssemblerMaxVersion {
 			return ops.errorf("unsupported version: %d", ver)
 		}
 
@@ -2004,7 +1996,7 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 func (ops *OpStream) prependCBlocks() []byte {
 	var scratch [binary.MaxVarintLen64]byte
 	prebytes := bytes.Buffer{}
-	vlen := binary.PutUvarint(scratch[:], ops.GetVersion())
+	vlen := binary.PutUvarint(scratch[:], ops.Version)
 	prebytes.Write(scratch[:vlen])
 	if len(ops.intc) > 0 && !ops.hasIntcBlock {
 		prebytes.WriteByte(0x20) // intcblock
@@ -2195,7 +2187,7 @@ func parseIntcblock(program []byte, pc int) (intc []uint64, nextpc int, err erro
 	pos := pc + 1
 	numInts, bytesUsed := binary.Uvarint(program[pos:])
 	if bytesUsed <= 0 {
-		err = fmt.Errorf("could not decode int const block size at pc=%d", pos)
+		err = fmt.Errorf("could not decode intcblock size at pc=%d", pos)
 		return
 	}
 	pos += bytesUsed
@@ -2224,7 +2216,7 @@ func checkIntConstBlock(cx *EvalContext) error {
 	pos := cx.pc + 1
 	numInts, bytesUsed := binary.Uvarint(cx.program[pos:])
 	if bytesUsed <= 0 {
-		return fmt.Errorf("could not decode int const block size at pc=%d", pos)
+		return fmt.Errorf("could not decode intcblock size at pc=%d", pos)
 	}
 	pos += bytesUsed
 	if numInts > uint64(len(cx.program)) {
@@ -2252,7 +2244,7 @@ func parseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err er
 	pos := pc + 1
 	numItems, bytesUsed := binary.Uvarint(program[pos:])
 	if bytesUsed <= 0 {
-		err = fmt.Errorf("could not decode []byte const block size at pc=%d", pos)
+		err = fmt.Errorf("could not decode bytecblock size at pc=%d", pos)
 		return
 	}
 	pos += bytesUsed
@@ -2292,7 +2284,7 @@ func checkByteConstBlock(cx *EvalContext) error {
 	pos := cx.pc + 1
 	numItems, bytesUsed := binary.Uvarint(cx.program[pos:])
 	if bytesUsed <= 0 {
-		return fmt.Errorf("could not decode []byte const block size at pc=%d", pos)
+		return fmt.Errorf("could not decode bytecblock size at pc=%d", pos)
 	}
 	pos += bytesUsed
 	if numItems > uint64(len(cx.program)) {

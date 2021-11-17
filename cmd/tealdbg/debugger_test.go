@@ -100,10 +100,10 @@ func TestDebuggerSimple(t *testing.T) {
 	da := makeTestDbgAdapter(t)
 	debugger.AddAdapter(da)
 
-	ep := logic.EvalParams{
+	ep := &logic.EvalParams{
 		Proto:    &proto,
 		Debugger: debugger,
-		Txn:      &transactions.SignedTxn{},
+		TxnGroup: make([]transactions.SignedTxnWithAD, 1),
 	}
 
 	source := `int 0
@@ -112,8 +112,9 @@ int 1
 `
 	ops, err := logic.AssembleStringWithVersion(source, 1)
 	require.NoError(t, err)
+	ep.TxnGroup[0].Lsig.Logic = ops.Program
 
-	_, err = logic.Eval(ops.Program, ep)
+	_, err = logic.EvalSignature(0, ep)
 	require.NoError(t, err)
 
 	da.WaitForCompletion()

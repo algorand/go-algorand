@@ -471,9 +471,10 @@ func MakeDebugBalances(l LedgerForCowBase, round basics.Round, proto protocol.Co
 	return cb
 }
 
-// StatefulEval runs application.
-// Execution happens in a child cow and all modifications are merged into parent if the program passes
-func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (pass bool, evalDelta transactions.EvalDelta, err error) {
+// StatefulEval runs application.  Execution happens in a child cow and all
+// modifications are merged into parent and the ApplyData in params[gi] is
+// filled if the program passes.
+func (cb *roundCowState) StatefulEval(gi int, params *logic.EvalParams, aidx basics.AppIndex, program []byte) (pass bool, evalDelta transactions.EvalDelta, err error) {
 	// Make a child cow to eval our program in
 	calf := cb.child(1)
 	params.Ledger, err = newLogicLedger(calf, aidx)
@@ -482,7 +483,7 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 	}
 
 	// Eval the program
-	pass, cx, err := logic.EvalStatefulCx(program, params)
+	pass, cx, err := logic.EvalContract(program, gi, params)
 	if err != nil {
 		var details string
 		if cx != nil {
@@ -501,14 +502,14 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 		// changes from this app and any inner called apps. Instead, we now keep
 		// the EvalDelta built as we go, in app evaluation.  So just use it.
 		if cb.proto.LogicSigVersion < 6 {
-			evalDelta, err = calf.BuildEvalDelta(aidx, &params.Txn.Txn)
+			evalDelta, err = calf.BuildEvalDelta(aidx, &params.TxnGroup[gi].Txn)
 			if err != nil {
 				return false, transactions.EvalDelta{}, err
 			}
-			evalDelta.Logs = cx.EvalDelta.Logs
-			evalDelta.InnerTxns = cx.EvalDelta.InnerTxns
+			evalDelta.Logs = params.TxnGroup[gi].EvalDelta.Logs
+			evalDelta.InnerTxns = params.TxnGroup[gi].EvalDelta.InnerTxns
 		} else {
-			evalDelta = cx.EvalDelta
+			evalDelta = params.TxnGroup[gi].EvalDelta
 		}
 		calf.commitToParent()
 	}

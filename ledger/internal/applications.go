@@ -248,10 +248,6 @@ func (al *logicLedger) DelGlobal(key string) error {
 	return al.cow.DelKey(al.creator, al.aidx, true, key, 0)
 }
 
-func (al *logicLedger) GetDelta(txn *transactions.Transaction) (evalDelta transactions.EvalDelta, err error) {
-	return al.cow.BuildEvalDelta(al.aidx, txn)
-}
-
 func (al *logicLedger) balances() (apply.Balances, error) {
 	balances, ok := al.cow.(apply.Balances)
 	if !ok {
@@ -260,7 +256,7 @@ func (al *logicLedger) balances() (apply.Balances, error) {
 	return balances, nil
 }
 
-func (al *logicLedger) Perform(tx *transactions.SignedTxnWithAD, ep *logic.EvalParams) error {
+func (al *logicLedger) Perform(tx *transactions.SignedTxnWithAD, gi int, ep *logic.EvalParams) error {
 	balances, err := al.balances()
 	if err != nil {
 		return err
@@ -308,7 +304,7 @@ func (al *logicLedger) Perform(tx *transactions.SignedTxnWithAD, ep *logic.EvalP
 
 	case protocol.ApplicationCallTx:
 		err = apply.ApplicationCall(tx.Txn.ApplicationCallTxnFields, tx.Txn.Header, balances, &tx.ApplyData,
-			ep, al.cow.txnCounter())
+			gi, ep, al.cow.txnCounter())
 
 	default:
 		err = fmt.Errorf("%s tx in AVM", tx.Txn.Type)

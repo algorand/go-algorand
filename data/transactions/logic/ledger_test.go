@@ -501,30 +501,6 @@ func (l *Ledger) CreatorAddress() basics.Address {
 	return addr
 }
 
-// GetDelta translates the mods set by AVM execution into the standard
-// format of an EvalDelta.
-func (l *Ledger) GetDelta(txn *transactions.Transaction) (evalDelta transactions.EvalDelta, err error) {
-	if tkv, ok := l.mods[l.appID]; ok {
-		evalDelta.GlobalDelta = tkv
-	}
-	if len(txn.Accounts) > 0 {
-		accounts := make(map[basics.Address]int)
-		accounts[txn.Sender] = 0
-		for idx, addr := range txn.Accounts {
-			accounts[addr] = idx + 1
-		}
-		evalDelta.LocalDeltas = make(map[uint64]basics.StateDelta)
-		for addr, br := range l.balances {
-			if idx, ok := accounts[addr]; ok {
-				if delta, ok := br.mods[l.appID]; ok {
-					evalDelta.LocalDeltas[uint64(idx)] = delta
-				}
-			}
-		}
-	}
-	return
-}
-
 func (l *Ledger) move(from basics.Address, to basics.Address, amount uint64) error {
 	fbr, ok := l.balances[from]
 	if !ok {
@@ -701,7 +677,7 @@ func (l *Ledger) afrz(from basics.Address, frz transactions.AssetFreezeTxnFields
 	return nil
 }
 
-func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnFields, ad *transactions.ApplyData, ep *EvalParams) error {
+func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnFields, ad *transactions.ApplyData, gi int, ep *EvalParams) error {
 	// This is just a mock.  We don't run it yet, but we always do the implied
 	// operation (create, update, delete).
 	aid := appl.ApplicationID
@@ -742,16 +718,14 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 	if !ok {
 		return errors.New("No application")
 	}
-	epl := *ep
-	epl.Ledger = l
-	pass, cx, err := EvalStatefulCx(params.ApprovalProgram, epl)
+	pass, cx, err := EvalContract(params.ApprovalProgram, gi, ep)
 	if err != nil {
 		return err
 	}
 	if !pass {
 		return errors.New("Approval program failed")
 	}
-	ad.EvalDelta = cx.EvalDelta
+	ad.EvalDelta = cx.Txn.EvalDelta
 
 	switch appl.OnCompletion {
 	case transactions.NoOpOC:
@@ -788,7 +762,7 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 }
 
 // Perform causes txn to "occur" against the ledger.
-func (l *Ledger) Perform(txn *transactions.SignedTxnWithAD, ep *EvalParams) error {
+func (l *Ledger) Perform(txn *transactions.SignedTxnWithAD, gi int, ep *EvalParams) error {
 	err := l.move(txn.Txn.Sender, ep.Specials.FeeSink, txn.Txn.Fee.Raw)
 	if err != nil {
 		return err
@@ -809,7 +783,7 @@ func (l *Ledger) Perform(txn *transactions.SignedTxnWithAD, ep *EvalParams) erro
 	case protocol.AssetFreezeTx:
 		return l.afrz(txn.Txn.Sender, txn.Txn.AssetFreezeTxnFields)
 	case protocol.ApplicationCallTx:
-		return l.appl(txn.Txn.Sender, txn.Txn.ApplicationCallTxnFields, &txn.ApplyData, ep)
+		return l.appl(txn.Txn.Sender, txn.Txn.ApplicationCallTxnFields, &txn.ApplyData, gi, ep)
 	default:
 		return fmt.Errorf("%s txn in AVM", txn.Txn.Type)
 	}

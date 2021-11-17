@@ -218,12 +218,13 @@ type evaluation struct {
 	states          AppState
 }
 
-func (e *evaluation) eval(ep logic.EvalParams) (pass bool, err error) {
+func (e *evaluation) eval(gi int, ep *logic.EvalParams) (pass bool, err error) {
 	if e.mode == modeStateful {
-		pass, _, err = e.ba.StatefulEval(ep, e.aidx, e.program)
+		pass, _, err = e.ba.StatefulEval(gi, ep, e.aidx, e.program)
 		return
 	}
-	return logic.Eval(e.program, ep)
+	ep.TxnGroup[gi].Lsig.Logic = e.program
+	return logic.EvalSignature(gi, ep)
 }
 
 // LocalRunner runs local eval
@@ -522,47 +523,48 @@ func (r *LocalRunner) RunAll() error {
 		return fmt.Errorf("no program to debug")
 	}
 
+	txngroup := transactions.WrapSignedTxnsWithAD(r.txnGroup)
 	failed := 0
 	start := time.Now()
 	pooledApplicationBudget := uint64(0)
-	credit, _ := transactions.FeeCredit(r.txnGroup, r.proto.MinTxnFee)
+	credit, _ := transactions.FeeCredit(txngroup, r.proto.MinTxnFee)
 	// ignore error since fees are not important for debugging in most cases
 
-	evalParams := make([]logic.EvalParams, len(r.runs))
-	for i, run := range r.runs {
+	var pastSideEffects []logic.EvalSideEffects
+	for _, run := range r.runs {
 		if run.mode == modeStateful {
 			if r.proto.EnableAppCostPooling {
 				pooledApplicationBudget += uint64(r.proto.MaxAppProgramCost)
 			} else {
 				pooledApplicationBudget = uint64(r.proto.MaxAppProgramCost)
 			}
+			pastSideEffects = run.pastSideEffects
 		}
-		ep := logic.EvalParams{
-			Proto:                   &r.proto,
-			Debugger:                r.debugger,
-			Txn:                     &r.txnGroup[run.groupIndex],
-			TxnGroup:                r.txnGroup,
-			GroupIndex:              run.groupIndex,
-			PastSideEffects:         run.pastSideEffects,
-			Specials:                &transactions.SpecialAddresses{},
-			FeeCredit:               &credit,
-			PooledApplicationBudget: &pooledApplicationBudget,
-		}
-		evalParams[i] = ep
+	}
+	ep := &logic.EvalParams{
+		Proto:                   &r.proto,
+		Debugger:                r.debugger,
+		TxnGroup:                txngroup,
+		PastSideEffects:         pastSideEffects,
+		Specials:                &transactions.SpecialAddresses{},
+		FeeCredit:               &credit,
+		PooledApplicationBudget: &pooledApplicationBudget,
 	}
 
+	var last error
 	for i := range r.runs {
 		run := &r.runs[i]
 		r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToLine, run.states)
 
-		run.result.pass, run.result.err = run.eval(evalParams[i])
+		run.result.pass, run.result.err = run.eval(int(run.groupIndex), ep)
 		if run.result.err != nil {
 			failed++
+			last = run.result.err
 		}
 	}
 	elapsed := time.Since(start)
 	if failed == len(r.runs) && elapsed < time.Second {
-		return fmt.Errorf("all %d program(s) failed in less than a second, invocation error?", failed)
+		return fmt.Errorf("all %d program(s) failed in less than a second, invocation error? %w", failed, last)
 	}
 	return nil
 }
@@ -573,12 +575,12 @@ func (r *LocalRunner) Run() (bool, error) {
 		return false, fmt.Errorf("no program to debug")
 	}
 
+	txngroup := transactions.WrapSignedTxnsWithAD(r.txnGroup)
 	pooledApplicationBudget := uint64(0)
-	credit, _ := transactions.FeeCredit(r.txnGroup, r.proto.MinTxnFee)
+	credit, _ := transactions.FeeCredit(txngroup, r.proto.MinTxnFee)
 	// ignore error since fees are not important for debugging in most cases
 
-	evalParams := make([]logic.EvalParams, len(r.runs))
-	for i, run := range r.runs {
+	for _, run := range r.runs {
 		if run.mode == modeStateful {
 			if r.proto.EnableAppCostPooling {
 				pooledApplicationBudget += uint64(r.proto.MaxAppProgramCost)
@@ -586,31 +588,25 @@ func (r *LocalRunner) Run() (bool, error) {
 				pooledApplicationBudget = uint64(r.proto.MaxAppProgramCost)
 			}
 		}
-		ep := logic.EvalParams{
-			Proto:                   &r.proto,
-			Txn:                     &r.txnGroup[run.groupIndex],
-			TxnGroup:                r.txnGroup,
-			GroupIndex:              run.groupIndex,
-			PastSideEffects:         run.pastSideEffects,
-			Specials:                &transactions.SpecialAddresses{},
-			FeeCredit:               &credit,
-			PooledApplicationBudget: &pooledApplicationBudget,
-		}
-
-		// Workaround for Go's nil/empty interfaces nil check after nil assignment, i.e.
-		// r.debugger = nil
-		// ep.Debugger = r.debugger
-		// if ep.Debugger != nil // FALSE
-		if r.debugger != nil {
-			r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToLine, run.states)
-			ep.Debugger = r.debugger
-		}
-
-		evalParams[i] = ep
+	}
+	ep := &logic.EvalParams{
+		Proto:                   &r.proto,
+		TxnGroup:                txngroup,
+		PastSideEffects:         r.runs[0].pastSideEffects, // Looks strange, but all runs have same pastSideEffects
+		Specials:                &transactions.SpecialAddresses{},
+		FeeCredit:               &credit,
+		PooledApplicationBudget: &pooledApplicationBudget,
 	}
 
 	run := r.runs[0]
-	ep := evalParams[0]
+	// Workaround for Go's nil/empty interfaces nil check after nil assignment, i.e.
+	// r.debugger = nil
+	// ep.Debugger = r.debugger
+	// if ep.Debugger != nil // FALSE
+	if r.debugger != nil {
+		r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToLine, run.states)
+		ep.Debugger = r.debugger
+	}
 
-	return run.eval(ep)
+	return run.eval(int(run.groupIndex), ep)
 }

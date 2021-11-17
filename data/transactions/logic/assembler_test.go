@@ -2037,8 +2037,8 @@ func TestPragmas(t *testing.T) {
 
 	testProg(t, `int 1`, 99, expect{0, "Can not assemble version 99"})
 
-	testProg(t, `#pragma version 0`, assemblerNoVersion,
-		expect{1, "unsupported version: 0"})
+	// Allow this on the off chance someone needs to reassemble an old logigsig
+	testProg(t, `#pragma version 0`, assemblerNoVersion)
 
 	testProg(t, `#pragma version a`, assemblerNoVersion,
 		expect{1, `bad #pragma version: "a"`})

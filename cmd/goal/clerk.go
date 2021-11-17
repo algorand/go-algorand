@@ -1055,10 +1055,7 @@ var dryrunCmd = &cobra.Command{
 			}
 			stxns = append(stxns, txn)
 		}
-		txgroup := make([]transactions.SignedTxn, len(stxns))
-		for i, st := range stxns {
-			txgroup[i] = st
-		}
+		txgroup := transactions.WrapSignedTxnsWithAD(stxns)
 		proto, params := getProto(protoVersion)
 		if dumpForDryrun {
 			// Write dryrun data to file
@@ -1068,7 +1065,7 @@ var dryrunCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf(err.Error())
 			}
-			data, err := libgoal.MakeDryrunStateBytes(client, nil, txgroup, accts, string(proto), dumpForDryrunFormat.String())
+			data, err := libgoal.MakeDryrunStateBytes(client, nil, stxns, accts, string(proto), dumpForDryrunFormat.String())
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -1086,22 +1083,15 @@ var dryrunCmd = &cobra.Command{
 			if uint64(txn.Lsig.Len()) > params.LogicSigMaxSize {
 				reportErrorf("program size too large: %d > %d", len(txn.Lsig.Logic), params.LogicSigMaxSize)
 			}
-			ep := logic.EvalParams{Txn: &txn, Proto: &params, GroupIndex: uint64(i), TxnGroup: txgroup}
-			err := logic.Check(txn.Lsig.Logic, ep)
+			ep := &logic.EvalParams{Proto: &params, TxnGroup: txgroup}
+			err := logic.CheckSignature(i, ep)
 			if err != nil {
 				reportErrorf("program failed Check: %s", err)
 			}
-			sb := strings.Builder{}
-			ep = logic.EvalParams{
-				Txn:        &txn,
-				GroupIndex: uint64(i),
-				Proto:      &params,
-				Trace:      &sb,
-				TxnGroup:   txgroup,
-			}
-			pass, err := logic.Eval(txn.Lsig.Logic, ep)
+			ep.Trace = &strings.Builder{}
+			pass, err := logic.EvalSignature(i, ep)
 			// TODO: optionally include `inspect` output here?
-			fmt.Fprintf(os.Stdout, "tx[%d] trace:\n%s\n", i, sb.String())
+			fmt.Fprintf(os.Stdout, "tx[%d] trace:\n%s\n", i, ep.Trace.String())
 			if pass {
 				fmt.Fprintf(os.Stdout, " - pass -\n")
 			} else {

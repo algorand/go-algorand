@@ -624,7 +624,7 @@ func TestRunMode(t *testing.T) {
 	a.Equal(modeStateful, l.runs[0].mode)
 	a.Equal(basics.AppIndex(100), l.runs[0].aidx)
 	a.NotEqual(
-		reflect.ValueOf(logic.Eval).Pointer(),
+		reflect.ValueOf(logic.EvalSignature).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
 	)
 
@@ -959,7 +959,7 @@ func TestLocalBalanceAdapter(t *testing.T) {
 	a.Equal(modeStateful, l.runs[0].mode)
 	a.NotEmpty(l.runs[0].aidx)
 	a.NotEqual(
-		reflect.ValueOf(logic.Eval).Pointer(),
+		reflect.ValueOf(logic.EvalSignature).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
 	)
 	ba := l.runs[0].ba
@@ -1050,7 +1050,7 @@ func TestLocalBalanceAdapterIndexer(t *testing.T) {
 	a.Equal(modeStateful, l.runs[0].mode)
 	a.NotEmpty(l.runs[0].aidx)
 	a.NotEqual(
-		reflect.ValueOf(logic.Eval).Pointer(),
+		reflect.ValueOf(logic.EvalSignature).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
 	)
 

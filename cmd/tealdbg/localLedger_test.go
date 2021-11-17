@@ -109,22 +109,19 @@ int 2
 	a.NoError(err)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	pse := logic.MakePastSideEffects(1)
-	ep := logic.EvalParams{
-		Txn:             &txn,
+	ep := &logic.EvalParams{
 		Proto:           &proto,
-		TxnGroup:        []transactions.SignedTxn{txn},
-		GroupIndex:      0,
-		PastSideEffects: pse,
+		TxnGroup:        []transactions.SignedTxnWithAD{transactions.SignedTxnWithAD{SignedTxn: txn}},
+		PastSideEffects: logic.MakePastSideEffects(1),
 	}
-	pass, delta, err := ba.StatefulEval(ep, appIdx, program)
+	pass, delta, err := ba.StatefulEval(0, ep, appIdx, program)
 	a.NoError(err)
 	a.True(pass)
-	a.Equal(1, len(delta.GlobalDelta))
+	a.Len(delta.GlobalDelta, 1)
 	a.Equal(basics.SetUintAction, delta.GlobalDelta["gkeyint"].Action)
 	a.Equal(uint64(3), delta.GlobalDelta["gkeyint"].Uint)
-	a.Equal(1, len(delta.LocalDeltas))
-	a.Equal(1, len(delta.LocalDeltas[0]))
+	a.Len(delta.LocalDeltas, 1)
+	a.Len(delta.LocalDeltas[0], 1)
 	a.Equal(basics.SetUintAction, delta.LocalDeltas[0]["lkeyint"].Action)
 	a.Equal(uint64(2), delta.LocalDeltas[0]["lkeyint"].Uint)
 }

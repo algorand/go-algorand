@@ -58,7 +58,7 @@ bytec_2
 !=
 bytec_3
 bytec 4
-==
+!=
 &&
 &&
 `
@@ -68,27 +68,20 @@ func TestWebDebuggerManual(t *testing.T) {
 
 	debugURL := os.Getenv("TEAL_DEBUGGER_URL")
 	if len(debugURL) == 0 {
-		return
+		t.Skip("this must be run manually")
 	}
 
-	txn := makeSampleTxn()
-	txgroup := makeSampleTxnGroup(txn)
-	txn.Lsig.Args = [][]byte{
-		txn.Txn.Sender[:],
-		txn.Txn.Receiver[:],
-		txn.Txn.CloseRemainderTo[:],
-		txn.Txn.VotePK[:],
-		txn.Txn.SelectionPK[:],
-		txn.Txn.Note,
+	ep, tx, _ := makeSampleEnv()
+	ep.TxnGroup[0].Lsig.Args = [][]byte{
+		tx.Sender[:],
+		tx.Receiver[:],
+		tx.CloseRemainderTo[:],
+		tx.VotePK[:],
+		tx.SelectionPK[:],
+		tx.Note,
 	}
-
-	ops, err := AssembleString(testProgram)
-	require.NoError(t, err)
-	ep := defaultEvalParams(nil, &txn)
-	ep.TxnGroup = txgroup
 	ep.Debugger = &WebDebuggerHook{URL: debugURL}
-	_, err = Eval(ops.Program, ep)
-	require.NoError(t, err)
+	testLogic(t, testProgram, AssemblerMaxVersion, ep)
 }
 
 type testDbgHook struct {
@@ -120,17 +113,14 @@ func TestDebuggerHook(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	testDbg := testDbgHook{}
-	ops, err := AssembleString(testProgram)
-	require.NoError(t, err)
-	ep := defaultEvalParams(nil, nil)
+	ep := defaultEvalParams(nil)
 	ep.Debugger = &testDbg
-	_, err = Eval(ops.Program, ep)
-	require.NoError(t, err)
+	testLogic(t, testProgram, AssemblerMaxVersion, ep)
 
 	require.Equal(t, 1, testDbg.register)
 	require.Equal(t, 1, testDbg.complete)
 	require.Greater(t, testDbg.update, 1)
-	require.Equal(t, 1, len(testDbg.state.Stack))
+	require.Len(t, testDbg.state.Stack, 1)
 }
 
 func TestLineToPC(t *testing.T) {

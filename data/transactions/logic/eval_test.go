@@ -25,6 +25,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -96,44 +97,49 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 	}
 }
 
-func defaultEvalParamsV1(sb *strings.Builder, txn *transactions.SignedTxn) EvalParams {
-	return defaultEvalParamsWithVersion(sb, txn, 1)
+func defaultEvalParams(txn *transactions.SignedTxn) *EvalParams {
+	return defaultEvalParamsWithVersion(txn, LogicVersion)
 }
 
-func defaultEvalParams(sb *strings.Builder, txn *transactions.SignedTxn) EvalParams {
-	return defaultEvalParamsWithVersion(sb, txn, LogicVersion)
-}
-
-func benchmarkEvalParams(sb *strings.Builder, txn *transactions.SignedTxn) EvalParams {
-	ep := defaultEvalParamsWithVersion(sb, txn, LogicVersion)
-	ep.Proto.LogicSigMaxCost = 1000 * 1000
+func benchmarkEvalParams(txn *transactions.SignedTxn) *EvalParams {
+	ep := defaultEvalParamsWithVersion(txn, LogicVersion)
+	ep.Trace = nil // Tracing would slow down benchmarks
+	clone := *ep.Proto
+	bigBudget := uint64(1000 * 1000) // Allow long run times
+	clone.LogicSigMaxCost = bigBudget
+	clone.MaxAppProgramCost = int(bigBudget)
+	ep.Proto = &clone
+	ep.PooledApplicationBudget = &bigBudget
 	return ep
 }
 
-func defaultEvalParamsWithVersion(sb *strings.Builder, txn *transactions.SignedTxn, version uint64) EvalParams {
+func defaultEvalParamsWithVersion(txn *transactions.SignedTxn, version uint64) *EvalParams {
 	proto := defaultEvalProtoWithVersion(version)
 
-	var pt *transactions.SignedTxn
-	if txn != nil {
-		pt = txn
-	} else {
-		pt = &transactions.SignedTxn{}
+	ep := &EvalParams{
+		Proto:           &proto,
+		TxnGroup:        make([]transactions.SignedTxnWithAD, 1),
+		PastSideEffects: MakePastSideEffects(proto.MaxTxGroupSize),
+		Specials:        &transactions.SpecialAddresses{},
+		Trace:           &strings.Builder{},
 	}
-
-	ep := EvalParams{}
-	ep.Proto = &proto
-	ep.Txn = pt
-	ep.PastSideEffects = MakePastSideEffects(5)
-	ep.Specials = &transactions.SpecialAddresses{}
-	/* start app with 700 budget */
+	if txn != nil {
+		ep.TxnGroup[0].SignedTxn = *txn
+	}
 	if proto.EnableAppCostPooling {
 		budget := uint64(proto.MaxAppProgramCost)
 		ep.PooledApplicationBudget = &budget
 	}
-	if sb != nil { // have to do this since go's nil semantics: https://golang.org/doc/faq#nil_error
-		ep.Trace = sb
-	}
 	return ep
+}
+
+// reset zeros out the ApplyDatas in the underlying TxnGroup.  This is in
+// *_test.go because no real code should ever need this. EvalParams should be
+// created to evaluate a group, and then thrown away.
+func (ep *EvalParams) reset() {
+	for i := range ep.TxnGroup {
+		ep.TxnGroup[i].ApplyData = transactions.ApplyData{}
+	}
 }
 
 func TestTooManyArgs(t *testing.T) {
@@ -147,8 +153,7 @@ func TestTooManyArgs(t *testing.T) {
 			txn.Lsig.Logic = ops.Program
 			args := [transactions.EvalMaxArgs + 1][]byte{}
 			txn.Lsig.Args = args[:]
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, &txn))
+			pass, err := EvalSignature(0, defaultEvalParams(&txn))
 			require.Error(t, err)
 			require.False(t, pass)
 		})
@@ -159,32 +164,23 @@ func TestEmptyProgram(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	pass, err := Eval(nil, defaultEvalParams(nil, nil))
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid program (empty)")
-	require.False(t, pass)
+	testLogicBytes(t, nil, defaultEvalParams(nil), "invalid", "invalid program (empty)")
 }
 
 // TestMinTealVersionParamEval tests eval/check reading the MinTealVersion from the param
-func TestMinTealVersionParamEvalCheck(t *testing.T) {
+func TestMinTealVersionParamEvalCheckSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	params := defaultEvalParams(nil, nil)
+	params := defaultEvalParams(nil)
 	version2 := uint64(rekeyingEnabledVersion)
 	params.MinTealVersion = &version2
 	program := make([]byte, binary.MaxVarintLen64)
 	// set the teal program version to 1
 	binary.PutUvarint(program, 1)
 
-	err := Check(program, params)
-	require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", appsEnabledVersion))
-
-	// If the param is read correctly, the eval should fail
-	pass, err := Eval(program, params)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", appsEnabledVersion))
-	require.False(t, pass)
+	verErr := fmt.Sprintf("program version must be >= %d", appsEnabledVersion)
+	testAppBytes(t, program, params, verErr, verErr)
 }
 
 func TestTxnFieldToTealValue(t *testing.T) {
@@ -241,20 +237,8 @@ func TestWrongProtoVersion(t *testing.T) {
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := testProg(t, "int 1", v)
-			var txn transactions.SignedTxn
-			txn.Lsig.Logic = ops.Program
-			sb := strings.Builder{}
-			proto := defaultEvalProto()
-			proto.LogicSigVersion = 0
-			ep := defaultEvalParams(&sb, &txn)
-			ep.Proto = &proto
-			err := Check(ops.Program, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "LogicSig not supported")
-			pass, err := Eval(ops.Program, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "LogicSig not supported")
-			require.False(t, pass)
+			ep := defaultEvalParamsWithVersion(nil, 0)
+			testAppBytes(t, ops.Program, ep, "LogicSig not supported", "LogicSig not supported")
 		})
 	}
 }
@@ -284,11 +268,10 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849b")}
-			sb := strings.Builder{}
-			ep := defaultEvalParams(&sb, &txn)
-			err := Check(ops.Program, ep)
+			ep := defaultEvalParams(&txn)
+			err := CheckSignature(0, ep)
 			require.NoError(t, err)
-			pass, err := Eval(ops.Program, ep)
+			pass, err := EvalSignature(0, ep)
 			require.True(t, pass)
 			require.NoError(t, err)
 		})
@@ -345,70 +328,65 @@ func TestTLHC(t *testing.T) {
 			// right answer
 			txn.Lsig.Args = [][]byte{secret}
 			txn.Txn.FirstValid = 999999
-			sb := strings.Builder{}
 			block := bookkeeping.Block{}
-			ep := defaultEvalParams(&sb, &txn)
-			err := Check(ops.Program, ep)
+			ep := defaultEvalParams(&txn)
+			err := CheckSignature(0, ep)
 			if err != nil {
 				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
+				t.Log(ep.Trace.String())
 			}
 			require.NoError(t, err)
-			pass, err := Eval(ops.Program, ep)
+			pass, err := EvalSignature(0, ep)
 			if pass {
 				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
+				t.Log(ep.Trace.String())
 			}
 			require.False(t, pass)
 			isNotPanic(t, err)
 
 			txn.Txn.Receiver = a2
 			txn.Txn.CloseRemainderTo = a2
-			sb = strings.Builder{}
-			ep = defaultEvalParams(&sb, &txn)
-			pass, err = Eval(ops.Program, ep)
+			ep = defaultEvalParams(&txn)
+			pass, err = EvalSignature(0, ep)
 			if !pass {
 				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
+				t.Log(ep.Trace.String())
 			}
 			require.True(t, pass)
 			require.NoError(t, err)
 
 			txn.Txn.Receiver = a2
 			txn.Txn.CloseRemainderTo = a2
-			sb = strings.Builder{}
 			txn.Txn.FirstValid = 1
-			ep = defaultEvalParams(&sb, &txn)
-			pass, err = Eval(ops.Program, ep)
+			ep = defaultEvalParams(&txn)
+			pass, err = EvalSignature(0, ep)
 			if pass {
 				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
+				t.Log(ep.Trace.String())
 			}
 			require.False(t, pass)
 			isNotPanic(t, err)
 
 			txn.Txn.Receiver = a1
 			txn.Txn.CloseRemainderTo = a1
-			sb = strings.Builder{}
 			txn.Txn.FirstValid = 999999
-			ep = defaultEvalParams(&sb, &txn)
-			pass, err = Eval(ops.Program, ep)
+			ep = defaultEvalParams(&txn)
+			pass, err = EvalSignature(0, ep)
 			if !pass {
 				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
+				t.Log(ep.Trace.String())
 			}
 			require.True(t, pass)
 			require.NoError(t, err)
 
 			// wrong answer
 			txn.Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849a")}
-			sb = strings.Builder{}
 			block.BlockHeader.Round = 1
-			ep = defaultEvalParams(&sb, &txn)
-			pass, err = Eval(ops.Program, ep)
+			ep = defaultEvalParams(&txn)
+			pass, err = EvalSignature(0, ep)
 			if pass {
 				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
+				t.Log(ep.Trace.String())
 			}
 			require.False(t, pass)
 			isNotPanic(t, err)
@@ -806,20 +784,8 @@ func TestTxnBadField(t *testing.T) {
 
 	t.Parallel()
 	program := []byte{0x01, 0x31, 0x7f}
-	err := Check(program, defaultEvalParams(nil, nil))
-	require.NoError(t, err) // TODO: Check should know the type stack was wrong
-	sb := strings.Builder{}
-	var txn transactions.SignedTxn
-	txn.Lsig.Logic = program
-	txn.Lsig.Args = nil
-	pass, err := Eval(program, defaultEvalParams(&sb, &txn))
-	if pass {
-		t.Log(hex.EncodeToString(program))
-		t.Log(sb.String())
-	}
-	require.Error(t, err)
-	require.False(t, pass)
-	isNotPanic(t, err)
+	testLogicBytes(t, program, defaultEvalParams(nil), "invalid txn field")
+	// TODO: Check should know the type stack was wrong
 
 	// test txn does not accept ApplicationArgs and Accounts
 	txnOpcode := OpsByName[LogicVersion]["txn"].Opcode
@@ -831,10 +797,7 @@ func TestTxnBadField(t *testing.T) {
 		ops := testProg(t, source, AssemblerMaxVersion)
 		require.Equal(t, txnaOpcode, ops.Program[1])
 		ops.Program[1] = txnOpcode
-		pass, err = Eval(ops.Program, defaultEvalParams(&sb, &txn))
-		require.Error(t, err)
-		require.Contains(t, err.Error(), fmt.Sprintf("invalid txn field %d", field))
-		require.False(t, pass)
+		testLogicBytes(t, ops.Program, defaultEvalParams(nil), fmt.Sprintf("invalid txn field %d", field))
 	}
 }
 
@@ -843,49 +806,16 @@ func TestGtxnBadIndex(t *testing.T) {
 
 	t.Parallel()
 	program := []byte{0x01, 0x33, 0x1, 0x01}
-	err := Check(program, defaultEvalParams(nil, nil))
-	require.NoError(t, err) // TODO: Check should know the type stack was wrong
-	sb := strings.Builder{}
-	var txn transactions.SignedTxn
-	txn.Lsig.Logic = program
-	txn.Lsig.Args = nil
-	txgroup := make([]transactions.SignedTxn, 1)
-	txgroup[0] = txn
-	ep := defaultEvalParams(&sb, &txn)
-	ep.TxnGroup = txgroup
-	pass, err := Eval(program, ep)
-	if pass {
-		t.Log(hex.EncodeToString(program))
-		t.Log(sb.String())
-	}
-	require.Error(t, err)
-	require.False(t, pass)
-	isNotPanic(t, err)
+	testLogicBytes(t, program, defaultEvalParams(nil), "gtxn lookup")
 }
 
 func TestGtxnBadField(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	program := []byte{0x01, 0x33, 0x0, 0x7f}
-	err := Check(program, defaultEvalParams(nil, nil))
-	require.NoError(t, err) // TODO: Check should know the type stack was wrong
-	sb := strings.Builder{}
-	var txn transactions.SignedTxn
-	txn.Lsig.Logic = program
-	txn.Lsig.Args = nil
-	txgroup := make([]transactions.SignedTxn, 1)
-	txgroup[0] = txn
-	ep := defaultEvalParams(&sb, &txn)
-	ep.TxnGroup = txgroup
-	pass, err := Eval(program, ep)
-	if pass {
-		t.Log(hex.EncodeToString(program))
-		t.Log(sb.String())
-	}
-	require.Error(t, err)
-	require.False(t, pass)
-	isNotPanic(t, err)
+	program := []byte{0x01, 0x33, 0x0, 127}
+	// TODO: Check should know the type stack was wrong
+	testLogicBytes(t, program, defaultEvalParams(nil), "invalid txn field 127")
 
 	// test gtxn does not accept ApplicationArgs and Accounts
 	txnOpcode := OpsByName[LogicVersion]["txn"].Opcode
@@ -897,10 +827,7 @@ func TestGtxnBadField(t *testing.T) {
 		ops := testProg(t, source, AssemblerMaxVersion)
 		require.Equal(t, txnaOpcode, ops.Program[1])
 		ops.Program[1] = txnOpcode
-		pass, err = Eval(ops.Program, defaultEvalParams(&sb, &txn))
-		require.Error(t, err)
-		require.Contains(t, err.Error(), fmt.Sprintf("invalid txn field %d", field))
-		require.False(t, pass)
+		testLogicBytes(t, ops.Program, defaultEvalParams(nil), fmt.Sprintf("invalid txn field %d", field))
 	}
 }
 
@@ -908,21 +835,8 @@ func TestGlobalBadField(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	program := []byte{0x01, 0x32, 0x7f}
-	err := Check(program, defaultEvalParams(nil, nil))
-	require.NoError(t, err) // Check does not validates opcode args
-	sb := strings.Builder{}
-	var txn transactions.SignedTxn
-	txn.Lsig.Logic = program
-	txn.Lsig.Args = nil
-	pass, err := Eval(program, defaultEvalParams(&sb, &txn))
-	if pass {
-		t.Log(hex.EncodeToString(program))
-		t.Log(sb.String())
-	}
-	require.Error(t, err)
-	require.False(t, pass)
-	isNotPanic(t, err)
+	program := []byte{0x01, 0x32, 127}
+	testLogicBytes(t, program, defaultEvalParams(nil), "invalid global field")
 }
 
 func TestArg(t *testing.T) {
@@ -935,11 +849,8 @@ func TestArg(t *testing.T) {
 			if v >= 5 {
 				source += "int 0; args; int 1; args; ==; assert; int 2; args; int 3; args; !=; assert"
 			}
-			ops := testProg(t, source, v)
-			err := Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
+
 			var txn transactions.SignedTxn
-			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{
 				[]byte("aoeu"),
 				[]byte("aoeu"),
@@ -947,14 +858,8 @@ func TestArg(t *testing.T) {
 				[]byte("aoeu3"),
 				[]byte("aoeu4"),
 			}
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, &txn))
-			if !pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.NoError(t, err)
-			require.True(t, pass)
+			ops := testProg(t, source, v)
+			testLogicBytes(t, ops.Program, defaultEvalParams(&txn))
 		})
 	}
 }
@@ -1035,32 +940,15 @@ func TestGlobal(t *testing.T) {
 	type desc struct {
 		lastField GlobalField
 		program   string
-		eval      func([]byte, EvalParams) (bool, error)
-		check     func([]byte, EvalParams) error
 	}
 	tests := map[uint64]desc{
-		0: {GroupSize, globalV1TestProgram, Eval, Check},
-		1: {GroupSize, globalV1TestProgram, Eval, Check},
-		2: {
-			CurrentApplicationID, globalV2TestProgram,
-			EvalStateful, CheckStateful,
-		},
-		3: {
-			CreatorAddress, globalV3TestProgram,
-			EvalStateful, CheckStateful,
-		},
-		4: {
-			CreatorAddress, globalV4TestProgram,
-			EvalStateful, CheckStateful,
-		},
-		5: {
-			GroupID, globalV5TestProgram,
-			EvalStateful, CheckStateful,
-		},
-		6: {
-			GroupID, globalV6TestProgram,
-			EvalStateful, CheckStateful,
-		},
+		0: {GroupSize, globalV1TestProgram},
+		1: {GroupSize, globalV1TestProgram},
+		2: {CurrentApplicationID, globalV2TestProgram},
+		3: {CreatorAddress, globalV3TestProgram},
+		4: {CreatorAddress, globalV4TestProgram},
+		5: {GroupID, globalV5TestProgram},
+		6: {GroupID, globalV6TestProgram},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
@@ -1075,22 +963,15 @@ func TestGlobal(t *testing.T) {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			last := tests[v].lastField
 			testProgram := tests[v].program
-			check := tests[v].check
-			eval := tests[v].eval
 			for _, globalField := range GlobalFieldNames[:last] {
 				if !strings.Contains(testProgram, globalField) {
 					t.Errorf("TestGlobal missing field %v", globalField)
 				}
 			}
-			ops := testProg(t, testProgram, v)
-			err := check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
+
 			var txn transactions.SignedTxn
-			txn.Lsig.Logic = ops.Program
 			txn.Txn.Group = crypto.Digest{0x07, 0x06}
-			txgroup := make([]transactions.SignedTxn, 1)
-			txgroup[0] = txn
-			sb := strings.Builder{}
+
 			proto := config.ConsensusParams{
 				MinTxnFee:         123,
 				MinBalance:        1000000,
@@ -1099,17 +980,10 @@ func TestGlobal(t *testing.T) {
 				LogicSigMaxCost:   20000,
 				MaxAppProgramCost: 700,
 			}
-			ep := defaultEvalParams(&sb, &txn)
-			ep.TxnGroup = txgroup
+			ep := defaultEvalParams(&txn)
 			ep.Proto = &proto
 			ep.Ledger = ledger
-			pass, err := eval(ops.Program, ep)
-			if !pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.NoError(t, err)
-			require.True(t, pass)
+			testApp(t, tests[v].program, ep)
 		})
 	}
 }
@@ -1150,19 +1024,16 @@ int %s
 ==
 &&`, symbol, string(tt))
 					ops := testProg(t, text, v)
-					err := Check(ops.Program, defaultEvalParams(nil, nil))
-					require.NoError(t, err)
+					if v < appsEnabledVersion && tt == protocol.ApplicationCallTx {
+					}
 					var txn transactions.SignedTxn
 					txn.Txn.Type = tt
-					sb := strings.Builder{}
-					ep := defaultEvalParams(&sb, &txn)
-					pass, err := Eval(ops.Program, ep)
-					if !pass {
-						t.Log(hex.EncodeToString(ops.Program))
-						t.Log(sb.String())
+					if v < appsEnabledVersion && tt == protocol.ApplicationCallTx {
+						testLogicBytes(t, ops.Program, defaultEvalParams(&txn),
+							"program version must be", "program version must be")
+						return
 					}
-					require.NoError(t, err)
-					require.True(t, pass)
+					testLogicBytes(t, ops.Program, defaultEvalParams(&txn))
 				})
 			}
 		})
@@ -1475,6 +1346,26 @@ int 1
 const testTxnProgramTextV6 = testTxnProgramTextV5 + `
 assert
 
+txn CreatedAssetID
+int 0
+==
+assert
+
+txn CreatedApplicationID
+int 0
+==
+assert
+
+txn NumLogs
+int 2
+==
+assert
+
+txn Logs 1
+byte "prefilled"
+==
+assert
+
 int 1
 `
 
@@ -1563,15 +1454,6 @@ func TestTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	for i, txnField := range TxnFieldNames {
-		fs := txnFieldSpecByField[TxnField(i)]
-		if !fs.effects && !strings.Contains(testTxnProgramTextV6, txnField) {
-			if txnField != FirstValidTime.String() {
-				t.Errorf("TestTxn missing field %v", txnField)
-			}
-		}
-	}
-
 	tests := map[uint64]string{
 		1: testTxnProgramTextV1,
 		2: testTxnProgramTextV2,
@@ -1581,13 +1463,31 @@ func TestTxn(t *testing.T) {
 		6: testTxnProgramTextV6,
 	}
 
+	for i, txnField := range TxnFieldNames {
+		fs := txnFieldSpecByField[TxnField(i)]
+		// Ensure that each field appears, starting in the version it was introduced
+		for v := uint64(1); v <= uint64(LogicVersion); v++ {
+			if v < fs.version {
+				continue
+			}
+			if !strings.Contains(tests[v], txnField) {
+				if txnField == FirstValidTime.String() {
+					continue
+				}
+				// fields were introduced for itxn before they became available for txn
+				if v < txnEffectsVersion && fs.effects {
+					continue
+				}
+				t.Errorf("testTxnProgramTextV%d missing field %v", v, txnField)
+			}
+		}
+	}
+
 	clearOps := testProg(t, "int 1", 1)
 
 	for v, source := range tests {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := testProg(t, source, v)
-			err := Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
 			txn := makeSampleTxn()
 			txn.Txn.ApprovalProgram = ops.Program
 			txn.Txn.ClearStateProgram = clearOps.Program
@@ -1613,16 +1513,28 @@ func TestTxn(t *testing.T) {
 				programHash[:],
 				clearProgramHash[:],
 			}
-			sb := strings.Builder{}
-			ep := defaultEvalParams(&sb, &txn)
-			ep.GroupIndex = 3
-			pass, err := Eval(ops.Program, ep)
-			if !pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
+			// Since we test GroupIndex ==3, we need to fake up such a group
+			ep := defaultEvalParams(nil)
+			ep.TxnGroup = transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{txn, txn, txn, txn})
+			ep.TxnGroup[3].EvalDelta.Logs = []string{"x", "prefilled"}
+			if v < txnEffectsVersion {
+				testLogicFull(t, ops.Program, 3, ep)
+			} else {
+				// Starting in txnEffectsVersion we can't access all fields in Logic mode
+				testLogicFull(t, ops.Program, 3, ep, "not allowed in current mode")
+				// And the early tests use "arg" a lot - not allowed in stateful. So remove those tests.
+				lastArg := strings.Index(source, "arg 10\n==\n&&")
+				require.NotEqual(t, -1, lastArg)
+
+				appSafe := "int 1" + strings.Replace(source[lastArg+12:], `txn Sender
+int 0
+args
+==
+assert`, "", 1)
+
+				ops := testProg(t, appSafe, v)
+				testAppFull(t, ops.Program, 3, ep)
 			}
-			require.NoError(t, err)
-			require.True(t, pass)
 		})
 	}
 }
@@ -1671,32 +1583,15 @@ int 0
 return
 `
 	ops := testProg(t, cachedTxnProg, 2)
-	sb := strings.Builder{}
-	err := Check(ops.Program, defaultEvalParams(&sb, nil))
-	if err != nil {
-		t.Log(hex.EncodeToString(ops.Program))
-		t.Log(sb.String())
-	}
-	require.NoError(t, err)
-	txn := makeSampleTxn()
-	txgroup := makeSampleTxnGroup(txn)
-	txn.Lsig.Logic = ops.Program
-	txid0 := txgroup[0].ID()
-	txid1 := txgroup[1].ID()
-	txn.Lsig.Args = [][]byte{
+
+	ep, _, _ := makeSampleEnv()
+	txid0 := ep.TxnGroup[0].ID()
+	txid1 := ep.TxnGroup[1].ID()
+	ep.TxnGroup[0].Lsig.Args = [][]byte{
 		txid0[:],
 		txid1[:],
 	}
-	sb = strings.Builder{}
-	ep := defaultEvalParams(&sb, &txn)
-	ep.TxnGroup = txgroup
-	pass, err := Eval(ops.Program, ep)
-	if !pass || err != nil {
-		t.Log(hex.EncodeToString(ops.Program))
-		t.Log(sb.String())
-	}
-	require.NoError(t, err)
-	require.True(t, pass)
+	testLogicBytes(t, ops.Program, ep)
 }
 
 func TestGaid(t *testing.T) {
@@ -1716,17 +1611,14 @@ int 100
 	targetTxn := makeSampleTxn()
 	targetTxn.Txn.Type = protocol.AssetConfigTx
 	txgroup[0] = targetTxn
-	sb := strings.Builder{}
 	ledger := MakeLedger(nil)
 	ledger.SetTrackedCreatable(0, basics.CreatableLocator{Index: 100})
-	ep := defaultEvalParams(&sb, &txn)
+	ep := defaultEvalParams(nil)
 	ep.Ledger = ledger
-	ep.TxnGroup = txgroup
-	ep.GroupIndex = 1
-	pass, err := EvalStateful(ops.Program, ep)
+	ep.TxnGroup = transactions.WrapSignedTxnsWithAD(txgroup)
+	pass, err := EvalApp(ops.Program, 1, ep)
 	if !pass || err != nil {
-		t.Log(hex.EncodeToString(ops.Program))
-		t.Log(sb.String())
+		t.Log(ep.Trace.String())
 	}
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -1739,28 +1631,26 @@ int 0
 `
 
 	ops = testProg(t, futureCreatableIDProg, 4)
-	_, err = EvalStateful(ops.Program, ep)
+	_, err = EvalApp(ops.Program, 1, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gaid can't get creatable ID of txn ahead of the current one")
 
 	// should fail when accessing self
-	ep.GroupIndex = 0
 	ops = testProg(t, checkCreatableIDProg, 4)
-	_, err = EvalStateful(ops.Program, ep)
+	_, err = EvalApp(ops.Program, 0, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gaid is only for accessing creatable IDs of previous txns")
-	ep.GroupIndex = 1
 
 	// should fail on non-creatable
 	ep.TxnGroup[0].Txn.Type = protocol.PaymentTx
-	_, err = EvalStateful(ops.Program, ep)
+	_, err = EvalApp(ops.Program, 1, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "can't use gaid on txn that is not an app call nor an asset config txn")
 	ep.TxnGroup[0].Txn.Type = protocol.AssetConfigTx
 
 	// should fail when no creatable was created
 	ledger.SetTrackedCreatable(0, basics.CreatableLocator{})
-	_, err = EvalStateful(ops.Program, ep)
+	_, err = EvalApp(ops.Program, 1, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "the txn did not create anything")
 }
@@ -1888,8 +1778,8 @@ gtxn 0 Sender
 				txn.Txn.SelectionPK[:],
 				txn.Txn.Note,
 			}
-			ep := defaultEvalParams(nil, &txn)
-			ep.TxnGroup = makeSampleTxnGroup(txn)
+			ep := defaultEvalParams(&txn)
+			ep.TxnGroup = transactions.WrapSignedTxnsWithAD(makeSampleTxnGroup(txn))
 			testLogic(t, source, v, ep)
 			if v >= 3 {
 				gtxnsProg := strings.ReplaceAll(source, "gtxn 0", "int 0; gtxns")
@@ -1904,27 +1794,64 @@ gtxn 0 Sender
 	}
 }
 
-func testLogic(t *testing.T, program string, v uint64, ep EvalParams, problems ...string) {
+func testLogic(t *testing.T, program string, v uint64, ep *EvalParams, problems ...string) {
+	t.Helper()
 	ops := testProg(t, program, v)
+	testLogicBytes(t, ops.Program, ep, problems...)
+}
+
+func testLogicBytes(t *testing.T, program []byte, ep *EvalParams, problems ...string) {
+	t.Helper()
+	testLogicFull(t, program, 0, ep, problems...)
+}
+
+func testLogicFull(t *testing.T, program []byte, gi int, ep *EvalParams, problems ...string) {
+	t.Helper()
+
+	var checkProblem string
+	var evalProblem string
+	switch len(problems) {
+	case 2:
+		checkProblem = problems[0]
+		evalProblem = problems[1]
+	case 1:
+		evalProblem = problems[0]
+	case 0:
+	default:
+		require.Fail(t, "Misused testLogic: %d problems", len(problems))
+	}
+
 	sb := &strings.Builder{}
 	ep.Trace = sb
-	ep.Txn.Lsig.Logic = ops.Program
-	err := Check(ops.Program, ep)
-	if err != nil {
-		t.Log(hex.EncodeToString(ops.Program))
-		t.Log(sb.String())
-	}
-	require.NoError(t, err)
 
-	pass, err := Eval(ops.Program, ep)
-	if len(problems) == 0 {
+	ep.TxnGroup[0].Lsig.Logic = program
+	err := CheckSignature(gi, ep)
+	if checkProblem == "" {
 		require.NoError(t, err, sb.String())
-		require.True(t, pass, sb.String())
 	} else {
-		require.Error(t, err, sb.String())
-		for _, problem := range problems {
-			require.Contains(t, err.Error(), problem)
-		}
+		require.Error(t, err, "Check\n%s\nExpected: %v", sb, checkProblem)
+		require.Contains(t, err.Error(), checkProblem)
+	}
+
+	// We continue on to check Eval() of things that failed Check() because it's
+	// a nice confirmation that Check() is usually stricter than Eval(). This
+	// may mean that the problems argument is often duplicated, but this seems
+	// the best way to be concise about all sorts of tests.
+
+	pass, err := EvalSignature(gi, ep)
+	if evalProblem == "" {
+		require.NoError(t, err, "Eval%s\nExpected: PASS", sb)
+		assert.True(t, pass, "Eval%s\nExpected: PASS", sb)
+		return
+	}
+
+	// There is an evalProblem to check. REJECT is special and only means that
+	// the app didn't accept.  Maybe it's an error, maybe it's just !pass.
+	if evalProblem == "REJECT" {
+		require.True(t, err != nil || !pass, "Eval%s\nExpected: REJECT", sb)
+	} else {
+		require.Error(t, err, "Eval%s\nExpected: %v", sb, evalProblem)
+		require.Contains(t, err.Error(), evalProblem)
 	}
 }
 
@@ -1940,43 +1867,30 @@ txna ApplicationArgs 0
 	var txn transactions.SignedTxn
 	txn.Txn.Accounts = make([]basics.Address, 1)
 	txn.Txn.Accounts[0] = txn.Txn.Sender
-	txn.Txn.ApplicationArgs = make([][]byte, 1)
-	txn.Txn.ApplicationArgs[0] = []byte(protocol.PaymentTx)
-	txgroup := make([]transactions.SignedTxn, 1)
-	txgroup[0] = txn
-	ep := defaultEvalParams(nil, &txn)
-	ep.TxnGroup = txgroup
-	_, err := Eval(ops.Program, ep)
-	require.NoError(t, err)
+	txn.Txn.ApplicationArgs = [][]byte{txn.Txn.Sender[:]}
+	ep := defaultEvalParams(&txn)
+	testLogicBytes(t, ops.Program, ep)
 
 	// modify txn field
 	saved := ops.Program[2]
 	ops.Program[2] = 0x01
-	_, err = Eval(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "unsupported array field")
+	testLogicBytes(t, ops.Program, ep, "unsupported array field")
 
 	// modify txn field to unknown one
 	ops.Program[2] = 99
-	_, err = Eval(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid txn field 99")
+	testLogicBytes(t, ops.Program, ep, "invalid txn field 99")
 
 	// modify txn array index
 	ops.Program[2] = saved
 	saved = ops.Program[3]
 	ops.Program[3] = 0x02
-	_, err = Eval(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid Accounts index")
+	testLogicBytes(t, ops.Program, ep, "invalid Accounts index")
 
 	// modify txn array index in the second opcode
 	ops.Program[3] = saved
 	saved = ops.Program[6]
 	ops.Program[6] = 0x01
-	_, err = Eval(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid ApplicationArgs index")
+	testLogicBytes(t, ops.Program, ep, "invalid ApplicationArgs index")
 	ops.Program[6] = saved
 
 	// check special case: Account 0 == Sender
@@ -1988,48 +1902,36 @@ txn Sender
 	ops2 := testProg(t, source, AssemblerMaxVersion)
 	var txn2 transactions.SignedTxn
 	copy(txn2.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
-	ep2 := defaultEvalParams(nil, &txn2)
-	pass, err := Eval(ops2.Program, ep2)
-	require.NoError(t, err)
-	require.True(t, pass)
+	ep2 := defaultEvalParams(&txn2)
+	testLogicBytes(t, ops2.Program, ep2)
 
 	// check gtxna
 	source = `gtxna 0 Accounts 1
 txna ApplicationArgs 0
 ==`
 	ops = testProg(t, source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	_, err = Eval(ops.Program, ep)
-	require.NoError(t, err)
+	testLogicBytes(t, ops.Program, ep)
 
 	// modify gtxn index
 	saved = ops.Program[2]
 	ops.Program[2] = 0x01
-	_, err = Eval(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "gtxna lookup TxnGroup[1] but it only has 1")
+	testLogicBytes(t, ops.Program, ep, "gtxna lookup TxnGroup[1] but it only has 1")
 
 	// modify gtxn field
 	ops.Program[2] = saved
 	saved = ops.Program[3]
 	ops.Program[3] = 0x01
-	_, err = Eval(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "unsupported array field")
+	testLogicBytes(t, ops.Program, ep, "unsupported array field")
 
 	// modify gtxn field to unknown one
 	ops.Program[3] = 99
-	_, err = Eval(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid txn field 99")
+	testLogicBytes(t, ops.Program, ep, "invalid txn field 99")
 
 	// modify gtxn array index
 	ops.Program[3] = saved
 	saved = ops.Program[4]
 	ops.Program[4] = 0x02
-	_, err = Eval(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid Accounts index")
+	testLogicBytes(t, ops.Program, ep, "invalid Accounts index")
 	ops.Program[4] = saved
 
 	// check special case: Account 0 == Sender
@@ -2041,13 +1943,8 @@ txn Sender
 	ops3 := testProg(t, source, AssemblerMaxVersion)
 	var txn3 transactions.SignedTxn
 	copy(txn2.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
-	txgroup3 := make([]transactions.SignedTxn, 1)
-	txgroup3[0] = txn3
-	ep3 := defaultEvalParams(nil, &txn3)
-	ep3.TxnGroup = txgroup3
-	pass, err = Eval(ops3.Program, ep3)
-	require.NoError(t, err)
-	require.True(t, pass)
+	ep3 := defaultEvalParams(&txn3)
+	testLogicBytes(t, ops3.Program, ep3)
 }
 
 // check empty values in ApplicationArgs and Account
@@ -2065,42 +1962,24 @@ int 0
 	var txn transactions.SignedTxn
 	txn.Txn.ApplicationArgs = make([][]byte, 1)
 	txn.Txn.ApplicationArgs[0] = []byte("")
-	txgroup := make([]transactions.SignedTxn, 1)
-	txgroup[0] = txn
-	ep := defaultEvalParams(nil, &txn)
-	ep.TxnGroup = txgroup
-	pass, err := Eval(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testLogicBytes(t, ops.Program, defaultEvalParams(&txn))
+
 	txn.Txn.ApplicationArgs[0] = nil
-	txgroup[0] = txn
-	ep.TxnGroup = txgroup
-	pass, err = Eval(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testLogicBytes(t, ops.Program, defaultEvalParams(&txn))
 
 	source2 := `txna Accounts 1
 global ZeroAddress
 ==
 `
-	ops2 := testProg(t, source2, AssemblerMaxVersion)
+	ops = testProg(t, source2, AssemblerMaxVersion)
 
 	var txn2 transactions.SignedTxn
 	txn2.Txn.Accounts = make([]basics.Address, 1)
 	txn2.Txn.Accounts[0] = basics.Address{}
-	txgroup2 := make([]transactions.SignedTxn, 1)
-	txgroup2[0] = txn2
-	ep2 := defaultEvalParams(nil, &txn2)
-	ep2.TxnGroup = txgroup2
-	pass, err = Eval(ops2.Program, ep2)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testLogicBytes(t, ops.Program, defaultEvalParams(&txn2))
+
 	txn2.Txn.Accounts = make([]basics.Address, 1)
-	txgroup2[0] = txn
-	ep2.TxnGroup = txgroup2
-	pass, err = Eval(ops2.Program, ep2)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testLogicBytes(t, ops.Program, defaultEvalParams(&txn2))
 }
 
 func TestTxnas(t *testing.T) {
@@ -2118,14 +1997,9 @@ txnas ApplicationArgs
 	var txn transactions.SignedTxn
 	txn.Txn.Accounts = make([]basics.Address, 1)
 	txn.Txn.Accounts[0] = txn.Txn.Sender
-	txn.Txn.ApplicationArgs = make([][]byte, 1)
-	txn.Txn.ApplicationArgs[0] = []byte(protocol.PaymentTx)
-	txgroup := make([]transactions.SignedTxn, 1)
-	txgroup[0] = txn
-	ep := defaultEvalParams(nil, &txn)
-	ep.TxnGroup = txgroup
-	_, err := Eval(ops.Program, ep)
-	require.NoError(t, err)
+	txn.Txn.ApplicationArgs = [][]byte{txn.Txn.Sender[:]}
+	ep := defaultEvalParams(&txn)
+	testLogicBytes(t, ops.Program, ep)
 
 	// check special case: Account 0 == Sender
 	// even without any additional context
@@ -2134,13 +2008,10 @@ txnas Accounts
 txn Sender
 ==
 `
-	ops2 := testProg(t, source, AssemblerMaxVersion)
+	ops = testProg(t, source, AssemblerMaxVersion)
 	var txn2 transactions.SignedTxn
 	copy(txn2.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
-	ep2 := defaultEvalParams(nil, &txn2)
-	pass, err := Eval(ops2.Program, ep2)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testLogicBytes(t, ops.Program, defaultEvalParams(&txn2))
 
 	// check gtxnas
 	source = `int 1
@@ -2148,9 +2019,7 @@ gtxnas 0 Accounts
 txna ApplicationArgs 0
 ==`
 	ops = testProg(t, source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	_, err = Eval(ops.Program, ep)
-	require.NoError(t, err)
+	testLogicBytes(t, ops.Program, ep)
 
 	// check special case: Account 0 == Sender
 	// even without any additional context
@@ -2159,16 +2028,10 @@ gtxnas 0 Accounts
 txn Sender
 ==
 	`
-	ops3 := testProg(t, source, AssemblerMaxVersion)
+	ops = testProg(t, source, AssemblerMaxVersion)
 	var txn3 transactions.SignedTxn
-	copy(txn2.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
-	txgroup3 := make([]transactions.SignedTxn, 1)
-	txgroup3[0] = txn3
-	ep3 := defaultEvalParams(nil, &txn3)
-	ep3.TxnGroup = txgroup3
-	pass, err = Eval(ops3.Program, ep3)
-	require.NoError(t, err)
-	require.True(t, pass)
+	copy(txn3.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
+	testLogicBytes(t, ops.Program, defaultEvalParams(&txn3))
 
 	// check gtxnsas
 	source = `int 0
@@ -2177,9 +2040,7 @@ gtxnsas Accounts
 txna ApplicationArgs 0
 ==`
 	ops = testProg(t, source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	_, err = Eval(ops.Program, ep)
-	require.NoError(t, err)
+	testLogicBytes(t, ops.Program, ep)
 }
 
 func TestBitOps(t *testing.T) {
@@ -2447,6 +2308,7 @@ func TestGload(t *testing.T) {
 	// for simple app-call-only transaction groups
 	type scratchTestCase struct {
 		tealSources []string
+		errTxn      int
 		errContains string
 	}
 
@@ -2495,6 +2357,7 @@ store 0
 int 1
 `,
 		},
+		errTxn:      0,
 		errContains: "can't use gload on self, use load instead",
 	}
 
@@ -2509,6 +2372,7 @@ int 2
 store 0
 int 1`,
 		},
+		errTxn:      0,
 		errContains: "gload can't get future scratch space from txn with index 1",
 	}
 
@@ -2520,56 +2384,24 @@ int 1`,
 	for i, testCase := range cases {
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
 			sources := testCase.tealSources
-			// Assemble ops
-			opsList := make([]*OpStream, len(sources))
-			for j, source := range sources {
-				ops := testProg(t, source, AssemblerMaxVersion)
-				opsList[j] = ops
-			}
 
-			// Initialize txgroup and cxgroup
-			txgroup := make([]transactions.SignedTxn, len(sources))
+			// Initialize txgroup
+			txgroup := make([]transactions.SignedTxnWithAD, len(sources))
 			for j := range txgroup {
-				txgroup[j] = transactions.SignedTxn{
-					Txn: transactions.Transaction{
-						Type: protocol.ApplicationCallTx,
-					},
-				}
+				txgroup[j].SignedTxn.Txn.Type = protocol.ApplicationCallTx
 			}
 
-			// Construct EvalParams
-			pastSideEffects := MakePastSideEffects(len(sources))
-			epList := make([]EvalParams, len(sources))
-			for j := range sources {
-				epList[j] = EvalParams{
-					Proto:           &proto,
-					Txn:             &txgroup[j],
-					TxnGroup:        txgroup,
-					GroupIndex:      uint64(j),
-					PastSideEffects: pastSideEffects,
-				}
+			ep := &EvalParams{
+				Proto:           &proto,
+				TxnGroup:        txgroup,
+				PastSideEffects: MakePastSideEffects(len(sources)),
 			}
 
-			// Evaluate app calls
-			shouldErr := testCase.errContains != ""
-			didPass := true
-			for j, ops := range opsList {
-				pass, err := EvalStateful(ops.Program, epList[j])
-
-				// Confirm it errors or that the error message is the expected one
-				if !shouldErr {
-					require.NoError(t, err)
-				} else if shouldErr && err != nil {
-					require.Error(t, err)
-					require.Contains(t, err.Error(), testCase.errContains)
-				}
-
-				if !pass {
-					didPass = false
-				}
+			if testCase.errContains != "" {
+				testApps(t, sources, ep, expect{testCase.errTxn, testCase.errContains})
+			} else {
+				testApps(t, sources, ep)
 			}
-
-			require.Equal(t, !shouldErr, didPass)
 		})
 	}
 
@@ -2603,38 +2435,25 @@ int 1`,
 	failCases := []failureCase{nonAppCall, logicSigCall}
 	for j, failCase := range failCases {
 		t.Run(fmt.Sprintf("j=%d", j), func(t *testing.T) {
-			source := "gload 0 0"
-			ops := testProg(t, source, AssemblerMaxVersion)
+			program := testProg(t, "gload 0 0", AssemblerMaxVersion).Program
 
-			// Initialize txgroup and cxgroup
-			txgroup := make([]transactions.SignedTxn, 2)
-			txgroup[0] = failCase.firstTxn
-			txgroup[1] = transactions.SignedTxn{}
-
-			// Construct EvalParams
-			pastSideEffects := MakePastSideEffects(2)
-			epList := make([]EvalParams, 2)
-			for j := range epList {
-				epList[j] = EvalParams{
-					Proto:           &proto,
-					Txn:             &txgroup[j],
-					TxnGroup:        txgroup,
-					GroupIndex:      uint64(j),
-					PastSideEffects: pastSideEffects,
-				}
+			txgroup := []transactions.SignedTxnWithAD{
+				{SignedTxn: failCase.firstTxn},
+				{},
 			}
 
-			// Evaluate app call
-			var err error
+			ep := &EvalParams{
+				Proto:           &proto,
+				TxnGroup:        txgroup,
+				PastSideEffects: MakePastSideEffects(2),
+			}
+
 			switch failCase.runMode {
 			case runModeApplication:
-				_, err = EvalStateful(ops.Program, epList[1])
+				testAppBytes(t, program, ep, failCase.errContains)
 			default:
-				_, err = Eval(ops.Program, epList[1])
+				testLogicBytes(t, program, ep, failCase.errContains, failCase.errContains)
 			}
-
-			require.Error(t, err)
-			require.Contains(t, err.Error(), failCase.errContains)
 		})
 	}
 }
@@ -2665,44 +2484,20 @@ byte "txn 2"
 &&`
 
 	sources := []string{source1, source2, source3}
-	proto := defaultEvalProtoWithVersion(LogicVersion)
 
-	// Assemble ops
-	opsList := make([]*OpStream, len(sources))
-	for j, source := range sources {
-		ops := testProg(t, source, AssemblerMaxVersion)
-		opsList[j] = ops
-	}
-
-	// Initialize txgroup and cxgroup
 	txgroup := make([]transactions.SignedTxn, len(sources))
 	for j := range txgroup {
-		txgroup[j] = transactions.SignedTxn{
-			Txn: transactions.Transaction{
-				Type: protocol.ApplicationCallTx,
-			},
-		}
+		txgroup[j].Txn.Type = protocol.ApplicationCallTx
 	}
 
-	// Construct EvalParams
-	pastSideEffects := MakePastSideEffects(len(sources))
-	epList := make([]EvalParams, len(sources))
-	for j := range sources {
-		epList[j] = EvalParams{
-			Proto:           &proto,
-			Txn:             &txgroup[j],
-			TxnGroup:        txgroup,
-			GroupIndex:      uint64(j),
-			PastSideEffects: pastSideEffects,
-		}
+	proto := defaultEvalProtoWithVersion(LogicVersion)
+	ep := &EvalParams{
+		Proto:           &proto,
+		TxnGroup:        transactions.WrapSignedTxnsWithAD(txgroup),
+		PastSideEffects: MakePastSideEffects(len(sources)),
 	}
 
-	// Evaluate app calls
-	for j, ops := range opsList {
-		pass, err := EvalStateful(ops.Program, epList[j])
-		require.NoError(t, err)
-		require.True(t, pass)
-	}
+	testApps(t, sources, ep)
 }
 
 const testCompareProgramText = `int 35
@@ -2790,35 +2585,25 @@ func TestSlowLogic(t *testing.T) {
 
 	// v1overspend fails (on v1)
 	ops := testProg(t, v1overspend, 1)
-	err := Check(ops.Program, defaultEvalParamsWithVersion(nil, nil, 1))
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "static cost")
-	// v2overspend passes Check, even on v2 proto, because cost is "grandfathered"
+	// We should never Eval this after it fails Check(), but nice to see it also fails.
+	testLogicBytes(t, ops.Program, defaultEvalParamsWithVersion(nil, 1),
+		"static cost", "dynamic cost")
+	// v2overspend passes Check, even on v2 proto, because the old low cost is "grandfathered"
 	ops = testProg(t, v2overspend, 1)
-	err = Check(ops.Program, defaultEvalParamsWithVersion(nil, nil, 2))
-	require.NoError(t, err)
+	testLogicBytes(t, ops.Program, defaultEvalParamsWithVersion(nil, 2))
 
 	// even the shorter, v2overspend, fails when compiled as v2 code
 	ops = testProg(t, v2overspend, 2)
-	err = Check(ops.Program, defaultEvalParamsWithVersion(nil, nil, 2))
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "static cost")
+	testLogicBytes(t, ops.Program, defaultEvalParamsWithVersion(nil, 2),
+		"static cost", "dynamic cost")
 
 	// in v4 cost is still 134, but only matters in Eval, not Check, so both fail there
-	ep4 := defaultEvalParamsWithVersion(nil, nil, 4)
+	ep4 := defaultEvalParamsWithVersion(nil, 4)
 	ops = testProg(t, v1overspend, 4)
-	err = Check(ops.Program, ep4)
-	require.NoError(t, err)
-	_, err = Eval(ops.Program, ep4)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "dynamic cost")
+	testLogicBytes(t, ops.Program, ep4, "dynamic cost")
 
 	ops = testProg(t, v2overspend, 4)
-	err = Check(ops.Program, ep4)
-	require.NoError(t, err)
-	_, err = Eval(ops.Program, ep4)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "dynamic cost")
+	testLogicBytes(t, ops.Program, ep4, "dynamic cost")
 }
 
 func isNotPanic(t *testing.T, err error) {
@@ -2838,16 +2623,7 @@ func TestStackUnderflow(t *testing.T) {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := testProg(t, `int 1`, v)
 			ops.Program = append(ops.Program, 0x08) // +
-			err := Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.False(t, pass)
-			isNotPanic(t, err)
+			testLogicBytes(t, ops.Program, defaultEvalParams(nil), "stack underflow")
 		})
 	}
 }
@@ -2860,16 +2636,7 @@ func TestWrongStackTypeRuntime(t *testing.T) {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := testProg(t, `int 1`, v)
 			ops.Program = append(ops.Program, 0x01, 0x15) // sha256, len
-			err := Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.False(t, pass)
-			isNotPanic(t, err)
+			testLogicBytes(t, ops.Program, defaultEvalParams(nil), "sha256 arg 0 wanted")
 		})
 	}
 }
@@ -2882,16 +2649,8 @@ func TestEqMismatch(t *testing.T) {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := testProg(t, `byte 0x1234; int 1`, v)
 			ops.Program = append(ops.Program, 0x12) // ==
-			err := Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err) // TODO: Check should know the type stack was wrong
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.False(t, pass)
-			isNotPanic(t, err)
+			testLogicBytes(t, ops.Program, defaultEvalParams(nil), "cannot compare")
+			// TODO: Check should know the type stack was wrong
 		})
 	}
 }
@@ -2904,16 +2663,7 @@ func TestNeqMismatch(t *testing.T) {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := testProg(t, `byte 0x1234; int 1`, v)
 			ops.Program = append(ops.Program, 0x13) // !=
-			err := Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err) // TODO: Check should know the type stack was wrong
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.False(t, pass)
-			isNotPanic(t, err)
+			testLogicBytes(t, ops.Program, defaultEvalParams(nil), "cannot compare")
 		})
 	}
 }
@@ -2926,16 +2676,7 @@ func TestWrongStackTypeRuntime2(t *testing.T) {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := testProg(t, `byte 0x1234; int 1`, v)
 			ops.Program = append(ops.Program, 0x08) // +
-			err := Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			pass, _ := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.False(t, pass)
-			isNotPanic(t, err)
+			testLogicBytes(t, ops.Program, defaultEvalParams(nil), "+ arg 0 wanted")
 		})
 	}
 }
@@ -2953,16 +2694,7 @@ func TestIllegalOp(t *testing.T) {
 					break
 				}
 			}
-			err := Check(ops.Program, defaultEvalParams(nil, nil))
-			require.Error(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.False(t, pass)
-			isNotPanic(t, err)
+			testLogicBytes(t, ops.Program, defaultEvalParams(nil), "illegal opcode", "illegal opcode")
 		})
 	}
 }
@@ -2980,16 +2712,8 @@ int 1
 `, v)
 			// cut two last bytes - intc_1 and last byte of bnz
 			ops.Program = ops.Program[:len(ops.Program)-2]
-			err := Check(ops.Program, defaultEvalParams(nil, nil))
-			require.Error(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.False(t, pass)
-			isNotPanic(t, err)
+			testLogicBytes(t, ops.Program, defaultEvalParams(nil),
+				"bnz program ends short", "bnz program ends short")
 		})
 	}
 }
@@ -3003,13 +2727,9 @@ intc 0
 intc 0
 bnz done
 done:`, 2)
-	err := Check(ops.Program, defaultEvalParams(nil, nil))
-	require.NoError(t, err)
-	sb := strings.Builder{}
-	pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-	require.NoError(t, err)
-	require.True(t, pass)
+	testLogicBytes(t, ops.Program, defaultEvalParams(nil))
 }
+
 func TestShortBytecblock(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -3022,17 +2742,8 @@ func TestShortBytecblock(t *testing.T) {
 			for i := 2; i < len(fullops.Program); i++ {
 				program := fullops.Program[:i]
 				t.Run(hex.EncodeToString(program), func(t *testing.T) {
-					err := Check(program, defaultEvalParams(nil, nil))
-					require.Error(t, err)
-					isNotPanic(t, err)
-					sb := strings.Builder{}
-					pass, err := Eval(program, defaultEvalParams(&sb, nil))
-					if pass {
-						t.Log(hex.EncodeToString(program))
-						t.Log(sb.String())
-					}
-					require.False(t, pass)
-					isNotPanic(t, err)
+					testLogicBytes(t, program, defaultEvalParams(nil),
+						"bytecblock", "bytecblock")
 				})
 			}
 		})
@@ -3053,17 +2764,7 @@ func TestShortBytecblock2(t *testing.T) {
 		t.Run(src, func(t *testing.T) {
 			program, err := hex.DecodeString(src)
 			require.NoError(t, err)
-			err = Check(program, defaultEvalParams(nil, nil))
-			require.Error(t, err)
-			isNotPanic(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(program, defaultEvalParams(&sb, nil))
-			if pass {
-				t.Log(hex.EncodeToString(program))
-				t.Log(sb.String())
-			}
-			require.False(t, pass)
-			isNotPanic(t, err)
+			testLogicBytes(t, program, defaultEvalParams(nil), "bytecblock", "bytecblock")
 		})
 	}
 }
@@ -3083,8 +2784,7 @@ func TestPanic(t *testing.T) {
 	log := logging.TestingLog(t)
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 1`, v)
-			require.NoError(t, err)
+			ops := testProg(t, `int 1`, v)
 			var hackedOpcode int
 			var oldSpec OpSpec
 			for opcode, spec := range opsByOpcode[v] {
@@ -3098,10 +2798,10 @@ func TestPanic(t *testing.T) {
 					break
 				}
 			}
-			sb := strings.Builder{}
-			params := defaultEvalParams(&sb, nil)
+			params := defaultEvalParams(nil)
 			params.Logger = log
-			err = Check(ops.Program, params)
+			params.TxnGroup[0].Lsig.Logic = ops.Program
+			err := CheckSignature(0, params)
 			require.Error(t, err)
 			if pe, ok := err.(PanicError); ok {
 				require.Equal(t, panicString, pe.PanicValue)
@@ -3110,15 +2810,14 @@ func TestPanic(t *testing.T) {
 			} else {
 				t.Errorf("expected PanicError object but got %T %#v", err, err)
 			}
-			sb = strings.Builder{}
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
-			params = defaultEvalParams(&sb, &txn)
+			params = defaultEvalParams(&txn)
 			params.Logger = log
-			pass, err := Eval(ops.Program, params)
+			pass, err := EvalSignature(0, params)
 			if pass {
 				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
+				t.Log(params.Trace.String())
 			}
 			require.False(t, pass)
 			if pe, ok := err.(PanicError); ok {
@@ -3139,13 +2838,8 @@ func TestProgramTooNew(t *testing.T) {
 	t.Parallel()
 	var program [12]byte
 	vlen := binary.PutUvarint(program[:], EvalMaxVersion+1)
-	err := Check(program[:vlen], defaultEvalParams(nil, nil))
-	require.Error(t, err)
-	isNotPanic(t, err)
-	pass, err := Eval(program[:vlen], defaultEvalParams(nil, nil))
-	require.Error(t, err)
-	require.False(t, pass)
-	isNotPanic(t, err)
+	testLogicBytes(t, program[:vlen], defaultEvalParams(nil),
+		"greater than max supported", "greater than max supported")
 }
 
 func TestInvalidVersion(t *testing.T) {
@@ -3154,13 +2848,7 @@ func TestInvalidVersion(t *testing.T) {
 	t.Parallel()
 	program, err := hex.DecodeString("ffffffffffffffffffffffff")
 	require.NoError(t, err)
-	err = Check(program, defaultEvalParams(nil, nil))
-	require.Error(t, err)
-	isNotPanic(t, err)
-	pass, err := Eval(program, defaultEvalParams(nil, nil))
-	require.Error(t, err)
-	require.False(t, pass)
-	isNotPanic(t, err)
+	testLogicBytes(t, program, defaultEvalParams(nil), "invalid version", "invalid version")
 }
 
 func TestProgramProtoForbidden(t *testing.T) {
@@ -3169,18 +2857,11 @@ func TestProgramProtoForbidden(t *testing.T) {
 	t.Parallel()
 	var program [12]byte
 	vlen := binary.PutUvarint(program[:], EvalMaxVersion)
-	proto := config.ConsensusParams{
+	ep := defaultEvalParams(nil)
+	ep.Proto = &config.ConsensusParams{
 		LogicSigVersion: EvalMaxVersion - 1,
 	}
-	ep := EvalParams{}
-	ep.Proto = &proto
-	err := Check(program[:vlen], ep)
-	require.Error(t, err)
-	ep.Txn = &transactions.SignedTxn{}
-	pass, err := Eval(program[:vlen], ep)
-	require.Error(t, err)
-	require.False(t, pass)
-	isNotPanic(t, err)
+	testLogicBytes(t, program[:vlen], ep, "greater than protocol", "greater than protocol")
 }
 
 func TestMisalignedBranch(t *testing.T) {
@@ -3189,41 +2870,29 @@ func TestMisalignedBranch(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 1
+			ops := testProg(t, `int 1
 bnz done
 bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
 int 1`, v)
-			require.NoError(t, err)
 			//t.Log(hex.EncodeToString(program))
 			canonicalProgramString := mutateProgVersion(v, "01200101224000112603040123457604ababcdcd04f000baad22")
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
 			require.NoError(t, err)
 			require.Equal(t, ops.Program, canonicalProgramBytes)
 			ops.Program[7] = 3 // clobber the branch offset to be in the middle of the bytecblock
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "aligned")
-			pass, err := Eval(ops.Program, defaultEvalParams(nil, nil))
-			require.Error(t, err)
-			require.False(t, pass)
-			isNotPanic(t, err)
+			// Since Eval() doesn't know the jump is bad, we reject "by luck"
+			testLogicBytes(t, ops.Program, defaultEvalParams(nil), "aligned", "REJECT")
 
 			// back branches are checked differently, so test misaligned back branch
 			ops.Program[6] = 0xff // Clobber the two bytes of offset with 0xff 0xff = -1
 			ops.Program[7] = 0xff // That jumps into the offset itself (pc + 3 -1)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.Error(t, err)
 			if v < backBranchEnabledVersion {
-				require.Contains(t, err.Error(), "negative branch")
+				testLogicBytes(t, ops.Program, defaultEvalParams(nil), "negative branch", "negative branch")
 			} else {
-				require.Contains(t, err.Error(), "back branch")
-				require.Contains(t, err.Error(), "aligned")
+				// Again, if we were ever to Eval(), we would not know it's wrong. But we reject here "by luck"
+				testLogicBytes(t, ops.Program, defaultEvalParams(nil), "back branch target", "REJECT")
 			}
-			pass, err = Eval(ops.Program, defaultEvalParams(nil, nil))
-			require.Error(t, err)
-			require.False(t, pass)
-			isNotPanic(t, err)
 		})
 	}
 }
@@ -3234,25 +2903,19 @@ func TestBranchTooFar(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 1
+			ops := testProg(t, `int 1
 bnz done
 bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
 int 1`, v)
-			require.NoError(t, err)
 			//t.Log(hex.EncodeToString(ops.Program))
 			canonicalProgramString := mutateProgVersion(v, "01200101224000112603040123457604ababcdcd04f000baad22")
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
 			require.NoError(t, err)
 			require.Equal(t, ops.Program, canonicalProgramBytes)
 			ops.Program[7] = 200 // clobber the branch offset to be beyond the end of the program
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.Error(t, err)
-			require.True(t, strings.Contains(err.Error(), "beyond end of program"))
-			pass, err := Eval(ops.Program, defaultEvalParams(nil, nil))
-			require.Error(t, err)
-			require.False(t, pass)
-			isNotPanic(t, err)
+			testLogicBytes(t, ops.Program, defaultEvalParams(nil),
+				"beyond end of program", "beyond end of program")
 		})
 	}
 }
@@ -3263,12 +2926,11 @@ func TestBranchTooLarge(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 1
+			ops := testProg(t, `int 1
 bnz done
 bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
 int 1`, v)
-			require.NoError(t, err)
 			//t.Log(hex.EncodeToString(ops.Program))
 			// (br)anch byte, (hi)gh byte of offset,  (lo)w byte:     brhilo
 			canonicalProgramString := mutateProgVersion(v, "01200101224000112603040123457604ababcdcd04f000baad22")
@@ -3276,14 +2938,7 @@ int 1`, v)
 			require.NoError(t, err)
 			require.Equal(t, ops.Program, canonicalProgramBytes)
 			ops.Program[6] = 0x70 // clobber hi byte of branch offset
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "beyond")
-			pass, err := Eval(ops.Program, defaultEvalParams(nil, nil))
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "beyond")
-			require.False(t, pass)
-			isNotPanic(t, err)
+			testLogicBytes(t, ops.Program, defaultEvalParams(nil), "beyond", "beyond")
 		})
 	}
 	branches := []string{
@@ -3296,7 +2951,6 @@ intc_0
 done:
 intc_1
 `
-	ep := defaultEvalParams(nil, nil)
 	for _, line := range branches {
 		t.Run(fmt.Sprintf("branch=%s", line), func(t *testing.T) {
 			source := fmt.Sprintf(template, line)
@@ -3304,13 +2958,8 @@ intc_1
 			require.NoError(t, err)
 			ops.Program[7] = 0xf0 // clobber the branch offset - highly negative
 			ops.Program[8] = 0xff // clobber the branch offset
-			err = Check(ops.Program, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "beyond")
-			pass, err := Eval(ops.Program, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "beyond")
-			require.False(t, pass)
+			testLogicBytes(t, ops.Program, defaultEvalParams(nil),
+				"branch target beyond", "branch target beyond")
 		})
 	}
 }
@@ -3594,12 +3243,15 @@ int 142791994204213819
 func evalLoop(b *testing.B, runs int, program []byte) {
 	b.ResetTimer()
 	for i := 0; i < runs; i++ {
-		pass, err := Eval(program, benchmarkEvalParams(nil, nil))
+		var txn transactions.SignedTxn
+		txn.Lsig.Logic = program
+		pass, err := EvalSignature(0, benchmarkEvalParams(&txn))
 		if !pass {
 			// rerun to trace it.  tracing messes up timing too much
-			sb := strings.Builder{}
-			pass, err = Eval(program, benchmarkEvalParams(&sb, nil))
-			b.Log(sb.String())
+			ep := benchmarkEvalParams(&txn)
+			ep.Trace = &strings.Builder{}
+			pass, err = EvalSignature(0, ep)
+			b.Log(ep.Trace.String())
 		}
 		// require is super slow but makes useful error messages, wrap it in a check that makes the benchmark run a bunch faster
 		if err != nil {
@@ -3613,8 +3265,6 @@ func evalLoop(b *testing.B, runs int, program []byte) {
 
 func benchmarkBasicProgram(b *testing.B, source string) {
 	ops := testProg(b, source, AssemblerMaxVersion)
-	err := Check(ops.Program, defaultEvalParams(nil, nil))
-	require.NoError(b, err)
 	evalLoop(b, b.N, ops.Program)
 }
 
@@ -3630,8 +3280,6 @@ func benchmarkOperation(b *testing.B, prefix string, operation string, suffix st
 	source := prefix + ";" + strings.Repeat(operation+";", 2000) + ";" + suffix
 	source = strings.ReplaceAll(source, ";", "\n")
 	ops := testProg(b, source, AssemblerMaxVersion)
-	err := Check(ops.Program, defaultEvalParams(nil, nil))
-	require.NoError(b, err)
 	evalLoop(b, runs, ops.Program)
 	b.ReportMetric(float64(inst)*15.0, "waste/op")
 }
@@ -3759,16 +3407,17 @@ func BenchmarkCheckx5(b *testing.B) {
 		addBenchmark2Source,
 	}
 
-	programs := make([]*OpStream, len(sourcePrograms))
-	var err error
+	programs := make([][]byte, len(sourcePrograms))
 	for i, text := range sourcePrograms {
-		programs[i], err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-		require.NoError(b, err)
+		ops := testProg(b, text, AssemblerMaxVersion)
+		programs[i] = ops.Program
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for _, program := range programs {
-			err = Check(program.Program, defaultEvalParams(nil, nil))
+			var txn transactions.SignedTxn
+			txn.Lsig.Logic = program
+			err := CheckSignature(0, defaultEvalParams(&txn))
 			if err != nil {
 				require.NoError(b, err)
 			}
@@ -3806,23 +3455,21 @@ pop
 `
 	ops := testProg(t, text, AssemblerMaxVersion)
 
-	ep := defaultEvalParams(nil, nil)
-	ep.Txn = &transactions.SignedTxn{}
-	ep.Txn.Txn.ApplicationArgs = [][]byte{[]byte("test")}
-	_, err := Eval(ops.Program, ep)
-	require.NoError(t, err)
+	var txn transactions.SignedTxn
+	txn.Lsig.Logic = ops.Program
+	txn.Txn.ApplicationArgs = [][]byte{[]byte("test")}
 
-	ep = defaultEvalParamsV1(nil, nil)
-	_, err = Eval(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "greater than protocol supported version 1")
+	ep := defaultEvalParams(&txn)
+	testLogicBytes(t, ops.Program, ep)
+
+	ep = defaultEvalParamsWithVersion(&txn, 1)
+	testLogicBytes(t, ops.Program, ep,
+		"greater than protocol supported version 1", "greater than protocol supported version 1")
 
 	// hack the version and fail on illegal opcode
 	ops.Program[0] = 0x1
-	ep = defaultEvalParamsV1(nil, nil)
-	_, err = Eval(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "illegal opcode 0x36") // txna
+	ep = defaultEvalParamsWithVersion(&txn, 1)
+	testLogicBytes(t, ops.Program, ep, "illegal opcode 0x36", "illegal opcode 0x36") // txna
 }
 
 func TestStackOverflow(t *testing.T) {
@@ -3923,34 +3570,19 @@ func TestApplicationsDisallowOldTeal(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	const source = "int 1"
-	ep := defaultEvalParams(nil, nil)
 
 	txn := makeSampleTxn()
 	txn.Txn.Type = protocol.ApplicationCallTx
 	txn.Txn.RekeyTo = basics.Address{}
-	txngroup := []transactions.SignedTxn{txn}
-	ep.TxnGroup = txngroup
+	ep := defaultEvalParams(&txn)
 
 	for v := uint64(0); v < appsEnabledVersion; v++ {
-		ops, err := AssembleStringWithVersion(source, v)
-		require.NoError(t, err)
-
-		err = CheckStateful(ops.Program, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", appsEnabledVersion))
-
-		_, err = EvalStateful(ops.Program, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", appsEnabledVersion))
+		ops := testProg(t, source, v)
+		e := fmt.Sprintf("program version must be >= %d", appsEnabledVersion)
+		testAppBytes(t, ops.Program, ep, e, e)
 	}
 
-	ops := testProg(t, source, appsEnabledVersion)
-
-	err := CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-
-	_, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
+	testApp(t, source, ep)
 }
 
 func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
@@ -3994,52 +3626,26 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 
 	for ci, cse := range cases {
 		t.Run(fmt.Sprintf("ci=%d", ci), func(t *testing.T) {
-			ep := defaultEvalParams(nil, &cse.group[0])
-			ep.TxnGroup = cse.group
+			ep := defaultEvalParams(nil)
+			ep.TxnGroup = transactions.WrapSignedTxnsWithAD(cse.group)
 
 			// Computed MinTealVersion should be == validFromVersion
-			calc := ComputeMinTealVersion(cse.group, false)
+			calc := ComputeMinTealVersion(ep.TxnGroup, false)
 			require.Equal(t, calc, cse.validFromVersion)
 
 			// Should fail for all versions < validFromVersion
 			expected := fmt.Sprintf("program version must be >= %d", cse.validFromVersion)
 			for v := uint64(0); v < cse.validFromVersion; v++ {
-				ops, err := AssembleStringWithVersion(source, v)
-				require.NoError(t, err)
-
-				err = CheckStateful(ops.Program, ep)
-				require.Error(t, err)
-				require.Contains(t, err.Error(), expected)
-
-				_, err = EvalStateful(ops.Program, ep)
-				require.Error(t, err)
-				require.Contains(t, err.Error(), expected)
-
-				err = Check(ops.Program, ep)
-				require.Error(t, err)
-				require.Contains(t, err.Error(), expected)
-
-				_, err = Eval(ops.Program, ep)
-				require.Error(t, err)
-				require.Contains(t, err.Error(), expected)
+				ops := testProg(t, source, v)
+				testAppBytes(t, ops.Program, ep, expected, expected)
+				testLogicBytes(t, ops.Program, ep, expected, expected)
 			}
 
 			// Should succeed for all versions >= validFromVersion
 			for v := cse.validFromVersion; v <= AssemblerMaxVersion; v++ {
-				ops, err := AssembleStringWithVersion(source, v)
-				require.NoError(t, err)
-
-				err = CheckStateful(ops.Program, ep)
-				require.NoError(t, err)
-
-				_, err = EvalStateful(ops.Program, ep)
-				require.NoError(t, err)
-
-				err = Check(ops.Program, ep)
-				require.NoError(t, err)
-
-				_, err = Eval(ops.Program, ep)
-				require.NoError(t, err)
+				ops := testProg(t, source, v)
+				testAppBytes(t, ops.Program, ep)
+				testLogicBytes(t, ops.Program, ep)
 			}
 		})
 	}
@@ -4084,7 +3690,7 @@ func TestAllowedOpcodesV2(t *testing.T) {
 		"gtxn":       true,
 	}
 
-	ep := defaultEvalParams(nil, nil)
+	ep := defaultEvalParams(nil)
 
 	cnt := 0
 	for _, spec := range OpSpecs {
@@ -4093,10 +3699,10 @@ func TestAllowedOpcodesV2(t *testing.T) {
 			require.True(t, ok, "Missed opcode in the test: %s", spec.Name)
 			require.Contains(t, source, spec.Name)
 			ops := testProg(t, source, AssemblerMaxVersion)
-			// all opcodes allowed in stateful mode so use CheckStateful/EvalStateful
-			err := CheckStateful(ops.Program, ep)
+			// all opcodes allowed in stateful mode so use CheckStateful/EvalContract
+			err := CheckContract(ops.Program, 0, ep)
 			require.NoError(t, err, source)
-			_, err = EvalStateful(ops.Program, ep)
+			_, err = EvalApp(ops.Program, 0, ep)
 			if spec.Name != "return" {
 				// "return" opcode always succeeds so ignore it
 				require.Error(t, err, source)
@@ -4105,18 +3711,8 @@ func TestAllowedOpcodesV2(t *testing.T) {
 
 			for v := byte(0); v <= 1; v++ {
 				ops.Program[0] = v
-				err = Check(ops.Program, ep)
-				require.Error(t, err, source)
-				require.Contains(t, err.Error(), "illegal opcode")
-				err = CheckStateful(ops.Program, ep)
-				require.Error(t, err, source)
-				require.Contains(t, err.Error(), "illegal opcode")
-				_, err = Eval(ops.Program, ep)
-				require.Error(t, err, source)
-				require.Contains(t, err.Error(), "illegal opcode")
-				_, err = EvalStateful(ops.Program, ep)
-				require.Error(t, err, source)
-				require.Contains(t, err.Error(), "illegal opcode")
+				testLogicBytes(t, ops.Program, ep, "illegal opcode", "illegal opcode")
+				testAppBytes(t, ops.Program, ep, "illegal opcode", "illegal opcode")
 			}
 			cnt++
 		}
@@ -4147,43 +3743,27 @@ func TestAllowedOpcodesV3(t *testing.T) {
 		"pushbytes":   `pushbytes "stringsfail?"`,
 	}
 
-	excluded := map[string]bool{}
-
-	ep := defaultEvalParams(nil, nil)
+	ep := defaultEvalParams(nil)
 
 	cnt := 0
 	for _, spec := range OpSpecs {
-		if spec.Version == 3 && !excluded[spec.Name] {
+		if spec.Version == 3 {
 			source, ok := tests[spec.Name]
 			require.True(t, ok, "Missed opcode in the test: %s", spec.Name)
 			require.Contains(t, source, spec.Name)
 			ops := testProg(t, source, AssemblerMaxVersion)
-			// all opcodes allowed in stateful mode so use CheckStateful/EvalStateful
-			err := CheckStateful(ops.Program, ep)
-			require.NoError(t, err, source)
-			_, err = EvalStateful(ops.Program, ep)
-			require.Error(t, err, source)
-			require.NotContains(t, err.Error(), "illegal opcode")
+			// all opcodes allowed in stateful mode so use CheckStateful/EvalContract
+			testAppBytes(t, ops.Program, ep, "REJECT")
 
 			for v := byte(0); v <= 1; v++ {
 				ops.Program[0] = v
-				err = Check(ops.Program, ep)
-				require.Error(t, err, source)
-				require.Contains(t, err.Error(), "illegal opcode")
-				err = CheckStateful(ops.Program, ep)
-				require.Error(t, err, source)
-				require.Contains(t, err.Error(), "illegal opcode")
-				_, err = Eval(ops.Program, ep)
-				require.Error(t, err, source)
-				require.Contains(t, err.Error(), "illegal opcode")
-				_, err = EvalStateful(ops.Program, ep)
-				require.Error(t, err, source)
-				require.Contains(t, err.Error(), "illegal opcode")
+				testLogicBytes(t, ops.Program, ep, "illegal opcode", "illegal opcode")
+				testAppBytes(t, ops.Program, ep, "illegal opcode", "illegal opcode")
 			}
 			cnt++
 		}
 	}
-	require.Equal(t, len(tests), cnt)
+	require.Len(t, tests, cnt)
 }
 
 func TestRekeyFailsOnOldVersion(t *testing.T) {
@@ -4192,23 +3772,12 @@ func TestRekeyFailsOnOldVersion(t *testing.T) {
 	t.Parallel()
 	for v := uint64(0); v < rekeyingEnabledVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 1`, v)
-			require.NoError(t, err)
+			ops := testProg(t, `int 1`, v)
 			var txn transactions.SignedTxn
-			txn.Lsig.Logic = ops.Program
 			txn.Txn.RekeyTo = basics.Address{1, 2, 3, 4}
-			sb := strings.Builder{}
-			proto := defaultEvalProto()
-			ep := defaultEvalParams(&sb, &txn)
-			ep.TxnGroup = []transactions.SignedTxn{txn}
-			ep.Proto = &proto
-			err = Check(ops.Program, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", rekeyingEnabledVersion))
-			pass, err := Eval(ops.Program, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", rekeyingEnabledVersion))
-			require.False(t, pass)
+			ep := defaultEvalParams(&txn)
+			e := fmt.Sprintf("program version must be >= %d", rekeyingEnabledVersion)
+			testLogicBytes(t, ops.Program, ep, e, e)
 		})
 	}
 }
@@ -4245,14 +3814,14 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 					sb := strings.Builder{}
 					var txn transactions.SignedTxn
 					txn.Lsig.Logic = ops.Program
-					err := Check(ops.Program, defaultEvalParamsWithVersion(&sb, &txn, lv))
+					err := CheckSignature(0, defaultEvalParamsWithVersion(&txn, lv))
 					if err != nil {
 						t.Log(hex.EncodeToString(ops.Program))
 						t.Log(sb.String())
 					}
 					require.NoError(t, err)
 					sb = strings.Builder{}
-					pass, err := Eval(ops.Program, defaultEvalParamsWithVersion(&sb, &txn, lv))
+					pass, err := EvalSignature(0, defaultEvalParamsWithVersion(&txn, lv))
 					ok := tester(pass, err)
 					if !ok {
 						t.Log(hex.EncodeToString(ops.Program))
@@ -4767,15 +4336,11 @@ func TestLog(t *testing.T) {
 
 	t.Parallel()
 	proto := defaultEvalProtoWithVersion(LogicVersion)
-	txn := transactions.SignedTxn{
-		Txn: transactions.Transaction{
-			Type: protocol.ApplicationCallTx,
-		},
-	}
+	var txn transactions.SignedTxn
+	txn.Txn.Type = protocol.ApplicationCallTx
 	ledger := MakeLedger(nil)
 	ledger.NewApp(txn.Txn.Receiver, 0, basics.AppParams{})
-	sb := strings.Builder{}
-	ep := defaultEvalParams(&sb, &txn)
+	ep := defaultEvalParams(&txn)
 	ep.Proto = &proto
 	ep.Ledger = ledger
 	testCases := []struct {
@@ -4806,19 +4371,12 @@ func TestLog(t *testing.T) {
 
 	//track expected number of logs in cx.EvalDelta.Logs
 	for i, s := range testCases {
-		ops := testProg(t, s.source, AssemblerMaxVersion)
-
-		err := CheckStateful(ops.Program, ep)
-		require.NoError(t, err, s)
-
-		pass, cx, err := EvalStatefulCx(ops.Program, ep)
-		require.NoError(t, err)
-		require.True(t, pass)
-		require.Len(t, cx.EvalDelta.Logs, s.loglen)
+		delta := testApp(t, s.source, ep)
+		require.Len(t, delta.Logs, s.loglen)
 		if i == len(testCases)-1 {
-			require.Equal(t, strings.Repeat("a", MaxLogSize), cx.EvalDelta.Logs[0])
+			require.Equal(t, strings.Repeat("a", MaxLogSize), delta.Logs[0])
 		} else {
-			for _, l := range cx.EvalDelta.Logs {
+			for _, l := range delta.Logs {
 				require.Equal(t, "a logging message", l)
 			}
 		}
@@ -4868,21 +4426,12 @@ func TestLog(t *testing.T) {
 	}
 
 	for _, c := range failCases {
-		ops := testProg(t, c.source, AssemblerMaxVersion)
-
-		err := CheckStateful(ops.Program, ep)
-		require.NoError(t, err, c)
-
-		var pass bool
 		switch c.runMode {
 		case runModeApplication:
-			pass, err = EvalStateful(ops.Program, ep)
+			testApp(t, c.source, ep, c.errContains)
 		default:
-			pass, err = Eval(ops.Program, ep)
-
+			testLogic(t, c.source, AssemblerMaxVersion, ep, c.errContains, c.errContains)
 		}
-		require.Contains(t, err.Error(), c.errContains)
-		require.False(t, pass)
 	}
 }
 
@@ -4903,24 +4452,17 @@ func TestPcDetails(t *testing.T) {
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
 			ops := testProg(t, test.source, LogicVersion)
-			txn := makeSampleTxn()
-			txgroup := makeSampleTxnGroup(txn)
-			txn.Lsig.Logic = ops.Program
-			sb := strings.Builder{}
-			ep := defaultEvalParams(&sb, &txn)
-			ep.TxnGroup = txgroup
+			ep, _, _ := makeSampleEnv()
 
-			var cx EvalContext
-			cx.EvalParams = ep
-			cx.runModeFlags = runModeSignature
-
-			pass, err := eval(ops.Program, &cx)
+			pass, cx, err := EvalContract(ops.Program, 0, ep)
 			require.Error(t, err)
 			require.False(t, pass)
 
+			assert.Equal(t, test.pc, cx.pc, ep.Trace.String())
+
 			pc, det := cx.PcDetails()
-			require.Equal(t, test.pc, pc)
-			require.Equal(t, test.det, det)
+			assert.Equal(t, test.pc, pc)
+			assert.Equal(t, test.det, det)
 		})
 	}
 }

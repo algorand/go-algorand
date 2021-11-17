@@ -133,7 +133,7 @@ func WrapSignedTxnsWithAD(txgroup []SignedTxn) []SignedTxnWithAD {
 
 // FeeCredit computes the amount of fee credit that can be spent on
 // inner txns because it was more than required.
-func FeeCredit(txgroup []SignedTxn, minFee uint64) (uint64, error) {
+func FeeCredit(txgroup []SignedTxnWithAD, minFee uint64) (uint64, error) {
 	minFeeCount := uint64(0)
 	feesPaid := uint64(0)
 	for _, stxn := range txgroup {

@@ -60,13 +60,13 @@ type PCOffset struct {
 // to json and send to tealdbg
 type DebugState struct {
 	// fields set once on Register
-	ExecID      string                   `codec:"execid"`
-	Disassembly string                   `codec:"disasm"`
-	PCOffset    []PCOffset               `codec:"pctooffset"`
-	TxnGroup    []transactions.SignedTxn `codec:"txngroup"`
-	GroupIndex  int                      `codec:"gindex"`
-	Proto       *config.ConsensusParams  `codec:"proto"`
-	Globals     []basics.TealValue       `codec:"globals"`
+	ExecID      string                         `codec:"execid"`
+	Disassembly string                         `codec:"disasm"`
+	PCOffset    []PCOffset                     `codec:"pctooffset"`
+	TxnGroup    []transactions.SignedTxnWithAD `codec:"txngroup"`
+	GroupIndex  int                            `codec:"gindex"`
+	Proto       *config.ConsensusParams        `codec:"proto"`
+	Globals     []basics.TealValue             `codec:"globals"`
 
 	// fields updated every step
 	PC      int                `codec:"pc"`
@@ -113,15 +113,8 @@ func makeDebugState(cx *EvalContext) DebugState {
 	}
 	ds.Globals = globals
 
-	// pre-allocate state maps
 	if (cx.runModeFlags & runModeApplication) != 0 {
-		ds.EvalDelta, err = cx.Ledger.GetDelta(&cx.Txn.Txn)
-		if err != nil {
-			sv := stackValue{Bytes: []byte(err.Error())}
-			tv := stackValueToTealValue(&sv)
-			vd := tv.ToValueDelta()
-			ds.EvalDelta.GlobalDelta = basics.StateDelta{"error": vd}
-		}
+		ds.EvalDelta = cx.Txn.EvalDelta
 	}
 
 	return ds
@@ -218,14 +211,7 @@ func (cx *EvalContext) refreshDebugState() *DebugState {
 	ds.Scratch = scratch
 
 	if (cx.runModeFlags & runModeApplication) != 0 {
-		var err error
-		ds.EvalDelta, err = cx.Ledger.GetDelta(&cx.Txn.Txn)
-		if err != nil {
-			sv := stackValue{Bytes: []byte(err.Error())}
-			tv := stackValueToTealValue(&sv)
-			vd := tv.ToValueDelta()
-			ds.EvalDelta.GlobalDelta = basics.StateDelta{"error": vd}
-		}
+		ds.EvalDelta = cx.Txn.EvalDelta
 	}
 
 	return ds
