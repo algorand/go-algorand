@@ -21,6 +21,10 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
@@ -157,6 +161,12 @@ func trackerDBInitializeImpl(ctx context.Context, tx *sql.Tx, params trackerDBPa
 					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 4 : %v", err)
 					return
 				}
+			case 5:
+				err = tu.upgradeDatabaseSchema5(ctx, tx)
+				if err != nil {
+					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 5 : %v", err)
+					return
+				}
 			default:
 				return trackerDBInitParams{}, fmt.Errorf("trackerDBInitialize unable to upgrade database from schema version %d", tu.schemaVersion)
 			}
@@ -268,7 +278,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context
 
 		tu.log.Infof("upgradeDatabaseSchema1 deleting stored catchpoints")
 		// delete catchpoints.
-		err = deleteStoredCatchpoints(ctx, accountsq, tu.dbPathPrefix)
+		err = deleteStoredCatchpoints(ctx, accountsq, tu.trackerDBParams.dbPathPrefix)
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema1 unable to delete stored catchpoints : %v", err)
 		}
@@ -362,4 +372,106 @@ done:
 	tu.log.Infof("upgradeDatabaseSchema4: deleted %d rows", numDeleted)
 
 	return tu.setVersion(ctx, tx, 5)
+}
+
+// upgradeDatabaseSchema5 upgrades the database schema from version 5 to version 6,
+// adding the resources table and clearing empty catchpoint directories.
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context, tx *sql.Tx) (err error) {
+	err = accountsCreateResourceTable(ctx, tx)
+	if err != nil {
+		return fmt.Errorf("upgradeDatabaseSchema5 unable to create resources table : %v", err)
+	}
+
+	err = removeEmptyDirsOnSchemaUpgrade(tu.trackerDBParams.dbPathPrefix)
+	if err != nil {
+		return fmt.Errorf("upgradeDatabaseSchema5 unable to clear empty catchpoint directories : %v", err)
+	}
+
+	var lastProgressInfoMsg time.Time
+	const progressLoggingInterval = 5 * time.Second
+	migrationProcessLog := func(processed, total uint64) {
+		if time.Since(lastProgressInfoMsg) < progressLoggingInterval {
+			return
+		}
+		lastProgressInfoMsg = time.Now()
+		tu.log.Infof("upgradeDatabaseSchema5 upgraded %d out of %d accounts [ %3.1f%% ]", processed, total, float64(processed)*100.0/float64(total))
+	}
+
+	err = performResourceTableMigration(ctx, tx, migrationProcessLog)
+	if err != nil {
+		return fmt.Errorf("upgradeDatabaseSchema5 unable to complete data migration : %v", err)
+	}
+
+	// reset the merkle trie
+	err = resetAccountHashes(tx)
+	if err != nil {
+		return fmt.Errorf("upgradeDatabaseSchema5 unable to reset account hashes : %v", err)
+	}
+
+	// update version
+	return tu.setVersion(ctx, tx, 6)
+}
+
+// isDirEmpty returns if a given directory is empty or not.
+func isDirEmpty(path string) (bool, error) {
+	dir, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer dir.Close()
+	_, err = dir.Readdirnames(1)
+	if err != io.EOF {
+		return false, err
+	}
+	return true, nil
+}
+
+// getEmptyDirs returns a slice of paths for empty directories which are located in PathToScan arg
+func getEmptyDirs(PathToScan string) ([]string, error) {
+	var emptyDir []string
+	err := filepath.Walk(PathToScan, func(path string, f os.FileInfo, errIn error) error {
+		if errIn != nil {
+			return errIn
+		}
+		if !f.IsDir() {
+			return nil
+		}
+		isEmpty, err := isDirEmpty(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return filepath.SkipDir
+			}
+			return err
+		}
+		if isEmpty {
+			emptyDir = append(emptyDir, path)
+		}
+		return nil
+	})
+	return emptyDir, err
+}
+
+func removeEmptyDirsOnSchemaUpgrade(dbDirectory string) (err error) {
+	catchpointRootDir := filepath.Join(dbDirectory, CatchpointDirName)
+	if _, err := os.Stat(catchpointRootDir); os.IsNotExist(err) {
+		return nil
+	}
+	for {
+		emptyDirs, err := getEmptyDirs(catchpointRootDir)
+		if err != nil {
+			return err
+		}
+		// There are no empty dirs
+		if len(emptyDirs) == 0 {
+			break
+		}
+		// only left with the root dir
+		if len(emptyDirs) == 1 && emptyDirs[0] == catchpointRootDir {
+			break
+		}
+		for _, emptyDirPath := range emptyDirs {
+			os.Remove(emptyDirPath)
+		}
+	}
+	return nil
 }
