@@ -26,6 +26,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -35,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util/execpool"
 )
 
 var _ = fmt.Printf
@@ -384,4 +386,27 @@ func BenchmarkCryptoVerifierBundleVertification(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		<-c
 	}
+}
+
+// TestCryptoVerifierVerificationFailures tests to see that the cryptoVerifier.VerifyVote returns an error in the vote response
+// when being unable to enqueue a vote.
+func TestCryptoVerifierVerificationFailures(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	mainPool := execpool.MakePool(t)
+	defer mainPool.Shutdown()
+
+	voteVerifier := MakeAsyncVoteVerifier(&expiredExecPool{mainPool})
+	defer voteVerifier.Quit()
+
+	cryptoVerifier := makeCryptoVerifier(nil, nil, voteVerifier, logging.TestingLog(t))
+	defer cryptoVerifier.Quit()
+
+	cryptoVerifier.VerifyVote(context.Background(), cryptoVoteRequest{message: message{Tag: protocol.AgreementVoteTag}, Round: basics.Round(8), TaskIndex: 14})
+	// read the failed response from VerifiedVotes:
+	votesout := cryptoVerifier.VerifiedVotes()
+	voteResponse := <-votesout
+	require.Equal(t, context.Canceled, voteResponse.err)
+	require.True(t, voteResponse.cancelled)
+	require.Equal(t, 14, voteResponse.index)
 }
