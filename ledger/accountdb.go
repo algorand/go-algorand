@@ -793,7 +793,7 @@ func (rd *resourcesData) SetAssetParams(ap basics.AssetParams, haveHoldings bool
 	rd.UnitName = ap.UnitName
 	rd.AssetName = ap.AssetName
 	rd.URL = ap.URL
-	copy(rd.MetadataHash[:], ap.MetadataHash[:])
+	rd.MetadataHash = ap.MetadataHash
 	rd.Manager = ap.Manager
 	rd.Reserve = ap.Reserve
 	rd.Freeze = ap.Freeze
@@ -812,12 +812,12 @@ func (rd *resourcesData) GetAssetParams() basics.AssetParams {
 		UnitName:      rd.UnitName,
 		AssetName:     rd.AssetName,
 		URL:           rd.URL,
+		MetadataHash:  rd.MetadataHash,
 		Manager:       rd.Manager,
 		Reserve:       rd.Reserve,
 		Freeze:        rd.Freeze,
 		Clawback:      rd.Clawback,
 	}
-	copy(ap.MetadataHash[:], rd.MetadataHash[:])
 	return ap
 }
 
