@@ -37,8 +37,7 @@ const (
 	maxPseudonodeOutputWaitDuration = 2 * time.Second
 )
 
-var errPseudonodeBacklogFullVote = "pseudonode input channel is full; unable to make vote for (%d, %d, %d)"
-var errPseudonodeBacklogFullProposal = "pseudonode input channel is full; unable to make a proposal for (%d, %d)"
+var errPseudonodeBacklogFull = fmt.Errorf("pseudonode input channel is full")
 var errPseudonodeVerifierClosedChannel = errors.New("crypto verifier closed the output channel prematurely")
 var errPseudonodeNoVotes = errors.New("no valid participation keys to generate votes for given round")
 var errPseudonodeNoProposals = errors.New("no valid participation keys to generate proposals for given round")
@@ -176,7 +175,7 @@ func (n asyncPseudonode) MakeProposals(ctx context.Context, r round, p period) (
 		return proposalTask.outputChannel(), nil
 	default:
 		proposalTask.close()
-		return nil, fmt.Errorf(errPseudonodeBacklogFullProposal, r, p)
+		return nil, fmt.Errorf("unable to make proposal for (%d, %d): %w", r, p, errPseudonodeBacklogFull)
 	}
 }
 
@@ -193,7 +192,7 @@ func (n asyncPseudonode) MakeVotes(ctx context.Context, r round, p period, s ste
 		return proposalTask.outputChannel(), nil
 	default:
 		proposalTask.close()
-		return nil, fmt.Errorf(errPseudonodeBacklogFullVote, r, p, s)
+		return nil, fmt.Errorf("unable to make vote for (%d, %d, %d): %w", r, p, s, errPseudonodeBacklogFull)
 	}
 }
 

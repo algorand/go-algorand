@@ -19,6 +19,7 @@ package agreement
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -525,6 +526,7 @@ func TestPseudonodeFailedEnqueuedTasks(t *testing.T) {
 		channels = append(channels, ch)
 	}
 	require.Error(t, err, "MakeProposals did not returned an error when being overflowed with requests")
+	require.True(t, errors.Is(err, errPseudonodeBacklogFull))
 
 	persist := make(chan error)
 	close(persist)
