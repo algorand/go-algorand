@@ -29,7 +29,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/crypto/passphrase"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	algodAcct "github.com/algorand/go-algorand/data/account"
@@ -1439,12 +1438,9 @@ var partkeyInfoCmd = &cobra.Command{
 				fmt.Printf("Key dilution:              %d\n", part.Key.VoteKeyDilution)
 				fmt.Printf("Selection key:             %s\n", base64.StdEncoding.EncodeToString(part.Key.SelectionParticipationKey))
 				fmt.Printf("Voting key:                %s\n", base64.StdEncoding.EncodeToString(part.Key.VoteParticipationKey))
-				if certSigner := part.StateProofSigner(); certSigner != nil {
-					stateProofID = *certSigner.GetVerifier()
-					fmt.Printf("State proof ID:            %s\n", base64.StdEncoding.EncodeToString(stateProofID))
-				}
 				// PKI TODO: enable with state proof support.
 				//fmt.Printf("State proof key:           %s\n", base64.StdEncoding.EncodeToString(part.StateProofKey))
+				//fmt.Printf("State proof ID:            %s\n", base64.StdEncoding.EncodeToString(stateProofID))
 			}
 		})
 	},
