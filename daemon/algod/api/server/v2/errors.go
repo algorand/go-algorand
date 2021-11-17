@@ -38,4 +38,5 @@ var (
 	errFailedToAbortCatchup                    = "failed to abort catchup : %v"
 	errFailedToStartCatchup                    = "failed to start catchup : %v"
 	errOperationNotAvailableDuringCatchup      = "operation not available during catchup"
+	errRESTPayloadZeroLength                   = "payload was of zero length"
 )

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"strings"
 )
 
 // typeCastToTuple cast an array-like ABI type into an ABI tuple type.
@@ -58,7 +59,7 @@ func (t Type) typeCastToTuple(tupLen ...int) (Type, error) {
 		return Type{}, fmt.Errorf("type cannot support conversion to tuple")
 	}
 
-	tuple, err := makeTupleType(childT)
+	tuple, err := MakeTupleType(childT)
 	if err != nil {
 		return Type{}, err
 	}
@@ -475,4 +476,74 @@ func decodeTuple(encoded []byte, childT []Type) ([]interface{}, error) {
 		}
 	}
 	return values, nil
+}
+
+// ParseArgJSONtoByteSlice convert input method arguments to ABI encoded bytes
+// it converts funcArgTypes into a tuple type and apply changes over input argument string (in JSON format)
+// if there are greater or equal to 15 inputs, then we compact the tailing inputs into one tuple
+func ParseArgJSONtoByteSlice(funcArgTypes string, jsonArgs []string, applicationArgs *[][]byte) error {
+	abiTupleT, err := TypeOf(funcArgTypes)
+	if err != nil {
+		return err
+	}
+	if len(abiTupleT.childTypes) != len(jsonArgs) {
+		return fmt.Errorf("input argument number %d != method argument number %d", len(jsonArgs), len(abiTupleT.childTypes))
+	}
+
+	// change the input args to be 1 - 14 + 15 (compacting everything together)
+	if len(jsonArgs) > 14 {
+		compactedType, err := MakeTupleType(abiTupleT.childTypes[14:])
+		if err != nil {
+			return err
+		}
+		abiTupleT.childTypes = abiTupleT.childTypes[:14]
+		abiTupleT.childTypes = append(abiTupleT.childTypes, compactedType)
+		abiTupleT.staticLength = 15
+
+		remainingJSON := "[" + strings.Join(jsonArgs[14:], ",") + "]"
+		jsonArgs = jsonArgs[:14]
+		jsonArgs = append(jsonArgs, remainingJSON)
+	}
+
+	// parse JSON value to ABI encoded bytes
+	for i := 0; i < len(jsonArgs); i++ {
+		interfaceVal, err := abiTupleT.childTypes[i].UnmarshalFromJSON([]byte(jsonArgs[i]))
+		if err != nil {
+			return err
+		}
+		abiEncoded, err := abiTupleT.childTypes[i].Encode(interfaceVal)
+		if err != nil {
+			return err
+		}
+		*applicationArgs = append(*applicationArgs, abiEncoded)
+	}
+	return nil
+}
+
+// ParseMethodSignature parses a method of format `method(...argTypes...)retType`
+// into `(...argTypes)` and `retType`
+func ParseMethodSignature(methodSig string) (string, string, error) {
+	var stack []int
+
+	for index, chr := range methodSig {
+		if chr == '(' {
+			stack = append(stack, index)
+		} else if chr == ')' {
+			if len(stack) == 0 {
+				break
+			}
+			leftParenIndex := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			if len(stack) == 0 {
+				returnType := methodSig[index+1:]
+				if _, err := TypeOf(returnType); err != nil {
+					if returnType != "void" {
+						return "", "", fmt.Errorf("cannot infer return type: %s", returnType)
+					}
+				}
+				return methodSig[leftParenIndex : index+1], methodSig[index+1:], nil
+			}
+		}
+	}
+	return "", "", fmt.Errorf("unpaired parentheses: %s", methodSig)
 }

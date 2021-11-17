@@ -502,4 +502,44 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			}
 		}
 	}
+
+	// test to see that after loadFromDisk, all the tracker content is lost ( as expected )
+	require.NotZero(t, len(ct.roundDigest))
+	require.NoError(t, ct.loadFromDisk(ml, ml.Latest()))
+	require.Zero(t, len(ct.roundDigest))
+	require.Zero(t, ct.catchpointWriting)
+	select {
+	case _, closed := <-ct.catchpointSlowWriting:
+		require.False(t, closed)
+	default:
+		require.FailNow(t, "The catchpointSlowWriting should have been a closed channel; it seems to be a nil ?!")
+	}
+}
+
+func TestCatchpointTrackerPrepareCommit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ct := &catchpointTracker{}
+	const maxOffset = 40
+	const maxLookback = 320
+	ct.roundDigest = make([]crypto.Digest, maxOffset+maxLookback)
+	for i := 0; i < len(ct.roundDigest); i++ {
+		ct.roundDigest[i] = crypto.Hash([]byte{byte(i), byte(i / 256)})
+	}
+	dcc := &deferredCommitContext{}
+	for offset := uint64(1); offset < maxOffset; offset++ {
+		dcc.offset = offset
+		for lookback := basics.Round(0); lookback < maxLookback; lookback += 20 {
+			dcc.lookback = lookback
+			for _, isCatchpointRound := range []bool{false, true} {
+				dcc.isCatchpointRound = isCatchpointRound
+				require.NoError(t, ct.prepareCommit(dcc))
+				if isCatchpointRound {
+					expectedRound := offset + uint64(lookback) - 1
+					expectedHash := crypto.Hash([]byte{byte(expectedRound), byte(expectedRound / 256)})
+					require.Equal(t, expectedHash[:], dcc.committedRoundDigest[:])
+				}
+			}
+		}
+	}
 }
