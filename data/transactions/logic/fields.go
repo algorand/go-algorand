@@ -448,6 +448,45 @@ func (s ecDsaCurveNameSpecMap) getExtraFor(name string) (extra string) {
 	return
 }
 
+// Base64Alphabet is an enum for the `base64decode` opcode
+type Base64Alphabet int
+
+const (
+	URLAlphabet Base64Alphabet = iota
+	StandardAlphabet
+	invalidBase64Alphabet
+)
+
+Base64AlphabetNames := [...]string{
+	"URL and Filename Safe base-64 Alphabet",
+	"Standard base-64 Alphabet",
+}
+
+var Base64AlphabetNames []string
+
+type base64AlphabetSpec struct {
+	field   Base64Alphabet
+	version uint64
+}
+
+var base64AlphbetSpecs = []base64AlphabetSpec{
+	{URLAlphabet, 5},
+	{StandardAlphabet, 5},
+}
+
+var base64AlphabetSpecByField map[Base64Alphabet]base64AlphabetSpec
+var base64AlphabetSpecByName base64AlphabetSpecMap
+
+type base64AlphabetSpecMap map[string]base64AlphabetSpec
+
+func (s base64AlphabetSpecMap) getExtraFor(name string) (extra string) {
+	// Uses 5 here because ecdsa fields were introduced in 5
+	if s[name].version > 5 {
+		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
+	}
+	return
+}
+
 // AssetHoldingField is an enum for `asset_holding_get` opcode
 type AssetHoldingField int
 
@@ -679,6 +718,16 @@ func init() {
 	ecdsaCurveSpecByName = make(ecDsaCurveNameSpecMap, len(EcdsaCurveNames))
 	for i, ahfn := range EcdsaCurveNames {
 		ecdsaCurveSpecByName[ahfn] = ecdsaCurveSpecByField[EcdsaCurve(i)]
+	}
+	
+	base64AlphabetSpecByField = make(map[Base64Alphabet]base64AlphabetSpec, len(Base64AlphabetNames))
+	for _, s := range base64AlphbetSpecs {
+		base64AlphabetSpecByField[s.field] = s
+	}
+	
+	base64AlphabetSpecByName = make(base64AlphabetSpecMap, len(Base64AlphabetNames))
+	for i, alphname := range Base64AlphabetNames {
+		base64AlphabetSpecByName[alphname] = base64AlphabetSpecByField[Base64Alphabet(i)]
 	}
 
 	AssetHoldingFieldNames = make([]string, int(invalidAssetHoldingField))

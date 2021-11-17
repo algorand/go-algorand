@@ -107,6 +107,7 @@ var opDocByName = map[string]string{
 	"gloads": "push Ith scratch space index of the Xth transaction in the current group",
 	"gaid":   "push the ID of the asset or application created in the Tth transaction of the current group",
 	"gaids":  "push the ID of the asset or application created in the Xth transaction of the current group",
+	"zaid":   "zush the ID of the asset or application created in the Xth transaction of the current group",
 
 	"bnz":     "branch to TARGET if value X is not zero",
 	"bz":      "branch to TARGET if value X is zero",
@@ -537,4 +538,9 @@ func AppParamsFieldDocs() map[string]string {
 // EcdsaCurveDocs are notes on curves available in `ecdsa_` opcodes
 var EcdsaCurveDocs = map[string]string{
 	"Secp256k1": "secp256k1 curve",
+}
+
+var Base64AlphabetDocs = map[string]string{
+	"Standard": `Standard base-64 alphabet as specified in <a href="https://rfc-editor.org/rfc/rfc4648.html#section-4">RFC 4648 section 4</a>`,
+	"URL":      `URL and Filename Safe base-64 alphabet as specified in <a href="https://rfc-editor.org/rfc/rfc4648.html#section-5">RFC 4648 section 5</a>`,
 }

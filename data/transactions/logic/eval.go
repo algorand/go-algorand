@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"crypto/sha512"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -4033,4 +4034,34 @@ func (cx *EvalContext) PcDetails() (pc int, dis string) {
 		}
 	}
 	return cx.pc, dis
+}
+
+func base64Decode(encoded []byte, isURL bool) ([]byte, error) {
+	encoding := base64.URLEncoding
+	if !isURL {
+		encoding = base64.StdEncoding
+	}
+
+	decoded := make([]byte, encoding.DecodedLen(len(encoded)))
+	n, err := encoding.Strict().Decode(decoded, encoded)
+	if err != nil {
+		n = 0
+	}
+	return decoded[:n], err
+}
+
+func opBase64Decode(cx *EvalContext) {
+	last := len(cx.stack) - 1
+	alphabetField := Base64Alphabet(cx.program[cx.pc+1])
+	fs, ok := base64AlphabetSpecByField[alphabetField]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid base64_decode field %d", alphabetField)
+		return
+	}
+
+	isURL := true
+	if alphabetField == StandardAlphabet {
+		isURL = false
+	}
+	cx.stack[last].Bytes, cx.err = base64Decode(cx.stack[last].Bytes, isURL)
 }
