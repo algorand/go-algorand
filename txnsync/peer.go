@@ -51,7 +51,7 @@ const shortTermRecentTransactionsSentBufferLength = 5000
 const pendingUnconfirmedRemoteMessages = 20
 
 // longTermRecentTransactionsSentBufferLength is the size of the long term transaction id cache.
-const longTermRecentTransactionsSentBufferLength = 15000
+const longTermRecentTransactionsSentBufferLength = 75000
 const minDataExchangeRateThreshold = 500 * 1024            // 500KB/s, which is ~3.9Mbps
 const maxDataExchangeRateThreshold = 100 * 1024 * 1024 / 8 // 100Mbps
 const defaultDataExchangeRate = minDataExchangeRateThreshold
