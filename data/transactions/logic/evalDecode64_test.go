@@ -80,7 +80,7 @@ func TestBase64DecodeFunc(t *testing.T) {
 		require.Equal(t, testCase.Error, err)
 	}
 
-	//  b := big.NewInt(0x100)
+	// b := big.NewInt(0x100)
 	// r, err := leadingZeros(1, b)
 	// require.Error(t, err)
 	// require.Nil(t, r)
