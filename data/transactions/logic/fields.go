@@ -457,12 +457,10 @@ const (
 	invalidBase64Alphabet
 )
 
-Base64AlphabetNames := [...]string{
+var Base64AlphabetNames [2]string = [...]string{
 	"URL and Filename Safe base-64 Alphabet",
 	"Standard base-64 Alphabet",
 }
-
-var Base64AlphabetNames []string
 
 type base64AlphabetSpec struct {
 	field   Base64Alphabet
@@ -719,12 +717,12 @@ func init() {
 	for i, ahfn := range EcdsaCurveNames {
 		ecdsaCurveSpecByName[ahfn] = ecdsaCurveSpecByField[EcdsaCurve(i)]
 	}
-	
+
 	base64AlphabetSpecByField = make(map[Base64Alphabet]base64AlphabetSpec, len(Base64AlphabetNames))
 	for _, s := range base64AlphbetSpecs {
 		base64AlphabetSpecByField[s.field] = s
 	}
-	
+
 	base64AlphabetSpecByName = make(base64AlphabetSpecMap, len(Base64AlphabetNames))
 	for i, alphname := range Base64AlphabetNames {
 		base64AlphabetSpecByName[alphname] = base64AlphabetSpecByField[Base64Alphabet(i)]
