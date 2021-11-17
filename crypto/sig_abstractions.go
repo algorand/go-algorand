@@ -25,7 +25,8 @@ import (
 
 const (
 	// MaxSignatureSize is the size of the largest signature
-	MaxSignatureSize = 64
+	// Used signature schemes: ed25519Signature and Falcon signature
+	MaxSignatureSize = FalconSigSize
 )
 
 type (
