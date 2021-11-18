@@ -457,3 +457,12 @@ func (t Type) ByteLen() (int, error) {
 		return -1, fmt.Errorf("%s is a dynamic type", t.String())
 	}
 }
+
+func IsTransactionType(s string) bool {
+	switch s {
+	case "txn", "pay", "keyreg", "acfg", "axfer", "afrz", "appl":
+		return true
+	default:
+		return false
+	}
+}
