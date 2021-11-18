@@ -33,9 +33,13 @@ type logicLedger struct {
 }
 
 type cowForLogicLedger interface {
-	Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error)
+	Get(addr basics.Address, withPendingRewards bool) (apply.AccountData, error)
+	GetAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, bool, error)
+	GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (basics.AssetParams, bool, error)
+	GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (basics.AssetHolding, bool, error)
 	GetCreatableID(groupIdx int) basics.CreatableIndex
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
+	MinBalance(addr basics.Address, proto *config.ConsensusParams) (res basics.MicroAlgos, err error)
 	GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error)
 	BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (transactions.EvalDelta, error)
 
@@ -81,12 +85,7 @@ func (al *logicLedger) Balance(addr basics.Address) (res basics.MicroAlgos, err 
 }
 
 func (al *logicLedger) MinBalance(addr basics.Address, proto *config.ConsensusParams) (res basics.MicroAlgos, err error) {
-	record, err := al.cow.Get(addr, false) // pending rewards unneeded
-	if err != nil {
-		return
-	}
-
-	return record.MinBalance(proto), nil
+	return al.cow.MinBalance(addr, proto)
 }
 
 func (al *logicLedger) Authorizer(addr basics.Address) (basics.Address, error) {
@@ -106,13 +105,12 @@ func (al *logicLedger) GetCreatableID(groupIdx int) basics.CreatableIndex {
 
 func (al *logicLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error) {
 	// Fetch the requested balance record
-	record, err := al.cow.Get(addr, false)
+	holding, ok, err := al.cow.GetAssetHolding(addr, assetIdx)
 	if err != nil {
 		return basics.AssetHolding{}, err
 	}
 
 	// Ensure we have the requested holding
-	holding, ok := record.Assets[assetIdx]
 	if !ok {
 		err = fmt.Errorf("account %s has not opted in to asset %d", addr.String(), assetIdx)
 		return basics.AssetHolding{}, err
@@ -134,13 +132,12 @@ func (al *logicLedger) AssetParams(assetIdx basics.AssetIndex) (basics.AssetPara
 	}
 
 	// Fetch the requested balance record
-	record, err := al.cow.Get(creator, false)
+	params, ok, err := al.cow.GetAssetParams(creator, assetIdx)
 	if err != nil {
 		return basics.AssetParams{}, creator, err
 	}
 
 	// Ensure account created the requested asset
-	params, ok := record.AssetParams[assetIdx]
 	if !ok {
 		err = fmt.Errorf("account %s has not created asset %d", creator, assetIdx)
 		return basics.AssetParams{}, creator, err
@@ -162,13 +159,12 @@ func (al *logicLedger) AppParams(appIdx basics.AppIndex) (basics.AppParams, basi
 	}
 
 	// Fetch the requested balance record
-	record, err := al.cow.Get(creator, false)
+	params, ok, err := al.cow.GetAppParams(creator, appIdx)
 	if err != nil {
 		return basics.AppParams{}, creator, err
 	}
 
 	// Ensure account created the requested app
-	params, ok := record.AppParams[appIdx]
 	if !ok {
 		err = fmt.Errorf("account %s has not created app %d", creator, appIdx)
 		return basics.AppParams{}, creator, err
