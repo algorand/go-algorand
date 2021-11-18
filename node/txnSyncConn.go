@@ -194,6 +194,7 @@ func (tsnc *transactionSyncNodeConnector) SendPeerMessage(netPeer interface{}, m
 	// that we want to disconnect from this peer. This aligns with the transaction sync txnsync.SendMessageCallback function
 	// behaviour.
 	if err := unicastPeer.Unicast(context.Background(), msg, protocol.Txn2Tag, network.UnicastWebsocketMessageStateCallback(callback)); err != nil {
+		logging.Base().Infof("not enqueued: %v", err)
 		if callbackErr := callback(false, 0); callbackErr != nil {
 			// disconnect from peer - the transaction sync wasn't able to process message sending confirmation
 			tsnc.node.net.Disconnect(unicastPeer)
