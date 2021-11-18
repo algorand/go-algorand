@@ -1067,7 +1067,7 @@ int 1
 `, ep)
 }
 
-// TestGtxnApps confirms that gtxn can now access previous txn's created app.
+// TestGtxnApps confirms that gtxn can now access previous txn's created app id.
 func TestGtxnApps(t *testing.T) {
 	ep, tx, ledger := makeSampleEnv()
 	appcheck := testProg(t, `
@@ -1106,7 +1106,7 @@ int 890
 `, ep)
 }
 
-// TestGtxnAsa confirms that gtxn can now access previous txn's created asa.
+// TestGtxnAsa confirms that gtxn can now access previous txn's created asa id.
 func TestGtxnAsa(t *testing.T) {
 	ep, tx, ledger := makeSampleEnv()
 	appcheck := testProg(t, `

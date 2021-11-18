@@ -762,7 +762,8 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 }
 
 // Perform causes txn to "occur" against the ledger.
-func (l *Ledger) Perform(txn *transactions.SignedTxnWithAD, gi int, ep *EvalParams) error {
+func (l *Ledger) Perform(gi int, ep *EvalParams) error {
+	txn := &ep.TxnGroup[gi]
 	err := l.move(txn.Txn.Sender, ep.Specials.FeeSink, txn.Txn.Fee.Raw)
 	if err != nil {
 		return err

@@ -221,7 +221,7 @@ type LedgerForLogic interface {
 	SetGlobal(key string, value basics.TealValue) error
 	DelGlobal(key string) error
 
-	Perform(txn *transactions.SignedTxnWithAD, gi int, ep *EvalParams) error
+	Perform(gi int, ep *EvalParams) error
 }
 
 // EvalSideEffects contains data returned from evaluation
@@ -286,12 +286,21 @@ type EvalParams struct {
 	caller   *EvalContext
 }
 
+func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.SignedTxnWithAD {
+	copy := make([]transactions.SignedTxnWithAD, len(txgroup))
+	for i := range txgroup {
+		copy[i].SignedTxn = txgroup[i].SignedTxn
+		// leave copy[i].ApplyData clear
+	}
+	return copy
+}
+
 // NewAppEvalParams creates an EvalParams to be used while evaluating apps in txgroup
 func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses, caller *EvalContext) *EvalParams {
 	minTealVersion := ComputeMinTealVersion(txgroup, caller != nil)
 	if minTealVersion == 0 && caller == nil {
 		// As an optimization, do no work if there will be no apps to evaluate in this txgroup
-		// (But inner transactions always use the EvalParams, so don't skip for them)
+		// Inner transactions always use the EvalParams (for specials), so don't skip for them.
 		return nil
 	}
 
@@ -321,7 +330,7 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 
 	return &EvalParams{
 		Proto:                   proto,
-		TxnGroup:                txgroup,
+		TxnGroup:                copyWithClearAD(txgroup),
 		PastSideEffects:         MakePastSideEffects(len(txgroup)),
 		MinTealVersion:          &minTealVersion,
 		FeeCredit:               &credit,
@@ -4195,7 +4204,8 @@ func opTxSubmit(cx *EvalContext) {
 
 	cx.appStack = append(cx.appStack, cx.Ledger.ApplicationID()) // push app
 
-	// All subtxns must have zero'd GroupID now, since it can't be set
+	// All subtxns will have zero'd GroupID since GroupID can't be set in
+	// AVM. (no need to blank it out before hashing for TxID)
 	var group transactions.TxGroup
 	var parent transactions.Txid
 	isGroup := len(cx.subtxns) > 1
@@ -4243,17 +4253,16 @@ func opTxSubmit(cx *EvalContext) {
 		}
 	}
 
-	withAD := transactions.WrapSignedTxnsWithAD(cx.subtxns)
-	ep := NewAppEvalParams(withAD, cx.Proto, cx.Specials, cx)
-	for i := range withAD {
-		err := cx.Ledger.Perform(&withAD[i], i, ep)
+	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(cx.subtxns), cx.Proto, cx.Specials, cx)
+	for i := range ep.TxnGroup {
+		err := cx.Ledger.Perform(i, ep)
 		if err != nil {
 			cx.err = err
 			return
 		}
 	}
 	cx.appStack = cx.appStack[:len(cx.appStack)-1] // pop app
-	cx.Txn.EvalDelta.InnerTxns = append(cx.Txn.EvalDelta.InnerTxns, withAD...)
+	cx.Txn.EvalDelta.InnerTxns = append(cx.Txn.EvalDelta.InnerTxns, ep.TxnGroup...)
 	cx.subtxns = nil
 }
 

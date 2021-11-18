@@ -256,19 +256,20 @@ func (al *logicLedger) balances() (apply.Balances, error) {
 	return balances, nil
 }
 
-func (al *logicLedger) Perform(tx *transactions.SignedTxnWithAD, gi int, ep *logic.EvalParams) error {
+func (al *logicLedger) Perform(gi int, ep *logic.EvalParams) error {
+	txn := &ep.TxnGroup[gi]
 	balances, err := al.balances()
 	if err != nil {
 		return err
 	}
 
 	// move fee to pool
-	err = balances.Move(tx.Txn.Sender, ep.Specials.FeeSink, tx.Txn.Fee, &tx.ApplyData.SenderRewards, nil)
+	err = balances.Move(txn.Txn.Sender, ep.Specials.FeeSink, txn.Txn.Fee, &txn.ApplyData.SenderRewards, nil)
 	if err != nil {
 		return err
 	}
 
-	err = apply.Rekey(balances, &tx.Txn)
+	err = apply.Rekey(balances, &txn.Txn)
 	if err != nil {
 		return err
 	}
@@ -284,30 +285,30 @@ func (al *logicLedger) Perform(tx *transactions.SignedTxnWithAD, gi int, ep *log
 	// first glance.
 	al.cow.incTxnCount()
 
-	switch tx.Txn.Type {
+	switch txn.Txn.Type {
 	case protocol.PaymentTx:
-		err = apply.Payment(tx.Txn.PaymentTxnFields, tx.Txn.Header, balances, *ep.Specials, &tx.ApplyData)
+		err = apply.Payment(txn.Txn.PaymentTxnFields, txn.Txn.Header, balances, *ep.Specials, &txn.ApplyData)
 
 	case protocol.KeyRegistrationTx:
-		err = apply.Keyreg(tx.Txn.KeyregTxnFields, tx.Txn.Header, balances, *ep.Specials, &tx.ApplyData,
+		err = apply.Keyreg(txn.Txn.KeyregTxnFields, txn.Txn.Header, balances, *ep.Specials, &txn.ApplyData,
 			al.Round())
 
 	case protocol.AssetConfigTx:
-		err = apply.AssetConfig(tx.Txn.AssetConfigTxnFields, tx.Txn.Header, balances, *ep.Specials, &tx.ApplyData,
+		err = apply.AssetConfig(txn.Txn.AssetConfigTxnFields, txn.Txn.Header, balances, *ep.Specials, &txn.ApplyData,
 			al.cow.txnCounter())
 
 	case protocol.AssetTransferTx:
-		err = apply.AssetTransfer(tx.Txn.AssetTransferTxnFields, tx.Txn.Header, balances, *ep.Specials, &tx.ApplyData)
+		err = apply.AssetTransfer(txn.Txn.AssetTransferTxnFields, txn.Txn.Header, balances, *ep.Specials, &txn.ApplyData)
 
 	case protocol.AssetFreezeTx:
-		err = apply.AssetFreeze(tx.Txn.AssetFreezeTxnFields, tx.Txn.Header, balances, *ep.Specials, &tx.ApplyData)
+		err = apply.AssetFreeze(txn.Txn.AssetFreezeTxnFields, txn.Txn.Header, balances, *ep.Specials, &txn.ApplyData)
 
 	case protocol.ApplicationCallTx:
-		err = apply.ApplicationCall(tx.Txn.ApplicationCallTxnFields, tx.Txn.Header, balances, &tx.ApplyData,
+		err = apply.ApplicationCall(txn.Txn.ApplicationCallTxnFields, txn.Txn.Header, balances, &txn.ApplyData,
 			gi, ep, al.cow.txnCounter())
 
 	default:
-		err = fmt.Errorf("%s tx in AVM", tx.Txn.Type)
+		err = fmt.Errorf("%s tx in AVM", txn.Txn.Type)
 	}
 	if err != nil {
 		return err

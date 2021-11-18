@@ -120,16 +120,10 @@ func TestPayAction(t *testing.T) {
 	}
 	txn(t, l, eval, &payout2)
 	// confirm that modifiedAccounts can see account in inner txn
-	found := false
 	vb = endBlock(t, l, eval)
 
 	deltas := vb.Delta()
-	for _, addr := range deltas.Accts.ModifiedAccounts() {
-		if addr == addrs[2] {
-			found = true
-		}
-	}
-	require.True(t, found)
+	require.Contains(t, deltas.Accts.ModifiedAccounts(), addrs[2])
 
 	payInBlock := vb.Block().Payset[0]
 	rewards := payInBlock.ApplyData.SenderRewards.Raw
@@ -999,14 +993,14 @@ func TestAsaDuringInit(t *testing.T) {
          itxn CreatedAssetID
          int 3
          ==
+         assert
          itxn CreatedApplicationID
          int 0
          ==
-         &&
+         assert
          itxn NumLogs
          int 0
          ==
-         &&
 `,
 	}
 
