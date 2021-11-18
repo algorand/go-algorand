@@ -1114,13 +1114,6 @@ var methodAppCmd = &cobra.Command{
 			tx.Fee = basics.MicroAlgos{Raw: fee}
 		}
 
-		// Broadcast
-		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-		signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
-		if err != nil {
-			reportErrorf(errorSigningTX, err)
-		}
-
 		if outFilename != "" {
 			if dumpForDryrun {
 				err = writeDryrunReqToFile(client, tx, outFilename)
@@ -1132,8 +1125,14 @@ var methodAppCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf(err.Error())
 			}
-
 			return
+		}
+
+		// Broadcast
+		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
+		signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+		if err != nil {
+			reportErrorf(errorSigningTX, err)
 		}
 
 		txid, err := client.BroadcastTransaction(signedTxn)
