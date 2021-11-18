@@ -93,7 +93,7 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 
 	accountsCount := uint64(b.N)
 	fileHeader := CatchpointFileHeader{
-		Version:           catchpointFileVersion,
+		Version:           catchpointFileVersionV6,
 		BalancesRound:     basics.Round(0),
 		BlocksRound:       basics.Round(0),
 		Totals:            ledgercore.AccountTotals{},
@@ -249,7 +249,7 @@ func TestBuildMerkleTrie(t *testing.T) {
 	// content.msgpack from this:
 	accountsCount := uint64(len(initKeys))
 	fileHeader := CatchpointFileHeader{
-		Version:           catchpointFileVersion,
+		Version:           catchpointFileVersionV6,
 		BalancesRound:     basics.Round(0),
 		BlocksRound:       basics.Round(0),
 		Totals:            ledgercore.AccountTotals{},

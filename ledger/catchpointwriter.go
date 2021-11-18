@@ -40,8 +40,11 @@ const (
 	// note that the last chunk would typically be less than this number.
 	BalancesPerCatchpointFileChunk = 512
 
-	// catchpointFileVersion is the catchpoint file version
-	catchpointFileVersion = uint64(0200)
+	// catchpointFileVersionV5 is the catchpoint file version that was used when the database schema was V0-V5.
+	catchpointFileVersionV5 = uint64(0200)
+
+	// catchpointFileVersionV6 is the catchpoint file version that is matching database schema V6
+	catchpointFileVersionV6 = uint64(0201)
 )
 
 // catchpointWriter is the struct managing the persistence of accounts data into the catchpoint file.
@@ -59,7 +62,7 @@ type catchpointWriter struct {
 	tar               *tar.Writer
 	headerWritten     bool
 	balancesOffset    int
-	balancesChunk     catchpointFileBalancesChunk
+	balancesChunk     catchpointFileBalancesChunkV6
 	fileHeader        *CatchpointFileHeader
 	balancesChunkNum  uint64
 	writtenBytes      int64
@@ -69,11 +72,33 @@ type catchpointWriter struct {
 	accountsIterator  encodedAccountsBatchIter
 }
 
-type encodedBalanceRecord struct {
+type encodedBalanceRecordV5 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Address     basics.Address `codec:"pk,allocbound=crypto.DigestSize"`
 	AccountData msgp.Raw       `codec:"ad,allocbound=basics.MaxEncodedAccountDataSize"`
+}
+
+type catchpointFileBalancesChunkV5 struct {
+	_struct  struct{}                 `codec:",omitempty,omitemptyarray"`
+	Balances []encodedBalanceRecordV5 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
+}
+
+// SortUint64 re-export this sort, which is implmented in basics, and being used by the msgp when
+// encoding the resources map below.
+type SortUint64 = basics.SortUint64
+
+type encodedBalanceRecordV6 struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Address     basics.Address      `codec:"a,allocbound=crypto.DigestSize"`
+	AccountData msgp.Raw            `codec:"b,allocbound=basics.MaxEncodedAccountDataSize"`
+	Resources   map[uint64]msgp.Raw `codec:"c,allocbound=basics.MaxEncodedAccountDataSize"`
+}
+
+type catchpointFileBalancesChunkV6 struct {
+	_struct  struct{}                 `codec:",omitempty,omitemptyarray"`
+	Balances []encodedBalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
 // CatchpointFileHeader is the content we would have in the "content.msgpack" file in the catchpoint tar archive.
@@ -89,11 +114,6 @@ type CatchpointFileHeader struct {
 	TotalChunks       uint64                   `codec:"chunksCount"`
 	Catchpoint        string                   `codec:"catchpoint"`
 	BlockHeaderDigest crypto.Digest            `codec:"blockHeaderDigest"`
-}
-
-type catchpointFileBalancesChunk struct {
-	_struct  struct{}               `codec:",omitempty,omitemptyarray"`
-	Balances []encodedBalanceRecord `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
 func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, blocksRound basics.Round, blockHeaderDigest crypto.Digest, label string) *catchpointWriter {
@@ -170,7 +190,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 		cw.headerWritten = true
 	}
 
-	writerRequest := make(chan catchpointFileBalancesChunk, 1)
+	writerRequest := make(chan catchpointFileBalancesChunkV6, 1)
 	writerResponse := make(chan error, 2)
 	go cw.asyncWriter(writerRequest, writerResponse, cw.balancesChunkNum)
 	defer func() {
@@ -242,7 +262,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 	}
 }
 
-func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChunk, response chan error, initialBalancesChunkNum uint64) {
+func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChunkV6, response chan error, initialBalancesChunkNum uint64) {
 	defer close(response)
 	balancesChunkNum := initialBalancesChunkNum
 	for bc := range balances {
@@ -309,7 +329,7 @@ func (cw *catchpointWriter) readHeaderFromDatabase(ctx context.Context, tx *sql.
 	header.TotalChunks = (header.TotalAccounts + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk
 	header.BlocksRound = cw.blocksRound
 	header.Catchpoint = cw.label
-	header.Version = catchpointFileVersion
+	header.Version = catchpointFileVersionV6
 	header.BlockHeaderDigest = cw.blockHeaderDigest
 	cw.fileHeader = &header
 	return
