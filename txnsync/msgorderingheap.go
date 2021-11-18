@@ -20,6 +20,7 @@ import (
 	"container/heap"
 	"errors"
 	"github.com/algorand/go-algorand/logging"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 )
@@ -35,6 +36,7 @@ type messageHeapItem incomingMessage
 type messageOrderingHeap struct {
 	mu       deadlock.Mutex
 	messages []messageHeapItem
+	lastDequeued time.Time
 }
 
 // Push implements heap.Interface
@@ -45,6 +47,7 @@ func (p *messageOrderingHeap) Push(x interface{}) {
 
 // Pop implements heap.Interface
 func (p *messageOrderingHeap) Pop() interface{} {
+	p.lastDequeued = time.Now()
 	end := len(p.messages) - 1
 	res := p.messages[end]
 	p.messages[end] = messageHeapItem{}

@@ -431,6 +431,7 @@ func (s *syncState) broadcastProposal(p ProposalBroadcastRequest, peers []*Peer)
 		peer.state = peerStateProposal
 		peer.lastTransactionSelectionTracker.resetProposalTracker()
 		peer.messageSeriesPendingTransactions = nil
+		// TODO these 2 lines cancel proposal sending
 
 		pendingTransactions := pendingTransactionGroupsSnapshot{
 			proposalRawBytes:          p.proposalBytes,

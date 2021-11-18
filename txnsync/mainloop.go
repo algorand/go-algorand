@@ -161,7 +161,7 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			logging.Base().Info("nextPeerStateCh end")
 			continue
 		case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
-			logging.Base().Info("getIncomingMessageChannel")
+			logging.Base().Infof("getIncomingMessageChannel %v", len(s.incomingMessagesQ.getIncomingMessageChannel()))
 			profIncomingMsg.start()
 			s.evaluateIncomingMessage(incomingMsg)
 			profIncomingMsg.end()
@@ -214,7 +214,7 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			profPeerState.end()
 			logging.Base().Info("nextPeerStateCh end")
 		case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
-			logging.Base().Info("getIncomingMessageChannel")
+			logging.Base().Infof("getIncomingMessageChannel %v", len(s.incomingMessagesQ.getIncomingMessageChannel()))
 			profIdle.end()
 			profIncomingMsg.start()
 			s.evaluateIncomingMessage(incomingMsg)

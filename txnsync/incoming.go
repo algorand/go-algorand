@@ -126,6 +126,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 	if err != nil {
 		// if the incoming message queue for this peer is full, disconnect from this peer.
 		s.log.Infof("unable to enqueue incoming message into peer incoming message backlog. disconnecting from peer.")
+		s.log.Info(time.Now().Sub(peer.incomingMessages.lastDequeued))
 		s.incomingMessagesQ.erase(peer, networkPeer)
 		return err
 	}
@@ -179,7 +180,7 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 	transactionPoolSize := 0
 	totalAccumulatedTransactionsCount := 0 // the number of transactions that were added during the execution of this method
 	transactionHandlerBacklogFull := false
-	logging.Base().Infof("incoming queue size %v", peer.incomingMessages.Len())
+	logging.Base().Infof("incoming queue size %v, last dequeued %v", peer.incomingMessages.Len(), time.Now().Sub(peer.incomingMessages.lastDequeued))
 incomingMessageLoop:
 	for {
 		incomingMsg, seq, err := peer.incomingMessages.popSequence(peer.nextReceivedMessageSeq)
