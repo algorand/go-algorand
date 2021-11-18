@@ -1991,6 +1991,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs tx
 		// Before we had inner apps, we did not allow these, since we had no inner groups.
 		if cx.version < innerAppsEnabledVersion && (fs.field == GroupIndex || fs.field == TxID) {
 			err = fmt.Errorf("illegal field for inner transaction %s", fs.field)
+			return
 		}
 	}
 	err = nil
@@ -3446,25 +3447,27 @@ func opAppLocalPut(cx *EvalContext) {
 	}
 
 	addr, accountIdx, err := cx.accountReference(cx.stack[pprev])
-	if err == nil {
-		// if writing the same value, do nothing, matching ledger behavior with
-		// previous BuildEvalDelta mechanism
-		etv, ok, err := cx.Ledger.GetLocal(addr, cx.Ledger.ApplicationID(), key, accountIdx)
-		if err != nil {
-			cx.err = err
-			return
-		}
-		tv := sv.toTealValue()
-		if !ok || tv != etv {
-			if _, ok := cx.Txn.EvalDelta.LocalDeltas[accountIdx]; !ok {
-				cx.Txn.EvalDelta.LocalDeltas[accountIdx] = basics.StateDelta{}
-			}
-			cx.Txn.EvalDelta.LocalDeltas[accountIdx][key] = tv.ToValueDelta()
-		}
-
-		err = cx.Ledger.SetLocal(addr, key, tv, accountIdx)
+	if err != nil {
+		cx.err = err
+		return
 	}
 
+	// if writing the same value, do nothing, matching ledger behavior with
+	// previous BuildEvalDelta mechanism
+	etv, ok, err := cx.Ledger.GetLocal(addr, cx.Ledger.ApplicationID(), key, accountIdx)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	tv := sv.toTealValue()
+	if !ok || tv != etv {
+		if _, ok := cx.Txn.EvalDelta.LocalDeltas[accountIdx]; !ok {
+			cx.Txn.EvalDelta.LocalDeltas[accountIdx] = basics.StateDelta{}
+		}
+		cx.Txn.EvalDelta.LocalDeltas[accountIdx][key] = tv.ToValueDelta()
+	}
+	err = cx.Ledger.SetLocal(addr, key, tv, accountIdx)
 	if err != nil {
 		cx.err = err
 		return
