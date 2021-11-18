@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -841,17 +842,18 @@ func accountHashBuilderV6(addr basics.Address, accountData *baseAccountData, enc
 		// the following takes the prefix & 255 -> hash[i]
 		hash[i] = byte(prefix)
 	}
+	hash[4] = 0 // set the 5th byte to zero to indicate it's a account base record hash
 
 	prehash := make([]byte, crypto.DigestSize+len(encodedAccountData))
 	copy(prehash[:], addr[:])
 	copy(prehash[crypto.DigestSize:], encodedAccountData[:])
 	entryHash := crypto.Hash(prehash)
-	copy(hash[4:], entryHash[:])
+	copy(hash[5:], entryHash[1:])
 	return hash[:]
 }
 
 // accountHashBuilderV6 calculates the hash key used for the trie by combining the account address and the account data
-func resourcesHashBuilderV6(addr basics.Address, updateRound uint64, encodedResourceData []byte) []byte {
+func resourcesHashBuilderV6(addr basics.Address, creatableIdx uint64, creatableType uint64, updateRound uint64, encodedResourceData []byte) []byte {
 	hash := make([]byte, 4+crypto.DigestSize)
 	// write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
 	// recent updated to be in-cache, and "older" nodes will be left alone.
@@ -859,12 +861,14 @@ func resourcesHashBuilderV6(addr basics.Address, updateRound uint64, encodedReso
 		// the following takes the prefix & 255 -> hash[i]
 		hash[i] = byte(prefix)
 	}
+	hash[4] = byte(creatableType + 1) // set the 5th byte to one or two ( asset / application ) so we could diffrenciate the hashes.
 
-	prehash := make([]byte, crypto.DigestSize+len(encodedResourceData))
+	prehash := make([]byte, 8+crypto.DigestSize+len(encodedResourceData))
 	copy(prehash[:], addr[:])
-	copy(prehash[crypto.DigestSize:], encodedResourceData[:])
+	binary.LittleEndian.PutUint64(prehash[crypto.DigestSize:], creatableIdx)
+	copy(prehash[crypto.DigestSize+8:], encodedResourceData[:])
 	entryHash := crypto.Hash(prehash)
-	copy(hash[4:], entryHash[:])
+	copy(hash[5:], entryHash[1:])
 	return hash[:]
 }
 

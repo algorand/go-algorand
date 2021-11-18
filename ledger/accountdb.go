@@ -1944,7 +1944,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 			return
 		}
 		// iterate over the existing resources
-		iterator.resourcesRows, err = iterator.tx.QueryContext(ctx, "SELECT addrid, data FROM resources ORDER BY addrid, aidx, rtype")
+		iterator.resourcesRows, err = iterator.tx.QueryContext(ctx, "SELECT addrid, aidx, rtype, data FROM resources ORDER BY addrid, aidx, rtype")
 		if err != nil {
 			return
 		}
@@ -1999,14 +1999,16 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 				}
 				buf = nil
 				var addrid int64
-				err = iterator.resourcesRows.Scan(&addrid, &buf)
+				var aidx uint64
+				var rtype uint64
+				err = iterator.resourcesRows.Scan(&addrid, &aidx, &rtype, &buf)
 				if err != nil {
 					iterator.Close(ctx)
 					return
 				}
 				if addrid != rowid {
 					iterator.Close(ctx)
-					err = errors.New("resource table entries mismatches account base table entries")
+					err = errors.New("resource table entries mismatches accountbase table entries")
 					return
 				}
 				var resData resourcesData
@@ -2015,7 +2017,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 					iterator.Close(ctx)
 					return
 				}
-				hash := resourcesHashBuilderV6(addr, resData.UpdateRound, buf)
+				hash = resourcesHashBuilderV6(addr, aidx, rtype, resData.UpdateRound, buf)
 				_, err = iterator.insertStmt.ExecContext(ctx, addrbuf, hash)
 				if err != nil {
 					iterator.Close(ctx)
@@ -2034,6 +2036,13 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 				return
 			}
 		}
+		// make sure the resource iterator has no more entries.
+		if iterator.resourcesRows.Next() {
+			iterator.Close(ctx)
+			err = errors.New("resource table entries exceed the ones specified in the accountbase table")
+			return
+		}
+
 		processedRecords = count
 		iterator.accountBaseRows.Close()
 		iterator.accountBaseRows = nil
