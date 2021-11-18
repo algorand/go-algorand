@@ -18,6 +18,7 @@ package txnsync
 
 import (
 	"errors"
+	"github.com/algorand/go-algorand/logging"
 	"time"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -178,6 +179,7 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 	transactionPoolSize := 0
 	totalAccumulatedTransactionsCount := 0 // the number of transactions that were added during the execution of this method
 	transactionHandlerBacklogFull := false
+	logging.Base().Infof("incoming queue size %v", peer.incomingMessages.Len())
 incomingMessageLoop:
 	for {
 		incomingMsg, seq, err := peer.incomingMessages.popSequence(peer.nextReceivedMessageSeq)

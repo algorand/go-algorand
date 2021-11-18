@@ -19,6 +19,7 @@ package txnsync
 import (
 	"container/heap"
 	"errors"
+	"github.com/algorand/go-algorand/logging"
 
 	"github.com/algorand/go-deadlock"
 )
@@ -73,6 +74,9 @@ func (p *messageOrderingHeap) enqueue(msg incomingMessage) error {
 		return errHeapReachedCapacity
 	}
 	heap.Push(p, messageHeapItem(msg))
+	if len(p.messages) >= messageOrderingHeapLimit {
+		logging.Base().Infof("queue now full")
+	}
 	return nil
 }
 

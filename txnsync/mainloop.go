@@ -154,10 +154,11 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			}
 			continue
 		case <-nextPeerStateCh:
-			logging.Base().Info("nextPeerStateCh")
+			logging.Base().Info("nextPeerStateCh start")
 			profPeerState.start()
 			s.evaluatePeerStateChanges(nextPeerStateTime)
 			profPeerState.end()
+			logging.Base().Info("nextPeerStateCh end")
 			continue
 		case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
 			logging.Base().Info("getIncomingMessageChannel")
@@ -174,6 +175,7 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			logging.Base().Info("proposalFilter")
 			peers := s.getPeers()
 			s.broadcastProposalFilter(proposalFilter, peers)
+			continue
 		case <-s.nextOffsetRollingCh:
 			profNextOffset.start()
 			s.rollOffsets()
@@ -205,24 +207,23 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 				logging.Base().Info("broadcast proposal event end")
 			}
 		case <-nextPeerStateCh:
-			logging.Base().Info("nextPeerStateCh")
+			logging.Base().Info("nextPeerStateCh start")
 			profIdle.end()
 			profPeerState.start()
 			s.evaluatePeerStateChanges(nextPeerStateTime)
 			profPeerState.end()
+			logging.Base().Info("nextPeerStateCh end")
 		case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
 			logging.Base().Info("getIncomingMessageChannel")
 			profIdle.end()
 			profIncomingMsg.start()
 			s.evaluateIncomingMessage(incomingMsg)
 			profIncomingMsg.end()
-			continue
 		case msgSent := <-s.outgoingMessagesCallbackCh:
 			profIdle.end()
 			profOutgoingMsg.start()
 			s.evaluateOutgoingMessage(msgSent)
 			profOutgoingMsg.end()
-			continue
 		case proposalFilter := <-proposalFilterCh:
 			logging.Base().Info("proposalFilter")
 			profIdle.end()
