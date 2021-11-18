@@ -787,6 +787,14 @@ type resourcesData struct {
 	UpdateRound   uint64        `codec:"z"`
 }
 
+func (rd *resourcesData) IsHolding() bool {
+	return (rd.ResourceFlags & resourceFlagsNotHolding) == resourceFlagsHolding
+}
+
+func (rd *resourcesData) IsOwning() bool {
+	return (rd.ResourceFlags & resourceFlagsOwnership) == resourceFlagsOwnership
+}
+
 func (rd *resourcesData) SetAssetParams(ap basics.AssetParams, haveHoldings bool) {
 	rd.Total = ap.Total
 	rd.Decimals = ap.Decimals
@@ -2023,7 +2031,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 					iterator.Close(ctx)
 					return
 				}
-				if (resData.ResourceFlags&resourceFlagsOwnership == resourceFlagsOwnership) && (resData.ResourceFlags&resourceFlagsNotHolding == 0) {
+				if resData.IsHolding() && resData.IsOwning() {
 					// this resource is used for both the holding and ownership.
 					resourcesEntriesCount--
 				}
