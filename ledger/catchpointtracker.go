@@ -19,7 +19,6 @@ package ledger
 import (
 	"context"
 	"database/sql"
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -830,7 +829,7 @@ func removeSingleCatchpointFileFromDisk(dbDirectory, fileToDelete string) (err e
 }
 
 // accountHashBuilderV6 calculates the hash key used for the trie by combining the account address and the account data
-func accountHashBuilderV6(rowid int64, addr basics.Address, accountData *baseAccountData, encodedAccountData []byte) []byte {
+func accountHashBuilderV6(addr basics.Address, accountData *baseAccountData, encodedAccountData []byte) []byte {
 	hash := make([]byte, 4+crypto.DigestSize)
 	hashIntPrefix := accountData.UpdateRound
 	if hashIntPrefix == 0 {
@@ -843,10 +842,27 @@ func accountHashBuilderV6(rowid int64, addr basics.Address, accountData *baseAcc
 		hash[i] = byte(prefix)
 	}
 
-	prehash := make([]byte, 8+crypto.DigestSize+len(encodedAccountData))
-	binary.LittleEndian.PutUint64(prehash, uint64(rowid))
-	copy(prehash[8:], addr[:])
-	copy(prehash[8+crypto.DigestSize:], encodedAccountData[:])
+	prehash := make([]byte, crypto.DigestSize+len(encodedAccountData))
+	copy(prehash[:], addr[:])
+	copy(prehash[crypto.DigestSize:], encodedAccountData[:])
+	entryHash := crypto.Hash(prehash)
+	copy(hash[4:], entryHash[:])
+	return hash[:]
+}
+
+// accountHashBuilderV6 calculates the hash key used for the trie by combining the account address and the account data
+func resourcesHashBuilderV6(addr basics.Address, updateRound uint64, encodedResourceData []byte) []byte {
+	hash := make([]byte, 4+crypto.DigestSize)
+	// write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
+	// recent updated to be in-cache, and "older" nodes will be left alone.
+	for i, prefix := 3, updateRound; i >= 0; i, prefix = i-1, prefix>>8 {
+		// the following takes the prefix & 255 -> hash[i]
+		hash[i] = byte(prefix)
+	}
+
+	prehash := make([]byte, crypto.DigestSize+len(encodedResourceData))
+	copy(prehash[:], addr[:])
+	copy(prehash[crypto.DigestSize:], encodedResourceData[:])
 	entryHash := crypto.Hash(prehash)
 	copy(hash[4:], entryHash[:])
 	return hash[:]

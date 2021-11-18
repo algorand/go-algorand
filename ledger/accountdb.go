@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -125,7 +126,7 @@ var accountsResetExprs = []string{
 // details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
 // and their descriptions.
 // TODO - this should be bumped to 6 if we want to enable the new database schema upgrade.
-var accountDBVersion = int32(5)
+var accountDBVersion = int32(6)
 
 // persistedAccountData is used for representing a single account stored on the disk. In addition to the
 // basics.AccountData, it also stores complete referencing information used to maintain the base accounts
@@ -1883,11 +1884,13 @@ const (
 
 // orderedAccountsIter allows us to iterate over the accounts addresses in the order of the account hashes.
 type orderedAccountsIter struct {
-	step         orderedAccountsIterStep
-	rows         *sql.Rows
-	tx           *sql.Tx
-	accountCount int
-	insertStmt   *sql.Stmt
+	step            orderedAccountsIterStep
+	accountBaseRows *sql.Rows
+	hashesRows      *sql.Rows
+	resourcesRows   *sql.Rows
+	tx              *sql.Tx
+	accountCount    int
+	insertStmt      *sql.Stmt
 }
 
 // makeOrderedAccountsIter creates an ordered account iterator. Note that due to implementation reasons,
@@ -1936,7 +1939,12 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 	if iterator.step == oaiStepQueryAccounts {
 		// iterate over the existing accounts
-		iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase")
+		iterator.accountBaseRows, err = iterator.tx.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase ORDER BY rowid")
+		if err != nil {
+			return
+		}
+		// iterate over the existing resources
+		iterator.resourcesRows, err = iterator.tx.QueryContext(ctx, "SELECT addrid, data FROM resources ORDER BY addrid, aidx, rtype")
 		if err != nil {
 			return
 		}
@@ -1951,11 +1959,11 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	if iterator.step == oaiStepInsertAccountData {
 		var addr basics.Address
 		count := 0
-		for iterator.rows.Next() {
+		for iterator.accountBaseRows.Next() {
 			var addrbuf []byte
 			var buf []byte
 			var rowid int64
-			err = iterator.rows.Scan(&rowid, &addrbuf, &buf)
+			err = iterator.accountBaseRows.Scan(&rowid, &addrbuf, &buf)
 			if err != nil {
 				iterator.Close(ctx)
 				return
@@ -1975,11 +1983,48 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 				iterator.Close(ctx)
 				return
 			}
-			hash := accountHashBuilderV6(rowid, addr, &accountData, buf)
+			hash := accountHashBuilderV6(addr, &accountData, buf)
 			_, err = iterator.insertStmt.ExecContext(ctx, addrbuf, hash)
 			if err != nil {
 				iterator.Close(ctx)
 				return
+			}
+
+			resourcesEntriesCount := accountData.TotalAppParams + accountData.TotalAppLocalStates + accountData.TotalAssetParams + accountData.TotalAssets
+			for ; resourcesEntriesCount > 0; resourcesEntriesCount-- {
+				if !iterator.resourcesRows.Next() {
+					iterator.Close(ctx)
+					err = errors.New("missing entries in resource table")
+					return
+				}
+				buf = nil
+				var addrid int64
+				err = iterator.resourcesRows.Scan(&addrid, &buf)
+				if err != nil {
+					iterator.Close(ctx)
+					return
+				}
+				if addrid != rowid {
+					iterator.Close(ctx)
+					err = errors.New("resource table entries mismatches account base table entries")
+					return
+				}
+				var resData resourcesData
+				err = protocol.Decode(buf, &resData)
+				if err != nil {
+					iterator.Close(ctx)
+					return
+				}
+				hash := resourcesHashBuilderV6(addr, resData.UpdateRound, buf)
+				_, err = iterator.insertStmt.ExecContext(ctx, addrbuf, hash)
+				if err != nil {
+					iterator.Close(ctx)
+					return
+				}
+				if (resData.ResourceFlags&resourceFlagsOwnership == resourceFlagsOwnership) && (resData.ResourceFlags&resourceFlagsNotHolding == 0) {
+					// this resource is used for both the holding and ownership.
+					resourcesEntriesCount--
+				}
 			}
 
 			count++
@@ -1990,8 +2035,10 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 			}
 		}
 		processedRecords = count
-		iterator.rows.Close()
-		iterator.rows = nil
+		iterator.accountBaseRows.Close()
+		iterator.accountBaseRows = nil
+		iterator.resourcesRows.Close()
+		iterator.resourcesRows = nil
 		iterator.insertStmt.Close()
 		iterator.insertStmt = nil
 		iterator.step = oaiStepCreateOrderingAccountIndex
@@ -2010,7 +2057,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 	if iterator.step == oaiStepSelectFromOrderedTable {
 		// select the data from the ordered table
-		iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT address, hash FROM accountsiteratorhashes ORDER BY hash")
+		iterator.hashesRows, err = iterator.tx.QueryContext(ctx, "SELECT address, hash FROM accountsiteratorhashes ORDER BY hash")
 
 		if err != nil {
 			iterator.Close(ctx)
@@ -2023,10 +2070,10 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	if iterator.step == oaiStepIterateOverOrderedTable {
 		acct = make([]accountAddressHash, 0, iterator.accountCount)
 		var addr basics.Address
-		for iterator.rows.Next() {
+		for iterator.hashesRows.Next() {
 			var addrbuf []byte
 			var hash []byte
-			err = iterator.rows.Scan(&addrbuf, &hash)
+			err = iterator.hashesRows.Scan(&addrbuf, &hash)
 			if err != nil {
 				iterator.Close(ctx)
 				return
@@ -2047,8 +2094,8 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 			}
 		}
 		iterator.step = oaiStepShutdown
-		iterator.rows.Close()
-		iterator.rows = nil
+		iterator.hashesRows.Close()
+		iterator.hashesRows = nil
 		return
 	}
 	if iterator.step == oaiStepShutdown {
@@ -2064,9 +2111,17 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 
 // Close shuts down the orderedAccountsBuilderIter, releasing database resources.
 func (iterator *orderedAccountsIter) Close(ctx context.Context) (err error) {
-	if iterator.rows != nil {
-		iterator.rows.Close()
-		iterator.rows = nil
+	if iterator.accountBaseRows != nil {
+		iterator.accountBaseRows.Close()
+		iterator.accountBaseRows = nil
+	}
+	if iterator.resourcesRows != nil {
+		iterator.resourcesRows.Close()
+		iterator.resourcesRows = nil
+	}
+	if iterator.hashesRows != nil {
+		iterator.hashesRows.Close()
+		iterator.hashesRows = nil
 	}
 	if iterator.insertStmt != nil {
 		iterator.insertStmt.Close()
