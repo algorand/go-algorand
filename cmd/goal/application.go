@@ -1144,6 +1144,7 @@ var methodAppCmd = &cobra.Command{
 			}
 
 			if retTypeStr == "void" {
+				fmt.Printf("method %s succeeded", method)
 				return
 			}
 
@@ -1181,7 +1182,7 @@ var methodAppCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf("cannot marshal returned bytes %v to JSON: %v", decoded, err)
 			}
-			fmt.Printf("method %s output: %s", method, string(decodedJSON))
+			fmt.Printf("method %s succeeded with output: %s", method, string(decodedJSON))
 		}
 	},
 }
