@@ -536,13 +536,13 @@ func ParseMethodSignature(methodSig string) (name string, argTypes []string, ret
 	for index, char := range methodSig {
 		switch char {
 		case '(':
-			depth += 1
+			depth++
 		case ')':
 			if depth == 0 {
 				err = fmt.Errorf("Unpaired parenthesis in method signature: %s", methodSig)
 				return
 			}
-			depth -= 1
+			depth--
 			if depth == 0 {
 				argsEnd = index
 				break

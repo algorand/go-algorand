@@ -1193,12 +1193,12 @@ var methodAppCmd = &cobra.Command{
 		txnGroup = append(txnGroup, appCallTxn)
 		if len(txnGroup) > 1 {
 			// Only if transaction arguments are present, assign group ID
-			groupId, err := client.GroupID(txnGroup)
+			groupID, err := client.GroupID(txnGroup)
 			if err != nil {
 				reportErrorf("Cannot assign transaction group ID: %s", err)
 			}
 			for i := range txnGroup {
-				txnGroup[i].Group = groupId
+				txnGroup[i].Group = groupID
 			}
 		}
 
