@@ -866,8 +866,8 @@ var groupCmd = &cobra.Command{
 		}
 
 		groupHash := crypto.HashObj(group)
-		for _, stxn := range stxns {
-			stxn.Txn.Group = groupHash
+		for i := range stxns {
+			stxns[i].Txn.Group = groupHash
 		}
 
 		err = writeSignedTxnsToFile(stxns, outFilename)
