@@ -14,26 +14,48 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 gcmd="goal -w ${WALLET}"
 
-GLOBAL_INTS=2
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 
 printf '#pragma version 2\nint 1' > "${TEMPDIR}/simple.teal"
 PROGRAM=($(${gcmd} clerk compile "${TEMPDIR}/simple.teal"))
-APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${DIR}/tealprogs/app-abi-add-example.teal --clear-prog ${TEMPDIR}/simple.teal --global-byteslices 0 --global-ints ${GLOBAL_INTS} --local-byteslices 0 --local-ints 0 | grep Created | awk '{ print $6 }')
+APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${DIR}/tealprogs/app-abi-add-example.teal --clear-prog ${TEMPDIR}/simple.teal --global-byteslices 0 --global-ints 0 --local-byteslices 1 --local-ints 0 | grep Created | awk '{ print $6 }')
 
-# Should succeed to opt in
-${gcmd} app optin --app-id $APPID --from $ACCOUNT
-
-# Call should now succeed
-RES=$(${gcmd} app method --method "add(uint64,uint64)uint64" --arg 1 --arg 2 --app-id $APPID --from $ACCOUNT 2>&1 || true)
-EXPECTED="method add(uint64,uint64)uint64 output: 3"
+# Opt in
+RES=$(${gcmd} app method --method "optIn(string)string" --arg "\"Algorand Fan\"" --on-completion optin --app-id $APPID --from $ACCOUNT 2>&1 || true)
+EXPECTED="method optIn(string)string succeeded with output: \"hello Algorand Fan\""
 if [[ $RES != *"${EXPECTED}"* ]]; then
-    date '+app-abi-add-test FAIL the application creation should not fail %Y%m%d_%H%M%S'
+    date '+app-abi-add-test FAIL the method call to optIn(string)string should not fail %Y%m%d_%H%M%S'
     false
 fi
 
-# Delete application should still succeed
-${gcmd} app delete --app-id $APPID --from $ACCOUNT
+# 1 + 2 = 3
+RES=$(${gcmd} app method --method "add(uint64,uint64)uint64" --arg 1 --arg 2 --app-id $APPID --from $ACCOUNT 2>&1 || true)
+EXPECTED="method add(uint64,uint64)uint64 succeeded with output: 3"
+if [[ $RES != *"${EXPECTED}"* ]]; then
+    date '+app-abi-add-test FAIL the method call to add(uint64,uint64)uint64 should not fail %Y%m%d_%H%M%S'
+    false
+fi
 
-# Clear should still succeed
-${gcmd} app clear --app-id $APPID --from $ACCOUNT
+# 18446744073709551614 + 1 = 18446744073709551615
+RES=$(${gcmd} app method --method "add(uint64,uint64)uint64" --arg 18446744073709551614 --arg 1 --app-id $APPID --from $ACCOUNT 2>&1 || true)
+EXPECTED="method add(uint64,uint64)uint64 succeeded with output: 18446744073709551615"
+if [[ $RES != *"${EXPECTED}"* ]]; then
+    date '+app-abi-add-test FAIL the method call to add(uint64,uint64)uint64 should not fail %Y%m%d_%H%M%S'
+    false
+fi
+
+# Close out
+RES=$(${gcmd} app method --method "closeOut()string" --on-completion closeout --app-id $APPID --from $ACCOUNT 2>&1 || true)
+EXPECTED="method closeOut()string succeeded with output: \"goodbye Algorand Fan\""
+if [[ $RES != *"${EXPECTED}"* ]]; then
+    date '+app-abi-add-test FAIL the method call to closeOut()string should not fail %Y%m%d_%H%M%S'
+    false
+fi
+
+# Delete
+RES=$(${gcmd} app method --method "delete()void" --on-completion deleteapplication --app-id $APPID --from $ACCOUNT 2>&1 || true)
+EXPECTED="method delete()void succeeded"
+if [[ $RES != *"${EXPECTED}"* ]]; then
+    date '+app-abi-add-test FAIL the method call to delete()void should not fail %Y%m%d_%H%M%S'
+    false
+fi
