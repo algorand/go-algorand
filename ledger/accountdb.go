@@ -432,8 +432,16 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 		return err
 	}
 
+	var insertRscStmt *sql.Stmt
+	insertRscStmt, err = tx.PrepareContext(ctx, "INSERT INTO catchpointresources(addrid, aidx, rtype, data) VALUES(?, ?, ?, ?)")
+	if err != nil {
+		return err
+	}
+
+	var result sql.Result
+	var rowID int64
 	for _, balance := range bals {
-		result, err := insertAcctStmt.ExecContext(ctx, balance.address[:], balance.normalizedBalance, balance.encodedAccountData)
+		result, err = insertAcctStmt.ExecContext(ctx, balance.address[:], balance.normalizedBalance, balance.encodedAccountData)
 		if err != nil {
 			return err
 		}
@@ -443,6 +451,25 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 		}
 		if aff != 1 {
 			return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
+		}
+		rowID, err = result.LastInsertId()
+		// write resources
+		for aidx, resData := range balance.resources {
+			ctype := basics.AssetCreatable
+			if resData.IsApp() {
+				ctype = basics.AppCreatable
+			}
+			result, err := insertRscStmt.ExecContext(ctx, rowID, aidx, ctype, protocol.Encode(&resData))
+			if err != nil {
+				return err
+			}
+			aff, err := result.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if aff != 1 {
+				return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
+			}
 		}
 	}
 	return nil
@@ -520,6 +547,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		"DROP TABLE IF EXISTS catchpointassetcreators",
 		"DROP TABLE IF EXISTS catchpointaccounthashes",
 		"DROP TABLE IF EXISTS catchpointpendinghashes",
+		"DROP TABLE IF EXISTS catchpointresources",
 		"DELETE FROM accounttotals where id='catchpointStaging'",
 	}
 
@@ -537,6 +565,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 			"CREATE TABLE IF NOT EXISTS catchpointbalances (address blob primary key, data blob, normalizedonlinebalance integer)",
 			"CREATE TABLE IF NOT EXISTS catchpointpendinghashes (data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
+			"CREATE TABLE IF NOT EXISTS catchpointresources (addrid INTEGER NOT NULL, aidx INTEGER NOT NULL, rtype INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (addrid, aidx, rtype) ) WITHOUT ROWID",
 			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"),
 		)
 	}
@@ -558,14 +587,17 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 		"ALTER TABLE accountbase RENAME TO accountbase_old",
 		"ALTER TABLE assetcreators RENAME TO assetcreators_old",
 		"ALTER TABLE accounthashes RENAME TO accounthashes_old",
+		"ALTER TABLE resources RENAME TO resources_old",
 
 		"ALTER TABLE catchpointbalances RENAME TO accountbase",
 		"ALTER TABLE catchpointassetcreators RENAME TO assetcreators",
 		"ALTER TABLE catchpointaccounthashes RENAME TO accounthashes",
+		"ALTER TABLE catchpointresources RENAME TO resources",
 
 		"DROP TABLE IF EXISTS accountbase_old",
 		"DROP TABLE IF EXISTS assetcreators_old",
 		"DROP TABLE IF EXISTS accounthashes_old",
+		"DROP TABLE IF EXISTS resources_old",
 	}
 
 	for _, stmt := range stmts {

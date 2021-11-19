@@ -377,9 +377,11 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		defer wg.Done()
 		hasCreatables := false
 		for _, accBal := range normalizedAccountBalances {
-			if len(accBal.resources) > 0 {
-				hasCreatables = true
-				break
+			for _, res := range accBal.resources {
+				if res.IsOwning() {
+					hasCreatables = true
+					break
+				}
 			}
 		}
 		if hasCreatables {
