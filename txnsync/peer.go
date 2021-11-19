@@ -840,7 +840,7 @@ func (p *Peer) getNextScheduleOffset(isRelay bool, beta time.Duration, partialMe
 		// schedule the next proposal message
 		if p.state == peerStateProposal {
 			if p.messageSeriesPendingTransactions == nil {
-				panic("sjouldnt happen")
+				panic("shouldnt happen")
 			}
 			return messageTimeWindow, peerOpsReschedule
 		}

@@ -428,8 +428,8 @@ func (s *syncState) broadcastProposal(p ProposalBroadcastRequest, peers []*Peer)
 		}
 
 		// clear out all scheduled messages for this peer
-		for s.scheduler.peerDuration(peer) != 0 {
-		}
+		s.scheduler.peers = make(peerBuckets, 0, len(peers))
+		s.scheduler.nextPeers = make(map[*Peer][]int)
 
 		// TODO make a function for the next 3 calls
 		peer.state = peerStateProposal
