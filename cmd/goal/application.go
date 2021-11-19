@@ -176,12 +176,10 @@ func init() {
 
 	infoAppCmd.MarkFlagRequired("app-id")
 
-	methodAppCmd.MarkFlagRequired("method")      // nolint:errcheck // follow previous required flag format
-	methodAppCmd.MarkFlagRequired("app-id")      // nolint:errcheck
-	methodAppCmd.MarkFlagRequired("from")        // nolint:errcheck
-	methodAppCmd.Flags().MarkHidden("app-arg")   // nolint:errcheck
-	methodAppCmd.Flags().MarkHidden("app-input") // nolint:errcheck
-	methodAppCmd.Flags().MarkHidden("i")         // nolint:errcheck
+	methodAppCmd.MarkFlagRequired("method")    // nolint:errcheck // follow previous required flag format
+	methodAppCmd.MarkFlagRequired("app-id")    // nolint:errcheck
+	methodAppCmd.MarkFlagRequired("from")      // nolint:errcheck
+	methodAppCmd.Flags().MarkHidden("app-arg") // nolint:errcheck
 }
 
 type appCallArg struct {
@@ -1187,11 +1185,13 @@ var methodAppCmd = &cobra.Command{
 		}
 
 		// Compile group
-		txnGroup := []transactions.Transaction{appCallTxn}
-		if len(txnArgs) != 0 {
-			for i := range txnArgs {
-				txnGroup = append(txnGroup, txnArgs[i].Txn)
-			}
+		var txnGroup []transactions.Transaction
+		for i := range txnArgs {
+			txnGroup = append(txnGroup, txnArgs[i].Txn)
+		}
+		txnGroup = append(txnGroup, appCallTxn)
+		if len(txnGroup) > 1 {
+			// Only if transaction arguments are present, assign group ID
 			groupId, err := client.GroupID(txnGroup)
 			if err != nil {
 				reportErrorf("Cannot assign transaction group ID: %s", err)
@@ -1202,8 +1202,8 @@ var methodAppCmd = &cobra.Command{
 		}
 
 		// Sign transactions
-		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 		signedTxnGroup := make([]transactions.SignedTxn, len(txnGroup))
+		shouldSign := sign || outFilename == ""
 		for i, unsignedTxn := range txnGroup {
 			txnFromArgs := transactions.SignedTxn{}
 			if i > 1 {
@@ -1219,16 +1219,25 @@ var methodAppCmd = &cobra.Command{
 				continue
 			}
 
-			signer := unsignedTxn.Sender
-			if !txnFromArgs.AuthAddr.IsZero() {
-				signer = txnFromArgs.AuthAddr
-			}
-
-			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signer.String(), unsignedTxn)
+			signedTxn, err := createSignedTransaction(client, shouldSign, dataDir, walletName, unsignedTxn, txnFromArgs.AuthAddr)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
+
 			signedTxnGroup = append(signedTxnGroup, signedTxn)
+		}
+
+		// Output to file
+		if outFilename != "" {
+			if dumpForDryrun {
+				err = writeDryrunReqToFile(client, txnGroup, outFilename)
+			} else {
+				err = writeSignedTxnsToFile(signedTxnGroup, outFilename)
+			}
+			if err != nil {
+				reportErrorf(err.Error())
+			}
+			return
 		}
 
 		// Broadcast
@@ -1291,7 +1300,7 @@ var methodAppCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf("cannot marshal returned bytes %v to JSON: %v", decoded, err)
 			}
-			fmt.Printf("method %s output: %s", method, string(decodedJSON))
+			fmt.Printf("method %s output: %s\n", method, string(decodedJSON))
 		}
 	},
 }
