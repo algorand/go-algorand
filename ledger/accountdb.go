@@ -205,9 +205,9 @@ type normalizedAccountBalanceV5 struct {
 type normalizedAccountBalanceV6 struct {
 	address            basics.Address
 	accountData        baseAccountData
-	resources          map[uint64]resourcesData
+	resources          map[basics.CreatableIndex]resourcesData
 	encodedAccountData []byte
-	accountHash        []byte
+	accountHashes      [][]byte
 	normalizedBalance  uint64
 }
 
@@ -223,14 +223,22 @@ func prepareNormalizedBalancesV5(bals []encodedBalanceRecordV5, proto config.Con
 		}
 		normalizedAccountBalances[i].accountData.SetAccountData(&accountDataV5)
 		normalizedAccountBalances[i].normalizedBalance = accountDataV5.NormalizedOnlineBalance(proto)
-		// todo : normalizedAccountBalances[i].resources = ...
+		resources := accountDataResources(&accountDataV5)
+		normalizedAccountBalances[i].accountHashes = make([][]byte, 1)
+		normalizedAccountBalances[i].accountHashes[0] = accountHashBuilder(balance.Address, accountDataV5, balance.AccountData)
+		if len(resources) > 0 {
+			normalizedAccountBalances[i].resources = make(map[basics.CreatableIndex]resourcesData, len(resources))
+		}
+		for _, resource := range resources {
+			normalizedAccountBalances[i].resources[resource.aidx] = resource.resourcesData
+		}
 		normalizedAccountBalances[i].encodedAccountData = balance.AccountData
-		normalizedAccountBalances[i].accountHash = accountHashBuilder(balance.Address, accountDataV5, balance.AccountData)
+
 	}
 	return
 }
 
-// prepareNormalizedBalancesV5 converts an array of encodedBalanceRecordV5 into an equal size array of normalizedAccountBalances.
+// prepareNormalizedBalancesV6 converts an array of encodedBalanceRecordV5 into an equal size array of normalizedAccountBalances.
 func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.ConsensusParams) (normalizedAccountBalances []normalizedAccountBalanceV6, err error) {
 	normalizedAccountBalances = make([]normalizedAccountBalanceV6, len(bals), len(bals))
 	for i, balance := range bals {
@@ -245,7 +253,24 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 			normalizedAccountBalances[i].accountData.MicroAlgos,
 			proto)
 		normalizedAccountBalances[i].encodedAccountData = balance.AccountData
-		normalizedAccountBalances[i].accountHash = accountHashBuilderV6(balance.Address, &normalizedAccountBalances[i].accountData, balance.AccountData)
+		normalizedAccountBalances[i].accountHashes = make([][]byte, 1+len(balance.Resources))
+		normalizedAccountBalances[i].accountHashes[0] = accountHashBuilderV6(balance.Address, &normalizedAccountBalances[i].accountData, balance.AccountData)
+		normalizedAccountBalances[i].resources = make(map[basics.CreatableIndex]resourcesData, len(balance.Resources))
+		resIdx := 0
+		for cidx, res := range balance.Resources {
+			var resData resourcesData
+			err = protocol.Decode(res, &resData)
+			if err != nil {
+				return nil, err
+			}
+			ctype := basics.AssetCreatable
+			if resData.IsEmptyApp() {
+				ctype = basics.AppCreatable
+			}
+			normalizedAccountBalances[i].accountHashes[resIdx+1] = resourcesHashBuilderV6(balance.Address, basics.CreatableIndex(cidx), ctype, resData.UpdateRound, res)
+			normalizedAccountBalances[i].resources[basics.CreatableIndex(cidx)] = resData
+			resIdx++
+		}
 	}
 	return
 }
@@ -431,17 +456,19 @@ func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normal
 	}
 
 	for _, balance := range bals {
-		result, err := insertStmt.ExecContext(ctx, balance.accountHash[:])
-		if err != nil {
-			return err
-		}
+		for _, hash := range balance.accountHashes {
+			result, err := insertStmt.ExecContext(ctx, hash[:])
+			if err != nil {
+				return err
+			}
 
-		aff, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if aff != 1 {
-			return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
+			aff, err := result.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if aff != 1 {
+				return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
+			}
 		}
 	}
 	return nil
@@ -990,6 +1017,65 @@ func (rd *resourcesData) GetAppParams() basics.AppParams {
 	}
 }
 
+//msgp:ignore resourcesRow
+type resourcesRow struct {
+	aidx  basics.CreatableIndex
+	rtype basics.CreatableType
+	resourcesData
+}
+
+func accountDataResources(accountData *basics.AccountData) (rows []resourcesRow) {
+	maxResourcesLen := len(accountData.Assets) + len(accountData.AssetParams) + len(accountData.AppLocalStates) + len(accountData.AppParams)
+	if maxResourcesLen == 0 {
+		return nil
+	}
+	rows = make([]resourcesRow, maxResourcesLen)
+	lastRow := 0
+	// does this account have any assets ?
+	if len(accountData.Assets) > 0 || len(accountData.AssetParams) > 0 {
+		for aidx, holding := range accountData.Assets {
+			rd := &rows[lastRow]
+			lastRow++
+			rd.SetAssetHolding(holding)
+			if ap, has := accountData.AssetParams[aidx]; has {
+				rd.SetAssetParams(ap, true)
+				delete(accountData.AssetParams, aidx)
+			}
+			rd.aidx = basics.CreatableIndex(aidx)
+			rd.rtype = basics.CreatableType(basics.AssetCreatable)
+		}
+		for aidx, aparams := range accountData.AssetParams {
+			rd := &rows[lastRow]
+			lastRow++
+			rd.SetAssetParams(aparams, false)
+			rd.aidx = basics.CreatableIndex(aidx)
+			rd.rtype = basics.CreatableType(basics.AssetCreatable)
+		}
+	}
+	// does this account have any applications ?
+	if len(accountData.AppLocalStates) > 0 || len(accountData.AppParams) > 0 {
+		for aidx, localState := range accountData.AppLocalStates {
+			rd := &rows[lastRow]
+			lastRow++
+			rd.SetAppLocalState(localState)
+			if ap, has := accountData.AppParams[aidx]; has {
+				rd.SetAppParams(ap, true)
+				delete(accountData.AppParams, aidx)
+			}
+			rd.aidx = basics.CreatableIndex(aidx)
+			rd.rtype = basics.CreatableType(basics.AppCreatable)
+		}
+		for aidx, aparams := range accountData.AppParams {
+			rd := &rows[lastRow]
+			lastRow++
+			rd.SetAppParams(aparams, false)
+			rd.aidx = basics.CreatableIndex(aidx)
+			rd.rtype = basics.CreatableType(basics.AppCreatable)
+		}
+	}
+	return rows[:lastRow]
+}
+
 // performResourceTableMigration migrate the database to use the resources table.
 func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(processed, total uint64)) (err error) {
 	idxnameBalances := fmt.Sprintf("onlineaccountbals_idx_%d", time.Now().UnixNano())
@@ -1093,50 +1179,11 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 		if err != nil {
 			return err
 		}
-		// does this account have any assets ?
-		if len(accountData.Assets) > 0 || len(accountData.AssetParams) > 0 {
-			for aidx, holding := range accountData.Assets {
-				var rd resourcesData
-				rd.SetAssetHolding(holding)
-				if ap, has := accountData.AssetParams[aidx]; has {
-					rd.SetAssetParams(ap, true)
-					delete(accountData.AssetParams, aidx)
-				}
-				_, err = insertResources.ExecContext(ctx, rowID, aidx, basics.AssetCreatable, protocol.Encode(&rd))
-				if err != nil {
-					return err
-				}
-			}
-			for aidx, aparams := range accountData.AssetParams {
-				var rd resourcesData
-				rd.SetAssetParams(aparams, false)
-				_, err = insertResources.ExecContext(ctx, rowID, aidx, basics.AssetCreatable, protocol.Encode(&rd))
-				if err != nil {
-					return err
-				}
-			}
-		}
-		// does this account have any applications ?
-		if len(accountData.AppLocalStates) > 0 || len(accountData.AppParams) > 0 {
-			for aidx, localState := range accountData.AppLocalStates {
-				var rd resourcesData
-				rd.SetAppLocalState(localState)
-				if ap, has := accountData.AppParams[aidx]; has {
-					rd.SetAppParams(ap, true)
-					delete(accountData.AppParams, aidx)
-				}
-				_, err = insertResources.ExecContext(ctx, rowID, aidx, basics.AppCreatable, protocol.Encode(&rd))
-				if err != nil {
-					return err
-				}
-			}
-			for aidx, aparams := range accountData.AppParams {
-				var rd resourcesData
-				rd.SetAppParams(aparams, false)
-				_, err = insertResources.ExecContext(ctx, rowID, aidx, basics.AppCreatable, protocol.Encode(&rd))
-				if err != nil {
-					return err
-				}
+		resources := accountDataResources(&accountData)
+		for _, resource := range resources {
+			_, err = insertResources.ExecContext(ctx, rowID, resource.aidx, resource.rtype, protocol.Encode(&resource.resourcesData))
+			if err != nil {
+				return err
 			}
 		}
 		processedAccounts++
@@ -1900,9 +1947,9 @@ func (mc *MerkleCommitter) LoadPage(page uint64) (content []byte, err error) {
 	return content, nil
 }
 
-type resourcesRowCache struct {
+type endcodedResourcesRow struct {
 	addrid int64
-	aidx   int64
+	aidx   basics.CreatableIndex
 	data   []byte
 }
 
@@ -1910,14 +1957,14 @@ type resourcesRowCache struct {
 type encodedAccountsBatchIter struct {
 	accountsRows     *sql.Rows
 	resourcesRows    *sql.Rows
-	nextResourcesRow *resourcesRowCache
+	nextResourcesRow *endcodedResourcesRow
 }
 
-func (iterator *encodedAccountsBatchIter) peekNextResourcesRow() (*resourcesRowCache, error) {
+func (iterator *encodedAccountsBatchIter) peekNextResourcesRow() (*endcodedResourcesRow, error) {
 	if iterator.nextResourcesRow != nil {
 		return iterator.nextResourcesRow, nil
 	}
-	row := &resourcesRowCache{}
+	row := &endcodedResourcesRow{}
 	if !iterator.resourcesRows.Next() {
 		// no more rows. Just return a pointer that won't match anything.
 		row.addrid = -1
@@ -1974,7 +2021,7 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 		copy(addr[:], addrbuf)
 		encodedRecord := encodedBalanceRecordV6{Address: addr, AccountData: buf}
 		for {
-			var nextRes *resourcesRowCache
+			var nextRes *endcodedResourcesRow
 			nextRes, err = iterator.peekNextResourcesRow()
 			if err != nil {
 				return
@@ -2157,8 +2204,8 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 				}
 				buf = nil
 				var addrid int64
-				var aidx uint64
-				var rtype uint64
+				var aidx basics.CreatableIndex
+				var rtype basics.CreatableType
 				err = iterator.resourcesRows.Scan(&addrid, &aidx, &rtype, &buf)
 				if err != nil {
 					iterator.Close(ctx)

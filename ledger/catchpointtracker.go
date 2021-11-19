@@ -853,7 +853,7 @@ func accountHashBuilderV6(addr basics.Address, accountData *baseAccountData, enc
 }
 
 // accountHashBuilderV6 calculates the hash key used for the trie by combining the account address and the account data
-func resourcesHashBuilderV6(addr basics.Address, creatableIdx uint64, creatableType uint64, updateRound uint64, encodedResourceData []byte) []byte {
+func resourcesHashBuilderV6(addr basics.Address, creatableIdx basics.CreatableIndex, creatableType basics.CreatableType, updateRound uint64, encodedResourceData []byte) []byte {
 	hash := make([]byte, 4+crypto.DigestSize)
 	// write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
 	// recent updated to be in-cache, and "older" nodes will be left alone.
@@ -865,7 +865,7 @@ func resourcesHashBuilderV6(addr basics.Address, creatableIdx uint64, creatableT
 
 	prehash := make([]byte, 8+crypto.DigestSize+len(encodedResourceData))
 	copy(prehash[:], addr[:])
-	binary.LittleEndian.PutUint64(prehash[crypto.DigestSize:], creatableIdx)
+	binary.LittleEndian.PutUint64(prehash[crypto.DigestSize:], uint64(creatableIdx))
 	copy(prehash[crypto.DigestSize+8:], encodedResourceData[:])
 	entryHash := crypto.Hash(prehash)
 	copy(hash[5:], entryHash[1:])
