@@ -458,6 +458,8 @@ func (t Type) ByteLen() (int, error) {
 	}
 }
 
+// IsTransactionType checks if a type string represents a transaction type
+// argument, such as "txn", "pay", "keyreg", etc.
 func IsTransactionType(s string) bool {
 	switch s {
 	case "txn", "pay", "keyreg", "acfg", "axfer", "afrz", "appl":
