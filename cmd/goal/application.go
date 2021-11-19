@@ -17,6 +17,8 @@
 package main
 
 import (
+	"bytes"
+	"crypto/sha512"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/binary"
@@ -28,9 +30,11 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/abi"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -41,12 +45,15 @@ var (
 	approvalProgFile string
 	clearProgFile    string
 
+	method     string
+	methodArgs []string
+
 	approvalProgRawFile string
 	clearProgRawFile    string
 
 	extraPages uint32
 
-	createOnCompletion string
+	onCompletion string
 
 	localSchemaUints      uint64
 	localSchemaByteSlices uint64
@@ -79,9 +86,10 @@ func init() {
 	appCmd.AddCommand(clearAppCmd)
 	appCmd.AddCommand(readStateAppCmd)
 	appCmd.AddCommand(infoAppCmd)
+	appCmd.AddCommand(methodAppCmd)
 
 	appCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
-	appCmd.PersistentFlags().StringSliceVar(&appArgs, "app-arg", nil, "Args to encode for application transactions (all will be encoded to a byte slice). For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.")
+	appCmd.PersistentFlags().StringArrayVar(&appArgs, "app-arg", nil, "Args to encode for application transactions (all will be encoded to a byte slice). For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.")
 	appCmd.PersistentFlags().StringSliceVar(&foreignApps, "foreign-app", nil, "Indexes of other apps whose global state is read in this transaction")
 	appCmd.PersistentFlags().StringSliceVar(&foreignAssets, "foreign-asset", nil, "Indexes of assets whose parameters are read in this transaction")
 	appCmd.PersistentFlags().StringSliceVar(&appStrAccounts, "app-account", nil, "Accounts that may be accessed from application logic")
@@ -98,7 +106,7 @@ func init() {
 	createAppCmd.Flags().Uint64Var(&localSchemaUints, "local-ints", 0, "Maximum number of integer values that may be stored in local (per-account) key/value stores for this app. Immutable.")
 	createAppCmd.Flags().Uint64Var(&localSchemaByteSlices, "local-byteslices", 0, "Maximum number of byte slices that may be stored in local (per-account) key/value stores for this app. Immutable.")
 	createAppCmd.Flags().StringVar(&appCreator, "creator", "", "Account to create the application")
-	createAppCmd.Flags().StringVar(&createOnCompletion, "on-completion", "NoOp", "OnCompletion action for application transaction")
+	createAppCmd.Flags().StringVar(&onCompletion, "on-completion", "NoOp", "OnCompletion action for application transaction")
 	createAppCmd.Flags().Uint32Var(&extraPages, "extra-pages", 0, "Additional program space for supporting larger TEAL assembly program. A maximum of 3 extra pages is allowed. A page is 1024 bytes.")
 
 	callAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to call app from")
@@ -108,6 +116,11 @@ func init() {
 	deleteAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to send delete transaction from")
 	readStateAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to fetch state from")
 	updateAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to send update transaction from")
+	methodAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to call method from")
+
+	methodAppCmd.Flags().StringVar(&method, "method", "", "Method to be called")
+	methodAppCmd.Flags().StringArrayVar(&methodArgs, "arg", nil, "Args to pass in for calling a method")
+	methodAppCmd.Flags().StringVar(&onCompletion, "on-completion", "NoOp", "OnCompletion action for application transaction")
 
 	// Can't use PersistentFlags on the root because for some reason marking
 	// a root command as required with MarkPersistentFlagRequired isn't
@@ -120,6 +133,7 @@ func init() {
 	readStateAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
 	updateAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
 	infoAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
+	methodAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
 
 	// Add common transaction flags to all txn-generating app commands
 	addTxnFlags(createAppCmd)
@@ -129,6 +143,7 @@ func init() {
 	addTxnFlags(optInAppCmd)
 	addTxnFlags(closeOutAppCmd)
 	addTxnFlags(clearAppCmd)
+	addTxnFlags(methodAppCmd)
 
 	readStateAppCmd.Flags().BoolVar(&fetchLocal, "local", false, "Fetch account-specific state for this application. `--from` address is required when using this flag")
 	readStateAppCmd.Flags().BoolVar(&fetchGlobal, "global", false, "Fetch global state for this application.")
@@ -161,6 +176,11 @@ func init() {
 	readStateAppCmd.MarkFlagRequired("app-id")
 
 	infoAppCmd.MarkFlagRequired("app-id")
+
+	methodAppCmd.MarkFlagRequired("method")    // nolint:errcheck // follow previous required flag format
+	methodAppCmd.MarkFlagRequired("app-id")    // nolint:errcheck
+	methodAppCmd.MarkFlagRequired("from")      // nolint:errcheck
+	methodAppCmd.Flags().MarkHidden("app-arg") // nolint:errcheck
 }
 
 type appCallArg struct {
@@ -229,6 +249,23 @@ func parseAppArg(arg appCallArg) (rawValue []byte, parseErr error) {
 			return
 		}
 		rawValue = data
+	case "abi":
+		typeAndValue := strings.SplitN(arg.Value, ":", 2)
+		if len(typeAndValue) != 2 {
+			parseErr = fmt.Errorf("Could not decode abi string (%s): should split abi-type and abi-value with colon", arg.Value)
+			return
+		}
+		abiType, err := abi.TypeOf(typeAndValue[0])
+		if err != nil {
+			parseErr = fmt.Errorf("Could not decode abi type string (%s): %v", typeAndValue[0], err)
+			return
+		}
+		value, err := abiType.UnmarshalFromJSON([]byte(typeAndValue[1]))
+		if err != nil {
+			parseErr = fmt.Errorf("Could not decode abi value string (%s):%v ", typeAndValue[1], err)
+			return
+		}
+		return abiType.Encode(value)
 	default:
 		parseErr = fmt.Errorf("Unknown encoding: %s", arg.Encoding)
 	}
@@ -266,6 +303,20 @@ func processAppInputFile() (args [][]byte, accounts []string, foreignApps []uint
 	return parseAppInputs(inputs)
 }
 
+// filterEmptyStrings filters out empty string parsed in by StringArrayVar
+// this function is added to support abi argument parsing
+// since parsing of `appArg` diverted from `StringSliceVar` to `StringArrayVar`
+func filterEmptyStrings(strSlice []string) []string {
+	var newStrSlice []string
+
+	for _, str := range strSlice {
+		if len(str) > 0 {
+			newStrSlice = append(newStrSlice, str)
+		}
+	}
+	return newStrSlice
+}
+
 func getAppInputs() (args [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) {
 	if (appArgs != nil || appStrAccounts != nil || foreignApps != nil) && appInputFilename != "" {
 		reportErrorf("Cannot specify both command-line arguments/accounts and JSON input filename")
@@ -275,7 +326,11 @@ func getAppInputs() (args [][]byte, accounts []string, foreignApps []uint64, for
 	}
 
 	var encodedArgs []appCallArg
-	for _, arg := range appArgs {
+
+	// we need to filter out empty strings from appArgs first, caused by change to `StringArrayVar`
+	newAppArgs := filterEmptyStrings(appArgs)
+
+	for _, arg := range newAppArgs {
 		encodingValue := strings.SplitN(arg, ":", 2)
 		if len(encodingValue) != 2 {
 			reportErrorf("all arguments should be of the form 'encoding:value'")
@@ -327,6 +382,12 @@ func mustParseOnCompletion(ocString string) (oc transactions.OnCompletion) {
 	}
 }
 
+func getDataDirAndClient() (dataDir string, client libgoal.Client) {
+	dataDir = ensureSingleDataDir()
+	client = ensureFullClient(dataDir)
+	return
+}
+
 func mustParseProgArgs() (approval []byte, clear []byte) {
 	// Ensure we don't have ambiguous or all empty args
 	if (approvalProgFile == "") == (approvalProgRawFile == "") {
@@ -357,9 +418,7 @@ var createAppCmd = &cobra.Command{
 	Long:  `Issue a transaction that creates an application`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-
-		dataDir := ensureSingleDataDir()
-		client := ensureFullClient(dataDir)
+		dataDir, client := getDataDirAndClient()
 
 		// Construct schemas from args
 		localSchema := basics.StateSchema{
@@ -374,15 +433,15 @@ var createAppCmd = &cobra.Command{
 
 		// Parse transaction parameters
 		approvalProg, clearProg := mustParseProgArgs()
-		onCompletion := mustParseOnCompletion(createOnCompletion)
+		onCompletionEnum := mustParseOnCompletion(onCompletion)
 		appArgs, appAccounts, foreignApps, foreignAssets := getAppInputs()
 
-		switch onCompletion {
+		switch onCompletionEnum {
 		case transactions.CloseOutOC, transactions.ClearStateOC:
-			reportWarnf("'--on-completion %s' may be ill-formed for 'goal app create'", createOnCompletion)
+			reportWarnf("'--on-completion %s' may be ill-formed for 'goal app create'", onCompletion)
 		}
 
-		tx, err := client.MakeUnsignedAppCreateTx(onCompletion, approvalProg, clearProg, globalSchema, localSchema, appArgs, appAccounts, foreignApps, foreignAssets, extraPages)
+		tx, err := client.MakeUnsignedAppCreateTx(onCompletionEnum, approvalProg, clearProg, globalSchema, localSchema, appArgs, appAccounts, foreignApps, foreignAssets, extraPages)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -451,8 +510,7 @@ var updateAppCmd = &cobra.Command{
 	Long:  `Issue a transaction that updates an application's ApprovalProgram and ClearStateProgram`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		dataDir := ensureSingleDataDir()
-		client := ensureFullClient(dataDir)
+		dataDir, client := getDataDirAndClient()
 
 		// Parse transaction parameters
 		approvalProg, clearProg := mustParseProgArgs()
@@ -523,8 +581,7 @@ var optInAppCmd = &cobra.Command{
 	Long:  `Opt an account in to an application, allocating local state in your account`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		dataDir := ensureSingleDataDir()
-		client := ensureFullClient(dataDir)
+		dataDir, client := getDataDirAndClient()
 
 		// Parse transaction parameters
 		appArgs, appAccounts, foreignApps, foreignAssets := getAppInputs()
@@ -594,8 +651,7 @@ var closeOutAppCmd = &cobra.Command{
 	Long:  `Close an account out of an application, removing local state from your account. The application must still exist. If it doesn't, use 'goal app clear'.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		dataDir := ensureSingleDataDir()
-		client := ensureFullClient(dataDir)
+		dataDir, client := getDataDirAndClient()
 
 		// Parse transaction parameters
 		appArgs, appAccounts, foreignApps, foreignAssets := getAppInputs()
@@ -665,8 +721,7 @@ var clearAppCmd = &cobra.Command{
 	Long:  `Remove any local state from your account associated with an application. The application does not need to exist anymore.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		dataDir := ensureSingleDataDir()
-		client := ensureFullClient(dataDir)
+		dataDir, client := getDataDirAndClient()
 
 		// Parse transaction parameters
 		appArgs, appAccounts, foreignApps, foreignAssets := getAppInputs()
@@ -736,8 +791,7 @@ var callAppCmd = &cobra.Command{
 	Long:  `Call an application, invoking application-specific functionality`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		dataDir := ensureSingleDataDir()
-		client := ensureFullClient(dataDir)
+		dataDir, client := getDataDirAndClient()
 
 		// Parse transaction parameters
 		appArgs, appAccounts, foreignApps, foreignAssets := getAppInputs()
@@ -807,8 +861,7 @@ var deleteAppCmd = &cobra.Command{
 	Long:  `Delete an application, removing the global state and other application parameters from the creator's account`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		dataDir := ensureSingleDataDir()
-		client := ensureFullClient(dataDir)
+		dataDir, client := getDataDirAndClient()
 
 		// Parse transaction parameters
 		appArgs, appAccounts, foreignApps, foreignAssets := getAppInputs()
@@ -879,8 +932,7 @@ var readStateAppCmd = &cobra.Command{
 	Long:  `Read global or local (account-specific) state for an application`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		dataDir := ensureSingleDataDir()
-		client := ensureFullClient(dataDir)
+		_, client := getDataDirAndClient()
 
 		// Ensure exactly one of --local or --global is specified
 		if fetchLocal == fetchGlobal {
@@ -961,8 +1013,7 @@ var infoAppCmd = &cobra.Command{
 	Long:  `Look up application information stored on the network, such as program hash.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		dataDir := ensureSingleDataDir()
-		client := ensureFullClient(dataDir)
+		_, client := getDataDirAndClient()
 
 		meta, err := client.ApplicationInformation(appIdx)
 		if err != nil {
@@ -992,6 +1043,158 @@ var infoAppCmd = &cobra.Command{
 		if lsch != nil {
 			fmt.Printf("Max local byteslices:  %d\n", lsch.NumByteSlice)
 			fmt.Printf("Max local integers:    %d\n", lsch.NumUint)
+		}
+	},
+}
+
+var methodAppCmd = &cobra.Command{
+	Use:   "method",
+	Short: "Invoke a method",
+	Long:  `Invoke a method in an App (stateful contract) with an application call transaction`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		dataDir, client := getDataDirAndClient()
+
+		// Parse transaction parameters
+		appArgsParsed, appAccounts, foreignApps, foreignAssets := getAppInputs()
+		if len(appArgsParsed) > 0 {
+			reportErrorf("in goal app method: --arg and --app-arg are mutually exclusive, do not use --app-arg")
+		}
+
+		onCompletionEnum := mustParseOnCompletion(onCompletion)
+
+		if appIdx == 0 {
+			reportErrorf("app id == 0, goal app create not supported in goal app method")
+		}
+
+		var approvalProg, clearProg []byte
+		if onCompletionEnum == transactions.UpdateApplicationOC {
+			approvalProg, clearProg = mustParseProgArgs()
+		}
+
+		var applicationArgs [][]byte
+
+		// insert the method selector hash
+		hash := sha512.Sum512_256([]byte(method))
+		applicationArgs = append(applicationArgs, hash[0:4])
+
+		// parse down the ABI type from method signature
+		argTupleTypeStr, retTypeStr, err := abi.ParseMethodSignature(method)
+		if err != nil {
+			reportErrorf("cannot parse method signature: %v", err)
+		}
+		err = abi.ParseArgJSONtoByteSlice(argTupleTypeStr, methodArgs, &applicationArgs)
+		if err != nil {
+			reportErrorf("cannot parse arguments to ABI encoding: %v", err)
+		}
+
+		tx, err := client.MakeUnsignedApplicationCallTx(
+			appIdx, applicationArgs, appAccounts, foreignApps, foreignAssets,
+			onCompletionEnum, approvalProg, clearProg, basics.StateSchema{}, basics.StateSchema{}, 0)
+
+		if err != nil {
+			reportErrorf("Cannot create application txn: %v", err)
+		}
+
+		// Fill in note and lease
+		tx.Note = parseNoteField(cmd)
+		tx.Lease = parseLease(cmd)
+
+		// Fill in rounds, fee, etc.
+		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		if err != nil {
+			reportErrorf("Cannot determine last valid round: %s", err)
+		}
+
+		tx, err = client.FillUnsignedTxTemplate(account, fv, lv, fee, tx)
+		if err != nil {
+			reportErrorf("Cannot construct transaction: %s", err)
+		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
+		}
+
+		if outFilename != "" {
+			if dumpForDryrun {
+				err = writeDryrunReqToFile(client, tx, outFilename)
+			} else {
+				// Write transaction to file
+				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
+			}
+
+			if err != nil {
+				reportErrorf(err.Error())
+			}
+			return
+		}
+
+		// Broadcast
+		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
+		signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+		if err != nil {
+			reportErrorf(errorSigningTX, err)
+		}
+
+		txid, err := client.BroadcastTransaction(signedTxn)
+		if err != nil {
+			reportErrorf(errorBroadcastingTX, err)
+		}
+
+		// Report tx details to user
+		reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
+
+		if !noWaitAfterSend {
+			_, err := waitForCommit(client, txid, lv)
+			if err != nil {
+				reportErrorf(err.Error())
+			}
+
+			resp, err := client.PendingTransactionInformationV2(txid)
+			if err != nil {
+				reportErrorf(err.Error())
+			}
+
+			if retTypeStr == "void" {
+				fmt.Printf("method %s succeeded", method)
+				return
+			}
+
+			// specify the return hash prefix
+			hashRet := sha512.Sum512_256([]byte("return"))
+			hashRetPrefix := hashRet[:4]
+
+			var abiEncodedRet []byte
+			foundRet := false
+			if resp.Logs != nil {
+				for i := len(*resp.Logs) - 1; i >= 0; i-- {
+					retLog := (*resp.Logs)[i]
+					if bytes.HasPrefix(retLog, hashRetPrefix) {
+						abiEncodedRet = retLog[4:]
+						foundRet = true
+						break
+					}
+				}
+			}
+
+			if !foundRet {
+				reportErrorf("cannot find return log for abi type %s", retTypeStr)
+			}
+
+			retType, err := abi.TypeOf(retTypeStr)
+			if err != nil {
+				reportErrorf("cannot cast %s to abi type: %v", retTypeStr, err)
+			}
+			decoded, err := retType.Decode(abiEncodedRet)
+			if err != nil {
+				reportErrorf("cannot decode return value %v: %v", abiEncodedRet, err)
+			}
+
+			decodedJSON, err := retType.MarshalToJSON(decoded)
+			if err != nil {
+				reportErrorf("cannot marshal returned bytes %v to JSON: %v", decoded, err)
+			}
+			fmt.Printf("method %s succeeded with output: %s", method, string(decodedJSON))
 		}
 	},
 }

@@ -350,10 +350,6 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 	// apply initialization transations if any
 	initSignedTxns, maxTxnPerBlock := txnSource.Prepare(b, addrs, keys, newBlock.Round(), genHash)
 	if len(initSignedTxns) > 0 {
-		// all init transactions need to be written to ledger before reopening and benchmarking
-		for _, l := range []*Ledger{l, l2} {
-			stopCommitSyncer(l)
-		}
 
 		var numBlocks uint64 = 0
 		var validatedBlock *ledgercore.ValidatedBlock

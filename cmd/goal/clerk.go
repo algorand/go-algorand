@@ -924,7 +924,7 @@ func assembleFile(fname string) (program []byte) {
 	}
 	ops, err := logic.AssembleString(string(text))
 	if err != nil {
-		ops.ReportProblems(fname)
+		ops.ReportProblems(fname, os.Stderr)
 		reportErrorf("%s: %s", fname, err)
 	}
 	_, params := getProto(protoVersion)
