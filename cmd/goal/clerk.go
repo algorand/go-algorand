@@ -223,7 +223,7 @@ func writeSignedTxnsToFile(stxns []transactions.SignedTxn, filename string) erro
 		outData = append(outData, protocol.Encode(&stxn)...)
 	}
 
-	return writeFile(outFilename, outData, 0600)
+	return writeFile(filename, outData, 0600)
 }
 
 func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction, filename string) error {
@@ -232,7 +232,7 @@ func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletNa
 		return err
 	}
 	// Write the SignedTxn to the output file
-	return writeSignedTxnsToFile([]transactions.SignedTxn{stxn}, outFilename)
+	return writeSignedTxnsToFile([]transactions.SignedTxn{stxn}, filename)
 }
 
 func getB64Args(args []string) [][]byte {
