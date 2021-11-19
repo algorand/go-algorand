@@ -41,19 +41,17 @@ func TestSentFilterSet(t *testing.T) {
 	sf.setSentFilter(bf, basics.Round(13))
 
 	// .. comes out
-	lastCounter, lcRound, shouldSendFresh := sf.nextFilterGroup(ep)
+	lastCounter, lcRound := sf.nextFilterGroup(ep)
 	a.Equal(uint64(42+1), lastCounter)
 	a.Equal(basics.Round(13), lcRound)
-	a.False(shouldSendFresh)
 
 	for i := 0; i < maxIncrementalFilters; i++ {
 		sf.setSentFilter(bf, basics.Round(13))
 	}
 
-	lastCounter, lcRound, shouldSendFresh = sf.nextFilterGroup(ep)
-	a.Equal(uint64(42+1), lastCounter)
-	a.Equal(basics.Round(13), lcRound)
-	a.True(shouldSendFresh)
+	lastCounter, lcRound = sf.nextFilterGroup(ep)
+	a.Equal(uint64(0), lastCounter)
+	a.Equal(basics.Round(0), lcRound)
 
 	for i := 0; i < maxSentFilterSet; i++ {
 		bf.encoded.EncodingParams.Offset++
@@ -61,8 +59,7 @@ func TestSentFilterSet(t *testing.T) {
 	}
 
 	// first oldest entry will have been lost
-	lastCounter, lcRound, shouldSendFresh = sf.nextFilterGroup(ep)
+	lastCounter, lcRound = sf.nextFilterGroup(ep)
 	a.Equal(uint64(0), lastCounter)
 	a.Equal(basics.Round(0), lcRound)
-	a.False(shouldSendFresh)
 }

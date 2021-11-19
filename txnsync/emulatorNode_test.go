@@ -424,7 +424,7 @@ func (n *emulatedNode) BroadcastProposal(proposalBytes []byte, txGroups []poolda
 
 	n.proposals = append(n.proposals, &proposalCache{ProposalData: data, txGroups: txGroups, numTxGroupsReceived: len(txGroups)})
 
-	n.externalEvents <- MakeBroadcastProposalRequestEvent(protocol.Encode(&data), txGroups)
+	n.externalEvents <- MakeBroadcastProposalRequestEvent(protocol.Encode(&data), txGroups, false)
 }
 
 func (n *emulatedNode) HandleProposalMessage(proposalDataBytes []byte, txGroups []pooldata.SignedTxGroup, peer *Peer) {

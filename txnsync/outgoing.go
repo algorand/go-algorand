@@ -234,7 +234,7 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions pendingT
 
 	if (msgOps&messageConstBloomFilter == messageConstBloomFilter) && len(pendingTransactions.pendingTransactionsGroups) > 0 {
 		filterTxns := pendingTransactions.pendingTransactionsGroups
-		minGroupCounter, lastGroupRound, shouldSendFreshFilter := peer.sentFilterParams.nextFilterGroup(metaMessage.message.UpdatedRequestParams)
+		minGroupCounter, lastGroupRound := peer.sentFilterParams.nextFilterGroup(metaMessage.message.UpdatedRequestParams)
 		if lastGroupRound != s.round {
 			minGroupCounter = 0
 		}
@@ -263,12 +263,11 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions pendingT
 			// for non-relays, we want to be more picky and send bloom filter that excludes the transactions that were send from that relay
 			// ( since the relay already knows that it sent us these transactions ). we cannot do the same for relay->relay since it would
 			// conflict with the bloom filters being calculated only once.
-			if !shouldSendFreshFilter {
-				excludeTransactions = peer.recentSentTransactions
-			}
+			excludeTransactions = peer.recentSentTransactions
 		}
 		profMakeBloomFilter := s.profiler.getElement(profElementMakeBloomFilter)
 		profMakeBloomFilter.start()
+		logging.Base().Info("start making bloom filter")
 		// generate a bloom filter that matches the requests params.
 		offset, modulator := peer.getLocalRequestParams()
 		assembledBloomFilter = s.makeBloomFilter(requestParams{Offset: offset, Modulator: modulator}, filterTxns, excludeTransactions, lastBloomFilter)
@@ -276,12 +275,13 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions pendingT
 		// ( note that we check here againt the peer, whereas the hint to makeBloomFilter could be the cached one for the relay )
 		if !assembledBloomFilter.sameParams(peer.lastSentBloomFilter) && assembledBloomFilter.encodedLength > 0 {
 			// Fresh bloom filter sent for new rounds or from relays
-			if lastGroupRound != s.round || s.isRelay || shouldSendFreshFilter {
+			if lastGroupRound != s.round {
 				assembledBloomFilter.encoded.ClearPrevious = 1
 			}
 			metaMessage.message.TxnBloomFilter = assembledBloomFilter.encoded
 			currentMessageSize += assembledBloomFilter.encodedLength
 		}
+		logging.Base().Info("done making bloom filter")
 		profMakeBloomFilter.end()
 		if s.isRelay {
 			s.lastBloomFilter = assembledBloomFilter

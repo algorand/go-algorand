@@ -84,11 +84,14 @@ func (sf *sentFilters) setSentFilter(filter bloomFilter, round basics.Round) {
 	}
 }
 
-func (sf *sentFilters) nextFilterGroup(encodingParams requestParams) (lastCounter uint64, round basics.Round, shouldSendFreshFilter bool) {
+func (sf *sentFilters) nextFilterGroup(encodingParams requestParams) (lastCounter uint64, round basics.Round) {
 	for _, sfs := range *sf {
 		if sfs.EncodingParams == encodingParams {
-			return sfs.lastCounter + 1, sfs.round, sfs.incrementalFilterCount > maxIncrementalFilters
+			if sfs.incrementalFilterCount > maxIncrementalFilters {
+				return 0, 0
+			}
+			return sfs.lastCounter + 1, sfs.round
 		}
 	}
-	return 0, 0, false // include everything since the start
+	return 0, 0 // include everything since the start
 }

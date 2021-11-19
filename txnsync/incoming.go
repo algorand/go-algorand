@@ -126,7 +126,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 	if err != nil {
 		// if the incoming message queue for this peer is full, disconnect from this peer.
 		s.log.Infof("unable to enqueue incoming message into peer incoming message backlog. disconnecting from peer.")
-		s.log.Info(time.Now().Sub(peer.incomingMessages.lastDequeued))
+		s.log.Infof("time last dequeued %v", peer.incomingMessages.lastDequeued)
 		s.incomingMessagesQ.erase(peer, networkPeer)
 		return err
 	}
