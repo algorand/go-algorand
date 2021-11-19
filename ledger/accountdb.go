@@ -453,6 +453,9 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 			return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
 		}
 		rowID, err = result.LastInsertId()
+		if err != nil {
+			return err
+		}
 		// write resources
 		for aidx, resData := range balance.resources {
 			ctype := basics.AssetCreatable
