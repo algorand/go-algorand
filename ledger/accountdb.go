@@ -204,7 +204,8 @@ type normalizedAccountBalanceV5 struct {
 // normalizedAccountBalanceV6 is a staging area for a catchpoint file account information before it's being added to the catchpoint staging tables.
 type normalizedAccountBalanceV6 struct {
 	address            basics.Address
-	accountData        basics.AccountData
+	accountData        baseAccountData
+	resources          map[uint64]resourcesData
 	encodedAccountData []byte
 	accountHash        []byte
 	normalizedBalance  uint64
@@ -215,13 +216,16 @@ func prepareNormalizedBalancesV5(bals []encodedBalanceRecordV5, proto config.Con
 	normalizedAccountBalances = make([]normalizedAccountBalanceV6, len(bals), len(bals))
 	for i, balance := range bals {
 		normalizedAccountBalances[i].address = balance.Address
-		err = protocol.Decode(balance.AccountData, &(normalizedAccountBalances[i].accountData))
+		var accountDataV5 basics.AccountData
+		err = protocol.Decode(balance.AccountData, &accountDataV5)
 		if err != nil {
 			return nil, err
 		}
-		normalizedAccountBalances[i].normalizedBalance = normalizedAccountBalances[i].accountData.NormalizedOnlineBalance(proto)
+		normalizedAccountBalances[i].accountData.SetAccountData(&accountDataV5)
+		normalizedAccountBalances[i].normalizedBalance = accountDataV5.NormalizedOnlineBalance(proto)
+		// todo : normalizedAccountBalances[i].resources = ...
 		normalizedAccountBalances[i].encodedAccountData = balance.AccountData
-		normalizedAccountBalances[i].accountHash = accountHashBuilder(balance.Address, normalizedAccountBalances[i].accountData, balance.AccountData)
+		normalizedAccountBalances[i].accountHash = accountHashBuilder(balance.Address, accountDataV5, balance.AccountData)
 	}
 	return
 }
@@ -235,9 +239,13 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 		if err != nil {
 			return nil, err
 		}
-		normalizedAccountBalances[i].normalizedBalance = normalizedAccountBalances[i].accountData.NormalizedOnlineBalance(proto)
+		normalizedAccountBalances[i].normalizedBalance = basics.NormalizedOnlineAccountBalance(
+			normalizedAccountBalances[i].accountData.Status,
+			normalizedAccountBalances[i].accountData.RewardsBase,
+			normalizedAccountBalances[i].accountData.MicroAlgos,
+			proto)
 		normalizedAccountBalances[i].encodedAccountData = balance.AccountData
-		normalizedAccountBalances[i].accountHash = accountHashBuilder(balance.Address, normalizedAccountBalances[i].accountData, balance.AccountData)
+		normalizedAccountBalances[i].accountHash = accountHashBuilderV6(balance.Address, &normalizedAccountBalances[i].accountData, balance.AccountData)
 	}
 	return
 }
@@ -456,23 +464,24 @@ func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, bals []nor
 	}
 
 	for _, balance := range bals {
-		// if the account has any asset params, it means that it's the creator of an asset.
-		if len(balance.accountData.AssetParams) > 0 {
-			for aidx := range balance.accountData.AssetParams {
-				_, err := insertStmt.ExecContext(ctx, basics.CreatableIndex(aidx), balance.address[:], basics.AssetCreatable)
-				if err != nil {
-					return err
+		for aidx, resData := range balance.resources {
+			if resData.IsOwning() {
+				// determine if it's a asset
+				if resData.IsAsset() {
+					_, err := insertStmt.ExecContext(ctx, basics.CreatableIndex(aidx), balance.address[:], basics.AssetCreatable)
+					if err != nil {
+						return err
+					}
+				}
+				// determine if it's a asset
+				if resData.IsApp() {
+					_, err := insertStmt.ExecContext(ctx, basics.CreatableIndex(aidx), balance.address[:], basics.AppCreatable)
+					if err != nil {
+						return err
+					}
 				}
 			}
-		}
-
-		if len(balance.accountData.AppParams) > 0 {
-			for aidx := range balance.accountData.AppParams {
-				_, err := insertStmt.ExecContext(ctx, basics.CreatableIndex(aidx), balance.address[:], basics.AppCreatable)
-				if err != nil {
-					return err
-				}
-			}
+			// TODO : add to resource table.
 		}
 	}
 	return nil
@@ -766,9 +775,11 @@ func (ba *baseAccountData) GetAccountData() basics.AccountData {
 type resourceFlags uint8
 
 const (
-	resourceFlagsHolding    = 0 //nolint:deadcode,varcheck
-	resourceFlagsNotHolding = 1
-	resourceFlagsOwnership  = 2
+	resourceFlagsHolding    resourceFlags = 0 //nolint:deadcode,varcheck
+	resourceFlagsNotHolding resourceFlags = 1
+	resourceFlagsOwnership  resourceFlags = 2
+	resourceFlagsEmptyAsset resourceFlags = 4
+	resourceFlagsEmptyApp   resourceFlags = 8
 )
 
 type resourcesData struct {
@@ -822,6 +833,49 @@ func (rd *resourcesData) IsOwning() bool {
 	return (rd.ResourceFlags & resourceFlagsOwnership) == resourceFlagsOwnership
 }
 
+func (rd *resourcesData) IsEmptyApp() bool {
+	return rd.SchemaNumUint == 0 &&
+		rd.SchemaNumByteSlice == 0 &&
+		len(rd.KeyValue) == 0 &&
+		len(rd.ApprovalProgram) == 0 &&
+		len(rd.ClearStateProgram) == 0 &&
+		len(rd.GlobalState) == 0 &&
+		rd.LocalStateSchemaNumUint == 0 &&
+		rd.LocalStateSchemaNumByteSlice == 0 &&
+		rd.GlobalStateSchemaNumUint == 0 &&
+		rd.GlobalStateSchemaNumByteSlice == 0 &&
+		rd.ExtraProgramPages == 0
+}
+
+func (rd *resourcesData) IsApp() bool {
+	if (rd.ResourceFlags & resourceFlagsEmptyApp) == resourceFlagsEmptyApp {
+		return true
+	}
+	return !rd.IsEmptyApp()
+}
+
+func (rd *resourcesData) IsEmptyAsset() bool {
+	return rd.Amount == 0 &&
+		rd.Frozen == false &&
+		rd.Total == 0 &&
+		rd.Decimals == 0 &&
+		rd.DefaultFrozen == false &&
+		rd.UnitName == "" &&
+		rd.AssetName == "" &&
+		rd.URL == "" &&
+		rd.MetadataHash == [32]byte{} ||
+		rd.Manager.IsZero() ||
+		rd.Reserve.IsZero() ||
+		rd.Freeze.IsZero() ||
+		rd.Clawback.IsZero()
+}
+
+func (rd *resourcesData) IsAsset() bool {
+	if (rd.ResourceFlags & resourceFlagsEmptyAsset) == resourceFlagsEmptyAsset {
+		return true
+	}
+	return !rd.IsEmptyAsset()
+}
 func (rd *resourcesData) SetAssetParams(ap basics.AssetParams, haveHoldings bool) {
 	rd.Total = ap.Total
 	rd.Decimals = ap.Decimals
@@ -837,6 +891,10 @@ func (rd *resourcesData) SetAssetParams(ap basics.AssetParams, haveHoldings bool
 	rd.ResourceFlags |= resourceFlagsOwnership
 	if !haveHoldings {
 		rd.ResourceFlags |= resourceFlagsNotHolding
+	}
+	rd.ResourceFlags &= ^resourceFlagsEmptyAsset
+	if rd.IsEmptyAsset() {
+		rd.ResourceFlags |= resourceFlagsEmptyAsset
 	}
 }
 
@@ -860,7 +918,10 @@ func (rd *resourcesData) GetAssetParams() basics.AssetParams {
 func (rd *resourcesData) SetAssetHolding(ah basics.AssetHolding) {
 	rd.Amount = ah.Amount
 	rd.Frozen = ah.Frozen
-	rd.ResourceFlags -= rd.ResourceFlags & resourceFlagsNotHolding
+	rd.ResourceFlags &= ^(resourceFlagsNotHolding + resourceFlagsEmptyAsset)
+	if rd.IsEmptyAsset() {
+		rd.ResourceFlags |= resourceFlagsEmptyAsset
+	}
 }
 
 func (rd *resourcesData) GetAssetHolding() basics.AssetHolding {
@@ -874,7 +935,11 @@ func (rd *resourcesData) SetAppLocalState(als basics.AppLocalState) {
 	rd.SchemaNumUint = als.Schema.NumUint
 	rd.SchemaNumByteSlice = als.Schema.NumByteSlice
 	rd.KeyValue = als.KeyValue
-	rd.ResourceFlags -= rd.ResourceFlags & resourceFlagsNotHolding
+
+	rd.ResourceFlags &= ^(resourceFlagsEmptyApp + resourceFlagsNotHolding)
+	if rd.IsEmptyApp() {
+		rd.ResourceFlags |= resourceFlagsEmptyApp
+	}
 }
 
 func (rd *resourcesData) GetAppLocalState() basics.AppLocalState {
@@ -899,6 +964,10 @@ func (rd *resourcesData) SetAppParams(ap basics.AppParams, haveHoldings bool) {
 	rd.ResourceFlags |= resourceFlagsOwnership
 	if !haveHoldings {
 		rd.ResourceFlags |= resourceFlagsNotHolding
+	}
+	rd.ResourceFlags &= ^resourceFlagsEmptyApp
+	if rd.IsEmptyApp() {
+		rd.ResourceFlags |= resourceFlagsEmptyApp
 	}
 }
 
@@ -1849,6 +1918,11 @@ func (iterator *encodedAccountsBatchIter) peekNextResourcesRow() (*resourcesRowC
 		return iterator.nextResourcesRow, nil
 	}
 	row := &resourcesRowCache{}
+	if !iterator.resourcesRows.Next() {
+		// no more rows. Just return a pointer that won't match anything.
+		row.addrid = -1
+		return row, nil
+	}
 	err := iterator.resourcesRows.Scan(&row.addrid, &row.aidx, &row.data)
 	switch err {
 	case nil:
@@ -1912,6 +1986,7 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 				encodedRecord.Resources = make(map[uint64]msgp.Raw)
 			}
 			encodedRecord.Resources[uint64(nextRes.aidx)] = nextRes.data
+			iterator.nextResourcesRow = nil
 		}
 		bals = append(bals, encodedRecord)
 		if len(bals) == accountCount {

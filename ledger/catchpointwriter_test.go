@@ -48,8 +48,8 @@ func makeString(len int) string {
 	return s
 }
 
-func makeTestEncodedBalanceRecord(t *testing.T) encodedBalanceRecord {
-	er := encodedBalanceRecord{}
+func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
+	er := encodedBalanceRecordV5{}
 	hash := crypto.Hash([]byte{1, 2, 3})
 	copy(er.Address[:], hash[:])
 	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
@@ -143,10 +143,10 @@ func makeTestEncodedBalanceRecord(t *testing.T) encodedBalanceRecord {
 func TestEncodedBalanceRecordEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	er := makeTestEncodedBalanceRecord(t)
+	er := makeTestEncodedBalanceRecordV5(t)
 	encodedBr := er.MarshalMsg(nil)
 
-	var er2 encodedBalanceRecord
+	var er2 encodedBalanceRecordV5
 	_, err := er2.UnmarshalMsg(encodedBr)
 	require.NoError(t, err)
 
@@ -156,13 +156,13 @@ func TestEncodedBalanceRecordEncoding(t *testing.T) {
 func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fbc := catchpointFileBalancesChunk{}
+	fbc := catchpointFileBalancesChunkV5{}
 	for i := 0; i < 512; i++ {
-		fbc.Balances = append(fbc.Balances, makeTestEncodedBalanceRecord(t))
+		fbc.Balances = append(fbc.Balances, makeTestEncodedBalanceRecordV5(t))
 	}
 	encodedFbc := fbc.MarshalMsg(nil)
 
-	var fbc2 catchpointFileBalancesChunk
+	var fbc2 catchpointFileBalancesChunkV5
 	_, err := fbc2.UnmarshalMsg(encodedFbc)
 	require.NoError(t, err)
 
@@ -257,7 +257,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 			require.Equal(t, blockHeaderDigest, fileHeader.BlockHeaderDigest)
 			require.Equal(t, uint64(len(accts)), fileHeader.TotalAccounts)
 		} else if header.Name == "balances.1.1.msgpack" {
-			var balances catchpointFileBalancesChunk
+			var balances catchpointFileBalancesChunkV6
 			err = protocol.Decode(balancesBlockBytes, &balances)
 			require.NoError(t, err)
 			require.Equal(t, uint64(len(accts)), uint64(len(balances.Balances)))

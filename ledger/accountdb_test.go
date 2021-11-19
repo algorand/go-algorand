@@ -820,11 +820,11 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 			last64KSize = chunkSize
 			last64KAccountCreationTime = time.Duration(0)
 		}
-		var balances catchpointFileBalancesChunk
-		balances.Balances = make([]encodedBalanceRecord, chunkSize)
+		var balances catchpointFileBalancesChunkV6
+		balances.Balances = make([]encodedBalanceRecordV6, chunkSize)
 		for i := uint64(0); i < chunkSize; i++ {
-			var randomAccount encodedBalanceRecord
-			accountData := basics.AccountData{RewardsBase: accountsLoaded + i}
+			var randomAccount encodedBalanceRecordV6
+			accountData := baseAccountData{RewardsBase: accountsLoaded + i}
 			accountData.MicroAlgos.Raw = crypto.RandUint63()
 			randomAccount.AccountData = protocol.Encode(&accountData)
 			crypto.RandBytes(randomAccount.Address[:])
@@ -837,7 +837,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 		last64KAccountCreationTime += balanceLoopDuration
 		accountsGenerationDuration += balanceLoopDuration
 
-		normalizedAccountBalances, err := prepareNormalizedBalances(balances.Balances, proto)
+		normalizedAccountBalances, err := prepareNormalizedBalancesV6(balances.Balances, proto)
 		b.StartTimer()
 		err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 			err = writeCatchpointStagingBalances(ctx, tx, normalizedAccountBalances)
