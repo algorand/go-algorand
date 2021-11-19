@@ -1202,12 +1202,12 @@ var methodAppCmd = &cobra.Command{
 		}
 
 		// Sign transactions
-		signedTxnGroup := make([]transactions.SignedTxn, len(txnGroup))
+		var signedTxnGroup []transactions.SignedTxn
 		shouldSign := sign || outFilename == ""
 		for i, unsignedTxn := range txnGroup {
 			txnFromArgs := transactions.SignedTxn{}
-			if i > 1 {
-				txnFromArgs = txnArgs[i-1]
+			if i < len(txnArgs) {
+				txnFromArgs = txnArgs[i]
 			}
 
 			if !txnFromArgs.Lsig.Blank() {
@@ -1230,7 +1230,7 @@ var methodAppCmd = &cobra.Command{
 		// Output to file
 		if outFilename != "" {
 			if dumpForDryrun {
-				err = writeDryrunReqToFile(client, txnGroup, outFilename)
+				err = writeDryrunReqToFile(client, signedTxnGroup, outFilename)
 			} else {
 				err = writeSignedTxnsToFile(signedTxnGroup, outFilename)
 			}
