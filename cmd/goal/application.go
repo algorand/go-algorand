@@ -177,12 +177,10 @@ func init() {
 
 	infoAppCmd.MarkFlagRequired("app-id")
 
-	methodAppCmd.MarkFlagRequired("method")      // nolint:errcheck // follow previous required flag format
-	methodAppCmd.MarkFlagRequired("app-id")      // nolint:errcheck
-	methodAppCmd.MarkFlagRequired("from")        // nolint:errcheck
-	methodAppCmd.Flags().MarkHidden("app-arg")   // nolint:errcheck
-	methodAppCmd.Flags().MarkHidden("app-input") // nolint:errcheck
-	methodAppCmd.Flags().MarkHidden("i")         // nolint:errcheck
+	methodAppCmd.MarkFlagRequired("method")    // nolint:errcheck // follow previous required flag format
+	methodAppCmd.MarkFlagRequired("app-id")    // nolint:errcheck
+	methodAppCmd.MarkFlagRequired("from")      // nolint:errcheck
+	methodAppCmd.Flags().MarkHidden("app-arg") // nolint:errcheck
 }
 
 type appCallArg struct {
@@ -1115,6 +1113,20 @@ var methodAppCmd = &cobra.Command{
 		explicitFee := cmd.Flags().Changed("fee")
 		if explicitFee {
 			tx.Fee = basics.MicroAlgos{Raw: fee}
+		}
+
+		if outFilename != "" {
+			if dumpForDryrun {
+				err = writeDryrunReqToFile(client, tx, outFilename)
+			} else {
+				// Write transaction to file
+				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
+			}
+
+			if err != nil {
+				reportErrorf(err.Error())
+			}
+			return
 		}
 
 		// Broadcast
