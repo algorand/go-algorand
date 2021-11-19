@@ -98,7 +98,7 @@ func (fn *mockNodeConnector) IncomingTransactionGroups(peer *Peer, messageSeq ui
 }
 func (fn *mockNodeConnector) NotifyMonitor() chan struct{} { return nil }
 
-func (fn *mockNodeConnector) RelayProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice) {
+func (fn *mockNodeConnector) BroadcastProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice) {
 }
 
 func (fn *mockNodeConnector) HandleProposalMessage(proposalDataBytes []byte, txGroups []pooldata.SignedTxGroup, peer *Peer) {

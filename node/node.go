@@ -1194,7 +1194,7 @@ func (node *AlgorandFullNode) ProposalsChannel() <-chan agreement.ProposalMessag
 	return node.txnSyncConnector.agreementProposalCh
 }
 
-// RelayProposal sends proposals to the txnsync for relaying.
-func (node *AlgorandFullNode) RelayProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice) {
-	node.txnSyncConnector.RelayProposal(proposalBytes, txnSlices)
+// BroadcastProposal sends proposals to the txnsync for relaying.
+func (node *AlgorandFullNode) BroadcastProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice, relay bool) {
+	node.txnSyncConnector.BroadcastProposal(proposalBytes, txnSlices, relay)
 }

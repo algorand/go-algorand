@@ -272,7 +272,7 @@ func (e *emulator) initNodes() {
 			group.EncodedLength = len(group.Transactions[0].MarshalMsg(encodingBuf))
 			txGroups = append(txGroups, group)
 		}
-		node.RelayProposal(proposalBytes, txGroups)
+		node.BroadcastProposal(proposalBytes, txGroups)
 	}
 
 	protocol.PutEncodingBuf(encodingBuf)

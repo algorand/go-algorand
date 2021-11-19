@@ -69,7 +69,7 @@ type networkImpl struct {
 
 type ProposalSender interface {
 	ProposalsChannel() <-chan agreement.ProposalMessage
-	RelayProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice)
+	BroadcastProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice, relay bool)
 }
 
 // WrapNetwork adapts a network.GossipNode into an agreement.Network.
@@ -200,8 +200,12 @@ func (i *networkImpl) broadcastTimeout(t protocol.Tag, data []byte, timeout time
 	return i.net.Broadcast(ctx, t, data, true, nil)
 }
 
+func (i *networkImpl) BroadcastProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice) {
+	i.ps.BroadcastProposal(proposalBytes, txnSlices, false)
+}
+
 func (i *networkImpl) RelayProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice) {
-	i.ps.RelayProposal(proposalBytes, txnSlices)
+	i.ps.BroadcastProposal(proposalBytes, txnSlices, true)
 }
 
 func (i *networkImpl) ProposalsChannel() <-chan agreement.ProposalMessage {

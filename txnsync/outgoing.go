@@ -411,6 +411,10 @@ func (s *syncState) broadcastProposalFilter(proposalHash crypto.Digest, peers []
 }
 
 func (s *syncState) broadcastProposal(p ProposalBroadcastRequest, peers []*Peer) {
+	// don't relay proposal if not a relay
+	if !s.isRelay && p.relay {
+		return
+	}
 	currentTime := s.clock.Since()
 	proposalHash := crypto.Hash(p.proposalBytes)
 

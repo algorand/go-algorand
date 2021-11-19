@@ -412,7 +412,7 @@ func (p *networkPeer) GetAddress() string {
 	return fmt.Sprintf("%d", p.target)
 }
 
-func (n *emulatedNode) RelayProposal(proposalBytes []byte, txGroups []pooldata.SignedTxGroup) {
+func (n *emulatedNode) BroadcastProposal(proposalBytes []byte, txGroups []pooldata.SignedTxGroup) {
 	data := txnsynctesting.ProposalData{
 		ProposalBytes: proposalBytes,
 		TxGroupIds:    make([]transactions.Txid, len(txGroups)),

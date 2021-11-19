@@ -44,6 +44,7 @@ type RoundSettings struct {
 type ProposalBroadcastRequest struct {
 	proposalBytes []byte
 	txGroups      []pooldata.SignedTxGroup
+	relay         bool
 }
 
 // Event is an external triggering event
@@ -127,12 +128,13 @@ func MakeNewRoundEvent(roundNumber basics.Round, fetchTransactions bool) Event {
 }
 
 // MakeBroadcastProposalRequestEvent creates an event for sending a proposal
-func MakeBroadcastProposalRequestEvent(proposalBytes []byte, txGroups []pooldata.SignedTxGroup) Event {
+func MakeBroadcastProposalRequestEvent(proposalBytes []byte, txGroups []pooldata.SignedTxGroup, relay bool) Event {
 	return Event{
 		eventType: proposalBroadcastRequestEvent,
 		proposalBroadcastRequest: ProposalBroadcastRequest{
 			proposalBytes: proposalBytes,
 			txGroups:      txGroups,
+			relay:         relay,
 		},
 	}
 }

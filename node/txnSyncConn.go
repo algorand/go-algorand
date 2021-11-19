@@ -293,7 +293,7 @@ func (tsnc *transactionSyncNodeConnector) IncomingTransactionGroups(peer *txnsyn
 	return
 }
 
-func (tsnc *transactionSyncNodeConnector) RelayProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice) {
+func (tsnc *transactionSyncNodeConnector) BroadcastProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice, relay bool) {
 	data := proposalData{
 		ProposalBytes: proposalBytes,
 		TxGroupIds:    make([]transactions.Txid, len(txnSlices)),
@@ -314,7 +314,7 @@ func (tsnc *transactionSyncNodeConnector) RelayProposal(proposalBytes []byte, tx
 		}
 	}
 
-	tsnc.eventsCh <- txnsync.MakeBroadcastProposalRequestEvent(protocol.Encode(&data), txGroups)
+	tsnc.eventsCh <- txnsync.MakeBroadcastProposalRequestEvent(protocol.Encode(&data), txGroups, relay)
 }
 
 func (tsnc *transactionSyncNodeConnector) handleProposalLoop() {

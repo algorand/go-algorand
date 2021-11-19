@@ -127,7 +127,7 @@ type fakeProposalSender struct {
 	gossip.ProposalSender
 }
 
-func (fps *fakeProposalSender) RelayProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice) {
+func (fps *fakeProposalSender) BroadcastProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice, relay bool) {
 }
 
 func (fps *fakeProposalSender) ProposalsChannel() <-chan agreement.ProposalMessage {

@@ -278,6 +278,7 @@ type Network interface {
 	Relay(MessageHandle, protocol.Tag, []byte) error
 
 	ProposalsChannel() <-chan ProposalMessage
+	BroadcastProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice)
 	RelayProposal(proposalBytes []byte, txnSlices []pooldata.SignedTxnSlice)
 
 	// Disconnect sends the Network a hint to disconnect to the peer
