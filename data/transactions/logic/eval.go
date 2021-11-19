@@ -571,10 +571,6 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 		return
 	}
 
-	if len(program) == 0 {
-		cx.err = errors.New("invalid program (empty)")
-		return false, cx.err
-	}
 	version, vlen, err := versionCheck(program, cx.EvalParams)
 	if err != nil {
 		cx.err = err
@@ -700,6 +696,9 @@ func check(program []byte, params *EvalParams, mode runMode) (err error) {
 }
 
 func versionCheck(program []byte, params *EvalParams) (uint64, int, error) {
+	if len(program) == 0 {
+		return 0, 0, errors.New("invalid program (empty)")
+	}
 	version, vlen := binary.Uvarint(program)
 	if vlen <= 0 {
 		return 0, 0, errors.New("invalid version")

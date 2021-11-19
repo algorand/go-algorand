@@ -310,7 +310,7 @@ var sendCmd = &cobra.Command{
 		var err error
 		if progByteFile != "" {
 			if programSource != "" || logicSigFile != "" {
-				reportErrorln("should at most one of --from-program/-F or --from-program-bytes/-P --logic-sig/-L")
+				reportErrorln("should use at most one of --from-program/-F or --from-program-bytes/-P --logic-sig/-L")
 			}
 			program, err = readFile(progByteFile)
 			if err != nil {
@@ -318,7 +318,7 @@ var sendCmd = &cobra.Command{
 			}
 		} else if programSource != "" {
 			if logicSigFile != "" {
-				reportErrorln("should at most one of --from-program/-F or --from-program-bytes/-P --logic-sig/-L")
+				reportErrorln("should use at most one of --from-program/-F or --from-program-bytes/-P --logic-sig/-L")
 			}
 			program = assembleFile(programSource)
 		} else if logicSigFile != "" {
@@ -777,6 +777,9 @@ var signCmd = &cobra.Command{
 		for _, group := range groupsOrder {
 			txnGroup := []transactions.SignedTxn{}
 			for _, txn := range txnGroups[group] {
+				if lsig.Logic != nil {
+					txn.Lsig = lsig
+				}
 				txnGroup = append(txnGroup, *txn)
 			}
 			var groupCtx *verify.GroupContext
@@ -790,7 +793,6 @@ var signCmd = &cobra.Command{
 			for i, txn := range txnGroup {
 				var signedTxn transactions.SignedTxn
 				if lsig.Logic != nil {
-					txn.Lsig = lsig
 					err = verify.LogicSigSanityCheck(&txn, i, groupCtx)
 					if err != nil {
 						reportErrorf("%s: txn[%d] error %s", txFilename, txnIndex[txnGroups[group][i]], err)
