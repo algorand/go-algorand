@@ -309,7 +309,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	start := time.Now()
 	ledgerProcessstagingbalancesCount.Inc(nil)
 
-	var normalizedAccountBalances []normalizedAccountBalanceV6
+	var normalizedAccountBalances []normalizedAccountBalance
 
 	switch progress.Version {
 	default:

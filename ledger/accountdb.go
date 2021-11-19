@@ -192,17 +192,8 @@ const (
 	catchpointStateCatchupBalancesRound = catchpointState("catchpointCatchupBalancesRound")
 )
 
-// normalizedAccountBalanceV5 is a staging area for a catchpoint file account information before it's being added to the catchpoint staging tables.
-type normalizedAccountBalanceV5 struct {
-	address            basics.Address
-	accountData        basics.AccountData
-	encodedAccountData []byte
-	accountHash        []byte
-	normalizedBalance  uint64
-}
-
-// normalizedAccountBalanceV6 is a staging area for a catchpoint file account information before it's being added to the catchpoint staging tables.
-type normalizedAccountBalanceV6 struct {
+// normalizedAccountBalance is a staging area for a catchpoint file account information before it's being added to the catchpoint staging tables.
+type normalizedAccountBalance struct {
 	address            basics.Address
 	accountData        baseAccountData
 	resources          map[basics.CreatableIndex]resourcesData
@@ -212,8 +203,8 @@ type normalizedAccountBalanceV6 struct {
 }
 
 // prepareNormalizedBalancesV5 converts an array of encodedBalanceRecordV5 into an equal size array of normalizedAccountBalances.
-func prepareNormalizedBalancesV5(bals []encodedBalanceRecordV5, proto config.ConsensusParams) (normalizedAccountBalances []normalizedAccountBalanceV6, err error) {
-	normalizedAccountBalances = make([]normalizedAccountBalanceV6, len(bals), len(bals))
+func prepareNormalizedBalancesV5(bals []encodedBalanceRecordV5, proto config.ConsensusParams) (normalizedAccountBalances []normalizedAccountBalance, err error) {
+	normalizedAccountBalances = make([]normalizedAccountBalance, len(bals))
 	for i, balance := range bals {
 		normalizedAccountBalances[i].address = balance.Address
 		var accountDataV5 basics.AccountData
@@ -239,8 +230,8 @@ func prepareNormalizedBalancesV5(bals []encodedBalanceRecordV5, proto config.Con
 }
 
 // prepareNormalizedBalancesV6 converts an array of encodedBalanceRecordV5 into an equal size array of normalizedAccountBalances.
-func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.ConsensusParams) (normalizedAccountBalances []normalizedAccountBalanceV6, err error) {
-	normalizedAccountBalances = make([]normalizedAccountBalanceV6, len(bals), len(bals))
+func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.ConsensusParams) (normalizedAccountBalances []normalizedAccountBalance, err error) {
+	normalizedAccountBalances = make([]normalizedAccountBalance, len(bals))
 	for i, balance := range bals {
 		normalizedAccountBalances[i].address = balance.Address
 		err = protocol.Decode(balance.AccountData, &(normalizedAccountBalances[i].accountData))
@@ -426,7 +417,7 @@ func (a *compactAccountDeltas) updateOld(idx int, old persistedAccountData) {
 }
 
 // writeCatchpointStagingBalances inserts all the account balances in the provided array into the catchpoint balance staging table catchpointbalances.
-func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalanceV6) error {
+func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
 	insertAcctStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, normalizedonlinebalance, data) VALUES(?, ?, ?)")
 	if err != nil {
 		return err
@@ -479,7 +470,7 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 }
 
 // writeCatchpointStagingHashes inserts all the account hashes in the provided array into the catchpoint pending hashes table catchpointpendinghashes.
-func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalanceV6) error {
+func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
 	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointpendinghashes(data) VALUES(?)")
 	if err != nil {
 		return err
@@ -514,7 +505,7 @@ func createCatchpointStagingHashesIndex(ctx context.Context, tx *sql.Tx) (err er
 }
 
 // writeCatchpointStagingCreatable inserts all the creatables in the provided array into the catchpoint asset creator staging table catchpointassetcreators.
-func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalanceV6) error {
+func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
 	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator, ctype) VALUES(?, ?, ?)")
 	if err != nil {
 		return err
@@ -918,10 +909,10 @@ func (rd *resourcesData) IsApp() bool {
 
 func (rd *resourcesData) IsEmptyAsset() bool {
 	return rd.Amount == 0 &&
-		rd.Frozen == false &&
+		!rd.Frozen &&
 		rd.Total == 0 &&
 		rd.Decimals == 0 &&
-		rd.DefaultFrozen == false &&
+		!rd.DefaultFrozen &&
 		rd.UnitName == "" &&
 		rd.AssetName == "" &&
 		rd.URL == "" &&
