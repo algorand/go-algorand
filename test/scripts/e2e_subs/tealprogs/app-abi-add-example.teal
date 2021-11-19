@@ -1,87 +1,164 @@
+// generated from https://gist.github.com/jasonpaulos/99e4f8a75f2fc2ec9b8073c064530359
 #pragma version 5
-intcblock 1 0
-bytecblock 0x151f7c75
 txn ApplicationID
-intc_1 // 0
+int 0
 ==
-bnz main_l12
+bnz main_l14
 txn OnCompletion
-intc_0 // OptIn
-==
-bnz main_l11
-txn OnCompletion
-pushint 5 // DeleteApplication
-==
-bnz main_l10
-txn OnCompletion
-intc_1 // NoOp
+int OptIn
 ==
 txna ApplicationArgs 0
-pushbytes 0xfe6bdf69 // 0xfe6bdf69
+byte 0xcfa68e36
+==
+&&
+bnz main_l13
+txn OnCompletion
+int CloseOut
+==
+txna ApplicationArgs 0
+byte 0xa9f42b3d
+==
+&&
+bnz main_l12
+txn OnCompletion
+int DeleteApplication
+==
+txna ApplicationArgs 0
+byte 0x24378d3c
+==
+&&
+bnz main_l11
+txn OnCompletion
+int NoOp
+==
+txna ApplicationArgs 0
+byte 0xfe6bdf69
+==
+&&
+bnz main_l10
+txn OnCompletion
+int NoOp
+==
+txna ApplicationArgs 0
+byte 0xa88c26a5
 ==
 &&
 bnz main_l9
 txn OnCompletion
-intc_1 // NoOp
+int NoOp
 ==
 txna ApplicationArgs 0
-pushbytes 0xa88c26a5 // 0xa88c26a5
+byte 0x535a47ba
 ==
 &&
 bnz main_l8
-txn OnCompletion
-intc_1 // NoOp
-==
-txna ApplicationArgs 0
-pushbytes 0x535a47ba // 0x535a47ba
-==
-&&
-bnz main_l7
-intc_1 // 0
-return
-main_l7:
-txna ApplicationArgs 1
-callsub sub2
-intc_0 // 1
+int 0
 return
 main_l8:
-callsub sub1
-intc_0 // 1
+txna ApplicationArgs 1
+callsub sub5
+int 1
 return
 main_l9:
-txna ApplicationArgs 1
-txna ApplicationArgs 2
-callsub sub0
-intc_0 // 1
+callsub sub4
+int 1
 return
 main_l10:
-intc_0 // 1
+txna ApplicationArgs 1
+txna ApplicationArgs 2
+callsub sub3
+int 1
 return
 main_l11:
-intc_0 // 1
+callsub sub2
+int 1
 return
 main_l12:
-intc_0 // 1
+callsub sub1
+int 1
 return
-sub0: // add
-store 1
+main_l13:
+txna ApplicationArgs 1
+callsub sub0
+int 1
+return
+main_l14:
+int 1
+return
+sub0: // optIn
 store 0
-bytec_0 // 0x151f7c75
+int 0
+byte "name"
 load 0
-btoi
+extract 2 0
+app_local_put
+byte "hello "
+int 0
+byte "name"
+app_local_get
+concat
+store 1
+byte 0x151f7c75
 load 1
+len
+itob
+extract 6 2
+concat
+load 1
+concat
+log
+retsub
+sub1: // closeOut
+byte "goodbye "
+int 0
+byte "name"
+app_local_get
+concat
+store 2
+byte 0x151f7c75
+load 2
+len
+itob
+extract 6 2
+concat
+load 2
+concat
+log
+retsub
+sub2: // deleteApp
+txn Sender
+global CreatorAddress
+==
+assert
+retsub
+sub3: // add
+store 4
+store 3
+byte 0x151f7c75
+load 3
+btoi
+load 4
 btoi
 +
 itob
 concat
 log
 retsub
-sub1: // empty
-bytec_0 // 0x151f7c75
+sub4: // empty
+byte "random inconsequential log"
 log
 retsub
-sub2: // payment
-store 2
-pushbytes 0x151f7c7580 // 0x151f7c7580
+sub5: // payment
+store 5
+txn GroupIndex
+int 1
+-
+gtxns TypeEnum
+int pay
+==
+assert
+byte 0x151f7c75
+byte 0x80
+concat
 log
 retsub
