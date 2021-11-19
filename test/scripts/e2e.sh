@@ -128,9 +128,13 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
 
     if [ $INTERACTIVE ]; then
 	echo "********** READY **********"
-	echo "The test environment is now set. Run the tests using the following command on a different terminal."
+	echo "The test environment is now set. Run the tests using the following command on a different terminal after setting the path."
+	echo ""
+	echo "export VIRTUAL_ENV=\"${TEMPDIR}/ve\""
+	echo "export PATH=\"\$VIRTUAL_ENV/bin:\$PATH\""
+	echo ""
 	echo "${TEMPDIR}/ve/bin/python3" test/scripts/e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/SCRIPT_FILE_NAME
-
+	echo ""
 	echo "Press enter to shut down the test environment..."
 	read a
 	echo -n "deactivating..."
