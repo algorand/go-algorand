@@ -48,7 +48,7 @@ txn OnCompletion
 int NoOp
 ==
 txna ApplicationArgs 0
-byte 0x535a47ba
+byte 0x3e3b3d28
 ==
 &&
 bnz main_l8
@@ -158,7 +158,19 @@ int pay
 ==
 assert
 byte 0x151f7c75
+txn GroupIndex
+int 1
+-
+gtxns Amount
+load 5
+btoi
+==
+bnz sub5_l2
+byte 0x00
+b sub5_l3
+sub5_l2:
 byte 0x80
+sub5_l3:
 concat
 log
 retsub

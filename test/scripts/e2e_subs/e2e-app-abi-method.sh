@@ -44,6 +44,24 @@ if [[ $RES != *"${EXPECTED}"* ]]; then
     false
 fi
 
+goal clerk send --from $ACCOUNT --to $ACCOUNT --amount 1000000 -o "${TEMPDIR}/pay-txn-arg.tx"
+
+# Payment with return true
+RES=$(${gcmd} app method --method "payment(pay,uint64)bool" --arg ${TEMPDIR}/pay-txn-arg.tx --arg 1000000 --app-id $APPID --from $ACCOUNT 2>&1 || true)
+EXPECTED="method payment(pay,uint64)bool succeeded with output: true"
+if [[ $RES != *"${EXPECTED}"* ]]; then
+    date '+app-abi-method-test FAIL the method call to payment(pay,uint64)bool should not fail %Y%m%d_%H%M%S'
+    false
+fi
+
+# Payment with return false
+RES=$(${gcmd} app method --method "payment(pay,uint64)bool" --arg ${TEMPDIR}/pay-txn-arg.tx --arg 1000001 --app-id $APPID --from $ACCOUNT 2>&1 || true)
+EXPECTED="method payment(pay,uint64)bool succeeded with output: false"
+if [[ $RES != *"${EXPECTED}"* ]]; then
+    date '+app-abi-method-test FAIL the method call to payment(pay,uint64)bool should not fail %Y%m%d_%H%M%S'
+    false
+fi
+
 # Close out
 RES=$(${gcmd} app method --method "closeOut()string" --on-completion closeout --app-id $APPID --from $ACCOUNT 2>&1 || true)
 EXPECTED="method closeOut()string succeeded with output: \"goodbye Algorand Fan\""
