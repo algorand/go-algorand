@@ -9,17 +9,17 @@ date "+$0 start %Y%m%d_%H%M%S"
 # Use admin token for both get and post
 export USE_ADMIN=true
 
-pushd "${TEMPDIR}" || exit
+pushd "${TEMPDIR}" || exit 1
 
 FIRST_ROUND=0
 # A really large (but arbitrary) last valid round
-LAST_ROUND=1200000
+LAST_ROUND=120
 
 NAME_OF_TEMP_PARTKEY="tmp.${FIRST_ROUND}.${LAST_ROUND}.partkey"
 
 algokey part generate --first ${FIRST_ROUND} --last ${LAST_ROUND} --keyfile ${NAME_OF_TEMP_PARTKEY} --parent ${ACCOUNT}
 
-popd || exit
+popd || exit 1
 
 call_and_verify "Get List of Keys" "/v2/participation" 200 'address'
 
@@ -51,6 +51,7 @@ call_delete_and_verify "Delete the specific ID" "/v2/participation/${INSTALLED_I
 call_delete_and_verify "Delete the specific ID" "/v2/participation/${INSTALLED_ID}" 404 true 'participation id not found'
 
 # Get list of keys
+call_and_verify "Get List of Keys" "/v2/participation" 200 'address'
 NUM_IDS_3=$(echo "$RES" | python3 -c 'import json,sys;o=json.load(sys.stdin);print(len(o))')
 
 if [[ "$NUM_IDS_3" -ne "$NUM_IDS_1" ]]; then
