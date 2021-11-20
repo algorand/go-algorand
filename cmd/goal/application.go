@@ -1254,7 +1254,7 @@ var methodAppCmd = &cobra.Command{
 		var txid string
 		for _, stxn := range signedTxnGroup {
 			txid = stxn.Txn.ID().String()
-			reportInfof("  Issued transaction from account %s, txid %s (fee %d)", stxn.Txn.Sender, txid, stxn.Txn.Fee.Raw)
+			reportInfof("\tIssued transaction from account %s, txid %s (fee %d)", stxn.Txn.Sender, txid, stxn.Txn.Fee.Raw)
 		}
 
 		if !noWaitAfterSend {
