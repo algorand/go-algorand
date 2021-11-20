@@ -53,7 +53,7 @@ var (
 
 	extraPages uint32
 
-	createOnCompletion string
+	onCompletion string
 
 	localSchemaUints      uint64
 	localSchemaByteSlices uint64
@@ -106,7 +106,7 @@ func init() {
 	createAppCmd.Flags().Uint64Var(&localSchemaUints, "local-ints", 0, "Maximum number of integer values that may be stored in local (per-account) key/value stores for this app. Immutable.")
 	createAppCmd.Flags().Uint64Var(&localSchemaByteSlices, "local-byteslices", 0, "Maximum number of byte slices that may be stored in local (per-account) key/value stores for this app. Immutable.")
 	createAppCmd.Flags().StringVar(&appCreator, "creator", "", "Account to create the application")
-	createAppCmd.Flags().StringVar(&createOnCompletion, "on-completion", "NoOp", "OnCompletion action for application transaction")
+	createAppCmd.Flags().StringVar(&onCompletion, "on-completion", "NoOp", "OnCompletion action for application transaction")
 	createAppCmd.Flags().Uint32Var(&extraPages, "extra-pages", 0, "Additional program space for supporting larger TEAL assembly program. A maximum of 3 extra pages is allowed. A page is 1024 bytes.")
 
 	callAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to call app from")
@@ -120,6 +120,7 @@ func init() {
 
 	methodAppCmd.Flags().StringVar(&method, "method", "", "Method to be called")
 	methodAppCmd.Flags().StringArrayVar(&methodArgs, "arg", nil, "Args to pass in for calling a method")
+	methodAppCmd.Flags().StringVar(&onCompletion, "on-completion", "NoOp", "OnCompletion action for application transaction")
 
 	// Can't use PersistentFlags on the root because for some reason marking
 	// a root command as required with MarkPersistentFlagRequired isn't
@@ -432,15 +433,15 @@ var createAppCmd = &cobra.Command{
 
 		// Parse transaction parameters
 		approvalProg, clearProg := mustParseProgArgs()
-		onCompletion := mustParseOnCompletion(createOnCompletion)
+		onCompletionEnum := mustParseOnCompletion(onCompletion)
 		appArgs, appAccounts, foreignApps, foreignAssets := getAppInputs()
 
-		switch onCompletion {
+		switch onCompletionEnum {
 		case transactions.CloseOutOC, transactions.ClearStateOC:
-			reportWarnf("'--on-completion %s' may be ill-formed for 'goal app create'", createOnCompletion)
+			reportWarnf("'--on-completion %s' may be ill-formed for 'goal app create'", onCompletion)
 		}
 
-		tx, err := client.MakeUnsignedAppCreateTx(onCompletion, approvalProg, clearProg, globalSchema, localSchema, appArgs, appAccounts, foreignApps, foreignAssets, extraPages)
+		tx, err := client.MakeUnsignedAppCreateTx(onCompletionEnum, approvalProg, clearProg, globalSchema, localSchema, appArgs, appAccounts, foreignApps, foreignAssets, extraPages)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -1060,14 +1061,14 @@ var methodAppCmd = &cobra.Command{
 			reportErrorf("in goal app method: --arg and --app-arg are mutually exclusive, do not use --app-arg")
 		}
 
-		onCompletion := mustParseOnCompletion(createOnCompletion)
+		onCompletionEnum := mustParseOnCompletion(onCompletion)
 
 		if appIdx == 0 {
 			reportErrorf("app id == 0, goal app create not supported in goal app method")
 		}
 
 		var approvalProg, clearProg []byte
-		if onCompletion == transactions.UpdateApplicationOC {
+		if onCompletionEnum == transactions.UpdateApplicationOC {
 			approvalProg, clearProg = mustParseProgArgs()
 		}
 
@@ -1089,7 +1090,7 @@ var methodAppCmd = &cobra.Command{
 
 		tx, err := client.MakeUnsignedApplicationCallTx(
 			appIdx, applicationArgs, appAccounts, foreignApps, foreignAssets,
-			onCompletion, approvalProg, clearProg, basics.StateSchema{}, basics.StateSchema{}, 0)
+			onCompletionEnum, approvalProg, clearProg, basics.StateSchema{}, basics.StateSchema{}, 0)
 
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
@@ -1155,6 +1156,7 @@ var methodAppCmd = &cobra.Command{
 			}
 
 			if retTypeStr == "void" {
+				fmt.Printf("method %s succeeded", method)
 				return
 			}
 
@@ -1192,7 +1194,7 @@ var methodAppCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf("cannot marshal returned bytes %v to JSON: %v", decoded, err)
 			}
-			fmt.Printf("method %s output: %s\n", method, string(decodedJSON))
+			fmt.Printf("method %s succeeded with output: %s", method, string(decodedJSON))
 		}
 	},
 }
