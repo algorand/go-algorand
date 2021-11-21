@@ -1036,9 +1036,7 @@ int %s
 ==
 &&`, symbol, string(tt))
 					ops := testProg(t, text, v)
-					if v < appsEnabledVersion && tt == protocol.ApplicationCallTx {
-					}
-					var txn transactions.SignedTxn
+					txn := transactions.SignedTxn{}
 					txn.Txn.Type = tt
 					if v < appsEnabledVersion && tt == protocol.ApplicationCallTx {
 						testLogicBytes(t, ops.Program, defaultEvalParams(&txn),
