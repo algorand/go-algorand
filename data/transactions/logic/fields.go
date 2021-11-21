@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Alphabet -output=fields_string.go
 
 // TxnField is an enum type for `txn` and `gtxn`
 type TxnField int
@@ -452,24 +452,23 @@ func (s ecDsaCurveNameSpecMap) getExtraFor(name string) (extra string) {
 type Base64Alphabet int
 
 const (
-	URLAlphabet Base64Alphabet = iota
-	StandardAlphabet
+	URLAlph Base64Alphabet = iota
+	StdAlph
 	invalidBase64Alphabet
 )
 
-var Base64AlphabetNames [2]string = [...]string{
-	"URL and Filename Safe base-64 Alphabet",
-	"Standard base-64 Alphabet",
-}
+// After running `go generate` these strings will be available:
+var base64AlphabetNames [2]string = [...]string{URLAlph.String(), StdAlph.String()}
 
 type base64AlphabetSpec struct {
 	field   Base64Alphabet
+	ftype   StackType
 	version uint64
 }
 
 var base64AlphbetSpecs = []base64AlphabetSpec{
-	{URLAlphabet, 5},
-	{StandardAlphabet, 5},
+	{URLAlph, StackBytes, 5},
+	{StdAlph, StackBytes, 5},
 }
 
 var base64AlphabetSpecByField map[Base64Alphabet]base64AlphabetSpec
@@ -718,13 +717,13 @@ func init() {
 		ecdsaCurveSpecByName[ahfn] = ecdsaCurveSpecByField[EcdsaCurve(i)]
 	}
 
-	base64AlphabetSpecByField = make(map[Base64Alphabet]base64AlphabetSpec, len(Base64AlphabetNames))
+	base64AlphabetSpecByField = make(map[Base64Alphabet]base64AlphabetSpec, len(base64AlphabetNames))
 	for _, s := range base64AlphbetSpecs {
 		base64AlphabetSpecByField[s.field] = s
 	}
 
-	base64AlphabetSpecByName = make(base64AlphabetSpecMap, len(Base64AlphabetNames))
-	for i, alphname := range Base64AlphabetNames {
+	base64AlphabetSpecByName = make(base64AlphabetSpecMap, len(base64AlphabetNames))
+	for i, alphname := range base64AlphabetNames {
 		base64AlphabetSpecByName[alphname] = base64AlphabetSpecByField[Base64Alphabet(i)]
 	}
 

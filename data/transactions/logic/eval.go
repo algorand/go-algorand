@@ -4036,12 +4036,7 @@ func (cx *EvalContext) PcDetails() (pc int, dis string) {
 	return cx.pc, dis
 }
 
-func base64Decode(encoded []byte, isURL bool) ([]byte, error) {
-	encoding := base64.URLEncoding
-	if !isURL {
-		encoding = base64.StdEncoding
-	}
-
+func base64Decode(encoded []byte, encoding *base64.Encoding) ([]byte, error) {
 	decoded := make([]byte, encoding.DecodedLen(len(encoded)))
 	n, err := encoding.Strict().Decode(decoded, encoded)
 	if err != nil {
@@ -4059,9 +4054,9 @@ func opBase64Decode(cx *EvalContext) {
 		return
 	}
 
-	isURL := true
-	if alphabetField == StandardAlphabet {
-		isURL = false
+	encoding := base64.URLEncoding
+	if alphabetField == StdAlph {
+		encoding = base64.StdEncoding
 	}
-	cx.stack[last].Bytes, cx.err = base64Decode(cx.stack[last].Bytes, isURL)
+	cx.stack[last].Bytes, cx.err = base64Decode(cx.stack[last].Bytes, encoding)
 }

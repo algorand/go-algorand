@@ -36,14 +36,14 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-type testCase struct {
+type b64decTestCase struct {
 	Encoded string
 	IsURL   bool
 	Decoded string
 	Error   error
 }
 
-var testCases = []testCase{
+var testCases = []b64decTestCase{
 	{"TU9CWS1ESUNLOwoKb3IsIFRIRSBXSEFMRS4KCgpCeSBIZXJtYW4gTWVsdmlsbGU=",
 		false,
 		`MOBY-DICK;
@@ -75,41 +75,191 @@ func TestBase64DecodeFunc(t *testing.T) {
 	t.Parallel()                   // do I need this
 
 	for _, testCase := range testCases {
-		decoded, err := base64Decode([]byte(testCase.Encoded), testCase.IsURL)
+		encoding := base64.StdEncoding
+		if testCase.IsURL {
+			encoding = base64.URLEncoding
+		}
+		encoding = encoding.Strict()
+		decoded, err := base64Decode([]byte(testCase.Encoded), encoding)
 		require.Equal(t, []byte(testCase.Decoded), decoded)
 		require.Equal(t, testCase.Error, err)
 	}
+}
 
-	// b := big.NewInt(0x100)
-	// r, err := leadingZeros(1, b)
-	// require.Error(t, err)
-	// require.Nil(t, r)
+type b64TestArgs struct {
+	Raw     []byte
+	Encoded []byte
+	IsURL   bool
+	Program []byte
+}
 
-	// b = big.NewInt(100)
-	// r, err = leadingZeros(1, b)
-	// require.NoError(t, err)
-	// require.Equal(t, []byte{100}, r)
+func testB64DecodeAssembleWithArgs(t *testing.T) []b64TestArgs {
+	sourceTmpl := `#pragma version 5
+	arg 0
+	arg 1
+	base64_decode %s
+	==`
+	args := []b64TestArgs{}
+	for _, testCase := range testCases {
+		if testCase.Error == nil {
+			field := "StdAlph"
+			if testCase.IsURL {
+				field = "URLAlph"
+			}
+			source := fmt.Sprintf(sourceTmpl, field)
+			ops, err := AssembleStringWithVersion(source, 5)
+			require.NoError(t, err)
 
-	// b = big.NewInt(100)
-	// r, err = leadingZeros(2, b)
-	// require.NoError(t, err)
-	// require.Equal(t, []byte{0, 100}, r)
+			arg := b64TestArgs{
+				Raw:     []byte(testCase.Decoded),
+				Encoded: []byte(testCase.Encoded),
+				IsURL:   testCase.IsURL,
+				Program: ops.Program,
+			}
+			args = append(args, arg)
+		}
+	}
+	return args
+}
 
-	// v32, err := hex.DecodeString("71a5910445820f57989c027bdf9391c80097874d249e0f38bf90834fdec2877f")
-	// require.NoError(t, err)
-	// b = new(big.Int).SetBytes(v32)
-	// r, err = leadingZeros(32, b)
-	// require.NoError(t, err)
-	// require.Equal(t, v32, r)
+func testB64DecodeEval(tb testing.TB, args []b64TestArgs) {
+	for _, data := range args {
+		var txn transactions.SignedTxn
+		txn.Lsig.Logic = data.Program
+		txn.Lsig.Args = [][]byte{data.Raw[:], data.Encoded[:]}
+		ep := defaultEvalParams(&strings.Builder{}, &txn)
+		pass, err := Eval(data.Program, ep)
+		if err != nil {
+			require.NoError(tb, err)
+		}
+		if !pass {
+			fmt.Printf("FAILING WITH data = %#v", data)
+			require.True(tb, pass)
+		}
+	}
+}
+func TestOpBase64Decode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	args := testB64DecodeAssembleWithArgs(t)
+	testB64DecodeEval(t, args)
+}
 
-	// v31 := v32[1:]
-	// b = new(big.Int).SetBytes(v31)
-	// r, err = leadingZeros(32, b)
-	// require.NoError(t, err)
-	// v31z := append([]byte{0}, v31...)
-	// require.Equal(t, v31z, r)
+func benchmarkB64DecodeGenData(b *testing.B, source string, isURL bool, msgLen int) (args []b64TestArgs, err error) {
+	var ops *OpStream
+	ops, err = AssembleStringWithVersion(source, 5)
+	if err != nil {
+		require.NoError(b, err)
+		return
+	}
 
-	// require.Equal(t, v31z, keyToByte(t, b))
+	encoding := base64.StdEncoding
+	if isURL {
+		encoding = base64.URLEncoding
+	}
+	encoding = encoding.Strict()
+
+	msg := make([]byte, msgLen)
+	for i := 0; i < b.N; i++ {
+		_, err = rand.Read(msg)
+		if err != nil {
+			require.NoError(b, err)
+			return
+		}
+		args = append(args, b64TestArgs{
+			Raw:     msg[:],
+			Encoded: []byte(encoding.EncodeToString(msg[:])),
+			IsURL:   isURL,
+			Program: ops.Program[:],
+		})
+	}
+	return
+}
+
+func benchmarkB64Decode(b *testing.B, scenario string, msgLen int) {
+	var source string
+	isURL := false
+
+	switch scenario {
+	case "base64url":
+		isURL = true
+		source = `#pragma version 5
+arg 0
+arg 1
+base64_decode URLAlph
+==`
+	case "base64std":
+		isURL = false
+		source = `#pragma version 5
+arg 0
+arg 1
+base64_decode StdAlph
+==`
+	default:
+		source = `#pragma version 5
+arg 0
+arg 1
+pop
+pop
+int 1`
+	}
+	args, err := benchmarkB64DecodeGenData(b, source, isURL, msgLen)
+	if err != nil {
+		require.NoError(b, err)
+		return
+	}
+	benchmarkB64DecodeSanity(b, args)
+	b.ResetTimer()
+	testB64DecodeEval(b, args)
+}
+
+func benchmarkB64DecodeSanity(b *testing.B, args []b64TestArgs) {
+	for _, data := range args {
+		encoding := base64.StdEncoding
+		if data.IsURL {
+			encoding = base64.URLEncoding
+		}
+		decoded, err := base64Decode(data.Encoded, encoding)
+		require.NoError(b, err)
+		require.Equal(b, data.Raw, decoded)
+	}
+}
+
+var b64msgLengths = []int{50, 1050, 2050, 3050}
+
+func benchmarkB64DecodeScenario(b *testing.B, scenario string) {
+	for _, msgLen := range b64msgLengths {
+		b.Run(fmt.Sprintf("%s_%d", scenario, msgLen), func(b *testing.B) {
+			benchmarkB64Decode(b, scenario, msgLen)
+		})
+	}
+}
+
+func TestInvestigation(t *testing.T) {
+	data := b64TestArgs{
+		Raw:     []uint8{0x1b, 0x66, 0x1d, 0x29, 0x5e, 0x8e, 0x95, 0x79, 0x36, 0xf7, 0xd5, 0xd3, 0x0, 0x35, 0x7b, 0x25, 0x1f, 0x1e, 0x57, 0x78, 0x58, 0x63, 0x26, 0xae, 0x29, 0xcc, 0x96, 0xee, 0x6c, 0x63, 0xc6, 0x88, 0x7b, 0x26, 0xb0, 0x41, 0x77, 0x5, 0xd6, 0xd3, 0x1f, 0x7f, 0x89, 0x94, 0x3a, 0x12, 0xab, 0xe3, 0x70, 0x73},
+		Encoded: []uint8{0x6e, 0x53, 0x46, 0x73, 0x7a, 0x7a, 0x74, 0x55, 0x4e, 0x70, 0x6d, 0x6c, 0x4b, 0x65, 0x39, 0x52, 0x33, 0x2d, 0x6f, 0x72, 0x64, 0x38, 0x66, 0x7a, 0x58, 0x32, 0x79, 0x64, 0x6b, 0x79, 0x37, 0x6e, 0x4b, 0x6d, 0x79, 0x51, 0x73, 0x52, 0x4f, 0x66, 0x6f, 0x43, 0x46, 0x69, 0x70, 0x76, 0x4b, 0x46, 0x48, 0x72, 0x49, 0x77, 0x66, 0x5a, 0x57, 0x48, 0x59, 0x48, 0x63, 0x53, 0x36, 0x54, 0x4a, 0x43, 0x72, 0x33, 0x73, 0x3d},
+		IsURL:   true,
+		Program: []uint8{0x5, 0x2d, 0x2e, 0x5c, 0x0, 0x12},
+	}
+	require.Equal(t, uint8(0x1b), data.Raw[0])
+	testB64DecodeEval(t, []b64TestArgs{data})
+}
+func BenchmarkBase64DecodeVanillaBase(b *testing.B) {
+	benchmarkB64DecodeScenario(b, "vanilla baseline")
+}
+
+func BenchmarkBase64DecodeURL(b *testing.B) {
+	benchmarkB64DecodeScenario(b, "base64url")
+}
+
+func TestCoverZZ(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, "byte base64 YWJjMTIzIT8kKiYoKSctPUB+; byte base64 YWJjMTIzIT8kKiYoKSctPUB+; ==", 1)
+	testAccepts(t, "byte base64 abc123!?$*&(); byte base64 abc123!?$*&(); ==", 1)
+	// testAccepts(t, "int 4; int 3; int 2; int 1; cover 2; pop; pop; int 1; ==; return", 5)
+	// testPanics(t, obfuscate("int 4; int 3; int 2; int 1; cover 11; int 2; ==; return"), 5)
+	// testPanics(t, obfuscate("int 4; int 3; int 2; int 1; cover 4; int 2; ==; return"), 5)
 }
 
 // OLDER
@@ -207,15 +357,6 @@ ed25519verify`, pkStr), v)
 		})
 	}
 }
-
-// bitIntFillBytes is a replacement for big.Int.FillBytes from future Go
-// func bitIntFillBytes(tb testing.TB, b *big.Int) []byte {
-// 	k := make([]byte, 32)
-// 	require.NotPanics(tb, func() {
-// 		k = bitIntFillBytes(b, k)
-// 	})
-// 	return k
-// }
 
 func TestEcdsa_Z(t *testing.T) {
 	partitiontest.PartitionTest(t)
