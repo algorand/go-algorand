@@ -371,6 +371,17 @@ const (
 	// GroupID [32]byte
 	GroupID
 
+	// v6
+
+	// OpcodeBudget The remaining budget available for execution
+	OpcodeBudget
+
+	// CallerApplicationID
+	CallerApplicationID
+
+	// CallerApplicationAddress
+	CallerApplicationAddress
+
 	invalidGlobalField
 )
 
@@ -400,6 +411,9 @@ var globalFieldSpecs = []globalFieldSpec{
 	{CreatorAddress, StackBytes, runModeApplication, 3},
 	{CurrentApplicationAddress, StackBytes, runModeApplication, 5},
 	{GroupID, StackBytes, modeAny, 5},
+	{OpcodeBudget, StackUint64, runModeApplication, 6},
+	{CallerApplicationID, StackUint64, runModeApplication, 6},
+	{CallerApplicationAddress, StackBytes, runModeApplication, 6},
 }
 
 // GlobalFieldSpecByField maps GlobalField to spec

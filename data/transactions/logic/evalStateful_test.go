@@ -2419,3 +2419,18 @@ func TestAppAddress(t *testing.T) {
 	source = fmt.Sprintf("int 0; app_params_get AppAddress; assert; addr %s; ==;", a)
 	testApp(t, source, ep)
 }
+
+func TestBudget(t *testing.T) {
+	ep, tx, ledger := makeSampleEnv()
+	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+	source := `
+global OpcodeBudget
+int 699
+==
+assert
+global OpcodeBudget
+int 695
+==
+`
+	testApp(t, source, ep)
+}

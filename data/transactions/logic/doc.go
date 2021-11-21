@@ -463,6 +463,9 @@ var globalFieldDocs = map[string]string{
 	"CreatorAddress":            "Address of the creator of the current application. Fails if no such application is executing",
 	"CurrentApplicationAddress": "Address that the current application controls. Fails in LogicSigs",
 	"GroupID":                   "ID of the transaction group. 32 zero bytes if the transaction is not part of a group.",
+	"OpcodeBudget":              "The remaining cost that can be spent by opcodes in this program.",
+	"CallerApplicationID":       "The application ID of the application that called this application. 0 if this application is at the top-level.",
+	"CallerApplicationAddress":  "The application address of the application that called this application. ZeroAddress if this application is at the top-level.",
 }
 
 // GlobalFieldDocs are notes on fields available in `global` with extra versioning info if any
