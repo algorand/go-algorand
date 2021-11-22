@@ -860,6 +860,8 @@ func changeAccountOnlineStatus(acct string, part *algodAcct.Participation, goOnl
 
 func genParticipationKeysAsync(asyncFunc func()) {
 	errChan := make(chan struct{}, 1)
+	defer close(errChan)
+
 	go func() {
 		asyncFunc()
 		errChan <- struct{}{}
@@ -1000,7 +1002,7 @@ func generateAndRegisterPartKey(address string, currentRound, lastValidRound uin
 		}
 		fmt.Printf("  Generated participation key for %s (Valid %d - %d)\n", address, currentRound, lastValidRound)
 	}
-	fmt.Printf("Generated participation key please standby...")
+	fmt.Printf("Please standby while generating keys. This might take few minutes...")
 	genParticipationKeysAsync(genFunc)
 	if err != nil {
 		return err

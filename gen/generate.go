@@ -244,6 +244,9 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 						return
 					}
 
+					if verbose {
+						verbosedOutput <- fmt.Sprintf("Generating keys for %s. participation period is %d rounds", wallet.Name, basics.Round(lastWalletValid).SubSaturate(basics.Round(firstWalletValid)))
+					}
 					part, err = account.FillDBWithParticipationKeys(partDB, root.Address(), basics.Round(firstWalletValid), basics.Round(lastWalletValid), partKeyDilution)
 					if err != nil {
 						err = fmt.Errorf("could not generate new participation file %s: %v", pfilename, err)
@@ -252,7 +255,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 						return
 					}
 					if verbose {
-						verbosedOutput <- fmt.Sprintf("Created new partkey: %s firstValid: %d lastValid %d", pfilename, basics.Round(firstWalletValid), basics.Round(lastWalletValid))
+						verbosedOutput <- fmt.Sprintf("participation keys for %s completed successfully ", wallet.Name)
 					}
 					atomic.AddInt64(&partKeyCreated, 1)
 				}
