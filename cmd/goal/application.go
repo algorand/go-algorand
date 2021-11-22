@@ -1047,6 +1047,43 @@ var infoAppCmd = &cobra.Command{
 	},
 }
 
+// populateMethodCallTxnArgs parses and loads transactions from the files indicated by the values
+// slice. An error will occur if the transaction does not matched the expected type, it has a nonzero
+// group ID, or if it is signed by a normal signature or Msig signature (but not Lsig signature)
+func populateMethodCallTxnArgs(types []string, values []string) ([]transactions.SignedTxn, error) {
+	loadedTxns := make([]transactions.SignedTxn, len(values))
+
+	for i, txFilename := range values {
+		data, err := readFile(txFilename)
+		if err != nil {
+			return nil, fmt.Errorf(fileReadError, txFilename, err)
+		}
+
+		var txn transactions.SignedTxn
+		err = protocol.Decode(data, &txn)
+		if err != nil {
+			return nil, fmt.Errorf(txDecodeError, txFilename, err)
+		}
+
+		if !txn.Sig.Blank() || !txn.Msig.Blank() {
+			return nil, fmt.Errorf("Transaction from %s has already been signed", txFilename)
+		}
+
+		if !txn.Txn.Group.IsZero() {
+			return nil, fmt.Errorf("Transaction from %s already has a group ID: %s", txFilename, txn.Txn.Group)
+		}
+
+		expectedType := types[i]
+		if expectedType != "txn" && txn.Txn.Type != protocol.TxType(expectedType) {
+			return nil, fmt.Errorf("Transaction from %s does not match method argument type. Expected %s, got %s", txFilename, expectedType, txn.Txn.Type)
+		}
+
+		loadedTxns[i] = txn
+	}
+
+	return loadedTxns, nil
+}
+
 var methodAppCmd = &cobra.Command{
 	Use:   "method",
 	Short: "Invoke a method",
@@ -1079,16 +1116,50 @@ var methodAppCmd = &cobra.Command{
 		applicationArgs = append(applicationArgs, hash[0:4])
 
 		// parse down the ABI type from method signature
-		argTupleTypeStr, retTypeStr, err := abi.ParseMethodSignature(method)
+		_, argTypes, retTypeStr, err := abi.ParseMethodSignature(method)
 		if err != nil {
 			reportErrorf("cannot parse method signature: %v", err)
 		}
-		err = abi.ParseArgJSONtoByteSlice(argTupleTypeStr, methodArgs, &applicationArgs)
+
+		var retType *abi.Type
+		if retTypeStr != "void" {
+			theRetType, err := abi.TypeOf(retTypeStr)
+			if err != nil {
+				reportErrorf("cannot cast %s to abi type: %v", retTypeStr, err)
+			}
+			retType = &theRetType
+		}
+
+		if len(methodArgs) != len(argTypes) {
+			reportErrorf("incorrect number of arguments, method expected %d but got %d", len(argTypes), len(methodArgs))
+		}
+
+		var txnArgTypes []string
+		var txnArgValues []string
+		var basicArgTypes []string
+		var basicArgValues []string
+		for i, argType := range argTypes {
+			argValue := methodArgs[i]
+			if abi.IsTransactionType(argType) {
+				txnArgTypes = append(txnArgTypes, argType)
+				txnArgValues = append(txnArgValues, argValue)
+			} else {
+				basicArgTypes = append(basicArgTypes, argType)
+				basicArgValues = append(basicArgValues, argValue)
+			}
+		}
+
+		err = abi.ParseArgJSONtoByteSlice(basicArgTypes, basicArgValues, &applicationArgs)
 		if err != nil {
 			reportErrorf("cannot parse arguments to ABI encoding: %v", err)
 		}
 
-		tx, err := client.MakeUnsignedApplicationCallTx(
+		txnArgs, err := populateMethodCallTxnArgs(txnArgTypes, txnArgValues)
+		if err != nil {
+			reportErrorf("error populating transaction arguments: %v", err)
+		}
+
+		appCallTxn, err := client.MakeUnsignedApplicationCallTx(
 			appIdx, applicationArgs, appAccounts, foreignApps, foreignAssets,
 			onCompletionEnum, approvalProg, clearProg, basics.StateSchema{}, basics.StateSchema{}, 0)
 
@@ -1097,8 +1168,8 @@ var methodAppCmd = &cobra.Command{
 		}
 
 		// Fill in note and lease
-		tx.Note = parseNoteField(cmd)
-		tx.Lease = parseLease(cmd)
+		appCallTxn.Note = parseNoteField(cmd)
+		appCallTxn.Lease = parseLease(cmd)
 
 		// Fill in rounds, fee, etc.
 		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
@@ -1106,23 +1177,65 @@ var methodAppCmd = &cobra.Command{
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
 
-		tx, err = client.FillUnsignedTxTemplate(account, fv, lv, fee, tx)
+		appCallTxn, err = client.FillUnsignedTxTemplate(account, fv, lv, fee, appCallTxn)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 		explicitFee := cmd.Flags().Changed("fee")
 		if explicitFee {
-			tx.Fee = basics.MicroAlgos{Raw: fee}
+			appCallTxn.Fee = basics.MicroAlgos{Raw: fee}
 		}
 
-		if outFilename != "" {
-			if dumpForDryrun {
-				err = writeDryrunReqToFile(client, tx, outFilename)
-			} else {
-				// Write transaction to file
-				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
+		// Compile group
+		var txnGroup []transactions.Transaction
+		for i := range txnArgs {
+			txnGroup = append(txnGroup, txnArgs[i].Txn)
+		}
+		txnGroup = append(txnGroup, appCallTxn)
+		if len(txnGroup) > 1 {
+			// Only if transaction arguments are present, assign group ID
+			groupID, err := client.GroupID(txnGroup)
+			if err != nil {
+				reportErrorf("Cannot assign transaction group ID: %s", err)
+			}
+			for i := range txnGroup {
+				txnGroup[i].Group = groupID
+			}
+		}
+
+		// Sign transactions
+		var signedTxnGroup []transactions.SignedTxn
+		shouldSign := sign || outFilename == ""
+		for i, unsignedTxn := range txnGroup {
+			txnFromArgs := transactions.SignedTxn{}
+			if i < len(txnArgs) {
+				txnFromArgs = txnArgs[i]
 			}
 
+			if !txnFromArgs.Lsig.Blank() {
+				signedTxnGroup = append(signedTxnGroup, transactions.SignedTxn{
+					Lsig:     txnFromArgs.Lsig,
+					AuthAddr: txnFromArgs.AuthAddr,
+					Txn:      unsignedTxn,
+				})
+				continue
+			}
+
+			signedTxn, err := createSignedTransaction(client, shouldSign, dataDir, walletName, unsignedTxn, txnFromArgs.AuthAddr)
+			if err != nil {
+				reportErrorf(errorSigningTX, err)
+			}
+
+			signedTxnGroup = append(signedTxnGroup, signedTxn)
+		}
+
+		// Output to file
+		if outFilename != "" {
+			if dumpForDryrun {
+				err = writeDryrunReqToFile(client, signedTxnGroup, outFilename)
+			} else {
+				err = writeSignedTxnsToFile(signedTxnGroup, outFilename)
+			}
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -1130,19 +1243,19 @@ var methodAppCmd = &cobra.Command{
 		}
 
 		// Broadcast
-		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-		signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
-		if err != nil {
-			reportErrorf(errorSigningTX, err)
-		}
-
-		txid, err := client.BroadcastTransaction(signedTxn)
+		err = client.BroadcastTransactionGroup(signedTxnGroup)
 		if err != nil {
 			reportErrorf(errorBroadcastingTX, err)
 		}
 
 		// Report tx details to user
-		reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
+		reportInfof("Issued %d transaction(s):", len(signedTxnGroup))
+		// remember the final txid in this variable
+		var txid string
+		for _, stxn := range signedTxnGroup {
+			txid = stxn.Txn.ID().String()
+			reportInfof("\tIssued transaction from account %s, txid %s (fee %d)", stxn.Txn.Sender, txid, stxn.Txn.Fee.Raw)
+		}
 
 		if !noWaitAfterSend {
 			_, err := waitForCommit(client, txid, lv)
@@ -1155,8 +1268,8 @@ var methodAppCmd = &cobra.Command{
 				reportErrorf(err.Error())
 			}
 
-			if retTypeStr == "void" {
-				fmt.Printf("method %s succeeded", method)
+			if retType == nil {
+				fmt.Printf("method %s succeeded\n", method)
 				return
 			}
 
@@ -1181,10 +1294,6 @@ var methodAppCmd = &cobra.Command{
 				reportErrorf("cannot find return log for abi type %s", retTypeStr)
 			}
 
-			retType, err := abi.TypeOf(retTypeStr)
-			if err != nil {
-				reportErrorf("cannot cast %s to abi type: %v", retTypeStr, err)
-			}
 			decoded, err := retType.Decode(abiEncodedRet)
 			if err != nil {
 				reportErrorf("cannot decode return value %v: %v", abiEncodedRet, err)
@@ -1194,7 +1303,7 @@ var methodAppCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf("cannot marshal returned bytes %v to JSON: %v", decoded, err)
 			}
-			fmt.Printf("method %s succeeded with output: %s", method, string(decodedJSON))
+			fmt.Printf("method %s succeeded with output: %s\n", method, string(decodedJSON))
 		}
 	},
 }
