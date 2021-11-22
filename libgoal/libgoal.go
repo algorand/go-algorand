@@ -1037,17 +1037,24 @@ func MakeDryrunState(client Client, txnOrStxn interface{}, otherTxns []transacti
 }
 
 // MakeDryrunStateGenerated function creates generatedV2.DryrunRequest data structure
-func MakeDryrunStateGenerated(client Client, txnOrStxn interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string) (dr generatedV2.DryrunRequest, err error) {
+func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string) (dr generatedV2.DryrunRequest, err error) {
 	var txns []transactions.SignedTxn
-	if txnOrStxn == nil {
-		// empty input do nothing
-	} else if txn, ok := txnOrStxn.(transactions.Transaction); ok {
-		txns = append(txns, transactions.SignedTxn{Txn: txn})
-	} else if stxn, ok := txnOrStxn.(transactions.SignedTxn); ok {
-		txns = append(txns, stxn)
-	} else {
-		err = fmt.Errorf("unsupported txn type")
-		return
+	if txnOrStxnOrSlice != nil {
+		switch txnType := txnOrStxnOrSlice.(type) {
+		case transactions.Transaction:
+			txns = append(txns, transactions.SignedTxn{Txn: txnType})
+		case []transactions.Transaction:
+			for _, t := range txnType {
+				txns = append(txns, transactions.SignedTxn{Txn: t})
+			}
+		case transactions.SignedTxn:
+			txns = append(txns, txnType)
+		case []transactions.SignedTxn:
+			txns = append(txns, txnType...)
+		default:
+			err = fmt.Errorf("unsupported txn type")
+			return
+		}
 	}
 
 	txns = append(txns, otherTxns...)
