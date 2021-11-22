@@ -18,21 +18,114 @@ package apply
 
 import (
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
+// AccountData provides users of the Balances interface per-account data (like basics.AccountData)
+// but without any maps containing AppParams, AppLocalState, AssetHolding, or AssetParams. This
+// ensures that transaction evaluation must retrieve and mutate account, asset, and application data
+// separately, to better support on-disk and in-memory schemas that do not store them together.
+type AccountData struct {
+	Status             basics.Status
+	MicroAlgos         basics.MicroAlgos
+	RewardsBase        uint64
+	RewardedMicroAlgos basics.MicroAlgos
+
+	VoteID          crypto.OneTimeSignatureVerifier
+	SelectionID     crypto.VRFVerifier
+	VoteFirstValid  basics.Round
+	VoteLastValid   basics.Round
+	VoteKeyDilution uint64
+
+	AuthAddr           basics.Address
+	TotalAppSchema     basics.StateSchema
+	TotalExtraAppPages uint32
+}
+
+// ToApplyAccountData returns apply.AccountData from basics.AccountData
+func ToApplyAccountData(acct basics.AccountData) AccountData {
+	return AccountData{
+		Status:             acct.Status,
+		MicroAlgos:         acct.MicroAlgos,
+		RewardsBase:        acct.RewardsBase,
+		RewardedMicroAlgos: acct.RewardedMicroAlgos,
+
+		VoteID:          acct.VoteID,
+		SelectionID:     acct.SelectionID,
+		VoteFirstValid:  acct.VoteFirstValid,
+		VoteLastValid:   acct.VoteLastValid,
+		VoteKeyDilution: acct.VoteKeyDilution,
+
+		AuthAddr:           acct.AuthAddr,
+		TotalAppSchema:     acct.TotalAppSchema,
+		TotalExtraAppPages: acct.TotalExtraAppPages,
+	}
+}
+
+// AssignAccountData assigns the contents of apply.AccountData to the fields in basics.AccountData,
+// but does not touch the AppParams, AppLocalState, AssetHolding, or AssetParams data.
+func AssignAccountData(a *basics.AccountData, acct AccountData) {
+	a.Status = acct.Status
+	a.MicroAlgos = acct.MicroAlgos
+	a.RewardsBase = acct.RewardsBase
+	a.RewardedMicroAlgos = acct.RewardedMicroAlgos
+
+	a.VoteID = acct.VoteID
+	a.SelectionID = acct.SelectionID
+	a.VoteFirstValid = acct.VoteFirstValid
+	a.VoteLastValid = acct.VoteLastValid
+	a.VoteKeyDilution = acct.VoteKeyDilution
+
+	a.AuthAddr = acct.AuthAddr
+	a.TotalAppSchema = acct.TotalAppSchema
+	a.TotalExtraAppPages = acct.TotalExtraAppPages
+}
+
 // Balances allow to move MicroAlgos from one address to another and to update balance records, or to access and modify individual balance records
 // After a call to Put (or Move), future calls to Get or Move will reflect the updated balance record(s)
 type Balances interface {
-	// Get looks up the account data for an address, ignoring application state
+	// Get looks up the account data for an address, ignoring application and asset data
 	// If the account is known to be empty, then err should be nil and the returned balance record should have the given address and empty AccountData
 	// withPendingRewards specifies whether pending rewards should be applied.
 	// A non-nil error means the lookup is impossible (e.g., if the database doesn't have necessary state anymore)
-	Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error)
+	Get(addr basics.Address, withPendingRewards bool) (AccountData, error)
 
-	Put(basics.Address, basics.AccountData) error
+	Put(basics.Address, AccountData) error
+
+	// CloseAccount is used by payment.go to delete an account, after ensuring no balance, asset or app state remains.
+	CloseAccount(basics.Address) error
+
+	// Methods for accessing app and asset data:
+	// CountX returns the number of AppParams, AppLocalState, AssetHolding, or AssetParams associated with an account.
+	// GetX returns the app or asset data associated with a given address and app/asset index.
+	// HasX checks when an account has data associated with a given address and app/asset index.
+	// PutX updates or creates app or asset data for an address and app/asset index.
+	// DeleteX deletes the app or asset data associated with an address and app/asset index.
+
+	CountAppParams(addr basics.Address) (int, error)
+	GetAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, bool, error)
+	PutAppParams(addr basics.Address, aidx basics.AppIndex, params basics.AppParams) error
+	DeleteAppParams(addr basics.Address, aidx basics.AppIndex) error
+
+	CountAppLocalState(addr basics.Address) (int, error)
+	GetAppLocalState(addr basics.Address, aidx basics.AppIndex) (basics.AppLocalState, bool, error)
+	HasAppLocalState(addr basics.Address, aidx basics.AppIndex) (bool, error)
+	PutAppLocalState(addr basics.Address, aidx basics.AppIndex, state basics.AppLocalState) error
+	DeleteAppLocalState(addr basics.Address, aidx basics.AppIndex) error
+
+	CountAssetHolding(addr basics.Address) (int, error)
+	GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (basics.AssetHolding, bool, error)
+	PutAssetHolding(addr basics.Address, aidx basics.AssetIndex, data basics.AssetHolding) error
+	DeleteAssetHolding(addr basics.Address, aidx basics.AssetIndex) error
+
+	CountAssetParams(addr basics.Address) (int, error)
+	GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (basics.AssetParams, bool, error)
+	HasAssetParams(addr basics.Address, aidx basics.AssetIndex) (bool, error)
+	PutAssetParams(addr basics.Address, aidx basics.AssetIndex, data basics.AssetParams) error
+	DeleteAssetParams(addr basics.Address, aidx basics.AssetIndex) error
 
 	// GetCreator gets the address of the account that created a given creatable
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
