@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"testing"
@@ -283,7 +284,7 @@ func TestBadRound(t *testing.T) {
 	start, _, signer := generateTestSignerAux(a)
 	defer signer.keyStore.store.Close()
 	hashable, sig := makeSig(signer, start, a)
-	
+
 	a.Error(signer.GetVerifier().Verify(start+1, 1, hashable, sig))
 
 	hashable, sig = makeSig(signer, start+1, a)
@@ -308,6 +309,66 @@ func TestBadMerkleProofInSignature(t *testing.T) {
 	rand.Read(someDigest[:])
 	sig3.Proof.Path[0] = someDigest[:]
 	a.Error(signer.GetVerifier().Verify(start, 1, hashable, sig3))
+}
+
+func calculateHashOnKeyLeaf(key *crypto.GenericSigningKey, round uint64) []byte {
+	binaryRound := make([]byte, 8)
+	binary.LittleEndian.PutUint64(binaryRound, round)
+
+	verifyingRawKey := key.GetSigner().GetVerifyingKey().GetVerifier().GetRawVerificationBytes()
+	keyCommitment := make([]byte, 0, len(protocol.KeystorePK)+len(verifyingRawKey)+len(binaryRound))
+
+	keyCommitment = append(keyCommitment, protocol.KeystorePK...)
+	keyCommitment = append(keyCommitment, binaryRound...)
+	keyCommitment = append(keyCommitment, verifyingRawKey...)
+
+	factory := crypto.HashFactory{HashType: KeyStoreHashFunction}
+	hashValue := crypto.HashBytes(factory.NewHash(), keyCommitment)
+	return hashValue
+}
+
+func calculateHashOnInternalNode(leftNode, rightNode []byte) []byte {
+	buf := make([]byte, len(leftNode)+len(rightNode)+len(protocol.MerkleArrayNode))
+	copy(buf[:], protocol.MerkleArrayNode)
+	copy(buf[len(protocol.MerkleArrayNode):], leftNode[:])
+	copy(buf[len(protocol.MerkleArrayNode)+len(leftNode):], rightNode[:])
+
+	factory := crypto.HashFactory{HashType: KeyStoreHashFunction}
+	hashValue := crypto.HashBytes(factory.NewHash(), buf)
+	return hashValue
+}
+
+// This test makes sure that our publickey commitment is according to spec and stays sync with the
+// SNARK verifier. we manually build the merkle tree hashes
+func TestKeyStoreCommitment(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	signer := generateTestSigner(crypto.FalconType, 1, 9, 2, a)
+	defer signer.keyStore.store.Close()
+	a.Equal(4, length(signer, a))
+
+	k0, err := signer.keyStore.GetKey(2)
+	a.NoError(err)
+	k0hash := calculateHashOnKeyLeaf(k0, 2)
+
+	k1, err := signer.keyStore.GetKey(4)
+	a.NoError(err)
+	k1hash := calculateHashOnKeyLeaf(k1, 4)
+
+	k2, err := signer.keyStore.GetKey(6)
+	a.NoError(err)
+	k2hash := calculateHashOnKeyLeaf(k2, 6)
+
+	k3, err := signer.keyStore.GetKey(8)
+	a.NoError(err)
+	k3hash := calculateHashOnKeyLeaf(k3, 8)
+
+	internal1 := calculateHashOnInternalNode(k0hash, k1hash)
+	internal2 := calculateHashOnInternalNode(k2hash, k3hash)
+
+	root := calculateHashOnInternalNode(internal1, internal2)
+	a.Equal(root, signer.GetVerifier()[:])
 }
 
 func copySig(sig Signature) Signature {

@@ -39,3 +39,17 @@ func TestSignAndVerifyFalcon(t *testing.T) {
 	err = verifier.GetVerifier().VerifyBytes(msg, byteSig)
 	a.NoError(err)
 }
+
+func TestVerificationBytes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var seed FalconSeed
+	SystemRNG.RandBytes(seed[:])
+	key, err := GenerateFalconSigner(seed)
+	a.NoError(err)
+
+	verifyingRawKey := key.GetVerifyingKey().GetVerifier().GetRawVerificationBytes()
+
+	a.Equal(verifyingRawKey, key.PublicKey[:])
+}

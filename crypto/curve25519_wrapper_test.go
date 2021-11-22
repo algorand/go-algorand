@@ -22,7 +22,7 @@ import (
 	"testing"
 )
 
-func TestSignAndVerify(t *testing.T) {
+func TestCurve25519SignAndVerify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	var seed Seed
@@ -34,4 +34,17 @@ func TestSignAndVerify(t *testing.T) {
 	verifier := key.GetVerifyingKey()
 	err = verifier.GetVerifier().VerifyBytes(msg, byteSig)
 	a.NoError(err)
+}
+
+func TestCurve25519VerificationBytes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var seed Seed
+	SystemRNG.RandBytes(seed[:])
+	key := GenerateEd25519Key(seed)
+
+	verifyingRawKey := key.GetVerifyingKey().GetVerifier().GetRawVerificationBytes()
+
+	a.Equal(verifyingRawKey, key.Sec.SignatureVerifier[:])
 }

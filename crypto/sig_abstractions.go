@@ -69,7 +69,7 @@ type Verifier interface {
 	// Verify and VerifyBytes returns error on bad signature, and any other problem.
 	Verify(message Hashable, sig ByteSignature) error
 	VerifyBytes(message []byte, sig ByteSignature) error
-	// GetRawVerificationBytes is used to fetch a plain serialized version of the public data (without the use of the message pack).
+	// GetRawVerificationBytes is used to fetch a plain serialized version of the public data (without the use of the msgpack).
 	GetRawVerificationBytes() []byte
 }
 
