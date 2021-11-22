@@ -389,6 +389,16 @@ func (_ ByteSignature) CanMarshalMsg(z interface{}) bool {
 func (z *ByteSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	{
 		var zb0001 []byte
+		var zb0002 int
+		zb0002, err = msgp.ReadBytesBytesHeader(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > MaxSignatureSize {
+			err = msgp.ErrOverflow(uint64(zb0002), uint64(MaxSignatureSize))
+			return
+		}
 		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
 		if err != nil {
 			err = msgp.WrapError(err)

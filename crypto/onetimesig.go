@@ -162,7 +162,7 @@ type OneTimeSignatureSecretsPersistent struct {
 	// FirstOffset denotes the first offset whose subkey appears in Offsets.
 	// These subkeys correspond to batch FirstBatch-1.
 	FirstOffset uint64            `codec:"firstoff"`
-	Offsets     []ephemeralSubkey `codec:"offkeys,allocbound=-"`
+	Offsets     []ephemeralSubkey `codec:"offkeys,allocbound=-"` // the bound is keyDilution
 
 	// When Offsets is non-empty, OffsetsPK2 is the intermediate-level public
 	// key that can be used to verify signatures on the subkeys in Offsets, and

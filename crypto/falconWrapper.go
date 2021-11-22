@@ -23,6 +23,9 @@ import (
 const (
 	// FalconSeedSize Represents the size in bytes of the random bytes used to generate Falcon keys
 	FalconSeedSize = 48
+
+	// FalconSigSize is the size of a falcon signature
+	FalconSigSize = cfalcon.SigSize
 )
 
 type (

@@ -23,9 +23,15 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+const (
+	// MaxSignatureSize is the size of the largest signature
+	// Used signature schemes: ed25519Signature and Falcon signature
+	MaxSignatureSize = FalconSigSize
+)
+
 type (
 	//ByteSignature using unspecified bound.
-	//msgp:allocbound ByteSignature
+	//msgp:allocbound ByteSignature MaxSignatureSize
 	ByteSignature []byte
 
 	// AlgorithmType enum type for signing algorithms
