@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/data/txntest"
+	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
@@ -270,7 +271,7 @@ func TestTestnetFixup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	eval := &BlockEvaluator{}
-	var rewardPoolBalance basics.AccountData
+	var rewardPoolBalance apply.AccountData
 	rewardPoolBalance.MicroAlgos.Raw = 1234
 	var headerRound basics.Round
 	testnetGenesisHash, _ := crypto.DigestFromString("JBR3KGFEWPEE5SAQ6IWU6EEBZMHXD4CZU6WCBXWGF57XBZIJHIRA")
@@ -307,7 +308,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	genesisInitState.Block.BlockHeader.GenesisID = "testnet"
 	genesisInitState.GenesisHash = testnetGenesisHash
 
-	rewardPoolBalance := genesisInitState.Accounts[testPoolAddr]
+	rewardPoolBalance := apply.ToApplyAccountData(genesisInitState.Accounts[testPoolAddr])
 	nextPoolBalance := rewardPoolBalance.MicroAlgos.Raw + poolBonus
 
 	l := newTestLedger(t, bookkeeping.GenesisBalances{

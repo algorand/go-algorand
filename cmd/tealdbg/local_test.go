@@ -844,20 +844,25 @@ func checkBalanceAdapter(
 	a.NoError(err)
 	a.Equal(basics.MicroAlgos{Raw: 500000000}, ad.MicroAlgos)
 
-	holdings, ok := ad.Assets[assetIdx+1]
+	holdings, ok, err := ba.GetAssetHolding(sender, assetIdx+1)
+	a.NoError(err)
 	a.False(ok)
-	holdings, ok = ad.Assets[assetIdx]
+	holdings, ok, err = ba.GetAssetHolding(sender, assetIdx)
+	a.NoError(err)
 	a.True(ok)
 	a.Equal(basics.AssetHolding{Amount: 10, Frozen: false}, holdings)
 
-	aparams, ok := ad.AssetParams[assetIdx]
+	aparams, ok, err := ba.GetAssetParams(sender, assetIdx)
+	a.NoError(err)
 	a.True(ok)
 	a.Equal(uint64(100), aparams.Total)
 	a.Equal("tok", aparams.UnitName)
 
-	params, ok := ad.AppParams[appIdx+1]
+	params, ok, err := ba.GetAppParams(sender, appIdx+1)
+	a.NoError(err)
 	a.False(ok)
-	params, ok = ad.AppParams[appIdx]
+	params, ok, err = ba.GetAppParams(sender, appIdx)
+	a.NoError(err)
 	a.True(ok)
 
 	addr, ok, err := ba.GetCreator(basics.CreatableIndex(assetIdx), basics.AssetCreatable)
@@ -886,9 +891,10 @@ func checkBalanceAdapter(
 	a.True(ok)
 	a.Equal("global", v.Bytes)
 
-	loc, ok := ad.AppLocalStates[appIdx+1]
+	loc, ok, err := ba.GetAppLocalState(sender, appIdx+1)
+	a.NoError(err)
 	a.False(ok)
-	loc, ok = ad.AppLocalStates[appIdx]
+	loc, ok, err = ba.GetAppLocalState(sender, appIdx)
 	a.True(ok)
 
 	v, ok = loc.KeyValue["lkeyint"]
@@ -901,7 +907,8 @@ func checkBalanceAdapter(
 
 	ad, err = ba.Get(receiver, false)
 	a.NoError(err)
-	loc, ok = ad.AppLocalStates[appIdx]
+	loc, ok, err = ba.GetAppLocalState(receiver, appIdx)
+	a.NoError(err)
 	a.False(ok)
 }
 
