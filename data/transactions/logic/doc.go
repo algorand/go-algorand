@@ -540,6 +540,7 @@ var EcdsaCurveDocs = map[string]string{
 	"Secp256k1": "secp256k1 curve",
 }
 
+// Base64AlphabetDocs for notes on opcode `base64decode`
 var Base64AlphabetDocs = map[string]string{
 	"Standard": `Standard base-64 alphabet as specified in <a href="https://rfc-editor.org/rfc/rfc4648.html#section-4">RFC 4648 section 4</a>`,
 	"URL":      `URL and Filename Safe base-64 alphabet as specified in <a href="https://rfc-editor.org/rfc/rfc4648.html#section-5">RFC 4648 section 5</a>`,
