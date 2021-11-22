@@ -452,8 +452,9 @@ func (s ecDsaCurveNameSpecMap) getExtraFor(name string) (extra string) {
 type Base64Alphabet int
 
 const (
-	// base64url and base64std alphabets according to https://www.rfc-editor.org/rfc/rfc4648.html
+	// URLAlph represents the base64url alphabet defined in https://www.rfc-editor.org/rfc/rfc4648.html
 	URLAlph Base64Alphabet = iota
+	// StdAlph represents the standard alphabet of the RFC
 	StdAlph
 	invalidBase64Alphabet
 )
