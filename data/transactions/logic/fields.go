@@ -376,10 +376,10 @@ const (
 	// OpcodeBudget The remaining budget available for execution
 	OpcodeBudget
 
-	// CallerApplicationID
+	// CallerApplicationID The ID of the caller app, else 0
 	CallerApplicationID
 
-	// CallerApplicationAddress
+	// CallerApplicationAddress The Address of the caller app, else ZeroAddress
 	CallerApplicationAddress
 
 	invalidGlobalField
