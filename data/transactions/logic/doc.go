@@ -454,7 +454,7 @@ var globalFieldDocs = map[string]string{
 	"GroupSize":                 "Number of transactions in this atomic transaction group. At least 1",
 	"LogicSigVersion":           "Maximum supported TEAL version",
 	"Round":                     "Current round number",
-	"LatestTimestamp":           "Last confirmed block UNIX timestamp. Fails if negative",
+	"LatestTimestamp":           "Last confirmed block UNIX timestamp. Fails if negative or in LogicSigs",
 	"CurrentApplicationID":      "ID of current application executing. Fails in LogicSigs",
 	"CreatorAddress":            "Address of the creator of the current application. Fails if no such application is executing",
 	"CurrentApplicationAddress": "Address that the current application controls. Fails in LogicSigs",
