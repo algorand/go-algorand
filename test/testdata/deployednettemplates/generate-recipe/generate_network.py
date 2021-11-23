@@ -25,7 +25,7 @@ def build_network(template):
 
     netgoal_params = build_netgoal_params(template_dict)
     build_net(template_path, netgoal_params)
-    build_genesis(template_path, netgoal_params)
+    build_genesis(template_path, netgoal_params, template_dict)
 
 def build_netgoal_params(template_dict):
     instances = template_dict['instances']
@@ -38,7 +38,7 @@ def build_netgoal_params(template_dict):
         relay_count += getInstanceCount(instances['relays'], group['percent']['relays'])
         participating_node_count += getInstanceCount(instances['participatingNodes'], group['percent']['participatingNodes'])
         non_participating_node_count += getInstanceCount(instances['nonParticipatingNodes'], group['percent']['nonParticipatingNodes'])
-    
+
 
     relay_config = instances['relays']['config']
     participating_node_config = instances['participatingNodes']['config']
@@ -66,13 +66,22 @@ def build_net(template_path, netgoal_params):
     args.extend(netgoal_params)
     netgoal(args, template_path)
 
-def build_genesis(template_path, netgoal_params):
+def build_genesis(template_path, netgoal_params, template_dict):
     args = [
         '-t', 'genesis',
         '-o', f"{template_path}/generated/genesis.json"
     ]
     args.extend(netgoal_params)
     netgoal(args, template_path)
+    if template_dict['network']['ConsensusProtocol']:
+        updateProtocol(f"{template_path}/generated/genesis.json", template_dict['network']['ConsensusProtocol'])
+
+def updateProtocol(genesis_path, consensus_protocol):
+    with open(genesis_path, 'r') as genfile:
+        genjson = json.load(genfile)
+        genjson["ConsensusProtocol"] = consensus_protocol
+    with open(genesis_path, 'w') as genfile:
+        json.dump(genjson, genfile, indent="\t")
 
 def netgoal(args, template_path='.'):
     cmd = [
