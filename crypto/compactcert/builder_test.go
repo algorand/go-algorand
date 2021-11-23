@@ -19,6 +19,7 @@ package compactcert
 import (
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"fmt"
 	"github.com/algorand/go-algorand/config"
 	"strconv"
@@ -182,6 +183,76 @@ func TestBuildVerify(t *testing.T) {
 	verif := MkVerifier(param, partcom.Root())
 	err = verif.Verify(cert)
 	require.NoError(t, err, "failed to verify the compact cert")
+}
+
+func generateRandomParticipant(a *require.Assertions, testname string) basics.Participant {
+	key, dbAccessor := generateTestSigner(testname+".db", 0, 0, 128*2, a)
+	defer dbAccessor.Close()
+	a.NotNil(dbAccessor, "failed to create signer")
+
+	p := basics.Participant{
+		PK:     *key.GetVerifier(),
+		Weight: crypto.RandUint64(),
+	}
+	return p
+}
+
+func calculateHashOnPartLeaf(part basics.Participant) []byte {
+	binaryWeight := make([]byte, 8)
+	binary.LittleEndian.PutUint64(binaryWeight, part.Weight)
+
+	publicKeyBytes := part.PK
+	partCommitment := make([]byte, 0, len(protocol.CompactCertPart)+len(binaryWeight)+len(publicKeyBytes))
+	partCommitment = append(partCommitment, protocol.CompactCertPart...)
+	partCommitment = append(partCommitment, binaryWeight...)
+	partCommitment = append(partCommitment, publicKeyBytes[:]...)
+
+	factory := crypto.HashFactory{HashType: HashType}
+	hashValue := crypto.HashBytes(factory.NewHash(), partCommitment)
+	return hashValue
+}
+
+func calculateHashOnInternalNode(leftNode, rightNode []byte) []byte {
+	buf := make([]byte, len(leftNode)+len(rightNode)+len(protocol.MerkleArrayNode))
+	copy(buf[:], protocol.MerkleArrayNode)
+	copy(buf[len(protocol.MerkleArrayNode):], leftNode[:])
+	copy(buf[len(protocol.MerkleArrayNode)+len(leftNode):], rightNode[:])
+
+	factory := crypto.HashFactory{HashType: HashType}
+	hashValue := crypto.HashBytes(factory.NewHash(), buf)
+	return hashValue
+}
+
+// This test makes sure that cert's participation commitment is according to spec and stays sync with the
+// SNARK verifier. we manually build the merkle tree hashes
+func TestParticipationCommitment(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	var parts []basics.Participant
+	parts = append(parts, generateRandomParticipant(a, t.Name()))
+	parts = append(parts, generateRandomParticipant(a, t.Name()))
+	parts = append(parts, generateRandomParticipant(a, t.Name()))
+	parts = append(parts, generateRandomParticipant(a, t.Name()))
+
+	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: HashType})
+	a.NoError(err)
+
+	partCommitmentRoot := partcom.Root()
+
+	leaf0 := calculateHashOnPartLeaf(parts[0])
+	leaf1 := calculateHashOnPartLeaf(parts[1])
+	leaf2 := calculateHashOnPartLeaf(parts[2])
+	leaf3 := calculateHashOnPartLeaf(parts[3])
+
+	inner1 := calculateHashOnInternalNode(leaf0, leaf1)
+	inner2 := calculateHashOnInternalNode(leaf2, leaf3)
+
+	calcRoot := calculateHashOnInternalNode(inner1, inner2)
+
+	a.Equal(partCommitmentRoot, crypto.GenericDigest(calcRoot))
+
 }
 
 func BenchmarkBuildVerify(b *testing.B) {

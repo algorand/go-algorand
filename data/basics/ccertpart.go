@@ -52,9 +52,9 @@ func (p Participant) ToBeHashed() (protocol.HashID, []byte) {
 
 	publicKeyBytes := p.PK
 
-	pkCommitment := make([]byte, 0, len(binaryWeight)+len(publicKeyBytes))
-	pkCommitment = append(pkCommitment, binaryWeight...)
-	pkCommitment = append(pkCommitment, publicKeyBytes[:]...)
+	partCommitment := make([]byte, 0, len(binaryWeight)+len(publicKeyBytes))
+	partCommitment = append(partCommitment, binaryWeight...)
+	partCommitment = append(partCommitment, publicKeyBytes[:]...)
 
-	return protocol.CompactCertPart, pkCommitment
+	return protocol.CompactCertPart, partCommitment
 }
