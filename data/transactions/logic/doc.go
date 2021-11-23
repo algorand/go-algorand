@@ -169,9 +169,10 @@ var opDocByName = map[string]string{
 	"b~":  "X with all bits inverted",
 
 	"log":         "write bytes to log state of the current application",
-	"itxn_begin":  "begin preparation of a new inner transaction",
+	"itxn_begin":  "begin preparation of a new inner transaction in a new transaction group",
+	"itxn_next":   "begin preparation of a new inner transaction in the same transaction group",
 	"itxn_field":  "set field F of the current inner transaction to X",
-	"itxn_submit": "execute the current inner transaction. Fail if 16 inner transactions have already been executed, or if the transaction itself fails.",
+	"itxn_submit": "execute the current inner transaction group. Fail if executing this group would exceed 16 total inner transactions, or if any transaction in the group fails.",
 }
 
 // OpDoc returns a description of the op
@@ -269,8 +270,8 @@ var opDocExtras = map[string]string{
 	"min_balance":         "params: Before v4, Txn.Accounts offset. Since v4, Txn.Accounts offset or an account address that appears in Txn.Accounts or is Txn.Sender). Return: value.",
 	"app_opted_in":        "params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), application id (or, since v4, a Txn.ForeignApps offset). Return: 1 if opted in and 0 otherwise.",
 	"app_local_get":       "params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), state key. Return: value. The value is zero (of type uint64) if the key does not exist.",
-	"app_local_get_ex":    "params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), application id (or, since v4, a Txn.ForeignApps offset), state key. Return: did_exist flag (top of the stack, 1 if the application existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
-	"app_global_get_ex":   "params: Txn.ForeignApps offset (or, since v4, an application id that appears in Txn.ForeignApps or is the CurrentApplicationID), state key. Return: did_exist flag (top of the stack, 1 if the application existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
+	"app_local_get_ex":    "params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), application id (or, since v4, a Txn.ForeignApps offset), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
+	"app_global_get_ex":   "params: Txn.ForeignApps offset (or, since v4, an application id that appears in Txn.ForeignApps or is the CurrentApplicationID), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
 	"app_global_get":      "params: state key. Return: value. The value is zero (of type uint64) if the key does not exist.",
 	"app_local_put":       "params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), state key, value.",
 	"app_local_del":       "params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), state key.\n\nDeleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)",
@@ -300,7 +301,7 @@ var OpGroups = map[string][]string{
 	"Loading Values":        {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gaid", "gaids"},
 	"Flow Control":          {"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "cover", "uncover", "swap", "select", "assert", "callsub", "retsub"},
 	"State Access":          {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "log"},
-	"Inner Transactions":    {"itxn_begin", "itxn_field", "itxn_submit", "itxn", "itxna"},
+	"Inner Transactions":    {"itxn_begin", "itxn_next", "itxn_field", "itxn_submit", "itxn", "itxna"},
 }
 
 // OpCost indicates the cost of an operation over the range of

@@ -96,6 +96,19 @@ func UnmarshalStatus(value string) (s Status, err error) {
 	return
 }
 
+// OnlineAccountData contains the voting information for a single account.
+//msgp:ignore OnlineAccountData
+type OnlineAccountData struct {
+	MicroAlgosWithRewards MicroAlgos
+
+	VoteID      crypto.OneTimeSignatureVerifier
+	SelectionID crypto.VRFVerifier
+
+	VoteFirstValid  Round
+	VoteLastValid   Round
+	VoteKeyDilution uint64
+}
+
 // AccountData contains the data associated with a given address.
 //
 // This includes the account balance, cryptographic public keys,
@@ -310,9 +323,6 @@ const (
 
 	// AppCreatable is the CreatableType corresponds to apps
 	AppCreatable CreatableType = 1
-
-	// MetadataHashLength is the number of bytes of the MetadataHash
-	MetadataHashLength int = 32
 )
 
 // CreatableLocator stores both the creator, whose balance record contains
@@ -364,7 +374,7 @@ type AssetParams struct {
 
 	// MetadataHash specifies a commitment to some unspecified asset
 	// metadata. The format of this metadata is up to the application.
-	MetadataHash [MetadataHashLength]byte `codec:"am"`
+	MetadataHash [32]byte `codec:"am"`
 
 	// Manager specifies an account that is allowed to change the
 	// non-zero addresses in this AssetParams.
@@ -398,6 +408,16 @@ func (app AppIndex) Address() Address {
 // MakeAccountData returns a UserToken
 func MakeAccountData(status Status, algos MicroAlgos) AccountData {
 	return AccountData{Status: status, MicroAlgos: algos}
+}
+
+// ClearOnlineState resets the account's fields to indicate that the account is an offline account
+func (u *AccountData) ClearOnlineState() {
+	u.Status = Offline
+	u.VoteFirstValid = Round(0)
+	u.VoteLastValid = Round(0)
+	u.VoteKeyDilution = 0
+	u.VoteID = crypto.OneTimeSignatureVerifier{}
+	u.SelectionID = crypto.VRFVerifier{}
 }
 
 // Money returns the amount of MicroAlgos associated with the user's account
@@ -469,20 +489,35 @@ func (u AccountData) MinBalance(proto *config.ConsensusParams) (res MicroAlgos) 
 	return res
 }
 
+// OnlineAccountData returns subset of AccountData as OnlineAccountData data structure.
+// Account is expected to be Online otherwise its is cleared out
+func (u AccountData) OnlineAccountData() OnlineAccountData {
+	if u.Status != Online {
+		// if the account is not Online and agreement requests it for some reason, clear it out
+		return OnlineAccountData{}
+	}
+
+	return OnlineAccountData{
+		MicroAlgosWithRewards: u.MicroAlgos,
+
+		VoteID:          u.VoteID,
+		SelectionID:     u.SelectionID,
+		VoteFirstValid:  u.VoteFirstValid,
+		VoteLastValid:   u.VoteLastValid,
+		VoteKeyDilution: u.VoteKeyDilution,
+	}
+}
+
 // VotingStake returns the amount of MicroAlgos associated with the user's account
 // for the purpose of participating in the Algorand protocol.  It assumes the
 // caller has already updated rewards appropriately using WithUpdatedRewards().
-func (u AccountData) VotingStake() MicroAlgos {
-	if u.Status != Online {
-		return MicroAlgos{Raw: 0}
-	}
-
-	return u.MicroAlgos
+func (u OnlineAccountData) VotingStake() MicroAlgos {
+	return u.MicroAlgosWithRewards
 }
 
 // KeyDilution returns the key dilution for this account,
 // returning the default key dilution if not explicitly specified.
-func (u AccountData) KeyDilution(proto config.ConsensusParams) uint64 {
+func (u OnlineAccountData) KeyDilution(proto config.ConsensusParams) uint64 {
 	if u.VoteKeyDilution != 0 {
 		return u.VoteKeyDilution
 	}

@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
@@ -487,9 +488,9 @@ func keypair() *crypto.SignatureSecrets {
 	return s
 }
 
-func generateInitState(accounts map[basics.Address]basics.AccountData, bootstrappedNet *netState) (ledger.InitState, error) {
+func generateInitState(accounts map[basics.Address]basics.AccountData, bootstrappedNet *netState) (ledgercore.InitState, error) {
 
-	var initState ledger.InitState
+	var initState ledgercore.InitState
 
 	block := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{

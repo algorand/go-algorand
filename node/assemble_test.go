@@ -30,7 +30,6 @@ import (
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
@@ -71,7 +70,6 @@ func BenchmarkAssembleBlock(b *testing.B) {
 			Status:     basics.Online,
 			MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
 		}
-		//b.Log(addr)
 	}
 
 	genesis[poolAddr] = basics.AccountData{
@@ -133,8 +131,7 @@ func BenchmarkAssembleBlock(b *testing.B) {
 			if okcount == 0 {
 				worstTxID = signedTx.ID()
 			}
-
-			err := tp.Remember(pooldata.SignedTxGroup{Transactions: []transactions.SignedTxn{signedTx}})
+			err := tp.Remember([]transactions.SignedTxn{signedTx})
 			if err != nil {
 				errcount++
 				b.Logf("(%d/%d) could not send [%d] %s -> [%d] %s: %s", errcount, okcount, sourcei, addresses[sourcei], desti, addresses[desti], err)
