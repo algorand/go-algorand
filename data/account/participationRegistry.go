@@ -157,6 +157,11 @@ type ParticipationRegistry interface {
 	// Insert adds a record to storage and computes the ParticipationID
 	Insert(record Participation) (ParticipationID, error)
 
+	// PKI TODO: use a real type instead of []byte
+	// AppendKeys appends state proof keys to an existing Participation record. Keys can only be appended
+	// once, an error
+	AppendKeys(id ParticipationID, keys map[uint64][]byte) error
+
 	// Delete removes a record from storage.
 	Delete(id ParticipationID) error
 
@@ -256,8 +261,9 @@ const (
 			key   BLOB    NOT NULL, --*  msgpack encoding of ParticipationAccount.BlockProof.SignatureAlgorithm
 			PRIMARY KEY (pk, round)
 		)`
-	insertKeysetQuery  = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution, vrf) VALUES (?, ?, ?, ?, ?, ?)`
-	insertRollingQuery = `INSERT INTO Rolling (pk, voting) VALUES (?, ?)`
+	insertKeysetQuery         = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution, vrf, stateProof) VALUES (?, ?, ?, ?, ?, ?, ?)`
+	insertRollingQuery        = `INSERT INTO Rolling (pk, voting) VALUES (?, ?)`
+	insertStateProofKeysQuery = `INSERT INTO StateProofKeys (pk, round, key) VALUES (?, ?, ?)`
 
 	// SELECT pk FROM Keysets WHERE participationID = ?
 	selectPK      = `SELECT pk FROM Keysets WHERE participationID = ? LIMIT 1`
@@ -332,6 +338,7 @@ type updatingParticipationRecord struct {
 type partDBWriteRecord struct {
 	insertID ParticipationID
 	insert   Participation
+	keys     map[uint64][]byte
 
 	registerUpdated map[ParticipationID]updatingParticipationRecord
 
@@ -380,7 +387,12 @@ func (db *participationDB) writeThread() {
 		if len(wr.registerUpdated) != 0 {
 			err = db.registerInner(wr.registerUpdated)
 		} else if !wr.insertID.IsZero() {
-			err = db.insertInner(wr.insert, wr.insertID)
+			if wr.insert != (Participation{}) {
+				err = db.insertInner(wr.insert, wr.insertID)
+			}
+			if len(wr.keys) != 0 {
+				err = db.inertKeysInner(wr.insertID, wr.keys)
+			}
 		} else if !wr.delete.IsZero() {
 			err = db.deleteInner(wr.delete)
 		} else if wr.flushResultChannel != nil {
@@ -413,9 +425,9 @@ func verifyExecWithOneRowEffected(err error, result sql.Result, operationName st
 }
 
 func (db *participationDB) insertInner(record Participation, id ParticipationID) (err error) {
-
 	var rawVRF []byte
 	var rawVoting []byte
+	var rawStateProof []byte
 
 	if record.VRF != nil {
 		rawVRF = protocol.Encode(record.VRF)
@@ -424,6 +436,7 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 		voting := record.Voting.Snapshot()
 		rawVoting = protocol.Encode(&voting)
 	}
+	// PKI TODO: Extract state proof from record.
 
 	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		result, err := tx.Exec(
@@ -433,7 +446,8 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 			record.FirstValid,
 			record.LastValid,
 			record.KeyDilution,
-			rawVRF)
+			rawVRF,
+			rawStateProof)
 		if err := verifyExecWithOneRowEffected(err, result, "insert keyset"); err != nil {
 			return err
 		}
@@ -451,6 +465,13 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 		return nil
 	})
 	return err
+}
+
+func (db *participationDB) inertKeysInner(id ParticipationID, keys map[uint64][]byte) (err error) {
+	// PKI TODO: Insert the keys
+	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+
+	})
 }
 
 func (db *participationDB) registerInner(updated map[ParticipationID]updatingParticipationRecord) error {
@@ -617,6 +638,21 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 	}
 
 	return
+}
+
+func (db *participationDB) AppendKeys(id ParticipationID, keys map[uint64][]byte) error {
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
+
+	if _, ok := db.cache[id]; ok {
+		return ErrParticipationIDNotFound
+	}
+
+	db.writeQueue <- partDBWriteRecord{
+
+	}
+
+	return nil
 }
 
 func (db *participationDB) Delete(id ParticipationID) error {
