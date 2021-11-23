@@ -17,8 +17,10 @@
 package ledger
 
 import (
-	"github.com/algorand/go-algorand/data/basics"
 	"testing"
+
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func checkLen(list *persistedAccountDataList) int {
@@ -36,6 +38,7 @@ func countListSize(head *persistedAccountDataListNode) (counter int) {
 }
 
 func TestRemoveFromList(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	l := newPersistedAccountList()
 	e1 := l.pushFront(&persistedAccountData{addr: basics.Address{1}})
 	e2 := l.pushFront(&persistedAccountData{addr: basics.Address{2}})
@@ -49,6 +52,7 @@ func TestRemoveFromList(t *testing.T) {
 }
 
 func TestAddingNewNodeWithAllocatedFreeList(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	l := newPersistedAccountList().allocateFreeNodes(10)
 	checkListPointers(t, l, []*persistedAccountDataListNode{})
 	if countListSize(l.freeList) != 10 {
@@ -122,6 +126,7 @@ func pointerInspection(t *testing.T, es []*persistedAccountDataListNode, root *p
 }
 
 func TestMultielementListPositioning(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	l := newPersistedAccountList()
 	checkListPointers(t, l, []*persistedAccountDataListNode{})
 	// test elements
@@ -180,6 +185,7 @@ func TestMultielementListPositioning(t *testing.T) {
 }
 
 func TestSingleElementListPositioning(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	l := newPersistedAccountList()
 	checkListPointers(t, l, []*persistedAccountDataListNode{})
 	e := l.pushFront(&persistedAccountData{addr: basics.Address{1}})
@@ -191,6 +197,7 @@ func TestSingleElementListPositioning(t *testing.T) {
 }
 
 func TestRemovedNodeShouldBeMovedToFreeList(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	l := newPersistedAccountList()
 	e1 := l.pushFront(&persistedAccountData{addr: basics.Address{1}})
 	e2 := l.pushFront(&persistedAccountData{addr: basics.Address{2}})

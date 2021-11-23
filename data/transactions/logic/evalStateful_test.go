@@ -1039,6 +1039,7 @@ intc_1
 }
 
 func TestAppParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	ep, ledger := makeSampleEnv()
 	ledger.NewAccount(ep.Txn.Txn.Sender, 1)
@@ -2346,6 +2347,7 @@ func TestReturnTypes(t *testing.T) {
 	require.NoError(t, err)
 	algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
 	ledger.NewLocal(txn.Txn.Receiver, 1, string(key), algoValue)
+	ledger.NewAccount(basics.AppIndex(1).Address(), 1000000)
 
 	ep.Ledger = ledger
 
@@ -2375,7 +2377,6 @@ func TestReturnTypes(t *testing.T) {
 		"bytec_2":           "bytecblock 0x32 0x33 0x34; bytec_2",
 		"bytec_3":           "bytecblock 0x32 0x33 0x34 0x35; bytec_3",
 		"substring":         "substring 0 2",
-		"ed25519verify":     "pop; pop; pop; int 1", // ignore
 		"asset_params_get":  "asset_params_get AssetTotal",
 		"asset_holding_get": "asset_holding_get AssetBalance",
 		"gtxns":             "gtxns Sender",
@@ -2388,13 +2389,24 @@ func TestReturnTypes(t *testing.T) {
 		"gtxnas":            "gtxnas 0 ApplicationArgs",
 		"gtxnsas":           "pop; pop; int 0; int 0; gtxnsas ApplicationArgs",
 		"args":              "args",
+		"itxn":              "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxn CreatedAssetID",
+		// This next one is a cop out.  Can't use itxna Logs until we have inner appl
+		"itxna": "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxn NumLogs",
+	}
+
+	// these require special input data and tested separately
+	skipCmd := map[string]bool{
+		"ed25519verify":       true,
+		"ecdsa_verify":        true,
+		"ecdsa_pk_recover":    true,
+		"ecdsa_pk_decompress": true,
 	}
 
 	byName := OpsByName[LogicVersion]
 	for _, m := range []runMode{runModeSignature, runModeApplication} {
 		t.Run(fmt.Sprintf("m=%s", m.String()), func(t *testing.T) {
 			for name, spec := range byName {
-				if len(spec.Returns) == 0 || (m&spec.Modes) == 0 {
+				if len(spec.Returns) == 0 || (m&spec.Modes) == 0 || skipCmd[name] {
 					continue
 				}
 				var sb strings.Builder
@@ -2481,7 +2493,7 @@ func TestPooledAppCallsVerifyOp(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	source := `#pragma version 5
+	source := `
 	global CurrentApplicationID
 	pop
 	byte 0x01

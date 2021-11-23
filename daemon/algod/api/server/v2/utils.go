@@ -110,7 +110,7 @@ func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, pay
 // computeAssetIndexFromTxn returns the created asset index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
-func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint64) {
+func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) *uint64 {
 	// Must have ledger
 	if l == nil {
 		return nil
@@ -127,6 +127,15 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint
 	if tx.Txn.Txn.AssetConfigTxnFields.ConfigAsset != 0 {
 		return nil
 	}
+
+	aid := uint64(tx.ApplyData.ConfigAsset)
+	if aid > 0 {
+		return &aid
+	}
+	// If there is no ConfigAsset in the ApplyData, it must be a
+	// transaction before inner transactions were activated. Therefore
+	// the computeCreatableIndexInPayset function will work properly
+	// to deduce the aid. Proceed.
 
 	// Look up block where transaction was confirmed
 	blk, err := l.Block(tx.ConfirmedRound)
@@ -145,7 +154,7 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint
 // computeAppIndexFromTxn returns the created app index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
-func computeAppIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint64) {
+func computeAppIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) *uint64 {
 	// Must have ledger
 	if l == nil {
 		return nil
@@ -162,6 +171,15 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint64
 	if tx.Txn.Txn.ApplicationCallTxnFields.ApplicationID != 0 {
 		return nil
 	}
+
+	aid := uint64(tx.ApplyData.ApplicationID)
+	if aid > 0 {
+		return &aid
+	}
+	// If there is no ApplicationID in the ApplyData, it must be a
+	// transaction before inner transactions were activated. Therefore
+	// the computeCreatableIndexInPayset function will work properly
+	// to deduce the aid. Proceed.
 
 	// Look up block where transaction was confirmed
 	blk, err := l.Block(tx.ConfirmedRound)
@@ -283,12 +301,12 @@ func convertLogs(txn node.TxnWithStatus) *[][]byte {
 func convertInners(txn *node.TxnWithStatus) *[]preEncodedTxInfo {
 	inner := make([]preEncodedTxInfo, len(txn.ApplyData.EvalDelta.InnerTxns))
 	for i, itxn := range txn.ApplyData.EvalDelta.InnerTxns {
-		inner[i] = convertTxn(&itxn)
+		inner[i] = convertInnerTxn(&itxn)
 	}
 	return &inner
 }
 
-func convertTxn(txn *transactions.SignedTxnWithAD) preEncodedTxInfo {
+func convertInnerTxn(txn *transactions.SignedTxnWithAD) preEncodedTxInfo {
 	// This copies from handlers.PendingTransactionInformation, with
 	// simplifications because we have a SignedTxnWithAD rather than
 	// TxnWithStatus, and we know this txn has committed.
@@ -301,9 +319,10 @@ func convertTxn(txn *transactions.SignedTxnWithAD) preEncodedTxInfo {
 	response.ReceiverRewards = &txn.ApplyData.ReceiverRewards.Raw
 	response.CloseRewards = &txn.ApplyData.CloseRewards.Raw
 
-	// Indexes can't be set until we allow acfg or appl
-	// response.AssetIndex = computeAssetIndexFromTxn(txn, v2.Node.Ledger())
-	// response.ApplicationIndex = computeAppIndexFromTxn(txn, v2.Node.Ledger())
+	// Since this is an inner txn, we know these indexes will be populated. No
+	// need to search payset for IDs
+	response.AssetIndex = numOrNil(uint64(txn.ApplyData.ConfigAsset))
+	response.ApplicationIndex = numOrNil(uint64(txn.ApplyData.ApplicationID))
 
 	// Deltas, Logs, and Inners can not be set until we allow appl
 	// response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)

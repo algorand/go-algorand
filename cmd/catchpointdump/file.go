@@ -63,7 +63,7 @@ var fileCmd = &cobra.Command{
 		if err != nil || len(tarFileBytes) == 0 {
 			reportErrorf("Unable to read '%s' : %v", tarFile, err)
 		}
-		genesisInitState := ledger.InitState{}
+		genesisInitState := ledgercore.InitState{}
 		cfg := config.GetDefaultLocal()
 		l, err := ledger.OpenLedger(logging.Base(), "./ledger", false, genesisInitState, cfg)
 		if err != nil {

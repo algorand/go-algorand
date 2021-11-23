@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -32,6 +33,7 @@ const inducePartitionTime = 6 * time.Second    // Try to minimize change of proc
 
 func TestBasicPartitionRecovery(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	if testing.Short() {
 		t.Skip()
@@ -78,6 +80,7 @@ func TestBasicPartitionRecovery(t *testing.T) {
 
 func TestPartitionRecoverySwapStartup(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	if testing.Short() {
 		t.Skip()
@@ -100,6 +103,7 @@ func TestPartitionRecoverySwapStartup(t *testing.T) {
 
 func TestPartitionRecoveryStaggerRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	if testing.Short() {
 		t.Skip()
@@ -167,6 +171,7 @@ func runTestWithStaggeredStopStart(t *testing.T, fixture *fixtures.RestClientFix
 
 func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	if testing.Short() {
 		t.Skip()
@@ -224,6 +229,7 @@ func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
 
 func TestPartitionHalfOffline(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
 
 	if testing.Short() {
 		t.Skip()
@@ -239,7 +245,16 @@ func TestPartitionHalfOffline(t *testing.T) {
 	// Start all but 10% of stake and verify we recover
 
 	var fixture fixtures.RestClientFixture
-	fixture.Setup(t, filepath.Join("nettemplates", "TenNodesDistributedMultiWallet.json"))
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TenNodesDistributedMultiWallet.json"))
+	for _, nodeDir := range fixture.NodeDataDirs() {
+		cfg, err := config.LoadConfigFromDisk(nodeDir)
+		a.NoError(err)
+		// adjust the refresh interval for one hour, so that we won't be reloading the participation key during this test.
+		cfg.ParticipationKeysRefreshInterval = time.Hour
+		cfg.SaveToDisk(nodeDir)
+	}
+	fixture.Start()
+
 	defer fixture.Shutdown()
 
 	// Get the 1st node (with Node1-3 wallets) so we can wait until it has reached the target round

@@ -240,7 +240,7 @@ func debugLocal(args []string) {
 	if len(txnFile) > 0 {
 		txnBlob, err = ioutil.ReadFile(txnFile)
 		if err != nil {
-			log.Fatalf("Error txn reading %s: %s", balanceFile, err)
+			log.Fatalf("Error txn reading %s: %s", txnFile, err)
 		}
 	}
 

@@ -37,7 +37,7 @@ import (
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c, 0x22, 0x95, 0xfd, 0x32, 0x4f, 0x77, 0xa5, 0x4, 0x8b, 0x42, 0xc2, 0xb7, 0xa8, 0x54, 0x84, 0xb6, 0x80, 0xb1, 0xe1, 0x3d, 0x59, 0x9b, 0xeb, 0x36}
 
-func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (genesisInitState ledger.InitState, initKeys map[basics.Address]*crypto.SignatureSecrets) {
+func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (genesisInitState ledgercore.InitState, initKeys map[basics.Address]*crypto.SignatureSecrets) {
 
 	var poolSecret, sinkSecret *crypto.SignatureSecrets
 	var seed crypto.Seed
@@ -157,7 +157,9 @@ func TestLedgerCirculation(t *testing.T) {
 	baseDestValue := data.MicroAlgos.Raw
 
 	blk := genesisInitState.Block
-	totals, _ := realLedger.Totals(basics.Round(0))
+	totalsRound, totals, err := realLedger.LatestTotals()
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(0), totalsRound)
 	baseCirculation := totals.Online.Money.Raw
 
 	srcAccountKey := keys[sourceAccount]
@@ -192,15 +194,13 @@ func TestLedgerCirculation(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, baseDestValue+uint64(rnd), data.MicroAlgos.Raw)
 
-			totals, err = realLedger.Totals(rnd)
+			roundCirculation, err := realLedger.OnlineTotals(rnd)
 			require.NoError(t, err)
-			roundCirculation := totals.Online.Money.Raw
-			require.Equal(t, baseCirculation-uint64(rnd)*(10001), roundCirculation)
+			require.Equal(t, baseCirculation-uint64(rnd)*(10001), roundCirculation.Raw)
 
-			totals, err = l.Totals(rnd)
+			roundCirculation, err = l.OnlineTotals(rnd)
 			require.NoError(t, err)
-			roundCirculation = totals.Online.Money.Raw
-			require.Equal(t, baseCirculation-uint64(rnd)*(10001), roundCirculation)
+			require.Equal(t, baseCirculation-uint64(rnd)*(10001), roundCirculation.Raw)
 		} else if rnd < basics.Round(510) {
 			// test one round ago
 			data, err = realLedger.Lookup(rnd-1, destAccount)
@@ -210,15 +210,13 @@ func TestLedgerCirculation(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, baseDestValue+uint64(rnd)-1, data.MicroAlgos.Raw)
 
-			totals, err = realLedger.Totals(rnd - 1)
+			roundCirculation, err := realLedger.OnlineTotals(rnd - 1)
 			require.NoError(t, err)
-			roundCirculation := totals.Online.Money.Raw
-			require.Equal(t, baseCirculation-uint64(rnd-1)*(10001), roundCirculation)
+			require.Equal(t, baseCirculation-uint64(rnd-1)*(10001), roundCirculation.Raw)
 
-			totals, err = l.Totals(rnd - 1)
+			roundCirculation, err = l.OnlineTotals(rnd - 1)
 			require.NoError(t, err)
-			roundCirculation = totals.Online.Money.Raw
-			require.Equal(t, baseCirculation-uint64(rnd-1)*(10001), roundCirculation)
+			require.Equal(t, baseCirculation-uint64(rnd-1)*(10001), roundCirculation.Raw)
 		} else if rnd < basics.Round(520) {
 			// test one round in the future ( expected error )
 			data, err = realLedger.Lookup(rnd+1, destAccount)
@@ -228,17 +226,17 @@ func TestLedgerCirculation(t *testing.T) {
 			require.Error(t, err)
 			require.Equal(t, uint64(0), data.MicroAlgos.Raw)
 
-			_, err = realLedger.Totals(rnd + 1)
+			_, err = realLedger.OnlineTotals(rnd + 1)
 			require.Error(t, err)
 
-			_, err = l.Totals(rnd + 1)
+			_, err = l.OnlineTotals(rnd + 1)
 			require.Error(t, err)
 		} else if rnd < basics.Round(520) {
 			// test expired round ( expected error )
-			_, err = realLedger.Totals(rnd - 500)
+			_, err = realLedger.OnlineTotals(rnd - 500)
 			require.Error(t, err)
 
-			_, err = l.Totals(rnd - 500)
+			_, err = l.OnlineTotals(rnd - 500)
 			require.Error(t, err)
 		}
 	}

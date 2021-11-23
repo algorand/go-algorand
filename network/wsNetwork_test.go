@@ -614,6 +614,12 @@ func (nc *nopConn) SetReadLimit(limit int64) {
 func (nc *nopConn) CloseWithoutFlush() error {
 	return nil
 }
+func (nc *nopConn) SetPingHandler(h func(appData string) error) {
+
+}
+func (nc *nopConn) SetPongHandler(h func(appData string) error) {
+
+}
 
 var nopConnSingleton = nopConn{}
 
@@ -2053,6 +2059,7 @@ type urlCase struct {
 }
 
 func TestParseHostOrURL(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	urlTestCases := []urlCase{
 		{"localhost:123", url.URL{Scheme: "http", Host: "localhost:123"}},
 		{"http://localhost:123", url.URL{Scheme: "http", Host: "localhost:123"}},

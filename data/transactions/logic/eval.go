@@ -35,6 +35,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/secp256k1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
@@ -112,6 +113,31 @@ func (sv *stackValue) uint() (uint64, error) {
 		return 0, errors.New("not a uint64")
 	}
 	return sv.Uint, nil
+}
+
+func (sv *stackValue) bool() (bool, error) {
+	u64, err := sv.uint()
+	if err != nil {
+		return false, err
+	}
+	switch u64 {
+	case 0:
+		return false, nil
+	case 1:
+		return true, nil
+	default:
+		return false, fmt.Errorf("boolean is neither 1 nor 0: %d", u64)
+	}
+}
+
+func (sv *stackValue) string(limit int) (string, error) {
+	if sv.Bytes == nil {
+		return "", errors.New("not a byte array")
+	}
+	if len(sv.Bytes) > limit {
+		return "", errors.New("value is too long")
+	}
+	return string(sv.Bytes), nil
 }
 
 func stackValueFromTealValue(tv *basics.TealValue) (sv stackValue, err error) {
@@ -221,7 +247,7 @@ type EvalParams struct {
 	TxnGroup []transactions.SignedTxn
 
 	// GroupIndex should point to Txn within TxnGroup
-	GroupIndex int
+	GroupIndex uint64
 
 	PastSideEffects []EvalSideEffects
 
@@ -323,8 +349,8 @@ type EvalContext struct {
 	version uint64
 	scratch scratchSpace
 
-	subtxn *transactions.SignedTxn // place to build for tx_submit
-	// The transactions Performed() and their effects
+	subtxns []transactions.SignedTxn // place to build for itxn_submit
+	// Previous transactions Performed() and their effects
 	InnerTxns []transactions.SignedTxnWithAD
 
 	cost    int // cost incurred so far
@@ -342,7 +368,7 @@ type EvalContext struct {
 	instructionStarts map[int]bool
 
 	programHashCached crypto.Digest
-	txidCache         map[int]transactions.Txid
+	txidCache         map[uint64]transactions.Txid
 	appAddrCache      map[basics.AppIndex]basics.Address
 
 	// Stores state & disassembly for the optional debugger
@@ -1231,12 +1257,12 @@ func opExpImpl(base uint64, exp uint64) (uint64, error) {
 	if exp == 0 || base == 1 {
 		return 1, nil
 	}
-	// base is now at least 2, so exp can not be over 64
-	if exp > 64 {
+	// base is now at least 2, so exp can not be 64
+	if exp >= 64 {
 		return 0, fmt.Errorf("%d^%d overflow", base, exp)
 	}
 	answer := base
-	// safe to cast exp, because it is known to fit in int (it's <= 64)
+	// safe to cast exp, because it is known to fit in int (it's < 64)
 	for i := 1; i < int(exp); i++ {
 		next := answer * base
 		if next/answer != base {
@@ -1274,14 +1300,14 @@ func opExpwImpl(base uint64, exp uint64) (*big.Int, error) {
 	if exp == 0 || base == 1 {
 		return new(big.Int).SetUint64(1), nil
 	}
-	// base is now at least 2, so exp can not be over 128
-	if exp > 128 {
+	// base is now at least 2, so exp can not be 128
+	if exp >= 128 {
 		return &big.Int{}, fmt.Errorf("%d^%d overflow", base, exp)
 	}
 
 	answer := new(big.Int).SetUint64(base)
 	bigbase := new(big.Int).SetUint64(base)
-	// safe to cast exp, because it is known to fit in int (it's <= 128)
+	// safe to cast exp, because it is known to fit in int (it's < 128)
 	for i := 1; i < int(exp); i++ {
 		next := answer.Mul(answer, bigbase)
 		answer = next
@@ -1854,15 +1880,19 @@ func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFi
 
 // TxnFieldToTealValue is a thin wrapper for txnFieldToStack for external use
 func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field TxnField, arrayFieldIdx uint64) (basics.TealValue, error) {
-	cx := EvalContext{EvalParams: EvalParams{GroupIndex: groupIndex}}
-	sv, err := cx.txnFieldToStack(txn, field, arrayFieldIdx, groupIndex)
+	if groupIndex < 0 {
+		return basics.TealValue{}, fmt.Errorf("negative groupIndex %d", groupIndex)
+	}
+	cx := EvalContext{EvalParams: EvalParams{GroupIndex: uint64(groupIndex)}}
+	fs := txnFieldSpecByField[field]
+	sv, err := cx.txnFieldToStack(txn, fs, arrayFieldIdx, uint64(groupIndex))
 	return sv.toTealValue(), err
 }
 
-func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int) transactions.Txid {
+func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex uint64) transactions.Txid {
 	// Initialize txidCache if necessary
 	if cx.txidCache == nil {
-		cx.txidCache = make(map[int]transactions.Txid, len(cx.TxnGroup))
+		cx.txidCache = make(map[uint64]transactions.Txid, len(cx.TxnGroup))
 	}
 
 	// Hashes are expensive, so we cache computed TxIDs
@@ -1875,9 +1905,41 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int) tr
 	return txid
 }
 
-func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, field TxnField, arrayFieldIdx uint64, groupIndex int) (sv stackValue, err error) {
+func (cx *EvalContext) itxnFieldToStack(itxn *transactions.SignedTxnWithAD, fs txnFieldSpec, arrayFieldIdx uint64) (sv stackValue, err error) {
+	if fs.effects {
+		switch fs.field {
+		case Logs:
+			if arrayFieldIdx >= uint64(len(itxn.EvalDelta.Logs)) {
+				err = fmt.Errorf("invalid Logs index %d", arrayFieldIdx)
+				return
+			}
+			sv.Bytes = nilToEmpty([]byte(itxn.EvalDelta.Logs[arrayFieldIdx]))
+		case NumLogs:
+			sv.Uint = uint64(len(itxn.EvalDelta.Logs))
+		case CreatedAssetID:
+			sv.Uint = uint64(itxn.ApplyData.ConfigAsset)
+		case CreatedApplicationID:
+			sv.Uint = uint64(itxn.ApplyData.ApplicationID)
+		default:
+			err = fmt.Errorf("invalid txn field %d", fs.field)
+		}
+		return
+	}
+
+	if fs.field == GroupIndex || fs.field == TxID {
+		err = fmt.Errorf("illegal field for inner transaction %s", fs.field)
+	} else {
+		sv, err = cx.txnFieldToStack(&itxn.Txn, fs, arrayFieldIdx, 0)
+	}
+	return
+}
+
+func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, fs txnFieldSpec, arrayFieldIdx uint64, groupIndex uint64) (sv stackValue, err error) {
+	if fs.effects {
+		return sv, errors.New("Unable to obtain effects from top-level transactions")
+	}
 	err = nil
-	switch field {
+	switch fs.field {
 	case Sender:
 		sv.Bytes = txn.Sender[:]
 	case Fee:
@@ -1921,7 +1983,7 @@ func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 	case AssetCloseTo:
 		sv.Bytes = txn.AssetCloseTo[:]
 	case GroupIndex:
-		sv.Uint = uint64(groupIndex)
+		sv.Uint = groupIndex
 	case TxID:
 		txid := cx.getTxID(txn, groupIndex)
 		sv.Bytes = txid[:]
@@ -2027,20 +2089,19 @@ func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 	case ExtraProgramPages:
 		sv.Uint = uint64(txn.ExtraProgramPages)
 	default:
-		err = fmt.Errorf("invalid txn field %d", field)
+		err = fmt.Errorf("invalid txn field %d", fs.field)
 		return
 	}
 
-	txnField := TxnField(field)
-	txnFieldType := TxnFieldTypes[txnField]
+	txnFieldType := TxnFieldTypes[fs.field]
 	if !typecheck(txnFieldType, sv.argType()) {
-		err = fmt.Errorf("%s expected field type is %s but got %s", txnField.String(), txnFieldType.String(), sv.argType().String())
+		err = fmt.Errorf("%s expected field type is %s but got %s", fs.field.String(), txnFieldType.String(), sv.argType().String())
 	}
 	return
 }
 
 func opTxn(cx *EvalContext) {
-	field := TxnField(uint64(cx.program[cx.pc+1]))
+	field := TxnField(cx.program[cx.pc+1])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -2051,7 +2112,7 @@ func opTxn(cx *EvalContext) {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
 		return
 	}
-	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, field, 0, cx.GroupIndex)
+	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, fs, 0, cx.GroupIndex)
 	if err != nil {
 		cx.err = err
 		return
@@ -2060,7 +2121,7 @@ func opTxn(cx *EvalContext) {
 }
 
 func opTxna(cx *EvalContext) {
-	field := TxnField(uint64(cx.program[cx.pc+1]))
+	field := TxnField(cx.program[cx.pc+1])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -2072,7 +2133,7 @@ func opTxna(cx *EvalContext) {
 		return
 	}
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
-	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx, cx.GroupIndex)
+	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, fs, arrayFieldIdx, cx.GroupIndex)
 	if err != nil {
 		cx.err = err
 		return
@@ -2095,7 +2156,7 @@ func opTxnas(cx *EvalContext) {
 		return
 	}
 	arrayFieldIdx := cx.stack[last].Uint
-	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx, cx.GroupIndex)
+	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, fs, arrayFieldIdx, cx.GroupIndex)
 	if err != nil {
 		cx.err = err
 		return
@@ -2104,13 +2165,13 @@ func opTxnas(cx *EvalContext) {
 }
 
 func opGtxn(cx *EvalContext) {
-	gtxid := int(uint(cx.program[cx.pc+1]))
-	if gtxid >= len(cx.TxnGroup) {
+	gtxid := cx.program[cx.pc+1]
+	if int(gtxid) >= len(cx.TxnGroup) {
 		cx.err = fmt.Errorf("gtxn lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(uint64(cx.program[cx.pc+2]))
+	field := TxnField(cx.program[cx.pc+2])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -2123,11 +2184,11 @@ func opGtxn(cx *EvalContext) {
 	}
 	var sv stackValue
 	var err error
-	if TxnField(field) == GroupIndex {
+	if field == GroupIndex {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = uint64(gtxid)
 	} else {
-		sv, err = cx.txnFieldToStack(tx, field, 0, gtxid)
+		sv, err = cx.txnFieldToStack(tx, fs, 0, uint64(gtxid))
 		if err != nil {
 			cx.err = err
 			return
@@ -2143,7 +2204,7 @@ func opGtxna(cx *EvalContext) {
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(uint64(cx.program[cx.pc+2]))
+	field := TxnField(cx.program[cx.pc+2])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -2155,7 +2216,7 @@ func opGtxna(cx *EvalContext) {
 		return
 	}
 	arrayFieldIdx := uint64(cx.program[cx.pc+3])
-	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, uint64(gtxid))
 	if err != nil {
 		cx.err = err
 		return
@@ -2166,12 +2227,9 @@ func opGtxna(cx *EvalContext) {
 func opGtxnas(cx *EvalContext) {
 	last := len(cx.stack) - 1
 
-	gtxid := int(cx.program[cx.pc+1])
-	if gtxid >= len(cx.TxnGroup) {
+	gtxid := cx.program[cx.pc+1]
+	if int(gtxid) >= len(cx.TxnGroup) {
 		cx.err = fmt.Errorf("gtxnas lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
-		return
-	} else if gtxid < 0 {
-		cx.err = fmt.Errorf("gtxnas lookup %d cannot be negative", gtxid)
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
@@ -2187,7 +2245,7 @@ func opGtxnas(cx *EvalContext) {
 		return
 	}
 	arrayFieldIdx := cx.stack[last].Uint
-	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, uint64(gtxid))
 	if err != nil {
 		cx.err = err
 		return
@@ -2197,13 +2255,13 @@ func opGtxnas(cx *EvalContext) {
 
 func opGtxns(cx *EvalContext) {
 	last := len(cx.stack) - 1
-	gtxid := int(cx.stack[last].Uint)
-	if gtxid >= len(cx.TxnGroup) {
+	gtxid := cx.stack[last].Uint
+	if gtxid >= uint64(len(cx.TxnGroup)) {
 		cx.err = fmt.Errorf("gtxns lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(uint64(cx.program[cx.pc+1]))
+	field := TxnField(cx.program[cx.pc+1])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -2216,11 +2274,11 @@ func opGtxns(cx *EvalContext) {
 	}
 	var sv stackValue
 	var err error
-	if TxnField(field) == GroupIndex {
+	if field == GroupIndex {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
-		sv.Uint = uint64(gtxid)
+		sv.Uint = gtxid
 	} else {
-		sv, err = cx.txnFieldToStack(tx, field, 0, gtxid)
+		sv, err = cx.txnFieldToStack(tx, fs, 0, gtxid)
 		if err != nil {
 			cx.err = err
 			return
@@ -2231,13 +2289,13 @@ func opGtxns(cx *EvalContext) {
 
 func opGtxnsa(cx *EvalContext) {
 	last := len(cx.stack) - 1
-	gtxid := int(cx.stack[last].Uint)
-	if gtxid >= len(cx.TxnGroup) {
+	gtxid := cx.stack[last].Uint
+	if gtxid >= uint64(len(cx.TxnGroup)) {
 		cx.err = fmt.Errorf("gtxnsa lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(uint64(cx.program[cx.pc+1]))
+	field := TxnField(cx.program[cx.pc+1])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -2249,7 +2307,7 @@ func opGtxnsa(cx *EvalContext) {
 		return
 	}
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
-	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, gtxid)
 	if err != nil {
 		cx.err = err
 		return
@@ -2261,12 +2319,9 @@ func opGtxnsas(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 
-	gtxid := int(cx.stack[prev].Uint)
-	if gtxid >= len(cx.TxnGroup) {
+	gtxid := cx.stack[prev].Uint
+	if gtxid >= uint64(len(cx.TxnGroup)) {
 		cx.err = fmt.Errorf("gtxnsas lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
-		return
-	} else if gtxid < 0 {
-		cx.err = fmt.Errorf("gtxnsas lookup %d cannot be negative", gtxid)
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
@@ -2282,7 +2337,7 @@ func opGtxnsas(cx *EvalContext) {
 		return
 	}
 	arrayFieldIdx := cx.stack[last].Uint
-	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, gtxid)
 	if err != nil {
 		cx.err = err
 		return
@@ -2291,8 +2346,63 @@ func opGtxnsas(cx *EvalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opGaidImpl(cx *EvalContext, groupIdx int, opName string) (sv stackValue, err error) {
-	if groupIdx >= len(cx.TxnGroup) {
+func opItxn(cx *EvalContext) {
+	field := TxnField(cx.program[cx.pc+1])
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid itxn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if ok {
+		cx.err = fmt.Errorf("invalid itxn field %d", field)
+		return
+	}
+
+	if len(cx.InnerTxns) == 0 {
+		cx.err = fmt.Errorf("no inner transaction available %d", field)
+		return
+	}
+
+	itxn := &cx.InnerTxns[len(cx.InnerTxns)-1]
+	sv, err := cx.itxnFieldToStack(itxn, fs, 0)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack = append(cx.stack, sv)
+}
+
+func opItxna(cx *EvalContext) {
+	field := TxnField(cx.program[cx.pc+1])
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid itxn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if !ok {
+		cx.err = fmt.Errorf("itxna unsupported field %d", field)
+		return
+	}
+	arrayFieldIdx := uint64(cx.program[cx.pc+2])
+
+	if len(cx.InnerTxns) == 0 {
+		cx.err = fmt.Errorf("no inner transaction available %d", field)
+		return
+	}
+
+	itxn := &cx.InnerTxns[len(cx.InnerTxns)-1]
+	sv, err := cx.itxnFieldToStack(itxn, fs, arrayFieldIdx)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack = append(cx.stack, sv)
+}
+
+func opGaidImpl(cx *EvalContext, groupIdx uint64, opName string) (sv stackValue, err error) {
+	if groupIdx >= uint64(len(cx.TxnGroup)) {
 		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
 		return
 	} else if groupIdx > cx.GroupIndex {
@@ -2319,8 +2429,8 @@ func opGaidImpl(cx *EvalContext, groupIdx int, opName string) (sv stackValue, er
 }
 
 func opGaid(cx *EvalContext) {
-	groupIdx := int(uint(cx.program[cx.pc+1]))
-	sv, err := opGaidImpl(cx, groupIdx, "gaid")
+	groupIdx := cx.program[cx.pc+1]
+	sv, err := opGaidImpl(cx, uint64(groupIdx), "gaid")
 	if err != nil {
 		cx.err = err
 		return
@@ -2331,7 +2441,7 @@ func opGaid(cx *EvalContext) {
 
 func opGaids(cx *EvalContext) {
 	last := len(cx.stack) - 1
-	groupIdx := int(cx.stack[last].Uint)
+	groupIdx := cx.stack[last].Uint
 	sv, err := opGaidImpl(cx, groupIdx, "gaids")
 	if err != nil {
 		cx.err = err
@@ -2390,12 +2500,16 @@ func (cx *EvalContext) getApplicationAddress() (basics.Address, error) {
 	return appAddr, nil
 }
 
-func (cx *EvalContext) getCreatableID(groupIndex int) (cid uint64, err error) {
+func (cx *EvalContext) getCreatableID(groupIndex uint64) (cid uint64, err error) {
 	if cx.Ledger == nil {
 		err = fmt.Errorf("ledger not available")
 		return
 	}
-	return uint64(cx.Ledger.GetCreatableID(groupIndex)), nil
+	gi := int(groupIndex)
+	if gi < 0 {
+		return 0, fmt.Errorf("groupIndex %d too high", groupIndex)
+	}
+	return uint64(cx.Ledger.GetCreatableID(gi)), nil
 }
 
 func (cx *EvalContext) getCreatorAddress() ([]byte, error) {
@@ -2525,23 +2639,203 @@ func opEd25519verify(cx *EvalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
+// leadingZeros needs to be replaced by big.Int.FillBytes
+func leadingZeros(size int, b *big.Int) ([]byte, error) {
+	data := b.Bytes()
+	if size < len(data) {
+		return nil, fmt.Errorf("insufficient buffer size: %d < %d", size, len(data))
+	}
+	if size == len(data) {
+		return data, nil
+	}
+
+	buf := make([]byte, size)
+	copy(buf[size-len(data):], data)
+	return buf, nil
+}
+
+func opEcdsaVerify(cx *EvalContext) {
+	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
+	fs, ok := ecdsaCurveSpecByField[ecdsaCurve]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid curve %d", ecdsaCurve)
+		return
+	}
+
+	if fs.field != Secp256k1 {
+		cx.err = fmt.Errorf("unsupported curve %d", fs.field)
+		return
+	}
+
+	last := len(cx.stack) - 1 // index of PK y
+	prev := last - 1          // index of PK x
+	pprev := prev - 1         // index of signature s
+	fourth := pprev - 1       // index of signature r
+	fifth := fourth - 1       // index of data
+
+	pkY := cx.stack[last].Bytes
+	pkX := cx.stack[prev].Bytes
+	sigS := cx.stack[pprev].Bytes
+	sigR := cx.stack[fourth].Bytes
+	msg := cx.stack[fifth].Bytes
+
+	x := new(big.Int).SetBytes(pkX)
+	y := new(big.Int).SetBytes(pkY)
+	pubkey := secp256k1.S256().Marshal(x, y)
+
+	signature := make([]byte, 0, len(sigR)+len(sigS))
+	signature = append(signature, sigR...)
+	signature = append(signature, sigS...)
+
+	result := secp256k1.VerifySignature(pubkey, msg, signature)
+
+	if result {
+		cx.stack[fifth].Uint = 1
+	} else {
+		cx.stack[fifth].Uint = 0
+	}
+	cx.stack[fifth].Bytes = nil
+	cx.stack = cx.stack[:fourth]
+}
+
+func opEcdsaPkDecompress(cx *EvalContext) {
+	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
+	fs, ok := ecdsaCurveSpecByField[ecdsaCurve]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid curve %d", ecdsaCurve)
+		return
+	}
+
+	if fs.field != Secp256k1 {
+		cx.err = fmt.Errorf("unsupported curve %d", fs.field)
+		return
+	}
+
+	last := len(cx.stack) - 1 // compressed PK
+
+	pubkey := cx.stack[last].Bytes
+	x, y := secp256k1.DecompressPubkey(pubkey)
+	if x == nil {
+		cx.err = fmt.Errorf("invalid pubkey")
+		return
+	}
+
+	var err error
+	cx.stack[last].Uint = 0
+	cx.stack[last].Bytes, err = leadingZeros(32, x)
+	if err != nil {
+		cx.err = fmt.Errorf("x component zeroing failed: %s", err.Error())
+		return
+	}
+
+	var sv stackValue
+	sv.Bytes, err = leadingZeros(32, y)
+	if err != nil {
+		cx.err = fmt.Errorf("y component zeroing failed: %s", err.Error())
+		return
+	}
+
+	cx.stack = append(cx.stack, sv)
+}
+
+func opEcdsaPkRecover(cx *EvalContext) {
+	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
+	fs, ok := ecdsaCurveSpecByField[ecdsaCurve]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid curve %d", ecdsaCurve)
+		return
+	}
+
+	if fs.field != Secp256k1 {
+		cx.err = fmt.Errorf("unsupported curve %d", fs.field)
+		return
+	}
+
+	last := len(cx.stack) - 1 // index of signature s
+	prev := last - 1          // index of signature r
+	pprev := prev - 1         // index of recovery id
+	fourth := pprev - 1       // index of data
+
+	sigS := cx.stack[last].Bytes
+	sigR := cx.stack[prev].Bytes
+	recid := cx.stack[pprev].Uint
+	msg := cx.stack[fourth].Bytes
+
+	if recid > 3 {
+		cx.err = fmt.Errorf("invalid recovery id: %d", recid)
+		return
+	}
+
+	signature := make([]byte, 0, len(sigR)+len(sigS)+1)
+	signature = append(signature, sigR...)
+	signature = append(signature, sigS...)
+	signature = append(signature, uint8(recid))
+
+	pk, err := secp256k1.RecoverPubkey(msg, signature)
+	if err != nil {
+		cx.err = fmt.Errorf("pubkey recover failed: %s", err.Error())
+		return
+	}
+	x, y := secp256k1.S256().Unmarshal(pk)
+	if x == nil {
+		cx.err = fmt.Errorf("pubkey unmarshal failed")
+		return
+	}
+
+	cx.stack[fourth].Uint = 0
+	cx.stack[fourth].Bytes, err = leadingZeros(32, x)
+	if err != nil {
+		cx.err = fmt.Errorf("x component zeroing failed: %s", err.Error())
+		return
+	}
+	cx.stack[pprev].Uint = 0
+	cx.stack[pprev].Bytes, err = leadingZeros(32, y)
+	if err != nil {
+		cx.err = fmt.Errorf("y component zeroing failed: %s", err.Error())
+		return
+	}
+	cx.stack = cx.stack[:prev]
+}
+
 func opLoad(cx *EvalContext) {
-	gindex := int(uint(cx.program[cx.pc+1]))
-	cx.stack = append(cx.stack, cx.scratch[gindex])
+	n := cx.program[cx.pc+1]
+	cx.stack = append(cx.stack, cx.scratch[n])
+}
+
+func opLoads(cx *EvalContext) {
+	last := len(cx.stack) - 1
+	n := cx.stack[last].Uint
+	if n >= uint64(len(cx.scratch)) {
+		cx.err = fmt.Errorf("invalid Scratch index %d", n)
+		return
+	}
+	cx.stack[last] = cx.scratch[n]
 }
 
 func opStore(cx *EvalContext) {
-	gindex := int(uint(cx.program[cx.pc+1]))
+	n := cx.program[cx.pc+1]
 	last := len(cx.stack) - 1
-	cx.scratch[gindex] = cx.stack[last]
+	cx.scratch[n] = cx.stack[last]
 	cx.stack = cx.stack[:last]
 }
 
-func opGloadImpl(cx *EvalContext, groupIdx int, scratchIdx int, opName string) (scratchValue stackValue, err error) {
-	if groupIdx >= len(cx.TxnGroup) {
+func opStores(cx *EvalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	n := cx.stack[prev].Uint
+	if n >= uint64(len(cx.scratch)) {
+		cx.err = fmt.Errorf("invalid Scratch index %d", n)
+		return
+	}
+	cx.scratch[n] = cx.stack[last]
+	cx.stack = cx.stack[:prev]
+}
+
+func opGloadImpl(cx *EvalContext, groupIdx uint64, scratchIdx byte, opName string) (scratchValue stackValue, err error) {
+	if groupIdx >= uint64(len(cx.TxnGroup)) {
 		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
 		return
-	} else if scratchIdx >= 256 {
+	} else if int(scratchIdx) >= len(cx.scratch) {
 		err = fmt.Errorf("invalid Scratch index %d", scratchIdx)
 		return
 	} else if txn := cx.TxnGroup[groupIdx].Txn; txn.Type != protocol.ApplicationCallTx {
@@ -2555,13 +2849,13 @@ func opGloadImpl(cx *EvalContext, groupIdx int, scratchIdx int, opName string) (
 		return
 	}
 
-	scratchValue = cx.PastSideEffects[groupIdx].getScratchValue(uint8(scratchIdx))
+	scratchValue = cx.PastSideEffects[groupIdx].getScratchValue(scratchIdx)
 	return
 }
 
 func opGload(cx *EvalContext) {
-	groupIdx := int(uint(cx.program[cx.pc+1]))
-	scratchIdx := int(uint(cx.program[cx.pc+2]))
+	groupIdx := uint64(cx.program[cx.pc+1])
+	scratchIdx := cx.program[cx.pc+2]
 	scratchValue, err := opGloadImpl(cx, groupIdx, scratchIdx, "gload")
 	if err != nil {
 		cx.err = err
@@ -2573,8 +2867,8 @@ func opGload(cx *EvalContext) {
 
 func opGloads(cx *EvalContext) {
 	last := len(cx.stack) - 1
-	groupIdx := int(cx.stack[last].Uint)
-	scratchIdx := int(uint(cx.program[cx.pc+1]))
+	groupIdx := cx.stack[last].Uint
+	scratchIdx := cx.program[cx.pc+1]
 	scratchValue, err := opGloadImpl(cx, groupIdx, scratchIdx, "gloads")
 	if err != nil {
 		cx.err = err
@@ -3382,40 +3676,75 @@ func authorizedSender(cx *EvalContext, addr basics.Address) bool {
 	return appAddr == authorizer
 }
 
-func opTxBegin(cx *EvalContext) {
-	if cx.subtxn != nil {
-		cx.err = errors.New("tx_begin without tx_submit")
-		return
-	}
-	// Start fresh
-	cx.subtxn = &transactions.SignedTxn{}
-	// Fill in defaults.
+// addInnerTxn appends a fresh SignedTxn to subtxns, populated with reasonable
+// defaults.
+func addInnerTxn(cx *EvalContext) error {
 	addr, err := cx.getApplicationAddress()
 	if err != nil {
-		cx.err = err
-		return
+		return err
 	}
 
-	fee := cx.Proto.MinTxnFee
-	if cx.FeeCredit != nil {
-		// Use credit to shrink the fee, but don't change FeeCredit
-		// here, because they might never tx_submit, or they might
-		// change the fee.  Do it in tx_submit.
-		fee = basics.SubSaturate(fee, *cx.FeeCredit)
+	// For compatibility with v5, in which failures only occurred in the submit,
+	// we only fail here if we are OVER the MaxInnerTransactions limit.  Thus
+	// this allows construction of one more Inner than is actually allowed, and
+	// will fail in submit. (But we do want the check here, so this can't become
+	// unbounded.)  The MaxTxGroupSize check can be, and is, precise.
+	if len(cx.InnerTxns)+len(cx.subtxns) > cx.Proto.MaxInnerTransactions ||
+		len(cx.subtxns) >= cx.Proto.MaxTxGroupSize {
+		return errors.New("attempt to create too many inner transactions")
 	}
-	cx.subtxn.Txn.Header = transactions.Header{
-		Sender:     addr, // Default, to simplify usage
+
+	stxn := transactions.SignedTxn{}
+
+	groupFee := basics.MulSaturate(cx.Proto.MinTxnFee, uint64(len(cx.subtxns)+1))
+	groupPaid := uint64(0)
+	for _, ptxn := range cx.subtxns {
+		groupPaid = basics.AddSaturate(groupPaid, ptxn.Txn.Fee.Raw)
+	}
+
+	fee := uint64(0)
+	if groupPaid < groupFee {
+		fee = groupFee - groupPaid
+
+		if cx.FeeCredit != nil {
+			// Use credit to shrink the default populated fee, but don't change
+			// FeeCredit here, because they might never itxn_submit, or they
+			// might change the fee.  Do it in itxn_submit.
+			fee = basics.SubSaturate(fee, *cx.FeeCredit)
+		}
+	}
+
+	stxn.Txn.Header = transactions.Header{
+		Sender:     addr,
 		Fee:        basics.MicroAlgos{Raw: fee},
 		FirstValid: cx.Txn.Txn.FirstValid,
 		LastValid:  cx.Txn.Txn.LastValid,
 	}
+	cx.subtxns = append(cx.subtxns, stxn)
+	return nil
+}
+
+func opTxBegin(cx *EvalContext) {
+	if len(cx.subtxns) > 0 {
+		cx.err = errors.New("itxn_begin without itxn_submit")
+		return
+	}
+	cx.err = addInnerTxn(cx)
+}
+
+func opTxNext(cx *EvalContext) {
+	if len(cx.subtxns) == 0 {
+		cx.err = errors.New("itxn_next without itxn_begin")
+		return
+	}
+	cx.err = addInnerTxn(cx)
 }
 
 // availableAccount is used instead of accountReference for more recent opcodes
 // that don't need (or want!) to allow low numbers to represent the account at
 // that index in Accounts array.
 func (cx *EvalContext) availableAccount(sv stackValue) (basics.Address, error) {
-	if sv.argType() != StackBytes {
+	if sv.argType() != StackBytes || len(sv.Bytes) != crypto.DigestSize {
 		return basics.Address{}, fmt.Errorf("not an address")
 	}
 
@@ -3440,68 +3769,170 @@ func (cx *EvalContext) availableAsset(sv stackValue) (basics.AssetIndex, error) 
 	return basics.AssetIndex(0), fmt.Errorf("invalid Asset reference %d", aid)
 }
 
-func opTxField(cx *EvalContext) {
-	if cx.subtxn == nil {
-		cx.err = errors.New("tx_field without tx_begin")
-		return
-	}
-	last := len(cx.stack) - 1
-	field := TxnField(uint64(cx.program[cx.pc+1]))
-	sv := cx.stack[last]
-	switch field {
+func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *transactions.Transaction) (err error) {
+	switch fs.field {
 	case Type:
 		if sv.Bytes == nil {
-			cx.err = fmt.Errorf("Type arg not a byte array")
+			err = fmt.Errorf("Type arg not a byte array")
+			return
 		}
-		cx.subtxn.Txn.Type = protocol.TxType(sv.Bytes)
+		txType := string(sv.Bytes)
+		ver, ok := innerTxnTypes[txType]
+		if ok && ver <= cx.version {
+			txn.Type = protocol.TxType(txType)
+		} else {
+			err = fmt.Errorf("%s is not a valid Type for itxn_field", txType)
+		}
 	case TypeEnum:
 		var i uint64
-		i, cx.err = sv.uint()
-		if i < uint64(len(TxnTypeNames)) {
-			cx.subtxn.Txn.Type = protocol.TxType(TxnTypeNames[i])
+		i, err = sv.uint()
+		if err != nil {
+			return
 		}
-
+		// i != 0 is so that the error reports 0 instead of Unknown
+		if i != 0 && i < uint64(len(TxnTypeNames)) {
+			ver, ok := innerTxnTypes[TxnTypeNames[i]]
+			if ok && ver <= cx.version {
+				txn.Type = protocol.TxType(TxnTypeNames[i])
+			} else {
+				err = fmt.Errorf("%s is not a valid Type for itxn_field", TxnTypeNames[i])
+			}
+		} else {
+			err = fmt.Errorf("%d is not a valid TypeEnum", i)
+		}
 	case Sender:
-		cx.subtxn.Txn.Sender, cx.err = cx.availableAccount(sv)
+		txn.Sender, err = cx.availableAccount(sv)
 	case Fee:
-		cx.subtxn.Txn.Fee.Raw, cx.err = sv.uint()
-	// FirstValid, LastValid unsettable: no motivation
-	// Note unsettable: would be strange, as this "Note" would not end up "chain-visible"
+		txn.Fee.Raw, err = sv.uint()
+	// FirstValid, LastValid unsettable: little motivation (maybe a app call
+	// wants to inspect?)  If we set, make sure they are legal, both for current
+	// round, and separation by MaxLifetime (check lifetime in submit, not here)
+	case Note:
+		if len(sv.Bytes) > cx.Proto.MaxTxnNoteBytes {
+			err = fmt.Errorf("%s may not exceed %d bytes", fs.field, cx.Proto.MaxTxnNoteBytes)
+		} else {
+			txn.Note = make([]byte, len(sv.Bytes))
+			copy(txn.Note[:], sv.Bytes)
+		}
 	// GenesisID, GenesisHash unsettable: surely makes no sense
 	// Group unsettable: Can't make groups from AVM (yet?)
 	// Lease unsettable: This seems potentially useful.
-	// RekeyTo unsettable: Feels dangerous for first release.
 
-	// KeyReg not allowed yet, so no fields settable
+	case RekeyTo:
+		txn.RekeyTo, err = sv.address()
 
+	// KeyReg
+	case VotePK:
+		if len(sv.Bytes) != 32 {
+			err = fmt.Errorf("%s must be 32 bytes", fs.field)
+		} else {
+			copy(txn.VotePK[:], sv.Bytes)
+		}
+	case SelectionPK:
+		if len(sv.Bytes) != 32 {
+			err = fmt.Errorf("%s must be 32 bytes", fs.field)
+		} else {
+			copy(txn.SelectionPK[:], sv.Bytes)
+		}
+	case VoteFirst:
+		var round uint64
+		round, err = sv.uint()
+		txn.VoteFirst = basics.Round(round)
+	case VoteLast:
+		var round uint64
+		round, err = sv.uint()
+		txn.VoteLast = basics.Round(round)
+	case VoteKeyDilution:
+		txn.VoteKeyDilution, err = sv.uint()
+	case Nonparticipation:
+		txn.Nonparticipation, err = sv.bool()
+
+	// Payment
 	case Receiver:
-		cx.subtxn.Txn.Receiver, cx.err = cx.availableAccount(sv)
+		txn.Receiver, err = cx.availableAccount(sv)
 	case Amount:
-		cx.subtxn.Txn.Amount.Raw, cx.err = sv.uint()
+		txn.Amount.Raw, err = sv.uint()
 	case CloseRemainderTo:
-		cx.subtxn.Txn.CloseRemainderTo, cx.err = cx.availableAccount(sv)
-
+		txn.CloseRemainderTo, err = cx.availableAccount(sv)
+	// AssetTransfer
 	case XferAsset:
-		cx.subtxn.Txn.XferAsset, cx.err = cx.availableAsset(sv)
+		txn.XferAsset, err = cx.availableAsset(sv)
 	case AssetAmount:
-		cx.subtxn.Txn.AssetAmount, cx.err = sv.uint()
+		txn.AssetAmount, err = sv.uint()
 	case AssetSender:
-		cx.subtxn.Txn.AssetSender, cx.err = cx.availableAccount(sv)
+		txn.AssetSender, err = cx.availableAccount(sv)
 	case AssetReceiver:
-		cx.subtxn.Txn.AssetReceiver, cx.err = cx.availableAccount(sv)
+		txn.AssetReceiver, err = cx.availableAccount(sv)
 	case AssetCloseTo:
-		cx.subtxn.Txn.AssetCloseTo, cx.err = cx.availableAccount(sv)
-
-	// acfg likely next
-
-	// afrz seems easy but not high demand
+		txn.AssetCloseTo, err = cx.availableAccount(sv)
+	// AssetConfig
+	case ConfigAsset:
+		txn.ConfigAsset, err = cx.availableAsset(sv)
+	case ConfigAssetTotal:
+		txn.AssetParams.Total, err = sv.uint()
+	case ConfigAssetDecimals:
+		var decimals uint64
+		decimals, err = sv.uint()
+		if err == nil {
+			if decimals > uint64(cx.Proto.MaxAssetDecimals) {
+				err = fmt.Errorf("too many decimals (%d)", decimals)
+			} else {
+				txn.AssetParams.Decimals = uint32(decimals)
+			}
+		}
+	case ConfigAssetDefaultFrozen:
+		txn.AssetParams.DefaultFrozen, err = sv.bool()
+	case ConfigAssetUnitName:
+		txn.AssetParams.UnitName, err = sv.string(cx.Proto.MaxAssetUnitNameBytes)
+	case ConfigAssetName:
+		txn.AssetParams.AssetName, err = sv.string(cx.Proto.MaxAssetNameBytes)
+	case ConfigAssetURL:
+		txn.AssetParams.URL, err = sv.string(cx.Proto.MaxAssetURLBytes)
+	case ConfigAssetMetadataHash:
+		if len(sv.Bytes) != 32 {
+			err = fmt.Errorf("%s must be 32 bytes", fs.field)
+		} else {
+			copy(txn.AssetParams.MetadataHash[:], sv.Bytes)
+		}
+	case ConfigAssetManager:
+		txn.AssetParams.Manager, err = sv.address()
+	case ConfigAssetReserve:
+		txn.AssetParams.Reserve, err = sv.address()
+	case ConfigAssetFreeze:
+		txn.AssetParams.Freeze, err = sv.address()
+	case ConfigAssetClawback:
+		txn.AssetParams.Clawback, err = sv.address()
+	// Freeze
+	case FreezeAsset:
+		txn.FreezeAsset, err = cx.availableAsset(sv)
+	case FreezeAssetAccount:
+		txn.FreezeAccount, err = cx.availableAccount(sv)
+	case FreezeAssetFrozen:
+		txn.AssetFrozen, err = sv.bool()
 
 	// appl needs to wait. Can't call AVM from AVM.
 
 	default:
-		cx.err = fmt.Errorf("invalid txfield %s", field)
+		return fmt.Errorf("invalid itxn_field %s", fs.field)
 	}
+	return
+}
 
+func opTxField(cx *EvalContext) {
+	itx := len(cx.subtxns) - 1
+	if itx < 0 {
+		cx.err = errors.New("itxn_field without itxn_begin")
+		return
+	}
+	last := len(cx.stack) - 1
+	field := TxnField(cx.program[cx.pc+1])
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.itxVersion == 0 || fs.itxVersion > cx.version {
+		cx.err = fmt.Errorf("invalid itxn_field %s", field)
+		return
+	}
+	sv := cx.stack[last]
+	cx.err = cx.stackIntoTxnField(sv, fs, &cx.subtxns[itx].Txn)
 	cx.stack = cx.stack[:last] // pop
 }
 
@@ -3511,69 +3942,95 @@ func opTxSubmit(cx *EvalContext) {
 		return
 	}
 
-	if cx.subtxn == nil {
-		cx.err = errors.New("tx_submit without tx_begin")
+	// Should never trigger, since itxn_next checks these too.
+	if len(cx.InnerTxns)+len(cx.subtxns) > cx.Proto.MaxInnerTransactions ||
+		len(cx.subtxns) > cx.Proto.MaxTxGroupSize {
+		cx.err = errors.New("too many inner transactions")
 		return
 	}
 
-	if len(cx.InnerTxns) >= cx.Proto.MaxInnerTransactions {
-		cx.err = errors.New("tx_submit with MaxInnerTransactions")
+	if len(cx.subtxns) == 0 {
+		cx.err = errors.New("itxn_submit without itxn_begin")
 		return
 	}
 
-	// Error out on anything unusual.  Allow pay, axfer.
-	switch cx.subtxn.Txn.Type {
-	case protocol.PaymentTx, protocol.AssetTransferTx:
-		// only pay and axfer for now
-	default:
-		cx.err = fmt.Errorf("Invalid inner transaction type %s", cx.subtxn.Txn.Type)
-		return
+	// Check fees across the group first. Allows fee pooling in inner groups.
+	groupFee := basics.MulSaturate(cx.Proto.MinTxnFee, uint64(len(cx.subtxns)))
+	groupPaid := uint64(0)
+	for _, ptxn := range cx.subtxns {
+		groupPaid = basics.AddSaturate(groupPaid, ptxn.Txn.Fee.Raw)
 	}
-
-	// The goal is to follow the same invariants used by the
-	// transaction pool. Namely that any transaction that makes it
-	// to Perform (which is equivalent to eval.applyTransaction)
-	// is authorized, and WellFormed.
-	if !authorizedSender(cx, cx.subtxn.Txn.Sender) {
-		cx.err = fmt.Errorf("unauthorized")
-		return
-	}
-
-	// Recall that WellFormed does not care about individual
-	// transaction fees because of fee pooling. So we check below.
-	cx.err = cx.subtxn.Txn.WellFormed(*cx.Specials, *cx.Proto)
-	if cx.err != nil {
-		return
-	}
-
-	paid := cx.subtxn.Txn.Fee.Raw
-	if paid >= cx.Proto.MinTxnFee {
-		// Over paying - accumulate into FeeCredit
-		overpaid := paid - cx.Proto.MinTxnFee
+	if groupPaid < groupFee {
+		// See if the FeeCredit is enough to cover the shortfall
+		shortfall := groupFee - groupPaid
+		if cx.FeeCredit == nil || *cx.FeeCredit < shortfall {
+			cx.err = fmt.Errorf("fee too small %#v", cx.subtxns)
+			return
+		}
+		*cx.FeeCredit -= shortfall
+	} else {
+		overpay := groupPaid - groupFee
 		if cx.FeeCredit == nil {
 			cx.FeeCredit = new(uint64)
 		}
-		*cx.FeeCredit = basics.AddSaturate(*cx.FeeCredit, overpaid)
-	} else {
-		underpaid := cx.Proto.MinTxnFee - paid
-		// Try to pay with FeeCredit, else fail.
-		if cx.FeeCredit != nil && *cx.FeeCredit >= underpaid {
-			*cx.FeeCredit -= underpaid
-		} else {
-			// This should be impossible until we allow changing the Fee
-			cx.err = fmt.Errorf("fee too small")
-			return
-		}
+		*cx.FeeCredit = basics.AddSaturate(*cx.FeeCredit, overpay)
 	}
 
-	ad, err := cx.Ledger.Perform(&cx.subtxn.Txn, *cx.Specials)
-	if err != nil {
-		cx.err = err
-		return
+	for itx := range cx.subtxns {
+		// The goal is to follow the same invariants used by the
+		// transaction pool. Namely that any transaction that makes it
+		// to Perform (which is equivalent to eval.applyTransaction)
+		// is authorized, and WellFormed.
+		if !authorizedSender(cx, cx.subtxns[itx].Txn.Sender) {
+			cx.err = fmt.Errorf("unauthorized")
+			return
+		}
+
+		// Recall that WellFormed does not care about individual
+		// transaction fees because of fee pooling. So we check below.
+		cx.err = cx.subtxns[itx].Txn.WellFormed(*cx.Specials, *cx.Proto)
+		if cx.err != nil {
+			return
+		}
+
+		ad, err := cx.Ledger.Perform(&cx.subtxns[itx].Txn, *cx.Specials)
+		if err != nil {
+			cx.err = err
+			return
+		}
+
+		cx.InnerTxns = append(cx.InnerTxns, transactions.SignedTxnWithAD{
+			SignedTxn: cx.subtxns[itx],
+			ApplyData: ad,
+		})
 	}
-	cx.InnerTxns = append(cx.InnerTxns, transactions.SignedTxnWithAD{
-		SignedTxn: *cx.subtxn,
-		ApplyData: ad,
-	})
-	cx.subtxn = nil
+	cx.subtxns = nil
+}
+
+// PcDetails return PC and disassembled instructions at PC up to 2 opcodes back
+func (cx *EvalContext) PcDetails() (pc int, dis string) {
+	const maxNumAdditionalOpcodes = 2
+	text, ds, err := disassembleInstrumented(cx.program, nil)
+	if err != nil {
+		return cx.pc, dis
+	}
+
+	for i := 0; i < len(ds.pcOffset); i++ {
+		if ds.pcOffset[i].PC == cx.pc {
+			start := 0
+			if i >= maxNumAdditionalOpcodes {
+				start = i - maxNumAdditionalOpcodes
+			}
+
+			startTextPos := ds.pcOffset[start].Offset
+			endTextPos := len(text)
+			if i+1 < len(ds.pcOffset) {
+				endTextPos = ds.pcOffset[i+1].Offset
+			}
+
+			dis = text[startTextPos:endTextPos]
+			break
+		}
+	}
+	return cx.pc, dis
 }

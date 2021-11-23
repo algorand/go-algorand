@@ -28,6 +28,7 @@ import (
 )
 
 func TestArrayFields(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	require.Equal(t, len(TxnaFieldNames), len(TxnaFieldTypes))
 	require.Equal(t, len(txnaFieldSpecByField), len(TxnaFieldTypes))
 }

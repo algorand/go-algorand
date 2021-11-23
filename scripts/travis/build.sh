@@ -46,9 +46,10 @@ ARCH=$("${SCRIPTPATH}/../archtype.sh")
 # Get the go build version.
 if [ -z "${SKIP_GO_INSTALLATION}" ]; then
   GOLANG_VERSION=$(./scripts/get_golang_version.sh)
-  curl -sL -o ~/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gimme
-  chmod +x ~/gimme
-  eval "$(~/gimme "${GOLANG_VERSION}")"
+  GIMME_PATH="${GIMME_INSTALL_DIR:-${HOME}}/gimme"
+  curl -sL -o "${GIMME_PATH}" https://raw.githubusercontent.com/travis-ci/gimme/master/gimme
+  chmod +x "${GIMME_PATH}"
+  eval "$("${GIMME_PATH}" "${GOLANG_VERSION}")"
 fi
 
 # travis sometimes fail to download a dependency. trying multiple times might help.

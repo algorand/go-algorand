@@ -364,7 +364,11 @@ func prepareTxn(txn *transactions.Transaction, groupIndex int) []fieldDesc {
 			field == int(logic.Accounts) ||
 			field == int(logic.ApplicationArgs) ||
 			field == int(logic.Assets) ||
-			field == int(logic.Applications) {
+			field == int(logic.Applications) ||
+			field == int(logic.CreatedApplicationID) ||
+			field == int(logic.CreatedAssetID) ||
+			field == int(logic.Logs) ||
+			field == int(logic.NumLogs) {
 			continue
 		}
 		var value string

@@ -97,6 +97,9 @@ type StateDelta struct {
 
 	// initial hint for allocating data structures for StateDelta
 	initialTransactionsCount int
+
+	// The account totals reflecting the changes in this StateDelta object.
+	Totals AccountTotals
 }
 
 // AccountDeltas stores ordered accounts and allows fast lookup by address

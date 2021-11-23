@@ -7,7 +7,16 @@ set -o pipefail
 
 export GOPATH=$(go env GOPATH)
 export GO111MODULE=on
-GOTESTCOMMAND=${GOTESTCOMMAND:="go test"}
+
+# Needed for now because circleci doesn't use makefile yet
+if [ -z "$(which gotestsum)" ]; then
+    GOTESTCOMMAND=${GOTESTCOMMAND:="go test"}
+else
+    TEST_RESULTS=${TEST_RESULTS:="$(pwd)"}
+    GOTESTCOMMAND=${GOTESTCOMMAND:="gotestsum --format testname --junitfile ${TEST_RESULTS}/results.xml --jsonfile ${TEST_RESULTS}/testresults.json --"}
+fi
+
+echo "GOTESTCOMMAND will be: ${GOTESTCOMMAND}"
 
 # If one or more -t <pattern> are specified, use GOTESTCOMMAND -run <pattern> for each
 
@@ -100,7 +109,7 @@ if [[ "${ARCHTYPE}" = arm* ]]; then
 fi
 
 PACKAGES="./..."
-if [ "$RUN_EXPECT" != "" ]; then
+if [ "$RUN_EXPECT" = "TRUE" ]; then
   PACKAGES=$(go list ./...|grep expect)
 fi
 
