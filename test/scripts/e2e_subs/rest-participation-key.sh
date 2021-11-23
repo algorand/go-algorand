@@ -21,34 +21,21 @@ algokey part generate --first ${FIRST_ROUND} --last ${LAST_ROUND} --keyfile ${NA
 
 popd || exit 1
 
-call_and_verify "Get List of Keys" "/v2/participation" 200 'address'
+call_and_verify "Get List of Keys" "/v2/participation" 200 'address' "address" "effective-first-valid"
 
 # Find out how many keys there are installed so far
-if [[ $RES != *"address"*"effective-first-valid"* ]]; then
-    echo "Unexpected output: " $RES
-    exit 1
-fi
 NUM_IDS_1=$(echo "$RES" | python3 -c 'import json,sys;o=json.load(sys.stdin);print(len(o))')
 RES=""
 
-call_post_and_verify "Install a basic participation key" "/v2/participation" 200 ${NAME_OF_TEMP_PARTKEY} 'partId'
+call_post_and_verify "Install a basic participation key" "/v2/participation" 200 ${NAME_OF_TEMP_PARTKEY} 'partId' "partId"
 
 # Get the returned participation id from the RESULT (aka $RES) variable
-if [[ $RES != *"partId"* ]]; then
-    echo "Unexpected output: " $RES
-    exit 1
-fi
 INSTALLED_ID=$(echo "$RES" | python3 -c 'import json,sys;o=json.load(sys.stdin);print(o["partId"])')
 RES=""
 
 # Should contain the installed id
-call_and_verify "Get List of Keys" "/v2/participation" 200 'address' "${INSTALLED_ID}"
+call_and_verify "Get List of Keys" "/v2/participation" 200 'address' "${INSTALLED_ID}" "address" "effective-first-valid"
 
-# Get list of keys
-if [[ $RES != *"address"*"effective-first-valid"* ]]; then
-    echo "Unexpected output: " $RES
-    exit 1
-fi
 NUM_IDS_2=$(echo "$RES" | python3 -c 'import json,sys;o=json.load(sys.stdin);print(len(o))')
 RES=""
 
@@ -66,11 +53,8 @@ call_delete_and_verify "Delete the specific ID" "/v2/participation/${INSTALLED_I
 call_delete_and_verify "Delete the specific ID" "/v2/participation/${INSTALLED_ID}" 404 true 'participation id not found'
 
 # Get list of keys
-call_and_verify "Get List of Keys" "/v2/participation" 200 'address'
-if [[ $RES != *"address"*"effective-first-valid"* ]]; then
-    echo "Unexpected output: " $RES
-    exit 1
-fi
+call_and_verify "Get List of Keys" "/v2/participation" 200 'address' "address" "effective-first-valid"
+
 NUM_IDS_3=$(echo "$RES" | python3 -c 'import json,sys;o=json.load(sys.stdin);print(len(o))')
 RES=""
 
