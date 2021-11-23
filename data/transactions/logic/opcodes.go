@@ -221,7 +221,7 @@ var OpSpecs = []OpSpec{
 	// Group scratch space access
 	{0x3a, "gload", opGload, asmDefault, disDefault, nil, oneAny, 4, runModeApplication, immediates("t", "i")},
 	{0x3b, "gloads", opGloads, asmDefault, disDefault, oneInt, oneAny, 4, runModeApplication, immediates("i")},
-	// Access creatable IDs
+	// Access creatable IDs (consider deprecating, as txn CreatedAssetID, CreatedApplicationID should be enough
 	{0x3c, "gaid", opGaid, asmDefault, disDefault, nil, oneInt, 4, runModeApplication, immediates("t")},
 	{0x3d, "gaids", opGaids, asmDefault, disDefault, oneInt, oneInt, 4, runModeApplication, opDefault},
 
@@ -334,6 +334,7 @@ var OpSpecs = []OpSpec{
 	{0xc1, "gtxnas", opGtxnas, assembleGtxnas, disGtxn, oneInt, oneAny, 5, modeAny, immediates("t", "f")},
 	{0xc2, "gtxnsas", opGtxnsas, assembleGtxnsas, disTxn, twoInts, oneAny, 5, modeAny, immediates("f")},
 	{0xc3, "args", opArgs, asmDefault, disDefault, oneInt, oneBytes, 5, runModeSignature, opDefault},
+	{0xc4, "gloadss", opGloadss, asmDefault, disDefault, twoInts, oneAny, 6, runModeApplication, opDefault},
 }
 
 type sortByOpcode []OpSpec

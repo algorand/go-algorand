@@ -2468,6 +2468,7 @@ int 1`,
 	}
 }
 
+// TestGloads tests gloads and gloadss
 func TestGloads(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -2487,11 +2488,26 @@ int 0
 gloads 0
 byte "txn 1"
 ==
+assert
 int 1
 gloads 1
 byte "txn 2"
 ==
-&&`
+assert
+int 0
+int 0
+gloadss
+byte "txn 1"
+==
+assert
+int 1
+int 1
+gloadss
+byte "txn 2"
+==
+assert
+int 1
+`
 
 	sources := []string{source1, source2, source3}
 

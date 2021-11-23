@@ -2977,6 +2977,30 @@ func opGloads(cx *EvalContext) {
 	cx.stack[last] = scratchValue
 }
 
+func opGloadss(cx *EvalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+
+	gi := cx.stack[prev].Uint
+	if gi >= uint64(len(cx.TxnGroup)) {
+		cx.err = fmt.Errorf("gloads lookup TxnGroup[%d] but it only has %d", gi, len(cx.TxnGroup))
+		return
+	}
+	scratchIdx := cx.stack[last].Uint
+	if scratchIdx >= 256 {
+		cx.err = fmt.Errorf("gloadss scratch index >= 256 (%d)", scratchIdx)
+		return
+	}
+	scratchValue, err := opGloadImpl(cx, int(gi), byte(scratchIdx), "gloadss")
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.stack[prev] = scratchValue
+	cx.stack = cx.stack[:last]
+}
+
 func opConcat(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
