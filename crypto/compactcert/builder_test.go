@@ -17,6 +17,7 @@
 package compactcert
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/binary"
@@ -186,9 +187,9 @@ func TestBuildVerify(t *testing.T) {
 }
 
 func generateRandomParticipant(a *require.Assertions, testname string) basics.Participant {
-	key, dbAccessor := generateTestSigner(testname+".db", 0, 0, 128*2, a)
-	defer dbAccessor.Close()
+	key, dbAccessor := generateTestSigner(testname+".db", 0, 100, 1, a)
 	a.NotNil(dbAccessor, "failed to create signer")
+	defer dbAccessor.Close()
 
 	p := basics.Participant{
 		PK:     *key.GetVerifier(),
@@ -206,6 +207,22 @@ func calculateHashOnPartLeaf(part basics.Participant) []byte {
 	partCommitment = append(partCommitment, protocol.CompactCertPart...)
 	partCommitment = append(partCommitment, binaryWeight...)
 	partCommitment = append(partCommitment, publicKeyBytes[:]...)
+
+	factory := crypto.HashFactory{HashType: HashType}
+	hashValue := crypto.HashBytes(factory.NewHash(), partCommitment)
+	return hashValue
+}
+
+func calculateHashOnSigLeaf(sig merklekeystore.Signature, lValue uint64) []byte {
+	binaryL := make([]byte, 8)
+	binary.LittleEndian.PutUint64(binaryL, lValue)
+
+	sigBytes := sig.ByteSignature
+	partCommitment := make([]byte, 0, len(protocol.CompactCertSig)+len(binaryL)+len(sigBytes))
+
+	partCommitment = append(partCommitment, protocol.CompactCertSig...)
+	partCommitment = append(partCommitment, binaryL...)
+	partCommitment = append(partCommitment, sigBytes[:]...)
 
 	factory := crypto.HashFactory{HashType: HashType}
 	hashValue := crypto.HashBytes(factory.NewHash(), partCommitment)
@@ -253,6 +270,83 @@ func TestParticipationCommitment(t *testing.T) {
 
 	a.Equal(partCommitmentRoot, crypto.GenericDigest(calcRoot))
 
+}
+
+// This test makes sure that cert's signature commitment is according to spec and stays sync with the
+// SNARK verifier. we manually build the merkle tree hashes
+func TestSignatureCommitment(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	currentRound := basics.Round(128)
+	totalWeight := 10000000
+	numPart := 4
+
+	param := Params{
+		Msg:               TestMessage("test!"),
+		ProvenWeight:      uint64(totalWeight / (2 * numPart)),
+		SigRound:          currentRound,
+		SecKQ:             128,
+		CompactCertRounds: 128,
+	}
+
+	var parts []basics.Participant
+	var sigs []merklekeystore.Signature
+
+	for i := 0; i < numPart; i++ {
+		key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(param.CompactCertRounds)+1, param.CompactCertRounds, a)
+		require.NotNil(t, dbAccessor, "failed to create signer")
+
+		part := basics.Participant{
+			PK:     *key.GetVerifier(),
+			Weight: uint64(totalWeight / 2 / numPart),
+		}
+		parts = append(parts, part)
+
+		sig, err := key.Sign(param.Msg, uint64(currentRound))
+		require.NoError(t, err, "failed to create keys")
+		sigs = append(sigs, sig)
+
+		dbAccessor.Close()
+	}
+
+	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: HashType})
+	a.NoError(err)
+
+	b, err := MkBuilder(param, parts, partcom)
+	a.NoError(err)
+
+	for i := 0; i < numPart; i++ {
+		err = b.Add(uint64(i), sigs[i], false)
+		a.NoError(err)
+	}
+
+	cert, err := b.Build()
+	a.NoError(err)
+
+	leaf0 := calculateHashOnSigLeaf(sigs[0], findLInCert(a, sigs[0], cert))
+	leaf1 := calculateHashOnSigLeaf(sigs[1], findLInCert(a, sigs[1], cert))
+	leaf2 := calculateHashOnSigLeaf(sigs[2], findLInCert(a, sigs[2], cert))
+	leaf3 := calculateHashOnSigLeaf(sigs[3], findLInCert(a, sigs[3], cert))
+
+	inner1 := calculateHashOnInternalNode(leaf0, leaf1)
+	inner2 := calculateHashOnInternalNode(leaf2, leaf3)
+
+	calcRoot := calculateHashOnInternalNode(inner1, inner2)
+
+	a.Equal(cert.SigCommit, crypto.GenericDigest(calcRoot))
+
+}
+
+func findLInCert(a *require.Assertions, signature merklekeystore.Signature, cert *Cert) uint64 {
+	for _, t := range cert.Reveals {
+		if bytes.Compare(t.SigSlot.Sig.Signature.ByteSignature, signature.ByteSignature) == 0 {
+			return t.SigSlot.L
+		}
+	}
+	a.Fail("could not find matching reveal")
+	return 0
 }
 
 func BenchmarkBuildVerify(b *testing.B) {
