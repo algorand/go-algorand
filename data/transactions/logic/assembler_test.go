@@ -1315,6 +1315,9 @@ global LatestTimestamp
 global CurrentApplicationID
 global CreatorAddress
 global GroupID
+global OpcodeBudget
+global CallerApplicationID
+global CallerApplicationAddress
 txn Sender
 txn Fee
 bnz label1

@@ -845,8 +845,8 @@ int 1
 
 // TestInnerBudgetIncrement ensures that an app can make a (nearly) empty inner
 // app call in order to get 700 extra opcode budget.  Unfortunately, it costs a
-// bit to create the call, and the app itself consumes a little, so it's more
-// like 690 or so.
+// bit to create the call, and the app itself consumes 1, so it ends up being
+// about 690 (see next test).
 func TestInnerBudgetIncrement(t *testing.T) {
 	ep, tx, ledger := makeSampleEnv()
 	gasup := testProg(t, "pushint 1", AssemblerMaxVersion)
@@ -872,6 +872,36 @@ itxn_submit;
 	testApp(t, buy+strings.Repeat(waste, 12)+"int 1", ep, "dynamic cost budget exceeded")
 	testApp(t, buy+strings.Repeat(waste, 12)+"int 1", ep, "dynamic cost budget exceeded")
 	testApp(t, buy+buy+strings.Repeat(waste, 12)+"int 1", ep)
+}
+
+func TestIncrementCheck(t *testing.T) {
+	ep, tx, ledger := makeSampleEnv()
+	gasup := testProg(t, "pushint 1", AssemblerMaxVersion)
+	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
+		ApprovalProgram: gasup.Program,
+	})
+
+	source := `
+// 698, not 699, because intcblock happens first
+global OpcodeBudget; int 698; ==; assert
+// "buy" more
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_submit;
+global OpcodeBudget; int 1387; ==; assert
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_submit;
+global OpcodeBudget; int 2076; ==; assert
+int 1
+`
+
+	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
+	testApp(t, source, ep)
 }
 
 // TestInnerTxIDs confirms that TxIDs are available and different
@@ -1138,5 +1168,32 @@ gitxn 2 Logs 1
 btoi
 int 890
 ==
+`, ep)
+}
+
+// TestCallerGlobals checks that a called app can see its caller.
+func TestCallerGlobals(t *testing.T) {
+	ep, tx, ledger := makeSampleEnv()
+	globals := testProg(t, fmt.Sprintf(`
+global CallerApplicationID
+int 888
+==
+global CallerApplicationAddress
+addr %s
+==
+&&
+`, basics.AppIndex(888).Address()), AssemblerMaxVersion)
+	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
+		ApprovalProgram: globals.Program,
+	})
+
+	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
+	testApp(t, `itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_submit
+int 1
 `, ep)
 }

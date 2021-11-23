@@ -2636,6 +2636,22 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		sv.Bytes, err = cx.getCreatorAddress()
 	case GroupID:
 		sv.Bytes = cx.Txn.Txn.Group[:]
+	case OpcodeBudget:
+		sv.Uint = uint64(cx.budget() - cx.cost)
+	case CallerApplicationID:
+		if cx.caller != nil {
+			sv.Uint, err = cx.caller.getApplicationID()
+		} else {
+			sv.Uint = 0
+		}
+	case CallerApplicationAddress:
+		if cx.caller != nil {
+			var addr basics.Address
+			addr, err = cx.caller.getApplicationAddress()
+			sv.Bytes = addr[:]
+		} else {
+			sv.Bytes = zeroAddress[:]
+		}
 	default:
 		err = fmt.Errorf("invalid global field %d", fs.field)
 	}

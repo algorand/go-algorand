@@ -524,6 +524,9 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 | 9 | CreatorAddress | []byte | Address of the creator of the current application. Fails if no such application is executing. LogicSigVersion >= 3. |
 | 10 | CurrentApplicationAddress | []byte | Address that the current application controls. Fails in LogicSigs. LogicSigVersion >= 5. |
 | 11 | GroupID | []byte | ID of the transaction group. 32 zero bytes if the transaction is not part of a group. LogicSigVersion >= 5. |
+| 12 | OpcodeBudget | uint64 | The remaining cost that can be spent by opcodes in this program. LogicSigVersion >= 6. |
+| 13 | CallerApplicationID | uint64 | The application ID of the application that called this application. 0 if this application is at the top-level. LogicSigVersion >= 6. |
+| 14 | CallerApplicationAddress | []byte | The application address of the application that called this application. ZeroAddress if this application is at the top-level. LogicSigVersion >= 6. |
 
 
 ## gtxn t f

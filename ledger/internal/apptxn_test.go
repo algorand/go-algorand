@@ -475,7 +475,8 @@ func TestClawbackAction(t *testing.T) {
 		Accounts:      []basics.Address{addrs[0], addrs[1]},
 	}
 	eval = nextBlock(t, l, true, nil)
-	txgroup(t, l, eval, &overpay, &clawmove)
+	err := txgroup(t, l, eval, &overpay, &clawmove)
+	require.NoError(t, err)
 	endBlock(t, l, eval)
 
 	amount, _ := holding(t, l, addrs[1], asaIndex)

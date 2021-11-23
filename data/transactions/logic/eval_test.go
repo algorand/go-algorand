@@ -930,7 +930,17 @@ byte 0x0706000000000000000000000000000000000000000000000000000000000000
 `
 
 const globalV6TestProgram = globalV5TestProgram + `
-// No new globals in v6
+global OpcodeBudget
+int 0
+>
+&&
+global CallerApplicationAddress
+global ZeroAddress
+==
+&&
+global CallerApplicationID
+!
+&&
 `
 
 func TestGlobal(t *testing.T) {
@@ -941,6 +951,7 @@ func TestGlobal(t *testing.T) {
 		lastField GlobalField
 		program   string
 	}
+	// Associate the highest allowed global constant with each version's test program
 	tests := map[uint64]desc{
 		0: {GroupSize, globalV1TestProgram},
 		1: {GroupSize, globalV1TestProgram},
@@ -948,10 +959,11 @@ func TestGlobal(t *testing.T) {
 		3: {CreatorAddress, globalV3TestProgram},
 		4: {CreatorAddress, globalV4TestProgram},
 		5: {GroupID, globalV5TestProgram},
-		6: {GroupID, globalV6TestProgram},
+		6: {CallerApplicationAddress, globalV6TestProgram},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
+	require.Len(t, globalFieldSpecs, int(invalidGlobalField))
 
 	ledger := MakeLedger(nil)
 	addr, err := basics.UnmarshalChecksumAddress(testAddr)
@@ -963,13 +975,13 @@ func TestGlobal(t *testing.T) {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			last := tests[v].lastField
 			testProgram := tests[v].program
-			for _, globalField := range GlobalFieldNames[:last] {
+			for _, globalField := range GlobalFieldNames[:last+1] {
 				if !strings.Contains(testProgram, globalField) {
 					t.Errorf("TestGlobal missing field %v", globalField)
 				}
 			}
 
-			var txn transactions.SignedTxn
+			txn := transactions.SignedTxn{}
 			txn.Txn.Group = crypto.Digest{0x07, 0x06}
 
 			proto := config.ConsensusParams{
@@ -1024,9 +1036,7 @@ int %s
 ==
 &&`, symbol, string(tt))
 					ops := testProg(t, text, v)
-					if v < appsEnabledVersion && tt == protocol.ApplicationCallTx {
-					}
-					var txn transactions.SignedTxn
+					txn := transactions.SignedTxn{}
 					txn.Txn.Type = tt
 					if v < appsEnabledVersion && tt == protocol.ApplicationCallTx {
 						testLogicBytes(t, ops.Program, defaultEvalParams(&txn),
