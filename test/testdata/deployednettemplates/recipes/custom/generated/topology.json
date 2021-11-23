@@ -3,7 +3,7 @@
         {
             "Name": "R1",
             "Group": "us-r",
-            "Template": "AWS-US-EAST-2-c5d.xlarge"
+            "Template": "AWS-US-EAST-2-c5d.4xlarge"
         },
         {
             "Name": "N1",

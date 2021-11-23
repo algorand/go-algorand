@@ -7,7 +7,7 @@
   "instances": {
     "relays": {
       "config": "./configs/relay.json",
-      "type": "c5d.xlarge",
+      "type": "c5d.4xlarge",
       "count": 1
     },
     "participatingNodes": {
