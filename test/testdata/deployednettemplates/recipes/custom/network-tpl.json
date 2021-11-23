@@ -1,24 +1,24 @@
 {
   "network": {
-    "wallets": 50,
-    "nodes": 25,
+    "wallets": 6,
+    "nodes": 3,
     "ConsensusProtocol": "future"
   },
   "instances": {
     "relays": {
       "config": "./configs/relay.json",
-      "type": "c5.xlarge",
-      "count": 10
+      "type": "c5d.xlarge",
+      "count": 1
     },
     "participatingNodes": {
       "config": "./configs/node.json",
-      "type": "c5.xlarge",
-      "count": 25
+      "type": "c5d.4xlarge",
+      "count": 3
     },
     "nonParticipatingNodes": {
       "config": "./configs/nonPartNode.json",
-      "type": "c5.xlarge",
-      "count": 20
+      "type": "c5d.4xlarge",
+      "count": 5
     }
   },
   "groups": [

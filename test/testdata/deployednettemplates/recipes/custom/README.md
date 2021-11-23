@@ -5,6 +5,7 @@ The key to this custom recipe is to serve as an example and a template for perfo
 
 ## Creating and Updating generated genesis.json, net.json, topology.json
 1. Modify values in `network-tpl.json`
+- `"FractionApply"` in configs/node.json represents the number of nodes to report to telemetry. We don't want to overwhelm the telemetry server, so use "0.2" on a large network. For small networks, you may need to update it to "1.0"
 2. `cd go-algorand`
 3. `python3 test/testdata/deployednettemplates/generate-recipe/generate_network.py -f test/testdata/deployednettemplates/recipes/custom/network-tpl.json`
 4. This will create a new set of files in the `generated` folder
