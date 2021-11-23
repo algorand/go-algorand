@@ -46,14 +46,9 @@ optional arguments:
   --version Future|vXX   selects the network template file
 ```
 
-To run a specific test:
+To run a specific test, run e2e.sh with -i interactive flag, and follow the instructions:
 ```
-~$ ./e2e_client_runner.py /full/path/to/e2e_subs/test_script.sh
-```
-
-Make sure to install the Algorand Python SDK before running:
-```
-pip install py-algorand-sdk
+test/scripts/e2e.sh -i
 ```
 
 Tests in the `e2e_subs/serial` directory are executed serially instead of in parallel. This should only be used when absolutely necessary.
