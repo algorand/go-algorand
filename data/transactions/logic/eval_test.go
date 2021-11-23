@@ -4911,6 +4911,8 @@ func TestPcDetails(t *testing.T) {
 	}
 }
 
+var minB64DecodeVersion uint64 = 6
+
 type b64DecodeTestCase struct {
 	Encoded string
 	IsURL   bool
@@ -4969,7 +4971,7 @@ type b64DecodeTestArgs struct {
 }
 
 func testB64DecodeAssembleWithArgs(t *testing.T) []b64DecodeTestArgs {
-	sourceTmpl := `#pragma version 5
+	sourceTmpl := `#pragma version %d
 arg 0
 arg 1
 base64_decode %s
@@ -4981,8 +4983,8 @@ base64_decode %s
 			if testCase.IsURL {
 				field = "URLAlph"
 			}
-			source := fmt.Sprintf(sourceTmpl, field)
-			ops, err := AssembleStringWithVersion(source, 5)
+			source := fmt.Sprintf(sourceTmpl, minB64DecodeVersion, field)
+			ops, err := AssembleStringWithVersion(source, minB64DecodeVersion)
 			require.NoError(t, err)
 
 			arg := b64DecodeTestArgs{
@@ -5024,7 +5026,7 @@ func TestOpBase64Decode(t *testing.T) {
 func benchmarkB64DecodeGenData(b *testing.B, source string, isURL bool, msgLen int) (args []b64DecodeTestArgs, err error) {
 	args = make([]b64DecodeTestArgs, b.N)
 	var ops *OpStream
-	ops, err = AssembleStringWithVersion(source, 5)
+	ops, err = AssembleStringWithVersion(source, minB64DecodeVersion)
 	if err != nil {
 		require.NoError(b, err)
 		return
@@ -5061,7 +5063,7 @@ func benchmarkB64Decode(b *testing.B, scenario string, msgLen int) {
 
 	switch scenario {
 	case "baseline":
-		source = `#pragma version 5
+		source = `#pragma version 6
 arg 0
 dup
 arg 1
@@ -5069,7 +5071,7 @@ pop
 ==`
 	case "base64url":
 		isURL = true
-		source = `#pragma version 5
+		source = `#pragma version 6
 arg 0
 arg 1
 dup
@@ -5078,7 +5080,7 @@ base64_decode URLAlph
 ==`
 	case "base64std":
 		isURL = false
-		source = `#pragma version 5
+		source = `#pragma version 6
 arg 0
 arg 1
 dup
@@ -5086,7 +5088,7 @@ pop
 base64_decode StdAlph
 ==`
 	default:
-		source = fmt.Sprintf(`#pragma version 5
+		source = fmt.Sprintf(`#pragma version 6
 arg 0
 dup
 arg 1
