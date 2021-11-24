@@ -493,21 +493,21 @@ func TestValidityPeriod(t *testing.T) {
 	defer store.Close()
 	firstValid := uint64(0)
 	lastValid := maxValidPeriod
-	_, err := New(firstValid, lastValid, crypto.Ed25519Type, store)
+	_, err := New(firstValid, lastValid, crypto.Ed25519Type, *store)
 	a.NoError(err)
 
 	store = initTestDB(a)
 	defer store.Close()
 	firstValid = uint64(0)
 	lastValid = maxValidPeriod + 1
-	_, err = New(firstValid, lastValid, crypto.Ed25519Type, store)
+	_, err = New(firstValid, lastValid, crypto.Ed25519Type, *store)
 	a.Error(err)
 
 	store = initTestDB(a)
 	defer store.Close()
 	firstValid = uint64(0)
 	lastValid = maxValidPeriod - 1
-	_, err = New(firstValid, lastValid, crypto.Ed25519Type, store)
+	_, err = New(firstValid, lastValid, crypto.Ed25519Type, *store)
 	a.NoError(err)
 }
 
@@ -521,7 +521,7 @@ func TestNumberOfGeneratedKeys(t *testing.T) {
 	defer store.Close()
 	firstValid := uint64(1000)
 	lastValid := validPeriod + 1000
-	s, err := new(firstValid, lastValid, interval, crypto.Ed25519Type, store)
+	s, err := new(firstValid, lastValid, interval, crypto.Ed25519Type, *store)
 	a.NoError(err)
 	err = s.Persist()
 	a.NoError(err)
@@ -531,7 +531,7 @@ func TestNumberOfGeneratedKeys(t *testing.T) {
 	defer store.Close()
 	firstValid = uint64(0)
 	lastValid = validPeriod
-	s, err = new(firstValid, lastValid, interval, crypto.Ed25519Type, store)
+	s, err = new(firstValid, lastValid, interval, crypto.Ed25519Type, *store)
 	a.NoError(err)
 	err = s.Persist()
 	a.NoError(err)
@@ -541,7 +541,7 @@ func TestNumberOfGeneratedKeys(t *testing.T) {
 	defer store.Close()
 	firstValid = uint64(1000)
 	lastValid = validPeriod + 1000 - (interval * 50)
-	s, err = new(firstValid, lastValid, interval, crypto.Ed25519Type, store)
+	s, err = new(firstValid, lastValid, interval, crypto.Ed25519Type, *store)
 	a.NoError(err)
 	err = s.Persist()
 	a.NoError(err)
@@ -566,7 +566,7 @@ func generateTestSignerAux(a *require.Assertions) (uint64, uint64, *Signer) {
 
 func generateTestSigner(t crypto.AlgorithmType, firstValid uint64, lastValid uint64, interval uint64, a *require.Assertions) *Signer {
 	store := initTestDB(a)
-	signer, err := new(firstValid, lastValid, interval, t, store)
+	signer, err := new(firstValid, lastValid, interval, t, *store)
 	a.NoError(err)
 
 	err = signer.Persist()
@@ -575,7 +575,7 @@ func generateTestSigner(t crypto.AlgorithmType, firstValid uint64, lastValid uin
 	return signer
 }
 
-func initTestDB(a *require.Assertions) db.Accessor {
+func initTestDB(a *require.Assertions) *db.Accessor {
 	tmpname := uuid.NewV4().String() // could this just be a constant string instead? does it even matter?
 	store, err := db.MakeAccessor(tmpname, false, true)
 	a.NoError(err)
@@ -590,7 +590,7 @@ func initTestDB(a *require.Assertions) db.Accessor {
 	})
 	a.NoError(err)
 
-	return store
+	return &store
 }
 
 func length(s *Signer, a *require.Assertions) int {
