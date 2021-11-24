@@ -219,11 +219,11 @@ ge25519_multi_scalarmult_vartime(ge25519_p3 *r, batch_heap *heap, size_t count) 
 /*
 * verifies ed25519 signatures in  batch. The algorithm is based on https://github.com/floodyberry/ed25519-donna 
 * implemention. we changed the algorithm according to https://eprint.iacr.org/2020/1244.pdf .
-* the batch size is between 3 and 64 sigantures per batch. 
-* When the batch fails the function falls back to check singature one at a time.
+* the batch size is between 2 and 64 signatures per batch. 
+* When the batch fails the function falls back to check signature one at a time.
 * the function returns 0 on success and fills and array of "valid" ints. 
 * 1 - for signature i passed verification
-* 0 - for siganture i failed verification
+* 0 - for signature i failed verification
 */
 int crypto_sign_ed25519_open_batch(const unsigned char **m, const unsigned long long *mlen, const unsigned char **pk, const unsigned char **RS, size_t num, int *valid_p)
 {
@@ -239,10 +239,10 @@ int crypto_sign_ed25519_open_batch(const unsigned char **m, const unsigned long 
     for (i = 0; i < num; i++)
         valid_p[i] = 1;
 
-    while (num > 1) {
+    while (num >= 2) {
         batchsize = (num > MAX_BATCH_SIZE) ? MAX_BATCH_SIZE : num;
 
-        /* valida the public key and siganture */
+        /* validate the public key and signature */
         for (i=0; i < batchsize; i++){
             if (validate_ed25519_pk_and_sig(RS[i],pk[i]) != 0)
                 goto fallback;
