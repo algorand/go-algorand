@@ -82,6 +82,11 @@ type (
 	}
 )
 
+// TODO: change to ConsensusCurrentVersion when updated
+var errValidityPeriodTooLong = fmt.Errorf("the validity period for merkleKeyStore is too large: the limit is %d", config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod)
+var errStartBiggerThanEndRound = errors.New("cannot create merkleKeyStore because end round is smaller then start round")
+var errDivisorIsZero = errors.New("received zero Interval")
+
 // ToBeHashed implementation means CommittablePublicKey is crypto.Hashable, required by merklekeystore.Verifier.Verify()
 func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.KeystorePK, protocol.Encode(e)
@@ -106,24 +111,24 @@ func (k *keysArray) Marshal(pos uint64) ([]byte, error) {
 // New Generates a merklekeystore.Signer
 // The function allow creation of empty signers, i.e signers without any key to sign with.
 // keys can be created between [A,Z], if A == 0, keys created will be in the range (0,Z]
-func New(firstValid uint64, lastValid uint64, sigAlgoType crypto.AlgorithmType, store db.Accessor) (*Signer, error) {
-	// TODO change this
+func New(firstValid, lastValid uint64, sigAlgoType crypto.AlgorithmType, store db.Accessor) (*Signer, error) {
+	// TODO: change to ConsensusCurrentVersion when updated
 	compactCertRound := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
 	return new(firstValid, lastValid, compactCertRound, sigAlgoType, store)
 }
 
 func new(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmType, store db.Accessor) (*Signer, error) {
 	if firstValid > lastValid {
-		return nil, errors.New("cannot create merkleKeyStore because end round is smaller then start round")
+		return nil, errStartBiggerThanEndRound
 	}
 
-	// TODO: change to ConsensusCurrentVersion
+	// TODO: change to ConsensusCurrentVersion when updated
 	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
 	if maxValidPeriod != 0 && (lastValid-firstValid) > maxValidPeriod {
-		return nil, fmt.Errorf("the validity period for merkleKeyStore is too large: the limit is %d", maxValidPeriod)
+		return nil, errValidityPeriodTooLong
 	}
 	if interval == 0 {
-		return nil, errors.New("received zero Interval")
+		return nil, errDivisorIsZero
 	}
 	if firstValid == 0 {
 		firstValid = 1

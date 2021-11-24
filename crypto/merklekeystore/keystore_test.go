@@ -57,8 +57,8 @@ func TestSignerCreation(t *testing.T) {
 
 	testSignerNumKeysLimits := func(t crypto.AlgorithmType, firstValid uint64, lastValid uint64, interval uint64, expectedLen int) {
 		signer := generateTestSigner(t, firstValid, lastValid, interval, a)
+		defer signer.keyStore.store.Close()
 		a.Equal(expectedLen, length(signer, a))
-		signer.keyStore.store.Close()
 	}
 
 	testSignerNumKeysLimits(crypto.FalconType, 0, 0, 1, 0)
@@ -115,6 +115,7 @@ func TestEmptySigner(t *testing.T) {
 
 	h := genHashableForTest()
 	signer := generateTestSigner(crypto.FalconType, 8, 9, 5, a)
+	defer signer.keyStore.store.Close()
 	a.NoError(err)
 	a.Equal(0, length(signer, a))
 
@@ -154,6 +155,7 @@ func TestDisposableKeysGeneration(t *testing.T) {
 	a.Error(err)
 
 	signer = generateTestSigner(crypto.FalconType, 1000, 1100, 101, a)
+	defer signer.keyStore.store.Close()
 	intervalRounds := make([]uint64, 0)
 	for i := uint64(1000); i <= 1100; i++ {
 		if i%101 == 0 {
@@ -488,18 +490,21 @@ func TestValidityPeriod(t *testing.T) {
 	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
 
 	store := initTestDB(a)
+	defer store.Close()
 	firstValid := uint64(0)
 	lastValid := maxValidPeriod
 	_, err := New(firstValid, lastValid, crypto.Ed25519Type, store)
 	a.NoError(err)
 
 	store = initTestDB(a)
+	defer store.Close()
 	firstValid = uint64(0)
 	lastValid = maxValidPeriod + 1
 	_, err = New(firstValid, lastValid, crypto.Ed25519Type, store)
 	a.Error(err)
 
 	store = initTestDB(a)
+	defer store.Close()
 	firstValid = uint64(0)
 	lastValid = maxValidPeriod - 1
 	_, err = New(firstValid, lastValid, crypto.Ed25519Type, store)
@@ -513,6 +518,7 @@ func TestNumberOfGeneratedKeys(t *testing.T) {
 	validPeriod := uint64((1<<8)*interval - 1)
 
 	store := initTestDB(a)
+	defer store.Close()
 	firstValid := uint64(1000)
 	lastValid := validPeriod + 1000
 	s, err := new(firstValid, lastValid, interval, crypto.Ed25519Type, store)
@@ -520,9 +526,9 @@ func TestNumberOfGeneratedKeys(t *testing.T) {
 	err = s.Persist()
 	a.NoError(err)
 	a.Equal(1<<8, length(s, a))
-	store.Close()
 
 	store = initTestDB(a)
+	defer store.Close()
 	firstValid = uint64(0)
 	lastValid = validPeriod
 	s, err = new(firstValid, lastValid, interval, crypto.Ed25519Type, store)
@@ -530,9 +536,9 @@ func TestNumberOfGeneratedKeys(t *testing.T) {
 	err = s.Persist()
 	a.NoError(err)
 	a.Equal((1<<8)-1, length(s, a))
-	store.Close()
 
 	store = initTestDB(a)
+	defer store.Close()
 	firstValid = uint64(1000)
 	lastValid = validPeriod + 1000 - (interval * 50)
 	s, err = new(firstValid, lastValid, interval, crypto.Ed25519Type, store)
@@ -540,7 +546,6 @@ func TestNumberOfGeneratedKeys(t *testing.T) {
 	err = s.Persist()
 	a.NoError(err)
 	a.Equal((1<<8)-50, length(s, a))
-	store.Close()
 }
 
 //#region Helper Functions
