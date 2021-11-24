@@ -1308,7 +1308,7 @@ void test_invalid_signatures_outside_batch()
 }
 
 
-void test_invalid_signatures_inside_batch()
+void test_invalid_signatures_in_first_batch()
 {
     unsigned char * messages[MINIMAL_BATCH_SIZE];
     unsigned char * pk_set[MINIMAL_BATCH_SIZE];
@@ -1316,7 +1316,7 @@ void test_invalid_signatures_inside_batch()
     size_t m_len_array[MINIMAL_BATCH_SIZE];
     int valid [MINIMAL_BATCH_SIZE];
 
-    printf("----- invalid signature in batch \n");
+    printf("----- invalid signature in first batch \n");
     rand_func_iml = &randombytes_buf;
 
     for (int i = 0; i < MINIMAL_BATCH_SIZE; i++) 
@@ -1334,13 +1334,49 @@ void test_invalid_signatures_inside_batch()
 	int res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,MINIMAL_BATCH_SIZE, valid);
     if (res == 0)
     {
-        printf("batch passed - should failed!");
+        printf("batch verification passed - should failed!");
     }
     check_valid_array(valid, MINIMAL_BATCH_SIZE, test_data_expected_results);
 
 
     sign_set[0][0]--;
     test_data_expected_results[0]=1;
+
+}
+
+void test_invalid_signature_in_second_batch()
+{
+    unsigned char * messages[SAMPLE_SIZE];
+    unsigned char * pk_set[SAMPLE_SIZE];
+    unsigned char * sign_set[SAMPLE_SIZE];
+    size_t m_len_array[SAMPLE_SIZE];
+    int valid [SAMPLE_SIZE];
+
+    printf("----- invalid second signature in second batch \n");
+    rand_func_iml = &randombytes_buf;
+
+    for (int i = 0; i < SAMPLE_SIZE; i++) 
+    {
+        messages[i] = test_data[i].m;
+        pk_set[i] = test_data[i].pk;
+        sign_set[i] = test_data[i].sig;
+        m_len_array[i] = i;
+    }
+
+    //change second signature in the secondbatch
+    sign_set[MAX_BATCH_SIZE+2][0]++;
+    test_data_expected_results[MAX_BATCH_SIZE+2]=0;
+
+	int res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,SAMPLE_SIZE, valid);
+    if (res == 0)
+    {
+        printf("batch verification passed - should failed!");
+    }
+    check_valid_array(valid, MAX_BATCH_SIZE, test_data_expected_results);
+
+
+    sign_set[MAX_BATCH_SIZE+2][0]--;
+    test_data_expected_results[MAX_BATCH_SIZE+2]=1;
 
 }
 
@@ -1388,8 +1424,9 @@ int main()
         test_data_expected_results[i] = 1;
     }
     sainty_tests();
-    test_invalid_signatures_inside_batch();
+    test_invalid_signatures_in_first_batch();
     test_invalid_signatures_outside_batch();
+    test_invalid_signature_in_second_batch();
     test_bos_carter_edge_case();
     test_edge_cases();
     test_mixed_subgroup_signatures(); 

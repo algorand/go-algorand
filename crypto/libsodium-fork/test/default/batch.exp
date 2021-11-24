@@ -1,7 +1,8 @@
 ----- sainty test 1024 signatures
 ----- sainty test 1025 signatures
------ invalid signature in batch 
+----- invalid signature in first batch 
 ----- invalid signature outside batch 
+----- invalid second signature in second batch 
 ----- bosecarter edge case test
 -----  edge cases test
 -----  mixed subgroup test
