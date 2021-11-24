@@ -521,7 +521,7 @@ func TestNumberOfGeneratedKeys(t *testing.T) {
 	defer store.Close()
 	firstValid := uint64(1000)
 	lastValid := validPeriod + 1000
-	s, err := new(firstValid, lastValid, interval, crypto.Ed25519Type, *store)
+	s, err := New(firstValid, lastValid, crypto.Ed25519Type, *store)
 	a.NoError(err)
 	err = s.Persist()
 	a.NoError(err)
@@ -531,7 +531,7 @@ func TestNumberOfGeneratedKeys(t *testing.T) {
 	defer store.Close()
 	firstValid = uint64(0)
 	lastValid = validPeriod
-	s, err = new(firstValid, lastValid, interval, crypto.Ed25519Type, *store)
+	s, err = New(firstValid, lastValid, crypto.Ed25519Type, *store)
 	a.NoError(err)
 	err = s.Persist()
 	a.NoError(err)
@@ -541,7 +541,7 @@ func TestNumberOfGeneratedKeys(t *testing.T) {
 	defer store.Close()
 	firstValid = uint64(1000)
 	lastValid = validPeriod + 1000 - (interval * 50)
-	s, err = new(firstValid, lastValid, interval, crypto.Ed25519Type, *store)
+	s, err = New(firstValid, lastValid, crypto.Ed25519Type, *store)
 	a.NoError(err)
 	err = s.Persist()
 	a.NoError(err)
@@ -566,7 +566,7 @@ func generateTestSignerAux(a *require.Assertions) (uint64, uint64, *Signer) {
 
 func generateTestSigner(t crypto.AlgorithmType, firstValid uint64, lastValid uint64, interval uint64, a *require.Assertions) *Signer {
 	store := initTestDB(a)
-	signer, err := new(firstValid, lastValid, interval, t, *store)
+	signer, err := New(firstValid, lastValid, t, *store)
 	a.NoError(err)
 
 	err = signer.Persist()

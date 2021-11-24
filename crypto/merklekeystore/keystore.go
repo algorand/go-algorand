@@ -112,18 +112,15 @@ func (k *keysArray) Marshal(pos uint64) ([]byte, error) {
 // The function allow creation of empty signers, i.e signers without any key to sign with.
 // keys can be created between [A,Z], if A == 0, keys created will be in the range (0,Z]
 func New(firstValid, lastValid uint64, sigAlgoType crypto.AlgorithmType, store db.Accessor) (*Signer, error) {
-	// TODO: change to ConsensusCurrentVersion when updated
-	compactCertRound := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
-	return new(firstValid, lastValid, compactCertRound, sigAlgoType, store)
-}
 
-func new(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmType, store db.Accessor) (*Signer, error) {
 	if firstValid > lastValid {
 		return nil, errStartBiggerThanEndRound
 	}
 
 	// TODO: change to ConsensusCurrentVersion when updated
+	interval := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
 	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
+
 	if maxValidPeriod != 0 && (lastValid-firstValid) > maxValidPeriod {
 		return nil, errValidityPeriodTooLong
 	}
