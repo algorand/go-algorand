@@ -53,3 +53,20 @@ func TestVerificationBytes(t *testing.T) {
 
 	a.Equal(verifyingRawKey, key.PublicKey[:])
 }
+
+func TestFalconsFormatConversion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var seed FalconSeed
+	SystemRNG.RandBytes(seed[:])
+	key, err := GenerateFalconSigner(seed)
+	a.NoError(err)
+
+	msg := []byte("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet")
+	sig, err := key.SignBytes(msg)
+	a.NoError(err)
+
+	rawFormat := key.GetVerifyingKey().GetVerifier().GetRawSignatureBytes(sig)
+	a.Equal([]byte(sig), rawFormat)
+}

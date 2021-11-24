@@ -48,3 +48,19 @@ func TestCurve25519VerificationBytes(t *testing.T) {
 
 	a.Equal(verifyingRawKey, key.Sec.SignatureVerifier[:])
 }
+
+func TestCurve25519RawSignatureBytes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var seed Seed
+	SystemRNG.RandBytes(seed[:])
+	key := GenerateEd25519Key(seed)
+
+	msg := []byte("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet")
+	sig, err := key.SignBytes(msg)
+	a.NoError(err)
+
+	rawFormat := key.GetVerifyingKey().GetVerifier().GetRawSignatureBytes(sig)
+	a.Equal([]byte(sig), rawFormat)
+}

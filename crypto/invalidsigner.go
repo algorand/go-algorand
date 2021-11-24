@@ -68,3 +68,8 @@ func (d *invalidVerifier) VerifyBytes(data []byte, sig ByteSignature) error {
 func (d *invalidVerifier) GetRawVerificationBytes() []byte {
 	return []byte{}
 }
+
+// GetRawSignatureBytes returns a serialized version of the signature
+func (d *invalidVerifier) GetRawSignatureBytes(signature ByteSignature) []byte {
+	return []byte{}
+}

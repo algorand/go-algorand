@@ -85,3 +85,8 @@ func byteSigToSignatureType(sig ByteSignature) Signature {
 func (p *Ed25519PublicKey) GetRawVerificationBytes() []byte {
 	return p.SignatureVerifier[:]
 }
+
+// GetRawSignatureBytes returns a serialized version of the signature
+func (p *Ed25519PublicKey) GetRawSignatureBytes(signature ByteSignature) []byte {
+	return signature
+}
