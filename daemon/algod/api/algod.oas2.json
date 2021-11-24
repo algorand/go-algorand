@@ -1525,8 +1525,9 @@
       "properties": {
         "amount": {
           "description": "\\[a\\] number of units held.",
-           "type": "integer",
-           "x-algorand-format": "uint64"
+          "type": "integer",
+          "format": "int64",
+          "x-algorand-format": "uint64"
         },
         "asset-id": {
           "description": "Asset ID of the holding.",
@@ -1599,6 +1600,7 @@
         "total": {
           "description": "\\[t\\] The total number of units of this asset.",
           "type": "integer",
+          "format": "int64",
           "x-algorand-format": "uint64"
         },
         "unit-name": {
@@ -1682,11 +1684,13 @@
         "effective-first-valid": {
           "description": "When registered, this is the first round it may be used.",
           "type": "integer",
+          "format": "int64",
           "x-algorand-format": "uint64"
         },
         "effective-last-valid": {
           "description": "When registered, this is the last round it may be used.",
           "type": "integer",
+          "format": "int64",
           "x-algorand-format": "uint64"
         },
         "last-vote": {
@@ -1750,6 +1754,7 @@
         "uint": {
           "description": "\\[ui\\] uint value.",
           "type": "integer",
+          "format": "int64",
           "x-algorand-format": "uint64"
         }
       }
@@ -1811,6 +1816,7 @@
         "uint": {
           "description": "\\[ui\\] uint value.",
           "type": "integer",
+          "format": "int64",
           "x-algorand-format": "uint64"
         }
       }
@@ -2028,6 +2034,7 @@
         "round": {
           "description": "Round is available to some TEAL scripts. Defaults to the current round on the network this algod is attached to.",
           "type": "integer",
+          "format": "int64",
           "x-algorand-format": "uint64"
         },
         "latest-timestamp": {
@@ -2065,6 +2072,7 @@
         },
         "app-index": {
           "type": "integer",
+          "format": "int64",
           "x-algorand-format": "uint64"
         }
       }
