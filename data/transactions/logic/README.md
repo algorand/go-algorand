@@ -250,6 +250,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `stores` | pop indexes A and B. store B to the Ath scratch space |
 | `gload t i` | push Ith scratch space index of the Tth transaction in the current group |
 | `gloads i` | push Ith scratch space index of the Xth transaction in the current group |
+| `gloadss` | push Bth scratch space index of the Ath transaction in the current group |
 | `gaid t` | push the ID of the asset or application created in the Tth transaction of the current group |
 | `gaids` | push the ID of the asset or application created in the Xth transaction of the current group |
 
