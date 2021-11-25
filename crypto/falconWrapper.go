@@ -91,13 +91,13 @@ func (d *FalconVerifier) VerifyBytes(data []byte, sig ByteSignature) error {
 	return (*cfalcon.FalconPublicKey)(&d.PublicKey).VerifyBytes(data, sig)
 }
 
-// GetRawVerificationBytes is used to fetch a plain serialized version of the public data (without the use of the msgpack).
-func (d *FalconVerifier) GetRawVerificationBytes() []byte {
+// GetVerificationBytes is used to fetch a plain serialized version of the public data (without the use of the msgpack).
+func (d *FalconVerifier) GetVerificationBytes() []byte {
 	return d.PublicKey[:]
 }
 
-// GetRawSignatureBytes returns a serialized version of the signature
-func (d *FalconVerifier) GetRawSignatureBytes(signature ByteSignature) []byte {
+// GetSerializedSignature returns a serialized version of the signature
+func (d *FalconVerifier) GetSerializedSignature(signature ByteSignature) []byte {
 	// TODO convert the signature to CT version
 	return signature
 }

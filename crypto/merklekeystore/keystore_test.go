@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
@@ -210,7 +211,7 @@ func TestSignatureStructure(t *testing.T) {
 
 	proof, err := signer.Tree.Prove([]uint64{1})
 	a.NoError(err)
-	a.Equal(Proof(*proof), sig.Proof)
+	a.Equal(*proof, sig.Proof)
 
 	a.NotEqual(nil, sig.ByteSignature)
 }
@@ -315,7 +316,7 @@ func calculateHashOnKeyLeaf(key *crypto.GenericSigningKey, round uint64) []byte 
 	binaryRound := make([]byte, 8)
 	binary.LittleEndian.PutUint64(binaryRound, round)
 
-	verifyingRawKey := key.GetSigner().GetVerifyingKey().GetVerifier().GetRawVerificationBytes()
+	verifyingRawKey := key.GetSigner().GetVerifyingKey().GetVerifier().GetVerificationBytes()
 	keyCommitment := make([]byte, 0, len(protocol.KeystorePK)+len(verifyingRawKey)+len(binaryRound))
 
 	keyCommitment = append(keyCommitment, protocol.KeystorePK...)
@@ -338,8 +339,8 @@ func calculateHashOnInternalNode(leftNode, rightNode []byte) []byte {
 	return hashValue
 }
 
-// This test makes sure that our publickey commitment is according to spec and stays sync with the
-// SNARK verifier. we manually build the merkle tree hashes
+// This test makes sure that publickey commitment is according to spec and stays sync with the
+// SNARK verifier. we manually build the merkle tree given an expected binary representation of the keys.
 func TestKeyStoreCommitment(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -382,13 +383,13 @@ func copySig(sig Signature) Signature {
 	}
 }
 
-func copyProof(proof Proof) Proof {
+func copyProof(proof merklearray.Proof) merklearray.Proof {
 	path := make([]crypto.GenericDigest, len(proof.Path))
 	for i, digest := range proof.Path {
 		path[i] = make([]byte, len(digest))
 		copy(path[i], digest)
 	}
-	return Proof{
+	return merklearray.Proof{
 		Path:        path,
 		HashFactory: proof.HashFactory,
 	}

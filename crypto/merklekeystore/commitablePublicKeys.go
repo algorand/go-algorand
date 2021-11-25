@@ -56,17 +56,17 @@ func (k *CommittablePublicKeyArray) Marshal(pos uint64) ([]byte, error) {
 
 // ToBeHashed returns the sequence of bytes that would be used as an input for the hash function when creating a merkle tree.
 // In order to create a more SNARK-friendly commitment we must avoid using the msgpack infrastructure.
-// msgpack creates a compressed representation of the struct which might be varied in length, which will
+// msgpack creates a compressed representation of the struct which might be varied in length, this will
 // be bad for creating SNARK
 func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
-	verifyingRawKey := e.VerifyingKey.GetVerifier().GetRawVerificationBytes()
+	verifyingRawKey := e.VerifyingKey.GetVerifier().GetVerificationBytes()
 
-	binaryRound := make([]byte, 8)
-	binary.LittleEndian.PutUint64(binaryRound, e.Round)
+	roundAsBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(roundAsBytes, e.Round)
 
-	keyCommitment := make([]byte, 0, len(verifyingRawKey)+len(binaryRound))
+	keyCommitment := make([]byte, 0, len(verifyingRawKey)+len(roundAsBytes))
 
-	keyCommitment = append(keyCommitment, binaryRound...)
+	keyCommitment = append(keyCommitment, roundAsBytes...)
 	keyCommitment = append(keyCommitment, verifyingRawKey...)
 
 	return protocol.KeystorePK, keyCommitment

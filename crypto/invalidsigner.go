@@ -64,12 +64,12 @@ func (d *invalidVerifier) VerifyBytes(data []byte, sig ByteSignature) error {
 	return errInvalidVerifier
 }
 
-// GetRawVerificationBytes returns an empty slice to signal that the verifier is invalid.
-func (d *invalidVerifier) GetRawVerificationBytes() []byte {
+// GetVerificationBytes returns an empty slice to signal that the verifier is invalid.
+func (d *invalidVerifier) GetVerificationBytes() []byte {
 	return []byte{}
 }
 
-// GetRawSignatureBytes returns a serialized version of the signature
-func (d *invalidVerifier) GetRawSignatureBytes(signature ByteSignature) []byte {
+// GetSerializedSignature returns a serialized version of the signature
+func (d *invalidVerifier) GetSerializedSignature(signature ByteSignature) []byte {
 	return []byte{}
 }

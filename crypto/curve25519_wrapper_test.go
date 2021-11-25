@@ -44,7 +44,7 @@ func TestCurve25519VerificationBytes(t *testing.T) {
 	SystemRNG.RandBytes(seed[:])
 	key := GenerateEd25519Key(seed)
 
-	verifyingRawKey := key.GetVerifyingKey().GetVerifier().GetRawVerificationBytes()
+	verifyingRawKey := key.GetVerifyingKey().GetVerifier().GetVerificationBytes()
 
 	a.Equal(verifyingRawKey, key.Sec.SignatureVerifier[:])
 }
@@ -61,6 +61,6 @@ func TestCurve25519RawSignatureBytes(t *testing.T) {
 	sig, err := key.SignBytes(msg)
 	a.NoError(err)
 
-	rawFormat := key.GetVerifyingKey().GetVerifier().GetRawSignatureBytes(sig)
+	rawFormat := key.GetVerifyingKey().GetVerifier().GetSerializedSignature(sig)
 	a.Equal([]byte(sig), rawFormat)
 }

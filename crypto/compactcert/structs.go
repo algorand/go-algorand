@@ -61,14 +61,13 @@ func (ssc sigslotCommit) ToBeHashed() (protocol.HashID, []byte) {
 	binaryLValue := make([]byte, 8)
 	binary.LittleEndian.PutUint64(binaryLValue, ssc.L)
 
-	sigBytes := ssc.Sig.Signature.ByteSignature
+	sigBytes := ssc.Sig.Signature.GetSerializedSignature()
 
 	sigSlotCommitment := make([]byte, 0, len(binaryLValue)+len(sigBytes))
 	sigSlotCommitment = append(sigSlotCommitment, binaryLValue...)
 	sigSlotCommitment = append(sigSlotCommitment, sigBytes...)
 
 	return protocol.CompactCertSig, sigSlotCommitment
-
 }
 
 // Reveal is a single array position revealed as part of a compact

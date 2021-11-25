@@ -17,6 +17,7 @@
 package merklekeystore
 
 import (
+	"encoding/binary"
 	"errors"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
@@ -25,9 +26,6 @@ import (
 
 type (
 
-	//Proof represent the merkle proof in each signature.
-	Proof merklearray.Proof
-
 	// Signature is a byte signature on a crypto.Hashable object,
 	// crypto.GenericVerifyingKey and includes a merkle proof for the key.
 	Signature struct {
@@ -35,7 +33,7 @@ type (
 		crypto.ByteSignature `codec:"bsig"`
 
 		MerkleArrayIndex uint64                     `codec:"idx"`
-		Proof            Proof                      `codec:"prf"`
+		Proof            merklearray.Proof          `codec:"prf"`
 		VerifyingKey     crypto.GenericVerifyingKey `codec:"vkey"`
 	}
 
@@ -150,7 +148,7 @@ func (s *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 
 	return Signature{
 		ByteSignature:    sig,
-		Proof:            Proof(*proof),
+		Proof:            *proof,
 		VerifyingKey:     *signingKey.GetVerifyingKey(),
 		MerkleArrayIndex: index,
 	}, nil
@@ -203,4 +201,22 @@ func (v *Verifier) Verify(round, interval uint64, obj crypto.Hashable, sig Signa
 	}
 
 	return sig.VerifyingKey.GetVerifier().Verify(obj, sig.ByteSignature)
+}
+
+// GetSerializedSignature serializes the merkle scheme into a sequence of bytes.
+// the format details can be found in the Algorand's spec.
+func (s *Signature) GetSerializedSignature() []byte {
+	sigBytes := s.VerifyingKey.GetVerifier().GetSerializedSignature(s.ByteSignature)
+	verifierBytes := s.VerifyingKey.GetVerifier().GetVerificationBytes()
+	binaryMerkleIndex := make([]byte, 8)
+	binary.LittleEndian.PutUint64(binaryMerkleIndex, s.MerkleArrayIndex)
+	proofBytes := s.Proof.GetSerializedProof()
+
+	merkleSignatureBytes := make([]byte, 0, len(sigBytes)+len(verifierBytes)+len(binaryMerkleIndex)+len(proofBytes))
+
+	merkleSignatureBytes = append(merkleSignatureBytes, sigBytes...)
+	merkleSignatureBytes = append(merkleSignatureBytes, verifierBytes...)
+	merkleSignatureBytes = append(merkleSignatureBytes, binaryMerkleIndex...)
+	merkleSignatureBytes = append(merkleSignatureBytes, proofBytes...)
+	return merkleSignatureBytes
 }

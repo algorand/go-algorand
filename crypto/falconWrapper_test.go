@@ -49,7 +49,7 @@ func TestVerificationBytes(t *testing.T) {
 	key, err := GenerateFalconSigner(seed)
 	a.NoError(err)
 
-	verifyingRawKey := key.GetVerifyingKey().GetVerifier().GetRawVerificationBytes()
+	verifyingRawKey := key.GetVerifyingKey().GetVerifier().GetVerificationBytes()
 
 	a.Equal(verifyingRawKey, key.PublicKey[:])
 }
@@ -67,6 +67,6 @@ func TestFalconsFormatConversion(t *testing.T) {
 	sig, err := key.SignBytes(msg)
 	a.NoError(err)
 
-	rawFormat := key.GetVerifyingKey().GetVerifier().GetRawSignatureBytes(sig)
+	rawFormat := key.GetVerifyingKey().GetVerifier().GetSerializedSignature(sig)
 	a.Equal([]byte(sig), rawFormat)
 }

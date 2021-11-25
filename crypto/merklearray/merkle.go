@@ -18,6 +18,7 @@ package merklearray
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"hash"
 	"sort"
@@ -52,6 +53,22 @@ type Proof struct {
 	// the path length can increase up to 2^MaxTreeDepth / 2
 	Path        []crypto.GenericDigest `codec:"pth,allocbound=MaxNumLeaves/2"`
 	HashFactory crypto.HashFactory     `codec:"hsh"`
+}
+
+// GetSerializedProof serializes the proof into a sequence of bytes.
+// the format details can be found in the Algorand's spec.
+func (p *Proof) GetSerializedProof() []byte {
+	var marshledProof []byte
+	proofLen := len(p.Path)
+	proofLenBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(proofLenBytes, uint32(proofLen))
+	marshledProof = append(marshledProof, proofLenBytes...)
+
+	for i := 0; i < proofLen; i++ {
+		marshledProof = append(marshledProof, p.Path[i]...)
+	}
+
+	return marshledProof
 }
 
 func (tree *Tree) topLayer() Layer {

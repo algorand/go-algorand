@@ -187,7 +187,7 @@ func TestBuildVerify(t *testing.T) {
 }
 
 func generateRandomParticipant(a *require.Assertions, testname string) basics.Participant {
-	key, dbAccessor := generateTestSigner(testname+".db", 0, 100, 1, a)
+	key, dbAccessor := generateTestSigner(testname+".db", 0, 8, 1, a)
 	a.NotNil(dbAccessor, "failed to create signer")
 	defer dbAccessor.Close()
 
@@ -214,18 +214,37 @@ func calculateHashOnPartLeaf(part basics.Participant) []byte {
 }
 
 func calculateHashOnSigLeaf(sig merklekeystore.Signature, lValue uint64) []byte {
+	var sigCommitment []byte
+	sigCommitment = append(sigCommitment, protocol.CompactCertSig...)
+
 	binaryL := make([]byte, 8)
 	binary.LittleEndian.PutUint64(binaryL, lValue)
 
-	sigBytes := sig.ByteSignature
-	partCommitment := make([]byte, 0, len(protocol.CompactCertSig)+len(binaryL)+len(sigBytes))
+	sigCommitment = append(sigCommitment, binaryL...)
 
-	partCommitment = append(partCommitment, protocol.CompactCertSig...)
-	partCommitment = append(partCommitment, binaryL...)
-	partCommitment = append(partCommitment, sigBytes[:]...)
+	serializedSig := sig.VerifyingKey.GetVerifier().GetSerializedSignature(sig.ByteSignature)
+	//build the expected binary representation of the merkle signature
+	sigCommitment = append(sigCommitment, serializedSig...)
+	sigCommitment = append(sigCommitment, sig.VerifyingKey.GetVerifier().GetVerificationBytes()...)
+
+	treeIdxBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(treeIdxBytes, sig.MerkleArrayIndex)
+	sigCommitment = append(sigCommitment, treeIdxBytes...)
+
+	//build the expected binary representation of the merkle signature proof
+
+	proofLen := len(sig.Proof.Path)
+	proofLenBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(proofLenBytes, uint32(proofLen))
+
+	sigCommitment = append(sigCommitment, proofLenBytes...)
+
+	for i := 0; i < proofLen; i++ {
+		sigCommitment = append(sigCommitment, sig.Proof.Path[i]...)
+	}
 
 	factory := crypto.HashFactory{HashType: HashType}
-	hashValue := crypto.HashBytes(factory.NewHash(), partCommitment)
+	hashValue := crypto.HashBytes(factory.NewHash(), sigCommitment)
 	return hashValue
 }
 
@@ -241,7 +260,7 @@ func calculateHashOnInternalNode(leftNode, rightNode []byte) []byte {
 }
 
 // This test makes sure that cert's participation commitment is according to spec and stays sync with the
-// SNARK verifier. we manually build the merkle tree hashes
+// SNARK verifier. we manually build the merkle tree given an expected binary representation of the keys.
 func TestParticipationCommitment(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -295,7 +314,7 @@ func TestSignatureCommitment(t *testing.T) {
 	var sigs []merklekeystore.Signature
 
 	for i := 0; i < numPart; i++ {
-		key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(param.CompactCertRounds)+1, param.CompactCertRounds, a)
+		key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(param.CompactCertRounds)*8, param.CompactCertRounds, a)
 		require.NotNil(t, dbAccessor, "failed to create signer")
 
 		part := basics.Participant{

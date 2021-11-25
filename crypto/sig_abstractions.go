@@ -69,10 +69,10 @@ type Verifier interface {
 	// Verify and VerifyBytes returns error on bad signature, and any other problem.
 	Verify(message Hashable, sig ByteSignature) error
 	VerifyBytes(message []byte, sig ByteSignature) error
-	// GetRawVerificationBytes returns a serialized version of the public data (without the use of the msgpack).
-	GetRawVerificationBytes() []byte
-	// GetRawSignatureBytes returns a serialized version of the signature
-	GetRawSignatureBytes(signature ByteSignature) []byte
+	// GetVerificationBytes returns a serialized version of the public key data (without the use of the msgpack).
+	GetVerificationBytes() []byte
+	// GetSerializedSignature returns a serialized version of the signature
+	GetSerializedSignature(signature ByteSignature) []byte
 }
 
 // GenericSigningKey holds a Signer, and the type of algorithm the Signer conforms with.
