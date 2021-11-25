@@ -18,9 +18,6 @@ package merklekeystore
 
 import (
 	"errors"
-	"fmt"
-
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/protocol"
@@ -82,8 +79,6 @@ type (
 	}
 )
 
-// TODO: change to ConsensusCurrentVersion when updated
-var errValidityPeriodTooLong = fmt.Errorf("the validity period for merkleKeyStore is too large: the limit is %d", config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod)
 var errStartBiggerThanEndRound = errors.New("cannot create merkleKeyStore because end round is smaller then start round")
 var errDivisorIsZero = errors.New("received zero Interval")
 
@@ -111,22 +106,14 @@ func (k *keysArray) Marshal(pos uint64) ([]byte, error) {
 // New Generates a merklekeystore.Signer
 // The function allow creation of empty signers, i.e signers without any key to sign with.
 // keys can be created between [A,Z], if A == 0, keys created will be in the range (0,Z]
-func New(firstValid, lastValid uint64, sigAlgoType crypto.AlgorithmType, store db.Accessor) (*Signer, error) {
-
+func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmType, store db.Accessor) (*Signer, error) {
 	if firstValid > lastValid {
 		return nil, errStartBiggerThanEndRound
-	}
-
-	// TODO: change to ConsensusCurrentVersion when updated
-	interval := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
-	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
-
-	if maxValidPeriod != 0 && (lastValid-firstValid) > maxValidPeriod {
-		return nil, errValidityPeriodTooLong
 	}
 	if interval == 0 {
 		return nil, errDivisorIsZero
 	}
+
 	if firstValid == 0 {
 		firstValid = 1
 	}

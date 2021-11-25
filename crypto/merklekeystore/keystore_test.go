@@ -26,7 +26,6 @@ import (
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -482,35 +481,6 @@ func TestKeyDeletion(t *testing.T) {
 	}
 }
 
-func TestValidityPeriod(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	// TODO: change to config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod when we reach that version
-	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
-
-	store := initTestDB(a)
-	defer store.Close()
-	firstValid := uint64(0)
-	lastValid := maxValidPeriod
-	_, err := New(firstValid, lastValid, crypto.Ed25519Type, *store)
-	a.NoError(err)
-
-	store = initTestDB(a)
-	defer store.Close()
-	firstValid = uint64(0)
-	lastValid = maxValidPeriod + 1
-	_, err = New(firstValid, lastValid, crypto.Ed25519Type, *store)
-	a.Error(err)
-
-	store = initTestDB(a)
-	defer store.Close()
-	firstValid = uint64(0)
-	lastValid = maxValidPeriod - 1
-	_, err = New(firstValid, lastValid, crypto.Ed25519Type, *store)
-	a.NoError(err)
-}
-
 func TestNumberOfGeneratedKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -521,7 +491,7 @@ func TestNumberOfGeneratedKeys(t *testing.T) {
 	defer store.Close()
 	firstValid := uint64(1000)
 	lastValid := validPeriod + 1000
-	s, err := New(firstValid, lastValid, crypto.Ed25519Type, *store)
+	s, err := New(firstValid, lastValid, interval, crypto.Ed25519Type, *store)
 	a.NoError(err)
 	err = s.Persist()
 	a.NoError(err)
@@ -531,7 +501,7 @@ func TestNumberOfGeneratedKeys(t *testing.T) {
 	defer store.Close()
 	firstValid = uint64(0)
 	lastValid = validPeriod
-	s, err = New(firstValid, lastValid, crypto.Ed25519Type, *store)
+	s, err = New(firstValid, lastValid, interval, crypto.Ed25519Type, *store)
 	a.NoError(err)
 	err = s.Persist()
 	a.NoError(err)
@@ -541,7 +511,7 @@ func TestNumberOfGeneratedKeys(t *testing.T) {
 	defer store.Close()
 	firstValid = uint64(1000)
 	lastValid = validPeriod + 1000 - (interval * 50)
-	s, err = New(firstValid, lastValid, crypto.Ed25519Type, *store)
+	s, err = New(firstValid, lastValid, interval, crypto.Ed25519Type, *store)
 	a.NoError(err)
 	err = s.Persist()
 	a.NoError(err)
@@ -564,9 +534,9 @@ func generateTestSignerAux(a *require.Assertions) (uint64, uint64, *Signer) {
 	return start, end, signer
 }
 
-func generateTestSigner(t crypto.AlgorithmType, firstValid uint64, lastValid uint64, interval uint64, a *require.Assertions) *Signer {
+func generateTestSigner(t crypto.AlgorithmType, firstValid, lastValid, interval uint64, a *require.Assertions) *Signer {
 	store := initTestDB(a)
-	signer, err := New(firstValid, lastValid, t, *store)
+	signer, err := New(firstValid, lastValid, interval, t, *store)
 	a.NoError(err)
 
 	err = signer.Persist()

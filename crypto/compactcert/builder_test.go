@@ -20,10 +20,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/algorand/go-algorand/config"
 	"strconv"
 	"testing"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklekeystore"
@@ -36,7 +36,7 @@ import (
 
 type TestMessage string
 
-// TODO: change to CurrentVersion
+// TODO: change to CurrentVersion when updated
 var CompactCertRounds = config.Consensus[protocol.ConsensusFuture].CompactCertRounds
 
 func (m TestMessage) ToBeHashed() (protocol.HashID, []byte) {
@@ -88,7 +88,7 @@ func generateTestSigner(name string, firstValid uint64, lastValid uint64, a *req
 	})
 	a.NoError(err)
 
-	signer, err := merklekeystore.New(firstValid, lastValid, crypto.FalconType, store)
+	signer, err := merklekeystore.New(firstValid, lastValid, CompactCertRounds, crypto.FalconType, store)
 	a.NoError(err)
 
 	err = signer.Persist()

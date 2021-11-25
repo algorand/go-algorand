@@ -89,6 +89,6 @@ func bencKeyGen(b *testing.B, algoType crypto.AlgorithmType) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		New(0, 3000000, algoType, store)
+		New(0, 3000000, 128, algoType, store)
 	}
 }

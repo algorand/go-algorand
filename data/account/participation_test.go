@@ -25,6 +25,7 @@ import (
 	"strings"
 	"testing"
 
+	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -447,4 +448,53 @@ func BenchmarkParticipationKeyRestoration(b *testing.B) {
 		b.StartTimer()
 	}
 	part.Close()
+}
+
+func createKeystoreTestDB(a *require.Assertions) *db.Accessor {
+	tmpname := uuid.NewV4().String() // could this just be a constant string instead? does it even matter?
+	store, err := db.MakeAccessor(tmpname, false, true)
+	a.NoError(err)
+	a.NotNil(store)
+
+	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err = tx.Exec(`CREATE TABLE schema (
+			tablename TEXT PRIMARY KEY,
+			version INTEGER
+		);`)
+		return err
+	})
+	a.NoError(err)
+
+	return &store
+}
+
+func TestKeyregValidityPeriod(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	// TODO: change to ConsensusCurrentVersion when updated
+	testConsensusParams := config.Consensus[protocol.ConsensusFuture]
+	maxValidPeriod := uint64(10000)
+	testConsensusParams.MaxKeyregValidPeriod = maxValidPeriod
+
+	store := createKeystoreTestDB(a)
+	defer store.Close()
+	firstValid := uint64(0)
+	lastValid := maxValidPeriod
+	_, err := generateKeystore(firstValid, lastValid, *store, testConsensusParams)
+	a.NoError(err)
+
+	store = createKeystoreTestDB(a)
+	defer store.Close()
+	firstValid = uint64(0)
+	lastValid = maxValidPeriod + 1
+	_, err = generateKeystore(firstValid, lastValid, *store, testConsensusParams)
+	a.Error(err)
+
+	store = createKeystoreTestDB(a)
+	defer store.Close()
+	firstValid = uint64(0)
+	lastValid = maxValidPeriod - 1
+	_, err = generateKeystore(firstValid, lastValid, *store, testConsensusParams)
+	a.NoError(err)
 }
