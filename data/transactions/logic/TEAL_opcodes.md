@@ -854,6 +854,15 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B+8 is larger than the array length, the program fails
 - LogicSigVersion >= 5
 
+## base64_decode v
+
+- Opcode: 0x5c {uint8 alphabet index}
+- Pops: *... stack*, []byte
+- Pushes: []byte
+- the base64 decoding of X using the alphabet denoted by argument 0
+- **Cost**: 50
+- LogicSigVersion >= 6
+
 ## balance
 
 - Opcode: 0x60

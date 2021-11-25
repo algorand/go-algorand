@@ -191,6 +191,7 @@ bytes on outputs.
 | `b==` | A is equals to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
 | `b!=` | A is not equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
 | `b%` | A modulo B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Fail if B is zero. |
+| `base64_decode v` | the base64 decoding of X using the alphabet denoted by argument 0 |
 
 These opcodes operate on the bits of byte-array values.  The shorter
 array is interpreted as though left padded with zeros until it is the
