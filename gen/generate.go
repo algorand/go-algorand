@@ -245,7 +245,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 					}
 
 					if verbose {
-						verbosedOutput <- fmt.Sprintf("Generating keys for %s. participation period is %d rounds", wallet.Name, basics.Round(lastWalletValid).SubSaturate(basics.Round(firstWalletValid)))
+						verbosedOutput <- fmt.Sprintf("Generating %s's keys for a period of %d rounds", wallet.Name, basics.Round(lastWalletValid).SubSaturate(basics.Round(firstWalletValid)))
 					}
 					part, err = account.FillDBWithParticipationKeys(partDB, root.Address(), basics.Round(firstWalletValid), basics.Round(lastWalletValid), partKeyDilution)
 					if err != nil {
@@ -374,8 +374,9 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 	jsonData := protocol.EncodeJSON(g)
 	err = ioutil.WriteFile(filepath.Join(outDir, config.GenesisJSONFile), append(jsonData, '\n'), 0666)
 
-	if (!verbose) && (rootKeyCreated > 0 || partKeyCreated > 0) {
+	if (verbose) && (rootKeyCreated > 0 || partKeyCreated > 0) {
 		fmt.Printf("Created %d new rootkeys and %d new partkeys.\n", rootKeyCreated, partKeyCreated)
+		fmt.Printf("NOTICE: Participation keys are valid for a period of %d rounds. After this round the network will stop unless new keys will be registered.\n", lastWalletValid-firstWalletValid)
 	}
 
 	return
