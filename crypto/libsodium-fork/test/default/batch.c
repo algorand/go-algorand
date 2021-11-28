@@ -1123,20 +1123,17 @@ void ed25519_only_ones (void *p, size_t len)
     memset(p,1,len);
 }
 
-
-static size_t m_len_array[SAMPLE_SIZE];
-
 void test_mixed_subgroup_signatures()
 {
     unsigned char * messages[MINIMAL_BATCH_SIZE];
     unsigned char * pk_set[MINIMAL_BATCH_SIZE];
     unsigned char * sign_set[MINIMAL_BATCH_SIZE];
-    size_t m_len_array[MINIMAL_BATCH_SIZE];
+    unsigned long long m_len_array[MINIMAL_BATCH_SIZE];
     int valid [MINIMAL_BATCH_SIZE];
 
-    unsigned char * pk_data[MINIMAL_BATCH_SIZE][crypto_sign_PUBLICKEYBYTES];
-    unsigned char * sign_data[MINIMAL_BATCH_SIZE][crypto_sign_BYTES];
-    unsigned char * message_data[MINIMAL_BATCH_SIZE][crypto_sign_PUBLICKEYBYTES];
+    unsigned char pk_data[MINIMAL_BATCH_SIZE][crypto_sign_PUBLICKEYBYTES];
+    unsigned char sign_data[MINIMAL_BATCH_SIZE][crypto_sign_BYTES];
+    unsigned char message_data[MINIMAL_BATCH_SIZE][crypto_sign_PUBLICKEYBYTES];
 
     printf("-----  mixed subgroup test\n");
     rand_func_iml = &ed25519_only_ones;
@@ -1162,13 +1159,13 @@ void test_mixed_subgroup_signatures()
 
     for (int i = 1; i < MINIMAL_BATCH_SIZE; i++) 
     {
-        messages[i] = test_data[i].m;
+        messages[i] = (unsigned char*)test_data[i].m;
         pk_set[i] = test_data[i].pk;
         sign_set[i] = test_data[i].sig;
         m_len_array[i] = i;
     }
 
-    int res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,MINIMAL_BATCH_SIZE, valid);
+    int res = crypto_sign_ed25519_open_batch((const unsigned char**)messages, m_len_array, (const unsigned char**)pk_set, (const unsigned char**)sign_set ,MINIMAL_BATCH_SIZE, valid);
     if (res != 0)
     {
         printf("batch verification failed\n");
@@ -1182,12 +1179,12 @@ void test_edge_cases()
     unsigned char * messages[EDGE_CASES_SIZE];
     unsigned char * pk_set[EDGE_CASES_SIZE];
     unsigned char * sign_set[EDGE_CASES_SIZE];
-    size_t m_len_array[EDGE_CASES_SIZE];
+    unsigned long long m_len_array[EDGE_CASES_SIZE];
     int valid [EDGE_CASES_SIZE];
 
-    unsigned char * pk_data[EDGE_CASES_SIZE][crypto_sign_PUBLICKEYBYTES];
-    unsigned char * sign_data[EDGE_CASES_SIZE][crypto_sign_BYTES];
-    unsigned char * message_data[EDGE_CASES_SIZE][crypto_sign_PUBLICKEYBYTES];
+    unsigned char pk_data[EDGE_CASES_SIZE][crypto_sign_PUBLICKEYBYTES];
+    unsigned char sign_data[EDGE_CASES_SIZE][crypto_sign_BYTES];
+    unsigned char message_data[EDGE_CASES_SIZE][crypto_sign_PUBLICKEYBYTES];
 
 
     printf("-----  edge cases test\n");
@@ -1215,7 +1212,7 @@ void test_edge_cases()
         m_len_array[i] = 32;
     }
 
-	int res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,EDGE_CASES_SIZE, valid);
+	int res = crypto_sign_ed25519_open_batch((const unsigned char**)messages, m_len_array, (const unsigned char**)pk_set, (const unsigned char**)sign_set ,EDGE_CASES_SIZE, valid);
     if (res == 0)
     {
         printf("batch passed - should have failed!");
@@ -1246,7 +1243,7 @@ void test_bos_carter_edge_case()
     unsigned char * messages[SAMPLE_SIZE];
     unsigned char * pk_set[SAMPLE_SIZE];
     unsigned char * sign_set[SAMPLE_SIZE];
-    size_t m_len_array[SAMPLE_SIZE];
+    unsigned long long m_len_array[SAMPLE_SIZE];
     int valid [SAMPLE_SIZE];
 
 
@@ -1255,13 +1252,13 @@ void test_bos_carter_edge_case()
 
     for (int i = 0; i < 8; i++) 
     {
-        messages[i] = test_data[i].m;
+        messages[i] = (unsigned char*)test_data[i].m;
         pk_set[i] = test_data[i].pk;
         sign_set[i] = test_data[i].sig;
         m_len_array[i] = i;
     }
     
-	int res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,8, valid);
+    int res = crypto_sign_ed25519_open_batch((const unsigned char**)messages, m_len_array, (const unsigned char**)pk_set, (const unsigned char**)sign_set ,8, valid);
     if (res != 0)
     {
         printf("batch failed!");
@@ -1277,7 +1274,7 @@ void test_invalid_signatures_outside_batch()
     unsigned char * messages[MAX_BATCH_SIZE+1];
     unsigned char * pk_set[MAX_BATCH_SIZE+1];
     unsigned char * sign_set[MAX_BATCH_SIZE+1];
-    size_t m_len_array[MAX_BATCH_SIZE+1];
+    unsigned long long m_len_array[MAX_BATCH_SIZE+1];
     int valid [MAX_BATCH_SIZE+1];
 
     printf("----- invalid signature outside batch \n");
@@ -1285,7 +1282,7 @@ void test_invalid_signatures_outside_batch()
 
     for (int i = 0; i < MAX_BATCH_SIZE+1; i++) 
     {
-        messages[i] = test_data[i].m;
+        messages[i] = (unsigned char*)test_data[i].m;
         pk_set[i] = test_data[i].pk;
         sign_set[i] = test_data[i].sig;
         m_len_array[i] = i;
@@ -1295,7 +1292,7 @@ void test_invalid_signatures_outside_batch()
     sign_set[MAX_BATCH_SIZE][0]++;
     test_data_expected_results[MAX_BATCH_SIZE]=0;
 
-	int res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,MAX_BATCH_SIZE+1, valid);
+    int res = crypto_sign_ed25519_open_batch((const unsigned char**)messages, m_len_array, (const unsigned char**)pk_set, (const unsigned char**)sign_set ,MAX_BATCH_SIZE+1, valid);
     if (res == 0)
     {
         printf("batch passed - should failed!");
@@ -1313,7 +1310,7 @@ void test_invalid_signatures_in_first_batch()
     unsigned char * messages[MINIMAL_BATCH_SIZE];
     unsigned char * pk_set[MINIMAL_BATCH_SIZE];
     unsigned char * sign_set[MINIMAL_BATCH_SIZE];
-    size_t m_len_array[MINIMAL_BATCH_SIZE];
+    unsigned long long m_len_array[MINIMAL_BATCH_SIZE];
     int valid [MINIMAL_BATCH_SIZE];
 
     printf("----- invalid signature in first batch \n");
@@ -1321,7 +1318,7 @@ void test_invalid_signatures_in_first_batch()
 
     for (int i = 0; i < MINIMAL_BATCH_SIZE; i++) 
     {
-        messages[i] = test_data[i].m;
+        messages[i] = (unsigned char*)test_data[i].m;
         pk_set[i] = test_data[i].pk;
         sign_set[i] = test_data[i].sig;
         m_len_array[i] = i;
@@ -1331,7 +1328,7 @@ void test_invalid_signatures_in_first_batch()
     sign_set[0][0]++;
     test_data_expected_results[0]=0;
 
-	int res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,MINIMAL_BATCH_SIZE, valid);
+    int res = crypto_sign_ed25519_open_batch((const unsigned char**)messages, m_len_array, (const unsigned char**)pk_set, (const unsigned char**)sign_set ,MINIMAL_BATCH_SIZE, valid);
     if (res == 0)
     {
         printf("batch verification passed - should failed!");
@@ -1349,7 +1346,7 @@ void test_invalid_signature_in_second_batch()
     unsigned char * messages[SAMPLE_SIZE];
     unsigned char * pk_set[SAMPLE_SIZE];
     unsigned char * sign_set[SAMPLE_SIZE];
-    size_t m_len_array[SAMPLE_SIZE];
+    unsigned long long m_len_array[SAMPLE_SIZE];
     int valid [SAMPLE_SIZE];
 
     printf("----- invalid second signature in second batch \n");
@@ -1357,7 +1354,7 @@ void test_invalid_signature_in_second_batch()
 
     for (int i = 0; i < SAMPLE_SIZE; i++) 
     {
-        messages[i] = test_data[i].m;
+        messages[i] = (unsigned char*)test_data[i].m;
         pk_set[i] = test_data[i].pk;
         sign_set[i] = test_data[i].sig;
         m_len_array[i] = i;
@@ -1367,7 +1364,7 @@ void test_invalid_signature_in_second_batch()
     sign_set[MAX_BATCH_SIZE+2][0]++;
     test_data_expected_results[MAX_BATCH_SIZE+2]=0;
 
-	int res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,SAMPLE_SIZE, valid);
+    int res = crypto_sign_ed25519_open_batch((const unsigned char**)messages, m_len_array, (const unsigned char**)pk_set, (const unsigned char**)sign_set ,SAMPLE_SIZE, valid);
     if (res == 0)
     {
         printf("batch verification passed - should failed!");
@@ -1386,7 +1383,7 @@ void sainty_tests()
     unsigned char * messages[SAMPLE_SIZE];
     unsigned char * pk_set[SAMPLE_SIZE];
     unsigned char * sign_set[SAMPLE_SIZE];
-    size_t m_len_array[SAMPLE_SIZE];
+    unsigned long long m_len_array[SAMPLE_SIZE];
     int valid [SAMPLE_SIZE];
 
 
@@ -1395,13 +1392,14 @@ void sainty_tests()
 
     for (int i = 0; i < SAMPLE_SIZE; i++) 
     {
-        messages[i] = test_data[i].m;
+        messages[i] = (unsigned char*)test_data[i].m;
         pk_set[i] = test_data[i].pk;
         sign_set[i] = test_data[i].sig;
         m_len_array[i] = i;
     }
     m_len_array[SAMPLE_SIZE-1]--; // the last signature is 1024 chars long
-	int res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,SAMPLE_SIZE, valid);
+
+    int res = crypto_sign_ed25519_open_batch((const unsigned char**)messages, m_len_array, (const unsigned char**)pk_set, (const unsigned char**)sign_set ,SAMPLE_SIZE, valid);
     if (res != 0)
     {
         printf("batch failed!");
@@ -1409,7 +1407,7 @@ void sainty_tests()
     check_valid_array(valid, SAMPLE_SIZE -1 , test_data_expected_results);
 
 	printf("----- sainty test 1025 signatures\n");
-	res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,SAMPLE_SIZE, valid);
+	res = crypto_sign_ed25519_open_batch((const unsigned char**)messages, m_len_array, (const unsigned char**)pk_set, (const unsigned char**)sign_set ,SAMPLE_SIZE, valid);
     if (res != 0)
     {
         printf("batch failed!");
