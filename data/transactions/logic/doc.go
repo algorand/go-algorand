@@ -133,7 +133,7 @@ var opDocByName = map[string]string{
 	"extract_uint16": "pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B+2 is larger than the array length, the program fails",
 	"extract_uint32": "pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B+4 is larger than the array length, the program fails",
 	"extract_uint64": "pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B+8 is larger than the array length, the program fails",
-	"base64_decode":  "the base64 decoding of X using the alphabet denoted by argument 0",
+	"base64_decode":  "the base64 decoding of X with the alphabet denoted by V (imm arg). Fail if X is not base64 encoded with alphabet V",
 
 	"balance":           "get balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.",
 	"min_balance":       "get minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes.",
@@ -286,6 +286,7 @@ var opDocExtras = map[string]string{
 	"itxn_begin":          "`itxn_begin` initializes Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; FirstValid/LastValid to the values in the top-level transaction, and all other fields to zero values.",
 	"itxn_field":          "`itxn_field` fails if X is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if X is an account or asset that does not appear in `txn.Accounts` or `txn.ForeignAssets` of the top-level transaction. (Setting addresses in asset creation are exempted from this requirement.)",
 	"itxn_submit":         "`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.",
+	"base64_decode":       "decodes X using the base64 alphabet V. Specify the alphabet with an immediate arg either as URL and Filename Safe (`URLAlph`) or Standard (`StdAlph`). See <a href=\"https://rfc-editor.org/rfc/rfc4648.html#section-4\">RFC 4648</a> (sections 4 and 5)",
 }
 
 // OpDocExtra returns extra documentation text about an op
@@ -540,10 +541,4 @@ func AppParamsFieldDocs() map[string]string {
 // EcdsaCurveDocs are notes on curves available in `ecdsa_` opcodes
 var EcdsaCurveDocs = map[string]string{
 	"Secp256k1": "secp256k1 curve",
-}
-
-// Base64AlphabetDocs for notes on opcode `base64decode`
-var Base64AlphabetDocs = map[string]string{
-	"Standard": `Standard base-64 alphabet as specified in <a href="https://rfc-editor.org/rfc/rfc4648.html#section-4">RFC 4648 section 4</a>`,
-	"URL":      `URL and Filename Safe base-64 alphabet as specified in <a href="https://rfc-editor.org/rfc/rfc4648.html#section-5">RFC 4648 section 5</a>`,
 }

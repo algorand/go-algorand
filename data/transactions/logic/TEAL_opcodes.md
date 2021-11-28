@@ -859,9 +859,11 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - Opcode: 0x5c {uint8 alphabet index}
 - Pops: *... stack*, []byte
 - Pushes: []byte
-- the base64 decoding of X using the alphabet denoted by argument 0
+- the base64 decoding of X with the alphabet denoted by V (imm arg). Fail if X is not base64 encoded with alphabet V
 - **Cost**: 50
 - LogicSigVersion >= 6
+
+decodes X using the base64 alphabet V. Specify the alphabet with an immediate arg either as URL and Filename Safe (`URLAlph`) or Standard (`StdAlph`). See <a href="https://rfc-editor.org/rfc/rfc4648.html#section-4">RFC 4648</a> (sections 4 and 5)
 
 ## balance
 
