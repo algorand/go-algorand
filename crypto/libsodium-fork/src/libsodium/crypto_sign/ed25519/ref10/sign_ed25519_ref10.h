@@ -18,7 +18,11 @@ int _crypto_sign_ed25519_verify_detached(const unsigned char *sig,
                                          const unsigned char *pk,
                                          int prehashed);
 
-
+int _crypto_sign_ed25519_bv_compatible_verify_detached(const unsigned char *sig,
+                                         const unsigned char *m,
+                                         unsigned long long   mlen,
+                                         const unsigned char *pk,
+                                         int prehashed);
 
 int _crypto_sign_ed25519_open_batch(const unsigned char **m, 
                                 const unsigned long long *mlen, 

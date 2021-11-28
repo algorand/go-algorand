@@ -88,6 +88,13 @@ crypto_sign_verify_detached(const unsigned char *sig, const unsigned char *m,
 }
 
 int
+crypto_sign_bv_compatible_verify_detached(const unsigned char *sig, const unsigned char *m,
+                            unsigned long long mlen, const unsigned char *pk)
+{
+    return crypto_sign_ed25519_bv_compatible_verify_detached(sig, m, mlen, pk);
+}
+
+int
 crypto_sign_init(crypto_sign_state *state)
 {
     return crypto_sign_ed25519ph_init(state);
@@ -112,4 +119,11 @@ crypto_sign_final_verify(crypto_sign_state *state, const unsigned char *sig,
                          const unsigned char *pk)
 {
     return crypto_sign_ed25519ph_final_verify(state, sig, pk);
+}
+
+int
+crypto_sign_final_bv_compatible_verify(crypto_sign_state *state, const unsigned char *sig,
+                         const unsigned char *pk)
+{
+    return crypto_sign_ed25519ph_final_bv_compatible_verify(state, sig, pk);
 }

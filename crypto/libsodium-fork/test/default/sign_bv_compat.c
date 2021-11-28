@@ -1,5 +1,5 @@
 
-#define TEST_NAME "sign"
+#define TEST_NAME "sign_bv_compat"
 #include "cmptest.h"
 
 static const unsigned char keypair_seed[]
@@ -1057,6 +1057,337 @@ static void add_l(unsigned char * const S)
     sodium_add(S, l, sizeof l);
 }
 
+
+
+// Test vector according to : "Taming the many EdDSAs" white paper
+static const  char edge_cases_signatures[12][3][500]= 
+{
+{"8c93255d71dcab10e8f379c26200f3c7bd5f09d9bc3068d3ef4edeb4853022b6" ,
+"c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa",
+"c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a0000000000000000000000000000000000000000000000000000000000000000"} ,
+{"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+"c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa",
+"f7badec5b8abeaf699583992219b7b223f1df3fbbea919844e3f7c554a43dd43a5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"aebf3f2601a0c8c5d39cc7d8911642f740b78168218da8471772b35f9d35b9ab",
+"f7badec5b8abeaf699583992219b7b223f1df3fbbea919844e3f7c554a43dd43",
+"c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa8c4bd45aecaca5b24fb97bc10ac27ac8751a7dfe1baff8b953ec9f5833ca260e"} ,
+{"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+"cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+"9046a64750444938de19f227bb80485e92b83fdb4b6506c160484c016cc1852f87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+{"e47d62c63f830dc7a6851a0b1f33ae4bb2f507fb6cffec4011eaccd55b53f56c" ,
+"cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+"160a1cb0dc9c0258cd0a7d23e94d8fa878bcb1925f2c64246b2dee1796bed5125ec6bc982a269b723e0668e540911a9a6a58921d6925e434ab10aa7940551a09"} ,
+{"e47d62c63f830dc7a6851a0b1f33ae4bb2f507fb6cffec4011eaccd55b53f56c" ,
+"cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+"21122a84e0b5fca4052f5b1235c80a537878b38f3142356b2c2384ebad4668b7e40bc836dac0f71076f9abe3a53f9c03c1ceeeddb658d0030494ace586687405"} ,
+{"85e241a07d148b41e47d62c63f830dc7a6851a0b1f33ae4bb2f507fb6cffec40",
+"442aad9f089ad9e14647b1ef9099a1ff4798d78589e66f28eca69c11f582a623",
+"e96f66be976d82e60150baecff9906684aebb1ef181f67a7189ac78ea23b6c0e547f7690a0e2ddcd04d87dbc3490dc19b3b3052f7ff0538cb68afb369ba3a514"} ,
+{"85e241a07d148b41e47d62c63f830dc7a6851a0b1f33ae4bb2f507fb6cffec40",
+"442aad9f089ad9e14647b1ef9099a1ff4798d78589e66f28eca69c11f582a623",
+"8ce5b96c8f26d0ab6c47958c9e68b937104cd36e13c33566acd2fe8d38aa19427e71f98a4734e74f2f13f06f97c20d58cc3f54b8bd0d272f42b695dd7e89a8c22"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+"f7badec5b8abeaf699583992219b7b223f1df3fbbea919844e3f7c554a43dd43",
+"ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff03be9678ac102edcd92b0210bb34d7428d12ffc5df5f37e359941266a4e35f0f"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+"f7badec5b8abeaf699583992219b7b223f1df3fbbea919844e3f7c554a43dd43",
+"ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffca8c5b64cd208982aa38d4936621a4775aa233aa0505711d8fdcfdaa943d4908"} ,
+{"e96b7021eb39c1a163b6da4e3093dcd3f21387da4cc4572be588fafae23c155b",
+"ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"39a591f5321bbe07fd5a23dc2f39d025d74526615746727ceefd6e82ae65c06f",
+"ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"}
+};
+
+// we desinged the verification to fit the white paper results on the above vectors.
+// the only defernce is that we reject small order R (becuase our previous version done that)
+static const int edge_cases_results[] = {-1,-1,0,0,0,0,-1,-1,-1,-1,-1,-1};
+
+
+//checking for non canoical R
+static const  char non_canoical_R[][3][500]= 
+{
+{"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "010000000000000000000000000000000000000000000000000000000000008087909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+{"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+{"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+{"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+{"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+{"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+};
+
+
+
+
+static const  char non_canoical_R_greater_than_field_element[][3][500]= 
+{
+{"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+ {"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+ {"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "f1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+ {"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "f2ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+ {"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "f3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+ {"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "f4ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+ {"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "f5ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+ {"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "f6ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+ {"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+ {"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "f8ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+ {"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "f9ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+ {"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "faffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+ {"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "fcffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+  {"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "fdffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+  {"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "feffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+   {"9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79",
+ "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d",
+ "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff87909e14428a7a1d62e9f22f3d3ad7802db02eb2e688b6c52fcd6648a98bd009"} ,
+ 
+};
+
+
+//checking for non canoical A
+static const  char non_canoical_public_key[][3][500]= 
+{
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "0100000000000000000000000000000000000000000000000000000000000080", // (-0,1)
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // (-0,-1)
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f", // (0,2^252-18)
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // (-0,2^252-18)
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // (-1sqrt(-1),2^252-19)
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f", // (sqrt(-1),2^252-19)
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+};
+
+
+
+//checking for non canoical A
+static const  char non_canoical_public_key_greater_than_field_element[][3][500]= 
+{
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+1
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+2
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "f0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+3
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "f1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+4
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "f2ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+5
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "f3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+6
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "f4ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+7
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "f5ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+8
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "f6ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+9
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+10
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "f8ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+11
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "f9ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+12
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "faffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+13
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "fbffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+14
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "fcffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+15
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "fdffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+16
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "feffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+17
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+{"9bedc267423725d473888631ebf45988bad3db83851ee85c85e241a07d148b41",
+ "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // 2^255-19+18
+"a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"} ,
+};
+
+
+int test_edge_case_signature(const char * pk_in,  const char * sig_in)
+{
+    unsigned char pk[crypto_sign_PUBLICKEYBYTES];
+    unsigned char sig[crypto_sign_BYTES];
+
+
+    sodium_hex2bin(pk, crypto_sign_PUBLICKEYBYTES,
+                pk_in,
+                crypto_sign_PUBLICKEYBYTES * 2, NULL, NULL, NULL);
+    sodium_hex2bin(sig, crypto_sign_BYTES,
+                sig_in,
+                crypto_sign_BYTES * 2, NULL, NULL, NULL);              
+
+   
+    return validate_ed25519_pk_and_sig(sig, pk);
+}
+
+
+void test_edge_cases()
+{
+    unsigned char pk[crypto_sign_PUBLICKEYBYTES];
+    unsigned char sig[crypto_sign_BYTES];
+    unsigned char msg[crypto_sign_BYTES];
+
+    
+
+
+    printf("---- testing: white paper edge cases\n");
+    printf("\t expecting the following result: \n");
+    for (int i=0; i<(sizeof edge_cases_signatures) / (sizeof edge_cases_signatures[0]) ;i++)
+    {
+        printf("%d |",edge_cases_results[i]);
+    }
+    printf("\n");
+
+    for (int i=0; i<(sizeof edge_cases_signatures) / (sizeof edge_cases_signatures[0]) ;i++)
+    {
+
+        sodium_hex2bin(pk, crypto_sign_PUBLICKEYBYTES,
+                edge_cases_signatures[i][1],
+                crypto_sign_PUBLICKEYBYTES * 2, NULL, NULL, NULL);
+        sodium_hex2bin(sig, crypto_sign_BYTES,
+                edge_cases_signatures[i][2],
+                crypto_sign_BYTES * 2, NULL, NULL, NULL);  
+        
+
+        sodium_hex2bin(msg, crypto_sign_BYTES,
+                edge_cases_signatures[i][0],
+                crypto_sign_BYTES * 2, NULL, NULL, NULL);  
+                
+        if ((crypto_sign_ed25519_bv_compatible_verify_detached(sig,
+                                                msg,
+                                                crypto_sign_PUBLICKEYBYTES,
+                                                pk)) != edge_cases_results[i])    
+        {
+            printf("sig num : %i doesn't match expected reuslt\n",i); 
+            printf("test failed!\n");          
+        }
+
+    }
+    printf("success\n");        
+}
+
+void test_inputs()
+{
+    
+    printf("---- testing: non canonical public key  - all should be rejected\n");
+    for (int i=0; i<(sizeof non_canoical_public_key) / (sizeof non_canoical_public_key[0]) ;i++)
+    {
+        if (test_edge_case_signature(non_canoical_public_key[i][1],
+                                    non_canoical_public_key[i][2]) != -1)    
+        {
+            printf("input for sig num : %i accepted \n", i);
+            printf("test failed\n");
+            
+        }
+    }
+    printf("success\n");        
+
+    printf("---- testing: non canonical public key greater than field element - all should be rejected\n");
+    for (int i=0; i<(sizeof non_canoical_public_key_greater_than_field_element) / (sizeof non_canoical_public_key_greater_than_field_element[0]) ;i++)
+    {
+        if (test_edge_case_signature(non_canoical_public_key_greater_than_field_element[i][1],
+                                    non_canoical_public_key_greater_than_field_element[i][2]) != -1)    
+        {
+            printf("input for sig num : %i accepted \n", i);
+            printf("test failed\n");
+            
+        }
+    }
+    printf("success\n");        
+
+    printf("---- testing: non canonical R - all should be rejected\n");
+    for (int i=0; i<(sizeof non_canoical_R) / (sizeof non_canoical_R[0]) ;i++)
+    {
+        if (test_edge_case_signature(non_canoical_R[i][1],
+                                    non_canoical_R[i][2]) != -1)    
+        {
+            printf("input for sig num : %i accepted \n", i);
+            printf("test failed\n");
+                     
+        }
+    }
+    printf("success\n");        
+
+    printf("---- testing: non canonical greater than field element R -  all should be rejected\n");
+    for (int i=0; i<(sizeof non_canoical_R_greater_than_field_element) / (sizeof non_canoical_R_greater_than_field_element[0]) ;i++)
+    {
+        if (test_edge_case_signature(non_canoical_R_greater_than_field_element[i][1],
+                                    non_canoical_R_greater_than_field_element[i][2]) != -1)    
+        {
+            printf("input for sig num : %i accepted \n", i);
+            printf("test failed\n");
+        }
+    }
+    printf("success\n");        
+}
+
 int main(void)
 {
     crypto_sign_state  st;
@@ -1141,7 +1472,7 @@ int main(void)
             printf("detached signature failure: [%u]\n", i);
             continue;
         }
-        if (crypto_sign_verify_detached(sig,
+        if (crypto_sign_bv_compatible_verify_detached(sig,
                                         (const unsigned char *)test_data[i].m,
                                         i, test_data[i].pk) != 0) {
             printf("detached signature verification failed: [%u]\n", i);
@@ -1165,7 +1496,7 @@ int main(void)
 
     for (j = 1U; j < 8U; j++) {
         sig[63] ^= (j << 5);
-        if (crypto_sign_verify_detached(sig,
+        if (crypto_sign_bv_compatible_verify_detached(sig,
                                         (const unsigned char *)test_data[i].m,
                                         i, test_data[i].pk) != -1) {
             printf("detached signature verification should have failed\n");
@@ -1175,14 +1506,14 @@ int main(void)
     }
 
 #ifndef ED25519_COMPAT
-    if (crypto_sign_verify_detached(sig,
+    if (crypto_sign_bv_compatible_verify_detached(sig,
                                     (const unsigned char *)test_data[i].m,
                                     i, non_canonical_p) != -1) {
         printf("detached signature verification with non-canonical key should have failed\n");
     }
 #endif
     memset(pk, 0, sizeof pk);
-    if (crypto_sign_verify_detached(sig,
+    if (crypto_sign_bv_compatible_verify_detached(sig,
                                     (const unsigned char *)test_data[i].m,
                                     i, pk) != -1) {
         printf("detached signature verification should have failed\n");
@@ -1190,7 +1521,7 @@ int main(void)
 
     memset(sig, 0xff, 32);
     sig[0] = 0xdb;
-    if (crypto_sign_verify_detached(sig,
+    if (crypto_sign_bv_compatible_verify_detached(sig,
                                     (const unsigned char *)test_data[i].m,
                                     i, pk) != -1) {
         printf("detached signature verification should have failed\n");
@@ -1201,7 +1532,7 @@ int main(void)
     sodium_hex2bin(pk, crypto_sign_PUBLICKEYBYTES,
                    "3eee494fb9eac773144e34b0c755affaf33ea782c0722e5ea8b150e61209ab36",
                    crypto_sign_PUBLICKEYBYTES * 2, NULL, NULL, NULL);
-    if (crypto_sign_verify_detached(sig,
+    if (crypto_sign_bv_compatible_verify_detached(sig,
                                     (const unsigned char *)test_data[i].m,
                                     i, pk) != -1) {
         printf("signature with an invalid public key should have failed\n");
@@ -1210,7 +1541,7 @@ int main(void)
     sodium_hex2bin(pk, crypto_sign_PUBLICKEYBYTES,
                    "0200000000000000000000000000000000000000000000000000000000000000",
                    crypto_sign_PUBLICKEYBYTES * 2, NULL, NULL, NULL);
-    if (crypto_sign_verify_detached(sig,
+    if (crypto_sign_bv_compatible_verify_detached(sig,
                                     (const unsigned char *)test_data[i].m,
                                     i, pk) != -1) {
         printf("signature with an invalid public key should have failed\n");
@@ -1219,7 +1550,7 @@ int main(void)
     sodium_hex2bin(pk, crypto_sign_PUBLICKEYBYTES,
                    "0500000000000000000000000000000000000000000000000000000000000000",
                    crypto_sign_PUBLICKEYBYTES * 2, NULL, NULL, NULL);
-    if (crypto_sign_verify_detached(sig,
+    if (crypto_sign_bv_compatible_verify_detached(sig,
                                     (const unsigned char *)test_data[i].m,
                                     i, pk) != -1) {
         printf("signature with an invalid public key should have failed\n");
@@ -1237,7 +1568,7 @@ int main(void)
 
     crypto_sign_init(&st);
     crypto_sign_update(&st, (const unsigned char *)test_data[i].m, i);
-    if (crypto_sign_final_verify(&st, sig, pk) != 0) {
+    if (crypto_sign_final_bv_compatible_verify(&st, sig, pk) != 0) {
         printf("ed5519ph verification failed\n");
     }
     crypto_sign_init(&st);
@@ -1245,16 +1576,16 @@ int main(void)
     crypto_sign_update(&st, (const unsigned char *)test_data[i].m, i / 2);
     crypto_sign_update(&st, ((const unsigned char *)test_data[i].m) + i / 2,
                        i - i / 2);
-    if (crypto_sign_final_verify(&st, sig, pk) != 0) {
+    if (crypto_sign_final_bv_compatible_verify(&st, sig, pk) != 0) {
         printf("ed5519ph verification failed\n");
     }
     sig[0]++;
-    if (crypto_sign_final_verify(&st, sig, pk) != -1) {
+    if (crypto_sign_final_bv_compatible_verify(&st, sig, pk) != -1) {
         printf("ed5519ph verification could be forged\n");
     }
     sig[0]--;
     pk[0]++;
-    if (crypto_sign_final_verify(&st, sig, pk) != -1) {
+    if (crypto_sign_final_bv_compatible_verify(&st, sig, pk) != -1) {
         printf("ed5519ph verification could be forged\n");
     }
     sodium_hex2bin(sk, crypto_sign_SECRETKEYBYTES,
@@ -1276,7 +1607,7 @@ int main(void)
 
     crypto_sign_init(&st);
     crypto_sign_update(&st, (const unsigned char *) "abc", 3);
-    if (crypto_sign_final_verify(&st, sig, pk) != 0) {
+    if (crypto_sign_final_bv_compatible_verify(&st, sig, pk) != 0) {
         printf("ed25519ph verification failed\n");
     }
     if (crypto_sign_keypair(pk, sk) != 0) {
@@ -1320,5 +1651,7 @@ int main(void)
     exit(0);
 #endif
 
+    test_inputs();
+    test_edge_cases();
     return 0;
 }

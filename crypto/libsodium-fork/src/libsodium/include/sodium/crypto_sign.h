@@ -92,6 +92,13 @@ int crypto_sign_verify_detached(const unsigned char *sig,
             __attribute__ ((warn_unused_result)) __attribute__ ((nonnull));
 
 SODIUM_EXPORT
+int crypto_sign_bv_compatible_verify_detached(const unsigned char *sig,
+                                const unsigned char *m,
+                                unsigned long long mlen,
+                                const unsigned char *pk)
+            __attribute__ ((warn_unused_result)) __attribute__ ((nonnull));
+
+SODIUM_EXPORT
 int crypto_sign_init(crypto_sign_state *state);
 
 SODIUM_EXPORT
@@ -107,6 +114,11 @@ int crypto_sign_final_create(crypto_sign_state *state, unsigned char *sig,
 
 SODIUM_EXPORT
 int crypto_sign_final_verify(crypto_sign_state *state, const unsigned char *sig,
+                             const unsigned char *pk)
+            __attribute__ ((warn_unused_result)) __attribute__ ((nonnull));
+
+SODIUM_EXPORT
+int crypto_sign_final_bv_compatible_verify(crypto_sign_state *state, const unsigned char *sig,
                              const unsigned char *pk)
             __attribute__ ((warn_unused_result)) __attribute__ ((nonnull));
 

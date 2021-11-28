@@ -294,7 +294,7 @@ int crypto_sign_ed25519_open_batch(const unsigned char **m, const unsigned long 
 
             fallback:
             for (i = 0; i < batchsize; i++) {
-                valid_p[i] = crypto_sign_ed25519_verify_detached(RS[i], m[i], mlen[i], pk[i]) ? 0 : 1;
+                valid_p[i] = crypto_sign_bv_compatible_verify_detached(RS[i], m[i], mlen[i], pk[i]) ? 0 : 1;
                 ret |= (valid_p[i] ^ 1);
             }
         }
@@ -309,7 +309,7 @@ int crypto_sign_ed25519_open_batch(const unsigned char **m, const unsigned long 
 
 
     for (i = 0; i < num; i++) {        
-        valid_p[i] = crypto_sign_ed25519_verify_detached(RS[i], m[i], mlen[i], pk[i]) ? 0 : 1;
+        valid_p[i] = crypto_sign_bv_compatible_verify_detached(RS[i], m[i], mlen[i], pk[i]) ? 0 : 1;
         ret |= (valid_p[i] ^ 1);
     }
 
