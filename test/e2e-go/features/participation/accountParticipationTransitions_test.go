@@ -102,7 +102,7 @@ func TestKeyRegistration(t *testing.T) {
 	sAccount := accountResponse.Address
 
 	// Add an overlapping participation keys for the account on round 1 and 2
-	last := uint64(6_000_000)
+	last := uint64(3_000)
 	numNew := 2
 	for i := 0; i < numNew; i++ {
 		response, part, err := installParticipationKey(t, sClient, sAccount, 0, last+uint64(i))

@@ -67,7 +67,7 @@ func (node *AlgorandFullNode) MakePrioResponse(challenge string) []byte {
 	// Find the participation key that has the highest weight in the
 	// latest round.
 	var maxWeight uint64
-	var maxPart account.Participation
+	var maxPart account.ParticipationRoundSecrets
 
 	latest := node.ledger.LastRound()
 	proto, err := node.ledger.ConsensusParams(latest)

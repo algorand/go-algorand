@@ -25,11 +25,11 @@ import (
 type SimpleKeyManager []account.Participation
 
 // VotingKeys implements KeyManager.VotingKeys.
-func (m SimpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Participation {
-	var km []account.Participation
+func (m SimpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.ParticipationRoundSecrets {
+	var km []account.ParticipationRoundSecrets
 	for _, acc := range m {
 		if acc.OverlapsInterval(votingRound, votingRound) {
-			km = append(km, acc)
+			km = append(km, acc.RoundSecrets(votingRound))
 		}
 	}
 	return km

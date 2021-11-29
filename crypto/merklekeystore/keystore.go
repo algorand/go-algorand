@@ -62,6 +62,22 @@ type (
 		Tree merklearray.Tree `codec:"tree"`
 	}
 
+	// SignerInRound represents the StateProof signer for a specified round.
+	// msgp:ignore SignerInRound
+	SignerInRound struct {
+		SigningKey *crypto.GenericSigningKey
+
+		// The round for which this SigningKey is related to
+		Round uint64
+
+		// the first round is used to set up the intervals.
+		FirstValid uint64 `codec:"rnd"`
+
+		Interval uint64 `codec:"iv"`
+
+		Tree merklearray.Tree `codec:"tree"`
+	}
+
 	// Verifier is used to verify a merklekeystore.Signature produced by merklekeystore.Signer.
 	// It validates a merklekeystore.Signature by validating the commitment on the GenericVerifyingKey and validating the signature with that key
 	Verifier [KeyStoreRootSize]byte
@@ -158,8 +174,40 @@ func (s *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 	}, nil
 }
 
+// Sign outputs a signature + proof for the signing key.
+func (s *SignerInRound) Sign(hashable crypto.Hashable, round uint64) (Signature, error) {
+	key := s.SigningKey
+	signingKey := key.GetSigner()
+
+	if err := checkKeystoreParams(s.FirstValid, round, s.Interval); err != nil {
+		return Signature{}, err
+	}
+
+	index := s.getMerkleTreeIndex(round)
+	proof, err := s.Tree.Prove([]uint64{index})
+	if err != nil {
+		return Signature{}, err
+	}
+
+	sig, err := signingKey.Sign(hashable)
+	if err != nil {
+		return Signature{}, err
+	}
+
+	return Signature{
+		ByteSignature: sig,
+		Proof:         Proof(*proof),
+		VerifyingKey:  *signingKey.GetVerifyingKey(),
+	}, nil
+}
+
 // expects valid rounds, i.e round that are bigger than FirstValid.
 func (s *Signer) getMerkleTreeIndex(round uint64) uint64 {
+	return roundToIndex(s.FirstValid, round, s.Interval)
+}
+
+// expects valid rounds, i.e round that are bigger than FirstValid.
+func (s *SignerInRound) getMerkleTreeIndex(round uint64) uint64 {
 	return roundToIndex(s.FirstValid, round, s.Interval)
 }
 
@@ -180,6 +228,27 @@ func (s *Signer) Restore(store db.Accessor) (err error) {
 	}
 	s.keyStore = keystore
 	return
+}
+
+// GetKey returns the SigningKey for a specified round
+func (s *Signer) GetKey(round uint64) *crypto.GenericSigningKey {
+	key, err := s.keyStore.GetKey(uint64(round))
+	// TODO: do not ignore error (log or return?)
+	if err != nil {
+		return nil
+	}
+	return key
+}
+
+// GetSignerInRound return the signer for the specified round
+func (s *Signer) GetSignerInRound(round uint64) *SignerInRound {
+	return &SignerInRound{
+		SigningKey: s.GetKey(round),
+		Round:      round,
+		FirstValid: s.FirstValid,
+		Interval:   s.Interval,
+		Tree:       s.Tree,
+	}
 }
 
 // IsEmpty returns true if the verifier contains an empty key

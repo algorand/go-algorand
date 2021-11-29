@@ -612,11 +612,11 @@ func generatePseudoRandomVRF(keynum int) *crypto.VRFSecrets {
 	}
 }
 
-func createTestAccountsAndBalances(t *testing.T, numNodes int, rootSeed []byte) (accounts []account.Participation, balances map[basics.Address]basics.AccountData) {
+func createTestAccountsAndBalances(t *testing.T, numNodes int, rootSeed []byte) (accounts []account.ParticipationRoundSecrets, balances map[basics.Address]basics.AccountData) {
 	off := int(rand.Uint32() >> 2) // prevent name collision from running tests more than once
 
 	// system state setup: keygen, stake initialization
-	accounts = make([]account.Participation, numNodes)
+	accounts = make([]account.ParticipationRoundSecrets, numNodes)
 	balances = make(map[basics.Address]basics.AccountData, numNodes)
 	var seed crypto.Seed
 	copy(seed[:], rootSeed)
@@ -654,7 +654,7 @@ func createTestAccountsAndBalances(t *testing.T, numNodes int, rootSeed []byte) 
 
 		// save partkeys to db
 		{
-			accounts[i] = account.Participation{
+			accounts[i] = account.ParticipationRoundSecrets{
 				Parent:     rootAddress,
 				VRF:        generatePseudoRandomVRF(i),
 				Voting:     v,

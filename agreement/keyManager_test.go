@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-func makeRecordingKeyManager(accounts []account.Participation) *recordingKeyManager {
+func makeRecordingKeyManager(accounts []account.ParticipationRoundSecrets) *recordingKeyManager {
 	return &recordingKeyManager{
 		keys:      accounts,
 		recording: make(map[basics.Address]map[account.ParticipationAction]basics.Round),
@@ -35,14 +35,14 @@ func makeRecordingKeyManager(accounts []account.Participation) *recordingKeyMana
 
 // recordingKeyManager provides a simple implementation of a KeyManager for unit tests.
 type recordingKeyManager struct {
-	keys      []account.Participation
+	keys      []account.ParticipationRoundSecrets
 	recording map[basics.Address]map[account.ParticipationAction]basics.Round
 	mutex     deadlock.Mutex
 }
 
 // VotingKeys implements KeyManager.VotingKeys.
-func (m *recordingKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Participation {
-	var km []account.Participation
+func (m *recordingKeyManager) VotingKeys(votingRound, _ basics.Round) []account.ParticipationRoundSecrets {
+	var km []account.ParticipationRoundSecrets
 	for _, acc := range m.keys {
 		if acc.OverlapsInterval(votingRound, votingRound) {
 			km = append(km, acc)

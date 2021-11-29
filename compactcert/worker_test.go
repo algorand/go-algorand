@@ -100,10 +100,10 @@ func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 	}
 }
 
-func (s *testWorkerStubs) Keys(rnd basics.Round) (out []account.Participation) {
+func (s *testWorkerStubs) Keys(rnd basics.Round) (out []account.ParticipationRoundSecrets) {
 	for _, part := range s.keys {
 		if part.OverlapsInterval(rnd, rnd) {
-			out = append(out, part)
+			out = append(out, part.RoundSecrets(rnd))
 		}
 	}
 	return

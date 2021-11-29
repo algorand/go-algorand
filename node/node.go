@@ -1276,10 +1276,10 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.Valid
 
 // VotingKeys implements the key manager's VotingKeys method, and provides additional validation with the ledger.
 // that allows us to load multiple overlapping keys for the same account, and filter these per-round basis.
-func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []account.Participation {
+func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []account.ParticipationRoundSecrets {
 	keys := node.accountManager.Keys(votingRound)
 
-	participations := make([]account.Participation, 0, len(keys))
+	participations := make([]account.ParticipationRoundSecrets, 0, len(keys))
 	accountsData := make(map[basics.Address]basics.OnlineAccountData, len(keys))
 	matchingAccountsKeys := make(map[basics.Address]bool)
 	mismatchingAccountsKeys := make(map[basics.Address]int)

@@ -76,8 +76,8 @@ type asyncPseudonode struct {
 	quit                   chan struct{}   // a quit signal for the verifier goroutines
 	closeWg                *sync.WaitGroup // frontend waitgroup to get notified when all the verifier goroutines are done.
 	monitor                *coserviceMonitor
-	participationKeysRound basics.Round            // the round to which the participationKeys matches
-	participationKeys      []account.Participation // the list of the participation keys for round participationKeysRound
+	participationKeysRound basics.Round                        // the round to which the participationKeys matches
+	participationKeys      []account.ParticipationRoundSecrets // the list of the participation keys for round participationKeysRound
 
 	proposalsVerifier *pseudonodeVerifier // dynamically generated verifier goroutine that manages incoming proposals making request.
 	votesVerifier     *pseudonodeVerifier // dynamically generated verifier goroutine that manages incoming votes making request.
@@ -93,7 +93,7 @@ type pseudonodeBaseTask struct {
 	node          *asyncPseudonode
 	context       context.Context // the context associated with that task; context might expire for a single task but remain valid for others.
 	out           chan externalEvent
-	participation []account.Participation
+	participation []account.ParticipationRoundSecrets
 }
 
 type pseudonodeVotesTask struct {
@@ -198,7 +198,7 @@ func (n asyncPseudonode) MakeVotes(ctx context.Context, r round, p period, s ste
 
 // load the participation keys from the account manager ( as needed ) for the
 // current round.
-func (n *asyncPseudonode) loadRoundParticipationKeys(voteRound basics.Round) []account.Participation {
+func (n *asyncPseudonode) loadRoundParticipationKeys(voteRound basics.Round) []account.ParticipationRoundSecrets {
 	// if we've already loaded up the keys, then just skip loading them.
 	if n.participationKeysRound == voteRound {
 		return n.participationKeys
@@ -267,7 +267,7 @@ func (n asyncPseudonode) makePseudonodeVerifier(voteVerifier *AsyncVoteVerifier)
 }
 
 // makeProposals creates a slice of block proposals for the given round and period.
-func (n asyncPseudonode) makeProposals(round basics.Round, period period, accounts []account.Participation) ([]proposal, []unauthenticatedVote) {
+func (n asyncPseudonode) makeProposals(round basics.Round, period period, accounts []account.ParticipationRoundSecrets) ([]proposal, []unauthenticatedVote) {
 	ve, err := n.factory.AssembleBlock(round)
 	if err != nil {
 		if err != ErrAssembleBlockRoundStale {
@@ -303,7 +303,7 @@ func (n asyncPseudonode) makeProposals(round basics.Round, period period, accoun
 
 // makeVotes creates a slice of votes for a given proposal value in a given
 // round, period, and step.
-func (n asyncPseudonode) makeVotes(round basics.Round, period period, step step, proposal proposalValue, participation []account.Participation) []unauthenticatedVote {
+func (n asyncPseudonode) makeVotes(round basics.Round, period period, step step, proposal proposalValue, participation []account.ParticipationRoundSecrets) []unauthenticatedVote {
 	votes := make([]unauthenticatedVote, 0)
 	for _, account := range participation {
 		rv := rawVote{Sender: account.Address(), Round: round, Period: period, Step: step, Proposal: proposal}

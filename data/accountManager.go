@@ -57,13 +57,13 @@ func MakeAccountManager(log logging.Logger, registry account.ParticipationRegist
 }
 
 // Keys returns a list of Participation accounts.
-func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participation) {
+func (manager *AccountManager) Keys(rnd basics.Round) (out []account.ParticipationRoundSecrets) {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 
 	for _, part := range manager.partKeys {
 		if part.OverlapsInterval(rnd, rnd) {
-			out = append(out, part.Participation)
+			out = append(out, part.Participation.RoundSecrets(rnd))
 		}
 	}
 	return out
