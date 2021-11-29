@@ -104,7 +104,7 @@ func TestKeyRegistration(t *testing.T) {
 	last := uint64(6_000_000)
 	numNew := 2
 	for i := 0; i < numNew; i++ {
-		response, part, err := installParticipationKey(t, sClient, sAccount, 0, last + uint64(i))
+		response, part, err := installParticipationKey(t, sClient, sAccount, 0, last+uint64(i))
 		require.NoError(t, err)
 		require.NotNil(t, response)
 		registerParticipationAndWait(t, sClient, part)
@@ -156,7 +156,7 @@ func TestKeyRegistration(t *testing.T) {
 			checkKey(k, 1, lookback, lookback, "keys[0]")
 		case last:
 			checkKey(k, lookback+1, lookback+1, lookback+1, "keys[1]")
-		case last+1:
+		case last + 1:
 			checkKey(k, lookback+2, last+1, lookback+2, "keys[2]")
 		}
 	}
