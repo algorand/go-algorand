@@ -82,6 +82,22 @@ type ParticipationRecord struct {
 	Voting *crypto.OneTimeSignatureSecrets
 }
 
+// StateProofKey is a placeholder for the real state proof key type.
+// PKI TODO: Replace this with a real object.
+type StateProofKey []byte
+
+// ParticipationRecordForRound adds in the per-round state proof key.
+type ParticipationRecordForRound struct {
+	ParticipationRecord
+
+	StateProof StateProofKey
+}
+
+// IsZero returns true if the object contains zero values.
+func (r ParticipationRecordForRound) IsZero() bool {
+	return r.StateProof == nil && r.ParticipationRecord.IsZero()
+}
+
 var zeroParticipationRecord = ParticipationRecord{}
 
 // IsZero returns true if the object contains zero values.
@@ -152,15 +168,17 @@ var ErrMultipleKeysForID = errors.New("multiple valid keys found for the same pa
 // ErrNoKeyForID there may be cases where a key is deleted and used at the same time, so this error should be handled.
 var ErrNoKeyForID = errors.New("no valid key found for the participationID")
 
+// ErrSecretNotFound is used when attempting to lookup secrets for a particular round.
+var ErrSecretNotFound = errors.New("the participation ID did not have secrets for the requested round")
+
 // ParticipationRegistry contain all functions for interacting with the Participation Registry.
 type ParticipationRegistry interface {
 	// Insert adds a record to storage and computes the ParticipationID
 	Insert(record Participation) (ParticipationID, error)
 
-	// PKI TODO: use a real type instead of []byte
 	// AppendKeys appends state proof keys to an existing Participation record. Keys can only be appended
 	// once, an error
-	AppendKeys(id ParticipationID, keys map[uint64][]byte) error
+	AppendKeys(id ParticipationID, keys map[uint64]StateProofKey) error
 
 	// Delete removes a record from storage.
 	Delete(id ParticipationID) error
@@ -173,6 +191,9 @@ type ParticipationRegistry interface {
 
 	// GetAll of the participation records.
 	GetAll() []ParticipationRecord
+
+	// GetWithSecrets fetches a record with all secrets for a particular round.
+	GetWithSecrets(id ParticipationID, round basics.Round) (ParticipationRecordForRound, error)
 
 	// Register updates the EffectiveFirst and EffectiveLast fields. If there are multiple records for the account
 	// then it is possible for multiple records to be updated.
@@ -263,7 +284,7 @@ const (
 		)`
 	insertKeysetQuery         = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution, vrf, stateProof) VALUES (?, ?, ?, ?, ?, ?, ?)`
 	insertRollingQuery        = `INSERT INTO Rolling (pk, voting) VALUES (?, ?)`
-	insertStateProofKeysQuery = `INSERT INTO StateProofKeys (pk, round, key) VALUES (?, ?, ?)`
+	appendStateProofKeysQuery = `INSERT INTO StateProofKeys (pk, round, key) VALUES(?, ?, ?)`
 
 	// SELECT pk FROM Keysets WHERE participationID = ?
 	selectPK      = `SELECT pk FROM Keysets WHERE participationID = ? LIMIT 1`
@@ -276,6 +297,10 @@ const (
 		FROM Keysets k
 		INNER JOIN Rolling r
 		ON k.pk = r.pk`
+	selectStateProofKeys   = `SELECT s.key
+		FROM StateProofKeys s
+		WHERE round=?
+		   AND pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
 	deleteKeysets          = `DELETE FROM Keysets WHERE pk=?`
 	deleteRolling          = `DELETE FROM Rolling WHERE pk=?`
 	updateRollingFieldsSQL = `UPDATE Rolling
@@ -338,7 +363,7 @@ type updatingParticipationRecord struct {
 type partDBWriteRecord struct {
 	insertID ParticipationID
 	insert   Participation
-	keys     map[uint64][]byte
+	keys     map[uint64]StateProofKey
 
 	registerUpdated map[ParticipationID]updatingParticipationRecord
 
@@ -391,7 +416,7 @@ func (db *participationDB) writeThread() {
 				err = db.insertInner(wr.insert, wr.insertID)
 			}
 			if len(wr.keys) != 0 {
-				err = db.inertKeysInner(wr.insertID, wr.keys)
+				err = db.appendKeysInner(wr.insertID, wr.keys)
 			}
 		} else if !wr.delete.IsZero() {
 			err = db.deleteInner(wr.delete)
@@ -448,7 +473,7 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 			record.KeyDilution,
 			rawVRF,
 			rawStateProof)
-		if err := verifyExecWithOneRowEffected(err, result, "insert keyset"); err != nil {
+		if err = verifyExecWithOneRowEffected(err, result, "insert keyset"); err != nil {
 			return err
 		}
 		pk, err := result.LastInsertId()
@@ -458,7 +483,7 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 
 		// Create Rolling entry
 		result, err = tx.Exec(insertRollingQuery, pk, rawVoting)
-		if err := verifyExecWithOneRowEffected(err, result, "insert rolling"); err != nil {
+		if err = verifyExecWithOneRowEffected(err, result, "insert rolling"); err != nil {
 			return err
 		}
 
@@ -467,11 +492,35 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 	return err
 }
 
-func (db *participationDB) inertKeysInner(id ParticipationID, keys map[uint64][]byte) (err error) {
-	// PKI TODO: Insert the keys
-	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+func (db *participationDB) appendKeysInner(id ParticipationID, keys map[uint64]StateProofKey) error {
+	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		// Fetch primary key
+		var pk int
+		row := tx.QueryRow(selectPK, id[:])
+		err := row.Scan(&pk)
+		if err == sql.ErrNoRows {
+			// nothing to do.
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("unable to scan pk: %w", err)
+		}
 
+		stmt, err := tx.Prepare(appendStateProofKeysQuery)
+		if err != nil {
+			return fmt.Errorf("unable to prepare state proof insert: %w", err)
+		}
+
+		for k, v := range keys {
+			result, err := stmt.Exec(pk, k, v)
+			if err = verifyExecWithOneRowEffected(err, result, "append keys"); err != nil {
+				return err
+			}
+		}
+
+		return nil
 	})
+	return err
 }
 
 func (db *participationDB) registerInner(updated map[ParticipationID]updatingParticipationRecord) error {
@@ -523,12 +572,12 @@ func (db *participationDB) deleteInner(id ParticipationID) error {
 
 		// Delete rows
 		result, err := tx.Exec(deleteKeysets, pk)
-		if err := verifyExecWithOneRowEffected(err, result, "delete keyset"); err != nil {
+		if err = verifyExecWithOneRowEffected(err, result, "delete keyset"); err != nil {
 			return err
 		}
 
 		result, err = tx.Exec(deleteRolling, pk)
-		if err := verifyExecWithOneRowEffected(err, result, "delete rolling"); err != nil {
+		if err = verifyExecWithOneRowEffected(err, result, "delete rolling"); err != nil {
 			return err
 		}
 
@@ -599,6 +648,8 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 
 	id = record.ID()
 	if _, ok := db.cache[id]; ok {
+		// PKI TODO: Add a special case to set the StateProof public key if it is in the input
+		//           but not in the cache.
 		return id, ErrAlreadyInserted
 	}
 
@@ -640,17 +691,26 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 	return
 }
 
-func (db *participationDB) AppendKeys(id ParticipationID, keys map[uint64][]byte) error {
+func (db *participationDB) AppendKeys(id ParticipationID, keys map[uint64]StateProofKey) error {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
-	if _, ok := db.cache[id]; ok {
+	if _, ok := db.cache[id]; !ok {
 		return ErrParticipationIDNotFound
 	}
 
-	db.writeQueue <- partDBWriteRecord{
-
+	keyCopy := make(map[uint64]StateProofKey)
+	for k, v := range keys {
+		keyCopy[k] = v // PKI TODO: Deep copy?
 	}
+
+	// Write to the DB asynchronously.
+	db.writeQueue <- partDBWriteRecord{
+		insertID: id,
+		keys:     keyCopy,
+	}
+
+	// Keys not stored in cache, no more work to do.
 
 	return nil
 }
@@ -665,6 +725,7 @@ func (db *participationDB) Delete(id ParticipationID) error {
 	}
 	delete(db.dirty, id)
 	delete(db.cache, id)
+
 	// do the db part async
 	db.writeQueue <- partDBWriteRecord{
 		delete: id,
@@ -804,6 +865,34 @@ func (db *participationDB) GetAll() []ParticipationRecord {
 		results = append(results, record.Duplicate())
 	}
 	return results
+}
+
+// GetWithSecrets fetches a record with all secrets for a particular round.
+func (db *participationDB) GetWithSecrets(id ParticipationID, round basics.Round) (ParticipationRecordForRound, error) {
+	var result ParticipationRecordForRound
+	result.ParticipationRecord = db.Get(id)
+	if result.ParticipationRecord.IsZero() {
+		return ParticipationRecordForRound{}, ErrParticipationIDNotFound
+	}
+
+	err := db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		row := tx.QueryRow(selectStateProofKeys, round, id[:])
+		err := row.Scan(&result.StateProof)
+		if err == sql.ErrNoRows {
+			return ErrSecretNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("error while querying secrets: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return ParticipationRecordForRound{}, fmt.Errorf("unable to lookup secrets: %w", err)
+	}
+
+	return result, nil
 }
 
 // updateRollingFields sets all of the rolling fields according to the record object.
