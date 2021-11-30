@@ -1403,7 +1403,7 @@ transactionGroupLoop:
 			if !ok {
 				break transactionGroupLoop
 			} else if txgroup.err != nil {
-				return ledgercore.StateDelta{}, err
+				return ledgercore.StateDelta{}, txgroup.err
 			}
 
 			for _, br := range txgroup.balances {
