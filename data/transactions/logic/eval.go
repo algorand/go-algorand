@@ -2630,7 +2630,8 @@ func opEd25519verify(cx *EvalContext) {
 	copy(sig[:], cx.stack[prev].Bytes)
 
 	msg := Msg{ProgramHash: cx.programHash(), Data: cx.stack[pprev].Bytes}
-	if sv.Verify(msg, sig) {
+	useBatchVerificationCompatibleVersion := cx.EvalParams.Proto.EnableBatchVerification
+	if sv.Verify(msg, sig, useBatchVerificationCompatibleVersion) {
 		cx.stack[pprev].Uint = 1
 	} else {
 		cx.stack[pprev].Uint = 0

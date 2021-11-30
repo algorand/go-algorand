@@ -43,7 +43,7 @@ func TestVerifyZeros(t *testing.T) {
 	var pk SignatureVerifier
 	var sig Signature
 	for x := byte(0); x < 255; x++ {
-		if pk.VerifyBytes([]byte{x}, sig) {
+		if pk.VerifyBytes([]byte{x}, sig, true) {
 			t.Errorf("Zero sig with zero pk successfully verified message %x", x)
 		}
 	}
@@ -84,7 +84,7 @@ func BenchmarkSignVerify(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		sig := c.Sign(s)
-		_ = c.Verify(s, sig)
+		_ = c.Verify(s, sig, true)
 	}
 }
 
@@ -108,6 +108,6 @@ func BenchmarkVerify(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_ = c.Verify(strs[i], sigs[i])
+		_ = c.Verify(strs[i], sigs[i], true)
 	}
 }

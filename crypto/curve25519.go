@@ -123,6 +123,17 @@ func ed25519Verify(public ed25519PublicKey, data []byte, sig ed25519Signature) b
 	return result == 0
 }
 
+func ed25519VerifyBatchVerificationCompatibleVersion(public ed25519PublicKey, data []byte, sig ed25519Signature) bool {
+	// &data[0] will make Go panic if msg is zero length
+	d := (*C.uchar)(C.NULL)
+	if len(data) != 0 {
+		d = (*C.uchar)(&data[0])
+	}
+
+	result := C.crypto_sign_ed25519_bv_compatible_verify_detached((*C.uchar)(&sig[0]), d, C.ulonglong(len(data)), (*C.uchar)(&public[0]))
+	return result == 0
+}
+
 // A Signature is a cryptographic signature. It proves that a message was
 // produced by a holder of a cryptographic secret.
 type Signature ed25519Signature
@@ -211,15 +222,21 @@ func (s *SignatureSecrets) SignBytes(message []byte) Signature {
 //
 // It returns true if this is the case; otherwise, it returns false.
 //
-func (v SignatureVerifier) Verify(message Hashable, sig Signature) bool {
+func (v SignatureVerifier) Verify(message Hashable, sig Signature, useBatchVerificationCompatibleVersion bool) bool {
 	cryptoSigSecretsVerifyTotal.Inc(map[string]string{})
+	if useBatchVerificationCompatibleVersion {
+		return ed25519VerifyBatchVerificationCompatibleVersion(ed25519PublicKey(v), hashRep(message), ed25519Signature(sig))
+	}
 	return ed25519Verify(ed25519PublicKey(v), hashRep(message), ed25519Signature(sig))
 }
 
 // VerifyBytes verifies a signature, where the message is not hashed first.
 // Caller is responsible for domain separation.
 // If the message is a Hashable, Verify() can be used instead.
-func (v SignatureVerifier) VerifyBytes(message []byte, sig Signature) bool {
+func (v SignatureVerifier) VerifyBytes(message []byte, sig Signature, useBatchVerificationCompatibleVersion bool) bool {
 	cryptoSigSecretsVerifyBytesTotal.Inc(map[string]string{})
+	if useBatchVerificationCompatibleVersion {
+		return ed25519VerifyBatchVerificationCompatibleVersion(ed25519PublicKey(v), message, ed25519Signature(sig))
+	}
 	return ed25519Verify(ed25519PublicKey(v), message, ed25519Signature(sig))
 }

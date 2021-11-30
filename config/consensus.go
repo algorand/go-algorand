@@ -395,6 +395,9 @@ type ConsensusParams struct {
 	// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts, which need
 	// to be taken offline, that would be proposed to be taken offline.
 	MaxProposedExpiredOnlineAccounts int
+
+	//EnableBatchVerification enable the use of the batch verification algorithm.
+	EnableBatchVerification bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1055,6 +1058,8 @@ func initConsensusProtocols() {
 	vFuture.LogicSigVersion = 6
 
 	vFuture.MaxProposedExpiredOnlineAccounts = 32
+
+	vFuture.EnableBatchVerification = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

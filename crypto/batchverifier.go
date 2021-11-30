@@ -44,9 +44,10 @@ import (
 
 // BatchVerifier enqueues signatures to be validated in batch.
 type BatchVerifier struct {
-	messages   []Hashable          // contains a slice of messages to be hashed. Each message is varible length
-	publicKeys []SignatureVerifier // contains a slice of public keys. Each individual public key is 32 bytes.
-	signatures []Signature         // contains a slice of signatures keys. Each individual signature is 64 bytes.
+	messages             []Hashable          // contains a slice of messages to be hashed. Each message is varible length
+	publicKeys           []SignatureVerifier // contains a slice of public keys. Each individual public key is 32 bytes.
+	signatures           []Signature         // contains a slice of signatures keys. Each individual signature is 64 bytes.
+	useBatchVerification bool
 }
 
 const minBatchVerifierAlloc = 16
@@ -68,23 +69,31 @@ func ed25519_randombytes_unsafe(p unsafe.Pointer, len C.size_t) {
 
 }
 
+// MakeBatchVerifierWithAlgorithmDefaultSize create a BatchVerifier instance. This function pre-allocates
+// amount of free space to enqueue signatures without expanding. this function always use the batch
+// verification algorithm
+func MakeBatchVerifierWithAlgorithmDefaultSize() *BatchVerifier {
+	return MakeBatchVerifier(minBatchVerifierAlloc, true)
+}
+
 // MakeBatchVerifierDefaultSize create a BatchVerifier instance. This function pre-allocates
-// amount of free space to enqueue signatures without exapneding
-func MakeBatchVerifierDefaultSize() *BatchVerifier {
-	return MakeBatchVerifier(minBatchVerifierAlloc)
+// amount of free space to enqueue signatures without expanding
+func MakeBatchVerifierDefaultSize(shouldUseBatchVerification bool) *BatchVerifier {
+	return MakeBatchVerifier(minBatchVerifierAlloc, shouldUseBatchVerification)
 }
 
 // MakeBatchVerifier create a BatchVerifier instance. This function pre-allocates
 // a given space so it will not expaned the storage
-func MakeBatchVerifier(hint int) *BatchVerifier {
+func MakeBatchVerifier(hint int, shouldUseBatchVerification bool) *BatchVerifier {
 	// preallocate enough storage for the expected usage. We will reallocate as needed.
 	if hint < minBatchVerifierAlloc {
 		hint = minBatchVerifierAlloc
 	}
 	return &BatchVerifier{
-		messages:   make([]Hashable, 0, hint),
-		publicKeys: make([]SignatureVerifier, 0, hint),
-		signatures: make([]Signature, 0, hint),
+		messages:             make([]Hashable, 0, hint),
+		publicKeys:           make([]SignatureVerifier, 0, hint),
+		signatures:           make([]Signature, 0, hint),
+		useBatchVerification: shouldUseBatchVerification,
 	}
 }
 
@@ -123,21 +132,23 @@ func (b *BatchVerifier) Verify() error {
 		return ErrZeroTranscationsInBatch
 	}
 
-	//return  b.verifyOneByOne()
-	var messages = make([][]byte, b.GetNumberOfEnqueuedSignatures())
-	for i, m := range b.messages {
-		messages[i] = hashRep(m)
+	if b.useBatchVerification {
+		var messages = make([][]byte, b.GetNumberOfEnqueuedSignatures())
+		for i, m := range b.messages {
+			messages[i] = hashRep(m)
+		}
+		if batchVerificationImpl(messages, b.publicKeys, b.signatures) {
+			return nil
+		}
+		return fmt.Errorf("erro checking batch")
 	}
-	if batchVerificationImpl(messages, b.publicKeys, b.signatures) {
-		return nil
-	}
-	return fmt.Errorf("erro checking batch")
+	return b.verifyOneByOne()
 }
 
 func (b *BatchVerifier) verifyOneByOne() error {
 	for i := range b.messages {
 		verifier := SignatureVerifier(b.publicKeys[i])
-		if !verifier.Verify(b.messages[i], b.signatures[i]) {
+		if !verifier.Verify(b.messages[i], b.signatures[i], false) {
 			return ErrBatchVerificationFailed
 		}
 	}
