@@ -19,6 +19,7 @@ package libgoal
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -30,6 +31,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
@@ -891,6 +893,40 @@ func (c *Client) GetPendingTransactionsByAddress(addr string, maxTxns uint64) (r
 	return
 }
 
+// AddParticipationKey takes a participation key file and sends it to the node.
+// The key will be loaded into the system when the function returns successfully.
+func (c *Client) AddParticipationKey(keyfile string) (resp generated.PostParticipationResponse, err error) {
+	data, err := ioutil.ReadFile(keyfile)
+	if err != nil {
+		return
+	}
+
+	algod, err := c.ensureAlgodClient()
+	if err != nil {
+		return
+	}
+
+	return algod.PostParticipationKey(data)
+}
+
+// GetParticipationKeys gets the currently installed participation keys.
+func (c *Client) GetParticipationKeys() (resp generated.ParticipationKeysResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.GetParticipationKeys()
+	}
+	return
+}
+
+// GetParticipationKeyByID looks up a specific participation key by its participationID.
+func (c *Client) GetParticipationKeyByID(id string) (resp generated.ParticipationKeyResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.GetParticipationKeyByID(id)
+	}
+	return
+}
+
 // ExportKey exports the private key of the passed account, assuming it's available
 func (c *Client) ExportKey(walletHandle []byte, password, account string) (resp kmdapi.APIV1POSTKeyExportResponse, err error) {
 	kmd, err := c.ensureKmdClient()
@@ -1001,17 +1037,24 @@ func MakeDryrunState(client Client, txnOrStxn interface{}, otherTxns []transacti
 }
 
 // MakeDryrunStateGenerated function creates generatedV2.DryrunRequest data structure
-func MakeDryrunStateGenerated(client Client, txnOrStxn interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string) (dr generatedV2.DryrunRequest, err error) {
+func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string) (dr generatedV2.DryrunRequest, err error) {
 	var txns []transactions.SignedTxn
-	if txnOrStxn == nil {
-		// empty input do nothing
-	} else if txn, ok := txnOrStxn.(transactions.Transaction); ok {
-		txns = append(txns, transactions.SignedTxn{Txn: txn})
-	} else if stxn, ok := txnOrStxn.(transactions.SignedTxn); ok {
-		txns = append(txns, stxn)
-	} else {
-		err = fmt.Errorf("unsupported txn type")
-		return
+	if txnOrStxnOrSlice != nil {
+		switch txnType := txnOrStxnOrSlice.(type) {
+		case transactions.Transaction:
+			txns = append(txns, transactions.SignedTxn{Txn: txnType})
+		case []transactions.Transaction:
+			for _, t := range txnType {
+				txns = append(txns, transactions.SignedTxn{Txn: t})
+			}
+		case transactions.SignedTxn:
+			txns = append(txns, txnType)
+		case []transactions.SignedTxn:
+			txns = append(txns, txnType...)
+		default:
+			err = fmt.Errorf("unsupported txn type")
+			return
+		}
 	}
 
 	txns = append(txns, otherTxns...)
