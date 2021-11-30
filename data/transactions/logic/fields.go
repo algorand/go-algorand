@@ -469,8 +469,8 @@ type base64AlphabetSpec struct {
 }
 
 var base64AlphbetSpecs = []base64AlphabetSpec{
-	{URLAlph, StackBytes, 5},
-	{StdAlph, StackBytes, 5},
+	{URLAlph, StackBytes, 6},
+	{StdAlph, StackBytes, 6},
 }
 
 var base64AlphabetSpecByField map[Base64Alphabet]base64AlphabetSpec
