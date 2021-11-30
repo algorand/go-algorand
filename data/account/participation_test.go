@@ -60,6 +60,7 @@ func setupParticipationKey(t *testing.T, a *require.Assertions) (PersistedPartic
 	a.Equal(versions[PartTableSchemaName], PartTableSchemaVersion)
 	return part, rootDB, partDB, err
 }
+
 func setupkeyWithNoDBS(t *testing.T, a *require.Assertions) PersistedParticipation {
 	part, rootDB, partDB, err := setupParticipationKey(t, a)
 	a.NoError(err)
@@ -456,45 +457,73 @@ func createKeystoreTestDB(a *require.Assertions) *db.Accessor {
 	a.NoError(err)
 	a.NotNil(store)
 
-	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		_, err = tx.Exec(`CREATE TABLE schema (
-			tablename TEXT PRIMARY KEY,
-			version INTEGER
-		);`)
-		return err
-	})
-	a.NoError(err)
-
 	return &store
 }
 
-func TestKeyregValidityPeriod(t *testing.T) {
+func TestKeyregValidityOverLimit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	// TODO: change to ConsensusCurrentVersion when updated
-	testConsensusParams := config.Consensus[protocol.ConsensusFuture]
-	maxValidPeriod := uint64(10000)
-	testConsensusParams.MaxKeyregValidPeriod = maxValidPeriod
+	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
+	dilution := config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution
+
+	var address basics.Address
+	crypto.RandBytes(address[:])
 
 	store := createKeystoreTestDB(a)
 	defer store.Close()
-	firstValid := uint64(0)
-	lastValid := maxValidPeriod
-	_, err := generateKeystore(firstValid, lastValid, *store, testConsensusParams)
-	a.NoError(err)
-
-	store = createKeystoreTestDB(a)
-	defer store.Close()
-	firstValid = uint64(0)
-	lastValid = maxValidPeriod + 1
-	_, err = generateKeystore(firstValid, lastValid, *store, testConsensusParams)
+	firstValid := basics.Round(0)
+	lastValid := basics.Round(maxValidPeriod + 1)
+	_, err := FillDBWithParticipationKeys(*store, address, firstValid, lastValid, dilution)
 	a.Error(err)
+}
+
+func TestFillDBWithParticipationKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	// TODO: change to ConsensusCurrentVersion when updated
+	dilution := config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution
+
+	var address basics.Address
+	crypto.RandBytes(address[:])
+
+	store := createKeystoreTestDB(a)
+	defer store.Close()
+	firstValid := basics.Round(0)
+	lastValid := basics.Round(10000)
+	_, err := FillDBWithParticipationKeys(*store, address, firstValid, lastValid, dilution)
+	a.NoError(err)
+}
+
+// Long unit test, should only be run nightly
+func TestKeyregValidityPeriod(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	if testing.Short() {
+		t.Skip()
+	}
+
+	a := require.New(t)
+
+	// TODO: change to ConsensusCurrentVersion when updated
+	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
+	dilution := config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution
+
+	var address basics.Address
+
+	store := createKeystoreTestDB(a)
+	defer store.Close()
+	firstValid := basics.Round(0)
+	lastValid := basics.Round(maxValidPeriod)
+	crypto.RandBytes(address[:])
+	_, err := FillDBWithParticipationKeys(*store, address, firstValid, lastValid, dilution)
+	a.NoError(err)
 
 	store = createKeystoreTestDB(a)
 	defer store.Close()
-	firstValid = uint64(0)
-	lastValid = maxValidPeriod - 1
-	_, err = generateKeystore(firstValid, lastValid, *store, testConsensusParams)
-	a.NoError(err)
+	firstValid = basics.Round(0)
+	lastValid = basics.Round(maxValidPeriod + 1)
+	_, err = FillDBWithParticipationKeys(*store, address, firstValid, lastValid, dilution)
+	a.Error(err)
 }

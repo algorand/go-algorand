@@ -217,28 +217,19 @@ func (part PersistedParticipation) PersistNewParent() error {
 	})
 }
 
-func generateKeystore(firstValid, lastValid uint64, store db.Accessor, protoParams config.ConsensusParams) (*merklekeystore.Signer, error) {
-	interval := protoParams.CompactCertRounds
-	maxValidPeriod := protoParams.MaxKeyregValidPeriod
-
-	if maxValidPeriod != 0 && uint64(lastValid-firstValid) > maxValidPeriod {
-		return nil, fmt.Errorf("the validity period for merkleKeyStore is too large: the limit is %d", maxValidPeriod)
-	}
-
-	// Generate a new key which signs the compact certificates
-	stateProofSecrets, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), interval, crypto.FalconType, store)
-	if err != nil {
-		return nil, err
-	}
-
-	return stateProofSecrets, nil
-}
-
 // FillDBWithParticipationKeys initializes the passed database with participation keys
 func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firstValid, lastValid basics.Round, keyDilution uint64) (part PersistedParticipation, err error) {
 	if lastValid < firstValid {
 		err = fmt.Errorf("FillDBWithParticipationKeys: firstValid %d is after lastValid %d", firstValid, lastValid)
 		return
+	}
+
+	// TODO: change to ConsensusCurrentVersion when updated
+	interval := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
+	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
+
+	if maxValidPeriod != 0 && uint64(lastValid-firstValid) > maxValidPeriod {
+		return PersistedParticipation{}, fmt.Errorf("the validity period for merkleKeyStore is too large: the limit is %d", maxValidPeriod)
 	}
 
 	// Compute how many distinct participation keys we should generate
@@ -252,8 +243,8 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	// Generate a new VRF key, which lives in the participation keys db
 	vrf := crypto.GenerateVRFSecrets()
 
-	// TODO: change to ConsensusCurrentVersion when updated
-	stateProofSecrets, err := generateKeystore(uint64(firstValid), uint64(lastValid), store, config.Consensus[protocol.ConsensusFuture])
+	// Generate a new key which signs the compact certificates
+	stateProofSecrets, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), interval, crypto.FalconType, store)
 	if err != nil {
 		return PersistedParticipation{}, err
 	}

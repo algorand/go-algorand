@@ -105,7 +105,7 @@ func (k *keysArray) Marshal(pos uint64) ([]byte, error) {
 
 // New Generates a merklekeystore.Signer
 // The function allow creation of empty signers, i.e signers without any key to sign with.
-// keys can be created between [A,Z], if A == 0, keys created will be in the range (0,Z]
+// keys can be created between [firstValid,lastValid], if firstValid == 0, keys created will be in the range (0,lastValid]
 func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmType, store db.Accessor) (*Signer, error) {
 	if firstValid > lastValid {
 		return nil, errStartBiggerThanEndRound
