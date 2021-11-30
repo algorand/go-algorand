@@ -1060,7 +1060,9 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 	var localFixture fixtures.RestClientFixture
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	// TODO: remove these 2 lines when CurrentVersion contains them already
 	proto.EnableStateProofKeyregCheck = true
+	proto.MaxKeyregValidPeriod = config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
 	localFixture.SetConsensus(config.ConsensusProtocols{protocol.ConsensusCurrentVersion: proto})
 
 	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))

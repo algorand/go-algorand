@@ -224,6 +224,14 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 		return
 	}
 
+	// TODO: change to ConsensusCurrentVersion when updated
+	interval := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
+	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
+
+	if maxValidPeriod != 0 && uint64(lastValid-firstValid) > maxValidPeriod {
+		return PersistedParticipation{}, fmt.Errorf("the validity period for merkleKeyStore is too large: the limit is %d", maxValidPeriod)
+	}
+
 	// Compute how many distinct participation keys we should generate
 	firstID := basics.OneTimeIDForRound(firstValid, keyDilution)
 	lastID := basics.OneTimeIDForRound(lastValid, keyDilution)
@@ -235,13 +243,10 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	// Generate a new VRF key, which lives in the participation keys db
 	vrf := crypto.GenerateVRFSecrets()
 
-	// TODO change this
-	compactCertRound := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
-
 	// Generate a new key which signs the compact certificates
-	stateProofSecrets, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), compactCertRound, crypto.FalconType, store)
+	stateProofSecrets, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), interval, crypto.FalconType, store)
 	if err != nil {
-		return
+		return PersistedParticipation{}, err
 	}
 
 	// Construct the Participation containing these keys to be persisted

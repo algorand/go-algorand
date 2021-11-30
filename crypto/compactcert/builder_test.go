@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/algorand/go-algorand/config"
 	"strconv"
 	"testing"
 
@@ -34,6 +35,9 @@ import (
 )
 
 type TestMessage string
+
+// TODO: change to CurrentVersion when updated
+var CompactCertRounds = config.Consensus[protocol.ConsensusFuture].CompactCertRounds
 
 func (m TestMessage) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Message, []byte(m)
@@ -70,7 +74,7 @@ func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key 
 	return parts
 }
 
-func generateTestSigner(name string, firstValid uint64, lastValid uint64, interval uint64, a *require.Assertions) (*merklekeystore.Signer, db.Accessor) {
+func generateTestSigner(name string, firstValid uint64, lastValid uint64, a *require.Assertions) (*merklekeystore.Signer, db.Accessor) {
 	store, err := db.MakeAccessor(name, false, true)
 	a.NoError(err)
 	a.NotNil(store)
@@ -84,7 +88,7 @@ func generateTestSigner(name string, firstValid uint64, lastValid uint64, interv
 	})
 	a.NoError(err)
 
-	signer, err := merklekeystore.New(firstValid, lastValid, interval, crypto.FalconType, store)
+	signer, err := merklekeystore.New(firstValid, lastValid, CompactCertRounds, crypto.FalconType, store)
 	a.NoError(err)
 
 	err = signer.Persist()
@@ -117,11 +121,11 @@ func TestBuildVerify(t *testing.T) {
 		ProvenWeight:      uint64(totalWeight / 2),
 		SigRound:          currentRound,
 		SecKQ:             128,
-		CompactCertRounds: 128,
+		CompactCertRounds: CompactCertRounds,
 	}
 
 	// Share the key; we allow the same vote key to appear in multiple accounts..
-	key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(param.CompactCertRounds)+1, param.CompactCertRounds, a)
+	key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(param.CompactCertRounds)+1, a)
 	defer dbAccessor.Close()
 	require.NotNil(t, dbAccessor, "failed to create signer")
 	var parts []basics.Participant
@@ -192,14 +196,14 @@ func BenchmarkBuildVerify(b *testing.B) {
 		ProvenWeight:      uint64(totalWeight / 2),
 		SigRound:          128,
 		SecKQ:             128,
-		CompactCertRounds: 128,
+		CompactCertRounds: CompactCertRounds,
 	}
 
 	var parts []basics.Participant
 	var partkeys []*merklekeystore.Signer
 	var sigs []merklekeystore.Signature
 	for i := 0; i < npart; i++ {
-		key, dbAccessor := generateTestSigner(b.Name()+"_"+strconv.Itoa(i)+"_crash.db", 0, uint64(param.CompactCertRounds)+1, param.CompactCertRounds, a)
+		key, dbAccessor := generateTestSigner(b.Name()+"_"+strconv.Itoa(i)+"_crash.db", 0, uint64(param.CompactCertRounds)+1, a)
 		defer dbAccessor.Close()
 		require.NotNil(b, dbAccessor, "failed to create signer")
 		part := basics.Participant{

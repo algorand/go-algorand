@@ -56,8 +56,8 @@ func TestSignerCreation(t *testing.T) {
 
 	testSignerNumKeysLimits := func(t crypto.AlgorithmType, firstValid uint64, lastValid uint64, interval uint64, expectedLen int) {
 		signer := generateTestSigner(t, firstValid, lastValid, interval, a)
+		defer signer.keyStore.store.Close()
 		a.Equal(expectedLen, length(signer, a))
-		signer.keyStore.store.Close()
 	}
 
 	testSignerNumKeysLimits(crypto.FalconType, 0, 0, 1, 0)
@@ -114,6 +114,7 @@ func TestEmptySigner(t *testing.T) {
 
 	h := genHashableForTest()
 	signer := generateTestSigner(crypto.FalconType, 8, 9, 5, a)
+	defer signer.keyStore.store.Close()
 	a.NoError(err)
 	a.Equal(0, length(signer, a))
 
@@ -153,6 +154,7 @@ func TestDisposableKeysGeneration(t *testing.T) {
 	a.Error(err)
 
 	signer = generateTestSigner(crypto.FalconType, 1000, 1100, 101, a)
+	defer signer.keyStore.store.Close()
 	intervalRounds := make([]uint64, 0)
 	for i := uint64(1000); i <= 1100; i++ {
 		if i%101 == 0 {
@@ -441,7 +443,6 @@ func TestSignerTrim(t *testing.T) {
 	_, err = signer.Trim(55)
 	a.NoError(err)
 	a.Equal(0, length(signer, a))
-
 }
 
 func TestKeyDeletion(t *testing.T) {
@@ -480,6 +481,43 @@ func TestKeyDeletion(t *testing.T) {
 	}
 }
 
+func TestNumberOfGeneratedKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	interval := uint64(128)
+	validPeriod := uint64((1<<8)*interval - 1)
+
+	store := initTestDB(a)
+	defer store.Close()
+	firstValid := uint64(1000)
+	lastValid := validPeriod + 1000
+	s, err := New(firstValid, lastValid, interval, crypto.Ed25519Type, *store)
+	a.NoError(err)
+	err = s.Persist()
+	a.NoError(err)
+	a.Equal(1<<8, length(s, a))
+
+	store = initTestDB(a)
+	defer store.Close()
+	firstValid = uint64(0)
+	lastValid = validPeriod
+	s, err = New(firstValid, lastValid, interval, crypto.Ed25519Type, *store)
+	a.NoError(err)
+	err = s.Persist()
+	a.NoError(err)
+	a.Equal((1<<8)-1, length(s, a))
+
+	store = initTestDB(a)
+	defer store.Close()
+	firstValid = uint64(1000)
+	lastValid = validPeriod + 1000 - (interval * 50)
+	s, err = New(firstValid, lastValid, interval, crypto.Ed25519Type, *store)
+	a.NoError(err)
+	err = s.Persist()
+	a.NoError(err)
+	a.Equal((1<<8)-50, length(s, a))
+}
+
 //#region Helper Functions
 func makeSig(signer *Signer, sigRound uint64, a *require.Assertions) (crypto.Hashable, Signature) {
 	hashable := genHashableForTest()
@@ -496,7 +534,18 @@ func generateTestSignerAux(a *require.Assertions) (uint64, uint64, *Signer) {
 	return start, end, signer
 }
 
-func generateTestSigner(t crypto.AlgorithmType, firstValid uint64, lastValid uint64, interval uint64, a *require.Assertions) *Signer {
+func generateTestSigner(t crypto.AlgorithmType, firstValid, lastValid, interval uint64, a *require.Assertions) *Signer {
+	store := initTestDB(a)
+	signer, err := New(firstValid, lastValid, interval, t, *store)
+	a.NoError(err)
+
+	err = signer.Persist()
+	a.NoError(err)
+
+	return signer
+}
+
+func initTestDB(a *require.Assertions) *db.Accessor {
 	tmpname := uuid.NewV4().String() // could this just be a constant string instead? does it even matter?
 	store, err := db.MakeAccessor(tmpname, false, true)
 	a.NoError(err)
@@ -511,13 +560,7 @@ func generateTestSigner(t crypto.AlgorithmType, firstValid uint64, lastValid uin
 	})
 	a.NoError(err)
 
-	signer, err := New(firstValid, lastValid, interval, t, store)
-	a.NoError(err)
-
-	err = signer.Persist()
-	a.NoError(err)
-
-	return signer
+	return &store
 }
 
 func length(s *Signer, a *require.Assertions) int {

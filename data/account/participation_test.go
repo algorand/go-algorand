@@ -25,6 +25,7 @@ import (
 	"strings"
 	"testing"
 
+	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -59,6 +60,7 @@ func setupParticipationKey(t *testing.T, a *require.Assertions) (PersistedPartic
 	a.Equal(versions[PartTableSchemaName], PartTableSchemaVersion)
 	return part, rootDB, partDB, err
 }
+
 func setupkeyWithNoDBS(t *testing.T, a *require.Assertions) PersistedParticipation {
 	part, rootDB, partDB, err := setupParticipationKey(t, a)
 	a.NoError(err)
@@ -447,4 +449,81 @@ func BenchmarkParticipationKeyRestoration(b *testing.B) {
 		b.StartTimer()
 	}
 	part.Close()
+}
+
+func createKeystoreTestDB(a *require.Assertions) *db.Accessor {
+	tmpname := uuid.NewV4().String() // could this just be a constant string instead? does it even matter?
+	store, err := db.MakeAccessor(tmpname, false, true)
+	a.NoError(err)
+	a.NotNil(store)
+
+	return &store
+}
+
+func TestKeyregValidityOverLimit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	// TODO: change to ConsensusCurrentVersion when updated
+	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
+	dilution := config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution
+
+	var address basics.Address
+	crypto.RandBytes(address[:])
+
+	store := createKeystoreTestDB(a)
+	defer store.Close()
+	firstValid := basics.Round(0)
+	lastValid := basics.Round(maxValidPeriod + 1)
+	_, err := FillDBWithParticipationKeys(*store, address, firstValid, lastValid, dilution)
+	a.Error(err)
+}
+
+func TestFillDBWithParticipationKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	// TODO: change to ConsensusCurrentVersion when updated
+	dilution := config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution
+
+	var address basics.Address
+	crypto.RandBytes(address[:])
+
+	store := createKeystoreTestDB(a)
+	defer store.Close()
+	firstValid := basics.Round(0)
+	lastValid := basics.Round(10000)
+	_, err := FillDBWithParticipationKeys(*store, address, firstValid, lastValid, dilution)
+	a.NoError(err)
+}
+
+// Long unit test, should only be run nightly
+func TestKeyregValidityPeriod(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	if testing.Short() {
+		t.Skip()
+	}
+
+	a := require.New(t)
+
+	// TODO: change to ConsensusCurrentVersion when updated
+	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
+	dilution := config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution
+
+	var address basics.Address
+
+	store := createKeystoreTestDB(a)
+	defer store.Close()
+	firstValid := basics.Round(0)
+	lastValid := basics.Round(maxValidPeriod)
+	crypto.RandBytes(address[:])
+	_, err := FillDBWithParticipationKeys(*store, address, firstValid, lastValid, dilution)
+	a.NoError(err)
+
+	store = createKeystoreTestDB(a)
+	defer store.Close()
+	firstValid = basics.Round(0)
+	lastValid = basics.Round(maxValidPeriod + 1)
+	_, err = FillDBWithParticipationKeys(*store, address, firstValid, lastValid, dilution)
+	a.Error(err)
 }
