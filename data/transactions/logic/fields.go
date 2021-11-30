@@ -479,8 +479,8 @@ var base64AlphabetSpecByName base64AlphabetSpecMap
 type base64AlphabetSpecMap map[string]base64AlphabetSpec
 
 func (s base64AlphabetSpecMap) getExtraFor(name string) (extra string) {
-	// Uses 5 here because base64_decode fields were introduced in v 6
-	if s[name].version > 5 {
+	// Uses 6 here because base64_decode fields were introduced in 6
+	if s[name].version > 6 {
 		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
 	}
 	return
