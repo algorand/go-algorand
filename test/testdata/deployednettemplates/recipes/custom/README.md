@@ -28,7 +28,6 @@ If you look at the files in `configs/node.json`, `nonPartNode.json`, and `relay.
 ```
 {
   "ProposalAssemblyTime": 250000000,
-  "TxPoolSize": 20000,
-  "NetworkProtocolVersion": 3.1
+  "TxPoolSize": 20000
 }
 ```
