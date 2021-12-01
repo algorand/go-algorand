@@ -98,6 +98,8 @@ func TestMerkle(t *testing.T) {
 		for i := uint64(0); i < 10; i++ {
 			testMerkle(t, crypto.Sumhash, i)
 		}
+	} else {
+		testMerkle(t, crypto.Sumhash, 10)
 	}
 
 }
@@ -393,7 +395,7 @@ func TestSizeLimitsMerkle(t *testing.T) {
 			numElts := uint64(1) << (depth - eltCoefficient)
 			positions := getRegularPositions(numElts, uint64(1)<<depth)
 
-			tree, proof := testMerkelSizeLimits(t, crypto.Sumhash, size, positions)
+			tree, proof := testMerkelSizeLimits(t, crypto.Sha512_256, size, positions)
 			require.Equal(t, (uint64(1)<<(depth-eltCoefficient))*eltCoefficient, uint64(len(proof.Path)))
 
 			// encode/decode
@@ -430,7 +432,7 @@ func TestSizeLimitsMerkle(t *testing.T) {
 			numElts := uint64(1) << (depth - eltCoefficient)
 			positions := getRandomPositions(numElts, numElts)
 
-			_, proof := testMerkelSizeLimits(t, crypto.Sumhash, size, positions)
+			_, proof := testMerkelSizeLimits(t, crypto.Sha512_256, size, positions)
 			require.GreaterOrEqual(t, (uint64(1)<<(depth-eltCoefficient))*eltCoefficient, uint64(len(proof.Path)))
 
 			if len(proof.Path) > MaxNumLeaves {
@@ -446,7 +448,7 @@ func TestSizeLimitsMerkle(t *testing.T) {
 
 	// case of a tree with leaves 2^16 + 1
 	size := (uint64(1) << MaxTreeDepth) + 1
-	tree, _ := testMerkelSizeLimits(t, crypto.Sumhash, size, []uint64{})
+	tree, _ := testMerkelSizeLimits(t, crypto.Sha512_256, size, []uint64{})
 	bytes := protocol.Encode(tree)
 	var outTree Tree
 	err := protocol.Decode(bytes, &outTree)
