@@ -97,7 +97,7 @@ func (node *AlgorandFullNode) MakePrioResponse(challenge string) []byte {
 	}
 
 	signer := maxPart.VotingSigner()
-	ephID := basics.OneTimeIDForRound(voteRound, signer.KeyDilution(proto))
+	ephID := basics.OneTimeIDForRound(voteRound, signer.KeyDilution(proto.DefaultKeyDilution))
 
 	rs.Round = voteRound
 	rs.Sender = maxPart.Address()

@@ -172,7 +172,7 @@ func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecr
 		}
 	}
 
-	ephID := basics.OneTimeIDForRound(rv.Round, voting.KeyDilution(proto))
+	ephID := basics.OneTimeIDForRound(rv.Round, voting.KeyDilution(proto.DefaultKeyDilution))
 	sig := voting.Sign(ephID, rv)
 	if (sig == crypto.OneTimeSignature{}) {
 		return unauthenticatedVote{}, fmt.Errorf("makeVote: got back empty signature for vote")
