@@ -168,7 +168,7 @@ func MakeNewAccountDeltas(hint int) NewAccountDeltas {
 	}
 }
 
-// Get lookups AccountData by address
+// GetData lookups AccountData by address
 func (ad NewAccountDeltas) GetData(addr basics.Address) (AccountData, bool) {
 	idx, ok := ad.acctsCache[addr]
 	if !ok {
