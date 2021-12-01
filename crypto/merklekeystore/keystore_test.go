@@ -20,8 +20,8 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
-	"encoding/binary"
 	"fmt"
+
 	"math"
 	"testing"
 
@@ -86,7 +86,7 @@ func TestSignerCreation(t *testing.T) {
 
 	sig, err := signer.Sign(genHashableForTest(), 2)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(2, 2, genHashableForTest(), sig))
+	a.NoError(signer.GetVerifier().Verify(2, genHashableForTest(), sig))
 
 	signer = generateTestSigner(crypto.FalconType, 2, 2, 3, a)
 	defer signer.keyStore.store.Close()
@@ -234,7 +234,7 @@ func TestSigning(t *testing.T) {
 
 	sig, err := signer.Sign(hashable, start)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(start, 1, hashable, sig))
+	a.NoError(signer.GetVerifier().Verify(start, hashable, sig))
 
 	_, err = signer.Sign(hashable, start-1)
 	a.Error(err)
@@ -247,11 +247,11 @@ func TestSigning(t *testing.T) {
 
 	sig, err = signer.Sign(hashable, start)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(start, 10, hashable, sig))
+	a.NoError(signer.GetVerifier().Verify(start, hashable, sig))
 
 	sig, err = signer.Sign(hashable, start+5)
 	a.Error(err)
-	a.Error(signer.GetVerifier().Verify(start+5, 10, hashable, sig))
+	a.Error(signer.GetVerifier().Verify(start+5, hashable, sig))
 
 	signer = generateTestSigner(crypto.FalconType, 50, 100, 12, a)
 	defer signer.keyStore.store.Close()
@@ -264,7 +264,7 @@ func TestSigning(t *testing.T) {
 		} else {
 			sig, err = signer.Sign(hashable, i)
 			a.NoError(err)
-			a.NoError(signer.GetVerifier().Verify(i, 12, hashable, sig))
+			a.NoError(signer.GetVerifier().Verify(i, hashable, sig))
 		}
 	}
 
@@ -286,11 +286,11 @@ func TestBadRound(t *testing.T) {
 	defer signer.keyStore.store.Close()
 	hashable, sig := makeSig(signer, start, a)
 
-	a.Error(signer.GetVerifier().Verify(start+1, 1, hashable, sig))
+	a.Error(signer.GetVerifier().Verify(start+1, hashable, sig))
 
 	hashable, sig = makeSig(signer, start+1, a)
-	a.Error(signer.GetVerifier().Verify(start, 1, hashable, sig))
-	a.Error(signer.GetVerifier().Verify(start+2, 1, hashable, sig))
+	a.Error(signer.GetVerifier().Verify(start, hashable, sig))
+	a.Error(signer.GetVerifier().Verify(start+2, hashable, sig))
 }
 
 func TestBadMerkleProofInSignature(t *testing.T) {
@@ -303,73 +303,13 @@ func TestBadMerkleProofInSignature(t *testing.T) {
 
 	sig2 := copySig(sig)
 	sig2.Proof.Path = sig2.Proof.Path[:len(sig2.Proof.Path)-1]
-	a.Error(signer.GetVerifier().Verify(start, 1, hashable, sig2))
+	a.Error(signer.GetVerifier().Verify(start, hashable, sig2))
 
 	sig3 := copySig(sig)
 	someDigest := crypto.Digest{}
 	rand.Read(someDigest[:])
 	sig3.Proof.Path[0] = someDigest[:]
-	a.Error(signer.GetVerifier().Verify(start, 1, hashable, sig3))
-}
-
-func calculateHashOnKeyLeaf(key *crypto.GenericSigningKey, round uint64) []byte {
-	binaryRound := make([]byte, 8)
-	binary.LittleEndian.PutUint64(binaryRound, round)
-
-	verifyingRawKey := key.GetSigner().GetVerifyingKey().GetVerifier().GetVerificationBytes()
-	keyCommitment := make([]byte, 0, len(protocol.KeystorePK)+len(verifyingRawKey)+len(binaryRound))
-
-	keyCommitment = append(keyCommitment, protocol.KeystorePK...)
-	keyCommitment = append(keyCommitment, binaryRound...)
-	keyCommitment = append(keyCommitment, verifyingRawKey...)
-
-	factory := crypto.HashFactory{HashType: KeyStoreHashFunction}
-	hashValue := crypto.HashBytes(factory.NewHash(), keyCommitment)
-	return hashValue
-}
-
-func calculateHashOnInternalNode(leftNode, rightNode []byte) []byte {
-	buf := make([]byte, len(leftNode)+len(rightNode)+len(protocol.MerkleArrayNode))
-	copy(buf[:], protocol.MerkleArrayNode)
-	copy(buf[len(protocol.MerkleArrayNode):], leftNode[:])
-	copy(buf[len(protocol.MerkleArrayNode)+len(leftNode):], rightNode[:])
-
-	factory := crypto.HashFactory{HashType: KeyStoreHashFunction}
-	hashValue := crypto.HashBytes(factory.NewHash(), buf)
-	return hashValue
-}
-
-// This test makes sure that publickey commitment is according to spec and stays sync with the
-// SNARK verifier. we manually build the merkle tree given an expected binary representation of the keys.
-func TestKeyStoreCommitment(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	signer := generateTestSigner(crypto.FalconType, 1, 9, 2, a)
-	defer signer.keyStore.store.Close()
-	a.Equal(4, length(signer, a))
-
-	k0, err := signer.keyStore.GetKey(2)
-	a.NoError(err)
-	k0hash := calculateHashOnKeyLeaf(k0, 2)
-
-	k1, err := signer.keyStore.GetKey(4)
-	a.NoError(err)
-	k1hash := calculateHashOnKeyLeaf(k1, 4)
-
-	k2, err := signer.keyStore.GetKey(6)
-	a.NoError(err)
-	k2hash := calculateHashOnKeyLeaf(k2, 6)
-
-	k3, err := signer.keyStore.GetKey(8)
-	a.NoError(err)
-	k3hash := calculateHashOnKeyLeaf(k3, 8)
-
-	internal1 := calculateHashOnInternalNode(k0hash, k1hash)
-	internal2 := calculateHashOnInternalNode(k2hash, k3hash)
-
-	root := calculateHashOnInternalNode(internal1, internal2)
-	a.Equal(root, signer.GetVerifier()[:])
+	a.Error(signer.GetVerifier().Verify(start, hashable, sig3))
 }
 
 func copySig(sig Signature) Signature {
@@ -380,18 +320,6 @@ func copySig(sig Signature) Signature {
 		ByteSignature: bsig,
 		Proof:         copyProof(sig.Proof),
 		VerifyingKey:  sig.VerifyingKey,
-	}
-}
-
-func copyProof(proof merklearray.Proof) merklearray.Proof {
-	path := make([]crypto.GenericDigest, len(proof.Path))
-	for i, digest := range proof.Path {
-		path[i] = make([]byte, len(digest))
-		copy(path[i], digest)
-	}
-	return merklearray.Proof{
-		Path:        path,
-		HashFactory: proof.HashFactory,
 	}
 }
 
@@ -408,7 +336,7 @@ func TestIncorrectByteSignature(t *testing.T) {
 	copy(bs, sig2.ByteSignature)
 	bs[0]++
 	sig2.ByteSignature = bs
-	a.Error(signer.GetVerifier().Verify(start, 1, hashable, sig2))
+	a.Error(signer.GetVerifier().Verify(start, hashable, sig2))
 }
 
 func TestIncorrectMerkleIndex(t *testing.T) {
@@ -424,11 +352,11 @@ func TestIncorrectMerkleIndex(t *testing.T) {
 	a.NoError(err)
 
 	sig.MerkleArrayIndex = 0
-	a.Error(signer.GetVerifier().Verify(20, 5, h, sig))
+	a.Error(signer.GetVerifier().Verify(20, h, sig))
 
 	sig.MerkleArrayIndex = math.MaxUint64
-	a.Error(signer.GetVerifier().Verify(20, 5, h, sig))
-	a.Error(signer.GetVerifier().Verify(20, 5, h, sig))
+	a.Error(signer.GetVerifier().Verify(20, h, sig))
+	a.Error(signer.GetVerifier().Verify(20, h, sig))
 
 }
 
@@ -448,7 +376,7 @@ func TestAttemptToUseDifferentKey(t *testing.T) {
 	a.NoError(err)
 
 	sig2.VerifyingKey = *(key.GetSigner().GetVerifyingKey())
-	a.Error(signer.GetVerifier().Verify(start+1, 1, hashable, sig2))
+	a.Error(signer.GetVerifier().Verify(start+1, hashable, sig2))
 }
 
 func TestMarshal(t *testing.T) {
@@ -543,7 +471,7 @@ func TestKeyDeletion(t *testing.T) {
 		sig, err := signer.Sign(genHashableForTest(), i)
 		a.NoError(err)
 
-		a.NoError(signer.GetVerifier().Verify(i, 1, genHashableForTest(), sig))
+		a.NoError(signer.GetVerifier().Verify(i, genHashableForTest(), sig))
 	}
 
 	signer = generateTestSigner(crypto.FalconType, 1, 60, 11, a)
@@ -559,7 +487,7 @@ func TestKeyDeletion(t *testing.T) {
 			a.Error(err)
 			continue
 		}
-		a.NoError(signer.GetVerifier().Verify(i, 11, genHashableForTest(), sig))
+		a.NoError(signer.GetVerifier().Verify(i, genHashableForTest(), sig))
 	}
 }
 
@@ -606,7 +534,7 @@ func makeSig(signer *Signer, sigRound uint64, a *require.Assertions) (crypto.Has
 
 	sig, err := signer.Sign(hashable, sigRound)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(sigRound, 1, hashable, sig))
+	a.NoError(signer.GetVerifier().Verify(sigRound, hashable, sig))
 	return hashable, sig
 }
 
@@ -658,6 +586,18 @@ func length(s *Signer, a *require.Assertions) int {
 	})
 	a.NoError(err)
 	return count
+}
+
+func copyProof(proof merklearray.Proof) merklearray.Proof {
+	path := make([]crypto.GenericDigest, len(proof.Path))
+	for i, digest := range proof.Path {
+		path[i] = make([]byte, len(digest))
+		copy(path[i], digest)
+	}
+	return merklearray.Proof{
+		Path:        path,
+		HashFactory: proof.HashFactory,
+	}
 }
 
 //#endregion

@@ -184,7 +184,7 @@ func (v *Verifier) IsEmpty() bool {
 }
 
 // Verify receives a signature over a specific crypto.Hashable object, and makes certain the signature is correct.
-func (v *Verifier) Verify(round, interval uint64, obj crypto.Hashable, sig Signature) error {
+func (v *Verifier) Verify(round uint64, msg crypto.Hashable, sig Signature) error {
 
 	ephkey := CommittablePublicKey{
 		VerifyingKey: sig.VerifyingKey,
@@ -192,15 +192,15 @@ func (v *Verifier) Verify(round, interval uint64, obj crypto.Hashable, sig Signa
 	}
 
 	err := merklearray.Verify(
-		(crypto.GenericDigest)(v[:]),
+		v[:],
 		map[uint64]crypto.Hashable{sig.MerkleArrayIndex: &ephkey},
-		(*merklearray.Proof)(&sig.Proof),
+		&sig.Proof,
 	)
 	if err != nil {
 		return err
 	}
 
-	return sig.VerifyingKey.GetVerifier().Verify(obj, sig.ByteSignature)
+	return sig.VerifyingKey.GetVerifier().Verify(msg, sig.ByteSignature)
 }
 
 // GetSerializedSignature serializes the merkle scheme into a sequence of bytes.

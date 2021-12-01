@@ -22,7 +22,6 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"fmt"
-	"github.com/algorand/go-algorand/config"
 	"strconv"
 	"testing"
 
@@ -38,8 +37,7 @@ import (
 
 type TestMessage string
 
-// TODO: change to CurrentVersion when updated
-var CompactCertRounds = config.Consensus[protocol.ConsensusFuture].CompactCertRounds
+const CompactCertRoundsForTests = 128
 
 func (m TestMessage) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Message, []byte(m)
@@ -75,7 +73,7 @@ func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key 
 	return parts
 }
 
-func generateTestSigner(name string, firstValid uint64, lastValid uint64, a *require.Assertions) (*merklekeystore.Signer, db.Accessor) {
+func generateTestSigner(name string, firstValid uint64, lastValid uint64, interval uint64, a *require.Assertions) (*merklekeystore.Signer, db.Accessor) {
 	store, err := db.MakeAccessor(name, false, true)
 	a.NoError(err)
 	a.NotNil(store)
@@ -89,7 +87,7 @@ func generateTestSigner(name string, firstValid uint64, lastValid uint64, a *req
 	})
 	a.NoError(err)
 
-	signer, err := merklekeystore.New(firstValid, lastValid, CompactCertRounds, crypto.FalconType, store)
+	signer, err := merklekeystore.New(firstValid, lastValid, interval, crypto.FalconType, store)
 	a.NoError(err)
 
 	err = signer.Persist()
@@ -118,15 +116,14 @@ func TestBuildVerify(t *testing.T) {
 	npart := npartHi + npartLo
 
 	param := Params{
-		Msg:               TestMessage("hello world"),
-		ProvenWeight:      uint64(totalWeight / 2),
-		SigRound:          currentRound,
-		SecKQ:             128,
-		CompactCertRounds: CompactCertRounds,
+		Msg:          TestMessage("hello world"),
+		ProvenWeight: uint64(totalWeight / 2),
+		SigRound:     currentRound,
+		SecKQ:        128,
 	}
 
 	// Share the key; we allow the same vote key to appear in multiple accounts..
-	key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(param.CompactCertRounds)+1, a)
+	key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(CompactCertRoundsForTests)+1, CompactCertRoundsForTests, a)
 	defer dbAccessor.Close()
 	require.NotNil(t, dbAccessor, "failed to create signer")
 	var parts []basics.Participant
@@ -303,18 +300,17 @@ func TestSignatureCommitment(t *testing.T) {
 	numPart := 4
 
 	param := Params{
-		Msg:               TestMessage("test!"),
-		ProvenWeight:      uint64(totalWeight / (2 * numPart)),
-		SigRound:          currentRound,
-		SecKQ:             128,
-		CompactCertRounds: 128,
+		Msg:          TestMessage("test!"),
+		ProvenWeight: uint64(totalWeight / (2 * numPart)),
+		SigRound:     currentRound,
+		SecKQ:        128,
 	}
 
 	var parts []basics.Participant
 	var sigs []merklekeystore.Signature
 
 	for i := 0; i < numPart; i++ {
-		key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(param.CompactCertRounds)*8, param.CompactCertRounds, a)
+		key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(CompactCertRoundsForTests)*8, CompactCertRoundsForTests, a)
 		require.NotNil(t, dbAccessor, "failed to create signer")
 
 		part := basics.Participant{
@@ -371,22 +367,22 @@ func findLInCert(a *require.Assertions, signature merklekeystore.Signature, cert
 func BenchmarkBuildVerify(b *testing.B) {
 	totalWeight := 1000000
 	npart := 10000
+
 	currentRound := basics.Round(128)
 	a := require.New(b)
 
 	param := Params{
-		Msg:               TestMessage("hello world"),
-		ProvenWeight:      uint64(totalWeight / 2),
-		SigRound:          128,
-		SecKQ:             128,
-		CompactCertRounds: CompactCertRounds,
+		Msg:          TestMessage("hello world"),
+		ProvenWeight: uint64(totalWeight / 2),
+		SigRound:     128,
+		SecKQ:        128,
 	}
 
 	var parts []basics.Participant
 	var partkeys []*merklekeystore.Signer
 	var sigs []merklekeystore.Signature
 	for i := 0; i < npart; i++ {
-		key, dbAccessor := generateTestSigner(b.Name()+"_"+strconv.Itoa(i)+"_crash.db", 0, uint64(param.CompactCertRounds)+1, a)
+		key, dbAccessor := generateTestSigner(b.Name()+"_"+strconv.Itoa(i)+"_crash.db", 0, uint64(CompactCertRoundsForTests)+1, CompactCertRoundsForTests, a)
 		defer dbAccessor.Close()
 		require.NotNil(b, dbAccessor, "failed to create signer")
 		part := basics.Participant{

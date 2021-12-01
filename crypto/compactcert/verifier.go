@@ -55,7 +55,6 @@ func (v *Verifier) Verify(c *Cert) error {
 
 		err := r.Part.PK.Verify(
 			uint64(v.SigRound),
-			v.CompactCertRounds,
 			v.Msg,
 			r.SigSlot.Sig.Signature)
 
