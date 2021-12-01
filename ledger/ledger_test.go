@@ -795,7 +795,7 @@ int 1
 	var appIdx basics.AppIndex = 1
 
 	rnd := l.Latest()
-	acct, _, err := l.LookupWithoutRewards(l.Latest(), creator)
+	acct, _, err := l.LookupWithoutRewards(rnd, creator)
 	a.NoError(err)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acct.AppParams[appIdx].GlobalState["counter"])
 

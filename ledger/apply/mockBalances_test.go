@@ -21,6 +21,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -75,9 +76,9 @@ func (balances mockBalances) StatefulEval(logic.EvalParams, basics.AppIndex, []b
 	return false, transactions.EvalDelta{}, nil
 }
 
-func (balances mockBalances) Get(addr basics.Address, withPendingRewards bool) (AccountData, error) {
+func (balances mockBalances) Get(addr basics.Address, withPendingRewards bool) (ledgercore.AccountData, error) {
 	acct, err := balances.getAccount(addr, withPendingRewards)
-	return ToApplyAccountData(acct), err
+	return ledgercore.ToAccountData(acct), err
 }
 
 func (balances mockBalances) getAccount(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
@@ -88,9 +89,9 @@ func (balances mockBalances) GetCreator(idx basics.CreatableIndex, ctype basics.
 	return basics.Address{}, true, nil
 }
 
-func (balances mockBalances) Put(addr basics.Address, acct AccountData) error {
+func (balances mockBalances) Put(addr basics.Address, acct ledgercore.AccountData) error {
 	a := balances.b[addr]
-	AssignAccountData(&a, acct)
+	ledgercore.AssignAccountData(&a, acct)
 	return balances.putAccount(addr, a)
 }
 

@@ -37,8 +37,28 @@ type mockLedger struct {
 	blockErr   map[basics.Round]error
 }
 
-func (ml *mockLedger) lookup(addr basics.Address) (basics.AccountData, error) {
-	return ml.balanceMap[addr], nil
+func (ml *mockLedger) lookup(addr basics.Address) (ledgercore.AccountData, error) {
+	return ledgercore.ToAccountData(ml.balanceMap[addr]), nil
+}
+
+func (ml *mockLedger) lookupAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, bool, error) {
+	params, ok := ml.balanceMap[addr].AppParams[aidx]
+	return params, ok, nil
+}
+
+func (ml *mockLedger) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex) (basics.AssetParams, bool, error) {
+	params, ok := ml.balanceMap[addr].AssetParams[aidx]
+	return params, ok, nil
+}
+
+func (ml *mockLedger) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex) (basics.AppLocalState, bool, error) {
+	params, ok := ml.balanceMap[addr].AppLocalStates[aidx]
+	return params, ok, nil
+}
+
+func (ml *mockLedger) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex) (basics.AssetHolding, bool, error) {
+	params, ok := ml.balanceMap[addr].Assets[aidx]
+	return params, ok, nil
 }
 
 func (ml *mockLedger) checkDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl ledgercore.Txlease) error {
@@ -94,15 +114,15 @@ func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.
 	for addr, data := range accts {
 		d, err := cow.lookup(addr)
 		require.NoError(t, err)
-		require.Equal(t, d, data)
+		require.Equal(t, d, ledgercore.ToAccountData(data))
 	}
 
 	d, err := cow.lookup(ledgertesting.RandomAddress())
 	require.NoError(t, err)
-	require.Equal(t, d, basics.AccountData{})
+	require.Equal(t, d, ledgercore.AccountData{})
 }
 
-func applyUpdates(cow *roundCowState, updates ledgercore.AccountDeltas) {
+func applyUpdates(cow *roundCowState, updates ledgercore.NewAccountDeltas) {
 	for i := 0; i < updates.Len(); i++ {
 		addr, delta := updates.GetByIdx(i)
 		cow.putAccount(addr, delta)
@@ -124,9 +144,10 @@ func TestCowBalance(t *testing.T) {
 	checkCow(t, c0, accts0)
 	checkCow(t, c1, accts0)
 
-	updates1, accts1, _ := ledgertesting.RandomDeltas(10, accts0, 0)
+	updates1, _, _ := ledgertesting.RandomDeltas(10, accts0, 0)
 	applyUpdates(c1, updates1)
 	checkCow(t, c0, accts0)
+	accts1 := updates1.ToBasicsAccountDataMap()
 	checkCow(t, c1, accts1)
 
 	c2 := c1.child(0)
@@ -134,10 +155,11 @@ func TestCowBalance(t *testing.T) {
 	checkCow(t, c1, accts1)
 	checkCow(t, c2, accts1)
 
-	updates2, accts2, _ := ledgertesting.RandomDeltas(10, accts1, 0)
+	updates2, _, _ := ledgertesting.RandomDeltas(10, accts1, 0)
 	applyUpdates(c2, updates2)
 	checkCow(t, c0, accts0)
 	checkCow(t, c1, accts1)
+	accts2 := updates2.ToBasicsAccountDataMap()
 	checkCow(t, c2, accts2)
 
 	c2.commitToParent()

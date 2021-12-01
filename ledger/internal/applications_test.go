@@ -25,7 +25,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger/apply"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -49,9 +49,9 @@ type mockCowForLogicLedger struct {
 	txc    uint64
 }
 
-func (c *mockCowForLogicLedger) Get(addr basics.Address, withPendingRewards bool) (apply.AccountData, error) {
+func (c *mockCowForLogicLedger) Get(addr basics.Address, withPendingRewards bool) (ledgercore.AccountData, error) {
 	acct, err := c.getAccount(addr, withPendingRewards)
-	return apply.ToApplyAccountData(acct), err
+	return ledgercore.ToAccountData(acct), err
 }
 
 func (c *mockCowForLogicLedger) getAccount(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {

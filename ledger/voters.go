@@ -150,7 +150,7 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 	return
 }
 
-// close waits until all the internal spawned go-rouines are done before returning, allowing clean
+// close waits until all the internal spawned go-routines are done before returning, allowing clean
 // shutdown.
 func (vt *votersTracker) close() {
 	vt.loadWaitGroup.Wait()

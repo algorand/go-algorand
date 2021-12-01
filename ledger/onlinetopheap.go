@@ -47,11 +47,7 @@ func (h *onlineTopHeap) Less(i, j int) bool {
 	}
 
 	bcmp := bytes.Compare(h.accts[i].Address[:], h.accts[j].Address[:])
-	if bcmp > 0 {
-		return true
-	}
-
-	return false
+	return bcmp > 0
 }
 
 // Swap implements sort.Interface

@@ -140,7 +140,7 @@ func BenchmarkRestoringFromCatchpointFile(b *testing.B) {
 	}
 }
 
-func TestCatchupAcessorFoo(t *testing.T) {
+func TestCatchupAccessorFoo(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	log := logging.TestingLog(t)

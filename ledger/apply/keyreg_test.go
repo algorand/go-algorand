@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
@@ -47,9 +48,9 @@ func newKeyregTestBalances() *keyregTestBalances {
 	return b
 }
 
-func (balances keyregTestBalances) Get(addr basics.Address, withPendingRewards bool) (AccountData, error) {
+func (balances keyregTestBalances) Get(addr basics.Address, withPendingRewards bool) (ledgercore.AccountData, error) {
 	acct, err := balances.getAccount(addr, withPendingRewards)
-	return ToApplyAccountData(acct), err
+	return ledgercore.ToAccountData(acct), err
 }
 
 func (balances keyregTestBalances) getAccount(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
@@ -60,9 +61,9 @@ func (balances keyregTestBalances) GetCreator(cidx basics.CreatableIndex, ctype 
 	return basics.Address{}, true, nil
 }
 
-func (balances keyregTestBalances) Put(addr basics.Address, ad AccountData) error {
+func (balances keyregTestBalances) Put(addr basics.Address, ad ledgercore.AccountData) error {
 	a, _ := balances.getAccount(addr, false) // ignoring not found error
-	AssignAccountData(&a, ad)
+	ledgercore.AssignAccountData(&a, ad)
 	return balances.putAccount(addr, a)
 }
 

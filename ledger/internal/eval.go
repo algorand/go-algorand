@@ -92,10 +92,10 @@ type roundCowBase struct {
 	// The accounts that we're already accessed during this round evaluation. This is a caching
 	// buffer used to avoid looking up the same account data more than once during a single evaluator
 	// execution. The AccountData is always an historical one, then therefore won't be changing.
-	// The underlying (accountupdates) infrastucture may provide additional cross-round caching which
+	// The underlying (accountupdates) infrastructure may provide additional cross-round caching which
 	// are beyond the scope of this cache.
 	// The account data store here is always the account data without the rewards.
-	accounts map[basics.Address]basics.AccountData
+	accounts map[basics.Address]ledgercore.AccountData
 
 	// Similar cache for asset/app creators.
 	creators map[creatable]foundAddress
@@ -108,7 +108,7 @@ func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, com
 		txnCount:           txnCount,
 		compactCertNextRnd: compactCertNextRnd,
 		proto:              proto,
-		accounts:           make(map[basics.Address]basics.AccountData),
+		accounts:           make(map[basics.Address]ledgercore.AccountData),
 		creators:           make(map[creatable]foundAddress),
 	}
 }
@@ -133,16 +133,60 @@ func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.Creat
 // lookup returns the non-rewarded account data for the provided account address. It uses the internal per-round cache
 // first, and if it cannot find it there, it would defer to the underlaying implementation.
 // note that errors in accounts data retrivals are not cached as these typically cause the transaction evaluation to fail.
-func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
+func (x *roundCowBase) lookup(addr basics.Address) (ledgercore.AccountData, error) {
 	if accountData, found := x.accounts[addr]; found {
 		return accountData, nil
 	}
 
 	accountData, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
-	if err == nil {
-		x.accounts[addr] = accountData
+	if err != nil {
+		return ledgercore.AccountData{}, err
 	}
-	return accountData, err
+
+	ad := ledgercore.ToAccountData(accountData)
+	x.accounts[addr] = ad
+	return ad, err
+}
+
+func (x *roundCowBase) lookupAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, bool, error) {
+	accountData, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	if err != nil {
+		return basics.AppParams{}, false, err
+	}
+
+	// TODO: cache
+	params, ok := accountData.AppParams[aidx]
+	return params, ok, nil
+}
+
+func (x *roundCowBase) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex) (basics.AssetParams, bool, error) {
+	accountData, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	if err != nil {
+		return basics.AssetParams{}, false, err
+	}
+
+	params, ok := accountData.AssetParams[aidx]
+	return params, ok, nil
+}
+
+func (x *roundCowBase) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex) (basics.AppLocalState, bool, error) {
+	accountData, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	if err != nil {
+		return basics.AppLocalState{}, false, err
+	}
+
+	ls, ok := accountData.AppLocalStates[aidx]
+	return ls, ok, nil
+}
+
+func (x *roundCowBase) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex) (basics.AssetHolding, bool, error) {
+	accountData, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	if err != nil {
+		return basics.AssetHolding{}, false, err
+	}
+
+	holding, ok := accountData.Assets[aidx]
+	return holding, ok, nil
 }
 
 func (x *roundCowBase) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
@@ -162,40 +206,40 @@ func (x *roundCowBase) blockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 }
 
 func (x *roundCowBase) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
-	acct, err := x.lookup(addr)
-	if err != nil {
-		return false, err
-	}
-
 	// For global, check if app params exist
 	if global {
-		_, ok := acct.AppParams[aidx]
-		return ok, nil
+		_, ok, err := x.lookupAppParams(addr, aidx)
+		return ok, err
 	}
 
 	// Otherwise, check app local states
-	_, ok := acct.AppLocalStates[aidx]
-	return ok, nil
+	_, ok, err := x.lookupAppLocalState(addr, aidx)
+	return ok, err
 }
 
 // getKey gets the value for a particular key in some storage
 // associated with an application globally or locally
 func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error) {
-	ad, err := x.lookup(addr)
-	if err != nil {
-		return basics.TealValue{}, false, err
-	}
-
+	var err error
 	exist := false
 	kv := basics.TealKeyValue{}
 	if global {
 		var app basics.AppParams
-		if app, exist = ad.AppParams[aidx]; exist {
+		app, exist, err = x.lookupAppParams(addr, aidx)
+		if err != nil {
+			return basics.TealValue{}, false, err
+		}
+		if exist {
 			kv = app.GlobalState
 		}
 	} else {
 		var ls basics.AppLocalState
-		if ls, exist = ad.AppLocalStates[aidx]; exist {
+		ls, exist, err = x.lookupAppLocalState(addr, aidx)
+		if err != nil {
+			return basics.TealValue{}, false, err
+		}
+
+		if exist {
 			kv = ls.KeyValue
 		}
 	}
@@ -211,22 +255,26 @@ func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global 
 // getStorageCounts counts the storage types used by some account
 // associated with an application globally or locally
 func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
-	ad, err := x.lookup(addr)
-	if err != nil {
-		return basics.StateSchema{}, err
-	}
-
+	var err error
 	count := basics.StateSchema{}
 	exist := false
 	kv := basics.TealKeyValue{}
 	if global {
 		var app basics.AppParams
-		if app, exist = ad.AppParams[aidx]; exist {
+		app, exist, err = x.lookupAppParams(addr, aidx)
+		if err != nil {
+			return basics.StateSchema{}, err
+		}
+		if exist {
 			kv = app.GlobalState
 		}
 	} else {
 		var ls basics.AppLocalState
-		if ls, exist = ad.AppLocalStates[aidx]; exist {
+		ls, exist, err = x.lookupAppLocalState(addr, aidx)
+		if err != nil {
+			return basics.StateSchema{}, err
+		}
+		if exist {
 			kv = ls.KeyValue
 		}
 	}
@@ -255,12 +303,10 @@ func (x *roundCowBase) getStorageLimits(addr basics.Address, aidx basics.AppInde
 		return basics.StateSchema{}, nil
 	}
 
-	record, err := x.lookup(creator)
+	params, ok, err := x.lookupAppParams(creator, aidx)
 	if err != nil {
 		return basics.StateSchema{}, err
 	}
-
-	params, ok := record.AppParams[aidx]
 	if !ok {
 		// This should never happen. If app exists then we should have
 		// found the creator successfully.
@@ -275,15 +321,15 @@ func (x *roundCowBase) getStorageLimits(addr basics.Address, aidx basics.AppInde
 }
 
 // wrappers for roundCowState to satisfy the (current) apply.Balances interface
-func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (apply.AccountData, error) {
+func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (ledgercore.AccountData, error) {
 	acct, err := cs.lookup(addr)
 	if err != nil {
-		return apply.AccountData{}, err
+		return ledgercore.AccountData{}, err
 	}
 	if withPendingRewards {
 		acct = acct.WithUpdatedRewards(cs.proto, cs.rewardsLevel())
 	}
-	return apply.ToApplyAccountData(acct), nil
+	return acct, nil
 }
 
 func (cs *roundCowState) GetCreatableID(groupIdx int) basics.CreatableIndex {
@@ -294,21 +340,16 @@ func (cs *roundCowState) GetCreator(cidx basics.CreatableIndex, ctype basics.Cre
 	return cs.getCreator(cidx, ctype)
 }
 
-func (cs *roundCowState) Put(addr basics.Address, acct apply.AccountData) error {
-	a, err := cs.lookup(addr)
-	if err != nil {
-		return err
-	}
-	apply.AssignAccountData(&a, acct)
-	return cs.putAccount(addr, a)
+func (cs *roundCowState) Put(addr basics.Address, acct ledgercore.AccountData) error {
+	return cs.putAccount(addr, acct)
 }
 
 func (cs *roundCowState) CloseAccount(addr basics.Address) error {
-	return cs.putAccount(addr, basics.AccountData{})
+	return cs.putAccount(addr, ledgercore.AccountData{})
 }
 
-func (cs *roundCowState) putAccount(addr basics.Address, acct basics.AccountData) error {
-	cs.mods.Accts.Upsert(addr, acct)
+func (cs *roundCowState) putAccount(addr basics.Address, acct ledgercore.AccountData) error {
+	cs.mods.NewAccts.Upsert(addr, acct)
 	return nil
 }
 
@@ -618,7 +659,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 
 // hotfix for testnet stall 08/26/2019; move some algos from testnet bank to rewards pool to give it enough time until protocol upgrade occur.
 // hotfix for testnet stall 11/07/2019; do the same thing
-func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance apply.AccountData, headerRound basics.Round) (poolOld apply.AccountData, err error) {
+func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance ledgercore.AccountData, headerRound basics.Round) (poolOld ledgercore.AccountData, err error) {
 	// verify that we patch the correct round.
 	if headerRound != 1499995 && headerRound != 2926564 {
 		return rewardPoolBalance, nil
@@ -892,7 +933,7 @@ func (eval *BlockEvaluator) checkMinBalance(cow *roundCowState) error {
 		effectiveMinBalance := dataNew.MinBalance(&eval.proto)
 		if dataNew.MicroAlgos.Raw < effectiveMinBalance.Raw {
 			return fmt.Errorf("account %v balance %d below min %d (%d assets)",
-				addr, dataNew.MicroAlgos.Raw, effectiveMinBalance.Raw, len(dataNew.Assets))
+				addr, dataNew.MicroAlgos.Raw, effectiveMinBalance.Raw, dataNew.TotalAssets)
 		}
 
 		// Check if we have exceeded the maximum minimum balance
@@ -1038,7 +1079,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		}
 
 	default:
-		err = fmt.Errorf("Unknown transaction type %v", tx.Type)
+		err = fmt.Errorf("unknown transaction type %v", tx.Type)
 	}
 
 	// If the protocol does not support rewards in ApplyData,
@@ -1181,14 +1222,14 @@ func (eval *BlockEvaluator) generateExpiredOnlineAccountsList() {
 	// Then we are going to go through each modified account and
 	// see if it meets the criteria for adding it to the expired
 	// participation accounts list.
-	modifiedAccounts := eval.state.mods.Accts.ModifiedAccounts()
+	modifiedAccounts := eval.state.mods.NewAccts.ModifiedAccounts()
 	currentRound := eval.Round()
 
 	expectedMaxNumberOfExpiredAccounts := eval.proto.MaxProposedExpiredOnlineAccounts
 
 	for i := 0; i < len(modifiedAccounts) && len(eval.block.ParticipationUpdates.ExpiredParticipationAccounts) < expectedMaxNumberOfExpiredAccounts; i++ {
 		accountAddr := modifiedAccounts[i]
-		acctDelta, found := eval.state.mods.Accts.Get(accountAddr)
+		acctDelta, found := eval.state.mods.NewAccts.GetData(accountAddr)
 		if !found {
 			continue
 		}
@@ -1434,7 +1475,8 @@ transactionGroupLoop:
 			}
 
 			for _, br := range txgroup.balances {
-				base.accounts[br.Addr] = br.AccountData
+				// TODO: create cache of params as well
+				base.accounts[br.Addr] = ledgercore.ToAccountData(br.AccountData)
 			}
 			err = eval.TransactionGroup(txgroup.group)
 			if err != nil {

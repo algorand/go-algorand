@@ -446,8 +446,8 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 	require.NoError(t, err)
 	deltas := vb.Delta()
 
-	ad, _ := deltas.Accts.Get(addr)
-	state := ad.AppParams[1].GlobalState
+	params, _ := deltas.NewAccts.GetAppParams(addr, 1)
+	state := params.GlobalState
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["caller"])
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
 }
@@ -860,6 +860,14 @@ func TestModifiedAppLocalStates(t *testing.T) {
 		created, ok := vb.Delta().ModifiedAppLocalStates[aa]
 		require.True(t, ok)
 		assert.True(t, created)
+
+		state, ok := vb.Delta().NewAccts.GetAppLocalState(addrs[1], appid)
+		require.True(t, ok)
+		require.NotNil(t, state)
+
+		params, ok := vb.Delta().NewAccts.GetAppParams(addrs[0], appid)
+		require.True(t, ok)
+		require.NotNil(t, params)
 	}
 
 	optOutTxn := txntest.Txn{

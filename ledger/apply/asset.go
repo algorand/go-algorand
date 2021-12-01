@@ -53,7 +53,7 @@ func getParams(balances Balances, aidx basics.AssetIndex) (params basics.AssetPa
 func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Header, balances Balances, spec transactions.SpecialAddresses, ad *transactions.ApplyData, txnCounter uint64) error {
 	if cc.ConfigAsset == 0 {
 		// Allocating an asset.
-		totalAssets, err := balances.CountAssetHolding(header.Sender)
+		record, err := balances.Get(header.Sender, false)
 		if err != nil {
 			return err
 		}
@@ -75,10 +75,19 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 			Amount: cc.AssetParams.Total,
 		}
 
-		if totalAssets >= balances.ConsensusParams().MaxAssetsPerAccount {
-			return fmt.Errorf("too many assets in account: %d >= %d", totalAssets, balances.ConsensusParams().MaxAssetsPerAccount)
+		totalAssets := record.TotalAssets
+		maxAssetsPerAccount := balances.ConsensusParams().MaxAssetsPerAccount
+		if totalAssets >= uint32(maxAssetsPerAccount) {
+			return fmt.Errorf("too many assets in account: %d >= %d", totalAssets, maxAssetsPerAccount)
 		}
 
+		record.TotalAssets = basics.AddSaturate32(record.TotalAssets, 1)
+		record.TotalAssetParams = basics.AddSaturate32(record.TotalAssetParams, 1)
+
+		err = balances.Put(header.Sender, record)
+		if err != nil {
+			return err
+		}
 		err = balances.PutAssetParams(header.Sender, newidx, assetParams)
 		if err != nil {
 			return err
@@ -114,6 +123,11 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 	}
 
 	if cc.AssetParams == (basics.AssetParams{}) {
+		record, err := balances.Get(creator, false)
+		if err != nil {
+			return err
+		}
+
 		// assetHolding is initialized to the zero value if none was found.
 		assetHolding, _, err := balances.GetAssetHolding(creator, cc.ConfigAsset)
 		if err != nil {
@@ -124,6 +138,14 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 		// the entire outstanding asset amount.
 		if assetHolding.Amount != params.Total {
 			return fmt.Errorf("cannot destroy asset: creator is holding only %d/%d", assetHolding.Amount, params.Total)
+		}
+
+		record.TotalAssetParams = basics.SubSaturate32(record.TotalAssetParams, 1)
+		record.TotalAssets = basics.SubSaturate32(record.TotalAssets, 1)
+
+		err = balances.Put(creator, record)
+		if err != nil {
+			return err
 		}
 
 		// Tell the cow what asset we deleted
@@ -173,6 +195,16 @@ func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, am
 		return nil
 	}
 
+	// TODO: remove after switching the schema
+	record, err := balances.Get(addr, false)
+	if err != nil {
+		return err
+	}
+	err = balances.Put(addr, record)
+	if err != nil {
+		return err
+	}
+
 	sndHolding, ok, err := balances.GetAssetHolding(addr, asset)
 	if err != nil {
 		return err
@@ -197,6 +229,16 @@ func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, am
 func putIn(balances Balances, addr basics.Address, asset basics.AssetIndex, amount uint64, bypassFreeze bool) error {
 	if amount == 0 {
 		return nil
+	}
+
+	// TODO: remove after switching the schema
+	record, err := balances.Get(addr, false)
+	if err != nil {
+		return err
+	}
+	err = balances.Put(addr, record)
+	if err != nil {
+		return err
 	}
 
 	rcvHolding, ok, err := balances.GetAssetHolding(addr, asset)
@@ -260,12 +302,21 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 
 			sndHolding.Frozen = params.DefaultFrozen
 
-			totalSndAssets, err := balances.CountAssetHolding(source)
+			record, err := balances.Get(source, false)
 			if err != nil {
 				return err
 			}
-			if totalSndAssets >= balances.ConsensusParams().MaxAssetsPerAccount {
-				return fmt.Errorf("too many assets in account: %d >= %d", totalSndAssets, balances.ConsensusParams().MaxAssetsPerAccount)
+
+			totalSndAssets := record.TotalAssets
+			maxAssetsPerAccount := balances.ConsensusParams().MaxAssetsPerAccount
+			if totalSndAssets >= uint32(maxAssetsPerAccount) {
+				return fmt.Errorf("too many assets in account: %d >= %d", totalSndAssets, maxAssetsPerAccount)
+			}
+
+			record.TotalAssets = basics.AddSaturate32(record.TotalAssets, 1)
+			err = balances.Put(source, record)
+			if err != nil {
+				return err
 			}
 
 			err = balances.PutAssetHolding(source, ct.XferAsset, sndHolding)
@@ -299,6 +350,11 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 		// Cannot close by clawback
 		if clawback {
 			return fmt.Errorf("cannot close asset by clawback")
+		}
+
+		record, err := balances.Get(source, false)
+		if err != nil {
+			return err
 		}
 
 		// Fetch the sender asset data. We will use this to ensure
@@ -367,6 +423,12 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 			return fmt.Errorf("asset %v not zero (%d) after closing", ct.XferAsset, sndHolding.Amount)
 		}
 
+		record.TotalAssets = basics.SubSaturate32(record.TotalAssets, 1)
+		err = balances.Put(source, record)
+		if err != nil {
+			return err
+		}
+
 		err = balances.DeleteAssetHolding(source, ct.XferAsset)
 		if err != nil {
 			return err
@@ -391,6 +453,18 @@ func AssetFreeze(cf transactions.AssetFreezeTxnFields, header transactions.Heade
 
 	if params.Freeze.IsZero() || (header.Sender != params.Freeze) {
 		return fmt.Errorf("freeze not allowed: sender %v, freeze %v", header.Sender, params.Freeze)
+	}
+
+	// TODO: remove after the schema switch
+	// get and put base account record - needed for writing full bascis AD back to DB
+	record, err := balances.Get(cf.FreezeAccount, false)
+	if err != nil {
+		return err
+	}
+
+	err = balances.Put(cf.FreezeAccount, record)
+	if err != nil {
+		return err
 	}
 
 	// Get the account to be frozen/unfrozen.
