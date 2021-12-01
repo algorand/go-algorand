@@ -2577,7 +2577,7 @@
                 }
               }
             },
-            "description": "Application Not Found"
+            "description": "Participation Key Not Found"
           },
           "500": {
             "content": {
@@ -2653,6 +2653,16 @@
             },
             "description": "Invalid API Token"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Participation Key Not Found"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -2723,6 +2733,16 @@
               }
             },
             "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Participation Key Not Found"
           },
           "500": {
             "content": {
@@ -2796,7 +2816,7 @@
                 }
               }
             },
-            "description": "Application Not Found"
+            "description": "Participation Key Not Found"
           },
           "500": {
             "content": {
@@ -2814,6 +2834,80 @@
           }
         },
         "summary": "Get participation key info by id",
+        "tags": [
+          "private"
+        ]
+      },
+      "post": {
+        "description": "Given a participation id, append state proof keys to a particular set of participation keys.",
+        "operationId": "AppendKeys",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "participation-id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParticipationKey"
+                }
+              }
+            },
+            "description": "A detailed description of a participation id"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Participation Key Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Append state proof keys to a participation key",
         "tags": [
           "private"
         ]

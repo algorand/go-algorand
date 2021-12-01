@@ -212,6 +212,12 @@ func (v2 *Handlers) GetParticipationKeyByID(ctx echo.Context, participationID st
 	return ctx.JSON(http.StatusOK, response)
 }
 
+// AppendKeys Append state proof keys to a participation key
+// (POST /v2/participation/{participation-id})
+func (v2 *Handlers) AppendKeys(ctx echo.Context, participationId string) error {
+	return nil
+}
+
 // ShutdownNode shuts down the node.
 // (POST /v2/shutdown)
 func (v2 *Handlers) ShutdownNode(ctx echo.Context, params private.ShutdownNodeParams) error {

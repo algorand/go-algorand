@@ -494,7 +494,7 @@
             }
           },
           "404": {
-            "description": "Application Not Found",
+            "description": "Participation Key Not Found",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -553,6 +553,12 @@
               "$ref": "#/definitions/ErrorResponse"
             }
           },
+          "404": {
+            "description": "Participation Key Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
           "500": {
             "description": "Internal Error",
             "schema": {
@@ -601,6 +607,12 @@
               "$ref": "#/definitions/ErrorResponse"
             }
           },
+          "404": {
+            "description": "Participation Key Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
           "500": {
             "description": "Internal Error",
             "schema": {
@@ -643,7 +655,54 @@
             }
           },
           "404": {
-            "description": "Application Not Found",
+            "description": "Participation Key Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "private"
+        ],
+        "description": "Given a participation id, append state proof keys to a particular set of participation keys.",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Append state proof keys to a participation key",
+        "operationId": "AppendKeys",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "$ref": "#/responses/ParticipationKeyResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Participation Key Not Found",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
