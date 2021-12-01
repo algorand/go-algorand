@@ -297,7 +297,7 @@ const (
 		FROM Keysets k
 		INNER JOIN Rolling r
 		ON k.pk = r.pk`
-	selectStateProofKeys   = `SELECT s.key
+	selectStateProofKeys = `SELECT s.key
 		FROM StateProofKeys s
 		WHERE round=?
 		   AND pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
@@ -703,14 +703,11 @@ func (db *participationDB) AppendKeys(id ParticipationID, keys map[uint64]StateP
 		keyCopy[k] = v // PKI TODO: Deep copy?
 	}
 
-	// Write to the DB asynchronously.
+	// Update the DB asynchronously.
 	db.writeQueue <- partDBWriteRecord{
 		insertID: id,
 		keys:     keyCopy,
 	}
-
-	// Keys not stored in cache, no more work to do.
-
 	return nil
 }
 
