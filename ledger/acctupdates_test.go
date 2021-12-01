@@ -345,10 +345,10 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			require.Equal(t, d, basics.AccountData{})
 		}
 	}
-	checkAcctUpdatesConsistency(t, au)
+	checkAcctUpdatesConsistency(t, au, latestRnd)
 }
 
-func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates) {
+func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Round) {
 	accounts := make(map[basics.Address]modifiedAccount)
 
 	for _, rdelta := range au.deltas {
@@ -363,6 +363,17 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates) {
 	}
 
 	require.Equal(t, au.accounts, accounts)
+
+	latest := au.deltas[len(au.deltas)-1]
+	for i := 0; i < latest.Len(); i++ {
+		addr, acct := latest.GetByIdx(i)
+		d, _, err := au.LookupWithoutRewards(rnd, addr)
+		require.NoError(t, err)
+		require.Equal(t, int(acct.TotalAppParams), len(d.AppParams))
+		require.Equal(t, int(acct.TotalAssetParams), len(d.AssetParams))
+		require.Equal(t, int(acct.TotalAppLocalStates), len(d.AppLocalStates))
+		require.Equal(t, int(acct.TotalAssets), len(d.Assets))
+	}
 }
 
 func TestAcctUpdates(t *testing.T) {
