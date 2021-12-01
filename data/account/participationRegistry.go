@@ -177,7 +177,7 @@ type ParticipationRegistry interface {
 	Insert(record Participation) (ParticipationID, error)
 
 	// AppendKeys appends state proof keys to an existing Participation record. Keys can only be appended
-	// once, an error
+	// once, an error will occur when the data is flushed when inserting a duplicate key.
 	AppendKeys(id ParticipationID, keys map[uint64]StateProofKey) error
 
 	// Delete removes a record from storage.
@@ -414,8 +414,7 @@ func (db *participationDB) writeThread() {
 		} else if !wr.insertID.IsZero() {
 			if wr.insert != (Participation{}) {
 				err = db.insertInner(wr.insert, wr.insertID)
-			}
-			if len(wr.keys) != 0 {
+			} else if len(wr.keys) != 0 {
 				err = db.appendKeysInner(wr.insertID, wr.keys)
 			}
 		} else if !wr.delete.IsZero() {
@@ -699,7 +698,7 @@ func (db *participationDB) AppendKeys(id ParticipationID, keys map[uint64]StateP
 		return ErrParticipationIDNotFound
 	}
 
-	keyCopy := make(map[uint64]StateProofKey)
+	keyCopy := make(map[uint64]StateProofKey, len(keys))
 	for k, v := range keys {
 		keyCopy[k] = v // PKI TODO: Deep copy?
 	}

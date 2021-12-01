@@ -775,3 +775,33 @@ func TestSecretNotFound(t *testing.T) {
 	a.Error(err)
 	a.ErrorIs(err, ErrSecretNotFound)
 }
+
+func TestAddingSecretTwice(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+	registry := getRegistry(t)
+	defer registryCloseTest(t, registry)
+
+	// Install a key for testing
+	p := makeTestParticipation(1, 0, 2, 3)
+	id, err := registry.Insert(p)
+	a.NoError(err)
+	a.Equal(p.ID(), id)
+
+	// Append key
+	keys := make(map[uint64]StateProofKey)
+	bs := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bs, 10)
+	keys[0] = bs
+
+	err = registry.AppendKeys(id, keys)
+	a.NoError(err)
+
+	// The error doesn't happen until the data persists.
+	err = registry.AppendKeys(id, keys)
+	a.NoError(err)
+
+	err = registry.Flush(10 * time.Second)
+	a.Error(err)
+	a.EqualError(err, "unable to execute append keys: UNIQUE constraint failed: StateProofKeys.pk, StateProofKeys.round")
+}
