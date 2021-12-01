@@ -1,0 +1,22 @@
+{
+  "Genesis": {
+    "NetworkName": "devmodenet",
+    "Wallets": [
+      {
+        "Name": "Wallet1",
+        "Stake": 100,
+        "Online": true
+      }
+    ],
+    "DevMode": true
+  },
+  "Nodes": [
+    {
+      "Name": "Node",
+      "IsRelay": false,
+      "Wallets": [
+        { "Name": "Wallet1", "ParticipationOnly": false }
+      ]
+    }
+  ]
+}

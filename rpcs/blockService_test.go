@@ -44,14 +44,16 @@ type mockUnicastPeer struct {
 func (mup *mockUnicastPeer) GetAddress() string {
 	return ""
 }
-func (mup *mockUnicastPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag, callback network.UnicastWebsocketMessageStateCallback) error {
+func (mup *mockUnicastPeer) Unicast(ctx context.Context, data []byte, tag protocol.Tag) error {
 	return nil
 }
 func (mup *mockUnicastPeer) Version() string {
-	return network.ProtocolVersion
+	return "2.1"
 }
-func (mup *mockUnicastPeer) IsOutgoing() bool {
-	return false
+
+// GetConnectionLatency returns the connection latency between the local node and this peer.
+func (mup *mockUnicastPeer) GetConnectionLatency() time.Duration {
+	return time.Duration(0)
 }
 func (mup *mockUnicastPeer) Request(ctx context.Context, tag network.Tag, topics network.Topics) (resp *network.Response, e error) {
 	return nil, nil

@@ -21,7 +21,6 @@ import (
 	"math/rand"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -85,6 +84,22 @@ type mockNode struct {
 	genesisID string
 	config    config.Local
 	err       error
+}
+
+func (m mockNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
+	panic("implement me")
+}
+
+func (m mockNode) ListParticipationKeys() ([]account.ParticipationRecord, error) {
+	panic("implement me")
+}
+
+func (m mockNode) GetParticipationKey(id account.ParticipationID) (account.ParticipationRecord, error) {
+	panic("implement me")
+}
+
+func (m mockNode) RemoveParticipationKey(id account.ParticipationID) error {
+	panic("implement me")
 }
 
 func makeMockNode(ledger *data.Ledger, genesisID string, nodeError error) mockNode {
@@ -171,7 +186,7 @@ func (m mockNode) GetTransactionByID(txid transactions.Txid, rnd basics.Round) (
 	return node.TxnWithStatus{}, fmt.Errorf("get transaction by id not implemented")
 }
 
-func (m mockNode) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
+func (m mockNode) AssembleBlock(round basics.Round) (agreement.ValidatedBlock, error) {
 	return nil, fmt.Errorf("assemble block not implemented")
 }
 

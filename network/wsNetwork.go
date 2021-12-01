@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"net"
 	"net/http"
 	"net/textproto"
@@ -31,7 +30,6 @@ import (
 	"path"
 	"regexp"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -54,11 +52,7 @@ import (
 )
 
 const incomingThreads = 20
-
-// messageFilterSize is the threshold beyond we send a request to the other peer to avoid sending us a message with that particular hash.
-// typically, this is beneficial for proposal messages, which tends to be large and uniform across the network. Non-uniform messages, such
-// as the transaction sync messages should not included in this filter.
-const messageFilterSize = 200000
+const messageFilterSize = 5000 // messages greater than that size may be blocked by incoming/outgoing filter
 
 // httpServerReadHeaderTimeout is the amount of time allowed to read
 // request headers. The connection's read deadline is reset
@@ -223,9 +217,6 @@ type IncomingMessage struct {
 	Data   []byte
 	Err    error
 	Net    GossipNode
-
-	// Sequence is the sequence number of the message for the specific tag and peer
-	Sequence uint64
 
 	// Received is time.Time.UnixNano()
 	Received int64
@@ -789,9 +780,6 @@ func (wn *WebsocketNetwork) Start() {
 		wn.scheme = "http"
 	}
 	wn.meshUpdateRequests <- meshRequest{false, nil}
-	if wn.config.EnablePingHandler {
-		wn.RegisterHandlers(pingHandlers)
-	}
 	if wn.prioScheme != nil {
 		wn.RegisterHandlers(prioHandlers)
 	}
@@ -801,10 +789,7 @@ func (wn *WebsocketNetwork) Start() {
 	}
 	wn.wg.Add(1)
 	go wn.meshThread()
-	if wn.config.PeerPingPeriodSeconds > 0 {
-		wn.wg.Add(1)
-		go wn.pingThread()
-	}
+
 	// we shouldn't have any ticker here.. but in case we do - just stop it.
 	if wn.peersConnectivityCheckTicker != nil {
 		wn.peersConnectivityCheckTicker.Stop()
@@ -1144,7 +1129,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 
 	// We are careful to encode this prior to starting the server to avoid needing 'messagesOfInterestMu' here.
 	if wn.messagesOfInterestEnc != nil {
-		err = peer.Unicast(wn.ctx, wn.messagesOfInterestEnc, protocol.MsgOfInterestTag, nil)
+		err = peer.Unicast(wn.ctx, wn.messagesOfInterestEnc, protocol.MsgOfInterestTag)
 		if err != nil {
 			wn.log.Infof("ws send msgOfInterest: %v", err)
 		}
@@ -1426,7 +1411,7 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 		if peer == request.except {
 			continue
 		}
-		ok := peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime, nil)
+		ok := peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime)
 		if ok {
 			sentMessageCount++
 			continue
@@ -1771,81 +1756,6 @@ func (wn *WebsocketNetwork) prioWeightRefresh() {
 	}
 }
 
-// Wake up the thread to do work this often.
-const pingThreadPeriod = 30 * time.Second
-
-// If ping stats are older than this, don't include in metrics.
-const maxPingAge = 30 * time.Minute
-
-// pingThread wakes up periodically to refresh the ping times on peers and update the metrics gauges.
-func (wn *WebsocketNetwork) pingThread() {
-	defer wn.wg.Done()
-	ticker := time.NewTicker(pingThreadPeriod)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-		case <-wn.ctx.Done():
-			return
-		}
-		sendList := wn.peersToPing()
-		wn.log.Debugf("ping %d peers...", len(sendList))
-		for _, peer := range sendList {
-			if !peer.sendPing() {
-				// if we failed to send a ping, see how long it was since last successful ping.
-				lastPingSent, _ := peer.pingTimes()
-				wn.log.Infof("failed to ping to %v for the past %f seconds", peer, time.Now().Sub(lastPingSent).Seconds())
-			}
-		}
-	}
-}
-
-// Walks list of peers, gathers list of peers to ping, also calculates statistics.
-func (wn *WebsocketNetwork) peersToPing() []*wsPeer {
-	wn.peersLock.RLock()
-	defer wn.peersLock.RUnlock()
-	// Never flood outbound traffic by trying to ping all the peers at once.
-	// Send to at most one fifth of the peers.
-	maxSend := 1 + (len(wn.peers) / 5)
-	out := make([]*wsPeer, 0, maxSend)
-	now := time.Now()
-	// a list to sort to find median
-	times := make([]float64, 0, len(wn.peers))
-	var min = math.MaxFloat64
-	var max float64
-	var sum float64
-	pingPeriod := time.Duration(wn.config.PeerPingPeriodSeconds) * time.Second
-	for _, peer := range wn.peers {
-		lastPingSent, lastPingRoundTripTime := peer.pingTimes()
-		sendToNow := now.Sub(lastPingSent)
-		if (sendToNow > pingPeriod) && (len(out) < maxSend) {
-			out = append(out, peer)
-		}
-		if (lastPingRoundTripTime > 0) && (sendToNow < maxPingAge) {
-			ftime := lastPingRoundTripTime.Seconds()
-			sum += ftime
-			times = append(times, ftime)
-			if ftime < min {
-				min = ftime
-			}
-			if ftime > max {
-				max = ftime
-			}
-		}
-	}
-	if len(times) != 0 {
-		sort.Float64s(times)
-		median := times[len(times)/2]
-		medianPing.Set(median, nil)
-		mean := sum / float64(len(times))
-		meanPing.Set(mean, nil)
-		minPing.Set(min, nil)
-		maxPing.Set(max, nil)
-		wn.log.Infof("ping times min=%f mean=%f median=%f max=%f", min, mean, median, max)
-	}
-	return out
-}
-
 func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) (relaysAddresses []string, archiverAddresses []string) {
 	var err error
 	relaysAddresses, err = tools_network.ReadFromSRV("algobootstrap", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
@@ -1876,15 +1786,14 @@ const ProtocolVersionHeader = "X-Algorand-Version"
 const ProtocolAcceptVersionHeader = "X-Algorand-Accept-Version"
 
 // SupportedProtocolVersions contains the list of supported protocol versions by this node ( in order of preference ).
-var SupportedProtocolVersions = []string{"3.0", "2.1"}
+var SupportedProtocolVersions = []string{"2.1"}
 
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
 /* Version history:
  *  1   Catchup service over websocket connections with unicast messages between peers
  *  2.1 Introduced topic key/data pairs and enabled services over the gossip connections
- *  3.0 Introduced new transaction gossiping protocol
  */
-const ProtocolVersion = "3.0"
+const ProtocolVersion = "2.1"
 
 // TelemetryIDHeader HTTP header for telemetry-id for logging
 const TelemetryIDHeader = "X-Algorand-TelId"
@@ -2150,7 +2059,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			resp := wn.prioScheme.MakePrioResponse(challenge)
 			if resp != nil {
 				mbytes := append([]byte(protocol.NetPrioResponseTag), resp...)
-				sent := peer.writeNonBlock(context.Background(), mbytes, true, crypto.Digest{}, time.Now(), nil)
+				sent := peer.writeNonBlock(context.Background(), mbytes, true, crypto.Digest{}, time.Now())
 				if !sent {
 					wn.log.With("remote", addr).With("local", localAddr).Warnf("could not send priority response to %v", addr)
 				}

@@ -287,11 +287,7 @@ func (p *testUnicastPeer) Version() string {
 	return p.version
 }
 
-func (p *testUnicastPeer) IsOutgoing() bool {
-	return false
-}
-
-func (p *testUnicastPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag, callback network.UnicastWebsocketMessageStateCallback) error {
+func (p *testUnicastPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) error {
 	ps := p.gn.(*httpTestPeerSource)
 	var dispather network.MessageHandler
 	for _, v := range ps.dispatchHandlers {

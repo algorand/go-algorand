@@ -8,7 +8,7 @@ require (
 	github.com/algorand/graphtrace v0.0.0-20201117160756-e524ed1a6f64
 	github.com/algorand/msgp v1.1.48
 	github.com/algorand/oapi-codegen v1.3.5-algorand5
-	github.com/algorand/websocket v1.4.2
+	github.com/algorand/websocket v1.4.4
 	github.com/algorand/xorfilter v0.2.0
 	github.com/aws/aws-sdk-go v1.16.5
 	github.com/chrismcguire/gobberish v0.0.0-20150821175641-1d8adb509a0e
@@ -26,7 +26,6 @@ require (
 	github.com/gopherjs/gopherwasm v1.0.1 // indirect
 	github.com/gorilla/context v1.1.1 // indirect
 	github.com/gorilla/mux v1.6.2
-	github.com/gorilla/schema v1.0.2
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jmoiron/sqlx v1.2.0
@@ -47,7 +46,7 @@ require (
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
 	golang.org/x/net v0.0.0-20200904194848-62affa334b73
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208 // indirect
-	golang.org/x/sys v0.0.0-20200905004654-be1d3432aa8f
+	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c
 	google.golang.org/appengine v1.6.7 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009
