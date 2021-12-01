@@ -131,7 +131,10 @@ func (cb *roundCowState) deltas() ledgercore.StateDelta {
 			if err != nil {
 				panic(fmt.Sprintf("delta lookup failed for addr %s app %d: %s", addr.String(), aapp.aidx, err.Error()))
 			}
-			cb.Put(addr, acct)
+			err = cb.Put(addr, acct)
+			if err != nil {
+				panic(fmt.Sprintf("delta saving failed for addr %s app %d: %s", addr.String(), aapp.aidx, err.Error()))
+			}
 
 			if err := applyStorageDelta(cb, addr, aapp, storeDelta); err != nil {
 				panic(fmt.Sprintf("applying storage delta failed for addr %s app %d: %s", addr.String(), aapp.aidx, err.Error()))

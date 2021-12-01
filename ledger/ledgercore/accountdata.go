@@ -109,19 +109,19 @@ func AssignAccountData(a *basics.AccountData, acct AccountData) {
 }
 
 // WithUpdatedRewards calls basics account data WithUpdatedRewards
-func (ad AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLevel uint64) AccountData {
-	u := basics.AccountData{
-		Status:             ad.Status,
-		MicroAlgos:         ad.MicroAlgos,
-		RewardsBase:        ad.RewardsBase,
-		RewardedMicroAlgos: ad.RewardedMicroAlgos,
+func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLevel uint64) AccountData {
+	bad := basics.AccountData{
+		Status:             u.Status,
+		MicroAlgos:         u.MicroAlgos,
+		RewardsBase:        u.RewardsBase,
+		RewardedMicroAlgos: u.RewardedMicroAlgos,
 	}
-	u = u.WithUpdatedRewards(proto, rewardsLevel)
+	bad = bad.WithUpdatedRewards(proto, rewardsLevel)
 
-	ad.MicroAlgos = u.MicroAlgos
-	ad.RewardsBase = u.RewardsBase
-	ad.RewardedMicroAlgos = u.RewardedMicroAlgos
-	return ad
+	u.MicroAlgos = bad.MicroAlgos
+	u.RewardsBase = bad.RewardsBase
+	u.RewardedMicroAlgos = bad.RewardedMicroAlgos
+	return u
 }
 
 // ClearOnlineState resets the account's fields to indicate that the account is an offline account
