@@ -617,11 +617,7 @@ type NodeStatusResponse struct {
 }
 
 // ParticipationKeyResponse defines model for ParticipationKeyResponse.
-type ParticipationKeyResponse struct {
-
-	// Detailed description of a participation key
-	ParticipationKey string `json:"participationKey"`
-}
+type ParticipationKeyResponse ParticipationKey
 
 // ParticipationKeysResponse defines model for ParticipationKeysResponse.
 type ParticipationKeysResponse []ParticipationKey
