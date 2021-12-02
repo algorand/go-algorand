@@ -4040,7 +4040,7 @@ func base64Decode(encoded []byte, encoding *base64.Encoding) ([]byte, error) {
 	decoded := make([]byte, encoding.DecodedLen(len(encoded)))
 	n, err := encoding.Strict().Decode(decoded, encoded)
 	if err != nil {
-		n = 0
+		return decoded[:0], err
 	}
 	return decoded[:n], err
 }
@@ -4050,7 +4050,7 @@ func opBase64Decode(cx *EvalContext) {
 	alphabetField := Base64Alphabet(cx.program[cx.pc+1])
 	fs, ok := base64AlphabetSpecByField[alphabetField]
 	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid base64_decode field %d", alphabetField)
+		cx.err = fmt.Errorf("invalid base64_decode alphabet %d", alphabetField)
 		return
 	}
 

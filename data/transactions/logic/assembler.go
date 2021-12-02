@@ -1251,7 +1251,7 @@ func assembleBase64Decode(ops *OpStream, spec *OpSpec, args []string) error {
 
 	alph, ok := base64AlphabetSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
+		return ops.errorf("%s unknown alphabet: %#v", spec.Name, args[0])
 	}
 	if alph.version > ops.Version {
 		//nolint:errcheck // we continue to maintain typestack

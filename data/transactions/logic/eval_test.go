@@ -5017,7 +5017,7 @@ type b64DecodeTestArgs struct {
 	Program []byte
 }
 
-func testB64DecodeAssembleWithArgs(t *testing.T) []b64DecodeTestArgs {
+func b64TestDecodeAssembleWithArgs(t *testing.T) []b64DecodeTestArgs {
 	sourceTmpl := `#pragma version %d
 arg 0
 arg 1
@@ -5046,7 +5046,7 @@ base64_decode %s
 	return args
 }
 
-func testB64DecodeEval(tb testing.TB, args []b64DecodeTestArgs) {
+func b64TestDecodeEval(tb testing.TB, args []b64DecodeTestArgs) {
 	for _, data := range args {
 		var txn transactions.SignedTxn
 		txn.Lsig.Logic = data.Program
@@ -5066,6 +5066,6 @@ func testB64DecodeEval(tb testing.TB, args []b64DecodeTestArgs) {
 func TestOpBase64Decode(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	args := testB64DecodeAssembleWithArgs(t)
-	testB64DecodeEval(t, args)
+	args := b64TestDecodeAssembleWithArgs(t)
+	b64TestDecodeEval(t, args)
 }
