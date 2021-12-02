@@ -481,37 +481,39 @@ func decodeTuple(encoded []byte, childT []Type) ([]interface{}, error) {
 // ParseArgJSONtoByteSlice convert input method arguments to ABI encoded bytes
 // it converts funcArgTypes into a tuple type and apply changes over input argument string (in JSON format)
 // if there are greater or equal to 15 inputs, then we compact the tailing inputs into one tuple
-func ParseArgJSONtoByteSlice(funcArgTypes string, jsonArgs []string, applicationArgs *[][]byte) error {
-	abiTupleT, err := TypeOf(funcArgTypes)
-	if err != nil {
-		return err
+func ParseArgJSONtoByteSlice(argTypes []string, jsonArgs []string, applicationArgs *[][]byte) error {
+	abiTypes := make([]Type, len(argTypes))
+	for i, typeString := range argTypes {
+		abiType, err := TypeOf(typeString)
+		if err != nil {
+			return err
+		}
+		abiTypes[i] = abiType
 	}
-	if len(abiTupleT.childTypes) != len(jsonArgs) {
-		return fmt.Errorf("input argument number %d != method argument number %d", len(jsonArgs), len(abiTupleT.childTypes))
+
+	if len(abiTypes) != len(jsonArgs) {
+		return fmt.Errorf("input argument number %d != method argument number %d", len(jsonArgs), len(abiTypes))
 	}
 
 	// change the input args to be 1 - 14 + 15 (compacting everything together)
 	if len(jsonArgs) > 14 {
-		compactedType, err := MakeTupleType(abiTupleT.childTypes[14:])
+		compactedType, err := MakeTupleType(abiTypes[14:])
 		if err != nil {
 			return err
 		}
-		abiTupleT.childTypes = abiTupleT.childTypes[:14]
-		abiTupleT.childTypes = append(abiTupleT.childTypes, compactedType)
-		abiTupleT.staticLength = 15
+		abiTypes = append(abiTypes[:14], compactedType)
 
 		remainingJSON := "[" + strings.Join(jsonArgs[14:], ",") + "]"
-		jsonArgs = jsonArgs[:14]
-		jsonArgs = append(jsonArgs, remainingJSON)
+		jsonArgs = append(jsonArgs[:14], remainingJSON)
 	}
 
 	// parse JSON value to ABI encoded bytes
 	for i := 0; i < len(jsonArgs); i++ {
-		interfaceVal, err := abiTupleT.childTypes[i].UnmarshalFromJSON([]byte(jsonArgs[i]))
+		interfaceVal, err := abiTypes[i].UnmarshalFromJSON([]byte(jsonArgs[i]))
 		if err != nil {
 			return err
 		}
-		abiEncoded, err := abiTupleT.childTypes[i].Encode(interfaceVal)
+		abiEncoded, err := abiTypes[i].Encode(interfaceVal)
 		if err != nil {
 			return err
 		}
@@ -520,30 +522,41 @@ func ParseArgJSONtoByteSlice(funcArgTypes string, jsonArgs []string, application
 	return nil
 }
 
-// ParseMethodSignature parses a method of format `method(...argTypes...)retType`
-// into `(...argTypes)` and `retType`
-func ParseMethodSignature(methodSig string) (string, string, error) {
-	var stack []int
+// ParseMethodSignature parses a method of format `method(argType1,argType2,...)retType`
+// into `method` {`argType1`,`argType2`,..} and `retType`
+func ParseMethodSignature(methodSig string) (name string, argTypes []string, returnType string, err error) {
+	argsStart := strings.Index(methodSig, "(")
+	if argsStart == -1 {
+		err = fmt.Errorf("Invalid method signature: %s", methodSig)
+		return
+	}
 
-	for index, chr := range methodSig {
-		if chr == '(' {
-			stack = append(stack, index)
-		} else if chr == ')' {
-			if len(stack) == 0 {
-				break
+	argsEnd := -1
+	depth := 0
+	for index, char := range methodSig {
+		switch char {
+		case '(':
+			depth++
+		case ')':
+			if depth == 0 {
+				err = fmt.Errorf("Unpaired parenthesis in method signature: %s", methodSig)
+				return
 			}
-			leftParenIndex := stack[len(stack)-1]
-			stack = stack[:len(stack)-1]
-			if len(stack) == 0 {
-				returnType := methodSig[index+1:]
-				if _, err := TypeOf(returnType); err != nil {
-					if returnType != "void" {
-						return "", "", fmt.Errorf("cannot infer return type: %s", returnType)
-					}
-				}
-				return methodSig[leftParenIndex : index+1], methodSig[index+1:], nil
+			depth--
+			if depth == 0 {
+				argsEnd = index
+				break
 			}
 		}
 	}
-	return "", "", fmt.Errorf("unpaired parentheses: %s", methodSig)
+
+	if argsEnd == -1 {
+		err = fmt.Errorf("Invalid method signature: %s", methodSig)
+		return
+	}
+
+	name = methodSig[:argsStart]
+	argTypes, err = parseTupleContent(methodSig[argsStart+1 : argsEnd])
+	returnType = methodSig[argsEnd+1:]
+	return
 }

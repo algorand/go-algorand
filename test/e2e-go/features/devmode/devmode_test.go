@@ -37,12 +37,11 @@ func TestDevMode(t *testing.T) {
 		t.Skip()
 	}
 
-	t.Parallel()
-
 	// Start devmode network, and make sure everything is primed by sending a transaction.
 	var fixture fixtures.RestClientFixture
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "DevModeNetwork.json"))
 	fixture.Start()
+	defer fixture.Shutdown()
 	sender, err := fixture.GetRichestAccount()
 	require.NoError(t, err)
 	key := crypto.GenerateSignatureSecrets(crypto.Seed{})
@@ -56,7 +55,7 @@ func TestDevMode(t *testing.T) {
 		txn = fixture.SendMoneyAndWait(firstRound+i, 100000, 1000, sender.Address, receiver.String(), "")
 		require.Equal(t, firstRound+i, txn.FirstRound)
 	}
-	require.True(t, time.Since(start) < 2*time.Second, "Transactions should be quickly confirmed.")
+	require.True(t, time.Since(start) < 8*time.Second, "Transactions should be quickly confirmed faster than usual.")
 
 	// Without transactions there should be no rounds even after a normal confirmation time.
 	time.Sleep(10 * time.Second)
