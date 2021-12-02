@@ -676,8 +676,23 @@
           "private"
         ],
         "description": "Given a participation id, append state proof keys to a particular set of participation keys.",
+        "consumes": [
+          "application/msgpack"
+        ],
         "produces": [
           "application/json"
+        ],
+        "parameters": [
+          {
+            "description": "The state proof keys to add to an existing participation id",
+            "name": "keymap",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          }
         ],
         "schemes": [
           "http"

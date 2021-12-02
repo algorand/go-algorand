@@ -2851,6 +2851,18 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/msgpack": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "description": "The state proof keys to add to an existing participation id",
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -2910,7 +2922,8 @@
         "summary": "Append state proof keys to a participation key",
         "tags": [
           "private"
-        ]
+        ],
+        "x-codegen-request-body-name": "keymap"
       }
     },
     "/v2/shutdown": {
