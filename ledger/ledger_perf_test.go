@@ -290,6 +290,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 					stxn.Txn = tx
 					stxn.Sig = crypto.Signature{1}
 					err = eval.Transaction(stxn, transactions.ApplyData{})
+					require.NoError(b, err)
 				}
 				break
 			}
@@ -404,7 +405,7 @@ func init() {
 
 	params = testParams{
 		testType: "app",
-		name:     fmt.Sprintf("int-1"),
+		name:     "int-1",
 		program:  ops.Program,
 	}
 	testCases[params.name] = params
@@ -412,7 +413,7 @@ func init() {
 	// Int 1 many apps
 	params = testParams{
 		testType: "app",
-		name:     fmt.Sprintf("int-1-many-apps"),
+		name:     "int-1-many-apps",
 		program:  ops.Program,
 		numApps:  10,
 	}

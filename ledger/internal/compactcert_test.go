@@ -169,6 +169,7 @@ func TestCompactCertParams(t *testing.T) {
 
 	hdr.Round = 4
 	res, err = CompactCertParams(votersHdr, hdr)
+	require.NoError(t, err)
 	require.Equal(t, hdr.Round+1, res.SigRound)
 
 	// Covers all cases except overflow

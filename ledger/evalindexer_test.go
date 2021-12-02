@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"errors"
-	"fmt"
 	"math/rand"
 	"testing"
 
@@ -94,8 +93,9 @@ func TestEvalForIndexerCustomProtocolParams(t *testing.T) {
 	crypto.RandBytes(genHash[:])
 	block, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusV24,
 		genesisBalances, "test", genHash)
+	require.NoError(t, err)
 
-	dbName := fmt.Sprintf("%s", t.Name())
+	dbName := t.Name()
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	l, err := OpenLedger(logging.Base(), dbName, true, ledgercore.InitState{
@@ -195,8 +195,9 @@ func TestEvalForIndexerForExpiredAccounts(t *testing.T) {
 	crypto.RandBytes(genHash[:])
 	block, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture,
 		genesisBalances, "test", genHash)
+	require.NoError(t, err)
 
-	dbName := fmt.Sprintf("%s", t.Name())
+	dbName := t.Name()
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	l, err := OpenLedger(logging.Base(), dbName, true, ledgercore.InitState{

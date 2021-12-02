@@ -1394,7 +1394,7 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 		au.log.Warnf("Vacuuming account database failed : %v", err)
 		return err
 	}
-	vacuumElapsedTime := time.Now().Sub(startTime)
+	vacuumElapsedTime := time.Since(startTime)
 	ledgerVacuumMicros.AddUint64(uint64(vacuumElapsedTime.Microseconds()), nil)
 
 	au.log.Infof("Vacuuming accounts database completed within %v, reducing number of pages from %d to %d and size from %d to %d", vacuumElapsedTime, vacuumStats.PagesBefore, vacuumStats.PagesAfter, vacuumStats.SizeBefore, vacuumStats.SizeAfter)

@@ -201,7 +201,7 @@ type normalizedAccountBalance struct {
 
 // prepareNormalizedBalances converts an array of encodedBalanceRecord into an equal size array of normalizedAccountBalances.
 func prepareNormalizedBalances(bals []encodedBalanceRecord, proto config.ConsensusParams) (normalizedAccountBalances []normalizedAccountBalance, err error) {
-	normalizedAccountBalances = make([]normalizedAccountBalance, len(bals), len(bals))
+	normalizedAccountBalances = make([]normalizedAccountBalance, len(bals))
 	for i, balance := range bals {
 		normalizedAccountBalances[i].address = balance.Address
 		err = protocol.Decode(balance.AccountData, &(normalizedAccountBalances[i].accountData))
@@ -1099,7 +1099,7 @@ func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, address
 			}
 			var addr basics.Address
 			if len(addrbuf) != len(addr) {
-				err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+				err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 				return 0, nil, err
 			}
 			copy(addr[:], addrbuf)
@@ -1371,7 +1371,7 @@ func (qs *accountsDbQueries) readCatchpointStateUint64(ctx context.Context, stat
 	var val sql.NullInt64
 	err = db.Retry(func() (err error) {
 		err = qs.selectCatchpointStateUint64.QueryRowContext(ctx, stateName).Scan(&val)
-		if err == sql.ErrNoRows || (err == nil && false == val.Valid) {
+		if err == sql.ErrNoRows || (err == nil && !val.Valid) {
 			val.Int64 = 0 // default to zero.
 			err = nil
 			def = true
@@ -1485,7 +1485,7 @@ func accountsOnlineTop(tx *sql.Tx, offset, n uint64, proto config.ConsensusParam
 
 		var addr basics.Address
 		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 			return nil, err
 		}
 
@@ -1731,7 +1731,7 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 		}
 
 		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 			return
 		}
 		copy(addr[:], addrbuf[:])
@@ -1744,7 +1744,7 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 			return
 		}
 		reencodedAccountData := protocol.Encode(&decodedAccountData)
-		if bytes.Compare(preencodedAccountData, reencodedAccountData) == 0 {
+		if bytes.Equal(preencodedAccountData, reencodedAccountData) {
 			// these are identical, no need to store re-encoded account data
 			continue
 		}
@@ -1852,7 +1852,7 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 		}
 
 		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 			return
 		}
 
@@ -1990,7 +1990,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 			}
 
 			if len(addrbuf) != len(addr) {
-				err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+				err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 				iterator.Close(ctx)
 				return
 			}
@@ -2061,7 +2061,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 			}
 
 			if len(addrbuf) != len(addr) {
-				err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+				err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 				iterator.Close(ctx)
 				return
 			}

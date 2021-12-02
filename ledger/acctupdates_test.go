@@ -653,7 +653,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		ml.trackers.committedUpTo(basics.Round(i))
 	}
 	ml.trackers.waitAccountsWriting()
-	deltaTime := time.Now().Sub(startTime)
+	deltaTime := time.Since(startTime)
 	if deltaTime > time.Second {
 		return
 	}
@@ -818,7 +818,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		var moneyAccounts []basics.Address
 
 		for addr := range accts[0] {
-			if bytes.Compare(addr[:], testPoolAddr[:]) == 0 || bytes.Compare(addr[:], testSinkAddr[:]) == 0 {
+			if bytes.Equal(addr[:], testPoolAddr[:]) || bytes.Equal(addr[:], testSinkAddr[:]) {
 				continue
 			}
 			moneyAccounts = append(moneyAccounts, addr)
@@ -1152,7 +1152,7 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 
 		var addr basics.Address
 		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 			return
 		}
 
@@ -1258,8 +1258,8 @@ func TestCompactDeltas(t *testing.T) {
 		addrs[i] = basics.Address(crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)}))
 	}
 
-	accountDeltas := make([]ledgercore.NewAccountDeltas, 1, 1)
-	creatableDeltas := make([]map[basics.CreatableIndex]ledgercore.ModifiedCreatable, 1, 1)
+	accountDeltas := make([]ledgercore.NewAccountDeltas, 1)
+	creatableDeltas := make([]map[basics.CreatableIndex]ledgercore.ModifiedCreatable, 1)
 	creatableDeltas[0] = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	accountDeltas[0].Upsert(addrs[0], ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 2}}})
 	creatableDeltas[0][100] = ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true}

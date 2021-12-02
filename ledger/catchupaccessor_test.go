@@ -125,7 +125,7 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 		last64KIndex--
 	}
 	if !last64KStart.IsZero() {
-		last64KDuration := time.Now().Sub(last64KStart)
+		last64KDuration := time.Since(last64KStart)
 		b.ReportMetric(float64(last64KDuration.Nanoseconds())/float64(64*1024), "ns/last_64k_account")
 	}
 }
