@@ -71,6 +71,30 @@ type foundAddress struct {
 	exists  bool
 }
 
+// cachedAppParams contains cached value and existence flag for app params
+type cachedAppParams struct {
+	value  basics.AppParams
+	exists bool
+}
+
+// cachedAssetParams contains cached value and existence flag for asset params
+type cachedAssetParams struct {
+	value  basics.AssetParams
+	exists bool
+}
+
+// cachedAppLocalState contains cached value and existence flag for app local state
+type cachedAppLocalState struct {
+	value  basics.AppLocalState
+	exists bool
+}
+
+// cachedAssetHolding contains cached value and existence flag for asset holding
+type cachedAssetHolding struct {
+	value  basics.AssetHolding
+	exists bool
+}
+
 type roundCowBase struct {
 	l LedgerForCowBase
 
@@ -97,6 +121,12 @@ type roundCowBase struct {
 	// The account data store here is always the account data without the rewards.
 	accounts map[basics.Address]ledgercore.AccountData
 
+	// Similarly to accounts cache that stores base account data, there are caches for params, states, holdings.
+	appParams      map[ledgercore.AccountApp]cachedAppParams
+	assetParams    map[ledgercore.AccountAsset]cachedAssetParams
+	appLocalStates map[ledgercore.AccountApp]cachedAppLocalState
+	assets         map[ledgercore.AccountAsset]cachedAssetHolding
+
 	// Similar cache for asset/app creators.
 	creators map[creatable]foundAddress
 }
@@ -109,6 +139,10 @@ func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, com
 		compactCertNextRnd: compactCertNextRnd,
 		proto:              proto,
 		accounts:           make(map[basics.Address]ledgercore.AccountData),
+		appParams:          make(map[ledgercore.AccountApp]cachedAppParams),
+		assetParams:        make(map[ledgercore.AccountAsset]cachedAssetParams),
+		appLocalStates:     make(map[ledgercore.AccountApp]cachedAppLocalState),
+		assets:             make(map[ledgercore.AccountAsset]cachedAssetHolding),
 		creators:           make(map[creatable]foundAddress),
 	}
 }
@@ -149,43 +183,62 @@ func (x *roundCowBase) lookup(addr basics.Address) (ledgercore.AccountData, erro
 }
 
 func (x *roundCowBase) lookupAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, bool, error) {
+	if result, ok := x.appParams[ledgercore.AccountApp{Address: addr, App: aidx}]; ok {
+		return result.value, result.exists, nil
+	}
+
 	accountData, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
 	if err != nil {
 		return basics.AppParams{}, false, err
 	}
 
-	// TODO: cache
 	params, ok := accountData.AppParams[aidx]
+	x.appParams[ledgercore.AccountApp{Address: addr, App: aidx}] = cachedAppParams{params, ok}
 	return params, ok, nil
 }
 
 func (x *roundCowBase) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex) (basics.AssetParams, bool, error) {
+	if result, ok := x.assetParams[ledgercore.AccountAsset{Address: addr, Asset: aidx}]; ok {
+		return result.value, result.exists, nil
+	}
+
 	accountData, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
 	if err != nil {
 		return basics.AssetParams{}, false, err
 	}
 
 	params, ok := accountData.AssetParams[aidx]
+	x.assetParams[ledgercore.AccountAsset{Address: addr, Asset: aidx}] = cachedAssetParams{params, ok}
 	return params, ok, nil
 }
 
 func (x *roundCowBase) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex) (basics.AppLocalState, bool, error) {
+	if result, ok := x.appLocalStates[ledgercore.AccountApp{Address: addr, App: aidx}]; ok {
+		return result.value, result.exists, nil
+	}
+
 	accountData, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
 	if err != nil {
 		return basics.AppLocalState{}, false, err
 	}
 
 	ls, ok := accountData.AppLocalStates[aidx]
+	x.appLocalStates[ledgercore.AccountApp{Address: addr, App: aidx}] = cachedAppLocalState{ls, ok}
 	return ls, ok, nil
 }
 
 func (x *roundCowBase) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex) (basics.AssetHolding, bool, error) {
+	if result, ok := x.assets[ledgercore.AccountAsset{Address: addr, Asset: aidx}]; ok {
+		return result.value, result.exists, nil
+	}
+
 	accountData, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
 	if err != nil {
 		return basics.AssetHolding{}, false, err
 	}
 
 	holding, ok := accountData.Assets[aidx]
+	x.assets[ledgercore.AccountAsset{Address: addr, Asset: aidx}] = cachedAssetHolding{holding, ok}
 	return holding, ok, nil
 }
 
@@ -1477,6 +1530,18 @@ transactionGroupLoop:
 			for _, br := range txgroup.balances {
 				// TODO: create cache of params as well
 				base.accounts[br.Addr] = ledgercore.ToAccountData(br.AccountData)
+				for aidx, val := range br.AccountData.AppParams {
+					base.appParams[ledgercore.AccountApp{Address: br.Addr, App: aidx}] = cachedAppParams{val, true}
+				}
+				for aidx, val := range br.AccountData.AssetParams {
+					base.assetParams[ledgercore.AccountAsset{Address: br.Addr, Asset: aidx}] = cachedAssetParams{val, true}
+				}
+				for aidx, val := range br.AccountData.AppLocalStates {
+					base.appLocalStates[ledgercore.AccountApp{Address: br.Addr, App: aidx}] = cachedAppLocalState{val, true}
+				}
+				for aidx, val := range br.AccountData.Assets {
+					base.assets[ledgercore.AccountAsset{Address: br.Addr, Asset: aidx}] = cachedAssetHolding{val, true}
+				}
 			}
 			err = eval.TransactionGroup(txgroup.group)
 			if err != nil {
