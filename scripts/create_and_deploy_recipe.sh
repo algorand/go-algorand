@@ -80,6 +80,10 @@ while [ "$1" != "" ]; do
         --skip-build)
             SKIP_BUILD="true"
             ;;
+        -template)
+            shift
+            NETWORK_TEMPLATE="$1"
+            ;;
         *)
             echo "Unknown option" "$1"
             exit 1
@@ -109,6 +113,11 @@ fi
 if [[ "${SKIP_BUILD}" != "true" || ! -f ${GOPATH}/bin/netgoal ]]; then
     # Build so we've got up-to-date binaries
     (cd ${SRCPATH} && make)
+fi
+
+# If template is passed in, a recipe will be generated in the custom recipe folder
+if [[ ! -z ${NETWORK_TEMPLATE} ]]; then
+    python3 ${SRCPATH}/test/testdata/deployednettemplates/generate-recipe/generate_network.py -f ${SRCPATH}/test/testdata/deployednettemplates/recipes/custom/${CUSTOM_NETWORK_TEMPLATE}
 fi
 
 # Generate the nodecfg package directory
