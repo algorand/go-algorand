@@ -38,7 +38,12 @@ import (
 //                  ||     ||
 
 type roundCowParent interface {
-	lookup(basics.Address) (basics.AccountData, error)
+	lookup(basics.Address) (ledgercore.AccountData, error)
+	lookupAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, bool, error)
+	lookupAssetParams(addr basics.Address, aidx basics.AssetIndex) (basics.AssetParams, bool, error)
+	lookupAppLocalState(addr basics.Address, aidx basics.AppIndex) (basics.AppLocalState, bool, error)
+	lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex) (basics.AssetHolding, bool, error)
+
 	checkDup(basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	txnCounter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
@@ -108,7 +113,6 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, proto conf
 }
 
 func (cb *roundCowState) deltas() ledgercore.StateDelta {
-	var err error
 	if len(cb.sdeltas) == 0 {
 		return cb.mods
 	}
@@ -118,21 +122,24 @@ func (cb *roundCowState) deltas() ledgercore.StateDelta {
 	//    SetKey/DelKey work only with sdeltas, so need to pull missing accounts
 	// 2. Call applyStorageDelta for every delta per account
 	for addr, smap := range cb.sdeltas {
-		var delta basics.AccountData
-		var exist bool
-		if delta, exist = cb.mods.Accts.Get(addr); !exist {
-			ad, err := cb.lookup(addr)
-			if err != nil {
-				panic(fmt.Sprintf("fetching account data failed for addr %s: %s", addr.String(), err.Error()))
-			}
-			delta = ad
-		}
 		for aapp, storeDelta := range smap {
-			if delta, err = applyStorageDelta(delta, aapp, storeDelta); err != nil {
+			// app params and app local states might be accessed without touching base account record
+			// from TEAL by writing/deleting KV store
+			// so store the base account to deltas here
+			// TODO: remove after the schema switch
+			acct, err := cb.lookup(addr)
+			if err != nil {
+				panic(fmt.Sprintf("delta lookup failed for addr %s app %d: %s", addr.String(), aapp.aidx, err.Error()))
+			}
+			err = cb.Put(addr, acct)
+			if err != nil {
+				panic(fmt.Sprintf("delta saving failed for addr %s app %d: %s", addr.String(), aapp.aidx, err.Error()))
+			}
+
+			if err := applyStorageDelta(cb, addr, aapp, storeDelta); err != nil {
 				panic(fmt.Sprintf("applying storage delta failed for addr %s app %d: %s", addr.String(), aapp.aidx, err.Error()))
 			}
 		}
-		cb.mods.Accts.Upsert(addr, delta)
 	}
 	return cb.mods
 }
@@ -164,13 +171,61 @@ func (cb *roundCowState) getCreator(cidx basics.CreatableIndex, ctype basics.Cre
 	return cb.lookupParent.getCreator(cidx, ctype)
 }
 
-func (cb *roundCowState) lookup(addr basics.Address) (data basics.AccountData, err error) {
-	d, ok := cb.mods.Accts.Get(addr)
+func (cb *roundCowState) lookup(addr basics.Address) (data ledgercore.AccountData, err error) {
+	d, ok := cb.mods.NewAccts.GetData(addr)
 	if ok {
 		return d, nil
 	}
 
 	return cb.lookupParent.lookup(addr)
+}
+
+func (cb *roundCowState) lookupAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, bool, error) {
+	params, ok := cb.mods.NewAccts.GetAppParams(addr, aidx)
+	if ok {
+		if params == nil {
+			return basics.AppParams{}, false, nil
+		}
+		return *params, ok, nil
+	}
+
+	return cb.lookupParent.lookupAppParams(addr, aidx)
+}
+
+func (cb *roundCowState) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex) (basics.AssetParams, bool, error) {
+	params, ok := cb.mods.NewAccts.GetAssetParams(addr, aidx)
+	if ok {
+		if params == nil {
+			return basics.AssetParams{}, false, nil
+		}
+		return *params, ok, nil
+	}
+
+	return cb.lookupParent.lookupAssetParams(addr, aidx)
+}
+
+func (cb *roundCowState) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex) (basics.AppLocalState, bool, error) {
+	state, ok := cb.mods.NewAccts.GetAppLocalState(addr, aidx)
+	if ok {
+		if state == nil {
+			return basics.AppLocalState{}, false, nil
+		}
+		return *state, ok, nil
+	}
+
+	return cb.lookupParent.lookupAppLocalState(addr, aidx)
+}
+
+func (cb *roundCowState) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex) (basics.AssetHolding, bool, error) {
+	holding, ok := cb.mods.NewAccts.GetAssetHolding(addr, aidx)
+	if ok {
+		if holding == nil {
+			return basics.AssetHolding{}, false, nil
+		}
+		return *holding, ok, nil
+	}
+
+	return cb.lookupParent.lookupAssetHolding(addr, aidx)
 }
 
 func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
@@ -252,7 +307,7 @@ func (cb *roundCowState) setGroupIdx(txnIdx int) {
 }
 
 func (cb *roundCowState) commitToParent() {
-	cb.commitParent.mods.Accts.MergeAccounts(cb.mods.Accts)
+	cb.commitParent.mods.NewAccts.MergeAccounts(cb.mods.NewAccts)
 
 	for txid, lv := range cb.mods.Txids {
 		cb.commitParent.mods.Txids[txid] = lv
@@ -289,7 +344,7 @@ func (cb *roundCowState) commitToParent() {
 }
 
 func (cb *roundCowState) modifiedAccounts() []basics.Address {
-	return cb.mods.Accts.ModifiedAccounts()
+	return cb.mods.NewAccts.ModifiedAccounts()
 }
 
 // errUnsupportedChildCowTotalCalculation is returned by CalculateTotals when called by a child roundCowState instance
@@ -307,8 +362,8 @@ func (cb *roundCowState) CalculateTotals() error {
 	var ot basics.OverflowTracker
 	totals.ApplyRewards(cb.mods.Hdr.RewardsLevel, &ot)
 
-	for i := 0; i < cb.mods.Accts.Len(); i++ {
-		accountAddr, updatedAccountData := cb.mods.Accts.GetByIdx(i)
+	for i := 0; i < cb.mods.NewAccts.Len(); i++ {
+		accountAddr, updatedAccountData := cb.mods.NewAccts.GetByIdx(i)
 		previousAccountData, lookupError := cb.lookupParent.lookup(accountAddr)
 		if lookupError != nil {
 			return fmt.Errorf("roundCowState.CalculateTotals unable to load account data for address %v", accountAddr)

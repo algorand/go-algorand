@@ -69,7 +69,7 @@ func (at *AccountTotals) statusField(status basics.Status) *AlgoCount {
 }
 
 // AddAccount adds an account algos from the total money
-func (at *AccountTotals) AddAccount(proto config.ConsensusParams, data basics.AccountData, ot *basics.OverflowTracker) {
+func (at *AccountTotals) AddAccount(proto config.ConsensusParams, data AccountData, ot *basics.OverflowTracker) {
 	sum := at.statusField(data.Status)
 	algos, _ := data.Money(proto, at.RewardsLevel)
 	sum.Money = ot.AddA(sum.Money, algos)
@@ -77,7 +77,7 @@ func (at *AccountTotals) AddAccount(proto config.ConsensusParams, data basics.Ac
 }
 
 // DelAccount removes an account algos from the total money
-func (at *AccountTotals) DelAccount(proto config.ConsensusParams, data basics.AccountData, ot *basics.OverflowTracker) {
+func (at *AccountTotals) DelAccount(proto config.ConsensusParams, data AccountData, ot *basics.OverflowTracker) {
 	sum := at.statusField(data.Status)
 	algos, _ := data.Money(proto, at.RewardsLevel)
 	sum.Money = ot.SubA(sum.Money, algos)

@@ -191,7 +191,7 @@ type deferredCommitRange struct {
 
 	isCatchpointRound bool
 
-	// catchpointWriting is a pointer to a varible with the same name in the catchpointTracker.
+	// catchpointWriting is a pointer to a variable with the same name in the catchpointTracker.
 	// it's used in order to reset the catchpointWriting flag from the acctupdates's
 	// prepareCommit/commitRound ( which is called before the corresponding catchpoint tracker method )
 	catchpointWriting *int32
@@ -207,7 +207,7 @@ type deferredCommitContext struct {
 
 	genesisProto config.ConsensusParams
 
-	deltas                 []ledgercore.AccountDeltas
+	deltas                 []ledgercore.NewAccountDeltas
 	roundTotals            ledgercore.AccountTotals
 	compactAccountDeltas   compactAccountDeltas
 	compactCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable

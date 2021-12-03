@@ -641,31 +641,28 @@ func (lsd *storageDelta) applyChild(child *storageDelta) {
 // applyStorageDelta saves in-mem storageDelta into AccountData
 // cow stores app data separately from AccountData to minimize potentially large AccountData copying/reallocations.
 // When cow is done applyStorageDelta offloads app stores into AccountData
-func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageDelta) (basics.AccountData, error) {
+func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, storeDelta *storageDelta) error {
 	// duplicate code in branches is proven to be a bit faster than
 	// having basics.AppParams and basics.AppLocalState under a common interface with additional loops and type assertions
 	if aapp.global {
-		var owned map[basics.AppIndex]basics.AppParams
-		if len(data.AppParams) > 0 {
-			owned = make(map[basics.AppIndex]basics.AppParams, len(data.AppParams))
-			for k, v := range data.AppParams {
-				owned[k] = v
-			}
-		}
-
-		switch store.action {
+		switch storeDelta.action {
 		case deallocAction:
-			delete(owned, aapp.aidx)
+			cb.mods.NewAccts.UpsertAppParams(addr, aapp.aidx, nil)
+			// delete(owned, aapp.aidx)
 		case allocAction, remainAllocAction:
 			// note: these should always exist because they were
 			// at least preceded by a call to Put()
-			params, ok := owned[aapp.aidx]
-			if !ok {
-				return basics.AccountData{}, fmt.Errorf("could not find existing params for %v", aapp.aidx)
+			params, exist, err := cb.lookupAppParams(addr, aapp.aidx)
+			// params, ok := owned[aapp.aidx]
+			if err != nil {
+				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d): %w", aapp.global, addr.String(), aapp.aidx, err)
+			}
+			if !exist {
+				return fmt.Errorf("could not find existing params for %v", aapp.aidx)
 			}
 			params = params.Clone()
-			if (store.action == allocAction && len(store.kvCow) > 0) ||
-				(store.action == remainAllocAction && params.GlobalState == nil) {
+			if (storeDelta.action == allocAction && len(storeDelta.kvCow) > 0) ||
+				(storeDelta.action == remainAllocAction && params.GlobalState == nil) {
 				// allocate KeyValue for
 				// 1) app creation and global write in the same app call
 				// 2) global state writing into empty global state
@@ -673,41 +670,35 @@ func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageD
 			}
 			// note: if this is an allocAction, there will be no
 			// DeleteActions below
-			for k, v := range store.kvCow {
+			for k, v := range storeDelta.kvCow {
 				if !v.newExists {
 					delete(params.GlobalState, k)
 				} else {
 					params.GlobalState[k] = v.new
 				}
 			}
-			owned[aapp.aidx] = params
+			cb.mods.NewAccts.UpsertAppParams(addr, aapp.aidx, &params)
 		}
-
-		data.AppParams = owned
-
 	} else {
-		var owned map[basics.AppIndex]basics.AppLocalState
-		if len(data.AppLocalStates) > 0 {
-			owned = make(map[basics.AppIndex]basics.AppLocalState, len(data.AppLocalStates))
-			for k, v := range data.AppLocalStates {
-				owned[k] = v
-			}
-		}
-
-		switch store.action {
+		switch storeDelta.action {
 		case deallocAction:
-			delete(owned, aapp.aidx)
+			cb.mods.NewAccts.UpsertAppLocalState(addr, aapp.aidx, nil)
+			// delete(owned, aapp.aidx)
 		case allocAction, remainAllocAction:
 			// note: these should always exist because they were
 			// at least preceded by a call to Put (opting in),
 			// or the account has opted in before and local states are pre-allocated
-			states, ok := owned[aapp.aidx]
-			if !ok {
-				return basics.AccountData{}, fmt.Errorf("could not find existing states for %v", aapp.aidx)
+			states, exist, err := cb.lookupAppLocalState(addr, aapp.aidx)
+			if err != nil {
+				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d): %w", aapp.global, addr.String(), aapp.aidx, err)
 			}
+			if !exist {
+				return fmt.Errorf("could not find existing states for %v", aapp.aidx)
+			}
+
 			states = states.Clone()
-			if (store.action == allocAction && len(store.kvCow) > 0) ||
-				(store.action == remainAllocAction && states.KeyValue == nil) {
+			if (storeDelta.action == allocAction && len(storeDelta.kvCow) > 0) ||
+				(storeDelta.action == remainAllocAction && states.KeyValue == nil) {
 				// allocate KeyValue for
 				// 1) opting in and local state write in the same app call
 				// 2) local state writing into empty local state (opted in)
@@ -715,17 +706,15 @@ func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageD
 			}
 			// note: if this is an allocAction, there will be no
 			// DeleteActions below
-			for k, v := range store.kvCow {
+			for k, v := range storeDelta.kvCow {
 				if !v.newExists {
 					delete(states.KeyValue, k)
 				} else {
 					states.KeyValue[k] = v.new
 				}
 			}
-			owned[aapp.aidx] = states
+			cb.mods.NewAccts.UpsertAppLocalState(addr, aapp.aidx, &states)
 		}
-
-		data.AppLocalStates = owned
 	}
-	return data, nil
+	return nil
 }

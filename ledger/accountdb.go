@@ -163,9 +163,10 @@ type compactAccountDeltas struct {
 }
 
 type accountDelta struct {
-	old     persistedAccountData
-	new     basics.AccountData
-	ndeltas int
+	old      persistedAccountData        // old account data from DB
+	new      basics.AccountData          // new fully updated account data
+	newDelta ledgercore.NewAccountDeltas // partial deltas to resolve in accountsLoadOld
+	ndeltas  int
 }
 
 // catchpointState is used to store catchpoint related variables into the catchpointstate table.
@@ -200,7 +201,7 @@ type normalizedAccountBalance struct {
 
 // prepareNormalizedBalances converts an array of encodedBalanceRecord into an equal size array of normalizedAccountBalances.
 func prepareNormalizedBalances(bals []encodedBalanceRecord, proto config.ConsensusParams) (normalizedAccountBalances []normalizedAccountBalance, err error) {
-	normalizedAccountBalances = make([]normalizedAccountBalance, len(bals), len(bals))
+	normalizedAccountBalances = make([]normalizedAccountBalance, len(bals))
 	for i, balance := range bals {
 		normalizedAccountBalances[i].address = balance.Address
 		err = protocol.Decode(balance.AccountData, &(normalizedAccountBalances[i].accountData))
@@ -217,7 +218,7 @@ func prepareNormalizedBalances(bals []encodedBalanceRecord, proto config.Consens
 // makeCompactAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
 // data structure that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
 // It counts the number of changes per round by specifying it in the ndeltas field of the accountDeltaCount/modifiedCreatable.
-func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseAccounts lruAccounts) (outAccountDeltas compactAccountDeltas) {
+func makeCompactAccountDeltas(accountDeltas []ledgercore.NewAccountDeltas, baseAccounts lruAccounts) (outAccountDeltas compactAccountDeltas) {
 	if len(accountDeltas) == 0 {
 		return
 	}
@@ -228,25 +229,44 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseAcco
 	outAccountDeltas.deltas = make([]accountDelta, 0, size)
 	outAccountDeltas.misses = make([]int, 0, size)
 
+	// TODO: remove
+	// convert partial deltas to full deltas
 	for _, roundDelta := range accountDeltas {
-		for i := 0; i < roundDelta.Len(); i++ {
-			addr, acctDelta := roundDelta.GetByIdx(i)
+		addresses := roundDelta.ModifiedAccounts()
+		for _, addr := range addresses {
 			if prev, idx := outAccountDeltas.get(addr); idx != -1 {
-				outAccountDeltas.update(idx, accountDelta{ // update instead of upsert economizes one map lookup
-					old:     prev.old,
-					new:     acctDelta,
-					ndeltas: prev.ndeltas + 1,
-				})
+				// TODO: remove
+				// partial deltas support
+				if !prev.old.accountData.IsZero() {
+					// old is loaded from base accounts and new is a fully updated basics account
+					new := roundDelta.ApplyToBasicsAccountData(addr, prev.new)
+					outAccountDeltas.update(idx, accountDelta{
+						old:     prev.old,
+						new:     new,
+						ndeltas: prev.ndeltas + 1,
+					})
+				} else {
+					// old is unknown, merge partial deltas into newDelta
+					newDelta := roundDelta.ApplyToPrevDelta(addr, prev.newDelta)
+					outAccountDeltas.update(idx, accountDelta{
+						ndeltas:  prev.ndeltas + 1,
+						newDelta: newDelta,
+					})
+				}
 			} else {
 				// it's a new entry.
 				newEntry := accountDelta{
-					new:     acctDelta,
 					ndeltas: 1,
 				}
 				if baseAccountData, has := baseAccounts.read(addr); has {
 					newEntry.old = baseAccountData
-					outAccountDeltas.insert(addr, newEntry) // insert instead of upsert economizes one map lookup
+					// TODO: remove
+					// partial delta support: apply partial delta into a full basics ad
+					// another conversion happens in accountsLoadOld -> updateOld
+					newEntry.new = roundDelta.ApplyToBasicsAccountData(addr, baseAccountData.accountData)
+					outAccountDeltas.insert(addr, newEntry)
 				} else {
+					newEntry.newDelta = roundDelta.ExtractDelta(addr)
 					outAccountDeltas.insertMissing(addr, newEntry)
 				}
 			}
@@ -353,7 +373,11 @@ func (a *compactAccountDeltas) insertMissing(addr basics.Address, delta accountD
 func (a *compactAccountDeltas) upsertOld(old persistedAccountData) {
 	addr := old.addr
 	if idx, exist := a.cache[addr]; exist {
-		a.deltas[idx].old = old
+		delta := a.deltas[idx]
+		delta.old = old
+		delta.new = delta.newDelta.ApplyToBasicsAccountData(addr, old.accountData)
+		delta.newDelta = ledgercore.NewAccountDeltas{}
+		a.deltas[idx] = delta
 		return
 	}
 	a.insert(addr, accountDelta{old: old})
@@ -361,7 +385,11 @@ func (a *compactAccountDeltas) upsertOld(old persistedAccountData) {
 
 // updateOld updates existing or inserts a new partial entry with only old field filled
 func (a *compactAccountDeltas) updateOld(idx int, old persistedAccountData) {
-	a.deltas[idx].old = old
+	delta := a.deltas[idx]
+	delta.old = old
+	delta.new = delta.newDelta.ApplyToBasicsAccountData(old.addr, old.accountData)
+	delta.newDelta = ledgercore.NewAccountDeltas{}
+	a.deltas[idx] = delta
 }
 
 // writeCatchpointStagingBalances inserts all the account balances in the provided array into the catchpoint balance staging table catchpointbalances.
@@ -567,7 +595,8 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 				return true, err
 			}
 
-			totals.AddAccount(proto, data, &ot)
+			ad := ledgercore.ToAccountData(data)
+			totals.AddAccount(proto, ad, &ot)
 		}
 
 		if ot.Overflowed {
@@ -1070,7 +1099,7 @@ func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, address
 			}
 			var addr basics.Address
 			if len(addrbuf) != len(addr) {
-				err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+				err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 				return 0, nil, err
 			}
 			copy(addr[:], addrbuf)
@@ -1342,7 +1371,7 @@ func (qs *accountsDbQueries) readCatchpointStateUint64(ctx context.Context, stat
 	var val sql.NullInt64
 	err = db.Retry(func() (err error) {
 		err = qs.selectCatchpointStateUint64.QueryRowContext(ctx, stateName).Scan(&val)
-		if err == sql.ErrNoRows || (err == nil && false == val.Valid) {
+		if err == sql.ErrNoRows || (err == nil && !val.Valid) {
 			val.Int64 = 0 // default to zero.
 			err = nil
 			def = true
@@ -1374,7 +1403,7 @@ func (qs *accountsDbQueries) readCatchpointStateString(ctx context.Context, stat
 	var val sql.NullString
 	err = db.Retry(func() (err error) {
 		err = qs.selectCatchpointStateString.QueryRowContext(ctx, stateName).Scan(&val)
-		if err == sql.ErrNoRows || (err == nil && false == val.Valid) {
+		if err == sql.ErrNoRows || (err == nil && !val.Valid) {
 			val.String = "" // default to empty string
 			err = nil
 			def = true
@@ -1456,7 +1485,7 @@ func accountsOnlineTop(tx *sql.Tx, offset, n uint64, proto config.ConsensusParam
 
 		var addr basics.Address
 		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 			return nil, err
 		}
 
@@ -1702,7 +1731,7 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 		}
 
 		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 			return
 		}
 		copy(addr[:], addrbuf[:])
@@ -1715,7 +1744,7 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 			return
 		}
 		reencodedAccountData := protocol.Encode(&decodedAccountData)
-		if bytes.Compare(preencodedAccountData, reencodedAccountData) == 0 {
+		if bytes.Equal(preencodedAccountData, reencodedAccountData) {
 			// these are identical, no need to store re-encoded account data
 			continue
 		}
@@ -1823,7 +1852,7 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 		}
 
 		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 			return
 		}
 
@@ -1961,7 +1990,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 			}
 
 			if len(addrbuf) != len(addr) {
-				err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+				err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 				iterator.Close(ctx)
 				return
 			}
@@ -2032,7 +2061,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 			}
 
 			if len(addrbuf) != len(addr) {
-				err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+				err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 				iterator.Close(ctx)
 				return
 			}

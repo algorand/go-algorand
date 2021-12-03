@@ -80,18 +80,12 @@ func Payment(payment transactions.PaymentTxnFields, header transactions.Header, 
 		}
 
 		// Confirm that there is no asset-related state in the account
-		totalAssets, err := balances.CountAssetHolding(header.Sender)
-		if err != nil {
-			return err
-		}
+		totalAssets := rec.TotalAssets
 		if totalAssets > 0 {
 			return fmt.Errorf("cannot close: %d outstanding assets", totalAssets)
 		}
 
-		totalAssetParams, err := balances.CountAssetParams(header.Sender)
-		if err != nil {
-			return err
-		}
+		totalAssetParams := rec.TotalAssetParams
 		if totalAssetParams > 0 {
 			// This should be impossible because every asset created
 			// by an account (in AssetParams) must also appear in Assets,
@@ -100,19 +94,13 @@ func Payment(payment transactions.PaymentTxnFields, header transactions.Header, 
 		}
 
 		// Confirm that there is no application-related state remaining
-		totalAppLocalStates, err := balances.CountAppLocalState(header.Sender)
-		if err != nil {
-			return err
-		}
+		totalAppLocalStates := rec.TotalAppLocalStates
 		if totalAppLocalStates > 0 {
 			return fmt.Errorf("cannot close: %d outstanding applications opted in. Please opt out or clear them", totalAppLocalStates)
 		}
 
 		// Can't have created apps remaining either
-		totalAppParams, err := balances.CountAppParams(header.Sender)
-		if err != nil {
-			return err
-		}
+		totalAppParams := rec.TotalAppParams
 		if totalAppParams > 0 {
 			return fmt.Errorf("cannot close: %d outstanding created applications", totalAppParams)
 		}

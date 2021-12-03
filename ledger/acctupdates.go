@@ -84,7 +84,7 @@ const accountsUpdatePerRoundHighWatermark = 1 * time.Second
 type modifiedAccount struct {
 	// data stores the most recent AccountData for this modified
 	// account.
-	data basics.AccountData
+	delta ledgercore.NewAccountDeltas
 
 	// ndelta keeps track of how many times this account appears in
 	// accountUpdates.deltas.  This is used to evict modifiedAccount
@@ -112,7 +112,7 @@ type accountUpdates struct {
 	cachedDBRound basics.Round
 
 	// deltas stores updates for every round after dbRound.
-	deltas []ledgercore.AccountDeltas
+	deltas []ledgercore.NewAccountDeltas
 
 	// accounts stores the most recent account state for every
 	// address that appears in deltas.
@@ -164,12 +164,6 @@ type accountUpdates struct {
 
 	// lastMetricsLogTime is the time when the previous metrics logging occurred
 	lastMetricsLogTime time.Time
-}
-
-type deferredCommit struct {
-	offset   uint64
-	dbRound  basics.Round
-	lookback basics.Round
 }
 
 // RoundOffsetError is an error for when requested round is behind earliest stored db entry
@@ -381,7 +375,9 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 					continue
 				}
 
-				modifiedAccounts[addr] = accountDataToOnline(addr, &d, proto)
+				ad := basics.AccountData{}
+				ledgercore.AssignAccountData(&ad, d)
+				modifiedAccounts[addr] = accountDataToOnline(addr, &ad, proto)
 			}
 		}
 
@@ -735,18 +731,27 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	if rnd != au.latest()+1 {
 		au.log.Panicf("accountUpdates: newBlockImpl %d too far in the future, dbRound %d, deltas %d", rnd, au.cachedDBRound, len(au.deltas))
 	}
-	au.deltas = append(au.deltas, delta.Accts)
+
+	// Partial delta support
+	// Make delta cumulative: for all accounts in delta.NewAccts get params/holdings/states from prev deltas and combine
+	newAccts := delta.NewAccts.Clone()
+	for i := len(au.deltas) - 1; i >= 0; i-- {
+		newAccts.MergeInMatchingAccounts(au.deltas[i])
+	}
+
+	au.deltas = append(au.deltas, newAccts)
 	au.versions = append(au.versions, blk.CurrentProtocol)
 	au.creatableDeltas = append(au.creatableDeltas, delta.Creatables)
-	au.deltasAccum = append(au.deltasAccum, delta.Accts.Len()+au.deltasAccum[len(au.deltasAccum)-1])
+	au.deltasAccum = append(au.deltasAccum, delta.NewAccts.Len()+au.deltasAccum[len(au.deltasAccum)-1])
 
 	au.baseAccounts.flushPendingWrites()
 
-	for i := 0; i < delta.Accts.Len(); i++ {
-		addr, data := delta.Accts.GetByIdx(i)
+	for i := 0; i < newAccts.Len(); i++ {
+		addr, _ := newAccts.GetByIdx(i)
+		delta := newAccts.ExtractDelta(addr)
 		macct := au.accounts[addr]
 		macct.ndeltas++
-		macct.data = data
+		macct.delta = delta
 		au.accounts[addr] = macct
 	}
 
@@ -809,12 +814,30 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 		}
 
 		// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
-		macct, indeltas := au.accounts[addr]
+		md, indeltas := au.accounts[addr]
 		if indeltas {
 			// Check if this is the most recent round, in which case, we can
 			// use a cache of the most recent account state.
 			if offset == uint64(len(au.deltas)) {
-				return macct.data, nil
+				// Partial delta handling:
+				// - load full delta
+				// - update with data from the delta
+				// Remove after switching to a new partial schema
+				var result basics.AccountData
+				if bacct, has := au.baseAccounts.read(addr); has && bacct.round == currentDbRound {
+					result = md.delta.ApplyToBasicsAccountData(addr, bacct.accountData)
+				} else {
+					persistedData, err = au.accountsq.lookup(addr)
+					if persistedData.round == currentDbRound {
+						au.baseAccounts.writePending(persistedData)
+						result = md.delta.ApplyToBasicsAccountData(addr, persistedData.accountData)
+					} else {
+						au.accountsMu.RUnlock()
+						needUnlock = false
+						goto repeat
+					}
+				}
+				return result, nil
 			}
 			// the account appears in the deltas, but we don't know if it appears in the
 			// delta range of [0..offset], so we'll need to check :
@@ -822,9 +845,27 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 			// priority if present.
 			for offset > 0 {
 				offset--
-				d, ok := au.deltas[offset].Get(addr)
+				_, ok := au.deltas[offset].GetData(addr)
+				// Partial delta handling:
+				// - load full delta
+				// - update with data from the delta
+				// Remove after switching to a new partial schema
 				if ok {
-					return d, nil
+					var result basics.AccountData
+					if bacct, has := au.baseAccounts.read(addr); has && bacct.round == currentDbRound {
+						result = au.deltas[offset].ApplyToBasicsAccountData(addr, bacct.accountData)
+					} else {
+						persistedData, err = au.accountsq.lookup(addr)
+						if persistedData.round == currentDbRound {
+							au.baseAccounts.writePending(persistedData)
+							result = au.deltas[offset].ApplyToBasicsAccountData(addr, persistedData.accountData)
+						} else {
+							au.accountsMu.RUnlock()
+							needUnlock = false
+							goto repeat
+						}
+					}
+					return result, nil
 				}
 			}
 		}
@@ -850,7 +891,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 			au.baseAccounts.writePending(persistedData)
 			return persistedData.accountData, err
 		}
-
+	repeat:
 		if persistedData.round < currentDbRound {
 			au.log.Errorf("accountUpdates.lookupWithRewards: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
 			return basics.AccountData{}, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
@@ -886,12 +927,32 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		}
 
 		// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
-		macct, indeltas := au.accounts[addr]
+		md, indeltas := au.accounts[addr]
 		if indeltas {
 			// Check if this is the most recent round, in which case, we can
 			// use a cache of the most recent account state.
 			if offset == uint64(len(au.deltas)) {
-				return macct.data, rnd, nil
+				// Partial delta handling:
+				// - load full delta
+				// - update with data from the delta
+				// Remove after switching to a new partial schema
+				var result basics.AccountData
+				if bacct, has := au.baseAccounts.read(addr); has && bacct.round == currentDbRound {
+					result = md.delta.ApplyToBasicsAccountData(addr, bacct.accountData)
+				} else {
+					persistedData, err = au.accountsq.lookup(addr)
+					if persistedData.round == currentDbRound {
+						au.baseAccounts.writePending(persistedData)
+						result = md.delta.ApplyToBasicsAccountData(addr, persistedData.accountData)
+					} else {
+						if synchronized {
+							au.accountsMu.RUnlock()
+							needUnlock = false
+						}
+						goto repeat
+					}
+				}
+				return result, rnd, nil
 			}
 			// the account appears in the deltas, but we don't know if it appears in the
 			// delta range of [0..offset], so we'll need to check :
@@ -899,11 +960,33 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			// priority if present.
 			for offset > 0 {
 				offset--
-				d, ok := au.deltas[offset].Get(addr)
+				// d, ok := au.deltas[offset].GetBasicsAccountData(addr)
+				_, ok := au.deltas[offset].GetData(addr)
 				if ok {
 					// the returned validThrough here is not optimal, but it still correct. We could get a more accurate value by scanning
 					// the deltas forward, but this would be time consuming loop, which might not pay off.
-					return d, rnd, nil
+
+					// Partial delta handling:
+					// - load full delta
+					// - update with data from the delta
+					// Remove after switching to a new partial schema
+					var result basics.AccountData
+					if bacct, has := au.baseAccounts.read(addr); has && bacct.round == currentDbRound {
+						result = au.deltas[offset].ApplyToBasicsAccountData(addr, bacct.accountData)
+					} else {
+						persistedData, err = au.accountsq.lookup(addr)
+						if persistedData.round == currentDbRound {
+							au.baseAccounts.writePending(persistedData)
+							result = au.deltas[offset].ApplyToBasicsAccountData(addr, persistedData.accountData)
+						} else {
+							if synchronized {
+								au.accountsMu.RUnlock()
+								needUnlock = false
+							}
+							goto repeat
+						}
+					}
+					return result, rnd, nil
 				}
 			}
 		} else {
@@ -936,6 +1019,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			au.baseAccounts.writePending(persistedData)
 			return persistedData.accountData, rnd, err
 		}
+	repeat:
 		if synchronized {
 			if persistedData.round < currentDbRound {
 				au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
@@ -1064,7 +1148,7 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 	au.accountsMu.RLock()
 
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
-	dcc.deltas = make([]ledgercore.AccountDeltas, offset)
+	dcc.deltas = make([]ledgercore.NewAccountDeltas, offset)
 	creatableDeltas := make([]map[basics.CreatableIndex]ledgercore.ModifiedCreatable, offset)
 	dcc.roundTotals = au.roundTotals[offset]
 	copy(dcc.deltas, au.deltas[:offset])
@@ -1310,7 +1394,7 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 		au.log.Warnf("Vacuuming account database failed : %v", err)
 		return err
 	}
-	vacuumElapsedTime := time.Now().Sub(startTime)
+	vacuumElapsedTime := time.Since(startTime)
 	ledgerVacuumMicros.AddUint64(uint64(vacuumElapsedTime.Microseconds()), nil)
 
 	au.log.Infof("Vacuuming accounts database completed within %v, reducing number of pages from %d to %d and size from %d to %d", vacuumElapsedTime, vacuumStats.PagesBefore, vacuumStats.PagesAfter, vacuumStats.SizeBefore, vacuumStats.SizeAfter)

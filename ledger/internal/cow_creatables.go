@@ -17,6 +17,8 @@
 package internal
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -28,183 +30,131 @@ func (cs *roundCowState) CountAppParams(addr basics.Address) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	return len(acct.AppParams), nil
+	return int(acct.TotalAppParams), nil
 }
+
 func (cs *roundCowState) CountAppLocalState(addr basics.Address) (int, error) {
 	acct, err := cs.lookup(addr)
 	if err != nil {
 		return 0, err
 	}
-	return len(acct.AppLocalStates), nil
+	return int(acct.TotalAppLocalStates), nil
 }
+
 func (cs *roundCowState) CountAssetHolding(addr basics.Address) (int, error) {
 	acct, err := cs.lookup(addr)
 	if err != nil {
 		return 0, err
 	}
-	return len(acct.Assets), nil
+	return int(acct.TotalAssets), nil
 }
+
 func (cs *roundCowState) CountAssetParams(addr basics.Address) (int, error) {
 	acct, err := cs.lookup(addr)
 	if err != nil {
 		return 0, err
 	}
-	return len(acct.AssetParams), nil
+	return int(acct.TotalAssetParams), nil
 }
 
 func (cs *roundCowState) GetAppParams(addr basics.Address, aidx basics.AppIndex) (ret basics.AppParams, ok bool, err error) {
-	acct, err := cs.lookup(addr)
-	if err != nil {
-		return
-	}
-	ret, ok = acct.AppParams[aidx]
-	return
+	return cs.lookupAppParams(addr, aidx)
 }
+
 func (cs *roundCowState) GetAppLocalState(addr basics.Address, aidx basics.AppIndex) (ret basics.AppLocalState, ok bool, err error) {
-	acct, err := cs.lookup(addr)
-	if err != nil {
-		return
-	}
-	ret, ok = acct.AppLocalStates[aidx]
-	return
+	return cs.lookupAppLocalState(addr, aidx)
 }
+
 func (cs *roundCowState) GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (ret basics.AssetHolding, ok bool, err error) {
-	acct, err := cs.lookup(addr)
-	if err != nil {
-		return
-	}
-	ret, ok = acct.Assets[aidx]
-	return
+	return cs.lookupAssetHolding(addr, aidx)
 }
+
 func (cs *roundCowState) GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (ret basics.AssetParams, ok bool, err error) {
-	acct, err := cs.lookup(addr)
-	if err != nil {
-		return
-	}
-	ret, ok = acct.AssetParams[aidx]
-	return
+	return cs.lookupAssetParams(addr, aidx)
 }
 
 func (cs *roundCowState) PutAppParams(addr basics.Address, aidx basics.AppIndex, params basics.AppParams) error {
-	acct, err := cs.lookup(addr)
-	if err != nil {
-		return err
+	// TODO: remove after the schema switch
+	if _, ok := cs.mods.NewAccts.GetData(addr); !ok {
+		return fmt.Errorf("PutAppParams: %s not found in deltas for %d", addr.String(), aidx)
 	}
-	m := make(map[basics.AppIndex]basics.AppParams, len(acct.AppParams))
-	for k, v := range acct.AppParams {
-		m[k] = v
-	}
-	m[aidx] = params
-	acct.AppParams = m
-	return cs.putAccount(addr, acct)
+
+	cs.mods.NewAccts.UpsertAppParams(addr, aidx, &params)
+	return nil
 }
+
 func (cs *roundCowState) PutAppLocalState(addr basics.Address, aidx basics.AppIndex, state basics.AppLocalState) error {
-	acct, err := cs.lookup(addr)
-	if err != nil {
-		return err
+	// TODO: remove after the schema switch
+	if _, ok := cs.mods.NewAccts.GetData(addr); !ok {
+		return fmt.Errorf("PutAppLocalState: %s not found in deltas for %d", addr.String(), aidx)
 	}
-	m := make(map[basics.AppIndex]basics.AppLocalState, len(acct.AppLocalStates))
-	for k, v := range acct.AppLocalStates {
-		m[k] = v
-	}
-	m[aidx] = state
-	acct.AppLocalStates = m
-	return cs.putAccount(addr, acct)
+
+	cs.mods.NewAccts.UpsertAppLocalState(addr, aidx, &state)
+	return nil
 }
+
 func (cs *roundCowState) PutAssetHolding(addr basics.Address, aidx basics.AssetIndex, data basics.AssetHolding) error {
-	acct, err := cs.lookup(addr)
-	if err != nil {
-		return err
+	// TODO: remove after the schema switch
+	if _, ok := cs.mods.NewAccts.GetData(addr); !ok {
+		return fmt.Errorf("PutAssetHolding: %s not found in deltas for %d", addr.String(), aidx)
 	}
-	m := make(map[basics.AssetIndex]basics.AssetHolding, len(acct.Assets))
-	for k, v := range acct.Assets {
-		m[k] = v
-	}
-	m[aidx] = data
-	acct.Assets = m
-	return cs.putAccount(addr, acct)
+
+	cs.mods.NewAccts.UpsertAssetHolding(addr, aidx, &data)
+	return nil
 }
+
 func (cs *roundCowState) PutAssetParams(addr basics.Address, aidx basics.AssetIndex, data basics.AssetParams) error {
-	acct, err := cs.lookup(addr)
-	if err != nil {
-		return err
+	// TODO: remove after the schema switch
+	if _, ok := cs.mods.NewAccts.GetData(addr); !ok {
+		return fmt.Errorf("PutAssetParams: %s not found in deltas for %d", addr.String(), aidx)
 	}
-	m := make(map[basics.AssetIndex]basics.AssetParams, len(acct.AssetParams))
-	for k, v := range acct.AssetParams {
-		m[k] = v
-	}
-	m[aidx] = data
-	acct.AssetParams = m
-	return cs.putAccount(addr, acct)
+
+	cs.mods.NewAccts.UpsertAssetParams(addr, aidx, &data)
+	return nil
 }
 
 func (cs *roundCowState) DeleteAppParams(addr basics.Address, aidx basics.AppIndex) error {
-	acct, err := cs.lookup(addr)
-	if err != nil {
-		return err
+	if _, ok := cs.mods.NewAccts.GetData(addr); !ok {
+		return fmt.Errorf("DeleteAppParams: %s not found in deltas for %d", addr.String(), aidx)
 	}
-	m := make(map[basics.AppIndex]basics.AppParams, len(acct.AppParams))
-	for k, v := range acct.AppParams {
-		m[k] = v
-	}
-	delete(m, aidx)
-	acct.AppParams = m
-	return cs.putAccount(addr, acct)
+
+	cs.mods.NewAccts.UpsertAppParams(addr, aidx, nil)
+	return nil
 }
+
 func (cs *roundCowState) DeleteAppLocalState(addr basics.Address, aidx basics.AppIndex) error {
-	acct, err := cs.lookup(addr)
-	if err != nil {
-		return err
+	if _, ok := cs.mods.NewAccts.GetData(addr); !ok {
+		return fmt.Errorf("DeleteAppLocalState: %s not found in deltas for %d", addr.String(), aidx)
 	}
-	m := make(map[basics.AppIndex]basics.AppLocalState, len(acct.AppLocalStates))
-	for k, v := range acct.AppLocalStates {
-		m[k] = v
-	}
-	delete(m, aidx)
-	acct.AppLocalStates = m
-	return cs.putAccount(addr, acct)
+
+	cs.mods.NewAccts.UpsertAppLocalState(addr, aidx, nil)
+	return nil
 }
+
 func (cs *roundCowState) DeleteAssetHolding(addr basics.Address, aidx basics.AssetIndex) error {
-	acct, err := cs.lookup(addr)
-	if err != nil {
-		return err
+	if _, ok := cs.mods.NewAccts.GetData(addr); !ok {
+		return fmt.Errorf("DeleteAssetHolding: %s not found in deltas for %d", addr.String(), aidx)
 	}
-	m := make(map[basics.AssetIndex]basics.AssetHolding, len(acct.Assets))
-	for k, v := range acct.Assets {
-		m[k] = v
-	}
-	delete(m, aidx)
-	acct.Assets = m
-	return cs.putAccount(addr, acct)
+
+	cs.mods.NewAccts.UpsertAssetHolding(addr, aidx, nil)
+	return nil
 }
+
 func (cs *roundCowState) DeleteAssetParams(addr basics.Address, aidx basics.AssetIndex) error {
-	acct, err := cs.lookup(addr)
-	if err != nil {
-		return err
+	if _, ok := cs.mods.NewAccts.GetData(addr); !ok {
+		return fmt.Errorf("DeleteAssetParams: %s not found in deltas for %d", addr.String(), aidx)
 	}
-	m := make(map[basics.AssetIndex]basics.AssetParams, len(acct.AssetParams))
-	for k, v := range acct.AssetParams {
-		m[k] = v
-	}
-	delete(m, aidx)
-	acct.AssetParams = m
-	return cs.putAccount(addr, acct)
+
+	cs.mods.NewAccts.UpsertAssetParams(addr, aidx, nil)
+	return nil
 }
 
 func (cs *roundCowState) HasAppLocalState(addr basics.Address, aidx basics.AppIndex) (ok bool, err error) {
-	acct, err := cs.lookup(addr)
-	if err != nil {
-		return
-	}
-	_, ok = acct.AppLocalStates[aidx]
+	_, ok, err = cs.lookupAppLocalState(addr, aidx)
 	return
 }
 
 func (cs *roundCowState) HasAssetParams(addr basics.Address, aidx basics.AssetIndex) (ok bool, err error) {
-	acct, err := cs.lookup(addr)
-	if err != nil {
-		return
-	}
-	_, ok = acct.AssetParams[aidx]
+	_, ok, err = cs.lookupAssetParams(addr, aidx)
 	return
 }
