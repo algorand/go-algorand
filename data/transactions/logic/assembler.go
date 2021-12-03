@@ -738,15 +738,35 @@ func assembleIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.Write(scratch[:l])
 	ops.intcRefs = nil
 	ops.intc = make([]uint64, len(args))
+
 	for i, xs := range args {
-		cu, err := strconv.ParseUint(xs, 0, 64)
-		if err != nil {
-			ops.error(err)
+
+		var (
+			cu   uint64
+			err  error
+			tmpl = strings.HasPrefix(xs, TmplPrefix)
+		)
+
+		if !tmpl {
+			cu, err = strconv.ParseUint(xs, 0, 64)
+			if err != nil {
+				ops.error(err)
+			}
 		}
+
 		l = binary.PutUvarint(scratch[:], cu)
 		ops.pending.Write(scratch[:l])
 		ops.intc[i] = cu
+
+		if tmpl {
+			ops.TemplateLabels[xs] = TemplateVariable{
+				SourceLine: uint64(ops.sourceLine),
+				IsBytes:    false,
+				Position:   uint64(ops.pending.Len()),
+			}
+		}
 	}
+
 	ops.hasIntcBlock = true
 	return nil
 }
@@ -757,6 +777,8 @@ func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	tvars := make([]string, 0, len(args))
 	rest := args
 
+	// This is done in two loops because each element may
+	// contain multiple entries in the args array
 	for len(rest) > 0 {
 		var (
 			tmpl = strings.HasPrefix(rest[0], TmplPrefix)
