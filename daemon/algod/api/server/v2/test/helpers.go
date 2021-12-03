@@ -84,6 +84,8 @@ type mockNode struct {
 	genesisID string
 	config    config.Local
 	err       error
+	id        account.ParticipationID
+	keys      account.StateProofKeys
 }
 
 func (m mockNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
@@ -102,8 +104,14 @@ func (m mockNode) RemoveParticipationKey(id account.ParticipationID) error {
 	panic("implement me")
 }
 
-func makeMockNode(ledger *data.Ledger, genesisID string, nodeError error) mockNode {
-	return mockNode{
+func (m *mockNode) AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error {
+	m.id = id
+	m.keys = keys
+	return nil
+}
+
+func makeMockNode(ledger *data.Ledger, genesisID string, nodeError error) *mockNode {
+	return &mockNode{
 		ledger:    ledger,
 		genesisID: genesisID,
 		config:    config.GetDefaultLocal(),

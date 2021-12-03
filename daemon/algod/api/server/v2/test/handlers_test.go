@@ -522,7 +522,7 @@ func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int, enableDe
 	mockNode := makeMockNode(mockLedger, t.Name(), nil)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
 	handler := v2.Handlers{
-		Node:     &mockNode,
+		Node:     mockNode,
 		Log:      logging.Base(),
 		Shutdown: dummyShutdownChan,
 	}
@@ -562,7 +562,7 @@ func tealDryrunTest(
 	mockNode := makeMockNode(mockLedger, t.Name(), nil)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
 	handler := v2.Handlers{
-		Node:     &mockNode,
+		Node:     mockNode,
 		Log:      logging.Base(),
 		Shutdown: dummyShutdownChan,
 	}
@@ -671,4 +671,44 @@ func TestTealDryrun(t *testing.T) {
 	tealDryrunTest(t, &gdr, "json", 200, "REJECT", true)
 	tealDryrunTest(t, &gdr, "msgp", 200, "REJECT", true)
 	tealDryrunTest(t, &gdr, "json", 404, "", false)
+}
+
+func TestMockNode_AppendParticipationKeys(t *testing.T) {
+	numAccounts := 1
+	numTransactions := 1
+	offlineAccounts := true
+	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
+	defer releasefunc()
+	dummyShutdownChan := make(chan struct{})
+	mockNode := makeMockNode(mockLedger, t.Name(), nil)
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+
+	// Create test object to append.
+	id := account.ParticipationID{}
+	id[0] = 10
+	keys := make(account.StateProofKeys)
+	keys[100] = []byte{ 100 }
+	keys[101] = []byte{ 101 }
+	keyBytes := protocol.Encode(keys)
+
+	// Put keys in the body.
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(keyBytes))
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	// Call handler with request.
+	err := handler.AppendKeys(c, id.String())
+
+	// Verify that request was properly received and deserialized.
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	require.Equal(t, id, mockNode.id)
+	require.Len(t, mockNode.keys, 2)
+	require.Equal(t, mockNode.keys[100], keys[100])
+	require.Equal(t, mockNode.keys[101], keys[101])
 }
