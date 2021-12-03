@@ -110,17 +110,17 @@ func AssignAccountData(a *basics.AccountData, acct AccountData) {
 
 // WithUpdatedRewards calls basics account data WithUpdatedRewards
 func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLevel uint64) AccountData {
-	bad := basics.AccountData{
+	ad := basics.AccountData{
 		Status:             u.Status,
 		MicroAlgos:         u.MicroAlgos,
 		RewardsBase:        u.RewardsBase,
 		RewardedMicroAlgos: u.RewardedMicroAlgos,
 	}
-	bad = bad.WithUpdatedRewards(proto, rewardsLevel)
+	ad = ad.WithUpdatedRewards(proto, rewardsLevel)
 
-	u.MicroAlgos = bad.MicroAlgos
-	u.RewardsBase = bad.RewardsBase
-	u.RewardedMicroAlgos = bad.RewardedMicroAlgos
+	u.MicroAlgos = ad.MicroAlgos
+	u.RewardsBase = ad.RewardsBase
+	u.RewardedMicroAlgos = ad.RewardedMicroAlgos
 	return u
 }
 
@@ -138,34 +138,13 @@ func (u *AccountData) ClearOnlineState() {
 // some consensus parameters. MinBalance should correspond roughly to how much
 // storage the account is allowed to store on disk.
 func (u AccountData) MinBalance(proto *config.ConsensusParams) (res basics.MicroAlgos) {
-	var min uint64
-
-	// First, base MinBalance
-	min = proto.MinBalance
-
-	// MinBalance for each Asset
-	assetCost := basics.MulSaturate(proto.MinBalance, uint64(u.TotalAssets))
-	min = basics.AddSaturate(min, assetCost)
-
-	// Base MinBalance for each created application
-	appCreationCost := basics.MulSaturate(proto.AppFlatParamsMinBalance, uint64(u.TotalAppParams))
-	min = basics.AddSaturate(min, appCreationCost)
-
-	// Base MinBalance for each opted in application
-	appOptInCost := basics.MulSaturate(proto.AppFlatOptInMinBalance, uint64(u.TotalAppLocalStates))
-	min = basics.AddSaturate(min, appOptInCost)
-
-	// MinBalance for state usage measured by LocalStateSchemas and
-	// GlobalStateSchemas
-	schemaCost := u.TotalAppSchema.MinBalance(proto)
-	min = basics.AddSaturate(min, schemaCost.Raw)
-
-	// MinBalance for each extra app program page
-	extraAppProgramLenCost := basics.MulSaturate(proto.AppFlatParamsMinBalance, uint64(u.TotalExtraAppPages))
-	min = basics.AddSaturate(min, extraAppProgramLenCost)
-
-	res.Raw = min
-	return res
+	return basics.MinBalance(
+		proto,
+		uint64(u.TotalAssets),
+		u.TotalAppSchema,
+		uint64(u.TotalAppParams), uint64(u.TotalAppLocalStates),
+		uint64(u.TotalExtraAppPages),
+	)
 }
 
 // IsZero checks if an AccountData value is the same as its zero value.

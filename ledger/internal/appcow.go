@@ -655,7 +655,7 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 			params, exist, err := cb.lookupAppParams(addr, aapp.aidx)
 			// params, ok := owned[aapp.aidx]
 			if err != nil {
-				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d): %s", aapp.global, addr.String(), aapp.aidx, err.Error())
+				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d): %w", aapp.global, addr.String(), aapp.aidx, err)
 			}
 			if !exist {
 				return fmt.Errorf("could not find existing params for %v", aapp.aidx)
@@ -690,7 +690,7 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 			// or the account has opted in before and local states are pre-allocated
 			states, exist, err := cb.lookupAppLocalState(addr, aapp.aidx)
 			if err != nil {
-				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d): %s", aapp.global, addr.String(), aapp.aidx, err.Error())
+				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d): %w", aapp.global, addr.String(), aapp.aidx, err)
 			}
 			if !exist {
 				return fmt.Errorf("could not find existing states for %v", aapp.aidx)

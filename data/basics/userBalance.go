@@ -459,30 +459,49 @@ func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLev
 // some consensus parameters. MinBalance should correspond roughly to how much
 // storage the account is allowed to store on disk.
 func (u AccountData) MinBalance(proto *config.ConsensusParams) (res MicroAlgos) {
+	return MinBalance(
+		proto,
+		uint64(len(u.Assets)),
+		u.TotalAppSchema,
+		uint64(len(u.AppParams)), uint64(len(u.AppLocalStates)),
+		uint64(u.TotalExtraAppPages),
+	)
+}
+
+// MinBalance computes the minimum balance requirements for an account based on
+// some consensus parameters. MinBalance should correspond roughly to how much
+// storage the account is allowed to store on disk.
+func MinBalance(
+	proto *config.ConsensusParams,
+	totalAssets uint64,
+	totalAppSchema StateSchema,
+	totalAppParams uint64, totalAppLocalStates uint64,
+	totalExtraAppPages uint64,
+) (res MicroAlgos) {
 	var min uint64
 
 	// First, base MinBalance
 	min = proto.MinBalance
 
 	// MinBalance for each Asset
-	assetCost := MulSaturate(proto.MinBalance, uint64(len(u.Assets)))
+	assetCost := MulSaturate(proto.MinBalance, totalAssets)
 	min = AddSaturate(min, assetCost)
 
 	// Base MinBalance for each created application
-	appCreationCost := MulSaturate(proto.AppFlatParamsMinBalance, uint64(len(u.AppParams)))
+	appCreationCost := MulSaturate(proto.AppFlatParamsMinBalance, totalAppParams)
 	min = AddSaturate(min, appCreationCost)
 
 	// Base MinBalance for each opted in application
-	appOptInCost := MulSaturate(proto.AppFlatOptInMinBalance, uint64(len(u.AppLocalStates)))
+	appOptInCost := MulSaturate(proto.AppFlatOptInMinBalance, totalAppLocalStates)
 	min = AddSaturate(min, appOptInCost)
 
 	// MinBalance for state usage measured by LocalStateSchemas and
 	// GlobalStateSchemas
-	schemaCost := u.TotalAppSchema.MinBalance(proto)
+	schemaCost := totalAppSchema.MinBalance(proto)
 	min = AddSaturate(min, schemaCost.Raw)
 
 	// MinBalance for each extra app program page
-	extraAppProgramLenCost := MulSaturate(proto.AppFlatParamsMinBalance, uint64(u.TotalExtraAppPages))
+	extraAppProgramLenCost := MulSaturate(proto.AppFlatParamsMinBalance, totalExtraAppPages)
 	min = AddSaturate(min, extraAppProgramLenCost)
 
 	res.Raw = min

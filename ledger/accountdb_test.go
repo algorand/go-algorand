@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -62,9 +61,6 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 		pad, err := aq.lookup(addr)
 		require.NoError(t, err)
 		d := pad.accountData
-		if !reflect.DeepEqual(d, data) {
-			fmt.Println("not equal", addr.String())
-		}
 		require.Equal(t, d, data)
 
 		switch d.Status {
