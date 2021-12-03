@@ -470,6 +470,7 @@ func (sd *StateDelta) OptimizeAllocatedMemory(proto config.ConsensusParams) {
 }
 
 // GetBasicsAccountData returns basics account data for some specific address
+// Currently is only used in tests
 func (ad NewAccountDeltas) GetBasicsAccountData(addr basics.Address) (basics.AccountData, bool) {
 	idx, ok := ad.acctsCache[addr]
 	if !ok {
@@ -484,9 +485,7 @@ func (ad NewAccountDeltas) GetBasicsAccountData(addr basics.Address) (basics.Acc
 		result.AppParams = make(map[basics.AppIndex]basics.AppParams)
 		for aapp, val := range ad.appParams {
 			if aapp.Address == addr {
-				if val == nil {
-					delete(result.AppParams, aapp.App)
-				} else {
+				if val != nil {
 					result.AppParams[aapp.App] = *val
 				}
 			}
@@ -500,9 +499,7 @@ func (ad NewAccountDeltas) GetBasicsAccountData(addr basics.Address) (basics.Acc
 		result.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
 		for aapp, val := range ad.appLocalStates {
 			if aapp.Address == addr {
-				if val == nil {
-					delete(result.AppLocalStates, aapp.App)
-				} else {
+				if val != nil {
 					result.AppLocalStates[aapp.App] = *val
 				}
 			}
@@ -516,9 +513,7 @@ func (ad NewAccountDeltas) GetBasicsAccountData(addr basics.Address) (basics.Acc
 		result.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
 		for aapp, val := range ad.assetParams {
 			if aapp.Address == addr {
-				if val == nil {
-					delete(result.AssetParams, aapp.Asset)
-				} else {
+				if val != nil {
 					result.AssetParams[aapp.Asset] = *val
 				}
 			}
@@ -532,9 +527,7 @@ func (ad NewAccountDeltas) GetBasicsAccountData(addr basics.Address) (basics.Acc
 		result.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
 		for aapp, val := range ad.assets {
 			if aapp.Address == addr {
-				if val == nil {
-					delete(result.Assets, aapp.Asset)
-				} else {
+				if val != nil {
 					result.Assets[aapp.Asset] = *val
 				}
 			}
