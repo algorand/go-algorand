@@ -1,33 +1,69 @@
 # Custom Recipe
-Custom Recipe can be used on your forked repo and be modified.
+This custom recipe serves as a template for performance testing on algonet (new network on AWS EC2 machines). With this recipe, you can modify the number of nodes, the type of machines, introduce new parameters to modify the network's configs and consensus parameters.
 
-The key to this custom recipe is to serve as an example and a template for performance testing.
+N = participating Nodes
+NPN = Non-Participating Nodes
+R = relays
 
-## Creating and Updating generated genesis.json, net.json, topology.json
-1. Modify configs folder
-    - `"FractionApply"` in configs/node.json represents the number of nodes to report to telemetry. We don't want to overwhelm the telemetry server, so use "0.2" on a large network. For small networks, you may need to update it to "1.0"
-1. Modify values in `network-tpl.json`
-    - Make sure the machine type exists. It uses the regions in the groups and the type to come up with the host template name in `test/testdata/deployednettemplates/hosttemplates/hosttemplates.json`. If it doesn't, you will have to add it to that file.
-2. `cd go-algorand`
-3. `python3 test/testdata/deployednettemplates/generate-recipe/generate_network.py -f test/testdata/deployednettemplates/recipes/custom/network-tpl.json`
-4. This will create a new set of files in the `generated` folder
-5. If you want to save a couple different generated files for testing, you can rename the generated folder, e.g. `generated1`, update the `network-tpl.json`, and rerun the python script. `python3 test/testdata/deployednettemplates/generate-recipe/generate_network.py -f test/testdata/deployednettemplates/recipes/custom/network-tpl.json`
-6. If you want to run `generated1` you will have to update the paths in `recipe.json`.
+## Running a Small Network (less than 20 total nodes)
+If you are running a network with less than 20 nodes, then you will need to update the default "FractionApply"
+1. Modify `configs/node.json` folder
+    - `"FractionApply"` in configs/node.json represents the number of nodes to report to telemetry. We don't want to overwhelm the telemetry server, so use something small like "0.2" on a large network.
+    - For small networks, update this value to "1.0"
 
-## Updating consensus.json
-If you add a `consensus.json` file with the protocol matching the one in network-tpl.json, the `consensus.json` will be added to the data folder before you spin up algonet.
+## Quick Start - Jenkins
+Build and create the recipe.
+- (See the first section above for small networks.)
+1. Modify the `network_templates/network-tpl.json` file.
+2. Select "custom" recipe
+3. Specify `network-tpl.json` as the `CUSTOM_NETWORK_TEMPLATE`
 
-** Remove consensus.json if you don't want to overwrite the default consensus values!**
-1. To generate a consensus.json, run `goal protocols > generated_consensus.json` on the latest code.
-2. For whichever protocol you are trying to overwrite, you must have all the keys the protocol has in the `generated_consensus.json`. Copy and paste the protocol object you're interested in and paste it into `consensus.json`
-3. Make sure `consensus.json` is a valid json and then update the values for the particular protocol. Save.
-
-## Updating config.json
-If you look at the files in `configs/node.json`, `nonPartNode.json`, and `relay.json` you will see there's already a `ConfigJSONOverride` parameter. This will be used to create a config.json in algonet's data folders. However, if you want to easily add **additional** config changes to all three types of nodes, you can add json files in the `config_jsons` folder.
-1. copy and paste something like this into a json file and save into `config_jsons`:
+## "Quick" Start - Manual recipe generation (not using Jenkins)
+Generate the recipe with the `network-tpl.json` file
+- (See the first section above for small networks.)
+1. Make sure you're in the same directory as this README and `cp network_templates/network-tpl.json network-tpl.json`
+2. Generate the recipe with a python script:
 ```
-{
-  "ProposalAssemblyTime": 250000000,
-  "TxPoolSize": 20000
-}
+cd go-algorand
+python3 test/testdata/deployednettemplates/generate-recipe/generate_network.py -f test/testdata/deployednettemplates/recipes/custom/network-tpl.json
 ```
+3. This will create a new set of files in the `generated` folder
+
+## Network Templates
+The network_templates folder is used to store 1 or more templates used to generate a recipe
+With the custom recipe, you can store multiple network templates in the network_templates directory.
+Feel free to modify or create more network templates in the network_templates folder.
+Variables to modify:
+- `wallets`: Number of wallets used by N
+- `nodes`: Number of N
+- `ConsensusProtocol`: ConsensusProtocol used for the genesis
+- `type`: machine sizes. For `us-east-2`, you can use `m5d.4xl` for most testing. If you need more powerful compute (make sure you get approval because it can get costly) use `c4d.4xl` or `c4d.18xl`
+- `count`: Number of machines per type
+- `percent`: percentage of machines in group to dedicate to certain types of nodes.
+
+## Modifying consensus values
+If you add a `consensus.json` file in this folder with the protocol matching the one in network-tpl.json, the `consensus.json` will merge with a generated_consensus.json template on Jenkins.
+- see `example/consensus.json`
+
+### How is consensus updated in Jenkins?
+- In Jenkins, this will be generated via `goal protocols > generated_consensus.json`
+- This means that you do not have to provide the whole `consensus.json` in this folder, but only the values you wish to update.
+- If you are spinning up a network manually, and wish to update a network with `consensus.json`, you must have all of the existing keys for the particular protocol in your JSON.
+
+## Updating config.json in the network
+See README in config_jsons folder.
+
+## Troubleshooting
+### Can't find netgoal
+- Make sure you have netgoal installed
+- Make sure you export GOBIN and GOPATH in your environment and add it to your path.
+On a mac, update by editing `~/.zshrc`, add
+```
+export GOBIN=/Users/{user}/go/bin
+
+export GOPATH=/Users/{user}/go
+export PATH=$PATH:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/Users/ec2-user/Library/Python/3.8/bin:/usr/local/go/bin:$GOBIN:$GOPATH
+
+```
+### Machine Type doesn't exist
+- Make sure the machine type exists. It uses the regions in the groups and the type to come up with the host template name in `test/testdata/deployednettemplates/hosttemplates/hosttemplates.json`. If it doesn't exist, you will have to add it to that file.
