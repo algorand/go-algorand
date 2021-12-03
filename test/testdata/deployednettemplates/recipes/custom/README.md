@@ -30,9 +30,7 @@ python3 test/testdata/deployednettemplates/generate-recipe/generate_network.py -
 3. This will create a new set of files in the `generated` folder
 
 ## Network Templates
-The network_templates folder is used to store 1 or more templates used to generate a recipe
 With the custom recipe, you can store multiple network templates in the network_templates directory.
-Feel free to modify or create more network templates in the network_templates folder.
 Variables to modify:
 - `wallets`: Number of wallets used by N
 - `nodes`: Number of N
@@ -42,13 +40,13 @@ Variables to modify:
 - `percent`: percentage of machines in group to dedicate to certain types of nodes.
 
 ## Modifying consensus values
-If you add a `consensus.json` file in this folder with the protocol matching the one in network-tpl.json, the `consensus.json` will merge with a generated_consensus.json template on Jenkins.
+If you add a `consensus.json` file in this folder with the protocol matching the one in `network-tpl.json`, the `consensus.json` will merge with a generated_consensus.json template on Jenkins.
 - see `example/consensus.json`
 
 ### How is consensus updated in Jenkins?
 - In Jenkins, this will be generated via `goal protocols > generated_consensus.json`
 - This means that you do not have to provide the whole `consensus.json` in this folder, but only the values you wish to update.
-- If you are spinning up a network manually, and wish to update a network with `consensus.json`, you must have all of the existing keys for the particular protocol in your JSON.
+- If you are spinning up a network manually and wish to update a network with `consensus.json`, you must have all of the existing keys for the particular protocol in your consensus.json.
 
 ## Updating config.json in the network
 See README in config_jsons folder.
@@ -67,3 +65,6 @@ export PATH=$PATH:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/Users/ec2-user/L
 ```
 ### Machine Type doesn't exist
 - Make sure the machine type exists. It uses the regions in the groups and the type to come up with the host template name in `test/testdata/deployednettemplates/hosttemplates/hosttemplates.json`. If it doesn't exist, you will have to add it to that file.
+
+### couldn't initialize the node: unsupported protocol
+- check your consensus.json. It may be missing the keys in the future protocol if you are doing this manually. Compare the consensus.json with `goal protocols > generated_consensus.json`

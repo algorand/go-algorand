@@ -39,7 +39,6 @@ def build_netgoal_params(template_dict):
         participating_node_count += getInstanceCount(instances['participatingNodes'], group['percent']['participatingNodes'])
         non_participating_node_count += getInstanceCount(instances['nonParticipatingNodes'], group['percent']['nonParticipatingNodes'])
 
-
     relay_config = instances['relays']['config']
     participating_node_config = instances['participatingNodes']['config']
     non_participating_node_config = instances['nonParticipatingNodes']['config']

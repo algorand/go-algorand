@@ -96,7 +96,7 @@ while [ "$1" != "" ]; do
 done
 
 if [[ -z "${CHANNEL}" || -z "${RECIPEFILE}" || -z "${ROOTDIR}" ]]; then
-    echo "Syntax: create_and_deploy_recipe.sh -c <channel/network> [-n network] --recipe <recipe file> -r <rootdir> [--nodeploy] [--force] [-template <template_path>]"
+    echo "Syntax: create_and_deploy_recipe.sh -c <channel/network> [-n network] --recipe <recipe file> -r <rootdir> [--nodeploy] [--force] [--template <template_path>]"
     echo "e.g. create_and_deploy_recipe.sh -c TestCatchup --recipe test/testdata/deployednettemplates/recipes/devnet-like.config -r ~/networks/<channel>/gen"
     exit 1
 fi
