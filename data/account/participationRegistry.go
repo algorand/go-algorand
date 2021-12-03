@@ -192,8 +192,8 @@ type ParticipationRegistry interface {
 	// GetAll of the participation records.
 	GetAll() []ParticipationRecord
 
-	// GetWithSecrets fetches a record with all secrets for a particular round.
-	GetWithSecrets(id ParticipationID, round basics.Round) (ParticipationRecordForRound, error)
+	// GetForRound fetches a record with all secrets for a particular round.
+	GetForRound(id ParticipationID, round basics.Round) (ParticipationRecordForRound, error)
 
 	// Register updates the EffectiveFirst and EffectiveLast fields. If there are multiple records for the account
 	// then it is possible for multiple records to be updated.
@@ -863,8 +863,8 @@ func (db *participationDB) GetAll() []ParticipationRecord {
 	return results
 }
 
-// GetWithSecrets fetches a record with all secrets for a particular round.
-func (db *participationDB) GetWithSecrets(id ParticipationID, round basics.Round) (ParticipationRecordForRound, error) {
+// GetForRound fetches a record with all secrets for a particular round.
+func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (ParticipationRecordForRound, error) {
 	var result ParticipationRecordForRound
 	result.ParticipationRecord = db.Get(id)
 	if result.ParticipationRecord.IsZero() {

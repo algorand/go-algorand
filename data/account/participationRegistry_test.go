@@ -749,7 +749,7 @@ func TestAddStateProofKeys(t *testing.T) {
 
 	// Make sure we're able to fetch the same data that was put in.
 	for i := uint64(0); i <= max; i++ {
-		r, err := registry.GetWithSecrets(id, basics.Round(i))
+		r, err := registry.GetForRound(id, basics.Round(i))
 		a.NoError(err)
 		a.Equal(keys[i], r.StateProof)
 		number := binary.LittleEndian.Uint64(r.StateProof)
@@ -769,7 +769,7 @@ func TestSecretNotFound(t *testing.T) {
 	a.NoError(err)
 	a.Equal(p.ID(), id)
 
-	r, err := registry.GetWithSecrets(id, basics.Round(100))
+	r, err := registry.GetForRound(id, basics.Round(100))
 
 	a.True(r.IsZero())
 	a.Error(err)
