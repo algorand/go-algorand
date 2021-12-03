@@ -5,7 +5,7 @@ set -e
 DISTRIB=$ID
 
 ARCH_DEPS="boost boost-libs expect jq autoconf shellcheck sqlite python-virtualenv"
-UBUNTU_DEPS="libboost-math-dev expect jq autoconf shellcheck sqlite3 python3-venv"
+UBUNTU_DEPS="libtool libboost-math-dev expect jq autoconf shellcheck sqlite3 python3-venv"
 FEDORA_DEPS="boost-devel expect jq autoconf ShellCheck sqlite python-virtualenv"
 
 if [ "${DISTRIB}" = "arch" ]; then
