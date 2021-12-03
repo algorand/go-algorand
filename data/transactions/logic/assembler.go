@@ -27,7 +27,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -483,16 +482,13 @@ func asmPushInt(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 
 	var (
-		val  uint64
-		err  error
-		tmpl string
+		tmpl = strings.HasPrefix(args[0], TmplPrefix)
+
+		val uint64
+		err error
 	)
 
-	if len(args[0]) > 5 && args[0][:5] == TmplPrefix {
-
-		val = 0
-		tmpl = args[0]
-	} else {
+	if !tmpl {
 		val, err = strconv.ParseUint(args[0], 0, 64)
 		if err != nil {
 			return ops.error(err)
@@ -501,8 +497,8 @@ func asmPushInt(ops *OpStream, spec *OpSpec, args []string) error {
 
 	ops.pending.WriteByte(spec.Opcode)
 
-	if tmpl != "" {
-		ops.TemplateLabels[tmpl] = TemplateVariable{
+	if tmpl {
+		ops.TemplateLabels[args[0]] = TemplateVariable{
 			SourceLine: uint64(ops.sourceLine),
 			IsBytes:    false,
 			Position:   uint64(ops.pending.Len() + 1), // Adding 1 to get to value byte
@@ -516,24 +512,27 @@ func asmPushInt(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 func asmPushBytes(ops *OpStream, spec *OpSpec, args []string) error {
-	if len(args) != 1 {
-		return ops.errorf("%s needs one argument", spec.Name)
+	if len(args) == 0 {
+		return ops.errorf("%s operation needs byte literal argument", spec.Name)
 	}
 
 	var (
-		val  []byte
-		err  error
-		tmpl bool
+		tmpl = strings.HasPrefix(args[0], TmplPrefix)
+
+		val      []byte
+		consumed int
+		err      error
 	)
-	if len(args[0]) > 5 && args[0][:5] == TmplPrefix {
-		val = []byte{}
-		tmpl = true
-	} else {
-		val, _, err = parseBinaryArgs(args)
+
+	// Safe to reference 0th, we check above
+	if !tmpl {
+		val, consumed, err = parseBinaryArgs(args)
 		if err != nil {
 			return ops.error(err)
 		}
-
+		if len(args) != consumed {
+			return ops.errorf("%s operation with extraneous argument", spec.Name)
+		}
 	}
 
 	ops.pending.WriteByte(spec.Opcode)
@@ -702,11 +701,14 @@ func parseStringLiteral(input string) (result []byte, err error) {
 // byte "this is a string\n"
 func assembleByte(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 0 {
-		return ops.error("byte operation needs byte literal argument")
+		return ops.errorf("%s operation needs byte literal argument", spec.Name)
 	}
-	val, _, err := parseBinaryArgs(args)
+	val, consumed, err := parseBinaryArgs(args)
 	if err != nil {
 		return ops.error(err)
+	}
+	if len(args) != consumed {
+		return ops.errorf("%s operation with extraneous argument", spec.Name)
 	}
 	ops.ByteLiteral(val)
 	return nil
@@ -755,15 +757,16 @@ func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	bvals := make([][]byte, 0, len(args))
 	tvars := make([]string, 0, len(args))
 	rest := args
+
 	for len(rest) > 0 {
 		var (
 			val      []byte
 			err      error
 			consumed int
-			tvar     string
 		)
-		if len(rest[0]) > 5 && rest[0][:5] == TmplPrefix {
-			tvar = rest[0]
+
+		if strings.HasPrefix(rest[0], TmplPrefix) {
+			tvars = append(tvars, rest[0])
 			consumed = 1
 		} else {
 			val, consumed, err = parseBinaryArgs(rest)
@@ -777,7 +780,6 @@ func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 			}
 		}
 
-		tvars = append(tvars, tvar)
 		bvals = append(bvals, val)
 		rest = rest[consumed:]
 	}
@@ -787,7 +789,6 @@ func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.Write(scratch[:l])
 
 	for idx, bv := range bvals {
-
 		l := binary.PutUvarint(scratch[:], uint64(len(bv)))
 		ops.pending.Write(scratch[:l])
 
@@ -1382,8 +1383,8 @@ func typeDig(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	idx := len(ops.typeStack) - depth
 	if idx >= 0 {
 		returns[len(returns)-1] = ops.typeStack[idx]
-		for i := idx + 1; i < len(ops.typeStack); i++ {
-			returns[i-idx-1] = ops.typeStack[i]
+		for i := idx; i < len(ops.typeStack); i++ {
+			returns[i-idx] = ops.typeStack[i]
 		}
 	}
 	return anys, returns
@@ -1680,6 +1681,7 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 	for scanner.Scan() {
 		ops.sourceLine++
 		line := scanner.Text()
+		line = strings.TrimSpace(line)
 		if len(line) == 0 {
 			ops.trace("%d: 0 line\n", ops.sourceLine)
 			continue
@@ -2194,19 +2196,27 @@ func (ops *OpStream) warnf(format string, a ...interface{}) error {
 	return ops.warn(fmt.Errorf(format, a...))
 }
 
-// ReportProblems issues accumulated warnings and errors to stderr.
-func (ops *OpStream) ReportProblems(fname string) {
+// ReportProblems issues accumulated warnings and outputs errors to an io.Writer.
+func (ops *OpStream) ReportProblems(fname string, writer io.Writer) {
 	for i, e := range ops.Errors {
 		if i > 9 {
 			break
 		}
-		fmt.Fprintf(os.Stderr, "%s: %s\n", fname, e)
+		if fname == "" {
+			fmt.Fprintf(writer, "%s\n", e)
+		} else {
+			fmt.Fprintf(writer, "%s: %s\n", fname, e)
+		}
 	}
 	for i, w := range ops.Warnings {
 		if i > 9 {
 			break
 		}
-		fmt.Fprintf(os.Stderr, "%s: %s\n", fname, w)
+		if fname == "" {
+			fmt.Fprintf(writer, "%s\n", w)
+		} else {
+			fmt.Fprintf(writer, "%s: %s\n", fname, w)
+		}
 	}
 }
 

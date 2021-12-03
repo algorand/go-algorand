@@ -50,6 +50,11 @@ func (mup *mockUnicastPeer) Unicast(ctx context.Context, data []byte, tag protoc
 func (mup *mockUnicastPeer) Version() string {
 	return "2.1"
 }
+
+// GetConnectionLatency returns the connection latency between the local node and this peer.
+func (mup *mockUnicastPeer) GetConnectionLatency() time.Duration {
+	return time.Duration(0)
+}
 func (mup *mockUnicastPeer) Request(ctx context.Context, tag network.Tag, topics network.Topics) (resp *network.Response, e error) {
 	return nil, nil
 }

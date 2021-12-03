@@ -134,7 +134,7 @@ intc 1
 mulw
 `
 
-const v2Nonsense = `
+const v2Nonsense = v1Nonsense + `
 dup2
 pop
 pop
@@ -219,7 +219,7 @@ txn FreezeAssetAccount
 txn FreezeAssetFrozen
 `
 
-const v3Nonsense = `
+const v3Nonsense = v2Nonsense + `
 assert
 min_balance
 int 0x031337			// get bit 1, negate it, put it back
@@ -248,7 +248,7 @@ pushbytes "john"
 
 // Keep in mind, only use existing int and byte constants, or else use
 // push* instead.  The idea is to not cause the *cblocks to change.
-const v4Nonsense = `
+const v4Nonsense = v3Nonsense + `
 int 1
 pushint 2000
 int 0
@@ -294,7 +294,7 @@ gaids
 int 100
 `
 
-const v5Nonsense = `
+const v5Nonsense = v4Nonsense + `
 app_params_get AppExtraProgramPages
 cover 1
 uncover 1
@@ -342,12 +342,17 @@ ecdsa_pk_recover Secp256k1
 itxna Logs 3
 `
 
+const v6Nonsense = v5Nonsense + `
+itxn_next
+`
+
 var nonsense = map[uint64]string{
 	1: v1Nonsense,
-	2: v1Nonsense + v2Nonsense,
-	3: v1Nonsense + v2Nonsense + v3Nonsense,
-	4: v1Nonsense + v2Nonsense + v3Nonsense + v4Nonsense,
-	5: v1Nonsense + v2Nonsense + v3Nonsense + v4Nonsense + v5Nonsense,
+	2: v2Nonsense,
+	3: v3Nonsense,
+	4: v4Nonsense,
+	5: v5Nonsense,
+	6: v6Nonsense,
 }
 
 var compiled = map[uint64]string{
@@ -356,6 +361,7 @@ var compiled = map[uint64]string{
 	3: "032008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4a484848482a50512a63222352410003420000432105602105612105270463484821052b62482b642b65484821052b2106662b21056721072b682b692107210570004848210771004848361c0037001a0031183119311b311d311e311f3120210721051e312131223123312431253126312731283129312a312b312c312d312e312f4478222105531421055427042106552105082106564c4d4b02210538212106391c0081e80780046a6f686e",
 	4: "042004010200b7a60c26040242420c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f23102311231223132314181b1c28171615400003290349483403350222231d4a484848482a50512a632223524100034200004322602261222b634848222862482864286548482228236628226724286828692422700048482471004848361c0037001a0031183119311b311d311e311f312024221e312131223123312431253126312731283129312a312b312c312d312e312f44782522531422542b2355220823564c4d4b0222382123391c0081e80780046a6f686e2281d00f24231f880003420001892223902291922394239593a0a1a2a3a4a5a6a7a8a9aaabacadae23af3a00003b003c003d8164",
 	5: "052004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f23102311231223132314181b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b53a03",
+	6: "062004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f23102311231223132314181b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b53a03b6",
 }
 
 func pseudoOp(opcode string) bool {
@@ -381,6 +387,7 @@ func TestAssemble(t *testing.T) {
 	// This doesn't have to be a sensible program to run, it just has to compile.
 
 	t.Parallel()
+	require.Equal(t, LogicVersion, len(nonsense))
 	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			for _, spec := range OpSpecs {
@@ -396,7 +403,7 @@ func TestAssemble(t *testing.T) {
 			// time. we must assemble to the same bytes
 			// this month that we did last month.
 			expectedBytes, _ := hex.DecodeString(compiled[v])
-			if bytes.Compare(expectedBytes, ops.Program) != 0 {
+			if !bytes.Equal(expectedBytes, ops.Program) {
 				// this print is for convenience if
 				// the program has been changed. the
 				// hex string can be copy pasted back
@@ -468,6 +475,9 @@ func testProg(t testing.TB, source string, ver uint64, expected ...expect) *OpSt
 		require.NoError(t, err)
 		require.Equal(t, ops.Program, ops2.Program)
 	} else {
+		if err == nil {
+			t.Log(program)
+		}
 		require.Error(t, err)
 		errors := ops.Errors
 		for _, exp := range expected {
@@ -500,6 +510,7 @@ func testProg(t testing.TB, source string, ver uint64, expected ...expect) *OpSt
 }
 
 func testLine(t *testing.T, line string, ver uint64, expected string) {
+	t.Helper()
 	// By embedding the source line between two other lines, the
 	// test for the correct line number in the error is more
 	// meaningful.
@@ -510,6 +521,7 @@ func testLine(t *testing.T, line string, ver uint64, expected string) {
 	}
 	testProg(t, source, ver, expect{2, expected})
 }
+
 func TestAssembleTxna(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -654,6 +666,7 @@ func TestAssembleBytes(t *testing.T) {
 	variations := []string{
 		"byte b32 MFRGGZDFMY",
 		"byte base32 MFRGGZDFMY",
+		"byte base32  MFRGGZDFMY",
 		"byte base32(MFRGGZDFMY)",
 		"byte b32(MFRGGZDFMY)",
 		"byte b32 MFRGGZDFMY======",
@@ -672,6 +685,11 @@ func TestAssembleBytes(t *testing.T) {
 	expectedDefaultConsts := "0126010661626364656628"
 	expectedOptimizedConsts := "018006616263646566"
 
+	bad := [][]string{
+		{"byte", "...operation needs byte literal argument"},
+		{`byte "john" "doe"`, "...operation with extraneous argument"},
+	}
+
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			expected := expectedDefaultConsts
@@ -683,8 +701,19 @@ func TestAssembleBytes(t *testing.T) {
 				ops := testProg(t, vi, v)
 				s := hex.EncodeToString(ops.Program)
 				require.Equal(t, mutateProgVersion(v, expected), s)
+				// pushbytes should take the same input
+				if v >= 3 {
+					testProg(t, strings.Replace(vi, "byte", "pushbytes", 1), v)
+				}
 			}
 
+			for _, b := range bad {
+				testProg(t, b[0], v, expect{1, b[1]})
+				// pushbytes should produce the same errors
+				if v >= 3 {
+					testProg(t, strings.Replace(b[0], "byte", "pushbytes", 1), v, expect{1, b[1]})
+				}
+			}
 		})
 	}
 }
@@ -1374,12 +1403,6 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 	// Disassembly won't necessarily perfectly recreate the source text, but assembling the result of Disassemble() should be the same program bytes.
 	t.Parallel()
 
-	tests := map[uint64]string{
-		1: v1Nonsense,
-		2: v1Nonsense + v2Nonsense,
-		3: v1Nonsense + v2Nonsense + v3Nonsense,
-	}
-
 	// This confirms that each program compiles to the same bytes
 	// (except the leading version indicator), when compiled under
 	// original version, unspecified version (so it should pick up
@@ -1388,7 +1411,8 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 	// optimizations in later versions that change the bytecode
 	// emitted. But currently it is, so we test it for now to
 	// catch any suprises.
-	for v, source := range tests {
+	require.Equal(t, LogicVersion, len(nonsense))
+	for v, source := range nonsense {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := testProg(t, source, v)
 			t2, err := Disassemble(ops.Program)
@@ -1446,7 +1470,7 @@ func TestConstantArgs(t *testing.T) {
 	}
 	for v := uint64(3); v <= AssemblerMaxVersion; v++ {
 		testProg(t, "pushint", v, expect{1, "pushint needs one argument"})
-		testProg(t, "pushbytes", v, expect{1, "pushbytes needs one argument"})
+		testProg(t, "pushbytes", v, expect{1, "pushbytes operation needs byte literal argument"})
 	}
 
 }
@@ -2058,6 +2082,9 @@ func TestPragmas(t *testing.T) {
 
 	testProg(t, "#pragma version", assemblerNoVersion,
 		expect{1, "no version value"})
+
+	ops = testProg(t, "    #pragma version 5     ", assemblerNoVersion)
+	require.Equal(t, uint64(5), ops.Version)
 }
 
 func TestAssemblePragmaVersion(t *testing.T) {
@@ -2205,7 +2232,8 @@ func TestDigAsm(t *testing.T) {
 
 	// Confirm that digging something out does not ruin our knowledge about the types in the middle
 	testProg(t, "int 1; byte 0x1234; byte 0x1234; dig 2; dig 3; +; pop; +", AssemblerMaxVersion,
-		expect{6, "+ arg 1..."})
+		expect{8, "+ arg 1..."})
+	testProg(t, "int 3; pushbytes \"123456\"; int 1; dig 2; substring3", AssemblerMaxVersion)
 
 }
 

@@ -1,4 +1,5 @@
-[![Build Status](https://travis-ci.com/algorand/go-algorand.svg?branch=master)](https://travis-ci.com/algorand/go-algorand)
+| rel/stable <br> [![CircleCI](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fstable.svg?style=svg)](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fstable) | rel/beta  <br> [![CircleCI](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fbeta.svg?style=svg)](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fbeta) | rel/nightly  <br> [![CircleCI](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fnightly.svg?style=svg)](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fnightly) |
+| --- | --- | --- |
 
 go-algorand
 ====================
@@ -105,7 +106,7 @@ daemons, as well as other tools and commands:
     about spending keys, protocols keys, one-time-use signing keys, and how they
     relate to each other.
   - `config` holds configuration parameters.  These include parameters used
-    locally by the node as well as parameters which must be agreed upon by the
+    locally by the node as well as parameters that must be agreed upon by the
     protocol.
   - `data` defines various types used throughout the codebase.
      - `basics` hold basic types such as MicroAlgos, account data, and

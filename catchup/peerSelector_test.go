@@ -63,6 +63,11 @@ func (d *mockUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMe
 	return nil
 }
 
+// GetConnectionLatency returns the connection latency between the local node and this peer.
+func (d *mockUnicastPeer) GetConnectionLatency() time.Duration {
+	return time.Duration(0)
+}
+
 func TestPeerAddress(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

@@ -134,6 +134,7 @@ func init() {
 	dryrunCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "consensus protocol version id string")
 	dryrunCmd.Flags().BoolVar(&dumpForDryrun, "dryrun-dump", false, "Dump in dryrun format acceptable by dryrun REST api instead of running")
 	dryrunCmd.Flags().Var(&dumpForDryrunFormat, "dryrun-dump-format", "Dryrun dump format: "+dumpForDryrunFormat.AllowedString())
+	dryrunCmd.Flags().StringSliceVar(&dumpForDryrunAccts, "dryrun-accounts", nil, "additional accounts to include into dryrun request obj")
 	dryrunCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing dryrun state object")
 	dryrunCmd.MarkFlagRequired("txfile")
 
@@ -196,34 +197,45 @@ func waitForCommit(client libgoal.Client, txid string, transactionLastValidRound
 	return
 }
 
-func createSignedTransaction(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction) (stxn transactions.SignedTxn, err error) {
+func createSignedTransaction(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction, signer basics.Address) (stxn transactions.SignedTxn, err error) {
 	if signTx {
 		// Sign the transaction
 		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-		stxn, err = client.SignTransactionWithWallet(wh, pw, tx)
-		if err != nil {
-			return
+		if signer.IsZero() {
+			stxn, err = client.SignTransactionWithWallet(wh, pw, tx)
+		} else {
+			stxn, err = client.SignTransactionWithWalletAndSigner(wh, pw, signer.String(), tx)
 		}
-	} else {
-		// Wrap in a transactions.SignedTxn with an empty sig.
-		// This way protocol.Encode will encode the transaction type
-		stxn, err = transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
-		if err != nil {
-			return
-		}
-
-		stxn = populateBlankMultisig(client, dataDir, walletName, stxn)
+		return
 	}
+
+	// Wrap in a transactions.SignedTxn with an empty sig.
+	// This way protocol.Encode will encode the transaction type
+	stxn, err = transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
+	if err != nil {
+		return
+	}
+
+	stxn = populateBlankMultisig(client, dataDir, walletName, stxn)
 	return
 }
 
+func writeSignedTxnsToFile(stxns []transactions.SignedTxn, filename string) error {
+	var outData []byte
+	for _, stxn := range stxns {
+		outData = append(outData, protocol.Encode(&stxn)...)
+	}
+
+	return writeFile(filename, outData, 0600)
+}
+
 func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction, filename string) error {
-	stxn, err := createSignedTransaction(client, signTx, dataDir, walletName, tx)
+	stxn, err := createSignedTransaction(client, signTx, dataDir, walletName, tx, basics.Address{})
 	if err != nil {
 		return err
 	}
 	// Write the SignedTxn to the output file
-	return writeFile(filename, protocol.Encode(&stxn), 0600)
+	return writeSignedTxnsToFile([]transactions.SignedTxn{stxn}, filename)
 }
 
 func getB64Args(args []string) [][]byte {
@@ -421,7 +433,7 @@ var sendCmd = &cobra.Command{
 			}
 		} else {
 			signTx := sign || (outFilename == "")
-			stx, err = createSignedTransaction(client, signTx, dataDir, walletName, payment)
+			stx, err = createSignedTransaction(client, signTx, dataDir, walletName, payment, basics.Address{})
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -487,18 +499,12 @@ var sendCmd = &cobra.Command{
 			}
 		} else {
 			if dumpForDryrun {
-				// Write dryrun data to file
-				proto, _ := getProto(protoVersion)
-				data, err := libgoal.MakeDryrunStateBytes(client, stx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
-				if err != nil {
-					reportErrorf(err.Error())
-				}
-				writeFile(outFilename, data, 0600)
+				err = writeDryrunReqToFile(client, stx, outFilename)
 			} else {
 				err = writeFile(outFilename, protocol.Encode(&stx), 0600)
-				if err != nil {
-					reportErrorf(err.Error())
-				}
+			}
+			if err != nil {
+				reportErrorf(err.Error())
 			}
 		}
 	},
@@ -862,13 +868,12 @@ var groupCmd = &cobra.Command{
 			transactionIdx++
 		}
 
-		var outData []byte
-		for _, stxn := range stxns {
-			stxn.Txn.Group = crypto.HashObj(group)
-			outData = append(outData, protocol.Encode(&stxn)...)
+		groupHash := crypto.HashObj(group)
+		for i := range stxns {
+			stxns[i].Txn.Group = groupHash
 		}
 
-		err = writeFile(outFilename, outData, 0600)
+		err = writeSignedTxnsToFile(stxns, outFilename)
 		if err != nil {
 			reportErrorf(fileWriteError, outFilename, err)
 		}
@@ -930,7 +935,7 @@ func assembleFileMap(fname string) (program []byte, deets logic.AssemblyMap) {
 	}
 	ops, err := logic.AssembleString(string(text))
 	if err != nil {
-		ops.ReportProblems(fname)
+		ops.ReportProblems(fname, os.Stderr)
 		reportErrorf("%s: %s", fname, err)
 	}
 	_, params := getProto(protoVersion)
@@ -954,7 +959,7 @@ func assembleFile(fname string) (program []byte) {
 	}
 	ops, err := logic.AssembleString(string(text))
 	if err != nil {
-		ops.ReportProblems(fname)
+		ops.ReportProblems(fname, os.Stderr)
 		reportErrorf("%s: %s", fname, err)
 	}
 	_, params := getProto(protoVersion)
@@ -1113,7 +1118,11 @@ var dryrunCmd = &cobra.Command{
 			// Write dryrun data to file
 			dataDir := ensureSingleDataDir()
 			client := ensureFullClient(dataDir)
-			data, err := libgoal.MakeDryrunStateBytes(client, nil, txgroup, string(proto), dumpForDryrunFormat.String())
+			accts, err := unmarshalSlice(dumpForDryrunAccts)
+			if err != nil {
+				reportErrorf(err.Error())
+			}
+			data, err := libgoal.MakeDryrunStateBytes(client, nil, txgroup, accts, string(proto), dumpForDryrunFormat.String())
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -1225,4 +1234,17 @@ var dryrunRemoteCmd = &cobra.Command{
 			}
 		}
 	},
+}
+
+// unmarshalSlice converts string addresses to basics.Address
+func unmarshalSlice(accts []string) ([]basics.Address, error) {
+	result := make([]basics.Address, 0, len(accts))
+	for _, acct := range accts {
+		addr, err := basics.UnmarshalChecksumAddress(acct)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, addr)
+	}
+	return result, nil
 }
