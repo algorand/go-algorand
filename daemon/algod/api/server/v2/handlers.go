@@ -73,6 +73,7 @@ type NodeInterface interface {
 	ListParticipationKeys() ([]account.ParticipationRecord, error)
 	GetParticipationKey(account.ParticipationID) (account.ParticipationRecord, error)
 	RemoveParticipationKey(account.ParticipationID) error
+	AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error
 }
 
 func roundToPtrOrNil(value basics.Round) *uint64 {
@@ -140,7 +141,6 @@ func (v2 *Handlers) GetParticipationKeys(ctx echo.Context) error {
 // AddParticipationKey Add a participation key to the node
 // (POST /v2/participation)
 func (v2 *Handlers) AddParticipationKey(ctx echo.Context) error {
-
 	buf := new(bytes.Buffer)
 	_, err := buf.ReadFrom(ctx.Request().Body)
 	if err != nil {
@@ -214,7 +214,32 @@ func (v2 *Handlers) GetParticipationKeyByID(ctx echo.Context, participationID st
 
 // AppendKeys Append state proof keys to a participation key
 // (POST /v2/participation/{participation-id})
-func (v2 *Handlers) AppendKeys(ctx echo.Context, participationId string) error {
+func (v2 *Handlers) AppendKeys(ctx echo.Context, participationID string) error {
+	decodedParticipationID, err := account.ParseParticipationID(participationID)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	var keys account.StateProofKeys
+	dec := protocol.NewDecoder(ctx.Request().Body)
+	err = dec.Decode(&keys)
+	// What is this error? Hit EOF before an object could finish decoding?
+	if err == io.EOF {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	if len(keys) == 0 {
+		err := errors.New("empty request, please include keys")
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	err = v2.Node.AppendParticipationKeys(decodedParticipationID, keys)
+	if err != nil {
+		return internalError(ctx, err, err.Error(), v2.Log)
+	}
 	return nil
 }
 
