@@ -1261,7 +1261,7 @@ func assembleBase64Decode(ops *OpStream, spec *OpSpec, args []string) error {
 	val := alph.field
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(val))
-	ops.trace("%s (%s)", alph.field.String(), alph.ftype.String())
+	ops.trace("%s (%s)", alph.field, alph.ftype)
 	ops.returns(alph.ftype)
 	return nil
 }

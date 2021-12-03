@@ -165,6 +165,7 @@ various sizes.
 | `extract_uint16` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B+2 is larger than the array length, the program fails |
 | `extract_uint32` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B+4 is larger than the array length, the program fails |
 | `extract_uint64` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B+8 is larger than the array length, the program fails |
+| `base64_decode e` | decode X which was base64-encoded using _encoding alphabet_ E. Fail if X is not base64 encoded with alphabet E |
 
 These opcodes take byte-array values that are interpreted as
 big-endian unsigned integers.  For mathematical operators, the
@@ -191,7 +192,6 @@ bytes on outputs.
 | `b==` | A is equals to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
 | `b!=` | A is not equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
 | `b%` | A modulo B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Fail if B is zero. |
-| `base64_decode v` | the base64 decoding of X with the alphabet denoted by V (imm arg). Fail if X is not base64 encoded with alphabet V |
 
 These opcodes operate on the bits of byte-array values.  The shorter
 array is interpreted as though left padded with zeros until it is the
