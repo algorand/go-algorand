@@ -524,7 +524,6 @@ func asmPushBytes(ops *OpStream, spec *OpSpec, args []string) error {
 		err      error
 	)
 
-	// Safe to reference 0th, we check above
 	if !tmpl {
 		val, consumed, err = parseBinaryArgs(args)
 		if err != nil {
@@ -760,15 +759,15 @@ func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 
 	for len(rest) > 0 {
 		var (
+			tmpl = strings.HasPrefix(rest[0], TmplPrefix)
+			tvar string
+
 			val      []byte
 			err      error
 			consumed int
 		)
 
-		if strings.HasPrefix(rest[0], TmplPrefix) {
-			tvars = append(tvars, rest[0])
-			consumed = 1
-		} else {
+		if !tmpl {
 			val, consumed, err = parseBinaryArgs(rest)
 			if err != nil {
 				// Would be nice to keep going, as in
@@ -778,8 +777,13 @@ func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 				ops.error(err)
 				return nil
 			}
+		} else {
+			tvar = rest[0]
+			consumed = 1
 		}
 
+		// Always add to tvars array to keep matching indicies
+		tvars = append(tvars, tvar)
 		bvals = append(bvals, val)
 		rest = rest[consumed:]
 	}
@@ -792,6 +796,7 @@ func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 		l := binary.PutUvarint(scratch[:], uint64(len(bv)))
 		ops.pending.Write(scratch[:l])
 
+		// Check the corresponding tvar index
 		if tvars[idx] != "" {
 			ops.TemplateLabels[tvars[idx]] = TemplateVariable{
 				SourceLine: uint64(ops.sourceLine),
