@@ -458,7 +458,7 @@ func (t Type) ByteLen() (int, error) {
 	}
 }
 
-// ABI argument type for a nonspecific transaction argument
+// AnyTransactionType is the ABI argument type string for a nonspecific transaction argument
 const AnyTransactionType = "txn"
 
 // IsTransactionType checks if a type string represents a transaction type
@@ -472,13 +472,13 @@ func IsTransactionType(s string) bool {
 	}
 }
 
-// ABI argument type for account references
+// AccountReferenceType is the ABI argument type string for account references
 const AccountReferenceType = "account"
 
-// ABI argument type for asset references
+// AssetReferenceType is the ABI argument type string for asset references
 const AssetReferenceType = "asset"
 
-// ABI argument type for application references
+// ApplicationReferenceType is the ABI argument type string for application references
 const ApplicationReferenceType = "application"
 
 // IsReferenceType checks if a type string represents a reference type argument,
