@@ -1003,6 +1003,8 @@ func TestRandomABIEncodeDecodeRoundTrip(t *testing.T) {
 }
 
 func TestParseMethodSignature(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	tests := []struct {
 		signature  string
 		name       string

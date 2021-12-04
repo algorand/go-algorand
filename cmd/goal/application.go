@@ -1113,16 +1113,16 @@ func populateMethodCallReferenceArgs(sender string, currentApp uint64, types []s
 				}
 			}
 		case abi.ApplicationReferenceType:
-			appId, err := strconv.ParseUint(value, 10, 64)
+			appID, err := strconv.ParseUint(value, 10, 64)
 			if err != nil {
 				return nil, fmt.Errorf("Unable to parse application ID '%s': %s", value, err)
 			}
-			if appId == currentApp {
+			if appID == currentApp {
 				resolved = 0
 			} else {
 				duplicate := false
 				for j, app := range *apps {
-					if appId == app {
+					if appID == app {
 						resolved = j + 1 // + 1 because 0 is the current app
 						duplicate = true
 						break
@@ -1130,17 +1130,17 @@ func populateMethodCallReferenceArgs(sender string, currentApp uint64, types []s
 				}
 				if !duplicate {
 					resolved = len(*apps) + 1
-					*apps = append(*apps, appId)
+					*apps = append(*apps, appID)
 				}
 			}
 		case abi.AssetReferenceType:
-			assetId, err := strconv.ParseUint(value, 10, 64)
+			assetID, err := strconv.ParseUint(value, 10, 64)
 			if err != nil {
 				return nil, fmt.Errorf("Unable to parse asset ID '%s': %s", value, err)
 			}
 			duplicate := false
 			for j, asset := range *assets {
-				if assetId == asset {
+				if assetID == asset {
 					resolved = j
 					duplicate = true
 					break
@@ -1148,7 +1148,7 @@ func populateMethodCallReferenceArgs(sender string, currentApp uint64, types []s
 			}
 			if !duplicate {
 				resolved = len(*assets)
-				*assets = append(*assets, assetId)
+				*assets = append(*assets, assetID)
 			}
 		default:
 			return nil, fmt.Errorf("Unknown reference type: %s", types[i])
