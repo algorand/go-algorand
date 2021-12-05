@@ -65,3 +65,5 @@ assets
 
 index.html
 
+#Exclude tests result file
+testresults.json
