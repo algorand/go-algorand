@@ -62,7 +62,7 @@ type Local struct {
 	MaxConnectionsPerIP int `version[3]:"30"`
 
 	// 0 == disable
-	PeerPingPeriodSeconds int `version[0]:"0"`
+	PeerPingPeriodSeconds int `version[0]:"0" version[18]:"10"`
 
 	// for https serving
 	TLSCertFile string `version[0]:""`

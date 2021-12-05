@@ -92,7 +92,7 @@ var defaultLocal = Local{
 	OutgoingMessageFilterBucketSize:            128,
 	ParticipationKeysRefreshInterval:           60000000000,
 	PeerConnectionsUpdateInterval:              3600,
-	PeerPingPeriodSeconds:                      0,
+	PeerPingPeriodSeconds:                      10,
 	PriorityPeers:                              map[string]bool{},
 	ProposalAssemblyTime:                       250000000,
 	PublicAddress:                              "",
