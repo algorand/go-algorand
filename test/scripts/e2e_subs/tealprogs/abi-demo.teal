@@ -1,0 +1,626 @@
+#pragma version 5
+intcblock 1 0 2 8 16 24 32 40
+bytecblock 0xfe6bdf69 0x78b488b7 0xe2f188c5 0x16e80f08 0xf20b6567 0xe54892f0 0x5084cec4 0x0316346f 0xe0f6a6c7 0x9b122fc1 0x80630032 0xfbd77ae8 0x
+txn ApplicationID
+intc_1 // 0
+==
+bnz main_l36
+txn OnCompletion
+pushint 5 // DeleteApplication
+==
+bnz main_l35
+txn OnCompletion
+pushint 4 // UpdateApplication
+==
+bnz main_l34
+txn OnCompletion
+intc_2 // CloseOut
+==
+bnz main_l33
+txn OnCompletion
+intc_0 // OptIn
+==
+bnz main_l32
+txn OnCompletion
+intc_1 // NoOp
+==
+bnz main_l7
+err
+main_l7:
+txna ApplicationArgs 0
+bytec_0 // 0xfe6bdf69
+==
+bnz main_l31
+txna ApplicationArgs 0
+bytec_1 // 0x78b488b7
+==
+bnz main_l30
+txna ApplicationArgs 0
+bytec_2 // 0xe2f188c5
+==
+bnz main_l29
+txna ApplicationArgs 0
+bytec_3 // 0x16e80f08
+==
+bnz main_l28
+txna ApplicationArgs 0
+bytec 4 // 0xf20b6567
+==
+bnz main_l27
+txna ApplicationArgs 0
+bytec 5 // 0xe54892f0
+==
+bnz main_l26
+txna ApplicationArgs 0
+bytec 6 // 0x5084cec4
+==
+bnz main_l25
+txna ApplicationArgs 0
+bytec 7 // 0x0316346f
+==
+bnz main_l24
+txna ApplicationArgs 0
+bytec 8 // 0xe0f6a6c7
+==
+bnz main_l23
+txna ApplicationArgs 0
+bytec 9 // 0x9b122fc1
+==
+bnz main_l22
+txna ApplicationArgs 0
+bytec 10 // 0x80630032
+==
+bnz main_l21
+txna ApplicationArgs 0
+bytec 11 // 0xfbd77ae8
+==
+bnz main_l20
+err
+main_l20:
+txna ApplicationArgs 1
+callsub sub8
+callsub sub0
+b main_l37
+main_l21:
+txna ApplicationArgs 1
+btoi
+callsub sub11
+itob
+callsub sub0
+b main_l37
+main_l22:
+txna ApplicationArgs 1
+btoi
+callsub sub10
+itob
+callsub sub0
+b main_l37
+main_l23:
+txna ApplicationArgs 1
+btoi
+callsub sub13
+itob
+callsub sub0
+b main_l37
+main_l24:
+txna ApplicationArgs 1
+btoi
+txna ApplicationArgs 2
+btoi
+txna ApplicationArgs 3
+btoi
+txna ApplicationArgs 4
+btoi
+txna ApplicationArgs 5
+btoi
+txna ApplicationArgs 6
+btoi
+txna ApplicationArgs 7
+btoi
+txna ApplicationArgs 8
+btoi
+txna ApplicationArgs 9
+btoi
+txna ApplicationArgs 10
+btoi
+txna ApplicationArgs 11
+btoi
+txna ApplicationArgs 12
+btoi
+txna ApplicationArgs 13
+btoi
+txna ApplicationArgs 14
+btoi
+txna ApplicationArgs 15
+intc_1 // 0
+extract_uint64
+txna ApplicationArgs 15
+intc_3 // 8
+extract_uint64
+txna ApplicationArgs 15
+intc 4 // 16
+extract_uint64
+txna ApplicationArgs 15
+intc 5 // 24
+extract_uint64
+txna ApplicationArgs 15
+intc 6 // 32
+extract_uint64
+txna ApplicationArgs 15
+intc 7 // 40
+extract_uint64
+callsub sub12
+itob
+callsub sub0
+b main_l37
+main_l25:
+txn GroupIndex
+intc_0 // 1
+-
+gtxns Amount
+txna ApplicationArgs 1
+btoi
+==
+txn GroupIndex
+intc_0 // 1
+-
+gtxns Fee
+txna ApplicationArgs 2
+btoi
+==
+&&
+itob
+callsub sub0
+b main_l37
+main_l26:
+txna ApplicationArgs 1
+callsub sub7
+callsub sub0
+b main_l37
+main_l27:
+txna ApplicationArgs 1
+btoi
+txna ApplicationArgs 2
+btoi
+callsub sub6
+callsub sub0
+b main_l37
+main_l28:
+txna ApplicationArgs 1
+btoi
+txna ApplicationArgs 2
+btoi
+callsub sub4
+itob
+callsub sub0
+b main_l37
+main_l29:
+txna ApplicationArgs 1
+btoi
+txna ApplicationArgs 2
+btoi
+callsub sub3
+itob
+callsub sub0
+b main_l37
+main_l30:
+txna ApplicationArgs 1
+btoi
+txna ApplicationArgs 2
+btoi
+callsub sub2
+itob
+callsub sub0
+b main_l37
+main_l31:
+txna ApplicationArgs 1
+btoi
+txna ApplicationArgs 2
+btoi
+callsub sub1
+itob
+callsub sub0
+b main_l37
+main_l32:
+callsub sub14
+b main_l37
+main_l33:
+callsub sub14
+b main_l37
+main_l34:
+txn Sender
+global CreatorAddress
+==
+b main_l37
+main_l35:
+txn Sender
+global CreatorAddress
+==
+b main_l37
+main_l36:
+intc_0 // 1
+main_l37:
+return
+sub0: // wrap_return
+store 0
+pushbytes 0x151f7c75 // 0x151f7c75
+load 0
+concat
+log
+intc_0 // 1
+retsub
+sub1: // add
+store 2
+store 1
+load 1
+load 2
++
+retsub
+sub2: // sub
+store 4
+store 3
+load 3
+load 4
+-
+retsub
+sub3: // mul
+store 6
+store 5
+load 5
+load 6
+*
+retsub
+sub4: // div
+store 8
+store 7
+load 7
+load 8
+/
+retsub
+sub5: // mod
+store 12
+store 11
+load 11
+load 12
+%
+retsub
+sub6: // qrem
+store 10
+store 9
+load 9
+load 10
+callsub sub4
+itob
+load 9
+load 10
+callsub sub5
+itob
+concat
+retsub
+sub7: // reverse
+store 13
+bytec 12 // ""
+store 15
+load 13
+intc_1 // 0
+extract_uint16
+intc_0 // 1
++
+store 14
+sub7_l1:
+load 14
+intc_2 // 2
+>=
+bz sub7_l3
+load 15
+load 13
+load 14
+intc_0 // 1
+extract3
+concat
+store 15
+load 14
+intc_0 // 1
+-
+store 14
+b sub7_l1
+sub7_l3:
+load 15
+callsub sub9
+retsub
+sub8: // concat_strings
+store 17
+bytec 12 // ""
+store 19
+intc_1 // 0
+store 20
+intc_1 // 0
+store 18
+sub8_l1:
+load 18
+load 17
+intc_1 // 0
+extract_uint16
+<
+bz sub8_l3
+load 17
+load 18
+intc_2 // 2
+*
+intc_2 // 2
++
+extract_uint16
+intc_2 // 2
++
+store 20
+load 19
+load 17
+load 20
+intc_2 // 2
++
+load 17
+load 20
+extract_uint16
+extract3
+concat
+store 19
+load 18
+intc_0 // 1
++
+store 18
+b sub8_l1
+sub8_l3:
+load 19
+callsub sub9
+retsub
+sub9: // prepend_length
+store 16
+load 16
+len
+itob
+pushint 6 // 6
+intc_2 // 2
+extract3
+load 16
+concat
+retsub
+sub10: // _optIn
+store 21
+load 21
+retsub
+sub11: // _closeOut
+store 22
+load 22
+retsub
+sub12: // manyargs
+store 42
+store 41
+store 40
+store 39
+store 38
+store 37
+store 36
+store 35
+store 34
+store 33
+store 32
+store 31
+store 30
+store 29
+store 28
+store 27
+store 26
+store 25
+store 24
+store 23
+load 23
+retsub
+sub13: // min_bal
+store 43
+load 43
+txnas Accounts
+min_balance
+retsub
+sub14: // route_or_allow
+txn NumAppArgs
+intc_1 // 0
+>
+bnz sub14_l2
+intc_0 // 1
+b sub14_l27
+sub14_l2:
+txna ApplicationArgs 0
+bytec_0 // 0xfe6bdf69
+==
+bnz sub14_l26
+txna ApplicationArgs 0
+bytec_1 // 0x78b488b7
+==
+bnz sub14_l25
+txna ApplicationArgs 0
+bytec_2 // 0xe2f188c5
+==
+bnz sub14_l24
+txna ApplicationArgs 0
+bytec_3 // 0x16e80f08
+==
+bnz sub14_l23
+txna ApplicationArgs 0
+bytec 4 // 0xf20b6567
+==
+bnz sub14_l22
+txna ApplicationArgs 0
+bytec 5 // 0xe54892f0
+==
+bnz sub14_l21
+txna ApplicationArgs 0
+bytec 6 // 0x5084cec4
+==
+bnz sub14_l20
+txna ApplicationArgs 0
+bytec 7 // 0x0316346f
+==
+bnz sub14_l19
+txna ApplicationArgs 0
+bytec 8 // 0xe0f6a6c7
+==
+bnz sub14_l18
+txna ApplicationArgs 0
+bytec 9 // 0x9b122fc1
+==
+bnz sub14_l17
+txna ApplicationArgs 0
+bytec 10 // 0x80630032
+==
+bnz sub14_l16
+txna ApplicationArgs 0
+bytec 11 // 0xfbd77ae8
+==
+bnz sub14_l15
+err
+sub14_l15:
+txna ApplicationArgs 1
+callsub sub8
+callsub sub0
+b sub14_l27
+sub14_l16:
+txna ApplicationArgs 1
+btoi
+callsub sub11
+itob
+callsub sub0
+b sub14_l27
+sub14_l17:
+txna ApplicationArgs 1
+btoi
+callsub sub10
+itob
+callsub sub0
+b sub14_l27
+sub14_l18:
+txna ApplicationArgs 1
+btoi
+callsub sub13
+itob
+callsub sub0
+b sub14_l27
+sub14_l19:
+txna ApplicationArgs 1
+btoi
+txna ApplicationArgs 2
+btoi
+txna ApplicationArgs 3
+btoi
+txna ApplicationArgs 4
+btoi
+txna ApplicationArgs 5
+btoi
+txna ApplicationArgs 6
+btoi
+txna ApplicationArgs 7
+btoi
+txna ApplicationArgs 8
+btoi
+txna ApplicationArgs 9
+btoi
+txna ApplicationArgs 10
+btoi
+txna ApplicationArgs 11
+btoi
+txna ApplicationArgs 12
+btoi
+txna ApplicationArgs 13
+btoi
+txna ApplicationArgs 14
+btoi
+txna ApplicationArgs 15
+intc_1 // 0
+extract_uint64
+txna ApplicationArgs 15
+intc_3 // 8
+extract_uint64
+txna ApplicationArgs 15
+intc 4 // 16
+extract_uint64
+txna ApplicationArgs 15
+intc 5 // 24
+extract_uint64
+txna ApplicationArgs 15
+intc 6 // 32
+extract_uint64
+txna ApplicationArgs 15
+intc 7 // 40
+extract_uint64
+callsub sub12
+itob
+callsub sub0
+b sub14_l27
+sub14_l20:
+txn GroupIndex
+intc_0 // 1
+-
+gtxns Amount
+txna ApplicationArgs 1
+btoi
+==
+txn GroupIndex
+intc_0 // 1
+-
+gtxns Fee
+txna ApplicationArgs 2
+btoi
+==
+&&
+itob
+callsub sub0
+b sub14_l27
+sub14_l21:
+txna ApplicationArgs 1
+callsub sub7
+callsub sub0
+b sub14_l27
+sub14_l22:
+txna ApplicationArgs 1
+btoi
+txna ApplicationArgs 2
+btoi
+callsub sub6
+callsub sub0
+b sub14_l27
+sub14_l23:
+txna ApplicationArgs 1
+btoi
+txna ApplicationArgs 2
+btoi
+callsub sub4
+itob
+callsub sub0
+b sub14_l27
+sub14_l24:
+txna ApplicationArgs 1
+btoi
+txna ApplicationArgs 2
+btoi
+callsub sub3
+itob
+callsub sub0
+b sub14_l27
+sub14_l25:
+txna ApplicationArgs 1
+btoi
+txna ApplicationArgs 2
+btoi
+callsub sub2
+itob
+callsub sub0
+b sub14_l27
+sub14_l26:
+txna ApplicationArgs 1
+btoi
+txna ApplicationArgs 2
+btoi
+callsub sub1
+itob
+callsub sub0
+sub14_l27:
+retsub

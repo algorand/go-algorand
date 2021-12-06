@@ -1,0 +1,69 @@
+{
+    "name": "app-base64_decode",
+    "appId": null,
+    "methods": [
+        {
+            "name": "add",
+            "desc": "Add 2 integers",
+            "args": [
+                {
+                    "type": "uint64"
+                },
+                {
+                    "type": "uint64"
+                }
+            ],
+            "returns": {
+                "type": "uint64"
+            }
+        },
+        {
+            "name": "base64URL_decode",
+            "desc": "Decode a base64 URL-encoded string",
+            "args": [
+                {
+                    "type": "string"
+                }
+            ],
+            "returns": {
+                "type": "string"
+            }
+        },
+        {
+            "name": "base64Std_decode",
+            "desc": "Decode a base64 URL-encoded string",
+            "args": [
+                {
+                    "type": "string"
+                }
+            ],
+            "returns": {
+                "type": "string"
+            }
+        },
+        {
+            "name": "_optIn",
+            "desc": "just opt in",
+            "args": [
+                {
+                    "type": "uint64"
+                }
+            ],
+            "returns": {
+                "type": "uint64"
+            }
+        },
+        {
+            "name": "_closeOut",
+            "desc": "just close out",
+            "args": [
+                {
+                    "type": "uint64"
+                }
+            ],
+            "returns": {
+                "type": "uint64"
+            }
+        }
+    ]
+}

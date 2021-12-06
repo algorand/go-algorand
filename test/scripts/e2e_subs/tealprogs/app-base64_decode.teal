@@ -1,0 +1,84 @@
+#pragma version 6
+    // TODO - some explanation
+    // TODO - comply with best practices (optin, delete, etc...)
+    txn ApplicationID
+    bz handle_createapp
+
+    txn OnCompletion
+    int NoOp
+    ==
+    bnz handle_noop
+    err // currently must be NoOp
+
+handle_createapp:
+    int 1
+    return
+
+handle_noop:
+    txna ApplicationArgs 0
+    byte 0xfe6bdf69 // add(uint64,uint64)uint64
+    ==
+    bnz handle_add
+
+    txna ApplicationArgs 0
+    byte 0xc988732e // base64URL_decode(string)string
+    ==
+    bnz handle_base64URL_decode
+
+    txn ApplicationArgs 0
+    byte 0x78b72705 // base64Std_decode(string)string
+    ==
+    bnz handle_base64Std_decode
+
+    err    
+
+// Stack methods
+
+handle_add:
+    txna ApplicationArgs 1
+    btoi
+    txna ApplicationArgs 2
+    btoi
+    +
+    itob
+    b return_uint64
+
+handle_base64URL_decode:
+    callsub extract_abi_string_arg1
+    base64_decode URLAlph
+    b return_bytes
+    
+handle_base64Std_decode:
+    callsub extract_abi_string_arg1
+    base64_decode StdAlph
+    b return_bytes
+
+extract_abi_string_arg1:
+    txna ApplicationArgs 1
+    extract 2 0
+    retsub
+
+// Return handling based on type
+
+return_uint64:
+    b end_return
+
+return_bytes:
+    dup
+    len
+    itob
+    extract 6 2
+    swap
+    concat
+    b end_return
+
+// ABI return prefix and logging
+
+end_return:
+    byte 0x151f7c75
+    swap
+    concat
+    log
+    int 1
+    return
+
