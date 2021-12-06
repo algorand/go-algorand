@@ -59,7 +59,7 @@ type Network struct {
 
 // CreateNetworkFromTemplate uses the specified template to deploy a new private network
 // under the specified root directory.
-func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols, isTest bool) (Network, error) {
+func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols) (Network, error) {
 	n := Network{
 		rootDir:          rootDir,
 		nodeExitCallback: nodeExitCallback,
@@ -81,13 +81,6 @@ func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, impor
 		return n, err
 	}
 	template.Consensus = consensus
-
-	isTestFlag := isTest || (os.Getenv("ALGOTEST") != "")
-	if isTestFlag {
-		// Generate participation keys for a shorter period
-		template.Genesis.LastPartKeyRound = 3000
-	}
-
 	err = template.generateGenesisAndWallets(rootDir, name, binDir)
 	if err != nil {
 		return n, err
@@ -98,6 +91,7 @@ func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, impor
 		return n, err
 	}
 	n.gen = template.Genesis
+
 	err = n.Save(rootDir)
 	n.SetConsensus(binDir, consensus)
 	return n, err

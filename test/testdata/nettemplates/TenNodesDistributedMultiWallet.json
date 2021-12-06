@@ -3,6 +3,7 @@
         "NetworkName": "tbd",
         "PartKeyDilution": 50,
         "LastPartKeyRound": 2000,
+        "LastPartKeyRound": 3000,
         "Wallets": [
             {
                 "Name": "20pct",

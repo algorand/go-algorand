@@ -6,6 +6,7 @@
 		"FirstPartKeyRound": 0,
 		"LastPartKeyRound": 3000000,
 		"PartKeyDilution": 0,
+		"LastPartKeyRound": 3000,
 		"Wallets": [
 			{
 				"Name": "Wallet1",

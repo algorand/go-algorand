@@ -1,6 +1,7 @@
 {
   "Genesis": {
     "NetworkName": "devmodenet",
+    "LastPartKeyRound": 3000,
     "Wallets": [
       {
         "Name": "Wallet1",
