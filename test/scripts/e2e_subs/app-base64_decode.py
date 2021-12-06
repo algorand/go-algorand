@@ -7,20 +7,20 @@ import sys
 from goal import Goal, AtomicABI
 
 
-def initialize_debugger():
+def initialize_debugger(port):
     import multiprocessing
 
     if multiprocessing.current_process().pid > 1:
         import debugpy
 
-        debugpy.listen(("0.0.0.0", 9999))
+        debugpy.listen(("0.0.0.0", port))
         print("Debugger is ready to be attached, press F5", flush=True)
         debugpy.wait_for_client()
         print("Visual Studio Code debugger is now attached", flush=True)
 
 
-# uncomment out the following to run a remote interactive debug session on port 9999
-# initialize_debugger()
+# uncomment out the following to run a remote interactive debug session:
+# initialize_debugger(1339)
 
 script_path, WALLET = sys.argv
 ppath = PurePath(script_path)
@@ -83,4 +83,5 @@ executed_methods, summary = abi.execute_all_methods()
 summary_str = "\n\n\n".join(map(str, summary))
 print(summary_str)
 
-exit(1)
+# Uncomment the following to see the above printouts:
+# exit(1)

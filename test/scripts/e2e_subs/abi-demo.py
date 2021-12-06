@@ -85,4 +85,6 @@ print("\n".join(map(str, summary)))
 stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 print(f"Finished {SCRIPT} inside {CWD} @ {stamp}")
 
-exit(1)
+
+# Uncomment the following if you want to print out the test output:
+# exit(1)

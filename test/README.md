@@ -46,9 +46,67 @@ optional arguments:
   --version Future|vXX   selects the network template file
 ```
 
+Tests in the `e2e_subs/serial` directory are executed serially instead of in parallel. This should only be used when absolutely necessary.
+
+### Running a Single E2E Test
+
 To run a specific test, run e2e.sh with -i interactive flag, and follow the instructions:
-```
-test/scripts/e2e.sh -i
+```bash
+$ test/scripts/e2e.sh -i
 ```
 
-Tests in the `e2e_subs/serial` directory are executed serially instead of in parallel. This should only be used when absolutely necessary.
+In particular, after 30 seconds or so you'll be prompted with some Python virtual environment related exports. You should open a _new terminal shell_ at that point and do something like:
+
+```bash
+$ export VIRTUAL_ENV="/SOME/VERY/LONG/PATH/TO/ve"
+$ export PATH="$VIRTUAL_ENV/bin:$PATH"
+```
+
+Once these virtual environment var's are in place, you can keep using that shell to run specific E2E tests with a commands such as:
+
+```bash
+python3 test/scripts/e2e_client_runner.py $(pwd)/test/scripts/e2e_subs/your_e2e_script.py
+```
+
+### Interaction through a Remote Debugger in a Python E2E Test Script
+
+If you add the following code snippet to the top of your Python test script, you'll also be able to attach a remote debugger to the test:
+
+```python
+def initialize_debugger(port):
+    import multiprocessing
+
+    if multiprocessing.current_process().pid > 1:
+        import debugpy
+
+        debugpy.listen(("0.0.0.0", port))
+        print("Debugger is ready to be attached, press F5", flush=True)
+        debugpy.wait_for_client()
+        print("Visual Studio Code debugger is now attached", flush=True)
+
+
+# uncomment out the following to run a remote interactive debug session:
+initialize_debugger(1339)
+```
+
+In this example, the debugger is listening on port 1339, but that's completely configurable. If you're using **VS Code**, you'll also want to modify your `launch.json` to look something like this:
+
+```json
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Attach",
+            "type": "python",
+            "request": "attach",
+            "localRoot": "${workspaceFolder}",
+            "remoteRoot": "/FULL/PATH/TO/YOUR/go-algorand/",
+            "port": 1339,
+            "secret": "my_secret",
+            "host": "localhost",
+            "justMyCode": false
+        }
+    ]
+}
+```
+For an example, have a look at [app-base64_decode.py](./scripts/e2e_subs/app-base64_decode.py).
