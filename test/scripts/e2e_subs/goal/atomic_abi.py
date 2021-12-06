@@ -186,6 +186,7 @@ class MethodCallSummary:
         self.result = result
 
     def __str__(self) -> str:
-        return (
-            f"{self.method.get_signature()}: {self.args} -> {self.result.return_value}"
-        )
+        return f"""SELECTOR<<<0x{self.method.get_selector().hex()}>>>
+{self.method.get_signature()}: {self.args} 
+    ->
+{self.result.return_value}"""
