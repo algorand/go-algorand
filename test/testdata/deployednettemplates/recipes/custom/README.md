@@ -17,6 +17,8 @@ Build and create the recipe.
 1. Modify the `network_templates/network-tpl.json` file.
 2. Select "custom" recipe
 3. Specify `network-tpl.json` as the `CUSTOM_NETWORK_TEMPLATE`
+- See Modify consensus values (below) to update consensus
+- See Update config.json (below) to update config.json
 
 ## "Quick" Start - Manual recipe generation (not using Jenkins)
 Generate the recipe with the `network-tpl.json` file
@@ -39,7 +41,7 @@ Variables to modify:
 - `count`: Number of machines per type
 - `percent`: percentage of machines in group to dedicate to certain types of nodes.
 
-## Modifying consensus values
+## Modify consensus values
 If you add a `consensus.json` file in this folder with the protocol matching the one in `network-tpl.json`, the `consensus.json` will merge with a generated_consensus.json template on Jenkins.
 - see `example/consensus.json`
 
@@ -48,7 +50,7 @@ If you add a `consensus.json` file in this folder with the protocol matching the
 - This means that you do not have to provide the whole `consensus.json` in this folder, but only the values you wish to update.
 - If you are spinning up a network manually and wish to update a network with `consensus.json`, you must have all of the existing keys for the particular protocol in your consensus.json.
 
-## Updating config.json in the network
+## Update config.json in the network
 If you look at the files in the "configs" folder, you will see `node.json`, `nonPartNode.json`, and `relay.json`. These jsons already have a `ConfigJSONOverride` parameter which will generate a config.json in the node's data directories. For testing, if you want to update all three types of nodes at once, you can save a `config.json` file here.
 1. copy and paste something like this into a json file and save into `config_jsons`:
 ```
