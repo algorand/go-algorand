@@ -59,11 +59,9 @@ If you look at the files in the "configs" folder, you will see `node.json`, `non
 ```
 This file will merge with the config.json created by `ConfigJSONOverride` and update the parameters if the keys match. This will be applied to participating nodes, nonParticipating Nodes, and relays.
 
-### config.json Example
 See `example/config_jsons` for an example of what it should look like.
 
-### config.json Notes
-Most examples of what can be modified by config.json can be found in `go-algorand/config/local_defaults.go`.
+Most parameters that can be modified by config.json can be found in `go-algorand/config/local_defaults.go`.
 
 ## Troubleshooting
 ### Can't find netgoal
