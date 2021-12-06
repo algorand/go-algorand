@@ -66,7 +66,7 @@ func makeCdtSession(uuid string, debugger Control, ch chan Notification) *cdtSes
 }
 
 func (s *cdtSession) sourceMapHandler(w http.ResponseWriter, r *http.Request) {
-	sm, err := s.debugger.GetSourceMap()
+	sm, err := GetSourceMap(s.debugger.(*session))
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))

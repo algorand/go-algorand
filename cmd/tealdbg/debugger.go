@@ -17,6 +17,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -33,6 +34,15 @@ import (
 type Notification struct {
 	Event      string           `codec:"event"`
 	DebugState logic.DebugState `codec:"state"`
+}
+
+// Source is used in the GetMapping function to provide access to the source mapping logic
+type Source interface {
+	Name() string
+	Version() int
+	NumLines() int
+	PcByLine(line int) (pc int, ok bool)
+	PcToLine(pc int) (line int, ok bool)
 }
 
 // DebugAdapter represents debugger frontend (i.e. CDT, webpage, VSCode, etc)
@@ -58,7 +68,6 @@ type Control interface {
 	RemoveBreakpoint(line int) error
 	SetBreakpointsActive(active bool)
 
-	GetSourceMap() ([]byte, error)
 	GetSource() (string, []byte)
 	GetStates(s *logic.DebugState) AppState
 }
@@ -252,9 +261,37 @@ func (s *session) SetBreakpointsActive(active bool) {
 	}
 }
 
+func (s *session) Version() int {
+	version, vlen := binary.Uvarint(s.program)
+	if vlen <= 0 {
+		return 0 //TODO: panic?
+	}
+	return int(version)
+}
+
+func (s *session) Name() string {
+	return s.programName
+}
+
+func (s *session) NumLines() int {
+	return len(s.lines)
+}
+
+func (s *session) PcToLine(pc int) (line int, ok bool) {
+	line, ok = s.offsetToLine[pc]
+	ok = ok && pc != 0
+	return
+}
+
+func (s *session) PcByLine(line int) (pc int, ok bool) {
+	pc, ok = s.pcOffset[line]
+	ok = ok && pc != 0
+	return
+}
+
 // GetSourceMap creates source map from source, disassembly and mappings
-func (s *session) GetSourceMap() ([]byte, error) {
-	if len(s.source) == 0 {
+func GetSourceMap(s Source) ([]byte, error) {
+	if s.NumLines() == 0 {
 		return nil, nil
 	}
 
@@ -265,7 +302,7 @@ func (s *session) GetSourceMap() ([]byte, error) {
 		Sources    []string `json:"sources"`
 		Mappings   string   `json:"mappings"`
 	}
-	lines := make([]string, len(s.lines))
+	lines := make([]string, s.NumLines())
 	const targetCol int = 0
 	const sourceIdx int = 0
 	sourceLine := 0
@@ -274,9 +311,9 @@ func (s *session) GetSourceMap() ([]byte, error) {
 
 	// the very first entry is needed by CDT
 	lines[0] = MakeSourceMapLine(targetCol, sourceIdx, 0, sourceCol)
-	for targetLine := 1; targetLine < len(s.lines); targetLine++ {
-		if pc, ok := s.pcOffset[targetLine]; ok && pc != 0 {
-			sourceLine, ok = s.offsetToLine[pc]
+	for targetLine := 1; targetLine < s.NumLines(); targetLine++ {
+		if pc, ok := s.PcByLine(targetLine); ok && pc != 0 {
+			sourceLine, ok = s.PcToLine(pc)
 			if !ok {
 				lines[targetLine] = ""
 			} else {
@@ -286,7 +323,7 @@ func (s *session) GetSourceMap() ([]byte, error) {
 		} else {
 			delta := 0
 			// the very last empty line, increment by number src number by 1
-			if targetLine == len(s.lines)-1 {
+			if targetLine == s.NumLines()-1 {
 				delta = 1
 			}
 			lines[targetLine] = MakeSourceMapLine(targetCol, sourceIdx, delta, sourceCol)
@@ -294,8 +331,8 @@ func (s *session) GetSourceMap() ([]byte, error) {
 	}
 
 	sm := sourceMap{
-		Version:    3,
-		File:       s.programName + ".dis",
+		Version:    s.Version(),
+		File:       s.Name() + ".dis",
 		SourceRoot: "",
 		Sources:    []string{"source"}, // this is a pseudo source file name, served by debugger
 		Mappings:   strings.Join(lines, ";"),
