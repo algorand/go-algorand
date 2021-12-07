@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -35,10 +36,11 @@ import (
 func TestTxTailCheckdup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	ledger := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion)
+	accts := ledgertesting.RandomAccounts(10, false)
+	ledger := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{accts})
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	tail := txTail{}
-	require.NoError(t, tail.loadFromDisk(ledger))
+	require.NoError(t, tail.loadFromDisk(ledger, 0))
 
 	lastRound := basics.Round(proto.MaxTxnLife)
 	lookback := basics.Round(100)
@@ -151,7 +153,7 @@ func TestTxTailLoadFromDisk(t *testing.T) {
 	var ledger txTailTestLedger
 	txtail := txTail{}
 
-	err := txtail.loadFromDisk(&ledger)
+	err := txtail.loadFromDisk(&ledger, 0)
 	require.NoError(t, err)
 	require.Equal(t, int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife), len(txtail.recent))
 	require.Equal(t, testTxTailValidityRange, len(txtail.lastValid))

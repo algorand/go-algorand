@@ -30,7 +30,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
@@ -933,131 +932,6 @@ func TestClientPrioritizesPendingTransactions(t *testing.T) {
 	a.True(int(statusResponse.TotalTxns) == NumTxns+1)
 	a.True(len(statusResponse.TruncatedTxns.Transactions) == MaxTxns)
 	a.True(statusResponse.TruncatedTxns.Transactions[0].TxID == txHigh.ID().String())
-}
-
-func TestClientCanGetPendingTransactionInfo(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
-	a := require.New(fixtures.SynchronizedTest(t))
-	var localFixture fixtures.RestClientFixture
-	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
-	defer localFixture.Shutdown()
-
-	testClient := localFixture.LibGoalClient
-
-	testClient.WaitForRound(1)
-
-	testClient.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
-
-	wh, err := testClient.GetUnencryptedWalletHandle()
-	a.NoError(err)
-	addresses, err := testClient.ListAddresses(wh)
-	a.NoError(err)
-	_, someAddress := getMaxBalAddr(t, testClient, addresses)
-	if someAddress == "" {
-		t.Error("no addr with funds")
-	}
-	a.NoError(err)
-	addr, err := basics.UnmarshalChecksumAddress(someAddress)
-
-	params, err := testClient.SuggestedParams()
-	a.NoError(err)
-
-	firstRound := basics.Round(params.LastRound + 1)
-	lastRound := basics.Round(params.LastRound + 1000)
-	var gh crypto.Digest
-	copy(gh[:], params.GenesisHash)
-
-	prog := `#pragma version 5
-byte "A"
-loop:
-int 0
-dup2
-getbyte
-int 1
-+
-dup
-int 97 //ascii code of last char
-<=
-bz end
-setbyte
-dup
-log
-b loop
-end:
-int 1
-return
-`
-	ops, err := logic.AssembleString(prog)
-	approv := ops.Program
-	ops, err = logic.AssembleString("#pragma version 5 \nint 1")
-	clst := ops.Program
-
-	gl := basics.StateSchema{
-		NumByteSlice: 1,
-	}
-	lc := basics.StateSchema{
-		NumByteSlice: 1,
-	}
-	minTxnFee, _, err := localFixture.CurrentMinFeeAndBalance()
-
-	tx, err := testClient.MakeUnsignedApplicationCallTx(0, nil, addresses, nil, nil, transactions.NoOpOC, approv, clst, gl, lc, 0)
-	tx.Sender = addr
-	tx.Fee = basics.MicroAlgos{Raw: minTxnFee}
-	tx.FirstValid = firstRound
-	tx.LastValid = lastRound
-	tx.GenesisHash = gh
-
-	txid, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
-	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, someAddress, txid, 60*time.Second)
-	a.NoError(err)
-	txn, err := testClient.PendingTransactionInformationV2(txid)
-	a.NoError(err)
-	a.NotNil(txn.Logs)
-	a.Equal(32, len(*txn.Logs))
-	for i, l := range *txn.Logs {
-		assert.Equal(t, []byte(string(rune('B'+i))), l)
-	}
-
-	//check non-create app call
-	wh, err = testClient.GetUnencryptedWalletHandle()
-	a.NoError(err)
-	addresses, err = testClient.ListAddresses(wh)
-	a.NoError(err)
-	_, someAddress = getMaxBalAddr(t, testClient, addresses)
-	if someAddress == "" {
-		t.Error("no addr with funds")
-	}
-	a.NoError(err)
-	addr, err = basics.UnmarshalChecksumAddress(someAddress)
-
-	params, err = testClient.SuggestedParams()
-	a.NoError(err)
-
-	firstRound = basics.Round(params.LastRound + 1)
-	lastRound = basics.Round(params.LastRound + 1000)
-
-	tx, err = testClient.MakeUnsignedAppNoOpTx(*txn.ApplicationIndex, nil, addresses, nil, nil)
-	tx.Sender = addr
-	tx.Fee = basics.MicroAlgos{Raw: minTxnFee}
-	tx.FirstValid = firstRound
-	tx.LastValid = lastRound
-	tx.GenesisHash = gh
-
-	txid, err = testClient.SignAndBroadcastTransaction(wh, nil, tx)
-	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, someAddress, txid, 60*time.Second)
-	a.NoError(err)
-	txn, err = testClient.PendingTransactionInformationV2(txid)
-	a.NoError(err)
-	a.NotNil(txn.Logs)
-	a.Equal(32, len(*txn.Logs))
-	for i, l := range *txn.Logs {
-		assert.Equal(t, []byte(string(rune('B'+i))), l)
-	}
-
 }
 
 func TestPendingTransactionInfoInnerTxnAssetCreate(t *testing.T) {

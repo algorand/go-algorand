@@ -85,7 +85,7 @@ func mockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData, 
 
 	fn := fmt.Sprintf("/tmp/%s.%d.sqlite3", t.Name(), crypto.RandUint64())
 	const inMem = true
-	genesisInitState := ledger.InitState{Block: initBlock, Accounts: initAccounts, GenesisHash: hash}
+	genesisInitState := ledgercore.InitState{Block: initBlock, Accounts: initAccounts, GenesisHash: hash}
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	l, err := ledger.OpenLedger(logging.Base(), fn, true, genesisInitState, cfg)
@@ -101,13 +101,13 @@ func makeMockLedgerFuture(t TestingT, initAccounts map[basics.Address]basics.Acc
 	return mockLedger(t, initAccounts, protocol.ConsensusFuture)
 }
 
-func newBlockEvaluator(t TestingT, l *ledger.Ledger) *ledger.BlockEvaluator {
+func newBlockEvaluator(t TestingT, l *ledger.Ledger) BlockEvaluator {
 	latest := l.Latest()
 	prev, err := l.BlockHdr(latest)
 	require.NoError(t, err)
 
 	next := bookkeeping.MakeBlock(prev)
-	eval, err := l.StartEvaluator(next.BlockHeader, 0)
+	eval, err := l.StartEvaluator(next.BlockHeader, 0, 0)
 	require.NoError(t, err)
 
 	return eval
@@ -1167,7 +1167,7 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 		for len(ledgerTxnQueue) > 0 {
 			stx := ledgerTxnQueue[0]
 			err := eval.Transaction(stx, transactions.ApplyData{})
-			if err == ledger.ErrNoSpace {
+			if err == ledgercore.ErrNoSpace {
 				break
 			}
 			require.NoError(b, err)
