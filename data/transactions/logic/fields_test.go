@@ -60,12 +60,12 @@ func TestGlobalFieldsVersions(t *testing.T) {
 
 		// check on a version before the field version
 		preLogicVersion := field.version - 1
-		proto := defaultEvalProtoWithVersion(preLogicVersion)
+		proto := makeTestProtoV(preLogicVersion)
 		if preLogicVersion < appsEnabledVersion {
 			require.False(t, proto.Application)
 		}
 		ep := defaultEvalParams(nil)
-		ep.Proto = &proto
+		ep.Proto = proto
 		ep.Ledger = ledger
 
 		// check failure with version check
@@ -138,12 +138,12 @@ func TestTxnFieldVersions(t *testing.T) {
 			ops := testProg(t, text, AssemblerMaxVersion)
 
 			preLogicVersion := fs.version - 1
-			proto := defaultEvalProtoWithVersion(preLogicVersion)
+			proto := makeTestProtoV(preLogicVersion)
 			if preLogicVersion < appsEnabledVersion {
 				require.False(t, proto.Application)
 			}
 			ep := defaultEvalParams(nil)
-			ep.Proto = &proto
+			ep.Proto = proto
 			ep.Ledger = ledger
 			ep.TxnGroup = transactions.WrapSignedTxnsWithAD(txgroup)
 

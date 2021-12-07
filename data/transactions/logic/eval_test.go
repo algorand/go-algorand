@@ -38,14 +38,14 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// Note that most of the tests use defaultEvalProto/defaultEvalParams as evaluator version so that
+// Note that most of the tests use makeTestProto/defaultEvalParams as evaluator version so that
 // we check that TEAL v1 and v2 programs are compatible with the latest evaluator
-func defaultEvalProto() config.ConsensusParams {
-	return defaultEvalProtoWithVersion(LogicVersion)
+func makeTestProto() *config.ConsensusParams {
+	return makeTestProtoV(LogicVersion)
 }
 
-func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
-	return config.ConsensusParams{
+func makeTestProtoV(version uint64) *config.ConsensusParams {
+	return &config.ConsensusParams{
 		LogicSigVersion:     version,
 		LogicSigMaxCost:     20000,
 		Application:         version >= appsEnabledVersion,
@@ -93,7 +93,8 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 		MaxGlobalSchemaEntries: 30,
 		MaxLocalSchemaEntries:  13,
 
-		EnableAppCostPooling: true,
+		EnableAppCostPooling:          true,
+		EnableInnerTransactionPooling: true,
 	}
 }
 
@@ -114,22 +115,16 @@ func benchmarkEvalParams(txn *transactions.SignedTxn) *EvalParams {
 }
 
 func defaultEvalParamsWithVersion(txn *transactions.SignedTxn, version uint64) *EvalParams {
-	proto := defaultEvalProtoWithVersion(version)
-
 	ep := &EvalParams{
-		Proto:           &proto,
-		TxnGroup:        make([]transactions.SignedTxnWithAD, 1),
-		PastSideEffects: MakePastSideEffects(proto.MaxTxGroupSize),
-		Specials:        &transactions.SpecialAddresses{},
-		Trace:           &strings.Builder{},
+		Proto:    makeTestProtoV(version),
+		TxnGroup: make([]transactions.SignedTxnWithAD, 1),
+		Specials: &transactions.SpecialAddresses{},
+		Trace:    &strings.Builder{},
 	}
 	if txn != nil {
 		ep.TxnGroup[0].SignedTxn = *txn
 	}
-	if proto.EnableAppCostPooling {
-		budget := uint64(proto.MaxAppProgramCost)
-		ep.PooledApplicationBudget = &budget
-	}
+	ep.reset()
 	return ep
 }
 
@@ -137,6 +132,15 @@ func defaultEvalParamsWithVersion(txn *transactions.SignedTxn, version uint64) *
 // *_test.go because no real code should ever need this. EvalParams should be
 // created to evaluate a group, and then thrown away.
 func (ep *EvalParams) reset() {
+	if ep.Proto.EnableAppCostPooling {
+		budget := uint64(ep.Proto.MaxAppProgramCost)
+		ep.PooledApplicationBudget = &budget
+	}
+	if ep.Proto.EnableInnerTransactionPooling {
+		inners := ep.Proto.MaxInnerTransactions
+		ep.PooledAllowedInners = &inners
+	}
+	ep.PastSideEffects = MakePastSideEffects(ep.Proto.MaxTxGroupSize)
 	for i := range ep.TxnGroup {
 		ep.TxnGroup[i].ApplyData = transactions.ApplyData{}
 	}
@@ -866,14 +870,14 @@ func TestArg(t *testing.T) {
 
 const globalV1TestProgram = `
 global MinTxnFee
-int 123
+int 1001
 ==
 global MinBalance
-int 1000000
+int 1001
 ==
 &&
 global MaxTxnLife
-int 999
+int 1500
 ==
 &&
 global ZeroAddress
@@ -984,16 +988,7 @@ func TestGlobal(t *testing.T) {
 			txn := transactions.SignedTxn{}
 			txn.Txn.Group = crypto.Digest{0x07, 0x06}
 
-			proto := config.ConsensusParams{
-				MinTxnFee:         123,
-				MinBalance:        1000000,
-				MaxTxnLife:        999,
-				LogicSigVersion:   LogicVersion,
-				LogicSigMaxCost:   20000,
-				MaxAppProgramCost: 700,
-			}
 			ep := defaultEvalParams(&txn)
-			ep.Proto = &proto
 			ep.Ledger = ledger
 			testApp(t, tests[v].program, ep)
 		})
@@ -1447,17 +1442,25 @@ func makeSampleTxn() transactions.SignedTxn {
 	return txn
 }
 
-func makeSampleTxnGroup(txn transactions.SignedTxn) []transactions.SignedTxn {
-	txgroup := make([]transactions.SignedTxn, 2)
-	txgroup[0] = txn
-	txgroup[1].Txn.Amount.Raw = 42
-	txgroup[1].Txn.Fee.Raw = 1066
-	txgroup[1].Txn.FirstValid = 42
-	txgroup[1].Txn.LastValid = 1066
-	txgroup[1].Txn.Sender = txn.Txn.Receiver
-	txgroup[1].Txn.Receiver = txn.Txn.Sender
-	txgroup[1].Txn.ExtraProgramPages = 2
-	return txgroup
+// makeSampleTxnGroup creates a sample txn group.  If less than two transactions
+// are supplied, samples are used.
+func makeSampleTxnGroup(txns ...transactions.SignedTxn) []transactions.SignedTxn {
+	if len(txns) == 0 {
+		txns = []transactions.SignedTxn{makeSampleTxn()}
+	}
+	if len(txns) == 1 {
+		second := transactions.SignedTxn{}
+		second.Txn.Type = protocol.PaymentTx
+		second.Txn.Amount.Raw = 42
+		second.Txn.Fee.Raw = 1066
+		second.Txn.FirstValid = 42
+		second.Txn.LastValid = 1066
+		second.Txn.Sender = txns[0].Txn.Receiver
+		second.Txn.Receiver = txns[0].Txn.Sender
+		second.Txn.ExtraProgramPages = 2
+		txns = append(txns, second)
+	}
+	return txns
 }
 
 func TestTxn(t *testing.T) {
@@ -2389,28 +2392,21 @@ int 1`,
 	cases := []scratchTestCase{
 		simpleCase, multipleTxnCase, selfCase, laterTxnSlotCase,
 	}
-	proto := defaultEvalProtoWithVersion(LogicVersion)
 
 	for i, testCase := range cases {
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
 			sources := testCase.tealSources
 
 			// Initialize txgroup
-			txgroup := make([]transactions.SignedTxnWithAD, len(sources))
+			txgroup := make([]transactions.SignedTxn, len(sources))
 			for j := range txgroup {
-				txgroup[j].SignedTxn.Txn.Type = protocol.ApplicationCallTx
-			}
-
-			ep := &EvalParams{
-				Proto:           &proto,
-				TxnGroup:        txgroup,
-				PastSideEffects: MakePastSideEffects(len(sources)),
+				txgroup[j].Txn.Type = protocol.ApplicationCallTx
 			}
 
 			if testCase.errContains != "" {
-				testApps(t, sources, ep, expect{testCase.errTxn, testCase.errContains})
+				testApps(t, sources, txgroup, LogicVersion, MakeLedger(nil), expect{testCase.errTxn, testCase.errContains})
 			} else {
-				testApps(t, sources, ep)
+				testApps(t, sources, txgroup, LogicVersion, MakeLedger(nil))
 			}
 		})
 	}
@@ -2453,7 +2449,7 @@ int 1`,
 			}
 
 			ep := &EvalParams{
-				Proto:           &proto,
+				Proto:           makeTestProto(),
 				TxnGroup:        txgroup,
 				PastSideEffects: MakePastSideEffects(2),
 			}
@@ -2500,14 +2496,7 @@ byte "txn 2"
 		txgroup[j].Txn.Type = protocol.ApplicationCallTx
 	}
 
-	proto := defaultEvalProtoWithVersion(LogicVersion)
-	ep := &EvalParams{
-		Proto:           &proto,
-		TxnGroup:        transactions.WrapSignedTxnsWithAD(txgroup),
-		PastSideEffects: MakePastSideEffects(len(sources)),
-	}
-
-	testApps(t, sources, ep)
+	testApps(t, sources, txgroup, LogicVersion, MakeLedger(nil))
 }
 
 const testCompareProgramText = `int 35
@@ -4345,13 +4334,12 @@ func TestLog(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	proto := defaultEvalProtoWithVersion(LogicVersion)
 	var txn transactions.SignedTxn
 	txn.Txn.Type = protocol.ApplicationCallTx
 	ledger := MakeLedger(nil)
 	ledger.NewApp(txn.Txn.Receiver, 0, basics.AppParams{})
 	ep := defaultEvalParams(&txn)
-	ep.Proto = &proto
+	ep.Proto = makeTestProtoV(LogicVersion)
 	ep.Ledger = ledger
 	testCases := []struct {
 		source string

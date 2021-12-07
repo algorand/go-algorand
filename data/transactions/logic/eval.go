@@ -281,6 +281,9 @@ type EvalParams struct {
 	// Total pool of app call budget in a group transaction (nil before pooling enabled)
 	PooledApplicationBudget *uint64
 
+	// Total allowable inner txns in a group transaction (nil before pooling enabled)
+	PooledAllowedInners *int
+
 	// The "call stack" of apps calling this app.
 	appStack []basics.AppIndex
 	caller   *EvalContext
@@ -295,40 +298,37 @@ func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.Sign
 	return copy
 }
 
-// NewAppEvalParams creates an EvalParams to be used while evaluating apps in txgroup
-func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses, caller *EvalContext) *EvalParams {
-	minTealVersion := ComputeMinTealVersion(txgroup, caller != nil)
-	if minTealVersion == 0 && caller == nil {
+// NewAppEvalParams creates an EvalParams to be used while evaluating apps for a top-level txgroup
+func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses) *EvalParams {
+	minTealVersion := ComputeMinTealVersion(txgroup, false)
+
+	apps := 0
+	for _, tx := range txgroup {
+		if tx.Txn.Type == protocol.ApplicationCallTx {
+			apps++
+		}
+	}
+	if apps == 0 {
 		// As an optimization, do no work if there will be no apps to evaluate in this txgroup
-		// Inner transactions always use the EvalParams (for specials), so don't skip for them.
 		return nil
 	}
 
-	var budget uint64
-	pooledApplicationBudget := &budget
-
-	var appStack []basics.AppIndex
-	var ledger LedgerForLogic
-	if caller != nil {
-		// share pool in the inner calls
-		pooledApplicationBudget = caller.PooledApplicationBudget
-		// note the stack, to prevent re-entrancy
-		appStack = caller.appStack
-		ledger = caller.Ledger
-	}
+	var pooledApplicationBudget *uint64
+	var pooledAllowedInners *int
 
 	credit, _ := transactions.FeeCredit(txgroup, proto.MinTxnFee)
+
 	if proto.EnableAppCostPooling {
-		for _, tx := range txgroup {
-			if tx.Txn.Type == protocol.ApplicationCallTx {
-				*pooledApplicationBudget += uint64(proto.MaxAppProgramCost)
-			}
-		}
-	} else {
-		pooledApplicationBudget = nil
+		pooledApplicationBudget = new(uint64)
+		*pooledApplicationBudget = uint64(apps * proto.MaxAppProgramCost)
 	}
 
-	return &EvalParams{
+	if proto.EnableInnerTransactionPooling {
+		pooledAllowedInners = new(int)
+		*pooledAllowedInners = apps * proto.MaxInnerTransactions
+	}
+
+	ep := &EvalParams{
 		Proto:                   proto,
 		TxnGroup:                copyWithClearAD(txgroup),
 		PastSideEffects:         MakePastSideEffects(len(txgroup)),
@@ -336,10 +336,46 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 		FeeCredit:               &credit,
 		Specials:                specials,
 		PooledApplicationBudget: pooledApplicationBudget,
-		appStack:                appStack,
-		caller:                  caller,
-		Ledger:                  ledger,
+		PooledAllowedInners:     pooledAllowedInners,
 	}
+	return ep
+}
+
+// NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
+func NewInnerEvalParams(txg []transactions.SignedTxn, caller *EvalContext) *EvalParams {
+	txgroup := transactions.WrapSignedTxnsWithAD(txg)
+
+	minTealVersion := ComputeMinTealVersion(txgroup, true)
+	// Can't happen now, since innerAppsEnabledVersion > than any minimum
+	// imposed otherwise.  But is correct to check.
+	if minTealVersion < *caller.MinTealVersion {
+		minTealVersion = *caller.MinTealVersion
+	}
+	credit, _ := transactions.FeeCredit(txgroup, caller.Proto.MinTxnFee)
+	*caller.FeeCredit = basics.AddSaturate(*caller.FeeCredit, credit)
+
+	if caller.Proto.EnableAppCostPooling {
+		for _, tx := range txgroup {
+			if tx.Txn.Type == protocol.ApplicationCallTx {
+				*caller.PooledApplicationBudget += uint64(caller.Proto.MaxAppProgramCost)
+			}
+		}
+	}
+
+	ep := &EvalParams{
+		Proto:                   caller.Proto,
+		TxnGroup:                copyWithClearAD(txgroup),
+		PastSideEffects:         MakePastSideEffects(len(txgroup)),
+		MinTealVersion:          &minTealVersion,
+		FeeCredit:               caller.FeeCredit,
+		Specials:                caller.Specials,
+		PooledApplicationBudget: caller.PooledApplicationBudget,
+		PooledAllowedInners:     caller.PooledAllowedInners,
+		Ledger:                  caller.Ledger,
+		appStack:                caller.appStack, // note the stack, to prevent re-entrancy
+		caller:                  caller,
+	}
+	return ep
 }
 
 type opEvalFunc func(cx *EvalContext)
@@ -398,6 +434,15 @@ type EvalContext struct {
 	// the transaction being evaluated (initialized from GroupIndex + ep.TxnGroup)
 	Txn *transactions.SignedTxnWithAD
 
+	// Txn.EvalDelta maintains a summary of changes as we go.  We used to
+	// compute this from the ledger after a full eval.  But now apps can call
+	// apps.  When they do, all of the changes accumulate into the parent's
+	// ledger, but Txn.EvalDelta should only have the changes from *this*
+	// call. (The changes caused by children are deeper inside - in the
+	// EvalDeltas of the InnerTxns inside this EvalDelta) Nice bonus - by
+	// keeping the running changes, the debugger can be changed to display them
+	// as the app runs.
+
 	stack     []stackValue
 	callstack []int
 
@@ -413,15 +458,6 @@ type EvalContext struct {
 	subtxns []transactions.SignedTxn // place to build for itxn_submit
 	cost    int                      // cost incurred so far
 	logSize int                      // total log size so far
-
-	// Summary of changes.  We used to compute this from the ledger after a full
-	// eval.  But now apps can call apps.  When they do, all of the changes
-	// accumulate into the parent's ledger, but EvalDelta should only have the
-	// changes from *this* call. (The changes caused by children are deeper
-	// inside - in the EvalDeltas of the InnerTxns inside this EvalDelta) Nice
-	// bonus - by keep the running changes, the debugger can be changed to
-	// display them as the app runs.
-	//EvalDelta transactions.EvalDelta
 
 	// Set of PC values that branches we've seen so far might
 	// go. So, if checkStep() skips one, that branch is trying to
@@ -503,13 +539,13 @@ func EvalContract(program []byte, gi int, params *EvalParams) (bool, *EvalContex
 	}
 	pass, err := eval(program, &cx)
 
-	// The following two updates show a need for something like a
-	// GroupEvalContext, as we are currently tucking things into the
-	// EvalParams so that they are available to later calls.
-
 	// update pooled budget (shouldn't overflow, but being careful anyway)
 	if cx.PooledApplicationBudget != nil {
 		*cx.PooledApplicationBudget = basics.SubSaturate(*cx.PooledApplicationBudget, uint64(cx.cost))
+	}
+	// update allowed inner transactions (shouldn't overflow, but it's an int, so safe anyway)
+	if cx.PooledAllowedInners != nil {
+		*cx.PooledAllowedInners -= len(cx.Txn.EvalDelta.InnerTxns)
 	}
 	// update side effects
 	cx.PastSideEffects[cx.GroupIndex].setScratchSpace(cx.scratch)
@@ -710,14 +746,12 @@ func versionCheck(program []byte, params *EvalParams) (uint64, int, error) {
 		return 0, 0, fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
 	}
 
-	var minVersion uint64
 	if params.MinTealVersion == nil {
-		minVersion = ComputeMinTealVersion(params.TxnGroup, params.caller != nil)
-	} else {
-		minVersion = *params.MinTealVersion
+		minVersion := ComputeMinTealVersion(params.TxnGroup, params.caller != nil)
+		params.MinTealVersion = &minVersion
 	}
-	if version < minVersion {
-		return 0, 0, fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", minVersion, version)
+	if version < *params.MinTealVersion {
+		return 0, 0, fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", *params.MinTealVersion, version)
 	}
 	return version, vlen, nil
 }
@@ -754,6 +788,13 @@ func (cx *EvalContext) budget() int {
 		return int(*cx.PooledApplicationBudget)
 	}
 	return cx.Proto.MaxAppProgramCost
+}
+
+func (cx *EvalContext) allowedInners() int {
+	if cx.Proto.EnableInnerTransactionPooling && cx.PooledAllowedInners != nil {
+		return *cx.PooledAllowedInners
+	}
+	return cx.Proto.MaxInnerTransactions
 }
 
 func (cx *EvalContext) step() {
@@ -3822,13 +3863,14 @@ func addInnerTxn(cx *EvalContext) error {
 	}
 
 	// For compatibility with v5, in which failures only occurred in the submit,
-	// we only fail here if we are OVER the MaxInnerTransactions limit.  Thus
-	// this allows construction of one more Inner than is actually allowed, and
-	// will fail in submit. (But we do want the check here, so this can't become
-	// unbounded.)  The MaxTxGroupSize check can be, and is, precise.
-	if len(cx.Txn.EvalDelta.InnerTxns)+len(cx.subtxns) > cx.Proto.MaxInnerTransactions ||
-		len(cx.subtxns) >= cx.Proto.MaxTxGroupSize {
-		return errors.New("attempt to create too many inner transactions")
+	// we only fail here if we are already over the max inner limit.  Thus this
+	// allows construction of one more Inner than is actually allowed, and will
+	// fail in submit. (But we do want the check here, so this can't become
+	// unbounded.)  The MaxTxGroupSize check can be, and is, precise. (That is,
+	// if we are at max group size, we can panic now, since we are trying to add
+	// too many)
+	if len(cx.Txn.EvalDelta.InnerTxns)+len(cx.subtxns) > cx.allowedInners() || len(cx.subtxns) >= cx.Proto.MaxTxGroupSize {
+		return fmt.Errorf("too many inner transactions %d", len(cx.Txn.EvalDelta.InnerTxns)+len(cx.subtxns))
 	}
 
 	stxn := transactions.SignedTxn{}
@@ -4183,10 +4225,11 @@ func opTxSubmit(cx *EvalContext) {
 		return
 	}
 
-	// Should never trigger, since itxn_next checks these too.
-	if len(cx.Txn.EvalDelta.InnerTxns)+len(cx.subtxns) > cx.Proto.MaxInnerTransactions ||
-		len(cx.subtxns) > cx.Proto.MaxTxGroupSize {
-		cx.err = errors.New("too many inner transactions")
+	// Should rarely trigger, since itxn_next checks these too. (but that check
+	// must be imperfect, see its comment) In contrast to that check, subtxns is
+	// already populated here.
+	if len(cx.Txn.EvalDelta.InnerTxns)+len(cx.subtxns) > cx.allowedInners() || len(cx.subtxns) > cx.Proto.MaxTxGroupSize {
+		cx.err = fmt.Errorf("too many inner transactions %d", len(cx.Txn.EvalDelta.InnerTxns)+len(cx.subtxns))
 		return
 	}
 
@@ -4268,7 +4311,7 @@ func opTxSubmit(cx *EvalContext) {
 		}
 	}
 
-	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(cx.subtxns), cx.Proto, cx.Specials, cx)
+	ep := NewInnerEvalParams(cx.subtxns, cx)
 	for i := range ep.TxnGroup {
 		err := cx.Ledger.Perform(i, ep)
 		if err != nil {

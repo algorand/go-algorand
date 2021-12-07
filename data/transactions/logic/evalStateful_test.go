@@ -327,24 +327,28 @@ func TestBalance(t *testing.T) {
 	testApp(t, text, ep)
 }
 
-func testApps(t *testing.T, programs []string, ep *EvalParams, expected ...expect) {
+func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn, version uint64, ledger LedgerForLogic,
+	expected ...expect) {
 	t.Helper()
-	codes := make([][]byte, len(ep.TxnGroup))
-	for i, source := range programs {
-		if source != "" {
-			codes[i] = testProg(t, source, ep.Proto.LogicSigVersion).Program
+	codes := make([][]byte, len(programs))
+	for i, program := range programs {
+		if program != "" {
+			codes[i] = testProg(t, program, version).Program
 		}
 	}
+	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), makeTestProtoV(version), &transactions.SpecialAddresses{})
+	ep.Ledger = ledger
 	testAppsBytes(t, codes, ep, expected...)
 }
 
 func testAppsBytes(t *testing.T, programs [][]byte, ep *EvalParams, expected ...expect) {
 	t.Helper()
-	ep.reset() // Only reset at beginning, so testApp calls see changes.
+	require.Equal(t, len(programs), len(ep.TxnGroup))
 	for i := range ep.TxnGroup {
-		if programs != nil {
+		if programs[i] != nil {
 			if len(expected) > 0 && expected[0].l == i {
 				testAppFull(t, programs[i], i, ep, expected[0].s)
+				break // Stop after first failure
 			} else {
 				testAppFull(t, programs[i], i, ep)
 			}
@@ -399,17 +403,6 @@ func testAppFull(t *testing.T, program []byte, gi int, ep *EvalParams, problems 
 	// a nice confirmation that Check() is usually stricter than Eval(). This
 	// may mean that the problems argument is often duplicated, but this seems
 	// the best way to be concise about all sorts of tests.
-
-	/* Hackish: Reset budget, since ep often gets reused in tests. But don't
-	   reset it if it's currently set to a positive multiple of the
-	   MaxAppProgramCost. That allows a test that's trying to simulate a group
-	   of app calls being pooled. */
-	if ep.PooledApplicationBudget != nil {
-		current := *ep.PooledApplicationBudget
-		if current == 0 || (current%uint64(ep.Proto.MaxAppProgramCost) != 0) {
-			*ep.PooledApplicationBudget = uint64(ep.Proto.MaxAppProgramCost)
-		}
-	}
 
 	if ep.Ledger == nil {
 		ep.Ledger = MakeLedger(nil)
@@ -2394,14 +2387,14 @@ func TestPooledAppCallsVerifyOp(t *testing.T) {
 	pop
 	int 1`
 
-	ep, _, _ := makeSampleEnv()
+	ledger := MakeLedger(nil)
+	call := transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.ApplicationCallTx}}
 	// Simulate test with 2 grouped txn
-	*ep.PooledApplicationBudget = uint64(ep.Proto.MaxAppProgramCost * 2)
-	testApp(t, source, ep, "pc=107 dynamic cost budget exceeded, executing ed25519verify: remaining budget is 1400 but program cost was 1905")
+	testApps(t, []string{source, ""}, []transactions.SignedTxn{call, call}, LogicVersion, ledger,
+		expect{0, "pc=107 dynamic cost budget exceeded, executing ed25519verify: remaining budget is 1400 but program cost was 1905"})
 
 	// Simulate test with 3 grouped txn
-	*ep.PooledApplicationBudget = uint64(ep.Proto.MaxAppProgramCost * 3)
-	testApp(t, source, ep)
+	testApps(t, []string{source, "", ""}, []transactions.SignedTxn{call, call, call}, LogicVersion, ledger)
 }
 
 func TestAppAddress(t *testing.T) {
