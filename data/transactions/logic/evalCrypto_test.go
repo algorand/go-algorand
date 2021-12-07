@@ -256,7 +256,7 @@ ecdsa_verify Secp256k1
 
 	rTampered := make([]byte, len(r))
 	copy(rTampered, pk)
-	rTampered[0] = 0
+	rTampered[0] += byte(1) // intentional overflow
 
 	var verifyTests = []struct {
 		data string
