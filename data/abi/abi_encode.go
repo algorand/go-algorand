@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"strings"
 )
 
 // typeCastToTuple cast an array-like ABI type into an ABI tuple type.
@@ -58,7 +59,7 @@ func (t Type) typeCastToTuple(tupLen ...int) (Type, error) {
 		return Type{}, fmt.Errorf("type cannot support conversion to tuple")
 	}
 
-	tuple, err := makeTupleType(childT)
+	tuple, err := MakeTupleType(childT)
 	if err != nil {
 		return Type{}, err
 	}
@@ -475,4 +476,87 @@ func decodeTuple(encoded []byte, childT []Type) ([]interface{}, error) {
 		}
 	}
 	return values, nil
+}
+
+// ParseArgJSONtoByteSlice convert input method arguments to ABI encoded bytes
+// it converts funcArgTypes into a tuple type and apply changes over input argument string (in JSON format)
+// if there are greater or equal to 15 inputs, then we compact the tailing inputs into one tuple
+func ParseArgJSONtoByteSlice(argTypes []string, jsonArgs []string, applicationArgs *[][]byte) error {
+	abiTypes := make([]Type, len(argTypes))
+	for i, typeString := range argTypes {
+		abiType, err := TypeOf(typeString)
+		if err != nil {
+			return err
+		}
+		abiTypes[i] = abiType
+	}
+
+	if len(abiTypes) != len(jsonArgs) {
+		return fmt.Errorf("input argument number %d != method argument number %d", len(jsonArgs), len(abiTypes))
+	}
+
+	// change the input args to be 1 - 14 + 15 (compacting everything together)
+	if len(jsonArgs) > 14 {
+		compactedType, err := MakeTupleType(abiTypes[14:])
+		if err != nil {
+			return err
+		}
+		abiTypes = append(abiTypes[:14], compactedType)
+
+		remainingJSON := "[" + strings.Join(jsonArgs[14:], ",") + "]"
+		jsonArgs = append(jsonArgs[:14], remainingJSON)
+	}
+
+	// parse JSON value to ABI encoded bytes
+	for i := 0; i < len(jsonArgs); i++ {
+		interfaceVal, err := abiTypes[i].UnmarshalFromJSON([]byte(jsonArgs[i]))
+		if err != nil {
+			return err
+		}
+		abiEncoded, err := abiTypes[i].Encode(interfaceVal)
+		if err != nil {
+			return err
+		}
+		*applicationArgs = append(*applicationArgs, abiEncoded)
+	}
+	return nil
+}
+
+// ParseMethodSignature parses a method of format `method(argType1,argType2,...)retType`
+// into `method` {`argType1`,`argType2`,..} and `retType`
+func ParseMethodSignature(methodSig string) (name string, argTypes []string, returnType string, err error) {
+	argsStart := strings.Index(methodSig, "(")
+	if argsStart == -1 {
+		err = fmt.Errorf("Invalid method signature: %s", methodSig)
+		return
+	}
+
+	argsEnd := -1
+	depth := 0
+	for index, char := range methodSig {
+		switch char {
+		case '(':
+			depth++
+		case ')':
+			if depth == 0 {
+				err = fmt.Errorf("Unpaired parenthesis in method signature: %s", methodSig)
+				return
+			}
+			depth--
+			if depth == 0 {
+				argsEnd = index
+				break
+			}
+		}
+	}
+
+	if argsEnd == -1 {
+		err = fmt.Errorf("Invalid method signature: %s", methodSig)
+		return
+	}
+
+	name = methodSig[:argsStart]
+	argTypes, err = parseTupleContent(methodSig[argsStart+1 : argsEnd])
+	returnType = methodSig[argsEnd+1:]
+	return
 }

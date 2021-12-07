@@ -194,34 +194,45 @@ func waitForCommit(client libgoal.Client, txid string, transactionLastValidRound
 	return
 }
 
-func createSignedTransaction(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction) (stxn transactions.SignedTxn, err error) {
+func createSignedTransaction(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction, signer basics.Address) (stxn transactions.SignedTxn, err error) {
 	if signTx {
 		// Sign the transaction
 		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-		stxn, err = client.SignTransactionWithWallet(wh, pw, tx)
-		if err != nil {
-			return
+		if signer.IsZero() {
+			stxn, err = client.SignTransactionWithWallet(wh, pw, tx)
+		} else {
+			stxn, err = client.SignTransactionWithWalletAndSigner(wh, pw, signer.String(), tx)
 		}
-	} else {
-		// Wrap in a transactions.SignedTxn with an empty sig.
-		// This way protocol.Encode will encode the transaction type
-		stxn, err = transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
-		if err != nil {
-			return
-		}
-
-		stxn = populateBlankMultisig(client, dataDir, walletName, stxn)
+		return
 	}
+
+	// Wrap in a transactions.SignedTxn with an empty sig.
+	// This way protocol.Encode will encode the transaction type
+	stxn, err = transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
+	if err != nil {
+		return
+	}
+
+	stxn = populateBlankMultisig(client, dataDir, walletName, stxn)
 	return
 }
 
+func writeSignedTxnsToFile(stxns []transactions.SignedTxn, filename string) error {
+	var outData []byte
+	for _, stxn := range stxns {
+		outData = append(outData, protocol.Encode(&stxn)...)
+	}
+
+	return writeFile(filename, outData, 0600)
+}
+
 func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction, filename string) error {
-	stxn, err := createSignedTransaction(client, signTx, dataDir, walletName, tx)
+	stxn, err := createSignedTransaction(client, signTx, dataDir, walletName, tx, basics.Address{})
 	if err != nil {
 		return err
 	}
 	// Write the SignedTxn to the output file
-	return writeFile(filename, protocol.Encode(&stxn), 0600)
+	return writeSignedTxnsToFile([]transactions.SignedTxn{stxn}, filename)
 }
 
 func getB64Args(args []string) [][]byte {
@@ -419,7 +430,7 @@ var sendCmd = &cobra.Command{
 			}
 		} else {
 			signTx := sign || (outFilename == "")
-			stx, err = createSignedTransaction(client, signTx, dataDir, walletName, payment)
+			stx, err = createSignedTransaction(client, signTx, dataDir, walletName, payment, basics.Address{})
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -854,13 +865,12 @@ var groupCmd = &cobra.Command{
 			transactionIdx++
 		}
 
-		var outData []byte
-		for _, stxn := range stxns {
-			stxn.Txn.Group = crypto.HashObj(group)
-			outData = append(outData, protocol.Encode(&stxn)...)
+		groupHash := crypto.HashObj(group)
+		for i := range stxns {
+			stxns[i].Txn.Group = groupHash
 		}
 
-		err = writeFile(outFilename, outData, 0600)
+		err = writeSignedTxnsToFile(stxns, outFilename)
 		if err != nil {
 			reportErrorf(fileWriteError, outFilename, err)
 		}

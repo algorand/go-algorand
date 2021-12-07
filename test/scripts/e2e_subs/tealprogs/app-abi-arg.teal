@@ -1,0 +1,73 @@
+#pragma version 5
+intcblock 1 0
+txn ApplicationID
+intc_1 // 0
+==
+bnz main_l14
+txn OnCompletion
+pushint 5 // DeleteApplication
+==
+bnz main_l13
+txn OnCompletion
+intc_0 // OptIn
+==
+txna ApplicationArgs 0
+pushbytes 0x00056f7074696e // 0x00056f7074696e
+==
+&&
+bnz main_l12
+txn OnCompletion
+intc_1 // NoOp
+==
+txna ApplicationArgs 0
+pushbytes 0x0000000000000000 // 0x0000000000000000
+==
+&&
+bnz main_l11
+txn OnCompletion
+intc_1 // NoOp
+==
+txna ApplicationArgs 0
+pushbytes 0x000102 // 0x000102
+==
+&&
+bnz main_l10
+txn OnCompletion
+intc_1 // NoOp
+==
+txna ApplicationArgs 0
+pushbytes 0x000d00010200000000000030340003757775 // 0x000d00010200000000000030340003757775
+==
+&&
+bnz main_l9
+txn OnCompletion
+intc_1 // NoOp
+==
+txna ApplicationArgs 0
+pushbytes 0x000000000000018f000c0019000b73686f756c642070617373000490 // 0x000000000000018f000c0019000b73686f756c642070617373000490
+==
+&&
+bnz main_l8
+intc_1 // 0
+return
+main_l8:
+intc_0 // 1
+return
+main_l9:
+intc_0 // 1
+return
+main_l10:
+intc_0 // 1
+return
+main_l11:
+intc_0 // 1
+return
+main_l12:
+intc_0 // 1
+return
+main_l13:
+intc_0 // 1
+return
+main_l14:
+intc_0 // 1
+return

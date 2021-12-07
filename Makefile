@@ -77,7 +77,7 @@ UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go li
 COVERPKG_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | egrep -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | egrep -v '(test|testing|mocks|mock)$$' ))
 ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
 
-MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/compactcert ./data/basics ./data/transactions ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./node ./ledger ./ledger/ledgercore ./compactcert
+MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/compactcert ./data/basics ./data/transactions ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./node ./ledger ./ledger/ledgercore ./compactcert ./data/account
 
 default: build
 
