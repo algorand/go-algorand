@@ -212,7 +212,7 @@ byte 0x%s
 &&`
 	pkTampered1 := make([]byte, len(pk))
 	copy(pkTampered1, pk)
-	pkTampered1[0] = 0
+	pkTampered1[0] += byte(1)
 	pkTampered2 := make([]byte, len(pk))
 	copy(pkTampered2, pk[1:])
 
