@@ -4961,14 +4961,16 @@ func TestPcDetails(t *testing.T) {
 var minB64DecodeVersion uint64 = 6
 
 type b64DecodeTestCase struct {
-	Encoded string
-	IsURL   bool
-	Decoded string
-	Error   error
+	Encoded     string
+	IsURL       bool
+	HasExtraNLs bool
+	Decoded     string
+	Error       error
 }
 
 var testCases = []b64DecodeTestCase{
 	{"TU9CWS1ESUNLOwoKb3IsIFRIRSBXSEFMRS4KCgpCeSBIZXJtYW4gTWVsdmlsbGU=",
+		false,
 		false,
 		`MOBY-DICK;
 
@@ -4980,6 +4982,7 @@ By Herman Melville`,
 	},
 	{"TU9CWS1ESUNLOwoKb3IsIFRIRSBXSEFMRS4KCgpCeSBIZXJtYW4gTWVsdmlsbGU=",
 		true,
+		false,
 		`MOBY-DICK;
 
 or, THE WHALE.
@@ -4988,10 +4991,47 @@ or, THE WHALE.
 By Herman Melville`,
 		nil,
 	},
-	{"YWJjMTIzIT8kKiYoKSctPUB+", false, "abc123!?$*&()'-=@~", nil},
-	{"YWJjMTIzIT8kKiYoKSctPUB-", true, "abc123!?$*&()'-=@~", nil},
-	{"YWJjMTIzIT8kKiYoKSctPUB+", true, "", base64.CorruptInputError(23)},
-	{"YWJjMTIzIT8kKiYoKSctPUB-", false, "", base64.CorruptInputError(23)},
+	{"YWJjMTIzIT8kKiYoKSctPUB+", false, false, "abc123!?$*&()'-=@~", nil},
+	{"YWJjMTIzIT8kKiYoKSctPUB-", true, false, "abc123!?$*&()'-=@~", nil},
+	{"YWJjMTIzIT8kKiYoKSctPUB+", true, false, "", base64.CorruptInputError(23)},
+	{"YWJjMTIzIT8kKiYoKSctPUB-", false, false, "", base64.CorruptInputError(23)},
+
+	// try extra ='s and various whitespace:
+	{"", false, false, "", nil},
+	{"", true, false, "", nil},
+	{"=", false, true, "", base64.CorruptInputError(0)},
+	{"=", true, true, "", base64.CorruptInputError(0)},
+	{" ", false, true, "", base64.CorruptInputError(0)},
+	{" ", true, true, "", base64.CorruptInputError(0)},
+	{"\t", false, true, "", base64.CorruptInputError(0)},
+	{"\t", true, true, "", base64.CorruptInputError(0)},
+	{"\r", false, true, "", nil},
+	{"\r", true, true, "", nil},
+	{"\n", false, true, "", nil},
+	{"\n", true, true, "", nil},
+
+	{"YWJjMTIzIT8kKiYoKSctPUB+\n", false, true, "abc123!?$*&()'-=@~", nil},
+	{"YWJjMTIzIT8kKiYoKSctPUB-\n", true, true, "abc123!?$*&()'-=@~", nil},
+	{"YWJjMTIzIT8kK\riYoKSctPUB+\n", false, true, "abc123!?$*&()'-=@~", nil},
+	{"YWJjMTIzIT8kK\riYoKSctPUB-\n", true, true, "abc123!?$*&()'-=@~", nil},
+	{"\n\rYWJjMTIzIT8\rkKiYoKSctPUB+\n", false, true, "abc123!?$*&()'-=@~", nil},
+	{"\n\rYWJjMTIzIT8\rkKiYoKSctPUB-\n", true, true, "abc123!?$*&()'-=@~", nil},
+
+	// padding and extra legal whitespace
+	{"SQ==", false, false, "I", nil},
+	{"SQ==", true, false, "I", nil},
+	{"\rS\r\nQ=\n=\r\r\n", false, true, "I", nil},
+	{"\rS\r\nQ=\n=\r\r\n", true, true, "I", nil},
+
+	// Padding necessary? - Yes it is! And exactly the expected amount.
+	{"SQ==", false, false, "I", nil},
+	{"SQ==", true, false, "I", nil},
+	{"SQ", false, false, "", base64.CorruptInputError(0)},
+	{"SQ", true, false, "", base64.CorruptInputError(0)},
+	{"SQ=", false, false, "", base64.CorruptInputError(3)},
+	{"SQ=", true, false, "", base64.CorruptInputError(3)},
+	{"SQ===", false, false, "", base64.CorruptInputError(4)},
+	{"SQ===", true, false, "", base64.CorruptInputError(4)},
 }
 
 func TestBase64DecodeFunc(t *testing.T) {
@@ -5003,10 +5043,14 @@ func TestBase64DecodeFunc(t *testing.T) {
 		if testCase.IsURL {
 			encoding = base64.URLEncoding
 		}
-		encoding = encoding.Strict()
+		// sanity check:
+		if testCase.Error == nil && !testCase.HasExtraNLs {
+			require.Equal(t, testCase.Encoded, encoding.EncodeToString([]byte(testCase.Decoded)))
+		}
+
 		decoded, err := base64Decode([]byte(testCase.Encoded), encoding)
+		require.Equal(t, testCase.Error, err, fmt.Sprintf("Error (%s): case decode [%s] -> [%s]", err, testCase.Encoded, testCase.Decoded))
 		require.Equal(t, []byte(testCase.Decoded), decoded)
-		require.Equal(t, testCase.Error, err)
 	}
 }
 
