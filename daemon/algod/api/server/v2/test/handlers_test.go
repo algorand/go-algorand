@@ -673,7 +673,7 @@ func TestTealDryrun(t *testing.T) {
 	tealDryrunTest(t, &gdr, "json", 404, "", false)
 }
 
-func TestMockNode_AppendParticipationKeys(t *testing.T) {
+func TestAppendParticipationKeys(t *testing.T) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
