@@ -2,6 +2,7 @@ package merklearray
 
 import (
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -102,5 +103,28 @@ func TestVcSizes(t *testing.T) {
 	require.Equal(t, uint8(4), vc.pathLen)
 	require.Equal(t, uint64(16), vc.paddedSize)
 	require.Equal(t, uint64(16), vc.Length())
-	
+}
+
+func TestVcArrayPadding(t *testing.T) {
+	testArray := make(TestArray, 11)
+	for i := uint64(0); i < 11; i++ {
+		crypto.RandBytes(testArray[i][:])
+	}
+	vc := generateVectorCommitmentArray(testArray)
+
+	h := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
+	leafBytes := make([]byte, len(protocol.Message)+h.Size())
+	copy(leafBytes, protocol.Message)
+	copy(leafBytes[len(protocol.Message):], testArray[1][:])
+	h.Reset()
+	h.Write(leafBytes)
+	leafHash := h.Sum(nil)
+
+	leafVc, err := vc.Marshal(msbToLsbIndex(1, 4))
+	h.Reset()
+	h.Write(leafVc)
+	leafVcHash := h.Sum(nil)
+
+	require.NoError(t, err)
+	require.Equal(t, leafHash, leafVcHash)
 }
