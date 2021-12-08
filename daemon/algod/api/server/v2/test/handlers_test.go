@@ -674,17 +674,13 @@ func TestTealDryrun(t *testing.T) {
 }
 
 func TestAppendParticipationKeys(t *testing.T) {
-	numAccounts := 1
-	numTransactions := 1
-	offlineAccounts := true
-	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
+	mockLedger, _, _, _, releasefunc := testingenv(t, 1, 1, true)
 	defer releasefunc()
-	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil)
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
-		Shutdown: dummyShutdownChan,
+		Shutdown: make(chan struct{}),
 	}
 
 	id := account.ParticipationID{}
@@ -715,9 +711,8 @@ func TestAppendParticipationKeys(t *testing.T) {
 		require.Equal(t, mockNode.keys[101], keys[101])
 	})
 
-	// Invalid body
 	t.Run("Invalid body", func(t *testing.T) {
-		// Put keys in the body.
+		// Create request with bogus bytes in the body
 		e := echo.New()
 		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte{0x99, 0x88, 0x77}))
 		rec := httptest.NewRecorder()
@@ -733,6 +728,7 @@ func TestAppendParticipationKeys(t *testing.T) {
 	})
 
 	t.Run("Empty body", func(t *testing.T) {
+		// Create test object with no keys to append.
 		keys := make(account.StateProofKeys)
 		keyBytes := protocol.Encode(keys)
 
@@ -752,12 +748,13 @@ func TestAppendParticipationKeys(t *testing.T) {
 	})
 
 	t.Run("Internal error", func(t *testing.T) {
+		// Create mock node with an error.
 		expectedErr := errors.New("expected error")
 		mockNode := makeMockNode(mockLedger, t.Name(), expectedErr)
 		handler := v2.Handlers{
 			Node:     mockNode,
 			Log:      logging.Base(),
-			Shutdown: dummyShutdownChan,
+			Shutdown: make(chan struct{}),
 		}
 
 		keys := make(account.StateProofKeys)
