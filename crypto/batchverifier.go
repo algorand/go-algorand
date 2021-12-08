@@ -38,7 +38,6 @@ package crypto
 import "C"
 import (
 	"errors"
-	"fmt"
 	"unsafe"
 )
 
@@ -55,18 +54,13 @@ const minBatchVerifierAlloc = 16
 // Batch verifications errors
 var (
 	ErrBatchVerificationFailed = errors.New("At least one signature didn't pass verification")
-	ErrZeroTranscationsInBatch = errors.New("Could not validate empty signature set")
+	ErrZeroTransactionInBatch  = errors.New("Could not validate empty signature set")
 )
 
 //export ed25519_randombytes_unsafe
 func ed25519_randombytes_unsafe(p unsafe.Pointer, len C.size_t) {
-	randLen := int(len)
-	rand := make([]byte, randLen)
-	RandBytes(rand)
-	for i := 0; i < randLen; i++ {
-		*(*byte)(unsafe.Pointer(uintptr(p) + uintptr(i*C.sizeof_uchar))) = rand[i]
-	}
-
+	randBuf := (*[1 << 30]byte)(p)[:len:len]
+	RandBytes(randBuf)
 }
 
 // MakeBatchVerifierWithAlgorithmDefaultSize create a BatchVerifier instance. This function pre-allocates
@@ -78,13 +72,13 @@ func MakeBatchVerifierWithAlgorithmDefaultSize() *BatchVerifier {
 
 // MakeBatchVerifierDefaultSize create a BatchVerifier instance. This function pre-allocates
 // amount of free space to enqueue signatures without expanding
-func MakeBatchVerifierDefaultSize(shouldUseBatchVerification bool) *BatchVerifier {
-	return MakeBatchVerifier(minBatchVerifierAlloc, shouldUseBatchVerification)
+func MakeBatchVerifierDefaultSize(enableBatchVerification bool) *BatchVerifier {
+	return MakeBatchVerifier(minBatchVerifierAlloc, enableBatchVerification)
 }
 
 // MakeBatchVerifier create a BatchVerifier instance. This function pre-allocates
 // a given space so it will not expaned the storage
-func MakeBatchVerifier(hint int, shouldUseBatchVerification bool) *BatchVerifier {
+func MakeBatchVerifier(hint int, enableBatchVerification bool) *BatchVerifier {
 	// preallocate enough storage for the expected usage. We will reallocate as needed.
 	if hint < minBatchVerifierAlloc {
 		hint = minBatchVerifierAlloc
@@ -93,7 +87,7 @@ func MakeBatchVerifier(hint int, shouldUseBatchVerification bool) *BatchVerifier
 		messages:             make([]Hashable, 0, hint),
 		publicKeys:           make([]SignatureVerifier, 0, hint),
 		signatures:           make([]Signature, 0, hint),
-		useBatchVerification: shouldUseBatchVerification,
+		useBatchVerification: enableBatchVerification,
 	}
 }
 
@@ -129,7 +123,7 @@ func (b *BatchVerifier) GetNumberOfEnqueuedSignatures() int {
 // if the batch is zero an appropriate error is return.
 func (b *BatchVerifier) Verify() error {
 	if b.GetNumberOfEnqueuedSignatures() == 0 {
-		return ErrZeroTranscationsInBatch
+		return ErrZeroTransactionInBatch
 	}
 
 	if b.useBatchVerification {
@@ -140,14 +134,14 @@ func (b *BatchVerifier) Verify() error {
 		if batchVerificationImpl(messages, b.publicKeys, b.signatures) {
 			return nil
 		}
-		return fmt.Errorf("erro checking batch")
+		return ErrBatchVerificationFailed
 	}
 	return b.verifyOneByOne()
 }
 
 func (b *BatchVerifier) verifyOneByOne() error {
 	for i := range b.messages {
-		verifier := SignatureVerifier(b.publicKeys[i])
+		verifier := b.publicKeys[i]
 		if !verifier.Verify(b.messages[i], b.signatures[i], false) {
 			return ErrBatchVerificationFailed
 		}
@@ -155,8 +149,7 @@ func (b *BatchVerifier) verifyOneByOne() error {
 	return nil
 }
 
-// DonnaBatchVerification calls the batch verification implemention in C. it prepares the arguments
-// to create a call to C code.
+// batchVerificationImpl invokes the ed25519 batch verification algorithm.
 // it returns true if all the signatures were authentically signed by the owners
 func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, signatures []Signature) bool {
 

@@ -36,7 +36,7 @@ func TestBatchVerifierSingle(t *testing.T) {
 	bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
 	require.NoError(t, bv.Verify())
 
-	// test expected failuire
+	// test expected failure
 	bv = MakeBatchVerifierWithAlgorithmDefaultSize()
 	msg = randString()
 	RandBytes(s[:])

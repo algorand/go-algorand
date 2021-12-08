@@ -51,7 +51,7 @@ heap_insert_next(batch_heap *heap) {
     /* insert at the bottom */
     pheap[node] = (heap_index_t)node;
 
-    /* sift node up to its sorted spot */
+    /* shift node up to its sorted spot */
     parent = (node - 1) / 2;
     while (node && lt256_modm_batch(scalars[pheap[parent]], scalars[pheap[node]], SC25519_LIMB_SIZE - 1)) {
         heap_swap(pheap, parent, node);
@@ -68,7 +68,7 @@ heap_updated_root(batch_heap *heap, size_t limbsize) {
     heap_index_t *pheap = heap->heap;
     sc25519 *scalars = heap->scalars;
 
-    /* sift root to the bottom */
+    /* shift root to the bottom */
     parent = 0;
     node = 1;
     childl = 1;
@@ -81,7 +81,7 @@ heap_updated_root(batch_heap *heap, size_t limbsize) {
         childr = childl + 1;
     }
 
-    /* sift root back up to its sorted spot */
+    /* shift root back up to its sorted spot */
     parent = (node - 1) / 2;
     while (node && lte256_modm_batch(scalars[pheap[parent]], scalars[pheap[node]], limbsize)) {
         heap_swap(pheap, parent, node);
@@ -175,6 +175,8 @@ void ge25519_multi_scalarmult_vartime_final(ge25519_p3 *r, ge25519_p3 *point, sc
 static void
 ge25519_multi_scalarmult_vartime(ge25519_p3 *r, batch_heap *heap, size_t count) {
     heap_index_t max1, max2;
+    ge25519_cached cached_p;
+    ge25519_p1p1 p_as_p1p1;
 
     /* start with the full limb size */
     size_t limbsize = SC25519_LIMB_SIZE - 1;
@@ -204,8 +206,6 @@ ge25519_multi_scalarmult_vartime(ge25519_p3 *r, batch_heap *heap, size_t count) 
         }
 
         sub256_modm_batch(heap->scalars[max1], heap->scalars[max1], heap->scalars[max2], limbsize);
-        ge25519_cached cached_p;
-        ge25519_p1p1 p_as_p1p1;
         ge25519_p3_to_cached(&cached_p,&heap->points[max1]);
 
         ge25519_add(&p_as_p1p1, &heap->points[max2], &cached_p);
@@ -243,8 +243,8 @@ int crypto_sign_ed25519_open_batch(const unsigned char **m, const unsigned long 
         batchsize = (num > MAX_BATCH_SIZE) ? MAX_BATCH_SIZE : num;
 
         /* validate the public key and signature */
-        for (i=0; i < batchsize; i++){
-            if (validate_ed25519_pk_and_sig(RS[i],pk[i]) != 0)
+        for (i=0; i < batchsize; i++) {
+            if (validate_ed25519_pk_and_sig(RS[i], pk[i]) != 0)
                 goto fallback;
         }
 

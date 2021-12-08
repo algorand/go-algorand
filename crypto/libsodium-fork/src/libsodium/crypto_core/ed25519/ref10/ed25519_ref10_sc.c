@@ -87,7 +87,7 @@ void reduce256_modm(sc25519 r)
 
 void barrett_reduce256_modm(sc25519 r, const sc25519 q1, const sc25519 r1)
 {
-    sc25519 q3, r2;
+	sc25519 q3, r2;
 	uint128_t c, mul;
 	sc25519_element_t f, b, pb;
 
