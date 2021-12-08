@@ -687,28 +687,96 @@ func TestMockNode_AppendParticipationKeys(t *testing.T) {
 		Shutdown: dummyShutdownChan,
 	}
 
-	// Create test object to append.
 	id := account.ParticipationID{}
 	id[0] = 10
-	keys := make(account.StateProofKeys)
-	keys[100] = []byte{100}
-	keys[101] = []byte{101}
-	keyBytes := protocol.Encode(keys)
 
-	// Put keys in the body.
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(keyBytes))
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
+	t.Run("HappyPath", func(t *testing.T) {
+		// Create test object to append.
+		keys := make(account.StateProofKeys)
+		keys[100] = []byte{100}
+		keys[101] = []byte{101}
+		keyBytes := protocol.Encode(keys)
 
-	// Call handler with request.
-	err := handler.AppendKeys(c, id.String())
+		// Put keys in the body.
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(keyBytes))
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
 
-	// Verify that request was properly received and deserialized.
-	require.NoError(t, err)
-	require.Equal(t, 200, rec.Code)
-	require.Equal(t, id, mockNode.id)
-	require.Len(t, mockNode.keys, 2)
-	require.Equal(t, mockNode.keys[100], keys[100])
-	require.Equal(t, mockNode.keys[101], keys[101])
+		// Call handler with request.
+		err := handler.AppendKeys(c, id.String())
+
+		// Verify that request was properly received and deserialized.
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, id, mockNode.id)
+		require.Len(t, mockNode.keys, 2)
+		require.Equal(t, mockNode.keys[100], keys[100])
+		require.Equal(t, mockNode.keys[101], keys[101])
+	})
+
+	// Invalid body
+	t.Run("Invalid body", func(t *testing.T) {
+		// Put keys in the body.
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte{ 0x00, 0x01, 0x02 }))
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		// Call handler with request.
+		err := handler.AppendKeys(c, id.String())
+
+		// Verify that request was properly received and deserialized.
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Contains(t, rec.Body.String(), "unable to parse keys from body: EOF")
+	})
+
+	t.Run("Empty body", func(t *testing.T) {
+		keys := make(account.StateProofKeys)
+		keyBytes := protocol.Encode(keys)
+
+		// Put keys in the body.
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(keyBytes))
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		// Call handler with request.
+		err := handler.AppendKeys(c, id.String())
+
+		// Verify that request was properly received and deserialized.
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Contains(t, rec.Body.String(), "empty request, please attach keys to request body")
+	})
+
+	t.Run("Internal Error", func(t *testing.T) {
+		expectedErr := errors.New("expected error")
+		mockNode := makeMockNode(mockLedger, t.Name(), expectedErr)
+		handler := v2.Handlers{
+			Node:     mockNode,
+			Log:      logging.Base(),
+			Shutdown: dummyShutdownChan,
+		}
+
+		keys := make(account.StateProofKeys)
+		keys[100] = []byte{100}
+		keys[101] = []byte{101}
+		keyBytes := protocol.Encode(keys)
+
+		// Put keys in the body.
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(keyBytes))
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		// Call handler with request.
+		err := handler.AppendKeys(c, id.String())
+
+		// Verify that request was properly received and deserialized.
+		require.NoError(t, err)
+		require.Equal(t, http.StatusInternalServerError, rec.Code)
+		require.Contains(t, rec.Body.String(), expectedErr.Error())
+	})
 }

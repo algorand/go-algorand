@@ -223,16 +223,12 @@ func (v2 *Handlers) AppendKeys(ctx echo.Context, participationID string) error {
 	var keys account.StateProofKeys
 	dec := protocol.NewDecoder(ctx.Request().Body)
 	err = dec.Decode(&keys)
-	// What is this error? Hit EOF before an object could finish decoding?
-	if err == io.EOF {
-		return badRequest(ctx, err, err.Error(), v2.Log)
-	}
 	if err != nil {
+		err = fmt.Errorf("unable to parse keys from body: %w", err)
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-
 	if len(keys) == 0 {
-		err := errors.New("empty request, please include keys")
+		err = errors.New("empty request, please attach keys to request body")
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 

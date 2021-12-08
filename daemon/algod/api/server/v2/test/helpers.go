@@ -107,7 +107,7 @@ func (m mockNode) RemoveParticipationKey(id account.ParticipationID) error {
 func (m *mockNode) AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error {
 	m.id = id
 	m.keys = keys
-	return nil
+	return m.err
 }
 
 func makeMockNode(ledger *data.Ledger, genesisID string, nodeError error) *mockNode {
