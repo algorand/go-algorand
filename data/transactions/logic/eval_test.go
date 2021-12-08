@@ -5023,9 +5023,13 @@ By Herman Melville`,
 	{"\rS\r\nQ=\n=\r\r\n", false, true, "I", nil},
 	{"\rS\r\nQ=\n=\r\r\n", true, true, "I", nil},
 
-	// Padding necessary? - Yes it is! And exactly the expected amount.
+	// Padding necessary? - Yes it is! And exactly the expected place and amount.
 	{"SQ==", false, false, "I", nil},
 	{"SQ==", true, false, "I", nil},
+	{"S=Q=", false, false, "", base64.CorruptInputError(1)},
+	{"S=Q=", true, false, "", base64.CorruptInputError(1)},
+	{"=SQ=", false, false, "", base64.CorruptInputError(0)},
+	{"=SQ=", true, false, "", base64.CorruptInputError(0)},
 	{"SQ", false, false, "", base64.CorruptInputError(0)},
 	{"SQ", true, false, "", base64.CorruptInputError(0)},
 	{"SQ=", false, false, "", base64.CorruptInputError(3)},
