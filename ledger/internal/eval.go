@@ -162,7 +162,7 @@ func (x *roundCowBase) blockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 }
 
 func (x *roundCowBase) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
-	acct, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	acct, err := x.lookup(addr)
 	if err != nil {
 		return false, err
 	}
@@ -181,7 +181,7 @@ func (x *roundCowBase) allocated(addr basics.Address, aidx basics.AppIndex, glob
 // getKey gets the value for a particular key in some storage
 // associated with an application globally or locally
 func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error) {
-	ad, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	ad, err := x.lookup(addr)
 	if err != nil {
 		return basics.TealValue{}, false, err
 	}
@@ -211,7 +211,7 @@ func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global 
 // getStorageCounts counts the storage types used by some account
 // associated with an application globally or locally
 func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
-	ad, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	ad, err := x.lookup(addr)
 	if err != nil {
 		return basics.StateSchema{}, err
 	}
@@ -1402,7 +1402,7 @@ transactionGroupLoop:
 			if !ok {
 				break transactionGroupLoop
 			} else if txgroup.err != nil {
-				return ledgercore.StateDelta{}, err
+				return ledgercore.StateDelta{}, txgroup.err
 			}
 
 			for _, br := range txgroup.balances {
