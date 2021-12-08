@@ -82,6 +82,10 @@ func buildWorker(ws *workerState, array Array, leaves Layer, h crypto.HashFactor
 	}
 }
 
+func BuildVectorCommitmentTree(array Array, factory crypto.HashFactory) (*Tree, error) {
+	return Build(generateVectorCommitmentArray(array), factory)
+}
+
 // Build constructs a Merkle tree given an array.
 func Build(array Array, factory crypto.HashFactory) (*Tree, error) {
 	arraylen := array.Length()
