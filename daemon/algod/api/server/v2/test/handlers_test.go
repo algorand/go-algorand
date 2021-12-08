@@ -719,7 +719,7 @@ func TestMockNode_AppendParticipationKeys(t *testing.T) {
 	t.Run("Invalid body", func(t *testing.T) {
 		// Put keys in the body.
 		e := echo.New()
-		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte{ 0x99, 0x88, 0x77 }))
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte{0x99, 0x88, 0x77}))
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 
