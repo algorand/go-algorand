@@ -4047,15 +4047,15 @@ func base64Decode(encoded []byte, encoding *base64.Encoding) ([]byte, error) {
 
 func opBase64Decode(cx *EvalContext) {
 	last := len(cx.stack) - 1
-	alphabetField := Base64Alphabet(cx.program[cx.pc+1])
-	fs, ok := base64AlphabetSpecByField[alphabetField]
+	encodingField := Base64Encoding(cx.program[cx.pc+1])
+	fs, ok := base64EncodingSpecByField[encodingField]
 	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid base64_decode alphabet %d", alphabetField)
+		cx.err = fmt.Errorf("invalid base64_decode encoding %d", encodingField)
 		return
 	}
 
 	encoding := base64.URLEncoding
-	if alphabetField == StdAlph {
+	if encodingField == StdEncoding {
 		encoding = base64.StdEncoding
 	}
 	cx.stack[last].Bytes, cx.err = base64Decode(cx.stack[last].Bytes, encoding)

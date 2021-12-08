@@ -3738,15 +3738,15 @@ func BenchmarkBase64Decode(b *testing.B) {
 		"keccak256",
 		"sha256",
 		"sha512_256",
-		"base64_decode StdAlph",
-		"base64_decode URLAlph",
+		"base64_decode StdEncoding",
+		"base64_decode URLEncoding",
 	}
 	benches := [][]string{}
 	for i, tag := range tags {
 		for _, op := range ops {
 			testName := op
 			encoded := stds[i]
-			if op == "base64_decode URLAlph" {
+			if op == "base64_decode URLEncoding" {
 				encoded = urls[i]
 			}
 			if len(op) > 0 {
@@ -5026,9 +5026,9 @@ base64_decode %s
 	args := []b64DecodeTestArgs{}
 	for _, testCase := range testCases {
 		if testCase.Error == nil {
-			field := "StdAlph"
+			field := "StdEncoding"
 			if testCase.IsURL {
-				field = "URLAlph"
+				field = "URLEncoding"
 			}
 			source := fmt.Sprintf(sourceTmpl, minB64DecodeVersion, field)
 			ops, err := AssembleStringWithVersion(source, minB64DecodeVersion)
