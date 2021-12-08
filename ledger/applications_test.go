@@ -34,7 +34,10 @@ import (
 )
 
 func commitRound(offset uint64, dbRound basics.Round, l *Ledger) {
+	l.trackers.mu.Lock()
 	l.trackers.lastFlushTime = time.Time{}
+	l.trackers.mu.Unlock()
+
 	l.trackers.scheduleCommit(l.Latest(), l.Latest()-(dbRound+basics.Round(offset)))
 	l.trackers.waitAccountsWriting()
 }

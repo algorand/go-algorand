@@ -433,6 +433,7 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 				record.FirstValid,
 				record.LastValid,
 				record.KeyDilution,
+				nil,
 				nil)
 			if err != nil {
 				return fmt.Errorf("unable to insert keyset: %w", err)
@@ -714,56 +715,93 @@ func TestFlushDeadlock(t *testing.T) {
 	wg.Wait()
 }
 
-func benchmarkKeyRegistration(numKeys int, b *testing.B) {
-	// setup
-	rootDB, err := db.OpenPair(b.Name(), true)
-	if err != nil {
-		b.Fail()
+func TestAddStateProofKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+	registry := getRegistry(t)
+	defer registryCloseTest(t, registry)
+
+	// Install a key to add StateProof keys.
+	max := uint64(1000)
+	p := makeTestParticipation(1, 0, basics.Round(max), 3)
+	id, err := registry.Insert(p)
+	a.NoError(err)
+	a.Equal(p.ID(), id)
+
+	// Wait for async DB operations to finish.
+	err = registry.Flush(10 * time.Second)
+	a.NoError(err)
+
+	// Initialize keys array.
+	keys := make(map[uint64]StateProofKey)
+	for i := uint64(0); i <= max; i++ {
+		bs := make([]byte, 8)
+		binary.LittleEndian.PutUint64(bs, i)
+		keys[i] = bs
 	}
-	registry, err := makeParticipationRegistry(rootDB, logging.TestingLog(b))
-	if err != nil {
-		b.Fail()
+
+	err = registry.AppendKeys(id, keys)
+	a.NoError(err)
+
+	// Wait for async DB operations to finish.
+	err = registry.Flush(10 * time.Second)
+	a.NoError(err)
+
+	// Make sure we're able to fetch the same data that was put in.
+	for i := uint64(0); i <= max; i++ {
+		r, err := registry.GetForRound(id, basics.Round(i))
+		a.NoError(err)
+		a.Equal(keys[i], r.StateProof)
+		number := binary.LittleEndian.Uint64(r.StateProof)
+		a.Equal(i, number)
 	}
-
-	// Insert records so that we can t
-	b.Run(fmt.Sprintf("KeyInsert_%d", numKeys), func(b *testing.B) {
-		for n := 0; n < b.N; n++ {
-			for key := 0; key < numKeys; key++ {
-				p := makeTestParticipation(key, basics.Round(0), basics.Round(1000000), 3)
-				registry.Insert(p)
-			}
-		}
-	})
-
-	// The first call to Register updates the DB.
-	b.Run(fmt.Sprintf("KeyRegistered_%d", numKeys), func(b *testing.B) {
-		for n := 0; n < b.N; n++ {
-			for key := 0; key < numKeys; key++ {
-				p := makeTestParticipation(key, basics.Round(0), basics.Round(1000000), 3)
-
-				// Unfortunately we need to repeatedly clear out the registration fields to ensure the
-				// db update runs each time this is called.
-				record := registry.cache[p.ID()]
-				record.EffectiveFirst = 0
-				record.EffectiveLast = 0
-				registry.cache[p.ID()] = record
-				registry.Register(p.ID(), 50)
-			}
-		}
-	})
-
-	// The keys should now be updated, so Register is a no-op.
-	b.Run(fmt.Sprintf("NoOp_%d", numKeys), func(b *testing.B) {
-		for n := 0; n < b.N; n++ {
-			for key := 0; key < numKeys; key++ {
-				p := makeTestParticipation(key, basics.Round(0), basics.Round(1000000), 3)
-				registry.Register(p.ID(), 50)
-			}
-		}
-	})
 }
 
-func BenchmarkKeyRegistration1(b *testing.B)  { benchmarkKeyRegistration(1, b) }
-func BenchmarkKeyRegistration5(b *testing.B)  { benchmarkKeyRegistration(5, b) }
-func BenchmarkKeyRegistration10(b *testing.B) { benchmarkKeyRegistration(10, b) }
-func BenchmarkKeyRegistration50(b *testing.B) { benchmarkKeyRegistration(50, b) }
+func TestSecretNotFound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+	registry := getRegistry(t)
+	defer registryCloseTest(t, registry)
+
+	// Install a key for testing
+	p := makeTestParticipation(1, 0, 2, 3)
+	id, err := registry.Insert(p)
+	a.NoError(err)
+	a.Equal(p.ID(), id)
+
+	r, err := registry.GetForRound(id, basics.Round(100))
+
+	a.True(r.IsZero())
+	a.Error(err)
+	a.ErrorIs(err, ErrSecretNotFound)
+}
+
+func TestAddingSecretTwice(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+	registry := getRegistry(t)
+	defer registryCloseTest(t, registry)
+
+	// Install a key for testing
+	p := makeTestParticipation(1, 0, 2, 3)
+	id, err := registry.Insert(p)
+	a.NoError(err)
+	a.Equal(p.ID(), id)
+
+	// Append key
+	keys := make(map[uint64]StateProofKey)
+	bs := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bs, 10)
+	keys[0] = bs
+
+	err = registry.AppendKeys(id, keys)
+	a.NoError(err)
+
+	// The error doesn't happen until the data persists.
+	err = registry.AppendKeys(id, keys)
+	a.NoError(err)
+
+	err = registry.Flush(10 * time.Second)
+	a.Error(err)
+	a.EqualError(err, "unable to execute append keys: UNIQUE constraint failed: StateProofKeys.pk, StateProofKeys.round")
+}
