@@ -132,4 +132,6 @@ assert not err, err
 txinfo, err = goal.app_call(joe, app_id, accounts=[goal.account])
 assert not err, err
 
-print(f"{os.path.basename(sys.argv[0])} OK {stamp}")
+
+stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+print(f"Running {SCRIPT} inside {CWD} @ {stamp}")
