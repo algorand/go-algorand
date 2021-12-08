@@ -690,7 +690,7 @@ func TestMockNode_AppendParticipationKeys(t *testing.T) {
 	id := account.ParticipationID{}
 	id[0] = 10
 
-	t.Run("HappyPath", func(t *testing.T) {
+	t.Run("Happy path", func(t *testing.T) {
 		// Create test object to append.
 		keys := make(account.StateProofKeys)
 		keys[100] = []byte{100}
@@ -719,7 +719,7 @@ func TestMockNode_AppendParticipationKeys(t *testing.T) {
 	t.Run("Invalid body", func(t *testing.T) {
 		// Put keys in the body.
 		e := echo.New()
-		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte{ 0x00, 0x01, 0x02 }))
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte{ 0x99, 0x88, 0x77 }))
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 
@@ -729,7 +729,7 @@ func TestMockNode_AppendParticipationKeys(t *testing.T) {
 		// Verify that request was properly received and deserialized.
 		require.NoError(t, err)
 		require.Equal(t, http.StatusBadRequest, rec.Code)
-		require.Contains(t, rec.Body.String(), "unable to parse keys from body: EOF")
+		require.Contains(t, rec.Body.String(), "unable to parse keys from body: msgpack decode error")
 	})
 
 	t.Run("Empty body", func(t *testing.T) {
@@ -751,7 +751,7 @@ func TestMockNode_AppendParticipationKeys(t *testing.T) {
 		require.Contains(t, rec.Body.String(), "empty request, please attach keys to request body")
 	})
 
-	t.Run("Internal Error", func(t *testing.T) {
+	t.Run("Internal error", func(t *testing.T) {
 		expectedErr := errors.New("expected error")
 		mockNode := makeMockNode(mockLedger, t.Name(), expectedErr)
 		handler := v2.Handlers{
