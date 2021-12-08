@@ -344,6 +344,7 @@ itxna Logs 3
 
 const v6Nonsense = v5Nonsense + `
 itxn_next
+base64_decode URLAlph
 txn StateProofPK
 `
 

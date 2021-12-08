@@ -3727,6 +3727,54 @@ func BenchmarkBigMath(b *testing.B) {
 	}
 }
 
+func BenchmarkBase64Decode(b *testing.B) {
+	smallStd := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+	smallURL := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+	medStd := strings.Repeat(smallStd, 16)
+	medURL := strings.Repeat(smallURL, 16)
+	bigStd := strings.Repeat(medStd, 4)
+	bigURL := strings.Repeat(medURL, 4)
+
+	tags := []string{"small", "medium", "large"}
+	stds := []string{smallStd, medStd, bigStd}
+	urls := []string{smallURL, medURL, bigURL}
+	ops := []string{
+		"",
+		"len",
+		"b~",
+		"int 1; pop",
+		"keccak256",
+		"sha256",
+		"sha512_256",
+		"base64_decode StdAlph",
+		"base64_decode URLAlph",
+	}
+	benches := [][]string{}
+	for i, tag := range tags {
+		for _, op := range ops {
+			testName := op
+			encoded := stds[i]
+			if op == "base64_decode URLAlph" {
+				encoded = urls[i]
+			}
+			if len(op) > 0 {
+				op += "; "
+			}
+			op += "pop"
+			benches = append(benches, []string{
+				fmt.Sprintf("%s_%s", testName, tag),
+				"",
+				fmt.Sprintf(`byte "%s"; %s`, encoded, op),
+				"int 1",
+			})
+		}
+	}
+	for _, bench := range benches {
+		b.Run(bench[0], func(b *testing.B) {
+			benchmarkOperation(b, bench[1], bench[2], bench[3])
+		})
+	}
+}
 func BenchmarkAddx64(b *testing.B) {
 	progs := [][]string{
 		{"add long stack", addBenchmarkSource},
@@ -4916,4 +4964,116 @@ func TestPcDetails(t *testing.T) {
 			require.Equal(t, test.det, det)
 		})
 	}
+}
+
+var minB64DecodeVersion uint64 = 6
+
+type b64DecodeTestCase struct {
+	Encoded string
+	IsURL   bool
+	Decoded string
+	Error   error
+}
+
+var testCases = []b64DecodeTestCase{
+	{"TU9CWS1ESUNLOwoKb3IsIFRIRSBXSEFMRS4KCgpCeSBIZXJtYW4gTWVsdmlsbGU=",
+		false,
+		`MOBY-DICK;
+
+or, THE WHALE.
+
+
+By Herman Melville`,
+		nil,
+	},
+	{"TU9CWS1ESUNLOwoKb3IsIFRIRSBXSEFMRS4KCgpCeSBIZXJtYW4gTWVsdmlsbGU=",
+		true,
+		`MOBY-DICK;
+
+or, THE WHALE.
+
+
+By Herman Melville`,
+		nil,
+	},
+	{"YWJjMTIzIT8kKiYoKSctPUB+", false, "abc123!?$*&()'-=@~", nil},
+	{"YWJjMTIzIT8kKiYoKSctPUB-", true, "abc123!?$*&()'-=@~", nil},
+	{"YWJjMTIzIT8kKiYoKSctPUB+", true, "", base64.CorruptInputError(23)},
+	{"YWJjMTIzIT8kKiYoKSctPUB-", false, "", base64.CorruptInputError(23)},
+}
+
+func TestBase64DecodeFunc(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, testCase := range testCases {
+		encoding := base64.StdEncoding
+		if testCase.IsURL {
+			encoding = base64.URLEncoding
+		}
+		encoding = encoding.Strict()
+		decoded, err := base64Decode([]byte(testCase.Encoded), encoding)
+		require.Equal(t, []byte(testCase.Decoded), decoded)
+		require.Equal(t, testCase.Error, err)
+	}
+}
+
+type b64DecodeTestArgs struct {
+	Raw     []byte
+	Encoded []byte
+	IsURL   bool
+	Program []byte
+}
+
+func b64TestDecodeAssembleWithArgs(t *testing.T) []b64DecodeTestArgs {
+	sourceTmpl := `#pragma version %d
+arg 0
+arg 1
+base64_decode %s
+==`
+	args := []b64DecodeTestArgs{}
+	for _, testCase := range testCases {
+		if testCase.Error == nil {
+			field := "StdAlph"
+			if testCase.IsURL {
+				field = "URLAlph"
+			}
+			source := fmt.Sprintf(sourceTmpl, minB64DecodeVersion, field)
+			ops, err := AssembleStringWithVersion(source, minB64DecodeVersion)
+			require.NoError(t, err)
+
+			arg := b64DecodeTestArgs{
+				Raw:     []byte(testCase.Decoded),
+				Encoded: []byte(testCase.Encoded),
+				IsURL:   testCase.IsURL,
+				Program: ops.Program,
+			}
+			args = append(args, arg)
+		}
+	}
+	return args
+}
+
+func b64TestDecodeEval(tb testing.TB, args []b64DecodeTestArgs) {
+	for _, data := range args {
+		var txn transactions.SignedTxn
+		txn.Lsig.Logic = data.Program
+		txn.Lsig.Args = [][]byte{data.Raw[:], data.Encoded[:]}
+		ep := defaultEvalParams(&strings.Builder{}, &txn)
+		pass, err := Eval(data.Program, ep)
+		if err != nil {
+			require.NoError(tb, err)
+		}
+		if !pass {
+			fmt.Printf("FAILING WITH data = %#v", data)
+			require.True(tb, pass)
+		}
+	}
+}
+
+func TestOpBase64Decode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	args := b64TestDecodeAssembleWithArgs(t)
+	b64TestDecodeEval(t, args)
 }
