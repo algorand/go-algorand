@@ -310,7 +310,7 @@ func (s *OneTimeSignatureSecrets) Sign(id OneTimeSignatureIdentifier, message Ha
 // OneTimeSignatureVerifier and some OneTimeSignatureIdentifier.
 //
 // It returns true if this is the case; otherwise, it returns false.
-func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message Hashable, sig OneTimeSignature) bool {
+func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message Hashable, sig OneTimeSignature, batchVersionCompatible bool) bool {
 	offsetID := OneTimeSignatureSubkeyOffsetID{
 		SubKeyPK: sig.PK,
 		Batch:    id.Batch,
@@ -321,13 +321,13 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 		Batch:    id.Batch,
 	}
 
-	if !ed25519Verify(ed25519PublicKey(v), hashRep(batchID), sig.PK2Sig) {
+	if !ed25519Verify(ed25519PublicKey(v), hashRep(batchID), sig.PK2Sig, batchVersionCompatible) {
 		return false
 	}
-	if !ed25519Verify(batchID.SubKeyPK, hashRep(offsetID), sig.PK1Sig) {
+	if !ed25519Verify(batchID.SubKeyPK, hashRep(offsetID), sig.PK1Sig, batchVersionCompatible) {
 		return false
 	}
-	if !ed25519Verify(offsetID.SubKeyPK, hashRep(message), sig.Sig) {
+	if !ed25519Verify(offsetID.SubKeyPK, hashRep(message), sig.Sig, batchVersionCompatible) {
 		return false
 	}
 	return true

@@ -33,7 +33,7 @@ func TestSignVerifyEmptyMessage(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	pk, sk := ed25519GenerateKey()
 	sig := ed25519Sign(sk, []byte{})
-	if !ed25519Verify(pk, []byte{}, sig) {
+	if !ed25519Verify(pk, []byte{}, sig, true) {
 		t.Errorf("sig of an empty message failed to verify")
 	}
 }
