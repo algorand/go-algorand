@@ -1368,23 +1368,21 @@ func strOrNA(value *uint64) string {
 	return uintToStr(*value)
 }
 
-// DEPRECATED
-type partkeyInfo struct {
-	_struct         struct{}                        `codec:",omitempty,omitemptyarray"`
-	Address         string                          `codec:"acct"`
-	FirstValid      basics.Round                    `codec:"first"`
-	LastValid       basics.Round                    `codec:"last"`
-	VoteID          crypto.OneTimeSignatureVerifier `codec:"vote"`
-	SelectionID     crypto.VRFVerifier              `codec:"sel"`
-	VoteKeyDilution uint64                          `codec:"voteKD"`
-}
-
-
 // legacyPartkeyInfoCommand prints key information in the same
 // format as earlier versions of goal. Some users are using this information
 // in scripts and need some extra time to migrate to alternatives.
 // DEPRECATED
 func legacyPartkeyInfoCommand() {
+	type partkeyInfo struct {
+		_struct         struct{}                        `codec:",omitempty,omitemptyarray"`
+		Address         string                          `codec:"acct"`
+		FirstValid      basics.Round                    `codec:"first"`
+		LastValid       basics.Round                    `codec:"last"`
+		VoteID          crypto.OneTimeSignatureVerifier `codec:"vote"`
+		SelectionID     crypto.VRFVerifier              `codec:"sel"`
+		VoteKeyDilution uint64                          `codec:"voteKD"`
+	}
+
 	onDataDirs(func(dataDir string) {
 		fmt.Printf("Dumping participation key info from %s...\n", dataDir)
 		client := ensureGoalClient(dataDir, libgoal.DynamicClient)
