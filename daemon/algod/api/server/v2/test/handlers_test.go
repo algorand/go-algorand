@@ -691,8 +691,8 @@ func TestMockNode_AppendParticipationKeys(t *testing.T) {
 	id := account.ParticipationID{}
 	id[0] = 10
 	keys := make(account.StateProofKeys)
-	keys[100] = []byte{ 100 }
-	keys[101] = []byte{ 101 }
+	keys[100] = []byte{100}
+	keys[101] = []byte{101}
 	keyBytes := protocol.Encode(keys)
 
 	// Put keys in the body.
