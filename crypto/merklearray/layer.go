@@ -31,25 +31,16 @@ type Layer []crypto.GenericDigest
 
 // A pair represents an internal node in the Merkle tree.
 type pair struct {
-	l crypto.GenericDigest
-	r crypto.GenericDigest
+	l             crypto.GenericDigest
+	r             crypto.GenericDigest
+	hashBlockSize int
 }
 
 func (p *pair) ToBeHashed() (protocol.HashID, []byte) {
-	buf := make([]byte, len(p.l)+len(p.r))
+	buf := make([]byte, 2*p.hashBlockSize)
 	copy(buf[:], p.l[:])
 	copy(buf[len(p.l):], p.r[:])
 	return protocol.MerkleArrayNode, buf[:]
-}
-
-func (p *pair) Marshal() []byte {
-
-	buf := make([]byte, len(p.l)+len(p.r)+len(protocol.MerkleArrayNode))
-	copy(buf[:], protocol.MerkleArrayNode)
-	copy(buf[len(protocol.MerkleArrayNode):], p.l[:])
-	copy(buf[len(protocol.MerkleArrayNode)+len(p.l):], p.r[:])
-
-	return buf
 }
 
 func upWorker(ws *workerState, in Layer, out Layer, h hash.Hash) {
@@ -66,6 +57,7 @@ func upWorker(ws *workerState, in Layer, out Layer, h hash.Hash) {
 
 		for i := off; i < off+batchSize && i < ws.maxidx; i += 2 {
 			var p pair
+			p.hashBlockSize = h.Size()
 			p.l = in[i]
 			if i+1 < ws.maxidx {
 				p.r = in[i+1]
