@@ -999,3 +999,171 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	a.Contains(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx], "lk1")
 	a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx]["lk1"].Bytes, "local1")
 }
+
+// TestParitalDeltaWrites checks account data consistency when app global state or app local state
+// accessed in a block where app creator and local user do not have any state changes expect app storage
+// Block 1: create app
+// Block 2: opt in
+// Block 3: write to global state (goes into creator's AD), write to local state of txn.Account[1] (not a txn sender)
+// In this case StateDelta will not have base record modification, only storage
+func TestParitalDeltaWrites(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	source := `#pragma version 2
+// app create is no-op
+txn ApplicationID
+int 0
+==
+bnz success
+// opt-in is no-op
+txn OnCompletion
+int OptIn
+==
+bnz success
+// a regular call:
+// write into global
+// write into txn.Accounts[1] local
+byte "gk"
+byte "global"
+app_global_put
+int 1
+byte "lk"
+byte "local"
+app_local_put
+success:
+int 1
+`
+
+	a := require.New(t)
+	ops, err := logic.AssembleString(source)
+	a.NoError(err)
+	a.Greater(len(ops.Program), 1)
+	program := ops.Program
+
+	creator, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
+	a.NoError(err)
+	userOptin, err := basics.UnmarshalChecksumAddress("6S6UMUQ4462XRGNON5GKBHW55RUJGJ5INIRDFVFD6KSPHGWGRKPC6RK2O4")
+	a.NoError(err)
+	userLocal, err := basics.UnmarshalChecksumAddress("UL5C6SRVLOROSB5FGAE6TY34VXPXVR7GNIELUB3DD5KTA4VT6JGOZ6WFAY")
+	a.NoError(err)
+
+	var tests = []struct {
+		name           string
+		separateBlocks bool
+	}{
+		{"commit-each-block", true},
+		{"commit-bulk", false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+
+			proto := config.Consensus[protocol.ConsensusCurrentVersion]
+			genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+			a.Contains(genesisInitState.Accounts, creator)
+			a.Contains(genesisInitState.Accounts, userOptin)
+			a.Contains(genesisInitState.Accounts, userLocal)
+
+			cfg := config.GetDefaultLocal()
+			l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+			a.NoError(err)
+			defer l.Close()
+
+			genesisID := t.Name()
+			txHeader := transactions.Header{
+				Sender:      creator,
+				Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+				FirstValid:  l.Latest() + 1,
+				LastValid:   l.Latest() + 10,
+				GenesisID:   genesisID,
+				GenesisHash: genesisInitState.GenesisHash,
+			}
+
+			// create application
+			appIdx := basics.AppIndex(1) // first tnx => idx = 1
+
+			approvalProgram := program
+			clearStateProgram := []byte("\x02") // empty
+			appCreateFields := transactions.ApplicationCallTxnFields{
+				ApprovalProgram:   approvalProgram,
+				ClearStateProgram: clearStateProgram,
+				GlobalStateSchema: basics.StateSchema{NumByteSlice: 4},
+				LocalStateSchema:  basics.StateSchema{NumByteSlice: 2},
+			}
+			appCreate := transactions.Transaction{
+				Type:                     protocol.ApplicationCallTx,
+				Header:                   txHeader,
+				ApplicationCallTxnFields: appCreateFields,
+			}
+			err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: appIdx})
+			a.NoError(err)
+
+			if test.separateBlocks {
+				commitRound(1, 0, l)
+			}
+
+			// opt-in
+			txHeader.Sender = userOptin
+			appCallFields := transactions.ApplicationCallTxnFields{
+				OnCompletion:  transactions.OptInOC,
+				ApplicationID: appIdx,
+			}
+			appCall := transactions.Transaction{
+				Type:                     protocol.ApplicationCallTx,
+				Header:                   txHeader,
+				ApplicationCallTxnFields: appCallFields,
+			}
+			err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall, transactions.ApplyData{})
+			a.NoError(err)
+
+			if test.separateBlocks {
+				commitRound(1, 1, l)
+			}
+
+			// run state write transaction
+			txHeader.Sender = userLocal
+			appCallFields = transactions.ApplicationCallTxnFields{
+				ApplicationID: appIdx,
+				Accounts:      []basics.Address{userOptin},
+			}
+			appCall = transactions.Transaction{
+				Type:                     protocol.ApplicationCallTx,
+				Header:                   txHeader,
+				ApplicationCallTxnFields: appCallFields,
+			}
+			err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall, transactions.ApplyData{
+				EvalDelta: transactions.EvalDelta{
+					GlobalDelta: basics.StateDelta{
+						"gk": basics.ValueDelta{
+							Action: basics.SetBytesAction,
+							Bytes:  "global",
+						},
+					},
+					LocalDeltas: map[uint64]basics.StateDelta{
+						1: {
+							"lk": basics.ValueDelta{
+								Action: basics.SetBytesAction,
+								Bytes:  "local",
+							},
+						},
+					},
+				},
+			})
+			a.NoError(err)
+
+			if test.separateBlocks {
+				commitRound(1, 2, l)
+			} else {
+				commitRound(3, 0, l)
+			}
+
+			// check first write
+			blk, err := l.Block(3)
+			a.NoError(err)
+			a.Contains(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta, "gk")
+			a.Equal(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta["gk"].Bytes, "global")
+			a.Contains(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[1], "lk")
+			a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[1]["lk"].Bytes, "local")
+		})
+	}
+}
