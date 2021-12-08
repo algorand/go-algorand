@@ -15,6 +15,14 @@ import (
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
 //
+// StateProofKey
+//       |-----> MarshalMsg
+//       |-----> CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> Msgsize
+//       |-----> MsgIsZero
+//
 
 // MarshalMsg implements msgp.Marshaler
 func (z *ParticipationKeyIdentity) MarshalMsg(b []byte) (o []byte) {
@@ -235,4 +243,50 @@ func (z *ParticipationKeyIdentity) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *ParticipationKeyIdentity) MsgIsZero() bool {
 	return ((*z).Parent.MsgIsZero()) && ((*z).VRFSK.MsgIsZero()) && ((*z).VoteID.MsgIsZero()) && ((*z).FirstValid.MsgIsZero()) && ((*z).LastValid.MsgIsZero()) && ((*z).KeyDilution == 0)
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z StateProofKey) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, []byte(z))
+	return
+}
+
+func (_ StateProofKey) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(StateProofKey)
+	if !ok {
+		_, ok = (z).(*StateProofKey)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *StateProofKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 []byte
+		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = StateProofKey(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (_ *StateProofKey) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofKey)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z StateProofKey) Msgsize() (s int) {
+	s = msgp.BytesPrefixSize + len([]byte(z))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z StateProofKey) MsgIsZero() bool {
+	return len(z) == 0
 }
