@@ -399,7 +399,7 @@ func TestAppCallCheckPrograms(t *testing.T) {
 	ep.Proto = &proto
 
 	proto.MaxAppProgramCost = 1
-	err := checkPrograms(&ac, 0, &ep)
+	err := checkPrograms(&ac, &ep)
 	a.Error(err)
 	a.Contains(err.Error(), "check failed on ApprovalProgram")
 
@@ -407,23 +407,23 @@ func TestAppCallCheckPrograms(t *testing.T) {
 	ac.ApprovalProgram = program
 	ac.ClearStateProgram = program
 
-	err = checkPrograms(&ac, 0, &ep)
+	err = checkPrograms(&ac, &ep)
 	a.Error(err)
 	a.Contains(err.Error(), "check failed on ApprovalProgram")
 
 	proto.MaxAppProgramCost = 10
-	err = checkPrograms(&ac, 0, &ep)
+	err = checkPrograms(&ac, &ep)
 	a.NoError(err)
 
 	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
 	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
 	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
-	err = checkPrograms(&ac, 0, &ep)
+	err = checkPrograms(&ac, &ep)
 	a.Error(err)
 	a.Contains(err.Error(), "check failed on ClearStateProgram")
 
 	ac.ClearStateProgram = program
-	err = checkPrograms(&ac, 0, &ep)
+	err = checkPrograms(&ac, &ep)
 	a.NoError(err)
 }
 

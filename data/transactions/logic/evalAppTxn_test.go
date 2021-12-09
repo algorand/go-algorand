@@ -110,6 +110,10 @@ func TestFieldTypes(t *testing.T) {
 
 }
 
+func appAddr(id int) basics.Address {
+	return basics.AppIndex(id).Address()
+}
+
 func TestAppPay(t *testing.T) {
 	pay := `
   itxn_begin
@@ -128,7 +132,7 @@ func TestAppPay(t *testing.T) {
 	TestApp(t, "txn Sender; txn Accounts 1; int 100"+pay, ep, "unauthorized")
 	TestApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+pay, ep,
 		"insufficient balance")
-	ledger.NewAccount(ledger.ApplicationID().Address(), 1000000)
+	ledger.NewAccount(appAddr(888), 1000000)
 
 	// You might NewExpect this to fail because of min balance issue
 	// (receiving account only gets 100 microalgos).  It does not fail at
@@ -273,9 +277,9 @@ func TestDefaultSender(t *testing.T) {
 
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	tx.Accounts = append(tx.Accounts, ledger.ApplicationID().Address())
+	tx.Accounts = append(tx.Accounts, appAddr(888))
 	TestApp(t, "txn Accounts 1; int 100"+pay, ep, "insufficient balance")
-	ledger.NewAccount(ledger.ApplicationID().Address(), 1000000)
+	ledger.NewAccount(appAddr(888), 1000000)
 	TestApp(t, "txn Accounts 1; int 100"+pay+"int 1", ep)
 	TestApp(t, "global CurrentApplicationAddress; balance; int 998899; ==", ep)
 }
@@ -304,8 +308,8 @@ func TestAppAxfer(t *testing.T) {
 	TestApp(t, "global CurrentApplicationAddress; int 77; asset_holding_get AssetBalance; assert; int 0; ==;", ep,
 		"assert failed") // app account not opted in
 
-	ledger.NewAccount(ledger.ApplicationID().Address(), 10000) // plenty for fees
-	ledger.NewHolding(ledger.ApplicationID().Address(), 77, 3000, false)
+	ledger.NewAccount(appAddr(888), 10000) // plenty for fees
+	ledger.NewHolding(appAddr(888), 77, 3000, false)
 	TestApp(t, "global CurrentApplicationAddress; int 77; asset_holding_get AssetBalance; assert; int 3000; ==;", ep)
 
 	TestApp(t, "txn Sender; txn Accounts 1; int 100"+axfer, ep, "unauthorized")
@@ -332,7 +336,7 @@ func TestAppAxfer(t *testing.T) {
   itxn_submit
 `
 	TestApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+noid+"int 1", ep,
-		fmt.Sprintf("Sender (%s) not opted in to 0", ledger.ApplicationID().Address()))
+		fmt.Sprintf("Sender (%s) not opted in to 0", appAddr(888)))
 
 	TestApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+axfer+"int 1", ep)
 
@@ -420,7 +424,7 @@ func TestNumInnerShallow(t *testing.T) {
 
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(ledger.ApplicationID().Address(), 1000000)
+	ledger.NewAccount(appAddr(888), 1000000)
 	TestApp(t, pay+";int 1", ep)
 	TestApp(t, pay+pay+";int 1", ep)
 	TestApp(t, pay+pay+pay+";int 1", ep)
@@ -448,7 +452,7 @@ func TestNumInnerPooled(t *testing.T) {
 	}.SignedTxn()
 	ledger := MakeLedger(nil)
 	ledger.NewApp(tx.Txn.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(ledger.ApplicationID().Address(), 1000000)
+	ledger.NewAccount(appAddr(888), 1000000)
 	short := pay + ";int 1"
 	long := pay + pay + pay + pay + pay + ";int 1"
 	// First two just replicate the non-pooled test
@@ -501,7 +505,7 @@ func TestAssetCreate(t *testing.T) {
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	TestApp(t, create, ep, "insufficient balance")
 	// Give it enough for fee.  Recall that we don't check min balance at this level.
-	ledger.NewAccount(ledger.ApplicationID().Address(), MakeTestProto().MinTxnFee)
+	ledger.NewAccount(appAddr(888), MakeTestProto().MinTxnFee)
 	TestApp(t, create, ep)
 }
 
@@ -517,36 +521,36 @@ func TestAssetFreeze(t *testing.T) {
   global CurrentApplicationAddress ; itxn_field ConfigAssetFreeze;
   itxn_submit
   itxn CreatedAssetID
-  int 889
+  int 5000
   ==
 `
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	// Give it enough for fees.  Recall that we don't check min balance at this level.
-	ledger.NewAccount(ledger.ApplicationID().Address(), 12*MakeTestProto().MinTxnFee)
+	ledger.NewAccount(appAddr(888), 12*MakeTestProto().MinTxnFee)
 	TestApp(t, create, ep)
 
 	freeze := `
   itxn_begin
   int afrz                    ; itxn_field TypeEnum
-  int 889                     ; itxn_field FreezeAsset
+  int 5000                    ; itxn_field FreezeAsset
   txn ApplicationArgs 0; btoi ; itxn_field FreezeAssetFrozen
   txn Accounts 1              ; itxn_field FreezeAssetAccount
   itxn_submit
   int 1
 `
 	TestApp(t, freeze, ep, "invalid Asset reference")
-	tx.ForeignAssets = []basics.AssetIndex{basics.AssetIndex(889)}
+	tx.ForeignAssets = []basics.AssetIndex{basics.AssetIndex(5000)}
 	tx.ApplicationArgs = [][]byte{{0x01}}
 	TestApp(t, freeze, ep, "does not hold Asset")
-	ledger.NewHolding(tx.Receiver, 889, 55, false)
+	ledger.NewHolding(tx.Receiver, 5000, 55, false)
 	TestApp(t, freeze, ep)
-	holding, err := ledger.AssetHolding(tx.Receiver, 889)
+	holding, err := ledger.AssetHolding(tx.Receiver, 5000)
 	require.NoError(t, err)
 	require.Equal(t, true, holding.Frozen)
 	tx.ApplicationArgs = [][]byte{{0x00}}
 	TestApp(t, freeze, ep)
-	holding, err = ledger.AssetHolding(tx.Receiver, 889)
+	holding, err = ledger.AssetHolding(tx.Receiver, 5000)
 	require.NoError(t, err)
 	require.Equal(t, false, holding.Frozen)
 }
@@ -554,7 +558,7 @@ func TestAssetFreeze(t *testing.T) {
 func TestFieldSetting(t *testing.T) {
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(ledger.ApplicationID().Address(), 10*MakeTestProto().MinTxnFee)
+	ledger.NewAccount(appAddr(888), 10*MakeTestProto().MinTxnFee)
 	TestApp(t, "itxn_begin; int 500; bzero; itxn_field Note; int 1", ep)
 	TestApp(t, "itxn_begin; int 501; bzero; itxn_field Note; int 1", ep,
 		"Note may not exceed")
@@ -584,7 +588,7 @@ func TestInnerGroup(t *testing.T) {
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	// Need both fees and both payments
-	ledger.NewAccount(ledger.ApplicationID().Address(), 999+2*MakeTestProto().MinTxnFee)
+	ledger.NewAccount(appAddr(888), 999+2*MakeTestProto().MinTxnFee)
 	pay := `
 int pay;    itxn_field TypeEnum;
 int 500;    itxn_field Amount;
@@ -594,14 +598,14 @@ txn Sender; itxn_field Receiver;
 		"insufficient balance")
 
 	// NewAccount overwrites the existing balance
-	ledger.NewAccount(ledger.ApplicationID().Address(), 1000+2*MakeTestProto().MinTxnFee)
+	ledger.NewAccount(appAddr(888), 1000+2*MakeTestProto().MinTxnFee)
 	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep)
 }
 
 func TestInnerFeePooling(t *testing.T) {
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	ledger.NewAccount(appAddr(888), 50_000)
 	pay := `
 int pay;    itxn_field TypeEnum;
 int 500;    itxn_field Amount;
@@ -733,7 +737,7 @@ func TestApplSubmission(t *testing.T) {
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	// Since the fee is moved first, fund the app
-	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	ledger.NewAccount(appAddr(888), 50_000)
 
 	ops := TestProg(t, "int 1", AssemblerMaxVersion)
 	approve := hex.EncodeToString(ops.Program)
@@ -774,7 +778,7 @@ func TestApplSubmission(t *testing.T) {
 func TestInnerApplCreate(t *testing.T) {
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	ledger.NewAccount(appAddr(888), 50_000)
 
 	ops := TestProg(t, "int 1", AssemblerMaxVersion)
 	approve := "byte 0x" + hex.EncodeToString(ops.Program)
@@ -790,29 +794,27 @@ int 3;       itxn_field LocalNumUint
 itxn_submit
 int 1
 `, ep)
-	// In testing, creating an app sets the "current app". So reset it.
-	ledger.SetApp(888)
 
 	TestApp(t, `
-int 889; app_params_get AppGlobalNumByteSlice; assert; int 0; ==; assert
+int 5000; app_params_get AppGlobalNumByteSlice; assert; int 0; ==; assert
 `, ep, "invalid App reference")
 
 	call := `
 itxn_begin
 int appl;              itxn_field TypeEnum
-int 889;               itxn_field ApplicationID
+int 5000;               itxn_field ApplicationID
 itxn_submit
 int 1
 `
 	// Can't call it either
 	TestApp(t, call, ep, "invalid App reference")
 
-	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(889)}
+	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(5000)}
 	TestApp(t, `
-int 889; app_params_get AppGlobalNumByteSlice; assert; int 0; ==; assert
-int 889; app_params_get AppGlobalNumUint;      assert; int 1; ==; assert
-int 889; app_params_get AppLocalNumByteSlice;  assert; int 2; ==; assert
-int 889; app_params_get AppLocalNumUint;       assert; int 3; ==; assert
+int 5000; app_params_get AppGlobalNumByteSlice; assert; int 0; ==; assert
+int 5000; app_params_get AppGlobalNumUint;      assert; int 1; ==; assert
+int 5000; app_params_get AppLocalNumByteSlice;  assert; int 2; ==; assert
+int 5000; app_params_get AppLocalNumUint;       assert; int 3; ==; assert
 int 1
 `, ep)
 
@@ -830,7 +832,7 @@ int 1
 
 	// App is gone
 	TestApp(t, `
-int 889; app_params_get AppGlobalNumByteSlice; !; assert; !; assert; int 1
+int 5000; app_params_get AppGlobalNumByteSlice; !; assert; !; assert; int 1
 `, ep)
 
 	// Can't call it either
@@ -841,7 +843,7 @@ int 889; app_params_get AppGlobalNumByteSlice; !; assert; !; assert; int 1
 func TestCreateOldAppFails(t *testing.T) {
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	ledger.NewAccount(appAddr(888), 50_000)
 
 	ops := TestProg(t, "int 1", InnerAppsEnabledVersion-1)
 	approve := "byte 0x" + hex.EncodeToString(ops.Program)
@@ -862,7 +864,7 @@ int 1
 func TestSelfReentrancy(t *testing.T) {
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	ledger.NewAccount(appAddr(888), 50_000)
 
 	TestApp(t, `
 itxn_begin
@@ -870,7 +872,7 @@ int appl;    itxn_field TypeEnum
 int 888;     itxn_field ApplicationID
 itxn_submit
 int 1
-`, ep, "attempt to re-enter 888")
+`, ep, "attempt to self-call")
 }
 
 func TestIndirectReentrancy(t *testing.T) {
@@ -886,15 +888,40 @@ int 1
 	})
 
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	ledger.NewAccount(appAddr(888), 50_000)
+	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
+	TestApp(t, `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+int 888;     itxn_field Applications
+itxn_submit
+int 1
+`, ep, "attempt to re-enter 888")
+}
+
+// TestInnerAppID ensures that inner app properly sees its AppId. This seems
+// needlessly picky to test, but the appID used to be stored outside the cx.
+func TestInnerAppID(t *testing.T) {
+	ep, tx, ledger := MakeSampleEnv()
+	logID := TestProg(t, `global CurrentApplicationID; itob; log; int 1`, AssemblerMaxVersion)
+	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
+		ApprovalProgram: logID.Program,
+	})
+
+	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(appAddr(888), 50_000)
 	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
 	TestApp(t, `
 itxn_begin
 int appl;    itxn_field TypeEnum
 int 222;     itxn_field ApplicationID
 itxn_submit
-int 1
-`, ep, "attempt to re-enter 888")
+itxn Logs 0
+btoi
+int 222
+==
+`, ep)
 }
 
 // TestInnerBudgetIncrement ensures that an app can make a (nearly) empty inner
@@ -916,7 +943,7 @@ itxn_submit;
 `
 
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	ledger.NewAccount(appAddr(888), 50_000)
 	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
 	TestApp(t, strings.Repeat(waste, 5)+"int 1", ep)
 	TestApp(t, strings.Repeat(waste, 6)+"int 1", ep, "dynamic cost budget exceeded")
@@ -953,7 +980,7 @@ int 1
 `
 
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	ledger.NewAccount(appAddr(888), 50_000)
 	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
 	TestApp(t, source, ep)
 }
@@ -966,7 +993,7 @@ func TestInnerTxIDs(t *testing.T) {
 		ApprovalProgram: txid.Program,
 	})
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	ledger.NewAccount(appAddr(888), 50_000)
 	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
 	TestApp(t, `
 itxn_begin
@@ -994,7 +1021,7 @@ func TestInnerGroupIDs(t *testing.T) {
 		ApprovalProgram: gid.Program,
 	})
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	ledger.NewAccount(appAddr(888), 50_000)
 	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
 
 	// A single txn gets 0 group id
@@ -1063,7 +1090,7 @@ func TestGtixn(t *testing.T) {
 	})
 
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	ledger.NewAccount(appAddr(888), 50_000)
 	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222), basics.AppIndex(333), basics.AppIndex(444)}
 
 	TestApp(t, `
@@ -1137,7 +1164,7 @@ func TestGtxnLog(t *testing.T) {
 	})
 
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	ledger.NewAccount(appAddr(888), 50_000)
 	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222), basics.AppIndex(333)}
 
 	TestApp(t, `itxn_begin
@@ -1166,7 +1193,7 @@ int 1
 	ops := TestProg(t, "int 1", AssemblerMaxVersion)
 
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	ledger.NewAccount(appAddr(888), 50_000)
 	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
 	TestApp(t, `itxn_begin
 int appl;    itxn_field TypeEnum
@@ -1180,12 +1207,12 @@ int 222;     itxn_field ApplicationID
 itxn_submit
 itxn Logs 0
 btoi
-int 889
+int 5000
 ==
 assert
 gitxn 2 Logs 1
 btoi
-int 890
+int 5001
 ==
 `, ep)
 }
@@ -1203,7 +1230,7 @@ int 1
 	})
 
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	ledger.NewAccount(appAddr(888), 50_000)
 	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
 	TestApp(t, `itxn_begin
 int acfg;    itxn_field TypeEnum
@@ -1215,12 +1242,12 @@ int 222;     itxn_field ApplicationID
 itxn_submit
 itxn Logs 0
 btoi
-int 889
+int 5000
 ==
 assert
 gitxn 2 Logs 1
 btoi
-int 890
+int 5001
 ==
 `, ep)
 }
@@ -1242,7 +1269,7 @@ addr %s
 	})
 
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(ledger.ApplicationID().Address(), 50_000)
+	ledger.NewAccount(appAddr(888), 50_000)
 	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
 	TestApp(t, `itxn_begin
 int appl;    itxn_field TypeEnum
@@ -1267,9 +1294,11 @@ func TestNumInnerDeep(t *testing.T) {
 `
 
 	tx := txntest.Txn{
-		Type:        protocol.ApplicationCallTx,
-		ForeignApps: []basics.AppIndex{basics.AppIndex(222)},
+		Type:          protocol.ApplicationCallTx,
+		ApplicationID: 888,
+		ForeignApps:   []basics.AppIndex{basics.AppIndex(222)},
 	}.SignedTxnWithAD()
+	require.Equal(t, 888, int(tx.Txn.ApplicationID))
 	ledger := MakeLedger(nil)
 
 	pay3 := TestProg(t, pay+pay+pay+"int 1;", AssemblerMaxVersion).Program
@@ -1278,7 +1307,7 @@ func TestNumInnerDeep(t *testing.T) {
 	})
 
 	ledger.NewApp(tx.Txn.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(ledger.ApplicationID().Address(), 1000000)
+	ledger.NewAccount(appAddr(888), 1_000_000)
 
 	callpay3 := `itxn_begin
 int appl;    itxn_field TypeEnum
@@ -1288,6 +1317,9 @@ itxn_submit
 	txg := []transactions.SignedTxnWithAD{tx}
 	ep := NewAppEvalParams(txg, MakeTestProto(), &transactions.SpecialAddresses{})
 	ep.Ledger = ledger
+	TestApp(t, callpay3+"int 1", ep, "insufficient balance") // inner contract needs money
+
+	ledger.NewAccount(appAddr(222), 1_000_000)
 	TestApp(t, callpay3+"int 1", ep)
 	TestApp(t, callpay3+callpay3+"int 1", ep, "too many inner transactions")
 }

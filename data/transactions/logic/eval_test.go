@@ -79,9 +79,10 @@ func makeTestProtoV(version uint64) *config.ConsensusParams {
 		EnableFeePooling:      true,
 
 		// Chosen to be different from one another and from normal proto
-		MaxAppTxnAccounts:      3,
-		MaxAppTxnForeignApps:   5,
-		MaxAppTxnForeignAssets: 6,
+		MaxAppTxnAccounts:        3,
+		MaxAppTxnForeignApps:     5,
+		MaxAppTxnForeignAssets:   6,
+		MaxAppTotalTxnReferences: 7,
 
 		MaxAppArgs:        12,
 		MaxAppTotalArgLen: 800,
@@ -906,7 +907,7 @@ int 0
 >
 &&
 global CurrentApplicationID
-int 42
+int 888
 ==
 &&
 `
@@ -972,7 +973,7 @@ func TestGlobal(t *testing.T) {
 	ledger := MakeLedger(nil)
 	addr, err := basics.UnmarshalChecksumAddress(testAddr)
 	require.NoError(t, err)
-	ledger.NewApp(addr, basics.AppIndex(42), basics.AppParams{})
+	ledger.NewApp(addr, 888, basics.AppParams{})
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		_, ok := tests[v]
 		require.True(t, ok)
@@ -1175,7 +1176,7 @@ arg 8
 `
 
 const testTxnProgramTextV2 = testTxnProgramTextV1 + `txn ApplicationID
-int 123
+int 888
 ==
 &&
 txn OnCompletion
@@ -1398,7 +1399,7 @@ func makeSampleTxn() transactions.SignedTxn {
 	txn.Txn.AssetSender = txn.Txn.Receiver
 	txn.Txn.AssetReceiver = txn.Txn.CloseRemainderTo
 	txn.Txn.AssetCloseTo = txn.Txn.Sender
-	txn.Txn.ApplicationID = basics.AppIndex(123)
+	txn.Txn.ApplicationID = basics.AppIndex(888)
 	txn.Txn.Accounts = make([]basics.Address, 1)
 	txn.Txn.Accounts[0] = txn.Txn.Receiver
 	rekeyToAddr := []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui05")
@@ -1546,7 +1547,7 @@ args
 assert`, "", 1)
 
 				ops := testProg(t, appSafe, v)
-				testAppFull(t, ops.Program, 3, ep)
+				testAppFull(t, ops.Program, 3, basics.AppIndex(888), ep)
 			}
 		})
 	}
@@ -1629,7 +1630,7 @@ int 100
 	ep := defaultEvalParams(nil)
 	ep.Ledger = ledger
 	ep.TxnGroup = transactions.WrapSignedTxnsWithAD(txgroup)
-	pass, err := EvalApp(ops.Program, 1, ep)
+	pass, err := EvalApp(ops.Program, 1, 0, ep)
 	if !pass || err != nil {
 		t.Log(ep.Trace.String())
 	}
@@ -1644,26 +1645,26 @@ int 0
 `
 
 	ops = testProg(t, futureCreatableIDProg, 4)
-	_, err = EvalApp(ops.Program, 1, ep)
+	_, err = EvalApp(ops.Program, 1, 0, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gaid can't get creatable ID of txn ahead of the current one")
 
 	// should fail when accessing self
 	ops = testProg(t, checkCreatableIDProg, 4)
-	_, err = EvalApp(ops.Program, 0, ep)
+	_, err = EvalApp(ops.Program, 0, 0, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gaid is only for accessing creatable IDs of previous txns")
 
 	// should fail on non-creatable
 	ep.TxnGroup[0].Txn.Type = protocol.PaymentTx
-	_, err = EvalApp(ops.Program, 1, ep)
+	_, err = EvalApp(ops.Program, 1, 0, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "can't use gaid on txn that is not an app call nor an asset config txn")
 	ep.TxnGroup[0].Txn.Type = protocol.AssetConfigTx
 
 	// should fail when no creatable was created
 	ledger.SetTrackedCreatable(0, basics.CreatableLocator{})
-	_, err = EvalApp(ops.Program, 1, ep)
+	_, err = EvalApp(ops.Program, 1, 0, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "the txn did not create anything")
 }
@@ -3699,9 +3700,9 @@ func TestAllowedOpcodesV2(t *testing.T) {
 			require.Contains(t, source, spec.Name)
 			ops := testProg(t, source, AssemblerMaxVersion)
 			// all opcodes allowed in stateful mode so use CheckStateful/EvalContract
-			err := CheckContract(ops.Program, 0, ep)
+			err := CheckContract(ops.Program, ep)
 			require.NoError(t, err, source)
-			_, err = EvalApp(ops.Program, 0, ep)
+			_, err = EvalApp(ops.Program, 0, 0, ep)
 			if spec.Name != "return" {
 				// "return" opcode always succeeds so ignore it
 				require.Error(t, err, source)
@@ -4452,7 +4453,7 @@ func TestPcDetails(t *testing.T) {
 			ops := testProg(t, test.source, LogicVersion)
 			ep, _, _ := makeSampleEnv()
 
-			pass, cx, err := EvalContract(ops.Program, 0, ep)
+			pass, cx, err := EvalContract(ops.Program, 0, 0, ep)
 			require.Error(t, err)
 			require.False(t, pass)
 

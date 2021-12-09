@@ -209,17 +209,16 @@ type LedgerForLogic interface {
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
 	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error)
 	AppParams(aidx basics.AppIndex) (basics.AppParams, basics.Address, error)
-	ApplicationID() basics.AppIndex
 	OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error)
 	GetCreatableID(groupIdx int) basics.CreatableIndex
 
 	GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (value basics.TealValue, exists bool, err error)
-	SetLocal(addr basics.Address, key string, value basics.TealValue, accountIdx uint64) error
-	DelLocal(addr basics.Address, key string, accountIdx uint64) error
+	SetLocal(addr basics.Address, appIdx basics.AppIndex, key string, value basics.TealValue, accountIdx uint64) error
+	DelLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) error
 
 	GetGlobal(appIdx basics.AppIndex, key string) (value basics.TealValue, exists bool, err error)
-	SetGlobal(key string, value basics.TealValue) error
-	DelGlobal(key string) error
+	SetGlobal(appIdx basics.AppIndex, key string, value basics.TealValue) error
+	DelGlobal(appIdx basics.AppIndex, key string) error
 
 	Perform(gi int, ep *EvalParams) error
 }
@@ -284,9 +283,8 @@ type EvalParams struct {
 	// Total allowable inner txns in a group transaction (nil before pooling enabled)
 	PooledAllowedInners *int
 
-	// The "call stack" of apps calling this app.
-	appStack []basics.AppIndex
-	caller   *EvalContext
+	// The calling context, if this is an inner app call
+	caller *EvalContext
 }
 
 func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.SignedTxnWithAD {
@@ -372,7 +370,6 @@ func NewInnerEvalParams(txg []transactions.SignedTxn, caller *EvalContext) *Eval
 		PooledApplicationBudget: caller.PooledApplicationBudget,
 		PooledAllowedInners:     caller.PooledAllowedInners,
 		Ledger:                  caller.Ledger,
-		appStack:                caller.appStack, // note the stack, to prevent re-entrancy
 		caller:                  caller,
 	}
 	return ep
@@ -446,6 +443,7 @@ type EvalContext struct {
 	stack     []stackValue
 	callstack []int
 
+	appID   basics.AppIndex
 	program []byte
 	pc      int
 	nextpc  int
@@ -526,8 +524,8 @@ func (pe PanicError) Error() string {
 var errLogicSigNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
-// EvalContract executes stateful TEAL program as the ith transaction in params
-func EvalContract(program []byte, gi int, params *EvalParams) (bool, *EvalContext, error) {
+// EvalContract executes stateful TEAL program as the gi'th transaction in params
+func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (bool, *EvalContext, error) {
 	if params.Ledger == nil {
 		return false, nil, errors.New("no ledger in contract eval")
 	}
@@ -536,6 +534,7 @@ func EvalContract(program []byte, gi int, params *EvalParams) (bool, *EvalContex
 		runModeFlags: runModeApplication,
 		GroupIndex:   gi,
 		Txn:          &params.TxnGroup[gi],
+		appID:        aid,
 	}
 	pass, err := eval(program, &cx)
 
@@ -554,8 +553,8 @@ func EvalContract(program []byte, gi int, params *EvalParams) (bool, *EvalContex
 }
 
 // EvalApp is a lighter weight interface that doesn't return the EvalContext
-func EvalApp(program []byte, gi int, params *EvalParams) (bool, error) {
-	pass, _, err := EvalContract(program, gi, params)
+func EvalApp(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (bool, error) {
+	pass, _, err := EvalContract(program, gi, aid, params)
 	return pass, err
 }
 
@@ -663,7 +662,7 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 // static checks and reject programs that are invalid. Prior to v4,
 // these static checks include a cost estimate that must be low enough
 // (controlled by params.Proto).
-func CheckContract(program []byte, gi int, params *EvalParams) error {
+func CheckContract(program []byte, params *EvalParams) error {
 	return check(program, params, runModeApplication)
 }
 
@@ -2600,32 +2599,19 @@ func (cx *EvalContext) getLatestTimestamp() (timestamp uint64, err error) {
 	return uint64(ts), nil
 }
 
-func (cx *EvalContext) getApplicationID() (uint64, error) {
-	if cx.Ledger == nil {
-		return 0, fmt.Errorf("ledger not available")
-	}
-	return uint64(cx.Ledger.ApplicationID()), nil
-}
-
-func (cx *EvalContext) getApplicationAddress() (basics.Address, error) {
-	if cx.Ledger == nil {
-		return basics.Address{}, fmt.Errorf("ledger not available")
-	}
-
+func (cx *EvalContext) getApplicationAddress() basics.Address {
 	// Initialize appAddrCache if necessary
 	if cx.appAddrCache == nil {
 		cx.appAddrCache = make(map[basics.AppIndex]basics.Address)
 	}
 
-	appID := cx.Ledger.ApplicationID()
-	// Hashes are expensive, so we cache computed app addrs
-	appAddr, ok := cx.appAddrCache[appID]
+	appAddr, ok := cx.appAddrCache[cx.appID]
 	if !ok {
-		appAddr = appID.Address()
-		cx.appAddrCache[appID] = appAddr
+		appAddr = cx.appID.Address()
+		cx.appAddrCache[cx.appID] = appAddr
 	}
 
-	return appAddr, nil
+	return appAddr
 }
 
 func (cx *EvalContext) getCreatableID(groupIndex int) (cid uint64, err error) {
@@ -2640,7 +2626,7 @@ func (cx *EvalContext) getCreatorAddress() ([]byte, error) {
 	if cx.Ledger == nil {
 		return nil, fmt.Errorf("ledger not available")
 	}
-	_, creator, err := cx.Ledger.AppParams(cx.Ledger.ApplicationID())
+	_, creator, err := cx.Ledger.AppParams(cx.appID)
 	if err != nil {
 		return nil, fmt.Errorf("No params for current app")
 	}
@@ -2668,10 +2654,10 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 	case LatestTimestamp:
 		sv.Uint, err = cx.getLatestTimestamp()
 	case CurrentApplicationID:
-		sv.Uint, err = cx.getApplicationID()
+		sv.Uint = uint64(cx.appID)
 	case CurrentApplicationAddress:
 		var addr basics.Address
-		addr, err = cx.getApplicationAddress()
+		addr = cx.getApplicationAddress()
 		sv.Bytes = addr[:]
 	case CreatorAddress:
 		sv.Bytes, err = cx.getCreatorAddress()
@@ -2681,14 +2667,14 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		sv.Uint = uint64(cx.budget() - cx.cost)
 	case CallerApplicationID:
 		if cx.caller != nil {
-			sv.Uint, err = cx.caller.getApplicationID()
+			sv.Uint = uint64(cx.caller.appID)
 		} else {
 			sv.Uint = 0
 		}
 	case CallerApplicationAddress:
 		if cx.caller != nil {
 			var addr basics.Address
-			addr, err = cx.caller.getApplicationAddress()
+			addr = cx.caller.getApplicationAddress()
 			sv.Bytes = addr[:]
 		} else {
 			sv.Bytes = zeroAddress[:]
@@ -3282,7 +3268,7 @@ func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uin
 
 	if err != nil {
 		// Application address is acceptable. index is meaningless though
-		appAddr, _ := cx.getApplicationAddress()
+		appAddr := cx.getApplicationAddress()
 		if appAddr == addr {
 			return addr, uint64(len(cx.Txn.Txn.Accounts) + 1), nil
 		}
@@ -3519,7 +3505,7 @@ func opAppLocalPut(cx *EvalContext) {
 
 	// if writing the same value, do nothing, matching ledger behavior with
 	// previous BuildEvalDelta mechanism
-	etv, ok, err := cx.Ledger.GetLocal(addr, cx.Ledger.ApplicationID(), key, accountIdx)
+	etv, ok, err := cx.Ledger.GetLocal(addr, cx.appID, key, accountIdx)
 	if err != nil {
 		cx.err = err
 		return
@@ -3532,7 +3518,7 @@ func opAppLocalPut(cx *EvalContext) {
 		}
 		cx.Txn.EvalDelta.LocalDeltas[accountIdx][key] = tv.ToValueDelta()
 	}
-	err = cx.Ledger.SetLocal(addr, key, tv, accountIdx)
+	err = cx.Ledger.SetLocal(addr, cx.appID, key, tv, accountIdx)
 	if err != nil {
 		cx.err = err
 		return
@@ -3555,7 +3541,7 @@ func opAppGlobalPut(cx *EvalContext) {
 
 	// if writing the same value, do nothing, matching ledger behavior with
 	// previous BuildEvalDelta mechanism
-	etv, ok, err := cx.Ledger.GetGlobal(cx.Ledger.ApplicationID(), key)
+	etv, ok, err := cx.Ledger.GetGlobal(cx.appID, key)
 	if err != nil {
 		cx.err = err
 		return
@@ -3565,7 +3551,7 @@ func opAppGlobalPut(cx *EvalContext) {
 		cx.Txn.EvalDelta.GlobalDelta[key] = tv.ToValueDelta()
 	}
 
-	err = cx.Ledger.SetGlobal(key, tv)
+	err = cx.Ledger.SetGlobal(cx.appID, key, tv)
 	if err != nil {
 		cx.err = err
 		return
@@ -3593,7 +3579,7 @@ func opAppLocalDel(cx *EvalContext) {
 		cx.Txn.EvalDelta.LocalDeltas[accountIdx][key] = basics.ValueDelta{
 			Action: basics.DeleteAction,
 		}
-		err = cx.Ledger.DelLocal(addr, key, accountIdx)
+		err = cx.Ledger.DelLocal(addr, cx.appID, key, accountIdx)
 	}
 	if err != nil {
 		cx.err = err
@@ -3616,7 +3602,7 @@ func opAppGlobalDel(cx *EvalContext) {
 	cx.Txn.EvalDelta.GlobalDelta[key] = basics.ValueDelta{
 		Action: basics.DeleteAction,
 	}
-	err := cx.Ledger.DelGlobal(key)
+	err := cx.Ledger.DelGlobal(cx.appID, key)
 	if err != nil {
 		cx.err = err
 		return
@@ -3634,7 +3620,7 @@ func opAppGlobalDel(cx *EvalContext) {
 func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, error) {
 	if cx.version >= directRefEnabledVersion {
 		if ref == 0 {
-			return cx.Ledger.ApplicationID(), nil
+			return cx.appID, nil
 		}
 		if ref <= uint64(len(cx.Txn.Txn.ForeignApps)) {
 			return basics.AppIndex(cx.Txn.Txn.ForeignApps[ref-1]), nil
@@ -3644,22 +3630,21 @@ func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, e
 				return appID, nil
 			}
 		}
-		// It should be legal to use your own app id, which
-		// can't be in ForeignApps during creation, because it
-		// is unknown then.  But it can be discovered in the
-		// app code.  It's tempting to combine this with the
-		// == 0 test, above, but it must come after the check
-		// for being below len(ForeignApps)
-		if ref == uint64(cx.Ledger.ApplicationID()) {
-			return cx.Ledger.ApplicationID(), nil
+		// It should be legal to use your own app id, which can't be in
+		// ForeignApps during creation, because it is unknown then.  But it can
+		// be discovered in the app code.  It's tempting to combine this with
+		// the == 0 test, above, but it must come after the check for being
+		// below len(ForeignApps)
+		if ref == uint64(cx.appID) {
+			return cx.appID, nil
 		}
 	} else {
 		// Old rules
+		if ref == 0 {
+			return cx.appID, nil
+		}
 		if foreign {
 			// In old versions, a foreign reference must be an index in ForeignAssets or 0
-			if ref == 0 {
-				return cx.Ledger.ApplicationID(), nil
-			}
 			if ref <= uint64(len(cx.Txn.Txn.ForeignApps)) {
 				return basics.AppIndex(cx.Txn.Txn.ForeignApps[ref-1]), nil
 			}
@@ -3843,24 +3828,17 @@ func opLog(cx *EvalContext) {
 }
 
 func authorizedSender(cx *EvalContext, addr basics.Address) bool {
-	appAddr, err := cx.getApplicationAddress()
-	if err != nil {
-		return false
-	}
 	authorizer, err := cx.Ledger.Authorizer(addr)
 	if err != nil {
 		return false
 	}
-	return appAddr == authorizer
+	return cx.getApplicationAddress() == authorizer
 }
 
 // addInnerTxn appends a fresh SignedTxn to subtxns, populated with reasonable
 // defaults.
 func addInnerTxn(cx *EvalContext) error {
-	addr, err := cx.getApplicationAddress()
-	if err != nil {
-		return err
-	}
+	addr := cx.getApplicationAddress()
 
 	// For compatibility with v5, in which failures only occurred in the submit,
 	// we only fail here if we are already over the max inner limit.  Thus this
@@ -3964,7 +3942,7 @@ func (cx *EvalContext) availableApp(sv stackValue) (basics.AppIndex, error) {
 		}
 	}
 	// Or, it can be the current app
-	if cx.Ledger.ApplicationID() == aid {
+	if cx.appID == aid {
 		return aid, nil
 	}
 
@@ -4260,8 +4238,6 @@ func opTxSubmit(cx *EvalContext) {
 		*cx.FeeCredit = basics.AddSaturate(*cx.FeeCredit, overpay)
 	}
 
-	cx.appStack = append(cx.appStack, cx.Ledger.ApplicationID()) // push app
-
 	// All subtxns will have zero'd GroupID since GroupID can't be set in
 	// AVM. (no need to blank it out before hashing for TxID)
 	var group transactions.TxGroup
@@ -4289,9 +4265,13 @@ func opTxSubmit(cx *EvalContext) {
 
 		// Disallow re-entrancy
 		if cx.subtxns[itx].Txn.Type == protocol.ApplicationCallTx {
-			for _, aid := range cx.appStack {
-				if aid == cx.subtxns[itx].Txn.ApplicationID {
-					cx.err = fmt.Errorf("attempt to re-enter %d", aid)
+			if cx.appID == cx.subtxns[itx].Txn.ApplicationID {
+				cx.err = fmt.Errorf("attempt to self-call")
+				return
+			}
+			for parent := cx.caller; parent != nil; parent = parent.caller {
+				if parent.appID == cx.subtxns[itx].Txn.ApplicationID {
+					cx.err = fmt.Errorf("attempt to re-enter %d", parent.appID)
 					return
 				}
 			}
@@ -4319,7 +4299,6 @@ func opTxSubmit(cx *EvalContext) {
 			return
 		}
 	}
-	cx.appStack = cx.appStack[:len(cx.appStack)-1] // pop app
 	cx.Txn.EvalDelta.InnerTxns = append(cx.Txn.EvalDelta.InnerTxns, ep.TxnGroup...)
 	cx.subtxns = nil
 }

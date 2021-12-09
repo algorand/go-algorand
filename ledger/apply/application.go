@@ -297,13 +297,13 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 	return nil
 }
 
-func checkPrograms(ac *transactions.ApplicationCallTxnFields, gi int, evalParams *logic.EvalParams) error {
-	err := logic.CheckContract(ac.ApprovalProgram, gi, evalParams)
+func checkPrograms(ac *transactions.ApplicationCallTxnFields, evalParams *logic.EvalParams) error {
+	err := logic.CheckContract(ac.ApprovalProgram, evalParams)
 	if err != nil {
 		return fmt.Errorf("check failed on ApprovalProgram: %v", err)
 	}
 
-	err = logic.CheckContract(ac.ClearStateProgram, gi, evalParams)
+	err = logic.CheckContract(ac.ClearStateProgram, evalParams)
 	if err != nil {
 		return fmt.Errorf("check failed on ClearStateProgram: %v", err)
 	}
@@ -364,7 +364,7 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 	// If this txn is going to set new programs (either for creation or
 	// update), check that the programs are valid and not too expensive
 	if ac.ApplicationID == 0 || ac.OnCompletion == transactions.UpdateApplicationOC {
-		err = checkPrograms(&ac, gi, evalParams)
+		err = checkPrograms(&ac, evalParams)
 		if err != nil {
 			return err
 		}
