@@ -726,6 +726,10 @@
             },
             "type": "array"
           },
+          "min-balance": {
+            "description": "\\[algo\\] total number of MicroAlgos needed to allow transacting from account",
+            "type": "integer"
+          },
           "participation": {
             "$ref": "#/components/schemas/AccountParticipation"
           },
@@ -763,6 +767,7 @@
           "address",
           "amount",
           "amount-without-pending-rewards",
+          "min-balance",
           "pending-rewards",
           "rewards",
           "round",
