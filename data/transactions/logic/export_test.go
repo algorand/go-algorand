@@ -20,8 +20,6 @@ package logic
 // https://medium.com/@robiplus/golang-trick-export-for-test-aa16cbd7b8cd for a
 // nice explanation.
 
-type Expect = expect
-
 func NewExpect(l int, s string) Expect {
 	return Expect{l, s}
 }

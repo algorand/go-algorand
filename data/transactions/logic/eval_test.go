@@ -2134,17 +2134,17 @@ func TestSubstringFlop(t *testing.T) {
 	// fails in compiler
 	testProg(t, `byte 0xf000000000000000
 substring
-len`, 2, expect{2, "substring expects 2 immediate arguments"})
+len`, 2, Expect{2, "substring expects 2 immediate arguments"})
 
 	// fails in compiler
 	testProg(t, `byte 0xf000000000000000
 substring 1
-len`, 2, expect{2, "substring expects 2 immediate arguments"})
+len`, 2, Expect{2, "substring expects 2 immediate arguments"})
 
 	// fails in compiler
 	testProg(t, `byte 0xf000000000000000
 substring 4 2
-len`, 2, expect{2, "substring end is before start"})
+len`, 2, Expect{2, "substring end is before start"})
 
 	// fails at runtime
 	testPanics(t, `byte 0xf000000000000000
@@ -2197,11 +2197,11 @@ func TestExtractFlop(t *testing.T) {
 	// fails in compiler
 	testProg(t, `byte 0xf000000000000000
 	extract
-	len`, 5, expect{2, "extract expects 2 immediate arguments"})
+	len`, 5, Expect{2, "extract expects 2 immediate arguments"})
 
 	testProg(t, `byte 0xf000000000000000
 	extract 1
-	len`, 5, expect{2, "extract expects 2 immediate arguments"})
+	len`, 5, Expect{2, "extract expects 2 immediate arguments"})
 
 	// fails at runtime
 	err := testPanics(t, `byte 0xf000000000000000
@@ -2405,7 +2405,7 @@ int 1`,
 			}
 
 			if testCase.errContains != "" {
-				testApps(t, sources, txgroup, LogicVersion, MakeLedger(nil), expect{testCase.errTxn, testCase.errContains})
+				testApps(t, sources, txgroup, LogicVersion, MakeLedger(nil), Expect{testCase.errTxn, testCase.errContains})
 			} else {
 				testApps(t, sources, txgroup, LogicVersion, MakeLedger(nil))
 			}
@@ -3802,7 +3802,7 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			t.Helper()
 			if v < introduced {
-				testProg(t, obfuscate(program), v, expect{0, "...was introduced..."})
+				testProg(t, obfuscate(program), v, Expect{0, "...was introduced..."})
 				return
 			}
 			ops := testProg(t, program, v)

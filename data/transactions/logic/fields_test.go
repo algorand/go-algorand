@@ -230,7 +230,7 @@ func TestAssetParamsFieldsVersions(t *testing.T) {
 			ep, _, _ := makeSampleEnv()
 			ep.Proto.LogicSigVersion = v
 			if field.version > v {
-				testProg(t, text, v, expect{3, "...available in version..."})
+				testProg(t, text, v, Expect{3, "...available in version..."})
 				ops := testProg(t, text, field.version) // assemble in the future
 				ops.Program[0] = byte(v)
 				testAppBytes(t, ops.Program, ep, "invalid asset_params_get field")
