@@ -87,18 +87,6 @@ class Goal:
 
         self.autosend = autosend
 
-    def show_endpoint_info(self) -> dict:
-        return {
-            "algod": {
-                "url": self.algod.algod_address,
-                "auth": self.algod.algod_token,
-            },
-            "kmd": {
-                "url": self.kmd.kmd_address,
-                "auth": self.kmd.kmd_token,
-            },
-        }
-
     def open_algod(self, algodata, algod_address=None):
         if algod_address:
             algod_token = algodata
@@ -175,7 +163,8 @@ class Goal:
         # out the unsigned tx if tx is sigged, logigsigged or
         # multisgged
         utxns = [
-            tx if isinstance(tx, txn.Transaction) else tx.transaction for tx in txns
+            tx if isinstance(tx, txn.Transaction) else tx.transaction
+            for tx in txns
         ]
         gid = txn.calculate_group_id(utxns)
         for tx in txns:
@@ -236,21 +225,13 @@ class Goal:
             return self.send(tx, confirm=True)
         return tx
 
-    def keyreg(
-        self,
-        sender,
-        votekey=None,
-        selkey=None,
-        votefst=None,
-        votelst=None,
-        votekd=None,
-        send=None,
-        **kwargs,
-    ):
+    def keyreg(self, sender, votekey=None, selkey=None, votefst=None,
+               votelst=None, votekd=None,
+               send=None, **kwargs):
         params = self.algod.suggested_params()
-        tx = txn.KeyregTxn(
-            sender, params, votekey, selkey, votefst, votelst, votekd, **kwargs
-        )
+        tx = txn.KeyregTxn(sender, params,
+                           votekey, selkey, votefst, votelst, votekd,
+                           **kwargs)
         return self.finish(tx, send)
 
     def pay(self, sender, receiver, amt: int, send=None, **kwargs):
@@ -271,7 +252,9 @@ class Goal:
 
     def axfer(self, sender, receiver, amt: int, index: int, send=None, **kwargs):
         params = self.algod.suggested_params()
-        tx = txn.AssetTransferTxn(sender, params, receiver, amt, index, **kwargs)
+        tx = txn.AssetTransferTxn(
+            sender, params, receiver, amt, index, **kwargs
+        )
         return self.finish(tx, send)
 
     def asset_optin(self, sender, index: int, **kwargs):
@@ -290,9 +273,8 @@ class Goal:
             return values
         return txn.StateSchema(num_uints=values[0], num_byte_slices=values[1])
 
-    def appl(
-        self, sender, index: int, on_complete=txn.OnComplete.NoOpOC, send=None, **kwargs
-    ):
+    def appl(self, sender, index: int, on_complete=txn.OnComplete.NoOpOC,
+             send=None, **kwargs):
         params = self.algod.suggested_params()
         local_schema = self.coerce_schema(kwargs.pop("local_schema", None))
         global_schema = self.coerce_schema(kwargs.pop("global_schema", None))
