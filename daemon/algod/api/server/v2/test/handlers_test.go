@@ -674,6 +674,8 @@ func TestTealDryrun(t *testing.T) {
 }
 
 func TestAppendParticipationKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	mockLedger, _, _, _, releasefunc := testingenv(t, 1, 1, true)
 	defer releasefunc()
 	mockNode := makeMockNode(mockLedger, t.Name(), nil)
