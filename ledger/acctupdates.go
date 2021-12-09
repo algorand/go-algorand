@@ -960,7 +960,6 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			// priority if present.
 			for offset > 0 {
 				offset--
-				// d, ok := au.deltas[offset].GetBasicsAccountData(addr)
 				_, ok := au.deltas[offset].GetData(addr)
 				if ok {
 					// the returned validThrough here is not optimal, but it still correct. We could get a more accurate value by scanning

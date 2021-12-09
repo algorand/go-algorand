@@ -524,10 +524,16 @@ func (ledger *evalTestLedger) AddValidatedBlock(vb ledgercore.ValidatedBlock, ce
 	for k, v := range ledger.roundBalances[vb.Block().Round()-1] {
 		newBalances[k] = v
 	}
+
 	// update
 	deltas := vb.Delta()
-	balances := deltas.NewAccts.ToBasicsAccountDataMap()
-	for addr, accountData := range balances {
+	// convert deltas into balance records
+	// the code assumes all modified accounts has entries in NewAccts.accts
+	// to enforce this fact we call ModifiedAccounts() with a panic as a side effect
+	deltas.NewAccts.ModifiedAccounts()
+	for i := 0; i < deltas.NewAccts.Len(); i++ {
+		addr, _ := deltas.NewAccts.GetByIdx(i) // <-- this assumes resources deltas has addr in accts
+		accountData, _ := deltas.NewAccts.GetBasicsAccountData(addr)
 		newBalances[addr] = accountData
 	}
 	ledger.roundBalances[vb.Block().Round()] = newBalances
