@@ -160,70 +160,19 @@ func TestAccountDBInit(t *testing.T) {
 
 // creatablesFromUpdates calculates creatables from updates
 func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates ledgercore.NewAccountDeltas, seen map[basics.CreatableIndex]bool) map[basics.CreatableIndex]ledgercore.ModifiedCreatable {
-	creatables := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
-	converted := updates.ToBasicsAccountDataMap()
-	for addr, update := range converted {
-		// no sets in Go, so iterate over
-		if ad, ok := base[addr]; ok {
-			for idx := range ad.AssetParams {
-				if _, ok := update.AssetParams[idx]; !ok {
-					creatables[basics.CreatableIndex(idx)] = ledgercore.ModifiedCreatable{
-						Ctype:   basics.AssetCreatable,
-						Created: false, // exists in base, not in new => deleted
-						Creator: addr,
-					}
-				}
-			}
-			for idx := range ad.AppParams {
-				if _, ok := update.AppParams[idx]; !ok {
-					creatables[basics.CreatableIndex(idx)] = ledgercore.ModifiedCreatable{
-						Ctype:   basics.AppCreatable,
-						Created: false, // exists in base, not in new => deleted
-						Creator: addr,
-					}
-				}
-			}
+	known := make(map[basics.CreatableIndex]struct{}, len(seen))
+	for aidx := range seen {
+		known[aidx] = struct{}{}
+	}
+	for _, ad := range base {
+		for aidx := range ad.AppParams {
+			known[basics.CreatableIndex(aidx)] = struct{}{}
 		}
-		for idx := range update.AssetParams {
-			if seen[basics.CreatableIndex(idx)] {
-				continue
-			}
-			ad, found := base[addr]
-			if found {
-				if _, ok := ad.AssetParams[idx]; !ok {
-					found = false
-				}
-			}
-			if !found {
-				creatables[basics.CreatableIndex(idx)] = ledgercore.ModifiedCreatable{
-					Ctype:   basics.AssetCreatable,
-					Created: true, // exists in new, not in base => created
-					Creator: addr,
-				}
-			}
-			seen[basics.CreatableIndex(idx)] = true
-		}
-		for idx := range update.AppParams {
-			if seen[basics.CreatableIndex(idx)] {
-				continue
-			}
-			ad, found := base[addr]
-			if found {
-				if _, ok := ad.AppParams[idx]; !ok {
-					found = false
-				}
-			}
-			if !found {
-				creatables[basics.CreatableIndex(idx)] = ledgercore.ModifiedCreatable{
-					Ctype:   basics.AppCreatable,
-					Created: true, // exists in new, not in base => created
-					Creator: addr,
-				}
-			}
-			seen[basics.CreatableIndex(idx)] = true
+		for aidx := range ad.AssetParams {
+			known[basics.CreatableIndex(aidx)] = struct{}{}
 		}
 	}
-	return creatables
+	return updates.ToModifiedCreatables(known)
 }
 
 func applyPartialDeltas(base map[basics.Address]basics.AccountData, deltas ledgercore.NewAccountDeltas) map[basics.Address]basics.AccountData {

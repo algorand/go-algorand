@@ -690,6 +690,46 @@ func (ad NewAccountDeltas) GetBasicsAccountData(addr basics.Address) (basics.Acc
 	return result, true
 }
 
+// ToModifiedCreatables creates map of ModifiedCreatable
+func (ad NewAccountDeltas) ToModifiedCreatables(seen map[basics.CreatableIndex]struct{}) map[basics.CreatableIndex]ModifiedCreatable {
+	result := make(map[basics.CreatableIndex]ModifiedCreatable, len(ad.appParams)+len(ad.assetParams))
+	for aapp, idx := range ad.appParamsCache {
+		rec := ad.appParams[idx]
+		if rec.params == nil {
+			result[basics.CreatableIndex(rec.aidx)] = ModifiedCreatable{
+				Ctype:   basics.AppCreatable,
+				Created: false,
+				Creator: aapp.Address,
+			}
+		} else if _, ok := seen[basics.CreatableIndex(rec.aidx)]; !ok {
+			result[basics.CreatableIndex(rec.aidx)] = ModifiedCreatable{
+				Ctype:   basics.AppCreatable,
+				Created: true,
+				Creator: aapp.Address,
+			}
+		}
+	}
+
+	for aapp, idx := range ad.assetParamsCache {
+		rec := ad.assetParams[idx]
+		if rec.params == nil {
+			result[basics.CreatableIndex(rec.aidx)] = ModifiedCreatable{
+				Ctype:   basics.AssetCreatable,
+				Created: false,
+				Creator: aapp.Address,
+			}
+		} else if _, ok := seen[basics.CreatableIndex(rec.aidx)]; !ok {
+			result[basics.CreatableIndex(rec.aidx)] = ModifiedCreatable{
+				Ctype:   basics.AssetCreatable,
+				Created: true,
+				Creator: aapp.Address,
+			}
+		}
+	}
+
+	return result
+}
+
 // ToBasicsAccountDataMap converts deltas into map of basics account data.
 // Currently is only used in tests
 // TODO: remove after the schema switch - the invariant "accts has all modified accounts" would not be true for storage modifications
