@@ -36,6 +36,7 @@ print(f"Running {SCRIPT} inside {CWD} @ {stamp}")
 
 # Initialize goal and fund a new account joe
 goal = Goal(WALLET, autosend=False)
+rest_endpoints = goal.get_endpoint_info()
 
 joe = goal.new_account()
 flo = goal.new_account()
