@@ -124,6 +124,8 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     . "${TEMPDIR}/ve/bin/activate"
     "${TEMPDIR}/ve/bin/pip3" install --upgrade pip
     "${TEMPDIR}/ve/bin/pip3" install --upgrade py-algorand-sdk cryptography
+    # enable remote debugging:
+    "${TEMPDIR}/ve/bin/pip3" install --upgrade debugpy
     duration "e2e client setup"
 
     if [ $INTERACTIVE ]; then
