@@ -4,6 +4,8 @@ from datetime import datetime
 from pathlib import PurePath
 import sys
 
+import algosdk.future.transaction as txn
+
 from goal import Goal, AtomicABI
 
 
@@ -20,31 +22,91 @@ def initialize_debugger(port):
 
 
 # uncomment out the following to run a remote interactive debug session:
-initialize_debugger(1339)
+initialize_debugger(1330)
 
 
 script_path, WALLET = sys.argv
 ppath = PurePath(script_path)
 
 CWD, SCRIPT = ppath.parent, ppath.name
-# TEAL_DIR = CWD / "tealprogs"
+TEAL_DIR = CWD / "tealprogs"
 
 stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 print(f"Running {SCRIPT} inside {CWD} @ {stamp}")
 
 # Initialize goal and fund a new account joe
-goal = Goal(WALLET, autosend=True)
+goal = Goal(WALLET, autosend=False)
 
 joe = goal.new_account()
 flo = goal.new_account()
 print(f"Joe & Flo: {joe}, {flo}")
 
-txinfo, err = goal.pay(goal.account, joe, amt=50_000_000)
-txinfo, err = goal.pay(goal.account, flo, amt=100_000_000)
+txinfo, err = goal.pay(goal.account, joe, amt=50_000_000, send=True)
+txinfo, err = goal.pay(goal.account, flo, amt=100_000_000, send=True)
 
-abi = AtomicABI(
-    goal,
-)
+# App create
+approval_teal_path = TEAL_DIR / "abi-min_balance.teal"
+print(f"approval_teal_path: {approval_teal_path}")
+approval_teal = goal.assemble(approval_teal_path)
+
+txinfo, err = goal.app_create(joe, approval_teal, send=True)
+print(f"txinfo for create request: {txinfo}")
+app_id = txinfo["application-index"]
+
+abi = AtomicABI(goal, app_id, TEAL_DIR / "abi-min_balance.json", flo)
+
+# Dummy complement call (for now)
+abi.next_abi_call_complement(bytes.fromhex("00ff00ff"))
+executed_methods, summary = abi.execute_atomic_group()
+
+
+# def min_balances(abi, joe, flo):
+#     abi = abi.clone()
+
+#     joe_sig = abi.get_atxn_signer(sender=joe)
+#     flo_sig = abi.get_atxn_signer(sender=flo)
+
+#     joe_pymt = txn.PaymentTxn(joe, abi.get_suggested_params(), flo, 10_000)
+#     joe_tx_sig = abi.get_txn_with_signer(joe_pymt, signer=joe_sig)
+
+#     flo_pymt = txn.PaymentTxn(flo, abi.get_suggested_params(), joe, 10_000)
+#     flo_tx_sig = abi.get_txn_with_signer(flo_pymt, signer=flo_sig)
+
+#     abi.next_abi_call_sender_min_balance(joe_tx_sig)
+#     abi.next_abi_call_sender_min_balance(flo_tx_sig)
+#     _, summaries = abi.execute_atomic_group()
+#     return {
+#         "joe_minb": summaries[0].result.return_value,
+#         "flo_minb": summaries[1].result.return_value,
+#     }
+
+
+def min_balance(abi, sender, receiver):
+    abi = abi.clone()
+
+    sender_sig = abi.get_atxn_signer(sender=sender)
+    sender_pymt = txn.PaymentTxn(sender, abi.get_suggested_params(), receiver, 10_000)
+    sender_tx_sig = abi.get_txn_with_signer(sender_pymt, signer=sender_sig)
+
+    return abi.execute_singleton("sender_min_balance", method_args=[sender_tx_sig])
+
+
+joe_minb = min_balance(abi, joe, flo)
+flo_minb = min_balance(abi, flo, joe)
+
+x = 42
+# abi.next_abi_call_add(29, 13)
+# abi.next_abi_call_sub(3, 1)
+# abi.next_abi_call_div(4, 2)
+# abi.next_abi_call_mul(3, 2)
+# abi.next_abi_call_qrem(27, 5)
+# abi.next_abi_call_reverse("desrever yllufsseccus")
+# abi.next_abi_call_txntest(10_000, txn_sgn, 1000)
+
+
+# flo_mb1 = min_balance(flo)
+# joe_mb1 = min_balance(joe)
+x = 42
 
 """
 	ledger.NewAccount(ep.Txn.Txn.Sender, 234)

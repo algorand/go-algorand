@@ -1,5 +1,5 @@
 import json
-from typing import Callable, List, Union, Tuple
+from typing import Callable, Dict, List, Union, Tuple
 from pathlib import Path
 import types
 
@@ -11,6 +11,8 @@ import algosdk.future.transaction as txn
 
 
 class AtomicABI:
+    CALL_TWICE_ERROR = "Cannot execute this Atomic ABI twice. Instantiate a new object to execute again."
+
     def __init__(
         self,
         goal: Goal,
@@ -27,9 +29,13 @@ class AtomicABI:
         """
         self.goal = goal
         self.app_id = app_id
+        self.contract_abi_json = contract_abi_json  # for cloning only
         self.contract_abi_json_path: str = None
 
         self.method_args: List[list] = []
+        self.sigs2selector: Dict[str, str] = {}
+        self.handle2meth: Dict[str, dict] = {}
+
         self.execution_results: atc.AtomicTransactionResponse = None
         self.execution_summaries: List[MethodCallSummary] = None
 
@@ -54,25 +60,76 @@ class AtomicABI:
         self.atomic_transaction_composer = atc.AtomicTransactionComposer()
 
         for abi_meth in self.contract.methods:
-            self._attach_dynamic_method_call(abi_meth.name, self._factory(abi_meth))
+            handle, meth_name, meth = self._attach_dynamic_method_call(
+                abi_meth.name, self._amc_factory(abi_meth)
+            )
+            signature = abi_meth.get_signature()
+            selector = "0x" + abi_meth.get_selector().hex()
+            self.sigs2selector[signature] = selector
+            self.handle2meth[handle] = {
+                "signature": signature,
+                "selector": selector,
+                "abi_meth": abi_meth,
+                "adder_meth_name": meth_name,
+                "adder_meth": meth,
+            }
 
-    def execute_all_methods(
+    @classmethod
+    def factory(cls, obj):
+        return cls(
+            obj.goal,
+            obj.app_id,
+            obj.contract_abi_json,
+            obj.sender,
+            signer=obj.signer,
+            sp=obj.sp,
+        )
+
+    def clone(self):
+        return self.factory(self)
+
+    def execute_atomic_group(
         self, wait_rounds: int = 5
     ) -> Tuple[atc.AtomicTransactionResponse, List["MethodCallSummary"]]:
-        assert (
-            self.execution_results is None
-        ), "Cannot execute this Atomic ABI twice. Instantiate a new object to execute again."
+        assert self.execution_results is None, self.CALL_TWICE_ERROR
         self.execution_results = self.atomic_transaction_composer.execute(
             self.goal.algod, wait_rounds
         )
-
         self.execution_summaries = self._build_summaries()
         return self.execution_results, self.execution_summaries
+
+    def execute_singleton(
+        self,
+        method_handle: str,
+        method_args: list,
+        wait_rounds: int = 5,
+        sp: txn.SuggestedParams = None,
+        on_complete: txn.OnComplete = txn.OnComplete.NoOpOC,
+        note: bytes = None,
+        lease: bytes = None,
+        rekey_to: str = None,
+    ) -> Tuple[atc.AtomicTransactionResponse, "MethodCallSummary"]:
+        assert self.execution_results is None, self.CALL_TWICE_ERROR
+        abi_meth = self.handle2meth[method_handle]["abi_meth"]
+        self.add_method_call(
+            abi_meth,
+            method_args,
+            sp=sp,
+            on_complete=on_complete,
+            note=note,
+            lease=lease,
+            rekey_to=rekey_to,
+        )
+        _, s = self.execute_atomic_group(wait_rounds=wait_rounds)
+        return s[0].result.return_value
+
+    def dump_selectors(self) -> str:
+        return json.dumps(self.sigs2selector, indent=4, sort_keys=True)
 
     def _build_summaries(self) -> List["MethodCallSummary"]:
         assert (
             self.execution_results
-        ), "Cannot summarize before calling 'execute_all_methods()'"
+        ), "Cannot summarize before calling 'execute_atomic_group()'"
         summaries = []
         i = 0
         for meth in self.atomic_transaction_composer.method_dict.values():
@@ -87,7 +144,7 @@ class AtomicABI:
         return summaries
 
     @staticmethod
-    def _factory(abi_meth: abi.method.Method):
+    def _amc_factory(abi_meth: abi.method.Method):
         def func(
             self,
             *args,
@@ -172,7 +229,9 @@ class AtomicABI:
         atc.add_method_call(app_id, abi_factorial_method, ...)
         """
         meth = types.MethodType(func, self)
-        setattr(self, self.abi_composer_name(name), meth)
+        meth_name = self.abi_composer_name(name)
+        setattr(self, meth_name, meth)
+        return name, meth_name, meth
 
     @classmethod
     def abi_composer_name(cls, method_name: str) -> str:

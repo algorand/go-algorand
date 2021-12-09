@@ -1,0 +1,102 @@
+#pragma version 6
+    // TODO - some explanation
+    // TODO - comply with best practices (optin, delete, etc...)
+    txn ApplicationID
+    bz handle_no_questions_asked
+
+    txn OnCompletion
+    int NoOp
+    ==
+    bnz handle_noop
+    err // TODO - handle more than just NoOp's
+
+handle_noop:
+    txna ApplicationArgs 0
+    byte 0x80630032 // _closeOut(uint64)uint64
+    ==
+    bnz handle_no_questions_asked
+
+    txna ApplicationArgs 0
+    byte 0x9b122fc1 // _optIn(uint64)uint64
+    ==
+    bnz handle_no_questions_asked
+
+    txn ApplicationArgs 0
+    byte 0x4f30c3ce // base64_decode(string,string)string
+    ==
+    bnz handle_base64_decode
+
+    txn ApplicationArgs 0
+    byte 0xd363f563 // complement(byte[])byte[] (tilde "~"" is too exotic for official signature)
+    ==
+    bnz handle_b~
+
+    txn ApplicationArgs 0
+    byte 0xa9c9f612 // sender_min_balance(pay)uint64
+    ==
+    bnz handle_min_balance
+
+    err    
+
+handle_no_questions_asked:
+    int 1
+    b return_uint64
+
+// opCodes
+
+handle_min_balance:
+    txn Accounts 0
+    min_balance
+    b return_uint64
+
+handle_base64_decode:
+handle_b~:
+    byte "abcde"
+    b return_bytes
+
+handle_base64URL_decode:
+    callsub extract_abi_string_arg1
+    base64_decode URLAlph
+    b return_bytes
+    
+handle_base64Std_decode:
+    callsub extract_abi_string_arg1
+    base64_decode StdAlph
+    b return_bytes
+
+extract_abi_string_arg1:
+    txna ApplicationArgs 1
+    extract 2 0
+    retsub
+
+// Return handling based on type
+
+return_2_uint64:
+    itob
+    swap
+    itob
+    swap
+    b end_return
+
+return_bytes:
+    dup
+    len
+    itob
+    extract 6 2
+    swap
+    concat
+    b end_return
+
+return_uint64:
+    itob
+    b end_return
+
+// ABI return prefix and logging
+
+end_return:
+    byte 0x151f7c75
+    swap
+    concat
+    log
+    int 1
+    return

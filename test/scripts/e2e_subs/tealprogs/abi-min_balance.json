@@ -1,0 +1,69 @@
+{
+    "name": "opCodes",
+    "appId": null,
+    "methods": [
+        {
+            "name": "sender_min_balance",
+            "desc": "Calculate the minimum balance of sender for referenced pay txn arg",
+            "args": [
+                {
+                    "type": "pay"
+                }
+            ],
+            "returns": {
+                "type": "uint64"
+            }
+        },
+        {
+            "name": "complement",
+            "desc": "The complement (aka b~) of arg0 viewed as a bitstring",
+            "args": [
+                {
+                    "type": "byte[]"
+                }
+            ],
+            "returns": {
+                "type": "byte[]"
+            }
+        },
+        {
+            "name": "base64_decode",
+            "desc": "Decode base64 arg1 using the encoding defined by arg0 (either 'URLEncoding' or 'StdEncoding') ",
+            "args": [
+                {
+                    "type": "string"
+                },
+                {
+                    "type": "string"
+                }
+            ],
+            "returns": {
+                "type": "string"
+            }
+        },
+        {
+            "name": "_optIn",
+            "desc": "just opt in",
+            "args": [
+                {
+                    "type": "uint64"
+                }
+            ],
+            "returns": {
+                "type": "uint64"
+            }
+        },
+        {
+            "name": "_closeOut",
+            "desc": "just close out",
+            "args": [
+                {
+                    "type": "uint64"
+                }
+            ],
+            "returns": {
+                "type": "uint64"
+            }
+        }
+    ]
+}
