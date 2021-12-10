@@ -305,7 +305,7 @@ func TestWellFormedErrors(t *testing.T) {
 			},
 			spec:          specialAddr,
 			proto:         protoV27,
-			expectedError: fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", protoV27.MaxExtraAppProgramPages),
+			expectedError: fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", protoV27.MaxExtraAppProgramPages),
 		},
 		{
 			tx: Transaction{
@@ -392,7 +392,7 @@ func TestWellFormedErrors(t *testing.T) {
 			},
 			spec:          specialAddr,
 			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", futureProto.MaxExtraAppProgramPages),
+			expectedError: fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", futureProto.MaxExtraAppProgramPages),
 		},
 		{
 			tx: Transaction{
@@ -457,7 +457,7 @@ func TestWellFormedErrors(t *testing.T) {
 			},
 			spec:          specialAddr,
 			proto:         futureProto,
-			expectedError: fmt.Errorf("tx has too many references, max is 8"),
+			expectedError: fmt.Errorf("tx references exceed MaxAppTotalTxnReferences = 8"),
 		},
 		{
 			tx: Transaction{
