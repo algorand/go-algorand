@@ -727,7 +727,7 @@
             "type": "array"
           },
           "min-balance": {
-            "description": "\\[algo\\] total number of MicroAlgos needed to allow transacting from account",
+            "description": "MicroAlgo balance required by the account.\n\nThe requirement starts at 100,000 and grows based on asset and application usage.",
             "type": "integer"
           },
           "participation": {

@@ -1367,7 +1367,7 @@
           "type": "integer"
         },
         "min-balance": {
-          "description": "MicroAlgo balance required by the account, the requirement starts at 1000 and grows based on the asset and application usage",
+          "description": "MicroAlgo balance required by the account.\n\nThe requirement starts at 100,000 and grows based on asset and application usage.",
           "type": "integer"
         },
         "amount-without-pending-rewards": {

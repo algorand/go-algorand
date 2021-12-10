@@ -158,7 +158,7 @@ assert not err, err
 expected_mb = CONSENSUS_MIN_BALANCE + APP_MIN_BALANCE + ASSET_MIN_BALANCE
 assert_min_balance(goal, goal.account, expected_mb, skip_abi=True)
 
-# let flo created app with 2 global schema ints, 10 global schema bytes, 1 extra page
+# flo creates an app with 2 global schema ints, 10 global schema bytes, 1 extra page
 txinfo, err = goal.app_create(
     flo,
     approval_teal,

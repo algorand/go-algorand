@@ -49,7 +49,9 @@ type Account struct {
 	// Note: the raw account uses `map[int] -> Asset` for this type.
 	CreatedAssets *[]Asset `json:"created-assets,omitempty"`
 
-	// \[algo\] total number of MicroAlgos needed to allow transacting from account
+	// MicroAlgo balance required by the account.
+	//
+	// The requirement starts at 100,000 and grows based on asset and application usage.
 	MinBalance uint64 `json:"min-balance"`
 
 	// AccountParticipation describes the parameters used by this account in consensus protocol.
