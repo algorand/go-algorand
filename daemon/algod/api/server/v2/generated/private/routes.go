@@ -32,7 +32,7 @@ type ServerInterface interface {
 	// Delete a given participation key by ID
 	// (DELETE /v2/participation/{participation-id})
 	DeleteParticipationKeyByID(ctx echo.Context, participationId string) error
-	// Get participation key info by ID
+	// Get participation key info given a participation ID
 	// (GET /v2/participation/{participation-id})
 	GetParticipationKeyByID(ctx echo.Context, participationId string) error
 	// Append state proof keys to a participation key
@@ -442,12 +442,12 @@ var swaggerSpec = []string{
 	"l8wYNyj3d5d+ff3eS1IXsCb2iNaH4t1Lim176PqWOuCTffTqsw75rEOkHf7p/Q1/CvKSpUDOoCiFpJLl",
 	"a/Izr+/z3Nyty7Jo+ltb9Hs6zXgjqchgATxxCiuZiWzt69a0AF6ADRn3DJXpx3bxSRv+GgxL2afq6+cs",
 	"+kjb5+e7FkzkhfsfYP3NGpt2PMaIT9hFcaNn2NVFA87Yjd7U/6x4PiuemxsvOwtPzH6JehM+kNPdk8f+",
-	"Ymvs6jfV/aF38Tn+UnH9t31D+LNK+KwSbq4SvoOIMKLUblQGm8O6fW2A6U9ZmGNsKwkZJ8M1r3IqiYJd",
-	"YxLHCNFFIu5DJdy3RxallXXIKCewYgpfNeiphLt20j7rs8/67BM6otquaNpWx95uzQWsC1rWzoxaVjoT",
-	"V7b6S1QrYhFYmrsqaljXrE6H0IJ4AM0tI/KTu1aXr80ULllmbDbNCjD2U63rTGefO9okrxoIzZtbC8Zx",
-	"AFQVOIotF0iD/H0FqeD28ZzOwZrD7I11AGNK9o8KUKM52jgcR+PWyYpbxkhxvlsbW/2DkOsNgfP6BZzW",
-	"39MrynQyF9Jd30EK9VMuNNB86uocdH61t5GDH9vP9kd+ndYVeKMfu4kksa8uz8M3ajK4wowoXKk6F+r9",
-	"B0NwLGrmFrFJ8DmaTjGzfSmUno6uxx87yT/hxw81jT/W+6uj9fWH6/8fAAD//2Luvp+npQAA",
+	"Ymvs6jfV/aF38Tn+UnH9t31D+LNK+KwSbq4SvoOIMKLUOiURYbqbRHr7CgIzorIw7dgWFzJ+h2te5VQS",
+	"BbuGKY4RogtO3IeWuG8nLUor66NRTmDFFD50EFmwu/XbPqu4zyruEzq12q5o2obI3p7OBawLWtb+jVpW",
+	"OhNXtiBMVCtiXViau8JqWOqszpDQgngAzcUj8pO7aZevzRQuWWbMOM0KMCZVretMZ59O2uSzGgjNM1wL",
+	"xnEAVBU4iq0gSIOUfgWp4PY9nc5Zm8PsjfUJY0r2jwpQoznaOBxH49Zhi1vGSL2+W9tf/bOR6w2x9PpR",
+	"nNbf0yvKdDIX0t3oQQr1szA00HzqSh90frUXlIMf2y/5R36d1kV5ox+7uSWxry71wzdqkrrCJClcqTo9",
+	"6v0HQ3Csc+YWscn5OZpOMdl9KZSejq7HHzv5QOHHDzWNP9b7q6P19Yfr/x8AAP//mUjHZrqlAAA=",
 }
 
 // GetSwagger returns the Swagger specification corresponding to the generated code

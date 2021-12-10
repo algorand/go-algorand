@@ -2833,7 +2833,7 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Get participation key info by ID",
+        "summary": "Get participation key info given a participation ID",
         "tags": [
           "private"
         ]

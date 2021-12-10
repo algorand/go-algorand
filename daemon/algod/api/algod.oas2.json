@@ -635,7 +635,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Get participation key info by ID",
+        "summary": "Get participation key info given a participation ID",
         "operationId": "GetParticipationKeyByID",
         "responses": {
           "200": {
