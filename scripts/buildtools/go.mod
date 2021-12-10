@@ -1,6 +1,6 @@
 module github.com/algorand/go-algorand/scripts/buildtools
 
-go 1.14
+go 1.16
 
 require (
 	github.com/algorand/msgp v1.1.48
