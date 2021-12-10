@@ -19,6 +19,7 @@ package rpcs
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"net/http"
 	"path"
 	"strconv"
@@ -28,6 +29,8 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/algorand/go-codec/codec"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -61,6 +64,8 @@ const (
 	BlockAndCertValue  = "blockAndCert"    // block+cert request data (as the value of requestDataTypeKey)
 )
 
+var errBlockServiceClosed = errors.New("block service is shutting down")
+
 // BlockService represents the Block RPC API
 type BlockService struct {
 	ledger                  *data.Ledger
@@ -74,6 +79,7 @@ type BlockService struct {
 	enableArchiverFallback  bool
 	log                     logging.Logger
 	closeWaitGroup          sync.WaitGroup
+	mu                      deadlock.Mutex
 }
 
 // EncodedBlockCert defines how GetBlockBytes encodes a block and its certificate
@@ -118,6 +124,8 @@ func MakeBlockService(log logging.Logger, config config.Local, ledger *data.Ledg
 
 // Start listening to catchup requests over ws
 func (bs *BlockService) Start() {
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
 	if bs.enableServiceOverGossip {
 		handlers := []network.TaggedMessageHandler{
 			{Tag: protocol.UniCatchupReqTag, MessageHandler: network.HandlerFunc(bs.processIncomingMessage)},
@@ -133,12 +141,14 @@ func (bs *BlockService) Start() {
 
 // Stop servicing catchup requests over ws
 func (bs *BlockService) Stop() {
+	bs.mu.Lock()
 	close(bs.stop)
+	bs.mu.Unlock()
 	bs.closeWaitGroup.Wait()
 }
 
 // ServerHTTP returns blocks
-// Either /v{version}/block/{round} or ?b={round}&v={version}
+// Either /v{version}/{genesisID}/block/{round} or ?b={round}&v={version}
 // Uses gorilla/mux for path argument parsing.
 func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	pathVars := mux.Vars(request)
@@ -200,7 +210,7 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 		response.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	encodedBlockCert, err := RawBlockBytes(bs.ledger, basics.Round(round))
+	encodedBlockCert, err := bs.rawBlockBytes(basics.Round(round))
 	if err != nil {
 		switch err.(type) {
 		case ledgercore.ErrNoEntry:
@@ -321,7 +331,7 @@ func (bs *BlockService) redirectRequest(round uint64, response http.ResponseWrit
 		bs.log.Debugf("redirectRequest: %s", err.Error())
 		return false
 	}
-	parsedURL.Path = FormatBlockQuery(round, parsedURL.Path, bs.net)
+	parsedURL.Path = strings.Replace(FormatBlockQuery(round, parsedURL.Path, bs.net), "{genesisID}", bs.genesisID, 1)
 	http.Redirect(response, request, parsedURL.String(), http.StatusTemporaryRedirect)
 	bs.log.Debugf("redirectRequest: redirected block request to %s", parsedURL.String())
 	return true
@@ -354,6 +364,22 @@ func (bs *BlockService) getRandomArchiver() (endpointAddress string) {
 	randIndex := crypto.RandUint64() % uint64(len(httpPeers))
 	endpointAddress = httpPeers[randIndex].GetAddress()
 	return
+}
+
+// rawBlockBytes returns the block/cert for a given round, while taking the lock
+// to ensure the block service is currently active.
+func (bs *BlockService) rawBlockBytes(round basics.Round) ([]byte, error) {
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
+	select {
+	case _, ok := <-bs.stop:
+		if !ok {
+			// service is closed.
+			return nil, errBlockServiceClosed
+		}
+	default:
+	}
+	return RawBlockBytes(bs.ledger, round)
 }
 
 func topicBlockBytes(log logging.Logger, dataLedger *data.Ledger, round basics.Round, requestType string) network.Topics {
