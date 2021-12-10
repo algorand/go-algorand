@@ -285,7 +285,6 @@ func (ad NewAccountDeltas) ModifiedAccounts() []basics.Address {
 }
 
 // MergeAccounts applies other accounts into this StateDelta accounts
-// Used in tests only
 func (ad *NewAccountDeltas) MergeAccounts(other NewAccountDeltas) {
 	for new := range other.accts {
 		addr := other.accts[new].Addr
