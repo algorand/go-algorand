@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 
-import subprocess
-import sys
-
 from datetime import datetime
 from pathlib import PurePath
 import sys
@@ -25,8 +22,8 @@ EXTRA_PAGE_MIN_BALANCE = (
 )
 
 
-# Set True if you want to run a remote debugger interactively on the given PORT
-INTERACTIVE, DEBUGPORT = True, 4312
+# Set INTERACTIVE True if you want to run a remote debugger interactively on the given PORT
+INTERACTIVE, DEBUGPORT = False, 4312
 
 
 def initialize_debugger():
@@ -45,7 +42,7 @@ if INTERACTIVE:
     initialize_debugger()
 
 
-def get_algod_min_balance(goal, account):
+def get_pysdk_min_balance(goal, account):
     return goal.algod.account_info(account)["min-balance"]
 
 
@@ -61,7 +58,7 @@ def get_teal_min_balance(abi, account):
 
 def assert_min_balance(abi_or_goal, account, expected_min_balance, skip_abi=False):
     goal = abi_or_goal if skip_abi else abi_or_goal.goal
-    algod_mb = get_algod_min_balance(goal, account)
+    algod_mb = get_pysdk_min_balance(goal, account)
     assert (
         algod_mb == expected_min_balance
     ), f"case 1: {algod_mb} != {expected_min_balance}"
@@ -174,7 +171,7 @@ assert not err, err
 expected_mb = (
     CONSENSUS_MIN_BALANCE
     + APP_MIN_BALANCE
-    # Not these because not opting in
+    # Not these local var requirements because not opting in
     # + 2 * APP_KV_MIN_BALANCE
     # + 2 * APP_INTS_MIN_BALANCE
     + 10 * APP_KV_MIN_BALANCE
@@ -183,21 +180,5 @@ expected_mb = (
 )
 assert_min_balance(abi, flo, expected_mb)
 
-# Finally, let flo additionally opt into her app (2 local schema ints)
-app_id = txinfo["application-index"]
-txinfo, err = goal.app_optin(flo, app_id, send=True)
-expected_mb += (
-    APP_MIN_BALANCE
-    + 2 * APP_KV_MIN_BALANCE
-    + 2 * APP_INTS_MIN_BALANCE
-    # Not these because only creator pays for the globals:
-    # + 10 * APP_KV_MIN_BALANCE
-    # + 10 * APP_BYTES_MIN_BALANCE
-    # + EXTRA_PAGE_MIN_BALANCE
-)
-assert_min_balance(abi, flo, expected_mb)
-
 stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 print(f"Running {SCRIPT} inside {CWD} @ {stamp}")
-
-assert False, "yay, got to the end!!!"

@@ -123,7 +123,9 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     python3 -m venv "${TEMPDIR}/ve"
     . "${TEMPDIR}/ve/bin/activate"
     "${TEMPDIR}/ve/bin/pip3" install --upgrade pip
-    "${TEMPDIR}/ve/bin/pip3" install --upgrade py-algorand-sdk cryptography
+    "${TEMPDIR}/ve/bin/pip3" install --upgrade cryptograpy
+    # get the latest tip of our python SDK main branch as opposed to what's on pypi:
+    "${TEMPDIR}/ve/bin/pip3" install --upgrade git+git://github.com/algorand/py-algorand-sdk@master
     # enable remote debugging:
     "${TEMPDIR}/ve/bin/pip3" install --upgrade debugpy
     duration "e2e client setup"

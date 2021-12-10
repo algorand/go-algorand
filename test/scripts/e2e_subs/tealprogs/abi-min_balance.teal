@@ -8,16 +8,17 @@
     int NoOp
     ==
     bnz handle_noop
+
+    txn OnCompletion
+    int OptIn
+    ==
+    bnz handle_optIn
+
     err // TODO - handle more than just NoOp's
 
 handle_noop:
     txna ApplicationArgs 0
     byte 0x80630032 // _closeOut(uint64)uint64
-    ==
-    bnz handle_no_questions_asked
-
-    txna ApplicationArgs 0
-    byte 0x9b122fc1 // _optIn(uint64)uint64
     ==
     bnz handle_no_questions_asked
 
@@ -37,6 +38,13 @@ handle_noop:
     bnz handle_min_balance
 
     err    
+
+handle_optIn:
+    txna ApplicationArgs 0
+    byte 0x9b122fc1 // _optIn(uint64)uint64
+    ==
+    bnz handle_no_questions_asked
+
 
 handle_no_questions_asked:
     int 1
