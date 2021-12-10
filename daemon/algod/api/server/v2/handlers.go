@@ -238,6 +238,14 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
+	block, _, err := myLedger.BlockCert(basics.Round(lastRound))
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+	consensus, ok := config.Consensus[block.CurrentProtocol]
+	if !ok {
+		return notFound(ctx, errors.New(errInternalFailure), errInternalFailure, v2.Log)
+	}
 
 	if handle == protocol.CodecHandle {
 		data, err := encode(handle, record)
@@ -270,7 +278,9 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		}
 	}
 
-	account, err := AccountDataToAccount(address, &record, assetsCreators, lastRound, amountWithoutPendingRewards)
+	minBalance := record.MinBalance(&consensus)
+
+	account, err := AccountDataToAccount(address, &record, assetsCreators, lastRound, amountWithoutPendingRewards, minBalance)
 	if err != nil {
 		return internalError(ctx, err, errInternalFailure, v2.Log)
 	}

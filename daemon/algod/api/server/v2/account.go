@@ -30,7 +30,7 @@ import (
 // AccountDataToAccount converts basics.AccountData to v2.generated.Account
 func AccountDataToAccount(
 	address string, record *basics.AccountData, assetsCreators map[basics.AssetIndex]string,
-	lastRound basics.Round, amountWithoutPendingRewards basics.MicroAlgos,
+	lastRound basics.Round, amountWithoutPendingRewards basics.MicroAlgos, minBalance basics.MicroAlgos,
 ) (generated.Account, error) {
 
 	assets := make([]generated.AssetHolding, 0, len(record.Assets))
@@ -126,6 +126,7 @@ func AccountDataToAccount(
 		AppsLocalState:              &appsLocalState,
 		AppsTotalSchema:             &totalAppSchema,
 		AppsTotalExtraPages:         numOrNil(totalExtraPages),
+		MinBalance:                  minBalance.Raw,
 	}, nil
 }
 

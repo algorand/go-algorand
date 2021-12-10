@@ -1,4 +1,5 @@
 import json
+from subprocess import call
 from typing import Callable, Dict, List, Union, Tuple
 from pathlib import Path
 import types
@@ -18,28 +19,30 @@ class AtomicABI:
         goal: Goal,
         app_id: int,
         contract_abi_json: Union[Path, str],
-        sender: str,
-        signer: atc.TransactionSigner = None,
+        caller_acct: str,
         sp: txn.SuggestedParams = None,
     ):
         """
         Note: app_id will over-write whatever app_id was defined in `contract_abi_json`
 
-        Also, I'm assuming a single signer for all the methods in the atomic transaction.
+        Also, we're assuming a single caller_account which is also the signer for all the transactions.
         """
         self.goal = goal
         self.app_id = app_id
         self.contract_abi_json = contract_abi_json  # for cloning only
-        self.contract_abi_json_path: str = None
+        self.caller_acct = caller_acct
+        self.sp = sp
 
-        self.method_args: List[list] = []
-        self.sigs2selector: Dict[str, str] = {}
-        self.handle2meth: Dict[str, dict] = {}
+        assert (
+            self.app_id and self.app_id > 0
+        ), f"must have already created the app but have app_id {self.app_id}"
 
-        self.execution_results: atc.AtomicTransactionResponse = None
-        self.execution_summaries: List[MethodCallSummary] = None
+        assert (
+            self.caller_acct in self.goal.internal_wallet
+        ), "aborting AtomicABI - will not be able to transact without signing authority"
 
         # try very hard to parse the ABI contract
+        self.contract_abi_json_path: str = None
         cajson = text(contract_abi_json)
         if cajson:
             self.contract_abi_json_path = contract_abi_json
@@ -49,13 +52,18 @@ class AtomicABI:
         cadict["appId"] = self.app_id
         self.contract: abi.Contract = abi.Contract.from_json(json.dumps(cadict))
 
-        self.sender = sender
         self.sp = sp
-        self.signer = signer
+        assert (
+            self.caller_acct
+        ), "aborting AtomicABI - cannot execute without a caller_acct"
+        self.signer = self.get_atxn_signer()
 
-        if not self.signer:
-            # gonna just try and get the signer from the sender
-            self.signer = self.get_atxn_signer(sender)
+        self.method_args: List[list] = []
+        self.sigs2selector: Dict[str, str] = {}
+        self.handle2meth: Dict[str, dict] = {}
+
+        self.execution_results: atc.AtomicTransactionResponse = None
+        self.execution_summaries: List[MethodCallSummary] = None
 
         self.atomic_transaction_composer = atc.AtomicTransactionComposer()
 
@@ -75,23 +83,23 @@ class AtomicABI:
             }
 
     @classmethod
-    def factory(cls, obj):
+    def factory(cls, obj, caller_acct: str = None):
         return cls(
             obj.goal,
             obj.app_id,
             obj.contract_abi_json,
-            obj.sender,
-            signer=obj.signer,
+            caller_acct if caller_acct else obj.caller_acct,
             sp=obj.sp,
         )
 
-    def clone(self):
-        return self.factory(self)
+    def clone(self, caller_acct: str = None):
+        return self.factory(self, caller_acct=caller_acct)
 
     def execute_atomic_group(
         self, wait_rounds: int = 5
     ) -> Tuple[atc.AtomicTransactionResponse, List["MethodCallSummary"]]:
         assert self.execution_results is None, self.CALL_TWICE_ERROR
+
         self.execution_results = self.atomic_transaction_composer.execute(
             self.goal.algod, wait_rounds
         )
@@ -172,10 +180,10 @@ class AtomicABI:
 
         return self.sp
 
-    def get_atxn_signer(self, sender: str = None) -> atc.AccountTransactionSigner:
-        if not sender:
-            sender = self.sender
-        sk = self.goal.internal_wallet.get(sender)
+    def get_atxn_signer(self, caller_acct: str = None) -> atc.AccountTransactionSigner:
+        if not caller_acct:
+            caller_acct = self.caller_acct
+        sk = self.goal.internal_wallet.get(caller_acct)
         if not sk:
             raise Exception("Cannot create AccountTransactionSigner")
         # TODO: handle querying kmd in the case that sk isn't in the internal wallet
@@ -206,7 +214,7 @@ class AtomicABI:
         self.atomic_transaction_composer.add_method_call(
             self.app_id,
             method,
-            self.sender,
+            self.caller_acct,
             sp,
             self.signer,
             method_args=method_args,
