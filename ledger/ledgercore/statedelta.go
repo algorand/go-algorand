@@ -690,88 +690,41 @@ func (ad NewAccountDeltas) GetBasicsAccountData(addr basics.Address) (basics.Acc
 	return result, true
 }
 
-// ToBasicsAccountDataMap converts deltas into map of basics account data.
-// Currently is only used in tests
-// TODO: remove after the schema switch - the invariant "accts has all modified accounts" would not be true for storage modifications
-func (ad NewAccountDeltas) ToBasicsAccountDataMap() map[basics.Address]basics.AccountData {
-	result := make(map[basics.Address]basics.AccountData, ad.Len())
-	for addr, idx := range ad.acctsCache {
-		acct := ad.accts[idx].AccountData
-		acctData := basics.AccountData{}
-		AssignAccountData(&acctData, acct)
-		result[addr] = acctData
-	}
-
+// ToModifiedCreatables creates map of ModifiedCreatable
+func (ad NewAccountDeltas) ToModifiedCreatables(seen map[basics.CreatableIndex]struct{}) map[basics.CreatableIndex]ModifiedCreatable {
+	result := make(map[basics.CreatableIndex]ModifiedCreatable, len(ad.appParams)+len(ad.assetParams))
 	for aapp, idx := range ad.appParamsCache {
-		acctData, ok := result[aapp.Address]
-		// TODO: remove after the schema switch
-		if !ok {
-			panic(fmt.Sprintf("ToBasicAccountData: app params for (%s, %d) not in base deltas", aapp.Address.String(), aapp.App))
-		}
 		rec := ad.appParams[idx]
 		if rec.params == nil {
-			delete(acctData.AppParams, aapp.App)
-		} else {
-			if acctData.AppParams == nil {
-				acctData.AppParams = make(map[basics.AppIndex]basics.AppParams)
+			result[basics.CreatableIndex(rec.aidx)] = ModifiedCreatable{
+				Ctype:   basics.AppCreatable,
+				Created: false,
+				Creator: aapp.Address,
 			}
-			acctData.AppParams[aapp.App] = *rec.params
-		}
-		result[aapp.Address] = acctData
-	}
-
-	for aapp, idx := range ad.appLocalStatesCache {
-		acctData, ok := result[aapp.Address]
-		// TODO: remove after the schema switch
-		if !ok {
-			panic(fmt.Sprintf("ToBasicAccountData: app states for (%s, %d) not in base deltas", aapp.Address.String(), aapp.App))
-		}
-		rec := ad.appLocalStates[idx]
-		if rec.state == nil {
-			delete(acctData.AppLocalStates, aapp.App)
-		} else {
-			if acctData.AppLocalStates == nil {
-				acctData.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+		} else if _, ok := seen[basics.CreatableIndex(rec.aidx)]; !ok {
+			result[basics.CreatableIndex(rec.aidx)] = ModifiedCreatable{
+				Ctype:   basics.AppCreatable,
+				Created: true,
+				Creator: aapp.Address,
 			}
-			acctData.AppLocalStates[aapp.App] = *rec.state
 		}
-		result[aapp.Address] = acctData
 	}
 
 	for aapp, idx := range ad.assetParamsCache {
-		acctData, ok := result[aapp.Address]
-		// TODO: remove after the schema switch
-		if !ok {
-			panic(fmt.Sprintf("ToBasicAccountData: asset params for (%s, %d) not in base deltas", aapp.Address.String(), aapp.Asset))
-		}
 		rec := ad.assetParams[idx]
 		if rec.params == nil {
-			delete(acctData.AssetParams, aapp.Asset)
-		} else {
-			if acctData.AssetParams == nil {
-				acctData.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
+			result[basics.CreatableIndex(rec.aidx)] = ModifiedCreatable{
+				Ctype:   basics.AssetCreatable,
+				Created: false,
+				Creator: aapp.Address,
 			}
-			acctData.AssetParams[aapp.Asset] = *rec.params
-		}
-		result[aapp.Address] = acctData
-	}
-
-	for aapp, idx := range ad.assetHoldingsCache {
-		acctData, ok := result[aapp.Address]
-		// TODO: remove after the schema switch
-		if !ok {
-			panic(fmt.Sprintf("ToBasicAccountData: asset holding for (%s, %d) not in base deltas", aapp.Address.String(), aapp.Asset))
-		}
-		rec := ad.assetHoldings[idx]
-		if rec.holding == nil {
-			delete(acctData.Assets, aapp.Asset)
-		} else {
-			if acctData.Assets == nil {
-				acctData.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
+		} else if _, ok := seen[basics.CreatableIndex(rec.aidx)]; !ok {
+			result[basics.CreatableIndex(rec.aidx)] = ModifiedCreatable{
+				Ctype:   basics.AssetCreatable,
+				Created: true,
+				Creator: aapp.Address,
 			}
-			acctData.Assets[aapp.Asset] = *rec.holding
 		}
-		result[aapp.Address] = acctData
 	}
 
 	return result
