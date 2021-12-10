@@ -62,6 +62,14 @@ if [[ $RES != *"${EXPECTED}"* ]]; then
     false
 fi
 
+# Foreign reference test
+RES=$(${gcmd} app method --method "referenceTest(account,application,account,asset,account,asset,asset,application,application)uint8[9]" --arg KGTOR3F3Q74JP4LB5M3SOCSJ4BOPOKZ2GPSLMLLGCWYWRXZJNN4LYQJXXU --arg $APPID --arg $ACCOUNT --arg 10 --arg KGTOR3F3Q74JP4LB5M3SOCSJ4BOPOKZ2GPSLMLLGCWYWRXZJNN4LYQJXXU --arg 11 --arg 10 --arg 20 --arg 21 --app-account 2R5LMPTYLVMWYEG4RPI26PJAM7ARTGUB7LZSONQPGLUWTPOP6LQCJTQZVE --foreign-app 21 --foreign-asset 10 --app-id $APPID --from $ACCOUNT 2>&1 || true)
+EXPECTED="method referenceTest(account,application,account,asset,account,asset,asset,application,application)uint8[9] succeeded with output: [2,0,2,0,2,1,0,1,0]"
+if [[ $RES != *"${EXPECTED}"* ]]; then
+    date '+app-abi-method-test FAIL the method call to referenceTest(account,application,account,asset,account,asset,asset,application,application)uint8[9] should not fail %Y%m%d_%H%M%S'
+    false
+fi
+
 # Close out
 RES=$(${gcmd} app method --method "closeOut()string" --on-completion closeout --app-id $APPID --from $ACCOUNT 2>&1 || true)
 EXPECTED="method closeOut()string succeeded with output: \"goodbye Algorand Fan\""
