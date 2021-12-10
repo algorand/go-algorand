@@ -199,7 +199,7 @@ func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeepin
 //  - If the context is canceled (e.g. if the node is shutting down)
 //  - If we couldn't fetch the block (e.g. if there are no peers available or we've reached the catchupRetryLimit)
 //  - If the block is already in the ledger (e.g. if agreement service has already written it)
-//  - If there is an issue validating the block (e.g. if we receive a malformed block)
+//  - If the retrieval of the previous block was unsuccessful
 func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool, peerSelector *peerSelector) bool {
 	i := 0
 	hasLookback := false
