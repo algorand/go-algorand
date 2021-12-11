@@ -17,9 +17,8 @@ APP_KV_MIN_BALANCE = 25_000
 APP_INTS_MIN_BALANCE = 3_500
 APP_BYTES_MIN_BALANCE = 25_000
 
-EXTRA_PAGE_MIN_BALANCE = (
-    APP_MIN_BALANCE  # per userBalance.go::MinBalance() as of Dec 2021
-)
+# per userBalance.go::MinBalance() as of Dec 2021:
+EXTRA_PAGE_MIN_BALANCE = APP_MIN_BALANCE
 
 
 # Set INTERACTIVE True if you want to run a remote debugger interactively on the given PORT
