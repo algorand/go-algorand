@@ -645,6 +645,14 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 	// duplicate code in branches is proven to be a bit faster than
 	// having basics.AppParams and basics.AppLocalState under a common interface with additional loops and type assertions
 	if aapp.global {
+		// var owned map[basics.AppIndex]basics.AppParams
+		// if len(data.AppParams) > 0 {
+		// 	owned = make(map[basics.AppIndex]basics.AppParams, len(data.AppParams))
+		// 	for k, v := range data.AppParams {
+		// 		owned[k] = v
+		// 	}
+		// }
+
 		switch storeDelta.action {
 		case deallocAction:
 			cb.mods.NewAccts.UpsertAppParams(addr, aapp.aidx, nil)
@@ -680,6 +688,14 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 			cb.mods.NewAccts.UpsertAppParams(addr, aapp.aidx, &params)
 		}
 	} else {
+		// var owned map[basics.AppIndex]basics.AppLocalState
+		// if len(data.AppLocalStates) > 0 {
+		// 	owned = make(map[basics.AppIndex]basics.AppLocalState, len(data.AppLocalStates))
+		// 	for k, v := range data.AppLocalStates {
+		// 		owned[k] = v
+		// 	}
+		// }
+
 		switch storeDelta.action {
 		case deallocAction:
 			cb.mods.NewAccts.UpsertAppLocalState(addr, aapp.aidx, nil)

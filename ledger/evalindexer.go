@@ -89,26 +89,70 @@ func (l indexerLedgerConnector) CheckDup(config.ConsensusParams, basics.Round, b
 }
 
 // LookupWithoutRewards is part of LedgerForEvaluator interface.
-func (l indexerLedgerConnector) LookupWithoutRewards(round basics.Round, address basics.Address) (basics.AccountData, basics.Round, error) {
+func (l indexerLedgerConnector) LookupWithoutRewards(round basics.Round, address basics.Address) (ledgercore.AccountData, basics.Round, error) {
 	// check to see if the account data in the cache.
 	if pad, has := l.roundResources.Accounts[address]; has {
 		if pad == nil {
-			return basics.AccountData{}, round, nil
+			return ledgercore.AccountData{}, round, nil
 		}
-		return *pad, round, nil
+		return ledgercore.ToAccountData(*pad), round, nil
 	}
 
 	accountDataMap, err :=
 		l.il.LookupWithoutRewards(map[basics.Address]struct{}{address: {}})
 	if err != nil {
-		return basics.AccountData{}, basics.Round(0), err
+		return ledgercore.AccountData{}, basics.Round(0), err
 	}
 
 	accountData := accountDataMap[address]
 	if accountData == nil {
-		return basics.AccountData{}, round, nil
+		return ledgercore.AccountData{}, round, nil
 	}
-	return *accountData, round, nil
+	return ledgercore.ToAccountData(*accountData), round, nil
+}
+
+// toAccountResource returns ledgercore.AccountResource for a creatable in basics.AccountData
+func toAccountResource(ad basics.AccountData, aidx basics.CreatableIndex, ctype basics.CreatableType) ledgercore.AccountResource {
+	ret := ledgercore.AccountResource{CreatableIndex: aidx, CreatableType: ctype}
+	switch ctype {
+	case basics.AppCreatable:
+		if a, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
+			ret.AppLocalState = &a
+		}
+		if a, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
+			ret.AppParams = &a
+		}
+	case basics.AssetCreatable:
+		if a, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
+			ret.AssetHolding = &a
+		}
+		if a, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
+			ret.AssetParam = &a
+		}
+	}
+	return ret
+}
+
+func (l indexerLedgerConnector) LookupResource(round basics.Round, address basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
+	// check to see if the account data in the cache.
+	if pad, has := l.roundResources.Accounts[address]; has {
+		if pad == nil {
+			return ledgercore.AccountResource{}, nil
+		}
+		return toAccountResource(*pad, aidx, ctype), nil
+	}
+
+	accountDataMap, err :=
+		l.il.LookupWithoutRewards(map[basics.Address]struct{}{address: {}})
+	if err != nil {
+		return ledgercore.AccountResource{}, err
+	}
+
+	accountData := accountDataMap[address]
+	if accountData == nil {
+		return ledgercore.AccountResource{}, nil
+	}
+	return toAccountResource(*accountData, aidx, ctype), nil
 }
 
 // GetCreatorForRound is part of LedgerForEvaluator interface.

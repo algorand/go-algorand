@@ -82,12 +82,29 @@ const accountsUpdatePerRoundHighWatermark = 1 * time.Second
 // the persistent state stored in the account DB (i.e., in the range of
 // rounds covered by the accountUpdates tracker).
 type modifiedAccount struct {
-	// data stores the most recent AccountData for this modified
+	// data stores the most recent ledgercore.AccountData for this modified
 	// account.
-	delta ledgercore.NewAccountDeltas
+	data ledgercore.AccountData
 
 	// ndelta keeps track of how many times this account appears in
 	// accountUpdates.deltas.  This is used to evict modifiedAccount
+	// entries when all changes to an account have been reflected in
+	// the account DB, and no outstanding modifications remain.
+	ndeltas int
+}
+
+// accountCreatable is used as a map key.
+type accountCreatable struct {
+	address basics.Address
+	index   basics.CreatableIndex
+}
+
+type modifiedResource struct {
+	// resource stores concrete information about this particular resource
+	resource ledgercore.AccountResource
+
+	// ndelta keeps track of how many times this resource appears in
+	// accountUpdates.deltas.  This is used to evict modifiedResource
 	// entries when all changes to an account have been reflected in
 	// the account DB, and no outstanding modifications remain.
 	ndeltas int
@@ -117,6 +134,10 @@ type accountUpdates struct {
 	// accounts stores the most recent account state for every
 	// address that appears in deltas.
 	accounts map[basics.Address]modifiedAccount
+
+	// resources stored the most recent resource state for every
+	// address&resource that appears in deltas.
+	resources map[accountCreatable]modifiedResource
 
 	// creatableDeltas stores creatable updates for every round after dbRound.
 	creatableDeltas []map[basics.CreatableIndex]ledgercore.ModifiedCreatable
@@ -156,6 +177,9 @@ type accountUpdates struct {
 	// baseAccounts stores the most recently used accounts, at exactly dbRound
 	baseAccounts lruAccounts
 
+	// baseResources stores the most recently used resources, at exactly dbRound
+	baseResources lruResources
+
 	// logAccountUpdatesMetrics is a flag for enable/disable metrics logging
 	logAccountUpdatesMetrics bool
 
@@ -164,6 +188,12 @@ type accountUpdates struct {
 
 	// lastMetricsLogTime is the time when the previous metrics logging occurred
 	lastMetricsLogTime time.Time
+}
+
+type deferredCommit struct {
+	offset   uint64
+	dbRound  basics.Round
+	lookback basics.Round
 }
 
 // RoundOffsetError is an error for when requested round is behind earliest stored db entry
@@ -236,12 +266,21 @@ func (au *accountUpdates) close() {
 // LookupWithRewards returns the account data for a given address at a given round.
 // Note that the function doesn't update the account with the rewards,
 // even while it does return the AccountData which represent the "rewarded" account data.
-func (au *accountUpdates) LookupWithRewards(rnd basics.Round, addr basics.Address) (data basics.AccountData, err error) {
+func (au *accountUpdates) LookupWithRewards(rnd basics.Round, addr basics.Address) (data ledgercore.AccountData, err error) {
 	return au.lookupWithRewards(rnd, addr)
 }
 
+// LookupOnlineAccountData returns the online account data for a given address at a given round.
+func (au *accountUpdates) LookupOnlineAccountData(rnd basics.Round, addr basics.Address) (data basics.OnlineAccountData, err error) {
+	return au.lookupOnlineAccountData(rnd, addr)
+}
+
+func (au *accountUpdates) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, basics.Round, error) {
+	return au.lookupResource(rnd, addr, aidx, ctype, true /* take lock */)
+}
+
 // LookupWithoutRewards returns the account data for a given address at a given round.
-func (au *accountUpdates) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (data basics.AccountData, validThrough basics.Round, err error) {
+func (au *accountUpdates) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (data ledgercore.AccountData, validThrough basics.Round, err error) {
 	return au.lookupWithoutRewards(rnd, addr, true /* take lock*/)
 }
 
@@ -646,8 +685,13 @@ func (aul *accountUpdatesLedgerEvaluator) CheckDup(config.ConsensusParams, basic
 }
 
 // lookupWithoutRewards returns the account balance for a given address at a given round, without the reward
-func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
+func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
 	return aul.au.lookupWithoutRewards(rnd, addr, false /*don't sync*/)
+}
+
+func (aul *accountUpdatesLedgerEvaluator) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
+	r, _, err := aul.au.lookupResource(rnd, addr, aidx, ctype, false /* don't sync */)
+	return r, err
 }
 
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
@@ -711,6 +755,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	au.deltas = nil
 	au.creatableDeltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
+	au.resources = make(map[accountCreatable]modifiedResource)
 	au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	au.deltasAccum = []int{0}
 
@@ -731,28 +776,59 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	if rnd != au.latest()+1 {
 		au.log.Panicf("accountUpdates: newBlockImpl %d too far in the future, dbRound %d, deltas %d", rnd, au.cachedDBRound, len(au.deltas))
 	}
-
-	// Partial delta support
-	// Make delta cumulative: for all accounts in delta.NewAccts get params/holdings/states from prev deltas and combine
-	newAccts := delta.NewAccts.Clone()
-	for i := len(au.deltas) - 1; i >= 0; i-- {
-		newAccts.MergeInMatchingAccounts(au.deltas[i])
-	}
-
-	au.deltas = append(au.deltas, newAccts)
+	au.deltas = append(au.deltas, delta.NewAccts)
 	au.versions = append(au.versions, blk.CurrentProtocol)
 	au.creatableDeltas = append(au.creatableDeltas, delta.Creatables)
 	au.deltasAccum = append(au.deltasAccum, delta.NewAccts.Len()+au.deltasAccum[len(au.deltasAccum)-1])
 
 	au.baseAccounts.flushPendingWrites()
 
-	for i := 0; i < newAccts.Len(); i++ {
-		addr, _ := newAccts.GetByIdx(i)
-		delta := newAccts.ExtractDelta(addr)
+	for i := 0; i < delta.NewAccts.Len(); i++ {
+		addr, data := delta.NewAccts.GetByIdx(i)
 		macct := au.accounts[addr]
 		macct.ndeltas++
-		macct.delta = delta
+		macct.data = data
 		au.accounts[addr] = macct
+	}
+	for _, holding := range delta.NewAccts.GetAllAssetsHoldings() {
+		key := accountCreatable{
+			address: holding.Addr,
+			index:   basics.CreatableIndex(holding.Aidx),
+		}
+		mres := au.resources[key]
+		mres.resource.AssetHolding = holding.Holding
+		mres.ndeltas++
+		au.resources[key] = mres
+	}
+	for _, params := range delta.NewAccts.GetAllAssetParams() {
+		key := accountCreatable{
+			address: params.Addr,
+			index:   basics.CreatableIndex(params.Aidx),
+		}
+		mres := au.resources[key]
+		mres.resource.AssetParam = params.Params
+		mres.ndeltas++
+		au.resources[key] = mres
+	}
+	for _, localStates := range delta.NewAccts.GetAllAppLocalStates() {
+		key := accountCreatable{
+			address: localStates.Addr,
+			index:   basics.CreatableIndex(localStates.Aidx),
+		}
+		mres := au.resources[key]
+		mres.resource.AppLocalState = localStates.State
+		mres.ndeltas++
+		au.resources[key] = mres
+	}
+	for _, appParams := range delta.NewAccts.GetAllAppParams() {
+		key := accountCreatable{
+			address: appParams.Addr,
+			index:   basics.CreatableIndex(appParams.Aidx),
+		}
+		mres := au.resources[key]
+		mres.resource.AppParams = appParams.Params
+		mres.ndeltas++
+		au.resources[key] = mres
 	}
 
 	for cidx, cdelta := range delta.Creatables {
@@ -778,7 +854,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 // lookupWithRewards returns the account data for a given address at a given round.
 // The rewards are added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
 // even while it does return the AccountData which represent the "rewarded" account data.
-func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Address) (data basics.AccountData, err error) {
+func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Address) (data ledgercore.AccountData, err error) {
 	au.accountsMu.RLock()
 	needUnlock := true
 	defer func() {
@@ -814,30 +890,12 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 		}
 
 		// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
-		md, indeltas := au.accounts[addr]
+		macct, indeltas := au.accounts[addr]
 		if indeltas {
 			// Check if this is the most recent round, in which case, we can
 			// use a cache of the most recent account state.
 			if offset == uint64(len(au.deltas)) {
-				// Partial delta handling:
-				// - load full delta
-				// - update with data from the delta
-				// Remove after switching to a new partial schema
-				var result basics.AccountData
-				if bacct, has := au.baseAccounts.read(addr); has && bacct.round == currentDbRound {
-					result = md.delta.ApplyToBasicsAccountData(addr, bacct.accountData)
-				} else {
-					persistedData, err = au.accountsq.lookup(addr)
-					if persistedData.round == currentDbRound {
-						au.baseAccounts.writePending(persistedData)
-						result = md.delta.ApplyToBasicsAccountData(addr, persistedData.accountData)
-					} else {
-						au.accountsMu.RUnlock()
-						needUnlock = false
-						goto repeat
-					}
-				}
-				return result, nil
+				return macct.data, nil
 			}
 			// the account appears in the deltas, but we don't know if it appears in the
 			// delta range of [0..offset], so we'll need to check :
@@ -845,27 +903,9 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 			// priority if present.
 			for offset > 0 {
 				offset--
-				_, ok := au.deltas[offset].GetData(addr)
-				// Partial delta handling:
-				// - load full delta
-				// - update with data from the delta
-				// Remove after switching to a new partial schema
+				d, ok := au.deltas[offset].GetData(addr)
 				if ok {
-					var result basics.AccountData
-					if bacct, has := au.baseAccounts.read(addr); has && bacct.round == currentDbRound {
-						result = au.deltas[offset].ApplyToBasicsAccountData(addr, bacct.accountData)
-					} else {
-						persistedData, err = au.accountsq.lookup(addr)
-						if persistedData.round == currentDbRound {
-							au.baseAccounts.writePending(persistedData)
-							result = au.deltas[offset].ApplyToBasicsAccountData(addr, persistedData.accountData)
-						} else {
-							au.accountsMu.RUnlock()
-							needUnlock = false
-							goto repeat
-						}
-					}
-					return result, nil
+					return d, nil
 				}
 			}
 		}
@@ -875,7 +915,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
 			// would ensure that we promote this field.
 			au.baseAccounts.writePending(macct)
-			return macct.accountData, nil
+			return macct.accountData.GetLedgerCoreAccountData(), nil
 		}
 
 		au.accountsMu.RUnlock()
@@ -889,12 +929,12 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 		persistedData, err = au.accountsq.lookup(addr)
 		if persistedData.round == currentDbRound {
 			au.baseAccounts.writePending(persistedData)
-			return persistedData.accountData, err
+			return persistedData.accountData.GetLedgerCoreAccountData(), err
 		}
-	repeat:
+
 		if persistedData.round < currentDbRound {
 			au.log.Errorf("accountUpdates.lookupWithRewards: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
-			return basics.AccountData{}, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
+			return ledgercore.AccountData{}, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 		}
 		au.accountsMu.RLock()
 		needUnlock = true
@@ -904,8 +944,179 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 	}
 }
 
+// lookupWithRewards returns the online account data for a given address at a given round.
+func (au *accountUpdates) lookupOnlineAccountData(rnd basics.Round, addr basics.Address) (data basics.OnlineAccountData, err error) {
+	au.accountsMu.RLock()
+	needUnlock := true
+	defer func() {
+		if needUnlock {
+			au.accountsMu.RUnlock()
+		}
+	}()
+	var offset uint64
+	var rewardsProto config.ConsensusParams
+	var rewardsLevel uint64
+	var persistedData persistedAccountData
+	for {
+		currentDbRound := au.cachedDBRound
+		currentDeltaLen := len(au.deltas)
+		offset, err = au.roundOffset(rnd)
+		if err != nil {
+			return
+		}
+
+		rewardsProto = config.Consensus[au.versions[offset]]
+		rewardsLevel = au.roundTotals[offset].RewardsLevel
+
+		// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
+		macct, indeltas := au.accounts[addr]
+		if indeltas {
+			// Check if this is the most recent round, in which case, we can
+			// use a cache of the most recent account state.
+			if offset == uint64(len(au.deltas)) {
+				return macct.data.OnlineAccountData(rewardsProto, rewardsLevel), nil
+			}
+			// the account appears in the deltas, but we don't know if it appears in the
+			// delta range of [0..offset], so we'll need to check :
+			// Traverse the deltas backwards to ensure that later updates take
+			// priority if present.
+			for offset > 0 {
+				offset--
+				d, ok := au.deltas[offset].GetData(addr)
+				if ok {
+					return d.OnlineAccountData(rewardsProto, rewardsLevel), nil
+				}
+			}
+		}
+
+		// check the baseAccounts -
+		if macct, has := au.baseAccounts.read(addr); has && macct.round == currentDbRound {
+			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
+			// would ensure that we promote this field.
+			au.baseAccounts.writePending(macct)
+			u := macct.accountData.GetCoreAccountData()
+			return u.OnlineAccountData(rewardsProto, rewardsLevel), nil
+		}
+
+		au.accountsMu.RUnlock()
+		needUnlock = false
+
+		// No updates of this account in the in-memory deltas; use on-disk DB.
+		// The check in roundOffset() made sure the round is exactly the one
+		// present in the on-disk DB.  As an optimization, we avoid creating
+		// a separate transaction here, and directly use a prepared SQL query
+		// against the database.
+		persistedData, err = au.accountsq.lookup(addr)
+		if persistedData.round == currentDbRound {
+			au.baseAccounts.writePending(persistedData)
+			u := persistedData.accountData.GetCoreAccountData()
+			return u.OnlineAccountData(rewardsProto, rewardsLevel), err
+		}
+
+		if persistedData.round < currentDbRound {
+			au.log.Errorf("accountUpdates.lookupOnlineAccountData: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
+			return basics.OnlineAccountData{}, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
+		}
+		au.accountsMu.RLock()
+		needUnlock = true
+		for currentDbRound >= au.cachedDBRound && currentDeltaLen == len(au.deltas) {
+			au.accountsReadCond.Wait()
+		}
+	}
+}
+
+func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType, synchronized bool) (data ledgercore.AccountResource, validThrough basics.Round, err error) {
+	needUnlock := false
+	if synchronized {
+		au.accountsMu.RLock()
+		needUnlock = true
+	}
+	defer func() {
+		if needUnlock {
+			au.accountsMu.RUnlock()
+		}
+	}()
+	var offset uint64
+	var persistedData persistedResourcesData
+	for {
+		currentDbRound := au.cachedDBRound
+		currentDeltaLen := len(au.deltas)
+		offset, err = au.roundOffset(rnd)
+		if err != nil {
+			return
+		}
+
+		// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
+		macct, indeltas := au.resources[accountCreatable{address: addr, index: aidx}]
+		if indeltas {
+			// Check if this is the most recent round, in which case, we can
+			// use a cache of the most recent account state.
+			if offset == uint64(len(au.deltas)) {
+				return macct.resource, rnd, nil
+			}
+			// the account appears in the deltas, but we don't know if it appears in the
+			// delta range of [0..offset], so we'll need to check :
+			// Traverse the deltas backwards to ensure that later updates take
+			// priority if present.
+			for offset > 0 {
+				offset--
+				r, ok := au.deltas[offset].GetResource(addr, aidx, ctype)
+				if ok {
+					// the returned validThrough here is not optimal, but it still correct. We could get a more accurate value by scanning
+					// the deltas forward, but this would be time consuming loop, which might not pay off.
+					return r, rnd, nil
+				}
+			}
+		} else {
+			// we know that the account in not in the deltas - so there is no point in scanning it.
+			// we've going to fall back to search in the database, but before doing so, we should
+			// update the rnd so that it would point to the end of the known delta range.
+			// ( that would give us the best validity range )
+			rnd = currentDbRound + basics.Round(currentDeltaLen)
+		}
+
+		// check the baseResources -
+		if macct, has := au.baseResources.read(addr, aidx); has {
+			// we don't technically need this, since it's already in the baseResources, however, writing this over
+			// would ensure that we promote this field.
+			au.baseResources.writePending(macct, addr)
+			return macct.AccountResource(), rnd, nil
+		}
+
+		if synchronized {
+			au.accountsMu.RUnlock()
+			needUnlock = false
+		}
+		// No updates of this account in the in-memory deltas; use on-disk DB.
+		// The check in roundOffset() made sure the round is exactly the one
+		// present in the on-disk DB.  As an optimization, we avoid creating
+		// a separate transaction here, and directly use a prepared SQL query
+		// against the database.
+		persistedData, err = au.accountsq.lookupResources(addr, aidx, ctype)
+		if persistedData.round == currentDbRound {
+			au.baseResources.writePending(persistedData, addr)
+			return persistedData.AccountResource(), rnd, err
+		}
+		if synchronized {
+			if persistedData.round < currentDbRound {
+				au.log.Errorf("accountUpdates.lookupResource: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
+				return ledgercore.AccountResource{}, basics.Round(0), &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
+			}
+			au.accountsMu.RLock()
+			needUnlock = true
+			for currentDbRound >= au.cachedDBRound && currentDeltaLen == len(au.deltas) {
+				au.accountsReadCond.Wait()
+			}
+		} else {
+			// in non-sync mode, we don't wait since we already assume that we're synchronized.
+			au.log.Errorf("accountUpdates.lookupResource: database round %d mismatching in-memory round %d", persistedData.round, currentDbRound)
+			return ledgercore.AccountResource{}, basics.Round(0), &MismatchingDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
+		}
+	}
+}
+
 // lookupWithoutRewards returns the account data for a given address at a given round.
-func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Address, synchronized bool) (data basics.AccountData, validThrough basics.Round, err error) {
+func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Address, synchronized bool) (data ledgercore.AccountData, validThrough basics.Round, err error) {
 	needUnlock := false
 	if synchronized {
 		au.accountsMu.RLock()
@@ -927,32 +1138,12 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		}
 
 		// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
-		md, indeltas := au.accounts[addr]
+		macct, indeltas := au.accounts[addr]
 		if indeltas {
 			// Check if this is the most recent round, in which case, we can
 			// use a cache of the most recent account state.
 			if offset == uint64(len(au.deltas)) {
-				// Partial delta handling:
-				// - load full delta
-				// - update with data from the delta
-				// Remove after switching to a new partial schema
-				var result basics.AccountData
-				if bacct, has := au.baseAccounts.read(addr); has && bacct.round == currentDbRound {
-					result = md.delta.ApplyToBasicsAccountData(addr, bacct.accountData)
-				} else {
-					persistedData, err = au.accountsq.lookup(addr)
-					if persistedData.round == currentDbRound {
-						au.baseAccounts.writePending(persistedData)
-						result = md.delta.ApplyToBasicsAccountData(addr, persistedData.accountData)
-					} else {
-						if synchronized {
-							au.accountsMu.RUnlock()
-							needUnlock = false
-						}
-						goto repeat
-					}
-				}
-				return result, rnd, nil
+				return macct.data, rnd, nil
 			}
 			// the account appears in the deltas, but we don't know if it appears in the
 			// delta range of [0..offset], so we'll need to check :
@@ -960,32 +1151,11 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			// priority if present.
 			for offset > 0 {
 				offset--
-				_, ok := au.deltas[offset].GetData(addr)
+				d, ok := au.deltas[offset].GetData(addr)
 				if ok {
 					// the returned validThrough here is not optimal, but it still correct. We could get a more accurate value by scanning
 					// the deltas forward, but this would be time consuming loop, which might not pay off.
-
-					// Partial delta handling:
-					// - load full delta
-					// - update with data from the delta
-					// Remove after switching to a new partial schema
-					var result basics.AccountData
-					if bacct, has := au.baseAccounts.read(addr); has && bacct.round == currentDbRound {
-						result = au.deltas[offset].ApplyToBasicsAccountData(addr, bacct.accountData)
-					} else {
-						persistedData, err = au.accountsq.lookup(addr)
-						if persistedData.round == currentDbRound {
-							au.baseAccounts.writePending(persistedData)
-							result = au.deltas[offset].ApplyToBasicsAccountData(addr, persistedData.accountData)
-						} else {
-							if synchronized {
-								au.accountsMu.RUnlock()
-								needUnlock = false
-							}
-							goto repeat
-						}
-					}
-					return result, rnd, nil
+					return d, rnd, nil
 				}
 			}
 		} else {
@@ -1001,7 +1171,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
 			// would ensure that we promote this field.
 			au.baseAccounts.writePending(macct)
-			return macct.accountData, rnd, nil
+			return macct.accountData.GetCoreAccountData(), rnd, nil
 		}
 
 		if synchronized {
@@ -1016,13 +1186,12 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		persistedData, err = au.accountsq.lookup(addr)
 		if persistedData.round == currentDbRound {
 			au.baseAccounts.writePending(persistedData)
-			return persistedData.accountData, rnd, err
+			return persistedData.accountData.GetCoreAccountData(), rnd, err
 		}
-	repeat:
 		if synchronized {
 			if persistedData.round < currentDbRound {
 				au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
-				return basics.AccountData{}, basics.Round(0), &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
+				return ledgercore.AccountData{}, basics.Round(0), &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 			}
 			au.accountsMu.RLock()
 			needUnlock = true
@@ -1032,7 +1201,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		} else {
 			// in non-sync mode, we don't wait since we already assume that we're synchronized.
 			au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d mismatching in-memory round %d", persistedData.round, currentDbRound)
-			return basics.AccountData{}, basics.Round(0), &MismatchingDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
+			return ledgercore.AccountData{}, basics.Round(0), &MismatchingDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 		}
 	}
 }
@@ -1259,7 +1428,7 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 	// from in-memory cache when no references remain.
 	for i := 0; i < dcc.compactAccountDeltas.len(); i++ {
 		addr, acctUpdate := dcc.compactAccountDeltas.getByIdx(i)
-		cnt := acctUpdate.ndeltas
+		cnt := acctUpdate.nAcctDeltas
 		macct, ok := au.accounts[addr]
 		if !ok {
 			au.log.Panicf("inconsistency: flushed %d changes to %s, but not in au.accounts", cnt, addr)
@@ -1273,6 +1442,8 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 			macct.ndeltas -= cnt
 			au.accounts[addr] = macct
 		}
+		// todo : tsachi -
+		// remove the entries from au.resources as needed.
 	}
 
 	for _, persistedAcct := range dcc.updatedPersistedAccounts {
