@@ -248,7 +248,7 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 				// ledger already has the block, no need to request this block.
 				// only the agreement could have added this block into the ledger, catchup is complete
 				s.log.Infof("fetchAndWrite(%d): the block is already in the ledger. The catchup is complete", r)
-				return false
+				return true
 			}
 			s.log.Debugf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
 			peerSelector.rankPeer(psp, peerRankDownloadFailed)

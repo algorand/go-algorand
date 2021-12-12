@@ -345,12 +345,11 @@ func TestBasicCatchupCompletes(t *testing.T) {
 
 	// Make the network progress faster
 	consensus := make(config.ConsensusProtocols)
-	const consensusCatchpointCatchupTestProtocol = protocol.ConsensusVersion("catchpointtestingprotocol")
-	catchpointCatchupProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
-	catchpointCatchupProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	catchpointCatchupProtocol.AgreementFilterTimeoutPeriod0 = 400 * time.Millisecond
-	catchpointCatchupProtocol.AgreementFilterTimeout = 400 * time.Millisecond
-	consensus[protocol.ConsensusCurrentVersion] = catchpointCatchupProtocol
+	fastProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
+	fastProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	fastProtocol.AgreementFilterTimeoutPeriod0 = 400 * time.Millisecond
+	fastProtocol.AgreementFilterTimeout = 400 * time.Millisecond
+	consensus[protocol.ConsensusCurrentVersion] = fastProtocol
 
 	// Setup the fixture with the modified fast consensus
 	var fixture fixtures.RestClientFixture
