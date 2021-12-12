@@ -250,17 +250,16 @@ int crypto_sign_ed25519_open_batch(const unsigned char **m, const unsigned long 
 
         /* generate r (scalars[batchsize+1]..scalars[2*batchsize] */
         ed25519_randombytes_unsafe (batch.r, batchsize * 16);
-        
-
         r_scalars = &batch.scalars[batchsize + 1];
-        for (i = 0; i < batchsize; i++)
-            expand256_modm(r_scalars[i], batch.r[i], 16);
 
-        /* compute scalars[0] = ((r1s1 + r2s2 + ...)) */
-        for (i = 0; i < batchsize; i++) {
-            expand256_modm(batch.scalars[i], RS[i] + 32, 32);
+        /* compute  r0s0, r1s1, r2s2, ...) */
+        for (i = 0; i < batchsize; i++){
+            expand256_modm16(r_scalars[i], batch.r[i]);
+            /* compute scalars[0] = ((r1s1 + r2s2 + ...)) */
+            expand256_modm32(batch.scalars[i], RS[i] + 32);
             mul256_modm(batch.scalars[i], batch.scalars[i], r_scalars[i]);
         }
+        /* compute scalars[0] = ((r0s0 + r1s1 + r2s2 + ...)) */
         for (i = 1; i < batchsize; i++)
             add256_modm(batch.scalars[0], batch.scalars[0], batch.scalars[i]);
 
@@ -274,7 +273,7 @@ int crypto_sign_ed25519_open_batch(const unsigned char **m, const unsigned long 
             crypto_hash_sha512_final(&hs, hram);
 
 
-            expand256_modm(batch.scalars[i+1], hram, 64);
+            expand256_modm64(batch.scalars[i+1], hram);
             mul256_modm(batch.scalars[i+1], batch.scalars[i+1], r_scalars[i]);
         }
         /* compute points */

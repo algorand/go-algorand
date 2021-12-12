@@ -130,7 +130,6 @@ void barrett_reduce256_modm(sc25519 r, const sc25519 q1, const sc25519 r1)
 }
 
 
-
 /*
  Input:
  s[0]+256*s[1]+...+256^63*s[63] = s
@@ -140,21 +139,19 @@ void barrett_reduce256_modm(sc25519 r, const sc25519 q1, const sc25519 r1)
  where l = 2^252 + 27742317777372353535851937790883648493.
  the output returns in sc25519 presentation 
  */
-void expand256_modm(sc25519 out, const unsigned char *in, size_t len)
+void expand256_modm64(sc25519 out, const unsigned char *in)
 {
-	unsigned char work[64] = {0};
-	sc25519_element_t x[16];
+	sc25519_element_t x[8];
 	sc25519 q1;
 
-	memcpy(work, in, len);
-	x[0] = U8TO64_LE(work +  0);
-	x[1] = U8TO64_LE(work +  8);
-	x[2] = U8TO64_LE(work + 16);
-	x[3] = U8TO64_LE(work + 24);
-	x[4] = U8TO64_LE(work + 32);
-	x[5] = U8TO64_LE(work + 40);
-	x[6] = U8TO64_LE(work + 48);
-	x[7] = U8TO64_LE(work + 56);
+	x[0] = U8TO64_LE(in +  0);
+	x[1] = U8TO64_LE(in +  8);
+	x[2] = U8TO64_LE(in + 16);
+	x[3] = U8TO64_LE(in + 24);
+	x[4] = U8TO64_LE(in + 32);
+	x[5] = U8TO64_LE(in + 40);
+	x[6] = U8TO64_LE(in + 48);
+	x[7] = U8TO64_LE(in + 56);
 
 	/* r1 = (x mod 256^(32+1)) = x mod (2^8)(31+1) = x & ((1 << 264) - 1) */
 	out[0] = (                         x[0]) & 0xffffffffffffff;
@@ -162,10 +159,6 @@ void expand256_modm(sc25519 out, const unsigned char *in, size_t len)
 	out[2] = ((x[ 1] >> 48) | (x[ 2] << 16)) & 0xffffffffffffff;
 	out[3] = ((x[ 2] >> 40) | (x[ 3] << 24)) & 0xffffffffffffff;
 	out[4] = ((x[ 3] >> 32) | (x[ 4] << 32)) & 0x0000ffffffffff;
-
-	/* under 252 bits, no need to reduce */
-	if (len < 32)
-		return;
 
 	/* q1 = x >> 248 = 264 bits */
 	q1[0] = ((x[ 3] >> 56) | (x[ 4] <<  8)) & 0xffffffffffffff;
@@ -177,6 +170,68 @@ void expand256_modm(sc25519 out, const unsigned char *in, size_t len)
 	barrett_reduce256_modm(out, q1, out);
 }
 
+/*
+ Input:
+ s[0]+256*s[1]+...+256^32*s[32] = s
+ *
+ Output:
+ s[0]+256*s[1]+...+256^31*s[31] = s mod l
+ where l = 2^252 + 27742317777372353535851937790883648493.
+ the output returns in sc25519 presentation 
+ */
+void expand256_modm32(sc25519 out, const unsigned char *in)
+{
+	sc25519_element_t x[4];
+	sc25519 q1;
+
+	x[0] = U8TO64_LE(in +  0);
+	x[1] = U8TO64_LE(in +  8);
+	x[2] = U8TO64_LE(in + 16);
+	x[3] = U8TO64_LE(in + 24);
+
+	/* r1 = (x mod 256^(32+1)) = x mod (2^8)(31+1) = x & ((1 << 264) - 1) */
+	out[0] = (                         x[0]) & 0xffffffffffffff;
+	out[1] = ((x[ 0] >> 56) | (x[ 1] <<  8)) & 0xffffffffffffff;
+	out[2] = ((x[ 1] >> 48) | (x[ 2] << 16)) & 0xffffffffffffff;
+	out[3] = ((x[ 2] >> 40) | (x[ 3] << 24)) & 0xffffffffffffff;
+	out[4] = ((x[ 3] >> 32) 			   ) & 0x0000ffffffffff;
+
+	/* q1 = x >> 248 = 264 bits */
+	q1[0] = ((x[ 3] >> 56)) & 0xffffffffffffff;
+	q1[1] = 0;
+	q1[2] = 0;
+	q1[3] = 0;
+	q1[4] = 0;
+
+	barrett_reduce256_modm(out, q1, out);
+}
+
+
+/*
+ Input:
+ s[0]+256*s[1]+...+256^16*s[16] = s
+ *
+ Output:
+ s[0]+256*s[1]+...+256^31*s[31] = s mod l
+ where l = 2^252 + 27742317777372353535851937790883648493.
+ the output returns in sc25519 presentation 
+ */
+void expand256_modm16(sc25519 out, const unsigned char *in)
+{
+	sc25519_element_t x[2];
+	sc25519 q1;
+
+	x[0] = U8TO64_LE(in +  0);
+	x[1] = U8TO64_LE(in +  8);
+
+	/* r1 = (x mod 256^(32+1)) = x mod (2^8)(31+1) = x & ((1 << 264) - 1) */
+	out[0] = (                         x[0]) & 0xffffffffffffff;
+	out[1] = ((x[ 0] >> 56) | (x[ 1] <<  8)) & 0xffffffffffffff;
+	out[2] = ((x[ 1] >> 48) 			   ) & 0xffffffffffffff;
+	out[3] = 0;
+	out[4] = 0;
+
+}
 
 void add256_modm(sc25519 r, const sc25519 x, const sc25519 y) 
 {
@@ -269,20 +324,24 @@ int lte256_modm_batch(const sc25519 a, const sc25519 b, size_t limbsize) {
 
 /* is a == 0 */
 int iszero256_modm_batch(const sc25519 a) {
-	size_t i;
-	for (i = 0; i < 5; i++)
-		if (a[i])
-			return 0;
-	return 1;
+	sc25519_element_t result = a[0] | 0;
+	result |= a[1] | 0;
+	result |= a[2] | 0;
+	result |= a[3] | 0;
+	result |= a[4] | 0;
+
+	return (result == 0);
 }
 
 /* is a == 1 */
 int isone256_modm_batch(const sc25519 a) {
-	size_t i;
-	for (i = 0; i < 5; i++)
-		if (a[i] != ((i) ? 0 : 1))
-			return 0;
-	return 1;
+	sc25519_element_t result = a[0] ^ 1;
+	result |= a[1] | 0;
+	result |= a[2] | 0;
+	result |= a[3] | 0;
+	result |= a[4] | 0;
+
+	return (result == 0);
 }
 
 /* can a fit in to (at most) 128 bits */

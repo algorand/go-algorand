@@ -1156,7 +1156,7 @@ int
 ge25519_is_canonical_vartime(const unsigned char *s)
 {
     if (s[0] < 0xED) {
-         static const unsigned char non_canoncial_special_points[][32] = {
+        static const unsigned char non_canoncial_special_points[][32] = {
             /* (-0,1) */
             { 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -1165,14 +1165,19 @@ ge25519_is_canonical_vartime(const unsigned char *s)
             { 0xec, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff },
-         };
-        if (memcmp(s, non_canoncial_special_points[0], 32) == 0 ||
-            memcmp(s, non_canoncial_special_points[1], 32) == 0)
-        {
-            return 0;
-        }
-        return 1;
-        
+        };
+      
+        uint64_t c[2] = { 0 };
+        c[0] |= ((uint64_t*)s)[0] ^ non_canoncial_special_points[0][0];
+        c[0] |= ((uint64_t*)s)[1] ^ non_canoncial_special_points[0][1];
+        c[0] |= ((uint64_t*)s)[2] ^ non_canoncial_special_points[0][2];
+        c[0] |= ((uint64_t*)s)[3] ^ non_canoncial_special_points[0][3];
+
+        c[1] |= ((uint64_t*)s)[0] ^ non_canoncial_special_points[1][0];
+        c[1] |= ((uint64_t*)s)[1] ^ non_canoncial_special_points[1][1];
+        c[1] |= ((uint64_t*)s)[2] ^ non_canoncial_special_points[1][2];
+        c[1] |= ((uint64_t*)s)[3] ^ non_canoncial_special_points[1][3];
+        return !((c[0]==0) || (c[1]==0));
     }
 
     return ge25519_is_canonical(s);

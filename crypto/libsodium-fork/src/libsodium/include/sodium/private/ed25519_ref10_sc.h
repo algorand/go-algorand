@@ -20,6 +20,9 @@ typedef sc25519_element_t sc25519[5];
 static void barrett_reduce256_modm(sc25519 r, const sc25519 q1, const sc25519 r1);
 static void reduce256_modm(sc25519 r);
 void expand256_modm(sc25519 out, const unsigned char *in, size_t len);
+void expand256_modm16(sc25519 out, const unsigned char *in);
+void expand256_modm32(sc25519 out, const unsigned char *in);
+void expand256_modm64(sc25519 out, const unsigned char *in);
 void add256_modm(sc25519 r, const sc25519 x, const sc25519 y);
 void mul256_modm(sc25519 r, const sc25519 x, const sc25519 y);
 
