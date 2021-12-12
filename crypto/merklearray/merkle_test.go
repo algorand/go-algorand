@@ -129,7 +129,7 @@ func testMerkle(t *testing.T, hashtype crypto.HashType, size uint64) {
 		require.NoError(t, err)
 
 		err = Verify(root, map[uint64]crypto.Hashable{i: junk}, proof)
-		require.Error(t, err, "no error when verifying junk")
+		require.ErrorIs(t, err, ErrRootMismatch)
 
 		allpos = append(allpos, i)
 		allmap[i] = a[i]
@@ -142,16 +142,20 @@ func testMerkle(t *testing.T, hashtype crypto.HashType, size uint64) {
 	require.NoError(t, err)
 
 	err = Verify(root, map[uint64]crypto.Hashable{0: junk}, proof)
-	require.Error(t, err, "no error when verifying junk batch")
+	require.ErrorIs(t, err, ErrRootMismatch)
 
 	err = Verify(root, map[uint64]crypto.Hashable{0: junk}, nil)
-	require.Error(t, err, "no error when verifying junk batch")
+	require.ErrorIs(t, err, ErrProofIsNil)
 
 	_, err = tree.Prove([]uint64{size})
-	require.Error(t, err, "no error when proving past the end")
+	if size == 0 {
+		require.ErrorIs(t, err, ErrProvingZeroCommitment)
+	} else {
+		require.Contains(t, err.Error(), "larger than leaf count")
+	}
 
 	err = Verify(root, map[uint64]crypto.Hashable{size: junk}, nil)
-	require.Error(t, err, "no error when verifying past the end")
+	require.ErrorIs(t, err, ErrProofIsNil)
 
 	if size > 0 {
 		var somepos []uint64
@@ -223,10 +227,10 @@ func TestVerifyWithNoElements(t *testing.T) {
 	p, err := tree.Prove([]uint64{1})
 	a.NoError(err)
 	err = Verify(tree.Root(), map[uint64]crypto.Hashable{}, p)
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrEmptyProofNonEmptyElements)
 
 	err = Verify(tree.Root(), map[uint64]crypto.Hashable{}, nil)
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrProofIsNil)
 
 	err = Verify(tree.Root(), map[uint64]crypto.Hashable{}, &Proof{HashFactory: crypto.HashFactory{HashType: crypto.Sha512_256}})
 	require.NoError(t, err)
@@ -502,7 +506,6 @@ func getRandomPositions(numElets, max uint64) (res []uint64) {
 }
 
 func testMerkelSizeLimits(t *testing.T, hashtype crypto.HashType, size uint64, positions []uint64) (*Tree, *Proof) {
-
 	a := make(TestArray, size)
 	for i := uint64(0); i < size; i++ {
 		crypto.RandBytes(a[i][:])
@@ -565,7 +568,7 @@ func testMerkleVC(t *testing.T, hashtype crypto.HashType, size uint64) {
 		require.NoError(t, err)
 
 		err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{i: junk}, proof)
-		require.Error(t, err, "no error when verifying junk")
+		require.ErrorIs(t, err, ErrRootMismatch)
 
 		allpos = append(allpos, i)
 		allmap[i] = a[i]
@@ -578,16 +581,17 @@ func testMerkleVC(t *testing.T, hashtype crypto.HashType, size uint64) {
 	require.NoError(t, err)
 
 	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{0: junk}, proof)
-	require.Error(t, err, "no error when verifying junk batch")
+	require.ErrorIs(t, err, ErrRootMismatch)
 
 	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{0: junk}, nil)
-	require.Error(t, err, "no error when verifying junk batch")
+	require.ErrorIs(t, err, ErrProofIsNil)
 
+	// when building VC with empty array we should expect a tree with one bottom leaf.
 	_, err = tree.Prove([]uint64{size})
-	require.Error(t, err, "no error when proving past the end")
+	require.Contains(t, err.Error(), "larger than leaf count")
 
 	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{size: junk}, nil)
-	require.Error(t, err, "no error when verifying past the end")
+	require.ErrorIs(t, err, ErrProofIsNil)
 
 	if size > 0 {
 		var somepos []uint64
@@ -645,6 +649,33 @@ func TestVCEmptyTree(t *testing.T) {
 
 	rootHash := tree.Root()
 	require.Equal(t, []byte(rootHash), root2)
+}
+
+func TestTreeTooDeep(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	size := uint64(10)
+	arr := make(TestArray, size)
+	for i := uint64(0); i < size; i++ {
+		crypto.RandBytes(arr[i][:])
+	}
+
+	tree, err := BuildVectorCommitmentTree(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+	proof, err := tree.Prove([]uint64{1})
+	require.NoError(t, err)
+	proof.TreeDepth = 65
+	err = VerifyVectorCommitment(tree.Root(), map[uint64]crypto.Hashable{1: arr[1]}, proof)
+	require.ErrorIs(t, err, ErrTreeTooDeep)
+
+	tree, err = Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+	proof, err = tree.Prove([]uint64{1})
+	require.NoError(t, err)
+	proof.TreeDepth = 65
+	err = Verify(tree.Root(), map[uint64]crypto.Hashable{1: arr[1]}, proof)
+	require.ErrorIs(t, err, ErrTreeTooDeep)
 }
 
 func BenchmarkMerkleCommit(b *testing.B) {

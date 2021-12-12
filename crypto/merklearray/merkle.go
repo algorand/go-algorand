@@ -18,6 +18,7 @@ package merklearray
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"hash"
 	"sort"
@@ -31,6 +32,15 @@ const (
 
 	// MaxNumLeaves is the maximum number of leaves allowed in the tree
 	MaxNumLeaves = 65536 // 2^MaxTreeDepth
+)
+
+var (
+	ErrRootMismatch               = errors.New("root mismatch")
+	ErrProvingZeroCommitment      = errors.New("proving in zero-length commitment")
+	ErrProofIsNil                 = errors.New("proof should not be nil")
+	ErrEmptyProofNonEmptyElements = errors.New("non-empty proof for empty set of elements")
+	ErrTreeTooDeep                = errors.New("proven tree is too deep")
+	ErrTooManyVerificationLevels  = errors.New("Verify exceeded 64 Levels, more than 2^64 leaves not supported")
 )
 
 // Tree is a Merkle tree, represented by layers of nodes (hashes) in the tree
@@ -169,7 +179,7 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 
 	// Special case: commitment to zero-length array
 	if len(tree.Levels) == 0 {
-		return nil, fmt.Errorf("proving in zero-length commitment")
+		return nil, ErrProvingZeroCommitment
 	}
 
 	// verify that all positions where part of the original array
@@ -267,15 +277,8 @@ func hashLeavesVC(elems map[uint64]crypto.Hashable, hash hash.Hash, proofDepth u
 
 // VerifyVectorCommitment verifies a vector commitment proof against a given root.
 func VerifyVectorCommitment(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *Proof) error {
-	if proof == nil {
-		return fmt.Errorf("proof should not be nil")
-	}
-
-	if len(elems) == 0 {
-		if len(proof.Path) != 0 {
-			return fmt.Errorf("non-empty proof for empty set of elements")
-		}
-		return nil
+	if err := validateVerifyInput(proof, elems); err != nil {
+		return err
 	}
 
 	hashedLeaves, err := hashLeavesVC(elems, proof.HashFactory.NewHash(), proof.TreeDepth)
@@ -291,15 +294,8 @@ func VerifyVectorCommitment(root crypto.GenericDigest, elems map[uint64]crypto.H
 // in a tree with the given root hash.  The proof is expected to be the proof
 // returned `by Prove().
 func Verify(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *Proof) error {
-	if proof == nil {
-		return fmt.Errorf("proof should not be nil")
-	}
-
-	if len(elems) == 0 {
-		if len(proof.Path) != 0 {
-			return fmt.Errorf("non-empty proof for empty set of elements")
-		}
-		return nil
+	if err := validateVerifyInput(proof, elems); err != nil {
+		return err
 	}
 
 	hashedLeaves, err := hashLeaves(elems, proof.HashFactory.NewHash())
@@ -311,7 +307,26 @@ func Verify(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *
 	return verifyPath(root, proof, pl)
 }
 
+func validateVerifyInput(proof *Proof, elems map[uint64]crypto.Hashable) error {
+	if proof == nil {
+		return ErrProofIsNil
+	}
+
+	if len(elems) == 0 && len(proof.Path) != 0 {
+		return ErrEmptyProofNonEmptyElements
+	}
+
+	if proof.TreeDepth > 64 {
+		return ErrTreeTooDeep
+	}
+	return nil
+}
+
 func verifyPath(root crypto.GenericDigest, proof *Proof, pl partialLayer) error {
+	if len(proof.Path) == 0 && len(pl) == 0 {
+		return nil
+	}
+
 	hints := proof.Path
 
 	s := &siblings{
@@ -326,7 +341,7 @@ func verifyPath(root crypto.GenericDigest, proof *Proof, pl partialLayer) error 
 		}
 
 		if l > 64 {
-			return fmt.Errorf("Verify exceeded 64 Levels, more than 2^64 leaves not supported")
+			return ErrTooManyVerificationLevels
 		}
 	}
 
@@ -349,7 +364,7 @@ func buildPartialLayer(elems map[uint64]crypto.GenericDigest) partialLayer {
 func inspectRoot(root crypto.GenericDigest, pl partialLayer) error {
 	computedroot := pl[0]
 	if computedroot.pos != 0 || !bytes.Equal(computedroot.hash, root) {
-		return fmt.Errorf("root mismatch")
+		return ErrRootMismatch
 	}
 	return nil
 }
