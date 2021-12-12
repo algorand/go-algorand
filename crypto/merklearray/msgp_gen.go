@@ -110,8 +110,8 @@ func (z Layer) MsgIsZero() bool {
 func (z *Proof) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0002Len := uint32(2)
-	var zb0002Mask uint8 /* 3 bits */
+	zb0002Len := uint32(3)
+	var zb0002Mask uint8 /* 4 bits */
 	if (*z).HashFactory.MsgIsZero() {
 		zb0002Len--
 		zb0002Mask |= 0x2
@@ -119,6 +119,10 @@ func (z *Proof) MarshalMsg(b []byte) (o []byte) {
 	if len((*z).Path) == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x4
+	}
+	if (*z).TreeDepth == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x8
 	}
 	// variable map header, size zb0002Len
 	o = append(o, 0x80|uint8(zb0002Len))
@@ -139,6 +143,11 @@ func (z *Proof) MarshalMsg(b []byte) (o []byte) {
 			for zb0001 := range (*z).Path {
 				o = (*z).Path[zb0001].MarshalMsg(o)
 			}
+		}
+		if (zb0002Mask & 0x8) == 0 { // if not empty
+			// string "td"
+			o = append(o, 0xa2, 0x74, 0x64)
+			o = msgp.AppendUint8(o, (*z).TreeDepth)
 		}
 	}
 	return
@@ -200,6 +209,14 @@ func (z *Proof) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0002 > 0 {
+			zb0002--
+			(*z).TreeDepth, bts, err = msgp.ReadUint8Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "TreeDepth")
+				return
+			}
+		}
+		if zb0002 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0002)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -255,6 +272,12 @@ func (z *Proof) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "HashFactory")
 					return
 				}
+			case "td":
+				(*z).TreeDepth, bts, err = msgp.ReadUint8Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TreeDepth")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -279,21 +302,21 @@ func (z *Proof) Msgsize() (s int) {
 	for zb0001 := range (*z).Path {
 		s += (*z).Path[zb0001].Msgsize()
 	}
-	s += 4 + (*z).HashFactory.Msgsize()
+	s += 4 + (*z).HashFactory.Msgsize() + 3 + msgp.Uint8Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Proof) MsgIsZero() bool {
-	return (len((*z).Path) == 0) && ((*z).HashFactory.MsgIsZero())
+	return (len((*z).Path) == 0) && ((*z).HashFactory.MsgIsZero()) && ((*z).TreeDepth == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *Tree) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0003Len := uint32(2)
-	var zb0003Mask uint8 /* 3 bits */
+	zb0003Len := uint32(4)
+	var zb0003Mask uint8 /* 5 bits */
 	if (*z).Hash.MsgIsZero() {
 		zb0003Len--
 		zb0003Mask |= 0x2
@@ -301,6 +324,14 @@ func (z *Tree) MarshalMsg(b []byte) (o []byte) {
 	if len((*z).Levels) == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x4
+	}
+	if (*z).NumOfLeaves == 0 {
+		zb0003Len--
+		zb0003Mask |= 0x8
+	}
+	if (*z).VectorCommitment == false {
+		zb0003Len--
+		zb0003Mask |= 0x10
 	}
 	// variable map header, size zb0003Len
 	o = append(o, 0x80|uint8(zb0003Len))
@@ -328,6 +359,16 @@ func (z *Tree) MarshalMsg(b []byte) (o []byte) {
 					o = (*z).Levels[zb0001][zb0002].MarshalMsg(o)
 				}
 			}
+		}
+		if (zb0003Mask & 0x8) == 0 { // if not empty
+			// string "nl"
+			o = append(o, 0xa2, 0x6e, 0x6c)
+			o = msgp.AppendUint64(o, (*z).NumOfLeaves)
+		}
+		if (zb0003Mask & 0x10) == 0 { // if not empty
+			// string "vc"
+			o = append(o, 0xa2, 0x76, 0x63)
+			o = msgp.AppendBool(o, (*z).VectorCommitment)
 		}
 	}
 	return
@@ -403,9 +444,25 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0003 > 0 {
 			zb0003--
+			(*z).NumOfLeaves, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "NumOfLeaves")
+				return
+			}
+		}
+		if zb0003 > 0 {
+			zb0003--
 			bts, err = (*z).Hash.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Hash")
+				return
+			}
+		}
+		if zb0003 > 0 {
+			zb0003--
+			(*z).VectorCommitment, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "VectorCommitment")
 				return
 			}
 		}
@@ -480,10 +537,22 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						}
 					}
 				}
+			case "nl":
+				(*z).NumOfLeaves, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "NumOfLeaves")
+					return
+				}
 			case "hsh":
 				bts, err = (*z).Hash.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Hash")
+					return
+				}
+			case "vc":
+				(*z).VectorCommitment, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "VectorCommitment")
 					return
 				}
 			default:
@@ -513,11 +582,11 @@ func (z *Tree) Msgsize() (s int) {
 			s += (*z).Levels[zb0001][zb0002].Msgsize()
 		}
 	}
-	s += 4 + (*z).Hash.Msgsize()
+	s += 3 + msgp.Uint64Size + 4 + (*z).Hash.Msgsize() + 3 + msgp.BoolSize
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Tree) MsgIsZero() bool {
-	return (len((*z).Levels) == 0) && ((*z).Hash.MsgIsZero())
+	return (len((*z).Levels) == 0) && ((*z).NumOfLeaves == 0) && ((*z).Hash.MsgIsZero()) && ((*z).VectorCommitment == false)
 }

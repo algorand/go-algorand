@@ -39,8 +39,22 @@ type Tree struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// Level 0 is the leaves.
-	Levels []Layer            `codec:"lvls,allocbound=MaxTreeDepth+1"`
-	Hash   crypto.HashFactory `codec:"hsh"`
+	Levels           []Layer            `codec:"lvls,allocbound=MaxTreeDepth+1"`
+	NumOfLeaves      uint64             `codec:"nl"`
+	Hash             crypto.HashFactory `codec:"hsh"`
+	VectorCommitment bool               `codec:"vc"`
+}
+
+// Proof contains the merkle path, along with the hash factory that should be used.
+type Proof struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	// Path is bounded by MaxNumLeaves since there could be multiple reveals, and
+	// given the distribution of the elt positions and the depth of the tree,
+	// the path length can increase up to 2^MaxTreeDepth / 2
+	Path        []crypto.GenericDigest `codec:"pth,allocbound=MaxNumLeaves/2"`
+	HashFactory crypto.HashFactory     `codec:"hsh"`
+	TreeDepth   uint8                  `codec:"td"`
 }
 
 func (tree *Tree) topLayer() Layer {
@@ -83,7 +97,13 @@ func buildWorker(ws *workerState, array Array, leaves Layer, h crypto.HashFactor
 }
 
 func BuildVectorCommitmentTree(array Array, factory crypto.HashFactory) (*Tree, error) {
-	return Build(generateVectorCommitmentArray(array), factory)
+	t, err := Build(generateVectorCommitmentArray(array), factory)
+	if err != nil {
+		return nil, err
+	}
+	t.VectorCommitment = true
+	t.NumOfLeaves = array.Length()
+	return t, nil
 }
 
 // Build constructs a Merkle tree given an array.
@@ -105,8 +125,10 @@ func Build(array Array, factory crypto.HashFactory) (*Tree, error) {
 	}
 
 	tree := &Tree{
-		Levels: nil,
-		Hash:   factory,
+		Levels:           nil,
+		NumOfLeaves:      array.Length(),
+		Hash:             factory,
+		VectorCommitment: false,
 	}
 
 	tree.buildLayers(leaves)
@@ -150,14 +172,25 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 		return nil, fmt.Errorf("proving in zero-length commitment")
 	}
 
+	// verify that all positions where part of the original array
+	for i := 0; i < len(idxs); i++ {
+		if idxs[i] >= tree.NumOfLeaves {
+			return nil, fmt.Errorf("pos %d larger than leaf count %d", idxs[i], tree.NumOfLeaves)
+		}
+	}
+
+	if tree.VectorCommitment {
+		vcIdxs := make([]uint64, len(idxs))
+		for i := 0; i < len(idxs); i++ {
+			vcIdxs[i] = msbToLsbIndex(idxs[i], uint8(len(tree.Levels)-1))
+		}
+		idxs = vcIdxs
+	}
+
 	sort.Slice(idxs, func(i, j int) bool { return idxs[i] < idxs[j] })
 
 	pl := make(partialLayer, 0, len(idxs))
 	for _, pos := range idxs {
-		if pos >= uint64(len(tree.Levels[0])) {
-			return nil, fmt.Errorf("pos %d larger than leaf count %d", pos, len(tree.Levels[0]))
-		}
-
 		// Discard duplicates
 		if len(pl) > 0 && pl[len(pl)-1].pos == pos {
 			continue
@@ -196,6 +229,7 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 	return &Proof{
 		Path:        s.hints,
 		HashFactory: tree.Hash,
+		TreeDepth:   uint8(len(tree.Levels) - 1),
 	}, nil
 }
 
@@ -213,7 +247,6 @@ func (tree *Tree) buildNextLayer() {
 }
 
 func hashLeaves(elems map[uint64]crypto.Hashable, hash hash.Hash) (map[uint64]crypto.GenericDigest, error) {
-
 	hashedLeaves := make(map[uint64]crypto.GenericDigest, len(elems))
 	for i, element := range elems {
 		hashedLeaves[i] = crypto.GenereicHashObj(hash, element)
@@ -222,11 +255,42 @@ func hashLeaves(elems map[uint64]crypto.Hashable, hash hash.Hash) (map[uint64]cr
 	return hashedLeaves, nil
 }
 
+func hashLeavesVC(elems map[uint64]crypto.Hashable, hash hash.Hash, proofDepth uint8) (map[uint64]crypto.GenericDigest, error) {
+	hashedLeaves := make(map[uint64]crypto.GenericDigest, len(elems))
+	for i, element := range elems {
+		msbIndex := msbToLsbIndex(i, proofDepth)
+		hashedLeaves[msbIndex] = crypto.GenereicHashObj(hash, element)
+	}
+
+	return hashedLeaves, nil
+}
+
+// VerifyVectorCommitment verifies a vector commitment proof against a given root.
+func VerifyVectorCommitment(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *Proof) error {
+	if proof == nil {
+		return fmt.Errorf("proof should not be nil")
+	}
+
+	if len(elems) == 0 {
+		if len(proof.Path) != 0 {
+			return fmt.Errorf("non-empty proof for empty set of elements")
+		}
+		return nil
+	}
+
+	hashedLeaves, err := hashLeavesVC(elems, proof.HashFactory.NewHash(), proof.TreeDepth)
+	if err != nil {
+		return err
+	}
+
+	pl := buildPartialLayer(hashedLeaves)
+	return verifyPath(root, proof, pl)
+}
+
 // Verify ensures that the positions in elems correspond to the respective hashes
 // in a tree with the given root hash.  The proof is expected to be the proof
-// returned by Prove().
+// returned `by Prove().
 func Verify(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *Proof) error {
-
 	if proof == nil {
 		return fmt.Errorf("proof should not be nil")
 	}

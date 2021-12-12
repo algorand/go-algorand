@@ -102,7 +102,6 @@ func TestMerkle(t *testing.T) {
 	} else {
 		testMerkle(t, crypto.Sumhash, 10)
 	}
-
 }
 
 func testMerkle(t *testing.T, hashtype crypto.HashType, size uint64) {
@@ -248,97 +247,6 @@ func TestEmptyTree(t *testing.T) {
 	a.NoError(err)
 	a.Len(tree.Levels, 1)
 	a.Equal(tree.Root().ToSlice(), tree.Levels[0][0].ToSlice())
-}
-
-func BenchmarkMerkleCommit(b *testing.B) {
-	b.Run("sha512_256", func(b *testing.B) { merkleCommitBench(b, crypto.Sha512_256) })
-	b.Run("sumhash", func(b *testing.B) { merkleCommitBench(b, crypto.Sumhash) })
-}
-
-func merkleCommitBench(b *testing.B, hashType crypto.HashType) {
-	for sz := 10; sz <= 100000; sz *= 100 {
-		msg := make(TestBuf, sz)
-		crypto.RandBytes(msg[:])
-
-		for cnt := 10; cnt <= 10000000; cnt *= 10 {
-			var a TestRepeatingArray
-			a.item = msg
-			a.count = uint64(cnt)
-
-			b.Run(fmt.Sprintf("Item%d/Count%d", sz, cnt), func(b *testing.B) {
-				for i := 0; i < b.N; i++ {
-					tree, err := Build(a, crypto.HashFactory{HashType: hashType})
-					if err != nil {
-						b.Error(err)
-					}
-					tree.Root()
-				}
-			})
-		}
-	}
-}
-
-func BenchmarkMerkleProve1M(b *testing.B) {
-	b.Run("sha512_256", func(b *testing.B) { benchmarkMerkleProve1M(b, crypto.Sha512_256) })
-	b.Run("sumhash", func(b *testing.B) { benchmarkMerkleProve1M(b, crypto.Sumhash) })
-}
-
-func benchmarkMerkleProve1M(b *testing.B, hashType crypto.HashType) {
-	msg := TestMessage("Hello world")
-
-	var a TestRepeatingArray
-	a.item = msg
-	a.count = 1024 * 1024
-
-	tree, err := Build(a, crypto.HashFactory{HashType: hashType})
-	if err != nil {
-		b.Error(err)
-	}
-
-	b.ResetTimer()
-
-	for i := uint64(0); i < uint64(b.N); i++ {
-		_, err := tree.Prove([]uint64{i % a.count})
-		if err != nil {
-			b.Error(err)
-		}
-	}
-}
-
-func BenchmarkMerkleVerify1M(b *testing.B) {
-	b.Run("sha512_256", func(b *testing.B) { benchmarkMerkleVerify1M(b, crypto.Sha512_256) })
-	b.Run("sumhash", func(b *testing.B) { benchmarkMerkleVerify1M(b, crypto.Sumhash) })
-}
-
-func benchmarkMerkleVerify1M(b *testing.B, hashType crypto.HashType) {
-	msg := TestMessage("Hello world")
-
-	var a TestRepeatingArray
-	a.item = msg
-	a.count = 1024 * 1024
-
-	tree, err := Build(a, crypto.HashFactory{HashType: hashType})
-	if err != nil {
-		b.Error(err)
-	}
-	root := tree.Root()
-
-	proofs := make([]*Proof, a.count)
-	for i := uint64(0); i < a.count; i++ {
-		proofs[i], err = tree.Prove([]uint64{i})
-		if err != nil {
-			b.Error(err)
-		}
-	}
-
-	b.ResetTimer()
-
-	for i := uint64(0); i < uint64(b.N); i++ {
-		err := Verify(root, map[uint64]crypto.Hashable{i % a.count: msg}, proofs[i])
-		if err != nil {
-			b.Error(err)
-		}
-	}
 }
 
 // TestGenericDigest makes sure GenericDigest will not decoded sizes
@@ -617,4 +525,215 @@ func testMerkelSizeLimits(t *testing.T, hashtype crypto.HashType, size uint64, p
 	require.NoError(t, err)
 
 	return tree, proof
+}
+
+func TestMerkleVC(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	for i := uint64(0); i < 32; i++ {
+		testMerkleVC(t, crypto.Sha512_256, i)
+	}
+
+	for i := uint64(0); i < 8; i++ {
+		testMerkleVC(t, crypto.Sumhash, i)
+	}
+
+}
+
+func testMerkleVC(t *testing.T, hashtype crypto.HashType, size uint64) {
+	var junk TestData
+	crypto.RandBytes(junk[:])
+
+	a := make(TestArray, size)
+	for i := uint64(0); i < size; i++ {
+		crypto.RandBytes(a[i][:])
+	}
+
+	tree, err := BuildVectorCommitmentTree(a, crypto.HashFactory{HashType: hashtype})
+	require.NoError(t, err)
+
+	root := tree.Root()
+
+	var allpos []uint64
+	allmap := make(map[uint64]crypto.Hashable)
+
+	for i := uint64(0); i < size; i++ {
+		proof, err := tree.Prove([]uint64{i})
+		require.NoError(t, err)
+
+		err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{i: a[i]}, proof)
+		require.NoError(t, err)
+
+		err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{i: junk}, proof)
+		require.Error(t, err, "no error when verifying junk")
+
+		allpos = append(allpos, i)
+		allmap[i] = a[i]
+	}
+
+	proof, err := tree.Prove(allpos)
+	require.NoError(t, err)
+
+	err = VerifyVectorCommitment(root, allmap, proof)
+	require.NoError(t, err)
+
+	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{0: junk}, proof)
+	require.Error(t, err, "no error when verifying junk batch")
+
+	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{0: junk}, nil)
+	require.Error(t, err, "no error when verifying junk batch")
+
+	_, err = tree.Prove([]uint64{size})
+	require.Error(t, err, "no error when proving past the end")
+
+	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{size: junk}, nil)
+	require.Error(t, err, "no error when verifying past the end")
+
+	if size > 0 {
+		var somepos []uint64
+		somemap := make(map[uint64]crypto.Hashable)
+		for i := 0; i < 10; i++ {
+			pos := crypto.RandUint64() % size
+			somepos = append(somepos, pos)
+			somemap[pos] = a[pos]
+		}
+
+		proof, err = tree.Prove(somepos)
+		require.NoError(t, err)
+
+		err = VerifyVectorCommitment(root, somemap, proof)
+		require.NoError(t, err)
+	}
+}
+
+func TestVCOnlyOneNode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var internalNodeDS = "MA"
+	a := make(TestArray, 1)
+	crypto.RandBytes(a[0][:])
+	var bottemLeafData TestData
+	copy(bottemLeafData[:], []byte{0x0})
+
+	h := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
+	leaf0Hash := crypto.GenereicHashObj(h, a[0])
+	h.Reset()
+	h.Write([]byte{0x0})
+	leaf1Hash := h.Sum(nil)
+
+	rootHash := hashInternalNode(h, internalNodeDS, leaf0Hash, leaf1Hash)
+
+	tree, err := BuildVectorCommitmentTree(a, crypto.HashFactory{HashType: crypto.Sha512_256})
+	require.NoError(t, err)
+
+	root2 := tree.Root()
+	require.Equal(t, rootHash, []byte(root2))
+}
+
+func TestVCEmptyTree(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := make(TestArray, 0)
+
+	h := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
+	h.Reset()
+	h.Write([]byte{0x0})
+	root2 := h.Sum(nil)
+
+	tree, err := BuildVectorCommitmentTree(a, crypto.HashFactory{HashType: crypto.Sha512_256})
+	require.NoError(t, err)
+
+	rootHash := tree.Root()
+	require.Equal(t, []byte(rootHash), root2)
+}
+
+func BenchmarkMerkleCommit(b *testing.B) {
+	b.Run("sha512_256", func(b *testing.B) { merkleCommitBench(b, crypto.Sha512_256) })
+	b.Run("sumhash", func(b *testing.B) { merkleCommitBench(b, crypto.Sumhash) })
+}
+
+func merkleCommitBench(b *testing.B, hashType crypto.HashType) {
+	for sz := 10; sz <= 100000; sz *= 100 {
+		msg := make(TestBuf, sz)
+		crypto.RandBytes(msg[:])
+
+		for cnt := 10; cnt <= 10000000; cnt *= 10 {
+			var a TestRepeatingArray
+			a.item = msg
+			a.count = uint64(cnt)
+
+			b.Run(fmt.Sprintf("Item%d/Count%d", sz, cnt), func(b *testing.B) {
+				for i := 0; i < b.N; i++ {
+					tree, err := Build(a, crypto.HashFactory{HashType: hashType})
+					if err != nil {
+						b.Error(err)
+					}
+					tree.Root()
+				}
+			})
+		}
+	}
+}
+
+func BenchmarkMerkleProve1M(b *testing.B) {
+	b.Run("sha512_256", func(b *testing.B) { benchmarkMerkleProve1M(b, crypto.Sha512_256) })
+	b.Run("sumhash", func(b *testing.B) { benchmarkMerkleProve1M(b, crypto.Sumhash) })
+}
+
+func benchmarkMerkleProve1M(b *testing.B, hashType crypto.HashType) {
+	msg := TestMessage("Hello world")
+
+	var a TestRepeatingArray
+	a.item = msg
+	a.count = 1024 * 1024
+
+	tree, err := Build(a, crypto.HashFactory{HashType: hashType})
+	if err != nil {
+		b.Error(err)
+	}
+
+	b.ResetTimer()
+
+	for i := uint64(0); i < uint64(b.N); i++ {
+		_, err := tree.Prove([]uint64{i % a.count})
+		if err != nil {
+			b.Error(err)
+		}
+	}
+}
+
+func BenchmarkMerkleVerify1M(b *testing.B) {
+	b.Run("sha512_256", func(b *testing.B) { benchmarkMerkleVerify1M(b, crypto.Sha512_256) })
+	b.Run("sumhash", func(b *testing.B) { benchmarkMerkleVerify1M(b, crypto.Sumhash) })
+}
+
+func benchmarkMerkleVerify1M(b *testing.B, hashType crypto.HashType) {
+	msg := TestMessage("Hello world")
+
+	var a TestRepeatingArray
+	a.item = msg
+	a.count = 1024 * 1024
+
+	tree, err := Build(a, crypto.HashFactory{HashType: hashType})
+	if err != nil {
+		b.Error(err)
+	}
+	root := tree.Root()
+
+	proofs := make([]*Proof, a.count)
+	for i := uint64(0); i < a.count; i++ {
+		proofs[i], err = tree.Prove([]uint64{i})
+		if err != nil {
+			b.Error(err)
+		}
+	}
+
+	b.ResetTimer()
+
+	for i := uint64(0); i < uint64(b.N); i++ {
+		err := Verify(root, map[uint64]crypto.Hashable{i % a.count: msg}, proofs[i])
+		if err != nil {
+			b.Error(err)
+		}
+	}
 }
