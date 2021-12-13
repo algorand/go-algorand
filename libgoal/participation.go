@@ -19,7 +19,6 @@ package libgoal
 import (
 	"fmt"
 	"io/ioutil"
-	"math"
 	"os"
 	"path/filepath"
 
@@ -169,78 +168,6 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 	part = newPart.Participation
 	partdb.Close()
 	return part, partKeyPath, err
-}
-
-// InstallParticipationKeys creates a .partkey database for a given address,
-// based on an existing database from inputfile.  On successful install, it
-// deletes the input file.
-func (c *Client) InstallParticipationKeys(inputfile string) (part account.Participation, filePath string, err error) {
-	proto, ok := c.consensus[protocol.ConsensusCurrentVersion]
-	if !ok {
-		err = fmt.Errorf("Unknown consensus protocol %s", protocol.ConsensusCurrentVersion)
-		return
-	}
-
-	// Get the GenesisID for use in the participation key path
-	var genID string
-	genID, err = c.GenesisID()
-	if err != nil {
-		return
-	}
-
-	outDir := filepath.Join(c.DataDir(), genID)
-
-	inputdb, err := db.MakeErasableAccessor(inputfile)
-	if err != nil {
-		return
-	}
-	defer inputdb.Close()
-
-	partkey, err := account.RestoreParticipation(inputdb)
-	if err != nil {
-		return
-	}
-
-	if partkey.Parent == (basics.Address{}) {
-		err = fmt.Errorf("Cannot install partkey with missing (zero) parent address")
-		return
-	}
-
-	newdbpath, err := participationKeysPath(outDir, partkey.Parent, partkey.FirstValid, partkey.LastValid)
-	if err != nil {
-		return
-	}
-
-	newdb, err := db.MakeErasableAccessor(newdbpath)
-	if err != nil {
-		return
-	}
-
-	newpartkey := partkey
-	newpartkey.Store = newdb
-	err = newpartkey.Persist()
-	if err != nil {
-		newpartkey.Close()
-		return
-	}
-
-	// After successful install, remove the input copy of the
-	// partkey so that old keys cannot be recovered after they
-	// are used by algod.  We try to delete the data inside
-	// sqlite first, so the key material is zeroed out from
-	// disk blocks, but regardless of whether that works, we
-	// delete the input file.  The consensus protocol version
-	// is irrelevant for the maxuint64 round number we pass in.
-	errCh := partkey.DeleteOldKeys(basics.Round(math.MaxUint64), proto)
-	err = <-errCh
-	if err != nil {
-		newpartkey.Close()
-		return
-	}
-	os.Remove(inputfile)
-	part = newpartkey.Participation
-	newpartkey.Close()
-	return part, newdbpath, nil
 }
 
 // ListParticipationKeys returns the available participation keys,

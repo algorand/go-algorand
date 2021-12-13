@@ -19,12 +19,14 @@ package main
 import (
 	"bufio"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -904,13 +906,48 @@ No --delete-input flag specified, exiting without installing key.`)
 		}
 
 		dataDir := ensureSingleDataDir()
-
 		client := ensureAlgodClient(dataDir)
-		_, _, err := client.InstallParticipationKeys(partKeyFile)
+		addResponse, err := client.AddParticipationKey(partKeyFile)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
+
+		verifyInstalled := func() error {
+			start := time.Now()
+
+			for {
+				keysResp, err := client.GetParticipationKeys()
+				if err != nil {
+					return err
+				}
+				for _, key := range keysResp {
+					if key.Id == addResponse.PartId {
+						// Installation successful.
+						return nil
+					}
+				}
+
+				if time.Since(start) > 1 * time.Minute {
+					return errors.New("timeout waiting for key to appear")
+				}
+
+				time.Sleep(1 * time.Second)
+			}
+		}
+
+		err = verifyInstalled()
+		if err != nil {
+			reportErrorf("Failure while verifying key installation. Verify key installation with 'goal account partkeyinfo' and delete '%s', or retry the command. Error: ", partKeyFile, err)
+		}
+
+		// PKI TODO: Install state proof keys.
+
 		fmt.Println("Participation key installed successfully")
+
+		// Delete partKeyFile
+		if nil != os.Remove(partKeyFile) {
+			reportErrorf("An error occurred while removing the partkey file, please delete it manually: %s", err)
+		}
 	},
 }
 
