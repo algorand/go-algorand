@@ -35,11 +35,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type TestMessage string
+type testMessage string
 
-const CompactCertRoundsForTests = 128
+const compactCertRoundsForTests = 128
 
-func (m TestMessage) ToBeHashed() (protocol.HashID, []byte) {
+func (m testMessage) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Message, []byte(m)
 }
 
@@ -116,14 +116,14 @@ func TestBuildVerify(t *testing.T) {
 	npart := npartHi + npartLo
 
 	param := Params{
-		Msg:          TestMessage("hello world"),
+		Msg:          testMessage("hello world"),
 		ProvenWeight: uint64(totalWeight / 2),
 		SigRound:     currentRound,
 		SecKQ:        128,
 	}
 
 	// Share the key; we allow the same vote key to appear in multiple accounts..
-	key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(CompactCertRoundsForTests)+1, CompactCertRoundsForTests, a)
+	key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(compactCertRoundsForTests)+1, compactCertRoundsForTests, a)
 	defer dbAccessor.Close()
 	require.NotNil(t, dbAccessor, "failed to create signer")
 	var parts []basics.Participant
@@ -300,7 +300,7 @@ func TestSignatureCommitment(t *testing.T) {
 	numPart := 4
 
 	param := Params{
-		Msg:          TestMessage("test!"),
+		Msg:          testMessage("test!"),
 		ProvenWeight: uint64(totalWeight / (2 * numPart)),
 		SigRound:     currentRound,
 		SecKQ:        128,
@@ -310,7 +310,7 @@ func TestSignatureCommitment(t *testing.T) {
 	var sigs []merklekeystore.Signature
 
 	for i := 0; i < numPart; i++ {
-		key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(CompactCertRoundsForTests)*8, CompactCertRoundsForTests, a)
+		key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(compactCertRoundsForTests)*8, compactCertRoundsForTests, a)
 		require.NotNil(t, dbAccessor, "failed to create signer")
 
 		part := basics.Participant{
@@ -372,7 +372,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 	a := require.New(b)
 
 	param := Params{
-		Msg:          TestMessage("hello world"),
+		Msg:          testMessage("hello world"),
 		ProvenWeight: uint64(totalWeight / 2),
 		SigRound:     128,
 		SecKQ:        128,
@@ -382,7 +382,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 	var partkeys []*merklekeystore.Signer
 	var sigs []merklekeystore.Signature
 	for i := 0; i < npart; i++ {
-		key, dbAccessor := generateTestSigner(b.Name()+"_"+strconv.Itoa(i)+"_crash.db", 0, uint64(CompactCertRoundsForTests)+1, CompactCertRoundsForTests, a)
+		key, dbAccessor := generateTestSigner(b.Name()+"_"+strconv.Itoa(i)+"_crash.db", 0, uint64(compactCertRoundsForTests)+1, compactCertRoundsForTests, a)
 		defer dbAccessor.Close()
 		require.NotNil(b, dbAccessor, "failed to create signer")
 		part := basics.Participant{

@@ -56,7 +56,7 @@ type Proof struct {
 }
 
 // GetSerializedProof serializes the proof into a sequence of bytes.
-// the format details can be found in the Algorand's spec.
+// the format details can be found on the Algorand's spec.
 func (p *Proof) GetSerializedProof() []byte {
 	var marshledProof []byte
 	proofLen := len(p.Path)
