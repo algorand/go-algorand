@@ -928,7 +928,7 @@ func mustReadFile(fname string) []byte {
 	return contents
 }
 
-func assembleFileMap(fname string) (program []byte, deets logic.AssemblyMap) {
+func assembleWithFileMap(fname string) (program []byte, deets logic.AssemblyMap) {
 	text, err := readFile(fname)
 	if err != nil {
 		reportErrorf("%s: %s", fname, err)
@@ -1023,7 +1023,7 @@ var compileCmd = &cobra.Command{
 				continue
 			}
 
-			program, sourceMap := assembleFileMap(fname)
+			program, sourceMap := assembleWithFileMap(fname)
 
 			outblob := program
 			outname := outFilename
@@ -1067,7 +1067,7 @@ var compileCmd = &cobra.Command{
 			}
 
 			if writeMap {
-				mapname := fname + ".map.json"
+				mapname := fname + ".map.json" // TODO: naming?
 				pcblob, err := json.Marshal(sourceMap)
 				if err != nil {
 					reportErrorf("%s: %s", mapname, err)

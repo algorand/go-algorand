@@ -44,6 +44,14 @@ type Writer interface {
 	WriteByte(c byte) error
 }
 
+type SourceMapper interface {
+	Name() string
+	Version() int
+	NumLines() int
+	PcByLine(line int) (pc int, ok bool)
+	PcToLine(pc int) (line int, ok bool)
+}
+
 type labelReference struct {
 	sourceLine int
 

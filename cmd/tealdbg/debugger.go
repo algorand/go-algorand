@@ -36,15 +36,6 @@ type Notification struct {
 	DebugState logic.DebugState `codec:"state"`
 }
 
-// Source is used in the GetMapping function to provide access to the source mapping logic
-type Source interface {
-	Name() string
-	Version() int
-	NumLines() int
-	PcByLine(line int) (pc int, ok bool)
-	PcToLine(pc int) (line int, ok bool)
-}
-
 // DebugAdapter represents debugger frontend (i.e. CDT, webpage, VSCode, etc)
 type DebugAdapter interface {
 	// SessionStarted is called by the debugging core on the beginning of execution.
@@ -70,6 +61,8 @@ type Control interface {
 
 	GetSource() (string, []byte)
 	GetStates(s *logic.DebugState) AppState
+
+	logic.SourceMapper
 }
 
 // Debugger is TEAL event-driven debugger
@@ -290,7 +283,7 @@ func (s *session) PcByLine(line int) (pc int, ok bool) {
 }
 
 // GetSourceMap creates source map from source, disassembly and mappings
-func GetSourceMap(s Source) ([]byte, error) {
+func GetSourceMap(s logic.SourceMapper) ([]byte, error) {
 	if s.NumLines() == 0 {
 		return nil, nil
 	}
