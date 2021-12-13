@@ -43,11 +43,13 @@ class AtomicABI:
 
         # try very hard to parse the ABI contract
         self.contract_abi_json_path: str = None
-        cajson = text(contract_abi_json)
-        if cajson:
+        try:
+            cajson = open(contract_abi_json, "rt").read().strip()
             self.contract_abi_json_path = contract_abi_json
-        else:
+        except Exception:
             cajson = contract_abi_json
+
+        self.contract_abi_json_path = contract_abi_json
         cadict = json.loads(cajson)
         cadict["appId"] = self.app_id
         self.contract: abi.Contract = abi.Contract.from_json(json.dumps(cadict))
@@ -68,8 +70,14 @@ class AtomicABI:
         self.atomic_transaction_composer = atc.AtomicTransactionComposer()
 
         for abi_meth in self.contract.methods:
-            handle, meth_name, meth = self._attach_dynamic_method_call(
-                abi_meth.name, self._amc_factory(abi_meth)
+            (
+                handle,
+                am_name,
+                adder_meth,
+                rn_name,
+                run_now_meth,
+            ) = self._attach_dynamic_method_calls(
+                abi_meth.name, *self._method_factories(abi_meth)
             )
             signature = abi_meth.get_signature()
             selector = "0x" + abi_meth.get_selector().hex()
@@ -78,22 +86,35 @@ class AtomicABI:
                 "signature": signature,
                 "selector": selector,
                 "abi_meth": abi_meth,
-                "adder_meth_name": meth_name,
-                "adder_meth": meth,
+                "adder_meth_name": am_name,
+                "adder_meth": adder_meth,
+                "run_now_meth_name": rn_name,
+                "run_now_meth": run_now_meth,
             }
 
     @classmethod
-    def factory(cls, obj, caller_acct: str = None):
+    def factory(
+        cls, obj, caller_acct: str = None, new_suggested_params: bool = True
+    ) -> "AtomicABI":
+        """
+        new_suggested_params defaults to True because we don't want an intentionally
+        cloned transaction to clash with a previous one (unless it's in the same round)
+        """
+        sp = obj.goal.algod.suggested_params() if new_suggested_params else obj.sp
         return cls(
             obj.goal,
             obj.app_id,
             obj.contract_abi_json,
             caller_acct if caller_acct else obj.caller_acct,
-            sp=obj.sp,
+            sp=sp,
         )
 
-    def clone(self, caller_acct: str = None):
-        return self.factory(self, caller_acct=caller_acct)
+    def clone(
+        self, caller_acct: str = None, new_suggested_params: bool = True
+    ) -> "AtomicABI":
+        return self.factory(
+            self, caller_acct=caller_acct, new_suggested_params=new_suggested_params
+        )
 
     def execute_atomic_group(
         self, wait_rounds: int = 5
@@ -152,8 +173,8 @@ class AtomicABI:
         return summaries
 
     @staticmethod
-    def _amc_factory(abi_meth: abi.method.Method):
-        def func(
+    def _method_factories(abi_meth: abi.method.Method) -> Tuple[Callable, Callable]:
+        def func_add_method_call(
             self,
             *args,
             sp: txn.SuggestedParams = None,
@@ -172,7 +193,30 @@ class AtomicABI:
                 rekey_to=rekey_to,
             )
 
-        return func
+        def func_run_now(
+            self,
+            *args,
+            wait_rounds: int = 5,
+            sp: txn.SuggestedParams = None,
+            on_complete: txn.OnComplete = txn.OnComplete.NoOpOC,
+            note: bytes = None,
+            lease: bytes = None,
+            rekey_to: str = None,
+        ):
+            abi = self.clone()
+            abi.add_method_call(
+                abi_meth,
+                method_args=args,
+                sp=sp,
+                on_complete=on_complete,
+                note=note,
+                lease=lease,
+                rekey_to=rekey_to,
+            )
+            _, s = abi.execute_atomic_group(wait_rounds=wait_rounds)
+            return s[0].result.return_value
+
+        return func_add_method_call, func_run_now
 
     def get_suggested_params(self) -> txn.SuggestedParams:
         if not self.sp:
@@ -228,22 +272,38 @@ class AtomicABI:
 
         return self
 
-    def _attach_dynamic_method_call(self, name: str, func: Callable) -> None:
+    def _attach_dynamic_method_calls(
+        self, name: str, adder_func: Callable, run_now_func: Callable
+    ) -> tuple:
         """
         For an abi method such as "factorial(uint64)uint64"
         this allows usages such as:
         >>> abi.next_abi_call_factorial(5)
         which will delegate to AtomicTransactionComposer with
         atc.add_method_call(app_id, abi_factorial_method, ...)
+
+        For immediate execuation, the following usages are supported:
+        >>> abi.run_factorial(5)
+        which will run add the method call as above, and then run
+        execute_atomic_group()
         """
-        meth = types.MethodType(func, self)
-        meth_name = self.abi_composer_name(name)
-        setattr(self, meth_name, meth)
-        return name, meth_name, meth
+        adder_meth = types.MethodType(adder_func, self)
+        adder_meth_name = self.abi_composer_name(name)
+        setattr(self, adder_meth_name, adder_meth)
+
+        run_now_meth = types.MethodType(run_now_func, self)
+        rn_meth_name = self.run_now_method_name(name)
+        setattr(self, rn_meth_name, run_now_meth)
+
+        return name, adder_meth_name, adder_meth, rn_meth_name, run_now_meth
 
     @classmethod
     def abi_composer_name(cls, method_name: str) -> str:
         return f"next_abi_call_{method_name}"
+
+    @classmethod
+    def run_now_method_name(cls, method_name: str) -> str:
+        return f"run_{method_name}"
 
 
 class MethodCallSummary:

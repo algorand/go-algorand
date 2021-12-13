@@ -48,11 +48,13 @@ def get_pysdk_min_balance(goal, account):
 def get_teal_min_balance(abi, account):
     # can't execute an abi object twice so must clone it before each execution:
     abi = abi.clone(caller_acct=account)
-    sender_pymt = txn.PaymentTxn(account, abi.get_suggested_params(), account, 10_000)
-    sender_tx_sig = abi.get_txn_with_signer(sender_pymt)
 
-    # TODO: abi.sender_min_balance(sender_tx_sig)
-    return abi.execute_singleton("sender_min_balance", method_args=[sender_tx_sig])
+    def get_txn_sig():
+        return abi.get_txn_with_signer(
+            txn.PaymentTxn(account, abi.goal.algod.suggested_params(), account, 10_000)
+        )
+
+    return abi.run_sender_min_balance(get_txn_sig())
 
 
 def assert_min_balance(abi_or_goal, account, expected_min_balance, skip_abi=False):
