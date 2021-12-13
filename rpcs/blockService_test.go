@@ -19,7 +19,9 @@ package rpcs
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -118,7 +120,7 @@ func TestHandleCatchupReqNegative(t *testing.T) {
 	require.Equal(t, roundNumberParseErrMsg, string(val))
 }
 
-// TestRedirectBasic tests the case when the block service redirects the request to elsewhere
+// TestRedirectFallbackArchiver tests the case when the block service fallback to another in the absense of a given block.
 func TestRedirectFallbackArchiver(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -136,8 +138,8 @@ func TestRedirectFallbackArchiver(t *testing.T) {
 	net2 := &httpTestPeerSource{}
 
 	config := config.GetDefaultLocal()
-	bs1 := MakeBlockService(log, config, ledger1, net1, "{genesisID}")
-	bs2 := MakeBlockService(log, config, ledger2, net2, "{genesisID}")
+	bs1 := MakeBlockService(log, config, ledger1, net1, "test-genesis-ID")
+	bs2 := MakeBlockService(log, config, ledger2, net2, "test-genesis-ID")
 
 	nodeA := &basicRPCNode{}
 	nodeB := &basicRPCNode{}
@@ -159,6 +161,7 @@ func TestRedirectFallbackArchiver(t *testing.T) {
 
 	ctx := context.Background()
 	parsedURL.Path = FormatBlockQuery(uint64(2), parsedURL.Path, net1)
+	parsedURL.Path = strings.Replace(parsedURL.Path, "{genesisID}", "test-genesis-ID", 1)
 	blockURL := parsedURL.String()
 	request, err := http.NewRequest("GET", blockURL, nil)
 	require.NoError(t, err)
@@ -170,6 +173,58 @@ func TestRedirectFallbackArchiver(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, http.StatusOK, response.StatusCode)
+	bodyData, err := ioutil.ReadAll(response.Body)
+	require.NoError(t, err)
+	require.NotEqual(t, 0, len(bodyData))
+}
+
+// TestBlockServiceShutdown tests that the block service is shutting down correctly.
+func TestBlockServiceShutdown(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	log := logging.TestingLog(t)
+
+	ledger1 := makeLedger(t, "l1")
+	addBlock(t, ledger1)
+
+	net1 := &httpTestPeerSource{}
+
+	config := config.GetDefaultLocal()
+	bs1 := MakeBlockService(log, config, ledger1, net1, "test-genesis-ID")
+	bs1.Start()
+
+	nodeA := &basicRPCNode{}
+
+	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
+	nodeA.start()
+	defer nodeA.stop()
+
+	parsedURL, err := network.ParseHostOrURL(nodeA.rootURL())
+	require.NoError(t, err)
+
+	client := http.Client{}
+
+	ctx := context.Background()
+	parsedURL.Path = FormatBlockQuery(uint64(1), parsedURL.Path, net1)
+	parsedURL.Path = strings.Replace(parsedURL.Path, "{genesisID}", "test-genesis-ID", 1)
+	blockURL := parsedURL.String()
+	request, err := http.NewRequest("GET", blockURL, nil)
+	require.NoError(t, err)
+	requestCtx, requestCancel := context.WithTimeout(ctx, time.Duration(config.CatchupHTTPBlockFetchTimeoutSec)*time.Second)
+	defer requestCancel()
+	request = request.WithContext(requestCtx)
+	network.SetUserAgentHeader(request.Header)
+
+	requestDone := make(chan struct{})
+	go func() {
+		defer close(requestDone)
+		client.Do(request)
+	}()
+
+	bs1.Stop()
+	ledger1.Close()
+
+	<-requestDone
 }
 
 // TestRedirectBasic tests the case when the block service redirects the request to elsewhere
