@@ -34,6 +34,7 @@ const (
 	MaxNumLeaves = 65536 // 2^MaxTreeDepth
 )
 
+// Merkle tree errors
 var (
 	ErrRootMismatch               = errors.New("root mismatch")
 	ErrProvingZeroCommitment      = errors.New("proving in zero-length commitment")
@@ -106,6 +107,10 @@ func buildWorker(ws *workerState, array Array, leaves Layer, h crypto.HashFactor
 	}
 }
 
+// BuildVectorCommitmentTree constructs a Merkle tree given an array.
+// the tree returned from this function can function as a vector commitment (has position binding property)
+// In addition, the tree will also extend the array to have a length of 2^X leaves.
+// i.e we always create a full tree
 func BuildVectorCommitmentTree(array Array, factory crypto.HashFactory) (*Tree, error) {
 	t, err := Build(generateVectorCommitmentArray(array), factory)
 	if err != nil {
@@ -116,7 +121,9 @@ func BuildVectorCommitmentTree(array Array, factory crypto.HashFactory) (*Tree, 
 	return t, nil
 }
 
-// Build constructs a Merkle tree given an array.
+// Build constructs a Merkle tree given an array. The tree can be used to generate
+// proofs of membership on element. If a proof of position is require, a Vector Commitments
+// is required
 func Build(array Array, factory crypto.HashFactory) (*Tree, error) {
 	arraylen := array.Length()
 	leaves := make(Layer, arraylen)
