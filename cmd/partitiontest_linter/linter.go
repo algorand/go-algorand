@@ -59,7 +59,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 				continue
 			}
 			if !isSearchLineInFunction(fn) {
-				pass.Reportf(fn.Pos(), "%s: Add missing partition call to top of test: %s.%s(%s)", fn.Name.Name, packageName, functionName, parameterName)
+				pass.Reportf(fn.Pos(), "%s: Add missing partition call to top of test. To disable partitioning, add it as a comment: %s.%s(%s)", fn.Name.Name, packageName, functionName, parameterName)
 			}
 
 		}
