@@ -238,13 +238,15 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
-	block, _, err := myLedger.BlockCert(basics.Round(lastRound))
+
+	latestBlkHdr, err := myLedger.BlockHdr(lastRound)
 	if err != nil {
-		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		return internalError(ctx, err, errFailedRetrievingLatestBlockHeaderStatus, v2.Log)
 	}
-	consensus, ok := config.Consensus[block.CurrentProtocol]
+
+	consensus, ok := config.Consensus[latestBlkHdr.CurrentProtocol]
 	if !ok {
-		return notFound(ctx, errors.New(errInternalFailure), errInternalFailure, v2.Log)
+		return notFound(ctx, errors.New(errInternalFailure), "could not retrieve consensus information for current protocol", v2.Log)
 	}
 
 	if handle == protocol.CodecHandle {
@@ -278,9 +280,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		}
 	}
 
-	minBalance := record.MinBalance(&consensus)
-
-	account, err := AccountDataToAccount(address, &record, assetsCreators, lastRound, amountWithoutPendingRewards, minBalance)
+	account, err := AccountDataToAccount(address, &record, assetsCreators, lastRound, &consensus, amountWithoutPendingRewards)
 	if err != nil {
 		return internalError(ctx, err, errInternalFailure, v2.Log)
 	}

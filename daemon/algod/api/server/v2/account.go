@@ -22,6 +22,7 @@ import (
 	"math"
 	"sort"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
@@ -30,7 +31,8 @@ import (
 // AccountDataToAccount converts basics.AccountData to v2.generated.Account
 func AccountDataToAccount(
 	address string, record *basics.AccountData, assetsCreators map[basics.AssetIndex]string,
-	lastRound basics.Round, amountWithoutPendingRewards basics.MicroAlgos, minBalance basics.MicroAlgos,
+	lastRound basics.Round, consensus *config.ConsensusParams,
+	amountWithoutPendingRewards basics.MicroAlgos,
 ) (generated.Account, error) {
 
 	assets := make([]generated.AssetHolding, 0, len(record.Assets))
@@ -107,6 +109,8 @@ func AccountDataToAccount(
 	if overflowed {
 		return generated.Account{}, errors.New("overflow on pending reward calculation")
 	}
+
+	minBalance := record.MinBalance(consensus)
 
 	return generated.Account{
 		SigType:                     nil,
