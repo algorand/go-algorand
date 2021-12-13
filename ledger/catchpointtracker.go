@@ -110,9 +110,6 @@ type catchpointTracker struct {
 
 	// catchpointsMu is the synchronization mutex for accessing the various non-static variables.
 	catchpointsMu deadlock.RWMutex
-
-	// roundDigest stores the digest of the block for every round starting with dbRound and every round after it.
-	roundDigest []crypto.Digest
 }
 
 // initialize initializes the catchpointTracker structure
@@ -159,7 +156,6 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, lastBalancesRound 
 	ct.log = l.trackerLog()
 	ct.dbs = l.trackerDB()
 
-	ct.roundDigest = nil
 	ct.catchpointWriting = 0
 	// keep these channel closed if we're not generating catchpoint
 	ct.catchpointSlowWriting = make(chan struct{}, 1)
@@ -220,9 +216,6 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, lastBalancesRound 
 // newBlock informs the tracker of a new block from round
 // rnd and a given ledgercore.StateDelta as produced by BlockEvaluator.
 func (ct *catchpointTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
-	ct.catchpointsMu.Lock()
-	defer ct.catchpointsMu.Unlock()
-	ct.roundDigest = append(ct.roundDigest, blk.Digest())
 }
 
 // committedUpTo implements the ledgerTracker interface for catchpointTracker.
@@ -294,11 +287,6 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 // prepareCommit, commitRound and postCommit are called when it is time to commit tracker's data.
 // If an error returned the process is aborted.
 func (ct *catchpointTracker) prepareCommit(dcc *deferredCommitContext) error {
-	ct.catchpointsMu.RLock()
-	defer ct.catchpointsMu.RUnlock()
-	if dcc.isCatchpointRound {
-		dcc.committedRoundDigest = ct.roundDigest[dcc.offset+uint64(dcc.lookback)-1]
-	}
 	return nil
 }
 
@@ -380,19 +368,15 @@ func (ct *catchpointTracker) postCommit(ctx context.Context, dcc *deferredCommit
 	}
 
 	if dcc.isCatchpointRound && dcc.catchpointLabel != "" {
+		ct.catchpointsMu.Lock()
 		ct.lastCatchpointLabel = dcc.catchpointLabel
+		ct.catchpointsMu.Unlock()
 	}
 	dcc.updatingBalancesDuration = time.Since(dcc.flushTime)
 
 	if dcc.updateStats {
 		dcc.stats.MemoryUpdatesDuration = time.Duration(time.Now().UnixNano())
 	}
-
-	ct.catchpointsMu.Lock()
-
-	ct.roundDigest = ct.roundDigest[dcc.offset:]
-
-	ct.catchpointsMu.Unlock()
 
 	if dcc.isCatchpointRound && ct.archivalLedger && dcc.catchpointLabel != "" {
 		// generate the catchpoint file. This need to be done inline so that it will block any new accounts that from being written.

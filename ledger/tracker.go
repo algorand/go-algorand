@@ -464,14 +464,23 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) {
 		return
 	}
 
+	var ctt ledgerTracker
 	tr.mu.Lock()
 	tr.dbRound = newBase
 	for _, lt := range tr.trackers {
-		lt.postCommit(tr.ctx, dcc)
+		if ct, ok := lt.(*catchpointTracker); ok {
+			ctt = ct
+		} else {
+			lt.postCommit(tr.ctx, dcc)
+		}
 	}
 	tr.lastFlushTime = dcc.flushTime
 	tr.mu.Unlock()
 
+	if ctt != nil {
+		// run catchpoint tracker's postCommit without a lock as potentially long operation
+		ctt.postCommit(tr.ctx, dcc)
+	}
 }
 
 // initializeTrackerCaches fills up the accountUpdates cache with the most recent ~320 blocks ( on normal execution ).

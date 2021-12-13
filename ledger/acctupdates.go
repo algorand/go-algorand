@@ -133,6 +133,9 @@ type accountUpdates struct {
 	// i.e., totals is one longer than deltas.
 	roundTotals []ledgercore.AccountTotals
 
+	// roundDigest stores the digest of the block for every round starting with dbRound and every round after it.
+	roundDigest []crypto.Digest
+
 	// log copied from ledger
 	log logging.Logger
 
@@ -717,6 +720,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	au.accounts = make(map[basics.Address]modifiedAccount)
 	au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	au.deltasAccum = []int{0}
+	au.roundDigest = nil
 
 	au.baseAccounts.init(au.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
 	return
@@ -738,6 +742,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	au.deltas = append(au.deltas, delta.Accts)
 	au.versions = append(au.versions, blk.CurrentProtocol)
 	au.creatableDeltas = append(au.creatableDeltas, delta.Creatables)
+	au.roundDigest = append(au.roundDigest, blk.Digest())
 	au.deltasAccum = append(au.deltasAccum, delta.Accts.Len()+au.deltasAccum[len(au.deltasAccum)-1])
 
 	au.baseAccounts.flushPendingWrites()
@@ -1085,6 +1090,10 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 		return fmt.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
 	}
 
+	if dcc.isCatchpointRound {
+		dcc.committedRoundDigest = au.roundDigest[offset+uint64(dcc.lookback)-1]
+	}
+
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
 	dcc.compactAccountDeltas = makeCompactAccountDeltas(dcc.deltas, au.baseAccounts)
@@ -1216,6 +1225,7 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 
 	au.deltas = au.deltas[offset:]
 	au.deltasAccum = au.deltasAccum[offset:]
+	au.roundDigest = au.roundDigest[offset:]
 	au.versions = au.versions[offset:]
 	au.roundTotals = au.roundTotals[offset:]
 	au.creatableDeltas = au.creatableDeltas[offset:]
