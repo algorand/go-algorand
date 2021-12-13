@@ -29,7 +29,7 @@ class AtomicABI:
         """
         self.goal = goal
         self.app_id = app_id
-        self.contract_abi_json = contract_abi_json  # for cloning only
+        self.contract_abi_json = contract_abi_json
         self.caller_acct = caller_acct
         self.sp = sp
 
@@ -127,7 +127,7 @@ class AtomicABI:
         self.execution_summaries = self._build_summaries()
         return self.execution_results, self.execution_summaries
 
-    def execute_singleton(
+    def execute_singleton_group(
         self,
         method_handle: str,
         method_args: list,
@@ -138,6 +138,13 @@ class AtomicABI:
         lease: bytes = None,
         rekey_to: str = None,
     ) -> Tuple[atc.AtomicTransactionResponse, "MethodCallSummary"]:
+        """
+        Note: the run_XYZ() dynamically generated methods are recommended over execute_singleton_group()
+        in most situation because they clone() the AtomicABI object first before execution.
+
+        However, in cases when method signatures are not known a-priori and only a single method
+        needs to be executed, execute_singleton_group() is needed.
+        """
         assert self.execution_results is None, self.CALL_TWICE_ERROR
         abi_meth = self.handle2meth[method_handle]["abi_meth"]
         self.add_method_call(
