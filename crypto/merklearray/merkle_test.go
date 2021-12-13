@@ -417,7 +417,6 @@ func TestMerkleTreeVectors(t *testing.T) {
 func TestMerkleTreeInternalNodeWithOneChild(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var internalNodeDS = "MA"
 	a := make(TestArray, 5)
 	for i := uint64(0); i < 5; i++ {
 		crypto.RandBytes(a[i][:])
@@ -429,12 +428,12 @@ func TestMerkleTreeInternalNodeWithOneChild(t *testing.T) {
 	leaf3Hash := crypto.GenereicHashObj(h, a[3])
 	leaf4Hash := crypto.GenereicHashObj(h, a[4])
 
-	internalNode0Hash := hashInternalNode(h, internalNodeDS, leaf0Hash, leaf1Hash)
-	internalNode1Hash := hashInternalNode(h, internalNodeDS, leaf2Hash, leaf3Hash)
-	internalNode2Hash := hashInternalNode(h, internalNodeDS, leaf4Hash, nil)
-	internalNode00Hash := hashInternalNode(h, internalNodeDS, internalNode0Hash, internalNode1Hash)
-	internalNode01Hash := hashInternalNode(h, internalNodeDS, internalNode2Hash, nil)
-	rootHash := hashInternalNode(h, internalNodeDS, internalNode00Hash, internalNode01Hash)
+	internalNode0Hash := hashInternalNode(h, leaf0Hash, leaf1Hash)
+	internalNode1Hash := hashInternalNode(h, leaf2Hash, leaf3Hash)
+	internalNode2Hash := hashInternalNode(h, leaf4Hash, nil)
+	internalNode00Hash := hashInternalNode(h, internalNode0Hash, internalNode1Hash)
+	internalNode01Hash := hashInternalNode(h, internalNode2Hash, nil)
+	rootHash := hashInternalNode(h, internalNode00Hash, internalNode01Hash)
 
 	tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha512_256})
 	require.NoError(t, err)
@@ -447,7 +446,6 @@ func TestMerkleTreeInternalNodeWithOneChild(t *testing.T) {
 func TestMerkleTreeInternalNodeFullTree(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var internalNodeDS = "MA"
 	a := make(TestArray, 4)
 	for i := uint64(0); i < 4; i++ {
 		crypto.RandBytes(a[i][:])
@@ -458,9 +456,9 @@ func TestMerkleTreeInternalNodeFullTree(t *testing.T) {
 	leaf2Hash := crypto.GenereicHashObj(h, a[2])
 	leaf3Hash := crypto.GenereicHashObj(h, a[3])
 
-	internalNode0Hash := hashInternalNode(h, internalNodeDS, leaf0Hash, leaf1Hash)
-	internalNode1Hash := hashInternalNode(h, internalNodeDS, leaf2Hash, leaf3Hash)
-	rootHash := hashInternalNode(h, internalNodeDS, internalNode0Hash, internalNode1Hash)
+	internalNode0Hash := hashInternalNode(h, leaf0Hash, leaf1Hash)
+	internalNode1Hash := hashInternalNode(h, leaf2Hash, leaf3Hash)
+	rootHash := hashInternalNode(h, internalNode0Hash, internalNode1Hash)
 
 	tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha512_256})
 	require.NoError(t, err)
@@ -470,11 +468,12 @@ func TestMerkleTreeInternalNodeFullTree(t *testing.T) {
 
 }
 
-func hashInternalNode(h hash.Hash, internalNodeDS string, firstLeafHash []byte, secondLeafHash []byte) []byte {
-	internalNode := make([]byte, 2*h.Size()+len(internalNodeDS))
-	copy(internalNode, internalNodeDS)
-	copy(internalNode[len(internalNodeDS):], firstLeafHash)
-	copy(internalNode[len(internalNodeDS)+h.Size():], secondLeafHash)
+func hashInternalNode(h hash.Hash, firstLeafHash []byte, secondLeafHash []byte) []byte {
+
+	internalNode := make([]byte, 2*h.Size()+len(protocol.MerkleArrayNode))
+	copy(internalNode, protocol.MerkleArrayNode)
+	copy(internalNode[len(protocol.MerkleArrayNode):], firstLeafHash)
+	copy(internalNode[len(protocol.MerkleArrayNode)+h.Size():], secondLeafHash)
 	h.Reset()
 	h.Write(internalNode)
 	internalNodeHash := h.Sum(nil)
@@ -586,9 +585,12 @@ func testMerkleVC(t *testing.T, hashtype crypto.HashType, size uint64) {
 	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{0: junk}, nil)
 	require.ErrorIs(t, err, ErrProofIsNil)
 
-	// when building VC with empty array we should expect a tree with one bottom leaf.
 	_, err = tree.Prove([]uint64{size})
-	require.Contains(t, err.Error(), "larger than leaf count")
+	if size == 0 {
+		require.ErrorIs(t, err, ErrProvingZeroCommitment)
+	} else {
+		require.Contains(t, err.Error(), "larger than leaf count")
+	}
 
 	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{size: junk}, nil)
 	require.ErrorIs(t, err, ErrProofIsNil)
@@ -613,19 +615,17 @@ func testMerkleVC(t *testing.T, hashtype crypto.HashType, size uint64) {
 func TestVCOnlyOneNode(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var internalNodeDS = "MA"
 	a := make(TestArray, 1)
-	crypto.RandBytes(a[0][:])
-	var bottemLeafData TestData
-	copy(bottemLeafData[:], []byte{0x0})
+
+	copy(a[0][:], []byte{0x1, 0x2})
 
 	h := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
 	leaf0Hash := crypto.GenereicHashObj(h, a[0])
 	h.Reset()
-	h.Write([]byte{0x0})
+	h.Write([]byte(protocol.MerkleBottomLeaf))
 	leaf1Hash := h.Sum(nil)
 
-	rootHash := hashInternalNode(h, internalNodeDS, leaf0Hash, leaf1Hash)
+	rootHash := hashInternalNode(h, leaf0Hash, leaf1Hash)
 
 	tree, err := BuildVectorCommitmentTree(a, crypto.HashFactory{HashType: crypto.Sha512_256})
 	require.NoError(t, err)
@@ -641,7 +641,7 @@ func TestVCEmptyTree(t *testing.T) {
 
 	h := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
 	h.Reset()
-	h.Write([]byte{0x0})
+	h.Write([]byte(protocol.MerkleBottomLeaf))
 	root2 := h.Sum(nil)
 
 	tree, err := BuildVectorCommitmentTree(a, crypto.HashFactory{HashType: crypto.Sha512_256})
@@ -696,9 +696,7 @@ func merkleCommitBench(b *testing.B, hashType crypto.HashType) {
 			b.Run(fmt.Sprintf("Item%d/Count%d", sz, cnt), func(b *testing.B) {
 				for i := 0; i < b.N; i++ {
 					tree, err := Build(a, crypto.HashFactory{HashType: hashType})
-					if err != nil {
-						b.Error(err)
-					}
+					require.NoError(b, err)
 					tree.Root()
 				}
 			})
@@ -719,9 +717,7 @@ func benchmarkMerkleProve1M(b *testing.B, hashType crypto.HashType) {
 	a.count = 1024 * 1024
 
 	tree, err := Build(a, crypto.HashFactory{HashType: hashType})
-	if err != nil {
-		b.Error(err)
-	}
+	require.NoError(b, err)
 
 	b.ResetTimer()
 
@@ -746,25 +742,19 @@ func benchmarkMerkleVerify1M(b *testing.B, hashType crypto.HashType) {
 	a.count = 1024 * 1024
 
 	tree, err := Build(a, crypto.HashFactory{HashType: hashType})
-	if err != nil {
-		b.Error(err)
-	}
+	require.NoError(b, err)
 	root := tree.Root()
 
 	proofs := make([]*Proof, a.count)
 	for i := uint64(0); i < a.count; i++ {
 		proofs[i], err = tree.Prove([]uint64{i})
-		if err != nil {
-			b.Error(err)
-		}
+		require.NoError(b, err)
 	}
 
 	b.ResetTimer()
 
 	for i := uint64(0); i < uint64(b.N); i++ {
 		err := Verify(root, map[uint64]crypto.Hashable{i % a.count: msg}, proofs[i])
-		if err != nil {
-			b.Error(err)
-		}
+		require.NoError(b, err)
 	}
 }

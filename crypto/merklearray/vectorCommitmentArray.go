@@ -2,6 +2,7 @@ package merklearray
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/protocol"
 	"math/bits"
 )
 
@@ -12,8 +13,8 @@ type vectorCommitmentArray struct {
 }
 
 func getBottomElement() []byte {
-	// TODO what is the bottom element?
-	return []byte{0x00}
+	hashId := protocol.MerkleBottomLeaf
+	return []byte(hashId)
 }
 
 func generateVectorCommitmentArray(innerArray Array) *vectorCommitmentArray {

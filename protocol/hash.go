@@ -49,6 +49,7 @@ const (
 	Genesis           HashID = "GE"
 	KeystorePK        HashID = "KP"
 	MerkleArrayNode   HashID = "MA"
+	MerkleBottomLeaf  HashID = "MB"
 	Message           HashID = "MX"
 	NetPrioResponse   HashID = "NPR"
 	OneTimeSigKey1    HashID = "OT1"

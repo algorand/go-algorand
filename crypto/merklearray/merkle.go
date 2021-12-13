@@ -178,7 +178,7 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 	}
 
 	// Special case: commitment to zero-length array
-	if len(tree.Levels) == 0 {
+	if len(tree.Levels) == 0 || tree.NumOfLeaves == 0 {
 		return nil, ErrProvingZeroCommitment
 	}
 
