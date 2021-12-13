@@ -17,6 +17,7 @@
 package catchup
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -390,19 +391,30 @@ func TestBasicCatchupCompletes(t *testing.T) {
 	catchupTime := time.Since(startTime)
 
 	// Check if curStatus.CatchupTime, the "Time since last block" is less than the catchup time.
-	// - If the catchup has not stopped, this value will reflect the catchup time, and be larger
-	//   than the time we expected it to have the catchup completed.
-	//-  If the catchup stops after it completes, this value will be the time since the last round was
+	// - If the catchup has not stopped, this value will keep on growing, and eventually be larger than the time
+	//   of a single round agreement.
+	// - If the catchup stops after it completes, this value will be the time since the last round was
 	//   obtained through the agreement, and be much smaller than the catchup time.
 	client := fixture.GetAlgodClientForController(fixture.LibGoalFixture.GetNodeControllerForDataDir(cloneDataDir))
 
-	// Note: since the network may have made some progress since waitForRound, it could be that the
-	// third node is still catching up even after getting to waitForRound. Give it some more time and check again..
+	// Prevent false positive
+	// - Since obtaining the exact catchup time is not possible, wait catchupTime again, to make sure curStatus.CatchupTime
+	//   will be at least our estimated catchupTime (since it keeps on growing if catchup has not stopped).
+	time.Sleep(catchupTime)
+
+	// Prevent false negative
+	// The network may have made some progress since waitForRound, it could be that the
+	// third node is still catching up even after getting to waitForRound.
+	// Moreover, it takes some time to transition from the catchup to agreement.
+	// Give it some more time and check again..
 	pass := false
-	for x := 0; x < 10; x++ {
+	for x := 0; x < 100; x++ {
 		curStatus, statusErr := client.Status()
 		require.NoError(t, statusErr, "fixture should be able to get node status")
-		pass = time.Duration(curStatus.CatchupTime).Milliseconds() < catchupTime.Milliseconds()
+		currentStateMsec := time.Duration(curStatus.CatchupTime).Milliseconds()
+		catchupMsec := catchupTime.Milliseconds()
+		pass = currentStateMsec < catchupMsec
+		fmt.Printf("%d / 50 currentStateMsec %d catchupMsec %d\n", x, currentStateMsec, catchupMsec)
 		if pass {
 			break
 		}
