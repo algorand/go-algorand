@@ -17,7 +17,6 @@
 package catchup
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -414,7 +413,6 @@ func TestBasicCatchupCompletes(t *testing.T) {
 		currentStateMsec := time.Duration(curStatus.CatchupTime).Milliseconds()
 		catchupMsec := catchupTime.Milliseconds()
 		pass = currentStateMsec < catchupMsec
-		fmt.Printf("%d / 50 currentStateMsec %d catchupMsec %d\n", x, currentStateMsec, catchupMsec)
 		if pass {
 			break
 		}
