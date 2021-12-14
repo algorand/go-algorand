@@ -36,7 +36,8 @@ import (
 type indexerLedgerForEval interface {
 	LatestBlockHdr() (bookkeeping.BlockHeader, error)
 	// The value of the returned map is nil iff the account was not found.
-	LookupWithoutRewards(map[basics.Address]struct{}) (map[basics.Address]*basics.AccountData, error)
+	LookupWithoutRewards(map[basics.Address]struct{}) (map[basics.Address]*ledgercore.AccountData, error)
+	LookupResources(map[basics.Address]map[Creatable]struct{}) (map[basics.Address]map[Creatable]*ledgercore.AccountResource, error)
 	GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]FoundAddress, error)
 	GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]FoundAddress, error)
 	LatestTotals() (ledgercore.AccountTotals, error)
@@ -107,7 +108,7 @@ func (l indexerLedgerConnector) LookupWithoutRewards(round basics.Round, address
 	if accountData == nil {
 		return ledgercore.AccountData{}, round, nil
 	}
-	return ledgercore.ToAccountData(*accountData), round, nil
+	return *accountData, round, nil
 }
 
 // toAccountResource returns ledgercore.AccountResource for a creatable in basics.AccountData
@@ -141,16 +142,21 @@ func (l indexerLedgerConnector) LookupResource(round basics.Round, address basic
 		return toAccountResource(*pad, aidx, ctype), nil
 	}
 
-	accountDataMap, err := l.il.LookupWithoutRewards(map[basics.Address]struct{}{address: {}})
+	accountResourceMap, err :=
+		l.il.LookupResources(map[basics.Address]map[Creatable]struct{}{address: {{aidx, ctype}: {}}})
 	if err != nil {
 		return ledgercore.AccountResource{}, err
 	}
 
-	accountData := accountDataMap[address]
-	if accountData == nil {
+	creatables, ok := accountResourceMap[address]
+	if !ok {
 		return ledgercore.AccountResource{}, nil
 	}
-	return toAccountResource(*accountData, aidx, ctype), nil
+	accountResource := creatables[Creatable{aidx, ctype}]
+	if accountResource == nil {
+		return ledgercore.AccountResource{}, nil
+	}
+	return *accountResource, nil
 }
 
 // GetCreatorForRound is part of LedgerForEvaluator interface.
