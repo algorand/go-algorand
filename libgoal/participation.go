@@ -116,8 +116,11 @@ func (c *Client) GenParticipationKeys(address string, firstValid, lastValid, key
 }
 
 // GenParticipationKeysTo creates a .partkey database for a given address, fills
-// it with keys, and saves it in the specified output directory.
+// it with keys, and saves it in the specified output directory. If the output
+// directory is empty, the key will be installed.
 func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, keyDilution uint64, outDir string) (part account.Participation, filePath string, err error) {
+	install := outDir == ""
+
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
@@ -140,20 +143,20 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 
 	// If output directory wasn't specified, store it in the current ledger directory.
 	if outDir == "" {
-		// Get the GenesisID for use in the participation key path
-		var genID string
-		genID, err = c.GenesisID()
-		if err != nil {
-			return
-		}
-
-		outDir = filepath.Join(c.DataDir(), genID)
+		outDir = os.TempDir()
 	}
+
 	// Connect to the database
 	partKeyPath, err := participationKeysPath(outDir, parsedAddr, firstRound, lastRound)
 	if err != nil {
 		return
 	}
+
+	// If the key is being installed, remove it afterwards.
+	if install {
+		defer os.Remove(partKeyPath)
+	}
+
 	partdb, err := db.MakeErasableAccessor(partKeyPath)
 	if err != nil {
 		return
@@ -167,6 +170,15 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 	newPart, err := account.FillDBWithParticipationKeys(partdb, parsedAddr, firstRound, lastRound, keyDilution)
 	part = newPart.Participation
 	partdb.Close()
+
+	if err != nil {
+		return
+	}
+
+	if install {
+		_, err = c.AddParticipationKey(partKeyPath)
+	}
+
 	return part, partKeyPath, err
 }
 

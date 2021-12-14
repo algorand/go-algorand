@@ -19,7 +19,6 @@ package main
 import (
 	"bufio"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -885,6 +884,7 @@ var addParticipationKeyCmd = &cobra.Command{
 	},
 }
 
+
 var installParticipationKeyCmd = &cobra.Command{
 	Use:   "installpartkey",
 	Short: "Install a participation key",
@@ -907,37 +907,16 @@ No --delete-input flag specified, exiting without installing key.`)
 
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
+
 		addResponse, err := client.AddParticipationKey(partKeyFile)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
 
-		verifyInstalled := func() error {
-			start := time.Now()
-
-			for {
-				keysResp, err := client.GetParticipationKeys()
-				if err != nil {
-					return err
-				}
-				for _, key := range keysResp {
-					if key.Id == addResponse.PartId {
-						// Installation successful.
-						return nil
-					}
-				}
-
-				if time.Since(start) > 1 * time.Minute {
-					return errors.New("timeout waiting for key to appear")
-				}
-
-				time.Sleep(1 * time.Second)
-			}
-		}
-
-		err = verifyInstalled()
-		if err != nil {
-			reportErrorf("Failure while verifying key installation. Verify key installation with 'goal account partkeyinfo' and delete '%s', or retry the command. Error: ", partKeyFile, err)
+		// In an abundance of caution, check for ourselves that the key has been installed.
+		if err := client.VerifyParticipationKey(time.Minute, addResponse.PartId); err != nil {
+			err = fmt.Errorf("unable to verify key installation. Verify key installation with 'goal account partkeyinfo' and delete '%s', or retry the command. Error: %w", partKeyFile, err)
+			reportErrorf(errorRequestFail, err)
 		}
 
 		// PKI TODO: Install state proof keys.
@@ -977,14 +956,14 @@ var renewParticipationKeyCmd = &cobra.Command{
 		}
 
 		// Make sure we don't already have a partkey valid for (or after) specified roundLastValid
-		parts, err := client.ListParticipationKeyFiles()
+		parts, err := client.ListParticipationKeys()
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
 		for _, part := range parts {
-			if part.Address().String() == accountAddress {
-				if part.LastValid >= basics.Round(roundLastValid) {
-					reportErrorf(errExistingPartKey, roundLastValid, part.LastValid)
+			if part.Address == accountAddress {
+				if part.Key.VoteLastValid >= roundLastValid {
+					reportErrorf(errExistingPartKey, roundLastValid, part.Key.VoteLastValid)
 				}
 			}
 		}
@@ -1035,19 +1014,19 @@ func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, lease
 	client := ensureAlgodClient(dataDir)
 
 	// Build list of accounts to renew from all accounts with part keys present
-	parts, err := client.ListParticipationKeyFiles()
+	parts, err := client.ListParticipationKeys()
 	if err != nil {
 		return fmt.Errorf(errorRequestFail, err)
 	}
-	renewAccounts := make(map[basics.Address]algodAcct.Participation)
+	renewAccounts := make(map[string]generatedV2.ParticipationKey)
 	for _, part := range parts {
-		if existing, has := renewAccounts[part.Address()]; has {
-			if existing.LastValid >= part.LastValid {
+		if existing, has := renewAccounts[part.Address]; has {
+			if existing.Key.VoteFirstValid >= part.Key.VoteLastValid {
 				// We already saw a partkey that expires later
 				continue
 			}
 		}
-		renewAccounts[part.Address()] = part
+		renewAccounts[part.Address] = part
 	}
 
 	currentRound, err := client.CurrentRound()
@@ -1071,18 +1050,18 @@ func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, lease
 	// at least through lastValidRound, generate a new key and register it.
 	// Make sure we don't already have a partkey valid for (or after) specified roundLastValid
 	for _, renewPart := range renewAccounts {
-		if renewPart.LastValid >= basics.Round(lastValidRound) {
-			fmt.Printf("  Skipping account %s: Already has a part key valid beyond %d (currently %d)\n", renewPart.Address(), lastValidRound, renewPart.LastValid)
+		if renewPart.Key.VoteLastValid >= lastValidRound {
+			fmt.Printf("  Skipping account %s: Already has a part key valid beyond %d (currently %d)\n", renewPart.Address, lastValidRound, renewPart.Key.VoteLastValid)
 			continue
 		}
 
 		// If the account's latest partkey expired before the current round, don't automatically renew and instead instruct the user to explicitly renew it.
-		if renewPart.LastValid < basics.Round(lastValidRound) {
-			fmt.Printf("  Skipping account %s: This account has part keys that have expired.  Please renew this account explicitly using 'renewpartkey'\n", renewPart.Address())
+		if renewPart.Key.VoteLastValid < lastValidRound {
+			fmt.Printf("  Skipping account %s: This account has part keys that have expired.  Please renew this account explicitly using 'renewpartkey'\n", renewPart.Address)
 			continue
 		}
 
-		address := renewPart.Address().String()
+		address := renewPart.Address
 		err = generateAndRegisterPartKey(address, currentRound, lastValidRound, fee, leaseBytes, dilution, wallet, dataDir, client)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  Error renewing part key for account %s: %v\n", address, err)
