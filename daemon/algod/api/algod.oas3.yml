@@ -341,6 +341,10 @@
         },
         "description": "Teal compile Result"
       },
+      "DeleteParticipationIdResponse": {
+        "content": {},
+        "description": "Participation key got deleted by ID"
+      },
       "DryrunResponse": {
         "content": {
           "application/json": {
@@ -453,6 +457,29 @@
           }
         }
       },
+      "ParticipationKeyResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ParticipationKey"
+            }
+          }
+        },
+        "description": "A detailed description of a participation id"
+      },
+      "ParticipationKeysResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "items": {
+                "$ref": "#/components/schemas/ParticipationKey"
+              },
+              "type": "array"
+            }
+          }
+        },
+        "description": "A list of participation keys"
+      },
       "PendingTransactionsResponse": {
         "content": {
           "application/json": {
@@ -482,6 +509,25 @@
           }
         },
         "description": "A potentially truncated list of transactions currently in the node's transaction pool. You can compute whether or not the list is truncated if the number of elements in the **top-transactions** array is fewer than **total-transactions**."
+      },
+      "PostParticipationResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "partId": {
+                  "description": "encoding of the participation id.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "partId"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Participation ID of the submission"
       },
       "PostTransactionsResponse": {
         "content": {
@@ -1267,6 +1313,51 @@
         "required": [
           "key",
           "value"
+        ],
+        "type": "object"
+      },
+      "ParticipationKey": {
+        "description": "Represents a participation key used by the node.",
+        "properties": {
+          "address": {
+            "description": "Address the key was generated for.",
+            "type": "string",
+            "x-algorand-format": "Address"
+          },
+          "effective-first-valid": {
+            "description": "When registered, this is the first round it may be used.",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          },
+          "effective-last-valid": {
+            "description": "When registered, this is the last round it may be used.",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          },
+          "id": {
+            "description": "The key's ParticipationID.",
+            "type": "string"
+          },
+          "key": {
+            "$ref": "#/components/schemas/AccountParticipation"
+          },
+          "last-block-proposal": {
+            "description": "Round when this key was last used to propose a block.",
+            "type": "integer"
+          },
+          "last-state-proof": {
+            "description": "Round when this key was last used to generate a state proof.",
+            "type": "integer"
+          },
+          "last-vote": {
+            "description": "Round when this key was last used to vote.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "address",
+          "id",
+          "key"
         ],
         "type": "object"
       },
@@ -2440,51 +2531,229 @@
         "summary": "Get the current supply reported by the ledger."
       }
     },
-    "/v2/register-participation-keys/{address}": {
+    "/v2/participation": {
+      "get": {
+        "description": "Return a list of participation keys",
+        "operationId": "GetParticipationKeys",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ParticipationKey"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "A list of participation keys"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Application Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Return a list of participation keys",
+        "tags": [
+          "private"
+        ]
+      },
       "post": {
-        "description": "Generate (or renew) and register participation keys on the node for a given account address.",
-        "operationId": "RegisterParticipationKeys",
+        "operationId": "AddParticipationKey",
+        "requestBody": {
+          "content": {
+            "application/msgpack": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "description": "The participation key to add to the node",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "partId": {
+                      "description": "encoding of the participation id.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "partId"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Participation ID of the submission"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Add a participation key to the node",
+        "tags": [
+          "private"
+        ],
+        "x-codegen-request-body-name": "participationkey"
+      }
+    },
+    "/v2/participation/{participation-id}": {
+      "delete": {
+        "description": "Delete a given participation key by id",
+        "operationId": "DeleteParticipationKeyByID",
         "parameters": [
           {
-            "description": "The `account-id` to update, or `all` to update all accounts.",
             "in": "path",
-            "name": "address",
+            "name": "participation-id",
             "required": true,
             "schema": {
               "type": "string"
             }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {},
+            "description": "Participation key got deleted by ID"
           },
-          {
-            "description": "The fee to use when submitting key registration transactions. Defaults to the suggested fee.",
-            "in": "query",
-            "name": "fee",
-            "schema": {
-              "default": 1000,
-              "type": "integer"
-            }
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
           },
-          {
-            "description": "value to use for two-level participation key.",
-            "in": "query",
-            "name": "key-dilution",
-            "schema": {
-              "type": "integer"
-            }
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
           },
-          {
-            "description": "The last round for which the generated participation keys will be valid.",
-            "in": "query",
-            "name": "round-last-valid",
-            "schema": {
-              "type": "integer"
-            }
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
           },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Delete a given participation key by id",
+        "tags": [
+          "private"
+        ]
+      },
+      "get": {
+        "description": "Given a participation id, return information about that participation key",
+        "operationId": "GetParticipationKeyByID",
+        "parameters": [
           {
-            "description": "Don't wait for transaction to commit before returning response.",
-            "in": "query",
-            "name": "no-wait",
+            "in": "path",
+            "name": "participation-id",
+            "required": true,
             "schema": {
-              "type": "boolean"
+              "type": "string"
             }
           }
         ],
@@ -2493,22 +2762,58 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "txId": {
-                      "description": "encoding of the transaction hash.",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "txId"
-                  ],
-                  "type": "object"
+                  "$ref": "#/components/schemas/ParticipationKey"
                 }
               }
             },
-            "description": "Transaction ID of the submission."
+            "description": "A detailed description of a participation id"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Application Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
           }
         },
+        "summary": "Get participation key info by id",
         "tags": [
           "private"
         ]

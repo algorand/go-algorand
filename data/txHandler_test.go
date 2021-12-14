@@ -29,18 +29,19 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
-func makeTestingTransactionPoolAndLedger(tb testing.TB, N int) (*pools.TransactionPool, *Ledger, []*crypto.SignatureSecrets, []basics.Address) {
+func BenchmarkTxHandlerProcessDecoded(b *testing.B) {
+	b.StopTimer()
+	b.ResetTimer()
+	const numRounds = 10
 	const numUsers = 100
-	log := logging.TestingLog(tb)
+	log := logging.TestingLog(b)
 	secrets := make([]*crypto.SignatureSecrets, numUsers)
 	addresses := make([]basics.Address, numUsers)
 
@@ -61,25 +62,20 @@ func makeTestingTransactionPoolAndLedger(tb testing.TB, N int) (*pools.Transacti
 		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
 	}
 
-	require.Equal(tb, len(genesis), numUsers+1)
+	require.Equal(b, len(genesis), numUsers+1)
 	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
-	ledgerName := fmt.Sprintf("%s-mem-%d", tb.Name(), N)
+	ledgerName := fmt.Sprintf("%s-mem-%d", b.Name(), b.N)
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
-	require.NoError(tb, err)
+	require.NoError(b, err)
+
+	l := ledger
 
 	cfg.TxPoolSize = 20000
 	cfg.EnableProcessBlockStats = false
-	tp := pools.MakeTransactionPool(ledger.Ledger, cfg, logging.Base())
-	return tp, ledger, secrets, addresses
-}
-
-func BenchmarkTxHandlerProcessDecoded(b *testing.B) {
-	const numUsers = 100
-	tp, l, secrets, addresses := makeTestingTransactionPoolAndLedger(b, b.N)
-	defer l.Close()
+	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
 	signedTransactions := make([]transactions.SignedTxn, 0, b.N)
 	for i := 0; i < b.N/numUsers; i++ {
 		for u := 0; u < numUsers; u++ {
@@ -104,17 +100,19 @@ func BenchmarkTxHandlerProcessDecoded(b *testing.B) {
 	}
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	txHandler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
-	b.ResetTimer()
+	b.StartTimer()
 	for _, signedTxn := range signedTransactions {
 		txHandler.processDecoded([]transactions.SignedTxn{signedTxn})
 	}
 }
 
 func BenchmarkTimeAfter(b *testing.B) {
+	b.StopTimer()
+	b.ResetTimer()
 	deadline := time.Now().Add(5 * time.Second)
 	after := 0
 	before := 0
-	b.ResetTimer()
+	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		if time.Now().After(deadline) {
 			after++
@@ -122,144 +120,4 @@ func BenchmarkTimeAfter(b *testing.B) {
 			before++
 		}
 	}
-}
-func TestFilterAlreadyCommitted(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	const numUsers = 100
-	tp, l, secrets, addresses := makeTestingTransactionPoolAndLedger(t, 1)
-	defer l.Close()
-	signedTransactions := make([]transactions.SignedTxn, 0, 100)
-
-	for u := 0; u < numUsers; u++ {
-		// generate transactions
-		tx := transactions.Transaction{
-			Type: protocol.PaymentTx,
-			Header: transactions.Header{
-				Sender:      addresses[u],
-				Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
-				FirstValid:  0,
-				LastValid:   basics.Round(proto.MaxTxnLife),
-				GenesisHash: l.GenesisHash(),
-				Note:        make([]byte, 2),
-			},
-			PaymentTxnFields: transactions.PaymentTxnFields{
-				Receiver: addresses[(u+1)%numUsers],
-				Amount:   basics.MicroAlgos{Raw: mockBalancesMinBalance + (rand.Uint64() % 10000)},
-			},
-		}
-		signedTx := tx.Sign(secrets[u])
-		signedTransactions = append(signedTransactions, signedTx)
-	}
-
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	txHandler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
-
-	// add the first 10 transactions to the pool.
-	for i := 0; i < 10; i++ {
-		tp.Remember(pooldata.SignedTxGroup{Transactions: []transactions.SignedTxn{signedTransactions[i]}})
-	}
-
-	allNew := []pooldata.SignedTxGroup{
-		pooldata.SignedTxGroup{
-			Transactions: signedTransactions[10:11],
-		},
-		pooldata.SignedTxGroup{
-			Transactions: signedTransactions[11:12],
-		},
-	}
-	allNewRef := []pooldata.SignedTxGroup{
-		pooldata.SignedTxGroup{
-			Transactions: signedTransactions[10:11],
-		},
-		pooldata.SignedTxGroup{
-			Transactions: signedTransactions[11:12],
-		},
-	}
-	allNewTransactions, allNewNonDupFilteredGroups := txHandler.filterAlreadyCommitted(allNew)
-	require.Equal(t, allNewRef, allNewTransactions)
-	require.False(t, allNewNonDupFilteredGroups)
-
-	firstTxDup := []pooldata.SignedTxGroup{
-		pooldata.SignedTxGroup{
-			Transactions: []transactions.SignedTxn{signedTransactions[1]},
-		},
-		pooldata.SignedTxGroup{
-			Transactions: signedTransactions[11:12],
-		},
-	}
-	firstTxExpectedOutput := []pooldata.SignedTxGroup{
-		pooldata.SignedTxGroup{
-			Transactions: signedTransactions[11:12],
-		},
-	}
-	firstTxDupTransactions, firstTxDupNonDupFilteredGroups := txHandler.filterAlreadyCommitted(firstTxDup)
-	require.Equal(t, firstTxExpectedOutput, firstTxDupTransactions)
-	require.False(t, firstTxDupNonDupFilteredGroups)
-
-	lastTxDup := []pooldata.SignedTxGroup{
-		pooldata.SignedTxGroup{
-			Transactions: signedTransactions[11:12],
-		},
-		pooldata.SignedTxGroup{
-			Transactions: []transactions.SignedTxn{signedTransactions[1]},
-		},
-	}
-	lastTxExpectedOutput := []pooldata.SignedTxGroup{
-		pooldata.SignedTxGroup{
-			Transactions: signedTransactions[11:12],
-		},
-	}
-	lastTxDupTransactions, lastTxDupNonDupFilteredGroups := txHandler.filterAlreadyCommitted(lastTxDup)
-	require.Equal(t, lastTxExpectedOutput, lastTxDupTransactions)
-	require.False(t, lastTxDupNonDupFilteredGroups)
-
-	midTxDup := []pooldata.SignedTxGroup{
-		pooldata.SignedTxGroup{
-			Transactions: signedTransactions[10:11],
-		},
-		pooldata.SignedTxGroup{
-			Transactions: signedTransactions[11:12],
-		},
-		pooldata.SignedTxGroup{
-			Transactions: []transactions.SignedTxn{signedTransactions[1]},
-		},
-		pooldata.SignedTxGroup{
-			Transactions: signedTransactions[13:14],
-		},
-		pooldata.SignedTxGroup{
-			Transactions: signedTransactions[14:15],
-		},
-		pooldata.SignedTxGroup{
-			Transactions: []transactions.SignedTxn{signedTransactions[2]},
-		},
-		pooldata.SignedTxGroup{
-			Transactions: []transactions.SignedTxn{signedTransactions[3]},
-		},
-		pooldata.SignedTxGroup{
-			Transactions: signedTransactions[15:16],
-		},
-	}
-	midTxDupExpectedOutput := []pooldata.SignedTxGroup{
-		pooldata.SignedTxGroup{
-			Transactions: signedTransactions[10:11],
-		},
-		pooldata.SignedTxGroup{
-			Transactions: signedTransactions[11:12],
-		},
-		pooldata.SignedTxGroup{
-			Transactions: signedTransactions[13:14],
-		},
-		pooldata.SignedTxGroup{
-			Transactions: signedTransactions[14:15],
-		},
-		pooldata.SignedTxGroup{
-			Transactions: signedTransactions[15:16],
-		},
-	}
-	midTxDupTransactions, midTxDupNonDupFilteredGroups := txHandler.filterAlreadyCommitted(midTxDup)
-	require.Equal(t, midTxDupExpectedOutput, midTxDupTransactions)
-	require.False(t, midTxDupNonDupFilteredGroups)
-
-	return
 }

@@ -18,11 +18,14 @@ package participation
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -61,30 +64,52 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 
 	a.GreaterOrEqual(newAmt, initialAmt)
 
-	sNodeStatus, err := sClient.Status()
-	a.NoError(err)
-	seededRound := sNodeStatus.LastRound
-
 	newAccountStatus, err := pClient.AccountInformation(sAccount)
 	a.NoError(err)
 	a.Equal(basics.Offline.String(), newAccountStatus.Status)
 
-	// account adds part key
-	partKeyFirstValid := uint64(0)
-	partKeyValidityPeriod := uint64(10)
-	partKeyLastValid := partKeyFirstValid + partKeyValidityPeriod
-	partkeyResponse, _, err := sClient.GenParticipationKeys(sAccount, partKeyFirstValid, partKeyLastValid, 0)
-	a.NoError(err)
-	a.Equal(sAccount, partkeyResponse.Parent.String())
-	// account uses part key to go online
-	goOnlineTx, err := sClient.MakeUnsignedGoOnlineTx(sAccount, &partkeyResponse, 0, 0, transactionFee, [32]byte{})
-	a.NoError(err)
-	a.Equal(sAccount, goOnlineTx.Src().String())
-	onlineTxID, err := sClient.SignAndBroadcastTransaction(sWH, nil, goOnlineTx)
-	a.NoError(err)
+	var onlineTxID string
+	var partKeyLastValid uint64
+
+	startTime := time.Now()
+	for time.Since(startTime) < 2*time.Minute {
+		_, currentRound := fixture.GetBalanceAndRound(richAccount)
+		// account adds part key
+		partKeyFirstValid := uint64(0)
+		partKeyValidityPeriod := uint64(10)
+		partKeyLastValid = currentRound + partKeyValidityPeriod
+		partkeyResponse, _, err := sClient.GenParticipationKeys(sAccount, partKeyFirstValid, partKeyLastValid, 0)
+		a.NoError(err)
+		a.Equal(sAccount, partkeyResponse.Parent.String())
+
+		// account uses part key to go online
+		goOnlineTx, err := sClient.MakeUnsignedGoOnlineTx(sAccount, &partkeyResponse, 0, 0, transactionFee, [32]byte{})
+		a.NoError(err)
+
+		a.Equal(sAccount, goOnlineTx.Src().String())
+		onlineTxID, err = sClient.SignAndBroadcastTransaction(sWH, nil, goOnlineTx)
+
+		if err == nil {
+			break
+		}
+
+		if strings.Contains(err.Error(), "transaction tries to mark an account as online with last voting round in the past") {
+			continue
+		}
+
+		// Error occurred
+		logging.TestingLog(t).Errorf("signAndBroadcastTransaction error: %s", err.Error())
+		logging.TestingLog(t).Errorf("first valid: %d, last valid: %d, current round: %d", partKeyFirstValid, partKeyLastValid, currentRound)
+		a.NoError(err)
+	}
 
 	fixture.AssertValidTxid(onlineTxID)
 	maxRoundsToWaitForTxnConfirm := uint64(3)
+
+	sNodeStatus, err := sClient.Status()
+	a.NoError(err)
+	seededRound := sNodeStatus.LastRound
+
 	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, sAccount, onlineTxID)
 	sNodeStatus, _ = sClient.Status()
 	newAccountStatus, err = pClient.AccountInformation(sAccount)
@@ -95,7 +120,7 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 
 	lastValidRound := sAccountData.VoteLastValid
 
-	a.Equal(basics.Round(10), lastValidRound)
+	a.Equal(basics.Round(partKeyLastValid), lastValidRound)
 
 	// We want to wait until we get to one round past the last valid round
 	err = fixture.WaitForRoundWithTimeout(uint64(lastValidRound) + 1)

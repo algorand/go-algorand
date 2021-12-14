@@ -1,0 +1,228 @@
+// generated from https://gist.github.com/jasonpaulos/99e4f8a75f2fc2ec9b8073c064530359
+#pragma version 5
+txn ApplicationID
+int 0
+==
+bnz main_l16
+txn OnCompletion
+int OptIn
+==
+txna ApplicationArgs 0
+byte 0xcfa68e36
+==
+&&
+bnz main_l15
+txn OnCompletion
+int CloseOut
+==
+txna ApplicationArgs 0
+byte 0xa9f42b3d
+==
+&&
+bnz main_l14
+txn OnCompletion
+int DeleteApplication
+==
+txna ApplicationArgs 0
+byte 0x24378d3c
+==
+&&
+bnz main_l13
+txn OnCompletion
+int NoOp
+==
+txna ApplicationArgs 0
+byte 0xfe6bdf69
+==
+&&
+bnz main_l12
+txn OnCompletion
+int NoOp
+==
+txna ApplicationArgs 0
+byte 0xa88c26a5
+==
+&&
+bnz main_l11
+txn OnCompletion
+int NoOp
+==
+txna ApplicationArgs 0
+byte 0x3e3b3d28
+==
+&&
+bnz main_l10
+txn OnCompletion
+int NoOp
+==
+txna ApplicationArgs 0
+byte 0x0df0050f
+==
+&&
+bnz main_l9
+int 0
+return
+main_l9:
+txna ApplicationArgs 1
+txna ApplicationArgs 2
+txna ApplicationArgs 3
+txna ApplicationArgs 4
+txna ApplicationArgs 5
+txna ApplicationArgs 6
+txna ApplicationArgs 7
+txna ApplicationArgs 8
+txna ApplicationArgs 9
+callsub sub6
+int 1
+return
+main_l10:
+txna ApplicationArgs 1
+callsub sub5
+int 1
+return
+main_l11:
+callsub sub4
+int 1
+return
+main_l12:
+txna ApplicationArgs 1
+txna ApplicationArgs 2
+callsub sub3
+int 1
+return
+main_l13:
+callsub sub2
+int 1
+return
+main_l14:
+callsub sub1
+int 1
+return
+main_l15:
+txna ApplicationArgs 1
+callsub sub0
+int 1
+return
+main_l16:
+int 1
+return
+sub0: // optIn
+store 0
+int 0
+byte "name"
+load 0
+extract 2 0
+app_local_put
+byte "hello "
+int 0
+byte "name"
+app_local_get
+concat
+store 1
+byte 0x151f7c75
+load 1
+len
+itob
+extract 6 2
+concat
+load 1
+concat
+log
+retsub
+sub1: // closeOut
+byte "goodbye "
+int 0
+byte "name"
+app_local_get
+concat
+store 2
+byte 0x151f7c75
+load 2
+len
+itob
+extract 6 2
+concat
+load 2
+concat
+log
+retsub
+sub2: // deleteApp
+txn Sender
+global CreatorAddress
+==
+assert
+retsub
+sub3: // add
+store 4
+store 3
+byte 0x151f7c75
+load 3
+btoi
+load 4
+btoi
++
+itob
+concat
+log
+retsub
+sub4: // empty
+byte "random inconsequential log"
+log
+retsub
+sub5: // payment
+store 5
+txn GroupIndex
+int 1
+-
+gtxns TypeEnum
+int pay
+==
+assert
+byte 0x151f7c75
+txn GroupIndex
+int 1
+-
+gtxns Amount
+load 5
+btoi
+==
+bnz sub5_l2
+byte 0x00
+b sub5_l3
+sub5_l2:
+byte 0x80
+sub5_l3:
+concat
+log
+retsub
+sub6: // referenceTest
+store 14
+store 13
+store 12
+store 11
+store 10
+store 9
+store 8
+store 7
+store 6
+byte 0x151f7c75
+load 6
+concat
+load 8
+concat
+load 10
+concat
+load 7
+concat
+load 13
+concat
+load 14
+concat
+load 9
+concat
+load 11
+concat
+load 12
+concat
+log
+retsub

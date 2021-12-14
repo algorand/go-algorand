@@ -100,7 +100,7 @@ func (avv *AsyncVoteVerifier) executeVoteVerification(task interface{}) interfac
 	select {
 	case <-req.ctx.Done():
 		// request cancelled, return an error response on the channel
-		return &asyncVerifyVoteResponse{err: req.ctx.Err(), cancelled: true, req: &req}
+		return &asyncVerifyVoteResponse{err: req.ctx.Err(), cancelled: true, req: &req, index: req.index}
 	default:
 		// request was not cancelled, so we verify it here and return the result on the channel
 		v, err := req.uv.verify(req.l)
@@ -119,7 +119,7 @@ func (avv *AsyncVoteVerifier) executeEqVoteVerification(task interface{}) interf
 	select {
 	case <-req.ctx.Done():
 		// request cancelled, return an error response on the channel
-		return &asyncVerifyVoteResponse{err: req.ctx.Err(), cancelled: true, req: &req}
+		return &asyncVerifyVoteResponse{err: req.ctx.Err(), cancelled: true, req: &req, index: req.index}
 	default:
 		// request was not cancelled, so we verify it here and return the result on the channel
 		ev, err := req.uev.verify(req.l)
@@ -131,7 +131,7 @@ func (avv *AsyncVoteVerifier) executeEqVoteVerification(task interface{}) interf
 	}
 }
 
-func (avv *AsyncVoteVerifier) verifyVote(verctx context.Context, l LedgerReader, uv unauthenticatedVote, index int, message message, out chan<- asyncVerifyVoteResponse) {
+func (avv *AsyncVoteVerifier) verifyVote(verctx context.Context, l LedgerReader, uv unauthenticatedVote, index int, message message, out chan<- asyncVerifyVoteResponse) error {
 	select {
 	case <-avv.ctx.Done(): // if we're quitting, don't enqueue the request
 	// case <-verctx.Done(): DO NOT DO THIS! otherwise we will lose the vote (and forget to clean up)!
@@ -140,16 +140,18 @@ func (avv *AsyncVoteVerifier) verifyVote(verctx context.Context, l LedgerReader,
 		// if we're done while waiting for room in the requests channel, don't queue the request
 		req := asyncVerifyVoteRequest{ctx: verctx, l: l, uv: &uv, index: index, message: message, out: out}
 		avv.wg.Add(1)
-		if avv.backlogExecPool.EnqueueBacklog(avv.ctx, avv.executeVoteVerification, req, avv.execpoolOut) != nil {
+		if err := avv.backlogExecPool.EnqueueBacklog(avv.ctx, avv.executeVoteVerification, req, avv.execpoolOut); err != nil {
 			// we want to call "wg.Done()" here to "fix" the accounting of the number of pending tasks.
 			// if we got a non-nil, it means that our context has expired, which means that we won't see this task
 			// getting to the verification function.
 			avv.wg.Done()
+			return err
 		}
 	}
+	return nil
 }
 
-func (avv *AsyncVoteVerifier) verifyEqVote(verctx context.Context, l LedgerReader, uev unauthenticatedEquivocationVote, index int, message message, out chan<- asyncVerifyVoteResponse) {
+func (avv *AsyncVoteVerifier) verifyEqVote(verctx context.Context, l LedgerReader, uev unauthenticatedEquivocationVote, index int, message message, out chan<- asyncVerifyVoteResponse) error {
 	select {
 	case <-avv.ctx.Done(): // if we're quitting, don't enqueue the request
 	// case <-verctx.Done(): DO NOT DO THIS! otherwise we will lose the vote (and forget to clean up)!
@@ -158,13 +160,15 @@ func (avv *AsyncVoteVerifier) verifyEqVote(verctx context.Context, l LedgerReade
 		// if we're done while waiting for room in the requests channel, don't queue the request
 		req := asyncVerifyVoteRequest{ctx: verctx, l: l, uev: &uev, index: index, message: message, out: out}
 		avv.wg.Add(1)
-		if avv.backlogExecPool.EnqueueBacklog(avv.ctx, avv.executeEqVoteVerification, req, avv.execpoolOut) != nil {
+		if err := avv.backlogExecPool.EnqueueBacklog(avv.ctx, avv.executeEqVoteVerification, req, avv.execpoolOut); err != nil {
 			// we want to call "wg.Done()" here to "fix" the accounting of the number of pending tasks.
 			// if we got a non-nil, it means that our context has expired, which means that we won't see this task
 			// getting to the verification function.
 			avv.wg.Done()
+			return err
 		}
 	}
+	return nil
 }
 
 // Quit tells the AsyncVoteVerifier to shutdown and waits until all workers terminate.

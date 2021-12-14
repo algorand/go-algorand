@@ -18,6 +18,7 @@ package catchup
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -155,8 +156,19 @@ func (s *Service) SynchronizingTime() time.Duration {
 	return time.Duration(timeInNS - startNS)
 }
 
+// errLedgerAlreadyHasBlock is returned by innerFetch in case the local ledger already has the requested block.
+var errLedgerAlreadyHasBlock = errors.New("ledger already has block")
+
 // function scope to make a bunch of defer statements better
 func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeeping.Block, cert *agreement.Certificate, ddur time.Duration, err error) {
+	ledgerWaitCh := s.ledger.Wait(r)
+	select {
+	case <-ledgerWaitCh:
+		// if our ledger already have this block, no need to attempt to fetch it.
+		return nil, nil, time.Duration(0), errLedgerAlreadyHasBlock
+	default:
+	}
+
 	ctx, cf := context.WithCancel(s.ctx)
 	fetcher := makeUniversalBlockFetcher(s.log, s.net, s.cfg)
 	defer cf()
@@ -165,15 +177,29 @@ func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeepin
 	go func() {
 		select {
 		case <-stopWaitingForLedgerRound:
-		case <-s.ledger.Wait(r):
+		case <-ledgerWaitCh:
 			cf()
 		}
 	}()
-	return fetcher.fetchBlock(ctx, r, peer)
+	blk, cert, ddur, err = fetcher.fetchBlock(ctx, r, peer)
+	// check to see if we aborted due to ledger.
+	if err != nil {
+		select {
+		case <-ledgerWaitCh:
+			// yes, we aborted since the ledger received this round.
+			err = errLedgerAlreadyHasBlock
+		default:
+		}
+	}
+	return
 }
 
 // fetchAndWrite fetches a block, checks the cert, and writes it to the ledger. Cert checking and ledger writing both wait for the ledger to advance if necessary.
-// Returns false if we couldn't fetch or write (i.e., if we failed even after a given number of retries or if we were told to abort.)
+// Returns false if we should stop trying to catch up.  This may occur for several reasons:
+//  - If the context is canceled (e.g. if the node is shutting down)
+//  - If we couldn't fetch the block (e.g. if there are no peers available or we've reached the catchupRetryLimit)
+//  - If the block is already in the ledger (e.g. if agreement service has already written it)
+//  - If the retrieval of the previous block was unsuccessful
 func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool, peerSelector *peerSelector) bool {
 	i := 0
 	hasLookback := false
@@ -218,6 +244,12 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 		block, cert, blockDownloadDuration, err := s.innerFetch(r, peer)
 
 		if err != nil {
+			if err == errLedgerAlreadyHasBlock {
+				// ledger already has the block, no need to request this block.
+				// only the agreement could have added this block into the ledger, catchup is complete
+				s.log.Infof("fetchAndWrite(%d): the block is already in the ledger. The catchup is complete", r)
+				return false
+			}
 			s.log.Debugf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
 			peerSelector.rankPeer(psp, peerRankDownloadFailed)
 			// we've just failed to retrieve a block; wait until the previous block is fetched before trying again
@@ -323,9 +355,14 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 
 				if err != nil {
 					switch err.(type) {
-					case ledgercore.BlockInLedgerError:
-						s.log.Infof("fetchAndWrite(%d): block already in ledger", r)
+					case ledgercore.ErrNonSequentialBlockEval:
+						s.log.Infof("fetchAndWrite(%d): no need to re-evaluate historical block", r)
 						return true
+					case ledgercore.BlockInLedgerError:
+						// the block was added to the ledger from elsewhere after fetching it here
+						// only the agreement could have added this block into the ledger, catchup is complete
+						s.log.Infof("fetchAndWrite(%d): after fetching the block, it is already in the ledger. The catchup is complete", r)
+						return false
 					case protocol.Error:
 						if !s.protocolErrorLogged {
 							logging.Base().Errorf("fetchAndWrite(%v): unrecoverable protocol error detected: %v", r, err)
@@ -358,7 +395,7 @@ func (s *Service) pipelineCallback(r basics.Round, thisFetchComplete chan bool, 
 		thisFetchComplete <- fetchResult
 
 		if !fetchResult {
-			s.log.Infof("failed to fetch block %v", r)
+			s.log.Infof("pipelineCallback(%d): did not fetch or write the block", r)
 			return 0
 		}
 		return r
