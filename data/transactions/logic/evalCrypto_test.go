@@ -212,9 +212,9 @@ byte 0x%s
 &&`
 	pkTampered1 := make([]byte, len(pk))
 	copy(pkTampered1, pk)
-	pkTampered1[0] = 0
-	pkTampered2 := make([]byte, len(pk))
-	copy(pkTampered2, pk[1:])
+	pkTampered1[0] = 0                     // first byte is a prefix of either 0x02 or 0x03
+	pkTampered2 := make([]byte, len(pk)-1) // must be 33 bytes length
+	copy(pkTampered2, pk)
 
 	var decompressTests = []struct {
 		key  []byte
@@ -224,8 +224,9 @@ byte 0x%s
 		{pkTampered1, false},
 		{pkTampered2, false},
 	}
-	for _, test := range decompressTests {
+	for i, test := range decompressTests {
 		t.Run(fmt.Sprintf("decompress/pass=%v", test.pass), func(t *testing.T) {
+			t.Log("decompressTests i", i)
 			src := fmt.Sprintf(source, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
 				testAccepts(t, src, 5)
@@ -255,8 +256,8 @@ ecdsa_verify Secp256k1
 	v := int(sign[64])
 
 	rTampered := make([]byte, len(r))
-	copy(rTampered, pk)
-	rTampered[0] = 0
+	copy(rTampered, r)
+	rTampered[0] += byte(1) // intentional overflow
 
 	var verifyTests = []struct {
 		data string

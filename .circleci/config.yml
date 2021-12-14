@@ -197,7 +197,7 @@ commands:
           shell: bash.exe
           command: |
             choco install -y msys2 pacman make wget --force
-            choco install -y golang --version=1.14.7 --force
+            choco install -y golang --version=1.16.11 --force
             choco install -y python3 --version=3.7.3 --force
             export msys2='cmd //C RefreshEnv.cmd '
             export msys2+='& set MSYS=winsymlinks:nativestrict '

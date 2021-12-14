@@ -1,6 +1,6 @@
 module github.com/algorand/go-algorand
 
-go 1.14
+go 1.16
 
 require (
 	github.com/algorand/falcon v0.0.0-20211112144253-903eac7921a6
@@ -11,7 +11,6 @@ require (
 	github.com/algorand/msgp v1.1.49
 	github.com/algorand/oapi-codegen v1.3.5-algorand5
 	github.com/algorand/websocket v1.4.4
-	github.com/algorand/xorfilter v0.2.0
 	github.com/aws/aws-sdk-go v1.16.5
 	github.com/chrismcguire/gobberish v0.0.0-20150821175641-1d8adb509a0e
 	github.com/cpuguy83/go-md2man v1.0.8 // indirect
