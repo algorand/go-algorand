@@ -62,7 +62,7 @@ func (mt *metricsTracker) commitRound(context.Context, *sql.Tx, *deferredCommitC
 	return nil
 }
 
-func (mt *metricsTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
+func (mt *metricsTracker) postCommit(ctx context.Context, dcc *deferredCommitContext, syncronized bool) {
 }
 
 func (mt *metricsTracker) handleUnorderedCommit(uint64, basics.Round, basics.Round) {

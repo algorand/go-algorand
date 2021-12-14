@@ -364,46 +364,49 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *d
 	return nil
 }
 
-func (ct *catchpointTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
-	var err error
-	if dcc.isCatchpointRound {
-		dcc.catchpointLabel, err = ct.accountsCreateCatchpointLabel(dcc.newBase+dcc.lookback, dcc.roundTotals, dcc.committedRoundDigest, dcc.trieBalancesHash)
-		if err != nil {
-			ct.log.Warnf("commitRound : unable to create a catchpoint label: %v", err)
+func (ct *catchpointTracker) postCommit(ctx context.Context, dcc *deferredCommitContext, syncronized bool) {
+	if syncronized {
+		var err error
+		if dcc.isCatchpointRound {
+			dcc.catchpointLabel, err = ct.accountsCreateCatchpointLabel(dcc.newBase+dcc.lookback, dcc.roundTotals, dcc.committedRoundDigest, dcc.trieBalancesHash)
+			if err != nil {
+				ct.log.Warnf("commitRound : unable to create a catchpoint label: %v", err)
+			}
 		}
-	}
-	if ct.balancesTrie != nil {
-		_, err = ct.balancesTrie.Evict(false)
-		if err != nil {
-			ct.log.Warnf("merkle trie failed to evict: %v", err)
+		if ct.balancesTrie != nil {
+			_, err = ct.balancesTrie.Evict(false)
+			if err != nil {
+				ct.log.Warnf("merkle trie failed to evict: %v", err)
+			}
 		}
-	}
 
-	if dcc.isCatchpointRound && dcc.catchpointLabel != "" {
-		ct.lastCatchpointLabel = dcc.catchpointLabel
-	}
-	dcc.updatingBalancesDuration = time.Since(dcc.flushTime)
+		if dcc.isCatchpointRound && dcc.catchpointLabel != "" {
+			ct.lastCatchpointLabel = dcc.catchpointLabel
+		}
+		dcc.updatingBalancesDuration = time.Since(dcc.flushTime)
 
-	if dcc.updateStats {
-		dcc.stats.MemoryUpdatesDuration = time.Duration(time.Now().UnixNano())
-	}
+		if dcc.updateStats {
+			dcc.stats.MemoryUpdatesDuration = time.Duration(time.Now().UnixNano())
+		}
 
-	ct.catchpointsMu.Lock()
+		ct.catchpointsMu.Lock()
 
-	ct.roundDigest = ct.roundDigest[dcc.offset:]
+		ct.roundDigest = ct.roundDigest[dcc.offset:]
 
-	ct.catchpointsMu.Unlock()
+		ct.catchpointsMu.Unlock()
+	} else {
+		if dcc.isCatchpointRound && ct.archivalLedger && dcc.catchpointLabel != "" {
+			// generate the catchpoint file. This need to be done inline so that it will block any new accounts that from being written.
+			// the generateCatchpoint expects that the accounts data would not be modified in the background during it's execution.
+			ct.generateCatchpoint(ctx, basics.Round(dcc.offset)+dcc.oldBase+dcc.lookback, dcc.catchpointLabel, dcc.committedRoundDigest, dcc.updatingBalancesDuration)
+		}
 
-	if dcc.isCatchpointRound && ct.archivalLedger && dcc.catchpointLabel != "" {
-		// generate the catchpoint file. This need to be done inline so that it will block any new accounts that from being written.
-		// the generateCatchpoint expects that the accounts data would not be modified in the background during it's execution.
-		ct.generateCatchpoint(ctx, basics.Round(dcc.offset)+dcc.oldBase+dcc.lookback, dcc.catchpointLabel, dcc.committedRoundDigest, dcc.updatingBalancesDuration)
-	}
-	// in scheduleCommit, we expect that this function to update the catchpointWriting when
-	// it's on a catchpoint round and it's an archival ledger. Doing this in a deferred function
-	// here would prevent us from "forgetting" to update this variable later on.
-	if dcc.isCatchpointRound && ct.archivalLedger {
-		atomic.StoreInt32(dcc.catchpointWriting, 0)
+		// in scheduleCommit, we expect that this function to update the catchpointWriting when
+		// it's on a catchpoint round and it's an archival ledger. Doing this in a deferred function
+		// here would prevent us from "forgetting" to update this variable later on.
+		if dcc.isCatchpointRound && ct.archivalLedger {
+			atomic.StoreInt32(dcc.catchpointWriting, 0)
+		}
 	}
 }
 

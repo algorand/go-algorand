@@ -1156,7 +1156,10 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 	return
 }
 
-func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitContext) {
+func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitContext, syncronized bool) {
+	if !syncronized {
+		return
+	}
 	if dcc.updateStats {
 		spentDuration := dcc.stats.DatabaseCommitDuration + dcc.stats.AccountsWritingDuration + dcc.stats.MerkleTrieUpdateDuration + dcc.stats.OldAccountPreloadDuration
 		dcc.stats.DatabaseCommitDuration = time.Duration(time.Now().UnixNano()) - spentDuration

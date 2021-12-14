@@ -122,7 +122,7 @@ func (bn *blockNotifier) commitRound(context.Context, *sql.Tx, *deferredCommitCo
 	return nil
 }
 
-func (bn *blockNotifier) postCommit(ctx context.Context, dcc *deferredCommitContext) {
+func (bn *blockNotifier) postCommit(ctx context.Context, dcc *deferredCommitContext, syncronized bool) {
 }
 
 func (bn *blockNotifier) handleUnorderedCommit(uint64, basics.Round, basics.Round) {
