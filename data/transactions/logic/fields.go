@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Alphabet -output=fields_string.go
 
 // TxnField is an enum type for `txn` and `gtxn`
 type TxnField int
@@ -448,6 +448,44 @@ func (s ecDsaCurveNameSpecMap) getExtraFor(name string) (extra string) {
 	return
 }
 
+// Base64Alphabet is an enum for the `base64decode` opcode
+type Base64Alphabet int
+
+const (
+	// URLAlph represents the base64url alphabet defined in https://www.rfc-editor.org/rfc/rfc4648.html
+	URLAlph Base64Alphabet = iota
+	// StdAlph represents the standard alphabet of the RFC
+	StdAlph
+	invalidBase64Alphabet
+)
+
+// After running `go generate` these strings will be available:
+var base64AlphabetNames [2]string = [...]string{URLAlph.String(), StdAlph.String()}
+
+type base64AlphabetSpec struct {
+	field   Base64Alphabet
+	ftype   StackType
+	version uint64
+}
+
+var base64AlphbetSpecs = []base64AlphabetSpec{
+	{URLAlph, StackBytes, 6},
+	{StdAlph, StackBytes, 6},
+}
+
+var base64AlphabetSpecByField map[Base64Alphabet]base64AlphabetSpec
+var base64AlphabetSpecByName base64AlphabetSpecMap
+
+type base64AlphabetSpecMap map[string]base64AlphabetSpec
+
+func (s base64AlphabetSpecMap) getExtraFor(name string) (extra string) {
+	// Uses 6 here because base64_decode fields were introduced in 6
+	if s[name].version > 6 {
+		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
+	}
+	return
+}
+
 // AssetHoldingField is an enum for `asset_holding_get` opcode
 type AssetHoldingField int
 
@@ -679,6 +717,16 @@ func init() {
 	ecdsaCurveSpecByName = make(ecDsaCurveNameSpecMap, len(EcdsaCurveNames))
 	for i, ahfn := range EcdsaCurveNames {
 		ecdsaCurveSpecByName[ahfn] = ecdsaCurveSpecByField[EcdsaCurve(i)]
+	}
+
+	base64AlphabetSpecByField = make(map[Base64Alphabet]base64AlphabetSpec, len(base64AlphabetNames))
+	for _, s := range base64AlphbetSpecs {
+		base64AlphabetSpecByField[s.field] = s
+	}
+
+	base64AlphabetSpecByName = make(base64AlphabetSpecMap, len(base64AlphabetNames))
+	for i, alphname := range base64AlphabetNames {
+		base64AlphabetSpecByName[alphname] = base64AlphabetSpecByField[Base64Alphabet(i)]
 	}
 
 	AssetHoldingFieldNames = make([]string, int(invalidAssetHoldingField))

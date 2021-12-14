@@ -32,6 +32,7 @@ import (
 
 func TestDevMode(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Skipf("Skipping flaky test. Re-enable with #3267")
 
 	if testing.Short() {
 		t.Skip()
