@@ -165,7 +165,10 @@ func (t *txTail) commitRound(context.Context, *sql.Tx, *deferredCommitContext) e
 	return nil
 }
 
-func (t *txTail) postCommit(ctx context.Context, dcc *deferredCommitContext, syncronized bool) {
+func (t *txTail) postCommit(ctx context.Context, dcc *deferredCommitContext) {
+}
+
+func (t *txTail) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
 func (t *txTail) handleUnorderedCommit(uint64, basics.Round, basics.Round) {

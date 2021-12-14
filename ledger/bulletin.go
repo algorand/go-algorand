@@ -117,7 +117,10 @@ func (b *bulletin) commitRound(context.Context, *sql.Tx, *deferredCommitContext)
 	return nil
 }
 
-func (b *bulletin) postCommit(ctx context.Context, dcc *deferredCommitContext, syncronized bool) {
+func (b *bulletin) postCommit(ctx context.Context, dcc *deferredCommitContext) {
+}
+
+func (b *bulletin) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
 func (b *bulletin) handleUnorderedCommit(uint64, basics.Round, basics.Round) {

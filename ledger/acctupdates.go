@@ -1156,10 +1156,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 	return
 }
 
-func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitContext, syncronized bool) {
-	if !syncronized {
-		return
-	}
+func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 	if dcc.updateStats {
 		spentDuration := dcc.stats.DatabaseCommitDuration + dcc.stats.AccountsWritingDuration + dcc.stats.MerkleTrieUpdateDuration + dcc.stats.OldAccountPreloadDuration
 		dcc.stats.DatabaseCommitDuration = time.Duration(time.Now().UnixNano()) - spentDuration
@@ -1242,6 +1239,9 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 		var details struct{}
 		au.log.Metrics(telemetryspec.Accounts, dcc.stats, details)
 	}
+}
+
+func (au *accountUpdates) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
 // compactCreatableDeltas takes an array of creatables map deltas ( one array entry per round ), and compact the array into a single

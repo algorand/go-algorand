@@ -107,7 +107,12 @@ type ledgerTracker interface {
 	// postCommit is called only on a successful commitRound. In that case, each of the trackers have
 	// the chance to update it's internal data structures, knowing that the given deferredCommitContext
 	// has completed. An optional context is provided for long-running operations.
-	postCommit(context.Context, *deferredCommitContext, bool)
+	postCommit(context.Context, *deferredCommitContext)
+
+	// postCommitUnlocked is called only on a successful commitRound. In that case, each of the trackers have
+	// the chance to make changes that aren't state-dependent.
+	// An optional context is provided for long-running operations.
+	postCommitUnlocked(context.Context, *deferredCommitContext)
 
 	// handleUnorderedCommit is a special method for handling deferred commits that are out of order.
 	// Tracker might update own state in this case. For example, account updates tracker cancels
@@ -467,13 +472,13 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) {
 	tr.mu.Lock()
 	tr.dbRound = newBase
 	for _, lt := range tr.trackers {
-		lt.postCommit(tr.ctx, dcc, true)
+		lt.postCommit(tr.ctx, dcc)
 	}
 	tr.lastFlushTime = dcc.flushTime
 	tr.mu.Unlock()
 
 	for _, lt := range tr.trackers {
-		lt.postCommit(tr.ctx, dcc, false)
+		lt.postCommitUnlocked(tr.ctx, dcc)
 	}
 
 }
