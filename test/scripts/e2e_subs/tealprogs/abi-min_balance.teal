@@ -1,6 +1,9 @@
 #pragma version 6
-    // TODO - some explanation
-    // TODO - comply with best practices (optin, delete, etc...)
+    // Program for testing some simple functions using the ABI. 
+    // 
+    // * See min_balance.json for the companion ABI Contract.
+    // * For how to call using ABI conventions, see min_balance.py
+
     txn ApplicationID
     bz handle_no_questions_asked
 
@@ -12,21 +15,11 @@
     txn OnCompletion
     int OptIn
     ==
-    bnz handle_optIn
-
-    err // TODO - handle more than just NoOp's
-
-handle_noop:
-    txna ApplicationArgs 0
-    byte 0x80630032 // _closeOut(uint64)uint64
-    ==
     bnz handle_no_questions_asked
 
-    txn ApplicationArgs 0
-    byte 0x4f30c3ce // base64_decode(string,string)string
-    ==
-    bnz handle_base64_decode
+    err
 
+handle_noop:
     txn ApplicationArgs 0
     byte 0xd363f563 // complement(byte[])byte[] (tilde "~"" is too exotic for official signature)
     ==
@@ -39,13 +32,6 @@ handle_noop:
 
     err    
 
-handle_optIn:
-    txna ApplicationArgs 0
-    byte 0x9b122fc1 // _optIn(uint64)uint64
-    ==
-    bnz handle_no_questions_asked
-
-
 handle_no_questions_asked:
     int 1
     b return_uint64
@@ -57,19 +43,9 @@ handle_min_balance:
     min_balance
     b return_uint64
 
-handle_base64_decode:
 handle_b~:
-    byte "abcde"
-    b return_bytes
-
-handle_base64URL_decode:
-    callsub extract_abi_string_arg1
-    base64_decode URLAlph
-    b return_bytes
-    
-handle_base64Std_decode:
-    callsub extract_abi_string_arg1
-    base64_decode StdAlph
+    b extract_abi_string_arg1
+    b~
     b return_bytes
 
 extract_abi_string_arg1:

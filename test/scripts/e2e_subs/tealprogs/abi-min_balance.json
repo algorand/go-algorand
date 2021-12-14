@@ -25,45 +25,6 @@
             "returns": {
                 "type": "byte[]"
             }
-        },
-        {
-            "name": "base64_decode",
-            "desc": "Decode base64 arg1 using the encoding defined by arg0 (either 'URLEncoding' or 'StdEncoding') ",
-            "args": [
-                {
-                    "type": "string"
-                },
-                {
-                    "type": "string"
-                }
-            ],
-            "returns": {
-                "type": "string"
-            }
-        },
-        {
-            "name": "_optIn",
-            "desc": "just opt in",
-            "args": [
-                {
-                    "type": "uint64"
-                }
-            ],
-            "returns": {
-                "type": "uint64"
-            }
-        },
-        {
-            "name": "_closeOut",
-            "desc": "just close out",
-            "args": [
-                {
-                    "type": "uint64"
-                }
-            ],
-            "returns": {
-                "type": "uint64"
-            }
         }
     ]
 }

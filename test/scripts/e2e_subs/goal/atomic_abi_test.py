@@ -135,9 +135,7 @@ def test_init(init_only=False):
 
 
 def test_dynamic_methods():
-
     abi = test_init(init_only=True)
-
     for meth in contract["methods"]:
         name = meth["name"]
         adder_meth_name = abi.abi_composer_name(name)

@@ -12,6 +12,29 @@ import algosdk.future.transaction as txn
 
 
 class AtomicABI:
+    """
+    AtomicABI allows for easier usage of ABI methods in Python.
+
+    For an abi method such as `factorial(uint64)uint64`
+    this allows usages such as:
+
+    >>> result = abi.run_factorial(5)
+    which will:
+    * create an atomic transaction composer
+    * add a single metod
+
+    or for an atomic transaction group, and another method
+    such as `add(uint64,uint64)uint64`
+    you build up the group with:
+
+    >>> abi.next_abi_call_factorial(5)
+    >>> abi.next_abi_call_add(29, 13)
+
+    and then execute the group with:
+
+    >>> abi.execute_atomic_group()
+    """
+
     CALL_TWICE_ERROR = "Cannot execute this Atomic ABI twice. Instantiate a new object to execute again."
 
     def __init__(
@@ -34,14 +57,13 @@ class AtomicABI:
         self.sp = sp
 
         assert (
-            self.app_id and self.app_id > 0
+            self.app_id
         ), f"must have already created the app but have app_id {self.app_id}"
 
         assert (
             self.caller_acct in self.goal.internal_wallet
         ), "aborting AtomicABI - will not be able to transact without signing authority"
 
-        # try very hard to parse the ABI contract
         self.contract_abi_json_path: str = None
         try:
             cajson = open(contract_abi_json, "rt").read().strip()
@@ -49,7 +71,6 @@ class AtomicABI:
         except Exception:
             cajson = contract_abi_json
 
-        self.contract_abi_json_path = contract_abi_json
         cadict = json.loads(cajson)
         cadict["appId"] = self.app_id
         self.contract: abi.Contract = abi.Contract.from_json(json.dumps(cadict))
@@ -60,9 +81,11 @@ class AtomicABI:
         ), "aborting AtomicABI - cannot execute without a caller_acct"
         self.signer = self.get_atxn_signer()
 
+        # list of lists of method_args for each of the methods to be called:
         self.method_args: List[list] = []
-        self.sigs2selector: Dict[str, str] = {}
-        self.handle2meth: Dict[str, dict] = {}
+
+        self.sig2selector: Dict[str, str] = {}
+        self._meth_dict: Dict[str, dict] = {}
 
         self.execution_results: atc.AtomicTransactionResponse = None
         self.execution_summaries: List[MethodCallSummary] = None
@@ -81,8 +104,8 @@ class AtomicABI:
             )
             signature = abi_meth.get_signature()
             selector = "0x" + abi_meth.get_selector().hex()
-            self.sigs2selector[signature] = selector
-            self.handle2meth[handle] = {
+            self.sig2selector[signature] = selector
+            self._meth_dict[handle] = {
                 "signature": signature,
                 "selector": selector,
                 "abi_meth": abi_meth,
@@ -93,7 +116,7 @@ class AtomicABI:
             }
 
     @classmethod
-    def factory(
+    def _clone(
         cls, obj, caller_acct: str = None, new_suggested_params: bool = True
     ) -> "AtomicABI":
         """
@@ -112,7 +135,7 @@ class AtomicABI:
     def clone(
         self, caller_acct: str = None, new_suggested_params: bool = True
     ) -> "AtomicABI":
-        return self.factory(
+        return self._clone(
             self, caller_acct=caller_acct, new_suggested_params=new_suggested_params
         )
 
@@ -146,7 +169,7 @@ class AtomicABI:
         needs to be executed, execute_singleton_group() is needed.
         """
         assert self.execution_results is None, self.CALL_TWICE_ERROR
-        abi_meth = self.handle2meth[method_handle]["abi_meth"]
+        abi_meth = self._meth_dict[method_handle]["abi_meth"]
         self.add_method_call(
             abi_meth,
             method_args,
@@ -160,7 +183,7 @@ class AtomicABI:
         return s[0].result.return_value
 
     def dump_selectors(self) -> str:
-        return json.dumps(self.sigs2selector, indent=4, sort_keys=True)
+        return json.dumps(self.sig2selector, indent=4, sort_keys=True)
 
     def _build_summaries(self) -> List["MethodCallSummary"]:
         assert (
@@ -282,18 +305,6 @@ class AtomicABI:
     def _attach_dynamic_method_calls(
         self, name: str, adder_func: Callable, run_now_func: Callable
     ) -> tuple:
-        """
-        For an abi method such as "factorial(uint64)uint64"
-        this allows usages such as:
-        >>> abi.next_abi_call_factorial(5)
-        which will delegate to AtomicTransactionComposer with
-        atc.add_method_call(app_id, abi_factorial_method, ...)
-
-        For immediate execuation, the following usages are supported:
-        >>> abi.run_factorial(5)
-        which will run add the method call as above, and then run
-        execute_atomic_group()
-        """
         adder_meth = types.MethodType(adder_func, self)
         adder_meth_name = self.abi_composer_name(name)
         setattr(self, adder_meth_name, adder_meth)
