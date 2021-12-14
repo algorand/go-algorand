@@ -328,6 +328,8 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 	}
 	if cdr != nil {
 		dcc.deferredCommitRange = *cdr
+	} else {
+		dcc = nil
 	}
 
 	tr.mu.RLock()
