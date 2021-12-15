@@ -362,9 +362,9 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 			var updates compactAccountDeltas
 			for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
 				addr := ledgertesting.RandomAddress()
-				acctData := basics.AccountData{}
+				acctData := baseAccountData{}
 				acctData.MicroAlgos.Raw = 1
-				updates.upsert(addr, accountDelta{new: acctData})
+				updates.upsert(addr, accountDelta{newAcct: acctData})
 				i++
 			}
 
