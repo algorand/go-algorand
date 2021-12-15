@@ -544,7 +544,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	}
 
 	lookupDone := make(chan struct{})
-	// now that we're blocked the tracker, try to call LookupAgreement and confirm it's not returning within 1 second.
+	// now that we're blocked the tracker, try to call LookupAgreement and confirm it returns almost immediately
 	go func() {
 		defer close(lookupDone)
 		ledger.LookupAgreement(ledger.Latest(), genesisInitState.Block.FeeSink)
@@ -553,7 +553,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	select {
 	case <-lookupDone:
 		// we expect it not to get stuck, even when the postCommitUnlocked is stuck.
-	case <-time.After(1 * time.Second):
+	case <-time.After(25 * time.Second):
 		require.FailNow(t, "The LookupAgreement wasn't getting blocked as expected by the blocked tracker")
 	}
 	// let the goroutines complete.
