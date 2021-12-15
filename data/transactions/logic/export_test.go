@@ -29,7 +29,7 @@ var MakeSampleEnvWithVersion = makeSampleEnvWithVersion
 var MakeSampleTxn = makeSampleTxn
 var MakeSampleTxnGroup = makeSampleTxnGroup
 var MakeTestProto = makeTestProto
-var MakeTestProtoVer = makeTestProtoV
+var MakeTestProtoV = makeTestProtoV
 var Obfuscate = obfuscate
 var TestApp = testApp
 var TestAppBytes = testAppBytes
@@ -37,3 +37,4 @@ var TestApps = testApps
 var TestProg = testProg
 
 const InnerAppsEnabledVersion = innerAppsEnabledVersion
+const CreatedResourcesVersion = createdResourcesVersion

@@ -336,7 +336,7 @@ func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn,
 			codes[i] = testProg(t, program, version).Program
 		}
 	}
-	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), makeTestProtoV(version), &transactions.SpecialAddresses{})
+	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), makeTestProtoV(version), &transactions.SpecialAddresses{}, 0)
 	ep.Ledger = ledger
 	testAppsBytes(t, codes, ep, expected...)
 }
@@ -2143,7 +2143,7 @@ func TestEnumFieldErrors(t *testing.T) {
 	source = `int 0
 int 55
 asset_holding_get AssetBalance
-pop
+assert
 `
 	origBalanceFs := assetHoldingFieldSpecByField[AssetBalance]
 	badBalanceFs := origBalanceFs
@@ -2157,7 +2157,7 @@ pop
 
 	source = `int 0
 asset_params_get AssetTotal
-pop
+assert
 `
 	origTotalFs := assetParamsFieldSpecByField[AssetTotal]
 	badTotalFs := origTotalFs

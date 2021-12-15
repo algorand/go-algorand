@@ -50,6 +50,11 @@ const innerAppsEnabledVersion = 6
 // "effects" (ApplyData info)
 const txnEffectsVersion = 6
 
+// createdResourcesVersion is the first version that allows access to assets and
+// applications that were created in the same group, despite them not being in
+// the Foreign arrays.
+const createdResourcesVersion = 6
+
 // opDetails records details such as non-standard costs, immediate
 // arguments, or dynamic layout controlled by a check function.
 type opDetails struct {

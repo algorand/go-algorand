@@ -221,6 +221,7 @@ type LedgerForLogic interface {
 	DelGlobal(appIdx basics.AppIndex, key string) error
 
 	Perform(gi int, ep *EvalParams) error
+	Counter() uint64
 }
 
 // EvalSideEffects contains data returned from evaluation
@@ -281,7 +282,11 @@ type EvalParams struct {
 	PooledApplicationBudget *uint64
 
 	// Total allowable inner txns in a group transaction (nil before pooling enabled)
-	PooledAllowedInners *int
+	pooledAllowedInners *int
+
+	// If non-zero, a txn counter value after which assets and apps should be
+	// allowed w/o foreign array. Left zero until createdResourcesVersion.
+	initialCounter uint64
 
 	// The calling context, if this is an inner app call
 	caller *EvalContext
@@ -297,7 +302,7 @@ func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.Sign
 }
 
 // NewAppEvalParams creates an EvalParams to be used while evaluating apps for a top-level txgroup
-func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses) *EvalParams {
+func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses, counter uint64) *EvalParams {
 	minTealVersion := ComputeMinTealVersion(txgroup, false)
 
 	apps := 0
@@ -326,6 +331,10 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 		*pooledAllowedInners = apps * proto.MaxInnerTransactions
 	}
 
+	if counter == 0 || proto.LogicSigVersion < createdResourcesVersion {
+		counter = math.MaxUint64
+	}
+
 	ep := &EvalParams{
 		Proto:                   proto,
 		TxnGroup:                copyWithClearAD(txgroup),
@@ -334,7 +343,8 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 		FeeCredit:               &credit,
 		Specials:                specials,
 		PooledApplicationBudget: pooledApplicationBudget,
-		PooledAllowedInners:     pooledAllowedInners,
+		pooledAllowedInners:     pooledAllowedInners,
+		initialCounter:          counter,
 	}
 	return ep
 }
@@ -368,8 +378,9 @@ func NewInnerEvalParams(txg []transactions.SignedTxn, caller *EvalContext) *Eval
 		FeeCredit:               caller.FeeCredit,
 		Specials:                caller.Specials,
 		PooledApplicationBudget: caller.PooledApplicationBudget,
-		PooledAllowedInners:     caller.PooledAllowedInners,
+		pooledAllowedInners:     caller.pooledAllowedInners,
 		Ledger:                  caller.Ledger,
+		initialCounter:          caller.initialCounter,
 		caller:                  caller,
 	}
 	return ep
@@ -543,8 +554,8 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		*cx.PooledApplicationBudget = basics.SubSaturate(*cx.PooledApplicationBudget, uint64(cx.cost))
 	}
 	// update allowed inner transactions (shouldn't overflow, but it's an int, so safe anyway)
-	if cx.PooledAllowedInners != nil {
-		*cx.PooledAllowedInners -= len(cx.Txn.EvalDelta.InnerTxns)
+	if cx.pooledAllowedInners != nil {
+		*cx.pooledAllowedInners -= len(cx.Txn.EvalDelta.InnerTxns)
 	}
 	// update side effects
 	cx.PastSideEffects[cx.GroupIndex].setScratchSpace(cx.scratch)
@@ -790,8 +801,8 @@ func (cx *EvalContext) budget() int {
 }
 
 func (cx *EvalContext) allowedInners() int {
-	if cx.Proto.EnableInnerTransactionPooling && cx.PooledAllowedInners != nil {
-		return *cx.PooledAllowedInners
+	if cx.Proto.EnableInnerTransactionPooling && cx.pooledAllowedInners != nil {
+		return *cx.pooledAllowedInners
 	}
 	return cx.Proto.MaxInnerTransactions
 }
@@ -3662,6 +3673,9 @@ func asaReference(cx *EvalContext, ref uint64, foreign bool) (basics.AssetIndex,
 		if ref < uint64(len(cx.Txn.Txn.ForeignAssets)) {
 			return basics.AssetIndex(cx.Txn.Txn.ForeignAssets[ref]), nil
 		}
+		if ref >= cx.initialCounter {
+			return basics.AssetIndex(ref), nil
+		}
 		for _, assetID := range cx.Txn.Txn.ForeignAssets {
 			if assetID == basics.AssetIndex(ref) {
 				return assetID, nil
@@ -3916,6 +3930,9 @@ func (cx *EvalContext) availableAsset(sv stackValue) (basics.AssetIndex, error) 
 	aid, err := sv.uint()
 	if err != nil {
 		return basics.AssetIndex(0), err
+	}
+	if aid >= cx.initialCounter {
+		return basics.AssetIndex(aid), nil
 	}
 	// Ensure that aid is in Foreign Assets
 	for _, assetID := range cx.Txn.Txn.ForeignAssets {

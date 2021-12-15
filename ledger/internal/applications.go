@@ -297,3 +297,7 @@ func (al *logicLedger) Perform(gi int, ep *logic.EvalParams) error {
 	return nil
 
 }
+
+func (al *logicLedger) Counter() uint64 {
+	return al.cow.txnCounter()
+}

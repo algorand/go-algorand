@@ -1315,11 +1315,110 @@ int 222;     itxn_field ApplicationID
 itxn_submit
 `
 	txg := []transactions.SignedTxnWithAD{tx}
-	ep := NewAppEvalParams(txg, MakeTestProto(), &transactions.SpecialAddresses{})
+	ep := NewAppEvalParams(txg, MakeTestProto(), &transactions.SpecialAddresses{}, 0)
 	ep.Ledger = ledger
 	TestApp(t, callpay3+"int 1", ep, "insufficient balance") // inner contract needs money
 
 	ledger.NewAccount(appAddr(222), 1_000_000)
 	TestApp(t, callpay3+"int 1", ep)
 	TestApp(t, callpay3+callpay3+"int 1", ep, "too many inner transactions")
+}
+
+// TestCreateAndUse checks that an ASA can be created in an inner app, and then
+// used.  This was not allowed until v6, because of the strict adherence to the
+// foreign-arrays rules.
+func TestCreateAndUse(t *testing.T) {
+	axfer := `
+  itxn_begin
+   int acfg;    itxn_field TypeEnum
+   int 10;      itxn_field ConfigAssetTotal
+   byte "Gold"; itxn_field ConfigAssetName
+  itxn_submit
+
+  itxn_begin
+   int axfer;           itxn_field TypeEnum
+   itxn CreatedAssetID; itxn_field XferAsset
+   txn Accounts 0;      itxn_field AssetReceiver
+  itxn_submit
+
+  int 1
+`
+
+	// First testing in axfer
+	ep, tx, ledger := MakeSampleEnv()
+	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(appAddr(888), 4*MakeTestProto().MinTxnFee)
+	TestApp(t, axfer, ep)
+
+	ep.Proto = MakeTestProtoV(CreatedResourcesVersion - 1)
+	TestApp(t, axfer, ep, "invalid Asset reference")
+
+	balance := `
+  itxn_begin
+  int acfg;    itxn_field TypeEnum
+  int 10;      itxn_field ConfigAssetTotal
+  byte "Gold"; itxn_field ConfigAssetName
+  itxn_submit
+
+  // txn Sender is not opted-in, as it's the app account that made the asset
+  // At some point, we should short-circuit so this does not go to disk.
+  txn Sender
+  itxn CreatedAssetID
+  asset_holding_get AssetBalance
+  int 0
+  ==
+  assert
+  int 0
+  ==
+  assert
+
+  // App account owns all the newly made gold
+  global CurrentApplicationAddress
+  itxn CreatedAssetID
+  asset_holding_get AssetBalance
+  assert
+  int 10
+  ==
+  assert
+
+  int 1
+`
+
+	// Now as in asset balance opcode
+	ep, tx, ledger = MakeSampleEnv()
+	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(appAddr(888), 4*MakeTestProto().MinTxnFee)
+	TestApp(t, balance, ep)
+
+	ep.Proto = MakeTestProtoV(CreatedResourcesVersion - 1)
+	TestApp(t, balance, ep, "invalid Asset reference")
+
+	appcall := `
+  itxn_begin
+  int acfg;    itxn_field TypeEnum
+  int 10;      itxn_field ConfigAssetTotal
+  byte "Gold"; itxn_field ConfigAssetName
+  itxn_submit
+
+  itxn_begin
+  int appl;            itxn_field TypeEnum
+  int 888;			   itxn_field ApplicationID
+  itxn CreatedAssetID; itxn_field Assets
+  itxn_submit
+
+  int 1
+`
+
+	// Now as ForeigAsset
+	ep, tx, ledger = MakeSampleEnv()
+	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(appAddr(888), 4*MakeTestProto().MinTxnFee)
+	// It gets passed the Assets setting
+	TestApp(t, appcall, ep, "attempt to self-call")
+
+	// Appcall is isn't allowed pre-CreatedResourcesVersion, because same
+	// version allowed inner app calls
+	// ep.Proto = MakeTestProtoV(CreatedResourcesVersion - 1)
+	// TestApp(t, appcall, ep, "invalid Asset reference")
 }

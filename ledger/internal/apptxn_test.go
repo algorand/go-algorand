@@ -18,6 +18,7 @@ package internal_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -40,10 +41,10 @@ import (
 // then approves, if the source avoids panicing and leaves the stack
 // empty.
 func main(source string) string {
-	return fmt.Sprintf(`txn ApplicationID
+	return strings.Replace(fmt.Sprintf(`txn ApplicationID
             bz end
             %s
-       end: int 1`, source)
+       end: int 1`, source), ";", "\n", -1)
 }
 
 // TestPayAction ensures a pay in teal affects balances
@@ -1382,4 +1383,120 @@ next2:
 		Action: basics.SetBytesAction,
 		Bytes:  "A",
 	}, inner.EvalDelta.GlobalDelta["X"])
+}
+
+// TestCreateAndUse checks that an ASA can be created in an early tx, and then
+// used in a later app call tx (in the same group).  This was not allowed until
+// v6, because of the strict adherence to the foreign-arrays rules.
+func TestCreateAndUse(t *testing.T) {
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	createapp := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+         itxn_begin
+         int axfer; itxn_field TypeEnum
+         int 0;     itxn_field Amount
+         gaid 0;    itxn_field XferAsset
+         global CurrentApplicationAddress;  itxn_field Sender
+         global CurrentApplicationAddress;  itxn_field AssetReceiver
+         itxn_submit
+`),
+	}
+	appIndex := basics.AppIndex(1)
+
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: appIndex.Address(),
+		Amount:   1_000_000,
+	}
+
+	createasa := txntest.Txn{
+		Type:   "acfg",
+		Sender: addrs[0],
+		AssetParams: basics.AssetParams{
+			Total:     1000000,
+			Decimals:  3,
+			UnitName:  "oz",
+			AssetName: "Gold",
+			URL:       "https://gold.rush/",
+		},
+	}
+	asaIndex := basics.AssetIndex(3)
+
+	use := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[0],
+		ApplicationID: basics.AppIndex(1),
+		// The point of this test is to show the following (psychic) setting is unnecessary.
+		//ForeignAssets: []basics.AssetIndex{asaIndex},
+	}
+
+	eval := nextBlock(t, l, true, nil)
+	txn(t, l, eval, &createapp)
+	txn(t, l, eval, &fund)
+	err := txgroup(t, l, eval, &createasa, &use)
+	require.NoError(t, err)
+	vb := endBlock(t, l, eval)
+
+	require.Equal(t, appIndex, vb.Block().Payset[0].ApplyData.ApplicationID)
+	require.Equal(t, asaIndex, vb.Block().Payset[2].ApplyData.ConfigAsset)
+}
+
+func TestGtxnEffects(t *testing.T) {
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	createapp := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+         gtxn 0 CreatedAssetID
+         int 3
+         ==
+         assert
+`),
+	}
+	appIndex := basics.AppIndex(1)
+
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: appIndex.Address(),
+		Amount:   1_000_000,
+	}
+
+	eval := nextBlock(t, l, true, nil)
+	txns(t, l, eval, &createapp, &fund)
+
+	createasa := txntest.Txn{
+		Type:   "acfg",
+		Sender: addrs[0],
+		AssetParams: basics.AssetParams{
+			Total:     1000000,
+			Decimals:  3,
+			UnitName:  "oz",
+			AssetName: "Gold",
+			URL:       "https://gold.rush/",
+		},
+	}
+	asaIndex := basics.AssetIndex(3)
+
+	see := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[0],
+		ApplicationID: basics.AppIndex(1),
+	}
+
+	err := txgroup(t, l, eval, &createasa, &see)
+	require.NoError(t, err)
+	vb := endBlock(t, l, eval)
+
+	require.Equal(t, appIndex, vb.Block().Payset[0].ApplyData.ApplicationID)
+	require.Equal(t, asaIndex, vb.Block().Payset[2].ApplyData.ConfigAsset)
 }

@@ -126,9 +126,12 @@ func (l *Ledger) NewAsset(creator basics.Address, assetID basics.AssetIndex, par
 	l.balances[creator] = br
 }
 
-// freshID gets a new creatable ID that isn't in use
-func (l *Ledger) freshID() uint64 {
-	for try := 5000; true; try++ {
+const firstTestID = 5000
+
+// Counter implements LedgerForLogic, but it not really a txn counter, but is
+// sufficient for the logic package.
+func (l *Ledger) Counter() uint64 {
+	for try := firstTestID; true; try++ {
 		if _, ok := l.assets[basics.AssetIndex(try)]; ok {
 			continue
 		}
@@ -606,7 +609,7 @@ func (l *Ledger) axfer(from basics.Address, xfer transactions.AssetTransferTxnFi
 
 func (l *Ledger) acfg(from basics.Address, cfg transactions.AssetConfigTxnFields, ad *transactions.ApplyData) error {
 	if cfg.ConfigAsset == 0 {
-		aid := basics.AssetIndex(l.freshID())
+		aid := basics.AssetIndex(l.Counter())
 		l.NewAsset(from, aid, cfg.AssetParams)
 		ad.ConfigAsset = aid
 		return nil
@@ -646,7 +649,7 @@ func (l *Ledger) afrz(from basics.Address, frz transactions.AssetFreezeTxnFields
 func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnFields, ad *transactions.ApplyData, gi int, ep *EvalParams) error {
 	aid := appl.ApplicationID
 	if aid == 0 {
-		aid = basics.AppIndex(l.freshID())
+		aid = basics.AppIndex(l.Counter())
 		params := basics.AppParams{
 			ApprovalProgram:   appl.ApprovalProgram,
 			ClearStateProgram: appl.ClearStateProgram,

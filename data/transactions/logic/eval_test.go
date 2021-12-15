@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"testing"
@@ -139,11 +140,20 @@ func (ep *EvalParams) reset() {
 	}
 	if ep.Proto.EnableInnerTransactionPooling {
 		inners := ep.Proto.MaxInnerTransactions
-		ep.PooledAllowedInners = &inners
+		ep.pooledAllowedInners = &inners
 	}
 	ep.PastSideEffects = MakePastSideEffects(ep.Proto.MaxTxGroupSize)
 	for i := range ep.TxnGroup {
 		ep.TxnGroup[i].ApplyData = transactions.ApplyData{}
+	}
+	if ep.Proto.LogicSigVersion < createdResourcesVersion {
+		ep.initialCounter = math.MaxUint64
+	} else {
+		if ep.Ledger != nil {
+			ep.initialCounter = ep.Ledger.Counter()
+		} else {
+			ep.initialCounter = firstTestID
+		}
 	}
 }
 
