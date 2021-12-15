@@ -28,6 +28,7 @@ const functionName string = "PartitionTest"
 const fileNameSuffix string = "_test.go"
 const functionNamePrefix string = "Test"
 const parameterType string = "T"
+const parameterName string = "t"
 
 // Analyzer initilization
 var Analyzer = &analysis.Analyzer{
@@ -58,7 +59,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 				continue
 			}
 			if !isSearchLineInFunction(fn) {
-				pass.Reportf(fn.Pos(), "%s function is missing %s.%s(<%s type parameter>)", fn.Name.Name, packageName, functionName, parameterType)
+				pass.Reportf(fn.Pos(), "%s: Add missing partition call to top of test. To disable partitioning, add it as a comment: %s.%s(%s)", fn.Name.Name, packageName, functionName, parameterName)
 			}
 
 		}
