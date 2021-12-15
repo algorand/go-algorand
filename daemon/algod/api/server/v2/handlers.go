@@ -246,7 +246,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 
 	consensus, ok := config.Consensus[latestBlkHdr.CurrentProtocol]
 	if !ok {
-		return notFound(ctx, errors.New(errInternalFailure), "could not retrieve consensus information for current protocol", v2.Log)
+		return internalError(ctx, errors.New(errInternalFailure), "could not retrieve consensus information for current protocol", v2.Log)
 	}
 
 	if handle == protocol.CodecHandle {
