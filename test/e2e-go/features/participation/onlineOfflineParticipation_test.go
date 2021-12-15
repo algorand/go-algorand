@@ -181,7 +181,11 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	a.NoError(err, "rest client should be able to add participation key to new account")
 	a.Equal(newAccount, partkeyResponse.Parent.String(), "partkey response should echo queried account")
 	// account uses part key to go online
-	goOnlineTx, err := client.MakeUnsignedGoOnlineTx(newAccount, &partkeyResponse, 0, 0, transactionFee, [32]byte{})
+	goOnlineTx := partkeyResponse.GenerateRegistrationTransaction(
+		basics.MicroAlgos{Raw: transactionFee},
+		basics.Round(0),
+		basics.Round(0),
+		[32]byte{})
 	a.NoError(err, "should be able to make go online tx")
 	a.Equal(newAccount, goOnlineTx.Src().String(), "go online response should echo queried account")
 	onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, goOnlineTx)

@@ -83,7 +83,11 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 		a.Equal(sAccount, partkeyResponse.Parent.String())
 
 		// account uses part key to go online
-		goOnlineTx, err := sClient.MakeUnsignedGoOnlineTx(sAccount, &partkeyResponse, 0, 0, transactionFee, [32]byte{})
+		goOnlineTx := partkeyResponse.GenerateRegistrationTransaction(
+			basics.MicroAlgos{Raw: transactionFee},
+			basics.Round(0),
+			basics.Round(0),
+			[32]byte{})
 		a.NoError(err)
 
 		a.Equal(sAccount, goOnlineTx.Src().String())

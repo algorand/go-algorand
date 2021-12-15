@@ -33,6 +33,7 @@ import (
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -60,7 +61,11 @@ func registerParticipationAndWait(t *testing.T, client libgoal.Client, part acco
 	sAccount := part.Address().String()
 	sWH, err := client.GetUnencryptedWalletHandle()
 	require.NoError(t, err)
-	goOnlineTx, err := client.MakeUnsignedGoOnlineTx(sAccount, &part, txParams.LastRound+1, txParams.LastRound+1, txParams.Fee, [32]byte{})
+	goOnlineTx := part.GenerateRegistrationTransaction(
+		basics.MicroAlgos{Raw: txParams.Fee},
+		basics.Round(txParams.LastRound+1),
+		basics.Round(txParams.LastRound+1),
+		[32]byte{})
 	require.NoError(t, err)
 	require.Equal(t, sAccount, goOnlineTx.Src().String())
 	onlineTxID, err := client.SignAndBroadcastTransaction(sWH, nil, goOnlineTx)

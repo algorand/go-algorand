@@ -18,7 +18,6 @@ package libgoal
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -32,72 +31,41 @@ import (
 
 // chooseParticipation chooses which participation keys to use for going online
 // based on the address, round number, and available participation databases
-func (c *Client) chooseParticipation(address basics.Address, round basics.Round) (part account.Participation, err error) {
-	genID, err := c.GenesisID()
+func (c *Client) chooseParticipation(address basics.Address, round basics.Round) (part generated.ParticipationKey, err error) {
+	parts, err := c.ListParticipationKeys()
 	if err != nil {
 		return
 	}
 
-	// Get a list of files in the participation keys directory
-	keyDir := filepath.Join(c.DataDir(), genID)
-	files, err := ioutil.ReadDir(keyDir)
-	if err != nil {
-		return
-	}
 	// This lambda will be used for finding the desired file.
-	checkIfFileIsDesiredKey := func(file os.FileInfo, expiresAfter basics.Round) (part account.Participation, err error) {
-		var handle db.Accessor
-		var partCandidate account.PersistedParticipation
-
-		// If it can't be a participation key database, skip it
-		if !config.IsPartKeyFilename(file.Name()) {
-			return
-		}
-
-		filename := file.Name()
-
-		// Fetch a handle to this database
-		handle, err = db.MakeErasableAccessor(filepath.Join(keyDir, filename))
-		if err != nil {
-			// Couldn't open it, skip it
-			return
-		}
-
-		// Fetch an account.Participation from the database
-		partCandidate, err = account.RestoreParticipation(handle)
-		if err != nil {
-			// Couldn't read it, skip it
-			handle.Close()
-			return
-		}
-		defer partCandidate.Close()
-
+	checkIfFileIsDesiredKey := func(partCandidate generated.ParticipationKey, expiresAfter uint64) (part generated.ParticipationKey, err error) {
 		// Return the Participation valid for this round that relates to the passed address
 		// that expires farthest in the future.
 		// Note that algod will sign votes with all possible Participations. so any should work
 		// in the short-term.
 		// In the future we should allow the user to specify exactly which partkeys to register.
-		if partCandidate.FirstValid <= round && round <= partCandidate.LastValid && partCandidate.Parent == address && partCandidate.LastValid > expiresAfter {
-			part = partCandidate.Participation
+		if partCandidate.Key.VoteFirstValid <= uint64(round) && uint64(round) <= partCandidate.Key.VoteLastValid && partCandidate.Address == address.String() && partCandidate.Key.VoteLastValid > expiresAfter {
+			part = partCandidate
 		}
 		return
 	}
 
 	// Loop through each of the files; pick the one that expires farthest in the future.
-	var expiry basics.Round
-	for _, info := range files {
+	var expiry uint64
+	for _, info := range parts {
 		// Use above lambda so the deferred handle closure happens each loop
 		partCandidate, err := checkIfFileIsDesiredKey(info, expiry)
-		if err == nil && (!partCandidate.Parent.IsZero()) {
+		if err == nil && partCandidate.Address != "" {
 			part = partCandidate
-			expiry = part.LastValid
+			expiry = part.Key.VoteLastValid
 		}
 	}
-	if part.Parent.IsZero() {
+	if part.Address == "" {
 		// Couldn't find one
-		err = fmt.Errorf("Couldn't find a participation key database for address %v valid at round %v in directory %v", address.GetUserAddress(), round, keyDir)
+		err = fmt.Errorf("Couldn't find a participation key database for address %v valid at round %v in participation registry", address.GetUserAddress(), round)
 		return
 	}
+
 	return
 }
 

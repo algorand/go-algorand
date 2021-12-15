@@ -21,8 +21,8 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
-	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
@@ -191,8 +191,51 @@ func (c *Client) SignAndBroadcastTransaction(walletHandle, pw []byte, utx transa
 	return c.BroadcastTransaction(stx)
 }
 
+// generateRegistrationTransaction returns a transaction object for registering a Participation with its parent this is
+// similar to account.Participation.GenerateRegistrationTransaction.
+func generateRegistrationTransaction(part generated.ParticipationKey, fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte) (transactions.Transaction, error) {
+	addr, err := basics.UnmarshalChecksumAddress(part.Address)
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
+	if len(part.Key.VoteParticipationKey) != 32 {
+		return transactions.Transaction{}, fmt.Errorf("voting key is the wrong size, should be 32 but it is %d", len(part.Key.VoteParticipationKey))
+	}
+
+	var votePk [32]byte
+	copy(votePk[:], part.Key.VoteParticipationKey[:])
+
+	if len(part.Key.SelectionParticipationKey) != 32 {
+		return transactions.Transaction{}, fmt.Errorf("selection key is the wrong size, should be 32 but it is %d", len(part.Key.VoteParticipationKey))
+	}
+
+	var selectionPk [32]byte
+	copy(selectionPk[:], part.Key.SelectionParticipationKey[:])
+
+	t := transactions.Transaction{
+		Type: protocol.KeyRegistrationTx,
+		Header: transactions.Header{
+			Sender:     addr,
+			Fee:        fee,
+			FirstValid: txnFirstValid,
+			LastValid:  txnLastValid,
+			Lease:      leaseBytes,
+		},
+		KeyregTxnFields: transactions.KeyregTxnFields{
+			VotePK:      votePk,
+			SelectionPK: selectionPk,
+		},
+	}
+	t.KeyregTxnFields.VoteFirst = basics.Round(part.Key.VoteFirstValid)
+	t.KeyregTxnFields.VoteLast = basics.Round(part.Key.VoteLastValid)
+	t.KeyregTxnFields.VoteKeyDilution = part.Key.VoteKeyDilution
+
+	return t, nil
+}
+
 // MakeUnsignedGoOnlineTx creates a transaction that will bring an address online using available participation keys
-func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participation, firstValid, lastValid, fee uint64, leaseBytes [32]byte) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedGoOnlineTx(address string, part *generated.ParticipationKey, firstValid, lastValid, fee uint64, leaseBytes [32]byte) (transactions.Transaction, error) {
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
@@ -229,7 +272,10 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participat
 	parsedLastValid := basics.Round(lastValid)
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
-	goOnlineTransaction := part.GenerateRegistrationTransaction(parsedFee, parsedFrstValid, parsedLastValid, leaseBytes)
+	goOnlineTransaction, err := generateRegistrationTransaction(*part, parsedFee, parsedFrstValid, parsedLastValid, leaseBytes)
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
 	if cparams.SupportGenesisHash {
 		var genHash crypto.Digest
 		copy(genHash[:], params.GenesisHash)

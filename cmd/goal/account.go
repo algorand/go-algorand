@@ -832,7 +832,11 @@ func changeAccountOnlineStatus(acct string, part *algodAcct.Participation, goOnl
 	var utx transactions.Transaction
 	var err error
 	if goOnline {
-		utx, err = client.MakeUnsignedGoOnlineTx(acct, part, firstTxRound, lastTxRound, fee, leaseBytes)
+		utx = part.GenerateRegistrationTransaction(
+			basics.MicroAlgos{Raw:fee},
+			basics.Round(firstTxRound),
+			basics.Round(lastTxRound),
+			leaseBytes)
 	} else {
 		utx, err = client.MakeUnsignedGoOfflineTx(acct, firstTxRound, lastTxRound, fee, leaseBytes)
 	}
