@@ -110,6 +110,19 @@ func (ml *mockLedger) blockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error
 	return hdr, nil
 }
 
+func checkCowByUpdate(t *testing.T, cow *roundCowState, delta ledgercore.NewAccountDeltas) {
+	for i := 0; i < delta.Len(); i++ {
+		addr, data := delta.GetByIdx(i)
+		d, err := cow.lookup(addr)
+		require.NoError(t, err)
+		require.Equal(t, d, data)
+	}
+
+	d, err := cow.lookup(ledgertesting.RandomAddress())
+	require.NoError(t, err)
+	require.Equal(t, d, ledgercore.AccountData{})
+}
+
 func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.AccountData) {
 	for addr, data := range accts {
 		d, err := cow.lookup(addr)

@@ -994,7 +994,7 @@ func (au *accountUpdates) lookupOnlineAccountData(rnd basics.Round, addr basics.
 			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
 			// would ensure that we promote this field.
 			au.baseAccounts.writePending(macct)
-			u := macct.accountData.GetCoreAccountData()
+			u := macct.accountData.GetLedgerCoreAccountData()
 			return u.OnlineAccountData(rewardsProto, rewardsLevel), nil
 		}
 
@@ -1009,7 +1009,7 @@ func (au *accountUpdates) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		persistedData, err = au.accountsq.lookup(addr)
 		if persistedData.round == currentDbRound {
 			au.baseAccounts.writePending(persistedData)
-			u := persistedData.accountData.GetCoreAccountData()
+			u := persistedData.accountData.GetLedgerCoreAccountData()
 			return u.OnlineAccountData(rewardsProto, rewardsLevel), err
 		}
 
@@ -1171,7 +1171,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
 			// would ensure that we promote this field.
 			au.baseAccounts.writePending(macct)
-			return macct.accountData.GetCoreAccountData(), rnd, nil
+			return macct.accountData.GetLedgerCoreAccountData(), rnd, nil
 		}
 
 		if synchronized {
@@ -1186,7 +1186,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		persistedData, err = au.accountsq.lookup(addr)
 		if persistedData.round == currentDbRound {
 			au.baseAccounts.writePending(persistedData)
-			return persistedData.accountData.GetCoreAccountData(), rnd, err
+			return persistedData.accountData.GetLedgerCoreAccountData(), rnd, err
 		}
 		if synchronized {
 			if persistedData.round < currentDbRound {

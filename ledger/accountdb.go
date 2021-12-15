@@ -265,7 +265,7 @@ type normalizedAccountBalance struct {
 
 // prepareNormalizedBalances converts an array of encodedBalanceRecord into an equal size array of normalizedAccountBalances.
 func prepareNormalizedBalances(bals []encodedBalanceRecord, proto config.ConsensusParams) (normalizedAccountBalances []normalizedAccountBalance, err error) {
-	normalizedAccountBalances = make([]normalizedAccountBalance, len(bals), len(bals))
+	normalizedAccountBalances = make([]normalizedAccountBalance, len(bals))
 	for i, balance := range bals {
 		normalizedAccountBalances[i].address = balance.Address
 		err = protocol.Decode(balance.AccountData, &(normalizedAccountBalances[i].accountData))
@@ -322,6 +322,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					newEntry.oldResource = baseResourceData
 					outResourcesDeltas.insert(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx), newEntry) // insert instead of upsert economizes one map lookup
 				} else {
+					// call ClearAssetHolding() so that we can set the resourceFlagsNotHolding flag.
 					newEntry.oldResource.data.ClearAssetHolding()
 					outResourcesDeltas.insertMissing(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx), newEntry)
 				}
@@ -388,7 +389,8 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					newEntry.oldResource = baseResourceData
 					outResourcesDeltas.insert(localState.Addr, basics.CreatableIndex(localState.Aidx), newEntry) // insert instead of upsert economizes one map lookup
 				} else {
-					newEntry.oldResource.data.ClearAssetHolding()
+					// call ClearAssetHolding() so that we can set the resourceFlagsNotHolding flag.
+					newEntry.oldResource.data.ClearAppLocalState()
 					outResourcesDeltas.insertMissing(localState.Addr, basics.CreatableIndex(localState.Aidx), newEntry)
 				}
 			}
@@ -1056,30 +1058,6 @@ func (ba *baseAccountData) GetAccountData() basics.AccountData {
 			NumByteSlice: ba.TotalAppSchemaNumByteSlice,
 		},
 		TotalExtraAppPages: ba.TotalExtraAppPages,
-	}
-}
-
-func (ba *baseAccountData) GetCoreAccountData() ledgercore.AccountData {
-	return ledgercore.AccountData{
-		AccountBaseData: ledgercore.AccountBaseData{
-			Status:             ba.Status,
-			MicroAlgos:         ba.MicroAlgos,
-			RewardsBase:        ba.RewardsBase,
-			RewardedMicroAlgos: ba.RewardedMicroAlgos,
-			AuthAddr:           ba.AuthAddr,
-			TotalAppSchema: basics.StateSchema{
-				NumUint:      ba.TotalAppSchemaNumUint,
-				NumByteSlice: ba.TotalAppSchemaNumByteSlice,
-			},
-			TotalExtraAppPages: ba.TotalExtraAppPages,
-		},
-		VotingData: ledgercore.VotingData{
-			VoteID:          ba.VoteID,
-			SelectionID:     ba.SelectionID,
-			VoteFirstValid:  ba.VoteFirstValid,
-			VoteLastValid:   ba.VoteLastValid,
-			VoteKeyDilution: ba.VoteKeyDilution,
-		},
 	}
 }
 
@@ -1871,7 +1849,7 @@ func (qs *accountsDbQueries) readCatchpointStateUint64(ctx context.Context, stat
 	var val sql.NullInt64
 	err = db.Retry(func() (err error) {
 		err = qs.selectCatchpointStateUint64.QueryRowContext(ctx, stateName).Scan(&val)
-		if err == sql.ErrNoRows || (err == nil && false == val.Valid) {
+		if err == sql.ErrNoRows || (err == nil && !val.Valid) {
 			val.Int64 = 0 // default to zero.
 			err = nil
 			def = true
@@ -1903,7 +1881,7 @@ func (qs *accountsDbQueries) readCatchpointStateString(ctx context.Context, stat
 	var val sql.NullString
 	err = db.Retry(func() (err error) {
 		err = qs.selectCatchpointStateString.QueryRowContext(ctx, stateName).Scan(&val)
-		if err == sql.ErrNoRows || (err == nil && false == val.Valid) {
+		if err == sql.ErrNoRows || (err == nil && !val.Valid) {
 			val.String = "" // default to empty string
 			err = nil
 			def = true

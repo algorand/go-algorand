@@ -285,7 +285,8 @@ func (l *localLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Roun
 	return nil
 }
 func (l *localLedger) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
-	// TODO
+	// TODO - the panic here is to remind us that we need to fix this.
+	panic(nil)
 	return ledgercore.AccountResource{}, nil
 }
 func (l *localLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {

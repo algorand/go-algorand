@@ -98,8 +98,7 @@ func (l indexerLedgerConnector) LookupWithoutRewards(round basics.Round, address
 		return ledgercore.ToAccountData(*pad), round, nil
 	}
 
-	accountDataMap, err :=
-		l.il.LookupWithoutRewards(map[basics.Address]struct{}{address: {}})
+	accountDataMap, err := l.il.LookupWithoutRewards(map[basics.Address]struct{}{address: {}})
 	if err != nil {
 		return ledgercore.AccountData{}, basics.Round(0), err
 	}
@@ -142,8 +141,7 @@ func (l indexerLedgerConnector) LookupResource(round basics.Round, address basic
 		return toAccountResource(*pad, aidx, ctype), nil
 	}
 
-	accountDataMap, err :=
-		l.il.LookupWithoutRewards(map[basics.Address]struct{}{address: {}})
+	accountDataMap, err := l.il.LookupWithoutRewards(map[basics.Address]struct{}{address: {}})
 	if err != nil {
 		return ledgercore.AccountResource{}, err
 	}

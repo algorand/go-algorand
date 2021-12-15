@@ -306,7 +306,8 @@ func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Addre
 }
 
 func (dl *dryrunLedger) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
-	// TODO
+	// TODO - the panic here is to remind us that we need to fix this.
+	panic(nil)
 	return ledgercore.AccountResource{}, nil
 }
 
