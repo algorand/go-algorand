@@ -1087,53 +1087,6 @@ func uintToStr(number uint64) string {
 	return fmt.Sprintf("%d", number)
 }
 
-// legacyListParticipationKeysCommand prints key information in the same
-// format as earlier versions of goal. Some users are using this information
-// in scripts and need some extra time to migrate to the REST API.
-// DEPRECATED
-func legacyListParticipationKeysCommand() {
-	dataDir := ensureSingleDataDir()
-
-	client := ensureGoalClient(dataDir, libgoal.DynamicClient)
-	parts, err := client.ListParticipationKeyFiles()
-	if err != nil {
-		reportErrorf(errorRequestFail, err)
-	}
-
-	var filenames []string
-	for fn := range parts {
-		filenames = append(filenames, fn)
-	}
-	sort.Strings(filenames)
-
-	rowFormat := "%-10s\t%-80s\t%-60s\t%12s\t%12s\t%12s\n"
-	fmt.Printf(rowFormat, "Registered", "Filename", "Parent address", "First round", "Last round", "First key")
-	for _, fn := range filenames {
-		onlineInfoStr := "unknown"
-		onlineAccountInfo, err := client.AccountInformation(parts[fn].Address().GetUserAddress())
-		if err == nil {
-			votingBytes := parts[fn].Voting.OneTimeSignatureVerifier
-			vrfBytes := parts[fn].VRF.PK
-			if onlineAccountInfo.Participation != nil &&
-				(string(onlineAccountInfo.Participation.ParticipationPK) == string(votingBytes[:])) &&
-				(string(onlineAccountInfo.Participation.VRFPK) == string(vrfBytes[:])) &&
-				(onlineAccountInfo.Participation.VoteFirst == uint64(parts[fn].FirstValid)) &&
-				(onlineAccountInfo.Participation.VoteLast == uint64(parts[fn].LastValid)) &&
-				(onlineAccountInfo.Participation.VoteKeyDilution == parts[fn].KeyDilution) {
-				onlineInfoStr = "yes"
-			} else {
-				onlineInfoStr = "no"
-			}
-		}
-		// it's okay to proceed without algod info
-		first, last := parts[fn].ValidInterval()
-		fmt.Printf(rowFormat, onlineInfoStr, fn, parts[fn].Address().GetUserAddress(),
-			fmt.Sprintf("%d", first),
-			fmt.Sprintf("%d", last),
-			fmt.Sprintf("%d.%d", parts[fn].Voting.FirstBatch, parts[fn].Voting.FirstOffset))
-	}
-}
-
 var listParticipationKeysCmd = &cobra.Command{
 	Use:   "listpartkeys",
 	Short: "List participation keys summary",
@@ -1386,47 +1339,6 @@ func strOrNA(value *uint64) string {
 	return uintToStr(*value)
 }
 
-// legacyPartkeyInfoCommand prints key information in the same
-// format as earlier versions of goal. Some users are using this information
-// in scripts and need some extra time to migrate to alternatives.
-// DEPRECATED
-func legacyPartkeyInfoCommand() {
-	type partkeyInfo struct {
-		_struct         struct{}                        `codec:",omitempty,omitemptyarray"`
-		Address         string                          `codec:"acct"`
-		FirstValid      basics.Round                    `codec:"first"`
-		LastValid       basics.Round                    `codec:"last"`
-		VoteID          crypto.OneTimeSignatureVerifier `codec:"vote"`
-		SelectionID     crypto.VRFVerifier              `codec:"sel"`
-		VoteKeyDilution uint64                          `codec:"voteKD"`
-	}
-
-	onDataDirs(func(dataDir string) {
-		fmt.Printf("Dumping participation key info from %s...\n", dataDir)
-		client := ensureGoalClient(dataDir, libgoal.DynamicClient)
-
-		// Make sure we don't already have a partkey valid for (or after) specified roundLastValid
-		parts, err := client.ListParticipationKeyFiles()
-		if err != nil {
-			reportErrorf(errorRequestFail, err)
-		}
-
-		for filename, part := range parts {
-			fmt.Println("------------------------------------------------------------------")
-			info := partkeyInfo{
-				Address:         part.Address().String(),
-				FirstValid:      part.FirstValid,
-				LastValid:       part.LastValid,
-				VoteID:          part.VotingSecrets().OneTimeSignatureVerifier,
-				SelectionID:     part.VRFSecrets().PK,
-				VoteKeyDilution: part.KeyDilution,
-			}
-			infoString := protocol.EncodeJSON(&info)
-			fmt.Printf("File: %s\n%s\n", filename, string(infoString))
-		}
-	})
-}
-
 var partkeyInfoCmd = &cobra.Command{
 	Use:   "partkeyinfo",
 	Short: "Output details about all available part keys",
@@ -1516,4 +1428,139 @@ var markNonparticipatingCmd = &cobra.Command{
 			reportErrorf("error waiting for transaction to be committed: %v", err)
 		}
 	},
+}
+
+// listParticipationKeyFiles returns the available participation keys,
+// as a map from database filename to Participation key object.
+// DEPRECATED
+func listParticipationKeyFiles(c *libgoal.Client) (partKeyFiles map[string]algodAcct.Participation, err error) {
+	genID, err := c.GenesisID()
+	if err != nil {
+		return
+	}
+
+	// Get a list of files in the participation keys directory
+	keyDir := filepath.Join(c.DataDir(), genID)
+	files, err := ioutil.ReadDir(keyDir)
+	if err != nil {
+		return
+	}
+
+	partKeyFiles = make(map[string]algodAcct.Participation)
+	for _, file := range files {
+		// If it can't be a participation key database, skip it
+		if !config.IsPartKeyFilename(file.Name()) {
+			continue
+		}
+
+		filename := file.Name()
+
+		// Fetch a handle to this database
+		handle, err := db.MakeErasableAccessor(filepath.Join(keyDir, filename))
+		if err != nil {
+			// Couldn't open it, skip it
+			continue
+		}
+
+		// Fetch an account.Participation from the database
+		part, err := algodAcct.RestoreParticipation(handle)
+		if err != nil {
+			// Couldn't read it, skip it
+			handle.Close()
+			continue
+		}
+
+		partKeyFiles[filename] = part.Participation
+		part.Close()
+	}
+
+	return
+}
+
+// legacyListParticipationKeysCommand prints key information in the same
+// format as earlier versions of goal. Some users are using this information
+// in scripts and need some extra time to migrate to the REST API.
+// DEPRECATED
+func legacyListParticipationKeysCommand() {
+	dataDir := ensureSingleDataDir()
+
+	client := ensureGoalClient(dataDir, libgoal.DynamicClient)
+	parts, err := listParticipationKeyFiles(&client)
+	if err != nil {
+		reportErrorf(errorRequestFail, err)
+	}
+
+	var filenames []string
+	for fn := range parts {
+		filenames = append(filenames, fn)
+	}
+	sort.Strings(filenames)
+
+	rowFormat := "%-10s\t%-80s\t%-60s\t%12s\t%12s\t%12s\n"
+	fmt.Printf(rowFormat, "Registered", "Filename", "Parent address", "First round", "Last round", "First key")
+	for _, fn := range filenames {
+		onlineInfoStr := "unknown"
+		onlineAccountInfo, err := client.AccountInformation(parts[fn].Address().GetUserAddress())
+		if err == nil {
+			votingBytes := parts[fn].Voting.OneTimeSignatureVerifier
+			vrfBytes := parts[fn].VRF.PK
+			if onlineAccountInfo.Participation != nil &&
+				(string(onlineAccountInfo.Participation.ParticipationPK) == string(votingBytes[:])) &&
+				(string(onlineAccountInfo.Participation.VRFPK) == string(vrfBytes[:])) &&
+				(onlineAccountInfo.Participation.VoteFirst == uint64(parts[fn].FirstValid)) &&
+				(onlineAccountInfo.Participation.VoteLast == uint64(parts[fn].LastValid)) &&
+				(onlineAccountInfo.Participation.VoteKeyDilution == parts[fn].KeyDilution) {
+				onlineInfoStr = "yes"
+			} else {
+				onlineInfoStr = "no"
+			}
+		}
+		// it's okay to proceed without algod info
+		first, last := parts[fn].ValidInterval()
+		fmt.Printf(rowFormat, onlineInfoStr, fn, parts[fn].Address().GetUserAddress(),
+			fmt.Sprintf("%d", first),
+			fmt.Sprintf("%d", last),
+			fmt.Sprintf("%d.%d", parts[fn].Voting.FirstBatch, parts[fn].Voting.FirstOffset))
+	}
+}
+
+// legacyPartkeyInfoCommand prints key information in the same
+// format as earlier versions of goal. Some users are using this information
+// in scripts and need some extra time to migrate to alternatives.
+// DEPRECATED
+func legacyPartkeyInfoCommand() {
+	type partkeyInfo struct {
+		_struct         struct{}                        `codec:",omitempty,omitemptyarray"`
+		Address         string                          `codec:"acct"`
+		FirstValid      basics.Round                    `codec:"first"`
+		LastValid       basics.Round                    `codec:"last"`
+		VoteID          crypto.OneTimeSignatureVerifier `codec:"vote"`
+		SelectionID     crypto.VRFVerifier              `codec:"sel"`
+		VoteKeyDilution uint64                          `codec:"voteKD"`
+	}
+
+	onDataDirs(func(dataDir string) {
+		fmt.Printf("Dumping participation key info from %s...\n", dataDir)
+		client := ensureGoalClient(dataDir, libgoal.DynamicClient)
+
+		// Make sure we don't already have a partkey valid for (or after) specified roundLastValid
+		parts, err := listParticipationKeyFiles(&client)
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+
+		for filename, part := range parts {
+			fmt.Println("------------------------------------------------------------------")
+			info := partkeyInfo{
+				Address:         part.Address().String(),
+				FirstValid:      part.FirstValid,
+				LastValid:       part.LastValid,
+				VoteID:          part.VotingSecrets().OneTimeSignatureVerifier,
+				SelectionID:     part.VRFSecrets().PK,
+				VoteKeyDilution: part.KeyDilution,
+			}
+			infoString := protocol.EncodeJSON(&info)
+			fmt.Printf("File: %s\n%s\n", filename, string(infoString))
+		}
+	})
 }
