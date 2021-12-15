@@ -300,6 +300,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				// update existing entry with new data.
 				updEntry := resourcesDeltas{
 					oldResource: prev.oldResource,
+					newResource: prev.newResource,
 					nAcctDeltas: prev.nAcctDeltas + 1,
 				}
 				if assetHold.Holding != nil {
@@ -334,6 +335,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				// update existing entry with new data.
 				updEntry := resourcesDeltas{
 					oldResource: prev.oldResource,
+					newResource: prev.newResource,
 					nAcctDeltas: prev.nAcctDeltas + 1,
 				}
 				if assetParams.Params != nil {
@@ -367,6 +369,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				// update existing entry with new data.
 				updEntry := resourcesDeltas{
 					oldResource: prev.oldResource,
+					newResource: prev.newResource,
 					nAcctDeltas: prev.nAcctDeltas + 1,
 				}
 				if localState.State != nil {
@@ -402,6 +405,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				// update existing entry with new data.
 				updEntry := resourcesDeltas{
 					oldResource: prev.oldResource,
+					newResource: prev.newResource,
 					nAcctDeltas: prev.nAcctDeltas + 1,
 				}
 				if appParams.Params != nil {
