@@ -1,0 +1,86 @@
+#pragma version 6
+    // Program for testing some simple functions using the ABI. 
+    // 
+    // * See min_balance.json for the companion ABI Contract.
+    // * For how to call using ABI conventions, see min_balance.py
+
+    txn ApplicationID
+    bz handle_no_questions_asked
+
+    txn OnCompletion
+    int NoOp
+    ==
+    bnz handle_noop
+
+    txn OnCompletion
+    int OptIn
+    ==
+    bnz handle_no_questions_asked
+
+    err
+
+handle_noop:
+    txn ApplicationArgs 0
+    byte 0xd363f563 // complement(byte[])byte[] (tilde "~"" is too exotic for official signature)
+    ==
+    bnz handle_b~
+
+    txn ApplicationArgs 0
+    byte 0xa9c9f612 // sender_min_balance(pay)uint64
+    ==
+    bnz handle_min_balance
+
+    err    
+
+handle_no_questions_asked:
+    int 1
+    b return_uint64
+
+// opCodes
+
+handle_min_balance:
+    txn Accounts 0
+    min_balance
+    b return_uint64
+
+handle_b~:
+    b extract_abi_string_arg1
+    b~
+    b return_bytes
+
+extract_abi_string_arg1:
+    txna ApplicationArgs 1
+    extract 2 0
+    retsub
+
+// Return handling based on type
+
+return_2_uint64:
+    itob
+    swap
+    itob
+    swap
+    b end_return
+
+return_bytes:
+    dup
+    len
+    itob
+    extract 6 2
+    swap
+    concat
+    b end_return
+
+return_uint64:
+    itob
+    b end_return
+
+// ABI return prefix and logging
+
+end_return:
+    byte 0x151f7c75
+    swap
+    concat
+    log
+    int 1
+    return

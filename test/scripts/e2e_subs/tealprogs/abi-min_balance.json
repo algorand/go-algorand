@@ -1,0 +1,30 @@
+{
+    "name": "opCodes",
+    "appId": null,
+    "methods": [
+        {
+            "name": "sender_min_balance",
+            "desc": "Calculate the minimum balance of sender for referenced pay txn arg",
+            "args": [
+                {
+                    "type": "pay"
+                }
+            ],
+            "returns": {
+                "type": "uint64"
+            }
+        },
+        {
+            "name": "complement",
+            "desc": "The complement (aka b~) of arg0 viewed as a bitstring",
+            "args": [
+                {
+                    "type": "byte[]"
+                }
+            ],
+            "returns": {
+                "type": "byte[]"
+            }
+        }
+    ]
+}
