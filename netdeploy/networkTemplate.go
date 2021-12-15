@@ -29,6 +29,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/netdeploy/remote"
@@ -59,13 +60,13 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 	genesisFile := filepath.Join(targetFolder, genesisFileName)
 
 	nodeDirs = make(map[string]string)
-	getGenesisVerCmd := filepath.Join(binDir, "algod")
 	importKeysCmd := filepath.Join(binDir, "goal")
-	genesisVer, _, err := util.ExecAndCaptureOutput(getGenesisVerCmd, "-G", "-d", targetFolder)
+
+	genesis, err := bookkeeping.LoadGenesisFromFile(filepath.Join(targetFolder, "genesis.json"))
 	if err != nil {
 		return
 	}
-	genesisVer = strings.TrimSpace(genesisVer)
+	genesisVer := genesis.ID()
 
 	relaysCount := countRelayNodes(t.Nodes)
 
