@@ -51,7 +51,6 @@ func commitRound(offset uint64, dbRound basics.Round, l *Ledger) {
 		time.Sleep(time.Millisecond)
 
 	}
-	//l.trackers.waitAccountsWriting()
 }
 
 // test ensures that
