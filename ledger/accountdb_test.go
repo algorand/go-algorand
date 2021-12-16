@@ -222,8 +222,10 @@ func TestAccountDBRound(t *testing.T) {
 	ctbsList, randomCtbs := randomCreatables(numElementsPerSegment)
 	expectedDbImage := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	var baseAccounts lruAccounts
+	var baseResources lruResources
 	var newacctsTotals map[basics.Address]ledgercore.AccountData
 	baseAccounts.init(nil, 100, 80)
+	baseResources.init(nil, 100, 80)
 	for i := 1; i < 10; i++ {
 		var updates ledgercore.NewAccountDeltas
 		updates, newacctsTotals, _, lastCreatableID = ledgertesting.RandomDeltasFull(20, accts, 0, lastCreatableID)
@@ -235,15 +237,24 @@ func TestAccountDBRound(t *testing.T) {
 		updatesCnt := makeCompactAccountDeltas([]ledgercore.NewAccountDeltas{updates}, baseAccounts)
 		err = updatesCnt.accountsLoadOld(tx)
 		require.NoError(t, err)
+		resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.NewAccountDeltas{updates}, baseResources)
+		// TODO: fill addrIDsMap ?
+		resourceUpdatesCnt.resourcesLoadOld(tx, nil)
 
 		err = accountsPutTotals(tx, totals, false)
 		require.NoError(t, err)
-		updatedAccts, err := accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto, basics.Round(i))
+		updatedAccts, updatesResources, err := accountsNewRound(tx, updatesCnt, resourceUpdatesCnt, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
 		require.Equal(t, updatesCnt.len(), len(updatedAccts))
+		numResUpdates := 0
+		for _, rs := range updatesResources {
+			numResUpdates += len(rs)
+		}
+		require.Equal(t, resourceUpdatesCnt.len(), numResUpdates)
 		err = updateAccountsRound(tx, basics.Round(i))
 		require.NoError(t, err)
 
+		// TODO: check resources in checkAccounts or add checkResources function
 		checkAccounts(t, tx, basics.Round(i), accts)
 		checkCreatables(t, tx, i, expectedDbImage)
 	}

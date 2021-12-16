@@ -1419,7 +1419,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 
 	// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
 	// so that we can update the base account back.
-	dcc.updatedPersistedAccounts, err = accountsNewRound(tx, dcc.compactAccountDeltas, dcc.compactCreatableDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
+	dcc.updatedPersistedAccounts, dcc.updatedPersistedResources, err = accountsNewRound(tx, dcc.compactAccountDeltas, dcc.compactResourcesDeltas, dcc.compactCreatableDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
 	if err != nil {
 		return err
 	}
@@ -1474,6 +1474,12 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 		au.baseAccounts.write(persistedAcct)
 	}
 
+	for addr, deltas := range dcc.updatedPersistedResources {
+		for _, persistedRes := range deltas {
+			au.baseResources.write(persistedRes, addr)
+		}
+	}
+
 	for cidx, modCrt := range dcc.compactCreatableDeltas {
 		cnt := modCrt.Ndeltas
 		mcreat, ok := au.creatables[cidx]
@@ -1512,6 +1518,11 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 		dcc.stats.RoundsCount = offset
 		dcc.stats.UpdatedAccountsCount = uint64(len(dcc.updatedPersistedAccounts))
 		dcc.stats.UpdatedCreatablesCount = uint64(len(dcc.compactCreatableDeltas))
+
+		dcc.stats.UpdatedResourcesCount = 0
+		for _, resData := range dcc.updatedPersistedResources {
+			dcc.stats.UpdatedResourcesCount += uint64(len(resData))
+		}
 
 		var details struct{}
 		au.log.Metrics(telemetryspec.Accounts, dcc.stats, details)
