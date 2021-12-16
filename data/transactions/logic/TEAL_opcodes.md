@@ -1415,3 +1415,12 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - push Xth LogicSig argument to stack
 - LogicSigVersion >= 5
 - Mode: Signature
+
+## gloadss
+
+- Opcode: 0xc4
+- Pops: *... stack*, {uint64 A}, {uint64 B}
+- Pushes: any
+- push Bth scratch space index of the Ath transaction in the current group
+- LogicSigVersion >= 6
+- Mode: Application

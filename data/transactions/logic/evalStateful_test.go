@@ -2226,6 +2226,7 @@ func TestReturnTypes(t *testing.T) {
 		"store":             "store 0",
 		"gload":             "gload 0 0",
 		"gloads":            "gloads 0",
+		"gloadss":           "pop; pop; int 0; int 1; gloadss", // Needs txn index = 0 to work
 		"gaid":              "gaid 0",
 		"dig":               "dig 0",
 		"cover":             "cover 0",
@@ -2309,7 +2310,7 @@ func TestReturnTypes(t *testing.T) {
 				require.Equal(
 					t,
 					len(spec.Returns), len(cx.stack),
-					fmt.Sprintf("\n%s%s expected to return %d values but stack has %d", ep.Trace.String(), spec.Name, len(spec.Returns), len(cx.stack)),
+					fmt.Sprintf("\n%s%s expected to return %d values but stack is %v", ep.Trace.String(), spec.Name, len(spec.Returns), cx.stack),
 				)
 				for i := 0; i < len(spec.Returns); i++ {
 					sp := len(cx.stack) - 1 - i
