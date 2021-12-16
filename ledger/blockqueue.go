@@ -110,11 +110,14 @@ func (bq *blockQueue) syncer() {
 		start := time.Now()
 		ledgerSyncBlockputCount.Inc(nil)
 		err := bq.l.blockDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			bq.l.log.Infof("workQ size: %d", len(workQ))
 			for _, e := range workQ {
+				tt1 := time.Now()
 				err0 := blockPut(tx, e.block, e.cert)
 				if err0 != nil {
 					return err0
 				}
+				bq.l.log.Infof("blockPut time: %d", time.Since(tt1).Milliseconds())
 			}
 			return nil
 		})
