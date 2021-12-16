@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,7 +26,9 @@ return`,
 	// TODO: What else?
 }
 
-func TestAssembleMapPCToLine(t *testing.T) {
+func TestAssembleMapPcToLine(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	// Iterate over Teal program(s)  (TODO: add known pc mapping?)
 	for _, program := range pcPrograms {
 		// call assemble
