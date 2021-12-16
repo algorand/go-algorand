@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    19,
+	Version:                                    20,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AnnounceParticipationKey:                   true,
@@ -55,6 +55,7 @@ var defaultLocal = Local{
 	EnableBlockServiceFallbackToArchiver:       true,
 	EnableCatchupFromArchiveServers:            false,
 	EnableDeveloperAPI:                         false,
+	EnableDynamicProposalSizeLimit:             false,
 	EnableGossipBlockService:                   true,
 	EnableIncomingMessageFilter:                false,
 	EnableLedgerService:                        false,
