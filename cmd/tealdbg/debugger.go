@@ -289,8 +289,8 @@ func GetSourceMap(s logic.SourceMapper) ([]byte, error) {
 	}
 
 	var (
-		sourceLine     = 0
-		prevSourceLine = 0
+		sourceLine     int
+		prevSourceLine int
 		lines          = make([]string, s.NumLines())
 	)
 
