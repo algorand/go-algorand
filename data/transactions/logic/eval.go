@@ -23,6 +23,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -4059,4 +4060,67 @@ func opBase64Decode(cx *EvalContext) {
 		encoding = base64.StdEncoding
 	}
 	cx.stack[last].Bytes, cx.err = base64Decode(cx.stack[last].Bytes, encoding)
+}
+
+func parseJSON(jsonText []byte) (interface{}, error) {
+	var parsed interface{}
+	err := json.Unmarshal(jsonText, &parsed)
+	if err != nil {
+		return nil, err
+	}
+	return parsed, nil
+}
+func opJSONRef(cx *EvalContext) {
+	fields := make([]string, 0)
+	n := uint(cx.program[cx.pc+1])
+
+	// get json keys
+	for i := 0; uint(i) < n; i++ {
+		last := len(cx.stack) - 1
+		fields = append(fields, string(cx.stack[last-1].Bytes))
+		cx.stack = cx.stack[:last-1] // pop
+	}
+
+	last := len(cx.stack) - 1
+	webAuthnResponse, err := parseJSON(cx.stack[last-1].Bytes)
+	if err != nil {
+		cx.err = fmt.Errorf("error while parsing FIDO2 response, %v", err)
+		return
+	}
+
+	//get value from json
+	for len(fields) > 0 {
+		key := fields[len(fields)-1]
+		if value, ok := webAuthnResponse.(map[string]interface{})[key]; ok {
+			switch key {
+			case "attestationObject":
+			case "clientDataJSON":
+				decodedBytes, err := base64Decode(value.([]byte), base64.URLEncoding)
+				if err != nil {
+
+				}
+				webAuthnResponse, err = parseJSON(decodedBytes)
+			default:
+				webAuthnResponse = webAuthnResponse.(map[string]interface{})[key]
+			}
+		} else {
+			cx.err = fmt.Errorf("key %s not found in FIDO2 response", key)
+			return
+		}
+		fields = fields[:len(fields)-1]
+	}
+	expectedType := string(cx.program[cx.pc+2])
+	switch webAuthnResponse.(type) {
+	case int:
+		if expectedType != "JSONInt" {
+			fmt.Errorf("value retrieved from FIDO2 response is type int but expected %s", expectedType)
+		}
+	case string:
+		if expectedType != "JSONString" {
+			fmt.Errorf("value retrieved from FIDO2 response is type string but expected %s", expectedType)
+		}
+	default:
+
+	}
+	cx.stack = cx.stack[:last-1] // pop
 }
