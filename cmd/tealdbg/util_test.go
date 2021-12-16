@@ -27,10 +27,9 @@ func TestVLQ(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	a.Equal("AAAA", MakeSourceMapLine(0, 0, 0, 0))
-	a.Equal("AACA", MakeSourceMapLine(0, 0, 1, 0))
-	a.Equal("AAEA", MakeSourceMapLine(0, 0, 2, 0))
-	a.Equal("AAgBA", MakeSourceMapLine(0, 0, 16, 0))
-	a.Equal("AAggBA", MakeSourceMapLine(0, 0, 512, 0))
-	a.Equal("ADggBD", MakeSourceMapLine(0, -1, 512, -1))
+	a.Equal("AAAA", MakeSourceMapLine(0))
+	a.Equal("AACA", MakeSourceMapLine(1))
+	a.Equal("AAEA", MakeSourceMapLine(2))
+	a.Equal("AAgBA", MakeSourceMapLine(16))
+	a.Equal("AAggBA", MakeSourceMapLine(512))
 }

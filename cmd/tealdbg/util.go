@@ -118,11 +118,11 @@ func IntToVLQ(v int, buf *bytes.Buffer) {
 }
 
 // MakeSourceMapLine creates source map mapping's line entry
-func MakeSourceMapLine(tcol, sindex, sline, scol int) string {
+func MakeSourceMapLine(sline int) string {
 	buf := bytes.NewBuffer(nil)
-	IntToVLQ(tcol, buf)
-	IntToVLQ(sindex, buf)
-	IntToVLQ(sline, buf)
-	IntToVLQ(scol, buf)
+	IntToVLQ(0, buf)     // target column
+	IntToVLQ(0, buf)     // source index
+	IntToVLQ(sline, buf) // source line
+	IntToVLQ(0, buf)     // source column
 	return buf.String()
 }

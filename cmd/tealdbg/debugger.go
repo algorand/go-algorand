@@ -288,29 +288,21 @@ func GetSourceMap(s logic.SourceMapper) ([]byte, error) {
 		return nil, nil
 	}
 
-	type sourceMap struct {
-		Version    int      `json:"version"`
-		File       string   `json:"file"`
-		SourceRoot string   `json:"sourceRoot"`
-		Sources    []string `json:"sources"`
-		Mappings   string   `json:"mappings"`
-	}
-	lines := make([]string, s.NumLines())
-	const targetCol int = 0
-	const sourceIdx int = 0
-	sourceLine := 0
-	const sourceCol int = 0
-	prevSourceLine := 0
+	var (
+		sourceLine     = 0
+		prevSourceLine = 0
+		lines          = make([]string, s.NumLines())
+	)
 
 	// the very first entry is needed by CDT
-	lines[0] = MakeSourceMapLine(targetCol, sourceIdx, 0, sourceCol)
+	lines[0] = MakeSourceMapLine(0)
 	for targetLine := 1; targetLine < s.NumLines(); targetLine++ {
 		if pc, ok := s.LineToPc(targetLine); ok && pc != 0 {
 			sourceLine, ok = s.PcToLine(pc)
 			if !ok {
 				lines[targetLine] = ""
 			} else {
-				lines[targetLine] = MakeSourceMapLine(targetCol, sourceIdx, sourceLine-prevSourceLine, sourceCol)
+				lines[targetLine] = MakeSourceMapLine(sourceLine - prevSourceLine)
 				prevSourceLine = sourceLine
 			}
 		} else {
@@ -319,17 +311,25 @@ func GetSourceMap(s logic.SourceMapper) ([]byte, error) {
 			if targetLine == s.NumLines()-1 {
 				delta = 1
 			}
-			lines[targetLine] = MakeSourceMapLine(targetCol, sourceIdx, delta, sourceCol)
+			lines[targetLine] = MakeSourceMapLine(delta)
 		}
 	}
 
-	sm := sourceMap{
+	// Structure defining the source map json that CDT is expecting
+	sm := struct {
+		Version    int      `json:"version"`
+		File       string   `json:"file"`
+		SourceRoot string   `json:"sourceRoot"`
+		Sources    []string `json:"sources"`
+		Mappings   string   `json:"mappings"`
+	}{
 		Version:    s.Version(),
 		File:       s.Name() + ".dis",
 		SourceRoot: "",
 		Sources:    []string{"source"}, // this is a pseudo source file name, served by debugger
 		Mappings:   strings.Join(lines, ";"),
 	}
+
 	data, err := json.Marshal(&sm)
 	return data, err
 }
@@ -410,8 +410,7 @@ func (d *Debugger) createSession(sid string, disassembly string, line int, pcOff
 
 	s = makeSession(disassembly, line)
 	d.sessions[sid] = s
-	meta, ok := d.programs[sid]
-	if ok {
+	if meta, ok := d.programs[sid]; ok {
 		s.programName = meta.name
 		s.program = meta.program
 		s.source = meta.source

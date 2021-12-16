@@ -145,10 +145,10 @@ func (c *MockDebugControl) GetStates(s *logic.DebugState) AppState {
 
 //TODO
 func (c *MockDebugControl) Name() string {
-	return ""
+	return "name"
 }
 func (c *MockDebugControl) Version() int {
-	return 0
+	return 1
 }
 func (c *MockDebugControl) NumLines() int {
 	return 0
