@@ -496,8 +496,36 @@ func (ledger *evalTestLedger) LatestTotals() (basics.Round, ledgercore.AccountTo
 
 // LookupWithoutRewards is like Lookup but does not apply pending rewards up
 // to the requested round rnd.
-func (ledger *evalTestLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
-	return ledger.roundBalances[rnd][addr], rnd, nil
+func (ledger *evalTestLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
+	ad := ledger.roundBalances[rnd][addr]
+	return ledgercore.ToAccountData(ad), rnd, nil
+}
+
+// LookupResource loads resources the requested round rnd.
+func (ledger *evalTestLedger) LookupResource(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
+	res := ledgercore.AccountResource{}
+	ad, ok := ledger.roundBalances[rnd][addr]
+	if !ok {
+		return res, fmt.Errorf("no such account %s", addr.String())
+	}
+	if ctype == basics.AppCreatable {
+		if params, ok := ad.AppParams[basics.AppIndex(cidx)]; ok {
+			res.AppParams = &params
+		}
+		if ls, ok := ad.AppLocalStates[basics.AppIndex(cidx)]; ok {
+			res.AppLocalState = &ls
+		}
+	} else if ctype == basics.AssetCreatable {
+		if params, ok := ad.AssetParams[basics.AssetIndex(cidx)]; ok {
+			res.AssetParam = &params
+		}
+		if h, ok := ad.Assets[basics.AssetIndex(cidx)]; ok {
+			res.AssetHolding = &h
+		}
+	} else {
+		return res, fmt.Errorf("unknown ctype %d", ctype)
+	}
+	return res, nil
 }
 
 // GenesisHash returns the genesis hash for this ledger.
@@ -661,8 +689,12 @@ func (l *testCowBaseLedger) CheckDup(config.ConsensusParams, basics.Round, basic
 	return errors.New("not implemented")
 }
 
-func (l *testCowBaseLedger) LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error) {
-	return basics.AccountData{}, basics.Round(0), errors.New("not implemented")
+func (l *testCowBaseLedger) LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error) {
+	return ledgercore.AccountData{}, basics.Round(0), errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) LookupResource(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
+	return ledgercore.AccountResource{}, errors.New("not implemented")
 }
 
 func (l *testCowBaseLedger) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
