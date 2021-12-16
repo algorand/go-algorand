@@ -20,10 +20,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
+	"runtime/pprof"
 	"sync"
 	"time"
-	"runtime/pprof"
-	"os"
 
 	"github.com/algorand/go-deadlock"
 
