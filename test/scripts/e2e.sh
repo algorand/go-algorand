@@ -24,7 +24,7 @@ Options:
     -n        Run tests without building binaries (Binaries are expected in PATH)
 "
 NO_BUILD=false
-while getopts ":c:nh" opt; do
+while getopts ":c:nhi" opt; do
   case ${opt} in
     c ) CHANNEL=$OPTARG
       ;;
@@ -33,7 +33,11 @@ while getopts ":c:nh" opt; do
       ;;
     h ) echo "${HELP}"
         exit 0
-      ;;
+    ;;
+    i ) echo "  Interactive session"
+        echo "######################################################################"
+        INTERACTIVE=true
+        ;;
     \? ) echo "${HELP}"
         exit 2
       ;;
@@ -121,6 +125,23 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     "${TEMPDIR}/ve/bin/pip3" install --upgrade pip
     "${TEMPDIR}/ve/bin/pip3" install --upgrade py-algorand-sdk cryptography
     duration "e2e client setup"
+
+    if [ $INTERACTIVE ]; then
+        echo "********** READY **********"
+        echo "The test environment is now set. Run the tests using the following command on a different terminal after setting the path."
+        echo ""
+        echo "export VIRTUAL_ENV=\"${TEMPDIR}/ve\""
+        echo "export PATH=\"\$VIRTUAL_ENV/bin:\$PATH\""
+        echo ""
+        echo "${TEMPDIR}/ve/bin/python3" test/scripts/e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/SCRIPT_FILE_NAME
+        echo ""
+        echo "Press enter to shut down the test environment..."
+        read a
+        echo -n "deactivating..."
+        deactivate
+        echo "done"
+        exit
+    fi
 
     "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
     duration "parallel client runner"

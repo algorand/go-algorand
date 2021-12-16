@@ -2257,6 +2257,7 @@ func TestReturnTypes(t *testing.T) {
 		"itxna":             "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxna Accounts 0",
 		"gitxn":             "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; gitxn 0 Sender",
 		"gitxna":            "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; gitxna 0 Accounts 0",
+		"base64_decode":     `pushbytes "YWJjMTIzIT8kKiYoKSctPUB+"; base64_decode StdAlph; pushbytes "abc123!?$*&()'-=@~"; ==; pushbytes "YWJjMTIzIT8kKiYoKSctPUB-"; base64_decode URLAlph; pushbytes "abc123!?$*&()'-=@~"; ==; &&; assert`,
 	}
 
 	/* Make sure the specialCmd tests the opcode in question */

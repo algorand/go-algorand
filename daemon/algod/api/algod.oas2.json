@@ -463,13 +463,10 @@
       }
     },
     "/v2/participation": {
-
       "get": {
-
         "tags": [
           "private"
         ],
-
         "description": "Return a list of participation keys",
         "produces": [
           "application/json"
@@ -513,14 +510,10 @@
           }
         }
       },
-
-
       "post": {
-
         "tags": [
           "private"
         ],
-
         "consumes": [
           "application/msgpack"
         ],
@@ -544,7 +537,6 @@
             }
           }
         ],
-
         "responses": {
           "200": {
             "$ref": "#/responses/PostParticipationResponse"
@@ -577,22 +569,17 @@
             "description": "Unknown Error"
           }
         }
-
       }
-
     },
     "/v2/participation/{participation-id}": {
       "delete": {
-
         "tags": [
           "private"
         ],
-
         "description": "Delete a given participation key by id",
         "produces": [
           "application/json"
         ],
-
         "schemes": [
           "http"
         ],
@@ -624,15 +611,11 @@
             "description": "Unknown Error"
           }
         }
-
       },
-
       "get": {
-
         "tags": [
           "private"
         ],
-
         "description": "Given a participation id, return information about that participation key",
         "produces": [
           "application/json"
@@ -2590,16 +2573,7 @@
     "ParticipationKeyResponse": {
       "description": "A detailed description of a participation id",
       "schema": {
-        "type": "object",
-        "required": [
-          "participationKey"
-        ],
-        "properties": {
-          "participationKey": {
-            "description": "Detailed description of a participation key",
-            "type": "string"
-          }
-        }
+        "$ref": "#/definitions/ParticipationKey"
       }
     },
     "DeleteParticipationIdResponse" : {

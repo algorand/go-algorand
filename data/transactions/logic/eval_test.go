@@ -3392,6 +3392,54 @@ func BenchmarkBigMath(b *testing.B) {
 	}
 }
 
+func BenchmarkBase64Decode(b *testing.B) {
+	smallStd := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+	smallURL := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+	medStd := strings.Repeat(smallStd, 16)
+	medURL := strings.Repeat(smallURL, 16)
+	bigStd := strings.Repeat(medStd, 4)
+	bigURL := strings.Repeat(medURL, 4)
+
+	tags := []string{"small", "medium", "large"}
+	stds := []string{smallStd, medStd, bigStd}
+	urls := []string{smallURL, medURL, bigURL}
+	ops := []string{
+		"",
+		"len",
+		"b~",
+		"int 1; pop",
+		"keccak256",
+		"sha256",
+		"sha512_256",
+		"base64_decode StdAlph",
+		"base64_decode URLAlph",
+	}
+	benches := [][]string{}
+	for i, tag := range tags {
+		for _, op := range ops {
+			testName := op
+			encoded := stds[i]
+			if op == "base64_decode URLAlph" {
+				encoded = urls[i]
+			}
+			if len(op) > 0 {
+				op += "; "
+			}
+			op += "pop"
+			benches = append(benches, []string{
+				fmt.Sprintf("%s_%s", testName, tag),
+				"",
+				fmt.Sprintf(`byte "%s"; %s`, encoded, op),
+				"int 1",
+			})
+		}
+	}
+	for _, bench := range benches {
+		b.Run(bench[0], func(b *testing.B) {
+			benchmarkOperation(b, bench[1], bench[2], bench[3])
+		})
+	}
+}
 func BenchmarkAddx64(b *testing.B) {
 	progs := [][]string{
 		{"add long stack", addBenchmarkSource},
@@ -3821,21 +3869,19 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 			// EvalParams, so try all forward versions.
 			for lv := v; lv <= AssemblerMaxVersion; lv++ {
 				t.Run(fmt.Sprintf("lv=%d", lv), func(t *testing.T) {
-					sb := strings.Builder{}
 					var txn transactions.SignedTxn
 					txn.Lsig.Logic = ops.Program
-					err := CheckSignature(0, defaultEvalParamsWithVersion(&txn, lv))
+					ep := defaultEvalParamsWithVersion(&txn, lv)
+					err := CheckSignature(0, ep)
 					if err != nil {
-						t.Log(hex.EncodeToString(ops.Program))
-						t.Log(sb.String())
+						t.Log(ep.Trace.String())
 					}
 					require.NoError(t, err)
-					sb = strings.Builder{}
-					pass, err := EvalSignature(0, defaultEvalParamsWithVersion(&txn, lv))
+					ep = defaultEvalParamsWithVersion(&txn, lv)
+					pass, err := EvalSignature(0, ep)
 					ok := tester(pass, err)
 					if !ok {
-						t.Log(hex.EncodeToString(ops.Program))
-						t.Log(sb.String())
+						t.Log(ep.Trace.String())
 						t.Log(err)
 					}
 					require.True(t, ok)
@@ -4473,5 +4519,69 @@ func TestPcDetails(t *testing.T) {
 			assert.Equal(t, test.pc, pc)
 			assert.Equal(t, test.det, det)
 		})
+	}
+}
+
+var minB64DecodeVersion uint64 = 6
+
+func TestOpBase64Decode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testCases := []struct {
+		encoded string
+		alph    string
+		decoded string
+		error   string
+	}{
+		{"TU9CWS1ESUNLOwoKb3IsIFRIRSBXSEFMRS4KCgpCeSBIZXJtYW4gTWVsdmlsbGU=",
+			"StdAlph",
+			`MOBY-DICK;
+
+or, THE WHALE.
+
+
+By Herman Melville`, "",
+		},
+		{"TU9CWS1ESUNLOwoKb3IsIFRIRSBXSEFMRS4KCgpCeSBIZXJtYW4gTWVsdmlsbGU=",
+			"URLAlph",
+			`MOBY-DICK;
+
+or, THE WHALE.
+
+
+By Herman Melville`, "",
+		},
+
+		// Test that a string that doesn't need padding can't have it
+		{"cGFk", "StdAlph", "pad", ""},
+		{"cGFk=", "StdAlph", "pad", "input byte 4"},
+		{"cGFk==", "StdAlph", "pad", "input byte 4"},
+		{"cGFk===", "StdAlph", "pad", "input byte 4"},
+		// Ensures that even correct padding is illegal if not needed
+		{"cGFk====", "StdAlph", "pad", "input byte 4"},
+
+		// Test that padding must be present to make len = 0 mod 4.
+		{"bm9wYWQ=", "StdAlph", "nopad", ""},
+		{"bm9wYWQ", "StdAlph", "nopad", "illegal"},
+		{"bm9wYWQ==", "StdAlph", "nopad", "illegal"},
+
+		{"YWJjMTIzIT8kKiYoKSctPUB+", "StdAlph", "abc123!?$*&()'-=@~", ""},
+		{"YWJjMTIzIT8kKiYoKSctPUB+", "StdAlph", "abc123!?$*&()'-=@~", ""},
+		{"YWJjMTIzIT8kKiYoKSctPUB-", "URLAlph", "abc123!?$*&()'-=@~", ""},
+		{"YWJjMTIzIT8kKiYoKSctPUB+", "URLAlph", "", "input byte 23"},
+		{"YWJjMTIzIT8kKiYoKSctPUB-", "StdAlph", "", "input byte 23"},
+	}
+
+	template := `byte 0x%s; byte "%s"; base64_decode %s; ==`
+	for _, tc := range testCases {
+		source := fmt.Sprintf(template, hex.EncodeToString([]byte(tc.decoded)), tc.encoded, tc.alph)
+
+		if tc.error == "" {
+			testAccepts(t, source, minB64DecodeVersion)
+		} else {
+			err := testPanics(t, source, minB64DecodeVersion)
+			require.Contains(t, err.Error(), tc.error)
+		}
 	}
 }
