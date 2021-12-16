@@ -110,11 +110,12 @@ func (ml *mockLedger) blockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error
 	return hdr, nil
 }
 
-func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.AccountData) {
-	for addr, data := range accts {
+func checkCowByUpdate(t *testing.T, cow *roundCowState, delta ledgercore.NewAccountDeltas) {
+	for i := 0; i < delta.Len(); i++ {
+		addr, data := delta.GetByIdx(i)
 		d, err := cow.lookup(addr)
 		require.NoError(t, err)
-		require.Equal(t, d, ledgercore.ToAccountData(data))
+		require.Equal(t, d, data)
 	}
 
 	d, err := cow.lookup(ledgertesting.RandomAddress())
@@ -122,12 +123,11 @@ func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.
 	require.Equal(t, d, ledgercore.AccountData{})
 }
 
-func checkCowByUpdate(t *testing.T, cow *roundCowState, delta ledgercore.NewAccountDeltas) {
-	for i := 0; i < delta.Len(); i++ {
-		addr, data := delta.GetByIdx(i)
+func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.AccountData) {
+	for addr, data := range accts {
 		d, err := cow.lookup(addr)
 		require.NoError(t, err)
-		require.Equal(t, d, data)
+		require.Equal(t, d, ledgercore.ToAccountData(data))
 	}
 
 	d, err := cow.lookup(ledgertesting.RandomAddress())
@@ -160,30 +160,25 @@ func TestCowBalance(t *testing.T) {
 	updates1, _, _ := ledgertesting.RandomDeltas(10, accts0, 0)
 	applyUpdates(c1, updates1)
 	checkCow(t, c0, accts0)
-	checkCowByUpdate(t, c1, updates1)
+	accts1 := updates1.ToBasicsAccountDataMap()
+	checkCow(t, c1, accts1)
 
 	c2 := c1.child(0)
 	checkCow(t, c0, accts0)
-	checkCowByUpdate(t, c1, updates1)
-	checkCowByUpdate(t, c2, updates1)
+	checkCow(t, c1, accts1)
+	checkCow(t, c2, accts1)
 
-	accts1 := make(map[basics.Address]basics.AccountData, updates1.Len())
-	for i := 0; i < updates1.Len(); i++ {
-		addr, _ := updates1.GetByIdx(i)
-		var ok bool
-		accts1[addr], ok = updates1.GetBasicsAccountData(addr)
-		require.True(t, ok)
-	}
 	updates2, _, _ := ledgertesting.RandomDeltas(10, accts1, 0)
 	applyUpdates(c2, updates2)
 	checkCow(t, c0, accts0)
-	checkCowByUpdate(t, c1, updates1)
-	checkCowByUpdate(t, c2, updates2)
+	checkCow(t, c1, accts1)
+	accts2 := updates2.ToBasicsAccountDataMap()
+	checkCow(t, c2, accts2)
 
 	c2.commitToParent()
 	checkCow(t, c0, accts0)
-	checkCowByUpdate(t, c1, updates2)
+	checkCow(t, c1, accts2)
 
 	c1.commitToParent()
-	checkCowByUpdate(t, c0, updates2)
+	checkCow(t, c0, accts2)
 }

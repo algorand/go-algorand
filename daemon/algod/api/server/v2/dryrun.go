@@ -261,7 +261,7 @@ func (dl *dryrunLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Ro
 	return nil
 }
 
-func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
+func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
 	// check accounts from debug records uploaded
 	any := false
 	out := basics.AccountData{}
@@ -271,7 +271,7 @@ func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Addre
 		acct := dl.dr.Accounts[accti]
 		var err error
 		if out, err = AccountToAccountData(&acct); err != nil {
-			return basics.AccountData{}, 0, err
+			return ledgercore.AccountData{}, 0, err
 		}
 		out.MicroAlgos.Raw = acct.AmountWithoutPendingRewards
 		// Clear RewardsBase since dryrun has no idea about rewards level so the underlying calculation with reward will fail.
@@ -284,7 +284,7 @@ func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Addre
 		app := dl.dr.Apps[appi]
 		params, err := ApplicationParamsToAppParams(&app.Params)
 		if err != nil {
-			return basics.AccountData{}, 0, err
+			return ledgercore.AccountData{}, 0, err
 		}
 		if out.AppParams == nil {
 			out.AppParams = make(map[basics.AppIndex]basics.AppParams)
@@ -300,9 +300,15 @@ func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Addre
 		}
 	}
 	if !any {
-		return basics.AccountData{}, 0, fmt.Errorf("no account for addr %s", addr.String())
+		return ledgercore.AccountData{}, 0, fmt.Errorf("no account for addr %s", addr.String())
 	}
-	return out, rnd, nil
+	return ledgercore.ToAccountData(out), rnd, nil
+}
+
+func (dl *dryrunLedger) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
+	// TODO - the panic here is to remind us that we need to fix this.
+	panic(nil)
+	return ledgercore.AccountResource{}, nil
 }
 
 func (dl *dryrunLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
