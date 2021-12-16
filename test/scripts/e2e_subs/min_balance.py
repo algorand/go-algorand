@@ -9,19 +9,6 @@ import algosdk.future.transaction as txn
 
 from goal import Goal
 
-CONSENSUS_MIN_BALANCE = 100_000
-ASSET_MIN_BALANCE = 100_000
-APP_MIN_BALANCE = 100_000
-OPTIN_MIN_BALANCE = 100_000
-# app schemas:
-APP_KV_MIN_BALANCE = 25_000
-APP_INTS_MIN_BALANCE = 3_500
-APP_BYTES_MIN_BALANCE = 25_000
-
-# per userBalance.go::MinBalance() as of Dec 2021:
-EXTRA_PAGE_MIN_BALANCE = APP_MIN_BALANCE
-
-
 # Set INTERACTIVE True if you want to run a remote debugger interactively on the given PORT
 INTERACTIVE, DEBUGPORT = False, 4312
 
@@ -37,6 +24,22 @@ def initialize_debugger():
         debugpy.wait_for_client()
         print("Visual Studio Code debugger is now attached", flush=True)
 
+
+if INTERACTIVE:
+    initialize_debugger()
+
+
+CONSENSUS_MIN_BALANCE = 100_000
+ASSET_MIN_BALANCE = 100_000
+APP_MIN_BALANCE = 100_000
+OPTIN_MIN_BALANCE = 100_000
+# app schemas:
+APP_KV_MIN_BALANCE = 25_000
+APP_INTS_MIN_BALANCE = 3_500
+APP_BYTES_MIN_BALANCE = 25_000
+
+# per userBalance.go::MinBalance() as of Dec 2021:
+EXTRA_PAGE_MIN_BALANCE = APP_MIN_BALANCE
 
 TEAL = f"""#pragma version 6
     byte "Hello Min Balance!"
@@ -57,8 +60,17 @@ handle_gtg:
     return"""
 
 
-if INTERACTIVE:
-    initialize_debugger()
+def get_endpoint_info(goal) -> dict:
+    return {
+        "algod": {
+            "url": goal.algod.algod_address,
+            "auth": goal.algod.algod_token,
+        },
+        "kmd": {
+            "url": goal.kmd.kmd_address,
+            "auth": goal.kmd.kmd_token,
+        },
+    }
 
 
 def get_pysdk_min_balance(goal, account):
@@ -117,7 +129,7 @@ print(f"Running {SCRIPT} inside {CWD} @ {stamp}")
 
 # Initialize goal
 goal = Goal(WALLET, autosend=True)
-rest_endpoints = goal.get_endpoint_info()
+rest_endpoints = get_endpoint_info(goal)
 print(f"Python Goal cennected to {rest_endpoints}")
 
 
