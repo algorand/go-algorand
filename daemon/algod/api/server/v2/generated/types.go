@@ -51,7 +51,7 @@ type Account struct {
 
 	// MicroAlgo balance required by the account.
 	//
-	// The requirement starts at 100,000 and grows based on asset and application usage.
+	// The requirement grows based on asset and application usage.
 	MinBalance uint64 `json:"min-balance"`
 
 	// AccountParticipation describes the parameters used by this account in consensus protocol.

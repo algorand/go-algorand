@@ -1056,7 +1056,7 @@
           "name": "application-id",
           "in": "path",
           "required": true
-      }
+        }
       ]
     },
     "/v2/assets/{asset-id}": {
@@ -1119,7 +1119,7 @@
           "name": "asset-id",
           "in": "path",
           "required": true
-      }
+        }
       ]
     },
     "/v2/teal/compile": {
@@ -1367,7 +1367,7 @@
           "type": "integer"
         },
         "min-balance": {
-          "description": "MicroAlgo balance required by the account.\n\nThe requirement starts at 100,000 and grows based on asset and application usage.",
+          "description": "MicroAlgo balance required by the account.\n\nThe requirement grows based on asset and application usage.",
           "type": "integer"
         },
         "amount-without-pending-rewards": {
@@ -1513,8 +1513,8 @@
       "properties": {
         "amount": {
           "description": "\\[a\\] number of units held.",
-           "type": "integer",
-           "x-algorand-format": "uint64"
+          "type": "integer",
+          "x-algorand-format": "uint64"
         },
         "asset-id": {
           "description": "Asset ID of the holding.",
@@ -2000,7 +2000,7 @@
         "accounts": {
           "type": "array",
           "items": {
-              "$ref": "#/definitions/Account"
+            "$ref": "#/definitions/Account"
           }
         },
         "apps": {
@@ -2135,7 +2135,7 @@
         "asset-index": {
           "description": "The asset index if the transaction was found and it created an asset.",
           "type": "integer"
-          },
+        },
         "application-index": {
           "description": "The application index if the transaction was found and it created an application.",
           "type": "integer"
@@ -2196,7 +2196,7 @@
         },
         "txn": {
           "description": "The raw signed transaction.",
-            "type": "object",
+          "type": "object",
           "x-algorand-format": "SignedTransaction"
         }
       }
@@ -2444,7 +2444,7 @@
         }
       }
     },
-    "CatchpointAbortResponse":{
+    "CatchpointAbortResponse": {
       "tags": [
         "private"
       ],
@@ -2565,7 +2565,6 @@
         }
       }
     },
-
     "ParticipationKeysResponse": {
       "description": "A list of participation keys",
       "schema": {
@@ -2581,15 +2580,15 @@
         "$ref": "#/definitions/ParticipationKey"
       }
     },
-    "DeleteParticipationIdResponse" : {
+    "DeleteParticipationIdResponse": {
       "description": "Participation key got deleted by ID"
     },
-    "PostParticipationResponse" : {
+    "PostParticipationResponse": {
       "description": "Participation ID of the submission",
       "schema": {
         "type": "object",
         "required": [
-         "partId"
+          "partId"
         ],
         "properties": {
           "partId": {
@@ -2598,9 +2597,7 @@
           }
         }
       }
-
     },
-
     "PostTransactionsResponse": {
       "description": "Transaction ID of the submission.",
       "schema": {
