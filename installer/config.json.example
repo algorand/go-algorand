@@ -34,7 +34,7 @@
     "EnableBlockServiceFallbackToArchiver": true,
     "EnableCatchupFromArchiveServers": false,
     "EnableDeveloperAPI": false,
-	"EnableDynamicProposalSizeLimit": false,
+    "EnableDynamicProposalSizeLimit": false,
     "EnableGossipBlockService": true,
     "EnableIncomingMessageFilter": false,
     "EnableLedgerService": false,
