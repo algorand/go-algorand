@@ -1025,9 +1025,7 @@ var compileCmd = &cobra.Command{
 				disassembleFile(fname, outFilename)
 				continue
 			}
-
 			program, sourceMap := assembleWithFileMap(fname)
-
 			outblob := program
 			outname := outFilename
 			if outname == "" {
@@ -1037,7 +1035,6 @@ var compileCmd = &cobra.Command{
 					outname = fmt.Sprintf("%s.tok", fname)
 				}
 			}
-
 			if signProgram {
 				dataDir := ensureSingleDataDir()
 				accountList := makeAccountsList(dataDir)
@@ -1061,14 +1058,12 @@ var compileCmd = &cobra.Command{
 				ls := transactions.LogicSig{Logic: program, Sig: signature}
 				outblob = protocol.Encode(&ls)
 			}
-
 			if !noProgramOutput {
 				err := writeFile(outname, outblob, 0666)
 				if err != nil {
 					reportErrorf("%s: %s", outname, err)
 				}
 			}
-
 			if writeMap {
 				mapname := fname + ".map.json" // TODO: naming?
 				pcblob, err := json.Marshal(sourceMap)
@@ -1080,7 +1075,6 @@ var compileCmd = &cobra.Command{
 					reportErrorf("%s: %s", mapname, err)
 				}
 			}
-
 			if !signProgram && outname != stdoutFilenameValue {
 				pd := logic.HashProgram(program)
 				addr := basics.Address(pd)

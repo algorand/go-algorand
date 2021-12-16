@@ -21,18 +21,22 @@ type AssemblyMap struct {
 
 var _ SourceMapper = &AssemblyMap{}
 
+// Name returns the source file name
 func (am *AssemblyMap) Name() string {
 	return am.SourceName
 }
 
+// Version returns the teal version
 func (am *AssemblyMap) Version() int {
 	return am.SourceVersion
 }
 
+// NumLines returns the number of lines in the source file
 func (am *AssemblyMap) NumLines() int {
 	return len(am.LineMap)
 }
 
+// LineToPc maps a line number to the pc (ie program counter, the byte index in the assembled file)
 func (am *AssemblyMap) LineToPc(line int) (int, bool) {
 	if line >= len(am.LineMap) {
 		return 0, false
@@ -50,6 +54,7 @@ func (am *AssemblyMap) LineToPc(line int) (int, bool) {
 	return 0, false
 }
 
+// PcToLine maps a pc to the line number in the source file
 func (am *AssemblyMap) PcToLine(pc int) (int, bool) {
 	for idx, p := range am.LineMap {
 		if p == pc {

@@ -481,14 +481,11 @@ func asmPushInt(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s needs one argument", spec.Name)
 	}
-
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
 		return ops.error(err)
 	}
-
 	ops.pending.WriteByte(spec.Opcode)
-
 	var scratch [binary.MaxVarintLen64]byte
 	vlen := binary.PutUvarint(scratch[:], val)
 	ops.pending.Write(scratch[:vlen])
@@ -499,7 +496,6 @@ func asmPushBytes(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 0 {
 		return ops.errorf("%s operation needs byte literal argument", spec.Name)
 	}
-
 	val, consumed, err := parseBinaryArgs(args)
 	if err != nil {
 		return ops.error(err)
@@ -507,12 +503,10 @@ func asmPushBytes(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != consumed {
 		return ops.errorf("%s operation with extraneous argument", spec.Name)
 	}
-
 	ops.pending.WriteByte(spec.Opcode)
 	var scratch [binary.MaxVarintLen64]byte
 	vlen := binary.PutUvarint(scratch[:], uint64(len(val)))
 	ops.pending.Write(scratch[:vlen])
-
 	ops.pending.Write(val)
 	return nil
 }
@@ -704,19 +698,15 @@ func assembleIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.Write(scratch[:l])
 	ops.intcRefs = nil
 	ops.intc = make([]uint64, len(args))
-
 	for i, xs := range args {
-
 		cu, err := strconv.ParseUint(xs, 0, 64)
 		if err != nil {
 			ops.error(err)
 		}
-
 		l = binary.PutUvarint(scratch[:], cu)
 		ops.pending.Write(scratch[:l])
 		ops.intc[i] = cu
 	}
-
 	ops.hasIntcBlock = true
 	return nil
 }
@@ -725,11 +715,9 @@ func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.WriteByte(spec.Opcode)
 	bvals := make([][]byte, 0, len(args))
 	rest := args
-
 	// This is done in two loops because each element may
 	// contain multiple entries in the args array
 	for len(rest) > 0 {
-
 		val, consumed, err := parseBinaryArgs(rest)
 		if err != nil {
 			// Would be nice to keep going, as in
@@ -739,19 +727,15 @@ func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 			ops.error(err)
 			return nil
 		}
-
 		bvals = append(bvals, val)
 		rest = rest[consumed:]
 	}
-
 	var scratch [binary.MaxVarintLen64]byte
 	l := binary.PutUvarint(scratch[:], uint64(len(bvals)))
 	ops.pending.Write(scratch[:l])
-
 	for _, bv := range bvals {
 		l := binary.PutUvarint(scratch[:], uint64(len(bv)))
 		ops.pending.Write(scratch[:l])
-
 		ops.pending.Write(bv)
 	}
 	ops.bytecRefs = nil
