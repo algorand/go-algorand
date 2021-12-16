@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -458,8 +459,8 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 
 	for i := 0; i < accountsDeltas.len(); i++ {
 		addr, delta := accountsDeltas.getByIdx(i)
-		if !delta.old.accountData.IsZero() {
-			deleteHash := accountHashBuilder(addr, delta.old.accountData, protocol.Encode(&delta.old.accountData))
+		if !delta.oldAcct.accountData.MsgIsZero() {
+			deleteHash := accountHashBuilderV6(addr, &delta.oldAcct.accountData, protocol.Encode(&delta.oldAcct.accountData))
 			deleted, err = ct.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
@@ -471,8 +472,8 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 			}
 		}
 
-		if !delta.new.IsZero() {
-			addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
+		if !delta.newAcct.MsgIsZero() {
+			addHash := accountHashBuilderV6(addr, &delta.newAcct, protocol.Encode(&delta.newAcct))
 			added, err = ct.balancesTrie.Add(addHash)
 			if err != nil {
 				return fmt.Errorf("attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)
@@ -829,6 +830,49 @@ func removeSingleCatchpointFileFromDisk(dbDirectory, fileToDelete string) (err e
 	}
 
 	return nil
+}
+
+// accountHashBuilderV6 calculates the hash key used for the trie by combining the account address and the account data
+func accountHashBuilderV6(addr basics.Address, accountData *baseAccountData, encodedAccountData []byte) []byte {
+	hash := make([]byte, 4+crypto.DigestSize)
+	hashIntPrefix := accountData.UpdateRound
+	if hashIntPrefix == 0 {
+		hashIntPrefix = accountData.RewardsBase
+	}
+	// write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
+	// recent updated to be in-cache, and "older" nodes will be left alone.
+	for i, prefix := 3, hashIntPrefix; i >= 0; i, prefix = i-1, prefix>>8 {
+		// the following takes the prefix & 255 -> hash[i]
+		hash[i] = byte(prefix)
+	}
+	hash[4] = 0 // set the 5th byte to zero to indicate it's a account base record hash
+
+	prehash := make([]byte, crypto.DigestSize+len(encodedAccountData))
+	copy(prehash[:], addr[:])
+	copy(prehash[crypto.DigestSize:], encodedAccountData[:])
+	entryHash := crypto.Hash(prehash)
+	copy(hash[5:], entryHash[1:])
+	return hash[:]
+}
+
+// accountHashBuilderV6 calculates the hash key used for the trie by combining the account address and the account data
+func resourcesHashBuilderV6(addr basics.Address, creatableIdx uint64, creatableType uint64, updateRound uint64, encodedResourceData []byte) []byte {
+	hash := make([]byte, 4+crypto.DigestSize)
+	// write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
+	// recent updated to be in-cache, and "older" nodes will be left alone.
+	for i, prefix := 3, updateRound; i >= 0; i, prefix = i-1, prefix>>8 {
+		// the following takes the prefix & 255 -> hash[i]
+		hash[i] = byte(prefix)
+	}
+	hash[4] = byte(creatableType + 1) // set the 5th byte to one or two ( asset / application ) so we could diffrenciate the hashes.
+
+	prehash := make([]byte, 8+crypto.DigestSize+len(encodedResourceData))
+	copy(prehash[:], addr[:])
+	binary.LittleEndian.PutUint64(prehash[crypto.DigestSize:], creatableIdx)
+	copy(prehash[crypto.DigestSize+8:], encodedResourceData[:])
+	entryHash := crypto.Hash(prehash)
+	copy(hash[5:], entryHash[1:])
+	return hash[:]
 }
 
 // accountHashBuilder calculates the hash key used for the trie by combining the account address and the account data
