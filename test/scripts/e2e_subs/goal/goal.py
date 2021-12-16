@@ -112,18 +112,6 @@ class Goal:
             kmd_address = "http://" + net
         return algosdk.kmd.KMDClient(kmd_token, kmd_address)
 
-    def get_endpoint_info(self) -> dict:
-        return {
-            "algod": {
-                "url": self.algod.algod_address,
-                "auth": self.algod.algod_token,
-            },
-            "kmd": {
-                "url": self.kmd.kmd_address,
-                "auth": self.kmd.kmd_token,
-            },
-        }
-
     def open_wallet(self, name):
         if name:
             self.wallet_name = name
