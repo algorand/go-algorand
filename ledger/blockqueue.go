@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+	"runtime/pprof"
+	"os"
 
 	"github.com/algorand/go-deadlock"
 
@@ -117,7 +119,13 @@ func (bq *blockQueue) syncer() {
 				if err0 != nil {
 					return err0
 				}
-				bq.l.log.Infof("blockPut time: %d", time.Since(tt1).Milliseconds())
+				since := time.Since(tt1).Milliseconds()
+				if since > 200 {
+					bq.l.log.Infof("blockPut time: %d", since)
+				}
+				if since > 1000 {
+					pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
+				}
 			}
 			return nil
 		})
