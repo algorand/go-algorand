@@ -39,7 +39,18 @@ func commitRound(offset uint64, dbRound basics.Round, l *Ledger) {
 	l.trackers.mu.Unlock()
 
 	l.trackers.scheduleCommit(l.Latest(), l.Latest()-(dbRound+basics.Round(offset)))
-	l.trackers.waitAccountsWriting()
+	// wait for the operation to complete. Once it does complete, the tr.lastFlushTime is going to be updated, so we can
+	// use that as an indicator.
+	for {
+		l.trackers.mu.Lock()
+		isDone := (!l.trackers.lastFlushTime.IsZero()) && (len(l.trackers.deferredCommits) == 0)
+		l.trackers.mu.Unlock()
+		if isDone {
+			break
+		}
+		time.Sleep(time.Millisecond)
+
+	}
 }
 
 // test ensures that

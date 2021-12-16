@@ -90,7 +90,7 @@ various sizes.
 
 ### Byte Array Manipulation
 
-@@ Byte_Array_Slicing.md @@
+@@ Byte_Array_Manipulation.md @@
 
 These opcodes take byte-array values that are interpreted as
 big-endian unsigned integers.  For mathematical operators, the
