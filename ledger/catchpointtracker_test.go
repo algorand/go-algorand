@@ -609,7 +609,7 @@ func (bt *blockingTracker) postCommitUnlocked(ctx context.Context, dcc *deferred
 }
 
 // handleUnorderedCommit is not used by the blockingTracker
-func (bt *blockingTracker) handleUnorderedCommit(uint64, basics.Round, basics.Round) {
+func (bt *blockingTracker) handleUnorderedCommit(*deferredCommitContext) {
 }
 
 // close is not used by the blockingTracker
