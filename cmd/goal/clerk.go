@@ -949,7 +949,10 @@ func assembleWithFileMap(fname string) (program []byte, deets logic.AssemblyMap)
 		}
 	}
 
-	return ops.Program, ops.GetAssemblyMap()
+	am := ops.GetAssemblyMap()
+	am.SourceName = fname
+
+	return ops.Program, am
 }
 
 func assembleFile(fname string) (program []byte) {

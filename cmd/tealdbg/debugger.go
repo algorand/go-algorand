@@ -270,14 +270,14 @@ func (s *session) NumLines() int {
 	return len(s.lines)
 }
 
-func (s *session) PcToLine(pc int) (line int, ok bool) {
-	line, ok = s.offsetToLine[pc]
+func (s *session) LineToPc(line int) (pc int, ok bool) {
+	pc, ok = s.pcOffset[line]
 	ok = ok && pc != 0
 	return
 }
 
-func (s *session) PcByLine(line int) (pc int, ok bool) {
-	pc, ok = s.pcOffset[line]
+func (s *session) PcToLine(pc int) (line int, ok bool) {
+	line, ok = s.offsetToLine[pc]
 	ok = ok && pc != 0
 	return
 }
@@ -305,7 +305,7 @@ func GetSourceMap(s logic.SourceMapper) ([]byte, error) {
 	// the very first entry is needed by CDT
 	lines[0] = MakeSourceMapLine(targetCol, sourceIdx, 0, sourceCol)
 	for targetLine := 1; targetLine < s.NumLines(); targetLine++ {
-		if pc, ok := s.PcByLine(targetLine); ok && pc != 0 {
+		if pc, ok := s.LineToPc(targetLine); ok && pc != 0 {
 			sourceLine, ok = s.PcToLine(pc)
 			if !ok {
 				lines[targetLine] = ""

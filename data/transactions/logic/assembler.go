@@ -44,14 +44,6 @@ type Writer interface {
 	WriteByte(c byte) error
 }
 
-type SourceMapper interface {
-	Name() string
-	Version() int
-	NumLines() int
-	PcByLine(line int) (pc int, ok bool)
-	PcToLine(pc int) (line int, ok bool)
-}
-
 type labelReference struct {
 	sourceLine int
 
@@ -272,7 +264,11 @@ func (ops *OpStream) GetAssemblyMap() AssemblyMap {
 		lto[line] = pc
 	}
 
-	return AssemblyMap{LineMap: lto, TemplateLabels: ops.TemplateLabels}
+	return AssemblyMap{
+		SourceVersion:  int(ops.Version),
+		LineMap:        lto,
+		TemplateLabels: ops.TemplateLabels,
+	}
 }
 
 // GetVersion returns the LogicSigVersion we're building to
