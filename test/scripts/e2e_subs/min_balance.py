@@ -42,22 +42,19 @@ APP_BYTES_MIN_BALANCE = 25_000
 EXTRA_PAGE_MIN_BALANCE = APP_MIN_BALANCE
 
 TEAL = f"""#pragma version 6
-    byte "Hello Min Balance!"
-    log
+byte "Hello Min Balance!"
+log
 
-    // even when creating the app, calc the min balance:
-    byte "min_balance="
-    log
+// even when creating the app, calc the min balance:
+byte "min_balance="
+log
 
-    txn Accounts 0
-    min_balance
-    itob
-    log
-    b handle_gtg
+txn Accounts 0
+min_balance
+itob
+log
 
-handle_gtg:
-    int 1
-    return"""
+int 1"""
 
 
 def get_endpoint_info(goal) -> dict:
