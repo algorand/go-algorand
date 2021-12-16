@@ -901,7 +901,10 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 	}
 
 	// Tell the AccountManager about the Participation (dupes don't matter) so we ignore the return value
-	_ = node.accountManager.AddParticipation(partkey)
+	added := node.accountManager.AddParticipation(partkey)
+	if !added {
+		return account.ParticipationID{}, fmt.Errorf("ParticipationRegistry: cannot register duplicate participation key")
+	}
 
 	// PKI TODO: pick a better timeout, this is just something short. This could also be removed if we change
 	// POST /v2/participation and DELETE /v2/participation to return "202 OK Accepted" instead of waiting and getting
@@ -913,6 +916,10 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 
 	newFilename := config.PartKeyFilename(partkey.ID().String(), uint64(partkey.FirstValid), uint64(partkey.LastValid))
 	newFullyQualifiedFilename := filepath.Join(outDir, filepath.Base(newFilename))
+
+	if _, err = os.Stat(newFullyQualifiedFilename); os.IsExist(err) {
+		return account.ParticipationID{}, fmt.Errorf("KeyInstallation: cannot register duplicate participation key")
+	}
 
 	err = os.Rename(fullyQualifiedTempFile, newFullyQualifiedFilename)
 

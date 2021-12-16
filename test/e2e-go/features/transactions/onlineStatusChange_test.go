@@ -18,6 +18,7 @@ package transactions
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -168,12 +169,20 @@ func TestCloseOnError(t *testing.T) {
 	// get the current round for partkey creation
 	_, curRound := fixture.GetBalanceAndRound(initiallyOnline)
 
+	tempDir := os.TempDir()
+	var partkeyFile string
+	_, partkeyFile, err = client.GenParticipationKeysTo(initiallyOffline, 0, curRound+1000, 0, tempDir)
+	defer os.Remove(partkeyFile)
+
 	// make a participation key for initiallyOffline
-	_, _, err = client.GenParticipationKeys(initiallyOffline, 0, curRound+1000, 0)
+	_, err = client.AddParticipationKey(partkeyFile)
 	a.NoError(err)
+
 	// check duplicate keys does not crash
-	_, _, err = client.GenParticipationKeys(initiallyOffline, 0, curRound+1000, 0)
-	a.Equal("PersistedParticipation.Persist: failed to install database: table ParticipationAccount already exists", err.Error())
+	_, err = client.AddParticipationKey(partkeyFile)
+	a.Error(err)
+	a.Contains(err.Error(), "cannot register duplicate participation key")
+
 	// check lastValid < firstValid does not crash
 	_, _, err = client.GenParticipationKeys(initiallyOffline, curRound+1001, curRound+1000, 0)
 	expected := fmt.Sprintf("FillDBWithParticipationKeys: firstValid %d is after lastValid %d", int(curRound+1001), int(curRound+1000))
