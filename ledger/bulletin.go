@@ -120,6 +120,9 @@ func (b *bulletin) commitRound(context.Context, *sql.Tx, *deferredCommitContext)
 func (b *bulletin) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 }
 
+func (b *bulletin) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
+}
+
 func (b *bulletin) handleUnorderedCommit(uint64, basics.Round, basics.Round) {
 }
 func (b *bulletin) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {

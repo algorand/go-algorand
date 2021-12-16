@@ -1241,6 +1241,9 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 	}
 }
 
+func (au *accountUpdates) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
+}
+
 // compactCreatableDeltas takes an array of creatables map deltas ( one array entry per round ), and compact the array into a single
 // map that contains all the deltas changes. While doing that, the function eliminate any intermediate changes.
 // It counts the number of changes per round by specifying it in the ndeltas field of the modifiedCreatable.
