@@ -323,8 +323,6 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					newEntry.oldResource = baseResourceData
 					outResourcesDeltas.insert(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx), newEntry) // insert instead of upsert economizes one map lookup
 				} else {
-					// call ClearAssetHolding() so that we can set the resourceFlagsNotHolding flag.
-					newEntry.oldResource.data.ClearAssetHolding()
 					outResourcesDeltas.insertMissing(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx), newEntry)
 				}
 			}
@@ -392,8 +390,6 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					newEntry.oldResource = baseResourceData
 					outResourcesDeltas.insert(localState.Addr, basics.CreatableIndex(localState.Aidx), newEntry) // insert instead of upsert economizes one map lookup
 				} else {
-					// call ClearAssetHolding() so that we can set the resourceFlagsNotHolding flag.
-					newEntry.oldResource.data.ClearAppLocalState()
 					outResourcesDeltas.insertMissing(localState.Addr, basics.CreatableIndex(localState.Aidx), newEntry)
 				}
 			}

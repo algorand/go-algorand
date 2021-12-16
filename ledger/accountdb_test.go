@@ -864,7 +864,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(0, ad.len())
 	a.Panics(func() { ad.getByIdx(0) })
 
-	sample1 := accountDelta{new: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 123}}}
+	sample1 := accountDelta{newAcct: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 123}}}
 	ad.upsert(addr, sample1)
 	data, idx = ad.get(addr)
 	a.NotEqual(-1, idx)
@@ -877,8 +877,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 
 	delta := ledgercore.MakeNewAccountDeltas(1)
 	delta.Upsert(addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 456}}})
-	// sample2 := accountDelta{new: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 456}}}
-	sample2 := accountDelta{newDelta: delta}
+	sample2 := accountDelta{newAcct: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 456}}}
 	ad.upsert(addr, sample2)
 	data, idx = ad.get(addr)
 	a.NotEqual(-1, idx)
@@ -899,26 +898,28 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(addr, address)
 	a.Equal(sample2, data)
 
-	old1 := persistedAccountData{addr: addr, accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
+	old1 := persistedAccountData{addr: addr, accountData: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
 	ad.upsertOld(old1)
 	a.Equal(1, ad.len())
 	address, data = ad.getByIdx(0)
 	a.Equal(addr, address)
 	new1, ok := delta.GetBasicsAccountData(addr)
 	a.True(ok)
-	a.Equal(accountDelta{new: new1, old: old1, newDelta: ledgercore.NewAccountDeltas{}}, data)
+	new1base := baseAccountData{}
+	new1base.SetAccountData(&new1)
+	a.Equal(accountDelta{newAcct: new1base, oldAcct: old1}, data)
 
 	addr1 := ledgertesting.RandomAddress()
-	old2 := persistedAccountData{addr: addr1, accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
+	old2 := persistedAccountData{addr: addr1, accountData: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
 	ad.upsertOld(old2)
 	a.Equal(2, ad.len())
 	address, data = ad.getByIdx(0)
 	a.Equal(addr, address)
-	a.Equal(accountDelta{new: new1, old: old1, newDelta: ledgercore.NewAccountDeltas{}}, data)
+	a.Equal(accountDelta{newAcct: new1base, oldAcct: old1}, data)
 
 	address, data = ad.getByIdx(1)
 	a.Equal(addr1, address)
-	a.Equal(accountDelta{old: old2}, data)
+	a.Equal(accountDelta{oldAcct: old2}, data)
 
 	// apply old on empty delta object, expect no changes
 	ad.updateOld(0, old2)
@@ -926,7 +927,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 	address, data = ad.getByIdx(0)
 	a.Equal(addr, address)
 	new2 := old2.accountData
-	a.Equal(accountDelta{new: new2, old: old2, newDelta: ledgercore.NewAccountDeltas{}}, data)
+	a.Equal(accountDelta{newAcct: new2, oldAcct: old2}, data)
 
 	addr2 := ledgertesting.RandomAddress()
 	idx = ad.insert(addr2, sample2)
