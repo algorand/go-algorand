@@ -143,6 +143,23 @@ func (c *MockDebugControl) GetStates(s *logic.DebugState) AppState {
 	return AppState{}
 }
 
+//TODO
+func (c *MockDebugControl) Name() string {
+	return ""
+}
+func (c *MockDebugControl) Version() int {
+	return 0
+}
+func (c *MockDebugControl) NumLines() int {
+	return 0
+}
+func (c *MockDebugControl) LineToPc(line int) (pc int, ok bool) {
+	return 0, false
+}
+func (c *MockDebugControl) PcToLine(pc int) (line int, ok bool) {
+	return 0, false
+}
+
 func TestCdtFrontendSessionStarted(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	params := CdtFrontendParams{

@@ -404,7 +404,7 @@ func TestAssemble(t *testing.T) {
 			// time. we must assemble to the same bytes
 			// this month that we did last month.
 			expectedBytes, _ := hex.DecodeString(compiled[v])
-			if bytes.Compare(expectedBytes, ops.Program) != 0 {
+			if !bytes.Equal(expectedBytes, ops.Program) {
 				// this print is for convenience if
 				// the program has been changed. the
 				// hex string can be copy pasted back

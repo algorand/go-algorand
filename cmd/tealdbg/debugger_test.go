@@ -179,7 +179,7 @@ func TestSession(t *testing.T) {
 	require.Equal(t, stepBreak, s.debugConfig.BreakAtLine)
 	require.Equal(t, 2, ackCount)
 
-	data, err := s.GetSourceMap()
+	data, err := GetSourceMap(s)
 	require.NoError(t, err)
 	require.Greater(t, len(data), 0)
 

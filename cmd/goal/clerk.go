@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -49,6 +50,7 @@ var (
 	rejectsFilename string
 	closeToAddress  string
 	noProgramOutput bool
+	writeMap        bool
 	signProgram     bool
 	programSource   string
 	argB64Strings   []string
@@ -123,6 +125,7 @@ func init() {
 
 	compileCmd.Flags().BoolVarP(&disassemble, "disassemble", "D", false, "disassemble a compiled program")
 	compileCmd.Flags().BoolVarP(&noProgramOutput, "no-out", "n", false, "don't write contract program binary")
+	compileCmd.Flags().BoolVarP(&writeMap, "map", "m", false, "write out assembly map")
 	compileCmd.Flags().BoolVarP(&signProgram, "sign", "s", false, "sign program, output is a binary signed LogicSig record")
 	compileCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename to write program bytes or signed LogicSig to")
 	compileCmd.Flags().StringVarP(&account, "account", "a", "", "Account address to sign the program (If not specified, uses default account)")
@@ -925,6 +928,33 @@ func mustReadFile(fname string) []byte {
 	return contents
 }
 
+func assembleWithFileMap(fname string) (program []byte, deets logic.AssemblyMap) {
+	text, err := readFile(fname)
+	if err != nil {
+		reportErrorf("%s: %s", fname, err)
+	}
+	ops, err := logic.AssembleString(string(text))
+	if err != nil {
+		ops.ReportProblems(fname, os.Stderr)
+		reportErrorf("%s: %s", fname, err)
+	}
+	_, params := getProto(protoVersion)
+	if ops.HasStatefulOps {
+		if len(ops.Program) > config.MaxAvailableAppProgramLen {
+			reportErrorf(tealAppSize, fname, len(ops.Program), config.MaxAvailableAppProgramLen)
+		}
+	} else {
+		if uint64(len(ops.Program)) > params.LogicSigMaxSize {
+			reportErrorf(tealLogicSigSize, fname, len(ops.Program), params.LogicSigMaxSize)
+		}
+	}
+
+	am := ops.GetAssemblyMap()
+	am.SourceName = fname
+
+	return ops.Program, am
+}
+
 func assembleFile(fname string) (program []byte) {
 	text, err := readFile(fname)
 	if err != nil {
@@ -995,7 +1025,9 @@ var compileCmd = &cobra.Command{
 				disassembleFile(fname, outFilename)
 				continue
 			}
-			program := assembleFile(fname)
+
+			program, sourceMap := assembleWithFileMap(fname)
+
 			outblob := program
 			outname := outFilename
 			if outname == "" {
@@ -1005,6 +1037,7 @@ var compileCmd = &cobra.Command{
 					outname = fmt.Sprintf("%s.tok", fname)
 				}
 			}
+
 			if signProgram {
 				dataDir := ensureSingleDataDir()
 				accountList := makeAccountsList(dataDir)
@@ -1028,12 +1061,26 @@ var compileCmd = &cobra.Command{
 				ls := transactions.LogicSig{Logic: program, Sig: signature}
 				outblob = protocol.Encode(&ls)
 			}
+
 			if !noProgramOutput {
 				err := writeFile(outname, outblob, 0666)
 				if err != nil {
 					reportErrorf("%s: %s", outname, err)
 				}
 			}
+
+			if writeMap {
+				mapname := fname + ".map.json" // TODO: naming?
+				pcblob, err := json.Marshal(sourceMap)
+				if err != nil {
+					reportErrorf("%s: %s", mapname, err)
+				}
+				err = writeFile(mapname, pcblob, 0666)
+				if err != nil {
+					reportErrorf("%s: %s", mapname, err)
+				}
+			}
+
 			if !signProgram && outname != stdoutFilenameValue {
 				pd := logic.HashProgram(program)
 				addr := basics.Address(pd)
