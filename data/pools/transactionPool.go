@@ -109,6 +109,9 @@ type TransactionPool struct {
 
 	// proposalAssemblyTime is the ProposalAssemblyTime configured for this node.
 	proposalAssemblyTime time.Duration
+
+	// dynamicProposalSize is a flag telling us whether to use dynamic proposal sizes or not
+	dynamicProposalSize bool
 }
 
 // BlockEvaluator defines the block evaluator interface exposed by the ledger package.
@@ -138,6 +141,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 		expFeeFactor:         cfg.TxPoolExponentialIncreaseFactor,
 		txPoolMaxSize:        cfg.TxPoolSize,
 		proposalAssemblyTime: cfg.ProposalAssemblyTime,
+		dynamicProposalSize:  cfg.EnableDynamicProposalSizeLimit,
 		log:                  log,
 	}
 	pool.cond.L = &pool.mu
@@ -1029,6 +1033,10 @@ func (pool *TransactionPool) SetDataExchangeRate(dataExchangeRate uint64) {
 // calculateMaxTxnBytesPerBlock computes the optimal block size for the current node, based
 // on it's effective network capabilities. This number is bound by the protocol MaxTxnBytesPerBlock.
 func (pool *TransactionPool) calculateMaxTxnBytesPerBlock(consensusVersion protocol.ConsensusVersion) int {
+	// if we do not support dynamic proposal sizes use the consensus's default value.
+	if !pool.dynamicProposalSize {
+		return 0
+	}
 	// get the latest data exchange rate we received from the transaction sync.
 	dataExchangeRate := atomic.LoadUint64(&pool.latestMeasuredDataExchangeRate)
 
