@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"testing"
@@ -38,14 +39,14 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// Note that most of the tests use defaultEvalProto/defaultEvalParams as evaluator version so that
+// Note that most of the tests use makeTestProto/defaultEvalParams as evaluator version so that
 // we check that TEAL v1 and v2 programs are compatible with the latest evaluator
-func defaultEvalProto() config.ConsensusParams {
-	return defaultEvalProtoWithVersion(LogicVersion)
+func makeTestProto() *config.ConsensusParams {
+	return makeTestProtoV(LogicVersion)
 }
 
-func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
-	return config.ConsensusParams{
+func makeTestProtoV(version uint64) *config.ConsensusParams {
+	return &config.ConsensusParams{
 		LogicSigVersion:     version,
 		LogicSigMaxCost:     20000,
 		Application:         version >= appsEnabledVersion,
@@ -79,9 +80,10 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 		EnableFeePooling:      true,
 
 		// Chosen to be different from one another and from normal proto
-		MaxAppTxnAccounts:      3,
-		MaxAppTxnForeignApps:   5,
-		MaxAppTxnForeignAssets: 6,
+		MaxAppTxnAccounts:        3,
+		MaxAppTxnForeignApps:     5,
+		MaxAppTxnForeignAssets:   6,
+		MaxAppTotalTxnReferences: 7,
 
 		MaxAppArgs:        12,
 		MaxAppTotalArgLen: 800,
@@ -93,7 +95,8 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 		MaxGlobalSchemaEntries: 30,
 		MaxLocalSchemaEntries:  13,
 
-		EnableAppCostPooling: true,
+		EnableAppCostPooling:          true,
+		EnableInnerTransactionPooling: true,
 	}
 }
 
@@ -114,22 +117,16 @@ func benchmarkEvalParams(txn *transactions.SignedTxn) *EvalParams {
 }
 
 func defaultEvalParamsWithVersion(txn *transactions.SignedTxn, version uint64) *EvalParams {
-	proto := defaultEvalProtoWithVersion(version)
-
 	ep := &EvalParams{
-		Proto:           &proto,
-		TxnGroup:        make([]transactions.SignedTxnWithAD, 1),
-		PastSideEffects: MakePastSideEffects(proto.MaxTxGroupSize),
-		Specials:        &transactions.SpecialAddresses{},
-		Trace:           &strings.Builder{},
+		Proto:    makeTestProtoV(version),
+		TxnGroup: make([]transactions.SignedTxnWithAD, 1),
+		Specials: &transactions.SpecialAddresses{},
+		Trace:    &strings.Builder{},
 	}
 	if txn != nil {
 		ep.TxnGroup[0].SignedTxn = *txn
 	}
-	if proto.EnableAppCostPooling {
-		budget := uint64(proto.MaxAppProgramCost)
-		ep.PooledApplicationBudget = &budget
-	}
+	ep.reset()
 	return ep
 }
 
@@ -137,8 +134,26 @@ func defaultEvalParamsWithVersion(txn *transactions.SignedTxn, version uint64) *
 // *_test.go because no real code should ever need this. EvalParams should be
 // created to evaluate a group, and then thrown away.
 func (ep *EvalParams) reset() {
+	if ep.Proto.EnableAppCostPooling {
+		budget := uint64(ep.Proto.MaxAppProgramCost)
+		ep.PooledApplicationBudget = &budget
+	}
+	if ep.Proto.EnableInnerTransactionPooling {
+		inners := ep.Proto.MaxInnerTransactions
+		ep.pooledAllowedInners = &inners
+	}
+	ep.PastSideEffects = MakePastSideEffects(ep.Proto.MaxTxGroupSize)
 	for i := range ep.TxnGroup {
 		ep.TxnGroup[i].ApplyData = transactions.ApplyData{}
+	}
+	if ep.Proto.LogicSigVersion < createdResourcesVersion {
+		ep.initialCounter = math.MaxUint64
+	} else {
+		if ep.Ledger != nil {
+			ep.initialCounter = ep.Ledger.Counter()
+		} else {
+			ep.initialCounter = firstTestID
+		}
 	}
 }
 
@@ -866,14 +881,14 @@ func TestArg(t *testing.T) {
 
 const globalV1TestProgram = `
 global MinTxnFee
-int 123
+int 1001
 ==
 global MinBalance
-int 1000000
+int 1001
 ==
 &&
 global MaxTxnLife
-int 999
+int 1500
 ==
 &&
 global ZeroAddress
@@ -902,7 +917,7 @@ int 0
 >
 &&
 global CurrentApplicationID
-int 42
+int 888
 ==
 &&
 `
@@ -968,7 +983,7 @@ func TestGlobal(t *testing.T) {
 	ledger := MakeLedger(nil)
 	addr, err := basics.UnmarshalChecksumAddress(testAddr)
 	require.NoError(t, err)
-	ledger.NewApp(addr, basics.AppIndex(42), basics.AppParams{})
+	ledger.NewApp(addr, 888, basics.AppParams{})
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		_, ok := tests[v]
 		require.True(t, ok)
@@ -984,16 +999,7 @@ func TestGlobal(t *testing.T) {
 			txn := transactions.SignedTxn{}
 			txn.Txn.Group = crypto.Digest{0x07, 0x06}
 
-			proto := config.ConsensusParams{
-				MinTxnFee:         123,
-				MinBalance:        1000000,
-				MaxTxnLife:        999,
-				LogicSigVersion:   LogicVersion,
-				LogicSigMaxCost:   20000,
-				MaxAppProgramCost: 700,
-			}
 			ep := defaultEvalParams(&txn)
-			ep.Proto = &proto
 			ep.Ledger = ledger
 			testApp(t, tests[v].program, ep)
 		})
@@ -1180,7 +1186,7 @@ arg 8
 `
 
 const testTxnProgramTextV2 = testTxnProgramTextV1 + `txn ApplicationID
-int 123
+int 888
 ==
 &&
 txn OnCompletion
@@ -1403,7 +1409,7 @@ func makeSampleTxn() transactions.SignedTxn {
 	txn.Txn.AssetSender = txn.Txn.Receiver
 	txn.Txn.AssetReceiver = txn.Txn.CloseRemainderTo
 	txn.Txn.AssetCloseTo = txn.Txn.Sender
-	txn.Txn.ApplicationID = basics.AppIndex(123)
+	txn.Txn.ApplicationID = basics.AppIndex(888)
 	txn.Txn.Accounts = make([]basics.Address, 1)
 	txn.Txn.Accounts[0] = txn.Txn.Receiver
 	rekeyToAddr := []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui05")
@@ -1447,17 +1453,25 @@ func makeSampleTxn() transactions.SignedTxn {
 	return txn
 }
 
-func makeSampleTxnGroup(txn transactions.SignedTxn) []transactions.SignedTxn {
-	txgroup := make([]transactions.SignedTxn, 2)
-	txgroup[0] = txn
-	txgroup[1].Txn.Amount.Raw = 42
-	txgroup[1].Txn.Fee.Raw = 1066
-	txgroup[1].Txn.FirstValid = 42
-	txgroup[1].Txn.LastValid = 1066
-	txgroup[1].Txn.Sender = txn.Txn.Receiver
-	txgroup[1].Txn.Receiver = txn.Txn.Sender
-	txgroup[1].Txn.ExtraProgramPages = 2
-	return txgroup
+// makeSampleTxnGroup creates a sample txn group.  If less than two transactions
+// are supplied, samples are used.
+func makeSampleTxnGroup(txns ...transactions.SignedTxn) []transactions.SignedTxn {
+	if len(txns) == 0 {
+		txns = []transactions.SignedTxn{makeSampleTxn()}
+	}
+	if len(txns) == 1 {
+		second := transactions.SignedTxn{}
+		second.Txn.Type = protocol.PaymentTx
+		second.Txn.Amount.Raw = 42
+		second.Txn.Fee.Raw = 1066
+		second.Txn.FirstValid = 42
+		second.Txn.LastValid = 1066
+		second.Txn.Sender = txns[0].Txn.Receiver
+		second.Txn.Receiver = txns[0].Txn.Sender
+		second.Txn.ExtraProgramPages = 2
+		txns = append(txns, second)
+	}
+	return txns
 }
 
 func TestTxn(t *testing.T) {
@@ -1543,7 +1557,7 @@ args
 assert`, "", 1)
 
 				ops := testProg(t, appSafe, v)
-				testAppFull(t, ops.Program, 3, ep)
+				testAppFull(t, ops.Program, 3, basics.AppIndex(888), ep)
 			}
 		})
 	}
@@ -1626,7 +1640,7 @@ int 100
 	ep := defaultEvalParams(nil)
 	ep.Ledger = ledger
 	ep.TxnGroup = transactions.WrapSignedTxnsWithAD(txgroup)
-	pass, err := EvalApp(ops.Program, 1, ep)
+	pass, err := EvalApp(ops.Program, 1, 0, ep)
 	if !pass || err != nil {
 		t.Log(ep.Trace.String())
 	}
@@ -1641,26 +1655,26 @@ int 0
 `
 
 	ops = testProg(t, futureCreatableIDProg, 4)
-	_, err = EvalApp(ops.Program, 1, ep)
+	_, err = EvalApp(ops.Program, 1, 0, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gaid can't get creatable ID of txn ahead of the current one")
 
 	// should fail when accessing self
 	ops = testProg(t, checkCreatableIDProg, 4)
-	_, err = EvalApp(ops.Program, 0, ep)
+	_, err = EvalApp(ops.Program, 0, 0, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gaid is only for accessing creatable IDs of previous txns")
 
 	// should fail on non-creatable
 	ep.TxnGroup[0].Txn.Type = protocol.PaymentTx
-	_, err = EvalApp(ops.Program, 1, ep)
+	_, err = EvalApp(ops.Program, 1, 0, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "can't use gaid on txn that is not an app call nor an asset config txn")
 	ep.TxnGroup[0].Txn.Type = protocol.AssetConfigTx
 
 	// should fail when no creatable was created
 	ledger.SetTrackedCreatable(0, basics.CreatableLocator{})
-	_, err = EvalApp(ops.Program, 1, ep)
+	_, err = EvalApp(ops.Program, 1, 0, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "the txn did not create anything")
 }
@@ -2130,17 +2144,17 @@ func TestSubstringFlop(t *testing.T) {
 	// fails in compiler
 	testProg(t, `byte 0xf000000000000000
 substring
-len`, 2, expect{2, "substring expects 2 immediate arguments"})
+len`, 2, Expect{2, "substring expects 2 immediate arguments"})
 
 	// fails in compiler
 	testProg(t, `byte 0xf000000000000000
 substring 1
-len`, 2, expect{2, "substring expects 2 immediate arguments"})
+len`, 2, Expect{2, "substring expects 2 immediate arguments"})
 
 	// fails in compiler
 	testProg(t, `byte 0xf000000000000000
 substring 4 2
-len`, 2, expect{2, "substring end is before start"})
+len`, 2, Expect{2, "substring end is before start"})
 
 	// fails at runtime
 	testPanics(t, `byte 0xf000000000000000
@@ -2193,11 +2207,11 @@ func TestExtractFlop(t *testing.T) {
 	// fails in compiler
 	testProg(t, `byte 0xf000000000000000
 	extract
-	len`, 5, expect{2, "extract expects 2 immediate arguments"})
+	len`, 5, Expect{2, "extract expects 2 immediate arguments"})
 
 	testProg(t, `byte 0xf000000000000000
 	extract 1
-	len`, 5, expect{2, "extract expects 2 immediate arguments"})
+	len`, 5, Expect{2, "extract expects 2 immediate arguments"})
 
 	// fails at runtime
 	err := testPanics(t, `byte 0xf000000000000000
@@ -2389,28 +2403,21 @@ int 1`,
 	cases := []scratchTestCase{
 		simpleCase, multipleTxnCase, selfCase, laterTxnSlotCase,
 	}
-	proto := defaultEvalProtoWithVersion(LogicVersion)
 
 	for i, testCase := range cases {
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
 			sources := testCase.tealSources
 
 			// Initialize txgroup
-			txgroup := make([]transactions.SignedTxnWithAD, len(sources))
+			txgroup := make([]transactions.SignedTxn, len(sources))
 			for j := range txgroup {
-				txgroup[j].SignedTxn.Txn.Type = protocol.ApplicationCallTx
-			}
-
-			ep := &EvalParams{
-				Proto:           &proto,
-				TxnGroup:        txgroup,
-				PastSideEffects: MakePastSideEffects(len(sources)),
+				txgroup[j].Txn.Type = protocol.ApplicationCallTx
 			}
 
 			if testCase.errContains != "" {
-				testApps(t, sources, ep, expect{testCase.errTxn, testCase.errContains})
+				testApps(t, sources, txgroup, LogicVersion, MakeLedger(nil), Expect{testCase.errTxn, testCase.errContains})
 			} else {
-				testApps(t, sources, ep)
+				testApps(t, sources, txgroup, LogicVersion, MakeLedger(nil))
 			}
 		})
 	}
@@ -2453,7 +2460,7 @@ int 1`,
 			}
 
 			ep := &EvalParams{
-				Proto:           &proto,
+				Proto:           makeTestProto(),
 				TxnGroup:        txgroup,
 				PastSideEffects: MakePastSideEffects(2),
 			}
@@ -2516,14 +2523,7 @@ int 1
 		txgroup[j].Txn.Type = protocol.ApplicationCallTx
 	}
 
-	proto := defaultEvalProtoWithVersion(LogicVersion)
-	ep := &EvalParams{
-		Proto:           &proto,
-		TxnGroup:        transactions.WrapSignedTxnsWithAD(txgroup),
-		PastSideEffects: MakePastSideEffects(len(sources)),
-	}
-
-	testApps(t, sources, ep)
+	testApps(t, sources, txgroup, LogicVersion, MakeLedger(nil))
 }
 
 const testCompareProgramText = `int 35
@@ -3408,6 +3408,54 @@ func BenchmarkBigMath(b *testing.B) {
 	}
 }
 
+func BenchmarkBase64Decode(b *testing.B) {
+	smallStd := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+	smallURL := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+	medStd := strings.Repeat(smallStd, 16)
+	medURL := strings.Repeat(smallURL, 16)
+	bigStd := strings.Repeat(medStd, 4)
+	bigURL := strings.Repeat(medURL, 4)
+
+	tags := []string{"small", "medium", "large"}
+	stds := []string{smallStd, medStd, bigStd}
+	urls := []string{smallURL, medURL, bigURL}
+	ops := []string{
+		"",
+		"len",
+		"b~",
+		"int 1; pop",
+		"keccak256",
+		"sha256",
+		"sha512_256",
+		"base64_decode StdAlph",
+		"base64_decode URLAlph",
+	}
+	benches := [][]string{}
+	for i, tag := range tags {
+		for _, op := range ops {
+			testName := op
+			encoded := stds[i]
+			if op == "base64_decode URLAlph" {
+				encoded = urls[i]
+			}
+			if len(op) > 0 {
+				op += "; "
+			}
+			op += "pop"
+			benches = append(benches, []string{
+				fmt.Sprintf("%s_%s", testName, tag),
+				"",
+				fmt.Sprintf(`byte "%s"; %s`, encoded, op),
+				"int 1",
+			})
+		}
+	}
+	for _, bench := range benches {
+		b.Run(bench[0], func(b *testing.B) {
+			benchmarkOperation(b, bench[1], bench[2], bench[3])
+		})
+	}
+}
 func BenchmarkAddx64(b *testing.B) {
 	progs := [][]string{
 		{"add long stack", addBenchmarkSource},
@@ -3726,9 +3774,9 @@ func TestAllowedOpcodesV2(t *testing.T) {
 			require.Contains(t, source, spec.Name)
 			ops := testProg(t, source, AssemblerMaxVersion)
 			// all opcodes allowed in stateful mode so use CheckStateful/EvalContract
-			err := CheckContract(ops.Program, 0, ep)
+			err := CheckContract(ops.Program, ep)
 			require.NoError(t, err, source)
-			_, err = EvalApp(ops.Program, 0, ep)
+			_, err = EvalApp(ops.Program, 0, 0, ep)
 			if spec.Name != "return" {
 				// "return" opcode always succeeds so ignore it
 				require.Error(t, err, source)
@@ -3828,7 +3876,7 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			t.Helper()
 			if v < introduced {
-				testProg(t, obfuscate(program), v, expect{0, "...was introduced..."})
+				testProg(t, obfuscate(program), v, Expect{0, "...was introduced..."})
 				return
 			}
 			ops := testProg(t, program, v)
@@ -3837,21 +3885,19 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 			// EvalParams, so try all forward versions.
 			for lv := v; lv <= AssemblerMaxVersion; lv++ {
 				t.Run(fmt.Sprintf("lv=%d", lv), func(t *testing.T) {
-					sb := strings.Builder{}
 					var txn transactions.SignedTxn
 					txn.Lsig.Logic = ops.Program
-					err := CheckSignature(0, defaultEvalParamsWithVersion(&txn, lv))
+					ep := defaultEvalParamsWithVersion(&txn, lv)
+					err := CheckSignature(0, ep)
 					if err != nil {
-						t.Log(hex.EncodeToString(ops.Program))
-						t.Log(sb.String())
+						t.Log(ep.Trace.String())
 					}
 					require.NoError(t, err)
-					sb = strings.Builder{}
-					pass, err := EvalSignature(0, defaultEvalParamsWithVersion(&txn, lv))
+					ep = defaultEvalParamsWithVersion(&txn, lv)
+					pass, err := EvalSignature(0, ep)
 					ok := tester(pass, err)
 					if !ok {
-						t.Log(hex.EncodeToString(ops.Program))
-						t.Log(sb.String())
+						t.Log(ep.Trace.String())
 						t.Log(err)
 					}
 					require.True(t, ok)
@@ -4361,13 +4407,12 @@ func TestLog(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	proto := defaultEvalProtoWithVersion(LogicVersion)
 	var txn transactions.SignedTxn
 	txn.Txn.Type = protocol.ApplicationCallTx
 	ledger := MakeLedger(nil)
 	ledger.NewApp(txn.Txn.Receiver, 0, basics.AppParams{})
 	ep := defaultEvalParams(&txn)
-	ep.Proto = &proto
+	ep.Proto = makeTestProtoV(LogicVersion)
 	ep.Ledger = ledger
 	testCases := []struct {
 		source string
@@ -4480,7 +4525,7 @@ func TestPcDetails(t *testing.T) {
 			ops := testProg(t, test.source, LogicVersion)
 			ep, _, _ := makeSampleEnv()
 
-			pass, cx, err := EvalContract(ops.Program, 0, ep)
+			pass, cx, err := EvalContract(ops.Program, 0, 0, ep)
 			require.Error(t, err)
 			require.False(t, pass)
 
@@ -4490,5 +4535,69 @@ func TestPcDetails(t *testing.T) {
 			assert.Equal(t, test.pc, pc)
 			assert.Equal(t, test.det, det)
 		})
+	}
+}
+
+var minB64DecodeVersion uint64 = 6
+
+func TestOpBase64Decode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testCases := []struct {
+		encoded string
+		alph    string
+		decoded string
+		error   string
+	}{
+		{"TU9CWS1ESUNLOwoKb3IsIFRIRSBXSEFMRS4KCgpCeSBIZXJtYW4gTWVsdmlsbGU=",
+			"StdAlph",
+			`MOBY-DICK;
+
+or, THE WHALE.
+
+
+By Herman Melville`, "",
+		},
+		{"TU9CWS1ESUNLOwoKb3IsIFRIRSBXSEFMRS4KCgpCeSBIZXJtYW4gTWVsdmlsbGU=",
+			"URLAlph",
+			`MOBY-DICK;
+
+or, THE WHALE.
+
+
+By Herman Melville`, "",
+		},
+
+		// Test that a string that doesn't need padding can't have it
+		{"cGFk", "StdAlph", "pad", ""},
+		{"cGFk=", "StdAlph", "pad", "input byte 4"},
+		{"cGFk==", "StdAlph", "pad", "input byte 4"},
+		{"cGFk===", "StdAlph", "pad", "input byte 4"},
+		// Ensures that even correct padding is illegal if not needed
+		{"cGFk====", "StdAlph", "pad", "input byte 4"},
+
+		// Test that padding must be present to make len = 0 mod 4.
+		{"bm9wYWQ=", "StdAlph", "nopad", ""},
+		{"bm9wYWQ", "StdAlph", "nopad", "illegal"},
+		{"bm9wYWQ==", "StdAlph", "nopad", "illegal"},
+
+		{"YWJjMTIzIT8kKiYoKSctPUB+", "StdAlph", "abc123!?$*&()'-=@~", ""},
+		{"YWJjMTIzIT8kKiYoKSctPUB+", "StdAlph", "abc123!?$*&()'-=@~", ""},
+		{"YWJjMTIzIT8kKiYoKSctPUB-", "URLAlph", "abc123!?$*&()'-=@~", ""},
+		{"YWJjMTIzIT8kKiYoKSctPUB+", "URLAlph", "", "input byte 23"},
+		{"YWJjMTIzIT8kKiYoKSctPUB-", "StdAlph", "", "input byte 23"},
+	}
+
+	template := `byte 0x%s; byte "%s"; base64_decode %s; ==`
+	for _, tc := range testCases {
+		source := fmt.Sprintf(template, hex.EncodeToString([]byte(tc.decoded)), tc.encoded, tc.alph)
+
+		if tc.error == "" {
+			testAccepts(t, source, minB64DecodeVersion)
+		} else {
+			err := testPanics(t, source, minB64DecodeVersion)
+			require.Contains(t, err.Error(), tc.error)
+		}
 	}
 }

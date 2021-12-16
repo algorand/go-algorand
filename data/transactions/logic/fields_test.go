@@ -60,16 +60,16 @@ func TestGlobalFieldsVersions(t *testing.T) {
 
 		// check on a version before the field version
 		preLogicVersion := field.version - 1
-		proto := defaultEvalProtoWithVersion(preLogicVersion)
+		proto := makeTestProtoV(preLogicVersion)
 		if preLogicVersion < appsEnabledVersion {
 			require.False(t, proto.Application)
 		}
 		ep := defaultEvalParams(nil)
-		ep.Proto = &proto
+		ep.Proto = proto
 		ep.Ledger = ledger
 
 		// check failure with version check
-		_, err := EvalApp(ops.Program, 0, ep)
+		_, err := EvalApp(ops.Program, 0, 0, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "greater than protocol supported version")
 
@@ -138,12 +138,12 @@ func TestTxnFieldVersions(t *testing.T) {
 			ops := testProg(t, text, AssemblerMaxVersion)
 
 			preLogicVersion := fs.version - 1
-			proto := defaultEvalProtoWithVersion(preLogicVersion)
+			proto := makeTestProtoV(preLogicVersion)
 			if preLogicVersion < appsEnabledVersion {
 				require.False(t, proto.Application)
 			}
 			ep := defaultEvalParams(nil)
-			ep.Proto = &proto
+			ep.Proto = proto
 			ep.Ledger = ledger
 			ep.TxnGroup = transactions.WrapSignedTxnsWithAD(txgroup)
 
@@ -196,7 +196,7 @@ func TestTxnEffectsAvailable(t *testing.T) {
 			_, err := EvalSignature(0, ep)
 			require.Error(t, err)
 			ep.Ledger = MakeLedger(nil)
-			_, err = EvalApp(ops.Program, 0, ep)
+			_, err = EvalApp(ops.Program, 0, 0, ep)
 			if v < txnEffectsVersion {
 				require.Error(t, err)
 			} else {
@@ -230,7 +230,7 @@ func TestAssetParamsFieldsVersions(t *testing.T) {
 			ep, _, _ := makeSampleEnv()
 			ep.Proto.LogicSigVersion = v
 			if field.version > v {
-				testProg(t, text, v, expect{3, "...available in version..."})
+				testProg(t, text, v, Expect{3, "...available in version..."})
 				ops := testProg(t, text, field.version) // assemble in the future
 				ops.Program[0] = byte(v)
 				testAppBytes(t, ops.Program, ep, "invalid asset_params_get field")

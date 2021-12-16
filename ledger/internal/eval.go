@@ -744,7 +744,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	var groupTxBytes int
 
 	cow := eval.state.child(len(txgroup))
-	evalParams := logic.NewAppEvalParams(txgroup, &eval.proto, &eval.specials, nil)
+	evalParams := logic.NewAppEvalParams(txgroup, &eval.proto, &eval.specials, cow.txnCounter())
 
 	// Evaluate each transaction in the group
 	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
@@ -974,6 +974,9 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		ad.SenderRewards = basics.MicroAlgos{}
 		ad.ReceiverRewards = basics.MicroAlgos{}
 		ad.CloseRewards = basics.MicroAlgos{}
+	}
+	if evalParams != nil {
+		evalParams.TxnGroup[gi].ApplyData = ad
 	}
 
 	return
@@ -1357,7 +1360,7 @@ transactionGroupLoop:
 			if !ok {
 				break transactionGroupLoop
 			} else if txgroup.err != nil {
-				return ledgercore.StateDelta{}, err
+				return ledgercore.StateDelta{}, txgroup.err
 			}
 
 			for _, br := range txgroup.balances {

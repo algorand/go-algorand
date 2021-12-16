@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"crypto/sha512"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -209,19 +210,19 @@ type LedgerForLogic interface {
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
 	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error)
 	AppParams(aidx basics.AppIndex) (basics.AppParams, basics.Address, error)
-	ApplicationID() basics.AppIndex
 	OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error)
 	GetCreatableID(groupIdx int) basics.CreatableIndex
 
 	GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (value basics.TealValue, exists bool, err error)
-	SetLocal(addr basics.Address, key string, value basics.TealValue, accountIdx uint64) error
-	DelLocal(addr basics.Address, key string, accountIdx uint64) error
+	SetLocal(addr basics.Address, appIdx basics.AppIndex, key string, value basics.TealValue, accountIdx uint64) error
+	DelLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) error
 
 	GetGlobal(appIdx basics.AppIndex, key string) (value basics.TealValue, exists bool, err error)
-	SetGlobal(key string, value basics.TealValue) error
-	DelGlobal(key string) error
+	SetGlobal(appIdx basics.AppIndex, key string, value basics.TealValue) error
+	DelGlobal(appIdx basics.AppIndex, key string) error
 
 	Perform(gi int, ep *EvalParams) error
+	Counter() uint64
 }
 
 // EvalSideEffects contains data returned from evaluation
@@ -281,9 +282,15 @@ type EvalParams struct {
 	// Total pool of app call budget in a group transaction (nil before pooling enabled)
 	PooledApplicationBudget *uint64
 
-	// The "call stack" of apps calling this app.
-	appStack []basics.AppIndex
-	caller   *EvalContext
+	// Total allowable inner txns in a group transaction (nil before pooling enabled)
+	pooledAllowedInners *int
+
+	// If non-zero, a txn counter value after which assets and apps should be
+	// allowed w/o foreign array. Left zero until createdResourcesVersion.
+	initialCounter uint64
+
+	// The calling context, if this is an inner app call
+	caller *EvalContext
 }
 
 func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.SignedTxnWithAD {
@@ -295,40 +302,41 @@ func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.Sign
 	return copy
 }
 
-// NewAppEvalParams creates an EvalParams to be used while evaluating apps in txgroup
-func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses, caller *EvalContext) *EvalParams {
-	minTealVersion := ComputeMinTealVersion(txgroup, caller != nil)
-	if minTealVersion == 0 && caller == nil {
+// NewAppEvalParams creates an EvalParams to be used while evaluating apps for a top-level txgroup
+func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses, counter uint64) *EvalParams {
+	minTealVersion := ComputeMinTealVersion(txgroup, false)
+
+	apps := 0
+	for _, tx := range txgroup {
+		if tx.Txn.Type == protocol.ApplicationCallTx {
+			apps++
+		}
+	}
+	if apps == 0 {
 		// As an optimization, do no work if there will be no apps to evaluate in this txgroup
-		// Inner transactions always use the EvalParams (for specials), so don't skip for them.
 		return nil
 	}
 
-	var budget uint64
-	pooledApplicationBudget := &budget
-
-	var appStack []basics.AppIndex
-	var ledger LedgerForLogic
-	if caller != nil {
-		// share pool in the inner calls
-		pooledApplicationBudget = caller.PooledApplicationBudget
-		// note the stack, to prevent re-entrancy
-		appStack = caller.appStack
-		ledger = caller.Ledger
-	}
+	var pooledApplicationBudget *uint64
+	var pooledAllowedInners *int
 
 	credit, _ := transactions.FeeCredit(txgroup, proto.MinTxnFee)
+
 	if proto.EnableAppCostPooling {
-		for _, tx := range txgroup {
-			if tx.Txn.Type == protocol.ApplicationCallTx {
-				*pooledApplicationBudget += uint64(proto.MaxAppProgramCost)
-			}
-		}
-	} else {
-		pooledApplicationBudget = nil
+		pooledApplicationBudget = new(uint64)
+		*pooledApplicationBudget = uint64(apps * proto.MaxAppProgramCost)
 	}
 
-	return &EvalParams{
+	if proto.EnableInnerTransactionPooling {
+		pooledAllowedInners = new(int)
+		*pooledAllowedInners = apps * proto.MaxInnerTransactions
+	}
+
+	if counter == 0 || proto.LogicSigVersion < createdResourcesVersion {
+		counter = math.MaxUint64
+	}
+
+	ep := &EvalParams{
 		Proto:                   proto,
 		TxnGroup:                copyWithClearAD(txgroup),
 		PastSideEffects:         MakePastSideEffects(len(txgroup)),
@@ -336,10 +344,47 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 		FeeCredit:               &credit,
 		Specials:                specials,
 		PooledApplicationBudget: pooledApplicationBudget,
-		appStack:                appStack,
-		caller:                  caller,
-		Ledger:                  ledger,
+		pooledAllowedInners:     pooledAllowedInners,
+		initialCounter:          counter,
 	}
+	return ep
+}
+
+// NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
+func NewInnerEvalParams(txg []transactions.SignedTxn, caller *EvalContext) *EvalParams {
+	txgroup := transactions.WrapSignedTxnsWithAD(txg)
+
+	minTealVersion := ComputeMinTealVersion(txgroup, true)
+	// Can't happen now, since innerAppsEnabledVersion > than any minimum
+	// imposed otherwise.  But is correct to check.
+	if minTealVersion < *caller.MinTealVersion {
+		minTealVersion = *caller.MinTealVersion
+	}
+	credit, _ := transactions.FeeCredit(txgroup, caller.Proto.MinTxnFee)
+	*caller.FeeCredit = basics.AddSaturate(*caller.FeeCredit, credit)
+
+	if caller.Proto.EnableAppCostPooling {
+		for _, tx := range txgroup {
+			if tx.Txn.Type == protocol.ApplicationCallTx {
+				*caller.PooledApplicationBudget += uint64(caller.Proto.MaxAppProgramCost)
+			}
+		}
+	}
+
+	ep := &EvalParams{
+		Proto:                   caller.Proto,
+		TxnGroup:                copyWithClearAD(txgroup),
+		PastSideEffects:         MakePastSideEffects(len(txgroup)),
+		MinTealVersion:          &minTealVersion,
+		FeeCredit:               caller.FeeCredit,
+		Specials:                caller.Specials,
+		PooledApplicationBudget: caller.PooledApplicationBudget,
+		pooledAllowedInners:     caller.pooledAllowedInners,
+		Ledger:                  caller.Ledger,
+		initialCounter:          caller.initialCounter,
+		caller:                  caller,
+	}
+	return ep
 }
 
 type opEvalFunc func(cx *EvalContext)
@@ -398,9 +443,19 @@ type EvalContext struct {
 	// the transaction being evaluated (initialized from GroupIndex + ep.TxnGroup)
 	Txn *transactions.SignedTxnWithAD
 
+	// Txn.EvalDelta maintains a summary of changes as we go.  We used to
+	// compute this from the ledger after a full eval.  But now apps can call
+	// apps.  When they do, all of the changes accumulate into the parent's
+	// ledger, but Txn.EvalDelta should only have the changes from *this*
+	// call. (The changes caused by children are deeper inside - in the
+	// EvalDeltas of the InnerTxns inside this EvalDelta) Nice bonus - by
+	// keeping the running changes, the debugger can be changed to display them
+	// as the app runs.
+
 	stack     []stackValue
 	callstack []int
 
+	appID   basics.AppIndex
 	program []byte
 	pc      int
 	nextpc  int
@@ -413,15 +468,6 @@ type EvalContext struct {
 	subtxns []transactions.SignedTxn // place to build for itxn_submit
 	cost    int                      // cost incurred so far
 	logSize int                      // total log size so far
-
-	// Summary of changes.  We used to compute this from the ledger after a full
-	// eval.  But now apps can call apps.  When they do, all of the changes
-	// accumulate into the parent's ledger, but EvalDelta should only have the
-	// changes from *this* call. (The changes caused by children are deeper
-	// inside - in the EvalDeltas of the InnerTxns inside this EvalDelta) Nice
-	// bonus - by keep the running changes, the debugger can be changed to
-	// display them as the app runs.
-	//EvalDelta transactions.EvalDelta
 
 	// Set of PC values that branches we've seen so far might
 	// go. So, if checkStep() skips one, that branch is trying to
@@ -490,8 +536,8 @@ func (pe PanicError) Error() string {
 var errLogicSigNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
-// EvalContract executes stateful TEAL program as the ith transaction in params
-func EvalContract(program []byte, gi int, params *EvalParams) (bool, *EvalContext, error) {
+// EvalContract executes stateful TEAL program as the gi'th transaction in params
+func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (bool, *EvalContext, error) {
 	if params.Ledger == nil {
 		return false, nil, errors.New("no ledger in contract eval")
 	}
@@ -500,16 +546,17 @@ func EvalContract(program []byte, gi int, params *EvalParams) (bool, *EvalContex
 		runModeFlags: runModeApplication,
 		GroupIndex:   gi,
 		Txn:          &params.TxnGroup[gi],
+		appID:        aid,
 	}
 	pass, err := eval(program, &cx)
-
-	// The following two updates show a need for something like a
-	// GroupEvalContext, as we are currently tucking things into the
-	// EvalParams so that they are available to later calls.
 
 	// update pooled budget (shouldn't overflow, but being careful anyway)
 	if cx.PooledApplicationBudget != nil {
 		*cx.PooledApplicationBudget = basics.SubSaturate(*cx.PooledApplicationBudget, uint64(cx.cost))
+	}
+	// update allowed inner transactions (shouldn't overflow, but it's an int, so safe anyway)
+	if cx.pooledAllowedInners != nil {
+		*cx.pooledAllowedInners -= len(cx.Txn.EvalDelta.InnerTxns)
 	}
 	// update side effects
 	cx.PastSideEffects[cx.GroupIndex].setScratchSpace(cx.scratch)
@@ -518,8 +565,8 @@ func EvalContract(program []byte, gi int, params *EvalParams) (bool, *EvalContex
 }
 
 // EvalApp is a lighter weight interface that doesn't return the EvalContext
-func EvalApp(program []byte, gi int, params *EvalParams) (bool, error) {
-	pass, _, err := EvalContract(program, gi, params)
+func EvalApp(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (bool, error) {
+	pass, _, err := EvalContract(program, gi, aid, params)
 	return pass, err
 }
 
@@ -627,7 +674,7 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 // static checks and reject programs that are invalid. Prior to v4,
 // these static checks include a cost estimate that must be low enough
 // (controlled by params.Proto).
-func CheckContract(program []byte, gi int, params *EvalParams) error {
+func CheckContract(program []byte, params *EvalParams) error {
 	return check(program, params, runModeApplication)
 }
 
@@ -710,14 +757,12 @@ func versionCheck(program []byte, params *EvalParams) (uint64, int, error) {
 		return 0, 0, fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
 	}
 
-	var minVersion uint64
 	if params.MinTealVersion == nil {
-		minVersion = ComputeMinTealVersion(params.TxnGroup, params.caller != nil)
-	} else {
-		minVersion = *params.MinTealVersion
+		minVersion := ComputeMinTealVersion(params.TxnGroup, params.caller != nil)
+		params.MinTealVersion = &minVersion
 	}
-	if version < minVersion {
-		return 0, 0, fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", minVersion, version)
+	if version < *params.MinTealVersion {
+		return 0, 0, fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", *params.MinTealVersion, version)
 	}
 	return version, vlen, nil
 }
@@ -754,6 +799,13 @@ func (cx *EvalContext) budget() int {
 		return int(*cx.PooledApplicationBudget)
 	}
 	return cx.Proto.MaxAppProgramCost
+}
+
+func (cx *EvalContext) allowedInners() int {
+	if cx.Proto.EnableInnerTransactionPooling && cx.pooledAllowedInners != nil {
+		return *cx.pooledAllowedInners
+	}
+	return cx.Proto.MaxInnerTransactions
 }
 
 func (cx *EvalContext) step() {
@@ -2559,32 +2611,19 @@ func (cx *EvalContext) getLatestTimestamp() (timestamp uint64, err error) {
 	return uint64(ts), nil
 }
 
-func (cx *EvalContext) getApplicationID() (uint64, error) {
-	if cx.Ledger == nil {
-		return 0, fmt.Errorf("ledger not available")
-	}
-	return uint64(cx.Ledger.ApplicationID()), nil
-}
-
-func (cx *EvalContext) getApplicationAddress() (basics.Address, error) {
-	if cx.Ledger == nil {
-		return basics.Address{}, fmt.Errorf("ledger not available")
-	}
-
+func (cx *EvalContext) getApplicationAddress() basics.Address {
 	// Initialize appAddrCache if necessary
 	if cx.appAddrCache == nil {
 		cx.appAddrCache = make(map[basics.AppIndex]basics.Address)
 	}
 
-	appID := cx.Ledger.ApplicationID()
-	// Hashes are expensive, so we cache computed app addrs
-	appAddr, ok := cx.appAddrCache[appID]
+	appAddr, ok := cx.appAddrCache[cx.appID]
 	if !ok {
-		appAddr = appID.Address()
-		cx.appAddrCache[appID] = appAddr
+		appAddr = cx.appID.Address()
+		cx.appAddrCache[cx.appID] = appAddr
 	}
 
-	return appAddr, nil
+	return appAddr
 }
 
 func (cx *EvalContext) getCreatableID(groupIndex int) (cid uint64, err error) {
@@ -2599,7 +2638,7 @@ func (cx *EvalContext) getCreatorAddress() ([]byte, error) {
 	if cx.Ledger == nil {
 		return nil, fmt.Errorf("ledger not available")
 	}
-	_, creator, err := cx.Ledger.AppParams(cx.Ledger.ApplicationID())
+	_, creator, err := cx.Ledger.AppParams(cx.appID)
 	if err != nil {
 		return nil, fmt.Errorf("No params for current app")
 	}
@@ -2627,10 +2666,10 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 	case LatestTimestamp:
 		sv.Uint, err = cx.getLatestTimestamp()
 	case CurrentApplicationID:
-		sv.Uint, err = cx.getApplicationID()
+		sv.Uint = uint64(cx.appID)
 	case CurrentApplicationAddress:
 		var addr basics.Address
-		addr, err = cx.getApplicationAddress()
+		addr = cx.getApplicationAddress()
 		sv.Bytes = addr[:]
 	case CreatorAddress:
 		sv.Bytes, err = cx.getCreatorAddress()
@@ -2640,14 +2679,14 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		sv.Uint = uint64(cx.budget() - cx.cost)
 	case CallerApplicationID:
 		if cx.caller != nil {
-			sv.Uint, err = cx.caller.getApplicationID()
+			sv.Uint = uint64(cx.caller.appID)
 		} else {
 			sv.Uint = 0
 		}
 	case CallerApplicationAddress:
 		if cx.caller != nil {
 			var addr basics.Address
-			addr, err = cx.caller.getApplicationAddress()
+			addr = cx.caller.getApplicationAddress()
 			sv.Bytes = addr[:]
 		} else {
 			sv.Bytes = zeroAddress[:]
@@ -3265,7 +3304,7 @@ func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uin
 
 	if err != nil {
 		// Application address is acceptable. index is meaningless though
-		appAddr, _ := cx.getApplicationAddress()
+		appAddr := cx.getApplicationAddress()
 		if appAddr == addr {
 			return addr, uint64(len(cx.Txn.Txn.Accounts) + 1), nil
 		}
@@ -3502,7 +3541,7 @@ func opAppLocalPut(cx *EvalContext) {
 
 	// if writing the same value, do nothing, matching ledger behavior with
 	// previous BuildEvalDelta mechanism
-	etv, ok, err := cx.Ledger.GetLocal(addr, cx.Ledger.ApplicationID(), key, accountIdx)
+	etv, ok, err := cx.Ledger.GetLocal(addr, cx.appID, key, accountIdx)
 	if err != nil {
 		cx.err = err
 		return
@@ -3515,7 +3554,7 @@ func opAppLocalPut(cx *EvalContext) {
 		}
 		cx.Txn.EvalDelta.LocalDeltas[accountIdx][key] = tv.ToValueDelta()
 	}
-	err = cx.Ledger.SetLocal(addr, key, tv, accountIdx)
+	err = cx.Ledger.SetLocal(addr, cx.appID, key, tv, accountIdx)
 	if err != nil {
 		cx.err = err
 		return
@@ -3538,7 +3577,7 @@ func opAppGlobalPut(cx *EvalContext) {
 
 	// if writing the same value, do nothing, matching ledger behavior with
 	// previous BuildEvalDelta mechanism
-	etv, ok, err := cx.Ledger.GetGlobal(cx.Ledger.ApplicationID(), key)
+	etv, ok, err := cx.Ledger.GetGlobal(cx.appID, key)
 	if err != nil {
 		cx.err = err
 		return
@@ -3548,7 +3587,7 @@ func opAppGlobalPut(cx *EvalContext) {
 		cx.Txn.EvalDelta.GlobalDelta[key] = tv.ToValueDelta()
 	}
 
-	err = cx.Ledger.SetGlobal(key, tv)
+	err = cx.Ledger.SetGlobal(cx.appID, key, tv)
 	if err != nil {
 		cx.err = err
 		return
@@ -3576,7 +3615,7 @@ func opAppLocalDel(cx *EvalContext) {
 		cx.Txn.EvalDelta.LocalDeltas[accountIdx][key] = basics.ValueDelta{
 			Action: basics.DeleteAction,
 		}
-		err = cx.Ledger.DelLocal(addr, key, accountIdx)
+		err = cx.Ledger.DelLocal(addr, cx.appID, key, accountIdx)
 	}
 	if err != nil {
 		cx.err = err
@@ -3599,7 +3638,7 @@ func opAppGlobalDel(cx *EvalContext) {
 	cx.Txn.EvalDelta.GlobalDelta[key] = basics.ValueDelta{
 		Action: basics.DeleteAction,
 	}
-	err := cx.Ledger.DelGlobal(key)
+	err := cx.Ledger.DelGlobal(cx.appID, key)
 	if err != nil {
 		cx.err = err
 		return
@@ -3617,7 +3656,7 @@ func opAppGlobalDel(cx *EvalContext) {
 func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, error) {
 	if cx.version >= directRefEnabledVersion {
 		if ref == 0 {
-			return cx.Ledger.ApplicationID(), nil
+			return cx.appID, nil
 		}
 		if ref <= uint64(len(cx.Txn.Txn.ForeignApps)) {
 			return basics.AppIndex(cx.Txn.Txn.ForeignApps[ref-1]), nil
@@ -3627,22 +3666,21 @@ func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, e
 				return appID, nil
 			}
 		}
-		// It should be legal to use your own app id, which
-		// can't be in ForeignApps during creation, because it
-		// is unknown then.  But it can be discovered in the
-		// app code.  It's tempting to combine this with the
-		// == 0 test, above, but it must come after the check
-		// for being below len(ForeignApps)
-		if ref == uint64(cx.Ledger.ApplicationID()) {
-			return cx.Ledger.ApplicationID(), nil
+		// It should be legal to use your own app id, which can't be in
+		// ForeignApps during creation, because it is unknown then.  But it can
+		// be discovered in the app code.  It's tempting to combine this with
+		// the == 0 test, above, but it must come after the check for being
+		// below len(ForeignApps)
+		if ref == uint64(cx.appID) {
+			return cx.appID, nil
 		}
 	} else {
 		// Old rules
+		if ref == 0 {
+			return cx.appID, nil
+		}
 		if foreign {
 			// In old versions, a foreign reference must be an index in ForeignAssets or 0
-			if ref == 0 {
-				return cx.Ledger.ApplicationID(), nil
-			}
 			if ref <= uint64(len(cx.Txn.Txn.ForeignApps)) {
 				return basics.AppIndex(cx.Txn.Txn.ForeignApps[ref-1]), nil
 			}
@@ -3659,6 +3697,9 @@ func asaReference(cx *EvalContext, ref uint64, foreign bool) (basics.AssetIndex,
 		// In recent versions, accept either kind of ASA reference
 		if ref < uint64(len(cx.Txn.Txn.ForeignAssets)) {
 			return basics.AssetIndex(cx.Txn.Txn.ForeignAssets[ref]), nil
+		}
+		if ref >= cx.initialCounter {
+			return basics.AssetIndex(ref), nil
 		}
 		for _, assetID := range cx.Txn.Txn.ForeignAssets {
 			if assetID == basics.AssetIndex(ref) {
@@ -3826,33 +3867,27 @@ func opLog(cx *EvalContext) {
 }
 
 func authorizedSender(cx *EvalContext, addr basics.Address) bool {
-	appAddr, err := cx.getApplicationAddress()
-	if err != nil {
-		return false
-	}
 	authorizer, err := cx.Ledger.Authorizer(addr)
 	if err != nil {
 		return false
 	}
-	return appAddr == authorizer
+	return cx.getApplicationAddress() == authorizer
 }
 
 // addInnerTxn appends a fresh SignedTxn to subtxns, populated with reasonable
 // defaults.
 func addInnerTxn(cx *EvalContext) error {
-	addr, err := cx.getApplicationAddress()
-	if err != nil {
-		return err
-	}
+	addr := cx.getApplicationAddress()
 
 	// For compatibility with v5, in which failures only occurred in the submit,
-	// we only fail here if we are OVER the MaxInnerTransactions limit.  Thus
-	// this allows construction of one more Inner than is actually allowed, and
-	// will fail in submit. (But we do want the check here, so this can't become
-	// unbounded.)  The MaxTxGroupSize check can be, and is, precise.
-	if len(cx.Txn.EvalDelta.InnerTxns)+len(cx.subtxns) > cx.Proto.MaxInnerTransactions ||
-		len(cx.subtxns) >= cx.Proto.MaxTxGroupSize {
-		return errors.New("attempt to create too many inner transactions")
+	// we only fail here if we are already over the max inner limit.  Thus this
+	// allows construction of one more Inner than is actually allowed, and will
+	// fail in submit. (But we do want the check here, so this can't become
+	// unbounded.)  The MaxTxGroupSize check can be, and is, precise. (That is,
+	// if we are at max group size, we can panic now, since we are trying to add
+	// too many)
+	if len(cx.Txn.EvalDelta.InnerTxns)+len(cx.subtxns) > cx.allowedInners() || len(cx.subtxns) >= cx.Proto.MaxTxGroupSize {
+		return fmt.Errorf("too many inner transactions %d", len(cx.Txn.EvalDelta.InnerTxns)+len(cx.subtxns))
 	}
 
 	stxn := transactions.SignedTxn{}
@@ -3921,6 +3956,9 @@ func (cx *EvalContext) availableAsset(sv stackValue) (basics.AssetIndex, error) 
 	if err != nil {
 		return basics.AssetIndex(0), err
 	}
+	if aid >= cx.initialCounter {
+		return basics.AssetIndex(aid), nil
+	}
 	// Ensure that aid is in Foreign Assets
 	for _, assetID := range cx.Txn.Txn.ForeignAssets {
 		if assetID == basics.AssetIndex(aid) {
@@ -3946,7 +3984,7 @@ func (cx *EvalContext) availableApp(sv stackValue) (basics.AppIndex, error) {
 		}
 	}
 	// Or, it can be the current app
-	if cx.Ledger.ApplicationID() == aid {
+	if cx.appID == aid {
 		return aid, nil
 	}
 
@@ -4207,10 +4245,11 @@ func opTxSubmit(cx *EvalContext) {
 		return
 	}
 
-	// Should never trigger, since itxn_next checks these too.
-	if len(cx.Txn.EvalDelta.InnerTxns)+len(cx.subtxns) > cx.Proto.MaxInnerTransactions ||
-		len(cx.subtxns) > cx.Proto.MaxTxGroupSize {
-		cx.err = errors.New("too many inner transactions")
+	// Should rarely trigger, since itxn_next checks these too. (but that check
+	// must be imperfect, see its comment) In contrast to that check, subtxns is
+	// already populated here.
+	if len(cx.Txn.EvalDelta.InnerTxns)+len(cx.subtxns) > cx.allowedInners() || len(cx.subtxns) > cx.Proto.MaxTxGroupSize {
+		cx.err = fmt.Errorf("too many inner transactions %d", len(cx.Txn.EvalDelta.InnerTxns)+len(cx.subtxns))
 		return
 	}
 
@@ -4241,8 +4280,6 @@ func opTxSubmit(cx *EvalContext) {
 		*cx.FeeCredit = basics.AddSaturate(*cx.FeeCredit, overpay)
 	}
 
-	cx.appStack = append(cx.appStack, cx.Ledger.ApplicationID()) // push app
-
 	// All subtxns will have zero'd GroupID since GroupID can't be set in
 	// AVM. (no need to blank it out before hashing for TxID)
 	var group transactions.TxGroup
@@ -4270,9 +4307,13 @@ func opTxSubmit(cx *EvalContext) {
 
 		// Disallow re-entrancy
 		if cx.subtxns[itx].Txn.Type == protocol.ApplicationCallTx {
-			for _, aid := range cx.appStack {
-				if aid == cx.subtxns[itx].Txn.ApplicationID {
-					cx.err = fmt.Errorf("attempt to re-enter %d", aid)
+			if cx.appID == cx.subtxns[itx].Txn.ApplicationID {
+				cx.err = fmt.Errorf("attempt to self-call")
+				return
+			}
+			for parent := cx.caller; parent != nil; parent = parent.caller {
+				if parent.appID == cx.subtxns[itx].Txn.ApplicationID {
+					cx.err = fmt.Errorf("attempt to re-enter %d", parent.appID)
 					return
 				}
 			}
@@ -4292,7 +4333,7 @@ func opTxSubmit(cx *EvalContext) {
 		}
 	}
 
-	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(cx.subtxns), cx.Proto, cx.Specials, cx)
+	ep := NewInnerEvalParams(cx.subtxns, cx)
 	for i := range ep.TxnGroup {
 		err := cx.Ledger.Perform(i, ep)
 		if err != nil {
@@ -4300,7 +4341,6 @@ func opTxSubmit(cx *EvalContext) {
 			return
 		}
 	}
-	cx.appStack = cx.appStack[:len(cx.appStack)-1] // pop app
 	cx.Txn.EvalDelta.InnerTxns = append(cx.Txn.EvalDelta.InnerTxns, ep.TxnGroup...)
 	cx.subtxns = nil
 }
@@ -4331,4 +4371,29 @@ func (cx *EvalContext) PcDetails() (pc int, dis string) {
 		}
 	}
 	return cx.pc, dis
+}
+
+func base64Decode(encoded []byte, encoding *base64.Encoding) ([]byte, error) {
+	decoded := make([]byte, encoding.DecodedLen(len(encoded)))
+	n, err := encoding.Decode(decoded, encoded)
+	if err != nil {
+		return decoded[:0], err
+	}
+	return decoded[:n], err
+}
+
+func opBase64Decode(cx *EvalContext) {
+	last := len(cx.stack) - 1
+	alphabetField := Base64Alphabet(cx.program[cx.pc+1])
+	fs, ok := base64AlphabetSpecByField[alphabetField]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid base64_decode alphabet %d", alphabetField)
+		return
+	}
+
+	encoding := base64.URLEncoding
+	if alphabetField == StdAlph {
+		encoding = base64.StdEncoding
+	}
+	cx.stack[last].Bytes, cx.err = base64Decode(cx.stack[last].Bytes, encoding)
 }

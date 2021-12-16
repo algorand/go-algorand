@@ -461,16 +461,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "properties": {
-                "participationKey": {
-                  "description": "Detailed description of a participation key",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "participationKey"
-              ],
-              "type": "object"
+              "$ref": "#/components/schemas/ParticipationKey"
             }
           }
         },
@@ -2771,16 +2762,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "participationKey": {
-                      "description": "Detailed description of a participation key",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "participationKey"
-                  ],
-                  "type": "object"
+                  "$ref": "#/components/schemas/ParticipationKey"
                 }
               }
             },

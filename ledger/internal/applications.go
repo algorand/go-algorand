@@ -28,9 +28,7 @@ import (
 )
 
 type logicLedger struct {
-	aidx    basics.AppIndex
-	creator basics.Address
-	cow     cowForLogicLedger
+	cow cowForLogicLedger
 }
 
 type cowForLogicLedger interface {
@@ -50,25 +48,10 @@ type cowForLogicLedger interface {
 	incTxnCount()
 }
 
-func newLogicLedger(cow cowForLogicLedger, aidx basics.AppIndex) (*logicLedger, error) {
-	if aidx == basics.AppIndex(0) {
-		return nil, fmt.Errorf("cannot make logic ledger for app index 0")
+func newLogicLedger(cow cowForLogicLedger) *logicLedger {
+	return &logicLedger{
+		cow: cow,
 	}
-
-	al := &logicLedger{
-		aidx: aidx,
-		cow:  cow,
-	}
-
-	// Fetch app creator so we don't have to look it up every time we get/set/del
-	// a key for this app's global state
-	creator, err := al.fetchAppCreator(al.aidx)
-	if err != nil {
-		return nil, err
-	}
-	al.creator = creator
-
-	return al, nil
 }
 
 func (al *logicLedger) Balance(addr basics.Address) (res basics.MicroAlgos, err error) {
@@ -186,34 +169,20 @@ func (al *logicLedger) LatestTimestamp() int64 {
 	return al.cow.prevTimestamp()
 }
 
-func (al *logicLedger) ApplicationID() basics.AppIndex {
-	return al.aidx
-}
-
-func (al *logicLedger) CreatorAddress() basics.Address {
-	return al.creator
-}
-
 func (al *logicLedger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {
-	if appIdx == basics.AppIndex(0) {
-		appIdx = al.aidx
-	}
 	return al.cow.allocated(addr, appIdx, false)
 }
 
 func (al *logicLedger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (basics.TealValue, bool, error) {
-	if appIdx == basics.AppIndex(0) {
-		appIdx = al.aidx
-	}
 	return al.cow.GetKey(addr, appIdx, false, key, accountIdx)
 }
 
-func (al *logicLedger) SetLocal(addr basics.Address, key string, value basics.TealValue, accountIdx uint64) error {
-	return al.cow.SetKey(addr, al.aidx, false, key, value, accountIdx)
+func (al *logicLedger) SetLocal(addr basics.Address, appIdx basics.AppIndex, key string, value basics.TealValue, accountIdx uint64) error {
+	return al.cow.SetKey(addr, appIdx, false, key, value, accountIdx)
 }
 
-func (al *logicLedger) DelLocal(addr basics.Address, key string, accountIdx uint64) error {
-	return al.cow.DelKey(addr, al.aidx, false, key, accountIdx)
+func (al *logicLedger) DelLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) error {
+	return al.cow.DelKey(addr, appIdx, false, key, accountIdx)
 }
 
 func (al *logicLedger) fetchAppCreator(appIdx basics.AppIndex) (basics.Address, error) {
@@ -230,9 +199,6 @@ func (al *logicLedger) fetchAppCreator(appIdx basics.AppIndex) (basics.Address, 
 }
 
 func (al *logicLedger) GetGlobal(appIdx basics.AppIndex, key string) (basics.TealValue, bool, error) {
-	if appIdx == basics.AppIndex(0) {
-		appIdx = al.aidx
-	}
 	addr, err := al.fetchAppCreator(appIdx)
 	if err != nil {
 		return basics.TealValue{}, false, err
@@ -240,12 +206,20 @@ func (al *logicLedger) GetGlobal(appIdx basics.AppIndex, key string) (basics.Tea
 	return al.cow.GetKey(addr, appIdx, true, key, 0)
 }
 
-func (al *logicLedger) SetGlobal(key string, value basics.TealValue) error {
-	return al.cow.SetKey(al.creator, al.aidx, true, key, value, 0)
+func (al *logicLedger) SetGlobal(appIdx basics.AppIndex, key string, value basics.TealValue) error {
+	creator, err := al.fetchAppCreator(appIdx)
+	if err != nil {
+		return err
+	}
+	return al.cow.SetKey(creator, appIdx, true, key, value, 0)
 }
 
-func (al *logicLedger) DelGlobal(key string) error {
-	return al.cow.DelKey(al.creator, al.aidx, true, key, 0)
+func (al *logicLedger) DelGlobal(appIdx basics.AppIndex, key string) error {
+	creator, err := al.fetchAppCreator(appIdx)
+	if err != nil {
+		return err
+	}
+	return al.cow.DelKey(creator, appIdx, true, key, 0)
 }
 
 func (al *logicLedger) balances() (apply.Balances, error) {
@@ -322,4 +296,8 @@ func (al *logicLedger) Perform(gi int, ep *logic.EvalParams) error {
 
 	return nil
 
+}
+
+func (al *logicLedger) Counter() uint64 {
+	return al.cow.txnCounter()
 }

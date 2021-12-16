@@ -65,7 +65,6 @@ type Ledger struct {
 	applications      map[basics.AppIndex]appParams
 	assets            map[basics.AssetIndex]asaParams
 	trackedCreatables map[int]basics.CreatableIndex
-	appID             basics.AppIndex
 	mods              map[basics.AppIndex]map[string]basics.ValueDelta
 	rnd               basics.Round
 }
@@ -81,7 +80,6 @@ func MakeLedger(balances map[basics.Address]uint64) *Ledger {
 	l.assets = make(map[basics.AssetIndex]asaParams)
 	l.trackedCreatables = make(map[int]basics.CreatableIndex)
 	l.mods = make(map[basics.AppIndex]map[string]basics.ValueDelta)
-	l.SetApp(1234) // Arbitrary initial app id for testApp()
 	return l
 }
 
@@ -104,7 +102,6 @@ func (l *Ledger) NewAccount(addr basics.Address, balance uint64) {
 // up the id and schema but no code, as testing will want to try many different
 // code sequences.
 func (l *Ledger) NewApp(creator basics.Address, appID basics.AppIndex, params basics.AppParams) {
-	l.SetApp(appID)
 	params = params.Clone()
 	if params.GlobalState == nil {
 		params.GlobalState = make(basics.TealKeyValue)
@@ -113,10 +110,6 @@ func (l *Ledger) NewApp(creator basics.Address, appID basics.AppIndex, params ba
 		Creator:   creator,
 		AppParams: params,
 	}
-}
-
-func (l *Ledger) SetApp(appID basics.AppIndex) {
-	l.appID = appID
 }
 
 // NewAsset adds an asset with the given id and params to the ledger.
@@ -133,9 +126,12 @@ func (l *Ledger) NewAsset(creator basics.Address, assetID basics.AssetIndex, par
 	l.balances[creator] = br
 }
 
-// freshID gets a new creatable ID that isn't in use
-func (l *Ledger) freshID() uint64 {
-	for try := l.appID + 1; true; try++ {
+const firstTestID = 5000
+
+// Counter implements LedgerForLogic, but it not really a txn counter, but is
+// sufficient for the logic package.
+func (l *Ledger) Counter() uint64 {
+	for try := firstTestID; true; try++ {
 		if _, ok := l.assets[basics.AssetIndex(try)]; ok {
 			continue
 		}
@@ -265,12 +261,9 @@ func (l *Ledger) Authorizer(addr basics.Address) (basics.Address, error) {
 // GetGlobal returns the current value of a global in an app, taking
 // into account the mods created by earlier teal execution.
 func (l *Ledger) GetGlobal(appIdx basics.AppIndex, key string) (basics.TealValue, bool, error) {
-	if appIdx == basics.AppIndex(0) {
-		appIdx = l.appID
-	}
 	params, ok := l.applications[appIdx]
 	if !ok {
-		return basics.TealValue{}, false, fmt.Errorf("no such app")
+		return basics.TealValue{}, false, fmt.Errorf("no such app %d", appIdx)
 	}
 
 	// return most recent value if available
@@ -290,11 +283,10 @@ func (l *Ledger) GetGlobal(appIdx basics.AppIndex, key string) (basics.TealValue
 
 // SetGlobal "sets" a global, but only through the mods mechanism, so
 // it can be removed with Reset()
-func (l *Ledger) SetGlobal(key string, value basics.TealValue) error {
-	appIdx := l.appID
+func (l *Ledger) SetGlobal(appIdx basics.AppIndex, key string, value basics.TealValue) error {
 	params, ok := l.applications[appIdx]
 	if !ok {
-		return fmt.Errorf("no such app")
+		return fmt.Errorf("no such app %d", appIdx)
 	}
 
 	// if writing the same value, return
@@ -315,11 +307,10 @@ func (l *Ledger) SetGlobal(key string, value basics.TealValue) error {
 
 // DelGlobal "deletes" a global, but only through the mods mechanism, so
 // the deletion can be Reset()
-func (l *Ledger) DelGlobal(key string) error {
-	appIdx := l.appID
+func (l *Ledger) DelGlobal(appIdx basics.AppIndex, key string) error {
 	params, ok := l.applications[appIdx]
 	if !ok {
-		return fmt.Errorf("no such app")
+		return fmt.Errorf("no such app %d", appIdx)
 	}
 
 	exist := false
@@ -345,9 +336,6 @@ func (l *Ledger) DelGlobal(key string) error {
 // GetLocal returns the current value bound to a local key, taking
 // into account mods caused by earlier executions.
 func (l *Ledger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (basics.TealValue, bool, error) {
-	if appIdx == 0 {
-		appIdx = l.appID
-	}
 	br, ok := l.balances[addr]
 	if !ok {
 		return basics.TealValue{}, false, fmt.Errorf("no such address")
@@ -373,9 +361,7 @@ func (l *Ledger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key strin
 
 // SetLocal "sets" the current value bound to a local key using the
 // mods mechanism, so it can be Reset()
-func (l *Ledger) SetLocal(addr basics.Address, key string, value basics.TealValue, accountIdx uint64) error {
-	appIdx := l.appID
-
+func (l *Ledger) SetLocal(addr basics.Address, appIdx basics.AppIndex, key string, value basics.TealValue, accountIdx uint64) error {
 	br, ok := l.balances[addr]
 	if !ok {
 		return fmt.Errorf("no such address")
@@ -403,9 +389,7 @@ func (l *Ledger) SetLocal(addr basics.Address, key string, value basics.TealValu
 
 // DelLocal "deletes" the current value bound to a local key using the
 // mods mechanism, so it can be Reset()
-func (l *Ledger) DelLocal(addr basics.Address, key string, accountIdx uint64) error {
-	appIdx := l.appID
-
+func (l *Ledger) DelLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) error {
 	br, ok := l.balances[addr]
 	if !ok {
 		return fmt.Errorf("no such address")
@@ -438,9 +422,6 @@ func (l *Ledger) DelLocal(addr basics.Address, key string, accountIdx uint64) er
 // from NewLocals, but potentially from executing AVM inner
 // transactions.
 func (l *Ledger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {
-	if appIdx == 0 {
-		appIdx = l.appID
-	}
 	br, ok := l.balances[addr]
 	if !ok {
 		return false, fmt.Errorf("no such address")
@@ -486,19 +467,7 @@ func (l *Ledger) AppParams(appID basics.AppIndex) (basics.AppParams, basics.Addr
 	if app, ok := l.applications[appID]; ok {
 		return app.AppParams, app.Creator, nil
 	}
-	return basics.AppParams{}, basics.Address{}, fmt.Errorf("no such app")
-}
-
-// ApplicationID gives ID of the "currently running" app.  For this
-// test ledger, that is chosen explicitly.
-func (l *Ledger) ApplicationID() basics.AppIndex {
-	return l.appID
-}
-
-// CreatorAddress returns of the address that created the "currently running" app.
-func (l *Ledger) CreatorAddress() basics.Address {
-	_, addr, _ := l.AppParams(l.appID)
-	return addr
+	return basics.AppParams{}, basics.Address{}, fmt.Errorf("no such app %d", appID)
 }
 
 func (l *Ledger) move(from basics.Address, to basics.Address, amount uint64) error {
@@ -640,7 +609,7 @@ func (l *Ledger) axfer(from basics.Address, xfer transactions.AssetTransferTxnFi
 
 func (l *Ledger) acfg(from basics.Address, cfg transactions.AssetConfigTxnFields, ad *transactions.ApplyData) error {
 	if cfg.ConfigAsset == 0 {
-		aid := basics.AssetIndex(l.freshID())
+		aid := basics.AssetIndex(l.Counter())
 		l.NewAsset(from, aid, cfg.AssetParams)
 		ad.ConfigAsset = aid
 		return nil
@@ -678,11 +647,9 @@ func (l *Ledger) afrz(from basics.Address, frz transactions.AssetFreezeTxnFields
 }
 
 func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnFields, ad *transactions.ApplyData, gi int, ep *EvalParams) error {
-	// This is just a mock.  We don't run it yet, but we always do the implied
-	// operation (create, update, delete).
 	aid := appl.ApplicationID
 	if aid == 0 {
-		aid = basics.AppIndex(l.freshID())
+		aid = basics.AppIndex(l.Counter())
 		params := basics.AppParams{
 			ApprovalProgram:   appl.ApprovalProgram,
 			ClearStateProgram: appl.ClearStateProgram,
@@ -699,9 +666,7 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 			},
 			ExtraProgramPages: appl.ExtraProgramPages,
 		}
-		was := l.appID
 		l.NewApp(from, aid, params)
-		l.SetApp(was)
 		ad.ApplicationID = aid
 	}
 
@@ -718,7 +683,7 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 	if !ok {
 		return errors.New("No application")
 	}
-	pass, cx, err := EvalContract(params.ApprovalProgram, gi, ep)
+	pass, cx, err := EvalContract(params.ApprovalProgram, gi, aid, ep)
 	if err != nil {
 		return err
 	}
