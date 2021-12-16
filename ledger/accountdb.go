@@ -212,7 +212,7 @@ type compactResourcesDeltas struct {
 	// cache for addr to deltas index resolution
 	cache map[accountCreatable]int
 	// misses holds indices of addresses for which old portion of delta needs to be loaded from disk
-	misses []int
+	misses []accountCreatable
 }
 
 type accountDelta struct {
@@ -347,9 +347,9 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 	return
 }
 
-// makeCompactResourceDeltas takes an array of AccountDeltas ( one array entry per round ), and compacts the resource portions of the arrays into a single
+// makeCompactResourceDeltas takes an array of NewAccountDeltas ( one array entry per round ), and compacts the resource portions of the arrays into a single
 // data structure that contains all the resources deltas changes. While doing that, the function eliminate any intermediate resources changes.
-// It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the accountDeltaCount/modifiedCreatable.
+// It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the resourcesDeltas.
 func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, baseResources lruResources) (outResourcesDeltas compactResourcesDeltas) {
 	if len(accountDeltas) == 0 {
 		return
@@ -359,7 +359,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 	size := accountDeltas[0].Len()*len(accountDeltas) + 1
 	outResourcesDeltas.cache = make(map[accountCreatable]int, size)
 	outResourcesDeltas.deltas = make([]resourcesDeltas, 0, size)
-	outResourcesDeltas.misses = make([]int, 0, size)
+	outResourcesDeltas.misses = make([]accountCreatable, 0, size)
 
 	for _, roundDelta := range accountDeltas {
 		// assets
@@ -500,6 +500,80 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 	return
 }
 
+// resourcesLoadOld updates the entries on the deltas.old map that matches the provided addresses.
+// The round number of the persistedAccountData is not updated by this function, and the caller is responsible
+// for populating this field.
+func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, addrIdMap map[basics.Address]int64) (err error) {
+	if len(a.misses) == 0 {
+		return nil
+	}
+	selectStmt, err := tx.Prepare("SELECT rtype, data FROM resources WHERE addrid = ? AND aidx = ?")
+	if err != nil {
+		return
+	}
+	defer selectStmt.Close()
+
+	addrRowidStmt, err := tx.Prepare("SELECT rowid FROM accountbase WHERE address=?")
+	if err != nil {
+		return
+	}
+	defer addrRowidStmt.Close()
+
+	defer func() {
+		a.misses = nil
+	}()
+	var addrid int64
+	var aidx basics.CreatableIndex
+	var resDataBuf []byte
+	var rtype sql.NullInt64
+	var ok bool
+	for _, entry := range a.misses {
+		idx := a.cache[entry]
+		addr := entry.address
+		if addrid, ok = addrIdMap[addr]; !ok {
+			err = addrRowidStmt.QueryRow(addr[:]).Scan(&addrid)
+			if err != nil {
+				if err == sql.ErrNoRows {
+					err = fmt.Errorf("base account not found while processing resource for addr=%s, aidx=%d", addr.String(), idx)
+				}
+				return err
+			}
+		}
+		aidx = entry.index
+		err = selectStmt.QueryRow(addrid, aidx).Scan(&rtype, &resDataBuf)
+		switch err {
+		case nil:
+			if len(resDataBuf) > 0 {
+				persistedResData := persistedResourcesData{addrid: addrid, aidx: aidx, rtype: basics.CreatableType(rtype.Int64)}
+				err = protocol.Decode(resDataBuf, &persistedResData.data)
+				if err != nil {
+					return err
+				}
+				a.updateOld(idx, persistedResData)
+			} else {
+				err = fmt.Errorf("empty resource record: addrid=%d, aidx=%d", addrid, aidx)
+				return err
+			}
+		case sql.ErrNoRows:
+			// we don't have that account, just return an empty record.
+			a.updateOld(idx, persistedResourcesData{addrid: addrid, aidx: aidx})
+			err = nil
+		default:
+			// unexpected error - let the caller know that we couldn't complete the operation.
+			return err
+		}
+	}
+	return
+}
+
+func (a *compactResourcesDeltas) getMissingAddresses() (addresses map[basics.Address]struct{}) {
+	addresses = make(map[basics.Address]struct{})
+	for _, entry := range a.misses {
+		addresses[entry.address] = struct{}{}
+	}
+	return
+}
+
 // get returns accountDelta by address and its position.
 // if no such entry -1 returned
 func (a *compactResourcesDeltas) get(addr basics.Address, index basics.CreatableIndex) (resourcesDeltas, int) {
@@ -520,7 +594,7 @@ func (a *compactResourcesDeltas) getByIdx(i int) (basics.Address, resourcesDelta
 
 // upsert updates existing or inserts a new entry
 func (a *compactResourcesDeltas) upsert(addr basics.Address, resIdx basics.CreatableIndex, delta resourcesDeltas) {
-	if idx, exist := a.cache[accountCreatable{address: addr, index: resIdx}]; exist { // nil map lookup is OK
+	if idx, exist := a.cache[accountCreatable{address: addr, index: resIdx}]; exist {
 		a.deltas[idx] = delta
 		return
 	}
@@ -545,8 +619,8 @@ func (a *compactResourcesDeltas) insert(addr basics.Address, idx basics.Creatabl
 }
 
 func (a *compactResourcesDeltas) insertMissing(addr basics.Address, resIdx basics.CreatableIndex, delta resourcesDeltas) {
-	idx := a.insert(addr, resIdx, delta)
-	a.misses = append(a.misses, idx)
+	a.insert(addr, resIdx, delta)
+	a.misses = append(a.misses, accountCreatable{address: addr, index: resIdx})
 }
 
 // updateOld updates existing or inserts a new partial entry with only old field filled

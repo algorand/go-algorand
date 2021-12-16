@@ -1339,6 +1339,7 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
 	dcc.compactAccountDeltas = makeCompactAccountDeltas(dcc.deltas, au.baseAccounts)
+	dcc.compactResourcesDeltas = makeCompactResourceDeltas(dcc.deltas, au.baseResources)
 	dcc.compactCreatableDeltas = compactCreatableDeltas(creatableDeltas)
 
 	au.accountsMu.RUnlock()
@@ -1376,6 +1377,29 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 	}
 
 	err = dcc.compactAccountDeltas.accountsLoadOld(tx)
+	if err != nil {
+		return err
+	}
+
+	addressesNeeded := dcc.compactResourcesDeltas.getMissingAddresses()
+	addressesResolved := make(map[basics.Address]int64, len(addressesNeeded))
+	for _, delta := range dcc.compactAccountDeltas.deltas {
+		if _, ok := addressesNeeded[delta.oldAcct.addr]; ok {
+			addressesResolved[delta.oldAcct.addr] = delta.oldAcct.rowid
+		}
+	}
+
+	au.accountsMu.RLock()
+	for addr := range addressesNeeded {
+		if _, ok := addressesResolved[addr]; !ok {
+			if pad, has := au.baseAccounts.read(addr); has {
+				addressesResolved[pad.addr] = pad.rowid
+			}
+		}
+	}
+	au.accountsMu.RUnlock()
+
+	err = dcc.compactResourcesDeltas.resourcesLoadOld(tx, addressesResolved)
 	if err != nil {
 		return err
 	}
