@@ -14,10 +14,36 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-// +build windows
+package middlewares
 
-package network
+import (
+	"net/http"
 
-func (wn *WebsocketNetwork) rlimitIncomingConnections() error {
-	return nil
+	"github.com/labstack/echo/v4"
+)
+
+// MakeConnectionLimiter makes an echo middleware that limits the number of
+// simultaneous connections. All connections above the limit will be returned
+// the 429 Too Many Requests http error.
+func MakeConnectionLimiter(limit uint64) echo.MiddlewareFunc {
+	sem := make(chan struct{}, limit)
+
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(ctx echo.Context) error {
+			select {
+			case sem <- struct{}{}:
+				defer func() {
+					// If we fail to read from `sem`, just continue.
+					select {
+					case <-sem:
+					default:
+					}
+				}()
+				err := next(ctx)
+				return err
+			default:
+				return ctx.NoContent(http.StatusTooManyRequests)
+			}
+		}
+	}
 }

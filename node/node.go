@@ -159,7 +159,6 @@ type TxnWithStatus struct {
 // MakeFull sets up an Algorand full node
 // (i.e., it returns a node that participates in consensus)
 func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFullNode, error) {
-
 	node := new(AlgorandFullNode)
 	node.rootDir = rootDir
 	node.log = log.With("name", cfg.NetAddress)
