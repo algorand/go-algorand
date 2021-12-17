@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 import algosdk.atomic_transaction_composer as atc
 import algosdk.abi as abi
 
-from .atomic_abi import AtomicABI
+from atomic_abi import AtomicABI
 
 
 contract = {
@@ -166,15 +166,14 @@ def test_run_methods():
     with patch.object(atc.AtomicTransactionComposer, "execute") as atc_execute:
         for m, meth in abi.atomic_transaction_composer.method_dict:
             print(m, meth)
-        import pdb
-
-        pdb.set_trace()
         z = abi.run_add(2, 3)
 
         atc_execute.return_value = make_atc_response(
             abi.atomic_transaction_composer.method_dict["add"]
         )
 
+
+test_fixture()
 
 # sub
 # mul
