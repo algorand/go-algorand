@@ -469,10 +469,37 @@ func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountDa
 	if err != nil {
 		return basics.AccountData{}, err
 	}
-	// TODO:
-	// implement this properly so that we can take the ledgercore.AccountData, add the resources, and rebuild the basics.AccountData.
-	_ = data
-	return basics.AccountData{}, nil
+
+	// Look up resources for this address
+	totalResources := uint64(data.TotalAppParams) + uint64(data.TotalAppLocalStates) + uint64(data.TotalAssetParams) + uint64(data.TotalAssets)
+	resources, _, err := l.accts.lookupAllResources(rnd, addr, totalResources, true)
+	if err != nil {
+		return basics.AccountData{}, err
+	}
+
+	var ret basics.AccountData
+	ledgercore.AssignAccountData(&ret, data)
+
+	// Combine account and resources data
+	for _, r := range resources {
+		switch r.CreatableType {
+		case basics.AssetCreatable:
+			if r.AssetParam != nil {
+				ret.AssetParams[basics.AssetIndex(r.CreatableIndex)] = *r.AssetParam
+			}
+			if r.AssetHolding != nil {
+				ret.Assets[basics.AssetIndex(r.CreatableIndex)] = *r.AssetHolding
+			}
+		case basics.AppCreatable:
+			if r.AppParams != nil {
+				ret.AppParams[basics.AppIndex(r.CreatableIndex)] = *r.AppParams
+			}
+			if r.AppLocalState != nil {
+				ret.AppLocalStates[basics.AppIndex(r.CreatableIndex)] = *r.AppLocalState
+			}
+		}
+	}
+	return ret, nil
 }
 
 // LookupResource loads a resource that matches the request parameters from the accounts update
