@@ -1507,65 +1507,6 @@ func accountDataResources(
 	return nil
 }
 
-//msgp:ignore resourcesRow
-type resourcesRow struct {
-	aidx  basics.CreatableIndex
-	rtype basics.CreatableType
-	resourcesData
-}
-
-func accountDataResources2(accountData *basics.AccountData) (rows []resourcesRow) {
-	maxResourcesLen := len(accountData.Assets) + len(accountData.AssetParams) + len(accountData.AppLocalStates) + len(accountData.AppParams)
-	if maxResourcesLen == 0 {
-		return nil
-	}
-	rows = make([]resourcesRow, maxResourcesLen)
-	lastRow := 0
-	// does this account have any assets ?
-	if len(accountData.Assets) > 0 || len(accountData.AssetParams) > 0 {
-		for aidx, holding := range accountData.Assets {
-			rd := &rows[lastRow]
-			lastRow++
-			rd.SetAssetHolding(holding)
-			if ap, has := accountData.AssetParams[aidx]; has {
-				rd.SetAssetParams(ap, true)
-				delete(accountData.AssetParams, aidx)
-			}
-			rd.aidx = basics.CreatableIndex(aidx)
-			rd.rtype = basics.CreatableType(basics.AssetCreatable)
-		}
-		for aidx, aparams := range accountData.AssetParams {
-			rd := &rows[lastRow]
-			lastRow++
-			rd.SetAssetParams(aparams, false)
-			rd.aidx = basics.CreatableIndex(aidx)
-			rd.rtype = basics.CreatableType(basics.AssetCreatable)
-		}
-	}
-	// does this account have any applications ?
-	if len(accountData.AppLocalStates) > 0 || len(accountData.AppParams) > 0 {
-		for aidx, localState := range accountData.AppLocalStates {
-			rd := &rows[lastRow]
-			lastRow++
-			rd.SetAppLocalState(localState)
-			if ap, has := accountData.AppParams[aidx]; has {
-				rd.SetAppParams(ap, true)
-				delete(accountData.AppParams, aidx)
-			}
-			rd.aidx = basics.CreatableIndex(aidx)
-			rd.rtype = basics.CreatableType(basics.AppCreatable)
-		}
-		for aidx, aparams := range accountData.AppParams {
-			rd := &rows[lastRow]
-			lastRow++
-			rd.SetAppParams(aparams, false)
-			rd.aidx = basics.CreatableIndex(aidx)
-			rd.rtype = basics.CreatableType(basics.AppCreatable)
-		}
-	}
-	return rows[:lastRow]
-}
-
 // performResourceTableMigration migrate the database to use the resources table.
 func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(processed, total uint64)) (err error) {
 	idxnameBalances := fmt.Sprintf("onlineaccountbals_idx_%d", time.Now().UnixNano())
