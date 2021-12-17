@@ -42,6 +42,22 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
+func accountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool) {
+	newDB, err := accountsInit(tx, initAccounts, proto)
+	require.NoError(tb, err)
+
+	err = accountsAddNormalizedBalance(tx, proto)
+	require.NoError(tb, err)
+
+	err = accountsCreateResourceTable(context.Background(), tx)
+	require.NoError(tb, err)
+
+	err = performResourceTableMigration(context.Background(), tx, nil)
+	require.NoError(tb, err)
+
+	return newDB
+}
+
 func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.Address]basics.AccountData) {
 	r, err := accountsRound(tx)
 	require.NoError(t, err)
@@ -147,18 +163,8 @@ func TestAccountDBInit(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := ledgertesting.RandomAccounts(20, true)
-	newDB, err := accountsInit(tx, accts, proto)
-	require.NoError(t, err)
+	newDB := accountsInitTest(t, tx, accts, proto)
 	require.True(t, newDB)
-
-	err = accountsAddNormalizedBalance(tx, proto)
-	require.NoError(t, err)
-
-	err = accountsCreateResourceTable(context.Background(), tx)
-	require.NoError(t, err)
-
-	err = performResourceTableMigration(context.Background(), tx, nil)
-	require.NoError(t, err)
 
 	checkAccounts(t, tx, 0, accts)
 
@@ -218,8 +224,7 @@ func TestAccountDBRound(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := ledgertesting.RandomAccounts(20, true)
-	_, err = accountsInit(tx, accts, proto)
-	require.NoError(t, err)
+	accountsInitTest(t, tx, accts, proto)
 	checkAccounts(t, tx, 0, accts)
 	totals, err := accountsTotals(tx, false)
 	require.NoError(t, err)
@@ -245,11 +250,19 @@ func TestAccountDBRound(t *testing.T) {
 			expectedDbImage, numElementsPerSegment)
 
 		updatesCnt := makeCompactAccountDeltas([]ledgercore.NewAccountDeltas{updates}, baseAccounts)
+		resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.NewAccountDeltas{updates}, baseResources)
+
 		err = updatesCnt.accountsLoadOld(tx)
 		require.NoError(t, err)
-		resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.NewAccountDeltas{updates}, baseResources)
-		// TODO: fill addrIDsMap ?
-		resourceUpdatesCnt.resourcesLoadOld(tx, nil)
+		addressesNeeded := resourceUpdatesCnt.getMissingAddresses()
+		addressesResolved := make(map[basics.Address]int64, len(addressesNeeded))
+		for _, delta := range updatesCnt.deltas {
+			if _, ok := addressesNeeded[delta.oldAcct.addr]; ok {
+				addressesResolved[delta.oldAcct.addr] = delta.oldAcct.rowid
+			}
+		}
+		err = resourceUpdatesCnt.resourcesLoadOld(tx, addressesResolved)
+		require.NoError(t, err)
 
 		err = accountsPutTotals(tx, totals, false)
 		require.NoError(t, err)
@@ -264,7 +277,6 @@ func TestAccountDBRound(t *testing.T) {
 		err = updateAccountsRound(tx, basics.Round(i))
 		require.NoError(t, err)
 
-		// TODO: check resources in checkAccounts or add checkResources function
 		checkAccounts(t, tx, basics.Round(i), accts)
 		checkCreatables(t, tx, i, expectedDbImage)
 	}
@@ -453,10 +465,7 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto con
 
 	updates = generateRandomTestingAccountBalances(numAccounts)
 
-	_, err = accountsInit(tx, updates, proto)
-	require.NoError(b, err)
-	err = accountsAddNormalizedBalance(tx, proto)
-	require.NoError(b, err)
+	accountsInitTest(b, tx, updates, proto)
 	err = tx.Commit()
 	require.NoError(b, err)
 	return
@@ -677,10 +686,7 @@ func TestAccountsReencoding(t *testing.T) {
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		_, err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
-		if err != nil {
-			return err
-		}
+		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
 
 		for _, oldAccData := range oldEncodedAccountsData {
 			addr := ledgertesting.RandomAddress()
@@ -757,10 +763,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	defer dbs.Close()
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		_, err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
-		if err != nil {
-			return err
-		}
+		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
 		return nil
 	})
 	require.NoError(t, err)
