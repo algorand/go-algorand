@@ -102,7 +102,7 @@ func TestAccount(t *testing.T) {
 	b := a.WithUpdatedRewards(proto, 100)
 
 	addr := basics.Address{}.String()
-	conv, err := AccountDataToAccount(addr, &b, map[basics.AssetIndex]string{}, round, a.MicroAlgos)
+	conv, err := AccountDataToAccount(addr, &b, map[basics.AssetIndex]string{}, round, &proto, a.MicroAlgos)
 	require.NoError(t, err)
 	require.Equal(t, addr, conv.Address)
 	require.Equal(t, b.MicroAlgos.Raw, conv.Amount)
@@ -196,7 +196,7 @@ func TestAccount(t *testing.T) {
 		// convert the same account a few more times to make sure we always
 		// produce the same generated.Account
 		for i := 0; i < 10; i++ {
-			anotherConv, err := AccountDataToAccount(addr, &b, map[basics.AssetIndex]string{}, round, a.MicroAlgos)
+			anotherConv, err := AccountDataToAccount(addr, &b, map[basics.AssetIndex]string{}, round, &proto, a.MicroAlgos)
 			require.NoError(t, err)
 
 			require.Equal(t, protocol.EncodeJSON(conv), protocol.EncodeJSON(anotherConv))

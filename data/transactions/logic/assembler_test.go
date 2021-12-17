@@ -344,7 +344,7 @@ itxna Logs 3
 
 const v6Nonsense = v5Nonsense + `
 itxn_next
-base64_decode URLAlph
+base64_decode URLEncoding
 `
 
 var nonsense = map[uint64]string{

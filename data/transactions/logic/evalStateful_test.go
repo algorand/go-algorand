@@ -2392,7 +2392,7 @@ func TestReturnTypes(t *testing.T) {
 		"itxn":              "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxn CreatedAssetID",
 		// This next one is a cop out.  Can't use itxna Logs until we have inner appl
 		"itxna":         "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxn NumLogs",
-		"base64_decode": `pushbytes "YWJjMTIzIT8kKiYoKSctPUB+"; base64_decode StdAlph; pushbytes "abc123!?$*&()'-=@~"; ==; pushbytes "YWJjMTIzIT8kKiYoKSctPUB-"; base64_decode URLAlph; pushbytes "abc123!?$*&()'-=@~"; ==; &&; assert`,
+		"base64_decode": `pushbytes "YWJjMTIzIT8kKiYoKSctPUB+"; base64_decode StdEncoding; pushbytes "abc123!?$*&()'-=@~"; ==; pushbytes "YWJjMTIzIT8kKiYoKSctPUB-"; base64_decode URLEncoding; pushbytes "abc123!?$*&()'-=@~"; ==; &&; assert`,
 	}
 
 	// these require special input data and tested separately

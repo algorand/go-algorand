@@ -73,6 +73,7 @@ var poolAddrResponseGolden = generatedV2.AccountResponse{
 	AppsLocalState:              &appLocalStates,
 	AppsTotalSchema:             &appsTotalSchema,
 	CreatedApps:                 &appCreatedApps,
+	MinBalance:                  100000,
 }
 var txnPoolGolden = make([]transactions.SignedTxn, 2)
 
