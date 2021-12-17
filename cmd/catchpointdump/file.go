@@ -230,8 +230,10 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 		}
 
 		balancesTable := "accountbase"
+		resourcesTable := "resources"
 		if fileHeader.Version != 0 {
 			balancesTable = "catchpointbalances"
+			resourcesTable = "catchpointresources"
 		}
 
 		var rowsCount int64
@@ -240,32 +242,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 			return
 		}
 
-		rows, err := tx.Query(fmt.Sprintf("SELECT address, data FROM %s order by address", balancesTable))
-		if err != nil {
-			return
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var addrbuf []byte
-			var buf []byte
-			err = rows.Scan(&addrbuf, &buf)
-			if err != nil {
-				return
-			}
-
-			var data basics.AccountData
-			err = protocol.Decode(buf, &data)
-			if err != nil {
-				return
-			}
-
-			var addr basics.Address
-			if len(addrbuf) != len(addr) {
-				err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-				return
-			}
-			copy(addr[:], addrbuf)
+		printer := func(addr basics.Address, data interface{}, progress uint64) (err error) {
 			jsonData, err := json.Marshal(data)
 			if err != nil {
 				return err
@@ -277,12 +254,62 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 				lastProgressUpdate = time.Now()
 				printDumpingCatchpointProgressLine(int(float64(progress)*50.0/float64(rowsCount)), 50, int64(progress))
 			}
-			progress++
+			return nil
 		}
 
-		err = rows.Err()
+		if fileHeader.Version < ledger.CatchpointFileVersionV6 {
+			var rows *sql.Rows
+			rows, err = tx.Query(fmt.Sprintf("SELECT address, data FROM %s order by address", balancesTable))
+			if err != nil {
+				return
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var addrbuf []byte
+				var buf []byte
+				err = rows.Scan(&addrbuf, &buf)
+				if err != nil {
+					return
+				}
+
+				var addr basics.Address
+				if len(addrbuf) != len(addr) {
+					err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+					return
+				}
+				copy(addr[:], addrbuf)
+
+				var data basics.AccountData
+				err = protocol.Decode(buf, &data)
+				if err != nil {
+					return
+				}
+
+				err = printer(addr, data, progress)
+				if err != nil {
+					return
+				}
+
+				progress++
+			}
+			err = rows.Err()
+		} else {
+			acctCb := func(addr basics.Address, data basics.AccountData) {
+				err = printer(addr, data, progress)
+				if err != nil {
+					return
+				}
+				progress++
+			}
+			_, err = ledger.LoadAllFullAccounts(context.Background(), tx, balancesTable, resourcesTable, acctCb)
+			if err != nil {
+				return
+			}
+		}
+
 		// increase the deadline warning to disable the warning message.
 		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(5*time.Second))
-		return nil
+		return err
 	})
 }
