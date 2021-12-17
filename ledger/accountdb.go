@@ -1906,7 +1906,7 @@ func (qs *accountsDbQueries) lookupAllResources(addr basics.Address) (data []per
 		data = nil
 		var buf []byte
 		for rows.Next() {
-			rows.Scan(&addrid, &dbRound, &aidx, &rtype, &buf)
+			err := rows.Scan(&addrid, &dbRound, &aidx, &rtype, &buf)
 			if err != nil {
 				return err
 			}
