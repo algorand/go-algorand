@@ -137,7 +137,7 @@ type accountUpdates struct {
 
 	// resources stored the most recent resource state for every
 	// address&resource that appears in deltas.
-	resources map[accountCreatable]modifiedResource
+	resources map[basics.Address]map[basics.CreatableIndex]modifiedResource
 
 	// creatableDeltas stores creatable updates for every round after dbRound.
 	creatableDeltas []map[basics.CreatableIndex]ledgercore.ModifiedCreatable
@@ -755,7 +755,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	au.deltas = nil
 	au.creatableDeltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
-	au.resources = make(map[accountCreatable]modifiedResource)
+	au.resources = make(map[basics.Address]map[basics.CreatableIndex]modifiedResource)
 	au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	au.deltasAccum = []int{0}
 
@@ -791,44 +791,48 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		au.accounts[addr] = macct
 	}
 	for _, holding := range delta.NewAccts.GetAllAssetsHoldings() {
-		key := accountCreatable{
-			address: holding.Addr,
-			index:   basics.CreatableIndex(holding.Aidx),
+		rmap, ok := au.resources[holding.Addr]
+		if !ok {
+			rmap = make(map[basics.CreatableIndex]modifiedResource)
+			au.resources[holding.Addr] = rmap
 		}
-		mres := au.resources[key]
+		mres := rmap[basics.CreatableIndex(holding.Aidx)]
 		mres.resource.AssetHolding = holding.Holding
 		mres.ndeltas++
-		au.resources[key] = mres
+		rmap[basics.CreatableIndex(holding.Aidx)] = mres
 	}
 	for _, params := range delta.NewAccts.GetAllAssetParams() {
-		key := accountCreatable{
-			address: params.Addr,
-			index:   basics.CreatableIndex(params.Aidx),
+		rmap, ok := au.resources[params.Addr]
+		if !ok {
+			rmap = make(map[basics.CreatableIndex]modifiedResource)
+			au.resources[params.Addr] = rmap
 		}
-		mres := au.resources[key]
+		mres := rmap[basics.CreatableIndex(params.Aidx)]
 		mres.resource.AssetParam = params.Params
 		mres.ndeltas++
-		au.resources[key] = mres
+		rmap[basics.CreatableIndex(params.Aidx)] = mres
 	}
 	for _, localStates := range delta.NewAccts.GetAllAppLocalStates() {
-		key := accountCreatable{
-			address: localStates.Addr,
-			index:   basics.CreatableIndex(localStates.Aidx),
+		rmap, ok := au.resources[localStates.Addr]
+		if !ok {
+			rmap = make(map[basics.CreatableIndex]modifiedResource)
+			au.resources[localStates.Addr] = rmap
 		}
-		mres := au.resources[key]
+		mres := rmap[basics.CreatableIndex(localStates.Aidx)]
 		mres.resource.AppLocalState = localStates.State
 		mres.ndeltas++
-		au.resources[key] = mres
+		rmap[basics.CreatableIndex(localStates.Aidx)] = mres
 	}
 	for _, appParams := range delta.NewAccts.GetAllAppParams() {
-		key := accountCreatable{
-			address: appParams.Addr,
-			index:   basics.CreatableIndex(appParams.Aidx),
+		rmap, ok := au.resources[appParams.Addr]
+		if !ok {
+			rmap = make(map[basics.CreatableIndex]modifiedResource)
+			au.resources[appParams.Addr] = rmap
 		}
-		mres := au.resources[key]
+		mres := rmap[basics.CreatableIndex(appParams.Aidx)]
 		mres.resource.AppParams = appParams.Params
 		mres.ndeltas++
-		au.resources[key] = mres
+		rmap[basics.CreatableIndex(appParams.Aidx)] = mres
 	}
 
 	for cidx, cdelta := range delta.Creatables {
@@ -1047,12 +1051,16 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 		}
 
 		// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
-		macct, indeltas := au.resources[accountCreatable{address: addr, index: aidx}]
+		indeltas := false
+		var mres modifiedResource
+		if rmap, ok := au.resources[addr]; ok {
+			mres, indeltas = rmap[aidx]
+		}
 		if indeltas {
 			// Check if this is the most recent round, in which case, we can
 			// use a cache of the most recent account state.
 			if offset == uint64(len(au.deltas)) {
-				return macct.resource, rnd, nil
+				return mres.resource, rnd, nil
 			}
 			// the account appears in the deltas, but we don't know if it appears in the
 			// delta range of [0..offset], so we'll need to check :
@@ -1076,11 +1084,11 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 		}
 
 		// check the baseResources -
-		if macct, has := au.baseResources.read(addr, aidx); has {
+		if mres, has := au.baseResources.read(addr, aidx); has {
 			// we don't technically need this, since it's already in the baseResources, however, writing this over
 			// would ensure that we promote this field.
-			au.baseResources.writePending(macct, addr)
-			return macct.AccountResource(), rnd, nil
+			au.baseResources.writePending(mres, addr)
+			return mres.AccountResource(), rnd, nil
 		}
 
 		if synchronized {
