@@ -881,7 +881,7 @@ var addParticipationKeyCmd = &cobra.Command{
 			reportErrorf(errorRequestFail, err)
 		}
 
-		fmt.Printf("Participation key installed successfully, Participation ID: %s\n", part.ID())
+		fmt.Printf("Participation key generation successful. Participation ID: %s\n", part.ID())
 	},
 }
 
@@ -976,7 +976,7 @@ var renewParticipationKeyCmd = &cobra.Command{
 
 func generateAndRegisterPartKey(address string, currentRound, keyLastValidRound, txLastValidRound uint64, fee uint64, leaseBytes [32]byte, dilution uint64, wallet string, dataDir string, client libgoal.Client) error {
 	// Generate a participation keys database and install it
-	_, keyPath, err := client.GenParticipationKeys(address, currentRound, keyLastValidRound, dilution)
+	part, keyPath, err := client.GenParticipationKeys(address, currentRound, keyLastValidRound, dilution)
 	if err != nil {
 		return fmt.Errorf(errorRequestFail, err)
 	}
@@ -990,7 +990,9 @@ func generateAndRegisterPartKey(address string, currentRound, keyLastValidRound,
 		os.Remove(keyPath)
 		fmt.Fprintf(os.Stderr, "  Error registering keys - deleting newly-generated key file: %s\n", keyPath)
 	}
-	return err
+
+	fmt.Printf("Participation key installed successfully, Participation ID: %s\n", part.ID())
+	return nil
 }
 
 var renewAllParticipationKeyCmd = &cobra.Command{

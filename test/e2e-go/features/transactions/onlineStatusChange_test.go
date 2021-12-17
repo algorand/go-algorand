@@ -87,7 +87,7 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	a.NoError(err, "should be no errors when creating partkeys")
 	a.Equal(initiallyOffline, partkeyResponse.Address().String(), "successful partkey creation should echo account")
 
-	goOnlineUTx, err := client.MakeUnsignedGoOnlineTx(initiallyOffline, nil, curRound, curRound+transactionValidityPeriod, transactionFee, [32]byte{})
+	goOnlineUTx, err := client.MakeUnsignedGoOnlineTx(initiallyOffline, curRound, curRound+transactionValidityPeriod, transactionFee, [32]byte{})
 	a.NoError(err, "should be able to make go online tx")
 	wh, err := client.GetUnencryptedWalletHandle()
 	a.NoError(err, "should be able to get unencrypted wallet handle")
