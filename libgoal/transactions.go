@@ -235,7 +235,7 @@ func generateRegistrationTransaction(part generated.ParticipationKey, fee basics
 }
 
 // MakeUnsignedGoOnlineTx creates a transaction that will bring an address online using available participation keys
-func (c *Client) MakeUnsignedGoOnlineTx(address string, part *generated.ParticipationKey, firstValid, lastValid, fee uint64, leaseBytes [32]byte) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedGoOnlineTx(address string, firstValid, lastValid, fee uint64, leaseBytes [32]byte) (transactions.Transaction, error) {
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
@@ -260,19 +260,16 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, part *generated.Particip
 
 	// Choose which participation keys to go online with;
 	// need to do this after filling in the round number.
-	if part == nil {
-		bestPart, err := c.chooseParticipation(parsedAddr, basics.Round(firstValid))
-		if err != nil {
-			return transactions.Transaction{}, err
-		}
-		part = &bestPart
+	part, err := c.chooseParticipation(parsedAddr, basics.Round(firstValid))
+	if err != nil {
+		return transactions.Transaction{}, err
 	}
 
 	parsedFrstValid := basics.Round(firstValid)
 	parsedLastValid := basics.Round(lastValid)
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
-	goOnlineTransaction, err := generateRegistrationTransaction(*part, parsedFee, parsedFrstValid, parsedLastValid, leaseBytes)
+	goOnlineTransaction, err := generateRegistrationTransaction(part, parsedFee, parsedFrstValid, parsedLastValid, leaseBytes)
 	if err != nil {
 		return transactions.Transaction{}, err
 	}

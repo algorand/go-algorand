@@ -818,7 +818,7 @@ var changeOnlineCmd = &cobra.Command{
 			reportErrorf(err.Error())
 		}
 		err = changeAccountOnlineStatus(
-			accountAddress, part, online, statusChangeTxFile, walletName,
+			accountAddress, online, statusChangeTxFile, walletName,
 			firstTxRound, lastTxRound, transactionFee, scLeaseBytes(cmd), dataDir, client,
 		)
 		if err != nil {
@@ -827,20 +827,12 @@ var changeOnlineCmd = &cobra.Command{
 	},
 }
 
-func changeAccountOnlineStatus(acct string, part *algodAcct.Participation, goOnline bool, txFile string, wallet string, firstTxRound, lastTxRound, fee uint64, leaseBytes [32]byte, dataDir string, client libgoal.Client) error {
+func changeAccountOnlineStatus(acct string, goOnline bool, txFile string, wallet string, firstTxRound, lastTxRound, fee uint64, leaseBytes [32]byte, dataDir string, client libgoal.Client) error {
 	// Generate an unsigned online/offline tx
 	var utx transactions.Transaction
 	var err error
 	if goOnline {
-		if part == nil {
-			utx, err = client.MakeUnsignedGoOnlineTx(acct, nil, firstTxRound, lastTxRound, fee, leaseBytes)
-		} else {
-			utx = part.GenerateRegistrationTransaction(
-				basics.MicroAlgos{Raw: fee},
-				basics.Round(firstTxRound),
-				basics.Round(lastTxRound),
-				leaseBytes)
-		}
+		utx, err = client.MakeUnsignedGoOnlineTx(acct, nil, firstTxRound, lastTxRound, fee, leaseBytes)
 	} else {
 		utx, err = client.MakeUnsignedGoOfflineTx(acct, firstTxRound, lastTxRound, fee, leaseBytes)
 	}
@@ -871,8 +863,8 @@ func changeAccountOnlineStatus(acct string, part *algodAcct.Participation, goOnl
 
 var addParticipationKeyCmd = &cobra.Command{
 	Use:   "addpartkey",
-	Short: "Generate a participation key for the specified account",
-	Long:  `Generate a participation key for the specified account. This participation key can then be used for going online and participating in consensus.`,
+	Short: "Generate and install participation key for the specified account",
+	Long:  `Generate and install participation key for the specified account. This participation key can then be used for going online and participating in consensus.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
@@ -884,11 +876,12 @@ var addParticipationKeyCmd = &cobra.Command{
 		// Generate a participation keys database and install it
 		client := ensureFullClient(dataDir)
 
-		_, _, err := client.GenParticipationKeysTo(accountAddress, roundFirstValid, roundLastValid, keyDilution, partKeyOutDir)
+		part, _, err := client.GenParticipationKeysTo(accountAddress, roundFirstValid, roundLastValid, keyDilution, partKeyOutDir)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
-		fmt.Println("Participation key generation successful")
+
+		fmt.Printf("Participation key installed successfully, Participation ID: %s\n", part.ID())
 	},
 }
 
@@ -926,9 +919,7 @@ No --delete-input flag specified, exiting without installing key.`)
 			reportErrorf(errorRequestFail, err)
 		}
 
-		// PKI TODO: Install state proof keys.
-
-		fmt.Println("Participation key installed successfully")
+		fmt.Printf("Participation key installed successfully, Participation ID: %s\n", addResponse.PartId)
 
 		// Delete partKeyFile
 		if nil != os.Remove(partKeyFile) {
@@ -985,7 +976,7 @@ var renewParticipationKeyCmd = &cobra.Command{
 
 func generateAndRegisterPartKey(address string, currentRound, keyLastValidRound, txLastValidRound uint64, fee uint64, leaseBytes [32]byte, dilution uint64, wallet string, dataDir string, client libgoal.Client) error {
 	// Generate a participation keys database and install it
-	part, keyPath, err := client.GenParticipationKeysTo(address, currentRound, keyLastValidRound, dilution, "")
+	_, keyPath, err := client.GenParticipationKeys(address, currentRound, keyLastValidRound, dilution)
 	if err != nil {
 		return fmt.Errorf(errorRequestFail, err)
 	}
@@ -994,7 +985,7 @@ func generateAndRegisterPartKey(address string, currentRound, keyLastValidRound,
 	// Now register it as our new online participation key
 	goOnline := true
 	txFile := ""
-	err = changeAccountOnlineStatus(address, &part, goOnline, txFile, wallet, currentRound, txLastValidRound, fee, leaseBytes, dataDir, client)
+	err = changeAccountOnlineStatus(address, goOnline, txFile, wallet, currentRound, txLastValidRound, fee, leaseBytes, dataDir, client)
 	if err != nil {
 		os.Remove(keyPath)
 		fmt.Fprintf(os.Stderr, "  Error registering keys - deleting newly-generated key file: %s\n", keyPath)
