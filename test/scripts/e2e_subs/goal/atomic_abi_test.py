@@ -1,8 +1,10 @@
 import json
 from os import confstr_names
+from typing import List
 from unittest.mock import Mock, patch
 
 import algosdk.atomic_transaction_composer as atc
+import algosdk.abi as abi
 
 from .atomic_abi import AtomicABI
 
@@ -143,3 +145,44 @@ def test_dynamic_methods():
 
         run_now_method_name = abi.run_now_method_name(name)
         assert getattr(abi, run_now_method_name, None)
+
+
+def make_atc_response(methods: List[abi.method.Method]):
+    confirmed_round = 1337
+    tx_ids = list(map(lambda m: f"txn for {m.name}", methods))
+    method_results = []
+    for i, meth in enumerate(methods):
+        method_results.append(atc.ABIResult(tx_ids[i], None, Mock(), None))
+
+    atc_response = atc.AtomicTransactionResponse(
+        confirmed_round=confirmed_round, tx_ids=tx_ids, results=method_results
+    )
+
+    return atc_response
+
+
+def test_run_methods():
+    abi = test_init(init_only=True)
+    with patch.object(atc.AtomicTransactionComposer, "execute") as atc_execute:
+        for m, meth in abi.atomic_transaction_composer.method_dict:
+            print(m, meth)
+        import pdb
+
+        pdb.set_trace()
+        z = abi.run_add(2, 3)
+
+        atc_execute.return_value = make_atc_response(
+            abi.atomic_transaction_composer.method_dict["add"]
+        )
+
+
+# sub
+# mul
+# div
+# qrem
+# reverse
+# txntest
+# concat_strings
+# manyargs
+# _optIn
+# _closeOut
