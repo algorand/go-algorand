@@ -187,3 +187,57 @@ func TestSession(t *testing.T) {
 	require.NotEmpty(t, name)
 	require.Greater(t, len(data), 0)
 }
+
+var sources = map[string]string{
+	"trivial": `#pragma version 5
+int 1
+return`,
+}
+
+func TestSessionSourceMap(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	for _, src := range sources {
+		s := sessionFromSource(src, t)
+		am := assemblyMapFromSource(src, t)
+
+		sessionData, err := GetSourceMap(s)
+		require.NoError(t, err)
+
+		assemblyMapData, err := GetSourceMap(&am)
+		require.NoError(t, err)
+
+		require.Equal(t, sessionData, assemblyMapData)
+	}
+}
+
+func sessionFromSource(src string, t *testing.T) *session {
+	ops, err := logic.AssembleString(src)
+	require.NoError(t, err)
+
+	disassembly, err := logic.Disassemble(ops.Program)
+	require.NoError(t, err)
+
+	// create a sample disassembly line to pc mapping
+	// this simple source is similar to disassembly except intcblock at the beginning
+	pcOffset := map[int]int{0: 0}
+	for pc, line := range ops.OffsetToLine {
+		pcOffset[line] = pc
+	}
+
+	s := makeSession(disassembly, 0)
+	s.source = src
+	s.programName = "test"
+	s.program = ops.Program
+	s.offsetToLine = ops.OffsetToLine
+	s.pcOffset = pcOffset
+
+	return s
+}
+
+func assemblyMapFromSource(src string, t *testing.T) logic.AssemblyMap {
+	ops, err := logic.AssembleString(src)
+	require.NoError(t, err)
+	am := ops.GetAssemblyMap()
+	am.SourceName = "test"
+	return am
+}

@@ -42,8 +42,13 @@ func (am *AssemblyMap) LineToPc(line int) (int, bool) {
 		return 0, false
 	}
 
+	// First line should always map to 0
+	if line == 0 {
+		return 0, true
+	}
+
 	var pc int
-	// If its an empty line, we need to go back to the first non-empty line
+	// If its an empty line, we should go back to the first non-empty line
 	for idx := line; idx > 0; idx-- {
 		pc = am.LineMap[line]
 		if pc != 0 {
