@@ -22,6 +22,7 @@ Requires:
 Options:
     -c        Channel of build you are building binaries with this script
     -n        Run tests without building binaries (Binaries are expected in PATH)
+    -i        Start an interactive session for running e2e subs.
 "
 NO_BUILD=false
 while getopts ":c:nhi" opt; do
@@ -117,9 +118,6 @@ export GOPATH=$(go env GOPATH)
 cd "${SCRIPT_PATH}"
 
 if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
-    ./timeout 200 ./e2e_basic_start_stop.sh
-    duration "e2e_basic_start_stop.sh"
-
     python3 -m venv "${TEMPDIR}/ve"
     . "${TEMPDIR}/ve/bin/activate"
     "${TEMPDIR}/ve/bin/pip3" install --upgrade pip
@@ -127,13 +125,20 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     duration "e2e client setup"
 
     if [ $INTERACTIVE ]; then
-        echo "********** READY **********"
-        echo "The test environment is now set. Run the tests using the following command on a different terminal after setting the path."
+        echo -e "\n\n********** READY **********\n\n"
+        echo "The test environment is now set. You can now run tests in another terminal."
+
+        echo -e "\nConfigure the environment:\n"
+        if [ "$(basename $SHELL)" == "fish" ]; then
+            echo "set -g VIRTUAL_ENV \"${TEMPDIR}/ve\""
+            echo "set -g PATH \"\$VIRTUAL_ENV/bin:\$PATH\""
+        else
+            echo "export VIRTUAL_ENV=\"${TEMPDIR}/ve\""
+            echo "export PATH=\"\$VIRTUAL_ENV/bin:\$PATH\""
+        fi
+
         echo ""
-        echo "export VIRTUAL_ENV=\"${TEMPDIR}/ve\""
-        echo "export PATH=\"\$VIRTUAL_ENV/bin:\$PATH\""
-        echo ""
-        echo "${TEMPDIR}/ve/bin/python3" test/scripts/e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/SCRIPT_FILE_NAME
+        echo "python3 \"$SCRIPT_PATH/e2e_client_runner.py\" ${RUN_KMD_WITH_UNSAFE_SCRYPT} \"$SCRIPT_PATH/e2e_subs/SCRIPT_FILE_NAME\""
         echo ""
         echo "Press enter to shut down the test environment..."
         read a
@@ -142,6 +147,9 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
         echo "done"
         exit
     fi
+
+    ./timeout 200 ./e2e_basic_start_stop.sh
+    duration "e2e_basic_start_stop.sh"
 
     "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
     duration "parallel client runner"
