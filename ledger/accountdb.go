@@ -1225,26 +1225,6 @@ func (ba *baseAccountData) GetLedgerCoreAccountData() ledgercore.AccountData {
 	}
 }
 
-func (ba *baseAccountData) GetAccountData() basics.AccountData {
-	return basics.AccountData{
-		Status:             ba.Status,
-		MicroAlgos:         ba.MicroAlgos,
-		RewardsBase:        ba.RewardsBase,
-		RewardedMicroAlgos: ba.RewardedMicroAlgos,
-		VoteID:             ba.VoteID,
-		SelectionID:        ba.SelectionID,
-		VoteFirstValid:     ba.VoteFirstValid,
-		VoteLastValid:      ba.VoteLastValid,
-		VoteKeyDilution:    ba.VoteKeyDilution,
-		AuthAddr:           ba.AuthAddr,
-		TotalAppSchema: basics.StateSchema{
-			NumUint:      ba.TotalAppSchemaNumUint,
-			NumByteSlice: ba.TotalAppSchemaNumByteSlice,
-		},
-		TotalExtraAppPages: ba.TotalExtraAppPages,
-	}
-}
-
 type resourceFlags uint8
 
 const (
@@ -1698,7 +1678,9 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 			return err
 		}
 		processedAccounts++
-		log(processedAccounts, totalBaseAccounts)
+		if log != nil {
+			log(processedAccounts, totalBaseAccounts)
+		}
 	}
 
 	// if the above loop was abrupted by an error, test it now.
@@ -1764,7 +1746,7 @@ func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, address
 // the full AccountData because we need to store a large number of these
 // in memory (say, 1M), and storing that many AccountData could easily
 // cause us to run out of memory.
-func accountDataToOnline(address basics.Address, ad *basics.AccountData, proto config.ConsensusParams) *ledgercore.OnlineAccount {
+func accountDataToOnline(address basics.Address, ad ledgercore.AccountData, proto config.ConsensusParams) *ledgercore.OnlineAccount {
 	return &ledgercore.OnlineAccount{
 		Address:                 address,
 		MicroAlgos:              ad.MicroAlgos,
@@ -1974,7 +1956,11 @@ func (qs *accountsDbQueries) lookup(addr basics.Address) (data persistedAccountD
 			data.addr = addr
 			if len(buf) > 0 && rowid.Valid {
 				data.rowid = rowid.Int64
-				return protocol.Decode(buf, &data.accountData)
+				err = protocol.Decode(buf, &data.accountData)
+				if err != nil {
+					panic("")
+				}
+				return err
 			}
 			// we don't have that account, just return the database round.
 			return nil
@@ -2143,7 +2129,7 @@ func accountsOnlineTop(tx *sql.Tx, offset, n uint64, proto config.ConsensusParam
 			return nil, err
 		}
 
-		var data basics.AccountData
+		var data baseAccountData
 		err = protocol.Decode(buf, &data)
 		if err != nil {
 			return nil, err
@@ -2156,7 +2142,8 @@ func accountsOnlineTop(tx *sql.Tx, offset, n uint64, proto config.ConsensusParam
 		}
 
 		copy(addr[:], addrbuf)
-		res[addr] = accountDataToOnline(addr, &data, proto)
+		ad := data.GetLedgerCoreAccountData()
+		res[addr] = accountDataToOnline(addr, ad, proto)
 	}
 
 	return res, rows.Err()

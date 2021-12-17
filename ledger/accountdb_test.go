@@ -51,17 +51,14 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	require.NoError(t, err)
 	defer aq.close()
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	err = accountsAddNormalizedBalance(tx, proto)
-	require.NoError(t, err)
-
 	var totalOnline, totalOffline, totalNotPart uint64
 
 	for addr, data := range accts {
+		expected := ledgercore.ToAccountData(data)
 		pad, err := aq.lookup(addr)
 		require.NoError(t, err)
-		d := pad.accountData
-		require.Equal(t, d, data)
+		d := pad.accountData.GetLedgerCoreAccountData()
+		require.Equal(t, d, expected)
 
 		switch d.Status {
 		case basics.Online:
@@ -90,12 +87,15 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	d, err := aq.lookup(ledgertesting.RandomAddress())
 	require.NoError(t, err)
 	require.Equal(t, rnd, d.round)
-	require.Equal(t, d.accountData, basics.AccountData{})
+	require.Equal(t, d.accountData, baseAccountData{})
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	onlineAccounts := make(map[basics.Address]*ledgercore.OnlineAccount)
 	for addr, data := range accts {
 		if data.Status == basics.Online {
-			onlineAccounts[addr] = accountDataToOnline(addr, &data, proto)
+			ad := ledgercore.ToAccountData(data)
+			onlineAccounts[addr] = accountDataToOnline(addr, ad, proto)
 		}
 	}
 
@@ -150,6 +150,16 @@ func TestAccountDBInit(t *testing.T) {
 	newDB, err := accountsInit(tx, accts, proto)
 	require.NoError(t, err)
 	require.True(t, newDB)
+
+	err = accountsAddNormalizedBalance(tx, proto)
+	require.NoError(t, err)
+
+	err = accountsCreateResourceTable(context.Background(), tx)
+	require.NoError(t, err)
+
+	err = performResourceTableMigration(context.Background(), tx, nil)
+	require.NoError(t, err)
+
 	checkAccounts(t, tx, 0, accts)
 
 	newDB, err = accountsInit(tx, accts, proto)

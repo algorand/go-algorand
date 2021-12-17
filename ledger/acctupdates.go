@@ -414,9 +414,7 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 					continue
 				}
 
-				ad := basics.AccountData{}
-				ledgercore.AssignAccountData(&ad, d)
-				modifiedAccounts[addr] = accountDataToOnline(addr, &ad, proto)
+				modifiedAccounts[addr] = accountDataToOnline(addr, d, proto)
 			}
 		}
 
