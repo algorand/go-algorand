@@ -287,7 +287,7 @@ func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basi
 }
 
 func (cs *roundCowState) GetCreatableID(groupIdx int) basics.CreatableIndex {
-	return cs.getCreatableIndex(groupIdx)
+	return cs.trackedCreatables[groupIdx]
 }
 
 func (cs *roundCowState) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {

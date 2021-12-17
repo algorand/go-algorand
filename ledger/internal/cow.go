@@ -149,10 +149,6 @@ func (cb *roundCowState) prevTimestamp() int64 {
 	return cb.mods.PrevTimestamp
 }
 
-func (cb *roundCowState) getCreatableIndex(groupIdx int) basics.CreatableIndex {
-	return cb.trackedCreatables[groupIdx]
-}
-
 func (cb *roundCowState) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	delta, ok := cb.mods.Creatables[cidx]
 	if ok {

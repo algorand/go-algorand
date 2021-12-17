@@ -3661,6 +3661,9 @@ func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, e
 		if ref <= uint64(len(cx.Txn.Txn.ForeignApps)) {
 			return basics.AppIndex(cx.Txn.Txn.ForeignApps[ref-1]), nil
 		}
+		if ref >= cx.initialCounter {
+			return basics.AppIndex(ref), nil
+		}
 		for _, appID := range cx.Txn.Txn.ForeignApps {
 			if appID == basics.AppIndex(ref) {
 				return appID, nil
@@ -3952,17 +3955,18 @@ func (cx *EvalContext) availableAccount(sv stackValue) (basics.Address, error) {
 // don't need (or want!) to allow low numbers to represent the asset at that
 // index in ForeignAssets array.
 func (cx *EvalContext) availableAsset(sv stackValue) (basics.AssetIndex, error) {
-	aid, err := sv.uint()
+	uint, err := sv.uint()
 	if err != nil {
 		return basics.AssetIndex(0), err
 	}
-	if aid >= cx.initialCounter {
-		return basics.AssetIndex(aid), nil
+	aid := basics.AssetIndex(uint)
+	if uint >= cx.initialCounter {
+		return aid, nil
 	}
 	// Ensure that aid is in Foreign Assets
 	for _, assetID := range cx.Txn.Txn.ForeignAssets {
-		if assetID == basics.AssetIndex(aid) {
-			return basics.AssetIndex(aid), nil
+		if assetID == aid {
+			return aid, nil
 		}
 	}
 	return basics.AssetIndex(0), fmt.Errorf("invalid Asset reference %d", aid)
@@ -3977,6 +3981,9 @@ func (cx *EvalContext) availableApp(sv stackValue) (basics.AppIndex, error) {
 		return basics.AppIndex(0), err
 	}
 	aid := basics.AppIndex(uint)
+	if uint >= cx.initialCounter {
+		return aid, nil
+	}
 	// Ensure that aid is in Foreign Apps
 	for _, appID := range cx.Txn.Txn.ForeignApps {
 		if appID == aid {

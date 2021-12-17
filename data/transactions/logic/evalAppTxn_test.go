@@ -1344,7 +1344,7 @@ func TestCreateAndUse(t *testing.T) {
   int 1
 `
 
-	// First testing in axfer
+	// First testing use in axfer
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 4*MakeTestProto().MinTxnFee)
@@ -1384,7 +1384,7 @@ func TestCreateAndUse(t *testing.T) {
   int 1
 `
 
-	// Now as in asset balance opcode
+	// Now test use in asset balance opcode
 	ep, tx, ledger = MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 4*MakeTestProto().MinTxnFee)
@@ -1409,7 +1409,7 @@ func TestCreateAndUse(t *testing.T) {
   int 1
 `
 
-	// Now as ForeigAsset
+	// Now as ForeignAsset
 	ep, tx, ledger = MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
@@ -1421,4 +1421,121 @@ func TestCreateAndUse(t *testing.T) {
 	// version allowed inner app calls
 	// ep.Proto = MakeTestProtoV(CreatedResourcesVersion - 1)
 	// TestApp(t, appcall, ep, "invalid Asset reference")
+}
+
+// main wraps up some TEAL source in a header and footer so that it is
+// an app that does nothing at create time, but otherwise runs source,
+// then approves, if the source avoids panicing and leaves the stack
+// empty.
+func main(source string) string {
+	return fmt.Sprintf(`txn ApplicationID
+            bz end
+            %s
+       end: int 1`, source)
+}
+
+func hexProgram(t *testing.T, source string) string {
+	return "0x" + hex.EncodeToString(TestProg(t, source, AssemblerMaxVersion).Program)
+}
+
+// TestCreateAndUseApp checks that an app can be created in an inner txn, and then
+// the address for it can be looked up.
+func TestCreateUseApp(t *testing.T) {
+	pay5back := main(`
+itxn_begin
+int pay;    itxn_field TypeEnum
+txn Sender; itxn_field Receiver
+int 5;      itxn_field Amount
+itxn_submit
+int 1
+`)
+
+	createAndUse := `
+  itxn_begin
+   int appl;     itxn_field TypeEnum
+   byte	` + hexProgram(t, pay5back) + `; itxn_field ApprovalProgram;
+  itxn_submit
+
+  itxn CreatedApplicationID; app_params_get AppAddress; assert
+  addr ` + appAddr(5000).String() + `
+  ==
+`
+
+	ep, tx, ledger := MakeSampleEnv()
+	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(appAddr(888), 1*MakeTestProto().MinTxnFee)
+	TestApp(t, createAndUse, ep)
+	// Again, can't test if this (properly) fails in previous version, because
+	// we can't even create apps this way in previous version.
+}
+
+// TestCreateAndPay checks that an app can be created in an inner app, and then
+// a pay can be done to the app's account.  This was not allowed until v6,
+// because of the strict adherence to the foreign-accounts rules.
+func TestCreateAndPay(t *testing.T) {
+	t.Skip("until access to created app accounts is implemented")
+	pay5back := main(`
+itxn_begin
+int pay;    itxn_field TypeEnum
+txn Sender; itxn_field Receiver
+int 5;      itxn_field Amount
+itxn_submit
+int 1
+`)
+
+	createAndPay := `
+  itxn_begin
+   int appl;    itxn_field TypeEnum
+	` + fmt.Sprintf("byte %s; itxn_field ApprovalProgram;", hexProgram(t, pay5back)) + `
+  itxn_submit
+
+  itxn_begin
+   itxn CreatedApplicationID; app_params_get AppAddress; assert; itxn_field Receiver
+   int 10;                    itxn_field Amount
+  itxn_submit
+
+  int 1
+`
+
+	ep, tx, ledger := MakeSampleEnv()
+	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(appAddr(888), 10*MakeTestProto().MinTxnFee)
+	TestApp(t, createAndPay, ep)
+
+	ep.Proto = MakeTestProtoV(CreatedResourcesVersion - 1)
+	TestApp(t, createAndPay, ep, "invalid Asset reference")
+}
+
+// TestInnerGaid ensures there's no confusion over the tracking of ids
+// across multiple inner transaction groups
+func TestInnerGaid(t *testing.T) {
+	t.Skip("until gaid works in the logic test env")
+	ep, tx, ledger := MakeSampleEnv()
+	// App to log the aid of slot[apparg[0]]
+	logGaid := TestProg(t, `txn ApplicationArgs 0; btoi; gaids; itob; log; int 1`, AssemblerMaxVersion)
+	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
+		ApprovalProgram: logGaid.Program,
+	})
+
+	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(appAddr(888), 50_000)
+	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
+	TestApp(t, `itxn_begin
+int acfg;    itxn_field TypeEnum
+itxn_next
+int pay;      itxn_field TypeEnum
+txn Sender;   itxn_field Receiver
+itxn_next
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+int 0; itob; itxn_field ApplicationArgs
+itxn_submit
+itxn Logs 0
+btoi
+int 5000
+==
+assert
+int 1
+`, ep)
+
 }
