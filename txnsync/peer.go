@@ -450,9 +450,16 @@ scanLoop:
 		}
 
 		// filter out transactions that we already previously sent.
-		if p.state != peerStateProposal && p.recentSentTransactions.contained(txID) {
-			// we already sent that transaction. no need to send again.
-			continue
+		if p.state == peerStateProposal {
+			//if p.recentSentTransactions.longTermCache.contained(txID) {
+			//	// we already sent that transaction. no need to send again.
+			//	continue
+			//}
+		} else {
+			if p.recentSentTransactions.contained(txID) {
+				// we already sent that transaction. no need to send again.
+				continue
+			}
 		}
 
 		// check if the peer already received these messages from a different source other than us.
