@@ -1104,7 +1104,8 @@ func TestListCreatables(t *testing.T) {
 	// ******* No deletes	                                           *******
 	// sync with the database
 	var updates compactAccountDeltas
-	_, err = accountsNewRound(tx, updates, ctbsWithDeletes, proto, basics.Round(1))
+	var resUpdates compactResourcesDeltas
+	_, _, err = accountsNewRound(tx, updates, resUpdates, ctbsWithDeletes, proto, basics.Round(1))
 	require.NoError(t, err)
 	// nothing left in cache
 	au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
@@ -1120,7 +1121,7 @@ func TestListCreatables(t *testing.T) {
 	// ******* Results are obtained from the database and from the cache *******
 	// ******* Deletes are in the database and in the cache              *******
 	// sync with the database. This has deletes synced to the database.
-	_, err = accountsNewRound(tx, updates, au.creatables, proto, basics.Round(1))
+	_, _, err = accountsNewRound(tx, updates, resUpdates, au.creatables, proto, basics.Round(1))
 	require.NoError(t, err)
 	// get new creatables in the cache. There will be deletes in the cache from the previous batch.
 	au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
@@ -1128,8 +1129,28 @@ func TestListCreatables(t *testing.T) {
 	listAndCompareComb(t, au, expectedDbImage)
 }
 
+func (ba *baseAccountData) GetAccountData() basics.AccountData {
+	return basics.AccountData{
+		Status:             ba.Status,
+		MicroAlgos:         ba.MicroAlgos,
+		RewardsBase:        ba.RewardsBase,
+		RewardedMicroAlgos: ba.RewardedMicroAlgos,
+		VoteID:             ba.VoteID,
+		SelectionID:        ba.SelectionID,
+		VoteFirstValid:     ba.VoteFirstValid,
+		VoteLastValid:      ba.VoteLastValid,
+		VoteKeyDilution:    ba.VoteKeyDilution,
+		AuthAddr:           ba.AuthAddr,
+		TotalAppSchema: basics.StateSchema{
+			NumUint:      ba.TotalAppSchemaNumUint,
+			NumByteSlice: ba.TotalAppSchemaNumByteSlice,
+		},
+		TotalExtraAppPages: ba.TotalExtraAppPages,
+	}
+}
+
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
-	rows, err := tx.Query("SELECT address, data FROM accountbase")
+	rows, err := tx.Query("SELECT rowid, address, data FROM accountbase")
 	if err != nil {
 		return
 	}
@@ -1139,12 +1160,13 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 	for rows.Next() {
 		var addrbuf []byte
 		var buf []byte
-		err = rows.Scan(&addrbuf, &buf)
+		var rowid sql.NullInt64
+		err = rows.Scan(&rowid, &addrbuf, &buf)
 		if err != nil {
 			return
 		}
 
-		var data basics.AccountData
+		var data baseAccountData
 		err = protocol.Decode(buf, &data)
 		if err != nil {
 			return
@@ -1156,8 +1178,67 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 			return
 		}
 
+		ad := data.GetAccountData()
+
+		err = func() (err error) {
+			// make a scope to use defer
+			var resRows *sql.Rows
+			resRows, err = tx.Query("SELECT aidx, data FROM resources where addrid = ?", rowid)
+			if err != nil {
+				return
+			}
+			defer resRows.Close()
+
+			for resRows.Next() {
+				var buf []byte
+				var aidx int64
+				err = resRows.Scan(&aidx, &buf)
+				if err != nil {
+					return
+				}
+				var resData resourcesData
+				err = protocol.Decode(buf, &resData)
+				if err != nil {
+					return
+				}
+				if resData.IsApp() {
+					if resData.IsOwning() {
+						if ad.AppParams == nil {
+							ad.AppParams = make(map[basics.AppIndex]basics.AppParams)
+						}
+						ad.AppParams[basics.AppIndex(aidx)] = resData.GetAppParams()
+					}
+					if resData.IsHolding() {
+						if ad.AppLocalStates == nil {
+							ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+						}
+						ad.AppLocalStates[basics.AppIndex(aidx)] = resData.GetAppLocalState()
+					}
+				} else if resData.IsAsset() {
+					if resData.IsOwning() {
+						if ad.AssetParams == nil {
+							ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
+						}
+						ad.AssetParams[basics.AssetIndex(aidx)] = resData.GetAssetParams()
+					}
+					if resData.IsHolding() {
+						if ad.Assets == nil {
+							ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
+						}
+						ad.Assets[basics.AssetIndex(aidx)] = resData.GetAssetHolding()
+					}
+				} else {
+					return err
+				}
+			}
+			return
+		}()
+		if err != nil {
+			return
+		}
+
 		copy(addr[:], addrbuf)
-		bals[addr] = data
+		bals[addr] = ad
 	}
 
 	err = rows.Err()
@@ -1200,7 +1281,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 		}
 
 		err := ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			_, err = accountsNewRound(tx, updates, nil, proto, basics.Round(1))
+			_, _, err = accountsNewRound(tx, updates, compactResourcesDeltas{}, nil, proto, basics.Round(1))
 			return
 		})
 		require.NoError(b, err)

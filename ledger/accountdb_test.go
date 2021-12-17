@@ -42,6 +42,22 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
+func accountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool) {
+	newDB, err := accountsInit(tx, initAccounts, proto)
+	require.NoError(tb, err)
+
+	err = accountsAddNormalizedBalance(tx, proto)
+	require.NoError(tb, err)
+
+	err = accountsCreateResourceTable(context.Background(), tx)
+	require.NoError(tb, err)
+
+	err = performResourceTableMigration(context.Background(), tx, nil)
+	require.NoError(tb, err)
+
+	return newDB
+}
+
 func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.Address]basics.AccountData) {
 	r, err := accountsRound(tx)
 	require.NoError(t, err)
@@ -51,17 +67,14 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	require.NoError(t, err)
 	defer aq.close()
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	err = accountsAddNormalizedBalance(tx, proto)
-	require.NoError(t, err)
-
 	var totalOnline, totalOffline, totalNotPart uint64
 
 	for addr, data := range accts {
+		expected := ledgercore.ToAccountData(data)
 		pad, err := aq.lookup(addr)
 		require.NoError(t, err)
-		d := pad.accountData
-		require.Equal(t, d, data)
+		d := pad.accountData.GetLedgerCoreAccountData()
+		require.Equal(t, d, expected)
 
 		switch d.Status {
 		case basics.Online:
@@ -90,12 +103,15 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	d, err := aq.lookup(ledgertesting.RandomAddress())
 	require.NoError(t, err)
 	require.Equal(t, rnd, d.round)
-	require.Equal(t, d.accountData, basics.AccountData{})
+	require.Equal(t, d.accountData, baseAccountData{})
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	onlineAccounts := make(map[basics.Address]*ledgercore.OnlineAccount)
 	for addr, data := range accts {
 		if data.Status == basics.Online {
-			onlineAccounts[addr] = accountDataToOnline(addr, &data, proto)
+			ad := ledgercore.ToAccountData(data)
+			onlineAccounts[addr] = accountDataToOnline(addr, ad, proto)
 		}
 	}
 
@@ -147,9 +163,9 @@ func TestAccountDBInit(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := ledgertesting.RandomAccounts(20, true)
-	newDB, err := accountsInit(tx, accts, proto)
-	require.NoError(t, err)
+	newDB := accountsInitTest(t, tx, accts, proto)
 	require.True(t, newDB)
+
 	checkAccounts(t, tx, 0, accts)
 
 	newDB, err = accountsInit(tx, accts, proto)
@@ -208,8 +224,7 @@ func TestAccountDBRound(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := ledgertesting.RandomAccounts(20, true)
-	_, err = accountsInit(tx, accts, proto)
-	require.NoError(t, err)
+	accountsInitTest(t, tx, accts, proto)
 	checkAccounts(t, tx, 0, accts)
 	totals, err := accountsTotals(tx, false)
 	require.NoError(t, err)
@@ -222,8 +237,10 @@ func TestAccountDBRound(t *testing.T) {
 	ctbsList, randomCtbs := randomCreatables(numElementsPerSegment)
 	expectedDbImage := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	var baseAccounts lruAccounts
+	var baseResources lruResources
 	var newacctsTotals map[basics.Address]ledgercore.AccountData
 	baseAccounts.init(nil, 100, 80)
+	baseResources.init(nil, 100, 80)
 	for i := 1; i < 10; i++ {
 		var updates ledgercore.NewAccountDeltas
 		updates, newacctsTotals, _, lastCreatableID = ledgertesting.RandomDeltasFull(20, accts, 0, lastCreatableID)
@@ -233,14 +250,30 @@ func TestAccountDBRound(t *testing.T) {
 			expectedDbImage, numElementsPerSegment)
 
 		updatesCnt := makeCompactAccountDeltas([]ledgercore.NewAccountDeltas{updates}, baseAccounts)
+		resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.NewAccountDeltas{updates}, baseResources)
+
 		err = updatesCnt.accountsLoadOld(tx)
+		require.NoError(t, err)
+		addressesNeeded := resourceUpdatesCnt.getMissingAddresses()
+		addressesResolved := make(map[basics.Address]int64, len(addressesNeeded))
+		for _, delta := range updatesCnt.deltas {
+			if _, ok := addressesNeeded[delta.oldAcct.addr]; ok {
+				addressesResolved[delta.oldAcct.addr] = delta.oldAcct.rowid
+			}
+		}
+		err = resourceUpdatesCnt.resourcesLoadOld(tx, addressesResolved)
 		require.NoError(t, err)
 
 		err = accountsPutTotals(tx, totals, false)
 		require.NoError(t, err)
-		updatedAccts, err := accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto, basics.Round(i))
+		updatedAccts, updatesResources, err := accountsNewRound(tx, updatesCnt, resourceUpdatesCnt, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
 		require.Equal(t, updatesCnt.len(), len(updatedAccts))
+		numResUpdates := 0
+		for _, rs := range updatesResources {
+			numResUpdates += len(rs)
+		}
+		require.Equal(t, resourceUpdatesCnt.len(), numResUpdates)
 		err = updateAccountsRound(tx, basics.Round(i))
 		require.NoError(t, err)
 
@@ -432,10 +465,7 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto con
 
 	updates = generateRandomTestingAccountBalances(numAccounts)
 
-	_, err = accountsInit(tx, updates, proto)
-	require.NoError(b, err)
-	err = accountsAddNormalizedBalance(tx, proto)
-	require.NoError(b, err)
+	accountsInitTest(b, tx, updates, proto)
 	err = tx.Commit()
 	require.NoError(b, err)
 	return
@@ -656,10 +686,7 @@ func TestAccountsReencoding(t *testing.T) {
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		_, err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
-		if err != nil {
-			return err
-		}
+		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
 
 		for _, oldAccData := range oldEncodedAccountsData {
 			addr := ledgertesting.RandomAddress()
@@ -736,10 +763,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	defer dbs.Close()
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		_, err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
-		if err != nil {
-			return err
-		}
+		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
 		return nil
 	})
 	require.NoError(t, err)
@@ -810,6 +834,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 		accountsGenerationDuration += balanceLoopDuration
 
 		normalizedAccountBalances, err := prepareNormalizedBalancesV6(balances.Balances, proto)
+		require.NoError(b, err)
 		b.StartTimer()
 		err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 			err = writeCatchpointStagingBalances(ctx, tx, normalizedAccountBalances)
@@ -874,8 +899,6 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(addr, address)
 	a.Equal(sample1, data)
 
-	delta := ledgercore.MakeNewAccountDeltas(1)
-	delta.Upsert(addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 456}}})
 	sample2 := accountDelta{newAcct: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 456}}}
 	ad.upsert(addr, sample2)
 	data, idx = ad.get(addr)
@@ -902,11 +925,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(1, ad.len())
 	address, data = ad.getByIdx(0)
 	a.Equal(addr, address)
-	new1, ok := delta.GetBasicsAccountData(addr)
-	a.True(ok)
-	new1base := baseAccountData{}
-	new1base.SetAccountData(&new1)
-	a.Equal(accountDelta{newAcct: new1base, oldAcct: old1}, data)
+	a.Equal(accountDelta{newAcct: sample2.newAcct, oldAcct: old1}, data)
 
 	addr1 := ledgertesting.RandomAddress()
 	old2 := persistedAccountData{addr: addr1, accountData: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
@@ -914,7 +933,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(2, ad.len())
 	address, data = ad.getByIdx(0)
 	a.Equal(addr, address)
-	a.Equal(accountDelta{newAcct: new1base, oldAcct: old1}, data)
+	a.Equal(accountDelta{newAcct: sample2.newAcct, oldAcct: old1}, data)
 
 	address, data = ad.getByIdx(1)
 	a.Equal(addr1, address)
@@ -925,8 +944,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(2, ad.len())
 	address, data = ad.getByIdx(0)
 	a.Equal(addr, address)
-	new2 := old2.accountData
-	a.Equal(accountDelta{newAcct: new2, oldAcct: old2}, data)
+	a.Equal(accountDelta{newAcct: sample2.newAcct, oldAcct: old2}, data)
 
 	addr2 := ledgertesting.RandomAddress()
 	idx = ad.insert(addr2, sample2)
