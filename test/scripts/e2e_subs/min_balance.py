@@ -138,7 +138,6 @@ print(f"Joe & Flo: {joe}, {flo}")
 txinfo, err = goal.pay(goal.account, joe, amt=50_000_000, send=True)
 txinfo, err = goal.pay(goal.account, flo, amt=100_000_000, send=True)
 
-
 expected_goal_mb = CONSENSUS_MIN_BALANCE + APP_MIN_BALANCE
 
 # starting out, should be at global min
