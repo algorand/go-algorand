@@ -64,14 +64,14 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	}
 
 	// look up how many apps they have
-	totalAppParams, err := balances.CountAppParams(creator)
+	totalAppParams := record.TotalAppParams
 	if err != nil {
 		return
 	}
 
 	// Make sure the creator isn't already at the app creation max
 	maxAppsCreated := balances.ConsensusParams().MaxAppsCreated
-	if totalAppParams >= maxAppsCreated {
+	if totalAppParams >= uint32(maxAppsCreated) {
 		err = fmt.Errorf("cannot create app for %s: max created apps per acct is %d", creator.String(), maxAppsCreated)
 		return
 	}
@@ -94,6 +94,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	totalSchema := record.TotalAppSchema
 	totalSchema = totalSchema.AddSchema(ac.GlobalStateSchema)
 	record.TotalAppSchema = totalSchema
+	record.TotalAppParams = basics.AddSaturate32(record.TotalAppParams, 1)
 
 	// Update the cached TotalExtraAppPages for this account, used
 	// when computing MinBalance
@@ -140,6 +141,7 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 	globalSchema := params.GlobalStateSchema
 	totalSchema = totalSchema.SubSchema(globalSchema)
 	record.TotalAppSchema = totalSchema
+	record.TotalAppParams = basics.SubSaturate32(record.TotalAppParams, 1)
 
 	// Delete app's extra program pages
 	totalExtraPages := record.TotalExtraAppPages
@@ -152,13 +154,13 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 		record.TotalExtraAppPages = totalExtraPages
 	}
 
-	// Delete the AppParams
-	err = balances.DeleteAppParams(creator, appIdx)
+	err = balances.Put(creator, record)
 	if err != nil {
 		return err
 	}
 
-	err = balances.Put(creator, record)
+	// Delete the AppParams
+	err = balances.DeleteAppParams(creator, appIdx)
 	if err != nil {
 		return err
 	}
@@ -218,14 +220,14 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 		return fmt.Errorf("account %s has already opted in to app %d", sender.String(), appIdx)
 	}
 
-	totalAppLocalState, err := balances.CountAppLocalState(sender)
+	totalAppLocalState := record.TotalAppLocalStates
 	if err != nil {
 		return err
 	}
 
 	// Make sure the user isn't already at the app opt-in max
 	maxAppsOptedIn := balances.ConsensusParams().MaxAppsOptedIn
-	if totalAppLocalState >= maxAppsOptedIn {
+	if totalAppLocalState >= uint32(maxAppsOptedIn) {
 		return fmt.Errorf("cannot opt in app %d for %s: max opted-in apps per acct is %d", appIdx, sender.String(), maxAppsOptedIn)
 	}
 
@@ -239,6 +241,7 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 	totalSchema := record.TotalAppSchema
 	totalSchema = totalSchema.AddSchema(params.LocalStateSchema)
 	record.TotalAppSchema = totalSchema
+	record.TotalAppLocalStates = basics.AddSaturate32(record.TotalAppLocalStates, 1)
 
 	// Write opted-in user back to cow
 	err = balances.Put(sender, record)
@@ -282,15 +285,16 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 	totalSchema := record.TotalAppSchema
 	totalSchema = totalSchema.SubSchema(localState.Schema)
 	record.TotalAppSchema = totalSchema
+	record.TotalAppLocalStates = basics.SubSaturate32(record.TotalAppLocalStates, 1)
 
-	// Delete the local state
-	err = balances.DeleteAppLocalState(sender, appIdx)
+	// Write closed-out user back to cow
+	err = balances.Put(sender, record)
 	if err != nil {
 		return err
 	}
 
-	// Write closed-out user back to cow
-	err = balances.Put(sender, record)
+	// Delete the local state
+	err = balances.DeleteAppLocalState(sender, appIdx)
 	if err != nil {
 		return err
 	}

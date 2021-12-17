@@ -109,6 +109,11 @@ type ledgerTracker interface {
 	// has completed. An optional context is provided for long-running operations.
 	postCommit(context.Context, *deferredCommitContext)
 
+	// postCommitUnlocked is called only on a successful commitRound. In that case, each of the trackers have
+	// the chance to make changes that aren't state-dependent.
+	// An optional context is provided for long-running operations.
+	postCommitUnlocked(context.Context, *deferredCommitContext)
+
 	// handleUnorderedCommit is a special method for handling deferred commits that are out of order.
 	// Tracker might update own state in this case. For example, account updates tracker cancels
 	// scheduled catchpoint writing that deferred commit.
@@ -191,7 +196,7 @@ type deferredCommitRange struct {
 
 	isCatchpointRound bool
 
-	// catchpointWriting is a pointer to a varible with the same name in the catchpointTracker.
+	// catchpointWriting is a pointer to a variable with the same name in the catchpointTracker.
 	// it's used in order to reset the catchpointWriting flag from the acctupdates's
 	// prepareCommit/commitRound ( which is called before the corresponding catchpoint tracker method )
 	catchpointWriting *int32
@@ -207,7 +212,7 @@ type deferredCommitContext struct {
 
 	genesisProto config.ConsensusParams
 
-	deltas                 []ledgercore.AccountDeltas
+	deltas                 []ledgercore.NewAccountDeltas
 	roundTotals            ledgercore.AccountTotals
 	compactAccountDeltas   compactAccountDeltas
 	compactCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable
@@ -323,6 +328,8 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 	}
 	if cdr != nil {
 		dcc.deferredCommitRange = *cdr
+	} else {
+		dcc = nil
 	}
 
 	tr.mu.RLock()
@@ -470,6 +477,10 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) {
 	}
 	tr.lastFlushTime = dcc.flushTime
 	tr.mu.Unlock()
+
+	for _, lt := range tr.trackers {
+		lt.postCommitUnlocked(tr.ctx, dcc)
+	}
 
 }
 

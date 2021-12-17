@@ -165,6 +165,7 @@ various sizes.
 | `extract_uint16` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B+2 is larger than the array length, the program fails |
 | `extract_uint32` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B+4 is larger than the array length, the program fails |
 | `extract_uint64` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B+8 is larger than the array length, the program fails |
+| `base64_decode e` | decode X which was base64-encoded using _encoding_ E. Fail if X is not base64 encoded with encoding E |
 
 These opcodes take byte-array values that are interpreted as
 big-endian unsigned integers.  For mathematical operators, the

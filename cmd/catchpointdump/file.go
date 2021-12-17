@@ -158,7 +158,7 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 			// we already know it's valid, since we validated that above.
 			protocol.Decode(balancesBlockBytes, &fileHeader)
 		}
-		if time.Now().Sub(lastProgressUpdate) > 50*time.Millisecond && len(fileBytes) > 0 {
+		if time.Since(lastProgressUpdate) > 50*time.Millisecond && len(fileBytes) > 0 {
 			lastProgressUpdate = time.Now()
 			printLoadCatchpointProgressLine(int(float64(progress)*50.0/float64(len(fileBytes))), 50, int64(progress))
 		}
@@ -262,7 +262,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 
 			var addr basics.Address
 			if len(addrbuf) != len(addr) {
-				err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+				err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 				return
 			}
 			copy(addr[:], addrbuf)
@@ -273,7 +273,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 
 			fmt.Fprintf(fileWriter, "%v : %s\n", addr, string(jsonData))
 
-			if time.Now().Sub(lastProgressUpdate) > 50*time.Millisecond && rowsCount > 0 {
+			if time.Since(lastProgressUpdate) > 50*time.Millisecond && rowsCount > 0 {
 				lastProgressUpdate = time.Now()
 				printDumpingCatchpointProgressLine(int(float64(progress)*50.0/float64(rowsCount)), 50, int64(progress))
 			}

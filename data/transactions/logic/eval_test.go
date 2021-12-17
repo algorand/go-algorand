@@ -3719,6 +3719,54 @@ func BenchmarkBigMath(b *testing.B) {
 	}
 }
 
+func BenchmarkBase64Decode(b *testing.B) {
+	smallStd := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+	smallURL := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+	medStd := strings.Repeat(smallStd, 16)
+	medURL := strings.Repeat(smallURL, 16)
+	bigStd := strings.Repeat(medStd, 4)
+	bigURL := strings.Repeat(medURL, 4)
+
+	tags := []string{"small", "medium", "large"}
+	stds := []string{smallStd, medStd, bigStd}
+	urls := []string{smallURL, medURL, bigURL}
+	ops := []string{
+		"",
+		"len",
+		"b~",
+		"int 1; pop",
+		"keccak256",
+		"sha256",
+		"sha512_256",
+		"base64_decode StdEncoding",
+		"base64_decode URLEncoding",
+	}
+	benches := [][]string{}
+	for i, tag := range tags {
+		for _, op := range ops {
+			testName := op
+			encoded := stds[i]
+			if op == "base64_decode URLEncoding" {
+				encoded = urls[i]
+			}
+			if len(op) > 0 {
+				op += "; "
+			}
+			op += "pop"
+			benches = append(benches, []string{
+				fmt.Sprintf("%s_%s", testName, tag),
+				"",
+				fmt.Sprintf(`byte "%s"; %s`, encoded, op),
+				"int 1",
+			})
+		}
+	}
+	for _, bench := range benches {
+		b.Run(bench[0], func(b *testing.B) {
+			benchmarkOperation(b, bench[1], bench[2], bench[3])
+		})
+	}
+}
 func BenchmarkAddx64(b *testing.B) {
 	progs := [][]string{
 		{"add long stack", addBenchmarkSource},
@@ -4908,4 +4956,164 @@ func TestPcDetails(t *testing.T) {
 			require.Equal(t, test.det, det)
 		})
 	}
+}
+
+var minB64DecodeVersion uint64 = 6
+
+type b64DecodeTestCase struct {
+	Encoded     string
+	IsURL       bool
+	HasExtraNLs bool
+	Decoded     string
+	Error       error
+}
+
+var testCases = []b64DecodeTestCase{
+	{"TU9CWS1ESUNLOwoKb3IsIFRIRSBXSEFMRS4KCgpCeSBIZXJtYW4gTWVsdmlsbGU=",
+		false,
+		false,
+		`MOBY-DICK;
+
+or, THE WHALE.
+
+
+By Herman Melville`,
+		nil,
+	},
+	{"TU9CWS1ESUNLOwoKb3IsIFRIRSBXSEFMRS4KCgpCeSBIZXJtYW4gTWVsdmlsbGU=",
+		true,
+		false,
+		`MOBY-DICK;
+
+or, THE WHALE.
+
+
+By Herman Melville`,
+		nil,
+	},
+	{"YWJjMTIzIT8kKiYoKSctPUB+", false, false, "abc123!?$*&()'-=@~", nil},
+	{"YWJjMTIzIT8kKiYoKSctPUB-", true, false, "abc123!?$*&()'-=@~", nil},
+	{"YWJjMTIzIT8kKiYoKSctPUB+", true, false, "", base64.CorruptInputError(23)},
+	{"YWJjMTIzIT8kKiYoKSctPUB-", false, false, "", base64.CorruptInputError(23)},
+
+	// try extra ='s and various whitespace:
+	{"", false, false, "", nil},
+	{"", true, false, "", nil},
+	{"=", false, true, "", base64.CorruptInputError(0)},
+	{"=", true, true, "", base64.CorruptInputError(0)},
+	{" ", false, true, "", base64.CorruptInputError(0)},
+	{" ", true, true, "", base64.CorruptInputError(0)},
+	{"\t", false, true, "", base64.CorruptInputError(0)},
+	{"\t", true, true, "", base64.CorruptInputError(0)},
+	{"\r", false, true, "", nil},
+	{"\r", true, true, "", nil},
+	{"\n", false, true, "", nil},
+	{"\n", true, true, "", nil},
+
+	{"YWJjMTIzIT8kKiYoKSctPUB+\n", false, true, "abc123!?$*&()'-=@~", nil},
+	{"YWJjMTIzIT8kKiYoKSctPUB-\n", true, true, "abc123!?$*&()'-=@~", nil},
+	{"YWJjMTIzIT8kK\riYoKSctPUB+\n", false, true, "abc123!?$*&()'-=@~", nil},
+	{"YWJjMTIzIT8kK\riYoKSctPUB-\n", true, true, "abc123!?$*&()'-=@~", nil},
+	{"\n\rYWJjMTIzIT8\rkKiYoKSctPUB+\n", false, true, "abc123!?$*&()'-=@~", nil},
+	{"\n\rYWJjMTIzIT8\rkKiYoKSctPUB-\n", true, true, "abc123!?$*&()'-=@~", nil},
+
+	// padding and extra legal whitespace
+	{"SQ==", false, false, "I", nil},
+	{"SQ==", true, false, "I", nil},
+	{"\rS\r\nQ=\n=\r\r\n", false, true, "I", nil},
+	{"\rS\r\nQ=\n=\r\r\n", true, true, "I", nil},
+
+	// Padding necessary? - Yes it is! And exactly the expected place and amount.
+	{"SQ==", false, false, "I", nil},
+	{"SQ==", true, false, "I", nil},
+	{"S=Q=", false, false, "", base64.CorruptInputError(1)},
+	{"S=Q=", true, false, "", base64.CorruptInputError(1)},
+	{"=SQ=", false, false, "", base64.CorruptInputError(0)},
+	{"=SQ=", true, false, "", base64.CorruptInputError(0)},
+	{"SQ", false, false, "", base64.CorruptInputError(0)},
+	{"SQ", true, false, "", base64.CorruptInputError(0)},
+	{"SQ=", false, false, "", base64.CorruptInputError(3)},
+	{"SQ=", true, false, "", base64.CorruptInputError(3)},
+	{"SQ===", false, false, "", base64.CorruptInputError(4)},
+	{"SQ===", true, false, "", base64.CorruptInputError(4)},
+}
+
+func TestBase64DecodeFunc(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, testCase := range testCases {
+		encoding := base64.StdEncoding
+		if testCase.IsURL {
+			encoding = base64.URLEncoding
+		}
+		// sanity check:
+		if testCase.Error == nil && !testCase.HasExtraNLs {
+			require.Equal(t, testCase.Encoded, encoding.EncodeToString([]byte(testCase.Decoded)))
+		}
+
+		decoded, err := base64Decode([]byte(testCase.Encoded), encoding)
+		require.Equal(t, testCase.Error, err, fmt.Sprintf("Error (%s): case decode [%s] -> [%s]", err, testCase.Encoded, testCase.Decoded))
+		require.Equal(t, []byte(testCase.Decoded), decoded)
+	}
+}
+
+type b64DecodeTestArgs struct {
+	Raw     []byte
+	Encoded []byte
+	IsURL   bool
+	Program []byte
+}
+
+func b64TestDecodeAssembleWithArgs(t *testing.T) []b64DecodeTestArgs {
+	sourceTmpl := `#pragma version %d
+arg 0
+arg 1
+base64_decode %s
+==`
+	args := []b64DecodeTestArgs{}
+	for _, testCase := range testCases {
+		if testCase.Error == nil {
+			field := "StdEncoding"
+			if testCase.IsURL {
+				field = "URLEncoding"
+			}
+			source := fmt.Sprintf(sourceTmpl, minB64DecodeVersion, field)
+			ops, err := AssembleStringWithVersion(source, minB64DecodeVersion)
+			require.NoError(t, err)
+
+			arg := b64DecodeTestArgs{
+				Raw:     []byte(testCase.Decoded),
+				Encoded: []byte(testCase.Encoded),
+				IsURL:   testCase.IsURL,
+				Program: ops.Program,
+			}
+			args = append(args, arg)
+		}
+	}
+	return args
+}
+
+func b64TestDecodeEval(tb testing.TB, args []b64DecodeTestArgs) {
+	for _, data := range args {
+		var txn transactions.SignedTxn
+		txn.Lsig.Logic = data.Program
+		txn.Lsig.Args = [][]byte{data.Raw[:], data.Encoded[:]}
+		ep := defaultEvalParams(&strings.Builder{}, &txn)
+		pass, err := Eval(data.Program, ep)
+		if err != nil {
+			require.NoError(tb, err)
+		}
+		if !pass {
+			fmt.Printf("FAILING WITH data = %#v", data)
+			require.True(tb, pass)
+		}
+	}
+}
+
+func TestOpBase64Decode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	args := b64TestDecodeAssembleWithArgs(t)
+	b64TestDecodeEval(t, args)
 }

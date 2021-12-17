@@ -410,12 +410,15 @@ func (ct *catchpointTracker) postCommit(ctx context.Context, dcc *deferredCommit
 	ct.roundDigest = ct.roundDigest[dcc.offset:]
 
 	ct.catchpointsMu.Unlock()
+}
 
+func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 	if dcc.isCatchpointRound && ct.archivalLedger && dcc.catchpointLabel != "" {
 		// generate the catchpoint file. This need to be done inline so that it will block any new accounts that from being written.
 		// the generateCatchpoint expects that the accounts data would not be modified in the background during it's execution.
 		ct.generateCatchpoint(ctx, basics.Round(dcc.offset)+dcc.oldBase+dcc.lookback, dcc.catchpointLabel, dcc.committedRoundDigest, dcc.updatingBalancesDuration)
 	}
+
 	// in scheduleCommit, we expect that this function to update the catchpointWriting when
 	// it's on a catchpoint round and it's an archival ledger. Doing this in a deferred function
 	// here would prevent us from "forgetting" to update this variable later on.
@@ -456,8 +459,8 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 
 	for i := 0; i < accountsDeltas.len(); i++ {
 		addr, delta := accountsDeltas.getByIdx(i)
-		if !delta.old.accountData.IsZero() {
-			deleteHash := accountHashBuilder(addr, delta.old.accountData, protocol.Encode(&delta.old.accountData))
+		if !delta.oldAcct.accountData.MsgIsZero() {
+			deleteHash := accountHashBuilderV6(addr, &delta.oldAcct.accountData, protocol.Encode(&delta.oldAcct.accountData))
 			deleted, err = ct.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
@@ -469,8 +472,8 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 			}
 		}
 
-		if !delta.new.IsZero() {
-			addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
+		if !delta.newAcct.MsgIsZero() {
+			addHash := accountHashBuilderV6(addr, &delta.newAcct, protocol.Encode(&delta.newAcct))
 			added, err = ct.balancesTrie.Add(addHash)
 			if err != nil {
 				return fmt.Errorf("attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)

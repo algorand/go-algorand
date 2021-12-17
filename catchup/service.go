@@ -195,7 +195,11 @@ func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeepin
 }
 
 // fetchAndWrite fetches a block, checks the cert, and writes it to the ledger. Cert checking and ledger writing both wait for the ledger to advance if necessary.
-// Returns false if we couldn't fetch or write (i.e., if we failed even after a given number of retries or if we were told to abort.)
+// Returns false if we should stop trying to catch up.  This may occur for several reasons:
+//  - If the context is canceled (e.g. if the node is shutting down)
+//  - If we couldn't fetch the block (e.g. if there are no peers available or we've reached the catchupRetryLimit)
+//  - If the block is already in the ledger (e.g. if agreement service has already written it)
+//  - If the retrieval of the previous block was unsuccessful
 func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool, peerSelector *peerSelector) bool {
 	i := 0
 	hasLookback := false
@@ -241,8 +245,10 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 
 		if err != nil {
 			if err == errLedgerAlreadyHasBlock {
-				// ledger already has the block, no need to request this block from anyone.
-				return true
+				// ledger already has the block, no need to request this block.
+				// only the agreement could have added this block into the ledger, catchup is complete
+				s.log.Infof("fetchAndWrite(%d): the block is already in the ledger. The catchup is complete", r)
+				return false
 			}
 			s.log.Debugf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
 			peerSelector.rankPeer(psp, peerRankDownloadFailed)
@@ -353,8 +359,10 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 						s.log.Infof("fetchAndWrite(%d): no need to re-evaluate historical block", r)
 						return true
 					case ledgercore.BlockInLedgerError:
-						s.log.Infof("fetchAndWrite(%d): block already in ledger", r)
-						return true
+						// the block was added to the ledger from elsewhere after fetching it here
+						// only the agreement could have added this block into the ledger, catchup is complete
+						s.log.Infof("fetchAndWrite(%d): after fetching the block, it is already in the ledger. The catchup is complete", r)
+						return false
 					case protocol.Error:
 						if !s.protocolErrorLogged {
 							logging.Base().Errorf("fetchAndWrite(%v): unrecoverable protocol error detected: %v", r, err)
@@ -387,7 +395,7 @@ func (s *Service) pipelineCallback(r basics.Round, thisFetchComplete chan bool, 
 		thisFetchComplete <- fetchResult
 
 		if !fetchResult {
-			s.log.Infof("failed to fetch block %v", r)
+			s.log.Infof("pipelineCallback(%d): did not fetch or write the block", r)
 			return 0
 		}
 		return r

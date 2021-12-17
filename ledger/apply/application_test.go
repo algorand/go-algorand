@@ -160,9 +160,9 @@ func newTestBalancesPass() *testBalancesPass {
 const appIdxError basics.AppIndex = 0x11223344
 const appIdxOk basics.AppIndex = 1
 
-func (b *testBalances) Get(addr basics.Address, withPendingRewards bool) (AccountData, error) {
+func (b *testBalances) Get(addr basics.Address, withPendingRewards bool) (ledgercore.AccountData, error) {
 	acct, err := b.getAccount(addr, withPendingRewards)
-	return ToApplyAccountData(acct), err
+	return ledgercore.ToAccountData(acct), err
 }
 
 func (b *testBalances) getAccount(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
@@ -179,10 +179,10 @@ func (b *testBalances) getAccount(addr basics.Address, withPendingRewards bool) 
 	return ad, nil
 }
 
-func (b *testBalances) Put(addr basics.Address, ad AccountData) error {
+func (b *testBalances) Put(addr basics.Address, ad ledgercore.AccountData) error {
 	b.put++
 	a, _ := b.getAccount(addr, false) // ignoring not found error
-	AssignAccountData(&a, ad)
+	ledgercore.AssignAccountData(&a, ad)
 	return b.putAccount(addr, a)
 }
 
@@ -279,9 +279,9 @@ func (b *testBalances) StatefulEval(params logic.EvalParams, aidx basics.AppInde
 	return b.pass, b.delta, b.err
 }
 
-func (b *testBalancesPass) Get(addr basics.Address, withPendingRewards bool) (AccountData, error) {
+func (b *testBalancesPass) Get(addr basics.Address, withPendingRewards bool) (ledgercore.AccountData, error) {
 	acct, err := b.getAccount(addr, withPendingRewards)
-	return ToApplyAccountData(acct), err
+	return ledgercore.ToAccountData(acct), err
 }
 
 func (b *testBalancesPass) getAccount(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
@@ -292,9 +292,9 @@ func (b *testBalancesPass) getAccount(addr basics.Address, withPendingRewards bo
 	return ad, nil
 }
 
-func (b *testBalancesPass) Put(addr basics.Address, ad AccountData) error {
+func (b *testBalancesPass) Put(addr basics.Address, ad ledgercore.AccountData) error {
 	a, _ := b.getAccount(addr, false) // ignoring not found error
-	AssignAccountData(&a, ad)
+	ledgercore.AssignAccountData(&a, ad)
 	return b.putAccount(addr, a)
 }
 

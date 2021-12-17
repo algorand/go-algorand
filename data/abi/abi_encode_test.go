@@ -1001,3 +1001,55 @@ func TestRandomABIEncodeDecodeRoundTrip(t *testing.T) {
 	addTupleRandomValues(t, Tuple, &testValuePool)
 	categorySelfRoundTripTest(t, testValuePool[Tuple])
 }
+
+func TestParseMethodSignature(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	tests := []struct {
+		signature  string
+		name       string
+		argTypes   []string
+		returnType string
+	}{
+		{
+			signature:  "add(uint8,uint16,pay,account,txn)uint32",
+			name:       "add",
+			argTypes:   []string{"uint8", "uint16", "pay", "account", "txn"},
+			returnType: "uint32",
+		},
+		{
+			signature:  "nothing()void",
+			name:       "nothing",
+			argTypes:   []string{},
+			returnType: "void",
+		},
+		{
+			signature:  "tupleArgs((uint8,uint128),account,(string,(bool,bool)))bool",
+			name:       "tupleArgs",
+			argTypes:   []string{"(uint8,uint128)", "account", "(string,(bool,bool))"},
+			returnType: "bool",
+		},
+		{
+			signature:  "tupleReturn(uint64)(bool,bool,bool)",
+			name:       "tupleReturn",
+			argTypes:   []string{"uint64"},
+			returnType: "(bool,bool,bool)",
+		},
+		{
+			signature:  "tupleArgsAndReturn((uint8,uint128),account,(string,(bool,bool)))(bool,bool,bool)",
+			name:       "tupleArgsAndReturn",
+			argTypes:   []string{"(uint8,uint128)", "account", "(string,(bool,bool))"},
+			returnType: "(bool,bool,bool)",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.signature, func(t *testing.T) {
+			name, argTypes, returnType, err := ParseMethodSignature(test.signature)
+			require.NoError(t, err)
+			require.Equal(t, test.name, name)
+			require.Equal(t, test.argTypes, argTypes)
+			require.Equal(t, test.returnType, returnType)
+		})
+	}
+}

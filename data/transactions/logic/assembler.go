@@ -1244,6 +1244,28 @@ func assembleEcdsa(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
+func assembleBase64Decode(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 1 {
+		return ops.errorf("%s expects one argument", spec.Name)
+	}
+
+	encoding, ok := base64EncodingSpecByName[args[0]]
+	if !ok {
+		return ops.errorf("%s unknown encoding: %#v", spec.Name, args[0])
+	}
+	if encoding.version > ops.Version {
+		//nolint:errcheck // we continue to maintain typestack
+		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], encoding.version)
+	}
+
+	val := encoding.field
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(val))
+	ops.trace("%s (%s)", encoding.field, encoding.ftype)
+	ops.returns(encoding.ftype)
+	return nil
+}
+
 type assembleFunc func(*OpStream, *OpSpec, []string) error
 
 // Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
@@ -2666,6 +2688,20 @@ func disEcdsa(dis *disassembleState, spec *OpSpec) (string, error) {
 		return "", fmt.Errorf("invalid curve arg index %d at pc=%d", arg, dis.pc)
 	}
 	return fmt.Sprintf("%s %s", spec.Name, EcdsaCurveNames[arg]), nil
+}
+
+func disBase64Decode(dis *disassembleState, spec *OpSpec) (string, error) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+	}
+	dis.nextpc = dis.pc + 2
+	b64dArg := dis.program[dis.pc+1]
+	if int(b64dArg) >= len(base64EncodingNames) {
+		return "", fmt.Errorf("invalid base64_decode arg index %d at pc=%d", b64dArg, dis.pc)
+	}
+	return fmt.Sprintf("%s %s", spec.Name, base64EncodingNames[b64dArg]), nil
 }
 
 type disInfo struct {

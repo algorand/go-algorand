@@ -17,6 +17,8 @@
 package ledgercore
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -69,7 +71,10 @@ type Txlease struct {
 // StateDelta describes the delta between a given round to the previous round
 type StateDelta struct {
 	// modified accounts
-	Accts AccountDeltas
+	// Accts AccountDeltas
+
+	// modified new accounts
+	NewAccts NewAccountDeltas
 
 	// new Txids for the txtail and TxnCounter, mapped to txn.LastValid
 	Txids map[transactions.Txid]basics.Round
@@ -103,12 +108,71 @@ type StateDelta struct {
 }
 
 // AccountDeltas stores ordered accounts and allows fast lookup by address
-type AccountDeltas struct {
+// type AccountDeltas struct {
+// 	// Actual data. If an account is deleted, `accts` contains a balance record
+// 	// with empty `AccountData`.
+// 	accts []basics.BalanceRecord
+// 	// cache for addr to deltas index resolution
+// 	acctsCache map[basics.Address]int
+// }
+
+// NewBalanceRecord todo
+type NewBalanceRecord struct {
+	Addr basics.Address
+
+	AccountData
+}
+
+// AppParamsRecord todo
+type AppParamsRecord struct {
+	Aidx   basics.AppIndex
+	Addr   basics.Address
+	Params *basics.AppParams
+}
+
+// AssetParamsRecord todo
+type AssetParamsRecord struct {
+	Aidx   basics.AssetIndex
+	Addr   basics.Address
+	Params *basics.AssetParams
+}
+
+// AppLocalStateRecord todo
+type AppLocalStateRecord struct {
+	Aidx  basics.AppIndex
+	Addr  basics.Address
+	State *basics.AppLocalState
+}
+
+// AssetHoldingRecord TODO
+type AssetHoldingRecord struct {
+	Aidx    basics.AssetIndex
+	Addr    basics.Address
+	Holding *basics.AssetHolding
+}
+
+// NewAccountDeltas stores ordered accounts and allows fast lookup by address
+type NewAccountDeltas struct {
 	// Actual data. If an account is deleted, `accts` contains a balance record
 	// with empty `AccountData`.
-	accts []basics.BalanceRecord
+	accts []NewBalanceRecord
 	// cache for addr to deltas index resolution
 	acctsCache map[basics.Address]int
+
+	// AppParams deltas. If app params is deleted, there is a nil value in AppParamsRecord.params
+	appParams []AppParamsRecord
+	// caches for {addr, app id} to app params delta resolution
+	appParamsCache map[AccountApp]int
+
+	// Similar data for asset params, local states and holdings
+	appLocalStates      []AppLocalStateRecord
+	appLocalStatesCache map[AccountApp]int
+
+	assetParams      []AssetParamsRecord
+	assetParamsCache map[AccountAsset]int
+
+	assetHoldings      []AssetHoldingRecord
+	assetHoldingsCache map[AccountAsset]int
 }
 
 // MakeStateDelta creates a new instance of StateDelta.
@@ -116,10 +180,7 @@ type AccountDeltas struct {
 // This does not play well for AssetConfig and ApplicationCall transactions on scale
 func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, compactCertNext basics.Round) StateDelta {
 	return StateDelta{
-		Accts: AccountDeltas{
-			accts:      make([]basics.BalanceRecord, 0, hint*2),
-			acctsCache: make(map[basics.Address]int, hint*2),
-		},
+		NewAccts: MakeNewAccountDeltas(hint),
 		Txids:    make(map[transactions.Txid]basics.Round, hint),
 		Txleases: make(map[Txlease]basics.Round, hint),
 		// asset or application creation are considered as rare events so do not pre-allocate space for them
@@ -133,56 +194,341 @@ func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int,
 	}
 }
 
-// Get lookups AccountData by address
-func (ad *AccountDeltas) Get(addr basics.Address) (basics.AccountData, bool) {
+// MakeNewAccountDeltas creates account delta
+func MakeNewAccountDeltas(hint int) NewAccountDeltas {
+	return NewAccountDeltas{
+		accts:      make([]NewBalanceRecord, 0, hint*2),
+		acctsCache: make(map[basics.Address]int, hint*2),
+
+		appParamsCache:      make(map[AccountApp]int),
+		appLocalStatesCache: make(map[AccountApp]int),
+		assetParamsCache:    make(map[AccountAsset]int),
+		assetHoldingsCache:  make(map[AccountAsset]int),
+	}
+}
+
+// GetData lookups AccountData by address
+func (ad NewAccountDeltas) GetData(addr basics.Address) (AccountData, bool) {
 	idx, ok := ad.acctsCache[addr]
 	if !ok {
-		return basics.AccountData{}, false
+		return AccountData{}, false
 	}
 	return ad.accts[idx].AccountData, true
 }
 
+// GetAppParams returns app params delta value
+func (ad NewAccountDeltas) GetAppParams(addr basics.Address, aidx basics.AppIndex) (*basics.AppParams, bool) {
+	idx, ok := ad.appParamsCache[AccountApp{addr, aidx}]
+	var result *basics.AppParams
+	if ok {
+		result = ad.appParams[idx].Params
+	}
+	return result, ok
+}
+
+// GetAssetParams returns asset params delta value
+func (ad NewAccountDeltas) GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (*basics.AssetParams, bool) {
+	idx, ok := ad.assetParamsCache[AccountAsset{addr, aidx}]
+	var result *basics.AssetParams
+	if ok {
+		result = ad.assetParams[idx].Params
+	}
+	return result, ok
+}
+
+// GetAppLocalState returns app local state delta value
+func (ad NewAccountDeltas) GetAppLocalState(addr basics.Address, aidx basics.AppIndex) (*basics.AppLocalState, bool) {
+	idx, ok := ad.appLocalStatesCache[AccountApp{addr, aidx}]
+	var result *basics.AppLocalState
+	if ok {
+		result = ad.appLocalStates[idx].State
+	}
+	return result, ok
+}
+
+// GetAssetHolding returns asset holding delta value
+func (ad NewAccountDeltas) GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (*basics.AssetHolding, bool) {
+	idx, ok := ad.assetHoldingsCache[AccountAsset{addr, aidx}]
+	var result *basics.AssetHolding
+	if ok {
+		result = ad.assetHoldings[idx].Holding
+	}
+	return result, ok
+}
+
 // ModifiedAccounts returns list of addresses of modified accounts
-func (ad *AccountDeltas) ModifiedAccounts() []basics.Address {
+func (ad NewAccountDeltas) ModifiedAccounts() []basics.Address {
 	result := make([]basics.Address, len(ad.accts))
 	for i := 0; i < len(ad.accts); i++ {
 		result[i] = ad.accts[i].Addr
 	}
+
+	// consistency check: ensure all addresses in params/holdings/states are also in base account
+	// TODO: remove after the schema switch
+	for aapp := range ad.appParamsCache {
+		if _, ok := ad.acctsCache[aapp.Address]; !ok {
+			panic(fmt.Sprintf("account app param delta: addr %s not in base account", aapp.Address))
+		}
+	}
+	for aapp := range ad.appLocalStatesCache {
+		if _, ok := ad.acctsCache[aapp.Address]; !ok {
+			panic(fmt.Sprintf("account app state delta: addr %s not in base account", aapp.Address))
+		}
+	}
+	for aapp := range ad.assetParamsCache {
+		if _, ok := ad.acctsCache[aapp.Address]; !ok {
+			panic(fmt.Sprintf("account asset param delta: addr %s not in base account", aapp.Address))
+		}
+	}
+	for aapp := range ad.assetHoldingsCache {
+		if _, ok := ad.acctsCache[aapp.Address]; !ok {
+			panic(fmt.Sprintf("account asset holding delta: addr %s not in base account", aapp.Address))
+		}
+	}
+
 	return result
 }
 
 // MergeAccounts applies other accounts into this StateDelta accounts
-func (ad *AccountDeltas) MergeAccounts(other AccountDeltas) {
+func (ad *NewAccountDeltas) MergeAccounts(other NewAccountDeltas) {
 	for new := range other.accts {
-		ad.upsert(other.accts[new])
+		addr := other.accts[new].Addr
+		acct := other.accts[new].AccountData
+		ad.Upsert(addr, acct)
+	}
+
+	for aapp, idx := range other.appParamsCache {
+		params := other.appParams[idx].Params
+		ad.UpsertAppParams(aapp.Address, aapp.App, params)
+	}
+	for aapp, idx := range other.appLocalStatesCache {
+		state := other.appLocalStates[idx].State
+		ad.UpsertAppLocalState(aapp.Address, aapp.App, state)
+	}
+	for aapp, idx := range other.assetParamsCache {
+		params := other.assetParams[idx].Params
+		ad.UpsertAssetParams(aapp.Address, aapp.Asset, params)
+	}
+	for aapp, idx := range other.assetHoldingsCache {
+		holding := other.assetHoldings[idx].Holding
+		ad.UpsertAssetHolding(aapp.Address, aapp.Asset, holding)
+	}
+}
+
+// Clone copies all map in NewAccountDeltas but does not reallocates inner arrays like addresses or metadata inside asset params
+func (ad NewAccountDeltas) Clone() NewAccountDeltas {
+	clone := NewAccountDeltas{
+		accts:      make([]NewBalanceRecord, len(ad.accts)),
+		acctsCache: make(map[basics.Address]int, len(ad.acctsCache)),
+
+		appParams:           make([]AppParamsRecord, len(ad.appParams)),
+		appParamsCache:      make(map[AccountApp]int, len(ad.appParamsCache)),
+		appLocalStates:      make([]AppLocalStateRecord, len(ad.appLocalStates)),
+		appLocalStatesCache: make(map[AccountApp]int, len(ad.appLocalStatesCache)),
+		assetParams:         make([]AssetParamsRecord, len(ad.assetParams)),
+		assetParamsCache:    make(map[AccountAsset]int, len(ad.assetParamsCache)),
+		assetHoldings:       make([]AssetHoldingRecord, len(ad.assetHoldings)),
+		assetHoldingsCache:  make(map[AccountAsset]int, len(ad.assetHoldingsCache)),
+	}
+
+	for idx := range ad.accts {
+		clone.accts[idx] = ad.accts[idx]
+	}
+	for addr, idx := range ad.acctsCache {
+		clone.acctsCache[addr] = idx
+	}
+
+	for idx, rec := range ad.appParams {
+		val := rec.Params
+		if val == nil {
+			clone.appParams[idx] = AppParamsRecord{rec.Aidx, rec.Addr, nil}
+		} else {
+			cp := *val
+			clone.appParams[idx] = AppParamsRecord{rec.Aidx, rec.Addr, &cp}
+		}
+	}
+	for aapp, idx := range ad.appParamsCache {
+		clone.appParamsCache[aapp] = idx
+	}
+
+	for idx, rec := range ad.appLocalStates {
+		val := rec.State
+		if val == nil {
+			clone.appLocalStates[idx] = AppLocalStateRecord{rec.Aidx, rec.Addr, nil}
+		} else {
+			cp := *val
+			clone.appLocalStates[idx] = AppLocalStateRecord{rec.Aidx, rec.Addr, &cp}
+		}
+	}
+	for aapp, idx := range ad.appLocalStatesCache {
+		clone.appLocalStatesCache[aapp] = idx
+	}
+
+	for idx, rec := range ad.assetParams {
+		val := rec.Params
+		if val == nil {
+			clone.assetParams[idx] = AssetParamsRecord{rec.Aidx, rec.Addr, nil}
+		} else {
+			cp := *val
+			clone.assetParams[idx] = AssetParamsRecord{rec.Aidx, rec.Addr, &cp}
+		}
+	}
+	for aapp, idx := range ad.assetParamsCache {
+		clone.assetParamsCache[aapp] = idx
+	}
+
+	for idx, rec := range ad.assetHoldings {
+		val := rec.Holding
+		if val == nil {
+			clone.assetHoldings[idx] = AssetHoldingRecord{rec.Aidx, rec.Addr, nil}
+		} else {
+			cp := *val
+			clone.assetHoldings[idx] = AssetHoldingRecord{rec.Aidx, rec.Addr, &cp}
+		}
+	}
+	for aapp, idx := range ad.assetHoldingsCache {
+		clone.assetHoldingsCache[aapp] = idx
+	}
+
+	return clone
+}
+
+// GetResource looks up a pair of app or asset resources, given its index and type.
+func (ad NewAccountDeltas) GetResource(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ret AccountResource, ok bool) {
+	ret.CreatableIndex = aidx
+	ret.CreatableType = ctype
+	switch ctype {
+	case basics.AssetCreatable:
+		aa := AccountAsset{addr, basics.AssetIndex(aidx)}
+		paramsIdx, okParams := ad.assetParamsCache[aa]
+		if okParams {
+			ret.AssetParam = ad.assetParams[paramsIdx].Params
+		}
+		holdingIdx, okHolding := ad.assetHoldingsCache[aa]
+		if okHolding {
+			ret.AssetHolding = ad.assetHoldings[holdingIdx].Holding
+		}
+		return ret, okHolding || okParams
+	case basics.AppCreatable:
+		aa := AccountApp{addr, basics.AppIndex(aidx)}
+		paramsIdx, okParams := ad.appParamsCache[aa]
+		if okParams {
+			ret.AppParams = ad.appParams[paramsIdx].Params
+		}
+		localStateIdx, okLocalState := ad.appLocalStatesCache[aa]
+		if okLocalState {
+			ret.AppLocalState = ad.appLocalStates[localStateIdx].State
+		}
+		return ret, okLocalState || okParams
+	}
+	return ret, false
+}
+
+// MergeInMatchingAccounts adds data from other for matching addresses.
+// It assumes ad is newer than other
+// This function requires accts/acctsCache include addresses for all resource deltas
+func (ad *NewAccountDeltas) MergeInMatchingAccounts(other NewAccountDeltas) {
+	// safety checks
+	// ModifiedAccounts panic if accts/acctsCache mismatch to resource deltas
+	ad.ModifiedAccounts()
+	other.ModifiedAccounts()
+
+	// do not update accts/acctsCache because ad is newer
+
+	// find missing params/holdings/states to add into newer delta
+	for _, rec := range other.appParams {
+		addr := rec.Addr
+		if _, ok := ad.acctsCache[addr]; ok {
+			key := AccountApp{addr, rec.Aidx}
+			// address is in newer delta, add params if needed
+			if _, ok := ad.appParamsCache[key]; !ok {
+				var newVal *basics.AppParams
+				if rec.Params != nil {
+					cp := *rec.Params
+					newVal = &cp
+				}
+				last := len(ad.appParams)
+				ad.appParams = append(ad.appParams, AppParamsRecord{rec.Aidx, addr, newVal})
+				ad.appParamsCache[key] = last
+			}
+		}
+	}
+
+	for _, rec := range other.appLocalStates {
+		addr := rec.Addr
+		if _, ok := ad.acctsCache[addr]; ok {
+			key := AccountApp{addr, rec.Aidx}
+			// address is in newer delta, add state if needed
+			if _, ok := ad.appLocalStatesCache[key]; !ok {
+				var newVal *basics.AppLocalState
+				if rec.State != nil {
+					cp := *rec.State
+					newVal = &cp
+				}
+				last := len(ad.appLocalStates)
+				ad.appLocalStates = append(ad.appLocalStates, AppLocalStateRecord{rec.Aidx, addr, newVal})
+				ad.appLocalStatesCache[key] = last
+			}
+		}
+	}
+
+	for _, rec := range other.assetParams {
+		addr := rec.Addr
+		if _, ok := ad.acctsCache[addr]; ok {
+			key := AccountAsset{addr, rec.Aidx}
+			// address is in newer delta, add params if needed
+			if _, ok := ad.assetParamsCache[key]; !ok {
+				var newVal *basics.AssetParams
+				if rec.Params != nil {
+					cp := *rec.Params
+					newVal = &cp
+				}
+				last := len(ad.assetParams)
+				ad.assetParams = append(ad.assetParams, AssetParamsRecord{rec.Aidx, addr, newVal})
+				ad.assetParamsCache[key] = last
+			}
+		}
+	}
+
+	for _, rec := range other.assetHoldings {
+		addr := rec.Addr
+		if _, ok := ad.acctsCache[addr]; ok {
+			key := AccountAsset{addr, rec.Aidx}
+			// address is in newer delta, add params if needed
+			if _, ok := ad.assetHoldingsCache[key]; !ok {
+				var newVal *basics.AssetHolding
+				if rec.Holding != nil {
+					cp := *rec.Holding
+					newVal = &cp
+				}
+				last := len(ad.assetHoldings)
+				ad.assetHoldings = append(ad.assetHoldings, AssetHoldingRecord{rec.Aidx, addr, newVal})
+				ad.assetHoldingsCache[key] = last
+			}
+		}
 	}
 }
 
 // Len returns number of stored accounts
-func (ad *AccountDeltas) Len() int {
+func (ad *NewAccountDeltas) Len() int {
 	return len(ad.accts)
 }
 
 // GetByIdx returns address and AccountData
 // It does NOT check boundaries.
-func (ad *AccountDeltas) GetByIdx(i int) (basics.Address, basics.AccountData) {
+func (ad *NewAccountDeltas) GetByIdx(i int) (basics.Address, AccountData) {
 	return ad.accts[i].Addr, ad.accts[i].AccountData
 }
 
-// Upsert adds new or updates existing account account
-func (ad *AccountDeltas) Upsert(addr basics.Address, data basics.AccountData) {
-	ad.upsert(basics.BalanceRecord{Addr: addr, AccountData: data})
-}
-
-func (ad *AccountDeltas) upsert(br basics.BalanceRecord) {
-	addr := br.Addr
+// Upsert adds ledgercore.AccountData into deltas
+func (ad *NewAccountDeltas) Upsert(addr basics.Address, data AccountData) {
 	if idx, exist := ad.acctsCache[addr]; exist { // nil map lookup is OK
-		ad.accts[idx] = br
+		ad.accts[idx] = NewBalanceRecord{Addr: addr, AccountData: data}
 		return
 	}
 
 	last := len(ad.accts)
-	ad.accts = append(ad.accts, br)
+	ad.accts = append(ad.accts, NewBalanceRecord{Addr: addr, AccountData: data})
 
 	if ad.acctsCache == nil {
 		ad.acctsCache = make(map[basics.Address]int)
@@ -190,25 +536,99 @@ func (ad *AccountDeltas) upsert(br basics.BalanceRecord) {
 	ad.acctsCache[addr] = last
 }
 
+// UpsertAppParams adds app params delta
+func (ad *NewAccountDeltas) UpsertAppParams(addr basics.Address, aidx basics.AppIndex, params *basics.AppParams) {
+	key := AccountApp{addr, aidx}
+	value := AppParamsRecord{aidx, addr, params}
+	if idx, exist := ad.appParamsCache[key]; exist {
+		ad.appParams[idx] = value
+		return
+	}
+
+	last := len(ad.appParams)
+	ad.appParams = append(ad.appParams, value)
+
+	if ad.appParamsCache == nil {
+		ad.appParamsCache = make(map[AccountApp]int)
+	}
+	ad.appParamsCache[key] = last
+}
+
+// UpsertAssetParams adds asset params delta
+func (ad *NewAccountDeltas) UpsertAssetParams(addr basics.Address, aidx basics.AssetIndex, params *basics.AssetParams) {
+	key := AccountAsset{addr, aidx}
+	value := AssetParamsRecord{aidx, addr, params}
+	if idx, exist := ad.assetParamsCache[key]; exist {
+		ad.assetParams[idx] = value
+		return
+	}
+
+	last := len(ad.assetParams)
+	ad.assetParams = append(ad.assetParams, AssetParamsRecord{aidx, addr, params})
+
+	if ad.assetParamsCache == nil {
+		ad.assetParamsCache = make(map[AccountAsset]int)
+	}
+	ad.assetParamsCache[key] = last
+}
+
+// UpsertAppLocalState adds app local state delta
+func (ad *NewAccountDeltas) UpsertAppLocalState(addr basics.Address, aidx basics.AppIndex, ls *basics.AppLocalState) {
+	key := AccountApp{addr, aidx}
+	value := AppLocalStateRecord{aidx, addr, ls}
+	if idx, exist := ad.appLocalStatesCache[key]; exist {
+		ad.appLocalStates[idx] = value
+		return
+	}
+
+	last := len(ad.appLocalStates)
+	ad.appLocalStates = append(ad.appLocalStates, value)
+
+	if ad.appLocalStatesCache == nil {
+		ad.appLocalStatesCache = make(map[AccountApp]int)
+	}
+
+	ad.appLocalStatesCache[key] = last
+}
+
+// UpsertAssetHolding adds asset holding delta
+func (ad *NewAccountDeltas) UpsertAssetHolding(addr basics.Address, aidx basics.AssetIndex, holding *basics.AssetHolding) {
+	key := AccountAsset{addr, aidx}
+	value := AssetHoldingRecord{aidx, addr, holding}
+	if idx, exist := ad.assetHoldingsCache[key]; exist {
+		ad.assetHoldings[idx] = value
+		return
+	}
+
+	last := len(ad.assetHoldings)
+	ad.assetHoldings = append(ad.assetHoldings, value)
+
+	if ad.assetHoldingsCache == nil {
+		ad.assetHoldingsCache = make(map[AccountAsset]int)
+	}
+
+	ad.assetHoldingsCache[key] = last
+}
+
 // OptimizeAllocatedMemory by reallocating maps to needed capacity
 // For each data structure, reallocate if it would save us at least 50MB aggregate
 func (sd *StateDelta) OptimizeAllocatedMemory(proto config.ConsensusParams) {
 	// accts takes up 232 bytes per entry, and is saved for 320 rounds
-	if uint64(cap(sd.Accts.accts)-len(sd.Accts.accts))*accountArrayEntrySize*proto.MaxBalLookback > stateDeltaTargetOptimizationThreshold {
-		accts := make([]basics.BalanceRecord, len(sd.Accts.acctsCache))
-		copy(accts, sd.Accts.accts)
-		sd.Accts.accts = accts
+	if uint64(cap(sd.NewAccts.accts)-len(sd.NewAccts.accts))*accountArrayEntrySize*proto.MaxBalLookback > stateDeltaTargetOptimizationThreshold {
+		accts := make([]NewBalanceRecord, len(sd.NewAccts.acctsCache))
+		copy(accts, sd.NewAccts.accts)
+		sd.NewAccts.accts = accts
 	}
 
 	// acctsCache takes up 64 bytes per entry, and is saved for 320 rounds
 	// realloc if original allocation capacity greater than length of data, and space difference is significant
-	if 2*sd.initialTransactionsCount > len(sd.Accts.acctsCache) &&
-		uint64(2*sd.initialTransactionsCount-len(sd.Accts.acctsCache))*accountMapCacheEntrySize*proto.MaxBalLookback > stateDeltaTargetOptimizationThreshold {
-		acctsCache := make(map[basics.Address]int, len(sd.Accts.acctsCache))
-		for k, v := range sd.Accts.acctsCache {
+	if 2*sd.initialTransactionsCount > len(sd.NewAccts.acctsCache) &&
+		uint64(2*sd.initialTransactionsCount-len(sd.NewAccts.acctsCache))*accountMapCacheEntrySize*proto.MaxBalLookback > stateDeltaTargetOptimizationThreshold {
+		acctsCache := make(map[basics.Address]int, len(sd.NewAccts.acctsCache))
+		for k, v := range sd.NewAccts.acctsCache {
 			acctsCache[k] = v
 		}
-		sd.Accts.acctsCache = acctsCache
+		sd.NewAccts.acctsCache = acctsCache
 	}
 
 	// TxLeases takes up 112 bytes per entry, and is saved for 1000 rounds
@@ -228,5 +648,329 @@ func (sd *StateDelta) OptimizeAllocatedMemory(proto config.ConsensusParams) {
 			creatableDeltas[k] = v
 		}
 		sd.Creatables = creatableDeltas
+	}
+}
+
+// GetBasicsAccountData returns basics account data for some specific address
+// Currently is only used in tests
+func (ad NewAccountDeltas) GetBasicsAccountData(addr basics.Address) (basics.AccountData, bool) {
+	idx, ok := ad.acctsCache[addr]
+	if !ok {
+		return basics.AccountData{}, false
+	}
+
+	result := basics.AccountData{}
+	acct := ad.accts[idx].AccountData
+	AssignAccountData(&result, acct)
+
+	if len(ad.appParamsCache) > 0 {
+		result.AppParams = make(map[basics.AppIndex]basics.AppParams)
+		for aapp, idx := range ad.appParamsCache {
+			rec := ad.appParams[idx]
+			if aapp.Address == addr {
+				if rec.Params != nil {
+					result.AppParams[aapp.App] = *rec.Params
+				}
+			}
+		}
+		if len(result.AppParams) == 0 {
+			result.AppParams = nil
+		}
+	}
+
+	if len(ad.appLocalStatesCache) > 0 {
+		result.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+		for aapp, idx := range ad.appLocalStatesCache {
+			rec := ad.appLocalStates[idx]
+			if aapp.Address == addr {
+				if rec.State != nil {
+					result.AppLocalStates[aapp.App] = *rec.State
+				}
+			}
+		}
+		if len(result.AppLocalStates) == 0 {
+			result.AppLocalStates = nil
+		}
+	}
+
+	if len(ad.assetParamsCache) > 0 {
+		result.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
+		for aapp, idx := range ad.assetParamsCache {
+			rec := ad.assetParams[idx]
+			if aapp.Address == addr {
+				if rec.Params != nil {
+					result.AssetParams[aapp.Asset] = *rec.Params
+				}
+			}
+		}
+		if len(result.AssetParams) == 0 {
+			result.AssetParams = nil
+		}
+	}
+
+	if len(ad.assetHoldingsCache) > 0 {
+		result.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
+		for aapp, idx := range ad.assetHoldingsCache {
+			rec := ad.assetHoldings[idx]
+			if aapp.Address == addr {
+				if rec.Holding != nil {
+					result.Assets[aapp.Asset] = *rec.Holding
+				}
+			}
+		}
+		if len(result.Assets) == 0 {
+			result.Assets = nil
+		}
+	}
+
+	return result, true
+}
+
+// ToModifiedCreatables creates map of ModifiedCreatable
+func (ad NewAccountDeltas) ToModifiedCreatables(seen map[basics.CreatableIndex]struct{}) map[basics.CreatableIndex]ModifiedCreatable {
+	result := make(map[basics.CreatableIndex]ModifiedCreatable, len(ad.appParams)+len(ad.assetParams))
+	for aapp, idx := range ad.appParamsCache {
+		rec := ad.appParams[idx]
+		if rec.Params == nil {
+			result[basics.CreatableIndex(rec.Aidx)] = ModifiedCreatable{
+				Ctype:   basics.AppCreatable,
+				Created: false,
+				Creator: aapp.Address,
+			}
+		} else if _, ok := seen[basics.CreatableIndex(rec.Aidx)]; !ok {
+			result[basics.CreatableIndex(rec.Aidx)] = ModifiedCreatable{
+				Ctype:   basics.AppCreatable,
+				Created: true,
+				Creator: aapp.Address,
+			}
+		}
+	}
+
+	for aapp, idx := range ad.assetParamsCache {
+		rec := ad.assetParams[idx]
+		if rec.Params == nil {
+			result[basics.CreatableIndex(rec.Aidx)] = ModifiedCreatable{
+				Ctype:   basics.AssetCreatable,
+				Created: false,
+				Creator: aapp.Address,
+			}
+		} else if _, ok := seen[basics.CreatableIndex(rec.Aidx)]; !ok {
+			result[basics.CreatableIndex(rec.Aidx)] = ModifiedCreatable{
+				Ctype:   basics.AssetCreatable,
+				Created: true,
+				Creator: aapp.Address,
+			}
+		}
+	}
+
+	return result
+}
+
+// ApplyToBasicsAccountData applies partial delta from "ad" to a full account data "prev" and returns a deep copy
+func (ad NewAccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev basics.AccountData) (result basics.AccountData) {
+	// set the base part of account data (balance, status, voting data...)
+	acct, ok := ad.GetData(addr)
+	if !ok {
+		return prev
+	}
+
+	AssignAccountData(&result, acct)
+
+	if acct.TotalAppParams > 0 || prev.AppParams != nil {
+		result.AppParams = make(map[basics.AppIndex]basics.AppParams)
+		for aidx, params := range prev.AppParams {
+			result.AppParams[aidx] = params
+		}
+		for aapp, idx := range ad.appParamsCache {
+			if aapp.Address == addr {
+				if idx >= len(ad.appParams) {
+					fmt.Println("overflow")
+				}
+
+				rec := ad.appParams[idx]
+				if rec.Params == nil {
+					delete(result.AppParams, aapp.App)
+				} else {
+					result.AppParams[aapp.App] = *rec.Params
+				}
+			}
+		}
+		if len(result.AppParams) == 0 {
+			result.AppParams = nil
+		}
+	}
+
+	if acct.TotalAppLocalStates > 0 || prev.AppLocalStates != nil {
+		result.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+		for aidx, state := range prev.AppLocalStates {
+			result.AppLocalStates[aidx] = state
+		}
+		for aapp, idx := range ad.appLocalStatesCache {
+			if aapp.Address == addr {
+				if idx >= len(ad.appLocalStates) {
+					fmt.Println("overflow")
+				}
+
+				rec := ad.appLocalStates[idx]
+				if rec.State == nil {
+					delete(result.AppLocalStates, aapp.App)
+				} else {
+					result.AppLocalStates[aapp.App] = *rec.State
+				}
+			}
+		}
+		if len(result.AppLocalStates) == 0 {
+			result.AppLocalStates = nil
+		}
+	}
+
+	if acct.TotalAssetParams > 0 || prev.AssetParams != nil {
+		result.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
+		for aidx, params := range prev.AssetParams {
+			result.AssetParams[aidx] = params
+		}
+		for aapp, idx := range ad.assetParamsCache {
+			if aapp.Address == addr {
+				if idx >= len(ad.assetParams) {
+					fmt.Println("overflow")
+				}
+				rec := ad.assetParams[idx]
+				if rec.Params == nil {
+					delete(result.AssetParams, aapp.Asset)
+				} else {
+					result.AssetParams[aapp.Asset] = *rec.Params
+				}
+			}
+		}
+		if len(result.AssetParams) == 0 {
+			result.AssetParams = nil
+		}
+	}
+
+	if acct.TotalAssets > 0 || prev.Assets != nil {
+		result.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
+		for aidx, params := range prev.Assets {
+			result.Assets[aidx] = params
+		}
+		for aapp, idx := range ad.assetHoldingsCache {
+			if aapp.Address == addr {
+				if idx >= len(ad.assetHoldings) {
+					fmt.Println("overflow")
+				}
+
+				rec := ad.assetHoldings[idx]
+				if rec.Holding == nil {
+					delete(result.Assets, aapp.Asset)
+				} else {
+					result.Assets[aapp.Asset] = *rec.Holding
+				}
+			}
+		}
+		if len(result.Assets) == 0 {
+			result.Assets = nil
+		}
+	}
+
+	return result
+}
+
+// GetAllAppParams todo
+func (ad *NewAccountDeltas) GetAllAppParams() []AppParamsRecord {
+	return ad.appParams
+}
+
+// GetAllAppLocalStates todo
+func (ad *NewAccountDeltas) GetAllAppLocalStates() []AppLocalStateRecord {
+	return ad.appLocalStates
+}
+
+// GetAllAssetParams todo
+func (ad *NewAccountDeltas) GetAllAssetParams() []AssetParamsRecord {
+	return ad.assetParams
+}
+
+// GetAllAssetsHoldings todo
+func (ad *NewAccountDeltas) GetAllAssetsHoldings() []AssetHoldingRecord {
+	return ad.assetHoldings
+}
+
+// ApplyToPrevDelta adds changes from "ad" delta into "prev" delta for specific address
+func (ad NewAccountDeltas) ApplyToPrevDelta(addr basics.Address, prev NewAccountDeltas) (result NewAccountDeltas) {
+	acct, ok := ad.GetData(addr)
+	if ok {
+		result = prev.Clone()
+		result.Upsert(addr, acct)
+		result.mergeInOther(addr, ad)
+	}
+	return result
+}
+
+// ExtractDelta extracts only data belonging to a specific address
+func (ad NewAccountDeltas) ExtractDelta(addr basics.Address) (result NewAccountDeltas) {
+	acct, ok := ad.GetData(addr)
+	if ok {
+		result = MakeNewAccountDeltas(1)
+		result.Upsert(addr, acct)
+		result.mergeInOther(addr, ad)
+	}
+	return result
+}
+
+// mergeInOther adds app/asset params, local states and holdings from other to ad for the specified address
+func (ad *NewAccountDeltas) mergeInOther(addr basics.Address, other NewAccountDeltas) {
+	for _, rec := range other.appParams {
+		if rec.Addr == addr {
+			var newVal *basics.AppParams
+			if rec.Params != nil {
+				cp := *rec.Params
+				newVal = &cp
+			}
+			last := len(ad.appParams)
+			key := AccountApp{rec.Addr, rec.Aidx}
+			ad.appParams = append(ad.appParams, AppParamsRecord{rec.Aidx, addr, newVal})
+			ad.appParamsCache[key] = last
+		}
+	}
+
+	for _, rec := range other.appLocalStates {
+		if rec.Addr == addr {
+			var newVal *basics.AppLocalState
+			if rec.State != nil {
+				cp := *rec.State
+				newVal = &cp
+			}
+			last := len(ad.appLocalStates)
+			key := AccountApp{rec.Addr, rec.Aidx}
+			ad.appLocalStates = append(ad.appLocalStates, AppLocalStateRecord{rec.Aidx, addr, newVal})
+			ad.appLocalStatesCache[key] = last
+		}
+	}
+
+	for _, rec := range other.assetParams {
+		if rec.Addr == addr {
+			var newVal *basics.AssetParams
+			if rec.Params != nil {
+				cp := *rec.Params
+				newVal = &cp
+			}
+			last := len(ad.assetParams)
+			key := AccountAsset{rec.Addr, rec.Aidx}
+			ad.assetParams = append(ad.assetParams, AssetParamsRecord{rec.Aidx, addr, newVal})
+			ad.assetParamsCache[key] = last
+		}
+	}
+
+	for _, rec := range other.assetHoldings {
+		if rec.Addr == addr {
+			var newVal *basics.AssetHolding
+			if rec.Holding != nil {
+				cp := *rec.Holding
+				newVal = &cp
+			}
+			last := len(ad.assetHoldings)
+			key := AccountAsset{rec.Addr, rec.Aidx}
+			ad.assetHoldings = append(ad.assetHoldings, AssetHoldingRecord{rec.Aidx, addr, newVal})
+			ad.assetHoldingsCache[key] = last
+		}
 	}
 }

@@ -22,8 +22,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"hash"
-	"io"
 	"os"
 	"path/filepath"
 
@@ -53,8 +51,6 @@ const (
 // has the option of throttling the CPU utilization in between the calls.
 type catchpointWriter struct {
 	ctx               context.Context
-	hasher            hash.Hash
-	innerWriter       io.WriteCloser
 	tx                *sql.Tx
 	filePath          string
 	file              *os.File
@@ -157,7 +153,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 	}
 
 	// have we timed-out / canceled by that point ?
-	if more, err = hasContextDeadlineExceeded(stepCtx); more == true || err != nil {
+	if more, err = hasContextDeadlineExceeded(stepCtx); more || err != nil {
 		return
 	}
 
@@ -169,7 +165,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 	}
 
 	// have we timed-out / canceled by that point ?
-	if more, err = hasContextDeadlineExceeded(stepCtx); more == true || err != nil {
+	if more, err = hasContextDeadlineExceeded(stepCtx); more || err != nil {
 		return
 	}
 
@@ -210,7 +206,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 
 	for {
 		// have we timed-out / canceled by that point ?
-		if more, err = hasContextDeadlineExceeded(stepCtx); more == true || err != nil {
+		if more, err = hasContextDeadlineExceeded(stepCtx); more || err != nil {
 			return
 		}
 
@@ -222,7 +218,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 		}
 
 		// have we timed-out / canceled by that point ?
-		if more, err = hasContextDeadlineExceeded(stepCtx); more == true || err != nil {
+		if more, err = hasContextDeadlineExceeded(stepCtx); more || err != nil {
 			return
 		}
 
@@ -230,9 +226,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 		select {
 		case err := <-writerResponse:
 			// we ran into an error. wait for the channel to close before returning with the error.
-			select {
-			case <-writerResponse:
-			}
+			<-writerResponse
 			return false, err
 		default:
 		}
@@ -244,18 +238,14 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 			if len(cw.balancesChunk.Balances) < BalancesPerCatchpointFileChunk || cw.balancesChunkNum == cw.fileHeader.TotalChunks {
 				cw.accountsIterator.Close()
 				// if we're done, wait for the writer to complete it's writing.
-				select {
-				case err, opened := <-writerResponse:
-					if opened {
-						// we ran into an error. wait for the channel to close before returning with the error.
-						select {
-						case <-writerResponse:
-						}
-						return false, err
-					}
-					// channel is closed. we're done writing and no issues detected.
-					return false, nil
+				err, opened := <-writerResponse
+				if opened {
+					// we ran into an error. wait for the channel to close before returning with the error.
+					<-writerResponse
+					return false, err
 				}
+				// channel is closed. we're done writing and no issues detected.
+				return false, nil
 			}
 			cw.balancesChunk.Balances = nil
 		}

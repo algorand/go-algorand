@@ -795,9 +795,9 @@ int 1
 	var appIdx basics.AppIndex = 1
 
 	rnd := l.Latest()
-	acct, _, err := l.LookupWithoutRewards(l.Latest(), creator)
+	acctRes, err := l.LookupResource(rnd, creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acct.AppParams[appIdx].GlobalState["counter"])
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acctRes.AppParams.GlobalState["counter"])
 
 	addEmptyValidatedBlock(t, l, initAccounts)
 	addEmptyValidatedBlock(t, l, initAccounts)
@@ -826,23 +826,19 @@ int 1
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, appcall, ad))
 
 	rnd = l.Latest()
-	acctwor, _, err := l.LookupWithoutRewards(rnd, creator)
+	acctworRes, err := l.LookupResource(rnd, creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctwor.AppParams[appIdx].GlobalState["counter"])
-
-	acctwr, err := l.Lookup(rnd, creator)
-	a.NoError(err)
-	a.Equal(acctwor.AppParams[appIdx].GlobalState["counter"], acctwr.AppParams[appIdx].GlobalState["counter"])
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctworRes.AppParams.GlobalState["counter"])
 
 	addEmptyValidatedBlock(t, l, initAccounts)
 
-	acctwor, _, err = l.LookupWithoutRewards(l.Latest()-1, creator)
+	acctworRes, err = l.LookupResource(l.Latest()-1, creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctwor.AppParams[appIdx].GlobalState["counter"])
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctworRes.AppParams.GlobalState["counter"])
 
-	acct, _, err = l.LookupWithoutRewards(rnd, user)
+	acctRes, err = l.LookupResource(rnd, user, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acct.AppLocalStates[appIdx].KeyValue["counter"])
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acctRes.AppLocalState.KeyValue["counter"])
 }
 
 // TestLedgerAppMultiTxnWrites ensures app state writes in multiple txn are applied
@@ -923,9 +919,9 @@ int 1                   // [1]
 	var appIdx basics.AppIndex = 1
 
 	rnd := l.Latest()
-	acct, _, err := l.LookupWithoutRewards(l.Latest(), creator)
+	acctRes, err := l.LookupResource(rnd, creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: uint64(value)}, acct.AppParams[appIdx].GlobalState["key"])
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: uint64(value)}, acctRes.AppParams.GlobalState["key"])
 
 	// make two app call txns and put into the same block, with and without groupping
 	var tests = []struct {
@@ -1000,13 +996,9 @@ int 1                   // [1]
 
 			expected := uint64(base + value1 + value2)
 			rnd = l.Latest()
-			acctwor, _, err := l.LookupWithoutRewards(rnd, creator)
+			acctworRes, err := l.LookupResource(rnd, creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 			a.NoError(err)
-			a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: expected}, acctwor.AppParams[appIdx].GlobalState["key"])
-
-			acctwr, err := l.Lookup(rnd, creator)
-			a.NoError(err)
-			a.Equal(acctwor.AppParams[appIdx].GlobalState["key"], acctwr.AppParams[appIdx].GlobalState["key"])
+			a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: expected}, acctworRes.AppParams.GlobalState["key"])
 		})
 	}
 }
@@ -1519,6 +1511,7 @@ func TestListAssetsAndApplications(t *testing.T) {
 	require.Equal(t, 2, len(results))
 	// Check the max asset id limit
 	results, err = ledger.ListAssets(basics.AssetIndex(maxAsset), 100)
+	require.NoError(t, err)
 	assetCount := 0
 	for id, ctb := range randomCtbs {
 		if ctb.Ctype == basics.AssetCreatable &&
@@ -1537,6 +1530,7 @@ func TestListAssetsAndApplications(t *testing.T) {
 	require.Equal(t, 2, len(results))
 	// Check the max application id limit
 	results, err = ledger.ListApplications(basics.AppIndex(maxApp), 100)
+	require.NoError(t, err)
 	appCount := 0
 	for id, ctb := range randomCtbs {
 		if ctb.Ctype == basics.AppCreatable &&

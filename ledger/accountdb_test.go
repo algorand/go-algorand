@@ -59,8 +59,8 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 
 	for addr, data := range accts {
 		pad, err := aq.lookup(addr)
-		d := pad.accountData
 		require.NoError(t, err)
+		d := pad.accountData
 		require.Equal(t, d, data)
 
 		switch d.Status {
@@ -159,71 +159,39 @@ func TestAccountDBInit(t *testing.T) {
 }
 
 // creatablesFromUpdates calculates creatables from updates
-func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates ledgercore.AccountDeltas, seen map[basics.CreatableIndex]bool) map[basics.CreatableIndex]ledgercore.ModifiedCreatable {
-	creatables := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
-	for i := 0; i < updates.Len(); i++ {
-		addr, update := updates.GetByIdx(i)
-		// no sets in Go, so iterate over
-		if ad, ok := base[addr]; ok {
-			for idx := range ad.Assets {
-				if _, ok := update.Assets[idx]; !ok {
-					creatables[basics.CreatableIndex(idx)] = ledgercore.ModifiedCreatable{
-						Ctype:   basics.AssetCreatable,
-						Created: false, // exists in base, not in new => deleted
-						Creator: addr,
-					}
-				}
-			}
-			for idx := range ad.AppParams {
-				if _, ok := update.AppParams[idx]; !ok {
-					creatables[basics.CreatableIndex(idx)] = ledgercore.ModifiedCreatable{
-						Ctype:   basics.AppCreatable,
-						Created: false, // exists in base, not in new => deleted
-						Creator: addr,
-					}
-				}
-			}
+func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates ledgercore.NewAccountDeltas, seen map[basics.CreatableIndex]bool) map[basics.CreatableIndex]ledgercore.ModifiedCreatable {
+	known := make(map[basics.CreatableIndex]struct{}, len(seen))
+	for aidx := range seen {
+		known[aidx] = struct{}{}
+	}
+	for _, ad := range base {
+		for aidx := range ad.AppParams {
+			known[basics.CreatableIndex(aidx)] = struct{}{}
 		}
-		for idx := range update.Assets {
-			if seen[basics.CreatableIndex(idx)] {
-				continue
-			}
-			ad, found := base[addr]
-			if found {
-				if _, ok := ad.Assets[idx]; !ok {
-					found = false
-				}
-			}
-			if !found {
-				creatables[basics.CreatableIndex(idx)] = ledgercore.ModifiedCreatable{
-					Ctype:   basics.AssetCreatable,
-					Created: true, // exists in new, not in base => created
-					Creator: addr,
-				}
-			}
-			seen[basics.CreatableIndex(idx)] = true
-		}
-		for idx := range update.AppParams {
-			if seen[basics.CreatableIndex(idx)] {
-				continue
-			}
-			ad, found := base[addr]
-			if found {
-				if _, ok := ad.AppParams[idx]; !ok {
-					found = false
-				}
-			}
-			if !found {
-				creatables[basics.CreatableIndex(idx)] = ledgercore.ModifiedCreatable{
-					Ctype:   basics.AppCreatable,
-					Created: true, // exists in new, not in base => created
-					Creator: addr,
-				}
-			}
-			seen[basics.CreatableIndex(idx)] = true
+		for aidx := range ad.AssetParams {
+			known[basics.CreatableIndex(aidx)] = struct{}{}
 		}
 	}
-	return creatables
+	return updates.ToModifiedCreatables(known)
+}
+
+func applyPartialDeltas(base map[basics.Address]basics.AccountData, deltas ledgercore.NewAccountDeltas) map[basics.Address]basics.AccountData {
+	result := make(map[basics.Address]basics.AccountData, len(base)+deltas.Len())
+	for addr, ad := range base {
+		result[addr] = ad
+	}
+
+	for i := 0; i < deltas.Len(); i++ {
+		addr, _ := deltas.GetByIdx(i)
+		ad, ok := result[addr]
+		if !ok {
+			ad, _ = deltas.GetBasicsAccountData(addr)
+		} else {
+			ad = deltas.ApplyToBasicsAccountData(addr, ad)
+		}
+		result[addr] = ad
+	}
+	return result
 }
 
 func TestAccountDBRound(t *testing.T) {
@@ -247,39 +215,42 @@ func TestAccountDBRound(t *testing.T) {
 	require.NoError(t, err)
 
 	// used to determine how many creatables element will be in the test per iteration
-	numElementsPerSegement := 10
+	numElementsPerSegment := 10
 
 	// lastCreatableID stores asset or app max used index to get rid of conflicts
 	lastCreatableID := crypto.RandUint64() % 512
-	ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
+	ctbsList, randomCtbs := randomCreatables(numElementsPerSegment)
 	expectedDbImage := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	var baseAccounts lruAccounts
-	var newaccts map[basics.Address]basics.AccountData
+	var newacctsTotals map[basics.Address]ledgercore.AccountData
 	baseAccounts.init(nil, 100, 80)
 	for i := 1; i < 10; i++ {
-		var updates ledgercore.AccountDeltas
-		updates, newaccts, _, lastCreatableID = ledgertesting.RandomDeltasFull(20, accts, 0, lastCreatableID)
+		var updates ledgercore.NewAccountDeltas
+		updates, newacctsTotals, _, lastCreatableID = ledgertesting.RandomDeltasFull(20, accts, 0, lastCreatableID)
 		totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, accts, totals)
-		accts = newaccts
+		accts = applyPartialDeltas(accts, updates)
 		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
-			expectedDbImage, numElementsPerSegement)
+			expectedDbImage, numElementsPerSegment)
 
-		updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, baseAccounts)
+		updatesCnt := makeCompactAccountDeltas([]ledgercore.NewAccountDeltas{updates}, baseAccounts)
 		err = updatesCnt.accountsLoadOld(tx)
 		require.NoError(t, err)
+
 		err = accountsPutTotals(tx, totals, false)
 		require.NoError(t, err)
-		_, err = accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto, basics.Round(i))
+		updatedAccts, err := accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
+		require.Equal(t, updatesCnt.len(), len(updatedAccts))
 		err = updateAccountsRound(tx, basics.Round(i))
 		require.NoError(t, err)
+
 		checkAccounts(t, tx, basics.Round(i), accts)
 		checkCreatables(t, tx, i, expectedDbImage)
 	}
 
 	// test the accounts totals
-	var updates ledgercore.AccountDeltas
-	for addr, acctData := range newaccts {
+	var updates ledgercore.NewAccountDeltas
+	for addr, acctData := range newacctsTotals {
 		updates.Upsert(addr, acctData)
 	}
 
@@ -592,6 +563,7 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 
 		// read all the accounts to obtain the addrs.
 		rows, err := tx.Query("SELECT rowid, address FROM accountbase")
+		require.NoError(b, err)
 		defer rows.Close()
 		for rows.Next() {
 			var addrbuf []byte
@@ -634,7 +606,7 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 			}
 
 		}
-		b.ReportMetric(float64(int(time.Now().Sub(startTime))/b.N), "ns/acct_update")
+		b.ReportMetric(float64(int(time.Since(startTime))/b.N), "ns/acct_update")
 	})
 
 	b.Run("ByRowID", func(b *testing.B) {
@@ -660,7 +632,7 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 				}
 			}
 		}
-		b.ReportMetric(float64(int(time.Now().Sub(startTime))/b.N), "ns/acct_update")
+		b.ReportMetric(float64(int(time.Since(startTime))/b.N), "ns/acct_update")
 
 	})
 
@@ -833,7 +805,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 			}
 			balances.Balances[i] = randomAccount
 		}
-		balanceLoopDuration := time.Now().Sub(balancesLoopStart)
+		balanceLoopDuration := time.Since(balancesLoopStart)
 		last64KAccountCreationTime += balanceLoopDuration
 		accountsGenerationDuration += balanceLoopDuration
 
@@ -848,13 +820,13 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 		accountsLoaded += chunkSize
 	}
 	if !last64KStart.IsZero() {
-		last64KDuration := time.Now().Sub(last64KStart) - last64KAccountCreationTime
+		last64KDuration := time.Since(last64KStart) - last64KAccountCreationTime
 		fmt.Printf("%-82s%-7d (last 64k) %-6d ns/account       %d accounts/sec\n", b.Name(), last64KSize, (last64KDuration / time.Duration(last64KSize)).Nanoseconds(), int(float64(last64KSize)/float64(last64KDuration.Seconds())))
 	}
 	stats, err := l.trackerDBs.Wdb.Vacuum(context.Background())
 	require.NoError(b, err)
 	fmt.Printf("%-82sdb fragmentation   %.1f%%\n", b.Name(), float32(stats.PagesBefore-stats.PagesAfter)*100/float32(stats.PagesBefore))
-	b.ReportMetric(float64(b.N)/float64((time.Now().Sub(accountsWritingStarted)-accountsGenerationDuration).Seconds()), "accounts/sec")
+	b.ReportMetric(float64(b.N)/float64((time.Since(accountsWritingStarted)-accountsGenerationDuration).Seconds()), "accounts/sec")
 }
 
 func BenchmarkWriteCatchpointStagingBalances(b *testing.B) {
@@ -891,7 +863,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(0, ad.len())
 	a.Panics(func() { ad.getByIdx(0) })
 
-	sample1 := accountDelta{new: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 123}}}
+	sample1 := accountDelta{newAcct: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 123}}}
 	ad.upsert(addr, sample1)
 	data, idx = ad.get(addr)
 	a.NotEqual(-1, idx)
@@ -902,7 +874,9 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(addr, address)
 	a.Equal(sample1, data)
 
-	sample2 := accountDelta{new: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 456}}}
+	delta := ledgercore.MakeNewAccountDeltas(1)
+	delta.Upsert(addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 456}}})
+	sample2 := accountDelta{newAcct: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 456}}}
 	ad.upsert(addr, sample2)
 	data, idx = ad.get(addr)
 	a.NotEqual(-1, idx)
@@ -923,30 +897,36 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(addr, address)
 	a.Equal(sample2, data)
 
-	old1 := persistedAccountData{addr: addr, accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
+	old1 := persistedAccountData{addr: addr, accountData: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
 	ad.upsertOld(old1)
 	a.Equal(1, ad.len())
 	address, data = ad.getByIdx(0)
 	a.Equal(addr, address)
-	a.Equal(accountDelta{new: sample2.new, old: old1}, data)
+	new1, ok := delta.GetBasicsAccountData(addr)
+	a.True(ok)
+	new1base := baseAccountData{}
+	new1base.SetAccountData(&new1)
+	a.Equal(accountDelta{newAcct: new1base, oldAcct: old1}, data)
 
 	addr1 := ledgertesting.RandomAddress()
-	old2 := persistedAccountData{addr: addr1, accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
+	old2 := persistedAccountData{addr: addr1, accountData: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
 	ad.upsertOld(old2)
 	a.Equal(2, ad.len())
 	address, data = ad.getByIdx(0)
 	a.Equal(addr, address)
-	a.Equal(accountDelta{new: sample2.new, old: old1}, data)
+	a.Equal(accountDelta{newAcct: new1base, oldAcct: old1}, data)
 
 	address, data = ad.getByIdx(1)
 	a.Equal(addr1, address)
-	a.Equal(accountDelta{old: old2}, data)
+	a.Equal(accountDelta{oldAcct: old2}, data)
 
+	// apply old on empty delta object, expect no changes
 	ad.updateOld(0, old2)
 	a.Equal(2, ad.len())
 	address, data = ad.getByIdx(0)
 	a.Equal(addr, address)
-	a.Equal(accountDelta{new: sample2.new, old: old2}, data)
+	new2 := old2.accountData
+	a.Equal(accountDelta{newAcct: new2, oldAcct: old2}, data)
 
 	addr2 := ledgertesting.RandomAddress()
 	idx = ad.insert(addr2, sample2)

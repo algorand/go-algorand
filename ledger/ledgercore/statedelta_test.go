@@ -37,24 +37,24 @@ func TestAccountDeltas(t *testing.T) {
 
 	a := require.New(t)
 
-	ad := AccountDeltas{}
-	data, ok := ad.Get(basics.Address{})
+	ad := NewAccountDeltas{}
+	data, ok := ad.GetData(basics.Address{})
 	a.False(ok)
-	a.Equal(basics.AccountData{}, data)
+	a.Equal(AccountData{}, data)
 
 	addr := randomAddress()
-	data, ok = ad.Get(addr)
+	data, ok = ad.GetData(addr)
 	a.False(ok)
-	a.Equal(basics.AccountData{}, data)
+	a.Equal(AccountData{}, data)
 
 	a.Equal(0, ad.Len())
 	a.Panics(func() { ad.GetByIdx(0) })
 
 	a.Equal([]basics.Address{}, ad.ModifiedAccounts())
 
-	sample1 := basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 123}}
+	sample1 := AccountData{AccountBaseData: AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 123}}}
 	ad.Upsert(addr, sample1)
-	data, ok = ad.Get(addr)
+	data, ok = ad.GetData(addr)
 	a.True(ok)
 	a.Equal(sample1, data)
 
@@ -63,9 +63,9 @@ func TestAccountDeltas(t *testing.T) {
 	a.Equal(addr, address)
 	a.Equal(sample1, data)
 
-	sample2 := basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 456}}
+	sample2 := AccountData{AccountBaseData: AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 456}}}
 	ad.Upsert(addr, sample2)
-	data, ok = ad.Get(addr)
+	data, ok = ad.GetData(addr)
 	a.True(ok)
 	a.Equal(sample2, data)
 
@@ -76,7 +76,7 @@ func TestAccountDeltas(t *testing.T) {
 
 	a.Equal([]basics.Address{addr}, ad.ModifiedAccounts())
 
-	ad2 := AccountDeltas{}
+	ad2 := NewAccountDeltas{}
 	ad2.Upsert(addr, sample2)
 	ad.MergeAccounts(ad2)
 	a.Equal(1, ad.Len())

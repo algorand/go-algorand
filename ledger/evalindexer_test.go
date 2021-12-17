@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"errors"
-	"fmt"
 	"math/rand"
 	"testing"
 
@@ -48,8 +47,8 @@ func (il indexerLedgerForEvalImpl) LatestBlockHdr() (bookkeeping.BlockHeader, er
 }
 
 // The value of the returned map is nil iff the account was not found.
-func (il indexerLedgerForEvalImpl) LookupWithoutRewards(addresses map[basics.Address]struct{}) (map[basics.Address]*basics.AccountData, error) {
-	res := make(map[basics.Address]*basics.AccountData)
+func (il indexerLedgerForEvalImpl) LookupWithoutRewards(addresses map[basics.Address]struct{}) (map[basics.Address]*ledgercore.AccountData, error) {
+	res := make(map[basics.Address]*ledgercore.AccountData)
 
 	for address := range addresses {
 		accountData, _, err := il.l.LookupWithoutRewards(il.latestRound, address)
@@ -60,9 +59,41 @@ func (il indexerLedgerForEvalImpl) LookupWithoutRewards(addresses map[basics.Add
 		if accountData.IsZero() {
 			res[address] = nil
 		} else {
-			accountDataCopy := new(basics.AccountData)
+			accountDataCopy := new(ledgercore.AccountData)
 			*accountDataCopy = accountData
 			res[address] = accountDataCopy
+		}
+	}
+
+	return res, nil
+}
+
+// The value of the returned map is nil iff the account was not found.
+func (il indexerLedgerForEvalImpl) LookupResources(addresses map[basics.Address]map[Creatable]struct{}) (map[basics.Address]map[Creatable]*ledgercore.AccountResource, error) {
+	res := make(map[basics.Address]map[Creatable]*ledgercore.AccountResource)
+
+	for address, creatables := range addresses {
+		for creatable := range creatables {
+			accountResource, err := il.l.LookupResource(il.latestRound, address, creatable.Index, creatable.Type)
+			if err != nil {
+				return nil, err
+			}
+
+			c, ok := res[address]
+			if (accountResource == ledgercore.AccountResource{}) {
+				if ok {
+					c[creatable] = nil
+					res[address] = c
+				}
+			} else {
+				if !ok {
+					c = make(map[Creatable]*ledgercore.AccountResource)
+				}
+
+				accountResourceCopy := new(ledgercore.AccountResource)
+				*accountResourceCopy = accountResource
+				c[creatable] = accountResourceCopy
+			}
 		}
 	}
 
@@ -94,8 +125,9 @@ func TestEvalForIndexerCustomProtocolParams(t *testing.T) {
 	crypto.RandBytes(genHash[:])
 	block, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusV24,
 		genesisBalances, "test", genHash)
+	require.NoError(t, err)
 
-	dbName := fmt.Sprintf("%s", t.Name())
+	dbName := t.Name()
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	l, err := OpenLedger(logging.Base(), dbName, true, ledgercore.InitState{
@@ -195,8 +227,9 @@ func TestEvalForIndexerForExpiredAccounts(t *testing.T) {
 	crypto.RandBytes(genHash[:])
 	block, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture,
 		genesisBalances, "test", genHash)
+	require.NoError(t, err)
 
-	dbName := fmt.Sprintf("%s", t.Name())
+	dbName := t.Name()
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	l, err := OpenLedger(logging.Base(), dbName, true, ledgercore.InitState{

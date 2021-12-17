@@ -25,6 +25,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -34,8 +35,10 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -112,6 +115,7 @@ func TestGetCatchpointStream(t *testing.T) {
 
 	// File on disk, and database has the record
 	reader, err := ct.GetCatchpointStream(basics.Round(1))
+	require.NoError(t, err)
 	n, err = reader.Read(dataRead)
 	require.NoError(t, err)
 	require.Equal(t, 3, n)
@@ -123,13 +127,16 @@ func TestGetCatchpointStream(t *testing.T) {
 
 	// File deleted, but record in the database
 	err = os.Remove(filepath.Join(temporaryDirectroy, CatchpointDirName, "2.catchpoint"))
+	require.NoError(t, err)
 	reader, err = ct.GetCatchpointStream(basics.Round(2))
 	require.Equal(t, ledgercore.ErrNoEntry{}, err)
 	require.Nil(t, reader)
 
 	// File on disk, but database lost the record
 	err = ct.accountsq.storeCatchpoint(context.Background(), basics.Round(3), "", "", 0)
+	require.NoError(t, err)
 	reader, err = ct.GetCatchpointStream(basics.Round(3))
+	require.NoError(t, err)
 	n, err = reader.Read(dataRead)
 	require.NoError(t, err)
 	require.Equal(t, 3, n)
@@ -358,9 +365,9 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 			var updates compactAccountDeltas
 			for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
 				addr := ledgertesting.RandomAddress()
-				acctData := basics.AccountData{}
+				acctData := baseAccountData{}
 				acctData.MicroAlgos.Raw = 1
-				updates.upsert(addr, accountDelta{new: acctData})
+				updates.upsert(addr, accountDelta{newAcct: acctData})
 				i++
 			}
 
@@ -433,8 +440,8 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	for i := basics.Round(1); i <= basics.Round(testCatchpointLabelsCount*cfg.CatchpointInterval); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
-		var updates ledgercore.AccountDeltas
-		var totals map[basics.Address]basics.AccountData
+		var updates ledgercore.NewAccountDeltas
+		var totals map[basics.Address]ledgercore.AccountData
 		base := accts[i-1]
 		updates, totals, lastCreatableID = ledgertesting.RandomDeltasBalancedFull(1, base, rewardLevel, lastCreatableID)
 		prevTotals, err := au.Totals(basics.Round(i - 1))
@@ -444,6 +451,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
+		newAccts := applyPartialDeltas(base, updates)
 
 		newTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardLevel, protoParams, base, prevTotals)
 
@@ -455,14 +463,14 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		blk.RewardsLevel = rewardLevel
 		blk.CurrentProtocol = testProtocolVersion
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.Accts.MergeAccounts(updates)
+		delta.NewAccts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 		delta.Totals = newTotals
 
 		ml.trackers.newBlock(blk, delta)
 		ml.trackers.committedUpTo(i)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
-		accts = append(accts, totals)
+		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 		roundDeltas[i] = delta
 
@@ -482,7 +490,8 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		au.close()
 		ml2 := ledgerHistory[startingRound]
 
-		ct := newCatchpointTracker(t, ml2, cfg, ".")
+		ct2 := newCatchpointTracker(t, ml2, cfg, ".")
+		defer ct2.close()
 		for i := startingRound + 1; i <= basics.Round(testCatchpointLabelsCount*cfg.CatchpointInterval); i++ {
 			blk := bookkeeping.Block{
 				BlockHeader: bookkeeping.BlockHeader{
@@ -498,7 +507,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			// if this is a catchpoint round, check the label.
 			if uint64(i)%cfg.CatchpointInterval == 0 {
 				ml2.trackers.waitAccountsWriting()
-				require.Equal(t, catchpointLabels[i], ct.GetLastCatchpointLabel())
+				require.Equal(t, catchpointLabels[i], ct2.GetLastCatchpointLabel())
 			}
 		}
 	}
@@ -541,5 +550,204 @@ func TestCatchpointTrackerPrepareCommit(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// blockingTracker is a testing tracker used to test "what if" a tracker would get blocked.
+type blockingTracker struct {
+	postCommitUnlockedEntryLock   chan struct{}
+	postCommitUnlockedReleaseLock chan struct{}
+	postCommitEntryLock           chan struct{}
+	postCommitReleaseLock         chan struct{}
+	committedUpToRound            int64
+}
+
+// loadFromDisk is not implemented in the blockingTracker.
+func (bt *blockingTracker) loadFromDisk(ledgerForTracker, basics.Round) error {
+	return nil
+}
+
+// newBlock is not implemented in the blockingTracker.
+func (bt *blockingTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
+}
+
+// committedUpTo in the blockingTracker just stores the committed round.
+func (bt *blockingTracker) committedUpTo(committedRnd basics.Round) (minRound, lookback basics.Round) {
+	atomic.StoreInt64(&bt.committedUpToRound, int64(committedRnd))
+	return committedRnd, basics.Round(0)
+}
+
+// produceCommittingTask is not used by the blockingTracker
+func (bt *blockingTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
+	return dcr
+}
+
+// prepareCommit, is not used by the blockingTracker
+func (bt *blockingTracker) prepareCommit(*deferredCommitContext) error {
+	return nil
+}
+
+// commitRound is not used by the blockingTracker
+func (bt *blockingTracker) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+	return nil
+}
+
+// postCommit implements entry/exit blockers, designed for testing.
+func (bt *blockingTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
+	if dcc.isCatchpointRound && dcc.catchpointLabel != "" {
+		bt.postCommitEntryLock <- struct{}{}
+		<-bt.postCommitReleaseLock
+	}
+}
+
+// postCommitUnlocked implements entry/exit blockers, designed for testing.
+func (bt *blockingTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
+	if dcc.isCatchpointRound && dcc.catchpointLabel != "" {
+		bt.postCommitUnlockedEntryLock <- struct{}{}
+		<-bt.postCommitUnlockedReleaseLock
+	}
+}
+
+// handleUnorderedCommit is not used by the blockingTracker
+func (bt *blockingTracker) handleUnorderedCommit(*deferredCommitContext) {
+}
+
+// close is not used by the blockingTracker
+func (bt *blockingTracker) close() {
+}
+
+func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 10)
+	const inMem = true
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Warn)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	cfg.CatchpointInterval = 2
+	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	require.NoError(t, err, "could not open ledger")
+	defer ledger.Close()
+
+	writeStallingTracker := &blockingTracker{
+		postCommitUnlockedEntryLock:   make(chan struct{}),
+		postCommitUnlockedReleaseLock: make(chan struct{}),
+		postCommitEntryLock:           make(chan struct{}),
+		postCommitReleaseLock:         make(chan struct{}),
+	}
+	ledger.trackerMu.Lock()
+	ledger.trackers.mu.Lock()
+	ledger.trackers.trackers = append(ledger.trackers.trackers, writeStallingTracker)
+	ledger.trackers.mu.Unlock()
+	ledger.trackerMu.Unlock()
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	// create the first MaxBalLookback blocks
+	for rnd := ledger.Latest() + 1; rnd <= basics.Round(proto.MaxBalLookback); rnd++ {
+		err = ledger.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
+		require.NoError(t, err)
+	}
+
+	// make sure to get to a catchpoint round, and block the writing there.
+	for {
+		err = ledger.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
+		require.NoError(t, err)
+		if uint64(ledger.Latest())%cfg.CatchpointInterval == 0 {
+			// release the entry lock for postCommit
+			<-writeStallingTracker.postCommitEntryLock
+
+			// release the exit lock for postCommit
+			writeStallingTracker.postCommitReleaseLock <- struct{}{}
+
+			// wait until we're blocked by the stalling tracker.
+			<-writeStallingTracker.postCommitUnlockedEntryLock
+			break
+		}
+	}
+
+	// write additional block, so that the block queue would trigger that too
+	err = ledger.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
+	require.NoError(t, err)
+	// wait for the committedUpToRound to be called with the correct round number.
+	for {
+		committedUpToRound := atomic.LoadInt64(&writeStallingTracker.committedUpToRound)
+		if basics.Round(committedUpToRound) == ledger.Latest() {
+			break
+		}
+		time.Sleep(1 * time.Millisecond)
+	}
+
+	lookupDone := make(chan struct{})
+	// now that we're blocked the tracker, try to call LookupAgreement and confirm it returns almost immediately
+	go func() {
+		defer close(lookupDone)
+		ledger.LookupAgreement(ledger.Latest(), genesisInitState.Block.FeeSink)
+	}()
+
+	select {
+	case <-lookupDone:
+		// we expect it not to get stuck, even when the postCommitUnlocked is stuck.
+	case <-time.After(25 * time.Second):
+		require.FailNow(t, "The LookupAgreement wasn't getting blocked as expected by the blocked tracker")
+	}
+	// let the goroutines complete.
+	// release the exit lock for postCommit
+	writeStallingTracker.postCommitUnlockedReleaseLock <- struct{}{}
+
+	// test false positive : we want to ensure that without releasing the postCommit lock, the LookupAgreemnt would not be able to return within 1 second.
+
+	// make sure to get to a catchpoint round, and block the writing there.
+	for {
+		err = ledger.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
+		require.NoError(t, err)
+		if uint64(ledger.Latest())%cfg.CatchpointInterval == 0 {
+			// release the entry lock for postCommit
+			<-writeStallingTracker.postCommitEntryLock
+			break
+		}
+	}
+	// write additional block, so that the block queue would trigger that too
+	err = ledger.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
+	require.NoError(t, err)
+	// wait for the committedUpToRound to be called with the correct round number.
+	for {
+		committedUpToRound := atomic.LoadInt64(&writeStallingTracker.committedUpToRound)
+		if basics.Round(committedUpToRound) == ledger.Latest() {
+			break
+		}
+		time.Sleep(1 * time.Millisecond)
+	}
+
+	lookupDone = make(chan struct{})
+	// now that we're blocked the tracker, try to call LookupAgreement and confirm it's not returning within 1 second.
+	go func() {
+		defer close(lookupDone)
+		ledger.LookupAgreement(ledger.Latest(), genesisInitState.Block.FeeSink)
+	}()
+
+	select {
+	case <-lookupDone:
+		require.FailNow(t, "The LookupAgreement wasn't getting blocked as expected by the blocked tracker")
+	case <-time.After(5 * time.Second):
+		// this one was "stuck" for over five second ( as expected )
+	}
+	// let the goroutines complete.
+	// release the exit lock for postCommit
+	writeStallingTracker.postCommitReleaseLock <- struct{}{}
+
+	// wait until we're blocked by the stalling tracker.
+	<-writeStallingTracker.postCommitUnlockedEntryLock
+	// release the blocker.
+	writeStallingTracker.postCommitUnlockedReleaseLock <- struct{}{}
+
+	// confirm that we get released quickly.
+	select {
+	case <-lookupDone:
+		// now that all the blocker have been removed, we should be able to complete
+		// the LookupAgreement call.
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "The LookupAgreement wasn't getting release as expected by the blocked tracker")
 	}
 }
