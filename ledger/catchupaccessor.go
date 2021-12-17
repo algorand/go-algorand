@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -230,6 +231,7 @@ type CatchpointCatchupAccessorProgress struct {
 	ProcessedBytes    uint64
 	TotalChunks       uint64
 	SeenHeader        bool
+	Version           uint64
 
 	// Having the cachedTrie here would help to accelerate the catchup process since the trie maintain an internal cache of nodes.
 	// While rebuilding the trie, we don't want to force and reload (some) of these nodes into the cache for each catchpoint file chunk.
@@ -260,7 +262,10 @@ func (c *CatchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 	if err != nil {
 		return err
 	}
-	if fileHeader.Version != catchpointFileVersion {
+	switch fileHeader.Version {
+	case CatchpointFileVersionV5:
+	case CatchpointFileVersionV6:
+	default:
 		return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to process catchpoint - version %d is not supported", fileHeader.Version)
 	}
 
@@ -288,6 +293,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 		progress.SeenHeader = true
 		progress.TotalAccounts = fileHeader.TotalAccounts
 		progress.TotalChunks = fileHeader.TotalChunks
+		progress.Version = fileHeader.Version
 		c.ledger.setSynchronousMode(ctx, c.ledger.accountsRebuildSynchronousMode)
 	}
 	return err
@@ -299,21 +305,47 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingBalances: content chunk was missing")
 	}
 
-	var balances catchpointFileBalancesChunk
-	err = protocol.Decode(bytes, &balances)
-	if err != nil {
-		return err
-	}
-
-	if len(balances.Balances) == 0 {
-		return fmt.Errorf("processStagingBalances received a chunk with no accounts")
-	}
-
 	wdb := c.ledger.trackerDB().Wdb
 	start := time.Now()
 	ledgerProcessstagingbalancesCount.Inc(nil)
 
-	normalizedAccountBalances, err := prepareNormalizedBalances(balances.Balances, c.ledger.GenesisProto())
+	var normalizedAccountBalances []normalizedAccountBalance
+
+	switch progress.Version {
+	default:
+		// unsupported version.
+		// we won't get to this point, since we've already verified the version in processStagingContent
+		return errors.New("unsupported version")
+	case CatchpointFileVersionV5:
+		var balances catchpointFileBalancesChunkV5
+		err = protocol.Decode(bytes, &balances)
+		if err != nil {
+			return err
+		}
+
+		if len(balances.Balances) == 0 {
+			return fmt.Errorf("processStagingBalances received a chunk with no accounts")
+		}
+
+		normalizedAccountBalances, err = prepareNormalizedBalancesV5(balances.Balances, c.ledger.GenesisProto())
+
+	case CatchpointFileVersionV6:
+		var balances catchpointFileBalancesChunkV6
+		err = protocol.Decode(bytes, &balances)
+		if err != nil {
+			return err
+		}
+
+		if len(balances.Balances) == 0 {
+			return fmt.Errorf("processStagingBalances received a chunk with no accounts")
+		}
+
+		normalizedAccountBalances, err = prepareNormalizedBalancesV6(balances.Balances, c.ledger.GenesisProto())
+	}
+
+	if err != nil {
+		return fmt.Errorf("processStagingBalances failed to prepare normalized balances : %w", err)
+	}
 
 	wg := sync.WaitGroup{}
 	errChan := make(chan error, 3)
@@ -345,9 +377,11 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		defer wg.Done()
 		hasCreatables := false
 		for _, accBal := range normalizedAccountBalances {
-			if len(accBal.accountData.AssetParams) > 0 || len(accBal.accountData.AppParams) > 0 {
-				hasCreatables = true
-				break
+			for _, res := range accBal.resources {
+				if res.IsOwning() {
+					hasCreatables = true
+					break
+				}
 			}
 		}
 		if hasCreatables {
@@ -391,7 +425,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 
 	ledgerProcessstagingbalancesMicros.AddMicrosecondsSince(start, nil)
 	if err == nil {
-		progress.ProcessedAccounts += uint64(len(balances.Balances))
+		progress.ProcessedAccounts += uint64(len(normalizedAccountBalances))
 		progress.ProcessedBytes += uint64(len(bytes))
 	}
 
