@@ -28,7 +28,7 @@ import (
 	"reflect"
 	"runtime"
 	"testing"
-	"time"
+	//	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -746,7 +746,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 			stxnib := makeSignedTxnInBlock(tx)
 			blk.Payset = append(blk.Payset, stxnib)
 			blk.BlockHeader.TxnCounter++
-			time.Sleep(10*time.Millisecond)
+			//			time.Sleep(10*time.Millisecond)
 		}
 
 		err := l.AddBlock(blk, agreement.Certificate{})
