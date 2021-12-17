@@ -2727,14 +2727,14 @@ func LoadAllFullAccounts(
 			resCounter++
 		}
 
-		return nil
-	}
+		if baseAcct.TotalAppParams+baseAcct.TotalAppLocalStates+baseAcct.TotalAssetParams+baseAcct.TotalAssets == resCounter {
+			acctCb(address, ad)
+			ad = basics.AccountData{}
+			resCounter = 0
+			address = basics.Address{}
+		}
 
-	if baseAcct.TotalAppParams+baseAcct.TotalAppLocalStates+baseAcct.TotalAssetParams+baseAcct.TotalAssets == resCounter {
-		acctCb(address, ad)
-		ad = basics.AccountData{}
-		resCounter = 0
-		address = basics.Address{}
+		return nil
 	}
 
 	count, err = processAllBaseAccountRecords(baseRows, resRows, baseCb, resCb, 0)
