@@ -26,6 +26,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/config"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -984,7 +985,7 @@ func TestLocalBalanceAdapterIndexer(t *testing.T) {
 		case strings.HasPrefix(r.URL.Path, accountPath):
 			w.WriteHeader(200)
 			if r.URL.Path[len(accountPath):] == brs.Addr.String() {
-				account, err := v2.AccountDataToAccount(brs.Addr.String(), &brs.AccountData, map[basics.AssetIndex]string{}, 100, basics.MicroAlgos{Raw: 0})
+				account, err := v2.AccountDataToAccount(brs.Addr.String(), &brs.AccountData, map[basics.AssetIndex]string{}, 100, &config.ConsensusParams{MinBalance: 100000}, basics.MicroAlgos{Raw: 0})
 				a.NoError(err)
 				accountResponse := AccountIndexerResponse{Account: account, CurrentRound: 100}
 				response, err := json.Marshal(accountResponse)

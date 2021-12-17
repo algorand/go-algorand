@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Alphabet -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding -output=fields_string.go
 
 // TxnField is an enum type for `txn` and `gtxn`
 type TxnField int
@@ -453,37 +453,37 @@ func (s ecDsaCurveNameSpecMap) getExtraFor(name string) (extra string) {
 	return
 }
 
-// Base64Alphabet is an enum for the `base64decode` opcode
-type Base64Alphabet int
+// Base64Encoding is an enum for the `base64decode` opcode
+type Base64Encoding int
 
 const (
-	// URLAlph represents the base64url alphabet defined in https://www.rfc-editor.org/rfc/rfc4648.html
-	URLAlph Base64Alphabet = iota
-	// StdAlph represents the standard alphabet of the RFC
-	StdAlph
+	// URLEncoding represents the base64url encoding defined in https://www.rfc-editor.org/rfc/rfc4648.html
+	URLEncoding Base64Encoding = iota
+	// StdEncoding represents the standard encoding of the RFC
+	StdEncoding
 	invalidBase64Alphabet
 )
 
 // After running `go generate` these strings will be available:
-var base64AlphabetNames [2]string = [...]string{URLAlph.String(), StdAlph.String()}
+var base64EncodingNames [2]string = [...]string{URLEncoding.String(), StdEncoding.String()}
 
-type base64AlphabetSpec struct {
-	field   Base64Alphabet
+type base64EncodingSpec struct {
+	field   Base64Encoding
 	ftype   StackType
 	version uint64
 }
 
-var base64AlphbetSpecs = []base64AlphabetSpec{
-	{URLAlph, StackBytes, 6},
-	{StdAlph, StackBytes, 6},
+var base64EncodingSpecs = []base64EncodingSpec{
+	{URLEncoding, StackBytes, 6},
+	{StdEncoding, StackBytes, 6},
 }
 
-var base64AlphabetSpecByField map[Base64Alphabet]base64AlphabetSpec
-var base64AlphabetSpecByName base64AlphabetSpecMap
+var base64EncodingSpecByField map[Base64Encoding]base64EncodingSpec
+var base64EncodingSpecByName base64EncodingSpecMap
 
-type base64AlphabetSpecMap map[string]base64AlphabetSpec
+type base64EncodingSpecMap map[string]base64EncodingSpec
 
-func (s base64AlphabetSpecMap) getExtraFor(name string) (extra string) {
+func (s base64EncodingSpecMap) getExtraFor(name string) (extra string) {
 	// Uses 6 here because base64_decode fields were introduced in 6
 	if s[name].version > 6 {
 		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
@@ -724,14 +724,14 @@ func init() {
 		ecdsaCurveSpecByName[ahfn] = ecdsaCurveSpecByField[EcdsaCurve(i)]
 	}
 
-	base64AlphabetSpecByField = make(map[Base64Alphabet]base64AlphabetSpec, len(base64AlphabetNames))
-	for _, s := range base64AlphbetSpecs {
-		base64AlphabetSpecByField[s.field] = s
+	base64EncodingSpecByField = make(map[Base64Encoding]base64EncodingSpec, len(base64EncodingNames))
+	for _, s := range base64EncodingSpecs {
+		base64EncodingSpecByField[s.field] = s
 	}
 
-	base64AlphabetSpecByName = make(base64AlphabetSpecMap, len(base64AlphabetNames))
-	for i, alphname := range base64AlphabetNames {
-		base64AlphabetSpecByName[alphname] = base64AlphabetSpecByField[Base64Alphabet(i)]
+	base64EncodingSpecByName = make(base64EncodingSpecMap, len(base64EncodingNames))
+	for i, encoding := range base64EncodingNames {
+		base64EncodingSpecByName[encoding] = base64EncodingSpecByField[Base64Encoding(i)]
 	}
 
 	AssetHoldingFieldNames = make([]string, int(invalidAssetHoldingField))

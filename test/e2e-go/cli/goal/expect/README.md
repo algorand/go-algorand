@@ -77,6 +77,15 @@ go test -v test/e2e-go/cli/goal/expect/goal_expect_test.go
 
 TESTFILTER=foobar[0-9]Test TESTDIR=baz go test -v test/e2e-go/cli/goal/expect/goal_expect_test.go
 ```
+In particular, if you want to run `goalAccountInfoTest.exp` you'll need to create a temporary directory such as `deletemeTemp` with
+```
+mkdir test/e2e-go/cli/goal/expect/deletemeTemp
+```
+and then run the following command:
+```
+TESTFILTER=goalAccountInfoTest TESTDIR=deletemeTemp go test -v test/e2e-go/cli/goal/expect/goal_expect_test.go
+```
+If you're running **exactly the same command again**, make sure to _delete_ and _re-create_ the temp directory first.
 
 > Of course, a test can always be run directly by `expect`, i.e. `expect rekeyTest.exp $TESTDIR $TESTDATADIR`.
 
