@@ -20,6 +20,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
+	"runtime/pprof"
 	"sync"
 	"time"
 
@@ -110,10 +112,19 @@ func (bq *blockQueue) syncer() {
 		start := time.Now()
 		ledgerSyncBlockputCount.Inc(nil)
 		err := bq.l.blockDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			bq.l.log.Infof("workQ size: %d", len(workQ))
 			for _, e := range workQ {
+				tt1 := time.Now()
 				err0 := blockPut(tx, e.block, e.cert)
 				if err0 != nil {
 					return err0
+				}
+				since := time.Since(tt1).Milliseconds()
+				if since > 200 {
+					bq.l.log.Infof("blockPut time: %d", since)
+				}
+				if since > 1000 {
+					pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
 				}
 			}
 			return nil

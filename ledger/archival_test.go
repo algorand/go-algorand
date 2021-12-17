@@ -784,6 +784,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, basics.Round(0), earliest)
 	require.Equal(t, basics.Round(0), latest)
+	require.Equal(t, 1, 2)
 }
 
 func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Round, error) {
