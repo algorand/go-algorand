@@ -2675,11 +2675,14 @@ func LoadAllFullAccounts(
 	if err != nil {
 		return
 	}
+	defer baseRows.Close()
+
 	// iterate over the existing resources
 	resRows, err := tx.QueryContext(ctx, fmt.Sprintf("SELECT addrid, aidx, rtype, data FROM %s ORDER BY addrid, aidx, rtype", resourcesTable))
 	if err != nil {
 		return
 	}
+	defer resRows.Close()
 
 	var address basics.Address
 	var baseAcct baseAccountData
