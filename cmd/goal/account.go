@@ -832,7 +832,7 @@ func changeAccountOnlineStatus(acct string, goOnline bool, txFile string, wallet
 	var utx transactions.Transaction
 	var err error
 	if goOnline {
-		utx, err = client.MakeUnsignedGoOnlineTx(acct, nil, firstTxRound, lastTxRound, fee, leaseBytes)
+		utx, err = client.MakeUnsignedGoOnlineTx(acct, firstTxRound, lastTxRound, fee, leaseBytes)
 	} else {
 		utx, err = client.MakeUnsignedGoOfflineTx(acct, firstTxRound, lastTxRound, fee, leaseBytes)
 	}
