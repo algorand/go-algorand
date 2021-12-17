@@ -831,6 +831,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 		accountsGenerationDuration += balanceLoopDuration
 
 		normalizedAccountBalances, err := prepareNormalizedBalancesV6(balances.Balances, proto)
+		require.NoError(b, err)
 		b.StartTimer()
 		err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 			err = writeCatchpointStagingBalances(ctx, tx, normalizedAccountBalances)
@@ -895,8 +896,6 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(addr, address)
 	a.Equal(sample1, data)
 
-	delta := ledgercore.MakeNewAccountDeltas(1)
-	delta.Upsert(addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 456}}})
 	sample2 := accountDelta{newAcct: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 456}}}
 	ad.upsert(addr, sample2)
 	data, idx = ad.get(addr)
@@ -923,11 +922,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(1, ad.len())
 	address, data = ad.getByIdx(0)
 	a.Equal(addr, address)
-	new1, ok := delta.GetBasicsAccountData(addr)
-	a.True(ok)
-	new1base := baseAccountData{}
-	new1base.SetAccountData(&new1)
-	a.Equal(accountDelta{newAcct: new1base, oldAcct: old1}, data)
+	a.Equal(accountDelta{newAcct: sample2.newAcct, oldAcct: old1}, data)
 
 	addr1 := ledgertesting.RandomAddress()
 	old2 := persistedAccountData{addr: addr1, accountData: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
@@ -935,7 +930,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(2, ad.len())
 	address, data = ad.getByIdx(0)
 	a.Equal(addr, address)
-	a.Equal(accountDelta{newAcct: new1base, oldAcct: old1}, data)
+	a.Equal(accountDelta{newAcct: sample2.newAcct, oldAcct: old1}, data)
 
 	address, data = ad.getByIdx(1)
 	a.Equal(addr1, address)
@@ -946,8 +941,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(2, ad.len())
 	address, data = ad.getByIdx(0)
 	a.Equal(addr, address)
-	new2 := old2.accountData
-	a.Equal(accountDelta{newAcct: new2, oldAcct: old2}, data)
+	a.Equal(accountDelta{newAcct: sample2.newAcct, oldAcct: old2}, data)
 
 	addr2 := ledgertesting.RandomAddress()
 	idx = ad.insert(addr2, sample2)
