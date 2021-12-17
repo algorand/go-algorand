@@ -258,12 +258,19 @@ const (
 
 // normalizedAccountBalance is a staging area for a catchpoint file account information before it's being added to the catchpoint staging tables.
 type normalizedAccountBalance struct {
-	address            basics.Address
-	accountData        baseAccountData
-	resources          map[basics.CreatableIndex]resourcesData
+	// The public key address to which the account belongs.
+	address basics.Address
+	// accountData contains the baseAccountData for that account.
+	accountData baseAccountData
+	// resources is a map, where the key is the creatable index, and the value is the resource data.
+	resources map[basics.CreatableIndex]resourcesData
+	// encodedAccountData contains the baseAccountData encoded bytes that are going to be written to the accountbase table.
 	encodedAccountData []byte
-	accountHashes      [][]byte
-	normalizedBalance  uint64
+	// accountHashes contains a list of all the hashes that would need to be added to the merkle trie for that account.
+	// on V6, we could have multiple hashes, since we have separate account/resource hashes.
+	accountHashes [][]byte
+	// normalizedBalance contains the normalized balance for the account.
+	normalizedBalance uint64
 }
 
 // prepareNormalizedBalancesV5 converts an array of encodedBalanceRecordV5 into an equal size array of normalizedAccountBalances.
@@ -777,31 +784,35 @@ func createCatchpointStagingHashesIndex(ctx context.Context, tx *sql.Tx) (err er
 }
 
 // writeCatchpointStagingCreatable inserts all the creatables in the provided array into the catchpoint asset creator staging table catchpointassetcreators.
+// note that we cannot insert the resources here : in order to insert the resources, we need the rowid of the accountbase entry. This is being inserted by
+// writeCatchpointStagingBalances via a separate go-routine.
 func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
-	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator, ctype) VALUES(?, ?, ?)")
+	var insertCreatorsStmt *sql.Stmt
+	var err error
+	insertCreatorsStmt, err = tx.PrepareContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator, ctype) VALUES(?, ?, ?)")
 	if err != nil {
 		return err
 	}
+	defer insertCreatorsStmt.Close()
 
 	for _, balance := range bals {
 		for aidx, resData := range balance.resources {
 			if resData.IsOwning() {
-				// determine if it's a asset
+				// determine if it's an asset
 				if resData.IsAsset() {
-					_, err := insertStmt.ExecContext(ctx, basics.CreatableIndex(aidx), balance.address[:], basics.AssetCreatable)
+					_, err := insertCreatorsStmt.ExecContext(ctx, basics.CreatableIndex(aidx), balance.address[:], basics.AssetCreatable)
 					if err != nil {
 						return err
 					}
 				}
-				// determine if it's a asset
+				// determine if it's an application
 				if resData.IsApp() {
-					_, err := insertStmt.ExecContext(ctx, basics.CreatableIndex(aidx), balance.address[:], basics.AppCreatable)
+					_, err := insertCreatorsStmt.ExecContext(ctx, basics.CreatableIndex(aidx), balance.address[:], basics.AppCreatable)
 					if err != nil {
 						return err
 					}
 				}
 			}
-			// TODO : add to resource table.
 		}
 	}
 	return nil
