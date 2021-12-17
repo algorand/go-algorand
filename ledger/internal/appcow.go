@@ -256,8 +256,6 @@ func (cb *roundCowState) AllocateApp(addr basics.Address, aidx basics.AppIndex, 
 		cb.mods.ModifiedAppLocalStates[aa] = true
 	}
 
-	cb.trackCreatable(basics.CreatableIndex(aidx))
-
 	return nil
 }
 

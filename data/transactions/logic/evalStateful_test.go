@@ -2206,7 +2206,6 @@ func TestReturnTypes(t *testing.T) {
 	}
 	ledger.NewAsset(tx.Sender, 1, params)
 	ledger.NewApp(tx.Sender, 1, basics.AppParams{})
-	ledger.SetTrackedCreatable(0, basics.CreatableLocator{Index: 1})
 	ledger.NewAccount(tx.Receiver, 1000000)
 	ledger.NewLocals(tx.Receiver, 1)
 	key, err := hex.DecodeString("33343536")
@@ -2299,11 +2298,11 @@ func TestReturnTypes(t *testing.T) {
 				cx.runModeFlags = m
 				cx.appID = 1
 
-				// These two are silly, but one test needs a higher gi, and
-				// another needs to work on the args that were put in txn[0].
-				// This convinces them both to work.  Revisit.
+				// These set conditions for some ops that examine the group.
+				// This convinces them all to work.  Revisit.
 				cx.Txn = &ep.TxnGroup[0]
 				cx.GroupIndex = 1
+				cx.TxnGroup[0].ConfigAsset = 100
 
 				eval(ops.Program, &cx)
 

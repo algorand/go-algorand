@@ -1509,8 +1509,8 @@ int 1
 // TestInnerGaid ensures there's no confusion over the tracking of ids
 // across multiple inner transaction groups
 func TestInnerGaid(t *testing.T) {
-	t.Skip("until gaid works in the logic test env")
 	ep, tx, ledger := MakeSampleEnv()
+	ep.Proto.MaxInnerTransactions = 100
 	// App to log the aid of slot[apparg[0]]
 	logGaid := TestProg(t, `txn ApplicationArgs 0; btoi; gaids; itob; log; int 1`, AssemblerMaxVersion)
 	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
@@ -1535,7 +1535,64 @@ btoi
 int 5000
 ==
 assert
+
+// Swap the pay and acfg, ensure gaid 1 works instead
+itxn_begin
+int pay;      itxn_field TypeEnum
+txn Sender;   itxn_field Receiver
+itxn_next
+int acfg;    itxn_field TypeEnum
+itxn_next
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+int 1; itob; itxn_field ApplicationArgs
+itxn_submit
+itxn Logs 0
+btoi
+int 5001
+==
+assert
+
+
 int 1
 `, ep)
+
+	// Nearly identical, but ensures that gaid 0 FAILS in the second group
+	TestApp(t, `itxn_begin
+int acfg;    itxn_field TypeEnum
+itxn_next
+int pay;      itxn_field TypeEnum
+txn Sender;   itxn_field Receiver
+itxn_next
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+int 0; itob; itxn_field ApplicationArgs
+itxn_submit
+itxn Logs 0
+btoi
+int 5000
+==
+assert
+
+// Swap the pay and acfg, ensure gaid 1 works instead
+itxn_begin
+int pay;      itxn_field TypeEnum
+txn Sender;   itxn_field Receiver
+itxn_next
+int acfg;    itxn_field TypeEnum
+itxn_next
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+int 0; itob; itxn_field ApplicationArgs
+itxn_submit
+itxn Logs 0
+btoi
+int 5001
+==
+assert
+
+
+int 1
+`, ep, "assert failed")
 
 }

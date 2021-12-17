@@ -1622,12 +1622,7 @@ func TestGaid(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	checkCreatableIDProg := `
-gaid 0
-int 100
-==
-`
-	ops := testProg(t, checkCreatableIDProg, 4)
+	check0 := testProg(t, "gaid 0; int 100; ==", 4)
 	txn := makeSampleTxn()
 	txn.Txn.Type = protocol.ApplicationCallTx
 	txgroup := make([]transactions.SignedTxn, 3)
@@ -1635,12 +1630,17 @@ int 100
 	targetTxn := makeSampleTxn()
 	targetTxn.Txn.Type = protocol.AssetConfigTx
 	txgroup[0] = targetTxn
-	ledger := MakeLedger(nil)
-	ledger.SetTrackedCreatable(0, basics.CreatableLocator{Index: 100})
 	ep := defaultEvalParams(nil)
-	ep.Ledger = ledger
 	ep.TxnGroup = transactions.WrapSignedTxnsWithAD(txgroup)
-	pass, err := EvalApp(ops.Program, 1, 0, ep)
+	ep.Ledger = MakeLedger(nil)
+
+	// should fail when no creatable was created
+	_, err := EvalApp(check0.Program, 1, 0, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "the txn did not create anything")
+
+	ep.TxnGroup[0].ApplyData.ConfigAsset = 100
+	pass, err := EvalApp(check0.Program, 1, 0, ep)
 	if !pass || err != nil {
 		t.Log(ep.Trace.String())
 	}
@@ -1648,35 +1648,22 @@ int 100
 	require.True(t, pass)
 
 	// should fail when accessing future transaction in group
-	futureCreatableIDProg := `
-gaid 2
-int 0
->
-`
-
-	ops = testProg(t, futureCreatableIDProg, 4)
-	_, err = EvalApp(ops.Program, 1, 0, ep)
+	check2 := testProg(t, "gaid 2; int 0; >", 4)
+	_, err = EvalApp(check2.Program, 1, 0, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gaid can't get creatable ID of txn ahead of the current one")
 
 	// should fail when accessing self
-	ops = testProg(t, checkCreatableIDProg, 4)
-	_, err = EvalApp(ops.Program, 0, 0, ep)
+	_, err = EvalApp(check0.Program, 0, 0, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gaid is only for accessing creatable IDs of previous txns")
 
 	// should fail on non-creatable
 	ep.TxnGroup[0].Txn.Type = protocol.PaymentTx
-	_, err = EvalApp(ops.Program, 1, 0, ep)
+	_, err = EvalApp(check0.Program, 1, 0, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "can't use gaid on txn that is not an app call nor an asset config txn")
 	ep.TxnGroup[0].Txn.Type = protocol.AssetConfigTx
-
-	// should fail when no creatable was created
-	ledger.SetTrackedCreatable(0, basics.CreatableLocator{})
-	_, err = EvalApp(ops.Program, 1, 0, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "the txn did not create anything")
 }
 
 func TestGtxn(t *testing.T) {

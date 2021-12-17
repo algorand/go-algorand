@@ -74,11 +74,6 @@ type roundCowState struct {
 	// cache mainaining accountIdx used in getKey for local keys access
 	compatibilityGetKeyCache map[basics.Address]map[storagePtr]uint64
 
-	// index of a txn within a group; used in conjunction with trackedCreatables
-	groupIdx int
-	// track creatables created during each transaction in the round
-	trackedCreatables map[int]basics.CreatableIndex
-
 	// prevTotals contains the accounts totals for the previous round. It's being used to calculate the totals for the new round
 	// so that we could perform the validation test on these to ensure the block evaluator generate a valid changeset.
 	prevTotals ledgercore.AccountTotals
@@ -86,13 +81,12 @@ type roundCowState struct {
 
 func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, proto config.ConsensusParams, prevTimestamp int64, prevTotals ledgercore.AccountTotals, hint int) *roundCowState {
 	cb := roundCowState{
-		lookupParent:      b,
-		commitParent:      nil,
-		proto:             proto,
-		mods:              ledgercore.MakeStateDelta(&hdr, prevTimestamp, hint, 0),
-		sdeltas:           make(map[basics.Address]map[storagePtr]*storageDelta),
-		trackedCreatables: make(map[int]basics.CreatableIndex),
-		prevTotals:        prevTotals,
+		lookupParent: b,
+		commitParent: nil,
+		proto:        proto,
+		mods:         ledgercore.MakeStateDelta(&hdr, prevTimestamp, hint, 0),
+		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
+		prevTotals:   prevTotals,
 	}
 
 	// compatibilityMode retains producing application' eval deltas under the following rule:
@@ -200,10 +194,6 @@ func (cb *roundCowState) blockHdr(r basics.Round) (bookkeeping.BlockHeader, erro
 	return cb.lookupParent.blockHdr(r)
 }
 
-func (cb *roundCowState) trackCreatable(creatableIndex basics.CreatableIndex) {
-	cb.trackedCreatables[cb.groupIdx] = creatableIndex
-}
-
 func (cb *roundCowState) incTxnCount() {
 	cb.txnCount++
 }
@@ -229,22 +219,11 @@ func (cb *roundCowState) child(hint int) *roundCowState {
 		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
 	}
 
-	// clone tracked creatables
-	ch.trackedCreatables = make(map[int]basics.CreatableIndex)
-	for i, tc := range cb.trackedCreatables {
-		ch.trackedCreatables[i] = tc
-	}
-
 	if cb.compatibilityMode {
 		ch.compatibilityMode = cb.compatibilityMode
 		ch.compatibilityGetKeyCache = make(map[basics.Address]map[storagePtr]uint64)
 	}
 	return &ch
-}
-
-// setGroupIdx sets this transaction's index within its group
-func (cb *roundCowState) setGroupIdx(txnIdx int) {
-	cb.groupIdx = txnIdx
 }
 
 func (cb *roundCowState) commitToParent() {

@@ -211,7 +211,6 @@ type LedgerForLogic interface {
 	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error)
 	AppParams(aidx basics.AppIndex) (basics.AppParams, basics.Address, error)
 	OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error)
-	GetCreatableID(groupIdx int) basics.CreatableIndex
 
 	GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (value basics.TealValue, exists bool, err error)
 	SetLocal(addr basics.Address, appIdx basics.AppIndex, key string, value basics.TealValue, accountIdx uint64) error
@@ -2627,11 +2626,13 @@ func (cx *EvalContext) getApplicationAddress() basics.Address {
 }
 
 func (cx *EvalContext) getCreatableID(groupIndex int) (cid uint64, err error) {
-	if cx.Ledger == nil {
-		err = fmt.Errorf("ledger not available")
-		return
+	if aid := cx.TxnGroup[groupIndex].ApplyData.ConfigAsset; aid != 0 {
+		return uint64(aid), nil
 	}
-	return uint64(cx.Ledger.GetCreatableID(groupIndex)), nil
+	if aid := cx.TxnGroup[groupIndex].ApplyData.ApplicationID; aid != 0 {
+		return uint64(aid), nil
+	}
+	return 0, fmt.Errorf("Index %d did not create anything", groupIndex)
 }
 
 func (cx *EvalContext) getCreatorAddress() ([]byte, error) {
