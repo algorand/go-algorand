@@ -44,7 +44,7 @@ if ! echo "$OUTPUT" | grep -q 'Participation ID:[[:space:]]*[[:alnum:]]\{52\}'; 
 
 
 # Test multiple data directory supported
-OUTPUT=$(goal account partkeyinfo -d "$ALGORAND_DATA" -d "$ALGORAND_DATA2"|grep -c 'Participation ID')
+OUTPUT=$(goal account partkeyinfo -d "$ALGORAND_DATA" -d "$ALGORAND_DATA2"|grep -c 'Dumping participation key info from')
 if [[ "$OUTPUT" != "2" ]]; then fail_test "Two Participation IDs should have been found."; fi
 
 # get stderr from this one
