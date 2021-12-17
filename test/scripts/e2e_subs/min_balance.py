@@ -139,8 +139,9 @@ txinfo, err = goal.pay(goal.account, joe, amt=50_000_000, send=True)
 txinfo, err = goal.pay(goal.account, flo, amt=100_000_000, send=True)
 
 
-# starting out, should be at global min
 expected_goal_mb = CONSENSUS_MIN_BALANCE + APP_MIN_BALANCE
+
+# starting out, should be at global min
 assert_min_balance(goal, flo, CONSENSUS_MIN_BALANCE, expected_goal_mb)
 
 expected_goal_mb += APP_MIN_BALANCE
