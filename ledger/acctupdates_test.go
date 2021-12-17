@@ -1130,7 +1130,7 @@ func TestListCreatables(t *testing.T) {
 }
 
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
-	rows, err := tx.Query("SELECT address, data FROM accountbase")
+	rows, err := tx.Query("SELECT rowid, address, data FROM accountbase")
 	if err != nil {
 		return
 	}
@@ -1140,12 +1140,13 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 	for rows.Next() {
 		var addrbuf []byte
 		var buf []byte
-		err = rows.Scan(&addrbuf, &buf)
+		var rowid sql.NullInt64
+		err = rows.Scan(&rowid, &addrbuf, &buf)
 		if err != nil {
 			return
 		}
 
-		var data basics.AccountData
+		var data baseAccountData
 		err = protocol.Decode(buf, &data)
 		if err != nil {
 			return
@@ -1157,8 +1158,67 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 			return
 		}
 
+		ad := data.GetAccountData()
+
+		err = func() (err error) {
+			// make a scope to use defer
+			var resRows *sql.Rows
+			resRows, err = tx.Query("SELECT aidx, data FROM resources where addrid = ?", rowid)
+			if err != nil {
+				return
+			}
+			defer resRows.Close()
+
+			for resRows.Next() {
+				var buf []byte
+				var aidx int64
+				err = resRows.Scan(&aidx, &buf)
+				if err != nil {
+					return
+				}
+				var resData resourcesData
+				err = protocol.Decode(buf, &resData)
+				if err != nil {
+					return
+				}
+				if resData.IsApp() {
+					if resData.IsOwning() {
+						if ad.AppParams == nil {
+							ad.AppParams = make(map[basics.AppIndex]basics.AppParams)
+						}
+						ad.AppParams[basics.AppIndex(aidx)] = resData.GetAppParams()
+					}
+					if resData.IsHolding() {
+						if ad.AppLocalStates == nil {
+							ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+						}
+						ad.AppLocalStates[basics.AppIndex(aidx)] = resData.GetAppLocalState()
+					}
+				} else if resData.IsAsset() {
+					if resData.IsOwning() {
+						if ad.AssetParams == nil {
+							ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
+						}
+						ad.AssetParams[basics.AssetIndex(aidx)] = resData.GetAssetParams()
+					}
+					if resData.IsHolding() {
+						if ad.Assets == nil {
+							ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
+						}
+						ad.Assets[basics.AssetIndex(aidx)] = resData.GetAssetHolding()
+					}
+				} else {
+					return err
+				}
+			}
+			return
+		}()
+		if err != nil {
+			return
+		}
+
 		copy(addr[:], addrbuf)
-		bals[addr] = data
+		bals[addr] = ad
 	}
 
 	err = rows.Err()
