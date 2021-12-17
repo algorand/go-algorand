@@ -239,14 +239,9 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
 
-	latestBlkHdr, err := myLedger.BlockHdr(lastRound)
+	consensus, err := myLedger.ConsensusParams(lastRound)
 	if err != nil {
-		return internalError(ctx, err, errFailedRetrievingLatestBlockHeaderStatus, v2.Log)
-	}
-
-	consensus, ok := config.Consensus[latestBlkHdr.CurrentProtocol]
-	if !ok {
-		return internalError(ctx, errors.New(errInternalFailure), "could not retrieve consensus information for current protocol", v2.Log)
+		return internalError(ctx, err, fmt.Sprintf("could not retrieve consensus information for last round (%d)", lastRound), v2.Log)
 	}
 
 	if handle == protocol.CodecHandle {

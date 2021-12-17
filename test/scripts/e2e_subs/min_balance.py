@@ -41,7 +41,7 @@ APP_BYTES_MIN_BALANCE = 25_000
 # per userBalance.go::MinBalance() as of Dec 2021:
 EXTRA_PAGE_MIN_BALANCE = APP_MIN_BALANCE
 
-TEAL = f"""#pragma version 6
+TEAL = f"""#pragma version 5
 byte "Hello Min Balance!"
 log
 
