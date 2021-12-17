@@ -138,7 +138,7 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
         fi
 
         echo ""
-        echo "python3 \"$SCRIPT_PATH\"/e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} \"$SCRIPT_PATH\"/e2e_subs/SCRIPT_FILE_NAME"
+        echo "python3 \"$SCRIPT_PATH/e2e_client_runner.py\" ${RUN_KMD_WITH_UNSAFE_SCRYPT} \"$SCRIPT_PATH/e2e_subs/SCRIPT_FILE_NAME\""
         echo ""
         echo "Press enter to shut down the test environment..."
         read a
