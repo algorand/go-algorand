@@ -263,8 +263,8 @@ func (c *CatchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 		return err
 	}
 	switch fileHeader.Version {
-	case catchpointFileVersionV5:
-	case catchpointFileVersionV6:
+	case CatchpointFileVersionV5:
+	case CatchpointFileVersionV6:
 	default:
 		return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to process catchpoint - version %d is not supported", fileHeader.Version)
 	}
@@ -316,7 +316,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		// unsupported version.
 		// we won't get to this point, since we've already verified the version in processStagingContent
 		return errors.New("unsupported version")
-	case catchpointFileVersionV5:
+	case CatchpointFileVersionV5:
 		var balances catchpointFileBalancesChunkV5
 		err = protocol.Decode(bytes, &balances)
 		if err != nil {
@@ -329,7 +329,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 
 		normalizedAccountBalances, err = prepareNormalizedBalancesV5(balances.Balances, c.ledger.GenesisProto())
 
-	case catchpointFileVersionV6:
+	case CatchpointFileVersionV6:
 		var balances catchpointFileBalancesChunkV6
 		err = protocol.Decode(bytes, &balances)
 		if err != nil {

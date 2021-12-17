@@ -285,7 +285,18 @@ func prepareNormalizedBalancesV5(bals []encodedBalanceRecordV5, proto config.Con
 		}
 		normalizedAccountBalances[i].accountData.SetAccountData(&accountDataV5)
 		normalizedAccountBalances[i].normalizedBalance = accountDataV5.NormalizedOnlineBalance(proto)
-		resources := accountDataResources(&accountDataV5)
+		type resourcesRow struct {
+			aidx basics.CreatableIndex
+			resourcesData
+		}
+		var resources []resourcesRow
+		addResourceRow := func(_ context.Context, _ int64, aidx basics.CreatableIndex, ctype basics.CreatableType, rd *resourcesData) error {
+			resources = append(resources, resourcesRow{aidx: aidx, resourcesData: *rd})
+			return nil
+		}
+		if err = accountDataResources(context.Background(), &accountDataV5, 0, addResourceRow); err != nil {
+			return nil, err
+		}
 		normalizedAccountBalances[i].accountHashes = make([][]byte, 1)
 		normalizedAccountBalances[i].accountHashes[0] = accountHashBuilder(balance.Address, accountDataV5, balance.AccountData)
 		if len(resources) > 0 {
@@ -295,7 +306,6 @@ func prepareNormalizedBalancesV5(bals []encodedBalanceRecordV5, proto config.Con
 			normalizedAccountBalances[i].resources[resource.aidx] = resource.resourcesData
 		}
 		normalizedAccountBalances[i].encodedAccountData = balance.AccountData
-
 	}
 	return
 }
@@ -1443,6 +1453,60 @@ func (rd *resourcesData) GetAppParams() basics.AppParams {
 	}
 }
 
+func accountDataResources(
+	ctx context.Context,
+	accountData *basics.AccountData, rowid int64,
+	cb func(ctx context.Context, rowid int64, cidx basics.CreatableIndex, ctype basics.CreatableType, rd *resourcesData) error,
+) error {
+	// does this account have any assets ?
+	if len(accountData.Assets) > 0 || len(accountData.AssetParams) > 0 {
+		for aidx, holding := range accountData.Assets {
+			var rd resourcesData
+			rd.SetAssetHolding(holding)
+			if ap, has := accountData.AssetParams[aidx]; has {
+				rd.SetAssetParams(ap, true)
+				delete(accountData.AssetParams, aidx)
+			}
+			err := cb(ctx, rowid, basics.CreatableIndex(aidx), basics.AssetCreatable, &rd)
+			if err != nil {
+				return err
+			}
+		}
+		for aidx, aparams := range accountData.AssetParams {
+			var rd resourcesData
+			rd.SetAssetParams(aparams, false)
+			err := cb(ctx, rowid, basics.CreatableIndex(aidx), basics.AssetCreatable, &rd)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	// does this account have any applications ?
+	if len(accountData.AppLocalStates) > 0 || len(accountData.AppParams) > 0 {
+		for aidx, localState := range accountData.AppLocalStates {
+			var rd resourcesData
+			rd.SetAppLocalState(localState)
+			if ap, has := accountData.AppParams[aidx]; has {
+				rd.SetAppParams(ap, true)
+				delete(accountData.AppParams, aidx)
+			}
+			err := cb(ctx, rowid, basics.CreatableIndex(aidx), basics.AssetCreatable, &rd)
+			if err != nil {
+				return err
+			}
+		}
+		for aidx, aparams := range accountData.AppParams {
+			var rd resourcesData
+			rd.SetAppParams(aparams, false)
+			err := cb(ctx, rowid, basics.CreatableIndex(aidx), basics.AssetCreatable, &rd)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 //msgp:ignore resourcesRow
 type resourcesRow struct {
 	aidx  basics.CreatableIndex
@@ -1450,7 +1514,7 @@ type resourcesRow struct {
 	resourcesData
 }
 
-func accountDataResources(accountData *basics.AccountData) (rows []resourcesRow) {
+func accountDataResources2(accountData *basics.AccountData) (rows []resourcesRow) {
 	maxResourcesLen := len(accountData.Assets) + len(accountData.AssetParams) + len(accountData.AppLocalStates) + len(accountData.AppParams)
 	if maxResourcesLen == 0 {
 		return nil
@@ -1605,12 +1669,14 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 		if err != nil {
 			return err
 		}
-		resources := accountDataResources(&accountData)
-		for _, resource := range resources {
-			_, err = insertResources.ExecContext(ctx, rowID, resource.aidx, resource.rtype, protocol.Encode(&resource.resourcesData))
-			if err != nil {
-				return err
-			}
+		insertResourceCallback := func(ctx context.Context, rowID int64, cidx basics.CreatableIndex, ctype basics.CreatableType, rd *resourcesData) error {
+			encodedData := protocol.Encode(rd)
+			_, err = insertResources.ExecContext(ctx, rowID, cidx, ctype, encodedData)
+			return err
+		}
+		err = accountDataResources(ctx, &accountData, rowID, insertResourceCallback)
+		if err != nil {
+			return err
 		}
 		processedAccounts++
 		log(processedAccounts, totalBaseAccounts)

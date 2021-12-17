@@ -38,11 +38,11 @@ const (
 	// note that the last chunk would typically be less than this number.
 	BalancesPerCatchpointFileChunk = 512
 
-	// catchpointFileVersionV5 is the catchpoint file version that was used when the database schema was V0-V5.
-	catchpointFileVersionV5 = uint64(0200)
+	// CatchpointFileVersionV5 is the catchpoint file version that was used when the database schema was V0-V5.
+	CatchpointFileVersionV5 = uint64(0200)
 
-	// catchpointFileVersionV6 is the catchpoint file version that is matching database schema V6
-	catchpointFileVersionV6 = uint64(0201)
+	// CatchpointFileVersionV6 is the catchpoint file version that is matching database schema V6
+	CatchpointFileVersionV6 = uint64(0201)
 )
 
 // catchpointWriter is the struct managing the persistence of accounts data into the catchpoint file.
@@ -319,7 +319,7 @@ func (cw *catchpointWriter) readHeaderFromDatabase(ctx context.Context, tx *sql.
 	header.TotalChunks = (header.TotalAccounts + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk
 	header.BlocksRound = cw.blocksRound
 	header.Catchpoint = cw.label
-	header.Version = catchpointFileVersionV6
+	header.Version = CatchpointFileVersionV6
 	header.BlockHeaderDigest = cw.blockHeaderDigest
 	cw.fileHeader = &header
 	return
