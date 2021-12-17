@@ -1074,7 +1074,7 @@ func populateMethodCallTxnArgs(types []string, values []string) ([]transactions.
 		}
 
 		expectedType := types[i]
-		if expectedType != "txn" && txn.Txn.Type != protocol.TxType(expectedType) {
+		if expectedType != abi.AnyTransactionType && txn.Txn.Type != protocol.TxType(expectedType) {
 			return nil, fmt.Errorf("Transaction from %s does not match method argument type. Expected %s, got %s", txFilename, expectedType, txn.Txn.Type)
 		}
 
@@ -1082,6 +1082,82 @@ func populateMethodCallTxnArgs(types []string, values []string) ([]transactions.
 	}
 
 	return loadedTxns, nil
+}
+
+// populateMethodCallReferenceArgs parses reference argument types and resolves them to an index
+// into the appropriate foreign array. Their placement will be as compact as possible, which means
+// values will be deduplicated and any value that is the sender or the current app will not be added
+// to the foreign array.
+func populateMethodCallReferenceArgs(sender string, currentApp uint64, types []string, values []string, accounts *[]string, apps *[]uint64, assets *[]uint64) ([]int, error) {
+	resolvedIndexes := make([]int, len(types))
+
+	for i, value := range values {
+		var resolved int
+
+		switch types[i] {
+		case abi.AccountReferenceType:
+			if value == sender {
+				resolved = 0
+			} else {
+				duplicate := false
+				for j, account := range *accounts {
+					if value == account {
+						resolved = j + 1 // + 1 because 0 is the sender
+						duplicate = true
+						break
+					}
+				}
+				if !duplicate {
+					resolved = len(*accounts) + 1
+					*accounts = append(*accounts, value)
+				}
+			}
+		case abi.ApplicationReferenceType:
+			appID, err := strconv.ParseUint(value, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("Unable to parse application ID '%s': %s", value, err)
+			}
+			if appID == currentApp {
+				resolved = 0
+			} else {
+				duplicate := false
+				for j, app := range *apps {
+					if appID == app {
+						resolved = j + 1 // + 1 because 0 is the current app
+						duplicate = true
+						break
+					}
+				}
+				if !duplicate {
+					resolved = len(*apps) + 1
+					*apps = append(*apps, appID)
+				}
+			}
+		case abi.AssetReferenceType:
+			assetID, err := strconv.ParseUint(value, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("Unable to parse asset ID '%s': %s", value, err)
+			}
+			duplicate := false
+			for j, asset := range *assets {
+				if assetID == asset {
+					resolved = j
+					duplicate = true
+					break
+				}
+			}
+			if !duplicate {
+				resolved = len(*assets)
+				*assets = append(*assets, assetID)
+			}
+		default:
+			return nil, fmt.Errorf("Unknown reference type: %s", types[i])
+		}
+
+		resolvedIndexes[i] = resolved
+	}
+
+	return resolvedIndexes, nil
 }
 
 var methodAppCmd = &cobra.Command{
@@ -1138,15 +1214,35 @@ var methodAppCmd = &cobra.Command{
 		var txnArgValues []string
 		var basicArgTypes []string
 		var basicArgValues []string
+		var refArgTypes []string
+		var refArgValues []string
+		refArgIndexToBasicArgIndex := make(map[int]int)
 		for i, argType := range argTypes {
 			argValue := methodArgs[i]
 			if abi.IsTransactionType(argType) {
 				txnArgTypes = append(txnArgTypes, argType)
 				txnArgValues = append(txnArgValues, argValue)
 			} else {
+				if abi.IsReferenceType(argType) {
+					refArgIndexToBasicArgIndex[len(refArgTypes)] = len(basicArgTypes)
+					refArgTypes = append(refArgTypes, argType)
+					refArgValues = append(refArgValues, argValue)
+					// treat the reference as a uint8 for encoding purposes
+					argType = "uint8"
+				}
 				basicArgTypes = append(basicArgTypes, argType)
 				basicArgValues = append(basicArgValues, argValue)
 			}
+		}
+
+		refArgsResolved, err := populateMethodCallReferenceArgs(account, appIdx, refArgTypes, refArgValues, &appAccounts, &foreignApps, &foreignAssets)
+		if err != nil {
+			reportErrorf("error populating reference arguments: %v", err)
+		}
+		for i, resolved := range refArgsResolved {
+			basicArgIndex := refArgIndexToBasicArgIndex[i]
+			// use the foreign array index as the encoded argument value
+			basicArgValues[basicArgIndex] = strconv.Itoa(resolved)
 		}
 
 		err = abi.ParseArgJSONtoByteSlice(basicArgTypes, basicArgValues, &applicationArgs)
