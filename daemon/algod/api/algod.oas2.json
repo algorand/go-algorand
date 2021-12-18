@@ -1354,7 +1354,8 @@
         "pending-rewards",
         "amount-without-pending-rewards",
         "rewards",
-        "status"
+        "status",
+        "min-balance"
       ],
       "properties": {
         "address": {
@@ -1363,6 +1364,10 @@
         },
         "amount": {
           "description": "\\[algo\\] total number of MicroAlgos in the account",
+          "type": "integer"
+        },
+        "min-balance": {
+          "description": "MicroAlgo balance required by the account.\n\nThe requirement grows based on asset and application usage.",
           "type": "integer"
         },
         "amount-without-pending-rewards": {
