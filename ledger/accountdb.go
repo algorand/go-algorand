@@ -623,6 +623,15 @@ func (a *compactResourcesDeltas) insertMissing(addr basics.Address, resIdx basic
 	a.misses = append(a.misses, accountCreatable{address: addr, index: resIdx})
 }
 
+// upsertOld updates existing or inserts a new partial entry with only old field filled
+func (a *compactResourcesDeltas) upsertOld(addr basics.Address, old persistedResourcesData) {
+	if idx, exist := a.cache[accountCreatable{address: addr, index: old.aidx}]; exist {
+		a.deltas[idx].oldResource = old
+		return
+	}
+	a.insert(addr, old.aidx, resourcesDeltas{oldResource: old})
+}
+
 // updateOld updates existing or inserts a new partial entry with only old field filled
 func (a *compactResourcesDeltas) updateOld(idx int, old persistedResourcesData) {
 	a.deltas[idx].oldResource = old

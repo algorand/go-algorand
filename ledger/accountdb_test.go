@@ -954,3 +954,87 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(addr2, address)
 	a.Equal(sample2, data)
 }
+
+func TestCompactResourceDeltas(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	ad := compactResourcesDeltas{}
+	data, idx := ad.get(basics.Address{}, 0)
+	a.Equal(-1, idx)
+	a.Equal(resourcesDeltas{}, data)
+
+	addr := ledgertesting.RandomAddress()
+	data, idx = ad.get(addr, 0)
+	a.Equal(-1, idx)
+	a.Equal(resourcesDeltas{}, data)
+
+	a.Equal(0, ad.len())
+	a.Panics(func() { ad.getByIdx(0) })
+
+	sample1 := resourcesDeltas{newResource: resourcesData{Total: 123}}
+	ad.upsert(addr, 1, sample1)
+	data, idx = ad.get(addr, 1)
+	a.NotEqual(-1, idx)
+	a.Equal(sample1, data)
+
+	a.Equal(1, ad.len())
+	address, data := ad.getByIdx(0)
+	a.Equal(addr, address)
+	a.Equal(sample1, data)
+
+	sample2 := resourcesDeltas{newResource: resourcesData{Total: 456}}
+	ad.upsert(addr, 1, sample2)
+	data, idx = ad.get(addr, 1)
+	a.NotEqual(-1, idx)
+	a.Equal(sample2, data)
+
+	a.Equal(1, ad.len())
+	address, data = ad.getByIdx(0)
+	a.Equal(addr, address)
+	a.Equal(sample2, data)
+
+	ad.update(idx, sample2)
+	data, idx2 := ad.get(addr, 1)
+	a.Equal(idx, idx2)
+	a.Equal(sample2, data)
+
+	a.Equal(1, ad.len())
+	address, data = ad.getByIdx(0)
+	a.Equal(addr, address)
+	a.Equal(sample2, data)
+
+	old1 := persistedResourcesData{addrid: 111, aidx: 1, data: resourcesData{Total: 789}}
+	ad.upsertOld(addr, old1)
+	a.Equal(1, ad.len())
+	address, data = ad.getByIdx(0)
+	a.Equal(addr, address)
+	a.Equal(resourcesDeltas{newResource: sample2.newResource, oldResource: old1}, data)
+
+	addr1 := ledgertesting.RandomAddress()
+	old2 := persistedResourcesData{addrid: 222, aidx: 2, data: resourcesData{Total: 789}}
+	ad.upsertOld(addr1, old2)
+	a.Equal(2, ad.len())
+	address, data = ad.getByIdx(0)
+	a.Equal(addr, address)
+	a.Equal(resourcesDeltas{newResource: sample2.newResource, oldResource: old1}, data)
+
+	address, data = ad.getByIdx(1)
+	a.Equal(addr1, address)
+	a.Equal(resourcesDeltas{oldResource: old2}, data)
+
+	ad.updateOld(0, old2)
+	a.Equal(2, ad.len())
+	address, data = ad.getByIdx(0)
+	a.Equal(addr, address)
+	a.Equal(resourcesDeltas{newResource: sample2.newResource, oldResource: old2}, data)
+
+	addr2 := ledgertesting.RandomAddress()
+	idx = ad.insert(addr2, 2, sample2)
+	a.Equal(3, ad.len())
+	a.Equal(2, idx)
+	address, data = ad.getByIdx(idx)
+	a.Equal(addr2, address)
+	a.Equal(sample2, data)
+}

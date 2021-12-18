@@ -1383,7 +1383,7 @@ func TestCompactDeltas(t *testing.T) {
 	require.Equal(t, 1, outCreatableDeltas[101].Ndeltas)
 }
 
-func TestCompactResourceDeltas(t *testing.T) {
+func TestCompactDeltasResources(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	addrs := make([]basics.Address, 10)
