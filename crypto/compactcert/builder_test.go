@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"testing"
 
+	cfalcon "github.com/algoidan/falcon"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklekeystore"
@@ -87,7 +88,7 @@ func generateTestSigner(name string, firstValid uint64, lastValid uint64, interv
 	})
 	a.NoError(err)
 
-	signer, err := merklekeystore.New(firstValid, lastValid, interval, crypto.FalconType, store)
+	signer, err := merklekeystore.New(firstValid, lastValid, interval, SignatureScheme, store)
 	a.NoError(err)
 
 	err = signer.Persist()
@@ -211,6 +212,7 @@ func calculateHashOnPartLeaf(part basics.Participant) []byte {
 }
 
 func calculateHashOnSigLeaf(t *testing.T, sig merklekeystore.Signature, lValue uint64) []byte {
+
 	var sigCommitment []byte
 	sigCommitment = append(sigCommitment, protocol.CompactCertSig...)
 
@@ -219,11 +221,17 @@ func calculateHashOnSigLeaf(t *testing.T, sig merklekeystore.Signature, lValue u
 
 	sigCommitment = append(sigCommitment, binaryL...)
 
-	serializedSig, err := sig.VerifyingKey.GetVerifier().GetSerializedSignature(sig.ByteSignature)
+	// verify the falcon usage
+	require.Equal(t, sig.VerifyingKey.Type, crypto.FalconType)
+	compressedFalconsSig := cfalcon.CompressedSignature(sig.ByteSignature)
+	ctFalconSig, err := compressedFalconsSig.ConvertToCT()
+	ctFalconSigBytes := ctFalconSig[:]
+	falconPK := sig.VerifyingKey.FalconPublicKey.PublicKey[:]
+
 	require.NoError(t, err)
 	//build the expected binary representation of the merkle signature
-	sigCommitment = append(sigCommitment, serializedSig...)
-	sigCommitment = append(sigCommitment, sig.VerifyingKey.GetVerifier().GetVerificationBytes()...)
+	sigCommitment = append(sigCommitment, ctFalconSigBytes...)
+	sigCommitment = append(sigCommitment, falconPK...)
 
 	treeIdxBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(treeIdxBytes, sig.MerkleArrayIndex)
@@ -257,8 +265,9 @@ func calculateHashOnInternalNode(leftNode, rightNode []byte) []byte {
 	return hashValue
 }
 
-// This test makes sure that cert's participation commitment is according to spec and stays sync with the
-// SNARK verifier. we manually build the merkle tree given an expected binary representation of the keys.
+// This test makes sure that cert's signature commitment is according to spec and stays sync with the
+// SNARK verifier. This test enforces a specific binary representation of the merkle's tree leaves.
+// in case this test breaks, the SNARK verifier should be updated accordingly
 func TestParticipationCommitment(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -290,7 +299,9 @@ func TestParticipationCommitment(t *testing.T) {
 }
 
 // This test makes sure that cert's signature commitment is according to spec and stays sync with the
-// SNARK verifier. we manually build the merkle tree hashes
+// SNARK verifier. This test enforces the usage of falcon signature and a specific binary representation
+// of the merkle's tree leaves.
+// in case this test breaks, the SNARK verifier should be updated accordingly
 func TestSignatureCommitment(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

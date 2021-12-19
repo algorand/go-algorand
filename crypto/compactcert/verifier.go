@@ -54,7 +54,7 @@ func (v *Verifier) Verify(c *Cert) error {
 		if err != nil {
 			return err
 		}
-		
+
 		sigs[pos] = sig
 		parts[pos] = r.Part
 
