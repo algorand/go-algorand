@@ -18,6 +18,8 @@ package basics
 
 import (
 	"encoding/binary"
+	"fmt"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -57,4 +59,23 @@ func (p Participant) ToBeHashed() (protocol.HashID, []byte) {
 	partCommitment = append(partCommitment, publicKeyBytes[:]...)
 
 	return protocol.CompactCertPart, partCommitment
+}
+
+// ParticipantsArray implements merklearray.Array and is used to commit
+// to a Merkle tree of online accounts.
+//msgp:ignore ParticipantsArray
+type ParticipantsArray []Participant
+
+// Length returns the ledger of the array.
+func (p ParticipantsArray) Length() uint64 {
+	return uint64(len(p))
+}
+
+// Marshal Returns the hash for the given position.
+func (p ParticipantsArray) Marshal(pos uint64) ([]byte, error) {
+	if pos >= uint64(len(p)) {
+		return crypto.GenericDigest{}, fmt.Errorf("array ParticipantsArray.Get(%d) out of bounds %d", pos, len(p))
+	}
+
+	return crypto.HashRep(p[pos]), nil
 }

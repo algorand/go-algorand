@@ -44,22 +44,6 @@ func (m testMessage) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Message, []byte(m)
 }
 
-type PartCommit struct {
-	participants []basics.Participant
-}
-
-func (pc PartCommit) Length() uint64 {
-	return uint64(len(pc.participants))
-}
-
-func (pc PartCommit) Marshal(pos uint64) ([]byte, error) {
-	if pos >= uint64(len(pc.participants)) {
-		return nil, fmt.Errorf("pos %d >= len %d", pos, len(pc.participants))
-	}
-
-	return crypto.HashRep(pc.participants[pos]), nil
-}
-
 func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key *merklekeystore.Signer) []basics.Participant {
 	parts := make([]basics.Participant, 0, numberOfParticipant)
 
@@ -139,7 +123,7 @@ func TestBuildVerify(t *testing.T) {
 		sigs = append(sigs, sig)
 	}
 
-	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: HashType})
+	partcom, err := merklearray.Build(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	if err != nil {
 		t.Error(err)
 	}
@@ -279,7 +263,7 @@ func TestParticipationCommitment(t *testing.T) {
 	parts = append(parts, generateRandomParticipant(a, t.Name()))
 	parts = append(parts, generateRandomParticipant(a, t.Name()))
 
-	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: HashType})
+	partcom, err := merklearray.Build(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
 	partCommitmentRoot := partcom.Root()
@@ -338,7 +322,7 @@ func TestSignatureCommitment(t *testing.T) {
 		dbAccessor.Close()
 	}
 
-	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: HashType})
+	partcom, err := merklearray.Build(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
 	b, err := MkBuilder(param, parts, partcom)
@@ -411,7 +395,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 	}
 
 	var cert *Cert
-	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: HashType})
+	partcom, err := merklearray.Build(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	if err != nil {
 		b.Error(err)
 	}

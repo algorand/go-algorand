@@ -17,31 +17,10 @@
 package ledgercore
 
 import (
-	"fmt"
-
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 )
-
-// ParticipantsArray implements merklearray.Array and is used to commit
-// to a Merkle tree of online accounts.
-//msgp:ignore ParticipantsArray
-type ParticipantsArray []basics.Participant
-
-// Length returns the ledger of the array.
-func (p ParticipantsArray) Length() uint64 {
-	return uint64(len(p))
-}
-
-// Marshal Returns the hash for the given position.
-func (p ParticipantsArray) Marshal(pos uint64) ([]byte, error) {
-	if pos >= uint64(len(p)) {
-		return crypto.GenericDigest{}, fmt.Errorf("array ParticipantsArray.Get(%d) out of bounds %d", pos, len(p))
-	}
-
-	return crypto.HashRep(p[pos]), nil
-}
 
 // InitState structure defines blockchain init params
 type InitState struct {
