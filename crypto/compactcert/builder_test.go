@@ -210,7 +210,7 @@ func calculateHashOnPartLeaf(part basics.Participant) []byte {
 	return hashValue
 }
 
-func calculateHashOnSigLeaf(sig merklekeystore.Signature, lValue uint64) []byte {
+func calculateHashOnSigLeaf(t *testing.T, sig merklekeystore.Signature, lValue uint64) []byte {
 	var sigCommitment []byte
 	sigCommitment = append(sigCommitment, protocol.CompactCertSig...)
 
@@ -219,7 +219,8 @@ func calculateHashOnSigLeaf(sig merklekeystore.Signature, lValue uint64) []byte 
 
 	sigCommitment = append(sigCommitment, binaryL...)
 
-	serializedSig := sig.VerifyingKey.GetVerifier().GetSerializedSignature(sig.ByteSignature)
+	serializedSig, err := sig.VerifyingKey.GetVerifier().GetSerializedSignature(sig.ByteSignature)
+	require.NoError(t, err)
 	//build the expected binary representation of the merkle signature
 	sigCommitment = append(sigCommitment, serializedSig...)
 	sigCommitment = append(sigCommitment, sig.VerifyingKey.GetVerifier().GetVerificationBytes()...)
@@ -340,10 +341,10 @@ func TestSignatureCommitment(t *testing.T) {
 	cert, err := b.Build()
 	a.NoError(err)
 
-	leaf0 := calculateHashOnSigLeaf(sigs[0], findLInCert(a, sigs[0], cert))
-	leaf1 := calculateHashOnSigLeaf(sigs[1], findLInCert(a, sigs[1], cert))
-	leaf2 := calculateHashOnSigLeaf(sigs[2], findLInCert(a, sigs[2], cert))
-	leaf3 := calculateHashOnSigLeaf(sigs[3], findLInCert(a, sigs[3], cert))
+	leaf0 := calculateHashOnSigLeaf(t, sigs[0], findLInCert(a, sigs[0], cert))
+	leaf1 := calculateHashOnSigLeaf(t, sigs[1], findLInCert(a, sigs[1], cert))
+	leaf2 := calculateHashOnSigLeaf(t, sigs[2], findLInCert(a, sigs[2], cert))
+	leaf3 := calculateHashOnSigLeaf(t, sigs[3], findLInCert(a, sigs[3], cert))
 
 	inner1 := calculateHashOnInternalNode(leaf0, leaf1)
 	inner2 := calculateHashOnInternalNode(leaf2, leaf3)

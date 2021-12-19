@@ -17,6 +17,7 @@
 package crypto
 
 import (
+	"github.com/algoidan/falcon"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -67,6 +68,12 @@ func TestFalconsFormatConversion(t *testing.T) {
 	sig, err := key.SignBytes(msg)
 	a.NoError(err)
 
-	rawFormat := key.GetVerifyingKey().GetVerifier().GetSerializedSignature(sig)
-	a.Equal([]byte(sig), rawFormat)
+	falconSig := falcon.CompressedSignature(sig)
+	ctFormat, err := falconSig.ConvertToCT()
+
+	rawFormat, err := key.GetVerifyingKey().GetVerifier().GetSerializedSignature(sig)
+	a.NoError(err)
+	a.NotEqual([]byte(sig), rawFormat)
+
+	a.Equal(ctFormat[:], rawFormat)
 }

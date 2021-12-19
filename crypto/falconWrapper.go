@@ -17,15 +17,15 @@
 package crypto
 
 import (
-	cfalcon "github.com/algorand/falcon"
+	cfalcon "github.com/algoidan/falcon"
 )
 
 const (
 	// FalconSeedSize Represents the size in bytes of the random bytes used to generate Falcon keys
 	FalconSeedSize = 48
 
-	// FalconSigSize is the size of a falcon signature
-	FalconSigSize = cfalcon.SigSize
+	// MaxFalconSignatureSize Represents the max possible size in bytes of a falcon signature
+	MaxFalconSignatureSize = cfalcon.CTSignatureSize
 )
 
 type (
@@ -47,7 +47,7 @@ type FalconSigner struct {
 
 // GenerateFalconSigner Generates a Falcon Signer.
 func GenerateFalconSigner(seed FalconSeed) (FalconSigner, error) {
-	sk, pk, err := cfalcon.GenerateKey(seed[:])
+	pk, sk, err := cfalcon.GenerateKey(seed[:])
 	return FalconSigner{
 		PublicKey: FPublicKey(pk),
 		SecretKey: FSecretKey(sk),
@@ -62,7 +62,8 @@ func (d *FalconSigner) Sign(message Hashable) (ByteSignature, error) {
 
 // SignBytes receives bytes and signs over them.
 func (d *FalconSigner) SignBytes(data []byte) (ByteSignature, error) {
-	return (*cfalcon.FalconPrivateKey)(&d.SecretKey).SignBytes(data)
+	signedData, err := (*cfalcon.PrivateKey)(&d.SecretKey).SignCompressed(data)
+	return ByteSignature(signedData), err
 }
 
 // GetVerifyingKey Outputs a verifying key object which is serializable.
@@ -88,7 +89,8 @@ func (d *FalconVerifier) Verify(message Hashable, sig ByteSignature) error {
 
 // VerifyBytes follows falcon algorithm to verify a signature.
 func (d *FalconVerifier) VerifyBytes(data []byte, sig ByteSignature) error {
-	return (*cfalcon.FalconPublicKey)(&d.PublicKey).VerifyBytes(data, sig)
+	// should verify version here
+	return (*cfalcon.PublicKey)(&d.PublicKey).Verify(cfalcon.CompressedSignature(sig), data)
 }
 
 // GetVerificationBytes is used to fetch a plain serialized version of the public data (without the use of the msgpack).
@@ -97,7 +99,8 @@ func (d *FalconVerifier) GetVerificationBytes() []byte {
 }
 
 // GetSerializedSignature returns a serialized version of the signature
-func (d *FalconVerifier) GetSerializedSignature(signature ByteSignature) []byte {
-	// TODO convert the signature to CT version
-	return signature
+func (d *FalconVerifier) GetSerializedSignature(signature ByteSignature) ([]byte, error) {
+	compressedSignature := cfalcon.CompressedSignature(signature)
+	ctSignature, err := compressedSignature.ConvertToCT()
+	return ctSignature[:], err
 }

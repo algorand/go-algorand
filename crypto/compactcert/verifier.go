@@ -50,10 +50,15 @@ func (v *Verifier) Verify(c *Cert) error {
 	sigs := make(map[uint64]crypto.Hashable)
 	parts := make(map[uint64]crypto.Hashable)
 	for pos, r := range c.Reveals {
-		sigs[pos] = r.SigSlot
+		sig, err := buildCommitableSignature(r.SigSlot)
+		if err != nil {
+			return err
+		}
+		
+		sigs[pos] = sig
 		parts[pos] = r.Part
 
-		err := r.Part.PK.Verify(
+		err = r.Part.PK.Verify(
 			uint64(v.SigRound),
 			v.Msg,
 			r.SigSlot.Sig.Signature)

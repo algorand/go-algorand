@@ -87,6 +87,6 @@ func (p *Ed25519PublicKey) GetVerificationBytes() []byte {
 }
 
 // GetSerializedSignature returns a serialized version of the signature
-func (p *Ed25519PublicKey) GetSerializedSignature(signature ByteSignature) []byte {
-	return signature
+func (p *Ed25519PublicKey) GetSerializedSignature(signature ByteSignature) ([]byte, error) {
+	return signature, nil
 }

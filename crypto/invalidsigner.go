@@ -70,6 +70,6 @@ func (d *invalidVerifier) GetVerificationBytes() []byte {
 }
 
 // GetSerializedSignature returns a serialized version of the signature
-func (d *invalidVerifier) GetSerializedSignature(signature ByteSignature) []byte {
-	return []byte{}
+func (d *invalidVerifier) GetSerializedSignature(signature ByteSignature) ([]byte, error) {
+	return []byte{}, errInvalidVerifier
 }

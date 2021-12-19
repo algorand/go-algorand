@@ -61,6 +61,7 @@ func TestCurve25519RawSignatureBytes(t *testing.T) {
 	sig, err := key.SignBytes(msg)
 	a.NoError(err)
 
-	rawFormat := key.GetVerifyingKey().GetVerifier().GetSerializedSignature(sig)
+	rawFormat, err := key.GetVerifyingKey().GetVerifier().GetSerializedSignature(sig)
+	a.NoError(err)
 	a.Equal([]byte(sig), rawFormat)
 }

@@ -26,7 +26,7 @@ import (
 const (
 	// MaxSignatureSize is the size of the largest signature
 	// Used signature schemes: ed25519Signature and Falcon signature
-	MaxSignatureSize = FalconSigSize
+	MaxSignatureSize = MaxFalconSignatureSize
 )
 
 type (
@@ -72,7 +72,7 @@ type Verifier interface {
 	// GetVerificationBytes returns a serialized version of the public key data (without the use of the msgpack).
 	GetVerificationBytes() []byte
 	// GetSerializedSignature returns a serialized version of the signature
-	GetSerializedSignature(signature ByteSignature) []byte
+	GetSerializedSignature(signature ByteSignature) ([]byte, error)
 }
 
 // GenericSigningKey holds a Signer, and the type of algorithm the Signer conforms with.

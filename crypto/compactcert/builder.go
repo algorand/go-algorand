@@ -18,7 +18,6 @@ package compactcert
 
 import (
 	"fmt"
-
 	"github.com/algorand/go-algorand/data/basics"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -126,21 +125,6 @@ func (b *Builder) SignedWeight() uint64 {
 	return b.signedWeight
 }
 
-//msgp:ignore sigsToCommit
-type sigsToCommit []sigslot
-
-func (sc sigsToCommit) Length() uint64 {
-	return uint64(len(sc))
-}
-
-func (sc sigsToCommit) Marshal(pos uint64) ([]byte, error) {
-	if pos >= uint64(len(sc)) {
-		return nil, fmt.Errorf("pos %d past end %d", pos, len(sc))
-	}
-
-	return crypto.HashRep(&sc[pos].sigslotCommit), nil
-}
-
 // coinIndex returns the position pos in the sigs array such that the sum
 // of all signature weights before pos is less than or equal to coinWeight,
 // but the sum of all signature weights up to and including pos exceeds
@@ -192,7 +176,7 @@ func (b *Builder) Build() (*Cert, error) {
 	b.sigsHasValidL = true
 
 	hfactory := crypto.HashFactory{HashType: HashType}
-	sigtree, err := merklearray.Build(sigsToCommit(b.sigs), hfactory)
+	sigtree, err := merklearray.Build(commitableSignatureArray(b.sigs), hfactory)
 	if err != nil {
 		return nil, err
 	}

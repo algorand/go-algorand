@@ -205,8 +205,11 @@ func (v *Verifier) Verify(round uint64, msg crypto.Hashable, sig Signature) erro
 
 // GetSerializedSignature serializes the merkle scheme into a sequence of bytes.
 // the format details can be found in the Algorand's spec.
-func (s *Signature) GetSerializedSignature() []byte {
-	sigBytes := s.VerifyingKey.GetVerifier().GetSerializedSignature(s.ByteSignature)
+func (s *Signature) GetSerializedSignature() ([]byte, error) {
+	sigBytes, err := s.VerifyingKey.GetVerifier().GetSerializedSignature(s.ByteSignature)
+	if err != nil {
+		return nil, err
+	}
 	verifierBytes := s.VerifyingKey.GetVerifier().GetVerificationBytes()
 	binaryMerkleIndex := make([]byte, 8)
 	binary.LittleEndian.PutUint64(binaryMerkleIndex, s.MerkleArrayIndex)
@@ -218,5 +221,5 @@ func (s *Signature) GetSerializedSignature() []byte {
 	merkleSignatureBytes = append(merkleSignatureBytes, verifierBytes...)
 	merkleSignatureBytes = append(merkleSignatureBytes, binaryMerkleIndex...)
 	merkleSignatureBytes = append(merkleSignatureBytes, proofBytes...)
-	return merkleSignatureBytes
+	return merkleSignatureBytes, nil
 }

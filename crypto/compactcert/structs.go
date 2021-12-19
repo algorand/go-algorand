@@ -17,7 +17,6 @@
 package compactcert
 
 import (
-	"encoding/binary"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklekeystore"
@@ -57,16 +56,7 @@ type sigslotCommit struct {
 // msgpack creates a compressed representation of the struct which might be varied in length, which will
 // be bad for creating SNARK
 func (ssc sigslotCommit) ToBeHashed() (protocol.HashID, []byte) {
-	binaryLValue := make([]byte, 8)
-	binary.LittleEndian.PutUint64(binaryLValue, ssc.L)
-
-	sigBytes := ssc.Sig.Signature.GetSerializedSignature()
-
-	sigSlotCommitment := make([]byte, 0, len(binaryLValue)+len(sigBytes))
-	sigSlotCommitment = append(sigSlotCommitment, binaryLValue...)
-	sigSlotCommitment = append(sigSlotCommitment, sigBytes...)
-
-	return protocol.CompactCertSig, sigSlotCommitment
+	return protocol.CompactCertSig, protocol.Encode(&ssc)
 }
 
 // Reveal is a single array position revealed as part of a compact
