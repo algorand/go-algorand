@@ -290,7 +290,6 @@ func TestAccountDBRound(t *testing.T) {
 }
 
 func TestAccountStorageWithStateProofID(t *testing.T) {
-	t.Skip()
 	proto := config.Consensus[protocol.ConsensusFuture]
 
 	dbs, _ := dbOpenTest(t, true)
