@@ -1038,3 +1038,193 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a.Equal(addr2, address)
 	a.Equal(sample2, data)
 }
+
+func TestResourcesDataApp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	// check empty
+	appParamsEmpty := basics.AppParams{}
+	rd := resourcesData{}
+	rd.SetAppParams(appParamsEmpty, false)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsEmptyApp())
+	a.Equal(appParamsEmpty, rd.GetAppParams())
+
+	appLocalEmpty := basics.AppLocalState{}
+	rd = resourcesData{}
+	rd.SetAppLocalState(appLocalEmpty)
+	a.True(rd.IsApp())
+	a.True(rd.IsHolding())
+	a.True(rd.IsEmptyApp())
+	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+
+	// check both empty
+	rd = resourcesData{}
+	rd.SetAppLocalState(appLocalEmpty)
+	rd.SetAppParams(appParamsEmpty, true)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.True(rd.IsEmptyApp())
+	a.Equal(appParamsEmpty, rd.GetAppParams())
+	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+
+	// check empty states + non-empty params
+	appParams := ledgertesting.RandomAppParams()
+	rd = resourcesData{}
+	rd.SetAppLocalState(appLocalEmpty)
+	rd.SetAppParams(appParams, true)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyApp())
+	a.Equal(appParams, rd.GetAppParams())
+	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+
+	appState := ledgertesting.RandomAppLocalState()
+	rd.SetAppLocalState(appState)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyApp())
+	a.Equal(appParams, rd.GetAppParams())
+	a.Equal(appState, rd.GetAppLocalState())
+
+	// check ClearAppLocalState
+	rd.ClearAppLocalState()
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.False(rd.IsEmptyApp())
+	a.Equal(appParams, rd.GetAppParams())
+	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+
+	// check ClearAppParams
+	rd.SetAppLocalState(appState)
+	rd.ClearAppParams()
+	a.True(rd.IsApp())
+	a.False(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyApp())
+	a.Equal(appParamsEmpty, rd.GetAppParams())
+	a.Equal(appState, rd.GetAppLocalState())
+
+	// check both clear
+	rd.ClearAppLocalState()
+	a.False(rd.IsApp())
+	a.False(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.True(rd.IsEmptyApp())
+	a.Equal(appParamsEmpty, rd.GetAppParams())
+	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+
+	// check params clear when non-empty params and empty holding
+	rd = resourcesData{}
+	rd.SetAppLocalState(appLocalEmpty)
+	rd.SetAppParams(appParams, true)
+	rd.ClearAppParams()
+	a.True(rd.IsApp())
+	a.False(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.True(rd.IsEmptyApp())
+	a.Equal(appParamsEmpty, rd.GetAppParams())
+	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+}
+
+func TestResourcesDataAsset(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	// check empty
+	assetParamsEmpty := basics.AssetParams{}
+	rd := resourcesData{}
+	rd.SetAssetParams(assetParamsEmpty, false)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.True(rd.IsEmptyAsset())
+	a.Equal(assetParamsEmpty, rd.GetAssetParams())
+
+	assetHoldingEmpty := basics.AssetHolding{}
+	rd = resourcesData{}
+	rd.SetAssetHolding(assetHoldingEmpty)
+	a.True(rd.IsAsset())
+	a.True(rd.IsHolding())
+	a.True(rd.IsEmptyAsset())
+	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
+
+	// check both empty
+	rd = resourcesData{}
+	rd.SetAssetHolding(assetHoldingEmpty)
+	rd.SetAssetParams(assetParamsEmpty, true)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.True(rd.IsEmptyAsset())
+	a.Equal(assetParamsEmpty, rd.GetAssetParams())
+	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
+
+	// check empty states + non-empty params
+	assetParams := ledgertesting.RandomAssetParams()
+	rd = resourcesData{}
+	rd.SetAssetHolding(assetHoldingEmpty)
+	rd.SetAssetParams(assetParams, true)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAsset())
+	a.Equal(assetParams, rd.GetAssetParams())
+	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
+
+	assetHolding := ledgertesting.RandomAssetHolding(true)
+	rd.SetAssetHolding(assetHolding)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAsset())
+	a.Equal(assetParams, rd.GetAssetParams())
+	a.Equal(assetHolding, rd.GetAssetHolding())
+
+	// check ClearAssetHolding
+	rd.ClearAssetHolding()
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.False(rd.IsEmptyAsset())
+	a.Equal(assetParams, rd.GetAssetParams())
+	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
+
+	// check ClearAssetParams
+	rd.SetAssetHolding(assetHolding)
+	rd.ClearAssetParams()
+	a.True(rd.IsAsset())
+	a.False(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAsset())
+	a.Equal(assetParamsEmpty, rd.GetAssetParams())
+	a.Equal(assetHolding, rd.GetAssetHolding())
+
+	// check both clear
+	rd.ClearAssetHolding()
+	a.False(rd.IsAsset())
+	a.False(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.True(rd.IsEmptyAsset())
+	a.Equal(assetParamsEmpty, rd.GetAssetParams())
+	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
+
+	// check params clear when non-empty params and empty holding
+	rd = resourcesData{}
+	rd.SetAssetHolding(assetHoldingEmpty)
+	rd.SetAssetParams(assetParams, true)
+	rd.ClearAssetParams()
+	a.True(rd.IsAsset())
+	a.False(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.True(rd.IsEmptyAsset())
+	a.Equal(assetParamsEmpty, rd.GetAssetParams())
+	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
+}

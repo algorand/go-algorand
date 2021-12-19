@@ -1498,7 +1498,7 @@ func (rd *resourcesData) ClearAppParams() {
 	rd.ResourceFlags -= rd.ResourceFlags & resourceFlagsOwnership
 	rd.ResourceFlags &= ^resourceFlagsEmptyApp
 	if rd.IsEmptyApp() && hadHolding {
-		rd.ResourceFlags |= resourceFlagsEmptyAsset
+		rd.ResourceFlags |= resourceFlagsEmptyApp
 	}
 }
 
