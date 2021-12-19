@@ -20,7 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
