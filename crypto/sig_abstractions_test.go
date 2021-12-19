@@ -25,6 +25,7 @@ import (
 )
 
 func TestInvalidSinger(t *testing.T) {
+	t.Skip()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 

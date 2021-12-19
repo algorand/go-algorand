@@ -23,6 +23,7 @@ import (
 )
 
 func TestSignAndVerify(t *testing.T) {
+	t.Skip()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	var seed Seed
