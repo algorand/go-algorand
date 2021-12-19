@@ -24,18 +24,19 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-type commitableSignature struct {
+type commitableSignatureSlot struct {
 	sigCommit           sigslotCommit
 	serializedSignature []byte
 }
 
-type commitableSignatureArray []sigslot
+//msgp:ignore commitableSignatureSlotArray
+type commitableSignatureSlotArray []sigslot
 
-func (sc commitableSignatureArray) Length() uint64 {
+func (sc commitableSignatureSlotArray) Length() uint64 {
 	return uint64(len(sc))
 }
 
-func (sc commitableSignatureArray) Marshal(pos uint64) ([]byte, error) {
+func (sc commitableSignatureSlotArray) Marshal(pos uint64) ([]byte, error) {
 	if pos >= uint64(len(sc)) {
 		return nil, fmt.Errorf("pos %d past end %d", pos, len(sc))
 	}
@@ -49,19 +50,24 @@ func (sc commitableSignatureArray) Marshal(pos uint64) ([]byte, error) {
 
 }
 
-func buildCommitableSignature(sigCommit sigslotCommit) (*commitableSignature, error) {
+func buildCommitableSignature(sigCommit sigslotCommit) (*commitableSignatureSlot, error) {
+	if sigCommit.Sig.Signature.ByteSignature == nil {
+		// TODO we get here if we don't have a signature in a particular slot.
+		// advise on what to do here. + create a TEST
+		return &commitableSignatureSlot{sigCommit: sigCommit, serializedSignature: []byte{}}, nil
+	}
 	sigBytes, err := sigCommit.Sig.GetSerializedSignature()
 	if err != nil {
 		return nil, err
 	}
-	return &commitableSignature{sigCommit: sigCommit, serializedSignature: sigBytes}, nil
+	return &commitableSignatureSlot{sigCommit: sigCommit, serializedSignature: sigBytes}, nil
 }
 
 // ToBeHashed returns the sequence of bytes that would be used as an input for the hash function when creating a merkle tree.
 // In order to create a more SNARK-friendly commitment we must avoid using the msgpack infrastructure.
 // msgpack creates a compressed representation of the struct which might be varied in length, this will
 // be bad for creating SNARK
-func (cs *commitableSignature) ToBeHashed() (protocol.HashID, []byte) {
+func (cs *commitableSignatureSlot) ToBeHashed() (protocol.HashID, []byte) {
 	binaryLValue := make([]byte, 8)
 	binary.LittleEndian.PutUint64(binaryLValue, cs.sigCommit.L)
 
