@@ -1656,7 +1656,7 @@ func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, address
 			}
 			var addr basics.Address
 			if len(addrbuf) != len(addr) {
-				err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+				err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 				return 0, nil, err
 			}
 			copy(addr[:], addrbuf)
@@ -2119,7 +2119,7 @@ func accountsOnlineTop(tx *sql.Tx, offset, n uint64, proto config.ConsensusParam
 
 		var addr basics.Address
 		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 			return nil, err
 		}
 
@@ -2365,7 +2365,7 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 		}
 
 		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 			return
 		}
 		copy(addr[:], addrbuf[:])
@@ -2525,7 +2525,7 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 		}
 
 		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 			return
 		}
 
@@ -2619,6 +2619,178 @@ func makeOrderedAccountsIter(tx *sql.Tx, accountCount int) *orderedAccountsIter 
 	}
 }
 
+func processAllResources(
+	resRows *sql.Rows,
+	addr basics.Address, accountData *baseAccountData, acctRowid int64,
+	callback func(addr basics.Address, creatableIdx basics.CreatableIndex, creatableType basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error,
+) (err error) {
+	resourcesEntriesCount := accountData.TotalAppParams + accountData.TotalAppLocalStates + accountData.TotalAssetParams + accountData.TotalAssets
+	for ; resourcesEntriesCount > 0; resourcesEntriesCount-- {
+		if !resRows.Next() {
+			err = errors.New("missing entries in resource table")
+			return
+		}
+		var buf []byte
+		var addrid int64
+		var aidx basics.CreatableIndex
+		var rtype basics.CreatableType
+		err = resRows.Scan(&addrid, &aidx, &rtype, &buf)
+		if err != nil {
+			return
+		}
+		if addrid != acctRowid {
+			err = errors.New("resource table entries mismatches accountbase table entries")
+			return
+		}
+		var resData resourcesData
+		err = protocol.Decode(buf, &resData)
+		if err != nil {
+			return
+		}
+		err = callback(addr, aidx, rtype, &resData, buf)
+		if err != nil {
+			return
+		}
+		if resData.IsHolding() && resData.IsOwning() {
+			// this resource is used for both the holding and ownership.
+			resourcesEntriesCount--
+		}
+	}
+	return nil
+}
+
+func processAllBaseAccountRecords(
+	baseRows *sql.Rows,
+	resRows *sql.Rows,
+	baseCb func(addr basics.Address, accountData *baseAccountData, encodedAccountData []byte) error,
+	resCb func(addr basics.Address, creatableIdx basics.CreatableIndex, creatableType basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error,
+	accountCount int,
+) (int, error) {
+	var addr basics.Address
+	var err error
+	count := 0
+	for baseRows.Next() {
+		var addrbuf []byte
+		var buf []byte
+		var rowid int64
+		err = baseRows.Scan(&rowid, &addrbuf, &buf)
+		if err != nil {
+			return 0, err
+		}
+
+		if len(addrbuf) != len(addr) {
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			return 0, err
+		}
+
+		copy(addr[:], addrbuf)
+
+		var accountData baseAccountData
+		err = protocol.Decode(buf, &accountData)
+		if err != nil {
+			return 0, err
+		}
+		err = baseCb(addr, &accountData, buf)
+		if err != nil {
+			return 0, err
+		}
+
+		err = processAllResources(resRows, addr, &accountData, rowid, resCb)
+		if err != nil {
+			return 0, err
+		}
+
+		count++
+		if accountCount > 0 && count == accountCount {
+			// we're done with this iteration.
+			return count, nil
+		}
+	}
+
+	return count, nil
+}
+
+// LoadAllFullAccounts loads all accounts from balancesTable and resourcesTable.
+// On every account full load it invokes acctCb callback to report progress and data.
+func LoadAllFullAccounts(
+	ctx context.Context, tx *sql.Tx,
+	balancesTable string, resourcesTable string,
+	acctCb func(basics.Address, basics.AccountData),
+) (count int, err error) {
+	baseRows, err := tx.QueryContext(ctx, fmt.Sprintf("SELECT rowid, address, data FROM %s ORDER BY rowid", balancesTable))
+	if err != nil {
+		return
+	}
+	defer baseRows.Close()
+
+	// iterate over the existing resources
+	resRows, err := tx.QueryContext(ctx, fmt.Sprintf("SELECT addrid, aidx, rtype, data FROM %s ORDER BY addrid, aidx, rtype", resourcesTable))
+	if err != nil {
+		return
+	}
+	defer resRows.Close()
+
+	var address basics.Address
+	var baseAcct baseAccountData
+	var ad basics.AccountData
+	var resCounter uint32 = 0
+
+	baseCb := func(addr basics.Address, accountData *baseAccountData, encodedAccountData []byte) (err error) {
+		baseAcct = *accountData
+		ad = baseAcct.GetAccountData()
+		copy(address[:], addr[:])
+		return nil
+	}
+
+	resCb := func(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error {
+		if resData.IsApp() && resData.IsOwning() {
+			if ad.AppParams == nil {
+				ad.AppParams = make(map[basics.AppIndex]basics.AppParams)
+			}
+			ad.AppParams[basics.AppIndex(cidx)] = resData.GetAppParams()
+			resCounter++
+		}
+		if resData.IsApp() && resData.IsHolding() {
+			if ad.AppLocalStates == nil {
+				ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+			}
+			ad.AppLocalStates[basics.AppIndex(cidx)] = resData.GetAppLocalState()
+			resCounter++
+		}
+
+		if resData.IsAsset() && resData.IsOwning() {
+			if ad.AssetParams == nil {
+				ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
+			}
+			ad.AssetParams[basics.AssetIndex(cidx)] = resData.GetAssetParams()
+			resCounter++
+		}
+		if resData.IsAsset() && resData.IsHolding() {
+			if ad.Assets == nil {
+				ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
+			}
+			ad.Assets[basics.AssetIndex(cidx)] = resData.GetAssetHolding()
+			resCounter++
+		}
+
+		if baseAcct.TotalAppParams+baseAcct.TotalAppLocalStates+baseAcct.TotalAssetParams+baseAcct.TotalAssets == resCounter {
+			acctCb(address, ad)
+			ad = basics.AccountData{}
+			resCounter = 0
+			address = basics.Address{}
+		}
+
+		return nil
+	}
+
+	count, err = processAllBaseAccountRecords(baseRows, resRows, baseCb, resCb, 0)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
 // accountAddressHash is used by Next to return a single account address and the associated hash.
 type accountAddressHash struct {
 	address basics.Address
@@ -2673,85 +2845,39 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		return
 	}
 	if iterator.step == oaiStepInsertAccountData {
-		var addr basics.Address
-		count := 0
-		for iterator.accountBaseRows.Next() {
-			var addrbuf []byte
-			var buf []byte
-			var rowid int64
-			err = iterator.accountBaseRows.Scan(&rowid, &addrbuf, &buf)
+
+		baseCb := func(addr basics.Address, accountData *baseAccountData, encodedAccountData []byte) (err error) {
+			hash := accountHashBuilderV6(addr, accountData, encodedAccountData)
+			_, err = iterator.insertStmt.ExecContext(ctx, addr[:], hash)
 			if err != nil {
-				iterator.Close(ctx)
 				return
 			}
-
-			if len(addrbuf) != len(addr) {
-				err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-				iterator.Close(ctx)
-				return
-			}
-
-			copy(addr[:], addrbuf)
-
-			var accountData baseAccountData
-			err = protocol.Decode(buf, &accountData)
-			if err != nil {
-				iterator.Close(ctx)
-				return
-			}
-			hash := accountHashBuilderV6(addr, &accountData, buf)
-			_, err = iterator.insertStmt.ExecContext(ctx, addrbuf, hash)
-			if err != nil {
-				iterator.Close(ctx)
-				return
-			}
-
-			resourcesEntriesCount := accountData.TotalAppParams + accountData.TotalAppLocalStates + accountData.TotalAssetParams + accountData.TotalAssets
-			for ; resourcesEntriesCount > 0; resourcesEntriesCount-- {
-				if !iterator.resourcesRows.Next() {
-					iterator.Close(ctx)
-					err = errors.New("missing entries in resource table")
-					return
-				}
-				buf = nil
-				var addrid int64
-				var aidx basics.CreatableIndex
-				var rtype basics.CreatableType
-				err = iterator.resourcesRows.Scan(&addrid, &aidx, &rtype, &buf)
-				if err != nil {
-					iterator.Close(ctx)
-					return
-				}
-				if addrid != rowid {
-					iterator.Close(ctx)
-					err = errors.New("resource table entries mismatches accountbase table entries")
-					return
-				}
-				var resData resourcesData
-				err = protocol.Decode(buf, &resData)
-				if err != nil {
-					iterator.Close(ctx)
-					return
-				}
-				hash = resourcesHashBuilderV6(addr, aidx, rtype, resData.UpdateRound, buf)
-				_, err = iterator.insertStmt.ExecContext(ctx, addrbuf, hash)
-				if err != nil {
-					iterator.Close(ctx)
-					return
-				}
-				if resData.IsHolding() && resData.IsOwning() {
-					// this resource is used for both the holding and ownership.
-					resourcesEntriesCount--
-				}
-			}
-
-			count++
-			if count == iterator.accountCount {
-				// we're done with this iteration.
-				processedRecords = count
-				return
-			}
+			return nil
 		}
+
+		resCb := func(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error {
+			hash := resourcesHashBuilderV6(addr, cidx, ctype, resData.UpdateRound, encodedResourceData)
+			_, err := iterator.insertStmt.ExecContext(ctx, addr[:], hash)
+			return err
+		}
+
+		count := 0
+		count, err = processAllBaseAccountRecords(
+			iterator.accountBaseRows, iterator.resourcesRows,
+			baseCb, resCb,
+			iterator.accountCount,
+		)
+		if err != nil {
+			iterator.Close(ctx)
+			return
+		}
+
+		if count == iterator.accountCount {
+			// we're done with this iteration.
+			processedRecords = count
+			return
+		}
+
 		// make sure the resource iterator has no more entries.
 		if iterator.resourcesRows.Next() {
 			iterator.Close(ctx)
@@ -2805,7 +2931,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 			}
 
 			if len(addrbuf) != len(addr) {
-				err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+				err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 				iterator.Close(ctx)
 				return
 			}
