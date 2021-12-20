@@ -385,6 +385,9 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				if assetHold.Holding != nil {
 					newEntry.newResource.SetAssetHolding(*assetHold.Holding)
 				} else {
+					// ClearAssetHolding sets resourceFlagsNotHolding flag.
+					// Otherwise newEntry.newResource.ResourceFlags == resourceFlagsHolding (0)
+					// meaning empty asset hodling (or app local state)
 					newEntry.newResource.ClearAssetHolding()
 				}
 				if baseResourceData, has := baseResources.read(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx)); has {
@@ -418,7 +421,10 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				if assetParams.Params != nil {
 					newEntry.newResource.SetAssetParams(*assetParams.Params, false)
 				} else {
-					newEntry.newResource.ClearAssetParams()
+					// ClearAssetHolding sets resourceFlagsNotHolding flag.
+					// Otherwise newEntry.newResource.ResourceFlags == resourceFlagsHolding (0)
+					// meaning empty asset hodling (or app local state)
+					newEntry.newResource.ClearAssetHolding()
 				}
 				if baseResourceData, has := baseResources.read(assetParams.Addr, basics.CreatableIndex(assetParams.Aidx)); has {
 					newEntry.oldResource = baseResourceData
@@ -452,6 +458,9 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				if localState.State != nil {
 					newEntry.newResource.SetAppLocalState(*localState.State)
 				} else {
+					// ClearAppLocalState sets resourceFlagsNotHolding flag.
+					// Otherwise newEntry.newResource.ResourceFlags == resourceFlagsHolding (0)
+					// meaning empty asset hodling (or app local state)
 					newEntry.newResource.ClearAppLocalState()
 				}
 				if baseResourceData, has := baseResources.read(localState.Addr, basics.CreatableIndex(localState.Aidx)); has {
@@ -486,7 +495,10 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				if appParams.Params != nil {
 					newEntry.newResource.SetAppParams(*appParams.Params, false)
 				} else {
-					newEntry.newResource.ClearAppParams()
+					// ClearAppLocalState sets resourceFlagsNotHolding flag.
+					// Otherwise newEntry.newResource.ResourceFlags == resourceFlagsHolding (0)
+					// meaning empty asset hodling (or app local state)
+					newEntry.newResource.ClearAppLocalState()
 				}
 				if baseResourceData, has := baseResources.read(appParams.Addr, basics.CreatableIndex(appParams.Aidx)); has {
 					newEntry.oldResource = baseResourceData
@@ -1268,15 +1280,10 @@ const (
 // Resource flags interpretation:
 //
 // resourceFlagsHolding - the resource contains the holding of asset/app.
-// resourceFlagsNotHolding - the resource is completly empty. This state should not be persisted.
+// resourceFlagsNotHolding - the resource is completely empty. This state should not be persisted.
 // resourceFlagsOwnership - the resource contains the asset parameter or application parameters.
-// resourceFlagsEmptyAsset - this is an asset resource, and
-//
-//
-//
-//
-//
-//
+// resourceFlagsEmptyAsset - this is an asset resource, and it is empty.
+// resourceFlagsEmptyApp - this is an app resource, and it is empty.
 
 type resourcesData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`

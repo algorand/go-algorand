@@ -1163,7 +1163,7 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 		err = func() (err error) {
 			// make a scope to use defer
 			var resRows *sql.Rows
-			resRows, err = tx.Query("SELECT aidx, data FROM resources where addrid = ?", rowid)
+			resRows, err = tx.Query("SELECT aidx, rtype, data FROM resources where addrid = ?", rowid)
 			if err != nil {
 				return
 			}
@@ -1172,7 +1172,8 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 			for resRows.Next() {
 				var buf []byte
 				var aidx int64
-				err = resRows.Scan(&aidx, &buf)
+				var rtype int64
+				err = resRows.Scan(&aidx, &rtype, &buf)
 				if err != nil {
 					return
 				}
@@ -1180,6 +1181,9 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 				err = protocol.Decode(buf, &resData)
 				if err != nil {
 					return
+				}
+				if resData.ResourceFlags == resourceFlagsNotHolding {
+					return fmt.Errorf("addr %s (%d) aidx = %d resourceFlagsNotHolding should not be persisted", addr.String(), rowid.Int64, aidx)
 				}
 				if resData.IsApp() {
 					if resData.IsOwning() {
@@ -1194,6 +1198,9 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 						}
 						ad.AppLocalStates[basics.AppIndex(aidx)] = resData.GetAppLocalState()
 					}
+					if basics.CreatableType(rtype) != basics.AppCreatable {
+						return fmt.Errorf("addr %s (%d) aidx = %d type mismatch %d != %d", addr.String(), rowid.Int64, aidx, rtype, basics.AppCreatable)
+					}
 				} else if resData.IsAsset() {
 					if resData.IsOwning() {
 						if ad.AssetParams == nil {
@@ -1206,6 +1213,9 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 							ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
 						}
 						ad.Assets[basics.AssetIndex(aidx)] = resData.GetAssetHolding()
+					}
+					if basics.CreatableType(rtype) != basics.AssetCreatable {
+						return fmt.Errorf("addr %s (%d) aidx = %d type mismatch %d != %d", addr.String(), rowid.Int64, aidx, rtype, basics.AssetCreatable)
 					}
 				} else {
 					return err
@@ -1391,7 +1401,39 @@ func TestCompactDeltasResources(t *testing.T) {
 		addrs[i] = basics.Address(crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)}))
 	}
 
+	var baseResources lruResources
+	baseResources.init(nil, 100, 80)
+
+	// check empty deltas do no produce empty resourcesData records
 	accountDeltas := make([]ledgercore.NewAccountDeltas, 1)
+	accountDeltas[0].UpsertAppParams(addrs[0], 100, nil)
+	accountDeltas[0].UpsertAppLocalState(addrs[1], 101, nil)
+	accountDeltas[0].UpsertAssetParams(addrs[2], 102, nil)
+	accountDeltas[0].UpsertAssetHolding(addrs[3], 103, nil)
+
+	outResourcesDeltas := makeCompactResourceDeltas(accountDeltas, baseResources)
+	delta, _ := outResourcesDeltas.get(addrs[0], 100)
+	require.NotEmpty(t, delta.newResource)
+	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
+	require.Equal(t, resourceFlagsNotHolding, delta.newResource.ResourceFlags)
+
+	delta, _ = outResourcesDeltas.get(addrs[1], 101)
+	require.NotEmpty(t, delta.newResource)
+	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
+	require.Equal(t, resourceFlagsNotHolding, delta.newResource.ResourceFlags)
+
+	delta, _ = outResourcesDeltas.get(addrs[2], 102)
+	require.NotEmpty(t, delta.newResource)
+	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
+	require.Equal(t, resourceFlagsNotHolding, delta.newResource.ResourceFlags)
+
+	delta, _ = outResourcesDeltas.get(addrs[3], 103)
+	require.NotEmpty(t, delta.newResource)
+	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
+	require.Equal(t, resourceFlagsNotHolding, delta.newResource.ResourceFlags)
+
+	// check actual data on non-empty input
+	accountDeltas = make([]ledgercore.NewAccountDeltas, 1)
 	// addr 0 has app params and a local state for another app
 	appParams100 := basics.AppParams{ApprovalProgram: []byte{100}}
 	appLocalState200 := basics.AppLocalState{KeyValue: basics.TealKeyValue{"200": basics.TealValue{Type: basics.TealBytesType, Bytes: "200"}}}
@@ -1416,10 +1458,9 @@ func TestCompactDeltasResources(t *testing.T) {
 	accountDeltas[0].UpsertAssetParams(addrs[3], 103, &assetParams103)
 	accountDeltas[0].UpsertAssetHolding(addrs[3], 103, &assetHolding103)
 
-	var baseResources lruResources
 	baseResources.init(nil, 100, 80)
 
-	outResourcesDeltas := makeCompactResourceDeltas(accountDeltas, baseResources)
+	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, baseResources)
 	// 6 entries are missing: same app (asset) params and local state are combined into a single entry
 	require.Equal(t, 6, len(outResourcesDeltas.misses))
 	require.Equal(t, 6, len(outResourcesDeltas.deltas))
@@ -1514,7 +1555,7 @@ func TestCompactDeltasResources(t *testing.T) {
 	require.Equal(t, 7, len(outResourcesDeltas.deltas))
 
 	checkNewDeltas(outResourcesDeltas)
-	delta, _ := outResourcesDeltas.get(addrs[0], 100)
+	delta, _ = outResourcesDeltas.get(addrs[0], 100)
 	require.Equal(t, appLocalState100.KeyValue, delta.newResource.GetAppLocalState().KeyValue)
 	require.Equal(t, int(2), delta.nAcctDeltas)
 
