@@ -464,19 +464,11 @@ func TestInitialRewardsRateCalculation(t *testing.T) {
 
 func performRewardsRateCalculation(
 	t *testing.T, consensusParams config.ConsensusParams,
-	rewardsRate uint64,
-	rewardsLevel uint64, rewardsResidue uint64, rewardsRecalculationRound basics.Round,
-	incentivePoolBalance uint64, totalRewardUnits uint64, startingRound basics.Round) bool {
+	curRewardsState RewardsState,
+	incentivePoolBalance uint64, totalRewardUnits uint64, startingRound uint64) bool {
 	require.GreaterOrEqual(t, incentivePoolBalance, consensusParams.MinBalance)
 
-	curRewardsState := RewardsState{
-		RewardsLevel:   rewardsLevel,
-		RewardsResidue: rewardsResidue,
-		RewardsRecalculationRound: rewardsRecalculationRound,
-		RewardsRate:               rewardsRate,
-	}
-
-	for rnd := int(startingRound); rnd < int(uint64(startingRound)+consensusParams.RewardsRateRefreshInterval+2); rnd++ {
+	for rnd := startingRound; rnd < startingRound+uint64(consensusParams.RewardsRateRefreshInterval)*3; rnd++ {
 		nextRewardState := curRewardsState.NextRewardsState(basics.Round(rnd), consensusParams, basics.MicroAlgos{Raw: incentivePoolBalance}, totalRewardUnits)
 		// adjust the incentive pool balance
 		var ot basics.OverflowTracker
@@ -492,6 +484,7 @@ func performRewardsRateCalculation(
 		// make sure the pool retain at least the min balance
 		ot.Sub(incentivePoolBalance, consensusParams.MinBalance)
 		if ot.Overflowed {
+			require.FailNow(t, "Should never overflow")
 			return false
 		}
 
@@ -504,6 +497,9 @@ func performRewardsRateCalculation(
 // TestInitialRewardsRateCalculationRealValues performs a similar to test for initial rewards calculations but uses
 // real values taken from mainnet
 func TestInitialRewardsRateCalculationRealValues(t *testing.T) {
+
+	partitiontest.PartitionTest(t)
+
 	tests := []struct {
 		name                      string
 		rewardsRate               uint64
@@ -512,10 +508,8 @@ func TestInitialRewardsRateCalculationRealValues(t *testing.T) {
 		rewardsRecalculationRound basics.Round
 		incentivePoolBalance      uint64
 		totalRewardUnits          uint64
-		startingRound             basics.Round
+		startingRound             uint64
 	}{
-		// Original test 1
-		{"1", 24000000, 0, 0, 500000, 125000000000000, 10000000000, 1},
 		// Real values gathered from mainnet
 		{"2", 24000000, 215332, 545321700, 18500000, 10464550021728, 6756334087, 18063999},
 		{"3", 24000000, 215332, 521321700, 18500000, 10464550021728, 6756334078, 18063998},
@@ -523,14 +517,16 @@ func TestInitialRewardsRateCalculationRealValues(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-
-			partitiontest.PartitionTest(t)
-
 			consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
 
-			require.True(t, performRewardsRateCalculation(t, consensusParams, test.rewardsRate, test.rewardsLevel, test.rewardsResidue,
-				test.rewardsRecalculationRound, test.incentivePoolBalance, test.totalRewardUnits, test.startingRound))
+			curRewardsState := RewardsState{
+				RewardsLevel:              test.rewardsLevel,
+				RewardsResidue:            test.rewardsResidue,
+				RewardsRecalculationRound: test.rewardsRecalculationRound,
+				RewardsRate:               test.rewardsRate,
+			}
 
+			performRewardsRateCalculation(t, consensusParams, curRewardsState, test.incentivePoolBalance, test.totalRewardUnits, test.startingRound)
 		})
 	}
 }
