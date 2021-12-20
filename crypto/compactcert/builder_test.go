@@ -25,7 +25,6 @@ import (
 	"strconv"
 	"testing"
 
-	cfalcon "github.com/algoidan/falcon"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklekeystore"
@@ -205,17 +204,13 @@ func calculateHashOnSigLeaf(t *testing.T, sig merklekeystore.Signature, lValue u
 
 	sigCommitment = append(sigCommitment, binaryL...)
 
-	// verify the falcon usage
-	require.Equal(t, sig.VerifyingKey.Type, crypto.FalconType)
-	compressedFalconsSig := cfalcon.CompressedSignature(sig.ByteSignature)
-	ctFalconSig, err := compressedFalconsSig.ConvertToCT()
-	ctFalconSigBytes := ctFalconSig[:]
-	falconPK := sig.VerifyingKey.FalconPublicKey.PublicKey[:]
-
+	pK := sig.VerifyingKey.GetVerifier()
+	serializedSig, err := pK.GetSerializedSignature(sig.ByteSignature)
 	require.NoError(t, err)
+
 	//build the expected binary representation of the merkle signature
-	sigCommitment = append(sigCommitment, ctFalconSigBytes...)
-	sigCommitment = append(sigCommitment, falconPK...)
+	sigCommitment = append(sigCommitment, serializedSig...)
+	sigCommitment = append(sigCommitment, pK.GetVerificationBytes()...)
 
 	treeIdxBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(treeIdxBytes, sig.MerkleArrayIndex)
@@ -283,8 +278,7 @@ func TestParticipationCommitment(t *testing.T) {
 }
 
 // This test makes sure that cert's signature commitment is according to spec and stays sync with the
-// SNARK verifier. This test enforces the usage of falcon signature and a specific binary representation
-// of the merkle's tree leaves.
+// SNARK verifier. This test enforces the usage of a specific binary representation  of the merkle's tree leaves.
 // in case this test breaks, the SNARK verifier should be updated accordingly
 func TestSignatureCommitment(t *testing.T) {
 	partitiontest.PartitionTest(t)

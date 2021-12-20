@@ -50,7 +50,7 @@ func (v *Verifier) Verify(c *Cert) error {
 	sigs := make(map[uint64]crypto.Hashable)
 	parts := make(map[uint64]crypto.Hashable)
 	for pos, r := range c.Reveals {
-		sig, err := buildCommitableSignature(r.SigSlot)
+		sig, err := buildCommittableSignature(r.SigSlot)
 		if err != nil {
 			return err
 		}

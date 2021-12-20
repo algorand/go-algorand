@@ -30,7 +30,8 @@ type (
 		interval   uint64
 	}
 
-	// CommittablePublicKey is a key tied to a specific round and is committed by the merklekeystore.Signer.
+	// CommittablePublicKey  is used to create a binary representation of public keys in the merkle
+	// signature scheme.
 	CommittablePublicKey struct {
 		VerifyingKey crypto.GenericVerifyingKey
 		Round        uint64
