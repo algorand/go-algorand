@@ -31,11 +31,15 @@ import (
 )
 
 const (
-	// WebSocketBufferSize is the size of the buffer for the
+	// WebSocketReadBufferSize is the size of the ReadBuffer for the
 	// tealdbg/cdt websocket session.
 	// A buffer that is too small will cause the session to choke
 	// during the `getScriptSource` call and the session cannot recover.
-	WebSocketReadBufferSize  = 81920
+	WebSocketReadBufferSize = 81920
+
+	// WebSocketWriteBufferSize is the size of the WriteBuffer for the
+	// tealdbg/cdt websocket session.
+	// The reasoning for the size is the same as above
 	WebSocketWriteBufferSize = 81920
 )
 
