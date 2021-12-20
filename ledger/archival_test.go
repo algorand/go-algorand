@@ -730,7 +730,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
-	const maxBlocks = 1000
+	const maxBlocks = 1500
 	for i := 0; i < maxBlocks; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
