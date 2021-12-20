@@ -199,6 +199,11 @@ type resourcesDeltas struct {
 	oldResource persistedResourcesData
 	newResource resourcesData
 	nAcctDeltas int
+	// addrid is the rowid associated with this resource from the accountbase table.
+	// the variable is populated during the resources writing (accountsNewRound) and used by the
+	// catchpoint tracker in catchpointTracker.accountsUpdateBalances.
+	addrid int64
+	aidx   basics.CreatableIndex
 }
 
 // compactResourcesDeltas and resourcesDeltas are extensions to ledgercore.AccountDeltas that is being used by the commitRound function for counting the
@@ -2302,6 +2307,9 @@ func accountsNewRound(
 				return
 			}
 		}
+		data.addrid = addrid
+		data.aidx = aidx
+		resources.update(i, data)
 		if data.oldResource.data.IsEmpty() {
 			// IsEmpty means we don't have a previous value. Note, can't use oldResource.data.MsgIsZero
 			// because of possibility of empty asset holdings or app local staste after opting in
@@ -2874,7 +2882,7 @@ func LoadAllFullAccounts(
 
 	baseCb := func(addr basics.Address, accountData *baseAccountData, encodedAccountData []byte) (err error) {
 		baseAcct = *accountData
-		ad = baseAcct.GetAccountData()
+		ledgercore.AssignAccountData(&ad, baseAcct.GetLedgerCoreAccountData())
 		copy(address[:], addr[:])
 		return nil
 	}

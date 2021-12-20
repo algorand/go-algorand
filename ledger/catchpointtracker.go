@@ -501,18 +501,21 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 			}
 		}
 
-		if !resDelta.oldResource.data.IsEmpty() {
-			/*
-				addHash := resourcesHashBuilderV6(addr, resDelta.newResource.aidx, resDelta.newResource.rtype, uint64(resDelta.newResource.round), protocol.Encode(&resDelta.newResource))
-				added, err = ct.balancesTrie.Add(addHash)
-				if err != nil {
-					return fmt.Errorf("attempted to add duplicate resource hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)
-				}
-				if !added {
-					ct.log.Warnf("attempted to add duplicate resource hash '%s' to merkle trie for account %v", hex.EncodeToString(addHash), addr)
-				} else {
-					accumulatedChanges++
-				}*/
+		if !resDelta.newResource.IsEmpty() {
+			ctype := basics.AssetCreatable
+			if resDelta.newResource.IsApp() {
+				ctype = basics.AppCreatable
+			}
+			addHash := resourcesHashBuilderV6(addr, resDelta.aidx, ctype, uint64(resDelta.newResource.UpdateRound), protocol.Encode(&resDelta.newResource))
+			added, err = ct.balancesTrie.Add(addHash)
+			if err != nil {
+				return fmt.Errorf("attempted to add duplicate resource hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)
+			}
+			if !added {
+				ct.log.Warnf("attempted to add duplicate resource hash '%s' to merkle trie for account %v", hex.EncodeToString(addHash), addr)
+			} else {
+				accumulatedChanges++
+			}
 		}
 	}
 
