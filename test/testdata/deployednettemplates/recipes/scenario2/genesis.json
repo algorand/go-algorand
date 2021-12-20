@@ -3,7 +3,7 @@
   "VersionModifier": "",
   "ConsensusProtocol": "future",
   "FirstPartKeyRound": 0,
-  "LastPartKeyRound": 200000,
+  "LastPartKeyRound": 50000,
   "PartKeyDilution": 0,
   "Wallets": [
     {
