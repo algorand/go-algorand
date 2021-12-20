@@ -41,12 +41,12 @@ func checkKeystoreParams(firstValid, round, interval uint64) error {
 	return nil
 }
 
-func roundToIndex(firstValid, currentRound, interval uint64) uint64 {
+func RoundToIndex(firstValid, currentRound, interval uint64) uint64 {
 	rofi := roundOfFirstIndex(firstValid, interval)
 	return (currentRound - rofi) / interval
 }
 
-func indexToRound(firstValid, interval, pos uint64) uint64 {
+func IndexToRound(firstValid, interval, pos uint64) uint64 {
 	return roundOfFirstIndex(firstValid, interval) + pos*interval
 }
 

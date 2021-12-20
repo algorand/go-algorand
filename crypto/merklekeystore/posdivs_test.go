@@ -95,8 +95,8 @@ func TestErrors(t *testing.T) {
 
 func checkIndexToRoundToIndex(count, firstValid, interval uint64, t *testing.T) {
 	for pos := uint64(0); pos < count; pos++ {
-		round := indexToRound(firstValid, interval, uint64(pos))
-		index := roundToIndex(firstValid, round, interval)
+		round := IndexToRound(firstValid, interval, uint64(pos))
+		index := RoundToIndex(firstValid, round, interval)
 		require.Equal(t, uint64(pos), index)
 	}
 
@@ -106,10 +106,10 @@ func checkRoundToIndex(count, initC, firstValid, interval uint64, t *testing.T) 
 	expIndex := uint64(0)
 	for c := initC; c < count; c++ {
 		round := interval * c
-		index := roundToIndex(firstValid, round, interval)
+		index := RoundToIndex(firstValid, round, interval)
 		require.Equal(t, expIndex, index)
 		expIndex++
-		round2 := indexToRound(firstValid, interval, index)
+		round2 := IndexToRound(firstValid, interval, index)
 		require.Equal(t, round, round2)
 	}
 

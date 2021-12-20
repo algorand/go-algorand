@@ -25,11 +25,32 @@ import (
 type SimpleKeyManager []account.Participation
 
 // VotingKeys implements KeyManager.VotingKeys.
-func (m SimpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.ParticipationRoundSecrets {
-	var km []account.ParticipationRoundSecrets
+func (m SimpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.ParticipationRecordForRound {
+	var km []account.ParticipationRecordForRound
 	for _, acc := range m {
 		if acc.OverlapsInterval(votingRound, votingRound) {
-			km = append(km, acc.RoundSecrets(votingRound))
+			record := account.ParticipationRecord{
+				ParticipationID:   acc.ID(),
+				Account:           acc.Parent,
+				FirstValid:        acc.FirstValid,
+				LastValid:         acc.LastValid,
+				KeyDilution:       acc.KeyDilution,
+				LastVote:          0,
+				LastBlockProposal: 0,
+				LastStateProof:    0,
+				EffectiveFirst:    acc.FirstValid,
+				EffectiveLast:     acc.LastValid,
+				VRF:               acc.VRF,
+				Voting:            acc.Voting,
+			}
+			// Usually this struct will be retrieved from the registry, however in this test
+			// case we can allow ourselves to generate it from the data already in memory
+			// (within the Participation after calling FillDB)
+			partRecForRound := account.ParticipationRecordForRound{
+				ParticipationRecord: record,
+				StateProof:          acc.StateProofSecrets.RoundSecrets(uint64(votingRound)),
+			}
+			km = append(km, partRecForRound)
 		}
 	}
 	return km

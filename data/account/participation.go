@@ -61,30 +61,6 @@ type Participation struct {
 	KeyDilution uint64
 }
 
-// ParticipationRoundSecrets contains the participation secrets relevant to a specified round.
-// For now, StateProofSecret will be for the round only while VRF and Voting secrets will
-// be stored in their entirety. This should be changed in the future gradually.
-//msgp:ignore ParticipationRoundSecrets
-type ParticipationRoundSecrets struct {
-	Parent basics.Address
-
-	VRF    *crypto.VRFSecrets
-	Voting *crypto.OneTimeSignatureSecrets
-	// StateProofSecret is used to sign compact certificates. might be nil
-	StateProofSecret *merklekeystore.SignerInRound
-
-	// The first and last rounds for which this account is valid, respectively.
-	//
-	// When lastValid has concluded, this set of secrets is destroyed.
-	FirstValid basics.Round
-	LastValid  basics.Round
-
-	KeyDilution uint64
-
-	// The round for which these secrets apply (StateProof specifically)
-	Round basics.Round
-}
-
 // ParticipationKeyIdentity is for msgpack encoding the participation data.
 type ParticipationKeyIdentity struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -125,24 +101,6 @@ func (part Participation) ID() ParticipationID {
 	return idData.ID()
 }
 
-// ID computes a ParticipationID.
-func (part ParticipationRoundSecrets) ID() ParticipationID {
-	idData := ParticipationKeyIdentity{
-		Parent:      part.Parent,
-		FirstValid:  part.FirstValid,
-		LastValid:   part.LastValid,
-		KeyDilution: part.KeyDilution,
-	}
-	if part.VRF != nil {
-		copy(idData.VRFSK[:], part.VRF.SK[:])
-	}
-	if part.Voting != nil {
-		copy(idData.VoteID[:], part.Voting.OneTimeSignatureVerifier[:])
-	}
-
-	return idData.ID()
-}
-
 // PersistedParticipation encapsulates the static state of the participation
 // for a single address at any given moment, while providing the ability
 // to handle persistence and deletion of secrets.
@@ -163,24 +121,8 @@ func (part Participation) Address() basics.Address {
 	return part.Parent
 }
 
-// Address returns the root account under which this participation account is registered.
-func (part ParticipationRoundSecrets) Address() basics.Address {
-	return part.Parent
-}
-
 // OverlapsInterval returns true if the partkey is valid at all within the range of rounds (inclusive)
 func (part Participation) OverlapsInterval(first, last basics.Round) bool {
-	if last < first {
-		logging.Base().Panicf("Round interval should be ordered (first = %v, last = %v)", first, last)
-	}
-	if last < part.FirstValid || first > part.LastValid {
-		return false
-	}
-	return true
-}
-
-// OverlapsInterval returns true if the partkey is valid at all within the range of rounds (inclusive)
-func (part ParticipationRoundSecrets) OverlapsInterval(first, last basics.Round) bool {
 	if last < first {
 		logging.Base().Panicf("Round interval should be ordered (first = %v, last = %v)", first, last)
 	}
@@ -195,18 +137,8 @@ func (part Participation) VRFSecrets() *crypto.VRFSecrets {
 	return part.VRF
 }
 
-// VRFSecrets returns the VRF secrets associated with this Participation account.
-func (part ParticipationRoundSecrets) VRFSecrets() *crypto.VRFSecrets {
-	return part.VRF
-}
-
 // VotingSecrets returns the voting secrets associated with this Participation account.
 func (part Participation) VotingSecrets() *crypto.OneTimeSignatureSecrets {
-	return part.Voting
-}
-
-// VotingSecrets returns the voting secrets associated with this ParticipationRoundSecrets account.
-func (part ParticipationRoundSecrets) VotingSecrets() *crypto.OneTimeSignatureSecrets {
 	return part.Voting
 }
 
@@ -219,16 +151,7 @@ func (part Participation) VotingSigner() crypto.OneTimeSigner {
 	}
 }
 
-// VotingSigner returns the voting secrets associated with this Participation account,
-// together with the KeyDilution value.
-func (part ParticipationRoundSecrets) VotingSigner() crypto.OneTimeSigner {
-	return crypto.OneTimeSigner{
-		OneTimeSignatureSecrets: part.Voting,
-		OptionalKeyDilution:     part.KeyDilution,
-	}
-}
-
-// StateProofSigner returns the key used to sign on Compact Certificates.
+// StateProofKey returns the key used to sign on Compact Certificates.
 // might return nil!
 func (part Participation) StateProofSigner() *merklekeystore.Signer {
 	return part.StateProofSecrets
@@ -259,25 +182,6 @@ func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos,
 	t.KeyregTxnFields.VoteLast = part.LastValid
 	t.KeyregTxnFields.VoteKeyDilution = part.KeyDilution
 	return t
-}
-
-// RoundSecrets returns the ParticipationRoundSecrets for a specified round
-func (part Participation) RoundSecrets(round basics.Round) ParticipationRoundSecrets {
-	stateProofSecret := &merklekeystore.SignerInRound{}
-	if part.StateProofSecrets != nil {
-		stateProofSecret = part.StateProofSecrets.GetSignerInRound(uint64(round))
-	}
-
-	return ParticipationRoundSecrets{
-		Parent:           part.Parent,
-		VRF:              part.VRF,
-		Voting:           part.Voting,
-		StateProofSecret: stateProofSecret,
-		FirstValid:       part.FirstValid,
-		LastValid:        part.LastValid,
-		KeyDilution:      part.KeyDilution,
-		Round:            round,
-	}
 }
 
 // DeleteOldKeys securely deletes ephemeral keys for rounds strictly older than the given round.
@@ -362,7 +266,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	// Persist the Participation into the database
 	err = part.Persist()
 	if err == nil {
-		err = stateProofSecrets.Persist() // must be called after part.Persist()
+		err = stateProofSecrets.Persist(store) // must be called after part.Persist()
 	}
 	return part, err
 }

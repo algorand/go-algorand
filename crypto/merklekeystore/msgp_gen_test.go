@@ -132,6 +132,66 @@ func BenchmarkUnmarshalSigner(b *testing.B) {
 	}
 }
 
+func TestMarshalUnmarshalSignerRecord(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := SignerRecord{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingSignerRecord(t *testing.T) {
+	protocol.RunEncodingTest(t, &SignerRecord{})
+}
+
+func BenchmarkMarshalMsgSignerRecord(b *testing.B) {
+	v := SignerRecord{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgSignerRecord(b *testing.B) {
+	v := SignerRecord{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalSignerRecord(b *testing.B) {
+	v := SignerRecord{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestMarshalUnmarshalVerifier(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	v := Verifier{}

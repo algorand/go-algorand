@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"strings"
 	"sync"
 	"testing"
@@ -59,11 +60,12 @@ func assertParticipation(t *testing.T, p Participation, pr ParticipationRecord) 
 
 func makeTestParticipation(addrID int, first, last basics.Round, dilution uint64) Participation {
 	p := Participation{
-		FirstValid:  first,
-		LastValid:   last,
-		KeyDilution: dilution,
-		Voting:      &crypto.OneTimeSignatureSecrets{},
-		VRF:         &crypto.VRFSecrets{},
+		FirstValid:        first,
+		LastValid:         last,
+		KeyDilution:       dilution,
+		Voting:            &crypto.OneTimeSignatureSecrets{},
+		VRF:               &crypto.VRFSecrets{},
+		StateProofSecrets: &merklekeystore.Signer{},
 	}
 	binary.LittleEndian.PutUint32(p.Parent[:], uint32(addrID))
 	return p
@@ -732,12 +734,16 @@ func TestAddStateProofKeys(t *testing.T) {
 	err = registry.Flush(10 * time.Second)
 	a.NoError(err)
 
+	signer, err := merklekeystore.New(1, max, 1, crypto.FalconType)
+	a.NoError(err)
 	// Initialize keys array.
 	keys := make(map[uint64]StateProofKey)
-	for i := uint64(0); i <= max; i++ {
-		bs := make([]byte, 8)
-		binary.LittleEndian.PutUint64(bs, i)
-		keys[i] = bs
+	for i := uint64(1); i < max; i++ {
+		k := signer.GetKey(i)
+		if k == nil {
+			continue
+		}
+		keys[i] = StateProofKey(*k)
 	}
 
 	err = registry.AppendKeys(id, keys)
@@ -748,12 +754,10 @@ func TestAddStateProofKeys(t *testing.T) {
 	a.NoError(err)
 
 	// Make sure we're able to fetch the same data that was put in.
-	for i := uint64(0); i <= max; i++ {
+	for i := uint64(1); i < max; i++ {
 		r, err := registry.GetForRound(id, basics.Round(i))
 		a.NoError(err)
-		a.Equal(keys[i], r.StateProof)
-		number := binary.LittleEndian.Uint64(r.StateProof)
-		a.Equal(i, number)
+		a.Equal(keys[i], StateProofKey(*r.StateProof.SigningKey))
 	}
 }
 
@@ -790,9 +794,7 @@ func TestAddingSecretTwice(t *testing.T) {
 
 	// Append key
 	keys := make(map[uint64]StateProofKey)
-	bs := make([]byte, 8)
-	binary.LittleEndian.PutUint64(bs, 10)
-	keys[0] = bs
+	keys[0] = StateProofKey(*p.StateProofSecrets.GetKey(0))
 
 	err = registry.AppendKeys(id, keys)
 	a.NoError(err)

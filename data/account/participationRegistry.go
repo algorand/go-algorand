@@ -22,6 +22,7 @@ import (
 	"encoding/base32"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"strings"
 	"time"
 
@@ -82,20 +83,27 @@ type ParticipationRecord struct {
 	Voting *crypto.OneTimeSignatureSecrets
 }
 
-// StateProofKey is a placeholder for the real state proof key type.
-// PKI TODO: Replace this with a real object.
-type StateProofKey []byte
+type StateProofKey crypto.GenericSigningKey
 
 // ParticipationRecordForRound adds in the per-round state proof key.
 type ParticipationRecordForRound struct {
 	ParticipationRecord
 
-	StateProof StateProofKey
+	StateProof *merklekeystore.SignerInRound
 }
 
 // IsZero returns true if the object contains zero values.
 func (r ParticipationRecordForRound) IsZero() bool {
 	return r.StateProof == nil && r.ParticipationRecord.IsZero()
+}
+
+// VotingSigner returns the voting secrets associated with this Participation account,
+// together with the KeyDilution value.
+func (part ParticipationRecordForRound) VotingSigner() crypto.OneTimeSigner {
+	return crypto.OneTimeSigner{
+		OneTimeSignatureSecrets: part.Voting,
+		OptionalKeyDilution:     part.KeyDilution,
+	}
 }
 
 var zeroParticipationRecord = ParticipationRecord{}
@@ -261,7 +269,7 @@ const (
 			keyDilution     INTEGER NOT NULL,
 
 			vrf BLOB,       --*  msgpack encoding of ParticipationAccount.vrf
-			stateProof BLOB --*  msgpack encoding of ParticipationAccount.BlockProof
+			stateProof BLOB --*  msgpack encoding of merklekeystore.SignerRecord
 		)`
 
 	createRolling = `CREATE TABLE Rolling (
@@ -297,7 +305,8 @@ const (
 		FROM Keysets k
 		INNER JOIN Rolling r
 		ON k.pk = r.pk`
-	selectStateProofKeys = `SELECT s.key
+	selectStateProofData = `SELECT stateProof FROM Keysets WHERE participationID = ? LIMIT 1`
+	selectStateProofKey  = `SELECT s.key
 		FROM StateProofKeys s
 		WHERE round=?
 		   AND pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
@@ -461,6 +470,12 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 		rawVoting = protocol.Encode(&voting)
 	}
 	// PKI TODO: Extract state proof from record.
+	// here we will the serialized state proof metadata and tree into the DB
+	// use the new struct merklekeystore.SignerRecord
+	// This does not contain secrets! only the public immutable data
+	if record.StateProofSecrets != nil {
+		rawStateProof = protocol.Encode(&record.StateProofSecrets.SignerRecord)
+	}
 
 	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		result, err := tx.Exec(
@@ -510,8 +525,8 @@ func (db *participationDB) appendKeysInner(id ParticipationID, keys map[uint64]S
 			return fmt.Errorf("unable to prepare state proof insert: %w", err)
 		}
 
-		for k, v := range keys {
-			result, err := stmt.Exec(pk, k, v)
+		for rnd, key := range keys {
+			result, err := stmt.Exec(pk, rnd, protocol.Encode(&key))
 			if err = verifyExecWithOneRowEffected(err, result, "append keys"); err != nil {
 				return err
 			}
@@ -690,6 +705,7 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 	return
 }
 
+// TODO: should keys be a tuple array instead of map? what's the added value for map?
 func (db *participationDB) AppendKeys(id ParticipationID, keys map[uint64]StateProofKey) error {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
@@ -866,14 +882,28 @@ func (db *participationDB) GetAll() []ParticipationRecord {
 // GetForRound fetches a record with all secrets for a particular round.
 func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (ParticipationRecordForRound, error) {
 	var result ParticipationRecordForRound
+	result.StateProof = &merklekeystore.SignerInRound{}
+	result.StateProof.SigningKey = &crypto.GenericSigningKey{}
+	var rawStateProofKey []byte
+	var rawSignerRecord []byte
+
 	result.ParticipationRecord = db.Get(id)
 	if result.ParticipationRecord.IsZero() {
 		return ParticipationRecordForRound{}, ErrParticipationIDNotFound
 	}
 
+	result.StateProof.Round = uint64(round)
+
 	err := db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		row := tx.QueryRow(selectStateProofKeys, round, id[:])
-		err := row.Scan(&result.StateProof)
+		// fetch stateproof public data
+		row := tx.QueryRow(selectStateProofData, id[:])
+		err := row.Scan(&rawSignerRecord)
+		if err != nil {
+			return fmt.Errorf("error while querying stateproof data: %w", err)
+		}
+		// fetch the secret key
+		row = tx.QueryRow(selectStateProofKey, round, id[:])
+		err = row.Scan(&rawStateProofKey)
 		if err == sql.ErrNoRows {
 			return ErrSecretNotFound
 		}
@@ -886,6 +916,16 @@ func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (
 
 	if err != nil {
 		return ParticipationRecordForRound{}, fmt.Errorf("unable to lookup secrets: %w", err)
+	}
+
+	err = protocol.Decode(rawSignerRecord, &result.StateProof.SignerRecord)
+	if err != nil {
+		return ParticipationRecordForRound{}, err
+	}
+
+	err = protocol.Decode(rawStateProofKey, result.StateProof.SigningKey)
+	if err != nil {
+		return ParticipationRecordForRound{}, err
 	}
 
 	return result, nil

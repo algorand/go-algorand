@@ -48,7 +48,7 @@ func (p *PersistentKeystore) Persist(keys []crypto.GenericSigningKey, firstValid
 		if interval == 0 {
 			return errIntervalZero
 		}
-		round := indexToRound(firstValid, interval, 0)
+		round := IndexToRound(firstValid, interval, 0)
 		for i, key := range keys {
 			encodedKey := key.MarshalMsg(protocol.GetEncodingBuf())
 			_, err := tx.Exec("INSERT INTO StateProofKeys (id, round, key) VALUES (?,?,?)", i, round, encodedKey)

@@ -18,7 +18,10 @@ package merklekeystore
 
 import (
 	"encoding/binary"
+	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/util/db"
@@ -52,23 +55,25 @@ type (
 		// in which they will be dumped into database and disposed of.
 		// non-exported fields to prevent msgpack marshalling
 		signatureAlgorithms []crypto.GenericSigningKey
-		keyStore            PersistentKeystore
+		//keyStore            PersistentKeystore
 
-		// the first round is used to set up the intervals.
-		FirstValid uint64 `codec:"rnd"`
-
-		Interval uint64 `codec:"iv"`
-
-		Tree merklearray.Tree `codec:"tree"`
+		SignerRecord
 	}
 
 	// SignerInRound represents the StateProof signer for a specified round.
-	// msgp:ignore SignerInRound
+	//msgp:ignore SignerInRound
 	SignerInRound struct {
 		SigningKey *crypto.GenericSigningKey
 
 		// The round for which this SigningKey is related to
 		Round uint64
+
+		SignerRecord
+	}
+
+	// SignerRecord contains all the public immutable data related to merklekeystore.Signer
+	SignerRecord struct {
+		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 		// the first round is used to set up the intervals.
 		FirstValid uint64 `codec:"rnd"`
@@ -89,7 +94,7 @@ var errDivisorIsZero = errors.New("received zero Interval")
 // New Generates a merklekeystore.Signer
 // The function allow creation of empty signers, i.e signers without any key to sign with.
 // keys can be created between [firstValid,lastValid], if firstValid == 0, keys created will be in the range (0,lastValid]
-func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmType, store db.Accessor) (*Signer, error) {
+func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmType) (*Signer, error) {
 	if firstValid > lastValid {
 		return nil, errStartBiggerThanEndRound
 	}
@@ -110,10 +115,11 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 		return nil, err
 	}
 	s := &Signer{
-		keyStore:            PersistentKeystore{store},
 		signatureAlgorithms: keys,
-		FirstValid:          firstValid,
-		Interval:            interval,
+		SignerRecord: SignerRecord{
+			FirstValid: firstValid,
+			Interval:   interval,
+		},
 	}
 	tree, err := merklearray.Build(&CommittablePublicKeyArray{keys, firstValid, interval}, crypto.HashFactory{HashType: KeyStoreHashFunction})
 	if err != nil {
@@ -124,15 +130,38 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 }
 
 // Persist dumps the keys into the database and deletes the reference to them in Signer
-func (s *Signer) Persist() error {
-	err := s.keyStore.Persist(s.signatureAlgorithms, s.FirstValid, s.Interval)
-	if err != nil {
-		return err
+func (s *Signer) Persist(store db.Accessor) error {
+	if s.signatureAlgorithms == nil {
+		return fmt.Errorf("no keys provided (nil)")
 	}
 
-	// Let the garbage collector remove these from memory
-	s.signatureAlgorithms = nil
-	return nil
+	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		err := keystoreInstallDatabase(tx) // assumes schema table already exists (created by partInstallDatabase)
+		if err != nil {
+			return err
+		}
+
+		if s.Interval == 0 {
+			return errIntervalZero
+		}
+		round := IndexToRound(s.FirstValid, s.Interval, 0)
+		for i, key := range s.signatureAlgorithms {
+			encodedKey := key.MarshalMsg(protocol.GetEncodingBuf())
+			_, err := tx.Exec("INSERT INTO StateProofKeys (id, round, key) VALUES (?,?,?)", i, round, encodedKey)
+			protocol.PutEncodingBuf(encodedKey)
+			if err != nil {
+				return fmt.Errorf("failed to insert StateProof key number %v round %d. SQL Error: %w", i, round, err)
+			}
+			round += s.Interval
+		}
+
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("PersistentKeystore.Persist: %w", err)
+	}
+
+	return nil // Success
 }
 
 // GetVerifier can be used to store the commitment and verifier for this signer.
@@ -143,47 +172,17 @@ func (s *Signer) GetVerifier() *Verifier {
 	return (*Verifier)(&ver)
 }
 
+// TODO: delete this
 // Sign outputs a signature + proof for the signing key.
-func (s *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error) {
-	key, err := s.keyStore.GetKey(round)
-	if err != nil {
-		return Signature{}, err
-	}
-	signingKey := key.GetSigner()
-
-	if err = checkKeystoreParams(s.FirstValid, round, s.Interval); err != nil {
-		return Signature{}, err
-	}
-
-	index := s.getMerkleTreeIndex(round)
-	proof, err := s.Tree.Prove([]uint64{index})
-	if err != nil {
-		return Signature{}, err
-	}
-
-	sig, err := signingKey.Sign(hashable)
-	if err != nil {
-		return Signature{}, err
-	}
-
-	return Signature{
-		ByteSignature:    sig,
-		Proof:            *proof,
-		VerifyingKey:     *signingKey.GetVerifyingKey(),
-		MerkleArrayIndex: index,
-	}, nil
-}
-
-// Sign outputs a signature + proof for the signing key.
-func (s *SignerInRound) Sign(hashable crypto.Hashable, round uint64) (Signature, error) {
+func (s *SignerInRound) Sign(hashable crypto.Hashable) (Signature, error) {
 	key := s.SigningKey
 	signingKey := key.GetSigner()
 
-	if err := checkKeystoreParams(s.FirstValid, round, s.Interval); err != nil {
+	if err := checkKeystoreParams(s.FirstValid, s.Round, s.Interval); err != nil {
 		return Signature{}, err
 	}
 
-	index := s.getMerkleTreeIndex(round)
+	index := s.getMerkleTreeIndex(s.Round)
 	proof, err := s.Tree.Prove([]uint64{index})
 	if err != nil {
 		return Signature{}, err
@@ -203,51 +202,72 @@ func (s *SignerInRound) Sign(hashable crypto.Hashable, round uint64) (Signature,
 
 // expects valid rounds, i.e round that are bigger than FirstValid.
 func (s *Signer) getMerkleTreeIndex(round uint64) uint64 {
-	return roundToIndex(s.FirstValid, round, s.Interval)
+	return RoundToIndex(s.FirstValid, round, s.Interval)
 }
 
 // expects valid rounds, i.e round that are bigger than FirstValid.
 func (s *SignerInRound) getMerkleTreeIndex(round uint64) uint64 {
-	return roundToIndex(s.FirstValid, round, s.Interval)
+	return RoundToIndex(s.FirstValid, round, s.Interval)
 }
 
+// TODO: delete this
 // Trim shortness deletes keys that existed before a specific round (including),
 // will return an error for non existing keys/ out of bounds keys.
 // If before value is higher than the lastValid - the earlier keys will still be deleted,
 // and no error value will be returned.
-func (s *Signer) Trim(before uint64) (count int64, err error) {
-	count, err = s.keyStore.DropKeys(before)
-	return count, err
-}
+//func (s *Signer) Trim(before uint64) (count int64, err error) {
+//	count, err = s.keyStore.DropKeys(before)
+//	return count, err
+//}
 
 // Restore loads Signer from given database, as well as restoring PersistenKeystore (where the actual keys are stored)
 func (s *Signer) Restore(store db.Accessor) (err error) {
-	keystore, err := RestoreKeystore(store)
-	if err != nil {
-		return
-	}
-	s.keyStore = keystore
+	//keystore, err := RestoreKeystore(store)
+	//if err != nil {
+	//	return
+	//}
+	//s.keyStore = keystore
 	return
 }
 
-// GetKey returns the SigningKey for a specified round
-func (s *Signer) GetKey(round uint64) *crypto.GenericSigningKey {
-	key, err := s.keyStore.GetKey(uint64(round))
-	// TODO: do not ignore error (log or return?)
-	if err != nil {
+// GetKey retrieves key from memory if exists
+func (s *Signer) GetKey(idx uint64) *crypto.GenericSigningKey {
+	if idx < 0 || idx >= uint64(len(s.signatureAlgorithms)) {
 		return nil
 	}
-	return key
+
+	return &s.signatureAlgorithms[idx]
 }
 
-// GetSignerInRound return the signer for the specified round
-func (s *Signer) GetSignerInRound(round uint64) *SignerInRound {
+// FetchKey returns the SigningKey and round for a specified index from the StateProof DB
+func (s *Signer) FetchKey(id uint64, store db.Accessor) (key *crypto.GenericSigningKey, round uint64) {
+	var keyB []byte
+	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		row := tx.QueryRow("SELECT (key,round) FROM StateProofKeys WHERE id = ?", id)
+		err := row.Scan(&keyB, &round)
+		if err != nil {
+			return fmt.Errorf("failed to select stateProof key for round %d : %w", round, err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, 0 // fmt.Errorf("PersistentKeystore.GetKey: %w", err)
+	}
+
+	err = protocol.Decode(keyB, key)
+	if err != nil {
+		return nil, 0 // fmt.Errorf("PersistentKeystore.GetKey: %w", err)
+	}
+
+	return
+}
+
+func (s *Signer) RoundSecrets(round uint64) *SignerInRound {
 	return &SignerInRound{
-		SigningKey: s.GetKey(round),
-		Round:      round,
-		FirstValid: s.FirstValid,
-		Interval:   s.Interval,
-		Tree:       s.Tree,
+		SigningKey:   s.GetKey(round),
+		Round:        round,
+		SignerRecord: s.SignerRecord,
 	}
 }
 

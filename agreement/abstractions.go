@@ -224,7 +224,7 @@ type KeyManager interface {
 	// VotingKeys returns an immutable array of voting keys that are
 	// valid for the provided votingRound, and were available at
 	// keysRound.
-	VotingKeys(votingRound, keysRound basics.Round) []account.ParticipationRoundSecrets
+	VotingKeys(votingRound, keysRound basics.Round) []account.ParticipationRecordForRound
 
 	// Record indicates that the given participation action has been taken.
 	// The operation needs to be asynchronous to avoid impacting agreement.
