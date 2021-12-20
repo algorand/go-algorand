@@ -60,6 +60,10 @@ EXTLDFLAGS := -static -static-libstdc++ -static-libgcc
 export GOBUILDMODE := -buildmode=exe
 endif
 
+ifeq ($(SHORT_PART_PERIOD), 1)
+export SHORT_PART_PERIOD_FLAG := -s
+endif
+
 GOTAGS      := --tags "$(GOTAGSLIST)"
 GOTRIMPATH	:= $(shell GOPATH=$(GOPATH) && go help build | grep -q .-trimpath && echo -trimpath)
 
@@ -289,7 +293,7 @@ gen/%/genesis.dump: gen/%/genesis.json
 	./scripts/dump_genesis.sh $< > $@
 
 gen/%/genesis.json: gen/%.json gen/generate.go buildsrc
-	$(GOPATH1)/bin/genesis -q -n $(shell basename $(shell dirname $@)) -c $< -d $(subst .json,,$<)
+	$(GOPATH1)/bin/genesis -q $(SHORT_PART_PERIOD_FLAG) -n $(shell basename $(shell dirname $@)) -c $< -d $(subst .json,,$<)
 
 gen: $(addsuffix gen, $(NETWORKS)) mainnetgen
 
