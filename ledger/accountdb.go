@@ -355,7 +355,7 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 // makeCompactResourceDeltas takes an array of NewAccountDeltas ( one array entry per round ), and compacts the resource portions of the arrays into a single
 // data structure that contains all the resources deltas changes. While doing that, the function eliminate any intermediate resources changes.
 // It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the resourcesDeltas.
-func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, baseResources lruResources) (outResourcesDeltas compactResourcesDeltas) {
+func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, baseAccounts lruAccounts, baseResources lruResources) (outResourcesDeltas compactResourcesDeltas) {
 	if len(accountDeltas) == 0 {
 		return
 	}
@@ -390,12 +390,18 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				if assetHold.Holding != nil {
 					newEntry.newResource.SetAssetHolding(*assetHold.Holding)
 				} else {
+					// ClearAssetHolding sets resourceFlagsNotHolding flag.
+					// Otherwise newEntry.newResource.ResourceFlags == resourceFlagsHolding (0)
+					// meaning empty asset hodling (or app local state)
 					newEntry.newResource.ClearAssetHolding()
 				}
 				if baseResourceData, has := baseResources.read(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx)); has {
 					newEntry.oldResource = baseResourceData
 					outResourcesDeltas.insert(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx), newEntry) // insert instead of upsert economizes one map lookup
 				} else {
+					if pad, has := baseAccounts.read(assetHold.Addr); has {
+						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
+					}
 					outResourcesDeltas.insertMissing(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx), newEntry)
 				}
 			}
@@ -423,12 +429,18 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				if assetParams.Params != nil {
 					newEntry.newResource.SetAssetParams(*assetParams.Params, false)
 				} else {
-					newEntry.newResource.ClearAssetParams()
+					// ClearAssetHolding sets resourceFlagsNotHolding flag.
+					// Otherwise newEntry.newResource.ResourceFlags == resourceFlagsHolding (0)
+					// meaning empty asset hodling (or app local state)
+					newEntry.newResource.ClearAssetHolding()
 				}
 				if baseResourceData, has := baseResources.read(assetParams.Addr, basics.CreatableIndex(assetParams.Aidx)); has {
 					newEntry.oldResource = baseResourceData
 					outResourcesDeltas.insert(assetParams.Addr, basics.CreatableIndex(assetParams.Aidx), newEntry) // insert instead of upsert economizes one map lookup
 				} else {
+					if pad, has := baseAccounts.read(assetParams.Addr); has {
+						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
+					}
 					outResourcesDeltas.insertMissing(assetParams.Addr, basics.CreatableIndex(assetParams.Aidx), newEntry)
 				}
 			}
@@ -457,12 +469,18 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				if localState.State != nil {
 					newEntry.newResource.SetAppLocalState(*localState.State)
 				} else {
+					// ClearAppLocalState sets resourceFlagsNotHolding flag.
+					// Otherwise newEntry.newResource.ResourceFlags == resourceFlagsHolding (0)
+					// meaning empty asset hodling (or app local state)
 					newEntry.newResource.ClearAppLocalState()
 				}
 				if baseResourceData, has := baseResources.read(localState.Addr, basics.CreatableIndex(localState.Aidx)); has {
 					newEntry.oldResource = baseResourceData
 					outResourcesDeltas.insert(localState.Addr, basics.CreatableIndex(localState.Aidx), newEntry) // insert instead of upsert economizes one map lookup
 				} else {
+					if pad, has := baseAccounts.read(localState.Addr); has {
+						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
+					}
 					outResourcesDeltas.insertMissing(localState.Addr, basics.CreatableIndex(localState.Aidx), newEntry)
 				}
 			}
@@ -491,12 +509,18 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				if appParams.Params != nil {
 					newEntry.newResource.SetAppParams(*appParams.Params, false)
 				} else {
-					newEntry.newResource.ClearAppParams()
+					// ClearAppLocalState sets resourceFlagsNotHolding flag.
+					// Otherwise newEntry.newResource.ResourceFlags == resourceFlagsHolding (0)
+					// meaning empty asset hodling (or app local state)
+					newEntry.newResource.ClearAppLocalState()
 				}
 				if baseResourceData, has := baseResources.read(appParams.Addr, basics.CreatableIndex(appParams.Aidx)); has {
 					newEntry.oldResource = baseResourceData
 					outResourcesDeltas.insert(appParams.Addr, basics.CreatableIndex(appParams.Aidx), newEntry) // insert instead of upsert economizes one map lookup
 				} else {
+					if pad, has := baseAccounts.read(appParams.Addr); has {
+						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
+					}
 					outResourcesDeltas.insertMissing(appParams.Addr, basics.CreatableIndex(appParams.Aidx), newEntry)
 				}
 			}
@@ -508,7 +532,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 // resourcesLoadOld updates the entries on the deltas.old map that matches the provided addresses.
 // The round number of the persistedAccountData is not updated by this function, and the caller is responsible
 // for populating this field.
-func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, addrIDsMap map[basics.Address]int64) (err error) {
+func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, knownAddresses map[basics.Address]int64) (err error) {
 	if len(a.misses) == 0 {
 		return nil
 	}
@@ -535,7 +559,10 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, addrIDsMap map[bas
 	for _, entry := range a.misses {
 		idx := a.cache[entry]
 		addr := entry.address
-		if addrid, ok = addrIDsMap[addr]; !ok {
+		delta := a.deltas[idx]
+		if delta.oldResource.addrid != 0 {
+			addrid = delta.oldResource.addrid
+		} else if addrid, ok = knownAddresses[addr]; !ok {
 			err = addrRowidStmt.QueryRow(addr[:]).Scan(&addrid)
 			if err != nil {
 				if err == sql.ErrNoRows {
@@ -567,14 +594,6 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, addrIDsMap map[bas
 			// unexpected error - let the caller know that we couldn't complete the operation.
 			return err
 		}
-	}
-	return
-}
-
-func (a *compactResourcesDeltas) getMissingAddresses() (addresses map[basics.Address]struct{}) {
-	addresses = make(map[basics.Address]struct{})
-	for _, entry := range a.misses {
-		addresses[entry.address] = struct{}{}
 	}
 	return
 }
@@ -626,6 +645,15 @@ func (a *compactResourcesDeltas) insert(addr basics.Address, idx basics.Creatabl
 func (a *compactResourcesDeltas) insertMissing(addr basics.Address, resIdx basics.CreatableIndex, delta resourcesDeltas) {
 	a.insert(addr, resIdx, delta)
 	a.misses = append(a.misses, accountCreatable{address: addr, index: resIdx})
+}
+
+// upsertOld updates existing or inserts a new partial entry with only old field filled
+func (a *compactResourcesDeltas) upsertOld(addr basics.Address, old persistedResourcesData) {
+	if idx, exist := a.cache[accountCreatable{address: addr, index: old.aidx}]; exist {
+		a.deltas[idx].oldResource = old
+		return
+	}
+	a.insert(addr, old.aidx, resourcesDeltas{oldResource: old})
 }
 
 // updateOld updates existing or inserts a new partial entry with only old field filled
@@ -1244,15 +1272,10 @@ const (
 // Resource flags interpretation:
 //
 // resourceFlagsHolding - the resource contains the holding of asset/app.
-// resourceFlagsNotHolding - the resource is completly empty. This state should not be persisted.
+// resourceFlagsNotHolding - the resource is completely empty. This state should not be persisted.
 // resourceFlagsOwnership - the resource contains the asset parameter or application parameters.
-// resourceFlagsEmptyAsset - this is an asset resource, and
-//
-//
-//
-//
-//
-//
+// resourceFlagsEmptyAsset - this is an asset resource, and it is empty.
+// resourceFlagsEmptyApp - this is an app resource, and it is empty.
 
 type resourcesData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -1474,7 +1497,7 @@ func (rd *resourcesData) ClearAppParams() {
 	rd.ResourceFlags -= rd.ResourceFlags & resourceFlagsOwnership
 	rd.ResourceFlags &= ^resourceFlagsEmptyApp
 	if rd.IsEmptyApp() && hadHolding {
-		rd.ResourceFlags |= resourceFlagsEmptyAsset
+		rd.ResourceFlags |= resourceFlagsEmptyApp
 	}
 }
 
@@ -1962,9 +1985,6 @@ func (qs *accountsDbQueries) lookup(addr basics.Address) (data persistedAccountD
 			if len(buf) > 0 && rowid.Valid {
 				data.rowid = rowid.Int64
 				err = protocol.Decode(buf, &data.accountData)
-				if err != nil {
-					panic("")
-				}
 				return err
 			}
 			// we don't have that account, just return the database round.
@@ -2307,13 +2327,10 @@ func accountsNewRound(
 				return
 			}
 		}
-		data.addrid = addrid
-		data.aidx = aidx
-		resources.update(i, data)
 		if data.oldResource.data.IsEmpty() {
 			// IsEmpty means we don't have a previous value. Note, can't use oldResource.data.MsgIsZero
-			// because of possibility of empty asset holdings or app local staste after opting in
-			if data.newResource.MsgIsZero() {
+			// because of possibility of empty asset holdings or app local state after opting in
+			if data.newResource.IsEmpty() {
 				// if we didn't had it before, and we don't have anything now, just skip it.
 			} else {
 				// create a new entry.
