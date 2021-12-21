@@ -67,14 +67,6 @@ func (ml *emptyLedger) checkDup(firstValid, lastValid basics.Round, txn transact
 	return nil
 }
 
-func (ml *emptyLedger) getAssetCreator(assetIdx basics.AssetIndex) (basics.Address, bool, error) {
-	return basics.Address{}, false, nil
-}
-
-func (ml *emptyLedger) getAppCreator(appIdx basics.AppIndex) (basics.Address, bool, error) {
-	return basics.Address{}, false, nil
-}
-
 func (ml *emptyLedger) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	return basics.Address{}, false, nil
 }

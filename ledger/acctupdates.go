@@ -58,6 +58,15 @@ const baseAccountsPendingAccountsBufferSize = 100000
 // is being flushed into the main base account cache.
 const baseAccountsPendingAccountsWarnThreshold = 85000
 
+// baseResourcesPendingAccountsBufferSize defines the size of the base resources pending accounts buffer size.
+// At the beginning of a new round, the entries from this buffer are being flushed into the base resources map.
+const baseResourcesPendingAccountsBufferSize = 100000
+
+// baseResourcesPendingAccountsWarnThreshold defines the threshold at which the lruResources would generate a warning
+// after we've surpassed a given pending account resources size. The warning is being generated when the pending accounts data
+// is being flushed into the main base resources cache.
+const baseResourcesPendingAccountsWarnThreshold = 85000
+
 // initializeCachesReadaheadBlocksStream defines how many block we're going to attempt to queue for the
 // initializeCaches method before it can process and store the account changes to disk.
 const initializeCachesReadaheadBlocksStream = 4
@@ -758,6 +767,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	au.deltasAccum = []int{0}
 
 	au.baseAccounts.init(au.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
+	au.baseResources.init(au.log, baseResourcesPendingAccountsBufferSize, baseResourcesPendingAccountsWarnThreshold)
 	return
 }
 
