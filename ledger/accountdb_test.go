@@ -249,8 +249,8 @@ func TestAccountDBRound(t *testing.T) {
 		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
 			expectedDbImage, numElementsPerSegment)
 
-		updatesCnt := makeCompactAccountDeltas([]ledgercore.NewAccountDeltas{updates}, baseAccounts)
-		resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.NewAccountDeltas{updates}, baseAccounts, baseResources)
+		updatesCnt := makeCompactAccountDeltas([]ledgercore.NewAccountDeltas{updates}, basics.Round(i), baseAccounts)
+		resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.NewAccountDeltas{updates}, basics.Round(i), baseAccounts, baseResources)
 
 		err = updatesCnt.accountsLoadOld(tx)
 		require.NoError(t, err)
