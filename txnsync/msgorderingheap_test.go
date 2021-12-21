@@ -78,8 +78,6 @@ func TestEnqueueHeapPop(t *testing.T) {
 	}
 
 	a.Equal(heap.Len(), int(messageOrderingHeapLimit))
-	a.Equal(heap.enqueue(incomingMessage{}), errHeapReachedCapacity)
-	a.Equal(heap.Len(), int(messageOrderingHeapLimit))
 
 	for i := 0; i < messageOrderingHeapLimit; i++ {
 		msg, err := heap.pop()
@@ -129,8 +127,8 @@ func TestMultiThreaded(t *testing.T) {
 	a := require.New(t)
 
 	loopTime := 5 * time.Second
-	numThreads := 100
-	itemsPerThread := 10
+	numThreads := 32
+	itemsPerThread := 4
 
 	totalItems := numThreads * itemsPerThread
 
@@ -253,8 +251,6 @@ func TestMultiThreaded(t *testing.T) {
 		wg.Wait()
 
 		a.Equal(heap.Len(), int(messageOrderingHeapLimit))
-		a.Equal(heap.enqueue(incomingMessage{}), errHeapReachedCapacity)
-		a.Equal(heap.Len(), int(messageOrderingHeapLimit))
 
 		sort.Ints(enqueuedList)
 
@@ -268,5 +264,46 @@ func TestMultiThreaded(t *testing.T) {
 
 		a.Equal(heap.Len(), int(0))
 	}
+
+}
+
+func TestCompressHeap(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	heap := messageOrderingHeap{}
+
+	for i := 0; i < messageOrderingHeapLimit - 1; i++ {
+		txnGroup := []pooldata.SignedTxGroup{
+			{
+				GroupTransactionID: transactions.Txid{byte(i % 255)},
+			},
+		}
+		a.Nil(heap.enqueue(incomingMessage{sequenceNumber: uint64(i), transactionGroups: txnGroup}))
+	}
+	a.Nil(heap.enqueue(incomingMessage{sequenceNumber: uint64(messageOrderingHeapLimit)}))
+
+	a.Equal(heap.Len(), int(messageOrderingHeapLimit))
+	a.Nil(heap.enqueue(incomingMessage{sequenceNumber: uint64(messageOrderingHeapLimit + 1)}))
+	a.Equal(heap.Len(), 3)
+
+
+	msg, err := heap.pop()
+	a.Nil(err)
+	a.Equal(msg.sequenceNumber, uint64(messageOrderingHeapLimit - 2))
+	a.Equal(msg.transactionGroups, []pooldata.SignedTxGroup{
+		{
+			GroupTransactionID: transactions.Txid{byte(0)},
+		},
+	})
+
+	msg, err = heap.pop()
+	a.Nil(err)
+	a.Equal(msg.sequenceNumber, uint64(messageOrderingHeapLimit))
+
+	msg, err = heap.pop()
+	a.Nil(err)
+	a.Equal(msg.sequenceNumber, uint64(messageOrderingHeapLimit + 1))
 
 }
