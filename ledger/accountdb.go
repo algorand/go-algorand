@@ -213,6 +213,15 @@ type compactResourcesDeltas struct {
 	cache map[accountCreatable]int
 	// misses holds indices of addresses for which old portion of delta needs to be loaded from disk
 	misses []accountCreatable
+
+	// knownAddresses holds address to addrid (accountsbase rowid) mapping in order to resolve
+	// addresses from into addrids when writing resourcesData blob into DB.
+	// It is filled in two stages:
+	// 1) using baseAccounts cache of known accounts
+	// 2) using a set of addresses from account compact deltas after loading old values from DB
+	knownAddresses map[basics.Address]int64
+	// missingAddresses contains still unresolved addresses
+	missingAddresses map[basics.Address]struct{}
 }
 
 type accountDelta struct {
@@ -350,7 +359,7 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 // makeCompactResourceDeltas takes an array of NewAccountDeltas ( one array entry per round ), and compacts the resource portions of the arrays into a single
 // data structure that contains all the resources deltas changes. While doing that, the function eliminate any intermediate resources changes.
 // It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the resourcesDeltas.
-func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, baseResources lruResources) (outResourcesDeltas compactResourcesDeltas) {
+func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, baseAccounts lruAccounts, baseResources lruResources) (outResourcesDeltas compactResourcesDeltas) {
 	if len(accountDeltas) == 0 {
 		return
 	}
@@ -361,6 +370,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 	outResourcesDeltas.deltas = make([]resourcesDeltas, 0, size)
 	outResourcesDeltas.misses = make([]accountCreatable, 0, size)
 
+	missingAddresses := make(map[basics.Address]struct{})
 	for _, roundDelta := range accountDeltas {
 		// assets
 		for _, assetHold := range roundDelta.GetAllAssetsHoldings() {
@@ -395,6 +405,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					outResourcesDeltas.insert(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx), newEntry) // insert instead of upsert economizes one map lookup
 				} else {
 					outResourcesDeltas.insertMissing(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx), newEntry)
+					missingAddresses[assetHold.Addr] = struct{}{}
 				}
 			}
 		}
@@ -431,6 +442,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					outResourcesDeltas.insert(assetParams.Addr, basics.CreatableIndex(assetParams.Aidx), newEntry) // insert instead of upsert economizes one map lookup
 				} else {
 					outResourcesDeltas.insertMissing(assetParams.Addr, basics.CreatableIndex(assetParams.Aidx), newEntry)
+					missingAddresses[assetParams.Addr] = struct{}{}
 				}
 			}
 		}
@@ -468,6 +480,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					outResourcesDeltas.insert(localState.Addr, basics.CreatableIndex(localState.Aidx), newEntry) // insert instead of upsert economizes one map lookup
 				} else {
 					outResourcesDeltas.insertMissing(localState.Addr, basics.CreatableIndex(localState.Aidx), newEntry)
+					missingAddresses[localState.Addr] = struct{}{}
 				}
 			}
 		}
@@ -505,17 +518,29 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					outResourcesDeltas.insert(appParams.Addr, basics.CreatableIndex(appParams.Aidx), newEntry) // insert instead of upsert economizes one map lookup
 				} else {
 					outResourcesDeltas.insertMissing(appParams.Addr, basics.CreatableIndex(appParams.Aidx), newEntry)
+					missingAddresses[appParams.Addr] = struct{}{}
 				}
 			}
 		}
 	}
+
+	outResourcesDeltas.knownAddresses = make(map[basics.Address]int64, len(missingAddresses))
+	outResourcesDeltas.missingAddresses = make(map[basics.Address]struct{}, len(missingAddresses))
+	for addr := range missingAddresses {
+		if pad, has := baseAccounts.read(addr); has {
+			outResourcesDeltas.knownAddresses[pad.addr] = pad.rowid
+		} else {
+			outResourcesDeltas.missingAddresses[addr] = struct{}{}
+		}
+	}
+
 	return
 }
 
 // resourcesLoadOld updates the entries on the deltas.old map that matches the provided addresses.
 // The round number of the persistedAccountData is not updated by this function, and the caller is responsible
 // for populating this field.
-func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, addrIDsMap map[basics.Address]int64) (err error) {
+func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx) (err error) {
 	if len(a.misses) == 0 {
 		return nil
 	}
@@ -542,7 +567,7 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, addrIDsMap map[bas
 	for _, entry := range a.misses {
 		idx := a.cache[entry]
 		addr := entry.address
-		if addrid, ok = addrIDsMap[addr]; !ok {
+		if addrid, ok = a.knownAddresses[addr]; !ok {
 			err = addrRowidStmt.QueryRow(addr[:]).Scan(&addrid)
 			if err != nil {
 				if err == sql.ErrNoRows {

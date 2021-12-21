@@ -1401,6 +1401,7 @@ func TestCompactDeltasResources(t *testing.T) {
 		addrs[i] = basics.Address(crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)}))
 	}
 
+	var baseAccounts lruAccounts
 	var baseResources lruResources
 	baseResources.init(nil, 100, 80)
 
@@ -1411,7 +1412,7 @@ func TestCompactDeltasResources(t *testing.T) {
 	accountDeltas[0].UpsertAssetParams(addrs[2], 102, nil)
 	accountDeltas[0].UpsertAssetHolding(addrs[3], 103, nil)
 
-	outResourcesDeltas := makeCompactResourceDeltas(accountDeltas, baseResources)
+	outResourcesDeltas := makeCompactResourceDeltas(accountDeltas, baseAccounts, baseResources)
 	delta, _ := outResourcesDeltas.get(addrs[0], 100)
 	require.NotEmpty(t, delta.newResource)
 	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
@@ -1460,7 +1461,7 @@ func TestCompactDeltasResources(t *testing.T) {
 
 	baseResources.init(nil, 100, 80)
 
-	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, baseResources)
+	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, baseAccounts, baseResources)
 	// 6 entries are missing: same app (asset) params and local state are combined into a single entry
 	require.Equal(t, 6, len(outResourcesDeltas.misses))
 	require.Equal(t, 6, len(outResourcesDeltas.deltas))
@@ -1519,7 +1520,7 @@ func TestCompactDeltasResources(t *testing.T) {
 		}
 	}
 
-	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, baseResources)
+	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, baseAccounts, baseResources)
 	require.Equal(t, 0, len(outResourcesDeltas.misses))
 	require.Equal(t, 6, len(outResourcesDeltas.deltas))
 
@@ -1549,7 +1550,7 @@ func TestCompactDeltasResources(t *testing.T) {
 	accountDeltas[1].UpsertAppLocalState(addrs[4], 104, &appLocalState204)
 
 	baseResources.write(persistedResourcesData{addrid: 4, aidx: basics.CreatableIndex(104)}, addrs[4])
-	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, baseResources)
+	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, baseAccounts, baseResources)
 
 	require.Equal(t, 0, len(outResourcesDeltas.misses))
 	require.Equal(t, 7, len(outResourcesDeltas.deltas))

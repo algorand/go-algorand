@@ -250,18 +250,19 @@ func TestAccountDBRound(t *testing.T) {
 			expectedDbImage, numElementsPerSegment)
 
 		updatesCnt := makeCompactAccountDeltas([]ledgercore.NewAccountDeltas{updates}, baseAccounts)
-		resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.NewAccountDeltas{updates}, baseResources)
+		resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.NewAccountDeltas{updates}, baseAccounts, baseResources)
 
 		err = updatesCnt.accountsLoadOld(tx)
 		require.NoError(t, err)
-		addressesNeeded := resourceUpdatesCnt.getMissingAddresses()
-		addressesResolved := make(map[basics.Address]int64, len(addressesNeeded))
+
 		for _, delta := range updatesCnt.deltas {
-			if _, ok := addressesNeeded[delta.oldAcct.addr]; ok {
-				addressesResolved[delta.oldAcct.addr] = delta.oldAcct.rowid
+			if _, ok := resourceUpdatesCnt.missingAddresses[delta.oldAcct.addr]; ok {
+				resourceUpdatesCnt.knownAddresses[delta.oldAcct.addr] = delta.oldAcct.rowid
+				delete(resourceUpdatesCnt.missingAddresses, delta.oldAcct.addr)
 			}
 		}
-		err = resourceUpdatesCnt.resourcesLoadOld(tx, addressesResolved)
+
+		err = resourceUpdatesCnt.resourcesLoadOld(tx)
 		require.NoError(t, err)
 
 		err = accountsPutTotals(tx, totals, false)
