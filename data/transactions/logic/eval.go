@@ -2047,12 +2047,12 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int) tr
 	}
 
 	// Initialize txidCache if necessary
-	if cx.txidCache == nil {
-		cx.txidCache = make(map[int]transactions.Txid, len(cx.TxnGroup))
+	if cx.EvalParams.txidCache == nil {
+		cx.EvalParams.txidCache = make(map[int]transactions.Txid, len(cx.TxnGroup))
 	}
 
 	// Hashes are expensive, so we cache computed TxIDs
-	txid, ok := cx.txidCache[groupIndex]
+	txid, ok := cx.EvalParams.txidCache[groupIndex]
 	if !ok {
 		if cx.caller != nil {
 			innerOffset := len(cx.caller.Txn.EvalDelta.InnerTxns)
@@ -2060,7 +2060,7 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int) tr
 		} else {
 			txid = txn.ID()
 		}
-		cx.txidCache[groupIndex] = txid
+		cx.EvalParams.txidCache[groupIndex] = txid
 	}
 
 	return txid
