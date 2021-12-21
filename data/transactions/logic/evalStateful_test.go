@@ -336,7 +336,7 @@ func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn,
 			codes[i] = testProg(t, program, version).Program
 		}
 	}
-	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), makeTestProtoV(version), &transactions.SpecialAddresses{}, 0)
+	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), makeTestProtoV(version), &transactions.SpecialAddresses{})
 	ep.Ledger = ledger
 	testAppsBytes(t, codes, ep, expected...)
 }
@@ -2411,8 +2411,7 @@ func TestAppInfo(t *testing.T) {
 }
 
 func TestBudget(t *testing.T) {
-	ep, tx, ledger := makeSampleEnv()
-	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+	ep := defaultEvalParams(nil)
 	source := `
 global OpcodeBudget
 int 699
@@ -2420,6 +2419,43 @@ int 699
 assert
 global OpcodeBudget
 int 695
+==
+`
+	testApp(t, source, ep)
+}
+
+func TestSelfMutate(t *testing.T) {
+	ep, _, ledger := makeSampleEnv()
+
+	/* In order to test the added protection of mutableAccountReference, we're
+	   going to set up a ledger in which an app account is opted into
+	   itself. That was impossible before v6, and indeed we did not have the
+	   extra mutable reference check then. */
+	ledger.NewLocals(basics.AppIndex(888).Address(), 888)
+	ledger.NewLocal(basics.AppIndex(888).Address(), 888, "hey",
+		basics.TealValue{Type: basics.TealUintType, Uint: 77})
+
+	source := `
+global CurrentApplicationAddress
+byte "hey"
+int 42
+app_local_put
+`
+	testApp(t, source, ep, "invalid Account reference for mutation")
+
+	source = `
+global CurrentApplicationAddress
+byte "hey"
+app_local_del
+`
+	testApp(t, source, ep, "invalid Account reference for mutation")
+
+	/* But let's just check normal access is working properly. */
+	source = `
+global CurrentApplicationAddress
+byte "hey"
+app_local_get
+int 77
 ==
 `
 	testApp(t, source, ep)

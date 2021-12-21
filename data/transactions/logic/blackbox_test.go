@@ -80,7 +80,7 @@ func TestNewAppEvalParams(t *testing.T) {
 	for i, param := range params {
 		for j, testCase := range cases {
 			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
-				ep := logic.NewAppEvalParams(testCase.group, &param, nil, 0)
+				ep := logic.NewAppEvalParams(testCase.group, &param, nil)
 
 				// Ensure non app calls have a nil evaluator, and that non-nil
 				// evaluators point to the right transactions and values

@@ -1315,7 +1315,7 @@ int 222;     itxn_field ApplicationID
 itxn_submit
 `
 	txg := []transactions.SignedTxnWithAD{tx}
-	ep := NewAppEvalParams(txg, MakeTestProto(), &transactions.SpecialAddresses{}, 0)
+	ep := NewAppEvalParams(txg, MakeTestProto(), &transactions.SpecialAddresses{})
 	ep.Ledger = ledger
 	TestApp(t, callpay3+"int 1", ep, "insufficient balance") // inner contract needs money
 
@@ -1473,7 +1473,6 @@ int 1
 // a pay can be done to the app's account.  This was not allowed until v6,
 // because of the strict adherence to the foreign-accounts rules.
 func TestCreateAndPay(t *testing.T) {
-	t.Skip("until access to created app accounts is implemented")
 	pay5back := main(`
 itxn_begin
 int pay;    itxn_field TypeEnum
@@ -1490,6 +1489,7 @@ int 1
   itxn_submit
 
   itxn_begin
+   int pay;                   itxn_field TypeEnum
    itxn CreatedApplicationID; app_params_get AppAddress; assert; itxn_field Receiver
    int 10;                    itxn_field Amount
   itxn_submit
@@ -1502,8 +1502,10 @@ int 1
 	ledger.NewAccount(appAddr(888), 10*MakeTestProto().MinTxnFee)
 	TestApp(t, createAndPay, ep)
 
-	ep.Proto = MakeTestProtoV(CreatedResourcesVersion - 1)
-	TestApp(t, createAndPay, ep, "invalid Asset reference")
+	// This test is impossible because CreatedResourcesVersion is also when
+	// inner txns could make apps.
+	// ep.Proto = MakeTestProtoV(CreatedResourcesVersion - 1)
+	// TestApp(t, createAndPay, ep, "invalid Address reference")
 }
 
 // TestInnerGaid ensures there's no confusion over the tracking of ids

@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 	"testing"
@@ -130,9 +129,9 @@ func defaultEvalParamsWithVersion(txn *transactions.SignedTxn, version uint64) *
 	return ep
 }
 
-// reset zeros out the ApplyDatas in the underlying TxnGroup.  This is in
-// *_test.go because no real code should ever need this. EvalParams should be
-// created to evaluate a group, and then thrown away.
+// reset puts an ep back into its original state.  This is in *_test.go because
+// no real code should ever need this. EvalParams should be created to evaluate
+// a group, and then thrown away.
 func (ep *EvalParams) reset() {
 	if ep.Proto.EnableAppCostPooling {
 		budget := uint64(ep.Proto.MaxAppProgramCost)
@@ -146,15 +145,9 @@ func (ep *EvalParams) reset() {
 	for i := range ep.TxnGroup {
 		ep.TxnGroup[i].ApplyData = transactions.ApplyData{}
 	}
-	if ep.Proto.LogicSigVersion < createdResourcesVersion {
-		ep.initialCounter = math.MaxUint64
-	} else {
-		if ep.Ledger != nil {
-			ep.initialCounter = ep.Ledger.Counter()
-		} else {
-			ep.initialCounter = firstTestID
-		}
-	}
+	ep.created = &resources{}
+	ep.appAddrCache = make(map[basics.AppIndex]basics.Address)
+	ep.Trace = &strings.Builder{}
 }
 
 func TestTooManyArgs(t *testing.T) {

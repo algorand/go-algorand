@@ -963,6 +963,11 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		err = fmt.Errorf("Unknown transaction type %v", tx.Type)
 	}
 
+	// Record first, so that details can all be used in logic evaluation, even
+	// if cleared below. For example, `gaid`, introduced in v28 is now
+	// implemented in terms of the AD fields introduced in v30.
+	evalParams.RecordAD(gi, ad)
+
 	// If the protocol does not support rewards in ApplyData,
 	// clear them out.
 	if !params.RewardsInApplyData {
@@ -970,8 +975,13 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		ad.ReceiverRewards = basics.MicroAlgos{}
 		ad.CloseRewards = basics.MicroAlgos{}
 	}
-	if evalParams != nil {
-		evalParams.TxnGroup[gi].ApplyData = ad
+
+	// No separate config for activating these AD fields because inner
+	// transactions require their presence, so the consensus update to add
+	// inners also stores these IDs.
+	if params.MaxInnerTransactions == 0 {
+		ad.ApplicationID = 0
+		ad.ConfigAsset = 0
 	}
 
 	return
