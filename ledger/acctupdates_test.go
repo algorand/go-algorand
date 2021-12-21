@@ -309,7 +309,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			for addr, data := range accts[rnd] {
 				d, validThrough, err := au.LookupWithoutRewards(rnd, addr)
 				require.NoError(t, err)
-				require.Equal(t, d, data)
+				require.Equal(t, d, ledgercore.ToAccountData(data))
 				require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
 
 				rewardsDelta := rewards[rnd] - d.RewardsBase
@@ -342,7 +342,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			d, validThrough, err := au.LookupWithoutRewards(rnd, ledgertesting.RandomAddress())
 			require.NoError(t, err)
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
-			require.Equal(t, d, basics.AccountData{})
+			require.Equal(t, d, ledgercore.AccountData{})
 		}
 	}
 	checkAcctUpdatesConsistency(t, au, latestRnd)
