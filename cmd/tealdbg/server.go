@@ -30,9 +30,22 @@ import (
 	"github.com/gorilla/mux"
 )
 
+const (
+	// WebSocketReadBufferSize is the size of the ReadBuffer for the
+	// tealdbg/cdt websocket session.
+	// A buffer that is too small will cause the session to choke
+	// during the `getScriptSource` call and the session cannot recover.
+	WebSocketReadBufferSize = 81920
+
+	// WebSocketWriteBufferSize is the size of the WriteBuffer for the
+	// tealdbg/cdt websocket session.
+	// The reasoning for the size is the same as above
+	WebSocketWriteBufferSize = 81920
+)
+
 var upgrader = websocket.Upgrader{
-	ReadBufferSize:  20480,
-	WriteBufferSize: 20480,
+	ReadBufferSize:  WebSocketReadBufferSize,
+	WriteBufferSize: WebSocketWriteBufferSize,
 	CheckOrigin: func(r *http.Request) bool {
 		if len(r.Header.Get("Origin")) == 0 {
 			return true
