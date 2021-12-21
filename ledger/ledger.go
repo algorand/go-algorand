@@ -457,49 +457,20 @@ func (l *Ledger) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) 
 	return l.accts.ListApplications(maxAppIdx, maxResults)
 }
 
-// Lookup uses the accounts tracker to return the account state for a
-// given account in a particular round.  The account values reflect
-// the changes of all blocks up to and including rnd.
-func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
+// LookupLatest uses the accounts tracker to return the account state (including
+// resources) for a given address, for the latest round. The returned account values
+// reflect the changes of all blocks up to and including the returned round number.
+func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
 	// Intentionally apply (pending) rewards up to rnd.
-	data, err := l.accts.LookupWithRewards(rnd, addr)
+	data, rnd, err := l.accts.lookupLatest(addr)
 	if err != nil {
-		return basics.AccountData{}, err
+		return basics.AccountData{}, basics.Round(0), err
 	}
 
-	// Look up resources for this address
-	totalResources := uint64(data.TotalAppParams) + uint64(data.TotalAppLocalStates) + uint64(data.TotalAssetParams) + uint64(data.TotalAssets)
-	resources, _, err := l.accts.lookupAllResources(rnd, addr, totalResources, true)
-	if err != nil {
-		return basics.AccountData{}, err
-	}
-
-	var ret basics.AccountData
-	ledgercore.AssignAccountData(&ret, data)
-
-	// Combine account and resources data
-	for _, r := range resources {
-		switch r.CreatableType {
-		case basics.AssetCreatable:
-			if r.AssetParam != nil {
-				ret.AssetParams[basics.AssetIndex(r.CreatableIndex)] = *r.AssetParam
-			}
-			if r.AssetHolding != nil {
-				ret.Assets[basics.AssetIndex(r.CreatableIndex)] = *r.AssetHolding
-			}
-		case basics.AppCreatable:
-			if r.AppParams != nil {
-				ret.AppParams[basics.AppIndex(r.CreatableIndex)] = *r.AppParams
-			}
-			if r.AppLocalState != nil {
-				ret.AppLocalStates[basics.AppIndex(r.CreatableIndex)] = *r.AppLocalState
-			}
-		}
-	}
-	return ret, nil
+	return data, rnd, nil
 }
 
 // LookupResource loads a resource that matches the request parameters from the accounts update
