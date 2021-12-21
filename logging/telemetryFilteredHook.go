@@ -63,7 +63,7 @@ func (hook *telemetryFilteredHook) Fire(entry *logrus.Entry) error {
 	if entry.Level <= hook.reportLogLevel {
 		// Logging entry at a level which should include log history
 		// Create a new entry augmented with the history field.
-		newEntry := entry.WithFields(Fields{"log": hook.history.string(), "session": hook.sessionGUID})
+		newEntry := entry.WithFields(Fields{"log": hook.history.string(), "session": hook.sessionGUID, "v": hook.telemetryConfig.Version})
 		newEntry.Time = entry.Time
 		newEntry.Level = entry.Level
 		newEntry.Message = entry.Message
@@ -81,6 +81,13 @@ func (hook *telemetryFilteredHook) Fire(entry *logrus.Entry) error {
 		newEntry = entry
 	} else {
 		newEntry = entry.WithField("session", hook.sessionGUID)
+	}
+
+	// Also add version field, if not already present.
+	if _, has := entry.Data["v"]; has {
+		newEntry = entry
+	} else {
+		newEntry = entry.WithField("v", hook.telemetryConfig.Version)
 	}
 	return hook.wrappedHook.Fire(newEntry)
 }
