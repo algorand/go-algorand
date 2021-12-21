@@ -372,6 +372,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					oldResource: prev.oldResource,
 					newResource: prev.newResource,
 					nAcctDeltas: prev.nAcctDeltas + 1,
+					address:     prev.address,
 				}
 				if assetHold.Holding != nil {
 					updEntry.newResource.SetAssetHolding(*assetHold.Holding)
@@ -417,6 +418,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					oldResource: prev.oldResource,
 					newResource: prev.newResource,
 					nAcctDeltas: prev.nAcctDeltas + 1,
+					address:     prev.address,
 				}
 				if assetParams.Params != nil {
 					updEntry.newResource.SetAssetParams(*assetParams.Params, updEntry.newResource.IsHolding())
@@ -463,6 +465,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					oldResource: prev.oldResource,
 					newResource: prev.newResource,
 					nAcctDeltas: prev.nAcctDeltas + 1,
+					address:     prev.address,
 				}
 				if localState.State != nil {
 					updEntry.newResource.SetAppLocalState(*localState.State)
@@ -509,6 +512,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					oldResource: prev.oldResource,
 					newResource: prev.newResource,
 					nAcctDeltas: prev.nAcctDeltas + 1,
+					address:     prev.address,
 				}
 				if appParams.Params != nil {
 					updEntry.newResource.SetAppParams(*appParams.Params, updEntry.newResource.IsHolding())
