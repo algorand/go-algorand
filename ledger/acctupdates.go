@@ -137,7 +137,7 @@ type accountUpdates struct {
 
 	// resources stored the most recent resource state for every
 	// address&resource that appears in deltas.
-	resources map[basics.Address]map[basics.CreatableIndex]modifiedResource
+	resources resourcesUpdates
 
 	// creatableDeltas stores creatable updates for every round after dbRound.
 	creatableDeltas []map[basics.CreatableIndex]ledgercore.ModifiedCreatable
@@ -227,6 +227,27 @@ type MismatchingDatabaseRoundError struct {
 
 func (e *MismatchingDatabaseRoundError) Error() string {
 	return fmt.Sprintf("database round %d mismatching in-memory round %d", e.databaseRound, e.memoryRound)
+}
+
+type resourcesUpdates map[accountCreatable]modifiedResource
+
+func (r resourcesUpdates) set(ac accountCreatable, m modifiedResource) { r[ac] = m }
+
+func (r resourcesUpdates) get(ac accountCreatable) (m modifiedResource, ok bool) {
+	m, ok = r[ac]
+	return
+}
+
+func (r resourcesUpdates) getForAddress(addr basics.Address) (ret []modifiedResource) {
+	if len(r) == 0 {
+		return
+	}
+	for ac, mres := range r {
+		if ac.address == addr {
+			ret = append(ret, mres)
+		}
+	}
+	return
 }
 
 // initialize initializes the accountUpdates structure
@@ -755,7 +776,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	au.deltas = nil
 	au.creatableDeltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
-	au.resources = make(map[basics.Address]map[basics.CreatableIndex]modifiedResource)
+	au.resources = resourcesUpdates(make(map[accountCreatable]modifiedResource))
 	au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	au.deltasAccum = []int{0}
 
@@ -791,48 +812,44 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		au.accounts[addr] = macct
 	}
 	for _, holding := range delta.NewAccts.GetAllAssetsHoldings() {
-		rmap, ok := au.resources[holding.Addr]
-		if !ok {
-			rmap = make(map[basics.CreatableIndex]modifiedResource)
-			au.resources[holding.Addr] = rmap
+		key := accountCreatable{
+			address: holding.Addr,
+			index:   basics.CreatableIndex(holding.Aidx),
 		}
-		mres := rmap[basics.CreatableIndex(holding.Aidx)]
+		mres, _ := au.resources.get(key)
 		mres.resource.AssetHolding = holding.Holding
 		mres.ndeltas++
-		rmap[basics.CreatableIndex(holding.Aidx)] = mres
+		au.resources.set(key, mres)
 	}
 	for _, params := range delta.NewAccts.GetAllAssetParams() {
-		rmap, ok := au.resources[params.Addr]
-		if !ok {
-			rmap = make(map[basics.CreatableIndex]modifiedResource)
-			au.resources[params.Addr] = rmap
+		key := accountCreatable{
+			address: params.Addr,
+			index:   basics.CreatableIndex(params.Aidx),
 		}
-		mres := rmap[basics.CreatableIndex(params.Aidx)]
+		mres, _ := au.resources.get(key)
 		mres.resource.AssetParam = params.Params
 		mres.ndeltas++
-		rmap[basics.CreatableIndex(params.Aidx)] = mres
+		au.resources.set(key, mres)
 	}
 	for _, localStates := range delta.NewAccts.GetAllAppLocalStates() {
-		rmap, ok := au.resources[localStates.Addr]
-		if !ok {
-			rmap = make(map[basics.CreatableIndex]modifiedResource)
-			au.resources[localStates.Addr] = rmap
+		key := accountCreatable{
+			address: localStates.Addr,
+			index:   basics.CreatableIndex(localStates.Aidx),
 		}
-		mres := rmap[basics.CreatableIndex(localStates.Aidx)]
+		mres, _ := au.resources.get(key)
 		mres.resource.AppLocalState = localStates.State
 		mres.ndeltas++
-		rmap[basics.CreatableIndex(localStates.Aidx)] = mres
+		au.resources.set(key, mres)
 	}
 	for _, appParams := range delta.NewAccts.GetAllAppParams() {
-		rmap, ok := au.resources[appParams.Addr]
-		if !ok {
-			rmap = make(map[basics.CreatableIndex]modifiedResource)
-			au.resources[appParams.Addr] = rmap
+		key := accountCreatable{
+			address: appParams.Addr,
+			index:   basics.CreatableIndex(appParams.Aidx),
 		}
-		mres := rmap[basics.CreatableIndex(appParams.Aidx)]
+		mres, _ := au.resources.get(key)
 		mres.resource.AppParams = appParams.Params
 		mres.ndeltas++
-		rmap[basics.CreatableIndex(appParams.Aidx)] = mres
+		au.resources.set(key, mres)
 	}
 
 	for cidx, cdelta := range delta.Creatables {
@@ -1051,11 +1068,7 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 		}
 
 		// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
-		indeltas := false
-		var mres modifiedResource
-		if rmap, ok := au.resources[addr]; ok {
-			mres, indeltas = rmap[aidx]
-		}
+		mres, indeltas := au.resources.get(accountCreatable{address: addr, index: aidx})
 		if indeltas {
 			// Check if this is the most recent round, in which case, we can
 			// use a cache of the most recent account state.
@@ -1141,21 +1154,23 @@ func (au *accountUpdates) lookupAllResources(rnd basics.Round, addr basics.Addre
 		round basics.Round
 		res   ledgercore.AccountResource
 	}
-	foundData := make(map[basics.CreatableIndex]foundResource)
-	foundCount := uint64(0)
-	addToFound := func(cidx basics.CreatableIndex, round basics.Round, data ledgercore.AccountResource) bool {
+
+	var foundData map[basics.CreatableIndex]foundResource
+	var foundCount uint64
+
+	// addToFound adds the resource to the current list of resources
+	addToFound := func(cidx basics.CreatableIndex, round basics.Round, data ledgercore.AccountResource) {
 		fr, ok := foundData[cidx]
 		if !ok { // first time seeing this cidx
 			foundCount++
 			foundData[cidx] = foundResource{round: round, res: data}
-			return true
 		}
-		// is this newer than known rnd? (XXX is this not possible?)
+		// is this newer than current "found" rnd for this resource? (XXX is this not possible?)
 		if round > fr.round {
-			foundData[cidx] = foundResource{round: round, res: data}
-			return true
+			panic("logic error in lookupAllResources") // remove after testing
+			//foundData[cidx] = foundResource{round: round, res: data}
 		}
-		return false
+		// otherwise older than current "found" rnd: ignore, since it's older than what we have
 	}
 	foundList := func() []ledgercore.AccountResource {
 		ret := make([]ledgercore.AccountResource, 0, len(foundData))
@@ -1172,15 +1187,20 @@ func (au *accountUpdates) lookupAllResources(rnd basics.Round, addr basics.Addre
 		if err != nil {
 			return
 		}
+		foundData = make(map[basics.CreatableIndex]foundResource)
+		foundCount = 0
 
 		// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
-		rmap, indeltas := au.resources[addr]
-		if indeltas {
+		mres := au.resources.getForAddress(addr)
+		if len(mres) > 0 {
 			// Check if this is the most recent round, in which case, we can
 			// use a cache of the most recent account state.
 			if offset == uint64(len(au.deltas)) {
-				for cidx, mres := range rmap {
-					addToFound(cidx, rnd, mres.resource)
+				for _, mr := range mres {
+					addToFound(mr.resource.CreatableIndex, rnd, mr.resource)
+				}
+				if foundCount == total {
+					return foundList(), rnd, nil
 				}
 			}
 			// the account appears in the deltas, but we don't know if it appears in the
@@ -1193,6 +1213,9 @@ func (au *accountUpdates) lookupAllResources(rnd basics.Round, addr basics.Addre
 				for cidx, res := range rmap {
 					addToFound(cidx, rnd-basics.Round(offset), res) // XXX is this how offset math works?
 				}
+				if foundCount == total {
+					return foundList(), rnd, nil
+				}
 			}
 		} else {
 			// we know that the account in not in the deltas - so there is no point in scanning it.
@@ -1200,11 +1223,6 @@ func (au *accountUpdates) lookupAllResources(rnd basics.Round, addr basics.Addre
 			// update the rnd so that it would point to the end of the known delta range.
 			// ( that would give us the best validity range )
 			rnd = currentDbRound + basics.Round(currentDeltaLen)
-		}
-
-		// have we found all the resources we need?
-		if foundCount == total {
-			return foundList(), rnd, nil
 		}
 
 		// check the baseResources -
@@ -1215,16 +1233,14 @@ func (au *accountUpdates) lookupAllResources(rnd basics.Round, addr basics.Addre
 				au.baseResources.writePending(prd, addr)
 				addToFound(prd.aidx, prd.round, prd.AccountResource())
 			}
+			if foundCount == total {
+				return foundList(), rnd, nil
+			}
 		}
 
 		if synchronized {
 			au.accountsMu.RUnlock()
 			needUnlock = false
-		}
-
-		// check again: have we found all the resources we need?
-		if foundCount == total {
-			return foundList(), rnd, nil
 		}
 
 		// No updates of this account in the in-memory deltas; use on-disk DB.
@@ -1240,6 +1256,9 @@ func (au *accountUpdates) lookupAllResources(rnd basics.Round, addr basics.Addre
 			for _, persistedData := range pds {
 				au.baseResources.writePending(persistedData, addr)
 				addToFound(persistedData.aidx, persistedData.round, persistedData.AccountResource())
+			}
+			if foundCount == total {
+				return foundList(), rnd, nil
 			}
 		}
 		if synchronized {
@@ -1257,13 +1276,6 @@ func (au *accountUpdates) lookupAllResources(rnd basics.Round, addr basics.Addre
 			au.log.Errorf("accountUpdates.lookupResource: database round %d mismatching in-memory round %d", persistedData.round, currentDbRound)
 			return nil, basics.Round(0), &MismatchingDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 		}
-
-		// have we found all the resources we need?
-		if foundCount == total {
-			return foundList(), rnd, nil
-		}
-
-		// XXX what if we don't find everything? could loop forever..?
 	}
 }
 
