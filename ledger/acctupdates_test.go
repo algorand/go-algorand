@@ -1129,26 +1129,6 @@ func TestListCreatables(t *testing.T) {
 	listAndCompareComb(t, au, expectedDbImage)
 }
 
-func (ba *baseAccountData) GetAccountData() basics.AccountData {
-	return basics.AccountData{
-		Status:             ba.Status,
-		MicroAlgos:         ba.MicroAlgos,
-		RewardsBase:        ba.RewardsBase,
-		RewardedMicroAlgos: ba.RewardedMicroAlgos,
-		VoteID:             ba.VoteID,
-		SelectionID:        ba.SelectionID,
-		VoteFirstValid:     ba.VoteFirstValid,
-		VoteLastValid:      ba.VoteLastValid,
-		VoteKeyDilution:    ba.VoteKeyDilution,
-		AuthAddr:           ba.AuthAddr,
-		TotalAppSchema: basics.StateSchema{
-			NumUint:      ba.TotalAppSchemaNumUint,
-			NumByteSlice: ba.TotalAppSchemaNumByteSlice,
-		},
-		TotalExtraAppPages: ba.TotalExtraAppPages,
-	}
-}
-
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
 	rows, err := tx.Query("SELECT rowid, address, data FROM accountbase")
 	if err != nil {

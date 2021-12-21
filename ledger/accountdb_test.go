@@ -254,15 +254,6 @@ func TestAccountDBRound(t *testing.T) {
 
 		err = updatesCnt.accountsLoadOld(tx)
 		require.NoError(t, err)
-		addressesNeeded := resourceUpdatesCnt.getMissingAddresses()
-		addressesResolved := make(map[basics.Address]int64, len(addressesNeeded))
-		for _, delta := range updatesCnt.deltas {
-			if _, ok := addressesNeeded[delta.oldAcct.addr]; ok {
-				addressesResolved[delta.oldAcct.addr] = delta.oldAcct.rowid
-			}
-		}
-		err = resourceUpdatesCnt.resourcesLoadOld(tx, addressesResolved)
-		require.NoError(t, err)
 
 		knownAddresses := make(map[basics.Address]int64)
 		for _, delta := range updatesCnt.deltas {
