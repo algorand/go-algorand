@@ -717,6 +717,7 @@ func TestFlushDeadlock(t *testing.T) {
 	wg.Wait()
 }
 
+// TODO: use FillDB to generated actual keys so the comparison will make sense
 func TestAddStateProofKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := assert.New(t)
@@ -786,15 +787,25 @@ func TestAddingSecretTwice(t *testing.T) {
 	registry := getRegistry(t)
 	defer registryCloseTest(t, registry)
 
+	access, err := db.MakeAccessor("stateprooftest", false, true)
+	if err != nil {
+		panic(err)
+	}
+	root, err := GenerateRoot(access)
+	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, 200, 3)
+	access.Close()
+	a.NoError(err)
+
 	// Install a key for testing
-	p := makeTestParticipation(1, 0, 2, 3)
-	id, err := registry.Insert(p)
+	id, err := registry.Insert(p.Participation)
 	a.NoError(err)
 	a.Equal(p.ID(), id)
 
 	// Append key
 	keys := make(map[uint64]StateProofKey)
-	keys[0] = StateProofKey(*p.StateProofSecrets.GetKey(0))
+	// TODO: change to ConsensusCurrentVersion when updated
+	interval := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
+	keys[0] = StateProofKey(*p.StateProofSecrets.GetKey(interval))
 
 	err = registry.AppendKeys(id, keys)
 	a.NoError(err)

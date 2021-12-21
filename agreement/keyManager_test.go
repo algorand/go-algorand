@@ -17,6 +17,7 @@
 package agreement
 
 import (
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"testing"
 
 	"github.com/algorand/go-deadlock"
@@ -26,7 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-func makeRecordingKeyManager(accounts []account.ParticipationRoundSecrets) *recordingKeyManager {
+func makeRecordingKeyManager(accounts []account.Participation) *recordingKeyManager {
 	return &recordingKeyManager{
 		keys:      accounts,
 		recording: make(map[basics.Address]map[account.ParticipationAction]basics.Round),
@@ -35,17 +36,38 @@ func makeRecordingKeyManager(accounts []account.ParticipationRoundSecrets) *reco
 
 // recordingKeyManager provides a simple implementation of a KeyManager for unit tests.
 type recordingKeyManager struct {
-	keys      []account.ParticipationRoundSecrets
+	keys      []account.Participation
 	recording map[basics.Address]map[account.ParticipationAction]basics.Round
 	mutex     deadlock.Mutex
 }
 
 // VotingKeys implements KeyManager.VotingKeys.
-func (m *recordingKeyManager) VotingKeys(votingRound, _ basics.Round) []account.ParticipationRoundSecrets {
-	var km []account.ParticipationRoundSecrets
+func (m *recordingKeyManager) VotingKeys(votingRound, _ basics.Round) []account.ParticipationRecordForRound {
+	var km []account.ParticipationRecordForRound
 	for _, acc := range m.keys {
 		if acc.OverlapsInterval(votingRound, votingRound) {
-			km = append(km, acc)
+			var signerInRound merklekeystore.SignerInRound
+			if acc.StateProofSecrets != nil {
+				acc.StateProofSecrets.RoundSecrets(uint64(votingRound))
+			}
+			partRecordForRound := account.ParticipationRecordForRound{
+				ParticipationRecord: account.ParticipationRecord{
+					ParticipationID:   acc.ID(),
+					Account:           acc.Parent,
+					FirstValid:        acc.FirstValid,
+					LastValid:         acc.LastValid,
+					KeyDilution:       acc.KeyDilution,
+					LastVote:          0,
+					LastBlockProposal: 0,
+					LastStateProof:    0,
+					EffectiveFirst:    0,
+					EffectiveLast:     acc.LastValid,
+					VRF:               acc.VRF,
+					Voting:            acc.Voting,
+				},
+				StateProof: &signerInRound,
+			}
+			km = append(km, partRecordForRound)
 		}
 	}
 	return km

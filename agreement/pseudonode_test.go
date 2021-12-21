@@ -388,10 +388,10 @@ func (n serializedPseudonode) Quit() {
 }
 
 type KeyManagerProxy struct {
-	target func(basics.Round, basics.Round) []account.ParticipationRoundSecrets
+	target func(basics.Round, basics.Round) []account.ParticipationRecordForRound
 }
 
-func (k *KeyManagerProxy) VotingKeys(votingRound, balanceRound basics.Round) []account.ParticipationRoundSecrets {
+func (k *KeyManagerProxy) VotingKeys(votingRound, balanceRound basics.Round) []account.ParticipationRecordForRound {
 	return k.target(votingRound, balanceRound)
 }
 
@@ -447,7 +447,7 @@ func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
 	pb.keys = keyManagerProxy
 	cparams, _ := ledger.ConsensusParams(0)
 	for rnd := basics.Round(3); rnd < 1000; rnd += 43 {
-		keyManagerProxy.target = func(votingRound, balanceRnd basics.Round) []account.ParticipationRoundSecrets {
+		keyManagerProxy.target = func(votingRound, balanceRnd basics.Round) []account.ParticipationRecordForRound {
 			require.Equal(t, rnd, votingRound)
 			require.Equal(t, balanceRound(rnd, cparams), balanceRnd)
 			return keyManager.VotingKeys(votingRound, balanceRnd)

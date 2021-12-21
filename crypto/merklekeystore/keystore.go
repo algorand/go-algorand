@@ -164,6 +164,28 @@ func (s *Signer) Persist(store db.Accessor) error {
 	return nil // Success
 }
 
+const keystoreSchemaVersion = 1
+const keystoreTableSchemaName = "merklekeystore"
+
+func keystoreInstallDatabase(tx *sql.Tx) error {
+	_, err := tx.Exec(`CREATE TABLE StateProofKeys (
+    	id	  INTEGER PRIMARY KEY, 
+    	round INTEGER,	    --*  committed round for this key
+		key   BLOB  --*  msgpack encoding of ParticipationAccount.StateProof.GenericSigningKey
+		);`)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS roundIdx ON StateProofKeys (round);`)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec("INSERT INTO schema (tablename, version) VALUES (?, ?)", keystoreTableSchemaName, keystoreSchemaVersion)
+
+	return err
+}
+
 // GetVerifier can be used to store the commitment and verifier for this signer.
 func (s *Signer) GetVerifier() *Verifier {
 	ver := [KeyStoreRootSize]byte{}
@@ -172,10 +194,44 @@ func (s *Signer) GetVerifier() *Verifier {
 	return (*Verifier)(&ver)
 }
 
-// TODO: delete this
+// TODO: merge identical logic of Signer and SignerInRound methods
+// Sign outputs a signature + proof for the signing key.
+//func (s *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error) {
+//	key, err := s.keyStore.GetKey(round)
+//	if err != nil {
+//		return Signature{}, err
+//	}
+//	signingKey := key.GetSigner()
+//
+//	if err = checkKeystoreParams(s.FirstValid, round, s.Interval); err != nil {
+//		return Signature{}, err
+//	}
+//
+//	index := s.getMerkleTreeIndex(round)
+//	proof, err := s.Tree.Prove([]uint64{index})
+//	if err != nil {
+//		return Signature{}, err
+//	}
+//
+//	sig, err := signingKey.Sign(hashable)
+//	if err != nil {
+//		return Signature{}, err
+//	}
+//
+//	return Signature{
+//		ByteSignature: sig,
+//		Proof:         Proof(*proof),
+//		VerifyingKey:  *signingKey.GetVerifyingKey(),
+//	}, nil
+//}
+
 // Sign outputs a signature + proof for the signing key.
 func (s *SignerInRound) Sign(hashable crypto.Hashable) (Signature, error) {
 	key := s.SigningKey
+	// Possible since there may not be a StateProof key for this specific round
+	if key == nil {
+		return Signature{}, fmt.Errorf("no stateproof key exists for this round")
+	}
 	signingKey := key.GetSigner()
 
 	if err := checkKeystoreParams(s.FirstValid, s.Round, s.Interval); err != nil {
@@ -231,8 +287,9 @@ func (s *Signer) Restore(store db.Accessor) (err error) {
 }
 
 // GetKey retrieves key from memory if exists
-func (s *Signer) GetKey(idx uint64) *crypto.GenericSigningKey {
-	if idx < 0 || idx >= uint64(len(s.signatureAlgorithms)) {
+func (s *Signer) GetKey(round uint64) *crypto.GenericSigningKey {
+	idx := RoundToIndex(s.FirstValid, round, s.Interval)
+	if idx < 0 || idx >= uint64(len(s.signatureAlgorithms)) || (round%s.Interval) != 0 {
 		return nil
 	}
 

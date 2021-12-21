@@ -106,6 +106,17 @@ func (part ParticipationRecordForRound) VotingSigner() crypto.OneTimeSigner {
 	}
 }
 
+func (p ParticipationRecordForRound) OverlapsInterval(first, last basics.Round) bool {
+	// OverlapsInterval returns true if the partkey is valid at all within the range of rounds (inclusive)
+	if last < first {
+		logging.Base().Panicf("Round interval should be ordered (first = %v, last = %v)", first, last)
+	}
+	if last < p.FirstValid || first > p.LastValid {
+		return false
+	}
+	return true
+}
+
 var zeroParticipationRecord = ParticipationRecord{}
 
 // IsZero returns true if the object contains zero values.
@@ -895,20 +906,21 @@ func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (
 	result.StateProof.Round = uint64(round)
 
 	err := db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		// fetch stateproof public data
-		row := tx.QueryRow(selectStateProofData, id[:])
-		err := row.Scan(&rawSignerRecord)
-		if err != nil {
-			return fmt.Errorf("error while querying stateproof data: %w", err)
-		}
-		// fetch the secret key
-		row = tx.QueryRow(selectStateProofKey, round, id[:])
-		err = row.Scan(&rawStateProofKey)
+		// fetch secret key
+		row := tx.QueryRow(selectStateProofKey, round, id[:])
+		err := row.Scan(&rawStateProofKey)
 		if err == sql.ErrNoRows {
 			return ErrSecretNotFound
 		}
 		if err != nil {
 			return fmt.Errorf("error while querying secrets: %w", err)
+		}
+
+		// fetch stateproof public data
+		row = tx.QueryRow(selectStateProofData, id[:])
+		err = row.Scan(&rawSignerRecord)
+		if err != nil {
+			return fmt.Errorf("error while querying stateproof data: %w", err)
 		}
 
 		return nil

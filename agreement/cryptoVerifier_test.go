@@ -303,7 +303,7 @@ func BenchmarkCryptoVerifierVoteVertification(b *testing.B) {
 func BenchmarkCryptoVerifierProposalVertification(b *testing.B) {
 	ledger, addresses, selections, votings := readOnlyFixture100()
 
-	participations := make([]account.ParticipationRoundSecrets, len(selections))
+	participations := make([]account.Participation, len(selections))
 	for i := range selections {
 		participations[i].Parent = addresses[i]
 		participations[i].VRF = selections[i]
