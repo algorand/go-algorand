@@ -195,29 +195,24 @@ func (prd *persistedResourcesData) AccountResource() ledgercore.AccountResource 
 	return ret
 }
 
-type resourcesDeltas struct {
+// resourceDelta is used as part of the compactResourcesDeltas to describe a change to a single resource.
+type resourceDelta struct {
 	oldResource persistedResourcesData
 	newResource resourcesData
 	nAcctDeltas int
-	// addrid is the rowid associated with this resource from the accountbase table.
-	// the variable is populated during the resources writing (accountsNewRound) and used by the
-	// catchpoint tracker in catchpointTracker.accountsUpdateBalances.
-	addrid int64
-	aidx   basics.CreatableIndex
+	address     basics.Address
 }
 
-// compactResourcesDeltas and resourcesDeltas are extensions to ledgercore.AccountDeltas that is being used by the commitRound function for counting the
+// compactResourcesDeltas and resourceDelta are extensions to ledgercore.AccountDeltas that is being used by the commitRound function for counting the
 // number of changes we've made per account. The ndeltas is used exclusively for consistency checking - making sure that
 // all the pending changes were written and that there are no outstanding writes missing.
 type compactResourcesDeltas struct {
 	// actual account deltas
-	deltas []resourcesDeltas
-	// addresses for deltas
-	addresses []basics.Address
+	deltas []resourceDelta
 	// cache for addr to deltas index resolution
 	cache map[accountCreatable]int
 	// misses holds indices of addresses for which old portion of delta needs to be loaded from disk
-	misses []accountCreatable
+	misses []int
 }
 
 type accountDelta struct {
@@ -363,15 +358,15 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 	// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
 	size := accountDeltas[0].Len()*len(accountDeltas) + 1
 	outResourcesDeltas.cache = make(map[accountCreatable]int, size)
-	outResourcesDeltas.deltas = make([]resourcesDeltas, 0, size)
-	outResourcesDeltas.misses = make([]accountCreatable, 0, size)
+	outResourcesDeltas.deltas = make([]resourceDelta, 0, size)
+	outResourcesDeltas.misses = make([]int, 0, size)
 
 	for _, roundDelta := range accountDeltas {
 		// assets
 		for _, assetHold := range roundDelta.GetAllAssetsHoldings() {
 			if prev, idx := outResourcesDeltas.get(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx)); idx != -1 {
 				// update existing entry with new data.
-				updEntry := resourcesDeltas{
+				updEntry := resourceDelta{
 					oldResource: prev.oldResource,
 					newResource: prev.newResource,
 					nAcctDeltas: prev.nAcctDeltas + 1,
@@ -384,8 +379,9 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				outResourcesDeltas.update(idx, updEntry)
 			} else {
 				// it's a new entry.
-				newEntry := resourcesDeltas{
+				newEntry := resourceDelta{
 					nAcctDeltas: 1,
+					address:     assetHold.Addr,
 				}
 				if assetHold.Holding != nil {
 					newEntry.newResource.SetAssetHolding(*assetHold.Holding)
@@ -402,6 +398,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					if pad, has := baseAccounts.read(assetHold.Addr); has {
 						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
 					}
+					newEntry.oldResource.aidx = basics.CreatableIndex(assetHold.Aidx)
 					outResourcesDeltas.insertMissing(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx), newEntry)
 				}
 			}
@@ -410,7 +407,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 		for _, assetParams := range roundDelta.GetAllAssetParams() {
 			if prev, idx := outResourcesDeltas.get(assetParams.Addr, basics.CreatableIndex(assetParams.Aidx)); idx != -1 {
 				// update existing entry with new data.
-				updEntry := resourcesDeltas{
+				updEntry := resourceDelta{
 					oldResource: prev.oldResource,
 					newResource: prev.newResource,
 					nAcctDeltas: prev.nAcctDeltas + 1,
@@ -423,8 +420,9 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				outResourcesDeltas.update(idx, updEntry)
 			} else {
 				// it's a new entry.
-				newEntry := resourcesDeltas{
+				newEntry := resourceDelta{
 					nAcctDeltas: 1,
+					address:     assetParams.Addr,
 				}
 				if assetParams.Params != nil {
 					newEntry.newResource.SetAssetParams(*assetParams.Params, false)
@@ -441,6 +439,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					if pad, has := baseAccounts.read(assetParams.Addr); has {
 						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
 					}
+					newEntry.oldResource.aidx = basics.CreatableIndex(assetParams.Aidx)
 					outResourcesDeltas.insertMissing(assetParams.Addr, basics.CreatableIndex(assetParams.Aidx), newEntry)
 				}
 			}
@@ -450,7 +449,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 		for _, localState := range roundDelta.GetAllAppLocalStates() {
 			if prev, idx := outResourcesDeltas.get(localState.Addr, basics.CreatableIndex(localState.Aidx)); idx != -1 {
 				// update existing entry with new data.
-				updEntry := resourcesDeltas{
+				updEntry := resourceDelta{
 					oldResource: prev.oldResource,
 					newResource: prev.newResource,
 					nAcctDeltas: prev.nAcctDeltas + 1,
@@ -463,8 +462,9 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				outResourcesDeltas.update(idx, updEntry)
 			} else {
 				// it's a new entry.
-				newEntry := resourcesDeltas{
+				newEntry := resourceDelta{
 					nAcctDeltas: 1,
+					address:     localState.Addr,
 				}
 				if localState.State != nil {
 					newEntry.newResource.SetAppLocalState(*localState.State)
@@ -481,6 +481,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					if pad, has := baseAccounts.read(localState.Addr); has {
 						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
 					}
+					newEntry.oldResource.aidx = basics.CreatableIndex(localState.Aidx)
 					outResourcesDeltas.insertMissing(localState.Addr, basics.CreatableIndex(localState.Aidx), newEntry)
 				}
 			}
@@ -490,7 +491,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 		for _, appParams := range roundDelta.GetAllAppParams() {
 			if prev, idx := outResourcesDeltas.get(appParams.Addr, basics.CreatableIndex(appParams.Aidx)); idx != -1 {
 				// update existing entry with new data.
-				updEntry := resourcesDeltas{
+				updEntry := resourceDelta{
 					oldResource: prev.oldResource,
 					newResource: prev.newResource,
 					nAcctDeltas: prev.nAcctDeltas + 1,
@@ -503,8 +504,9 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				outResourcesDeltas.update(idx, updEntry)
 			} else {
 				// it's a new entry.
-				newEntry := resourcesDeltas{
+				newEntry := resourceDelta{
 					nAcctDeltas: 1,
+					address:     appParams.Addr,
 				}
 				if appParams.Params != nil {
 					newEntry.newResource.SetAppParams(*appParams.Params, false)
@@ -521,6 +523,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					if pad, has := baseAccounts.read(appParams.Addr); has {
 						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
 					}
+					newEntry.oldResource.aidx = basics.CreatableIndex(appParams.Aidx)
 					outResourcesDeltas.insertMissing(appParams.Addr, basics.CreatableIndex(appParams.Aidx), newEntry)
 				}
 			}
@@ -529,7 +532,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 	return
 }
 
-// resourcesLoadOld updates the entries on the deltas.old map that matches the provided addresses.
+// resourcesLoadOld updates the entries on the deltas.oldResource map that matches the provided addresses.
 // The round number of the persistedAccountData is not updated by this function, and the caller is responsible
 // for populating this field.
 func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, knownAddresses map[basics.Address]int64) (err error) {
@@ -556,22 +559,25 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, knownAddresses map
 	var resDataBuf []byte
 	var rtype sql.NullInt64
 	var ok bool
-	for _, entry := range a.misses {
-		idx := a.cache[entry]
-		addr := entry.address
-		delta := a.deltas[idx]
+	for _, missIdx := range a.misses {
+		delta := a.deltas[missIdx]
+		addr := delta.address
 		if delta.oldResource.addrid != 0 {
 			addrid = delta.oldResource.addrid
 		} else if addrid, ok = knownAddresses[addr]; !ok {
 			err = addrRowidStmt.QueryRow(addr[:]).Scan(&addrid)
 			if err != nil {
-				if err == sql.ErrNoRows {
-					err = fmt.Errorf("base account not found while processing resource for addr=%s, aidx=%d", addr.String(), idx)
+				if err != sql.ErrNoRows {
+					return err
+
 				}
-				return err
+				// not having an account could be legit : the account might not have been created yet, which is why it won't
+				// have a rowid. We will be able to re-test that after all the baseAccountData would be written to disk.
+				err = nil
+				continue
 			}
 		}
-		aidx = entry.index
+		aidx = delta.oldResource.aidx
 		err = selectStmt.QueryRow(addrid, aidx).Scan(&rtype, &resDataBuf)
 		switch err {
 		case nil:
@@ -581,14 +587,14 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, knownAddresses map
 				if err != nil {
 					return err
 				}
-				a.updateOld(idx, persistedResData)
+				a.updateOld(missIdx, persistedResData)
 			} else {
 				err = fmt.Errorf("empty resource record: addrid=%d, aidx=%d", addrid, aidx)
 				return err
 			}
 		case sql.ErrNoRows:
 			// we don't have that account, just return an empty record.
-			a.updateOld(idx, persistedResourcesData{addrid: addrid, aidx: aidx})
+			a.updateOld(missIdx, persistedResourcesData{addrid: addrid, aidx: aidx})
 			err = nil
 		default:
 			// unexpected error - let the caller know that we couldn't complete the operation.
@@ -600,10 +606,10 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, knownAddresses map
 
 // get returns accountDelta by address and its position.
 // if no such entry -1 returned
-func (a *compactResourcesDeltas) get(addr basics.Address, index basics.CreatableIndex) (resourcesDeltas, int) {
+func (a *compactResourcesDeltas) get(addr basics.Address, index basics.CreatableIndex) (resourceDelta, int) {
 	idx, ok := a.cache[accountCreatable{address: addr, index: index}]
 	if !ok {
-		return resourcesDeltas{}, -1
+		return resourceDelta{}, -1
 	}
 	return a.deltas[idx], idx
 }
@@ -612,12 +618,12 @@ func (a *compactResourcesDeltas) len() int {
 	return len(a.deltas)
 }
 
-func (a *compactResourcesDeltas) getByIdx(i int) (basics.Address, resourcesDeltas) {
-	return a.addresses[i], a.deltas[i]
+func (a *compactResourcesDeltas) getByIdx(i int) resourceDelta {
+	return a.deltas[i]
 }
 
 // upsert updates existing or inserts a new entry
-func (a *compactResourcesDeltas) upsert(addr basics.Address, resIdx basics.CreatableIndex, delta resourcesDeltas) {
+func (a *compactResourcesDeltas) upsert(addr basics.Address, resIdx basics.CreatableIndex, delta resourceDelta) {
 	if idx, exist := a.cache[accountCreatable{address: addr, index: resIdx}]; exist {
 		a.deltas[idx] = delta
 		return
@@ -626,14 +632,13 @@ func (a *compactResourcesDeltas) upsert(addr basics.Address, resIdx basics.Creat
 }
 
 // update replaces specific entry by idx
-func (a *compactResourcesDeltas) update(idx int, delta resourcesDeltas) {
+func (a *compactResourcesDeltas) update(idx int, delta resourceDelta) {
 	a.deltas[idx] = delta
 }
 
-func (a *compactResourcesDeltas) insert(addr basics.Address, idx basics.CreatableIndex, delta resourcesDeltas) int {
+func (a *compactResourcesDeltas) insert(addr basics.Address, idx basics.CreatableIndex, delta resourceDelta) int {
 	last := len(a.deltas)
 	a.deltas = append(a.deltas, delta)
-	a.addresses = append(a.addresses, addr)
 
 	if a.cache == nil {
 		a.cache = make(map[accountCreatable]int)
@@ -642,9 +647,8 @@ func (a *compactResourcesDeltas) insert(addr basics.Address, idx basics.Creatabl
 	return last
 }
 
-func (a *compactResourcesDeltas) insertMissing(addr basics.Address, resIdx basics.CreatableIndex, delta resourcesDeltas) {
-	a.insert(addr, resIdx, delta)
-	a.misses = append(a.misses, accountCreatable{address: addr, index: resIdx})
+func (a *compactResourcesDeltas) insertMissing(addr basics.Address, resIdx basics.CreatableIndex, delta resourceDelta) {
+	a.misses = append(a.misses, a.insert(addr, resIdx, delta))
 }
 
 // upsertOld updates existing or inserts a new partial entry with only old field filled
@@ -653,7 +657,7 @@ func (a *compactResourcesDeltas) upsertOld(addr basics.Address, old persistedRes
 		a.deltas[idx].oldResource = old
 		return
 	}
-	a.insert(addr, old.aidx, resourcesDeltas{oldResource: old})
+	a.insert(addr, old.aidx, resourceDelta{oldResource: old})
 }
 
 // updateOld updates existing or inserts a new partial entry with only old field filled
@@ -2336,7 +2340,8 @@ func accountsNewRound(
 
 	updatedResources = make(map[basics.Address][]persistedResourcesData)
 	for i := 0; i < resources.len(); i++ {
-		addr, data := resources.getByIdx(i)
+		data := resources.getByIdx(i)
+		addr := data.address
 		aidx := data.oldResource.aidx
 		addrid := data.oldResource.addrid
 		if addrid == 0 {

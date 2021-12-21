@@ -487,7 +487,8 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 	}
 
 	for i := 0; i < resourcesDeltas.len(); i++ {
-		addr, resDelta := resourcesDeltas.getByIdx(i)
+		resDelta := resourcesDeltas.getByIdx(i)
+		addr := resDelta.address
 		if !resDelta.oldResource.data.IsEmpty() {
 			deleteHash := resourcesHashBuilderV6(addr, resDelta.oldResource.aidx, resDelta.oldResource.rtype, uint64(resDelta.oldResource.round), protocol.Encode(&resDelta.oldResource.data))
 			deleted, err = ct.balancesTrie.Delete(deleteHash)
@@ -506,7 +507,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 			if resDelta.newResource.IsApp() {
 				ctype = basics.AppCreatable
 			}
-			addHash := resourcesHashBuilderV6(addr, resDelta.aidx, ctype, uint64(resDelta.newResource.UpdateRound), protocol.Encode(&resDelta.newResource))
+			addHash := resourcesHashBuilderV6(addr, resDelta.oldResource.aidx, ctype, uint64(resDelta.newResource.UpdateRound), protocol.Encode(&resDelta.newResource))
 			added, err = ct.balancesTrie.Add(addHash)
 			if err != nil {
 				return fmt.Errorf("attempted to add duplicate resource hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)
