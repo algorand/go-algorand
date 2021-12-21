@@ -215,9 +215,11 @@ type deferredCommitContext struct {
 	deltas                 []ledgercore.NewAccountDeltas
 	roundTotals            ledgercore.AccountTotals
 	compactAccountDeltas   compactAccountDeltas
+	compactResourcesDeltas compactResourcesDeltas
 	compactCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable
 
-	updatedPersistedAccounts []persistedAccountData
+	updatedPersistedAccounts  []persistedAccountData
+	updatedPersistedResources map[basics.Address][]persistedResourcesData
 
 	committedRoundDigest     crypto.Digest
 	trieBalancesHash         crypto.Digest
