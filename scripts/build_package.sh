@@ -91,7 +91,7 @@ mkdir ${PKG_ROOT}/genesis
 genesis_dirs=("devnet" "testnet" "mainnet" "betanet")
 for dir in "${genesis_dirs[@]}"; do
     mkdir -p ${PKG_ROOT}/genesis/${dir}
-    cp ${REPO_DIR}/installer/genesis/${dir}/genesis.json ${PKG_ROOT}/genesis/${dir}/
+    cp ${REPO_DIR}/gen/${dir}/genesis.json ${PKG_ROOT}/genesis/${dir}/
     if [ $? -ne 0 ]; then exit 1; fi
 done
 # Copy the appropriate network genesis.json for our default (in root ./genesis folder)
