@@ -1104,7 +1104,8 @@ func TestListCreatables(t *testing.T) {
 	// ******* No deletes	                                           *******
 	// sync with the database
 	var updates compactAccountDeltas
-	_, err = accountsNewRound(tx, updates, ctbsWithDeletes, proto, basics.Round(1))
+	var resUpdates compactResourcesDeltas
+	_, _, err = accountsNewRound(tx, updates, resUpdates, ctbsWithDeletes, proto, basics.Round(1))
 	require.NoError(t, err)
 	// nothing left in cache
 	au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
@@ -1120,7 +1121,7 @@ func TestListCreatables(t *testing.T) {
 	// ******* Results are obtained from the database and from the cache *******
 	// ******* Deletes are in the database and in the cache              *******
 	// sync with the database. This has deletes synced to the database.
-	_, err = accountsNewRound(tx, updates, au.creatables, proto, basics.Round(1))
+	_, _, err = accountsNewRound(tx, updates, resUpdates, au.creatables, proto, basics.Round(1))
 	require.NoError(t, err)
 	// get new creatables in the cache. There will be deletes in the cache from the previous batch.
 	au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
@@ -1129,7 +1130,7 @@ func TestListCreatables(t *testing.T) {
 }
 
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
-	rows, err := tx.Query("SELECT address, data FROM accountbase")
+	rows, err := tx.Query("SELECT rowid, address, data FROM accountbase")
 	if err != nil {
 		return
 	}
@@ -1139,12 +1140,13 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 	for rows.Next() {
 		var addrbuf []byte
 		var buf []byte
-		err = rows.Scan(&addrbuf, &buf)
+		var rowid sql.NullInt64
+		err = rows.Scan(&rowid, &addrbuf, &buf)
 		if err != nil {
 			return
 		}
 
-		var data basics.AccountData
+		var data baseAccountData
 		err = protocol.Decode(buf, &data)
 		if err != nil {
 			return
@@ -1156,8 +1158,77 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 			return
 		}
 
+		ad := data.GetAccountData()
+
+		err = func() (err error) {
+			// make a scope to use defer
+			var resRows *sql.Rows
+			resRows, err = tx.Query("SELECT aidx, rtype, data FROM resources where addrid = ?", rowid)
+			if err != nil {
+				return
+			}
+			defer resRows.Close()
+
+			for resRows.Next() {
+				var buf []byte
+				var aidx int64
+				var rtype int64
+				err = resRows.Scan(&aidx, &rtype, &buf)
+				if err != nil {
+					return
+				}
+				var resData resourcesData
+				err = protocol.Decode(buf, &resData)
+				if err != nil {
+					return
+				}
+				if resData.ResourceFlags == resourceFlagsNotHolding {
+					return fmt.Errorf("addr %s (%d) aidx = %d resourceFlagsNotHolding should not be persisted", addr.String(), rowid.Int64, aidx)
+				}
+				if resData.IsApp() {
+					if resData.IsOwning() {
+						if ad.AppParams == nil {
+							ad.AppParams = make(map[basics.AppIndex]basics.AppParams)
+						}
+						ad.AppParams[basics.AppIndex(aidx)] = resData.GetAppParams()
+					}
+					if resData.IsHolding() {
+						if ad.AppLocalStates == nil {
+							ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+						}
+						ad.AppLocalStates[basics.AppIndex(aidx)] = resData.GetAppLocalState()
+					}
+					if basics.CreatableType(rtype) != basics.AppCreatable {
+						return fmt.Errorf("addr %s (%d) aidx = %d type mismatch %d != %d", addr.String(), rowid.Int64, aidx, rtype, basics.AppCreatable)
+					}
+				} else if resData.IsAsset() {
+					if resData.IsOwning() {
+						if ad.AssetParams == nil {
+							ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
+						}
+						ad.AssetParams[basics.AssetIndex(aidx)] = resData.GetAssetParams()
+					}
+					if resData.IsHolding() {
+						if ad.Assets == nil {
+							ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
+						}
+						ad.Assets[basics.AssetIndex(aidx)] = resData.GetAssetHolding()
+					}
+					if basics.CreatableType(rtype) != basics.AssetCreatable {
+						return fmt.Errorf("addr %s (%d) aidx = %d type mismatch %d != %d", addr.String(), rowid.Int64, aidx, rtype, basics.AssetCreatable)
+					}
+				} else {
+					return err
+				}
+			}
+			return
+		}()
+		if err != nil {
+			return
+		}
+
 		copy(addr[:], addrbuf)
-		bals[addr] = data
+		bals[addr] = ad
 	}
 
 	err = rows.Err()
@@ -1200,7 +1271,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 		}
 
 		err := ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			_, err = accountsNewRound(tx, updates, nil, proto, basics.Round(1))
+			_, _, err = accountsNewRound(tx, updates, compactResourcesDeltas{}, nil, proto, basics.Round(1))
 			return
 		})
 		require.NoError(b, err)
@@ -1322,7 +1393,7 @@ func TestCompactDeltas(t *testing.T) {
 	require.Equal(t, 1, outCreatableDeltas[101].Ndeltas)
 }
 
-func TestCompactResourceDeltas(t *testing.T) {
+func TestCompactDeltasResources(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	addrs := make([]basics.Address, 10)
@@ -1330,7 +1401,40 @@ func TestCompactResourceDeltas(t *testing.T) {
 		addrs[i] = basics.Address(crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)}))
 	}
 
+	var baseAccounts lruAccounts
+	var baseResources lruResources
+	baseResources.init(nil, 100, 80)
+
+	// check empty deltas do no produce empty resourcesData records
 	accountDeltas := make([]ledgercore.NewAccountDeltas, 1)
+	accountDeltas[0].UpsertAppParams(addrs[0], 100, nil)
+	accountDeltas[0].UpsertAppLocalState(addrs[1], 101, nil)
+	accountDeltas[0].UpsertAssetParams(addrs[2], 102, nil)
+	accountDeltas[0].UpsertAssetHolding(addrs[3], 103, nil)
+
+	outResourcesDeltas := makeCompactResourceDeltas(accountDeltas, baseAccounts, baseResources)
+	delta, _ := outResourcesDeltas.get(addrs[0], 100)
+	require.NotEmpty(t, delta.newResource)
+	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
+	require.Equal(t, resourceFlagsNotHolding, delta.newResource.ResourceFlags)
+
+	delta, _ = outResourcesDeltas.get(addrs[1], 101)
+	require.NotEmpty(t, delta.newResource)
+	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
+	require.Equal(t, resourceFlagsNotHolding, delta.newResource.ResourceFlags)
+
+	delta, _ = outResourcesDeltas.get(addrs[2], 102)
+	require.NotEmpty(t, delta.newResource)
+	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
+	require.Equal(t, resourceFlagsNotHolding, delta.newResource.ResourceFlags)
+
+	delta, _ = outResourcesDeltas.get(addrs[3], 103)
+	require.NotEmpty(t, delta.newResource)
+	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
+	require.Equal(t, resourceFlagsNotHolding, delta.newResource.ResourceFlags)
+
+	// check actual data on non-empty input
+	accountDeltas = make([]ledgercore.NewAccountDeltas, 1)
 	// addr 0 has app params and a local state for another app
 	appParams100 := basics.AppParams{ApprovalProgram: []byte{100}}
 	appLocalState200 := basics.AppLocalState{KeyValue: basics.TealKeyValue{"200": basics.TealValue{Type: basics.TealBytesType, Bytes: "200"}}}
@@ -1355,10 +1459,9 @@ func TestCompactResourceDeltas(t *testing.T) {
 	accountDeltas[0].UpsertAssetParams(addrs[3], 103, &assetParams103)
 	accountDeltas[0].UpsertAssetHolding(addrs[3], 103, &assetHolding103)
 
-	var baseResources lruResources
 	baseResources.init(nil, 100, 80)
 
-	outResourcesDeltas := makeCompactResourceDeltas(accountDeltas, baseResources)
+	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, baseAccounts, baseResources)
 	// 6 entries are missing: same app (asset) params and local state are combined into a single entry
 	require.Equal(t, 6, len(outResourcesDeltas.misses))
 	require.Equal(t, 6, len(outResourcesDeltas.deltas))
@@ -1417,7 +1520,7 @@ func TestCompactResourceDeltas(t *testing.T) {
 		}
 	}
 
-	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, baseResources)
+	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, baseAccounts, baseResources)
 	require.Equal(t, 0, len(outResourcesDeltas.misses))
 	require.Equal(t, 6, len(outResourcesDeltas.deltas))
 
@@ -1447,13 +1550,13 @@ func TestCompactResourceDeltas(t *testing.T) {
 	accountDeltas[1].UpsertAppLocalState(addrs[4], 104, &appLocalState204)
 
 	baseResources.write(persistedResourcesData{addrid: 4, aidx: basics.CreatableIndex(104)}, addrs[4])
-	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, baseResources)
+	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, baseAccounts, baseResources)
 
 	require.Equal(t, 0, len(outResourcesDeltas.misses))
 	require.Equal(t, 7, len(outResourcesDeltas.deltas))
 
 	checkNewDeltas(outResourcesDeltas)
-	delta, _ := outResourcesDeltas.get(addrs[0], 100)
+	delta, _ = outResourcesDeltas.get(addrs[0], 100)
 	require.Equal(t, appLocalState100.KeyValue, delta.newResource.GetAppLocalState().KeyValue)
 	require.Equal(t, int(2), delta.nAcctDeltas)
 

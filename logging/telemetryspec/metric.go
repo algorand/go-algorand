@@ -154,6 +154,7 @@ type AccountsUpdateMetrics struct {
 	DatabaseCommitDuration    time.Duration
 	MemoryUpdatesDuration     time.Duration
 	UpdatedAccountsCount      uint64
+	UpdatedResourcesCount     uint64
 	UpdatedCreatablesCount    uint64
 }
 
