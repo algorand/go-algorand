@@ -73,13 +73,13 @@ func (l *persistedAccountDataList) allocateFreeNodes(numAllocs int) *persistedAc
 	return l
 }
 
-func isEmpty(list *persistedAccountDataList) bool {
-	// assumes we are inserting correctly to the list - using pushFront.
-	return list.root.next == &list.root
-}
-
 // Back returns the last element of list l or nil if the list is empty.
 func (l *persistedAccountDataList) back() *persistedAccountDataListNode {
+	isEmpty := func(list *persistedAccountDataList) bool {
+		// assumes we are inserting correctly to the list - using pushFront.
+		return list.root.next == &list.root
+	}
+
 	if isEmpty(l) {
 		return nil
 	}
