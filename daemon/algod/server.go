@@ -98,7 +98,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 		// Default setting - host app should configure this
 		// If host doesn't, the default is Disable = false (so, enabled)
 	}
-	if deadlock.Opts.Disable == false {
+	if !deadlock.Opts.Disable {
 		deadlock.Opts.DeadlockTimeout = time.Second * time.Duration(cfg.DeadlockDetectionThreshold)
 	}
 
