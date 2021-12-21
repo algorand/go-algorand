@@ -440,6 +440,10 @@ func (ep EvalParams) log() logging.Logger {
 	return logging.Base()
 }
 
+// RecordAD notes ApplyData information that was derived outside of the logic
+// package. For example, after a acfg transaction is processed in a group that
+// also has app calls, the AD created by the acfg should be added to the
+// EvalParams this way.
 func (ep *EvalParams) RecordAD(gi int, ad transactions.ApplyData) {
 	if ep == nil {
 		return
