@@ -193,7 +193,7 @@ type Local struct {
 	DeadlockDetection int `version[1]:"0"`
 
 	// The threshold used for deadlock detection, in seconds.
-	DeadlockDetectionThreshold int `version[1]:"30"`
+	DeadlockDetectionThreshold int `version[20]:"30"`
 
 	// Prefer to run algod Hosted (under algoh)
 	// Observed by `goal` for now.
