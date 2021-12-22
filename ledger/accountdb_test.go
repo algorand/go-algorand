@@ -869,6 +869,33 @@ func BenchmarkWriteCatchpointStagingBalances(b *testing.B) {
 	}
 }
 
+// upsert updates existing or inserts a new entry
+func (a *compactResourcesDeltas) upsert(delta resourceDelta) {
+	if idx, exist := a.cache[accountCreatable{address: delta.address, index: delta.oldResource.aidx}]; exist {
+		a.deltas[idx] = delta
+		return
+	}
+	a.insert(delta)
+}
+
+// upsertOld updates existing or inserts a new partial entry with only old field filled
+func (a *compactAccountDeltas) upsertOld(old persistedAccountData) {
+	addr := old.addr
+	if idx, exist := a.cache[addr]; exist {
+		a.deltas[idx].oldAcct = old
+		return
+	}
+	a.insert(accountDelta{oldAcct: old, address: old.addr})
+}
+
+// upsert updates existing or inserts a new entry
+func (a *compactAccountDeltas) upsert(addr basics.Address, delta accountDelta) {
+	if idx, exist := a.cache[addr]; exist { // nil map lookup is OK
+		a.deltas[idx] = delta
+		return
+	}
+	a.insert(delta)
+}
 func TestCompactAccountDeltas(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -887,26 +914,26 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(0, ad.len())
 	a.Panics(func() { ad.getByIdx(0) })
 
-	sample1 := accountDelta{newAcct: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 123}}}
+	sample1 := accountDelta{newAcct: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 123}}, address: addr}
 	ad.upsert(addr, sample1)
 	data, idx = ad.get(addr)
 	a.NotEqual(-1, idx)
 	a.Equal(sample1, data)
 
 	a.Equal(1, ad.len())
-	address, data := ad.getByIdx(0)
-	a.Equal(addr, address)
+	data = ad.getByIdx(0)
+	a.Equal(addr, data.address)
 	a.Equal(sample1, data)
 
-	sample2 := accountDelta{newAcct: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 456}}}
+	sample2 := accountDelta{newAcct: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 456}}, address: addr}
 	ad.upsert(addr, sample2)
 	data, idx = ad.get(addr)
 	a.NotEqual(-1, idx)
 	a.Equal(sample2, data)
 
 	a.Equal(1, ad.len())
-	address, data = ad.getByIdx(0)
-	a.Equal(addr, address)
+	data = ad.getByIdx(0)
+	a.Equal(addr, data.address)
 	a.Equal(sample2, data)
 
 	ad.update(idx, sample2)
@@ -915,42 +942,43 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(sample2, data)
 
 	a.Equal(1, ad.len())
-	address, data = ad.getByIdx(0)
-	a.Equal(addr, address)
+	data = ad.getByIdx(0)
+	a.Equal(addr, data.address)
 	a.Equal(sample2, data)
 
 	old1 := persistedAccountData{addr: addr, accountData: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
 	ad.upsertOld(old1)
 	a.Equal(1, ad.len())
-	address, data = ad.getByIdx(0)
-	a.Equal(addr, address)
-	a.Equal(accountDelta{newAcct: sample2.newAcct, oldAcct: old1}, data)
+	data = ad.getByIdx(0)
+	a.Equal(addr, data.address)
+	a.Equal(accountDelta{newAcct: sample2.newAcct, oldAcct: old1, address: addr}, data)
 
 	addr1 := ledgertesting.RandomAddress()
 	old2 := persistedAccountData{addr: addr1, accountData: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
 	ad.upsertOld(old2)
 	a.Equal(2, ad.len())
-	address, data = ad.getByIdx(0)
-	a.Equal(addr, address)
-	a.Equal(accountDelta{newAcct: sample2.newAcct, oldAcct: old1}, data)
+	data = ad.getByIdx(0)
+	a.Equal(addr, data.address)
+	a.Equal(accountDelta{newAcct: sample2.newAcct, oldAcct: old1, address: addr}, data)
 
-	address, data = ad.getByIdx(1)
-	a.Equal(addr1, address)
-	a.Equal(accountDelta{oldAcct: old2}, data)
+	data = ad.getByIdx(1)
+	a.Equal(addr1, data.oldAcct.addr)
+	a.Equal(accountDelta{oldAcct: old2, address: addr1}, data)
 
 	// apply old on empty delta object, expect no changes
 	ad.updateOld(0, old2)
 	a.Equal(2, ad.len())
-	address, data = ad.getByIdx(0)
-	a.Equal(addr, address)
-	a.Equal(accountDelta{newAcct: sample2.newAcct, oldAcct: old2}, data)
+	data = ad.getByIdx(0)
+	a.Equal(addr, data.address)
+	a.Equal(accountDelta{newAcct: sample2.newAcct, oldAcct: old2, address: addr}, data)
 
 	addr2 := ledgertesting.RandomAddress()
-	idx = ad.insert(addr2, sample2)
+	sample2.address = addr2
+	idx = ad.insert(sample2)
 	a.Equal(3, ad.len())
 	a.Equal(2, idx)
-	address, data = ad.getByIdx(idx)
-	a.Equal(addr2, address)
+	data = ad.getByIdx(idx)
+	a.Equal(addr2, data.address)
 	a.Equal(sample2, data)
 }
 
@@ -960,7 +988,7 @@ func (a *compactResourcesDeltas) upsertOld(addr basics.Address, old persistedRes
 		a.deltas[idx].oldResource = old
 		return
 	}
-	idx := a.insert(addr, old.aidx, resourceDelta{oldResource: old})
+	idx := a.insert(resourceDelta{oldResource: old, address: addr})
 	a.deltas[idx].address = addr
 }
 func TestCompactResourceDeltas(t *testing.T) {
@@ -981,8 +1009,8 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a.Equal(0, ad.len())
 	a.Panics(func() { ad.getByIdx(0) })
 
-	sample1 := resourceDelta{newResource: resourcesData{Total: 123}, address: addr}
-	ad.upsert(addr, 1, sample1)
+	sample1 := resourceDelta{newResource: resourcesData{Total: 123}, address: addr, oldResource: persistedResourcesData{aidx: 1}}
+	ad.upsert(sample1)
 	data, idx = ad.get(addr, 1)
 	a.NotEqual(-1, idx)
 	a.Equal(sample1, data)
@@ -992,8 +1020,8 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a.Equal(addr, data.address)
 	a.Equal(sample1, data)
 
-	sample2 := resourceDelta{newResource: resourcesData{Total: 456}, address: addr}
-	ad.upsert(addr, 1, sample2)
+	sample2 := resourceDelta{newResource: resourcesData{Total: 456}, address: addr, oldResource: persistedResourcesData{aidx: 1}}
+	ad.upsert(sample2)
 	data, idx = ad.get(addr, 1)
 	a.NotEqual(-1, idx)
 	a.Equal(sample2, data)
@@ -1039,11 +1067,13 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a.Equal(resourceDelta{newResource: sample2.newResource, oldResource: old2, address: addr}, data)
 
 	addr2 := ledgertesting.RandomAddress()
-	idx = ad.insert(addr2, 2, sample2)
+	sample2.oldResource.aidx = 2
+	sample2.address = addr2
+	idx = ad.insert(sample2)
 	a.Equal(3, ad.len())
 	a.Equal(2, idx)
 	data = ad.getByIdx(idx)
-	a.Equal(addr, data.address)
+	a.Equal(addr2, data.address)
 	cachedData, pos := ad.get(addr2, 2)
 	a.Equal(2, pos)
 	a.Equal(data, cachedData)

@@ -219,6 +219,7 @@ type accountDelta struct {
 	oldAcct     persistedAccountData
 	newAcct     baseAccountData
 	nAcctDeltas int
+	address     basics.Address
 }
 
 // compactAccountDeltas and accountDelta are extensions to ledgercore.AccountDeltas that is being used by the commitRound function for counting the
@@ -227,8 +228,6 @@ type accountDelta struct {
 type compactAccountDeltas struct {
 	// actual account deltas
 	deltas []accountDelta
-	// addresses for deltas
-	addresses []basics.Address
 	// cache for addr to deltas index resolution
 	cache map[basics.Address]int
 	// misses holds indices of addresses for which old portion of delta needs to be loaded from disk
@@ -407,13 +406,13 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				}
 				if baseResourceData, has := baseResources.read(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx)); has {
 					newEntry.oldResource = baseResourceData
-					outResourcesDeltas.insert(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx), newEntry) // insert instead of upsert economizes one map lookup
+					outResourcesDeltas.insert(newEntry) // insert instead of upsert economizes one map lookup
 				} else {
 					if pad, has := baseAccounts.read(assetHold.Addr); has {
 						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
 					}
 					newEntry.oldResource.aidx = basics.CreatableIndex(assetHold.Aidx)
-					outResourcesDeltas.insertMissing(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx), newEntry)
+					outResourcesDeltas.insertMissing(newEntry)
 				}
 			}
 		}
@@ -453,13 +452,13 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				}
 				if baseResourceData, has := baseResources.read(assetParams.Addr, basics.CreatableIndex(assetParams.Aidx)); has {
 					newEntry.oldResource = baseResourceData
-					outResourcesDeltas.insert(assetParams.Addr, basics.CreatableIndex(assetParams.Aidx), newEntry) // insert instead of upsert economizes one map lookup
+					outResourcesDeltas.insert(newEntry) // insert instead of upsert economizes one map lookup
 				} else {
 					if pad, has := baseAccounts.read(assetParams.Addr); has {
 						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
 					}
 					newEntry.oldResource.aidx = basics.CreatableIndex(assetParams.Aidx)
-					outResourcesDeltas.insertMissing(assetParams.Addr, basics.CreatableIndex(assetParams.Aidx), newEntry)
+					outResourcesDeltas.insertMissing(newEntry)
 				}
 			}
 		}
@@ -500,13 +499,13 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				}
 				if baseResourceData, has := baseResources.read(localState.Addr, basics.CreatableIndex(localState.Aidx)); has {
 					newEntry.oldResource = baseResourceData
-					outResourcesDeltas.insert(localState.Addr, basics.CreatableIndex(localState.Aidx), newEntry) // insert instead of upsert economizes one map lookup
+					outResourcesDeltas.insert(newEntry) // insert instead of upsert economizes one map lookup
 				} else {
 					if pad, has := baseAccounts.read(localState.Addr); has {
 						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
 					}
 					newEntry.oldResource.aidx = basics.CreatableIndex(localState.Aidx)
-					outResourcesDeltas.insertMissing(localState.Addr, basics.CreatableIndex(localState.Aidx), newEntry)
+					outResourcesDeltas.insertMissing(newEntry)
 				}
 			}
 		}
@@ -547,13 +546,13 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				}
 				if baseResourceData, has := baseResources.read(appParams.Addr, basics.CreatableIndex(appParams.Aidx)); has {
 					newEntry.oldResource = baseResourceData
-					outResourcesDeltas.insert(appParams.Addr, basics.CreatableIndex(appParams.Aidx), newEntry) // insert instead of upsert economizes one map lookup
+					outResourcesDeltas.insert(newEntry) // insert instead of upsert economizes one map lookup
 				} else {
 					if pad, has := baseAccounts.read(appParams.Addr); has {
 						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
 					}
 					newEntry.oldResource.aidx = basics.CreatableIndex(appParams.Aidx)
-					outResourcesDeltas.insertMissing(appParams.Addr, basics.CreatableIndex(appParams.Aidx), newEntry)
+					outResourcesDeltas.insertMissing(newEntry)
 				}
 			}
 		}
@@ -652,33 +651,24 @@ func (a *compactResourcesDeltas) getByIdx(i int) resourceDelta {
 	return a.deltas[i]
 }
 
-// upsert updates existing or inserts a new entry
-func (a *compactResourcesDeltas) upsert(addr basics.Address, resIdx basics.CreatableIndex, delta resourceDelta) {
-	if idx, exist := a.cache[accountCreatable{address: addr, index: resIdx}]; exist {
-		a.deltas[idx] = delta
-		return
-	}
-	a.insert(addr, resIdx, delta)
-}
-
 // update replaces specific entry by idx
 func (a *compactResourcesDeltas) update(idx int, delta resourceDelta) {
 	a.deltas[idx] = delta
 }
 
-func (a *compactResourcesDeltas) insert(addr basics.Address, idx basics.CreatableIndex, delta resourceDelta) int {
+func (a *compactResourcesDeltas) insert(delta resourceDelta) int {
 	last := len(a.deltas)
 	a.deltas = append(a.deltas, delta)
 
 	if a.cache == nil {
 		a.cache = make(map[accountCreatable]int)
 	}
-	a.cache[accountCreatable{address: addr, index: idx}] = last
+	a.cache[accountCreatable{address: delta.address, index: delta.oldResource.aidx}] = last
 	return last
 }
 
-func (a *compactResourcesDeltas) insertMissing(addr basics.Address, resIdx basics.CreatableIndex, delta resourceDelta) {
-	a.misses = append(a.misses, a.insert(addr, resIdx, delta))
+func (a *compactResourcesDeltas) insertMissing(delta resourceDelta) {
+	a.misses = append(a.misses, a.insert(delta))
 }
 
 // updateOld updates existing or inserts a new partial entry with only old field filled
@@ -716,6 +706,7 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.NewAccountDeltas, baseR
 				updEntry := accountDelta{
 					oldAcct:     prev.oldAcct,
 					nAcctDeltas: prev.nAcctDeltas + 1,
+					address:     prev.address,
 				}
 				updEntry.newAcct.SetCoreAccountData(&acctDelta)
 				updEntry.newAcct.UpdateRound = deltaRound * updateRoundMultiplier
@@ -727,13 +718,14 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.NewAccountDeltas, baseR
 					newAcct: baseAccountData{
 						UpdateRound: deltaRound * updateRoundMultiplier,
 					},
+					address: addr,
 				}
 				newEntry.newAcct.SetCoreAccountData(&acctDelta)
 				if baseAccountData, has := baseAccounts.read(addr); has {
 					newEntry.oldAcct = baseAccountData
-					outAccountDeltas.insert(addr, newEntry) // insert instead of upsert economizes one map lookup
+					outAccountDeltas.insert(newEntry) // insert instead of upsert economizes one map lookup
 				} else {
-					outAccountDeltas.insertMissing(addr, newEntry)
+					outAccountDeltas.insertMissing(newEntry)
 				}
 			}
 		}
@@ -759,7 +751,7 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 	var rowid sql.NullInt64
 	var acctDataBuf []byte
 	for _, idx := range a.misses {
-		addr := a.addresses[idx]
+		addr := a.deltas[idx].address
 		err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &acctDataBuf)
 		switch err {
 		case nil:
@@ -800,17 +792,8 @@ func (a *compactAccountDeltas) len() int {
 	return len(a.deltas)
 }
 
-func (a *compactAccountDeltas) getByIdx(i int) (basics.Address, accountDelta) {
-	return a.addresses[i], a.deltas[i]
-}
-
-// upsert updates existing or inserts a new entry
-func (a *compactAccountDeltas) upsert(addr basics.Address, delta accountDelta) {
-	if idx, exist := a.cache[addr]; exist { // nil map lookup is OK
-		a.deltas[idx] = delta
-		return
-	}
-	a.insert(addr, delta)
+func (a *compactAccountDeltas) getByIdx(i int) accountDelta {
+	return a.deltas[i]
 }
 
 // update replaces specific entry by idx
@@ -818,31 +801,20 @@ func (a *compactAccountDeltas) update(idx int, delta accountDelta) {
 	a.deltas[idx] = delta
 }
 
-func (a *compactAccountDeltas) insert(addr basics.Address, delta accountDelta) int {
+func (a *compactAccountDeltas) insert(delta accountDelta) int {
 	last := len(a.deltas)
 	a.deltas = append(a.deltas, delta)
-	a.addresses = append(a.addresses, addr)
 
 	if a.cache == nil {
 		a.cache = make(map[basics.Address]int)
 	}
-	a.cache[addr] = last
+	a.cache[delta.address] = last
 	return last
 }
 
-func (a *compactAccountDeltas) insertMissing(addr basics.Address, delta accountDelta) {
-	idx := a.insert(addr, delta)
+func (a *compactAccountDeltas) insertMissing(delta accountDelta) {
+	idx := a.insert(delta)
 	a.misses = append(a.misses, idx)
-}
-
-// upsertOld updates existing or inserts a new partial entry with only old field filled
-func (a *compactAccountDeltas) upsertOld(old persistedAccountData) {
-	addr := old.addr
-	if idx, exist := a.cache[addr]; exist {
-		a.deltas[idx].oldAcct = old
-		return
-	}
-	a.insert(addr, accountDelta{oldAcct: old})
 }
 
 // updateOld updates existing or inserts a new partial entry with only old field filled
@@ -2306,7 +2278,7 @@ func accountsNewRound(
 	updatedAccountIdx := 0
 	newAddressesRowIDs := make(map[basics.Address]int64)
 	for i := 0; i < updates.len(); i++ {
-		addr, data := updates.getByIdx(i)
+		data := updates.getByIdx(i)
 		if data.oldAcct.rowid == 0 {
 			// zero rowid means we don't have a previous value.
 			if data.newAcct.MsgIsZero() {
@@ -2314,13 +2286,13 @@ func accountsNewRound(
 			} else {
 				// create a new entry.
 				normBalance := data.newAcct.NormalizedOnlineBalance(proto)
-				result, err = insertStmt.Exec(addr[:], normBalance, protocol.Encode(&data.newAcct))
+				result, err = insertStmt.Exec(data.address[:], normBalance, protocol.Encode(&data.newAcct))
 				if err == nil {
 					var rowid int64
 					rowid, err = result.LastInsertId()
 					updatedAccounts[updatedAccountIdx].rowid = rowid
 					updatedAccounts[updatedAccountIdx].accountData = data.newAcct
-					newAddressesRowIDs[addr] = rowid
+					newAddressesRowIDs[data.address] = rowid
 				}
 			}
 		} else {
@@ -2334,7 +2306,7 @@ func accountsNewRound(
 					updatedAccounts[updatedAccountIdx].accountData = baseAccountData{}
 					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
-						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", addr, data.oldAcct.rowid)
+						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", data.address, data.oldAcct.rowid)
 					}
 				}
 			} else {
@@ -2346,7 +2318,7 @@ func accountsNewRound(
 					updatedAccounts[updatedAccountIdx].accountData = data.newAcct
 					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
-						err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", addr, data.oldAcct.rowid)
+						err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", data.address, data.oldAcct.rowid)
 					}
 				}
 			}
@@ -2358,7 +2330,7 @@ func accountsNewRound(
 
 		// set the returned persisted account states so that we could store that as the baseAccounts in commitRound
 		updatedAccounts[updatedAccountIdx].round = lastUpdateRound
-		updatedAccounts[updatedAccountIdx].addr = addr
+		updatedAccounts[updatedAccountIdx].addr = data.address
 		updatedAccountIdx++
 	}
 
