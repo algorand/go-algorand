@@ -527,7 +527,7 @@ func (r *LocalRunner) RunAll() error {
 	failed := 0
 	start := time.Now()
 
-	ep := logic.NewAppEvalParams(txngroup, &r.proto, &transactions.SpecialAddresses{})
+	ep := logic.NewEvalParams(txngroup, &r.proto, &transactions.SpecialAddresses{})
 	ep.Debugger = r.debugger
 	ep.PastSideEffects = r.runs[0].pastSideEffects
 
@@ -557,7 +557,7 @@ func (r *LocalRunner) Run() (bool, error) {
 
 	txngroup := transactions.WrapSignedTxnsWithAD(r.txnGroup)
 
-	ep := logic.NewAppEvalParams(txngroup, &r.proto, &transactions.SpecialAddresses{})
+	ep := logic.NewEvalParams(txngroup, &r.proto, &transactions.SpecialAddresses{})
 	ep.PastSideEffects = r.runs[0].pastSideEffects
 
 	run := r.runs[0]

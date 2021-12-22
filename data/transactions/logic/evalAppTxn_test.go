@@ -1315,7 +1315,7 @@ int 222;     itxn_field ApplicationID
 itxn_submit
 `
 	txg := []transactions.SignedTxnWithAD{tx}
-	ep := NewAppEvalParams(txg, MakeTestProto(), &transactions.SpecialAddresses{})
+	ep := NewEvalParams(txg, MakeTestProto(), &transactions.SpecialAddresses{})
 	ep.Ledger = ledger
 	TestApp(t, callpay3+"int 1", ep, "insufficient balance") // inner contract needs money
 

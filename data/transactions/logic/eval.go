@@ -317,10 +317,8 @@ func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.Sign
 	return copy
 }
 
-// NewAppEvalParams creates an EvalParams to be used while evaluating apps for a top-level txgroup
-func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses) *EvalParams {
-	minTealVersion := ComputeMinTealVersion(txgroup, false)
-
+// NewEvalParams creates an EvalParams to use while evaluating a top-level txgroup
+func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses) *EvalParams {
 	apps := 0
 	for _, tx := range txgroup {
 		if tx.Txn.Type == protocol.ApplicationCallTx {
@@ -328,9 +326,21 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 		}
 	}
 	if apps == 0 {
-		// As an optimization, do no work if there will be no apps to evaluate in this txgroup
-		return nil
+		// As an optimization, do less work if there will be no apps to evaluate in this txgroup
+		// Many fields are unneeded for stateless evaluation
+		return &EvalParams{
+			/* It is tempting to not copy the txgroup, as you would imagine that
+			   running no apps means it can not be modified. However,
+			   transaction processing "reaches in" to change the AD of this
+			   group using RecordAD. An alternative would be to avoid those
+			   calls when there are no apps, but this feels safer. */
+			TxnGroup: copyWithClearAD(txgroup),
+			Proto:    proto,
+			Specials: specials,
+		}
 	}
+
+	minTealVersion := ComputeMinTealVersion(txgroup, false)
 
 	var pooledApplicationBudget *uint64
 	var pooledAllowedInners *int
@@ -347,19 +357,18 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 		*pooledAllowedInners = apps * proto.MaxInnerTransactions
 	}
 
-	ep := &EvalParams{
-		Proto:                   proto,
+	return &EvalParams{
 		TxnGroup:                copyWithClearAD(txgroup),
+		Proto:                   proto,
+		Specials:                specials,
 		PastSideEffects:         MakePastSideEffects(len(txgroup)),
 		MinTealVersion:          &minTealVersion,
 		FeeCredit:               &credit,
-		Specials:                specials,
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
 		created:                 &resources{},
 		appAddrCache:            make(map[basics.AppIndex]basics.Address),
 	}
-	return ep
 }
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
@@ -441,13 +450,9 @@ func (ep EvalParams) log() logging.Logger {
 }
 
 // RecordAD notes ApplyData information that was derived outside of the logic
-// package. For example, after a acfg transaction is processed in a group that
-// also has app calls, the AD created by the acfg should be added to the
-// EvalParams this way.
+// package. For example, after a acfg transaction is processed, the AD created
+// by the acfg is added to the EvalParams this way.
 func (ep *EvalParams) RecordAD(gi int, ad transactions.ApplyData) {
-	if ep == nil {
-		return
-	}
 	ep.TxnGroup[gi].ApplyData = ad
 	if aid := ad.ConfigAsset; aid != 0 {
 		ep.created.asas = append(ep.created.asas, aid)

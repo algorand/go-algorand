@@ -524,7 +524,7 @@ func TestDebugFromPrograms(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	txnBlob := []byte("[" + strings.Join([]string{string(txnSample), txnSample}, ",") + "]")
+	txnBlob := []byte("[" + strings.Join([]string{txnSample, txnSample}, ",") + "]")
 
 	l := LocalRunner{}
 	dp := DebugParams{
@@ -603,7 +603,7 @@ func TestRunMode(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	txnBlob := []byte("[" + strings.Join([]string{string(txnSample), txnSample}, ",") + "]")
+	txnBlob := []byte("[" + strings.Join([]string{txnSample, txnSample}, ",") + "]")
 	l := LocalRunner{}
 
 	// check run mode auto on stateful code

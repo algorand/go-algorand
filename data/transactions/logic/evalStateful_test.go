@@ -336,7 +336,7 @@ func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn,
 			codes[i] = testProg(t, program, version).Program
 		}
 	}
-	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), makeTestProtoV(version), &transactions.SpecialAddresses{})
+	ep := NewEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), makeTestProtoV(version), &transactions.SpecialAddresses{})
 	ep.Ledger = ledger
 	testAppsBytes(t, codes, ep, expected...)
 }
