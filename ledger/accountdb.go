@@ -350,7 +350,7 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 // makeCompactResourceDeltas takes an array of NewAccountDeltas ( one array entry per round ), and compacts the resource portions of the arrays into a single
 // data structure that contains all the resources deltas changes. While doing that, the function eliminate any intermediate resources changes.
 // It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the resourcesDeltas.
-func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, baseRound basics.Round, baseAccounts lruAccounts, baseResources lruResources) (outResourcesDeltas compactResourcesDeltas) {
+func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts, baseResources lruResources) (outResourcesDeltas compactResourcesDeltas) {
 	if len(accountDeltas) == 0 {
 		return
 	}
@@ -362,6 +362,13 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 	outResourcesDeltas.misses = make([]int, 0, size)
 
 	deltaRound := uint64(baseRound)
+	// the updateRoundMultiplier is used when setting the UpdateRound, so that we can set the
+	// value without creating any branching. Avoiding branching in the code provides (marginal)
+	// performance gain since CPUs can speculate ahead more efficiently.
+	updateRoundMultiplier := uint64(0)
+	if setUpdateRound {
+		updateRoundMultiplier = 1
+	}
 	for _, roundDelta := range accountDeltas {
 		deltaRound++
 		// assets
@@ -379,7 +386,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				} else {
 					updEntry.newResource.ClearAssetHolding()
 				}
-				updEntry.newResource.UpdateRound = deltaRound
+				updEntry.newResource.UpdateRound = deltaRound * updateRoundMultiplier
 				outResourcesDeltas.update(idx, updEntry)
 			} else {
 				// it's a new entry.
@@ -387,7 +394,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					nAcctDeltas: 1,
 					address:     assetHold.Addr,
 					newResource: resourcesData{
-						UpdateRound: deltaRound,
+						UpdateRound: deltaRound * updateRoundMultiplier,
 					},
 				}
 				if assetHold.Holding != nil {
@@ -425,7 +432,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				} else {
 					updEntry.newResource.ClearAssetParams()
 				}
-				updEntry.newResource.UpdateRound = deltaRound
+				updEntry.newResource.UpdateRound = deltaRound * updateRoundMultiplier
 				outResourcesDeltas.update(idx, updEntry)
 			} else {
 				// it's a new entry.
@@ -433,7 +440,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					nAcctDeltas: 1,
 					address:     assetParams.Addr,
 					newResource: resourcesData{
-						UpdateRound: deltaRound,
+						UpdateRound: deltaRound * updateRoundMultiplier,
 					},
 				}
 				if assetParams.Params != nil {
@@ -472,7 +479,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				} else {
 					updEntry.newResource.ClearAppLocalState()
 				}
-				updEntry.newResource.UpdateRound = deltaRound
+				updEntry.newResource.UpdateRound = deltaRound * updateRoundMultiplier
 				outResourcesDeltas.update(idx, updEntry)
 			} else {
 				// it's a new entry.
@@ -480,7 +487,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					nAcctDeltas: 1,
 					address:     localState.Addr,
 					newResource: resourcesData{
-						UpdateRound: deltaRound,
+						UpdateRound: deltaRound * updateRoundMultiplier,
 					},
 				}
 				if localState.State != nil {
@@ -519,7 +526,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				} else {
 					updEntry.newResource.ClearAppParams()
 				}
-				updEntry.newResource.UpdateRound = deltaRound
+				updEntry.newResource.UpdateRound = deltaRound * updateRoundMultiplier
 				outResourcesDeltas.update(idx, updEntry)
 			} else {
 				// it's a new entry.
@@ -527,7 +534,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					nAcctDeltas: 1,
 					address:     appParams.Addr,
 					newResource: resourcesData{
-						UpdateRound: deltaRound,
+						UpdateRound: deltaRound * updateRoundMultiplier,
 					},
 				}
 				if appParams.Params != nil {
@@ -681,7 +688,7 @@ func (a *compactResourcesDeltas) updateOld(idx int, old persistedResourcesData) 
 // makeCompactAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
 // data structure that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
 // It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the accountDeltaCount/modifiedCreatable.
-func makeCompactAccountDeltas(accountDeltas []ledgercore.NewAccountDeltas, baseRound basics.Round, baseAccounts lruAccounts) (outAccountDeltas compactAccountDeltas) {
+func makeCompactAccountDeltas(accountDeltas []ledgercore.NewAccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts) (outAccountDeltas compactAccountDeltas) {
 	if len(accountDeltas) == 0 {
 		return
 	}
@@ -693,6 +700,13 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.NewAccountDeltas, baseR
 	outAccountDeltas.misses = make([]int, 0, size)
 
 	deltaRound := uint64(baseRound)
+	// the updateRoundMultiplier is used when setting the UpdateRound, so that we can set the
+	// value without creating any branching. Avoiding branching in the code provides (marginal)
+	// performance gain since CPUs can speculate ahead more efficiently.
+	updateRoundMultiplier := uint64(0)
+	if setUpdateRound {
+		updateRoundMultiplier = 1
+	}
 	for _, roundDelta := range accountDeltas {
 		deltaRound++
 		for i := 0; i < roundDelta.Len(); i++ {
@@ -703,14 +717,14 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.NewAccountDeltas, baseR
 					nAcctDeltas: prev.nAcctDeltas + 1,
 				}
 				updEntry.newAcct.SetCoreAccountData(&acctDelta)
-				updEntry.newAcct.UpdateRound = deltaRound
+				updEntry.newAcct.UpdateRound = deltaRound * updateRoundMultiplier
 				outAccountDeltas.update(idx, updEntry)
 			} else {
 				// it's a new entry.
 				newEntry := accountDelta{
 					nAcctDeltas: 1,
 					newAcct: baseAccountData{
-						UpdateRound: deltaRound,
+						UpdateRound: deltaRound * updateRoundMultiplier,
 					},
 				}
 				newEntry.newAcct.SetCoreAccountData(&acctDelta)

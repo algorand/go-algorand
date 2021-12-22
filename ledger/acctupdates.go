@@ -1348,10 +1348,14 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 		return fmt.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
 	}
 
+	// once the consensus upgrade to resource separation is complete, all resources/accounts are also tagged with
+	// their corresponding update round.
+	setUpdateRound := config.Consensus[au.versions[1]].EnableAccountDataResourceSeparation
+
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
-	dcc.compactAccountDeltas = makeCompactAccountDeltas(dcc.deltas, dcc.oldBase, au.baseAccounts)
-	dcc.compactResourcesDeltas = makeCompactResourceDeltas(dcc.deltas, dcc.oldBase, au.baseAccounts, au.baseResources)
+	dcc.compactAccountDeltas = makeCompactAccountDeltas(dcc.deltas, dcc.oldBase, setUpdateRound, au.baseAccounts)
+	dcc.compactResourcesDeltas = makeCompactResourceDeltas(dcc.deltas, dcc.oldBase, setUpdateRound, au.baseAccounts, au.baseResources)
 	dcc.compactCreatableDeltas = compactCreatableDeltas(creatableDeltas)
 
 	au.accountsMu.RUnlock()
