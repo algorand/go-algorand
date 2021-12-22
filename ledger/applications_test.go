@@ -58,7 +58,7 @@ func commitRound(offset uint64, dbRound basics.Round, l *Ledger) {
 // before and after application code refactoring
 // 2) writing into empty (opted-in) local state's KeyValue works after reloading
 // Hardcoded values are from commit 9a0b439 (pre app refactor commit)
-
+// Hardcoded values were manually converted to new acctbase format during separation resources data from base account data
 func TestAppAccountDataStorage(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -134,11 +134,17 @@ return`
 	a.Contains(genesisInitState.Accounts, userLocal)
 	a.Contains(genesisInitState.Accounts, userLocal2)
 
-	expectedCreator, err := hex.DecodeString("84a4616c676fce009d2290a461707070810184a6617070726f76c45602200200012604056c6f63616c06676c6f62616c026c6b02676b3118221240003331192212400010311923124000022243311b221240001c361a00281240000a361a0029124000092243222a28664200032b29672343a6636c65617270c40102a46773636881a36e627304a46c73636881a36e627301a36f6e6c01a47473636881a36e627304")
+	expectedCreatorBase, err := hex.DecodeString("84a16101a162ce009d2290a16704a16b01")
 	a.NoError(err)
-	expectedUserOptIn, err := hex.DecodeString("84a4616c676fce00a02fd0a46170706c810181a46873636881a36e627301a36f6e6c01a47473636881a36e627301")
+	expectedCreatorResource, err := hex.DecodeString("85a171c45602200200012604056c6f63616c06676c6f62616c026c6b02676b3118221240003331192212400010311923124000022243311b221240001c361a00281240000a361a0029124000092243222a28664200032b29672343a172c40102a17501a17704a17903")
 	a.NoError(err)
-	expectedUserLocal, err := hex.DecodeString("84a4616c676fce00a33540a46170706c810182a46873636881a36e627301a3746b7681a26c6b82a27462a56c6f63616ca2747401a36f6e6c01a47473636881a36e627301")
+	expectedUserOptInBase, err := hex.DecodeString("84a16101a162ce00a02fd0a16701a16c01")
+	a.NoError(err)
+	expectedUserOptInResource, err := hex.DecodeString("81a16f01")
+	a.NoError(err)
+	expectedUserLocalBase, err := hex.DecodeString("84a16101a162ce00a33540a16701a16c01")
+	a.NoError(err)
+	expectedUserLocalResource, err := hex.DecodeString("82a16f01a17081a26c6b82a27462a56c6f63616ca2747401")
 	a.NoError(err)
 
 	cfg := config.GetDefaultLocal()
@@ -227,12 +233,21 @@ return`
 	err = l.accts.accountsq.lookupStmt.QueryRow(creator[:]).Scan(&rowid, &dbRound, &buf)
 	a.NoError(err)
 	a.Equal(basics.Round(4), dbRound)
-	a.Equal(expectedCreator, buf)
+	a.Equal(expectedCreatorBase, buf)
+	err = l.accts.accountsq.lookupResourcesStmt.QueryRow(creator[:], basics.CreatableIndex(appIdx), basics.AppCreatable).Scan(&rowid, &dbRound, &buf)
+	a.NoError(err)
+	a.Equal(basics.Round(4), dbRound)
+	a.Equal(expectedCreatorResource, buf)
 
 	err = l.accts.accountsq.lookupStmt.QueryRow(userOptin[:]).Scan(&rowid, &dbRound, &buf)
 	a.NoError(err)
 	a.Equal(basics.Round(4), dbRound)
-	a.Equal(expectedUserOptIn, buf)
+	a.Equal(expectedUserOptInBase, buf)
+	err = l.accts.accountsq.lookupResourcesStmt.QueryRow(userOptin[:], basics.CreatableIndex(appIdx), basics.AppCreatable).Scan(&rowid, &dbRound, &buf)
+	a.NoError(err)
+	a.Equal(basics.Round(4), dbRound)
+	a.Equal(expectedUserOptInResource, buf)
+
 	pad, err := l.accts.accountsq.lookup(userOptin)
 	a.NoError(err)
 	a.NotEmpty(pad)
@@ -247,12 +262,15 @@ return`
 	err = l.accts.accountsq.lookupStmt.QueryRow(userLocal[:]).Scan(&rowid, &dbRound, &buf)
 	a.NoError(err)
 	a.Equal(basics.Round(4), dbRound)
-	a.Equal(expectedUserLocal, buf)
-
-	ad, rnd, err = l.LookupLatest(userLocal)
-	a.Equal(dbRound, rnd)
+	a.Equal(expectedUserLocalBase, buf)
+	err = l.accts.accountsq.lookupResourcesStmt.QueryRow(userLocal[:], basics.CreatableIndex(appIdx), basics.AppCreatable).Scan(&rowid, &dbRound, &buf)
 	a.NoError(err)
-	a.Equal("local", ad.AppLocalStates[appIdx].KeyValue["lk"].Bytes)
+	a.Equal(basics.Round(4), dbRound)
+	a.Equal(expectedUserLocalResource, buf)
+
+	ar, err := l.LookupResource(dbRound, userLocal, basics.CreatableIndex(appIdx), basics.AppCreatable)
+	a.NoError(err)
+	a.Equal("local", ar.AppLocalState.KeyValue["lk"].Bytes)
 
 	// ensure writing into empty global state works as well
 	l.reloadLedger()

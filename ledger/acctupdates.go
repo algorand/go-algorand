@@ -295,6 +295,7 @@ func (au *accountUpdates) close() {
 	}
 
 	au.baseAccounts.prune(0)
+	au.baseResources.prune(0)
 }
 
 // LookupOnlineAccountData returns the online account data for a given address at a given round.
@@ -808,6 +809,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	au.deltasAccum = append(au.deltasAccum, delta.NewAccts.Len()+au.deltasAccum[len(au.deltasAccum)-1])
 
 	au.baseAccounts.flushPendingWrites()
+	au.baseResources.flushPendingWrites()
 
 	for i := 0; i < delta.NewAccts.Len(); i++ {
 		addr, data := delta.NewAccts.GetByIdx(i)
@@ -871,6 +873,8 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	// calling prune would drop old entries from the base accounts.
 	newBaseAccountSize := (len(au.accounts) + 1) + baseAccountsPendingAccountsBufferSize
 	au.baseAccounts.prune(newBaseAccountSize)
+	newBaseResourcesSize := (len(au.resources) + 1) + baseResourcesPendingAccountsBufferSize
+	au.baseResources.prune(newBaseResourcesSize)
 
 	if au.voters != nil {
 		au.voters.newBlock(blk.BlockHeader)
@@ -1697,6 +1701,7 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 	// vaccumming the database would modify the some of the tables rowid, so we need to make sure any stored in-memory
 	// rowid are flushed.
 	au.baseAccounts.prune(0)
+	au.baseResources.prune(0)
 
 	startTime := time.Now()
 	vacuumExitCh := make(chan struct{}, 1)

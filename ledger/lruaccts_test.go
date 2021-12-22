@@ -29,7 +29,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestBasicLRUAccounts(t *testing.T) {
+func TestLRUBasicAccounts(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var baseAcct lruAccounts
