@@ -1355,7 +1355,7 @@ func TestCompactDeltas(t *testing.T) {
 	require.Equal(t, 0, len(outAccountDeltas.misses))
 	delta, _ = outAccountDeltas.get(addrs[0])
 	require.Equal(t, persistedAccountData{addr: addrs[0]}, delta.oldAcct)
-	require.Equal(t, baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}}, delta.newAcct)
+	require.Equal(t, baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}, UpdateRound: 2}, delta.newAcct)
 	require.Equal(t, ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true, Ndeltas: 1}, outCreatableDeltas[100])
 	baseAccounts.init(nil, 100, 80)
 
@@ -1504,11 +1504,11 @@ func TestCompactDeltasResources(t *testing.T) {
 	for i := int64(0); i < 4; i++ {
 		delta, idx := outResourcesDeltas.get(addrs[i], basics.CreatableIndex(100+i))
 		require.NotEqual(t, -1, idx)
-		require.Equal(t, persistedResourcesData{}, delta.oldResource)
+		require.Equal(t, persistedResourcesData{aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
 		if i%2 == 0 {
 			delta, idx = outResourcesDeltas.get(addrs[i], basics.CreatableIndex(200+i))
 			require.NotEqual(t, -1, idx)
-			require.Equal(t, persistedResourcesData{}, delta.oldResource)
+			require.Equal(t, persistedResourcesData{aidx: basics.CreatableIndex(200 + i)}, delta.oldResource)
 		}
 	}
 
