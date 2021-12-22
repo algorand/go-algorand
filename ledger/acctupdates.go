@@ -909,6 +909,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 			resourceCount++
 			foundResources[cidx] = round
 			res.AssignAccountData(&data)
+			return
 		}
 		// is this newer than current "found" rnd for this resource? (XXX is this not possible?)
 		if round > foundRound {
@@ -954,7 +955,6 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 	}
 
 	for {
-		ad = ledgercore.AccountData{}
 		currentDbRound := au.cachedDBRound
 		currentDeltaLen := len(au.deltas)
 		// offset should now be len(au.deltas)
@@ -964,6 +964,9 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		if err != nil {
 			return
 		}
+		ad = ledgercore.AccountData{}
+		foundResources = make(map[basics.CreatableIndex]basics.Round)
+		resourceCount = 0
 
 		rewardsProto = config.Consensus[au.versions[offset]]
 		rewardsLevel = au.roundTotals[offset].RewardsLevel
