@@ -357,7 +357,7 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *d
 		dcc.stats.MerkleTrieUpdateDuration = time.Duration(time.Now().UnixNano())
 	}
 
-	err = ct.accountsUpdateBalances(dcc.compactAccountDeltas)
+	err = ct.accountsUpdateBalances(dcc.compactAccountDeltas, dcc.compactResourcesDeltas)
 	if err != nil {
 		return err
 	}
@@ -450,7 +450,7 @@ func (ct *catchpointTracker) close() {
 }
 
 // accountsUpdateBalances applies the given compactAccountDeltas to the merkle trie
-func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccountDeltas) (err error) {
+func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccountDeltas, resourcesDeltas compactResourcesDeltas) (err error) {
 	if !ct.catchpointEnabled() {
 		return nil
 	}
@@ -485,6 +485,41 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 			}
 		}
 	}
+
+	for i := 0; i < resourcesDeltas.len(); i++ {
+		resDelta := resourcesDeltas.getByIdx(i)
+		addr := resDelta.address
+		if !resDelta.oldResource.data.IsEmpty() {
+			deleteHash := resourcesHashBuilderV6(addr, resDelta.oldResource.aidx, resDelta.oldResource.rtype, uint64(resDelta.oldResource.data.UpdateRound), protocol.Encode(&resDelta.oldResource.data))
+			deleted, err = ct.balancesTrie.Delete(deleteHash)
+			if err != nil {
+				return fmt.Errorf("failed to delete resource hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
+			}
+			if !deleted {
+				ct.log.Warnf("failed to delete resource hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
+			} else {
+				accumulatedChanges++
+			}
+		}
+
+		if !resDelta.newResource.IsEmpty() {
+			ctype := basics.AssetCreatable
+			if resDelta.newResource.IsApp() {
+				ctype = basics.AppCreatable
+			}
+			addHash := resourcesHashBuilderV6(addr, resDelta.oldResource.aidx, ctype, uint64(resDelta.newResource.UpdateRound), protocol.Encode(&resDelta.newResource))
+			added, err = ct.balancesTrie.Add(addHash)
+			if err != nil {
+				return fmt.Errorf("attempted to add duplicate resource hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)
+			}
+			if !added {
+				ct.log.Warnf("attempted to add duplicate resource hash '%s' to merkle trie for account %v", hex.EncodeToString(addHash), addr)
+			} else {
+				accumulatedChanges++
+			}
+		}
+	}
+
 	if accumulatedChanges >= trieAccumulatedChangesFlush {
 		accumulatedChanges = 0
 		_, err = ct.balancesTrie.Commit()
