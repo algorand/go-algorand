@@ -591,12 +591,14 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, knownAddresses map
 	for _, missIdx := range a.misses {
 		delta := a.deltas[missIdx]
 		addr := delta.address
+		aidx = delta.oldResource.aidx
 		if delta.oldResource.addrid != 0 {
 			addrid = delta.oldResource.addrid
 		} else if addrid, ok = knownAddresses[addr]; !ok {
 			err = addrRowidStmt.QueryRow(addr[:]).Scan(&addrid)
 			if err != nil {
 				if err != sql.ErrNoRows {
+					err = fmt.Errorf("base account cannot be read while processing resource for addr=%s, aidx=%d: %w", addr.String(), aidx, err)
 					return err
 
 				}
@@ -606,7 +608,6 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, knownAddresses map
 				continue
 			}
 		}
-		aidx = delta.oldResource.aidx
 		err = selectStmt.QueryRow(addrid, aidx).Scan(&rtype, &resDataBuf)
 		switch err {
 		case nil:
@@ -1220,6 +1221,10 @@ type baseAccountData struct {
 
 	baseOnlineAccountData
 
+	// UpdateRound is the round that modified this account data last. Since we want all the nodes to have the exact same
+	// value for this field, we'll be setting the value of this field to zero *before* the EnableAccountDataResourceSeparation
+	// consensus parameter is being set. Once the above consensus takes place, this field would be populated with the
+	// correct round number.
 	UpdateRound uint64 `codec:"z"`
 }
 
@@ -1374,7 +1379,11 @@ type resourcesData struct {
 	// to just being the owner of the asset. A comparison against the empty structure doesn't work here -
 	// since both the holdings and the parameters are allowed to be all at their default values.
 	ResourceFlags resourceFlags `codec:"y"`
-	UpdateRound   uint64        `codec:"z"`
+	// UpdateRound is the round that modified this resource last. Since we want all the nodes to have the exact same
+	// value for this field, we'll be setting the value of this field to zero *before* the EnableAccountDataResourceSeparation
+	// consensus parameter is being set. Once the above consensus takes place, this field would be populated with the
+	// correct round number.
+	UpdateRound uint64 `codec:"z"`
 }
 
 func (rd *resourcesData) IsHolding() bool {
