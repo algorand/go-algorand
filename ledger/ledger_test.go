@@ -112,7 +112,7 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		require.Equal(t, l.Latest(), latestRound)
 		totalRewardUnits = totals.RewardUnits()
 	}
-	poolBal, err := l.Lookup(l.Latest(), poolAddr)
+	poolBal, _, err := l.LookupLatest(poolAddr)
 	a.NoError(err, "could not get incentive pool balance")
 
 	blk.BlockHeader = bookkeeping.BlockHeader{
@@ -211,7 +211,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	for _, acctdata := range genesisInitState.Accounts {
 		totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
 	}
-	poolBal, err := l.Lookup(l.Latest(), poolAddr)
+	poolBal, _, err := l.LookupLatest(poolAddr)
 	a.NoError(err, "could not get incentive pool balance")
 
 	correctHeader := bookkeeping.BlockHeader{
@@ -1198,7 +1198,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 			for _, acctdata := range initAccounts {
 				totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
 			}
-			poolBal, err := l.Lookup(l.Latest(), testPoolAddr)
+			poolBal, _, err := l.LookupLatest(testPoolAddr)
 			a.NoError(err, "could not get incentive pool balance")
 			lastBlock, err := l.Block(l.Latest())
 			a.NoError(err, "could not get last block")
@@ -1639,7 +1639,7 @@ func TestLedgerMemoryLeak(t *testing.T) {
 
 					err = l.appendUnvalidatedTx(t, accounts, keys, correctPay, transactions.ApplyData{})
 					require.NoError(t, err)
-					ad, err := l.Lookup(l.Latest(), addr)
+					ad, _, err := l.LookupLatest(addr)
 					require.NoError(t, err)
 
 					addresses = append(addresses, addr)
