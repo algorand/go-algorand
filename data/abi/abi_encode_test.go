@@ -27,17 +27,35 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	UintStepLength             = 8
+	UintBegin                  = 8
+	UintEnd                    = 512
+	UintRandomTestPoints       = 1000
+	UintTestCaseCount          = 200
+	UfixedPrecision            = 160
+	UfixedRandomTestPoints     = 20
+	TupleMaxLength             = 10
+	ByteTestCaseCount          = 1 << 8
+	BoolTestCaseCount          = 2
+	AddressTestCaseCount       = 300
+	StringTestCaseCount        = 100
+	StringTestCaseSpecLenCount = 5
+	TakeNum                    = 10
+	TupleTestCaseCount         = 100
+)
+
 func TestEncodeValid(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// encoding test for uint type, iterating through all uint sizes
 	// randomly pick 1000 valid uint values and check if encoded value match with expected
-	for intSize := 8; intSize <= 512; intSize += 8 {
+	for intSize := UintBegin; intSize <= UintEnd; intSize += UintStepLength {
 		upperLimit := big.NewInt(0).Lsh(big.NewInt(1), uint(intSize))
 		uintType, err := makeUintType(intSize)
 		require.NoError(t, err, "make uint type fail")
 
-		for i := 0; i < 1000; i++ {
+		for i := 0; i < UintRandomTestPoints; i++ {
 			randomInt, err := rand.Int(rand.Reader, upperLimit)
 			require.NoError(t, err, "cryptographic random int init fail")
 
@@ -64,17 +82,17 @@ func TestEncodeValid(t *testing.T) {
 	// encoding test for ufixed, iterating through all the valid ufixed bitSize and precision
 	// randomly generate 10 big int values for ufixed numerator and check if encoded value match with expected
 	// also check if ufixed can fit max numerator (2^bitSize - 1) under specific byte bitSize
-	for size := 8; size <= 512; size += 8 {
+	for size := UintBegin; size <= UintEnd; size += UintStepLength {
 		upperLimit := big.NewInt(0).Lsh(big.NewInt(1), uint(size))
 		largest := big.NewInt(0).Add(
 			upperLimit,
 			big.NewInt(1).Neg(big.NewInt(1)),
 		)
-		for precision := 1; precision <= 160; precision++ {
+		for precision := 1; precision <= UfixedPrecision; precision++ {
 			typeUfixed, err := makeUfixedType(size, precision)
 			require.NoError(t, err, "make ufixed type fail")
 
-			for i := 0; i < 10; i++ {
+			for i := 0; i < UfixedRandomTestPoints; i++ {
 				randomInt, err := rand.Int(rand.Reader, upperLimit)
 				require.NoError(t, err, "cryptographic random int init fail")
 
@@ -96,13 +114,13 @@ func TestEncodeValid(t *testing.T) {
 
 	// encoding test for address, since address is 32 byte, it can be considered as 256 bit uint
 	// randomly generate 1000 uint256 and make address values, check if encoded value match with expected
-	upperLimit := big.NewInt(0).Lsh(big.NewInt(1), 256)
-	for i := 0; i < 1000; i++ {
+	upperLimit := big.NewInt(0).Lsh(big.NewInt(1), addressByteSize<<3)
+	for i := 0; i < UintRandomTestPoints; i++ {
 		randomAddrInt, err := rand.Int(rand.Reader, upperLimit)
 		require.NoError(t, err, "cryptographic random int init fail")
 
 		rand256Bytes := randomAddrInt.Bytes()
-		addrBytesExpected := make([]byte, 32-len(rand256Bytes))
+		addrBytesExpected := make([]byte, addressByteSize-len(rand256Bytes))
 		addrBytesExpected = append(addrBytesExpected, rand256Bytes...)
 
 		addrBytesActual, err := addressType.Encode(addrBytesExpected)
@@ -111,7 +129,7 @@ func TestEncodeValid(t *testing.T) {
 	}
 
 	// encoding test for bool values
-	for i := 0; i < 2; i++ {
+	for i := 0; i < BoolTestCaseCount; i++ {
 		boolEncode, err := boolType.Encode(i == 1)
 		require.NoError(t, err, "bool encode fail")
 		expected := []byte{0x00}
@@ -122,7 +140,7 @@ func TestEncodeValid(t *testing.T) {
 	}
 
 	// encoding test for byte values
-	for i := 0; i < (1 << 8); i++ {
+	for i := 0; i < ByteTestCaseCount; i++ {
 		byteEncode, err := byteType.Encode(byte(i))
 		require.NoError(t, err, "byte encode fail")
 		expected := []byte{byte(i)}
@@ -133,8 +151,8 @@ func TestEncodeValid(t *testing.T) {
 	// we use `gobberish` to generate random utf-8 symbols
 	// randomly generate utf-8 str from length 1 to 100, each length draw 10 random strs
 	// check if encoded ABI str match with expected value
-	for length := 1; length <= 100; length++ {
-		for i := 0; i < 10; i++ {
+	for length := 1; length <= StringTestCaseCount; length++ {
+		for i := 0; i < StringTestCaseSpecLenCount; i++ {
 			// generate utf8 strings from `gobberish` at some length
 			utf8Str := gobberish.GenerateString(length)
 			// since string is just type alias of `byte[]`, we need to store number of bytes in encoding
@@ -841,22 +859,6 @@ func categorySelfRoundTripTest(t *testing.T, category []testUnit) {
 		require.Equal(t, testObj.value, jsonActual, "decode JSON value not equal to expected")
 	}
 }
-
-const (
-	UintStepLength             = 8
-	UintBegin                  = 8
-	UintEnd                    = 512
-	UintTestCaseCount          = 200
-	UfixedPrecision            = 160
-	TupleMaxLength             = 10
-	ByteTestCaseCount          = 1 << 8
-	BoolTestCaseCount          = 2
-	AddressTestCaseCount       = 300
-	StringTestCaseCount        = 100
-	StringTestCaseSpecLenCount = 4
-	TakeNum                    = 10
-	TupleTestCaseCount         = 100
-)
 
 func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
 	(*pool)[Uint] = make([]testUnit, UintTestCaseCount*UintEnd/UintStepLength)
