@@ -1171,12 +1171,12 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 		}
 
 		// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
-		mres, indeltas := au.resources.get(accountCreatable{address: addr, index: aidx})
+		macct, indeltas := au.resources.get(accountCreatable{address: addr, index: aidx})
 		if indeltas {
 			// Check if this is the most recent round, in which case, we can
 			// use a cache of the most recent account state.
 			if offset == uint64(len(au.deltas)) {
-				return mres.resource, rnd, nil
+				return macct.resource, rnd, nil
 			}
 			// the account appears in the deltas, but we don't know if it appears in the
 			// delta range of [0..offset], so we'll need to check :
@@ -1200,11 +1200,11 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 		}
 
 		// check the baseResources -
-		if mres, has := au.baseResources.read(addr, aidx); has {
+		if macct, has := au.baseResources.read(addr, aidx); has {
 			// we don't technically need this, since it's already in the baseResources, however, writing this over
 			// would ensure that we promote this field.
-			au.baseResources.writePending(mres, addr)
-			return mres.AccountResource(), rnd, nil
+			au.baseResources.writePending(macct, addr)
+			return macct.AccountResource(), rnd, nil
 		}
 
 		if synchronized {
