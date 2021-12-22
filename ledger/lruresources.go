@@ -84,7 +84,6 @@ func (m *lruResources) flushPendingWrites() {
 			return
 		}
 	}
-	return
 }
 
 // writePending write a single persistedAccountData entry to the pendingResources buffer.
