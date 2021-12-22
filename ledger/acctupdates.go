@@ -1050,12 +1050,8 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				au.baseResources.writePending(pd, addr)
 				addResource(pd.aidx, pd.round, pd.AccountResource())
 			}
-			if checkDone() {
-				return
-			}
-			// if we didn't find all the resources by now, something is wrong
-			au.log.Errorf("accountUpdates.lookupLatest: couldn't find all resources for addr %s", addr.String())
-			return basics.AccountData{}, basics.Round(0), fmt.Errorf("Couldn't find resources for addr %s: %w", addr.String(), ErrLookupLatestResources)
+			// We've found all the resources we could find for this address.
+			return
 		}
 
 		if resourceDbRound < currentDbRound {

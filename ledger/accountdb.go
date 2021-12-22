@@ -2002,10 +2002,8 @@ func (qs *accountsDbQueries) lookupAllResources(addr basics.Address) (data []per
 		}
 		defer rows.Close()
 
-		var addrid int64
+		var addrid, aidx, rtype sql.NullInt64
 		var dbRound basics.Round
-		var aidx basics.CreatableIndex
-		var rtype basics.CreatableType
 		data = nil
 		var buf []byte
 		for rows.Next() {
@@ -2013,15 +2011,19 @@ func (qs *accountsDbQueries) lookupAllResources(addr basics.Address) (data []per
 			if err != nil {
 				return err
 			}
+			if !addrid.Valid || !aidx.Valid || !rtype.Valid {
+				// we received an entry without any index. This would happen only on the first entry when there are no resources for this address.
+				break
+			}
 			var resData resourcesData
 			err = protocol.Decode(buf, &resData)
 			if err != nil {
 				return err
 			}
 			data = append(data, persistedResourcesData{
-				addrid: addrid,
-				aidx:   aidx,
-				rtype:  rtype,
+				addrid: addrid.Int64,
+				aidx:   basics.CreatableIndex(aidx.Int64),
+				rtype:  basics.CreatableType(rtype.Int64),
 				data:   resData,
 				round:  dbRound,
 			})
