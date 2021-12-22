@@ -152,9 +152,9 @@ func TestLedgerCirculation(t *testing.T) {
 	require.False(t, sourceAccount.IsZero())
 	require.False(t, destAccount.IsZero())
 
-	data, err := realLedger.Lookup(basics.Round(0), destAccount)
+	data, err := realLedger.LookupAgreement(basics.Round(0), destAccount)
 	require.NoError(t, err)
-	baseDestValue := data.MicroAlgos.Raw
+	baseDestValue := data.MicroAlgosWithRewards.Raw
 
 	blk := genesisInitState.Block
 	totalsRound, totals, err := realLedger.LatestTotals()
@@ -187,12 +187,12 @@ func TestLedgerCirculation(t *testing.T) {
 
 		// test most recent round
 		if rnd < basics.Round(500) {
-			data, err = realLedger.Lookup(rnd, destAccount)
+			data, err = realLedger.LookupAgreement(rnd, destAccount)
 			require.NoError(t, err)
-			require.Equal(t, baseDestValue+uint64(rnd), data.MicroAlgos.Raw)
-			data, err = l.Lookup(rnd, destAccount)
+			require.Equal(t, baseDestValue+uint64(rnd), data.MicroAlgosWithRewards.Raw)
+			data, err = l.LookupAgreement(rnd, destAccount)
 			require.NoError(t, err)
-			require.Equal(t, baseDestValue+uint64(rnd), data.MicroAlgos.Raw)
+			require.Equal(t, baseDestValue+uint64(rnd), data.MicroAlgosWithRewards.Raw)
 
 			roundCirculation, err := realLedger.OnlineTotals(rnd)
 			require.NoError(t, err)
@@ -203,12 +203,12 @@ func TestLedgerCirculation(t *testing.T) {
 			require.Equal(t, baseCirculation-uint64(rnd)*(10001), roundCirculation.Raw)
 		} else if rnd < basics.Round(510) {
 			// test one round ago
-			data, err = realLedger.Lookup(rnd-1, destAccount)
+			data, err = realLedger.LookupAgreement(rnd-1, destAccount)
 			require.NoError(t, err)
-			require.Equal(t, baseDestValue+uint64(rnd)-1, data.MicroAlgos.Raw)
-			data, err = l.Lookup(rnd-1, destAccount)
+			require.Equal(t, baseDestValue+uint64(rnd)-1, data.MicroAlgosWithRewards.Raw)
+			data, err = l.LookupAgreement(rnd-1, destAccount)
 			require.NoError(t, err)
-			require.Equal(t, baseDestValue+uint64(rnd)-1, data.MicroAlgos.Raw)
+			require.Equal(t, baseDestValue+uint64(rnd)-1, data.MicroAlgosWithRewards.Raw)
 
 			roundCirculation, err := realLedger.OnlineTotals(rnd - 1)
 			require.NoError(t, err)
@@ -219,12 +219,12 @@ func TestLedgerCirculation(t *testing.T) {
 			require.Equal(t, baseCirculation-uint64(rnd-1)*(10001), roundCirculation.Raw)
 		} else if rnd < basics.Round(520) {
 			// test one round in the future ( expected error )
-			data, err = realLedger.Lookup(rnd+1, destAccount)
+			data, err = realLedger.LookupAgreement(rnd+1, destAccount)
 			require.Error(t, err)
-			require.Equal(t, uint64(0), data.MicroAlgos.Raw)
-			data, err = l.Lookup(rnd+1, destAccount)
+			require.Equal(t, uint64(0), data.MicroAlgosWithRewards.Raw)
+			data, err = l.LookupAgreement(rnd+1, destAccount)
 			require.Error(t, err)
-			require.Equal(t, uint64(0), data.MicroAlgos.Raw)
+			require.Equal(t, uint64(0), data.MicroAlgosWithRewards.Raw)
 
 			_, err = realLedger.OnlineTotals(rnd + 1)
 			require.Error(t, err)

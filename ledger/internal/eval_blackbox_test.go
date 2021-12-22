@@ -211,16 +211,16 @@ func TestBlockEvaluator(t *testing.T) {
 
 	l.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
 
-	bal0new, err := l.Lookup(newBlock.Round(), addrs[0])
+	bal0new, err := l.LookupAgreement(newBlock.Round(), addrs[0])
 	require.NoError(t, err)
-	bal1new, err := l.Lookup(newBlock.Round(), addrs[1])
+	bal1new, err := l.LookupAgreement(newBlock.Round(), addrs[1])
 	require.NoError(t, err)
-	bal2new, err := l.Lookup(newBlock.Round(), addrs[2])
+	bal2new, err := l.LookupAgreement(newBlock.Round(), addrs[2])
 	require.NoError(t, err)
 
-	require.Equal(t, bal0new.MicroAlgos.Raw, bal0.MicroAlgos.Raw-minFee.Raw-100)
-	require.Equal(t, bal1new.MicroAlgos.Raw, bal1.MicroAlgos.Raw+100)
-	require.Equal(t, bal2new.MicroAlgos.Raw, bal2.MicroAlgos.Raw-minFee.Raw)
+	require.Equal(t, bal0new.MicroAlgosWithRewards.Raw, bal0.MicroAlgos.Raw-minFee.Raw-100)
+	require.Equal(t, bal1new.MicroAlgosWithRewards.Raw, bal1.MicroAlgos.Raw+100)
+	require.Equal(t, bal2new.MicroAlgosWithRewards.Raw, bal2.MicroAlgos.Raw-minFee.Raw)
 }
 
 func TestRekeying(t *testing.T) {
@@ -677,18 +677,18 @@ func TestMinBalanceChanges(t *testing.T) {
 		AssetReceiver: addrs[5],
 	}
 
-	ad0init, err := l.Lookup(l.Latest(), addrs[0])
+	ad0init, _, err := l.LookupLatest(addrs[0])
 	require.NoError(t, err)
-	ad5init, err := l.Lookup(l.Latest(), addrs[5])
+	ad5init, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 
 	eval := nextBlock(t, l, true, nil)
 	txns(t, l, eval, &createTxn, &optInTxn)
 	endBlock(t, l, eval)
 
-	ad0new, err := l.Lookup(l.Latest(), addrs[0])
+	ad0new, _, err := l.LookupLatest(addrs[0])
 	require.NoError(t, err)
-	ad5new, err := l.Lookup(l.Latest(), addrs[5])
+	ad5new, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 
 	proto := l.GenesisProto()
@@ -716,9 +716,9 @@ func TestMinBalanceChanges(t *testing.T) {
 	txns(t, l, eval, &optOutTxn, &closeTxn)
 	endBlock(t, l, eval)
 
-	ad0final, err := l.Lookup(l.Latest(), addrs[0])
+	ad0final, _, err := l.LookupLatest(addrs[0])
 	require.NoError(t, err)
-	ad5final, err := l.Lookup(l.Latest(), addrs[5])
+	ad5final, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 	// Check we got our balance "back"
 	require.Equal(t, ad0final.MinBalance(&proto), ad0init.MinBalance(&proto))
