@@ -393,40 +393,6 @@ func (ad NewAccountDeltas) Clone() NewAccountDeltas {
 	return clone
 }
 
-// GetAllResources gets a map of all known resources for a given address.
-func (ad NewAccountDeltas) GetAllResources(addr basics.Address) (ret map[basics.CreatableIndex]AccountResource) {
-	ret = make(map[basics.CreatableIndex]AccountResource)
-	for aa, idx := range ad.assetParamsCache {
-		if aa.Address == addr {
-			r := ret[basics.CreatableIndex(aa.Asset)]
-			r.AssetParam = ad.assetParams[idx].Params
-			ret[basics.CreatableIndex(aa.Asset)] = r
-		}
-	}
-	for aa, idx := range ad.assetHoldingsCache {
-		if aa.Address == addr {
-			r := ret[basics.CreatableIndex(aa.Asset)]
-			r.AssetHolding = ad.assetHoldings[idx].Holding
-			ret[basics.CreatableIndex(aa.Asset)] = r
-		}
-	}
-	for aa, idx := range ad.appParamsCache {
-		if aa.Address == addr {
-			r := ret[basics.CreatableIndex(aa.App)]
-			r.AppParams = ad.appParams[idx].Params
-			ret[basics.CreatableIndex(aa.App)] = r
-		}
-	}
-	for aa, idx := range ad.appLocalStatesCache {
-		if aa.Address == addr {
-			r := ret[basics.CreatableIndex(aa.App)]
-			r.AppLocalState = ad.appLocalStates[idx].State
-			ret[basics.CreatableIndex(aa.App)] = r
-		}
-	}
-	return
-}
-
 // GetResource looks up a pair of app or asset resources, given its index and type.
 func (ad NewAccountDeltas) GetResource(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ret AccountResource, ok bool) {
 	ret.CreatableIndex = aidx
