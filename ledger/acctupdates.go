@@ -1042,8 +1042,14 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				return basics.AccountData{}, basics.Round(0), err
 			}
 			if persistedData.round == currentDbRound {
-				au.baseAccounts.writePending(persistedData)
-				ad = persistedData.accountData.GetLedgerCoreAccountData()
+				if persistedData.rowid != 0 {
+					// if we read actual data return it
+					au.baseAccounts.writePending(persistedData)
+					ad = persistedData.accountData.GetLedgerCoreAccountData()
+				} else {
+					ad = ledgercore.AccountData{}
+				}
+
 				foundAccount = true
 				if checkDone() {
 					return
@@ -1149,8 +1155,13 @@ func (au *accountUpdates) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		// against the database.
 		persistedData, err = au.accountsq.lookup(addr)
 		if persistedData.round == currentDbRound {
-			au.baseAccounts.writePending(persistedData)
-			u := persistedData.accountData.GetLedgerCoreAccountData()
+			var u ledgercore.AccountData
+			if persistedData.rowid != 0 {
+				// if we read actual data return it
+				au.baseAccounts.writePending(persistedData)
+				u = persistedData.accountData.GetLedgerCoreAccountData()
+			}
+			// otherwise return empty
 			return u.OnlineAccountData(rewardsProto, rewardsLevel), err
 		}
 
@@ -1235,8 +1246,13 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 		// against the database.
 		persistedData, err = au.accountsq.lookupResources(addr, aidx, ctype)
 		if persistedData.round == currentDbRound {
-			au.baseResources.writePending(persistedData, addr)
-			return persistedData.AccountResource(), rnd, err
+			if persistedData.addrid != 0 {
+				// if we read actual data return it
+				au.baseResources.writePending(persistedData, addr)
+				return persistedData.AccountResource(), rnd, err
+			}
+			// otherwise return empty
+			return ledgercore.AccountResource{}, rnd, err
 		}
 		if synchronized {
 			if persistedData.round < currentDbRound {
@@ -1326,8 +1342,13 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		// against the database.
 		persistedData, err = au.accountsq.lookup(addr)
 		if persistedData.round == currentDbRound {
-			au.baseAccounts.writePending(persistedData)
-			return persistedData.accountData.GetLedgerCoreAccountData(), rnd, err
+			if persistedData.rowid != 0 {
+				// if we read actual data return it
+				au.baseAccounts.writePending(persistedData)
+				return persistedData.accountData.GetLedgerCoreAccountData(), rnd, err
+			}
+			// otherwise return empty
+			return ledgercore.AccountData{}, rnd, err
 		}
 		if synchronized {
 			if persistedData.round < currentDbRound {
