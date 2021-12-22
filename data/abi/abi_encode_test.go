@@ -39,11 +39,34 @@ const (
 	ByteTestCaseCount          = 1 << 8
 	BoolTestCaseCount          = 2
 	AddressTestCaseCount       = 300
-	StringTestCaseCount        = 100
+	StringTestCaseCount        = 10
 	StringTestCaseSpecLenCount = 5
 	TakeNum                    = 10
 	TupleTestCaseCount         = 100
 )
+
+/*
+   The set of parameters ensure that the error of byte length >= 2^16 is eliminated.
+
+   i. Consider uint512[] with length 10, the ABI encoding length is: 64 x 10 + 2
+   (2 is introduced from dynamic array length encoding)
+   The motivation here is that, forall ABI type that is non-array/non-tuple like,
+   uint512 gives the longest byte length in ABI encoding
+   (utf-8 string's byte length is at most 42, address byte length is at most 32)
+
+   ii. Consider a tuple of length 10, with all elements uint512[] of length 10.
+   The ABI encoding length is: 10 x 2 + 10 x 642 == 6440
+   (2 is for tuple index to keep track of dynamic type encoding)
+
+   iii. Consider a tuple of length 10, with all elements of tuples mentioned in (ii).
+   The ABI encoding length is: 10 x 2 + 10 x 6440 == 64420
+   This is the end of the generation of nested-tuple test case,
+   no more layers of random tuples will be produced.
+
+   This gives an upper bound for the produced ABI encoding byte length in this test script,
+   and noticing that length 64420 mentioned in (iii) is less than 2^16 == 65536.
+   Assuming that ABI implementation is correct, then the flaky test should not happen again.
+*/
 
 func TestEncodeValid(t *testing.T) {
 	partitiontest.PartitionTest(t)
