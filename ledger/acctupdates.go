@@ -1007,6 +1007,19 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 			addResource(mr.resource.CreatableIndex, rnd, mr.resource)
 		}
 
+		if checkDone() {
+			return
+		}
+
+		// check the baseResources -
+		if prds := au.baseResources.readAll(addr); len(prds) > 0 {
+			for _, prd := range prds {
+				// we don't technically need this, since it's already in the baseResources, however, writing this over
+				// would ensure that we promote this field.
+				au.baseResources.writePending(prd, addr)
+				addResource(prd.aidx, prd.round, prd.AccountResource())
+			}
+		}
 		au.accountsMu.RUnlock()
 		needUnlock = false
 
