@@ -526,30 +526,10 @@ func (r *LocalRunner) RunAll() error {
 	txngroup := transactions.WrapSignedTxnsWithAD(r.txnGroup)
 	failed := 0
 	start := time.Now()
-	pooledApplicationBudget := uint64(0)
-	credit, _ := transactions.FeeCredit(txngroup, r.proto.MinTxnFee)
-	// ignore error since fees are not important for debugging in most cases
 
-	var pastSideEffects []logic.EvalSideEffects
-	for _, run := range r.runs {
-		if run.mode == modeStateful {
-			if r.proto.EnableAppCostPooling {
-				pooledApplicationBudget += uint64(r.proto.MaxAppProgramCost)
-			} else {
-				pooledApplicationBudget = uint64(r.proto.MaxAppProgramCost)
-			}
-			pastSideEffects = run.pastSideEffects
-		}
-	}
-	ep := &logic.EvalParams{
-		Proto:                   &r.proto,
-		Debugger:                r.debugger,
-		TxnGroup:                txngroup,
-		PastSideEffects:         pastSideEffects,
-		Specials:                &transactions.SpecialAddresses{},
-		FeeCredit:               &credit,
-		PooledApplicationBudget: &pooledApplicationBudget,
-	}
+	ep := logic.NewAppEvalParams(txngroup, &r.proto, &transactions.SpecialAddresses{})
+	ep.Debugger = r.debugger
+	ep.PastSideEffects = r.runs[0].pastSideEffects
 
 	var last error
 	for i := range r.runs {
@@ -576,27 +556,9 @@ func (r *LocalRunner) Run() (bool, error) {
 	}
 
 	txngroup := transactions.WrapSignedTxnsWithAD(r.txnGroup)
-	pooledApplicationBudget := uint64(0)
-	credit, _ := transactions.FeeCredit(txngroup, r.proto.MinTxnFee)
-	// ignore error since fees are not important for debugging in most cases
 
-	for _, run := range r.runs {
-		if run.mode == modeStateful {
-			if r.proto.EnableAppCostPooling {
-				pooledApplicationBudget += uint64(r.proto.MaxAppProgramCost)
-			} else {
-				pooledApplicationBudget = uint64(r.proto.MaxAppProgramCost)
-			}
-		}
-	}
-	ep := &logic.EvalParams{
-		Proto:                   &r.proto,
-		TxnGroup:                txngroup,
-		PastSideEffects:         r.runs[0].pastSideEffects, // Looks strange, but all runs have same pastSideEffects
-		Specials:                &transactions.SpecialAddresses{},
-		FeeCredit:               &credit,
-		PooledApplicationBudget: &pooledApplicationBudget,
-	}
+	ep := logic.NewAppEvalParams(txngroup, &r.proto, &transactions.SpecialAddresses{})
+	ep.PastSideEffects = r.runs[0].pastSideEffects
 
 	run := r.runs[0]
 	// Workaround for Go's nil/empty interfaces nil check after nil assignment, i.e.

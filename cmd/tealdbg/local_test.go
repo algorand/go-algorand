@@ -316,6 +316,7 @@ func TestDebugEnvironment(t *testing.T) {
 	// make transaction group: app call + sample payment
 	txn := transactions.SignedTxn{
 		Txn: transactions.Transaction{
+			Type: protocol.ApplicationCallTx,
 			Header: transactions.Header{
 				Sender: sender,
 				Fee:    basics.MicroAlgos{Raw: 1000},
