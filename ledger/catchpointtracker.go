@@ -490,7 +490,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 		resDelta := resourcesDeltas.getByIdx(i)
 		addr := resDelta.address
 		if !resDelta.oldResource.data.IsEmpty() {
-			deleteHash := resourcesHashBuilderV6(addr, resDelta.oldResource.aidx, resDelta.oldResource.rtype, uint64(resDelta.oldResource.round), protocol.Encode(&resDelta.oldResource.data))
+			deleteHash := resourcesHashBuilderV6(addr, resDelta.oldResource.aidx, resDelta.oldResource.rtype, uint64(resDelta.oldResource.data.UpdateRound), protocol.Encode(&resDelta.oldResource.data))
 			deleted, err = ct.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("failed to delete resource hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
