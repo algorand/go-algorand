@@ -842,21 +842,37 @@ func categorySelfRoundTripTest(t *testing.T, category []testUnit) {
 	}
 }
 
+const (
+	UintStepLength             = 8
+	UintBegin                  = 8
+	UintEnd                    = 512
+	UintTestCaseCount          = 200
+	UfixedPrecision            = 160
+	TupleMaxLength             = 10
+	ByteTestCaseCount          = 1 << 8
+	BoolTestCaseCount          = 2
+	AddressTestCaseCount       = 300
+	StringTestCaseCount        = 100
+	StringTestCaseSpecLenCount = 4
+	TakeNum                    = 10
+	TupleTestCaseCount         = 100
+)
+
 func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
-	(*pool)[Uint] = make([]testUnit, 200*64)
-	(*pool)[Ufixed] = make([]testUnit, 160*64)
+	(*pool)[Uint] = make([]testUnit, UintTestCaseCount*UintEnd/UintStepLength)
+	(*pool)[Ufixed] = make([]testUnit, UfixedPrecision*UintEnd/UintStepLength)
 
 	uintIndex := 0
 	ufixedIndex := 0
 
-	for bitSize := 8; bitSize <= 512; bitSize += 8 {
+	for bitSize := UintBegin; bitSize <= UintEnd; bitSize += UintStepLength {
 		max := new(big.Int).Lsh(big.NewInt(1), uint(bitSize))
 
 		uintT, err := makeUintType(bitSize)
 		require.NoError(t, err, "make uint type failure")
 		uintTstr := uintT.String()
 
-		for j := 0; j < 200; j++ {
+		for j := 0; j < UintTestCaseCount; j++ {
 			randVal, err := rand.Int(rand.Reader, max)
 			require.NoError(t, err, "generate random uint, should be no error")
 
@@ -867,7 +883,7 @@ func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
 			uintIndex++
 		}
 
-		for precision := 1; precision <= 160; precision++ {
+		for precision := 1; precision <= UfixedPrecision; precision++ {
 			randVal, err := rand.Int(rand.Reader, max)
 			require.NoError(t, err, "generate random ufixed, should be no error")
 
@@ -884,33 +900,33 @@ func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
 	categorySelfRoundTripTest(t, (*pool)[Uint])
 	categorySelfRoundTripTest(t, (*pool)[Ufixed])
 
-	(*pool)[Byte] = make([]testUnit, 1<<8)
-	for i := 0; i < (1 << 8); i++ {
+	(*pool)[Byte] = make([]testUnit, ByteTestCaseCount)
+	for i := 0; i < ByteTestCaseCount; i++ {
 		(*pool)[Byte][i] = testUnit{serializedType: byteType.String(), value: byte(i)}
 	}
 	categorySelfRoundTripTest(t, (*pool)[Byte])
 
-	(*pool)[Bool] = make([]testUnit, 2)
+	(*pool)[Bool] = make([]testUnit, BoolTestCaseCount)
 	(*pool)[Bool][0] = testUnit{serializedType: boolType.String(), value: false}
 	(*pool)[Bool][1] = testUnit{serializedType: boolType.String(), value: true}
 	categorySelfRoundTripTest(t, (*pool)[Bool])
 
-	maxAddress := new(big.Int).Lsh(big.NewInt(1), 256)
-	(*pool)[Address] = make([]testUnit, 300)
-	for i := 0; i < 300; i++ {
+	maxAddress := new(big.Int).Lsh(big.NewInt(1), addressByteSize<<3)
+	(*pool)[Address] = make([]testUnit, AddressTestCaseCount)
+	for i := 0; i < AddressTestCaseCount; i++ {
 		randAddrVal, err := rand.Int(rand.Reader, maxAddress)
 		require.NoError(t, err, "generate random value for address, should be no error")
 		addrBytes := randAddrVal.Bytes()
-		remainBytes := make([]byte, 32-len(addrBytes))
+		remainBytes := make([]byte, addressByteSize-len(addrBytes))
 		addrBytes = append(remainBytes, addrBytes...)
 		(*pool)[Address][i] = testUnit{serializedType: addressType.String(), value: addrBytes}
 	}
 	categorySelfRoundTripTest(t, (*pool)[Address])
 
-	(*pool)[String] = make([]testUnit, 400)
+	(*pool)[String] = make([]testUnit, StringTestCaseCount*StringTestCaseSpecLenCount)
 	stringIndex := 0
-	for length := 1; length <= 100; length++ {
-		for i := 0; i < 4; i++ {
+	for length := 1; length <= StringTestCaseCount; length++ {
+		for i := 0; i < StringTestCaseSpecLenCount; i++ {
 			(*pool)[String][stringIndex] = testUnit{
 				serializedType: stringType.String(),
 				value:          gobberish.GenerateString(length),
@@ -945,21 +961,21 @@ func takeSomeFromCategoryAndGenerateArray(
 }
 
 func addArrayRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
-	for intIndex := 0; intIndex < len((*pool)[Uint]); intIndex += 200 {
-		takeSomeFromCategoryAndGenerateArray(t, Uint, intIndex, 20, pool)
+	for intIndex := 0; intIndex < len((*pool)[Uint]); intIndex += UintTestCaseCount {
+		takeSomeFromCategoryAndGenerateArray(t, Uint, intIndex, TakeNum, pool)
 	}
-	takeSomeFromCategoryAndGenerateArray(t, Byte, 0, 20, pool)
-	takeSomeFromCategoryAndGenerateArray(t, Address, 0, 20, pool)
-	takeSomeFromCategoryAndGenerateArray(t, String, 0, 20, pool)
-	takeSomeFromCategoryAndGenerateArray(t, Bool, 0, 20, pool)
+	takeSomeFromCategoryAndGenerateArray(t, Byte, 0, TakeNum, pool)
+	takeSomeFromCategoryAndGenerateArray(t, Address, 0, TakeNum, pool)
+	takeSomeFromCategoryAndGenerateArray(t, String, 0, TakeNum, pool)
+	takeSomeFromCategoryAndGenerateArray(t, Bool, 0, TakeNum, pool)
 
 	categorySelfRoundTripTest(t, (*pool)[ArrayStatic])
 	categorySelfRoundTripTest(t, (*pool)[ArrayDynamic])
 }
 
 func addTupleRandomValues(t *testing.T, slotRange BaseType, pool *map[BaseType][]testUnit) {
-	for i := 0; i < 100; i++ {
-		tupleLenBig, err := rand.Int(rand.Reader, big.NewInt(20))
+	for i := 0; i < TupleTestCaseCount; i++ {
+		tupleLenBig, err := rand.Int(rand.Reader, big.NewInt(TupleMaxLength))
 		require.NoError(t, err, "generate random tuple length should not return error")
 		tupleLen := tupleLenBig.Int64() + 1
 		testUnits := make([]testUnit, tupleLen)
