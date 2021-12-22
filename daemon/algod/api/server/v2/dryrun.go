@@ -366,6 +366,17 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 		return
 	}
 	proto := config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
+	txgroup := transactions.WrapSignedTxnsWithAD(dr.Txns)
+	specials := transactions.SpecialAddresses{}
+	// Make an EvalParams for evaluating logic.
+	lep := &logic.EvalParams{
+		Proto:    &proto,
+		TxnGroup: txgroup,
+		Specials: &specials,
+	}
+	// Make one for the apps.
+	aep := logic.NewAppEvalParams(txgroup, &proto, &specials)
+
 	origEnableAppCostPooling := proto.EnableAppCostPooling
 	// Enable EnableAppCostPooling so that dryrun
 	// 1) can determine cost 2) reports actual cost for large programs that fail
@@ -381,23 +392,18 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 			allowedBudget += uint64(proto.MaxAppProgramCost)
 		}
 	}
+	// logic.NewAppEvalParams returns nil if there are no app calls.
+	if aep != nil {
+		aep.PooledApplicationBudget = &pooledAppBudget
+	}
 
 	response.Txns = make([]generated.DryrunTxnResult, len(dr.Txns))
-	txgroup := transactions.WrapSignedTxnsWithAD(dr.Txns)
-	pse := logic.MakePastSideEffects(len(dr.Txns))
 	for ti, stxn := range dr.Txns {
-		ep := &logic.EvalParams{
-			Proto:                   &proto,
-			TxnGroup:                txgroup,
-			PastSideEffects:         pse,
-			PooledApplicationBudget: &pooledAppBudget,
-			Specials:                &transactions.SpecialAddresses{},
-		}
 		var result generated.DryrunTxnResult
 		if len(stxn.Lsig.Logic) > 0 {
 			var debug dryrunDebugReceiver
-			ep.Debugger = &debug
-			pass, err := logic.EvalSignature(ti, ep)
+			lep.Debugger = &debug
+			pass, err := logic.EvalSignature(ti, lep)
 			var messages []string
 			result.Disassembly = debug.lines
 			result.LogicSigTrace = &debug.history
@@ -478,7 +484,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 				messages[0] = fmt.Sprintf("uploaded state did not include app id %d referenced in txn[%d]", appIdx, ti)
 			} else {
 				var debug dryrunDebugReceiver
-				ep.Debugger = &debug
+				aep.Debugger = &debug
 				var program []byte
 				messages = make([]string, 1)
 				if stxn.Txn.OnCompletion == transactions.ClearStateOC {
@@ -488,7 +494,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 					program = app.ApprovalProgram
 					messages[0] = "ApprovalProgram"
 				}
-				pass, delta, err := ba.StatefulEval(ti, ep, appIdx, program)
+				pass, delta, err := ba.StatefulEval(ti, aep, appIdx, program)
 				result.Disassembly = debug.lines
 				result.AppCallTrace = &debug.history
 				result.GlobalDelta = StateDeltaToStateDelta(delta.GlobalDelta)

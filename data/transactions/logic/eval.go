@@ -48,7 +48,7 @@ const EvalMaxVersion = LogicVersion
 // The constants below control TEAL opcodes evaluation and MAY NOT be changed
 // without moving them into consensus parameters.
 
-// MaxStringSize is the limit of byte strings created by `concat`
+// MaxStringSize is the limit of byte string length in an AVM value
 const MaxStringSize = 4096
 
 // MaxByteMathSize is the limit of byte strings supplied as input to byte math opcodes
@@ -2697,8 +2697,7 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 	case CurrentApplicationID:
 		sv.Uint = uint64(cx.appID)
 	case CurrentApplicationAddress:
-		var addr basics.Address
-		addr = cx.getApplicationAddress(cx.appID)
+		addr := cx.getApplicationAddress(cx.appID)
 		sv.Bytes = addr[:]
 	case CreatorAddress:
 		sv.Bytes, err = cx.getCreatorAddress()
