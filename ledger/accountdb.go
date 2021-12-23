@@ -2844,44 +2844,65 @@ func makeOrderedAccountsIter(tx *sql.Tx, accountCount int) *orderedAccountsIter 
 	}
 }
 
+type pendingRow struct {
+	addrid int64
+	aidx   basics.CreatableIndex
+	rtype  basics.CreatableType
+	buf    []byte
+}
+
 func processAllResources(
 	resRows *sql.Rows,
-	addr basics.Address, accountData *baseAccountData, acctRowid int64,
+	addr basics.Address, accountData *baseAccountData, acctRowid int64, pr pendingRow,
 	callback func(addr basics.Address, creatableIdx basics.CreatableIndex, creatableType basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error,
-) (err error) {
-	resourcesEntriesCount := accountData.TotalAppParams + accountData.TotalAppLocalStates + accountData.TotalAssetParams + accountData.TotalAssets
-	for ; resourcesEntriesCount > 0; resourcesEntriesCount-- {
-		if !resRows.Next() {
-			err = errors.New("missing entries in resource table")
-			return
-		}
+) (pendingRow, error) {
+	var err error
+	for {
 		var buf []byte
 		var addrid int64
 		var aidx basics.CreatableIndex
 		var rtype basics.CreatableType
-		err = resRows.Scan(&addrid, &aidx, &rtype, &buf)
-		if err != nil {
-			return
-		}
-		if addrid != acctRowid {
-			err = errors.New("resource table entries mismatches accountbase table entries")
-			return
+		if pr.addrid != 0 {
+			// some accounts may not have resources, consider the following case:
+			// acct 1 and 3 has resources, account 2 does not
+			// in this case addrid = 3 after processing resources from 1, but acctRowid = 2
+			// and we need to skip accounts without resources
+			if pr.addrid > acctRowid {
+				err = callback(addr, 0, 0, &resourcesData{}, nil)
+				return pendingRow{}, err
+			}
+			if pr.addrid < acctRowid {
+				err = errors.New("resource table entries mismatches accountbase table entries")
+				return pendingRow{}, err
+			}
+			addrid = pr.addrid
+			buf = pr.buf
+			aidx = pr.aidx
+			rtype = pr.rtype
+			pr = pendingRow{}
+		} else {
+			if !resRows.Next() {
+				break
+			}
+			err = resRows.Scan(&addrid, &aidx, &rtype, &buf)
+			if err != nil {
+				return pendingRow{}, err
+			}
+			if addrid != acctRowid {
+				return pendingRow{addrid, aidx, rtype, buf}, nil
+			}
 		}
 		var resData resourcesData
 		err = protocol.Decode(buf, &resData)
 		if err != nil {
-			return
+			return pendingRow{}, err
 		}
 		err = callback(addr, aidx, rtype, &resData, buf)
 		if err != nil {
-			return
-		}
-		if resData.IsHolding() && resData.IsOwning() {
-			// this resource is used for both the holding and ownership.
-			resourcesEntriesCount--
+			return pendingRow{}, err
 		}
 	}
-	return nil
+	return pendingRow{}, nil
 }
 
 func processAllBaseAccountRecords(
@@ -2894,6 +2915,7 @@ func processAllBaseAccountRecords(
 	var addr basics.Address
 	var err error
 	count := 0
+	var pending pendingRow
 	for baseRows.Next() {
 		var addrbuf []byte
 		var buf []byte
@@ -2920,7 +2942,7 @@ func processAllBaseAccountRecords(
 			return 0, err
 		}
 
-		err = processAllResources(resRows, addr, &accountData, rowid, resCb)
+		pending, err = processAllResources(resRows, addr, &accountData, rowid, pending, resCb)
 		if err != nil {
 			return 0, err
 		}
@@ -2958,7 +2980,6 @@ func LoadAllFullAccounts(
 	var address basics.Address
 	var baseAcct baseAccountData
 	var ad basics.AccountData
-	var resCounter uint32 = 0
 
 	baseCb := func(addr basics.Address, accountData *baseAccountData, encodedAccountData []byte) (err error) {
 		baseAcct = *accountData
@@ -2967,20 +2988,21 @@ func LoadAllFullAccounts(
 		return nil
 	}
 
+	var totalAppParams, totalAppLocalStates, totalAssetParams, totalAssets uint32
 	resCb := func(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error {
 		if resData.IsApp() && resData.IsOwning() {
 			if ad.AppParams == nil {
 				ad.AppParams = make(map[basics.AppIndex]basics.AppParams)
 			}
 			ad.AppParams[basics.AppIndex(cidx)] = resData.GetAppParams()
-			resCounter++
+			totalAppParams++
 		}
 		if resData.IsApp() && resData.IsHolding() {
 			if ad.AppLocalStates == nil {
 				ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
 			}
 			ad.AppLocalStates[basics.AppIndex(cidx)] = resData.GetAppLocalState()
-			resCounter++
+			totalAppLocalStates++
 		}
 
 		if resData.IsAsset() && resData.IsOwning() {
@@ -2988,20 +3010,26 @@ func LoadAllFullAccounts(
 				ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
 			}
 			ad.AssetParams[basics.AssetIndex(cidx)] = resData.GetAssetParams()
-			resCounter++
+			totalAssetParams++
 		}
 		if resData.IsAsset() && resData.IsHolding() {
 			if ad.Assets == nil {
 				ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
 			}
 			ad.Assets[basics.AssetIndex(cidx)] = resData.GetAssetHolding()
-			resCounter++
+			totalAssets++
 		}
 
-		if baseAcct.TotalAppParams+baseAcct.TotalAppLocalStates+baseAcct.TotalAssetParams+baseAcct.TotalAssets == resCounter {
+		if baseAcct.TotalAppParams == totalAppParams &&
+			baseAcct.TotalAppLocalStates == totalAppLocalStates &&
+			baseAcct.TotalAssetParams == totalAssetParams &&
+			baseAcct.TotalAssets == totalAssets {
 			acctCb(address, ad)
 			ad = basics.AccountData{}
-			resCounter = 0
+			totalAppParams = 0
+			totalAppLocalStates = 0
+			totalAssetParams = 0
+			totalAssets = 0
 			address = basics.Address{}
 		}
 
