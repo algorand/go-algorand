@@ -1592,7 +1592,7 @@ func accountDataResources(
 				rd.SetAppParams(ap, true)
 				delete(accountData.AppParams, aidx)
 			}
-			err := cb(ctx, rowid, basics.CreatableIndex(aidx), basics.AssetCreatable, &rd)
+			err := cb(ctx, rowid, basics.CreatableIndex(aidx), basics.AppCreatable, &rd)
 			if err != nil {
 				return err
 			}
@@ -1600,7 +1600,7 @@ func accountDataResources(
 		for aidx, aparams := range accountData.AppParams {
 			var rd resourcesData
 			rd.SetAppParams(aparams, false)
-			err := cb(ctx, rowid, basics.CreatableIndex(aidx), basics.AssetCreatable, &rd)
+			err := cb(ctx, rowid, basics.CreatableIndex(aidx), basics.AppCreatable, &rd)
 			if err != nil {
 				return err
 			}
