@@ -295,16 +295,21 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 			}
 			err = rows.Err()
 		} else {
+			acctCount := 0
 			acctCb := func(addr basics.Address, data basics.AccountData) {
 				err = printer(addr, data, progress)
 				if err != nil {
 					return
 				}
 				progress++
+				acctCount++
 			}
 			_, err = ledger.LoadAllFullAccounts(context.Background(), tx, balancesTable, resourcesTable, acctCb)
 			if err != nil {
 				return
+			}
+			if acctCount != int(rowsCount) {
+				return fmt.Errorf("expected %d accounts but got only %d", rowsCount, acctCount)
 			}
 		}
 
