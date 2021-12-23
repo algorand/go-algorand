@@ -19,7 +19,6 @@ package abi
 import (
 	"crypto/rand"
 	"encoding/binary"
-	"fmt"
 	"math/big"
 	"testing"
 
@@ -873,27 +872,26 @@ func categorySelfRoundTripTest(t *testing.T, category []testUnit) {
 		require.NoError(t, err, "failure to deserialize type: "+testObj.serializedType)
 		encodedValue, err := abiType.Encode(testObj.value)
 		require.NoError(t, err,
-			fmt.Sprintf("failure to encode value %#v over type %s", testObj.value, testObj.serializedType),
+			"failure to encode value %#v over type %s", testObj.value, testObj.serializedType,
 		)
 		actual, err := abiType.Decode(encodedValue)
 		require.NoError(t, err,
-			fmt.Sprintf("failure to decode value %#v for type %s", encodedValue, testObj.serializedType),
+			"failure to decode value %#v for type %s", encodedValue, testObj.serializedType,
 		)
 		require.Equal(t, testObj.value, actual,
-			fmt.Sprintf("decoded value %#v not equal to expected value %#v", actual, testObj.value),
+			"decoded value %#v not equal to expected value %#v", actual, testObj.value,
 		)
 		jsonEncodedValue, err := abiType.MarshalToJSON(testObj.value)
 		require.NoError(t, err,
-			fmt.Sprintf("failure to encode value %#v to JSON type", testObj.value),
+			"failure to encode value %#v to JSON type", testObj.value,
 		)
 		jsonActual, err := abiType.UnmarshalFromJSON(jsonEncodedValue)
 		require.NoError(t, err,
-			fmt.Sprintf("failure to decode JSON value %s back for type %s",
-				string(jsonEncodedValue), testObj.serializedType,
-			),
+			"failure to decode JSON value %s back for type %s",
+			string(jsonEncodedValue), testObj.serializedType,
 		)
 		require.Equal(t, testObj.value, jsonActual,
-			fmt.Sprintf("decode JSON value %s not equal to expected %s", jsonActual, testObj.value),
+			"decode JSON value %s not equal to expected %s", jsonActual, testObj.value,
 		)
 	}
 }
