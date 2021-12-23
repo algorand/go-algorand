@@ -293,7 +293,7 @@ func LogicSigSanityCheckBatchVerify(txn *transactions.SignedTxn, groupIndex int,
 	ep := logic.EvalParams{
 		Proto:          &groupCtx.consensusParams,
 		TxnGroup:       txngroup,
-		MinTealVersion: &groupCtx.minTealVersion,
+		minTealVersion: &groupCtx.minTealVersion,
 	}
 	err := logic.CheckSignature(groupIndex, &ep)
 	if err != nil {
@@ -348,7 +348,7 @@ func logicSigBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 	ep := logic.EvalParams{
 		Proto:          &groupCtx.consensusParams,
 		TxnGroup:       transactions.WrapSignedTxnsWithAD(groupCtx.signedGroupTxns),
-		MinTealVersion: &groupCtx.minTealVersion,
+		minTealVersion: &groupCtx.minTealVersion,
 	}
 	pass, err := logic.EvalSignature(groupIndex, &ep)
 	if err != nil {

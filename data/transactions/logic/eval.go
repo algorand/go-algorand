@@ -224,31 +224,6 @@ type LedgerForLogic interface {
 	Counter() uint64
 }
 
-// EvalSideEffects contains data returned from evaluation
-type EvalSideEffects struct {
-	scratchSpace scratchSpace
-}
-
-// MakePastSideEffects allocates and initializes a slice of EvalSideEffects of length `size`
-func MakePastSideEffects(size int) []EvalSideEffects {
-	pastSideEffects := make([]EvalSideEffects, size)
-	for j := range pastSideEffects {
-		pastSideEffects[j] = EvalSideEffects{}
-	}
-	return pastSideEffects
-}
-
-// getScratchValue loads and clones a stackValue
-// The value is cloned so the original bytes are protected from changes
-func (se *EvalSideEffects) getScratchValue(scratchPos uint8) stackValue {
-	return se.scratchSpace[scratchPos].clone()
-}
-
-// setScratchSpace stores the scratch space
-func (se *EvalSideEffects) setScratchSpace(scratch scratchSpace) {
-	se.scratchSpace = scratch
-}
-
 // resources contains a list of apps and assets. It's used to track the apps and
 // assets created by a txgroup, for "free" access.
 type resources struct {
@@ -264,9 +239,9 @@ type EvalParams struct {
 
 	TxnGroup []transactions.SignedTxnWithAD
 
-	PastSideEffects []EvalSideEffects
+	pastScratch []*scratchSpace
 
-	Logger logging.Logger
+	logger logging.Logger
 
 	Ledger LedgerForLogic
 
@@ -325,20 +300,6 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 			apps++
 		}
 	}
-	if apps == 0 {
-		// As an optimization, do less work if there will be no apps to evaluate in this txgroup
-		// Many fields are unneeded for stateless evaluation
-		return &EvalParams{
-			/* It is tempting to not copy the txgroup, as you would imagine that
-			   running no apps means it can not be modified. However,
-			   transaction processing "reaches in" to change the AD of this
-			   group using RecordAD. An alternative would be to avoid those
-			   calls when there are no apps, but this feels safer. */
-			TxnGroup: copyWithClearAD(txgroup),
-			Proto:    proto,
-			Specials: specials,
-		}
-	}
 
 	minTealVersion := ComputeMinTealVersion(txgroup, false)
 
@@ -361,7 +322,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		TxnGroup:                copyWithClearAD(txgroup),
 		Proto:                   proto,
 		Specials:                specials,
-		PastSideEffects:         MakePastSideEffects(len(txgroup)),
+		pastScratch:             make([]*scratchSpace, len(txgroup)),
 		MinTealVersion:          &minTealVersion,
 		FeeCredit:               &credit,
 		PooledApplicationBudget: pooledApplicationBudget,
@@ -395,7 +356,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxn, caller *EvalContext) *Eval
 	ep := &EvalParams{
 		Proto:                   caller.Proto,
 		TxnGroup:                copyWithClearAD(txgroup),
-		PastSideEffects:         MakePastSideEffects(len(txgroup)),
+		pastScratch:             make([]*scratchSpace, len(txgroup)),
 		MinTealVersion:          &minTealVersion,
 		FeeCredit:               caller.FeeCredit,
 		Specials:                caller.Specials,
@@ -443,8 +404,8 @@ func (r runMode) String() string {
 }
 
 func (ep EvalParams) log() logging.Logger {
-	if ep.Logger != nil {
-		return ep.Logger
+	if ep.logger != nil {
+		return ep.logger
 	}
 	return logging.Base()
 }
@@ -462,7 +423,7 @@ func (ep *EvalParams) RecordAD(gi int, ad transactions.ApplyData) {
 	}
 }
 
-type scratchSpace = [256]stackValue
+type scratchSpace [256]stackValue
 
 // EvalContext is the execution context of AVM bytecode.  It contains the full
 // state of the running program, and tracks some of the things that the program
@@ -592,7 +553,8 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		*cx.pooledAllowedInners -= len(cx.Txn.EvalDelta.InnerTxns)
 	}
 	// update side effects
-	cx.PastSideEffects[cx.GroupIndex].setScratchSpace(cx.scratch)
+	cx.pastScratch[cx.GroupIndex] = &scratchSpace{}
+	*cx.pastScratch[cx.GroupIndex] = cx.scratch
 
 	return pass, &cx, err
 }
@@ -2997,26 +2959,25 @@ func opStores(cx *EvalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
-func opGloadImpl(cx *EvalContext, groupIdx int, scratchIdx byte, opName string) (scratchValue stackValue, err error) {
+func opGloadImpl(cx *EvalContext, groupIdx int, scratchIdx byte, opName string) (stackValue, error) {
+	var none stackValue
 	if groupIdx >= len(cx.TxnGroup) {
-		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
-		return
-	} else if int(scratchIdx) >= len(cx.scratch) {
-		err = fmt.Errorf("invalid Scratch index %d", scratchIdx)
-		return
-	} else if txn := cx.TxnGroup[groupIdx].Txn; txn.Type != protocol.ApplicationCallTx {
-		err = fmt.Errorf("can't use %s on non-app call txn with index %d", opName, groupIdx)
-		return
-	} else if groupIdx == cx.GroupIndex {
-		err = fmt.Errorf("can't use %s on self, use load instead", opName)
-		return
-	} else if groupIdx > cx.GroupIndex {
-		err = fmt.Errorf("%s can't get future scratch space from txn with index %d", opName, groupIdx)
-		return
+		return none, fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
+	}
+	if int(scratchIdx) >= len(cx.scratch) {
+		return none, fmt.Errorf("invalid Scratch index %d", scratchIdx)
+	}
+	if cx.TxnGroup[groupIdx].Txn.Type != protocol.ApplicationCallTx {
+		return none, fmt.Errorf("can't use %s on non-app call txn with index %d", opName, groupIdx)
+	}
+	if groupIdx == cx.GroupIndex {
+		return none, fmt.Errorf("can't use %s on self, use load instead", opName)
+	}
+	if groupIdx > cx.GroupIndex {
+		return none, fmt.Errorf("%s can't get future scratch space from txn with index %d", opName, groupIdx)
 	}
 
-	scratchValue = cx.PastSideEffects[groupIdx].getScratchValue(scratchIdx)
-	return
+	return cx.pastScratch[groupIdx][scratchIdx], nil
 }
 
 func opGload(cx *EvalContext) {

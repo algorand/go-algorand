@@ -2191,6 +2191,7 @@ func TestReturnTypes(t *testing.T) {
 		[]byte("aoeu2"),
 		[]byte("aoeu3"),
 	}
+	ep.pastScratch[0] = &scratchSpace{} // for gload
 	ledger.NewAccount(tx.Sender, 1)
 	params := basics.AssetParams{
 		Total:         1000,

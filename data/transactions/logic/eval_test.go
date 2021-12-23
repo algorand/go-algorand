@@ -141,7 +141,7 @@ func (ep *EvalParams) reset() {
 		inners := ep.Proto.MaxInnerTransactions
 		ep.pooledAllowedInners = &inners
 	}
-	ep.PastSideEffects = MakePastSideEffects(ep.Proto.MaxTxGroupSize)
+	ep.pastScratch = make([]*scratchSpace, ep.Proto.MaxTxGroupSize)
 	for i := range ep.TxnGroup {
 		ep.TxnGroup[i].ApplyData = transactions.ApplyData{}
 	}
@@ -2440,9 +2440,9 @@ int 1`,
 			}
 
 			ep := &EvalParams{
-				Proto:           makeTestProto(),
-				TxnGroup:        txgroup,
-				PastSideEffects: MakePastSideEffects(2),
+				Proto:       makeTestProto(),
+				TxnGroup:    txgroup,
+				pastScratch: make([]*scratchSpace, 2),
 			}
 
 			switch failCase.runMode {
@@ -2805,7 +2805,7 @@ func TestPanic(t *testing.T) {
 				}
 			}
 			params := defaultEvalParams(nil)
-			params.Logger = log
+			params.logger = log
 			params.TxnGroup[0].Lsig.Logic = ops.Program
 			err := CheckSignature(0, params)
 			require.Error(t, err)
@@ -2819,7 +2819,7 @@ func TestPanic(t *testing.T) {
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			params = defaultEvalParams(&txn)
-			params.Logger = log
+			params.logger = log
 			pass, err := EvalSignature(0, params)
 			if pass {
 				t.Log(hex.EncodeToString(ops.Program))

@@ -84,16 +84,10 @@ func TestNewAppEvalParams(t *testing.T) {
 				require.NotNil(t, ep)
 				require.Equal(t, ep.TxnGroup, testCase.group)
 				require.Equal(t, *ep.Proto, param)
-				// Ensure details of eps that will run on apps
-				if testCase.numAppCalls > 0 {
-					require.NotNil(t, ep.PastSideEffects)
-					if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusV29]) {
-						require.Nil(t, ep.PooledApplicationBudget)
-					} else if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusFuture]) {
-						require.Equal(t, *ep.PooledApplicationBudget, uint64(param.MaxAppProgramCost*testCase.numAppCalls))
-					}
-				} else {
-					require.Nil(t, ep.PastSideEffects)
+				if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusV29]) {
+					require.Nil(t, ep.PooledApplicationBudget)
+				} else if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusFuture]) {
+					require.Equal(t, *ep.PooledApplicationBudget, uint64(param.MaxAppProgramCost*testCase.numAppCalls))
 				}
 			})
 		}
