@@ -152,8 +152,10 @@ func TestVcArrayPadding(t *testing.T) {
 	leafHash := h.Sum(nil)
 
 	leafVc, err := vc.Marshal(msbToLsbIndex(1, 4))
+	hashID, leafData := leafVc.ToBeHashed()
 	h.Reset()
-	h.Write(leafVc)
+	h.Write([]byte(hashID))
+	h.Write(leafData)
 	leafVcHash := h.Sum(nil)
 
 	require.NoError(t, err)

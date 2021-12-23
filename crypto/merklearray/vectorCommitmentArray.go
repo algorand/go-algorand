@@ -18,6 +18,7 @@ package merklearray
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 	"math/bits"
 )
@@ -28,8 +29,10 @@ type vectorCommitmentArray struct {
 	paddedLen uint64
 }
 
-func getBottomElement() []byte {
-	return []byte(protocol.MerkleBottomLeaf)
+type bottomElement struct{}
+
+func (b *bottomElement) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.MerkleBottomLeaf, []byte{}
 }
 
 func generateVectorCommitmentArray(innerArray Array) *vectorCommitmentArray {
@@ -55,7 +58,7 @@ func (vc *vectorCommitmentArray) Length() uint64 {
 	return vc.paddedLen
 }
 
-func (vc *vectorCommitmentArray) Marshal(pos uint64) ([]byte, error) {
+func (vc *vectorCommitmentArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	lsbIndex := msbToLsbIndex(pos, vc.pathLen)
 	if lsbIndex >= vc.paddedLen {
 		return nil, fmt.Errorf("vectorCommitmentArray.Get(%d): out of bounds, full size %d", pos, vc.paddedLen)
@@ -66,7 +69,7 @@ func (vc *vectorCommitmentArray) Marshal(pos uint64) ([]byte, error) {
 		return vc.array.Marshal(lsbIndex)
 	}
 
-	return getBottomElement(), nil
+	return &bottomElement{}, nil
 }
 
 func msbToLsbIndex(msbIndex uint64, pathLen uint8) uint64 {

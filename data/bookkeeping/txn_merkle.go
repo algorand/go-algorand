@@ -46,7 +46,7 @@ func (tma *txnMerkleArray) Length() uint64 {
 }
 
 // Get implements the merklearray.Array interface.
-func (tma *txnMerkleArray) Marshal(pos uint64) ([]byte, error) {
+func (tma *txnMerkleArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	if pos >= uint64(len(tma.block.Payset)) {
 		return nil, fmt.Errorf("txnMerkleArray.Get(%d): out of bounds, payset size %d", pos, len(tma.block.Payset))
 	}
@@ -60,7 +60,7 @@ func (tma *txnMerkleArray) Marshal(pos uint64) ([]byte, error) {
 	}
 	elem.txn = stxn.Txn
 
-	return elem.HashRepresentation(), nil
+	return &elem, nil
 }
 
 // txnMerkleElem represents a leaf in the Merkle tree of all transactions

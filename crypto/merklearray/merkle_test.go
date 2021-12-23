@@ -61,12 +61,12 @@ func hashRep(h crypto.Hashable) []byte {
 	return append([]byte(hashid), data...)
 }
 
-func (a TestArray) Marshal(pos uint64) ([]byte, error) {
+func (a TestArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	if pos >= uint64(len(a)) {
 		return nil, fmt.Errorf("pos %d larger than length %d", pos, len(a))
 	}
 
-	return hashRep(a[pos]), nil
+	return a[pos], nil
 }
 
 type TestRepeatingArray struct {
@@ -78,12 +78,12 @@ func (a TestRepeatingArray) Length() uint64 {
 	return a.count
 }
 
-func (a TestRepeatingArray) Marshal(pos uint64) ([]byte, error) {
+func (a TestRepeatingArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	if pos >= a.count {
 		return nil, fmt.Errorf("pos %d larger than length %d", pos, a.count)
 	}
 
-	return hashRep(a.item), nil
+	return a.item, nil
 }
 
 func TestMerkle(t *testing.T) {
@@ -205,7 +205,7 @@ func (n nonmarshalable) Length() uint64 {
 	return uint64(len(n))
 }
 
-func (n nonmarshalable) Marshal(pos uint64) ([]byte, error) {
+func (n nonmarshalable) Marshal(pos uint64) (crypto.Hashable, error) {
 	return nil, fmt.Errorf("can't be marshaled")
 }
 
