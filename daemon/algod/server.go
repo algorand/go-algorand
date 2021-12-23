@@ -98,6 +98,9 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 		// Default setting - host app should configure this
 		// If host doesn't, the default is Disable = false (so, enabled)
 	}
+	if !deadlock.Opts.Disable {
+		deadlock.Opts.DeadlockTimeout = time.Second * time.Duration(cfg.DeadlockDetectionThreshold)
+	}
 
 	// if we have the telemetry enabled, we want to use it's sessionid as part of the
 	// collected metrics decorations.
