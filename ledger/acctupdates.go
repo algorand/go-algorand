@@ -825,6 +825,8 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		}
 		mres, _ := au.resources.get(key)
 		mres.resource.AssetHolding = holding.Holding
+		mres.resource.CreatableIndex = basics.CreatableIndex(holding.Aidx)
+		mres.resource.CreatableType = basics.AssetCreatable
 		mres.ndeltas++
 		au.resources.set(key, mres)
 	}
@@ -835,6 +837,8 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		}
 		mres, _ := au.resources.get(key)
 		mres.resource.AssetParam = params.Params
+		mres.resource.CreatableIndex = basics.CreatableIndex(params.Aidx)
+		mres.resource.CreatableType = basics.AssetCreatable
 		mres.ndeltas++
 		au.resources.set(key, mres)
 	}
@@ -845,6 +849,8 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		}
 		mres, _ := au.resources.get(key)
 		mres.resource.AppLocalState = localStates.State
+		mres.resource.CreatableIndex = basics.CreatableIndex(localStates.Aidx)
+		mres.resource.CreatableType = basics.AppCreatable
 		mres.ndeltas++
 		au.resources.set(key, mres)
 	}
@@ -855,6 +861,8 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		}
 		mres, _ := au.resources.get(key)
 		mres.resource.AppParams = appParams.Params
+		mres.resource.CreatableIndex = basics.CreatableIndex(appParams.Aidx)
+		mres.resource.CreatableType = basics.AppCreatable
 		mres.ndeltas++
 		au.resources.set(key, mres)
 	}
