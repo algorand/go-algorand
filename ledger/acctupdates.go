@@ -1021,7 +1021,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				// we don't technically need this, since it's already in the baseResources, however, writing this over
 				// would ensure that we promote this field.
 				au.baseResources.writePending(prd, addr)
-				addResource(prd.aidx, prd.round, prd.AccountResource())
+				addResource(prd.aidx, rnd, prd.AccountResource())
 			}
 		}
 		au.accountsMu.RUnlock()
@@ -1060,7 +1060,9 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				au.log.Errorf("accountUpdates.lookupLatest: account database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
 				return basics.AccountData{}, basics.Round(0), &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 			}
-			goto tryAgain
+			if persistedData.round > currentDbRound {
+				goto tryAgain
+			}
 		}
 
 		// Look for resources on disk
@@ -1071,7 +1073,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		if resourceDbRound == currentDbRound {
 			for _, pd := range persistedResources {
 				au.baseResources.writePending(pd, addr)
-				addResource(pd.aidx, pd.round, pd.AccountResource())
+				addResource(pd.aidx, currentDbRound, pd.AccountResource())
 			}
 			// We've found all the resources we could find for this address.
 			return
