@@ -23,9 +23,9 @@ import (
 )
 
 type vectorCommitmentArray struct {
-	array      Array
-	pathLen    uint8
-	paddedSize uint64
+	array     Array
+	pathLen   uint8
+	paddedLen uint64
 }
 
 func getBottomElement() []byte {
@@ -34,44 +34,38 @@ func getBottomElement() []byte {
 
 func generateVectorCommitmentArray(innerArray Array) *vectorCommitmentArray {
 	arrayLen := innerArray.Length()
-	if arrayLen == 0 {
-		// in this case the tree has only one bottom element
-		return &vectorCommitmentArray{array: innerArray, pathLen: 1, paddedSize: 1}
-	}
-	if arrayLen == 1 {
-		return &vectorCommitmentArray{array: innerArray, pathLen: 1, paddedSize: 2}
+	if arrayLen == 0 || arrayLen == 1 {
+		return &vectorCommitmentArray{array: innerArray, pathLen: 1, paddedLen: 1}
 	}
 
-	numOfBits := uint8(bits.Len64(arrayLen - 1))
-
+	path := uint8(bits.Len64(arrayLen - 1))
 	var fullSize uint64
-	var path uint8
 	// if only one bit is set then this is a power of 2 number
 	// if not, we round up the number to the closest power of 2
 	if bits.OnesCount64(arrayLen) == 1 {
 		fullSize = arrayLen
-		path = numOfBits
 	} else {
-		path = numOfBits
 		fullSize = 1 << path
 	}
 
-	return &vectorCommitmentArray{array: innerArray, pathLen: path, paddedSize: fullSize}
+	return &vectorCommitmentArray{array: innerArray, pathLen: path, paddedLen: fullSize}
 }
 
 func (vc *vectorCommitmentArray) Length() uint64 {
-	return vc.paddedSize
+	return vc.paddedLen
 }
 
 func (vc *vectorCommitmentArray) Marshal(pos uint64) ([]byte, error) {
-	msbIndex := msbToLsbIndex(pos, vc.pathLen)
-	if msbIndex >= vc.paddedSize {
-		return nil, fmt.Errorf("vectorCommitmentArray.Get(%d): out of bounds, full size %d", pos, vc.paddedSize)
+	lsbIndex := msbToLsbIndex(pos, vc.pathLen)
+	if lsbIndex >= vc.paddedLen {
+		return nil, fmt.Errorf("vectorCommitmentArray.Get(%d): out of bounds, full size %d", pos, vc.paddedLen)
+	}
+	// try to enforce the DS
+	if lsbIndex < vc.array.Length() {
+		// assert that this doesn't start with MB
+		return vc.array.Marshal(lsbIndex)
 	}
 
-	if msbIndex < vc.array.Length() {
-		return vc.array.Marshal(msbIndex)
-	}
 	return getBottomElement(), nil
 }
 

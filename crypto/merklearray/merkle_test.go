@@ -232,7 +232,7 @@ func TestVerifyWithNoElements(t *testing.T) {
 	p, err := tree.Prove([]uint64{1})
 	a.NoError(err)
 	err = Verify(tree.Root(), map[uint64]crypto.Hashable{}, p)
-	require.ErrorIs(t, err, ErrEmptyProofNonEmptyElements)
+	require.ErrorIs(t, err, ErrNonEmptyProofForEmptyElements)
 
 	err = Verify(tree.Root(), map[uint64]crypto.Hashable{}, nil)
 	require.ErrorIs(t, err, ErrProofIsNil)
@@ -637,12 +637,7 @@ func TestVCOnlyOneNode(t *testing.T) {
 	copy(a[0][:], []byte{0x1, 0x2})
 
 	h := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
-	leaf0Hash := crypto.GenereicHashObj(h, a[0])
-	h.Reset()
-	h.Write([]byte(protocol.MerkleBottomLeaf))
-	leaf1Hash := h.Sum(nil)
-
-	rootHash := hashInternalNode(h, leaf0Hash, leaf1Hash)
+	rootHash := crypto.GenereicHashObj(h, a[0])
 
 	tree, err := BuildVectorCommitmentTree(a, crypto.HashFactory{HashType: crypto.Sha512_256})
 	require.NoError(t, err)

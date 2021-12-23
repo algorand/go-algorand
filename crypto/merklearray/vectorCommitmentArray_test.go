@@ -87,52 +87,52 @@ func TestVcSizes(t *testing.T) {
 
 	vc = vcSizeInnerTest(0)
 	require.Equal(t, uint8(1), vc.pathLen)
-	require.Equal(t, uint64(1), vc.paddedSize)
+	require.Equal(t, uint64(1), vc.paddedLen)
 	require.Equal(t, uint64(1), vc.Length())
 
 	vc = vcSizeInnerTest(1)
 	require.Equal(t, uint8(1), vc.pathLen)
-	require.Equal(t, uint64(2), vc.paddedSize)
-	require.Equal(t, uint64(2), vc.Length())
+	require.Equal(t, uint64(1), vc.paddedLen)
+	require.Equal(t, uint64(1), vc.Length())
 
 	vc = vcSizeInnerTest(2)
 	require.Equal(t, uint8(1), vc.pathLen)
-	require.Equal(t, uint64(2), vc.paddedSize)
+	require.Equal(t, uint64(2), vc.paddedLen)
 	require.Equal(t, uint64(2), vc.Length())
 
 	vc = vcSizeInnerTest(3)
 	require.Equal(t, uint8(2), vc.pathLen)
-	require.Equal(t, uint64(4), vc.paddedSize)
+	require.Equal(t, uint64(4), vc.paddedLen)
 	require.Equal(t, uint64(4), vc.Length())
 
 	vc = vcSizeInnerTest(4)
 	require.Equal(t, uint8(2), vc.pathLen)
-	require.Equal(t, uint64(4), vc.paddedSize)
+	require.Equal(t, uint64(4), vc.paddedLen)
 	require.Equal(t, uint64(4), vc.Length())
 
 	vc = vcSizeInnerTest(5)
 	require.Equal(t, uint8(3), vc.pathLen)
-	require.Equal(t, uint64(8), vc.paddedSize)
+	require.Equal(t, uint64(8), vc.paddedLen)
 	require.Equal(t, uint64(8), vc.Length())
 
 	vc = vcSizeInnerTest(9)
 	require.Equal(t, uint8(4), vc.pathLen)
-	require.Equal(t, uint64(16), vc.paddedSize)
+	require.Equal(t, uint64(16), vc.paddedLen)
 	require.Equal(t, uint64(16), vc.Length())
 
 	vc = vcSizeInnerTest(15)
 	require.Equal(t, uint8(4), vc.pathLen)
-	require.Equal(t, uint64(16), vc.paddedSize)
+	require.Equal(t, uint64(16), vc.paddedLen)
 	require.Equal(t, uint64(16), vc.Length())
 
 	vc = vcSizeInnerTest(16)
 	require.Equal(t, uint8(4), vc.pathLen)
-	require.Equal(t, uint64(16), vc.paddedSize)
+	require.Equal(t, uint64(16), vc.paddedLen)
 	require.Equal(t, uint64(16), vc.Length())
 
 	vc = vcSizeInnerTest(17)
 	require.Equal(t, uint8(5), vc.pathLen)
-	require.Equal(t, uint64(32), vc.paddedSize)
+	require.Equal(t, uint64(32), vc.paddedLen)
 	require.Equal(t, uint64(32), vc.Length())
 }
 
