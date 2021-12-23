@@ -34,6 +34,16 @@ const (
 	MaxNumLeaves = 65536 // 2^MaxTreeDepth
 )
 
+// building a merkle tree with zero element -> root == somevalue (no preimage known)/ hash some other DS
+// 			maybe we corrently use 000000000...00 as the root???
+// 		one element -> root == hash(leaf)
+// generate proof - Im being asked to prove on nil elements - not
+// verify - accept if no elements to prove on and no proof. reject if there is a proof and no elements
+//
+//VC
+//===
+//
+
 // Merkle tree errors
 var (
 	ErrRootMismatch                  = errors.New("root mismatch")
@@ -42,6 +52,7 @@ var (
 	ErrNonEmptyProofForEmptyElements = errors.New("non-empty proof for empty set of elements")
 	ErrTreeTooDeep                   = errors.New("proven tree is too deep")
 	ErrTooManyVerificationLevels     = errors.New("Verify exceeded 64 Levels, more than 2^64 leaves not supported")
+	ErrUnexpectedTreeDepth           = errors.New("unexpected tree depth")
 )
 
 // Tree is a Merkle tree, represented by layers of nodes (hashes) in the tree
@@ -65,7 +76,9 @@ type Proof struct {
 	// the path length can increase up to 2^MaxTreeDepth / 2
 	Path        []crypto.GenericDigest `codec:"pth,allocbound=MaxNumLeaves/2"`
 	HashFactory crypto.HashFactory     `codec:"hsh"`
-	TreeDepth   uint8                  `codec:"td"`
+	// TreeDepth represents the depth of the tree that is being proven.
+	// the root level does not included
+	TreeDepth uint8 `codec:"td"`
 }
 
 func (tree *Tree) topLayer() Layer {
@@ -179,10 +192,19 @@ const validateProof = false
 // used to construct the tree.
 func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 	if len(idxs) == 0 {
+		treeDepth := uint8(0)
+		if len(tree.Levels) != 0 {
+			treeDepth = uint8(len(tree.Levels)) - 1
+		}
 		return &Proof{
 			HashFactory: tree.Hash,
+			TreeDepth:   treeDepth,
 		}, nil
 	}
+
+	// make sure that the origian lmerkle tree also rejects zero elements proof
+	// we need to return an error when on that case
+	//
 
 	// Special case: commitment to zero-length array
 	if len(tree.Levels) == 0 || tree.NumOfLeaves == 0 {
@@ -272,16 +294,6 @@ func hashLeaves(elems map[uint64]crypto.Hashable, hash hash.Hash) (map[uint64]cr
 	return hashedLeaves, nil
 }
 
-func hashLeavesVC(elems map[uint64]crypto.Hashable, hash hash.Hash, proofDepth uint8) (map[uint64]crypto.GenericDigest, error) {
-	hashedLeaves := make(map[uint64]crypto.GenericDigest, len(elems))
-	for i, element := range elems {
-		msbIndex := msbToLsbIndex(i, proofDepth)
-		hashedLeaves[msbIndex] = crypto.GenereicHashObj(hash, element)
-	}
-
-	return hashedLeaves, nil
-}
-
 // VerifyVectorCommitment verifies a vector commitment proof against a given root.
 func VerifyVectorCommitment(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *Proof) error {
 	if proof == nil {
@@ -308,6 +320,7 @@ func Verify(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *
 		return ErrTreeTooDeep
 	}
 
+	// create a test for that case in VC - array with 0 elements
 	if len(elems) == 0 {
 		if len(proof.Path) != 0 {
 			return ErrNonEmptyProofForEmptyElements

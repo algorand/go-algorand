@@ -690,6 +690,56 @@ func TestTreeTooDeep(t *testing.T) {
 	require.ErrorIs(t, err, ErrTreeTooDeep)
 }
 
+func TestTreeDepth(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var sizes = []int{1, 2, 3}
+	var expectedDepth = []int{0, 1, 2}
+
+	// array with 0 elements
+	a := require.New(t)
+	size := uint64(0)
+	arr := make(TestArray, size)
+	tree, err := BuildVectorCommitmentTree(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+	p, err := tree.Prove([]uint64{})
+	require.NoError(t, err)
+	require.Equal(t, p.TreeDepth, uint8(0))
+
+	tree, err = Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+	p, err = tree.Prove([]uint64{})
+	require.NoError(t, err)
+	require.Equal(t, p.TreeDepth, uint8(0))
+
+	for i := 0; i < len(sizes); i++ {
+		a = require.New(t)
+		size = uint64(sizes[i])
+		arr = make(TestArray, size)
+		tree, err = BuildVectorCommitmentTree(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+		a.NoError(err)
+		p, err = tree.Prove([]uint64{})
+		require.NoError(t, err)
+		require.Equal(t, p.TreeDepth, uint8(expectedDepth[i]))
+
+		tree, err = Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+		a.NoError(err)
+		p, err = tree.Prove([]uint64{})
+		require.NoError(t, err)
+		require.Equal(t, p.TreeDepth, uint8(expectedDepth[i]))
+
+		p, err = tree.Prove([]uint64{uint64(i)})
+		require.NoError(t, err)
+		require.Equal(t, p.TreeDepth, uint8(expectedDepth[i]))
+
+		tree, err = Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+		a.NoError(err)
+		p, err = tree.Prove([]uint64{uint64(i)})
+		require.NoError(t, err)
+		require.Equal(t, p.TreeDepth, uint8(expectedDepth[i]))
+	}
+
+}
 func BenchmarkMerkleCommit(b *testing.B) {
 	b.Run("sha512_256", func(b *testing.B) { merkleCommitBench(b, crypto.Sha512_256) })
 	b.Run("sumhash", func(b *testing.B) { merkleCommitBench(b, crypto.Sumhash) })
