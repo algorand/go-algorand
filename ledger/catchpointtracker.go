@@ -458,28 +458,28 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 	accumulatedChanges := 0
 
 	for i := 0; i < accountsDeltas.len(); i++ {
-		addr, delta := accountsDeltas.getByIdx(i)
+		delta := accountsDeltas.getByIdx(i)
 		if !delta.oldAcct.accountData.MsgIsZero() {
-			deleteHash := accountHashBuilderV6(addr, &delta.oldAcct.accountData, protocol.Encode(&delta.oldAcct.accountData))
+			deleteHash := accountHashBuilderV6(delta.address, &delta.oldAcct.accountData, protocol.Encode(&delta.oldAcct.accountData))
 			deleted, err = ct.balancesTrie.Delete(deleteHash)
 			if err != nil {
-				return fmt.Errorf("failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
+				return fmt.Errorf("failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), delta.address, err)
 			}
 			if !deleted {
-				ct.log.Warnf("failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
+				ct.log.Warnf("failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), delta.address)
 			} else {
 				accumulatedChanges++
 			}
 		}
 
 		if !delta.newAcct.MsgIsZero() {
-			addHash := accountHashBuilderV6(addr, &delta.newAcct, protocol.Encode(&delta.newAcct))
+			addHash := accountHashBuilderV6(delta.address, &delta.newAcct, protocol.Encode(&delta.newAcct))
 			added, err = ct.balancesTrie.Add(addHash)
 			if err != nil {
-				return fmt.Errorf("attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)
+				return fmt.Errorf("attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), delta.address, err)
 			}
 			if !added {
-				ct.log.Warnf("attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(addHash), addr)
+				ct.log.Warnf("attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(addHash), delta.address)
 			} else {
 				accumulatedChanges++
 			}
