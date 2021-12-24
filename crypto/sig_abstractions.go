@@ -72,6 +72,7 @@ type Verifier interface {
 	// GetVerificationBytes returns a serialized version of the public key data (without the use of the msgpack).
 	GetVerificationBytes() []byte
 	// GetSerializedSignature returns a serialized version of the signature
+	// muse be const sized
 	GetSerializedSignature(signature ByteSignature) ([]byte, error)
 }
 

@@ -65,8 +65,11 @@ func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
 	roundAsBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(roundAsBytes, e.Round)
 
-	keyCommitment := make([]byte, 0, len(verifyingRawKey)+len(roundAsBytes))
+	schemeAsBytes := make([]byte, 2)
+	binary.LittleEndian.PutUint16(schemeAsBytes, uint16(e.VerifyingKey.Type))
 
+	keyCommitment := make([]byte, 0, len(schemeAsBytes)+len(verifyingRawKey)+len(roundAsBytes))
+	keyCommitment = append(keyCommitment, schemeAsBytes...)
 	keyCommitment = append(keyCommitment, roundAsBytes...)
 	keyCommitment = append(keyCommitment, verifyingRawKey...)
 

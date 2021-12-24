@@ -107,7 +107,7 @@ func TestBuildVerify(t *testing.T) {
 	}
 
 	// Share the key; we allow the same vote key to appear in multiple accounts..
-	key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(compactCertRoundsForTests)+1, compactCertRoundsForTests, a)
+	key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
 	defer dbAccessor.Close()
 	require.NotNil(t, dbAccessor, "failed to create signer")
 	var parts []basics.Participant
@@ -204,11 +204,15 @@ func calculateHashOnSigLeaf(t *testing.T, sig merklekeystore.Signature, lValue u
 
 	sigCommitment = append(sigCommitment, binaryL...)
 
+	//build the expected binary representation of the merkle signature
 	pK := sig.VerifyingKey.GetVerifier()
 	serializedSig, err := pK.GetSerializedSignature(sig.ByteSignature)
 	require.NoError(t, err)
 
-	//build the expected binary representation of the merkle signature
+	schemeType := make([]byte, 2)
+	binary.LittleEndian.PutUint16(schemeType, uint16(sig.VerifyingKey.Type))
+
+	sigCommitment = append(sigCommitment, schemeType...)
 	sigCommitment = append(sigCommitment, serializedSig...)
 	sigCommitment = append(sigCommitment, pK.GetVerificationBytes()...)
 
@@ -218,18 +222,22 @@ func calculateHashOnSigLeaf(t *testing.T, sig merklekeystore.Signature, lValue u
 
 	//build the expected binary representation of the merkle signature proof
 
-	proofLen := len(sig.Proof.Path)
-	proofLenBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(proofLenBytes, uint32(proofLen))
+	proofLenByte := byte(len(sig.Proof.Path))
 
-	sigCommitment = append(sigCommitment, proofLenBytes...)
+	sigCommitment = append(sigCommitment, proofLenByte)
 
-	for i := 0; i < proofLen; i++ {
+	i := byte(0)
+	for ; i < proofLenByte; i++ {
 		sigCommitment = append(sigCommitment, sig.Proof.Path[i]...)
 	}
 
-	factory := crypto.HashFactory{HashType: HashType}
-	hashValue := crypto.HashBytes(factory.NewHash(), sigCommitment)
+	hash := crypto.HashFactory{HashType: HashType}.NewHash()
+	zeroDigest := make([]byte, hash.BlockSize())
+	for ; i < merklearray.MaxTreeDepth; i++ {
+		sigCommitment = append(sigCommitment, zeroDigest...)
+	}
+
+	hashValue := crypto.HashBytes(hash, sigCommitment)
 	return hashValue
 }
 
