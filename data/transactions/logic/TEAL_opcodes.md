@@ -865,6 +865,16 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 
 decodes X using the base64 encoding alphabet E. Specify the alphabet with an immediate arg either as URL and Filename Safe (`URLAlph`) or Standard (`StdAlph`). See <a href="https://rfc-editor.org/rfc/rfc4648.html#section-4">RFC 4648</a> (sections 4 and 5)
 
+## json_ref r
+
+- Opcode: 0x5d {return type}
+- Pops: *... stack*, {[]byte A}, {[]byte B}
+- Pushes: any
+- return key B's value from json text A
+- LogicSigVersion >= 6
+
+specify the return type with an immediate arg either as JSONInt or JSONString. When B is a nested key of json object A, A.B returns the value of B. Providing a json with keys containing . will return incorrect value. See <a href="https://datatracker.ietf.org/doc/html/rfc7159.html">RFC 7159</a> for additional json specifications
+
 ## balance
 
 - Opcode: 0x60

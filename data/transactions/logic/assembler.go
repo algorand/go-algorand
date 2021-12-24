@@ -1266,6 +1266,28 @@ func assembleBase64Decode(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
+func assembleJSONRef(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 1 {
+		return ops.errorf("%s expects one argument", spec.Name)
+	}
+
+	jsonSpec, ok := jsonRefSpecByName[args[0]]
+	if !ok {
+		return ops.errorf("%s unsupported JSON value type: %#v", spec.Name, args[0])
+	}
+	if jsonSpec.version > ops.Version {
+		//nolint:errcheck // we continue to maintain typestack
+		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], jsonSpec.version)
+	}
+
+	valueType := jsonSpec.field
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(valueType))
+	ops.trace("%s (%s)", jsonSpec.field, jsonSpec.ftype)
+	ops.returns(jsonSpec.ftype)
+	return nil
+}
+
 type assembleFunc func(*OpStream, *OpSpec, []string) error
 
 // Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
@@ -2702,6 +2724,22 @@ func disBase64Decode(dis *disassembleState, spec *OpSpec) (string, error) {
 		return "", fmt.Errorf("invalid base64_decode arg index %d at pc=%d", b64dArg, dis.pc)
 	}
 	return fmt.Sprintf("%s %s", spec.Name, base64AlphabetNames[b64dArg]), nil
+}
+
+func disJSONRef(dis *disassembleState, spec *OpSpec) (string, error) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+	}
+	dis.nextpc = dis.pc + 2
+
+	jsonRefArg := dis.program[dis.pc+1]
+	if int(jsonRefArg) >= len(jsonRefSpecByName) {
+		return "", fmt.Errorf("invalid json_ref arg index %d at pc=%d", jsonRefArg, dis.pc)
+	}
+
+	return fmt.Sprintf("%s %s", spec.Name, jsonRefTypeNames[jsonRefArg]), nil
 }
 
 type disInfo struct {

@@ -5069,3 +5069,93 @@ func TestOpBase64Decode(t *testing.T) {
 	args := b64TestDecodeAssembleWithArgs(t)
 	b64TestDecodeEval(t, args)
 }
+
+func TestOpJSONRef(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	proto := defaultEvalProtoWithVersion(LogicVersion)
+	txn := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Type: protocol.ApplicationCallTx,
+		},
+	}
+	ledger := logictest.MakeLedger(nil)
+	ledger.NewApp(txn.Txn.Receiver, 0, basics.AppParams{})
+	sb := strings.Builder{}
+	ep := defaultEvalParams(&sb, &txn)
+	ep.Proto = &proto
+	ep.Ledger = ledger
+	testCases := []struct {
+		source string
+	}{
+		{
+			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key3\": [1,2,3]} }"; byte "key0"; json_ref JSONInt; int 1; ==`,
+		},
+		{
+			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key3\": [1,2,3]} }"; byte "key1"; json_ref JSONString; byte "algo"; ==`,
+		},
+		{
+			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": [1,2,3]} }"; byte "key2.key3"; json_ref JSONString; byte "teal"; ==`,
+		},
+		{
+			source: `byte  "{\"rawId\": \"responseId\",\"id\": \"0\",\"response\": {\"attestationObject\": \"based64url_encoded_buffer\",\"clientDataJSON\":  \"based64url_encoded_client_data\"},\"getClientExtensionResults\": {},\"type\": \"public-key\"}"; byte "response.clientDataJSON"; json_ref JSONString; byte "based64url_encoded_client_data"; ==`,
+		},
+	}
+
+	for _, s := range testCases {
+		ops := testProg(t, s.source, AssemblerMaxVersion)
+
+		err := CheckStateful(ops.Program, ep)
+		require.NoError(t, err, s)
+
+		pass, _, err := EvalStatefulCx(ops.Program, ep)
+		require.NoError(t, err)
+		require.True(t, pass)
+	}
+
+	failedCases := []struct {
+		source string
+		error  string
+	}{
+		{
+			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key3\": [1,2,3]} }"; byte "key0"; json_ref JSONString;`,
+			error:  "value retrieved from JSON text is type int but expected JSONString",
+		},
+		{
+			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key3\": [1,2,3]} }"; byte "key1"; json_ref JSONInt;`,
+			error:  "value retrieved from JSON text is type string but expected JSONInt",
+		},
+		{
+			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": [1,2,3]} }"; byte "key2"; json_ref JSONString;`,
+			error:  "value of unexpected type retrieved from JSON text",
+		},
+		{
+			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": [1,2,3]} }"; byte "key3"; json_ref JSONString;`,
+			error:  "key key3 not found in JSON text",
+		},
+		{
+			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": [1,2,3]} }"; byte "key2.key3.key5"; json_ref JSONString;`,
+			error:  "key key5 not found in JSON text",
+		},
+		{
+			source: `byte  "{\"key0.name\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": [1,2,3]} }"; byte "key.name"; json_ref JSONString;`,
+			error:  "key key not found in JSON text",
+		},
+		{
+			source: `byte  "{\"key0\": 1,}"; byte "key0"; json_ref JSONString;`,
+			error:  "error while parsing JSON text, invalid json text {\"key0\": 1,}",
+		},
+	}
+
+	for _, s := range failedCases {
+		ops := testProg(t, s.source, AssemblerMaxVersion)
+
+		err := CheckStateful(ops.Program, ep)
+		require.NoError(t, err, s)
+
+		_, _, err = EvalStatefulCx(ops.Program, ep)
+		require.Error(t, err)
+		require.EqualError(t, err, s.error)
+	}
+
+}

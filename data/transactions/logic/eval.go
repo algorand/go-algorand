@@ -4063,6 +4063,9 @@ func opBase64Decode(cx *EvalContext) {
 }
 
 func parseJSON(jsonText []byte) (interface{}, error) {
+	if !json.Valid(jsonText) {
+		return nil, fmt.Errorf("invalid json text %s", jsonText)
+	}
 	var parsed interface{}
 	err := json.Unmarshal(jsonText, &parsed)
 	if err != nil {
@@ -4071,56 +4074,49 @@ func parseJSON(jsonText []byte) (interface{}, error) {
 	return parsed, nil
 }
 func opJSONRef(cx *EvalContext) {
-	fields := make([]string, 0)
-	n := uint(cx.program[cx.pc+1])
-
-	// get json keys
-	for i := 0; uint(i) < n; i++ {
-		last := len(cx.stack) - 1
-		fields = append(fields, string(cx.stack[last-1].Bytes))
-		cx.stack = cx.stack[:last-1] // pop
-	}
-
 	last := len(cx.stack) - 1
-	webAuthnResponse, err := parseJSON(cx.stack[last-1].Bytes)
+	fields := strings.Split(string(cx.stack[last].Bytes), ".") // get json keys
+	cx.stack = cx.stack[:last]                                 // pop
+	last = len(cx.stack) - 1
+	resp, err := parseJSON(cx.stack[last].Bytes)
 	if err != nil {
-		cx.err = fmt.Errorf("error while parsing FIDO2 response, %v", err)
+		cx.err = fmt.Errorf("error while parsing JSON text, %v", err)
 		return
 	}
-
 	//get value from json
-	for len(fields) > 0 {
-		key := fields[len(fields)-1]
-		if value, ok := webAuthnResponse.(map[string]interface{})[key]; ok {
-			switch key {
-			case "attestationObject":
-			case "clientDataJSON":
-				decodedBytes, err := base64Decode(value.([]byte), base64.URLEncoding)
-				if err != nil {
-
-				}
-				webAuthnResponse, err = parseJSON(decodedBytes)
-			default:
-				webAuthnResponse = webAuthnResponse.(map[string]interface{})[key]
+	for i := 0; i < len(fields); i++ {
+		key := fields[i]
+		switch resp.(type) {
+		case map[string]interface{}:
+			if _, ok := resp.(map[string]interface{})[key]; ok {
+				resp = resp.(map[string]interface{})[key]
+			} else {
+				cx.err = fmt.Errorf("key %s not found in JSON text", key)
+				return
 			}
-		} else {
-			cx.err = fmt.Errorf("key %s not found in FIDO2 response", key)
+		default:
+			cx.err = fmt.Errorf("key %s not found in JSON text", key)
 			return
 		}
-		fields = fields[:len(fields)-1]
 	}
-	expectedType := string(cx.program[cx.pc+2])
-	switch webAuthnResponse.(type) {
-	case int:
+	expectedType := jsonRefTypeNames[cx.program[cx.pc+1]]
+	var val stackValue
+	switch resp.(type) {
+	case float64:
 		if expectedType != "JSONInt" {
-			fmt.Errorf("value retrieved from FIDO2 response is type int but expected %s", expectedType)
+			cx.err = fmt.Errorf("value retrieved from JSON text is type int but expected %s", expectedType)
+			return
 		}
+		val.Uint = uint64(resp.(float64))
 	case string:
 		if expectedType != "JSONString" {
-			fmt.Errorf("value retrieved from FIDO2 response is type string but expected %s", expectedType)
+			cx.err = fmt.Errorf("value retrieved from JSON text is type string but expected %s", expectedType)
+			return
 		}
+		val.Bytes = []byte(resp.(string))
 	default:
-
+		cx.err = fmt.Errorf("value of unexpected type retrieved from JSON text")
+		return
 	}
-	cx.stack = cx.stack[:last-1] // pop
+	cx.stack[last] = val
 }

@@ -98,15 +98,16 @@ var opDocByName = map[string]string{
 	"itxn":    "push field F of the last inner transaction to stack",
 	"itxna":   "push Ith value of the array field F of the last inner transaction to stack",
 
-	"global": "push value from globals to stack",
-	"load":   "copy a value from scratch space to the stack. All scratch spaces are 0 at program start.",
-	"store":  "pop value X. store X to the Ith scratch space",
-	"loads":  "copy a value from the Xth scratch space to the stack.  All scratch spaces are 0 at program start.",
-	"stores": "pop indexes A and B. store B to the Ath scratch space",
-	"gload":  "push Ith scratch space index of the Tth transaction in the current group",
-	"gloads": "push Ith scratch space index of the Xth transaction in the current group",
-	"gaid":   "push the ID of the asset or application created in the Tth transaction of the current group",
-	"gaids":  "push the ID of the asset or application created in the Xth transaction of the current group",
+	"global":   "push value from globals to stack",
+	"load":     "copy a value from scratch space to the stack. All scratch spaces are 0 at program start.",
+	"store":    "pop value X. store X to the Ith scratch space",
+	"loads":    "copy a value from the Xth scratch space to the stack.  All scratch spaces are 0 at program start.",
+	"stores":   "pop indexes A and B. store B to the Ath scratch space",
+	"gload":    "push Ith scratch space index of the Tth transaction in the current group",
+	"gloads":   "push Ith scratch space index of the Xth transaction in the current group",
+	"gaid":     "push the ID of the asset or application created in the Tth transaction of the current group",
+	"gaids":    "push the ID of the asset or application created in the Xth transaction of the current group",
+	"json_ref": "return key B's value from json text A",
 
 	"bnz":     "branch to TARGET if value X is not zero",
 	"bz":      "branch to TARGET if value X is zero",
@@ -232,6 +233,7 @@ var opcodeImmediateNotes = map[string]string{
 	"ecdsa_pk_recover":    "{uint8 curve index}",
 
 	"base64_decode": "{uint8 alphabet index}",
+	"json_ref":      "{return type}",
 }
 
 // OpImmediateNote returns a short string about immediate data which follows the op byte
@@ -287,6 +289,7 @@ var opDocExtras = map[string]string{
 	"itxn_field":          "`itxn_field` fails if X is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if X is an account or asset that does not appear in `txn.Accounts` or `txn.ForeignAssets` of the top-level transaction. (Setting addresses in asset creation are exempted from this requirement.)",
 	"itxn_submit":         "`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.",
 	"base64_decode":       "decodes X using the base64 encoding alphabet E. Specify the alphabet with an immediate arg either as URL and Filename Safe (`URLAlph`) or Standard (`StdAlph`). See <a href=\"https://rfc-editor.org/rfc/rfc4648.html#section-4\">RFC 4648</a> (sections 4 and 5)",
+	"json_ref":            "specify the return type with an immediate arg either as JSONInt or JSONString. When B is a nested key of json object A, A.B returns the value of B. Providing a json with keys containing . will return incorrect value. See <a href=\"https://datatracker.ietf.org/doc/html/rfc7159.html\">RFC 7159</a> for additional json specifications",
 }
 
 // OpDocExtra returns extra documentation text about an op
@@ -302,7 +305,7 @@ var OpGroups = map[string][]string{
 	"Byte Array Slicing":    {"substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "base64_decode"},
 	"Byte Array Arithmetic": {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%"},
 	"Byte Array Logic":      {"b|", "b&", "b^", "b~"},
-	"Loading Values":        {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gaid", "gaids"},
+	"Loading Values":        {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gaid", "gaids", "json_ref"},
 	"Flow Control":          {"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "cover", "uncover", "swap", "select", "assert", "callsub", "retsub"},
 	"State Access":          {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "log"},
 	"Inner Transactions":    {"itxn_begin", "itxn_next", "itxn_field", "itxn_submit", "itxn", "itxna"},
