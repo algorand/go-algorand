@@ -825,6 +825,8 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		}
 		mres, _ := au.resources.get(key)
 		mres.resource.AssetHolding = holding.Holding
+		mres.resource.CreatableIndex = basics.CreatableIndex(holding.Aidx)
+		mres.resource.CreatableType = basics.AssetCreatable
 		mres.ndeltas++
 		au.resources.set(key, mres)
 	}
@@ -835,6 +837,8 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		}
 		mres, _ := au.resources.get(key)
 		mres.resource.AssetParam = params.Params
+		mres.resource.CreatableIndex = basics.CreatableIndex(params.Aidx)
+		mres.resource.CreatableType = basics.AssetCreatable
 		mres.ndeltas++
 		au.resources.set(key, mres)
 	}
@@ -845,6 +849,8 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		}
 		mres, _ := au.resources.get(key)
 		mres.resource.AppLocalState = localStates.State
+		mres.resource.CreatableIndex = basics.CreatableIndex(localStates.Aidx)
+		mres.resource.CreatableType = basics.AppCreatable
 		mres.ndeltas++
 		au.resources.set(key, mres)
 	}
@@ -855,6 +861,8 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		}
 		mres, _ := au.resources.get(key)
 		mres.resource.AppParams = appParams.Params
+		mres.resource.CreatableIndex = basics.CreatableIndex(appParams.Aidx)
+		mres.resource.CreatableType = basics.AppCreatable
 		mres.ndeltas++
 		au.resources.set(key, mres)
 	}
@@ -1021,7 +1029,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				// we don't technically need this, since it's already in the baseResources, however, writing this over
 				// would ensure that we promote this field.
 				au.baseResources.writePending(prd, addr)
-				addResource(prd.aidx, prd.round, prd.AccountResource())
+				addResource(prd.aidx, rnd, prd.AccountResource())
 			}
 		}
 		au.accountsMu.RUnlock()
@@ -1042,8 +1050,14 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				return basics.AccountData{}, basics.Round(0), err
 			}
 			if persistedData.round == currentDbRound {
-				au.baseAccounts.writePending(persistedData)
-				ad = persistedData.accountData.GetLedgerCoreAccountData()
+				if persistedData.rowid != 0 {
+					// if we read actual data return it
+					au.baseAccounts.writePending(persistedData)
+					ad = persistedData.accountData.GetLedgerCoreAccountData()
+				} else {
+					ad = ledgercore.AccountData{}
+				}
+
 				foundAccount = true
 				if checkDone() {
 					return
@@ -1054,7 +1068,9 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				au.log.Errorf("accountUpdates.lookupLatest: account database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
 				return basics.AccountData{}, basics.Round(0), &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 			}
-			goto tryAgain
+			if persistedData.round > currentDbRound {
+				goto tryAgain
+			}
 		}
 
 		// Look for resources on disk
@@ -1065,7 +1081,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		if resourceDbRound == currentDbRound {
 			for _, pd := range persistedResources {
 				au.baseResources.writePending(pd, addr)
-				addResource(pd.aidx, pd.round, pd.AccountResource())
+				addResource(pd.aidx, currentDbRound, pd.AccountResource())
 			}
 			// We've found all the resources we could find for this address.
 			return
@@ -1149,8 +1165,13 @@ func (au *accountUpdates) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		// against the database.
 		persistedData, err = au.accountsq.lookup(addr)
 		if persistedData.round == currentDbRound {
-			au.baseAccounts.writePending(persistedData)
-			u := persistedData.accountData.GetLedgerCoreAccountData()
+			var u ledgercore.AccountData
+			if persistedData.rowid != 0 {
+				// if we read actual data return it
+				au.baseAccounts.writePending(persistedData)
+				u = persistedData.accountData.GetLedgerCoreAccountData()
+			}
+			// otherwise return empty
 			return u.OnlineAccountData(rewardsProto, rewardsLevel), err
 		}
 
@@ -1235,8 +1256,13 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 		// against the database.
 		persistedData, err = au.accountsq.lookupResources(addr, aidx, ctype)
 		if persistedData.round == currentDbRound {
-			au.baseResources.writePending(persistedData, addr)
-			return persistedData.AccountResource(), rnd, err
+			if persistedData.addrid != 0 {
+				// if we read actual data return it
+				au.baseResources.writePending(persistedData, addr)
+				return persistedData.AccountResource(), rnd, err
+			}
+			// otherwise return empty
+			return ledgercore.AccountResource{}, rnd, err
 		}
 		if synchronized {
 			if persistedData.round < currentDbRound {
@@ -1326,8 +1352,13 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		// against the database.
 		persistedData, err = au.accountsq.lookup(addr)
 		if persistedData.round == currentDbRound {
-			au.baseAccounts.writePending(persistedData)
-			return persistedData.accountData.GetLedgerCoreAccountData(), rnd, err
+			if persistedData.rowid != 0 {
+				// if we read actual data return it
+				au.baseAccounts.writePending(persistedData)
+				return persistedData.accountData.GetLedgerCoreAccountData(), rnd, err
+			}
+			// otherwise return empty
+			return ledgercore.AccountData{}, rnd, err
 		}
 		if synchronized {
 			if persistedData.round < currentDbRound {
