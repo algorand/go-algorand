@@ -94,12 +94,12 @@ func TestMerkle(t *testing.T) {
 		increment = uint64(16)
 	}
 
-	for i := uint64(0); i < 1024; i = i + increment {
+	for i := uint64(1); i < 1024; i = i + increment {
 		testMerkle(t, crypto.Sha512_256, i)
 	}
 
 	if !testing.Short() {
-		for i := uint64(0); i < 10; i++ {
+		for i := uint64(1); i < 10; i++ {
 			testMerkle(t, crypto.Sumhash, i)
 		}
 	} else {
@@ -147,54 +147,19 @@ func testMerkle(t *testing.T, hashtype crypto.HashType, size uint64) {
 	err = Verify(root, map[uint64]crypto.Hashable{0: junk}, proof)
 	require.ErrorIs(t, err, ErrRootMismatch)
 
-	err = Verify(root, map[uint64]crypto.Hashable{0: junk}, nil)
-	require.ErrorIs(t, err, ErrProofIsNil)
-
-	_, err = tree.Prove([]uint64{size})
-	if size == 0 {
-		require.ErrorIs(t, err, ErrProvingZeroCommitment)
-	} else {
-		require.Contains(t, err.Error(), OutOfBoundString)
+	var somepos []uint64
+	somemap := make(map[uint64]crypto.Hashable)
+	for i := 0; i < 10; i++ {
+		pos := crypto.RandUint64() % size
+		somepos = append(somepos, pos)
+		somemap[pos] = a[pos]
 	}
 
-	err = Verify(root, map[uint64]crypto.Hashable{size: junk}, nil)
-	require.ErrorIs(t, err, ErrProofIsNil)
+	proof, err = tree.Prove(somepos)
+	require.NoError(t, err)
 
-	if size > 0 {
-		var somepos []uint64
-		somemap := make(map[uint64]crypto.Hashable)
-		for i := 0; i < 10; i++ {
-			pos := crypto.RandUint64() % size
-			somepos = append(somepos, pos)
-			somemap[pos] = a[pos]
-		}
-
-		proof, err = tree.Prove(somepos)
-		require.NoError(t, err)
-
-		err = Verify(root, somemap, proof)
-		require.NoError(t, err)
-	}
-}
-
-func TestEmptyProveStructure(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
-	size := uint64(10)
-	arr := make(TestArray, size)
-	for i := uint64(0); i < size; i++ {
-		crypto.RandBytes(arr[i][:])
-	}
-
-	tree, err := Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
-	a.NoError(err)
-
-	prf, err := tree.Prove(nil)
-	a.NoError(err)
-	a.NotNil(prf)
-	a.Nil(prf.Path)
-	a.Equal(prf.HashFactory, crypto.HashFactory{HashType: crypto.Sha512_256})
+	err = Verify(root, somemap, proof)
+	require.NoError(t, err)
 }
 
 type nonmarshalable []int
@@ -215,45 +180,223 @@ func TestErrorInMarshal(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestVerifyWithNoElements(t *testing.T) {
+func TestMerkleBuildEdgeCases(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
-	size := uint64(10)
-	arr := make(TestArray, size)
-	for i := uint64(0); i < size; i++ {
-		crypto.RandBytes(arr[i][:])
-	}
-	tree, err := Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
-	a.NoError(err)
-
-	p, err := tree.Prove([]uint64{1})
-	a.NoError(err)
-	err = Verify(tree.Root(), map[uint64]crypto.Hashable{}, p)
-	require.ErrorIs(t, err, ErrNonEmptyProofForEmptyElements)
-
-	err = Verify(tree.Root(), map[uint64]crypto.Hashable{}, nil)
-	require.ErrorIs(t, err, ErrProofIsNil)
-
-	err = Verify(tree.Root(), map[uint64]crypto.Hashable{}, &Proof{HashFactory: crypto.HashFactory{HashType: crypto.Sha512_256}})
-	require.NoError(t, err)
-}
-
-func TestEmptyTree(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	arr := make(TestArray, 0)
 	tree, err := Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
 	a.NoError(err)
 	a.Len(tree.Levels, 0)
+	a.Equal(tree.NumOfLeaves, uint64(0))
 
-	arr = make(TestArray, 1)
-	tree, err = Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	root := tree.Root()
+
+	a.Equal(root, crypto.GenericDigest([]byte{}))
+}
+
+func TestMerkleVCBuildEdgeCases(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	h := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
+	h.Reset()
+	h.Write([]byte(protocol.MerkleBottomLeaf))
+	root2 := h.Sum(nil)
+
+	arr := make(TestArray, 0)
+	tree, err := BuildVectorCommitmentTree(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
 	a.NoError(err)
 	a.Len(tree.Levels, 1)
-	a.Equal(tree.Root().ToSlice(), tree.Levels[0][0].ToSlice())
+	a.Equal(tree.NumOfLeaves, uint64(0))
+
+	rootHash := tree.Root()
+	require.Equal(t, []byte(rootHash), root2)
+}
+
+func TestMerkleProveEdgeCases(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	arr := make(TestArray, 4)
+	for i := uint64(0); i < 4; i++ {
+		crypto.RandBytes(arr[i][:])
+	}
+
+	tree, err := Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+
+	_, err = tree.Prove([]uint64{4})
+	a.Error(err)
+	require.Contains(t, err.Error(), OutOfBoundString)
+
+	// prove on nothing
+	proof, err := tree.Prove(nil)
+	a.NoError(err)
+	a.Equal(proof.Path, []crypto.GenericDigest(nil))
+	a.Equal(proof.TreeDepth, uint8(2))
+
+	arr = make(TestArray, 0)
+	tree, err = Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+
+	_, err = tree.Prove([]uint64{0})
+	a.Error(err)
+	require.ErrorIs(t, err, ErrProvingZeroCommitment)
+
+	// prove on nothing - now the tree is empty as well
+	proof, err = tree.Prove(nil)
+	a.NoError(err)
+	a.Equal(proof.Path, []crypto.GenericDigest(nil))
+	a.Equal(proof.TreeDepth, uint8(0))
+}
+
+func TestMerkleVCProveEdgeCases(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	arr := make(TestArray, 5)
+	for i := uint64(0); i < 5; i++ {
+		crypto.RandBytes(arr[i][:])
+	}
+	tree, err := BuildVectorCommitmentTree(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+
+	// element in the out of the inner array
+	_, err = tree.Prove([]uint64{5})
+	a.Error(err)
+	require.Contains(t, err.Error(), OutOfBoundString)
+
+	// element in the padded array - bottom leaf
+	_, err = tree.Prove([]uint64{8})
+	a.Error(err)
+	require.Contains(t, err.Error(), OutOfBoundString)
+
+	// prove on nothing
+	proof, err := tree.Prove(nil)
+	a.NoError(err)
+	a.Equal(proof.Path, []crypto.GenericDigest(nil))
+	a.Equal(proof.TreeDepth, uint8(3))
+
+	arr = make(TestArray, 0)
+	tree, err = BuildVectorCommitmentTree(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+
+	_, err = tree.Prove([]uint64{0})
+	a.Error(err)
+	require.ErrorIs(t, err, ErrProvingZeroCommitment)
+
+	// prove on nothing - now the tree is empty as well
+	proof, err = tree.Prove(nil)
+	a.NoError(err)
+	a.Equal(proof.Path, []crypto.GenericDigest(nil))
+	a.Equal(proof.TreeDepth, uint8(0))
+}
+
+func TestMerkleVerifyEdgeCases(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	arr := make(TestArray, 4)
+	for i := uint64(0); i < 4; i++ {
+		crypto.RandBytes(arr[i][:])
+	}
+	tree, err := Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+
+	proof, err := tree.Prove([]uint64{3})
+	a.NoError(err)
+
+	root := tree.Root()
+
+	err = Verify(root, map[uint64]crypto.Hashable{4: arr[3]}, proof)
+	a.Error(err)
+	require.Contains(t, err.Error(), OutOfBoundString)
+
+	err = Verify(root, map[uint64]crypto.Hashable{3: arr[3], 4: arr[3]}, proof)
+	a.Error(err)
+	require.Contains(t, err.Error(), OutOfBoundString)
+
+	err = Verify(root, nil, nil)
+	a.Error(err)
+	a.ErrorIs(ErrProofIsNil, err)
+
+	trivialProof := Proof{TreeDepth: 2, HashFactory: crypto.HashFactory{HashType: crypto.Sha512_256}}
+	err = Verify(root, nil, &trivialProof)
+	a.NoError(err)
+
+	err = Verify(root, nil, proof)
+	a.Error(err)
+	a.ErrorIs(ErrNonEmptyProofForEmptyElements, err)
+
+	err = Verify(root, nil, &trivialProof)
+	a.NoError(err)
+
+	arr = make(TestArray, 1)
+	for i := uint64(0); i < 1; i++ {
+		crypto.RandBytes(arr[i][:])
+	}
+
+	tree, err = Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+	proof, err = tree.Prove([]uint64{0})
+	a.NoError(err)
+	a.Equal(trivialProof.Path, []crypto.GenericDigest(nil))
+	err = Verify(tree.Root(), map[uint64]crypto.Hashable{0: arr[0]}, proof)
+	a.NoError(err)
+}
+
+func TestMerkleVCVerifyEdgeCases(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	arr := make(TestArray, 4)
+	for i := uint64(0); i < 4; i++ {
+		crypto.RandBytes(arr[i][:])
+	}
+	tree, err := BuildVectorCommitmentTree(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+
+	proof, err := tree.Prove([]uint64{3})
+	a.NoError(err)
+
+	root := tree.Root()
+
+	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{4: arr[3]}, proof)
+	a.Error(err)
+	require.Contains(t, err.Error(), OutOfBoundString)
+
+	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{3: arr[3], 4: arr[3]}, proof)
+	a.Error(err)
+	require.Contains(t, err.Error(), OutOfBoundString)
+
+	err = VerifyVectorCommitment(root, nil, nil)
+	a.Error(err)
+	a.ErrorIs(ErrProofIsNil, err)
+
+	trivialProof := Proof{TreeDepth: 2, HashFactory: crypto.HashFactory{HashType: crypto.Sha512_256}}
+	err = VerifyVectorCommitment(root, nil, &trivialProof)
+	a.NoError(err)
+
+	err = VerifyVectorCommitment(root, nil, proof)
+	a.Error(err)
+	a.ErrorIs(ErrNonEmptyProofForEmptyElements, err)
+
+	err = VerifyVectorCommitment(root, nil, &trivialProof)
+	a.NoError(err)
+
+	arr = make(TestArray, 1)
+	for i := uint64(0); i < 1; i++ {
+		crypto.RandBytes(arr[i][:])
+	}
+
+	tree, err = Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+	proof, err = tree.Prove([]uint64{0})
+	a.NoError(err)
+	a.Equal(trivialProof.Path, []crypto.GenericDigest(nil))
+	err = VerifyVectorCommitment(tree.Root(), map[uint64]crypto.Hashable{0: arr[0]}, proof)
+	a.NoError(err)
 }
 
 // TestGenericDigest makes sure GenericDigest will not decoded sizes
@@ -371,6 +514,31 @@ func TestSizeLimitsMerkle(t *testing.T) {
 	require.Contains(t, err.Error(), "> 17 at Levels")
 }
 
+func testMerkelSizeLimits(t *testing.T, hashtype crypto.HashType, size uint64, positions []uint64) (*Tree, *Proof) {
+	a := make(TestArray, size)
+	for i := uint64(0); i < size; i++ {
+		crypto.RandBytes(a[i][:])
+	}
+
+	tree, err := Build(a, crypto.HashFactory{HashType: hashtype})
+	require.NoError(t, err)
+
+	root := tree.Root()
+
+	posMap := make(map[uint64]crypto.Hashable)
+	for _, j := range positions {
+		posMap[j] = a[j]
+	}
+
+	proof, err := tree.Prove(positions)
+	require.NoError(t, err)
+
+	err = Verify(root, posMap, proof)
+	require.NoError(t, err)
+
+	return tree, proof
+}
+
 var KATs = []KATElement{
 	{
 		[]byte{223, 165, 76, 43, 118, 131, 205, 83, 151, 176, 50, 187, 236, 17, 236, 27, 119, 185, 251, 236, 90, 86, 201, 233, 66, 15, 107, 153, 128, 120, 64, 52},
@@ -429,6 +597,8 @@ func TestMerkleTreeKATs(t *testing.T) {
 
 }
 
+// todo add kats test for VC
+
 func TestMerkleTreeInternalNodeWithOneChild(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -455,7 +625,6 @@ func TestMerkleTreeInternalNodeWithOneChild(t *testing.T) {
 
 	root2 := tree.Root()
 	require.Equal(t, rootHash, []byte(root2))
-
 }
 
 func TestMerkleTreeInternalNodeFullTree(t *testing.T) {
@@ -484,7 +653,6 @@ func TestMerkleTreeInternalNodeFullTree(t *testing.T) {
 }
 
 func hashInternalNode(h hash.Hash, firstLeafHash []byte, secondLeafHash []byte) []byte {
-
 	internalNode := make([]byte, 2*h.Size()+len(protocol.MerkleArrayNode))
 	copy(internalNode, protocol.MerkleArrayNode)
 	copy(internalNode[len(protocol.MerkleArrayNode):], firstLeafHash)
@@ -519,39 +687,14 @@ func getRandomPositions(numElets, max uint64) (res []uint64) {
 	return
 }
 
-func testMerkelSizeLimits(t *testing.T, hashtype crypto.HashType, size uint64, positions []uint64) (*Tree, *Proof) {
-	a := make(TestArray, size)
-	for i := uint64(0); i < size; i++ {
-		crypto.RandBytes(a[i][:])
-	}
-
-	tree, err := Build(a, crypto.HashFactory{HashType: hashtype})
-	require.NoError(t, err)
-
-	root := tree.Root()
-
-	posMap := make(map[uint64]crypto.Hashable)
-	for _, j := range positions {
-		posMap[j] = a[j]
-	}
-
-	proof, err := tree.Prove(positions)
-	require.NoError(t, err)
-
-	err = Verify(root, posMap, proof)
-	require.NoError(t, err)
-
-	return tree, proof
-}
-
 func TestMerkleVC(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for i := uint64(0); i < 32; i++ {
+	for i := uint64(1); i < 32; i++ {
 		testMerkleVC(t, crypto.Sha512_256, i)
 	}
 
-	for i := uint64(0); i < 8; i++ {
+	for i := uint64(1); i < 8; i++ {
 		testMerkleVC(t, crypto.Sumhash, i)
 	}
 
@@ -597,113 +740,40 @@ func testMerkleVC(t *testing.T, hashtype crypto.HashType, size uint64) {
 	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{0: junk}, proof)
 	require.ErrorIs(t, err, ErrRootMismatch)
 
-	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{0: junk}, nil)
-	require.ErrorIs(t, err, ErrProofIsNil)
-
-	_, err = tree.Prove([]uint64{size})
-	if size == 0 {
-		require.ErrorIs(t, err, ErrProvingZeroCommitment)
-	} else {
-		require.Contains(t, err.Error(), OutOfBoundString)
+	var somepos []uint64
+	somemap := make(map[uint64]crypto.Hashable)
+	for i := 0; i < 10; i++ {
+		pos := crypto.RandUint64() % size
+		somepos = append(somepos, pos)
+		somemap[pos] = a[pos]
 	}
 
-	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{size: junk}, nil)
-	require.ErrorIs(t, err, ErrProofIsNil)
+	proof, err = tree.Prove(somepos)
+	require.NoError(t, err)
 
-	if size > 0 {
-		var somepos []uint64
-		somemap := make(map[uint64]crypto.Hashable)
-		for i := 0; i < 10; i++ {
-			pos := crypto.RandUint64() % size
-			somepos = append(somepos, pos)
-			somemap[pos] = a[pos]
-		}
+	err = VerifyVectorCommitment(root, somemap, proof)
+	require.NoError(t, err)
 
-		proof, err = tree.Prove(somepos)
-		require.NoError(t, err)
-
-		err = VerifyVectorCommitment(root, somemap, proof)
-		require.NoError(t, err)
-	}
 }
 
-func TestVCOutOfBoundIndex(t *testing.T) {
-	var junk TestData
-	crypto.RandBytes(junk[:])
+func TestMerkleTreeOneLeaf(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
-	size := uint64(256)
-	a := make(TestArray, size)
-	for i := uint64(0); i < size; i++ {
-		crypto.RandBytes(a[i][:])
-	}
+	a := make(TestArray, 1)
 
-	tree, err := BuildVectorCommitmentTree(a, crypto.HashFactory{HashType: crypto.Sha512_256})
-	require.NoError(t, err)
+	copy(a[0][:], []byte{0x1, 0x2})
 
-	root := tree.Root()
-
-	proof, err := tree.Prove([]uint64{255})
-	require.NoError(t, err)
-
-	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{255: a[255]}, proof)
-	require.NoError(t, err)
-
-	_, err = tree.Prove([]uint64{256})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), OutOfBoundString)
-
-	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{256: a[1]}, proof)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), OutOfBoundString)
-
-	_, err = tree.Prove([]uint64{255, 256})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), OutOfBoundString)
-
-	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{255: a[255], 256: a[1]}, proof)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), OutOfBoundString)
-}
-
-func TestOutOfBoundIndex(t *testing.T) {
-	var junk TestData
-	crypto.RandBytes(junk[:])
-
-	size := uint64(256)
-	a := make(TestArray, size)
-	for i := uint64(0); i < size; i++ {
-		crypto.RandBytes(a[i][:])
-	}
+	h := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
+	rootHash := crypto.GenereicHashObj(h, a[0])
 
 	tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha512_256})
 	require.NoError(t, err)
 
-	root := tree.Root()
-
-	proof, err := tree.Prove([]uint64{255})
-	require.NoError(t, err)
-
-	err = Verify(root, map[uint64]crypto.Hashable{255: a[255]}, proof)
-	require.NoError(t, err)
-
-	_, err = tree.Prove([]uint64{256})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), OutOfBoundString)
-
-	err = Verify(root, map[uint64]crypto.Hashable{256: a[1]}, proof)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), OutOfBoundString)
-
-	_, err = tree.Prove([]uint64{255, 256})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), OutOfBoundString)
-
-	err = Verify(root, map[uint64]crypto.Hashable{255: a[255], 256: a[1]}, proof)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), OutOfBoundString)
+	root2 := tree.Root()
+	require.Equal(t, rootHash, []byte(root2))
 }
 
-func TestVCOnlyOneNode(t *testing.T) {
+func TestVCOneLeaf(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := make(TestArray, 1)
@@ -720,27 +790,10 @@ func TestVCOnlyOneNode(t *testing.T) {
 	require.Equal(t, rootHash, []byte(root2))
 }
 
-func TestVCEmptyTree(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := make(TestArray, 0)
-
-	h := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
-	h.Reset()
-	h.Write([]byte(protocol.MerkleBottomLeaf))
-	root2 := h.Sum(nil)
-
-	tree, err := BuildVectorCommitmentTree(a, crypto.HashFactory{HashType: crypto.Sha512_256})
-	require.NoError(t, err)
-
-	rootHash := tree.Root()
-	require.Equal(t, []byte(rootHash), root2)
-}
-
 func TestTreeTooDeep(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
+
 	size := uint64(10)
 	arr := make(TestArray, size)
 	for i := uint64(0); i < size; i++ {
@@ -764,7 +817,7 @@ func TestTreeTooDeep(t *testing.T) {
 	require.ErrorIs(t, err, ErrTreeTooDeep)
 }
 
-func TestTreeDepth(t *testing.T) {
+func TestTreeDepthField(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var sizes = []int{1, 2, 3}
@@ -774,6 +827,10 @@ func TestTreeDepth(t *testing.T) {
 	a := require.New(t)
 	size := uint64(0)
 	arr := make(TestArray, size)
+	for i := uint64(0); i < size; i++ {
+		crypto.RandBytes(arr[i][:])
+	}
+
 	tree, err := BuildVectorCommitmentTree(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
 	a.NoError(err)
 	p, err := tree.Prove([]uint64{})
@@ -790,6 +847,10 @@ func TestTreeDepth(t *testing.T) {
 		a = require.New(t)
 		size = uint64(sizes[i])
 		arr = make(TestArray, size)
+		for i := uint64(0); i < size; i++ {
+			crypto.RandBytes(arr[i][:])
+		}
+
 		tree, err = BuildVectorCommitmentTree(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
 		a.NoError(err)
 		p, err = tree.Prove([]uint64{})
@@ -812,8 +873,55 @@ func TestTreeDepth(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, p.TreeDepth, uint8(expectedDepth[i]))
 	}
-
 }
+
+func TestTreeNumOfLeavesField(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	arr := make(TestArray, 1)
+	crypto.RandBytes(arr[0][:])
+	tree, err := Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+	a.Equal(tree.NumOfLeaves, uint64(1))
+
+	arr = make(TestArray, 2)
+	crypto.RandBytes(arr[0][:])
+	crypto.RandBytes(arr[1][:])
+	tree, err = Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+	a.Equal(tree.NumOfLeaves, uint64(2))
+
+	arr = make(TestArray, 3)
+	crypto.RandBytes(arr[0][:])
+	crypto.RandBytes(arr[1][:])
+	crypto.RandBytes(arr[2][:])
+	tree, err = Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+	a.Equal(tree.NumOfLeaves, uint64(3))
+
+	arr = make(TestArray, 1)
+	crypto.RandBytes(arr[0][:])
+	tree, err = BuildVectorCommitmentTree(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+	a.Equal(tree.NumOfLeaves, uint64(1))
+
+	arr = make(TestArray, 2)
+	crypto.RandBytes(arr[0][:])
+	crypto.RandBytes(arr[1][:])
+	tree, err = BuildVectorCommitmentTree(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+	a.Equal(tree.NumOfLeaves, uint64(2))
+
+	arr = make(TestArray, 3)
+	crypto.RandBytes(arr[0][:])
+	crypto.RandBytes(arr[1][:])
+	crypto.RandBytes(arr[2][:])
+	tree, err = BuildVectorCommitmentTree(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+	a.Equal(tree.NumOfLeaves, uint64(3))
+}
+
 func BenchmarkMerkleCommit(b *testing.B) {
 	b.Run("sha512_256", func(b *testing.B) { merkleCommitBench(b, crypto.Sha512_256) })
 	b.Run("sumhash", func(b *testing.B) { merkleCommitBench(b, crypto.Sumhash) })

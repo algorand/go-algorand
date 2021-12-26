@@ -34,16 +34,6 @@ const (
 	MaxNumLeaves = 65536 // 2^MaxTreeDepth
 )
 
-// building a merkle tree with zero element -> root == somevalue (no preimage known)/ hash some other DS
-// 			maybe we corrently use 000000000...00 as the root???
-// 		one element -> root == hash(leaf)
-// generate proof - Im being asked to prove on nil elements - not
-// verify - accept if no elements to prove on and no proof. reject if there is a proof and no elements
-//
-//VC
-//===
-//
-
 // Merkle tree errors
 var (
 	ErrRootMismatch                  = errors.New("root mismatch")
@@ -299,21 +289,7 @@ func hashLeaves(elems map[uint64]crypto.Hashable, treeDepth uint8, hash hash.Has
 	return hashedLeaves, nil
 }
 
-// VerifyVectorCommitment verifies a vector commitment proof against a given root.
-func VerifyVectorCommitment(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *Proof) error {
-	if err := checkInput(proof); err != nil {
-		return err
-	}
-
-	msbIndexedElements, err := ConvertIndexes(elems, proof)
-	if err != nil {
-		return err
-	}
-
-	return Verify(root, msbIndexedElements, proof)
-}
-
-func ConvertIndexes(elems map[uint64]crypto.Hashable, proof *Proof) (map[uint64]crypto.Hashable, error) {
+func convertIndexes(elems map[uint64]crypto.Hashable, proof *Proof) (map[uint64]crypto.Hashable, error) {
 	msbIndexedElements := make(map[uint64]crypto.Hashable, len(elems))
 	for i, e := range elems {
 		idx, err := msbToLsbIndex(i, proof.TreeDepth)
@@ -325,6 +301,20 @@ func ConvertIndexes(elems map[uint64]crypto.Hashable, proof *Proof) (map[uint64]
 	return msbIndexedElements, nil
 }
 
+// VerifyVectorCommitment verifies a vector commitment proof against a given root.
+func VerifyVectorCommitment(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *Proof) error {
+	if err := checkInput(proof); err != nil {
+		return err
+	}
+
+	msbIndexedElements, err := convertIndexes(elems, proof)
+	if err != nil {
+		return err
+	}
+
+	return Verify(root, msbIndexedElements, proof)
+}
+
 // Verify ensures that the positions in elems correspond to the respective hashes
 // in a tree with the given root hash.  The proof is expected to be the proof
 // returned by Prove().
@@ -333,7 +323,6 @@ func Verify(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *
 		return err
 	}
 
-	// create a test for that case in VC - array with 0 elements
 	if len(elems) == 0 {
 		if len(proof.Path) != 0 {
 			return ErrNonEmptyProofForEmptyElements

@@ -23,6 +23,8 @@ import (
 	"math/bits"
 )
 
+// ErrGetOutOfBound returned when trying to retrieve an element which is out of
+// the padded array bound.
 var (
 	ErrGetOutOfBound = "vectorCommitmentArray.Get(%d): out of bounds, full size %d"
 )
