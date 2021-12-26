@@ -56,10 +56,6 @@ type TestArray []TestData
 func (a TestArray) Length() uint64 {
 	return uint64(len(a))
 }
-func hashRep(h crypto.Hashable) []byte {
-	hashid, data := h.ToBeHashed()
-	return append([]byte(hashid), data...)
-}
 
 func (a TestArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	if pos >= uint64(len(a)) {
@@ -85,6 +81,8 @@ func (a TestRepeatingArray) Marshal(pos uint64) (crypto.Hashable, error) {
 
 	return a.item, nil
 }
+
+const OutOfBoundString = "larger than leaf count"
 
 func TestMerkle(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -156,7 +154,7 @@ func testMerkle(t *testing.T, hashtype crypto.HashType, size uint64) {
 	if size == 0 {
 		require.ErrorIs(t, err, ErrProvingZeroCommitment)
 	} else {
-		require.Contains(t, err.Error(), "larger than leaf count")
+		require.Contains(t, err.Error(), OutOfBoundString)
 	}
 
 	err = Verify(root, map[uint64]crypto.Hashable{size: junk}, nil)
@@ -606,7 +604,7 @@ func testMerkleVC(t *testing.T, hashtype crypto.HashType, size uint64) {
 	if size == 0 {
 		require.ErrorIs(t, err, ErrProvingZeroCommitment)
 	} else {
-		require.Contains(t, err.Error(), "larger than leaf count")
+		require.Contains(t, err.Error(), OutOfBoundString)
 	}
 
 	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{size: junk}, nil)
@@ -627,6 +625,82 @@ func testMerkleVC(t *testing.T, hashtype crypto.HashType, size uint64) {
 		err = VerifyVectorCommitment(root, somemap, proof)
 		require.NoError(t, err)
 	}
+}
+
+func TestVCOutOfBoundIndex(t *testing.T) {
+	var junk TestData
+	crypto.RandBytes(junk[:])
+
+	size := uint64(256)
+	a := make(TestArray, size)
+	for i := uint64(0); i < size; i++ {
+		crypto.RandBytes(a[i][:])
+	}
+
+	tree, err := BuildVectorCommitmentTree(a, crypto.HashFactory{HashType: crypto.Sha512_256})
+	require.NoError(t, err)
+
+	root := tree.Root()
+
+	proof, err := tree.Prove([]uint64{255})
+	require.NoError(t, err)
+
+	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{255: a[255]}, proof)
+	require.NoError(t, err)
+
+	_, err = tree.Prove([]uint64{256})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), OutOfBoundString)
+
+	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{256: a[1]}, proof)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), OutOfBoundString)
+
+	_, err = tree.Prove([]uint64{255, 256})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), OutOfBoundString)
+
+	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{255: a[255], 256: a[1]}, proof)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), OutOfBoundString)
+}
+
+func TestOutOfBoundIndex(t *testing.T) {
+	var junk TestData
+	crypto.RandBytes(junk[:])
+
+	size := uint64(256)
+	a := make(TestArray, size)
+	for i := uint64(0); i < size; i++ {
+		crypto.RandBytes(a[i][:])
+	}
+
+	tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha512_256})
+	require.NoError(t, err)
+
+	root := tree.Root()
+
+	proof, err := tree.Prove([]uint64{255})
+	require.NoError(t, err)
+
+	err = Verify(root, map[uint64]crypto.Hashable{255: a[255]}, proof)
+	require.NoError(t, err)
+
+	_, err = tree.Prove([]uint64{256})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), OutOfBoundString)
+
+	err = Verify(root, map[uint64]crypto.Hashable{256: a[1]}, proof)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), OutOfBoundString)
+
+	_, err = tree.Prove([]uint64{255, 256})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), OutOfBoundString)
+
+	err = Verify(root, map[uint64]crypto.Hashable{255: a[255], 256: a[1]}, proof)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), OutOfBoundString)
 }
 
 func TestVCOnlyOneNode(t *testing.T) {

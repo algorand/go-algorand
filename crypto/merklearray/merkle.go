@@ -53,6 +53,7 @@ var (
 	ErrTreeTooDeep                   = errors.New("proven tree is too deep")
 	ErrTooManyVerificationLevels     = errors.New("Verify exceeded 64 Levels, more than 2^64 leaves not supported")
 	ErrUnexpectedTreeDepth           = errors.New("unexpected tree depth")
+	ErrPosOutOfBound                 = "pos %d larger than leaf count %d"
 )
 
 // Tree is a Merkle tree, represented by layers of nodes (hashes) in the tree
@@ -202,10 +203,6 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 		}, nil
 	}
 
-	// make sure that the origian lmerkle tree also rejects zero elements proof
-	// we need to return an error when on that case
-	//
-
 	// Special case: commitment to zero-length array
 	if len(tree.Levels) == 0 || tree.NumOfLeaves == 0 {
 		return nil, ErrProvingZeroCommitment
@@ -214,14 +211,19 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 	// verify that all positions where part of the original array
 	for i := 0; i < len(idxs); i++ {
 		if idxs[i] >= tree.NumOfLeaves {
-			return nil, fmt.Errorf("pos %d larger than leaf count %d", idxs[i], tree.NumOfLeaves)
+			return nil, fmt.Errorf(ErrPosOutOfBound, idxs[i], tree.NumOfLeaves)
 		}
 	}
 
 	if tree.VectorCommitment {
 		vcIdxs := make([]uint64, len(idxs))
 		for i := 0; i < len(idxs); i++ {
-			vcIdxs[i] = msbToLsbIndex(idxs[i], uint8(len(tree.Levels)-1))
+			idx, err := msbToLsbIndex(idxs[i], uint8(len(tree.Levels)-1))
+			if err != nil {
+				return nil, err
+			}
+			vcIdxs[i] = idx
+
 		}
 		idxs = vcIdxs
 	}
@@ -285,9 +287,12 @@ func (tree *Tree) buildNextLayer() {
 	tree.Levels = append(tree.Levels, newLayer)
 }
 
-func hashLeaves(elems map[uint64]crypto.Hashable, hash hash.Hash) (map[uint64]crypto.GenericDigest, error) {
+func hashLeaves(elems map[uint64]crypto.Hashable, treeDepth uint8, hash hash.Hash) (map[uint64]crypto.GenericDigest, error) {
 	hashedLeaves := make(map[uint64]crypto.GenericDigest, len(elems))
 	for i, element := range elems {
+		if i >= (1 << treeDepth) {
+			return nil, fmt.Errorf(ErrPosOutOfBound, i, 1<<treeDepth)
+		}
 		hashedLeaves[i] = crypto.GenereicHashObj(hash, element)
 	}
 
@@ -296,28 +301,36 @@ func hashLeaves(elems map[uint64]crypto.Hashable, hash hash.Hash) (map[uint64]cr
 
 // VerifyVectorCommitment verifies a vector commitment proof against a given root.
 func VerifyVectorCommitment(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *Proof) error {
-	if proof == nil {
-		return ErrProofIsNil
+	if err := checkInput(proof); err != nil {
+		return err
 	}
 
-	msbIndexedElements := make(map[uint64]crypto.Hashable, len(elems))
-	for i, e := range elems {
-		msbIndexedElements[msbToLsbIndex(i, proof.TreeDepth)] = e
+	msbIndexedElements, err := ConvertIndexes(elems, proof)
+	if err != nil {
+		return err
 	}
 
 	return Verify(root, msbIndexedElements, proof)
+}
+
+func ConvertIndexes(elems map[uint64]crypto.Hashable, proof *Proof) (map[uint64]crypto.Hashable, error) {
+	msbIndexedElements := make(map[uint64]crypto.Hashable, len(elems))
+	for i, e := range elems {
+		idx, err := msbToLsbIndex(i, proof.TreeDepth)
+		if err != nil {
+			return nil, err
+		}
+		msbIndexedElements[idx] = e
+	}
+	return msbIndexedElements, nil
 }
 
 // Verify ensures that the positions in elems correspond to the respective hashes
 // in a tree with the given root hash.  The proof is expected to be the proof
 // returned by Prove().
 func Verify(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *Proof) error {
-	if proof == nil {
-		return ErrProofIsNil
-	}
-
-	if proof.TreeDepth > 64 {
-		return ErrTreeTooDeep
+	if err := checkInput(proof); err != nil {
+		return err
 	}
 
 	// create a test for that case in VC - array with 0 elements
@@ -328,13 +341,24 @@ func Verify(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *
 		return nil
 	}
 
-	hashedLeaves, err := hashLeaves(elems, proof.HashFactory.NewHash())
+	hashedLeaves, err := hashLeaves(elems, proof.TreeDepth, proof.HashFactory.NewHash())
 	if err != nil {
 		return err
 	}
 
 	pl := buildPartialLayer(hashedLeaves)
 	return verifyPath(root, proof, pl)
+}
+
+func checkInput(proof *Proof) error {
+	if proof == nil {
+		return ErrProofIsNil
+	}
+
+	if proof.TreeDepth > 64 {
+		return ErrTreeTooDeep
+	}
+	return nil
 }
 
 func verifyPath(root crypto.GenericDigest, proof *Proof, pl partialLayer) error {

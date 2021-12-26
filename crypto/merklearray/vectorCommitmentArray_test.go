@@ -24,54 +24,61 @@ import (
 	"testing"
 )
 
+func indexTranslate(t *testing.T, from, to uint64, pathLen uint8) {
+	lsbIndex, error := msbToLsbIndex(from, pathLen)
+	require.NoError(t, error)
+	require.Equal(t, to, lsbIndex)
+}
+
 func TestIndexing(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var pathLen uint8
 
 	pathLen = 1
-	require.Equal(t, uint64(0), msbToLsbIndex(0, pathLen))
-	require.Equal(t, uint64(1), msbToLsbIndex(1, pathLen))
+	indexTranslate(t, 0, 0, pathLen)
+	indexTranslate(t, 1, 1, pathLen)
 
 	pathLen = 2
-	require.Equal(t, uint64(0), msbToLsbIndex(0, pathLen))
-	require.Equal(t, uint64(2), msbToLsbIndex(1, pathLen))
-	require.Equal(t, uint64(1), msbToLsbIndex(2, pathLen))
-	require.Equal(t, uint64(3), msbToLsbIndex(3, pathLen))
+	indexTranslate(t, 0, 0, pathLen)
+	indexTranslate(t, 1, 2, pathLen)
+	indexTranslate(t, 2, 1, pathLen)
+	indexTranslate(t, 3, 3, pathLen)
 
 	pathLen = 3
-	require.Equal(t, uint64(0), msbToLsbIndex(0, pathLen))
-	require.Equal(t, uint64(4), msbToLsbIndex(1, pathLen))
-	require.Equal(t, uint64(2), msbToLsbIndex(2, pathLen))
-	require.Equal(t, uint64(6), msbToLsbIndex(3, pathLen))
-	require.Equal(t, uint64(1), msbToLsbIndex(4, pathLen))
-	require.Equal(t, uint64(5), msbToLsbIndex(5, pathLen))
-	require.Equal(t, uint64(3), msbToLsbIndex(6, pathLen))
-	require.Equal(t, uint64(7), msbToLsbIndex(7, pathLen))
+	indexTranslate(t, 0, 0, pathLen)
+	indexTranslate(t, 1, 4, pathLen)
+	indexTranslate(t, 2, 2, pathLen)
+	indexTranslate(t, 3, 6, pathLen)
+	indexTranslate(t, 4, 1, pathLen)
+	indexTranslate(t, 5, 5, pathLen)
+	indexTranslate(t, 6, 3, pathLen)
+	indexTranslate(t, 7, 7, pathLen)
 
 	pathLen = 4
-	require.Equal(t, uint64(0), msbToLsbIndex(0, pathLen))
-	require.Equal(t, uint64(8), msbToLsbIndex(1, pathLen))
-	require.Equal(t, uint64(4), msbToLsbIndex(2, pathLen))
-	require.Equal(t, uint64(12), msbToLsbIndex(3, pathLen))
-	require.Equal(t, uint64(2), msbToLsbIndex(4, pathLen))
-	require.Equal(t, uint64(10), msbToLsbIndex(5, pathLen))
-	require.Equal(t, uint64(6), msbToLsbIndex(6, pathLen))
-	require.Equal(t, uint64(14), msbToLsbIndex(7, pathLen))
-	require.Equal(t, uint64(1), msbToLsbIndex(8, pathLen))
-	require.Equal(t, uint64(9), msbToLsbIndex(9, pathLen))
-	require.Equal(t, uint64(5), msbToLsbIndex(10, pathLen))
-	require.Equal(t, uint64(13), msbToLsbIndex(11, pathLen))
-	require.Equal(t, uint64(3), msbToLsbIndex(12, pathLen))
-	require.Equal(t, uint64(11), msbToLsbIndex(13, pathLen))
-	require.Equal(t, uint64(7), msbToLsbIndex(14, pathLen))
-	require.Equal(t, uint64(15), msbToLsbIndex(15, pathLen))
+	indexTranslate(t, 0, 0, pathLen)
+	indexTranslate(t, 1, 8, pathLen)
+	indexTranslate(t, 2, 4, pathLen)
+	indexTranslate(t, 3, 12, pathLen)
+	indexTranslate(t, 4, 2, pathLen)
+	indexTranslate(t, 5, 10, pathLen)
+	indexTranslate(t, 6, 6, pathLen)
+	indexTranslate(t, 7, 14, pathLen)
+	indexTranslate(t, 8, 1, pathLen)
+	indexTranslate(t, 9, 9, pathLen)
+	indexTranslate(t, 10, 5, pathLen)
+	indexTranslate(t, 11, 13, pathLen)
+	indexTranslate(t, 12, 3, pathLen)
+	indexTranslate(t, 13, 11, pathLen)
+	indexTranslate(t, 14, 7, pathLen)
+	indexTranslate(t, 15, 15, pathLen)
 
-	pathLen = 64
-	require.Equal(t, uint64(0), msbToLsbIndex(0, pathLen))
-	require.Equal(t, uint64(1), msbToLsbIndex((1<<64)/2, pathLen))
-	require.Equal(t, uint64((1<<64)/2), msbToLsbIndex(1, pathLen))
-	require.Equal(t, uint64(1<<64-1), msbToLsbIndex(1<<64-1, pathLen))
+	pathLen = 63
+	indexTranslate(t, 0, 0, pathLen)
+	indexTranslate(t, (1<<63)/2, 1, pathLen)
+	indexTranslate(t, 1, (1<<63)/2, pathLen)
+	indexTranslate(t, 1<<63-1, 1<<63-1, pathLen)
+
 }
 
 func vcSizeInnerTest(size uint64) *vectorCommitmentArray {
@@ -80,6 +87,35 @@ func vcSizeInnerTest(size uint64) *vectorCommitmentArray {
 		crypto.RandBytes(testArray[i][:])
 	}
 	return generateVectorCommitmentArray(testArray)
+}
+
+func TestIndexOutOfBounds(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var pathLen uint8
+
+	pathLen = 1
+	lsbIndex, err := msbToLsbIndex(0, pathLen)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), lsbIndex)
+
+	lsbIndex, err = msbToLsbIndex(1, pathLen)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), lsbIndex)
+
+	lsbIndex, err = msbToLsbIndex(2, pathLen)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "larger than leaf count")
+
+	pathLen = 4
+	lsbIndex, err = msbToLsbIndex(15, pathLen)
+	require.NoError(t, err)
+	require.Equal(t, uint64(15), lsbIndex)
+
+	lsbIndex, err = msbToLsbIndex(16, pathLen)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "larger than leaf count")
+
 }
 
 func TestVcSizes(t *testing.T) {
@@ -151,7 +187,9 @@ func TestVcArrayPadding(t *testing.T) {
 	h.Write(leafBytes)
 	leafHash := h.Sum(nil)
 
-	leafVc, err := vc.Marshal(msbToLsbIndex(1, 4))
+	idx, err := msbToLsbIndex(1, 4)
+	require.NoError(t, err)
+	leafVc, err := vc.Marshal(idx)
 	hashID, leafData := leafVc.ToBeHashed()
 	h.Reset()
 	h.Write([]byte(hashID))

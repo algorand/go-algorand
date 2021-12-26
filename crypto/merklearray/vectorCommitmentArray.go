@@ -23,6 +23,10 @@ import (
 	"math/bits"
 )
 
+var (
+	ErrGetOutOfBound = "vectorCommitmentArray.Get(%d): out of bounds, full size %d"
+)
+
 type vectorCommitmentArray struct {
 	array     Array
 	pathLen   uint8
@@ -59,19 +63,24 @@ func (vc *vectorCommitmentArray) Length() uint64 {
 }
 
 func (vc *vectorCommitmentArray) Marshal(pos uint64) (crypto.Hashable, error) {
-	lsbIndex := msbToLsbIndex(pos, vc.pathLen)
-	if lsbIndex >= vc.paddedLen {
-		return nil, fmt.Errorf("vectorCommitmentArray.Get(%d): out of bounds, full size %d", pos, vc.paddedLen)
+	lsbIndex, err := msbToLsbIndex(pos, vc.pathLen)
+	if err != nil {
+		return nil, err
 	}
-	// try to enforce the DS
+	if lsbIndex >= vc.paddedLen {
+		return nil, fmt.Errorf(ErrGetOutOfBound, pos, vc.paddedLen)
+	}
+
 	if lsbIndex < vc.array.Length() {
-		// assert that this doesn't start with MB
 		return vc.array.Marshal(lsbIndex)
 	}
 
 	return &bottomElement{}, nil
 }
 
-func msbToLsbIndex(msbIndex uint64, pathLen uint8) uint64 {
-	return bits.Reverse64(msbIndex) >> (64 - pathLen)
+func msbToLsbIndex(msbIndex uint64, pathLen uint8) (uint64, error) {
+	if msbIndex >= (1 << pathLen) {
+		return 0, fmt.Errorf(ErrPosOutOfBound, msbIndex, 1<<pathLen)
+	}
+	return bits.Reverse64(msbIndex) >> (64 - pathLen), nil
 }
