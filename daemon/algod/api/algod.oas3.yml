@@ -26,9 +26,9 @@
         "name": "address-role",
         "schema": {
           "enum": [
-            "sender",
-            "receiver",
-            "freeze-target"
+              "sender",
+              "receiver",
+              "freeze-target"
           ],
           "type": "string"
         }
@@ -108,8 +108,8 @@
         "name": "format",
         "schema": {
           "enum": [
-            "json",
-            "msgpack"
+              "json",
+              "msgpack"
           ],
           "type": "string"
         }
@@ -187,9 +187,9 @@
         "name": "sig-type",
         "schema": {
           "enum": [
-            "sig",
-            "msig",
-            "lsig"
+              "sig",
+              "msig",
+              "lsig"
           ],
           "type": "string"
         }
@@ -211,12 +211,12 @@
         "name": "tx-type",
         "schema": {
           "enum": [
-            "pay",
-            "keyreg",
-            "acfg",
-            "axfer",
-            "afrz",
-            "appl"
+              "pay",
+              "keyreg",
+              "acfg",
+              "axfer",
+              "afrz",
+              "appl"
           ],
           "type": "string"
         }
@@ -259,19 +259,19 @@
               "properties": {
                 "block": {
                   "description": "Block header data.",
-                  "properties": {},
+                  "properties": { },
                   "type": "object",
                   "x-algorand-format": "BlockHeader"
                 },
                 "cert": {
                   "description": "Optional certificate object. This is only included when the format is set to message pack.",
-                  "properties": {},
+                  "properties": { },
                   "type": "object",
                   "x-algorand-format": "BlockCertificate"
                 }
               },
               "required": [
-                "block"
+                  "block"
               ],
               "type": "object"
             }
@@ -291,7 +291,7 @@
                 }
               },
               "required": [
-                "catchup-message"
+                  "catchup-message"
               ],
               "type": "object"
             }
@@ -310,7 +310,7 @@
                 }
               },
               "required": [
-                "catchup-message"
+                  "catchup-message"
               ],
               "type": "object"
             }
@@ -332,8 +332,8 @@
                 }
               },
               "required": [
-                "hash",
-                "result"
+                  "hash",
+                  "result"
               ],
               "type": "object"
             }
@@ -342,7 +342,7 @@
         "description": "Teal compile Result"
       },
       "DeleteParticipationIdResponse": {
-        "content": {},
+        "content": { },
         "description": "Participation key got deleted by ID"
       },
       "DryrunResponse": {
@@ -365,9 +365,9 @@
                 }
               },
               "required": [
-                "error",
-                "protocol-version",
-                "txns"
+                  "error",
+                  "protocol-version",
+                  "txns"
               ],
               "type": "object"
             }
@@ -443,14 +443,14 @@
                 }
               },
               "required": [
-                "catchup-time",
-                "last-round",
-                "last-version",
-                "next-version",
-                "next-version-round",
-                "next-version-supported",
-                "stopped-at-unsupported-round",
-                "time-since-last-round"
+                  "catchup-time",
+                  "last-round",
+                  "last-version",
+                  "next-version",
+                  "next-version-round",
+                  "next-version-supported",
+                  "stopped-at-unsupported-round",
+                  "time-since-last-round"
               ],
               "type": "object"
             }
@@ -489,7 +489,7 @@
                 "top-transactions": {
                   "description": "An array of signed transaction objects.",
                   "items": {
-                    "properties": {},
+                    "properties": { },
                     "type": "object",
                     "x-algorand-format": "SignedTransaction"
                   },
@@ -501,8 +501,8 @@
                 }
               },
               "required": [
-                "top-transactions",
-                "total-transactions"
+                  "top-transactions",
+                  "total-transactions"
               ],
               "type": "object"
             }
@@ -521,7 +521,7 @@
                 }
               },
               "required": [
-                "partId"
+                  "partId"
               ],
               "type": "object"
             }
@@ -540,7 +540,7 @@
                 }
               },
               "required": [
-                "txId"
+                  "txId"
               ],
               "type": "object"
             }
@@ -556,13 +556,17 @@
                 "hashtype": {
                   "description": "The type of hash function used to create the proof",
                   "enum": [
-                    "sumhash",
-                    "sha512_256"
+                      "sumhash",
+                      "sha512_256"
                   ],
                   "type": "string"
                 },
                 "idx": {
                   "description": "Index of the transaction in the block's payset.",
+                  "type": "integer"
+                },
+                "treeDepth": {
+                  "description": "represents the depth of the tree that is being proven. the root level is not included.",
                   "type": "integer"
                 },
                 "proof": {
@@ -579,10 +583,11 @@
                 }
               },
               "required": [
-                "hashtype",
-                "idx",
-                "proof",
-                "stibhash"
+                  "hashtype",
+                  "idx",
+                  "proof",
+                  "treeDepth",
+                  "stibhash"
               ],
               "type": "object"
             }
@@ -610,9 +615,9 @@
                 }
               },
               "required": [
-                "current_round",
-                "online-money",
-                "total-money"
+                  "current_round",
+                  "online-money",
+                  "total-money"
               ],
               "type": "object"
             }
@@ -654,12 +659,12 @@
                 }
               },
               "required": [
-                "consensus-version",
-                "fee",
-                "genesis-hash",
-                "genesis-id",
-                "last-round",
-                "min-fee"
+                  "consensus-version",
+                  "fee",
+                  "genesis-hash",
+                  "genesis-id",
+                  "last-round",
+                  "min-fee"
               ],
               "type": "object",
               "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
@@ -761,9 +766,9 @@
           "sig-type": {
             "description": "Indicates what type of signature is used by this account, must be one of:\n* sig\n* msig\n* lsig",
             "enum": [
-              "sig",
-              "msig",
-              "lsig"
+                "sig",
+                "msig",
+                "lsig"
             ],
             "type": "string"
           },
@@ -773,14 +778,14 @@
           }
         },
         "required": [
-          "address",
-          "amount",
-          "amount-without-pending-rewards",
-          "min-balance",
-          "pending-rewards",
-          "rewards",
-          "round",
-          "status"
+            "address",
+            "amount",
+            "amount-without-pending-rewards",
+            "min-balance",
+            "pending-rewards",
+            "rewards",
+            "round",
+            "status"
         ],
         "type": "object"
       },
@@ -819,11 +824,11 @@
           }
         },
         "required": [
-          "selection-participation-key",
-          "vote-first-valid",
-          "vote-key-dilution",
-          "vote-last-valid",
-          "vote-participation-key"
+            "selection-participation-key",
+            "vote-first-valid",
+            "vote-key-dilution",
+            "vote-last-valid",
+            "vote-participation-key"
         ],
         "type": "object"
       },
@@ -838,8 +843,8 @@
           }
         },
         "required": [
-          "address",
-          "delta"
+            "address",
+            "delta"
         ],
         "type": "object"
       },
@@ -855,8 +860,8 @@
           }
         },
         "required": [
-          "id",
-          "params"
+            "id",
+            "params"
         ],
         "type": "object"
       },
@@ -875,8 +880,8 @@
           }
         },
         "required": [
-          "id",
-          "schema"
+            "id",
+            "schema"
         ],
         "type": "object"
       },
@@ -917,9 +922,9 @@
           }
         },
         "required": [
-          "approval-program",
-          "clear-state-program",
-          "creator"
+            "approval-program",
+            "clear-state-program",
+            "creator"
         ],
         "type": "object"
       },
@@ -936,8 +941,8 @@
           }
         },
         "required": [
-          "num-byte-slice",
-          "num-uint"
+            "num-byte-slice",
+            "num-uint"
         ],
         "type": "object"
       },
@@ -953,8 +958,8 @@
           }
         },
         "required": [
-          "index",
-          "params"
+            "index",
+            "params"
         ],
         "type": "object"
       },
@@ -981,10 +986,10 @@
           }
         },
         "required": [
-          "amount",
-          "asset-id",
-          "creator",
-          "is-frozen"
+            "amount",
+            "asset-id",
+            "creator",
+            "is-frozen"
         ],
         "type": "object"
       },
@@ -1064,9 +1069,9 @@
           }
         },
         "required": [
-          "creator",
-          "decimals",
-          "total"
+            "creator",
+            "decimals",
+            "total"
         ],
         "type": "object"
       },
@@ -1095,12 +1100,12 @@
           }
         },
         "required": [
-          "branch",
-          "build_number",
-          "channel",
-          "commit_hash",
-          "major",
-          "minor"
+            "branch",
+            "build_number",
+            "channel",
+            "commit_hash",
+            "major",
+            "minor"
         ],
         "title": "BuildVersion contains the current algod build version information.",
         "type": "object"
@@ -1151,13 +1156,13 @@
           }
         },
         "required": [
-          "accounts",
-          "apps",
-          "latest-timestamp",
-          "protocol-version",
-          "round",
-          "sources",
-          "txns"
+            "accounts",
+            "apps",
+            "latest-timestamp",
+            "protocol-version",
+            "round",
+            "sources",
+            "txns"
         ],
         "type": "object"
       },
@@ -1180,10 +1185,10 @@
           }
         },
         "required": [
-          "app-index",
-          "field-name",
-          "source",
-          "txn-index"
+            "app-index",
+            "field-name",
+            "source",
+            "txn-index"
         ],
         "type": "object"
       },
@@ -1216,9 +1221,9 @@
           }
         },
         "required": [
-          "line",
-          "pc",
-          "stack"
+            "line",
+            "pc",
+            "stack"
         ],
         "type": "object"
       },
@@ -1279,7 +1284,7 @@
           }
         },
         "required": [
-          "disassembly"
+            "disassembly"
         ],
         "type": "object"
       },
@@ -1294,7 +1299,7 @@
           }
         },
         "required": [
-          "message"
+            "message"
         ],
         "type": "object"
       },
@@ -1316,7 +1321,7 @@
           }
         },
         "required": [
-          "action"
+            "action"
         ],
         "type": "object"
       },
@@ -1331,8 +1336,8 @@
           }
         },
         "required": [
-          "key",
-          "value"
+            "key",
+            "value"
         ],
         "type": "object"
       },
@@ -1375,9 +1380,9 @@
           }
         },
         "required": [
-          "address",
-          "id",
-          "key"
+            "address",
+            "id",
+            "key"
         ],
         "type": "object"
       },
@@ -1448,14 +1453,14 @@
           },
           "txn": {
             "description": "The raw signed transaction.",
-            "properties": {},
+            "properties": { },
             "type": "object",
             "x-algorand-format": "SignedTransaction"
           }
         },
         "required": [
-          "pool-error",
-          "txn"
+            "pool-error",
+            "txn"
         ],
         "type": "object"
       },
@@ -1477,8 +1482,8 @@
           }
         },
         "required": [
-          "key",
-          "value"
+            "key",
+            "value"
         ],
         "type": "object"
       },
@@ -1507,9 +1512,9 @@
           }
         },
         "required": [
-          "bytes",
-          "type",
-          "uint"
+            "bytes",
+            "type",
+            "uint"
         ],
         "type": "object"
       },
@@ -1535,10 +1540,10 @@
           }
         },
         "required": [
-          "build",
-          "genesis_hash_b64",
-          "genesis_id",
-          "versions"
+            "build",
+            "genesis_hash_b64",
+            "genesis_id",
+            "versions"
         ],
         "title": "Version contains the current algod version.",
         "type": "object"
@@ -1581,13 +1586,13 @@
             "description": "The genesis file in json."
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
         "summary": "Gets the genesis information.",
         "tags": [
-          "common"
+            "common"
         ]
       }
     },
@@ -1596,17 +1601,17 @@
         "operationId": "HealthCheck",
         "responses": {
           "200": {
-            "content": {},
+            "content": { },
             "description": "OK."
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
         "summary": "Returns OK if healthy.",
         "tags": [
-          "common"
+            "common"
         ]
       }
     },
@@ -1615,17 +1620,17 @@
         "operationId": "Metrics",
         "responses": {
           "200": {
-            "content": {},
+            "content": { },
             "description": "text with \\#-comments and key:value lines"
           },
           "404": {
-            "content": {},
+            "content": { },
             "description": "metrics were compiled out"
           }
         },
         "summary": "Return metrics about algod functioning.",
         "tags": [
-          "common"
+            "common"
         ]
       }
     },
@@ -1645,13 +1650,13 @@
             "description": "The current swagger spec"
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
         "summary": "Gets the current swagger spec.",
         "tags": [
-          "common"
+            "common"
         ]
       }
     },
@@ -1666,8 +1671,8 @@
             "name": "format",
             "schema": {
               "enum": [
-                "json",
-                "msgpack"
+                  "json",
+                  "msgpack"
               ],
               "type": "string"
             }
@@ -1744,7 +1749,7 @@
             "description": "Internal Error"
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
@@ -1780,8 +1785,8 @@
             "name": "format",
             "schema": {
               "enum": [
-                "json",
-                "msgpack"
+                  "json",
+                  "msgpack"
               ],
               "type": "string"
             }
@@ -1797,7 +1802,7 @@
                     "top-transactions": {
                       "description": "An array of signed transaction objects.",
                       "items": {
-                        "properties": {},
+                        "properties": { },
                         "type": "object",
                         "x-algorand-format": "SignedTransaction"
                       },
@@ -1809,8 +1814,8 @@
                     }
                   },
                   "required": [
-                    "top-transactions",
-                    "total-transactions"
+                      "top-transactions",
+                      "total-transactions"
                   ],
                   "type": "object"
                 }
@@ -1822,7 +1827,7 @@
                     "top-transactions": {
                       "description": "An array of signed transaction objects.",
                       "items": {
-                        "properties": {},
+                        "properties": { },
                         "type": "object",
                         "x-algorand-format": "SignedTransaction"
                       },
@@ -1834,8 +1839,8 @@
                     }
                   },
                   "required": [
-                    "top-transactions",
-                    "total-transactions"
+                      "top-transactions",
+                      "total-transactions"
                   ],
                   "type": "object"
                 }
@@ -1904,7 +1909,7 @@
             "description": "Service Temporarily Unavailable"
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
@@ -1978,7 +1983,7 @@
             "description": "Internal Error"
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
@@ -2052,7 +2057,7 @@
             "description": "Internal Error"
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
@@ -2069,8 +2074,8 @@
             "name": "format",
             "schema": {
               "enum": [
-                "json",
-                "msgpack"
+                  "json",
+                  "msgpack"
               ],
               "type": "string"
             }
@@ -2094,19 +2099,19 @@
                   "properties": {
                     "block": {
                       "description": "Block header data.",
-                      "properties": {},
+                      "properties": { },
                       "type": "object",
                       "x-algorand-format": "BlockHeader"
                     },
                     "cert": {
                       "description": "Optional certificate object. This is only included when the format is set to message pack.",
-                      "properties": {},
+                      "properties": { },
                       "type": "object",
                       "x-algorand-format": "BlockCertificate"
                     }
                   },
                   "required": [
-                    "block"
+                      "block"
                   ],
                   "type": "object"
                 }
@@ -2116,19 +2121,19 @@
                   "properties": {
                     "block": {
                       "description": "Block header data.",
-                      "properties": {},
+                      "properties": { },
                       "type": "object",
                       "x-algorand-format": "BlockHeader"
                     },
                     "cert": {
                       "description": "Optional certificate object. This is only included when the format is set to message pack.",
-                      "properties": {},
+                      "properties": { },
                       "type": "object",
                       "x-algorand-format": "BlockCertificate"
                     }
                   },
                   "required": [
-                    "block"
+                      "block"
                   ],
                   "type": "object"
                 }
@@ -2197,7 +2202,7 @@
             "description": "Internal Error"
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
@@ -2233,8 +2238,8 @@
             "name": "format",
             "schema": {
               "enum": [
-                "json",
-                "msgpack"
+                  "json",
+                  "msgpack"
               ],
               "type": "string"
             }
@@ -2249,8 +2254,8 @@
                     "hashtype": {
                       "description": "The type of hash function used to create the proof",
                       "enum": [
-                        "sumhash",
-                        "sha512_256"
+                          "sumhash",
+                          "sha512_256"
                       ],
                       "type": "string"
                     },
@@ -2272,10 +2277,10 @@
                     }
                   },
                   "required": [
-                    "hashtype",
-                    "idx",
-                    "proof",
-                    "stibhash"
+                      "hashtype",
+                      "idx",
+                      "proof",
+                      "stibhash"
                   ],
                   "type": "object"
                 }
@@ -2324,7 +2329,7 @@
             "description": "Internal error, including protocol not supporting Merkle proofs."
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown error"
           }
         },
@@ -2363,7 +2368,7 @@
                     }
                   },
                   "required": [
-                    "catchup-message"
+                      "catchup-message"
                   ],
                   "type": "object"
                 }
@@ -2401,13 +2406,13 @@
             "description": "Internal Error"
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
         "summary": "Aborts a catchpoint catchup.",
         "tags": [
-          "private"
+            "private"
         ]
       },
       "post": {
@@ -2441,7 +2446,7 @@
                     }
                   },
                   "required": [
-                    "catchup-message"
+                      "catchup-message"
                   ],
                   "type": "object"
                 }
@@ -2460,7 +2465,7 @@
                     }
                   },
                   "required": [
-                    "catchup-message"
+                      "catchup-message"
                   ],
                   "type": "object"
                 }
@@ -2498,13 +2503,13 @@
             "description": "Internal Error"
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
         "summary": "Starts a catchpoint catchup.",
         "tags": [
-          "private"
+            "private"
         ]
       }
     },
@@ -2532,9 +2537,9 @@
                     }
                   },
                   "required": [
-                    "current_round",
-                    "online-money",
-                    "total-money"
+                      "current_round",
+                      "online-money",
+                      "total-money"
                   ],
                   "type": "object"
                 }
@@ -2553,7 +2558,7 @@
             "description": "Invalid API Token"
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
@@ -2619,13 +2624,13 @@
             "description": "Internal Error"
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
         "summary": "Return a list of participation keys",
         "tags": [
-          "private"
+            "private"
         ]
       },
       "post": {
@@ -2654,7 +2659,7 @@
                     }
                   },
                   "required": [
-                    "partId"
+                      "partId"
                   ],
                   "type": "object"
                 }
@@ -2713,13 +2718,13 @@
             "description": "Service Temporarily Unavailable"
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
         "summary": "Add a participation key to the node",
         "tags": [
-          "private"
+            "private"
         ],
         "x-codegen-request-body-name": "participationkey"
       }
@@ -2740,7 +2745,7 @@
         ],
         "responses": {
           "200": {
-            "content": {},
+            "content": { },
             "description": "Participation key got deleted by ID"
           },
           "400": {
@@ -2784,13 +2789,13 @@
             "description": "Internal Error"
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
         "summary": "Delete a given participation key by ID",
         "tags": [
-          "private"
+            "private"
         ]
       },
       "get": {
@@ -2858,13 +2863,13 @@
             "description": "Internal Error"
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
         "summary": "Get participation key info given a participation ID",
         "tags": [
-          "private"
+            "private"
         ]
       },
       "post": {
@@ -2981,7 +2986,7 @@
           }
         },
         "tags": [
-          "private"
+            "private"
         ]
       }
     },
@@ -3057,14 +3062,14 @@
                     }
                   },
                   "required": [
-                    "catchup-time",
-                    "last-round",
-                    "last-version",
-                    "next-version",
-                    "next-version-round",
-                    "next-version-supported",
-                    "stopped-at-unsupported-round",
-                    "time-since-last-round"
+                      "catchup-time",
+                      "last-round",
+                      "last-version",
+                      "next-version",
+                      "next-version-round",
+                      "next-version-supported",
+                      "stopped-at-unsupported-round",
+                      "time-since-last-round"
                   ],
                   "type": "object"
                 }
@@ -3092,7 +3097,7 @@
             "description": "Internal Error"
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
@@ -3184,14 +3189,14 @@
                     }
                   },
                   "required": [
-                    "catchup-time",
-                    "last-round",
-                    "last-version",
-                    "next-version",
-                    "next-version-round",
-                    "next-version-supported",
-                    "stopped-at-unsupported-round",
-                    "time-since-last-round"
+                      "catchup-time",
+                      "last-round",
+                      "last-version",
+                      "next-version",
+                      "next-version-round",
+                      "next-version-supported",
+                      "stopped-at-unsupported-round",
+                      "time-since-last-round"
                   ],
                   "type": "object"
                 }
@@ -3239,7 +3244,7 @@
             "description": "Service Temporarily Unavailable"
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
@@ -3278,8 +3283,8 @@
                     }
                   },
                   "required": [
-                    "hash",
-                    "result"
+                      "hash",
+                      "result"
                   ],
                   "type": "object"
                 }
@@ -3308,7 +3313,7 @@
             "description": "Invalid API Token"
           },
           "404": {
-            "content": {},
+            "content": { },
             "description": "Developer API not enabled"
           },
           "500": {
@@ -3322,7 +3327,7 @@
             "description": "Internal Error"
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
@@ -3371,9 +3376,9 @@
                     }
                   },
                   "required": [
-                    "error",
-                    "protocol-version",
-                    "txns"
+                      "error",
+                      "protocol-version",
+                      "txns"
                   ],
                   "type": "object"
                 }
@@ -3402,7 +3407,7 @@
             "description": "Invalid API Token"
           },
           "404": {
-            "content": {},
+            "content": { },
             "description": "Developer API not enabled"
           },
           "500": {
@@ -3416,7 +3421,7 @@
             "description": "Internal Error"
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
@@ -3451,7 +3456,7 @@
                     }
                   },
                   "required": [
-                    "txId"
+                      "txId"
                   ],
                   "type": "object"
                 }
@@ -3500,7 +3505,7 @@
             "description": "Service Temporarily Unavailable"
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
@@ -3546,12 +3551,12 @@
                     }
                   },
                   "required": [
-                    "consensus-version",
-                    "fee",
-                    "genesis-hash",
-                    "genesis-id",
-                    "last-round",
-                    "min-fee"
+                      "consensus-version",
+                      "fee",
+                      "genesis-hash",
+                      "genesis-id",
+                      "last-round",
+                      "min-fee"
                   ],
                   "type": "object",
                   "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
@@ -3591,7 +3596,7 @@
             "description": "Service Temporarily Unavailable"
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
@@ -3617,8 +3622,8 @@
             "name": "format",
             "schema": {
               "enum": [
-                "json",
-                "msgpack"
+                  "json",
+                  "msgpack"
               ],
               "type": "string"
             }
@@ -3634,7 +3639,7 @@
                     "top-transactions": {
                       "description": "An array of signed transaction objects.",
                       "items": {
-                        "properties": {},
+                        "properties": { },
                         "type": "object",
                         "x-algorand-format": "SignedTransaction"
                       },
@@ -3646,8 +3651,8 @@
                     }
                   },
                   "required": [
-                    "top-transactions",
-                    "total-transactions"
+                      "top-transactions",
+                      "total-transactions"
                   ],
                   "type": "object"
                 }
@@ -3659,7 +3664,7 @@
                     "top-transactions": {
                       "description": "An array of signed transaction objects.",
                       "items": {
-                        "properties": {},
+                        "properties": { },
                         "type": "object",
                         "x-algorand-format": "SignedTransaction"
                       },
@@ -3671,8 +3676,8 @@
                     }
                   },
                   "required": [
-                    "top-transactions",
-                    "total-transactions"
+                      "top-transactions",
+                      "total-transactions"
                   ],
                   "type": "object"
                 }
@@ -3726,7 +3731,7 @@
             "description": "Service Temporarily Unavailable"
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
@@ -3754,8 +3759,8 @@
             "name": "format",
             "schema": {
               "enum": [
-                "json",
-                "msgpack"
+                  "json",
+                  "msgpack"
               ],
               "type": "string"
             }
@@ -3823,7 +3828,7 @@
             "description": "Transaction Not Found"
           },
           "default": {
-            "content": {},
+            "content": { },
             "description": "Unknown Error"
           }
         },
@@ -3847,14 +3852,14 @@
           }
         },
         "tags": [
-          "common"
+            "common"
         ]
       }
     }
   },
   "security": [
     {
-      "api_key": []
+      "api_key": [ ]
     }
   ],
   "servers": [

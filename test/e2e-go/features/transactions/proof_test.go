@@ -107,6 +107,7 @@ func TestTxnMerkleProof(t *testing.T) {
 
 	var proof merklearray.Proof
 	proof.HashFactory = crypto.HashFactory{HashType: hashtype}
+	proof.TreeDepth = uint8(proofresp.TreeDepth)
 	proofconcat := []byte(proofresp.Proof)
 	for len(proofconcat) > 0 {
 		var d crypto.Digest

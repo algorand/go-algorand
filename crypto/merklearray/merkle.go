@@ -68,7 +68,7 @@ type Proof struct {
 	Path        []crypto.GenericDigest `codec:"pth,allocbound=MaxNumLeaves/2"`
 	HashFactory crypto.HashFactory     `codec:"hsh"`
 	// TreeDepth represents the depth of the tree that is being proven.
-	// the root level does not included
+	// the root level is not included
 	TreeDepth uint8 `codec:"td"`
 }
 
