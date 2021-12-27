@@ -1687,7 +1687,6 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 		if err != nil {
 			return err
 		}
-
 		var newAccountData baseAccountData
 		newAccountData.SetAccountData(&accountData)
 		encodedAcctData = protocol.Encode(&newAccountData)
@@ -1713,8 +1712,11 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 			return err
 		}
 		insertResourceCallback := func(ctx context.Context, rowID int64, cidx basics.CreatableIndex, ctype basics.CreatableType, rd *resourcesData) error {
-			encodedData := protocol.Encode(rd)
-			_, err = insertResources.ExecContext(ctx, rowID, cidx, ctype, encodedData)
+			var err error
+			if rd != nil {
+				encodedData := protocol.Encode(rd)
+				_, err = insertResources.ExecContext(ctx, rowID, cidx, ctype, encodedData)
+			}
 			return err
 		}
 		err = accountDataResources(ctx, &accountData, rowID, insertResourceCallback)
@@ -1727,7 +1729,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 		}
 	}
 
-	// if the above loop was abrupted by an error, test it now.
+	// if the above loop was abrupt by an error, test it now.
 	if err = rows.Err(); err != nil {
 		return err
 	}
@@ -2683,41 +2685,11 @@ func (mc *MerkleCommitter) LoadPage(page uint64) (content []byte, err error) {
 	return content, nil
 }
 
-type endcodedResourcesRow struct {
-	addrid int64
-	aidx   basics.CreatableIndex
-	data   []byte
-}
-
 // encodedAccountsBatchIter allows us to iterate over the accounts data stored in the accountbase table.
 type encodedAccountsBatchIter struct {
-	accountsRows     *sql.Rows
-	resourcesRows    *sql.Rows
-	nextResourcesRow *endcodedResourcesRow
-}
-
-func (iterator *encodedAccountsBatchIter) peekNextResourcesRow() (*endcodedResourcesRow, error) {
-	if iterator.nextResourcesRow != nil {
-		return iterator.nextResourcesRow, nil
-	}
-	row := &endcodedResourcesRow{}
-	if !iterator.resourcesRows.Next() {
-		// no more rows. Just return a pointer that won't match anything.
-		row.addrid = -1
-		return row, nil
-	}
-	err := iterator.resourcesRows.Scan(&row.addrid, &row.aidx, &row.data)
-	switch err {
-	case nil:
-	case sql.ErrNoRows:
-		// normal. Just return a pointer that won't match anything.
-		row.addrid = -1
-		return row, nil
-	default:
-		iterator.Close()
-		return nil, err
-	}
-	return row, nil
+	accountsRows  *sql.Rows
+	resourcesRows *sql.Rows
+	nextRow       pendingRow
 }
 
 // Next returns an array containing the account data, in the same way it appear in the database
@@ -2730,7 +2702,7 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 		}
 	}
 	if iterator.resourcesRows == nil {
-		iterator.resourcesRows, err = tx.QueryContext(ctx, "SELECT addrid, aidx, data FROM resources ORDER BY addrid, aidx, rtype")
+		iterator.resourcesRows, err = tx.QueryContext(ctx, "SELECT addrid, aidx, rtype, data FROM resources ORDER BY addrid, aidx, rtype")
 		if err != nil {
 			return
 		}
@@ -2738,44 +2710,69 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 
 	// gather up to accountCount encoded accounts.
 	bals = make([]encodedBalanceRecordV6, 0, accountCount)
-	var addr basics.Address
-	for iterator.accountsRows.Next() {
-		var addrbuf []byte
-		var buf []byte
-		var rowid int64
-		err = iterator.accountsRows.Scan(&rowid, &addrbuf, &buf)
-		if err != nil {
-			iterator.Close()
-			return
-		}
+	var encodedRecord encodedBalanceRecordV6
+	var baseAcct baseAccountData
+	var numAcct int
+	baseCb := func(addr basics.Address, rowid int64, accountData *baseAccountData, encodedAccountData []byte) (err error) {
+		encodedRecord = encodedBalanceRecordV6{Address: addr, AccountData: encodedAccountData}
+		baseAcct = *accountData
+		numAcct++
+		return nil
+	}
 
-		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-			return
-		}
-
-		copy(addr[:], addrbuf)
-		encodedRecord := encodedBalanceRecordV6{Address: addr, AccountData: buf}
-		for {
-			var nextRes *endcodedResourcesRow
-			nextRes, err = iterator.peekNextResourcesRow()
-			if err != nil {
-				return
-			}
-			if nextRes.addrid != rowid {
-				break
-			}
+	var totalAppParams, totalAppLocalStates, totalAssetParams, totalAssets uint32
+	// emptyCount := 0
+	resCb := func(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error {
+		emptyBaseAcct := baseAcct.TotalAppParams == 0 && baseAcct.TotalAppLocalStates == 0 && baseAcct.TotalAssetParams == 0 && baseAcct.TotalAssets == 0
+		if !emptyBaseAcct && resData != nil {
 			if encodedRecord.Resources == nil {
 				encodedRecord.Resources = make(map[uint64]msgp.Raw)
 			}
-			encodedRecord.Resources[uint64(nextRes.aidx)] = nextRes.data
-			iterator.nextResourcesRow = nil
+			encodedRecord.Resources[uint64(cidx)] = encodedResourceData
+			if resData.IsApp() && resData.IsOwning() {
+				totalAppParams++
+			}
+			if resData.IsApp() && resData.IsHolding() {
+				totalAppLocalStates++
+			}
+
+			if resData.IsAsset() && resData.IsOwning() {
+				totalAssetParams++
+			}
+			if resData.IsAsset() && resData.IsHolding() {
+				totalAssets++
+			}
+
 		}
-		bals = append(bals, encodedRecord)
-		if len(bals) == accountCount {
-			// we're done with this iteration.
-			return
+
+		if baseAcct.TotalAppParams == totalAppParams &&
+			baseAcct.TotalAppLocalStates == totalAppLocalStates &&
+			baseAcct.TotalAssetParams == totalAssetParams &&
+			baseAcct.TotalAssets == totalAssets {
+
+			bals = append(bals, encodedRecord)
+			totalAppParams = 0
+			totalAppLocalStates = 0
+			totalAssetParams = 0
+			totalAssets = 0
 		}
+
+		return nil
+	}
+
+	_, iterator.nextRow, err = processAllBaseAccountRecords(
+		iterator.accountsRows, iterator.resourcesRows,
+		baseCb, resCb,
+		iterator.nextRow, accountCount,
+	)
+	if err != nil {
+		iterator.Close()
+		return
+	}
+
+	if len(bals) == accountCount {
+		// we're done with this iteration.
+		return
 	}
 
 	err = iterator.accountsRows.Err()
@@ -2830,6 +2827,7 @@ type orderedAccountsIter struct {
 	hashesRows      *sql.Rows
 	resourcesRows   *sql.Rows
 	tx              *sql.Tx
+	pendingRow      pendingRow
 	accountCount    int
 	insertStmt      *sql.Stmt
 }
@@ -2868,8 +2866,8 @@ func processAllResources(
 			// in this case addrid = 3 after processing resources from 1, but acctRowid = 2
 			// and we need to skip accounts without resources
 			if pr.addrid > acctRowid {
-				err = callback(addr, 0, 0, &resourcesData{}, nil)
-				return pendingRow{}, err
+				err = callback(addr, 0, 0, nil, nil)
+				return pr, err
 			}
 			if pr.addrid < acctRowid {
 				err = errors.New("resource table entries mismatches accountbase table entries")
@@ -2882,6 +2880,10 @@ func processAllResources(
 			pr = pendingRow{}
 		} else {
 			if !resRows.Next() {
+				err = callback(addr, 0, 0, nil, nil)
+				if err != nil {
+					return pendingRow{}, err
+				}
 				break
 			}
 			err = resRows.Scan(&addrid, &aidx, &rtype, &buf)
@@ -2889,7 +2891,8 @@ func processAllResources(
 				return pendingRow{}, err
 			}
 			if addrid != acctRowid {
-				return pendingRow{addrid, aidx, rtype, buf}, nil
+				err = callback(addr, 0, 0, nil, nil)
+				return pendingRow{addrid, aidx, rtype, buf}, err
 			}
 		}
 		var resData resourcesData
@@ -2908,26 +2911,25 @@ func processAllResources(
 func processAllBaseAccountRecords(
 	baseRows *sql.Rows,
 	resRows *sql.Rows,
-	baseCb func(addr basics.Address, accountData *baseAccountData, encodedAccountData []byte) error,
+	baseCb func(addr basics.Address, rowid int64, accountData *baseAccountData, encodedAccountData []byte) error,
 	resCb func(addr basics.Address, creatableIdx basics.CreatableIndex, creatableType basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error,
-	accountCount int,
-) (int, error) {
+	pending pendingRow, accountCount int,
+) (int, pendingRow, error) {
 	var addr basics.Address
 	var err error
 	count := 0
-	var pending pendingRow
 	for baseRows.Next() {
 		var addrbuf []byte
 		var buf []byte
 		var rowid int64
 		err = baseRows.Scan(&rowid, &addrbuf, &buf)
 		if err != nil {
-			return 0, err
+			return 0, pendingRow{}, err
 		}
 
 		if len(addrbuf) != len(addr) {
 			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-			return 0, err
+			return 0, pendingRow{}, err
 		}
 
 		copy(addr[:], addrbuf)
@@ -2935,26 +2937,26 @@ func processAllBaseAccountRecords(
 		var accountData baseAccountData
 		err = protocol.Decode(buf, &accountData)
 		if err != nil {
-			return 0, err
+			return 0, pendingRow{}, err
 		}
-		err = baseCb(addr, &accountData, buf)
+		err = baseCb(addr, rowid, &accountData, buf)
 		if err != nil {
-			return 0, err
+			return 0, pendingRow{}, err
 		}
 
 		pending, err = processAllResources(resRows, addr, &accountData, rowid, pending, resCb)
 		if err != nil {
-			return 0, err
+			return 0, pendingRow{}, err
 		}
 
 		count++
 		if accountCount > 0 && count == accountCount {
 			// we're done with this iteration.
-			return count, nil
+			return count, pending, nil
 		}
 	}
 
-	return count, nil
+	return count, pending, nil
 }
 
 // LoadAllFullAccounts loads all accounts from balancesTable and resourcesTable.
@@ -2981,7 +2983,7 @@ func LoadAllFullAccounts(
 	var baseAcct baseAccountData
 	var ad basics.AccountData
 
-	baseCb := func(addr basics.Address, accountData *baseAccountData, encodedAccountData []byte) (err error) {
+	baseCb := func(addr basics.Address, rowid int64, accountData *baseAccountData, encodedAccountData []byte) (err error) {
 		baseAcct = *accountData
 		ad = baseAcct.GetAccountData()
 		copy(address[:], addr[:])
@@ -2990,34 +2992,38 @@ func LoadAllFullAccounts(
 
 	var totalAppParams, totalAppLocalStates, totalAssetParams, totalAssets uint32
 	resCb := func(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error {
-		if resData.IsApp() && resData.IsOwning() {
-			if ad.AppParams == nil {
-				ad.AppParams = make(map[basics.AppIndex]basics.AppParams)
+		if resData != nil {
+			// resData can be nil if a base account does not have resources
+			// or there is a pending resource row from a next account
+			if resData.IsApp() && resData.IsOwning() {
+				if ad.AppParams == nil {
+					ad.AppParams = make(map[basics.AppIndex]basics.AppParams)
+				}
+				ad.AppParams[basics.AppIndex(cidx)] = resData.GetAppParams()
+				totalAppParams++
 			}
-			ad.AppParams[basics.AppIndex(cidx)] = resData.GetAppParams()
-			totalAppParams++
-		}
-		if resData.IsApp() && resData.IsHolding() {
-			if ad.AppLocalStates == nil {
-				ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+			if resData.IsApp() && resData.IsHolding() {
+				if ad.AppLocalStates == nil {
+					ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+				}
+				ad.AppLocalStates[basics.AppIndex(cidx)] = resData.GetAppLocalState()
+				totalAppLocalStates++
 			}
-			ad.AppLocalStates[basics.AppIndex(cidx)] = resData.GetAppLocalState()
-			totalAppLocalStates++
-		}
 
-		if resData.IsAsset() && resData.IsOwning() {
-			if ad.AssetParams == nil {
-				ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
+			if resData.IsAsset() && resData.IsOwning() {
+				if ad.AssetParams == nil {
+					ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
+				}
+				ad.AssetParams[basics.AssetIndex(cidx)] = resData.GetAssetParams()
+				totalAssetParams++
 			}
-			ad.AssetParams[basics.AssetIndex(cidx)] = resData.GetAssetParams()
-			totalAssetParams++
-		}
-		if resData.IsAsset() && resData.IsHolding() {
-			if ad.Assets == nil {
-				ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
+			if resData.IsAsset() && resData.IsHolding() {
+				if ad.Assets == nil {
+					ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
+				}
+				ad.Assets[basics.AssetIndex(cidx)] = resData.GetAssetHolding()
+				totalAssets++
 			}
-			ad.Assets[basics.AssetIndex(cidx)] = resData.GetAssetHolding()
-			totalAssets++
 		}
 
 		if baseAcct.TotalAppParams == totalAppParams &&
@@ -3036,7 +3042,7 @@ func LoadAllFullAccounts(
 		return nil
 	}
 
-	count, err = processAllBaseAccountRecords(baseRows, resRows, baseCb, resCb, 0)
+	count, _, err = processAllBaseAccountRecords(baseRows, resRows, baseCb, resCb, pendingRow{}, 0)
 	if err != nil {
 		return
 	}
@@ -3099,7 +3105,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 	if iterator.step == oaiStepInsertAccountData {
 
-		baseCb := func(addr basics.Address, accountData *baseAccountData, encodedAccountData []byte) (err error) {
+		baseCb := func(addr basics.Address, rowid int64, accountData *baseAccountData, encodedAccountData []byte) (err error) {
 			hash := accountHashBuilderV6(addr, accountData, encodedAccountData)
 			_, err = iterator.insertStmt.ExecContext(ctx, addr[:], hash)
 			if err != nil {
@@ -3109,16 +3115,19 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		}
 
 		resCb := func(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error {
-			hash := resourcesHashBuilderV6(addr, cidx, ctype, resData.UpdateRound, encodedResourceData)
-			_, err := iterator.insertStmt.ExecContext(ctx, addr[:], hash)
+			var err error
+			if resData != nil {
+				hash := resourcesHashBuilderV6(addr, cidx, ctype, resData.UpdateRound, encodedResourceData)
+				_, err = iterator.insertStmt.ExecContext(ctx, addr[:], hash)
+			}
 			return err
 		}
 
 		count := 0
-		count, err = processAllBaseAccountRecords(
+		count, iterator.pendingRow, err = processAllBaseAccountRecords(
 			iterator.accountBaseRows, iterator.resourcesRows,
 			baseCb, resCb,
-			iterator.accountCount,
+			iterator.pendingRow, iterator.accountCount,
 		)
 		if err != nil {
 			iterator.Close(ctx)
