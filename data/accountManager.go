@@ -65,7 +65,7 @@ func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participati
 		if part.OverlapsInterval(rnd, rnd) {
 			partRndSecrets, err := manager.registry.GetForRound(part.ID(), rnd)
 			if err != nil {
-				// TODO: log error
+				manager.log.Warnf("error while loading round secrets from participation registry: %w", err)
 				continue
 			}
 			out = append(out, partRndSecrets)

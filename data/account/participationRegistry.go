@@ -187,6 +187,7 @@ var ErrMultipleKeysForID = errors.New("multiple valid keys found for the same pa
 // ErrNoKeyForID there may be cases where a key is deleted and used at the same time, so this error should be handled.
 var ErrNoKeyForID = errors.New("no valid key found for the participationID")
 
+// TODO: add round parameter to this error message
 // ErrSecretNotFound is used when attempting to lookup secrets for a particular round.
 var ErrSecretNotFound = errors.New("the participation ID did not have secrets for the requested round")
 
@@ -890,6 +891,9 @@ func (db *participationDB) GetAll() []ParticipationRecord {
 	return results
 }
 
+// TODO: improve performance somehow but not querying the DB if stateproof key should not
+// exist for this round
+// TODO: make sure it returns a nil stateproof if none exist for this round
 // GetForRound fetches a record with all secrets for a particular round.
 func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (ParticipationRecordForRound, error) {
 	var result ParticipationRecordForRound
@@ -925,8 +929,9 @@ func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (
 
 		return nil
 	})
-
-	if err != nil {
+	if err == ErrSecretNotFound {
+		return result, nil // leave Signer fields empty as no stateproof exists for requested round
+	} else if err != nil {
 		return ParticipationRecordForRound{}, fmt.Errorf("unable to lookup secrets: %w", err)
 	}
 

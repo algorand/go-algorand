@@ -188,6 +188,11 @@ func keystoreInstallDatabase(tx *sql.Tx) error {
 
 // GetVerifier can be used to store the commitment and verifier for this signer.
 func (s *Signer) GetVerifier() *Verifier {
+	return s.SignerRecord.GetVerifier()
+}
+
+// GetVerifier can be used to store the commitment and verifier for this signer.
+func (s *SignerRecord) GetVerifier() *Verifier {
 	ver := [KeyStoreRootSize]byte{}
 	ss := s.Tree.Root().ToSlice()
 	copy(ver[:], ss)
@@ -296,11 +301,15 @@ func (s *Signer) GetKey(round uint64) *crypto.GenericSigningKey {
 	return &s.signatureAlgorithms[idx]
 }
 
+// TODO: add unit test
 // FetchKey returns the SigningKey and round for a specified index from the StateProof DB
-func (s *Signer) FetchKey(id uint64, store db.Accessor) (key *crypto.GenericSigningKey, round uint64) {
+func (s *Signer) FetchKey(id uint64, store db.Accessor) (*crypto.GenericSigningKey, uint64, error) {
 	var keyB []byte
+	var round uint64
+	key := &crypto.GenericSigningKey{}
+
 	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		row := tx.QueryRow("SELECT (key,round) FROM StateProofKeys WHERE id = ?", id)
+		row := tx.QueryRow("SELECT key,round FROM StateProofKeys WHERE id = ?", id)
 		err := row.Scan(&keyB, &round)
 		if err != nil {
 			return fmt.Errorf("failed to select stateProof key for round %d : %w", round, err)
@@ -309,15 +318,32 @@ func (s *Signer) FetchKey(id uint64, store db.Accessor) (key *crypto.GenericSign
 		return nil
 	})
 	if err != nil {
-		return nil, 0 // fmt.Errorf("PersistentKeystore.GetKey: %w", err)
+		return nil, 0, err // fmt.Errorf("PersistentKeystore.GetKey: %w", err)
 	}
 
 	err = protocol.Decode(keyB, key)
 	if err != nil {
-		return nil, 0 // fmt.Errorf("PersistentKeystore.GetKey: %w", err)
+		return nil, 0, err // fmt.Errorf("PersistentKeystore.GetKey: %w", err)
 	}
 
-	return
+	return key, round, nil
+}
+
+// CountKeys couts the number of rows in StateProofKeys table
+func (s *Signer) CountKeys(store db.Accessor) int {
+	var count int
+	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		row := tx.QueryRow("SELECT COUNT(*) FROM StateProofKeys")
+		err := row.Scan(&count)
+		if err != nil {
+			return fmt.Errorf("failed to count rows in table StateProofKeys : %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return -1
+	}
+	return count
 }
 
 func (s *Signer) RoundSecrets(round uint64) *SignerInRound {

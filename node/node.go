@@ -982,9 +982,14 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 			// insert into the registry X rounds of keys via account manager
 			// all in for loop until no more keys in db
 			partID := part.ID()
-			for i := uint64(0); i < (1 << 16); i++ {
-				key, round := part.Participation.StateProofSecrets.FetchKey(i, part.Store)
+			numKeys := part.Participation.StateProofSecrets.CountKeys(part.Store)
+			for i := uint64(0); i < uint64(numKeys); i++ {
+				key, round, err := part.Participation.StateProofSecrets.FetchKey(i, part.Store)
+				if err != nil {
+					return err
+				}
 				if key == nil {
+					node.log.Warnf("Was able to fetch %d State Proof keys from database, out of existing %d", i, numKeys)
 					break // no more keys (should return error instead probably)
 				}
 
@@ -993,6 +998,7 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 					round: account.StateProofKey(*key),
 				}
 				err = node.accountManager.Registry().AppendKeys(partID, m)
+				// kinda useless since AppendKeys returns nil exclusively and appends asynchronously
 				if err != nil {
 					return err
 				}

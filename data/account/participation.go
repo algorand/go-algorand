@@ -157,6 +157,11 @@ func (part Participation) StateProofSigner() *merklekeystore.Signer {
 	return part.StateProofSecrets
 }
 
+// StateProofKey returns the verifier for the StateProof keys.
+func (part Participation) StateProofVerifier() *merklekeystore.Verifier {
+	return part.StateProofSecrets.GetVerifier()
+}
+
 // GenerateRegistrationTransaction returns a transaction object for registering a Participation with its parent.
 func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte, protoParams config.ConsensusParams) transactions.Transaction {
 	t := transactions.Transaction{
