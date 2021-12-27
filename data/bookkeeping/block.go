@@ -519,7 +519,7 @@ func (block Block) paysetCommit(t config.PaysetCommitType) (crypto.Digest, error
 		if err != nil {
 			return crypto.Digest{}, err
 		}
-		// in case the there are no leaves (e.g empty block with 0 txns) the merkle root is a slice for an 0 len array
+		// in case there are no leaves (e.g empty block with 0 txns) the merkle root is a slice for an 0 len array
 		// We convert this slice to [32]byte{0x00,...0x00}. Hence, the empty root is represented by the value [32]byte{0x00,...0x00}.
 		return tree.Root().To32Byte(), nil
 	default:

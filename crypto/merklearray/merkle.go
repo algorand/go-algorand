@@ -183,14 +183,7 @@ const validateProof = false
 // used to construct the tree.
 func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 	if len(idxs) == 0 {
-		treeDepth := uint8(0)
-		if len(tree.Levels) != 0 {
-			treeDepth = uint8(len(tree.Levels)) - 1
-		}
-		return &Proof{
-			HashFactory: tree.Hash,
-			TreeDepth:   treeDepth,
-		}, nil
+		return tree.createEmptyProof()
 	}
 
 	// Special case: commitment to zero-length array
@@ -206,20 +199,19 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 	}
 
 	if tree.VectorCommitment {
-		vcIdxs := make([]uint64, len(idxs))
-		for i := 0; i < len(idxs); i++ {
-			idx, err := msbToLsbIndex(idxs[i], uint8(len(tree.Levels)-1))
-			if err != nil {
-				return nil, err
-			}
-			vcIdxs[i] = idx
-
+		VcIdxs, err := tree.convertLeavesIndexes(idxs)
+		if err != nil {
+			return nil, err
 		}
-		idxs = vcIdxs
+		idxs = VcIdxs
 	}
 
 	sort.Slice(idxs, func(i, j int) bool { return idxs[i] < idxs[j] })
 
+	return tree.createProof(idxs)
+}
+
+func (tree *Tree) createProof(idxs []uint64) (*Proof, error) {
 	pl := make(partialLayer, 0, len(idxs))
 	for _, pos := range idxs {
 		// Discard duplicates
@@ -264,6 +256,29 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 	}, nil
 }
 
+func (tree *Tree) convertLeavesIndexes(idxs []uint64) ([]uint64, error) {
+	vcIdxs := make([]uint64, len(idxs))
+	for i := 0; i < len(idxs); i++ {
+		idx, err := msbToLsbIndex(idxs[i], uint8(len(tree.Levels)-1))
+		if err != nil {
+			return nil, err
+		}
+		vcIdxs[i] = idx
+	}
+	return vcIdxs, nil
+}
+
+func (tree *Tree) createEmptyProof() (*Proof, error) {
+	treeDepth := uint8(0)
+	if len(tree.Levels) != 0 {
+		treeDepth = uint8(len(tree.Levels)) - 1
+	}
+	return &Proof{
+		HashFactory: tree.Hash,
+		TreeDepth:   treeDepth,
+	}, nil
+}
+
 func (tree *Tree) buildNextLayer() {
 	l := tree.topLayer()
 	n := len(l)
@@ -275,30 +290,6 @@ func (tree *Tree) buildNextLayer() {
 	}
 	ws.wait()
 	tree.Levels = append(tree.Levels, newLayer)
-}
-
-func hashLeaves(elems map[uint64]crypto.Hashable, treeDepth uint8, hash hash.Hash) (map[uint64]crypto.GenericDigest, error) {
-	hashedLeaves := make(map[uint64]crypto.GenericDigest, len(elems))
-	for i, element := range elems {
-		if i >= (1 << treeDepth) {
-			return nil, fmt.Errorf(ErrPosOutOfBound, i, 1<<treeDepth)
-		}
-		hashedLeaves[i] = crypto.GenereicHashObj(hash, element)
-	}
-
-	return hashedLeaves, nil
-}
-
-func convertIndexes(elems map[uint64]crypto.Hashable, proof *Proof) (map[uint64]crypto.Hashable, error) {
-	msbIndexedElements := make(map[uint64]crypto.Hashable, len(elems))
-	for i, e := range elems {
-		idx, err := msbToLsbIndex(i, proof.TreeDepth)
-		if err != nil {
-			return nil, err
-		}
-		msbIndexedElements[idx] = e
-	}
-	return msbIndexedElements, nil
 }
 
 // VerifyVectorCommitment verifies a vector commitment proof against a given root.
@@ -335,7 +326,7 @@ func Verify(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *
 		return err
 	}
 
-	pl := buildPartialLayer(hashedLeaves)
+	pl := buildFirstPartialLayer(hashedLeaves)
 	return verifyPath(root, proof, pl)
 }
 
@@ -372,7 +363,31 @@ func verifyPath(root crypto.GenericDigest, proof *Proof, pl partialLayer) error 
 	return inspectRoot(root, pl)
 }
 
-func buildPartialLayer(elems map[uint64]crypto.GenericDigest) partialLayer {
+func hashLeaves(elems map[uint64]crypto.Hashable, treeDepth uint8, hash hash.Hash) (map[uint64]crypto.GenericDigest, error) {
+	hashedLeaves := make(map[uint64]crypto.GenericDigest, len(elems))
+	for i, element := range elems {
+		if i >= (1 << treeDepth) {
+			return nil, fmt.Errorf(ErrPosOutOfBound, i, 1<<treeDepth)
+		}
+		hashedLeaves[i] = crypto.GenereicHashObj(hash, element)
+	}
+
+	return hashedLeaves, nil
+}
+
+func convertIndexes(elems map[uint64]crypto.Hashable, proof *Proof) (map[uint64]crypto.Hashable, error) {
+	msbIndexedElements := make(map[uint64]crypto.Hashable, len(elems))
+	for i, e := range elems {
+		idx, err := msbToLsbIndex(i, proof.TreeDepth)
+		if err != nil {
+			return nil, err
+		}
+		msbIndexedElements[idx] = e
+	}
+	return msbIndexedElements, nil
+}
+
+func buildFirstPartialLayer(elems map[uint64]crypto.GenericDigest) partialLayer {
 	pl := make(partialLayer, 0, len(elems))
 	for pos, elem := range elems {
 		pl = append(pl, layerItem{

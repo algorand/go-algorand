@@ -82,7 +82,7 @@ func (a TestRepeatingArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	return a.item, nil
 }
 
-const OutOfBoundString = "larger than leaf count"
+const OutOfBoundErrorString = "larger than leaf count"
 
 func TestMerkle(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -201,7 +201,7 @@ func TestMerkleVCBuildEdgeCases(t *testing.T) {
 
 	h := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
 	h.Reset()
-	h.Write([]byte(protocol.MerkleBottomLeaf))
+	h.Write([]byte(protocol.MerkleVectorCommitmentBottomLeaf))
 	root2 := h.Sum(nil)
 
 	arr := make(TestArray, 0)
@@ -228,7 +228,7 @@ func TestMerkleProveEdgeCases(t *testing.T) {
 
 	_, err = tree.Prove([]uint64{4})
 	a.Error(err)
-	require.Contains(t, err.Error(), OutOfBoundString)
+	require.Contains(t, err.Error(), OutOfBoundErrorString)
 
 	// prove on nothing
 	proof, err := tree.Prove(nil)
@@ -265,12 +265,12 @@ func TestMerkleVCProveEdgeCases(t *testing.T) {
 	// element in the out of the inner array
 	_, err = tree.Prove([]uint64{5})
 	a.Error(err)
-	require.Contains(t, err.Error(), OutOfBoundString)
+	require.Contains(t, err.Error(), OutOfBoundErrorString)
 
 	// element in the padded array - bottom leaf
 	_, err = tree.Prove([]uint64{8})
 	a.Error(err)
-	require.Contains(t, err.Error(), OutOfBoundString)
+	require.Contains(t, err.Error(), OutOfBoundErrorString)
 
 	// prove on nothing
 	proof, err := tree.Prove(nil)
@@ -311,11 +311,11 @@ func TestMerkleVerifyEdgeCases(t *testing.T) {
 
 	err = Verify(root, map[uint64]crypto.Hashable{4: arr[3]}, proof)
 	a.Error(err)
-	require.Contains(t, err.Error(), OutOfBoundString)
+	require.Contains(t, err.Error(), OutOfBoundErrorString)
 
 	err = Verify(root, map[uint64]crypto.Hashable{3: arr[3], 4: arr[3]}, proof)
 	a.Error(err)
-	require.Contains(t, err.Error(), OutOfBoundString)
+	require.Contains(t, err.Error(), OutOfBoundErrorString)
 
 	err = Verify(root, nil, nil)
 	a.Error(err)
@@ -346,6 +346,37 @@ func TestMerkleVerifyEdgeCases(t *testing.T) {
 	a.NoError(err)
 }
 
+func TestProveDuplicateLeaves(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	arr := make(TestArray, 4)
+	for i := uint64(0); i < 4; i++ {
+		crypto.RandBytes(arr[i][:])
+	}
+	tree, err := Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+
+	proof, err := tree.Prove([]uint64{3, 3})
+	a.NoError(err)
+
+	root := tree.Root()
+
+	err = Verify(root, map[uint64]crypto.Hashable{3: arr[3]}, proof)
+	a.NoError(err)
+
+	tree, err = BuildVectorCommitmentTree(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+
+	proof, err = tree.Prove([]uint64{3, 3})
+	a.NoError(err)
+
+	root = tree.Root()
+
+	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{3: arr[3]}, proof)
+	a.NoError(err)
+}
+
 func TestMerkleVCVerifyEdgeCases(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -364,11 +395,11 @@ func TestMerkleVCVerifyEdgeCases(t *testing.T) {
 
 	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{4: arr[3]}, proof)
 	a.Error(err)
-	require.Contains(t, err.Error(), OutOfBoundString)
+	require.Contains(t, err.Error(), OutOfBoundErrorString)
 
 	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{3: arr[3], 4: arr[3]}, proof)
 	a.Error(err)
-	require.Contains(t, err.Error(), OutOfBoundString)
+	require.Contains(t, err.Error(), OutOfBoundErrorString)
 
 	err = VerifyVectorCommitment(root, nil, nil)
 	a.Error(err)

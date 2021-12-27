@@ -38,7 +38,7 @@ type vectorCommitmentArray struct {
 type bottomElement struct{}
 
 func (b *bottomElement) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.MerkleBottomLeaf, []byte{}
+	return protocol.MerkleVectorCommitmentBottomLeaf, []byte{}
 }
 
 func generateVectorCommitmentArray(innerArray Array) *vectorCommitmentArray {
