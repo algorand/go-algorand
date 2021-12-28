@@ -1370,7 +1370,7 @@ var methodAppCmd = &cobra.Command{
 				return
 			}
 
-			// the 4-byte prefix for logged return values
+			// the 4-byte prefix for logged return values, from https://github.com/algorandfoundation/ARCs/blob/main/ARCs/arc-0004.md#standard-format
 			var abiReturnHash = []byte{0x15, 0x1f, 0x7c, 0x75}
 
 			if resp.Logs == nil || len(*resp.Logs) == 0 {
