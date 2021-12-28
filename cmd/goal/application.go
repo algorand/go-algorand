@@ -22,6 +22,7 @@ import (
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"strconv"
@@ -1162,8 +1163,8 @@ func populateMethodCallReferenceArgs(sender string, currentApp uint64, types []s
 
 var methodAppCmd = &cobra.Command{
 	Use:   "method",
-	Short: "Invoke a method",
-	Long:  `Invoke a method in an App (stateful contract) with an application call transaction`,
+	Short: "Invoke an ABI method",
+	Long:  `Invoke an ARC-4 ABI method on an App (stateful contract) with an application call transaction`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir, client := getDataDirAndClient()
@@ -1384,12 +1385,12 @@ var methodAppCmd = &cobra.Command{
 			rawReturnValue := lastLog[len(abiReturnHash):]
 			decoded, err := retType.Decode(rawReturnValue)
 			if err != nil {
-				reportErrorf("method %s succeed but its return value could not be decoded. The error is: %s", method, err)
+				reportErrorf("method %s succeed but its return value could not be decoded.\nThe raw return value in hex is:%s\nThe error is: %s", method, hex.EncodeToString(rawReturnValue), err)
 			}
 
 			decodedJSON, err := retType.MarshalToJSON(decoded)
 			if err != nil {
-				reportErrorf("method %s succeed but its return value could not be converted to JSON. The error is: %s", method, err)
+				reportErrorf("method %s succeed but its return value could not be converted to JSON.\nThe raw return value in hex is:%s\nThe error is: %s", method, hex.EncodeToString(rawReturnValue), err)
 			}
 
 			fmt.Printf("method %s succeeded with output: %s\n", method, string(decodedJSON))

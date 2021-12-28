@@ -479,7 +479,10 @@ func decodeTuple(encoded []byte, childT []Type) ([]interface{}, error) {
 	return values, nil
 }
 
-// maxAppArgs is the maximum number of arguments for an application call transaction
+// maxAppArgs is the maximum number of arguments for an application call transaction, in compliance
+// with ARC-4. Currently this is the same as the MaxAppArgs consensus parameter, but the
+// difference is that the consensus parameter is liable to change in a future consensus upgrade.
+// However, the ARC-4 ABI argument encoding **MUST** always remain the same.
 const maxAppArgs = 16
 
 // The tuple threshold is maxAppArgs, minus 1 for the method selector in the first app arg,
@@ -505,7 +508,8 @@ func ParseArgJSONtoByteSlice(argTypes []string, jsonArgs []string, applicationAr
 
 	// Up to 16 app arguments can be passed to app call. First is reserved for method selector,
 	// and the rest are for method call arguments. But if more than 15 method call arguments
-	// are present, then the 14th+ are placed in a tuple in the last app argument slot
+	// are present, then the method arguments after the 14th are placed in a tuple in the last
+	// app argument slot
 	if len(abiTypes) > maxAppArgs-1 {
 		typesForTuple := make([]Type, len(abiTypes)-methodArgsTupleThreshold)
 		copy(typesForTuple, abiTypes[methodArgsTupleThreshold:])
