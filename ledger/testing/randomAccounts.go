@@ -188,7 +188,6 @@ func RandomAppLocalState() basics.AppLocalState {
 
 // RandomFullAccountData generates a random AccountData
 func RandomFullAccountData(rewardsLevel uint64, knownCreatables map[basics.CreatableIndex]basics.CreatableType, lastCreatableID uint64) (basics.AccountData, map[basics.CreatableIndex]basics.CreatableType, uint64) {
-	// func RandomFullAccountData(rewardsLevel uint64, lastCreatableID uint64) (basics.AccountData, uint64) {
 	data := RandomAccountData(rewardsLevel)
 
 	crypto.RandBytes(data.VoteID[:])
@@ -196,23 +195,21 @@ func RandomFullAccountData(rewardsLevel uint64, knownCreatables map[basics.Creat
 	data.VoteFirstValid = basics.Round(crypto.RandUint64())
 	data.VoteLastValid = basics.Round(crypto.RandUint64())
 	data.VoteKeyDilution = crypto.RandUint64()
-	// knownAssets := make(map[basics.CreatableIndex]bool)
 	if (crypto.RandUint64() % 2) == 1 {
 		// if account has created assets, have these defined.
-		data.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
 		createdAssetsCount := crypto.RandUint64()%20 + 1
+		data.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, createdAssetsCount)
 		for i := uint64(0); i < createdAssetsCount; i++ {
 			ap := RandomAssetParams()
 			lastCreatableID++
 			data.AssetParams[basics.AssetIndex(lastCreatableID)] = ap
-			// knownAssets[basics.CreatableIndex(lastCreatableID)] = true
 			knownCreatables[basics.CreatableIndex(lastCreatableID)] = basics.AssetCreatable
 		}
 	}
 	if (crypto.RandUint64()%2) == 1 && lastCreatableID > 0 {
 		// if account owns assets
-		data.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
 		ownedAssetsCount := crypto.RandUint64()%20 + 1
+		data.Assets = make(map[basics.AssetIndex]basics.AssetHolding, ownedAssetsCount)
 		for i := uint64(0); i < ownedAssetsCount; i++ {
 			ah := RandomAssetHolding(false)
 			aidx := crypto.RandUint64() % lastCreatableID
@@ -225,7 +222,6 @@ func RandomFullAccountData(rewardsLevel uint64, knownCreatables map[basics.Creat
 			}
 
 			data.Assets[basics.AssetIndex(aidx)] = ah
-			// knownAssets[basics.CreatableIndex(aidx)] = true
 			knownCreatables[basics.CreatableIndex(aidx)] = basics.AssetCreatable
 		}
 	}
@@ -234,8 +230,8 @@ func RandomFullAccountData(rewardsLevel uint64, knownCreatables map[basics.Creat
 	}
 
 	if (crypto.RandUint64() % 3) == 1 {
-		data.AppParams = make(map[basics.AppIndex]basics.AppParams)
 		appParamsCount := crypto.RandUint64()%5 + 1
+		data.AppParams = make(map[basics.AppIndex]basics.AppParams, appParamsCount)
 		for i := uint64(0); i < appParamsCount; i++ {
 			ap := RandomAppParams()
 			lastCreatableID++
@@ -244,8 +240,8 @@ func RandomFullAccountData(rewardsLevel uint64, knownCreatables map[basics.Creat
 		}
 	}
 	if (crypto.RandUint64()%3) == 1 && lastCreatableID > 0 {
-		data.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
 		appStatesCount := crypto.RandUint64()%20 + 1
+		data.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState, appStatesCount)
 		for i := uint64(0); i < appStatesCount; i++ {
 			ap := RandomAppLocalState()
 			aidx := crypto.RandUint64() % lastCreatableID
