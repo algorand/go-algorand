@@ -3,7 +3,15 @@
 txn ApplicationID
 int 0
 ==
-bnz main_l16
+bnz main_l18
+txn OnCompletion
+int UpdateApplication
+==
+txna ApplicationArgs 0
+byte 0xa0e81872
+==
+&&
+bnz main_l17
 txn OnCompletion
 int OptIn
 ==
@@ -11,7 +19,7 @@ txna ApplicationArgs 0
 byte 0xcfa68e36
 ==
 &&
-bnz main_l15
+bnz main_l16
 txn OnCompletion
 int CloseOut
 ==
@@ -19,7 +27,7 @@ txna ApplicationArgs 0
 byte 0xa9f42b3d
 ==
 &&
-bnz main_l14
+bnz main_l15
 txn OnCompletion
 int DeleteApplication
 ==
@@ -27,7 +35,7 @@ txna ApplicationArgs 0
 byte 0x24378d3c
 ==
 &&
-bnz main_l13
+bnz main_l14
 txn OnCompletion
 int NoOp
 ==
@@ -35,7 +43,7 @@ txna ApplicationArgs 0
 byte 0xfe6bdf69
 ==
 &&
-bnz main_l12
+bnz main_l13
 txn OnCompletion
 int NoOp
 ==
@@ -43,7 +51,7 @@ txna ApplicationArgs 0
 byte 0xa88c26a5
 ==
 &&
-bnz main_l11
+bnz main_l12
 txn OnCompletion
 int NoOp
 ==
@@ -51,7 +59,7 @@ txna ApplicationArgs 0
 byte 0x3e3b3d28
 ==
 &&
-bnz main_l10
+bnz main_l11
 txn OnCompletion
 int NoOp
 ==
@@ -59,10 +67,10 @@ txna ApplicationArgs 0
 byte 0x0df0050f
 ==
 &&
-bnz main_l9
+bnz main_l10
 int 0
 return
-main_l9:
+main_l10:
 txna ApplicationArgs 1
 txna ApplicationArgs 2
 txna ApplicationArgs 3
@@ -72,65 +80,78 @@ txna ApplicationArgs 6
 txna ApplicationArgs 7
 txna ApplicationArgs 8
 txna ApplicationArgs 9
-callsub sub6
-int 1
-return
-main_l10:
-txna ApplicationArgs 1
-callsub sub5
+callsub sub8
 int 1
 return
 main_l11:
-callsub sub4
+txna ApplicationArgs 1
+callsub sub7
 int 1
 return
 main_l12:
-txna ApplicationArgs 1
-txna ApplicationArgs 2
-callsub sub3
+callsub sub6
 int 1
 return
 main_l13:
-callsub sub2
+txna ApplicationArgs 1
+txna ApplicationArgs 2
+callsub sub5
 int 1
 return
 main_l14:
-callsub sub1
+callsub sub4
 int 1
 return
 main_l15:
-txna ApplicationArgs 1
-callsub sub0
+callsub sub3
 int 1
 return
 main_l16:
+txna ApplicationArgs 1
+callsub sub2
 int 1
 return
-sub0: // optIn
+main_l17:
+callsub sub1
+int 1
+return
+main_l18:
+txn NumAppArgs
+int 0
+>
+bnz main_l20
+main_l19:
+int 1
+return
+main_l20:
+txna ApplicationArgs 0
+byte 0x43464101
+==
+assert
+txna ApplicationArgs 1
+callsub sub0
+b main_l19
+sub0: // create
 store 0
-int 0
-byte "name"
-load 0
-extract 2 0
-app_local_put
-byte "hello "
-int 0
-byte "name"
-app_local_get
-concat
-store 1
 byte 0x151f7c75
-load 1
-len
+load 0
+btoi
+int 2
+*
 itob
-extract 6 2
-concat
-load 1
 concat
 log
 retsub
-sub1: // closeOut
-byte "goodbye "
+sub1: // update
+retsub
+sub2: // optIn
+store 1
+int 0
+byte "name"
+load 1
+extract 2 0
+app_local_put
+byte "hello "
 int 0
 byte "name"
 app_local_get
@@ -146,31 +167,48 @@ load 2
 concat
 log
 retsub
-sub2: // deleteApp
+sub3: // closeOut
+byte "goodbye "
+int 0
+byte "name"
+app_local_get
+concat
+store 3
+byte 0x151f7c75
+load 3
+len
+itob
+extract 6 2
+concat
+load 3
+concat
+log
+retsub
+sub4: // deleteApp
 txn Sender
 global CreatorAddress
 ==
 assert
 retsub
-sub3: // add
+sub5: // add
+store 5
 store 4
-store 3
 byte 0x151f7c75
-load 3
-btoi
 load 4
+btoi
+load 5
 btoi
 +
 itob
 concat
 log
 retsub
-sub4: // empty
+sub6: // empty
 byte "random inconsequential log"
 log
 retsub
-sub5: // payment
-store 5
+sub7: // payment
+store 6
 txn GroupIndex
 int 1
 -
@@ -183,19 +221,20 @@ txn GroupIndex
 int 1
 -
 gtxns Amount
-load 5
+load 6
 btoi
 ==
-bnz sub5_l2
+bnz sub7_l2
 byte 0x00
-b sub5_l3
-sub5_l2:
+b sub7_l3
+sub7_l2:
 byte 0x80
-sub5_l3:
+sub7_l3:
 concat
 log
 retsub
-sub6: // referenceTest
+sub8: // referenceTest
+store 15
 store 14
 store 13
 store 12
@@ -204,25 +243,24 @@ store 10
 store 9
 store 8
 store 7
-store 6
 byte 0x151f7c75
-load 6
-concat
-load 8
-concat
-load 10
-concat
 load 7
-concat
-load 13
-concat
-load 14
 concat
 load 9
 concat
 load 11
 concat
+load 8
+concat
+load 14
+concat
+load 15
+concat
+load 10
+concat
 load 12
+concat
+load 13
 concat
 log
 retsub
