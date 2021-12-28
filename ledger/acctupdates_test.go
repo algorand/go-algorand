@@ -246,7 +246,7 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 
 	for offset := uint64(0); offset < offsetLimit; offset++ {
 		deltas := au.deltas[offset]
-		bals = applyPartialDeltas(bals, deltas)
+		bals = ledgercore.AccumulateDeltas(bals, deltas)
 	}
 	return
 }
@@ -262,6 +262,42 @@ func newAcctUpdates(tb testing.TB, l *mockLedgerForTracker, conf config.Local, d
 	require.NoError(tb, err)
 
 	return au
+}
+
+// checkEqualAcctMaps is a low-memory version of map[basics.Address]basics.AccountData comparator.
+// It is slow (10s on TestAcctUpdates ) than require.Equal -> reflect.DeepEqual
+// but uses much less memory (0.9GB vs 4GB on TestAcctUpdates)
+func checkEqualAcctMaps(t *testing.T, all, bll map[basics.Address]basics.AccountData) {
+	require.Equal(t, len(all), len(bll))
+	for addr, ad := range all {
+		bd := bll[addr]
+		require.Equal(t, len(ad.AppParams), len(bd.AppParams))
+		require.Equal(t, len(ad.AppLocalStates), len(bd.AppLocalStates))
+		require.Equal(t, len(ad.AssetParams), len(bd.AssetParams))
+		require.Equal(t, len(ad.Assets), len(bd.Assets))
+		for aidx, a := range ad.AppParams {
+			require.Equal(t, a, bd.AppParams[aidx])
+		}
+		for aidx, a := range ad.AppLocalStates {
+			require.Equal(t, a, bd.AppLocalStates[aidx])
+		}
+		for aidx, a := range ad.AssetParams {
+			require.Equal(t, a, bd.AssetParams[aidx])
+		}
+		for aidx, a := range ad.Assets {
+			require.Equal(t, a, bd.Assets[aidx])
+		}
+		ad.AppParams = nil
+		ad.AppLocalStates = nil
+		ad.AssetParams = nil
+		ad.Assets = nil
+		bd.AppParams = nil
+		bd.AppLocalStates = nil
+		bd.AssetParams = nil
+		bd.Assets = nil
+
+		require.Equal(t, ad, bd)
+	}
 }
 
 func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, latestRnd basics.Round, accts []map[basics.Address]basics.AccountData, rewards []uint64, proto config.ConsensusParams) {
@@ -329,7 +365,8 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 
 			all, err := au.allBalances(rnd)
 			require.NoError(t, err)
-			require.Equal(t, all, accts[rnd])
+			bll := accts[rnd]
+			require.Equal(t, all, bll)
 
 			totals, err := au.Totals(rnd)
 			require.NoError(t, err)
@@ -1159,6 +1196,18 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 		}
 
 		ad := data.GetAccountData()
+		if data.TotalAppParams > 0 {
+			ad.AppParams = make(map[basics.AppIndex]basics.AppParams)
+		}
+		if data.TotalAppLocalStates > 0 {
+			ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+		}
+		if data.TotalAssetParams > 0 {
+			ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
+		}
+		if data.TotalAssets > 0 {
+			ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
+		}
 
 		err = func() (err error) {
 			// make a scope to use defer
@@ -1187,15 +1236,9 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 				}
 				if resData.IsApp() {
 					if resData.IsOwning() {
-						if ad.AppParams == nil {
-							ad.AppParams = make(map[basics.AppIndex]basics.AppParams)
-						}
 						ad.AppParams[basics.AppIndex(aidx)] = resData.GetAppParams()
 					}
 					if resData.IsHolding() {
-						if ad.AppLocalStates == nil {
-							ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
-						}
 						ad.AppLocalStates[basics.AppIndex(aidx)] = resData.GetAppLocalState()
 					}
 					if basics.CreatableType(rtype) != basics.AppCreatable {
@@ -1203,15 +1246,9 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 					}
 				} else if resData.IsAsset() {
 					if resData.IsOwning() {
-						if ad.AssetParams == nil {
-							ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
-						}
 						ad.AssetParams[basics.AssetIndex(aidx)] = resData.GetAssetParams()
 					}
 					if resData.IsHolding() {
-						if ad.Assets == nil {
-							ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
-						}
 						ad.Assets[basics.AssetIndex(aidx)] = resData.GetAssetHolding()
 					}
 					if basics.CreatableType(rtype) != basics.AssetCreatable {
