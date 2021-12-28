@@ -105,6 +105,10 @@ func makeDebugState(cx *EvalContext) DebugState {
 
 	globals := make([]basics.TealValue, len(globalFieldSpecs))
 	for _, fs := range globalFieldSpecs {
+		// Don't try to grab app only fields when evaluating a signature
+		if (cx.runModeFlags&runModeSignature) != 0 && fs.mode == runModeApplication {
+			continue
+		}
 		sv, err := cx.globalFieldToValue(fs)
 		if err != nil {
 			sv = stackValue{Bytes: []byte(err.Error())}

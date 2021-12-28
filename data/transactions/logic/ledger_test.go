@@ -61,12 +61,11 @@ type asaParams struct {
 
 // Ledger is a fake ledger that is "good enough" to reasonably test AVM programs.
 type Ledger struct {
-	balances          map[basics.Address]balanceRecord
-	applications      map[basics.AppIndex]appParams
-	assets            map[basics.AssetIndex]asaParams
-	trackedCreatables map[int]basics.CreatableIndex
-	mods              map[basics.AppIndex]map[string]basics.ValueDelta
-	rnd               basics.Round
+	balances     map[basics.Address]balanceRecord
+	applications map[basics.AppIndex]appParams
+	assets       map[basics.AssetIndex]asaParams
+	mods         map[basics.AppIndex]map[string]basics.ValueDelta
+	rnd          basics.Round
 }
 
 // MakeLedger constructs a Ledger with the given balances.
@@ -78,7 +77,6 @@ func MakeLedger(balances map[basics.Address]uint64) *Ledger {
 	}
 	l.applications = make(map[basics.AppIndex]appParams)
 	l.assets = make(map[basics.AssetIndex]asaParams)
-	l.trackedCreatables = make(map[int]basics.CreatableIndex)
 	l.mods = make(map[basics.AppIndex]map[string]basics.ValueDelta)
 	return l
 }
@@ -428,18 +426,6 @@ func (l *Ledger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, err
 	}
 	_, ok = br.locals[appIdx]
 	return ok, nil
-}
-
-// SetTrackedCreatable remembers that the given cl "happened" in txn
-// groupIdx of the group, for use by GetCreatableID.
-func (l *Ledger) SetTrackedCreatable(groupIdx int, cl basics.CreatableLocator) {
-	l.trackedCreatables[groupIdx] = cl.Index
-}
-
-// GetCreatableID returns the creatable constructed in a given transaction
-// slot. For the test ledger, that's been set up by SetTrackedCreatable
-func (l *Ledger) GetCreatableID(groupIdx int) basics.CreatableIndex {
-	return l.trackedCreatables[groupIdx]
 }
 
 // AssetHolding gives the amount of an ASA held by an account, or

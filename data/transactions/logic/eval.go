@@ -48,7 +48,7 @@ const EvalMaxVersion = LogicVersion
 // The constants below control TEAL opcodes evaluation and MAY NOT be changed
 // without moving them into consensus parameters.
 
-// MaxStringSize is the limit of byte strings created by `concat`
+// MaxStringSize is the limit of byte string length in an AVM value
 const MaxStringSize = 4096
 
 // MaxByteMathSize is the limit of byte strings supplied as input to byte math opcodes
@@ -211,7 +211,6 @@ type LedgerForLogic interface {
 	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error)
 	AppParams(aidx basics.AppIndex) (basics.AppParams, basics.Address, error)
 	OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error)
-	GetCreatableID(groupIdx int) basics.CreatableIndex
 
 	GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (value basics.TealValue, exists bool, err error)
 	SetLocal(addr basics.Address, appIdx basics.AppIndex, key string, value basics.TealValue, accountIdx uint64) error
@@ -225,29 +224,11 @@ type LedgerForLogic interface {
 	Counter() uint64
 }
 
-// EvalSideEffects contains data returned from evaluation
-type EvalSideEffects struct {
-	scratchSpace scratchSpace
-}
-
-// MakePastSideEffects allocates and initializes a slice of EvalSideEffects of length `size`
-func MakePastSideEffects(size int) (pastSideEffects []EvalSideEffects) {
-	pastSideEffects = make([]EvalSideEffects, size)
-	for j := range pastSideEffects {
-		pastSideEffects[j] = EvalSideEffects{}
-	}
-	return
-}
-
-// getScratchValue loads and clones a stackValue
-// The value is cloned so the original bytes are protected from changes
-func (se *EvalSideEffects) getScratchValue(scratchPos uint8) stackValue {
-	return se.scratchSpace[scratchPos].clone()
-}
-
-// setScratchSpace stores the scratch space
-func (se *EvalSideEffects) setScratchSpace(scratch scratchSpace) {
-	se.scratchSpace = scratch
+// resources contains a list of apps and assets. It's used to track the apps and
+// assets created by a txgroup, for "free" access.
+type resources struct {
+	asas []basics.AssetIndex
+	apps []basics.AppIndex
 }
 
 // EvalParams contains data that comes into condition evaluation.
@@ -258,9 +239,9 @@ type EvalParams struct {
 
 	TxnGroup []transactions.SignedTxnWithAD
 
-	PastSideEffects []EvalSideEffects
+	pastScratch []*scratchSpace
 
-	Logger logging.Logger
+	logger logging.Logger
 
 	Ledger LedgerForLogic
 
@@ -272,22 +253,31 @@ type EvalParams struct {
 	// MinTealVersion is nil, we will compute it ourselves
 	MinTealVersion *uint64
 
-	// Amount "overpaid" by the top-level transactions of the group.  Often 0.
-	// When positive, it can be spent by inner transactions.  Shared across a
-	// group's txns, so that it can be updated. nil is interpreted as 0.
+	// Amount "overpaid" by the transactions of the group.  Often 0.  When
+	// positive, it can be spent by inner transactions.  Shared across a group's
+	// txns, so that it can be updated (including upward, by overpaying inner
+	// transactions). nil is treated as 0 (used before fee pooling is enabled).
 	FeeCredit *uint64
 
 	Specials *transactions.SpecialAddresses
 
-	// Total pool of app call budget in a group transaction (nil before pooling enabled)
+	// Total pool of app call budget in a group transaction (nil before budget pooling enabled)
 	PooledApplicationBudget *uint64
 
-	// Total allowable inner txns in a group transaction (nil before pooling enabled)
+	// Total allowable inner txns in a group transaction (nil before inner pooling enabled)
 	pooledAllowedInners *int
 
-	// If non-zero, a txn counter value after which assets and apps should be
-	// allowed w/o foreign array. Left zero until createdResourcesVersion.
-	initialCounter uint64
+	// created contains resources that may be used for "created" - they need not be in
+	// a foreign array. They remain empty until createdResourcesVersion.
+	created *resources
+
+	// Caching these here means the hashes can be shared across the TxnGroup
+	// (and inners, because the cache is shared with the inner EvalParams)
+	appAddrCache map[basics.AppIndex]basics.Address
+
+	// Cache the txid hashing, but do *not* share this into inner EvalParams, as
+	// the key is just the index in the txgroup.
+	txidCache map[int]transactions.Txid
 
 	// The calling context, if this is an inner app call
 	caller *EvalContext
@@ -302,20 +292,16 @@ func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.Sign
 	return copy
 }
 
-// NewAppEvalParams creates an EvalParams to be used while evaluating apps for a top-level txgroup
-func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses, counter uint64) *EvalParams {
-	minTealVersion := ComputeMinTealVersion(txgroup, false)
-
+// NewEvalParams creates an EvalParams to use while evaluating a top-level txgroup
+func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses) *EvalParams {
 	apps := 0
 	for _, tx := range txgroup {
 		if tx.Txn.Type == protocol.ApplicationCallTx {
 			apps++
 		}
 	}
-	if apps == 0 {
-		// As an optimization, do no work if there will be no apps to evaluate in this txgroup
-		return nil
-	}
+
+	minTealVersion := ComputeMinTealVersion(txgroup, false)
 
 	var pooledApplicationBudget *uint64
 	var pooledAllowedInners *int
@@ -332,22 +318,18 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 		*pooledAllowedInners = apps * proto.MaxInnerTransactions
 	}
 
-	if counter == 0 || proto.LogicSigVersion < createdResourcesVersion {
-		counter = math.MaxUint64
-	}
-
-	ep := &EvalParams{
-		Proto:                   proto,
+	return &EvalParams{
 		TxnGroup:                copyWithClearAD(txgroup),
-		PastSideEffects:         MakePastSideEffects(len(txgroup)),
+		Proto:                   proto,
+		Specials:                specials,
+		pastScratch:             make([]*scratchSpace, len(txgroup)),
 		MinTealVersion:          &minTealVersion,
 		FeeCredit:               &credit,
-		Specials:                specials,
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
-		initialCounter:          counter,
+		created:                 &resources{},
+		appAddrCache:            make(map[basics.AppIndex]basics.Address),
 	}
-	return ep
 }
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
@@ -374,14 +356,15 @@ func NewInnerEvalParams(txg []transactions.SignedTxn, caller *EvalContext) *Eval
 	ep := &EvalParams{
 		Proto:                   caller.Proto,
 		TxnGroup:                copyWithClearAD(txgroup),
-		PastSideEffects:         MakePastSideEffects(len(txgroup)),
+		pastScratch:             make([]*scratchSpace, len(txgroup)),
 		MinTealVersion:          &minTealVersion,
 		FeeCredit:               caller.FeeCredit,
 		Specials:                caller.Specials,
 		PooledApplicationBudget: caller.PooledApplicationBudget,
 		pooledAllowedInners:     caller.pooledAllowedInners,
 		Ledger:                  caller.Ledger,
-		initialCounter:          caller.initialCounter,
+		created:                 caller.created,
+		appAddrCache:            caller.appAddrCache,
 		caller:                  caller,
 	}
 	return ep
@@ -421,13 +404,26 @@ func (r runMode) String() string {
 }
 
 func (ep EvalParams) log() logging.Logger {
-	if ep.Logger != nil {
-		return ep.Logger
+	if ep.logger != nil {
+		return ep.logger
 	}
 	return logging.Base()
 }
 
-type scratchSpace = [256]stackValue
+// RecordAD notes ApplyData information that was derived outside of the logic
+// package. For example, after a acfg transaction is processed, the AD created
+// by the acfg is added to the EvalParams this way.
+func (ep *EvalParams) RecordAD(gi int, ad transactions.ApplyData) {
+	ep.TxnGroup[gi].ApplyData = ad
+	if aid := ad.ConfigAsset; aid != 0 {
+		ep.created.asas = append(ep.created.asas, aid)
+	}
+	if aid := ad.ApplicationID; aid != 0 {
+		ep.created.apps = append(ep.created.apps, aid)
+	}
+}
+
+type scratchSpace [256]stackValue
 
 // EvalContext is the execution context of AVM bytecode.  It contains the full
 // state of the running program, and tracks some of the things that the program
@@ -480,8 +476,6 @@ type EvalContext struct {
 	instructionStarts map[int]bool
 
 	programHashCached crypto.Digest
-	txidCache         map[int]transactions.Txid
-	appAddrCache      map[basics.AppIndex]basics.Address
 
 	// Stores state & disassembly for the optional debugger
 	debugState DebugState
@@ -559,7 +553,8 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		*cx.pooledAllowedInners -= len(cx.Txn.EvalDelta.InnerTxns)
 	}
 	// update side effects
-	cx.PastSideEffects[cx.GroupIndex].setScratchSpace(cx.scratch)
+	cx.pastScratch[cx.GroupIndex] = &scratchSpace{}
+	*cx.pastScratch[cx.GroupIndex] = cx.scratch
 
 	return pass, &cx, err
 }
@@ -2019,12 +2014,12 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int) tr
 	}
 
 	// Initialize txidCache if necessary
-	if cx.txidCache == nil {
-		cx.txidCache = make(map[int]transactions.Txid, len(cx.TxnGroup))
+	if cx.EvalParams.txidCache == nil {
+		cx.EvalParams.txidCache = make(map[int]transactions.Txid, len(cx.TxnGroup))
 	}
 
 	// Hashes are expensive, so we cache computed TxIDs
-	txid, ok := cx.txidCache[groupIndex]
+	txid, ok := cx.EvalParams.txidCache[groupIndex]
 	if !ok {
 		if cx.caller != nil {
 			innerOffset := len(cx.caller.Txn.EvalDelta.InnerTxns)
@@ -2032,7 +2027,7 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int) tr
 		} else {
 			txid = txn.ID()
 		}
-		cx.txidCache[groupIndex] = txid
+		cx.EvalParams.txidCache[groupIndex] = txid
 	}
 
 	return txid
@@ -2611,27 +2606,28 @@ func (cx *EvalContext) getLatestTimestamp() (timestamp uint64, err error) {
 	return uint64(ts), nil
 }
 
-func (cx *EvalContext) getApplicationAddress() basics.Address {
-	// Initialize appAddrCache if necessary
-	if cx.appAddrCache == nil {
-		cx.appAddrCache = make(map[basics.AppIndex]basics.Address)
-	}
-
-	appAddr, ok := cx.appAddrCache[cx.appID]
+// getApplicationAddress memoizes app.Address() across a tx group's evaluation
+func (cx *EvalContext) getApplicationAddress(app basics.AppIndex) basics.Address {
+	/* Do not instantiate the cache here, that would mask a programming error.
+	   The cache must be instantiated at EvalParams construction time, so that
+	   proper sharing with inner EvalParams can work. */
+	appAddr, ok := cx.appAddrCache[app]
 	if !ok {
-		appAddr = cx.appID.Address()
-		cx.appAddrCache[cx.appID] = appAddr
+		appAddr = app.Address()
+		cx.appAddrCache[app] = appAddr
 	}
 
 	return appAddr
 }
 
 func (cx *EvalContext) getCreatableID(groupIndex int) (cid uint64, err error) {
-	if cx.Ledger == nil {
-		err = fmt.Errorf("ledger not available")
-		return
+	if aid := cx.TxnGroup[groupIndex].ApplyData.ConfigAsset; aid != 0 {
+		return uint64(aid), nil
 	}
-	return uint64(cx.Ledger.GetCreatableID(groupIndex)), nil
+	if aid := cx.TxnGroup[groupIndex].ApplyData.ApplicationID; aid != 0 {
+		return uint64(aid), nil
+	}
+	return 0, fmt.Errorf("Index %d did not create anything", groupIndex)
 }
 
 func (cx *EvalContext) getCreatorAddress() ([]byte, error) {
@@ -2668,8 +2664,7 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 	case CurrentApplicationID:
 		sv.Uint = uint64(cx.appID)
 	case CurrentApplicationAddress:
-		var addr basics.Address
-		addr = cx.getApplicationAddress()
+		addr := cx.getApplicationAddress(cx.appID)
 		sv.Bytes = addr[:]
 	case CreatorAddress:
 		sv.Bytes, err = cx.getCreatorAddress()
@@ -2685,8 +2680,7 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		}
 	case CallerApplicationAddress:
 		if cx.caller != nil {
-			var addr basics.Address
-			addr = cx.caller.getApplicationAddress()
+			addr := cx.caller.getApplicationAddress(cx.caller.appID)
 			sv.Bytes = addr[:]
 		} else {
 			sv.Bytes = zeroAddress[:]
@@ -2965,26 +2959,25 @@ func opStores(cx *EvalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
-func opGloadImpl(cx *EvalContext, groupIdx int, scratchIdx byte, opName string) (scratchValue stackValue, err error) {
+func opGloadImpl(cx *EvalContext, groupIdx int, scratchIdx byte, opName string) (stackValue, error) {
+	var none stackValue
 	if groupIdx >= len(cx.TxnGroup) {
-		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
-		return
-	} else if int(scratchIdx) >= len(cx.scratch) {
-		err = fmt.Errorf("invalid Scratch index %d", scratchIdx)
-		return
-	} else if txn := cx.TxnGroup[groupIdx].Txn; txn.Type != protocol.ApplicationCallTx {
-		err = fmt.Errorf("can't use %s on non-app call txn with index %d", opName, groupIdx)
-		return
-	} else if groupIdx == cx.GroupIndex {
-		err = fmt.Errorf("can't use %s on self, use load instead", opName)
-		return
-	} else if groupIdx > cx.GroupIndex {
-		err = fmt.Errorf("%s can't get future scratch space from txn with index %d", opName, groupIdx)
-		return
+		return none, fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
+	}
+	if int(scratchIdx) >= len(cx.scratch) {
+		return none, fmt.Errorf("invalid Scratch index %d", scratchIdx)
+	}
+	if cx.TxnGroup[groupIdx].Txn.Type != protocol.ApplicationCallTx {
+		return none, fmt.Errorf("can't use %s on non-app call txn with index %d", opName, groupIdx)
+	}
+	if groupIdx == cx.GroupIndex {
+		return none, fmt.Errorf("can't use %s on self, use load instead", opName)
+	}
+	if groupIdx > cx.GroupIndex {
+		return none, fmt.Errorf("%s can't get future scratch space from txn with index %d", opName, groupIdx)
 	}
 
-	scratchValue = cx.PastSideEffects[groupIdx].getScratchValue(scratchIdx)
-	return
+	return cx.pastScratch[groupIdx][scratchIdx], nil
 }
 
 func opGload(cx *EvalContext) {
@@ -3283,14 +3276,19 @@ func opExtract64Bits(cx *EvalContext) {
 	opExtractNBytes(cx, 8) // extract 8 bytes
 }
 
-// accountReference yields the address and Accounts offset designated
-// by a stackValue. If the stackValue is the app account, it need not
-// be in the Accounts array, therefore len(Accounts) + 1 is returned
-// as the index. This unusual convention is based on the existing
-// convention that 0 is the sender, 1-len(Accounts) are indexes into
-// Accounts array, and so len+1 is the next available value.  This
-// will allow encoding into EvalDelta efficiently when it becomes
-// necessary (when apps change local state on their own account).
+// accountReference yields the address and Accounts offset designated by a
+// stackValue. If the stackValue is the app account or an account of an app in
+// created.apps, and it is not be in the Accounts array, then len(Accounts) + 1
+// is returned as the index. This would let us catch the mistake if the index is
+// used for set/del. If the txn somehow "psychically" predicted the address, and
+// therefore it IS in txn.Accounts, then happy day, we can set/del it.  Return
+// the proper index.
+
+// If we ever want apps to be able to change local state on these accounts
+// (which includes this app's own account!), we will need a change to
+// EvalDelta's on disk format, so that the addr can be encoded explicitly rather
+// than by index into txn.Accounts.
+
 func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uint64, error) {
 	if account.argType() == StackUint64 {
 		addr, err := cx.Txn.Txn.AddressByIndex(account.Uint, cx.Txn.Txn.Sender)
@@ -3302,15 +3300,38 @@ func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uin
 	}
 	idx, err := cx.Txn.Txn.IndexByAddress(addr, cx.Txn.Txn.Sender)
 
+	invalidIndex := uint64(len(cx.Txn.Txn.Accounts) + 1)
+	// Allow an address for an app that was created in group
+	if err != nil && cx.version >= createdResourcesVersion {
+		for _, appID := range cx.created.apps {
+			createdAddress := cx.getApplicationAddress(appID)
+			if addr == createdAddress {
+				return addr, invalidIndex, nil
+			}
+		}
+	}
+
+	// this app's address is also allowed
 	if err != nil {
-		// Application address is acceptable. index is meaningless though
-		appAddr := cx.getApplicationAddress()
+		appAddr := cx.getApplicationAddress(cx.appID)
 		if appAddr == addr {
-			return addr, uint64(len(cx.Txn.Txn.Accounts) + 1), nil
+			return addr, invalidIndex, nil
 		}
 	}
 
 	return addr, idx, err
+}
+
+func (cx *EvalContext) mutableAccountReference(account stackValue) (basics.Address, uint64, error) {
+	addr, accountIdx, err := cx.accountReference(account)
+	if err == nil && accountIdx > uint64(len(cx.Txn.Txn.Accounts)) {
+		// There was no error, but accountReference has signaled that accountIdx
+		// is not for mutable ops (because it can't encode it in EvalDelta)
+		// This also tells us that account.address() will work.
+		addr, _ := account.address()
+		err = fmt.Errorf("invalid Account reference for mutation %s", addr)
+	}
+	return addr, accountIdx, err
 }
 
 type opQuery func(basics.Address, *config.ConsensusParams) (basics.MicroAlgos, error)
@@ -3533,7 +3554,7 @@ func opAppLocalPut(cx *EvalContext) {
 		return
 	}
 
-	addr, accountIdx, err := cx.accountReference(cx.stack[pprev])
+	addr, accountIdx, err := cx.mutableAccountReference(cx.stack[pprev])
 	if err != nil {
 		cx.err = err
 		return
@@ -3607,7 +3628,7 @@ func opAppLocalDel(cx *EvalContext) {
 		return
 	}
 
-	addr, accountIdx, err := cx.accountReference(cx.stack[prev])
+	addr, accountIdx, err := cx.mutableAccountReference(cx.stack[prev])
 	if err == nil {
 		if _, ok := cx.Txn.EvalDelta.LocalDeltas[accountIdx]; !ok {
 			cx.Txn.EvalDelta.LocalDeltas[accountIdx] = basics.StateDelta{}
@@ -3666,6 +3687,14 @@ func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, e
 				return appID, nil
 			}
 		}
+		// or was created in group
+		if cx.version >= createdResourcesVersion {
+			for _, appID := range cx.created.apps {
+				if appID == basics.AppIndex(ref) {
+					return appID, nil
+				}
+			}
+		}
 		// It should be legal to use your own app id, which can't be in
 		// ForeignApps during creation, because it is unknown then.  But it can
 		// be discovered in the app code.  It's tempting to combine this with
@@ -3698,12 +3727,17 @@ func asaReference(cx *EvalContext, ref uint64, foreign bool) (basics.AssetIndex,
 		if ref < uint64(len(cx.Txn.Txn.ForeignAssets)) {
 			return basics.AssetIndex(cx.Txn.Txn.ForeignAssets[ref]), nil
 		}
-		if ref >= cx.initialCounter {
-			return basics.AssetIndex(ref), nil
-		}
 		for _, assetID := range cx.Txn.Txn.ForeignAssets {
 			if assetID == basics.AssetIndex(ref) {
 				return assetID, nil
+			}
+		}
+		// or was created in group
+		if cx.version >= createdResourcesVersion {
+			for _, assetID := range cx.created.asas {
+				if assetID == basics.AssetIndex(ref) {
+					return assetID, nil
+				}
 			}
 		}
 	} else {
@@ -3871,13 +3905,13 @@ func authorizedSender(cx *EvalContext, addr basics.Address) bool {
 	if err != nil {
 		return false
 	}
-	return cx.getApplicationAddress() == authorizer
+	return cx.getApplicationAddress(cx.appID) == authorizer
 }
 
 // addInnerTxn appends a fresh SignedTxn to subtxns, populated with reasonable
 // defaults.
 func addInnerTxn(cx *EvalContext) error {
-	addr := cx.getApplicationAddress()
+	addr := cx.getApplicationAddress(cx.appID)
 
 	// For compatibility with v5, in which failures only occurred in the submit,
 	// we only fail here if we are already over the max inner limit.  Thus this
@@ -3952,19 +3986,27 @@ func (cx *EvalContext) availableAccount(sv stackValue) (basics.Address, error) {
 // don't need (or want!) to allow low numbers to represent the asset at that
 // index in ForeignAssets array.
 func (cx *EvalContext) availableAsset(sv stackValue) (basics.AssetIndex, error) {
-	aid, err := sv.uint()
+	uint, err := sv.uint()
 	if err != nil {
 		return basics.AssetIndex(0), err
 	}
-	if aid >= cx.initialCounter {
-		return basics.AssetIndex(aid), nil
-	}
+	aid := basics.AssetIndex(uint)
+
 	// Ensure that aid is in Foreign Assets
 	for _, assetID := range cx.Txn.Txn.ForeignAssets {
-		if assetID == basics.AssetIndex(aid) {
-			return basics.AssetIndex(aid), nil
+		if assetID == aid {
+			return aid, nil
 		}
 	}
+	// or was created in group
+	if cx.version >= createdResourcesVersion {
+		for _, assetID := range cx.created.asas {
+			if assetID == aid {
+				return aid, nil
+			}
+		}
+	}
+
 	return basics.AssetIndex(0), fmt.Errorf("invalid Asset reference %d", aid)
 }
 
@@ -3977,10 +4019,19 @@ func (cx *EvalContext) availableApp(sv stackValue) (basics.AppIndex, error) {
 		return basics.AppIndex(0), err
 	}
 	aid := basics.AppIndex(uint)
+
 	// Ensure that aid is in Foreign Apps
 	for _, appID := range cx.Txn.Txn.ForeignApps {
 		if appID == aid {
 			return aid, nil
+		}
+	}
+	// or was created in group
+	if cx.version >= createdResourcesVersion {
+		for _, appID := range cx.created.apps {
+			if appID == aid {
+				return aid, nil
+			}
 		}
 	}
 	// Or, it can be the current app
@@ -4340,6 +4391,9 @@ func opTxSubmit(cx *EvalContext) {
 			cx.err = err
 			return
 		}
+		// This is mostly a no-op, because Perform does its work "in-place", but
+		// RecordAD has some further responsibilities.
+		ep.RecordAD(i, ep.TxnGroup[i].ApplyData)
 	}
 	cx.Txn.EvalDelta.InnerTxns = append(cx.Txn.EvalDelta.InnerTxns, ep.TxnGroup...)
 	cx.subtxns = nil

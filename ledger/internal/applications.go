@@ -33,7 +33,6 @@ type logicLedger struct {
 
 type cowForLogicLedger interface {
 	Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error)
-	GetCreatableID(groupIdx int) basics.CreatableIndex
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error)
 	BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (transactions.EvalDelta, error)
@@ -82,10 +81,6 @@ func (al *logicLedger) Authorizer(addr basics.Address) (basics.Address, error) {
 		return record.AuthAddr, nil
 	}
 	return addr, nil
-}
-
-func (al *logicLedger) GetCreatableID(groupIdx int) basics.CreatableIndex {
-	return al.cow.GetCreatableID(groupIdx)
 }
 
 func (al *logicLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error) {

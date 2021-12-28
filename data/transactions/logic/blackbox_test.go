@@ -80,22 +80,14 @@ func TestNewAppEvalParams(t *testing.T) {
 	for i, param := range params {
 		for j, testCase := range cases {
 			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
-				ep := logic.NewAppEvalParams(testCase.group, &param, nil, 0)
-
-				// Ensure non app calls have a nil evaluator, and that non-nil
-				// evaluators point to the right transactions and values
-				if testCase.numAppCalls > 0 {
-					require.NotNil(t, ep)
-					require.NotNil(t, ep.PastSideEffects)
-					require.Equal(t, ep.TxnGroup, testCase.group)
-					require.Equal(t, *ep.Proto, param)
-					if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusV29]) {
-						require.Nil(t, ep.PooledApplicationBudget)
-					} else if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusFuture]) {
-						require.Equal(t, *ep.PooledApplicationBudget, uint64(param.MaxAppProgramCost*testCase.numAppCalls))
-					}
-				} else {
-					require.Nil(t, ep)
+				ep := logic.NewEvalParams(testCase.group, &param, nil)
+				require.NotNil(t, ep)
+				require.Equal(t, ep.TxnGroup, testCase.group)
+				require.Equal(t, *ep.Proto, param)
+				if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusV29]) {
+					require.Nil(t, ep.PooledApplicationBudget)
+				} else if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusFuture]) {
+					require.Equal(t, *ep.PooledApplicationBudget, uint64(param.MaxAppProgramCost*testCase.numAppCalls))
 				}
 			})
 		}

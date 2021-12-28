@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 	"testing"
@@ -130,9 +129,9 @@ func defaultEvalParamsWithVersion(txn *transactions.SignedTxn, version uint64) *
 	return ep
 }
 
-// reset zeros out the ApplyDatas in the underlying TxnGroup.  This is in
-// *_test.go because no real code should ever need this. EvalParams should be
-// created to evaluate a group, and then thrown away.
+// reset puts an ep back into its original state.  This is in *_test.go because
+// no real code should ever need this. EvalParams should be created to evaluate
+// a group, and then thrown away.
 func (ep *EvalParams) reset() {
 	if ep.Proto.EnableAppCostPooling {
 		budget := uint64(ep.Proto.MaxAppProgramCost)
@@ -142,19 +141,13 @@ func (ep *EvalParams) reset() {
 		inners := ep.Proto.MaxInnerTransactions
 		ep.pooledAllowedInners = &inners
 	}
-	ep.PastSideEffects = MakePastSideEffects(ep.Proto.MaxTxGroupSize)
+	ep.pastScratch = make([]*scratchSpace, ep.Proto.MaxTxGroupSize)
 	for i := range ep.TxnGroup {
 		ep.TxnGroup[i].ApplyData = transactions.ApplyData{}
 	}
-	if ep.Proto.LogicSigVersion < createdResourcesVersion {
-		ep.initialCounter = math.MaxUint64
-	} else {
-		if ep.Ledger != nil {
-			ep.initialCounter = ep.Ledger.Counter()
-		} else {
-			ep.initialCounter = firstTestID
-		}
-	}
+	ep.created = &resources{}
+	ep.appAddrCache = make(map[basics.AppIndex]basics.Address)
+	ep.Trace = &strings.Builder{}
 }
 
 func TestTooManyArgs(t *testing.T) {
@@ -1622,12 +1615,7 @@ func TestGaid(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	checkCreatableIDProg := `
-gaid 0
-int 100
-==
-`
-	ops := testProg(t, checkCreatableIDProg, 4)
+	check0 := testProg(t, "gaid 0; int 100; ==", 4)
 	txn := makeSampleTxn()
 	txn.Txn.Type = protocol.ApplicationCallTx
 	txgroup := make([]transactions.SignedTxn, 3)
@@ -1635,12 +1623,17 @@ int 100
 	targetTxn := makeSampleTxn()
 	targetTxn.Txn.Type = protocol.AssetConfigTx
 	txgroup[0] = targetTxn
-	ledger := MakeLedger(nil)
-	ledger.SetTrackedCreatable(0, basics.CreatableLocator{Index: 100})
 	ep := defaultEvalParams(nil)
-	ep.Ledger = ledger
 	ep.TxnGroup = transactions.WrapSignedTxnsWithAD(txgroup)
-	pass, err := EvalApp(ops.Program, 1, 0, ep)
+	ep.Ledger = MakeLedger(nil)
+
+	// should fail when no creatable was created
+	_, err := EvalApp(check0.Program, 1, 0, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "the txn did not create anything")
+
+	ep.TxnGroup[0].ApplyData.ConfigAsset = 100
+	pass, err := EvalApp(check0.Program, 1, 0, ep)
 	if !pass || err != nil {
 		t.Log(ep.Trace.String())
 	}
@@ -1648,35 +1641,22 @@ int 100
 	require.True(t, pass)
 
 	// should fail when accessing future transaction in group
-	futureCreatableIDProg := `
-gaid 2
-int 0
->
-`
-
-	ops = testProg(t, futureCreatableIDProg, 4)
-	_, err = EvalApp(ops.Program, 1, 0, ep)
+	check2 := testProg(t, "gaid 2; int 0; >", 4)
+	_, err = EvalApp(check2.Program, 1, 0, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gaid can't get creatable ID of txn ahead of the current one")
 
 	// should fail when accessing self
-	ops = testProg(t, checkCreatableIDProg, 4)
-	_, err = EvalApp(ops.Program, 0, 0, ep)
+	_, err = EvalApp(check0.Program, 0, 0, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gaid is only for accessing creatable IDs of previous txns")
 
 	// should fail on non-creatable
 	ep.TxnGroup[0].Txn.Type = protocol.PaymentTx
-	_, err = EvalApp(ops.Program, 1, 0, ep)
+	_, err = EvalApp(check0.Program, 1, 0, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "can't use gaid on txn that is not an app call nor an asset config txn")
 	ep.TxnGroup[0].Txn.Type = protocol.AssetConfigTx
-
-	// should fail when no creatable was created
-	ledger.SetTrackedCreatable(0, basics.CreatableLocator{})
-	_, err = EvalApp(ops.Program, 1, 0, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "the txn did not create anything")
 }
 
 func TestGtxn(t *testing.T) {
@@ -2460,9 +2440,9 @@ int 1`,
 			}
 
 			ep := &EvalParams{
-				Proto:           makeTestProto(),
-				TxnGroup:        txgroup,
-				PastSideEffects: MakePastSideEffects(2),
+				Proto:       makeTestProto(),
+				TxnGroup:    txgroup,
+				pastScratch: make([]*scratchSpace, 2),
 			}
 
 			switch failCase.runMode {
@@ -2825,7 +2805,7 @@ func TestPanic(t *testing.T) {
 				}
 			}
 			params := defaultEvalParams(nil)
-			params.Logger = log
+			params.logger = log
 			params.TxnGroup[0].Lsig.Logic = ops.Program
 			err := CheckSignature(0, params)
 			require.Error(t, err)
@@ -2839,7 +2819,7 @@ func TestPanic(t *testing.T) {
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			params = defaultEvalParams(&txn)
-			params.Logger = log
+			params.logger = log
 			pass, err := EvalSignature(0, params)
 			if pass {
 				t.Log(hex.EncodeToString(ops.Program))

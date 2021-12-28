@@ -100,11 +100,8 @@ func TestDebuggerSimple(t *testing.T) {
 	da := makeTestDbgAdapter(t)
 	debugger.AddAdapter(da)
 
-	ep := &logic.EvalParams{
-		Proto:    &proto,
-		Debugger: debugger,
-		TxnGroup: make([]transactions.SignedTxnWithAD, 1),
-	}
+	ep := logic.NewEvalParams(make([]transactions.SignedTxnWithAD, 1), &proto, nil)
+	ep.Debugger = debugger
 
 	source := `int 0
 int 1

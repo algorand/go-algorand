@@ -366,6 +366,10 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 		return
 	}
 	proto := config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
+	txgroup := transactions.WrapSignedTxnsWithAD(dr.Txns)
+	specials := transactions.SpecialAddresses{}
+	ep := logic.NewEvalParams(txgroup, &proto, &specials)
+
 	origEnableAppCostPooling := proto.EnableAppCostPooling
 	// Enable EnableAppCostPooling so that dryrun
 	// 1) can determine cost 2) reports actual cost for large programs that fail
@@ -381,18 +385,10 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 			allowedBudget += uint64(proto.MaxAppProgramCost)
 		}
 	}
+	ep.PooledApplicationBudget = &pooledAppBudget
 
 	response.Txns = make([]generated.DryrunTxnResult, len(dr.Txns))
-	txgroup := transactions.WrapSignedTxnsWithAD(dr.Txns)
-	pse := logic.MakePastSideEffects(len(dr.Txns))
 	for ti, stxn := range dr.Txns {
-		ep := &logic.EvalParams{
-			Proto:                   &proto,
-			TxnGroup:                txgroup,
-			PastSideEffects:         pse,
-			PooledApplicationBudget: &pooledAppBudget,
-			Specials:                &transactions.SpecialAddresses{},
-		}
 		var result generated.DryrunTxnResult
 		if len(stxn.Lsig.Logic) > 0 {
 			var debug dryrunDebugReceiver

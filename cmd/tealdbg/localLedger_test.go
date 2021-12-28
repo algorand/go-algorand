@@ -90,6 +90,7 @@ int 2
 	// make transaction group: app call + sample payment
 	txn := transactions.SignedTxn{
 		Txn: transactions.Transaction{
+			Type: protocol.ApplicationCallTx,
 			Header: transactions.Header{
 				Sender: addr,
 				Fee:    basics.MicroAlgos{Raw: 100},
@@ -109,11 +110,7 @@ int 2
 	a.NoError(err)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	ep := &logic.EvalParams{
-		Proto:           &proto,
-		TxnGroup:        []transactions.SignedTxnWithAD{transactions.SignedTxnWithAD{SignedTxn: txn}},
-		PastSideEffects: logic.MakePastSideEffects(1),
-	}
+	ep := logic.NewEvalParams([]transactions.SignedTxnWithAD{{SignedTxn: txn}}, &proto, &transactions.SpecialAddresses{})
 	pass, delta, err := ba.StatefulEval(0, ep, appIdx, program)
 	a.NoError(err)
 	a.True(pass)

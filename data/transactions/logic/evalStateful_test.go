@@ -336,7 +336,7 @@ func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn,
 			codes[i] = testProg(t, program, version).Program
 		}
 	}
-	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), makeTestProtoV(version), &transactions.SpecialAddresses{}, 0)
+	ep := NewEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), makeTestProtoV(version), &transactions.SpecialAddresses{})
 	ep.Ledger = ledger
 	testAppsBytes(t, codes, ep, expected...)
 }
@@ -2191,6 +2191,7 @@ func TestReturnTypes(t *testing.T) {
 		[]byte("aoeu2"),
 		[]byte("aoeu3"),
 	}
+	ep.pastScratch[0] = &scratchSpace{} // for gload
 	ledger.NewAccount(tx.Sender, 1)
 	params := basics.AssetParams{
 		Total:         1000,
@@ -2206,7 +2207,6 @@ func TestReturnTypes(t *testing.T) {
 	}
 	ledger.NewAsset(tx.Sender, 1, params)
 	ledger.NewApp(tx.Sender, 1, basics.AppParams{})
-	ledger.SetTrackedCreatable(0, basics.CreatableLocator{Index: 1})
 	ledger.NewAccount(tx.Receiver, 1000000)
 	ledger.NewLocals(tx.Receiver, 1)
 	key, err := hex.DecodeString("33343536")
@@ -2299,11 +2299,11 @@ func TestReturnTypes(t *testing.T) {
 				cx.runModeFlags = m
 				cx.appID = 1
 
-				// These two are silly, but one test needs a higher gi, and
-				// another needs to work on the args that were put in txn[0].
-				// This convinces them both to work.  Revisit.
+				// These set conditions for some ops that examine the group.
+				// This convinces them all to work.  Revisit.
 				cx.Txn = &ep.TxnGroup[0]
 				cx.GroupIndex = 1
+				cx.TxnGroup[0].ConfigAsset = 100
 
 				eval(ops.Program, &cx)
 
@@ -2412,8 +2412,7 @@ func TestAppInfo(t *testing.T) {
 }
 
 func TestBudget(t *testing.T) {
-	ep, tx, ledger := makeSampleEnv()
-	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+	ep := defaultEvalParams(nil)
 	source := `
 global OpcodeBudget
 int 699
@@ -2421,6 +2420,43 @@ int 699
 assert
 global OpcodeBudget
 int 695
+==
+`
+	testApp(t, source, ep)
+}
+
+func TestSelfMutate(t *testing.T) {
+	ep, _, ledger := makeSampleEnv()
+
+	/* In order to test the added protection of mutableAccountReference, we're
+	   going to set up a ledger in which an app account is opted into
+	   itself. That was impossible before v6, and indeed we did not have the
+	   extra mutable reference check then. */
+	ledger.NewLocals(basics.AppIndex(888).Address(), 888)
+	ledger.NewLocal(basics.AppIndex(888).Address(), 888, "hey",
+		basics.TealValue{Type: basics.TealUintType, Uint: 77})
+
+	source := `
+global CurrentApplicationAddress
+byte "hey"
+int 42
+app_local_put
+`
+	testApp(t, source, ep, "invalid Account reference for mutation")
+
+	source = `
+global CurrentApplicationAddress
+byte "hey"
+app_local_del
+`
+	testApp(t, source, ep, "invalid Account reference for mutation")
+
+	/* But let's just check normal access is working properly. */
+	source = `
+global CurrentApplicationAddress
+byte "hey"
+app_local_get
+int 77
 ==
 `
 	testApp(t, source, ep)
