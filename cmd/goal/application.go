@@ -22,6 +22,7 @@ import (
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"strconv"
@@ -1162,8 +1163,8 @@ func populateMethodCallReferenceArgs(sender string, currentApp uint64, types []s
 
 var methodAppCmd = &cobra.Command{
 	Use:   "method",
-	Short: "Invoke a method",
-	Long:  `Invoke a method in an App (stateful contract) with an application call transaction`,
+	Short: "Invoke an ABI method",
+	Long:  `Invoke an ARC-4 ABI method on an App (stateful contract) with an application call transaction`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir, client := getDataDirAndClient()
@@ -1369,36 +1370,29 @@ var methodAppCmd = &cobra.Command{
 				return
 			}
 
-			// specify the return hash prefix
-			hashRet := sha512.Sum512_256([]byte("return"))
-			hashRetPrefix := hashRet[:4]
+			// the 4-byte prefix for logged return values, from https://github.com/algorandfoundation/ARCs/blob/main/ARCs/arc-0004.md#standard-format
+			var abiReturnHash = []byte{0x15, 0x1f, 0x7c, 0x75}
 
-			var abiEncodedRet []byte
-			foundRet := false
-			if resp.Logs != nil {
-				for i := len(*resp.Logs) - 1; i >= 0; i-- {
-					retLog := (*resp.Logs)[i]
-					if bytes.HasPrefix(retLog, hashRetPrefix) {
-						abiEncodedRet = retLog[4:]
-						foundRet = true
-						break
-					}
-				}
+			if resp.Logs == nil || len(*resp.Logs) == 0 {
+				reportErrorf("method %s succeed but did not log a return value", method)
 			}
 
-			if !foundRet {
-				reportErrorf("cannot find return log for abi type %s", retTypeStr)
+			lastLog := (*resp.Logs)[len(*resp.Logs)-1]
+			if !bytes.HasPrefix(lastLog, abiReturnHash) {
+				reportErrorf("method %s succeed but did not log a return value", method)
 			}
 
-			decoded, err := retType.Decode(abiEncodedRet)
+			rawReturnValue := lastLog[len(abiReturnHash):]
+			decoded, err := retType.Decode(rawReturnValue)
 			if err != nil {
-				reportErrorf("cannot decode return value %v: %v", abiEncodedRet, err)
+				reportErrorf("method %s succeed but its return value could not be decoded.\nThe raw return value in hex is:%s\nThe error is: %s", method, hex.EncodeToString(rawReturnValue), err)
 			}
 
 			decodedJSON, err := retType.MarshalToJSON(decoded)
 			if err != nil {
-				reportErrorf("cannot marshal returned bytes %v to JSON: %v", decoded, err)
+				reportErrorf("method %s succeed but its return value could not be converted to JSON.\nThe raw return value in hex is:%s\nThe error is: %s", method, hex.EncodeToString(rawReturnValue), err)
 			}
+
 			fmt.Printf("method %s succeeded with output: %s\n", method, string(decodedJSON))
 		}
 	},

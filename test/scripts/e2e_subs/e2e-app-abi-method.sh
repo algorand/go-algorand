@@ -28,6 +28,14 @@ if [[ $RES != *"${EXPECTED}"* ]]; then
     false
 fi
 
+# No arguments or return value
+RES=$(${gcmd} app method --method "empty()void" --app-id $APPID --from $ACCOUNT 2>&1 || true)
+EXPECTED="method empty()void succeeded"
+if [[ $RES != *"${EXPECTED}" ]]; then
+    date '+app-abi-method-test FAIL the method call to empty()void should not fail %Y%m%d_%H%M%S'
+    false
+fi
+
 # 1 + 2 = 3
 RES=$(${gcmd} app method --method "add(uint64,uint64)uint64" --arg 1 --arg 2 --app-id $APPID --from $ACCOUNT 2>&1 || true)
 EXPECTED="method add(uint64,uint64)uint64 succeeded with output: 3"
