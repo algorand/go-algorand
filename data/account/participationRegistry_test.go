@@ -774,11 +774,15 @@ func TestSecretNotFound(t *testing.T) {
 	a.NoError(err)
 	a.Equal(p.ID(), id)
 
-	r, err := registry.GetForRound(id, basics.Round(100))
+	r, err := registry.GetForRound(id, basics.Round(2))
+	a.NoError(err)
 
-	a.True(r.IsZero())
-	a.Error(err)
-	a.ErrorIs(err, ErrSecretNotFound)
+	// Empty stateproof key TODO: IsZero method for SignerInRound
+	s := merklekeystore.SignerInRound{SigningKey: &crypto.GenericSigningKey{}, Round: 2}
+	a.Equal(&s, r.StateProof)
+
+	_, err = registry.GetForRound(id, basics.Round(100))
+	a.ErrorIs(err, ErrRequestedRoundOutOfRange)
 }
 
 func TestAddingSecretTwice(t *testing.T) {

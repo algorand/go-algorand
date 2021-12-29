@@ -977,6 +977,7 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 				node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
 			} else {
 				part.Close()
+				continue
 			}
 			// create a const value Number of records in one fetch
 			// insert into the registry X rounds of keys via account manager

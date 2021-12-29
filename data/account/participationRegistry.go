@@ -83,6 +83,7 @@ type ParticipationRecord struct {
 	Voting *crypto.OneTimeSignatureSecrets
 }
 
+// StateProofKey defined the type used for the compact certificate signing key
 type StateProofKey crypto.GenericSigningKey
 
 // ParticipationRecordForRound adds in the per-round state proof key.
@@ -99,19 +100,20 @@ func (r ParticipationRecordForRound) IsZero() bool {
 
 // VotingSigner returns the voting secrets associated with this Participation account,
 // together with the KeyDilution value.
-func (part ParticipationRecordForRound) VotingSigner() crypto.OneTimeSigner {
+func (r ParticipationRecordForRound) VotingSigner() crypto.OneTimeSigner {
 	return crypto.OneTimeSigner{
-		OneTimeSignatureSecrets: part.Voting,
-		OptionalKeyDilution:     part.KeyDilution,
+		OneTimeSignatureSecrets: r.Voting,
+		OptionalKeyDilution:     r.KeyDilution,
 	}
 }
 
-func (p ParticipationRecordForRound) OverlapsInterval(first, last basics.Round) bool {
+// OverlapsInterval returns true if the partkey is valid at all within the range of rounds (inclusive)
+func (r ParticipationRecordForRound) OverlapsInterval(first, last basics.Round) bool {
 	// OverlapsInterval returns true if the partkey is valid at all within the range of rounds (inclusive)
 	if last < first {
 		logging.Base().Panicf("Round interval should be ordered (first = %v, last = %v)", first, last)
 	}
-	if last < p.FirstValid || first > p.LastValid {
+	if last < r.FirstValid || first > r.LastValid {
 		return false
 	}
 	return true
@@ -169,6 +171,9 @@ var ErrParticipationIDNotFound = errors.New("the participation ID was not found"
 // ErrInvalidRegisterRange is used when attempting to register a participation key on a round that is out of range.
 var ErrInvalidRegisterRange = errors.New("key would not be active within range")
 
+// ErrRequestedRoundOutOfRange is used when the requested round for GetForRound is outside the valid range of this participation
+var ErrRequestedRoundOutOfRange = errors.New("request range is not within the validity range")
+
 // ErrUnknownParticipationAction is used when record is given something other than the known actions.
 var ErrUnknownParticipationAction = errors.New("unknown participation action")
 
@@ -187,8 +192,8 @@ var ErrMultipleKeysForID = errors.New("multiple valid keys found for the same pa
 // ErrNoKeyForID there may be cases where a key is deleted and used at the same time, so this error should be handled.
 var ErrNoKeyForID = errors.New("no valid key found for the participationID")
 
-// TODO: add round parameter to this error message
 // ErrSecretNotFound is used when attempting to lookup secrets for a particular round.
+// TODO: add round parameter to this error message?
 var ErrSecretNotFound = errors.New("the participation ID did not have secrets for the requested round")
 
 // ParticipationRegistry contain all functions for interacting with the Participation Registry.
@@ -905,6 +910,10 @@ func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (
 	result.ParticipationRecord = db.Get(id)
 	if result.ParticipationRecord.IsZero() {
 		return ParticipationRecordForRound{}, ErrParticipationIDNotFound
+	}
+
+	if round > result.LastValid {
+		return ParticipationRecordForRound{}, ErrRequestedRoundOutOfRange
 	}
 
 	result.StateProof.Round = uint64(round)

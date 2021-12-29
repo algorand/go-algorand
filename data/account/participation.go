@@ -151,13 +151,13 @@ func (part Participation) VotingSigner() crypto.OneTimeSigner {
 	}
 }
 
-// StateProofKey returns the key used to sign on Compact Certificates.
+// StateProofSigner returns the key used to sign on Compact Certificates.
 // might return nil!
 func (part Participation) StateProofSigner() *merklekeystore.Signer {
 	return part.StateProofSecrets
 }
 
-// StateProofKey returns the verifier for the StateProof keys.
+// StateProofVerifier returns the verifier for the StateProof keys.
 func (part Participation) StateProofVerifier() *merklekeystore.Verifier {
 	return part.StateProofSecrets.GetVerifier()
 }

@@ -144,7 +144,7 @@ func (s *Signer) Persist(store db.Accessor) error {
 		if s.Interval == 0 {
 			return errIntervalZero
 		}
-		round := IndexToRound(s.FirstValid, s.Interval, 0)
+		round := indexToRound(s.FirstValid, s.Interval, 0)
 		for i, key := range s.signatureAlgorithms {
 			encodedKey := key.MarshalMsg(protocol.GetEncodingBuf())
 			_, err := tx.Exec("INSERT INTO StateProofKeys (id, round, key) VALUES (?,?,?)", i, round, encodedKey)
@@ -263,12 +263,12 @@ func (s *SignerInRound) Sign(hashable crypto.Hashable) (Signature, error) {
 
 // expects valid rounds, i.e round that are bigger than FirstValid.
 func (s *Signer) getMerkleTreeIndex(round uint64) uint64 {
-	return RoundToIndex(s.FirstValid, round, s.Interval)
+	return roundToIndex(s.FirstValid, round, s.Interval)
 }
 
 // expects valid rounds, i.e round that are bigger than FirstValid.
 func (s *SignerInRound) getMerkleTreeIndex(round uint64) uint64 {
-	return RoundToIndex(s.FirstValid, round, s.Interval)
+	return roundToIndex(s.FirstValid, round, s.Interval)
 }
 
 // TODO: delete this
@@ -293,7 +293,7 @@ func (s *Signer) Restore(store db.Accessor) (err error) {
 
 // GetKey retrieves key from memory if exists
 func (s *Signer) GetKey(round uint64) *crypto.GenericSigningKey {
-	idx := RoundToIndex(s.FirstValid, round, s.Interval)
+	idx := roundToIndex(s.FirstValid, round, s.Interval)
 	if idx < 0 || idx >= uint64(len(s.signatureAlgorithms)) || (round%s.Interval) != 0 {
 		return nil
 	}
@@ -301,8 +301,8 @@ func (s *Signer) GetKey(round uint64) *crypto.GenericSigningKey {
 	return &s.signatureAlgorithms[idx]
 }
 
-// TODO: add unit test
 // FetchKey returns the SigningKey and round for a specified index from the StateProof DB
+// TODO: add unit test
 func (s *Signer) FetchKey(id uint64, store db.Accessor) (*crypto.GenericSigningKey, uint64, error) {
 	var keyB []byte
 	var round uint64
@@ -346,6 +346,7 @@ func (s *Signer) CountKeys(store db.Accessor) int {
 	return count
 }
 
+// RoundSecrets returns the secret keys required for the specified round as well as the public immutable data
 func (s *Signer) RoundSecrets(round uint64) *SignerInRound {
 	return &SignerInRound{
 		SigningKey:   s.GetKey(round),
