@@ -46,9 +46,9 @@ var (
 	approvalProgFile string
 	clearProgFile    string
 
-	method         string
-	methodArgs     []string
-	methodCreation bool
+	method           string
+	methodArgs       []string
+	methodCreatesApp bool
 
 	approvalProgRawFile string
 	clearProgRawFile    string
@@ -123,7 +123,7 @@ func init() {
 	methodAppCmd.Flags().StringVar(&method, "method", "", "Method to be called")
 	methodAppCmd.Flags().StringArrayVar(&methodArgs, "arg", nil, "Args to pass in for calling a method")
 	methodAppCmd.Flags().StringVar(&onCompletion, "on-completion", "NoOp", "OnCompletion action for application transaction")
-	methodAppCmd.Flags().BoolVar(&methodCreation, "create", false, "Create an application in this method call")
+	methodAppCmd.Flags().BoolVar(&methodCreatesApp, "create", false, "Create an application in this method call")
 	methodAppCmd.Flags().Uint64Var(&globalSchemaUints, "global-ints", 0, "Maximum number of integer values that may be stored in the global key/value store. Immutable, only valid when passed with --create.")
 	methodAppCmd.Flags().Uint64Var(&globalSchemaByteSlices, "global-byteslices", 0, "Maximum number of byte slices that may be stored in the global key/value store. Immutable, only valid when passed with --create.")
 	methodAppCmd.Flags().Uint64Var(&localSchemaUints, "local-ints", 0, "Maximum number of integer values that may be stored in local (per-account) key/value stores for this app. Immutable, only valid when passed with --create.")
@@ -1194,7 +1194,7 @@ var methodAppCmd = &cobra.Command{
 
 		onCompletionEnum := mustParseOnCompletion(onCompletion)
 
-		if methodCreation {
+		if methodCreatesApp {
 			if appIdx != 0 {
 				reportErrorf("--app-id and --create are mutually exclusive, only provide one")
 			}
@@ -1218,7 +1218,7 @@ var methodAppCmd = &cobra.Command{
 		}
 
 		var approvalProg, clearProg []byte
-		if methodCreation || onCompletionEnum == transactions.UpdateApplicationOC {
+		if methodCreatesApp || onCompletionEnum == transactions.UpdateApplicationOC {
 			approvalProg, clearProg = mustParseProgArgs()
 		}
 
@@ -1382,7 +1382,7 @@ var methodAppCmd = &cobra.Command{
 		}
 
 		// Report tx details to user
-		if methodCreation {
+		if methodCreatesApp {
 			reportInfof("Attempting to create app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
 		} else if onCompletionEnum == transactions.UpdateApplicationOC {
 			reportInfof("Attempting to update app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
@@ -1408,7 +1408,7 @@ var methodAppCmd = &cobra.Command{
 				reportErrorf(err.Error())
 			}
 
-			if methodCreation && resp.ApplicationIndex != nil && *resp.ApplicationIndex != 0 {
+			if methodCreatesApp && resp.ApplicationIndex != nil && *resp.ApplicationIndex != 0 {
 				reportInfof("Created app with app index %d", *resp.ApplicationIndex)
 			}
 
