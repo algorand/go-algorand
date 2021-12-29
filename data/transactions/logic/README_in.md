@@ -1,17 +1,31 @@
 # Transaction Execution Approval Language (TEAL)
 
-TEAL is a bytecode based stack language that executes inside Algorand transactions. TEAL programs can be used to check the parameters of the transaction and approve the transaction as if by a signature. This use of TEAL is called a _LogicSig_. Starting with v2, TEAL programs may
-also execute as _Applications_ which are invoked with explicit application call transactions. Programs have read-only access to the transaction they are attached to, transactions in their atomic transaction group, and a few global values. In addition, _Application_ programs have access to limited state that is global to the application and per-account local state for each account that has opted-in to the application. For both types of program, approval is signaled by finishing with the stack containing a single non-zero uint64 value.
+The AVM is a bytecode based stack interpreter that executes inside
+Algorand transactions. TEAL is an assembly language syntax for
+specifying a program that is ultimately AVM bytecode. These programs
+can be used to check the parameters of the transaction and approve the
+transaction as if by a signature. This use is called a
+_LogicSig_. Starting with v2, these programs may also execute as
+_Applications_ which are invoked with explicit application call
+transactions. Programs have read-only access to the transaction they
+are attached to, transactions in their atomic transaction group, and a
+few global values. In addition, _Application_ programs have access to
+limited state that is global to the application and per-account local
+state for each account that has opted-in to the application. For both
+types of program, approval is signaled by finishing with the stack
+containing a single non-zero uint64 value.
 
 ## The Stack
 
-The stack starts empty and contains values of either uint64 or bytes
-(`bytes` are implemented in Go as a []byte slice and may not exceed
+The stack starts empty and contains values of either uint64 or byte-arrays
+(byte-arrays may not exceed
 4096 bytes in length). Most operations act on the stack, popping
-arguments from it and pushing results to it.
+arguments from it and pushing results to it. Some operations have
+_immediate_ arguments that encoded directly into the instruction,
+rather than coming from the stack.
 
 The maximum stack depth is currently 1000. If the stack depth is
-exceed or if a `bytes` element exceed 4096 bytes, the program fails.
+exceed or if a byte-array element exceed 4096 bytes, the program fails.
 
 ## Scratch Space
 
@@ -22,30 +36,32 @@ moving data from or to scratch space, respectively.
 
 ## Execution Modes
 
-Starting from version 2 TEAL evaluator can run programs in two modes:
+Starting from version 2, the AVM can run programs in two modes:
 1. LogicSig (stateless)
-2. Application run (stateful)
+2. Application (stateful)
 
 Differences between modes include:
 1. Max program length (consensus parameters LogicSigMaxSize, MaxAppTotalProgramLen & MaxExtraAppProgramPages)
 2. Max program cost (consensus parameters LogicSigMaxCost, MaxAppProgramCost)
 3. Opcode availability. For example, all stateful operations are only available in stateful mode. Refer to [opcodes document](TEAL_opcodes.md) for details.
+4. Some global values, such as LatestTimestamp, are only available in stateful mode.
+5. Only Applications can observe transaction effects, such as Logs or IDs allocated to ASAs or new Applications.
 
 ## Execution Environment for LogicSigs
 
-TEAL LogicSigs run in Algorand nodes as part of testing a proposed transaction to see if it is valid and authorized to be committed into a block.
+LogicSigs run in Algorand nodes as part of testing a proposed transaction to see if it is valid and authorized to be committed into a block.
 
 If an authorized program executes and finishes with a single non-zero uint64 value on the stack then that program has validated the transaction it is attached to.
 
-The TEAL program has access to data from the transaction it is attached to (`txn` op), any transactions in a transaction group it is part of (`gtxn` op), and a few global values like consensus parameters (`global` op). Some "Args" may be attached to a transaction being validated by a TEAL program. Args are an array of byte strings. A common pattern would be to have the key to unlock some contract as an Arg. Args are recorded on the blockchain and publicly visible when the transaction is submitted to the network. These LogicSig Args are _not_ part of the transaction ID nor of the TxGroup hash. They also cannot be read from other TEAL programs in the group of transactions.
+The program has access to data from the transaction it is attached to (`txn` op), any transactions in a transaction group it is part of (`gtxn` op), and a few global values like consensus parameters (`global` op). Some "Args" may be attached to a transaction being validated by a program. Args are an array of byte strings. A common pattern would be to have the key to unlock some contract as an Arg. Args are recorded on the blockchain and publicly visible when the transaction is submitted to the network. These LogicSig Args are _not_ part of the transaction ID nor of the TxGroup hash. They also cannot be read from other programs in the group of transactions.
 
 A program can either authorize some delegated action on a normal private key signed or multisig account or be wholly in charge of a contract account.
 
-* If the account has signed the program (an ed25519 signature on "Program" concatenated with the program bytes) then if the program returns true the transaction is authorized as if the account had signed it. This allows an account to hand out a signed program so that other users can carry out delegated actions which are approved by the program. Note that LogicSig Args are _not_ signed.
+* If the account has signed the program (an ed25519 signature on "Program" concatenated with the program bytecode) then if the program returns true the transaction is authorized as if the account had signed it. This allows an account to hand out a signed program so that other users can carry out delegated actions which are approved by the program. Note that LogicSig Args are _not_ signed.
 
 * If the SHA512_256 hash of the program (prefixed by "Program") is equal to the transaction Sender address then this is a contract account wholly controlled by the program. No other signature is necessary or possible. The only way to execute a transaction against the contract account is for the program to approve it.
 
-The TEAL bytecode plus the length of all Args must add up to no more than 1000 bytes (consensus parameter LogicSigMaxSize). Each TEAL op has an associated cost and the program cost must total no more than 20000 (consensus parameter LogicSigMaxCost). Most ops have a cost of 1, but a few slow crypto ops are much higher. Prior to v4, the program's cost was estimated as the static sum of all the opcode costs in the program (whether they were actually executed or not). Beginning with v4, the program's cost is tracked dynamically, while being evaluated. If the program exceeds its budget, it fails.
+The bytecode plus the length of all Args must add up to no more than 1000 bytes (consensus parameter LogicSigMaxSize). Each opcode has an associated cost and the program cost must total no more than 20,000 (consensus parameter LogicSigMaxCost). Most opcodes have a cost of 1, but a few slow cryptographic operations are much higher. Prior to v4, the program's cost was estimated as the static sum of all the opcode costs in the program (whether they were actually executed or not). Beginning with v4, the program's cost is tracked dynamically, while being evaluated. If the program exceeds its budget, it fails.
 
 ## Constants
 
@@ -53,7 +69,7 @@ Constants are loaded into the environment into storage separate from the stack. 
 
 The assembler will hide most of this, allowing simple use of `int 1234` and `byte 0xcafed00d`. These constants will automatically get assembled into int and byte pages of constants, de-duplicated, and operations to load them from constant storage space inserted.
 
-Constants are loaded into the environment by two opcodes, `intcblock` and `bytecblock`. Both of these use [proto-buf style variable length unsigned int](https://developers.google.com/protocol-buffers/docs/encoding#varint), reproduced [here](#varuint). The `intcblock` opcode is followed by a varuint specifying the length of the array and then that number of varuint. The `bytecblock` opcode is followed by a varuint array length then that number of pairs of (varuint, bytes) length prefixed byte strings. This should efficiently load 32 and 64 byte constants which will be common as addresses, hashes, and signatures.
+Constants are loaded into the environment by two opcodes, `intcblock` and `bytecblock`. Both of these use [proto-buf style variable length unsigned int](https://developers.google.com/protocol-buffers/docs/encoding#varint), reproduced [here](#varuint). The `intcblock` opcode is followed by a varuint specifying the length of the array and then that number of varuint. The `bytecblock` opcode is followed by a varuint array length then that number of pairs of (varuint, bytes) length prefixed byte strings.
 
 Constants are pushed onto the stack by `intc`, `intc_[0123]`, `pushint`, `bytec`, `bytec_[0123]`, and `pushbytes`. The assembler will handle converting `int N` or `byte N` into the appropriate form of the instruction needed.
 
@@ -65,15 +81,13 @@ Constants are pushed onto the stack by `intc`, `intc_[0123]`, `pushint`, `bytec`
 
 Most operations work with only one type of argument, uint64 or bytes, and panic if the wrong type value is on the stack.
 
-Many instructions accept values to designate Accounts, Assets, or Applications. Beginning with TEAL v4, these values may always be given as an _offset_ in the corresponding Txn fields (Txn.Accounts, Txn.ForeignAssets, Txn.ForeignApps) _or_ as the value itself (a bytes address for Accounts, or a uint64 ID). The values, however, must still be present in the Txn fields. Before TEAL v4, most opcodes required the use of an offset, except for reading account local values of assets or applications, which accepted the IDs directly and did not require the ID to be present in they corresponding _Foreign_ array. (Note that beginning with TEAL v4, those IDs are required to be present in their corresponding _Foreign_ array.) See individual opcodes for details. In the case of account offsets or application offsets, 0 is specially defined to Txn.Sender or the ID of the current application, respectively.
-
-Many programs need only a few dozen instructions. The instruction set has some optimization built in. `intc`, `bytec`, and `arg` take an immediate value byte, making a 2-byte op to load a value onto the stack, but they also have single byte versions for loading the most common constant values. Any program will benefit from having a few common values loaded with a smaller one byte opcode. Cryptographic hashes and `ed25519verify` are single byte opcodes with powerful libraries behind them. These operations still take more time than other ops (and this is reflected in the cost of each op and the cost limit of a program) but are efficient in compiled code space.
+Many instructions accept values to designate Accounts, Assets, or Applications. Beginning with TEAL v4, these values may be given as an _offset_ in the corresponding Txn fields (Txn.Accounts, Txn.ForeignAssets, Txn.ForeignApps) _or_ as the value itself (a byte-array address for Accounts, or a uint64 ID). The values, however, must still be present in the Txn fields. Before TEAL v4, most opcodes required the use of an offset, except for reading account local values of assets or applications, which accepted the IDs directly and did not require the ID to be present in they corresponding _Foreign_ array. (Note that beginning with TEAL v4, those IDs are required to be present in their corresponding _Foreign_ array.) See individual opcodes for details. In the case of account offsets or application offsets, 0 is specially defined to Txn.Sender or the ID of the current application, respectively.
 
 This summary is supplemented by more detail in the [opcodes document](TEAL_opcodes.md).
 
 Some operations 'panic' and immediately fail the program.
 A transaction checked by a program that panics is not valid.
-A contract account governed by a buggy program might not have a way to get assets back out of it. Code carefully.
+A account governed by a buggy program might not have a way to get assets back out of it. Code carefully.
 
 ### Arithmetic, Logic, and Cryptographic Operations
 
@@ -85,9 +99,6 @@ For three-argument ops, `A` is the element two below the top, `B` is the penulti
 
 @@ Arithmetic.md @@
 
-These opcodes return portions of byte arrays, accessed by position, in
-various sizes.
-
 ### Byte Array Manipulation
 
 @@ Byte_Array_Slicing.md @@
@@ -96,9 +107,9 @@ These opcodes take byte-array values that are interpreted as
 big-endian unsigned integers.  For mathematical operators, the
 returned values are the shortest byte-array that can represent the
 returned value.  For example, the zero value is the empty
-byte-array. For comparison operators, the returned value is a uint64
+byte-array. For comparison operators, the returned value is a uint64.
 
-Input lengths are limited to a maximum length 64 bytes, which
+Input lengths are limited to a maximum length of 64 bytes, which
 represents a 512 bit unsigned integer. Output lengths are not
 explicitly restricted, though only `b*` and `b+` can produce a larger
 output than their inputs, so there is an implicit length limit of 128
@@ -107,9 +118,9 @@ bytes on outputs.
 @@ Byte_Array_Arithmetic.md @@
 
 These opcodes operate on the bits of byte-array values.  The shorter
-array is interpreted as though left padded with zeros until it is the
+input array is interpreted as though left padded with zeros until it is the
 same length as the other input.  The returned values are the same
-length as the longest input.  Therefore, unlike array arithmetic,
+length as the longer input.  Therefore, unlike array arithmetic,
 these results may contain leading zero bytes.
 
 @@ Byte_Array_Logic.md @@
@@ -164,43 +175,50 @@ of a true top-level transaction, programatically.  However, they are
 different in significant ways.  The most important differences are
 that they are not signed, duplicates are not rejected, and they do not
 appear in the block in the usual away. Instead, their effects are
-noted in metadata associated with the associated top-level application
+noted in metadata associated with their top-level application
 call transaction.  An inner transaction's `Sender` must be the
 SHA512_256 hash of the application ID (prefixed by "appID"), or an
 account that has been rekeyed to that hash.
 
-Currently, inner transactions may perform `pay`, `axfer`, `acfg`, and
+In v5, inner transactions may perform `pay`, `axfer`, `acfg`, and
 `afrz` effects.  After executing an inner transaction with
 `itxn_submit`, the effects of the transaction are visible begining
 with the next instruction with, for example, `balance` and
-`min_balance` checks.
+`min_balance` checks. In v6, inner transactions may also perform
+`keyreg` and `appl` effects.
 
-Of the transaction Header fields, only a few fields may be set:
-`Type`/`TypeEnum`, `Sender`, and `Fee`. For the specific fields of
-each transaction types, any field, except `RekeyTo` may be set.  This
-allows, for example, clawback transactions, asset opt-ins, and asset
-creates in addtion to the more common uses of `axfer` and `acfg`.  All
-fields default to the zero value, except those described under
-`itxn_begin`.
+In v5, only a few of the Header fields may be set: `Type`/`TypeEnum`,
+`Sender`, and `Fee`. In v6, Header fields `Note` and `RekeyTo` may
+also be set.  For the specific fields of each transaction types, any
+field may be set (except `RekeyTo` in v5).  This allows, for example,
+clawback transactions, asset opt-ins, and asset creates in addition to
+the more common uses of `axfer` and `acfg`.  All fields default to the
+zero value, except those described under `itxn_begin`.
 
 Fields may be set multiple times, but may not be read. The most recent
-setting is used when `itxn_submit` executes. (For this purpose `Type`
-and `TypeEnum` are considered to be the same field.) `itxn_field`
-fails immediately for unsupported fields, unsupported transaction
-types, or improperly typed values for a particular field. `itxn_field`
-makes aceptance decisions entirely from the field and value provided,
-never considering previously set fields. Illegal interactions between
-fields, such as setting fields that belong to two different
-transaction types, are rejected by `itxn_submit`.
+setting is used when `itxn_submit` executes. For this purpose `Type`
+and `TypeEnum` are considered to be the same field. When using
+`itxn_field` to set an array field (`ApplicationArgs` `Accounts`,
+`Assets`, or `Applications`) each use adds an element to end of the
+the array, rather than setting the entire array at once.
+
+`itxn_field` fails immediately for unsupported fields, unsupported
+transaction types, or improperly typed values for a particular
+field. `itxn_field` makes aceptance decisions entirely from the field
+and value provided, never considering previously set fields. Illegal
+interactions between fields, such as setting fields that belong to two
+different transaction types, are rejected by `itxn_submit`.
 
 @@ Inner_Transactions.md @@
 
 
 # Assembler Syntax
 
-The assembler parses line by line. Ops that just use the stack appear on a line by themselves. Ops that take arguments are the op and then whitespace and then any argument or arguments.
+The assembler parses line by line. Ops that only take stack arguments
+appear on a line by themselves. Immediate arguments follow the opcode
+on the same line, separated by whitespace.
 
-The first line may contain a special version pragma `#pragma version X`, which directs the assembler to generate TEAL bytecode targeting a certain version. For instance, `#pragma version 2` produces bytecode targeting TEAL v2. By default, the assembler targets TEAL v1.
+The first line may contain a special version pragma `#pragma version X`, which directs the assembler to generate AVM bytecode targeting a certain version. For instance, `#pragma version 2` produces bytecode targeting TEAL v2. By default, the assembler targets TEAL v1.
 
 Subsequent lines may contain other pragma declarations (i.e., `#pragma <some-specification>`), pertaining to checks that the assembler should perform before agreeing to emit the program bytes, specific optimizations, etc. Those declarations are optional and cannot alter the semantics as described in this document.
 
@@ -246,30 +264,55 @@ pop
 
 # Encoding and Versioning
 
-A program starts with a varuint declaring the version of the compiled code. Any addition, removal, or change of opcode behavior increments the version. For the most part opcode behavior should not change, addition will be infrequent (not likely more often than every three months and less often as the language matures), and removal should be very rare.
+A compiled program starts with a varuint declaring the version of the compiled code. Any addition, removal, or change of opcode behavior increments the version. For the most part opcode behavior should not change, addition will be infrequent (not likely more often than every three months and less often as the language matures), and removal should be very rare.
 
 For version 1, subsequent bytes after the varuint are program opcode bytes. Future versions could put other metadata following the version identifier.
 
-It is important to prevent newly-introduced transaction fields from breaking assumptions made by older versions of TEAL. If one of the transactions in a group will execute a TEAL program whose version predates a given field, that field must not be set anywhere in the transaction group, or the group will be rejected. For example, executing a TEAL version 1 program on a transaction with RekeyTo set to a nonzero address will cause the program to fail, regardless of the other contents of the program itself.
+It is important to prevent newly-introduced transaction fields from
+breaking assumptions made by older versions of the AVM. If one of the
+transactions in a group will execute a program whose version predates
+a given field, that field must not be set anywhere in the transaction
+group, or the group will be rejected. For example, executing a version
+1 program on a transaction with RekeyTo set to a nonzero address will
+cause the program to fail, regardless of the other contents of the
+program itself.
 
 This requirement is enforced as follows:
 
-* For every transaction, compute the earliest TEAL version that supports all the fields and and values in this transaction. For example, a transaction with a nonzero RekeyTo field will have version (at least) 2.
+* For every transaction, compute the earliest version that supports all the fields and and values in this transaction. For example, a transaction with a nonzero RekeyTo field will have version (at least) 2.
 
-* Compute the largest version number across all the transactions in a group (of size 1 or more), call it `maxVerNo`. If any transaction in this group has a TEAL program with a version smaller than `maxVerNo`, then that TEAL program will fail.
+* Compute the largest version number across all the transactions in a group (of size 1 or more), call it `maxVerNo`. If any transaction in this group has a program with a version smaller than `maxVerNo`, then that TEAL program will fail.
+
+In addition, applications must be version 6 or greater to be eligible
+for calling in an inner transaction.
 
 ## Varuint
 
 A '[proto-buf style variable length unsigned int](https://developers.google.com/protocol-buffers/docs/encoding#varint)' is encoded with 7 data bits per byte and the high bit is 1 if there is a following byte and 0 for the last byte. The lowest order 7 bits are in the first byte, followed by successively higher groups of 7 bits.
 
-# What TEAL Cannot Do
+# What AVM Programs Cannot Do
 
-Design and implementation limitations to be aware of with various versions of TEAL.
+Design and implementation limitations to be aware of with various versions.
 
-* Stateless TEAL cannot lookup balances of Algos or other assets. (Standard transaction accounting will apply after TEAL has run and authorized a transaction. A TEAL-approved transaction could still be invalid by other accounting rules just as a standard signed transaction could be invalid. e.g. I can't give away money I don't have.)
-* TEAL cannot access information in previous blocks. TEAL cannot access most information in other transactions in the current block. (TEAL can access fields of the transaction it is attached to and the transactions in an atomic transaction group.)
-* TEAL cannot know exactly what round the current transaction will commit in (but it is somewhere in FirstValid through LastValid).
-* TEAL cannot know exactly what time its transaction is committed.
-* TEAL cannot loop prior to v4. In v3 and prior, the branch instructions `bnz` "branch if not zero", `bz` "branch if zero" and `b` "branch" can only branch forward so as to skip some code.
-* Until v4, TEAL had no notion of subroutines (and therefore no recursion). As of v4, use `callsub` and `retsub`.
-* TEAL cannot make indirect jumps. `b`, `bz`, `bnz`, and `callsub` jump to an immediately specified address, and `retsub` jumps to the address currently on the top of the call stack, which is manipulated only by previous calls to `callsub`.
+* Stateless programs cannot lookup balances of Algos or other
+  assets. (Standard transaction accounting will apply after the
+  LogicSig has run and authorized a transaction. A LogicSig-approved
+  transaction could still be invalid by other accounting rules just as
+  a standard signed transaction could be invalid. e.g. I can't give
+  away money I don't have.)
+* Programs cannot access information in previous blocks. Programs
+  cannot access information in other transactions in the current
+  block, unless they are a part of the same atomic transaction group.
+* LogicSigs cannot know exactly what round the current transaction
+  will commit in (but it is somewhere in FirstValid through
+  LastValid).
+* Programs cannot know exactly what time its transaction is committed.
+* Programs cannot loop prior to v4. In v3 and prior, the branch
+  instructions `bnz` "branch if not zero", `bz` "branch if zero" and
+  `b` "branch" can only branch forward.
+* Until v4, the AVM had no notion of subroutines (and therefore no
+  recursion). As of v4, use `callsub` and `retsub`.
+* Programs cannot make indirect jumps. `b`, `bz`, `bnz`, and `callsub`
+  jump to an immediately specified address, and `retsub` jumps to the
+  address currently on the top of the call stack, which is manipulated
+  only by previous calls to `callsub` and `retsub`.

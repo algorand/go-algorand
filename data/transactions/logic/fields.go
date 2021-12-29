@@ -180,6 +180,9 @@ func (s tfNameSpecMap) getExtraFor(name string) (extra string) {
 	if s[name].version > 1 {
 		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
 	}
+	if s[name].effects {
+		extra += " Application mode only"
+	}
 	return
 }
 
@@ -411,7 +414,7 @@ var globalFieldSpecs = []globalFieldSpec{
 	{CreatorAddress, StackBytes, runModeApplication, 3},
 	{CurrentApplicationAddress, StackBytes, runModeApplication, 5},
 	{GroupID, StackBytes, modeAny, 5},
-	{OpcodeBudget, StackUint64, runModeApplication, 6},
+	{OpcodeBudget, StackUint64, modeAny, 6},
 	{CallerApplicationID, StackUint64, runModeApplication, 6},
 	{CallerApplicationAddress, StackBytes, runModeApplication, 6},
 }
@@ -427,6 +430,10 @@ func (s gfNameSpecMap) getExtraFor(name string) (extra string) {
 	if s[name].version > 1 {
 		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
 	}
+	if s[name].mode == runModeApplication {
+		extra += " Application mode only."
+	}
+	// There are no Signature mode only fields
 	return
 }
 

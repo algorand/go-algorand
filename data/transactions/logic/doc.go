@@ -176,7 +176,7 @@ var opDocByName = map[string]string{
 	"itxn_begin":  "begin preparation of a new inner transaction in a new transaction group",
 	"itxn_next":   "begin preparation of a new inner transaction in the same transaction group",
 	"itxn_field":  "set field F of the current inner transaction to X",
-	"itxn_submit": "execute the current inner transaction group. Fail if executing this group would exceed 16 total inner transactions, or if any transaction in the group fails.",
+	"itxn_submit": "execute the current inner transaction group. Fail if executing this group would exceed the inner transaction limit, or if any transaction in the group fails.",
 }
 
 // OpDoc returns a description of the op
@@ -288,8 +288,9 @@ var opDocExtras = map[string]string{
 	"asset_params_get":    "params: Before v4, Txn.ForeignAssets offset. Since v4, Txn.ForeignAssets offset or an asset id that appears in Txn.ForeignAssets. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.",
 	"app_params_get":      "params: Txn.ForeignApps offset or an app id that appears in Txn.ForeignApps. Return: did_exist flag (1 if the application existed and 0 otherwise), value.",
 	"log":                 "`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds 1024 bytes.",
-	"itxn_begin":          "`itxn_begin` initializes Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; FirstValid/LastValid to the values in the top-level transaction, and all other fields to zero values.",
-	"itxn_field":          "`itxn_field` fails if X is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if X is an account or asset that does not appear in `txn.Accounts` or `txn.ForeignAssets` of the top-level transaction. (Setting addresses in asset creation are exempted from this requirement.)",
+	"itxn_begin":          "`itxn_begin` initializes Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; FirstValid/LastValid to the values in the invoking transaction, and all other fields to zero values.",
+	"itxn_next":           "`itxn_next` initializes the transaction exactly as `itxn_begin` does",
+	"itxn_field":          "`itxn_field` fails if X is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if X is an account, asset, or app that does not appear in `txn.Accounts`, `txn.ForeignAssets`, or `txn.ForeignApplications` of the invoking transaction. (Setting addresses in asset creation are exempted from this requirement.)",
 	"itxn_submit":         "`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.",
 	"base64_decode":       "decodes X using the base64 encoding alphabet E. Specify the alphabet with an immediate arg either as URL and Filename Safe (`URLAlph`) or Standard (`StdAlph`). See <a href=\"https://rfc-editor.org/rfc/rfc4648.html#section-4\">RFC 4648</a> (sections 4 and 5)",
 }
@@ -444,10 +445,10 @@ var txnFieldDocs = map[string]string{
 	"FreezeAssetAccount": "32 byte address of the account whose asset slot is being frozen or un-frozen",
 	"FreezeAssetFrozen":  "The new frozen value, 0 or 1",
 
-	"Logs":                 "Log messages emitted by an application call (itxn only)",
-	"NumLogs":              "Number of Logs (itxn only)",
-	"CreatedAssetID":       "Asset ID allocated by the creation of an ASA (itxn only)",
-	"CreatedApplicationID": "ApplicationID allocated by the creation of an application (itxn only)",
+	"Logs":                 "Log messages emitted by an application call (`itxn` only until v6)",
+	"NumLogs":              "Number of Logs (`itxn` only until v6)",
+	"CreatedAssetID":       "Asset ID allocated by the creation of an ASA (`itxn` only until v6)",
+	"CreatedApplicationID": "ApplicationID allocated by the creation of an application (`itxn` only until v6)",
 }
 
 // TxnFieldDocs are notes on fields available by `txn` and `gtxn` with extra versioning info if any
