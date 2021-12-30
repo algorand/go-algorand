@@ -71,6 +71,7 @@ func registerParticipationAndWait(t *testing.T, client libgoal.Client, part acco
 	return status
 }
 
+// TODO: figure out what's the purpose of this test and fix it
 func TestKeyRegistration(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Skipf("Skipping flaky test. Re-enable with #3255")
@@ -153,7 +154,7 @@ func TestKeyRegistration(t *testing.T) {
 	require.Len(t, keys, 3)
 	for _, k := range keys {
 		switch k.Key.VoteLastValid {
-		case 3_000_000:
+		case 1_500:
 			checkKey(k, 1, lookback, lookback, "keys[0]")
 		case last:
 			checkKey(k, lookback+1, lookback+1, lookback+1, "keys[1]")

@@ -56,7 +56,7 @@ func MakeAccountManager(log logging.Logger, registry account.ParticipationRegist
 	return manager
 }
 
-// Keys returns a list of Participation accounts. // TODO: this comment is no longer accurate
+// Keys returns a list of Participation accounts, and their keys/secrets for requested round.
 func (manager *AccountManager) Keys(rnd basics.Round) (out []account.ParticipationRecordForRound) {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()

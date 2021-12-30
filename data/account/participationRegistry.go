@@ -486,9 +486,7 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 		voting := record.Voting.Snapshot()
 		rawVoting = protocol.Encode(&voting)
 	}
-	// PKI TODO: Extract state proof from record.
-	// here we will the serialized state proof metadata and tree into the DB
-	// use the new struct merklekeystore.SignerRecord
+
 	// This does not contain secrets! only the public immutable data
 	if record.StateProofSecrets != nil {
 		rawStateProof = protocol.Encode(&record.StateProofSecrets.SignerRecord)

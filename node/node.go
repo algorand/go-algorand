@@ -1306,41 +1306,40 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.Valid
 // VotingKeys implements the key manager's VotingKeys method, and provides additional validation with the ledger.
 // that allows us to load multiple overlapping keys for the same account, and filter these per-round basis.
 func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []account.ParticipationRecordForRound {
-	keys := node.accountManager.Keys(votingRound)
-	// TODO: naming of keys and part is very confusing, should change
-	participations := make([]account.ParticipationRecordForRound, 0, len(keys))
-	accountsData := make(map[basics.Address]basics.OnlineAccountData, len(keys))
+	parts := node.accountManager.Keys(votingRound)
+	participations := make([]account.ParticipationRecordForRound, 0, len(parts))
+	accountsData := make(map[basics.Address]basics.OnlineAccountData, len(parts))
 	matchingAccountsKeys := make(map[basics.Address]bool)
 	mismatchingAccountsKeys := make(map[basics.Address]int)
 	const bitMismatchingVotingKey = 1
 	const bitMismatchingSelectionKey = 2
-	for _, part := range keys {
-		acctData, hasAccountData := accountsData[part.Account]
+	for _, p := range parts {
+		acctData, hasAccountData := accountsData[p.Account]
 		if !hasAccountData {
 			var err error
-			acctData, err = node.ledger.LookupAgreement(keysRound, part.Account)
+			acctData, err = node.ledger.LookupAgreement(keysRound, p.Account)
 			if err != nil {
-				node.log.Warnf("node.VotingKeys: Account %v not participating: cannot locate account for round %d : %v", part.Account, keysRound, err)
+				node.log.Warnf("node.VotingKeys: Account %v not participating: cannot locate account for round %d : %v", p.Account, keysRound, err)
 				continue
 			}
-			accountsData[part.Account] = acctData
+			accountsData[p.Account] = acctData
 		}
 
-		if acctData.VoteID != part.Voting.OneTimeSignatureVerifier {
-			mismatchingAccountsKeys[part.Account] = mismatchingAccountsKeys[part.Account] | bitMismatchingVotingKey
+		if acctData.VoteID != p.Voting.OneTimeSignatureVerifier {
+			mismatchingAccountsKeys[p.Account] = mismatchingAccountsKeys[p.Account] | bitMismatchingVotingKey
 			continue
 		}
-		if acctData.SelectionID != part.VRF.PK {
-			mismatchingAccountsKeys[part.Account] = mismatchingAccountsKeys[part.Account] | bitMismatchingSelectionKey
+		if acctData.SelectionID != p.VRF.PK {
+			mismatchingAccountsKeys[p.Account] = mismatchingAccountsKeys[p.Account] | bitMismatchingSelectionKey
 			continue
 		}
-		participations = append(participations, part)
-		matchingAccountsKeys[part.Account] = true
+		participations = append(participations, p)
+		matchingAccountsKeys[p.Account] = true
 
 		// Make sure the key is registered.
-		err := node.accountManager.Registry().Register(part.ParticipationID, votingRound)
+		err := node.accountManager.Registry().Register(p.ParticipationID, votingRound)
 		if err != nil {
-			node.log.Warnf("Failed to register participation key (%s) with participation registry: %v\n", part.ParticipationID, err)
+			node.log.Warnf("Failed to register participation key (%s) with participation registry: %v\n", p.ParticipationID, err)
 		}
 	}
 	// write the warnings per account only if we couldn't find a single valid key for that account.
