@@ -65,7 +65,7 @@ func makeTestParticipation(addrID int, first, last basics.Round, dilution uint64
 		KeyDilution:       dilution,
 		Voting:            &crypto.OneTimeSignatureSecrets{},
 		VRF:               &crypto.VRFSecrets{},
-		StateProofSecrets: &merklekeystore.Signer{},
+		StateProofSecrets: &merklekeystore.Keystore{},
 	}
 	binary.LittleEndian.PutUint32(p.Parent[:], uint32(addrID))
 	return p
@@ -777,8 +777,8 @@ func TestSecretNotFound(t *testing.T) {
 	r, err := registry.GetForRound(id, basics.Round(2))
 	a.NoError(err)
 
-	// Empty stateproof key TODO: IsZero method for SignerInRound
-	s := merklekeystore.SignerInRound{SigningKey: &crypto.GenericSigningKey{}, Round: 2}
+	// Empty stateproof key TODO: IsZero method for Signer
+	s := merklekeystore.Signer{SigningKey: &crypto.GenericSigningKey{}, Round: 2}
 	a.Equal(&s, r.StateProof)
 
 	_, err = registry.GetForRound(id, basics.Round(100))

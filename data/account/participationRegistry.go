@@ -90,7 +90,7 @@ type StateProofKey crypto.GenericSigningKey
 type ParticipationRecordForRound struct {
 	ParticipationRecord
 
-	StateProof *merklekeystore.SignerInRound
+	StateProof *merklekeystore.Signer
 }
 
 // IsZero returns true if the object contains zero values.
@@ -286,7 +286,7 @@ const (
 			keyDilution     INTEGER NOT NULL,
 
 			vrf BLOB,       --*  msgpack encoding of ParticipationAccount.vrf
-			stateProof BLOB --*  msgpack encoding of merklekeystore.SignerRecord
+			stateProof BLOB --*  msgpack encoding of merklekeystore.SignerContext
 		)`
 
 	createRolling = `CREATE TABLE Rolling (
@@ -489,7 +489,7 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 
 	// This does not contain secrets! only the public immutable data
 	if record.StateProofSecrets != nil {
-		rawStateProof = protocol.Encode(&record.StateProofSecrets.SignerRecord)
+		rawStateProof = protocol.Encode(&record.StateProofSecrets.SignerContext)
 	}
 
 	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -900,7 +900,7 @@ func (db *participationDB) GetAll() []ParticipationRecord {
 // GetForRound fetches a record with all secrets for a particular round.
 func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (ParticipationRecordForRound, error) {
 	var result ParticipationRecordForRound
-	result.StateProof = &merklekeystore.SignerInRound{}
+	result.StateProof = &merklekeystore.Signer{}
 	result.StateProof.SigningKey = &crypto.GenericSigningKey{}
 	var rawStateProofKey []byte
 	var rawSignerRecord []byte
@@ -937,12 +937,12 @@ func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (
 		return nil
 	})
 	if err == ErrSecretNotFound {
-		return result, nil // leave Signer fields empty as no stateproof exists for requested round
+		return result, nil // leave Keystore fields empty as no stateproof exists for requested round
 	} else if err != nil {
 		return ParticipationRecordForRound{}, fmt.Errorf("unable to lookup secrets: %w", err)
 	}
 
-	err = protocol.Decode(rawSignerRecord, &result.StateProof.SignerRecord)
+	err = protocol.Decode(rawSignerRecord, &result.StateProof.SignerContext)
 	if err != nil {
 		return ParticipationRecordForRound{}, err
 	}

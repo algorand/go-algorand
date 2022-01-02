@@ -117,7 +117,7 @@ func (s *testWorkerStubs) Keys(rnd basics.Round) (out []account.ParticipationRec
 				VRF:               part.VRF,
 				Voting:            part.Voting,
 			}
-			signerInRound := part.StateProofSecrets.RoundSecrets(uint64(rnd))
+			signerInRound := part.StateProofSecrets.GetSigner(uint64(rnd))
 			partRecordForRound := account.ParticipationRecordForRound{
 				ParticipationRecord: partRecord,
 				StateProof:          signerInRound,

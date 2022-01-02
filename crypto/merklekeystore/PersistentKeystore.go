@@ -48,8 +48,8 @@ func keystoreInstallDatabase(tx *sql.Tx) error {
 	return err
 }
 
-// Persist dumps the keys into the database and deletes the reference to them in Signer
-func (s *Signer) Persist(store db.Accessor) error {
+// Persist dumps the keys into the database and deletes the reference to them in Keystore
+func (s *Keystore) Persist(store db.Accessor) error {
 	if s.signatureAlgorithms == nil {
 		return fmt.Errorf("no keys provided (nil)")
 	}
@@ -83,8 +83,8 @@ func (s *Signer) Persist(store db.Accessor) error {
 	return nil // Success
 }
 
-// Restore loads Signer from given database, as well as restoring PersistenKeystore (where the actual keys are stored)
-func (s *Signer) Restore(store db.Accessor) (err error) {
+// Restore loads Keystore from given database, as well as restoring PersistenKeystore (where the actual keys are stored)
+func (s *Keystore) Restore(store db.Accessor) (err error) {
 	//keystore, err := RestoreKeystore(store)
 	//if err != nil {
 	//	return
@@ -95,7 +95,7 @@ func (s *Signer) Restore(store db.Accessor) (err error) {
 
 // FetchKey returns the SigningKey and round for a specified index from the StateProof DB
 // TODO: add unit test
-func (s *Signer) FetchKey(id uint64, store db.Accessor) (*crypto.GenericSigningKey, uint64, error) {
+func (s *Keystore) FetchKey(id uint64, store db.Accessor) (*crypto.GenericSigningKey, uint64, error) {
 	var keyB []byte
 	var round uint64
 	key := &crypto.GenericSigningKey{}
@@ -122,7 +122,7 @@ func (s *Signer) FetchKey(id uint64, store db.Accessor) (*crypto.GenericSigningK
 }
 
 // CountKeys couts the number of rows in StateProofKeys table
-func (s *Signer) CountKeys(store db.Accessor) int {
+func (s *Keystore) CountKeys(store db.Accessor) int {
 	var count int
 	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		row := tx.QueryRow("SELECT COUNT(*) FROM StateProofKeys")

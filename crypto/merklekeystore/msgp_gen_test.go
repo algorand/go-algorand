@@ -74,7 +74,7 @@ func BenchmarkUnmarshalSignature(b *testing.B) {
 
 func TestMarshalUnmarshalSigner(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := Signer{}
+	v := Keystore{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -94,11 +94,11 @@ func TestMarshalUnmarshalSigner(t *testing.T) {
 }
 
 func TestRandomizedEncodingSigner(t *testing.T) {
-	protocol.RunEncodingTest(t, &Signer{})
+	protocol.RunEncodingTest(t, &Keystore{})
 }
 
 func BenchmarkMarshalMsgSigner(b *testing.B) {
-	v := Signer{}
+	v := Keystore{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -107,7 +107,7 @@ func BenchmarkMarshalMsgSigner(b *testing.B) {
 }
 
 func BenchmarkAppendMsgSigner(b *testing.B) {
-	v := Signer{}
+	v := Keystore{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -119,7 +119,7 @@ func BenchmarkAppendMsgSigner(b *testing.B) {
 }
 
 func BenchmarkUnmarshalSigner(b *testing.B) {
-	v := Signer{}
+	v := Keystore{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -134,7 +134,7 @@ func BenchmarkUnmarshalSigner(b *testing.B) {
 
 func TestMarshalUnmarshalSignerRecord(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := SignerRecord{}
+	v := SignerContext{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -154,11 +154,11 @@ func TestMarshalUnmarshalSignerRecord(t *testing.T) {
 }
 
 func TestRandomizedEncodingSignerRecord(t *testing.T) {
-	protocol.RunEncodingTest(t, &SignerRecord{})
+	protocol.RunEncodingTest(t, &SignerContext{})
 }
 
 func BenchmarkMarshalMsgSignerRecord(b *testing.B) {
-	v := SignerRecord{}
+	v := SignerContext{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -167,7 +167,7 @@ func BenchmarkMarshalMsgSignerRecord(b *testing.B) {
 }
 
 func BenchmarkAppendMsgSignerRecord(b *testing.B) {
-	v := SignerRecord{}
+	v := SignerContext{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -179,7 +179,7 @@ func BenchmarkAppendMsgSignerRecord(b *testing.B) {
 }
 
 func BenchmarkUnmarshalSignerRecord(b *testing.B) {
-	v := SignerRecord{}
+	v := SignerContext{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

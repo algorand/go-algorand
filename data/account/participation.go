@@ -50,7 +50,7 @@ type Participation struct {
 	VRF    *crypto.VRFSecrets
 	Voting *crypto.OneTimeSignatureSecrets
 	// StateProofSecrets is used to sign compact certificates. might be nil
-	StateProofSecrets *merklekeystore.Signer
+	StateProofSecrets *merklekeystore.Keystore
 
 	// The first and last rounds for which this account is valid, respectively.
 	//
@@ -153,7 +153,7 @@ func (part Participation) VotingSigner() crypto.OneTimeSigner {
 
 // StateProofSigner returns the key used to sign on Compact Certificates.
 // might return nil!
-func (part Participation) StateProofSigner() *merklekeystore.Signer {
+func (part Participation) StateProofSigner() *merklekeystore.Keystore {
 	return part.StateProofSecrets
 }
 

@@ -186,7 +186,7 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 	if len(rawStateProof) == 0 {
 		return acc, nil
 	}
-	acc.StateProofSecrets = &merklekeystore.Signer{}
+	acc.StateProofSecrets = &merklekeystore.Keystore{}
 	if err = protocol.Decode(rawStateProof, acc.StateProofSecrets); err != nil {
 		return PersistedParticipation{}, err
 	}

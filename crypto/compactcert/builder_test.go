@@ -57,7 +57,7 @@ func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key 
 	return parts
 }
 
-func generateTestSigner(name string, firstValid uint64, lastValid uint64, a *require.Assertions) *merklekeystore.Signer {
+func generateTestSigner(name string, firstValid uint64, lastValid uint64, a *require.Assertions) *merklekeystore.Keystore {
 	signer, err := merklekeystore.New(firstValid, lastValid, CompactCertRounds, crypto.FalconType)
 	a.NoError(err)
 
@@ -97,7 +97,7 @@ func TestBuildVerify(t *testing.T) {
 	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartHi, signer)...)
 	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartLo, signer)...)
 
-	signerInRound := signer.RoundSecrets(uint64(currentRound))
+	signerInRound := signer.GetSigner(uint64(currentRound))
 	sig, err := signerInRound.Sign(param.Msg)
 	require.NoError(t, err, "failed to create keys")
 
@@ -433,7 +433,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 	}
 
 	var parts []basics.Participant
-	var partkeys []*merklekeystore.Signer
+	var partkeys []*merklekeystore.Keystore
 	var sigs []merklekeystore.Signature
 	for i := 0; i < npart; i++ {
 		signer := generateTestSigner(b.Name()+"_"+strconv.Itoa(i)+"_crash.db", 0, uint64(param.CompactCertRounds)+1, a)
@@ -443,7 +443,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 			FirstValid: 0,
 		}
 
-		signerInRound := signer.RoundSecrets(uint64(currentRound))
+		signerInRound := signer.GetSigner(uint64(currentRound))
 		sig, err := signerInRound.Sign(param.Msg)
 		require.NoError(b, err, "failed to create keys")
 
