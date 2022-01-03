@@ -1932,6 +1932,119 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 	require.Equal(t, basics.Round(initialRounds+2*extraRounds), au.cachedDBRound)
 }
 
+func TestAcctUpdatesResources(t *testing.T) {
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 100 * 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesResources")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = 2
+	protoParams.SeedLookback = 1
+	protoParams.SeedRefreshInterval = 1
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	ml := makeMockLedgerForTracker(t, false, 1, testProtocolVersion, accts)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au := newAcctUpdates(t, ml, conf, ".")
+	defer au.close()
+
+	var addr basics.Address
+	for addr = range accts[0] {
+		if addr != testSinkAddr && addr != testPoolAddr {
+			break
+		}
+	}
+
+	aidx := basics.AssetIndex(1)
+
+	rewardLevel := uint64(0)
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+	// the test requires 3 blocks with different resource state, au requires MaxBalLookback block to start persisting
+	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback+3); i++ {
+		rewardLevelDelta := crypto.RandUint64() % 5
+		rewardLevel += rewardLevelDelta
+		var updates ledgercore.NewAccountDeltas
+		base := accts[i-1]
+
+		// modify state as needed for the tests: create, delete, create
+		if i == 1 {
+			updates.UpsertAssetHolding(addr, aidx, &basics.AssetHolding{Amount: 100})
+		}
+		if i == 2 {
+			updates.UpsertAssetHolding(addr, aidx, nil)
+		}
+		if i == 3 {
+			updates.UpsertAssetHolding(addr, aidx, &basics.AssetHolding{Amount: 200})
+		}
+		prevTotals, err := au.Totals(basics.Round(i - 1))
+		require.NoError(t, err)
+
+		newAccts := applyPartialDeltas(base, updates)
+
+		newTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardLevel, protoParams, base, prevTotals)
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = testProtocolVersion
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+		delta.NewAccts.MergeAccounts(updates)
+		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
+		delta.Totals = newTotals
+
+		au.newBlock(blk, delta)
+
+		// commit changes synchroniously
+		_, maxLookback := au.committedUpTo(i)
+		dcc := &deferredCommitContext{
+			deferredCommitRange: deferredCommitRange{
+				lookback: maxLookback,
+			},
+		}
+		cdr := &dcc.deferredCommitRange
+		cdr = au.produceCommittingTask(i, ml.trackers.dbRound, cdr)
+		if cdr != nil {
+			func() {
+				dcc.deferredCommitRange = *cdr
+				ml.trackers.accountsWriting.Add(1)
+				defer ml.trackers.accountsWriting.Done()
+
+				// do not take any locks since all operations are synchronous
+				newBase := basics.Round(dcc.offset) + dcc.oldBase
+				dcc.newBase = newBase
+
+				err := au.prepareCommit(dcc)
+				require.NoError(t, err)
+				err = ml.trackers.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+					return au.commitRound(ctx, tx, dcc)
+				})
+				require.NoError(t, err)
+				ml.trackers.dbRound = newBase
+				au.postCommit(ml.trackers.ctx, dcc)
+				au.postCommitUnlocked(ml.trackers.ctx, dcc)
+			}()
+
+		}
+		accts = append(accts, newAccts)
+	}
+}
+
 // TestConsecutiveVersion tests the consecutiveVersion method correctness.
 func TestConsecutiveVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
