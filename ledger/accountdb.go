@@ -393,17 +393,10 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				newEntry := resourceDelta{
 					nAcctDeltas: 1,
 					address:     assetHold.Addr,
-					newResource: resourcesData{
-						UpdateRound: deltaRound * updateRoundMultiplier,
-					},
+					newResource: makeResourcesData(deltaRound * updateRoundMultiplier),
 				}
 				if assetHold.Holding != nil {
 					newEntry.newResource.SetAssetHolding(*assetHold.Holding)
-				} else {
-					// ClearAssetHolding sets resourceFlagsNotHolding flag.
-					// Otherwise newEntry.newResource.ResourceFlags == resourceFlagsHolding (0)
-					// meaning empty asset hodling (or app local state)
-					newEntry.newResource.ClearAssetHolding()
 				}
 				if baseResourceData, has := baseResources.read(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx)); has {
 					newEntry.oldResource = baseResourceData
@@ -439,17 +432,10 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				newEntry := resourceDelta{
 					nAcctDeltas: 1,
 					address:     assetParams.Addr,
-					newResource: resourcesData{
-						UpdateRound: deltaRound * updateRoundMultiplier,
-					},
+					newResource: makeResourcesData(deltaRound * updateRoundMultiplier),
 				}
 				if assetParams.Params != nil {
 					newEntry.newResource.SetAssetParams(*assetParams.Params, false)
-				} else {
-					// ClearAssetHolding sets resourceFlagsNotHolding flag.
-					// Otherwise newEntry.newResource.ResourceFlags == resourceFlagsHolding (0)
-					// meaning empty asset hodling (or app local state)
-					newEntry.newResource.ClearAssetHolding()
 				}
 				if baseResourceData, has := baseResources.read(assetParams.Addr, basics.CreatableIndex(assetParams.Aidx)); has {
 					newEntry.oldResource = baseResourceData
@@ -486,17 +472,10 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				newEntry := resourceDelta{
 					nAcctDeltas: 1,
 					address:     localState.Addr,
-					newResource: resourcesData{
-						UpdateRound: deltaRound * updateRoundMultiplier,
-					},
+					newResource: makeResourcesData(deltaRound * updateRoundMultiplier),
 				}
 				if localState.State != nil {
 					newEntry.newResource.SetAppLocalState(*localState.State)
-				} else {
-					// ClearAppLocalState sets resourceFlagsNotHolding flag.
-					// Otherwise newEntry.newResource.ResourceFlags == resourceFlagsHolding (0)
-					// meaning empty asset hodling (or app local state)
-					newEntry.newResource.ClearAppLocalState()
 				}
 				if baseResourceData, has := baseResources.read(localState.Addr, basics.CreatableIndex(localState.Aidx)); has {
 					newEntry.oldResource = baseResourceData
@@ -533,17 +512,10 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				newEntry := resourceDelta{
 					nAcctDeltas: 1,
 					address:     appParams.Addr,
-					newResource: resourcesData{
-						UpdateRound: deltaRound * updateRoundMultiplier,
-					},
+					newResource: makeResourcesData(deltaRound * updateRoundMultiplier),
 				}
 				if appParams.Params != nil {
 					newEntry.newResource.SetAppParams(*appParams.Params, false)
-				} else {
-					// ClearAppLocalState sets resourceFlagsNotHolding flag.
-					// Otherwise newEntry.newResource.ResourceFlags == resourceFlagsHolding (0)
-					// meaning empty asset hodling (or app local state)
-					newEntry.newResource.ClearAppLocalState()
 				}
 				if baseResourceData, has := baseResources.read(appParams.Addr, basics.CreatableIndex(appParams.Aidx)); has {
 					newEntry.oldResource = baseResourceData
@@ -1357,6 +1329,13 @@ type resourcesData struct {
 	// consensus parameter is being set. Once the above consensus takes place, this field would be populated with the
 	// correct round number.
 	UpdateRound uint64 `codec:"z"`
+}
+
+// makeResourcesData returns a new empty instance of resourcesData.
+// Using this constructor method is necessary because of the ResourceFlags field.
+// An optional rnd args sets UpdateRound
+func makeResourcesData(rnd uint64) resourcesData {
+	return resourcesData{ResourceFlags: resourceFlagsNotHolding, UpdateRound: rnd}
 }
 
 func (rd *resourcesData) IsHolding() bool {
@@ -2448,7 +2427,7 @@ func accountsNewRound(
 				result, err = deleteResourceStmt.Exec(addrid, aidx)
 				if err == nil {
 					// we deleted the entry successfully.
-					entry := persistedResourcesData{addrid, aidx, 0, resourcesData{}, 0}
+					entry := persistedResourcesData{addrid, aidx, 0, makeResourcesData(0), lastUpdateRound}
 					deltas := updatedResources[addr]
 					deltas = append(deltas, entry)
 					updatedResources[addr] = deltas
