@@ -1319,14 +1319,15 @@ func AssetInformation(ctx lib.ReqContext, context echo.Context) {
 		return
 	}
 
-	record, _, err := ledger.LookupLatest(creator)
+	lastRound := ledger.Latest()
+	resource, err := ledger.LookupResource(lastRound, creator, basics.CreatableIndex(aidx), basics.AssetCreatable)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
 	}
 
-	if asset, ok := record.AssetParams[aidx]; ok {
-		thisAssetParams := modelAssetParams(creator, asset)
+	if resource.AssetParam != nil {
+		thisAssetParams := modelAssetParams(creator, *resource.AssetParam)
 		SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
 	} else {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
