@@ -100,7 +100,7 @@ func (r ParticipationRecordForRound) IsZero() bool {
 
 // VotingSigner returns the voting secrets associated with this Participation account,
 // together with the KeyDilution value.
-func (r ParticipationRecordForRound) VotingSigner() crypto.OneTimeSigner {
+func (r *ParticipationRecordForRound) VotingSigner() crypto.OneTimeSigner {
 	return crypto.OneTimeSigner{
 		OneTimeSignatureSecrets: r.Voting,
 		OptionalKeyDilution:     r.KeyDilution,
@@ -108,7 +108,7 @@ func (r ParticipationRecordForRound) VotingSigner() crypto.OneTimeSigner {
 }
 
 // OverlapsInterval returns true if the partkey is valid at all within the range of rounds (inclusive)
-func (r ParticipationRecordForRound) OverlapsInterval(first, last basics.Round) bool {
+func (r *ParticipationRecordForRound) OverlapsInterval(first, last basics.Round) bool {
 	// OverlapsInterval returns true if the partkey is valid at all within the range of rounds (inclusive)
 	if last < first {
 		logging.Base().Panicf("Round interval should be ordered (first = %v, last = %v)", first, last)

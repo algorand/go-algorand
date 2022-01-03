@@ -17,14 +17,14 @@
 package agreement
 
 import (
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"testing"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-deadlock"
 )
 
 func makeRecordingKeyManager(accounts []account.Participation) *recordingKeyManager {
