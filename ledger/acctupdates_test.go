@@ -1932,7 +1932,11 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 	require.Equal(t, basics.Round(initialRounds+2*extraRounds), au.cachedDBRound)
 }
 
+// TestAcctUpdatesResources checks that created, deleted, and created resource keep
+// acct updates' compact deltas in a correct state
 func TestAcctUpdatesResources(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
 	pooldata := basics.AccountData{}
 	pooldata.MicroAlgos.Raw = 100 * 1000 * 1000 * 1000 * 1000
