@@ -69,9 +69,10 @@ func (p *messageOrderingHeap) Less(i, j int) bool {
 func (p *messageOrderingHeap) enqueue(msg incomingMessage) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	msg.nextSequenceNumber = msg.sequenceNumber + 1
 	if len(p.messages) >= messageOrderingHeapLimit {
 		// try compressing the msgorderingheap first
-		p.compress()
+		p.compact()
 		if len(p.messages) >= messageOrderingHeapLimit {
 			// return an error if still can't enqueue
 			return errHeapReachedCapacity
@@ -84,6 +85,10 @@ func (p *messageOrderingHeap) enqueue(msg incomingMessage) error {
 func (p *messageOrderingHeap) popSequence(sequenceNumber uint64) (msg incomingMessage, heapSequenceNumber uint64, err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	return p.popSequenceUnsafe(sequenceNumber)
+}
+
+func (p *messageOrderingHeap) popSequenceUnsafe(sequenceNumber uint64) (msg incomingMessage, heapSequenceNumber uint64, err error) {
 	if len(p.messages) == 0 {
 		return incomingMessage{}, 0, errHeapEmpty
 	}
@@ -97,6 +102,10 @@ func (p *messageOrderingHeap) popSequence(sequenceNumber uint64) (msg incomingMe
 func (p *messageOrderingHeap) pop() (msg incomingMessage, err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	return p.popUnsafe()
+}
+
+func (p *messageOrderingHeap) popUnsafe() (msg incomingMessage, err error) {
 	if len(p.messages) == 0 {
 		return incomingMessage{}, errHeapEmpty
 	}
@@ -104,17 +113,16 @@ func (p *messageOrderingHeap) pop() (msg incomingMessage, err error) {
 	return incomingMessage(entry), nil
 }
 
-func (p *messageOrderingHeap) compress() {
-	if len(p.messages) == 0 {
+func (p *messageOrderingHeap) compact() {
+	compressedEntry, err := p.popUnsafe()
+	if err != nil {
 		return
 	}
-	compressedEntry := heap.Pop(p).(messageHeapItem)
 	expectedSeqNum := compressedEntry.sequenceNumber + 1
 	for len(p.messages) != 0 {
-		nextEntry := heap.Pop(p).(messageHeapItem)
+		nextEntry, _, err := p.popSequenceUnsafe(expectedSeqNum)
 		// compress only consecutive messages
-		if nextEntry.sequenceNumber != expectedSeqNum {
-			heap.Push(p, nextEntry)
+		if err != nil {
 			break
 		}
 		// use oldest transaction groups if possible
@@ -124,9 +132,10 @@ func (p *messageOrderingHeap) compress() {
 		if nextEntry.bloomFilter == nil {
 			nextEntry.bloomFilter = compressedEntry.bloomFilter
 		}
+		nextEntry.sequenceNumber = compressedEntry.sequenceNumber
 		compressedEntry = nextEntry
 		expectedSeqNum++
 	}
 	// return compressed message to heap
-	heap.Push(p, compressedEntry)
+	heap.Push(p, messageHeapItem(compressedEntry))
 }
