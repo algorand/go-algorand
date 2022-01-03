@@ -4,6 +4,7 @@
 # TODO: This needs to be reworked a bit to support Darwin.
 
 set -exo pipefail
+shopt -s nullglob
 
 echo
 date "+build_release begin SIGN stage %Y%m%d_%H%M%S"
