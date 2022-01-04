@@ -255,9 +255,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 						return
 					}
 					if verbose {
-						if verbose {
-							verbosedOutput <- fmt.Sprintf("participation keys for %s completed successfully ", wallet.Name)
-						}
+						verbosedOutput <- fmt.Sprintf("participation key generation for %s successfully", wallet.Name)
 					}
 					atomic.AddInt64(&partKeyCreated, 1)
 				}
@@ -378,7 +376,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 
 	if (verbose) && (rootKeyCreated > 0 || partKeyCreated > 0) {
 		fmt.Printf("Created %d new rootkeys and %d new partkeys.\n", rootKeyCreated, partKeyCreated)
-		fmt.Printf("NOTICE: Participation keys are valid for a period of %d rounds. After this round the network will stop unless new keys will be registered.\n", lastWalletValid-firstWalletValid)
+		fmt.Printf("NOTICE: Participation keys are valid for a period of %d rounds. After this round the network will stall unless new keys are registered.\n", lastWalletValid-firstWalletValid)
 	}
 
 	return
