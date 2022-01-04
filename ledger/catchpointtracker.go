@@ -393,12 +393,15 @@ func (ct *catchpointTracker) postCommit(ctx context.Context, dcc *deferredCommit
 	ct.roundDigest = ct.roundDigest[dcc.offset:]
 
 	ct.catchpointsMu.Unlock()
+}
 
+func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 	if dcc.isCatchpointRound && ct.archivalLedger && dcc.catchpointLabel != "" {
 		// generate the catchpoint file. This need to be done inline so that it will block any new accounts that from being written.
 		// the generateCatchpoint expects that the accounts data would not be modified in the background during it's execution.
 		ct.generateCatchpoint(ctx, basics.Round(dcc.offset)+dcc.oldBase+dcc.lookback, dcc.catchpointLabel, dcc.committedRoundDigest, dcc.updatingBalancesDuration)
 	}
+
 	// in scheduleCommit, we expect that this function to update the catchpointWriting when
 	// it's on a catchpoint round and it's an archival ledger. Doing this in a deferred function
 	// here would prevent us from "forgetting" to update this variable later on.
