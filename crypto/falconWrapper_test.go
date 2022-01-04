@@ -55,25 +55,6 @@ func TestVerificationBytes(t *testing.T) {
 	a.Equal(verifyingRawKey, key.PublicKey[:])
 }
 
-func TestSignatureWithWrongSaltVersion(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	var seed FalconSeed
-	SystemRNG.RandBytes(seed[:])
-	key, err := GenerateFalconSigner(seed)
-	a.NoError(err)
-
-	msg := []byte("a")
-	byteSig, err := key.SignBytes(msg)
-	a.NoError(err)
-	byteSig[1] = 3
-
-	verifier := key.GetVerifyingKey()
-	err = verifier.GetVerifier().VerifyBytes(msg, byteSig)
-	a.ErrorIs(err, errFalconWrongSaltVersion)
-}
-
 func TestFalconsFormatConversion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)

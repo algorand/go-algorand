@@ -27,10 +27,6 @@ const (
 
 	// MaxFalconSignatureSize Represents the max possible size in bytes of a falcon signature
 	MaxFalconSignatureSize = cfalcon.CTSignatureSize
-
-	// FalconSaltVersion Represents the current supported falcon version by go-algorand code.
-	// if needed this value could be replaced with consensus param.
-	FalconSaltVersion = 0
 )
 
 var (
@@ -98,13 +94,7 @@ func (d *FalconVerifier) Verify(message Hashable, sig ByteSignature) error {
 
 // VerifyBytes follows falcon algorithm to verify a signature.
 func (d *FalconVerifier) VerifyBytes(data []byte, sig ByteSignature) error {
-	// we explicitly verify the signature's salt version.
-	// This verification is mandatory in order to avoid a collection of signatures with multiple versions.
-	// a collection built with different signatures will fail the SNARK verifier
 	falconSig := cfalcon.CompressedSignature(sig)
-	if falconSig.SaltVersion() != FalconSaltVersion {
-		return errFalconWrongSaltVersion
-	}
 	return (*cfalcon.PublicKey)(&d.PublicKey).Verify(falconSig, data)
 }
 
