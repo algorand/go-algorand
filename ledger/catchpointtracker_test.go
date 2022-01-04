@@ -317,8 +317,11 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
+		curTotals := accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		require.Equal(t, prevTotals.All(), curTotals.All())
 
 		newTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardLevel, protoParams, base, prevTotals)
+		require.Equal(t, newTotals.All(), curTotals.All())
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
