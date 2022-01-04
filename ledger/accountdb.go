@@ -2017,6 +2017,11 @@ func (qs *accountsDbQueries) lookupAllResources(addr basics.Address) (data []per
 			}
 			if !addrid.Valid || !aidx.Valid || !rtype.Valid {
 				// we received an entry without any index. This would happen only on the first entry when there are no resources for this address.
+				// ensure this is the first entry, set the round and return
+				if len(data) != 0 {
+					return fmt.Errorf("lookupAllResources: unexpected invalid result on non-first resource record: (%v, %v, %v)", addrid.Valid, aidx.Valid, rtype.Valid)
+				}
+				rnd = dbRound
 				break
 			}
 			var resData resourcesData

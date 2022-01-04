@@ -387,6 +387,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 
 func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Round) {
 	accounts := make(map[basics.Address]modifiedAccount)
+	resources := make(resourcesUpdates)
 
 	for _, rdelta := range au.deltas {
 		for i := 0; i < rdelta.Len(); i++ {
@@ -396,21 +397,59 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Ro
 			macct.ndeltas++
 			accounts[addr] = macct
 		}
+
+		for _, rec := range rdelta.GetAllAppLocalStates() {
+			key := accountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
+			entry, _ := resources.get(key)
+			entry.resource.AppLocalState = rec.State
+			entry.resource.CreatableIndex = basics.CreatableIndex(rec.Aidx)
+			entry.resource.CreatableType = basics.AppCreatable
+			entry.ndeltas++
+			resources[key] = entry
+		}
+		for _, rec := range rdelta.GetAllAppParams() {
+			key := accountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
+			entry, _ := resources.get(key)
+			entry.resource.AppParams = rec.Params
+			entry.resource.CreatableIndex = basics.CreatableIndex(rec.Aidx)
+			entry.resource.CreatableType = basics.AppCreatable
+			entry.ndeltas++
+			resources[key] = entry
+		}
+		for _, rec := range rdelta.GetAllAssetsHoldings() {
+			key := accountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
+			entry, _ := resources.get(key)
+			entry.resource.AssetHolding = rec.Holding
+			entry.resource.CreatableIndex = basics.CreatableIndex(rec.Aidx)
+			entry.resource.CreatableType = basics.AssetCreatable
+			entry.ndeltas++
+			resources[key] = entry
+		}
+		for _, rec := range rdelta.GetAllAssetParams() {
+			key := accountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
+			entry, _ := resources.get(key)
+			entry.resource.AssetParam = rec.Params
+			entry.resource.CreatableIndex = basics.CreatableIndex(rec.Aidx)
+			entry.resource.CreatableType = basics.AssetCreatable
+			entry.ndeltas++
+			resources[key] = entry
+		}
 	}
 
 	require.Equal(t, au.accounts, accounts)
+	require.Equal(t, au.resources, resources)
 
-	// TODO: restore after lookup full implementation
-	// latest := au.deltas[len(au.deltas)-1]
-	// for i := 0; i < latest.Len(); i++ {
-	// 	addr, acct := latest.GetByIdx(i)
-	// 	d, _, err := au.LookupWithoutRewards(rnd, addr)
-	// 	require.NoError(t, err)
-	// 	require.Equal(t, int(acct.TotalAppParams), len(d.AppParams))
-	// 	require.Equal(t, int(acct.TotalAssetParams), len(d.AssetParams))
-	// 	require.Equal(t, int(acct.TotalAppLocalStates), len(d.AppLocalStates))
-	// 	require.Equal(t, int(acct.TotalAssets), len(d.Assets))
-	// }
+	latest := au.deltas[len(au.deltas)-1]
+	for i := 0; i < latest.Len(); i++ {
+		addr, acct := latest.GetByIdx(i)
+		d, r, err := au.lookupLatest(addr)
+		require.NoError(t, err)
+		require.Equal(t, rnd, r)
+		require.Equal(t, int(acct.TotalAppParams), len(d.AppParams))
+		require.Equal(t, int(acct.TotalAssetParams), len(d.AssetParams))
+		require.Equal(t, int(acct.TotalAppLocalStates), len(d.AppLocalStates))
+		require.Equal(t, int(acct.TotalAssets), len(d.Assets))
+	}
 }
 
 func TestAcctUpdates(t *testing.T) {

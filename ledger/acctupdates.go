@@ -240,7 +240,7 @@ func (e *MismatchingDatabaseRoundError) Error() string {
 }
 
 // ErrLookupLatestResources is returned if there is an error retrieving an account along with its resources.
-var ErrLookupLatestResources = errors.New("Couldn't find latest resources")
+var ErrLookupLatestResources = errors.New("couldn't find latest resources")
 
 type resourcesUpdates map[accountCreatable]modifiedResource
 
@@ -1629,8 +1629,25 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 			macct.ndeltas -= cnt
 			au.accounts[acctUpdate.address] = macct
 		}
-		// todo : tsachi -
-		// remove the entries from au.resources as needed.
+	}
+
+	for i := 0; i < dcc.compactResourcesDeltas.len(); i++ {
+		resUpdate := dcc.compactResourcesDeltas.getByIdx(i)
+		cnt := resUpdate.nAcctDeltas
+		key := accountCreatable{resUpdate.address, resUpdate.oldResource.aidx}
+		macct, ok := au.resources[key]
+		if !ok {
+			au.log.Panicf("inconsistency: flushed %d changes to (%s, %d), but not in au.resources", cnt, resUpdate.address, resUpdate.oldResource.aidx)
+		}
+
+		if cnt > macct.ndeltas {
+			au.log.Panicf("inconsistency: flushed %d changes to (%s, %d), but au.resources had %d", cnt, resUpdate.address, resUpdate.oldResource.aidx, macct.ndeltas)
+		} else if cnt == macct.ndeltas {
+			delete(au.resources, key)
+		} else {
+			macct.ndeltas -= cnt
+			au.resources[key] = macct
+		}
 	}
 
 	for _, persistedAcct := range dcc.updatedPersistedAccounts {
