@@ -324,10 +324,14 @@ func convertInnerTxn(txn *transactions.SignedTxnWithAD) preEncodedTxInfo {
 	response.AssetIndex = numOrNil(uint64(txn.ApplyData.ConfigAsset))
 	response.ApplicationIndex = numOrNil(uint64(txn.ApplyData.ApplicationID))
 
-	// Deltas, Logs, and Inners can not be set until we allow appl
-	// response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)
-	// response.Logs = convertLogs(txn)
-	// response.Inners = convertInners(&txn)
+	withStatus := node.TxnWithStatus{
+		Txn:            txn.SignedTxn,
+		ConfirmedRound: basics.Round(*response.ConfirmedRound),
+		ApplyData:      txn.ApplyData,
+	}
+	response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(withStatus)
+	response.Logs = convertLogs(withStatus)
+	response.Inners = convertInners(&withStatus)
 	return response
 }
 
