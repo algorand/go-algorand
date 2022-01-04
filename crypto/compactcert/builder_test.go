@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"fmt"
+	"github.com/algoidan/falcon"
 	"strconv"
 	"testing"
 
@@ -352,6 +353,131 @@ func TestSignatureCommitment(t *testing.T) {
 
 }
 
+// The aim of this test is to simulate how a SNARK circuit will verify a signature.(part of the overall compcatcert verification)
+// it includes parsing the signature's format (according to Algorand's spec) and binds it to a specific length.
+// here we also expect the scheme to use Falcon signatures and nothing else.
+func TestSimulateSignatureVerification(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	signer, dbaccess := generateTestSigner(t.Name()+"_1.db", 50, 100, 1, a)
+	defer dbaccess.Close()
+
+	sigRound := uint64(55)
+	hashable := testMessage("testMessage")
+	sig, err := signer.Sign(hashable, sigRound)
+	a.NoError(err)
+
+	genericKey := signer.GetVerifier()
+	sigBytes, err := sig.GetSerializedSignature()
+	a.NoError(err)
+	checkSignature(a, sigBytes, genericKey, sigRound, hashable, 5, 6)
+}
+
+// The aim of this test is to simulate how a SNARK circuit will verify a signature.(part of the overall compcatcert verification)
+// it includes parsing the signature's format (according to Algorand's spec) and binds it to a specific length.
+// here we also expect the scheme to use Falcon signatures and nothing else.
+func TestSimulateSignatureVerificationOneEphemeralKey(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	signer, dbaccess := generateTestSigner(t.Name()+"_2.db", 1, 128, 128, a)
+	defer dbaccess.Close()
+
+	sigRound := uint64(128)
+	hashable := testMessage("testMessage")
+	sig, err := signer.Sign(hashable, sigRound)
+	a.NoError(err)
+
+	genericKey := signer.GetVerifier()
+	sigBytes, err := sig.GetSerializedSignature()
+	a.NoError(err)
+	checkSignature(a, sigBytes, genericKey, sigRound, hashable, 0, 0)
+}
+
+func checkSignature(a *require.Assertions, sigBytes []byte, verifier *merklekeystore.Verifier, round uint64, message crypto.Hashable, expectedIndex uint64, expectedPathLen uint8) {
+	a.Equal(len(sigBytes), 4366)
+
+	parsedBytes := 0
+	// check schemeId
+	schemeID := binary.LittleEndian.Uint16(sigBytes[parsedBytes : parsedBytes+2])
+	parsedBytes += 2
+	a.Equal(schemeID, uint16(0))
+
+	parsedBytes, falconPK := verifyFalconSignature(a, sigBytes, parsedBytes, message)
+
+	// check the public key commitment
+
+	leafHash := hashEphemeralPublicKeyLeaf(round, falconPK)
+
+	// parsing the merkle path index and the proof's len
+	idx := binary.LittleEndian.Uint64(sigBytes[parsedBytes : parsedBytes+8])
+	parsedBytes += 8
+	pathLe := sigBytes[parsedBytes]
+	parsedBytes++
+
+	a.Equal(expectedIndex, idx)
+	a.Equal(expectedPathLen, pathLe)
+
+	leafHash = verifyMerklePath(idx, pathLe, sigBytes, parsedBytes, leafHash)
+
+	a.Equal(leafHash, verifier[:])
+}
+
+func verifyMerklePath(idx uint64, pathLe byte, sigBytes []byte, parsedBytes int, leafHash []byte) []byte {
+	// idxDirection will indicate which sibling we should fetch LSB to MSB leaf-to-root
+	// todo when change to vector commitment this needs to be changed.
+	idxDirection := idx
+	// use the verification path to hash siblings up to the root
+	for i := uint8(0); i < pathLe; i++ {
+		var innerNodeBytes []byte
+
+		siblingHash := sigBytes[parsedBytes : parsedBytes+64]
+		parsedBytes += 64
+
+		innerNodeBytes = append(innerNodeBytes, []byte{'M', 'A'}...)
+		if (idxDirection & 1) != 0 {
+			innerNodeBytes = append(innerNodeBytes, siblingHash...)
+			innerNodeBytes = append(innerNodeBytes, leafHash...)
+		} else {
+			innerNodeBytes = append(innerNodeBytes, leafHash...)
+			innerNodeBytes = append(innerNodeBytes, siblingHash...)
+		}
+		idxDirection = idxDirection >> 1
+		leafHash = crypto.HashBytes(crypto.HashFactory{HashType: HashType}.NewHash(), innerNodeBytes)
+	}
+	return leafHash
+}
+
+func hashEphemeralPublicKeyLeaf(round uint64, falconPK [falcon.PublicKeySize]byte) []byte {
+	var sigRoundAsBytes [8]byte
+	binary.LittleEndian.PutUint64(sigRoundAsBytes[:], round)
+
+	var ephemeralPublicKeyBytes []byte
+	ephemeralPublicKeyBytes = append(ephemeralPublicKeyBytes, []byte{'K', 'P'}...)
+	ephemeralPublicKeyBytes = append(ephemeralPublicKeyBytes, []byte{0, 0}...)
+	ephemeralPublicKeyBytes = append(ephemeralPublicKeyBytes, sigRoundAsBytes[:]...)
+	ephemeralPublicKeyBytes = append(ephemeralPublicKeyBytes, falconPK[:]...)
+	leafHash := crypto.HashBytes(crypto.HashFactory{HashType: HashType}.NewHash(), ephemeralPublicKeyBytes)
+	return leafHash
+}
+
+func verifyFalconSignature(a *require.Assertions, sigBytes []byte, parsedBytes int, message crypto.Hashable) (int, [falcon.PublicKeySize]byte) {
+	var falconSig [falcon.CTSignatureSize]byte
+	copy(falconSig[:], sigBytes[parsedBytes:parsedBytes+1538])
+	parsedBytes += 1538
+	ctSign := falcon.CTSignature(falconSig)
+
+	var falconPK [falcon.PublicKeySize]byte
+	copy(falconPK[:], sigBytes[parsedBytes:parsedBytes+1793])
+	parsedBytes += 1793
+	ephemeralPk := falcon.PublicKey(falconPK)
+
+	msgBytes := crypto.Hash(crypto.HashRep(message))
+	err := ephemeralPk.VerifyCTSignature(ctSign, msgBytes[:])
+	a.NoError(err)
+	return parsedBytes, falconPK
+}
 func findLInCert(a *require.Assertions, signature merklekeystore.Signature, cert *Cert) uint64 {
 	for _, t := range cert.Reveals {
 		if bytes.Compare(t.SigSlot.Sig.Signature.ByteSignature, signature.ByteSignature) == 0 {
