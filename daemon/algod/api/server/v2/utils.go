@@ -325,9 +325,8 @@ func convertInnerTxn(txn *transactions.SignedTxnWithAD) preEncodedTxInfo {
 	response.ApplicationIndex = numOrNil(uint64(txn.ApplyData.ApplicationID))
 
 	withStatus := node.TxnWithStatus{
-		Txn:            txn.SignedTxn,
-		ConfirmedRound: basics.Round(*response.ConfirmedRound),
-		ApplyData:      txn.ApplyData,
+		Txn:       txn.SignedTxn,
+		ApplyData: txn.ApplyData,
 	}
 	response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(withStatus)
 	response.Logs = convertLogs(withStatus)
